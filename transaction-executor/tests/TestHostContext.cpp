@@ -6,6 +6,7 @@
 #include "bcos-crypto/interfaces/crypto/CryptoSuite.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-executor/src/Common.h"
+#include "bcos-framework/ledger/GenesisConfig.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-ledger/src/libledger/Ledger.h"
 #include "bcos-table/src/LegacyStorageWrapper.h"
@@ -13,6 +14,7 @@
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
+#include "bcos-tool/VersionConverter.h"
 #include "bcos-transaction-executor/RollbackableStorage.h"
 #include "bcos-transaction-executor/vm/VMFactory.h"
 #include "bcos-utilities/FixedBytes.h"
@@ -76,7 +78,7 @@ public:
             evmc_address origin = {};
 
             HostContext hostContext(vmFactory, rollbackableStorage, blockHeader, message, origin,
-                "", 0, seq, *precompiledManager);
+                "", 0, seq, *precompiledManager, bcos::ledger::LedgerConfig{});
             auto result = co_await hostContext.execute();
 
             BOOST_REQUIRE_EQUAL(result.status_code, 0);
@@ -114,7 +116,7 @@ public:
         evmc_address origin = {};
 
         HostContext hostContext(vmFactory, rollbackableStorage, blockHeader, message, origin, "", 0,
-            seq, *precompiledManager);
+            seq, *precompiledManager, bcos::ledger::LedgerConfig{});
         auto result = co_await hostContext.execute();
 
         co_return result;
@@ -270,7 +272,7 @@ BOOST_AUTO_TEST_CASE(precompiled)
 {
     syncWait([this]() -> Task<void> {
         // Use ledger to init storage
-        auto ledgerConfig = std::make_shared<bcos::ledger::LedgerConfig>();
+        auto ledgerConfig = bcos::ledger::LedgerConfig{};
         auto storageWrapper =
             std::make_shared<bcos::storage::LegacyStorageWrapper<std::decay_t<decltype(storage)>>>(
                 storage);
@@ -282,7 +284,10 @@ BOOST_AUTO_TEST_CASE(precompiled)
                 std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite),
                 std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(cryptoSuite)),
             storageWrapper);
-        ledger.buildGenesisBlock(ledgerConfig, 100000, "", "3.5.0");
+        bcos::ledger::GenesisConfig genesis;
+        genesis.m_txGasLimit = 100000;
+        genesis.m_compatibilityVersion = bcos::tool::toVersionNumber("3.5.0");
+        ledger.buildGenesisBlock(genesis, ledgerConfig);
 
         bcostars::protocol::BlockHeaderImpl blockHeader(
             [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
@@ -313,7 +318,7 @@ BOOST_AUTO_TEST_CASE(precompiled)
             evmc_address origin = {};
 
             HostContext hostContext(vmFactory, rollbackableStorage, blockHeader, message, origin,
-                "", 0, seq, *precompiledManager);
+                "", 0, seq, *precompiledManager, bcos::ledger::LedgerConfig{});
             auto result = co_await hostContext.execute();
         }
 
@@ -342,7 +347,7 @@ BOOST_AUTO_TEST_CASE(precompiled)
             evmc_address origin = {};
 
             HostContext hostContext(vmFactory, rollbackableStorage, blockHeader, message, origin,
-                "", 0, seq, *precompiledManager);
+                "", 0, seq, *precompiledManager, bcos::ledger::LedgerConfig{});
             result.emplace(co_await hostContext.execute());
         }
 

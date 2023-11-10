@@ -79,7 +79,6 @@ struct SeekIteratorTrait
 template <storage2::SeekableStorage Storage>
 using SeekIteratorType = typename SeekIteratorTrait<Storage>::type;
 
-
 template <class FromStorage, class ToStorage>
 concept HasMemberMergeMethod =
     requires(FromStorage& fromStorage, ToStorage& toStorage) {

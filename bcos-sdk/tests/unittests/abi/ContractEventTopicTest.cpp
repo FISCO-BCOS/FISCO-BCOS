@@ -17,7 +17,7 @@
  * @author: octopus
  * @date 2022-02-24
  */
-#include <bcos-cpp-sdk/utilities/abi/ContractEventTopic.h>
+#include <bcos-cpp-sdk/utilities/abi/ContractABIEventTopic.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/interfaces/crypto/Hash.h>
@@ -26,7 +26,6 @@
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <sys/types.h>
 #include <boost/test/tools/old/interface.hpp>
-#include <memory>
 #include <set>
 #include <stdexcept>
 #include <string>
@@ -40,8 +39,13 @@ BOOST_FIXTURE_TEST_SUITE(ContractEventTopicTest, TestPromptFixture)
 
 BOOST_AUTO_TEST_CASE(test_EventTopic_Keccak256)
 {
-    auto hashImpl = std::make_shared<bcos::crypto::Keccak256>();
-    auto contactEventTopic = std::make_shared<bcos::codec::abi::ContractEventTopic>(hashImpl);
+    auto ecdsaHashImpl = std::make_shared<bcos::crypto::Keccak256>();
+    auto smHashImpl = std::make_shared<bcos::crypto::SM3>();
+
+    auto contactEventTopic =
+        std::make_shared<bcos::codec::abi::ContractABIEventTopic>(ecdsaHashImpl);
+    auto smContactEventTopic =
+        std::make_shared<bcos::codec::abi::ContractABIEventTopic>(smHashImpl);
 
     // int
     {
@@ -102,14 +106,20 @@ BOOST_AUTO_TEST_CASE(test_EventTopic_Keccak256)
         std::string s0 = "";
         BOOST_CHECK_EQUAL("0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
             contactEventTopic->stringToTopic(s0));
+        BOOST_CHECK_EQUAL("0x1ab21d8355cfa17f8e61194831e81a8f22bec8c728fefb747ed035eb5082aa2b",
+            smContactEventTopic->stringToTopic(s0));
 
         std::string s1 = "HelloWorld";
         BOOST_CHECK_EQUAL("0x7c5ea36004851c764c44143b1dcb59679b11c9a68e5f41497f6cf3d480715331",
             contactEventTopic->stringToTopic(s1));
+        BOOST_CHECK_EQUAL("0x44526eeba9235bae33f2bab8ff1f9ca8965b59d58be82af8111f336a00c1c432",
+            smContactEventTopic->stringToTopic(s1));
 
         std::string s2 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         BOOST_CHECK_EQUAL("0x6bf4107d5e7ac7a9c23a4e8d6581b098e5323fe49df3596168d3710d50526dad",
             contactEventTopic->stringToTopic(s2));
+        BOOST_CHECK_EQUAL("0x58cc358e7880b06962f996be258e454af7eecfd3455831dd690566c4bbe025b5",
+            smContactEventTopic->stringToTopic(s2));
     }
 
     // bytesN
@@ -127,7 +137,7 @@ BOOST_AUTO_TEST_CASE(test_EventTopic_Keccak256)
             contactEventTopic->bytesNToTopic(bs2));
 
         bcos::bytes bs3(33, '1');
-        BOOST_CHECK_THROW(contactEventTopic->bytesNToTopic(bs3), bcos::InvalidParameter);
+        BOOST_CHECK_THROW(contactEventTopic->bytesNToTopic(bs3), std::runtime_error);
     }
 
     // bytes
@@ -135,17 +145,21 @@ BOOST_AUTO_TEST_CASE(test_EventTopic_Keccak256)
         bcos::bytes bs0;
         BOOST_CHECK_EQUAL("0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
             contactEventTopic->bytesToTopic(bs0));
+        BOOST_CHECK_EQUAL("0x1ab21d8355cfa17f8e61194831e81a8f22bec8c728fefb747ed035eb5082aa2b",
+            smContactEventTopic->bytesToTopic(bs0));
 
         std::string hex = "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470";
         BOOST_CHECK_EQUAL("0xe166801d00a45901e2b3ca692a6a95e367d4a976218b485546a2da464b6c88b5",
             contactEventTopic->bytesToTopic(bcos::bytes(hex.begin(), hex.end())));
+        BOOST_CHECK_EQUAL("0x2cd6eb8aa7aed20ed9665df40f7b3ea261fb6555473d33aea100fe4cb5eda8f9",
+            smContactEventTopic->bytesToTopic(bcos::bytes(hex.begin(), hex.end())));
     }
 }
 
 BOOST_AUTO_TEST_CASE(test_EventTopic_SM3)
 {
     auto hashImpl = std::make_shared<bcos::crypto::SM3>();
-    auto contactEventTopic = std::make_shared<bcos::codec::abi::ContractEventTopic>(hashImpl);
+    auto contactEventTopic = std::make_shared<bcos::codec::abi::ContractABIEventTopic>(hashImpl);
 
     // int
     {
@@ -231,7 +245,7 @@ BOOST_AUTO_TEST_CASE(test_EventTopic_SM3)
             contactEventTopic->bytesNToTopic(bs2));
 
         bcos::bytes bs3(33, '1');
-        BOOST_CHECK_THROW(contactEventTopic->bytesNToTopic(bs3), bcos::InvalidParameter);
+        BOOST_CHECK_THROW(contactEventTopic->bytesNToTopic(bs3), std::runtime_error);
     }
 
     // bytes
