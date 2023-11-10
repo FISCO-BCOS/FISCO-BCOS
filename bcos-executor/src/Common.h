@@ -192,6 +192,13 @@ constexpr evmc_gas_metrics ethMetrics{32000, 20000, 5000, 200, 9000, 2300, 25000
 
 protocol::TransactionStatus toTransactionStatus(Exception const& _e);
 
+enum ExecutiveType : uint8_t
+{
+    common = 0,
+    coroutine = 1,
+    billing = 2
+};
+
 }  // namespace executor
 
 bool hasWasmPreamble(const std::string_view& _input);
