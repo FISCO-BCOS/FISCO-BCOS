@@ -371,7 +371,7 @@ bcos::task::Task<bcos::ledger::Features> bcos::ledger::tag_invoke(
         }
         catch (std::exception& e)
         {
-            LEDGER2_LOG(TRACE) << "Not found system config: " << key;
+            LEDGER2_LOG(DEBUG) << "Not found system config: " << key;
         }
     }
 
