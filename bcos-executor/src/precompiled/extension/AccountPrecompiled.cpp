@@ -212,28 +212,35 @@ uint8_t AccountPrecompiled::getAccountStatus(
 }
 
 
-void AccountPrecompiled::getAccountBalance(const std::string& account,
+void AccountPrecompiled::getAccountBalance(const std::string& accountTableName,
     const std::shared_ptr<executor::TransactionExecutive>& _executive,
     PrecompiledExecResult::Ptr const& _callParameters) const
 {
     u256 balance;
     const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
-    auto accountTable = getContractTableName(executor::USER_APPS_PREFIX, account);
-    auto entry = _executive->storage().getRow(accountTable, ACCOUNT_BALANCE);
+    auto table = _executive->storage().openTable(accountTableName);
+    if (!table)
+    {
+        _callParameters->setExecResult(codec.encode(int32_t(CODE_TABLE_NOT_EXIST)));
+        BOOST_THROW_EXCEPTION(PrecompiledError("Account table not exist!"));
+        return;
+    }
+    auto entry = _executive->storage().getRow(accountTableName, ACCOUNT_BALANCE);
     if (!entry.has_value())
     {
         PRECOMPILED_LOG(TRACE) << BLOCK_NUMBER(blockContext.number())
                                << LOG_BADGE("AccountPrecompiled, getAccountBalance")
                                << LOG_DESC("balance not exist, return 0 by default")
-                               << LOG_KV("account", account);
+                               << LOG_KV("account", accountTableName);
         _callParameters->setExecResult(codec.encode(0));
         return;
     }
     balance = u256(std::string(entry->get()));
     PRECOMPILED_LOG(TRACE) << BLOCK_NUMBER(blockContext.number())
                            << LOG_BADGE("AccountPrecompiled, getAccountBalance")
-                           << LOG_DESC("get account balance success") << LOG_KV("account", account)
+                           << LOG_DESC("get account balance success")
+                           << LOG_KV("account", accountTableName)
                            << LOG_KV("balance", to_string(balance));
 
     _callParameters->setExecResult(codec.encode(balance));
