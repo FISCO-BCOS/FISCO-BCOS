@@ -27,6 +27,13 @@
 
 namespace bcos::tool
 {
+inline std::string fromVersionNumber(protocol::BlockVersion version)
+{
+    std::stringstream ss;
+    ss << version;
+    return ss.str();
+}
+
 inline uint32_t toVersionNumber(std::string_view _version)
 {
     std::string version{_version};

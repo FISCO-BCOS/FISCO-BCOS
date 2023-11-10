@@ -8,8 +8,6 @@
 #include "bcos-task/Task.h"
 #include <bcos-concepts/Exception.h>
 #include <bcos-utilities/Ranges.h>
-#include <boost/archive/binary_iarchive.hpp>
-#include <boost/archive/binary_oarchive.hpp>
 #include <boost/throw_exception.hpp>
 #include <array>
 #include <bitset>
@@ -47,6 +45,16 @@ private:
     std::bitset<magic_enum::enum_count<Flag>()> m_flags;
 
 public:
+    static Flag string2Flag(std::string_view str)
+    {
+        auto value = magic_enum::enum_cast<Flag>(str);
+        if (!value)
+        {
+            BOOST_THROW_EXCEPTION(NoSuchFeatureError{});
+        }
+        return *value;
+    }
+
     void validate(std::string flag) const
     {
         auto value = magic_enum::enum_cast<Flag>(flag);
@@ -54,15 +62,17 @@ public:
         {
             BOOST_THROW_EXCEPTION(NoSuchFeatureError{});
         }
-
+        
         validate(*value);
     }
+
     void validate(Flag flag) const
     {
         if ((flag == Flag::feature_balance_policy1 || flag == Flag::feature_balance_precompiled) &&
             !get(Flag::feature_balance))
         {
-            BOOST_THROW_EXCEPTION(PreconditionMismatchError{} << errinfo_comment("must set feature_balance first"));
+            BOOST_THROW_EXCEPTION(
+                PreconditionMismatchError{} << errinfo_comment("must set feature_balance first"));
         }
     }
 
@@ -76,15 +86,7 @@ public:
 
         return m_flags[*index];
     }
-    bool get(std::string_view flag) const
-    {
-        auto value = magic_enum::enum_cast<Flag>(flag);
-        if (!value)
-        {
-            BOOST_THROW_EXCEPTION(NoSuchFeatureError{});
-        }
-        return get(*value);
-    }
+    bool get(std::string_view flag) const { return get(string2Flag(flag)); }
 
     void set(Flag flag)
     {
@@ -95,18 +97,9 @@ public:
         }
 
         validate(flag);
-
         m_flags[*index] = true;
     }
-    void set(std::string_view flag)
-    {
-        auto value = magic_enum::enum_cast<Flag>(flag);
-        if (!value)
-        {
-            BOOST_THROW_EXCEPTION(NoSuchFeatureError{});
-        }
-        set(*value);
-    }
+    void set(std::string_view flag) { set(string2Flag(flag)); }
 
     void setToShardingDefault(protocol::BlockVersion version)
     {
@@ -148,7 +141,7 @@ public:
                });
     }
 
-    task::Task<void> readFromStorage(storage::StorageInterface& storage, long blockNumber)
+    task::Task<void> readFromStorage(auto& storage, long blockNumber)
     {
         for (auto key : bcos::ledger::Features::featureKeys())
         {
@@ -156,7 +149,7 @@ public:
                 co_await storage2::readOne(storage, std::make_tuple(ledger::SYS_CONFIG, key));
             if (entry)
             {
-                auto [value, enableNumber] = entry->getObject<ledger::SystemConfigEntry>();
+                auto [value, enableNumber] = entry->template getObject<ledger::SystemConfigEntry>();
                 if (blockNumber >= enableNumber)
                 {
                     set(key);
@@ -165,7 +158,7 @@ public:
         }
     }
 
-    task::Task<void> writeToStorage(storage::StorageInterface& storage, long blockNumber) const
+    task::Task<void> writeToStorage(auto& storage, long blockNumber) const
     {
         for (auto [flag, name, value] : flags())
         {
@@ -183,6 +176,7 @@ public:
 
 inline std::ostream& operator<<(std::ostream& stream, Features::Flag flag)
 {
+    stream << magic_enum::enum_name(flag);
     return stream;
 }
 

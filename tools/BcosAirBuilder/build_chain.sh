@@ -67,6 +67,25 @@ multi_ca_path=""
 consensus_type="pbft"
 supported_consensus=(pbft rpbft)
 
+# for pro or max default setting
+bcos_builder_package=BcosBuilder.tgz
+bcos_builder_version=v3.5.0
+use_exist_binary="false"
+download_specific_binary_flag="false"
+download_service_binary_type="cdn"
+service_binary_version="v3.5.0"
+download_service_binary_path="binary"
+download_service_binary_path_flag="false"
+service_type="all"
+chain_version="air"
+service_output_dir="generated"
+proOrmax_port_start=(30300 20200 40400 2379 3901)
+isPortSpecified="false"
+tars_listen_port_space=5
+
+#for pro or max expand
+expand_dir="expand"
+
 LOG_WARN() {
     local content=${1}
     echo -e "\033[31m[ERROR] ${content}\033[0m"
@@ -541,6 +560,7 @@ help() {
     echo $1
     cat <<EOF
 Usage:
+air
     -C <Command>                        [Optional] the command, support 'deploy' and 'expand' now, default is deploy
     -g <group id>                       [Optional] set the group id, default: group0
     -I <chain id>                       [Optional] set the chain id, default: chain0
@@ -570,6 +590,22 @@ Usage:
     -6 <ipv6 mode>                      [Optional] IPv6 mode use :: as default listen ip, default is false
     -T <Consensus Algorithm>            [Optional] Default PBFT. Options can be pbft / rpbft, pbft is recommended
     -h Help
+pro or max
+    -C <Command>                        [Optional] the command, support 'deploy' now, default is deploy
+    -g <group id>                       [Optional] set the group id, default: group0
+    -I <chain id>                       [Optional] set the chain id, default: chain0
+    -V <chain version>                  [Optional] support 'air'、'pro'、'max', default is 'air'
+    -l <IP list>                        [Required] "ip1:nodeNum1,ip2:nodeNum2" e.g:"192.168.0.1:2,192.168.0.2:3"
+    -p <Start port>                     [Optional] Default 30300、20200、40400、2379 means p2p_port start from 30300, rpc_port from 20200, tars_port from 40400, tikv_port default 2379
+    -e <service binary path>            [Optional] rpc gateway node service binary path
+    -y <service binary download type>   [Optional] rpc gateway node service binary download type, default type is cdn
+    -v <service binary version>         [Optional] Default is the latest ${service_binary_version}
+    -r <service binary download path>   [Optional] service binary download path, default is ${download_service_binary_path}
+    -c <Config Path>                    [Optional] Specify the path of the deploy node config.toml
+    -t <deploy type>                    [Optional] support 'rpc'、'gateway'、'node'、'all', default is 'all'
+    -o <output dir>                     [Optional] output directory, default genearted
+    -s <SM model>                       [Optional] SM SSL connection or not, default is false
+    -h Help
 
 deploy nodes e.g
     bash $0 -p 30300,20200 -l 127.0.0.1:4 -o nodes -e ./fisco-bcos
@@ -584,12 +620,33 @@ expand node e.g
 modify node e.g
     bash $0 -C modify -N ./node0 -u ./ca/ca.crt
     bash $0 -C modify -N ./node0 -u ./ca/ca.crt -s
+deploy pro service e.g
+    bash $0 -p 30300,20200 -l 172.31.184.227:2,172.30.93.111:2 -C deploy -V pro -o generate -t all
+    bash $0 -p 30300,20200 -l 172.31.184.227:2,172.30.93.111:2 -C deploy -V pro -o generate -t all -s
+    bash $0 -p 30300,20200 -l 172.31.184.227:2,172.30.93.111:2 -C deploy -V pro -o generate -e ./binary
+    bash $0 -p 30300,20200,40400 -l 172.31.184.227:2,172.30.93.111:2 -C deploy -V pro -o generate -y cdn -v v3.5.0 -r ./binaryPath
+deploy max service e.g
+    bash $0 -p 30300,20200,40400,2379 -l 172.31.184.227:1,172.30.93.111:1,172.31.184.54:1,172.31.185.59:1 -C deploy -V max -o generate -t all
+    bash $0 -p 30300,20200,40400,2379 -l 172.31.184.227:1,172.30.93.111:1,172.31.184.54:1,172.31.185.59:1 -C deploy -V max -o generate -t all -e ./binary -s
+    bash $0 -p 30300,20200,40400,2379 -l 172.31.184.227:1,172.30.93.111:1,172.31.184.54:1,172.31.185.59:1 -C deploy -V max -o generate -y cdn -v v3.5.0 -r ./binaryPath 
+    bash $0 -c config.toml -C deploy -V max -o generate -t all
+expand pro node e.g
+    bash $0 -C expand_node -V pro -o expand_node -c ./config.toml
+expand pro rpc/gateway e.g
+    bash $0 -C expand_service -V pro -o expand_service -c ./config.toml
+expand pro group e.g
+    bash $0 -C expand_group -V pro -o expand_group -c ./config.toml
+expand max node e.g
+    bash $0 -C expand_node -V max -o expand_node -c ./config.toml
+expand max rpc/gateway e.g
+    bash $0 -C expand_service -V max -o expand_service -c ./config.toml
+
 EOF
     exit 0
 }
 
 parse_params() {
-    while getopts "l:C:c:o:e:t:p:d:g:G:L:v:i:I:M:k:zwDshHmn:R:a:N:u:6T:" option; do
+    while getopts "l:C:c:o:e:t:p:d:g:G:L:v:i:I:M:k:zwDshHmn:R:a:N:u:y:r:V:6T:" option; do
         case $option in
         6) use_ipv6="true" && default_listen_ip="::"
         ;;
@@ -606,14 +663,16 @@ parse_params() {
             ;;
         o)
             output_dir="$OPTARG"
+            service_output_dir="$OPTARG"
+            expand_dir="$OPTARG"
             ;;
         e)
+            use_exist_binary="true"
             binary_path="$OPTARG"
-            file_must_exists "${binary_path}"
             ;;
         t)
+            service_type="$OPTARG"
             mtail_binary_path="$OPTARG"
-            file_must_exists "${mtail_binary_path}"
             ;;
         C) command="${OPTARG}"
             ;;
@@ -622,8 +681,9 @@ parse_params() {
         c) config_path="${OPTARG}"
         ;;
         p)
+            isPortSpecified="true"
             port_start=(${OPTARG//,/ })
-            if [ ${#port_start[@]} -ne 2 ]; then LOG_WARN "p2p start port error. e.g: 30300" && exit 1; fi
+            proOrmax_port_start=(${OPTARG//,/ })
             ;;
         s) sm_mode="true" ;;
         H) enable_hsm="true";;
@@ -660,7 +720,10 @@ parse_params() {
           auth_admin_account="${OPTARG}"
           auth_mode="true"
         ;;
-        v) compatibility_version="${OPTARG}";;
+        v) compatibility_version="${OPTARG}"
+           service_binary_version="${OPTARG}"
+           download_specific_binary_flag="true"
+        ;;
         z) make_tar="true";;
         N)
             modify_node_path=$OPTARG
@@ -674,16 +737,43 @@ parse_params() {
             fi
             file_must_exists "${multi_ca_path}"
             ;;
-        T) consensus_type=$OPTARG
+         T) consensus_type=$OPTARG
                 if ! echo "${supported_consensus[*]}" | grep -i "${consensus_type}" &>/dev/null; then
                     LOG_WARN "${consensus_type} is not supported. Please set one of ${supported_consensus[*]}"
                     exit 1;
                 fi
             ;;
+        y)  
+            download_service_binary_type="${OPTARG}"
+            download_specific_binary_flag="true"
+            ;;
+        r)
+            download_service_binary_path="${OPTARG}"
+            download_service_binary_path_flag="true"
+            ;;
+        V)
+            chain_version="${OPTARG}";;
+           
         h) help ;;
         *) help ;;
         esac
     done
+
+    if [[ "$chain_version" == "air" ]];then
+        if [[ "$mtail_binary_path" != "" ]]; then
+            file_must_exists "${mtail_binary_path}"  
+        fi       
+        if [[ "$use_exist_binary" = "true" ]]; then
+            file_must_exists "${binary_path}"
+        fi
+        if [[ "$isPortSpecified" = "true" ]]; then
+            if [ ${#port_start[@]} -ne 2 ]; then LOG_WARN "p2p start port error. e.g: 30300" && exit 1; fi
+        fi
+    else
+        if [[ "$isPortSpecified" = "true" ]]; then
+            if [ ${#proOrmax_port_start[@]} -lt 2 ]; then LOG_WARN "service start port error. e.g: 30300,20200" && exit 1; fi
+        fi
+    fi
 }
 
 print_result() {
@@ -1936,8 +2026,8 @@ deploy_nodes()
             num=${line#*\]}
             num=${num#*:}
             use_ipv6="true"
-            if [[ -n "${use_ipv6}" && $ip != "::" && -z "$(echo "$ip" | grep -E "^([0-9a-fA-F]{0,4}:){1,7}[0-9a-fA-F]{1,4}$")" ]]; then
-                LOG_FATAL "Please check IPv6 address: ${ip}"
+        if [[ -n "${use_ipv6}" && $ip != "::" && -z "$(echo "$ip" | grep -E "^([0-9a-fA-F]{0,4}:){1,7}[0-9a-fA-F]{1,4}$")" ]]; then
+            LOG_FATAL "Please check IPv6 address: ${ip}"
             fi
         else
             ip=${line%:*}
@@ -2010,8 +2100,8 @@ deploy_nodes()
             num=${line#*\]}
             num=${num#*:}
             use_ipv6="true"
-            if [ -n "${use_ipv6}" ] && [ "$ip" != "::" ] && [ -z "$(echo "$ip" | grep -E "^([0-9a-fA-F]{0,4}:){1,7}[0-9a-fA-F]{1,4}$")" ]; then
-                LOG_FATAL "Please check IPv6 address: ${ip}"
+        if [ -n "${use_ipv6}" ] && [ "$ip" != "::" ] && [ -z "$(echo "$ip" | grep -E "^([0-9a-fA-F]{0,4}:){1,7}[0-9a-fA-F]{1,4}$")" ]; then
+            LOG_FATAL "Please check IPv6 address: ${ip}"
             fi
         else
             ip=${line%:*}
@@ -2208,8 +2298,11 @@ generate_auth_account()
   fi
   auth_admin_account=$(bash ${account_script} | grep Address | sed -r "s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]//g" | awk '{print $5}')
   LOG_INFO "Admin account: ${auth_admin_account}"
-  mv accounts* "${ca_dir}"
-
+  if [[ ${chain_version} == "air" ]];then
+      mv accounts* "${ca_dir}"
+  else
+      mv accounts* "${BcosBuilder_path}/${chain_version}"
+  fi
   if [ "$?" -ne "0" ]; then
       LOG_INFO "Admin account generate failed, please check ${account_script}."
       exit 1
@@ -2235,10 +2328,389 @@ modify_multiple_ca_node(){
     modify_node_ca_setting "${subject_hash}"
 }
 
+convert_to_absolute_path() {
+    local path="$1"
+    # Convert to absolute path
+    if [[ ! $path =~ ^/ ]]; then
+        local current_dir=$(pwd)
+
+        path="$current_dir/$path"
+    fi
+    echo "$path"
+}
+
+download_bcos_builder(){
+    local Download_Link="${cdn_link_header}/FISCO-BCOS/releases/${bcos_builder_version}/${bcos_builder_package}"
+    local github_link="https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/${bcos_builder_version}/${bcos_builder_package}"
+    # the binary can obtained from the cos
+    if [ $(curl -IL -o /dev/null -s -w %{http_code} "${Download_Link}") == 200 ];then
+        # try cdn_link
+        LOG_INFO "Downloading bcos-builder tools from ${Download_Link} ..."
+        curl -#LO "${Download_Link}"
+    else
+        LOG_INFO "Downloading bcos-builder tools from ${github_link} ..."
+        curl -#LO "${github_link}"
+    fi
+    if [[ "$(ls -al . | grep "BcosBuilder.tgz" | awk '{print $5}')" -lt "1048576" ]];then
+        exit_with_clean "Download bcos-builder tools failed, please try again. Or download and extract it manually from ${Download_Link}."
+    fi
+    tar -zxf ${bcos_builder_package} 
+}
+
+download_service_bin(){
+    local BcosBuilder_path=$1
+    if [[ ${download_service_binary_path_flag} == "true" ]];then
+        download_service_binary_path=$(convert_to_absolute_path "$download_service_binary_path")
+    fi
+    cd "${BcosBuilder_path}/${chain_version}"
+    if [[ ${chain_version} == "pro" ]] && [[ ${download_specific_binary_flag} == "true" || ${download_service_binary_path_flag} == "true" || ! -d "binary" || ! -f "binary/BcosGatewayService/BcosGatewayService" || \
+     ! -f "binary/BcosNodeService/BcosNodeService" || ! -f "binary/BcosRpcService/BcosRpcService" ]] || \
+    [[ ${chain_version} == "max" ]] && [[ ${download_specific_binary_flag} == "true" || ${download_service_binary_path_flag} == "true" || ! -d "binary" || ! -f "binary/BcosGatewayService/BcosGatewayService" || \
+     ! -f "binary/BcosExecutorService/BcosExecutorService" || ! -f "binary/BcosMaxNodeService/BcosMaxNodeService" || ! -f "binary/BcosRpcService/BcosRpcService" ]];then
+
+        download_service_binary_path=$(convert_to_absolute_path "$download_service_binary_path")
+        python3 build_chain.py download_binary -t ${download_service_binary_type} -v ${service_binary_version} -p ${download_service_binary_path}
+        binary_path=$download_service_binary_path
+    else
+        binary_path=${BcosBuilder_path}/${chain_version}/binary
+    fi
+    cd ../../
+}
+
+gen_chain_template() {
+    local config_path=$1
+    cat <<EOF >"${config_path}"
+[tars]
+tars_pkg_dir = "${binary_path}"
+
+[chain]
+chain_id="${default_chainid}"
+# the rpc-service enable sm-ssl or not, default disable sm-ssl
+rpc_sm_ssl=${sm_mode}
+# the gateway-service enable sm-ssl or not, default disable sm-ssm
+gateway_sm_ssl=${sm_mode}
+# the existed rpc service ca path, will generate new ca if not configured
+#rpc_ca_cert_path=""
+# the existed gateway service ca path, will generate new ca if not configured
+#gateway_ca_cert_path=""
+
+EOF
+}
+
+gen_group_template() {
+    local config_path=$1
+    cat <<EOF >>"${config_path}"
+[[group]]
+group_id="${default_group}"
+# the genesis configuration path of the group, will generate new genesis configuration if not configured
+# genesis_config_path = ""
+# VM type, now only support evm/wasm
+vm_type="evm"
+# use sm-crypto or not
+sm_crypto=false
+# enable auth-check or not
+auth_check=false
+init_auth_address="${auth_admin_account}"
+
+# the genesis config
+# the number of blocks generated by each leader
+leader_period = 1
+# the max number of transactions of a block
+block_tx_count_limit = 1000
+# consensus algorithm now support PBFT(consensus_type=pbft)
+consensus_type = "pbft"
+# transaction gas limit
+gas_limit = "3000000000"
+# compatible version, can be dynamically upgraded through setSystemConfig
+compatibility_version="3.5.0"
+
+EOF
+}
+
+gen_gateway_template() {
+    local agencyName=$1
+    local ip=$2
+    local num=$3
+    local config_path=$4
+    local peers_str=$5
+    local p2p_listen_port=${proOrmax_port_start[0]}
+    local rpc_listen_port=${proOrmax_port_start[1]}
+
+    cat <<EOF >>"${config_path}"
+[[agency]]
+name = "${agencyName}"
+EOF
+
+if [[ ${chain_version} == "max" ]];then
+        tars_listen_port_space=6
+        cat <<EOF >>"${config_path}"
+failover_cluster_url = "${ip}:${tikv_listen_port}"
+EOF
+fi
+
+    cat <<EOF >>"${config_path}"
+# enable data disk encryption for rpc/gateway or not, default is false
+enable_storage_security = false
+# url of the key center, in format of ip:port, please refer to https://github.com/FISCO-BCOS/key-manager for details
+# key_center_url =
+# cipher_data_key =
+
+    [agency.rpc]
+    deploy_ip=["$ip"]
+    # rpc listen ip
+    listen_ip="0.0.0.0"
+    # rpc listen port
+    listen_port=${rpc_listen_port}
+    thread_count=4
+    # rpc tars server listen ip
+    tars_listen_ip="0.0.0.0"
+    # rpc tars server listen port
+    tars_listen_port=${tars_listen_port}
+
+    [agency.gateway]
+    deploy_ip=["$ip"]
+    # gateway listen ip
+    listen_ip="0.0.0.0"
+    # gateway listen port
+    listen_port=${p2p_listen_port}
+    # gateway connected peers, should be all of the gateway peers info
+    peers=${peers_str}
+    tars_listen_port=$((${tars_listen_port}+1))
+
+EOF
+    tars_listen_port=$((tars_listen_port + 2))
+    local i
+    for((i = 0; i < ${num}; i++)); do
+        gen_node_template ${i} ${tars_listen_port} ${config_path} ${ip}
+        tars_listen_port=$((tars_listen_port + ${tars_listen_port_space}))
+    done
+}
+
+gen_node_template(){
+    local node_id=$1
+    local node_name="node${node_id}"
+    local tars_listen_port=$2
+    local config_path=$3
+    local ip=$4
+
+    if [[ ${chain_version} == "pro" ]];then
+    cat <<EOF >>"${config_path}"
+    [[agency.group]]
+        group_id = "${default_group}"
+
+        [[agency.group.node]]
+        # node name, Notice: node_name in the same agency and group must be unique
+        node_name = "${node_name}"
+        deploy_ip = "${ip}"
+        # node tars server listen ip
+        tars_listen_ip="0.0.0.0"
+        # node tars server listen port, Notice: the tars server of the node will cost five ports, then the port tars_listen_port ~ tars_listen_port + 4 should be in free
+        tars_listen_port=${tars_listen_port}
+        # enable data disk encryption for bcos node or not, default is false
+        enable_storage_security = false
+        # url of the key center, in format of ip:port, please refer to https://github.com/FISCO-BCOS/key-manager for details
+        # key_center_url =
+        # cipher_data_key =
+        monitor_listen_port = "${monitor_listen_port}"
+        # monitor log path example:"/home/fisco/tars/framework/app_log/"
+        monitor_log_path = ""
+
+EOF
+    fi
+    if [[ ${chain_version} == "max" ]];then
+        cat <<EOF >>"${config_path}"
+     [[agency.group]]
+        group_id = "${default_group}"
+        [[agency.group.node]]
+        node_name =  "${node_name}"
+        # the tikv storage pd-addresses
+        pd_addrs = "${ip}:${tikv_listen_port}"
+        key_page_size=10240
+        deploy_ip = ["$ip"]
+        executor_deploy_ip=["$ip"]
+        monitor_listen_port =  "${monitor_listen_port}"
+        # the tikv storage pd-addresses
+        # monitor log path example:"/home/fisco/tars/framework/app_log/"
+        monitor_log_path = ""
+        # node tars server listen ip
+        tars_listen_ip="0.0.0.0"
+        # node tars server listen port
+        tars_listen_port=${tars_listen_port}
+
+EOF
+    fi
+}
+
+getPeers(){
+    local ip_param=$1
+    ip_array=(${ip_param//,/ })
+
+    peer=""
+    local gateway_port=${proOrmax_port_start[0]}
+
+    for line in ${ip_array[*]}; do
+        if [ -n "$(echo ${line} | grep "\.")" ];then
+            ip=${line%:*}
+        fi
+        peer+="\"${ip[$n]}:${gateway_port}\", "
+    done
+    peers=[$(echo "${peer::-2}")]
+    echo $peers
+}
+
+gen_gateway_config() {
+    local config_path="$1"
+    [ -z $use_ip_param ] && help 'ERROR: Please set -l or -f option.'
+    if [ "${use_ip_param}" == "true" ]; then
+        ip_array=(${ip_param//,/ })
+    else
+        help
+    fi
+    peers_str=$(getPeers $ip_param)
+    if [[ "${sm_mode}" == "false" && -d "${BcosBuilder_path}/${chain_version}/accounts" ]]; then
+        rm -rf ${BcosBuilder_path}/${chain_version}/accounts
+    fi
+    if [[ "${sm_mode}" == "true" && -d "${BcosBuilder_path}/${chain_version}/accounts_gm" ]]; then
+        rm -rf ${BcosBuilder_path}/${chain_version}/accounts_gm
+    fi
+    check_auth_account
+    gen_chain_template "${config_path}"
+    gen_group_template "${config_path}"
+    local k=0
+    if [[ -z ${proOrmax_port_start[2]} ]];then
+       tars_listen_port=40400 
+    else
+        tars_listen_port=${proOrmax_port_start[2]}
+    fi
+
+    if [[ -z ${proOrmax_port_start[3]} ]];then
+        tikv_listen_port=2379 
+    else
+        tikv_listen_port=${proOrmax_port_start[3]}
+    fi
+
+    if [[ -z ${proOrmax_port_start[4]} ]];then
+        monitor_listen_port=3901 
+    else
+        monitor_listen_port=${proOrmax_port_start[4]}
+    fi
+
+    for line in ${ip_array[*]}; do
+        if [ -n "$(echo ${line} | grep "\.")" ];then
+            ip=${line%:*}
+            num=${line#*:}
+        fi
+        letter=$(printf "\\$(printf '%03o' $((k + 65)))")
+        (( k += 1 ))
+        
+        gen_gateway_template agency${letter} ${ip} ${num} ${config_path} "${peers_str}"
+    done
+}
+
+install_python_package(){
+    if command -v python >/dev/null 2>&1; then
+        file_must_exists "${BcosBuilder_path}/requirements.txt"
+        dir_must_exists "${BcosBuilder_path}/${chain_version}"
+        # package not exit,install now
+        while IFS= read -r package; do
+            if ! python3 -c "import $package" >/dev/null 2>&1; then
+                pip3 install $package >/dev/null 2>&1
+            fi
+        done < "${BcosBuilder_path}/requirements.txt"
+    fi
+}
+# deploy pro or max chain service
+deploy_pro_or_max_nodes(){
+    dir_must_not_exists "${service_output_dir}"
+    mkdir -p "$service_output_dir"
+    dir_must_exists "${service_output_dir}"
+    BcosBuilder_path=${current_dir}/BcosBuilder
+    if [ ! -d "$BcosBuilder_path" ]; then
+        download_bcos_builder
+    fi
+    install_python_package
+    local build_chain_file="${BcosBuilder_path}/${chain_version}/build_chain.py"
+    file_must_exists ${build_chain_file}
+    if [ "$use_exist_binary" == "true" ];then
+        binary_path=$(convert_to_absolute_path "$binary_path")
+        dir_must_exists "${binary_path}"
+    else
+        download_service_bin "${BcosBuilder_path}"
+    fi
+    if [[ "$config_path" != "" ]]; then
+        config_path=$(convert_to_absolute_path "$config_path")
+        file_must_exists "${config_path}"         
+    else
+        config_path=${BcosBuilder_path}/${chain_version}/config.toml
+        gen_gateway_config "${config_path}"
+    fi
+    service_output_dir=$(convert_to_absolute_path "$service_output_dir")
+    cd "${BcosBuilder_path}/${chain_version}"
+    python3 build_chain.py build -t ${service_type} -c ${config_path} -O ${service_output_dir}
+    cd ../../
+}
+
+# remove excess files from the results folder
+removeExcessFiles(){
+    local folder_path="$1"
+
+    for file in "$folder_path"/*
+    do
+        filename=$(basename "$file")
+        
+        # Determine if the file name is named with IP
+        if [[ $filename =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            # Keep only group_node files, remove rpc gateway files
+            if [ -d  ${file}/rpc* ]; then
+                rm -rf ${file}/rpc*
+            fi
+            if [ -d ${file}/gateway* ]; then
+                rm -r ${file}/gateway*
+            fi
+        else
+            # If the file name is not named after IP, delete the file
+            rm -r  $file
+        fi
+    done
+}
+
+expand_pro_max(){
+    dir_must_not_exists "${expand_dir}"
+    mkdir -p "$expand_dir"
+    dir_must_exists "${expand_dir}"
+    BcosBuilder_path=${current_dir}/BcosBuilder
+    if [ ! -d "$BcosBuilder_path" ]; then
+        download_bcos_builder
+    fi
+    install_python_package
+
+    local build_chain_file="${BcosBuilder_path}/${chain_version}/build_chain.py"
+    file_must_exists ${build_chain_file}
+
+    if [[ "$config_path" != "" ]]; then
+        config_path=$(convert_to_absolute_path "$config_path")
+    else
+        config_path=${BcosBuilder_path}/${chain_version}/config.toml
+    fi
+
+    file_must_exists "${config_path}"         
+    # echo ${config_path}
+    expand_dir=$(convert_to_absolute_path "$expand_dir")
+    cd "${BcosBuilder_path}/${chain_version}"
+    python3 build_chain.py build -t all -c ${config_path} -O ${expand_dir}
+
+    cd ../../
+
+    if [[ "${command}" == "expand_node" || "${command}" == "expand_group" ]]; then
+        removeExcessFiles ${expand_dir}
+    fi
+}
+
 main() {
     check_env
     check_and_install_tassl
     parse_params "$@"
+    if [[ "${chain_version}" == "air" ]]; then
     if [[ "${command}" == "deploy" ]]; then
         deploy_nodes
     elif [[ "${command}" == "expand" ]]; then
@@ -2270,6 +2742,13 @@ main() {
         modify_multiple_ca_node
     else
         LOG_FATAL "Unsupported command ${command}, only support \'deploy\' and \'expand\' now!"
+    fi
+    elif [[ "${chain_version}" == "pro" || "${chain_version}" == "max" ]]; then
+        if [[ "${command}" == "deploy" ]]; then
+            deploy_pro_or_max_nodes
+        elif [[ "${command}" == "expand_node" || "${command}" == "expand_group" || "${command}" == "expand_service" ]]; then
+            expand_pro_max
+        fi
     fi
 }
 
