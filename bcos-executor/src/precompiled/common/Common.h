@@ -175,6 +175,8 @@ enum PrecompiledErrorCode : int
     CODE_REGISTER_CALLER_NOT_EXIST = -50094,
     CODE_UNREGISTER_CALLER_FAILED = -50093,
     CODE_CHECK_CALLER_FAILED = -50092,
+    CODE_TRANSFER_FAILED = -50091,
+    CODE_CALLER_TABLE_NOT_EXIST = -50090,
 
     // correct return: code great or equal 0
     CODE_SUCCESS = 0

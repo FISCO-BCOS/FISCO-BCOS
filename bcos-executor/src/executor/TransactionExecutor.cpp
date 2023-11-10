@@ -307,9 +307,13 @@ void TransactionExecutor::initEvmEnvironment()
         CpuHeavyPrecompiled::registerPrecompiled(m_precompiled, m_hashImpl);
         SmallBankPrecompiled::registerPrecompiled(m_precompiled, m_hashImpl);
     }
-    // TODO:according to feature flag to register precompiled
+
+    // according to feature flag to register precompiled
     m_precompiled->insert(BALANCE_PRECOMPILED_ADDRESS,
-        std::make_shared<BalancePrecompiled>(m_hashImpl), BlockVersion::V3_6_VERSION);
+        std::make_shared<BalancePrecompiled>(m_hashImpl),
+        [](uint32_t version, bool isAuthCheck, ledger::Features const& features) {
+            return features.get(ledger::Features::Flag::feature_balance_precompiled);
+        });
 }
 
 void TransactionExecutor::initWasmEnvironment()
@@ -367,6 +371,12 @@ void TransactionExecutor::initWasmEnvironment()
         CpuHeavyPrecompiled::registerPrecompiled(m_precompiled, m_hashImpl);
         SmallBankPrecompiled::registerPrecompiled(m_precompiled, m_hashImpl);
     }
+    // according to feature flag to register precompiled
+    m_precompiled->insert(BALANCE_PRECOMPILED_NAME,
+        std::make_shared<BalancePrecompiled>(m_hashImpl),
+        [](uint32_t, bool, ledger::Features const& features) {
+            return features.get(ledger::Features::Flag::feature_balance_precompiled);
+        });
 }
 
 void TransactionExecutor::initTestPrecompiledTable(storage::StorageInterface::Ptr storage)

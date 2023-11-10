@@ -92,9 +92,6 @@ static constexpr const std::string_view ACCOUNT_LAST_STATUS = "last_status";
 static constexpr const std::string_view ACCOUNT_BALANCE = "balance";
 
 
-/// balance caller
-static constexpr const std::string_view BALANCE_PRECOMPILED_CALLER = "caller";
-
 enum AccountStatus : uint8_t
 {
     normal = 0,

@@ -203,106 +203,123 @@ uint8_t AccountPrecompiled::getAccountStatus(
 }
 
 
-void AccountPrecompiled::getAccountBalance(const std::string& tableName,
+void AccountPrecompiled::getAccountBalance(const std::string& account,
     const std::shared_ptr<executor::TransactionExecutive>& _executive,
     PrecompiledExecResult::Ptr const& _callParameters) const
 {
-    Address account;
     u256 balance;
     const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
-    codec.decode(_callParameters->params(), account);
-    std::string accountStr = account.hex();
-    auto accountTable = getContractTableName(executor::USER_APPS_PREFIX, account.hex());
+    auto accountTable = getContractTableName(executor::USER_APPS_PREFIX, account);
     auto entry = _executive->storage().getRow(accountTable, ACCOUNT_BALANCE);
     if (!entry.has_value())
     {
         PRECOMPILED_LOG(TRACE) << BLOCK_NUMBER(blockContext.number())
                                << LOG_BADGE("AccountPrecompiled, getAccountBalance")
-                               << LOG_DESC("balance not exist, return 0 by default");
+                               << LOG_DESC("balance not exist, return 0 by default")
+                               << LOG_KV("account", account);
         _callParameters->setExecResult(codec.encode(0));
+        return;
     }
     balance = u256(std::string(entry->get()));
+    PRECOMPILED_LOG(TRACE) << BLOCK_NUMBER(blockContext.number())
+                           << LOG_BADGE("AccountPrecompiled, getAccountBalance")
+                           << LOG_DESC("get account balance success") << LOG_KV("account", account)
+                           << LOG_KV("balance", to_string(balance));
 
     _callParameters->setExecResult(codec.encode(balance));
 }
 
-void AccountPrecompiled::addAccountBalance(const std::string& tableName,
+void AccountPrecompiled::addAccountBalance(const std::string& accountTableName,
     const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
     PrecompiledExecResult::Ptr const& _callParameters) const
 {
-    Address account;
     u256 value;
     const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
-    codec.decode(_callParameters->params(), account, value);
-    std::string accountStr = account.hex();
-    auto accountTable = getContractTableName(executor::USER_APPS_PREFIX, account.hex());
+    codec.decode(data, value);
+
+    // check sender
+    const auto* addAccountBalanceSender =
+        blockContext.isWasm() ? BALANCE_PRECOMPILED_NAME : BALANCE_PRECOMPILED_ADDRESS;
+    if (_callParameters->m_sender != addAccountBalanceSender)
+    {
+        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
+        return;
+    }
 
     // check account exist
-    auto table = _executive->storage().openTable(accountTable);
+    auto table = _executive->storage().openTable(accountTableName);
     if (!table.has_value()) [[unlikely]]
     {
         // create account table, and set balance is 0
-        std::string accountTableName(ACCOUNT_BALANCE);
-        _executive->storage().createTable(accountTable, accountTableName);
+        std::string balanceFiled(ACCOUNT_BALANCE);
+        _executive->storage().createTable(accountTableName, balanceFiled);
         Entry Balance;
-        Balance.importFields({"0"});
-        _executive->storage().setRow(accountTable, ACCOUNT_BALANCE, std::move(Balance));
+        Balance.importFields({boost::lexical_cast<std::string>(value)});
+        _executive->storage().setRow(accountTableName, ACCOUNT_BALANCE, std::move(Balance));
         PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number())
                               << LOG_BADGE("AccountPrecompiled, addAccountBalance")
-                              << LOG_DESC("table not exist, create and initialize balance is 0");
+                              << LOG_DESC("table not exist, create and initialize balance")
+                              << LOG_KV("account balance", to_string(value));
         _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
         return;
     }
 
     // check balance exist
-    auto entry = _executive->storage().getRow(accountTable, ACCOUNT_BALANCE);
+    auto entry = _executive->storage().getRow(accountTableName, ACCOUNT_BALANCE);
     if (entry.has_value())
     {
         u256 balance = u256(std::string(entry->get()));
         balance += value;
         Entry Balance;
         Balance.importFields({boost::lexical_cast<std::string>(balance)});
-        _executive->storage().setRow(accountTable, ACCOUNT_BALANCE, std::move(Balance));
+        _executive->storage().setRow(accountTableName, ACCOUNT_BALANCE, std::move(Balance));
     }
     else
     {
         // first time
         Entry Balance;
         Balance.importFields({boost::lexical_cast<std::string>(value)});
-        _executive->storage().setRow(accountTable, ACCOUNT_LAST_STATUS, std::move(Balance));
+        _executive->storage().setRow(accountTableName, ACCOUNT_BALANCE, std::move(Balance));
     }
     PRECOMPILED_LOG(TRACE) << BLOCK_NUMBER(blockContext.number()) << LOG_BADGE("AccountPrecompiled")
-                           << LOG_DESC("addAccountBalance") << LOG_KV("account", tableName)
+                           << LOG_DESC("addAccountBalance") << LOG_KV("account", accountTableName)
                            << LOG_KV("add account balance success", to_string(value));
 
     _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
 }
 
-void AccountPrecompiled::subAccountBalance(const std::string& tableName,
+void AccountPrecompiled::subAccountBalance(const std::string& accountTableName,
     const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
     PrecompiledExecResult::Ptr const& _callParameters) const
 {
-    Address account;
     u256 value;
     const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
-    codec.decode(_callParameters->params(), account, value);
-    std::string accountStr = account.hex();
-    auto accountTable = getContractTableName(executor::USER_APPS_PREFIX, account.hex());
+    codec.decode(data, value);
+
+    // check sender
+    const auto* subAccountBalanceSender =
+        blockContext.isWasm() ? BALANCE_PRECOMPILED_NAME : BALANCE_PRECOMPILED_ADDRESS;
+    if (_callParameters->m_sender != subAccountBalanceSender)
+    {
+        getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
+        return;
+    }
+
 
     // check account exist
-    auto table = _executive->storage().openTable(accountTable);
+    auto table = _executive->storage().openTable(accountTableName);
     // if table not exist, create it
     if (!table.has_value()) [[unlikely]]
     {
         // create account table, and set balance is 0
-        std::string accountTableName(ACCOUNT_BALANCE);
-        _executive->storage().createTable(accountTable, accountTableName);
+        std::string balanceField(ACCOUNT_BALANCE);
+        _executive->storage().createTable(accountTableName, balanceField);
         Entry Balance;
         Balance.importFields({"0"});
-        _executive->storage().setRow(accountTable, ACCOUNT_BALANCE, std::move(Balance));
+        _executive->storage().setRow(accountTableName, ACCOUNT_BALANCE, std::move(Balance));
         PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number())
                               << LOG_BADGE("AccountPrecompiled, subAccountBalance")
                               << LOG_DESC("table not exist, create and initialize balance is 0");
@@ -311,7 +328,7 @@ void AccountPrecompiled::subAccountBalance(const std::string& tableName,
     }
 
     // check balance exist
-    auto entry = _executive->storage().getRow(accountTable, ACCOUNT_BALANCE);
+    auto entry = _executive->storage().getRow(accountTableName, ACCOUNT_BALANCE);
     if (entry.has_value())
     {
         u256 balance = u256(std::string(entry->get()));
@@ -329,7 +346,7 @@ void AccountPrecompiled::subAccountBalance(const std::string& tableName,
             balance -= value;
             Entry Balance;
             Balance.importFields({boost::lexical_cast<std::string>(balance)});
-            _executive->storage().setRow(accountTable, ACCOUNT_BALANCE, std::move(Balance));
+            _executive->storage().setRow(accountTableName, ACCOUNT_BALANCE, std::move(Balance));
             _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
             return;
         }
@@ -339,7 +356,7 @@ void AccountPrecompiled::subAccountBalance(const std::string& tableName,
         // table exist, but ACCOUNT_BALANCE filed not exist
         Entry Balance;
         Balance.importFields({boost::lexical_cast<std::string>(0)});
-        _executive->storage().setRow(accountTable, ACCOUNT_BALANCE, std::move(Balance));
+        _executive->storage().setRow(accountTableName, ACCOUNT_BALANCE, std::move(Balance));
         _callParameters->setExecResult(codec.encode(int32_t(CODE_ACCOUNT_SUB_BALANCE_FAILED)));
         return;
     }
