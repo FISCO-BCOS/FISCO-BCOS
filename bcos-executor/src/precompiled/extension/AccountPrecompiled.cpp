@@ -68,7 +68,7 @@ std::shared_ptr<PrecompiledExecResult> AccountPrecompiled::call(
     uint32_t func = getParamFunc(originParam);
     bytesConstRef data = getParamData(originParam);
     auto table = _executive->storage().openTable(accountTableName);
-//    for fake debug, temporary comment
+//    FIXME: for fake debug, temporary comment
 //    if (!table.has_value()) [[unlikely]]
 //    {
 //        BOOST_THROW_EXCEPTION(PrecompiledError(accountTableName + " does not exist"));
