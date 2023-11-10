@@ -67,14 +67,14 @@ static constexpr std::string_view USER_SYS_PREFIX = "/sys/";
 static constexpr std::string_view USER_USR_PREFIX = "/usr/";
 static constexpr std::string_view USER_SHARD_PREFIX = "/shards/";
 
-static constexpr std::string_view STORAGE_VALUE = "value";
-static constexpr std::string_view ACCOUNT_CODE_HASH = "codeHash";
-static constexpr std::string_view ACCOUNT_CODE = "code";
-static constexpr std::string_view ACCOUNT_ABI = "abi";
-static constexpr std::string_view ACCOUNT_NONCE = "nonce";
-static constexpr std::string_view ACCOUNT_ALIVE = "alive";
-static constexpr std::string_view ACCOUNT_FROZEN = "frozen";
-static constexpr std::string_view ACCOUNT_SHARD = "shard";
+static const char* const STORAGE_VALUE = "value";
+static const char* const ACCOUNT_CODE_HASH = "codeHash";
+static const char* const ACCOUNT_CODE = "code";
+static const char* const ACCOUNT_ABI = "abi";
+static const char* const ACCOUNT_NONCE = "nonce";
+static const char* const ACCOUNT_ALIVE = "alive";
+static const char* const ACCOUNT_FROZEN = "frozen";
+static const char* const ACCOUNT_SHARD = "shard";
 
 /// auth
 static constexpr const std::string_view CONTRACT_SUFFIX = "_accessAuth";
@@ -118,20 +118,20 @@ static constexpr inline std::string_view StatusToString(uint8_t _status) noexcep
 }
 
 /// FileSystem table keys
-static constexpr const std::string_view FS_KEY_NAME = "name";
-static constexpr const std::string_view FS_KEY_TYPE = "type";
-static constexpr const std::string_view FS_KEY_SUB = "sub";
-static constexpr const std::string_view FS_ACL_TYPE = "acl_type";
-static constexpr const std::string_view FS_ACL_WHITE = "acl_white";
-static constexpr const std::string_view FS_ACL_BLACK = "acl_black";
-static constexpr const std::string_view FS_KEY_EXTRA = "extra";
-static constexpr const std::string_view FS_LINK_ADDRESS = "link_address";
-static constexpr const std::string_view FS_LINK_ABI = "link_abi";
+static const char* const FS_KEY_NAME = "name";
+static const char* const FS_KEY_TYPE = "type";
+static const char* const FS_KEY_SUB = "sub";
+static const char* const FS_ACL_TYPE = "acl_type";
+static const char* const FS_ACL_WHITE = "acl_white";
+static const char* const FS_ACL_BLACK = "acl_black";
+static const char* const FS_KEY_EXTRA = "extra";
+static const char* const FS_LINK_ADDRESS = "link_address";
+static const char* const FS_LINK_ABI = "link_abi";
 
 /// FileSystem file type
-static constexpr const std::string_view FS_TYPE_DIR = "directory";
-static constexpr const std::string_view FS_TYPE_CONTRACT = "contract";
-static constexpr const std::string_view FS_TYPE_LINK = "link";
+static const char* const FS_TYPE_DIR = "directory";
+static const char* const FS_TYPE_CONTRACT = "contract";
+static const char* const FS_TYPE_LINK = "link";
 
 #define EXECUTIVE_LOG(LEVEL) BCOS_LOG(LEVEL) << "[EXECUTOR]"
 
