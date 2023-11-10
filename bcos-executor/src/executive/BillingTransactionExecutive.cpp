@@ -1,10 +1,4 @@
 #include "BillingTransactionExecutive.h"
-#include <bcos-codec/bcos-codec/wrapper/CodecWrapper.h>
-#include <bcos-framework/bcos-framework/executor/PrecompiledTypeDef.h>
-
-#ifdef WITH_WASM
-#include "../vm/gas_meter/GasInjector.h"
-#endif
 
 using namespace bcos::executor;
 using namespace bcos::codec;
