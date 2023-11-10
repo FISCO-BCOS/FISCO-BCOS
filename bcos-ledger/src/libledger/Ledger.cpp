@@ -154,6 +154,11 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
 
 
     size_t TOTAL_CALLBACK = 8;
+    // if blockVersion >= 3.6, txs will be stored when commit block, not here
+    if (blockVersion >= uint32_t(bcos::protocol::BlockVersion::V3_6_VERSION))
+    {
+        --TOTAL_CALLBACK;
+    }
 
     auto setRowCallback = [total = std::make_shared<std::atomic<size_t>>(TOTAL_CALLBACK),
                               failed = std::make_shared<bool>(false),
@@ -266,98 +271,8 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
                             << LOG_KV("blockNumber", blockNumberStr);
     }
 
-    if (blockVersion >= uint32_t(bcos::protocol::BlockVersion::V3_6_VERSION))
+    if (blockVersion < uint32_t(bcos::protocol::BlockVersion::V3_6_VERSION))
     {
-        // The genesis block does not have any txs,
-        // so it need to be stored separately in the SYS_NUMBER_2_BLOCK_TXS table.
-        if (header->number() == SYS_CONTRACT_DEPLOY_NUMBER)
-        {
-            assert(block->transactionsSize() == 0);
-            assert(block->transactionsMetaDataSize() == 0);
-            bytes blockBuffer;
-            block->encode(blockBuffer);
-            Entry blockEntry;
-            blockEntry.importFields({std::move(blockBuffer)});
-            m_storage->asyncSetRow(SYS_NUMBER_2_BLOCK_TXS,
-                boost::lexical_cast<std::string>(header->number()), std::move(blockEntry),
-                [setRowCallback](
-                    auto&& error) { setRowCallback(std::forward<decltype(error)>(error)); });
-        }
-        else
-        {
-            // if blockVersion >= 3.6.0, txs are stored in block
-            auto start = utcTime();
-            auto txsToSaveResult = needStoreUnsavedTxs(_blockTxs, block);
-            bool shouldStoreTxs = std::get<0>(txsToSaveResult);
-            if (shouldStoreTxs)
-            {
-                auto blockTxsSize = _blockTxs->size();
-                auto unstoredTxsHash = std::get<1>(txsToSaveResult);
-                auto unstoredTxs = std::get<2>(txsToSaveResult);
-
-                auto blockVersion = block->blockHeaderConst()->version();
-                auto blockNumber = block->blockHeaderConst()->number();
-                auto total = unstoredTxs->size();
-
-                std::vector<std::string_view> txHashKeys(total);
-                std::vector<std::string> values(total);
-                std::vector<std::string_view> valuesView(total);
-                auto blockNumberStr = boost::lexical_cast<std::string>(blockNumber);
-                for (size_t i = 0; i < unstoredTxs->size(); ++i)
-                {
-                    // save txs data in block
-                    auto tx = m_blockFactory->transactionFactory()->createTransaction(
-                        bcos::ref(*(*unstoredTxs)[i]));
-                    transactionsBlock->appendTransaction(tx);
-
-                    // save txhash : blockNumber , txIndex
-                    auto txIndex = boost::lexical_cast<std::string>(i);
-                    txHashKeys[i] = concepts::bytebuffer::toView((*unstoredTxsHash)[i]);
-                    values[i] = blockNumberStr + "+" + txIndex;
-                    valuesView[i] = std::string_view(values[i]);
-                }
-
-                {
-                    // save txs data in block
-                    bytes transactionsBuffer;
-                    transactionsBlock->encode(transactionsBuffer);
-                    Entry number2BlockTxsEntry;
-                    number2BlockTxsEntry.importFields({std::move(transactionsBuffer)});
-                    m_storage->asyncSetRow(SYS_NUMBER_2_BLOCK_TXS,
-                        boost::lexical_cast<std::string>(blockNumber),
-                        std::move(number2BlockTxsEntry), [setRowCallback](auto&& error) {
-                            if (error)
-                            {
-                                setRowCallback(std::forward<decltype(error)>(error));
-                                return;
-                            }
-                        });
-
-                    RecursiveGuard l(m_mutex);
-                    // save txhash : blockNumber , txIndex
-                    bcos::Error::Ptr error = nullptr;
-                    error = m_storage->setRows(SYS_TXHASH_2_NUMBER, txHashKeys, valuesView);
-                    if (error)
-                    {
-                        setRowCallback(std::make_unique<Error>(*error));
-                    }
-                    // set the flag when store success
-                    for (auto const& tx : *_blockTxs)
-                    {
-                        tx->setStoreToBackend(true);
-                    }
-                }
-
-                auto writeTxsTime = utcTime() - start;
-                LEDGER_LOG(INFO) << LOG_DESC("asyncPrewriteBlock")
-                                 << LOG_KV("number", block->blockHeaderConst()->number())
-                                 << LOG_KV("writeTxsTime(ms)", writeTxsTime);
-            }
-        }
-    }
-    else
-    {
-        // if blockVersion >= v3.6.0 , blocks must be stored in SYS_NUMBER_2_BLOCK_TXS
         bytes transactionsBuffer;
         transactionsBlock->encode(transactionsBuffer);
 
@@ -367,10 +282,6 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
             std::move(number2TransactionHashesEntry), [setRowCallback](auto&& error) {
                 setRowCallback(std::forward<decltype(error)>(error));
             });
-
-        asyncPreStoreBlockTxs(_blockTxs, block, [setRowCallback](auto&& error) {
-            setRowCallback(std::forward<decltype(error)>(error));
-        });
     }
 
     std::atomic_int64_t totalCount = 0;

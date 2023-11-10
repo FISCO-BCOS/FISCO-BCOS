@@ -1280,6 +1280,9 @@ BOOST_AUTO_TEST_CASE(testSyncBlock)
 
     block->setBlockHeader(blockHeader);
 
+    auto receipt = testPBTransactionReceipt(m_blockFactory->cryptoSuite(), 100, false);
+    block->appendReceipt(receipt);
+
     std::string inputStr = "hello world!";
     bytes input(inputStr.begin(), inputStr.end());
 
@@ -1301,7 +1304,9 @@ BOOST_AUTO_TEST_CASE(testSyncBlock)
     initFixture();
     auto transactions = std::make_shared<Transactions>();
     transactions->push_back(tx);
-    // m_ledger->storeTransactionsAndReceipts(transactions, std::const_pointer_cast<const bcos::protocol::Block>(block));
+
+    m_ledger->storeTransactionsAndReceipts(transactions, block);
+
     m_ledger->asyncPrewriteBlock(
         m_storage, blockTxs, block, [](Error::Ptr&& error) { BOOST_CHECK(!error); });
 
