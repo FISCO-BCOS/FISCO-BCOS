@@ -27,7 +27,7 @@ public:
     virtual ~MockExecutiveFactory() {}
 
 
-    std::shared_ptr<TransactionExecutive> build(const std::string&, int64_t, int64_t, bool) override
+    std::shared_ptr<TransactionExecutive> build(const std::string&, int64_t, int64_t, ExecutiveType) override
     {
         auto ledgerCache = std::make_shared<LedgerCache>(std::make_shared<MockLedger>());
         blockContext = std::make_shared<BlockContext>(

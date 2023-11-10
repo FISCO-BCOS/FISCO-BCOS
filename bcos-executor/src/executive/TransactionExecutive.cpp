@@ -186,7 +186,7 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
     }
 
 
-    auto executive = buildChildExecutive(input->codeAddress, m_contextID, newSeq, false);
+    auto executive = buildChildExecutive(input->codeAddress, m_contextID, newSeq, ExecutiveType::common);
 
     m_childExecutives.push_back(executive);  // add child executive for revert() if needed
 
