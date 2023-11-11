@@ -86,32 +86,37 @@ std::chrono::milliseconds::rep current();
  */
 task::Task<h256> calculateStateRoot(auto& storage, crypto::Hash const& hashImpl)
 {
-    constexpr static auto STATE_ROOT_CHUNK_SIZE = 32;
-
+    constexpr static auto STATE_ROOT_CHUNK_SIZE = 64;
     auto range = co_await storage2::range(storage);
     auto chunkedRange = range | RANGES::views::chunk(STATE_ROOT_CHUNK_SIZE);
 
     storage::Entry deletedEntry;
     deletedEntry.setStatus(storage::Entry::DELETED);
 
-    tbb::concurrent_vector<h256> hashes;
-    hashes.reserve(RANGES::size(chunkedRange));
-    tbb::parallel_for_each(chunkedRange, [&](auto&& subrange) {
-        h256 localHash;
-        for (auto [key, entry] : subrange)
-        {
-            auto& [tableName, keyName] = *key;
-
-            if (!entry)
+    std::vector<h256, tbb::cache_aligned_allocator<h256>> hashes(RANGES::size(chunkedRange));
+    tbb::task_group hashGroup;
+    auto index = 0U;
+    for (auto&& subrange : chunkedRange)
+    {
+        hashGroup.run([index = index, subrange = std::forward<decltype(subrange)>(subrange),
+                          &hashes, &deletedEntry, &hashImpl]() {
+            auto& localHash = hashes[index];
+            for (auto [key, entry] : subrange)
             {
-                entry = std::addressof(deletedEntry);
-            }
+                auto& [tableName, keyName] = *key;
 
-            localHash ^= entry->hash(tableName, keyName, hashImpl,
-                static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION));
-        }
-        hashes.emplace_back(localHash);
-    });
+                if (!entry)
+                {
+                    entry = std::addressof(deletedEntry);
+                }
+
+                localHash ^= entry->hash(tableName, keyName, hashImpl,
+                    static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION));
+            }
+        });
+        ++index;
+    }
+    hashGroup.wait();
 
     struct XORHash
     {
