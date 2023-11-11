@@ -15,7 +15,7 @@ struct InvalidStateKey : public Error
 
 struct StateValueResolver
 {
-    static std::string_view encode(storage::Entry const& entry) { return entry.get(); }
+    static std::string_view encode(const storage::Entry& entry) { return entry.get(); }
     static storage::Entry decode(concepts::bytebuffer::ByteBuffer auto&& buffer)
     {
         storage::Entry entry;
@@ -32,7 +32,7 @@ struct StateKeyResolver
             transaction_executor::ContractKey::static_capacity>;
     constexpr static char TABLE_KEY_SPLIT = ':';
 
-    static DBKey encode(auto const& stateKey)
+    static DBKey encode(auto&& stateKey)
     {
         auto& [tableName, key] = stateKey;
 

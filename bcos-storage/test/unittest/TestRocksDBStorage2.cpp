@@ -170,7 +170,7 @@ BOOST_AUTO_TEST_CASE(merge)
         RocksDBStorage2<StateKey, StateValue, StateKeyResolver,
             bcos::storage2::rocksdb::StateValueResolver>
             rocksDB(*originRocksDB, StateKeyResolver{}, StateValueResolver{});
-        co_await rocksDB.merge(memoryStorage);
+        co_await storage2::merge(memoryStorage, rocksDB);
 
 #if 0
         auto seekIt = co_await rocksDB.seek(storage2::STORAGE_BEGIN);
