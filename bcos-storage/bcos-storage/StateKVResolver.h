@@ -15,7 +15,8 @@ struct InvalidStateKey : public Error
 
 struct StateValueResolver
 {
-    static std::string_view encode(const storage::Entry& entry) { return entry.get(); }
+    static auto encode(const storage::Entry& entry) { return entry; }
+    static auto encode(storage::Entry&& entry) { return std::forward<decltype(entry)>(entry); }
     static storage::Entry decode(concepts::bytebuffer::ByteBuffer auto&& buffer)
     {
         storage::Entry entry;

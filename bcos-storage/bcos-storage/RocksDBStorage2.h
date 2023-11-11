@@ -9,11 +9,13 @@
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Error.h"
 #include "bcos-utilities/Overloaded.h"
+#include <bits/utility.h>
 #include <oneapi/tbb/concurrent_vector.h>
 #include <oneapi/tbb/parallel_for_each.h>
 #include <oneapi/tbb/parallel_pipeline.h>
 #include <rocksdb/db.h>
 #include <rocksdb/iterator.h>
+#include <rocksdb/slice.h>
 #include <boost/container/small_vector.hpp>
 #include <boost/throw_exception.hpp>
 #include <functional>
@@ -45,6 +47,18 @@ struct UnsupportedMethod : public bcos::Error {};
 struct UnexpectedItemType : public bcos::Error {};
 // clang-format on
 
+// Copy from rocksdb util/coding.h
+inline constexpr int VarintLength(uint64_t v)
+{
+    int len = 1;
+    while (v >= 128)
+    {
+        v >>= 7;
+        len++;
+    }
+    return len;
+}
+
 constexpr static size_t ROCKSDB_SEP_HEADER_SIZE = 12;
 constexpr inline size_t getRocksDBKeyPairSize(
     bool hashColumnFamily, size_t keySize, size_t valueSize)
@@ -60,7 +74,9 @@ constexpr inline size_t getRocksDBKeyPairSize(
     |key_size|key_bytes|
     |value_length|value_bytes|
     */
-    return hashColumnFamily ? 1 + 4 + keySize + 4 + valueSize : 1 + keySize + 4 + valueSize;
+    return hashColumnFamily ?
+               1 + 4 + VarintLength(keySize) + keySize + VarintLength(valueSize) + valueSize :
+               1 + VarintLength(keySize) + keySize + VarintLength(valueSize) + valueSize;
 }
 
 constexpr static auto ROCKSDB_WRITE_CHUNK_SIZE = 64;
@@ -175,7 +191,7 @@ public:
                 {
                     auto it = rocksDBKeyValues.emplace_back(
                         storage.m_keyResolver.encode(key), storage.m_valueResolver.encode(value));
-                    auto&& [keyBuffer, valueBuffer] = *it;
+                    auto const& [keyBuffer, valueBuffer] = *it;
                     localReservedLength += getRocksDBKeyPairSize(
                         false, RANGES::size(keyBuffer), RANGES::size(valueBuffer));
                 }
@@ -243,10 +259,12 @@ public:
     {
         auto range = co_await storage2::range(fromStorage);
 
-        using RangeValueType = std::optional<storage::Entry>;
+        using RangeValueType = RANGES::range_value_t<decltype(range)>;
         using RocksDBKeyValueTuple = std::tuple<
-            decltype(storage.m_keyResolver.encode(std::declval<transaction_executor::StateKey>())),
-            std::optional<decltype(storage.m_keyResolver.encode(std::declval<RangeValueType>()))>>;
+            decltype(storage.m_keyResolver.encode(
+                std::declval<std::remove_pointer_t<std::tuple_element_t<0, RangeValueType>>>())),
+            std::optional<decltype(storage.m_valueResolver.encode(
+                std::declval<std::remove_pointer_t<std::tuple_element_t<1, RangeValueType>>>()))>>;
 
         std::atomic_size_t totalReservedLength = ROCKSDB_SEP_HEADER_SIZE;
         tbb::concurrent_vector<RocksDBKeyValueTuple> rocksDBKeyValues;
@@ -267,16 +285,14 @@ public:
                         localReservedLength += getRocksDBKeyPairSize(
                             false, RANGES::size(keyBuffer), RANGES::size(*valueBuffer));
                     }
-                    // else
-                    // {
-                    //     auto it =
-                    //     rocksDBKeyValues.emplace_back(storage.m_keyResolver.encode(*key),
-                    //         std::optional<decltype(storage.m_keyResolver.encode(
-                    //             std::declval<RangeValueType>()))>{});
-                    //     auto&& [keyBuffer, valueBuffer] = *it;
-                    //     localReservedLength +=
-                    //         getRocksDBKeyPairSize(false, RANGES::size(keyBuffer), 0);
-                    // }
+                    else
+                    {
+                        auto it = rocksDBKeyValues.emplace_back(storage.m_keyResolver.encode(*key),
+                            std::tuple_element_t<1, RocksDBKeyValueTuple>{});
+                        auto&& [keyBuffer, valueBuffer] = *it;
+                        localReservedLength +=
+                            getRocksDBKeyPairSize(false, RANGES::size(keyBuffer), 0);
+                    }
                 }
                 totalReservedLength += localReservedLength;
             });

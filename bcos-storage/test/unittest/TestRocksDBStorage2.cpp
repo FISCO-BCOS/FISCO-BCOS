@@ -51,6 +51,30 @@ BOOST_AUTO_TEST_CASE(kvResolver)
     BOOST_CHECK_EQUAL(keyName, "key100");
 }
 
+BOOST_AUTO_TEST_CASE(writeBatch)
+{
+    size_t totalReservedLength = ROCKSDB_SEP_HEADER_SIZE;
+    constexpr static auto key1 = "Hello world!"sv;
+    constexpr static auto value1 = "I am a value!"sv;
+
+    constexpr static auto key2 = "key2"sv;
+    constexpr static auto value2 = "value2"sv;
+
+    constexpr static auto totalSize = key1.size() + key2.size() + value1.size() + value2.size();
+
+    totalReservedLength += getRocksDBKeyPairSize(false, RANGES::size(key1), RANGES::size(value1));
+    totalReservedLength += getRocksDBKeyPairSize(false, RANGES::size(key2), RANGES::size(value2));
+    ::rocksdb::WriteBatch writeBatch(totalReservedLength);
+    const auto* address = writeBatch.Data().data();
+
+    writeBatch.Put(
+        ::rocksdb::Slice(key1.data(), key1.size()), ::rocksdb::Slice(value1.data(), value1.size()));
+    writeBatch.Put(
+        ::rocksdb::Slice(key2.data(), key2.size()), ::rocksdb::Slice(value2.data(), value2.size()));
+    BOOST_CHECK_EQUAL(totalReservedLength, writeBatch.Data().size());
+    BOOST_CHECK_EQUAL(address, writeBatch.Data().data());
+}
+
 BOOST_AUTO_TEST_CASE(readWriteRemoveSeek)
 {
     task::syncWait([this]() -> task::Task<void> {
@@ -165,7 +189,7 @@ BOOST_AUTO_TEST_CASE(merge)
             entry.set(fmt::format("Entry value is: i am a value!!!!!!! {}", num));
             return entry;
         });
-        co_await memoryStorage.write(keys, values);
+        co_await storage2::writeSome(memoryStorage, keys, values);
 
         RocksDBStorage2<StateKey, StateValue, StateKeyResolver,
             bcos::storage2::rocksdb::StateValueResolver>
