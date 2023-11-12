@@ -68,11 +68,6 @@ constexpr inline size_t getRocksDBKeyPairSize(
     |KTypeValue|
     |key_size|key_bytes|
     |value_length|value_bytes|
-
-    specify cf:
-    |kTypeColumnFamilyValue|column_family_id|
-    |key_size|key_bytes|
-    |value_length|value_bytes|
     */
     return hashColumnFamily ?
                1 + 4 + VarintLength(keySize) + keySize + VarintLength(valueSize) + valueSize :
@@ -105,10 +100,11 @@ public:
         auto const& key) -> task::AwaitableValue<std::optional<ValueType>>
     {
         auto rocksDBKey = storage.m_keyResolver.encode(key);
-        ::rocksdb::PinnableSlice result;
+        std::string result;
         auto status =
             storage.m_rocksDB.Get(::rocksdb::ReadOptions(), storage.m_rocksDB.DefaultColumnFamily(),
-                ::rocksdb::Slice(RANGES::data(rocksDBKey), RANGES::size(rocksDBKey)), &result);
+                ::rocksdb::Slice(RANGES::data(rocksDBKey), RANGES::size(rocksDBKey)),
+                std::addressof(result));
         if (!status.ok())
         {
             if (!status.IsNotFound())
@@ -119,7 +115,7 @@ public:
             return {std::optional<ValueType>{}};
         }
 
-        return {std::make_optional(storage.m_valueResolver.decode(result.ToStringView()))};
+        return {std::make_optional(storage.m_valueResolver.decode(std::move(result)))};
     }
 
     static auto readSome(RocksDBStorage2& storage, RANGES::input_range auto&& keys)
@@ -156,7 +152,7 @@ public:
 
                 return std::make_optional(storage.m_valueResolver.decode(result.ToStringView()));
             }) |
-            RANGES::to<std::vector<std::optional<storage::Entry>>>();
+            RANGES::to<boost::container::small_vector<std::optional<storage::Entry>, 1>>();
         return result;
     }
 
@@ -179,6 +175,7 @@ public:
 
         std::atomic_size_t totalReservedLength = ROCKSDB_SEP_HEADER_SIZE;
         tbb::concurrent_vector<RocksDBKeyValueTuple> rocksDBKeyValues;
+        rocksDBKeyValues.reserve(RANGES::size(keys));
         auto chunkRange =
             RANGES::views::zip(keys, values) | RANGES::views::chunk(ROCKSDB_WRITE_CHUNK_SIZE);
         tbb::task_group writeGroup;
@@ -314,7 +311,7 @@ public:
             }
         }
         ::rocksdb::WriteOptions options;
-        auto status = storage.m_rocksDB.Write(options, &writeBatch);
+        auto status = storage.m_rocksDB.Write(options, std::addressof(writeBatch));
 
         if (!status.ok())
         {

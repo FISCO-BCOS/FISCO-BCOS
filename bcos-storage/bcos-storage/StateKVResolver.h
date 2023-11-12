@@ -17,11 +17,16 @@ struct StateValueResolver
 {
     static auto encode(const storage::Entry& entry) { return entry; }
     static auto encode(storage::Entry&& entry) { return std::forward<decltype(entry)>(entry); }
-    static storage::Entry decode(concepts::bytebuffer::ByteBuffer auto&& buffer)
+    static storage::Entry decode(std::string_view view)
     {
         storage::Entry entry;
-        entry.set(std::forward<decltype(buffer)>(buffer));
-
+        entry.set(view);
+        return entry;
+    }
+    static storage::Entry decode(std::string buffer)
+    {
+        storage::Entry entry;
+        entry.set(std::move(buffer));
         return entry;
     }
 };
