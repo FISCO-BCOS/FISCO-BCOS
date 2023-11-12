@@ -3,7 +3,6 @@
 #include "bcos-concepts/Exception.h"
 #include "bcos-framework/storage/Entry.h"
 #include "bcos-framework/storage2/Storage.h"
-#include "bcos-framework/storage2/StorageMethods.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-task/AwaitableValue.h"
 #include "bcos-task/Wait.h"

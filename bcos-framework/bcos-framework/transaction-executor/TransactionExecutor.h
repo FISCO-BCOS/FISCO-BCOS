@@ -143,6 +143,13 @@ struct std::hash<bcos::transaction_executor::StateKey>
         auto view = static_cast<bcos::transaction_executor::StateKeyView>(stateKey);
         return std::hash<bcos::transaction_executor::StateKeyView>{}(view);
     }
+    size_t operator()(const bcos::transaction_executor::StateKeyView& stateKeyView) const
+    {
+        auto const& [table, key] = stateKeyView;
+        auto hash = std::hash<std::string_view>{}(table);
+        boost::hash_combine(hash, std::hash<std::string_view>{}(key));
+        return hash;
+    }
 };
 
 template <>
@@ -151,6 +158,13 @@ struct boost::hash<bcos::transaction_executor::StateKey>
     size_t operator()(const bcos::transaction_executor::StateKey& stateKey) const
     {
         return std::hash<bcos::transaction_executor::StateKey>{}(stateKey);
+    }
+    size_t operator()(const bcos::transaction_executor::StateKeyView& stateKeyView) const
+    {
+        auto const& [table, key] = stateKeyView;
+        auto hash = std::hash<std::string_view>{}(table);
+        boost::hash_combine(hash, std::hash<std::string_view>{}(key));
+        return hash;
     }
 };
 
@@ -161,3 +175,14 @@ inline std::ostream& operator<<(
     stream << static_cast<std::string_view>(smallString);
     return stream;
 }
+
+template <>
+struct std::equal_to<bcos::transaction_executor::StateKey>
+{
+    bool operator()(bcos::transaction_executor::StateKeyView const& lhs,
+        bcos::transaction_executor::StateKey const& rhs) const
+    {
+        auto rhsView = static_cast<bcos::transaction_executor::StateKeyView>(rhs);
+        return lhs == rhsView;
+    }
+};

@@ -161,7 +161,8 @@ static void readTBBHashMap(benchmark::State& state)
     }
 }
 
-tbb::concurrent_unordered_map<Key, storage::Entry, std::hash<StateKey>> tbbUnorderedMap;
+tbb::concurrent_unordered_map<Key, storage::Entry, std::hash<StateKey>, std::equal_to<>>
+    tbbUnorderedMap;
 static void readTBBUnorderedMap(benchmark::State& state)
 {
     if (state.thread_index() == 0)

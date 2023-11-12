@@ -27,8 +27,7 @@ struct UnsupportedMethod : public bcos::Error {};
 // clang-format on
 
 template <class MutableStorageType, class CachedStorage, class BackendStorage>
-    requires((std::is_void_v<CachedStorage> || (!std::is_void_v<CachedStorage>)) &&
-             storage2::SeekableStorage<MutableStorageType>)
+    requires((std::is_void_v<CachedStorage> || (!std::is_void_v<CachedStorage>)))
 class MultiLayerStorage
 {
 private:

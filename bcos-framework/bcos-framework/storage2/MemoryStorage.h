@@ -335,9 +335,11 @@ public:
         return {};
     }
 
-    task::AwaitableValue<void> merge(MemoryStorage& from)
+    friend task::AwaitableValue<void> tag_invoke(
+        storage2::tag_t<merge> /*unused*/, MemoryStorage& fromStorage, MemoryStorage& toStorage)
     {
-        for (auto&& [bucket, fromBucket] : RANGES::views::zip(m_buckets, from.m_buckets))
+        for (auto&& [bucket, fromBucket] :
+            RANGES::views::zip(toStorage.m_buckets, fromStorage.m_buckets))
         {
             Lock toLock(bucket.mutex);
             Lock fromLock(fromBucket.mutex);
