@@ -175,6 +175,10 @@ task::Task<void> tag_invoke(
         {
             co_await storage2::writeOne(toStorage, *key, *value);
         }
+        else
+        {
+            co_await storage2::removeOne(toStorage, *key);
+        }
     }
 }
 

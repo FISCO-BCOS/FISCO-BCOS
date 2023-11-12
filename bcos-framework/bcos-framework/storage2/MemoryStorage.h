@@ -2,6 +2,7 @@
 
 #include "Storage.h"
 #include "bcos-task/AwaitableValue.h"
+#include "bcos-utilities/Overloaded.h"
 #include <bcos-utilities/NullLock.h>
 #include <boost/container/small_vector.hpp>
 #include <boost/multi_index/hashed_index.hpp>
@@ -148,8 +149,8 @@ private:
         requires(!withConcurrent)
     {
         auto range = RANGES::views::transform(storage.m_buckets[0].container,
-            [](Data const& data) -> std::tuple<const KeyType*, const ValueType*> {
-                if constexpr (withLogicalDeletion)
+            [&](Data const& data) -> std::tuple<const KeyType*, const ValueType*> {
+                if constexpr (storage.withLogicalDeletion)
                 {
                     return std::make_tuple(std::addressof(data.key),
                         std::holds_alternative<Deleted>(data.value) ?
@@ -210,14 +211,21 @@ public:
             auto it = index.find(key);
             if (it != index.end())
             {
-                if constexpr (withMRU)
+                if constexpr (storage.withMRU)
                 {
                     storage.updateMRUAndCheck(bucket, it);
                 }
 
-                if constexpr (withLogicalDeletion)
+                if constexpr (storage.withLogicalDeletion)
                 {
-                    result.value().emplace_back(std::get<ValueType>(it->value));
+                    std::visit(bcos::overloaded{[&](ValueType const& value) {
+                                                    result.value().emplace_back(
+                                                        std::make_optional(value));
+                                                },
+                                   [&](Deleted const&) {
+                                       result.value().emplace_back(std::optional<ValueType>{});
+                                   }},
+                        it->value);
                 }
                 else
                 {
@@ -240,14 +248,14 @@ public:
             auto [bucket, lock] = storage.getBucket(key);
             auto const& index = bucket.get().container.template get<0>();
 
-            std::conditional_t<withMRU, int64_t, Empty> updatedCapacity;
-            if constexpr (withMRU)
+            std::conditional_t<storage.withMRU, int64_t, Empty> updatedCapacity;
+            if constexpr (storage.withMRU)
             {
                 updatedCapacity = getSize(value);
             }
 
             typename Container::iterator it;
-            if constexpr (withOrdered)
+            if constexpr (storage.withOrdered)
             {
                 it = index.lower_bound(key);
             }
@@ -257,7 +265,7 @@ public:
             }
             if (it != index.end() && it->key == key)
             {
-                if constexpr (withMRU)
+                if constexpr (storage.withMRU)
                 {
                     auto& existsValue = it->value;
                     updatedCapacity -= getSize(existsValue);
@@ -275,7 +283,7 @@ public:
                             .value = std::forward<decltype(value)>(value)});
             }
 
-            if constexpr (withMRU)
+            if constexpr (storage.withMRU)
             {
                 bucket.get().capacity += updatedCapacity;
                 storage.updateMRUAndCheck(bucket.get(), it);
@@ -297,7 +305,7 @@ public:
             if (it != index.end())
             {
                 auto& existsValue = it->value;
-                if constexpr (withLogicalDeletion)
+                if constexpr (storage.withLogicalDeletion)
                 {
                     if (std::holds_alternative<Deleted>(existsValue))
                     {
@@ -306,12 +314,12 @@ public:
                     }
                 }
 
-                if constexpr (withMRU)
+                if constexpr (storage.withMRU)
                 {
                     bucket.get().capacity -= getSize(existsValue);
                 }
 
-                if constexpr (withLogicalDeletion)
+                if constexpr (storage.withLogicalDeletion)
                 {
                     bucket.get().container.modify(it, [](Data& data) mutable {
                         data.value.template emplace<Deleted>(Deleted{});
@@ -324,7 +332,7 @@ public:
             }
             else
             {
-                if constexpr (withLogicalDeletion)
+                if constexpr (storage.withLogicalDeletion)
                 {
                     it = bucket.get().container.emplace_hint(
                         it, Data{.key = key, .value = Deleted{}});
