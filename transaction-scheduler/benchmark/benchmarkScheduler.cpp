@@ -1,20 +1,21 @@
 #include "bcos-codec/bcos-codec/abi/ContractABICodec.h"
+#include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/protocol/ServiceDesc.h"
-#include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-framework/storage2/MemoryStorage.h>
-#include <bcos-framework/transaction-executor/TransactionExecutor.h>
-#include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
-#include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
-#include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
-#include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
-#include <bcos-tars-protocol/protocol/TransactionReceiptImpl.h>
-#include <bcos-task/Wait.h>
-#include <bcos-transaction-executor/TransactionExecutorImpl.h>
-#include <bcos-transaction-executor/precompiled/PrecompiledManager.h>
-#include <bcos-transaction-scheduler/MultiLayerStorage.h>
-#include <bcos-transaction-scheduler/SchedulerParallelImpl.h>
-#include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
-#include <bcos-utilities/ITTAPI.h>
+#include "bcos-framework/storage2/MemoryStorage.h"
+#include "bcos-framework/transaction-executor/TransactionExecutor.h"
+#include "bcos-storage/RocksDBStorage2.h"
+#include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
+#include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
+#include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
+#include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
+#include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
+#include "bcos-task/Wait.h"
+#include "bcos-transaction-executor/TransactionExecutorImpl.h"
+#include "bcos-transaction-executor/precompiled/PrecompiledManager.h"
+#include "bcos-transaction-scheduler/MultiLayerStorage.h"
+#include "bcos-transaction-scheduler/SchedulerParallelImpl.h"
+#include "bcos-transaction-scheduler/SchedulerSerialImpl.h"
+#include "bcos-utilities/ITTAPI.h"
 #include <benchmark/benchmark.h>
 #include <fmt/format.h>
 #include <transaction-executor/tests/TestBytecode.h>
@@ -31,9 +32,19 @@ constexpr static s256 singleTransfer(1);
 
 using MutableStorage = MemoryStorage<StateKey, StateValue, Attribute(ORDERED | LOGICAL_DELETION)>;
 using BackendStorage =
-    MemoryStorage<StateKey, StateValue, Attribute(CONCURRENT), std::hash<StateKey>>;
+    MemoryStorage<StateKey, StateValue, Attribute(CONCURRENT), std::hash<StateKeyView>>;
 using MultiLayerStorageType = MultiLayerStorage<MutableStorage, void, BackendStorage>;
 using ReceiptFactory = bcostars::protocol::TransactionReceiptFactoryImpl;
+
+namespace bcos::transaction_scheduler
+{
+auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, MutableStorage& storage,
+    RANGES::input_range auto&& keys, storage2::READ_FRONT_TYPE const& /*unused*/)
+    -> task::Task<task::AwaitableReturnType<decltype(storage2::readSome(storage, keys))>>
+{
+    co_return co_await storage2::readSome(storage, std::forward<decltype(keys)>(keys));
+}
+}  // namespace bcos::transaction_scheduler
 
 template <bool parallel>
 struct Fixture

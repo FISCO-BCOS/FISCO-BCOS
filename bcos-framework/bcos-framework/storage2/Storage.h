@@ -130,34 +130,38 @@ template <auto& Tag>
 using tag_t = std::decay_t<decltype(Tag)>;
 
 // Default implementations
-auto tag_invoke(bcos::storage2::tag_t<readOne> /*unused*/, auto& storage, auto const& key)
-    -> task::Task<std::remove_cvref_t<decltype(std::declval<
-        task::AwaitableReturnType<decltype(readSome(storage, RANGES::views::single(key)))>>()[0])>>
+auto tag_invoke(bcos::storage2::tag_t<readOne> /*unused*/, auto& storage, auto const& key,
+    auto&&... args) -> task::
+    Task<std::remove_cvref_t<decltype(std::declval<task::AwaitableReturnType<decltype(readSome(
+            storage, RANGES::views::single(key), std::forward<decltype(args)>(args)...))>>()[0])>>
 {
     auto values = co_await readSome(storage,
         RANGES::views::single(std::cref(key)) |
-            RANGES::views::transform([](auto&& input) -> auto const& { return input.get(); }));
+            RANGES::views::transform([](auto&& input) -> auto const& { return input.get(); }),
+        std::forward<decltype(args)>(args)...);
     co_return std::move(values[0]);
 }
 
-auto tag_invoke(bcos::storage2::tag_t<writeOne> /*unused*/, auto& storage, auto&& key, auto&& value)
-    -> task::Task<void>
+auto tag_invoke(bcos::storage2::tag_t<writeOne> /*unused*/, auto& storage, auto&& key, auto&& value,
+    auto&&... args) -> task::Task<void>
 {
     co_await writeSome(storage, RANGES::views::single(std::forward<decltype(key)>(key)),
-        RANGES::views::single(std::forward<decltype(value)>(value)));
+        RANGES::views::single(std::forward<decltype(value)>(value)),
+        std::forward<decltype(args)>(args)...);
 }
 
-auto tag_invoke(bcos::storage2::tag_t<removeOne> /*unused*/, auto& storage, auto const& key)
-    -> task::Task<void>
+auto tag_invoke(bcos::storage2::tag_t<removeOne> /*unused*/, auto& storage, auto const& key,
+    auto&&... args) -> task::Task<void>
 {
     co_await removeSome(storage, RANGES::views::single(std::cref(key)) | RANGES::views::transform([
-    ](auto&& input) -> auto const& { return input.get(); }));
+    ](auto&& input) -> auto const& { return input.get(); }),
+        std::forward<decltype(args)>(args)...);
 }
 
-auto tag_invoke(bcos::storage2::tag_t<existsOne> /*unused*/, auto& storage, auto const& key)
-    -> task::Task<bool>
+auto tag_invoke(bcos::storage2::tag_t<existsOne> /*unused*/, auto& storage, auto const& key,
+    auto&&... args) -> task::Task<bool>
 {
-    auto result = co_await readOne(storage, key);
+    auto result = co_await readOne(storage, key, std::forward<decltype(args)>(args)...);
     co_return result.has_value();
 }
 

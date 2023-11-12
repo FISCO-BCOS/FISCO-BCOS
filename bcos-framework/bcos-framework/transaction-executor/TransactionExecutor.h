@@ -6,7 +6,6 @@
 #include "../protocol/TransactionReceiptFactory.h"
 #include "../storage/Entry.h"
 #include "../storage2/Storage.h"
-#include "../storage2/StorageMethods.h"
 #include "bcos-utilities/ThreeWay4StringView.h"
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-task/Trait.h>
