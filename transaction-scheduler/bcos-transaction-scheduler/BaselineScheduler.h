@@ -274,13 +274,15 @@ private:
             scheduler.m_multiLayerStorage.newMutable();
             auto view = scheduler.m_multiLayerStorage.fork(true);
             auto constTransactions = co_await getTransactions(scheduler.m_txpool, *block);
+
+            auto ledgerConfig = scheduler.m_ledgerConfig;
             auto receipts = co_await transaction_scheduler::executeBlock(scheduler.m_schedulerImpl,
                 view, scheduler.m_executor, *blockHeader,
                 constTransactions |
                     RANGES::views::transform(
                         [](protocol::Transaction::ConstPtr const& transactionPtr)
                             -> protocol::Transaction const& { return *transactionPtr; }),
-                *scheduler.m_ledgerConfig);
+                *ledgerConfig);
 
             auto newBlockHeader = scheduler.m_blockHeaderFactory.populateBlockHeader(blockHeader);
             finishExecute(scheduler.m_multiLayerStorage.mutableStorage(), receipts, *newBlockHeader,
