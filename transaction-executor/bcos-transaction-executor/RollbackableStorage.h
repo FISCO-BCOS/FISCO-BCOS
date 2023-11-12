@@ -22,13 +22,14 @@ template <class Storage>
 class Rollbackable
 {
 private:
-    constexpr static size_t MOSTLY_STEPS = 7;
     struct Record
     {
-        StateKey key;
-        std::optional<StateValue> oldValue;
+        typename Storage::Key key;
+        task::AwaitableReturnType<decltype(storage2::readOne((Storage&)std::declval<Storage>(),
+            std::declval<typename Storage::Key>(), storage2::READ_FRONT))>
+            oldValue;
     };
-    boost::container::small_vector<Record, MOSTLY_STEPS> m_records;
+    std::vector<Record> m_records;
     Storage& m_storage;
 
 public:
@@ -84,16 +85,11 @@ public:
             (Storage&)std::declval<Storage>(), std::forward<decltype(keys)>(keys),
             std::forward<decltype(values)>(values)))>>
     {
-        // Store values to history
         auto oldValues = co_await storage2::readSome(storage.m_storage, keys, storage2::READ_FRONT);
-        for (auto&& [key, value] : RANGES::views::zip(keys, oldValues))
+        for (auto&& [key, oldValue] : RANGES::views::zip(keys, oldValues))
         {
-            auto& record =
-                storage.m_records.emplace_back(Record{.key = StateKey{key}, .oldValue = {}});
-            if (value)
-            {
-                record.oldValue.emplace(std::move(*value));
-            }
+            storage.m_records.emplace_back(Record{.key = typename Storage::Key{key},
+                .oldValue = std::forward<decltype(oldValue)>(oldValue)});
         }
 
         co_return co_await storage2::writeSome(storage.m_storage,
@@ -106,12 +102,8 @@ public:
             task::AwaitableReturnType<decltype(storage2::writeOne((Storage&)std::declval<Storage>(),
                 std::forward<decltype(key)>(key), std::forward<decltype(value)>(value)))>>
     {
-        auto oldValue = co_await storage2::readOne(storage.m_storage, key, storage2::READ_FRONT);
-        auto& record = storage.m_records.emplace_back(Record{.key = StateKey{key}, .oldValue = {}});
-        if (oldValue)
-        {
-            record.oldValue.emplace(std::move(*oldValue));
-        }
+        storage.m_records.emplace_back(Record{.key = typename Storage::Key{key},
+            .oldValue = co_await storage2::readOne(storage.m_storage, key, storage2::READ_FRONT)});
         co_await storage2::writeOne(storage.m_storage, std::forward<decltype(key)>(key),
             std::forward<decltype(value)>(value));
     }
