@@ -8,7 +8,6 @@
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Error.h"
 #include "bcos-utilities/Overloaded.h"
-#include <bits/utility.h>
 #include <oneapi/tbb/concurrent_vector.h>
 #include <oneapi/tbb/parallel_for_each.h>
 #include <oneapi/tbb/parallel_pipeline.h>
