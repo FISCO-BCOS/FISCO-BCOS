@@ -782,23 +782,12 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
 
     if (_avoidDuplicate)
     {
-        size_t eachBucketTxsLimit = 0;
-        // After performance testing, 0.25 had the best performance.
-        eachBucketTxsLimit = (_txsLimit / (0.25 * CPU_CORES)) + 1;
-        if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
-        {
-            TXPOOL_LOG(TRACE) << LOG_DESC("batchFetchTxs")
-                              << LOG_KV("pendingTxs", m_txsTable.size())
-                              << LOG_KV("limit", _txsLimit)
-                              << LOG_KV("eachBucketTxsLimit", eachBucketTxsLimit);
-        }
         m_txsTable.forEach<TxsMap::ReadAccessor>(
-            m_knownLatestSealedTxHash, eachBucketTxsLimit, [&](TxsMap::ReadAccessor::Ptr accessor) {
+            m_knownLatestSealedTxHash, [&](TxsMap::ReadAccessor::Ptr accessor) {
                 const auto& tx = accessor->value();
-                bool isTxValid = handleTx(tx);
-                bool needContinue = (_txsList->transactionsMetaDataSize() +
-                                        _sysTxsList->transactionsMetaDataSize()) < _txsLimit;
-                return std::pair<bool, bool>(needContinue, isTxValid);
+                handleTx(tx);
+                return (_txsList->transactionsMetaDataSize() +
+                           _sysTxsList->transactionsMetaDataSize()) < _txsLimit;
             });
     }
     else
