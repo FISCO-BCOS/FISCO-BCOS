@@ -25,19 +25,16 @@
 #include <bcos-framework/protocol/ProtocolInfoCodec.h>
 #include <bcos-tars-protocol/tars/ProtocolInfo.h>
 
-namespace bcostars
-{
-namespace protocol
+namespace bcostars::protocol
 {
 class ProtocolInfoCodecImpl : public bcos::protocol::ProtocolInfoCodec
 {
 public:
     ProtocolInfoCodecImpl() = default;
-    ~ProtocolInfoCodecImpl() override {}
+    ~ProtocolInfoCodecImpl() override = default;
 
     void encode(
         bcos::protocol::ProtocolInfo::ConstPtr _protocol, bcos::bytes& _encodeData) const override;
     bcos::protocol::ProtocolInfo::Ptr decode(bcos::bytesConstRef _data) const override;
 };
-}  // namespace protocol
-}  // namespace bcostars
+}  // namespace bcostars::protocol

@@ -36,6 +36,7 @@ using namespace bcos;
 using namespace bcos::txpool;
 using namespace bcos::protocol;
 using namespace bcos::crypto;
+using namespace std::string_view_literals;
 
 namespace bcos
 {
@@ -130,7 +131,7 @@ void testAsyncFillBlock(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     BOOST_CHECK(r == true);
 
     // case3: with some txs hitted
-    auto txHash = _cryptoSuite->hashImpl()->hash("test");
+    auto txHash = _cryptoSuite->hashImpl()->hash("test"sv);
     txsHash->emplace_back(txHash);
     // auto txMetaData = blockFactory->createTransactionMetaData(txHash, txHash.abridged());
     auto txMetaData = _faker->blockFactory()->createTransactionMetaData();
@@ -253,7 +254,7 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
 
     // mark txs to given proposal as false, expect: mark failed
     finish = false;
-    auto blockHash = _cryptoSuite->hashImpl()->hash("blockHash");
+    auto blockHash = _cryptoSuite->hashImpl()->hash("blockHash"sv);
     auto blockNumber = 10;
     _txpool->asyncMarkTxs(sealedTxs, false, blockNumber, blockHash, [&](Error::Ptr _error) {
         BOOST_CHECK(_error == nullptr);

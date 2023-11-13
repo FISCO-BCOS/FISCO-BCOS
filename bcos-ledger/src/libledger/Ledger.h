@@ -18,10 +18,12 @@
  * @date 2021-04-13
  */
 #pragma once
+#include "bcos-framework/ledger/GenesisConfig.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/BlockFactory.h"
 #include "bcos-framework/protocol/BlockHeaderFactory.h"
+#include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/storage/Common.h"
 #include "bcos-framework/storage/StorageInterface.h"
@@ -108,10 +110,11 @@ public:
         override;
 
     /****** init ledger ******/
-    bool buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit,
-        const std::string_view& _genesisData, std::string const& _compatibilityVersion,
-        bool _isAuthCheck = false, std::string const& _consensusType = "pbft",
-        std::int64_t _epochSealerNum = 4, std::int64_t _epochBlockNum = 1000);
+    // bool buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit,
+    //     const std::string_view& _genesisData, std::string const& _compatibilityVersion,
+    //     bool _isAuthCheck = false, std::string const& _consensusType = "pbft",
+    //     std::int64_t _epochSealerNum = 4, std::int64_t _epochBlockNum = 1000);
+    bool buildGenesisBlock(GenesisConfig const& genesis, ledger::LedgerConfig const& ledgerConfig);
 
     void asyncGetBlockTransactionHashes(bcos::protocol::BlockNumber blockNumber,
         std::function<void(Error::Ptr&&, std::vector<std::string>&&)> callback);
@@ -161,7 +164,7 @@ private:
         bcos::protocol::TransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr _block);
 
     bcos::consensus::ConsensusNodeListPtr selectWorkingSealer(
-        const bcos::ledger::LedgerConfig::Ptr& _ledgerConfig, std::int64_t _epochSealerNum);
+        const bcos::ledger::LedgerConfig& _ledgerConfig, std::int64_t _epochSealerNum);
 
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bcos::storage::StorageInterface::Ptr m_storage;

@@ -32,7 +32,7 @@ struct Fixture
         {
             auto tableName = fmt::format("Table-{}", i % 1000);  // All 1000 tables
             auto key = fmt::format("Key-{}", i);
-            allKeys.emplace_back(tableName, key);
+            allKeys.emplace_back(std::string_view(tableName), std::string_view(key));
 
             storage::Entry entry;
             entry.set(fmt::format("value is {}", i));

@@ -22,7 +22,6 @@
 #pragma once
 
 #include "../impl/TarsHashable.h"
-
 #include "bcos-concepts/ByteBuffer.h"
 #include "bcos-concepts/Hash.h"
 #include "bcos-tars-protocol/tars/Transaction.h"
@@ -73,6 +72,13 @@ public:
     void setNonce(std::string nonce) override;
     std::string_view to() const override;
     std::string_view abi() const override;
+
+    std::string_view value() const override;
+    std::string_view gasPrice() const override;
+    int64_t gasLimit() const override;
+    std::string_view maxFeePerGas() const override;
+    std::string_view maxPriorityFeePerGas() const override;
+
     bcos::bytesConstRef input() const override;
     int64_t importTime() const override;
     void setImportTime(int64_t _importTime) override;

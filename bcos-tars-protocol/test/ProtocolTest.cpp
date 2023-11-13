@@ -23,6 +23,8 @@
 #include <gsl/span>
 #include <memory>
 
+using namespace std::string_view_literals;
+
 namespace bcostars
 {
 namespace test
@@ -630,7 +632,7 @@ BOOST_AUTO_TEST_CASE(testExecutionMessage)
     executionMsg->setType((bcos::protocol::ExecutionMessage::Type)type);
     executionMsg->transactionHash();
 
-    auto txsHash = cryptoSuite->hash("###abc");
+    auto txsHash = cryptoSuite->hash("###abc"sv);
     executionMsg->setTransactionHash(txsHash);
     int64_t contextID = 10000;
     executionMsg->setContextID(contextID);

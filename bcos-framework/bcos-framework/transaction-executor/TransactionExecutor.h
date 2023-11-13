@@ -19,17 +19,21 @@
 namespace bcos::transaction_executor
 {
 constexpr static size_t CONTRACT_KEY_LENGTH = 32;
-constexpr static size_t CONTRACT_TABLE_LENGTH = std::string_view{"/apps/"}.size() + 20 * 2;
+constexpr static size_t CONTRACT_TABLE_LENGTH = 48;
 
 template <size_t length>
 class SmallString : public boost::container::small_vector<char, length>
 {
 public:
     using boost::container::small_vector<char, length>::small_vector;
-    SmallString(const char* str) { this->assign(str, str + strlen(str)); }
-    SmallString(concepts::bytebuffer::ByteBuffer auto const& bytes)
+    explicit SmallString(std::string_view view)
     {
-        this->assign(RANGES::begin(bytes), RANGES::end(bytes));
+        this->assign(RANGES::begin(view), RANGES::end(view));
+    }
+    explicit SmallString(bytesConstRef ref) { this->assign(RANGES::begin(ref), RANGES::end(ref)); }
+    explicit SmallString(const std::string& str)
+    {
+        this->assign(RANGES::begin(str), RANGES::end(str));
     }
     auto operator<=>(std::string_view view) const
     {
@@ -52,7 +56,7 @@ using StateKeyView = std::tuple<std::string_view, std::string_view>;
 using StateKey = std::tuple<ContractTable, ContractKey>;
 using StateValue = storage::Entry;
 
-struct Execute
+struct ExecuteTransaction
 {
     /**
      * @brief Executes a transaction and returns a task that resolves to a transaction receipt.
@@ -75,10 +79,11 @@ struct Execute
             std::forward<decltype(args)>(args)...);
     }
 };
-inline constexpr Execute execute{};
+inline constexpr ExecuteTransaction executeTransaction{};
 
 template <auto& Tag>
 using tag_t = std::decay_t<decltype(Tag)>;
+
 }  // namespace bcos::transaction_executor
 
 template <>

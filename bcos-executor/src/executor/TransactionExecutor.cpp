@@ -43,6 +43,7 @@
 #include "../precompiled/extension/AccountManagerPrecompiled.h"
 #include "../precompiled/extension/AccountPrecompiled.h"
 #include "../precompiled/extension/AuthManagerPrecompiled.h"
+#include "../precompiled/extension/BalancePrecompiled.h"
 #include "../precompiled/extension/ContractAuthMgrPrecompiled.h"
 #include "../precompiled/extension/DagTransferPrecompiled.h"
 #include "../precompiled/extension/GroupSigPrecompiled.h"
@@ -306,6 +307,9 @@ void TransactionExecutor::initEvmEnvironment()
         CpuHeavyPrecompiled::registerPrecompiled(m_precompiled, m_hashImpl);
         SmallBankPrecompiled::registerPrecompiled(m_precompiled, m_hashImpl);
     }
+    // TODO:according to feature flag to register precompiled
+    m_precompiled->insert(BALANCE_PRECOMPILED_ADDRESS,
+        std::make_shared<BalancePrecompiled>(m_hashImpl), BlockVersion::V3_6_VERSION);
 }
 
 void TransactionExecutor::initWasmEnvironment()
@@ -1506,7 +1510,7 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                     auto executiveFactory = std::make_shared<ExecutiveFactory>(*m_blockContext,
                         m_evmPrecompiled, m_precompiled, m_staticPrecompiled, *m_gasInjector);
                     auto executive = executiveFactory->build(
-                        params->codeAddress, params->contextID, params->seq, false);
+                        params->codeAddress, params->contextID, params->seq, ExecutiveType::common);
                     auto p = executive->getPrecompiled(params->receiveAddress);
                     if (p)
                     {
@@ -2131,7 +2135,7 @@ void TransactionExecutor::getABI(
     {
         auto codeHash = getCodeHash(contractTableName, stateStorage);
         // asyncGetRow key should not be empty
-        std::string abiKey = codeHash.empty() ? ACCOUNT_ABI : codeHash;
+        std::string abiKey = codeHash.empty() ? std::string(ACCOUNT_ABI) : codeHash;
         // try to get abi from SYS_CONTRACT_ABI first
         EXECUTOR_LOG(TRACE) << LOG_DESC("get abi") << LOG_KV("abiKey", abiKey);
 
@@ -2632,6 +2636,12 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
                 0, addressSize - callParameters->receiveAddress.size(), '0');
         }
     }
+    callParameters->value = s256(input.value());
+    callParameters->gasPrice = s256(input.gasPrice());
+    callParameters->gasLimit = input.gasLimit();
+    callParameters->maxFeePerGas = s256(input.maxFeePerGas());
+    callParameters->maxPriorityFeePerGas = s256(input.maxPriorityFeePerGas());
+
 
     return callParameters;
 }
@@ -2661,6 +2671,11 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->delegateCall = false;
     callParameters->delegateCallCode = bytes();
     callParameters->delegateCallSender = "";
+    callParameters->value = s256(input.value());
+    callParameters->gasPrice = s256(input.gasPrice());
+    callParameters->gasLimit = input.gasLimit();
+    callParameters->maxFeePerGas = s256(input.maxFeePerGas());
+    callParameters->maxPriorityFeePerGas = s256(input.maxPriorityFeePerGas());
 
     if (!m_isWasm && !callParameters->create)
     {
@@ -2696,7 +2711,7 @@ void TransactionExecutor::executeTransactionsWithCriticals(
         auto executiveFactory = std::make_shared<ExecutiveFactory>(
             *m_blockContext, m_evmPrecompiled, m_precompiled, m_staticPrecompiled, *m_gasInjector);
         auto executive =
-            executiveFactory->build(input->codeAddress, input->contextID, input->seq, false);
+            executiveFactory->build(input->codeAddress, input->contextID, input->seq, ExecutiveType::common);
 
         EXECUTOR_NAME_LOG(TRACE) << LOG_BADGE("executeTransactionsWithCriticals")
                                  << LOG_DESC("Start transaction")

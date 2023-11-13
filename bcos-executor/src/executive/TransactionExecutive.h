@@ -103,9 +103,11 @@ public:
         CallParameters::UniquePtr callParameters);  // execute parameters in
                                                     // current corouitine
 
-    bool isPrecompiled(const std::string& _address) const;
+    virtual bool isPrecompiled(const std::string& _address) const;
 
     std::shared_ptr<precompiled::Precompiled> getPrecompiled(const std::string& _address) const;
+    virtual std::shared_ptr<precompiled::Precompiled> getPrecompiled(const std::string& _address,
+        uint32_t version, bool isAuth, const ledger::Features& features) const;
 
     void setStaticPrecompiled(std::shared_ptr<const std::set<std::string>> _staticPrecompiled)
     {
@@ -143,6 +145,10 @@ public:
     bool hasContractTableChanged() const { return m_hasContractTableChanged; }
     void setContractTableChanged() { m_hasContractTableChanged = true; }
 
+    bool checkAuth(const CallParameters::UniquePtr& callParameters);
+    void creatAuthTable(std::string_view _tableName, std::string_view _origin,
+        std::string_view _sender, uint32_t _version);
+
 protected:
     std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> call(
         CallParameters::UniquePtr callParameters);
@@ -155,14 +161,16 @@ protected:
     CallParameters::UniquePtr callDynamicPrecompiled(
         CallParameters::UniquePtr callParameters, const std::string& code);
 
+//    virtual TransactionExecutive::Ptr buildChildExecutive(const std::string& _contractAddress,
+//        int64_t contextID, int64_t seq, bool useCoroutine = true)
     virtual TransactionExecutive::Ptr buildChildExecutive(const std::string& _contractAddress,
-        int64_t contextID, int64_t seq, bool useCoroutine = true)
+            int64_t contextID, int64_t seq, ExecutiveType execType = ExecutiveType::coroutine)
     {
         auto executiveFactory = std::make_shared<ExecutiveFactory>(
             m_blockContext, m_evmPrecompiled, m_precompiled, m_staticPrecompiled, m_gasInjector);
 
 
-        return executiveFactory->build(_contractAddress, contextID, seq, useCoroutine);
+        return executiveFactory->build(_contractAddress, contextID, seq, execType);
     }
 
     void revert();
@@ -212,13 +220,9 @@ protected:
         return std::string(USER_APPS_PREFIX).append(formatAddress);
     }
 
-    bool checkAuth(const CallParameters::UniquePtr& callParameters);
     bool checkExecAuth(const CallParameters::UniquePtr& callParameters);
     int32_t checkContractAvailable(const CallParameters::UniquePtr& callParameters);
     uint8_t checkAccountAvailable(const CallParameters::UniquePtr& callParameters);
-
-    void creatAuthTable(std::string_view _tableName, std::string_view _origin,
-        std::string_view _sender, uint32_t _version);
 
     bool buildBfsPath(std::string_view _absoluteDir, std::string_view _origin,
         std::string_view _sender, std::string_view _type, int64_t gasLeft);

@@ -3,6 +3,7 @@
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-table/src/StateStorage.h"
 #include "bcos-transaction-executor/vm/VMFactory.h"
+#include "precompiled/PrecompiledManager.h"
 #include "transaction-executor/bcos-transaction-executor/RollbackableStorage.h"
 #include "transaction-executor/bcos-transaction-executor/vm/VMInstance.h"
 #include "vm/HostContext.h"
@@ -25,25 +26,24 @@ namespace bcos::transaction_executor
 struct InvalidArgumentsError: public bcos::Error {};
 // clang-format on
 
-template <class PrecompiledManager>
 class TransactionExecutorImpl
 {
 public:
-    TransactionExecutorImpl(protocol::TransactionReceiptFactory const& receiptFactory,
-        PrecompiledManager const& precompiledManager)
-      : m_receiptFactory(receiptFactory), m_precompiledManager(precompiledManager)
+    TransactionExecutorImpl(
+        protocol::TransactionReceiptFactory const& receiptFactory, crypto::Hash::Ptr hashImpl)
+      : m_receiptFactory(receiptFactory), m_precompiledManager(std::move(hashImpl))
     {}
 
 private:
     VMFactory m_vmFactory;
     protocol::TransactionReceiptFactory const& m_receiptFactory;
-    PrecompiledManager const& m_precompiledManager;
+    PrecompiledManager m_precompiledManager;
 
-    friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(tag_t<execute> /*unused*/,
-        TransactionExecutorImpl& executor, auto& storage, protocol::BlockHeader const& blockHeader,
-        protocol::Transaction const& transaction, int contextID)
+    friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
+        tag_t<executeTransaction> /*unused*/, TransactionExecutorImpl& executor, auto& storage,
+        protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
+        int contextID, ledger::LedgerConfig const& ledgerConfig)
     {
-        constexpr static uint64_t TRANSACTION_GAS = 3000000000;
         try
         {
             if (c_fileLogLevel <= LogLevel::TRACE)
@@ -52,7 +52,7 @@ private:
                     << "Execte transaction: " << transaction.hash().hex();
             }
 
-            Rollbackable<std::remove_reference_t<decltype(storage)>> rollbackableStorage(storage);
+            Rollbackable<std::decay_t<decltype(storage)>> rollbackableStorage(storage);
 
             auto toAddress = unhexAddress(transaction.to());
             evmc_message evmcMessage = {.kind = transaction.to().empty() ? EVMC_CREATE : EVMC_CALL,
@@ -74,10 +74,16 @@ private:
                 .create2_salt = {},
                 .code_address = toAddress};
 
+            if (blockHeader.number() == 0 &&
+                transaction.to() == precompiled::AUTH_COMMITTEE_ADDRESS)
+            {
+                evmcMessage.kind = EVMC_CREATE;
+            }
+
             int64_t seq = 0;
             HostContext hostContext(executor.m_vmFactory, rollbackableStorage, blockHeader,
                 evmcMessage, evmcMessage.sender, transaction.abi(), contextID, seq,
-                executor.m_precompiledManager);
+                executor.m_precompiledManager, ledgerConfig);
             auto evmcResult = co_await hostContext.execute();
 
             bcos::bytesConstRef output;
