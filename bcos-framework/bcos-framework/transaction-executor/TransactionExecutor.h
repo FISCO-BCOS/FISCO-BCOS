@@ -17,7 +17,14 @@
 
 namespace bcos::transaction_executor
 {
+
+// EVM合约KEY固定为32
+// The EVM contract KEY is fixed at 32
 constexpr static size_t CONTRACT_KEY_LENGTH = 32;
+
+// 目录前缀+hex合约地址，"/apps/"长度为6，hex合约地址长度为40，总长度46，对齐后48
+// Directory prefix + hex contract address, "/apps/" length is 6, hex contract address length is 40,
+// total length 46, aligned 48
 constexpr static size_t CONTRACT_TABLE_LENGTH = 48;
 
 template <size_t length>

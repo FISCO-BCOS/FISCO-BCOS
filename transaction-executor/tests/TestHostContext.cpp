@@ -43,6 +43,7 @@ public:
     VMFactory vmFactory;
     int64_t seq = 0;
     std::optional<PrecompiledManager> precompiledManager;
+    bcos::ledger::LedgerConfig ledgerConfig;
 
     TestHostContextFixture() : rollbackableStorage(storage)
     {
@@ -78,8 +79,9 @@ public:
                 .code_address = {}};
             evmc_address origin = {};
 
+
             HostContext hostContext(vmFactory, rollbackableStorage, blockHeader, message, origin,
-                "", 0, seq, *precompiledManager, bcos::ledger::LedgerConfig{});
+                "", 0, seq, *precompiledManager, ledgerConfig);
             auto result = co_await hostContext.execute();
 
             BOOST_REQUIRE_EQUAL(result.status_code, 0);
@@ -117,7 +119,7 @@ public:
         evmc_address origin = {};
 
         HostContext hostContext(vmFactory, rollbackableStorage, blockHeader, message, origin, "", 0,
-            seq, *precompiledManager, bcos::ledger::LedgerConfig{});
+            seq, *precompiledManager, ledgerConfig);
         auto result = co_await hostContext.execute();
 
         co_return result;

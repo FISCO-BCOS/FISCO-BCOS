@@ -104,7 +104,6 @@ task::Task<h256> calculateStateRoot(auto& storage, crypto::Hash const& hashImpl)
             for (auto [key, entry] : subrange)
             {
                 auto& [tableName, keyName] = *key;
-
                 if (!entry)
                 {
                     entry = std::addressof(deletedEntry);

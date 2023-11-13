@@ -15,10 +15,12 @@ concept HasReadOneDirect =
     requires(Storage& storage) {
         requires RANGES::range<task::AwaitableReturnType<decltype(storage2::readSome(
             storage, std::declval<std::vector<typename Storage::Key>>(), storage2::READ_FRONT))>>;
+        requires !std::is_void_v<
+            task::AwaitableReturnType<decltype(storage2::readOne((Storage&)std::declval<Storage>(),
+                std::declval<typename Storage::Key>(), storage2::READ_FRONT))>>;
     };
 
-template <class Storage>
-    requires HasReadOneDirect<Storage>
+template <HasReadOneDirect Storage>
 class Rollbackable
 {
 private:
