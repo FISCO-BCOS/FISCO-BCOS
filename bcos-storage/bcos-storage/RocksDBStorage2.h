@@ -92,7 +92,7 @@ public:
         }
     };
 
-    auto read(RANGES::input_range auto const& keys) & -> task::AwaitableValue<ReadIterator>
+    auto read(RANGES::input_range auto&& keys) & -> task::AwaitableValue<ReadIterator>
     {
         task::AwaitableValue<ReadIterator> readIteratorAwaitable(ReadIterator{m_valueResolver});
         auto& readIterator = readIteratorAwaitable.value();

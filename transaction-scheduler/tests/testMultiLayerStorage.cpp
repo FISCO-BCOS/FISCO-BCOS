@@ -1,10 +1,10 @@
 #include "bcos-framework/storage2/MemoryStorage.h"
+#include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
+#include "bcos-transaction-scheduler/MultiLayerStorage.h"
 #include <bcos-task/Wait.h>
-#include <bcos-transaction-scheduler/MultiLayerStorage.h>
 #include <fmt/format.h>
 #include <boost/test/unit_test.hpp>
-#include <range/v3/view/transform.hpp>
 #include <type_traits>
 
 using namespace bcos;
@@ -18,7 +18,8 @@ struct TableNameHash
     size_t operator()(const bcos::transaction_executor::StateKey& key) const
     {
         auto const& tableID = std::get<0>(key);
-        return std::hash<std::string_view>{}(tableID);
+        std::string_view tableIDView(tableID.data(), tableID.size());
+        return std::hash<std::string_view>{}(tableIDView);
     }
 };
 
@@ -36,8 +37,7 @@ public:
     BackendStorage backendStorage;
     MultiLayerStorage<MutableStorage, void, BackendStorage> multiLayerStorage;
 
-    static_assert(
-        storage2::ReadableStorage<decltype(multiLayerStorage.fork(true))>, "No match storage!");
+    // static_assert(HasReadOneDirect<MultiLayerStorage<MutableStorage, void, BackendStorage>>);
 };
 
 BOOST_FIXTURE_TEST_SUITE(TestMultiLayerStorage, TestMultiLayerStorageFixture)
@@ -70,11 +70,9 @@ BOOST_AUTO_TEST_CASE(readWriteMutable)
         co_await storage2::writeOne(*view, key, entry);
 
         RANGES::single_view keyViews(key);
-        auto it = co_await view->read(keyViews);
+        auto values = co_await storage2::readSome(*view, keyViews);
 
-        co_await it.next();
-        const auto& iteratorValue = co_await it.value();
-        BOOST_CHECK_EQUAL(iteratorValue.get(), entry.get());
+        BOOST_CHECK_EQUAL(values[0]->get(), entry.get());
 
         BOOST_CHECK_NO_THROW(multiLayerStorage.pushMutableToImmutableFront());
         view.reset();
@@ -104,7 +102,7 @@ BOOST_AUTO_TEST_CASE(merge)
             return entry;
         });
 
-        co_await view->write(RANGES::iota_view<int, int>(0, 100) | toKey,
+        co_await storage2::writeSome(*view, RANGES::iota_view<int, int>(0, 100) | toKey,
             RANGES::iota_view<int, int>(0, 100) | toValue);
 
         BOOST_CHECK_THROW(
@@ -116,37 +114,32 @@ BOOST_AUTO_TEST_CASE(merge)
 
         auto view2 = multiLayerStorage.fork(false);
         auto keys = RANGES::iota_view<int, int>(0, 100) | toKey;
-        auto it = co_await view2.read(keys);
+        auto values = co_await storage2::readSome(view2, keys);
 
-        int i = 0;
-        while (co_await it.next())
+        for (auto&& [index, value] : RANGES::views::enumerate(values))
         {
-            auto const& value = co_await it.value();
-            BOOST_CHECK_EQUAL(value.get(), fmt::format("value: {}", i));
-            ++i;
+            BOOST_CHECK_EQUAL(value->get(), fmt::format("value: {}", index));
         }
-        BOOST_CHECK_EQUAL(i, 100);
+        BOOST_CHECK_EQUAL(RANGES::size(values), 100);
 
         multiLayerStorage.newMutable();
 
         auto view3 = multiLayerStorage.fork(true);
-        co_await view3.remove(RANGES::iota_view<int, int>(20, 30) | toKey);
+        co_await storage2::removeSome(view3, RANGES::iota_view<int, int>(20, 30) | toKey);
         multiLayerStorage.pushMutableToImmutableFront();
         co_await multiLayerStorage.mergeAndPopImmutableBack();
 
-        auto removedIt = co_await view3.read(keys);
-        i = 0;
-        while (co_await removedIt.next())
+        auto values2 = co_await storage2::readSome(view3, keys);
+        for (auto&& [index, value] : RANGES::views::enumerate(values2))
         {
-            if (i >= 20 && i < 30)
+            if (index >= 20 && index < 30)
             {
-                BOOST_CHECK(!co_await removedIt.hasValue());
+                BOOST_CHECK(!value);
             }
             else
             {
-                BOOST_CHECK(co_await removedIt.hasValue());
+                BOOST_CHECK(value);
             }
-            ++i;
         }
 
         co_return;
