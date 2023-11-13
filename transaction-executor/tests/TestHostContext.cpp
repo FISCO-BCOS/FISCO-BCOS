@@ -321,7 +321,7 @@ BOOST_AUTO_TEST_CASE(precompiled)
             evmc_address origin = {};
 
             HostContext hostContext(vmFactory, rollbackableStorage, blockHeader, message, origin,
-                "", 0, seq, *precompiledManager, bcos::ledger::LedgerConfig{});
+                "", 0, seq, *precompiledManager, ledgerConfig);
             auto result = co_await hostContext.execute();
         }
 
@@ -350,7 +350,7 @@ BOOST_AUTO_TEST_CASE(precompiled)
             evmc_address origin = {};
 
             HostContext hostContext(vmFactory, rollbackableStorage, blockHeader, message, origin,
-                "", 0, seq, *precompiledManager, bcos::ledger::LedgerConfig{});
+                "", 0, seq, *precompiledManager, ledgerConfig);
             result.emplace(co_await hostContext.execute());
         }
 

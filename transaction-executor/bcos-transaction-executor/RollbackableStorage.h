@@ -26,7 +26,7 @@ class Rollbackable
 private:
     struct Record
     {
-        typename Storage::Key key;
+        StateKey key;
         task::AwaitableReturnType<decltype(storage2::readOne((Storage&)std::declval<Storage>(),
             std::declval<typename Storage::Key>(), storage2::READ_FRONT))>
             oldValue;
@@ -104,10 +104,10 @@ public:
             task::AwaitableReturnType<decltype(storage2::writeOne((Storage&)std::declval<Storage>(),
                 std::forward<decltype(key)>(key), std::forward<decltype(value)>(value)))>>
     {
-        storage.m_records.emplace_back(Record{.key = typename Storage::Key{key},
-            .oldValue = co_await storage2::readOne(storage.m_storage, key, storage2::READ_FRONT)});
-        co_await storage2::writeOne(storage.m_storage, std::forward<decltype(key)>(key),
-            std::forward<decltype(value)>(value));
+        auto& record = storage.m_records.emplace_back(std::forward<decltype(key)>(key),
+            co_await storage2::readOne(storage.m_storage, key, storage2::READ_FRONT));
+        co_await storage2::writeOne(
+            storage.m_storage, record.key, std::forward<decltype(value)>(value));
     }
 
     friend auto tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/, Rollbackable& storage,
