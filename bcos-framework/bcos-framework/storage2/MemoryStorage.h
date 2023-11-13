@@ -150,7 +150,7 @@ private:
     {
         auto range = RANGES::views::transform(storage.m_buckets[0].container,
             [&](Data const& data) -> std::tuple<const KeyType*, const ValueType*> {
-                if constexpr (storage.withLogicalDeletion)
+                if constexpr (std::decay_t<decltype(storage)>::withLogicalDeletion)
                 {
                     return std::make_tuple(std::addressof(data.key),
                         std::holds_alternative<Deleted>(data.value) ?
@@ -211,12 +211,12 @@ public:
             auto it = index.find(key);
             if (it != index.end())
             {
-                if constexpr (storage.withMRU)
+                if constexpr (std::decay_t<decltype(storage)>::withMRU)
                 {
                     storage.updateMRUAndCheck(bucket, it);
                 }
 
-                if constexpr (storage.withLogicalDeletion)
+                if constexpr (std::decay_t<decltype(storage)>::withLogicalDeletion)
                 {
                     std::visit(bcos::overloaded{[&](ValueType const& value) {
                                                     result.value().emplace_back(
@@ -248,14 +248,15 @@ public:
             auto [bucket, lock] = storage.getBucket(key);
             auto const& index = bucket.get().container.template get<0>();
 
-            std::conditional_t<storage.withMRU, int64_t, Empty> updatedCapacity;
-            if constexpr (storage.withMRU)
+            std::conditional_t<std::decay_t<decltype(storage)>::withMRU, int64_t, Empty>
+                updatedCapacity;
+            if constexpr (std::decay_t<decltype(storage)>::withMRU)
             {
                 updatedCapacity = getSize(value);
             }
 
             typename Container::iterator it;
-            if constexpr (storage.withOrdered)
+            if constexpr (std::decay_t<decltype(storage)>::withOrdered)
             {
                 it = index.lower_bound(key);
             }
@@ -265,7 +266,7 @@ public:
             }
             if (it != index.end() && it->key == key)
             {
-                if constexpr (storage.withMRU)
+                if constexpr (std::decay_t<decltype(storage)>::withMRU)
                 {
                     auto& existsValue = it->value;
                     updatedCapacity -= getSize(existsValue);
@@ -283,7 +284,7 @@ public:
                             .value = std::forward<decltype(value)>(value)});
             }
 
-            if constexpr (storage.withMRU)
+            if constexpr (std::decay_t<decltype(storage)>::withMRU)
             {
                 bucket.get().capacity += updatedCapacity;
                 storage.updateMRUAndCheck(bucket.get(), it);
@@ -305,7 +306,7 @@ public:
             if (it != index.end())
             {
                 auto& existsValue = it->value;
-                if constexpr (storage.withLogicalDeletion)
+                if constexpr (std::decay_t<decltype(storage)>::withLogicalDeletion)
                 {
                     if (std::holds_alternative<Deleted>(existsValue))
                     {
@@ -314,12 +315,12 @@ public:
                     }
                 }
 
-                if constexpr (storage.withMRU)
+                if constexpr (std::decay_t<decltype(storage)>::withMRU)
                 {
                     bucket.get().capacity -= getSize(existsValue);
                 }
 
-                if constexpr (storage.withLogicalDeletion)
+                if constexpr (std::decay_t<decltype(storage)>::withLogicalDeletion)
                 {
                     bucket.get().container.modify(it, [](Data& data) mutable {
                         data.value.template emplace<Deleted>(Deleted{});
@@ -332,7 +333,7 @@ public:
             }
             else
             {
-                if constexpr (storage.withLogicalDeletion)
+                if constexpr (std::decay_t<decltype(storage)>::withLogicalDeletion)
                 {
                     it = bucket.get().container.emplace_hint(
                         it, Data{.key = key, .value = Deleted{}});
