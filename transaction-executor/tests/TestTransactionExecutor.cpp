@@ -1,5 +1,6 @@
 #include "../bcos-transaction-executor/TransactionExecutorImpl.h"
 #include "TestBytecode.h"
+#include "TestMemoryStorage.h"
 #include "bcos-codec/bcos-codec/abi/ContractABICodec.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
@@ -26,7 +27,7 @@ BOOST_FIXTURE_TEST_SUITE(TransactionExecutorImpl, TestTransactionExecutorImplFix
 BOOST_AUTO_TEST_CASE(execute)
 {
     task::syncWait([this]() mutable -> task::Task<void> {
-        memory_storage::MemoryStorage<StateKey, StateValue, memory_storage::ORDERED> storage;
+        MutableStorage storage;
 
         auto cryptoSuite = std::make_shared<bcos::crypto::CryptoSuite>(
             bcos::executor::GlobalHashImpl::g_hashImpl, nullptr, nullptr);

@@ -13,16 +13,24 @@ struct STORAGE_BEGIN_TYPE
 };
 inline constexpr STORAGE_BEGIN_TYPE STORAGE_BEGIN{};
 
+struct READ_FRONT_TYPE
+{
+};
+inline constexpr READ_FRONT_TYPE READ_FRONT{};
+
 template <class Invoke>
 using ReturnType = typename task::AwaitableReturnType<Invoke>;
 
 struct ReadSome
 {
-    auto operator()(auto& storage, RANGES::input_range auto const& keys) const
-        -> task::Task<ReturnType<decltype(tag_invoke(*this, storage, keys))>>
-        requires RANGES::range<ReturnType<decltype(tag_invoke(*this, storage, keys))>>
+    auto operator()(auto& storage, RANGES::input_range auto&& keys, auto&&... args) const
+        -> task::Task<ReturnType<decltype(tag_invoke(*this, storage,
+            std::forward<decltype(keys)>(keys), std::forward<decltype(args)>(args)...))>>
+        requires RANGES::range<ReturnType<decltype(tag_invoke(*this, storage,
+            std::forward<decltype(keys)>(keys), std::forward<decltype(args)>(args)...))>>
     {
-        co_return co_await tag_invoke(*this, storage, keys);
+        co_return co_await tag_invoke(*this, storage, std::forward<decltype(keys)>(keys),
+            std::forward<decltype(args)>(args)...);
     }
 };
 inline constexpr ReadSome readSome{};
@@ -53,10 +61,11 @@ struct RemoveSome
 inline constexpr RemoveSome removeSome{};
 struct ReadOne
 {
-    auto operator()(auto& storage, auto const& key) const
-        -> task::Task<ReturnType<decltype(tag_invoke(*this, storage, key))>>
+    auto operator()(auto& storage, auto const& key, auto&&... args) const
+        -> task::Task<ReturnType<decltype(tag_invoke(
+            *this, storage, key, std::forward<decltype(args)>(args)...))>>
     {
-        co_return co_await tag_invoke(*this, storage, key);
+        co_return co_await tag_invoke(*this, storage, key, std::forward<decltype(args)>(args)...);
     }
 };
 inline constexpr ReadOne readOne{};
@@ -150,6 +159,19 @@ auto tag_invoke(bcos::storage2::tag_t<existsOne> /*unused*/, auto& storage, auto
 {
     auto result = co_await readOne(storage, key);
     co_return result.has_value();
+}
+
+task::Task<void> tag_invoke(
+    bcos::storage2::tag_t<merge> /*unused*/, auto const& fromStorage, auto& toStorage)
+{
+    auto range = co_await storage2::range(fromStorage);
+    for (auto [key, value] : range)
+    {
+        if (value)
+        {
+            co_await storage2::writeOne(toStorage, *key, *value);
+        }
+    }
 }
 
 }  // namespace bcos::storage2

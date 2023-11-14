@@ -147,7 +147,7 @@ private:
     }
 
     friend auto tag_invoke(
-        bcos::storage2::tag_t<storage2::range> /*unused*/, MemoryStorage& storage)
+        bcos::storage2::tag_t<storage2::range> /*unused*/, MemoryStorage const& storage)
         requires(!withConcurrent)
     {
         auto range = RANGES::views::transform(storage.m_buckets[0].container,
@@ -327,7 +327,7 @@ public:
     {
         task::AwaitableValue<ReadIterator> outputAwaitable(ReadIterator{});
         ReadIterator& output = outputAwaitable.value();
-        if constexpr (RANGES::sized_range<std::remove_cvref_t<decltype(keys)>>)
+        if constexpr (RANGES::sized_range<decltype(keys)>)
         {
             output.m_iterators.reserve(RANGES::size(keys));
         }
@@ -440,7 +440,8 @@ public:
             else
             {
                 it = bucket.get().container.emplace_hint(
-                    it, Data{.key = KeyType(key), .value = std::forward<decltype(value)>(value)});
+                    it, Data{.key = KeyType(std::forward<decltype(key)>(key)),
+                            .value = std::forward<decltype(value)>(value)});
             }
 
             if constexpr (withMRU)

@@ -1,5 +1,6 @@
 #include "../bcos-transaction-executor/TransactionExecutorImpl.h"
 #include "../tests/TestBytecode.h"
+#include "../tests/TestMemoryStorage.h"
 #include "bcos-codec/bcos-codec/abi/ContractABICodec.h"
 #include "bcos-crypto/interfaces/crypto/CryptoSuite.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
@@ -18,8 +19,8 @@ using namespace bcos;
 using namespace bcos::storage2::memory_storage;
 using namespace bcos::transaction_executor;
 
-using MutableStorage = MemoryStorage<StateKey, StateValue, ORDERED>;
 using ReceiptFactory = bcostars::protocol::TransactionReceiptFactoryImpl;
+static_assert(HasReadOneDirect<MutableStorage>);
 
 struct Fixture
 {

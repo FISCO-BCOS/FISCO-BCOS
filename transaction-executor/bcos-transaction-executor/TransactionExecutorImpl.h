@@ -52,7 +52,7 @@ private:
                     << "Execte transaction: " << transaction.hash().hex();
             }
 
-            Rollbackable<std::remove_reference_t<decltype(storage)>> rollbackableStorage(storage);
+            Rollbackable<std::decay_t<decltype(storage)>> rollbackableStorage(storage);
 
             auto toAddress = unhexAddress(transaction.to());
             evmc_message evmcMessage = {.kind = transaction.to().empty() ? EVMC_CREATE : EVMC_CALL,

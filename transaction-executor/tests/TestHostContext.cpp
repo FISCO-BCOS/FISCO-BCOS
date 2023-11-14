@@ -2,6 +2,7 @@
 #include "../bcos-transaction-executor/vm/HostContext.h"
 #include "../bcos-transaction-executor/vm/VMInstance.h"
 #include "TestBytecode.h"
+#include "TestMemoryStorage.h"
 #include "bcos-codec/bcos-codec/abi/ContractABICodec.h"
 #include "bcos-crypto/interfaces/crypto/CryptoSuite.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
@@ -36,7 +37,7 @@ class TestHostContextFixture
 {
 public:
     bcos::crypto::Hash::Ptr hashImpl = std::make_shared<bcos::crypto::Keccak256>();
-    memory_storage::MemoryStorage<StateKey, StateValue, memory_storage::ORDERED> storage;
+    MutableStorage storage;
     Rollbackable<decltype(storage)> rollbackableStorage;
     evmc_address helloworldAddress;
     VMFactory vmFactory;

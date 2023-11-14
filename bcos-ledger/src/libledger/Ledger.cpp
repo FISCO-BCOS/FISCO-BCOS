@@ -157,7 +157,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     // if blockVersion >= 3.6, txs will be stored when commit block, not here
     if (blockVersion >= uint32_t(bcos::protocol::BlockVersion::V3_6_VERSION))
     {
-        --TOTAL_CALLBACK;
+        TOTAL_CALLBACK = 7;
     }
 
     auto setRowCallback = [total = std::make_shared<std::atomic<size_t>>(TOTAL_CALLBACK),
@@ -271,7 +271,11 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
                             << LOG_KV("blockNumber", blockNumberStr);
     }
 
-    if (blockVersion < uint32_t(bcos::protocol::BlockVersion::V3_6_VERSION))
+    if (blockVersion >= uint32_t(bcos::protocol::BlockVersion::V3_6_VERSION))
+    {
+        LEDGER_LOG(DEBUG) << "Store txs in block during commiting block. ";
+    }
+    else
     {
         bytes transactionsBuffer;
         transactionsBlock->encode(transactionsBuffer);
@@ -407,22 +411,23 @@ bcos::Error::Ptr Ledger::storeTransactionsAndReceipts(
         auto err = storage->setRows(SYS_HASH_2_RECEIPT, keys, values);
         promise->set_value(err);
     });
+
     auto txsToStore = std::make_shared<std::vector<bytes>>();
     txsToStore->reserve(txSize);
     auto txsToStoreHash = std::make_shared<HashList>();
     txsToStoreHash->reserve(txSize);
-    std::vector<std::string_view> keys;
-    keys.reserve(txSize);
+    std::vector<std::string_view> txHashes;
+    txHashes.reserve(txSize);
     auto blockNumber = block->blockHeaderConst()->number();
     auto blockVersion = block->blockHeaderConst()->version();
 
     RecursiveGuard guard(m_mutex);
-    size_t unstoredTxs = 0;
+    size_t unstoredTxsCount = 0;
     // TODO: usr block level flag to indicate whether the transactions has been stored
     if (blockVersion >= (uint32_t)BlockVersion::V3_6_VERSION)
     {
-        std::vector<std::string> values(txSize);
-        std::vector<std::string_view> valuesView(txSize);
+        std::vector<std::string> numberAndTxID(txSize);
+        std::vector<std::string_view> numberAndTxIDView(txSize);
         auto transactionsBlock = m_blockFactory->createBlock();
         auto blockNumberStr = boost::lexical_cast<std::string>(blockNumber);
         for (size_t i = 0; i < txSize; i++)
@@ -435,30 +440,22 @@ bcos::Error::Ptr Ledger::storeTransactionsAndReceipts(
 
             bcos::bytes encodeData;
             tx->encode(encodeData);
-            bcos::protocol::Transaction::Ptr txData;
-            if (blockNumber == SYS_CONTRACT_DEPLOY_NUMBER)
-            {
-                txData = m_blockFactory->transactionFactory()->createTransaction(
-                    bcos::ref(encodeData), false, false);
-            }
-            else
-            {
-                txData =
-                    m_blockFactory->transactionFactory()->createTransaction(bcos::ref(encodeData));
-            }
-            transactionsBlock->appendTransaction(txData);
+            bcos::protocol::Transaction::Ptr transaction;
+            transaction =
+                m_blockFactory->transactionFactory()->createTransaction(bcos::ref(encodeData));
+            transactionsBlock->appendTransaction(transaction);
 
             txsToStoreHash->emplace_back(tx->hash());
-            keys.push_back(concepts::bytebuffer::toView((*txsToStoreHash)[unstoredTxs]));
+            txHashes.push_back(concepts::bytebuffer::toView((*txsToStoreHash)[unstoredTxsCount]));
 
-            values[unstoredTxs] =
-                blockNumberStr + "+" + boost::lexical_cast<std::string>(unstoredTxs);
-            valuesView[unstoredTxs] = std::string_view(values[unstoredTxs]);
+            numberAndTxID[unstoredTxsCount] =
+                blockNumberStr + "_" + boost::lexical_cast<std::string>(unstoredTxsCount);
+            numberAndTxIDView[unstoredTxsCount] = std::string_view(numberAndTxID[unstoredTxsCount]);
 
-            ++unstoredTxs;
+            ++unstoredTxsCount;
         }
 
-        if (!keys.empty())
+        if (!txHashes.empty())
         {
             bytes transactionsBuffer;
             transactionsBlock->encode(transactionsBuffer);
@@ -477,7 +474,7 @@ bcos::Error::Ptr Ledger::storeTransactionsAndReceipts(
                     }
                 });
 
-            error = m_storage->setRows(SYS_TXHASH_2_NUMBER, keys, valuesView);
+            error = m_storage->setRows(SYS_TXHASH_2_NUMBER, txHashes, numberAndTxIDView);
             if (error)
             {
                 LEDGER_LOG(ERROR) << LOG_DESC("ledger write transactions failed")
@@ -505,8 +502,8 @@ bcos::Error::Ptr Ledger::storeTransactionsAndReceipts(
     }
     else
     {
-        std::vector<std::string_view> values;
-        values.reserve(txSize);
+        std::vector<std::string_view> txsBytes;
+        txsBytes.reserve(txSize);
         for (size_t i = 0; i < txSize; i++)
         {
             auto tx = blockTxs ? blockTxs->at(i) : block->transaction(i);
@@ -518,15 +515,15 @@ bcos::Error::Ptr Ledger::storeTransactionsAndReceipts(
             tx->encode(encodeData);
             txsToStoreHash->emplace_back(tx->hash());
             txsToStore->emplace_back(std::move(encodeData));
-            keys.push_back(bcos::concepts::bytebuffer::toView((*txsToStoreHash)[unstoredTxs]));
-            values.push_back(bcos::concepts::bytebuffer::toView((*txsToStore)[unstoredTxs]));
-            ++unstoredTxs;
+            txHashes.push_back(bcos::concepts::bytebuffer::toView((*txsToStoreHash)[unstoredTxsCount]));
+            txsBytes.push_back(bcos::concepts::bytebuffer::toView((*txsToStore)[unstoredTxsCount]));
+            ++unstoredTxsCount;
         }
-        if (!keys.empty())
+        if (!txHashes.empty())
         {
             // asyncPreStoreBlockTxs also write txs to DB, needStoreUnsavedTxs is out of lock, so
             // the transactions may be write twice
-            error = m_storage->setRows(SYS_HASH_2_TX, keys, values);
+            error = m_storage->setRows(SYS_HASH_2_TX, txHashes, txsBytes);
             if (error)
             {
                 LEDGER_LOG(ERROR) << LOG_DESC("ledger write transactions failed")
@@ -557,7 +554,7 @@ bcos::Error::Ptr Ledger::storeTransactionsAndReceipts(
 
     LEDGER_LOG(INFO) << LOG_DESC("storeTransactionsAndReceipts finished")
                      << LOG_KV("blockNumber", blockNumber) << LOG_KV("blockTxsSize", txSize)
-                     << LOG_KV("unStoredTxs", unstoredTxs)
+                     << LOG_KV("unStoredTxs", unstoredTxsCount)
                      << LOG_KV("timeCost", (utcTime() - start));
     return nullptr;
 }
