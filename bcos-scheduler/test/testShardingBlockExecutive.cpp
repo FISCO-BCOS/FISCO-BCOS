@@ -192,7 +192,7 @@ BOOST_AUTO_TEST_CASE(asyncExecuteTest1)
     {
         std::string inputStr = "hello world!";
         bytes input(inputStr.begin(), inputStr.end());
-        auto tx = transactionFactory->createTransaction(20,
+        auto tx = transactionFactory->createTransaction(0,
             "contract" + boost::lexical_cast<std::string>((i + 1) % 10), input, std::to_string(i),
             200, "chainID", "groupID", 400, keyPair);
         // tx->setAttribute(bcos::protocol::Transaction::Attribute::DAG);
@@ -461,7 +461,7 @@ BOOST_AUTO_TEST_CASE(dagByMessage)
     {
         std::string inputStr = "hello world!";
         bytes input(inputStr.begin(), inputStr.end());
-        auto tx = transactionFactory->createTransaction(20,
+        auto tx = transactionFactory->createTransaction(0,
             "contract" + boost::lexical_cast<std::string>((i + 1) % 10), input, std::to_string(i),
             200, "chainID", "groupID", 400, keyPair);
         tx->setAttribute(bcos::protocol::Transaction::Attribute::DAG);
@@ -525,7 +525,7 @@ BOOST_AUTO_TEST_CASE(executeWithSystemError)
     block->blockHeader()->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
 
     auto tx = blockFactory->transactionFactory()->createTransaction(
-        3, "0xaabbccdd", {}, std::to_string(1), 500, "chainId", "groupId", utcTime());
+        0, "0xaabbccdd", {}, std::to_string(1), 500, "chainId", "groupId", utcTime());
     block->appendTransaction(std::move(tx));
 
     // Add Executor
