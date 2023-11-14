@@ -31,7 +31,7 @@ private:
             std::declval<typename Storage::Key>(), storage2::READ_FRONT))>
             oldValue;
     };
-    std::vector<Record> m_records;
+    boost::container::vector<Record> m_records;
     Storage& m_storage;
 
 public:
