@@ -1595,6 +1595,34 @@ void Ledger::getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
         });
 }
 
+static task::Task<void> setGenesisFeatures(RANGES::input_range auto const& featureSets,
+    const ledger::Features existsFeatures, auto& storage)
+{
+    ledger::Features features = existsFeatures;
+    for (auto&& featureSet : featureSets)
+    {
+        if (featureSet.enable > 0)
+        {
+            features.set(featureSet.flag);
+        }
+    }
+    co_await features.writeToStorage(storage, 0);
+}
+
+static task::Task<void> setAlloc(RANGES::input_range auto const& allocs, auto& storage)
+{
+    for (auto&& alloc : allocs)
+    {
+        storage::Entry tableEntry;
+        tableEntry.setField(0, "value");
+        co_await storage2::writeOne(
+            storage, std::make_tuple(SYS_TABLES, alloc.address), std::move(tableEntry));
+
+        
+    }
+    co_return;
+}
+
 // sync method, to be split
 // FIXME: too long
 bool Ledger::buildGenesisBlock(
@@ -1750,7 +1778,6 @@ bool Ledger::buildGenesisBlock(
         }
     }
 
-
     createFileSystemTables(genesis.m_compatibilityVersion);
     auto txLimit = genesis.m_txCountLimit;
     LEDGER_LOG(INFO) << LOG_DESC("Commit the genesis block") << LOG_KV("txLimit", txLimit)
@@ -1839,6 +1866,7 @@ bool Ledger::buildGenesisBlock(
         notifyRotateEntry.setObject(SystemConfigEntry("0", 0));
         sysTable->setRow(INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE, std::move(notifyRotateEntry));
     }
+    task::syncWait(setGenesisFeatures(genesis.m_features, features, *m_storage));
 
     // consensus leader period
     Entry leaderPeriodEntry;
@@ -1964,8 +1992,6 @@ bool Ledger::buildGenesisBlock(
     Entry archivedNumber;
     archivedNumber.importFields({"0"});
     stateTable->setRow(SYS_KEY_ARCHIVED_NUMBER, std::move(archivedNumber));
-
-    task::syncWait(features.writeToStorage(*m_storage, 0));
     return true;
 }
 
