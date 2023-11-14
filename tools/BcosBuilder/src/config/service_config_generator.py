@@ -82,6 +82,18 @@ class ServiceConfigGenerator:
                 utilities.execute_command(copy_cmd)
                 utilities.log_info("* copy tars_proxy.ini: " + tars_proxy_conf + " ,dir: " + conf_dir)
 
+    def __copy_ssl_files(self, src, dst):
+        try:
+            shutil.copytree(src, dst)
+        except FileExistsError:
+            for item in os.listdir(src):
+                s = os.path.join(src, item)
+                d = os.path.join(dst, item)
+                if os.path.isdir(s):
+                    shutil.copytree(s, d)
+                else:
+                    shutil.copy2(s, d)
+
     def __copy_tars_conf_file(self, service_config, service_type):
         for deploy_ip in service_config.deploy_ip_list:
             conf_dir = self.__get_service_config_base_path(service_config, deploy_ip, True)
@@ -89,9 +101,8 @@ class ServiceConfigGenerator:
             # utilities.log_info("* ==> generate tars install package deploy ip: %s, service type: %s, chain id: %s, tars pkg dir: %s" % (deploy_ip, service_type, self.config.chain_id, self.config.tars_config.tars_pkg_dir))
 
             # # copy ssl/ca.crt ssl/ssl.crt ssl/ssl.key
-            cert_dir = os.path.join(conf_dir, "ssl", "*")
-            cp_command = "cp " + cert_dir + " " + conf_dir
-            os.system(cp_command)
+            cert_dir = os.path.join(conf_dir, "ssl")
+            self.__copy_ssl_files(cert_dir, conf_dir)
             # remove ssl/
             shutil.rmtree(os.path.join(conf_dir, "ssl"))
 
