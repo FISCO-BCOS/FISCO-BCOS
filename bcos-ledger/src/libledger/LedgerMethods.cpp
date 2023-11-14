@@ -49,6 +49,14 @@ bcos::task::Task<void> bcos::ledger::prewriteBlockToStorage(LedgerInterface& led
     co_await awaitable;
 }
 
+bcos::task::Task<void> bcos::ledger::tag_invoke(
+    ledger::tag_t<storeTransactionsAndReceipts> /*unused*/, LedgerInterface& ledger,
+    bcos::protocol::TransactionsPtr blockTxs, bcos::protocol::Block::ConstPtr block)
+{
+    ledger.storeTransactionsAndReceipts(std::move(blockTxs), std::move(block));
+    co_return;
+}
+
 bcos::task::Task<bcos::protocol::Block::Ptr> bcos::ledger::tag_invoke(
     ledger::tag_t<getBlockData> /*unused*/, LedgerInterface& ledger,
     protocol::BlockNumber blockNumber, int32_t blockFlag)
@@ -345,6 +353,8 @@ bcos::task::Task<bcos::ledger::LedgerConfig::Ptr> bcos::ledger::tag_invoke(
         ledgerConfig->setNotifyRotateFlagInfo(std::get<0>(co_await getSystemConfigOrDefault(
             ledger, INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE, DEFAULT_INTERNAL_NOTIFY_FLAG)));
     }
+    ledgerConfig->setAuthCheckStatus(
+        std::get<0>(co_await getSystemConfigOrDefault(ledger, SYSTEM_KEY_AUTH_CHECK_STATUS, 0)));
 
     co_return ledgerConfig;
 }
@@ -362,7 +372,7 @@ bcos::task::Task<bcos::ledger::Features> bcos::ledger::tag_invoke(
         }
         catch (std::exception& e)
         {
-            LEDGER2_LOG(TRACE) << "Not found system config: " << key;
+            LEDGER2_LOG(DEBUG) << "Not found system config: " << key;
         }
     }
 

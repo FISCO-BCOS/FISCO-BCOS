@@ -1510,7 +1510,7 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                     auto executiveFactory = std::make_shared<ExecutiveFactory>(*m_blockContext,
                         m_evmPrecompiled, m_precompiled, m_staticPrecompiled, *m_gasInjector);
                     auto executive = executiveFactory->build(
-                        params->codeAddress, params->contextID, params->seq, false);
+                        params->codeAddress, params->contextID, params->seq, ExecutiveType::common);
                     auto p = executive->getPrecompiled(params->receiveAddress);
                     if (p)
                     {
@@ -2135,7 +2135,7 @@ void TransactionExecutor::getABI(
     {
         auto codeHash = getCodeHash(contractTableName, stateStorage);
         // asyncGetRow key should not be empty
-        std::string abiKey = codeHash.empty() ? ACCOUNT_ABI : codeHash;
+        std::string abiKey = codeHash.empty() ? std::string(ACCOUNT_ABI) : codeHash;
         // try to get abi from SYS_CONTRACT_ABI first
         EXECUTOR_LOG(TRACE) << LOG_DESC("get abi") << LOG_KV("abiKey", abiKey);
 
@@ -2711,7 +2711,7 @@ void TransactionExecutor::executeTransactionsWithCriticals(
         auto executiveFactory = std::make_shared<ExecutiveFactory>(
             *m_blockContext, m_evmPrecompiled, m_precompiled, m_staticPrecompiled, *m_gasInjector);
         auto executive =
-            executiveFactory->build(input->codeAddress, input->contextID, input->seq, false);
+            executiveFactory->build(input->codeAddress, input->contextID, input->seq, ExecutiveType::common);
 
         EXECUTOR_NAME_LOG(TRACE) << LOG_BADGE("executeTransactionsWithCriticals")
                                  << LOG_DESC("Start transaction")

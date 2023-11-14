@@ -138,7 +138,7 @@ void ExecutiveDagFlow::runOriginFlow(std::function<void(CallParameters::UniquePt
 
             // dag tx no need to use coroutine
             auto executive =
-                m_executiveFactory->build(input->codeAddress, input->contextID, input->seq, false);
+                m_executiveFactory->build(input->codeAddress, input->contextID, input->seq, ExecutiveType::common);
 
             output = executive->start(std::move(input));
 

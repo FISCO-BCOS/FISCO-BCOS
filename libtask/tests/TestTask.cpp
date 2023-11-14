@@ -135,6 +135,7 @@ BOOST_AUTO_TEST_CASE(asyncTask)
 
         BOOST_CHECK_EQUAL(result, 200);
         std::cout << "Got async result" << std::endl;
+        co_return;
     }(taskGroup));
 
     std::cout << "Top task destroyed" << std::endl;

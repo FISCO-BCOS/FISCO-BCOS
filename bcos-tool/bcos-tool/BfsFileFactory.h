@@ -99,8 +99,8 @@ public:
     // sync create dir
     static std::optional<storage::Table> createDir(
         bcos::storage::StorageInterface::Ptr const& _storage, std::string _table);
-    static void buildDirEntry(
-        storage::Entry& _mutableEntry, std::variant<FileType, std::string> fileType);
+    static void buildDirEntry(storage::Entry& _mutableEntry,
+        std::variant<FileType, std::string, std::string_view> fileType);
     static bool buildLink(storage::Table& _table, const std::string& _address,
         const std::string& _abi, const std::string& name = "");
     static bool buildAuth(storage::Table& _table, const std::string& _admin);

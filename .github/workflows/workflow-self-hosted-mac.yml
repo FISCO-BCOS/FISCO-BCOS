@@ -40,11 +40,11 @@ jobs:
 
       - name: Remove cache if correspond dir change
         run: ./tools/.ci/clear_build_cache.sh
-
+            
       - name: Build for mac
         run: |
           mkdir -p build && cd build && rm -rf  CMakeCache.txt
-          cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCOVERAGE=OFF -DVCPKG_HOST_TRIPLET=arm64-osx -DVCPKG_TARGET_TRIPLET=arm64-osx -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON -DURL_BASE=ghproxy.com/github.com .. || cat *.log
+          cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCOVERAGE=OFF -DVCPKG_HOST_TRIPLET=arm64-osx -DVCPKG_TARGET_TRIPLET=arm64-osx -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON .. || cat *.log
           cmake --build . --parallel 8
 
       - name: Test

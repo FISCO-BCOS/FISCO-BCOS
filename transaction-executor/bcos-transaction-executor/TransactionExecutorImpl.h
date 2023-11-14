@@ -39,9 +39,10 @@ private:
     protocol::TransactionReceiptFactory const& m_receiptFactory;
     PrecompiledManager m_precompiledManager;
 
-    friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(tag_t<execute> /*unused*/,
-        TransactionExecutorImpl& executor, auto& storage, protocol::BlockHeader const& blockHeader,
-        protocol::Transaction const& transaction, int contextID)
+    friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
+        tag_t<executeTransaction> /*unused*/, TransactionExecutorImpl& executor, auto& storage,
+        protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
+        int contextID, ledger::LedgerConfig const& ledgerConfig)
     {
         try
         {
@@ -51,7 +52,7 @@ private:
                     << "Execte transaction: " << transaction.hash().hex();
             }
 
-            Rollbackable<std::remove_reference_t<decltype(storage)>> rollbackableStorage(storage);
+            Rollbackable<std::decay_t<decltype(storage)>> rollbackableStorage(storage);
 
             auto toAddress = unhexAddress(transaction.to());
             evmc_message evmcMessage = {.kind = transaction.to().empty() ? EVMC_CREATE : EVMC_CALL,
@@ -73,10 +74,16 @@ private:
                 .create2_salt = {},
                 .code_address = toAddress};
 
+            if (blockHeader.number() == 0 &&
+                transaction.to() == precompiled::AUTH_COMMITTEE_ADDRESS)
+            {
+                evmcMessage.kind = EVMC_CREATE;
+            }
+
             int64_t seq = 0;
             HostContext hostContext(executor.m_vmFactory, rollbackableStorage, blockHeader,
                 evmcMessage, evmcMessage.sender, transaction.abi(), contextID, seq,
-                executor.m_precompiledManager);
+                executor.m_precompiledManager, ledgerConfig);
             auto evmcResult = co_await hostContext.execute();
 
             bcos::bytesConstRef output;

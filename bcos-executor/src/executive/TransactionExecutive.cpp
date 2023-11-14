@@ -186,7 +186,7 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
     }
 
 
-    auto executive = buildChildExecutive(input->codeAddress, m_contextID, newSeq, false);
+    auto executive = buildChildExecutive(input->codeAddress, m_contextID, newSeq, ExecutiveType::common);
 
     m_childExecutives.push_back(executive);  // add child executive for revert() if needed
 
@@ -393,7 +393,7 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
     // Create table
     try
     {
-        m_storageWrapper->createTable(tableName, STORAGE_VALUE);
+        m_storageWrapper->createTable(tableName, std::string(STORAGE_VALUE));
         EXECUTIVE_LOG(INFO) << "create contract table " << LOG_KV("table", tableName)
                             << LOG_KV("sender", callParameters->senderAddress);
         if (m_blockContext.isAuthCheck() ||
@@ -524,7 +524,7 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
             return buildCallResults;
         }
         /// create contract table
-        m_storageWrapper->createTable(newAddress, STORAGE_VALUE);
+        m_storageWrapper->createTable(newAddress, std::string(STORAGE_VALUE));
         /// set code field
         Entry entry = {};
         entry.importFields({codeString});
@@ -551,11 +551,11 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
         }
 
         /// create link table
-        auto linkTable = m_storageWrapper->createTable(tableName, STORAGE_VALUE);
+        auto linkTable = m_storageWrapper->createTable(tableName, std::string(STORAGE_VALUE));
 
         /// create code index contract
         auto codeTable = getContractTableName(newAddress, false);
-        m_storageWrapper->createTable(codeTable, STORAGE_VALUE);
+        m_storageWrapper->createTable(codeTable, std::string(STORAGE_VALUE));
 
         /// set code field
         Entry entry = {};
@@ -1289,7 +1289,7 @@ void TransactionExecutive::creatAuthTable(std::string_view _tableName, std::stri
     EXECUTIVE_LOG(DEBUG) << "creatAuthTable in deploy" << LOG_KV("tableName", _tableName)
                          << LOG_KV("origin", _origin) << LOG_KV("sender", _sender)
                          << LOG_KV("admin", admin);
-    auto table = m_storageWrapper->createTable(authTableName, STORAGE_VALUE);
+    auto table = m_storageWrapper->createTable(authTableName, std::string(STORAGE_VALUE));
 
     if (table) [[likely]]
     {

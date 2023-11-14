@@ -1,5 +1,6 @@
 #include "../bcos-transaction-executor/TransactionExecutorImpl.h"
 #include "TestBytecode.h"
+#include "TestMemoryStorage.h"
 #include "bcos-codec/bcos-codec/abi/ContractABICodec.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
@@ -18,14 +19,15 @@ public:
     {
         bcos::executor::GlobalHashImpl::g_hashImpl = std::make_shared<bcos::crypto::Keccak256>();
     }
+    ledger::LedgerConfig ledgerConfig;
 };
 
 BOOST_FIXTURE_TEST_SUITE(TransactionExecutorImpl, TestTransactionExecutorImplFixture)
 
 BOOST_AUTO_TEST_CASE(execute)
 {
-    task::syncWait([]() mutable -> task::Task<void> {
-        memory_storage::MemoryStorage<StateKey, StateValue, memory_storage::ORDERED> storage;
+    task::syncWait([this]() mutable -> task::Task<void> {
+        MutableStorage storage;
 
         auto cryptoSuite = std::make_shared<bcos::crypto::CryptoSuite>(
             bcos::executor::GlobalHashImpl::g_hashImpl, nullptr, nullptr);
@@ -45,8 +47,8 @@ BOOST_AUTO_TEST_CASE(execute)
         // First deploy
         auto transaction =
             transactionFactory.createTransaction(0, "", helloworldBytecodeBinary, {}, 0, "", "", 0);
-        auto receipt = co_await bcos::transaction_executor::execute(
-            executor, storage, blockHeader, *transaction, 0);
+        auto receipt = co_await bcos::transaction_executor::executeTransaction(
+            executor, storage, blockHeader, *transaction, 0, ledgerConfig);
         BOOST_CHECK_EQUAL(receipt->status(), 0);
         BOOST_CHECK_EQUAL(receipt->contractAddress(), "e0e794ca86d198042b64285c5ce667aee747509b");
 
@@ -55,16 +57,16 @@ BOOST_AUTO_TEST_CASE(execute)
         auto input = abiCodec.abiIn("setInt(int256)", bcos::s256(10099));
         auto transaction2 = transactionFactory.createTransaction(
             0, std::string(receipt->contractAddress()), input, {}, 0, "", "", 0);
-        auto receipt2 = co_await bcos::transaction_executor::execute(
-            executor, storage, blockHeader, *transaction2, 1);
+        auto receipt2 = co_await bcos::transaction_executor::executeTransaction(
+            executor, storage, blockHeader, *transaction2, 1, ledgerConfig);
         BOOST_CHECK_EQUAL(receipt2->status(), 0);
 
         // Get the value
         auto input2 = abiCodec.abiIn("getInt()");
         auto transaction3 = transactionFactory.createTransaction(
             0, std::string(receipt->contractAddress()), input2, {}, 0, "", "", 0);
-        auto receipt3 = co_await bcos::transaction_executor::execute(
-            executor, storage, blockHeader, *transaction3, 2);
+        auto receipt3 = co_await bcos::transaction_executor::executeTransaction(
+            executor, storage, blockHeader, *transaction3, 2, ledgerConfig);
         BOOST_CHECK_EQUAL(receipt3->status(), 0);
         bcos::s256 getIntResult = -1;
         abiCodec.abiOut(receipt3->output(), getIntResult);

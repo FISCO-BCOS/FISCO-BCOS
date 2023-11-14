@@ -9,7 +9,6 @@
         "evmone",
         "evmc",
         "tarscpp",
-        "boost-context",
         "ethash",
         "intx",
         "fiscobcos",
