@@ -52,6 +52,10 @@ public:
      * @return bcostars::TransactionDataUniquePtr
      */
     bcostars::ReceiptDataUniquePtr createReceiptDataWithJson(const std::string& _json) override;
+
+    crypto::HashType calculateReceiptDataHashWithJson(
+        bcos::cppsdk::utilities::CryptoType _cryptoType, const std::string& _json) override;
+
     crypto::HashType calculateReceiptDataHash(
         CryptoType _cryptoType, const bcostars::TransactionReceiptData& _receiptData) override;
     bytesConstPtr encodeReceipt(const bcostars::TransactionReceiptData& _receipt) override;
