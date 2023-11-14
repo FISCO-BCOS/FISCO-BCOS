@@ -1645,7 +1645,7 @@ void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr outp
     }
     else
     {
-        auto receipt = m_scheduler->m_blockFactory->receiptFactory()->createReceipt(txGasUsed,
+        auto receipt = m_scheduler->m_blockFactory->receiptFactory()->createReceipt2(txGasUsed,
             std::string(output->newEVMContractAddress()), output->takeLogEntries(),
             output->status(), output->data(), number(), std::string(output->effectiveGasPrice()));
         // write receipt in results
@@ -1654,7 +1654,8 @@ void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr outp
                              << ", receipt: " << receipt->hash()
                              << ", gasUsed: " << receipt->gasUsed()
                              << ", version: " << receipt->version()
-                             << ", status: " << receipt->status();
+                             << ", status: " << receipt->status()
+                             << ", effectiveGasPrice: " << receipt->effectiveGasPrice();
         m_executiveResults[output->contextID() - m_startContextID].receipt = std::move(receipt);
     }
 }

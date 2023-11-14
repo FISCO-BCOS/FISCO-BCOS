@@ -88,15 +88,15 @@ public:
         return transactionReceipt;
     }
 
-    TransactionReceiptImpl::Ptr createReceipt(bcos::u256 const& gasUsed,
+    TransactionReceiptImpl::Ptr createReceipt2(bcos::u256 const& gasUsed,
         std::string contractAddress, const std::vector<bcos::protocol::LogEntry>& logEntries,
         int32_t status, bcos::bytesConstRef output, bcos::protocol::BlockNumber blockNumber,
-        std::string effectiveGasPrice) const override
+        std::string effectiveGasPrice = "1") const override
     {
         auto transactionReceipt = std::make_shared<TransactionReceiptImpl>(
             [m_receipt = bcostars::TransactionReceipt()]() mutable { return &m_receipt; });
         auto& inner = transactionReceipt->mutableInner();
-        inner.data.version = 0;
+        inner.data.version = 1;
         inner.data.gasUsed = boost::lexical_cast<std::string>(gasUsed);
         inner.data.contractAddress = std::move(contractAddress);
         inner.data.status = status;
