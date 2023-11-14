@@ -128,12 +128,14 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
     request->senderAddress = myAddress();
     request->origin = origin();
     request->status = 0;
+    request->value = fromEvmC(_msg->value);
     const auto& blockContext = m_executive->blockContext();
     switch (_msg->kind)
     {
     case EVMC_CREATE2:
         request->createSalt = fromEvmC(_msg->create2_salt);
-        if (features().get(ledger::Features::Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy))
+        if (features().get(
+                ledger::Features::Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy))
         {
             request->data.assign(_msg->input_data, _msg->input_data + _msg->input_size);
             request->create = true;

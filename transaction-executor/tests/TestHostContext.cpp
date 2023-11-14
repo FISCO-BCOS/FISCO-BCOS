@@ -287,7 +287,7 @@ BOOST_AUTO_TEST_CASE(precompiled)
             storageWrapper);
         bcos::ledger::GenesisConfig genesis;
         genesis.m_txGasLimit = 100000;
-        genesis.m_compatibilityVersion = bcos::tool::toVersionNumber("3.5.0");
+        genesis.m_compatibilityVersion = bcos::tool::toVersionNumber("3.6.0");
         ledger.buildGenesisBlock(genesis, ledgerConfig);
 
         bcostars::protocol::BlockHeaderImpl blockHeader(

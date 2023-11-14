@@ -126,7 +126,7 @@ enum class BlockVersion : uint32_t
     V3_0_VERSION = 0x03000000,
     RC4_VERSION = 4,
     MIN_VERSION = RC4_VERSION,
-    MAX_VERSION = V3_5_VERSION,
+    MAX_VERSION = V3_6_VERSION,
 };
 
 enum class TransactionVersion : uint32_t
@@ -143,6 +143,7 @@ const std::string V3_2_VERSION_STR = "3.2.0";
 const std::string V3_3_VERSION_STR = "3.3.0";
 const std::string V3_4_VERSION_STR = "3.4.0";
 const std::string V3_5_VERSION_STR = "3.5.0";
+const std::string V3_6_VERSION_STR = "3.6.0";
 
 const std::string RC_VERSION_PREFIX = "3.0.0-rc";
 
