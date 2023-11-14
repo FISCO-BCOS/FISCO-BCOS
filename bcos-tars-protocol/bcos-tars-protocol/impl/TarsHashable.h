@@ -58,8 +58,9 @@ void impl_calculate(bcos::crypto::hasher::Hasher auto hasher,
 
     auto const& hashFields = receipt.data;
     int32_t version = boost::endian::native_to_big((int32_t)hashFields.version);
-    // if version == 1, update effectiveGasPrice to calculate receipt hash
-    if (version == 0)
+    switch (version)
+    {
+    case int32_t(bcos::protocol::TransactionVersion::V0_VERSION):
     {
         hasher.update(version);
         hasher.update(hashFields.gasUsed);
@@ -67,8 +68,9 @@ void impl_calculate(bcos::crypto::hasher::Hasher auto hasher,
         int32_t status = boost::endian::native_to_big((int32_t)hashFields.status);
         hasher.update(status);
         hasher.update(hashFields.output);
+        break;
     }
-    else
+    case int32_t(bcos::protocol::TransactionVersion::V1_VERSION):
     {
         hasher.update(version);
         hasher.update(hashFields.gasUsed);
@@ -77,6 +79,10 @@ void impl_calculate(bcos::crypto::hasher::Hasher auto hasher,
         hasher.update(status);
         hasher.update(hashFields.output);
         hasher.update(hashFields.effectiveGasPrice);
+        break;
+    }
+    default:
+        BOOST_THROW_EXCEPTION(std::runtime_error("not support version"));
     }
     // vector<LogEntry> logEntries: 6
     for (auto const& log : hashFields.logEntries)
