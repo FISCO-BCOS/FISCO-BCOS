@@ -104,14 +104,8 @@ public:
             task::AwaitableReturnType<decltype(storage2::writeOne((Storage&)std::declval<Storage>(),
                 std::forward<decltype(key)>(key), std::forward<decltype(value)>(value)))>>
     {
-#ifndef __APPLE__
         auto& record = storage.m_records.emplace_back(
             key, co_await storage2::readOne(storage.m_storage, key, storage2::READ_FRONT));
-#else
-        auto& record = storage.m_records.emplace_back();
-        record.key = std::forward<decltype(key)>(key);
-        record.oldValue = co_await storage2::readOne(storage.m_storage, record.key, storage2::READ_FRONT));
-#endif
         co_await storage2::writeOne(
             storage.m_storage, record.key, std::forward<decltype(value)>(value));
     }
