@@ -206,7 +206,7 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
 
             default:
             {
-                SESSION_LOG(ERROR) << LOG_DESC("Unknown topic packet type")
+                SESSION_LOG(WARNING) << LOG_DESC("Unknown topic packet type")
                                    << LOG_KV("type", message->packetType());
                 break;
             }
