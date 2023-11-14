@@ -66,7 +66,7 @@ using namespace bcos::protocol;
 using namespace bcos::storage;
 using namespace bcos::crypto;
 using namespace bcos::tool;
-
+using namespace std::string_view_literals;
 
 void Ledger::asyncPreStoreBlockTxs(bcos::protocol::TransactionsPtr _blockTxs,
     bcos::protocol::Block::ConstPtr block, std::function<void(Error::UniquePtr&&)> _callback)
@@ -1613,12 +1613,8 @@ static task::Task<void> setAlloc(RANGES::input_range auto const& allocs, auto& s
 {
     for (auto&& alloc : allocs)
     {
-        storage::Entry tableEntry;
-        tableEntry.setField(0, "value");
         co_await storage2::writeOne(
-            storage, std::make_tuple(SYS_TABLES, alloc.address), std::move(tableEntry));
-
-        
+            storage, std::make_tuple(SYS_TABLES, alloc.address), storage::Entry("value"sv));
     }
     co_return;
 }
