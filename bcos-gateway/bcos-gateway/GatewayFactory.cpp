@@ -674,6 +674,18 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
             {
                 amop = buildAMOP(service, pubHex);
             }
+            else
+            {
+                // register a null amop message handler
+                service->registerHandlerByMsgType(GatewayMessageType::AMOPMessageType,
+                    [](const bcos::gateway::NetworkException& _e,
+                        const bcos::gateway::P2PSession::Ptr& session,
+                        const std::shared_ptr<bcos::gateway::P2PMessage>& message) {
+                        // 只读模式下, 不处理其它节点的amop消息
+                        // In read-only mode, AMOP messages from other nodes are not processed
+                        return;
+                    });
+            }
         }
 
         // init Gateway
