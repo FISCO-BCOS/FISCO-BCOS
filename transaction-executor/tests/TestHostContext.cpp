@@ -15,6 +15,7 @@
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
+#include "bcos-task/Wait.h"
 #include "bcos-tool/VersionConverter.h"
 #include "bcos-transaction-executor/RollbackableStorage.h"
 #include "bcos-transaction-executor/vm/VMFactory.h"
@@ -318,8 +319,9 @@ BOOST_AUTO_TEST_CASE(precompiled)
                 .code_address = callAddress};
             evmc_address origin = {};
 
-            HostContext hostContext(vmFactory, rollbackableStorage, blockHeader, message, origin,
-                "", 0, seq, *precompiledManager, bcos::ledger::LedgerConfig{});
+            HostContext<decltype(rollbackableStorage), bcos::task::syncWait> hostContext(vmFactory,
+                rollbackableStorage, blockHeader, message, origin, "", 0, seq, *precompiledManager,
+                bcos::ledger::LedgerConfig{});
             auto result = co_await hostContext.execute();
         }
 
@@ -347,8 +349,9 @@ BOOST_AUTO_TEST_CASE(precompiled)
                 .code_address = callAddress};
             evmc_address origin = {};
 
-            HostContext hostContext(vmFactory, rollbackableStorage, blockHeader, message, origin,
-                "", 0, seq, *precompiledManager, bcos::ledger::LedgerConfig{});
+            HostContext<decltype(rollbackableStorage), bcos::task::syncWait> hostContext(vmFactory,
+                rollbackableStorage, blockHeader, message, origin, "", 0, seq, *precompiledManager,
+                bcos::ledger::LedgerConfig{});
             result.emplace(co_await hostContext.execute());
         }
 

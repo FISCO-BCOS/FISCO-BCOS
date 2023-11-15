@@ -66,7 +66,7 @@ inline evmc_bytes32 evm_hash_fn(const uint8_t* data, size_t size)
     return toEvmC(executor::GlobalHashImpl::g_hashImpl->hash(bytesConstRef(data, size)));
 }
 
-template <class Storage>
+template <class Storage, auto waitOperator>
 class HostContext : public evmc_host_context
 {
 private:
@@ -154,7 +154,7 @@ public:
         const evmc_message& message, const evmc_address& origin, std::string_view abi,
         int contextID, int64_t& seq, PrecompiledManager const& precompiledManager,
         ledger::LedgerConfig const& ledgerConfig)
-      : evmc_host_context{.interface = getHostInterface<HostContext, task::syncWait>(),
+      : evmc_host_context{.interface = getHostInterface<HostContext, waitOperator>(),
             .wasm_interface = nullptr,
             .hash_fn = evm_hash_fn,
             .isSMCrypto = (executor::GlobalHashImpl::g_hashImpl->getHashImplType() ==

@@ -39,8 +39,9 @@ private:
     protocol::TransactionReceiptFactory const& m_receiptFactory;
     PrecompiledManager m_precompiledManager;
 
+    template <class Storage, auto waitOperator>
     friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
-        tag_t<executeTransaction> /*unused*/, TransactionExecutorImpl& executor, auto& storage,
+        tag_t<executeTransaction> /*unused*/, TransactionExecutorImpl& executor, Storage& storage,
         protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
         int contextID, ledger::LedgerConfig const& ledgerConfig)
     {
@@ -82,9 +83,9 @@ private:
             }
 
             int64_t seq = 0;
-            HostContext hostContext(executor.m_vmFactory, rollbackableStorage, blockHeader,
-                evmcMessage, evmcMessage.sender, transaction.abi(), contextID, seq,
-                executor.m_precompiledManager, ledgerConfig);
+            HostContext<Storage, waitOperator> hostContext(executor.m_vmFactory,
+                rollbackableStorage, blockHeader, evmcMessage, evmcMessage.sender,
+                transaction.abi(), contextID, seq, executor.m_precompiledManager, ledgerConfig);
             auto evmcResult = co_await hostContext.execute();
 
             bcos::bytesConstRef output;
