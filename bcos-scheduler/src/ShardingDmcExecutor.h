@@ -33,9 +33,9 @@ public:
         bcos::protocol::Block::Ptr block,
         bcos::executor::ParallelTransactionExecutorInterface::Ptr executor,
         GraphKeyLocks::Ptr keyLocks, bcos::crypto::Hash::Ptr hashImpl,
-        DmcStepRecorder::Ptr dmcRecorder, int64_t schedulerTermId)
+        DmcStepRecorder::Ptr dmcRecorder, int64_t schedulerTermId, bool isCall)
       : DmcExecutor(std::move(name), std::move(contractAddress), block, executor, keyLocks,
-            hashImpl, dmcRecorder),
+            hashImpl, dmcRecorder, isCall),
         m_schedulerTermId(schedulerTermId)
     {}
 
