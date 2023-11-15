@@ -154,7 +154,7 @@ public:
         const evmc_message& message, const evmc_address& origin, std::string_view abi,
         int contextID, int64_t& seq, PrecompiledManager const& precompiledManager,
         ledger::LedgerConfig const& ledgerConfig)
-      : evmc_host_context{.interface = getHostInterface<HostContext>(),
+      : evmc_host_context{.interface = getHostInterface<HostContext, task::syncWait>(),
             .wasm_interface = nullptr,
             .hash_fn = evm_hash_fn,
             .isSMCrypto = (executor::GlobalHashImpl::g_hashImpl->getHashImplType() ==

@@ -60,6 +60,4 @@ public:
 
 template <auto& Tag>
 using tag_t = std::decay_t<decltype(Tag)>;
-
-constexpr static uint64_t TRANSACTION_GAS = 3000000000;
 }  // namespace bcos::transaction_executor
