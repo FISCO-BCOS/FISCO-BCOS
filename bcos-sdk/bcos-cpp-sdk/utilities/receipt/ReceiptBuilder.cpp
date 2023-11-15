@@ -42,6 +42,14 @@ bcostars::ReceiptDataUniquePtr bcos::cppsdk::utilities::ReceiptBuilder::createRe
     return _receipt;
 }
 
+bcos::crypto::HashType bcos::cppsdk::utilities::ReceiptBuilder::calculateReceiptDataHashWithJson(
+    bcos::cppsdk::utilities::CryptoType _cryptoType, const std::string& _json)
+{
+    auto _receipt = std::make_unique<bcostars::TransactionReceiptData>();
+    _receipt->readFromJsonString(_json);
+    return calculateReceiptDataHash(_cryptoType, *_receipt);
+}
+
 bcos::crypto::HashType bcos::cppsdk::utilities::ReceiptBuilder::calculateReceiptDataHash(
     bcos::cppsdk::utilities::CryptoType _cryptoType,
     const bcostars::TransactionReceiptData& _receiptData)

@@ -64,6 +64,16 @@ public:
     virtual bcostars::ReceiptDataUniquePtr createReceiptDataWithJson(const std::string& _json) = 0;
 
     /**
+     * @brief calculate receipt data hash with json
+     *
+     * @param _cryptoType
+     * @param _json
+     * @return crypto::HashType
+     */
+    virtual crypto::HashType calculateReceiptDataHashWithJson(
+        bcos::cppsdk::utilities::CryptoType _cryptoType, const std::string& _json) = 0;
+
+    /**
      * @brief
      *
      * @param _cryptoType
