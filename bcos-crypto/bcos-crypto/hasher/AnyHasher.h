@@ -2,6 +2,7 @@
 #include "Hasher.h"
 #include "bcos-crypto/TrivialObject.h"
 #include <bcos-concepts/ByteBuffer.h>
+#include <memory>
 #include <span>
 
 namespace bcos::crypto::hasher
@@ -30,6 +31,10 @@ private:
 
 public:
     AnyHasherImpl(Hasher hasher) : m_hasher(std::move(hasher)) {}
+    AnyHasherImpl(AnyHasherImpl&&) = default;
+    AnyHasherImpl(const AnyHasherImpl&) = default;
+    AnyHasherImpl& operator=(AnyHasherImpl&&) = default;
+    AnyHasherImpl& operator=(const AnyHasherImpl&) = default;
     void update(std::span<std::byte const> input) override { m_hasher.update(input); }
     void final(std::span<std::byte> output) override { m_hasher.final(output); }
     std::unique_ptr<AnyHasherInterface> clone() const override
@@ -64,6 +69,8 @@ public:
         m_anyHasher->update(view);
     }
 
+    void update(std::span<std::byte const> input) { m_anyHasher->update(input); }
+
     void final(concepts::bytebuffer::ByteBuffer auto& output)
     {
         concepts::resizeTo(output, hashSize());
@@ -71,10 +78,11 @@ public:
             std::span<std::byte>((std::byte*)RANGES::data(output), RANGES::size(output)));
     }
 
+    void final(std::span<std::byte> output) { m_anyHasher->final(output); }
+
     AnyHasher clone() const { return {m_anyHasher->clone()}; }
     size_t hashSize() const { return m_anyHasher->hashSize(); }
 };
 
 static_assert(Hasher<AnyHasher>, "Not a valid Hasher!");
-
 }  // namespace bcos::crypto::hasher

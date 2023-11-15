@@ -24,7 +24,7 @@ struct TransactionData : public tars::TarsStructBase
 {
 public:
     static std::string className() { return "bcostars.TransactionData"; }
-    static std::string MD5() { return "ea41d47be6b852a5c3edcfe7a805be85"; }
+    static std::string MD5() { return "8147ae64a9fd777c7d425e7796bf503b"; }
     TransactionData() { resetDefault(); }
     void resetDefault()
     {
@@ -36,6 +36,11 @@ public:
         to = "";
         input.clear();
         abi = "";
+        value = "";
+        gasPrice = "";
+        gasLimit = 0;
+        maxFeePerGas = "";
+        maxPriorityFeePerGas = "";
     }
     template <typename WriterT>
     void writeTo(tars::TarsOutputStream<WriterT>& _os) const
@@ -54,6 +59,26 @@ public:
         {
             _os.write(abi, 8);
         }
+        if (value != "")
+        {
+            _os.write(value, 9);
+        }
+        if (gasPrice != "")
+        {
+            _os.write(gasPrice, 10);
+        }
+        if (gasLimit != 0)
+        {
+            _os.write(gasLimit, 11);
+        }
+        if (maxFeePerGas != "")
+        {
+            _os.write(maxFeePerGas, 12);
+        }
+        if (maxPriorityFeePerGas != "")
+        {
+            _os.write(maxPriorityFeePerGas, 13);
+        }
     }
     template <typename ReaderT>
     void readFrom(tars::TarsInputStream<ReaderT>& _is)
@@ -67,6 +92,11 @@ public:
         _is.read(to, 6, false);
         _is.read(input, 7, true);
         _is.read(abi, 8, false);
+        _is.read(value, 9, false);
+        _is.read(gasPrice, 10, false);
+        _is.read(gasLimit, 11, false);
+        _is.read(maxFeePerGas, 12, false);
+        _is.read(maxPriorityFeePerGas, 13, false);
     }
     tars::JsonValueObjPtr writeToJson() const
     {
@@ -79,6 +109,14 @@ public:
         p->value["to"] = tars::JsonOutput::writeJson(to);
         p->value["input"] = tars::JsonOutput::writeJson(bcos::toHexStringWithPrefix(input));
         p->value["abi"] = tars::JsonOutput::writeJson(abi);
+        if ((int)version == 1)
+        {
+            p->value["value"] = tars::JsonOutput::writeJson(value);
+            p->value["gasPrice"] = tars::JsonOutput::writeJson(gasPrice);
+            p->value["gasLimit"] = tars::JsonOutput::writeJson(gasLimit);
+            p->value["maxFeePerGas"] = tars::JsonOutput::writeJson(maxFeePerGas);
+            p->value["maxPriorityFeePerGas"] = tars::JsonOutput::writeJson(maxPriorityFeePerGas);
+        }
         return p;
     }
     std::string writeToJsonString() const { return tars::TC_Json::writeValue(writeToJson()); }
@@ -104,6 +142,15 @@ public:
         auto inputBytes = bcos::fromHexString(inputHex);
         std::copy(inputBytes->begin(), inputBytes->end(), std::back_inserter(input));
         tars::JsonInput::readJson(abi, pObj->value["abi"], false);
+        if ((int)version == 1)
+        {
+            tars::JsonInput::readJson(value, pObj->value["value"], false);
+            tars::JsonInput::readJson(gasPrice, pObj->value["gasPrice"], false);
+            tars::JsonInput::readJson(gasLimit, pObj->value["gasLimit"], false);
+            tars::JsonInput::readJson(maxFeePerGas, pObj->value["maxFeePerGas"], false);
+            tars::JsonInput::readJson(
+                maxPriorityFeePerGas, pObj->value["maxPriorityFeePerGas"], false);
+        }
     }
     void readFromJsonString(const std::string& str) { readFromJson(tars::TC_Json::getValue(str)); }
     std::ostream& display(std::ostream& _os, int _level = 0) const
@@ -117,6 +164,11 @@ public:
         _ds.display(to, "to");
         _ds.display(input, "input");
         _ds.display(abi, "abi");
+        _ds.display(value, "value");
+        _ds.display(gasPrice, "gasPrice");
+        _ds.display(gasLimit, "gasLimit");
+        _ds.display(maxFeePerGas, "maxFeePerGas");
+        _ds.display(maxPriorityFeePerGas, "maxPriorityFeePerGas");
         return _os;
     }
     std::ostream& displaySimple(std::ostream& _os, int _level = 0) const
@@ -130,6 +182,11 @@ public:
         _ds.displaySimple(to, true);
         _ds.displaySimple(input, true);
         _ds.displaySimple(abi, false);
+        _ds.displaySimple(value, true);
+        _ds.displaySimple(gasPrice, true);
+        _ds.displaySimple(gasLimit, true);
+        _ds.displaySimple(maxFeePerGas, true);
+        _ds.displaySimple(maxPriorityFeePerGas, false);
         return _os;
     }
 
@@ -156,6 +213,24 @@ public:
         // encode abi
         hasher.update(bcos::bytesConstRef((bcos::byte*)abi.data(), abi.size()));
 
+        if ((int)version == 1)
+        {
+            // encode value
+            hasher.update(bcos::bytesConstRef((bcos::byte*)value.data(), value.size()));
+            // encode gasPrice
+            hasher.update(bcos::bytesConstRef((bcos::byte*)gasPrice.data(), gasPrice.size()));
+            // encode gasLimit
+            int64_t networkGasLimit = boost::endian::native_to_big((int64_t)gasLimit);
+            hasher.update(bcos::bytesConstRef(
+                (bcos::byte*)(&networkGasLimit), sizeof(networkGasLimit) / sizeof(uint8_t)));
+            // encode maxFeePerGas
+            hasher.update(
+                bcos::bytesConstRef((bcos::byte*)maxFeePerGas.data(), maxFeePerGas.size()));
+            // encode maxPriorityFeePerGas
+            hasher.update(bcos::bytesConstRef(
+                (bcos::byte*)maxPriorityFeePerGas.data(), maxPriorityFeePerGas.size()));
+        }
+
         hasher.final(hashResult);
 
         return hashResult;
@@ -170,12 +245,19 @@ public:
     std::string to;
     std::vector<tars::Char> input;
     std::string abi;
+    std::string value;
+    std::string gasPrice;
+    tars::Int64 gasLimit;
+    std::string maxFeePerGas;
+    std::string maxPriorityFeePerGas;
 };
 inline bool operator==(const TransactionData& l, const TransactionData& r)
 {
     return l.version == r.version && l.chainID == r.chainID && l.groupID == r.groupID &&
            l.blockLimit == r.blockLimit && l.nonce == r.nonce && l.to == r.to &&
-           l.input == r.input && l.abi == r.abi;
+           l.input == r.input && l.abi == r.abi && l.value == r.value && l.gasPrice == r.gasPrice &&
+           l.gasLimit == r.gasLimit && l.maxFeePerGas == r.maxFeePerGas &&
+           l.maxPriorityFeePerGas == r.maxPriorityFeePerGas;
 }
 inline bool operator!=(const TransactionData& l, const TransactionData& r)
 {
