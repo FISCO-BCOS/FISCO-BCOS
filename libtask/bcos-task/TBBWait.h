@@ -12,7 +12,7 @@ namespace bcos::task::tbb
 struct SyncWait
 {
     template <class Task>
-    auto operator()(Task&& task) -> AwaitableReturnType<std::remove_cvref_t<Task>>
+    auto operator()(Task&& task) const -> AwaitableReturnType<std::remove_cvref_t<Task>>
         requires IsAwaitable<Task> && std::is_rvalue_reference_v<decltype(task)>
     {
         using ReturnType = AwaitableReturnType<std::remove_cvref_t<Task>>;

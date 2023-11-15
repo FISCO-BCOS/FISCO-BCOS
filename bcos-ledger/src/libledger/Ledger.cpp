@@ -1609,6 +1609,7 @@ static task::Task<void> setGenesisFeatures(RANGES::input_range auto const& featu
     co_await features.writeToStorage(storage, 0);
 }
 
+#if 0
 static task::Task<void> setAlloc(RANGES::input_range auto const& allocs, auto& storage)
 {
     for (auto&& alloc : allocs)
@@ -1618,6 +1619,7 @@ static task::Task<void> setAlloc(RANGES::input_range auto const& allocs, auto& s
     }
     co_return;
 }
+#endif
 
 // sync method, to be split
 // FIXME: too long
