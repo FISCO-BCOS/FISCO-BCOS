@@ -408,7 +408,7 @@ download_bin()
         LOG_INFO "Downloading fisco-bcos binary from ${github_link} ..."
         curl -#LO "${github_link}"
     fi
-    if [[ "$(ls -al . | grep "fisco-bcos.*tar.gz" | awk '{print $5}')" -lt "1048576" ]];then
+    if [[ "$(ls -al . | grep "fisco-bcos.*tar.gz" | grep -vE "lightnode"| awk '{print $5}')" -lt "1048576" ]];then
         exit_with_clean "Download fisco-bcos failed, please try again. Or download and extract it manually from ${Download_Link} and use -e option."
     fi
     mkdir -p bin && mv ${package_name} bin && cd bin && tar -zxf ${package_name} && cd ..

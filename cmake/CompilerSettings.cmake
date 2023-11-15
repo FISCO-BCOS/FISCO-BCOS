@@ -129,6 +129,7 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
 
         add_compile_options(-fstack-protector)
         add_compile_options(-Winconsistent-missing-override)
+        add_compile_options(-foptimize-sibling-calls)
 
         # Some Linux-specific Clang settings.  We don't want these for OS X.
         if("${CMAKE_SYSTEM_NAME}" MATCHES "Linux")
