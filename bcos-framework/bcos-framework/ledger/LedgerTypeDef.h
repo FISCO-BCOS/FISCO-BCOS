@@ -71,6 +71,7 @@ constexpr static std::string_view SYS_KEY_TOTAL_FAILED_TRANSACTION =
     "total_failed_transaction_count";
 
 // sys table name
+constexpr static std::string_view SYS_TABLES{"s_tables"};
 constexpr static std::string_view SYS_CONSENSUS{"s_consensus"};
 constexpr static std::string_view SYS_CONFIG{"s_config"};
 constexpr static std::string_view SYS_CURRENT_STATE{"s_current_state"};

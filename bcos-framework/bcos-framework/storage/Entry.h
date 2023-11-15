@@ -51,6 +51,8 @@ public:
         std::shared_ptr<std::vector<unsigned char>>, std::shared_ptr<std::vector<char>>>;
 
     Entry() = default;
+    explicit Entry(auto input) { set(std::move(input)); }
+
     Entry(const Entry&) = default;
     Entry(Entry&&) noexcept = default;
     bcos::storage::Entry& operator=(const Entry&) = default;
@@ -81,14 +83,14 @@ public:
 
     template <typename In, typename OutputArchive = boost::archive::binary_oarchive,
         int flag = ARCHIVE_FLAG>
-    void setObject(const In& in)
+    void setObject(const In& input)
     {
         std::string value;
         boost::iostreams::stream<boost::iostreams::back_insert_device<std::string>> outputStream(
             value);
         OutputArchive archive(outputStream, flag);
 
-        archive << in;
+        archive << input;
         outputStream.flush();
 
         setField(0, std::move(value));
@@ -160,6 +162,13 @@ public:
             }
         }
 
+        m_status = MODIFIED;
+    }
+    template <EntryBufferInput T>
+    void set(std::shared_ptr<T> value)
+    {
+        m_size = value->size();
+        m_value = std::move(value);
         m_status = MODIFIED;
     }
 

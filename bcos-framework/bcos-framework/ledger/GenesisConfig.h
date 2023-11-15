@@ -36,7 +36,18 @@ namespace bcos::ledger
 struct FeatureSet
 {
     Features::Flag flag{};
-    protocol::BlockNumber enableNumber{};
+    int enable{};
+};
+
+struct Alloc
+{
+    using State = std::pair<std::string, std::string>;
+
+    std::string address;
+    u256 nonce;
+    u256 balance;
+    std::string code;
+    std::vector<State> storage;
 };
 
 class GenesisConfig
@@ -68,6 +79,9 @@ public:
     // rpbft config
     int64_t m_epochSealerNum = 4;
     int64_t m_epochBlockNum = 1000;
+
     std::vector<FeatureSet> m_features;
+    std::vector<Alloc> m_allocs;
+
 };  // namespace genesisConfig
 }  // namespace bcos::ledger

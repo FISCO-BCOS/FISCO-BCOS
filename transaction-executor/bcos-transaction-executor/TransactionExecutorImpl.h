@@ -53,12 +53,13 @@ private:
             }
 
             Rollbackable<std::decay_t<decltype(storage)>> rollbackableStorage(storage);
+            auto gasLimit = static_cast<int64_t>(std::get<0>(ledgerConfig.gasLimit()));
 
             auto toAddress = unhexAddress(transaction.to());
             evmc_message evmcMessage = {.kind = transaction.to().empty() ? EVMC_CREATE : EVMC_CALL,
                 .flags = 0,
                 .depth = 0,
-                .gas = TRANSACTION_GAS,
+                .gas = gasLimit,
                 .recipient = toAddress,
                 .destination_ptr = nullptr,
                 .destination_len = 0,
@@ -106,9 +107,9 @@ private:
             }
 
             auto const& logEntries = hostContext.logs();
-            auto receipt = executor.m_receiptFactory.createReceipt(
-                TRANSACTION_GAS - evmcResult.gas_left, std::move(newContractAddress), logEntries,
-                evmcResult.status_code, output, blockHeader.number());
+            auto receipt = executor.m_receiptFactory.createReceipt(gasLimit - evmcResult.gas_left,
+                std::move(newContractAddress), logEntries, evmcResult.status_code, output,
+                blockHeader.number());
 
             co_return receipt;
         }

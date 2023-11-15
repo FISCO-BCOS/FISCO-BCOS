@@ -1016,7 +1016,7 @@ void bcos::tool::NodeConfig::loadGenesisFeatures(boost::property_tree::ptree con
             auto flag = it.first;
             auto enableNumber = it.second.get_value<bool>();
             m_genesisConfig.m_features.emplace_back(ledger::FeatureSet{
-                .flag = ledger::Features::string2Flag(flag), .enableNumber = enableNumber});
+                .flag = ledger::Features::string2Flag(flag), .enable = enableNumber});
         }
     }
 }
@@ -1063,7 +1063,7 @@ std::string bcos::tool::generateGenesisData(
             ss << "[features]" << '\n';
             for (const auto& feature : genesisConfig.m_features)
             {
-                ss << feature.flag << ":" << feature.enableNumber << '\n';
+                ss << feature.flag << ":" << feature.enable << '\n';
             }
         }
 
