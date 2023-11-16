@@ -145,6 +145,7 @@ public:
         output.clear();
         logEntries.clear();
         blockNumber = 0;
+        effectiveGasPrice = "";
     }
     template <typename WriterT>
     void writeTo(tars::TarsOutputStream<WriterT>& _os) const
@@ -174,6 +175,10 @@ public:
         {
             _os.write(blockNumber, 7);
         }
+        if (effectiveGasPrice != "")
+        {
+            _os.write(effectiveGasPrice, 8);
+        }
     }
     template <typename ReaderT>
     void readFrom(tars::TarsInputStream<ReaderT>& _is)
@@ -186,6 +191,7 @@ public:
         _is.read(output, 5, false);
         _is.read(logEntries, 6, false);
         _is.read(blockNumber, 7, false);
+        _is.read(effectiveGasPrice, 8, false);
     }
     [[nodiscard]] tars::JsonValueObjPtr writeToJson() const
     {
@@ -197,6 +203,7 @@ public:
         p->value["output"] = tars::JsonOutput::writeJson(bcos::toHexStringWithPrefix(output));
         p->value["logEntries"] = tars::JsonOutput::writeJson(logEntries);
         p->value["blockNumber"] = tars::JsonOutput::writeJson(blockNumber);
+        p->value["effectiveGasPrice"] = tars::JsonOutput::writeJson(effectiveGasPrice);
         return p;
     }
     [[nodiscard]] std::string writeToJsonString() const
@@ -227,6 +234,7 @@ public:
 
         tars::JsonInput::readJson(logEntries, pObj->value["logEntries"], false);
         tars::JsonInput::readJson(blockNumber, pObj->value["blockNumber"], true);
+        tars::JsonInput::readJson(effectiveGasPrice, pObj->value["effectiveGasPrice"], true);
     }
     void readFromJsonString(const std::string& str) { readFromJson(tars::TC_Json::getValue(str)); }
     std::ostream& display(std::ostream& _os, int _level = 0) const
@@ -239,6 +247,7 @@ public:
         _ds.display(output, "output");
         _ds.display(logEntries, "logEntries");
         _ds.display(blockNumber, "blockNumber");
+        _ds.display(effectiveGasPrice, "effectiveGasPrice");
         return _os;
     }
     std::ostream& displaySimple(std::ostream& _os, int _level = 0) const
@@ -251,6 +260,7 @@ public:
         _ds.displaySimple(output, true);
         _ds.displaySimple(logEntries, true);
         _ds.displaySimple(blockNumber, false);
+        _ds.displaySimple(effectiveGasPrice, false);
         return _os;
     }
 
@@ -303,12 +313,14 @@ public:
     std::vector<tars::Char> output;
     std::vector<bcostars::LogEntry> logEntries;
     tars::Int64 blockNumber;
+    std::string effectiveGasPrice;
 };
 inline bool operator==(const TransactionReceiptData& l, const TransactionReceiptData& r)
 {
     return l.version == r.version && l.gasUsed == r.gasUsed &&
            l.contractAddress == r.contractAddress && l.status == r.status && l.output == r.output &&
-           l.logEntries == r.logEntries && l.blockNumber == r.blockNumber;
+           l.logEntries == r.logEntries && l.blockNumber == r.blockNumber &&
+           l.effectiveGasPrice == r.effectiveGasPrice;
 }
 inline bool operator!=(const TransactionReceiptData& l, const TransactionReceiptData& r)
 {
