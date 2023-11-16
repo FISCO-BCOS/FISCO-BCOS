@@ -38,6 +38,7 @@
 #include <chrono>
 #include <exception>
 #include <memory>
+#include <range/v3/view/enumerate.hpp>
 #include <type_traits>
 
 namespace bcos::transaction_scheduler
@@ -85,26 +86,36 @@ std::chrono::milliseconds::rep current();
  */
 task::Task<h256> calculateStateRoot(auto& storage, crypto::Hash const& hashImpl)
 {
+    constexpr static auto STATE_ROOT_CHUNK_SIZE = 64;
     auto range = co_await storage2::range(storage);
+    auto chunkedRange = range | RANGES::views::chunk(STATE_ROOT_CHUNK_SIZE);
 
     storage::Entry deletedEntry;
     deletedEntry.setStatus(storage::Entry::DELETED);
-    h256 stateRoot;
 
-    tbb::concurrent_vector<h256> hashes;
-    hashes.reserve(RANGES::size(range));
-    tbb::parallel_for_each(range, [&](auto const& keyValue) {
-        auto [key, entry] = keyValue;
-        auto& [tableName, keyName] = *key;
+    std::vector<h256, tbb::cache_aligned_allocator<h256>> hashes(RANGES::size(chunkedRange));
+    tbb::task_group hashGroup;
+    auto index = 0U;
+    for (auto&& subrange : chunkedRange)
+    {
+        hashGroup.run([index = index, subrange = std::forward<decltype(subrange)>(subrange),
+                          &hashes, &deletedEntry, &hashImpl]() {
+            auto& localHash = hashes[index];
+            for (auto [key, entry] : subrange)
+            {
+                auto& [tableName, keyName] = *key;
+                if (!entry)
+                {
+                    entry = std::addressof(deletedEntry);
+                }
 
-        if (!entry)
-        {
-            entry = std::addressof(deletedEntry);
-        }
-
-        hashes.emplace_back(entry->hash(tableName, keyName, hashImpl,
-            static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION)));
-    });
+                localHash ^= entry->hash(tableName, keyName, hashImpl,
+                    static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION));
+            }
+        });
+        ++index;
+    }
+    hashGroup.wait();
 
     struct XORHash
     {
@@ -262,13 +273,15 @@ private:
             scheduler.m_multiLayerStorage.newMutable();
             auto view = scheduler.m_multiLayerStorage.fork(true);
             auto constTransactions = co_await getTransactions(scheduler.m_txpool, *block);
+
+            auto ledgerConfig = scheduler.m_ledgerConfig;
             auto receipts = co_await transaction_scheduler::executeBlock(scheduler.m_schedulerImpl,
                 view, scheduler.m_executor, *blockHeader,
                 constTransactions |
                     RANGES::views::transform(
                         [](protocol::Transaction::ConstPtr const& transactionPtr)
                             -> protocol::Transaction const& { return *transactionPtr; }),
-                *scheduler.m_ledgerConfig);
+                *ledgerConfig);
 
             auto newBlockHeader = scheduler.m_blockHeaderFactory.populateBlockHeader(blockHeader);
             finishExecute(scheduler.m_multiLayerStorage.mutableStorage(), receipts, *newBlockHeader,

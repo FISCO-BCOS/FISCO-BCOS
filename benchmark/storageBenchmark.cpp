@@ -70,7 +70,7 @@ task::Task<void> storage2BatchWrite(auto& storage, RANGES::range auto const& dat
 {
     auto now = std::chrono::steady_clock::now();
 
-    co_await storage.write(dataSet | RANGES::views::transform([
+    co_await storage2::writeSome(storage, dataSet | RANGES::views::transform([
     ](auto& item) -> auto const& { return std::get<0>(item); }),
         dataSet |
             RANGES::views::transform([](auto& item) -> auto const& { return std::get<1>(item); }));
@@ -113,9 +113,9 @@ task::Task<void> storage2MultiThreadWrite(auto& storage, RANGES::range auto cons
             for (auto i = range.begin(); i != range.end(); ++i)
             {
                 auto const& item = dataSet[i];
-                (void)storage.write(RANGES::views::single(std::get<0>(item)),
-                    RANGES::views::single(std::get<1>(item)));  // Here is valid because storage
-                                                                // returns AwaitableValue
+                (void)storage2::writeOne(storage, std::get<0>(item),
+                    std::get<1>(item));  // Here is valid because storage
+                                         // returns AwaitableValue
             }
         });
     auto elpased = std::chrono::duration_cast<std::chrono::milliseconds>(

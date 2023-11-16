@@ -15,20 +15,23 @@ concept HasReadOneDirect =
     requires(Storage& storage) {
         requires RANGES::range<task::AwaitableReturnType<decltype(storage2::readSome(
             storage, std::declval<std::vector<typename Storage::Key>>(), storage2::READ_FRONT))>>;
+        requires !std::is_void_v<
+            task::AwaitableReturnType<decltype(storage2::readOne((Storage&)std::declval<Storage>(),
+                std::declval<typename Storage::Key>(), storage2::READ_FRONT))>>;
     };
 
-template <class Storage>
-    requires HasReadOneDirect<Storage>
+template <HasReadOneDirect Storage>
 class Rollbackable
 {
 private:
-    constexpr static size_t MOSTLY_STEPS = 7;
     struct Record
     {
         StateKey key;
-        std::optional<StateValue> oldValue;
+        task::AwaitableReturnType<decltype(storage2::readOne((Storage&)std::declval<Storage>(),
+            std::declval<typename Storage::Key>(), storage2::READ_FRONT))>
+            oldValue;
     };
-    boost::container::small_vector<Record, MOSTLY_STEPS> m_records;
+    std::vector<Record> m_records;
     Storage& m_storage;
 
 public:
@@ -70,26 +73,42 @@ public:
             storage.m_storage, std::forward<decltype(keys)>(keys));
     }
 
+    friend auto tag_invoke(
+        storage2::tag_t<storage2::readOne> /*unused*/, Rollbackable& storage, const auto& key)
+        -> task::Task<task::AwaitableReturnType<decltype(storage2::readOne(
+            (Storage&)std::declval<Storage>(), key))>>
+    {
+        co_return co_await storage2::readOne(storage.m_storage, key);
+    }
+
     friend auto tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/, Rollbackable& storage,
         RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
         -> task::Task<task::AwaitableReturnType<decltype(storage2::writeSome(
             (Storage&)std::declval<Storage>(), std::forward<decltype(keys)>(keys),
             std::forward<decltype(values)>(values)))>>
     {
-        // Store values to history
         auto oldValues = co_await storage2::readSome(storage.m_storage, keys, storage2::READ_FRONT);
-        for (auto&& [key, value] : RANGES::views::zip(keys, oldValues))
+        for (auto&& [key, oldValue] : RANGES::views::zip(keys, oldValues))
         {
-            auto& record =
-                storage.m_records.emplace_back(Record{.key = StateKey{key}, .oldValue = {}});
-            if (value)
-            {
-                record.oldValue.emplace(std::move(*value));
-            }
+            storage.m_records.emplace_back(Record{.key = typename Storage::Key{key},
+                .oldValue = std::forward<decltype(oldValue)>(oldValue)});
         }
 
         co_return co_await storage2::writeSome(storage.m_storage,
             std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values));
+    }
+
+    friend auto tag_invoke(storage2::tag_t<storage2::writeOne> /*unused*/, Rollbackable& storage,
+        auto&& key, auto&& value)
+        -> task::Task<
+            task::AwaitableReturnType<decltype(storage2::writeOne((Storage&)std::declval<Storage>(),
+                std::forward<decltype(key)>(key), std::forward<decltype(value)>(value)))>>
+    {
+        auto& record = storage.m_records.emplace_back();
+        record.key = key;
+        record.oldValue = co_await storage2::readOne(storage.m_storage, key, storage2::READ_FRONT);
+        co_await storage2::writeOne(
+            storage.m_storage, record.key, std::forward<decltype(value)>(value));
     }
 
     friend auto tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/, Rollbackable& storage,

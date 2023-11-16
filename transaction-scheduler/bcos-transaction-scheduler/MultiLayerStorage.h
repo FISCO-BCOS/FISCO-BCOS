@@ -27,8 +27,7 @@ struct UnsupportedMethod : public bcos::Error {};
 // clang-format on
 
 template <class MutableStorageType, class CachedStorage, class BackendStorage>
-    requires((std::is_void_v<CachedStorage> || (!std::is_void_v<CachedStorage>)) &&
-             storage2::SeekableStorage<MutableStorageType>)
+    requires((std::is_void_v<CachedStorage> || (!std::is_void_v<CachedStorage>)))
 class MultiLayerStorage
 {
 private:
@@ -242,24 +241,15 @@ public:
         friend task::Task<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/,
             View& storage, RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
         {
-            if (!storage.m_mutableStorage) [[unlikely]]
-            {
-                BOOST_THROW_EXCEPTION(NotExistsMutableStorageError{});
-            }
-            co_await storage2::writeSome(*storage.m_mutableStorage,
+            co_await storage2::writeSome(storage.mutableStorage(),
                 std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values));
         }
 
         friend task::Task<void> tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/,
             View& storage, RANGES::input_range auto&& keys)
         {
-            if (!storage.m_mutableStorage)
-            {
-                BOOST_THROW_EXCEPTION(NotExistsMutableStorageError{});
-            }
-
             co_await storage2::removeSome(
-                *storage.m_mutableStorage, std::forward<decltype(keys)>(keys));
+                storage.mutableStorage(), std::forward<decltype(keys)>(keys));
         }
 
         MutableStorageType& mutableStorage()
@@ -271,7 +261,6 @@ public:
             return *m_mutableStorage;
         }
 
-    public:
         View(const View&) = delete;
         View& operator=(const View&) = delete;
         View(View&&) noexcept = default;

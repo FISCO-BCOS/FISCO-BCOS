@@ -372,6 +372,7 @@ public:
                 m_myContractTable, buildLegacyExternalCaller(), m_precompiledManager);
         }
 
+        auto savepoint = m_rollbackableStorage.current();
         storage::Entry tableEntry;
         tableEntry.setField(0, "value");
         co_await storage2::writeOne(
@@ -384,7 +385,6 @@ public:
         auto vmInstance =
             co_await m_vmFactory.create(VMKind::evmone, createCodeHash, createCode, mode);
 
-        auto savepoint = m_rollbackableStorage.current();
         auto result = vmInstance.execute(
             interface, this, mode, &m_message, m_message.input_data, m_message.input_size);
         if (result.status_code != 0)

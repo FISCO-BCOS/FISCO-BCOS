@@ -53,14 +53,15 @@ public:
     DmcExecutor(std::string name, std::string contractAddress, bcos::protocol::Block::Ptr block,
         bcos::executor::ParallelTransactionExecutorInterface::Ptr executor,
         GraphKeyLocks::Ptr keyLocks, bcos::crypto::Hash::Ptr hashImpl,
-        DmcStepRecorder::Ptr dmcRecorder)
+        DmcStepRecorder::Ptr dmcRecorder, bool isCall)
       : m_name(name),
         m_contractAddress(contractAddress),
         m_block(block),
         m_executor(executor),
         m_keyLocks(keyLocks),
         m_hashImpl(hashImpl),
-        m_dmcRecorder(dmcRecorder)
+        m_dmcRecorder(dmcRecorder),
+        m_isCall(isCall)
     {}
 
     virtual ~DmcExecutor() = default;
@@ -128,6 +129,8 @@ public:
 
     bool hasContractTableChanged() { return m_hasContractTableChanged; }
 
+    void setIsCall(bool isCall) { m_isCall = isCall; }
+
 protected:
     virtual void executorCall(bcos::protocol::ExecutionMessage::UniquePtr input,
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
@@ -153,6 +156,7 @@ protected:
     std::string newEVMAddress(int64_t blockNumber, int64_t contextID, int64_t seq);
     std::string newEVMAddress(
         const std::string_view& _sender, bytesConstRef _init, u256 const& _salt);
+    bool isCall() { return m_isCall; }
 
 protected:
     std::string m_name;
@@ -164,6 +168,7 @@ protected:
     DmcStepRecorder::Ptr m_dmcRecorder;
     ExecutivePool m_executivePool;
     bool m_hasContractTableChanged = false;
+    bool m_isCall;
 
 
     mutable SharedMutex x_concurrentLock;

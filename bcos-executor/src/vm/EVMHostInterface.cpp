@@ -114,10 +114,25 @@ evmc_bytes32 getCodeHash(evmc_host_context* _context, const evmc_address* _addr)
  * @param _bufferSize : code size to copy
  * @return size_t : return copied code size(in byte)
  */
-size_t copyCode(evmc_host_context* _context, const evmc_address*, size_t, uint8_t* _bufferData,
-    size_t _bufferSize)
+size_t copyCode(evmc_host_context* _context, const evmc_address* _addr, size_t _codeOffset,
+    uint8_t* _bufferData, size_t _bufferSize)
 {
     auto& hostContext = static_cast<HostContext&>(*_context);
+    if (hostContext.features().get(
+            ledger::Features::Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy))
+    {
+        auto addr = fromEvmC(*_addr);
+        bytes const& code = hostContext.codeAt(addr);
+
+        // Handle "big offset" edge case.
+        if (_codeOffset >= code.size())
+            return 0;
+
+        size_t maxToCopy = code.size() - _codeOffset;
+        size_t numToCopy = std::min(maxToCopy, _bufferSize);
+        std::copy_n(&code[_codeOffset], numToCopy, _bufferData);
+        return numToCopy;
+    }
 
     hostContext.setCode(bytes((bcos::byte*)_bufferData, (bcos::byte*)_bufferData + _bufferSize));
     return _bufferSize;
