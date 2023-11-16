@@ -37,11 +37,13 @@ public:
     bool setCode(bytes code) override;
     h256 codeHash() override;
 
+    std::string_view myAddress() const override;
     std::string_view caller() const override;
 
 private:
     storage::Entry m_code;
     h256 m_codeHash;
+    std::string m_thisAddress;
     std::string m_delegateCallSender;
 };
 

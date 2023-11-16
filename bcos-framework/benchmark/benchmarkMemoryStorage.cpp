@@ -1,5 +1,4 @@
 #include <bcos-framework/storage/Entry.h>
-#include <bcos-framework/storage2/AnyStorage.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-task/Wait.h>
 #include <benchmark/benchmark.h>
@@ -16,7 +15,6 @@ using namespace bcos;
 using namespace bcos::storage2;
 using namespace bcos::storage2::memory_storage;
 using namespace bcos::transaction_executor;
-using namespace bcos::storage2::any_storage;
 
 using Key = StateKey;
 
@@ -67,9 +65,6 @@ std::variant<MemoryStorage<Key, storage::Entry, memory_storage::Attribute(ORDERE
     MemoryStorage<Key, storage::Entry, memory_storage::Attribute(CONCURRENT), std::hash<Key>>,
     MemoryStorage<Key, storage::Entry, memory_storage::Attribute(CONCURRENT | MRU), std::hash<Key>>>
     allStorage;
-std::optional<AnyStorage<Key, storage::Entry,
-    any_storage::Attribute(any_storage::READABLE | any_storage::WRITEABLE)>>
-    anyStorageView;
 
 template <class Storage>
 static void read(benchmark::State& state)
@@ -83,7 +78,7 @@ static void read(benchmark::State& state)
             co_await std::visit(
                 [&](auto& storage) -> task::Task<void> {
                     setCapacityForMRU(storage);
-                    co_await storage.write(fixture.allKeys, fixture.allValues);
+                    co_await storage2::writeSome(storage, fixture.allKeys, fixture.allValues);
                 },
                 allStorage);
         }());
@@ -95,53 +90,14 @@ static void read(benchmark::State& state)
                 int i = (state.range(0) / state.threads()) * state.thread_index();
                 for (auto const& it : state)
                 {
-                    auto itAwaitable = co_await storage.read(RANGES::views::single(
-                        fixture.allKeys[(i + fixture.allKeys.size()) % fixture.allKeys.size()]));
-                    co_await itAwaitable.next();
-                    [[maybe_unused]] auto& value = co_await itAwaitable.value();
-                    // [[maybe_unused]] auto value = co_await storage2::readOne(storage,
-                    //     fixture.allKeys[(i + fixture.allKeys.size()) % fixture.allKeys.size()]);
+                    auto value = co_await storage2::readOne(storage,
+                        fixture.allKeys[(i + fixture.allKeys.size()) % fixture.allKeys.size()]);
 
                     ++i;
                 }
                 co_return;
             },
             allStorage);
-
-        co_return;
-    }(state));
-}
-
-template <class Storage>
-static void readAny(benchmark::State& state)
-{
-    if (state.thread_index() == 0)
-    {
-        fixture.prepareData(state.range(0));
-        allStorage.emplace<Storage>();
-
-        task::syncWait([&]() -> task::Task<void> {
-            co_await std::visit(
-                [&](auto& storage) -> task::Task<void> {
-                    setCapacityForMRU(storage);
-                    co_await storage.write(fixture.allKeys, fixture.allValues);
-                },
-                allStorage);
-        }());
-    }
-
-    std::visit([&](auto& storage) { anyStorageView.emplace(storage); }, allStorage);
-    task::syncWait([&](benchmark::State& state) -> task::Task<void> {
-        int i = (state.range(0) / state.threads()) * state.thread_index();
-        for (auto const& it : state)
-        {
-            auto itAwaitable = co_await anyStorageView->read(RANGES::views::single(
-                fixture.allKeys[(i + fixture.allKeys.size()) % fixture.allKeys.size()]));
-            co_await itAwaitable.next();
-            [[maybe_unused]] auto value = co_await itAwaitable.value();
-
-            ++i;
-        }
 
         co_return;
     }(state));
@@ -165,8 +121,8 @@ static void write(benchmark::State& state)
                 for (auto const& it : state)
                 {
                     auto index = (i + fixture.allKeys.size()) % fixture.allKeys.size();
-                    co_await storage.write(RANGES::views::single(fixture.allKeys[index]),
-                        RANGES::views::single(fixture.allValues[index]));
+                    co_await storage2::writeOne(
+                        storage, fixture.allKeys[index], fixture.allValues[index]);
                     ++i;
                 }
                 co_return;
@@ -205,7 +161,8 @@ static void readTBBHashMap(benchmark::State& state)
     }
 }
 
-tbb::concurrent_unordered_map<Key, storage::Entry, std::hash<StateKey>> tbbUnorderedMap;
+tbb::concurrent_unordered_map<Key, storage::Entry, std::hash<StateKey>, std::equal_to<>>
+    tbbUnorderedMap;
 static void readTBBUnorderedMap(benchmark::State& state)
 {
     if (state.thread_index() == 0)
@@ -272,30 +229,6 @@ BENCHMARK(read<MemoryStorage<Key, storage::Entry,
 BENCHMARK(read<MemoryStorage<Key, storage::Entry>>)->Arg(100000)->Arg(1000000);
 BENCHMARK(
     read<MemoryStorage<Key, storage::Entry, memory_storage::Attribute(CONCURRENT), std::hash<Key>>>)
-    ->Arg(100000)
-    ->Arg(1000000)
-    ->Threads(1)
-    ->Threads(8);
-
-BENCHMARK(readAny<MemoryStorage<Key, storage::Entry, memory_storage::Attribute(ORDERED)>>)
-    ->Arg(100000)
-    ->Arg(1000000);
-BENCHMARK(readAny<MemoryStorage<Key, storage::Entry,
-              memory_storage::Attribute(ORDERED | CONCURRENT), std::hash<Key>>>)
-    ->Arg(100000)
-    ->Arg(1000000)
-    ->Threads(1)
-    ->Threads(8);
-BENCHMARK(readAny<MemoryStorage<Key, storage::Entry,
-              memory_storage::Attribute(ORDERED | CONCURRENT | MRU), std::hash<Key>>>)
-    ->Arg(100000)
-    ->Arg(1000000)
-    ->Threads(1)
-    ->Threads(8);
-BENCHMARK(readAny<MemoryStorage<Key, storage::Entry>>)->Arg(100000)->Arg(1000000);
-BENCHMARK(
-    readAny<
-        MemoryStorage<Key, storage::Entry, memory_storage::Attribute(CONCURRENT), std::hash<Key>>>)
     ->Arg(100000)
     ->Arg(1000000)
     ->Threads(1)

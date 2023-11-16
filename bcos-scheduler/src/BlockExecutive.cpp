@@ -1516,7 +1516,7 @@ DmcExecutor::Ptr BlockExecutive::buildDmcExecutor(const std::string& name,
     bcos::executor::ParallelTransactionExecutorInterface::Ptr executor)
 {
     auto dmcExecutor = std::make_shared<DmcExecutor>(name, contractAddress, m_block, executor,
-        m_keyLocks, m_scheduler->m_hashImpl, m_dmcRecorder);
+        m_keyLocks, m_scheduler->m_hashImpl, m_dmcRecorder, isCall());
     return dmcExecutor;
 }
 

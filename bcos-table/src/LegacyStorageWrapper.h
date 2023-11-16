@@ -2,7 +2,6 @@
 #include "bcos-framework/storage/Common.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-framework/storage2/Storage.h"
-#include "bcos-framework/storage2/StorageMethods.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-table/src/StateStorageInterface.h"
 #include "bcos-task/Task.h"
