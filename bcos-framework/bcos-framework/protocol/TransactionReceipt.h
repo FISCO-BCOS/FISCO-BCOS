@@ -45,6 +45,8 @@ public:
     virtual bcos::bytesConstRef output() const = 0;
     virtual gsl::span<const LogEntry> logEntries() const = 0;
     virtual protocol::BlockNumber blockNumber() const = 0;
+    virtual std::string_view effectiveGasPrice() const = 0;
+    virtual void setEffectiveGasPrice(std::string effectiveGasPrice) = 0;
 
     // additional information on transaction execution, no need to be involved in the hash
     // calculation

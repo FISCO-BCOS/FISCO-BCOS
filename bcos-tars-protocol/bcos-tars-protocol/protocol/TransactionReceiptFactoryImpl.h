@@ -88,6 +88,28 @@ public:
         return transactionReceipt;
     }
 
+    TransactionReceiptImpl::Ptr createReceipt2(bcos::u256 const& gasUsed,
+        std::string contractAddress, const std::vector<bcos::protocol::LogEntry>& logEntries,
+        int32_t status, bcos::bytesConstRef output, bcos::protocol::BlockNumber blockNumber,
+        std::string effectiveGasPrice = "1") const override
+    {
+        auto transactionReceipt = std::make_shared<TransactionReceiptImpl>(
+            [m_receipt = bcostars::TransactionReceipt()]() mutable { return &m_receipt; });
+        auto& inner = transactionReceipt->mutableInner();
+        inner.data.version = 1;
+        inner.data.gasUsed = boost::lexical_cast<std::string>(gasUsed);
+        inner.data.contractAddress = std::move(contractAddress);
+        inner.data.status = status;
+        inner.data.output.assign(output.begin(), output.end());
+        transactionReceipt->setLogEntries(logEntries);
+        inner.data.blockNumber = blockNumber;
+        inner.data.effectiveGasPrice = std::move(effectiveGasPrice);
+
+        // Update the hash field
+        bcos::concepts::hash::calculate(m_hashImpl->hasher(), inner, inner.dataHash);
+        return transactionReceipt;
+    }
+
 private:
     bcos::crypto::Hash::Ptr m_hashImpl;
 };

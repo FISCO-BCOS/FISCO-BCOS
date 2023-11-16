@@ -87,7 +87,7 @@ void createTxs(bcos::initializer::Initializer::Ptr const& init)
 {
     bytes input = {0};
     auto tx = init->protocolInitializer()->blockFactory()->transactionFactory()->createTransaction(
-        3, precompiled::AUTH_COMMITTEE_ADDRESS, input, "", 1000, init->nodeConfig()->chainId(),
+        0, precompiled::AUTH_COMMITTEE_ADDRESS, input, "", 1000, init->nodeConfig()->chainId(),
         init->nodeConfig()->groupId(), utcSteadyTime());
     auto sender = Address(precompiled::AUTH_COMMITTEE_ADDRESS);
     tx->forceSender(sender.asBytes());

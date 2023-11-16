@@ -60,6 +60,8 @@ public:
     bcos::bytesConstRef output() const override;
     gsl::span<const bcos::protocol::LogEntry> logEntries() const override;
     bcos::protocol::BlockNumber blockNumber() const override;
+    std::string_view effectiveGasPrice() const override;
+    void setEffectiveGasPrice(std::string effectiveGasPrice) override;
 
     const bcostars::TransactionReceipt& inner() const;
     bcostars::TransactionReceipt& mutableInner();
