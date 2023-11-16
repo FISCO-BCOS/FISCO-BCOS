@@ -234,7 +234,7 @@ public:
 
         tars::JsonInput::readJson(logEntries, pObj->value["logEntries"], false);
         tars::JsonInput::readJson(blockNumber, pObj->value["blockNumber"], true);
-        tars::JsonInput::readJson(effectiveGasPrice, pObj->value["effectiveGasPrice"], true);
+        tars::JsonInput::readJson(effectiveGasPrice, pObj->value["effectiveGasPrice"], false);
     }
     void readFromJsonString(const std::string& str) { readFromJson(tars::TC_Json::getValue(str)); }
     std::ostream& display(std::ostream& _os, int _level = 0) const
