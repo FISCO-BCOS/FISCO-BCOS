@@ -29,19 +29,17 @@ jobs:
       - uses: actions/checkout@v2
         with:
           fetch-depth: 5
-      - uses: actions/cache@v2
+      - uses: actions/cache@v3
         id: cache
         with:
           path: |
             deps/
             c:/vcpkg
-            c:/vcpkg/buildtrees
-            c:/vcpkg/packages
-            c:/vcpkg/downloads
             ccache
-          key: hunter-msvc-v3-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: vcpkg-msvc-v3-notest-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            hunter-msvc-v3-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            vcpkg-msvc-v3-notest-${{ hashFiles('.github/workflows/workflow.yml') }}
+            vcpkg-msvc-v3-notest-
       - name: update vcpkg
         run: |
           cd ${{ env.VCPKG_ROOT }} && git fetch --all && git checkout master && git pull
