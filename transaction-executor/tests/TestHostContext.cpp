@@ -81,9 +81,9 @@ public:
             evmc_address origin = {};
 
 
-            HostContext<decltype(rollbackableStorage), bcos::task::syncWait> hostContext(vmFactory,
-                rollbackableStorage, blockHeader, message, origin, "", 0, seq, *precompiledManager,
-                ledgerConfig);
+            HostContext<decltype(rollbackableStorage)> hostContext(vmFactory, rollbackableStorage,
+                blockHeader, message, origin, "", 0, seq, *precompiledManager, ledgerConfig,
+                bcos::task::syncWait);
             auto result = co_await hostContext.execute();
 
             BOOST_REQUIRE_EQUAL(result.status_code, 0);
@@ -120,9 +120,9 @@ public:
             .code_address = helloworldAddress};
         evmc_address origin = {};
 
-        HostContext<decltype(rollbackableStorage), bcos::task::syncWait> hostContext(vmFactory,
-            rollbackableStorage, blockHeader, message, origin, "", 0, seq, *precompiledManager,
-            ledgerConfig);
+        HostContext<decltype(rollbackableStorage)> hostContext(vmFactory, rollbackableStorage,
+            blockHeader, message, origin, "", 0, seq, *precompiledManager, ledgerConfig,
+            bcos::task::syncWait);
         auto result = co_await hostContext.execute();
 
         co_return result;
@@ -323,9 +323,9 @@ BOOST_AUTO_TEST_CASE(precompiled)
                 .code_address = callAddress};
             evmc_address origin = {};
 
-            HostContext<decltype(rollbackableStorage), bcos::task::syncWait> hostContext(vmFactory,
-                rollbackableStorage, blockHeader, message, origin, "", 0, seq, *precompiledManager,
-                bcos::ledger::LedgerConfig{});
+            HostContext<decltype(rollbackableStorage)> hostContext(vmFactory, rollbackableStorage,
+                blockHeader, message, origin, "", 0, seq, *precompiledManager,
+                bcos::ledger::LedgerConfig{}, bcos::task::syncWait);
             auto result = co_await hostContext.execute();
         }
 
@@ -353,9 +353,9 @@ BOOST_AUTO_TEST_CASE(precompiled)
                 .code_address = callAddress};
             evmc_address origin = {};
 
-            HostContext<decltype(rollbackableStorage), bcos::task::syncWait> hostContext(vmFactory,
-                rollbackableStorage, blockHeader, message, origin, "", 0, seq, *precompiledManager,
-                bcos::ledger::LedgerConfig{});
+            HostContext<decltype(rollbackableStorage)> hostContext(vmFactory, rollbackableStorage,
+                blockHeader, message, origin, "", 0, seq, *precompiledManager,
+                bcos::ledger::LedgerConfig{}, bcos::task::syncWait);
             result.emplace(co_await hostContext.execute());
         }
 

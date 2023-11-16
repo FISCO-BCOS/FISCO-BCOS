@@ -66,7 +66,7 @@ inline evmc_bytes32 evm_hash_fn(const uint8_t* data, size_t size)
     return toEvmC(executor::GlobalHashImpl::g_hashImpl->hash(bytesConstRef(data, size)));
 }
 
-template <class Storage, auto waitOperator>
+template <class Storage>
 class HostContext : public evmc_host_context
 {
 private:
@@ -149,12 +149,17 @@ private:
         }
     }
 
-public:
-    HostContext(VMFactory& vmFactory, Storage& storage, protocol::BlockHeader const& blockHeader,
-        const evmc_message& message, const evmc_address& origin, std::string_view abi,
-        int contextID, int64_t& seq, PrecompiledManager const& precompiledManager,
-        ledger::LedgerConfig const& ledgerConfig)
-      : evmc_host_context{.interface = getHostInterface<HostContext, waitOperator>(),
+    struct InnerConstructor
+    {
+    };
+    constexpr static InnerConstructor innerConstructor{};
+
+    HostContext(InnerConstructor /*unused*/, VMFactory& vmFactory, Storage& storage,
+        protocol::BlockHeader const& blockHeader, const evmc_message& message,
+        const evmc_address& origin, std::string_view abi, int contextID, int64_t& seq,
+        PrecompiledManager const& precompiledManager, ledger::LedgerConfig const& ledgerConfig,
+        const evmc_host_interface* hostInterface)
+      : evmc_host_context{.interface = hostInterface,
             .wasm_interface = nullptr,
             .hash_fn = evm_hash_fn,
             .isSMCrypto = (executor::GlobalHashImpl::g_hashImpl->getHashImplType() ==
@@ -173,6 +178,17 @@ public:
         m_ledgerConfig(ledgerConfig),
         m_myContractTable(getMyContractTable(blockHeader, message))
     {}
+
+public:
+    HostContext(VMFactory& vmFactory, Storage& storage, protocol::BlockHeader const& blockHeader,
+        const evmc_message& message, const evmc_address& origin, std::string_view abi,
+        int contextID, int64_t& seq, PrecompiledManager const& precompiledManager,
+        ledger::LedgerConfig const& ledgerConfig, auto&& waitOperator)
+      : HostContext(innerConstructor, vmFactory, storage, blockHeader, message, origin, abi,
+            contextID, seq, precompiledManager, ledgerConfig,
+            getHostInterface<HostContext>(std::forward<decltype(waitOperator)>(waitOperator)))
+    {}
+
     ~HostContext() noexcept = default;
 
     HostContext(HostContext const&) = delete;
@@ -465,8 +481,9 @@ public:
             messagePtr = std::addressof(*messageWithSender);
         }
 
-        HostContext hostcontext(m_vmFactory, m_rollbackableStorage, m_blockHeader, *messagePtr,
-            m_origin, {}, m_contextID, m_seq, m_precompiledManager, m_ledgerConfig);
+        HostContext hostcontext(innerConstructor, m_vmFactory, m_rollbackableStorage, m_blockHeader,
+            *messagePtr, m_origin, {}, m_contextID, m_seq, m_precompiledManager, m_ledgerConfig,
+            interface);
 
         auto result = co_await hostcontext.execute();
         auto& logs = hostcontext.logs();

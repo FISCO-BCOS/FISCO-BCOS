@@ -48,7 +48,7 @@ BOOST_AUTO_TEST_CASE(execute)
         auto transaction =
             transactionFactory.createTransaction(0, "", helloworldBytecodeBinary, {}, 0, "", "", 0);
         auto receipt = co_await bcos::transaction_executor::executeTransaction(
-            executor, storage, blockHeader, *transaction, 0, ledgerConfig);
+            executor, storage, blockHeader, *transaction, 0, ledgerConfig, task::syncWait);
         BOOST_CHECK_EQUAL(receipt->status(), 0);
         BOOST_CHECK_EQUAL(receipt->contractAddress(), "e0e794ca86d198042b64285c5ce667aee747509b");
 
@@ -58,7 +58,7 @@ BOOST_AUTO_TEST_CASE(execute)
         auto transaction2 = transactionFactory.createTransaction(
             0, std::string(receipt->contractAddress()), input, {}, 0, "", "", 0);
         auto receipt2 = co_await bcos::transaction_executor::executeTransaction(
-            executor, storage, blockHeader, *transaction2, 1, ledgerConfig);
+            executor, storage, blockHeader, *transaction2, 1, ledgerConfig, task::syncWait);
         BOOST_CHECK_EQUAL(receipt2->status(), 0);
 
         // Get the value
@@ -66,7 +66,7 @@ BOOST_AUTO_TEST_CASE(execute)
         auto transaction3 = transactionFactory.createTransaction(
             0, std::string(receipt->contractAddress()), input2, {}, 0, "", "", 0);
         auto receipt3 = co_await bcos::transaction_executor::executeTransaction(
-            executor, storage, blockHeader, *transaction3, 2, ledgerConfig);
+            executor, storage, blockHeader, *transaction3, 2, ledgerConfig, task::syncWait);
         BOOST_CHECK_EQUAL(receipt3->status(), 0);
         bcos::s256 getIntResult = -1;
         abiCodec.abiOut(receipt3->output(), getIntResult);

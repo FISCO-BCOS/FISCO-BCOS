@@ -39,11 +39,10 @@ private:
     protocol::TransactionReceiptFactory const& m_receiptFactory;
     PrecompiledManager m_precompiledManager;
 
-    template <class Storage, auto waitOperator>
     friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
-        tag_t<executeTransaction> /*unused*/, TransactionExecutorImpl& executor, Storage& storage,
+        tag_t<executeTransaction> /*unused*/, TransactionExecutorImpl& executor, auto& storage,
         protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
-        int contextID, ledger::LedgerConfig const& ledgerConfig)
+        int contextID, ledger::LedgerConfig const& ledgerConfig, auto&& waitOperator)
     {
         try
         {
@@ -76,16 +75,17 @@ private:
                 .create2_salt = {},
                 .code_address = toAddress};
 
-            if (blockHeader.number() == 0 &&
+            if (ledgerConfig.authCheckStatus() != 0 && blockHeader.number() == 0 &&
                 transaction.to() == precompiled::AUTH_COMMITTEE_ADDRESS)
             {
                 evmcMessage.kind = EVMC_CREATE;
             }
 
             int64_t seq = 0;
-            HostContext<Storage, waitOperator> hostContext(executor.m_vmFactory,
+            HostContext<decltype(rollbackableStorage)> hostContext(executor.m_vmFactory,
                 rollbackableStorage, blockHeader, evmcMessage, evmcMessage.sender,
-                transaction.abi(), contextID, seq, executor.m_precompiledManager, ledgerConfig);
+                transaction.abi(), contextID, seq, executor.m_precompiledManager, ledgerConfig,
+                std::forward<decltype(waitOperator)>(waitOperator));
             auto evmcResult = co_await hostContext.execute();
 
             bcos::bytesConstRef output;

@@ -92,7 +92,8 @@ class SchedulerParallelImpl
                     co_return;
                 }
                 *receipt = co_await transaction_executor::executeTransaction(m_executor,
-                    m_localReadWriteSetStorage, blockHeader, *transaction, contextID, ledgerConfig);
+                    m_localReadWriteSetStorage, blockHeader, *transaction, contextID, ledgerConfig,
+                    task::tbb::syncWait);
             }
 
             PARALLEL_SCHEDULER_LOG(DEBUG) << "Chunk " << m_chunkIndex << " execute finished";

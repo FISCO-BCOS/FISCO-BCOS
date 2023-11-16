@@ -117,7 +117,6 @@ public:
         commitBlock(1);
     }
 
-#pragma region
     std::string consTestBin =
         "608060405234801561001057600080fd5b506110036000806101000a81548173ffffffffffffffffffffffffff"
         "ffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff160217905550610791806100"
@@ -230,7 +229,7 @@ public:
         "043757600080fd5b505af115801561044b573d6000803e3d6000fd5b505050506040513d602081101561046157"
         "600080fd5b81019080805190602001909291905050509050929150505600a165627a7a72305820fd4857231ba5"
         "7cb17d47d43e38f1370285cfd965b622af793ee1bd9a3e490d270029";
-#pragma endregion
+
     ExecutionMessage::UniquePtr rotate(protocol::BlockNumber _number, bcos::bytes const& pk,
         bcos::bytes const& msg, bcos::bytes const& proof, std::string const& txSender = "",
         int _errorCode = 0)

@@ -528,14 +528,15 @@ public:
             {
                 blockHeader->setVersion(ledgerConfig->compatibilityVersion());
                 blockHeader->setNumber(ledgerConfig->blockNumber());
-                receipt = co_await transaction_executor::executeTransaction(
-                    self->m_executor, view, *blockHeader, *transaction, 0, *ledgerConfig);
+                receipt = co_await transaction_executor::executeTransaction(self->m_executor, view,
+                    *blockHeader, *transaction, 0, *ledgerConfig, task::syncWait);
             }
             else
             {
+                ledger::LedgerConfig emptyLedgerConfig;
                 blockHeader->setVersion((uint32_t)bcos::protocol::BlockVersion::V3_2_4_VERSION);
-                receipt = co_await transaction_executor::executeTransaction(
-                    self->m_executor, view, *blockHeader, *transaction, 0, ledger::LedgerConfig{});
+                receipt = co_await transaction_executor::executeTransaction(self->m_executor, view,
+                    *blockHeader, *transaction, 0, emptyLedgerConfig, task::syncWait);
             }
 
 
