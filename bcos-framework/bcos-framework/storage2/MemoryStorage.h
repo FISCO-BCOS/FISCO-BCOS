@@ -2,6 +2,7 @@
 
 #include "Storage.h"
 #include "bcos-task/AwaitableValue.h"
+#include "bcos-utilities/Overloaded.h"
 #include <bcos-utilities/NullLock.h>
 #include <boost/container/small_vector.hpp>
 #include <boost/multi_index/hashed_index.hpp>
@@ -102,8 +103,6 @@ private:
         return std::make_tuple(std::ref(bucket), Lock(bucket.mutex));
     }
 
-    Bucket& getBucketByIndex(size_t index) { return m_buckets[index]; }
-
     size_t getBucketIndex(auto const& key) const
     {
         if constexpr (!withConcurrent)
@@ -129,7 +128,6 @@ private:
         {
             auto const& item = index.front();
             bucket.capacity -= getSize(item.value);
-
             index.pop_front();
         }
     }
@@ -151,8 +149,8 @@ private:
         requires(!withConcurrent)
     {
         auto range = RANGES::views::transform(storage.m_buckets[0].container,
-            [](Data const& data) -> std::tuple<const KeyType*, const ValueType*> {
-                if constexpr (withLogicalDeletion)
+            [&](Data const& data) -> std::tuple<const KeyType*, const ValueType*> {
+                if constexpr (std::decay_t<decltype(storage)>::withLogicalDeletion)
                 {
                     return std::make_tuple(std::addressof(data.key),
                         std::holds_alternative<Deleted>(data.value) ?
@@ -194,229 +192,71 @@ public:
         m_maxCapacity = capacity;
     }
 
-    class ReadIterator
+    friend auto tag_invoke(bcos::storage2::tag_t<readSome> /*unused*/, MemoryStorage& storage,
+        RANGES::input_range auto&& keys)
+        -> task::AwaitableValue<boost::container::small_vector<std::optional<ValueType>, 1>>
     {
-    private:
-        int64_t m_index = -1;
-        boost::container::small_vector<const Data*, 1> m_iterators;
-        [[no_unique_address]] std::conditional_t<withConcurrent,
-            boost::container::small_vector<Lock, 1>, Empty>
-            m_bucketLocks;
-
-    public:
-        friend class MemoryStorage;
-        using Key = const KeyType&;
-        using Value = const ValueType&;
-
-        ReadIterator() = default;
-        ReadIterator(const ReadIterator&) = delete;
-        ReadIterator(ReadIterator&&) noexcept = default;
-        ReadIterator& operator=(const ReadIterator&) = delete;
-        ReadIterator& operator=(ReadIterator&&) noexcept = default;
-        ~ReadIterator() noexcept = default;
-
-        task::AwaitableValue<bool> next() &
+        task::AwaitableValue<boost::container::small_vector<std::optional<ValueType>, 1>> result(
+            {});
+        if (RANGES::sized_range<decltype(keys)>)
         {
-            return {static_cast<size_t>(++m_index) != m_iterators.size()};
-        }
-        task::AwaitableValue<Key> key() const& { return {m_iterators[m_index]->key}; }
-        task::AwaitableValue<Value> value() const&
-        {
-            if constexpr (withLogicalDeletion)
-            {
-                return {std::get<ValueType>(m_iterators[m_index]->value)};
-            }
-            else
-            {
-                return {m_iterators[m_index]->value};
-            }
-        }
-        task::AwaitableValue<bool> hasValue() const
-        {
-            auto* data = m_iterators[m_index];
-            if constexpr (withLogicalDeletion)
-            {
-                if (data != nullptr && std::holds_alternative<Deleted>(data->value))
-                {
-                    return false;
-                }
-            }
-            return {data != nullptr};
+            result.value().reserve(RANGES::size(keys));
         }
 
-        void release()
-        {
-            if constexpr (withConcurrent)
-            {
-                m_bucketLocks.clear();
-            }
-        }
-    };
-
-    class SeekIterator
-    {
-    private:
-        typename Container::iterator m_it;
-        typename Container::iterator m_end;
-        [[no_unique_address]] Lock m_bucketLock;
-        bool m_started = false;
-
-    public:
-        friend class MemoryStorage;
-        using Key = const KeyType&;
-        using Value = const ValueType&;
-
-        task::AwaitableValue<bool> next() &
-        {
-            if (!m_started)
-            {
-                m_started = true;
-                return {m_it != m_end};
-            }
-            return {(++m_it) != m_end};
-        }
-        task::AwaitableValue<Key> key() const { return {m_it->key}; }
-        task::AwaitableValue<Value> value() const
-        {
-            if constexpr (withLogicalDeletion)
-            {
-                return {std::get<ValueType>(m_it->value)};
-            }
-            else
-            {
-                return {m_it->value};
-            }
-        }
-        task::AwaitableValue<bool> hasValue() const
-        {
-            if constexpr (withLogicalDeletion)
-            {
-                if (std::holds_alternative<Deleted>(m_it->value))
-                {
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        void release() { m_bucketLock.unlock(); }
-
-        auto range() const&
-        {
-            return RANGES::subrange<decltype(m_it), decltype(m_end)>(m_it, m_end) |
-                   RANGES::views::transform(
-                       [](auto const& it) -> std::tuple<const KeyType*, const ValueType*> {
-                           if constexpr (withLogicalDeletion)
-                           {
-                               if (std::holds_alternative<Deleted>(it.value))
-                               {
-                                   return {std::addressof(it.key), nullptr};
-                               }
-                               return {std::addressof(it.key),
-                                   std::addressof(std::get<ValueType>(it.value))};
-                           }
-                           else
-                           {
-                               return {std::addressof(it.key), std::addressof(it.value)};
-                           }
-                       });
-        }
-    };
-
-    task::AwaitableValue<ReadIterator> read(RANGES::input_range auto&& keys)
-    {
-        task::AwaitableValue<ReadIterator> outputAwaitable(ReadIterator{});
-        ReadIterator& output = outputAwaitable.value();
-        if constexpr (RANGES::sized_range<decltype(keys)>)
-        {
-            output.m_iterators.reserve(RANGES::size(keys));
-        }
-
-        std::conditional_t<withConcurrent, std::bitset<BUCKETS_COUNT>, Empty> locks;
         for (auto&& key : keys)
         {
-            auto bucketIndex = getBucketIndex(key);
-            auto& bucket = getBucketByIndex(bucketIndex);
+            auto [bucket, lock] = storage.getBucket(key);
 
-            if constexpr (withConcurrent)
-            {
-                if (!locks[bucketIndex])
-                {
-                    locks[bucketIndex] = true;
-                    output.m_bucketLocks.emplace_back(bucket.mutex);
-                }
-            }
-
-            auto const& index = bucket.container.template get<0>();
+            auto const& index = bucket.get().container.template get<0>();
             auto it = index.find(key);
             if (it != index.end())
             {
-                if constexpr (withMRU)
+                if constexpr (std::decay_t<decltype(storage)>::withMRU)
                 {
-                    updateMRUAndCheck(bucket, it);
+                    storage.updateMRUAndCheck(bucket, it);
                 }
-                output.m_iterators.emplace_back(std::addressof(*it));
+
+                if constexpr (std::decay_t<decltype(storage)>::withLogicalDeletion)
+                {
+                    std::visit(bcos::overloaded{[&](ValueType const& value) {
+                                                    result.value().emplace_back(
+                                                        std::make_optional(value));
+                                                },
+                                   [&](Deleted const&) {
+                                       result.value().emplace_back(std::optional<ValueType>{});
+                                   }},
+                        it->value);
+                }
+                else
+                {
+                    result.value().emplace_back(it->value);
+                }
             }
             else
             {
-                output.m_iterators.emplace_back(nullptr);
+                result.value().emplace_back(std::optional<ValueType>{});
             }
         }
-
-        return outputAwaitable;
+        return result;
     }
 
-    task::AwaitableValue<SeekIterator> seek(auto const& key)
-    {
-        auto [bucket, lock] = getBucket(key);
-        auto const& index = bucket.get().container.template get<0>();
-
-        decltype(index.begin()) it;
-        if constexpr (std::is_same_v<storage2::STORAGE_BEGIN_TYPE,
-                          std::remove_cvref_t<decltype(key)>>)
-        {
-            it = index.begin();
-        }
-        else
-        {
-            if constexpr (withOrdered)
-            {
-                it = index.lower_bound(key);
-            }
-            else
-            {
-                it = index.find(key);
-            }
-        }
-
-        task::AwaitableValue<SeekIterator> output({});
-        auto& seekIt = output.value();
-        seekIt.m_it = it;
-        seekIt.m_end = index.end();
-        if constexpr (withConcurrent)
-        {
-            seekIt.m_bucketLock = std::move(lock);
-        }
-
-        return output;
-    }
-
-    task::AwaitableValue<void> write(
-        RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
+    friend task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/,
+        MemoryStorage& storage, RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
     {
         for (auto&& [key, value] : RANGES::views::zip(keys, values))
         {
-            auto [bucket, lock] = getBucket(key);
+            auto [bucket, lock] = storage.getBucket(key);
             auto const& index = bucket.get().container.template get<0>();
 
-            std::conditional_t<withMRU, int64_t, Empty> updatedCapacity;
-            if constexpr (withMRU)
+            std::conditional_t<std::decay_t<decltype(storage)>::withMRU, int64_t, Empty>
+                updatedCapacity;
+            if constexpr (std::decay_t<decltype(storage)>::withMRU)
             {
                 updatedCapacity = getSize(value);
             }
 
             typename Container::iterator it;
-            if constexpr (withOrdered)
+            if constexpr (std::decay_t<decltype(storage)>::withOrdered)
             {
                 it = index.lower_bound(key);
             }
@@ -426,7 +266,7 @@ public:
             }
             if (it != index.end() && it->key == key)
             {
-                if constexpr (withMRU)
+                if constexpr (std::decay_t<decltype(storage)>::withMRU)
                 {
                     auto& existsValue = it->value;
                     updatedCapacity -= getSize(existsValue);
@@ -444,28 +284,29 @@ public:
                             .value = std::forward<decltype(value)>(value)});
             }
 
-            if constexpr (withMRU)
+            if constexpr (std::decay_t<decltype(storage)>::withMRU)
             {
                 bucket.get().capacity += updatedCapacity;
-                updateMRUAndCheck(bucket.get(), it);
+                storage.updateMRUAndCheck(bucket.get(), it);
             }
         }
 
         return {};
     }
 
-    task::AwaitableValue<void> remove(RANGES::input_range auto const& keys)
+    friend task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/,
+        MemoryStorage& storage, RANGES::input_range auto&& keys)
     {
         for (auto&& key : keys)
         {
-            auto [bucket, lock] = getBucket(key);
+            auto [bucket, lock] = storage.getBucket(key);
             auto const& index = bucket.get().container.template get<0>();
 
             auto it = index.find(key);
             if (it != index.end())
             {
                 auto& existsValue = it->value;
-                if constexpr (withLogicalDeletion)
+                if constexpr (std::decay_t<decltype(storage)>::withLogicalDeletion)
                 {
                     if (std::holds_alternative<Deleted>(existsValue))
                     {
@@ -474,12 +315,12 @@ public:
                     }
                 }
 
-                if constexpr (withMRU)
+                if constexpr (std::decay_t<decltype(storage)>::withMRU)
                 {
                     bucket.get().capacity -= getSize(existsValue);
                 }
 
-                if constexpr (withLogicalDeletion)
+                if constexpr (std::decay_t<decltype(storage)>::withLogicalDeletion)
                 {
                     bucket.get().container.modify(it, [](Data& data) mutable {
                         data.value.template emplace<Deleted>(Deleted{});
@@ -492,7 +333,7 @@ public:
             }
             else
             {
-                if constexpr (withLogicalDeletion)
+                if constexpr (std::decay_t<decltype(storage)>::withLogicalDeletion)
                 {
                     it = bucket.get().container.emplace_hint(
                         it, Data{.key = key, .value = Deleted{}});
@@ -503,9 +344,11 @@ public:
         return {};
     }
 
-    task::AwaitableValue<void> merge(MemoryStorage& from)
+    friend task::AwaitableValue<void> tag_invoke(
+        storage2::tag_t<merge> /*unused*/, MemoryStorage& fromStorage, MemoryStorage& toStorage)
     {
-        for (auto&& [bucket, fromBucket] : RANGES::views::zip(m_buckets, from.m_buckets))
+        for (auto&& [bucket, fromBucket] :
+            RANGES::views::zip(toStorage.m_buckets, fromStorage.m_buckets))
         {
             Lock toLock(bucket.mutex);
             Lock fromLock(fromBucket.mutex);

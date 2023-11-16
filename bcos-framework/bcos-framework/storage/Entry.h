@@ -193,8 +193,6 @@ public:
 
     bool dirty() const { return (m_status == MODIFIED || m_status == DELETED); }
 
-    int32_t size() const { return m_size; }
-
     template <typename Input>
     void importFields(std::initializer_list<Input> values)
     {
@@ -212,6 +210,13 @@ public:
         m_size = 0;
         return std::move(m_value);
     }
+
+    const char* data() const&
+    {
+        auto view = outputValueView(m_value);
+        return view.data();
+    }
+    int32_t size() const { return m_size; }
 
     bool valid() const { return m_status == Status::NORMAL; }
     crypto::HashType hash(std::string_view table, std::string_view key,

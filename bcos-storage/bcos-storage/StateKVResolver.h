@@ -15,12 +15,18 @@ struct InvalidStateKey : public Error
 
 struct StateValueResolver
 {
-    static std::string_view encode(storage::Entry const& entry) { return entry.get(); }
-    static storage::Entry decode(concepts::bytebuffer::ByteBuffer auto&& buffer)
+    static auto encode(const storage::Entry& entry) { return entry; }
+    static auto encode(storage::Entry&& entry) { return std::forward<decltype(entry)>(entry); }
+    static storage::Entry decode(std::string_view view)
     {
         storage::Entry entry;
-        entry.set(std::forward<decltype(buffer)>(buffer));
-
+        entry.set(view);
+        return entry;
+    }
+    static storage::Entry decode(std::string buffer)
+    {
+        storage::Entry entry;
+        entry.set(std::move(buffer));
         return entry;
     }
 };
@@ -29,10 +35,10 @@ struct StateKeyResolver
 {
     using DBKey = boost::container::small_vector<char,
         transaction_executor::ContractTable::static_capacity +
-            transaction_executor::ContractKey::static_capacity + 1>;
+            transaction_executor::ContractKey::static_capacity>;
     constexpr static char TABLE_KEY_SPLIT = ':';
 
-    static DBKey encode(auto const& stateKey)
+    static DBKey encode(auto&& stateKey)
     {
         auto& [tableName, key] = stateKey;
 

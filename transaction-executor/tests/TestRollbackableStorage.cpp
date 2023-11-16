@@ -3,7 +3,6 @@
 #include "TestMemoryStorage.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/Storage.h"
-#include "bcos-framework/storage2/StorageMethods.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-task/Task.h"
 #include "bcos-task/Trait.h"

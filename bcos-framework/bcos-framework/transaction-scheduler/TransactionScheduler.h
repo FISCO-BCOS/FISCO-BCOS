@@ -4,7 +4,6 @@
 #include "bcos-task/Task.h"
 #include "bcos-task/Trait.h"
 #include "bcos-utilities/Ranges.h"
-#include <oneapi/tbb/task_group.h>
 #include <concepts>
 
 namespace bcos::transaction_scheduler
