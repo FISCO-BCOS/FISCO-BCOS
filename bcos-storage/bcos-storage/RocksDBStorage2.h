@@ -46,7 +46,7 @@ struct UnexpectedItemType : public bcos::Error {};
 // clang-format on
 
 // Copy from rocksdb util/coding.h
-inline constexpr int VarintLength(uint64_t v)
+inline constexpr int varintLength(uint64_t v)
 {
     int len = 1;
     while (v >= 128)
@@ -68,8 +68,8 @@ constexpr inline size_t getRocksDBKeyPairSize(
     |value_length|value_bytes|
     */
     return hashColumnFamily ?
-               1 + 4 + VarintLength(keySize) + keySize + VarintLength(valueSize) + valueSize :
-               1 + VarintLength(keySize) + keySize + VarintLength(valueSize) + valueSize;
+               1 + 4 + varintLength(keySize) + keySize + varintLength(valueSize) + valueSize :
+               1 + varintLength(keySize) + keySize + varintLength(valueSize) + valueSize;
 }
 
 constexpr static auto ROCKSDB_WRITE_CHUNK_SIZE = 64;

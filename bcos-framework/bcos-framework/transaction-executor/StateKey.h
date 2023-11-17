@@ -59,12 +59,7 @@ public:
     StateKey& operator=(StateKey&&) noexcept = default;
     ~StateKey() noexcept = default;
 
-    /**
-     * @brief Converts a state key to a string representation.
-     *
-     * @param key The state key to convert.
-     * @return std::string The string representation of the state key.
-     */
+    // 将存储的值修改为可以直接作为rocksdb key的格式
     bool convertToStringKey() &
     {
         static constexpr std::string_view USER_APPS_PREFIX = "/apps/";
@@ -98,7 +93,7 @@ public:
         return std::string_view(std::get<StringKey>(m_key).tableKey);
     }
 
-    friend auto operator<=>(const StateKey& lhs, const StateKey& rhs)
+    friend std::strong_ordering operator<=>(const StateKey& lhs, const StateKey& rhs)
     {
         return std::visit(overloaded{[](const EVMKey& lhsKey, const EVMKey& rhsKey) {
                                          auto lhsStringView = std::string_view(
@@ -115,6 +110,10 @@ public:
                                   return std::strong_ordering::equivalent;
                               }},
             lhs.m_key, rhs.m_key);
+    }
+    friend bool operator==(const StateKey& lhs, const StateKey& rhs)
+    {
+        return std::is_eq(lhs <=> rhs);
     }
 };
 
@@ -189,7 +188,7 @@ public:
                     auto rhsKeyStringView = std::string_view(rhsView.key, rhsView.keyLength);
 
                     auto result = lhsTableStringView <=> rhsTableStringView;
-                    if (result == std::strong_ordering::equal)
+                    if (std::is_eq(result))
                     {
                         result = lhsKeyStringView <=> rhsKeyStringView;
                     }
@@ -200,15 +199,25 @@ public:
                 }},
             lhs.m_view, rhs.m_view);
     }
+    friend bool operator==(const StateKeyView& lhs, const StateKeyView& rhs)
+    {
+        return std::is_eq(lhs <=> rhs);
+    }
 
     size_t hash() const
     {
         return std::visit(
-            overloaded{[](const StateKeyView::EVMKeyView& evmKeyView) {
-                           auto stringView = std::string_view(
-                               (const char*)std::addressof(evmKeyView), sizeof(evmKeyView));
-                           return std::hash<std::string_view>{}(stringView);
-                       },
+            overloaded{
+                [](const StateKeyView::EVMKeyView& evmKeyView) {
+                    auto addressStringView = std::string_view(
+                        (const char*)evmKeyView.address->bytes, sizeof(evmKeyView.address->bytes));
+                    auto keyStringView = std::string_view(
+                        (const char*)evmKeyView.key->bytes, sizeof(evmKeyView.key->bytes));
+
+                    auto result = std::hash<std::string_view>{}(addressStringView);
+                    boost::hash_combine(result, std::hash<std::string_view>{}(keyStringView));
+                    return result;
+                },
                 [](const StateKeyView::StringKeyView& stringKeyView) {
                     return std::hash<std::string_view>{}(stringKeyView.addressKey);
                 },
@@ -225,7 +234,6 @@ public:
             m_view);
     }
 };
-
 
 }  // namespace bcos::transaction_executor
 
@@ -244,12 +252,10 @@ struct std::less<bcos::transaction_executor::StateKey>
         auto rightView = bcos::transaction_executor::StateKeyView(right);
         return leftView < rightView;
     }
-    auto operator()(bcos::transaction_executor::StateKey const& left,
-        bcos::transaction_executor::StateKey const& right) const -> bool
+    auto operator()(bcos::transaction_executor::StateKey const& lhs,
+        bcos::transaction_executor::StateKey const& rhs) const -> bool
     {
-        auto leftView = bcos::transaction_executor::StateKeyView(left);
-        auto rightView = bcos::transaction_executor::StateKeyView(right);
-        return leftView < rightView;
+        return lhs < rhs;
     }
 };
 
@@ -298,7 +304,6 @@ struct boost::hash<bcos::transaction_executor::StateKey>
     }
 };
 
-template <size_t N>
 inline std::ostream& operator<<(
     std::ostream& stream, const bcos::transaction_executor::StateKey& stateKey)
 {
@@ -311,10 +316,15 @@ inline std::ostream& operator<<(
 template <>
 struct std::equal_to<bcos::transaction_executor::StateKey>
 {
+    bool operator()(bcos::transaction_executor::StateKey const& lhs,
+        bcos::transaction_executor::StateKey const& rhs) const
+    {
+        return std::is_eq(lhs <=> rhs);
+    }
     bool operator()(bcos::transaction_executor::StateKeyView const& lhsView,
         bcos::transaction_executor::StateKey const& rhs) const
     {
-        auto rhsView = static_cast<bcos::transaction_executor::StateKeyView>(rhs);
-        return (lhsView <=> rhsView) == std::strong_ordering::equal;
+        auto rhsView = bcos::transaction_executor::StateKeyView(rhs);
+        return std::is_eq(lhsView <=> rhsView);
     }
 };
