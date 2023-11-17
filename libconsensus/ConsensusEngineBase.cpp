@@ -184,7 +184,9 @@ void ConsensusEngineBase::updateConsensusNodeList()
         s2 << "Observers:";
         dev::h512s observerList = m_blockChain->observerList();
         for (dev::h512 node : observerList)
+        {
             s2 << node.abridged() << ",";
+        }
 
         if (m_lastNodeList != s2.str())
         {
@@ -197,14 +199,7 @@ void ConsensusEngineBase::updateConsensusNodeList()
             std::sort(nodeList.begin(), nodeList.end());
             // check the node exists in the group or not(observer node or sealer node)
             auto it = std::find(nodeList.begin(), nodeList.end(), m_keyPair.pub());
-            if (it != nodeList.end())
-            {
-                m_existsInGroup = true;
-            }
-            else
-            {
-                m_existsInGroup = false;
-            }
+            m_existsInGroup = (it != nodeList.end());
             if (m_blockSync->syncTreeRouterEnabled())
             {
                 if (m_sealerListUpdated)
@@ -218,6 +213,7 @@ void ConsensusEngineBase::updateConsensusNodeList()
                 }
             }
             m_service->setNodeListByGroupID(m_groupId, nodeList);
+            m_service->setSealerListByGroupID(m_groupId, observerList);
 
             m_lastNodeList = s2.str();
         }

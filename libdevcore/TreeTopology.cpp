@@ -74,7 +74,7 @@ ssize_t TreeTopology::getNodeIndexByNodeId(
  */
 bool TreeTopology::getNodeIDByIndex(h512& _nodeID, ssize_t const& _nodeIndex) const
 {
-    if (_nodeIndex >= (ssize_t)m_currentConsensusNodes->size())
+    if (_nodeIndex >= (ssize_t)m_currentConsensusNodes->size() || _nodeIndex < 0)
     {
         return false;
     }
@@ -148,7 +148,7 @@ void TreeTopology::selectParentNodes(std::shared_ptr<dev::h512s> _selectedNodeLi
     std::shared_ptr<std::set<dev::h512>> _peers, int64_t const& _nodeIndex,
     int64_t const& _startIndex, bool const& _selectAll)
 {
-    ssize_t parentIndex = (_nodeIndex - 1) / m_treeWidth;
+    ssize_t parentIndex = (_nodeIndex - 1 + m_treeWidth - 1) / m_treeWidth;
     // the parentNode is the node-slef
     if (parentIndex == _nodeIndex)
     {

@@ -49,7 +49,7 @@ days=36500 # 100 years
 timestamp=$(($(date '+%s')*1000))
 chain_id=1
 compatibility_version=""
-default_version="2.10.0"
+default_version="2.10.1"
 rsa_key_length=2048
 macOS=""
 x86_64_arch="false"
@@ -662,7 +662,10 @@ generate_config_ini()
 
 [log]
     enable=true
+    ; the log path, default path is ./log
     log_path=./log
+	; print the log to std::cout or not, default print to the log files
+    enable_console_output = false
     ; enable/disable the statistics function
     enable_statistic=${enable_statistic}
     ; network statistics interval, unit is second, default is 60s

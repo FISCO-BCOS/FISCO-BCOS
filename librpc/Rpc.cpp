@@ -68,9 +68,9 @@ std::map<int, std::string> dev::rpc::RPCMsg{{RPCExceptionType::Success, "Success
     {RPCExceptionType::DynamicGroupDisabled,
         "Dynamic group related interfaces are forbidden to access"}};
 
-Rpc::Rpc(
-    LedgerInitializer::Ptr _ledgerInitializer, std::shared_ptr<dev::p2p::P2PInterface> _service)
-  : m_service(_service)
+Rpc::Rpc(LedgerInitializer::Ptr _ledgerInitializer,
+    std::shared_ptr<dev::p2p::P2PInterface> _service, bool _rawGroupInfo)
+  : m_service(_service), m_uncheckGroupMember(_rawGroupInfo)
 {
     setLedgerInitializer(_ledgerInitializer);
 }
@@ -113,12 +113,15 @@ void Rpc::checkRequest(int _groupID)
         BOOST_THROW_EXCEPTION(
             JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
     }
-    auto _nodeList = blockchain->sealerList() + blockchain->observerList();
-    auto it = std::find(_nodeList.begin(), _nodeList.end(), service()->id());
-    if (it == _nodeList.end())
+    if(!m_uncheckGroupMember)
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(
-            RPCExceptionType::InvalidRequest, RPCMsg[RPCExceptionType::InvalidRequest]));
+        auto _nodeList = blockchain->sealerList() + blockchain->observerList();
+        auto it = std::find(_nodeList.begin(), _nodeList.end(), service()->id());
+        if (it == _nodeList.end())
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                RPCExceptionType::InvalidRequest, RPCMsg[RPCExceptionType::InvalidRequest]));
+        }
     }
     return;
 }
@@ -572,10 +575,22 @@ Json::Value Rpc::getGroupList()
         RPC_LOG(INFO) << LOG_BADGE("getGroupList") << LOG_DESC("request");
 
         Json::Value response = Json::Value(Json::arrayValue);
-
-        auto groupList = ledgerManager()->getGroupListForRpc();
-        for (dev::GROUP_ID id : groupList)
-            response.append(id);
+        if (!m_uncheckGroupMember)
+        {  // filter out the group which the node doesn't belong to
+            auto groupList = ledgerManager()->getGroupListForRpc();
+            for (dev::GROUP_ID id : groupList)
+            {
+                response.append(id);
+            }
+        }
+        else
+        {
+            auto groupList = ledgerManager()->getGroupList();
+            for (dev::GROUP_ID id : groupList)
+            {
+                response.append(id);
+            }
+        }
 
         return response;
     }

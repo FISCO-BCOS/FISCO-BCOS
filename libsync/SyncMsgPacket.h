@@ -144,7 +144,7 @@ public:
 class SyncReqBlockPacket : public SyncMsgPacket
 {
 public:
-    SyncReqBlockPacket() { packetType = ReqBlocskPacket; }
+    SyncReqBlockPacket() { packetType = ReqBlocksPacket; }
     void encode(int64_t _from, unsigned _size);
 };
 
@@ -160,7 +160,7 @@ public:
 class SyncTxsReqPacket : public SyncMsgPacket
 {
 public:
-    SyncTxsReqPacket() { packetType = TxsRequestPacekt; }
+    SyncTxsReqPacket() { packetType = TxsRequestPacket; }
     void encode(std::shared_ptr<std::vector<dev::h256>> _requestedTxs);
 };
 

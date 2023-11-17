@@ -38,7 +38,10 @@ void VM::copyDataToMemory(bytesConstRef _data, u256* _sp)
         bigIndex + size > _data.size() ? _data.size() < bigIndex ? 0 : _data.size() - index : size;
 
     if (sizeToBeCopied > 0)
-        std::memcpy(m_mem.data() + offset, _data.data() + index, sizeToBeCopied);
+    {
+        memcpyWithCheck(
+            m_mem.data() + offset, m_mem.size() - offset, _data.data() + index, sizeToBeCopied);
+    }
     if (size > sizeToBeCopied)
         std::memset(m_mem.data() + offset + sizeToBeCopied, 0, size - sizeToBeCopied);
 }

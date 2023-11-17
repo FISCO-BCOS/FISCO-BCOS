@@ -55,9 +55,9 @@ std::vector<unsigned char> dev::crypto::SM2Signature::asBytes() const
 {
     std::vector<unsigned char> data;
     data.resize(128);
-    memcpy(data.data(), r.data(), 32);
-    memcpy(data.data() + 32, s.data(), 32);
-    memcpy(data.data() + 64, v.data(), 64);
+    memcpyWithCheck(data.data(), data.size(), r.data(), 32);
+    memcpyWithCheck(data.data() + 32, data.size() - 32, s.data(), 32);
+    memcpyWithCheck(data.data() + 64, data.size() - 64, v.data(), 64);
     return data;
 }
 
@@ -140,7 +140,7 @@ pair<bool, bytes> dev::recover(bytesConstRef _in)
         h256 r;
         h256 s;
     } in;
-    memcpy(&in, _in.data(), min(_in.size(), sizeof(in)));
+    memcpyWithCheck(&in, sizeof(h256) * 4, _in.data(), min(_in.size(), sizeof(in)));
     auto sig = std::make_shared<SM2Signature>(in.r, in.s, in.v);
     if (!sig->isValid())
     {

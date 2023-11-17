@@ -115,7 +115,7 @@ std::function<void(std::string&)> dev::storage::getDecryptHandler(
             }
             // resize and copy the uncompressed data
             data.resize(uncompressedData->size());
-            memcpy((void*)data.data(), (const void*)uncompressedData->data(),
+            memcpyWithCheck((void*)data.data(), data.size(), (const void*)uncompressedData->data(),
                 uncompressedData->size());
         }
         catch (const std::exception& e)

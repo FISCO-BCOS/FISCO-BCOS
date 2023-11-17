@@ -234,7 +234,8 @@ void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
                           << LOG_KV("versionNumber", g_BCOSConfig.version())
                           << LOG_KV("enableStat", g_BCOSConfig.enableStat())
                           << LOG_KV("chainId", g_BCOSConfig.chainId())
-                          << LOG_KV("useSMCrypto", g_BCOSConfig.SMCrypto());
+                          << LOG_KV("useSMCrypto", g_BCOSConfig.SMCrypto())
+                          << LOG_KV("IgnoreObserverWriteRequest", g_BCOSConfig.enableIgnoreObserverWriteRequest());
 }
 
 void dev::version()
@@ -249,4 +250,5 @@ void dev::version()
               << FISCO_BCOS_BUILD_TYPE << std::endl;
     std::cout << "Git Branch         : " << FISCO_BCOS_BUILD_BRANCH << std::endl;
     std::cout << "Git Commit Hash    : " << FISCO_BCOS_COMMIT_HASH << std::endl;
+    std::cout << "Compile Options    : " << FISCO_BCOS_COMPILE_OPTIONS << std::endl;
 }

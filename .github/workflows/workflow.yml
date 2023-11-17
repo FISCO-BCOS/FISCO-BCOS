@@ -26,7 +26,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-18.04, macos-latest]
+        os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v2
         with:
@@ -38,11 +38,11 @@ jobs:
         id: cache
         with:
           path: deps/src
-          key: deps-v9-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: deps-v10-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            deps-v9-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            deps-v9-${{ runner.temp }}-${{ github.base_ref }}-
-            deps-v9-${{ runner.temp }}-
+            deps-v10-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            deps-v10-${{ runner.temp }}-${{ github.base_ref }}-
+            deps-v10-${{ runner.temp }}-
       - uses: actions/cache@v2
         id: ccache
         with:
@@ -59,7 +59,7 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt install -y g++ libssl-dev openssl cmake git build-essential autoconf texinfo flex patch bison libgmp-dev zlib1g-dev automake libtool
       - name: configure
-        run: CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DTESTS=ON .
+        run: CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DTESTS=ON -DBUILD_STATIC=ON -DTOOL=ON -DCMAKE_BUILD_TYPE=Release .
       - name: compile
         run: make -j2
       - name: run uint tests
@@ -81,12 +81,12 @@ jobs:
         id: cache
         with:
           path: deps/src
-          key: deps-v5-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: deps-v6-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            deps-v5-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            deps-v5-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            deps-v5-notest-${{ runner.temp }}-
-            deps-v5-${{ runner.temp }}-
+            deps-v6-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            deps-v6-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            deps-v6-notest-${{ runner.temp }}-
+            deps-v6-${{ runner.temp }}-
       - uses: actions/cache@v2
         id: ccache
         with:
@@ -122,12 +122,12 @@ jobs:
         id: cache
         with:
           path: deps/src
-          key: deps-v4-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: deps-v5-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            deps-v4-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            deps-v4-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            deps-v4-notest-${{ runner.temp }}-
-            deps-v4-${{ runner.temp }}-
+            deps-v5-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            deps-v5-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            deps-v5-notest-${{ runner.temp }}-
+            deps-v5-${{ runner.temp }}-
       - uses: actions/cache@v2
         id: ccache
         with:
@@ -142,7 +142,7 @@ jobs:
       - name: configure
         run: cmake . -DBUILD_STATIC=ON
       - name: compile
-        run: make -j2 || cat /home/runner/work/FISCO-BCOS/FISCO-BCOS/deps/src/cryptopp-stamp/cryptopp-configure-*.log
+        run: make -j2
       - name: run integration testing
         run: cd tools && bash ci/ci_check.sh
       - name: tar fisco-bcos for Linux

@@ -101,6 +101,8 @@ public:
         m_enableRSACertForChannel = _enableRSACertForChannel;
     }
 
+    bool enableIgnoreObserverWriteRequest() const { return m_enableIgnoreObserverWriteRequest; }
+
     struct DiskEncryption
     {
         bool enable = false;
@@ -154,6 +156,13 @@ private:
     // if you already have an old java-sdk environment(java-sdk < 2.9.0) with certificates
     // you can turn off this switch for channel ssl connection
     bool m_enableRSACertForChannel{true};
+
+    // if you want to ignore observer write request, you can turn on this switch
+#if defined(DISABLE_OBSERVER_WRITE_REQUEST)
+    bool m_enableIgnoreObserverWriteRequest = true;
+#else
+    bool m_enableIgnoreObserverWriteRequest = false;
+#endif
 };
 
 #define g_BCOSConfig GlobalConfigure::instance()

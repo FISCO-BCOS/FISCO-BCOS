@@ -96,9 +96,9 @@ void dev::channel::ChannelServer::onAccept(
     {
         boost::system::error_code ec;
         auto remoteEndpoint = session->sslSocket()->lowest_layer().remote_endpoint(ec);
-        CHANNEL_LOG(TRACE) << LOG_DESC("Receive new connection")
-                           << LOG_KV("from", remoteEndpoint.address().to_string()) << ":"
-                           << remoteEndpoint.port();
+        CHANNEL_LOG(INFO) << LOG_DESC("Receive new connection")
+                          << LOG_KV("from", remoteEndpoint.address().to_string()) << ":"
+                          << remoteEndpoint.port();
 
         session->setHost(remoteEndpoint.address().to_string());
         session->setPort(remoteEndpoint.port());
@@ -157,7 +157,7 @@ dev::channel::ChannelServer::newVerifyCallback(std::shared_ptr<std::string> _sdk
             X509* cert = X509_STORE_CTX_get_current_cert(ctx.native_handle());
             if (!cert)
             {
-                CHANNEL_LOG(ERROR) << LOG_DESC("Get cert failed");
+                CHANNEL_LOG(WARNING) << LOG_DESC("Get cert failed");
                 return preverified;
             }
 
@@ -166,7 +166,7 @@ dev::channel::ChannelServer::newVerifyCallback(std::shared_ptr<std::string> _sdk
                 (BASIC_CONSTRAINTS*)X509_get_ext_d2i(cert, NID_basic_constraints, &crit, NULL);
             if (!basic)
             {
-                CHANNEL_LOG(ERROR) << LOG_DESC("Get ca basic failed");
+                CHANNEL_LOG(WARNING) << LOG_DESC("Get ca basic failed");
                 return preverified;
             }
             /// ignore ca
@@ -293,6 +293,8 @@ void dev::channel::ChannelServer::onHandshake(const boost::system::error_code& e
         else
         {
             CHANNEL_LOG(WARNING) << LOG_DESC("SSL handshake error")
+                                 << LOG_KV("remoteHost", session->host())
+                                 << LOG_KV("remotePort", session->port())
                                  << LOG_KV("message", error.message());
 
             try

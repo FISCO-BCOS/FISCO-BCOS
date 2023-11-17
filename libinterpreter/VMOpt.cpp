@@ -29,10 +29,10 @@ namespace eth
 std::array<evmc_instruction_metrics, 256> VM::c_metrics{{}};
 void VM::initMetrics()
 {
-    static bool done = []() noexcept
-    {
+    static bool done = []() noexcept {
         // Copy the metrics of the top EVM revision.
-        std::memcpy(&c_metrics[0], evmc_get_instruction_metrics_table(EVMC_LATEST_REVISION),
+        memcpyWithCheck(c_metrics.data(), c_metrics.size(),
+            evmc_get_instruction_metrics_table(EVMC_LATEST_REVISION),
             c_metrics.size() * sizeof(c_metrics[0]));
 
         // Inject interpreter optimization opcodes.
@@ -40,8 +40,7 @@ void VM::initMetrics()
         c_metrics[uint8_t(Instruction::JUMPC)] = c_metrics[uint8_t(Instruction::JUMP)];
         c_metrics[uint8_t(Instruction::JUMPCI)] = c_metrics[uint8_t(Instruction::JUMPI)];
         return true;
-    }
-    ();
+    }();
     (void)done;
 }
 

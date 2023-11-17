@@ -135,7 +135,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             X509* cert = X509_STORE_CTX_get_current_cert(ctx.native_handle());
             if (!cert)
             {
-                HOST_LOG(ERROR) << LOG_DESC("Get cert failed");
+                HOST_LOG(WARNING) << LOG_DESC("Get cert failed");
                 return preverified;
             }
 
@@ -144,7 +144,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
                 (BASIC_CONSTRAINTS*)X509_get_ext_d2i(cert, NID_basic_constraints, &crit, NULL);
             if (!basic)
             {
-                HOST_LOG(ERROR) << LOG_DESC("Get ca basic failed");
+                HOST_LOG(WARNING) << LOG_DESC("Get ca basic failed");
                 return preverified;
             }
             /// ignore ca
@@ -197,7 +197,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
         }
         catch (std::exception& e)
         {
-            HOST_LOG(ERROR) << LOG_DESC("Cert verify failed") << boost::diagnostic_information(e);
+            HOST_LOG(INFO) << LOG_DESC("Cert verify failed") << boost::diagnostic_information(e);
             return preverified;
         }
     };
@@ -240,7 +240,7 @@ NodeInfo Host::nodeInfo()
     }
     catch (std::exception& e)
     {
-        HOST_LOG(ERROR) << LOG_DESC("Get node information from cert failed.")
+        HOST_LOG(INFO) << LOG_DESC("Get node information from cert failed.")
                         << boost::diagnostic_information(e);
         return m_nodeInfo;
     }
@@ -316,7 +316,7 @@ void Host::handshakeServer(const boost::system::error_code& error,
     if (error)
     {
         HOST_LOG(WARNING) << LOG_DESC("handshakeServer Handshake failed")
-                          << LOG_KV("errorValue", error.value())
+                          << LOG_KV("code", error.value())
                           << LOG_KV("message", error.message())
                           << LOG_KV("endpoint", socket->nodeIPEndpoint());
         socket->close();
@@ -452,8 +452,8 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
         /// connection timer error
         if (error && error != boost::asio::error::operation_aborted)
         {
-            HOST_LOG(ERROR) << LOG_DESC("AsyncConnect timer failed")
-                            << LOG_KV("errorValue", error.value())
+            HOST_LOG(INFO) << LOG_DESC("AsyncConnect timer failed")
+                            << LOG_KV("code", error.value())
                             << LOG_KV("message", error.message());
         }
         if (socket->isConnected())
@@ -468,7 +468,7 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
     m_asioInterface->asyncResolveConnect(socket, [=](boost::system::error_code const& ec) {
         if (ec)
         {
-            HOST_LOG(ERROR) << LOG_DESC("TCP Connection refused by node")
+            HOST_LOG(WARNING) << LOG_DESC("TCP Connection refused by node")
                             << LOG_KV("endpoint", _nodeIPEndpoint)
                             << LOG_KV("message", ec.message());
             socket->close();
@@ -509,9 +509,9 @@ void Host::handshakeClient(const boost::system::error_code& error,
     erasePendingConns(_nodeIPEndpoint);
     if (error)
     {
-        HOST_LOG(WARNING) << LOG_DESC("handshakeClient failed")
+        HOST_LOG(INFO) << LOG_DESC("handshakeClient failed")
                           << LOG_KV("endpoint", _nodeIPEndpoint)
-                          << LOG_KV("errorValue", error.value())
+                          << LOG_KV("code", error.value())
                           << LOG_KV("message", error.message());
 
         if (socket->isConnected())

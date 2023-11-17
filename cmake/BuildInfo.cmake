@@ -49,9 +49,9 @@ function(create_build_info)
     # Generate header file containing useful build information
     add_custom_target(BuildInfo.h ALL
         WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-        COMMAND ${CMAKE_COMMAND} -DETH_SOURCE_DIR="${PROJECT_SOURCE_DIR}" 
-        -DETH_BUILDINFO_IN="${ETH_CMAKE_DIR}/templates/BuildInfo.h.in" 
-        -DETH_DST_DIR="${PROJECT_BINARY_DIR}/include" 
+        COMMAND ${CMAKE_COMMAND} -DETH_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
+        -DETH_BUILDINFO_IN="${ETH_CMAKE_DIR}/templates/BuildInfo.h.in"
+        -DETH_DST_DIR="${PROJECT_BINARY_DIR}/include"
         -DETH_CMAKE_DIR="${ETH_CMAKE_DIR}"
         -DFISCO_BCOS_BUILD_TYPE="${_cmake_build_type}"
         -DFISCO_BCOS_BUILD_OS="${ETH_BUILD_OS}"
@@ -59,6 +59,7 @@ function(create_build_info)
         -DFISCO_BCOS_BUILD_PLATFORM="${ETH_BUILD_PLATFORM}"
         -DFISCO_BCOS_BUILD_NUMBER="${FISCO_BCOS_BUILD_NUMBER}"
         -DFISCO_BCOS_VERSION_SUFFIX="${VERSION_SUFFIX}"
+        -DFISCO_BCOS_COMPILE_OPTIONS="${COMPILE_OPTIONS}"
         -DPROJECT_VERSION="${PROJECT_VERSION}"
         -P "${ETH_SCRIPTS_DIR}/buildinfo.cmake"
         )

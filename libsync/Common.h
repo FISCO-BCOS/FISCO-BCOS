@@ -77,9 +77,9 @@ enum SyncPacketType : byte
     StatusPacket = 0x00,
     TransactionsPacket = 0x01,
     BlocksPacket = 0x02,
-    ReqBlocskPacket = 0x03,
+    ReqBlocksPacket = 0x03,
     TxsStatusPacket = 0x04,
-    TxsRequestPacekt = 0x05,
+    TxsRequestPacket = 0x05,
     PacketCount
 };
 

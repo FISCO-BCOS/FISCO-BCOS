@@ -61,7 +61,7 @@ public:
         PROTOCOL_ID const& _protocolId, NodeID const& _nodeId, h256 const& _genesisHash,
         unsigned const& _idleWaitMs = 200, int64_t const& _gossipInterval = 1000,
         int64_t const& _gossipPeers = 3, bool const& _enableSendTxsByTree = false,
-        bool const& _enableSendBlockStatusByTree = true, int64_t const& _syncTreeWidth = 3)
+        bool const& _enableSendBlockStatusByTree = true, int64_t const& _syncTreeWidth = 3, bool _enableFreeNodeRead = false)
       : SyncInterface(),
         Worker("Sync-" + std::to_string(_protocolId), _idleWaitMs),
         m_service(_service),
@@ -73,7 +73,8 @@ public:
         m_nodeId(_nodeId),
         m_genesisHash(_genesisHash),
         m_enableSendTxsByTree(_enableSendTxsByTree),
-        m_enableSendBlockStatusByTree(_enableSendBlockStatusByTree)
+        m_enableSendBlockStatusByTree(_enableSendBlockStatusByTree),
+        m_enableFreeNodeRead(_enableFreeNodeRead)
     {
         /// set thread name
         std::string threadName = "Sync-" + std::to_string(m_groupId);
@@ -311,7 +312,7 @@ private:
     uint64_t m_lastDownloadingRequestTime = 0;
     int64_t m_lastDownloadingBlockNumber = 0;
     int64_t m_currentSealingNumber = 0;
-    int64_t m_eachBlockDownloadingRequestTimeout = 1000;
+    int64_t m_eachBlockDownloadingRequestTimeout = 500;
 
     // Internal coding variable
     /// mutex to access m_signalled
@@ -346,6 +347,9 @@ private:
     dev::flowlimit::RateLimiter::Ptr m_bandwidthLimiter;
     dev::flowlimit::RateLimiter::Ptr m_nodeBandwidthLimiter;
     NodeTimeMaintenance::Ptr m_nodeTimeMaintenance;
+
+    bool m_enableFreeNodeRead = false;
+    bool m_syncInfoPrinted = false;
 
 public:
     void maintainBlocks();

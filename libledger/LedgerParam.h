@@ -117,6 +117,8 @@ struct SyncParam
     int64_t maxQueueSizeForBlockSync = 512 * 1024 * 1024;
     // limit the peers number the txs-status gossip to
     signed txsStatusGossipMaxPeers = 5;
+    // send blocks to free node or not
+    bool enableFreeNodeRead = false;
 };
 
 /// modification 2019.03.20: add timeStamp field to GenesisParam

@@ -41,9 +41,9 @@ std::string dev::crypto::SDFSM4Encrypt(const unsigned char* _plainData, size_t _
     int nSize = 16 - padding;
     int inDataVLen = _plainDataSize + nSize;
     bytes inDataV(inDataVLen);
-    memcpy(inDataV.data(), _plainData, _plainDataSize);
+    memcpyWithCheck(inDataV.data(), inDataV.size(), _plainData, _plainDataSize);
     memset(inDataV.data() + _plainDataSize, nSize, nSize);
-   
+
     // Encrypt
     Key key = Key();
     std::shared_ptr<const std::vector<byte>> pbKeyValue =
@@ -51,19 +51,18 @@ std::string dev::crypto::SDFSM4Encrypt(const unsigned char* _plainData, size_t _
     key.setSymmetricKey(pbKeyValue);
     CryptoProvider& provider = SDFCryptoProvider::GetInstance();
     unsigned int size;
-    //bytes enData(inDataVLen/16);
+    // bytes enData(inDataVLen/16);
     string enData;
     enData.resize(inDataVLen);
     bytes iv(16);
-    memcpy(iv.data(), _ivData, 16);
-    provider.Encrypt(key, SM4_CBC, (unsigned char*)iv.data(), (unsigned char*)inDataV.data(), inDataVLen,
-        (unsigned char*)enData.data(), &size);
+    memcpyWithCheck(iv.data(), iv.size(), _ivData, 16);
+    provider.Encrypt(key, SM4_CBC, (unsigned char*)iv.data(), (unsigned char*)inDataV.data(),
+        inDataVLen, (unsigned char*)enData.data(), &size);
     return enData;
 }
 std::string dev::crypto::SDFSM4Decrypt(const unsigned char* _cypherData, size_t _cypherDataSize,
     const unsigned char* _key, size_t, const unsigned char* _ivData)
 {
-    
     string deData;
     deData.resize(_cypherDataSize);
     Key key = Key();
@@ -74,7 +73,7 @@ std::string dev::crypto::SDFSM4Decrypt(const unsigned char* _cypherData, size_t 
 
     unsigned int size;
     bytes iv(16);
-    memcpy(iv.data(), _ivData, 16);
+    memcpyWithCheck(iv.data(), iv.size(), _ivData, 16);
     provider.Decrypt(key, SM4_CBC, (unsigned char*)iv.data(), _cypherData, _cypherDataSize,
         (unsigned char*)deData.data(), &size);
     int padding = deData.at(_cypherDataSize - 1);

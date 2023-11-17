@@ -298,7 +298,7 @@ int SM2::sm2GetZ(std::string const& _privateKey, const EC_KEY* _ecKey, unsigned 
     if (c_mapTozValueCache.count(_privateKey))
     {
         auto cache = c_mapTozValueCache[_privateKey];
-        memcpy(_zValue, cache.first.get(), cache.second);
+        memcpyWithCheck(_zValue, _zValueLen, cache.first.get(), cache.second);
         _zValueLen = cache.second;
         return 1;
     }
@@ -310,7 +310,7 @@ int SM2::sm2GetZ(std::string const& _privateKey, const EC_KEY* _ecKey, unsigned 
     }
     // update the zValue cache
     std::shared_ptr<unsigned char> zValueCache(new unsigned char[SM3_DIGEST_LENGTH]);
-    memcpy(zValueCache.get(), _zValue, _zValueLen);
+    memcpyWithCheck(zValueCache.get(), SM3_DIGEST_LENGTH, _zValue, _zValueLen);
     std::pair<std::shared_ptr<unsigned char>, size_t> cache =
         std::make_pair(zValueCache, _zValueLen);
     c_mapTozValueCache[_privateKey] = cache;

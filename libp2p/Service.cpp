@@ -22,7 +22,9 @@
 #include "Service.h"
 #include "Common.h"
 #include "P2PMessage.h"
-#include "libdevcore/FixedHash.h"      // for FixedHash, hash
+#include "libdevcore/FixedHash.h"  // for FixedHash, hash
+#include "libdevcore/Guards.h"
+#include "libdevcore/Log.h"
 #include "libdevcore/ThreadPool.h"     // for ThreadPool
 #include "libnetwork/ASIOInterface.h"  // for ASIOInterface
 #include "libnetwork/Common.h"         // for SocketFace
@@ -237,7 +239,7 @@ void Service::onConnect(dev::network::NetworkException e, dev::network::NodeInfo
     }
     if (e.errorCode())
     {
-        SERVICE_LOG(WARNING) << LOG_DESC("onConnect") << LOG_KV("errorCode", e.errorCode())
+        SERVICE_LOG(WARNING) << LOG_DESC("onConnect") << LOG_KV("code", e.errorCode())
                              << LOG_KV("nodeID", nodeID.abridged())
                              << LOG_KV("nodeName", nodeInfo.nodeName) << LOG_KV("endpoint", peer)
                              << LOG_KV("what", e.what());
@@ -319,7 +321,7 @@ void Service::onDisconnect(dev::network::NetworkException e, P2PSession::Ptr p2p
         m_sessions.erase(it);
         if (e.errorCode() == dev::network::P2PExceptionType::DuplicateSession)
             return;
-        SERVICE_LOG(WARNING) << LOG_DESC("onDisconnect") << LOG_KV("errorCode", e.errorCode())
+        SERVICE_LOG(INFO) << LOG_DESC("onDisconnect") << LOG_KV("code", e.errorCode())
                              << LOG_KV("what", boost::diagnostic_information(e));
         RecursiveGuard l(x_nodes);
         for (auto& it : m_staticNodes)
@@ -353,7 +355,7 @@ void Service::onMessage(dev::network::NetworkException e, dev::network::SessionF
 
         if (e.errorCode())
         {
-            SERVICE_LOG(WARNING) << LOG_DESC("disconnect error P2PSession")
+            SERVICE_LOG(INFO) << LOG_DESC("disconnect inactive P2PSession")
                                  << LOG_KV("nodeID", nodeID.abridged())
                                  << LOG_KV("endpoint", nodeIPEndpoint)
                                  << LOG_KV("errorCode", e.errorCode()) << LOG_KV("what", e.what());
@@ -389,8 +391,40 @@ void Service::onMessage(dev::network::NetworkException e, dev::network::SessionF
             updateIncomingTraffic(p2pMessage);
         }
 
+
         if (p2pMessage->isRequestPacket())
         {
+            auto ret = dev::eth::getGroupAndProtocol(abs(p2pMessage->protocolID()));
+            if (g_BCOSConfig.enableIgnoreObserverWriteRequest())
+            {  // only BlockSync message and the other messages from sealer is permitted
+               // all amop message will be filter out
+                auto groupID = ret.first;
+                if (ret.second != dev::eth::ProtocolID::BlockSync)
+                { // filter all request not from sealer
+                    RecursiveGuard guard(x_sealerList);
+                    auto it = m_groupID2SealerList.find(groupID);
+                    if (it == m_groupID2SealerList.end())
+                    {  // group not exist
+                        SERVICE_LOG(WARNING)
+                            << LOG_BADGE("Write-filter")
+                            << LOG_DESC("ignore unregistered group request")
+                            << LOG_KV("endpoint", nodeIPEndpoint) << LOG_KV("nodeID", nodeID.hex())
+                            << LOG_KV("groupID", groupID) << LOG_KV("protocolID", ret.second)
+                            << LOG_KV("messageSize", p2pMessage->length());
+                        return;
+                    }
+                    if (std::find(it->second.begin(), it->second.end(), nodeID) == it->second.end())
+                    {  // fromNode is not sealer
+                        SERVICE_LOG(WARNING)
+                            << LOG_BADGE("Write-filter")
+                            << LOG_DESC("ignore unregistered node request")
+                            << LOG_KV("endpoint", nodeIPEndpoint) << LOG_KV("nodeID", nodeID.hex())
+                            << LOG_KV("groupID", groupID) << LOG_KV("protocolID", ret.second)
+                            << LOG_KV("messageSize", p2pMessage->length());
+                        return;
+                    }
+                }
+            }
             CallbackFuncWithSession callback;
             {
                 RecursiveGuard lock(x_protocolID2Handler);
@@ -461,9 +495,9 @@ P2PMessage::Ptr Service::sendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr mess
         dev::network::NetworkException error = callback->error;
         if (error.errorCode() != 0)
         {
-            SERVICE_LOG(ERROR) << LOG_DESC("asyncSendMessageByNodeID error")
+            SERVICE_LOG(WARNING) << LOG_DESC("asyncSendMessageByNodeID failed")
                                << LOG_KV("nodeID", nodeID.abridged())
-                               << LOG_KV("errorCode", error.errorCode())
+                               << LOG_KV("code", error.errorCode())
                                << LOG_KV("what", error.what());
             BOOST_THROW_EXCEPTION(error);
         }
@@ -472,7 +506,7 @@ P2PMessage::Ptr Service::sendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr mess
     }
     catch (std::exception& e)
     {
-        SERVICE_LOG(ERROR) << LOG_DESC("asyncSendMessageByNodeID error")
+        SERVICE_LOG(WARNING) << LOG_DESC("asyncSendMessageByNodeID failed")
                            << LOG_KV("nodeID", nodeID.abridged())
                            << LOG_KV("what", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(e);
@@ -620,12 +654,12 @@ void Service::asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
         }
         else
         {
-            SERVICE_LOG(WARNING) << "Node inactived" << LOG_KV("nodeID", nodeID.abridged());
+            SERVICE_LOG(WARNING) << "Node inactive" << LOG_KV("nodeID", nodeID.abridged());
         }
     }
     catch (std::exception& e)
     {
-        SERVICE_LOG(ERROR) << "asyncSendMessageByNodeID" << LOG_KV("nodeID", nodeID.abridged())
+        SERVICE_LOG(WARNING) << "asyncSendMessageByNodeID" << LOG_KV("nodeID", nodeID.abridged())
                            << LOG_KV("what", boost::diagnostic_information(e));
 
         if (callback)
@@ -670,8 +704,8 @@ P2PMessage::Ptr Service::sendMessageByTopic(std::string topic, P2PMessage::Ptr m
         dev::network::NetworkException error = callback->error;
         if (error.errorCode() != 0)
         {
-            SERVICE_LOG(ERROR) << LOG_DESC("sendMessageByTopic error") << LOG_KV("topic", topic)
-                               << LOG_KV("errorCode", error.errorCode())
+            SERVICE_LOG(WARNING) << LOG_DESC("sendMessageByTopic failed") << LOG_KV("topic", topic)
+                               << LOG_KV("code", error.errorCode())
                                << LOG_KV("what", error.what());
             BOOST_THROW_EXCEPTION(error);
         }
@@ -680,7 +714,7 @@ P2PMessage::Ptr Service::sendMessageByTopic(std::string topic, P2PMessage::Ptr m
     }
     catch (std::exception& e)
     {
-        SERVICE_LOG(ERROR) << "sendMessageByTopic error"
+        SERVICE_LOG(WARNING) << "sendMessageByTopic failed"
                            << LOG_KV("what", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(e);
     }
@@ -715,7 +749,7 @@ void Service::asyncSendMessageByTopic(std::string topic, P2PMessage::Ptr message
             {
                 if (e.errorCode() != 0)
                 {
-                    SERVICE_LOG(WARNING) << LOG_DESC("Send topics message error")
+                    SERVICE_LOG(WARNING) << LOG_DESC("Send topics message failed")
                                          << LOG_KV("to", m_current) << LOG_KV("what", e.what());
                 }
 
@@ -1140,7 +1174,8 @@ bool Service::addPeers(
 {
     if (endpoints.size() > m_peersParamLimit)
     {
-        response = "refused for too many param peers. peers_param_limit: " + std::to_string(m_peersParamLimit);
+        response = "refused for too many param peers. peers_param_limit: " +
+                   std::to_string(m_peersParamLimit);
         return false;
     }
     auto nodes = staticNodes();
@@ -1159,7 +1194,8 @@ bool Service::addPeers(
     {
         SERVICE_LOG(INFO) << LOG_DESC("refused for too many peers")
                           << LOG_KV("LIMIT", m_maxNodesLimit);
-        response = "refused for too many peers. max_nodes_limit: " + std::to_string(m_maxNodesLimit);
+        response =
+            "refused for too many peers. max_nodes_limit: " + std::to_string(m_maxNodesLimit);
         return false;
     }
     setStaticNodes(nodes);
@@ -1173,7 +1209,8 @@ bool Service::erasePeers(
 {
     if (endpoints.size() > m_peersParamLimit)
     {
-        response = "refused for too many param peers. peers_param_limit: " + std::to_string(m_peersParamLimit);
+        response = "refused for too many param peers. peers_param_limit: " +
+                   std::to_string(m_peersParamLimit);
         return false;
     }
     auto nodes = staticNodes();

@@ -128,6 +128,11 @@ public:
         RecursiveGuard l(x_nodeList);
         m_groupID2NodeList[_groupID] = _nodeList;
     }
+    void setSealerListByGroupID(GROUP_ID _groupID, const dev::h512s& _sealerList) override
+    {
+        RecursiveGuard guard(x_sealerList);
+        m_groupID2SealerList[_groupID] = _sealerList;
+    }
 
     virtual uint32_t topicSeq() { return m_topicSeq; }
     virtual void increaseTopicSeq() { ++m_topicSeq; }
@@ -207,14 +212,11 @@ public:
         std::vector<dev::network::NodeIPEndpoint> const& endpoints, std::string& response) override;
     bool erasePeers(
         std::vector<dev::network::NodeIPEndpoint> const& endpoints, std::string& response) override;
-    void setPeersParamLimit(uint32_t const& peersParamLimit) 
+    void setPeersParamLimit(uint32_t const& peersParamLimit)
     {
         m_peersParamLimit = peersParamLimit;
     }
-    void setMaxNodesLimit(uint32_t const& maxNodesLimit)
-    {
-        m_maxNodesLimit = maxNodesLimit;
-    }
+    void setMaxNodesLimit(uint32_t const& maxNodesLimit) { m_maxNodesLimit = maxNodesLimit; }
 
 private:
     void callDisconnectHandlers(dev::network::NetworkException _e, P2PSession::Ptr _p2pSession);
@@ -258,6 +260,9 @@ private:
     ///< the data is currently statically loaded and not synchronized between nodes
     mutable RecursiveMutex x_nodeList;
     std::map<GROUP_ID, h512s> m_groupID2NodeList;
+
+    mutable RecursiveMutex x_sealerList;
+    std::map<GROUP_ID, h512s> m_groupID2SealerList;
 
     std::shared_ptr<std::unordered_map<uint32_t, CallbackFuncWithSession>> m_protocolID2Handler;
     RecursiveMutex x_protocolID2Handler;

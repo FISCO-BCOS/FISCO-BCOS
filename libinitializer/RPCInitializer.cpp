@@ -88,9 +88,11 @@ void RPCInitializer::initChannelRPCServer(boost::property_tree::ptree const& _pt
 
     m_channelRPCServer->setChannelServer(server);
 
+    bool uncheckGroupMember = _pt.get<bool>("rpc.act_as_group_member", false);
+
     // start channelServer before initialize ledger, because amdb-proxy depends on channel
     bool disableDynamicGroup = _pt.get<bool>("rpc.disable_dynamic_group", false);
-    auto rpcEntity = new rpc::Rpc(nullptr, nullptr);
+    auto rpcEntity = new rpc::Rpc(nullptr, nullptr, uncheckGroupMember);
     rpcEntity->setDisableDynamicGroup(disableDynamicGroup);
 
     auto modularServer = new ModularServer<rpc::Rpc>(rpcEntity);
@@ -129,6 +131,7 @@ void RPCInitializer::initChannelRPCServer(boost::property_tree::ptree const& _pt
     }
     INITIALIZER_LOG(INFO) << LOG_BADGE("RPCInitializer: ChannelRPCHttpServer started.")
                           << LOG_KV("disableDynamicGroup", disableDynamicGroup)
+                          << LOG_KV("uncheckGroupMember", uncheckGroupMember)
                           << LOG_KV("threadSize", channelThreadPoolSize);
     m_channelRPCServer->setCallbackSetter(std::bind(&rpc::Rpc::setCurrentTransactionCallback,
         rpcEntity, std::placeholders::_1, std::placeholders::_2));
@@ -218,10 +221,11 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
                     channelRPCServer->asyncPushChannelMessageHandler(_1, _2);
                 }
             });
+        bool uncheckGroupMember = _pt.get<bool>("rpc.act_as_group_member", false);
 
         // Don't to set destructor, the ModularServer will destruct.
         bool disableDynamicGroup = _pt.get<bool>("rpc.disable_dynamic_group", false);
-        auto rpcEntity = new rpc::Rpc(m_ledgerInitializer, m_p2pService);
+        auto rpcEntity = new rpc::Rpc(m_ledgerInitializer, m_p2pService, uncheckGroupMember);
         rpcEntity->setDisableDynamicGroup(disableDynamicGroup);
         auto ipAddress = boost::asio::ip::make_address(listenIP);
         m_safeHttpServer.reset(new SafeHttpServer(listenIP, httpListenPort, ipAddress.is_v6(),
@@ -244,7 +248,8 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
                               << LOG_KV("jsonrpc_listen_port", httpListenPort)
                               << LOG_KV("jsonrpc_thread_count", httpThreadCount)
                               << LOG_KV("ipv6", ipAddress.is_v6())
-                              << LOG_KV("disableDynamicGroup", disableDynamicGroup);
+                              << LOG_KV("disableDynamicGroup", disableDynamicGroup)
+                              << LOG_KV("uncheckGroupMember", uncheckGroupMember);
     }
     catch (std::exception& e)
     {

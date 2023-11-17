@@ -35,25 +35,41 @@ using namespace dev::blockverifier;
 
 void SyncMaster::printSyncInfo()
 {
-    auto pendingSize = m_txPool->pendingSize();
-    auto peers = m_syncStatus->peers();
-    std::string peer_str;
-    for (auto const& peer : *peers)
+    if (isSyncing())
     {
-        peer_str += peer.abridged() + "/";
+        auto pendingSize = m_txPool->pendingSize();
+        auto peers = m_syncStatus->peers();
+        std::string peer_str;
+        for (auto const& peer : *peers)
+        {
+            peer_str += peer.abridged() + "/";
+        }
+        SYNC_LOG(TRACE) << "\n[Sync Info] --------------------------------------------\n"
+                        << "            IsSyncing:    " << isSyncing() << "\n"
+                        << "            Block number: " << m_blockChain->number() << "\n"
+                        << "            Block hash:   "
+                        << m_blockChain->numberHash(m_blockChain->number()) << "\n"
+                        << "            Genesis hash: " << m_syncStatus->genesisHash.abridged()
+                        << "\n"
+                        << "            TxPool size:  " << pendingSize << "\n"
+                        << "            Peers size:   " << peers->size() << "\n"
+                        << "[Peer Info] --------------------------------------------\n"
+                        << "    Host: " << m_nodeId.abridged() << "\n"
+                        << "    Peer: " << peer_str << "\n"
+                        << "            --------------------------------------------";
     }
-    SYNC_LOG(TRACE) << "\n[Sync Info] --------------------------------------------\n"
-                    << "            IsSyncing:    " << isSyncing() << "\n"
-                    << "            Block number: " << m_blockChain->number() << "\n"
-                    << "            Block hash:   "
-                    << m_blockChain->numberHash(m_blockChain->number()) << "\n"
-                    << "            Genesis hash: " << m_syncStatus->genesisHash.abridged() << "\n"
-                    << "            TxPool size:  " << pendingSize << "\n"
-                    << "            Peers size:   " << peers->size() << "\n"
-                    << "[Peer Info] --------------------------------------------\n"
-                    << "    Host: " << m_nodeId.abridged() << "\n"
-                    << "    Peer: " << peer_str << "\n"
-                    << "            --------------------------------------------";
+    // every 8 hour print sync info
+    auto hour = (utcTime() / 3600000) % 8;
+    if (!m_syncInfoPrinted && hour == 0)
+    {
+        m_syncInfoPrinted = true;
+        SYNC_LOG(INFO) << LOG_DESC("print sync info") << LOG_KV("peersCount", m_syncStatus->size())
+                       << LOG_KV("infoJson", syncInfo());
+    }
+    else if (m_syncInfoPrinted && hour != 0)
+    {
+        m_syncInfoPrinted = false;
+    }
 }
 
 SyncStatus SyncMaster::status() const
@@ -138,9 +154,7 @@ void SyncMaster::stop()
 
 void SyncMaster::doWork()
 {
-    // Debug print
-    if (isSyncing())
-        printSyncInfo();
+    printSyncInfo();
     // maintain the connections between observers/sealers
     maintainPeersConnection();
     m_downloadBlockProcessor->enqueue([this]() {
@@ -179,7 +193,7 @@ void SyncMaster::doWork()
         }
         catch (std::exception const& e)
         {
-            SYNC_LOG(ERROR) << LOG_DESC("maintainBlockRequest exceptioned")
+            SYNC_LOG(ERROR) << LOG_DESC("maintainBlockRequest exception")
                             << LOG_KV("errorInfo", boost::diagnostic_information(e));
         }
     });
@@ -563,29 +577,40 @@ bool SyncMaster::maintainDownloadingQueue()
 
 void SyncMaster::maintainPeersConnection()
 {
-    // Get active peers
-    auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
-    set<NodeID> activePeers;
-    for (auto const& session : sessions)
-    {
-        activePeers.insert(session.nodeID());
-    }
-
     // Get sealers and observer
     NodeIDs sealers = m_blockChain->sealerList();
     NodeIDs sealerOrObserver = sealers + m_blockChain->observerList();
 
     // member set is [(sealer || observer) && activePeer && not myself]
     set<NodeID> memberSet;
-    bool hasMyself = false;
-    for (auto const& member : sealerOrObserver)
+    bool hasMyself = (std::find(sealerOrObserver.begin(), sealerOrObserver.end(), m_nodeId) !=
+                      sealerOrObserver.end());
+    if (!m_enableFreeNodeRead)
     {
-        /// find active peers
-        if (activePeers.find(member) != activePeers.end() && member != m_nodeId)
+        // Get active peers
+        auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
+        set<NodeID> activePeers;
+        for (auto const& session : sessions)
         {
-            memberSet.insert(member);
+            activePeers.insert(session.nodeID());
         }
-        hasMyself |= (member == m_nodeId);
+        for (auto const& member : sealerOrObserver)
+        {
+            /// find active peers
+            if (activePeers.find(member) != activePeers.end() && member != m_nodeId)
+            {
+                memberSet.insert(member);
+            }
+        }
+    }
+    else
+    {
+        // Get active peers
+        auto sessions = m_service->sessionInfos();
+        for (auto& session : sessions)
+        {
+            memberSet.insert(session.nodeID());
+        }
     }
 
     // Delete uncorrelated peers
@@ -639,6 +664,8 @@ void SyncMaster::maintainPeersConnection()
         }
     }
 
+    m_msgEngine->setSealerList(sealers);
+    m_msgEngine->setGroupNodeList(sealerOrObserver);
     // Update sync sealer status
     set<NodeID> sealerSet;
     for (auto sealer : sealers)
@@ -774,6 +801,7 @@ bool SyncMaster::isNextBlock(BlockPtr _block)
     // check block sealerlist sig
     if (fp_isConsensusOk && !(fp_isConsensusOk)(*_block))
     {
+        // if signature check failed, the block will be pop out
         SYNC_LOG(WARNING) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
                           << LOG_DESC("Ignore illegal block")
                           << LOG_KV("reason", "consensus check failed")

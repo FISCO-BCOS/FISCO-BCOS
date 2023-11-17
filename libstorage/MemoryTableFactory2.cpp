@@ -267,7 +267,8 @@ h256 MemoryTableFactory2::hash()
                 }
 
                 bytes tableHash = hash.asBytes();
-                memcpy(&data[it * 32], &tableHash[0], tableHash.size());
+                memcpyWithCheck(
+                    &data[it * 32], data.size() - it * 32, &tableHash[0], tableHash.size());
 #if FISCO_DEBUG
                 STORAGE_LOG(DEBUG)
                     << LOG_BADGE("FISCO_DEBUG") << LOG_BADGE("MemoryTableFactory2 hash ") << it + 1

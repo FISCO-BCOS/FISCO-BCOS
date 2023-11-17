@@ -37,7 +37,7 @@ string dev::crypto::sm4Encrypt(const unsigned char* _plainData, size_t _plainDat
     int nSize = 16 - padding;
     int inDataVLen = _plainDataSize + nSize;
     bytes inDataV(inDataVLen);
-    memcpy(inDataV.data(), _plainData, _plainDataSize);
+    memcpyWithCheck(inDataV.data(), inDataV.size(), _plainData, _plainDataSize);
     memset(inDataV.data() + _plainDataSize, nSize, nSize);
 
     string enData;

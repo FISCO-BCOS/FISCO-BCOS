@@ -441,7 +441,7 @@ public:
 
         _N ret;
         size_t s = std::min<size_t>(_N::size, l);
-        memcpy(ret.data() + _N::size - s, p.data(), s);
+        memcpyWithCheck(ret.data() + _N::size - s, ret.size - _N::size + s, p.data(), s);
         return ret;
     }
 
