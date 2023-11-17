@@ -559,7 +559,13 @@ void LedgerParam::initSyncConfig(ptree const& pt)
     }
     mutableSyncParam().maxQueueSizeForBlockSync *= 1024 * 1024;
     mutableSyncParam().enableFreeNodeRead = pt.get<bool>("sync.allow_free_node", false);
+    mutableSyncParam().syncInfoPrintInterval = pt.get<int>("sync.print_info_interval", 10);
 
+    if (mutableSyncParam().syncInfoPrintInterval <= 1)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfiguration() << errinfo_comment(
+                                  "print_info_interval must be bigger than 1"));
+    }
     LedgerParam_LOG(INFO)
         << LOG_BADGE("initSyncConfig")
         << LOG_KV("enableSendBlockStatusByTree", mutableSyncParam().enableSendBlockStatusByTree)
@@ -568,6 +574,7 @@ void LedgerParam::initSyncConfig(ptree const& pt)
         << LOG_KV("syncTreeWidth", mutableSyncParam().syncTreeWidth)
         << LOG_KV("maxQueueSizeForBlockSync", mutableSyncParam().maxQueueSizeForBlockSync)
         << LOG_KV("txsStatusGossipMaxPeers", mutableSyncParam().txsStatusGossipMaxPeers)
+        << LOG_KV("syncInfoPrintInterval", mutableSyncParam().syncInfoPrintInterval)
         << LOG_KV("freeNodeRead", mutableSyncParam().enableFreeNodeRead);
 }
 

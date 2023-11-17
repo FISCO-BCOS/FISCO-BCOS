@@ -59,14 +59,14 @@ void SyncMaster::printSyncInfo()
                         << "            --------------------------------------------";
     }
     // every 8 hour print sync info
-    auto hour = (utcTime() / 3600000) % 8;
-    if (!m_syncInfoPrinted && hour == 0)
+    auto minute = (utcTime() / 60000) % m_syncInfoPrintInterval;
+    if (!m_syncInfoPrinted && minute == 0)
     {
         m_syncInfoPrinted = true;
         SYNC_LOG(INFO) << LOG_DESC("print sync info") << LOG_KV("peersCount", m_syncStatus->size())
                        << LOG_KV("infoJson", syncInfo());
     }
-    else if (m_syncInfoPrinted && hour != 0)
+    else if (m_syncInfoPrinted && minute != 0)
     {
         m_syncInfoPrinted = false;
     }

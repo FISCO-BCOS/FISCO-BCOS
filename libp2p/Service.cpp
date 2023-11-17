@@ -654,7 +654,7 @@ void Service::asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
         }
         else
         {
-            SERVICE_LOG(WARNING) << "Node inactive" << LOG_KV("nodeID", nodeID.abridged());
+            SERVICE_LOG(DEBUG) << "Node inactive" << LOG_KV("nodeID", nodeID.abridged());
         }
     }
     catch (std::exception& e)
