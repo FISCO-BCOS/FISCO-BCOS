@@ -41,14 +41,11 @@ BOOST_FIXTURE_TEST_SUITE(TestRocksDBStorage2, TestRocksDBStorage2Fixture)
 
 BOOST_AUTO_TEST_CASE(kvResolver)
 {
-    StateKeyResolver keyResolver;
-
     std::string_view mergedKey = "test_table!!!:key100";
-    auto keyPair = keyResolver.decode(mergedKey);
+    auto decodedKey = bcos::storage2::rocksdb::StateKeyResolver::decode(mergedKey);
 
-    auto&& [tableName, keyName] = static_cast<StateKeyView>(keyPair);
-    BOOST_CHECK_EQUAL(tableName, "test_table!!!");
-    BOOST_CHECK_EQUAL(keyName, "key100");
+    StateKey key("test_table!!!"sv, "key100"sv);
+    BOOST_CHECK(key == decodedKey);
 }
 
 BOOST_AUTO_TEST_CASE(writeBatch)
@@ -148,24 +145,6 @@ BOOST_AUTO_TEST_CASE(readWriteRemoveSeek)
                 BOOST_CHECK(!value);
             }
         }
-
-// Seek to ensure 50 values
-#if 0
-        auto seekIt = co_await rocksDB.seek(storage2::STORAGE_BEGIN);
-
-        i = 0;
-        while (co_await seekIt.next())
-        {
-            BOOST_CHECK(co_await seekIt.hasValue());
-
-            auto key = co_await seekIt.key();
-            auto& [tableName, keyName] = key;
-
-            auto value = co_await seekIt.value();
-            ++i;
-        }
-        BOOST_CHECK_EQUAL(i, 80);
-#endif
 
         co_return;
     }());

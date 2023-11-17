@@ -5,8 +5,6 @@
 #include "bcos-utilities/Overloaded.h"
 #include "bcos-utilities/Ranges.h"
 #include "bcos-utilities/ThreeWay4StringView.h"
-#include "evmc/evmc.h"
-#include <boost/algorithm/hex.hpp>
 #include <boost/container/small_vector.hpp>
 #include <boost/throw_exception.hpp>
 #include <compare>
@@ -24,6 +22,7 @@ struct UnableToCompareError : public bcos::Exception
 };
 
 using StateValue = storage::Entry;
+using EncodedKey = std::string;
 
 class StateKey
 {
@@ -31,13 +30,12 @@ private:
     friend class StateKeyView;
     struct EVMKey
     {
-        evmc_address address;
-        evmc_bytes32 key;
+        std::array<uint8_t, 79> buffer;
+        uint8_t length;
     };
     struct StringKey
     {
         std::string tableKey;
-        size_t split{};
     };
     std::variant<EVMKey, StringKey> m_key;
 
@@ -59,40 +57,6 @@ public:
     StateKey& operator=(StateKey&&) noexcept = default;
     ~StateKey() noexcept = default;
 
-    // 将存储的值修改为可以直接作为rocksdb key的格式
-    bool convertToStringKey() &
-    {
-        static constexpr std::string_view USER_APPS_PREFIX = "/apps/";
-
-        if (std::holds_alternative<StringKey>(m_key))
-        {
-            return false;
-        }
-        auto& evmKey = std::get<EVMKey>(m_key);
-
-        std::string tableKey;
-        tableKey.reserve(USER_APPS_PREFIX.size() + sizeof(evmKey.address) * 2 + sizeof(evmKey.key));
-        tableKey.append(USER_APPS_PREFIX);
-        boost::algorithm::hex_lower((const char*)evmKey.address.bytes,
-            (const char*)evmKey.address.bytes + sizeof(evmKey.address.bytes),
-            std::back_inserter(tableKey));
-        size_t split = tableKey.size();
-        tableKey.push_back(':');
-        tableKey.append(std::string_view((const char*)evmKey.key.bytes, sizeof(evmKey.key.bytes)));
-        m_key = StringKey{std::move(tableKey), split};
-        return true;
-    }
-
-    std::string_view getStringKey() const&
-    {
-        if (!std::holds_alternative<StringKey>(m_key))
-        {
-            BOOST_THROW_EXCEPTION(NotStringKeyError{});
-        }
-
-        return std::string_view(std::get<StringKey>(m_key).tableKey);
-    }
-
     friend std::strong_ordering operator<=>(const StateKey& lhs, const StateKey& rhs)
     {
         return std::visit(overloaded{[](const EVMKey& lhsKey, const EVMKey& rhsKey) {
@@ -107,7 +71,7 @@ public:
                               },
                               [](auto const& lhsKey, auto const& rhsKey) {
                                   BOOST_THROW_EXCEPTION(UnableToCompareError{});
-                                  return std::strong_ordering::equivalent;
+                                  return std::strong_ordering::equal;
                               }},
             lhs.m_key, rhs.m_key);
     }
@@ -195,13 +159,54 @@ public:
                     return result;
                 },
                 [](auto const& lhsView, auto const& rhsView) {
-                    return std::strong_ordering::equivalent;
+                    BOOST_THROW_EXCEPTION(UnableToCompareError{});
+                    return std::strong_ordering::equal;
                 }},
             lhs.m_view, rhs.m_view);
     }
     friend bool operator==(const StateKeyView& lhs, const StateKeyView& rhs)
     {
         return std::is_eq(lhs <=> rhs);
+    }
+
+    friend EncodedKey encodeToRocksDBKey(const StateKeyView& view)
+    {
+        static constexpr std::string_view USER_APPS_PREFIX = "/apps/";
+        EncodedKey output;
+
+        std::visit(
+            overloaded{[&](const EVMKeyView& evmKey) {
+                           std::string encodedKey;
+                           encodedKey.reserve(USER_APPS_PREFIX.size() + sizeof(evmKey.address) * 2 +
+                                              sizeof(evmKey.key));
+                           encodedKey.append(USER_APPS_PREFIX);
+                           boost::algorithm::hex_lower((const char*)evmKey.address->bytes,
+                               (const char*)evmKey.address->bytes + sizeof(evmKey.address->bytes),
+                               std::back_inserter(encodedKey));
+                           size_t split = encodedKey.size();
+                           encodedKey.push_back(':');
+                           encodedKey.append(std::string_view(
+                               (const char*)evmKey.key->bytes, sizeof(evmKey.key->bytes)));
+                           output = std::move(encodedKey);
+                       },
+                [&](const StringKeyView& stringKeyView) {
+                    output = EncodedKey(stringKeyView.addressKey);
+                },
+                [&](const MultiStringView& multiStringView) {
+                    std::string encodedKey;
+                    encodedKey.reserve(
+                        multiStringView.keyLength + multiStringView.addressLength + 1);
+
+                    encodedKey.append(
+                        std::string_view(multiStringView.address, multiStringView.addressLength));
+                    encodedKey.push_back(':');
+                    encodedKey.append(
+                        std::string_view(multiStringView.key, multiStringView.keyLength));
+                    output = std::move(encodedKey);
+                }},
+            view.m_view);
+
+        return output;
     }
 
     size_t hash() const
@@ -307,9 +312,8 @@ struct boost::hash<bcos::transaction_executor::StateKey>
 inline std::ostream& operator<<(
     std::ostream& stream, const bcos::transaction_executor::StateKey& stateKey)
 {
-    auto myStateKey = stateKey;
-    myStateKey.convertToStringKey();
-    stream << myStateKey.getStringKey();
+    auto encodedKey = encodeToRocksDBKey(bcos::transaction_executor::StateKeyView(stateKey));
+    stream << std::string_view(encodedKey.data(), encodedKey.size());
     return stream;
 }
 

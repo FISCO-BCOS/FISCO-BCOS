@@ -1,9 +1,10 @@
 #pragma once
 #include "bcos-concepts/ByteBuffer.h"
 #include "bcos-concepts/Exception.h"
+#include "bcos-framework/transaction-executor/StateKey.h"
 #include <bcos-framework/storage/Entry.h>
-#include <bcos-framework/transaction-executor/TransactionExecutor.h>
 #include <fmt/format.h>
+#include <boost/algorithm/hex.hpp>
 #include <boost/throw_exception.hpp>
 
 namespace bcos::storage2::rocksdb
@@ -33,23 +34,18 @@ struct StateValueResolver
 
 struct StateKeyResolver
 {
-    using DBKey = boost::container::small_vector<char,
-        transaction_executor::ContractTable::static_capacity +
-            transaction_executor::ContractKey::static_capacity>;
     constexpr static char TABLE_KEY_SPLIT = ':';
 
-    static DBKey encode(auto&& stateKey)
+    static auto encode(const transaction_executor::StateKey& stateKey)
     {
-        auto& [tableName, key] = stateKey;
-
-        DBKey buffer;
-        buffer.insert(buffer.end(), RANGES::begin(tableName), RANGES::end(tableName));
-        buffer.emplace_back(TABLE_KEY_SPLIT);
-        buffer.insert(buffer.end(), RANGES::begin(key), RANGES::end(key));
-        return buffer;
+        return encodeToRocksDBKey(transaction_executor::StateKeyView(stateKey));
     }
-
-    transaction_executor::StateKey decode(concepts::bytebuffer::ByteBuffer auto const& buffer)
+    static auto encode(const transaction_executor::StateKeyView& stateKeyView)
+    {
+        return encodeToRocksDBKey(stateKeyView);
+    }
+    static transaction_executor::StateKey decode(
+        concepts::bytebuffer::ByteBuffer auto const& buffer)
     {
         std::string_view view = concepts::bytebuffer::toView(buffer);
         auto pos = view.find(TABLE_KEY_SPLIT);
@@ -68,10 +64,27 @@ struct StateKeyResolver
                                       fmt::format("Empty table or key!", buffer)));
         }
 
-        auto stateKey = std::make_tuple(transaction_executor::ContractTable(std::string_view(
-                                            RANGES::data(tableRange), RANGES::size(tableRange))),
-            transaction_executor::ContractKey(
-                std::string_view(RANGES::data(keyRange), RANGES::size(keyRange))));
+        try
+        {
+            if (tableRange.starts_with("/apps/") && tableRange.size() == 46 &&
+                keyRange.size() == 32)
+            {
+                // Treat as an evm key
+                evmc_address address;
+                auto addressHexView = tableRange.substr(6);
+                boost::algorithm::unhex(
+                    addressHexView.begin(), addressHexView.end(), address.bytes);
+
+                transaction_executor::StateKey stateKey(address, *(evmc_bytes32*)keyRange.data());
+                return stateKey;
+            }
+        }
+        catch (boost::algorithm::non_hex_input& e)
+        {
+            // No hex input? may be a normal key
+        }
+
+        transaction_executor::StateKey stateKey(tableRange, keyRange);
         return stateKey;
     }
 };
