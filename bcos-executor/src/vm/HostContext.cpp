@@ -136,7 +136,8 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
     {
     case EVMC_CREATE2:
         request->createSalt = fromEvmC(_msg->create2_salt);
-        if (features().get(ledger::Features::Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy))
+        if (features().get(
+                ledger::Features::Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy))
         {
             request->data.assign(_msg->input_data, _msg->input_data + _msg->input_size);
             request->create = true;
@@ -239,6 +240,11 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
         .create_address = toEvmC(boost::algorithm::unhex(response->newEVMContractAddress)),
         .padding = {}};
 
+    if (features().get(ledger::Features::Flag::bugfix_event_log_order))
+    {
+        // put event log by stack(dfs) order
+        m_callParameters->logEntries = std::move(response->logEntries);
+    }
     // Put response to store in order to avoid data lost
     m_responseStore.emplace_back(std::move(response));
 
