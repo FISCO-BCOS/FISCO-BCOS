@@ -167,6 +167,7 @@ protected:
     void buildExecutivesFromNormalTransaction();
 
     bcos::storage::TransactionalStorageInterface::Ptr getStorage();
+    void recoderTxVersion(const bcos::protocol::Block::Ptr& block);
 
     virtual void serialPrepareExecutor();
 

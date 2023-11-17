@@ -86,6 +86,7 @@ constexpr static std::string_view DAG_TRANSFER{"/tables/dag_transfer"};
 constexpr static std::string_view SMALLBANK_TRANSFER{"/tables/smallbank_transfer"};
 constexpr static std::string_view SYS_CODE_BINARY{"s_code_binary"};
 constexpr static std::string_view SYS_CONTRACT_ABI{"s_contract_abi"};
+constexpr static std::string_view SYS_BALANCE_CALLER{"s_balance_caller"};
 
 enum ConsensusType : uint32_t
 {
