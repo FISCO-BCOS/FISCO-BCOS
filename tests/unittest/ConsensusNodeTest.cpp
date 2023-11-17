@@ -17,11 +17,11 @@
  * @file ConsensusNodeTest.cpp
  */
 #include "bcos-framework/consensus/ConsensusNode.h"
+#include "bcos-crypto/bcos-crypto/signature/key/KeyImpl.h"
+#include "bcos-crypto/bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
 #include "bcos-framework/consensus/ConsensusNodeInterface.h"
 #include "bcos-framework/protocol/Protocol.h"
-#include <bcos-crypto/signature/key/KeyImpl.h>
-#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
-#include <bcos-utilities/testutils/TestPromptFixture.h>
+#include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::consensus;
