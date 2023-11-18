@@ -107,6 +107,11 @@ public:
         boost::hash_combine(result, std::hash<std::string_view>{}(m_key));
         return result;
     }
+
+    std::tuple<std::string_view, std::string_view> getTableAndKey() const
+    {
+        return std::make_tuple(m_table, m_key);
+    }
 };
 
 inline StateKey::StateKey(StateKeyView const& view) : StateKey(view.m_table, view.m_key) {}

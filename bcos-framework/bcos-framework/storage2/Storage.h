@@ -16,9 +16,9 @@ inline constexpr READ_FRONT_TYPE READ_FRONT{};
 template <class Invoke>
 using ReturnType = typename task::AwaitableReturnType<Invoke>;
 template <class Tag, class Storage, class... Args>
-concept HasTag = requires(Tag&& tag, Storage&& storage, Args&&... args) {
+concept HasTag = requires(Tag tag, Storage&& storage, Args&&... args) {
                      requires task::IsAwaitable<decltype(tag_invoke(
-                         std::forward<decltype(tag)>(tag), std::forward<Storage>(storage), std::forward<Args>(args)...))>;
+                         tag, std::forward<Storage>(storage), std::forward<Args>(args)...))>;
                  };
 
 inline constexpr struct ReadSome
@@ -37,10 +37,13 @@ inline constexpr struct ReadSome
 struct WriteSome
 {
     auto operator()(auto& storage, RANGES::input_range auto&& keys,
-        RANGES::input_range auto&& values) const -> task::Task<void>
+        RANGES::input_range auto&& values, auto&&... args) const
+        -> task::Task<
+            ReturnType<decltype(tag_invoke(*this, storage, std::forward<decltype(keys)>(keys),
+                std::forward<decltype(values)>(values), std::forward<decltype(args)>(args)...))>>
     {
         co_await tag_invoke(*this, storage, std::forward<decltype(keys)>(keys),
-            std::forward<decltype(values)>(values));
+            std::forward<decltype(values)>(values), std::forward<decltype(args)>(args)...);
     }
 };
 inline constexpr WriteSome writeSome{};
@@ -60,8 +63,7 @@ inline constexpr struct ReadOne
         -> task::Task<ReturnType<decltype(tag_invoke(*this, storage,
             std::forward<decltype(key)>(key), std::forward<decltype(args)>(args)...))>>
     {
-        if constexpr (HasTag<ReadOne, std::decay_t<decltype(storage)>, decltype(key),
-                          decltype(args)...>)
+        if constexpr (HasTag<ReadOne, decltype(storage), decltype(key), decltype(args)...>)
         {
             co_return co_await tag_invoke(*this, storage, std::forward<decltype(key)>(key),
                 std::forward<decltype(args)>(args)...);
@@ -147,12 +149,14 @@ inline constexpr struct Range
 
 inline constexpr struct Merge
 {
-    auto operator()(auto& fromStorage, auto& toStorage, auto&&... args) const
-        -> task::Task<ReturnType<decltype(tag_invoke(*this, fromStorage, toStorage))>>
+    auto operator()(auto&& fromStorage, auto& toStorage, auto&&... args) const -> task::Task<
+        ReturnType<decltype(tag_invoke(*this, std::forward<decltype(fromStorage)>(fromStorage),
+            toStorage, std::forward<decltype(args)>(args)...))>>
     {
         if constexpr (HasTag<Merge, decltype(fromStorage), decltype(toStorage)>)
         {
-            co_await tag_invoke(*this, fromStorage, toStorage);
+            co_await tag_invoke(*this, std::forward<decltype(fromStorage)>(fromStorage), toStorage,
+                std::forward<decltype(args)>(args)...);
         }
         else
         {

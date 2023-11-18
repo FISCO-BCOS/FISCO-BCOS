@@ -375,7 +375,7 @@ public:
     }
 
     friend task::AwaitableValue<void> tag_invoke(
-        storage2::tag_t<merge> /*unused*/, MemoryStorage& fromStorage, MemoryStorage& toStorage)
+        storage2::tag_t<merge> /*unused*/, MemoryStorage&& fromStorage, MemoryStorage& toStorage)
     {
         for (auto&& [bucket, fromBucket] :
             RANGES::views::zip(toStorage.m_buckets, fromStorage.m_buckets))

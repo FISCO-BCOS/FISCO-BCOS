@@ -26,6 +26,7 @@
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/storage/LegacyStorageMethods.h"
+#include "bcos-framework/storage2/Storage.h"
 #include "bcos-tool/NodeConfig.h"
 #include "bcos-tool/VersionConverter.h"
 #include "bcos-utilities/Common.h"
@@ -1685,6 +1686,9 @@ bool Ledger::buildGenesisBlock(
                             static_cast<protocol::BlockVersion>(genesis.m_compatibilityVersion)) +
                         ", No support this version"));
             }
+
+            static_assert(storage2::HasTag<storage2::ReadOne, decltype(*m_storage),
+                std::tuple<std::string_view, std::string_view>>);
 
             // Before return, make sure sharding flag is placed
             task::syncWait([&]() -> task::Task<void> {
