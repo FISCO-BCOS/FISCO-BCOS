@@ -76,15 +76,27 @@ CallParameters::UniquePtr CoroutineTransactionExecutive::externalCall(
 
     if (output->delegateCall && output->type != CallParameters::FINISHED)
     {
-        EXECUTIVE_LOG(DEBUG) << "Could not getCode during DMC externalCall"
-                             << LOG_KV("codeAddress", output->codeAddress);
         output->data = bytes();
-        output->status = (int32_t)bcos::protocol::TransactionStatus::RevertInstruction;
-        output->evmStatus = EVMC_REVERT;
+        if (m_blockContext.features().get(
+                ledger::Features::Flag::bugfix_delegatecall_noaddr_return))
+        {
+            // This is eth's bug, but we still need to compat with it :)
+            // https://docs.soliditylang.org/en/v0.8.17/control-structures.html#error-handling-assert-require-revert-and-exceptions
+            output->status = (int32_t)bcos::protocol::TransactionStatus::None;
+            output->evmStatus = EVMC_SUCCESS;
+        }
+        else
+        {
+            output->status = (int32_t)bcos::protocol::TransactionStatus::RevertInstruction;
+            output->evmStatus = EVMC_REVERT;
+        }
+        EXECUTIVE_LOG(DEBUG) << "Could not getCode during DMC externalCall"
+                             << LOG_KV("codeAddress", output->codeAddress)
+                             << LOG_KV("status", output->status)
+                             << LOG_KV("evmStatus", output->evmStatus);
     }
 
-    if (versionCompareTo(
-            m_blockContext.blockVersion(), protocol::BlockVersion::V3_3_VERSION) >= 0)
+    if (versionCompareTo(m_blockContext.blockVersion(), protocol::BlockVersion::V3_3_VERSION) >= 0)
     {
         if (output->type == CallParameters::REVERT)
         {
