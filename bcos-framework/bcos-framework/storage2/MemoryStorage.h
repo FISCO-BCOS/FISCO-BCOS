@@ -240,6 +240,36 @@ public:
         return result;
     }
 
+    friend task::AwaitableValue<std::optional<ValueType>> tag_invoke(
+        storage2::tag_t<storage2::readOne> /*unused*/, MemoryStorage& storage, auto&& key)
+    {
+        task::AwaitableValue<std::optional<ValueType>> result({});
+        auto [bucket, lock] = storage.getBucket(key);
+
+        auto const& index = bucket.get().container.template get<0>();
+        auto it = index.find(key);
+        if (it != index.end())
+        {
+            if constexpr (std::decay_t<decltype(storage)>::withMRU)
+            {
+                storage.updateMRUAndCheck(bucket, it);
+            }
+
+            if constexpr (std::decay_t<decltype(storage)>::withLogicalDeletion)
+            {
+                std::visit(
+                    bcos::overloaded{[&](ValueType const& value) { result.value().emplace(value); },
+                        [&](Deleted const&) {}},
+                    it->value);
+            }
+            else
+            {
+                result.value().emplace(it->value);
+            }
+        }
+        return result;
+    }
+
     friend task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/,
         MemoryStorage& storage, RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
     {

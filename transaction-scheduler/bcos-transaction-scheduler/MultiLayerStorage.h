@@ -245,6 +245,14 @@ public:
                 std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values));
         }
 
+        friend auto tag_invoke(bcos::storage2::tag_t<storage2::writeOne> /*unused*/, View& storage,
+            auto&& key, auto&& value) -> task::Task<void>
+        {
+            co_await storage2::writeSome(storage,
+                RANGES::views::single(std::forward<decltype(key)>(key)),
+                RANGES::views::single(std::forward<decltype(value)>(value)));
+        }
+
         friend task::Task<void> tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/,
             View& storage, RANGES::input_range auto&& keys)
         {

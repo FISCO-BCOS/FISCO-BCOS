@@ -34,58 +34,26 @@ struct StateValueResolver
 
 struct StateKeyResolver
 {
-    constexpr static char TABLE_KEY_SPLIT = ':';
-
-    static auto encode(const transaction_executor::StateKey& stateKey)
+    static std::string_view encode(const transaction_executor::StateKey& stateKey)
     {
-        return encodeToRocksDBKey(transaction_executor::StateKeyView(stateKey));
+        return {stateKey.data(), stateKey.size()};
     }
-    static auto encode(const transaction_executor::StateKeyView& stateKeyView)
+    static transaction_executor::StateKey encode(transaction_executor::StateKey&& stateKey)
     {
-        return encodeToRocksDBKey(stateKeyView);
+        return std::forward<transaction_executor::StateKey>(stateKey);
     }
-    static transaction_executor::StateKey decode(
-        concepts::bytebuffer::ByteBuffer auto const& buffer)
+    static transaction_executor::StateKey encode(
+        const transaction_executor::StateKeyView& stateKeyView)
     {
-        std::string_view view = concepts::bytebuffer::toView(buffer);
-        auto pos = view.find(TABLE_KEY_SPLIT);
-        if (pos == std::string_view::npos)
-        {
-            BOOST_THROW_EXCEPTION(InvalidStateKey{} << error::ErrorMessage(
-                                      fmt::format("Invalid state key! {}", buffer)));
-        }
-
-        auto tableRange = view.substr(0, pos);
-        auto keyRange = view.substr(pos + 1, view.size());
-
-        if (RANGES::empty(tableRange) || RANGES::empty(keyRange))
-        {
-            BOOST_THROW_EXCEPTION(InvalidStateKey{} << error::ErrorMessage(
-                                      fmt::format("Empty table or key!", buffer)));
-        }
-
-        try
-        {
-            if (tableRange.starts_with("/apps/") && tableRange.size() == 46 &&
-                keyRange.size() == 32)
-            {
-                // Treat as an evm key
-                evmc_address address;
-                auto addressHexView = tableRange.substr(6);
-                boost::algorithm::unhex(
-                    addressHexView.begin(), addressHexView.end(), address.bytes);
-
-                transaction_executor::StateKey stateKey(address, *(evmc_bytes32*)keyRange.data());
-                return stateKey;
-            }
-        }
-        catch (boost::algorithm::non_hex_input& e)
-        {
-            // No hex input? may be a normal key
-        }
-
-        transaction_executor::StateKey stateKey(tableRange, keyRange);
-        return stateKey;
+        return transaction_executor::StateKey(stateKeyView);
+    }
+    static transaction_executor::StateKey decode(std::string_view view)
+    {
+        return transaction_executor::StateKey(std::string(view));
+    }
+    static transaction_executor::StateKey decode(std::string buffer)
+    {
+        return transaction_executor::StateKey(std::move(buffer));
     }
 };
 

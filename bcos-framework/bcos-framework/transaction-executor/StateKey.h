@@ -14,231 +14,102 @@
 
 namespace bcos::transaction_executor
 {
-struct NotStringKeyError : public bcos::Exception
-{
-};
-struct UnableToCompareError : public bcos::Exception
+struct NoTableSpliterError : public bcos::Exception
 {
 };
 
 using StateValue = storage::Entry;
 using EncodedKey = std::string;
 
+class StateKeyView;
+
 class StateKey
 {
 private:
     friend class StateKeyView;
-    struct EVMKey
-    {
-        std::array<uint8_t, 79> buffer;
-        uint8_t length;
-    };
-    struct StringKey
-    {
-        std::string tableKey;
-    };
-    std::variant<EVMKey, StringKey> m_key;
+    std::string m_tableAndKey;
+    size_t m_split{};
 
 public:
-    StateKey(const evmc_address& address, const evmc_bytes32& key) : m_key(EVMKey{address, key}) {}
+    StateKey() = default;
     StateKey(std::string_view table, std::string_view key)
     {
-        std::string tableKey;
-        tableKey.reserve(table.size() + 1 + key.size());
-        tableKey.insert(tableKey.end(), table.begin(), table.end());
-        auto split = tableKey.size();
-        tableKey.push_back(':');
-        tableKey.insert(tableKey.end(), key.begin(), key.end());
-        m_key = StringKey{std::move(tableKey), split};
+        m_tableAndKey.reserve(table.size() + 1 + key.size());
+        m_tableAndKey.append(table);
+        m_split = m_tableAndKey.size();
+        m_tableAndKey.push_back(':');
+        m_tableAndKey.append(key);
     }
+    explicit StateKey(std::string tableAndKey)
+      : m_tableAndKey(std::move(tableAndKey)), m_split(m_tableAndKey.find_first_of(':'))
+    {
+        if (m_split == std::string::npos)
+        {
+            BOOST_THROW_EXCEPTION(NoTableSpliterError());
+        }
+    }
+    explicit StateKey(StateKeyView const& view);
+
     StateKey(const StateKey&) = default;
     StateKey(StateKey&&) noexcept = default;
     StateKey& operator=(const StateKey&) = default;
     StateKey& operator=(StateKey&&) noexcept = default;
     ~StateKey() noexcept = default;
 
-    friend std::strong_ordering operator<=>(const StateKey& lhs, const StateKey& rhs)
+    friend std::strong_ordering operator<=>(const StateKey& lhs, const StateKey& rhs) = default;
+    friend bool operator==(const StateKey& lhs, const StateKey& rhs) = default;
+    friend ::std::ostream& operator<<(
+        ::std::ostream& stream, const bcos::transaction_executor::StateKey& stateKey)
     {
-        return std::visit(overloaded{[](const EVMKey& lhsKey, const EVMKey& rhsKey) {
-                                         auto lhsStringView = std::string_view(
-                                             (const char*)std::addressof(lhsKey), sizeof(lhsKey));
-                                         auto rhsStringView = std::string_view(
-                                             (const char*)std::addressof(rhsKey), sizeof(rhsKey));
-                                         return lhsStringView <=> rhsStringView;
-                                     },
-                              [](const StringKey& lhsKey, const StringKey& rhsKey) {
-                                  return lhsKey.tableKey <=> rhsKey.tableKey;
-                              },
-                              [](auto const& lhsKey, auto const& rhsKey) {
-                                  BOOST_THROW_EXCEPTION(UnableToCompareError{});
-                                  return std::strong_ordering::equal;
-                              }},
-            lhs.m_key, rhs.m_key);
+        stream << stateKey.m_tableAndKey;
+        return stream;
     }
-    friend bool operator==(const StateKey& lhs, const StateKey& rhs)
-    {
-        return std::is_eq(lhs <=> rhs);
-    }
+    const char* data() const& { return m_tableAndKey.data(); }
+    size_t size() const { return m_tableAndKey.size(); }
 };
 
 class StateKeyView
 {
 private:
-    struct EVMKeyView
-    {
-        evmc_address const* address;
-        evmc_bytes32 const* key;
-    };
-
-    struct StringKeyView
-    {
-        std::string_view addressKey;
-        size_t split{};
-    };
-
-    // Key一般不会超过INT32_MAX, 用int32_t存储长度可以节省空间,
-    // 如果使用两个string_view, 类大小会达到40字节, 对优化不利
-    // The key generally does not exceed INT32_MAX, and the storage length can be saved by using
-    // int32_t, but if two string_view are used, the class size will reach 40 bytes, which is not
-    // conducive to optimization
-    struct MultiStringView
-    {
-        const char* address;
-        const char* key;
-        int32_t addressLength;
-        int32_t keyLength;
-    };
-    std::variant<EVMKeyView, StringKeyView, MultiStringView> m_view;
+    std::string_view m_table;
+    std::string_view m_key;
+    friend class StateKey;
 
 public:
     explicit StateKeyView(const StateKey& stateKey)
     {
-        std::visit(overloaded{[this](const StateKey::EVMKey& evmStateKey) {
-                                  m_view = EVMKeyView{&evmStateKey.address, &evmStateKey.key};
-                              },
-                       [this](const StateKey::StringKey& stringKey) {
-                           m_view = StringKeyView{stringKey.tableKey, stringKey.split};
-                       }},
-            stateKey.m_key);
+        std::string_view view(stateKey.m_tableAndKey);
+        m_table = view.substr(0, stateKey.m_split);
+        m_key = view.substr(stateKey.m_split + 1);
     }
-    StateKeyView(const evmc_address& address, const evmc_bytes32& key)
-      : m_view(EVMKeyView{&address, &key})
-    {}
-    StateKeyView(std::string_view table, std::string_view key)
-      : m_view(MultiStringView{table.data(), key.data(), static_cast<int32_t>(table.size()),
-            static_cast<int32_t>(key.size())})
-    {}
+    StateKeyView(std::string_view table, std::string_view key) : m_table(table), m_key(key) {}
 
-    friend auto operator<=>(const StateKeyView& lhs, const StateKeyView& rhs)
+    friend std::strong_ordering operator<=>(
+        const StateKeyView& lhs, const StateKeyView& rhs) noexcept
     {
-        return std::visit(
-            overloaded{[](const EVMKeyView& lhsView, const EVMKeyView& rhsView) {
-                           auto lhsStringView = std::string_view(
-                               (const char*)std::addressof(lhsView), sizeof(EVMKeyView));
-                           auto rhsStringView = std::string_view(
-                               (const char*)std::addressof(rhsView), sizeof(EVMKeyView));
-                           return lhsStringView <=> rhsStringView;
-                       },
-                [](const StringKeyView& lhsView, const StringKeyView& rhsView) {
-                    return lhsView.addressKey <=> rhsView.addressKey;
-                },
-                [](const MultiStringView& lhsView, const MultiStringView& rhsView) {
-                    auto lhsTableStringView =
-                        std::string_view(lhsView.address, lhsView.addressLength);
-                    auto rhsTableStringView =
-                        std::string_view(rhsView.address, rhsView.addressLength);
-
-                    auto lhsKeyStringView = std::string_view(lhsView.key, lhsView.keyLength);
-                    auto rhsKeyStringView = std::string_view(rhsView.key, rhsView.keyLength);
-
-                    auto result = lhsTableStringView <=> rhsTableStringView;
-                    if (std::is_eq(result))
-                    {
-                        result = lhsKeyStringView <=> rhsKeyStringView;
-                    }
-                    return result;
-                },
-                [](auto const& lhsView, auto const& rhsView) {
-                    BOOST_THROW_EXCEPTION(UnableToCompareError{});
-                    return std::strong_ordering::equal;
-                }},
-            lhs.m_view, rhs.m_view);
+        auto cmp = lhs.m_table <=> rhs.m_table;
+        if (std::is_eq(cmp))
+        {
+            cmp = lhs.m_key <=> rhs.m_key;
+        }
+        return cmp;
     }
-    friend bool operator==(const StateKeyView& lhs, const StateKeyView& rhs)
+    friend bool operator==(const StateKeyView& lhs, const StateKeyView& rhs) = default;
+    friend ::std::ostream& operator<<(::std::ostream& stream, const StateKeyView& stateKeyView)
     {
-        return std::is_eq(lhs <=> rhs);
-    }
-
-    friend EncodedKey encodeToRocksDBKey(const StateKeyView& view)
-    {
-        static constexpr std::string_view USER_APPS_PREFIX = "/apps/";
-        EncodedKey output;
-
-        std::visit(
-            overloaded{[&](const EVMKeyView& evmKey) {
-                           std::string encodedKey;
-                           encodedKey.reserve(USER_APPS_PREFIX.size() + sizeof(evmKey.address) * 2 +
-                                              sizeof(evmKey.key));
-                           encodedKey.append(USER_APPS_PREFIX);
-                           boost::algorithm::hex_lower((const char*)evmKey.address->bytes,
-                               (const char*)evmKey.address->bytes + sizeof(evmKey.address->bytes),
-                               std::back_inserter(encodedKey));
-                           size_t split = encodedKey.size();
-                           encodedKey.push_back(':');
-                           encodedKey.append(std::string_view(
-                               (const char*)evmKey.key->bytes, sizeof(evmKey.key->bytes)));
-                           output = std::move(encodedKey);
-                       },
-                [&](const StringKeyView& stringKeyView) {
-                    output = EncodedKey(stringKeyView.addressKey);
-                },
-                [&](const MultiStringView& multiStringView) {
-                    std::string encodedKey;
-                    encodedKey.reserve(
-                        multiStringView.keyLength + multiStringView.addressLength + 1);
-
-                    encodedKey.append(
-                        std::string_view(multiStringView.address, multiStringView.addressLength));
-                    encodedKey.push_back(':');
-                    encodedKey.append(
-                        std::string_view(multiStringView.key, multiStringView.keyLength));
-                    output = std::move(encodedKey);
-                }},
-            view.m_view);
-
-        return output;
+        stream << stateKeyView.m_table << ":" << stateKeyView.m_key;
+        return stream;
     }
 
     size_t hash() const
     {
-        return std::visit(
-            overloaded{
-                [](const StateKeyView::EVMKeyView& evmKeyView) {
-                    auto addressStringView = std::string_view(
-                        (const char*)evmKeyView.address->bytes, sizeof(evmKeyView.address->bytes));
-                    auto keyStringView = std::string_view(
-                        (const char*)evmKeyView.key->bytes, sizeof(evmKeyView.key->bytes));
-
-                    auto result = std::hash<std::string_view>{}(addressStringView);
-                    boost::hash_combine(result, std::hash<std::string_view>{}(keyStringView));
-                    return result;
-                },
-                [](const StateKeyView::StringKeyView& stringKeyView) {
-                    return std::hash<std::string_view>{}(stringKeyView.addressKey);
-                },
-                [](const StateKeyView::MultiStringView& multiStringView) {
-                    auto addressStringView =
-                        std::string_view(multiStringView.address, multiStringView.addressLength);
-                    auto keyStringView =
-                        std::string_view(multiStringView.key, multiStringView.keyLength);
-
-                    auto result = std::hash<std::string_view>{}(addressStringView);
-                    boost::hash_combine(result, std::hash<std::string_view>{}(keyStringView));
-                    return result;
-                }},
-            m_view);
+        auto result = std::hash<std::string_view>{}(m_table);
+        boost::hash_combine(result, std::hash<std::string_view>{}(m_key));
+        return result;
     }
 };
+
+inline StateKey::StateKey(StateKeyView const& view) : StateKey(view.m_table, view.m_key) {}
 
 }  // namespace bcos::transaction_executor
 
@@ -308,14 +179,6 @@ struct boost::hash<bcos::transaction_executor::StateKey>
         return stateKeyView.hash();
     }
 };
-
-inline std::ostream& operator<<(
-    std::ostream& stream, const bcos::transaction_executor::StateKey& stateKey)
-{
-    auto encodedKey = encodeToRocksDBKey(bcos::transaction_executor::StateKeyView(stateKey));
-    stream << std::string_view(encodedKey.data(), encodedKey.size());
-    return stream;
-}
 
 template <>
 struct std::equal_to<bcos::transaction_executor::StateKey>

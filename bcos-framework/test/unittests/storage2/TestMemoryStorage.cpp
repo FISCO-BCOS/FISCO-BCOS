@@ -23,6 +23,40 @@ struct std::hash<std::tuple<std::string, std::string>>
 };
 BOOST_FIXTURE_TEST_SUITE(TestMemoryStorage, MemoryStorageFixture)
 
+namespace other1::other2
+{
+template <class T>
+struct MyStorage
+{
+    T value{};
+
+    friend task::Task<std::vector<std::optional<int>>> tag_invoke(
+        storage2::tag_t<storage2::readSome> /*unused*/, MyStorage& storage, auto&& keys)
+    {
+        std::vector<std::optional<int>> result;
+        result.emplace_back(200);
+        co_return result;
+    }
+
+    friend auto tag_invoke(storage2::tag_t<bcos::storage2::readOne> /*unused*/, MyStorage& storage,
+        auto&& key) -> task::Task<std::optional<int>>
+    {
+        co_return std::make_optional(100);
+    }
+};
+
+BOOST_AUTO_TEST_CASE(passbyDefault)
+{
+    task::syncWait([]() -> task::Task<void> {
+        MyStorage<int> myStorage;
+
+        auto num = co_await storage2::readOne(myStorage, 1);
+
+        BOOST_CHECK_EQUAL(*num, 100);
+    }());
+}
+}  // namespace other1::other2
+
 BOOST_AUTO_TEST_CASE(writeReadModifyRemove)
 {
     task::syncWait([]() -> task::Task<void> {

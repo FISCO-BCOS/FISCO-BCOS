@@ -1,17 +1,16 @@
-#include <bcos-framework/storage/Entry.h>
-#include <bcos-framework/storage2/MemoryStorage.h>
-#include <bcos-task/Wait.h>
+#include "bcos-framework/storage/Entry.h"
+#include "bcos-framework/storage2/MemoryStorage.h"
+#include "bcos-task/TBBWait.h"
+#include "bcos-task/Wait.h"
 #include <tbb/blocked_range.h>
 #include <tbb/concurrent_hash_map.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <tbb/enumerable_thread_specific.h>
 #include <tbb/parallel_for.h>
-#include <boost/container_hash/hash_fwd.hpp>
 #include <boost/lexical_cast.hpp>
 #include <chrono>
 #include <iostream>
 #include <random>
-#include <range/v3/view/transform.hpp>
 
 using namespace bcos;
 using namespace bcos::storage2::memory_storage;
@@ -83,41 +82,18 @@ task::Task<void> storage2BatchWrite(auto& storage, RANGES::range auto const& dat
     co_return;
 }
 
-task::Task<void> storage2BatchRead(auto& storage, RANGES::range auto const& dataSet)
-{
-    auto now = std::chrono::steady_clock::now();
-
-    auto it = co_await storage.read(
-        dataSet | RANGES::views::transform([](auto& item) -> auto& { return std::get<0>(item); }));
-
-    while (co_await it.next())
-    {
-        assert(co_await it.hasValue());
-        [[maybe_unused]] auto key = co_await it.key();
-        [[maybe_unused]] auto value = co_await it.value();
-    }
-    auto elpased = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::steady_clock::now() - now)
-                       .count();
-    std::cout << "Storage2 batch read elpased: " << elpased << "ms" << std::endl;
-
-    co_return;
-}
-
 task::Task<void> storage2MultiThreadWrite(auto& storage, RANGES::range auto const& dataSet)
 {
     auto now = std::chrono::steady_clock::now();
 
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, RANGES::size(dataSet)),
-        [&storage, &dataSet](const auto& range) {
-            for (auto i = range.begin(); i != range.end(); ++i)
-            {
-                auto const& item = dataSet[i];
-                (void)storage2::writeOne(storage, std::get<0>(item),
-                    std::get<1>(item));  // Here is valid because storage
-                                         // returns AwaitableValue
-            }
-        });
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, RANGES::size(dataSet)), [&storage, &dataSet](
+                                                                                const auto& range) {
+        for (auto i = range.begin(); i != range.end(); ++i)
+        {
+            auto const& item = dataSet[i];
+            task::tbb::syncWait(storage2::writeOne(storage, std::get<0>(item), std::get<1>(item)));
+        }
+    });
     auto elpased = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now() - now)
                        .count();
@@ -173,7 +149,6 @@ int main(int argc, char* argv[])
             Attribute(ORDERED | CONCURRENT), std::hash<Key>>
             newStorage1;
         co_await storage2BatchWrite(newStorage1, dataSet);
-        // co_await storage2BatchRead(newStorage1, dataSet);
 
         storage2::memory_storage::MemoryStorage<Key, storage::Entry,
             Attribute(ORDERED | CONCURRENT), std::hash<Key>>

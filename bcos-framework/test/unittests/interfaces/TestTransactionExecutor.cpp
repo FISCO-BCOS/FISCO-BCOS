@@ -17,7 +17,13 @@ BOOST_AUTO_TEST_CASE(stateKey)
     StateKey stateKey1("test state table1"sv, "test state key1"sv);
     StateKey stateKey2("test state table2"sv, "test state key2"sv);
 
-    BOOST_CHECK(stateKey1 != stateKey2);
+    BOOST_CHECK_NE(stateKey1, stateKey2);
+
+    StateKeyView view1("table", "key");
+
+    std::stringstream ss;
+    ss << view1;
+    BOOST_CHECK_EQUAL(ss.str(), "table:key");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

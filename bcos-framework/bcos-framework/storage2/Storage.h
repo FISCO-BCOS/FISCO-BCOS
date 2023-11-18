@@ -8,11 +8,6 @@
 namespace bcos::storage2
 {
 
-struct STORAGE_BEGIN_TYPE
-{
-};
-inline constexpr STORAGE_BEGIN_TYPE STORAGE_BEGIN{};
-
 struct READ_FRONT_TYPE
 {
 };
@@ -20,8 +15,13 @@ inline constexpr READ_FRONT_TYPE READ_FRONT{};
 
 template <class Invoke>
 using ReturnType = typename task::AwaitableReturnType<Invoke>;
+template <class Tag, class Storage, class... Args>
+concept HasTag = requires(Tag&& tag, Storage&& storage, Args&&... args) {
+                     requires task::IsAwaitable<decltype(tag_invoke(
+                         std::forward<decltype(tag)>(tag), std::forward<Storage>(storage), std::forward<Args>(args)...))>;
+                 };
 
-struct ReadSome
+inline constexpr struct ReadSome
 {
     auto operator()(auto& storage, RANGES::input_range auto&& keys, auto&&... args) const
         -> task::Task<ReturnType<decltype(tag_invoke(*this, storage,
@@ -32,16 +32,12 @@ struct ReadSome
         co_return co_await tag_invoke(*this, storage, std::forward<decltype(keys)>(keys),
             std::forward<decltype(args)>(args)...);
     }
-};
-inline constexpr ReadSome readSome{};
+} readSome{};
 
 struct WriteSome
 {
     auto operator()(auto& storage, RANGES::input_range auto&& keys,
         RANGES::input_range auto&& values) const -> task::Task<void>
-        requires std::same_as<void,
-            ReturnType<decltype(tag_invoke(*this, storage, std::forward<decltype(keys)>(keys),
-                std::forward<decltype(values)>(values)))>>
     {
         co_await tag_invoke(*this, storage, std::forward<decltype(keys)>(keys),
             std::forward<decltype(values)>(values));
@@ -49,137 +45,134 @@ struct WriteSome
 };
 inline constexpr WriteSome writeSome{};
 
-struct RemoveSome
+inline constexpr struct RemoveSome
 {
-    auto operator()(auto& storage, RANGES::input_range auto const& keys) const
-        -> task::Task<ReturnType<decltype(tag_invoke(*this, storage, keys))>>
-        requires std::same_as<void, ReturnType<decltype(tag_invoke(*this, storage, keys))>>
+    auto operator()(auto& storage, RANGES::input_range auto&& keys) const -> task::Task<
+        ReturnType<decltype(tag_invoke(*this, storage, std::forward<decltype(keys)>(keys)))>>
     {
-        co_await tag_invoke(*this, storage, keys);
+        co_await tag_invoke(*this, storage, std::forward<decltype(keys)>(keys));
     }
-};
-inline constexpr RemoveSome removeSome{};
-struct ReadOne
-{
-    auto operator()(auto& storage, auto const& key, auto&&... args) const
-        -> task::Task<ReturnType<decltype(tag_invoke(
-            *this, storage, key, std::forward<decltype(args)>(args)...))>>
-    {
-        co_return co_await tag_invoke(*this, storage, key, std::forward<decltype(args)>(args)...);
-    }
-};
-inline constexpr ReadOne readOne{};
+} removeSome{};
 
-struct WriteOne
+inline constexpr struct ReadOne
 {
-    auto operator()(auto& storage, auto&& key, auto&& value) const -> task::Task<void>
-        requires std::same_as<void,
-            ReturnType<decltype(tag_invoke(*this, storage, std::forward<decltype(key)>(key),
-                std::forward<decltype(value)>(value)))>>
+    auto operator()(auto& storage, auto&& key, auto&&... args) const
+        -> task::Task<ReturnType<decltype(tag_invoke(*this, storage,
+            std::forward<decltype(key)>(key), std::forward<decltype(args)>(args)...))>>
     {
-        co_await tag_invoke(
-            *this, storage, std::forward<decltype(key)>(key), std::forward<decltype(value)>(value));
+        if constexpr (HasTag<ReadOne, std::decay_t<decltype(storage)>, decltype(key),
+                          decltype(args)...>)
+        {
+            co_return co_await tag_invoke(*this, storage, std::forward<decltype(key)>(key),
+                std::forward<decltype(args)>(args)...);
+        }
+        else
+        {
+            auto values = co_await storage2::readSome(storage,
+                RANGES::views::single(std::forward<decltype(key)>(key)),
+                std::forward<decltype(args)>(args)...);
+            co_return std::move(values[0]);
+        }
     }
-};
-inline constexpr WriteOne writeOne{};
+} readOne{};
 
-struct RemoveOne
+
+inline constexpr struct WriteOne
 {
-    auto operator()(auto& storage, auto const& key) const
-        -> task::Task<ReturnType<decltype(tag_invoke(*this, storage, key))>>
-        requires std::same_as<void, ReturnType<decltype(tag_invoke(*this, storage, key))>>
+    auto operator()(auto& storage, auto&& key, auto&& value, auto&&... args) const
+        -> task::Task<void>
     {
-        co_await tag_invoke(*this, storage, key);
+        if constexpr (HasTag<WriteOne, std::decay_t<decltype(storage)>, decltype(key),
+                          decltype(value), decltype(args)...>)
+        {
+            co_await tag_invoke(*this, storage, std::forward<decltype(key)>(key),
+                std::forward<decltype(value)>(value), std::forward<decltype(args)>(args)...);
+        }
+        else
+        {
+            co_await writeSome(storage, RANGES::views::single(std::forward<decltype(key)>(key)),
+                RANGES::views::single(std::forward<decltype(value)>(value)),
+                std::forward<decltype(args)>(args)...);
+        }
     }
-};
-inline constexpr RemoveOne removeOne{};
+} writeOne{};
 
-struct ExistsOne
+inline constexpr struct RemoveOne
 {
-    auto operator()(auto& storage, auto const& key) const
-        -> task::Task<ReturnType<decltype(tag_invoke(*this, storage, key))>>
-        requires std::same_as<bool, ReturnType<decltype(tag_invoke(*this, storage, key))>>
+    auto operator()(auto& storage, auto&& key, auto&&... args) const
+        -> task::Task<ReturnType<decltype(tag_invoke(*this, storage, key, args...))>>
     {
-        co_return co_await tag_invoke(*this, storage, key);
+        if constexpr (HasTag<RemoveOne, std::decay_t<decltype(storage)>, decltype(key),
+                          decltype(args)...>)
+        {
+            co_await tag_invoke(*this, storage, std::forward<decltype(key)>(key),
+                std::forward<decltype(args)>(args)...);
+        }
+        else
+        {
+            co_await removeSome(storage, RANGES::views::single(std::forward<decltype(key)>(key)),
+                std::forward<decltype(args)>(args)...);
+        }
     }
-};
-inline constexpr ExistsOne existsOne{};
+} removeOne{};
 
-struct Merge
+inline constexpr struct ExistsOne
 {
-    auto operator()(auto& fromStorage, auto& toStorage) const
-        -> task::Task<ReturnType<decltype(tag_invoke(*this, fromStorage, toStorage))>>
-        requires std::same_as<void, ReturnType<decltype(tag_invoke(*this, fromStorage, toStorage))>>
+    auto operator()(auto& storage, auto&& key, auto&&... args) const -> task::Task<
+        ReturnType<decltype(tag_invoke(*this, storage, std::forward<decltype(key)>(key)))>>
+        requires std::same_as<bool,
+            ReturnType<decltype(tag_invoke(*this, storage, std::forward<decltype(key)>(key)))>>
     {
-        co_await tag_invoke(*this, fromStorage, toStorage);
+        if constexpr (HasTag<ExistsOne, std::decay_t<decltype(storage)>, decltype(key)>)
+        {
+            co_return co_await tag_invoke(*this, storage, std::forward<decltype(key)>(key),
+                std::forward<decltype(args)>(args)...);
+        }
+        else
+        {
+            auto result = co_await readOne(storage, key, std::forward<decltype(args)>(args)...);
+            co_return result.has_value();
+        }
     }
-};
-inline constexpr Merge merge{};
+} existsOne{};
 
-struct Range
+inline constexpr struct Range
 {
     auto operator()(auto& storage, auto&&... args) const -> task::Task<
         ReturnType<decltype(tag_invoke(*this, storage, std::forward<decltype(args)>(args)...))>>
     {
         co_return co_await tag_invoke(*this, storage, std::forward<decltype(args)>(args)...);
     }
-};
-inline constexpr Range range{};
+} range{};
 
-template <auto& Tag>
-using tag_t = std::decay_t<decltype(Tag)>;
-
-// Default implementations
-auto tag_invoke(bcos::storage2::tag_t<readOne> /*unused*/, auto& storage, auto const& key,
-    auto&&... args) -> task::
-    Task<std::remove_cvref_t<decltype(std::declval<task::AwaitableReturnType<decltype(readSome(
-            storage, RANGES::views::single(key), std::forward<decltype(args)>(args)...))>>()[0])>>
+inline constexpr struct Merge
 {
-    auto values = co_await readSome(storage,
-        RANGES::views::single(std::cref(key)) |
-            RANGES::views::transform([](auto&& input) -> auto const& { return input.get(); }),
-        std::forward<decltype(args)>(args)...);
-    co_return std::move(values[0]);
-}
-
-auto tag_invoke(bcos::storage2::tag_t<writeOne> /*unused*/, auto& storage, auto&& key, auto&& value,
-    auto&&... args) -> task::Task<void>
-{
-    co_await writeSome(storage, RANGES::views::single(std::forward<decltype(key)>(key)),
-        RANGES::views::single(std::forward<decltype(value)>(value)),
-        std::forward<decltype(args)>(args)...);
-}
-
-auto tag_invoke(bcos::storage2::tag_t<removeOne> /*unused*/, auto& storage, auto const& key,
-    auto&&... args) -> task::Task<void>
-{
-    co_await removeSome(storage, RANGES::views::single(std::cref(key)) | RANGES::views::transform([
-    ](auto&& input) -> auto const& { return input.get(); }),
-        std::forward<decltype(args)>(args)...);
-}
-
-auto tag_invoke(bcos::storage2::tag_t<existsOne> /*unused*/, auto& storage, auto const& key,
-    auto&&... args) -> task::Task<bool>
-{
-    auto result = co_await readOne(storage, key, std::forward<decltype(args)>(args)...);
-    co_return result.has_value();
-}
-
-task::Task<void> tag_invoke(
-    bcos::storage2::tag_t<merge> /*unused*/, auto const& fromStorage, auto& toStorage)
-{
-    auto range = co_await storage2::range(fromStorage);
-    for (auto [key, value] : range)
+    auto operator()(auto& fromStorage, auto& toStorage, auto&&... args) const
+        -> task::Task<ReturnType<decltype(tag_invoke(*this, fromStorage, toStorage))>>
     {
-        if (value)
+        if constexpr (HasTag<Merge, decltype(fromStorage), decltype(toStorage)>)
         {
-            co_await storage2::writeOne(toStorage, *key, *value);
+            co_await tag_invoke(*this, fromStorage, toStorage);
         }
         else
         {
-            co_await storage2::removeOne(toStorage, *key);
+            auto range = co_await storage2::range(fromStorage);
+            for (auto [key, value] : range)
+            {
+                if (value)
+                {
+                    co_await storage2::writeOne(toStorage, *key, *value);
+                }
+                else
+                {
+                    co_await storage2::removeOne(toStorage, *key);
+                }
+            }
         }
     }
-}
+} merge{};
+
+template <auto& Tag>
+using tag_t = std::decay_t<decltype(Tag)>;
 
 }  // namespace bcos::storage2

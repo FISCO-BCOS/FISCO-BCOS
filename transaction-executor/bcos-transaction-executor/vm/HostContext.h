@@ -81,7 +81,7 @@ private:
     PrecompiledManager const& m_precompiledManager;
     ledger::LedgerConfig const& m_ledgerConfig;
 
-    ContractTable m_myContractTable;
+    std::string m_myContractTable;
     evmc_address m_newContractAddress;  // Set by getMyContractTable, not need initialize value!
     std::vector<protocol::LogEntry> m_logs;
 
@@ -91,9 +91,9 @@ private:
             [this](const evmc_message& message) { return task::syncWait(externalCall(message)); };
     }
 
-    ContractTable getTableName(const evmc_address& address)
+    std::string getTableName(const evmc_address& address)
     {
-        ContractTable tableName;
+        std::string tableName;
         tableName.insert(
             tableName.end(), executor::USER_APPS_PREFIX.begin(), executor::USER_APPS_PREFIX.end());
         boost::algorithm::hex_lower((const char*)address.bytes,
@@ -102,7 +102,7 @@ private:
         return tableName;
     }
 
-    ContractTable getMyContractTable(
+    std::string getMyContractTable(
         const protocol::BlockHeader& blockHeader, const evmc_message& message)
     {
         switch (message.kind)
@@ -220,9 +220,9 @@ public:
         storage::Entry entry;
         entry.set(valueView);
 
-        auto keyView = bytesConstRef(key->bytes, sizeof(key->bytes));
+        auto keyView = std::string_view((const char*)key->bytes, sizeof(key->bytes));
         co_await storage2::writeOne(m_rollbackableStorage,
-            StateKey{m_myContractTable, ContractKey{keyView}}, std::move(entry));
+            StateKey{std::string_view(m_myContractTable), keyView}, std::move(entry));
     }
 
     task::Task<std::optional<storage::Entry>> code(const evmc_address& address)
@@ -250,8 +250,9 @@ public:
 
         // Need block version >= 3.1
         // Query the code table first
-        if (!co_await storage2::existsOne(
-                m_rollbackableStorage, StateKeyView{ledger::SYS_CODE_BINARY, codeHashEntry.get()}))
+        auto existsCode = co_await storage2::readOne(
+            m_rollbackableStorage, StateKeyView{ledger::SYS_CODE_BINARY, codeHashEntry.get()});
+        if (!existsCode)
         {
             storage::Entry codeEntry;
             codeEntry.set(code.toBytes());
