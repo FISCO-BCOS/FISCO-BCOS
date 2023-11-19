@@ -165,6 +165,7 @@ bcos::protocol::ExecutionMessage::UniquePtr BlockExecutive::buildMessage(
     message->setGasPrice(std::string(tx->gasPrice()));
     message->setMaxFeePerGas(std::string(tx->maxFeePerGas()));
     message->setMaxPriorityFeePerGas(std::string(tx->maxPriorityFeePerGas()));
+    message->setEffectiveGasPrice(std::string(tx->gasPrice()));
 
     return message;
 }
@@ -290,6 +291,7 @@ void BlockExecutive::buildExecutivesFromNormalTransaction()
             {
                 auto tx = m_block->transaction(i);
                 m_executiveResults[i].transactionHash = tx->hash();
+                m_executiveResults[i].version = tx->version();
 
                 auto contextID = i + m_startContextID;
                 auto& [to, message, enableDAG] = results[i];
@@ -1626,17 +1628,44 @@ void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr outp
         txGasUsed = 0;
     }
     m_gasUsed.fetch_add(txGasUsed);
-    auto receipt = m_scheduler->m_blockFactory->receiptFactory()->createReceipt(txGasUsed,
-        std::string(output->newEVMContractAddress()), output->takeLogEntries(), output->status(),
-        output->data(), number());
-
-    // write receipt in results
-    SCHEDULER_LOG(TRACE) << " 6.GenReceipt:\t [^^] " << output->toString()
-                         << " -> contextID:" << output->contextID() - m_startContextID
-                         << ", receipt: " << receipt->hash() << ", gasUsed: " << receipt->gasUsed()
-                         << ", version: " << receipt->version()
-                         << ", status: " << receipt->status();
-    m_executiveResults[output->contextID() - m_startContextID].receipt = std::move(receipt);
+    auto version = m_executiveResults[output->contextID() - m_startContextID].version;
+    switch (version)
+    {
+    case int32_t(bcos::protocol::TransactionVersion::V0_VERSION):
+    {
+        auto receipt = m_scheduler->m_blockFactory->receiptFactory()->createReceipt(txGasUsed,
+            std::string(output->newEVMContractAddress()), output->takeLogEntries(),
+            output->status(), output->data(), number());
+        // write receipt in results
+        SCHEDULER_LOG(TRACE) << " 6.GenReceipt:\t [^^] " << output->toString()
+                             << " -> contextID:" << output->contextID() - m_startContextID
+                             << ", receipt: " << receipt->hash()
+                             << ", gasUsed: " << receipt->gasUsed()
+                             << ", version: " << receipt->version()
+                             << ", status: " << receipt->status();
+        m_executiveResults[output->contextID() - m_startContextID].receipt = std::move(receipt);
+        break;
+    }
+    case int32_t(bcos::protocol::TransactionVersion::V1_VERSION):
+    {
+        auto receipt = m_scheduler->m_blockFactory->receiptFactory()->createReceipt2(txGasUsed,
+            std::string(output->newEVMContractAddress()), output->takeLogEntries(),
+            output->status(), output->data(), number(), std::string(output->effectiveGasPrice()));
+        // write receipt in results
+        SCHEDULER_LOG(TRACE) << " 6.GenReceipt:\t [^^] " << output->toString()
+                             << " -> contextID:" << output->contextID() - m_startContextID
+                             << ", receipt: " << receipt->hash()
+                             << ", gasUsed: " << receipt->gasUsed()
+                             << ", version: " << receipt->version()
+                             << ", status: " << receipt->status()
+                             << ", effectiveGasPrice: " << receipt->effectiveGasPrice();
+        m_executiveResults[output->contextID() - m_startContextID].receipt = std::move(receipt);
+        break;
+    }
+    default:
+        BOOST_THROW_EXCEPTION(BCOS_ERROR(SchedulerError::InvalidTransactionVersion,
+            "Invalid receipt version: " + std::to_string(version)));
+    }
 }
 
 

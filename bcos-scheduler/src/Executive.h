@@ -42,5 +42,6 @@ struct ExecutiveResult
     bcos::protocol::TransactionReceipt::Ptr receipt;
     bcos::crypto::HashType transactionHash;
     std::string source;
+    int32_t version;
 };
 }  // namespace bcos::scheduler

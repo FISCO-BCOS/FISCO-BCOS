@@ -33,6 +33,9 @@ public:
         bugfix_revert,  // https://github.com/FISCO-BCOS/FISCO-BCOS/issues/3629
         bugfix_statestorage_hash,
         bugfix_evm_create2_delegatecall_staticcall_codecopy,
+        bugfix_event_log_order,
+        bugfix_delegatecall_noaddr_return,
+        bugfix_precompiled_codehash,
         feature_dmc2serial,
         feature_sharding,
         feature_rpbft,
@@ -63,7 +66,7 @@ public:
         {
             BOOST_THROW_EXCEPTION(NoSuchFeatureError{});
         }
-        
+
         validate(*value);
     }
 
@@ -122,6 +125,13 @@ public:
             set(Flag::bugfix_statestorage_hash);
             set(Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy);
         }
+        if (version >= protocol::BlockVersion::V3_6_VERSION)
+        {
+            set(Flag::bugfix_event_log_order);
+            set(Flag::bugfix_delegatecall_noaddr_return);
+            set(Flag::bugfix_precompiled_codehash);
+        }
+
         setToShardingDefault(version);
     }
 

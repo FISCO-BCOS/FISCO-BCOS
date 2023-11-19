@@ -98,6 +98,14 @@ bcos::protocol::BlockNumber bcostars::protocol::TransactionReceiptImpl::blockNum
 {
     return m_inner()->data.blockNumber;
 }
+std::string_view bcostars::protocol::TransactionReceiptImpl::effectiveGasPrice() const
+{
+    return m_inner()->data.effectiveGasPrice;
+}
+void bcostars::protocol::TransactionReceiptImpl::setEffectiveGasPrice(std::string effectiveGasPrice)
+{
+    m_inner()->data.effectiveGasPrice = std::move(effectiveGasPrice);
+}
 const bcostars::TransactionReceipt& bcostars::protocol::TransactionReceiptImpl::inner() const
 {
     return *m_inner();

@@ -129,9 +129,21 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
             auto& output = input;
             EXECUTIVE_LOG(DEBUG) << "Could not getCodeHash during externalCall"
                                  << LOG_KV("codeAddress", input->codeAddress);
+
             output->data = bytes();
-            output->status = (int32_t)TransactionStatus::RevertInstruction;
-            output->evmStatus = EVMC_REVERT;
+            if (m_blockContext.features().get(
+                    ledger::Features::Flag::bugfix_delegatecall_noaddr_return))
+            {
+                // This is eth's bug, but we still need to compat with it :)
+                // https://docs.soliditylang.org/en/v0.8.17/control-structures.html#error-handling-assert-require-revert-and-exceptions
+                output->status = (int32_t)TransactionStatus::None;
+                output->evmStatus = EVMC_SUCCESS;
+            }
+            else
+            {
+                output->status = (int32_t)TransactionStatus::RevertInstruction;
+                output->evmStatus = EVMC_REVERT;
+            }
             return std::move(output);
         }
 
@@ -186,7 +198,8 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
     }
 
 
-    auto executive = buildChildExecutive(input->codeAddress, m_contextID, newSeq, ExecutiveType::common);
+    auto executive =
+        buildChildExecutive(input->codeAddress, m_contextID, newSeq, ExecutiveType::common);
 
     m_childExecutives.push_back(executive);  // add child executive for revert() if needed
 

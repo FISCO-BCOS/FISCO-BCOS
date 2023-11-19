@@ -46,7 +46,8 @@
       "features": []
     },
     "wedprcrypto",
-    "range-v3"
+    "range-v3",
+    "hsm-crypto"
   ],
   "features": {
     "fullnode": {
@@ -118,7 +119,8 @@
         {
           "name": "tarscpp",
           "version>=": "3.0.3-1#1"
-        }
+        },
+        "hsm-crypto"
       ]
     },
     "etcd": {

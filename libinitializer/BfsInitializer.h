@@ -40,7 +40,7 @@ public:
             _protocol->cryptoSuite()->hashImpl(), _nodeConfig->isWasm());
         bytes input = codecWrapper.encodeWithSig("initBfs()");
 
-        auto transaction = _protocol->blockFactory()->transactionFactory()->createTransaction(3,
+        auto transaction = _protocol->blockFactory()->transactionFactory()->createTransaction(0,
             _nodeConfig->isWasm() ? precompiled::BFS_NAME : precompiled::BFS_ADDRESS, input,
             u256(_number).str(), 500, _nodeConfig->chainId(), _nodeConfig->groupId(), utcTime());
         _block->appendTransaction(std::move(transaction));

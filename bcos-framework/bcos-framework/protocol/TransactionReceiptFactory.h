@@ -42,6 +42,9 @@ public:
     virtual TransactionReceipt::Ptr createReceipt(u256 const& gasUsed, std::string contractAddress,
         const std::vector<LogEntry>& logEntries, int32_t status, bcos::bytesConstRef output,
         BlockNumber blockNumber) const = 0;
+    virtual TransactionReceipt::Ptr createReceipt2(u256 const& gasUsed, std::string contractAddress,
+        const std::vector<LogEntry>& logEntries, int32_t status, bcos::bytesConstRef output,
+        BlockNumber blockNumber, std::string effectiveGasPrice = "1") const = 0;
 };
 
 }  // namespace bcos::protocol
