@@ -212,8 +212,8 @@ private:
                                     ittapi::Report report(
                                         ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
                                         ittapi::ITT_DOMAINS::instance().MERGE_CHUNK);
-                                    task::tbb::syncWait(storage2::merge(
-                                        chunk->localStorage().mutableStorage(), lastStorage));
+                                    task::tbb::syncWait(storage2::merge(lastStorage,
+                                        std::move(chunk->localStorage().mutableStorage())));
                                 });
                             scheduler.m_asyncTaskGroup->run([chunk = std::move(chunk)]() {});
                         }));

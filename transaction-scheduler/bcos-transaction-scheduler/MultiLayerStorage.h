@@ -87,7 +87,8 @@ public:
 
             std::vector<std::pair<StoreKeyType, std::reference_wrapper<std::optional<ValueType>>>>
                 missingKeyValues;
-            for (auto&& [key, value] : RANGES::views::zip(keys, values))
+            for (auto&& [key, value] :
+                RANGES::views::zip(std::forward<decltype(keys)>(keys), values))
             {
                 if (!value)
                 {
@@ -182,9 +183,10 @@ public:
         }
 
         friend auto tag_invoke(
-            storage2::tag_t<storage2::readOne> /*unused*/, View& storage, auto const& key)
+            storage2::tag_t<storage2::readOne> /*unused*/, View& storage, auto&& key)
             -> task::Task<task::AwaitableReturnType<decltype(storage2::readOne(
-                (MutableStorageType&)std::declval<MutableStorageType>(), key))>>
+                (MutableStorageType&)std::declval<MutableStorageType>(),
+                std::forward<decltype(key)>(key)))>>
         {
             if (storage.m_mutableStorage)
             {
@@ -214,26 +216,31 @@ public:
         }
 
         friend auto tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/, View& storage,
-            auto const& key, const storage2::READ_FRONT_TYPE& /*unused*/)
+            auto&& key, storage2::READ_FRONT_TYPE /*unused*/)
             -> task::Task<task::AwaitableReturnType<decltype(storage2::readOne(
-                (MutableStorageType&)std::declval<MutableStorageType>(), key))>>
+                (MutableStorageType&)std::declval<MutableStorageType>(),
+                std::forward<decltype(key)>(key)))>>
         {
             if (storage.m_mutableStorage)
             {
-                co_return co_await storage2::readOne(*storage.m_mutableStorage, key);
+                co_return co_await storage2::readOne(
+                    *storage.m_mutableStorage, std::forward<decltype(key)>(key));
             }
 
             for (auto& immutableStorage : storage.m_immutableStorages)
             {
-                co_return co_await storage2::readOne(*immutableStorage, key);
+                co_return co_await storage2::readOne(
+                    *immutableStorage, std::forward<decltype(key)>(key));
             }
 
             if constexpr (withCacheStorage)
             {
-                co_return co_await storage2::readOne(storage.m_cacheStorage, key);
+                co_return co_await storage2::readOne(
+                    storage.m_cacheStorage, std::forward<decltype(key)>(key));
             }
 
-            co_return co_await storage2::readOne(storage.m_backendStorage, key);
+            co_return co_await storage2::readOne(
+                storage.m_backendStorage, std::forward<decltype(key)>(key));
         }
 
         friend task::Task<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/,

@@ -440,10 +440,9 @@ public:
         auto codeEntry = co_await code(m_message.code_address);
         if (!codeEntry || codeEntry->size() == 0)
         {
-            BOOST_THROW_EXCEPTION(NotFoundCodeError{} << bcos::Error::ErrorMessage(
-                                      std::string("Not found contract code: ")
-                                          .append(toHexStringWithPrefix(
-                                              static_cast<std::string_view>(m_myContractTable)))));
+            BOOST_THROW_EXCEPTION(
+                NotFoundCodeError{} << bcos::Error::ErrorMessage(
+                    std::string("Not found contract code: ").append(m_myContractTable)));
         }
         auto code = codeEntry->get();
         auto mode = toRevision(vmSchedule());
