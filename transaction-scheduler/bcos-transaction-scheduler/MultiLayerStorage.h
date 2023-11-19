@@ -6,7 +6,6 @@
 #include "bcos-task/Wait.h"
 #include "transaction-executor/bcos-transaction-executor/RollbackableStorage.h"
 #include <oneapi/tbb/parallel_invoke.h>
-#include <boost/container/small_vector.hpp>
 #include <boost/throw_exception.hpp>
 #include <functional>
 #include <iterator>
@@ -86,8 +85,7 @@ public:
                 std::is_lvalue_reference_v<RANGES::range_value_t<decltype(keys)>>,
                 std::reference_wrapper<KeyType>, KeyType>;
 
-            boost::container::small_vector<
-                std::pair<StoreKeyType, std::reference_wrapper<std::optional<ValueType>>>, 1>
+            std::vector<std::pair<StoreKeyType, std::reference_wrapper<std::optional<ValueType>>>>
                 missingKeyValues;
             for (auto&& [key, value] : RANGES::views::zip(keys, values))
             {
@@ -389,12 +387,12 @@ public:
         if constexpr (withCacheStorage)
         {
             tbb::parallel_invoke(
-                [&]() { task::syncWait(storage2::merge(*immutableStorage, m_backendStorage)); },
-                [&]() { task::syncWait(storage2::merge(*immutableStorage, m_cacheStorage)); });
+                [&]() { task::syncWait(storage2::merge(m_backendStorage, *immutableStorage)); },
+                [&]() { task::syncWait(storage2::merge(m_cacheStorage, *immutableStorage)); });
         }
         else
         {
-            co_await storage2::merge(*immutableStorage, m_backendStorage);
+            co_await storage2::merge(m_backendStorage, *immutableStorage);
         }
 
         immutablesLock.lock();

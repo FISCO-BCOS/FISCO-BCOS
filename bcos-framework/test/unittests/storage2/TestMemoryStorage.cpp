@@ -29,6 +29,7 @@ template <class T>
 struct MyStorage
 {
     T value{};
+    using Value = T;
 
     friend task::Task<std::vector<std::optional<int>>> tag_invoke(
         storage2::tag_t<storage2::readSome> /*unused*/, MyStorage& storage, auto&& keys)
@@ -268,7 +269,7 @@ BOOST_AUTO_TEST_CASE(merge)
         co_await storage2::writeSome(
             storage2, RANGES::iota_view<int, int>(9, 19), RANGES::repeat_view<int>(200));
 
-        co_await storage2::merge(storage2, storage1);
+        co_await storage2::merge(storage1, storage2);
         auto values = co_await storage2::range(storage1);
         BOOST_CHECK_EQUAL(RANGES::size(values), 19);
         for (auto&& [i, tuple] : RANGES::views::enumerate(values))

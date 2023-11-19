@@ -221,7 +221,7 @@ private:
             ittapi::Report mergeReport(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
                 ittapi::ITT_DOMAINS::instance().MERGE_LAST_CHUNK);
             PARALLEL_SCHEDULER_LOG(DEBUG) << "Final merge lastStorage";
-            co_await storage2::merge(lastStorage, storage);
+            co_await storage2::merge(storage, lastStorage);
 
             scheduler.m_asyncTaskGroup->run(
                 [lastStorage = std::move(lastStorage), readWriteSet = std::move(writeSet)]() {});

@@ -14,7 +14,6 @@
 #include <rocksdb/db.h>
 #include <rocksdb/iterator.h>
 #include <rocksdb/slice.h>
-#include <boost/container/small_vector.hpp>
 #include <boost/throw_exception.hpp>
 #include <functional>
 #include <type_traits>
@@ -88,26 +87,24 @@ public:
 
     static auto executeReadSome(RocksDBStorage2& storage, RANGES::input_range auto&& keys)
     {
-        using EncodedType = std::vector<decltype(storage.m_keyResolver.encode(
-            std::declval<RANGES::range_value_t<decltype(keys)>>()))>;
         auto encodedKeys = keys | RANGES::views::transform([&](auto&& key) {
             return storage.m_keyResolver.encode(std::forward<decltype(key)>(key));
-        }) | RANGES::to<EncodedType>();
+        }) | RANGES::to<std::vector>();
 
         std::vector<::rocksdb::PinnableSlice> results(RANGES::size(encodedKeys));
         std::vector<::rocksdb::Status> status(RANGES::size(encodedKeys));
 
         auto rocksDBKeys = encodedKeys | RANGES::views::transform([](const auto& encodedKey) {
             return ::rocksdb::Slice(RANGES::data(encodedKey), RANGES::size(encodedKey));
-        }) | RANGES::to<std::vector<::rocksdb::Slice>>();
+        }) | RANGES::to<std::vector>();
         storage.m_rocksDB.MultiGet(::rocksdb::ReadOptions(),
             storage.m_rocksDB.DefaultColumnFamily(), rocksDBKeys.size(), rocksDBKeys.data(),
             results.data(), status.data());
 
         auto result =
             RANGES::views::zip(results, status) |
-            RANGES::views::transform([&](auto&& tuple) -> std::optional<ValueType> {
-                auto&& [result, status] = tuple;
+            RANGES::views::transform([&](auto tuple) -> std::optional<ValueType> {
+                auto& [result, status] = tuple;
                 if (!status.ok())
                 {
                     if (!status.IsNotFound())
@@ -120,7 +117,7 @@ public:
 
                 return std::make_optional(storage.m_valueResolver.decode(result.ToStringView()));
             }) |
-            RANGES::to<boost::container::small_vector<std::optional<storage::Entry>, 1>>();
+            RANGES::to<std::vector>();
         return result;
     }
 
@@ -243,7 +240,7 @@ public:
     }
 
     friend task::Task<void> tag_invoke(
-        storage2::tag_t<storage2::merge> /*unused*/, auto& fromStorage, RocksDBStorage2& storage)
+        storage2::tag_t<merge> /*unused*/, RocksDBStorage2& storage, auto&& fromStorage)
     {
         auto range = co_await storage2::range(fromStorage);
 

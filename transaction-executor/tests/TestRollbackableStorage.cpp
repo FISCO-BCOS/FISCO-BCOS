@@ -50,7 +50,7 @@ BOOST_AUTO_TEST_CASE(addRollback)
         for (auto&& [key, value] : RANGES::views::zip(keys, values))
         {
             BOOST_REQUIRE(value);
-            BOOST_CHECK_EQUAL(key, StateKeyView(tableID, "Key" + std::to_string(count + 1)));
+            BOOST_CHECK_EQUAL(key, StateKey(tableID, "Key" + std::to_string(count + 1)));
             ++count;
         }
         BOOST_CHECK_EQUAL(count, 2);
@@ -92,7 +92,7 @@ BOOST_AUTO_TEST_CASE(removeRollback)
         for (auto&& [key, value] : RANGES::views::zip(keys, values))
         {
             BOOST_REQUIRE(value);
-            BOOST_CHECK_EQUAL(key, StateKeyView(tableID, "Key" + std::to_string(count + 1)));
+            BOOST_CHECK_EQUAL(key, StateKey(tableID, "Key" + std::to_string(count + 1)));
             ++count;
         }
         co_await rollbackableStorage.rollback(point);

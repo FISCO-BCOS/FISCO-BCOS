@@ -5,7 +5,6 @@
 #include "bcos-utilities/Overloaded.h"
 #include "bcos-utilities/Ranges.h"
 #include "bcos-utilities/ThreeWay4StringView.h"
-#include <boost/container/small_vector.hpp>
 #include <boost/throw_exception.hpp>
 #include <compare>
 #include <functional>

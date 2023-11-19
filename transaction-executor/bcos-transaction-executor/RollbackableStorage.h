@@ -4,7 +4,6 @@
 #include "bcos-table/src/StateStorage.h"
 #include "bcos-task/Trait.h"
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
-#include <boost/container/small_vector.hpp>
 #include <type_traits>
 
 namespace bcos::transaction_executor

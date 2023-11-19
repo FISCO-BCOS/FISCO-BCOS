@@ -1,6 +1,5 @@
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
-#include <boost/container/small_vector.hpp>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos::transaction_executor;
@@ -24,6 +23,16 @@ BOOST_AUTO_TEST_CASE(stateKey)
     std::stringstream ss;
     ss << view1;
     BOOST_CHECK_EQUAL(ss.str(), "table:key");
+}
+
+BOOST_AUTO_TEST_CASE(single_view)
+{
+    int i = 100;
+    auto& ref = i;
+
+    auto view = RANGES::views::single(ref);
+    auto&& j = view[0];
+    BOOST_CHECK_EQUAL(view[0], 100);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

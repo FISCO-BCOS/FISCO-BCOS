@@ -60,13 +60,10 @@ public:
                        decltype(callback) callback) -> task::Task<void> {
             try
             {
-                auto stateKeys =
-                    keys | RANGES::views::transform([&table](auto&& key) -> auto{
-                        return transaction_executor::StateKeyView{
-                            table, std::forward<decltype(key)>(key)};
-                    }) |
-                    RANGES::to<
-                        boost::container::small_vector<transaction_executor::StateKeyView, 1>>();
+                auto stateKeys = keys | RANGES::views::transform([&table](auto&& key) -> auto{
+                    return transaction_executor::StateKeyView{
+                        table, std::forward<decltype(key)>(key)};
+                }) | RANGES::to<std::vector>();
                 auto values = co_await storage2::readSome(self->m_storage, stateKeys);
 
                 std::vector<std::optional<storage::Entry>> vectorValues(
@@ -88,7 +85,7 @@ public:
             try
             {
                 co_await storage2::writeOne(
-                    self->m_storage, transaction_executor::StateKey{table, key}, std::move(entry));
+                    self->m_storage, transaction_executor::StateKey(table, key), std::move(entry));
                 callback(nullptr);
             }
             catch (std::exception& e)
