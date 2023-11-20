@@ -284,10 +284,10 @@ void BalancePrecompiled::transfer(const std::shared_ptr<executor::TransactionExe
 
     // first subAccountBalance, then addAccountBalance
 
-    auto Params = codec.encodeWithSig("subAccountBalance(uint256)", value);
+    auto params = codec.encodeWithSig("subAccountBalance(uint256)", value);
     auto formTableName = getContractTableName(executor::USER_APPS_PREFIX, fromStr);
     std::vector<std::string> fromTableNameVector = {formTableName};
-    auto inputParams = codec.encode(fromTableNameVector, Params);
+    auto inputParams = codec.encode(fromTableNameVector, params);
 
     auto subParams = codec.encode(std::string(ACCOUNT_ADDRESS), inputParams);
     auto subBalanceResult = externalRequest(_executive, ref(subParams), _callParameters->m_origin,
@@ -296,10 +296,10 @@ void BalancePrecompiled::transfer(const std::shared_ptr<executor::TransactionExe
 
     if (subBalanceResult->status == int32_t(CODE_SUCCESS))
     {
-        auto params = codec.encodeWithSig("addAccountBalance(uint256)", value);
+        auto params1 = codec.encodeWithSig("addAccountBalance(uint256)", value);
         auto toTableName = getContractTableName(executor::USER_APPS_PREFIX, toStr);
         std::vector<std::string> toTableNameVector = {toTableName};
-        auto inputParams1 = codec.encode(toTableNameVector, params);
+        auto inputParams1 = codec.encode(toTableNameVector, params1);
         auto addParams = codec.encode(std::string(ACCOUNT_ADDRESS), inputParams1);
 
         auto addBalanceResult =
@@ -313,7 +313,7 @@ void BalancePrecompiled::transfer(const std::shared_ptr<executor::TransactionExe
         // if addBalanceResult is not success, then revert the subBalance, and return the error
         else
         {
-            auto revertParams = codec.encode(fromTableNameVector, params);
+            auto revertParams = codec.encode(fromTableNameVector, params1);
             auto addParams1 = codec.encode(std::string(ACCOUNT_ADDRESS), revertParams);
             auto addBalanceResult1 =
                 externalRequest(_executive, ref(addParams1), _callParameters->m_origin,
