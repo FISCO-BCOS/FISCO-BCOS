@@ -20,7 +20,7 @@
  */
 #pragma once
 
-#include "bcos-crypto/bcos-crypto/KeyCompareTools.h"
+#include "bcos-crypto/KeyCompareTools.h"
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 
 #define TREE_LOG(LEVEL)                                                      \

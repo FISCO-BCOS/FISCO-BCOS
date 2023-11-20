@@ -23,7 +23,6 @@ add_subdirectory(bcos-protocol)
 add_library(bcos-protocol INTERFACE)
 target_include_directories(bcos-protocol INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
     $<INSTALL_INTERFACE:include/bcos-protocol>
 )
 target_link_libraries(bcos-protocol INTERFACE ${CODEC_TARGET})
