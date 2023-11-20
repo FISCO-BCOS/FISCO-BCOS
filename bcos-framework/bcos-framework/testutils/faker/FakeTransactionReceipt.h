@@ -18,13 +18,13 @@
  * @date: 2021-03-16
  */
 #pragma once
-#include "bcos-crypto/bcos-crypto/hash/Keccak256.h"
-#include "bcos-crypto/bcos-crypto/hash/SM3.h"
-#include "bcos-crypto/bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
+#include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-crypto/hash/SM3.h"
+#include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include "bcos-tars-protocol/bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
-#include "bcos-utilities/bcos-utilities/Common.h"
+#include "bcos-utilities/Common.h"
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;

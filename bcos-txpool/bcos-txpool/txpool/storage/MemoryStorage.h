@@ -23,7 +23,7 @@
 #include "bcos-task/Task.h"
 #include "bcos-txpool/TxPoolConfig.h"
 #include "bcos-txpool/txpool/utilities/Common.h"
-#include <bcos-txpool/bcos-txpool/txpool/utilities/TransactionBucket.h>
+#include <bcos-txpool/txpool/utilities/TransactionBucket.h>
 #include <bcos-utilities/BucketMap.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <bcos-utilities/RateCollector.h>

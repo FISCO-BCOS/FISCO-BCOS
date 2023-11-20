@@ -21,13 +21,13 @@
 #include "bcos-tars-protocol/bcos-tars-protocol/impl/TarsHashable.h"
 
 #include "bcos-concepts/Hash.h"
-#include "bcos-crypto/bcos-crypto/hash/Keccak256.h"
-#include "bcos-crypto/bcos-crypto/hash/SM3.h"
-#include "bcos-crypto/bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
+#include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-crypto/hash/SM3.h"
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
+#include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
 #include "bcos-tars-protocol/bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
-#include "bcos-utilities/bcos-utilities/Common.h"
+#include "bcos-utilities/Common.h"
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
