@@ -307,9 +307,12 @@ void TransactionExecutor::initEvmEnvironment()
         CpuHeavyPrecompiled::registerPrecompiled(m_precompiled, m_hashImpl);
         SmallBankPrecompiled::registerPrecompiled(m_precompiled, m_hashImpl);
     }
-    // TODO:according to feature flag to register precompiled
+
     m_precompiled->insert(BALANCE_PRECOMPILED_ADDRESS,
-        std::make_shared<BalancePrecompiled>(m_hashImpl), BlockVersion::V3_6_VERSION);
+        std::make_shared<BalancePrecompiled>(m_hashImpl),
+        [](uint32_t version, bool isAuthCheck, ledger::Features const& features) {
+            return features.get(ledger::Features::Flag::feature_balance_precompiled);
+        });
 }
 
 void TransactionExecutor::initWasmEnvironment()
@@ -367,6 +370,12 @@ void TransactionExecutor::initWasmEnvironment()
         CpuHeavyPrecompiled::registerPrecompiled(m_precompiled, m_hashImpl);
         SmallBankPrecompiled::registerPrecompiled(m_precompiled, m_hashImpl);
     }
+    // according to feature flag to register precompiled
+    m_precompiled->insert(BALANCE_PRECOMPILED_NAME,
+        std::make_shared<BalancePrecompiled>(m_hashImpl),
+        [](uint32_t, bool, ledger::Features const& features) {
+            return features.get(ledger::Features::Flag::feature_balance_precompiled);
+        });
 }
 
 void TransactionExecutor::initTestPrecompiledTable(storage::StorageInterface::Ptr storage)
@@ -2628,11 +2637,11 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
                 0, addressSize - callParameters->receiveAddress.size(), '0');
         }
     }
-    callParameters->value = s256(input.value());
-    callParameters->gasPrice = s256(input.gasPrice());
+    callParameters->value = u256(input.value());
+    callParameters->gasPrice = u256(input.gasPrice());
     callParameters->gasLimit = input.gasLimit();
-    callParameters->maxFeePerGas = s256(input.maxFeePerGas());
-    callParameters->maxPriorityFeePerGas = s256(input.maxPriorityFeePerGas());
+    callParameters->maxFeePerGas = u256(input.maxFeePerGas());
+    callParameters->maxPriorityFeePerGas = u256(input.maxPriorityFeePerGas());
 
 
     return callParameters;
@@ -2663,11 +2672,11 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->delegateCall = false;
     callParameters->delegateCallCode = bytes();
     callParameters->delegateCallSender = "";
-    callParameters->value = s256(input.value());
-    callParameters->gasPrice = s256(input.gasPrice());
+    callParameters->value = u256(input.value());
+    callParameters->gasPrice = u256(input.gasPrice());
     callParameters->gasLimit = input.gasLimit();
-    callParameters->maxFeePerGas = s256(input.maxFeePerGas());
-    callParameters->maxPriorityFeePerGas = s256(input.maxPriorityFeePerGas());
+    callParameters->maxFeePerGas = u256(input.maxFeePerGas());
+    callParameters->maxPriorityFeePerGas = u256(input.maxPriorityFeePerGas());
 
     if (!m_isWasm && !callParameters->create)
     {
