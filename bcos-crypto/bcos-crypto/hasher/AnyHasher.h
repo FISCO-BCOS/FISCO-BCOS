@@ -12,10 +12,10 @@ class AnyHasherInterface
 public:
     AnyHasherInterface() = default;
     AnyHasherInterface(const AnyHasherInterface&) = default;
-    AnyHasherInterface(AnyHasherInterface&&) = default;
+    AnyHasherInterface(AnyHasherInterface&&) noexcept = default;
     AnyHasherInterface& operator=(const AnyHasherInterface&) = default;
-    AnyHasherInterface& operator=(AnyHasherInterface&&) = default;
-    virtual ~AnyHasherInterface() = default;
+    AnyHasherInterface& operator=(AnyHasherInterface&&) noexcept = default;
+    virtual ~AnyHasherInterface() noexcept = default;
 
     virtual void update(std::span<std::byte const> input) = 0;
     virtual void final(std::span<std::byte> output) = 0;
@@ -31,10 +31,11 @@ private:
 
 public:
     AnyHasherImpl(Hasher hasher) : m_hasher(std::move(hasher)) {}
-    AnyHasherImpl(AnyHasherImpl&&) = default;
+    AnyHasherImpl(AnyHasherImpl&&) noexcept = default;
     AnyHasherImpl(const AnyHasherImpl&) = default;
-    AnyHasherImpl& operator=(AnyHasherImpl&&) = default;
+    AnyHasherImpl& operator=(AnyHasherImpl&&) noexcept = default;
     AnyHasherImpl& operator=(const AnyHasherImpl&) = default;
+    ~AnyHasherImpl() noexcept override = default;
     void update(std::span<std::byte const> input) override { m_hasher.update(input); }
     void final(std::span<std::byte> output) override { m_hasher.final(output); }
     std::unique_ptr<AnyHasherInterface> clone() const override
