@@ -30,7 +30,6 @@ find_package(Microsoft.GSL CONFIG REQUIRED)
 add_library(${CODEC_TARGET} ${SRC_LIST} ${HEADERS})
 target_include_directories(${CODEC_TARGET} PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
     $<INSTALL_INTERFACE:include/bcos-codec>
 )
 target_link_libraries(${CODEC_TARGET} PUBLIC bcos-crypto Microsoft.GSL::GSL)
