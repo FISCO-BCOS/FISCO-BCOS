@@ -42,11 +42,11 @@ struct CallParameters
     std::string abi;   // common field, contract abi, json format
 
     // balance
-    s256 value = 0;
-    s256 gasPrice = 0;
+    u256 value = 0;
+    u256 gasPrice = 0;
     int64_t gasLimit = 0;
-    s256 maxFeePerGas = 0;
-    s256 maxPriorityFeePerGas = 0;
+    u256 maxFeePerGas = 0;
+    u256 maxPriorityFeePerGas = 0;
 
     std::vector<std::string> keyLocks;                 // common field
     std::string acquireKeyLock;                        // by response
