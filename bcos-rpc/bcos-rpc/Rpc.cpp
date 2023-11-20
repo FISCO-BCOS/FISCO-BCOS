@@ -156,7 +156,7 @@ void Rpc::notifyGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo)
             continue;
         }
         Json::Value groupInfoJson;
-        groupInfoToJson(groupInfoJson, _groupInfo);
+        groupInfoToJson(groupInfoJson, *_groupInfo);
         auto response = groupInfoJson.toStyledString();
         auto message = m_wsService->messageFactory()->buildMessage();
         message->setPacketType(bcos::protocol::MessageType::GROUP_NOTIFY);
