@@ -198,6 +198,8 @@ void BlockExecutive::buildExecutivesFromMetaData()
 
                     auto& [toAddress, message, enableDAG] = results[i];
                     message = buildMessage(contextID, (*m_blockTxs)[i]);
+                    // recoder tx version
+                    m_executiveResults[i].version = (*m_blockTxs)[i]->version();
                     toAddress = {message->to().data(), message->to().size()};
                     enableDAG = metaData.attribute() & bcos::protocol::Transaction::Attribute::DAG;
                 }
@@ -205,62 +207,8 @@ void BlockExecutive::buildExecutivesFromMetaData()
     }
     else
     {
-        tbb::parallel_for(tbb::blocked_range<size_t>(0U, m_block->transactionsMetaDataSize()),
-            [&](auto const& range) {
-                for (auto i = range.begin(); i < range.end(); ++i)
-                {
-                    auto metaData = blockImpl->transactionMetaDataImpl(i);
-                    // if (metaData)
-                    {
-                        m_executiveResults[i].transactionHash = metaData.hash();
-                        m_executiveResults[i].source = metaData.source();
-                    }
-
-                    auto contextID = i + m_startContextID;
-
-                    auto& [to, message, enableDAG] = results[i];
-                    message = m_scheduler->m_executionMessageFactory->createExecutionMessage();
-                    message->setContextID(contextID);
-                    message->setType(protocol::ExecutionMessage::TXHASH);
-                    // Note: set here for fetching txs when send_back
-                    message->setTransactionHash(metaData.hash());
-
-                    if (metaData.attribute() &
-                        bcos::protocol::Transaction::Attribute::LIQUID_SCALE_CODEC)
-                    {
-                        // LIQUID
-                        if (metaData.attribute() &
-                            bcos::protocol::Transaction::Attribute::LIQUID_CREATE)
-                        {
-                            message->setCreate(true);
-                        }
-                        message->setTo(std::string(metaData.to()));
-                    }
-                    else
-                    {
-                        // SOLIDITY
-                        if (metaData.to().empty())
-                        {
-                            message->setCreate(true);
-                        }
-                        else
-                        {
-                            message->setTo(preprocessAddress(metaData.to()));
-                        }
-                    }
-
-                    message->setDepth(0);
-                    message->setGasAvailable(m_gasLimit);
-                    auto toAddress = metaData.to();
-                    if (precompiled::c_systemTxsAddress.contains(toAddress))
-                    {
-                        message->setGasAvailable(TRANSACTION_GAS);
-                    }
-                    message->setStaticCall(false);
-                    enableDAG = metaData.attribute() & bcos::protocol::Transaction::Attribute::DAG;
-                    to = {message->to().data(), message->to().size()};
-                }
-            });
+        BOOST_THROW_EXCEPTION(BCOS_ERROR(
+            SchedulerError::BuildBlockError, "buildExecutivesFromMetaData: fetchBlockTxs error"));
     }
 
     for (auto& it : results)

@@ -50,6 +50,7 @@ constexpr const char* const DISCRETE_ZKP_NAME = "/sys/discrete_zkp";
 constexpr const char* const ACCOUNT_MANAGER_NAME = "/sys/account_manager";
 constexpr const char* const CAST_NAME = "/sys/cast_tools";
 constexpr const char* const SHARDING_PRECOMPILED_NAME = "/sys/sharding";
+constexpr const char* const BALANCE_PRECOMPILED_NAME = "/sys/balance";
 constexpr static const uint8_t BFS_SYS_SUBS_COUNT = 15;
 constexpr static const std::array<std::string_view, BFS_SYS_SUBS_COUNT> BFS_SYS_SUBS = {
     SYS_CONFIG_NAME, TABLE_NAME, TABLE_MANAGER_NAME, CONSENSUS_TABLE_NAME, AUTH_MANAGER_NAME,

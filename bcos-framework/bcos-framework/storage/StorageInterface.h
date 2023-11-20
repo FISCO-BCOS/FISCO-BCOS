@@ -47,6 +47,7 @@ public:
     static TableInfo::ConstPtr getSysTableInfo(std::string_view tableName);
 
     using Ptr = std::shared_ptr<StorageInterface>;
+    using Value = storage::Entry;
 
     virtual ~StorageInterface() = default;
 
