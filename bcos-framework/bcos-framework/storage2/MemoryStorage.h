@@ -4,7 +4,6 @@
 #include "bcos-task/AwaitableValue.h"
 #include "bcos-utilities/Overloaded.h"
 #include <bcos-utilities/NullLock.h>
-#include <boost/container/small_vector.hpp>
 #include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/identity.hpp>
 #include <boost/multi_index/key.hpp>
@@ -194,10 +193,9 @@ public:
 
     friend auto tag_invoke(bcos::storage2::tag_t<readSome> /*unused*/, MemoryStorage& storage,
         RANGES::input_range auto&& keys)
-        -> task::AwaitableValue<boost::container::small_vector<std::optional<ValueType>, 1>>
+        -> task::AwaitableValue<std::vector<std::optional<ValueType>>>
     {
-        task::AwaitableValue<boost::container::small_vector<std::optional<ValueType>, 1>> result(
-            {});
+        task::AwaitableValue<std::vector<std::optional<ValueType>>> result({});
         if (RANGES::sized_range<decltype(keys)>)
         {
             result.value().reserve(RANGES::size(keys));
@@ -235,6 +233,36 @@ public:
             else
             {
                 result.value().emplace_back(std::optional<ValueType>{});
+            }
+        }
+        return result;
+    }
+
+    friend task::AwaitableValue<std::optional<ValueType>> tag_invoke(
+        storage2::tag_t<storage2::readOne> /*unused*/, MemoryStorage& storage, auto&& key)
+    {
+        task::AwaitableValue<std::optional<ValueType>> result({});
+        auto [bucket, lock] = storage.getBucket(key);
+
+        auto const& index = bucket.get().container.template get<0>();
+        auto it = index.find(key);
+        if (it != index.end())
+        {
+            if constexpr (std::decay_t<decltype(storage)>::withMRU)
+            {
+                storage.updateMRUAndCheck(bucket, it);
+            }
+
+            if constexpr (std::decay_t<decltype(storage)>::withLogicalDeletion)
+            {
+                std::visit(
+                    bcos::overloaded{[&](ValueType const& value) { result.value().emplace(value); },
+                        [&](Deleted const&) {}},
+                    it->value);
+            }
+            else
+            {
+                result.value().emplace(it->value);
             }
         }
         return result;
@@ -345,7 +373,8 @@ public:
     }
 
     friend task::AwaitableValue<void> tag_invoke(
-        storage2::tag_t<merge> /*unused*/, MemoryStorage& fromStorage, MemoryStorage& toStorage)
+        storage2::tag_t<merge> /*unused*/, MemoryStorage& toStorage, MemoryStorage&& fromStorage)
+        requires(!std::is_const_v<decltype(fromStorage)>)
     {
         for (auto&& [bucket, fromBucket] :
             RANGES::views::zip(toStorage.m_buckets, fromStorage.m_buckets))

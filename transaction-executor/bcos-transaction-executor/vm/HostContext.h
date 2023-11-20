@@ -81,7 +81,7 @@ private:
     PrecompiledManager const& m_precompiledManager;
     ledger::LedgerConfig const& m_ledgerConfig;
 
-    ContractTable m_myContractTable;
+    std::string m_myContractTable;
     evmc_address m_newContractAddress;  // Set by getMyContractTable, not need initialize value!
     std::vector<protocol::LogEntry> m_logs;
 
@@ -91,9 +91,9 @@ private:
             [this](const evmc_message& message) { return task::syncWait(externalCall(message)); };
     }
 
-    ContractTable getTableName(const evmc_address& address)
+    std::string getTableName(const evmc_address& address)
     {
-        ContractTable tableName;
+        std::string tableName;
         tableName.insert(
             tableName.end(), executor::USER_APPS_PREFIX.begin(), executor::USER_APPS_PREFIX.end());
         boost::algorithm::hex_lower((const char*)address.bytes,
@@ -102,7 +102,7 @@ private:
         return tableName;
     }
 
-    ContractTable getMyContractTable(
+    std::string getMyContractTable(
         const protocol::BlockHeader& blockHeader, const evmc_message& message)
     {
         switch (message.kind)
@@ -149,12 +149,17 @@ private:
         }
     }
 
-public:
-    HostContext(VMFactory& vmFactory, Storage& storage, protocol::BlockHeader const& blockHeader,
-        const evmc_message& message, const evmc_address& origin, std::string_view abi,
-        int contextID, int64_t& seq, PrecompiledManager const& precompiledManager,
-        ledger::LedgerConfig const& ledgerConfig)
-      : evmc_host_context{.interface = getHostInterface<HostContext, task::syncWait>(),
+    struct InnerConstructor
+    {
+    };
+    constexpr static InnerConstructor innerConstructor{};
+
+    HostContext(InnerConstructor /*unused*/, VMFactory& vmFactory, Storage& storage,
+        protocol::BlockHeader const& blockHeader, const evmc_message& message,
+        const evmc_address& origin, std::string_view abi, int contextID, int64_t& seq,
+        PrecompiledManager const& precompiledManager, ledger::LedgerConfig const& ledgerConfig,
+        const evmc_host_interface* hostInterface)
+      : evmc_host_context{.interface = hostInterface,
             .wasm_interface = nullptr,
             .hash_fn = evm_hash_fn,
             .isSMCrypto = (executor::GlobalHashImpl::g_hashImpl->getHashImplType() ==
@@ -173,6 +178,17 @@ public:
         m_ledgerConfig(ledgerConfig),
         m_myContractTable(getMyContractTable(blockHeader, message))
     {}
+
+public:
+    HostContext(VMFactory& vmFactory, Storage& storage, protocol::BlockHeader const& blockHeader,
+        const evmc_message& message, const evmc_address& origin, std::string_view abi,
+        int contextID, int64_t& seq, PrecompiledManager const& precompiledManager,
+        ledger::LedgerConfig const& ledgerConfig, auto&& waitOperator)
+      : HostContext(innerConstructor, vmFactory, storage, blockHeader, message, origin, abi,
+            contextID, seq, precompiledManager, ledgerConfig,
+            getHostInterface<HostContext>(std::forward<decltype(waitOperator)>(waitOperator)))
+    {}
+
     ~HostContext() noexcept = default;
 
     HostContext(HostContext const&) = delete;
@@ -204,9 +220,9 @@ public:
         storage::Entry entry;
         entry.set(valueView);
 
-        auto keyView = bytesConstRef(key->bytes, sizeof(key->bytes));
+        auto keyView = std::string_view((const char*)key->bytes, sizeof(key->bytes));
         co_await storage2::writeOne(m_rollbackableStorage,
-            StateKey{m_myContractTable, ContractKey{keyView}}, std::move(entry));
+            StateKey{std::string_view(m_myContractTable), keyView}, std::move(entry));
     }
 
     task::Task<std::optional<storage::Entry>> code(const evmc_address& address)
@@ -234,8 +250,9 @@ public:
 
         // Need block version >= 3.1
         // Query the code table first
-        if (!co_await storage2::existsOne(
-                m_rollbackableStorage, StateKeyView{ledger::SYS_CODE_BINARY, codeHashEntry.get()}))
+        auto existsCode = co_await storage2::readOne(
+            m_rollbackableStorage, StateKeyView{ledger::SYS_CODE_BINARY, codeHashEntry.get()});
+        if (!existsCode)
         {
             storage::Entry codeEntry;
             codeEntry.set(code.toBytes());
@@ -423,10 +440,9 @@ public:
         auto codeEntry = co_await code(m_message.code_address);
         if (!codeEntry || codeEntry->size() == 0)
         {
-            BOOST_THROW_EXCEPTION(NotFoundCodeError{} << bcos::Error::ErrorMessage(
-                                      std::string("Not found contract code: ")
-                                          .append(toHexStringWithPrefix(
-                                              static_cast<std::string_view>(m_myContractTable)))));
+            BOOST_THROW_EXCEPTION(
+                NotFoundCodeError{} << bcos::Error::ErrorMessage(
+                    std::string("Not found contract code: ").append(m_myContractTable)));
         }
         auto code = codeEntry->get();
         auto mode = toRevision(vmSchedule());
@@ -465,8 +481,9 @@ public:
             messagePtr = std::addressof(*messageWithSender);
         }
 
-        HostContext hostcontext(m_vmFactory, m_rollbackableStorage, m_blockHeader, *messagePtr,
-            m_origin, {}, m_contextID, m_seq, m_precompiledManager, m_ledgerConfig);
+        HostContext hostcontext(innerConstructor, m_vmFactory, m_rollbackableStorage, m_blockHeader,
+            *messagePtr, m_origin, {}, m_contextID, m_seq, m_precompiledManager, m_ledgerConfig,
+            interface);
 
         auto result = co_await hostcontext.execute();
         auto& logs = hostcontext.logs();

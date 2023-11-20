@@ -47,14 +47,10 @@ BOOST_AUTO_TEST_CASE(addRollback)
         std::vector<StateKey> keys{StateKey{tableID, "Key1"sv}, StateKey{"table1"sv, "Key2"sv}};
         auto values = co_await storage2::readSome(rollbackableStorage, keys);
         auto count = 0;
-        // while (co_await it.next())
         for (auto&& [key, value] : RANGES::views::zip(keys, values))
         {
             BOOST_REQUIRE(value);
-            BOOST_CHECK_EQUAL(
-                static_cast<std::string>(static_cast<std::string>(std::get<0>(key))), tableID);
-            BOOST_CHECK_EQUAL(
-                static_cast<std::string>(static_cast<std::string>(std::get<0>(key))), "table1"sv);
+            BOOST_CHECK_EQUAL(key, StateKey(tableID, "Key" + std::to_string(count + 1)));
             ++count;
         }
         BOOST_CHECK_EQUAL(count, 2);
@@ -92,11 +88,12 @@ BOOST_AUTO_TEST_CASE(removeRollback)
         std::vector<StateKey> keys{StateKey{tableID, "Key1"sv}, StateKey{"table1"sv, "Key2"sv}};
         auto values = co_await storage2::readSome(rollbackableStorage, keys);
 
+        int count = 0;
         for (auto&& [key, value] : RANGES::views::zip(keys, values))
         {
             BOOST_REQUIRE(value);
-            BOOST_CHECK_EQUAL(static_cast<std::string>(std::get<0>(key)), tableID);
-            BOOST_CHECK_EQUAL(static_cast<std::string>(std::get<0>(key)), "table1"sv);
+            BOOST_CHECK_EQUAL(key, StateKey(tableID, "Key" + std::to_string(count + 1)));
+            ++count;
         }
         co_await rollbackableStorage.rollback(point);
 
@@ -128,9 +125,9 @@ BOOST_AUTO_TEST_CASE(equal)
         int i = 0;
         for (auto&& [key, value] : RANGES::views::zip(keys, values))
         {
-            auto view = std::get<1>(key);
+            auto view = StateKeyView(key);
             auto str = boost::lexical_cast<std::string>(i);
-            BOOST_CHECK_EQUAL(static_cast<std::string>(view), std::string_view(str));
+            BOOST_CHECK_EQUAL(view, StateKeyView("table"sv, std::string_view(str)));
             BOOST_CHECK_EQUAL(*value, i);
             ++i;
         }

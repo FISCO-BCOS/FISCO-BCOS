@@ -93,6 +93,6 @@ struct SyncWait
         }
     }
 };
-constexpr inline static SyncWait syncWait{};
+constexpr inline SyncWait syncWait{};
 
 }  // namespace bcos::task::tbb
