@@ -1687,9 +1687,6 @@ bool Ledger::buildGenesisBlock(
                         ", No support this version"));
             }
 
-            static_assert(storage2::HasTag<storage2::ReadOne, decltype(*m_storage),
-                std::tuple<std::string_view, std::string_view>>);
-
             // Before return, make sure sharding flag is placed
             task::syncWait([&]() -> task::Task<void> {
                 auto versionEntry = co_await storage2::readOne(
