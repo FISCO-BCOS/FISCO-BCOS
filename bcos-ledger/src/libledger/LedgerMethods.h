@@ -25,10 +25,10 @@
 namespace bcos::ledger
 {
 
-inline task::AwaitableValue<void> tag_invoke(ledger::tag_t<buildGenesisBlock> /*unused*/,
+inline task::AwaitableValue<bool> tag_invoke(ledger::tag_t<buildGenesisBlock> /*unused*/,
     auto& ledger, GenesisConfig const& genesis, ledger::LedgerConfig const& ledgerConfig)
 {
-    co_return ledger.buildGenesisBlock(genesis, ledgerConfig);
+    return {ledger.buildGenesisBlock(genesis, ledgerConfig)};
 }
 
 task::Task<void> prewriteBlockToStorage(LedgerInterface& ledger,

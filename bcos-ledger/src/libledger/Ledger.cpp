@@ -26,6 +26,7 @@
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/storage/LegacyStorageMethods.h"
+#include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-tool/NodeConfig.h"
 #include "bcos-tool/VersionConverter.h"
 #include "bcos-utilities/Common.h"
@@ -50,6 +51,7 @@
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <tbb/parallel_for.h>
+#include <boost/algorithm/hex.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/lexical_cast/bad_lexical_cast.hpp>
@@ -57,6 +59,7 @@
 #include <array>
 #include <cstddef>
 #include <future>
+#include <iterator>
 #include <memory>
 #include <utility>
 
@@ -1609,17 +1612,76 @@ static task::Task<void> setGenesisFeatures(RANGES::input_range auto const& featu
     co_await features.writeToStorage(storage, 0);
 }
 
-#if 0
-static task::Task<void> setAlloc(RANGES::input_range auto const& allocs, auto& storage)
+static std::string getTableName(std::string_view hexAddress)
+{
+    std::string tableName;
+    tableName.reserve(SYS_DIRECTORY::USER_APPS.size() + hexAddress.size());
+    tableName.append(SYS_DIRECTORY::USER_APPS);
+    tableName.append(hexAddress);
+    return tableName;
+}
+
+static task::Task<void> setAllocs(
+    RANGES::input_range auto const& allocs, auto& storage, const crypto::Hash& hashImpl)
 {
     for (auto&& alloc : allocs)
     {
-        co_await storage2::writeOne(
-            storage, std::make_tuple(SYS_TABLES, alloc.address), storage::Entry("value"sv));
+        auto tableName = getTableName(alloc.address);
+        co_await storage2::writeOne(storage, transaction_executor::StateKey(SYS_TABLES, tableName),
+            storage::Entry{"value"sv});
+
+        if (!alloc.code.empty())
+        {
+            bcos::bytes binaryCode;
+            binaryCode.reserve(alloc.code.size() / 2);
+            boost::algorithm::unhex(alloc.code, std::back_inserter(binaryCode));
+            co_await storage2::writeOne(storage,
+                transaction_executor::StateKey(tableName, ACCOUNT_TABLE_FIELDS::ACCOUNT_CODE),
+                storage::Entry{std::move(binaryCode)});
+
+            auto codeHash = hashImpl.hash(binaryCode);
+            co_await storage2::writeOne(storage,
+                transaction_executor::StateKey(tableName, ACCOUNT_TABLE_FIELDS::ACCOUNT_CODE_HASH),
+                storage::Entry{codeHash.asBytes()});
+        }
+
+        if (alloc.balance > 0)
+        {
+            co_await storage2::writeOne(storage,
+                transaction_executor::StateKey(tableName, ACCOUNT_TABLE_FIELDS::ACCOUNT_BALANCE),
+                storage::Entry{boost::lexical_cast<std::string>(alloc.balance)});
+        }
+
+        if (alloc.nonce > 0)
+        {
+            co_await storage2::writeOne(storage,
+                transaction_executor::StateKey(tableName, ACCOUNT_TABLE_FIELDS::ACCOUNT_NONCE),
+                storage::Entry{boost::lexical_cast<std::string>(alloc.nonce)});
+        }
+
+        if (!alloc.storage.empty())
+        {
+            co_await storage2::writeSome(storage,
+                alloc.storage | RANGES::views::keys |
+                    RANGES::views::transform([&](std::string const& key) {
+                        bcos::bytes binaryKey;
+                        binaryKey.reserve(key.size() / 2);
+                        boost::algorithm::unhex(key, std::back_inserter(binaryKey));
+
+                        return transaction_executor::StateKey(tableName,
+                            std::string_view((const char*)binaryKey.data(), binaryKey.size()));
+                    }),
+                alloc.storage | RANGES::views::values |
+                    RANGES::views::transform([](std::string const& value) {
+                        bcos::bytes binaryValue;
+                        binaryValue.reserve(value.size() / 2);
+                        boost::algorithm::unhex(value, std::back_inserter(binaryValue));
+                        return storage::Entry(std::move(binaryValue));
+                    }));
+        }
     }
     co_return;
 }
-#endif
 
 // sync method, to be split
 // FIXME: too long
@@ -1864,7 +1926,12 @@ bool Ledger::buildGenesisBlock(
         notifyRotateEntry.setObject(SystemConfigEntry("0", 0));
         sysTable->setRow(INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE, std::move(notifyRotateEntry));
     }
-    task::syncWait(setGenesisFeatures(genesis.m_features, features, *m_storage));
+
+    task::syncWait([&]() -> task::Task<void> {
+        co_await setGenesisFeatures(genesis.m_features, features, *m_storage);
+        co_await setAllocs(
+            genesis.m_allocs, *m_storage, *m_blockFactory->cryptoSuite()->hashImpl());
+    }());
 
     // consensus leader period
     Entry leaderPeriodEntry;
