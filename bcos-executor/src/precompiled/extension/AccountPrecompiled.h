@@ -49,10 +49,6 @@ private:
         const std::shared_ptr<executor::TransactionExecutive>& _executive,
         PrecompiledExecResult::Ptr const& _callParameters) const;
 
-    void setAccountBalance(const std::string& tableName,
-        const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
-        PrecompiledExecResult::Ptr const& _callParameters) const;
-
     void getAccountBalance(const std::string& tableName,
         const std::shared_ptr<executor::TransactionExecutive>& _executive,
         PrecompiledExecResult::Ptr const& _callParameters) const;
