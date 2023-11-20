@@ -1383,7 +1383,15 @@ BOOST_AUTO_TEST_CASE(genesisBlockWithAllocs)
         auto storage = std::make_shared<MockStorage>(memoryStorage);
         auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
 
+        LedgerConfig param;
+        param.setBlockNumber(0);
+        param.setHash(HashType(""));
+        param.setBlockTxCountLimit(0);
+
         GenesisConfig genesisConfig;
+        genesisConfig.m_txGasLimit = 3000000000;
+        genesisConfig.m_compatibilityVersion =
+            tool::toVersionNumber(bcos::protocol::V3_6_VERSION_STR);
         static auto code = "I am a solidity code!"s;
 
         genesisConfig.m_allocs = RANGES::views::iota(0, 10) |
@@ -1403,7 +1411,7 @@ BOOST_AUTO_TEST_CASE(genesisBlockWithAllocs)
                                  }) |
                                  RANGES::to<std::vector>();
 
-        co_await ledger::buildGenesisBlock(*ledger, genesisConfig, *m_param);
+        co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param);
 
         for (auto i : RANGES::views::iota(0, 10))
         {
@@ -1411,11 +1419,39 @@ BOOST_AUTO_TEST_CASE(genesisBlockWithAllocs)
             auto balanceEntry =
                 co_await storage2::readOne(*storage, transaction_executor::StateKeyView(tableName,
                                                          ACCOUNT_TABLE_FIELDS::ACCOUNT_BALANCE));
-            BOOST_CHECK_EQUAL(balanceEntry->get(), boost::lexical_cast<std::string>(i * 10));
+            if (i == 0)
+            {
+                BOOST_CHECK(!balanceEntry);
+            }
+            else
+            {
+                BOOST_CHECK_EQUAL(balanceEntry->get(), boost::lexical_cast<std::string>(i * 10));
+            }
 
             auto codeEntry = co_await storage2::readOne(*storage,
                 transaction_executor::StateKeyView(tableName, ACCOUNT_TABLE_FIELDS::ACCOUNT_CODE));
             BOOST_CHECK_EQUAL(codeEntry->get(), code);
+
+            auto codeHashEntry =
+                co_await storage2::readOne(*storage, transaction_executor::StateKeyView(tableName,
+                                                         ACCOUNT_TABLE_FIELDS::ACCOUNT_CODE_HASH));
+            auto codeView = codeEntry->get();
+            auto codeHash = hashImpl->hash(
+                bcos::bytesConstRef((const uint8_t*)codeView.data(), codeView.size()));
+            auto codeHashBytes = codeHash.asBytes();
+            BOOST_CHECK_EQUAL(codeHashEntry->get(),
+                std::string_view((const char*)codeHashBytes.data(), codeHashBytes.size()));
+
+            auto nonceEntry = co_await storage2::readOne(*storage,
+                transaction_executor::StateKeyView(tableName, ACCOUNT_TABLE_FIELDS::ACCOUNT_NONCE));
+            if (i == 0)
+            {
+                BOOST_CHECK(!nonceEntry);
+            }
+            else
+            {
+                BOOST_CHECK_EQUAL(nonceEntry->get(), boost::lexical_cast<std::string>(i));
+            }
         }
     }());
 }
