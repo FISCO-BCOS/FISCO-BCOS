@@ -46,6 +46,7 @@ enum SchedulerError
     InvalidBlockVersion,
     BlockIsCommitting,
     InvalidTransactionVersion,
+    BuildBlockError,
 };
 }  // namespace scheduler
 }  // namespace bcos
