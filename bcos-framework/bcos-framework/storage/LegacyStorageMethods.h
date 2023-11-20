@@ -52,7 +52,8 @@ inline task::Task<std::optional<Entry>> tag_invoke(storage2::tag_t<storage2::rea
 inline task::Task<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/,
     StorageInterface& storage, RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
 {
-    for (auto&& [key, value] : RANGES::views::zip(keys, values))
+    for (auto&& [key, value] : RANGES::views::zip(
+             std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values)))
     {
         co_await storage2::writeOne(
             storage, std::forward<decltype(key)>(key), std::forward<decltype(value)>(value));
