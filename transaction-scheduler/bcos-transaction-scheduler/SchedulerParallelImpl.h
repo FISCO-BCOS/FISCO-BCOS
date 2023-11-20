@@ -53,7 +53,7 @@ class SchedulerParallelImpl
         }
 
         int64_t m_chunkIndex = 0;
-        std::atomic_int64_t* m_lastChunkIndex = nullptr;
+        std::atomic_int64_t const& m_lastChunkIndex;
         Range m_transactionAndReceiptsRange;
         Executor& m_executor;
         MultiLayerStorage<ChunkStorage, void, Storage> m_localStorage;
@@ -62,10 +62,10 @@ class SchedulerParallelImpl
             m_localReadWriteSetStorage;
 
     public:
-        ChunkStatus(int64_t chunkIndex, std::atomic_int64_t& lastChunkIndex,
+        ChunkStatus(int64_t chunkIndex, std::atomic_int64_t const& lastChunkIndex,
             Range transactionAndReceiptsRange, Executor& executor, auto& storage)
           : m_chunkIndex(chunkIndex),
-            m_lastChunkIndex(std::addressof(lastChunkIndex)),
+            m_lastChunkIndex(lastChunkIndex),
             m_transactionAndReceiptsRange(transactionAndReceiptsRange),
             m_executor(executor),
             m_localStorage(storage),
@@ -86,7 +86,7 @@ class SchedulerParallelImpl
             PARALLEL_SCHEDULER_LOG(DEBUG) << "Chunk " << m_chunkIndex << " executing...";
             for (auto&& [contextID, transaction, receipt] : m_transactionAndReceiptsRange)
             {
-                if (m_chunkIndex >= *m_lastChunkIndex)
+                if (m_chunkIndex >= m_lastChunkIndex)
                 {
                     PARALLEL_SCHEDULER_LOG(DEBUG) << "Chunk " << m_chunkIndex << " execute aborted";
                     co_return;
