@@ -14,7 +14,7 @@
 #include <bcos-executor/src/Common.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-table/src/StateStorageFactory.h>
-#include <bcos-tool/bcos-tool/VersionConverter.h>
+#include <bcos-tool/VersionConverter.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Ranges.h>
 #include <tbb/blocked_range.h>
@@ -449,10 +449,10 @@ private:
     }
 
     template <class Type>
-        requires std::same_as<Type, concepts::ledger::TRANSACTIONS> ||
-                 std::same_as<Type, concepts::ledger::RECEIPTS>
-    task::Task<void> getBlockData(
-        std::string_view blockNumberKey, bcos::concepts::block::Block auto& block)
+    requires std::same_as<Type, concepts::ledger::TRANSACTIONS> ||
+        std::same_as<Type, concepts::ledger::RECEIPTS>
+            task::Task<void> getBlockData(
+                std::string_view blockNumberKey, bcos::concepts::block::Block auto& block)
     {
         LEDGER_LOG(DEBUG) << "getBlockData transactions or receipts: " << blockNumberKey;
 

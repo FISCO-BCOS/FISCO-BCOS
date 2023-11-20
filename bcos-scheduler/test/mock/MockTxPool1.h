@@ -1,7 +1,7 @@
 #pragma once
 
-#include "bcos-framework/bcos-framework/testutils/faker/FakeBlockHeader.h"
-#include "bcos-framework/bcos-framework/testutils/faker/FakeTransaction.h"
+#include "bcos-framework/testutils/faker/FakeBlockHeader.h"
+#include "bcos-framework/testutils/faker/FakeTransaction.h"
 #include "bcos-scheduler/src/Common.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>

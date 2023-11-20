@@ -23,8 +23,8 @@
  * @date 2021-10-14
  */
 #pragma once
-#include "bcos-storage/bcos-storage/RocksDBStorage.h"
-#include "bcos-storage/bcos-storage/TiKVStorage.h"
+#include "bcos-storage/RocksDBStorage.h"
+#include "bcos-storage/TiKVStorage.h"
 #include "boost/filesystem.hpp"
 #include "rocksdb/convenience.h"
 #include "rocksdb/filter_policy.h"
@@ -79,14 +79,14 @@ public:
             options.statistics = rocksdb::CreateDBStatistics();
         }
         // block cache 128MB
-        std::shared_ptr<rocksdb::Cache> cache =
-            rocksdb::NewLRUCache(rocksDBOption.blockCacheSize);
+        std::shared_ptr<rocksdb::Cache> cache = rocksdb::NewLRUCache(rocksDBOption.blockCacheSize);
         rocksdb::BlockBasedTableOptions table_options;
         table_options.block_cache = cache;
         // use bloom filter to optimize point lookup, i.e. get
         table_options.filter_policy.reset(rocksdb::NewBloomFilterPolicy(10, false));
         table_options.optimize_filters_for_memory = true;
-        // table_options.cache_index_and_filter_blocks = true; // this will increase memory and lower performance
+        // table_options.cache_index_and_filter_blocks = true; // this will increase memory and
+        // lower performance
         options.table_factory.reset(rocksdb::NewBlockBasedTableFactory(table_options));
 
         if (boost::filesystem::space(_path).available < 1 << 30)
