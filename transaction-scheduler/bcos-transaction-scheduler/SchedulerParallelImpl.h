@@ -92,7 +92,8 @@ class SchedulerParallelImpl
                     co_return;
                 }
                 *receipt = co_await transaction_executor::executeTransaction(m_executor,
-                    m_localReadWriteSetStorage, blockHeader, *transaction, contextID, ledgerConfig);
+                    m_localReadWriteSetStorage, blockHeader, *transaction, contextID, ledgerConfig,
+                    task::tbb::syncWait);
             }
 
             PARALLEL_SCHEDULER_LOG(DEBUG) << "Chunk " << m_chunkIndex << " execute finished";
@@ -211,8 +212,8 @@ private:
                                     ittapi::Report report(
                                         ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
                                         ittapi::ITT_DOMAINS::instance().MERGE_CHUNK);
-                                    task::tbb::syncWait(storage2::merge(
-                                        chunk->localStorage().mutableStorage(), lastStorage));
+                                    task::tbb::syncWait(storage2::merge(lastStorage,
+                                        std::move(chunk->localStorage().mutableStorage())));
                                 });
                             scheduler.m_asyncTaskGroup->run([chunk = std::move(chunk)]() {});
                         }));
@@ -220,7 +221,7 @@ private:
             ittapi::Report mergeReport(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
                 ittapi::ITT_DOMAINS::instance().MERGE_LAST_CHUNK);
             PARALLEL_SCHEDULER_LOG(DEBUG) << "Final merge lastStorage";
-            co_await storage2::merge(lastStorage, storage);
+            co_await storage2::merge(storage, lastStorage);
 
             scheduler.m_asyncTaskGroup->run(
                 [lastStorage = std::move(lastStorage), readWriteSet = std::move(writeSet)]() {});
