@@ -25,7 +25,7 @@
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-ledger/src/libledger/LedgerImpl.h>
-#include <bcos-storage/bcos-storage/StorageWrapperImpl.h>
+#include <bcos-storage/StorageWrapperImpl.h>
 #include <bcos-tool/NodeConfig.h>
 
 namespace bcos::initializer

@@ -21,9 +21,9 @@
 
 #pragma once
 
-#include "bcos-crypto/bcos-crypto/interfaces/crypto/CommonType.h"
-#include "bcos-utilities/bcos-utilities/FixedBytes.h"
-#include "bcos-utilities/bcos-utilities/Ranges.h"
+#include "bcos-crypto/interfaces/crypto/CommonType.h"
+#include "bcos-utilities/FixedBytes.h"
+#include "bcos-utilities/Ranges.h"
 
 namespace bcos::crypto
 {

@@ -18,12 +18,12 @@
  * @date: 2021-03-16
  */
 #pragma once
-#include "bcos-crypto/bcos-crypto/hash/Keccak256.h"
-#include "bcos-crypto/bcos-crypto/hash/SM3.h"
-#include "bcos-crypto/bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
+#include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-crypto/hash/SM3.h"
+#include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
 #include "bcos-protocol/Common.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
-#include "bcos-utilities/bcos-utilities/Common.h"
+#include "bcos-utilities/Common.h"
 #include <tbb/parallel_invoke.h>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>

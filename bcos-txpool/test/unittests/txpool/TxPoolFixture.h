@@ -19,17 +19,10 @@
  * @date 2021-05-25
  */
 #pragma once
-#include "bcos-framework/bcos-framework/testutils/faker/FakeBlock.h"
-#include "bcos-framework/bcos-framework/testutils/faker/FakeBlockHeader.h"
-#include "bcos-framework/protocol/GlobalConfig.h"
-
-#include "bcos-tool/TreeTopology.h"
-#include "bcos-txpool/TxPoolConfig.h"
-#include "bcos-txpool/TxPoolFactory.h"
-#include "bcos-txpool/sync/TransactionSync.h"
-#include "bcos-txpool/txpool/storage/MemoryStorage.h"
-#include "bcos-txpool/txpool/validator/TxValidator.h"
 #include <bcos-framework/consensus/ConsensusNode.h>
+#include <bcos-framework/protocol/GlobalConfig.h>
+#include <bcos-framework/testutils/faker/FakeBlock.h>
+#include <bcos-framework/testutils/faker/FakeBlockHeader.h>
 #include <bcos-framework/testutils/faker/FakeFrontService.h>
 #include <bcos-framework/testutils/faker/FakeLedger.h>
 #include <bcos-framework/testutils/faker/FakeSealer.h>
@@ -39,6 +32,12 @@
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <bcos-task/Wait.h>
+#include <bcos-tool/TreeTopology.h>
+#include <bcos-txpool/TxPoolConfig.h>
+#include <bcos-txpool/TxPoolFactory.h>
+#include <bcos-txpool/sync/TransactionSync.h>
+#include <bcos-txpool/txpool/storage/MemoryStorage.h>
+#include <bcos-txpool/txpool/validator/TxValidator.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/test/unit_test.hpp>
 #include <chrono>
