@@ -132,3 +132,6 @@ install(
     DESTINATION share/fiscobcos
     NAMESPACE fiscobcos::
 )
+# copy pre-commit to git hook
+file(COPY ${CMAKE_SOURCE_DIR}/tools/.ci/pre-commit DESTINATION ${CMAKE_SOURCE_DIR}/.git/hooks
+        FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
