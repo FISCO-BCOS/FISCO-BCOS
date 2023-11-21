@@ -70,7 +70,6 @@ static constexpr std::string_view USER_SHARD_PREFIX = "/shards/";
 static constexpr std::string_view STORAGE_VALUE = "value";
 static constexpr std::string_view ACCOUNT_CODE_HASH = "codeHash";
 static constexpr std::string_view ACCOUNT_CODE = "code";
-static constexpr std::string_view ACCOUNT_BALANCE = "balance";
 static constexpr std::string_view ACCOUNT_ABI = "abi";
 static constexpr std::string_view ACCOUNT_NONCE = "nonce";
 static constexpr std::string_view ACCOUNT_ALIVE = "alive";
@@ -89,6 +88,8 @@ static constexpr const std::string_view METHOD_AUTH_BLACK = "method_auth_black";
 static constexpr const std::string_view ACCOUNT_STATUS = "status";
 static constexpr const std::string_view ACCOUNT_LAST_UPDATE = "last_update";
 static constexpr const std::string_view ACCOUNT_LAST_STATUS = "last_status";
+static constexpr const std::string_view ACCOUNT_BALANCE = "balance";
+
 enum AccountStatus : uint8_t
 {
     normal = 0,
