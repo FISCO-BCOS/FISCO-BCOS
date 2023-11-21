@@ -487,7 +487,7 @@ public:
     BaselineScheduler(BaselineScheduler&&) noexcept = default;
     BaselineScheduler& operator=(const BaselineScheduler&) = delete;
     BaselineScheduler& operator=(BaselineScheduler&&) noexcept = default;
-    ~BaselineScheduler() noexcept override = default;
+    ~BaselineScheduler() noexcept override { m_asyncGroup.wait(); }
 
     void executeBlock(bcos::protocol::Block::Ptr block, bool verify,
         std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool sysBlock)>

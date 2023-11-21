@@ -196,7 +196,7 @@ private:
                             }
                             if (hasRAW)
                             {
-                                // 检测到读写集冲突，立即合并已经完成的storage并开始新一轮执行，不等待当前pipeline执行结束
+                                // 检测到读写集冲突，立即合并已完成的storage并开始新一轮执行，不等待当前pipeline执行结束
                                 // When a read/write set conflict is detected, the system
                                 // immediately merges the completed storage and starts a new round
                                 // of execution without waiting for the current pipeline execution
