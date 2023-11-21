@@ -13,16 +13,6 @@ using namespace bcos::transaction_executor;
 using namespace bcos::transaction_scheduler;
 using namespace std::string_view_literals;
 
-struct TableNameHash
-{
-    size_t operator()(const bcos::transaction_executor::StateKey& key) const
-    {
-        auto const& tableID = std::get<0>(key);
-        std::string_view tableIDView(tableID.data(), tableID.size());
-        return std::hash<std::string_view>{}(tableIDView);
-    }
-};
-
 class TestMultiLayerStorageFixture
 {
 public:
@@ -30,7 +20,7 @@ public:
         memory_storage::Attribute(memory_storage::ORDERED | memory_storage::LOGICAL_DELETION)>;
     using BackendStorage = memory_storage::MemoryStorage<StateKey, StateValue,
         memory_storage::Attribute(memory_storage::ORDERED | memory_storage::CONCURRENT),
-        TableNameHash>;
+        std::hash<StateKey>>;
 
     TestMultiLayerStorageFixture() : multiLayerStorage(backendStorage) {}
 

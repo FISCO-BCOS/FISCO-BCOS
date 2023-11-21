@@ -11,6 +11,7 @@
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
 #include "bcos-framework/storage2/Storage.h"
+#include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-ledger/src/libledger/LedgerMethods.h"
@@ -103,7 +104,8 @@ task::Task<h256> calculateStateRoot(auto& storage, crypto::Hash const& hashImpl)
             auto& localHash = hashes[index];
             for (auto [key, entry] : subrange)
             {
-                auto& [tableName, keyName] = *key;
+                transaction_executor::StateKeyView view(*key);
+                auto [tableName, keyName] = view.getTableAndKey();
                 if (!entry)
                 {
                     entry = std::addressof(deletedEntry);
@@ -528,14 +530,15 @@ public:
             {
                 blockHeader->setVersion(ledgerConfig->compatibilityVersion());
                 blockHeader->setNumber(ledgerConfig->blockNumber());
-                receipt = co_await transaction_executor::executeTransaction(
-                    self->m_executor, view, *blockHeader, *transaction, 0, *ledgerConfig);
+                receipt = co_await transaction_executor::executeTransaction(self->m_executor, view,
+                    *blockHeader, *transaction, 0, *ledgerConfig, task::syncWait);
             }
             else
             {
+                ledger::LedgerConfig emptyLedgerConfig;
                 blockHeader->setVersion((uint32_t)bcos::protocol::BlockVersion::V3_2_4_VERSION);
-                receipt = co_await transaction_executor::executeTransaction(
-                    self->m_executor, view, *blockHeader, *transaction, 0, ledger::LedgerConfig{});
+                receipt = co_await transaction_executor::executeTransaction(self->m_executor, view,
+                    *blockHeader, *transaction, 0, emptyLedgerConfig, task::syncWait);
             }
 
 

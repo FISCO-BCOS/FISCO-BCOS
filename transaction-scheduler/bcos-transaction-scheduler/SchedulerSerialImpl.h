@@ -4,6 +4,7 @@
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
+#include "bcos-task/Wait.h"
 
 namespace bcos::transaction_scheduler
 {
@@ -27,8 +28,8 @@ private:
         int contextID = 0;
         for (auto const& transaction : transactions)
         {
-            receipts.emplace_back(co_await transaction_executor::executeTransaction(
-                executor, storage, blockHeader, transaction, contextID, ledgerConfig));
+            receipts.emplace_back(co_await transaction_executor::executeTransaction(executor,
+                storage, blockHeader, transaction, contextID, ledgerConfig, task::syncWait));
             ++contextID;
         }
 

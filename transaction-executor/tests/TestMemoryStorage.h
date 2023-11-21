@@ -14,4 +14,11 @@ auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, MutableStorage& 
 {
     co_return co_await storage2::readSome(storage, std::forward<decltype(keys)>(keys));
 }
+
+auto tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/, MutableStorage& storage,
+    const auto& key, storage2::READ_FRONT_TYPE const& /*unused*/)
+    -> task::Task<task::AwaitableReturnType<decltype(storage2::readOne(storage, key))>>
+{
+    co_return co_await storage2::readOne(storage, key);
+}
 }  // namespace bcos::transaction_executor

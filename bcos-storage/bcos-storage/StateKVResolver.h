@@ -1,9 +1,10 @@
 #pragma once
 #include "bcos-concepts/ByteBuffer.h"
 #include "bcos-concepts/Exception.h"
+#include "bcos-framework/transaction-executor/StateKey.h"
 #include <bcos-framework/storage/Entry.h>
-#include <bcos-framework/transaction-executor/TransactionExecutor.h>
 #include <fmt/format.h>
+#include <boost/algorithm/hex.hpp>
 #include <boost/throw_exception.hpp>
 
 namespace bcos::storage2::rocksdb
@@ -33,46 +34,26 @@ struct StateValueResolver
 
 struct StateKeyResolver
 {
-    using DBKey = boost::container::small_vector<char,
-        transaction_executor::ContractTable::static_capacity +
-            transaction_executor::ContractKey::static_capacity>;
-    constexpr static char TABLE_KEY_SPLIT = ':';
-
-    static DBKey encode(auto&& stateKey)
+    static std::string_view encode(const transaction_executor::StateKey& stateKey)
     {
-        auto& [tableName, key] = stateKey;
-
-        DBKey buffer;
-        buffer.insert(buffer.end(), RANGES::begin(tableName), RANGES::end(tableName));
-        buffer.emplace_back(TABLE_KEY_SPLIT);
-        buffer.insert(buffer.end(), RANGES::begin(key), RANGES::end(key));
-        return buffer;
+        return {stateKey.data(), stateKey.size()};
     }
-
-    transaction_executor::StateKey decode(concepts::bytebuffer::ByteBuffer auto const& buffer)
+    static transaction_executor::StateKey encode(transaction_executor::StateKey&& stateKey)
     {
-        std::string_view view = concepts::bytebuffer::toView(buffer);
-        auto pos = view.find(TABLE_KEY_SPLIT);
-        if (pos == std::string_view::npos)
-        {
-            BOOST_THROW_EXCEPTION(InvalidStateKey{} << error::ErrorMessage(
-                                      fmt::format("Invalid state key! {}", buffer)));
-        }
-
-        auto tableRange = view.substr(0, pos);
-        auto keyRange = view.substr(pos + 1, view.size());
-
-        if (RANGES::empty(tableRange) || RANGES::empty(keyRange))
-        {
-            BOOST_THROW_EXCEPTION(InvalidStateKey{} << error::ErrorMessage(
-                                      fmt::format("Empty table or key!", buffer)));
-        }
-
-        auto stateKey = std::make_tuple(transaction_executor::ContractTable(std::string_view(
-                                            RANGES::data(tableRange), RANGES::size(tableRange))),
-            transaction_executor::ContractKey(
-                std::string_view(RANGES::data(keyRange), RANGES::size(keyRange))));
-        return stateKey;
+        return std::forward<transaction_executor::StateKey>(stateKey);
+    }
+    static transaction_executor::StateKey encode(
+        const transaction_executor::StateKeyView& stateKeyView)
+    {
+        return transaction_executor::StateKey(stateKeyView);
+    }
+    static transaction_executor::StateKey decode(std::string_view view)
+    {
+        return transaction_executor::StateKey(std::string(view));
+    }
+    static transaction_executor::StateKey decode(std::string buffer)
+    {
+        return transaction_executor::StateKey(std::move(buffer));
     }
 };
 

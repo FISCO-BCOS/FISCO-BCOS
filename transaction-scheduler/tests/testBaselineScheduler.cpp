@@ -27,7 +27,8 @@ struct MockExecutor
         bcos::transaction_executor::tag_t<
             bcos::transaction_executor::executeTransaction> /*unused*/,
         MockExecutor& executor, auto& storage, protocol::BlockHeader const& blockHeader,
-        protocol::Transaction const& transaction, int contextID, ledger::LedgerConfig const&)
+        protocol::Transaction const& transaction, int contextID, ledger::LedgerConfig const&,
+        auto&& waitOperator)
     {
         co_return std::shared_ptr<protocol::TransactionReceipt>();
     }

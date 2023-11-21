@@ -4,12 +4,10 @@
 #include "../protocol/Transaction.h"
 #include "../protocol/TransactionReceipt.h"
 #include "../protocol/TransactionReceiptFactory.h"
-#include "../storage/Entry.h"
 #include "../storage2/Storage.h"
-#include "bcos-utilities/ThreeWay4StringView.h"
+#include "StateKey.h"
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-task/Trait.h>
-#include <boost/container/small_vector.hpp>
 #include <compare>
 #include <tuple>
 #include <type_traits>
@@ -17,56 +15,6 @@
 
 namespace bcos::transaction_executor
 {
-
-// EVM合约KEY固定为32
-// The EVM contract KEY is fixed at 32
-constexpr static size_t CONTRACT_KEY_LENGTH = 32;
-
-// 目录前缀+hex合约地址，"/apps/"长度为6，hex合约地址长度为40，总长度46，对齐后48
-// Directory prefix + hex contract address, "/apps/" length is 6, hex contract address length is 40,
-// total length 46, aligned 48
-constexpr static size_t CONTRACT_TABLE_LENGTH = 48;
-
-template <size_t length>
-class SmallString : public boost::container::small_vector<char, length>
-{
-public:
-    using boost::container::small_vector<char, length>::small_vector;
-    explicit SmallString(std::string_view view)
-    {
-        this->assign(RANGES::begin(view), RANGES::end(view));
-    }
-    explicit SmallString(bytesConstRef ref) { this->assign(RANGES::begin(ref), RANGES::end(ref)); }
-    explicit SmallString(const std::string& str)
-    {
-        this->assign(RANGES::begin(str), RANGES::end(str));
-    }
-    auto operator<=>(std::string_view view) const
-    {
-        return static_cast<std::string_view>(*this) <=> view;
-    }
-    auto operator<=>(std::string const& str) const
-    {
-        return static_cast<std::string_view>(*this) <=> std::string_view(str);
-    }
-    auto operator<=>(SmallString const& rhs) const
-    {
-        return static_cast<std::string_view>(*this) <=> static_cast<std::string_view>(rhs);
-    }
-    operator std::string_view() const& { return {this->data(), this->size()}; }
-};
-using ContractTable = SmallString<CONTRACT_TABLE_LENGTH>;
-using ContractKey = SmallString<CONTRACT_KEY_LENGTH>;
-
-using StateKeyView = std::tuple<std::string_view, std::string_view>;
-using StateKey = std::tuple<ContractTable, ContractKey>;
-using StateValue = storage::Entry;
-
-// struct EVMContractTableKey
-// {
-//     uint8_t address[20];
-//     uint8_t key[32];
-// };
 
 struct ExecuteTransaction
 {
@@ -97,99 +45,3 @@ template <auto& Tag>
 using tag_t = std::decay_t<decltype(Tag)>;
 
 }  // namespace bcos::transaction_executor
-
-template <>
-struct std::less<bcos::transaction_executor::StateKey>
-{
-    auto operator()(bcos::transaction_executor::StateKey const& left,
-        bcos::transaction_executor::StateKeyView const& right) const -> bool
-    {
-        auto leftView = static_cast<bcos::transaction_executor::StateKeyView>(left);
-        return leftView < right;
-    }
-    auto operator()(bcos::transaction_executor::StateKeyView const& left,
-        bcos::transaction_executor::StateKey const& right) const -> bool
-    {
-        auto rightView = static_cast<bcos::transaction_executor::StateKeyView>(right);
-        return left < rightView;
-    }
-    auto operator()(bcos::transaction_executor::StateKey const& left,
-        bcos::transaction_executor::StateKey const& right) const -> bool
-    {
-        auto leftView = static_cast<bcos::transaction_executor::StateKeyView>(left);
-        auto rightView = static_cast<bcos::transaction_executor::StateKeyView>(right);
-        return leftView < rightView;
-    }
-};
-
-template <>
-struct std::hash<bcos::transaction_executor::StateKeyView>
-{
-    size_t operator()(const bcos::transaction_executor::StateKeyView& stateKeyView) const
-    {
-        auto const& [table, key] = stateKeyView;
-        auto hash = std::hash<std::string_view>{}(table);
-        boost::hash_combine(hash, std::hash<std::string_view>{}(key));
-        return hash;
-    }
-};
-template <>
-struct boost::hash<bcos::transaction_executor::StateKeyView>
-{
-    size_t operator()(const bcos::transaction_executor::StateKeyView& stateKeyView) const
-    {
-        return std::hash<bcos::transaction_executor::StateKeyView>{}(stateKeyView);
-    }
-};
-
-template <>
-struct std::hash<bcos::transaction_executor::StateKey>
-{
-    size_t operator()(const bcos::transaction_executor::StateKey& stateKey) const
-    {
-        auto view = static_cast<bcos::transaction_executor::StateKeyView>(stateKey);
-        return std::hash<bcos::transaction_executor::StateKeyView>{}(view);
-    }
-    size_t operator()(const bcos::transaction_executor::StateKeyView& stateKeyView) const
-    {
-        auto const& [table, key] = stateKeyView;
-        auto hash = std::hash<std::string_view>{}(table);
-        boost::hash_combine(hash, std::hash<std::string_view>{}(key));
-        return hash;
-    }
-};
-
-template <>
-struct boost::hash<bcos::transaction_executor::StateKey>
-{
-    size_t operator()(const bcos::transaction_executor::StateKey& stateKey) const
-    {
-        return std::hash<bcos::transaction_executor::StateKey>{}(stateKey);
-    }
-    size_t operator()(const bcos::transaction_executor::StateKeyView& stateKeyView) const
-    {
-        auto const& [table, key] = stateKeyView;
-        auto hash = std::hash<std::string_view>{}(table);
-        boost::hash_combine(hash, std::hash<std::string_view>{}(key));
-        return hash;
-    }
-};
-
-template <size_t N>
-inline std::ostream& operator<<(
-    std::ostream& stream, const bcos::transaction_executor::SmallString<N>& smallString)
-{
-    stream << static_cast<std::string_view>(smallString);
-    return stream;
-}
-
-template <>
-struct std::equal_to<bcos::transaction_executor::StateKey>
-{
-    bool operator()(bcos::transaction_executor::StateKeyView const& lhs,
-        bcos::transaction_executor::StateKey const& rhs) const
-    {
-        auto rhsView = static_cast<bcos::transaction_executor::StateKeyView>(rhs);
-        return lhs == rhsView;
-    }
-};

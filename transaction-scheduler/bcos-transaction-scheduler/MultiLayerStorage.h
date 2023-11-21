@@ -6,7 +6,6 @@
 #include "bcos-task/Wait.h"
 #include "transaction-executor/bcos-transaction-executor/RollbackableStorage.h"
 #include <oneapi/tbb/parallel_invoke.h>
-#include <boost/container/small_vector.hpp>
 #include <boost/throw_exception.hpp>
 #include <functional>
 #include <iterator>
@@ -86,10 +85,10 @@ public:
                 std::is_lvalue_reference_v<RANGES::range_value_t<decltype(keys)>>,
                 std::reference_wrapper<KeyType>, KeyType>;
 
-            boost::container::small_vector<
-                std::pair<StoreKeyType, std::reference_wrapper<std::optional<ValueType>>>, 1>
+            std::vector<std::pair<StoreKeyType, std::reference_wrapper<std::optional<ValueType>>>>
                 missingKeyValues;
-            for (auto&& [key, value] : RANGES::views::zip(keys, values))
+            for (auto&& [key, value] :
+                RANGES::views::zip(std::forward<decltype(keys)>(keys), values))
             {
                 if (!value)
                 {
@@ -184,9 +183,10 @@ public:
         }
 
         friend auto tag_invoke(
-            storage2::tag_t<storage2::readOne> /*unused*/, View& storage, auto const& key)
+            storage2::tag_t<storage2::readOne> /*unused*/, View& storage, auto&& key)
             -> task::Task<task::AwaitableReturnType<decltype(storage2::readOne(
-                (MutableStorageType&)std::declval<MutableStorageType>(), key))>>
+                (MutableStorageType&)std::declval<MutableStorageType>(),
+                std::forward<decltype(key)>(key)))>>
         {
             if (storage.m_mutableStorage)
             {
@@ -216,26 +216,31 @@ public:
         }
 
         friend auto tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/, View& storage,
-            auto const& key, const storage2::READ_FRONT_TYPE& /*unused*/)
+            auto&& key, storage2::READ_FRONT_TYPE /*unused*/)
             -> task::Task<task::AwaitableReturnType<decltype(storage2::readOne(
-                (MutableStorageType&)std::declval<MutableStorageType>(), key))>>
+                (MutableStorageType&)std::declval<MutableStorageType>(),
+                std::forward<decltype(key)>(key)))>>
         {
             if (storage.m_mutableStorage)
             {
-                co_return co_await storage2::readOne(*storage.m_mutableStorage, key);
+                co_return co_await storage2::readOne(
+                    *storage.m_mutableStorage, std::forward<decltype(key)>(key));
             }
 
             for (auto& immutableStorage : storage.m_immutableStorages)
             {
-                co_return co_await storage2::readOne(*immutableStorage, key);
+                co_return co_await storage2::readOne(
+                    *immutableStorage, std::forward<decltype(key)>(key));
             }
 
             if constexpr (withCacheStorage)
             {
-                co_return co_await storage2::readOne(storage.m_cacheStorage, key);
+                co_return co_await storage2::readOne(
+                    storage.m_cacheStorage, std::forward<decltype(key)>(key));
             }
 
-            co_return co_await storage2::readOne(storage.m_backendStorage, key);
+            co_return co_await storage2::readOne(
+                storage.m_backendStorage, std::forward<decltype(key)>(key));
         }
 
         friend task::Task<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/,
@@ -243,6 +248,13 @@ public:
         {
             co_await storage2::writeSome(storage.mutableStorage(),
                 std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values));
+        }
+
+        friend auto tag_invoke(bcos::storage2::tag_t<storage2::writeOne> /*unused*/, View& storage,
+            auto&& key, auto&& value) -> task::Task<void>
+        {
+            co_await storage2::writeOne(storage.mutableStorage(), std::forward<decltype(key)>(key),
+                std::forward<decltype(value)>(value));
         }
 
         friend task::Task<void> tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/,
@@ -381,12 +393,12 @@ public:
         if constexpr (withCacheStorage)
         {
             tbb::parallel_invoke(
-                [&]() { task::syncWait(storage2::merge(*immutableStorage, m_backendStorage)); },
-                [&]() { task::syncWait(storage2::merge(*immutableStorage, m_cacheStorage)); });
+                [&]() { task::syncWait(storage2::merge(m_backendStorage, *immutableStorage)); },
+                [&]() { task::syncWait(storage2::merge(m_cacheStorage, *immutableStorage)); });
         }
         else
         {
-            co_await storage2::merge(*immutableStorage, m_backendStorage);
+            co_await storage2::merge(m_backendStorage, *immutableStorage);
         }
 
         immutablesLock.lock();

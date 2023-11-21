@@ -18,7 +18,7 @@ struct Wait
         task.start();
     }
 };
-constexpr inline static Wait wait{};
+constexpr inline Wait wait{};
 
 struct SyncWait
 {
@@ -98,6 +98,6 @@ struct SyncWait
         }
     }
 };
-constexpr inline static SyncWait syncWait{};
+constexpr inline SyncWait syncWait{};
 
 }  // namespace bcos::task
