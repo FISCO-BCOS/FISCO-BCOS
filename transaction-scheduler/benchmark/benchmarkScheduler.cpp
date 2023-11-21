@@ -30,21 +30,11 @@ using namespace bcos::transaction_executor;
 constexpr static s256 singleIssue(1000000);
 constexpr static s256 singleTransfer(1);
 
-using MutableStorage = MemoryStorage<StateKey, StateValue, Attribute(ORDERED | LOGICAL_DELETION)>;
+using MutableStorage = MemoryStorage<StateKey, StateValue, Attribute(LOGICAL_DELETION)>;
 using BackendStorage =
     MemoryStorage<StateKey, StateValue, Attribute(CONCURRENT), std::hash<StateKey>>;
 using MultiLayerStorageType = MultiLayerStorage<MutableStorage, void, BackendStorage>;
 using ReceiptFactory = bcostars::protocol::TransactionReceiptFactoryImpl;
-
-namespace bcos::transaction_scheduler
-{
-auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, MutableStorage& storage,
-    RANGES::input_range auto&& keys, storage2::READ_FRONT_TYPE const& /*unused*/)
-    -> task::Task<task::AwaitableReturnType<decltype(storage2::readSome(storage, keys))>>
-{
-    co_return co_await storage2::readSome(storage, std::forward<decltype(keys)>(keys));
-}
-}  // namespace bcos::transaction_scheduler
 
 template <bool parallel>
 struct Fixture
