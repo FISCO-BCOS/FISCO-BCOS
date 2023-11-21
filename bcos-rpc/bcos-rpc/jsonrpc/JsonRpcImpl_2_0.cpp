@@ -1249,7 +1249,7 @@ void JsonRpcImpl_2_0::getGroupInfo(std::string_view _groupID, RespFunc _respFunc
     if (groupInfo)
     {
         // can only recover the deleted group
-        groupInfoToJson(response, groupInfo);
+        groupInfoToJson(response, *groupInfo);
     }
     _respFunc(nullptr, response);
 }
