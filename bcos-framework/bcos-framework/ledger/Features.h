@@ -125,7 +125,7 @@ public:
             set(Flag::bugfix_statestorage_hash);
             set(Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy);
         }
-        if (version >= protocol::BlockVersion::V3_6_VERSION)
+        if (version >= protocol::BlockVersion::V3_2_6_VERSION)
         {
             set(Flag::bugfix_event_log_order);
             set(Flag::bugfix_delegatecall_noaddr_return);
