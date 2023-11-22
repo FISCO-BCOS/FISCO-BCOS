@@ -3,13 +3,14 @@
 #include "Entry.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-framework/storage2/Storage.h"
+#include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Task.h"
 
 namespace bcos::storage
 {
 
 inline task::Task<std::optional<Entry>> tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/,
-    StorageInterface& storage, std::tuple<std::string_view, std::string_view> stateKey)
+    StorageInterface& storage, transaction_executor::StateKeyView stateKey)
 {
     struct Awaitable
     {
@@ -44,7 +45,7 @@ inline task::Task<std::optional<Entry>> tag_invoke(storage2::tag_t<storage2::rea
         }
     };
 
-    auto [table, key] = stateKey;
+    auto [table, key] = stateKey.getTableAndKey();
     Awaitable awaitable{.m_storage = storage, .m_table = table, .m_key = key, .m_result = {}};
     co_return co_await awaitable;
 }

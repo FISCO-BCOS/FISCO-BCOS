@@ -5,6 +5,7 @@
 #include "../storage/StorageInterface.h"
 #include "../storage2/Storage.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Task.h"
 #include <bcos-concepts/Exception.h>
 #include <bcos-utilities/Ranges.h>
@@ -157,8 +158,8 @@ public:
     {
         for (auto key : bcos::ledger::Features::featureKeys())
         {
-            auto entry =
-                co_await storage2::readOne(storage, std::make_tuple(ledger::SYS_CONFIG, key));
+            auto entry = co_await storage2::readOne(
+                storage, transaction_executor::StateKeyView(ledger::SYS_CONFIG, key));
             if (entry)
             {
                 auto [value, enableNumber] = entry->template getObject<ledger::SystemConfigEntry>();

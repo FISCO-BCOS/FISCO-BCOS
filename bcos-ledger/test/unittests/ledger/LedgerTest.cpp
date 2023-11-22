@@ -110,6 +110,7 @@ public:
         return nullptr;
     }
 };
+
 class LedgerFixture : public TestPromptFixture
 {
 public:
