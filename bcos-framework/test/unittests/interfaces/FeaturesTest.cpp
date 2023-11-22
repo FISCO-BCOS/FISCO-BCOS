@@ -65,11 +65,14 @@ BOOST_AUTO_TEST_CASE(feature)
     BOOST_CHECK_EQUAL(features5.get("feature_dmc2serial"), true);
 
     auto keys = Features::featureKeys();
-    BOOST_CHECK_EQUAL(keys.size(), 4);
+    BOOST_CHECK_EQUAL(keys.size(), 7);
     BOOST_CHECK_EQUAL(keys[0], "bugfix_revert");
     BOOST_CHECK_EQUAL(keys[1], "bugfix_statestorage_hash");
     BOOST_CHECK_EQUAL(keys[2], "bugfix_evm_create2_delegatecall_staticcall_codecopy");
-    BOOST_CHECK_EQUAL(keys[3], "feature_dmc2serial");
+    BOOST_CHECK_EQUAL(keys[3], "bugfix_event_log_order");
+    BOOST_CHECK_EQUAL(keys[4], "bugfix_delegatecall_noaddr_return");
+    BOOST_CHECK_EQUAL(keys[5], "bugfix_precompiled_codehash");
+    BOOST_CHECK_EQUAL(keys[6], "feature_dmc2serial");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

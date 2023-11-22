@@ -239,6 +239,11 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
         .create_address = toEvmC(boost::algorithm::unhex(response->newEVMContractAddress)),
         .padding = {}};
 
+    if (features().get(ledger::Features::Flag::bugfix_event_log_order))
+    {
+        // put event log by stack(dfs) order
+        m_callParameters->logEntries = std::move(response->logEntries);
+    }
     // Put response to store in order to avoid data lost
     m_responseStore.emplace_back(std::move(response));
 
@@ -470,6 +475,15 @@ h256 HostContext::codeHashAt(const std::string_view& address)
             return {0};
         }
         auto code = externalCodeRequest(address);
+
+        if (code.empty())
+        {
+            if (features().get(ledger::Features::Flag::bugfix_precompiled_codehash))
+            {
+                return {0};
+            }
+        }
+
         auto hash = hashImpl()->hash(code).asBytes();
         return h256(hash);
     }
