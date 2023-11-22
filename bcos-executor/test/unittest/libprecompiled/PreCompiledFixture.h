@@ -19,15 +19,6 @@
  */
 
 #pragma once
-#include "bcos-executor/src/precompiled/common/Common.h"
-#include "bcos-executor/src/precompiled/common/Utilities.h"
-#include "bcos-framework/bcos-framework/testutils/faker/FakeBlock.h"
-#include "bcos-framework/bcos-framework/testutils/faker/FakeBlockHeader.h"
-#include "bcos-framework/ledger/LedgerTypeDef.h"
-#include "bcos-framework/protocol/Protocol.h"
-#include "bcos-framework/protocol/ProtocolTypeDef.h"
-#include "bcos-table/src/StateStorageFactory.h"
-#include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "executive/BlockContext.h"
 #include "executive/TransactionExecutive.h"
 #include "executor/TransactionExecutorFactory.h"
@@ -40,8 +31,17 @@
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-crypto/signature/sm2.h>
+#include <bcos-executor/src/precompiled/common/Common.h>
+#include <bcos-executor/src/precompiled/common/Utilities.h>
 #include <bcos-framework/executor/NativeExecutionMessage.h>
+#include <bcos-framework/ledger/LedgerTypeDef.h>
+#include <bcos-framework/protocol/Protocol.h>
+#include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/storage/Table.h>
+#include <bcos-framework/testutils/faker/FakeBlock.h>
+#include <bcos-framework/testutils/faker/FakeBlockHeader.h>
+#include <bcos-table/src/StateStorageFactory.h>
+#include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
 #include <bcos-tool/BfsFileFactory.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <libinitializer/AuthInitializer.h>

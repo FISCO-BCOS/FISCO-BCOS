@@ -1,7 +1,8 @@
+#include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
-#include <boost/container/small_vector.hpp>
 #include <boost/test/unit_test.hpp>
 
+using namespace bcos::transaction_executor;
 using namespace std::string_view_literals;
 
 struct TestTransactionExecutorFixture
@@ -10,21 +11,28 @@ struct TestTransactionExecutorFixture
 
 BOOST_FIXTURE_TEST_SUITE(TestTransactionExecutor, TestTransactionExecutorFixture)
 
-BOOST_AUTO_TEST_CASE(tableName)
+BOOST_AUTO_TEST_CASE(stateKey)
 {
-    boost::container::small_vector<char, 32> test1;
-    BOOST_CHECK_EQUAL(test1.capacity(), 32);
+    StateKey stateKey1("test state table1"sv, "test state key1"sv);
+    StateKey stateKey2("test state table2"sv, "test state key2"sv);
 
-    bcos::transaction_executor::ContractTable tableName;
-    BOOST_CHECK_EQUAL(tableName.capacity(), bcos::transaction_executor::CONTRACT_TABLE_LENGTH);
+    BOOST_CHECK_NE(stateKey1, stateKey2);
 
-    auto PREFIX = "/apps/"sv;
-    tableName.insert(tableName.end(), PREFIX.begin(), PREFIX.end());
+    StateKeyView view1("table", "key");
 
-    std::array<uint8_t, 20> bytes{};
-    boost::algorithm::hex_lower(bytes.begin(), bytes.end(), std::back_inserter(tableName));
+    std::stringstream ss;
+    ss << view1;
+    BOOST_CHECK_EQUAL(ss.str(), "table:key");
+}
 
-    BOOST_CHECK_EQUAL(tableName.capacity(), bcos::transaction_executor::CONTRACT_TABLE_LENGTH);
+BOOST_AUTO_TEST_CASE(single_view)
+{
+    int i = 100;
+    auto& ref = i;
+
+    auto view = RANGES::views::single(ref);
+    auto&& j = view[0];
+    BOOST_CHECK_EQUAL(view[0], 100);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

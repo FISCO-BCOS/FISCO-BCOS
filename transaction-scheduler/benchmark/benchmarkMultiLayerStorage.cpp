@@ -1,3 +1,4 @@
+#include "bcos-framework/transaction-executor/StateKey.h"
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
 #include <bcos-task/Wait.h>
@@ -10,15 +11,6 @@ using namespace bcos::storage2::memory_storage;
 using namespace bcos::transaction_scheduler;
 
 using namespace std::string_view_literals;
-
-struct TableNameHash
-{
-    size_t operator()(const bcos::transaction_executor::StateKey& key) const
-    {
-        auto const& tableID = std::get<0>(key);
-        return std::hash<std::string_view>{}(tableID);
-    }
-};
 
 struct Fixture
 {
@@ -55,8 +47,9 @@ struct Fixture
 
     using MutableStorage = MemoryStorage<transaction_executor::StateKey,
         transaction_executor::StateValue, Attribute(ORDERED | LOGICAL_DELETION)>;
-    using BackendStorage = MemoryStorage<transaction_executor::StateKey,
-        transaction_executor::StateValue, Attribute(ORDERED | CONCURRENT), TableNameHash>;
+    using BackendStorage =
+        MemoryStorage<transaction_executor::StateKey, transaction_executor::StateValue,
+            Attribute(ORDERED | CONCURRENT), std::hash<transaction_executor::StateKey>>;
 
     BackendStorage m_backendStorage;
     MultiLayerStorage<MutableStorage, void, BackendStorage> multiLayerStorage;

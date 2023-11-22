@@ -40,7 +40,7 @@ jobs:
 
       - name: Remove cache if correspond dir change
         run: ./tools/.ci/clear_build_cache.sh
-            
+
       - name: Build for mac
         run: |
           mkdir -p build && cd build && rm -rf  CMakeCache.txt
@@ -51,6 +51,14 @@ jobs:
         run: |
           cd build
           CTEST_OUTPUT_ON_FAILURE=TRUE make test
+          
+      - name: prepare RPCAPI Tests
+        run: cd tools && bash .ci/rpcapi_ci_prepare.sh
+
+      - name: FISCO BCOS RpcApiTest
+        uses: matt-ball/newman-action@v1.0.4
+        with:
+          collection: https://raw.githubusercontent.com/FISCO-BCOS/FISCOBCOS-RPC-API/main/fiscobcos.rpcapi.collection.json
 
       - name: Integration test - Air
         run: cd tools && bash .ci/ci_check_air.sh ${{ github.base_ref }}

@@ -14,7 +14,6 @@
 #include <rocksdb/db.h>
 #include <rocksdb/iterator.h>
 #include <rocksdb/slice.h>
-#include <boost/container/small_vector.hpp>
 #include <boost/throw_exception.hpp>
 #include <functional>
 #include <type_traits>
@@ -31,14 +30,6 @@ concept Resolver = requires(ResolverType&& resolver) {
                        // clang-format on
                    };
 
-template <class AnyResolver, class Key>
-struct ResolverEncodeReturnTrait
-{
-    using type = decltype(std::declval<AnyResolver>().encode(std::declval<Key>()));
-};
-template <class AnyResolver, class Key>
-using ResolverEncodeReturnType = typename ResolverEncodeReturnTrait<AnyResolver, Key>::type;
-
 // clang-format off
 struct RocksDBException : public bcos::Error {};
 struct UnsupportedMethod : public bcos::Error {};
@@ -46,7 +37,7 @@ struct UnexpectedItemType : public bcos::Error {};
 // clang-format on
 
 // Copy from rocksdb util/coding.h
-inline constexpr int VarintLength(uint64_t v)
+inline constexpr int varintLength(uint64_t v)
 {
     int len = 1;
     while (v >= 128)
@@ -68,8 +59,8 @@ constexpr inline size_t getRocksDBKeyPairSize(
     |value_length|value_bytes|
     */
     return hashColumnFamily ?
-               1 + 4 + VarintLength(keySize) + keySize + VarintLength(valueSize) + valueSize :
-               1 + VarintLength(keySize) + keySize + VarintLength(valueSize) + valueSize;
+               1 + 4 + varintLength(keySize) + keySize + varintLength(valueSize) + valueSize :
+               1 + varintLength(keySize) + keySize + varintLength(valueSize) + valueSize;
 }
 
 constexpr static auto ROCKSDB_WRITE_CHUNK_SIZE = 64;
@@ -94,8 +85,51 @@ public:
     using Key = KeyType;
     using Value = ValueType;
 
+    static auto executeReadSome(RocksDBStorage2& storage, RANGES::input_range auto&& keys)
+    {
+        auto encodedKeys = keys | RANGES::views::transform([&](auto&& key) {
+            return storage.m_keyResolver.encode(std::forward<decltype(key)>(key));
+        }) | RANGES::to<std::vector>();
+
+        std::vector<::rocksdb::PinnableSlice> results(RANGES::size(encodedKeys));
+        std::vector<::rocksdb::Status> status(RANGES::size(encodedKeys));
+
+        auto rocksDBKeys = encodedKeys | RANGES::views::transform([](const auto& encodedKey) {
+            return ::rocksdb::Slice(RANGES::data(encodedKey), RANGES::size(encodedKey));
+        }) | RANGES::to<std::vector>();
+        storage.m_rocksDB.MultiGet(::rocksdb::ReadOptions(),
+            storage.m_rocksDB.DefaultColumnFamily(), rocksDBKeys.size(), rocksDBKeys.data(),
+            results.data(), status.data());
+
+        auto result =
+            RANGES::views::zip(results, status) |
+            RANGES::views::transform([&](auto tuple) -> std::optional<ValueType> {
+                auto& [result, status] = tuple;
+                if (!status.ok())
+                {
+                    if (!status.IsNotFound())
+                    {
+                        BOOST_THROW_EXCEPTION(
+                            RocksDBException{} << bcos::Error::ErrorMessage(status.ToString()));
+                    }
+                    return {};
+                }
+
+                return std::make_optional(storage.m_valueResolver.decode(result.ToStringView()));
+            }) |
+            RANGES::to<std::vector>();
+        return result;
+    }
+
+    friend auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, RocksDBStorage2& storage,
+        RANGES::input_range auto&& keys) -> task::AwaitableValue<decltype(executeReadSome(storage,
+        std::forward<decltype(keys)>(keys)))>
+    {
+        return {executeReadSome(storage, std::forward<decltype(keys)>(keys))};
+    }
+
     friend auto tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/, RocksDBStorage2& storage,
-        auto const& key) -> task::AwaitableValue<std::optional<ValueType>>
+        auto&& key) -> task::AwaitableValue<std::optional<ValueType>>
     {
         auto rocksDBKey = storage.m_keyResolver.encode(key);
         std::string result;
@@ -114,51 +148,6 @@ public:
         }
 
         return {std::make_optional(storage.m_valueResolver.decode(std::move(result)))};
-    }
-
-    static auto readSome(RocksDBStorage2& storage, RANGES::input_range auto&& keys)
-    {
-        auto encodedKeys =
-            keys | RANGES::views::transform([&](const auto& key) {
-                return storage.m_keyResolver.encode(key);
-            }) |
-            RANGES::to<std::vector<
-                ResolverEncodeReturnType<KeyResolver, RANGES::range_value_t<decltype(keys)>>>>();
-        std::vector<::rocksdb::PinnableSlice> results(RANGES::size(encodedKeys));
-        std::vector<::rocksdb::Status> status(RANGES::size(encodedKeys));
-
-        auto rocksDBKeys = encodedKeys | RANGES::views::transform([](const auto& encodedKey) {
-            return ::rocksdb::Slice(RANGES::data(encodedKey), RANGES::size(encodedKey));
-        }) | RANGES::to<std::vector<::rocksdb::Slice>>();
-        storage.m_rocksDB.MultiGet(::rocksdb::ReadOptions(),
-            storage.m_rocksDB.DefaultColumnFamily(), rocksDBKeys.size(), rocksDBKeys.data(),
-            results.data(), status.data());
-
-        auto result =
-            RANGES::views::zip(results, status) |
-            RANGES::views::transform([&](auto&& tuple) -> std::optional<ValueType> {
-                auto&& [result, status] = tuple;
-                if (!status.ok())
-                {
-                    if (!status.IsNotFound())
-                    {
-                        BOOST_THROW_EXCEPTION(
-                            RocksDBException{} << bcos::Error::ErrorMessage(status.ToString()));
-                    }
-                    return {};
-                }
-
-                return std::make_optional(storage.m_valueResolver.decode(result.ToStringView()));
-            }) |
-            RANGES::to<boost::container::small_vector<std::optional<storage::Entry>, 1>>();
-        return result;
-    }
-
-    friend auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, RocksDBStorage2& storage,
-        RANGES::input_range auto&& keys)
-        -> task::AwaitableValue<decltype(readSome(storage, std::forward<decltype(keys)>(keys)))>
-    {
-        return {readSome(storage, std::forward<decltype(keys)>(keys))};
     }
 
     friend task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/,
@@ -185,7 +174,8 @@ public:
                 for (auto&& [key, value] : subrange)
                 {
                     auto it = rocksDBKeyValues.emplace_back(
-                        storage.m_keyResolver.encode(key), storage.m_valueResolver.encode(value));
+                        storage.m_keyResolver.encode(std::forward<decltype(key)>(key)),
+                        storage.m_valueResolver.encode(std::forward<decltype(value)>(value)));
                     auto const& [keyBuffer, valueBuffer] = *it;
                     localReservedLength += getRocksDBKeyPairSize(
                         false, RANGES::size(keyBuffer), RANGES::size(valueBuffer));
@@ -250,7 +240,7 @@ public:
     }
 
     friend task::Task<void> tag_invoke(
-        storage2::tag_t<storage2::merge> /*unused*/, auto& fromStorage, RocksDBStorage2& storage)
+        storage2::tag_t<merge> /*unused*/, RocksDBStorage2& storage, auto&& fromStorage)
     {
         auto range = co_await storage2::range(fromStorage);
 

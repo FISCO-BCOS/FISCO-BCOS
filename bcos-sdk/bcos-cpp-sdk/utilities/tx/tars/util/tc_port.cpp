@@ -261,7 +261,7 @@ std::string TC_Port::exec(const char* cmd, std::string& err)
     static size_t buf_len = 2 * 1024 * 1024;
     char* buf = new char[buf_len];
     memset(buf, 0, buf_len);
-    fread(buf, sizeof(char), buf_len - 1, fp);
+    [[maybe_unused]] auto s = fread(buf, sizeof(char), buf_len - 1, fp);
 #if TARGET_PLATFORM_WINDOWS
     _pclose(fp);
 #else
