@@ -40,9 +40,9 @@ VMInstance::VMInstance(evmc_vm* instance, evmc_revision revision, bytes_view cod
     // Set the options.
     if (m_instance->set_option != nullptr)
     {  // baseline interpreter could not work with precompiled
-        // m_instance->set_option(m_instance, "advanced", "");  // default is baseline interpreter
-        // m_instance->set_option(m_instance, "trace", "");
-        // m_instance->set_option(m_instance, "cgoto", "no");
+       // m_instance->set_option(m_instance, "advanced", "");  // default is baseline interpreter
+       // m_instance->set_option(m_instance, "trace", "");
+       // m_instance->set_option(m_instance, "cgoto", "no");
     }
 }
 
@@ -62,8 +62,8 @@ Result VMInstance::execute(HostContext& _hostContext, evmc_message* _msg)
     }
     auto state = std::make_unique<evmone::advanced::AdvancedExecutionState>(
         *_msg, m_revision, *_hostContext.interface, &_hostContext, m_code);
-    { // baseline
-        auto* evm = evmc_create_evmone();  // baseline use the vm to get options
+    {                                             // baseline
+        static auto* evm = evmc_create_evmone();  // baseline use the vm to get options
         return Result(evmone::baseline::execute(
             *static_cast<evmone::VM*>(evm), _msg->gas, *state, *m_analysis));
     }

@@ -2,11 +2,10 @@
 #include "../protocol/Protocol.h"
 #include "../storage/Entry.h"
 #include "../storage/LegacyStorageMethods.h"
-#include "../storage/StorageInterface.h"
 #include "../storage2/Storage.h"
+#include "bcos-concepts/Exception.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-task/Task.h"
-#include <bcos-concepts/Exception.h>
 #include <bcos-utilities/Ranges.h>
 #include <boost/throw_exception.hpp>
 #include <array>
@@ -125,6 +124,8 @@ public:
             set(Flag::bugfix_statestorage_hash);
             set(Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy);
         }
+
+        // FIXME: Fork to 3.2.6
         if (version >= protocol::BlockVersion::V3_6_VERSION)
         {
             set(Flag::bugfix_event_log_order);
