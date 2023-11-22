@@ -32,6 +32,7 @@
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/storage/LegacyStorageMethods.h"
+#include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-ledger/src/libledger/LedgerMethods.h"
 #include "bcos-ledger/src/libledger/utilities/Common.h"
@@ -1318,7 +1319,7 @@ BOOST_AUTO_TEST_CASE(getLedgerConfig)
     task::syncWait([this]() -> task::Task<void> {
         initFixture();
 
-        using KeyType = std::tuple<std::string_view, std::string_view>;
+        using KeyType = transaction_executor::StateKey;
         Entry value;
         SystemConfigEntry config;
 

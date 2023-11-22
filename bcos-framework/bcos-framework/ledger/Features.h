@@ -180,8 +180,8 @@ public:
                 storage::Entry entry;
                 entry.setObject(
                     SystemConfigEntry{boost::lexical_cast<std::string>((int)value), blockNumber});
-                co_await storage2::writeOne(
-                    storage, std::make_tuple(ledger::SYS_CONFIG, name), std::move(entry));
+                co_await storage2::writeOne(storage,
+                    transaction_executor::StateKey(ledger::SYS_CONFIG, name), std::move(entry));
             }
         }
     }
