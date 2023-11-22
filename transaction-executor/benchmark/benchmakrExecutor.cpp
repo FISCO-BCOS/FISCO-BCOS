@@ -28,9 +28,10 @@ struct Fixture
       : m_cryptoSuite(std::make_shared<bcos::crypto::CryptoSuite>(
             std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr)),
         m_receiptFactory(m_cryptoSuite),
-        m_executor(m_receiptFactory, bcos::executor::GlobalHashImpl::g_hashImpl),
+        m_executor(m_receiptFactory, std::make_shared<bcos::crypto::Keccak256>()),
         blockHeader([inner = std::addressof(tarsBlockHeader)]() mutable { return inner; })
     {
+        boost::log::core::get()->set_logging_enabled(false);
         bcos::executor::GlobalHashImpl::g_hashImpl = std::make_shared<bcos::crypto::Keccak256>();
         boost::algorithm::unhex(helloworldBytecode, std::back_inserter(m_helloworldBytecodeBinary));
         blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);

@@ -2,11 +2,10 @@
 #include "../protocol/Protocol.h"
 #include "../storage/Entry.h"
 #include "../storage/LegacyStorageMethods.h"
-#include "../storage/StorageInterface.h"
 #include "../storage2/Storage.h"
+#include "bcos-concepts/Exception.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-task/Task.h"
-#include <bcos-concepts/Exception.h>
 #include <bcos-utilities/Ranges.h>
 #include <boost/throw_exception.hpp>
 #include <array>

@@ -39,7 +39,6 @@
 #include <chrono>
 #include <exception>
 #include <memory>
-#include <range/v3/view/enumerate.hpp>
 #include <type_traits>
 
 namespace bcos::transaction_scheduler
@@ -216,7 +215,7 @@ private:
     std::mutex m_executeMutex;
     int64_t m_lastcommittedBlockNumber = -1;
     std::mutex m_commitMutex;
-    tbb::task_group m_notifyGroup;
+    tbb::task_group m_asyncGroup;
 
     struct ExecuteResult
     {
@@ -224,7 +223,7 @@ private:
         std::vector<protocol::TransactionReceipt::Ptr> m_receipts;
         protocol::Block::Ptr m_block;
     };
-    std::list<ExecuteResult> m_results;
+    std::deque<ExecuteResult> m_results;
     std::mutex m_resultsMutex;
 
     /**
@@ -302,6 +301,7 @@ private:
 
             scheduler.m_multiLayerStorage.pushMutableToImmutableFront();
             scheduler.m_lastExecutedBlockNumber = blockHeader->number();
+            scheduler.m_asyncGroup.run([view = std::move(view)]() {});
 
             auto transactions =
                 RANGES::views::transform(constTransactions,
@@ -413,9 +413,9 @@ private:
                                          << " | elapsed: " << (current() - now) << "ms";
             commitLock.unlock();
 
-            scheduler.m_notifyGroup.run([&, result = std::move(result),
-                                            blockHash = ledgerConfig->hash(),
-                                            blockNumber = ledgerConfig->blockNumber()]() {
+            scheduler.m_asyncGroup.run([&, result = std::move(result),
+                                           blockHash = ledgerConfig->hash(),
+                                           blockNumber = ledgerConfig->blockNumber()]() {
                 ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
                     ittapi::ITT_DOMAINS::instance().NOTIFY_RESULTS);
 
@@ -487,7 +487,7 @@ public:
     BaselineScheduler(BaselineScheduler&&) noexcept = default;
     BaselineScheduler& operator=(const BaselineScheduler&) = delete;
     BaselineScheduler& operator=(BaselineScheduler&&) noexcept = default;
-    ~BaselineScheduler() noexcept override = default;
+    ~BaselineScheduler() noexcept override { m_asyncGroup.wait(); }
 
     void executeBlock(bcos::protocol::Block::Ptr block, bool verify,
         std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool sysBlock)>
