@@ -124,6 +124,8 @@ public:
             set(Flag::bugfix_statestorage_hash);
             set(Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy);
         }
+
+        // FIXME: Fork to 3.2.6
         if (version >= protocol::BlockVersion::V3_6_VERSION)
         {
             set(Flag::bugfix_event_log_order);
