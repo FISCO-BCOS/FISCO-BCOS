@@ -115,7 +115,7 @@ private:
         co_return u256{};
     }
 
-    friend task::Task<u256> tag_invoke(
+    friend task::Task<void> tag_invoke(
         tag_t<setBalance> /*unused*/, EVMAccount& account, const u256& balance)
     {
         storage::Entry balanceEntry(boost::lexical_cast<std::string>(balance));
