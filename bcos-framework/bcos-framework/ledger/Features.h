@@ -2,12 +2,11 @@
 #include "../protocol/Protocol.h"
 #include "../storage/Entry.h"
 #include "../storage/LegacyStorageMethods.h"
-#include "../storage/StorageInterface.h"
 #include "../storage2/Storage.h"
+#include "bcos-concepts/Exception.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Task.h"
-#include <bcos-concepts/Exception.h>
 #include <bcos-utilities/Ranges.h>
 #include <boost/throw_exception.hpp>
 #include <array>
@@ -126,7 +125,7 @@ public:
             set(Flag::bugfix_statestorage_hash);
             set(Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy);
         }
-        if (version >= protocol::BlockVersion::V3_6_VERSION)
+        if (version >= protocol::BlockVersion::V3_2_6_VERSION)
         {
             set(Flag::bugfix_event_log_order);
             set(Flag::bugfix_delegatecall_noaddr_return);

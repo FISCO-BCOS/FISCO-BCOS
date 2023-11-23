@@ -56,8 +56,6 @@ public:
         if constexpr (std::is_same_v<Instance, evmc_vm*>)
         {
             assert(instance->abi_version == EVMC_ABI_VERSION);
-            if (instance->set_option != nullptr)
-            {}
             m_instance.emplace<EVMC_VM>(instance);
         }
         else
