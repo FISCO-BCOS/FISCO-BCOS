@@ -1653,13 +1653,6 @@ static task::Task<void> setAllocs(
                 storage::Entry{boost::lexical_cast<std::string>(alloc.balance)});
         }
 
-        if (alloc.nonce > 0)
-        {
-            co_await storage2::writeOne(storage,
-                transaction_executor::StateKey(tableName, ACCOUNT_TABLE_FIELDS::ACCOUNT_NONCE),
-                storage::Entry{boost::lexical_cast<std::string>(alloc.nonce)});
-        }
-
         if (!alloc.storage.empty())
         {
             co_await storage2::writeSome(storage,

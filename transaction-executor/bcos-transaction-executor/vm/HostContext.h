@@ -61,15 +61,22 @@ namespace bcos::transaction_executor
 struct NotFoundCodeError : public bcos::Error {};
 // clang-format on
 
+namespace
+{
 inline evmc_bytes32 evm_hash_fn(const uint8_t* data, size_t size)
 {
     return toEvmC(executor::GlobalHashImpl::g_hashImpl->hash(bytesConstRef(data, size)));
 }
+}  // namespace
 
 template <class Storage>
 class HostContext : public evmc_host_context
 {
 private:
+    constexpr static auto EVM_TABLE_NAME_LENGTH =
+        ledger::SYS_DIRECTORY::USER_APPS.size() + sizeof(evmc_address::bytes) * 2;
+    using EVMTableName = std::array<char, EVM_TABLE_NAME_LENGTH>;
+
     VMFactory& m_vmFactory;
     Storage& m_rollbackableStorage;
     protocol::BlockHeader const& m_blockHeader;
@@ -81,8 +88,8 @@ private:
     PrecompiledManager const& m_precompiledManager;
     ledger::LedgerConfig const& m_ledgerConfig;
 
-    std::string m_myContractTable;
-    evmc_address m_newContractAddress;  // Set by getMyContractTable, not need initialize value!
+    EVMTableName m_myContractTable;
+    evmc_address m_newContractAddress;  // Set by getMyContractTable, no need initialize value!
     std::vector<protocol::LogEntry> m_logs;
 
     auto buildLegacyExternalCaller()
@@ -91,18 +98,17 @@ private:
             [this](const evmc_message& message) { return task::syncWait(externalCall(message)); };
     }
 
-    std::string getTableName(const evmc_address& address)
+    EVMTableName getTableName(const evmc_address& address)
     {
-        std::string tableName;
-        tableName.insert(
-            tableName.end(), executor::USER_APPS_PREFIX.begin(), executor::USER_APPS_PREFIX.end());
-        boost::algorithm::hex_lower((const char*)address.bytes,
-            (const char*)address.bytes + sizeof(address), std::back_inserter(tableName));
-
+        EVMTableName tableName;
+        auto* lastIt = std::uninitialized_copy(ledger::SYS_DIRECTORY::USER_APPS.begin(),
+            ledger::SYS_DIRECTORY::USER_APPS.end(), tableName.begin());
+        boost::algorithm::hex_lower(
+            (const char*)address.bytes, (const char*)address.bytes + sizeof(address), lastIt);
         return tableName;
     }
 
-    std::string getMyContractTable(
+    EVMTableName getMyContractTable(
         const protocol::BlockHeader& blockHeader, const evmc_message& message)
     {
         switch (message.kind)
@@ -200,8 +206,8 @@ public:
     {
         evmc_bytes32 result;
         auto valueEntry = co_await storage2::readOne(m_rollbackableStorage,
-            StateKeyView{
-                m_myContractTable, std::string_view((const char*)key->bytes, sizeof(key->bytes))});
+            StateKeyView{concepts::bytebuffer::toView(m_myContractTable),
+                std::string_view((const char*)key->bytes, sizeof(key->bytes))});
         if (valueEntry)
         {
             auto field = valueEntry->getField(0);
@@ -222,15 +228,15 @@ public:
 
         auto keyView = std::string_view((const char*)key->bytes, sizeof(key->bytes));
         co_await storage2::writeOne(m_rollbackableStorage,
-            StateKey{std::string_view(m_myContractTable), keyView}, std::move(entry));
+            StateKey{concepts::bytebuffer::toView(m_myContractTable), keyView}, std::move(entry));
     }
 
     task::Task<std::optional<storage::Entry>> code(const evmc_address& address)
     {
         // Need block version >= 3.1
         auto tableName = getTableName(address);
-        auto codeHashEntry = co_await storage2::readOne(
-            m_rollbackableStorage, StateKeyView{tableName, executor::ACCOUNT_CODE_HASH});
+        auto codeHashEntry = co_await storage2::readOne(m_rollbackableStorage,
+            StateKeyView{concepts::bytebuffer::toView(tableName), executor::ACCOUNT_CODE_HASH});
         if (codeHashEntry)
         {
             auto codeEntry = co_await storage2::readOne(
@@ -260,7 +266,8 @@ public:
                 StateKey{ledger::SYS_CODE_BINARY, codeHashEntry.get()}, std::move(codeEntry));
         }
         co_await storage2::writeOne(m_rollbackableStorage,
-            StateKey{m_myContractTable, executor::ACCOUNT_CODE_HASH}, std::move(codeHashEntry));
+            StateKey{concepts::bytebuffer::toView(m_myContractTable), executor::ACCOUNT_CODE_HASH},
+            std::move(codeHashEntry));
     }
 
     task::Task<void> setCode(bytesConstRef code)
@@ -303,8 +310,8 @@ public:
     task::Task<h256> codeHashAt(const evmc_address& address)
     {
         auto tableName = getTableName(address);
-        auto codeHashEntry = co_await storage2::readOne(
-            m_rollbackableStorage, StateKeyView{tableName, executor::ACCOUNT_CODE_HASH});
+        auto codeHashEntry = co_await storage2::readOne(m_rollbackableStorage,
+            StateKeyView{concepts::bytebuffer::toView(tableName), executor::ACCOUNT_CODE_HASH});
         if (codeHashEntry)
         {
             auto view = codeHashEntry->get();
@@ -377,8 +384,8 @@ public:
     {
         // Write table to s_tables
         constexpr std::string_view SYS_TABLES{"s_tables"};
-        if (co_await storage2::existsOne(
-                m_rollbackableStorage, StateKey{SYS_TABLES, m_myContractTable}))
+        if (co_await storage2::existsOne(m_rollbackableStorage,
+                StateKey{SYS_TABLES, concepts::bytebuffer::toView(m_myContractTable)}))
         {
             // Table exists
         }
@@ -386,14 +393,16 @@ public:
         if (m_ledgerConfig.authCheckStatus() != 0U)
         {
             createAuthTable(m_rollbackableStorage, m_blockHeader, m_message, m_origin,
-                m_myContractTable, buildLegacyExternalCaller(), m_precompiledManager);
+                concepts::bytebuffer::toView(m_myContractTable), buildLegacyExternalCaller(),
+                m_precompiledManager);
         }
 
         auto savepoint = m_rollbackableStorage.current();
         storage::Entry tableEntry;
         tableEntry.setField(0, "value");
-        co_await storage2::writeOne(
-            m_rollbackableStorage, StateKey{SYS_TABLES, m_myContractTable}, std::move(tableEntry));
+        co_await storage2::writeOne(m_rollbackableStorage,
+            StateKey{SYS_TABLES, concepts::bytebuffer::toView(m_myContractTable)},
+            std::move(tableEntry));
 
         std::string_view createCode((const char*)m_message.input_data, m_message.input_size);
         auto createCodeHash = executor::GlobalHashImpl::g_hashImpl->hash(
@@ -442,7 +451,8 @@ public:
         {
             BOOST_THROW_EXCEPTION(
                 NotFoundCodeError{} << bcos::Error::ErrorMessage(
-                    std::string("Not found contract code: ").append(m_myContractTable)));
+                    std::string("Not found contract code: ")
+                        .append(concepts::bytebuffer::toView(m_myContractTable))));
         }
         auto code = codeEntry->get();
         auto mode = toRevision(vmSchedule());
