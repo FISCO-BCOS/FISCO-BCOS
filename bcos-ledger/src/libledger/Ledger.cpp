@@ -53,6 +53,7 @@
 #include <bcos-tool/ConsensusNode.h>
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <evmc/evmc.h>
 #include <tbb/parallel_for.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/exception/diagnostic_information.hpp>
@@ -1620,7 +1621,10 @@ static task::Task<void> setAllocs(
 {
     for (auto&& alloc : allocs)
     {
-        account::EVMAccount account(storage, evmc_address{});
+        evmc_address address;
+        boost::algorithm::unhex(alloc.address, address.bytes);
+
+        account::EVMAccount account(storage, address);
         co_await account::create(account);
 
         if (!alloc.code.empty())

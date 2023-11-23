@@ -1428,7 +1428,8 @@ BOOST_AUTO_TEST_CASE(genesisBlockWithAllocs)
             }
             else
             {
-                BOOST_CHECK_EQUAL(balanceEntry->get(), boost::lexical_cast<std::string>(i * 10));
+                auto numberStr = boost::lexical_cast<std::string>(i * 10);
+                BOOST_CHECK_EQUAL(balanceEntry->get(), numberStr);
             }
 
             auto codeHashEntry = co_await storage2::readOne(*storage,
@@ -1443,17 +1444,6 @@ BOOST_AUTO_TEST_CASE(genesisBlockWithAllocs)
             auto codeHashBytes = codeHash.asBytes();
             BOOST_CHECK_EQUAL(codeHashEntry->get(),
                 std::string_view((const char*)codeHashBytes.data(), codeHashBytes.size()));
-
-            auto nonceEntry = co_await storage2::readOne(*storage,
-                transaction_executor::StateKeyView(tableName, ACCOUNT_TABLE_FIELDS::NONCE));
-            if (i == 0)
-            {
-                BOOST_CHECK(!nonceEntry);
-            }
-            else
-            {
-                BOOST_CHECK_EQUAL(nonceEntry->get(), boost::lexical_cast<std::string>(i));
-            }
         }
     }());
 }

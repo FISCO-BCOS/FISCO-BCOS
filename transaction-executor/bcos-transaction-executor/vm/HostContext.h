@@ -29,6 +29,7 @@
 #include "bcos-concepts/ByteBuffer.h"
 #include "bcos-crypto/hasher/Hasher.h"
 #include "bcos-executor/src/Common.h"
+#include "bcos-framework/ledger/Account.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/BlockHeader.h"
@@ -89,7 +90,7 @@ private:
     PrecompiledManager const& m_precompiledManager;
     ledger::LedgerConfig const& m_ledgerConfig;
 
-    EVMTableName m_myContractTable;
+    ledger::account::EVMAccount<Storage> m_myAccount;
     evmc_address m_newContractAddress;  // Set by getMyContractTable, no need initialize value!
     std::vector<protocol::LogEntry> m_logs;
 
@@ -205,70 +206,23 @@ public:
 
     task::Task<evmc_bytes32> get(const evmc_bytes32* key)
     {
-        evmc_bytes32 result;
-        auto valueEntry = co_await storage2::readOne(m_rollbackableStorage,
-            StateKeyView{concepts::bytebuffer::toView(m_myContractTable),
-                std::string_view((const char*)key->bytes, sizeof(key->bytes))});
-        if (valueEntry)
-        {
-            auto field = valueEntry->getField(0);
-            std::uninitialized_copy_n(field.data(), sizeof(result), result.bytes);
-        }
-        else
-        {
-            std::uninitialized_fill_n(result.bytes, sizeof(result), 0);
-        }
-        co_return result;
+        co_return co_await ledger::account::storage(m_myAccount, *key);
     }
 
     task::Task<void> set(const evmc_bytes32* key, const evmc_bytes32* value)
     {
-        std::string_view valueView((char*)value->bytes, sizeof(value->bytes));
-        storage::Entry entry;
-        entry.set(valueView);
-
-        auto keyView = std::string_view((const char*)key->bytes, sizeof(key->bytes));
-        co_await storage2::writeOne(m_rollbackableStorage,
-            StateKey{concepts::bytebuffer::toView(m_myContractTable), keyView}, std::move(entry));
+        co_await ledger::account::setStorage(m_myAccount, *key, *value);
     }
 
     task::Task<std::optional<storage::Entry>> code(const evmc_address& address)
     {
-        // Need block version >= 3.1
-        auto tableName = getTableName(address);
-        auto codeHashEntry = co_await storage2::readOne(m_rollbackableStorage,
-            StateKeyView{concepts::bytebuffer::toView(tableName), executor::ACCOUNT_CODE_HASH});
-        if (codeHashEntry)
-        {
-            auto codeEntry = co_await storage2::readOne(
-                m_rollbackableStorage, StateKeyView{ledger::SYS_CODE_BINARY, codeHashEntry->get()});
-            if (codeEntry)
-            {
-                co_return codeEntry;
-            }
-        }
-        co_return std::optional<storage::Entry>{};
+        ledger::account::EVMAccount tempAccount(m_rollbackableStorage, address);
+        co_return co_await ledger::account::code(tempAccount);
     }
 
     task::Task<void> setCode(const crypto::HashType& codeHash, bytesConstRef code)
     {
-        storage::Entry codeHashEntry;
-        codeHashEntry.set(std::string_view((const char*)codeHash.data(), codeHash.size()));
-
-        // Need block version >= 3.1
-        // Query the code table first
-        auto existsCode = co_await storage2::readOne(
-            m_rollbackableStorage, StateKeyView{ledger::SYS_CODE_BINARY, codeHashEntry.get()});
-        if (!existsCode)
-        {
-            storage::Entry codeEntry;
-            codeEntry.set(code.toBytes());
-            co_await storage2::writeOne(m_rollbackableStorage,
-                StateKey{ledger::SYS_CODE_BINARY, codeHashEntry.get()}, std::move(codeEntry));
-        }
-        co_await storage2::writeOne(m_rollbackableStorage,
-            StateKey{concepts::bytebuffer::toView(m_myContractTable), executor::ACCOUNT_CODE_HASH},
-            std::move(codeHashEntry));
+        co_await ledger::account::setCode(m_myAccount, code.toBytes(), codeHash);
     }
 
     task::Task<void> setCode(bytesConstRef code)
@@ -278,6 +232,9 @@ public:
 
     task::Task<void> setCodeAndABI(bytesConstRef code, std::string abi)
     {
+        co_await ledger::account::setCode(m_myAccount, code.toBytes());
+        co_await ledger::account::setABI(m_myAccount, std::move(abi));
+
         auto codeHash = executor::GlobalHashImpl::g_hashImpl->hash(code);
         auto codeHashView = std::string_view((char*)codeHash.data(), codeHash.size());
         co_await setCode(codeHash, code);

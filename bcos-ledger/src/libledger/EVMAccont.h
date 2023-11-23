@@ -53,7 +53,7 @@ private:
         const crypto::HashType& codeHash)
     {
         storage::Entry codeHashEntry;
-        codeHashEntry.set(concepts::bytebuffer::toView(codeHash));
+        codeHashEntry.set(std::move(codeHash));
 
         // Query the code table first
         auto existsCode = co_await storage2::readOne(account.m_storage,
