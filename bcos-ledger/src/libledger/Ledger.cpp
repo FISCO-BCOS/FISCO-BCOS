@@ -1615,15 +1615,6 @@ static task::Task<void> setGenesisFeatures(RANGES::input_range auto const& featu
     co_await features.writeToStorage(storage, 0);
 }
 
-static std::string getTableName(std::string_view hexAddress)
-{
-    std::string tableName;
-    tableName.reserve(SYS_DIRECTORY::USER_APPS.size() + hexAddress.size());
-    tableName.append(SYS_DIRECTORY::USER_APPS);
-    tableName.append(hexAddress);
-    return tableName;
-}
-
 static task::Task<void> setAllocs(
     RANGES::input_range auto const& allocs, auto& storage, const crypto::Hash& hashImpl)
 {

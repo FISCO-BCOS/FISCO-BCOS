@@ -53,6 +53,7 @@
 #include <bcos-table/src/StateStorage.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
+#include <boost/algorithm/hex.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
 #include <memory>
@@ -1394,20 +1395,21 @@ BOOST_AUTO_TEST_CASE(genesisBlockWithAllocs)
         genesisConfig.m_txGasLimit = 3000000000;
         genesisConfig.m_compatibilityVersion =
             tool::toVersionNumber(bcos::protocol::V3_6_VERSION_STR);
-        static auto code = "I am a solidity code!"s;
+        auto code = "I am a solidity code!"s;
+        std::string hexCode;
+        boost::algorithm::hex_lower(code, std::back_inserter(hexCode));
 
         genesisConfig.m_allocs = RANGES::views::iota(0, 10) |
-                                 RANGES::views::transform([](int index) {
-                                     Alloc alloc{.address = fmt::format("0x{:0>40}", index),
-                                         .nonce = bcos::u256(index),
+                                 RANGES::views::transform([&](int index) {
+                                     Alloc alloc{.address = fmt::format("{:0>40}", index),
                                          .balance = bcos::u256(index * 10),
-                                         .code = code,
+                                         .code = hexCode,
                                          .storage = {}};
 
                                      if (index % 2 == 0)
                                      {
-                                         alloc.storage.emplace_back(fmt::format("0x{:0>64}", index),
-                                             fmt::format("0x{:0>64}", index * 2));
+                                         alloc.storage.emplace_back(fmt::format("{:0>64}", index),
+                                             fmt::format("{:0>64}", index * 2));
                                      }
                                      return alloc;
                                  }) |
@@ -1418,9 +1420,8 @@ BOOST_AUTO_TEST_CASE(genesisBlockWithAllocs)
         for (auto i : RANGES::views::iota(0, 10))
         {
             auto tableName = fmt::format("{}{:0>40}", SYS_DIRECTORY::USER_APPS, i);
-            auto balanceEntry =
-                co_await storage2::readOne(*storage, transaction_executor::StateKeyView(tableName,
-                                                         ACCOUNT_TABLE_FIELDS::BALANCE));
+            auto balanceEntry = co_await storage2::readOne(*storage,
+                transaction_executor::StateKeyView(tableName, ACCOUNT_TABLE_FIELDS::BALANCE));
             if (i == 0)
             {
                 BOOST_CHECK(!balanceEntry);
@@ -1430,13 +1431,12 @@ BOOST_AUTO_TEST_CASE(genesisBlockWithAllocs)
                 BOOST_CHECK_EQUAL(balanceEntry->get(), boost::lexical_cast<std::string>(i * 10));
             }
 
-            auto codeEntry = co_await storage2::readOne(*storage,
-                transaction_executor::StateKeyView(tableName, ACCOUNT_TABLE_FIELDS::CODE));
-            BOOST_CHECK_EQUAL(codeEntry->get(), code);
+            auto codeHashEntry = co_await storage2::readOne(*storage,
+                transaction_executor::StateKeyView(tableName, ACCOUNT_TABLE_FIELDS::CODE_HASH));
 
-            auto codeHashEntry =
-                co_await storage2::readOne(*storage, transaction_executor::StateKeyView(tableName,
-                                                         ACCOUNT_TABLE_FIELDS::CODE_HASH));
+            auto codeEntry = co_await storage2::readOne(*storage,
+                transaction_executor::StateKeyView(ledger::SYS_CODE_BINARY, codeHashEntry->get()));
+            BOOST_CHECK_EQUAL(codeEntry->get(), code);
             auto codeView = codeEntry->get();
             auto codeHash = hashImpl->hash(
                 bcos::bytesConstRef((const uint8_t*)codeView.data(), codeView.size()));

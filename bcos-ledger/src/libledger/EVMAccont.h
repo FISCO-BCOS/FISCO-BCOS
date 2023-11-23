@@ -25,8 +25,9 @@ private:
 
     friend task::Task<void> tag_invoke(tag_t<create> /*unused*/, EVMAccount& account)
     {
-        co_await storage2::writeOne(storage,
-            transaction_executor::StateKey(SYS_TABLES, account.m_tableName),
+        co_await storage2::writeOne(account.m_storage,
+            transaction_executor::StateKey(
+                SYS_TABLES, concepts::bytebuffer::toView(account.m_tableName)),
             storage::Entry{std::string_view{"value"}});
     }
 
