@@ -36,6 +36,7 @@
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
+#include "bcos-ledger/src/libledger/EVMAccont.h"
 #include "bcos-utilities/Common.h"
 #include <bcos-task/Wait.h>
 #include <evmc/evmc.h>

@@ -1,4 +1,5 @@
 #pragma once
+#include "bcos-concepts/ByteBuffer.h"
 #include "bcos-framework/ledger/Account.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/storage/Entry.h"
@@ -22,6 +23,13 @@ private:
     Storage& m_storage;
     EVMTableName m_tableName;
 
+    friend task::Task<void> tag_invoke(tag_t<create> /*unused*/, EVMAccount& account)
+    {
+        co_await storage2::writeOne(storage,
+            transaction_executor::StateKey(SYS_TABLES, account.m_tableName),
+            storage::Entry{std::string_view{"value"}});
+    }
+
     friend task::Task<std::optional<storage::Entry>> tag_invoke(
         tag_t<code> /*unused*/, EVMAccount& account)
     {
@@ -40,19 +48,18 @@ private:
         co_return std::optional<storage::Entry>{};
     }
 
-    friend task::Task<void> tag_invoke(tag_t<setCode> /*unused*/, EVMAccount& account,
-        bytesConstRef code, const crypto::HashType& codeHash)
+    friend task::Task<void> tag_invoke(tag_t<setCode> /*unused*/, EVMAccount& account, bytes code,
+        const crypto::HashType& codeHash)
     {
         storage::Entry codeHashEntry;
-        codeHashEntry.set(std::string_view((const char*)codeHash.data(), codeHash.size()));
+        codeHashEntry.set(concepts::bytebuffer::toView(codeHash));
 
         // Query the code table first
         auto existsCode = co_await storage2::readOne(account.m_storage,
             transaction_executor::StateKeyView{ledger::SYS_CODE_BINARY, codeHashEntry.get()});
         if (!existsCode)
         {
-            storage::Entry codeEntry;
-            codeEntry.set(code.toBytes());
+            storage::Entry codeEntry(std::move(code));
             co_await storage2::writeOne(account.m_storage,
                 transaction_executor::StateKey{ledger::SYS_CODE_BINARY, codeHashEntry.get()},
                 std::move(codeEntry));
@@ -63,11 +70,18 @@ private:
             std::move(codeHashEntry));
     }
 
+    friend task::Task<void> tag_invoke(
+        tag_t<setCode> /*unused*/, EVMAccount& account, bytes code, const crypto::Hash& hashImpl)
+    {
+        auto codeHash = hashImpl.hash(code);
+        co_await account::setCode(account, std::move(code), codeHash);
+    }
+
     friend task::Task<h256> tag_invoke(tag_t<codeHash> /*unused*/, EVMAccount& account)
     {
         auto codeHashEntry = co_await storage2::readOne(account.m_storage,
-            transaction_executor::StateKeyView{
-                concepts::bytebuffer::toView(account.m_storage), ACCOUNT_TABLE_FIELDS::CODE_HASH});
+            transaction_executor::StateKeyView{concepts::bytebuffer::toView(account.m_tableName),
+                ACCOUNT_TABLE_FIELDS::CODE_HASH});
         if (codeHashEntry)
         {
             auto view = codeHashEntry->get();
@@ -77,18 +91,19 @@ private:
         co_return h256{};
     }
 
-    friend task::Task<std::optional<storage::Entry>> tag_invoke(tag_t<abi>, EVMAccount& account)
+    friend task::Task<std::optional<storage::Entry>> tag_invoke(
+        tag_t<abi> /*unused*/, EVMAccount& account)
     {
         co_return co_await storage2::readOne(account.m_storage,
             transaction_executor::StateKeyView{
-                concepts::bytebuffer::toView(account.m_storage), ACCOUNT_TABLE_FIELDS::ABI});
+                concepts::bytebuffer::toView(account.m_tableName), ACCOUNT_TABLE_FIELDS::ABI});
     }
 
-    friend task::Task<u256> tag_invoke(tag_t<balance>, EVMAccount& account)
+    friend task::Task<u256> tag_invoke(tag_t<balance> /*unused*/, EVMAccount& account)
     {
         auto balanceEntry = co_await storage2::readOne(account.m_storage,
             transaction_executor::StateKeyView{
-                concepts::bytebuffer::toView(account.m_storage), ACCOUNT_TABLE_FIELDS::BALANCE});
+                concepts::bytebuffer::toView(account.m_tableName), ACCOUNT_TABLE_FIELDS::BALANCE});
 
         if (balanceEntry)
         {
@@ -105,7 +120,7 @@ private:
         storage::Entry balanceEntry(boost::lexical_cast<std::string>(balance));
         co_await storage2::writeOne(account.m_storage,
             transaction_executor::StateKey{
-                concepts::bytebuffer::toView(account.m_storage), ACCOUNT_TABLE_FIELDS::BALANCE},
+                concepts::bytebuffer::toView(account.m_tableName), ACCOUNT_TABLE_FIELDS::BALANCE},
             std::move(balanceEntry));
     }
 
@@ -113,7 +128,7 @@ private:
         tag_t<storage> /*unused*/, EVMAccount& account, const evmc_bytes32& key)
     {
         auto valueEntry = co_await storage2::readOne(account.m_storage,
-            transaction_executor::StateKeyView{concepts::bytebuffer::toView(account.m_storage),
+            transaction_executor::StateKeyView{concepts::bytebuffer::toView(account.m_tableName),
                 concepts::bytebuffer::toView(key.bytes)});
 
         evmc_bytes32 value;
@@ -149,8 +164,7 @@ public:
     {
         auto* lastIt = std::uninitialized_copy(ledger::SYS_DIRECTORY::USER_APPS.begin(),
             ledger::SYS_DIRECTORY::USER_APPS.end(), m_tableName.data());
-        boost::algorithm::hex_lower(
-            (const char*)address.bytes, (const char*)address.bytes + sizeof(address), lastIt);
+        boost::algorithm::hex_lower(concepts::bytebuffer::toView(address.bytes), lastIt);
     }
     ~EVMAccount() noexcept = default;
 };

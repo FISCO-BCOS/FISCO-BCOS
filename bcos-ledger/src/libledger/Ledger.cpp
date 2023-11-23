@@ -22,12 +22,14 @@
  */
 
 #include "Ledger.h"
+#include "EVMAccont.h"
 #include "LedgerMethods.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
+#include "bcos-ledger/src/libledger/EVMAccont.h"
 #include "bcos-tool/NodeConfig.h"
 #include "bcos-tool/VersionConverter.h"
 #include "bcos-utilities/Common.h"
@@ -1627,51 +1629,33 @@ static task::Task<void> setAllocs(
 {
     for (auto&& alloc : allocs)
     {
-        auto tableName = getTableName(alloc.address);
-        co_await storage2::writeOne(storage, transaction_executor::StateKey(SYS_TABLES, tableName),
-            storage::Entry{"value"sv});
+        account::EVMAccount account(storage, evmc_address{});
+        co_await account::create(account);
 
         if (!alloc.code.empty())
         {
             bcos::bytes binaryCode;
             binaryCode.reserve(alloc.code.size() / 2);
             boost::algorithm::unhex(alloc.code, std::back_inserter(binaryCode));
-            co_await storage2::writeOne(storage,
-                transaction_executor::StateKey(tableName, ACCOUNT_TABLE_FIELDS::CODE),
-                storage::Entry{std::move(binaryCode)});
-
-            auto codeHash = hashImpl.hash(binaryCode);
-            co_await storage2::writeOne(storage,
-                transaction_executor::StateKey(tableName, ACCOUNT_TABLE_FIELDS::CODE_HASH),
-                storage::Entry{codeHash.asBytes()});
+            co_await account::setCode(account, std::move(binaryCode), hashImpl);
         }
 
         if (alloc.balance > 0)
         {
-            co_await storage2::writeOne(storage,
-                transaction_executor::StateKey(tableName, ACCOUNT_TABLE_FIELDS::BALANCE),
-                storage::Entry{boost::lexical_cast<std::string>(alloc.balance)});
+            co_await account::setBalance(account, alloc.balance);
         }
 
         if (!alloc.storage.empty())
         {
-            co_await storage2::writeSome(storage,
-                alloc.storage | RANGES::views::keys |
-                    RANGES::views::transform([&](std::string const& key) {
-                        bcos::bytes binaryKey;
-                        binaryKey.reserve(key.size() / 2);
-                        boost::algorithm::unhex(key, std::back_inserter(binaryKey));
+            for (auto const& [key, value] : alloc.storage)
+            {
+                evmc_bytes32 evmKey;
+                boost::algorithm::unhex(key, evmKey.bytes);
+                evmc_bytes32 evmValue;
+                boost::algorithm::unhex(value, evmValue.bytes);
 
-                        return transaction_executor::StateKey(tableName,
-                            std::string_view((const char*)binaryKey.data(), binaryKey.size()));
-                    }),
-                alloc.storage | RANGES::views::values |
-                    RANGES::views::transform([](std::string const& value) {
-                        bcos::bytes binaryValue;
-                        binaryValue.reserve(value.size() / 2);
-                        boost::algorithm::unhex(value, std::back_inserter(binaryValue));
-                        return storage::Entry(std::move(binaryValue));
-                    }));
+                co_await account::setStorage(account, evmKey, evmValue);
+            }
         }
     }
     co_return;
