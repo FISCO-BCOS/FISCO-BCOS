@@ -1420,7 +1420,7 @@ BOOST_AUTO_TEST_CASE(genesisBlockWithAllocs)
             auto tableName = fmt::format("{}{:0>40}", SYS_DIRECTORY::USER_APPS, i);
             auto balanceEntry =
                 co_await storage2::readOne(*storage, transaction_executor::StateKeyView(tableName,
-                                                         ACCOUNT_TABLE_FIELDS::ACCOUNT_BALANCE));
+                                                         ACCOUNT_TABLE_FIELDS::BALANCE));
             if (i == 0)
             {
                 BOOST_CHECK(!balanceEntry);
@@ -1431,12 +1431,12 @@ BOOST_AUTO_TEST_CASE(genesisBlockWithAllocs)
             }
 
             auto codeEntry = co_await storage2::readOne(*storage,
-                transaction_executor::StateKeyView(tableName, ACCOUNT_TABLE_FIELDS::ACCOUNT_CODE));
+                transaction_executor::StateKeyView(tableName, ACCOUNT_TABLE_FIELDS::CODE));
             BOOST_CHECK_EQUAL(codeEntry->get(), code);
 
             auto codeHashEntry =
                 co_await storage2::readOne(*storage, transaction_executor::StateKeyView(tableName,
-                                                         ACCOUNT_TABLE_FIELDS::ACCOUNT_CODE_HASH));
+                                                         ACCOUNT_TABLE_FIELDS::CODE_HASH));
             auto codeView = codeEntry->get();
             auto codeHash = hashImpl->hash(
                 bcos::bytesConstRef((const uint8_t*)codeView.data(), codeView.size()));
@@ -1445,7 +1445,7 @@ BOOST_AUTO_TEST_CASE(genesisBlockWithAllocs)
                 std::string_view((const char*)codeHashBytes.data(), codeHashBytes.size()));
 
             auto nonceEntry = co_await storage2::readOne(*storage,
-                transaction_executor::StateKeyView(tableName, ACCOUNT_TABLE_FIELDS::ACCOUNT_NONCE));
+                transaction_executor::StateKeyView(tableName, ACCOUNT_TABLE_FIELDS::NONCE));
             if (i == 0)
             {
                 BOOST_CHECK(!nonceEntry);

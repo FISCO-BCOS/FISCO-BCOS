@@ -1637,19 +1637,19 @@ static task::Task<void> setAllocs(
             binaryCode.reserve(alloc.code.size() / 2);
             boost::algorithm::unhex(alloc.code, std::back_inserter(binaryCode));
             co_await storage2::writeOne(storage,
-                transaction_executor::StateKey(tableName, ACCOUNT_TABLE_FIELDS::ACCOUNT_CODE),
+                transaction_executor::StateKey(tableName, ACCOUNT_TABLE_FIELDS::CODE),
                 storage::Entry{std::move(binaryCode)});
 
             auto codeHash = hashImpl.hash(binaryCode);
             co_await storage2::writeOne(storage,
-                transaction_executor::StateKey(tableName, ACCOUNT_TABLE_FIELDS::ACCOUNT_CODE_HASH),
+                transaction_executor::StateKey(tableName, ACCOUNT_TABLE_FIELDS::CODE_HASH),
                 storage::Entry{codeHash.asBytes()});
         }
 
         if (alloc.balance > 0)
         {
             co_await storage2::writeOne(storage,
-                transaction_executor::StateKey(tableName, ACCOUNT_TABLE_FIELDS::ACCOUNT_BALANCE),
+                transaction_executor::StateKey(tableName, ACCOUNT_TABLE_FIELDS::BALANCE),
                 storage::Entry{boost::lexical_cast<std::string>(alloc.balance)});
         }
 

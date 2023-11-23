@@ -95,14 +95,14 @@ struct SYS_DIRECTORY
 // Table fields
 struct ACCOUNT_TABLE_FIELDS
 {
-    static constexpr std::string_view ACCOUNT_CODE_HASH = "codeHash";
-    static constexpr std::string_view ACCOUNT_CODE = "code";
-    static constexpr std::string_view ACCOUNT_BALANCE = "balance";
-    static constexpr std::string_view ACCOUNT_ABI = "abi";
-    static constexpr std::string_view ACCOUNT_NONCE = "nonce";
-    static constexpr std::string_view ACCOUNT_ALIVE = "alive";
-    static constexpr std::string_view ACCOUNT_FROZEN = "frozen";
-    static constexpr std::string_view ACCOUNT_SHARD = "shard";
+    static constexpr std::string_view CODE_HASH = "codeHash";
+    static constexpr std::string_view CODE = "code";
+    static constexpr std::string_view BALANCE = "balance";
+    static constexpr std::string_view ABI = "abi";
+    static constexpr std::string_view NONCE = "nonce";
+    static constexpr std::string_view ALIVE = "alive";
+    static constexpr std::string_view FROZEN = "frozen";
+    static constexpr std::string_view SHARD = "shard";
 };
 
 enum ConsensusType : uint32_t
