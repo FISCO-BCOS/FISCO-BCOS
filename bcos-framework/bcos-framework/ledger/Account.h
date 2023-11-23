@@ -24,6 +24,16 @@ inline constexpr struct SetCode
     }
 } setCode{};
 
+inline constexpr struct CodeHash
+{
+    auto operator()(auto& account, auto&&... args) const
+        -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(
+            *this, account, std::forward<decltype(args)>(args)...))>>
+    {
+        co_return co_await tag_invoke(*this, account, std::forward<decltype(args)>(args)...);
+    }
+} codeHash{};
+
 inline constexpr struct ABI
 {
     auto operator()(auto& account, auto&&... args) const
