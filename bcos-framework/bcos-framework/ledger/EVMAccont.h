@@ -123,7 +123,7 @@ private:
     }
 
     friend task::Task<evmc_bytes32> tag_invoke(
-        tag_t<storage> /*unused*/, EVMAccount account, const evmc_bytes32& key)
+        tag_t<storage> /*unused*/, EVMAccount& account, const evmc_bytes32& key)
     {
         auto valueEntry = co_await storage2::readOne(account.m_storage,
             transaction_executor::StateKeyView{concepts::bytebuffer::toView(account.m_tableName),

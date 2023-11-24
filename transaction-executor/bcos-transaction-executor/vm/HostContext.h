@@ -302,11 +302,12 @@ public:
             interface, this, mode, &m_message, m_message.input_data, m_message.input_size);
         if (result.status_code == 0)
         {
-            auto savepoint = m_rollbackableStorage.current();
+            auto code = bytesConstRef(result.output_data, result.output_size);
+            auto codeHash = m_hashImpl.hash(code);
 
             co_await ledger::account::create(m_myAccount);
             co_await ledger::account::setCode(
-                m_myAccount, createCode.toBytes(), std::string(m_abi), createCodeHash);
+                m_myAccount, code.toBytes(), std::string(m_abi), codeHash);
 
             result.gas_left -= result.output_size * vmSchedule().createDataGas;
             result.create_address = m_newContractAddress;
