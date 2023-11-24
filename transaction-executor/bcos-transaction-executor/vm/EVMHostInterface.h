@@ -89,12 +89,23 @@ struct EVMHostInterface
         return toEvmC(waitOperator(hostContext.codeHashAt(*addr)));
     }
 
-    static size_t copyCode(evmc_host_context* context, const evmc_address*, size_t,
-        uint8_t* bufferData, size_t bufferSize) noexcept
+    static size_t copyCode(evmc_host_context* context, const evmc_address* address,
+        size_t codeOffset, uint8_t* bufferData, size_t bufferSize) noexcept
     {
         auto& hostContext = static_cast<HostContextType&>(*context);
-        waitOperator(hostContext.setCode(bytesConstRef((bcos::byte*)bufferData, bufferSize)));
-        return bufferSize;
+        auto codeEntry = waitOperator(hostContext.code(*address));
+
+        // Handle "big offset" edge case.
+        if (!codeEntry || codeOffset >= (size_t)codeEntry->size())
+        {
+            return 0;
+        }
+        auto code = codeEntry->get();
+
+        size_t maxToCopy = code.size() - codeOffset;
+        size_t numToCopy = std::min(maxToCopy, bufferSize);
+        std::copy_n(&(code[codeOffset]), numToCopy, bufferData);
+        return numToCopy;
     }
 
     static bool selfdestruct(evmc_host_context* context, [[maybe_unused]] const evmc_address* addr,

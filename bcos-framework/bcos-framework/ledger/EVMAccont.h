@@ -52,7 +52,7 @@ private:
     friend task::Task<void> tag_invoke(tag_t<setCode> /*unused*/, EVMAccount& account, bytes code,
         std::string abi, const crypto::HashType& codeHash)
     {
-        storage::Entry codeHashEntry(bytesConstRef(codeHash.data(), codeHash.size()));
+        storage::Entry codeHashEntry(concepts::bytebuffer::toView(codeHash));
         if (!co_await storage2::existsOne(account.m_storage,
                 transaction_executor::StateKeyView{ledger::SYS_CODE_BINARY, codeHashEntry.get()}))
         {
@@ -158,17 +158,23 @@ private:
         co_return concepts::bytebuffer::toView(account.m_tableName);
     }
 
+    static EVMTableName getTableName(const evmc_address& address)
+    {
+        EVMTableName tableName;
+        auto* lastIt = std::uninitialized_copy(ledger::SYS_DIRECTORY::USER_APPS.begin(),
+            ledger::SYS_DIRECTORY::USER_APPS.end(), tableName.data());
+        boost::algorithm::hex_lower(concepts::bytebuffer::toView(address.bytes), lastIt);
+        return tableName;
+    }
+
 public:
     EVMAccount(const EVMAccount&) = delete;
     EVMAccount(EVMAccount&&) = delete;
     EVMAccount& operator=(const EVMAccount&) = delete;
     EVMAccount& operator=(EVMAccount&&) = delete;
-    EVMAccount(Storage& storage, const evmc_address& address) : m_storage(storage)
-    {
-        auto* lastIt = std::uninitialized_copy(ledger::SYS_DIRECTORY::USER_APPS.begin(),
-            ledger::SYS_DIRECTORY::USER_APPS.end(), m_tableName.data());
-        boost::algorithm::hex_lower(concepts::bytebuffer::toView(address.bytes), lastIt);
-    }
+    EVMAccount(Storage& storage, const evmc_address& address)
+      : m_storage(storage), m_tableName(getTableName(address))
+    {}
     ~EVMAccount() noexcept = default;
 };
 

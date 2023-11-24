@@ -67,7 +67,7 @@ public:
     }
 
     task::Task<VMInstance> create(
-        VMKind kind, const bcos::h256& codeHash, std::string_view code, evmc_revision mode)
+        VMKind kind, const bcos::h256& codeHash, bytesConstRef code, evmc_revision mode)
     {
         switch (kind)
         {

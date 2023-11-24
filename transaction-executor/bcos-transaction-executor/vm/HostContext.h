@@ -288,11 +288,11 @@ public:
         if (m_ledgerConfig.authCheckStatus() != 0U)
         {
             createAuthTable(m_rollbackableStorage, m_blockHeader, m_message, m_origin,
-                ledger::account::path(m_myAccount), buildLegacyExternalCaller(),
+                co_await ledger::account::path(m_myAccount), buildLegacyExternalCaller(),
                 m_precompiledManager);
         }
 
-        std::string_view createCode((const char*)m_message.input_data, m_message.input_size);
+        bytesConstRef createCode(m_message.input_data, m_message.input_size);
         auto createCodeHash = m_hashImpl.hash(createCode);
         auto mode = toRevision(vmSchedule());
         auto vmInstance =
@@ -306,7 +306,7 @@ public:
 
             co_await ledger::account::create(m_myAccount);
             co_await ledger::account::setCode(
-                m_myAccount, createCode, std::string(m_abi), createCodeHash);
+                m_myAccount, createCode.toBytes(), std::string(m_abi), createCodeHash);
 
             result.gas_left -= result.output_size * vmSchedule().createDataGas;
             result.create_address = m_newContractAddress;
@@ -344,7 +344,8 @@ public:
         auto mode = toRevision(vmSchedule());
 
         auto codeHash = co_await codeHashAt(m_message.code_address);
-        auto vmInstance = co_await m_vmFactory.create(VMKind::evmone, codeHash, code, mode);
+        auto vmInstance = co_await m_vmFactory.create(VMKind::evmone, codeHash,
+            bytesConstRef((const uint8_t*)code.data(), code.size()), mode);
         auto savepoint = m_rollbackableStorage.current();
         auto result = vmInstance.execute(
             interface, this, mode, &m_message, (const uint8_t*)code.data(), code.size());
