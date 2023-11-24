@@ -44,7 +44,6 @@
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/storage/Table.h>
-#include <bcos-protocol/ParallelMerkleProof.h>
 #include <bcos-task/Wait.h>
 #include <bcos-tool/BfsFileFactory.h>
 #include <bcos-tool/ConsensusNode.h>

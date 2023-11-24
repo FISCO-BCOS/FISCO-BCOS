@@ -20,7 +20,7 @@ target_include_directories(bcos-utilities PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-utilities>)
 if (ONLY_CPP_SDK)
-    target_link_libraries(bcos-utilities PUBLIC Boost::log Boost::filesystem Boost::chrono Boost::thread Boost::serialization)
+    target_link_libraries(bcos-utilities PUBLIC Boost::log_setup Boost::log Boost::filesystem Boost::chrono Boost::thread Boost::serialization)
 else ()
     target_link_libraries(bcos-utilities PUBLIC Boost::log Boost::filesystem Boost::chrono Boost::thread Boost::serialization redis++::redis++_static zstd::libzstd_static ittapi)
 endif ()

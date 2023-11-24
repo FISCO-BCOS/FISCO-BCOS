@@ -4,11 +4,9 @@ file(GLOB HEADERS "*.h")
 aux_source_directory(. SRC_LIST)
 aux_source_directory(./amop SRC_LIST)
 
-find_package(Threads REQUIRED)
 add_library(${PROTOCOL_TARGET} ${SRC_LIST} ${HEADERS})
 
-find_package(TBB CONFIG REQUIRED)
-target_link_libraries(${PROTOCOL_TARGET} PUBLIC ${CRYPTO_TARGET} ${CODEC_TARGET} bcos-framework TBB::tbb)
+target_link_libraries(${PROTOCOL_TARGET} PUBLIC ${CRYPTO_TARGET} ${CODEC_TARGET} bcos-framework)
 
 include(GNUInstallDirs)
 install(TARGETS ${PROTOCOL_TARGET} EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")

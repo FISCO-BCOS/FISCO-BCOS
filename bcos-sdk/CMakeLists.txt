@@ -17,6 +17,9 @@ find_package(Microsoft.GSL REQUIRED)
 find_package(range-v3 REQUIRED)
 
 set(BCOS_CPP_SDK_TARGET bcos-cpp-sdk)
+if(ONLY_CPP_SDK AND (CMAKE_BUILD_TYPE MATCHES "Release"))
+    set_target_properties(BCOS_CPP_SDK_TARGET PROPERTIES LINK_FLAGS_RELEASE -s)
+endif ()
 add_library(${BCOS_CPP_SDK_TARGET} ${SRC_LIST})
 target_include_directories(${BCOS_CPP_SDK_TARGET} PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>

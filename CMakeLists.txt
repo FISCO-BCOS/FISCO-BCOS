@@ -11,6 +11,14 @@ set(VERSION_SUFFIX "")
 include(Options)
 configure_project()
 
+if (WIN32)
+# to fix boost log link error in Windows8 API
+# https://github.com/microsoft/vcpkg/discussions/22762
+    add_definitions(-D_WIN32_WINNT=0x0601)
+    add_definitions(-DBOOST_USE_WINAPI_VERSION=BOOST_WINAPI_VERSION_WIN7)
+    set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS "ON")
+endif ()
+
 # vcpkg init
 if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
     find_package(Git REQUIRED)
@@ -35,7 +43,7 @@ add_subdirectory(bcos-utilities)
 add_subdirectory(concepts)
 add_subdirectory(libtask)
 add_subdirectory(bcos-protocol)
-if(NOT ONLY_CPP_SDK AND NOT WITH_SWIG_SDK)
+if(NOT ONLY_CPP_SDK)
     add_subdirectory(bcos-tars-protocol)
 endif ()
 add_subdirectory(bcos-codec)
@@ -133,5 +141,8 @@ install(
     NAMESPACE fiscobcos::
 )
 # copy pre-commit to git hook
-file(COPY ${CMAKE_SOURCE_DIR}/tools/.ci/pre-commit DESTINATION ${CMAKE_SOURCE_DIR}/.git/hooks
-        FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+
+if(NOT EXISTS ${CMAKE_SOURCE_DIR}/.git/hooks/pre-commit)
+    file(COPY ${CMAKE_SOURCE_DIR}/tools/.ci/pre-commit DESTINATION ${CMAKE_SOURCE_DIR}/.git/hooks
+            FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+endif()

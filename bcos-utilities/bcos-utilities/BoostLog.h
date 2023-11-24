@@ -21,6 +21,11 @@
  */
 #pragma once
 
+#if defined(WIN32) || defined(WIN64) || defined(_WIN32) || defined(_WIN32_)
+// to fix boost log link error
+// https://github.com/microsoft/vcpkg/discussions/22762
+#define BOOST_USE_WINAPI_VERSION BOOST_WINAPI_VERSION_WIN7
+#endif
 #include <boost/log/attributes/constant.hpp>
 #include <boost/log/attributes/scoped_attribute.hpp>
 #include <boost/log/sources/severity_channel_logger.hpp>
