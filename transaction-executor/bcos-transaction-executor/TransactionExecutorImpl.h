@@ -31,12 +31,15 @@ class TransactionExecutorImpl
 public:
     TransactionExecutorImpl(
         protocol::TransactionReceiptFactory const& receiptFactory, crypto::Hash::Ptr hashImpl)
-      : m_receiptFactory(receiptFactory), m_precompiledManager(std::move(hashImpl))
+      : m_receiptFactory(receiptFactory),
+        m_hashImpl(std::move(hashImpl)),
+        m_precompiledManager(m_hashImpl)
     {}
 
 private:
     VMFactory m_vmFactory;
     protocol::TransactionReceiptFactory const& m_receiptFactory;
+    crypto::Hash::Ptr m_hashImpl;
     PrecompiledManager m_precompiledManager;
 
     friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
@@ -85,7 +88,7 @@ private:
             HostContext<decltype(rollbackableStorage)> hostContext(executor.m_vmFactory,
                 rollbackableStorage, blockHeader, evmcMessage, evmcMessage.sender,
                 transaction.abi(), contextID, seq, executor.m_precompiledManager, ledgerConfig,
-                std::forward<decltype(waitOperator)>(waitOperator));
+                *executor.m_hashImpl, std::forward<decltype(waitOperator)>(waitOperator));
             auto evmcResult = co_await hostContext.execute();
 
             bcos::bytesConstRef output;

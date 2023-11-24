@@ -22,14 +22,13 @@
  */
 
 #include "Ledger.h"
-#include "EVMAccont.h"
 #include "LedgerMethods.h"
+#include "bcos-framework/ledger/EVMAccont.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
-#include "bcos-ledger/src/libledger/EVMAccont.h"
 #include "bcos-tool/NodeConfig.h"
 #include "bcos-tool/VersionConverter.h"
 #include "bcos-utilities/Common.h"
@@ -1632,7 +1631,9 @@ static task::Task<void> setAllocs(
             bcos::bytes binaryCode;
             binaryCode.reserve(alloc.code.size() / 2);
             boost::algorithm::unhex(alloc.code, std::back_inserter(binaryCode));
-            co_await account::setCode(account, std::move(binaryCode), hashImpl);
+
+            auto codeHash = hashImpl.hash(binaryCode);
+            co_await account::setCode(account, std::move(binaryCode), std::string{}, codeHash);
         }
 
         if (alloc.balance > 0)

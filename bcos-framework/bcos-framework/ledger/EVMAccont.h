@@ -50,32 +50,29 @@ private:
     }
 
     friend task::Task<void> tag_invoke(tag_t<setCode> /*unused*/, EVMAccount& account, bytes code,
-        const crypto::HashType& codeHash)
+        std::string abi, const crypto::HashType& codeHash)
     {
-        storage::Entry codeHashEntry;
-        codeHashEntry.set(std::move(codeHash));
-
-        // Query the code table first
-        auto existsCode = co_await storage2::readOne(account.m_storage,
-            transaction_executor::StateKeyView{ledger::SYS_CODE_BINARY, codeHashEntry.get()});
-        if (!existsCode)
+        storage::Entry codeHashEntry(bytesConstRef(codeHash.data(), codeHash.size()));
+        if (!co_await storage2::existsOne(account.m_storage,
+                transaction_executor::StateKeyView{ledger::SYS_CODE_BINARY, codeHashEntry.get()}))
         {
-            storage::Entry codeEntry(std::move(code));
             co_await storage2::writeOne(account.m_storage,
                 transaction_executor::StateKey{ledger::SYS_CODE_BINARY, codeHashEntry.get()},
-                std::move(codeEntry));
+                storage::Entry{std::move(code)});
         }
+        if (!abi.empty() &&
+            !co_await storage2::existsOne(account.m_storage,
+                transaction_executor::StateKeyView{ledger::SYS_CONTRACT_ABI, codeHashEntry.get()}))
+        {
+            co_await storage2::writeOne(account.m_storage,
+                transaction_executor::StateKey{ledger::SYS_CONTRACT_ABI, codeHashEntry.get()},
+                storage::Entry{std::move(abi)});
+        }
+
         co_await storage2::writeOne(account.m_storage,
             transaction_executor::StateKey{
                 concepts::bytebuffer::toView(account.m_tableName), ACCOUNT_TABLE_FIELDS::CODE_HASH},
             std::move(codeHashEntry));
-    }
-
-    friend task::Task<void> tag_invoke(
-        tag_t<setCode> /*unused*/, EVMAccount& account, bytes code, const crypto::Hash& hashImpl)
-    {
-        auto codeHash = hashImpl.hash(code);
-        co_await account::setCode(account, std::move(code), codeHash);
     }
 
     friend task::Task<h256> tag_invoke(tag_t<codeHash> /*unused*/, EVMAccount& account)
@@ -126,7 +123,7 @@ private:
     }
 
     friend task::Task<evmc_bytes32> tag_invoke(
-        tag_t<storage> /*unused*/, EVMAccount& account, const evmc_bytes32& key)
+        tag_t<storage> /*unused*/, EVMAccount account, const evmc_bytes32& key)
     {
         auto valueEntry = co_await storage2::readOne(account.m_storage,
             transaction_executor::StateKeyView{concepts::bytebuffer::toView(account.m_tableName),
@@ -154,6 +151,11 @@ private:
             transaction_executor::StateKey{concepts::bytebuffer::toView(account.m_tableName),
                 concepts::bytebuffer::toView(key.bytes)},
             std::move(valueEntry));
+    }
+
+    friend task::Task<std::string_view> tag_invoke(tag_t<path> /*unused*/, EVMAccount& account)
+    {
+        co_return concepts::bytebuffer::toView(account.m_tableName);
     }
 
 public:
