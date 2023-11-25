@@ -138,6 +138,48 @@ task::Task<h256> calculateStateRoot(auto& storage, crypto::Hash const& hashImpl)
     co_return xorHash.m_hash;
 }
 
+task::Task<std::tuple<u256, h256>> calculateReceiptHashAndRoot(
+    auto& receipts, auto& block, crypto::Hash const& hashImpl)
+{
+    u256 gasUsed;
+    h256 receiptRoot;
+    tbb::parallel_for(tbb::blocked_range(0LU, RANGES::size(receipts)), [&](auto const& range) {
+        for (auto i = range.begin(); i != range.end(); ++i)
+        {
+            auto& receipt = receipts[i];
+            receipt->calculateHash(hashImpl);
+        }
+    });
+
+    tbb::parallel_invoke(
+        [&]() {
+            for (auto&& [receipt, index] : RANGES::views::zip(receipts, RANGES::views::iota(0UL)))
+            {
+                gasUsed += receipt->gasUsed();
+                if (index < block.receiptsSize())
+                {
+                    block.setReceipt(index, receipt);
+                }
+                else
+                {
+                    block.appendReceipt(receipt);
+                }
+            }
+        },
+        [&]() {
+            bcos::crypto::merkle::Merkle merkle(hashImpl.hasher());
+            auto hashesRange = receipts | RANGES::views::transform(
+                                              [](const auto& receipt) { return receipt->hash(); });
+
+            std::vector<bcos::h256> merkleTrie;
+            merkle.generateMerkle(hashesRange, merkleTrie);
+
+            receiptRoot = *RANGES::rbegin(merkleTrie);
+        });
+
+    co_return std::make_tuple(gasUsed, receiptRoot);
+}
+
 /**
  * @brief Finishes the execution of a transaction and updates the block header and block.
  *
@@ -158,42 +200,11 @@ void finishExecute(auto& storage, RANGES::range auto& receipts,
     h256 stateRoot;
     h256 receiptRoot;
 
-    tbb::parallel_invoke(
-        [&]() {
-            // Append receipts
-            for (auto&& [receipt, index] : RANGES::views::zip(receipts, RANGES::views::iota(0UL)))
-            {
-                gasUsed += receipt->gasUsed();
-                if (index < block.receiptsSize())
-                {
-                    block.setReceipt(index, receipt);
-                }
-                else
-                {
-                    block.appendReceipt(receipt);
-                }
-            }
-        },
-        [&]() { transactionRoot = calcauteTransactionRoot(block, hashImpl); },
+    tbb::parallel_invoke([&]() { transactionRoot = calcauteTransactionRoot(block, hashImpl); },
         [&]() { stateRoot = task::tbb::syncWait(calculateStateRoot(storage, hashImpl)); },
         [&]() {
-            tbb::parallel_for(
-                tbb::blocked_range(0LU, RANGES::size(receipts)), [&](auto const& range) {
-                    for (auto i = range.begin(); i != range.end(); ++i)
-                    {
-                        auto& receipt = receipts[i];
-                        receipt->calculateHash(hashImpl);
-                    }
-                });
-
-            bcos::crypto::merkle::Merkle merkle(hashImpl.hasher());
-            auto hashesRange = receipts | RANGES::views::transform(
-                                              [](const auto& receipt) { return receipt->hash(); });
-
-            std::vector<bcos::h256> merkleTrie;
-            merkle.generateMerkle(hashesRange, merkleTrie);
-
-            receiptRoot = *RANGES::rbegin(merkleTrie);
+            std::tie(gasUsed, receiptRoot) =
+                task::tbb::syncWait(calculateReceiptHashAndRoot(receipts, block, hashImpl));
         });
     newBlockHeader.setGasUsed(gasUsed);
     newBlockHeader.setTxsRoot(transactionRoot);
