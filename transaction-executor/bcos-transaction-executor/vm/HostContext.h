@@ -110,7 +110,7 @@ private:
             {
                 auto address =
                     fmt::format(FMT_COMPILE("{}_{}_{}"), blockHeader.number(), m_contextID, m_seq);
-                auto hash = executor::GlobalHashImpl::g_hashImpl->hash(address);
+                auto hash = m_hashImpl.hash(address);
                 std::uninitialized_copy_n(
                     hash.data(), sizeof(m_newContractAddress.bytes), m_newContractAddress.bytes);
             }
@@ -123,12 +123,10 @@ private:
         }
         case EVMC_CREATE2:
         {
-            auto const& hashImpl = *executor::GlobalHashImpl::g_hashImpl;
-
-            auto field1 = hashImpl.hash(bytes{0xff});
+            auto field1 = m_hashImpl.hash(bytes{0xff});
             auto field2 = bytesConstRef(message.sender.bytes, sizeof(message.sender.bytes));
             auto field3 = toBigEndian(fromEvmC(message.create2_salt));
-            auto field4 = hashImpl.hash(bytesConstRef(message.input_data, message.input_size));
+            auto field4 = m_hashImpl.hash(bytesConstRef(message.input_data, message.input_size));
             auto hashView = RANGES::views::concat(field1, field2, field3, field4);
 
             std::uninitialized_copy_n(hashView.begin() + 12, sizeof(m_newContractAddress.bytes),
@@ -156,8 +154,7 @@ private:
       : evmc_host_context{.interface = hostInterface,
             .wasm_interface = nullptr,
             .hash_fn = evm_hash_fn,
-            .isSMCrypto = (executor::GlobalHashImpl::g_hashImpl->getHashImplType() ==
-                           crypto::HashImplType::Sm3Hash),
+            .isSMCrypto = (hashImpl.getHashImplType() == crypto::HashImplType::Sm3Hash),
             .version = 0,
             .metrics = std::addressof(executor::ethMetrics)},
         m_vmFactory(vmFactory),
@@ -224,7 +221,7 @@ public:
         co_return co_await ledger::account::codeHash(account);
     }
 
-    task::Task<bool> exists([[maybe_unused]] const std::string_view& address)
+    task::Task<bool> exists([[maybe_unused]] const evmc_address& address)
     {
         // TODO: impl the full suport for solidity
         co_return true;
@@ -236,18 +233,19 @@ public:
     /// Hash of a block if within the last 256 blocks, or h256() otherwise.
     task::Task<h256> blockHash(int64_t number) const
     {
+        if (number >= blockNumber() || number < 0)
+        {
+            co_return h256{};
+        }
+
         BOOST_THROW_EXCEPTION(std::runtime_error("Unsupported method!"));
-        // TODO: return the block hash in multilayer storage
         co_return h256{};
     }
     int64_t blockNumber() const { return m_blockHeader.number(); }
     uint32_t blockVersion() const { return m_blockHeader.version(); }
     int64_t timestamp() const { return m_blockHeader.timestamp(); }
     evmc_address const& origin() const { return m_origin; }
-    int64_t blockGasLimit() const
-    {
-        return 30000 * 10000;  // TODO: add config
-    }
+    int64_t blockGasLimit() const { return std::get<0>(m_ledgerConfig.gasLimit()); }
 
     /// Revert any changes made (by any of the other calls).
     void log(h256s topics, bytesConstRef data)

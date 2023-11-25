@@ -38,6 +38,7 @@ public:
     virtual void decode(bytesConstRef _receiptData) = 0;
     virtual void encode(bytes& _encodedData) const = 0;
     virtual bcos::crypto::HashType hash() const = 0;
+    virtual void calculateHash(const crypto::Hash& hashImpl) = 0;
     virtual int32_t version() const = 0;
     virtual bcos::u256 gasUsed() const = 0;
     virtual std::string_view contractAddress() const = 0;

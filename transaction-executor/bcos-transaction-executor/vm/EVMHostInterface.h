@@ -44,8 +44,7 @@ struct EVMHostInterface
     static bool accountExists(evmc_host_context* context, const evmc_address* addr) noexcept
     {
         auto& hostContext = static_cast<HostContextType&>(*context);
-        auto addrView = fromEvmC(*addr);
-        return waitOperator(hostContext.exists(addrView));
+        return waitOperator(hostContext.exists(*addr));
     }
 
     static evmc_bytes32 getStorage(evmc_host_context* context,

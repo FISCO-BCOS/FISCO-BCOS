@@ -148,7 +148,7 @@ task::Task<h256> calculateStateRoot(auto& storage, crypto::Hash const& hashImpl)
  * @param newBlock The updated block.
  * @param hashImpl The hash implementation used to calculate the block hash.
  */
-void finishExecute(auto& storage, RANGES::range auto const& receipts,
+void finishExecute(auto& storage, RANGES::range auto& receipts,
     protocol::BlockHeader& newBlockHeader, protocol::Block& block, crypto::Hash const& hashImpl)
 {
     ittapi::Report finishReport(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
@@ -177,6 +177,15 @@ void finishExecute(auto& storage, RANGES::range auto const& receipts,
         [&]() { transactionRoot = calcauteTransactionRoot(block, hashImpl); },
         [&]() { stateRoot = task::tbb::syncWait(calculateStateRoot(storage, hashImpl)); },
         [&]() {
+            tbb::parallel_for(
+                tbb::blocked_range(0LU, RANGES::size(receipts)), [&](auto const& range) {
+                    for (auto i = range.begin(); i != range.end(); ++i)
+                    {
+                        auto& receipt = receipts[i];
+                        receipt->calculateHash(hashImpl);
+                    }
+                });
+
             bcos::crypto::merkle::Merkle merkle(hashImpl.hasher());
             auto hashesRange = receipts | RANGES::views::transform(
                                               [](const auto& receipt) { return receipt->hash(); });
