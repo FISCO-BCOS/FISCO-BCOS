@@ -133,6 +133,18 @@ bcos::crypto::Hash::Ptr bcos::executor::GlobalHashImpl::g_hashImpl;
 
 BOOST_FIXTURE_TEST_SUITE(TestHostContext, TestHostContextFixture)
 
+BOOST_AUTO_TEST_CASE(bits)
+{
+    auto evmAddress = bcos::unhexAddress("0x0000000000000000000000000000000000000100");
+    bcos::u160 address1;
+    boost::multiprecision::import_bits(
+        address1, evmAddress.bytes, evmAddress.bytes + sizeof(evmAddress.bytes));
+    auto address2 =
+        fromBigEndian<bcos::u160>(bcos::bytesConstRef(evmAddress.bytes, sizeof(evmAddress.bytes)));
+
+    BOOST_CHECK_EQUAL(address1, address2);
+}
+
 BOOST_AUTO_TEST_CASE(simpleCall)
 {
     syncWait([this]() -> Task<void> {

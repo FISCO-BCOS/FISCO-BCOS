@@ -39,31 +39,22 @@ namespace bcos::transaction_executor
 
 struct ReleaseEVMC
 {
-    void operator()(evmc_vm* ptr) const noexcept
-    {
-        if (ptr != nullptr)
-        {
-            ptr->destroy(ptr);
-        }
-    }
+    void operator()(evmc_vm* ptr) const noexcept;
 };
 
 /// The RAII wrapper for an VMInstance-C instance.
-template <class StatePool>
 class VMInstance
 {
 private:
     using EVMC_VM = std::unique_ptr<evmc_vm, ReleaseEVMC>;
     using EVMC_ANALYSIS_RESULT = std::shared_ptr<evmone::baseline::CodeAnalysis const>;
     std::variant<EVMC_VM, EVMC_ANALYSIS_RESULT> m_instance;
-    StatePool& m_statePool;
 
 public:
     template <class Instance>
-    explicit VMInstance(Instance instance, StatePool& statePool) noexcept
+    explicit VMInstance(Instance instance) noexcept
         requires std::same_as<Instance, evmc_vm*> ||
                  std::same_as<Instance, std::shared_ptr<evmone::baseline::CodeAnalysis const>>
-      : m_statePool(statePool)
     {
         if constexpr (std::is_same_v<Instance, evmc_vm*>)
         {
@@ -83,34 +74,9 @@ public:
     VMInstance& operator=(VMInstance&&) noexcept = default;
 
     EVMCResult execute(const struct evmc_host_interface* host, struct evmc_host_context* context,
-        evmc_revision rev, const evmc_message* msg, const uint8_t* code, size_t codeSize)
-    {
-        return std::visit(
-            overloaded{[&](EVMC_VM const& instance) {
-                           return EVMCResult(instance->execute(
-                               instance.get(), host, context, rev, msg, code, codeSize));
-                       },
-                [&](EVMC_ANALYSIS_RESULT const& instance) {
-                    std::unique_ptr<evmone::advanced::AdvancedExecutionState> state;
-                    if (m_statePool.try_pop(state))
-                    {
-                        state->reset(*msg, rev, *host, context,
-                            std::basic_string_view<uint8_t>(code, codeSize));
-                    }
-                    else
-                    {
-                        state = std::make_unique<evmone::advanced::AdvancedExecutionState>(*msg,
-                            rev, *host, context, std::basic_string_view<uint8_t>(code, codeSize));
-                    }
-                    static auto const* evm = evmc_create_evmone();
-                    return EVMCResult(evmone::baseline::execute(
-                        *static_cast<evmone::VM const*>(evm), msg->gas, *state, *instance));
-                    m_statePool.push(std::move(state));
-                }},
-            m_instance);
-    }
+        evmc_revision rev, const evmc_message* msg, const uint8_t* code, size_t codeSize);
 
-    void enableDebugOutput(){};
+    void enableDebugOutput();
 };
 
 }  // namespace bcos::transaction_executor

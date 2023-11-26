@@ -45,6 +45,7 @@
 #include <evmc/instructions.h>
 #include <evmone/evmone.h>
 #include <fmt/format.h>
+#include <boost/multiprecision/cpp_int/import_export.hpp>
 #include <boost/throw_exception.hpp>
 #include <atomic>
 #include <functional>
@@ -317,8 +318,9 @@ public:
     task::Task<EVMCResult> call()
     {
         constexpr static unsigned long MAX_PRECOMPILED_ADDRESS = 100000;
-        auto address = fromBigEndian<u160>(bcos::bytesConstRef(
-            m_message.code_address.bytes, sizeof(m_message.code_address.bytes)));
+        u160 address;
+        boost::multiprecision::import_bits(address, m_message.code_address.bytes,
+            m_message.code_address.bytes + sizeof(m_message.code_address.bytes));
         if (address > 0 && address < MAX_PRECOMPILED_ADDRESS)
         {
             auto addressUL = address.convert_to<unsigned long>();

@@ -8,6 +8,7 @@ find_package(fmt REQUIRED)
 find_package(jsoncpp REQUIRED)
 
 add_library(transaction-executor
+    bcos-transaction-executor/vm/VMInstance.cpp
     bcos-transaction-executor/precompiled/PrecompiledManager.cpp
 )
 target_include_directories(transaction-executor PUBLIC
