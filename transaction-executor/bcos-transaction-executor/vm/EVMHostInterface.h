@@ -22,8 +22,8 @@
 #pragma once
 
 #include "../Common.h"
+#include "HostContext.h"
 #include "bcos-executor/src/Common.h"
-#include "bcos-transaction-executor/vm/HostContext.h"
 #include <evmc/evmc.h>
 #include <evmc/instructions.h>
 #include <boost/core/pointer_traits.hpp>

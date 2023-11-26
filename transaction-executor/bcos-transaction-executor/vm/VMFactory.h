@@ -23,6 +23,7 @@
 #include "VMInstance.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include <evmone/evmone.h>
+#include <oneapi/tbb/concurrent_queue.h>
 #include <boost/throw_exception.hpp>
 #include <memory>
 #include <string>
@@ -49,24 +50,10 @@ private:
             storage2::memory_storage::CONCURRENT | storage2::memory_storage::MRU),
         std::hash<crypto::HashType>>
         m_evmoneCodeAnalysisCache;
+    tbb::concurrent_queue<std::unique_ptr<evmone::advanced::AdvancedExecutionState>> m_statePool;
 
 public:
-    /// Creates a VM instance of the global kind.
-    static VMInstance create() { return create(VMKind::evmone); }
-
-    /// Creates a VM instance of the kind provided.
-    static VMInstance create(VMKind kind)
-    {
-        switch (kind)
-        {
-        case VMKind::evmone:
-            return VMInstance{evmc_create_evmone()};
-        default:
-            BOOST_THROW_EXCEPTION(UnknownVMError{});
-        }
-    }
-
-    task::Task<VMInstance> create(
+    task::Task<VMInstance<decltype(m_statePool)>> create(
         VMKind kind, const bcos::h256& codeHash, bytesConstRef code, evmc_revision mode)
     {
         switch (kind)
@@ -83,7 +70,7 @@ public:
                 co_await storage2::writeOne(m_evmoneCodeAnalysisCache, codeHash, *codeAnalysis);
             }
 
-            co_return VMInstance{std::move(*codeAnalysis)};
+            co_return VMInstance<decltype(m_statePool)>{std::move(*codeAnalysis), m_statePool};
         }
         default:
             BOOST_THROW_EXCEPTION(UnknownVMError{});
