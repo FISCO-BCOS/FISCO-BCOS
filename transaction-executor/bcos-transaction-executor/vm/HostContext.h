@@ -30,7 +30,7 @@
 #include "bcos-crypto/hasher/Hasher.h"
 #include "bcos-executor/src/Common.h"
 #include "bcos-framework/ledger/Account.h"
-#include "bcos-framework/ledger/EVMAccont.h"
+#include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/BlockHeader.h"

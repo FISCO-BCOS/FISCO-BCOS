@@ -24,12 +24,13 @@ bcos::transaction_scheduler::BaselineSchedulerInitializer::build(::rocksdb::DB& 
         using MutableStorage =
             storage2::memory_storage::MemoryStorage<transaction_executor::StateKey,
                 transaction_executor::StateValue,
-                storage2::memory_storage::Attribute(storage2::memory_storage::LOGICAL_DELETION),
-                std::hash<bcos::transaction_executor::StateKey>>;
+                storage2::memory_storage::Attribute(storage2::memory_storage::ORDERED |
+                                                    storage2::memory_storage::LOGICAL_DELETION)>;
         using CacheStorage = storage2::memory_storage::MemoryStorage<transaction_executor::StateKey,
             transaction_executor::StateValue,
-            storage2::memory_storage::Attribute(
-                storage2::memory_storage::CONCURRENT | storage2::memory_storage::MRU),
+            storage2::memory_storage::Attribute(storage2::memory_storage::ORDERED |
+                                                storage2::memory_storage::CONCURRENT |
+                                                storage2::memory_storage::MRU),
             std::hash<bcos::transaction_executor::StateKey>>;
 
         CacheStorage m_cacheStorage;

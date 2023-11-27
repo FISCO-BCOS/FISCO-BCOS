@@ -27,7 +27,6 @@
 #include <evmc/evmc.h>
 #include <evmc/instructions.h>
 #include <boost/core/pointer_traits.hpp>
-#include <boost/optional.hpp>
 #include <functional>
 #include <set>
 

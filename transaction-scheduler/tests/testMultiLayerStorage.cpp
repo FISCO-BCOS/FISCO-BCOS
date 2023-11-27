@@ -35,6 +35,7 @@ BOOST_FIXTURE_TEST_SUITE(TestMultiLayerStorage, TestMultiLayerStorageFixture)
 BOOST_AUTO_TEST_CASE(noMutable)
 {
     task::syncWait([this]() -> task::Task<void> {
+
         auto view = multiLayerStorage.fork(true);
         storage::Entry entry;
         BOOST_CHECK_THROW(co_await storage2::writeOne(

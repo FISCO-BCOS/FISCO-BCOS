@@ -114,6 +114,8 @@ public:
         }
 
     public:
+        using MutableStorage = MutableStorageType;
+
         friend auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, View& storage,
             RANGES::input_range auto&& keys)
             -> task::Task<task::AwaitableReturnType<decltype(storage2::readSome(
