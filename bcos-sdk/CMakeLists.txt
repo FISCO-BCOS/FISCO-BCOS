@@ -6,7 +6,6 @@ if (ONLY_CPP_SDK AND (NOT WITH_SWIG_SDK))
     list(REMOVE_ITEM SRC_LIST "${CMAKE_CURRENT_SOURCE_DIR}/bcos-cpp-sdk/tarsRPC/detail/Core.cpp")
 else ()
     list(APPEND LINK_LIB_LIST ${TARS_PROTOCOL_TARGET})
-    find_package(range-v3 REQUIRED)
 endif ()
 
 find_package(Boost REQUIRED log serialization)
