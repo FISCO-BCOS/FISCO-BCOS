@@ -29,11 +29,7 @@
 #include <memory>
 #include <mutex>
 
-namespace bcos
-{
-namespace cppsdk
-{
-namespace utilities
+namespace bcos::cppsdk::utilities
 {
 class TransactionBuilder : public TransactionBuilderInterface
 {
@@ -208,7 +204,6 @@ public:
 
     std::string generateRandomStr();
 
-public:
     auto ecdsaCryptoSuite() -> auto& { return m_ecdsaCryptoSuite; }
     auto smCryptoSuite() -> auto& { return m_smCryptoSuite; }
 
@@ -225,6 +220,4 @@ private:
 
     std::mutex x_hsmCryptoSuite;
 };
-}  // namespace utilities
-}  // namespace cppsdk
-}  // namespace bcos
+}  // namespace bcos::cppsdk::utilities
