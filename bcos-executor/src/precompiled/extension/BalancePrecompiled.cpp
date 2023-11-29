@@ -345,18 +345,17 @@ void BalancePrecompiled::registerCaller(
     const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(_callParameters->params(), account);
-    auto sender = _callParameters->m_sender;
     std::string accountStr = account.hex();
-    PRECOMPILED_LOG(TRACE) << BLOCK_NUMBER(blockContext.number()) << LOG_BADGE("registerCaller")
-                           << LOG_DESC("registerCaller") << LOG_KV("account", accountStr)
-                           << LOG_KV("sender", sender);
     // check is governor
+    auto origin = _callParameters->m_origin;
     auto governors = getGovernorList(_executive, _callParameters, codec);
     PRECOMPILED_LOG(TRACE) << BLOCK_NUMBER(blockContext.number()) << LOG_BADGE("registerCaller")
                            << LOG_KV("governors size", governors.size())
-                           << LOG_KV("governors[0] address", governors[0].hex());
+                           << LOG_KV("governors[0] address", governors[0].hex())
+                           << LOG_KV("origin address", origin)
+                           << LOG_KV("account address", accountStr);
 
-    if (RANGES::find(governors, Address(sender)) == governors.end())
+    if (RANGES::find(governors, Address(origin)) == governors.end())
     {
         _callParameters->setExecResult(codec.encode(int32_t(CODE_REGISTER_CALLER_FAILED)));
         PRECOMPILED_LOG(TRACE) << BLOCK_NUMBER(blockContext.number()) << LOG_BADGE("registerCaller")
@@ -411,9 +410,14 @@ void BalancePrecompiled::unregisterCaller(
     codec.decode(_callParameters->params(), account);
     std::string accountStr = account.hex();
     // check is governor
-    auto sender = _callParameters->m_sender;
+    auto origin = _callParameters->m_origin;
     auto governors = getGovernorList(_executive, _callParameters, codec);
-    if (RANGES::find(governors, Address(sender)) == governors.end())
+    PRECOMPILED_LOG(TRACE) << BLOCK_NUMBER(blockContext.number()) << LOG_BADGE("unregisterCaller")
+                           << LOG_KV("governors size", governors.size())
+                           << LOG_KV("governors[0] address", governors[0].hex())
+                           << LOG_KV("origin address", origin)
+                           << LOG_KV("account address", accountStr);
+    if (RANGES::find(governors, Address(origin)) == governors.end())
     {
         _callParameters->setExecResult(codec.encode(int32_t(CODE_REGISTER_CALLER_FAILED)));
         PRECOMPILED_LOG(TRACE) << BLOCK_NUMBER(blockContext.number()) << LOG_BADGE("registerCaller")
