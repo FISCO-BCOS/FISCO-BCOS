@@ -9,6 +9,7 @@
 #include <bcos-cpp-sdk/utilities/tx/tars/tup/Tars.h>
 #include <bcos-cpp-sdk/utilities/tx/tars/tup/TarsJson.h>
 #include <bcos-crypto/interfaces/crypto/Hash.h>
+#include <bcos-framework/protocol/Protocol.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/asio/detail/socket_ops.hpp>
 #include <boost/endian/conversion.hpp>
