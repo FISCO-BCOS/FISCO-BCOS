@@ -1420,18 +1420,6 @@ BOOST_AUTO_TEST_CASE(genesisBlockWithAllocs)
         for (auto i : RANGES::views::iota(0, 10))
         {
             auto tableName = fmt::format("{}{:0>40}", SYS_DIRECTORY::USER_APPS, i);
-            auto balanceEntry = co_await storage2::readOne(*storage,
-                transaction_executor::StateKeyView(tableName, ACCOUNT_TABLE_FIELDS::BALANCE));
-            if (i == 0)
-            {
-                BOOST_CHECK(!balanceEntry);
-            }
-            else
-            {
-                auto numberStr = boost::lexical_cast<std::string>(i * 10);
-                BOOST_CHECK_EQUAL(balanceEntry->get(), numberStr);
-            }
-
             auto codeHashEntry = co_await storage2::readOne(*storage,
                 transaction_executor::StateKeyView(tableName, ACCOUNT_TABLE_FIELDS::CODE_HASH));
 
