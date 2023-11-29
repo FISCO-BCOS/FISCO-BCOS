@@ -22,6 +22,7 @@
 
 #include <bcos-cpp-sdk/utilities/tx/Transaction.h>
 #include <bcos-cpp-sdk/utilities/tx/TransactionBuilder.h>
+#include <bcos-cpp-sdk/utilities/tx/TransactionUtils.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
@@ -36,139 +37,143 @@ namespace bcos::cppsdk::utilities
 class TransactionBuilderV2 : public TransactionBuilder
 {
 public:
-    //    /**
-    //     * @brief Create a Transaction Data object with full params
-    //     *
-    //     * @param _version tx version, if version==1, then enable
-    //     * (value,gasPrice,gasLimit,maxFeePerGas,maxPriorityFeePerGas) fields
-    //     * @param _groupID group id
-    //     * @param _chainID  chain id
-    //     * @param _to   contract address, if empty, then create contract
-    //     * @param _nonce nonce, random number to avoid duplicate transactions
-    //     * @param _data encoded contract method and params
-    //     * @param _abi  contract abi, only create contract need
-    //     * @param _blockLimit block limit
-    //     * @param _value transfer value
-    //     * @param _gasPrice gas price
-    //     * @param _gasLimit gas limit
-    //     * @param _maxFeePerGas max fee per gas
-    //     * @param _maxPriorityFeePerGas max priority fee per gas
-    //     * @throw Exception if lack of some required fields, or some fields are invalid
-    //     * @return bcostars::TransactionDataUniquePtr
-    //     */
-    virtual bcostars::TransactionDataUniquePtr createTransactionData(int64_t _version,
+    /**
+     * @brief Create a Transaction Data object with full params
+     *
+     * @param _version tx version, if version==1, then enable
+     * (value,gasPrice,gasLimit,maxFeePerGas,maxPriorityFeePerGas) fields
+     * @param _groupID group id
+     * @param _chainID  chain id
+     * @param _to   contract address, if empty, then create contract
+     * @param _nonce nonce, random number to avoid duplicate transactions
+     * @param _data encoded contract method and params
+     * @param _abi  contract abi, only create contract need
+     * @param _blockLimit block limit
+     * @param _value transfer value
+     * @param _gasPrice gas price
+     * @param _gasLimit gas limit
+     * @param _maxFeePerGas max fee per gas
+     * @param _maxPriorityFeePerGas max priority fee per gas
+     * @throw Exception if lack of some required fields, or some fields are invalid
+     * @return bcostars::TransactionDataUniquePtr
+     */
+    using TransactionBuilder::createTransactionData;
+    virtual bcostars::TransactionDataUniquePtr createTransactionData(int32_t _version,
         std::string _groupID, std::string _chainID, std::string _to, std::string _nonce,
         bcos::bytes _input, std::string _abi, int64_t _blockLimit, std::string _value = "",
         std::string _gasPrice = "", int64_t _gasLimit = 0, std::string _maxFeePerGas = "",
         std::string _maxPriorityFeePerGas = "");
 
-    //    /**
-    //     * @brief calculate TransactionData hash with full fields
-    //     *
-    //     * @param _cryptoType 0: keccak256, 1: sm3
-    //     * @param _version tx version, if version==1, then enable
-    //     * (value,gasPrice,gasLimit,maxFeePerGas,maxPriorityFeePerGas) fields
-    //     * @param _groupID group id
-    //     * @param _chainID  chain id
-    //     * @param _to   contract address, if empty, then create contract
-    //     * @param _nonce nonce, random number to avoid duplicate transactions
-    //     * @param _data encoded contract method and params
-    //     * @param _abi  contract abi, only create contract need
-    //     * @param _blockLimit block limit
-    //     * @param _value transfer value
-    //     * @param _gasPrice gas price
-    //     * @param _gasLimit gas limit
-    //     * @param _maxFeePerGas max fee per gas
-    //     * @param _maxPriorityFeePerGas max priority fee per gas
-    //     * @return crypto::HashType
-    //     */
-    virtual crypto::HashType calculateTransactionDataHash(CryptoType _cryptoType, int64_t _version,
+    /**
+     * @brief calculate TransactionData hash with full fields
+     *
+     * @param _cryptoType 0: keccak256, 1: sm3
+     * @param _version tx version, if version==1, then enable
+     * (value,gasPrice,gasLimit,maxFeePerGas,maxPriorityFeePerGas) fields
+     * @param _groupID group id
+     * @param _chainID  chain id
+     * @param _to   contract address, if empty, then create contract
+     * @param _nonce nonce, random number to avoid duplicate transactions
+     * @param _data encoded contract method and params
+     * @param _abi  contract abi, only create contract need
+     * @param _blockLimit block limit
+     * @param _value transfer value
+     * @param _gasPrice gas price
+     * @param _gasLimit gas limit
+     * @param _maxFeePerGas max fee per gas
+     * @param _maxPriorityFeePerGas max priority fee per gas
+     * @return crypto::HashType
+     */
+    using TransactionBuilder::calculateTransactionDataHash;
+    virtual crypto::HashType calculateTransactionDataHash(CryptoType _cryptoType, int32_t _version,
         std::string _groupID, std::string _chainID, std::string _to, std::string _nonce,
         bcos::bytes _input, std::string _abi, int64_t _blockLimit, std::string _value = "",
         std::string _gasPrice = "", int64_t _gasLimit = 0, std::string _maxFeePerGas = "",
         std::string _maxPriorityFeePerGas = "");
 
 
-    //    /**
-    //     * @brief calculate TransactionData hash with jsonData
-    //     *
-    //     * @param _cryptoType 0: keccak256, 1: sm3
-    //     * @param _json
-    //     *              version:number
-    //     *              groupID:string
-    //     *              chainID:string
-    //     *              to:string
-    //     *              input:hex string
-    //     *              abi:string
-    //     *              blockLimit:number
-    //     *              nonce:string
-    //     *              value:string
-    //     *              gasPrice:string
-    //     *              gasLimit:number
-    //     *              maxFeePerGas:string
-    //     *              maxPriorityFeePerGas:string
-    //     * @throw Exception if lack of some required fields
-    //     * @return HashType
-    //     */
+    /**
+     * @brief calculate TransactionData hash with jsonData
+     *
+     * @param _cryptoType 0: keccak256, 1: sm3
+     * @param _json
+     *              version:number
+     *              groupID:string
+     *              chainID:string
+     *              to:string
+     *              input:hex string
+     *              abi:string
+     *              blockLimit:number
+     *              nonce:string
+     *              value:string
+     *              gasPrice:string
+     *              gasLimit:number
+     *              maxFeePerGas:string
+     *              maxPriorityFeePerGas:string
+     * @throw Exception if lack of some required fields
+     * @return HashType
+     */
     virtual crypto::HashType calculateTransactionDataHashWithJson(
         CryptoType _cryptoType, std::string _jsonData);
 
-    //    /**
-    //     * @brief Create a Transaction object with full fields
-    //     *
-    //     * @param _transactionData
-    //     * @param _signData
-    //     * @param _hash
-    //     * @param _attribute
-    //     * @param _extraData
-    //     * @param _version tx version, if version==1, then enable
-    //     * (value,gasPrice,gasLimit,maxFeePerGas,maxPriorityFeePerGas) fields
-    //     * @param _groupID group id
-    //     * @param _chainID  chain id
-    //     * @param _to   contract address, if empty, then create contract
-    //     * @param _nonce nonce, random number to avoid duplicate transactions
-    //     * @param _data encoded contract method and params
-    //     * @param _abi  contract abi, only create contract need
-    //     * @param _blockLimit block limit
-    //     * @param _value transfer value
-    //     * @param _gasPrice gas price
-    //     * @param _gasLimit gas limit
-    //     * @param _maxFeePerGas max fee per gas
-    //     * @param _maxPriorityFeePerGas max priority fee per gas
-    //     * @return bcostars::TransactionUniquePtr
-    //     */
+    /**
+     * @brief Create a Transaction object with full fields
+     *
+     * @param _transactionData
+     * @param _signData
+     * @param _hash
+     * @param _attribute
+     * @param _extraData
+     * @param _version tx version, if version==1, then enable
+     * (value,gasPrice,gasLimit,maxFeePerGas,maxPriorityFeePerGas) fields
+     * @param _groupID group id
+     * @param _chainID  chain id
+     * @param _to   contract address, if empty, then create contract
+     * @param _nonce nonce, random number to avoid duplicate transactions
+     * @param _data encoded contract method and params
+     * @param _abi  contract abi, only create contract need
+     * @param _blockLimit block limit
+     * @param _value transfer value
+     * @param _gasPrice gas price
+     * @param _gasLimit gas limit
+     * @param _maxFeePerGas max fee per gas
+     * @param _maxPriorityFeePerGas max priority fee per gas
+     * @return bcostars::TransactionUniquePtr
+     */
+    using TransactionBuilder::createTransaction;
     virtual bcostars::TransactionUniquePtr createTransaction(bcos::bytes _signData,
-        crypto::HashType _hash, int32_t _attribute, int64_t _version, std::string _groupID,
+        crypto::HashType _hash, int32_t _attribute, int32_t _version, std::string _groupID,
         std::string _chainID, std::string _to, std::string _nonce, bcos::bytes _input,
         std::string _abi, int64_t _blockLimit, std::string _value = "", std::string _gasPrice = "",
         int64_t _gasLimit = 0, std::string _maxFeePerGas = "",
         std::string _maxPriorityFeePerGas = "", std::string _extraData = "");
 
-    //    /**
-    //     * @brief Create a Signed Transaction object
-    //     *
-    //     * @param _keyPair key pair
-    //     * @param _groupID group id
-    //     * @param _chainID chain id
-    //     * @param _to   contract address, if empty, then create contract
-    //     * @param _data encoded contract method and params
-    //     * @param _abi  contract abi, only create contract need
-    //     * @param _blockLimit   block limit
-    //     * @param _attribute    transaction attribute
-    //     * @param _extraData    extra data
-    //     * @param _version  tx version, if version==1, then enable
-    //     * (value,gasPrice,gasLimit,maxFeePerGas,maxPriorityFeePerGas) fields
-    //     * @param _value    transfer value
-    //     * @param _gasPrice    gas price
-    //     * @param _gasLimit    gas limit
-    //     * @param _maxFeePerGas    max fee per gas
-    //     * @param _maxPriorityFeePerGas    max priority fee per gas
-    //     * @param _nonce    nonce, random number to avoid duplicate transactions
-    //     * @throw Exception if lack of some required fields
-    //     * @return std::pair<std::string, std::string>
-    //     */
+    /**
+     * @brief Create a Signed Transaction object
+     *
+     * @param _keyPair key pair
+     * @param _groupID group id
+     * @param _chainID chain id
+     * @param _to   contract address, if empty, then create contract
+     * @param _data encoded contract method and params
+     * @param _abi  contract abi, only create contract need
+     * @param _blockLimit   block limit
+     * @param _attribute    transaction attribute
+     * @param _extraData    extra data
+     * @param _version  tx version, if version==1, then enable
+     * (value,gasPrice,gasLimit,maxFeePerGas,maxPriorityFeePerGas) fields
+     * @param _value    transfer value
+     * @param _gasPrice    gas price
+     * @param _gasLimit    gas limit
+     * @param _maxFeePerGas    max fee per gas
+     * @param _maxPriorityFeePerGas    max priority fee per gas
+     * @param _nonce    nonce, random number to avoid duplicate transactions
+     * @throw Exception if lack of some required fields
+     * @return std::pair<std::string, std::string>
+     */
+    using TransactionBuilder::createSignedTransaction;
     virtual std::pair<std::string, std::string> createSignedTransaction(
-        bcos::crypto::KeyPairInterface _keyPair, int32_t _attribute, int64_t _version,
+        bcos::crypto::KeyPairInterface const& _keyPair, int32_t _attribute, int32_t _version,
         std::string _groupID, std::string _chainID, std::string _to, std::string _nonce,
         bcos::bytes _input, std::string _abi, int64_t _blockLimit, std::string _value = "",
         std::string _gasPrice = "", int64_t _gasLimit = 0, std::string _maxFeePerGas = "",
