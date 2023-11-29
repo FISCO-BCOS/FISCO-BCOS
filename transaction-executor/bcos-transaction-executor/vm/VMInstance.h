@@ -59,11 +59,11 @@ public:
         if constexpr (std::is_same_v<Instance, evmc_vm*>)
         {
             assert(instance->abi_version == EVMC_ABI_VERSION);
-            m_instance.template emplace<EVMC_VM>(instance);
+            m_instance.emplace<EVMC_VM>(instance);
         }
         else
         {
-            m_instance.template emplace<EVMC_ANALYSIS_RESULT>(std::move(instance));
+            m_instance.emplace<EVMC_ANALYSIS_RESULT>(std::move(instance));
         }
     }
     ~VMInstance() noexcept = default;

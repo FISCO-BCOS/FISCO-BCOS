@@ -142,7 +142,6 @@ install(
     DESTINATION share/fiscobcos
     NAMESPACE fiscobcos::
 )
-
 # copy pre-commit to git hook
 
 if(NOT EXISTS ${CMAKE_SOURCE_DIR}/.git/hooks/pre-commit)
