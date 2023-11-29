@@ -150,7 +150,7 @@ public:
         std::string_view _sender, uint32_t _version);
 
 protected:
-    bool transferBalance(std::string_view origin, std::string_view sender, 
+    bool transferBalance(std::string_view origin, std::string_view sender,
         std::string_view receiver, const u256& value, int64_t gas);
     std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> call(
         CallParameters::UniquePtr callParameters);
@@ -163,10 +163,10 @@ protected:
     CallParameters::UniquePtr callDynamicPrecompiled(
         CallParameters::UniquePtr callParameters, const std::string& code);
 
-//    virtual TransactionExecutive::Ptr buildChildExecutive(const std::string& _contractAddress,
-//        int64_t contextID, int64_t seq, bool useCoroutine = true)
+    //    virtual TransactionExecutive::Ptr buildChildExecutive(const std::string& _contractAddress,
+    //        int64_t contextID, int64_t seq, bool useCoroutine = true)
     virtual TransactionExecutive::Ptr buildChildExecutive(const std::string& _contractAddress,
-            int64_t contextID, int64_t seq, ExecutiveType execType = ExecutiveType::coroutine)
+        int64_t contextID, int64_t seq, ExecutiveType execType = ExecutiveType::coroutine)
     {
         auto executiveFactory = std::make_shared<ExecutiveFactory>(
             m_blockContext, m_evmPrecompiled, m_precompiled, m_staticPrecompiled, m_gasInjector);

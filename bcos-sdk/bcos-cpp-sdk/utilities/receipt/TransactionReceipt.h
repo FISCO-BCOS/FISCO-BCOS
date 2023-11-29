@@ -7,6 +7,7 @@
 #include "bcos-cpp-sdk/utilities/tx/tars/tup/Tars.h"
 #include "bcos-cpp-sdk/utilities/tx/tars/tup/TarsJson.h"
 #include <bcos-crypto/interfaces/crypto/Hash.h>
+#include <bcos-framework/protocol/Protocol.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/asio/detail/socket_ops.hpp>
 #include <boost/endian/conversion.hpp>
@@ -284,7 +285,7 @@ public:
         hasher.update(bcos::bytesConstRef((bcos::byte*)output.data(), output.size()));
 
         // FIXME: use TarsHashable to calculate hash
-        if (version == 1)
+        if (version == (uint32_t)bcos::protocol::TransactionVersion::V1_VERSION)
         {
             // effectiveGasPrice
             hasher.update(bcos::bytesConstRef(

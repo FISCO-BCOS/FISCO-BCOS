@@ -213,7 +213,7 @@ public:
         // encode abi
         hasher.update(bcos::bytesConstRef((bcos::byte*)abi.data(), abi.size()));
 
-        if ((int)version == 1)
+        if ((uint32_t)version == (uint32_t)bcos::protocol::TransactionVersion::V1_VERSION)
         {
             // encode value
             hasher.update(bcos::bytesConstRef((bcos::byte*)value.data(), value.size()));
