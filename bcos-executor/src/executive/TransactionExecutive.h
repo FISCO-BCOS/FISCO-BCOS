@@ -150,6 +150,8 @@ public:
         std::string_view _sender, uint32_t _version);
 
 protected:
+    bool transferBalance(std::string_view origin, std::string_view sender, 
+        std::string_view receiver, const u256& value, int64_t gas);
     std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> call(
         CallParameters::UniquePtr callParameters);
     CallParameters::UniquePtr callPrecompiled(CallParameters::UniquePtr callParameters);
