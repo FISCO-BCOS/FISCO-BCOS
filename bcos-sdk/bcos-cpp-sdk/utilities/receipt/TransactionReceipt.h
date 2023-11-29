@@ -282,6 +282,14 @@ public:
             (bcos::byte*)(&receiptStatus), sizeof(receiptStatus) / sizeof(uint8_t)));
         // output
         hasher.update(bcos::bytesConstRef((bcos::byte*)output.data(), output.size()));
+
+        // FIXME: use TarsHashable to calculate hash
+        if (version == 1)
+        {
+            // effectiveGasPrice
+            hasher.update(bcos::bytesConstRef(
+                (bcos::byte*)effectiveGasPrice.data(), effectiveGasPrice.size()));
+        }
         // logEntries
         for (const auto& log : logEntries)
         {
