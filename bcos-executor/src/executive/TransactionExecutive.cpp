@@ -337,6 +337,10 @@ CallParameters::UniquePtr TransactionExecutive::callPrecompiled(
         revert();
         callParameters->type = CallParameters::REVERT;
         callParameters->status = (int32_t)TransactionStatus::PrecompiledError;
+        if (m_blockContext.blockVersion() >= (uint32_t)(bcos::protocol::BlockVersion::V3_6_VERSION))
+        {
+            callParameters->evmStatus = EVMC_REVERT;
+        }
         callParameters->message = e.what();
     }
     catch (Exception const& e)
@@ -990,10 +994,18 @@ std::shared_ptr<precompiled::PrecompiledExecResult> TransactionExecutive::execPr
 {
     auto precompiled = getPrecompiled(_precompiledParams->m_precompiledAddress);
 
-    if (precompiled)
+    try
     {
-        auto execResult = precompiled->call(shared_from_this(), _precompiledParams);
-        return execResult;
+        if (precompiled)
+        {
+            auto execResult = precompiled->call(shared_from_this(), _precompiledParams);
+            return execResult;
+        }
+    }
+    catch (protocol::PrecompiledError const& e)
+    {
+        EXECUTIVE_LOG(ERROR) << "Precompiled error: " << diagnostic_information(e);
+        BOOST_THROW_EXCEPTION(PrecompiledError(e.what()));
     }
     [[unlikely]] EXECUTIVE_LOG(WARNING)
         << LOG_DESC("[call]Can't find precompiled address")

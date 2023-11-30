@@ -328,6 +328,8 @@ void BalancePrecompiled::transfer(const std::shared_ptr<executor::TransactionExe
     else
     {
         _callParameters->setExecResult(codec.encode(int32_t(CODE_TRANSFER_FAILED)));
+        BOOST_THROW_EXCEPTION(protocol::PrecompiledError(
+            "transfer failed, subBalance failed, please check the balance try again"));
         PRECOMPILED_LOG(ERROR) << BLOCK_NUMBER(blockContext.number())
                                << LOG_BADGE("BalancePrecompiled") << LOG_DESC("transfer")
                                << LOG_KV("from", fromStr) << LOG_KV("to", toStr)
@@ -383,7 +385,7 @@ void BalancePrecompiled::registerCaller(
     else
     {
         auto callerEntry = table->getRow(accountStr);
-        if (callerEntry->get() == "1")
+        if (callerEntry && callerEntry->get() == "1")
         {
             _callParameters->setExecResult(
                 codec.encode(int32_t(CODE_REGISTER_CALLER_ALREADY_EXIST)));

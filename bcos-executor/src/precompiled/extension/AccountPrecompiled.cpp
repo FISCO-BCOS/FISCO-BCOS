@@ -239,7 +239,7 @@ void AccountPrecompiled::getAccountBalance(const std::string& accountTableName,
                                << LOG_BADGE("AccountPrecompiled, getAccountBalance")
                                << LOG_DESC("balance not exist, return 0 by default")
                                << LOG_KV("account", accountTableName);
-        _callParameters->setExecResult(codec.encode(0));
+        BOOST_THROW_EXCEPTION(PrecompiledError("Account balance not exist!"));
         return;
     }
     balance = u256(std::string(entry->get()));
@@ -351,6 +351,7 @@ void AccountPrecompiled::subAccountBalance(const std::string& accountTableName,
                               << LOG_BADGE("AccountPrecompiled, subAccountBalance")
                               << LOG_DESC("table not exist, create and initialize balance is 0");
         _callParameters->setExecResult(codec.encode(int32_t(CODE_ACCOUNT_BALANCE_NOT_ENOUGH)));
+        BOOST_THROW_EXCEPTION(PrecompiledError("Account table not exist!"));
         return;
     }
 
@@ -366,6 +367,7 @@ void AccountPrecompiled::subAccountBalance(const std::string& accountTableName,
                                    << LOG_BADGE("AccountPrecompiled, subAccountBalance")
                                    << LOG_DESC("account balance not enough");
             _callParameters->setExecResult(codec.encode(int32_t(CODE_ACCOUNT_BALANCE_NOT_ENOUGH)));
+            BOOST_THROW_EXCEPTION(PrecompiledError("Account balance is not enough!"));
             return;
         }
         else
@@ -385,6 +387,7 @@ void AccountPrecompiled::subAccountBalance(const std::string& accountTableName,
         Balance.importFields({boost::lexical_cast<std::string>(0)});
         _executive->storage().setRow(accountTableName, ACCOUNT_BALANCE, std::move(Balance));
         _callParameters->setExecResult(codec.encode(int32_t(CODE_ACCOUNT_SUB_BALANCE_FAILED)));
+        BOOST_THROW_EXCEPTION(PrecompiledError("Account balance is not enough!"));
         return;
     }
 }
