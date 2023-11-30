@@ -329,7 +329,7 @@ void BalancePrecompiled::transfer(const std::shared_ptr<executor::TransactionExe
     {
         _callParameters->setExecResult(codec.encode(int32_t(CODE_TRANSFER_FAILED)));
         BOOST_THROW_EXCEPTION(protocol::PrecompiledError(
-            "transfer failed, subBalance failed, please check the balance try again"));
+            "transfer failed, account subBalance failed, please check the account balance"));
         PRECOMPILED_LOG(ERROR) << BLOCK_NUMBER(blockContext.number())
                                << LOG_BADGE("BalancePrecompiled") << LOG_DESC("transfer")
                                << LOG_KV("from", fromStr) << LOG_KV("to", toStr)

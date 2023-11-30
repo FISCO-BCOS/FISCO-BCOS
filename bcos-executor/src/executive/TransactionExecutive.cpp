@@ -1112,18 +1112,10 @@ std::shared_ptr<precompiled::PrecompiledExecResult> TransactionExecutive::execPr
 {
     auto precompiled = getPrecompiled(_precompiledParams->m_precompiledAddress);
 
-    try
+    if (precompiled)
     {
-        if (precompiled)
-        {
-            auto execResult = precompiled->call(shared_from_this(), _precompiledParams);
-            return execResult;
-        }
-    }
-    catch (protocol::PrecompiledError const& e)
-    {
-        EXECUTIVE_LOG(ERROR) << "Precompiled error: " << diagnostic_information(e);
-        BOOST_THROW_EXCEPTION(PrecompiledError(e.what()));
+        auto execResult = precompiled->call(shared_from_this(), _precompiledParams);
+        return execResult;
     }
     [[unlikely]] EXECUTIVE_LOG(WARNING)
         << LOG_DESC("[call]Can't find precompiled address")
