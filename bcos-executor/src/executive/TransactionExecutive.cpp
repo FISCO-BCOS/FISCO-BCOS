@@ -231,10 +231,41 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
                              << LOG_KV("blockNumber", m_blockContext.number());
     }
     m_storageWrapper->setRecoder(m_recoder);
-
     std::unique_ptr<HostContext> hostContext;
     CallParameters::UniquePtr callResults;
-    if (callParameters->create)
+    if (c_fileLogLevel <= LogLevel::TRACE)
+    {
+        EXECUTIVE_LOG(TRACE) << LOG_BADGE("Execute") << LOG_DESC("Execute begin")
+                             << LOG_KV(
+                                    "feature_balance", m_blockContext.features().get(
+                                                           ledger::Features::Flag::feature_balance))
+                             << LOG_KV("value", callParameters->value);
+    }
+
+    if (m_blockContext.features().get(ledger::Features::Flag::feature_balance) &&
+        callParameters->value > 0)
+    {
+        if (false == transferBalance(callParameters->origin, callParameters->senderAddress,
+                         callParameters->receiveAddress, static_cast<u256>(callParameters->value),
+                         callParameters->gas))
+        {
+            EXECUTIVE_LOG(DEBUG) << LOG_BADGE("Execute")
+                                 << LOG_DESC("transferBalance failed and will revet");
+            revert();
+            callResults = std::move(callParameters);
+            callResults->type = CallParameters::REVERT;
+            callResults->status = (int32_t)TransactionStatus::RevertInstruction;
+        }
+        else
+        {
+            hostContext = nullptr;
+            callResults = std::move(callParameters);
+            callResults->type = CallParameters::FINISHED;
+            callResults->status = (int32_t)TransactionStatus::None;
+        }
+    }
+
+    else if (callParameters->create)
     {
         std::tie(hostContext, callResults) = create(std::move(callParameters));
     }
@@ -259,6 +290,87 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
     }
     return callResults;
 }
+
+
+bool TransactionExecutive::transferBalance(std::string_view origin, std::string_view sender,
+    std::string_view receiver, const u256& value, int64_t gas)
+{
+    // origin 是发送方
+    // sender 是合约地址
+    // receiver 是转账接收方
+    EXECUTIVE_LOG(TRACE) << LOG_BADGE("Execute") << "now to transferBalance"
+                         << LOG_KV("subAccount", origin) << LOG_KV("addAccount", receiver)
+                         << LOG_KV("receiveAddress", ACCOUNT_ADDRESS) << LOG_KV("value", value)
+                         << LOG_KV("gas", gas);
+
+    // first subAccountBalance, then addAccountBalance
+    // origin = origin - value
+    auto codec = CodecWrapper(m_blockContext.hashHandler(), m_blockContext.isWasm());
+    auto params = codec.encodeWithSig("subAccountBalance(uint256)", value);
+    auto formTableName = bcos::getContractTableName(executor::USER_APPS_PREFIX, origin);
+    std::vector<std::string> fromTableNameVector = {formTableName};
+    auto inputParams = codec.encode(fromTableNameVector, params);
+    auto subParams = codec.encode(std::string(ACCOUNT_ADDRESS), inputParams);
+    EXECUTIVE_LOG(TRACE) << LOG_BADGE("Execute") << "transferBalance start, now is sub."
+                         << LOG_KV("tableName", formTableName) << LOG_KV("will sub balance", value);
+
+    auto reposeSub = externalRequest(shared_from_this(), ref(subParams), origin,
+        std::string(EVM_BALANCE_SENDER_ADDRESS), receiver, false, false, gas, true);
+    s256 result;
+    codec.decode(ref(reposeSub->data), result);
+    if (result != s256((int)bcos::precompiled::PrecompiledErrorCode::CODE_SUCCESS))
+    {
+        EXECUTIVE_LOG(DEBUG) << LOG_BADGE("Execute") << LOG_DESC("transferBalance sub failed")
+                             << LOG_KV("subAccount", origin) << LOG_KV("tablename", formTableName);
+        return false;
+    }
+
+    // to add balance
+    // receiver = receiver + value
+    auto params1 = codec.encodeWithSig("addAccountBalance(uint256)", value);
+    auto toTableName = bcos::getContractTableName(executor::USER_APPS_PREFIX, receiver);
+    std::vector<std::string> toTableNameVector = {toTableName};
+    auto inputParams1 = codec.encode(toTableNameVector, params1);
+    auto addParams = codec.encode(std::string(ACCOUNT_ADDRESS), inputParams1);
+
+    EXECUTIVE_LOG(TRACE) << LOG_BADGE("Execute") << "transferBalance start, now is add."
+                         << LOG_KV("tableName", toTableName) << LOG_KV("will add balance", value);
+    auto reposeAdd = externalRequest(shared_from_this(), ref(addParams), origin,
+        std::string(EVM_BALANCE_SENDER_ADDRESS), receiver, false, false, gas, true);
+    codec.decode(ref(reposeAdd->data), result);
+    if (result != s256((int)bcos::precompiled::PrecompiledErrorCode::CODE_SUCCESS))
+    {
+        EXECUTIVE_LOG(DEBUG) << LOG_BADGE("Execute")
+                             << LOG_DESC("transferBalance add failed, need to restore")
+                             << LOG_KV("addAccount", receiver) << LOG_KV("tablename", toTableName);
+
+        // if receiver add failed, sender need to restore
+        // sender = sender + value
+        auto revertParams = codec.encode(fromTableNameVector, params1);
+        auto addParams1 = codec.encode(std::string(ACCOUNT_ADDRESS), revertParams);
+        auto reponseRestore = externalRequest(shared_from_this(), ref(addParams1), origin,
+            std::string(EVM_BALANCE_SENDER_ADDRESS), receiver, false, false, gas, true);
+        s256 addResult;
+        codec.decode(ref(reponseRestore->data), addResult);
+        if (addResult != s256((int)bcos::precompiled::PrecompiledErrorCode::CODE_SUCCESS))
+        {
+            EXECUTIVE_LOG(DEBUG)
+                << LOG_BADGE("Execute")
+                << LOG_DESC(
+                       "transferBalance to sub success but add failed, strike a balance failed.")
+                << LOG_KV("restoreAccount", origin) << LOG_KV("tablename", formTableName);
+            BOOST_THROW_EXCEPTION(PrecompiledError(
+                "transferBalance to sub success but add failed, strike a balance failed."));
+        }
+        return false;
+    }
+    EXECUTIVE_LOG(DEBUG) << LOG_BADGE("Execute") << "transferBalance finished."
+                         << LOG_KV("subAccount", origin) << LOG_KV("addAccount", receiver)
+                         << LOG_KV("receiveAddress", ACCOUNT_ADDRESS) << LOG_KV("value", value)
+                         << LOG_KV("gas", gas);
+    return true;
+}
+
 
 std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionExecutive::call(
     CallParameters::UniquePtr callParameters)
@@ -288,7 +400,6 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
     {
         return {nullptr, callPrecompiled(std::move(callParameters))};
     }
-
     auto hostContext = make_unique<HostContext>(
         std::move(callParameters), shared_from_this(), std::move(tableName));
     return {std::move(hostContext), nullptr};

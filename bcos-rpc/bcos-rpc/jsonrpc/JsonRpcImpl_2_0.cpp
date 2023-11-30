@@ -276,6 +276,7 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, std::string_view _txHash,
     {
         jResp["hash"] = "0x";
     }
+    jResp["effectiveGasPrice"] = std::string(transactionReceipt.effectiveGasPrice());
 
     jResp["logEntries"] = Json::Value(Json::arrayValue);
     for (const auto& logEntry : transactionReceipt.logEntries())

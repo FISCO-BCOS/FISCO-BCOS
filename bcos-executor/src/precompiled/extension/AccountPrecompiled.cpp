@@ -59,17 +59,16 @@ std::shared_ptr<PrecompiledExecResult> AccountPrecompiled::call(
     bytes param;
     codec.decode(_callParameters->input(), dynamicParams, param);
     auto accountTableName = dynamicParams.at(0);
-
     // get user call actual params
     auto originParam = ref(param);
     uint32_t func = getParamFunc(originParam);
     bytesConstRef data = getParamData(originParam);
     auto table = _executive->storage().openTable(accountTableName);
-//    FIXME: for fake debug, temporary comment
-//    if (!table.has_value()) [[unlikely]]
-//    {
-//        BOOST_THROW_EXCEPTION(PrecompiledError(accountTableName + " does not exist"));
-//    }
+    //    FIXME: for fake debug, temporary comment
+    //    if (!table.has_value()) [[unlikely]]
+    //    {
+    //        BOOST_THROW_EXCEPTION(PrecompiledError(accountTableName + " does not exist"));
+    //    }
 
     if (func == name2Selector[AM_METHOD_SET_ACCOUNT_STATUS])
     {
@@ -228,8 +227,12 @@ void AccountPrecompiled::getAccountBalance(const std::string& accountTableName,
     auto table = _executive->storage().openTable(accountTableName);
     if (!table)
     {
-        _callParameters->setExecResult(codec.encode(int32_t(CODE_TABLE_NOT_EXIST)));
-        BOOST_THROW_EXCEPTION(PrecompiledError("Account table not exist!"));
+        _callParameters->setExecResult(codec.encode(0));
+        // BOOST_THROW_EXCEPTION(PrecompiledError("Account table not exist!"));
+        PRECOMPILED_LOG(ERROR) << BLOCK_NUMBER(blockContext.number())
+                               << LOG_BADGE("AccountPrecompiled, getAccountBalance")
+                               << LOG_DESC("Account table not exist, return 0 by default")
+                               << LOG_KV("account", accountTableName);
         return;
     }
     auto entry = _executive->storage().getRow(accountTableName, ACCOUNT_BALANCE);
@@ -266,7 +269,8 @@ void AccountPrecompiled::addAccountBalance(const std::string& accountTableName,
     // check sender
     const auto* addAccountBalanceSender =
         blockContext.isWasm() ? BALANCE_PRECOMPILED_NAME : BALANCE_PRECOMPILED_ADDRESS;
-    if (_callParameters->m_sender != addAccountBalanceSender)
+    if (!(_callParameters->m_sender == addAccountBalanceSender ||
+            _callParameters->m_sender == EVM_BALANCE_SENDER_ADDRESS))
     {
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
         return;
@@ -330,7 +334,8 @@ void AccountPrecompiled::subAccountBalance(const std::string& accountTableName,
     // check sender
     const auto* subAccountBalanceSender =
         blockContext.isWasm() ? BALANCE_PRECOMPILED_NAME : BALANCE_PRECOMPILED_ADDRESS;
-    if (_callParameters->m_sender != subAccountBalanceSender)
+    if (!(_callParameters->m_sender == subAccountBalanceSender ||
+            _callParameters->m_sender == EVM_BALANCE_SENDER_ADDRESS))
     {
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
         return;

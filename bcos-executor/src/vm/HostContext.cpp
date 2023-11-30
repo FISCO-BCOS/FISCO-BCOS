@@ -125,11 +125,21 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
     // Convert evmc_message to CallParameters
     auto request = std::make_unique<CallParameters>(CallParameters::MESSAGE);
 
-    request->senderAddress = myAddress();
     request->origin = origin();
     request->status = 0;
     request->value = fromEvmC(_msg->value);
     const auto& blockContext = m_executive->blockContext();
+    if (blockContext.features().get(ledger::Features::Flag::feature_balance) &&
+        evmAddress2String(_msg->sender) ==
+            std::string(bcos::precompiled::EVM_BALANCE_SENDER_ADDRESS))
+    {
+        // for AccountPrecompiled to sub and add
+        request->senderAddress = std::string(bcos::precompiled::EVM_BALANCE_SENDER_ADDRESS);
+    }
+    else
+    {
+        request->senderAddress = myAddress();
+    }
     switch (_msg->kind)
     {
     case EVMC_CREATE2:
