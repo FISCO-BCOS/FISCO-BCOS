@@ -9,6 +9,7 @@
 #include <bcos-cpp-sdk/utilities/tx/tars/tup/Tars.h>
 #include <bcos-cpp-sdk/utilities/tx/tars/tup/TarsJson.h>
 #include <bcos-crypto/interfaces/crypto/Hash.h>
+#include <bcos-framework/protocol/Protocol.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/asio/detail/socket_ops.hpp>
 #include <boost/endian/conversion.hpp>
@@ -213,7 +214,7 @@ public:
         // encode abi
         hasher.update(bcos::bytesConstRef((bcos::byte*)abi.data(), abi.size()));
 
-        if ((int)version == 1)
+        if ((uint32_t)version == (uint32_t)bcos::protocol::TransactionVersion::V1_VERSION)
         {
             // encode value
             hasher.update(bcos::bytesConstRef((bcos::byte*)value.data(), value.size()));

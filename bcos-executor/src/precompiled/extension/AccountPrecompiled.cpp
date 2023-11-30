@@ -64,11 +64,11 @@ std::shared_ptr<PrecompiledExecResult> AccountPrecompiled::call(
     uint32_t func = getParamFunc(originParam);
     bytesConstRef data = getParamData(originParam);
     auto table = _executive->storage().openTable(accountTableName);
-//    FIXME: for fake debug, temporary comment
-//    if (!table.has_value()) [[unlikely]]
-//    {
-//        BOOST_THROW_EXCEPTION(PrecompiledError(accountTableName + " does not exist"));
-//    }
+    //    FIXME: for fake debug, temporary comment
+    //    if (!table.has_value()) [[unlikely]]
+    //    {
+    //        BOOST_THROW_EXCEPTION(PrecompiledError(accountTableName + " does not exist"));
+    //    }
 
     if (func == name2Selector[AM_METHOD_SET_ACCOUNT_STATUS])
     {
@@ -269,7 +269,8 @@ void AccountPrecompiled::addAccountBalance(const std::string& accountTableName,
     // check sender
     const auto* addAccountBalanceSender =
         blockContext.isWasm() ? BALANCE_PRECOMPILED_NAME : BALANCE_PRECOMPILED_ADDRESS;
-    if (!(_callParameters->m_sender == addAccountBalanceSender ||  _callParameters->m_sender == EVM_BALANCE_SENDER_ADDRESS))
+    if (!(_callParameters->m_sender == addAccountBalanceSender ||
+            _callParameters->m_sender == EVM_BALANCE_SENDER_ADDRESS))
     {
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
         return;
@@ -333,7 +334,8 @@ void AccountPrecompiled::subAccountBalance(const std::string& accountTableName,
     // check sender
     const auto* subAccountBalanceSender =
         blockContext.isWasm() ? BALANCE_PRECOMPILED_NAME : BALANCE_PRECOMPILED_ADDRESS;
-    if (!(_callParameters->m_sender == subAccountBalanceSender ||  _callParameters->m_sender == EVM_BALANCE_SENDER_ADDRESS))
+    if (!(_callParameters->m_sender == subAccountBalanceSender ||
+            _callParameters->m_sender == EVM_BALANCE_SENDER_ADDRESS))
     {
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
         return;

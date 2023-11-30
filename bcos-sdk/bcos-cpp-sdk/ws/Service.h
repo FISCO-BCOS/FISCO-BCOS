@@ -134,7 +134,7 @@ public:
         m_strictConnectVersion = _strictVersion;
     }
 
-    uint64_t localProtocolInfo() const { return m_localProtocol->version(); }
+    uint32_t localProtocolInfo() const { return m_localProtocol->version(); }
     uint32_t negotiatedProtocolInfo()
     {
         uint16_t maxVersion = 0;
