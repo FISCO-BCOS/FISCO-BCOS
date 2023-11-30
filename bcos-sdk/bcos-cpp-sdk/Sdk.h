@@ -123,7 +123,7 @@ public:
     [[nodiscard]] bcos::cppsdk::amop::AMOP::Ptr amop() const { return m_amop; }
 
     [[nodiscard]] bcos::cppsdk::event::EventSub::Ptr eventSub() const { return m_eventSub; }
-    uint64_t localProtocolInfo() const { return m_service->localProtocolInfo(); }
+    uint32_t localProtocolInfo() const { return m_service->localProtocolInfo(); }
     uint32_t negotiatedProtocolInfo() { return m_service->negotiatedProtocolInfo(); }
 };
 

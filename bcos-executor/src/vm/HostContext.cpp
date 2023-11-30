@@ -130,7 +130,8 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
     request->value = fromEvmC(_msg->value);
     const auto& blockContext = m_executive->blockContext();
     if (blockContext.features().get(ledger::Features::Flag::feature_balance) &&
-        evmAddress2String(_msg->sender) == std::string(bcos::precompiled::EVM_BALANCE_SENDER_ADDRESS))
+        evmAddress2String(_msg->sender) ==
+            std::string(bcos::precompiled::EVM_BALANCE_SENDER_ADDRESS))
     {
         // for AccountPrecompiled to sub and add
         request->senderAddress = std::string(bcos::precompiled::EVM_BALANCE_SENDER_ADDRESS);
@@ -157,7 +158,7 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
         }
         else
         {
-            request->receiveAddress = evmAddress2String(_msg->code_address); 
+            request->receiveAddress = evmAddress2String(_msg->code_address);
         }
 
         request->codeAddress = request->receiveAddress;

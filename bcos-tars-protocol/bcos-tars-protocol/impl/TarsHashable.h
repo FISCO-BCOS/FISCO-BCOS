@@ -36,11 +36,12 @@ void impl_calculate(bcos::crypto::hasher::Hasher auto hasher,
     hasher.update(hashFields.abi);
     // if version == 1, update value, gasPrice, gasLimit, maxFeePerGas, maxPriorityFeePerGas to
     // hashBuffer calculate hash
-    if (version == 1)
+    if (hashFields.version == (uint32_t)bcos::protocol::TransactionVersion::V1_VERSION)
     {
         hasher.update(hashFields.value);
         hasher.update(hashFields.gasPrice);
-        hasher.update(hashFields.gasLimit);
+        int64_t bigEndGasLimit = boost::endian::native_to_big((int64_t)hashFields.gasLimit);
+        hasher.update(bigEndGasLimit);
         hasher.update(hashFields.maxFeePerGas);
         hasher.update(hashFields.maxPriorityFeePerGas);
     }
@@ -58,7 +59,7 @@ void impl_calculate(bcos::crypto::hasher::Hasher auto hasher,
 
     auto const& hashFields = receipt.data;
     int32_t version = boost::endian::native_to_big((int32_t)hashFields.version);
-    switch (version)
+    switch (hashFields.version)
     {
     case int32_t(bcos::protocol::TransactionVersion::V0_VERSION):
     {
