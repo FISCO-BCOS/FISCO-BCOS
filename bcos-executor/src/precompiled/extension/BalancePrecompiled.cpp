@@ -211,7 +211,7 @@ void BalancePrecompiled::subBalance(
     // if caller table not exist, check caller failed, return error
     if (!table)
     {
-        PRECOMPILED_LOG(ERROR) << BLOCK_NUMBER(blockContext.number())
+        PRECOMPILED_LOG(WARNING) << BLOCK_NUMBER(blockContext.number())
                                << LOG_BADGE("BalancePrecompiled") << LOG_DESC("subBalance")
                                << LOG_KV("account", accountStr) << LOG_KV("value", value)
                                << LOG_KV("caller", caller) << LOG_KV("callerTableNotExist", "true");
@@ -264,7 +264,7 @@ void BalancePrecompiled::transfer(const std::shared_ptr<executor::TransactionExe
     // if caller table not exist, check caller failed, return error
     if (!table)
     {
-        PRECOMPILED_LOG(ERROR) << BLOCK_NUMBER(blockContext.number())
+        PRECOMPILED_LOG(WARNING) << BLOCK_NUMBER(blockContext.number())
                                << LOG_BADGE("BalancePrecompiled") << LOG_DESC("transfer")
                                << LOG_KV("from", fromStr) << LOG_KV("to", toStr)
                                << LOG_KV("value", value) << LOG_KV("caller", caller)
@@ -328,7 +328,9 @@ void BalancePrecompiled::transfer(const std::shared_ptr<executor::TransactionExe
     else
     {
         _callParameters->setExecResult(codec.encode(int32_t(CODE_TRANSFER_FAILED)));
-        PRECOMPILED_LOG(ERROR) << BLOCK_NUMBER(blockContext.number())
+        BOOST_THROW_EXCEPTION(protocol::PrecompiledError(
+            "transfer failed, account subBalance failed, please check the account balance"));
+        PRECOMPILED_LOG(WARNING) << BLOCK_NUMBER(blockContext.number())
                                << LOG_BADGE("BalancePrecompiled") << LOG_DESC("transfer")
                                << LOG_KV("from", fromStr) << LOG_KV("to", toStr)
                                << LOG_KV("value", value)
@@ -383,7 +385,7 @@ void BalancePrecompiled::registerCaller(
     else
     {
         auto callerEntry = table->getRow(accountStr);
-        if (callerEntry->get() == "1")
+        if (callerEntry && callerEntry->get() == "1")
         {
             _callParameters->setExecResult(
                 codec.encode(int32_t(CODE_REGISTER_CALLER_ALREADY_EXIST)));
@@ -432,7 +434,7 @@ void BalancePrecompiled::unregisterCaller(
         std::string tableStr(SYS_BALANCE_CALLER);
         _executive->storage().createTable(tableStr, "caller_address");
         _callParameters->setExecResult(codec.encode(int32_t(CODE_UNREGISTER_CALLER_FAILED)));
-        PRECOMPILED_LOG(ERROR) << BLOCK_NUMBER(blockContext.number())
+        PRECOMPILED_LOG(WARNING) << BLOCK_NUMBER(blockContext.number())
                                << LOG_BADGE("BalancePrecompiled") << LOG_DESC("unregisterCaller")
                                << LOG_KV("account", accountStr);
     }
