@@ -537,13 +537,8 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
                 newEntriesOffset = genDataOffset(m_tableData->newEntries, insertDataStartOffset);
             }
             // Parallel processing dirtyEntries and newEntries
-            tbb::parallel_invoke(
-                [this, allData, dirtyEntriesOffset]() {
-                    parallelGenData(*allData, dirtyEntriesOffset, m_tableData->dirtyEntries);
-                },
-                [this, allData, newEntriesOffset]() {
-                    parallelGenData(*allData, newEntriesOffset, m_tableData->newEntries);
-                });
+            parallelGenData(*allData, dirtyEntriesOffset, m_tableData->dirtyEntries);
+            parallelGenData(*allData, newEntriesOffset, m_tableData->newEntries);
 
 
 #if FISCO_DEBUG

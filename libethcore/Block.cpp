@@ -192,9 +192,7 @@ void Block::calTransactionRootV2_2_0(bool update) const
     {
         std::vector<dev::bytes> transactionList;
         transactionList.resize(m_transactions->size());
-        tbb::parallel_for(tbb::blocked_range<size_t>(0, m_transactions->size()),
-            [&](const tbb::blocked_range<size_t>& _r) {
-                for (uint32_t i = _r.begin(); i < _r.end(); ++i)
+                for (uint32_t i = 0; i < m_transactions->size(); ++i)
                 {
                     RLPStream s;
                     s << i;
@@ -203,7 +201,6 @@ void Block::calTransactionRootV2_2_0(bool update) const
                     byteValue.insert(byteValue.end(), hValue.begin(), hValue.end());
                     transactionList[i] = byteValue;
                 }
-            });
         m_txsCache = TxsParallelParser::encode(m_transactions);
         m_transRootCache = dev::getHash256(transactionList);
     }
@@ -225,10 +222,7 @@ std::shared_ptr<std::map<std::string, std::vector<std::string>>> Block::getTrans
         std::make_shared<std::map<std::string, std::vector<std::string>>>();
     std::vector<dev::bytes> transactionList;
     transactionList.resize(m_transactions->size());
-
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, m_transactions->size()),
-        [&](const tbb::blocked_range<size_t>& _r) {
-            for (uint32_t i = _r.begin(); i < _r.end(); ++i)
+            for (uint32_t i = 0; i <  m_transactions->size(); ++i)
             {
                 RLPStream s;
                 s << i;
@@ -237,7 +231,6 @@ std::shared_ptr<std::map<std::string, std::vector<std::string>>> Block::getTrans
                 byteValue.insert(byteValue.end(), hValue.begin(), hValue.end());
                 transactionList[i] = byteValue;
             }
-        });
 
     dev::getMerkleProof(transactionList, merklePath);
     return merklePath;
@@ -247,9 +240,7 @@ void Block::getReceiptAndHash(RLPStream& txReceipts, std::vector<dev::bytes>& re
 {
     txReceipts.appendList(m_transactionReceipts->size());
     receiptList.resize(m_transactionReceipts->size());
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, m_transactionReceipts->size()),
-        [&](const tbb::blocked_range<size_t>& _r) {
-            for (uint32_t i = _r.begin(); i < _r.end(); ++i)
+            for (uint32_t i = 0; i < m_transactionReceipts->size(); ++i)
             {
                 (*m_transactionReceipts)[i]->receipt();
                 dev::bytes receiptHash = (*m_transactionReceipts)[i]->hash();
@@ -259,7 +250,6 @@ void Block::getReceiptAndHash(RLPStream& txReceipts, std::vector<dev::bytes>& re
                 receiptValue.insert(receiptValue.end(), receiptHash.begin(), receiptHash.end());
                 receiptList[i] = receiptValue;
             }
-        });
     for (size_t i = 0; i < m_transactionReceipts->size(); i++)
     {
         txReceipts.appendRaw((*m_transactionReceipts)[i]->receipt());
@@ -366,9 +356,7 @@ void Block::calReceiptRootRC2(bool update) const
         size_t receiptsNum = m_transactionReceipts->size();
 
         std::vector<dev::bytes> receiptsRLPs(receiptsNum, bytes());
-        tbb::parallel_for(
-            tbb::blocked_range<size_t>(0, receiptsNum), [&](const tbb::blocked_range<size_t>& _r) {
-                for (size_t i = _r.begin(); i != _r.end(); ++i)
+                for (size_t i = 0; i != receiptsNum; ++i)
                 {
                     RLPStream s;
                     s << i;
@@ -376,8 +364,6 @@ void Block::calReceiptRootRC2(bool update) const
                     (*m_transactionReceipts)[i]->encode(receiptRLP);
                     receiptsRLPs[i] = receiptRLP;
                 }
-            });
-
         // auto record_time = utcTime();
         RLPStream txReceipts;
         txReceipts.appendList(receiptsNum);

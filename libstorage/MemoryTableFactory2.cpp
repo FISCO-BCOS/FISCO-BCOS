@@ -223,7 +223,7 @@ h256 MemoryTableFactory2::hash()
 
     bytes data;
     data.resize(tables.size() * 32);
-            for (auto it = 0; it != tables.size(); ++it)
+            for (size_t it = 0; it != tables.size(); ++it)
             {
                 auto table = tables[it];
                 h256 hash = table.second->hash();

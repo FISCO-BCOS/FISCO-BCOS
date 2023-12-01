@@ -40,9 +40,7 @@ bytes TxsParallelParser::encode(std::shared_ptr<Transactions> _txs)
     std::vector<bytes> txRLPs(txNum, bytes());
 
     // encode tx and caculate offset
-    tbb::parallel_for(
-        tbb::blocked_range<size_t>(0, txNum), [&](const tbb::blocked_range<size_t>& _r) {
-            for (Offset_t i = _r.begin(); i < _r.end(); ++i)
+            for (Offset_t i = 0; i < txNum; ++i)
             {
                 bytes txByte = (*_txs)[i]->rlp(WithSignature);
 
@@ -52,7 +50,6 @@ bytes TxsParallelParser::encode(std::shared_ptr<Transactions> _txs)
                 // record bytes in txRLPs for caculating all transaction bytes
                 txRLPs[i] = txByte;
             }
-        });
 
     // caculate real offset
     for (size_t i = 0; i < txNum; ++i)
@@ -143,9 +140,7 @@ void TxsParallelParser::decode(std::shared_ptr<Transactions> _txs, bytesConstRef
         size_t maxOffset = bytesSize - objectStart - 1;
         try
         {
-            tbb::parallel_for(tbb::blocked_range<Offset_t>(0, txNum),
-                [&](const tbb::blocked_range<Offset_t>& _r) {
-                    for (Offset_t i = _r.begin(); i != _r.end(); ++i)
+                    for (Offset_t i = 0; i != txNum; ++i)
                     {
                         Offset_t offset = offsets[i];
                         Offset_t size = offsets[i + 1] - offsets[i];
@@ -165,7 +160,6 @@ void TxsParallelParser::decode(std::shared_ptr<Transactions> _txs, bytesConstRef
                             (*_txs)[i]->hash();
                         }
                     }
-                });
         }
         catch (...)
         {
