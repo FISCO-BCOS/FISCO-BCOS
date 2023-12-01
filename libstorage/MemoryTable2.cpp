@@ -361,21 +361,17 @@ dev::storage::TableData::Ptr MemoryTable2::dumpWithoutOptimize()
 
         auto tempEntries = tbb::concurrent_vector<Entry::Ptr>();
 
-        tbb::parallel_for_each(
-            m_dirty.begin(), m_dirty.end(), [&](const std::pair<const uint64_t, Entry::Ptr>& _p) {
+                for(auto const& _p : m_dirty){
                 if (!_p.second->deleted())
                 {
                     m_tableData->dirtyEntries->addEntry(_p.second);
                     tempEntries.push_back(_p.second);
                 }
-            });
+                }
 
         m_tableData->newEntries = std::make_shared<Entries>();
-        tbb::parallel_for_each(m_newEntries.begin(), m_newEntries.end(),
-            [&](const std::pair<const std::string, Entries::Ptr>& _p) {
-                tbb::parallel_for(tbb::blocked_range<size_t>(0, _p.second->size(), 1000),
-                    [&](tbb::blocked_range<size_t>& rangeIndex) {
-                        for (auto i = rangeIndex.begin(); i < rangeIndex.end(); ++i)
+                    for(auto const& _p : m_newEntries){
+                        for (auto i = 0; i < _p.second->size(); ++i)
                         {
                             if (!_p.second->get(i)->deleted())
                             {
@@ -383,8 +379,7 @@ dev::storage::TableData::Ptr MemoryTable2::dumpWithoutOptimize()
                                 tempEntries.push_back(_p.second->get(i));
                             }
                         }
-                    });
-            });
+                    }
 
         TIME_RECORD("Sort data");
         tbb::parallel_sort(tempEntries.begin(), tempEntries.end(), EntryLessNoLock(m_tableInfo));
@@ -444,9 +439,7 @@ void MemoryTable2::parallelGenData(
     {
         return;
     }
-    tbb::parallel_for(tbb::blocked_range<uint64_t>(0, _offsetVec->size() - 1),
-        [&](const tbb::blocked_range<uint64_t>& range) {
-            for (uint64_t i = range.begin(); i < range.end(); i++)
+            for (uint64_t i = 0; i < _offsetVec->size() - 1; i++)
             {
                 auto entry = (*_entries)[i];
                 auto startOffSet = (*_offsetVec)[i];
@@ -467,7 +460,6 @@ void MemoryTable2::parallelGenData(
                 char status = (char)entry->getStatus();
                 memcpy(&_generatedData[startOffSet], &status, sizeof(status));
             }
-        });
 }
 
 std::shared_ptr<std::vector<size_t>> MemoryTable2::genDataOffset(
@@ -497,21 +489,17 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
         m_tableData->info = m_tableInfo;
         m_tableData->dirtyEntries = std::make_shared<Entries>();
 
-        tbb::parallel_for_each(
-            m_dirty.begin(), m_dirty.end(), [&](const std::pair<const uint64_t, Entry::Ptr>& _p) {
+                for(auto const& _p : m_dirty){
                 if (!_p.second->deleted())
                 {
                     m_tableData->dirtyEntries->addEntry(_p.second);
                     allSize += (_p.second->capacityOfHashField() + 1);  // 1 for status field
                 }
-            });
+                }
 
         m_tableData->newEntries = std::make_shared<Entries>();
-        tbb::parallel_for_each(m_newEntries.begin(), m_newEntries.end(),
-            [&](const std::pair<const std::string, Entries::Ptr>& _p) {
-                tbb::parallel_for(tbb::blocked_range<size_t>(0, _p.second->size(), 1000),
-                    [&](tbb::blocked_range<size_t>& rangeIndex) {
-                        for (auto i = rangeIndex.begin(); i < rangeIndex.end(); ++i)
+                        for(auto const& _p : m_newEntries){
+                        for (auto i = 0; i < _p.second->size(); ++i)
                         {
                             if (!_p.second->get(i)->deleted())
                             {
@@ -520,8 +508,7 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
                                 allSize += (_p.second->get(i)->capacityOfHashField() + 1);
                             }
                         }
-                    });
-            });
+                        }
 
         if (m_tableInfo->enableConsensus)
         {

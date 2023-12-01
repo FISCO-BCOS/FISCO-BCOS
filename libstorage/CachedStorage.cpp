@@ -24,8 +24,6 @@
 #include <libdevcore/Common.h>
 #include <libdevcore/FixedHash.h>
 #include <tbb/concurrent_vector.h>
-#include <tbb/parallel_for.h>
-#include <tbb/parallel_for_each.h>
 #include <tbb/parallel_sort.h>
 #include <thread>
 
@@ -229,9 +227,7 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
         std::make_shared<std::vector<TableData::Ptr>>();
 
     commitDatas->resize(datas.size());
-    tbb::parallel_for(
-        tbb::blocked_range<size_t>(0, datas.size()), [&](const tbb::blocked_range<size_t>& range) {
-            for (size_t idx = range.begin(); idx < range.end(); ++idx)
+            for (size_t idx = 0; idx < datas.size(); ++idx)
             {
                 auto requestData = datas[idx];
 
@@ -250,11 +246,7 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
                     std::set<std::string> addtionKey;
                     std::set<uint64_t> duplicateIDs;
                     tbb::spin_mutex addtionKeyMutex;
-
-                    tbb::parallel_for(
-                        tbb::blocked_range<size_t>(0, requestData->dirtyEntries->size()),
-                        [&](const tbb::blocked_range<size_t>& rangeEntries) {
-                            for (size_t i = rangeEntries.begin(); i < rangeEntries.end(); ++i)
+                            for (size_t i = 0; i < requestData->dirtyEntries->size(); ++i)
                             {
                                 ++total;
 
@@ -377,11 +369,8 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
                                 }
                                 touchMRU(requestData->info->name, key, change);
                             }
-                        });
-                    tbb::parallel_for(tbb::blocked_range<size_t>(requestData->dirtyEntries->size(),
-                                          commitData->dirtyEntries->size()),
-                        [&](const tbb::blocked_range<size_t>& rangeEntries) {
-                            for (size_t i = rangeEntries.begin(); i < rangeEntries.end(); ++i)
+                    
+                            for (size_t i = requestData->dirtyEntries->size(); i < commitData->dirtyEntries->size(); ++i)
                             {  // remove duplicate entries, rocksdb need this
                                 if (duplicateIDs.find((*commitData->dirtyEntries)[i]->getID()) !=
                                     duplicateIDs.end())
@@ -392,7 +381,6 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
                                     (*commitData->dirtyEntries)[i] = duplicateEntry;
                                 }
                             }
-                        });
                     tbb::parallel_sort(commitData->dirtyEntries->begin(),
                         commitData->dirtyEntries->end(), EntryLessNoLock(commitData->info));
                 }
@@ -400,7 +388,6 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
                 commitData->newEntries->shallowFrom(requestData->newEntries);
                 (*commitDatas)[idx] = commitData;
             }
-        });
 
     TIME_RECORD("Process new entries");
     auto commitDatasSize = commitDatas->size();
@@ -409,10 +396,7 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
     std::shared_ptr<std::vector<tbb::concurrent_unordered_set<std::string>>> processedKeys =
         std::make_shared<std::vector<tbb::concurrent_unordered_set<std::string>>>(
             commitDatasSize, tbb::concurrent_unordered_set<std::string>());
-
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, commitDatasSize),
-        [&](const tbb::blocked_range<size_t>& range) {
-            for (size_t i = range.begin(); i < range.end(); ++i)
+            for (size_t i = 0; i < commitDatasSize; ++i)
             {
                 auto commitData = (*commitDatas)[i];
 
@@ -422,9 +406,7 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
                 }
 
                 auto newEntriesSize = commitData->newEntries->size();
-                tbb::parallel_for(tbb::blocked_range<size_t>(0, newEntriesSize),
-                    [&](const tbb::blocked_range<size_t>& range) {
-                        for (size_t j = range.begin(); j < range.end(); ++j)
+                        for (size_t j = 0; j < newEntriesSize; ++j)
                         {
                             auto commitEntry = commitData->newEntries->get(j);
                             commitEntry->setNum(num);
@@ -490,9 +472,7 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
 #endif
                             touchMRU(commitData->info->name, key, cacheEntry->capacity());
                         }
-                    });
             }
-        });
     // sort the caches
     TIME_RECORD("sort caches");
     sortCaches(commitDatas, processedKeys);
@@ -568,31 +548,26 @@ void CachedStorage::sortCaches(std::shared_ptr<std::vector<TableData::Ptr>> _com
     std::shared_ptr<std::vector<tbb::concurrent_unordered_set<std::string>>> _processedKeys)
 {
     auto commitDataSize = _commitDatas->size();
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, commitDataSize),
-        [&](const tbb::blocked_range<size_t>& range) {
-            for (size_t i = range.begin(); i < range.end(); i++)
+            for (size_t i = 0; i < commitDataSize; i++)
             {
                 auto commitData = (*_commitDatas)[i];
                 auto processedKey = (*_processedKeys)[i];
                 // get caches and parallel sort the caches
 
-                tbb::parallel_for_each(
-                    processedKey.begin(), processedKey.end(), [&](const std::string& _str) {
+                        for(auto const& _str : processedKey)
+                        {
                         auto result = touchCache(commitData->info, _str, true);
                         auto caches = std::get<1>(result);
                         tbb::parallel_sort(caches->entries()->begin(), caches->entries()->end(),
                             EntryLessNoLock(commitData->info));
-                    });
-
-                tbb::parallel_for_each(
-                    processedKey.begin(), processedKey.end(), [&](const std::string& _str) {
+                        }
+                        for(auto const& _str: processedKey){
                         auto result = touchCache(commitData->info, _str, true);
                         auto caches = std::get<1>(result);
                         tbb::parallel_sort(caches->entries()->begin(), caches->entries()->end(),
                             EntryLessNoLock(commitData->info));
-                    });
+                        }
             }
-        });
 }
 
 void CachedStorage::setBackend(Storage::Ptr backend)

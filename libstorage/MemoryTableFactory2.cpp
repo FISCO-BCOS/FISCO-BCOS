@@ -223,9 +223,7 @@ h256 MemoryTableFactory2::hash()
 
     bytes data;
     data.resize(tables.size() * 32);
-    tbb::parallel_for(
-        tbb::blocked_range<size_t>(0, tables.size()), [&](const tbb::blocked_range<size_t>& range) {
-            for (auto it = range.begin(); it != range.end(); ++it)
+            for (auto it = 0; it != tables.size(); ++it)
             {
                 auto table = tables[it];
                 h256 hash = table.second->hash();
@@ -249,7 +247,6 @@ h256 MemoryTableFactory2::hash()
                     << LOG_KV("hash", hash) << LOG_KV("blockNum", m_blockNum);
 #endif
             }
-        });
 
     if (data.empty())
     {
