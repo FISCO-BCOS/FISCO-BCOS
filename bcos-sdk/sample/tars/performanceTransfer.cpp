@@ -13,11 +13,11 @@
 #include <oneapi/tbb/blocked_range.h>
 #include <oneapi/tbb/parallel_for.h>
 #include <boost/exception/diagnostic_information.hpp>
+#include <boost/thread/latch.hpp>
 #include <boost/throw_exception.hpp>
 #include <atomic>
 #include <chrono>
 #include <exception>
-#include <latch>
 #include <random>
 #include <string>
 #include <thread>
@@ -30,12 +30,12 @@ const static std::string DAG_TRANSFER_ADDRESS = "0000000000000000000000000000000
 class PerformanceCallback : public bcos::sdk::Callback
 {
 private:
-    std::latch& m_latch;
+    boost::latch& m_latch;
     bcos::sample::Collector& m_collector;
     long m_startTime;
 
 public:
-    PerformanceCallback(std::latch& latch, bcos::sample::Collector& collector)
+    PerformanceCallback(boost::latch& latch, bcos::sample::Collector& collector)
       : m_latch(latch), m_collector(collector), m_startTime(bcos::sample::currentTime())
     {}
 
@@ -51,7 +51,7 @@ std::vector<std::atomic_long> query(bcos::sdk::RPCClient& rpcClient,
     int userCount)
 {
     bcostars::protocol::TransactionFactoryImpl transactionFactory(cryptoSuite);
-    std::latch latch(userCount);
+    boost::latch latch(userCount);
     std::vector<std::optional<bcos::sdk::Call>> handles(userCount);
 
     bcos::sample::Collector collector(userCount, "Query");
@@ -112,7 +112,7 @@ int issue(bcos::sdk::RPCClient& rpcClient, std::shared_ptr<bcos::crypto::CryptoS
     int userCount, [[maybe_unused]] int qps, std::vector<std::atomic_long>& balances)
 {
     bcostars::protocol::TransactionFactoryImpl transactionFactory(cryptoSuite);
-    std::latch latch(userCount);
+    boost::latch latch(userCount);
     std::vector<std::optional<bcos::sdk::SendTransaction>> handles(userCount);
 
     bcos::sample::Collector collector(userCount, "Issue");
@@ -172,7 +172,7 @@ int transfer(bcos::sdk::RPCClient& rpcClient,
     [[maybe_unused]] int qps, std::vector<std::atomic_long>& balances)
 {
     bcostars::protocol::TransactionFactoryImpl transactionFactory(cryptoSuite);
-    std::latch latch(transactionCount);
+    boost::latch latch(transactionCount);
     std::vector<std::optional<bcos::sdk::SendTransaction>> handles(transactionCount);
 
     bcos::ratelimiter::TimeWindowRateLimiter limiter(qps);
