@@ -12,9 +12,8 @@ namespace bcos::transaction_executor
 template <class Storage>
 concept HasReadOneDirect =
     requires(Storage& storage) {
-        requires !std::is_void_v<
-            task::AwaitableReturnType<decltype(storage2::readOne((Storage&)std::declval<Storage>(),
-                std::declval<typename Storage::Key>(), storage2::READ_FRONT))>>;
+        requires !std::is_void_v<task::AwaitableReturnType<decltype(storage2::readOne(
+            storage, std::declval<typename Storage::Key>(), storage2::READ_FRONT))>>;
     };
 template <class Storage>
 concept HasReadSomeDirect =
@@ -30,8 +29,8 @@ private:
     struct Record
     {
         StateKey key;
-        task::AwaitableReturnType<decltype(storage2::readOne((Storage&)std::declval<Storage>(),
-            std::declval<typename Storage::Key>(), storage2::READ_FRONT))>
+        task::AwaitableReturnType<std::invoke_result_t<decltype(storage2::readOne), Storage&,
+            typename Storage::Key, storage2::READ_FRONT_TYPE>>
             oldValue;
     };
     std::vector<Record> m_records;
