@@ -27,4 +27,4 @@ bcos::transaction_executor::EVMCResult bcos::transaction_executor::VMInstance::e
         m_instance);
 }
 
-void bcos::transaction_executor::VMInstance::enableDebugOutput(){};
+void bcos::transaction_executor::VMInstance::enableDebugOutput() {}
