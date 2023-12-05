@@ -225,14 +225,15 @@ void AccountPrecompiled::getAccountBalance(const std::string& accountTableName,
     const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     auto table = _executive->storage().openTable(accountTableName);
+
+    // if account table not exist in apps but usr exist, return 0 by default
     if (!table)
     {
-        _callParameters->setExecResult(codec.encode(0));
-        // BOOST_THROW_EXCEPTION(PrecompiledError("Account table not exist!"));
         PRECOMPILED_LOG(ERROR) << BLOCK_NUMBER(blockContext.number())
                                << LOG_BADGE("AccountPrecompiled, getAccountBalance")
                                << LOG_DESC("Account table not exist, return 0 by default")
                                << LOG_KV("account", accountTableName);
+        _callParameters->setExecResult(codec.encode(0));
         return;
     }
     auto entry = _executive->storage().getRow(accountTableName, ACCOUNT_BALANCE);
@@ -242,7 +243,7 @@ void AccountPrecompiled::getAccountBalance(const std::string& accountTableName,
                                << LOG_BADGE("AccountPrecompiled, getAccountBalance")
                                << LOG_DESC("balance not exist, return 0 by default")
                                << LOG_KV("account", accountTableName);
-        BOOST_THROW_EXCEPTION(PrecompiledError("Account balance not exist!"));
+        _callParameters->setExecResult(codec.encode(0));
         return;
     }
     balance = u256(std::string(entry->get()));
@@ -276,21 +277,14 @@ void AccountPrecompiled::addAccountBalance(const std::string& accountTableName,
         return;
     }
 
-    // check account exist， if not exist, create it
+    // check account exist
     auto table = _executive->storage().openTable(accountTableName);
     if (!table.has_value()) [[unlikely]]
     {
-        // create account table, and set balance
-        std::string balanceFiled(ACCOUNT_BALANCE);
-        _executive->storage().createTable(accountTableName, balanceFiled);
-        Entry Balance;
-        Balance.importFields({boost::lexical_cast<std::string>(value)});
-        _executive->storage().setRow(accountTableName, ACCOUNT_BALANCE, std::move(Balance));
-        PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number())
-                              << LOG_BADGE("AccountPrecompiled, addAccountBalance")
-                              << LOG_DESC("table not exist, create and initialize balance")
-                              << LOG_KV("account balance", to_string(value));
-        _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
+        PRECOMPILED_LOG(WARNING) << BLOCK_NUMBER(blockContext.number())
+                                 << LOG_BADGE("AccountPrecompiled, addAccountBalance")
+                                 << LOG_DESC("table not exist!");
+        BOOST_THROW_EXCEPTION(PrecompiledError("Account table not exist, addBalance failed!"));
         return;
     }
 
@@ -343,19 +337,12 @@ void AccountPrecompiled::subAccountBalance(const std::string& accountTableName,
 
     // check account exist
     auto table = _executive->storage().openTable(accountTableName);
-    // if table not exist, create it
     if (!table.has_value()) [[unlikely]]
     {
-        // create account table, and set balance is 0
-        std::string balanceField(ACCOUNT_BALANCE);
-        _executive->storage().createTable(accountTableName, balanceField);
-        Entry Balance;
-        Balance.importFields({"0"});
-        _executive->storage().setRow(accountTableName, ACCOUNT_BALANCE, std::move(Balance));
-        PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number())
-                              << LOG_BADGE("AccountPrecompiled, subAccountBalance")
-                              << LOG_DESC("table not exist, create and initialize balance is 0");
-        BOOST_THROW_EXCEPTION(PrecompiledError("Account table not exist!"));
+        PRECOMPILED_LOG(WARNING) << BLOCK_NUMBER(blockContext.number())
+                                 << LOG_BADGE("AccountPrecompiled, subAccountBalance")
+                                 << LOG_DESC("table not exist!");
+        BOOST_THROW_EXCEPTION(PrecompiledError("Account table not exist, subBalance failed!"));
         return;
     }
 

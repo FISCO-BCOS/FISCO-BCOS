@@ -55,6 +55,10 @@ private:
     void unregisterCaller(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         PrecompiledExecResult::Ptr const& _callParameters);
 
+    void createAccount(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        PrecompiledExecResult::Ptr const& _callParameters, const CodecWrapper& codec,
+        std::string_view accountHex);
+
 private:
     mutable std::map<std::string, u256> m_fakeBalancePrecompiled;
 };
