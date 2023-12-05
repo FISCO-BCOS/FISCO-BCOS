@@ -2637,11 +2637,28 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
                 0, addressSize - callParameters->receiveAddress.size(), '0');
         }
     }
-    callParameters->value = u256(input.value());
-    callParameters->gasPrice = u256(input.gasPrice());
-    callParameters->gasLimit = input.gasLimit();
-    callParameters->maxFeePerGas = u256(input.maxFeePerGas());
-    callParameters->maxPriorityFeePerGas = u256(input.maxPriorityFeePerGas());
+    try
+    {
+        callParameters->value = u256(input.value());
+        callParameters->gasPrice = u256(input.gasPrice());
+        callParameters->gasLimit = input.gasLimit();
+        callParameters->maxFeePerGas = u256(input.maxFeePerGas());
+        callParameters->maxPriorityFeePerGas = u256(input.maxPriorityFeePerGas());
+    }
+    catch (std::exception& e)
+    {
+        EXECUTOR_NAME_LOG(ERROR) << LOG_BADGE("createCallParameters")
+                                 << LOG_DESC(
+                                        "createCallParameters error: value, gasPrice, maxFeePerGas "
+                                        "or maxPriorityFeePerGas not hex type,")
+                                 << LOG_KV("value", input.value())
+                                 << LOG_KV("gasPrice", input.gasPrice())
+                                 << LOG_KV("gasLimit", input.gasLimit())
+                                 << LOG_KV("maxFeePerGas", input.maxFeePerGas())
+                                 << LOG_KV("maxPriorityFeePerGas", input.maxPriorityFeePerGas());
+        BOOST_THROW_EXCEPTION(BCOS_ERROR(
+            ExecuteError::EXECUTE_ERROR, "Unexpected  callParameters balance filed type."));
+    }
 
 
     return callParameters;
@@ -2672,11 +2689,29 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->delegateCall = false;
     callParameters->delegateCallCode = bytes();
     callParameters->delegateCallSender = "";
-    callParameters->value = u256(input.value());
-    callParameters->gasPrice = u256(input.gasPrice());
-    callParameters->gasLimit = input.gasLimit();
-    callParameters->maxFeePerGas = u256(input.maxFeePerGas());
-    callParameters->maxPriorityFeePerGas = u256(input.maxPriorityFeePerGas());
+    try
+    {
+        callParameters->value = u256(input.value());
+        callParameters->gasPrice = u256(input.gasPrice());
+        callParameters->gasLimit = input.gasLimit();
+        callParameters->maxFeePerGas = u256(input.maxFeePerGas());
+        callParameters->maxPriorityFeePerGas = u256(input.maxPriorityFeePerGas());
+    }
+    catch (std::exception& e)
+    {
+        EXECUTOR_NAME_LOG(ERROR) << LOG_BADGE("createCallParameters")
+                                 << LOG_DESC(
+                                        "createCallParameters error: value, gasPrice, maxFeePerGas "
+                                        "or maxPriorityFeePerGas not hex type,")
+                                 << LOG_KV("value", input.value())
+                                 << LOG_KV("gasPrice", input.gasPrice())
+                                 << LOG_KV("gasLimit", input.gasLimit())
+                                 << LOG_KV("maxFeePerGas", input.maxFeePerGas())
+                                 << LOG_KV("maxPriorityFeePerGas", input.maxPriorityFeePerGas());
+        BOOST_THROW_EXCEPTION(BCOS_ERROR(
+            ExecuteError::EXECUTE_ERROR, "Unexpected  callParameters balance filed type."));
+    }
+
 
     if (!m_isWasm && !callParameters->create)
     {
