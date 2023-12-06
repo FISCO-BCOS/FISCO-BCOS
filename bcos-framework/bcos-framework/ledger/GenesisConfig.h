@@ -44,7 +44,6 @@ struct Alloc
     using State = std::pair<std::string, std::string>;
 
     std::string address;
-    u256 nonce;
     u256 balance;
     std::string code;
     std::vector<State> storage;

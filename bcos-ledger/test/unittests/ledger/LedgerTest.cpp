@@ -26,11 +26,13 @@
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include "bcos-crypto/merkle/Merkle.h"
+#include "bcos-framework/ledger/GenesisConfig.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/storage/LegacyStorageMethods.h"
+#include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-ledger/src/libledger/LedgerMethods.h"
 #include "bcos-ledger/src/libledger/utilities/Common.h"
@@ -51,6 +53,7 @@
 #include <bcos-table/src/StateStorage.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
+#include <boost/algorithm/hex.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
 #include <memory>
@@ -61,6 +64,7 @@ using namespace bcos::protocol;
 using namespace bcos::storage;
 using namespace bcos::crypto;
 using namespace bcos::tool;
+using namespace std::string_literals;
 
 namespace std
 {
@@ -108,6 +112,7 @@ public:
         return nullptr;
     }
 };
+
 class LedgerFixture : public TestPromptFixture
 {
 public:
@@ -1315,7 +1320,7 @@ BOOST_AUTO_TEST_CASE(getLedgerConfig)
     task::syncWait([this]() -> task::Task<void> {
         initFixture();
 
-        using KeyType = std::tuple<std::string_view, std::string_view>;
+        using KeyType = transaction_executor::StateKey;
         Entry value;
         SystemConfigEntry config;
 
@@ -1370,6 +1375,64 @@ BOOST_AUTO_TEST_CASE(getLedgerConfig)
         BOOST_CHECK_EQUAL(std::get<0>(ledgerConfig->epochBlockNum()), 1000);
         BOOST_CHECK_EQUAL(ledgerConfig->notifyRotateFlagInfo(), 0);
         co_return;
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(genesisBlockWithAllocs)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        auto hashImpl = std::make_shared<Keccak256>();
+        auto memoryStorage = std::make_shared<StateStorage>(nullptr);
+        auto storage = std::make_shared<MockStorage>(memoryStorage);
+        auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+
+        LedgerConfig param;
+        param.setBlockNumber(0);
+        param.setHash(HashType(""));
+        param.setBlockTxCountLimit(0);
+
+        GenesisConfig genesisConfig;
+        genesisConfig.m_txGasLimit = 3000000000;
+        genesisConfig.m_compatibilityVersion =
+            tool::toVersionNumber(bcos::protocol::V3_6_VERSION_STR);
+        auto code = "I am a solidity code!"s;
+        std::string hexCode;
+        boost::algorithm::hex_lower(code, std::back_inserter(hexCode));
+
+        genesisConfig.m_allocs = RANGES::views::iota(0, 10) |
+                                 RANGES::views::transform([&](int index) {
+                                     Alloc alloc{.address = fmt::format("{:0>40}", index),
+                                         .balance = bcos::u256(index * 10),
+                                         .code = hexCode,
+                                         .storage = {}};
+
+                                     if (index % 2 == 0)
+                                     {
+                                         alloc.storage.emplace_back(fmt::format("{:0>64}", index),
+                                             fmt::format("{:0>64}", index * 2));
+                                     }
+                                     return alloc;
+                                 }) |
+                                 RANGES::to<std::vector>();
+
+        co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param);
+
+        for (auto i : RANGES::views::iota(0, 10))
+        {
+            auto tableName = fmt::format("{}{:0>40}", SYS_DIRECTORY::USER_APPS, i);
+            auto codeHashEntry = co_await storage2::readOne(*storage,
+                transaction_executor::StateKeyView(tableName, ACCOUNT_TABLE_FIELDS::CODE_HASH));
+
+            auto codeEntry = co_await storage2::readOne(*storage,
+                transaction_executor::StateKeyView(ledger::SYS_CODE_BINARY, codeHashEntry->get()));
+            BOOST_CHECK_EQUAL(codeEntry->get(), code);
+            auto codeView = codeEntry->get();
+            auto codeHash = hashImpl->hash(
+                bcos::bytesConstRef((const uint8_t*)codeView.data(), codeView.size()));
+            auto codeHashBytes = codeHash.asBytes();
+            BOOST_CHECK_EQUAL(codeHashEntry->get(),
+                std::string_view((const char*)codeHashBytes.data(), codeHashBytes.size()));
+        }
     }());
 }
 

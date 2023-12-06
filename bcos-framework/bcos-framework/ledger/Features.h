@@ -5,6 +5,7 @@
 #include "../storage2/Storage.h"
 #include "bcos-concepts/Exception.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Task.h"
 #include <bcos-utilities/Ranges.h>
 #include <boost/throw_exception.hpp>
@@ -156,8 +157,8 @@ public:
     {
         for (auto key : bcos::ledger::Features::featureKeys())
         {
-            auto entry =
-                co_await storage2::readOne(storage, std::make_tuple(ledger::SYS_CONFIG, key));
+            auto entry = co_await storage2::readOne(
+                storage, transaction_executor::StateKeyView(ledger::SYS_CONFIG, key));
             if (entry)
             {
                 auto [value, enableNumber] = entry->template getObject<ledger::SystemConfigEntry>();
@@ -178,8 +179,8 @@ public:
                 storage::Entry entry;
                 entry.setObject(
                     SystemConfigEntry{boost::lexical_cast<std::string>((int)value), blockNumber});
-                co_await storage2::writeOne(
-                    storage, std::make_tuple(ledger::SYS_CONFIG, name), std::move(entry));
+                co_await storage2::writeOne(storage,
+                    transaction_executor::StateKey(ledger::SYS_CONFIG, name), std::move(entry));
             }
         }
     }

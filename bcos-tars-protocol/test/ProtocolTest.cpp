@@ -70,6 +70,16 @@ inline std::vector<bcos::bytes> fakeSealerList(
     return sealerList;
 }
 
+BOOST_AUTO_TEST_CASE(strAndLexical)
+{
+    bcos::u256 num(1234567890);
+
+    auto str1 = boost::lexical_cast<std::string>(num);
+    auto str2 = num.backend().str({}, {});
+
+    BOOST_CHECK_EQUAL(str1, str2);
+}
+
 BOOST_AUTO_TEST_CASE(transaction)
 {
     std::string to("Target");

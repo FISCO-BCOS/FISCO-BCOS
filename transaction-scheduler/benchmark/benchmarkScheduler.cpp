@@ -30,9 +30,9 @@ using namespace bcos::transaction_executor;
 constexpr static s256 singleIssue(1000000);
 constexpr static s256 singleTransfer(1);
 
-using MutableStorage = MemoryStorage<StateKey, StateValue, Attribute(LOGICAL_DELETION)>;
+using MutableStorage = MemoryStorage<StateKey, StateValue, Attribute(ORDERED | LOGICAL_DELETION)>;
 using BackendStorage =
-    MemoryStorage<StateKey, StateValue, Attribute(CONCURRENT), std::hash<StateKey>>;
+    MemoryStorage<StateKey, StateValue, Attribute(ORDERED | CONCURRENT | MRU), std::hash<StateKey>>;
 using MultiLayerStorageType = MultiLayerStorage<MutableStorage, void, BackendStorage>;
 using ReceiptFactory = bcostars::protocol::TransactionReceiptFactoryImpl;
 

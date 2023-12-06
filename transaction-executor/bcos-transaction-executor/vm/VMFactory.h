@@ -51,23 +51,8 @@ private:
         m_evmoneCodeAnalysisCache;
 
 public:
-    /// Creates a VM instance of the global kind.
-    static VMInstance create() { return create(VMKind::evmone); }
-
-    /// Creates a VM instance of the kind provided.
-    static VMInstance create(VMKind kind)
-    {
-        switch (kind)
-        {
-        case VMKind::evmone:
-            return VMInstance{evmc_create_evmone()};
-        default:
-            BOOST_THROW_EXCEPTION(UnknownVMError{});
-        }
-    }
-
     task::Task<VMInstance> create(
-        VMKind kind, const bcos::h256& codeHash, std::string_view code, evmc_revision mode)
+        VMKind kind, const bcos::h256& codeHash, bytesConstRef code, evmc_revision mode)
     {
         switch (kind)
         {

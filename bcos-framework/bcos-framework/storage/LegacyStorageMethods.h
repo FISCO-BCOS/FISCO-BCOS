@@ -3,13 +3,14 @@
 #include "Entry.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-framework/storage2/Storage.h"
+#include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Task.h"
 
 namespace bcos::storage
 {
 
 inline task::Task<std::optional<Entry>> tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/,
-    StorageInterface& storage, std::tuple<std::string_view, std::string_view> stateKey)
+    StorageInterface& storage, transaction_executor::StateKeyView stateKey)
 {
     struct Awaitable
     {
@@ -44,13 +45,16 @@ inline task::Task<std::optional<Entry>> tag_invoke(storage2::tag_t<storage2::rea
         }
     };
 
-    auto [table, key] = stateKey;
+    auto [table, key] = stateKey.getTableAndKey();
     Awaitable awaitable{.m_storage = storage, .m_table = table, .m_key = key, .m_result = {}};
     co_return co_await awaitable;
 }
 
 inline task::Task<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/,
     StorageInterface& storage, RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
+    requires std::is_same_v<RANGES::range_value_t<decltype(keys)>,
+                 transaction_executor::StateKey> &&
+             std::is_same_v<RANGES::range_value_t<decltype(values)>, Entry>
 {
     for (auto&& [key, value] : RANGES::views::zip(
              std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values)))
@@ -60,8 +64,9 @@ inline task::Task<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unused
     }
 }
 
+
 inline task::Task<void> tag_invoke(storage2::tag_t<storage2::writeOne> /*unused*/,
-    StorageInterface& storage, std::tuple<std::string_view, std::string_view> stateKey, Entry entry)
+    StorageInterface& storage, transaction_executor::StateKey stateKey, Entry entry)
 {
     struct Awaitable
     {
@@ -92,7 +97,8 @@ inline task::Task<void> tag_invoke(storage2::tag_t<storage2::writeOne> /*unused*
         }
     };
 
-    auto [table, key] = stateKey;
+    auto view = transaction_executor::StateKeyView(stateKey);
+    auto [table, key] = view.getTableAndKey();
     Awaitable awaitable{.m_storage = storage,
         .m_table = table,
         .m_key = key,

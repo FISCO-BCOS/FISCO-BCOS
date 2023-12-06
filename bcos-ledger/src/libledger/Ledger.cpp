@@ -23,10 +23,12 @@
 
 #include "Ledger.h"
 #include "LedgerMethods.h"
+#include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-framework/storage2/Storage.h"
+#include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-tool/NodeConfig.h"
 #include "bcos-tool/VersionConverter.h"
 #include "bcos-utilities/Common.h"
@@ -50,7 +52,9 @@
 #include <bcos-tool/ConsensusNode.h>
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <evmc/evmc.h>
 #include <tbb/parallel_for.h>
+#include <boost/algorithm/hex.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/lexical_cast/bad_lexical_cast.hpp>
@@ -58,6 +62,7 @@
 #include <array>
 #include <cstddef>
 #include <future>
+#include <iterator>
 #include <memory>
 #include <utility>
 
@@ -1610,17 +1615,47 @@ static task::Task<void> setGenesisFeatures(RANGES::input_range auto const& featu
     co_await features.writeToStorage(storage, 0);
 }
 
-#if 0
-static task::Task<void> setAlloc(RANGES::input_range auto const& allocs, auto& storage)
+static task::Task<void> setAllocs(
+    RANGES::input_range auto const& allocs, auto& storage, const crypto::Hash& hashImpl)
 {
     for (auto&& alloc : allocs)
     {
-        co_await storage2::writeOne(
-            storage, std::make_tuple(SYS_TABLES, alloc.address), storage::Entry("value"sv));
+        evmc_address address;
+        boost::algorithm::unhex(alloc.address, address.bytes);
+
+        account::EVMAccount account(storage, address);
+        co_await account::create(account);
+
+        if (!alloc.code.empty())
+        {
+            bcos::bytes binaryCode;
+            binaryCode.reserve(alloc.code.size() / 2);
+            boost::algorithm::unhex(alloc.code, std::back_inserter(binaryCode));
+
+            auto codeHash = hashImpl.hash(binaryCode);
+            co_await account::setCode(account, std::move(binaryCode), std::string{}, codeHash);
+        }
+
+        if (alloc.balance > 0)
+        {
+            co_await account::setBalance(account, alloc.balance);
+        }
+
+        if (!alloc.storage.empty())
+        {
+            for (auto const& [key, value] : alloc.storage)
+            {
+                evmc_bytes32 evmKey;
+                boost::algorithm::unhex(key, evmKey.bytes);
+                evmc_bytes32 evmValue;
+                boost::algorithm::unhex(value, evmValue.bytes);
+
+                co_await account::setStorage(account, evmKey, evmValue);
+            }
+        }
     }
     co_return;
 }
-#endif
 
 // sync method, to be split
 // FIXME: too long
@@ -1690,9 +1725,10 @@ bool Ledger::buildGenesisBlock(
             // Before return, make sure sharding flag is placed
             task::syncWait([&]() -> task::Task<void> {
                 auto versionEntry = co_await storage2::readOne(
-                    *m_storage, std::make_tuple(SYS_CONFIG, SYSTEM_KEY_COMPATIBILITY_VERSION));
-                auto blockNumberEntry = co_await storage2::readOne(
-                    *m_storage, std::make_tuple(SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER));
+                    *m_storage, transaction_executor::StateKeyView(
+                                    SYS_CONFIG, SYSTEM_KEY_COMPATIBILITY_VERSION));
+                auto blockNumberEntry = co_await storage2::readOne(*m_storage,
+                    transaction_executor::StateKeyView(SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER));
                 if (versionEntry && blockNumberEntry)
                 {
                     auto [versionStr, _] = versionEntry->getObject<SystemConfigEntry>();
@@ -1865,7 +1901,12 @@ bool Ledger::buildGenesisBlock(
         notifyRotateEntry.setObject(SystemConfigEntry("0", 0));
         sysTable->setRow(INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE, std::move(notifyRotateEntry));
     }
-    task::syncWait(setGenesisFeatures(genesis.m_features, features, *m_storage));
+
+    task::syncWait([&]() -> task::Task<void> {
+        co_await setGenesisFeatures(genesis.m_features, features, *m_storage);
+        co_await setAllocs(
+            genesis.m_allocs, *m_storage, *m_blockFactory->cryptoSuite()->hashImpl());
+    }());
 
     // consensus leader period
     Entry leaderPeriodEntry;
