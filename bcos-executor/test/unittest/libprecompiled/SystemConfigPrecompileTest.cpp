@@ -2,6 +2,7 @@
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/Exceptions.h"
 #include "bcos-framework/storage2/Storage.h"
+#include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-table/src/StateStorage.h"
 #include "bcos-task/Wait.h"
 #include "executor/TransactionExecutor.h"
@@ -90,8 +91,8 @@ BOOST_AUTO_TEST_CASE(getAndSetFeature)
     BOOST_CHECK_EQUAL(value, "1");
 
 
-    setInput = codec.encodeWithSig(
-        "setValueByKey(string,string)", std::string("feature_balance_precompiled"), std::string("1"));
+    setInput = codec.encodeWithSig("setValueByKey(string,string)",
+        std::string("feature_balance_precompiled"), std::string("1"));
     setParameters->m_input = bcos::ref(setInput);
     BOOST_CHECK_THROW(systemConfigPrecompiled.call(executive, setParameters), PrecompiledError);
 
@@ -110,15 +111,14 @@ BOOST_AUTO_TEST_CASE(getAndSetFeature)
 
     std::shared_ptr<LedgerCache> ledgerCache =
         std::make_shared<LedgerCache>(std::make_shared<bcos::test::MockLedger>());
-    std::shared_ptr<BlockContext> newBlockContext =
-        std::make_shared<BlockContext>(executive->blockContext().storage(), ledgerCache, 
-            executive->blockContext().hashHandler(), 1, h256(), utcTime(),
-            static_cast<uint32_t>(protocol::BlockVersion::V3_1_VERSION), FiscoBcosSchedule, false,
-            false, backendStorage);
+    std::shared_ptr<BlockContext> newBlockContext = std::make_shared<BlockContext>(
+        executive->blockContext().storage(), ledgerCache, executive->blockContext().hashHandler(),
+        1, h256(), utcTime(), static_cast<uint32_t>(protocol::BlockVersion::V3_1_VERSION),
+        FiscoBcosSchedule, false, false, backendStorage);
     std::shared_ptr<MockTransactionExecutive> newExecutive =
         std::make_shared<MockTransactionExecutive>(*newBlockContext, "", 100, 0, *gasInjector);
-    setInput = codec.encodeWithSig(
-        "setValueByKey(string,string)", std::string("feature_balance_precompiled"), std::string("1"));
+    setInput = codec.encodeWithSig("setValueByKey(string,string)",
+        std::string("feature_balance_precompiled"), std::string("1"));
     setParameters->m_input = bcos::ref(setInput);
     auto featureBalancePreResult = systemConfigPrecompiled.call(newExecutive, setParameters);
 
@@ -165,8 +165,8 @@ BOOST_AUTO_TEST_CASE(upgradeVersion)
         codec.decode(bcos::ref(result->execResult()), code);
         BOOST_CHECK_EQUAL(code, 0);
 
-        auto entry = co_await storage2::readOne(
-            *backendStorage, std::make_tuple(ledger::SYS_CONFIG, "bugfix_revert"));
+        auto entry = co_await storage2::readOne(*backendStorage,
+            transaction_executor::StateKeyView(ledger::SYS_CONFIG, "bugfix_revert"));
         BOOST_CHECK(!entry);
 
         result = systemConfigPrecompiled.call(executive, getRevertParameters);
@@ -182,8 +182,8 @@ BOOST_AUTO_TEST_CASE(upgradeVersion)
         codec.decode(bcos::ref(result->execResult()), code);
         BOOST_CHECK_EQUAL(code, 0);
 
-        entry = co_await storage2::readOne(
-            *backendStorage, std::make_tuple(ledger::SYS_CONFIG, "feature_sharding"));
+        entry = co_await storage2::readOne(*backendStorage,
+            bcos::transaction_executor::StateKeyView(ledger::SYS_CONFIG, "feature_sharding"));
         BOOST_CHECK(entry);
 
         auto getShardingParameters = std::make_shared<PrecompiledExecResult>();

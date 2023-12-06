@@ -12,9 +12,8 @@ namespace bcos::transaction_executor
 template <class Storage>
 concept HasReadOneDirect =
     requires(Storage& storage) {
-        requires !std::is_void_v<
-            task::AwaitableReturnType<decltype(storage2::readOne((Storage&)std::declval<Storage>(),
-                std::declval<typename Storage::Key>(), storage2::READ_FRONT))>>;
+        requires !std::is_void_v<task::AwaitableReturnType<decltype(storage2::readOne(
+            storage, std::declval<typename Storage::Key>(), storage2::READ_FRONT))>>;
     };
 template <class Storage>
 concept HasReadSomeDirect =
@@ -30,8 +29,8 @@ private:
     struct Record
     {
         StateKey key;
-        task::AwaitableReturnType<decltype(storage2::readOne((Storage&)std::declval<Storage>(),
-            std::declval<typename Storage::Key>(), storage2::READ_FRONT))>
+        task::AwaitableReturnType<std::invoke_result_t<decltype(storage2::readOne), Storage&,
+            typename Storage::Key, storage2::READ_FRONT_TYPE>>
             oldValue;
     };
     std::vector<Record> m_records;
@@ -69,8 +68,8 @@ public:
 
     friend auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, Rollbackable& storage,
         RANGES::input_range auto&& keys)
-        -> task::Task<task::AwaitableReturnType<decltype(storage2::readSome(
-            (Storage&)std::declval<Storage>(), std::forward<decltype(keys)>(keys)))>>
+        -> task::Task<task::AwaitableReturnType<
+            std::invoke_result_t<storage2::ReadSome, Storage&, decltype(keys)>>>
     {
         co_return co_await storage2::readSome(
             storage.m_storage, std::forward<decltype(keys)>(keys));
@@ -78,17 +77,16 @@ public:
 
     friend auto tag_invoke(
         storage2::tag_t<storage2::readOne> /*unused*/, Rollbackable& storage, auto&& key)
-        -> task::Task<task::AwaitableReturnType<decltype(storage2::readOne(
-            (Storage&)std::declval<Storage>(), std::forward<decltype(key)>(key)))>>
+        -> task::Task<task::AwaitableReturnType<
+            std::invoke_result_t<storage2::ReadOne, Storage&, decltype(key)>>>
     {
         co_return co_await storage2::readOne(storage.m_storage, std::forward<decltype(key)>(key));
     }
 
     friend auto tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/, Rollbackable& storage,
         RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
-        -> task::Task<task::AwaitableReturnType<decltype(storage2::writeSome(
-            (Storage&)std::declval<Storage>(), std::forward<decltype(keys)>(keys),
-            std::forward<decltype(values)>(values)))>>
+        -> task::Task<task::AwaitableReturnType<
+            std::invoke_result_t<storage2::WriteSome, Storage&, decltype(keys), decltype(values)>>>
         requires HasReadSomeDirect<Storage>
     {
         auto oldValues = co_await storage2::readSome(storage.m_storage, keys, storage2::READ_FRONT);
@@ -104,9 +102,8 @@ public:
 
     friend auto tag_invoke(storage2::tag_t<storage2::writeOne> /*unused*/, Rollbackable& storage,
         auto&& key, auto&& value)
-        -> task::Task<
-            task::AwaitableReturnType<decltype(storage2::writeOne((Storage&)std::declval<Storage>(),
-                std::forward<decltype(key)>(key), std::forward<decltype(value)>(value)))>>
+        -> task::Task<task::AwaitableReturnType<
+            std::invoke_result_t<storage2::WriteOne, Storage&, decltype(key), decltype(value)>>>
         requires HasReadOneDirect<Storage>
     {
         auto& record = storage.m_records.emplace_back();
@@ -118,8 +115,8 @@ public:
 
     friend auto tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/, Rollbackable& storage,
         RANGES::input_range auto const& keys)
-        -> task::Task<task::AwaitableReturnType<decltype(storage2::removeSome(
-            (Storage&)std::declval<Storage>(), keys))>>
+        -> task::Task<task::AwaitableReturnType<
+            std::invoke_result_t<storage2::RemoveSome, Storage&, decltype(keys)>>>
     {
         // Store values to history
         auto oldValues = co_await storage2::readSome(storage.m_storage, keys, storage2::READ_FRONT);

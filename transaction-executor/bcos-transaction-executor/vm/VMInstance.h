@@ -27,22 +27,25 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Overloaded.h>
 #include <evmc/evmc.h>
+#include <evmone/evmone.h>
 #include <evmone/advanced_analysis.hpp>
 #include <evmone/advanced_execution.hpp>
 #include <evmone/baseline.hpp>
+#include <evmone/vm.hpp>
 #include <variant>
 
 namespace bcos::transaction_executor
 {
 
+struct ReleaseEVMC
+{
+    void operator()(evmc_vm* ptr) const noexcept;
+};
+
 /// The RAII wrapper for an VMInstance-C instance.
 class VMInstance
 {
 private:
-    struct ReleaseEVMC
-    {
-        void operator()(evmc_vm* ptr) const noexcept;
-    };
     using EVMC_VM = std::unique_ptr<evmc_vm, ReleaseEVMC>;
     using EVMC_ANALYSIS_RESULT = std::shared_ptr<evmone::baseline::CodeAnalysis const>;
     std::variant<EVMC_VM, EVMC_ANALYSIS_RESULT> m_instance;

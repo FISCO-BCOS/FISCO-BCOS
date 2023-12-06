@@ -207,4 +207,47 @@ BOOST_AUTO_TEST_CASE(scheduleBlock)
     // ledger::LedgerConfig::Ptr &&)> callback)
 }
 
+BOOST_AUTO_TEST_CASE(sameBlock)
+{
+    auto block = std::make_shared<bcostars::protocol::BlockImpl>();
+    auto blockHeader = block->blockHeader();
+    blockHeader->setNumber(500);
+    blockHeader->setVersion(200);
+    blockHeader->calculateHash(*hashImpl);
+
+    // Prepare a transaction
+    bcos::bytes input;
+    block->appendTransaction(
+        transactionFactory->createTransaction(0, "to", input, "12345", 100, "chain", "group", 0));
+
+    std::promise<bcos::Error::Ptr> end;
+    bcos::protocol::BlockHeader::Ptr executedHeader;
+    baselineScheduler.executeBlock(block, false,
+        [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr blockHeader, bool sysBlock) {
+            BOOST_CHECK(!error);
+            BOOST_CHECK(blockHeader);
+            BOOST_CHECK(!sysBlock);
+
+            executedHeader = blockHeader;
+            end.set_value(error);
+        });
+    auto error = end.get_future().get();
+    BOOST_CHECK(!error);
+
+    std::promise<bcos::Error::Ptr> end2;
+    baselineScheduler.executeBlock(block, false,
+        [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr blockHeader, bool sysBlock) {
+            BOOST_CHECK(!error);
+            BOOST_CHECK(blockHeader);
+            BOOST_CHECK(!sysBlock);
+
+            BOOST_CHECK_EQUAL(blockHeader.get(), executedHeader.get());
+            BOOST_CHECK_EQUAL(blockHeader->hash(), executedHeader->hash());
+            BOOST_CHECK_EQUAL(blockHeader->number(), executedHeader->number());
+            end2.set_value(error);
+        });
+    auto error2 = end2.get_future().get();
+    BOOST_CHECK(!error2);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

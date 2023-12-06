@@ -74,6 +74,16 @@ private:
     std::string_view m_key;
     friend class StateKey;
 
+    constexpr friend std::optional<std::string_view> continuousView(StateKeyView const& view)
+    {
+        if ((view.m_table.data() + view.m_table.size() + 1) == view.m_key.data())
+        {
+            return std::string_view(
+                view.m_table.data(), view.m_table.size() + 1 + view.m_key.size());
+        }
+        return {};
+    }
+
 public:
     explicit StateKeyView(const StateKey& stateKey)
     {
@@ -86,6 +96,13 @@ public:
     friend std::strong_ordering operator<=>(
         const StateKeyView& lhs, const StateKeyView& rhs) noexcept
     {
+        auto lhsContinuousView = continuousView(lhs);
+        auto rhsContinuousView = continuousView(rhs);
+        if (lhsContinuousView && rhsContinuousView)
+        {
+            return *lhsContinuousView <=> *rhsContinuousView;
+        }
+
         auto cmp = lhs.m_table <=> rhs.m_table;
         if (std::is_eq(cmp))
         {

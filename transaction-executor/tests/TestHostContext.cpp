@@ -52,44 +52,39 @@ public:
         precompiledManager.emplace(hashImpl);
 
         // deploy the hello world contract
-        syncWait([this]() -> Task<void> {
-            bcostars::protocol::BlockHeaderImpl blockHeader(
-                [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
-            blockHeader.setVersion(
-                static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_3_VERSION));
-            blockHeader.calculateHash(*hashImpl);
+        bcostars::protocol::BlockHeaderImpl blockHeader(
+            [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+        blockHeader.setVersion(static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_3_VERSION));
+        blockHeader.calculateHash(*hashImpl);
 
-            std::string helloworldBytecodeBinary;
-            boost::algorithm::unhex(
-                helloworldBytecode, std::back_inserter(helloworldBytecodeBinary));
+        std::string helloworldBytecodeBinary;
+        boost::algorithm::unhex(helloworldBytecode, std::back_inserter(helloworldBytecodeBinary));
 
-            evmc_message message = {.kind = EVMC_CREATE,
-                .flags = 0,
-                .depth = 0,
-                .gas = 300 * 10000,
-                .recipient = {},
-                .destination_ptr = nullptr,
-                .destination_len = 0,
-                .sender = {},
-                .sender_ptr = nullptr,
-                .sender_len = 0,
-                .input_data = (const uint8_t*)helloworldBytecodeBinary.data(),
-                .input_size = helloworldBytecodeBinary.size(),
-                .value = {},
-                .create2_salt = {},
-                .code_address = {}};
-            evmc_address origin = {};
+        evmc_message message = {.kind = EVMC_CREATE,
+            .flags = 0,
+            .depth = 0,
+            .gas = 300 * 10000,
+            .recipient = {},
+            .destination_ptr = nullptr,
+            .destination_len = 0,
+            .sender = {},
+            .sender_ptr = nullptr,
+            .sender_len = 0,
+            .input_data = (const uint8_t*)helloworldBytecodeBinary.data(),
+            .input_size = helloworldBytecodeBinary.size(),
+            .value = {},
+            .create2_salt = {},
+            .code_address = {}};
+        evmc_address origin = {};
 
+        HostContext<decltype(rollbackableStorage)> hostContext(vmFactory, rollbackableStorage,
+            blockHeader, message, origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
+            bcos::task::syncWait);
+        auto result = syncWait(hostContext.execute());
 
-            HostContext<decltype(rollbackableStorage)> hostContext(vmFactory, rollbackableStorage,
-                blockHeader, message, origin, "", 0, seq, *precompiledManager, ledgerConfig,
-                bcos::task::syncWait);
-            auto result = co_await hostContext.execute();
+        BOOST_REQUIRE_EQUAL(result.status_code, 0);
 
-            BOOST_REQUIRE_EQUAL(result.status_code, 0);
-
-            helloworldAddress = result.create_address;
-        }());
+        helloworldAddress = result.create_address;
     }
 
     template <class... Arg>
@@ -121,7 +116,7 @@ public:
         evmc_address origin = {};
 
         HostContext<decltype(rollbackableStorage)> hostContext(vmFactory, rollbackableStorage,
-            blockHeader, message, origin, "", 0, seq, *precompiledManager, ledgerConfig,
+            blockHeader, message, origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
             bcos::task::syncWait);
         auto result = co_await hostContext.execute();
 
@@ -132,6 +127,18 @@ public:
 bcos::crypto::Hash::Ptr bcos::executor::GlobalHashImpl::g_hashImpl;
 
 BOOST_FIXTURE_TEST_SUITE(TestHostContext, TestHostContextFixture)
+
+BOOST_AUTO_TEST_CASE(bits)
+{
+    auto evmAddress = bcos::unhexAddress("0x0000000000000000000000000000000000000100");
+    bcos::u160 address1;
+    boost::multiprecision::import_bits(
+        address1, evmAddress.bytes, evmAddress.bytes + sizeof(evmAddress.bytes));
+    auto address2 =
+        fromBigEndian<bcos::u160>(bcos::bytesConstRef(evmAddress.bytes, sizeof(evmAddress.bytes)));
+
+    BOOST_CHECK_EQUAL(address1, address2);
+}
 
 BOOST_AUTO_TEST_CASE(simpleCall)
 {
@@ -276,97 +283,92 @@ BOOST_AUTO_TEST_CASE(log)
 
 BOOST_AUTO_TEST_CASE(precompiled)
 {
-    syncWait([this]() -> Task<void> {
-        // Use ledger to init storage
-        auto ledgerConfig = bcos::ledger::LedgerConfig{};
-        auto storageWrapper =
-            std::make_shared<bcos::storage::LegacyStorageWrapper<std::decay_t<decltype(storage)>>>(
-                storage);
-        auto cryptoSuite = std::make_shared<bcos::crypto::CryptoSuite>(
-            std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr);
-        bcos::ledger::Ledger ledger(
-            std::make_shared<bcostars::protocol::BlockFactoryImpl>(cryptoSuite,
-                std::make_shared<bcostars::protocol::BlockHeaderFactoryImpl>(cryptoSuite),
-                std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite),
-                std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(cryptoSuite)),
-            storageWrapper);
-        bcos::ledger::GenesisConfig genesis;
-        genesis.m_txGasLimit = 100000;
-        genesis.m_compatibilityVersion = bcos::tool::toVersionNumber("3.6.0");
-        ledger.buildGenesisBlock(genesis, ledgerConfig);
+    // Use ledger to init storage
+    auto ledgerConfig = bcos::ledger::LedgerConfig{};
+    auto storageWrapper =
+        std::make_shared<bcos::storage::LegacyStorageWrapper<std::decay_t<decltype(storage)>>>(
+            storage);
+    auto cryptoSuite = std::make_shared<bcos::crypto::CryptoSuite>(
+        std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr);
+    bcos::ledger::Ledger ledger(
+        std::make_shared<bcostars::protocol::BlockFactoryImpl>(cryptoSuite,
+            std::make_shared<bcostars::protocol::BlockHeaderFactoryImpl>(cryptoSuite),
+            std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite),
+            std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(cryptoSuite)),
+        storageWrapper);
+    bcos::ledger::GenesisConfig genesis;
+    genesis.m_txGasLimit = 100000;
+    genesis.m_compatibilityVersion = bcos::tool::toVersionNumber("3.6.0");
+    ledger.buildGenesisBlock(genesis, ledgerConfig);
 
-        bcostars::protocol::BlockHeaderImpl blockHeader(
-            [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
-        blockHeader.mutableInner().data.version = (int)bcos::protocol::BlockVersion::V3_5_VERSION;
-        blockHeader.calculateHash(*bcos::executor::GlobalHashImpl::g_hashImpl);
+    bcostars::protocol::BlockHeaderImpl blockHeader(
+        [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+    blockHeader.mutableInner().data.version = (int)bcos::protocol::BlockVersion::V3_5_VERSION;
+    blockHeader.calculateHash(*bcos::executor::GlobalHashImpl::g_hashImpl);
 
-        bcos::codec::abi::ContractABICodec abiCodec(bcos::executor::GlobalHashImpl::g_hashImpl);
-        {
-            auto input = abiCodec.abiIn("initBfs()");
-            auto address = bcos::Address(0x100e);
-            evmc_address callAddress{};
-            std::uninitialized_copy(address.begin(), address.end(), callAddress.bytes);
-            evmc_message message = {.kind = EVMC_CALL,
-                .flags = 0,
-                .depth = 0,
-                .gas = 1000000,
-                .recipient = callAddress,
-                .destination_ptr = nullptr,
-                .destination_len = 0,
-                .sender = {},
-                .sender_ptr = nullptr,
-                .sender_len = 0,
-                .input_data = input.data(),
-                .input_size = input.size(),
-                .value = {},
-                .create2_salt = {},
-                .code_address = callAddress};
-            evmc_address origin = {};
+    bcos::codec::abi::ContractABICodec abiCodec(bcos::executor::GlobalHashImpl::g_hashImpl);
+    {
+        auto input = abiCodec.abiIn("initBfs()");
+        auto address = bcos::Address(0x100e);
+        evmc_address callAddress{};
+        std::uninitialized_copy(address.begin(), address.end(), callAddress.bytes);
+        evmc_message message = {.kind = EVMC_CALL,
+            .flags = 0,
+            .depth = 0,
+            .gas = 1000000,
+            .recipient = callAddress,
+            .destination_ptr = nullptr,
+            .destination_len = 0,
+            .sender = {},
+            .sender_ptr = nullptr,
+            .sender_len = 0,
+            .input_data = input.data(),
+            .input_size = input.size(),
+            .value = {},
+            .create2_salt = {},
+            .code_address = callAddress};
+        evmc_address origin = {};
 
-            HostContext<decltype(rollbackableStorage)> hostContext(vmFactory, rollbackableStorage,
-                blockHeader, message, origin, "", 0, seq, *precompiledManager,
-                bcos::ledger::LedgerConfig{}, bcos::task::syncWait);
-            auto result = co_await hostContext.execute();
-        }
+        HostContext<decltype(rollbackableStorage)> hostContext(vmFactory, rollbackableStorage,
+            blockHeader, message, origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
+            bcos::task::syncWait);
+        auto result = syncWait(hostContext.execute());
+    }
 
-        std::optional<EVMCResult> result;
-        {
-            auto input = abiCodec.abiIn(std::string("makeShard(string)"), std::string("shared1"));
+    std::optional<EVMCResult> result;
+    {
+        auto input = abiCodec.abiIn(std::string("makeShard(string)"), std::string("shared1"));
 
-            auto address = bcos::Address(0x1010);
-            evmc_address callAddress{};
-            std::uninitialized_copy(address.begin(), address.end(), callAddress.bytes);
-            evmc_message message = {.kind = EVMC_CALL,
-                .flags = 0,
-                .depth = 0,
-                .gas = 1000000,
-                .recipient = callAddress,
-                .destination_ptr = nullptr,
-                .destination_len = 0,
-                .sender = {},
-                .sender_ptr = nullptr,
-                .sender_len = 0,
-                .input_data = input.data(),
-                .input_size = input.size(),
-                .value = {},
-                .create2_salt = {},
-                .code_address = callAddress};
-            evmc_address origin = {};
+        auto address = bcos::Address(0x1010);
+        evmc_address callAddress{};
+        std::uninitialized_copy(address.begin(), address.end(), callAddress.bytes);
+        evmc_message message = {.kind = EVMC_CALL,
+            .flags = 0,
+            .depth = 0,
+            .gas = 1000000,
+            .recipient = callAddress,
+            .destination_ptr = nullptr,
+            .destination_len = 0,
+            .sender = {},
+            .sender_ptr = nullptr,
+            .sender_len = 0,
+            .input_data = input.data(),
+            .input_size = input.size(),
+            .value = {},
+            .create2_salt = {},
+            .code_address = callAddress};
+        evmc_address origin = {};
 
-            HostContext<decltype(rollbackableStorage)> hostContext(vmFactory, rollbackableStorage,
-                blockHeader, message, origin, "", 0, seq, *precompiledManager,
-                bcos::ledger::LedgerConfig{}, bcos::task::syncWait);
-            result.emplace(co_await hostContext.execute());
-        }
+        HostContext<decltype(rollbackableStorage)> hostContext(vmFactory, rollbackableStorage,
+            blockHeader, message, origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
+            bcos::task::syncWait);
+        result.emplace(syncWait(hostContext.execute()));
+    }
 
-        BOOST_CHECK_EQUAL(result->status_code, 0);
-        bcos::s256 getIntResult = -1;
-        abiCodec.abiOut(
-            bcos::bytesConstRef(result->output_data, result->output_size), getIntResult);
-        BOOST_CHECK_EQUAL(getIntResult, 0);
-
-        co_return;
-    }());
+    BOOST_CHECK_EQUAL(result->status_code, 0);
+    bcos::s256 getIntResult = -1;
+    abiCodec.abiOut(bcos::bytesConstRef(result->output_data, result->output_size), getIntResult);
+    BOOST_CHECK_EQUAL(getIntResult, 0);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

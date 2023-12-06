@@ -22,12 +22,11 @@
 #pragma once
 
 #include "../Common.h"
+#include "HostContext.h"
 #include "bcos-executor/src/Common.h"
-#include "bcos-transaction-executor/vm/HostContext.h"
 #include <evmc/evmc.h>
 #include <evmc/instructions.h>
 #include <boost/core/pointer_traits.hpp>
-#include <boost/optional.hpp>
 #include <functional>
 #include <set>
 
@@ -38,14 +37,13 @@ static_assert(alignof(Address) == alignof(evmc_address), "Address types alignmen
 static_assert(sizeof(h256) == sizeof(evmc_bytes32), "Hash types size mismatch");
 static_assert(alignof(h256) == alignof(evmc_bytes32), "Hash types alignment mismatch");
 
-template <class HostContextType, auto&& waitOperator>
+template <class HostContextType, auto waitOperator>
 struct EVMHostInterface
 {
     static bool accountExists(evmc_host_context* context, const evmc_address* addr) noexcept
     {
         auto& hostContext = static_cast<HostContextType&>(*context);
-        auto addrView = fromEvmC(*addr);
-        return waitOperator(hostContext.exists(addrView));
+        return waitOperator(hostContext.exists(*addr));
     }
 
     static evmc_bytes32 getStorage(evmc_host_context* context,
@@ -89,12 +87,23 @@ struct EVMHostInterface
         return toEvmC(waitOperator(hostContext.codeHashAt(*addr)));
     }
 
-    static size_t copyCode(evmc_host_context* context, const evmc_address*, size_t,
-        uint8_t* bufferData, size_t bufferSize) noexcept
+    static size_t copyCode(evmc_host_context* context, const evmc_address* address,
+        size_t codeOffset, uint8_t* bufferData, size_t bufferSize) noexcept
     {
         auto& hostContext = static_cast<HostContextType&>(*context);
-        waitOperator(hostContext.setCode(bytesConstRef((bcos::byte*)bufferData, bufferSize)));
-        return bufferSize;
+        auto codeEntry = waitOperator(hostContext.code(*address));
+
+        // Handle "big offset" edge case.
+        if (!codeEntry || codeOffset >= (size_t)codeEntry->size())
+        {
+            return 0;
+        }
+        auto code = codeEntry->get();
+
+        size_t maxToCopy = code.size() - codeOffset;
+        size_t numToCopy = std::min(maxToCopy, bufferSize);
+        std::copy_n(&(code[codeOffset]), numToCopy, bufferData);
+        return numToCopy;
     }
 
     static bool selfdestruct(evmc_host_context* context, [[maybe_unused]] const evmc_address* addr,

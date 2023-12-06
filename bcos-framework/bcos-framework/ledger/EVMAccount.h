@@ -115,7 +115,7 @@ private:
     friend task::Task<void> tag_invoke(
         tag_t<setBalance> /*unused*/, EVMAccount& account, const u256& balance)
     {
-        storage::Entry balanceEntry(boost::lexical_cast<std::string>(balance));
+        storage::Entry balanceEntry(balance.str({}, {}));
         co_await storage2::writeOne(account.m_storage,
             transaction_executor::StateKey{
                 concepts::bytebuffer::toView(account.m_tableName), ACCOUNT_TABLE_FIELDS::BALANCE},
