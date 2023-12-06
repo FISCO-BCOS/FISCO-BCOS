@@ -2637,44 +2637,11 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
                 0, addressSize - callParameters->receiveAddress.size(), '0');
         }
     }
-    std::string hexHead = "0x";
-    if (input.value().substr(0, 2) != "0x")
-    {
-        std::string str(input.value());
-        callParameters->value = u256(hexHead + str);
-    }
-    else
-    {
-        callParameters->value = u256(input.value());
-    }
-    if (input.gasPrice().substr(0, 2) != "0x")
-    {
-        std::string str(input.gasPrice());
-        callParameters->gasPrice = u256(hexHead + str);
-    }
-    else
-    {
-        callParameters->gasPrice = u256(input.gasPrice());
-    }
+    callParameters->value = u256(toHex(input.value()));
+    callParameters->gasPrice = u256(toHex(input.gasPrice()));
     callParameters->gasLimit = input.gasLimit();
-    if (input.maxFeePerGas().substr(0, 2) != "0x")
-    {
-        std::string str(input.maxFeePerGas());
-        callParameters->maxFeePerGas = u256(hexHead + str);
-    }
-    else
-    {
-        callParameters->maxFeePerGas = u256(input.maxFeePerGas());
-    }
-    if (input.maxPriorityFeePerGas().substr(0, 2) != "0x")
-    {
-        std::string str(input.maxPriorityFeePerGas());
-        callParameters->maxPriorityFeePerGas = u256(hexHead + str);
-    }
-    else
-    {
-        callParameters->maxPriorityFeePerGas = u256(input.maxPriorityFeePerGas());
-    }
+    callParameters->maxFeePerGas = u256(toHex(input.maxFeePerGas()));
+    callParameters->maxPriorityFeePerGas = u256(toHex(input.maxPriorityFeePerGas()));
 
     return callParameters;
 }
@@ -2704,44 +2671,11 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->delegateCall = false;
     callParameters->delegateCallCode = bytes();
     callParameters->delegateCallSender = "";
-    std::string hexHead = "0x";
-    if (input.value().substr(0, 2) != "0x")
-    {
-        std::string str(input.value());
-        callParameters->value = u256(hexHead + str);
-    }
-    else
-    {
-        callParameters->value = u256(input.value());
-    }
-    if (input.gasPrice().substr(0, 2) != "0x")
-    {
-        std::string str(input.gasPrice());
-        callParameters->gasPrice = u256(hexHead + str);
-    }
-    else
-    {
-        callParameters->gasPrice = u256(input.gasPrice());
-    }
+    callParameters->value = u256(toHex(input.value()));
+    callParameters->gasPrice = u256(toHex(input.gasPrice()));
     callParameters->gasLimit = input.gasLimit();
-    if (input.maxFeePerGas().substr(0, 2) != "0x")
-    {
-        std::string str(input.maxFeePerGas());
-        callParameters->maxFeePerGas = u256(hexHead + str);
-    }
-    else
-    {
-        callParameters->maxFeePerGas = u256(input.maxFeePerGas());
-    }
-    if (input.maxPriorityFeePerGas().substr(0, 2) != "0x")
-    {
-        std::string str(input.maxPriorityFeePerGas());
-        callParameters->maxPriorityFeePerGas = u256(hexHead + str);
-    }
-    else
-    {
-        callParameters->maxPriorityFeePerGas = u256(input.maxPriorityFeePerGas());
-    }
+    callParameters->maxFeePerGas = u256(toHex(input.maxFeePerGas()));
+    callParameters->maxPriorityFeePerGas = u256(toHex(input.maxPriorityFeePerGas()));
 
 
     if (!m_isWasm && !callParameters->create)
@@ -2759,6 +2693,16 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
         }
     }
     return callParameters;
+}
+
+std::string TransactionExecutor::toHex(const std::string_view& str)
+{
+    std::string temp(str);
+    if (str.substr(0, 2) != "0x")
+    {
+        return "0x" + temp;
+    }
+    return temp;
 }
 
 void TransactionExecutor::executeTransactionsWithCriticals(
