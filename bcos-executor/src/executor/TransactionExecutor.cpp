@@ -2637,11 +2637,11 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
                 0, addressSize - callParameters->receiveAddress.size(), '0');
         }
     }
-    callParameters->value = u256(toHex(input.value()));
-    callParameters->gasPrice = u256(toHex(input.gasPrice()));
+    callParameters->value = u256(input.value());
+    callParameters->gasPrice = u256(input.gasPrice());
     callParameters->gasLimit = input.gasLimit();
-    callParameters->maxFeePerGas = u256(toHex(input.maxFeePerGas()));
-    callParameters->maxPriorityFeePerGas = u256(toHex(input.maxPriorityFeePerGas()));
+    callParameters->maxFeePerGas = u256(input.maxFeePerGas());
+    callParameters->maxPriorityFeePerGas = u256(input.maxPriorityFeePerGas());
 
     return callParameters;
 }
@@ -2671,11 +2671,11 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->delegateCall = false;
     callParameters->delegateCallCode = bytes();
     callParameters->delegateCallSender = "";
-    callParameters->value = u256(toHex(input.value()));
-    callParameters->gasPrice = u256(toHex(input.gasPrice()));
+    callParameters->value = u256(input.value());
+    callParameters->gasPrice = u256(input.gasPrice());
     callParameters->gasLimit = input.gasLimit();
-    callParameters->maxFeePerGas = u256(toHex(input.maxFeePerGas()));
-    callParameters->maxPriorityFeePerGas = u256(toHex(input.maxPriorityFeePerGas()));
+    callParameters->maxFeePerGas = u256(input.maxFeePerGas());
+    callParameters->maxPriorityFeePerGas = u256(input.maxPriorityFeePerGas());
 
 
     if (!m_isWasm && !callParameters->create)
@@ -2695,15 +2695,6 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     return callParameters;
 }
 
-std::string TransactionExecutor::toHex(const std::string_view& str)
-{
-    std::string temp(str);
-    if (str.substr(0, 2) != "0x")
-    {
-        return "0x" + temp;
-    }
-    return temp;
-}
 
 void TransactionExecutor::executeTransactionsWithCriticals(
     critical::CriticalFieldsInterface::Ptr criticals,

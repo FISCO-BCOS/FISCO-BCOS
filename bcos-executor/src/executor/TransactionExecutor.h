@@ -218,8 +218,6 @@ protected:
     std::unique_ptr<protocol::ExecutionMessage> toExecutionResult(
         std::unique_ptr<CallParameters> params);
 
-    std::string toHex(const std::string_view& _str);
-
     std::unique_ptr<CallParameters> createCallParameters(
         bcos::protocol::ExecutionMessage& inputs, bool staticCall);
 
