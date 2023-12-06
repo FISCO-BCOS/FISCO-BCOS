@@ -241,6 +241,7 @@ private:
     {
         protocol::TransactionsPtr m_transactions;
         std::vector<protocol::TransactionReceipt::Ptr> m_receipts;
+        protocol::BlockHeader::Ptr m_newBlockHeader;
         protocol::Block::Ptr m_block;
     };
     std::deque<ExecuteResult> m_results;
@@ -263,6 +264,10 @@ private:
         try
         {
             auto blockHeader = block->blockHeaderConst();
+            BASELINE_SCHEDULER_LOG(INFO)
+                << "Execute block: " << blockHeader->number() << " | " << verify << " | "
+                << block->transactionsMetaDataSize() << " | " << block->transactionsSize();
+
             std::unique_lock executeLock(scheduler.m_executeMutex, std::try_to_lock);
             if (!executeLock.owns_lock())
             {
@@ -277,6 +282,29 @@ private:
             if (scheduler.m_lastExecutedBlockNumber != -1 &&
                 blockHeader->number() - scheduler.m_lastExecutedBlockNumber != 1)
             {
+                // 如果区块已经执行过，则直接返回结果，不报错，用于共识和同步同时执行一个区块的场景
+                // If the block has been executed, the result will be returned directly without
+                // error, which is used for the scenario of consensus and synchronous execution of a
+                // block at the same time
+                {
+                    std::unique_lock resultsLock(scheduler.m_resultsMutex);
+                    if (!scheduler.m_results.empty())
+                    {
+                        auto& front = scheduler.m_results.front();
+                        auto& back = scheduler.m_results.back();
+                        auto number = blockHeader->number();
+                        if (number >= front.m_newBlockHeader->number() &&
+                            number <= back.m_newBlockHeader->number())
+                        {
+                            BASELINE_SCHEDULER_LOG(INFO)
+                                << "Block has been executed, return result directly";
+                            auto& result =
+                                scheduler.m_results.at(number - front.m_newBlockHeader->number());
+                            co_return std::make_tuple(nullptr, result.m_newBlockHeader, false);
+                        }
+                    }
+                }
+
                 auto message =
                     fmt::format("Discontinuous execute block number! expect: {} input: {}",
                         scheduler.m_lastExecutedBlockNumber + 1, blockHeader->number());
@@ -287,10 +315,6 @@ private:
             }
 
             auto now = current();
-            BASELINE_SCHEDULER_LOG(INFO)
-                << "Execute block: " << blockHeader->number() << " | " << verify << " | "
-                << block->transactionsMetaDataSize() << " | " << block->transactionsSize();
-
             scheduler.m_multiLayerStorage.newMutable();
             auto view = scheduler.m_multiLayerStorage.fork(true);
             auto constTransactions = co_await getTransactions(scheduler.m_txpool, *block);
@@ -334,6 +358,7 @@ private:
                 {.m_transactions =
                         std::make_shared<protocol::Transactions>(std::move(transactions)),
                     .m_receipts = std::move(receipts),
+                    .m_newBlockHeader = newBlockHeader,
                     .m_block = std::move(block)});
 
             BASELINE_SCHEDULER_LOG(INFO)
