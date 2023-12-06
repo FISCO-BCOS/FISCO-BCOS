@@ -32,11 +32,11 @@ inline task::AwaitableValue<bool> tag_invoke(ledger::tag_t<buildGenesisBlock> /*
 }
 
 task::Task<void> prewriteBlockToStorage(LedgerInterface& ledger,
-    bcos::protocol::TransactionsPtr transactions, bcos::protocol::Block::ConstPtr block,
+    bcos::protocol::ConstTransactionsPtr transactions, bcos::protocol::Block::ConstPtr block,
     bool withTransactionsAndReceipts, storage::StorageInterface::Ptr storage);
 
 inline task::Task<void> tag_invoke(ledger::tag_t<prewriteBlock> /*unused*/, LedgerInterface& ledger,
-    bcos::protocol::TransactionsPtr transactions, bcos::protocol::Block::ConstPtr block,
+    bcos::protocol::ConstTransactionsPtr transactions, bcos::protocol::Block::ConstPtr block,
     bool withTransactionsAndReceipts, auto& storage)
 {
     static_assert(
@@ -61,7 +61,7 @@ inline task::Task<void> tag_invoke(ledger::tag_t<prewriteBlock> /*unused*/, Ledg
 }
 
 task::Task<void> tag_invoke(ledger::tag_t<storeTransactionsAndReceipts>, LedgerInterface& ledger,
-    bcos::protocol::TransactionsPtr blockTxs, bcos::protocol::Block::ConstPtr block);
+    bcos::protocol::ConstTransactionsPtr blockTxs, bcos::protocol::Block::ConstPtr block);
 
 task::Task<protocol::Block::Ptr> tag_invoke(ledger::tag_t<getBlockData> /*unused*/,
     LedgerInterface& ledger, protocol::BlockNumber blockNumber, int32_t blockFlag);

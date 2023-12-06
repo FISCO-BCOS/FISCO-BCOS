@@ -260,12 +260,12 @@ void BlockExecutive::buildExecutivesFromNormalTransaction()
     }
 }
 
-bcos::protocol::TransactionsPtr BlockExecutive::fetchBlockTxsFromTxPool(
+bcos::protocol::ConstTransactionsPtr BlockExecutive::fetchBlockTxsFromTxPool(
     bcos::protocol::Block::Ptr block, bcos::txpool::TxPoolInterface::Ptr txPool)
 {
     SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(number()) << "BlockExecutive prepare: fillBlock start"
                          << LOG_KV("txNum", block->transactionsMetaDataSize());
-    bcos::protocol::TransactionsPtr txs = nullptr;
+    bcos::protocol::ConstTransactionsPtr txs = nullptr;
     auto lastT = utcTime();
     if (txPool != nullptr)
     {
@@ -282,10 +282,10 @@ bcos::protocol::TransactionsPtr BlockExecutive::fetchBlockTxsFromTxPool(
                 SCHEDULER_LOG(TRACE) << "fetch: " << tx.abridged();
             }
         }
-        std::shared_ptr<std::promise<bcos::protocol::TransactionsPtr>> txsPromise =
-            std::make_shared<std::promise<bcos::protocol::TransactionsPtr>>();
+        std::shared_ptr<std::promise<bcos::protocol::ConstTransactionsPtr>> txsPromise =
+            std::make_shared<std::promise<bcos::protocol::ConstTransactionsPtr>>();
         txPool->asyncFillBlock(
-            txHashes, [txsPromise](Error::Ptr error, bcos::protocol::TransactionsPtr txs) {
+            txHashes, [txsPromise](Error::Ptr error, bcos::protocol::ConstTransactionsPtr txs) {
                 if (!txsPromise)
                 {
                     return;

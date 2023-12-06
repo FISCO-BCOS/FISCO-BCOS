@@ -94,7 +94,8 @@ public:
 
     // for scheduler to fetch txs
     void asyncFillBlock(bcos::crypto::HashListPtr _txsHash,
-        std::function<void(Error::Ptr, bcos::protocol::TransactionsPtr)> _onBlockFilled) override;
+        std::function<void(Error::Ptr, bcos::protocol::ConstTransactionsPtr)> _onBlockFilled)
+        override;
 
     // for consensus and sealer, for batch mark txs sealed flag
     // trigger scene such as view change, submit proposal, etc.
@@ -140,10 +141,10 @@ protected:
     virtual bool checkExistsInGroup(bcos::protocol::TxSubmitCallback _txSubmitCallback);
     virtual void getTxsFromLocalLedger(bcos::crypto::HashListPtr _txsHash,
         bcos::crypto::HashListPtr _missedTxs,
-        std::function<void(Error::Ptr, bcos::protocol::TransactionsPtr)> _onBlockFilled);
+        std::function<void(Error::Ptr, bcos::protocol::ConstTransactionsPtr)> _onBlockFilled);
 
     virtual void fillBlock(bcos::crypto::HashListPtr _txsHash,
-        std::function<void(Error::Ptr, bcos::protocol::TransactionsPtr)> _onBlockFilled,
+        std::function<void(Error::Ptr, bcos::protocol::ConstTransactionsPtr)> _onBlockFilled,
         bool _fetchFromLedger = true);
 
     void initSendResponseHandler();

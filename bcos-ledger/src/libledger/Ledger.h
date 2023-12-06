@@ -58,15 +58,15 @@ public:
 
     ~Ledger() override = default;
 
-    void asyncPreStoreBlockTxs(bcos::protocol::TransactionsPtr _blockTxs,
+    void asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr _blockTxs,
         bcos::protocol::Block::ConstPtr block,
         std::function<void(Error::UniquePtr&&)> _callback) override;
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
-        bcos::protocol::TransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
+        bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
         std::function<void(Error::Ptr&&)> callback, bool writeTxsAndReceipts = true) override;
 
-    bcos::Error::Ptr storeTransactionsAndReceipts(
-        bcos::protocol::TransactionsPtr blockTxs, bcos::protocol::Block::ConstPtr block) override;
+    bcos::Error::Ptr storeTransactionsAndReceipts(bcos::protocol::ConstTransactionsPtr blockTxs,
+        bcos::protocol::Block::ConstPtr block) override;
 
     void asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber, int32_t _blockFlag,
         std::function<void(Error::Ptr, bcos::protocol::Block::Ptr)> _onGetBlock) override;
@@ -154,7 +154,7 @@ private:
 
     std::tuple<bool, bcos::crypto::HashListPtr, std::shared_ptr<std::vector<bytesConstPtr>>>
     needStoreUnsavedTxs(
-        bcos::protocol::TransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr _block);
+        bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr _block);
 
     bcos::consensus::ConsensusNodeListPtr selectWorkingSealer(
         const bcos::ledger::LedgerConfig& _ledgerConfig, std::int64_t _epochSealerNum);

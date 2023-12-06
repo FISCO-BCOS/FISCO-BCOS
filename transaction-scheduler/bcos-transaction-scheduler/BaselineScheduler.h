@@ -1,6 +1,7 @@
 #pragma once
 
 #include "bcos-crypto/interfaces/crypto/Hash.h"
+#include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
@@ -239,10 +240,11 @@ private:
 
     struct ExecuteResult
     {
-        protocol::TransactionsPtr m_transactions;
+        protocol::ConstTransactionsPtr m_transactions;
         std::vector<protocol::TransactionReceipt::Ptr> m_receipts;
-        protocol::BlockHeader::Ptr m_newBlockHeader;
+        protocol::BlockHeader::Ptr m_executedBlockHeader;
         protocol::Block::Ptr m_block;
+        bool m_sysBlock{};
     };
     std::deque<ExecuteResult> m_results;
     std::mutex m_resultsMutex;
@@ -293,14 +295,15 @@ private:
                         auto& front = scheduler.m_results.front();
                         auto& back = scheduler.m_results.back();
                         auto number = blockHeader->number();
-                        if (number >= front.m_newBlockHeader->number() &&
-                            number <= back.m_newBlockHeader->number())
+                        if (number >= front.m_executedBlockHeader->number() &&
+                            number <= back.m_executedBlockHeader->number())
                         {
                             BASELINE_SCHEDULER_LOG(INFO)
                                 << "Block has been executed, return result directly";
-                            auto& result =
-                                scheduler.m_results.at(number - front.m_newBlockHeader->number());
-                            co_return std::make_tuple(nullptr, result.m_newBlockHeader, false);
+                            auto& result = scheduler.m_results.at(
+                                number - front.m_executedBlockHeader->number());
+                            co_return std::make_tuple(
+                                nullptr, result.m_executedBlockHeader, result.m_sysBlock);
                         }
                     }
                 }
@@ -328,14 +331,15 @@ private:
                             -> protocol::Transaction const& { return *transactionPtr; }),
                 *ledgerConfig);
 
-            auto newBlockHeader = scheduler.m_blockHeaderFactory.populateBlockHeader(blockHeader);
-            finishExecute(scheduler.m_multiLayerStorage.mutableStorage(), receipts, *newBlockHeader,
-                *block, scheduler.m_hashImpl);
+            auto executedBlockHeader =
+                scheduler.m_blockHeaderFactory.populateBlockHeader(blockHeader);
+            finishExecute(scheduler.m_multiLayerStorage.mutableStorage(), receipts,
+                *executedBlockHeader, *block, scheduler.m_hashImpl);
 
-            if (verify && (newBlockHeader->hash() != blockHeader->hash()))
+            if (verify && (executedBlockHeader->hash() != blockHeader->hash()))
             {
                 auto message = fmt::format("Unmatch block hash! Expect: {} got: {}",
-                    blockHeader->hash().hex(), newBlockHeader->hash().hex());
+                    blockHeader->hash().hex(), executedBlockHeader->hash().hex());
                 BASELINE_SCHEDULER_LOG(ERROR) << message;
 
                 co_return std::make_tuple(
@@ -347,31 +351,27 @@ private:
             scheduler.m_lastExecutedBlockNumber = blockHeader->number();
             scheduler.m_asyncGroup.run([view = std::move(view)]() {});
 
-            auto transactions =
-                RANGES::views::transform(constTransactions,
-                    [](protocol::Transaction::ConstPtr const& transaction) {
-                        return std::const_pointer_cast<protocol::Transaction>(transaction);
-                    }) |
-                RANGES::to<std::vector<protocol::Transaction::Ptr>>();
+            bool sysBlock = false;
             std::unique_lock resultsLock(scheduler.m_resultsMutex);
             scheduler.m_results.push_front(
                 {.m_transactions =
-                        std::make_shared<protocol::Transactions>(std::move(transactions)),
+                        std::make_shared<protocol::ConstTransactions>(std::move(constTransactions)),
                     .m_receipts = std::move(receipts),
-                    .m_newBlockHeader = newBlockHeader,
-                    .m_block = std::move(block)});
+                    .m_executedBlockHeader = executedBlockHeader,
+                    .m_block = std::move(block),
+                    .m_sysBlock = sysBlock});
 
             BASELINE_SCHEDULER_LOG(INFO)
-                << "Execute block finished: " << newBlockHeader->number() << " | "
-                << static_cast<protocol::BlockVersion>(newBlockHeader->version())
-                << " | blockHash: " << newBlockHeader->hash()
-                << " | stateRoot: " << newBlockHeader->stateRoot()
-                << " | txRoot: " << newBlockHeader->txsRoot()
-                << " | receiptRoot: " << newBlockHeader->receiptsRoot()
-                << " | gasUsed: " << newBlockHeader->gasUsed()
+                << "Execute block finished: " << executedBlockHeader->number() << " | "
+                << static_cast<protocol::BlockVersion>(executedBlockHeader->version())
+                << " | blockHash: " << executedBlockHeader->hash()
+                << " | stateRoot: " << executedBlockHeader->stateRoot()
+                << " | txRoot: " << executedBlockHeader->txsRoot()
+                << " | receiptRoot: " << executedBlockHeader->receiptsRoot()
+                << " | gasUsed: " << executedBlockHeader->gasUsed()
                 << " | elapsed: " << (current() - now) << "ms";
 
-            co_return std::make_tuple(nullptr, std::move(newBlockHeader), false);
+            co_return std::make_tuple(nullptr, std::move(executedBlockHeader), sysBlock);
         }
         catch (std::exception& e)
         {

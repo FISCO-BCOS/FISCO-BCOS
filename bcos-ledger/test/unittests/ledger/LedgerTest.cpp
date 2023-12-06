@@ -234,7 +234,7 @@ public:
         for (int i = 0; i < _number; ++i)
         {
             auto block = m_fakeBlocks->at(i);
-            auto transactions = std::make_shared<Transactions>();
+            auto transactions = std::make_shared<ConstTransactions>();
             for (size_t j = 0; j < block->transactionsSize(); ++j)
             {
                 auto tx = block->transaction(j);
@@ -265,7 +265,7 @@ public:
             auto txSize = m_fakeBlocks->at(i)->transactionsSize();
             auto txDataList = std::make_shared<std::vector<bytesConstPtr>>();
             auto txHashList = std::make_shared<protocol::HashList>();
-            auto txList = std::make_shared<std::vector<Transaction::Ptr>>();
+            auto txList = std::make_shared<std::vector<Transaction::ConstPtr>>();
             for (size_t j = 0; j < txSize; ++j)
             {
                 bcos::bytes txData;
@@ -339,7 +339,7 @@ public:
     std::shared_ptr<Ledger> m_ledger = nullptr;
     LedgerConfig::Ptr m_param;
     BlocksPtr m_fakeBlocks;
-    std::vector<TransactionsPtr> m_fakeTransactions;
+    std::vector<ConstTransactionsPtr> m_fakeTransactions;
     bcos::crypto::merkle::Merkle<crypto::hasher::openssl::OpenSSL_Keccak256_Hasher> merkleUtility;
 };
 
@@ -1292,7 +1292,7 @@ BOOST_AUTO_TEST_CASE(testSyncBlock)
         0, "to", input, std::to_string(200), 300, "chainid", "groupid", 800, keyPair);
 
     block->appendTransaction(tx);
-    auto blockTxs = std::make_shared<Transactions>();
+    auto blockTxs = std::make_shared<ConstTransactions>();
     blockTxs->push_back(tx);
     auto txs = std::make_shared<std::vector<bytesConstPtr>>();
     auto hashList = std::make_shared<crypto::HashList>();

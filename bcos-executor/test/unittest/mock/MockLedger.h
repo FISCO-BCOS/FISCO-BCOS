@@ -25,13 +25,13 @@ public:
     {}
 
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
-        bcos::protocol::TransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
+        bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
         std::function<void(Error::Ptr&&)> callback, bool writeTxsAndReceipts) override
     {
         BOOST_CHECK(false);  // Need implementations
     };
-    void asyncPreStoreBlockTxs(bcos::protocol::TransactionsPtr, bcos::protocol::Block::ConstPtr,
-        std::function<void(Error::UniquePtr&&)> _callback) override
+    void asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr,
+        bcos::protocol::Block::ConstPtr, std::function<void(Error::UniquePtr&&)> _callback) override
     {
         if (!_callback)
         {
@@ -41,7 +41,7 @@ public:
     }
 
     bcos::Error::Ptr storeTransactionsAndReceipts(
-        bcos::protocol::TransactionsPtr, bcos::protocol::Block::ConstPtr) override
+        bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr) override
     {
         BOOST_CHECK(false);  // Need implementations
         return nullptr;

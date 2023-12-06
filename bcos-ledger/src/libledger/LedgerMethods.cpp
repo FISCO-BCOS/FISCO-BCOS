@@ -5,7 +5,7 @@
 #include <exception>
 
 bcos::task::Task<void> bcos::ledger::prewriteBlockToStorage(LedgerInterface& ledger,
-    bcos::protocol::TransactionsPtr transactions, bcos::protocol::Block::ConstPtr block,
+    bcos::protocol::ConstTransactionsPtr transactions, bcos::protocol::Block::ConstPtr block,
     bool withTransactionsAndReceipts, storage::StorageInterface::Ptr storage)
 {
     struct Awaitable
@@ -52,7 +52,7 @@ bcos::task::Task<void> bcos::ledger::prewriteBlockToStorage(LedgerInterface& led
 
 bcos::task::Task<void> bcos::ledger::tag_invoke(
     ledger::tag_t<storeTransactionsAndReceipts> /*unused*/, LedgerInterface& ledger,
-    bcos::protocol::TransactionsPtr blockTxs, bcos::protocol::Block::ConstPtr block)
+    bcos::protocol::ConstTransactionsPtr blockTxs, bcos::protocol::Block::ConstPtr block)
 {
     ledger.storeTransactionsAndReceipts(std::move(blockTxs), std::move(block));
     co_return;

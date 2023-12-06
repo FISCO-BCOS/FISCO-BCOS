@@ -74,7 +74,7 @@ using namespace bcos::crypto;
 using namespace bcos::tool;
 using namespace std::string_view_literals;
 
-void Ledger::asyncPreStoreBlockTxs(bcos::protocol::TransactionsPtr _blockTxs,
+void Ledger::asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr _blockTxs,
     bcos::protocol::Block::ConstPtr block, std::function<void(Error::UniquePtr&&)> _callback)
 {
     auto txsToSaveResult = needStoreUnsavedTxs(_blockTxs, block);
@@ -125,7 +125,7 @@ void Ledger::asyncPreStoreBlockTxs(bcos::protocol::TransactionsPtr _blockTxs,
 }
 
 void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
-    bcos::protocol::TransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
+    bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
     std::function<void(Error::Ptr&&)> callback,
     bool writeTxsAndReceipts)  // Unused flag writeTxsAndReceipts
 {
@@ -382,7 +382,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
 
 std::tuple<bool, bcos::crypto::HashListPtr, std::shared_ptr<std::vector<bytesConstPtr>>>
 Ledger::needStoreUnsavedTxs(
-    bcos::protocol::TransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr _block)
+    bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr _block)
 {
     // Note: in the case of block-sync, no-need to save transactions when prewriteBlock
     if (!_blockTxs || _blockTxs->size() == 0)
@@ -418,7 +418,7 @@ Ledger::needStoreUnsavedTxs(
 }
 
 bcos::Error::Ptr Ledger::storeTransactionsAndReceipts(
-    bcos::protocol::TransactionsPtr blockTxs, bcos::protocol::Block::ConstPtr block)
+    bcos::protocol::ConstTransactionsPtr blockTxs, bcos::protocol::Block::ConstPtr block)
 {
     // node commit synced block will give empty blockTxs, the block will never be null
     if (!block)

@@ -30,6 +30,18 @@
 
 namespace bcos::txpool
 {
+constexpr inline struct GetTransactions
+{
+    task::Task<std::vector<protocol::Transaction::ConstPtr>> operator()(
+        auto& txpool, RANGES::input_range auto&& hashes) const
+    {
+        co_return co_await tag_invoke(*this, txpool, std::forward<decltype(hashes)>(hashes));
+    }
+} getTransactions{};
+
+template <auto& Tag>
+using tag_t = std::decay_t<decltype(Tag)>;
+
 class TxPoolInterface
 {
 public:
@@ -116,7 +128,7 @@ public:
      * @param _onBlockFilled callback to be called after the block has been filled
      */
     virtual void asyncFillBlock(bcos::crypto::HashListPtr _txsHash,
-        std::function<void(Error::Ptr, bcos::protocol::TransactionsPtr)> _onBlockFilled) = 0;
+        std::function<void(Error::Ptr, bcos::protocol::ConstTransactionsPtr)> _onBlockFilled) = 0;
 
     /**
      * @brief After the blockchain is on-chain, the interface is called to notify the transaction
@@ -155,9 +167,13 @@ public:
     virtual void clearAllTxs() {}
 
     virtual void tryToSyncTxsFromPeers() {}
+
+    friend task::Task<std::vector<protocol::Transaction::ConstPtr>> tag_invoke(
+        tag_t<txpool::getTransactions> /*unused*/, TxPoolInterface& txpool,
+        RANGES::input_range auto&& hashes)
+    {
+        co_return co_await txpool.getTransactions(std::forward<decltype(hashes)>(hashes));
+    }
 };
 
-template <class T>
-concept IsTxPool = std::derived_from<std::remove_cvref_t<T>, TxPoolInterface> ||
-    std::same_as<std::remove_cvref_t<T>, TxPoolInterface>;
 }  // namespace bcos::txpool

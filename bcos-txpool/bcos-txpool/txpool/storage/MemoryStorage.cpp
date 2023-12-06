@@ -625,9 +625,9 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
                      << LOG_KV("updateTxPoolNonceT", updateTxPoolNonceT);
 }
 
-TransactionsPtr MemoryStorage::fetchTxs(HashList& _missedTxs, HashList const& _txs)
+ConstTransactionsPtr MemoryStorage::fetchTxs(HashList& _missedTxs, HashList const& _txs)
 {
-    auto fetchedTxs = std::make_shared<Transactions>();
+    auto fetchedTxs = std::make_shared<ConstTransactions>();
     _missedTxs.clear();
 
     for (auto const& hash : _txs)
@@ -640,8 +640,7 @@ TransactionsPtr MemoryStorage::fetchTxs(HashList& _missedTxs, HashList const& _t
             continue;
         }
         auto& tx = accessor->value();
-
-        fetchedTxs->emplace_back(std::const_pointer_cast<Transaction>(tx));
+        fetchedTxs->emplace_back(tx);
     }
     if (c_fileLogLevel <= TRACE) [[unlikely]]
     {

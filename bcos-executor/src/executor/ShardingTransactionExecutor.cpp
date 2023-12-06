@@ -293,8 +293,8 @@ void ShardingTransactionExecutor::preExecuteTransactions(int64_t schedulerTermId
                 [this, cache, cacheGuard, blockContext, executiveFactory, startT, contractAddress,
                     timestamp, indexes = std::move(indexes), fillInputs = std::move(fillInputs),
                     callParametersList = std::move(callParametersList),
-                    callback = std::move(callback), txHashes,
-                    blockNumber](Error::Ptr error, protocol::TransactionsPtr transactions) mutable {
+                    callback = std::move(callback), txHashes, blockNumber](
+                    Error::Ptr error, protocol::ConstTransactionsPtr transactions) mutable {
                     auto fillTxsT = (utcTime() - startT);
 
                     if (!m_isRunning)
