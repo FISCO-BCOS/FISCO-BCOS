@@ -13,15 +13,14 @@
 
 namespace bcos::ledger
 {
-struct BuildGenesisBlock
+inline constexpr struct BuildGenesisBlock
 {
     task::Task<bool> operator()(
         auto& ledger, GenesisConfig const& genesis, ledger::LedgerConfig const& ledgerConfig) const
     {
         co_return co_await tag_invoke(*this, ledger, genesis, ledgerConfig);
     }
-};
-inline constexpr BuildGenesisBlock buildGenesisBlock{};
+} buildGenesisBlock{};
 
 struct PrewriteBlock
 {

@@ -1,8 +1,6 @@
 #include "VMInstance.h"
-#include <evmone/evmone.h>
-#include <evmone/vm.hpp>
 
-void bcos::transaction_executor::VMInstance::ReleaseEVMC::operator()(evmc_vm* ptr) const noexcept
+void bcos::transaction_executor::ReleaseEVMC::operator()(evmc_vm* ptr) const noexcept
 {
     if (ptr != nullptr)
     {
@@ -29,4 +27,4 @@ bcos::transaction_executor::EVMCResult bcos::transaction_executor::VMInstance::e
         m_instance);
 }
 
-void bcos::transaction_executor::VMInstance::enableDebugOutput() {}
+void bcos::transaction_executor::VMInstance::enableDebugOutput(){};

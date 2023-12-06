@@ -88,6 +88,23 @@ constexpr static std::string_view SYS_CODE_BINARY{"s_code_binary"};
 constexpr static std::string_view SYS_CONTRACT_ABI{"s_contract_abi"};
 constexpr static std::string_view SYS_BALANCE_CALLER{"s_balance_caller"};
 
+struct SYS_DIRECTORY
+{
+    static constexpr std::string_view USER_APPS = "/apps/";
+};
+// Table fields
+struct ACCOUNT_TABLE_FIELDS
+{
+    static constexpr std::string_view CODE_HASH = "codeHash";
+    static constexpr std::string_view CODE = "code";
+    static constexpr std::string_view BALANCE = "balance";
+    static constexpr std::string_view ABI = "abi";
+    static constexpr std::string_view NONCE = "nonce";
+    static constexpr std::string_view ALIVE = "alive";
+    static constexpr std::string_view FROZEN = "frozen";
+    static constexpr std::string_view SHARD = "shard";
+};
+
 enum ConsensusType : uint32_t
 {
     PBFT_TYPE = 1,

@@ -32,9 +32,6 @@ namespace bcos::transaction_scheduler
 
 class SchedulerParallelImpl
 {
-    using ChunkStorage = storage2::memory_storage::MemoryStorage<transaction_executor::StateKey,
-        transaction_executor::StateValue,
-        storage2::memory_storage::Attribute(storage2::memory_storage::LOGICAL_DELETION)>;
     std::unique_ptr<tbb::task_group> m_asyncTaskGroup;
     constexpr static size_t MIN_CHUNK_SIZE = 16;
     size_t m_chunkSize = MIN_CHUNK_SIZE;
@@ -55,7 +52,7 @@ class SchedulerParallelImpl
         std::atomic_int64_t const& m_lastChunkIndex;
         Range m_transactionAndReceiptsRange;
         Executor& m_executor;
-        MultiLayerStorage<ChunkStorage, void, Storage> m_localStorage;
+        MultiLayerStorage<typename Storage::MutableStorage, void, Storage> m_localStorage;
         decltype(m_localStorage.fork(true)) m_localStorageView;
         ReadWriteSetStorage<decltype(m_localStorageView), transaction_executor::StateKey>
             m_localReadWriteSetStorage;
@@ -113,12 +110,12 @@ public:
 
 private:
     static task::Task<void> mergeLastStorage(
-        SchedulerParallelImpl& scheduler, auto& storage, ChunkStorage&& lastStorage)
+        SchedulerParallelImpl& scheduler, auto& storage, auto&& lastStorage)
     {
         ittapi::Report mergeReport(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
             ittapi::ITT_DOMAINS::instance().MERGE_LAST_CHUNK);
         PARALLEL_SCHEDULER_LOG(DEBUG) << "Final merge lastStorage";
-        co_await storage2::merge(storage, std::forward<ChunkStorage>(lastStorage));
+        co_await storage2::merge(storage, std::forward<decltype(lastStorage)>(lastStorage));
     }
 
     static void executeSinglePass(SchedulerParallelImpl& scheduler, auto& storage, auto& executor,
@@ -149,6 +146,9 @@ private:
 
         PARALLEL_SCHEDULER_LOG(DEBUG) << "Start new chunk executing... " << offset << " | "
                                       << RANGES::size(currentTransactionAndReceipts);
+
+        using ChunkStorage = typename std::decay_t<decltype(storage)>::MutableStorage;
+
         ChunkStorage lastStorage;
         tbb::parallel_pipeline(
             scheduler.m_maxToken == 0 ? std::thread::hardware_concurrency() : scheduler.m_maxToken,

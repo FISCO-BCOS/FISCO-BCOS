@@ -22,6 +22,8 @@
 #pragma once
 
 #include "../Common.h"
+#include "../impl/TarsHashable.h"
+#include <bcos-concepts/Hash.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-framework/protocol/Block.h>
@@ -51,6 +53,7 @@ public:
     void decode(bcos::bytesConstRef _receiptData) override;
     void encode(bcos::bytes& _encodedData) const override;
     bcos::crypto::HashType hash() const override;
+    void calculateHash(const bcos::crypto::Hash& hashImpl) override;
 
     int32_t version() const override;
     bcos::u256 gasUsed() const override;
