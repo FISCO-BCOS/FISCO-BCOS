@@ -448,6 +448,10 @@ CallParameters::UniquePtr TransactionExecutive::callPrecompiled(
         revert();
         callParameters->type = CallParameters::REVERT;
         callParameters->status = (int32_t)TransactionStatus::PrecompiledError;
+        if (m_blockContext.blockVersion() >= (uint32_t)(bcos::protocol::BlockVersion::V3_6_VERSION))
+        {
+            callParameters->evmStatus = EVMC_REVERT;
+        }
         callParameters->message = e.what();
     }
     catch (Exception const& e)
