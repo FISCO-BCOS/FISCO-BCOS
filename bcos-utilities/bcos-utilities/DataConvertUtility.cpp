@@ -18,6 +18,7 @@
 
 #include "DataConvertUtility.h"
 #include <random>
+#include <regex>
 
 #include "Exceptions.h"
 
@@ -59,23 +60,8 @@ bool bcos::isHexString(string const& _string)
 
 bool bcos::isHexStringV2(string const& _string)
 {
-    auto it = _string.begin();
-    if (_string.find("0x") == 0)
-    {
-        it += 2;
-    }
-    else
-    {
-        return false;
-    }
-    for (; it != _string.end(); it++)
-    {
-        if (convertCharToHexNumber(*it) == -1)
-        {
-            return false;
-        }
-    }
-    return true;
+    std::regex pattern("0x[0-9a-fA-F]*");
+    return std::regex_match(_string, pattern);
 }
 
 std::shared_ptr<bytes> bcos::fromHexString(std::string const& _hexedString)
