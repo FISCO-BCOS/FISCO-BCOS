@@ -191,6 +191,14 @@ BOOST_AUTO_TEST_CASE(testSecp256k1SignAndVerify)
     BOOST_CHECK(*signData == *encodedData);
     auto publicKey = secp256k1Crypto->recover(hashData, ref(*encodedData));
     BOOST_CHECK(publicKey->data() == keyPair->publicKey()->data());
+    for (uint8_t i = 4; i < 255; i++)
+    {
+        (*encodedData)[SECP256K1_SIGNATURE_V] = i;
+        BOOST_CHECK_THROW(secp256k1Crypto->recover(hashData, ref(*encodedData)), InvalidSignature);
+        BOOST_CHECK_THROW(
+            secp256k1Crypto->verify(keyPair->publicKey(), hashData, ref(*encodedData)),
+            InvalidSignature);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(testSM2KeyPair)

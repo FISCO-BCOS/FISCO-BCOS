@@ -59,6 +59,10 @@ jobs:
       - name: Remove cache if correspond dir change
         run: ./tools/.ci/clear_build_cache.sh
 
+      - name: update vcpkg
+        run: |
+          cd ${{ env.VCPKG_ROOT }} && git fetch --all
+          cd -
 
       - name: Build for linux
         run: |

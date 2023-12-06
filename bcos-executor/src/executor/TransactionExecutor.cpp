@@ -2637,29 +2637,44 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
                 0, addressSize - callParameters->receiveAddress.size(), '0');
         }
     }
-    try
+    std::string hexHead = "0x";
+    if (input.value().substr(0, 2) != "0x")
+    {
+        std::string str(input.value());
+        callParameters->value = u256(hexHead + str);
+    }
+    else
     {
         callParameters->value = u256(input.value());
+    }
+    if (input.gasPrice().substr(0, 2) != "0x")
+    {
+        std::string str(input.gasPrice());
+        callParameters->gasPrice = u256(hexHead + str);
+    }
+    else
+    {
         callParameters->gasPrice = u256(input.gasPrice());
-        callParameters->gasLimit = input.gasLimit();
+    }
+    callParameters->gasLimit = input.gasLimit();
+    if (input.maxFeePerGas().substr(0, 2) != "0x")
+    {
+        std::string str(input.maxFeePerGas());
+        callParameters->maxFeePerGas = u256(hexHead + str);
+    }
+    else
+    {
         callParameters->maxFeePerGas = u256(input.maxFeePerGas());
+    }
+    if (input.maxPriorityFeePerGas().substr(0, 2) != "0x")
+    {
+        std::string str(input.maxPriorityFeePerGas());
+        callParameters->maxPriorityFeePerGas = u256(hexHead + str);
+    }
+    else
+    {
         callParameters->maxPriorityFeePerGas = u256(input.maxPriorityFeePerGas());
     }
-    catch (std::exception& e)
-    {
-        EXECUTOR_NAME_LOG(ERROR) << LOG_BADGE("createCallParameters")
-                                 << LOG_DESC(
-                                        "createCallParameters error: value, gasPrice, maxFeePerGas "
-                                        "or maxPriorityFeePerGas not hex type,")
-                                 << LOG_KV("value", input.value())
-                                 << LOG_KV("gasPrice", input.gasPrice())
-                                 << LOG_KV("gasLimit", input.gasLimit())
-                                 << LOG_KV("maxFeePerGas", input.maxFeePerGas())
-                                 << LOG_KV("maxPriorityFeePerGas", input.maxPriorityFeePerGas());
-        BOOST_THROW_EXCEPTION(BCOS_ERROR(
-            ExecuteError::EXECUTE_ERROR, "Unexpected  callParameters balance filed type."));
-    }
-
 
     return callParameters;
 }
@@ -2689,27 +2704,43 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->delegateCall = false;
     callParameters->delegateCallCode = bytes();
     callParameters->delegateCallSender = "";
-    try
+    std::string hexHead = "0x";
+    if (input.value().substr(0, 2) != "0x")
+    {
+        std::string str(input.value());
+        callParameters->value = u256(hexHead + str);
+    }
+    else
     {
         callParameters->value = u256(input.value());
-        callParameters->gasPrice = u256(input.gasPrice());
-        callParameters->gasLimit = input.gasLimit();
-        callParameters->maxFeePerGas = u256(input.maxFeePerGas());
-        callParameters->maxPriorityFeePerGas = u256(input.maxPriorityFeePerGas());
     }
-    catch (std::exception& e)
+    if (input.gasPrice().substr(0, 2) != "0x")
     {
-        EXECUTOR_NAME_LOG(ERROR) << LOG_BADGE("createCallParameters")
-                                 << LOG_DESC(
-                                        "createCallParameters error: value, gasPrice, maxFeePerGas "
-                                        "or maxPriorityFeePerGas not hex type,")
-                                 << LOG_KV("value", input.value())
-                                 << LOG_KV("gasPrice", input.gasPrice())
-                                 << LOG_KV("gasLimit", input.gasLimit())
-                                 << LOG_KV("maxFeePerGas", input.maxFeePerGas())
-                                 << LOG_KV("maxPriorityFeePerGas", input.maxPriorityFeePerGas());
-        BOOST_THROW_EXCEPTION(BCOS_ERROR(
-            ExecuteError::EXECUTE_ERROR, "Unexpected  callParameters balance filed type."));
+        std::string str(input.gasPrice());
+        callParameters->gasPrice = u256(hexHead + str);
+    }
+    else
+    {
+        callParameters->gasPrice = u256(input.gasPrice());
+    }
+    callParameters->gasLimit = input.gasLimit();
+    if (input.maxFeePerGas().substr(0, 2) != "0x")
+    {
+        std::string str(input.maxFeePerGas());
+        callParameters->maxFeePerGas = u256(hexHead + str);
+    }
+    else
+    {
+        callParameters->maxFeePerGas = u256(input.maxFeePerGas());
+    }
+    if (input.maxPriorityFeePerGas().substr(0, 2) != "0x")
+    {
+        std::string str(input.maxPriorityFeePerGas());
+        callParameters->maxPriorityFeePerGas = u256(hexHead + str);
+    }
+    else
+    {
+        callParameters->maxPriorityFeePerGas = u256(input.maxPriorityFeePerGas());
     }
 
 
