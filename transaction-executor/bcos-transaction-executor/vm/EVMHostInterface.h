@@ -37,7 +37,7 @@ static_assert(alignof(Address) == alignof(evmc_address), "Address types alignmen
 static_assert(sizeof(h256) == sizeof(evmc_bytes32), "Hash types size mismatch");
 static_assert(alignof(h256) == alignof(evmc_bytes32), "Hash types alignment mismatch");
 
-template <class HostContextType, auto&& waitOperator>
+template <class HostContextType, auto waitOperator>
 struct EVMHostInterface
 {
     static bool accountExists(evmc_host_context* context, const evmc_address* addr) noexcept

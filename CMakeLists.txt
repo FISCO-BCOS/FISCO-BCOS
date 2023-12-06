@@ -49,7 +49,7 @@ if(NOT ONLY_CPP_SDK)
     add_subdirectory(bcos-tars-protocol)
 endif ()
 add_subdirectory(bcos-codec)
-if(NOT ONLY_CPP_SDK AND NOT WITH_SWIG_SDK)
+if(NOT ONLY_CPP_SDK)
     include(ProjectITTAPI)
 endif ()
 
