@@ -60,8 +60,12 @@ bool bcos::isHexString(string const& _string)
 
 bool bcos::isHexStringV2(string const& _string)
 {
-    std::regex pattern("0x[0-9a-fA-F]*");
-    return std::regex_match(_string, pattern);
+    if (_string.length() / 2 == 0)
+    {
+        std::regex pattern("0x[0-9a-fA-F]*");
+        return std::regex_match(_string, pattern);
+    }
+    return false;
 }
 
 std::shared_ptr<bytes> bcos::fromHexString(std::string const& _hexedString)
