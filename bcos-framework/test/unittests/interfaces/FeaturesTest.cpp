@@ -127,7 +127,7 @@ BOOST_AUTO_TEST_CASE(feature)
 
     auto keys = Features::featureKeys();
 
-    BOOST_CHECK_EQUAL(keys.size(), 13);
+    BOOST_CHECK_EQUAL(keys.size(), 14);
     BOOST_CHECK_EQUAL(keys[0], "bugfix_revert");
     BOOST_CHECK_EQUAL(keys[1], "bugfix_statestorage_hash");
     BOOST_CHECK_EQUAL(keys[2], "bugfix_evm_create2_delegatecall_staticcall_codecopy");
@@ -141,6 +141,7 @@ BOOST_AUTO_TEST_CASE(feature)
     BOOST_CHECK_EQUAL(keys[10], "feature_balance");
     BOOST_CHECK_EQUAL(keys[11], "feature_balance_precompiled");
     BOOST_CHECK_EQUAL(keys[12], "feature_balance_policy1");
+    BOOST_CHECK_EQUAL(keys[13], "feature_paillier_add_raw");
 }
 
 BOOST_AUTO_TEST_SUITE_END()
