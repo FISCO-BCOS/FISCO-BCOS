@@ -30,18 +30,6 @@
 
 namespace bcos::txpool
 {
-constexpr inline struct GetTransactions
-{
-    task::Task<std::vector<protocol::Transaction::ConstPtr>> operator()(
-        auto& txpool, RANGES::input_range auto&& hashes) const
-    {
-        co_return co_await tag_invoke(*this, txpool, std::forward<decltype(hashes)>(hashes));
-    }
-} getTransactions{};
-
-template <auto& Tag>
-using tag_t = std::decay_t<decltype(Tag)>;
-
 class TxPoolInterface
 {
 public:
@@ -167,13 +155,6 @@ public:
     virtual void clearAllTxs() {}
 
     virtual void tryToSyncTxsFromPeers() {}
-
-    friend task::Task<std::vector<protocol::Transaction::ConstPtr>> tag_invoke(
-        tag_t<txpool::getTransactions> /*unused*/, TxPoolInterface& txpool,
-        RANGES::input_range auto&& hashes)
-    {
-        co_return co_await txpool.getTransactions(std::forward<decltype(hashes)>(hashes));
-    }
 };
 
 }  // namespace bcos::txpool

@@ -15,10 +15,10 @@ bcos::transaction_scheduler::getTransactions(
             RANGES::to<std::vector>();
     }
 
-    co_return co_await bcos::txpool::getTransactions(
-        txpool, RANGES::iota_view<size_t, size_t>(0LU, block.transactionsMetaDataSize()) |
-                    RANGES::views::transform(
-                        [&block](uint64_t index) { return block.transactionHash(index); }));
+    co_return co_await txpool.getTransactions(
+        RANGES::iota_view<size_t, size_t>(0LU, block.transactionsMetaDataSize()) |
+        RANGES::views::transform(
+            [&block](uint64_t index) { return block.transactionHash(index); }));
 }
 
 bcos::h256 bcos::transaction_scheduler::calcauteTransactionRoot(
