@@ -178,7 +178,7 @@ void BalancePrecompiled::addBalance(
     std::string accountStr = account.hex();
 
     // check the sender whether belong to callers
-    auto caller = _callParameters->m_origin;
+    auto caller = _callParameters->m_sender;
     auto table = _executive->storage().openTable(SYS_BALANCE_CALLER);
 
     // if caller table not exist, check caller failed, return error
@@ -206,10 +206,17 @@ void BalancePrecompiled::addBalance(
                            << LOG_KV("callerEntry", entry->get());
 
     // check the account whether exist, if not exist, create the account
-    auto accountTableName = getAccountTableName(accountStr);
+    auto accountTableName = getContractTableName(executor::USER_APPS_PREFIX, accountStr);
     auto table1 = _executive->storage().openTable(accountTableName);
     if (!table1)
     {
+        PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext.number())
+                               << LOG_BADGE("BalancePrecompiled, addBalance")
+                               << LOG_DESC(
+                                      "account not exist apps table, account maybe not contract "
+                                      "account, create account")
+                               << LOG_KV("account", accountStr) << LOG_KV("value", value)
+                               << LOG_KV("caller", caller);
         createAccount(_executive, _callParameters, codec, accountStr);
     }
 
@@ -240,7 +247,7 @@ void BalancePrecompiled::subBalance(
     std::string accountStr = account.hex();
 
     // check the sender whether belong to callers
-    auto caller = _callParameters->m_origin;
+    auto caller = _callParameters->m_sender;
     auto table = _executive->storage().openTable(SYS_BALANCE_CALLER);
     // if caller table not exist, check caller failed, return error
     if (!table)
@@ -263,10 +270,17 @@ void BalancePrecompiled::subBalance(
     }
 
     // check the account whether exist, if not exist, create the account
-    auto accountTableName = getAccountTableName(accountStr);
+    auto accountTableName = getContractTableName(executor::USER_APPS_PREFIX, accountStr);
     auto table1 = _executive->storage().openTable(accountTableName);
     if (!table1)
     {
+        PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext.number())
+                               << LOG_BADGE("BalancePrecompiled, subBalance")
+                               << LOG_DESC(
+                                      "account not exist apps table, account maybe not contract "
+                                      "account, create account")
+                               << LOG_KV("account", accountStr) << LOG_KV("value", value)
+                               << LOG_KV("caller", caller);
         createAccount(_executive, _callParameters, codec, accountStr);
     }
 
@@ -302,7 +316,7 @@ void BalancePrecompiled::transfer(const std::shared_ptr<executor::TransactionExe
                            << LOG_DESC("transfer") << LOG_KV("from", fromStr) << LOG_KV("to", toStr)
                            << LOG_KV("value", value);
     // check the sender whether belong to callers
-    auto caller = _callParameters->m_origin;
+    auto caller = _callParameters->m_sender;
     auto table = _executive->storage().openTable(SYS_BALANCE_CALLER);
     // if caller table not exist, check caller failed, return error
     if (!table)
@@ -333,10 +347,17 @@ void BalancePrecompiled::transfer(const std::shared_ptr<executor::TransactionExe
     auto inputParams = codec.encode(fromTableNameVector, params);
 
     // check the from account whether exist, if not exist, create the account
-    auto fromAccountTableName = getAccountTableName(fromStr);
+    auto fromAccountTableName = getContractTableName(executor::USER_APPS_PREFIX, fromStr);
     auto fromTable = _executive->storage().openTable(fromAccountTableName);
     if (!fromTable)
     {
+        PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext.number())
+                               << LOG_BADGE("BalancePrecompiled, transfer stage 1")
+                               << LOG_DESC(
+                                      "account not exist apps table, account maybe not contract "
+                                      "account, create account")
+                               << LOG_KV("fromStr", fromStr) << LOG_KV("value", value)
+                               << LOG_KV("caller", caller);
         createAccount(_executive, _callParameters, codec, fromStr);
     }
 
@@ -354,10 +375,17 @@ void BalancePrecompiled::transfer(const std::shared_ptr<executor::TransactionExe
         auto addParams = codec.encode(std::string(ACCOUNT_ADDRESS), inputParams1);
 
         // check the to account whether exist, if not exist, create the account
-        auto toAccountTableName = getAccountTableName(toStr);
+        auto toAccountTableName = getContractTableName(executor::USER_APPS_PREFIX, toStr);
         auto toTable = _executive->storage().openTable(toAccountTableName);
         if (!toTable)
         {
+            PRECOMPILED_LOG(DEBUG)
+                << BLOCK_NUMBER(blockContext.number())
+                << LOG_BADGE("BalancePrecompiled, transfer stage 2")
+                << LOG_DESC(
+                       "account not exist apps table, account maybe not contract account, create "
+                       "account")
+                << LOG_KV("fromStr", fromStr) << LOG_KV("value", value) << LOG_KV("caller", caller);
             createAccount(_executive, _callParameters, codec, toStr);
         }
 

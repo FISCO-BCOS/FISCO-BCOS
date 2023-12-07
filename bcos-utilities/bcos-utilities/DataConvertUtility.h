@@ -157,6 +157,8 @@ std::shared_ptr<bytes> fromHexString(std::string const& _hexedString);
  * @return false : the input string is not hex string
  */
 bool isHexString(std::string const& _string);
+bool isHexStringV2(std::string const& _string);
+
 
 /// Converts byte array to a string containing the same (binary) data. Unless
 /// the byte array happens to contain ASCII data, this won't be printable.
