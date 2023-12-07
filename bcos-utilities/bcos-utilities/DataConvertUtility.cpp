@@ -60,7 +60,7 @@ bool bcos::isHexString(string const& _string)
 
 bool bcos::isHexStringV2(string const& _string)
 {
-    if (_string.length() / 2 == 0)
+    if (_string.length() % 2 == 0)
     {
         std::regex pattern("0x[0-9a-fA-F]*");
         return std::regex_match(_string, pattern);
