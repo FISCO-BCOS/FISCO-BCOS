@@ -42,6 +42,7 @@ struct RocksDBOption
     size_t writeBufferSize = 64 << 20;  // 64MB
     int minWriteBufferNumberToMerge = 1;
     size_t blockCacheSize = 128 << 20;  // 128MB
+    bool enable_blob_files = false;
 };
 
 class StorageInitializer
@@ -54,9 +55,10 @@ public:
         rocksdb::DB* db = nullptr;
         rocksdb::Options options;
         // Note: This option will increase much memory
-        // options.IncreaseParallelism();
+        // options.IncreaseParallelism(std::thread::hardware_concurrency());
         // Note: This option will increase much memory
         // options.OptimizeLevelStyleCompaction();
+
         // create the DB if it's not already present
         options.create_if_missing = true;
         // to mitigate write stalls
@@ -64,6 +66,10 @@ public:
         options.max_write_buffer_number = rocksDBOption.maxWriteBufferNumber;
         // FIXME: enable blob support when space amplification is acceptable
         // options.enable_blob_files = keyPageSize > 1 ? true : false;
+        options.enable_blob_files = rocksDBOption.enable_blob_files;
+        options.bytes_per_sync = 1 << 20;  // 1MB
+        // options.level_compaction_dynamic_level_bytes = true;
+        // options.compaction_pri = rocksdb::kMinOverlappingRatio;
         options.compression = rocksdb::kZSTD;
         options.bottommost_compression = rocksdb::kZSTD;  // last level compression
         options.max_open_files = 256;
@@ -85,6 +91,7 @@ public:
         // use bloom filter to optimize point lookup, i.e. get
         table_options.filter_policy.reset(rocksdb::NewBloomFilterPolicy(10, false));
         table_options.optimize_filters_for_memory = true;
+        table_options.block_size = 64 * 1024;
         // table_options.cache_index_and_filter_blocks = true; // this will increase memory and
         // lower performance
         options.table_factory.reset(rocksdb::NewBlockBasedTableFactory(table_options));
