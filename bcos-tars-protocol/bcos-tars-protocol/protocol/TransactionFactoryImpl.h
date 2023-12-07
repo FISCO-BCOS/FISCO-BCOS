@@ -48,6 +48,28 @@ public:
             [m_transaction = bcostars::Transaction()]() mutable { return &m_transaction; });
 
         transaction->decode(txData);
+        // check value or gasPrice or maxFeePerGas or maxPriorityFeePerGas is hex string
+        if (transaction->version() == int32_t(bcos::protocol::TransactionVersion::V1_VERSION))
+        {
+            if (!bcos::isHexStringV2(transaction->mutableInner().data.value) ||
+                !bcos::isHexStringV2(transaction->mutableInner().data.gasPrice) ||
+                !bcos::isHexStringV2(transaction->mutableInner().data.maxFeePerGas) ||
+                !bcos::isHexStringV2(transaction->mutableInner().data.maxPriorityFeePerGas))
+            {
+                BCOS_LOG(WARNING) << LOG_DESC(
+                                         "the transaction value or gasPrice or maxFeePerGas or "
+                                         "maxPriorityFeePerGas is not hex string")
+                                  << LOG_KV("value", transaction->mutableInner().data.value)
+                                  << LOG_KV("gasPrice", transaction->mutableInner().data.gasPrice)
+                                  << LOG_KV("maxFeePerGas",
+                                         transaction->mutableInner().data.maxFeePerGas)
+                                  << LOG_KV("maxPriorityFeePerGas",
+                                         transaction->mutableInner().data.maxPriorityFeePerGas);
+                BOOST_THROW_EXCEPTION(
+                    std::invalid_argument("transaction value or gasPrice or maxFeePerGas or "
+                                          "maxPriorityFeePerGas is not hex string"));
+            }
+        }
 
         auto originDataHash = std::move(transaction->mutableInner().dataHash);
         transaction->mutableInner().dataHash.clear();
@@ -107,11 +129,27 @@ public:
 
         if (_version == int32_t(bcos::protocol::TransactionVersion::V1_VERSION))
         {
-            inner.data.value = std::move(_value);
-            inner.data.gasPrice = std::move(_gasPrice);
-            inner.data.gasLimit = _gasLimit;
-            inner.data.maxFeePerGas = std::move(_maxFeePerGas);
-            inner.data.maxPriorityFeePerGas = std::move(_maxPriorityFeePerGas);
+            if (bcos::isHexStringV2(_value) && bcos::isHexStringV2(_gasPrice) &&
+                bcos::isHexStringV2(_maxFeePerGas) && bcos::isHexStringV2(_maxPriorityFeePerGas))
+            {
+                inner.data.value = std::move(_value);
+                inner.data.gasPrice = std::move(_gasPrice);
+                inner.data.gasLimit = _gasLimit;
+                inner.data.maxFeePerGas = std::move(_maxFeePerGas);
+                inner.data.maxPriorityFeePerGas = std::move(_maxPriorityFeePerGas);
+            }
+            else
+            {
+                BCOS_LOG(WARNING) << LOG_DESC(
+                                         "the transaction value or gasPrice or maxFeePerGas or "
+                                         "maxPriorityFeePerGas is not hex string")
+                                  << LOG_KV("value", _value) << LOG_KV("gasPrice", _gasPrice)
+                                  << LOG_KV("maxFeePerGas", _maxFeePerGas)
+                                  << LOG_KV("maxPriorityFeePerGas", _maxPriorityFeePerGas);
+                BOOST_THROW_EXCEPTION(
+                    std::invalid_argument("transaction value or gasPrice or maxFeePerGas or "
+                                          "maxPriorityFeePerGas is not hex string"));
+            }
         }
         inner.importTime = _importTime;
 

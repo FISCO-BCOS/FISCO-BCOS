@@ -2643,7 +2643,6 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->maxFeePerGas = u256(input.maxFeePerGas());
     callParameters->maxPriorityFeePerGas = u256(input.maxPriorityFeePerGas());
 
-
     return callParameters;
 }
 
@@ -2678,6 +2677,7 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->maxFeePerGas = u256(input.maxFeePerGas());
     callParameters->maxPriorityFeePerGas = u256(input.maxPriorityFeePerGas());
 
+
     if (!m_isWasm && !callParameters->create)
     {
         constexpr static auto addressSize = Address::SIZE * 2;
@@ -2694,6 +2694,7 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     }
     return callParameters;
 }
+
 
 void TransactionExecutor::executeTransactionsWithCriticals(
     critical::CriticalFieldsInterface::Ptr criticals,
