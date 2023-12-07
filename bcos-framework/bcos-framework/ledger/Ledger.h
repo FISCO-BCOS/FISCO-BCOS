@@ -24,7 +24,7 @@ inline constexpr struct BuildGenesisBlock
 
 struct PrewriteBlock
 {
-    task::Task<void> operator()(auto& ledger, bcos::protocol::TransactionsPtr transactions,
+    task::Task<void> operator()(auto& ledger, bcos::protocol::ConstTransactionsPtr transactions,
         bcos::protocol::Block::ConstPtr block, bool withTransactionsAndReceipts,
         auto& storage) const
     {
@@ -36,7 +36,7 @@ inline constexpr PrewriteBlock prewriteBlock{};
 
 struct StoreTransactionsAndReceipts
 {
-    task::Task<void> operator()(auto& ledger, bcos::protocol::TransactionsPtr transactions,
+    task::Task<void> operator()(auto& ledger, bcos::protocol::ConstTransactionsPtr transactions,
         bcos::protocol::Block::ConstPtr block) const
     {
         co_await tag_invoke(*this, ledger, std::move(transactions), std::move(block));

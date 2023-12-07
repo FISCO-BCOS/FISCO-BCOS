@@ -986,12 +986,12 @@ void TransactionExecutor::executeTransactionsInternal(std::string contractAddres
 
     if (!txHashes->empty())
     {
-        m_txpool->asyncFillBlock(txHashes,
-            [this, startT, useCoroutine, contractAddress, indexes = std::move(indexes),
-                fillInputs = std::move(fillInputs),
-                callParametersList = std::move(callParametersList), callback = std::move(callback),
-                txHashes,
-                blockNumber](Error::Ptr error, protocol::TransactionsPtr transactions) mutable {
+        m_txpool->asyncFillBlock(
+            txHashes, [this, startT, useCoroutine, contractAddress, indexes = std::move(indexes),
+                          fillInputs = std::move(fillInputs),
+                          callParametersList = std::move(callParametersList),
+                          callback = std::move(callback), txHashes, blockNumber](
+                          Error::Ptr error, protocol::ConstTransactionsPtr transactions) mutable {
                 auto fillTxsT = (utcTime() - startT);
 
                 if (!m_isRunning)
@@ -1219,8 +1219,8 @@ void TransactionExecutor::dagExecuteTransactions(
         m_txpool->asyncFillBlock(txHashes,
             [this, startT, indexes = std::move(indexes), fillInputs = std::move(fillInputs),
                 callParametersList = std::move(callParametersList), callback = std::move(callback),
-                txHashes,
-                blockNumber](Error::Ptr error, protocol::TransactionsPtr transactions) mutable {
+                txHashes, blockNumber](
+                Error::Ptr error, protocol::ConstTransactionsPtr transactions) mutable {
                 auto fillTxsT = utcTime() - startT;
 
                 if (!m_isRunning)
@@ -2276,7 +2276,8 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
 
         m_txpool->asyncFillBlock(std::move(txHashes),
             [this, useCoroutine, inputPtr = input.release(), blockContext = std::move(blockContext),
-                callback](Error::Ptr error, bcos::protocol::TransactionsPtr transactions) mutable {
+                callback](
+                Error::Ptr error, bcos::protocol::ConstTransactionsPtr transactions) mutable {
                 if (!m_isRunning)
                 {
                     callback(BCOS_ERROR_UNIQUE_PTR(
@@ -2712,8 +2713,8 @@ void TransactionExecutor::executeTransactionsWithCriticals(
         auto& input = inputs[id];
         auto executiveFactory = std::make_shared<ExecutiveFactory>(
             *m_blockContext, m_evmPrecompiled, m_precompiled, m_staticPrecompiled, *m_gasInjector);
-        auto executive =
-            executiveFactory->build(input->codeAddress, input->contextID, input->seq, ExecutiveType::common);
+        auto executive = executiveFactory->build(
+            input->codeAddress, input->contextID, input->seq, ExecutiveType::common);
 
         EXECUTOR_NAME_LOG(TRACE) << LOG_BADGE("executeTransactionsWithCriticals")
                                  << LOG_DESC("Start transaction")

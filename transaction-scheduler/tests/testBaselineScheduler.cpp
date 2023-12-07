@@ -1,3 +1,4 @@
+#include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
@@ -63,7 +64,7 @@ struct MockLedger
 };
 
 inline task::AwaitableValue<void> tag_invoke(ledger::tag_t<bcos::ledger::prewriteBlock> /*unused*/,
-    MockLedger& ledger, bcos::protocol::TransactionsPtr transactions,
+    MockLedger& ledger, bcos::protocol::ConstTransactionsPtr transactions,
     bcos::protocol::Block::ConstPtr block, bool withTransactionsAndReceipts, auto& storage)
 {
     return {};
@@ -76,7 +77,7 @@ inline task::AwaitableValue<ledger::LedgerConfig::Ptr> tag_invoke(
 }
 
 task::AwaitableValue<void> tag_invoke(ledger::tag_t<ledger::storeTransactionsAndReceipts>,
-    MockLedger& ledger, bcos::protocol::TransactionsPtr blockTxs,
+    MockLedger& ledger, bcos::protocol::ConstTransactionsPtr blockTxs,
     bcos::protocol::Block::ConstPtr block)
 {
     return {};
@@ -98,7 +99,8 @@ struct MockTxPool : public txpool::TxPoolInterface
         std::function<void(Error::Ptr, bool)> _onVerifyFinished) override
     {}
     void asyncFillBlock(bcos::crypto::HashListPtr _txsHash,
-        std::function<void(Error::Ptr, bcos::protocol::TransactionsPtr)> _onBlockFilled) override
+        std::function<void(Error::Ptr, bcos::protocol::ConstTransactionsPtr)> _onBlockFilled)
+        override
     {}
     void asyncNotifyBlockResult(bcos::protocol::BlockNumber _blockNumber,
         bcos::protocol::TransactionSubmitResultsPtr _txsResult,

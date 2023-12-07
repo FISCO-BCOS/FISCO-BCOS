@@ -67,7 +67,7 @@ void testAsyncFillBlock(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     }
     block->blockHeader()->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
     std::promise<Error::Ptr> promise;
-    _txpool->asyncFillBlock(txsHash, [&promise](Error::Ptr _error, const TransactionsPtr&) {
+    _txpool->asyncFillBlock(txsHash, [&promise](Error::Ptr _error, ConstTransactionsPtr) {
         promise.set_value(std::move(_error));
     });
     auto error = promise.get_future().get();
@@ -105,8 +105,8 @@ void testAsyncFillBlock(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     }
     block->blockHeader()->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
 
-    std::promise<std::tuple<Error::Ptr, TransactionsPtr>> promise3;
-    _txpool->asyncFillBlock(txsHash, [&](Error::Ptr _error, TransactionsPtr _fetchedTxs) {
+    std::promise<std::tuple<Error::Ptr, ConstTransactionsPtr>> promise3;
+    _txpool->asyncFillBlock(txsHash, [&](Error::Ptr _error, ConstTransactionsPtr _fetchedTxs) {
         promise3.set_value({std::move(_error), std::move(_fetchedTxs)});
     });
     auto [e3, fetchTxs] = promise3.get_future().get();

@@ -54,7 +54,8 @@ public:
         _callback(nullptr);
     }
     // useless for PBFT, needed by dispatcher to fetch block transactions
-    void asyncFillBlock(HashListPtr, std::function<void(Error::Ptr, TransactionsPtr)>) override {}
+    void asyncFillBlock(HashListPtr, std::function<void(Error::Ptr, ConstTransactionsPtr)>) override
+    {}
 
     // useless for PBFT, maybe useful for the ledger
     void asyncNotifyBlockResult(

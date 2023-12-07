@@ -84,7 +84,7 @@ public:
     bcos::protocol::Transaction::Ptr removeSubmittedTx(
         bcos::protocol::TransactionSubmitResult::Ptr _txSubmitResult) override;
 
-    bcos::protocol::TransactionsPtr fetchTxs(
+    bcos::protocol::ConstTransactionsPtr fetchTxs(
         bcos::crypto::HashList& _missedTxs, bcos::crypto::HashList const& _txsList) override;
 
     // FIXME: deprecated, after using txpool::broadcastTransaction

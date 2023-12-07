@@ -53,12 +53,13 @@ public:
     void asyncResetTxPool(std::function<void(Error::Ptr)>) override {}
 
     void asyncFillBlock(bcos::crypto::HashListPtr _txsHash,
-        std::function<void(Error::Ptr, bcos::protocol::TransactionsPtr)> _onBlockFilled) override
+        std::function<void(Error::Ptr, bcos::protocol::ConstTransactionsPtr)> _onBlockFilled)
+        override
     {
         BOOST_CHECK_GT(_txsHash->size(), 0);
         SCHEDULER_LOG(DEBUG) << LOG_KV("txHashes size", _txsHash->size())
                              << LOG_KV("map Size", hash2Transaction.size());
-        auto transactions = std::make_shared<bcos::protocol::Transactions>();
+        auto transactions = std::make_shared<bcos::protocol::ConstTransactions>();
         for (auto& hash : *_txsHash)
         {
             auto it = hash2Transaction.find(hash);

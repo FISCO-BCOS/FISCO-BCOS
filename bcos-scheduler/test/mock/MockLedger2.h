@@ -11,7 +11,7 @@ class MockLedger2 : public bcos::ledger::LedgerInterface
 {
 public:
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
-        bcos::protocol::TransactionsPtr, bcos::protocol::Block::ConstPtr block,
+        bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr block,
         std::function<void(Error::Ptr&&)> callback, bool writeTxsAndReceipts)
     {
         auto mutableBlock = std::const_pointer_cast<bcos::protocol::Block>(block);
@@ -30,8 +30,8 @@ public:
         // TODO: write receipts and tx count
     }
 
-    void asyncPreStoreBlockTxs(bcos::protocol::TransactionsPtr, bcos::protocol::Block::ConstPtr,
-        std::function<void(Error::UniquePtr&&)> _callback) override
+    void asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr,
+        bcos::protocol::Block::ConstPtr, std::function<void(Error::UniquePtr&&)> _callback) override
     {
         if (!_callback)
         {
@@ -39,8 +39,8 @@ public:
         }
         _callback(nullptr);
     }
-    bcos::Error::Ptr storeTransactionsAndReceipts(
-        bcos::protocol::TransactionsPtr blockTxs, bcos::protocol::Block::ConstPtr block) override
+    bcos::Error::Ptr storeTransactionsAndReceipts(bcos::protocol::ConstTransactionsPtr blockTxs,
+        bcos::protocol::Block::ConstPtr block) override
     {
         return nullptr;
     }
