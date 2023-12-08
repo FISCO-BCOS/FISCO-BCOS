@@ -41,6 +41,7 @@
 #include "bcos-tool/BfsFileFactory.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include "libinitializer/BaselineSchedulerInitializer.h"
+#include "rocksdb/statistics.h"
 #include <bcos-crypto/hasher/AnyHasher.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
@@ -165,6 +166,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         option.writeBufferSize = m_nodeConfig->writeBufferSize();
         option.minWriteBufferNumberToMerge = m_nodeConfig->minWriteBufferNumberToMerge();
         option.blockCacheSize = m_nodeConfig->blockCacheSize();
+        option.enable_blob_files = m_nodeConfig->enableRocksDBBlob();
 
         // m_protocolInitializer->dataEncryption() will return nullptr when storage_security = false
         storage =

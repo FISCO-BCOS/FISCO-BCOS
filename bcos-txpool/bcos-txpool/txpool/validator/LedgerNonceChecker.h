@@ -29,8 +29,11 @@ class LedgerNonceChecker : public TxPoolNonceChecker
 public:
     LedgerNonceChecker(
         std::shared_ptr<std::map<int64_t, bcos::protocol::NonceListPtr> > _initialNonces,
-        bcos::protocol::BlockNumber _blockNumber, int64_t _blockLimit)
-      : TxPoolNonceChecker(), m_blockNumber(_blockNumber), m_blockLimit(_blockLimit)
+        bcos::protocol::BlockNumber _blockNumber, int64_t _blockLimit, bool _checkBlockLimit)
+      : TxPoolNonceChecker(),
+        m_blockNumber(_blockNumber),
+        m_blockLimit(_blockLimit),
+        m_checkBlockLimit(_checkBlockLimit)
     {
         if (_initialNonces)
         {
@@ -46,11 +49,13 @@ public:
 protected:
     virtual bcos::protocol::TransactionStatus checkBlockLimit(
         bcos::protocol::Transaction::ConstPtr _tx);
-    void initNonceCache(std::shared_ptr<std::map<int64_t, bcos::protocol::NonceListPtr> > _initialNonces);
+    void initNonceCache(
+        std::shared_ptr<std::map<int64_t, bcos::protocol::NonceListPtr> > _initialNonces);
 
 private:
     std::atomic<bcos::protocol::BlockNumber> m_blockNumber = {0};
     int64_t m_blockLimit;
+    bool m_checkBlockLimit = true;
 
     /// cache the block nonce to in case of accessing the DB to get nonces of given block frequently
     /// key: block number
