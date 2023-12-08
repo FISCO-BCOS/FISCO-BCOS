@@ -544,9 +544,10 @@ void TxPool::init()
     TXPOOL_LOG(INFO) << LOG_DESC("fetch history nonces success");
 
     // create LedgerNonceChecker and set it into the validator
-    TXPOOL_LOG(INFO) << LOG_DESC("init txs validator");
-    auto ledgerNonceChecker = std::make_shared<LedgerNonceChecker>(
-        ledgerConfigFetcher->nonceList(), ledgerConfig->blockNumber(), blockLimit);
+    TXPOOL_LOG(INFO) << LOG_DESC("init txs validator")
+                     << LOG_KV("checkBlockLimit", m_checkBlockLimit);
+    auto ledgerNonceChecker = std::make_shared<LedgerNonceChecker>(ledgerConfigFetcher->nonceList(),
+        ledgerConfig->blockNumber(), blockLimit, m_checkBlockLimit);
 
     auto validator = std::dynamic_pointer_cast<TxValidator>(m_config->txValidator());
     validator->setLedgerNonceChecker(ledgerNonceChecker);

@@ -137,6 +137,8 @@ public:
 
     auto treeRouter() const { return m_treeRouter; }
 
+    void setCheckBlockLimit(bool _checkBlockLimit) { m_checkBlockLimit = _checkBlockLimit; }
+
 protected:
     virtual bool checkExistsInGroup(bcos::protocol::TxSubmitCallback _txSubmitCallback);
     virtual void getTxsFromLocalLedger(bcos::crypto::HashListPtr _txsHash,
@@ -171,5 +173,6 @@ private:
     // Note: This x_markTxsMutex is used for locking asyncSealTxs() during sealBlock
     // because memory storage is not contain a big lock now
     mutable bcos::SharedMutex x_markTxsMutex;
+    bool m_checkBlockLimit = true;
 };
 }  // namespace bcos::txpool
