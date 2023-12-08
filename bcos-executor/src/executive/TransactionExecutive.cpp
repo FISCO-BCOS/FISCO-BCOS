@@ -522,8 +522,8 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
     try
     {
         m_storageWrapper->createTable(tableName, std::string(STORAGE_VALUE));
-        EXECUTIVE_LOG(INFO) << "create contract table " << LOG_KV("table", tableName)
-                            << LOG_KV("sender", callParameters->senderAddress);
+        EXECUTIVE_LOG(DEBUG) << "create contract table " << LOG_KV("table", tableName)
+                             << LOG_KV("sender", callParameters->senderAddress);
         if (m_blockContext.isAuthCheck() ||
             (!m_blockContext.isWasm() &&
                 m_blockContext.blockVersion() >= BlockVersion::V3_3_VERSION))
