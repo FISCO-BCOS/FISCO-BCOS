@@ -472,10 +472,10 @@ void RocksDBStorage::asyncCommit(
         m_db->GetProperty("rocksdb.cur-size-all-mem-tables", &current);
         STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("RocksDB statistics")
                                   << LOG_KV("blockNumber", params.number)
-                                  << LOG_KV(
-                                         "block_cache_usage", tableOptions->block_cache->GetUsage())
-                                  << LOG_KV("block_cache_pinned_usage",
-                                         tableOptions->block_cache->GetPinnedUsage())
+                                //   << LOG_KV(
+                                //          "block_cache_usage", tableOptions->block_cache->GetUsage())
+                                //   << LOG_KV("block_cache_pinned_usage",
+                                //          tableOptions->block_cache->GetPinnedUsage())
                                   << LOG_KV("estimate-table-readers-mem", out)
                                   << LOG_KV("cur-size-all-mem-tables", current);
     }
