@@ -3,7 +3,9 @@
 #include "Storage.h"
 #include "bcos-task/AwaitableValue.h"
 #include "bcos-utilities/Overloaded.h"
+#include "tbb/spin_mutex.h"
 #include <bcos-utilities/NullLock.h>
+#include <oneapi/tbb/spin_mutex.h>
 #include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/identity.hpp>
 #include <boost/multi_index/key.hpp>
@@ -61,8 +63,9 @@ private:
     static_assert(!withConcurrent || !std::is_void_v<BucketHasher>);
 
     constexpr static unsigned DEFAULT_CAPACITY = 32 * 1024 * 1024;  // For mru
-    using Mutex = std::mutex;
-    using Lock = std::conditional_t<withConcurrent, std::unique_lock<Mutex>, utilities::NullLock>;
+    using Mutex = tbb::spin_mutex;
+    using Lock = std::conditional_t<withConcurrent, typename tbb::spin_mutex::scoped_lock,
+        utilities::NullLock>;
     using BucketMutex = std::conditional_t<withConcurrent, Mutex, Empty>;
     using DataValueType =
         std::conditional_t<withLogicalDeletion, std::variant<Deleted, ValueType>, ValueType>;
@@ -90,16 +93,16 @@ private:
     Buckets m_buckets;
     [[no_unique_address]] std::conditional_t<withMRU, int64_t, Empty> m_maxCapacity;
 
-    std::tuple<std::reference_wrapper<Bucket>, Lock> getBucket(auto const& key)
+    Bucket& getBucket(auto const& key) &
     {
         if constexpr (!withConcurrent)
         {
-            return std::make_tuple(std::ref(m_buckets[0]), Lock(Empty{}));
+            return m_buckets[0];
         }
         auto index = getBucketIndex(key);
 
         auto& bucket = m_buckets[index];
-        return std::make_tuple(std::ref(bucket), Lock(bucket.mutex));
+        return bucket;
     }
 
     size_t getBucketIndex(auto const& key) const
@@ -203,9 +206,10 @@ public:
 
         for (auto&& key : keys)
         {
-            auto [bucket, lock] = storage.getBucket(key);
+            auto& bucket = storage.getBucket(key);
+            Lock lock(bucket.mutex);
 
-            auto const& index = bucket.get().container.template get<0>();
+            auto const& index = bucket.container.template get<0>();
             auto it = index.find(key);
             if (it != index.end())
             {
@@ -242,9 +246,10 @@ public:
         storage2::tag_t<storage2::readOne> /*unused*/, MemoryStorage& storage, auto&& key)
     {
         task::AwaitableValue<std::optional<ValueType>> result({});
-        auto [bucket, lock] = storage.getBucket(key);
+        auto& bucket = storage.getBucket(key);
+        Lock lock(bucket.mutex);
 
-        auto const& index = bucket.get().container.template get<0>();
+        auto const& index = bucket.container.template get<0>();
         auto it = index.find(key);
         if (it != index.end())
         {
@@ -273,8 +278,9 @@ public:
     {
         for (auto&& [key, value] : RANGES::views::zip(keys, values))
         {
-            auto [bucket, lock] = storage.getBucket(key);
-            auto const& index = bucket.get().container.template get<0>();
+            auto& bucket = storage.getBucket(key);
+            Lock lock(bucket.mutex);
+            auto const& index = bucket.container.template get<0>();
 
             std::conditional_t<std::decay_t<decltype(storage)>::withMRU, int64_t, Empty>
                 updatedCapacity;
@@ -300,22 +306,22 @@ public:
                     updatedCapacity -= getSize(existsValue);
                 }
 
-                bucket.get().container.modify(
+                bucket.container.modify(
                     it, [newValue = std::forward<decltype(value)>(value)](Data& data) mutable {
                         data.value = std::forward<decltype(newValue)>(newValue);
                     });
             }
             else
             {
-                it = bucket.get().container.emplace_hint(
+                it = bucket.container.emplace_hint(
                     it, Data{.key = KeyType(std::forward<decltype(key)>(key)),
                             .value = std::forward<decltype(value)>(value)});
             }
 
             if constexpr (std::decay_t<decltype(storage)>::withMRU)
             {
-                bucket.get().capacity += updatedCapacity;
-                storage.updateMRUAndCheck(bucket.get(), it);
+                bucket.capacity += updatedCapacity;
+                storage.updateMRUAndCheck(bucket, it);
             }
         }
 
@@ -327,8 +333,10 @@ public:
     {
         for (auto&& key : keys)
         {
-            auto [bucket, lock] = storage.getBucket(key);
-            auto const& index = bucket.get().container.template get<0>();
+            auto& bucket = storage.getBucket(key);
+            Lock lock(bucket.mutex);
+
+            auto const& index = bucket.container.template get<0>();
 
             auto it = index.find(key);
             if (it != index.end())
@@ -345,26 +353,25 @@ public:
 
                 if constexpr (std::decay_t<decltype(storage)>::withMRU)
                 {
-                    bucket.get().capacity -= getSize(existsValue);
+                    bucket.capacity -= getSize(existsValue);
                 }
 
                 if constexpr (std::decay_t<decltype(storage)>::withLogicalDeletion)
                 {
-                    bucket.get().container.modify(it, [](Data& data) mutable {
+                    bucket.container.modify(it, [](Data& data) mutable {
                         data.value.template emplace<Deleted>(Deleted{});
                     });
                 }
                 else
                 {
-                    bucket.get().container.erase(it);
+                    bucket.container.erase(it);
                 }
             }
             else
             {
                 if constexpr (std::decay_t<decltype(storage)>::withLogicalDeletion)
                 {
-                    it = bucket.get().container.emplace_hint(
-                        it, Data{.key = key, .value = Deleted{}});
+                    it = bucket.container.emplace_hint(it, Data{.key = key, .value = Deleted{}});
                 }
             }
         }
