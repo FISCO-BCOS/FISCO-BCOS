@@ -24,11 +24,12 @@ namespace bcos::storage2::memory_storage
 {
 
 template <class Object>
-concept HasMemberSize = requires(Object object) {
-                            // clang-format off
+concept HasMemberSize = requires(Object object)
+{
+    // clang-format off
     { object.size() } -> std::integral;
-                            // clang-format on
-                        };
+    // clang-format on
+};
 
 struct Empty
 {
@@ -117,9 +118,8 @@ private:
         }
     }
 
-    void updateMRUAndCheck(
-        Bucket& bucket, typename Container::template nth_index<0>::type::iterator entryIt)
-        requires withMRU
+    void updateMRUAndCheck(Bucket& bucket,
+        typename Container::template nth_index<0>::type::iterator entryIt) requires withMRU
     {
         auto& index = bucket.container.template get<1>();
         auto seqIt = index.iterator_to(*entryIt);
@@ -145,9 +145,8 @@ private:
         return sizeof(ObjectType);
     }
 
-    friend auto tag_invoke(
-        bcos::storage2::tag_t<storage2::range> /*unused*/, MemoryStorage const& storage)
-        requires(!withConcurrent)
+    friend auto tag_invoke(bcos::storage2::tag_t<storage2::range> /*unused*/,
+        MemoryStorage const& storage) requires(!withConcurrent)
     {
         auto range = RANGES::views::transform(storage.m_buckets[0].container,
             [&](Data const& data) -> std::tuple<const KeyType*, const ValueType*> {
@@ -187,11 +186,7 @@ public:
     MemoryStorage& operator=(MemoryStorage&&) noexcept = default;
     ~MemoryStorage() noexcept = default;
 
-    void setMaxCapacity(int64_t capacity)
-        requires withMRU
-    {
-        m_maxCapacity = capacity;
-    }
+    void setMaxCapacity(int64_t capacity) requires withMRU { m_maxCapacity = capacity; }
 
     friend auto tag_invoke(bcos::storage2::tag_t<readSome> /*unused*/, MemoryStorage& storage,
         RANGES::input_range auto&& keys)
@@ -379,9 +374,9 @@ public:
         return {};
     }
 
-    friend task::AwaitableValue<void> tag_invoke(
-        storage2::tag_t<merge> /*unused*/, MemoryStorage& toStorage, MemoryStorage&& fromStorage)
-        requires(!std::is_const_v<decltype(fromStorage)>)
+    friend task::AwaitableValue<void> tag_invoke(storage2::tag_t<merge> /*unused*/,
+        MemoryStorage& toStorage,
+        MemoryStorage&& fromStorage) requires(!std::is_const_v<decltype(fromStorage)>)
     {
         for (auto&& [bucket, fromBucket] :
             RANGES::views::zip(toStorage.m_buckets, fromStorage.m_buckets))
