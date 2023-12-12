@@ -534,9 +534,11 @@ void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt, bool _e
     }
     catch (std::exception const& e)
     {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "config.genesis chain.sm_crypto/chain.group_id/chain.chain_id is "
-                                  "null, please set it!"));
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "chain.sm_crypto/chain.group_id/chain.chain_id is null, please set it,"
+                " if compatibility_version in genesis block >= 3.1.0,"
+                " 'chain' config should appear in config.genesis, else in config.ini."));
     }
     if (!isalNumStr(m_genesisConfig.m_chainID))
     {
