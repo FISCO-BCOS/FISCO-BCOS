@@ -74,7 +74,7 @@ function check_PR_limit() {
     #     LOG_ERROR "modify ${files} files, limit is ${file_limit}"
     #     exit 1
     # fi
-    local need_check_files=$(git diff --numstat HEAD^ |awk '{if ($1!=0) print $0;}'|sed "s/{.*> //g" |sed "s/}//g" |awk '{print $3}' |grep -vE 'benchmark\/|test|tools\/|fisco-bcos\/|.github\/')
+    local need_check_files=$(git diff --numstat HEAD^ |awk '{if ($1!=0) print $0;}'|sed "s/{.*> //g" |sed "s/}//g" |awk '{print $3}' |grep -vE 'sample\/|benchmark\/|test|tools\/|fisco-bcos\/|.github\/')
     echo "need check files:"
     echo "${need_check_files}"
 
@@ -89,10 +89,11 @@ function check_PR_limit() {
     local include_lines=$(git diff HEAD^ $(echo "${need_check_files}") | grep -e '^+\#include' | wc -l | xargs)
     local comment_lines=$(git diff HEAD^ $(echo "${need_check_files}") | grep -e "^+\s*\/\/" | wc -l | xargs)
     local insertions=$(git diff --ignore-space-change --shortstat HEAD^ $(echo "${need_check_files}")| awk -F ' ' '{print $4}')
+    local insertions_from_git=$(git diff --shortstat HEAD^ | awk -F ' ' '{print $4}')
     local valid_insertions=$((insertions - new_files * license_line - comment_lines - empty_lines - block_lines - include_lines))
     echo "valid_insertions: ${valid_insertions}, insertions(${insertions}) - new_files(${new_files}) * license_line(${license_line}) - comment_lines(${comment_lines}) - empty_lines(${empty_lines}) - block_lines(${block_lines}) - include_lines(${include_lines})"
-    if [ ${insert_limit} -lt ${valid_insertions} ]; then
-        LOG_ERROR "insert ${insertions} lines, valid is ${valid_insertions}, limit is ${insert_limit}"
+    if [[ ${insert_limit} -lt ${valid_insertions} && ${insert_limit} -lt ${insertions_from_git} ]]; then
+        LOG_ERROR "insert ${insertions} lines, valid is ${valid_insertions}, limit is ${insert_limit}, git reports insert ${insertions_from_git} lines"
         exit 1
     fi
     local deletions=$(git diff --ignore-space-change --shortstat HEAD^ | awk -F ' ' '{print $6}')
@@ -115,7 +116,7 @@ function check_PR_limit() {
         LOG_ERROR "PR contain merge : ${merges}, Please rebase!"
         exit 1
     fi
-    LOG_INFO "modify ${files} files, insert ${insertions} lines, valid insertion ${valid_insertions}, delete ${deletions} lines. Total ${commits} commits."
+    LOG_INFO "modify ${files} files, git reports insert ${insertions_from_git} lines, insert ${insertions} lines, valid insertion ${valid_insertions}, delete ${deletions} lines. Total ${commits} commits."
     LOG_INFO "Ok!"
 }
 

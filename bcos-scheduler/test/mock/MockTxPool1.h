@@ -1,13 +1,13 @@
 #pragma once
 
+#include "bcos-framework/testutils/faker/FakeBlockHeader.h"
+#include "bcos-framework/testutils/faker/FakeTransaction.h"
 #include "bcos-scheduler/src/Common.h"
-#include "bcos-tars-protocol/testutil/FakeBlockHeader.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
-#include <bcos-tars-protocol/testutil/FakeTransaction.h>
 #include <boost/test/unit_test.hpp>
 
 
@@ -53,12 +53,13 @@ public:
     void asyncResetTxPool(std::function<void(Error::Ptr)>) override {}
 
     void asyncFillBlock(bcos::crypto::HashListPtr _txsHash,
-        std::function<void(Error::Ptr, bcos::protocol::TransactionsPtr)> _onBlockFilled) override
+        std::function<void(Error::Ptr, bcos::protocol::ConstTransactionsPtr)> _onBlockFilled)
+        override
     {
         BOOST_CHECK_GT(_txsHash->size(), 0);
         SCHEDULER_LOG(DEBUG) << LOG_KV("txHashes size", _txsHash->size())
                              << LOG_KV("map Size", hash2Transaction.size());
-        auto transactions = std::make_shared<bcos::protocol::Transactions>();
+        auto transactions = std::make_shared<bcos::protocol::ConstTransactions>();
         for (auto& hash : *_txsHash)
         {
             auto it = hash2Transaction.find(hash);
@@ -92,9 +93,8 @@ public:
     //         keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
 
     //         // Generate fakeTransaction
-    //         auto tx = fakeTransaction(cryptoSuite, keyPair, "", "", std::to_string(101), 100001, "1", "1");
-    //         auto hash = tx->hash();
-    //         hash2Transaction.emplace(hash, tx);
+    //         auto tx = fakeTransaction(cryptoSuite, keyPair, "", "", std::to_string(101), 100001,
+    //         "1", "1"); auto hash = tx->hash(); hash2Transaction.emplace(hash, tx);
     //         txHashes.emplace_back(hash);
     //     }
     //     return txHashes;

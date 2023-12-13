@@ -206,7 +206,7 @@ PeersRouterTable::Group2NodeIDListType PeersRouterTable::peersNodeIDList(
         for (size_t i = 0; i < groupNodeIDList.size(); ++i)
         {
             auto nodeID = groupNodeIDList[i];
-            nodeIDList[it->groupID()][nodeID] = bcos::protocol::NodeType::None;
+            nodeIDList[it->groupID()][nodeID] = bcos::protocol::NodeType::NONE;
             if (nodeTypeList.size() > i)
             {
                 auto nodeType = nodeTypeList[i];
@@ -293,9 +293,12 @@ void PeersRouterTable::asyncBroadcastMsg(
                       << LOG_KV("peersSize", selectedPeers.size());
     for (auto const& peer : selectedPeers)
     {
-        ROUTER_LOG(TRACE) << LOG_BADGE("PeersRouterTable") << LOG_DESC("asyncBroadcastMsg")
-                          << LOG_KV("nodeType", _type) << LOG_KV("moduleID", _moduleID)
-                          << LOG_KV("dst", peer);
+        if (c_fileLogLevel <= TRACE) [[unlikely]]
+        {
+            ROUTER_LOG(TRACE) << LOG_BADGE("PeersRouterTable") << LOG_DESC("asyncBroadcastMsg")
+                              << LOG_KV("nodeType", _type) << LOG_KV("moduleID", _moduleID)
+                              << LOG_KV("dst", P2PMessage::printP2PIDElegantly(peer));
+        }
         m_p2pInterface->asyncSendMessageByNodeID(peer, _msg, CallbackFuncWithSession());
     }
 }

@@ -65,8 +65,7 @@ BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> stora
         return;
     }
 
-    m_features =
-        task::syncWait(ledger::Features::readFeaturesFromStorage(*m_storage, m_blockNumber));
+    task::syncWait(m_features.readFromStorage(*m_storage, m_blockNumber));
 }
 
 BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
@@ -151,7 +150,7 @@ void BlockContext::killSuicides()
         return;
     }
 
-    auto emptyCodeHash = m_hashImpl->hash("");
+    auto emptyCodeHash = m_hashImpl->hash(""sv);
     for (std::string_view table2Suicide : m_suicides)
     {
         auto contractTable = storage()->openTable(table2Suicide);

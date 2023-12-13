@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------
-    # Copyright (C) 2021 FISCO BCOS.
+# Copyright (C) 2021 FISCO BCOS.
 # SPDX-License-Identifier: Apache-2.0
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -75,15 +75,29 @@ macro(configure_project)
     default_option(WITH_TARS_SERVICES ON)
     default_option(WITH_SM2_OPTIMIZE ON)
     default_option(WITH_CPPSDK ON)
+    default_option(WITH_SWIG_SDK OFF)
     default_option(WITH_BENCHMARK ON)
     default_option(WITH_WASM ON)
     default_option(WITH_VTUNE_ITT OFF)
+    default_option(ONLY_CPP_SDK OFF)
+
+    if((NOT FULLNODE) AND (NOT WITH_LIGHTNODE) AND WITH_CPPSDK)
+        set(ONLY_CPP_SDK ON)
+    endif()
 
     if(NOT WITH_VTUNE_ITT)
         add_definitions(-DINTEL_NO_ITTNOTIFY_API)
     endif()
     if(FULLNODE)
         list(APPEND VCPKG_MANIFEST_FEATURES "fullnode")
+    endif ()
+    if (TESTS)
+        list(APPEND VCPKG_MANIFEST_FEATURES "tests")
+    endif ()
+    if (ONLY_CPP_SDK)
+        add_compile_definitions(ONLY_CPP_SDK)
+        add_definitions(-DONLY_CPP_SDK)
+        #list(APPEND VCPKG_MANIFEST_FEATURES "cppsdk")
     endif()
     if(WITH_LIGHTNODE)
         list(APPEND VCPKG_MANIFEST_FEATURES "lightnode")
@@ -95,6 +109,10 @@ macro(configure_project)
     endif()
     if(WITH_SM2_OPTIMIZE)
         add_compile_definitions(WITH_SM2_OPTIMIZE)
+    endif()
+
+    if(APPLE)
+        list(APPEND VCPKG_MANIFEST_FEATURES "jthread")
     endif()
 
     if(NOT ALLOCATOR)
@@ -155,8 +173,10 @@ macro(print_config NAME)
     message("-- WITH_TARS_SERVICES Enable tars services         ${WITH_TARS_SERVICES}")
     message("-- WITH_SM2_OPTIMIZE  Enable sm2 optimize          ${WITH_SM2_OPTIMIZE}")
     message("-- WITH_CPPSDK        Enable cpp sdk               ${WITH_CPPSDK}")
+    message("-- WITH_SWIG_SDK      Enable swig sdk              ${WITH_SWIG_SDK}")
     message("-- WITH_WASM          Enable wasm                  ${WITH_WASM}")
     message("-- WITH_VTUNE_ITT     Enable vtune itt api support ${WITH_VTUNE_ITT}")
+    message("-- ONLY_CPP_SDK       Only build cpp sdk           ${ONLY_CPP_SDK}")
     message("------------------------------------------------------------------------")
     message("")
 endmacro()

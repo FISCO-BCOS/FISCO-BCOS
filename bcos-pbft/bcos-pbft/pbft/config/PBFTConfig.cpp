@@ -54,17 +54,8 @@ void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
 
     bcos::consensus::ConsensusNodeList consensusList;
     bcos::consensus::ConsensusNodeList observerList;
-    if (_ledgerConfig->features().get(Features::Flag::feature_rpbft) &&
-        !_ledgerConfig->workingSealerNodeList().empty())
-    {
-        consensusList = _ledgerConfig->workingSealerNodeList();
-        observerList = _ledgerConfig->observerNodeList() + _ledgerConfig->consensusNodeList();
-    }
-    else
-    {
-        consensusList = _ledgerConfig->mutableConsensusNodeList();
-        observerList = _ledgerConfig->observerNodeList();
-    }
+    consensusList = _ledgerConfig->consensusNodeList();
+    observerList = _ledgerConfig->observerNodeList() + _ledgerConfig->candidateSealerNodeList();
     setConsensusNodeList(consensusList);
     setObserverNodeList(observerList);
     // set leader_period
@@ -105,16 +96,20 @@ void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
                        << LOG_KV("consensusNodeSize", consensusList.size())
                        << LOG_KV("observerNodeSize", observerList.size());
     }
+    if (m_rpbftConfigTools != nullptr)
+    {
+        m_rpbftConfigTools->resetConfig(_ledgerConfig);
+    }
 
     // notify the latest block number to the sealer
     if (m_stateNotifier)
     {
-        m_stateNotifier(_ledgerConfig->blockNumber());
+        m_stateNotifier(_ledgerConfig->blockNumber(), _ledgerConfig->hash());
     }
     // notify the latest block to the sync module
     if (m_newBlockNotifier && !_syncedBlock)
     {
-        m_newBlockNotifier(_ledgerConfig, [_ledgerConfig](Error::Ptr _error) {
+        m_newBlockNotifier(_ledgerConfig, [_ledgerConfig](auto&& _error) {
             if (_error)
             {
                 PBFT_LOG(WARNING) << LOG_DESC("asyncNotifyNewBlock to sync module failed")
@@ -397,7 +392,7 @@ void PBFTConfig::asyncNotifySealProposal(
             catch (std::exception const& e)
             {
                 PBFT_LOG(WARNING) << LOG_DESC("asyncNotifySealProposal exception")
-                                  << LOG_KV("error", boost::diagnostic_information(e));
+                                  << LOG_KV("message", boost::diagnostic_information(e));
             }
         });
 }
@@ -472,6 +467,10 @@ std::string PBFTConfig::printCurrentState()
                  << LOG_KV("waitResealUntil", m_waitResealUntil)
                  << LOG_KV("consensusTimeout", m_consensusTimeout.load())
                  << LOG_KV("nodeId", nodeID()->shortHex());
+    if (c_fileLogLevel <= DEBUG)
+    {
+        stringstream << LOG_KV("nodeAddr", cryptoSuite()->calculateAddress(nodeID())).hex();
+    }
     return stringstream.str();
 }
 

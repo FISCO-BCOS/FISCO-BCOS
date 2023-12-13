@@ -31,26 +31,21 @@ class TransactionReceiptFactory
 public:
     using Ptr = std::shared_ptr<TransactionReceiptFactory>;
     TransactionReceiptFactory() = default;
-    virtual ~TransactionReceiptFactory() = default;
-    virtual TransactionReceipt::Ptr createReceipt(bytesConstRef _receiptData) = 0;
-    virtual TransactionReceipt::Ptr createReceipt(bytes const& _receiptData) = 0;
+    TransactionReceiptFactory(const TransactionReceiptFactory&) = default;
+    TransactionReceiptFactory(TransactionReceiptFactory&&) = default;
+    TransactionReceiptFactory& operator=(const TransactionReceiptFactory&) = default;
+    TransactionReceiptFactory& operator=(TransactionReceiptFactory&&) = default;
 
+    virtual ~TransactionReceiptFactory() = default;
+    virtual TransactionReceipt::Ptr createReceipt(bytesConstRef _receiptData) const = 0;
+    virtual TransactionReceipt::Ptr createReceipt(bytes const& _receiptData) const = 0;
     virtual TransactionReceipt::Ptr createReceipt(u256 const& gasUsed, std::string contractAddress,
         const std::vector<LogEntry>& logEntries, int32_t status, bcos::bytesConstRef output,
-        BlockNumber blockNumber) = 0;
+        BlockNumber blockNumber, bool withHash = true) const = 0;
+    virtual TransactionReceipt::Ptr createReceipt2(u256 const& gasUsed, std::string contractAddress,
+        const std::vector<LogEntry>& logEntries, int32_t status, bcos::bytesConstRef output,
+        BlockNumber blockNumber, std::string effectiveGasPrice = "1",
+        bool withHash = true) const = 0;
 };
 
-template <class T>
-concept IsTransactionReceiptFactory =
-    std::derived_from<T, TransactionReceiptFactory> || std::same_as<T, TransactionReceiptFactory>;
-
-template <IsTransactionReceiptFactory ReceiptFactory>
-struct ReceiptFactoryReturnTrait
-{
-    using type = std::remove_cvref_t<decltype(std::declval<ReceiptFactory>().createReceipt(
-        bcos::u256{}, std::string{}, std::vector<LogEntry>{}, 0, bcos::bytesConstRef{}, 0))>;
-};
-
-template <IsTransactionReceiptFactory ReceiptFactory>
-using ReceiptFactoryReturnType = typename ReceiptFactoryReturnTrait<ReceiptFactory>::type;
 }  // namespace bcos::protocol

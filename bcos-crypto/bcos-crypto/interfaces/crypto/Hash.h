@@ -52,19 +52,19 @@ public:
         }
         return m_emptyHash;
     }
-    virtual HashType hash(bytes const& _data)
+    virtual HashType hash(bytes const& _data) const
     {
         return hash(bytesConstRef(_data.data(), _data.size()));
     }
-    virtual HashType hash(std::string const& _data) { return hash(bytesConstRef(_data)); }
+    virtual HashType hash(std::string const& _data) const { return hash(bytesConstRef(_data)); }
 
     template <unsigned N>
-    inline HashType hash(FixedBytes<N> const& _input)
+    inline HashType hash(FixedBytes<N> const& _input) const
     {
         return hash(_input.ref());
     }
 
-    inline HashType hash(const PublicPtr& _public) { return hash(_public->data()); }
+    inline HashType hash(const PublicPtr& _public) const { return hash(_public->data()); }
 
     inline void setHashImplType(HashImplType _type) { m_type = _type; }
 

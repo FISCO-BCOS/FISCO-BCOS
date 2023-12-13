@@ -75,7 +75,7 @@ public:
             catch (std::exception const& _e)
             {
                 CONSENSUS_LOG(ERROR) << LOG_DESC("Process consensus task exception")
-                                     << LOG_KV("error", boost::diagnostic_information(_e));
+                                     << LOG_KV("message", boost::diagnostic_information(_e));
             }
         }
     }

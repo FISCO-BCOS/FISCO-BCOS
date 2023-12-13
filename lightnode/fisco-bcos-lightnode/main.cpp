@@ -20,13 +20,13 @@
  * @date 2022-07-04
  */
 
-#include <bcos-tars-protocol/impl/TarsHashable.h>
-
 #include "RPCInitializer.h"
 #include "bcos-crypto/interfaces/crypto/CryptoSuite.h"
+#include "bcos-utilities/Common.h"
 #include "libinitializer/CommandHelper.h"
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-storage/StorageWrapperImpl.h>
+#include <bcos-tars-protocol/impl/TarsHashable.h>
 #include <bcos-tars-protocol/tars/Block.h>
 #include <bcos-task/Task.h>
 #include <bcos-utilities/BoostLogInitializer.h>
@@ -36,6 +36,9 @@
 #include <exception>
 #include <memory>
 #include <thread>
+struct StartLightNodeException : public bcos::error::Exception
+{
+};
 
 static auto newStorage(const std::string& path)
 {
@@ -50,7 +53,7 @@ static auto newStorage(const std::string& path)
     rocksdb::Status status = rocksdb::DB::Open(options, path, &rocksdb);
     if (!status.ok())
     {
-        BCOS_LOG(INFO) << LOG_DESC("open rocksDB failed") << LOG_KV("error", status.ToString());
+        BCOS_LOG(INFO) << LOG_DESC("open rocksDB failed") << LOG_KV("message", status.ToString());
         BOOST_THROW_EXCEPTION(std::runtime_error("open rocksDB failed, err:" + status.ToString()));
     }
     return std::make_shared<bcos::storage::RocksDBStorage>(
@@ -73,11 +76,11 @@ static auto startSyncerThread(bcos::concepts::ledger::Ledger auto fromLedger,
             {
                 auto& ledger = bcos::concepts::getRef(toLedger);
 
-                auto syncedBlock =
-                    ~ledger
-                         .template sync<std::remove_cvref_t<decltype(fromLedger)>, bcostars::Block>(
-                             fromLedger, true);
-                auto currentStatus = ~ledger.getStatus();
+                auto syncedBlock = bcos::task::syncWait(
+                    ledger
+                        .template sync<std::remove_cvref_t<decltype(fromLedger)>, bcostars::Block>(
+                            fromLedger, true));
+                auto currentStatus = bcos::task::syncWait(ledger.getStatus());
 
                 if (syncedBlock > 0)
                 {
@@ -151,12 +154,23 @@ void starLightnode(bcos::tool::NodeConfig::Ptr nodeConfig, auto ledger, auto fro
     }
     bcos::concepts::bytebuffer::assignTo(
         nodeConfig->genesisData(), genesisBlock.blockHeader.data.extraData);
-    ~ledger->setupGenesisBlock(std::move(genesisBlock));
+    bcos::task::syncWait(ledger->setupGenesisBlock(std::move(genesisBlock)));
 
     LIGHTNODE_LOG(INFO) << "Init lightnode rpc...";
     auto wsService = bcos::lightnode::initRPC(
         nodeConfig, nodeID, gateway, keyFactory, ledger, remoteLedger, transactionPool, scheduler);
-    wsService->start();
+    try
+    {
+        wsService->start();
+    }
+    catch (std::exception const& e)
+    {
+        std::cout << "[" << bcos::getCurrentDateTime() << "] ";
+        std::cout << "start fisco-bcos-lightnode failed, error:" << boost::diagnostic_information(e)
+                  << std::endl;
+        BOOST_THROW_EXCEPTION(StartLightNodeException{} << bcos::error::ErrorMessage{
+                                  "start lightnode failed, " + boost::diagnostic_information(e)});
+    }
 
     LIGHTNODE_LOG(INFO) << "Init lightnode block syner...";
     auto stopToken = std::make_shared<std::atomic_bool>(false);
@@ -199,7 +213,19 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
     gateway->gatewayNodeManager()->registerNode(nodeConfig->groupId(),
         protocolInitializer.keyPair()->publicKey(), bcos::protocol::NodeType::LIGHT_NODE, front,
         protocolInfo);
-    gateway->start();
+    try
+    {
+        gateway->start();
+    }
+    catch (std::exception const& e)
+    {
+        std::cout << "[" << bcos::getCurrentDateTime() << "] ";
+        std::cout << "start fisco-bcos-lightnode failed, error:" << boost::diagnostic_information(e)
+                  << std::endl;
+        BOOST_THROW_EXCEPTION(StartLightNodeException{} << bcos::error::ErrorMessage{
+                                  "start lightnode failed, " + boost::diagnostic_information(e)});
+    }
+
 
     // front
     front->setMessageFactory(std::make_shared<bcos::front::FrontMessageFactory>());

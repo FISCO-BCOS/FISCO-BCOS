@@ -24,7 +24,6 @@
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <gsl/span>
-#include <range/v3/view/any_view.hpp>
 
 namespace bcos::protocol
 {
@@ -142,8 +141,4 @@ public:
     virtual void setSignatureList(gsl::span<const Signature> const& _signatureList) = 0;
     virtual void setSignatureList(SignatureList&& _signatureList) = 0;
 };
-
-template <class T>
-concept IsBlockHeader = std::derived_from<T, BlockHeader> || std::same_as<T, BlockHeader>;
-
 }  // namespace bcos::protocol

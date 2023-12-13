@@ -21,6 +21,7 @@
 #pragma once
 
 #include "bcos-gateway/libratelimit/GatewayRateLimiter.h"
+#include "filter/ReadOnlyFilter.h"
 #include "bcos-utilities/ObjectAllocatorMonitor.h"
 #include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-framework/gateway/GatewayInterface.h>
@@ -113,8 +114,8 @@ public:
 
                 GATEWAY_LOG(DEBUG)
                     << LOG_BADGE("Retry") << LOG_DESC("network callback") << LOG_KV("seq", seq)
-                    << LOG_KV("dstP2P", p2pID) << LOG_KV("errorCode", e.errorCode())
-                    << LOG_KV("moduleID", moduleID) << LOG_KV("errorMessage", e.what())
+                    << LOG_KV("dstP2P", p2pID) << LOG_KV("code", e.errorCode())
+                    << LOG_KV("moduleID", moduleID) << LOG_KV("message", e.what())
                     << LOG_KV("timeCost", (utcTime() - startT));
                 // try again
                 self->trySendMessage();
@@ -130,10 +131,9 @@ public:
                 // message successfully,find another gateway and try again
                 if (respCode != bcos::protocol::CommonError::SUCCESS)
                 {
-                    GATEWAY_LOG(DEBUG)
-                        << LOG_BADGE("Retry") << LOG_KV("p2pid", p2pID)
-                        << LOG_KV("moduleID", moduleID) << LOG_KV("errorCode", respCode)
-                        << LOG_KV("errorMessage", e.what());
+                    GATEWAY_LOG(DEBUG) << LOG_BADGE("Retry") << LOG_KV("p2pid", p2pID)
+                                       << LOG_KV("moduleID", moduleID) << LOG_KV("code", respCode)
+                                       << LOG_KV("message", e.what());
                     // try again
                     self->trySendMessage();
                     return;
@@ -159,8 +159,8 @@ public:
                                    << LOG_KV("src", message->options() ?
                                                         toHex(*(message->options()->srcNodeID())) :
                                                         "unknown")
-                                   << LOG_KV("size", message->length()) << LOG_KV("error", e.what())
-                                   << LOG_KV("moduleID", moduleID);
+                                   << LOG_KV("size", message->length())
+                                   << LOG_KV("message", e.what()) << LOG_KV("moduleID", moduleID);
 
                 self->trySendMessage();
             }
@@ -320,6 +320,8 @@ public:
         return m_gatewayNodeManager->unregisterNode(_groupID, _nodeID);
     }
 
+    void enableReadOnlyMode();
+
 protected:
     // for UT
     Gateway() {}
@@ -350,6 +352,7 @@ private:
 
     // For rate limit
     ratelimiter::GatewayRateLimiter::Ptr m_gatewayRateLimiter;
+    std::optional<ReadOnlyFilter> m_readonlyFilter;
 };
 }  // namespace gateway
 }  // namespace bcos

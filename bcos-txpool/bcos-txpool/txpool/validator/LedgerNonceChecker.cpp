@@ -41,8 +41,11 @@ TransactionStatus LedgerNonceChecker::checkNonce(Transaction::ConstPtr _tx, bool
     {
         return status;
     }
-    // check blockLimit
-    return checkBlockLimit(_tx);
+    if (m_checkBlockLimit)
+    {  // check blockLimit
+        return checkBlockLimit(_tx);
+    }
+    return TransactionStatus::None;
 }
 
 TransactionStatus LedgerNonceChecker::checkBlockLimit(bcos::protocol::Transaction::ConstPtr _tx)

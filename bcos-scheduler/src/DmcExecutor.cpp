@@ -223,7 +223,7 @@ void DmcExecutor::go(std::function<void(bcos::Error::UniquePtr, Status)> callbac
     // record all send message for debug
     m_dmcRecorder->recordSends(m_contractAddress, *messages);
 
-    if (messages->size() == 1 && (*messages)[0]->staticCall())
+    if (isCall())
     {
         DMC_LOG(TRACE) << "send call request, address:" << m_contractAddress
                        << LOG_KV("executor", m_name) << LOG_KV("to", (*messages)[0]->to())

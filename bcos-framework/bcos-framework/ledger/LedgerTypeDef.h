@@ -42,8 +42,10 @@ constexpr static std::string_view SYSTEM_KEY_AUTH_CHECK_STATUS = "auth_check_sta
 // for compatibility
 constexpr static std::string_view SYSTEM_KEY_COMPATIBILITY_VERSION = "compatibility_version";
 // system configuration for RPBFT
-constexpr static std::string_view SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM = "feature_rpbft_epoch_sealer_num";
-constexpr static std::string_view SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM = "feature_rpbft_epoch_block_num";
+constexpr static std::string_view SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM =
+    "feature_rpbft_epoch_sealer_num";
+constexpr static std::string_view SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM =
+    "feature_rpbft_epoch_block_num";
 constexpr static std::string_view SYSTEM_KEY_RPBFT_SWITCH = "feature_rpbft";
 // notify rotate key for rpbft
 constexpr static std::string_view INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE = "feature_rpbft_notify_rotate";
@@ -59,7 +61,7 @@ const unsigned RPBFT_EPOCH_BLOCK_NUM_MIN = 1;
 // get consensus node list type
 constexpr static std::string_view CONSENSUS_SEALER = "consensus_sealer";
 constexpr static std::string_view CONSENSUS_OBSERVER = "consensus_observer";
-constexpr static std::string_view CONSENSUS_WORKING_SEALER = "consensus_working_sealer";
+constexpr static std::string_view CONSENSUS_CANDIDATE_SEALER = "consensus_candidate_sealer";
 
 // get current state key
 constexpr static std::string_view SYS_KEY_CURRENT_NUMBER = "current_number";
@@ -69,6 +71,7 @@ constexpr static std::string_view SYS_KEY_TOTAL_FAILED_TRANSACTION =
     "total_failed_transaction_count";
 
 // sys table name
+constexpr static std::string_view SYS_TABLES{"s_tables"};
 constexpr static std::string_view SYS_CONSENSUS{"s_consensus"};
 constexpr static std::string_view SYS_CONFIG{"s_config"};
 constexpr static std::string_view SYS_CURRENT_STATE{"s_current_state"};
@@ -83,6 +86,24 @@ constexpr static std::string_view DAG_TRANSFER{"/tables/dag_transfer"};
 constexpr static std::string_view SMALLBANK_TRANSFER{"/tables/smallbank_transfer"};
 constexpr static std::string_view SYS_CODE_BINARY{"s_code_binary"};
 constexpr static std::string_view SYS_CONTRACT_ABI{"s_contract_abi"};
+constexpr static std::string_view SYS_BALANCE_CALLER{"s_balance_caller"};
+
+struct SYS_DIRECTORY
+{
+    static constexpr std::string_view USER_APPS = "/apps/";
+};
+// Table fields
+struct ACCOUNT_TABLE_FIELDS
+{
+    static constexpr std::string_view CODE_HASH = "codeHash";
+    static constexpr std::string_view CODE = "code";
+    static constexpr std::string_view BALANCE = "balance";
+    static constexpr std::string_view ABI = "abi";
+    static constexpr std::string_view NONCE = "nonce";
+    static constexpr std::string_view ALIVE = "alive";
+    static constexpr std::string_view FROZEN = "frozen";
+    static constexpr std::string_view SHARD = "shard";
+};
 
 enum ConsensusType : uint32_t
 {

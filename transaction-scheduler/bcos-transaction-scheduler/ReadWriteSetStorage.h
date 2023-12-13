@@ -1,13 +1,16 @@
 #pragma once
-#include <bcos-framework/transaction-executor/TransactionExecutor.h>
+#include "bcos-framework/storage2/Storage.h"
+#include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include <bcos-task/Trait.h>
+#include <oneapi/tbb.h>
+#include <compare>
 #include <type_traits>
 #include <variant>
 
 namespace bcos::transaction_scheduler
 {
 
-template <transaction_executor::StateStorage Storage>
+template <class Storage, class KeyType>
 class ReadWriteSetStorage
 {
 private:
@@ -17,109 +20,126 @@ private:
         bool read = false;
         bool write = false;
     };
-    std::map<typename Storage::Key, ReadWriteFlag, std::less<>> m_readWriteSet;
+    std::unordered_map<KeyType, ReadWriteFlag> m_readWriteSet;
+
     void putSet(bool write, auto const& key)
     {
-        auto it = m_readWriteSet.lower_bound(key);
-        if (it == m_readWriteSet.end() || it->first != key)
+        auto [it, inserted] =
+            m_readWriteSet.try_emplace(KeyType(key), ReadWriteFlag{.read = !write, .write = write});
+        if (!inserted)
         {
-            it = m_readWriteSet.emplace_hint(it, key, ReadWriteFlag{});
-        }
-
-        if (write)
-        {
-            it->second.write = true;
-        }
-        else
-        {
-            it->second.read = true;
+            it->second.write |= write;
+            it->second.read |= (!write);
         }
     }
 
 public:
-    using Key = typename Storage::Key;
-    using Value = typename Storage::Value;
+    friend auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/,
+        ReadWriteSetStorage& storage, RANGES::input_range auto&& keys)
+        -> task::Task<task::AwaitableReturnType<
+            std::invoke_result_t<storage2::ReadSome, Storage&, decltype(keys)>>>
+    {
+        for (auto&& key : keys)
+        {
+            storage.putSet(false, std::forward<decltype(key)>(key));
+        }
+        co_return co_await storage2::readSome(
+            storage.m_storage, std::forward<decltype(keys)>(keys));
+    }
+
+    friend auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/,
+        ReadWriteSetStorage& storage, RANGES::input_range auto&& keys,
+        const storage2::READ_FRONT_TYPE& /*unused*/)
+        -> task::Task<task::AwaitableReturnType<
+            std::invoke_result_t<storage2::ReadSome, Storage&, decltype(keys)>>>
+    {
+        co_return co_await storage2::readSome(
+            storage.m_storage, std::forward<decltype(keys)>(keys));
+    }
+
+    friend auto tag_invoke(
+        storage2::tag_t<storage2::readOne> /*unused*/, ReadWriteSetStorage& storage, auto&& key)
+        -> task::Task<task::AwaitableReturnType<
+            std::invoke_result_t<storage2::ReadOne, Storage&, decltype(key)>>>
+    {
+        storage.putSet(false, key);
+        co_return co_await storage2::readOne(storage.m_storage, std::forward<decltype(key)>(key));
+    }
+
+    friend auto tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/,
+        ReadWriteSetStorage& storage, auto&& key, storage2::READ_FRONT_TYPE /*unused*/)
+        -> task::Task<task::AwaitableReturnType<
+            std::invoke_result_t<storage2::ReadOne, Storage&, decltype(key)>>>
+    {
+        co_return co_await storage2::readOne(storage.m_storage, std::forward<decltype(key)>(key));
+    }
+
+    friend auto tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/,
+        ReadWriteSetStorage& storage, RANGES::input_range auto&& keys,
+        RANGES::input_range auto&& values)
+        -> task::Task<task::AwaitableReturnType<
+            std::invoke_result_t<storage2::WriteSome, Storage&, decltype(keys), decltype(values)>>>
+    {
+        for (auto&& key : keys)
+        {
+            storage.putSet(true, std::forward<decltype(key)>(key));
+        }
+        co_return co_await storage2::writeSome(
+            storage.m_storage, keys, std::forward<decltype(values)>(values));
+    }
+
+    friend auto tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/,
+        ReadWriteSetStorage& storage, RANGES::input_range auto const& keys)
+        -> task::Task<task::AwaitableReturnType<
+            std::invoke_result_t<storage2::RemoveSome, Storage&, decltype(keys)>>>
+    {
+        for (auto&& key : keys)
+        {
+            storage.putSet(true, std::forward<decltype(key)>(key));
+        }
+        co_return co_await storage2::removeSome(storage.m_storage, keys);
+    }
+
+    using Key = KeyType;
+    using Value = typename task::AwaitableReturnType<decltype(storage2::readOne(
+        m_storage, std::declval<KeyType>()))>::value_type;
+
     ReadWriteSetStorage(Storage& storage) : m_storage(storage) {}
 
-    // RAW means read after write
-    bool hasRAWIntersection(const ReadWriteSetStorage& rhs)
+    auto& readWriteSet() { return m_readWriteSet; }
+    auto const& readWriteSet() const { return m_readWriteSet; }
+    void mergeWriteSet(auto& inputWriteSet)
+    {
+        auto& writeMap = inputWriteSet.readWriteSet();
+        for (auto& [key, flag] : writeMap)
+        {
+            if (flag.write)
+            {
+                putSet(true, key);
+            }
+        }
+    }
+
+    // RAW: read after write
+    bool hasRAWIntersection(const auto& rhs) const
     {
         auto const& lhsSet = m_readWriteSet;
-        auto const& rhsSet = rhs.m_readWriteSet;
+        auto const& rhsSet = rhs.readWriteSet();
 
         if (RANGES::empty(lhsSet) || RANGES::empty(rhsSet))
         {
             return false;
         }
 
-        if ((RANGES::back(lhsSet).first < RANGES::front(rhsSet).first) ||
-            (RANGES::front(lhsSet).first > RANGES::back(rhsSet).first))
+        for (auto const& [key, flag] : rhsSet)
         {
-            return false;
-        }
-
-        auto lhsRange = lhsSet |
-                        RANGES::views::filter([](auto& pair) { return pair.second.write; }) |
-                        RANGES::views::keys;
-        auto rhsRange = rhsSet |
-                        RANGES::views::filter([](auto& pair) { return pair.second.read; }) |
-                        RANGES::views::keys;
-
-        auto lBegin = RANGES::begin(lhsRange);
-        auto lEnd = RANGES::end(lhsRange);
-        auto rBegin = RANGES::begin(rhsRange);
-        auto rEnd = RANGES::end(rhsRange);
-
-        // O(lhsSet.size() + rhsSet.size())
-        while (lBegin != lEnd && rBegin != rEnd)
-        {
-            if (*lBegin < *rBegin)
+            if (flag.read && lhsSet.contains(key))
             {
-                RANGES::advance(lBegin, 1);
-            }
-            else
-            {
-                if (!(*rBegin < *lBegin))
-                {
-                    return true;
-                }
-                RANGES::advance(rBegin, 1);
+                return true;
             }
         }
 
         return false;
-    }
-
-    auto read(RANGES::input_range auto const& keys)
-        -> task::Task<task::AwaitableReturnType<decltype(m_storage.read(keys))>>
-    {
-        for (auto&& key : keys)
-        {
-            putSet(false, key);
-        }
-        co_return co_await m_storage.read(keys);
-    }
-
-    auto write(RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
-        -> task::Task<task::AwaitableReturnType<decltype(m_storage.write(
-            std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values)))>>
-    {
-        for (auto&& key : keys)
-        {
-            putSet(true, std::forward<decltype(key)>(key));
-        }
-        co_return co_await m_storage.write(
-            std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values));
-    }
-
-    auto remove(RANGES::input_range auto const& keys)
-        -> task::Task<task::AwaitableReturnType<decltype(m_storage.remove(keys))>>
-    {
-        for (auto&& key : keys)
-        {
-            putSet(true, std::forward<decltype(key)>(key));
-        }
-        co_return co_await m_storage.remove(keys);
     }
 };
 

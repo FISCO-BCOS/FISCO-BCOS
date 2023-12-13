@@ -48,12 +48,12 @@ public:
         protocol::Transaction::Ptr transaction) override;
 
     task::Task<protocol::TransactionSubmitResult::Ptr> submitTransactionWithHook(
-        protocol::Transaction::Ptr transaction, std::function<void()> afterInsertHook) override;
+        protocol::Transaction::Ptr transaction, std::function<void()> onTxSubmitted) override;
 
-    task::Task<void> broadcastTransaction(const protocol::Transaction& transaction) override;
-    task::Task<void> broadcastTransactionBuffer(const bytesConstRef& _data) override;
-    task::Task<void> broadcastTransactionBufferByTree(
-        const bcos::bytesConstRef& _data, bool isStartNode = false) override;
+    void broadcastTransaction(const protocol::Transaction& transaction) override;
+    void broadcastTransactionBuffer(const bytesConstRef& _data) override;
+    void broadcastTransactionBufferByTree(const bcos::bytesConstRef& _data,
+        bool isStartNode = false, bcos::crypto::NodeIDPtr fromNode = nullptr) override;
 
     task::Task<std::vector<protocol::Transaction::ConstPtr>> getTransactions(
         RANGES::any_view<bcos::h256, RANGES::category::mask | RANGES::category::sized> hashes)
@@ -94,7 +94,8 @@ public:
 
     // for scheduler to fetch txs
     void asyncFillBlock(bcos::crypto::HashListPtr _txsHash,
-        std::function<void(Error::Ptr, bcos::protocol::TransactionsPtr)> _onBlockFilled) override;
+        std::function<void(Error::Ptr, bcos::protocol::ConstTransactionsPtr)> _onBlockFilled)
+        override;
 
     // for consensus and sealer, for batch mark txs sealed flag
     // trigger scene such as view change, submit proposal, etc.
@@ -136,14 +137,16 @@ public:
 
     auto treeRouter() const { return m_treeRouter; }
 
+    void setCheckBlockLimit(bool _checkBlockLimit) { m_checkBlockLimit = _checkBlockLimit; }
+
 protected:
     virtual bool checkExistsInGroup(bcos::protocol::TxSubmitCallback _txSubmitCallback);
     virtual void getTxsFromLocalLedger(bcos::crypto::HashListPtr _txsHash,
         bcos::crypto::HashListPtr _missedTxs,
-        std::function<void(Error::Ptr, bcos::protocol::TransactionsPtr)> _onBlockFilled);
+        std::function<void(Error::Ptr, bcos::protocol::ConstTransactionsPtr)> _onBlockFilled);
 
     virtual void fillBlock(bcos::crypto::HashListPtr _txsHash,
-        std::function<void(Error::Ptr, bcos::protocol::TransactionsPtr)> _onBlockFilled,
+        std::function<void(Error::Ptr, bcos::protocol::ConstTransactionsPtr)> _onBlockFilled,
         bool _fetchFromLedger = true);
 
     void initSendResponseHandler();
@@ -154,7 +157,6 @@ private:
     TxPoolConfig::Ptr m_config;
     TxPoolStorageInterface::Ptr m_txpoolStorage;
     bcos::sync::TransactionSyncInterface::Ptr m_transactionSync;
-    bcos::front::FrontServiceInterface::Ptr m_frontService;
     bcos::protocol::TransactionFactory::Ptr m_transactionFactory;
     bcos::ledger::LedgerInterface::Ptr m_ledger;
 
@@ -171,5 +173,6 @@ private:
     // Note: This x_markTxsMutex is used for locking asyncSealTxs() during sealBlock
     // because memory storage is not contain a big lock now
     mutable bcos::SharedMutex x_markTxsMutex;
+    bool m_checkBlockLimit = true;
 };
 }  // namespace bcos::txpool

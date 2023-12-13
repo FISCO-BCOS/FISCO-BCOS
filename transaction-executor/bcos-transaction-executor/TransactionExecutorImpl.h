@@ -3,6 +3,7 @@
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-table/src/StateStorage.h"
 #include "bcos-transaction-executor/vm/VMFactory.h"
+#include "precompiled/PrecompiledManager.h"
 #include "transaction-executor/bcos-transaction-executor/RollbackableStorage.h"
 #include "transaction-executor/bcos-transaction-executor/vm/VMInstance.h"
 #include "vm/HostContext.h"
@@ -19,71 +20,56 @@
 
 namespace bcos::transaction_executor
 {
-
 #define TRANSACTION_EXECUTOR_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("TRANSACTION_EXECUTOR")
 
 // clang-format off
 struct InvalidArgumentsError: public bcos::Error {};
 // clang-format on
 
-template <StateStorage Storage>
 class TransactionExecutorImpl
 {
-private:
-    evmc_address unhexAddress(std::string_view view)
-    {
-        if (view.empty())
-        {
-            return {};
-        }
-        if (view.starts_with("0x"))
-        {
-            view = view.substr(2);
-        }
-
-        evmc_address address;
-        if (view.empty())
-        {
-            std::uninitialized_fill(address.bytes, address.bytes + sizeof(address.bytes), 0);
-        }
-        else
-        {
-            boost::algorithm::unhex(view, address.bytes);
-        }
-        return address;
-    }
-
-    VMFactory vmFactory;
-    Storage& m_storage;
-    protocol::TransactionReceiptFactory& m_receiptFactory;
-    TableNamePool& m_tableNamePool;
-
 public:
-    TransactionExecutorImpl(Storage& storage, protocol::TransactionReceiptFactory& receiptFactory,
-        TableNamePool& tableNamePool)
-      : m_storage(storage), m_receiptFactory(receiptFactory), m_tableNamePool(tableNamePool)
+    TransactionExecutorImpl(
+        protocol::TransactionReceiptFactory const& receiptFactory, crypto::Hash::Ptr hashImpl)
+      : m_receiptFactory(receiptFactory),
+        m_hashImpl(std::move(hashImpl)),
+        m_precompiledManager(m_hashImpl)
     {}
 
-    task::Task<protocol::TransactionReceipt::Ptr> execute(
-        protocol::IsBlockHeader auto const& blockHeader,
-        protocol::IsTransaction auto const& transaction, int contextID)
-    {
-        constexpr static evmc_address EMPTY_ADDRESS = {};
+private:
+    VMFactory m_vmFactory;
+    protocol::TransactionReceiptFactory const& m_receiptFactory;
+    crypto::Hash::Ptr m_hashImpl;
+    PrecompiledManager m_precompiledManager;
 
+    friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
+        tag_t<executeTransaction> /*unused*/, TransactionExecutorImpl& executor, auto& storage,
+        protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
+        int contextID, ledger::LedgerConfig const& ledgerConfig, auto&& waitOperator)
+    {
         try
         {
-            Rollbackable<std::remove_reference_t<decltype(m_storage)>> rollbackableStorage(
-                m_storage);
+            if (c_fileLogLevel <= LogLevel::TRACE)
+            {
+                TRANSACTION_EXECUTOR_LOG(TRACE)
+                    << "Execte transaction: " << transaction.hash().hex();
+            }
+
+            Rollbackable<std::decay_t<decltype(storage)>> rollbackableStorage(storage);
+            auto gasLimit = static_cast<int64_t>(std::get<0>(ledgerConfig.gasLimit()));
 
             auto toAddress = unhexAddress(transaction.to());
             evmc_message evmcMessage = {.kind = transaction.to().empty() ? EVMC_CREATE : EVMC_CALL,
                 .flags = 0,
                 .depth = 0,
-                .gas = 30000 * 10000,  // TODO: use arg
+                .gas = gasLimit,
                 .recipient = toAddress,
                 .destination_ptr = nullptr,
                 .destination_len = 0,
-                .sender = {},
+                .sender = (!transaction.sender().empty() &&
+                              transaction.sender().size() == sizeof(evmc_address)) ?
+                              *(evmc_address*)transaction.sender().data() :
+                              evmc_address{},
                 .sender_ptr = nullptr,
                 .sender_len = 0,
                 .input_data = transaction.input().data(),
@@ -91,18 +77,23 @@ public:
                 .value = {},
                 .create2_salt = {},
                 .code_address = toAddress};
-            std::uninitialized_copy(
-                transaction.sender().begin(), transaction.sender().end(), evmcMessage.sender.bytes);
+
+            if (ledgerConfig.authCheckStatus() != 0 && blockHeader.number() == 0 &&
+                transaction.to() == precompiled::AUTH_COMMITTEE_ADDRESS)
+            {
+                evmcMessage.kind = EVMC_CREATE;
+            }
 
             int64_t seq = 0;
-            HostContext hostContext(vmFactory, rollbackableStorage, m_tableNamePool, blockHeader,
-                evmcMessage, evmcMessage.sender, contextID, seq);
+            HostContext<decltype(rollbackableStorage)> hostContext(executor.m_vmFactory,
+                rollbackableStorage, blockHeader, evmcMessage, evmcMessage.sender,
+                transaction.abi(), contextID, seq, executor.m_precompiledManager, ledgerConfig,
+                *executor.m_hashImpl, std::forward<decltype(waitOperator)>(waitOperator));
             auto evmcResult = co_await hostContext.execute();
-            auto finallyAction = gsl::finally([&]() { releaseResult(evmcResult); });
 
             bcos::bytesConstRef output;
             std::string newContractAddress;
-            if (!RANGES::equal(evmcResult.create_address.bytes, EMPTY_ADDRESS.bytes))
+            if (!RANGES::equal(evmcResult.create_address.bytes, executor::EMPTY_EVM_ADDRESS.bytes))
             {
                 newContractAddress.reserve(sizeof(evmcResult.create_address) * 2);
                 boost::algorithm::hex_lower(evmcResult.create_address.bytes,
@@ -120,9 +111,9 @@ public:
             }
 
             auto const& logEntries = hostContext.logs();
-            auto receipt =
-                m_receiptFactory.createReceipt(evmcResult.gas_left, std::move(newContractAddress),
-                    logEntries, evmcResult.status_code, output, blockHeader.number());
+            auto receipt = executor.m_receiptFactory.createReceipt(gasLimit - evmcResult.gas_left,
+                std::move(newContractAddress), logEntries, evmcResult.status_code, output,
+                blockHeader.number(), false);
 
             co_return receipt;
         }
@@ -131,7 +122,7 @@ public:
             TRANSACTION_EXECUTOR_LOG(DEBUG)
                 << "Execute exception: " << boost::diagnostic_information(e);
 
-            auto receipt = m_receiptFactory.createReceipt(
+            auto receipt = executor.m_receiptFactory.createReceipt(
                 0, {}, {}, EVMC_INTERNAL_ERROR, {}, blockHeader.number());
             receipt->setMessage(boost::diagnostic_information(e));
             co_return receipt;

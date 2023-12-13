@@ -62,7 +62,7 @@ void CampaignConfig::fetchLeaderInfoFromEtcd()
     {
         ELECTION_LOG(WARNING) << LOG_DESC("fetchLeaderInfoFromEtcd exception")
                               << LOG_KV("leaderKey", m_leaderKey)
-                              << LOG_KV("error", boost::diagnostic_information(e));
+                              << LOG_KV("message", boost::diagnostic_information(e));
     }
 }
 

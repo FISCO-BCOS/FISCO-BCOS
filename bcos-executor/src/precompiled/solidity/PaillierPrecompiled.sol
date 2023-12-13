@@ -5,5 +5,10 @@ abstract contract PaillierPrecompiled {
     function paillierAdd(
         string memory cipher1,
         string memory cipher2
-    ) public virtual view returns (string memory);
+    ) public virtual returns (string memory);
+
+    function paillierAdd(
+        bytes memory cipher1,
+        bytes memory cipher2
+    ) public virtual returns (bytes memory);
 }

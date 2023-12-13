@@ -20,9 +20,8 @@
  */
 #pragma once
 
-#include "../impl/TarsHashable.h"
-
 #include "../Common.h"
+#include "../impl/TarsHashable.h"
 #include "BlockHeaderImpl.h"
 #include "TransactionImpl.h"
 #include "TransactionMetaDataImpl.h"
@@ -69,6 +68,7 @@ public:
     // get transaction metaData
     bcos::protocol::TransactionMetaData::ConstPtr transactionMetaData(
         uint64_t _index) const override;
+    TransactionMetaDataImpl transactionMetaDataImpl(uint64_t _index) const;
     void setBlockType(bcos::protocol::BlockType _blockType) override;
 
     // set blockHeader

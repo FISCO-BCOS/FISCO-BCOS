@@ -34,7 +34,17 @@ void impl_calculate(bcos::crypto::hasher::Hasher auto hasher,
     hasher.update(hashFields.to);
     hasher.update(hashFields.input);
     hasher.update(hashFields.abi);
-
+    // if version == 1, update value, gasPrice, gasLimit, maxFeePerGas, maxPriorityFeePerGas to
+    // hashBuffer calculate hash
+    if (hashFields.version == (uint32_t)bcos::protocol::TransactionVersion::V1_VERSION)
+    {
+        hasher.update(hashFields.value);
+        hasher.update(hashFields.gasPrice);
+        int64_t bigEndGasLimit = boost::endian::native_to_big((int64_t)hashFields.gasLimit);
+        hasher.update(bigEndGasLimit);
+        hasher.update(hashFields.maxFeePerGas);
+        hasher.update(hashFields.maxPriorityFeePerGas);
+    }
     hasher.final(out);
 }
 
@@ -49,12 +59,32 @@ void impl_calculate(bcos::crypto::hasher::Hasher auto hasher,
 
     auto const& hashFields = receipt.data;
     int32_t version = boost::endian::native_to_big((int32_t)hashFields.version);
-    hasher.update(version);
-    hasher.update(hashFields.gasUsed);
-    hasher.update(hashFields.contractAddress);
-    int32_t status = boost::endian::native_to_big((int32_t)hashFields.status);
-    hasher.update(status);
-    hasher.update(hashFields.output);
+    switch (hashFields.version)
+    {
+    case int32_t(bcos::protocol::TransactionVersion::V0_VERSION):
+    {
+        hasher.update(version);
+        hasher.update(hashFields.gasUsed);
+        hasher.update(hashFields.contractAddress);
+        int32_t status = boost::endian::native_to_big((int32_t)hashFields.status);
+        hasher.update(status);
+        hasher.update(hashFields.output);
+        break;
+    }
+    case int32_t(bcos::protocol::TransactionVersion::V1_VERSION):
+    {
+        hasher.update(version);
+        hasher.update(hashFields.gasUsed);
+        hasher.update(hashFields.contractAddress);
+        int32_t status = boost::endian::native_to_big((int32_t)hashFields.status);
+        hasher.update(status);
+        hasher.update(hashFields.output);
+        hasher.update(hashFields.effectiveGasPrice);
+        break;
+    }
+    default:
+        BOOST_THROW_EXCEPTION(std::runtime_error("not support version"));
+    }
     // vector<LogEntry> logEntries: 6
     for (auto const& log : hashFields.logEntries)
     {

@@ -30,15 +30,15 @@ class AccountPrecompiled : public bcos::precompiled::Precompiled
 {
 public:
     using Ptr = std::shared_ptr<AccountPrecompiled>;
-    AccountPrecompiled();
+    AccountPrecompiled(crypto::Hash::Ptr hashImpl);
     ~AccountPrecompiled() override = default;
 
     std::shared_ptr<PrecompiledExecResult> call(
         std::shared_ptr<executor::TransactionExecutive> _executive,
         PrecompiledExecResult::Ptr _callParameters) override;
 
-    uint8_t getAccountStatus(const std::string& accountTable,
-        const std::shared_ptr<executor::TransactionExecutive>& _executive) const;
+    static uint8_t getAccountStatus(const std::string& accountTable,
+        const std::shared_ptr<executor::TransactionExecutive>& _executive);
 
 private:
     void setAccountStatus(const std::string& tableName,
@@ -48,5 +48,21 @@ private:
     void getAccountStatus(const std::string& tableName,
         const std::shared_ptr<executor::TransactionExecutive>& _executive,
         PrecompiledExecResult::Ptr const& _callParameters) const;
+
+    void getAccountBalance(const std::string& tableName,
+        const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        PrecompiledExecResult::Ptr const& _callParameters) const;
+
+    void addAccountBalance(const std::string& tableName,
+        const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
+        PrecompiledExecResult::Ptr const& _callParameters) const;
+
+    void subAccountBalance(const std::string& tableName,
+        const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
+        PrecompiledExecResult::Ptr const& _callParameters) const;
+
+private:
+    // Fake storage for balance,should be removed after real implementation
+    mutable std::map<std::string, u256> m_fakeAccountBalances;
 };
 }  // namespace bcos::precompiled

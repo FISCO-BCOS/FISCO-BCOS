@@ -1,60 +1,18 @@
 #pragma once
 
+#include "Handle.h"
 #include "bcos-framework/protocol/Transaction.h"
+#include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-tars-protocol/tars/RPC.h"
-#include "detail/Core.h"
-#include <servant/Communicator.h>
 
 namespace bcos::sdk
 {
 
-class CompletionQueue
+struct Config
 {
-public:
-    CompletionQueue() = default;
-    CompletionQueue(const CompletionQueue&) = default;
-    CompletionQueue& operator=(const CompletionQueue&) = default;
-    CompletionQueue(CompletionQueue&&) = default;
-    CompletionQueue& operator=(CompletionQueue&&) = default;
-
-    virtual ~CompletionQueue() noexcept = default;
-    virtual void notify(std::any tag) = 0;
-};
-
-template <class Response>
-class Future
-{
-private:
-    std::future<tars::ReqMessagePtr> m_future;
-
-public:
-    Future() = default;
-    Future(std::future<tars::ReqMessagePtr> future) : m_future(std::move(future)) {}
-    Future(Future const&) = delete;
-    Future& operator=(Future const&) = delete;
-    Future(Future&&) noexcept = default;
-    Future& operator=(Future&&) noexcept = default;
-    ~Future() noexcept = default;
-
-    Response get()
-    {
-        auto message = m_future.get();
-        message->callback->dispatch(message);
-
-        auto& tarsCallback = dynamic_cast<detail::TarsCallback&>(*message->callback.get());
-        return std::move(tarsCallback).getResponse<Response>();
-    }
-    void wait() { m_future.wait(); }
-    template <typename Rep, typename Period>
-    std::future_status waitFor(const std::chrono::duration<Rep, Period>& rel)
-    {
-        return m_future.wait_for(rel);
-    }
-    template <typename Clock, typename Duration>
-    std::future_status waitUntil(const std::chrono::time_point<Clock, Duration>& abs)
-    {
-        return m_future.wait_until(abs);
-    }
+    std::string connectionString;
+    long sendQueueSize = 0;
+    int timeoutMs = 60000;
 };
 
 class RPCClient
@@ -66,11 +24,32 @@ private:
     static void onMessage(tars::ReqMessagePtr message);
 
 public:
-    RPCClient(const std::string& connectionString);
+    RPCClient(Config const& config);
+    bcostars::RPCPrx& rpcProxy();
 
-    Future<bcos::protocol::TransactionReceipt::Ptr> sendTransaction(
-        const bcos::protocol::Transaction& transaction, CompletionQueue* completionQueue = nullptr,
-        std::any tag = {});
-    Future<long> blockNumber(CompletionQueue* completionQueue = nullptr, std::any tag = {});
+    static std::string toConnectionString(const std::vector<std::string>& hostAndPorts);
+    std::string generateNonce();
 };
+
+class SendTransaction : public bcos::sdk::Handle<bcos::protocol::TransactionReceipt::Ptr>
+{
+public:
+    SendTransaction(RPCClient& rpcClient);
+    SendTransaction& send(const bcos::protocol::Transaction& transaction);
+};
+
+class Call : public bcos::sdk::Handle<protocol::TransactionReceipt::Ptr>
+{
+public:
+    Call(RPCClient& rpcClient);
+    Call& send(const protocol::Transaction& transaction);
+};
+
+class BlockNumber : public bcos::sdk::Handle<long>
+{
+public:
+    BlockNumber(RPCClient& rpcClient);
+    BlockNumber& send();
+};
+
 }  // namespace bcos::sdk

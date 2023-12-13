@@ -28,12 +28,12 @@ download_java_sdk()
         if [ $? -ne 0 ]; then
             cd ..
             rm -rf ${java_sdk_file}
-            git clone -b ${java_sdk_branch} https://ghproxy.com/github.com/FISCO-BCOS/java-sdk.git
+            git clone -b ${java_sdk_branch} https://github.com/FISCO-BCOS/java-sdk.git
         fi
         git pull
     else
         rm -rf ${java_sdk_file}
-        git clone -b ${java_sdk_branch} https://ghproxy.com/github.com/FISCO-BCOS/java-sdk.git
+        git clone -b ${java_sdk_branch} https://github.com/FISCO-BCOS/java-sdk.git
     fi
 }
 

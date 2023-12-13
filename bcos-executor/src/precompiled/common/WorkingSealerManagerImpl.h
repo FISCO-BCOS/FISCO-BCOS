@@ -41,7 +41,7 @@ public:
 private:
     void checkVRFInfos(crypto::HashType const& parentHash, std::string const& origin);
     bool shouldRotate(const executor::TransactionExecutive::Ptr& _executive);
-    void getConsensusNodeListFromStorage(const executor::TransactionExecutive::Ptr& _executive);
+    bool getConsensusNodeListFromStorage(const executor::TransactionExecutive::Ptr& _executive);
     void setNotifyRotateFlag(const executor::TransactionExecutive::Ptr& executive, unsigned flag);
     bool getNotifyRotateFlag(const executor::TransactionExecutive::Ptr& executive);
     // calculate the number of working sealers that need to be added and removed
@@ -63,11 +63,11 @@ private:
     }
 
     VRFInfo::Ptr m_vrfInfo;
-    std::vector<std::string> m_pendingSealer = {};
-    std::vector<std::string> m_workingSealer = {};
+    std::vector<std::string> m_candidateSealer = {};
+    std::vector<std::string> m_consensusSealer = {};
     bool m_consensusChangeFlag = false;
     ledger::ConsensusNodeList m_consensusNodes = {};
     bool m_notifyNextLeaderRotateSet = false;
-    uint32_t m_configuredEpochSealersSize;
+    uint32_t m_configuredEpochSealersSize = 4;
 };
 }  // namespace bcos::precompiled

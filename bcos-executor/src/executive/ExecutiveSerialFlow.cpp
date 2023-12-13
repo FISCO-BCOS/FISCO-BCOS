@@ -67,7 +67,10 @@ void ExecutiveSerialFlow::asyncRun(std::function<void(CallParameters::UniquePtr)
 std::shared_ptr<TransactionExecutive> ExecutiveSerialFlow::buildExecutive(
     CallParameters::UniquePtr& input)
 {
-    return m_executiveFactory->build(input->codeAddress, input->contextID, input->seq, false);
+    bool isFeatureBalancePolicy1 =
+        m_executiveFactory->getBlockContext().features().get(ledger::Features::Flag::feature_balance_policy1);
+    return m_executiveFactory->build(input->codeAddress, input->contextID, input->seq,
+                isFeatureBalancePolicy1 ? ExecutiveType::billing : ExecutiveType::common);
 }
 
 void ExecutiveSerialFlow::run(std::function<void(CallParameters::UniquePtr)> onTxReturn,
@@ -124,6 +127,6 @@ void ExecutiveSerialFlow::run(std::function<void(CallParameters::UniquePtr)> onT
     {
         EXECUTIVE_LOG(ERROR) << "ExecutiveSerialFlow run error: "
                              << boost::diagnostic_information(e);
-        onFinished(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "ExecutiveSerialFlow run error", e));
+        onFinished(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "ExecutiveSerialFlow run failed", e));
     }
 }

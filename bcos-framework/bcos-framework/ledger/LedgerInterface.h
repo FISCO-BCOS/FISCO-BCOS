@@ -41,7 +41,7 @@ class LedgerInterface
 public:
     using Ptr = std::shared_ptr<LedgerInterface>;
     LedgerInterface() = default;
-    virtual ~LedgerInterface() {}
+    virtual ~LedgerInterface() = default;
 
     /**
      * @brief async prewrite a block in scheduler module
@@ -49,7 +49,7 @@ public:
      * @param callback trigger this callback when write is finished
      */
     virtual void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
-        bcos::protocol::TransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
+        bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
         std::function<void(Error::Ptr&&)> callback, bool writeTxsAndReceipts) = 0;
 
     /**
@@ -59,7 +59,7 @@ public:
      * @param _onTxsStored callback
      */
     virtual bcos::Error::Ptr storeTransactionsAndReceipts(
-        bcos::protocol::TransactionsPtr blockTxs, bcos::protocol::Block::ConstPtr block) = 0;
+        bcos::protocol::ConstTransactionsPtr blockTxs, bcos::protocol::Block::ConstPtr block) = 0;
 
     /**
      * @brief async get block by blockNumber
@@ -165,11 +165,9 @@ public:
             Error::Ptr, std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>>)>
             _onGetList) = 0;
 
-    virtual void asyncPreStoreBlockTxs(bcos::protocol::TransactionsPtr _blockTxs,
+    virtual void asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr _blockTxs,
         bcos::protocol::Block::ConstPtr block,
         std::function<void(Error::UniquePtr&&)> _callback) = 0;
 };
 
-template <class T>
-concept IsLedger = std::derived_from<T, LedgerInterface> || std::same_as<T, LedgerInterface>;
 }  // namespace bcos::ledger

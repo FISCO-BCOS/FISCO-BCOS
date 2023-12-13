@@ -107,7 +107,7 @@ void ShardingBlockExecutive::asyncExecute(
     else
     {
         SCHEDULER_LOG(TRACE) << BLOCK_NUMBER(number()) << LOG_BADGE("BlockTrace")
-                             << LOG_DESC("DMCExecute begin for call")
+                             << LOG_DESC("ShardingExecute begin for call")
                              << LOG_KV("shardSize", m_dmcExecutors.size());
         shardingExecute(std::move(callback));
     }
@@ -181,7 +181,7 @@ void ShardingBlockExecutive::shardingExecute(
 
         if (batchStatus->error > 0)
         {
-            auto message = "DAGExecute:" + boost::lexical_cast<std::string>(number()) +
+            auto message = "ShardingExecute:" + boost::lexical_cast<std::string>(number()) +
                            " with errors! " + boost::lexical_cast<std::string>(batchStatus->error);
             SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(number()) << message;
 
@@ -190,8 +190,8 @@ void ShardingBlockExecutive::shardingExecute(
             return;
         }
 
-        SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(number()) << LOG_DESC("DAGExecute success")
-                            << LOG_KV("dagExecuteT", (utcTime() - startT));
+        SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(number()) << LOG_DESC("ShardingExecute success")
+                             << LOG_KV("shardingExecuteT", (utcTime() - startT));
 
         DMCExecute(std::move(callback));
     };
@@ -225,7 +225,7 @@ DmcExecutor::Ptr ShardingBlockExecutive::buildDmcExecutor(const std::string& nam
     bcos::executor::ParallelTransactionExecutorInterface::Ptr executor)
 {
     auto dmcExecutor = std::make_shared<ShardingDmcExecutor>(name, contractAddress, m_block,
-        executor, m_keyLocks, m_hashImpl, m_dmcRecorder, m_schedulerTermId);
+        executor, m_keyLocks, m_hashImpl, m_dmcRecorder, m_schedulerTermId, isCall());
     return dmcExecutor;
 }
 
@@ -266,8 +266,7 @@ std::string ShardingBlockExecutive::getContractShard(const std::string& contract
         }
         else
         {
-            stateStorage = std::make_shared<bcos::storage::StateStorage>(
-                getStorage(), m_block->blockHeaderConst()->version());
+            stateStorage = std::make_shared<bcos::storage::StateStorage>(getStorage());
         }
 
 

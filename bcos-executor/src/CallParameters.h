@@ -41,15 +41,22 @@ struct CallParameters
     bcos::bytes data;  // common field, transaction data, binary format
     std::string abi;   // common field, contract abi, json format
 
-    std::vector<std::string> keyLocks;  // common field
-    std::string acquireKeyLock;         // by response
+    // balance
+    u256 value = 0;
+    u256 gasPrice = 0;
+    int64_t gasLimit = 0;
+    u256 maxFeePerGas = 0;
+    u256 maxPriorityFeePerGas = 0;
+
+    std::vector<std::string> keyLocks;                 // common field
+    std::string acquireKeyLock;                        // by response
 
     std::string message;                               // by response, readable format
     std::vector<bcos::protocol::LogEntry> logEntries;  // by response
     std::optional<u256> createSalt;                    // by response
     std::string newEVMContractAddress;                 // by response, readable format
 
-    int32_t status = 0;  // by response
+    int32_t status = 0;                                // by response
     int32_t evmStatus = 0;
     Type type;
     bool staticCall = false;      // common field

@@ -49,6 +49,7 @@ DERIVE_BCOS_EXCEPTION(InvalidEncoding);
 namespace executor
 {
 
+constexpr static evmc_address EMPTY_EVM_ADDRESS = {};
 using bytes_view = std::basic_string_view<uint8_t>;
 
 #define EXECUTOR_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTOR")
@@ -66,15 +67,14 @@ static constexpr std::string_view USER_SYS_PREFIX = "/sys/";
 static constexpr std::string_view USER_USR_PREFIX = "/usr/";
 static constexpr std::string_view USER_SHARD_PREFIX = "/shards/";
 
-static const char* const STORAGE_VALUE = "value";
-static const char* const ACCOUNT_CODE_HASH = "codeHash";
-static const char* const ACCOUNT_CODE = "code";
-static const char* const ACCOUNT_BALANCE = "balance";
-static const char* const ACCOUNT_ABI = "abi";
-static const char* const ACCOUNT_NONCE = "nonce";
-static const char* const ACCOUNT_ALIVE = "alive";
-static const char* const ACCOUNT_FROZEN = "frozen";
-static const char* const ACCOUNT_SHARD = "shard";
+static constexpr std::string_view STORAGE_VALUE = "value";
+static constexpr std::string_view ACCOUNT_CODE_HASH = "codeHash";
+static constexpr std::string_view ACCOUNT_CODE = "code";
+static constexpr std::string_view ACCOUNT_ABI = "abi";
+static constexpr std::string_view ACCOUNT_NONCE = "nonce";
+static constexpr std::string_view ACCOUNT_ALIVE = "alive";
+static constexpr std::string_view ACCOUNT_FROZEN = "frozen";
+static constexpr std::string_view ACCOUNT_SHARD = "shard";
 
 /// auth
 static constexpr const std::string_view CONTRACT_SUFFIX = "_accessAuth";
@@ -88,6 +88,8 @@ static constexpr const std::string_view METHOD_AUTH_BLACK = "method_auth_black";
 static constexpr const std::string_view ACCOUNT_STATUS = "status";
 static constexpr const std::string_view ACCOUNT_LAST_UPDATE = "last_update";
 static constexpr const std::string_view ACCOUNT_LAST_STATUS = "last_status";
+static constexpr const std::string_view ACCOUNT_BALANCE = "balance";
+
 enum AccountStatus : uint8_t
 {
     normal = 0,
@@ -115,20 +117,20 @@ static constexpr inline std::string_view StatusToString(uint8_t _status) noexcep
 }
 
 /// FileSystem table keys
-static const char* const FS_KEY_NAME = "name";
-static const char* const FS_KEY_TYPE = "type";
-static const char* const FS_KEY_SUB = "sub";
-static const char* const FS_ACL_TYPE = "acl_type";
-static const char* const FS_ACL_WHITE = "acl_white";
-static const char* const FS_ACL_BLACK = "acl_black";
-static const char* const FS_KEY_EXTRA = "extra";
-static const char* const FS_LINK_ADDRESS = "link_address";
-static const char* const FS_LINK_ABI = "link_abi";
+static constexpr std::string_view FS_KEY_NAME = "name";
+static constexpr std::string_view FS_KEY_TYPE = "type";
+static constexpr std::string_view FS_KEY_SUB = "sub";
+static constexpr std::string_view FS_ACL_TYPE = "acl_type";
+static constexpr std::string_view FS_ACL_WHITE = "acl_white";
+static constexpr std::string_view FS_ACL_BLACK = "acl_black";
+static constexpr std::string_view FS_KEY_EXTRA = "extra";
+static constexpr std::string_view FS_LINK_ADDRESS = "link_address";
+static constexpr std::string_view FS_LINK_ABI = "link_abi";
 
 /// FileSystem file type
-static const char* const FS_TYPE_DIR = "directory";
-static const char* const FS_TYPE_CONTRACT = "contract";
-static const char* const FS_TYPE_LINK = "link";
+static constexpr std::string_view FS_TYPE_DIR = "directory";
+static constexpr std::string_view FS_TYPE_CONTRACT = "contract";
+static constexpr std::string_view FS_TYPE_LINK = "link";
 
 #define EXECUTIVE_LOG(LEVEL) BCOS_LOG(LEVEL) << "[EXECUTOR]"
 
@@ -185,7 +187,16 @@ static const VMSchedule FiscoBcosScheduleV320 = [] {
     return schedule;
 }();
 
+constexpr evmc_gas_metrics ethMetrics{32000, 20000, 5000, 200, 9000, 2300, 25000};
+
 protocol::TransactionStatus toTransactionStatus(Exception const& _e);
+
+enum ExecutiveType : uint8_t
+{
+    common = 0,
+    coroutine = 1,
+    billing = 2
+};
 
 }  // namespace executor
 
@@ -282,4 +293,8 @@ inline std::string getContractTableName(
 }
 
 bytes getComponentBytes(size_t index, const std::string& typeName, const bytesConstRef& data);
+
+evmc_address unhexAddress(std::string_view view);
+std::string addressBytesStr2HexString(std::string_view receiveAddressBytes);
+std::string address2HexString(const evmc_address& address);
 }  // namespace bcos

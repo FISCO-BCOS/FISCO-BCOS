@@ -72,6 +72,7 @@ std::vector<std::string> DagTransferPrecompiled::getParallelTag(bytesConstRef _p
     bytesConstRef data = getParamData(_param);
 
     std::vector<std::string> results;
+    results.reserve(2);
     auto codec = CodecWrapper(m_hashImpl, _isWasm);
     // user_name user_balance 2 fields in table, the key of table is user_name field
     if (func == name2Selector[DAG_TRANSFER_METHOD_ADD_STR_UINT])
@@ -107,7 +108,7 @@ std::vector<std::string> DagTransferPrecompiled::getParallelTag(bytesConstRef _p
             results.push_back(user);
         }
     }
-    else if (func == name2Selector[DAG_TRANSFER_METHOD_TRS_STR2_UINT])
+    else if (func == name2Selector[DAG_TRANSFER_METHOD_TRS_STR2_UINT]) [[likely]]
     {
         // userTransfer(string,string,uint256)
         std::string fromUser, toUser;
@@ -116,8 +117,8 @@ std::vector<std::string> DagTransferPrecompiled::getParallelTag(bytesConstRef _p
         // if params is invalid , parallel process can be done
         if (!fromUser.empty() && !toUser.empty())
         {
-            results.push_back(fromUser);
-            results.push_back(toUser);
+            results.emplace_back(std::move(fromUser));
+            results.emplace_back(std::move(toUser));
         }
     }
     else if (func == name2Selector[DAG_TRANSFER_METHOD_BAL_STR])
@@ -165,7 +166,7 @@ std::shared_ptr<PrecompiledExecResult> DagTransferPrecompiled::call(
     }
     else
     {
-        PRECOMPILED_LOG(INFO) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("error func")
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("invalid func")
                               << LOG_KV("func", func);
     }
     gasPricer->updateMemUsed(_callParameters->m_execResult.size());

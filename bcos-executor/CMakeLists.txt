@@ -17,10 +17,10 @@ find_package(jsoncpp REQUIRED)
 file(GLOB_RECURSE SRCS src/*.cpp)
 add_library(${EXECUTOR_TARGET} ${SRCS})
 if(WITH_WASM)
-    target_link_libraries(${EXECUTOR_TARGET} PUBLIC jsoncpp_static ${CODEC_TARGET} ${CRYPTO_TARGET} ${TABLE_TARGET} wedprcrypto::fisco-bcos bcos-protocol
+    target_link_libraries(${EXECUTOR_TARGET} PUBLIC jsoncpp_static ${CODEC_TARGET} ${TOOL_TARGET} ${CRYPTO_TARGET} ${TABLE_TARGET} wedprcrypto::fisco-bcos bcos-protocol
         Boost::context evmone fbwasm evmc::loader evmc::instructions wabt GroupSig Paillier)
 else()
-    target_link_libraries(${EXECUTOR_TARGET} PUBLIC jsoncpp_static ${CODEC_TARGET} ${CRYPTO_TARGET} ${TABLE_TARGET} wedprcrypto::fisco-bcos bcos-protocol
+    target_link_libraries(${EXECUTOR_TARGET} PUBLIC jsoncpp_static ${CODEC_TARGET} ${TOOL_TARGET} ${CRYPTO_TARGET} ${TABLE_TARGET} wedprcrypto::fisco-bcos bcos-protocol
         Boost::context evmone evmc::loader evmc::instructions GroupSig Paillier)
 endif()
 

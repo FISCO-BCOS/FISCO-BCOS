@@ -20,7 +20,7 @@
  */
 #pragma once
 
-#include "bcos-crypto/bcos-crypto/KeyCompareTools.h"
+#include "bcos-crypto/KeyCompareTools.h"
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 
 #define TREE_LOG(LEVEL)                                                      \
@@ -50,17 +50,18 @@ public:
     virtual void updateConsensusNodeInfo(const bcos::crypto::NodeIDs& _consensusNodes);
 
     // select the nodes by tree topology
-    virtual bcos::crypto::NodeIDListPtr selectNodes(bcos::crypto::NodeIDSetPtr const& _peers,
-        std::int32_t _consIndex = 0, bool _isTheStartNode = false);
+    [[nodiscard]] virtual bcos::crypto::NodeIDSetPtr selectNodes(
+        bcos::crypto::NodeIDSetPtr const& _peers, std::int32_t _consIndex = 0,
+        bool _isTheStartNode = false, bcos::crypto::NodeIDPtr fromNode = nullptr);
 
-    virtual bcos::crypto::NodeIDListPtr selectNodesByNodeID(
+    [[nodiscard]] virtual bcos::crypto::NodeIDSetPtr selectNodesByNodeID(
         bcos::crypto::NodeIDSetPtr const& _peers, bcos::crypto::NodeIDPtr const& _nodeID,
         bool _isTheStartNode);
 
-    virtual bcos::crypto::NodeIDListPtr selectParent(
+    [[nodiscard]] virtual bcos::crypto::NodeIDSetPtr selectParent(
         bcos::crypto::NodeIDSetPtr const& _peers, std::int32_t _consIndex, bool _selectAll);
 
-    virtual bcos::crypto::NodeIDListPtr selectParentByNodeID(
+    [[nodiscard]] virtual bcos::crypto::NodeIDSetPtr selectParentByNodeID(
         bcos::crypto::NodeIDSetPtr const& _peers, bcos::crypto::NodeIDPtr const& _nodeID);
 
     virtual inline std::int32_t consIndex() const
@@ -77,12 +78,12 @@ protected:
     virtual void updateStartAndEndIndex();
 
     // select the child nodes by tree
-    virtual void recursiveSelectChildNodes(bcos::crypto::NodeIDListPtr const& _selectedNodeList,
+    [[nodiscard]] virtual bcos::crypto::NodeIDSetPtr recursiveSelectChildNodes(
         std::int32_t _treeIndex, bcos::crypto::NodeIDSetPtr const& _peers, std::int32_t _consIndex);
     // select the parent nodes by tree
     // _selectAll is true:
     // select all the parent(include the grandparent) for the given node
-    virtual void selectParentNodes(bcos::crypto::NodeIDListPtr const& _selectedNodeList,
+    [[nodiscard]] virtual bcos::crypto::NodeIDSetPtr selectParentNodes(
         bcos::crypto::NodeIDSetPtr const& _peers, std::int32_t _nodeIndex, std::int32_t _startIndex,
         bool _selectAll);
 
@@ -92,7 +93,7 @@ protected:
     // pass in 3, return 9; pass in 4, return 0
     std::int32_t getTreeIndex(std::int32_t _consIndex);
 
-    virtual bool getNodeIDByIndex(bcos::crypto::NodeIDPtr& _nodeID, std::int32_t _nodeIndex) const;
+    [[nodiscard]] virtual bcos::crypto::NodeIDPtr getNodeIDByIndex(std::int32_t _nodeIndex) const;
 
     virtual inline std::int32_t transTreeIndexToNodeIndex(
         std::int32_t _selectedIndex, std::int32_t _offset)
@@ -110,10 +111,12 @@ protected:
 
     std::atomic_int32_t m_nodeNum{0};
     std::uint32_t m_treeWidth;
+    // index of consensus, if observer than -1
     std::atomic_int32_t m_consIndex{0};
 
-    std::atomic_int32_t m_endIndex{0};
+    // node select range, [startIndex, endIndex]
     std::atomic_int32_t m_startIndex{0};
+    std::atomic_int32_t m_endIndex{0};
 };
 
 }  // namespace bcos::tool

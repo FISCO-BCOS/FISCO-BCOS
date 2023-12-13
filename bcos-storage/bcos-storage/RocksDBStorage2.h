@@ -1,14 +1,19 @@
 #pragma once
+#include "bcos-concepts/ByteBuffer.h"
 #include "bcos-concepts/Exception.h"
-#include <bcos-concepts/ByteBuffer.h>
-#include <bcos-framework/storage2/Storage.h>
-#include <bcos-task/AwaitableValue.h>
-#include <bcos-task/Wait.h>
-#include <bcos-utilities/Error.h>
+#include "bcos-framework/storage/Entry.h"
+#include "bcos-framework/storage2/Storage.h"
+#include "bcos-framework/transaction-executor/TransactionExecutor.h"
+#include "bcos-task/AwaitableValue.h"
+#include "bcos-task/Wait.h"
+#include "bcos-utilities/Error.h"
+#include "bcos-utilities/Overloaded.h"
+#include <oneapi/tbb/concurrent_vector.h>
+#include <oneapi/tbb/parallel_for_each.h>
 #include <oneapi/tbb/parallel_pipeline.h>
 #include <rocksdb/db.h>
 #include <rocksdb/iterator.h>
-#include <boost/container/small_vector.hpp>
+#include <rocksdb/slice.h>
 #include <boost/throw_exception.hpp>
 #include <functional>
 #include <type_traits>
@@ -25,19 +30,40 @@ concept Resolver = requires(ResolverType&& resolver) {
                        // clang-format on
                    };
 
-template <class AnyResolver, class Key>
-struct ResolverEncodeReturnTrait
-{
-    using type = decltype(std::declval<AnyResolver>().encode(std::declval<Key>()));
-};
-template <class AnyResolver, class Key>
-using ResolverEncodeReturnType = typename ResolverEncodeReturnTrait<AnyResolver, Key>::type;
-
 // clang-format off
 struct RocksDBException : public bcos::Error {};
 struct UnsupportedMethod : public bcos::Error {};
 struct UnexpectedItemType : public bcos::Error {};
 // clang-format on
+
+// Copy from rocksdb util/coding.h
+inline constexpr int varintLength(uint64_t v)
+{
+    int len = 1;
+    while (v >= 128)
+    {
+        v >>= 7;
+        len++;
+    }
+    return len;
+}
+
+constexpr static size_t ROCKSDB_SEP_HEADER_SIZE = 12;
+constexpr inline size_t getRocksDBKeyPairSize(
+    bool hashColumnFamily, size_t keySize, size_t valueSize)
+{
+    /*
+    default cf:
+    |KTypeValue|
+    |key_size|key_bytes|
+    |value_length|value_bytes|
+    */
+    return hashColumnFamily ?
+               1 + 4 + varintLength(keySize) + keySize + varintLength(valueSize) + valueSize :
+               1 + varintLength(keySize) + keySize + varintLength(valueSize) + valueSize;
+}
+
+constexpr static auto ROCKSDB_WRITE_CHUNK_SIZE = 64;
 
 template <class KeyType, class ValueType, Resolver<KeyType> KeyResolver,
     Resolver<ValueType> ValueResolver>
@@ -59,119 +85,152 @@ public:
     using Key = KeyType;
     using Value = ValueType;
 
-    class ReadIterator
+    static auto executeReadSome(RocksDBStorage2& storage, RANGES::input_range auto&& keys)
     {
-        friend class RocksDBStorage2;
+        auto encodedKeys = keys | RANGES::views::transform([&](auto&& key) {
+            return storage.m_keyResolver.encode(std::forward<decltype(key)>(key));
+        }) | RANGES::to<std::vector>();
 
-    private:
-        boost::container::small_vector<::rocksdb::PinnableSlice, 1> m_results;
-        boost::container::small_vector<::rocksdb::Status, 1> m_status;
-        int64_t m_index = -1;
-        ValueResolver& m_valueResolver;
-
-    public:
-        using Key = KeyType const&;
-        using Value = ValueType;
-
-        ReadIterator(ValueResolver& valueResolver) : m_valueResolver(valueResolver) {}
-
-        task::AwaitableValue<bool> next()
-        {
-            return {!(static_cast<size_t>(++m_index) == m_results.size())};
-        }
-        task::AwaitableValue<bool> hasValue() const { return {m_status[m_index].ok()}; }
-        task::AwaitableValue<Key> key() const
-        {
-            static_assert(sizeof(*this) == 0U, "Unsupported method!");
-        }
-        task::AwaitableValue<Value> value() const
-        {
-            return {m_valueResolver.decode(m_results[m_index].ToStringView())};
-        }
-    };
-
-    auto read(RANGES::input_range auto const& keys) & -> task::AwaitableValue<ReadIterator>
-    {
-        task::AwaitableValue<ReadIterator> readIteratorAwaitable(ReadIterator{m_valueResolver});
-        auto& readIterator = readIteratorAwaitable.value();
-        if constexpr (RANGES::sized_range<decltype(keys)>)
-        {
-            if (RANGES::size(keys) == 1)
-            {
-                readIterator.m_results.resize(1);
-                readIterator.m_status.resize(1);
-
-                auto key = m_keyResolver.encode(keys[0]);
-                auto& status = readIterator.m_status[0];
-                status = m_rocksDB.Get(::rocksdb::ReadOptions(), m_rocksDB.DefaultColumnFamily(),
-                    ::rocksdb::Slice(RANGES::data(key), RANGES::size(key)),
-                    &readIterator.m_results[0]);
-                if (!status.ok() && !status.IsNotFound())
-                {
-                    BOOST_THROW_EXCEPTION(
-                        RocksDBException{} << bcos::Error::ErrorMessage(status.ToString()));
-                }
-
-                return readIteratorAwaitable;
-            }
-        }
-
-        auto encodedKeys =
-            keys | RANGES::views::transform([this](const auto& key) {
-                return m_keyResolver.encode(key);
-            }) |
-            RANGES::to<std::vector<
-                ResolverEncodeReturnType<KeyResolver, RANGES::range_value_t<decltype(keys)>>>>();
+        std::vector<::rocksdb::PinnableSlice> results(RANGES::size(encodedKeys));
+        std::vector<::rocksdb::Status> status(RANGES::size(encodedKeys));
 
         auto rocksDBKeys = encodedKeys | RANGES::views::transform([](const auto& encodedKey) {
             return ::rocksdb::Slice(RANGES::data(encodedKey), RANGES::size(encodedKey));
-        }) | RANGES::to<std::vector<::rocksdb::Slice>>();
+        }) | RANGES::to<std::vector>();
+        storage.m_rocksDB.MultiGet(::rocksdb::ReadOptions(),
+            storage.m_rocksDB.DefaultColumnFamily(), rocksDBKeys.size(), rocksDBKeys.data(),
+            results.data(), status.data());
 
-        readIterator.m_results.resize(RANGES::size(rocksDBKeys));
-        readIterator.m_status.resize(RANGES::size(rocksDBKeys));
+        auto result =
+            RANGES::views::zip(results, status) |
+            RANGES::views::transform([&](auto tuple) -> std::optional<ValueType> {
+                auto& [result, status] = tuple;
+                if (!status.ok())
+                {
+                    if (!status.IsNotFound())
+                    {
+                        BOOST_THROW_EXCEPTION(
+                            RocksDBException{} << bcos::Error::ErrorMessage(status.ToString()));
+                    }
+                    return {};
+                }
 
-        m_rocksDB.MultiGet(::rocksdb::ReadOptions(), m_rocksDB.DefaultColumnFamily(),
-            rocksDBKeys.size(), rocksDBKeys.data(), readIterator.m_results.data(),
-            readIterator.m_status.data());
-        return readIteratorAwaitable;
+                return std::make_optional(storage.m_valueResolver.decode(result.ToStringView()));
+            }) |
+            RANGES::to<std::vector>();
+        return result;
     }
 
-    task::AwaitableValue<void> write(
-        RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
+    friend auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, RocksDBStorage2& storage,
+        RANGES::input_range auto&& keys) -> task::AwaitableValue<decltype(executeReadSome(storage,
+        std::forward<decltype(keys)>(keys)))>
     {
-        ::rocksdb::WriteBatch writeBatch;
+        return {executeReadSome(storage, std::forward<decltype(keys)>(keys))};
+    }
 
-        for (auto&& [key, value] : RANGES::views::zip(keys, values))
+    friend auto tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/, RocksDBStorage2& storage,
+        auto&& key) -> task::AwaitableValue<std::optional<ValueType>>
+    {
+        auto rocksDBKey = storage.m_keyResolver.encode(key);
+        std::string result;
+        auto status =
+            storage.m_rocksDB.Get(::rocksdb::ReadOptions(), storage.m_rocksDB.DefaultColumnFamily(),
+                ::rocksdb::Slice(RANGES::data(rocksDBKey), RANGES::size(rocksDBKey)),
+                std::addressof(result));
+        if (!status.ok())
         {
-            auto encodedKey = m_keyResolver.encode(key);
-            auto encodedValue = m_valueResolver.encode(value);
-
-            writeBatch.Put(::rocksdb::Slice(RANGES::data(encodedKey), RANGES::size(encodedKey)),
-                ::rocksdb::Slice(RANGES::data(encodedValue), RANGES::size(encodedValue)));
+            if (!status.IsNotFound())
+            {
+                BOOST_THROW_EXCEPTION(
+                    RocksDBException{} << bcos::Error::ErrorMessage(status.ToString()));
+            }
+            return {std::optional<ValueType>{}};
         }
 
+        return {std::make_optional(storage.m_valueResolver.decode(std::move(result)))};
+    }
+
+    friend task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/,
+        RocksDBStorage2& storage, RANGES::input_range auto&& keys,
+        RANGES::input_range auto&& values)
+    {
+        using RocksDBKeyValueTuple =
+            std::tuple<decltype(storage.m_keyResolver.encode(
+                           std::declval<RANGES::range_value_t<decltype(keys)>>())),
+                decltype(storage.m_valueResolver.encode(
+                    std::declval<RANGES::range_value_t<decltype(values)>>()))>;
+
+        std::atomic_size_t totalReservedLength = ROCKSDB_SEP_HEADER_SIZE;
+        tbb::concurrent_vector<RocksDBKeyValueTuple> rocksDBKeyValues;
+        rocksDBKeyValues.reserve(RANGES::size(keys));
+        auto chunkRange =
+            RANGES::views::zip(keys, values) | RANGES::views::chunk(ROCKSDB_WRITE_CHUNK_SIZE);
+        tbb::task_group writeGroup;
+        for (auto&& subrange : chunkRange)
+        {
+            writeGroup.run([subrange = std::forward<decltype(subrange)>(subrange),
+                               &rocksDBKeyValues, &storage, &totalReservedLength]() {
+                size_t localReservedLength = 0;
+                for (auto&& [key, value] : subrange)
+                {
+                    auto it = rocksDBKeyValues.emplace_back(
+                        storage.m_keyResolver.encode(std::forward<decltype(key)>(key)),
+                        storage.m_valueResolver.encode(std::forward<decltype(value)>(value)));
+                    auto const& [keyBuffer, valueBuffer] = *it;
+                    localReservedLength += getRocksDBKeyPairSize(
+                        false, RANGES::size(keyBuffer), RANGES::size(valueBuffer));
+                }
+                totalReservedLength += localReservedLength;
+            });
+        }
+        writeGroup.wait();
+
+        ::rocksdb::WriteBatch writeBatch(totalReservedLength);
+        for (auto&& [keyBuffer, valueBuffer] : rocksDBKeyValues)
+        {
+            writeBatch.Put(::rocksdb::Slice(RANGES::data(keyBuffer), RANGES::size(keyBuffer)),
+                ::rocksdb::Slice(RANGES::data(valueBuffer), RANGES::size(valueBuffer)));
+        }
         ::rocksdb::WriteOptions options;
-        auto status = m_rocksDB.Write(options, &writeBatch);
+        auto status = storage.m_rocksDB.Write(options, &writeBatch);
+
         if (!status.ok())
         {
             BOOST_THROW_EXCEPTION(RocksDBException{} << error::ErrorMessage(status.ToString()));
         }
-
         return {};
     }
 
-    task::AwaitableValue<void> remove(RANGES::input_range auto const& keys)
+    friend task::AwaitableValue<void> tag_invoke(
+        storage2::tag_t<storage2::writeOne> /*unused*/, RocksDBStorage2& storage, auto const& key)
+    {
+        auto rocksDBKey = storage.m_keyResolver.encode(key);
+        auto rocksDBValue = storage.m_valueResolver.encode(key);
+
+        ::rocksdb::WriteOptions options;
+        auto status = storage.m_rocksDB.Put(options,
+            ::rocksdb::Slice(RANGES::data(rocksDBKey), RANGES::size(rocksDBKey)),
+            ::rocksdb::Slice(RANGES::data(rocksDBValue), RANGES::size(rocksDBValue)));
+
+        if (!status.ok())
+        {
+            BOOST_THROW_EXCEPTION(RocksDBException{} << error::ErrorMessage(status.ToString()));
+        }
+    }
+
+    friend task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/,
+        RocksDBStorage2& storage, RANGES::input_range auto const& keys)
     {
         ::rocksdb::WriteBatch writeBatch;
 
         for (auto const& key : keys)
         {
-            auto encodedKey = m_keyResolver.encode(key);
+            auto encodedKey = storage.m_keyResolver.encode(key);
             writeBatch.Delete(::rocksdb::Slice(RANGES::data(encodedKey), RANGES::size(encodedKey)));
         }
 
         ::rocksdb::WriteOptions options;
-        auto status = m_rocksDB.Write(options, &writeBatch);
+        auto status = storage.m_rocksDB.Write(options, &writeBatch);
         if (!status.ok())
         {
             BOOST_THROW_EXCEPTION(RocksDBException{} << error::ErrorMessage(status.ToString()));
@@ -180,204 +239,72 @@ public:
         return {};
     }
 
-    class SeekIterator
+    friend task::Task<void> tag_invoke(
+        storage2::tag_t<merge> /*unused*/, RocksDBStorage2& storage, auto&& fromStorage)
     {
-        friend class RocksDBStorage2;
+        auto range = co_await storage2::range(fromStorage);
 
-    private:
-        std::unique_ptr<::rocksdb::Iterator> m_rocksDBIterator;
-        RocksDBStorage2& m_self;
-        bool m_started = false;
+        using RangeValueType = RANGES::range_value_t<decltype(range)>;
+        using RocksDBKeyValueTuple = std::tuple<
+            decltype(storage.m_keyResolver.encode(
+                std::declval<std::remove_pointer_t<std::tuple_element_t<0, RangeValueType>>>())),
+            std::optional<decltype(storage.m_valueResolver.encode(
+                std::declval<std::remove_pointer_t<std::tuple_element_t<1, RangeValueType>>>()))>>;
 
-    public:
-        using Key = KeyType;
-        using Value = ValueType;
-
-        SeekIterator(std::unique_ptr<::rocksdb::Iterator> rocksDBIterator, RocksDBStorage2& self)
-          : m_rocksDBIterator(std::move(rocksDBIterator)), m_self(self)
-        {}
-
-        task::AwaitableValue<bool> next()
+        std::atomic_size_t totalReservedLength = ROCKSDB_SEP_HEADER_SIZE;
+        tbb::concurrent_vector<RocksDBKeyValueTuple> rocksDBKeyValues;
+        auto chunkRange = range | RANGES::views::chunk(ROCKSDB_WRITE_CHUNK_SIZE);
+        tbb::task_group mergeGroup;
+        for (auto&& subrange : chunkRange)
         {
-            if (m_started)
+            mergeGroup.run([&rocksDBKeyValues, &storage, &totalReservedLength,
+                               subrange = std::forward<decltype(subrange)>(subrange)]() {
+                size_t localReservedLength = 0;
+                for (auto [key, value] : subrange)
+                {
+                    if (value)
+                    {
+                        auto it = rocksDBKeyValues.emplace_back(storage.m_keyResolver.encode(*key),
+                            std::make_optional(storage.m_valueResolver.encode(*value)));
+                        auto&& [keyBuffer, valueBuffer] = *it;
+                        localReservedLength += getRocksDBKeyPairSize(
+                            false, RANGES::size(keyBuffer), RANGES::size(*valueBuffer));
+                    }
+                    else
+                    {
+                        auto it = rocksDBKeyValues.emplace_back(storage.m_keyResolver.encode(*key),
+                            std::tuple_element_t<1, RocksDBKeyValueTuple>{});
+                        auto&& [keyBuffer, valueBuffer] = *it;
+                        localReservedLength +=
+                            getRocksDBKeyPairSize(false, RANGES::size(keyBuffer), 0);
+                    }
+                }
+                totalReservedLength += localReservedLength;
+            });
+        }
+        mergeGroup.wait();
+
+        ::rocksdb::WriteBatch writeBatch(totalReservedLength);
+        for (auto&& [keyBuffer, valueBuffer] : rocksDBKeyValues)
+        {
+            if (valueBuffer)
             {
-                m_rocksDBIterator->Next();
+                writeBatch.Put(::rocksdb::Slice(RANGES::data(keyBuffer), RANGES::size(keyBuffer)),
+                    ::rocksdb::Slice(RANGES::data(*valueBuffer), RANGES::size(*valueBuffer)));
             }
             else
             {
-                m_started = true;
+                writeBatch.Delete(
+                    ::rocksdb::Slice(RANGES::data(keyBuffer), RANGES::size(keyBuffer)));
             }
-            return {m_rocksDBIterator->Valid()};
         }
-        task::AwaitableValue<bool> hasValue() const { return {true}; }
-        task::AwaitableValue<Key> key() const
-        {
-            auto slice = m_rocksDBIterator->key();
-            return {m_self.m_keyResolver.decode(slice.ToStringView())};
-        }
-        task::AwaitableValue<Value> value() const
-        {
-            auto slice = m_rocksDBIterator->value();
-            return {m_self.m_valueResolver.decode(slice.ToStringView())};
-        }
-    };
-
-    task::AwaitableValue<SeekIterator> seek(auto const& key) &
-    {
-        task::AwaitableValue<SeekIterator> iteratorAwaitable(
-            {std::unique_ptr<::rocksdb::Iterator>(
-                 m_rocksDB.NewIterator(::rocksdb::ReadOptions(), m_rocksDB.DefaultColumnFamily())),
-                *this});
-        auto& iterator = iteratorAwaitable.value();
-        if constexpr (std::is_same_v<storage2::STORAGE_BEGIN_TYPE,
-                          std::remove_cvref_t<decltype(key)>>)
-        {
-            iterator.m_rocksDBIterator->SeekToFirst();
-        }
-        else
-        {
-            iterator.m_rocksDBIterator->Seek(
-                ::rocksdb::Slice(RANGES::data(key), RANGES::size(key)));
-        }
-        return iteratorAwaitable;
-    }
-
-    auto refToPointer(auto&& value)
-    {
-        if constexpr (std::is_lvalue_reference_v<decltype(value)>)
-        {
-            return std::addressof(value);
-        }
-        else
-        {
-            return std::forward<decltype(value)>(value);
-        }
-    }
-
-    auto& pointerToRef(auto& value)
-    {
-        using Type = std::remove_reference_t<decltype(value)>;
-        if constexpr (std::is_pointer_v<Type>)
-        {
-            return *value;
-        }
-        else
-        {
-            return value;
-        }
-    }
-
-    task::Task<void> merge(storage2::SeekableStorage auto& from)
-    {
-        ::rocksdb::WriteBatch writeBatch;
-
-        auto it = co_await from.seek(storage2::STORAGE_BEGIN);
-        using IteratorKeyType = task::AwaitableReturnType<decltype(it.key())>;
-        using IteratorValueType = task::AwaitableReturnType<decltype(it.value())>;
-
-        using BatchKeyType = std::conditional_t<std::is_lvalue_reference_v<IteratorKeyType>,
-            std::add_pointer_t<std::remove_reference_t<IteratorKeyType>>, IteratorKeyType>;
-        using BatchValueType = std::conditional_t<std::is_lvalue_reference_v<IteratorValueType>,
-            std::add_pointer_t<std::remove_reference_t<IteratorValueType>>, IteratorValueType>;
-
-        using KeyValue = std::tuple<BatchKeyType, BatchValueType>;
-        using DeleteKey = BatchKeyType;
-        using KeyValueBuffer =
-            std::tuple<decltype(m_keyResolver.encode(std::declval<IteratorKeyType>())),
-                decltype(m_valueResolver.encode(std::declval<IteratorValueType>()))>;
-        using DeleteKeyBuffer = decltype(m_keyResolver.encode(std::declval<IteratorKeyType>()));
-        using PipelineItem =
-            std::variant<std::monostate, KeyValue, DeleteKey, KeyValueBuffer, DeleteKeyBuffer>;
-
-        tbb::parallel_pipeline(std::thread::hardware_concurrency() * 10,
-            tbb::make_filter<void, PipelineItem>(tbb::filter_mode::serial_in_order,
-                [&](tbb::flow_control& control) {
-                    PipelineItem output;
-                    task::syncWait([&]() -> task::Task<void> {
-                        if (!co_await it.next())
-                        {
-                            control.stop();
-                            co_return;
-                        }
-
-                        if (co_await it.hasValue())
-                        {
-                            output.template emplace<KeyValue>(
-                                refToPointer(co_await it.key()), refToPointer(co_await it.value()));
-                        }
-                        else
-                        {
-                            output.template emplace<DeleteKey>(refToPointer(co_await it.key()));
-                        }
-                    }());
-                    return output;
-                }) &
-                tbb::make_filter<PipelineItem, PipelineItem>(tbb::filter_mode::parallel,
-                    [&](PipelineItem&& input) {
-                        PipelineItem output;
-                        std::visit(
-                            [&](auto& item) {
-                                using ItemType = std::remove_cvref_t<decltype(item)>;
-                                if constexpr (std::is_same_v<std::monostate, ItemType>)
-                                {
-                                    return;
-                                }
-                                else if constexpr (std::is_same_v<KeyValue, ItemType>)
-                                {
-                                    auto& [key, value] = item;
-                                    output.template emplace<KeyValueBuffer>(
-                                        m_keyResolver.encode(pointerToRef(key)),
-                                        m_valueResolver.encode(pointerToRef(value)));
-                                }
-                                else if constexpr (std::is_same_v<DeleteKey, ItemType>)
-                                {
-                                    output.template emplace<DeleteKeyBuffer>(
-                                        m_keyResolver.encode(pointerToRef(item)));
-                                }
-                                else
-                                {
-                                    BOOST_THROW_EXCEPTION(UnexpectedItemType{});
-                                }
-                            },
-                            input);
-                        return output;
-                    }) &
-                tbb::make_filter<PipelineItem, void>(
-                    tbb::filter_mode::serial_out_of_order, [&](PipelineItem&& input) {
-                        std::visit(
-                            [&](auto& item) {
-                                using ItemType = std::remove_cvref_t<decltype(item)>;
-                                if constexpr (std::is_same_v<std::monostate, ItemType>)
-                                {
-                                    return;
-                                }
-                                else if constexpr (std::is_same_v<KeyValueBuffer, ItemType>)
-                                {
-                                    auto& [keyBuffer, valueBuffer] = item;
-                                    writeBatch.Put(::rocksdb::Slice(RANGES::data(keyBuffer),
-                                                       RANGES::size(keyBuffer)),
-                                        ::rocksdb::Slice(
-                                            RANGES::data(valueBuffer), RANGES::size(valueBuffer)));
-                                }
-                                else if constexpr (std::is_same_v<DeleteKeyBuffer, ItemType>)
-                                {
-                                    writeBatch.Delete(
-                                        ::rocksdb::Slice(RANGES::data(item), RANGES::size(item)));
-                                }
-                                else
-                                {
-                                    BOOST_THROW_EXCEPTION(UnexpectedItemType{});
-                                }
-                            },
-                            input);
-                    }));
         ::rocksdb::WriteOptions options;
-        auto status = m_rocksDB.Write(options, &writeBatch);
+        auto status = storage.m_rocksDB.Write(options, std::addressof(writeBatch));
+
         if (!status.ok())
         {
             BOOST_THROW_EXCEPTION(RocksDBException{} << error::ErrorMessage(status.ToString()));
         }
-        co_return;
     }
 };
 

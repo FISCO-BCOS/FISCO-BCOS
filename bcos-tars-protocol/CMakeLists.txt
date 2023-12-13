@@ -1,7 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
 
-project(bcos-tars-protocol VERSION ${VERSION})
-
 # for tars generator
 set(TARS_HEADER_DIR ${CMAKE_BINARY_DIR}/generated/bcos-tars-protocol/tars)
 find_program(TARS_TARS2CPP tars2cpp REQUIRED)
@@ -38,7 +36,7 @@ target_include_directories(${TARS_PROTOCOL_TARGET} PUBLIC
     $<BUILD_INTERFACE:${TARSCPP_ROOT}/include>
     $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/generated>
     $<INSTALL_INTERFACE:include/bcos-tars-protocol>)
-target_link_libraries(${TARS_PROTOCOL_TARGET} PUBLIC bcos-concepts bcos-crypto ${PROTOCOL_TARGET} ${TOOL_TARGET} tarscpp::tarsservant tarscpp::tarsutil TBB::tbb)
+target_link_libraries(${TARS_PROTOCOL_TARGET} PUBLIC bcos-concepts bcos-crypto ${PROTOCOL_TARGET} tarscpp::tarsservant tarscpp::tarsutil TBB::tbb)
 
 if(TESTS)
     enable_testing()

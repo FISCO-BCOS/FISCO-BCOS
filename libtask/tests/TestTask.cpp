@@ -136,6 +136,7 @@ BOOST_AUTO_TEST_CASE(asyncTask)
 
         BOOST_CHECK_EQUAL(result, 200);
         std::cout << "Got async result" << std::endl;
+        co_return;
     }(taskGroup));
 
     std::cout << "Top task destroyed" << std::endl;
@@ -173,7 +174,7 @@ struct SleepTask
     constexpr bool await_ready() const { return false; }
     void await_suspend(CO_STD::coroutine_handle<> handle)
     {
-        futures.emplace_back(std::async([m_handle = handle]() {
+        futures.emplace_back(std::async([m_handle = handle]() mutable {
             using namespace std::chrono_literals;
             std::this_thread::sleep_for(1s);
             m_handle.resume();

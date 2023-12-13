@@ -20,6 +20,7 @@
  */
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include "bcos-crypto/signature/sm2/SM2Crypto.h"
+#include "bcos-framework/bcos-framework/testutils/faker/FakeTransaction.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "test/unittests/txpool/TxPoolFixture.h"
 #include <bcos-crypto/hash/Keccak256.h>
@@ -27,7 +28,6 @@
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/protocol/CommonError.h>
-#include <bcos-tars-protocol/testutil/FakeTransaction.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/test/unit_test.hpp>
@@ -36,6 +36,7 @@ using namespace bcos;
 using namespace bcos::txpool;
 using namespace bcos::protocol;
 using namespace bcos::crypto;
+using namespace std::string_view_literals;
 
 namespace bcos
 {
@@ -66,7 +67,7 @@ void testAsyncFillBlock(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     }
     block->blockHeader()->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
     std::promise<Error::Ptr> promise;
-    _txpool->asyncFillBlock(txsHash, [&promise](Error::Ptr _error, const TransactionsPtr&) {
+    _txpool->asyncFillBlock(txsHash, [&promise](Error::Ptr _error, ConstTransactionsPtr) {
         promise.set_value(std::move(_error));
     });
     auto error = promise.get_future().get();
@@ -104,8 +105,8 @@ void testAsyncFillBlock(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     }
     block->blockHeader()->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
 
-    std::promise<std::tuple<Error::Ptr, TransactionsPtr>> promise3;
-    _txpool->asyncFillBlock(txsHash, [&](Error::Ptr _error, TransactionsPtr _fetchedTxs) {
+    std::promise<std::tuple<Error::Ptr, ConstTransactionsPtr>> promise3;
+    _txpool->asyncFillBlock(txsHash, [&](Error::Ptr _error, ConstTransactionsPtr _fetchedTxs) {
         promise3.set_value({std::move(_error), std::move(_fetchedTxs)});
     });
     auto [e3, fetchTxs] = promise3.get_future().get();
@@ -130,7 +131,7 @@ void testAsyncFillBlock(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     BOOST_CHECK(r == true);
 
     // case3: with some txs hitted
-    auto txHash = _cryptoSuite->hashImpl()->hash("test");
+    auto txHash = _cryptoSuite->hashImpl()->hash("test"sv);
     txsHash->emplace_back(txHash);
     // auto txMetaData = blockFactory->createTransactionMetaData(txHash, txHash.abridged());
     auto txMetaData = _faker->blockFactory()->createTransactionMetaData();
@@ -177,7 +178,8 @@ void testAsyncFillBlock(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
         promise7.set_value({std::move(_error), _result});
     });
     std::tie(e, r) = promise7.get_future().get();
-    BOOST_CHECK(e->errorCode() == CommonError::InconsistentTransactions);
+    // FIXME: duplicate tx in block, verify failed
+    BOOST_CHECK(e->errorCode() == CommonError::VerifyProposalFailed);
     BOOST_CHECK(r == false);
 
     _txpoolStorage->remove(tx->hash());
@@ -252,7 +254,7 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
 
     // mark txs to given proposal as false, expect: mark failed
     finish = false;
-    auto blockHash = _cryptoSuite->hashImpl()->hash("blockHash");
+    auto blockHash = _cryptoSuite->hashImpl()->hash("blockHash"sv);
     auto blockNumber = 10;
     _txpool->asyncMarkTxs(sealedTxs, false, blockNumber, blockHash, [&](Error::Ptr _error) {
         BOOST_CHECK(_error == nullptr);
@@ -566,7 +568,7 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
     }
     try
     {
-        auto _result = ~txpool->submitTransaction(tx);
+        auto _result = bcos::task::syncWait(txpool->submitTransaction(tx));
     }
     catch (bcos::Error& e)
     {

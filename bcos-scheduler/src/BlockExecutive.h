@@ -170,7 +170,7 @@ protected:
 
     virtual void serialPrepareExecutor();
 
-    bcos::protocol::TransactionsPtr fetchBlockTxsFromTxPool(
+    bcos::protocol::ConstTransactionsPtr fetchBlockTxsFromTxPool(
         bcos::protocol::Block::Ptr block, bcos::txpool::TxPoolInterface::Ptr txPool);
     std::string preprocessAddress(const std::string_view& address);
 
@@ -191,7 +191,7 @@ protected:
 
     bcos::protocol::Block::Ptr m_block;
     bcos::protocol::BlockHeader::ConstPtr m_blockHeader;
-    bcos::protocol::TransactionsPtr m_blockTxs;
+    bcos::protocol::ConstTransactionsPtr m_blockTxs;
 
     bcos::protocol::BlockHeader::Ptr m_result;
     SchedulerImpl* m_scheduler;

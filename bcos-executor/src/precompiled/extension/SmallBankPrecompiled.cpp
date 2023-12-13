@@ -39,12 +39,13 @@ const char* const SMALL_BANK_METHOD_ADD_STR_UINT = "updateBalance(string,uint256
 const char* const SMALL_BANK_METHOD_TRS_STR2_UINT = "sendPayment(string,string,uint256)";
 const size_t SMALLBANK_TRANSFER_FIELD_BALANCE = 0;
 
-SmallBankPrecompiled::SmallBankPrecompiled(std::string _tableName)
-  : Precompiled(GlobalHashImpl::g_hashImpl), m_tableName(_tableName)
+SmallBankPrecompiled::SmallBankPrecompiled(crypto::Hash::Ptr hashImpl, std::string _tableName)
+  : Precompiled(hashImpl), m_tableName(_tableName)
 {
-    name2Selector[SMALL_BANK_METHOD_ADD_STR_UINT] = getFuncSelector(SMALL_BANK_METHOD_ADD_STR_UINT);
+    name2Selector[SMALL_BANK_METHOD_ADD_STR_UINT] =
+        getFuncSelector(SMALL_BANK_METHOD_ADD_STR_UINT, hashImpl);
     name2Selector[SMALL_BANK_METHOD_TRS_STR2_UINT] =
-        getFuncSelector(SMALL_BANK_METHOD_TRS_STR2_UINT);
+        getFuncSelector(SMALL_BANK_METHOD_TRS_STR2_UINT, hashImpl);
 }
 
 
@@ -123,7 +124,7 @@ std::shared_ptr<PrecompiledExecResult> SmallBankPrecompiled::call(
     }
     else
     {
-        PRECOMPILED_LOG(INFO) << LOG_BADGE("SmallBankPrecompiled") << LOG_DESC("error func")
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("SmallBankPrecompiled") << LOG_DESC("invalid func")
                               << LOG_KV("func", func);
     }
 

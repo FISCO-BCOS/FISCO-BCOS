@@ -88,7 +88,7 @@ void GatewayConfig::hostAndPort2Endpoint(const std::string& _host, NodeIPEndpoin
     boost::asio::ip::address ip_address = boost::asio::ip::make_address(ip, ec);
     if (ec.value() != 0)
     {
-        GATEWAY_CONFIG_LOG(ERROR) << LOG_DESC("the host is invalid, make_address error")
+        GATEWAY_CONFIG_LOG(ERROR) << LOG_DESC("the host is invalid, make_address failed")
                                   << LOG_KV("host", _host);
         BOOST_THROW_EXCEPTION(
             InvalidParameter() << errinfo_comment(
@@ -178,7 +178,7 @@ void GatewayConfig::initConfig(std::string const& _configPath, bool _uuidRequire
 
         BOOST_THROW_EXCEPTION(
             InvalidParameter() << errinfo_comment("initConfig: currentPath:" + full_path.string() +
-                                                  " ,error:" + boost::diagnostic_information(e)));
+                                                  " ,message:" + boost::diagnostic_information(e)));
     }
 
     GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("initConfig ok!") << LOG_KV("configPath", _configPath)
@@ -202,6 +202,7 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
       listen_port=30300
       nodes_path=./
       nodes_file=nodes.json
+      readonly=false
 
       enable_rip_protocol=true
       allow_max_msg_size=
@@ -234,7 +235,7 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
     }
 
     m_nodeFileName = _pt.get<std::string>("p2p.nodes_file", "nodes.json");
-
+    m_readonly = _pt.get<bool>("p2p.readonly", false);
     m_enableRIPProtocol = _pt.get<bool>("p2p.enable_rip_protocol", true);
 
     m_enableCompress = _pt.get<bool>("p2p.enable_compression", true);
@@ -282,7 +283,8 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
                              << LOG_KV("p2p.session_max_send_msg_count", m_maxSendMsgCount)
                              << LOG_KV("p2p.thread_count", m_threadPoolSize)
                              << LOG_KV("p2p.nodes_path", m_nodePath)
-                             << LOG_KV("p2p.nodes_file", m_nodeFileName);
+                             << LOG_KV("p2p.nodes_file", m_nodeFileName)
+                             << LOG_KV("p2p.readonly", m_readonly);
 }
 
 // load p2p connected peers

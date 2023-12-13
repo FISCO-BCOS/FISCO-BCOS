@@ -104,13 +104,12 @@ std::string checkCreateTableParam(const std::string_view& _tableName, std::strin
     const std::variant<std::string, std::vector<std::string>>& _valueField,
     std::optional<uint8_t> keyOrder = std::nullopt);
 
-uint32_t getFuncSelector(std::string const& _functionName,
-    const crypto::Hash::Ptr& _hashImpl = executor::GlobalHashImpl::g_hashImpl);
+uint32_t getFuncSelector(std::string_view functionName, const crypto::Hash::Ptr& _hashImpl);
 // for ut
 void clearName2SelectCache();
 uint32_t getParamFunc(bytesConstRef _param);
 uint32_t getFuncSelectorByFunctionName(
-    std::string const& _functionName, const crypto::Hash::Ptr& _hashImpl);
+    std::string_view _functionName, const crypto::Hash::Ptr& _hashImpl);
 
 bcos::precompiled::ContractStatus getContractStatus(
     std::shared_ptr<bcos::executor::TransactionExecutive> _executive,

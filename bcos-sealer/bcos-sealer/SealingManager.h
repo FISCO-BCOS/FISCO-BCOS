@@ -54,7 +54,7 @@ public:
     virtual bool shouldFetchTransaction();
 
     std::pair<bool, bcos::protocol::Block::Ptr> generateProposal(
-        std::function<bool(bcos::protocol::Block::Ptr)> = nullptr);
+        std::function<uint16_t(bcos::protocol::Block::Ptr)> = nullptr);
     virtual void setUnsealedTxsSize(size_t _unsealedTxsSize)
     {
         m_unsealedTxsSize = _unsealedTxsSize;
@@ -102,13 +102,13 @@ public:
                        << LOG_KV("unsealedTxs", m_unsealedTxsSize);
     }
 
-    virtual void resetCurrentNumber(int64_t _currentNumber) { m_currentNumber = _currentNumber; }
-    virtual void resetCurrentHash(crypto::HashType _currentHash)
+    virtual void resetLatestNumber(int64_t _latestNumber) { m_latestNumber = _latestNumber; }
+    virtual void resetLatestHash(crypto::HashType _latestHash)
     {
-        m_currentHash = std::move(_currentHash);
+        m_latestHash = std::move(_latestHash);
     }
-    virtual int64_t currentNumber() const { return m_currentNumber; }
-    virtual crypto::HashType currentHash() const { return m_currentHash; }
+    virtual int64_t latestNumber() const { return m_latestNumber; }
+    virtual crypto::HashType latestHash() const { return m_latestHash; }
     virtual void fetchTransactions();
 
     template <class T>
@@ -154,7 +154,7 @@ private:
 
     std::atomic_bool m_fetchingTxs = {false};
 
-    std::atomic<ssize_t> m_currentNumber = {0};
-    bcos::crypto::HashType m_currentHash = {};
+    std::atomic<ssize_t> m_latestNumber = {0};
+    bcos::crypto::HashType m_latestHash = {};
 };
 }  // namespace bcos::sealer

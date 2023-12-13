@@ -40,10 +40,11 @@ public:
     virtual ~LedgerConfigFetcher() = default;
 
     virtual void fetchAll();
+    virtual void fetchBlockNumber();
     virtual void fetchBlockNumberAndHash();
     virtual void fetchConsensusNodeList();
     virtual void fetchObserverNodeList();
-    virtual void fetchWorkingSealerList();
+    virtual void fetchCandidateSealerList();
     virtual void fetchBlockTxCountLimit();
     virtual void fetchGenesisHash();
     virtual void fetchNonceList(protocol::BlockNumber _startNumber, int64_t _offset);

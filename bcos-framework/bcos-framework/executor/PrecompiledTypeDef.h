@@ -50,6 +50,7 @@ constexpr const char* const DISCRETE_ZKP_NAME = "/sys/discrete_zkp";
 constexpr const char* const ACCOUNT_MANAGER_NAME = "/sys/account_manager";
 constexpr const char* const CAST_NAME = "/sys/cast_tools";
 constexpr const char* const SHARDING_PRECOMPILED_NAME = "/sys/sharding";
+constexpr const char* const BALANCE_PRECOMPILED_NAME = "/sys/balance";
 constexpr static const uint8_t BFS_SYS_SUBS_COUNT = 15;
 constexpr static const std::array<std::string_view, BFS_SYS_SUBS_COUNT> BFS_SYS_SUBS = {
     SYS_CONFIG_NAME, TABLE_NAME, TABLE_MANAGER_NAME, CONSENSUS_TABLE_NAME, AUTH_MANAGER_NAME,
@@ -77,6 +78,9 @@ constexpr const char* const BFS_ADDRESS = "0000000000000000000000000000000000001
 constexpr const char* const CAST_ADDRESS = "000000000000000000000000000000000000100f";
 constexpr const char* const SHARDING_PRECOMPILED_ADDRESS =
     "0000000000000000000000000000000000001010";
+constexpr const char* const BALANCE_PRECOMPILED_ADDRESS =
+    "0000000000000000000000000000000000001011";
+
 constexpr std::string_view SYS_ADDRESS_PREFIX = "00000000000000000000000000000000000";
 constexpr std::string_view EVM_PRECOMPILED_PREFIX = "000000000000000000000000000000000000000";
 constexpr std::string_view EMPTY_ADDRESS = "0000000000000000000000000000000000000000";
@@ -95,6 +99,9 @@ constexpr const char* const AUTH_COMMITTEE_ADDRESS = "00000000000000000000000000
 constexpr const char* const AUTH_CONTRACT_MGR_ADDRESS = "0000000000000000000000000000000000010002";
 constexpr const char* const ACCOUNT_MGR_ADDRESS = "0000000000000000000000000000000000010003";
 constexpr const char* const ACCOUNT_ADDRESS = "0000000000000000000000000000000000010004";
+
+// for balance transfer in evm
+constexpr const char* const EVM_BALANCE_SENDER_ADDRESS = "000000000000000000000000000000000000ffff";
 
 // clang-format off
 /// name to address, only for create sys table

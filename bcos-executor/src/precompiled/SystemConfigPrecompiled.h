@@ -33,7 +33,7 @@ class SystemConfigPrecompiled : public bcos::precompiled::Precompiled
 public:
     using Ptr = std::shared_ptr<SystemConfigPrecompiled>;
 
-    SystemConfigPrecompiled();
+    SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl);
     SystemConfigPrecompiled(const SystemConfigPrecompiled&) = default;
     SystemConfigPrecompiled& operator=(const SystemConfigPrecompiled&) = delete;
     SystemConfigPrecompiled(SystemConfigPrecompiled&&) = default;
@@ -47,7 +47,8 @@ public:
         const std::shared_ptr<executor::TransactionExecutive>& _executive, const std::string& _key);
 
 private:
-    int64_t validate(std::string_view key, std::string_view value, uint32_t blockVersion);
+    int64_t validate(const std::shared_ptr<executor::TransactionExecutive>& _executive, 
+        std::string_view key, std::string_view value, uint32_t blockVersion);
     static bool shouldUpgradeChain(
         std::string_view key, uint32_t fromVersion, uint32_t toVersion) noexcept;
     static void upgradeChain(const std::shared_ptr<executor::TransactionExecutive>& _executive,

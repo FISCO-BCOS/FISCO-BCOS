@@ -81,6 +81,7 @@ public:
         if (m_reportTimer)
         {
             m_reportTimer->stop();
+            m_reportTimer->destroy();
         }
     }
 

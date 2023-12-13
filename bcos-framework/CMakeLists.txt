@@ -18,10 +18,10 @@
 
 cmake_minimum_required(VERSION 3.12)
 
-include_directories(${CMAKE_CURRENT_BINARY_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework)
 
 find_package(Microsoft.GSL CONFIG REQUIRED)
+find_package(fmt CONFIG REQUIRED)
 
 add_library(bcos-framework INTERFACE)
 target_include_directories(bcos-framework INTERFACE
@@ -29,24 +29,23 @@ target_include_directories(bcos-framework INTERFACE
     $<INSTALL_INTERFACE:include/bcos-framework>)
 
 if (PRECOMPILED_HEADER)
-    target_link_libraries(bcos-framework INTERFACE bcos-crypto bcos-task Microsoft.GSL::GSL precompiled-headers)
+    target_link_libraries(bcos-framework INTERFACE bcos-task Microsoft.GSL::GSL precompiled-headers)
     target_precompile_headers(bcos-framework REUSE_FROM precompiled-headers)
 else()
-    target_link_libraries(bcos-framework INTERFACE bcos-crypto bcos-task Microsoft.GSL::GSL)
+    target_link_libraries(bcos-framework INTERFACE bcos-task Microsoft.GSL::GSL fmt::fmt)
 endif()
 
 if (TESTS)
     enable_testing()
     set(CTEST_OUTPUT_ON_FAILURE TRUE)
     add_subdirectory(test)
-    add_subdirectory(benchmark)
 endif()
 
 # for code coverage
-if (COVERAGE)
-    include(Coverage)
-    config_coverage("framework-cov" "'/usr*' '${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts*' '${CMAKE_CURRENT_SOURCE_DIR}/test/bcos-test*'")
-endif ()
+#if (COVERAGE)
+#    include(Coverage)
+#    config_coverage("framework-cov" "'/usr*' '${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts*' '${CMAKE_CURRENT_SOURCE_DIR}/test/bcos-test*'")
+#endif ()
 
 include(GNUInstallDirs)
 install(TARGETS bcos-framework EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")

@@ -38,11 +38,11 @@ VMInstance::VMInstance(evmc_vm* instance, evmc_revision revision, bytes_view cod
     assert(m_instance->abi_version == EVMC_ABI_VERSION);
 
     // Set the options.
-    if (m_instance->set_option)
+    if (m_instance->set_option != nullptr)
     {  // baseline interpreter could not work with precompiled
-        m_instance->set_option(m_instance, "advanced", "");  // default is baseline interpreter
-        // m_instance->set_option(m_instance, "trace", "");
-        // m_instance->set_option(m_instance, "cgoto", "no");
+       // m_instance->set_option(m_instance, "advanced", "");  // default is baseline interpreter
+       // m_instance->set_option(m_instance, "trace", "");
+       // m_instance->set_option(m_instance, "cgoto", "no");
     }
 }
 
@@ -55,22 +55,20 @@ VMInstance::VMInstance(
 
 Result VMInstance::execute(HostContext& _hostContext, evmc_message* _msg)
 {
-    if (m_instance)
+    if (m_instance != nullptr)
     {
         return Result(m_instance->execute(m_instance, _hostContext.interface, &_hostContext,
             m_revision, _msg, m_code.data(), m_code.size()));
     }
     auto state = std::make_unique<evmone::advanced::AdvancedExecutionState>(
         *_msg, m_revision, *_hostContext.interface, &_hostContext, m_code);
-    {  // baseline
-
-        // auto vm = evmc_create_evmone(); // baseline use the vm to get options
-        // return Result(evmone::baseline::execute(*static_cast<evmone::VM*>(vm), *state,
-        // *m_analysis));
+    {                                             // baseline
+        static auto* evm = evmc_create_evmone();  // baseline use the vm to get options
+        return Result(evmone::baseline::execute(
+            *static_cast<evmone::VM*>(evm), _msg->gas, *state, *m_analysis));
     }
     // advanced, TODO: state also could be reused
-
-    return Result(evmone::advanced::execute(*state, *m_analysis));
+    // return Result(evmone::advanced::execute(*state, *m_analysis));
 }
 
 evmc_revision toRevision(VMSchedule const& _schedule)

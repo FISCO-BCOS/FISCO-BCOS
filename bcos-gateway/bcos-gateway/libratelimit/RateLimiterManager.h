@@ -51,17 +51,17 @@ public:
         initP2pBasicMsgTypes();
     }
 
-    RateLimiterInterface::Ptr getRateLimiter(const std::string& _rateLimiterKey);
+    bcos::ratelimiter::RateLimiterInterface::Ptr getRateLimiter(const std::string& _rateLimiterKey);
 
-    std::pair<bool, RateLimiterInterface::Ptr> registerRateLimiter(
-        const std::string& _rateLimiterKey, RateLimiterInterface::Ptr _rateLimiter);
+    std::pair<bool, bcos::ratelimiter::RateLimiterInterface::Ptr> registerRateLimiter(
+        const std::string& _rateLimiterKey, bcos::ratelimiter::RateLimiterInterface::Ptr _rateLimiter);
     bool removeRateLimiter(const std::string& _rateLimiterKey);
 
-    RateLimiterInterface::Ptr getGroupRateLimiter(const std::string& _group);
-    RateLimiterInterface::Ptr getConnRateLimiter(const std::string& _connIP);
+    bcos::ratelimiter::RateLimiterInterface::Ptr getGroupRateLimiter(const std::string& _group);
+    bcos::ratelimiter::RateLimiterInterface::Ptr getConnRateLimiter(const std::string& _connIP);
 
-    RateLimiterInterface::Ptr getInRateLimiter(const std::string& _connIP, uint16_t _packageType);
-    RateLimiterInterface::Ptr getInRateLimiter(
+    bcos::ratelimiter::RateLimiterInterface::Ptr getInRateLimiter(const std::string& _connIP, uint16_t _packageType);
+    bcos::ratelimiter::RateLimiterInterface::Ptr getInRateLimiter(
         const std::string& _groupID, uint16_t _moduleID, bool /***/);
 
     ratelimiter::RateLimiterFactory::Ptr rateLimiterFactory() const { return m_rateLimiterFactory; }
@@ -133,7 +133,7 @@ private:
     // lock for m_group2RateLimiter
     mutable std::shared_mutex x_rateLimiters;
     // group/ip => ratelimiter
-    std::unordered_map<std::string, RateLimiterInterface::Ptr> m_rateLimiters;
+    std::unordered_map<std::string, bcos::ratelimiter::RateLimiterInterface::Ptr> m_rateLimiters;
 
     // the message of modules that do not limit bandwidth
     std::array<bool, std::numeric_limits<uint16_t>::max()> m_modulesWithoutLimit{};

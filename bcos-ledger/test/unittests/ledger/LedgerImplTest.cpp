@@ -1,9 +1,4 @@
-#include <bcos-tars-protocol/impl/TarsHashable.h>
-#include <bcos-tars-protocol/impl/TarsOutput.h>
-#include <bcos-tars-protocol/impl/TarsSerializable.h>
-
 #include "bcos-ledger/src/libledger/LedgerImpl.h"
-#include "bcos-ledger/src/libledger/LedgerImpl2.h"
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-concepts/Serialize.h>
 #include <bcos-concepts/ledger/Ledger.h>
@@ -11,6 +6,9 @@
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/storage/Entry.h>
+#include <bcos-tars-protocol/impl/TarsHashable.h>
+#include <bcos-tars-protocol/impl/TarsOutput.h>
+#include <bcos-tars-protocol/impl/TarsSerializable.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockImpl.h>
 #include <bcos-tars-protocol/tars/Block.h>
@@ -266,7 +264,7 @@ BOOST_AUTO_TEST_CASE(setBlockAndGetInfo)
 
     BOOST_CHECK_NO_THROW(bcos::task::syncWait(ledger.setBlock<bcos::concepts::ledger::ALL>(block)));
     bcostars::Block gotBlock;
-    ~ledger.getBlock<bcos::concepts::ledger::ALL>(100, gotBlock);
+    bcos::task::syncWait(ledger.getBlock<bcos::concepts::ledger::ALL>(100, gotBlock));
 
     BOOST_CHECK_EQUAL(gotBlock.blockHeader.data.blockNumber, block.blockHeader.data.blockNumber);
     BOOST_CHECK_EQUAL(gotBlock.transactions.size(), block.transactions.size());

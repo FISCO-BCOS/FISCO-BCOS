@@ -76,6 +76,7 @@ public:
     {
         return nullptr;
     };
+    virtual bool shouldRotateSealers(protocol::BlockNumber) const { return false; }
     virtual uint32_t compatibilityVersion() const
     {
         return (uint32_t)(bcos::protocol::DEFAULT_VERSION);

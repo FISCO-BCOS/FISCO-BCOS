@@ -60,19 +60,18 @@ public:
         BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
     }
 
-    virtual task::Task<void> broadcastTransaction(
-        [[maybe_unused]] const protocol::Transaction& transaction)
+    virtual void broadcastTransaction([[maybe_unused]] const protocol::Transaction& transaction)
     {
         BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
     }
 
-    virtual task::Task<void> broadcastTransactionBuffer([[maybe_unused]] const bytesConstRef& _data)
+    virtual void broadcastTransactionBuffer([[maybe_unused]] const bytesConstRef& _data)
     {
         BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
     }
 
-    virtual task::Task<void> broadcastTransactionBufferByTree(
-        [[maybe_unused]] const bytesConstRef& _data, bool isStartNode = false)
+    virtual void broadcastTransactionBufferByTree([[maybe_unused]] const bytesConstRef& _data,
+        bool isStartNode = false, bcos::crypto::NodeIDPtr fromNode = nullptr)
     {
         BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
     }
@@ -117,7 +116,7 @@ public:
      * @param _onBlockFilled callback to be called after the block has been filled
      */
     virtual void asyncFillBlock(bcos::crypto::HashListPtr _txsHash,
-        std::function<void(Error::Ptr, bcos::protocol::TransactionsPtr)> _onBlockFilled) = 0;
+        std::function<void(Error::Ptr, bcos::protocol::ConstTransactionsPtr)> _onBlockFilled) = 0;
 
     /**
      * @brief After the blockchain is on-chain, the interface is called to notify the transaction
@@ -148,7 +147,7 @@ public:
     // notify to reset the txpool when the consensus module startup
     virtual void asyncResetTxPool(std::function<void(Error::Ptr)> _onRecvResponse) = 0;
 
-    [[deprecated]] virtual void notifyConnectedNodes(bcos::crypto::NodeIDSet const& _connectedNodes,
+    virtual void notifyConnectedNodes(bcos::crypto::NodeIDSet const& _connectedNodes,
         std::function<void(Error::Ptr)> _onResponse) = 0;
 
     // determine to clean up txs periodically or not
@@ -158,7 +157,4 @@ public:
     virtual void tryToSyncTxsFromPeers() {}
 };
 
-template <class T>
-concept IsTxPool = std::derived_from<std::remove_cvref_t<T>, TxPoolInterface> ||
-                   std::same_as<std::remove_cvref_t<T>, TxPoolInterface>;
 }  // namespace bcos::txpool

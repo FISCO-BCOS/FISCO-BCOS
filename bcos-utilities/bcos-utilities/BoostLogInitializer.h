@@ -94,12 +94,15 @@ private:
     void setLogFormatter(T _sink)
     {
         /// set file format
-        /// log-level|timestamp | message
+        /// log-level|timestamp|thread-id|message
         _sink->set_formatter(
             boost::log::expressions::stream
             << boost::log::expressions::attr<boost::log::trivial::severity_level>("Severity") << "|"
             << boost::log::expressions::format_date_time<boost::posix_time::ptime>(
                    "TimeStamp", "%Y-%m-%d %H:%M:%S.%f")
+            << "|"
+            << boost::log::expressions::attr<boost::log::attributes::current_thread_id::value_type>(
+                   "ThreadID")
             << "|" << boost::log::expressions::smessage);
     }
 

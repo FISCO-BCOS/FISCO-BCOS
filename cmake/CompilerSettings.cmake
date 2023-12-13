@@ -41,6 +41,7 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
     add_compile_options(-Wno-error=unknown-pragmas)
     add_compile_options(-Wno-error=deprecated-declarations)
     add_compile_options(-fno-omit-frame-pointer)
+    add_compile_options(-Wno-error=strict-aliasing)
 
     if(NOT APPLE)
         set(CMAKE_CXX_VISIBILITY_PRESET hidden)
@@ -75,9 +76,13 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
     endif()
 
     # Configuration-specific compiler settings.
-    set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g")
+    set(CMAKE_CXX_FLAGS_DEBUG "-Og -g")
     set(CMAKE_CXX_FLAGS_MINSIZEREL "-Os -DNDEBUG")
-    set(CMAKE_CXX_FLAGS_RELEASE "-O3 -g -DNDEBUG")
+    if(ONLY_CPP_SDK)
+        set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
+    else ()
+        set(CMAKE_CXX_FLAGS_RELEASE "-O3 -g -DNDEBUG")
+    endif ()
     set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g -DNDEBUG")
 
     if("${LINKER}" MATCHES "gold")
@@ -113,6 +118,7 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
         add_compile_options(-foptimize-sibling-calls)
         add_compile_options(-Wno-stringop-overflow)
         add_compile_options(-Wno-restrict)
+        add_compile_options(-Wno-error=format-truncation)
 
         if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 11.0)
             add_compile_options(-Wno-stringop-overread)
@@ -128,6 +134,7 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
 
         add_compile_options(-fstack-protector)
         add_compile_options(-Winconsistent-missing-override)
+        add_compile_options(-foptimize-sibling-calls)
 
         # Some Linux-specific Clang settings.  We don't want these for OS X.
         if("${CMAKE_SYSTEM_NAME}" MATCHES "Linux")
@@ -162,7 +169,8 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
         endif()
     endif()
 elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
-    add_definitions(-DUSE_STD_RANGES)
+    add_compile_definitions(NOMINMAX)
+    #add_definitions(-DUSE_STD_RANGES)
     add_compile_options(/std:c++latest)
     add_compile_options(-bigobj)
 

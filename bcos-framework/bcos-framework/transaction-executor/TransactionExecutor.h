@@ -4,80 +4,44 @@
 #include "../protocol/Transaction.h"
 #include "../protocol/TransactionReceipt.h"
 #include "../protocol/TransactionReceiptFactory.h"
-#include "../storage/Entry.h"
-#include "../storage2/StringPool.h"
+#include "../storage2/Storage.h"
+#include "StateKey.h"
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-task/Trait.h>
-#include <boost/container/small_vector.hpp>
 #include <compare>
+#include <tuple>
 #include <type_traits>
+#include <utility>
 
 namespace bcos::transaction_executor
 {
-using TableNamePool = storage2::string_pool::FixedStringPool;
-using TableNameID = storage2::string_pool::StringID;
 
-constexpr static size_t MOSTLY_KEY_LENGTH = 32;
-class SmallKey : public boost::container::small_vector<char, MOSTLY_KEY_LENGTH>
+struct ExecuteTransaction
 {
-public:
-    using boost::container::small_vector<char, MOSTLY_KEY_LENGTH>::small_vector;
-
-    explicit SmallKey(concepts::bytebuffer::ByteBuffer auto const& buffer)
-      : boost::container::small_vector<char, MOSTLY_KEY_LENGTH>::small_vector::small_vector(
-            RANGES::begin(buffer), RANGES::end(buffer))
-    {}
-
-    std::string_view toStringView() const& { return {this->data(), this->size()}; }
+    /**
+     * @brief Executes a transaction and returns a task that resolves to a transaction receipt.
+     *
+     * @tparam Executor The type of the executor.
+     * @tparam Storage The type of the storage.
+     * @tparam Args The types of additional arguments.
+     * @param executor The executor instance.
+     * @param storage The storage instance.
+     * @param blockHeader The block header.
+     * @param transaction The transaction to execute.
+     * @param args Additional arguments.
+     * @return A task that resolves to a transaction receipt.
+     */
+    auto operator()(auto& executor, auto& storage, const protocol::BlockHeader& blockHeader,
+        const protocol::Transaction& transaction, auto&&... args) const
+        -> task::Task<protocol::TransactionReceipt::Ptr>
+    {
+        co_return co_await tag_invoke(*this, executor, storage, blockHeader, transaction,
+            std::forward<decltype(args)>(args)...);
+    }
 };
+inline constexpr ExecuteTransaction executeTransaction{};
 
-using StateKey = std::tuple<TableNameID, SmallKey>;
-using StateValue = storage::Entry;
+template <auto& Tag>
+using tag_t = std::decay_t<decltype(Tag)>;
 
-template <class StorageType>
-concept StateStorage = requires() {
-                           requires storage2::ReadableStorage<StorageType>;
-                           requires storage2::WriteableStorage<StorageType>;
-                       };
-
-template <class TransactionExecutorType, class Storage, class ReceiptFactory>
-concept TransactionExecutor =
-    requires(TransactionExecutorType executor, const protocol::BlockHeader& blockHeader,
-        Storage& storage, ReceiptFactory& receiptFactory) {
-        requires StateStorage<Storage>;
-        requires protocol::IsTransactionReceiptFactory<ReceiptFactory>;
-
-        requires std::same_as<task::AwaitableReturnType<decltype(executor.execute(
-                                  blockHeader, std::declval<protocol::Transaction>(), 0))>,
-            protocol::ReceiptFactoryReturnType<ReceiptFactory>>;
-    };
 }  // namespace bcos::transaction_executor
-
-template <>
-struct std::hash<bcos::transaction_executor::StateKey>
-{
-    size_t operator()(const bcos::transaction_executor::StateKey& stateKey) const
-    {
-        auto const& [table, key] = stateKey;
-        size_t hash = 0;
-        boost::hash_combine(hash, std::hash<bcos::transaction_executor::TableNameID>{}(table));
-        boost::hash_combine(hash, std::hash<std::string_view>{}(key.toStringView()));
-        return hash;
-    }
-};
-
-template <>
-struct boost::hash<bcos::transaction_executor::StateKey>
-{
-    size_t operator()(const bcos::transaction_executor::StateKey& stateKey) const
-    {
-        return std::hash<bcos::transaction_executor::StateKey>{}(stateKey);
-    }
-};
-
-inline std::ostream& operator<<(
-    std::ostream& stream, bcos::transaction_executor::SmallKey const& smallKey)
-{
-    stream << smallKey.toStringView();
-    return stream;
-}

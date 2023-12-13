@@ -18,14 +18,14 @@
  * @author: yujiechen
  * @date 2021-05-26
  */
+#include "bcos-framework/bcos-framework/testutils/faker/FakeBlockHeader.h"
+#include "bcos-framework/bcos-framework/testutils/faker/FakeTransaction.h"
 #include "test/unittests/txpool/TxPoolFixture.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-crypto/signature/sm2/SM2Crypto.h>
-#include <bcos-tars-protocol/testutil/FakeBlockHeader.h>
-#include <bcos-tars-protocol/testutil/FakeTransaction.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <tbb/blocked_range.h>
@@ -54,7 +54,7 @@ Transactions importTransactions(
         auto transaction = fakeTransaction(_cryptoSuite, std::to_string(utcTime() + 1000 + i),
             ledger->blockNumber() + 1, _faker->chainId(), _faker->groupId());
         transactions.push_back(transaction);
-        task::wait(txpool->broadcastTransaction(*transaction));
+        txpool->broadcastTransaction(*transaction);
         task::wait(txpool->submitTransaction(transaction));
     }
     auto startT = utcTime();
@@ -76,7 +76,7 @@ void importTransactionsNew(
     {
         auto transaction = fakeTransaction(_cryptoSuite, std::to_string(utcTime() + 1000 + i),
             ledger->blockNumber() + 1, _faker->chainId(), _faker->groupId());
-        task::wait(txpool->broadcastTransaction(*transaction));
+        txpool->broadcastTransaction(*transaction);
         transactions.push_back(transaction);
     }
 

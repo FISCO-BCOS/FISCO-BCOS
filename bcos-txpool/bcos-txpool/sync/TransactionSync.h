@@ -48,7 +48,7 @@ public:
     TransactionSync& operator=(const TransactionSync&) = delete;
     TransactionSync& operator=(TransactionSync&&) = delete;
 
-    ~TransactionSync() override = default;
+    ~TransactionSync() override { stop(); };
 
     using SendResponseCallback = std::function<void(bytesConstRef respData)>;
     void onRecvSyncMessage(bcos::Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,
@@ -60,6 +60,8 @@ public:
         VerifyResponseCallback _onVerifyFinished) override;
 
     void onEmptyTxs() override;
+
+    void stop() override;
 
 protected:
     virtual void responseTxsStatus(bcos::crypto::NodeIDPtr _fromNode);

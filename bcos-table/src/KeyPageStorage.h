@@ -143,7 +143,8 @@ public:
                                               const std::string_view& key, const Entry& entry)>
                                               callback) const override;
 
-    crypto::HashType hash(const bcos::crypto::Hash::Ptr& hashImpl) const override;
+    crypto::HashType hash(
+        const bcos::crypto::Hash::Ptr& hashImpl, bool /*useHashV310*/) const override;
 
     void rollback(const Recoder& recoder) override;
 
@@ -887,7 +888,7 @@ public:
             m_invalidPageKeys.clear();
             if (!entries.empty() && pageKey != entries.rbegin()->first)
             {
-                KeyPage_LOG(WARNING) << LOG_DESC("import page with invalid pageKey")
+                KeyPage_LOG(DEBUG) << LOG_DESC("import page with invalid pageKey")
                                      << LOG_KV("pageKey", toHex(pageKey))
                                      << LOG_KV("validPageKey", toHex(entries.rbegin()->first))
                                      << LOG_KV("count", entries.size());
@@ -1185,7 +1186,7 @@ public:
         {
             KeyPage_LOG(ERROR) << LOG_DESC("getData error") << LOG_KV("table", table)
                                << LOG_KV("key", toHex(key))
-                               << LOG_KV("error", error->errorMessage());
+                               << LOG_KV("message", error->errorMessage());
             return std::nullopt;
         }
         if (c_fileLogLevel <= TRACE)

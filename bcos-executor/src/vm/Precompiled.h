@@ -160,7 +160,7 @@ public:
     virtual std::vector<std::string> getParallelTag(bytesConstRef, bool) { return {}; }
 
 protected:
-    std::map<std::string, uint32_t> name2Selector;
+    std::map<std::string, uint32_t, std::less<>> name2Selector;
     [[no_unique_address]] std::unordered_map<uint32_t,
         std::pair<protocol::BlockVersion, PrecompiledParams>>
         selector2Func;
@@ -175,7 +175,8 @@ protected:
     void registerFunc(std::string const& _funcName, PrecompiledParams _func,
         protocol::BlockVersion _minVersion = protocol::BlockVersion::V3_0_VERSION)
     {
-        selector2Func.insert({getFuncSelector(_funcName), {_minVersion, std::move(_func)}});
+        selector2Func.insert(
+            {getFuncSelector(_funcName, m_hashImpl), {_minVersion, std::move(_func)}});
     }
 
     template <class F>

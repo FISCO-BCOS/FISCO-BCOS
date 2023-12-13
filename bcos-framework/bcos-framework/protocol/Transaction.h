@@ -23,7 +23,9 @@
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
+#if !ONLY_CPP_SDK
 #include <bcos-utilities/ITTAPI.h>
+#endif
 #include <boost/throw_exception.hpp>
 #include <concepts>
 #include <shared_mutex>
@@ -69,8 +71,10 @@ public:
 
     virtual void verify(crypto::Hash& hashImpl, crypto::SignatureCrypto& signatureImpl) const
     {
+#if !ONLY_CPP_SDK
         ittapi::Report report(ittapi::ITT_DOMAINS::instance().TRANSACTION,
             ittapi::ITT_DOMAINS::instance().VERIFY_TRANSACTION);
+#endif
         // The tx has already been verified
         if (!sender().empty())
         {
@@ -94,12 +98,19 @@ public:
     virtual std::string_view to() const = 0;
     virtual std::string_view abi() const = 0;
 
+    // balance
+    virtual std::string_view value() const = 0;
+    virtual std::string_view gasPrice() const = 0;
+    virtual int64_t gasLimit() const = 0;
+    virtual std::string_view maxFeePerGas() const = 0;
+    virtual std::string_view maxPriorityFeePerGas() const = 0;
+
     virtual std::string_view extraData() const = 0;
     virtual void setExtraData(std::string const& _extraData) = 0;
 
     virtual std::string_view sender() const = 0;
 
-    virtual bytesConstRef input() const = 0;
+    virtual bcos::bytesConstRef input() const = 0;
     virtual int64_t importTime() const = 0;
     virtual void setImportTime(int64_t _importTime) = 0;
     virtual TransactionType type() const
@@ -111,7 +122,7 @@ public:
         return TransactionType::ContractCreation;
     }
     virtual void forceSender(const bcos::bytes& _sender) const = 0;
-    virtual bytesConstRef signatureData() const = 0;
+    virtual bcos::bytesConstRef signatureData() const = 0;
 
     virtual int32_t attribute() const = 0;
     virtual void setAttribute(int32_t attribute) = 0;
@@ -169,8 +180,5 @@ using TransactionsPtr = std::shared_ptr<Transactions>;
 using TransactionsConstPtr = std::shared_ptr<const Transactions>;
 using ConstTransactions = std::vector<Transaction::ConstPtr>;
 using ConstTransactionsPtr = std::shared_ptr<ConstTransactions>;
-
-template <class T>
-concept IsTransaction = std::derived_from<T, Transaction> || std::same_as<T, Transaction>;
 
 }  // namespace bcos::protocol

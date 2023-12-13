@@ -45,6 +45,8 @@ Sealer::Ptr SealerFactory::createSealer()
         std::make_shared<SealerConfig>(m_blockFactory, m_txpool, m_nodeTimeMaintenance);
     sealerConfig->setMinSealTime(m_minSealTime);
     sealerConfig->setKeyPair(m_keyPair);
+    sealerConfig->setGroupId(m_groupId);
+    sealerConfig->setChainId(m_chainId);
     return std::make_shared<Sealer>(sealerConfig);
 }
 

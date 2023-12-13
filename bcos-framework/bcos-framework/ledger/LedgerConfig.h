@@ -37,7 +37,7 @@ public:
     LedgerConfig()
       : m_consensusNodeList(std::make_shared<bcos::consensus::ConsensusNodeList>()),
         m_observerNodeList(std::make_shared<bcos::consensus::ConsensusNodeList>()),
-        m_workingSealerNodeList(std::make_shared<bcos::consensus::ConsensusNodeList>())
+        m_candidateSealerNodeList(std::make_shared<bcos::consensus::ConsensusNodeList>())
     {}
     virtual ~LedgerConfig() = default;
 
@@ -49,10 +49,10 @@ public:
     {
         *m_observerNodeList = _observerNodeList;
     }
-    virtual void setWorkingSealerNodeList(
-        bcos::consensus::ConsensusNodeList const& _workingSealerNodeList)
+    virtual void setCandidateSealerNodeList(
+        bcos::consensus::ConsensusNodeList const& candidateSealerNodeList)
     {
-        *m_workingSealerNodeList = _workingSealerNodeList;
+        *m_candidateSealerNodeList = candidateSealerNodeList;
     }
     virtual void setHash(bcos::crypto::HashType const& _hash) { m_hash = _hash; }
     virtual void setBlockNumber(bcos::protocol::BlockNumber _blockNumber)
@@ -78,9 +78,9 @@ public:
     {
         return *m_observerNodeList;
     }
-    virtual bcos::consensus::ConsensusNodeList const& workingSealerNodeList() const
+    virtual bcos::consensus::ConsensusNodeList const& candidateSealerNodeList() const
     {
-        return *m_workingSealerNodeList;
+        return *m_candidateSealerNodeList;
     }
     bcos::crypto::HashType const& hash() const { return m_hash; }
     bcos::protocol::BlockNumber blockNumber() const { return m_blockNumber; }
@@ -92,9 +92,9 @@ public:
 
     bcos::consensus::ConsensusNodeListPtr mutableConsensusList() { return m_consensusNodeList; }
     bcos::consensus::ConsensusNodeListPtr mutableObserverList() { return m_observerNodeList; }
-    bcos::consensus::ConsensusNodeListPtr mutableWorkingSealerList()
+    bcos::consensus::ConsensusNodeListPtr mutableCandidateSealerNodeList()
     {
-        return m_workingSealerNodeList;
+        return m_candidateSealerNodeList;
     }
 
     uint64_t leaderSwitchPeriod() const { return m_leaderSwitchPeriod; }
@@ -153,7 +153,7 @@ public:
 private:
     bcos::consensus::ConsensusNodeListPtr m_consensusNodeList;
     bcos::consensus::ConsensusNodeListPtr m_observerNodeList;
-    bcos::consensus::ConsensusNodeListPtr m_workingSealerNodeList;
+    bcos::consensus::ConsensusNodeListPtr m_candidateSealerNodeList;
     bcos::crypto::HashType m_hash;
     bcos::protocol::BlockNumber m_blockNumber = 0;
     std::string m_consensusType;

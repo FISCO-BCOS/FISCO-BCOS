@@ -18,13 +18,13 @@
  * @date 2022-01-17
  */
 
-#include "bcos-crypto/interfaces/crypto/CryptoSuite.h"
-#include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
-#include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
+#include <bcos-cpp-sdk/utilities/crypto/KeyPairBuilder.h>
+#include <bcos-cpp-sdk/utilities/tx/TransactionBuilder.h>
+#include <bcos-cpp-sdk/utilities/tx/TransactionBuilderService.h>
+
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <chrono>
 #include <iostream>
 #include <memory>
@@ -40,7 +40,7 @@
 pragma solidity>=0.4.24 <0.6.11;
 
 contract HelloWorld {
-    string name;
+    std::string name;
 
     constructor() public {
         name = "Hello, World!";
@@ -144,13 +144,13 @@ int main(int argc, char** argv)
 
     printf("[Create Signed Tx Perf Test] ===>>>> smCrypto: %d, txCount: %u\n", smCrypto, txCount);
 
-    // auto keyPairBuilder = std::make_shared<bcos::cppsdk::utilities::KeyPairBuilder>();
-    // auto keyPair =
-    //     keyPairBuilder->genKeyPair(smCrypto ? bcos::cppsdk::utilities::CryptoType::SM2 :
-    //                                           bcos::cppsdk::utilities::CryptoType::Secp256K1);
+    auto keyPairBuilder = std::make_shared<bcos::cppsdk::utilities::KeyPairBuilder>();
+    auto keyPair =
+        keyPairBuilder->genKeyPair(smCrypto ? bcos::cppsdk::utilities::CryptoType::SM2 :
+                                              bcos::cppsdk::utilities::CryptoType::Secp256K1);
 
-    // auto transactionBuilder = std::make_shared<bcos::cppsdk::utilities::TransactionBuilder>();
-    // auto code = *bcos::fromHexString(getBinary(smCrypto ? 1 : 0));
+    auto transactionBuilder = std::make_shared<bcos::cppsdk::utilities::TransactionBuilder>();
+    auto code = *bcos::fromHexString(getBinary(smCrypto ? 1 : 0));
 
     int64_t block_limit = 111111;
     const char* group_id = "group0";
@@ -159,7 +159,6 @@ int main(int argc, char** argv)
     std::string txHash = "";
     uint32_t i = 0;
     uint32_t _10Per = txCount / 10;
-    auto keyPairFactory = std::make_shared<bcos::crypto::Secp256k1Crypto>();
 
     auto startPoint = std::chrono::high_resolution_clock::now();
     while (i++ < txCount)
@@ -169,17 +168,9 @@ int main(int argc, char** argv)
             std::cerr << " ..process : " << ((double)i / txCount) * 100 << "%" << std::endl;
         }
 
-        auto keyPair = keyPairFactory->generateKeyPair();
-        auto hashImpl = std::make_shared<bcos::crypto::Keccak256>();
-        bcos::crypto::CryptoSuite::Ptr cryptoSuite =
-            std::make_shared<bcos::crypto::CryptoSuite>(hashImpl, keyPairFactory, nullptr);
-
-        auto transactionFactory =
-            std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite);
-        bcos::bytes inputData;
-        auto tx =
-            transactionFactory->createTransaction(0, "to", inputData, std::to_string(100), 200, "chain",
-                "group", 1112, std::shared_ptr<bcos::crypto::KeyPairInterface>(std::move(keyPair)));
+        auto txPair = transactionBuilder->createSignedTransaction(
+            *keyPair, group_id, chain_id, "", code, "", block_limit, 0);
+        txHash = txPair.first;
     }
 
     auto endPoint = std::chrono::high_resolution_clock::now();

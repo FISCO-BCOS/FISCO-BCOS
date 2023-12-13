@@ -44,13 +44,21 @@ jobs:
       - name: Build for mac
         run: |
           mkdir -p build && cd build && rm -rf  CMakeCache.txt
-          cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCOVERAGE=ON -DVCPKG_HOST_TRIPLET=arm64-osx -DVCPKG_TARGET_TRIPLET=arm64-osx -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON -DURL_BASE=ghproxy.com/github.com .. || cat *.log
+          cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCOVERAGE=OFF -DVCPKG_HOST_TRIPLET=arm64-osx -DVCPKG_TARGET_TRIPLET=arm64-osx -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON .. || cat *.log
           cmake --build . --parallel 8
 
       - name: Test
         run: |
           cd build
           CTEST_OUTPUT_ON_FAILURE=TRUE make test
+          
+      - name: prepare RPCAPI Tests
+        run: cd tools && bash .ci/rpcapi_ci_prepare.sh
+
+      - name: FISCO BCOS RpcApiTest
+        uses: matt-ball/newman-action@v1.0.4
+        with:
+          collection: https://raw.githubusercontent.com/FISCO-BCOS/FISCOBCOS-RPC-API/main/fiscobcos.rpcapi.collection.json
 
       - name: Integration test - Air
         run: cd tools && bash .ci/ci_check_air.sh ${{ github.base_ref }}

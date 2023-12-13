@@ -80,7 +80,7 @@ void BlockSync::init()
     fetcher->fetchFeatures();
     fetcher->fetchConsensusNodeList();
     fetcher->fetchObserverNodeList();
-    fetcher->fetchWorkingSealerList();
+    fetcher->fetchCandidateSealerList();
     fetcher->fetchGenesisHash();
     // set the syncConfig
     auto genesisHash = fetcher->genesisHash();
@@ -145,7 +145,7 @@ void BlockSync::initSendResponseHandler()
         catch (std::exception const& e)
         {
             BLKSYNC_LOG(WARNING) << LOG_DESC("sendResponse exception")
-                                 << LOG_KV("error", boost::diagnostic_information(e));
+                                 << LOG_KV("message", boost::diagnostic_information(e));
         }
     };
 }
@@ -231,7 +231,7 @@ void BlockSync::executeWorker()
         {
             BLKSYNC_LOG(ERROR) << LOG_DESC(
                                       "maintainDownloadingQueue or maintainPeersStatus exception")
-                               << LOG_KV("errorInfo", boost::diagnostic_information(e));
+                               << LOG_KV("message", boost::diagnostic_information(e));
         }
     });
     // send block to other nodes
@@ -243,7 +243,7 @@ void BlockSync::executeWorker()
         catch (std::exception const& e)
         {
             BLKSYNC_LOG(ERROR) << LOG_DESC("maintainBlockRequest exception")
-                               << LOG_KV("errorInfo", boost::diagnostic_information(e));
+                               << LOG_KV("message", boost::diagnostic_information(e));
         }
     });
 }
@@ -264,7 +264,7 @@ void BlockSync::workerProcessLoop()
         catch (std::exception const& e)
         {
             BLKSYNC_LOG(ERROR) << LOG_DESC("BlockSync executeWorker exception")
-                               << LOG_KV("errorInfo", boost::diagnostic_information(e));
+                               << LOG_KV("message", boost::diagnostic_information(e));
         }
     }
 }
@@ -331,7 +331,7 @@ void BlockSync::asyncNotifyBlockSyncMessage(Error::Ptr _error, std::string const
             catch (std::exception const& e)
             {
                 BLKSYNC_LOG(WARNING) << LOG_DESC("asyncNotifyBlockSyncMessage sendResponse failed")
-                                     << LOG_KV("error", boost::diagnostic_information(e))
+                                     << LOG_KV("message", boost::diagnostic_information(e))
                                      << LOG_KV("id", _uuid) << LOG_KV("dst", _nodeID->shortHex());
             }
         },
@@ -386,7 +386,7 @@ void BlockSync::asyncNotifyBlockSyncMessage(Error::Ptr _error, NodeIDPtr _nodeID
     catch (std::exception const& e)
     {
         BLKSYNC_LOG(WARNING) << LOG_DESC("asyncNotifyBlockSyncMessage exception")
-                             << LOG_KV("error", boost::diagnostic_information(e))
+                             << LOG_KV("message", boost::diagnostic_information(e))
                              << LOG_KV("peer", _nodeID->shortHex());
     }
 }
@@ -786,8 +786,8 @@ void BlockSync::fetchAndSendBlock(PublicPtr const& _peer, BlockNumber _number)
             {
                 BLKSYNC_LOG(WARNING)
                     << LOG_DESC("fetchAndSendBlock failed for asyncGetBlockDataByNumber failed")
-                    << LOG_KV("number", _number) << LOG_KV("errorCode", _error->errorCode())
-                    << LOG_KV("errorMessage", _error->errorMessage());
+                    << LOG_KV("number", _number) << LOG_KV("code", _error->errorCode())
+                    << LOG_KV("message", _error->errorMessage());
                 return;
             }
             try
@@ -818,14 +818,14 @@ void BlockSync::fetchAndSendBlock(PublicPtr const& _peer, BlockNumber _number)
             {
                 BLKSYNC_LOG(WARNING)
                     << LOG_DESC("fetchAndSendBlock exception") << LOG_KV("number", _number)
-                    << LOG_KV("error", boost::diagnostic_information(e));
+                    << LOG_KV("message", boost::diagnostic_information(e));
             }
         });
 }
 
 void BlockSync::maintainPeersConnection()
 {
-    if (!m_config->existsInGroup())
+    if (!m_allowFreeNode && !m_config->existsInGroup())
     {
         return;
     }
@@ -841,7 +841,8 @@ void BlockSync::maintainPeersConnection()
             peersToDelete.emplace_back(_p->nodeId());
             return true;
         }
-        if (!m_config->existsInGroup(_p->nodeId()) && m_config->blockNumber() >= _p->number())
+        if (!m_allowFreeNode && !m_config->existsInGroup(_p->nodeId()) &&
+            m_config->blockNumber() >= _p->number())
         {
             // Only delete outsider whose number is smaller than myself
             peersToDelete.emplace_back(_p->nodeId());
@@ -872,7 +873,7 @@ void BlockSync::sendSyncStatusByTree()
         m_config->archiveBlockNumber());
     m_syncStatus->updatePeerStatus(m_config->nodeID(), statusMsg);
     auto encodedData = statusMsg->encode();
-    BLKSYNC_LOG(TRACE) << LOG_BADGE("BlockSync") << LOG_DESC("broadcastSyncStatus")
+    BLKSYNC_LOG(TRACE) << LOG_BADGE("BlockSync") << LOG_DESC("broadcastSyncStatusByTree")
                        << LOG_KV("number", statusMsg->number())
                        << LOG_KV("genesisHash", statusMsg->genesisHash().abridged())
                        << LOG_KV("currentHash", statusMsg->hash().abridged());
@@ -903,11 +904,22 @@ void BlockSync::broadcastSyncStatus()
                        << LOG_KV("currentHash", statusMsg->hash().abridged());
     // Note: only send status to the observers/sealers, but the OUTSIDE_GROUP node maybe
     // observer/sealer before sync to the highest here can't use asyncSendBroadcastMessage
-    auto const& groupNodeList = m_config->groupNodeList();
-    for (auto const& nodeID : groupNodeList)
+
+    // Broadcast to all nodes if turn on allow_free_nodes_sync
+    if (m_allowFreeNode)
     {
-        m_config->frontService()->asyncSendMessageByNodeID(
-            ModuleID::BlockSync, nodeID, ref(*encodedData), 0, nullptr);
+        m_config->frontService()->asyncSendBroadcastMessage(
+            LIGHT_NODE | CONSENSUS_NODE | OBSERVER_NODE | FREE_NODE, ModuleID::BlockSync,
+            bcos::ref(*encodedData));
+    }
+    else
+    {
+        auto const& groupNodeList = m_config->groupNodeList();
+        for (auto const& nodeID : groupNodeList)
+        {
+            m_config->frontService()->asyncSendMessageByNodeID(
+                ModuleID::BlockSync, nodeID, ref(*encodedData), 0, nullptr);
+        }
     }
 }
 

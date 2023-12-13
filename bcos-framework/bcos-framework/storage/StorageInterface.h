@@ -47,6 +47,7 @@ public:
     static TableInfo::ConstPtr getSysTableInfo(std::string_view tableName);
 
     using Ptr = std::shared_ptr<StorageInterface>;
+    using Value = storage::Entry;
 
     virtual ~StorageInterface() = default;
 
@@ -74,14 +75,17 @@ public:
 
     virtual void asyncGetTableInfo(std::string_view tableName,
         std::function<void(Error::UniquePtr, TableInfo::ConstPtr)> callback);
-    virtual Error::Ptr setRows(std::string_view,
-        const std::variant<const gsl::span<std::string_view const>,
-            const gsl::span<std::string const>>&,
-        std::variant<gsl::span<std::string_view const>, gsl::span<std::string const>>)
+    virtual Error::Ptr setRows(std::string_view tableName,
+        RANGES::any_view<std::string_view,
+            RANGES::category::random_access | RANGES::category::sized>
+            keys,
+        RANGES::any_view<std::string_view,
+            RANGES::category::random_access | RANGES::category::sized>
+            values)
     {
         throw std::invalid_argument("unimplemented method");
         return nullptr;
-    };
+    }
     virtual Error::Ptr deleteRows(
         std::string_view, const std::variant<const gsl::span<std::string_view const>,
                               const gsl::span<std::string const>>&)
@@ -101,42 +105,6 @@ public:
         return result;
     };
 
-    auto coGetRow(std::string_view table, std::string_view key)
-    {
-        struct Awaitable
-        {
-            StorageInterface* m_self;
-            std::string_view m_table;
-            std::string_view m_key;
-            std::variant<std::monostate, std::optional<Entry>, std::exception_ptr> m_result;
-
-            constexpr static bool await_ready() noexcept { return false; }
-            void await_suspend(CO_STD::coroutine_handle<> handle)
-            {
-                m_self->asyncGetRow(m_table, m_key,
-                    [this, handle](Error::UniquePtr error, std::optional<Entry> entry) mutable {
-                        if (error)
-                        {
-                            m_result.emplace<std::exception_ptr>(std::make_exception_ptr(*error));
-                        }
-                        else
-                        {
-                            m_result.emplace<std::optional<Entry>>(std::move(entry));
-                        }
-                        handle.resume();
-                    });
-            }
-            std::optional<Entry> await_resume()
-            {
-                if (std::holds_alternative<std::exception_ptr>(m_result))
-                {
-                    std::rethrow_exception(std::get<std::exception_ptr>(m_result));
-                }
-                return std::move(std::get<std::optional<Entry>>(m_result));
-            }
-        };
-        return Awaitable{.m_self = this, .m_table = table, .m_key = key, .m_result = {}};
-    };
     virtual void stop(){};
 };
 

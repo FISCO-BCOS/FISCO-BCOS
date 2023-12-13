@@ -20,7 +20,7 @@
 #include "bcos-gateway/libnetwork/Common.h"
 #include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libp2p/P2PMessage.h"
-#include "bcos-gateway/libratelimit/TimeWindowRateLimiter.h"
+#include "bcos-utilities/ratelimiter/TimeWindowRateLimiter.h"
 #include "bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h"
 #include "bcos-utilities/BoostLogInitializer.h"
 #include "bcos-utilities/Common.h"
@@ -129,8 +129,8 @@ int main(int argc, const char** argv)
 
             std::cerr << "\t[Client] msg size:  " << msgSize << " ,QPS: " << QPS << std::endl;
 
-            ratelimiter::TimeWindowRateLimiter::Ptr timeWindowRateLimiter =
-                std::make_shared<ratelimiter::TimeWindowRateLimiter>(QPS, 1000, false);
+            bcos::ratelimiter::TimeWindowRateLimiter::Ptr timeWindowRateLimiter =
+                std::make_shared<bcos::ratelimiter::TimeWindowRateLimiter>(QPS, 1000, false);
 
             P2PInfos p2pInfos;
             do

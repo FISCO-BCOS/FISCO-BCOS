@@ -24,7 +24,7 @@ aux_source_directory(src/libledger/utilities SRCS)
 find_package(Boost REQUIRED serialization)
 
 add_library(${LEDGER_TARGET} ${SRCS})
-target_link_libraries(${LEDGER_TARGET} PUBLIC ${CODEC_TARGET} ${TABLE_TARGET} ${PROTOCOL_TARGET} bcos-concepts Boost::serialization)
+target_link_libraries(${LEDGER_TARGET} PUBLIC ${TOOL_TARGET} ${CODEC_TARGET} ${TABLE_TARGET} ${PROTOCOL_TARGET} bcos-concepts Boost::serialization)
 
 # test related
 if (TESTS)
@@ -34,7 +34,7 @@ if (TESTS)
 endif()
 
 # for code coverage
-if (COVERAGE)
-    include(Coverage)
-    config_coverage("ledger-coverage" "'/usr*' '${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts*' '${CMAKE_SOURCE_DIR}/test/mock**' '${CMAKE_SOURCE_DIR}/test/main**'")
-endif ()
+#if (COVERAGE)
+#    include(Coverage)
+#    config_coverage("ledger-coverage" "'/usr*' '${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts*' '${CMAKE_SOURCE_DIR}/test/mock**' '${CMAKE_SOURCE_DIR}/test/main**'")
+#endif ()

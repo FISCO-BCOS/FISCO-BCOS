@@ -23,6 +23,8 @@
 #include <gsl/span>
 #include <memory>
 
+using namespace std::string_view_literals;
+
 namespace bcostars
 {
 namespace test
@@ -68,6 +70,16 @@ inline std::vector<bcos::bytes> fakeSealerList(
     return sealerList;
 }
 
+BOOST_AUTO_TEST_CASE(strAndLexical)
+{
+    bcos::u256 num(1234567890);
+
+    auto str1 = boost::lexical_cast<std::string>(num);
+    auto str2 = num.backend().str({}, {});
+
+    BOOST_CHECK_EQUAL(str1, str2);
+}
+
 BOOST_AUTO_TEST_CASE(transaction)
 {
     std::string to("Target");
@@ -75,8 +87,9 @@ BOOST_AUTO_TEST_CASE(transaction)
     std::string nonce("800");
 
     bcostars::protocol::TransactionFactoryImpl factory(cryptoSuite);
-    auto tx = factory.createTransaction(0, to, input, nonce, 100, "testChain", "testGroup", 1000,
-        cryptoSuite->signatureImpl()->generateKeyPair());
+    auto keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
+    auto tx = factory.createTransaction(
+        0, to, input, nonce, 100, "testChain", "testGroup", 1000, *keyPair);
 
     tx->verify(*cryptoSuite->hashImpl(), *cryptoSuite->signatureImpl());
     BOOST_CHECK(!tx->sender().empty());
@@ -629,7 +642,7 @@ BOOST_AUTO_TEST_CASE(testExecutionMessage)
     executionMsg->setType((bcos::protocol::ExecutionMessage::Type)type);
     executionMsg->transactionHash();
 
-    auto txsHash = cryptoSuite->hash("###abc");
+    auto txsHash = cryptoSuite->hash("###abc"sv);
     executionMsg->setTransactionHash(txsHash);
     int64_t contextID = 10000;
     executionMsg->setContextID(contextID);

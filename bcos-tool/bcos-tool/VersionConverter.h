@@ -27,14 +27,21 @@
 
 namespace bcos::tool
 {
-inline uint32_t toVersionNumber(const std::string& _version)
+inline std::string fromVersionNumber(protocol::BlockVersion version)
 {
-    auto version = _version;
+    std::stringstream ss;
+    ss << version;
+    return ss.str();
+}
+
+inline uint32_t toVersionNumber(std::string_view _version)
+{
+    std::string version{_version};
     boost::to_lower(version);
     // 3.0.0-rc{x} version
     if (_version.starts_with(bcos::protocol::RC_VERSION_PREFIX))
     {
-        std::string versionNumber = _version.substr(bcos::protocol::RC_VERSION_PREFIX.length());
+        auto versionNumber = _version.substr(bcos::protocol::RC_VERSION_PREFIX.length());
         return boost::lexical_cast<uint32_t>(versionNumber);
     }
     std::vector<std::string> versionFields;
@@ -44,7 +51,7 @@ inline uint32_t toVersionNumber(const std::string& _version)
         BOOST_THROW_EXCEPTION(InvalidVersion() << errinfo_comment(
                                   "The version must be in format of MAJOR.MINOR.PATCH, "
                                   "and the PATCH version is optional, current version is " +
-                                  _version));
+                                  std::string(_version)));
     }
     try
     {
@@ -61,17 +68,17 @@ inline uint32_t toVersionNumber(const std::string& _version)
         if (majorVersion > bcos::protocol::MAX_MAJOR_VERSION ||
             majorVersion < bcos::protocol::MIN_MAJOR_VERSION)
         {
-            BOOST_THROW_EXCEPTION(
-                InvalidVersion() << errinfo_comment(
-                    "The major version must between " +
-                    std::to_string(bcos::protocol::MIN_MAJOR_VERSION) + " to " +
-                    std::to_string(bcos::protocol::MAX_MAJOR_VERSION) + ", version:" + _version));
+            BOOST_THROW_EXCEPTION(InvalidVersion() << errinfo_comment(
+                                      "The major version must between " +
+                                      std::to_string(bcos::protocol::MIN_MAJOR_VERSION) + " to " +
+                                      std::to_string(bcos::protocol::MAX_MAJOR_VERSION) +
+                                      ", version:" + std::string(_version)));
         }
         return (majorVersion << 24) + (minorVersion << 16) + (patchVersion << 8);
     }
     catch (const boost::bad_lexical_cast& e)
     {
-        BOOST_THROW_EXCEPTION(InvalidVersion() << errinfo_comment(_version));
+        BOOST_THROW_EXCEPTION(InvalidVersion() << errinfo_comment(std::string(_version)));
     }
 }
 }  // namespace bcos::tool

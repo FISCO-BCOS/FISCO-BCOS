@@ -8,6 +8,7 @@ log_start_block=
 log_end_block=
 start_block=0
 end_block=0
+time_elapsed_seconds=0
 tmp_log_dir=./.temp_log
 analysis_log_prefix=
 
@@ -45,12 +46,18 @@ prepare_tmp_log()
 {
     local log_file=$1
     mkdir -p ${tmp_log_dir}
-    local start_line=$(cat -n $log_file | grep -aiE "Generate proposal,index=${start_block}|Generating seal on,index=${start_block}" | head -n 1 | awk '{print $1}')
-    local end_line=$(cat -n $log_file | grep -a "Report.*committedIndex=${end_block}," | tail -n 1 | awk '{print $1}')
+    local start_line=$(cat -n $log_file | grep -aiE "addPrepareCache.*,reqIndex=${start_block}" | head -n 1)
+    # start_line=$(cat -n $log_file | grep -aiE "Generate proposal,index=${start_block}|Generating seal on,index=${start_block}" | head -n 1)
+    start_line_number=$(echo "${start_line}"| awk '{print $1}')
+    local start_block_timepoint=$(echo "${start_line}" | awk -F '|' '{print $2}'| awk -F '.' '{print $1}')
+    local end_line=$(cat -n $log_file | grep -a "Report.*committedIndex=${end_block}," | tail -n 1)
+    end_line_number=$(echo "${end_line}"| awk '{print $1}')
+    local end_block_timepoint=$(echo "${end_line}" | awk -F '|' '{print $2}'| awk -F '.' '{print $1}')
+    time_elapsed_seconds=$(echo $(date -d "${end_block_timepoint}" +%s)-$(date -d "${start_block_timepoint}" +%s) | bc)
     # prepare the log in request block number range
     analysis_log_prefix="${tmp_log_dir}/${start_block}_${end_block}"
-    sed -n "${start_line},${end_line}p" $log_file > "${analysis_log_prefix}.log"
-    # echo "prepare log from line ${start_line} to line ${end_line}"
+    sed -n "${start_line_number},${end_line_number}p" $log_file > "${analysis_log_prefix}.log"
+    echo "analysis log from line ${start_line_number} to line ${end_line_number}, from ${start_block_timepoint} to ${end_block_timepoint}, total time: ${time_elapsed_seconds}s"
 }
 
 clean_tmp_log()
@@ -75,13 +82,12 @@ count_index()
     grep -aE "CONSENSUS|BLOCK SYNC" ${log_file} > "${analysis_log_prefix}_executor_sync.log"
     local consensus_log_file="${analysis_log_prefix}_executor_sync.log"
 
-    local execute_block_list="$(cat ${consensus_log_file} | grep -iaE "asyncExecuteBlock success,sysBlock|BlockSync: applyBlock success")"
-    local execute_block_time_list="$(echo ${execute_block_list} | awk -F '=' '{print $9}' | awk -F ',' '{print $1}')"
+    local execute_block_time_list="$(cat ${consensus_log_file} | grep -iaE "asyncExecuteBlock success,sysBlock|BlockSync: applyBlock success" | awk -F '=' '{print $9}' | awk -F ',' '{print $1}')"
     local average_execute_block_time=$(echo "${execute_block_time_list}" | awk '{sum+=$1} END {print sum/NR}')
     local max_execute_block_time=$(echo "${execute_block_time_list}" | awk 'max<$1 || NR==1{ max=$1 } END {print max}')
     local min_execute_block_time=$(echo "${execute_block_time_list}" | awk 'min>$1 || NR==1{ min=$1 } END {print min}')
 
-    local execute_tx_time_list="$(echo ${execute_block_list} | awk -F '=' '{print $10}' | awk -F ',' '{print $1}')"
+    local execute_tx_time_list="$(cat ${consensus_log_file} | grep -iaE "asyncExecuteBlock success,sysBlock|BlockSync: applyBlock success" | awk -F '=' '{print $10}' | awk -F ',' '{print $1}')"
     local average_execute_tx_time=$(echo "${execute_tx_time_list}" | awk '{sum+=$1} END {print sum/NR}')
     local max_execute_tx_time=$(echo "${execute_tx_time_list}" | awk 'max<$1 || NR==1{ max=$1 } END {print max}')
     local min_execute_tx_time=$(echo "${execute_tx_time_list}" | awk 'min>$1 || NR==1{ min=$1 } END {print min}')
@@ -91,13 +97,12 @@ count_index()
     local max_sealed_queue_length=$(echo "${sealed_queue_length_list}" | awk 'max<$1 || NR==1{ max=$1 } END {print max}')
     local min_sealed_queue_length=$(echo "${sealed_queue_length_list}" | awk 'min>$1 || NR==1{ min=$1 } END {print min}')
 
-    local report_list="$(cat ${consensus_log_file} | grep -iaE "Report,sea")"
-    local txs_in_block_list=$(echo "${report_list}" | awk -F '=' '{print $3}' |awk -F ',' '{print $1}')
+    local txs_in_block_list=$(cat ${consensus_log_file} | grep -iaE "Report,sea" | awk -F '=' '{print $3}' |awk -F ',' '{print $1}')
     local total_txs=$(echo "${txs_in_block_list}" | awk '{sum+=$1} END {print sum}')
     local average_txs_in_block=$(echo "${txs_in_block_list}" | awk '{sum+=$1} END {print sum/NR}')
     local max_txs_in_block=$(echo "${txs_in_block_list}" | awk 'max<$1 || NR==1{ max=$1 } END {print max}')
     local min_txs_in_block=$(echo "${txs_in_block_list}" | awk 'min>$1 || NR==1{ min=$1 } END {print min}')
-    local latest_report=$(echo "${report_list}" | tail -n 1)
+    local latest_report=$(cat ${consensus_log_file} | grep -iaE "Report,sea" | tail -n 1)
     local latest_block=$(echo "${latest_report}"| awk -F '=' '{print $4}'|awk -F ',' '{print $1}')
     local latest_consensus=$(echo "${latest_report}"| awk -F '=' '{print $5}'|awk -F ',' '{print $1}')
     local view=$(echo "${latest_report}"| awk -F '=' '{print $7}'|awk -F ',' '{print $1}')
@@ -112,12 +117,11 @@ count_index()
     local max_hash_time=$(echo "${hash_time_list}" | awk 'max<$1 || NR==1{ max=$1 } END {print max}')
     local min_hash_time=$(echo "${hash_time_list}" | awk 'min>$1 || NR==1{ min=$1 } END {print min}')
 
-    local execute_request_list="$(cat ${executor_log} | grep -iaE "ExecuteBlock request.*waitT")"
-    local wait_time_list="$(echo ${execute_request_list} | awk -F '=' '{print $8}' | awk -F ',' '{print $1}')"
+    local wait_time_list="$(cat ${executor_log} | grep -iaE "ExecuteBlock request.*waitT" | awk -F '=' '{print $8}' | awk -F ',' '{print $1}')"
     local average_wait_time=$(echo "${wait_time_list}" | awk '{sum+=$1} END {print sum/NR}')
     local max_wait_time=$(echo "${wait_time_list}" | awk 'max<$1 || NR==1{ max=$1 } END {print max}')
     local min_wait_time=$(echo "${wait_time_list}" | awk 'min>$1 || NR==1{ min=$1 } END {print min}')
-    local latest_execute_request=$(echo "${execute_request_list}" | tail -n 1)
+    local latest_execute_request=$(cat ${executor_log} | grep -iaE "ExecuteBlock request.*waitT" | tail -n 1)
     local last_executed_block=$(echo "${latest_execute_request}" | awk -F ']' '{print $3}' | awk -F '-' '{print $2}')
     local latest_block_version=$(echo "${latest_execute_request}" | awk -F '=' '{print $7}' | awk -F ',' '{print $1}')
 
@@ -135,13 +139,12 @@ count_index()
     grep -a "STORAGE" ${log_file} > "${analysis_log_prefix}_storage.log"
     local storage_log_file="${analysis_log_prefix}_storage.log"
 
-    local prepare_log="$(cat ${storage_log_file} |grep -iaE "asyncPrepare.*finished")"
-    local prepare_encode_time_list="$(echo "${prepare_log}" | awk -F '=' '{print $6}' | awk -F ',' '{print $1}')"
+    local prepare_encode_time_list="$(cat ${storage_log_file} |grep -iaE "asyncPrepare.*finished" | awk -F '=' '{print $6}' | awk -F ',' '{print $1}')"
     local average_prepare_encode_time=$(echo "${prepare_encode_time_list}" | awk '{sum+=$1} END {print sum/NR}')
     local max_prepare_encode_time=$(echo "${prepare_encode_time_list}" | awk 'max<$1 || NR==1{ max=$1 } END {print max}')
     local min_prepare_encode_time=$(echo "${prepare_encode_time_list}" | awk 'min>$1 || NR==1{ min=$1 } END {print min}')
 
-    local prepare_time_list="$(echo "${prepare_log}" | awk -F '=' '{print $7}' | awk -F ',' '{print $1}')"
+    local prepare_time_list="$(cat ${storage_log_file} |grep -iaE "asyncPrepare.*finished" | awk -F '=' '{print $7}' | awk -F ',' '{print $1}')"
     local average_prepare_time=$(echo "${prepare_time_list}" | awk '{sum+=$1} END {print sum/NR}')
     local max_prepare_time=$(echo "${prepare_time_list}" | awk 'max<$1 || NR==1{ max=$1 } END {print max}')
     local min_prepare_time=$(echo "${prepare_time_list}" | awk 'min>$1 || NR==1{ min=$1 } END {print min}')
@@ -184,9 +187,10 @@ count_index()
     # tps connection sync
 
     local chain_info="consensus commited=${latest_block} consensus=${latest_consensus} view=${view} unsealdTxs=${unsealtxs} timeout=${consensus_timeout}\n"
-    chain_info="${chain_info}executor last=${last_executed_block} version=${latest_block_version} totalTxs=${total_txs}"
-    local average_block_time_used=$((average_execute_block_time+average_wait_time))
-    if [[ $average_block_time_used -gt 0 ]]; then
+    local average_block_time=$(echo "${time_elapsed_seconds}*1000/(${end_block}-${start_block})"|bc)
+    chain_info="${chain_info}executor last=${last_executed_block} version=${latest_block_version} totalTxs=${total_txs} timePerBlock=${average_block_time}ms\n"
+    local average_block_time_used=$(echo "${average_execute_block_time}+${average_wait_time}"|bc)
+    if [[ $(echo "${average_block_time_used} > 0"|bc) -eq 1 ]]; then
         local tps=$(echo "1000/($average_execute_block_time+$average_wait_time)*$average_txs_in_block" | bc)
         chain_info="${chain_info} tps=${tps}\n"
     else
@@ -232,10 +236,14 @@ main()
         end_block=$3
     fi
     get_block_range ${log_file}
-    start_block=$(max $start_block $log_start_block)
+    if [[ $start_block -gt $log_end_block ]]; then
+        start_block=$log_start_block
+    else
+        start_block=$(max $start_block $log_start_block)
+    fi
     if [ $end_block -le 0 ];then
         end_block=$log_end_block
-    elif [ $end_block -gt $log_end_block ];
+    elif [[ $end_block -gt $log_end_block || $end_block -lt $log_start_block ]];
     then
         end_block=$log_end_block
     fi

@@ -47,9 +47,10 @@ TxPoolInitializer::TxPoolInitializer(bcos::tool::NodeConfig::Ptr _nodeConfig,
 
     m_txpool = txpoolFactory->createTxPool(m_nodeConfig->notifyWorkerNum(),
         m_nodeConfig->verifierWorkerNum(), m_nodeConfig->txsExpirationTime());
-
-    if (m_nodeConfig->enableSendBlockStatusByTree())
+    m_txpool->setCheckBlockLimit(m_nodeConfig->checkBlockLimit());
+    if (m_nodeConfig->enableSendTxByTree())
     {
+        INITIALIZER_LOG(INFO) << LOG_DESC("enableSendTxByTree");
         auto treeRouter =
             std::make_shared<tool::TreeTopology>(m_protocolInitializer->keyPair()->publicKey());
         m_txpool->setTreeRouter(std::move(treeRouter));
@@ -68,7 +69,7 @@ void TxPoolInitializer::init(bcos::sealer::SealerInterface::Ptr _sealer)
             {
                 INITIALIZER_LOG(WARNING)
                     << LOG_DESC("call UnsealedTxsNotifier to the sealer exception")
-                    << LOG_KV("error", boost::diagnostic_information(e));
+                    << LOG_KV("message", boost::diagnostic_information(e));
             }
         });
     m_txpool->init();

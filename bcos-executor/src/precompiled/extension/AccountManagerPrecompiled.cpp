@@ -36,12 +36,13 @@ using namespace bcos::protocol;
 const char* const AM_METHOD_SET_ACCOUNT_STATUS = "setAccountStatus(address,uint8)";
 const char* const AM_METHOD_GET_ACCOUNT_STATUS = "getAccountStatus(address)";
 
-AccountManagerPrecompiled::AccountManagerPrecompiled() : Precompiled(GlobalHashImpl::g_hashImpl)
+AccountManagerPrecompiled::AccountManagerPrecompiled(crypto::Hash::Ptr hashImpl)
+  : Precompiled(hashImpl)
 {
     name2Selector[AM_METHOD_SET_ACCOUNT_STATUS] =
-        getFuncSelector(AM_METHOD_SET_ACCOUNT_STATUS, GlobalHashImpl::g_hashImpl);
+        getFuncSelector(AM_METHOD_SET_ACCOUNT_STATUS, hashImpl);
     name2Selector[AM_METHOD_GET_ACCOUNT_STATUS] =
-        getFuncSelector(AM_METHOD_GET_ACCOUNT_STATUS, GlobalHashImpl::g_hashImpl);
+        getFuncSelector(AM_METHOD_GET_ACCOUNT_STATUS, hashImpl);
 }
 
 std::shared_ptr<PrecompiledExecResult> AccountManagerPrecompiled::call(
@@ -101,10 +102,10 @@ void AccountManagerPrecompiled::createAccountWithStatus(
 
     if (setStatusRes->status != (int32_t)TransactionStatus::None)
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("AccountManagerPrecompiled")
-                               << LOG_DESC("set status failed")
-                               << LOG_KV("accountTableName", accountTableName)
-                               << LOG_KV("status", response->status);
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("AccountManagerPrecompiled")
+                              << LOG_DESC("set status failed")
+                              << LOG_KV("accountTableName", accountTableName)
+                              << LOG_KV("status", response->status);
         BOOST_THROW_EXCEPTION(PrecompiledError("Set account status failed."));
     }
     _callParameters->setExternalResult(std::move(setStatusRes));

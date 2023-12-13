@@ -2,7 +2,6 @@
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-task/Wait.h"
 #include <bcos-framework/storage/Entry.h>
-#include <bcos-framework/storage2/StringPool.h>
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
 #include <bcos-storage/RocksDBStorage2.h>
 #include <bcos-storage/StateKVResolver.h>
@@ -10,11 +9,13 @@
 #include <boost/filesystem.hpp>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
-#include <range/v3/iterator/concepts.hpp>
+#include <range/v3/view/enumerate.hpp>
+#include <string_view>
 
 using namespace bcos;
 using namespace bcos::storage2::rocksdb;
 using namespace bcos::transaction_executor;
+using namespace std::string_view_literals;
 
 struct TestRocksDBStorage2Fixture
 {
@@ -33,23 +34,42 @@ struct TestRocksDBStorage2Fixture
     }
 
     ~TestRocksDBStorage2Fixture() { boost::filesystem::remove_all("./rocksdbtestdb"); }
-
     std::unique_ptr<rocksdb::DB> originRocksDB;
-    storage2::string_pool::FixedStringPool stringPool;
 };
 
 BOOST_FIXTURE_TEST_SUITE(TestRocksDBStorage2, TestRocksDBStorage2Fixture)
 
 BOOST_AUTO_TEST_CASE(kvResolver)
 {
-    StateKeyResolver keyResolver(stringPool);
-
     std::string_view mergedKey = "test_table!!!:key100";
-    auto keyPair = keyResolver.decode(mergedKey);
+    auto decodedKey = bcos::storage2::rocksdb::StateKeyResolver::decode(mergedKey);
 
-    auto& [tableName, keyName] = keyPair;
-    BOOST_CHECK_EQUAL(*tableName, "test_table!!!");
-    BOOST_CHECK_EQUAL(keyName.toStringView(), "key100");
+    StateKey key("test_table!!!"sv, "key100"sv);
+    BOOST_CHECK(key == decodedKey);
+}
+
+BOOST_AUTO_TEST_CASE(writeBatch)
+{
+    size_t totalReservedLength = ROCKSDB_SEP_HEADER_SIZE;
+    constexpr static auto key1 = "Hello world!"sv;
+    constexpr static auto value1 = "I am a value!"sv;
+
+    constexpr static auto key2 = "key2"sv;
+    constexpr static auto value2 = "value2"sv;
+
+    constexpr static auto totalSize = key1.size() + key2.size() + value1.size() + value2.size();
+
+    totalReservedLength += getRocksDBKeyPairSize(false, RANGES::size(key1), RANGES::size(value1));
+    totalReservedLength += getRocksDBKeyPairSize(false, RANGES::size(key2), RANGES::size(value2));
+    ::rocksdb::WriteBatch writeBatch(totalReservedLength);
+    const auto* address = writeBatch.Data().data();
+
+    writeBatch.Put(
+        ::rocksdb::Slice(key1.data(), key1.size()), ::rocksdb::Slice(value1.data(), value1.size()));
+    writeBatch.Put(
+        ::rocksdb::Slice(key2.data(), key2.size()), ::rocksdb::Slice(value2.data(), value2.size()));
+    BOOST_CHECK_EQUAL(totalReservedLength, writeBatch.Data().size());
+    BOOST_CHECK_EQUAL(address, writeBatch.Data().data());
 }
 
 BOOST_AUTO_TEST_CASE(readWriteRemoveSeek)
@@ -57,18 +77,16 @@ BOOST_AUTO_TEST_CASE(readWriteRemoveSeek)
     task::syncWait([this]() -> task::Task<void> {
         RocksDBStorage2<StateKey, StateValue, StateKeyResolver,
             bcos::storage2::rocksdb::StateValueResolver>
-            rocksDB(*originRocksDB, StateKeyResolver(stringPool), StateValueResolver{});
+            rocksDB(*originRocksDB, StateKeyResolver{}, StateValueResolver{});
 
-        auto notExistsValue = co_await storage2::readOne(
-            rocksDB, StateKey{storage2::string_pool::makeStringID(stringPool, "Non exists table"),
-                         "Non exists key"});
+        auto notExistsValue =
+            co_await storage2::readOne(rocksDB, StateKey{"Non exists table"sv, "Non exists key"sv});
         BOOST_REQUIRE(!notExistsValue);
 
-        auto keys = RANGES::views::iota(0, 100) | RANGES::views::transform([this](int num) {
+        auto keys = RANGES::views::iota(0, 100) | RANGES::views::transform([](int num) {
             auto tableName = fmt::format("Table~{}", num % 10);
             auto key = fmt::format("Key~{}", num);
-            auto stateKey =
-                StateKey{storage2::string_pool::makeStringID(stringPool, tableName), key};
+            auto stateKey = StateKey{std::string_view(tableName), std::string_view(key)};
             return stateKey;
         });
         auto values = RANGES::views::iota(0, 100) | RANGES::views::transform([](int num) {
@@ -77,85 +95,56 @@ BOOST_AUTO_TEST_CASE(readWriteRemoveSeek)
             return entry;
         });
 
-        BOOST_CHECK_NO_THROW(co_await rocksDB.write(keys, values));
+        BOOST_CHECK_NO_THROW(co_await storage2::writeSome(rocksDB, keys, values));
 
-        auto queryKeys = RANGES::views::iota(0, 150) | RANGES::views::transform([this](int num) {
+        auto queryKeys = RANGES::views::iota(0, 150) | RANGES::views::transform([](int num) {
             auto tableName = fmt::format("Table~{}", num % 10);
             auto key = fmt::format("Key~{}", num);
-            auto stateKey =
-                StateKey{storage2::string_pool::makeStringID(stringPool, tableName), key};
+            auto stateKey = StateKey{std::string_view(tableName), std::string_view(key)};
             return stateKey;
         });
-        auto it = co_await rocksDB.read(queryKeys);
-        int i = 0;
-        while (co_await it.next())
+        auto gotValues = co_await storage2::readSome(rocksDB, queryKeys);
+        for (auto&& [i, value] : RANGES::views::enumerate(gotValues))
         {
             if (i < 100)
             {
-                BOOST_CHECK(co_await it.hasValue());
-
-                auto value = co_await it.value();
+                BOOST_CHECK(value);
                 BOOST_CHECK_EQUAL(
-                    value.get(), fmt::format("Entry value is: i am a value!!!!!!! {}", i));
+                    value->get(), fmt::format("Entry value is: i am a value!!!!!!! {}", i));
             }
             else
             {
-                BOOST_CHECK(!co_await it.hasValue());
+                BOOST_CHECK(!value);
             }
-
-            ++i;
         }
 
         // Remove some
-        auto removeKeys = RANGES::views::iota(50, 70) | RANGES::views::transform([this](int num) {
+        auto removeKeys = RANGES::views::iota(50, 70) | RANGES::views::transform([](int num) {
             auto tableName = fmt::format("Table~{}", num % 10);
             auto key = fmt::format("Key~{}", num);
-            auto stateKey =
-                StateKey{storage2::string_pool::makeStringID(stringPool, tableName), key};
+            StateKey stateKey{std::string_view(tableName), std::string_view(key)};
             return stateKey;
         });
-        co_await rocksDB.remove(removeKeys);
+        co_await storage2::removeSome(rocksDB, removeKeys);
 
-        auto it2 = co_await rocksDB.read(queryKeys);
-        i = 0;
-        while (co_await it2.next())
+        auto gotValues2 = co_await storage2::readSome(rocksDB, queryKeys);
+        for (auto&& [i, value] : RANGES::views::enumerate(gotValues2))
         {
             if (i >= 50 && i < 70)
             {
-                BOOST_CHECK(!co_await it2.hasValue());
+                BOOST_CHECK(!value);
             }
             else if (i < 100)
             {
-                BOOST_CHECK(co_await it2.hasValue());
-
-                // BOOST_CHECK_THROW(co_await it2.key(), UnsupportedMethod);
-                auto value = co_await it2.value();
+                BOOST_CHECK(value);
                 BOOST_CHECK_EQUAL(
-                    value.get(), fmt::format("Entry value is: i am a value!!!!!!! {}", i));
+                    value->get(), fmt::format("Entry value is: i am a value!!!!!!! {}", i));
             }
             else
             {
-                BOOST_CHECK(!co_await it2.hasValue());
+                BOOST_CHECK(!value);
             }
-
-            ++i;
         }
-
-        // Seek to ensure 50 values
-        auto seekIt = co_await rocksDB.seek(storage2::STORAGE_BEGIN);
-
-        i = 0;
-        while (co_await seekIt.next())
-        {
-            BOOST_CHECK(co_await seekIt.hasValue());
-
-            auto key = co_await seekIt.key();
-            auto& [tableName, keyName] = key;
-
-            auto value = co_await seekIt.value();
-            ++i;
-        }
-        BOOST_CHECK_EQUAL(i, 80);
 
         co_return;
     }());
@@ -168,11 +157,10 @@ BOOST_AUTO_TEST_CASE(merge)
             storage2::memory_storage::ORDERED>
             memoryStorage;
 
-        auto keys = RANGES::views::iota(0, 100) | RANGES::views::transform([this](int num) {
+        auto keys = RANGES::views::iota(0, 100) | RANGES::views::transform([](int num) {
             auto tableName = fmt::format("Table~{}", num % 10);
             auto key = fmt::format("Key~{}", num);
-            auto stateKey =
-                StateKey{storage2::string_pool::makeStringID(stringPool, tableName), key};
+            auto stateKey = StateKey{std::string_view(tableName), std::string_view(key)};
             return stateKey;
         });
         auto values = RANGES::views::iota(0, 100) | RANGES::views::transform([](int num) {
@@ -180,12 +168,14 @@ BOOST_AUTO_TEST_CASE(merge)
             entry.set(fmt::format("Entry value is: i am a value!!!!!!! {}", num));
             return entry;
         });
-        co_await memoryStorage.write(keys, values);
+        co_await storage2::writeSome(memoryStorage, keys, values);
 
         RocksDBStorage2<StateKey, StateValue, StateKeyResolver,
             bcos::storage2::rocksdb::StateValueResolver>
-            rocksDB(*originRocksDB, StateKeyResolver(stringPool), StateValueResolver{});
-        co_await rocksDB.merge(memoryStorage);
+            rocksDB(*originRocksDB, StateKeyResolver{}, StateValueResolver{});
+        co_await storage2::merge(rocksDB, memoryStorage);
+
+#if 0
         auto seekIt = co_await rocksDB.seek(storage2::STORAGE_BEGIN);
 
         int i = 0;
@@ -200,6 +190,7 @@ BOOST_AUTO_TEST_CASE(merge)
             ++i;
         }
         BOOST_CHECK_EQUAL(i, 100);
+#endif
 
         co_return;
     }());

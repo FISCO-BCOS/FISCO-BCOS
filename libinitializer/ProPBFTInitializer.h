@@ -23,9 +23,9 @@
 #include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-framework/rpc/RPCInterface.h>
+#include <bcos-tool/NodeTimeMaintenance.h>
 #include <bcos-utilities/Timer.h>
 #include <fisco-bcos-tars-service/Common/TarsUtils.h>
-#include <bcos-tool/NodeTimeMaintenance.h>
 
 namespace bcos
 {
@@ -63,6 +63,7 @@ private:
 
     bcos::gateway::GatewayInterface::Ptr m_gateway;
     bcos::rpc::RPCInterface::Ptr m_rpc;
+    bool m_running = false;
 };
 }  // namespace initializer
 }  // namespace bcos

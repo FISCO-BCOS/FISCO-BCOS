@@ -20,25 +20,21 @@
 
 #pragma once
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
+#include <bcos-framework/multigroup/ChainNodeInfo.h>
 #include <bcos-protocol/TransactionStatus.h>
 namespace bcos::rpc
 {
 class CallValidator
 {
 public:
-    explicit CallValidator(bcos::crypto::CryptoSuite::Ptr _cryptoSuite)
-      : m_cryptoSuite(std::move(_cryptoSuite))
-    {}
+    CallValidator() = default;
     ~CallValidator() = default;
     CallValidator(const CallValidator&) = delete;
     CallValidator(CallValidator&&) = default;
     CallValidator& operator=(const CallValidator&) = delete;
     CallValidator& operator=(CallValidator&&) = default;
 
-    std::pair<bool, bytes> verify(
-        std::string_view _to, std::string_view _data, std::string_view _sign);
-
-private:
-    bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
+    static std::pair<bool, bytes> verify(std::string_view _to, std::string_view _data,
+        std::string_view _sign, group::NodeCryptoType);
 };
 }  // namespace bcos::rpc

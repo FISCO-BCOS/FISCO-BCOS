@@ -1,3 +1,53 @@
+name: Others CI check
+on:
+  push:
+    paths-ignore:
+      - "docs/**"
+      - "Changelog.md"
+      - "README.md"
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "Changelog.md"
+      - "README.md"
+  release:
+    types: [published, push]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build_cppsdk_with_windows:
+    name: build_cppsdk_with_windows
+    runs-on: ${{ matrix.os }}
+    env:
+      VCPKG_ROOT: c:/vcpkg
+    strategy:
+      matrix:
+        os: [ windows-2019 ]
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 5
+      - uses: actions/cache@v3
+        id: cache
+        with:
+          path: |
+            deps/
+            c:/vcpkg
+            ccache
+          key: vcpkg-msvc-v3-notest-${{ hashFiles('.github/workflows/workflow.yml') }}
+          restore-keys: |
+            vcpkg-msvc-v3-notest-${{ hashFiles('.github/workflows/workflow.yml') }}
+            vcpkg-msvc-v3-notest-
+      - name: update vcpkg
+        run: |
+          cd ${{ env.VCPKG_ROOT }} && git fetch --all && git checkout master && git pull
+          cd -
+      - name: Add MSbuild to PATH
+        uses: microsoft/setup-msbuild@v1.1
+      - name: configure and build
+        run: mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DALLOCATOR=default -DTESTS=OFF -DFULLNODE=OFF -DWITH_LIGHTNODE=OFF -DWITH_TARS_SERVICES=OFF -DWITH_CPPSDK=ON -DWITH_WASM=OFF -DWITH_TIKV=OFF -DVCPKG_TARGET_TRIPLET=x64-windows-static -DCMAKE_TOOLCHAIN_FILE=c:/vcpkg/scripts/buildsystems/vcpkg.cmake ../ && cmake --build . --parallel 3
 #name: Others CI check
 #on:
 #  push:
@@ -73,7 +123,7 @@
 #        if: runner.os != 'Windows'
 #        run: |
 #          cd build && CTEST_OUTPUT_ON_FAILURE=TRUE ctest
-#          make cov
+#          make coverage
 #      - name: Generate covreage report
 #        if: runner.os == 'Linux'
 #        uses: codecov/codecov-action@v2

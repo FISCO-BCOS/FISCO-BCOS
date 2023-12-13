@@ -22,7 +22,6 @@
 #pragma once
 
 #include "../impl/TarsHashable.h"
-
 #include "bcos-concepts/ByteBuffer.h"
 #include "bcos-concepts/Hash.h"
 #include "bcos-tars-protocol/tars/Transaction.h"
@@ -43,6 +42,10 @@ public:
       : m_inner(std::move(inner))
     {}
     ~TransactionImpl() override = default;
+    TransactionImpl& operator=(const TransactionImpl& _tx) = delete;
+    TransactionImpl(const TransactionImpl& _tx) = delete;
+    TransactionImpl& operator=(TransactionImpl&& _tx) = delete;
+    TransactionImpl(TransactionImpl&& _tx) = delete;
 
     friend class TransactionFactoryImpl;
 
@@ -53,7 +56,8 @@ public:
 
     bcos::crypto::HashType hash() const override;
 
-    void calculateHash(bcos::crypto::hasher::Hasher auto&& hasher)
+    template <class Hasher>
+    void calculateHash(Hasher&& hasher)
     {
         bcos::concepts::hash::calculate(
             std::forward<decltype(hasher)>(hasher), *m_inner(), m_inner()->dataHash);
@@ -65,9 +69,16 @@ public:
     int64_t blockLimit() const override;
     const std::string& nonce() const override;
     // only for test
-    void setNonce(std::string _n) override;
+    void setNonce(std::string nonce) override;
     std::string_view to() const override;
     std::string_view abi() const override;
+
+    std::string_view value() const override;
+    std::string_view gasPrice() const override;
+    int64_t gasLimit() const override;
+    std::string_view maxFeePerGas() const override;
+    std::string_view maxPriorityFeePerGas() const override;
+
     bcos::bytesConstRef input() const override;
     int64_t importTime() const override;
     void setImportTime(int64_t _importTime) override;

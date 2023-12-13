@@ -361,7 +361,8 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
     KeyPage_LOG(INFO) << LOG_DESC("parallelTraverse") << LOG_KV("size", m_size);
 }
 
-auto KeyPageStorage::hash(const bcos::crypto::Hash::Ptr& hashImpl) const -> crypto::HashType
+auto KeyPageStorage::hash(const bcos::crypto::Hash::Ptr& hashImpl, bool /*useHashV310*/) const
+    -> crypto::HashType
 {
     bcos::crypto::HashType pagesHash(0);
     bcos::crypto::HashType entriesHash(0);
@@ -620,7 +621,7 @@ auto KeyPageStorage::getData(std::string_view tableView, std::string_view key, b
             {
                 KeyPage_LOG(ERROR)
                     << LOG_DESC("getData error") << LOG_KV("table", tableView)
-                    << LOG_KV("key", toHex(key)) << LOG_KV("error", error->errorMessage());
+                    << LOG_KV("key", toHex(key)) << LOG_KV("message", error->errorMessage());
                 return std::make_tuple(std::move(error), std::nullopt);
             }
             if (c_fileLogLevel <= TRACE)

@@ -23,16 +23,24 @@
 
 #include "bcos-ledger/src/libledger/Ledger.h"
 #include "../../mock/MockKeyFactor.h"
+#include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include "bcos-crypto/merkle/Merkle.h"
+#include "bcos-framework/ledger/GenesisConfig.h"
+#include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/protocol/Transaction.h"
+#include "bcos-framework/storage/LegacyStorageMethods.h"
+#include "bcos-framework/transaction-executor/StateKey.h"
+#include "bcos-framework/transaction-executor/TransactionExecutor.h"
+#include "bcos-ledger/src/libledger/LedgerMethods.h"
 #include "bcos-ledger/src/libledger/utilities/Common.h"
+#include "bcos-task/Wait.h"
 #include "bcos-tool/BfsFileFactory.h"
 #include "bcos-tool/ConsensusNode.h"
 #include "bcos-tool/NodeConfig.h"
-#include "common/FakeBlock.h"
+#include "bcos-tool/VersionConverter.h"
 #include <bcos-codec/scale/Scale.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
@@ -41,9 +49,11 @@
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-framework/storage/Table.h>
+#include <bcos-framework/testutils/faker/FakeBlock.h>
 #include <bcos-table/src/StateStorage.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
+#include <boost/algorithm/hex.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
 #include <memory>
@@ -54,6 +64,7 @@ using namespace bcos::protocol;
 using namespace bcos::storage;
 using namespace bcos::crypto;
 using namespace bcos::tool;
+using namespace std::string_literals;
 
 namespace std
 {
@@ -84,31 +95,31 @@ public:
     MockStorage(std::shared_ptr<StorageInterface> prev)
       : storage::StateStorageInterface(prev), StateStorage(prev)
     {}
-    bcos::Error::Ptr setRows(std::string_view table,
-        const std::variant<const gsl::span<std::string_view const>,
-            const gsl::span<std::string const>>& keys,
-        std::variant<gsl::span<std::string_view const>, gsl::span<std::string const>> values)
+    bcos::Error::Ptr setRows(std::string_view tableName,
+        RANGES::any_view<std::string_view,
+            RANGES::category::random_access | RANGES::category::sized>
+            keys,
+        RANGES::any_view<std::string_view,
+            RANGES::category::random_access | RANGES::category::sized>
+            values) override
     {
-        std::visit(
-            [&](auto&& keys, auto&& values) {
-                for (size_t i = 0; i < keys.size(); ++i)
-                {
-                    Entry e;
-                    e.set(std::string(values[i]));
-                    asyncSetRow(table, keys[i], e, [](Error::UniquePtr) {});
-                }
-            },
-            keys, values);
+        for (size_t i = 0; i < keys.size(); ++i)
+        {
+            Entry e;
+            e.set(std::string(values[i]));
+            asyncSetRow(tableName, keys[i], e, [](Error::UniquePtr) {});
+        }
         return nullptr;
     }
 };
+
 class LedgerFixture : public TestPromptFixture
 {
 public:
     LedgerFixture()
       : TestPromptFixture(), merkleUtility(crypto::hasher::openssl::OpenSSL_Keccak256_Hasher{})
     {
-        m_blockFactory = createBlockFactory(createCryptoSuite());
+        m_blockFactory = createBlockFactory(createNormalCryptoSuite());
         auto keyFactor = std::make_shared<MockKeyFactory>();
         m_blockFactory->cryptoSuite()->setKeyFactory(keyFactor);
 
@@ -169,10 +180,14 @@ public:
         m_param->setObserverNodeList(observerNodeList);
 
         LEDGER_LOG(TRACE) << "build genesis for first time";
-        auto result = m_ledger->buildGenesisBlock(m_param, 3000000000, "", version);
+        GenesisConfig genesisConfig;
+        genesisConfig.m_txGasLimit = 3000000000;
+        genesisConfig.m_compatibilityVersion = tool::toVersionNumber(version);
+
+        auto result = m_ledger->buildGenesisBlock(genesisConfig, *m_param);
         BOOST_CHECK(result);
         LEDGER_LOG(TRACE) << "build genesis for second time";
-        auto result2 = m_ledger->buildGenesisBlock(m_param, 3000000000, "", version);
+        auto result2 = m_ledger->buildGenesisBlock(genesisConfig, *m_param);
         BOOST_CHECK(result2);
     }
 
@@ -183,11 +198,25 @@ public:
         m_param->setHash(HashType(""));
         m_param->setBlockTxCountLimit(0);
 
-        auto result1 = m_ledger->buildGenesisBlock(m_param, 3000000000, "", bcos::protocol::V3_1_VERSION_STR);
+        GenesisConfig genesisConfig1;
+        genesisConfig1.m_txGasLimit = 3000000000;
+        genesisConfig1.m_compatibilityVersion =
+            tool::toVersionNumber(bcos::protocol::V3_1_VERSION_STR);
+        auto result1 = m_ledger->buildGenesisBlock(genesisConfig1, *m_param);
         BOOST_CHECK(result1);
-        auto result2 = m_ledger->buildGenesisBlock(m_param, 30, "", bcos::protocol::V3_1_VERSION_STR);
+
+        GenesisConfig genesisConfig2;
+        genesisConfig2.m_txGasLimit = 30;
+        genesisConfig2.m_compatibilityVersion =
+            tool::toVersionNumber(bcos::protocol::V3_1_VERSION_STR);
+        auto result2 = m_ledger->buildGenesisBlock(genesisConfig2, *m_param);
         BOOST_CHECK(!result2);
-        auto result3 = m_ledger->buildGenesisBlock(m_param, 3000000000, "", bcos::protocol::V3_1_VERSION_STR);
+
+        GenesisConfig genesisConfig3;
+        genesisConfig3.m_txGasLimit = 3000000000;
+        genesisConfig3.m_compatibilityVersion =
+            tool::toVersionNumber(bcos::protocol::V3_1_VERSION_STR);
+        auto result3 = m_ledger->buildGenesisBlock(genesisConfig3, *m_param);
         BOOST_CHECK(result3);
     }
 
@@ -205,7 +234,7 @@ public:
         for (int i = 0; i < _number; ++i)
         {
             auto block = m_fakeBlocks->at(i);
-            auto transactions = std::make_shared<Transactions>();
+            auto transactions = std::make_shared<ConstTransactions>();
             for (size_t j = 0; j < block->transactionsSize(); ++j)
             {
                 auto tx = block->transaction(j);
@@ -236,7 +265,7 @@ public:
             auto txSize = m_fakeBlocks->at(i)->transactionsSize();
             auto txDataList = std::make_shared<std::vector<bytesConstPtr>>();
             auto txHashList = std::make_shared<protocol::HashList>();
-            auto txList = std::make_shared<std::vector<Transaction::Ptr>>();
+            auto txList = std::make_shared<std::vector<Transaction::ConstPtr>>();
             for (size_t j = 0; j < txSize; ++j)
             {
                 bcos::bytes txData;
@@ -310,7 +339,7 @@ public:
     std::shared_ptr<Ledger> m_ledger = nullptr;
     LedgerConfig::Ptr m_param;
     BlocksPtr m_fakeBlocks;
-    std::vector<TransactionsPtr> m_fakeTransactions;
+    std::vector<ConstTransactionsPtr> m_fakeTransactions;
     bcos::crypto::merkle::Merkle<crypto::hasher::openssl::OpenSSL_Keccak256_Hasher> merkleUtility;
 };
 
@@ -1263,7 +1292,7 @@ BOOST_AUTO_TEST_CASE(testSyncBlock)
         0, "to", input, std::to_string(200), 300, "chainid", "groupid", 800, keyPair);
 
     block->appendTransaction(tx);
-    auto blockTxs = std::make_shared<Transactions>();
+    auto blockTxs = std::make_shared<ConstTransactions>();
     blockTxs->push_back(tx);
     auto txs = std::make_shared<std::vector<bytesConstPtr>>();
     auto hashList = std::make_shared<crypto::HashList>();
@@ -1285,5 +1314,127 @@ BOOST_AUTO_TEST_CASE(testSyncBlock)
             BOOST_CHECK_EQUAL(block->transaction(0)->hash().hex(), tx->hash().hex());
         });
 }
+
+BOOST_AUTO_TEST_CASE(getLedgerConfig)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        initFixture();
+
+        using KeyType = transaction_executor::StateKey;
+        Entry value;
+        SystemConfigEntry config;
+
+        config = {"12", 0};
+        value.setObject(config);
+        co_await storage2::writeOne(
+            *m_storage, KeyType{SYS_CONFIG, SYSTEM_KEY_TX_COUNT_LIMIT}, value);
+
+        config = {"100", 0};
+        value.setObject(config);
+        co_await storage2::writeOne(
+            *m_storage, KeyType{SYS_CONFIG, SYSTEM_KEY_CONSENSUS_LEADER_PERIOD}, value);
+
+        config = {"200", 0};
+        value.setObject(config);
+        co_await storage2::writeOne(
+            *m_storage, KeyType{SYS_CONFIG, SYSTEM_KEY_TX_GAS_LIMIT}, value);
+
+        config = {"3.8.1", 0};
+        value.setObject(config);
+        co_await storage2::writeOne(
+            *m_storage, KeyType{SYS_CONFIG, SYSTEM_KEY_COMPATIBILITY_VERSION}, value);
+
+        value.set("10086");
+        co_await storage2::writeOne(
+            *m_storage, KeyType{SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER}, value);
+
+        auto randomHash = crypto::HashType::generateRandomFixedBytes();
+        value.set(randomHash.asBytes());
+        co_await storage2::writeOne(*m_storage, KeyType{SYS_NUMBER_2_HASH, "10086"}, value);
+
+        config = {"1", 0};
+        value.setObject(config);
+        co_await storage2::writeOne(
+            *m_storage, KeyType{SYS_CONFIG, SYSTEM_KEY_RPBFT_SWITCH}, value);
+
+        config = {"12345", 0};
+        value.setObject(config);
+        co_await storage2::writeOne(
+            *m_storage, KeyType{SYS_CONFIG, SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM}, value);
+
+        auto ledgerConfig = co_await ledger::getLedgerConfig(*m_ledger);
+        BOOST_CHECK_EQUAL(ledgerConfig->blockTxCountLimit(), 12);
+        BOOST_CHECK_EQUAL(ledgerConfig->leaderSwitchPeriod(), 100);
+        BOOST_CHECK_EQUAL(std::get<0>(ledgerConfig->gasLimit()), 200);
+        BOOST_CHECK_EQUAL(ledgerConfig->compatibilityVersion(), tool::toVersionNumber("3.8.1"));
+        BOOST_CHECK_EQUAL(ledgerConfig->blockNumber(), 10086);
+        BOOST_CHECK_EQUAL(ledgerConfig->hash(), randomHash);
+        BOOST_CHECK_EQUAL(ledgerConfig->consensusType(), RPBFT_CONSENSUS_TYPE);
+
+        BOOST_CHECK_EQUAL(std::get<0>(ledgerConfig->epochSealerNum()), 12345);
+        BOOST_CHECK_EQUAL(std::get<0>(ledgerConfig->epochBlockNum()), 1000);
+        BOOST_CHECK_EQUAL(ledgerConfig->notifyRotateFlagInfo(), 0);
+        co_return;
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(genesisBlockWithAllocs)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        auto hashImpl = std::make_shared<Keccak256>();
+        auto memoryStorage = std::make_shared<StateStorage>(nullptr);
+        auto storage = std::make_shared<MockStorage>(memoryStorage);
+        auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+
+        LedgerConfig param;
+        param.setBlockNumber(0);
+        param.setHash(HashType(""));
+        param.setBlockTxCountLimit(0);
+
+        GenesisConfig genesisConfig;
+        genesisConfig.m_txGasLimit = 3000000000;
+        genesisConfig.m_compatibilityVersion =
+            tool::toVersionNumber(bcos::protocol::V3_6_VERSION_STR);
+        auto code = "I am a solidity code!"s;
+        std::string hexCode;
+        boost::algorithm::hex_lower(code, std::back_inserter(hexCode));
+
+        genesisConfig.m_allocs = RANGES::views::iota(0, 10) |
+                                 RANGES::views::transform([&](int index) {
+                                     Alloc alloc{.address = fmt::format("{:0>40}", index),
+                                         .balance = bcos::u256(index * 10),
+                                         .code = hexCode,
+                                         .storage = {}};
+
+                                     if (index % 2 == 0)
+                                     {
+                                         alloc.storage.emplace_back(fmt::format("{:0>64}", index),
+                                             fmt::format("{:0>64}", index * 2));
+                                     }
+                                     return alloc;
+                                 }) |
+                                 RANGES::to<std::vector>();
+
+        co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param);
+
+        for (auto i : RANGES::views::iota(0, 10))
+        {
+            auto tableName = fmt::format("{}{:0>40}", SYS_DIRECTORY::USER_APPS, i);
+            auto codeHashEntry = co_await storage2::readOne(*storage,
+                transaction_executor::StateKeyView(tableName, ACCOUNT_TABLE_FIELDS::CODE_HASH));
+
+            auto codeEntry = co_await storage2::readOne(*storage,
+                transaction_executor::StateKeyView(ledger::SYS_CODE_BINARY, codeHashEntry->get()));
+            BOOST_CHECK_EQUAL(codeEntry->get(), code);
+            auto codeView = codeEntry->get();
+            auto codeHash = hashImpl->hash(
+                bcos::bytesConstRef((const uint8_t*)codeView.data(), codeView.size()));
+            auto codeHashBytes = codeHash.asBytes();
+            BOOST_CHECK_EQUAL(codeHashEntry->get(),
+                std::string_view((const char*)codeHashBytes.data(), codeHashBytes.size()));
+        }
+    }());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

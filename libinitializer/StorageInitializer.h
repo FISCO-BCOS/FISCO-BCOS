@@ -23,8 +23,8 @@
  * @date 2021-10-14
  */
 #pragma once
-#include "bcos-storage/bcos-storage/RocksDBStorage.h"
-#include "bcos-storage/bcos-storage/TiKVStorage.h"
+#include "bcos-storage/RocksDBStorage.h"
+#include "bcos-storage/TiKVStorage.h"
 #include "boost/filesystem.hpp"
 #include "rocksdb/convenience.h"
 #include "rocksdb/filter_policy.h"
@@ -42,6 +42,7 @@ struct RocksDBOption
     size_t writeBufferSize = 64 << 20;  // 64MB
     int minWriteBufferNumberToMerge = 1;
     size_t blockCacheSize = 128 << 20;  // 128MB
+    bool enable_blob_files = false;
 };
 
 class StorageInitializer
@@ -54,9 +55,10 @@ public:
         rocksdb::DB* db = nullptr;
         rocksdb::Options options;
         // Note: This option will increase much memory
-        // options.IncreaseParallelism();
+        // options.IncreaseParallelism(std::thread::hardware_concurrency());
         // Note: This option will increase much memory
         // options.OptimizeLevelStyleCompaction();
+
         // create the DB if it's not already present
         options.create_if_missing = true;
         // to mitigate write stalls
@@ -64,6 +66,10 @@ public:
         options.max_write_buffer_number = rocksDBOption.maxWriteBufferNumber;
         // FIXME: enable blob support when space amplification is acceptable
         // options.enable_blob_files = keyPageSize > 1 ? true : false;
+        options.enable_blob_files = rocksDBOption.enable_blob_files;
+        options.bytes_per_sync = 1 << 20;  // 1MB
+        // options.level_compaction_dynamic_level_bytes = true;
+        // options.compaction_pri = rocksdb::kMinOverlappingRatio;
         options.compression = rocksdb::kZSTD;
         options.bottommost_compression = rocksdb::kZSTD;  // last level compression
         options.max_open_files = 256;
@@ -79,14 +85,15 @@ public:
             options.statistics = rocksdb::CreateDBStatistics();
         }
         // block cache 128MB
-        std::shared_ptr<rocksdb::Cache> cache =
-            rocksdb::NewLRUCache(rocksDBOption.blockCacheSize);
+        std::shared_ptr<rocksdb::Cache> cache = rocksdb::NewLRUCache(rocksDBOption.blockCacheSize);
         rocksdb::BlockBasedTableOptions table_options;
         table_options.block_cache = cache;
         // use bloom filter to optimize point lookup, i.e. get
         table_options.filter_policy.reset(rocksdb::NewBloomFilterPolicy(10, false));
         table_options.optimize_filters_for_memory = true;
-        // table_options.cache_index_and_filter_blocks = true; // this will increase memory and lower performance
+        table_options.block_size = 64 * 1024;
+        // table_options.cache_index_and_filter_blocks = true; // this will increase memory and
+        // lower performance
         options.table_factory.reset(rocksdb::NewBlockBasedTableFactory(table_options));
 
         if (boost::filesystem::space(_path).available < 1 << 30)
@@ -99,8 +106,9 @@ public:
         rocksdb::Status status = rocksdb::DB::Open(options, _path, &db);
         if (!status.ok())
         {
-            BCOS_LOG(INFO) << LOG_DESC("open rocksDB failed") << LOG_KV("error", status.ToString());
-            throw std::runtime_error("open rocksDB failed, err:" + status.ToString());
+            BCOS_LOG(INFO) << LOG_DESC("open rocksDB failed")
+                           << LOG_KV("message", status.ToString());
+            throw std::runtime_error("open rocksDB failed, msg:" + status.ToString());
         }
         return std::unique_ptr<rocksdb::DB, std::function<void(rocksdb::DB*)>>(
             db, [](rocksdb::DB* db) {

@@ -22,9 +22,7 @@
 #include <bcos-crypto/interfaces/crypto/Signature.h>
 #include <bcos-crypto/signature/key/KeyPair.h>
 
-namespace bcos
-{
-namespace crypto
+namespace bcos::crypto
 {
 const int SECP256K1_PUBLIC_LEN = 64;
 const int SECP256K1_PRIVATE_LEN = 32;
@@ -45,5 +43,4 @@ public:
     }
     virtual PublicPtr priToPub(SecretPtr _secret) { return secp256k1PriToPub(_secret); }
 };
-}  // namespace crypto
-}  // namespace bcos
+}  // namespace bcos::crypto

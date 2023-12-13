@@ -22,6 +22,7 @@
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/ledger/Features.h"
+#include "bcos-task/Wait.h"
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-framework/protocol/Protocol.h>
@@ -40,12 +41,10 @@ using namespace bcos::protocol;
 const char* const SYSCONFIG_METHOD_SET_STR = "setValueByKey(string,string)";
 const char* const SYSCONFIG_METHOD_GET_STR = "getValueByKey(string)";
 
-SystemConfigPrecompiled::SystemConfigPrecompiled() : Precompiled(GlobalHashImpl::g_hashImpl)
+SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl) : Precompiled(hashImpl)
 {
-    name2Selector[SYSCONFIG_METHOD_SET_STR] =
-        getFuncSelector(SYSCONFIG_METHOD_SET_STR, GlobalHashImpl::g_hashImpl);
-    name2Selector[SYSCONFIG_METHOD_GET_STR] =
-        getFuncSelector(SYSCONFIG_METHOD_GET_STR, GlobalHashImpl::g_hashImpl);
+    name2Selector[SYSCONFIG_METHOD_SET_STR] = getFuncSelector(SYSCONFIG_METHOD_SET_STR, hashImpl);
+    name2Selector[SYSCONFIG_METHOD_GET_STR] = getFuncSelector(SYSCONFIG_METHOD_GET_STR, hashImpl);
     auto defaultCmp = [](std::string_view _key, int64_t _value, int64_t _minValue, uint32_t version,
                           BlockVersion minVersion = BlockVersion::V3_0_VERSION) {
         if (versionCompareTo(version, minVersion) < 0) [[unlikely]]
@@ -151,7 +150,7 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
                                   << LOG_DESC("setValueByKey") << LOG_KV("configKey", configKey)
                                   << LOG_KV("configValue", configValue);
 
-            int64_t value = validate(configKey, configValue, blockContext.blockVersion());
+            int64_t value = validate(_executive, configKey, configValue, blockContext.blockVersion());
             auto table = _executive->storage().openTable(ledger::SYS_CONFIG);
 
             auto entry = table->newEntry();
@@ -195,6 +194,7 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
 }
 
 int64_t SystemConfigPrecompiled::validate(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive,
     std::string_view _key, std::string_view value, uint32_t blockVersion)
 {
     int64_t configuredValue = 0;
@@ -217,6 +217,11 @@ int64_t SystemConfigPrecompiled::validate(
             BOOST_THROW_EXCEPTION(PrecompiledError("The value for " + key + " must be 1."));
         }
 
+        if(setFeature)
+        {
+            _executive->blockContext().features().validate(key);
+        }
+
         if (m_valueConverter.contains(key))
         {
             configuredValue = (m_valueConverter.at(key))(std::string(value), blockVersion);
@@ -236,15 +241,21 @@ int64_t SystemConfigPrecompiled::validate(
             std::to_string(bcos::protocol::MIN_MAJOR_VERSION) + " to " +
             std::to_string(bcos::protocol::MAX_MAJOR_VERSION);
         PRECOMPILED_LOG(INFO) << LOG_DESC("SystemConfigPrecompiled: invalid version")
-                              << LOG_KV("errorInfo", boost::diagnostic_information(e));
+                              << LOG_KV("info", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(PrecompiledError(errorMsg));
+    }
+    catch (bcos::Exception const& e)
+    {
+        PRECOMPILED_LOG(INFO) << LOG_DESC("SystemConfigPrecompiled: set feature failed")
+                              << LOG_KV("info", boost::diagnostic_information(e));
+        BOOST_THROW_EXCEPTION(PrecompiledError(boost::diagnostic_information(e)));
     }
     catch (std::exception const& e)
     {
         PRECOMPILED_LOG(INFO) << LOG_BADGE("SystemConfigPrecompiled")
                               << LOG_DESC("checkValueValid failed") << LOG_KV("key", _key)
                               << LOG_KV("value", value)
-                              << LOG_KV("errorInfo", boost::diagnostic_information(e));
+                              << LOG_KV("info", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(
             PrecompiledError("The value for " + key + " must be a valid number."));
     }
@@ -340,26 +351,20 @@ void SystemConfigPrecompiled::upgradeChain(
     }
 
     // Write default features when data version changes
-    if (toVersion >= static_cast<uint32_t>(BlockVersion::V3_2_VERSION))
+    if (toVersion >= static_cast<uint32_t>(BlockVersion::V3_2_3_VERSION))
     {
-        Features features;
-        features.setToDefault(protocol::BlockVersion(toVersion));
+        Features bugfixFeatures;
+        bugfixFeatures.setToDefault(protocol::BlockVersion(toVersion));
+        task::syncWait(bugfixFeatures.writeToStorage(*_executive->blockContext().storage(), 0));
 
-        // From 3.3 or 3.4, enable the feature_sharding
-        if (version >= BlockVersion::V3_3_VERSION && version <= BlockVersion::V3_4_VERSION &&
-            toVersion >= BlockVersion::V3_5_VERSION)
+        // From 3.3 / 3.4 or to 3.3 / 3.4, enable the feature_sharding
+        if ((version >= BlockVersion::V3_3_VERSION && version <= BlockVersion::V3_4_VERSION) ||
+            (toVersion >= BlockVersion::V3_3_VERSION && toVersion <= BlockVersion::V3_4_VERSION))
         {
-            features.set(ledger::Features::Flag::feature_sharding);
-        }
-
-        for (auto [flag, name, value] : features.flags())
-        {
-            if (value)
-            {
-                Entry entry;
-                entry.setObject(SystemConfigEntry{boost::lexical_cast<std::string>((int)value), 0});
-                _executive->storage().setRow(SYS_CONFIG, name, std::move(entry));
-            }
+            Features shardingFeatures;
+            shardingFeatures.set(ledger::Features::Flag::feature_sharding);
+            task::syncWait(
+                shardingFeatures.writeToStorage(*_executive->blockContext().backendStorage(), 0));
         }
     }
 }

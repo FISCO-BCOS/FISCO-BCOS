@@ -193,7 +193,7 @@ bool P2PMessage::encode(EncodedMessage& _buffer)
         {
             isCompressSuccess = true;
             // set compress flag
-            m_ext |= bcos::protocol::MessageExtFieldFlag::Compress;
+            m_ext |= bcos::protocol::MessageExtFieldFlag::COMPRESS;
             _buffer.payload = std::move(compressData);
         }
     }
@@ -242,7 +242,7 @@ bool P2PMessage::encode(bcos::bytes& _buffer)
     {
         isCompressSuccess = true;
         // set compress flag
-        m_ext |= bcos::protocol::MessageExtFieldFlag::Compress;
+        m_ext |= bcos::protocol::MessageExtFieldFlag::COMPRESS;
     }
 
     if (!encodeHeader(_buffer))
@@ -370,8 +370,8 @@ int32_t P2PMessage::decode(const bytesConstRef& _buffer)
 
     // uncompress payload
     // payload has been compressed
-    if ((m_ext & bcos::protocol::MessageExtFieldFlag::Compress) ==
-        bcos::protocol::MessageExtFieldFlag::Compress)
+    if ((m_ext & bcos::protocol::MessageExtFieldFlag::COMPRESS) ==
+        bcos::protocol::MessageExtFieldFlag::COMPRESS)
     {
         bool isUncompressSuccess = ZstdCompress::uncompress(data, *m_payload);
         if (!isUncompressSuccess)
@@ -382,11 +382,14 @@ int32_t P2PMessage::decode(const bytesConstRef& _buffer)
             // invalid packet?
             return MessageDecodeStatus::MESSAGE_ERROR;
         }
-        P2PMSG_LOG(TRACE) << LOG_DESC("zstd uncompress success")
-                          << LOG_KV("packetType", m_packetType) << LOG_KV("ext", m_ext)
-                          << LOG_KV("rawData", (char*)(data.data())) << LOG_KV("seq", m_seq);
+        if (c_fileLogLevel <= TRACE) [[unlikely]]
+        {
+            P2PMSG_LOG(TRACE) << LOG_DESC("zstd uncompress success")
+                              << LOG_KV("packetType", m_packetType) << LOG_KV("ext", m_ext)
+                              << LOG_KV("rawDataSize", data.size()) << LOG_KV("seq", m_seq);
+        }
         // reset ext
-        m_ext &= (~bcos::protocol::MessageExtFieldFlag::Compress);
+        m_ext &= (~bcos::protocol::MessageExtFieldFlag::COMPRESS);
     }
     else
     {

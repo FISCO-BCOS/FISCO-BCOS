@@ -24,7 +24,7 @@ enum class NodeListType
 {
     ConsensusNodeList,
     ObserverNodeList,
-    WorkingSealerNodeList
+    CandidateSealerNodeList,
 };
 
 enum class ConfigType
@@ -163,9 +163,6 @@ private:
 
     BlockExecutive::Ptr getLatestPreparedBlock(bcos::protocol::BlockNumber blockNumber);
     void tryExecuteBlock(bcos::protocol::BlockNumber number, bcos::crypto::HashType parentHash);
-
-    void asyncGetLedgerConfig(
-        std::function<void(Error::Ptr, ledger::LedgerConfig::Ptr ledgerConfig)> callback);
 
     BlockExecutive::Ptr getPreparedBlock(
         bcos::protocol::BlockNumber blockNumber, int64_t timestamp);

@@ -21,7 +21,9 @@
 #pragma once
 #include "Exceptions.h"
 #include "bcos-framework/consensus/ConsensusNodeInterface.h"
+#include "bcos-framework/ledger/GenesisConfig.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
+#include "bcos-tool/VersionConverter.h"
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/Common.h>
 #include <bcos-framework/protocol/Protocol.h>
@@ -103,10 +105,11 @@ public:
     size_t notifyWorkerNum() const { return m_notifyWorkerNum; }
     size_t verifierWorkerNum() const { return m_verifierWorkerNum; }
     int64_t txsExpirationTime() const { return m_txsExpirationTime; }
+    bool checkBlockLimit() const { return m_checkBlockLimit; }
 
-    bool smCryptoType() const { return m_smCryptoType; }
-    std::string const& chainId() const { return m_chainId; }
-    std::string const& groupId() const { return m_groupId; }
+    bool smCryptoType() const { return m_genesisConfig.m_smCrypto; }
+    std::string const& chainId() const { return m_genesisConfig.m_chainID; }
+    std::string const& groupId() const { return m_genesisConfig.m_groupID; }
     size_t blockLimit() const { return m_blockLimit; }
 
     std::string const& privateKeyPath() const { return m_privateKeyPath; }
@@ -129,6 +132,7 @@ public:
     size_t writeBufferSize() const { return m_writeBufferSize; }
     int minWriteBufferNumberToMerge() const { return m_minWriteBufferNumberToMerge; }
     size_t blockCacheSize() const { return m_blockCacheSize; }
+    bool enableRocksDBBlob() const { return m_enableRocksDBBlob; }
     std::vector<std::string> const& pdAddrs() const { return m_pd_addrs; }
     std::string const& pdCaPath() const { return m_pdCaPath; }
     std::string const& pdCertPath() const { return m_pdCertPath; }
@@ -143,19 +147,19 @@ public:
 
     bcos::ledger::LedgerConfig::Ptr ledgerConfig() { return m_ledgerConfig; }
 
-    std::string const& consensusType() const { return m_consensusType; }
-    size_t txGasLimit() const { return m_txGasLimit; }
+    std::string const& consensusType() const { return m_genesisConfig.m_consensusType; }
+    size_t txGasLimit() const { return m_genesisConfig.m_txGasLimit; }
     std::string const& genesisData() const { return m_genesisData; }
 
-    std::int64_t epochSealerNum() const { return m_epochSealerNum; }
-    std::int64_t epochBlockNum() const { return m_epochBlockNum; }
+    std::int64_t epochSealerNum() const { return m_genesisConfig.m_epochSealerNum; }
+    std::int64_t epochBlockNum() const { return m_genesisConfig.m_epochBlockNum; }
 
-    bool isWasm() const { return m_isWasm; }
-    bool isAuthCheck() const { return m_isAuthCheck; }
-    bool isSerialExecute() const { return m_isSerialExecute; }
+    bool isWasm() const { return m_genesisConfig.m_isWasm; }
+    bool isAuthCheck() const { return m_genesisConfig.m_isAuthCheck; }
+    bool isSerialExecute() const { return m_genesisConfig.m_isSerialExecute; }
     size_t vmCacheSize() const { return m_vmCacheSize; }
 
-    std::string const& authAdminAddress() const { return m_authAdminAddress; }
+    std::string const& authAdminAddress() const { return m_genesisConfig.m_authAdminAccount; }
 
     std::string const& rpcServiceName() const { return m_rpcServiceName; }
     std::string const& gatewayServiceName() const { return m_gatewayServiceName; }
@@ -166,10 +170,8 @@ public:
 
     std::string const& nodeName() const { return m_nodeName; }
 
-    std::string getDefaultServiceName(std::string const& _nodeName, std::string const& _serviceName)
-    {
-        return m_chainId + "." + _nodeName + _serviceName;
-    }
+    std::string getDefaultServiceName(
+        std::string const& _nodeName, std::string const& _serviceName) const;
 
     // the rpc configurations
     const std::string& rpcListenIP() const { return m_rpcListenIP; }
@@ -216,8 +218,13 @@ public:
     bool enableLRUCacheStorage() const { return m_enableLRUCacheStorage; }
     ssize_t cacheSize() const { return m_cacheSize; }
 
-    uint32_t compatibilityVersion() const { return m_compatibilityVersion; }
-    std::string const& compatibilityVersionStr() const { return m_compatibilityVersionStr; }
+    uint32_t compatibilityVersion() const { return m_genesisConfig.m_compatibilityVersion; }
+    std::string compatibilityVersionStr() const
+    {
+        std::stringstream ss;
+        ss << (bcos::protocol::BlockVersion)m_genesisConfig.m_compatibilityVersion;
+        return ss.str();
+    }
 
     std::string const& memberID() const { return m_memberID; }
     unsigned leaseTTL() const { return m_leaseTTL; }
@@ -246,7 +253,7 @@ public:
     bool enableBaselineScheduler() const { return m_enableBaselineScheduler; }
     struct BaselineSchedulerConfig
     {
-        int parallel = 0;
+        bool parallel = false;
         int chunkSize = 0;
         int maxThread = 0;
     };
@@ -257,9 +264,13 @@ public:
 
     struct TarsRPCConfig
     {
-        std::string configPath;
+        std::string host;
+        uint16_t port = 0;
+        uint32_t threadCount = 0;
     };
     TarsRPCConfig const& tarsRPCConfig() const { return m_tarsRPCConfig; }
+
+    ledger::GenesisConfig const& genesisConfig() const;
 
 protected:
     virtual void loadChainConfig(boost::property_tree::ptree const& _pt, bool _enforceGroupId);
@@ -292,13 +303,13 @@ protected:
         std::string const& _defaultValue = "", bool _require = true);
     void checkService(std::string const& _serviceType, std::string const& _serviceName);
 
-
 private:
+    void loadGenesisFeatures(boost::property_tree::ptree const& ptree);
+
     bcos::consensus::ConsensusNodeListPtr parseConsensusNodeList(
         boost::property_tree::ptree const& _pt, std::string const& _sectionName,
         std::string const& _subSectionName);
 
-    void generateGenesisData();
     virtual int64_t checkAndGetValue(boost::property_tree::ptree const& _pt,
         std::string const& _value, std::string const& _defaultValue);
 
@@ -310,12 +321,10 @@ private:
     size_t m_notifyWorkerNum;
     size_t m_verifierWorkerNum;
     int64_t m_txsExpirationTime;
+    bool m_checkBlockLimit = true;
     // TODO: the block sync module need some configurations?
 
     // chain configuration
-    bool m_smCryptoType;
-    std::string m_chainId;
-    std::string m_groupId;
     size_t m_blockLimit;
 
     // sealer configuration
@@ -338,14 +347,11 @@ private:
     std::string m_storageSecurityCipherDataKey;
 
     // ledger configuration
-    std::string m_consensusType;
     bcos::ledger::LedgerConfig::Ptr m_ledgerConfig;
-    size_t m_txGasLimit;
     std::string m_genesisData;
 
-    // rpbft
-    std::uint32_t m_epochSealerNum{4};
-    std::uint32_t m_epochBlockNum{1000};
+    // Genesis config
+    ledger::GenesisConfig m_genesisConfig;
 
     // storage configuration
     std::string m_storagePath;
@@ -361,6 +367,7 @@ private:
     size_t m_writeBufferSize = 64 << 21;
     int m_minWriteBufferNumberToMerge = 2;
     size_t m_blockCacheSize = 128 << 20;
+    bool m_enableRocksDBBlob = false;
 
     bool m_enableArchive = false;
     std::string m_archiveListenIP;
@@ -370,11 +377,7 @@ private:
     std::string m_stateDBName = "state";
 
     // executor config
-    bool m_isWasm = false;
-    bool m_isAuthCheck = false;
-    bool m_isSerialExecute = false;
     size_t m_vmCacheSize = 1024;
-    std::string m_authAdminAddress;
     bool m_enableBaselineScheduler = false;
     BaselineSchedulerConfig m_baselineSchedulerConfig;
     TarsRPCConfig m_tarsRPCConfig;
@@ -428,8 +431,6 @@ private:
 
     bool m_enableLRUCacheStorage = true;
     ssize_t m_cacheSize = DEFAULT_CACHE_SIZE;  // 32MB for default
-    uint32_t m_compatibilityVersion;
-    std::string m_compatibilityVersionStr;
 
     // failover config
     std::string m_memberID;
@@ -442,4 +443,8 @@ private:
     int m_sendTxTimeout = -1;
     int64_t checkAndGetValue(const boost::property_tree::ptree& _pt, const std::string& _key);
 };
+
+std::string generateGenesisData(
+    ledger::GenesisConfig const& genesisConfig, ledger::LedgerConfig const& ledgerConfig);
+
 }  // namespace bcos::tool

@@ -39,7 +39,7 @@ void LedgerConfigFetcher::fetchAll()
     fetchFeatures();
     fetchConsensusNodeList();
     fetchObserverNodeList();
-    fetchWorkingSealerList();
+    fetchCandidateSealerList();
     fetchBlockTxCountLimit();
     fetchGenesisHash();
     fetchConsensusLeaderPeriod();
@@ -49,7 +49,7 @@ void LedgerConfigFetcher::fetchAll()
     fetchNotifyRotateFlagInfo();
 }
 
-void LedgerConfigFetcher::fetchBlockNumberAndHash()
+void LedgerConfigFetcher::fetchBlockNumber()
 {
     std::promise<std::pair<Error::Ptr, BlockNumber>> blockNumberPromise;
     m_ledger->asyncGetBlockNumber([&blockNumberPromise](Error::Ptr _error, BlockNumber _number) {
@@ -60,8 +60,8 @@ void LedgerConfigFetcher::fetchBlockNumberAndHash()
     if (error)
     {
         TOOL_LOG(WARNING) << LOG_DESC("LedgerConfigFetcher: fetchBlockNumber failed")
-                          << LOG_KV("errorCode", error->errorCode())
-                          << LOG_KV("errorMessage", error->errorMessage());
+                          << LOG_KV("code", error->errorCode())
+                          << LOG_KV("message", error->errorMessage());
         BOOST_THROW_EXCEPTION(LedgerConfigFetcherException()
                               << errinfo_comment("LedgerConfigFetcher: fetchBlockNumber failed "));
     }
@@ -69,6 +69,12 @@ void LedgerConfigFetcher::fetchBlockNumberAndHash()
     m_ledgerConfig->setBlockNumber(blockNumber);
     TOOL_LOG(INFO) << LOG_DESC("LedgerConfigFetcher: fetchBlockNumber success")
                    << LOG_KV("blockNumber", blockNumber);
+}
+
+void LedgerConfigFetcher::fetchBlockNumberAndHash()
+{
+    fetchBlockNumber();
+    auto blockNumber = m_ledgerConfig->blockNumber();
     // fetch blockHash
     auto hash = fetchBlockHash(blockNumber);
     TOOL_LOG(INFO) << LOG_DESC("LedgerConfigFetcher: fetchBlockHash success")
@@ -95,8 +101,8 @@ HashType LedgerConfigFetcher::fetchBlockHash(BlockNumber _blockNumber)
     if (error)
     {
         TOOL_LOG(WARNING) << LOG_DESC("LedgerConfigFetcher: fetchBlockHash failed")
-                          << LOG_KV("errorCode", error->errorCode())
-                          << LOG_KV("errorMessage", error->errorMessage())
+                          << LOG_KV("code", error->errorCode())
+                          << LOG_KV("message", error->errorMessage())
                           << LOG_KV("number", _blockNumber);
         BOOST_THROW_EXCEPTION(LedgerConfigFetcherException()
                               << errinfo_comment("LedgerConfigFetcher: fetchBlockHash failed "));
@@ -116,9 +122,8 @@ std::string LedgerConfigFetcher::fetchSystemConfig(std::string_view _key)
     auto error = std::get<0>(ret);
     if (error)
     {
-        TOOL_LOG(WARNING) << LOG_DESC("fetchSystemConfig failed")
-                          << LOG_KV("errorCode", error->errorCode())
-                          << LOG_KV("errorMessage", error->errorMessage()) << LOG_KV("key", _key);
+        TOOL_LOG(INFO) << LOG_DESC("fetchSystemConfig failed") << LOG_KV("code", error->errorCode())
+                       << LOG_KV("message", error->errorMessage()) << LOG_KV("key", _key);
         BOOST_THROW_EXCEPTION(
             LedgerConfigFetcherException() << errinfo_comment(
                 "LedgerConfigFetcher: fetchSystemConfig for " + std::string{_key} + " failed"));
@@ -138,8 +143,9 @@ bcos::ledger::SystemConfigEntry LedgerConfigFetcher::fetchSystemConfigNoExceptio
     auto error = std::get<0>(ret);
     if (error)
     {
-        TOOL_LOG(INFO) << LOG_DESC("fetchSystemConfig failed") << LOG_KV("code", error->errorCode())
-                       << LOG_KV("msg", error->errorMessage()) << LOG_KV("key", _key);
+        TOOL_LOG(INFO) << LOG_DESC("fetchSystemConfig failed, use default value")
+                       << LOG_KV("code", error->errorCode()) << LOG_KV("msg", error->errorMessage())
+                       << LOG_KV("key", _key) << LOG_KV("defaultValue", std::get<0>(_defaultValue));
         return _defaultValue;
     }
     return std::get<SystemConfigEntry>(ret);
@@ -203,16 +209,16 @@ void LedgerConfigFetcher::fetchFeatures()
     m_ledgerConfig->setFeatures(features);
 }
 
-void LedgerConfigFetcher::fetchWorkingSealerList()
+void LedgerConfigFetcher::fetchCandidateSealerList()
 {
     if (m_ledgerConfig->compatibilityVersion() < protocol::BlockVersion::V3_5_VERSION)
     {
         return;
     }
-    auto sealerList = fetchNodeListByNodeType(CONSENSUS_WORKING_SEALER);
-    TOOL_LOG(INFO) << LOG_DESC("fetchWorkingSealerList success")
+    auto sealerList = fetchNodeListByNodeType(CONSENSUS_CANDIDATE_SEALER);
+    TOOL_LOG(INFO) << LOG_DESC("fetchCandidateSealerList success")
                    << LOG_KV("size", sealerList->size());
-    m_ledgerConfig->setWorkingSealerNodeList(*sealerList);
+    m_ledgerConfig->setCandidateSealerNodeList(*sealerList);
 }
 
 void LedgerConfigFetcher::fetchBlockTxCountLimit()
@@ -236,8 +242,8 @@ void LedgerConfigFetcher::fetchNonceList(BlockNumber _startNumber, int64_t _offs
     if (error)
     {
         TOOL_LOG(WARNING) << LOG_DESC("LedgerConfigFetcher: fetchNonceList failed")
-                          << LOG_KV("errorCode", error->errorCode())
-                          << LOG_KV("errorMsg", error->errorMessage())
+                          << LOG_KV("code", error->errorCode())
+                          << LOG_KV("msg", error->errorMessage())
                           << LOG_KV("startNumber", _startNumber) << LOG_KV("offset", _offset);
         BOOST_THROW_EXCEPTION(LedgerConfigFetcherException() << errinfo_comment(
                                   "LedgerConfigFetcher: fetchNonceList failed, start: " +

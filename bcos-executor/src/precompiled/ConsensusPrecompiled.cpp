@@ -66,11 +66,15 @@ std::shared_ptr<PrecompiledExecResult> ConsensusPrecompiled::call(
 
     if (blockContext.isAuthCheck() && !checkSenderFromAuth(_callParameters->m_sender))
     {
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
-                               << LOG_DESC("sender is not from sys")
-                               << LOG_KV("sender", _callParameters->m_sender);
-        _callParameters->setExecResult(codec.encode(int32_t(CODE_NO_AUTHORIZED)));
-        return _callParameters;
+        if (!blockContext.features().get(Features::Flag::feature_rpbft) ||
+            func != name2Selector[WSM_METHOD_ROTATE_STR])
+        {
+            PRECOMPILED_LOG(DEBUG)
+                << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("sender is not from sys")
+                << LOG_KV("sender", _callParameters->m_sender);
+            _callParameters->setExecResult(codec.encode(int32_t(CODE_NO_AUTHORIZED)));
+            return _callParameters;
+        }
     }
 
     int result = 0;
@@ -94,11 +98,9 @@ std::shared_ptr<PrecompiledExecResult> ConsensusPrecompiled::call(
         // setWeight(string,uint256)
         result = setWeight(_executive, data, codec);
     }
-    else if (blockContext.blockVersion() >= protocol::BlockVersion::V3_5_VERSION &&
-             blockContext.features().get(Features::Flag::feature_rpbft) &&
+    else if (blockContext.features().get(Features::Flag::feature_rpbft) &&
              func == name2Selector[WSM_METHOD_ROTATE_STR])
     {
-        // TODO: use feature
         rotateWorkingSealer(_executive, _callParameters, codec);
     }
     else [[unlikely]]
@@ -133,7 +135,7 @@ int ConsensusPrecompiled::addSealer(
             [](unsigned char _ch) { return std::isxdigit(_ch); }) != NODE_LENGTH)
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
-                               << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
+                               << LOG_DESC("nodeID length mistake") << LOG_KV("nodeID", nodeID);
         return CODE_INVALID_NODE_ID;
     }
     if (weight == 0)
@@ -163,7 +165,14 @@ int ConsensusPrecompiled::addSealer(
     {
         // exist
         node->weight = weight;
-        node->type = ledger::CONSENSUS_SEALER;
+        if (blockContext.features().get(Features::Flag::feature_rpbft))
+        {
+            node->type = ledger::CONSENSUS_CANDIDATE_SEALER;
+        }
+        else
+        {
+            node->type = ledger::CONSENSUS_SEALER;
+        }
         node->enableNumber = boost::lexical_cast<std::string>(blockContext.number() + 1);
     }
     else
@@ -207,7 +216,7 @@ int ConsensusPrecompiled::addObserver(
             [](unsigned char c) { return std::isxdigit(c); }) != NODE_LENGTH)
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
-                               << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
+                               << LOG_DESC("nodeID length mistake") << LOG_KV("nodeID", nodeID);
         return CODE_INVALID_NODE_ID;
     }
 
@@ -269,7 +278,7 @@ int ConsensusPrecompiled::removeNode(
     if (nodeID.size() != NODE_LENGTH)
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
-                               << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
+                               << LOG_DESC("nodeID length mistake") << LOG_KV("nodeID", nodeID);
         return CODE_INVALID_NODE_ID;
     }
 
@@ -328,7 +337,7 @@ int ConsensusPrecompiled::setWeight(
     if (nodeID.size() != NODE_LENGTH)
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
-                               << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
+                               << LOG_DESC("nodeID length mistake") << LOG_KV("nodeID", nodeID);
         return CODE_INVALID_NODE_ID;
     }
     if (weight == 0)
@@ -354,7 +363,7 @@ int ConsensusPrecompiled::setWeight(
         [&nodeID](const ConsensusNode& node) { return node.nodeID == nodeID; });
     if (node != consensusList.end())
     {
-        if (node->type != ledger::CONSENSUS_SEALER)
+        if (node->type == ledger::CONSENSUS_OBSERVER)
         {
             BOOST_THROW_EXCEPTION(protocol::PrecompiledError("Cannot set weight to observer."));
         }
@@ -394,7 +403,7 @@ void ConsensusPrecompiled::rotateWorkingSealer(
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("WorkingSealerManagerPrecompiled")
                                << LOG_DESC("rotateWorkingSealer exception occurred")
-                               << LOG_KV("errorInfo", _e.what())
+                               << LOG_KV("msg", _e.what())
                                << LOG_KV("origin", _callParameters->m_origin)
                                << LOG_KV("sender", _callParameters->m_sender);
         BOOST_THROW_EXCEPTION(_e);
@@ -403,7 +412,7 @@ void ConsensusPrecompiled::rotateWorkingSealer(
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("WorkingSealerManagerPrecompiled")
                                << LOG_DESC("rotateWorkingSealer exception occurred")
-                               << LOG_KV("errorInfo", boost::diagnostic_information(_e))
+                               << LOG_KV("msg", boost::diagnostic_information(_e))
                                << LOG_KV("origin", _callParameters->m_origin)
                                << LOG_KV("sender", _callParameters->m_sender);
         BOOST_THROW_EXCEPTION(

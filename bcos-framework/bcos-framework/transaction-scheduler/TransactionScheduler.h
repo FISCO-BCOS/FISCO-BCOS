@@ -1,29 +1,51 @@
 #pragma once
 
 #include "../protocol/Block.h"
-#include <bcos-concepts/ByteBuffer.h>
-#include <bcos-task/Task.h>
-#include <bcos-task/Trait.h>
-#include <bcos-utilities/Ranges.h>
+#include "bcos-task/Task.h"
+#include "bcos-task/Trait.h"
+#include "bcos-utilities/Ranges.h"
+#include <concepts>
 
-namespace bcos::concepts::transaction_scheduler
+namespace bcos::transaction_scheduler
 {
 
-class TransactionScheduler
+struct ExecuteBlock
 {
-public:
-    TransactionScheduler() noexcept = default;
-    TransactionScheduler(TransactionScheduler const&) noexcept = default;
-    TransactionScheduler(TransactionScheduler&&) noexcept = default;
-    TransactionScheduler& operator=(TransactionScheduler const&) noexcept = default;
-    TransactionScheduler& operator=(TransactionScheduler&&) noexcept = default;
-    virtual ~TransactionScheduler() noexcept = default;
-
-    virtual task::Task<std::vector<protocol::TransactionReceipt::Ptr>> execute(
-        protocol::Block const& blockHeader,
-        RANGES::any_view<protocol::Transaction const&,
-            RANGES::category::random_access | RANGES::category::sized>
-            transactions) = 0;
+    /**
+     * @brief Function call operator for TransactionScheduler.
+     *
+     * @tparam Scheduler The type of the scheduler.
+     * @tparam Storage The type of the storage.
+     * @tparam Executor The type of the executor.
+     * @tparam Transactions The type of the transactions.
+     * @param scheduler The scheduler instance.
+     * @param storage The storage instance.
+     * @param executor The executor instance.
+     * @param blockHeader The block header.
+     * @param transactions The input range of transactions.
+     * @return A task that returns the awaitable return type of the tag_invoke function.
+     */
+    auto operator()(auto& scheduler, auto& storage, auto& executor,
+        protocol::BlockHeader const& blockHeader, RANGES::input_range auto const& transactions,
+        auto&&... args) const
+        -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(*this, scheduler, storage,
+            executor, blockHeader, transactions, std::forward<decltype(args)>(args)...))>>
+        requires RANGES::range<task::AwaitableReturnType<decltype(tag_invoke(*this, scheduler,
+                     storage, executor, blockHeader, transactions,
+                     std::forward<decltype(args)>(args)...))>> &&
+                 std::convertible_to<
+                     RANGES::range_value_t<task::AwaitableReturnType<decltype(tag_invoke(*this,
+                         scheduler, storage, executor, blockHeader, transactions,
+                         std::forward<decltype(args)>(args)...))>>,
+                     std::shared_ptr<protocol::TransactionReceipt>>
+    {
+        co_return co_await tag_invoke(*this, scheduler, storage, executor, blockHeader,
+            transactions, std::forward<decltype(args)>(args)...);
+    }
 };
+inline constexpr ExecuteBlock executeBlock{};
 
-}  // namespace bcos::concepts::transaction_scheduler
+template <auto& Tag>
+using tag_t = std::decay_t<decltype(Tag)>;
+
+}  // namespace bcos::transaction_scheduler

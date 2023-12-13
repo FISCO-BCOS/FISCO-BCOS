@@ -31,6 +31,7 @@
 #include "bcos-gateway/libp2p/ServiceV2.h"
 #include "bcos-gateway/protocol/GatewayNodeStatus.h"
 #include "bcos-utilities/BoostLog.h"
+#include "filter/Filter.h"
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-gateway/Common.h>
 #include <bcos-gateway/Gateway.h>
@@ -171,10 +172,9 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, int _moduleI
         {
             return;
         }
-        GATEWAY_LOG(WARNING) << LOG_DESC("could not find a gateway to send this message")
-                             << LOG_KV("groupID", _groupID)
-                             << LOG_KV("srcNodeID", _srcNodeID->hex())
-                             << LOG_KV("dstNodeID", _dstNodeID->hex());
+        GATEWAY_LOG(DEBUG) << LOG_DESC("could not find a gateway to send this message")
+                           << LOG_KV("groupID", _groupID) << LOG_KV("srcNodeID", _srcNodeID->hex())
+                           << LOG_KV("dstNodeID", _dstNodeID->hex());
 
         auto errorPtr = BCOS_ERROR_PTR(CommonError::NotFoundFrontServiceSendMsg,
             "could not find a gateway to "
@@ -401,6 +401,15 @@ void Gateway::onReceiveP2PMessage(
                            << LOG_KV("seq", _msg->seq()) << LOG_KV("payload size", payload.size());
     }
 
+    // Readonly filter
+    if (m_readonlyFilter && !filter(*m_readonlyFilter, groupID, moduleID, {}))
+    {
+        GATEWAY_LOG(WARNING) << "P2PMessage moduleID: " << moduleID << " filter by readOnlyFilter";
+
+        // Drop the message
+        return;
+    }
+
     if (m_gatewayRateLimiter)
     {
         // The moduleID is not obtained,
@@ -435,9 +444,9 @@ void Gateway::onReceiveP2PMessage(
             if (_error)
             {
                 GATEWAY_LOG(TRACE)
-                    << LOG_BADGE("onReceiveP2PMessage") << "callback error"
-                    << LOG_KV("errorCode", _error->errorCode())
-                    << LOG_KV("errorMessage", _error->errorMessage()) << LOG_KV("group", groupID)
+                    << LOG_BADGE("onReceiveP2PMessage") << "callback failed"
+                    << LOG_KV("code", _error->errorCode())
+                    << LOG_KV("message", _error->errorMessage()) << LOG_KV("group", groupID)
                     << LOG_KV("moduleID", moduleID) << LOG_KV("src", srcNodeIDPtr->shortHex())
                     << LOG_KV("dst", dstNodeIDPtr->shortHex());
             }
@@ -451,7 +460,7 @@ void Gateway::onReceiveBroadcastMessage(
 {
     if (_e.errorCode() != 0)
     {
-        GATEWAY_LOG(WARNING) << LOG_DESC("onReceiveBroadcastMessage error")
+        GATEWAY_LOG(WARNING) << LOG_DESC("onReceiveBroadcastMessage failed")
                              << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what());
         return;
     }
@@ -480,6 +489,14 @@ void Gateway::onReceiveBroadcastMessage(
                            << LOG_KV("seq", _msg->seq()) << LOG_KV("payload size", payload->size());
     }
 
+    // Readonly filter
+    if (m_readonlyFilter && !filter(*m_readonlyFilter, groupID, moduleID, bytesConstRef{}))
+    {
+        GATEWAY_LOG(WARNING) << "BroadcastMessage moduleID: " << moduleID
+                             << " filter by readOnlyFilter";
+        return;
+    }
+
     if (m_gatewayRateLimiter)
     {
         auto result = ((moduleID == 0) ?
@@ -503,4 +520,9 @@ void Gateway::onReceiveBroadcastMessage(
     auto type = _msg->ext();
     m_gatewayNodeManager->localRouterTable()->asyncBroadcastMsg(type, groupID, moduleID,
         srcNodeIDPtr, bytesConstRef(_msg->payload()->data(), _msg->payload()->size()));
+}
+
+void bcos::gateway::Gateway::enableReadOnlyMode()
+{
+    m_readonlyFilter.emplace();
 }

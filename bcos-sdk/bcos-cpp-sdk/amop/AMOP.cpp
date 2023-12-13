@@ -139,9 +139,9 @@ void AMOP::publish(
                 auto errorNew = BCOS_ERROR_PTR(wsMessage->status(),
                     std::string(wsMessage->payload()->begin(), wsMessage->payload()->end()));
 
-                AMOP_CLIENT(WARNING) << LOG_BADGE("publish") << LOG_DESC("publish response error")
-                                     << LOG_KV("errorCode", errorNew->errorCode())
-                                     << LOG_KV("errorMessage", errorNew->errorMessage());
+                AMOP_CLIENT(WARNING) << LOG_BADGE("publish") << LOG_DESC("publish response failed")
+                                     << LOG_KV("code", errorNew->errorCode())
+                                     << LOG_KV("message", errorNew->errorMessage());
 
                 _error = errorNew;
             }
@@ -225,7 +225,7 @@ void AMOP::onRecvAMOPRequest(std::shared_ptr<boostssl::MessageFace> _msg,
 
     if (callback)
     {
-        callback(nullptr, _session->connectedEndPoint(), seq, request->data(), _session);
+        callback(nullptr, _session->endPoint(), seq, request->data(), _session);
     }
     else
     {
@@ -273,7 +273,7 @@ void AMOP::onRecvAMOPBroadcast(std::shared_ptr<boostssl::MessageFace> _msg,
 
     if (callback)
     {
-        callback(nullptr, _session->connectedEndPoint(), seq, request->data(), _session);
+        callback(nullptr, _session->endPoint(), seq, request->data(), _session);
     }
     else
     {

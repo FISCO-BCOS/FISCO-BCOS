@@ -64,10 +64,14 @@ public:
         m_contractAddress(std::move(contractAddress)),
         m_contextID(contextID),
         m_seq(seq),
-        m_gasInjector(gasInjector)
+        m_gasInjector(gasInjector),
+        m_storageWrapperObj(m_blockContext.storage(), m_recoder),
+        m_storageWrapper(&m_storageWrapperObj)
     {
         m_recoder = std::make_shared<storage::Recoder>();
         m_hashImpl = m_blockContext.hashHandler();
+        m_storageWrapperObj.setCodeCache(m_blockContext.getCodeCache());
+        m_storageWrapperObj.setCodeHashCache(m_blockContext.getCodeHashCache());
     }
 
     TransactionExecutive(TransactionExecutive const&) = delete;
@@ -89,21 +93,21 @@ public:
     }
 
     const BlockContext& blockContext() { return m_blockContext; }
-    const BlockContext& blockContextReference() { return m_blockContext; }
-
 
     int64_t contextID() const { return m_contextID; }
     int64_t seq() const { return m_seq; }
 
-    std::string_view contractAddress() { return m_contractAddress; }
+    std::string_view contractAddress() const { return m_contractAddress; }
 
     CallParameters::UniquePtr execute(
         CallParameters::UniquePtr callParameters);  // execute parameters in
                                                     // current corouitine
 
-    bool isPrecompiled(const std::string& _address) const;
+    virtual bool isPrecompiled(const std::string& _address) const;
 
     std::shared_ptr<precompiled::Precompiled> getPrecompiled(const std::string& _address) const;
+    virtual std::shared_ptr<precompiled::Precompiled> getPrecompiled(const std::string& _address,
+        uint32_t version, bool isAuth, const ledger::Features& features) const;
 
     void setStaticPrecompiled(std::shared_ptr<const std::set<std::string>> _staticPrecompiled)
     {
@@ -138,10 +142,16 @@ public:
 
     bool isWasm() const { return m_blockContext.isWasm(); }
 
-    bool hasContractTableChanged() { return m_hasContractTableChanged; }
+    bool hasContractTableChanged() const { return m_hasContractTableChanged; }
     void setContractTableChanged() { m_hasContractTableChanged = true; }
 
+    bool checkAuth(const CallParameters::UniquePtr& callParameters);
+    void creatAuthTable(std::string_view _tableName, std::string_view _origin,
+        std::string_view _sender, uint32_t _version);
+
 protected:
+    bool transferBalance(std::string_view origin, std::string_view sender,
+        std::string_view receiver, const u256& value, int64_t gas);
     std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> call(
         CallParameters::UniquePtr callParameters);
     CallParameters::UniquePtr callPrecompiled(CallParameters::UniquePtr callParameters);
@@ -153,14 +163,16 @@ protected:
     CallParameters::UniquePtr callDynamicPrecompiled(
         CallParameters::UniquePtr callParameters, const std::string& code);
 
+    //    virtual TransactionExecutive::Ptr buildChildExecutive(const std::string& _contractAddress,
+    //        int64_t contextID, int64_t seq, bool useCoroutine = true)
     virtual TransactionExecutive::Ptr buildChildExecutive(const std::string& _contractAddress,
-        int64_t contextID, int64_t seq, bool useCoroutine = true)
+        int64_t contextID, int64_t seq, ExecutiveType execType = ExecutiveType::coroutine)
     {
         auto executiveFactory = std::make_shared<ExecutiveFactory>(
             m_blockContext, m_evmPrecompiled, m_precompiled, m_staticPrecompiled, m_gasInjector);
 
 
-        return executiveFactory->build(_contractAddress, contextID, seq, useCoroutine);
+        return executiveFactory->build(_contractAddress, contextID, seq, execType);
     }
 
     void revert();
@@ -210,13 +222,9 @@ protected:
         return std::string(USER_APPS_PREFIX).append(formatAddress);
     }
 
-    bool checkAuth(const CallParameters::UniquePtr& callParameters);
     bool checkExecAuth(const CallParameters::UniquePtr& callParameters);
     int32_t checkContractAvailable(const CallParameters::UniquePtr& callParameters);
     uint8_t checkAccountAvailable(const CallParameters::UniquePtr& callParameters);
-
-    void creatAuthTable(std::string_view _tableName, std::string_view _origin,
-        std::string_view _sender, uint32_t _version);
 
     bool buildBfsPath(std::string_view _absoluteDir, std::string_view _origin,
         std::string_view _sender, std::string_view _type, int64_t gasLeft);
@@ -236,7 +244,8 @@ protected:
     bcos::storage::Recoder::Ptr m_recoder;
     std::vector<TransactionExecutive::Ptr> m_childExecutives;
 
-    std::shared_ptr<storage::StorageWrapper> m_storageWrapper;
+    storage::StorageWrapper m_storageWrapperObj;
+    storage::StorageWrapper* m_storageWrapper;
     bool m_hasContractTableChanged = false;
 };
 

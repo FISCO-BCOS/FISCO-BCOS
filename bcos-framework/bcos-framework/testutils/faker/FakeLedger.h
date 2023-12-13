@@ -22,6 +22,7 @@
 #include "../../ledger/LedgerConfig.h"
 #include "../../ledger/LedgerInterface.h"
 #include "../../protocol/Block.h"
+#include "FakeBlock.h"
 #include <bcos-utilities/ThreadPool.h>
 
 #include <utility>
@@ -99,8 +100,8 @@ public:
     Block::Ptr init(BlockHeader::Ptr _parentBlockHeader, bool _withHeader, BlockNumber _blockNumber,
         size_t _txsSize, int64_t _timestamp = utcTime())
     {
-        auto block = fakeAndCheckBlock(
-            m_blockFactory->cryptoSuite(), m_blockFactory, false, _txsSize, 0, false);
+        auto block = fakeAndCheckBlock(m_blockFactory->cryptoSuite(), m_blockFactory, _txsSize,
+            _txsSize, _blockNumber, true, false);
         if (!_withHeader)
         {
             return block;
@@ -143,7 +144,7 @@ public:
     }
 
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
-        bcos::protocol::TransactionsPtr, bcos::protocol::Block::ConstPtr block,
+        bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr block,
         std::function<void(Error::Ptr&&)> callback, bool writeTxsAndReceipts) override
     {
         (void)storage;
@@ -151,8 +152,8 @@ public:
         callback(nullptr);
     }
 
-    void asyncPreStoreBlockTxs(bcos::protocol::TransactionsPtr, bcos::protocol::Block::ConstPtr,
-        std::function<void(Error::UniquePtr&&)> _callback) override
+    void asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr,
+        bcos::protocol::Block::ConstPtr, std::function<void(Error::UniquePtr&&)> _callback) override
     {
         if (!_callback)
         {
@@ -162,8 +163,8 @@ public:
     }
 
     // the txpool module use this interface to store txs
-    bcos::Error::Ptr storeTransactionsAndReceipts(
-        bcos::protocol::TransactionsPtr blockTxs, bcos::protocol::Block::ConstPtr block) override
+    bcos::Error::Ptr storeTransactionsAndReceipts(bcos::protocol::ConstTransactionsPtr blockTxs,
+        bcos::protocol::Block::ConstPtr block) override
     {
         WriteGuard l(x_txsHashToData);
         for (size_t i = 0; i < block->transactionsSize(); i++)
@@ -280,10 +281,10 @@ public:
             _onGetNodeList(nullptr, observerNodes);
             return;
         }
-        if (_type == CONSENSUS_WORKING_SEALER)
+        if (_type == CONSENSUS_CANDIDATE_SEALER)
         {
             auto consensusNodes = std::make_shared<ConsensusNodeList>();
-            *consensusNodes = m_ledgerConfig->workingSealerNodeList();
+            *consensusNodes = m_ledgerConfig->candidateSealerNodeList();
             _onGetNodeList(nullptr, consensusNodes);
             return;
         }

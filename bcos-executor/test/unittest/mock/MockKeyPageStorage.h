@@ -106,7 +106,7 @@ public:
                 auto myTable = m_inner->openTable(table);
                 if (!myTable)
                 {
-                    m_inner->createTable(std::string(table), executor::STORAGE_VALUE);
+                    m_inner->createTable(std::string(table), std::string(executor::STORAGE_VALUE));
                     myTable = m_inner->openTable(std::string(table));
                 }
                 myTable->setRow(key, entry);
@@ -137,33 +137,31 @@ public:
     }
 
     Error::Ptr setRows(std::string_view tableName,
-        const std::variant<const gsl::span<const std::string_view>,
-            const gsl::span<const std::string>>& keys,
-        std::variant<gsl::span<const std::string_view>, gsl::span<const std::string>> values)
-        override
+        RANGES::any_view<std::string_view,
+            RANGES::category::random_access | RANGES::category::sized>
+            keys,
+        RANGES::any_view<std::string_view,
+            RANGES::category::random_access | RANGES::category::sized>
+            values) noexcept override
     {
         std::promise<bool> p;
         std::atomic_int64_t count = 0;
-        std::visit(
-            [&](auto&& keys, auto&& values) {
-                std::atomic_int64_t c = keys.size();
-                auto collector = [&]() {
-                    c--;
-                    count++;
-                    if (c == 0)
-                    {
-                        p.set_value(true);
-                    }
-                };
-                for (size_t i = 0; i < keys.size(); ++i)
-                {
-                    storage::Entry e;
-                    e.set(std::string(values[i]));
-                    asyncSetRow(tableName, keys[i], std::move(e),
-                        [&collector](Error::UniquePtr) { collector(); });
-                }
-            },
-            keys, values);
+        std::atomic_int64_t c = keys.size();
+        auto collector = [&]() {
+            c--;
+            count++;
+            if (c == 0)
+            {
+                p.set_value(true);
+            }
+        };
+        for (size_t i = 0; i < keys.size(); ++i)
+        {
+            storage::Entry e;
+            e.set(std::string(values[i]));
+            asyncSetRow(
+                tableName, keys[i], std::move(e), [&collector](Error::UniquePtr) { collector(); });
+        }
         p.get_future().get();
         std::cout << "setRows: " << count << std::endl;
         return nullptr;

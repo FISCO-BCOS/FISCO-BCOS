@@ -31,7 +31,7 @@ CallParameters::UniquePtr ExecutiveState::go()
     {
         m_executive =
             std::dynamic_pointer_cast<CoroutineTransactionExecutive>(m_executiveFactory->build(
-                m_input->codeAddress, m_input->contextID, m_input->seq, true));
+                m_input->codeAddress, m_input->contextID, m_input->seq, ExecutiveType::coroutine));
     }
 
     // run

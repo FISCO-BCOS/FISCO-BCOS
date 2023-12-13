@@ -117,7 +117,6 @@ public:
         commitBlock(1);
     }
 
-#pragma region
     std::string consTestBin =
         "608060405234801561001057600080fd5b506110036000806101000a81548173ffffffffffffffffffffffffff"
         "ffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff160217905550610791806100"
@@ -230,7 +229,7 @@ public:
         "043757600080fd5b505af115801561044b573d6000803e3d6000fd5b505050506040513d602081101561046157"
         "600080fd5b81019080805190602001909291905050509050929150505600a165627a7a72305820fd4857231ba5"
         "7cb17d47d43e38f1370285cfd965b622af793ee1bd9a3e490d270029";
-#pragma endregion
+
     ExecutionMessage::UniquePtr rotate(protocol::BlockNumber _number, bcos::bytes const& pk,
         bcos::bytes const& msg, bcos::bytes const& proof, std::string const& txSender = "",
         int _errorCode = 0)
@@ -888,7 +887,7 @@ BOOST_AUTO_TEST_CASE(rotateValidTest)
     auto nodeList = getNodeList();
     BOOST_CHECK(nodeList.size() == 4);
     std::for_each(nodeList.begin(), nodeList.end(), [&](const ledger::ConsensusNode& node) {
-        BOOST_CHECK(node.type == ledger::CONSENSUS_WORKING_SEALER);
+        BOOST_CHECK(node.type == ledger::CONSENSUS_SEALER);
     });
 
     // case2: valid proof, but the origin is not exist in the workingSealers
@@ -935,14 +934,20 @@ BOOST_AUTO_TEST_CASE(rotateValidTest)
     BOOST_CHECK(nodeList.size() == 4);
     // only one node is working sealer
     uint16_t workingSealerCount = 0;
+    uint16_t candidateSealerCount = 0;
     for (const auto& node : nodeList)
     {
-        if (node.type == ledger::CONSENSUS_WORKING_SEALER)
+        if (node.type == ledger::CONSENSUS_SEALER)
         {
             workingSealerCount++;
         }
+        if (node.type == ledger::CONSENSUS_CANDIDATE_SEALER)
+        {
+            candidateSealerCount++;
+        }
     }
     BOOST_CHECK(workingSealerCount == 1);
+    BOOST_CHECK(candidateSealerCount == 3);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

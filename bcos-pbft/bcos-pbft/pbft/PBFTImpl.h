@@ -77,7 +77,7 @@ public:
     }
 
     // notify the sealer the latest blockNumber
-    void registerStateNotifier(std::function<void(bcos::protocol::BlockNumber)> _stateNotifier)
+    void registerStateNotifier(std::function<void(bcos::protocol::BlockNumber, crypto::HashType const&)> _stateNotifier)
     {
         m_pbftEngine->pbftConfig()->registerStateNotifier(std::move(_stateNotifier));
     }
@@ -155,6 +155,11 @@ public:
     void clearExceptionProposalState(bcos::protocol::BlockNumber _number) override
     {
         m_pbftEngine->clearExceptionProposalState(_number);
+    }
+
+    bool shouldRotateSealers(protocol::BlockNumber _number) const override
+    {
+        return m_pbftEngine->shouldRotateSealers(_number);
     }
 
 protected:

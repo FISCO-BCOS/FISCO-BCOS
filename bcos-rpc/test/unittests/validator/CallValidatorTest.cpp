@@ -59,7 +59,7 @@ BOOST_AUTO_TEST_CASE(verifyTest)
     auto address = keyPair.address(hashImpl);
     auto cryptoSuite =
         std::make_shared<bcos::crypto::CryptoSuite>(hashImpl, signatureImpl, encryptImpl);
-    CallValidator callValidator(cryptoSuite);
+    CallValidator callValidator;
     bcos::bytes input{};
     // precompiled::SYS_CONFIG_ADDRESS string_view to address
     input.insert(
@@ -73,7 +73,8 @@ BOOST_AUTO_TEST_CASE(verifyTest)
     // success
     {
         auto [result, recoverAdd] = callValidator.verify(precompiled::SYS_CONFIG_ADDRESS,
-            "0xbcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd", signStr);
+            "0xbcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd", signStr,
+            group::NON_SM_NODE);
         BOOST_CHECK(result);
         BOOST_CHECK(bcos::toHex(recoverAdd) == address.hex());
     }
@@ -81,7 +82,8 @@ BOOST_AUTO_TEST_CASE(verifyTest)
     // error
     {
         auto [result, recoverAdd] = callValidator.verify(precompiled::CONSENSUS_ADDRESS,
-            "0xbcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd", signStr);
+            "0xbcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd", signStr,
+            group::NON_SM_NODE);
         BOOST_CHECK(bcos::toHex(recoverAdd) != address.hex());
     }
 }
@@ -98,7 +100,7 @@ BOOST_AUTO_TEST_CASE(smVerifyTest)
     auto address = keyPair.address(hashImpl);
     auto cryptoSuite =
         std::make_shared<bcos::crypto::CryptoSuite>(hashImpl, signatureImpl, nullptr);
-    CallValidator callValidator(cryptoSuite);
+    CallValidator callValidator;
     bcos::bytes input{};
     // precompiled::SYS_CONFIG_ADDRESS string_view to address
     input.insert(
@@ -113,7 +115,8 @@ BOOST_AUTO_TEST_CASE(smVerifyTest)
     // success
     {
         auto [result, recoverAdd] = callValidator.verify(precompiled::SYS_CONFIG_ADDRESS,
-            "0xbcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd", signStr);
+            "0xbcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd", signStr,
+            group::SM_NODE);
         BOOST_CHECK(result);
         BOOST_CHECK(bcos::toHex(recoverAdd) == address.hex());
     }
@@ -121,7 +124,8 @@ BOOST_AUTO_TEST_CASE(smVerifyTest)
     // error
     {
         auto [result, recoverAdd] = callValidator.verify(precompiled::CONSENSUS_ADDRESS,
-            "0xbcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd", signStr);
+            "0xbcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd", signStr,
+            group::SM_NODE);
         BOOST_CHECK(bcos::toHex(recoverAdd) != address.hex());
     }
 }
@@ -140,7 +144,6 @@ BOOST_AUTO_TEST_CASE(wasmTest)
     auto address = keyPair.address(hashImpl);
     auto cryptoSuite =
         std::make_shared<bcos::crypto::CryptoSuite>(hashImpl, signatureImpl, encryptImpl);
-    CallValidator callValidator(cryptoSuite);
     bcos::bytes input{};
     // precompiled::SYS_CONFIG_ADDRESS string_view to address
     std::string_view name(precompiled::SYS_CONFIG_NAME);
@@ -154,16 +157,60 @@ BOOST_AUTO_TEST_CASE(wasmTest)
     std::string signStr = bcos::toHex(*sign);
     // success
     {
-        auto [result, recoverAdd] = callValidator.verify(precompiled::SYS_CONFIG_NAME,
-            "0xbcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd", signStr);
+        auto [result, recoverAdd] = bcos::rpc::CallValidator::verify(precompiled::SYS_CONFIG_NAME,
+            "0xbcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd", signStr,
+            group::NON_SM_NODE);
         BOOST_CHECK(result);
         BOOST_CHECK(bcos::toHex(recoverAdd) == address.hex());
     }
 
     // error
     {
-        auto [result, recoverAdd] = callValidator.verify(precompiled::CONSENSUS_ADDRESS,
-            "0xbcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd", signStr);
+        auto [result, recoverAdd] = bcos::rpc::CallValidator::verify(precompiled::CONSENSUS_ADDRESS,
+            "0xbcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd", signStr,
+            group::NON_SM_NODE);
+        BOOST_CHECK(bcos::toHex(recoverAdd) != address.hex());
+    }
+}
+
+
+BOOST_AUTO_TEST_CASE(wasmSmTest)
+{
+    h256 fixedSec1("bcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd");
+    auto sec1 = std::make_shared<KeyImpl>(fixedSec1.asBytes());
+    auto keyFactory = std::make_shared<KeyFactoryImpl>();
+    crypto::SM2KeyPair keyPair(sec1);
+
+    auto hashImpl = std::make_shared<bcos::crypto::SM3>();
+    auto signatureImpl = std::make_shared<bcos::crypto::SM2Crypto>();
+    auto address = keyPair.address(hashImpl);
+    auto cryptoSuite =
+        std::make_shared<bcos::crypto::CryptoSuite>(hashImpl, signatureImpl, nullptr);
+    bcos::bytes input{};
+    // precompiled::SYS_CONFIG_ADDRESS string_view to address
+    std::string_view name(precompiled::SYS_CONFIG_NAME);
+    input.insert(
+        input.end(), precompiled::SYS_CONFIG_NAME, precompiled::SYS_CONFIG_NAME + name.size());
+    std::string data = "bcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd";
+    input += bcos::fromHex(data);
+
+    auto hash = hashImpl->hash(bcos::ref(input));
+    auto sign = signatureImpl->sign(keyPair, hash, true);
+    std::string signStr = bcos::toHex(*sign);
+    // success
+    {
+        auto [result, recoverAdd] = bcos::rpc::CallValidator::verify(precompiled::SYS_CONFIG_NAME,
+            "0xbcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd", signStr,
+            group::SM_NODE);
+        BOOST_CHECK(result);
+        BOOST_CHECK(bcos::toHex(recoverAdd) == address.hex());
+    }
+
+    // error
+    {
+        auto [result, recoverAdd] = bcos::rpc::CallValidator::verify(precompiled::CONSENSUS_ADDRESS,
+            "0xbcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd", signStr,
+            group::SM_NODE);
         BOOST_CHECK(bcos::toHex(recoverAdd) != address.hex());
     }
 }

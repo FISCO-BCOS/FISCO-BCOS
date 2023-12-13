@@ -28,6 +28,8 @@
 
 namespace bcos::sealer
 {
+constexpr static const uint16_t curve25519PublicKeySize = 32;
+constexpr static const uint16_t curve25519VRFProofSize = 96;
 class VRFBasedSealer : public bcos::sealer::Sealer
 {
 public:
@@ -40,10 +42,10 @@ public:
     VRFBasedSealer(VRFBasedSealer&&) = delete;
     VRFBasedSealer& operator=(VRFBasedSealer&&) = delete;
 
-    bool hookWhenSealBlock(bcos::protocol::Block::Ptr _block) override;
+    uint16_t hookWhenSealBlock(bcos::protocol::Block::Ptr _block) override;
 
-private:
     // generate and seal the workingSealerManagerPrecompiled transaction into _txOffset
-    bool generateTransactionForRotating(bcos::protocol::Block::Ptr& _block);
+    static uint16_t generateTransactionForRotating(bcos::protocol::Block::Ptr& _block,
+        SealerConfig::Ptr const&, SealingManager::ConstPtr const&, crypto::Hash::Ptr const&);
 };
 }  // namespace bcos::sealer

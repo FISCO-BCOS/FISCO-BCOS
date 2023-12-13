@@ -20,13 +20,12 @@
 
 #pragma once
 #include "Common.h"
-#include <bcos-codec/wrapper/CodecWrapper.h>
-#include <bcos-framework/executor/PrecompiledTypeDef.h>
+#include "bcos-codec/wrapper/CodecWrapper.h"
+#include "bcos-framework/executor/PrecompiledTypeDef.h"
+#include "bcos-framework/protocol/Block.h"
+#include "libinitializer/ProtocolInitializer.h"
 #include <bcos-tool/NodeConfig.h>
 
-using namespace bcos;
-using namespace bcos::tool;
-using namespace bcos::initializer;
 namespace bcos::initializer
 {
 class BfsInitializer
@@ -35,13 +34,13 @@ public:
     BfsInitializer() = delete;
     static void init(protocol::BlockNumber _number,
         const std::shared_ptr<ProtocolInitializer>& _protocol,
-        const std::shared_ptr<NodeConfig>& _nodeConfig, const protocol::Block::Ptr& _block)
+        const std::shared_ptr<tool::NodeConfig>& _nodeConfig, const protocol::Block::Ptr& _block)
     {
         bcos::CodecWrapper codecWrapper(
             _protocol->cryptoSuite()->hashImpl(), _nodeConfig->isWasm());
         bytes input = codecWrapper.encodeWithSig("initBfs()");
 
-        auto transaction = _protocol->blockFactory()->transactionFactory()->createTransaction(3,
+        auto transaction = _protocol->blockFactory()->transactionFactory()->createTransaction(0,
             _nodeConfig->isWasm() ? precompiled::BFS_NAME : precompiled::BFS_ADDRESS, input,
             u256(_number).str(), 500, _nodeConfig->chainId(), _nodeConfig->groupId(), utcTime());
         _block->appendTransaction(std::move(transaction));

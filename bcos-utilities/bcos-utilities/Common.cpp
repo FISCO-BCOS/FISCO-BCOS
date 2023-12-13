@@ -20,14 +20,15 @@
 
 #define NOMINMAX
 
-#include "Common.h"
-#include "Exceptions.h"
-#include <csignal>
 #if defined(WIN32) || defined(WIN64) || defined(_WIN32) || defined(_WIN32_)
+#define _WIN32_WINNT 0x0601
 #include <windows.h>
 #else
 #include <sys/time.h>
 #endif
+#include "Common.h"
+#include "Exceptions.h"
+#include <csignal>
 #ifdef __APPLE__
 #include <pthread.h>
 #endif

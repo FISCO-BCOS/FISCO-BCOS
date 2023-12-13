@@ -316,9 +316,16 @@ void archiveBlocks(auto archiveStorage, auto ledger,
                     receiptValues[j] = receiptJson.toStyledString();
                 }
             });
-        archiveStorage->setRows(ledger::SYS_HASH_2_TX, keys, std::move(transactionValues));
-        archiveStorage->setRows(
-            ledger::SYS_HASH_2_RECEIPT, std::move(keys), std::move(receiptValues));
+        archiveStorage->setRows(ledger::SYS_HASH_2_TX,
+            keys | RANGES::views::transform(
+                       [](const std::string& str) { return std::string_view{str}; }),
+            transactionValues | RANGES::views::transform(
+                                    [](const std::string& str) { return std::string_view{str}; }));
+        archiveStorage->setRows(ledger::SYS_HASH_2_RECEIPT,
+            keys | RANGES::views::transform(
+                       [](const std::string& str) { return std::string_view{str}; }),
+            receiptValues | RANGES::views::transform(
+                                [](const std::string& str) { return std::string_view{str}; }));
         std::cout << "\r"
                   << "write block " << i << " size: " << size << std::flush;
     }
@@ -406,13 +413,13 @@ void reimportBlocks(auto archiveStorage, TransactionalStorageInterface::Ptr loca
                     }
                     // convert json to transaction
                     int32_t version = jsonValue["version"].asInt();
-                    auto nonce = jsonValue["nonce"].asString();
+                    auto nonce = asString(fromHex(jsonValue["nonce"].asString()));
                     auto input = fromHexWithPrefix(jsonValue["input"].asString());
                     auto signature = fromHexWithPrefix(jsonValue["signature"].asString());
                     auto tx = transactionFactory->createTransaction(version,
                         jsonValue["to"].asString(), input, nonce, jsonValue["blockLimit"].asInt64(),
                         jsonValue["chainID"].asString(), jsonValue["groupID"].asString(),
-                        jsonValue["importTime"].asInt64());
+                        jsonValue["importTime"].asInt64(), jsonValue["abi"].asString());
                     dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(tx)->setSignatureData(
                         signature);
                     tx->encode(txs[i]);
@@ -421,7 +428,7 @@ void reimportBlocks(auto archiveStorage, TransactionalStorageInterface::Ptr loca
             });
 
         // write transactions to local storage
-        localStorage->setRows(ledger::SYS_HASH_2_TX, txHashes, std::move(txsView));
+        localStorage->setRows(ledger::SYS_HASH_2_TX, txHashes, txsView);
 
         // get receipts from archive database
         std::promise<std::vector<std::optional<Entry>>> promiseReceipts;
@@ -504,7 +511,7 @@ void reimportBlocks(auto archiveStorage, TransactionalStorageInterface::Ptr loca
                 }
             });
         // write receipt to local storage
-        localStorage->setRows(ledger::SYS_HASH_2_RECEIPT, txHashes, std::move(receiptsView));
+        localStorage->setRows(ledger::SYS_HASH_2_RECEIPT, txHashes, receiptsView);
         std::cout << "\r"
                   << "reimport block " << blockNumber << " size: " << txHashes.size() << std::flush;
     }

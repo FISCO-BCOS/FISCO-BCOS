@@ -35,12 +35,11 @@ class EmptyType
 {
 };
 
-template <class KeyType, class ValueType>
-class Bucket : public std::enable_shared_from_this<Bucket<KeyType, ValueType>>
+template <class KeyType, class ValueType, class MapType = std::unordered_map<KeyType, ValueType>>
+class Bucket : public std::enable_shared_from_this<Bucket<KeyType, ValueType, MapType>>
 {
 public:
     using Ptr = std::shared_ptr<Bucket>;
-    using MapType = std::unordered_map<KeyType, ValueType>;
 
     Bucket() = default;
     Bucket(const Bucket&) = default;
@@ -193,6 +192,11 @@ public:
         auto it = m_values.find(key);
         if (it == m_values.end())
         {
+            if (c_fileLogLevel == LogLevel::DEBUG) [[unlikely]]
+            {
+                BCOS_LOG(DEBUG) << LOG_DESC("Remove tx, but transaction not found! ")
+                                << LOG_KV("key", key);
+            }
             return {false, {}};
         }
         else
@@ -254,24 +258,25 @@ public:
 
     SharedMutex& getMutex() { return m_mutex; }
 
-private:
+protected:
     MapType m_values;
     mutable SharedMutex m_mutex;
 };
 
-template <class KeyType, class ValueType, class BucketHasher = std::hash<KeyType>>
+template <class KeyType, class ValueType, class BucketHasher = std::hash<KeyType>,
+    class BucketType = Bucket<KeyType, ValueType>>
 class BucketMap
 {
 public:
     using Ptr = std::shared_ptr<BucketMap>;
-    using WriteAccessor = typename Bucket<KeyType, ValueType>::WriteAccessor;
-    using ReadAccessor = typename Bucket<KeyType, ValueType>::ReadAccessor;
+    using WriteAccessor = typename BucketType::WriteAccessor;
+    using ReadAccessor = typename BucketType::ReadAccessor;
 
     BucketMap(size_t bucketSize)
     {
         for (size_t i = 0; i < bucketSize; i++)
         {
-            m_buckets.push_back(std::make_shared<Bucket<KeyType, ValueType>>());
+            m_buckets.push_back(std::make_shared<BucketType>());
         }
     }
 
@@ -290,23 +295,23 @@ public:
     void batchFind(
         const auto& keys, std::function<bool(const KeyType&, typename AccessorType::Ptr)> handler)
     {
-        forEach<AccessorType>(keys, [handler = std::move(handler)](const KeyType& key,
-                                        typename Bucket<KeyType, ValueType>::Ptr bucket,
-                                        typename AccessorType::Ptr accessor) {
-            bool has = bucket->template find<AccessorType>(accessor, key);
-            return handler(key, has ? accessor : nullptr);
-        });
+        forEach<AccessorType>(
+            keys, [handler = std::move(handler)](const KeyType& key,
+                      typename BucketType::Ptr bucket, typename AccessorType::Ptr accessor) {
+                bool has = bucket->template find<AccessorType>(accessor, key);
+                return handler(key, has ? accessor : nullptr);
+            });
     }
 
     void batchInsert(const auto& kvs,
         std::function<void(bool, const KeyType&, typename WriteAccessor::Ptr)> onInsert)
     {
-        forEach<WriteAccessor>(kvs, [onInsert = std::move(onInsert)](decltype(kvs.front()) kv,
-                                        typename Bucket<KeyType, ValueType>::Ptr bucket,
-                                        typename WriteAccessor::Ptr accessor) {
-            bucket->insert(accessor, kv);
-            return true;
-        });
+        forEach<WriteAccessor>(
+            kvs, [onInsert = std::move(onInsert)](decltype(kvs.front()) kv,
+                     typename BucketType::Ptr bucket, typename WriteAccessor::Ptr accessor) {
+                bucket->insert(accessor, kv);
+                return true;
+            });
     }
 
     void batchInsert(const auto& kvs)
@@ -317,13 +322,13 @@ public:
     void batchRemove(
         const auto& keys, std::function<void(bool, const KeyType&, const ValueType&)> onRemove)
     {
-        forEach<WriteAccessor>(keys, [onRemove = std::move(onRemove)](const KeyType& key,
-                                         typename Bucket<KeyType, ValueType>::Ptr bucket,
-                                         typename WriteAccessor::Ptr accessor) {
-            auto [success, value] = bucket->remove(accessor, key);
-            onRemove(success, key, value);
-            return true;
-        });
+        forEach<WriteAccessor>(
+            keys, [onRemove = std::move(onRemove)](const KeyType& key,
+                      typename BucketType::Ptr bucket, typename WriteAccessor::Ptr accessor) {
+                auto [success, value] = bucket->remove(accessor, key);
+                onRemove(success, key, value);
+                return true;
+            });
     }
 
     void batchRemove(const auto& keys)
@@ -370,17 +375,17 @@ public:
         {
             for (size_t i = 0; i < m_buckets.size(); i++)
             {
-                m_buckets[i] = std::make_shared<Bucket<KeyType, ValueType>>();
+                m_buckets[i] = std::make_shared<BucketType>();
             }
         }
         else
         {
             // idx and bucket
-            std::queue<std::pair<size_t, typename Bucket<KeyType, ValueType>::Ptr>> bucket2Remove;
+            std::queue<std::pair<size_t, typename BucketType::Ptr>> bucket2Remove;
             for (size_t i = 0; i < m_buckets.size(); i++)
             {
                 auto bucket = m_buckets[i];
-                m_buckets[i] = std::make_shared<Bucket<KeyType, ValueType>>();
+                m_buckets[i] = std::make_shared<BucketType>();
                 bucket2Remove.emplace(i, std::move(bucket));
             }
 
@@ -423,6 +428,86 @@ public:
         forEach<AccessorType>(startIdx, std::move(handler));
     }
 
+#if 0
+        template <class AccessorType>  // handler return isContinue
+        void forEach(const KeyType& startAfter, uint64_t eachBucketTimeLimit, size_t totalTxLimit,
+            std::function<bool(typename AccessorType::Ptr accessor)> handler)
+        {
+            size_t startIdx = (getBucketIndex(startAfter) + 1) % m_buckets.size();
+            size_t bucketsSize = m_buckets.size();
+
+            auto indexes =
+                RANGES::iota_view<size_t, size_t>{startIdx, startIdx + bucketsSize} |
+                RANGES::views::transform([bucketsSize](size_t i) { return i % bucketsSize; });
+
+            forEachBucket<AccessorType>(
+                indexes, [eachBucketTimeLimit, &totalTxLimit, handler =
+                std::move(handler)](size_t,
+                             typename BucketType::Ptr bucket, typename AccessorType::Ptr accessor)
+                             {
+                    auto bucketStartTime = utcTime();
+
+                    return bucket->template forEach<AccessorType>(
+                        [&bucketStartTime, eachBucketTimeLimit, &totalTxLimit, handler =
+                        std::move(handler)](
+                            typename AccessorType::Ptr accessor) {
+                            if (utcTime() - bucketStartTime >= eachBucketTimeLimit)
+                            {
+                                BCOS_LOG(DEBUG) << LOG_KV("bucketStayTime:", utcTime() -
+                                bucketStartTime)
+                                                << LOG_KV("eachBucketTxsLimit:",
+                                                eachBucketTimeLimit)
+                                                << LOG_KV("totalTxLimit:", totalTxLimit);
+                                return true;
+                            }
+                            if (totalTxLimit <= 0)
+                            {
+                                return false;
+                            }
+                            totalTxLimit--;
+                            return handler(accessor);
+                        },
+                        accessor);
+                });
+        }
+#endif
+
+    template <class AccessorType>  // handler return isContinue
+    void forEach(const KeyType& startAfter, size_t eachBucketLimit,
+        std::function<std::pair<bool, bool>(typename AccessorType::Ptr accessor)> handler)
+    {
+        size_t startIdx = (getBucketIndex(startAfter) + 1) % m_buckets.size();
+        size_t bucketsSize = m_buckets.size();
+
+        auto indexes =
+            RANGES::iota_view<size_t, size_t>{startIdx, startIdx + bucketsSize} |
+            RANGES::views::transform([bucketsSize](size_t i) { return i % bucketsSize; });
+
+        forEachBucket<AccessorType>(
+            indexes, [eachBucketLimit, handler = std::move(handler)](size_t,
+                         typename BucketType::Ptr bucket, typename AccessorType::Ptr accessor) {
+                size_t count = 0;
+                bool needBucketContinue = true;
+                bucket->template forEach<AccessorType>(
+                    [&count, &needBucketContinue, eachBucketLimit, handler = std::move(handler)](
+                        typename AccessorType::Ptr accessor) {
+                        auto [needContinue, isValid] = handler(accessor);
+                        needBucketContinue = needContinue;
+                        if (isValid)
+                        {
+                            count++;
+                        }
+                        if (count >= eachBucketLimit)
+                        {
+                            return false;
+                        }
+                        return needContinue;
+                    },
+                    accessor);
+                return needBucketContinue;
+            });
+    }
+
     template <class AccessorType>  // handler return isContinue
     void forEach(size_t startIdx, std::function<bool(typename AccessorType::Ptr)> handler)
     {
@@ -433,21 +518,20 @@ public:
             RANGES::iota_view<size_t, size_t>{startIdx, startIdx + bucketsSize} |
             RANGES::views::transform([bucketsSize](size_t i) { return i % bucketsSize; });
 
-        forEachBucket<AccessorType>(indexes,
-            [handler = std::move(handler)](size_t, typename Bucket<KeyType, ValueType>::Ptr bucket,
-                typename AccessorType::Ptr accessor) {
+        forEachBucket<AccessorType>(
+            indexes, [handler = std::move(handler)](size_t, typename BucketType::Ptr bucket,
+                         typename AccessorType::Ptr accessor) {
                 return bucket->template forEach<AccessorType>(handler, accessor);
             });
     }
 
     template <class AccessorType>  // handler return isContinue
     void forEachBucket(const auto& bucketIndexes,
-        std::function<bool(
-            size_t idx, typename Bucket<KeyType, ValueType>::Ptr, typename AccessorType::Ptr)>
+        std::function<bool(size_t idx, typename BucketType::Ptr, typename AccessorType::Ptr)>
             handler)
     {
         // idx and bucket
-        std::queue<std::pair<size_t, typename Bucket<KeyType, ValueType>::Ptr>> bucket2Process;
+        std::queue<std::pair<size_t, typename BucketType::Ptr>> bucket2Process;
 
         for (size_t idx : bucketIndexes)
         {
@@ -478,17 +562,15 @@ public:
     }
 
     template <class AccessorType>  // handler return isContinue
-    void forEach(const auto& objs,
-        std::function<bool(decltype(objs.front()), typename Bucket<KeyType, ValueType>::Ptr,
-            typename AccessorType::Ptr)>
-            handler)
+    void forEach(const auto& objs, std::function<bool(decltype(objs.front()),
+                                       typename BucketType::Ptr, typename AccessorType::Ptr)>
+                                       handler)
     {
         auto batches = objs | RANGES::views::chunk_by([this](const auto& a, const auto& b) {
             return this->getBucketIndex(a) == this->getBucketIndex(b);
         });
 
-        std::queue<
-            std::tuple<size_t, decltype(batches.front()), typename Bucket<KeyType, ValueType>::Ptr>>
+        std::queue<std::tuple<size_t, decltype(batches.front()), typename BucketType::Ptr>>
             bucket2Process;
 
         for (const auto& batch : batches)
@@ -555,7 +637,7 @@ protected:
         return hash % m_buckets.size();
     }
 
-    tbb::concurrent_vector<typename Bucket<KeyType, ValueType>::Ptr> m_buckets;
+    tbb::concurrent_vector<typename BucketType::Ptr> m_buckets;
 };
 
 template <class KeyType, class BucketHasher = std::hash<KeyType>>

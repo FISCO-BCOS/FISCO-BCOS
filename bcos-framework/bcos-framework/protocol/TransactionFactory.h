@@ -22,28 +22,41 @@
 #include "Transaction.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 
+#include <utility>
+
 namespace bcos::protocol
 {
 class TransactionFactory
 {
 public:
-    using Ptr = std::shared_ptr<TransactionFactory>;
-
     TransactionFactory() = default;
     TransactionFactory(const TransactionFactory&) = default;
     TransactionFactory(TransactionFactory&&) = default;
     TransactionFactory& operator=(const TransactionFactory&) = default;
     TransactionFactory& operator=(TransactionFactory&&) = default;
+    using Ptr = std::shared_ptr<TransactionFactory>;
     virtual ~TransactionFactory() = default;
 
     virtual Transaction::Ptr createTransaction(
         bytesConstRef txData, bool checkSig = true, bool checkHash = false) = 0;
     virtual Transaction::Ptr createTransaction(int32_t _version, std::string _to,
         bytes const& _input, std::string const& _nonce, int64_t blockLimit, std::string _chainId,
-        std::string _groupId, int64_t _importTime) = 0;
+        std::string _groupId, int64_t _importTime, std::string _abi = "", std::string _value = "",
+        std::string _gasPrice = "", int64_t _gasLimit = 0, std::string _maxFeePerGas = "",
+        std::string maxPriorityFeePerGas = "") = 0;
     virtual Transaction::Ptr createTransaction(int32_t _version, std::string _to,
         bytes const& _input, std::string const& _nonce, int64_t _blockLimit, std::string _chainId,
-        std::string _groupId, int64_t _importTime, bcos::crypto::KeyPairInterface::Ptr keyPair) = 0;
+        std::string _groupId, int64_t _importTime, const bcos::crypto::KeyPairInterface& keyPair,
+        std::string _abi = "", std::string _value = "", std::string _gasPrice = "",
+        int64_t _gasLimit = 0, std::string _maxFeePerGas = "",
+        std::string maxPriorityFeePerGas = "") = 0;
+    Transaction::Ptr createTransaction(int32_t _version, std::string _to, bytes const& _input,
+        std::string const& _nonce, int64_t _blockLimit, std::string _chainId, std::string _groupId,
+        int64_t _importTime, const bcos::crypto::KeyPairInterface::Ptr& keyPair, std::string _abi = "")
+    {
+        return createTransaction(_version, std::move(_to), _input, _nonce, _blockLimit,
+            std::move(_chainId), std::move(_groupId), _importTime, *keyPair, std::move(_abi));
+    }
     virtual bcos::crypto::CryptoSuite::Ptr cryptoSuite() = 0;
 };
 }  // namespace bcos::protocol

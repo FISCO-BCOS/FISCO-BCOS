@@ -21,6 +21,7 @@
 #include "FakeTxsSyncMsg.h"
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include "bcos-crypto/signature/sm2/SM2Crypto.h"
+#include "bcos-framework/bcos-framework/testutils/faker/FakeTransaction.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "test/unittests/txpool/TxPoolFixture.h"
 #include <bcos-crypto/hash/Keccak256.h>
@@ -28,7 +29,6 @@
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/protocol/CommonError.h>
-#include <bcos-tars-protocol/testutil/FakeTransaction.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/test/unit_test.hpp>
@@ -43,11 +43,9 @@ BOOST_AUTO_TEST_CASE(testFreeNodeTreeSync)
 {
     auto txpool = this->txpool();
     auto tx = fakeTransaction(this->m_cryptoSuite, std::to_string(utcTime()));
-    bcos::task::wait([](decltype(txpool) txpool, decltype(tx) tx) -> bcos::task::Task<void> {
-        bcos::bytes data;
-        tx->encode(data);
-        co_await txpool->broadcastTransactionBuffer(bcos::ref(data));
-    }(txpool, tx));
+    bcos::bytes data;
+    tx->encode(data);
+    txpool->broadcastTransactionBuffer(bcos::ref(data));
 }
 
 BOOST_AUTO_TEST_CASE(testConsensusNodeTreeSync)
@@ -65,18 +63,26 @@ BOOST_AUTO_TEST_CASE(testConsensusNodeTreeSync)
                     << LOG_KV("consIndex", txpool.treeRouter()->consIndex());
 
     auto tx = fakeTransaction(this->m_cryptoSuite, std::to_string(utcSteadyTime()));
-    bcos::task::wait([](decltype(txpool) txpool, decltype(tx) tx) -> bcos::task::Task<void> {
-        bcos::bytes data;
-        tx->encode(data);
-        co_await txpool.broadcastTransactionBufferByTree(bcos::ref(data), true);
+    bcos::bytes data;
+    tx->encode(data);
+    //    txpool.txpoolStorage()->insert(tx);
+    task::wait([](decltype(txpool) txpool, decltype(tx) transaction) -> task::Task<void> {
+        [[maybe_unused]] auto submitResult =
+            co_await txpool.submitTransaction(std::move(transaction));
     }(txpool, tx));
+    txpool.broadcastTransactionBufferByTree(bcos::ref(data), true);
     // broadcast to all nodes finally
+    auto totalMsg = m_frontService->totalSendMsgSize();
     for (const auto& item : this->m_nodeIdList)
     {
+        auto fakeFront = std::dynamic_pointer_cast<FakeFrontService>(
+            m_fakeGateWay->m_nodeId2TxPool.at(item)->transactionSync()->config()->frontService());
+        totalMsg += fakeFront->totalSendMsgSize();
         auto& nodeTxpool = dynamic_cast<TxPool&>(*m_fakeGateWay->m_nodeId2TxPool.at(item));
         auto size = nodeTxpool.txpoolStorage()->size();
         BOOST_CHECK(size == 1);
     }
+    BOOST_CHECK(totalMsg <= m_nodeIdList.size());
 }
 
 BOOST_AUTO_TEST_CASE(testObserverNodeTreeSync)
@@ -94,11 +100,9 @@ BOOST_AUTO_TEST_CASE(testObserverNodeTreeSync)
                     << LOG_KV("consIndex", txpool.treeRouter()->consIndex());
 
     auto tx = fakeTransaction(this->m_cryptoSuite, std::to_string(utcSteadyTime()));
-    bcos::task::wait([](decltype(txpool) txpool, decltype(tx) tx) -> bcos::task::Task<void> {
-        bcos::bytes data;
-        tx->encode(data);
-        co_await txpool.broadcastTransactionBufferByTree(bcos::ref(data), true);
-    }(txpool, tx));
+    bcos::bytes data;
+    tx->encode(data);
+    txpool.broadcastTransactionBufferByTree(bcos::ref(data), true);
     // broadcast to all nodes finally
     for (const auto& item : this->m_nodeIdList)
     {
@@ -132,11 +136,9 @@ BOOST_AUTO_TEST_CASE(testConsensusNodeWithLowerVersionTreeSync)
                     << LOG_KV("consIndex", txpool.treeRouter()->consIndex());
 
     auto tx = fakeTransaction(this->m_cryptoSuite, std::to_string(utcSteadyTimeUs()));
-    bcos::task::wait([](decltype(txpool) txpool, decltype(tx) tx) -> bcos::task::Task<void> {
-        bcos::bytes data;
-        tx->encode(data);
-        co_await txpool.broadcastTransactionBuffer(bcos::ref(data));
-    }(txpool, tx));
+    bcos::bytes data;
+    tx->encode(data);
+    txpool.broadcastTransactionBuffer(bcos::ref(data));
     // broadcast to all nodes
     for (const auto& item : this->m_nodeIdList)
     {

@@ -2,9 +2,9 @@
 
 #include "Storage.h"
 #include "bcos-task/AwaitableValue.h"
-#include <bcos-utilities/NullLock.h>
-#include <oneapi/tbb/parallel_for_each.h>
-#include <boost/container/small_vector.hpp>
+#include "bcos-utilities/NullLock.h"
+#include "bcos-utilities/Overloaded.h"
+#include <oneapi/tbb/spin_rw_mutex.h>
 #include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/identity.hpp>
 #include <boost/multi_index/key.hpp>
@@ -15,10 +15,10 @@
 #include <boost/throw_exception.hpp>
 #include <functional>
 #include <mutex>
-#include <range/v3/view/transform.hpp>
 #include <thread>
 #include <type_traits>
 #include <utility>
+#include <variant>
 
 namespace bcos::storage2::memory_storage
 {
@@ -41,30 +41,30 @@ enum Attribute : int
 {
     NONE = 0,
     ORDERED = 1,
-    CONCURRENT = 2,
-    MRU = 4,
-    LOGICAL_DELETION = 8,
+    CONCURRENT = 1 << 1,
+    MRU = 1 << 2,
+    LOGICAL_DELETION = 1 << 3,
 };
 
 template <class KeyType, class ValueType = Empty, Attribute attribute = Attribute::NONE,
     class BucketHasher = void>
 class MemoryStorage
 {
-private:
+public:
     constexpr static bool withOrdered = (attribute & Attribute::ORDERED) != 0;
     constexpr static bool withConcurrent = (attribute & Attribute::CONCURRENT) != 0;
     constexpr static bool withMRU = (attribute & Attribute::MRU) != 0;
     constexpr static bool withLogicalDeletion = (attribute & Attribute::LOGICAL_DELETION) != 0;
 
+private:
     constexpr static unsigned BUCKETS_COUNT = 64;  // Magic number 64
     constexpr unsigned getBucketSize() { return withConcurrent ? BUCKETS_COUNT : 1; }
-    constexpr static int MOSTLY_CACHELINE_SIZE = 64;
-
     static_assert(!withConcurrent || !std::is_void_v<BucketHasher>);
 
-    constexpr static unsigned DEFAULT_CAPACITY = 4 * 1024 * 1024;  // For mru
-    using Mutex = std::mutex;
-    using Lock = std::conditional_t<withConcurrent, std::unique_lock<Mutex>, utilities::NullLock>;
+    constexpr static unsigned DEFAULT_CAPACITY = 32 * 1024 * 1024;  // For mru
+    using Mutex = tbb::spin_rw_mutex;
+    using Lock = std::conditional_t<withConcurrent, typename tbb::spin_rw_mutex::scoped_lock,
+        utilities::NullLock>;
     using BucketMutex = std::conditional_t<withConcurrent, Mutex, Empty>;
     using DataValueType =
         std::conditional_t<withLogicalDeletion, std::variant<Deleted, ValueType>, ValueType>;
@@ -81,7 +81,7 @@ private:
         boost::multi_index_container<Data,
             boost::multi_index::indexed_by<IndexType, boost::multi_index::sequenced<>>>,
         boost::multi_index_container<Data, boost::multi_index::indexed_by<IndexType>>>;
-    struct alignas(MOSTLY_CACHELINE_SIZE) Bucket
+    struct Bucket
     {
         Container container;
         [[no_unique_address]] BucketMutex mutex;  // For concurrent
@@ -92,19 +92,17 @@ private:
     Buckets m_buckets;
     [[no_unique_address]] std::conditional_t<withMRU, int64_t, Empty> m_maxCapacity;
 
-    std::tuple<std::reference_wrapper<Bucket>, Lock> getBucket(auto const& key)
+    Bucket& getBucket(auto const& key) &
     {
         if constexpr (!withConcurrent)
         {
-            return std::make_tuple(std::ref(m_buckets[0]), Lock(Empty{}));
+            return m_buckets[0];
         }
         auto index = getBucketIndex(key);
 
         auto& bucket = m_buckets[index];
-        return std::make_tuple(std::ref(bucket), Lock(bucket.mutex));
+        return bucket;
     }
-
-    Bucket& getBucketByIndex(size_t index) { return m_buckets[index]; }
 
     size_t getBucketIndex(auto const& key) const
     {
@@ -131,7 +129,6 @@ private:
         {
             auto const& item = index.front();
             bucket.capacity -= getSize(item.value);
-
             index.pop_front();
         }
     }
@@ -148,23 +145,37 @@ private:
         return sizeof(ObjectType);
     }
 
+    friend auto tag_invoke(
+        bcos::storage2::tag_t<storage2::range> /*unused*/, MemoryStorage const& storage)
+        requires(!withConcurrent)
+    {
+        auto range = RANGES::views::transform(storage.m_buckets[0].container,
+            [&](Data const& data) -> std::tuple<const KeyType*, const ValueType*> {
+                if constexpr (std::decay_t<decltype(storage)>::withLogicalDeletion)
+                {
+                    return std::make_tuple(std::addressof(data.key),
+                        std::holds_alternative<Deleted>(data.value) ?
+                            nullptr :
+                            std::addressof(std::get<ValueType>(data.value)));
+                }
+                else
+                {
+                    return std::make_tuple(std::addressof(data.key), std::addressof(data.value));
+                }
+            });
+        return task::AwaitableValue<decltype(range)>(std::move(range));
+    }
+
 public:
     using Key = KeyType;
     using Value = ValueType;
 
-    MemoryStorage()
-        requires(!withConcurrent)
-    {
-        if constexpr (withMRU)
-        {
-            m_maxCapacity = DEFAULT_CAPACITY;
-        }
-    }
-
     explicit MemoryStorage(unsigned buckets = BUCKETS_COUNT)
-        requires(withConcurrent)
-      : m_buckets(std::min(buckets, getBucketSize()))
     {
+        if constexpr (withConcurrent)
+        {
+            m_buckets = decltype(m_buckets)(std::min(buckets, getBucketSize()));
+        }
         if constexpr (withMRU)
         {
             m_maxCapacity = DEFAULT_CAPACITY;
@@ -182,237 +193,104 @@ public:
         m_maxCapacity = capacity;
     }
 
-    class ReadIterator
+    friend auto tag_invoke(bcos::storage2::tag_t<readSome> /*unused*/, MemoryStorage& storage,
+        RANGES::input_range auto&& keys)
+        -> task::AwaitableValue<std::vector<std::optional<ValueType>>>
     {
-    private:
-        int64_t m_index = -1;
-        boost::container::small_vector<const Data*, 1> m_iterators;
-        [[no_unique_address]] std::conditional_t<withConcurrent,
-            boost::container::small_vector<Lock, 1>, Empty>
-            m_bucketLocks;
-
-    public:
-        friend class MemoryStorage;
-        using Key = const KeyType&;
-        using Value = const ValueType&;
-
-        ReadIterator() = default;
-        ReadIterator(const ReadIterator&) = delete;
-        ReadIterator(ReadIterator&&) noexcept = default;
-        ReadIterator& operator=(const ReadIterator&) = delete;
-        ReadIterator& operator=(ReadIterator&&) noexcept = default;
-        ~ReadIterator() noexcept = default;
-
-        task::AwaitableValue<bool> next() &
+        task::AwaitableValue<std::vector<std::optional<ValueType>>> result({});
+        if (RANGES::sized_range<decltype(keys)>)
         {
-            return {static_cast<size_t>(++m_index) != m_iterators.size()};
-        }
-        task::AwaitableValue<Key> key() const& { return {m_iterators[m_index]->key}; }
-        task::AwaitableValue<Value> value() const&
-        {
-            if constexpr (withLogicalDeletion)
-            {
-                return {std::get<ValueType>(m_iterators[m_index]->value)};
-            }
-            else
-            {
-                return {m_iterators[m_index]->value};
-            }
-        }
-        task::AwaitableValue<bool> hasValue() const
-        {
-            auto* data = m_iterators[m_index];
-            if constexpr (withLogicalDeletion)
-            {
-                if (data != nullptr && std::holds_alternative<Deleted>(data->value))
-                {
-                    return false;
-                }
-            }
-            return {data != nullptr};
+            result.value().reserve(RANGES::size(keys));
         }
 
-        void release()
-        {
-            if constexpr (withConcurrent)
-            {
-                m_bucketLocks.clear();
-            }
-        }
-
-        auto range() const&
-        {
-            return m_iterators |
-                   RANGES::views::transform(
-                       [](auto const* data) -> std::tuple<const KeyType*, const ValueType*> {
-                           if (!data)
-                           {
-                               return {nullptr, nullptr};
-                           }
-                           return {std::addressof(data->key), std::addressof(data->value)};
-                       });
-        }
-    };
-
-    class SeekIterator
-    {
-    private:
-        typename Container::iterator m_it;
-        typename Container::iterator m_end;
-        [[no_unique_address]] Lock m_bucketLock;
-        bool m_started = false;
-
-    public:
-        friend class MemoryStorage;
-        using Key = const KeyType&;
-        using Value = const ValueType&;
-
-        task::AwaitableValue<bool> next() &
-        {
-            if (!m_started)
-            {
-                m_started = true;
-                return {m_it != m_end};
-            }
-            return {(++m_it) != m_end};
-        }
-        task::AwaitableValue<Key> key() const { return {m_it->key}; }
-        task::AwaitableValue<Value> value() const
-        {
-            if constexpr (withLogicalDeletion)
-            {
-                return {std::get<ValueType>(m_it->value)};
-            }
-            else
-            {
-                return {m_it->value};
-            }
-        }
-        task::AwaitableValue<bool> hasValue() const
-        {
-            if constexpr (withLogicalDeletion)
-            {
-                if (std::holds_alternative<Deleted>(m_it->value))
-                {
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        void release() { m_bucketLock.unlock(); }
-
-        auto range() const&
-        {
-            return RANGES::subrange<decltype(m_it), decltype(m_end)>(m_it, m_end) |
-                   RANGES::views::transform(
-                       [](auto const& it) -> std::tuple<const KeyType*, const ValueType*> {
-                           if constexpr (withLogicalDeletion)
-                           {
-                               if (std::holds_alternative<Deleted>(it.value))
-                               {
-                                   return {std::addressof(it.key), nullptr};
-                               }
-                               return {std::addressof(it.key),
-                                   std::addressof(std::get<ValueType>(it.value))};
-                           }
-                           else
-                           {
-                               return {std::addressof(it.key), std::addressof(it.value)};
-                           }
-                       });
-        }
-    };
-
-    task::AwaitableValue<ReadIterator> read(RANGES::input_range auto&& keys)
-    {
-        task::AwaitableValue<ReadIterator> outputAwaitable(ReadIterator{});
-        ReadIterator& output = outputAwaitable.value();
-        if constexpr (RANGES::sized_range<std::remove_cvref_t<decltype(keys)>>)
-        {
-            output.m_iterators.reserve(RANGES::size(keys));
-        }
-
-        std::conditional_t<withConcurrent, std::bitset<BUCKETS_COUNT>, Empty> locks;
         for (auto&& key : keys)
         {
-            auto bucketIndex = getBucketIndex(key);
-            auto& bucket = getBucketByIndex(bucketIndex);
-
-            if constexpr (withConcurrent)
-            {
-                if (!locks[bucketIndex])
-                {
-                    locks[bucketIndex] = true;
-                    output.m_bucketLocks.emplace_back(bucket.mutex);
-                }
-            }
+            auto& bucket = storage.getBucket(key);
+            Lock lock(bucket.mutex, false);
 
             auto const& index = bucket.container.template get<0>();
             auto it = index.find(key);
             if (it != index.end())
             {
-                if constexpr (withMRU)
+                if constexpr (std::decay_t<decltype(storage)>::withLogicalDeletion)
                 {
-                    updateMRUAndCheck(bucket, it);
+                    std::visit(bcos::overloaded{[&](ValueType const& value) {
+                                                    result.value().emplace_back(
+                                                        std::make_optional(value));
+                                                },
+                                   [&](Deleted const&) {
+                                       result.value().emplace_back(std::optional<ValueType>{});
+                                   }},
+                        it->value);
                 }
-                output.m_iterators.emplace_back(std::addressof(*it));
+                else
+                {
+                    result.value().emplace_back(it->value);
+                }
+
+                if constexpr (std::decay_t<decltype(storage)>::withMRU)
+                {
+                    lock.upgrade_to_writer();
+                    storage.updateMRUAndCheck(bucket, it);
+                }
             }
             else
             {
-                output.m_iterators.emplace_back(nullptr);
+                result.value().emplace_back(std::optional<ValueType>{});
             }
         }
-
-        return outputAwaitable;
+        return result;
     }
 
-    task::AwaitableValue<SeekIterator> seek(auto const& key)
-        requires(withOrdered)
+    friend task::AwaitableValue<std::optional<ValueType>> tag_invoke(
+        storage2::tag_t<storage2::readOne> /*unused*/, MemoryStorage& storage, auto&& key)
     {
-        auto [bucket, lock] = getBucket(key);
-        auto const& index = bucket.get().container.template get<0>();
+        task::AwaitableValue<std::optional<ValueType>> result({});
+        auto& bucket = storage.getBucket(key);
+        Lock lock(bucket.mutex, false);
 
-        decltype(index.begin()) it;
-        if constexpr (std::is_same_v<storage2::STORAGE_BEGIN_TYPE,
-                          std::remove_cvref_t<decltype(key)>>)
+        auto const& index = bucket.container.template get<0>();
+        auto it = index.find(key);
+        if (it != index.end())
         {
-            it = index.begin();
-        }
-        else
-        {
-            it = index.lower_bound(key);
-        }
+            if constexpr (std::decay_t<decltype(storage)>::withMRU)
+            {
+                storage.updateMRUAndCheck(bucket, it);
+            }
 
-        task::AwaitableValue<SeekIterator> output({});
-        auto& seekIt = output.value();
-        seekIt.m_it = it;
-        seekIt.m_end = index.end();
-        if constexpr (withConcurrent)
-        {
-            seekIt.m_bucketLock = std::move(lock);
+            if constexpr (std::decay_t<decltype(storage)>::withLogicalDeletion)
+            {
+                std::visit(
+                    bcos::overloaded{[&](ValueType const& value) { result.value().emplace(value); },
+                        [&](Deleted const&) {}},
+                    it->value);
+            }
+            else
+            {
+                result.value().emplace(it->value);
+            }
         }
-
-        return output;
+        return result;
     }
 
-    task::AwaitableValue<void> write(
-        RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
+    friend task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/,
+        MemoryStorage& storage, RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
     {
-        for (auto&& [key, value] : RANGES::views::zip(
-                 std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values)))
+        for (auto&& [key, value] : RANGES::views::zip(keys, values))
         {
-            auto [bucket, lock] = getBucket(key);
-            auto const& index = bucket.get().container.template get<0>();
+            auto& bucket = storage.getBucket(key);
+            Lock lock(bucket.mutex, true);
+            auto const& index = bucket.container.template get<0>();
 
-            std::conditional_t<withMRU, int64_t, Empty> updatedCapacity;
-            if constexpr (withMRU)
+            std::conditional_t<std::decay_t<decltype(storage)>::withMRU, int64_t, Empty>
+                updatedCapacity;
+            if constexpr (std::decay_t<decltype(storage)>::withMRU)
             {
                 updatedCapacity = getSize(value);
             }
 
             typename Container::iterator it;
-            if constexpr (withOrdered)
+            if constexpr (std::decay_t<decltype(storage)>::withOrdered)
             {
                 it = index.lower_bound(key);
             }
@@ -422,45 +300,49 @@ public:
             }
             if (it != index.end() && it->key == key)
             {
-                if constexpr (withMRU)
+                if constexpr (std::decay_t<decltype(storage)>::withMRU)
                 {
                     auto& existsValue = it->value;
                     updatedCapacity -= getSize(existsValue);
                 }
 
-                bucket.get().container.modify(
+                bucket.container.modify(
                     it, [newValue = std::forward<decltype(value)>(value)](Data& data) mutable {
                         data.value = std::forward<decltype(newValue)>(newValue);
                     });
             }
             else
             {
-                it = bucket.get().container.emplace_hint(
-                    it, Data{.key = key, .value = std::forward<decltype(value)>(value)});
+                it = bucket.container.emplace_hint(
+                    it, Data{.key = KeyType(std::forward<decltype(key)>(key)),
+                            .value = std::forward<decltype(value)>(value)});
             }
 
-            if constexpr (withMRU)
+            if constexpr (std::decay_t<decltype(storage)>::withMRU)
             {
-                bucket.get().capacity += updatedCapacity;
-                updateMRUAndCheck(bucket.get(), it);
+                bucket.capacity += updatedCapacity;
+                storage.updateMRUAndCheck(bucket, it);
             }
         }
 
         return {};
     }
 
-    task::AwaitableValue<void> remove(RANGES::input_range auto const& keys)
+    friend task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/,
+        MemoryStorage& storage, RANGES::input_range auto&& keys)
     {
         for (auto&& key : keys)
         {
-            auto [bucket, lock] = getBucket(key);
-            auto const& index = bucket.get().container.template get<0>();
+            auto& bucket = storage.getBucket(key);
+            Lock lock(bucket.mutex, true);
+
+            auto const& index = bucket.container.template get<0>();
 
             auto it = index.find(key);
             if (it != index.end())
             {
                 auto& existsValue = it->value;
-                if constexpr (withLogicalDeletion)
+                if constexpr (std::decay_t<decltype(storage)>::withLogicalDeletion)
                 {
                     if (std::holds_alternative<Deleted>(existsValue))
                     {
@@ -469,28 +351,27 @@ public:
                     }
                 }
 
-                if constexpr (withMRU)
+                if constexpr (std::decay_t<decltype(storage)>::withMRU)
                 {
-                    bucket.get().capacity -= getSize(existsValue);
+                    bucket.capacity -= getSize(existsValue);
                 }
 
-                if constexpr (withLogicalDeletion)
+                if constexpr (std::decay_t<decltype(storage)>::withLogicalDeletion)
                 {
-                    bucket.get().container.modify(it, [](Data& data) mutable {
+                    bucket.container.modify(it, [](Data& data) mutable {
                         data.value.template emplace<Deleted>(Deleted{});
                     });
                 }
                 else
                 {
-                    bucket.get().container.erase(it);
+                    bucket.container.erase(it);
                 }
             }
             else
             {
-                if constexpr (withLogicalDeletion)
+                if constexpr (std::decay_t<decltype(storage)>::withLogicalDeletion)
                 {
-                    it = bucket.get().container.emplace_hint(
-                        it, Data{.key = key, .value = Deleted{}});
+                    it = bucket.container.emplace_hint(it, Data{.key = key, .value = Deleted{}});
                 }
             }
         }
@@ -498,27 +379,29 @@ public:
         return {};
     }
 
-    task::Task<void> merge(MemoryStorage& from)
+    friend task::AwaitableValue<void> tag_invoke(
+        storage2::tag_t<merge> /*unused*/, MemoryStorage& toStorage, MemoryStorage&& fromStorage)
+        requires(!std::is_const_v<decltype(fromStorage)>)
     {
-        for (auto bucketPair : RANGES::views::zip(m_buckets, from.m_buckets))
+        for (auto&& [bucket, fromBucket] :
+            RANGES::views::zip(toStorage.m_buckets, fromStorage.m_buckets))
         {
-            auto& [bucket, fromBucket] = bucketPair;
-            Lock toLock(bucket.mutex);
-            Lock fromLock(fromBucket.mutex);
+            Lock toLock(bucket.mutex, true);
+            Lock fromLock(fromBucket.mutex, true);
 
-            auto& index = bucket.container.template get<0>();
+            auto& toIndex = bucket.container.template get<0>();
             auto& fromIndex = fromBucket.container.template get<0>();
 
             while (!fromIndex.empty())
             {
-                auto [it, merged] = index.merge(fromIndex, fromIndex.begin());
+                auto [it, merged] = toIndex.merge(fromIndex, fromIndex.begin());
                 if (!merged)
                 {
-                    index.insert(index.erase(it), fromIndex.extract(fromIndex.begin()));
+                    toIndex.insert(toIndex.erase(it), fromIndex.extract(fromIndex.begin()));
                 }
             }
         }
-        co_return;
+        return {};
     }
 
     void swap(MemoryStorage& from)
@@ -526,8 +409,8 @@ public:
         for (auto bucketPair : RANGES::views::zip(m_buckets, from.m_buckets))
         {
             auto& [bucket, fromBucket] = bucketPair;
-            Lock toLock(bucket.mutex);
-            Lock fromLock(fromBucket.mutex);
+            Lock toLock(bucket.mutex, true);
+            Lock fromLock(fromBucket.mutex, true);
             bucket.container.swap(fromBucket.container);
         }
     }
@@ -537,7 +420,7 @@ public:
         bool allEmpty = true;
         for (auto& bucket : m_buckets)
         {
-            Lock lock(bucket.mutex);
+            Lock lock(bucket.mutex, false);
             if (!bucket.container.empty())
             {
                 allEmpty = false;
