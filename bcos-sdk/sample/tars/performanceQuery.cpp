@@ -228,6 +228,7 @@ void perfQuery(bcos::sdk::RPCClient& rpcClient,
 }
 
 
+#if __cpp_lib_jthread
 void loopFetchBlockNumber(std::stop_token& token, bcos::sdk::RPCClient& rpcClient)
 {
     while (!token.stop_requested())
@@ -243,6 +244,23 @@ void loopFetchBlockNumber(std::stop_token& token, bcos::sdk::RPCClient& rpcClien
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
 }
+#else
+void loopFetchBlockNumber(bcos::sdk::RPCClient& rpcClient)
+{
+    while (true)
+    {
+        try
+        {
+            blockNumber = bcos::sdk::BlockNumber(rpcClient).send().get();
+        }
+        catch (std::exception& e)
+        {
+            std::cout << boost::diagnostic_information(e);
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+}
+#endif
 
 int main(int argc, char* argv[])
 {
