@@ -144,3 +144,15 @@ void bcos::pthread_setThreadName(std::string const& _n)
     pthread_setname_np(_n.c_str());
 #endif
 }
+
+std::string bcos::pthread_getThreadName()
+{
+    std::string name;
+    name.resize(32);
+    auto err = pthread_getname_np(pthread_self(), (char*)name.data(), name.size());
+    if (err == 0)
+    {
+        return name;
+    }
+    return "";
+}
