@@ -18,7 +18,10 @@
  * @date 2021-07-28
  */
 #pragma once
-
+#if defined(__linux__)
+// Fix for Boost UUID on old kernel version Linux.  See https://github.com/boostorg/uuid/issues/91
+#define BOOST_UUID_RANDOM_PROVIDER_FORCE_POSIX
+#endif
 #include "bcos-boostssl/websocket/Common.h"
 #include <bcos-boostssl/interfaces/MessageFace.h>
 #include <bcos-framework/protocol/Protocol.h>
