@@ -15,8 +15,7 @@ RUN apt-get -q update && apt-get install -qy --no-install-recommends \
     && ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
     && apt-get install -qy --no-install-recommends tzdata \
     && dpkg-reconfigure --frontend noninteractive tzdata \
-    && rm -rf /var/lib/apt/lists/* \
-
+    && rm -rf /var/lib/apt/lists/* 
 RUN if [ "${TARGETARCH}" = "amd64" ]; then \
       wget -q https://github.com/Kitware/CMake/releases/download/v3.21.0/cmake-3.21.0-Linux-x86_64.sh -O /tmp/cmake-3.21.0-Linux-x86_64.sh && \
       chmod +x /tmp/cmake-3.21.0-Linux-x86_64.sh && \
