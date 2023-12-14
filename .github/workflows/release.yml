@@ -61,7 +61,15 @@ jobs:
             ccache-v3-notest-${{ runner.temp }}-${{ github.base_ref }}-
             ccache-v3-notest-${{ runner.temp }}-
       - name: install ubuntu dependencies
-        run: sudo apt install -y g++ libssl-dev openssl cmake git build-essential autoconf texinfo flex patch bison libgmp-dev zlib1g-dev automake libtool && sudo apt -y remove libtbb-dev
+        run: sudo apt install -y g++ libssl-dev openssl git build-essential autoconf texinfo flex patch bison libgmp-dev zlib1g-dev automake libtool && sudo apt -y remove libtbb-dev
+
+      - name: install cmake
+        run: |
+          wget https://github.com/Kitware/CMake/releases/download/v3.22.0/cmake-3.22.0-linux-x86_64.tar.gz
+          tar -xzvf cmake-3.22.0-linux-x86_64.tar.gz
+          mv cmake-3.22.0-linux-x86_64 /opt/cmake-3.22.0
+          update-alternatives --install /usr/bin/cmake cmake /opt/cmake-3.22.0/bin/cmake 1 --force
+
       - name: configure
         run: /usr/bin/cmake . -DBUILD_STATIC=ON -DTOOL=ON -DCMAKE_BUILD_TYPE=Release
       - name: compile
