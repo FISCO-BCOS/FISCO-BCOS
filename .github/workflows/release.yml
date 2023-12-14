@@ -71,7 +71,7 @@ jobs:
         run: cmake --version
 
       - name: configure
-        run: /usr/bin/cmake . -DBUILD_STATIC=ON -DTOOL=ON -DCMAKE_BUILD_TYPE=Release
+        run: cmake -DBUILD_STATIC=ON -DTOOL=ON -DCMAKE_BUILD_TYPE=Release ..
       - name: compile
         run: make -j2
       - name: prepare artifact
