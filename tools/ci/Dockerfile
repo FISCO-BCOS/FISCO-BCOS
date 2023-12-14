@@ -10,7 +10,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     SOURCE=${SOURCE_BRANCH:-master-2.0}
 
 RUN apt-get -q update && apt-get install -qy --no-install-recommends \
-    git clang make build-essential cmake libssl-dev zlib1g-dev ca-certificates \
+    git clang wget make build-essential cmake libssl-dev zlib1g-dev ca-certificates \
     libgmp-dev flex bison patch \
     && ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
     && apt-get install -qy --no-install-recommends tzdata \
