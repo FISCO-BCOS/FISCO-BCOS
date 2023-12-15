@@ -19,6 +19,10 @@
  */
 #pragma once
 
+#if defined(__linux__)
+// Fix for Boost UUID on old kernel version Linux.  See https://github.com/boostorg/uuid/issues/91
+#define BOOST_UUID_RANDOM_PROVIDER_FORCE_POSIX
+#endif
 #include <bcos-utilities/Common.h>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>

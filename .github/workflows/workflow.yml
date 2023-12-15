@@ -40,10 +40,10 @@ jobs:
           restore-keys: |
             vcpkg-msvc-v3-notest-${{ hashFiles('.github/workflows/workflow.yml') }}
             vcpkg-msvc-v3-notest-
-      - name: update vcpkg
-        run: |
-          cd ${{ env.VCPKG_ROOT }} && git fetch --all && git checkout master && git pull
-          cd -
+#      - name: update vcpkg
+#        run: |
+#          cd ${{ env.VCPKG_ROOT }} && git fetch --all && git checkout master && git pull
+#          cd -
       - name: Add MSbuild to PATH
         uses: microsoft/setup-msbuild@v1.1
       - name: configure and build

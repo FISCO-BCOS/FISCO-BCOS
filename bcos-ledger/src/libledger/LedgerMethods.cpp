@@ -365,13 +365,17 @@ bcos::task::Task<bcos::ledger::LedgerConfig::Ptr> bcos::ledger::tag_invoke(
 bcos::task::Task<bcos::ledger::Features> bcos::ledger::tag_invoke(
     ledger::tag_t<getFeatures> /*unused*/, LedgerInterface& ledger)
 {
+    auto blockNumber = co_await getCurrentBlockNumber(ledger);
     Features features;
     for (auto key : bcos::ledger::Features::featureKeys())
     {
         try
         {
             auto value = co_await getSystemConfig(ledger, key);
-            features.set(key);
+            if (blockNumber + 1 >= std::get<1>(value))
+            {
+                features.set(key);
+            }
         }
         catch (std::exception& e)
         {
