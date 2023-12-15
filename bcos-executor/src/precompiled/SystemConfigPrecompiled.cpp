@@ -248,8 +248,7 @@ int64_t SystemConfigPrecompiled::validate(
     {
         PRECOMPILED_LOG(INFO) << LOG_DESC("SystemConfigPrecompiled: set feature failed")
                               << LOG_KV("info", boost::diagnostic_information(e));
-        BOOST_THROW_EXCEPTION(
-            PrecompiledError("set feature failed, Please check the feature conditions!"));
+        BOOST_THROW_EXCEPTION(PrecompiledError(boost::diagnostic_information(e)));
     }
     catch (std::exception const& e)
     {
