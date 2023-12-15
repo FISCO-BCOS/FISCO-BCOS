@@ -139,6 +139,10 @@ jobs:
             ccache-v3-notest-${{ runner.temp }}-
       - name: install ubuntu dependencies
         run: sudo apt install -y g++ libssl-dev openssl git build-essential autoconf texinfo flex patch bison libgmp-dev zlib1g-dev automake libtool && sudo apt -y remove libtbb-dev
+      - name: Setup cmake
+        uses: jwlawson/actions-setup-cmake@v1.14
+        with:
+          cmake-version: '3.21.0'
       - name: configure
         run: cmake . -DBUILD_STATIC=ON
       - name: compile
