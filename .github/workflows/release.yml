@@ -61,9 +61,13 @@ jobs:
             ccache-v3-notest-${{ runner.temp }}-${{ github.base_ref }}-
             ccache-v3-notest-${{ runner.temp }}-
       - name: install ubuntu dependencies
-        run: sudo apt install -y g++ libssl-dev openssl cmake git build-essential autoconf texinfo flex patch bison libgmp-dev zlib1g-dev automake libtool && sudo apt -y remove libtbb-dev
+        run: sudo apt install -y g++ libssl-dev openssl git build-essential autoconf texinfo flex patch bison libgmp-dev zlib1g-dev automake libtool && sudo apt -y remove libtbb-dev
+      - name: Setup cmake
+        uses: jwlawson/actions-setup-cmake@v1.14
+        with:
+          cmake-version: '3.21.0'
       - name: configure
-        run: /usr/bin/cmake . -DBUILD_STATIC=ON -DTOOL=ON -DCMAKE_BUILD_TYPE=Release
+        run: cmake . -DBUILD_STATIC=ON -DTOOL=ON -DCMAKE_BUILD_TYPE=Release
       - name: compile
         run: make -j2
       - name: prepare artifact
