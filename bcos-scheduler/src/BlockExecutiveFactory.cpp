@@ -24,11 +24,12 @@
 #include "SchedulerImpl.h"
 #include "SerialBlockExecutive.h"
 #include "ShardingBlockExecutive.h"
-
+#include "bcos-framework/ledger/Features.h"
 
 using namespace std;
 using namespace bcos::protocol;
 using namespace bcos::scheduler;
+using namespace bcos::ledger;
 
 
 std::shared_ptr<BlockExecutive> BlockExecutiveFactory::build(bcos::protocol::Block::Ptr block,
@@ -37,7 +38,8 @@ std::shared_ptr<BlockExecutive> BlockExecutiveFactory::build(bcos::protocol::Blo
     bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
     bcos::txpool::TxPoolInterface::Ptr _txPool)
 {
-    if (m_isSerialExecute)
+    if (m_isSerialExecute ||
+        scheduler->ledgerConfig().features().get(ledger::Features::Flag::feature_dmc2serial))
     {
         auto serialBlockExecutive = std::make_shared<SerialBlockExecutive>(block, scheduler,
             startContextID, transactionSubmitResultFactory, staticCall, _blockFactory, _txPool);
@@ -66,7 +68,8 @@ std::shared_ptr<BlockExecutive> BlockExecutiveFactory::build(bcos::protocol::Blo
         return shardingBlockExecutive;
     }
 
-    if (m_isSerialExecute)
+    if (m_isSerialExecute ||
+        scheduler->ledgerConfig().features().get(ledger::Features::Flag::feature_dmc2serial))
     {
         auto serialBlockExecutive = std::make_shared<SerialBlockExecutive>(block, scheduler,
             startContextID, transactionSubmitResultFactory, staticCall, _blockFactory, _txPool,

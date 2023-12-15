@@ -2148,9 +2148,8 @@ deploy_nodes()
         local lightnode_account_dir="${lightnode_dir}/conf"
         generate_node_account "${sm_mode}" "${lightnode_account_dir}" ${count}
 
-        local node_count=$(get_value ${ip//./}_count)
-        local p2p_port=$((p2p_listen_port + node_count))
-        local rpc_port=$((rpc_listen_port + node_count))
+        local p2p_port=$((p2p_listen_port + num))
+        local rpc_port=$((rpc_listen_port + num))
         generate_config "${sm_mode}" "${lightnode_dir}/config.ini" "${default_listen_ip}" "${p2p_port}" "${default_listen_ip}" "${rpc_port}"
         generate_p2p_connected_conf "${lightnode_dir}/${p2p_connected_conf_name}" "${connected_nodes}" "false"
 
