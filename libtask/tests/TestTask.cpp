@@ -1,3 +1,4 @@
+#include "bcos-task/Generator.h"
 #include "bcos-utilities/Overloaded.h"
 #include <bcos-task/Task.h>
 #include <bcos-task/Wait.h>
@@ -181,5 +182,23 @@ struct SleepTask
     }
     constexpr void await_resume() const {}
 };
+
+bcos::task::Generator<int> genInt()
+{
+    co_yield 1;
+    co_yield 2;
+    co_yield 3;
+}
+
+BOOST_AUTO_TEST_CASE(generator)
+{
+    int j = 0;
+    for (auto i : genInt())
+    {
+        BOOST_CHECK_EQUAL(i, ++j);
+        std::cout << i << std::endl;
+    }
+    std::cout << "All outputed" << std::endl;
+}
 
 BOOST_AUTO_TEST_SUITE_END()
