@@ -2280,6 +2280,11 @@ check_auth_account()
   if [ -z "${auth_admin_account}" ]; then
     # get account string to auth_admin_account
     generate_auth_account
+  else
+    if ! [[ ${auth_admin_account} =~ ^0x[0-9a-fA-F]{40}$ ]]; then
+        LOG_FATAL "auth_admin_account must be a valid, please check it!"
+        exit 1
+    fi
   fi
 }
 
