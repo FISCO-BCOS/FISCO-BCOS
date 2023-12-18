@@ -1,4 +1,3 @@
-#include "bcos-rpc/jsonrpc/Common.h"
 #include "bcos-task/Generator.h"
 #include "bcos-utilities/Overloaded.h"
 #include <bcos-task/Task.h>
