@@ -115,6 +115,10 @@ public:
             {
                 m_awaitable->m_value.template emplace<std::exception_ptr>(std::current_exception());
             }
+            else
+            {
+                std::rethrow_exception(std::current_exception());
+            }
         }
 
         CO_STD::coroutine_handle<> m_continuationHandle;
