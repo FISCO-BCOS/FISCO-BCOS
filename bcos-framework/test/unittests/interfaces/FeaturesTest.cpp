@@ -132,7 +132,7 @@ BOOST_AUTO_TEST_CASE(feature)
     BOOST_CHECK_EQUAL(keys[1], "bugfix_statestorage_hash");
     BOOST_CHECK_EQUAL(keys[2], "bugfix_evm_create2_delegatecall_staticcall_codecopy");
     BOOST_CHECK_EQUAL(keys[3], "bugfix_event_log_order");
-    BOOST_CHECK_EQUAL(keys[4], "bugfix_delegatecall_noaddr_return");
+    BOOST_CHECK_EQUAL(keys[4], "bugfix_call_noaddr_return");
     BOOST_CHECK_EQUAL(keys[5], "bugfix_precompiled_codehash");
     BOOST_CHECK_EQUAL(keys[6], "feature_dmc2serial");
     BOOST_CHECK_EQUAL(keys[7], "feature_sharding");
