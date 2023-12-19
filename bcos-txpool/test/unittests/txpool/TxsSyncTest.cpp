@@ -154,13 +154,6 @@ void testTransactionSync(bool _onlyTxsStatus = false)
     auto transactions = importTransactions(txsNum, cryptoSuite, faker);
 
     // Assume transaction had been received
-    for (const auto& txpoolPeer : txpoolPeerList)
-    {
-        for (auto const& transaction : transactions)
-        {
-            task::wait(txpoolPeer->txpool()->submitTransaction(transaction));
-        }
-    }
 
     // check maintain transactions
     if (_onlyTxsStatus)
