@@ -34,7 +34,7 @@ public:
         bugfix_statestorage_hash,
         bugfix_evm_create2_delegatecall_staticcall_codecopy,
         bugfix_event_log_order,
-        bugfix_delegatecall_noaddr_return,
+        bugfix_call_noaddr_return,
         bugfix_precompiled_codehash,
         feature_dmc2serial,
         feature_sharding,
@@ -129,7 +129,7 @@ public:
         if (version >= protocol::BlockVersion::V3_2_6_VERSION)
         {
             set(Flag::bugfix_event_log_order);
-            set(Flag::bugfix_delegatecall_noaddr_return);
+            set(Flag::bugfix_call_noaddr_return);
             set(Flag::bugfix_precompiled_codehash);
         }
 
