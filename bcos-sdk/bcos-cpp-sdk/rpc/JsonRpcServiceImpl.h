@@ -26,12 +26,9 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
 #include <functional>
+#include <utility>
 
-namespace bcos
-{
-namespace cppsdk
-{
-namespace jsonrpc
+namespace bcos::cppsdk::jsonrpc
 {
 
 class JsonRpcServiceImpl : public JsonRpcServiceInterface
@@ -42,17 +39,15 @@ public:
 
     JsonRpcServiceImpl(std::shared_ptr<bcos::cppsdk::jsonrpc::JsonRpcImpl> _rpc,
         utilities::TransactionBuilderInterface::Ptr _transactionBuilder)
-      : m_rpc(_rpc), m_transactionBuilder(_transactionBuilder)
+      : m_rpc(std::move(_rpc)), m_transactionBuilder(std::move(_transactionBuilder))
     {}
-    virtual ~JsonRpcServiceImpl() override {}
+    ~JsonRpcServiceImpl() override = default;
 
-public:
     virtual std::string sendTransaction(const bcos::crypto::KeyPairInterface& _keyPair,
         const std::string& _groupID, const std::string& _nodeName, const std::string& _to,
         bcos::bytes&& _data, std::string _abi, int32_t _attribute, std::string _extraData,
         RespFunc _respFunc) override;
 
-public:
     std::shared_ptr<bcos::cppsdk::jsonrpc::JsonRpcImpl> rpc() const { return m_rpc; }
     utilities::TransactionBuilderInterface::Ptr transactionBuilder() const
     {
@@ -63,8 +58,4 @@ private:
     std::shared_ptr<bcos::cppsdk::jsonrpc::JsonRpcImpl> m_rpc;
     utilities::TransactionBuilderInterface::Ptr m_transactionBuilder;
 };
-
-
-}  // namespace jsonrpc
-}  // namespace cppsdk
-}  // namespace bcos
+}  // namespace bcos::cppsdk::jsonrpc

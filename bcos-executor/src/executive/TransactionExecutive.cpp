@@ -131,8 +131,7 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
                                  << LOG_KV("codeAddress", input->codeAddress);
 
             output->data = bytes();
-            if (m_blockContext.features().get(
-                    ledger::Features::Flag::bugfix_delegatecall_noaddr_return))
+            if (m_blockContext.features().get(ledger::Features::Flag::bugfix_call_noaddr_return))
             {
                 // This is eth's bug, but we still need to compat with it :)
                 // https://docs.soliditylang.org/en/v0.8.17/control-structures.html#error-handling-assert-require-revert-and-exceptions
@@ -265,7 +264,7 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
         }
     }
 
-    else if (callParameters->create)
+    if (callParameters->create)
     {
         std::tie(hostContext, callResults) = create(std::move(callParameters));
     }
@@ -949,6 +948,24 @@ CallParameters::UniquePtr TransactionExecutive::go(
             {
                 revert();
                 auto callResult = hostContext.takeCallParameters();
+
+                if (m_blockContext.features().get(
+                        ledger::Features::Flag::bugfix_call_noaddr_return) &&
+                    callResult->staticCall)
+                {
+                    // Note: to be the same as eth
+                    // Just fix DMC:
+                    // if bugfix_call_noaddr_return is not set, callResult->evmStatus is still
+                    // default to EVMC_SUCCESS and serial mode is execute same as eth, but DMC is
+                    // using callResult->status, so we need to compat with DMC here
+
+                    callResult->type = CallParameters::FINISHED;
+                    callResult->evmStatus = EVMC_SUCCESS;
+                    callResult->status = (int32_t)TransactionStatus::None;
+                    callResult->message = "Error contract address.";
+                    return callResult;
+                }
+
                 callResult->type = CallParameters::REVERT;
                 callResult->status = (int32_t)TransactionStatus::CallAddressError;
                 callResult->message = "Error contract address.";
