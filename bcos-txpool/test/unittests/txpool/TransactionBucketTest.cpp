@@ -55,7 +55,7 @@ void testTransactionBucket()
     int64_t blockLimit = 10;
     auto fakeGateWay = std::make_shared<FakeGateWay>();
     auto fakerTxPool = std::make_shared<TxPoolFixture>(
-        keyPair->publicKey(), cryptoSuite, groupId, chainId, blockLimit, fakeGateWay);
+        keyPair->publicKey(), cryptoSuite, groupId, chainId, blockLimit, fakeGateWay, false, false);
 
     // init the config
     fakerTxPool->init();

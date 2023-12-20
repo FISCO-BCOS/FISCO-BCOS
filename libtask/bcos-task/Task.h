@@ -17,8 +17,7 @@ struct NoReturnValue : public bcos::error::Exception {};
 // clang-format on
 
 template <class Value>
-    requires(!std::is_rvalue_reference_v<Value>)
-class [[nodiscard]] Task
+requires(!std::is_rvalue_reference_v<Value>) class [[nodiscard]] Task
 {
 public:
     using ReturnType = Value;
@@ -114,6 +113,10 @@ public:
             if (m_awaitable)
             {
                 m_awaitable->m_value.template emplace<std::exception_ptr>(std::current_exception());
+            }
+            else
+            {
+                std::rethrow_exception(std::current_exception());
             }
         }
 

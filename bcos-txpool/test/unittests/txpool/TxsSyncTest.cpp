@@ -74,7 +74,7 @@ void importTransactionsNew(
     Transactions transactions;
     for (size_t i = 0; i < _txsNum; i++)
     {
-        auto transaction = fakeTransaction(_cryptoSuite, std::to_string(utcTime() + 1000 + i),
+        auto transaction = fakeTransaction(_cryptoSuite, std::to_string(utcTime() + 10000 + i),
             ledger->blockNumber() + 1, _faker->chainId(), _faker->groupId());
         txpool->broadcastTransaction(*transaction);
         transactions.push_back(transaction);
@@ -113,7 +113,7 @@ void testTransactionSync(bool _onlyTxsStatus = false)
     int64_t blockLimit = 15;
     auto fakeGateWay = std::make_shared<FakeGateWay>();
     auto faker = std::make_shared<TxPoolFixture>(
-        keyPair->publicKey(), cryptoSuite, groupId, chainId, blockLimit, fakeGateWay);
+        keyPair->publicKey(), cryptoSuite, groupId, chainId, blockLimit, fakeGateWay, false, false);
     if (_onlyTxsStatus)
     {
         faker->resetToFakeTransactionSync();
@@ -132,7 +132,7 @@ void testTransactionSync(bool _onlyTxsStatus = false)
     {
         auto nodeId = signatureImpl->generateKeyPair()->publicKey();
         auto sessionFaker = std::make_shared<TxPoolFixture>(
-            nodeId, cryptoSuite, groupId, chainId, blockLimit, fakeGateWay);
+            nodeId, cryptoSuite, groupId, chainId, blockLimit, fakeGateWay, false, false);
         sessionFaker->init();
         if (_onlyTxsStatus)
         {
