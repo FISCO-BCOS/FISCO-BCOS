@@ -53,6 +53,10 @@ void TreeTopology::updateStartAndEndIndex()
 std::int32_t TreeTopology::getNodeIndexByNodeId(
     const bcos::crypto::NodeIDListPtr& _nodeList, const bcos::crypto::NodeIDPtr& _nodeId)
 {
+    if (!_nodeList || _nodeList->empty() || !_nodeId)
+    {
+        return -1;
+    }
     std::int32_t nodeIndex{-1};
     auto iter = std::find_if(_nodeList->begin(), _nodeList->end(),
         [&_nodeId](auto& _node) { return (_nodeId->data() == _node->data()); });
@@ -194,10 +198,12 @@ bcos::crypto::NodeIDSetPtr TreeTopology::selectNodes(bcos::crypto::NodeIDSetPtr 
     if (m_consIndex < 0)
     {
         bcos::crypto::NodeIDSetPtr selectedNodeSet = std::make_shared<bcos::crypto::NodeIDSet>();
+        // if not from rpc node
         if (!_isTheStartNode)
         {
             return selectedNodeSet;
         }
+        // if tx from rpc, broadcast to all consensus nodes
 
         // if node index exist && node alive in group peers && node is not self
         bcos::crypto::NodeIDPtr selectedNode = getNodeIDByIndex(_consIndex);
@@ -215,22 +221,25 @@ bcos::crypto::NodeIDSetPtr TreeTopology::selectNodes(bcos::crypto::NodeIDSetPtr 
     }
     crypto::NodeIDSetPtr nodes;
     // if the consensus nodes
-
-    if (fromNode != nullptr && !_isTheStartNode)
+    /// tx from p2p
+    if (!_isTheStartNode)
     {
         auto nodeIndexInConsensus = getNodeIndexByNodeId(m_consensusNodes, fromNode);
         TREE_LOG(DEBUG) << LOG_DESC("selectNodesByOtherNodeView")
                         << LOG_KV("index", nodeIndexInConsensus)
-                        << LOG_KV("fromNode", fromNode->shortHex());
+                        << LOG_KV("fromNode", fromNode ? fromNode->shortHex() : "null");
         // from observer node
         if (nodeIndexInConsensus < 0)
         {
+            // from observer node
             auto nodeIndex = getTreeIndex(_consIndex);
             nodes = recursiveSelectChildNodes(nodeIndex, _peers, _consIndex);
         }
         else
         {
-            nodes = recursiveSelectChildNodes(m_consIndex, _peers, nodeIndexInConsensus);
+            // from consensus node
+            auto treeIndex = getTreeIndex(nodeIndexInConsensus);
+            nodes = recursiveSelectChildNodes(treeIndex, _peers, nodeIndexInConsensus);
         }
     }
     else

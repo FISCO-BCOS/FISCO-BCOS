@@ -91,7 +91,7 @@ public:
     {}
     TxPoolFixture(NodeIDPtr _nodeId, CryptoSuite::Ptr _cryptoSuite, std::string _groupId,
         std::string _chainId, int64_t _blockLimit, FakeGateWay::Ptr _fakeGateWay,
-        bool enableTree = false)
+        bool enableTree = false, bool buildPeerInside = true)
       : m_nodeId(_nodeId),
         m_cryptoSuite(_cryptoSuite),
         m_groupId(_groupId),
@@ -138,7 +138,7 @@ public:
 
         if (enableTree)
         {
-            auto router = std::make_shared<TreeTopology>(m_nodeId);
+            auto router = std::make_shared<TreeTopology>(m_nodeId, 4);
             m_txpool->setTreeRouter(std::move(router));
         }
         m_txpool->init();
@@ -165,6 +165,11 @@ public:
             allNode.push_back(nodeId);
         }
         allNode.push_back(m_nodeId);
+
+        if (!buildPeerInside)
+        {
+            return;
+        }
         for (const auto& nodeId : m_nodeIdList)
         {
             TxPool::Ptr txpool;
@@ -194,7 +199,7 @@ public:
 
             if (enableTree)
             {
-                auto router = std::make_shared<TreeTopology>(nodeId);
+                auto router = std::make_shared<TreeTopology>(nodeId, 4);
                 router->updateConsensusNodeInfo(allNode);
                 BCOS_LOG(TRACE) << LOG_DESC("updateRouter")
                                 << LOG_KV("consIndex", router->consIndex());
