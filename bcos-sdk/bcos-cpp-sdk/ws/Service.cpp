@@ -76,7 +76,7 @@ void Service::waitForConnectionEstablish()
         // sleep for connection establish
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-        if (handshakeSucCount())
+        if (handshakeSucCount() > 0)
         {
             RPC_WS_LOG(INFO) << LOG_BADGE("waitForConnectionEstablish")
                              << LOG_DESC("wait for websocket connection handshake success")
@@ -88,15 +88,12 @@ void Service::waitForConnectionEstablish()
         {
             continue;
         }
-        else
-        {
-            stop();
-            RPC_WS_LOG(WARNING) << LOG_BADGE("waitForConnectionEstablish")
-                                << LOG_DESC("wait for websocket connection handshake timeout")
-                                << LOG_KV("timeout", waitConnectFinishTimeout());
+        stop();
+        RPC_WS_LOG(WARNING) << LOG_BADGE("waitForConnectionEstablish")
+                            << LOG_DESC("wait for websocket connection handshake timeout")
+                            << LOG_KV("timeout", waitConnectFinishTimeout());
 
-            BOOST_THROW_EXCEPTION(std::runtime_error("The websocket connection handshake timeout"));
-        }
+        BOOST_THROW_EXCEPTION(std::runtime_error("The websocket connection handshake timeout"));
     }
 }
 

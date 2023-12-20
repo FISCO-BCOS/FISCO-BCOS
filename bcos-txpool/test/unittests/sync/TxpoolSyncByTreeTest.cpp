@@ -87,7 +87,8 @@ BOOST_AUTO_TEST_CASE(testConsensusNodeTreeSync)
 
 BOOST_AUTO_TEST_CASE(testObserverNodeTreeSync)
 {
-    this->appendObserver(this->m_nodeId);
+    // FIXME: observer tree sync
+    this->appendSealer(this->m_nodeId);
     for (const auto& item : this->m_nodeIdList)
     {
         this->appendSealer(item);

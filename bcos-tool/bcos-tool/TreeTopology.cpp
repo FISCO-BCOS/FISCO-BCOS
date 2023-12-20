@@ -222,6 +222,7 @@ bcos::crypto::NodeIDSetPtr TreeTopology::selectNodes(bcos::crypto::NodeIDSetPtr 
         TREE_LOG(DEBUG) << LOG_DESC("selectNodesByOtherNodeView")
                         << LOG_KV("index", nodeIndexInConsensus)
                         << LOG_KV("fromNode", fromNode->shortHex());
+        // from observer node
         if (nodeIndexInConsensus < 0)
         {
             auto nodeIndex = getTreeIndex(_consIndex);
