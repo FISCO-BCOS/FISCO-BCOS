@@ -427,8 +427,8 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
     std::string chainId = "chain_test_for_txpool";
     int64_t blockLimit = 10;
     auto fakeGateWay = std::make_shared<FakeGateWay>();
-    auto faker = std::make_shared<TxPoolFixture>(
-        keyPair->publicKey(), _cryptoSuite, groupId, chainId, blockLimit, fakeGateWay);
+    auto faker = std::make_shared<TxPoolFixture>(keyPair->publicKey(), _cryptoSuite, groupId,
+        chainId, blockLimit, fakeGateWay, false, false);
     faker->init();
 
     // check the txpool config

@@ -17,8 +17,7 @@ struct NoReturnValue : public bcos::error::Exception {};
 // clang-format on
 
 template <class Value>
-    requires(!std::is_rvalue_reference_v<Value>)
-class [[nodiscard]] Task
+requires(!std::is_rvalue_reference_v<Value>) class [[nodiscard]] Task
 {
 public:
     using ReturnType = Value;

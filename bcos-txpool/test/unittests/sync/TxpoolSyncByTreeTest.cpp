@@ -56,7 +56,12 @@ BOOST_AUTO_TEST_CASE(testConsensusNodeTreeSync)
         this->appendSealer(item);
     }
     NodeIDs nodeIds = m_nodeIdList;
-    nodeIds.push_back(this->m_nodeId);
+    nodeIds.insert(nodeIds.begin(), this->m_nodeId);
+    for (const auto& item : this->m_nodeIdList)
+    {
+        auto& nodeTxpool = dynamic_cast<TxPool&>(*m_fakeGateWay->m_nodeId2TxPool.at(item));
+        nodeTxpool.treeRouter()->updateConsensusNodeInfo(nodeIds);
+    }
     auto& txpool = dynamic_cast<TxPool&>(*this->txpool());
     txpool.treeRouter()->updateConsensusNodeInfo(nodeIds);
     BCOS_LOG(TRACE) << LOG_DESC("updateRouter")
@@ -87,16 +92,19 @@ BOOST_AUTO_TEST_CASE(testConsensusNodeTreeSync)
 
 BOOST_AUTO_TEST_CASE(testObserverNodeTreeSync)
 {
-    // FIXME: observer tree sync
-    this->appendSealer(this->m_nodeId);
     for (const auto& item : this->m_nodeIdList)
     {
         this->appendSealer(item);
     }
+    this->appendObserver(this->m_nodeId);
     NodeIDs nodeIds = m_nodeIdList;
-    nodeIds.push_back(this->m_nodeId);
     auto& txpool = dynamic_cast<TxPool&>(*this->txpool());
     txpool.treeRouter()->updateConsensusNodeInfo(nodeIds);
+    for (const auto& item : this->m_nodeIdList)
+    {
+        auto& nodeTxpool = dynamic_cast<TxPool&>(*m_fakeGateWay->m_nodeId2TxPool.at(item));
+        nodeTxpool.treeRouter()->updateConsensusNodeInfo(nodeIds);
+    }
     BCOS_LOG(TRACE) << LOG_DESC("updateRouter")
                     << LOG_KV("consIndex", txpool.treeRouter()->consIndex());
 
