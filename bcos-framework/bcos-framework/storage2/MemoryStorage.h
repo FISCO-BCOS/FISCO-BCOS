@@ -23,13 +23,10 @@
 namespace bcos::storage2::memory_storage
 {
 
+// clang-format off
 template <class Object>
-concept HasMemberSize = requires(Object object)
-{
-    // clang-format off
-    { object.size() } -> std::integral;
-    // clang-format on
-};
+concept HasMemberSize = requires(Object object) { { object.size() } -> std::integral; };
+// clang-format on
 
 struct Empty
 {
@@ -93,7 +90,7 @@ private:
     Buckets m_buckets;
     [[no_unique_address]] std::conditional_t<withMRU, int64_t, Empty> m_maxCapacity;
 
-    Bucket& getBucket(auto const& key) &
+    Bucket& getBucket(auto const& key) & noexcept
     {
         if constexpr (!withConcurrent)
         {
@@ -118,8 +115,9 @@ private:
         }
     }
 
-    void updateMRUAndCheck(Bucket& bucket,
-        typename Container::template nth_index<0>::type::iterator entryIt) requires withMRU
+    void updateMRUAndCheck(
+        Bucket& bucket, typename Container::template nth_index<0>::type::iterator entryIt)
+        requires withMRU
     {
         auto& index = bucket.container.template get<1>();
         auto seqIt = index.iterator_to(*entryIt);
@@ -145,8 +143,9 @@ private:
         return sizeof(ObjectType);
     }
 
-    friend auto tag_invoke(bcos::storage2::tag_t<storage2::range> /*unused*/,
-        MemoryStorage const& storage) requires(!withConcurrent)
+    friend auto tag_invoke(
+        bcos::storage2::tag_t<storage2::range> /*unused*/, MemoryStorage const& storage)
+        requires(!withConcurrent)
     {
         auto range = RANGES::views::transform(storage.m_buckets[0].container,
             [&](Data const& data) -> std::tuple<const KeyType*, const ValueType*> {
@@ -186,7 +185,11 @@ public:
     MemoryStorage& operator=(MemoryStorage&&) noexcept = default;
     ~MemoryStorage() noexcept = default;
 
-    void setMaxCapacity(int64_t capacity) requires withMRU { m_maxCapacity = capacity; }
+    void setMaxCapacity(int64_t capacity)
+        requires withMRU
+    {
+        m_maxCapacity = capacity;
+    }
 
     friend auto tag_invoke(bcos::storage2::tag_t<readSome> /*unused*/, MemoryStorage& storage,
         RANGES::input_range auto&& keys)
@@ -293,7 +296,7 @@ public:
             {
                 it = index.find(key);
             }
-            if (it != index.end() && it->key == key)
+            if (it != index.end() && std::equal_to<Key>{}(it->key, key))
             {
                 if constexpr (std::decay_t<decltype(storage)>::withMRU)
                 {
@@ -374,9 +377,9 @@ public:
         return {};
     }
 
-    friend task::AwaitableValue<void> tag_invoke(storage2::tag_t<merge> /*unused*/,
-        MemoryStorage& toStorage,
-        MemoryStorage&& fromStorage) requires(!std::is_const_v<decltype(fromStorage)>)
+    friend task::AwaitableValue<void> tag_invoke(
+        storage2::tag_t<merge> /*unused*/, MemoryStorage& toStorage, MemoryStorage&& fromStorage)
+        requires(!std::is_const_v<decltype(fromStorage)>)
     {
         for (auto&& [bucket, fromBucket] :
             RANGES::views::zip(toStorage.m_buckets, fromStorage.m_buckets))
@@ -387,27 +390,24 @@ public:
             auto& toIndex = bucket.container.template get<0>();
             auto& fromIndex = fromBucket.container.template get<0>();
 
+            if (toIndex.empty())
+            {
+                toIndex.swap(fromIndex);
+                continue;
+            }
+
+            auto hintIt = toIndex.end();
             while (!fromIndex.empty())
             {
-                auto [it, merged] = toIndex.merge(fromIndex, fromIndex.begin());
-                if (!merged)
+                auto node = fromIndex.extract(fromIndex.begin());
+                hintIt = toIndex.insert(hintIt, std::move(node));
+                if (!node.empty())
                 {
-                    toIndex.insert(toIndex.erase(it), fromIndex.extract(fromIndex.begin()));
+                    hintIt = toIndex.insert(toIndex.erase(hintIt), std::move(node));
                 }
             }
         }
         return {};
-    }
-
-    void swap(MemoryStorage& from)
-    {
-        for (auto bucketPair : RANGES::views::zip(m_buckets, from.m_buckets))
-        {
-            auto& [bucket, fromBucket] = bucketPair;
-            Lock toLock(bucket.mutex, true);
-            Lock fromLock(fromBucket.mutex, true);
-            bucket.container.swap(fromBucket.container);
-        }
     }
 
     bool empty() const
