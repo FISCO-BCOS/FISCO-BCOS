@@ -540,7 +540,7 @@ void BalancePrecompiled::listCaller(
         BOOST_THROW_EXCEPTION(protocol::PrecompiledError("caller table not exist."));
     }
 
-    auto keyCondition = std::make_shared<storage::Condition>();
+    auto keyCondition = std::make_optional<storage::Condition>();
     keyCondition->limit(0, USER_TABLE_MAX_LIMIT_COUNT);
     auto tableKeyList = table->getPrimaryKeys(*keyCondition);
     if (tableKeyList.size() == 0)
@@ -556,7 +556,6 @@ void BalancePrecompiled::listCaller(
         auto entry = table->getRow(it);
         if (entry && entry->get() == "1")
         {
-            it = "0x" + it;
             addresses.push_back(Address(it));
             PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext.number())
                                    << LOG_BADGE("BalancePrecompiled") << LOG_DESC("listCaller")
