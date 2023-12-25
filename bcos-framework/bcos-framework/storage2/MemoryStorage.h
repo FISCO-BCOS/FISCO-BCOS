@@ -23,12 +23,10 @@
 namespace bcos::storage2::memory_storage
 {
 
+// clang-format off
 template <class Object>
-concept HasMemberSize = requires(Object object) {
-                            // clang-format off
-    { object.size() } -> std::integral;
-                            // clang-format on
-                        };
+concept HasMemberSize = requires(Object object) { { object.size() } -> std::integral; };
+// clang-format on
 
 struct Empty
 {
