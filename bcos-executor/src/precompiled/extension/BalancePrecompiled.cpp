@@ -556,10 +556,7 @@ void BalancePrecompiled::listCaller(
         auto entry = table->getRow(it);
         if (entry && entry->get() == "1")
         {
-            addresses.push_back(Address(it));
-            PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext.number())
-                                   << LOG_BADGE("BalancePrecompiled") << LOG_DESC("listCaller")
-                                   << LOG_KV("caller", it) << LOG_KV("address", Address(it).hex());
+            addresses.emplace_back(Address(it));
         }
     }
     PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number()) << LOG_BADGE("BalancePrecompiled")
