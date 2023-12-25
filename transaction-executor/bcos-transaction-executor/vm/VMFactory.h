@@ -42,33 +42,16 @@ struct UnknownVMError : public bcos::Error {};
 
 class VMFactory
 {
-private:
-    storage2::memory_storage::MemoryStorage<crypto::HashType,
-        std::shared_ptr<evmone::baseline::CodeAnalysis const>,
-        storage2::memory_storage::Attribute(
-            storage2::memory_storage::CONCURRENT | storage2::memory_storage::MRU),
-        std::hash<crypto::HashType>>
-        m_evmoneCodeAnalysisCache;
-
 public:
-    task::Task<VMInstance> create(
-        VMKind kind, const bcos::h256& codeHash, bytesConstRef code, evmc_revision mode)
+    static VMInstance create(VMKind kind, bytesConstRef code, evmc_revision mode)
     {
         switch (kind)
         {
         case VMKind::evmone:
         {
-            auto codeAnalysis = co_await storage2::readOne(m_evmoneCodeAnalysisCache, codeHash);
-
-            if (!codeAnalysis)
-            {
-                codeAnalysis.emplace(
-                    std::make_shared<evmone::baseline::CodeAnalysis>(evmone::baseline::analyze(
-                        mode, evmone::bytes_view((const uint8_t*)code.data(), code.size()))));
-                co_await storage2::writeOne(m_evmoneCodeAnalysisCache, codeHash, *codeAnalysis);
-            }
-
-            co_return VMInstance{std::move(*codeAnalysis)};
+            return VMInstance{
+                std::make_shared<evmone::baseline::CodeAnalysis>(evmone::baseline::analyze(
+                    mode, evmone::bytes_view((const uint8_t*)code.data(), code.size())))};
         }
         default:
             BOOST_THROW_EXCEPTION(UnknownVMError{});
