@@ -187,7 +187,6 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, int _moduleI
         return;
     }
 
-    auto retry = std::make_shared<Retry>();
     auto message =
         std::static_pointer_cast<P2PMessage>(m_p2pInterface->messageFactory()->buildMessage());
 
@@ -206,14 +205,9 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, int _moduleI
     options->setSrcNodeID(_srcNodeID->encode());
     options->dstNodeIDs().push_back(_dstNodeID->encode());
 
-    retry->m_p2pMessage = message;
-    retry->m_p2pIDs.insert(retry->m_p2pIDs.begin(), p2pIDs.begin(), p2pIDs.end());
-    retry->m_respFunc = _errorRespFunc;
-    retry->m_srcNodeID = _srcNodeID;
-    retry->m_dstNodeID = _dstNodeID;
-    retry->m_p2pInterface = m_p2pInterface;
-    retry->m_moduleID = _moduleID;
-
+    auto retry = std::make_shared<Retry>(std::move(_srcNodeID), std::move(_dstNodeID),
+        std::move(message), m_p2pInterface, std::move(_errorRespFunc), _moduleID);
+    retry->insertP2pIDs(p2pIDs);
     retry->trySendMessage();
 }
 
