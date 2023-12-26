@@ -21,8 +21,8 @@
 #pragma once
 
 #include "bcos-gateway/libratelimit/GatewayRateLimiter.h"
-#include "filter/ReadOnlyFilter.h"
 #include "bcos-utilities/ObjectAllocatorMonitor.h"
+#include "filter/ReadOnlyFilter.h"
 #include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-framework/protocol/CommonError.h>
@@ -42,10 +42,21 @@ namespace gateway
 class Retry : public std::enable_shared_from_this<Retry>, public ObjectCounter<Retry>
 {
 public:
+    Retry(crypto::NodeIDPtr _srcNodeID, crypto::NodeIDPtr _dstNodeID,
+        std::shared_ptr<P2PMessage> _p2pMessage, std::shared_ptr<P2PInterface> _p2pInterface,
+        ErrorRespFunc _respFunc, int _moduleID)
+      : m_srcNodeID(std::move(_srcNodeID)),
+        m_dstNodeID(std::move(_dstNodeID)),
+        m_p2pMessage(std::move(_p2pMessage)),
+        m_p2pInterface(std::move(_p2pInterface)),
+        m_respFunc(std::move(_respFunc)),
+        m_moduleID(_moduleID)
+    {}
     // random choose one p2pID to send message
     P2pID chooseP2pID()
     {
         auto p2pId = P2pID();
+        std::lock_guard<std::mutex> lock(x_mutex);
         if (!m_p2pIDs.empty())
         {
             p2pId = *m_p2pIDs.begin();
@@ -168,7 +179,16 @@ public:
         m_p2pInterface->asyncSendMessageByNodeID(p2pID, m_p2pMessage, callback, Options(10000));
     }
 
-public:
+    // insert p2pIDs
+    void insertP2pIDs(RANGES::range auto const& _p2pIDs)
+    {
+        std::lock_guard<std::mutex> lock(x_mutex);
+        m_p2pIDs.insert(m_p2pIDs.end(), _p2pIDs.begin(), _p2pIDs.end());
+    }
+
+private:
+    // mutex for p2pIDs
+    mutable std::mutex x_mutex;
     std::vector<P2pID> m_p2pIDs;
     crypto::NodeIDPtr m_srcNodeID;
     crypto::NodeIDPtr m_dstNodeID;

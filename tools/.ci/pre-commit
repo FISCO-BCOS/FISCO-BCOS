@@ -47,6 +47,11 @@ function check_codeFormat() {
     LOG_INFO "clang-format command not found, please install it, skip by default."
     exit 0
   fi
+  # if clang-format first version less than 15 skip check
+  if [ $(clang-format --version | awk '{print $3}' | awk -F '.' '{print $1}') -lt 15 ]; then
+    LOG_INFO "clang-format version less than 15, skip check."
+    exit 0
+  fi
   # Redirect output to stderr.
   exec 1>&2
   sum=0
