@@ -40,6 +40,7 @@ const char* const BALANCE_METHOD_SUB_BALANCE = "subBalance(address,uint256)";
 const char* const BALANCE_METHOD_TRANSFER = "transfer(address,address,uint256)";
 const char* const BALANCE_METHOD_REGISTER_CALLER = "registerCaller(address)";
 const char* const BALANCE_METHOD_UNREGISTER_CALLER = "unregisterCaller(address)";
+const char* const BALANCE_METHOD_LIST_CALLER = "listCaller()";
 
 BalancePrecompiled::BalancePrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl)
 {
@@ -54,6 +55,8 @@ BalancePrecompiled::BalancePrecompiled(crypto::Hash::Ptr _hashImpl) : Precompile
         getFuncSelector(BALANCE_METHOD_REGISTER_CALLER, _hashImpl);
     name2Selector[BALANCE_METHOD_UNREGISTER_CALLER] =
         getFuncSelector(BALANCE_METHOD_UNREGISTER_CALLER, _hashImpl);
+    name2Selector[BALANCE_METHOD_LIST_CALLER] =
+        getFuncSelector(BALANCE_METHOD_LIST_CALLER, _hashImpl);
 }
 
 std::shared_ptr<PrecompiledExecResult> BalancePrecompiled::call(
@@ -87,6 +90,10 @@ std::shared_ptr<PrecompiledExecResult> BalancePrecompiled::call(
     else if (func == name2Selector[BALANCE_METHOD_UNREGISTER_CALLER])
     {
         unregisterCaller(_executive, _callParameters);
+    }
+    else if (func == name2Selector[BALANCE_METHOD_LIST_CALLER])
+    {
+        listCaller(_executive, _callParameters);
     }
     else
     {
@@ -131,18 +138,6 @@ void BalancePrecompiled::getBalance(
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(_callParameters->params(), account);
     std::string accountStr = account.hex();
-
-
-    auto usrTableName = getAccountTableName(accountStr);
-    auto usrTable = _executive->storage().openTable(usrTableName);
-    auto appsTableName = getContractTableName(executor::USER_APPS_PREFIX, accountStr);
-    auto appsTable = _executive->storage().openTable(appsTableName);
-    if (!usrTable && !appsTable)
-    {
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError(
-            "account appsTable and usrTable not exist, getBalance failed"));
-        return;
-    }
 
     // get balance from account table
     auto params = codec.encodeWithSig("getAccountBalance()");
@@ -507,7 +502,7 @@ void BalancePrecompiled::unregisterCaller(
     if (!table)
     {
         std::string tableStr(SYS_BALANCE_CALLER);
-        _executive->storage().createTable(tableStr, "caller_address");
+        _executive->storage().createTable(tableStr, "value");
         PRECOMPILED_LOG(WARNING) << BLOCK_NUMBER(blockContext.number())
                                << LOG_BADGE("BalancePrecompiled") << LOG_DESC("unregisterCaller")
                                << LOG_KV("account", accountStr);
@@ -526,4 +521,47 @@ void BalancePrecompiled::unregisterCaller(
 
     PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number()) << LOG_BADGE("BalancePrecompiled")
                           << LOG_DESC("unregisterCaller success") << LOG_KV("account", accountStr);
+}
+
+void BalancePrecompiled::listCaller(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    const PrecompiledExecResult::Ptr& _callParameters)
+{
+    // listCaller
+    const auto& blockContext = _executive->blockContext();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+
+    auto table = _executive->storage().openTable(SYS_BALANCE_CALLER);
+    if (!table)
+    {
+        PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number())
+                              << LOG_BADGE("BalancePrecompiled")
+                              << LOG_DESC("listCaller failed, caller table not exist");
+        BOOST_THROW_EXCEPTION(protocol::PrecompiledError("caller table not exist."));
+    }
+
+    auto keyCondition = std::make_optional<storage::Condition>();
+    keyCondition->limit(0, USER_TABLE_MAX_LIMIT_COUNT);
+    auto tableKeyList = table->getPrimaryKeys(*keyCondition);
+    if (tableKeyList.size() == 0)
+    {
+        PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number())
+                              << LOG_BADGE("BalancePrecompiled")
+                              << LOG_DESC("listCaller failed, caller table is empty");
+        BOOST_THROW_EXCEPTION(protocol::PrecompiledError("caller table is empty."));
+    }
+    Addresses addresses;
+    for (auto& it : tableKeyList)
+    {
+        auto entry = table->getRow(it);
+        if (entry && entry->get() == "1")
+        {
+            addresses.emplace_back(Address(it));
+        }
+    }
+    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number()) << LOG_BADGE("BalancePrecompiled")
+                          << LOG_DESC("listCaller success")
+                          << LOG_KV("addresses size", addresses.size());
+    auto encodeCallers = codec.encode(addresses);
+    _callParameters->setExecResult(std::move(encodeCallers));
 }
