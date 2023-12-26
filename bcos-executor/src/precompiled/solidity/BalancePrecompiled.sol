@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 contract BalancePrecompiled {
-    function getBalance(address account) public returns (uint256) {}
+    function getBalance(address account) public view returns (uint256) {}
 
     function addBalance(address account, uint256 amount) public {}
 
@@ -13,4 +13,6 @@ contract BalancePrecompiled {
     function registerCaller(address account) public {}
 
     function unregisterCaller(address account) public {}
+
+    function listCaller() public view returns (address[] memory) {}
 }
