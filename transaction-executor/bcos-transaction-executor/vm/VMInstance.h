@@ -46,26 +46,10 @@ struct ReleaseEVMC
 class VMInstance
 {
 private:
-    using EVMC_VM = std::unique_ptr<evmc_vm, ReleaseEVMC>;
-    using EVMC_ANALYSIS_RESULT = std::shared_ptr<evmone::baseline::CodeAnalysis const>;
-    std::variant<EVMC_VM, EVMC_ANALYSIS_RESULT> m_instance;
+    std::shared_ptr<evmone::baseline::CodeAnalysis const> m_instance;
 
 public:
-    template <class Instance>
-    explicit VMInstance(Instance instance) noexcept
-        requires std::same_as<Instance, evmc_vm*> ||
-                 std::same_as<Instance, std::shared_ptr<evmone::baseline::CodeAnalysis const>>
-    {
-        if constexpr (std::is_same_v<Instance, evmc_vm*>)
-        {
-            assert(instance->abi_version == EVMC_ABI_VERSION);
-            m_instance.emplace<EVMC_VM>(instance);
-        }
-        else
-        {
-            m_instance.emplace<EVMC_ANALYSIS_RESULT>(std::move(instance));
-        }
-    }
+    explicit VMInstance(std::shared_ptr<evmone::baseline::CodeAnalysis const> instance) noexcept;
     ~VMInstance() noexcept = default;
 
     VMInstance(VMInstance const&) = delete;
@@ -80,3 +64,21 @@ public:
 };
 
 }  // namespace bcos::transaction_executor
+
+template <>
+struct std::equal_to<evmc_address>
+{
+    bool operator()(const evmc_address& lhs, const evmc_address& rhs) const noexcept;
+};
+
+template <>
+struct boost::hash<evmc_address>
+{
+    size_t operator()(const evmc_address& address) const noexcept;
+};
+
+template <>
+struct std::hash<evmc_address>
+{
+    size_t operator()(const evmc_address& address) const noexcept;
+};

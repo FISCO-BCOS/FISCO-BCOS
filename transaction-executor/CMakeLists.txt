@@ -10,6 +10,7 @@ find_package(jsoncpp REQUIRED)
 add_library(transaction-executor
     bcos-transaction-executor/vm/VMInstance.cpp
     bcos-transaction-executor/precompiled/PrecompiledManager.cpp
+    bcos-transaction-executor/vm/HostContext.cpp
 )
 target_include_directories(transaction-executor PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
