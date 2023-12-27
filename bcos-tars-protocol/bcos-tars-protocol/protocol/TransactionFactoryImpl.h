@@ -56,15 +56,15 @@ public:
                 !bcos::isHexStringV2(transaction->mutableInner().data.maxFeePerGas) ||
                 !bcos::isHexStringV2(transaction->mutableInner().data.maxPriorityFeePerGas))
             {
-                BCOS_LOG(WARNING) << LOG_DESC(
-                                         "the transaction value or gasPrice or maxFeePerGas or "
-                                         "maxPriorityFeePerGas is not hex string")
-                                  << LOG_KV("value", transaction->mutableInner().data.value)
-                                  << LOG_KV("gasPrice", transaction->mutableInner().data.gasPrice)
-                                  << LOG_KV("maxFeePerGas",
-                                         transaction->mutableInner().data.maxFeePerGas)
-                                  << LOG_KV("maxPriorityFeePerGas",
-                                         transaction->mutableInner().data.maxPriorityFeePerGas);
+                BCOS_LOG(INFO) << LOG_DESC(
+                                      "the transaction value or gasPrice or maxFeePerGas or "
+                                      "maxPriorityFeePerGas is not hex string")
+                               << LOG_KV("value", transaction->mutableInner().data.value)
+                               << LOG_KV("gasPrice", transaction->mutableInner().data.gasPrice)
+                               << LOG_KV(
+                                      "maxFeePerGas", transaction->mutableInner().data.maxFeePerGas)
+                               << LOG_KV("maxPriorityFeePerGas",
+                                      transaction->mutableInner().data.maxPriorityFeePerGas);
                 BOOST_THROW_EXCEPTION(
                     std::invalid_argument("transaction value or gasPrice or maxFeePerGas or "
                                           "maxPriorityFeePerGas is not hex string"));
