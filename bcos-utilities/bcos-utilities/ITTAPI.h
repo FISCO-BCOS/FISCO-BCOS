@@ -36,7 +36,7 @@ struct Report
     Report& operator=(const Report&) = delete;
     Report& operator=(Report&&) = default;
     ~Report() noexcept { release(); }
-    void release()
+    void release() noexcept
     {
         if (!m_released)
         {
@@ -75,6 +75,12 @@ struct ITT_DOMAINS
     const __itt_domain* const BASE_SCHEDULER = __itt_domain_create("baseScheduler");
     __itt_string_handle* SET_BLOCK = __itt_string_handle_create("setBlock");
     __itt_string_handle* MERGE_STATE = __itt_string_handle_create("mergeState");
+
+    const __itt_domain* const SERIAL_SCHEDULER = __itt_domain_create("serialScheduler");
+    __itt_string_handle* SERIAL_EXECUTE = __itt_string_handle_create("serialExecute");
+    __itt_string_handle* STEP_1 = __itt_string_handle_create("step1");
+    __itt_string_handle* STEP_2 = __itt_string_handle_create("step2");
+    __itt_string_handle* STEP_3 = __itt_string_handle_create("step3");
 
     const __itt_domain* const PARALLEL_SCHEDULER = __itt_domain_create("parallelScheduler");
     __itt_string_handle* PARALLEL_EXECUTE = __itt_string_handle_create("parallelExecute");
