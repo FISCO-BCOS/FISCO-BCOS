@@ -131,7 +131,8 @@ private:
         ReadWriteSetStorage<decltype(storage), transaction_executor::StateKey> writeSet(storage);
         using Chunk = SchedulerParallelImpl::ChunkStatus<std::decay_t<decltype(storage)>,
             std::decay_t<decltype(executor)>,
-            decltype(RANGES::subrange(currentTransactionAndReceipts))>;
+            decltype(RANGES::subrange<RANGES::iterator_t<decltype(currentTransactionAndReceipts)>>(
+                currentTransactionAndReceipts))>;
         using ChunkStorage = typename std::decay_t<decltype(storage)>::MutableStorage;
         PARALLEL_SCHEDULER_LOG(DEBUG) << "Start new chunk executing... " << offset << " | "
                                       << RANGES::size(currentTransactionAndReceipts);
@@ -140,8 +141,9 @@ private:
         boost::atomic_flag hasRAW;
         auto makeChunk = [&](tbb::blocked_range<int32_t> range) {
             PARALLEL_SCHEDULER_LOG(DEBUG) << "Chunk: " << chunkIndex;
-            RANGES::subrange executionRange(currentTransactionAndReceipts.begin() + range.begin(),
-                currentTransactionAndReceipts.begin() + range.end());
+            RANGES::subrange<RANGES::iterator_t<decltype(currentTransactionAndReceipts)>>
+                executionRange(currentTransactionAndReceipts.begin() + range.begin(),
+                    currentTransactionAndReceipts.begin() + range.end());
             return std::make_unique<Chunk>(chunkIndex++, hasRAW, executionRange, executor, storage);
         };
 
