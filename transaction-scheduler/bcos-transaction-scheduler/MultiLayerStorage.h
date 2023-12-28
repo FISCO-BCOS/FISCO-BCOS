@@ -249,11 +249,18 @@ public:
                 std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values));
         }
 
-        friend auto tag_invoke(bcos::storage2::tag_t<storage2::writeOne> /*unused*/, View& storage,
+        friend auto tag_invoke(storage2::tag_t<storage2::writeOne> /*unused*/, View& storage,
             auto&& key, auto&& value) -> task::Task<void>
         {
             co_await storage2::writeOne(storage.mutableStorage(), std::forward<decltype(key)>(key),
                 std::forward<decltype(value)>(value));
+        }
+
+        friend task::Task<void> tag_invoke(
+            storage2::tag_t<storage2::merge> /*unused*/, View& toStorage, auto&& fromStorage)
+        {
+            co_await storage2::merge(
+                toStorage.mutableStorage(), std::forward<decltype(fromStorage)>(fromStorage));
         }
 
         friend task::Task<void> tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/,

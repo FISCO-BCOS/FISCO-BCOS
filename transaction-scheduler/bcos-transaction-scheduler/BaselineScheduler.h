@@ -30,7 +30,6 @@
 #include <fmt/format.h>
 #include <ittnotify.h>
 #include <oneapi/tbb/blocked_range.h>
-#include <oneapi/tbb/concurrent_vector.h>
 #include <oneapi/tbb/parallel_for_each.h>
 #include <oneapi/tbb/parallel_invoke.h>
 #include <oneapi/tbb/parallel_reduce.h>
@@ -76,7 +75,6 @@ bcos::h256 calcauteTransactionRoot(protocol::Block const& block, crypto::Hash co
  * @return the current time in milliseconds
  */
 std::chrono::milliseconds::rep current();
-
 
 /**
  * Calculates the state root of the given storage using the specified hash implementation.
@@ -139,18 +137,11 @@ task::Task<h256> calculateStateRoot(auto& storage, crypto::Hash const& hashImpl)
     co_return xorHash.m_hash;
 }
 
-task::Task<std::tuple<u256, h256>> calculateReceiptHashAndRoot(
+task::Task<std::tuple<u256, h256>> calculateReceiptRoot(
     auto& receipts, auto& block, crypto::Hash const& hashImpl)
 {
     u256 gasUsed;
     h256 receiptRoot;
-    tbb::parallel_for(tbb::blocked_range(0LU, RANGES::size(receipts)), [&](auto const& range) {
-        for (auto i = range.begin(); i != range.end(); ++i)
-        {
-            auto& receipt = receipts[i];
-            receipt->calculateHash(hashImpl);
-        }
-    });
 
     tbb::parallel_invoke(
         [&]() {
@@ -191,8 +182,9 @@ task::Task<std::tuple<u256, h256>> calculateReceiptHashAndRoot(
  * @param newBlock The updated block.
  * @param hashImpl The hash implementation used to calculate the block hash.
  */
-void finishExecute(auto& storage, RANGES::range auto& receipts,
-    protocol::BlockHeader& newBlockHeader, protocol::Block& block, crypto::Hash const& hashImpl)
+void finishExecute(auto& storage, RANGES::range auto const& receipts,
+    protocol::BlockHeader& newBlockHeader, protocol::Block& block,
+    RANGES::input_range auto const& transactions, bool& sysBlock, crypto::Hash const& hashImpl)
 {
     ittapi::Report finishReport(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
         ittapi::ITT_DOMAINS::instance().FINISH_EXECUTE);
@@ -205,7 +197,12 @@ void finishExecute(auto& storage, RANGES::range auto& receipts,
         [&]() { stateRoot = task::tbb::syncWait(calculateStateRoot(storage, hashImpl)); },
         [&]() {
             std::tie(gasUsed, receiptRoot) =
-                task::tbb::syncWait(calculateReceiptHashAndRoot(receipts, block, hashImpl));
+                task::tbb::syncWait(calculateReceiptRoot(receipts, block, hashImpl));
+        },
+        [&]() {
+            sysBlock = RANGES::any_of(transactions, [](auto const& transaction) {
+                return bcos::precompiled::c_systemTxsAddress.contains(transaction->to());
+            });
         });
     newBlockHeader.setGasUsed(gasUsed);
     newBlockHeader.setTxsRoot(transactionRoot);
@@ -320,21 +317,21 @@ private:
             auto now = current();
             scheduler.m_multiLayerStorage.newMutable();
             auto view = scheduler.m_multiLayerStorage.fork(true);
-            auto constTransactions = co_await getTransactions(scheduler.m_txpool, *block);
+            auto transactions = co_await getTransactions(scheduler.m_txpool, *block);
 
             auto ledgerConfig = scheduler.m_ledgerConfig;
             auto receipts = co_await transaction_scheduler::executeBlock(scheduler.m_schedulerImpl,
                 view, scheduler.m_executor, *blockHeader,
-                constTransactions |
-                    RANGES::views::transform(
-                        [](protocol::Transaction::ConstPtr const& transactionPtr)
-                            -> protocol::Transaction const& { return *transactionPtr; }),
+                transactions | RANGES::views::transform(
+                                   [](protocol::Transaction::ConstPtr const& transactionPtr)
+                                       -> protocol::Transaction const& { return *transactionPtr; }),
                 *ledgerConfig);
 
             auto executedBlockHeader =
                 scheduler.m_blockHeaderFactory.populateBlockHeader(blockHeader);
+            bool sysBlock = false;
             finishExecute(scheduler.m_multiLayerStorage.mutableStorage(), receipts,
-                *executedBlockHeader, *block, scheduler.m_hashImpl);
+                *executedBlockHeader, *block, transactions, sysBlock, scheduler.m_hashImpl);
 
             if (verify && (executedBlockHeader->hash() != blockHeader->hash()))
             {
@@ -349,13 +346,11 @@ private:
 
             scheduler.m_multiLayerStorage.pushMutableToImmutableFront();
             scheduler.m_lastExecutedBlockNumber = blockHeader->number();
-            scheduler.m_asyncGroup.run([view = std::move(view)]() {});
 
-            bool sysBlock = false;
             std::unique_lock resultsLock(scheduler.m_resultsMutex);
             scheduler.m_results.push_front(
                 {.m_transactions =
-                        std::make_shared<protocol::ConstTransactions>(std::move(constTransactions)),
+                        std::make_shared<protocol::ConstTransactions>(std::move(transactions)),
                     .m_receipts = std::move(receipts),
                     .m_executedBlockHeader = executedBlockHeader,
                     .m_block = std::move(block),
@@ -368,7 +363,7 @@ private:
                 << " | stateRoot: " << executedBlockHeader->stateRoot()
                 << " | txRoot: " << executedBlockHeader->txsRoot()
                 << " | receiptRoot: " << executedBlockHeader->receiptsRoot()
-                << " | gasUsed: " << executedBlockHeader->gasUsed()
+                << " | gasUsed: " << executedBlockHeader->gasUsed() << " | sysBlock: " << sysBlock
                 << " | elapsed: " << (current() - now) << "ms";
 
             co_return std::make_tuple(nullptr, std::move(executedBlockHeader), sysBlock);
@@ -484,7 +479,7 @@ private:
 
                             return submitResult;
                         }) |
-                    RANGES::to<std::vector<protocol::TransactionSubmitResult::Ptr>>();
+                    RANGES::to<std::vector>();
 
                 auto submitResultsPtr = std::make_shared<bcos::protocol::TransactionSubmitResults>(
                     std::move(submitResults));

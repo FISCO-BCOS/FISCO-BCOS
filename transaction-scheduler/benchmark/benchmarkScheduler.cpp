@@ -341,6 +341,7 @@ static void issue(benchmark::State& state)
                                     balance.template convert_to<std::string>())));
                         }
                     }
+                    fixture.m_multiLayerStorage.pushMutableToImmutableFront();
                 }(state));
             }
         },
@@ -436,7 +437,7 @@ static void transfer(benchmark::State& state)
                         }
                     }
 
-                    co_return;
+                    fixture.m_multiLayerStorage.pushMutableToImmutableFront();
                 }(state));
             }
         },
@@ -543,6 +544,7 @@ static void conflictTransfer(benchmark::State& state)
                             }
                         }
                     }
+                    fixture.m_multiLayerStorage.pushMutableToImmutableFront();
                 }(state));
             }
         },

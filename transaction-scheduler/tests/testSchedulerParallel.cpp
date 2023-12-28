@@ -126,8 +126,6 @@ BOOST_AUTO_TEST_CASE(conflict)
     task::syncWait([&, this]() -> task::Task<void> {
         MockConflictExecutor executor;
         SchedulerParallelImpl scheduler;
-        scheduler.setChunkSize(1);
-        scheduler.setMaxToken(std::thread::hardware_concurrency());
 
         multiLayerStorage.newMutable();
         constexpr static int INITIAL_VALUE = 100000;

@@ -1,8 +1,7 @@
 #pragma once
 #include "bcos-framework/storage2/Storage.h"
-#include "bcos-framework/transaction-executor/TransactionExecutor.h"
+#include "bcos-framework/transaction-executor/StateKey.h"
 #include <bcos-task/Trait.h>
-#include <oneapi/tbb.h>
 #include <compare>
 #include <type_traits>
 #include <variant>
@@ -20,12 +19,18 @@ private:
         bool read = false;
         bool write = false;
     };
-    std::unordered_map<KeyType, ReadWriteFlag> m_readWriteSet;
+    std::unordered_map<size_t, ReadWriteFlag> m_readWriteSet;
 
     void putSet(bool write, auto const& key)
     {
+        auto hash = std::hash<KeyType>{}(key);
+        putSet(write, hash);
+    }
+
+    void putSet(bool write, size_t hash)
+    {
         auto [it, inserted] =
-            m_readWriteSet.try_emplace(KeyType(key), ReadWriteFlag{.read = !write, .write = write});
+            m_readWriteSet.try_emplace(hash, ReadWriteFlag{.read = !write, .write = write});
         if (!inserted)
         {
             it->second.write |= write;
