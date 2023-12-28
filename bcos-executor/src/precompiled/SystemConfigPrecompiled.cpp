@@ -164,7 +164,7 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
                 upgradeChain(_executive, _callParameters, codec, value);
             }
             // if feature_balance_precompiled is enabled, register governor to caller
-            if (configKey == "feature_balance_precompiled" &&
+            if (configKey == SYSTEM_KEY_BALANCE_PRECOMPILED_SWITCH &&
                 blockContext.blockVersion() >= BlockVersion::V3_6_VERSION)
             {
                 registerGovernorToCaller(_executive, _callParameters, codec);
