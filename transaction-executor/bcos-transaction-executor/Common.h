@@ -24,7 +24,6 @@
 
 namespace bcos::transaction_executor
 {
-
 class EVMCResult : public evmc_result
 {
 public:

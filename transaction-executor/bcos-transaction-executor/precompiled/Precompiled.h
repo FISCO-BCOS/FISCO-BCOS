@@ -45,7 +45,7 @@ inline auto buildLegacyExecutive(auto& storage, protocol::BlockHeader const& blo
 using Precompiled =
     std::variant<executor::PrecompiledContract, std::shared_ptr<precompiled::Precompiled>>;
 
-inline EVMCResult call(Precompiled const& precompiled, auto& storage,
+inline EVMCResult callPrecompiled(Precompiled const& precompiled, auto& storage,
     protocol::BlockHeader const& blockHeader, evmc_message const& message,
     evmc_address const& origin, ExternalCaller auto&& externalCaller,
     auto const& precompiledManager)

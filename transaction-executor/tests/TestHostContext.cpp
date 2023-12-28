@@ -23,10 +23,10 @@
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
-#include <bcos-task/Wait.h>
 #include <evmc/evmc.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/test/unit_test.hpp>
+#include <atomic>
 #include <iterator>
 #include <memory>
 
@@ -41,7 +41,6 @@ public:
     MutableStorage storage;
     Rollbackable<decltype(storage)> rollbackableStorage;
     evmc_address helloworldAddress;
-    VMFactory vmFactory;
     int64_t seq = 0;
     std::optional<PrecompiledManager> precompiledManager;
     bcos::ledger::LedgerConfig ledgerConfig;
@@ -77,9 +76,10 @@ public:
             .code_address = {}};
         evmc_address origin = {};
 
-        HostContext<decltype(rollbackableStorage)> hostContext(vmFactory, rollbackableStorage,
-            blockHeader, message, origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
+        HostContext<decltype(rollbackableStorage)> hostContext(rollbackableStorage, blockHeader,
+            message, origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
             bcos::task::syncWait);
+        syncWait(hostContext.prepare());
         auto result = syncWait(hostContext.execute());
 
         BOOST_REQUIRE_EQUAL(result.status_code, 0);
@@ -88,7 +88,7 @@ public:
     }
 
     template <class... Arg>
-    Task<EVMCResult> call(std::string_view abi, Arg const&... args)
+    Task<EVMCResult> call(std::string_view abi, evmc_address sender, Arg const&... args)
     {
         bcos::codec::abi::ContractABICodec abiCodec(bcos::executor::GlobalHashImpl::g_hashImpl);
         auto input = abiCodec.abiIn(std::string(abi), args...);
@@ -96,6 +96,9 @@ public:
         bcostars::protocol::BlockHeaderImpl blockHeader(
             [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
         blockHeader.setVersion(static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_3_VERSION));
+
+        static std::atomic_int64_t number = 0;
+        blockHeader.setNumber(number++);
         blockHeader.calculateHash(*hashImpl);
 
         evmc_message message = {.kind = EVMC_CALL,
@@ -105,7 +108,7 @@ public:
             .recipient = helloworldAddress,
             .destination_ptr = nullptr,
             .destination_len = 0,
-            .sender = {},
+            .sender = sender,
             .sender_ptr = nullptr,
             .sender_len = 0,
             .input_data = input.data(),
@@ -115,9 +118,10 @@ public:
             .code_address = helloworldAddress};
         evmc_address origin = {};
 
-        HostContext<decltype(rollbackableStorage)> hostContext(vmFactory, rollbackableStorage,
-            blockHeader, message, origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
+        HostContext<decltype(rollbackableStorage)> hostContext(rollbackableStorage, blockHeader,
+            message, origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
             bcos::task::syncWait);
+        co_await hostContext.prepare();
         auto result = co_await hostContext.execute();
 
         co_return result;
@@ -143,7 +147,7 @@ BOOST_AUTO_TEST_CASE(bits)
 BOOST_AUTO_TEST_CASE(simpleCall)
 {
     syncWait([this]() -> Task<void> {
-        auto result = co_await call(std::string("getInt()"));
+        auto result = co_await call(std::string("getInt()"), {});
 
         BOOST_CHECK_EQUAL(result.status_code, 0);
         bcos::s256 getIntResult = -1;
@@ -158,10 +162,11 @@ BOOST_AUTO_TEST_CASE(simpleCall)
 BOOST_AUTO_TEST_CASE(executeAndCall)
 {
     syncWait([this]() -> Task<void> {
-        auto result1 = co_await call("setInt(int256)", bcos::s256(10000));
-        auto result2 = co_await call("getInt()");
-        auto result3 = co_await call("setString(string)", std::string("Hello world, fisco-bcos!"));
-        auto result4 = co_await call("getString()");
+        auto result1 = co_await call("setInt(int256)", {}, bcos::s256(10000));
+        auto result2 = co_await call("getInt()", {});
+        auto result3 =
+            co_await call("setString(string)", {}, std::string("Hello world, fisco-bcos!"));
+        auto result4 = co_await call("getString()", {});
 
         BOOST_CHECK_EQUAL(result1.status_code, 0);
         BOOST_CHECK_EQUAL(result2.status_code, 0);
@@ -184,7 +189,7 @@ BOOST_AUTO_TEST_CASE(executeAndCall)
 BOOST_AUTO_TEST_CASE(contractDeploy)
 {
     syncWait([this]() -> Task<void> {
-        auto result = co_await call("deployAndCall(int256)", bcos::s256(999));
+        auto result = co_await call("deployAndCall(int256)", {}, bcos::s256(999));
 
         BOOST_CHECK_EQUAL(result.status_code, 0);
         bcos::s256 getIntResult = -1;
@@ -199,7 +204,7 @@ BOOST_AUTO_TEST_CASE(contractDeploy)
 BOOST_AUTO_TEST_CASE(createTwice)
 {
     syncWait([this]() -> Task<void> {
-        auto result = co_await call("createTwice()");
+        auto result = co_await call("createTwice()", {});
         BOOST_CHECK_EQUAL(result.status_code, 0);
 
         co_return;
@@ -211,20 +216,20 @@ BOOST_AUTO_TEST_CASE(failure)
     syncWait([this]() -> Task<void> {
         bcos::codec::abi::ContractABICodec abiCodec(bcos::executor::GlobalHashImpl::g_hashImpl);
 
-        auto result1 = co_await call("returnRequire()");
+        auto result1 = co_await call("returnRequire()", {});
         BOOST_CHECK_EQUAL(result1.status_code, 2);
 
-        auto result2 = co_await call("getInt()");
+        auto result2 = co_await call("getInt()", {});
         BOOST_CHECK_EQUAL(result2.status_code, 0);
         bcos::s256 getIntResult = -1;
         abiCodec.abiOut(
             bcos::bytesConstRef(result2.output_data, result2.output_size), getIntResult);
         BOOST_CHECK_EQUAL(getIntResult, 0);
 
-        auto result3 = co_await call("returnRevert()");
+        auto result3 = co_await call("returnRevert()", {});
         BOOST_CHECK_EQUAL(result3.status_code, 2);
 
-        auto result4 = co_await call("getInt()");
+        auto result4 = co_await call("getInt()", {});
         BOOST_CHECK_EQUAL(result4.status_code, 0);
         abiCodec.abiOut(
             bcos::bytesConstRef(result4.output_data, result4.output_size), getIntResult);
@@ -239,16 +244,17 @@ BOOST_AUTO_TEST_CASE(delegateCall)
     syncWait([this]() -> Task<void> {
         bcos::codec::abi::ContractABICodec abiCodec(bcos::executor::GlobalHashImpl::g_hashImpl);
 
-        auto result1 = co_await call("delegateCall()");
+        evmc_address sender = bcos::unhexAddress("0x0000000000000000000000000000000000000050");
+        auto result1 = co_await call("delegateCall()", sender);
         BOOST_CHECK_EQUAL(result1.status_code, 0);
 
-        auto result2 = co_await call("getInt()");
+        auto result2 = co_await call("getInt()", sender);
         bcos::s256 getIntResult = -1;
         abiCodec.abiOut(
             bcos::bytesConstRef(result2.output_data, result2.output_size), getIntResult);
         BOOST_CHECK_EQUAL(getIntResult, 19876);
 
-        auto result3 = co_await call("getString()");
+        auto result3 = co_await call("getString()", sender);
         std::string strResult;
         abiCodec.abiOut(bcos::bytesConstRef(result3.output_data, result3.output_size), strResult);
         BOOST_CHECK_EQUAL(strResult, "hi!");
@@ -329,9 +335,10 @@ BOOST_AUTO_TEST_CASE(precompiled)
             .code_address = callAddress};
         evmc_address origin = {};
 
-        HostContext<decltype(rollbackableStorage)> hostContext(vmFactory, rollbackableStorage,
-            blockHeader, message, origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
+        HostContext<decltype(rollbackableStorage)> hostContext(rollbackableStorage, blockHeader,
+            message, origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
             bcos::task::syncWait);
+        syncWait(hostContext.prepare());
         auto result = syncWait(hostContext.execute());
     }
 
@@ -359,9 +366,10 @@ BOOST_AUTO_TEST_CASE(precompiled)
             .code_address = callAddress};
         evmc_address origin = {};
 
-        HostContext<decltype(rollbackableStorage)> hostContext(vmFactory, rollbackableStorage,
-            blockHeader, message, origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
+        HostContext<decltype(rollbackableStorage)> hostContext(rollbackableStorage, blockHeader,
+            message, origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
             bcos::task::syncWait);
+        syncWait(hostContext.prepare());
         result.emplace(syncWait(hostContext.execute()));
     }
 
