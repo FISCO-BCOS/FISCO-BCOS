@@ -264,7 +264,7 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
         }
     }
 
-    if (callParameters->create)
+    else if (callParameters->create)
     {
         std::tie(hostContext, callResults) = create(std::move(callParameters));
     }
