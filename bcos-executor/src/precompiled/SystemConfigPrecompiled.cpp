@@ -163,6 +163,12 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
             {
                 upgradeChain(_executive, _callParameters, codec, value);
             }
+            // if feature_balance_precompiled is enabled, register governor to caller
+            if (configKey == SYSTEM_KEY_BALANCE_PRECOMPILED_SWITCH &&
+                blockContext.blockVersion() >= BlockVersion::V3_6_VERSION)
+            {
+                registerGovernorToCaller(_executive, _callParameters, codec);
+            }
 
             PRECOMPILED_LOG(INFO) << LOG_BADGE("SystemConfigPrecompiled")
                                   << LOG_DESC("set system config") << LOG_KV("configKey", configKey)
@@ -365,6 +371,48 @@ void SystemConfigPrecompiled::upgradeChain(
             shardingFeatures.set(ledger::Features::Flag::feature_sharding);
             task::syncWait(
                 shardingFeatures.writeToStorage(*_executive->blockContext().backendStorage(), 0));
+        }
+    }
+}
+
+void SystemConfigPrecompiled::registerGovernorToCaller(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    const PrecompiledExecResult::Ptr& _callParameters, CodecWrapper const& codec)
+{
+    // get governor address
+    auto governorAddress = getGovernorList(_executive, _callParameters, codec);
+    if (governorAddress.empty())
+    {
+        BOOST_THROW_EXCEPTION(PrecompiledError("Governor address is empty."));
+        return;
+    }
+    // register governor to caller
+    auto table = _executive->storage().openTable(ledger::SYS_BALANCE_CALLER);
+    if (!table)
+    {
+        std::string tableStr(SYS_BALANCE_CALLER);
+        table = _executive->storage().createTable(tableStr, "value");
+        for (auto const& address : governorAddress)
+        {
+            auto entry = table->newEntry();
+            Entry CallerEntry;
+            CallerEntry.importFields({"1"});
+            _executive->storage().setRow(SYS_BALANCE_CALLER, address.hex(), std::move(CallerEntry));
+        }
+        return;
+    }
+    else
+    {
+        for (auto const& address : governorAddress)
+        {
+            auto entry = table->getRow(address.hex());
+            if (!entry)
+            {
+                Entry CallerEntry;
+                CallerEntry.importFields({"1"});
+                _executive->storage().setRow(
+                    SYS_BALANCE_CALLER, address.hex(), std::move(CallerEntry));
+            }
         }
     }
 }

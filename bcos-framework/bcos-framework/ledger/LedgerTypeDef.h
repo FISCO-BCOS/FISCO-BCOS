@@ -47,6 +47,9 @@ constexpr static std::string_view SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM =
 constexpr static std::string_view SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM =
     "feature_rpbft_epoch_block_num";
 constexpr static std::string_view SYSTEM_KEY_RPBFT_SWITCH = "feature_rpbft";
+// system configuration for balance
+constexpr static std::string_view SYSTEM_KEY_BALANCE_PRECOMPILED_SWITCH =
+    "feature_balance_precompiled";
 // notify rotate key for rpbft
 constexpr static std::string_view INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE = "feature_rpbft_notify_rotate";
 constexpr static std::string_view PBFT_CONSENSUS_TYPE = "pbft";

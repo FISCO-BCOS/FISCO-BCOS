@@ -47,13 +47,16 @@ public:
         const std::shared_ptr<executor::TransactionExecutive>& _executive, const std::string& _key);
 
 private:
-    int64_t validate(const std::shared_ptr<executor::TransactionExecutive>& _executive, 
+    int64_t validate(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         std::string_view key, std::string_view value, uint32_t blockVersion);
     static bool shouldUpgradeChain(
         std::string_view key, uint32_t fromVersion, uint32_t toVersion) noexcept;
     static void upgradeChain(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         const PrecompiledExecResult::Ptr& _callParameters, CodecWrapper const& codec,
         uint32_t toVersion);
+    static void registerGovernorToCaller(
+        const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        const PrecompiledExecResult::Ptr& _callParameters, CodecWrapper const& codec);
 
     std::map<std::string, std::function<int64_t(std::string, uint32_t)>> m_valueConverter;
     std::unordered_map<std::string, std::function<void(int64_t, uint32_t)>> m_sysValueCmp;
