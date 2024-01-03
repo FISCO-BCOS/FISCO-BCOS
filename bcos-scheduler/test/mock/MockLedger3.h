@@ -31,7 +31,7 @@ public:
     using Ptr = std::shared_ptr<MockLedger3>;
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::TransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
-        std::function<void(Error::Ptr&&)> callback, bool writeTxsAndReceipts) override
+        std::function<void(Error::Ptr&&)> callback) override
     {
         auto blockNumber = block->blockHeaderConst()->number();
         SCHEDULER_LOG(DEBUG) << LOG_KV("blockNumber", blockNumber);

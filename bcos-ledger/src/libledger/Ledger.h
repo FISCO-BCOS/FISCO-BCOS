@@ -63,7 +63,7 @@ public:
         std::function<void(Error::UniquePtr&&)> _callback) override;
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::TransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
-        std::function<void(Error::Ptr&&)> callback, bool writeTxsAndReceipts = true) override;
+        std::function<void(Error::Ptr&&)> callback) override;
 
     bcos::Error::Ptr storeTransactionsAndReceipts(
         bcos::protocol::TransactionsPtr blockTxs, bcos::protocol::Block::ConstPtr block) override;

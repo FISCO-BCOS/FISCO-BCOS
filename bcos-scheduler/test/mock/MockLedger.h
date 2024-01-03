@@ -13,7 +13,7 @@ class MockLedger : public bcos::ledger::LedgerInterface
 public:
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::TransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
-        std::function<void(Error::Ptr&&)> callback, bool writeTxsAndReceipts) override
+        std::function<void(Error::Ptr&&)> callback) override
     {
         BOOST_CHECK_EQUAL(block->blockHeaderConst()->number(), 100);
         callback(nullptr);
