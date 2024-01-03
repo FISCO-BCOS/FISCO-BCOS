@@ -262,10 +262,9 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
             callResults->type = CallParameters::FINISHED;
             callResults->status = (int32_t)TransactionStatus::None;
         }
-        return callResults;
     }
 
-    if (callParameters->create)
+    else if (callParameters->create)
     {
         std::tie(hostContext, callResults) = create(std::move(callParameters));
     }
