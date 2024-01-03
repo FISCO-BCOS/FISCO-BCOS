@@ -134,7 +134,7 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
 
         if (connectPeers)
         {
-            for (auto& peer : *connectPeers)
+            for (const auto& peer : *connectPeers)
             {
                 if (!WsTools::validIP(peer.address()))
                 {

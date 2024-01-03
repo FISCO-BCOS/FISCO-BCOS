@@ -22,6 +22,7 @@
 #include <bcos-boostssl/context/ContextBuilder.h>
 #include <bcos-boostssl/context/ContextConfig.h>
 #include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/Exceptions.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
@@ -34,23 +35,27 @@ using namespace bcos::boostssl::context;
 
 // static const std::string DEFAULT_CONFIG = "./boostssl.ini";
 
-std::shared_ptr<std::string> ContextBuilder::readFileContent(boost::filesystem::path const& _file)
+std::string ContextBuilder::readFileContent(boost::filesystem::path const& _file)
 {
-    std::shared_ptr<std::string> content = std::make_shared<std::string>();
+    std::string content = {};
     boost::filesystem::ifstream fileStream(_file, std::ifstream::binary);
     if (!fileStream)
     {
-        return content;
+        // file not exist, throw
+        BOOST_THROW_EXCEPTION(
+            InvalidParameter() << errinfo_comment(_file.string() + " file not exist"));
     }
-    fileStream.seekg(0, fileStream.end);
+    fileStream.seekg(0, boost::filesystem::ifstream::end);
     auto length = fileStream.tellg();
     if (length == 0)
     {
-        return content;
+        // file is empty, throw
+        BOOST_THROW_EXCEPTION(
+            InvalidParameter() << errinfo_comment(_file.string() + " file is empty"));
     }
-    fileStream.seekg(0, fileStream.beg);
-    content->resize(length);
-    fileStream.read((char*)content->data(), length);
+    fileStream.seekg(0, boost::filesystem::ifstream::beg);
+    content.resize(length);
+    fileStream.read((char*)content.data(), length);
     return content;
 }
 
@@ -73,14 +78,12 @@ std::shared_ptr<boost::asio::ssl::context> ContextBuilder::buildSslContext(
         }
         return buildSslContext(_server, _contextConfig.smCertConfig());
     }
-    else
+
+    if (_contextConfig.sslType() != "sm_ssl")
     {
-        if (_contextConfig.sslType() != "sm_ssl")
-        {
-            return buildSslContextByCertContent(_contextConfig.certConfig());
-        }
-        return buildSslContextByCertContent(_server, _contextConfig.smCertConfig());
+        return buildSslContextByCertContent(_contextConfig.certConfig());
     }
+    return buildSslContextByCertContent(_server, _contextConfig.smCertConfig());
 }
 
 std::shared_ptr<boost::asio::ssl::context> ContextBuilder::buildSslContext(
@@ -91,7 +94,7 @@ std::shared_ptr<boost::asio::ssl::context> ContextBuilder::buildSslContext(
 
     auto keyContent =
         readFileContent(boost::filesystem::path(_certConfig.nodeKey));  // node.key content
-    boost::asio::const_buffer keyBuffer(keyContent->data(), keyContent->size());
+    boost::asio::const_buffer keyBuffer(keyContent.data(), keyContent.size());
     sslContext->use_private_key(keyBuffer, boost::asio::ssl::context::file_format::pem);
 
     // node.crt
@@ -99,7 +102,7 @@ std::shared_ptr<boost::asio::ssl::context> ContextBuilder::buildSslContext(
 
     auto caCertContent = readFileContent(boost::filesystem::path(_certConfig.caCert));  // ca.crt
     sslContext->add_certificate_authority(
-        boost::asio::const_buffer(caCertContent->data(), caCertContent->size()));
+        boost::asio::const_buffer(caCertContent.data(), caCertContent.size()));
 
     std::string caPath;
     if (!caPath.empty())
@@ -190,7 +193,7 @@ std::shared_ptr<boost::asio::ssl::context> ContextBuilder::buildSslContext(
     */
     auto caCertContent = readFileContent(boost::filesystem::path(_smCertConfig.caCert));  // ca.crt
     sslContext->add_certificate_authority(
-        boost::asio::const_buffer(caCertContent->data(), caCertContent->size()));
+        boost::asio::const_buffer(caCertContent.data(), caCertContent.size()));
 
     sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer |
                                 boost::asio::ssl::verify_fail_if_no_peer_cert);

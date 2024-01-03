@@ -281,14 +281,33 @@ void AccountPrecompiled::addAccountBalance(const std::string& accountTableName,
     auto table = _executive->storage().openTable(accountTableName);
     if (!table.has_value()) [[unlikely]]
     {
-        PRECOMPILED_LOG(WARNING) << BLOCK_NUMBER(blockContext.number())
-                                 << LOG_BADGE("AccountPrecompiled, addAccountBalance")
-                                 << LOG_DESC("table not exist!");
-        BOOST_THROW_EXCEPTION(PrecompiledError("Account table not exist, addBalance failed!"));
-        return;
+        // table is not exist, this call form EVM_BALANCE_SENDER_ADDRESS, create it
+        // substr prefix, get account
+        auto accountHex = accountTableName.substr(6);
+        PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number())
+                              << LOG_BADGE("AccountPrecompiled, addAccountBalance")
+                              << LOG_DESC("table not exist, create it")
+                              << LOG_KV("account", accountHex);
+        auto accountTable = getAccountTableName(accountHex);
+        // create account table
+        std::string codeString = getDynamicPrecompiledCodeString(ACCOUNT_ADDRESS, accountTable);
+        auto input = codec.encode(accountTable, codeString);
+
+        auto response = externalRequest(_executive, ref(input), _callParameters->m_origin,
+            _callParameters->m_codeAddress, accountHex, false, true, _callParameters->m_gasLeft,
+            true);
+
+        if (response->status != (int32_t)TransactionStatus::None)
+        {
+            PRECOMPILED_LOG(INFO) << LOG_BADGE("AccountManagerPrecompiled")
+                                  << LOG_DESC("createAccount failed")
+                                  << LOG_KV("accountTableName", accountTableName)
+                                  << LOG_KV("status", response->status);
+            BOOST_THROW_EXCEPTION(PrecompiledError("Create account error."));
+        }
     }
 
-    // check balance exist
+    // ensure here accountTable must exist， add balance
     auto entry = _executive->storage().getRow(accountTableName, ACCOUNT_BALANCE);
     if (entry.has_value())
     {

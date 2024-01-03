@@ -109,11 +109,11 @@ void JsonRpcImpl::call(const std::string& _groupID, const std::string& _nodeName
     params.append(_data);
 
     auto request = m_factory->buildRequest("call", params);
-    auto s = request->toJson();
-    m_sender(_groupID, name, s, _respFunc);
+    auto json = request->toJson();
+    m_sender(_groupID, name, json, _respFunc);
     if (c_fileLogLevel <= DEBUG) [[unlikely]]
     {
-        RPCIMPL_LOG(DEBUG) << LOG_BADGE("call") << LOG_KV("request", s);
+        RPCIMPL_LOG(DEBUG) << LOG_BADGE("call") << LOG_KV("request", json);
     }
 }
 
@@ -135,7 +135,7 @@ void JsonRpcImpl::sendTransaction(const std::string& _groupID, const std::string
     fmt % _data;
     fmt % _requireProof;
 
-    std::string s = fmt.str();
+    std::string json = fmt.str();
     /*
     Json::Value params = Json::Value(Json::arrayValue);
     params.append(_groupID);
@@ -147,13 +147,13 @@ void JsonRpcImpl::sendTransaction(const std::string& _groupID, const std::string
     auto s = request->toJson();
     */
 
-    m_sender("", "", s, _respFunc);
+    m_sender(_groupID, _nodeName, json, _respFunc);
     if (c_fileLogLevel <= DEBUG) [[unlikely]]
     {
         RPCIMPL_LOG(DEBUG) << LOG_BADGE("sendTransaction")
                            << LOG_KV(
                                   "sendRequestToHighestBlockNode", m_sendRequestToHighestBlockNode)
-                           << LOG_KV("request", s);
+                           << LOG_KV("request", json);
     }
 }
 
@@ -173,11 +173,11 @@ void JsonRpcImpl::getTransaction(const std::string& _groupID, const std::string&
     params.append(_requireProof);
 
     auto request = m_factory->buildRequest("getTransaction", params);
-    auto s = request->toJson();
-    m_sender(_groupID, name, s, _respFunc);
+    auto json = request->toJson();
+    m_sender(_groupID, name, json, _respFunc);
     if (c_fileLogLevel <= DEBUG) [[unlikely]]
     {
-        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getTransaction") << LOG_KV("request", s);
+        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getTransaction") << LOG_KV("request", json);
     }
 }
 
@@ -197,11 +197,11 @@ void JsonRpcImpl::getTransactionReceipt(const std::string& _groupID, const std::
     params.append(_requireProof);
 
     auto request = m_factory->buildRequest("getTransactionReceipt", params);
-    auto s = request->toJson();
-    m_sender(_groupID, name, s, _respFunc);
+    auto json = request->toJson();
+    m_sender(_groupID, name, json, _respFunc);
     if (c_fileLogLevel <= DEBUG) [[unlikely]]
     {
-        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getTransactionReceipt") << LOG_KV("request", s);
+        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getTransactionReceipt") << LOG_KV("request", json);
     }
 }
 
@@ -222,11 +222,11 @@ void JsonRpcImpl::getBlockByHash(const std::string& _groupID, const std::string&
     params.append(_onlyTxHash);
 
     auto request = m_factory->buildRequest("getBlockByHash", params);
-    auto s = request->toJson();
-    m_sender(_groupID, name, s, _respFunc);
+    auto json = request->toJson();
+    m_sender(_groupID, name, json, _respFunc);
     if (c_fileLogLevel <= DEBUG) [[unlikely]]
     {
-        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getBlockByHash") << LOG_KV("request", s);
+        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getBlockByHash") << LOG_KV("request", json);
     }
 }
 
@@ -247,11 +247,11 @@ void JsonRpcImpl::getBlockByNumber(const std::string& _groupID, const std::strin
     params.append(_onlyTxHash);
 
     auto request = m_factory->buildRequest("getBlockByNumber", params);
-    auto s = request->toJson();
-    m_sender(_groupID, name, s, _respFunc);
+    auto json = request->toJson();
+    m_sender(_groupID, name, json, _respFunc);
     if (c_fileLogLevel <= DEBUG) [[unlikely]]
     {
-        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getBlockByNumber") << LOG_KV("request", s);
+        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getBlockByNumber") << LOG_KV("request", json);
     }
 }
 
@@ -270,11 +270,11 @@ void JsonRpcImpl::getBlockHashByNumber(const std::string& _groupID, const std::s
     params.append(_blockNumber);
 
     auto request = m_factory->buildRequest("getBlockHashByNumber", params);
-    auto s = request->toJson();
-    m_sender(_groupID, name, s, _respFunc);
+    auto json = request->toJson();
+    m_sender(_groupID, name, json, _respFunc);
     if (c_fileLogLevel <= DEBUG) [[unlikely]]
     {
-        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getBlockHashByNumber") << LOG_KV("request", s);
+        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getBlockHashByNumber") << LOG_KV("request", json);
     }
 }
 
@@ -292,11 +292,11 @@ void JsonRpcImpl::getBlockNumber(
     params.append(name);
 
     auto request = m_factory->buildRequest("getBlockNumber", params);
-    auto s = request->toJson();
-    m_sender(_groupID, name, s, _respFunc);
+    auto json = request->toJson();
+    m_sender(_groupID, name, json, _respFunc);
     if (c_fileLogLevel <= DEBUG) [[unlikely]]
     {
-        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getBlockNumber") << LOG_KV("request", s);
+        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getBlockNumber") << LOG_KV("request", json);
     }
 }
 
@@ -315,11 +315,11 @@ void JsonRpcImpl::getCode(const std::string& _groupID, const std::string& _nodeN
     params.append(_contractAddress);
 
     auto request = m_factory->buildRequest("getCode", params);
-    auto s = request->toJson();
-    m_sender(_groupID, name, s, _respFunc);
+    auto json = request->toJson();
+    m_sender(_groupID, name, json, _respFunc);
     if (c_fileLogLevel <= DEBUG) [[unlikely]]
     {
-        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getCode") << LOG_KV("request", s);
+        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getCode") << LOG_KV("request", json);
     }
 }
 
@@ -337,11 +337,11 @@ void JsonRpcImpl::getSealerList(
     params.append(name);
 
     auto request = m_factory->buildRequest("getSealerList", params);
-    auto s = request->toJson();
-    m_sender(_groupID, name, s, _respFunc);
+    auto json = request->toJson();
+    m_sender(_groupID, name, json, _respFunc);
     if (c_fileLogLevel <= DEBUG) [[unlikely]]
     {
-        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getSealerList") << LOG_KV("request", s);
+        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getSealerList") << LOG_KV("request", json);
     }
 }
 
@@ -359,11 +359,11 @@ void JsonRpcImpl::getObserverList(
     params.append(name);
 
     auto request = m_factory->buildRequest("getObserverList", params);
-    auto s = request->toJson();
-    m_sender(_groupID, name, s, _respFunc);
+    auto json = request->toJson();
+    m_sender(_groupID, name, json, _respFunc);
     if (c_fileLogLevel <= DEBUG) [[unlikely]]
     {
-        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getObserverList") << LOG_KV("request", s);
+        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getObserverList") << LOG_KV("request", json);
     }
 }
 
@@ -381,11 +381,11 @@ void JsonRpcImpl::getPbftView(
     params.append(name);
 
     auto request = m_factory->buildRequest("getPbftView", params);
-    auto s = request->toJson();
-    m_sender(_groupID, name, s, _respFunc);
+    auto json = request->toJson();
+    m_sender(_groupID, name, json, _respFunc);
     if (c_fileLogLevel <= DEBUG) [[unlikely]]
     {
-        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getPbftView") << LOG_KV("request", s);
+        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getPbftView") << LOG_KV("request", json);
     }
 }
 
@@ -403,11 +403,11 @@ void JsonRpcImpl::getPendingTxSize(
     params.append(name);
 
     auto request = m_factory->buildRequest("getPendingTxSize", params);
-    auto s = request->toJson();
-    m_sender(_groupID, name, s, _respFunc);
+    auto json = request->toJson();
+    m_sender(_groupID, name, json, _respFunc);
     if (c_fileLogLevel <= DEBUG) [[unlikely]]
     {
-        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getPendingTxSize") << LOG_KV("request", s);
+        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getPendingTxSize") << LOG_KV("request", json);
     }
 }
 
@@ -425,11 +425,11 @@ void JsonRpcImpl::getSyncStatus(
     params.append(name);
 
     auto request = m_factory->buildRequest("getSyncStatus", params);
-    auto s = request->toJson();
-    m_sender(_groupID, name, s, _respFunc);
+    auto json = request->toJson();
+    m_sender(_groupID, name, json, _respFunc);
     if (c_fileLogLevel <= DEBUG) [[unlikely]]
     {
-        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getSyncStatus") << LOG_KV("request", s);
+        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getSyncStatus") << LOG_KV("request", json);
     }
 }
 
@@ -447,11 +447,11 @@ void JsonRpcImpl::getConsensusStatus(
     params.append(name);
 
     auto request = m_factory->buildRequest("getConsensusStatus", params);
-    auto s = request->toJson();
-    m_sender(_groupID, name, s, _respFunc);
+    auto json = request->toJson();
+    m_sender(_groupID, name, json, _respFunc);
     if (c_fileLogLevel <= DEBUG) [[unlikely]]
     {
-        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getConsensusStatus") << LOG_KV("request", s);
+        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getConsensusStatus") << LOG_KV("request", json);
     }
 }
 
@@ -470,11 +470,11 @@ void JsonRpcImpl::getSystemConfigByKey(const std::string& _groupID, const std::s
     params.append(_keyValue);
 
     auto request = m_factory->buildRequest("getSystemConfigByKey", params);
-    auto s = request->toJson();
-    m_sender(_groupID, name, s, _respFunc);
+    auto json = request->toJson();
+    m_sender(_groupID, name, json, _respFunc);
     if (c_fileLogLevel <= DEBUG) [[unlikely]]
     {
-        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getSystemConfigByKey") << LOG_KV("request", s);
+        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getSystemConfigByKey") << LOG_KV("request", json);
     }
 }
 
@@ -492,11 +492,11 @@ void JsonRpcImpl::getTotalTransactionCount(
     params.append(name);
 
     auto request = m_factory->buildRequest("getTotalTransactionCount", params);
-    auto s = request->toJson();
-    m_sender(_groupID, name, s, _respFunc);
+    auto json = request->toJson();
+    m_sender(_groupID, name, json, _respFunc);
     if (c_fileLogLevel <= DEBUG) [[unlikely]]
     {
-        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getTotalTransactionCount") << LOG_KV("request", s);
+        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getTotalTransactionCount") << LOG_KV("request", json);
     }
 }
 
@@ -504,11 +504,11 @@ void JsonRpcImpl::getPeers(RespFunc _respFunc)
 {
     Json::Value params = Json::Value(Json::arrayValue);
     auto request = m_factory->buildRequest("getPeers", params);
-    auto s = request->toJson();
-    m_sender("", "", s, _respFunc);
+    auto json = request->toJson();
+    m_sender("", "", json, _respFunc);
     if (c_fileLogLevel <= DEBUG) [[unlikely]]
     {
-        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getPeers") << LOG_KV("request", s);
+        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getPeers") << LOG_KV("request", json);
     }
 }
 
@@ -516,11 +516,11 @@ void JsonRpcImpl::getGroupList(RespFunc _respFunc)
 {
     Json::Value params = Json::Value(Json::arrayValue);
     auto request = m_factory->buildRequest("getGroupList", params);
-    auto s = request->toJson();
-    m_sender("", "", s, _respFunc);
+    auto json = request->toJson();
+    m_sender("", "", json, _respFunc);
     if (c_fileLogLevel <= DEBUG) [[unlikely]]
     {
-        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getGroupList") << LOG_KV("request", s);
+        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getGroupList") << LOG_KV("request", json);
     }
 }
 
@@ -556,11 +556,11 @@ void JsonRpcImpl::getGroupInfoList(RespFunc _respFunc)
     Json::Value params = Json::Value(Json::arrayValue);
 
     auto request = m_factory->buildRequest("getGroupInfoList", params);
-    auto s = request->toJson();
-    m_sender("", "", s, _respFunc);
+    auto json = request->toJson();
+    m_sender("", "", json, _respFunc);
     if (c_fileLogLevel <= DEBUG) [[unlikely]]
     {
-        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getGroupNodeInfo") << LOG_KV("request", s);
+        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getGroupNodeInfo") << LOG_KV("request", json);
     }
 }
 
@@ -572,11 +572,11 @@ void JsonRpcImpl::getGroupNodeInfo(
     params.append(_nodeName);
 
     auto request = m_factory->buildRequest("getGroupNodeInfo", params);
-    auto s = request->toJson();
-    m_sender(_groupID, _nodeName, s, _respFunc);
+    auto json = request->toJson();
+    m_sender(_groupID, _nodeName, json, _respFunc);
     if (c_fileLogLevel <= DEBUG) [[unlikely]]
     {
-        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getGroupNodeInfo") << LOG_KV("request", s);
+        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getGroupNodeInfo") << LOG_KV("request", json);
     }
 }
 

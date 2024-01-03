@@ -227,6 +227,14 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::Transaction const
     jResp["abi"] = std::string(transaction.abi());
     jResp["signature"] = toHexStringWithPrefix(transaction.signatureData());
     jResp["extraData"] = std::string(transaction.extraData());
+    if (transaction.version() == int32_t(bcos::protocol::TransactionVersion::V1_VERSION))
+    {
+        jResp["value"] = std::string(transaction.value());
+        jResp["gasPrice"] = std::string(transaction.gasPrice());
+        jResp["gasLimit"] = transaction.gasLimit();
+        jResp["maxFeePerGas"] = std::string(transaction.maxFeePerGas());
+        jResp["maxPriorityFeePerGas"] = std::string(transaction.maxPriorityFeePerGas());
+    }
 }
 
 void bcos::rpc::toJsonResp(Json::Value& jResp, std::string_view _txHash,
@@ -276,7 +284,6 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, std::string_view _txHash,
     {
         jResp["hash"] = "0x";
     }
-    jResp["effectiveGasPrice"] = std::string(transactionReceipt.effectiveGasPrice());
 
     jResp["logEntries"] = Json::Value(Json::arrayValue);
     for (const auto& logEntry : transactionReceipt.logEntries())
@@ -290,6 +297,10 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, std::string_view _txHash,
         }
         jLog["data"] = toHexStringWithPrefix(logEntry.data());
         jResp["logEntries"].append(jLog);
+    }
+    if (transactionReceipt.version() == int32_t(bcos::protocol::TransactionVersion::V1_VERSION))
+    {
+        jResp["effectiveGasPrice"] = std::string(transactionReceipt.effectiveGasPrice());
     }
 }
 
@@ -521,7 +532,7 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
         catch (std::exception& e)
         {
             auto info = boost::diagnostic_information(e);
-            RPC_IMPL_LOG(WARNING) << "RPC common error: " << info;
+            RPC_IMPL_LOG(WARNING) << "RPC common exception: " << info;
             respFunc(BCOS_ERROR_PTR(-1, std::move(info)), jResp);
         }
     }(this, groupID, nodeName, data, requireProof, std::move(respFunc)));

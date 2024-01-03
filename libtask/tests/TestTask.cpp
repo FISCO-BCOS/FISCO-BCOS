@@ -10,8 +10,10 @@
 #include <tbb/task.h>
 #include <tbb/task_group.h>
 #include <boost/test/unit_test.hpp>
+#include <boost/throw_exception.hpp>
 #include <chrono>
 #include <iostream>
+#include <stdexcept>
 #include <thread>
 
 using namespace bcos::task;
@@ -56,6 +58,20 @@ Task<void> level1()
 
     std::cout << "Level1 execute finished" << std::endl;
     co_return;
+}
+
+void innerThrow()
+{
+    BOOST_THROW_EXCEPTION(std::runtime_error("error11"));
+}
+
+BOOST_AUTO_TEST_CASE(taskException)
+{
+    BOOST_CHECK_THROW(bcos::task::wait([]() -> bcos::task::Task<void> {
+        innerThrow();
+        co_return;
+    }()),
+        std::runtime_error);
 }
 
 BOOST_AUTO_TEST_CASE(normalTask)
