@@ -2403,6 +2403,10 @@ EOF
 
 gen_group_template() {
     local config_path=$1
+    local binary_version=${service_binary_version}
+    if [ "${service_binary_version:0:1}" == "v" ]; then
+        binary_version=${service_binary_version:1}
+    fi
     cat <<EOF >>"${config_path}"
 [[group]]
 group_id="${default_group}"
@@ -2426,7 +2430,7 @@ consensus_type = "pbft"
 # transaction gas limit
 gas_limit = "3000000000"
 # compatible version, can be dynamically upgraded through setSystemConfig
-compatibility_version="3.5.0"
+compatibility_version="${binary_version}"
 
 EOF
 }
