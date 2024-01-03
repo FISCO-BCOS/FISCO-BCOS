@@ -298,15 +298,22 @@ bool TransactionExecutive::transferBalance(std::string_view origin, std::string_
     // sender 是合约地址
     // receiver 是转账接收方
     EXECUTIVE_LOG(TRACE) << LOG_BADGE("Execute") << "now to transferBalance"
-                         << LOG_KV("subAccount", origin) << LOG_KV("addAccount", receiver)
-                         << LOG_KV("receiveAddress", ACCOUNT_ADDRESS) << LOG_KV("value", value)
+                         << LOG_KV("origin", origin)
+                         << LOG_KV("subAccount", sender)
+                         << LOG_KV("addAccount", receiver)
+                         << LOG_KV("receiveAddress", ACCOUNT_ADDRESS) 
+                         << LOG_KV("value", value)
                          << LOG_KV("gas", gas);
-
+    if (isPrecompiled(std::string(receiver)))
+    {
+        EXECUTIVE_LOG(DEBUG) << LOG_BADGE("Execute") << "transferBalance, receiverAddress is precompiled address";
+        return false;
+    }
     // first subAccountBalance, then addAccountBalance
-    // origin = origin - value
+    // sender = sender - value
     auto codec = CodecWrapper(m_blockContext.hashHandler(), m_blockContext.isWasm());
     auto params = codec.encodeWithSig("subAccountBalance(uint256)", value);
-    auto formTableName = bcos::getContractTableName(executor::USER_APPS_PREFIX, origin);
+    auto formTableName = bcos::getContractTableName(executor::USER_APPS_PREFIX, sender);
     std::vector<std::string> fromTableNameVector = {formTableName};
     auto inputParams = codec.encode(fromTableNameVector, params);
     auto subParams = codec.encode(std::string(ACCOUNT_ADDRESS), inputParams);
@@ -341,7 +348,7 @@ bool TransactionExecutive::transferBalance(std::string_view origin, std::string_
     {
         EXECUTIVE_LOG(DEBUG) << LOG_BADGE("Execute")
                              << LOG_DESC("transferBalance add failed, need to restore")
-                             << LOG_KV("addAccount", receiver) << LOG_KV("tablename", toTableName);
+                             << LOG_KV("tableName", formTableName) << LOG_KV("will add balance", value);
 
         // if receiver add failed, sender need to restore
         // sender = sender + value
@@ -364,7 +371,7 @@ bool TransactionExecutive::transferBalance(std::string_view origin, std::string_
         return false;
     }
     EXECUTIVE_LOG(DEBUG) << LOG_BADGE("Execute") << "transferBalance finished."
-                         << LOG_KV("subAccount", origin) << LOG_KV("addAccount", receiver)
+                         << LOG_KV("subAccount", sender) << LOG_KV("addAccount", receiver)
                          << LOG_KV("receiveAddress", ACCOUNT_ADDRESS) << LOG_KV("value", value)
                          << LOG_KV("gas", gas);
     return true;
