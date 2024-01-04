@@ -254,17 +254,18 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
             callResults = std::move(callParameters);
             callResults->type = CallParameters::REVERT;
             callResults->status = (int32_t)TransactionStatus::RevertInstruction;
+            return callResults;
         }
-        else
+        else if (callParameters->data.empty())
         {
-            hostContext = nullptr;
             callResults = std::move(callParameters);
             callResults->type = CallParameters::FINISHED;
             callResults->status = (int32_t)TransactionStatus::None;
+            return callResults;          
         }
     }
 
-    else if (callParameters->create)
+    if (callParameters->create)
     {
         std::tie(hostContext, callResults) = create(std::move(callParameters));
     }
