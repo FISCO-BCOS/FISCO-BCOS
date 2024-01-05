@@ -34,7 +34,7 @@ constexpr inline bool isSysContractDeploy(protocol::BlockNumber _number)
 }
 
 constexpr unsigned int PRECOMPILED_ADDRESS_UPPER_BOUND = 0x20000;
-constexpr inline bool isPrecompiledAddressRange(std::string_view _address)
+inline bool isPrecompiledAddressRange(std::string_view _address)
 {
     unsigned int address;
     auto result = std::from_chars(_address.data(), _address.data() + _address.size(), address, 16);
