@@ -276,12 +276,13 @@ void AccountPrecompiled::addAccountBalance(const std::string& accountTableName,
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
         return;
     }
-    if (isPrecompiledAddressRange(accountTableName.substr(6)))
+    if (isPrecompiledAddressRange(accountTableName.substr(USER_APPS_PREFIX.length())))
     {
         PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number())
                               << LOG_BADGE("AccountPrecompiled, addAccountBalance")
                               << LOG_DESC("account is precompiled address")
-                              << LOG_KV("account", accountTableName.substr(6));
+                              << LOG_KV(
+                                     "account", accountTableName.substr(USER_APPS_PREFIX.length()));
         BOOST_THROW_EXCEPTION(
             PrecompiledError("addBalance failed, toAddress is precompiledAddress!"));
         return;
@@ -292,7 +293,7 @@ void AccountPrecompiled::addAccountBalance(const std::string& accountTableName,
     {
         // table is not exist, this call form EVM_BALANCE_SENDER_ADDRESS, create it
         // substr prefix, get account
-        auto accountHex = accountTableName.substr(6);
+        auto accountHex = accountTableName.substr(USER_APPS_PREFIX.length());
         PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number())
                               << LOG_BADGE("AccountPrecompiled, addAccountBalance")
                               << LOG_DESC("table not exist, create it")
@@ -363,7 +364,7 @@ void AccountPrecompiled::subAccountBalance(const std::string& accountTableName,
         return;
     }
     // check account is precompiled address, if true, return
-    if (isPrecompiledAddressRange(accountTableName.substr(6)))
+    if (isPrecompiledAddressRange(accountTableName.substr(USER_APPS_PREFIX.length())))
     {
         PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number())
                               << LOG_BADGE("AccountPrecompiled, addAccountBalance")
