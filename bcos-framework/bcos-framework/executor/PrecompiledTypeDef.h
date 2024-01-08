@@ -21,6 +21,8 @@
 #pragma once
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include <bcos-utilities/Common.h>
+#include <charconv>
+#include <sstream>
 
 namespace bcos
 {
@@ -29,6 +31,14 @@ constexpr const int SYS_CONTRACT_DEPLOY_NUMBER = 0;
 constexpr inline bool isSysContractDeploy(protocol::BlockNumber _number)
 {
     return _number == SYS_CONTRACT_DEPLOY_NUMBER;
+}
+
+constexpr unsigned int PRECOMPILED_ADDRESS_UPPER_BOUND = 0x20000;
+inline bool isPrecompiledAddressRange(std::string_view _address)
+{
+    unsigned int address;
+    auto result = std::from_chars(_address.data(), _address.data() + _address.size(), address, 16);
+    return result.ec == std::errc() && address < PRECOMPILED_ADDRESS_UPPER_BOUND;
 }
 
 namespace precompiled
