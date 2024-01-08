@@ -51,6 +51,10 @@ void AMOP::start()
 }
 void AMOP::stop()
 {
+    if (m_service)
+    {
+        m_service->stop();
+    }
     AMOP_CLIENT(INFO) << LOG_BADGE("stop") << LOG_DESC("stop amop");
 }
 

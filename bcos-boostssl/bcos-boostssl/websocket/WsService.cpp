@@ -44,7 +44,7 @@ using namespace std::chrono_literals;
 using namespace bcos::boostssl;
 using namespace bcos::boostssl::ws;
 
-WsService::WsService(std::string _moduleName) : m_moduleName(_moduleName)
+WsService::WsService(std::string _moduleName) : m_moduleName(std::move(_moduleName))
 {
     WEBSOCKET_SERVICE(INFO) << LOG_KV("[NEWOBJ][WsService]", this);
 }
@@ -124,6 +124,11 @@ void WsService::stop()
     if (m_heartbeat)
     {
         m_heartbeat->cancel();
+    }
+
+    if (m_httpServer)
+    {
+        m_httpServer->stop();
     }
 
     WEBSOCKET_SERVICE(INFO) << LOG_BADGE("stop") << LOG_DESC("stop websocket service successfully");
@@ -333,7 +338,7 @@ void WsService::reconnect()
 
             if (!connectPeers->empty())
             {
-                for (auto reconnectPeer : *connectPeers)
+                for (const auto& reconnectPeer : *connectPeers)
                 {
                     WEBSOCKET_SERVICE(INFO)
                         << ("reconnect")

@@ -60,7 +60,7 @@ void WsConnector::connectToWsServer(const std::string& _host, uint16_t _port, bo
     auto connector = shared_from_this();
 
     // resolve host
-    resolver->async_resolve(_host.c_str(), std::to_string(_port).c_str(),
+    resolver->async_resolve(_host, std::to_string(_port),
         [this, _host, _port, _disableSsl, endpoint, ioc, ctx, connector, builder, _callback](
             boost::beast::error_code _ec, boost::asio::ip::tcp::resolver::results_type _results) {
             if (_ec)

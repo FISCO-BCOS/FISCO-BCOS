@@ -24,6 +24,7 @@
 #include <bcos-cpp-sdk/ws/Service.h>
 #include <bcos-framework/multigroup/GroupInfoCodec.h>
 #include <functional>
+#include <utility>
 
 namespace bcos::cppsdk::jsonrpc
 {
@@ -37,11 +38,15 @@ public:
     using UniquePtr = std::unique_ptr<JsonRpcImpl>;
 
 public:
-    JsonRpcImpl(bcos::group::GroupInfoCodec::Ptr _groupInfoCodec)
+    explicit JsonRpcImpl(bcos::group::GroupInfoCodec::Ptr _groupInfoCodec)
       : m_groupInfoCodec(std::move(_groupInfoCodec))
     {}
 
-    ~JsonRpcImpl() override { stop(); }
+    ~JsonRpcImpl() override
+    {
+        stop();
+        BCOS_LOG(INFO) << LOG_KV("[DELOBJ][JsonRpcImpl]", this);
+    }
 
 public:
     void start() override;
@@ -49,92 +54,90 @@ public:
 
 public:
     //-------------------------------------------------------------------------------------
-    virtual void genericMethod(const std::string& _data, RespFunc _respFunc) override;
+    void genericMethod(const std::string& _data, RespFunc _respFunc) override;
 
-    virtual void genericMethod(
+    void genericMethod(
         const std::string& _groupID, const std::string& _data, RespFunc _respFunc) override;
 
-    virtual void genericMethod(const std::string& _groupID, const std::string& _nodeName,
+    void genericMethod(const std::string& _groupID, const std::string& _nodeName,
         const std::string& _data, RespFunc _respFunc) override;
     //-------------------------------------------------------------------------------------
 
-    virtual void call(const std::string& _groupID, const std::string& _nodeName,
-        const std::string& _to, const std::string& _data, RespFunc _respFunc) override;
+    void call(const std::string& _groupID, const std::string& _nodeName, const std::string& _to,
+        const std::string& _data, RespFunc _respFunc) override;
 
-    virtual void sendTransaction(const std::string& _groupID, const std::string& _nodeName,
+    void sendTransaction(const std::string& _groupID, const std::string& _nodeName,
         const std::string& _data, bool _requireProof, RespFunc _respFunc) override;
 
-    virtual void getTransaction(const std::string& _groupID, const std::string& _nodeName,
+    void getTransaction(const std::string& _groupID, const std::string& _nodeName,
         const std::string& _txHash, bool _requireProof, RespFunc _respFunc) override;
 
-    virtual void getTransactionReceipt(const std::string& _groupID, const std::string& _nodeName,
+    void getTransactionReceipt(const std::string& _groupID, const std::string& _nodeName,
         const std::string& _txHash, bool _requireProof, RespFunc _respFunc) override;
 
-    virtual void getBlockByHash(const std::string& _groupID, const std::string& _nodeName,
+    void getBlockByHash(const std::string& _groupID, const std::string& _nodeName,
         const std::string& _blockHash, bool _onlyHeader, bool _onlyTxHash,
         RespFunc _respFunc) override;
 
-    virtual void getBlockByNumber(const std::string& _groupID, const std::string& _nodeName,
+    void getBlockByNumber(const std::string& _groupID, const std::string& _nodeName,
         int64_t _blockNumber, bool _onlyHeader, bool _onlyTxHash, RespFunc _respFunc) override;
 
-    virtual void getBlockHashByNumber(const std::string& _groupID, const std::string& _nodeName,
+    void getBlockHashByNumber(const std::string& _groupID, const std::string& _nodeName,
         int64_t _blockNumber, RespFunc _respFunc) override;
 
-    virtual void getBlockNumber(
+    void getBlockNumber(
         const std::string& _groupID, const std::string& _nodeName, RespFunc _respFunc) override;
 
-    virtual void getCode(const std::string& _groupID, const std::string& _nodeName,
-        const std::string _contractAddress, RespFunc _respFunc) override;
+    void getCode(const std::string& _groupID, const std::string& _nodeName,
+        const std::string& _contractAddress, RespFunc _respFunc) override;
 
-    virtual void getSealerList(
+    void getSealerList(
         const std::string& _groupID, const std::string& _nodeName, RespFunc _respFunc) override;
 
-    virtual void getObserverList(
+    void getObserverList(
         const std::string& _groupID, const std::string& _nodeName, RespFunc _respFunc) override;
 
-    virtual void getPbftView(
+    void getPbftView(
         const std::string& _groupID, const std::string& _nodeName, RespFunc _respFunc) override;
 
-    virtual void getPendingTxSize(
+    void getPendingTxSize(
         const std::string& _groupID, const std::string& _nodeName, RespFunc _respFunc) override;
 
-    virtual void getSyncStatus(
+    void getSyncStatus(
         const std::string& _groupID, const std::string& _nodeName, RespFunc _respFunc) override;
 
-    virtual void getConsensusStatus(
+    void getConsensusStatus(
         const std::string& _groupID, const std::string& _nodeName, RespFunc _respFunc) override;
 
-    virtual void getSystemConfigByKey(const std::string& _groupID, const std::string& _nodeName,
+    void getSystemConfigByKey(const std::string& _groupID, const std::string& _nodeName,
         const std::string& _keyValue, RespFunc _respFunc) override;
 
-    virtual void getTotalTransactionCount(
+    void getTotalTransactionCount(
         const std::string& _groupID, const std::string& _nodeName, RespFunc _respFunc) override;
 
-    virtual void getGroupPeers(std::string const& _groupID, RespFunc _respFunc) override;
+    void getGroupPeers(std::string const& _groupID, RespFunc _respFunc) override;
 
-    virtual void getPeers(RespFunc _respFunc) override;
+    void getPeers(RespFunc _respFunc) override;
 
-    virtual void getGroupList(RespFunc _respFunc) override;
+    void getGroupList(RespFunc _respFunc) override;
 
-    virtual void getGroupInfo(const std::string& _groupID, RespFunc _respFunc) override;
+    void getGroupInfo(const std::string& _groupID, RespFunc _respFunc) override;
 
-    virtual void getGroupInfoList(RespFunc _respFunc) override;
+    void getGroupInfoList(RespFunc _respFunc) override;
 
-    virtual void getGroupNodeInfo(
+    void getGroupNodeInfo(
         const std::string& _groupID, const std::string& _nodeName, RespFunc _respFunc) override;
 
-
-public:
     JsonRpcRequestFactory::Ptr factory() const { return m_factory; }
     void setFactory(JsonRpcRequestFactory::Ptr _factory) { m_factory = std::move(_factory); }
 
     JsonRpcSendFunc sender() const { return m_sender; }
-    void setSender(JsonRpcSendFunc _sender) { m_sender = _sender; }
+    void setSender(JsonRpcSendFunc _sender) { m_sender = std::move(_sender); }
 
     std::shared_ptr<bcos::cppsdk::service::Service> service() const { return m_service; }
     void setService(std::shared_ptr<bcos::cppsdk::service::Service> _service)
     {
-        m_service = _service;
+        m_service = std::move(_service);
     }
 
     void setSendRequestToHighestBlockNode(bool _sendRequestToHighestBlockNode)
