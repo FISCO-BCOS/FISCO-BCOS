@@ -23,9 +23,7 @@
 #include <mutex>
 #include <string>
 
-namespace bcos
-{
-namespace cppsdk
+namespace bcos::cppsdk
 {
 class LogInitializer
 {
@@ -37,14 +35,14 @@ public:
         {
             boost::property_tree::read_ini(_configPath, pt);
         }
-        catch (const std::exception& e)
+        catch (const std::exception&)
         {
             try
             {
                 std::string defaultPath = "conf/clog.ini";
                 boost::property_tree::read_ini(defaultPath, pt);
             }
-            catch (const std::exception& e)
+            catch (const std::exception&)
             {
                 // log disable by default
                 pt.put("log.enable", false);
@@ -62,9 +60,7 @@ public:
         });
     }
 
-private:
     static std::once_flag m_flag;
     static bcos::BoostLogInitializer* m_logInitializer;
 };
-}  // namespace cppsdk
-}  // namespace bcos
+}  // namespace bcos::cppsdk

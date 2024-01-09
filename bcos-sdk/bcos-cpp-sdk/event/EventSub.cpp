@@ -51,7 +51,7 @@ void EventSub::start()
     // start websocket service
     m_service->start();
 
-    m_timer = std::make_shared<bcos::Timer>(m_config->reconnectPeriod(), "doLoop");
+    m_timer = std::make_shared<bcos::Timer>(m_config->reconnectPeriod(), "sdkEventLoop");
     m_timer->registerTimeoutHandler([this]() { doLoop(); });
     m_timer->start();
     EVENT_SUB(INFO) << LOG_BADGE("start") << LOG_DESC("start event sub successfully")
@@ -71,6 +71,11 @@ void EventSub::stop()
     if (m_timer)
     {
         m_timer->stop();
+        m_timer->destroy();
+    }
+    if (m_service)
+    {
+        m_service->stop();
     }
 
     EVENT_SUB(INFO) << LOG_BADGE("stop") << LOG_DESC("stop event sub successfully");

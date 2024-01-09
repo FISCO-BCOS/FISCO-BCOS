@@ -63,12 +63,7 @@ SdkFactory::SdkFactory()
 bcos::cppsdk::Sdk::UniquePtr SdkFactory::buildSdk(
     std::shared_ptr<bcos::boostssl::ws::WsConfig> _config, bool _sendRequestToHighestBlockNode)
 {
-    if (!_config)
-    {
-        _config = m_config;
-    }
-
-    auto service = buildService(_config);
+    auto service = buildService(std::move(_config));
     auto amop = buildAMOP(service);
     auto jsonRpc = buildJsonRpc(service, _sendRequestToHighestBlockNode);
     auto eventSub = buildEventSub(service);
@@ -94,10 +89,11 @@ Service::Ptr SdkFactory::buildService(std::shared_ptr<bcos::boostssl::ws::WsConf
     auto initializer = std::make_shared<WsInitializer>();
     initializer->setConfig(std::move(_config));
     initializer->initWsService(service);
+    auto weakService = std::weak_ptr<Service>(service);
     service->registerMsgHandler(
-        bcos::protocol::MessageType::BLOCK_NOTIFY, [service](auto&& _msg, auto&& _session) {
+        bcos::protocol::MessageType::BLOCK_NOTIFY, [weakService](auto&& _msg, auto&& _session) {
             auto blkMsg = std::string(_msg->payload()->begin(), _msg->payload()->end());
-
+            auto service = weakService.lock();
             service->onRecvBlockNotifier(blkMsg);
 
             BCOS_LOG(INFO) << "[WS]" << LOG_DESC("receive block notify")
@@ -105,9 +101,9 @@ Service::Ptr SdkFactory::buildService(std::shared_ptr<bcos::boostssl::ws::WsConf
         });
 
     service->registerMsgHandler(
-        bcos::protocol::MessageType::GROUP_NOTIFY, [service](auto&& _msg, auto&& _session) {
+        bcos::protocol::MessageType::GROUP_NOTIFY, [weakService](auto&& _msg, auto&& _session) {
             std::string groupInfo = std::string(_msg->payload()->begin(), _msg->payload()->end());
-
+            auto service = weakService.lock();
             service->onNotifyGroupInfo(groupInfo, _session);
 
             BCOS_LOG(INFO) << "[WS]" << LOG_DESC("receive group info notify")
@@ -132,7 +128,7 @@ bcos::cppsdk::jsonrpc::JsonRpcImpl::Ptr SdkFactory::buildJsonRpc(
                    << LOG_KV("sendRequestToHighestBlockNode", _sendRequestToHighestBlockNode);
 
     jsonRpc->setSender([_service](const std::string& _group, const std::string& _node,
-                           const std::string& _request, bcos::cppsdk::jsonrpc::RespFunc _respFunc) {
+                           const std::string& _request, auto&& _respFunc) {
         auto data = std::make_shared<bytes>(_request.begin(), _request.end());
         auto msg = _service->messageFactory()->buildMessage();
         msg->setSeq(_service->messageFactory()->newSeq());
