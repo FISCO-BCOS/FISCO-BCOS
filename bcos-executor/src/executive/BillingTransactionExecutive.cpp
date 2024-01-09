@@ -10,9 +10,10 @@ CallParameters::UniquePtr BillingTransactionExecutive::start(CallParameters::Uni
     int64_t originGas = input->gas;
     uint64_t currentSeq = input->seq;
     std::string currentSenderAddr = input->senderAddress;
+    bool staticCall = input->staticCall;
     auto message = TransactionExecutive::execute(std::move(input));
 
-    if (currentSeq == 0)
+    if ((currentSeq == 0) && !staticCall)
     {
         CallParameters::UniquePtr callParam4AccountPre =
             std::make_unique<CallParameters>(CallParameters::MESSAGE);
@@ -25,7 +26,7 @@ CallParameters::UniquePtr BillingTransactionExecutive::start(CallParameters::Uni
 
         int64_t gasUsed = originGas - message->gas;
         bytes subBalanceIn = codec.encodeWithSig("subAccountBalance(uint256)", gasUsed * gasPrice);
-        std::vector<std::string> codeParameters{currentSenderAddr};
+        std::vector<std::string> codeParameters{getContractTableName(currentSenderAddr)};
         auto newParams = codec.encode(codeParameters, subBalanceIn);
         callParam4AccountPre->data = std::move(newParams);
 
