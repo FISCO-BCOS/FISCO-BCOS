@@ -19,12 +19,14 @@
  */
 #pragma once
 #include "rpc/JsonRpcServiceImpl.h"
+#include "utilities/logger/LogInitializer.h"
 #include <bcos-boostssl/websocket/WsConfig.h>
 #include <bcos-boostssl/websocket/WsService.h>
 #include <bcos-cpp-sdk/amop/AMOP.h>
 #include <bcos-cpp-sdk/event/EventSub.h>
 #include <bcos-cpp-sdk/rpc/JsonRpcImpl.h>
 #include <bcos-cpp-sdk/ws/Service.h>
+#include <bcos-utilities/BoostLogInitializer.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <memory>
 #include <utility>
@@ -69,6 +71,11 @@ private:
 public:
     virtual void start()
     {
+        if (m_service)
+        {
+            m_service->start();
+        }
+
         if (m_jsonRpc)
         {
             m_jsonRpc->start();
@@ -82,11 +89,6 @@ public:
         if (m_eventSub)
         {
             m_eventSub->start();
-        }
-
-        if (m_service)
-        {
-            m_service->start();
         }
     }
 

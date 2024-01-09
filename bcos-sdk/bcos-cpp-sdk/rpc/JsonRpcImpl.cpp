@@ -48,6 +48,10 @@ void JsonRpcImpl::start()
 
 void JsonRpcImpl::stop()
 {
+    if (m_service)
+    {
+        m_service->stop();
+    }
     RPCIMPL_LOG(INFO) << LOG_BADGE("stop") << LOG_DESC("stop rpc");
 }
 
@@ -301,7 +305,7 @@ void JsonRpcImpl::getBlockNumber(
 }
 
 void JsonRpcImpl::getCode(const std::string& _groupID, const std::string& _nodeName,
-    const std::string _contractAddress, RespFunc _respFunc)
+    const std::string& _contractAddress, RespFunc _respFunc)
 {
     std::string name = _nodeName;
     if (m_sendRequestToHighestBlockNode && name.empty())

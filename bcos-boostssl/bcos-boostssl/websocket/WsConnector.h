@@ -40,7 +40,7 @@ public:
     using Ptr = std::shared_ptr<WsConnector>;
     using ConstPtr = std::shared_ptr<const WsConnector>;
 
-    WsConnector(std::shared_ptr<boost::asio::ip::tcp::resolver> _resolver)
+    explicit WsConnector(std::shared_ptr<boost::asio::ip::tcp::resolver> _resolver)
       : m_resolver(std::move(_resolver))
     {}
 
