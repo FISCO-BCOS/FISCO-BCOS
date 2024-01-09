@@ -379,40 +379,51 @@ void SystemConfigPrecompiled::registerGovernorToCaller(
     const std::shared_ptr<executor::TransactionExecutive>& _executive,
     const PrecompiledExecResult::Ptr& _callParameters, CodecWrapper const& codec)
 {
-    // get governor address
-    auto governorAddress = getGovernorList(_executive, _callParameters, codec);
-    if (governorAddress.empty())
+    try
     {
-        BOOST_THROW_EXCEPTION(PrecompiledError("Governor address is empty."));
-        return;
-    }
-    // register governor to caller
-    auto table = _executive->storage().openTable(ledger::SYS_BALANCE_CALLER);
-    if (!table)
-    {
-        std::string tableStr(SYS_BALANCE_CALLER);
-        table = _executive->storage().createTable(tableStr, "value");
-        for (auto const& address : governorAddress)
+        auto governorAddress = getGovernorList(_executive, _callParameters, codec);
+        if (governorAddress.empty())
         {
-            auto entry = table->newEntry();
-            Entry CallerEntry;
-            CallerEntry.importFields({"1"});
-            _executive->storage().setRow(SYS_BALANCE_CALLER, address.hex(), std::move(CallerEntry));
+            PRECOMPILED_LOG(INFO) << LOG_BADGE("SystemConfigPrecompiled")
+                                  << LOG_DESC("get governor is empty, maybe governor is not set");
+            return;
         }
-        return;
-    }
-    else
-    {
-        for (auto const& address : governorAddress)
+        // register governor to caller
+        auto table = _executive->storage().openTable(ledger::SYS_BALANCE_CALLER);
+        if (!table)
         {
-            auto entry = table->getRow(address.hex());
-            if (!entry)
+            std::string tableStr(SYS_BALANCE_CALLER);
+            table = _executive->storage().createTable(tableStr, "value");
+            for (auto const& address : governorAddress)
             {
+                auto entry = table->newEntry();
                 Entry CallerEntry;
                 CallerEntry.importFields({"1"});
                 _executive->storage().setRow(
                     SYS_BALANCE_CALLER, address.hex(), std::move(CallerEntry));
             }
+            return;
         }
+        else
+        {
+            for (auto const& address : governorAddress)
+            {
+                auto entry = table->getRow(address.hex());
+                if (!entry)
+                {
+                    Entry CallerEntry;
+                    CallerEntry.importFields({"1"});
+                    _executive->storage().setRow(
+                        SYS_BALANCE_CALLER, address.hex(), std::move(CallerEntry));
+                }
+            }
+        }
+    }
+    catch (std::exception const& e)
+    {
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("SystemConfigPrecompiled")
+                              << LOG_DESC("get governor list failed, maybe it's a wasm chain")
+                              << LOG_KV("info", boost::diagnostic_information(e));
+        return;
     }
 }
