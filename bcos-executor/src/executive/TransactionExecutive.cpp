@@ -124,43 +124,58 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
 
         // get codeHash in contract table
         auto codeHashEntry = storage().getRow(tableName, ACCOUNT_CODE_HASH);
-        if (!codeHashEntry || codeHashEntry->get().empty())
+        do
         {
-            auto& output = input;
-            EXECUTIVE_LOG(DEBUG) << "Could not getCodeHash during externalCall"
-                                 << LOG_KV("codeAddress", input->codeAddress);
+            if (!codeHashEntry || codeHashEntry->get().empty())
+            {
+                auto& output = input;
+                EXECUTIVE_LOG(DEBUG) << "Could not getCodeHash during externalCall"
+                                     << LOG_KV("codeAddress", input->codeAddress);
 
-            output->data = bytes();
-            if (m_blockContext.features().get(ledger::Features::Flag::bugfix_call_noaddr_return))
-            {
-                // This is eth's bug, but we still need to compat with it :)
-                // https://docs.soliditylang.org/en/v0.8.17/control-structures.html#error-handling-assert-require-revert-and-exceptions
-                output->status = (int32_t)TransactionStatus::None;
-                output->evmStatus = EVMC_SUCCESS;
+                if (m_blockContext.features().get(
+                        ledger::Features::Flag::bugfix_call_noaddr_return))
+                {
+                    auto entry = storage().getRow(tableName, ACCOUNT_CODE);
+                    if (entry && !entry->get().empty())
+                    {
+                        input->delegateCallCode = toBytes(entry->get());
+                        break;
+                    }
+                }
+
+                output->data = bytes();
+                if (m_blockContext.features().get(
+                        ledger::Features::Flag::bugfix_call_noaddr_return))
+                {
+                    // This is eth's bug, but we still need to compat with it :)
+                    // https://docs.soliditylang.org/en/v0.8.17/control-structures.html#error-handling-assert-require-revert-and-exceptions
+                    output->status = (int32_t)TransactionStatus::None;
+                    output->evmStatus = EVMC_SUCCESS;
+                }
+                else
+                {
+                    output->status = (int32_t)TransactionStatus::RevertInstruction;
+                    output->evmStatus = EVMC_REVERT;
+                }
+                return std::move(output);
             }
-            else
+
+            auto codeHash = codeHashEntry->getField(0);
+
+            // get code in code binary table
+            auto entry = storage().getRow(bcos::ledger::SYS_CODE_BINARY, codeHash);
+            if (!entry || entry->get().empty())
             {
+                auto& output = input;
+                EXECUTIVE_LOG(DEBUG) << "Could not getCode during externalCall"
+                                     << LOG_KV("codeAddress", input->codeAddress);
+                output->data = bytes();
                 output->status = (int32_t)TransactionStatus::RevertInstruction;
                 output->evmStatus = EVMC_REVERT;
+                return std::move(output);
             }
-            return std::move(output);
-        }
-
-        auto codeHash = codeHashEntry->getField(0);
-
-        // get code in code binary table
-        auto entry = storage().getRow(bcos::ledger::SYS_CODE_BINARY, codeHash);
-        if (!entry || entry->get().empty())
-        {
-            auto& output = input;
-            EXECUTIVE_LOG(DEBUG) << "Could not getCode during externalCall"
-                                 << LOG_KV("codeAddress", input->codeAddress);
-            output->data = bytes();
-            output->status = (int32_t)TransactionStatus::RevertInstruction;
-            output->evmStatus = EVMC_REVERT;
-            return std::move(output);
-        }
-        input->delegateCallCode = toBytes(entry->get());
+            input->delegateCallCode = toBytes(entry->get());
+        } while (0);
     }
 
     if (input->data == bcos::protocol::GET_CODE_INPUT_BYTES)
@@ -175,6 +190,16 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
         auto codeHashEntry = storage().getRow(tableName, ACCOUNT_CODE_HASH);
         if (!codeHashEntry || codeHashEntry->get().empty())
         {
+            if (m_blockContext.features().get(ledger::Features::Flag::bugfix_call_noaddr_return))
+            {
+                auto entry = storage().getRow(tableName, ACCOUNT_CODE);
+                if (entry && !entry->get().empty())
+                {
+                    output->data = toBytes(entry->get());
+                    return std::move(output);
+                }
+            }
+
             EXECUTIVE_LOG(DEBUG) << "Could not get external code hash from local storage"
                                  << LOG_KV("codeAddress", input->codeAddress);
             output->data = bytes();
@@ -959,7 +984,9 @@ CallParameters::UniquePtr TransactionExecutive::go(
 
                 if (m_blockContext.features().get(
                         ledger::Features::Flag::bugfix_call_noaddr_return) &&
-                    callResult->staticCall)
+                    callResult->staticCall &&
+                    callResult->seq > 0  // must staticCall from contract(not from rpc call)
+                )
                 {
                     // Note: to be the same as eth
                     // Just fix DMC:

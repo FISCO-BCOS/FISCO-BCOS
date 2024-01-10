@@ -133,7 +133,7 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
         evmAddress2String(_msg->sender) ==
             std::string(bcos::precompiled::EVM_BALANCE_SENDER_ADDRESS))
     {
-        // for AccountPrecompiled to sub and add
+        // comes from selfdestruct() getAccountBalance use EVM_BALANCE_SENDER_ADDRESS as msg->sender
         request->senderAddress = std::string(bcos::precompiled::EVM_BALANCE_SENDER_ADDRESS);
     }
     else
