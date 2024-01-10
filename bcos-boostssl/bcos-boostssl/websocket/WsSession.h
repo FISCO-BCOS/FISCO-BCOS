@@ -37,6 +37,7 @@
 #include <queue>
 #include <shared_mutex>
 #include <unordered_map>
+#include <utility>
 
 namespace bcos::boostssl::ws
 {
@@ -91,29 +92,32 @@ public:
         m_connectedEndPoint = _connectedEndPoint;
     }
 
-    void setConnectHandler(WsConnectHandler _connectHandler) { m_connectHandler = _connectHandler; }
+    void setConnectHandler(WsConnectHandler _connectHandler)
+    {
+        m_connectHandler = std::move(_connectHandler);
+    }
     WsConnectHandler connectHandler() { return m_connectHandler; }
 
     void setDisconnectHandler(WsDisconnectHandler _disconnectHandler)
     {
-        m_disconnectHandler = _disconnectHandler;
+        m_disconnectHandler = std::move(_disconnectHandler);
     }
     WsDisconnectHandler disconnectHandler() { return m_disconnectHandler; }
 
     void setRecvMessageHandler(WsRecvMessageHandler _recvMessageHandler)
     {
-        m_recvMessageHandler = _recvMessageHandler;
+        m_recvMessageHandler = std::move(_recvMessageHandler);
     }
     const WsRecvMessageHandler& recvMessageHandler() { return m_recvMessageHandler; }
 
     std::shared_ptr<MessageFaceFactory> messageFactory() { return m_messageFactory; }
     void setMessageFactory(std::shared_ptr<MessageFaceFactory> _messageFactory)
     {
-        m_messageFactory = _messageFactory;
+        m_messageFactory = std::move(_messageFactory);
     }
 
     std::shared_ptr<boost::asio::io_context> ioc() const { return m_ioc; }
-    void setIoc(std::shared_ptr<boost::asio::io_context> _ioc) { m_ioc = _ioc; }
+    void setIoc(std::shared_ptr<boost::asio::io_context> _ioc) { m_ioc = std::move(_ioc); }
 
     void setVersion(uint16_t _version) { m_version.store(_version); }
     uint16_t version() const { return m_version.load(); }
@@ -121,7 +125,7 @@ public:
     WsStreamDelegate::Ptr wsStreamDelegate() { return m_wsStreamDelegate; }
     void setWsStreamDelegate(WsStreamDelegate::Ptr _wsStreamDelegate)
     {
-        m_wsStreamDelegate = _wsStreamDelegate;
+        m_wsStreamDelegate = std::move(_wsStreamDelegate);
     }
 
     boost::beast::flat_buffer& buffer() { return m_buffer; }
@@ -140,10 +144,10 @@ public:
     }
 
     std::string nodeId() { return m_nodeId; }
-    void setNodeId(std::string _nodeId) { m_nodeId = _nodeId; }
+    void setNodeId(std::string _nodeId) { m_nodeId = std::move(_nodeId); }
 
     std::string moduleName() { return m_moduleName; }
-    void setModuleName(std::string _moduleName) { m_moduleName = _moduleName; }
+    void setModuleName(std::string _moduleName) { m_moduleName = std::move(_moduleName); }
 
     bool needCheckRspPacket() { return m_needCheckRspPacket; }
     void setNeedCheckRspPacket(bool _needCheckRespPacket)

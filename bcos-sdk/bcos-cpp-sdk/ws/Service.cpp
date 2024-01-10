@@ -126,9 +126,9 @@ void Service::onRecvMessage(std::shared_ptr<MessageFace> _msg, std::shared_ptr<W
                                    "websocket service unable to handler message before handshake"
                                    "with the node successfully")
                             << LOG_KV("endpoint", _session ? _session->endPoint() : std::string(""))
-                            << LOG_KV("seq", seq);
+                            << LOG_KV("type", _msg->packetType()) << LOG_KV("seq", seq);
 
-        _session->drop(bcos::boostssl::ws::WsError::UserDisconnect);
+        // _session->drop(bcos::boostssl::ws::WsError::UserDisconnect);
         return;
     }
 
@@ -202,7 +202,7 @@ void Service::asyncSendMessageByGroupAndNode(const std::string& _group, const st
 // ---------------------send message end---------------------------------------------------------
 
 
-bool Service::checkHandshakeDone(std::shared_ptr<bcos::boostssl::ws::WsSession> _session)
+bool Service::checkHandshakeDone(std::shared_ptr<bcos::boostssl::ws::WsSession> const& _session)
 {
     return _session && _session->version();
 }
@@ -292,10 +292,8 @@ void Service::startHandshake(std::shared_ptr<bcos::boostssl::ws::WsSession> _ses
 }
 
 
-void Service::onNotifyGroupInfo(
-    const std::string& _groupInfoJson, std::shared_ptr<bcos::boostssl::ws::WsSession> _session)
+void Service::onNotifyGroupInfo(const std::string& _groupInfoJson, const std::string& endPoint)
 {
-    std::string endPoint = _session->endPoint();
     RPC_WS_LOG(TRACE) << LOG_BADGE("onNotifyGroupInfo") << LOG_KV("endPoint", endPoint)
                       << LOG_KV("groupInfoJson", _groupInfoJson);
 
@@ -312,14 +310,14 @@ void Service::onNotifyGroupInfo(
     }
 }
 
-void Service::onNotifyGroupInfo(std::shared_ptr<bcos::boostssl::ws::WsMessage> _msg,
-    std::shared_ptr<bcos::boostssl::ws::WsSession> _session)
+void Service::onNotifyGroupInfo(
+    std::shared_ptr<bcos::boostssl::ws::WsMessage> _msg, const std::string& endPoint)
 {
     std::string groupInfo = std::string(_msg->payload()->begin(), _msg->payload()->end());
 
     RPC_WS_LOG(INFO) << LOG_BADGE("onNotifyGroupInfo") << LOG_KV("groupInfo", groupInfo);
 
-    return onNotifyGroupInfo(groupInfo, std::move(_session));
+    return onNotifyGroupInfo(groupInfo, endPoint);
 }
 
 void Service::clearGroupInfoByEp(const std::string& _endPoint)

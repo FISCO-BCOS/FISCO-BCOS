@@ -26,11 +26,7 @@
 #include <bcos-utilities/Error.h>
 #include <functional>
 
-namespace bcos
-{
-namespace cppsdk
-{
-namespace jsonrpc
+namespace bcos::cppsdk::jsonrpc
 {
 
 class JsonRpcServiceInterface
@@ -40,7 +36,7 @@ public:
     using UniquePtr = std::unique_ptr<JsonRpcServiceInterface>;
 
     JsonRpcServiceInterface() = default;
-    virtual ~JsonRpcServiceInterface() {}
+    virtual ~JsonRpcServiceInterface() = default;
 
 public:
     virtual std::string sendTransaction(const bcos::crypto::KeyPairInterface& _keyPair,
@@ -49,6 +45,4 @@ public:
         RespFunc _respFunc) = 0;
 };
 
-}  // namespace jsonrpc
-}  // namespace cppsdk
-}  // namespace bcos
+}  // namespace bcos::cppsdk::jsonrpc

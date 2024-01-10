@@ -8,6 +8,7 @@
 #include <boost/filesystem.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <memory>
+#include <utility>
 
 namespace bcos::boostssl::context
 {
@@ -58,7 +59,7 @@ public:
     void setIsCertPath(bool _isCertPath) { m_isCertPath = _isCertPath; }
 
     std::string sslType() const { return m_sslType; }
-    void setSslType(const std::string _sslType) { m_sslType = _sslType; }
+    void setSslType(std::string _sslType) { m_sslType = std::move(_sslType); }
 
     const CertConfig& certConfig() const { return m_certConfig; }
     void setCertConfig(const CertConfig& _certConfig) { m_certConfig = _certConfig; }
@@ -67,7 +68,7 @@ public:
     void setSmCertConfig(const SMCertConfig& _smCertConfig) { m_smCertConfig = _smCertConfig; }
 
     std::string moduleName() { return m_moduleName; }
-    void setModuleName(std::string _moduleName) { m_moduleName = _moduleName; }
+    void setModuleName(std::string _moduleName) { m_moduleName = std::move(_moduleName); }
 
 
 private:
@@ -81,4 +82,4 @@ private:
     std::string m_moduleName = "DEFAULT";
 };
 
-}  // namespace bcos
+}  // namespace bcos::boostssl::context
