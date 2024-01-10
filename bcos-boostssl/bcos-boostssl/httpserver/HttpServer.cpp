@@ -22,6 +22,7 @@
 #include <bcos-boostssl/httpserver/HttpServer.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <memory>
+#include <utility>
 
 using namespace bcos;
 using namespace bcos::boostssl;
@@ -228,12 +229,11 @@ HttpServer::Ptr HttpServerFactory::buildHttpServer(const std::string& _listenIP,
     uint16_t _listenPort, std::shared_ptr<boost::asio::io_context> _ioc,
     std::shared_ptr<boost::asio::ssl::context> _ctx, std::string _moduleName)
 {
-    std::string m_moduleName = _moduleName;
     // create httpserver and launch a listening port
-    auto server = std::make_shared<HttpServer>(_listenIP, _listenPort, _moduleName);
+    auto server = std::make_shared<HttpServer>(_listenIP, _listenPort, std::move(_moduleName));
     auto acceptor = std::make_shared<boost::asio::ip::tcp::acceptor>((*_ioc));
     auto httpStreamFactory = std::make_shared<HttpStreamFactory>();
-    server->setCtx(_ctx);
+    server->setCtx(std::move(_ctx));
     server->setAcceptor(acceptor);
     server->setHttpStreamFactory(httpStreamFactory);
 

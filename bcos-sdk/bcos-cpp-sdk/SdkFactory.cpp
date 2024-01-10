@@ -104,7 +104,7 @@ Service::Ptr SdkFactory::buildService(std::shared_ptr<bcos::boostssl::ws::WsConf
         bcos::protocol::MessageType::GROUP_NOTIFY, [weakService](auto&& _msg, auto&& _session) {
             std::string groupInfo = std::string(_msg->payload()->begin(), _msg->payload()->end());
             auto service = weakService.lock();
-            service->onNotifyGroupInfo(groupInfo, _session);
+            service->onNotifyGroupInfo(groupInfo, _session->endPoint());
 
             BCOS_LOG(INFO) << "[WS]" << LOG_DESC("receive group info notify")
                            << LOG_KV("endpoint", _session->endPoint())

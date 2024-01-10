@@ -119,7 +119,7 @@ std::shared_ptr<boost::asio::ssl::context> ContextBuilder::buildSslContext(
 std::shared_ptr<boost::asio::ssl::context> ContextBuilder::buildSslContext(
     bool _server, const ContextConfig::SMCertConfig& _smCertConfig)
 {
-    SSL_CTX* ctx = NULL;
+    SSL_CTX* ctx = nullptr;
     if (_server)
     {
         const SSL_METHOD* meth = SSLv23_server_method();
@@ -230,7 +230,7 @@ std::shared_ptr<boost::asio::ssl::context> ContextBuilder::buildSslContextByCert
 std::shared_ptr<boost::asio::ssl::context> ContextBuilder::buildSslContextByCertContent(
     bool _server, const ContextConfig::SMCertConfig& _smCertConfig)
 {
-    SSL_CTX* ctx = NULL;
+    SSL_CTX* ctx = nullptr;
     if (_server)
     {
         const SSL_METHOD* meth = SSLv23_server_method();

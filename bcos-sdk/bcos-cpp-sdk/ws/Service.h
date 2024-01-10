@@ -29,6 +29,7 @@
 #include <functional>
 #include <set>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace bcos::cppsdk::service
@@ -70,15 +71,14 @@ public:
     // ---------------------oversend message begin----------------------------
 
     virtual void startHandshake(std::shared_ptr<bcos::boostssl::ws::WsSession> _session);
-    virtual bool checkHandshakeDone(std::shared_ptr<bcos::boostssl::ws::WsSession> _session);
+    virtual bool checkHandshakeDone(std::shared_ptr<bcos::boostssl::ws::WsSession> const& _session);
 
     void clearGroupInfoByEp(const std::string& _endPoint);
     void clearGroupInfoByEp(const std::string& _endPoint, const std::string& _groupID);
     void updateGroupInfoByEp(const std::string& _endPoint, bcos::group::GroupInfo::Ptr _groupInfo);
+    void onNotifyGroupInfo(const std::string& _groupInfo, const std::string& endPoint);
     void onNotifyGroupInfo(
-        const std::string& _groupInfo, std::shared_ptr<bcos::boostssl::ws::WsSession> _session);
-    void onNotifyGroupInfo(std::shared_ptr<bcos::boostssl::ws::WsMessage> _msg,
-        std::shared_ptr<bcos::boostssl::ws::WsSession> _session);
+        std::shared_ptr<bcos::boostssl::ws::WsMessage> _msg, const std::string& endPoint);
 
     //------------------------------ Block Notifier begin --------------------------
     bool getBlockNumber(const std::string& _group, int64_t& _blockNumber);
@@ -118,10 +118,10 @@ public:
 
     void registerWsHandshakeSucHandler(WsHandshakeSucHandler _handler)
     {
-        m_wsHandshakeSucHandlers.push_back(_handler);
+        m_wsHandshakeSucHandlers.push_back(std::move(_handler));
     }
 
-    void callWsHandshakeSucHandlers(std::shared_ptr<bcos::boostssl::ws::WsSession> _session)
+    void callWsHandshakeSucHandlers(const std::shared_ptr<bcos::boostssl::ws::WsSession>& _session)
     {
         for (auto& handler : m_wsHandshakeSucHandlers)
         {

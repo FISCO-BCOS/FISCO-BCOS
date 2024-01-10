@@ -130,7 +130,9 @@ void WsSession::startAsServer(HttpRequest _httpRequest)
     WEBSOCKET_SESSION(INFO) << LOG_BADGE("startAsServer") << LOG_DESC("start websocket handshake")
                             << LOG_KV("endPoint", m_endPoint) << LOG_KV("session", this);
     m_wsStreamDelegate->asyncAccept(
-        _httpRequest, std::bind(&WsSession::onWsAccept, shared_from_this(), std::placeholders::_1));
+        std::move(_httpRequest), [self = shared_from_this()](auto&& code) {
+            self->onWsAccept(std::forward<decltype(code)>(code));
+        });
 }
 
 void WsSession::onWsAccept(boost::beast::error_code _ec)
@@ -424,7 +426,7 @@ void WsSession::asyncSendMessage(
 void WsSession::addRespCallback(const std::string& _seq, CallBack::Ptr _callback)
 {
     WriteGuard lock(x_callback);
-    m_callbacks[_seq] = _callback;
+    m_callbacks[_seq] = std::move(_callback);
 }
 
 WsSession::CallBack::Ptr WsSession::getAndRemoveRespCallback(

@@ -185,14 +185,13 @@ void WsService::reportConnectedNodes()
 std::string WsService::genConnectError(
     const std::string& _error, const std::string& endpoint, bool end)
 {
-    std::string msg = _error;
-    msg += ":/";
-    msg += endpoint;
+    std::stringstream msg;
+    msg << _error << ":/" << endpoint;
     if (!end)
     {
-        msg += ", ";
+        msg << ", ";
     }
-    return msg;
+    return msg.str();
 }
 
 void WsService::syncConnectToEndpoints(EndPointsPtr _peers)
@@ -423,7 +422,7 @@ std::shared_ptr<WsSession> WsService::newSession(
         auto wsService = self.lock();
         if (wsService)
         {
-            wsService->onConnect(_error, _session);
+            wsService->onConnect(std::move(_error), std::move(_session));
         }
     });
     session->setDisconnectHandler(
@@ -431,7 +430,7 @@ std::shared_ptr<WsSession> WsService::newSession(
             auto wsService = self.lock();
             if (wsService)
             {
-                wsService->onDisconnect(_error, _session);
+                wsService->onDisconnect(std::move(_error), std::move(_session));
             }
         });
     session->setRecvMessageHandler(
@@ -511,7 +510,6 @@ WsSessions WsService::sessions()
 
     return sessions;
 }
-
 /**
  * @brief: session connect
  * @param _error:
@@ -609,14 +607,13 @@ void WsService::asyncSendMessageByEndPoint(const std::string& _endPoint,
         return;
     }
 
-    session->asyncSendMessage(_msg, _options, _respFunc);
+    session->asyncSendMessage(std::move(_msg), _options, _respFunc);
 }
 
 void WsService::asyncSendMessage(
     std::shared_ptr<boostssl::MessageFace> _msg, Options _options, RespCallBack _respCallBack)
 {
-    auto seq = _msg->seq();
-    return asyncSendMessage(sessions(), _msg, _options, _respCallBack);
+    return asyncSendMessage(sessions(), std::move(_msg), _options, std::move(_respCallBack));
 }
 
 void WsService::asyncSendMessage(const WsSessions& _ss, std::shared_ptr<boostssl::MessageFace> _msg,
@@ -670,9 +667,8 @@ void WsService::asyncSendMessage(const WsSessions& _ss, std::shared_ptr<boostssl
             auto moduleName = session->moduleName();
             // Note: should not pass session to the lamda operator[], this will lead to memory leak
             session->asyncSendMessage(msg, options,
-                [self, endPoint, moduleName, callback = respFunc](Error::Ptr _error,
-                    std::shared_ptr<boostssl::MessageFace> _msg,
-                    std::shared_ptr<WsSession> _session) {
+                [self, endPoint, moduleName, callback = respFunc](
+                    auto&& _error, auto&& _msg, auto&& _session) {
                     if (_error && _error->errorCode() != 0)
                     {
                         BOOST_SSL_LOG(WARNING)
@@ -694,12 +690,12 @@ void WsService::asyncSendMessage(const WsSessions& _ss, std::shared_ptr<boostssl
 
     auto retry = std::make_shared<Retry>();
     retry->ss = _ss;
-    retry->msg = _msg;
+    retry->msg = std::move(_msg);
 
     retry->options = _options;
-    retry->respFunc = _respFunc;
+    retry->respFunc = std::move(_respFunc);
 
-    if (_respFunc)
+    if (retry->respFunc)
     {
         retry->trySendMessageWithCB();
     }
@@ -737,12 +733,12 @@ void WsService::asyncSendMessage(const std::set<std::string>& _endPoints,
         }
     }
 
-    return asyncSendMessage(ss, _msg, _options, _respFunc);
+    return asyncSendMessage(ss, std::move(_msg), _options, std::move(_respFunc));
 }
 
 void WsService::broadcastMessage(std::shared_ptr<boostssl::MessageFace> _msg)
 {
-    broadcastMessage(sessions(), _msg);
+    broadcastMessage(sessions(), std::move(_msg));
 }
 
 void WsService::broadcastMessage(
