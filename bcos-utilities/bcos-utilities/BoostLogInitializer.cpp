@@ -58,7 +58,8 @@ struct BoostLogLevelResetHandler
                            << LOG_KV("logLevelStr", logLevelStr) << LOG_KV("logLevel", logLevel);
         }
         catch (...)
-        {}
+        {
+        }
     }
 
     static std::string configFile;
@@ -213,7 +214,7 @@ boost::shared_ptr<bcos::BoostLogInitializer::sink_t> BoostLogInitializer::initHo
     std::string fileName = _logPath + "/" + _logPrefix + "_%Y%m%d%H.%M.log";
 
     boost::shared_ptr<sink_t> sink(new sink_t());
-    sink->locked_backend()->set_open_mode(std::ios::app);
+    sink->locked_backend()->set_open_mode(std::ios::ate);
     sink->locked_backend()->set_time_based_rotation(
         boost::bind(&BoostLogInitializer::canRotate, this, (m_currentHourVec.size() - 1)));
 
