@@ -25,11 +25,13 @@
 #include "bcos-utilities/Common.h"
 #include "libinitializer/CommandHelper.h"
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
+#include <bcos-ledger/src/libledger/Ledger.h>
 #include <bcos-storage/StorageWrapperImpl.h>
 #include <bcos-tars-protocol/impl/TarsHashable.h>
 #include <bcos-tars-protocol/tars/Block.h>
 #include <bcos-task/Task.h>
 #include <bcos-utilities/BoostLogInitializer.h>
+#include <libinitializer/LedgerInitializer.h>
 #include <libinitializer/ProtocolInitializer.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
@@ -142,19 +144,6 @@ void starLightnode(bcos::tool::NodeConfig::Ptr nodeConfig, auto ledger, auto fro
         std::make_shared<bcos::transaction_pool::TransactionPoolClientImpl>(p2pClient);
     auto scheduler = std::make_shared<bcos::scheduler::SchedulerClientImpl>(p2pClient);
 
-    LIGHTNODE_LOG(INFO) << "Prepare genesis block...";
-    bcostars::Block genesisBlock;
-    genesisBlock.blockHeader.data.blockNumber = 0;
-    if (nodeConfig->compatibilityVersion() >=
-        static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION))
-    {
-        genesisBlock.blockHeader.data.version =
-            static_cast<decltype(genesisBlock.blockHeader.data.version)>(
-                nodeConfig->compatibilityVersion());
-    }
-    bcos::concepts::bytebuffer::assignTo(
-        nodeConfig->genesisData(), genesisBlock.blockHeader.data.extraData);
-    bcos::task::syncWait(ledger->setupGenesisBlock(std::move(genesisBlock)));
 
     LIGHTNODE_LOG(INFO) << "Init lightnode rpc...";
     auto wsService = bcos::lightnode::initRPC(
@@ -241,7 +230,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
 
     // local ledger
     auto storage = newStorage(nodeConfig->storagePath());
-    bcos::storage::StorageImpl storageWrapper(std::move(storage));
+    bcos::storage::StorageImpl storageWrapper(storage);
 
     if (nodeConfig->smCryptoType())
     {
@@ -249,6 +238,10 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
             bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher, decltype(storageWrapper)>>(
             bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher{}, std::move(storageWrapper),
             protocolInitializer.blockFactory(), storage);
+
+        LIGHTNODE_LOG(INFO) << "prepare genesis block...";
+        bcos::initializer::LedgerInitializer::build(
+            protocolInitializer.blockFactory(), storage, nodeConfig);
 
         LIGHTNODE_LOG(INFO) << "start sm light node...";
         starLightnode(nodeConfig, localLedger, front, gateway, keyFactory, nodeID);
@@ -259,6 +252,10 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
             bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher, decltype(storageWrapper)>>(
             bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher{}, std::move(storageWrapper),
             protocolInitializer.blockFactory(), storage);
+
+        LIGHTNODE_LOG(INFO) << "prepare genesis block...";
+        bcos::initializer::LedgerInitializer::build(
+            protocolInitializer.blockFactory(), storage, nodeConfig);
 
         LIGHTNODE_LOG(INFO) << "start light node...";
         starLightnode(nodeConfig, localLedger, front, gateway, keyFactory, nodeID);
