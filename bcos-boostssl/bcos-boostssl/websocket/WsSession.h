@@ -51,7 +51,7 @@ public:
     using Ptrs = std::vector<std::shared_ptr<WsSession>>;
 
 public:
-    WsSession(tbb::task_group& taskGroup, std::string _moduleName = "DEFAULT");
+    explicit WsSession(tbb::task_group& taskGroup, std::string _moduleName = "DEFAULT");
 
     virtual ~WsSession() noexcept
     {
@@ -149,7 +149,7 @@ public:
     std::string moduleName() { return m_moduleName; }
     void setModuleName(std::string _moduleName) { m_moduleName = std::move(_moduleName); }
 
-    bool needCheckRspPacket() { return m_needCheckRspPacket; }
+    bool needCheckRspPacket() const { return m_needCheckRspPacket; }
     void setNeedCheckRspPacket(bool _needCheckRespPacket)
     {
         m_needCheckRspPacket = _needCheckRespPacket;
