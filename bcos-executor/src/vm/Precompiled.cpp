@@ -478,7 +478,16 @@ pair<bool, bytes> ecRecover(bytesConstRef _in)
     crypto::HashType mHash;
     memcpy(mHash.data(), _in.data(), crypto::HashType::SIZE);
 
-    auto pk = crypto::secp256k1Recover(mHash, bytesConstRef(rawRSV, RSV_LENGTH));
+    PublicPtr pk;
+    try
+    {
+        pk = crypto::secp256k1Recover(mHash, bytesConstRef(rawRSV, RSV_LENGTH));
+    }
+    catch (...)
+    {
+        // is also ok and return 0x0000000000000000000000000000000000000084
+        return {true, {}};
+    }
 
     pair<bool, bytes> ret{true, bytes(crypto::HashType::SIZE, 0)};
     BCOS_LOG(TRACE) << LOG_BADGE("Precompiled") << LOG_DESC("wedpr_secp256k1_recover_public_key")

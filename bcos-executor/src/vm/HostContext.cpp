@@ -288,11 +288,18 @@ evmc_result HostContext::callBuiltInPrecompiled(
         {
             callResults->gas = _request->gas - gasUsed;
         }
-        auto [success, output] =
-            m_executive->executeOriginPrecompiled(_request->receiveAddress, ref(_request->data));
-        resultCode =
-            (int32_t)(success ? TransactionStatus::None : TransactionStatus::RevertInstruction);
-        resultData.swap(output);
+        try
+        {
+            auto [success, output] = m_executive->executeOriginPrecompiled(
+                _request->receiveAddress, ref(_request->data));
+            resultCode =
+                (int32_t)(success ? TransactionStatus::None : TransactionStatus::RevertInstruction);
+            resultData.swap(output);
+        }
+        catch (...)
+        {
+            resultCode = (int32_t)TransactionStatus::RevertInstruction;
+        }
     }
     else
     {
