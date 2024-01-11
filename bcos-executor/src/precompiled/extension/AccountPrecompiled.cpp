@@ -271,7 +271,8 @@ void AccountPrecompiled::addAccountBalance(const std::string& accountTableName,
     const auto* addAccountBalanceSender =
         blockContext.isWasm() ? BALANCE_PRECOMPILED_NAME : BALANCE_PRECOMPILED_ADDRESS;
     if (!(_callParameters->m_sender == addAccountBalanceSender ||
-            _callParameters->m_sender == EVM_BALANCE_SENDER_ADDRESS))
+            _callParameters->m_sender == EVM_BALANCE_SENDER_ADDRESS ||
+            _callParameters->m_sender == TXEXEC_GAS_CONSUMER_ADDRESS))
     {
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
         return;
@@ -358,7 +359,8 @@ void AccountPrecompiled::subAccountBalance(const std::string& accountTableName,
     const auto* subAccountBalanceSender =
         blockContext.isWasm() ? BALANCE_PRECOMPILED_NAME : BALANCE_PRECOMPILED_ADDRESS;
     if (!(_callParameters->m_sender == subAccountBalanceSender ||
-            _callParameters->m_sender == EVM_BALANCE_SENDER_ADDRESS))
+            _callParameters->m_sender == EVM_BALANCE_SENDER_ADDRESS ||
+            _callParameters->m_sender == TXEXEC_GAS_CONSUMER_ADDRESS))
     {
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
         return;

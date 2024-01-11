@@ -214,8 +214,7 @@ void BalancePrecompiled::addBalance(
 
     // AccountPrecompiledAddress  + addAccountBalance(value), internal call
     auto balanceParams = codec.encodeWithSig("addAccountBalance(uint256)", value);
-    auto tableName = getContractTableName(executor::USER_APPS_PREFIX, accountStr);
-    std::vector<std::string> tableNameVector = {tableName};
+    std::vector<std::string> tableNameVector = {accountTableName};
     auto inputParams = codec.encode(tableNameVector, balanceParams);
     // ACCOUNT_ADDRESS + [tableName] + params
     auto internalParams = codec.encode(std::string(ACCOUNT_ADDRESS), inputParams);
@@ -312,10 +311,10 @@ void BalancePrecompiled::transfer(const std::shared_ptr<executor::TransactionExe
     if (!table)
     {
         PRECOMPILED_LOG(WARNING) << BLOCK_NUMBER(blockContext.number())
-                               << LOG_BADGE("BalancePrecompiled") << LOG_DESC("transfer")
-                               << LOG_KV("from", fromStr) << LOG_KV("to", toStr)
-                               << LOG_KV("value", value) << LOG_KV("caller", caller)
-                               << LOG_KV("callerTableNotExist", "true");
+                                 << LOG_BADGE("BalancePrecompiled") << LOG_DESC("transfer")
+                                 << LOG_KV("from", fromStr) << LOG_KV("to", toStr)
+                                 << LOG_KV("value", value) << LOG_KV("caller", caller)
+                                 << LOG_KV("callerTableNotExist", "true");
         BOOST_THROW_EXCEPTION(
             protocol::PrecompiledError("caller table not exist, transfer failed"));
         return;
@@ -405,10 +404,10 @@ void BalancePrecompiled::transfer(const std::shared_ptr<executor::TransactionExe
         BOOST_THROW_EXCEPTION(protocol::PrecompiledError(
             "transfer failed, account subBalance failed, please check the account balance"));
         PRECOMPILED_LOG(WARNING) << BLOCK_NUMBER(blockContext.number())
-                               << LOG_BADGE("BalancePrecompiled") << LOG_DESC("transfer")
-                               << LOG_KV("from", fromStr) << LOG_KV("to", toStr)
-                               << LOG_KV("value", value)
-                               << LOG_KV("subBalanceResult", subBalanceResult);
+                                 << LOG_BADGE("BalancePrecompiled") << LOG_DESC("transfer")
+                                 << LOG_KV("from", fromStr) << LOG_KV("to", toStr)
+                                 << LOG_KV("value", value)
+                                 << LOG_KV("subBalanceResult", subBalanceResult);
     }
 }
 
@@ -504,8 +503,8 @@ void BalancePrecompiled::unregisterCaller(
         std::string tableStr(SYS_BALANCE_CALLER);
         _executive->storage().createTable(tableStr, "value");
         PRECOMPILED_LOG(WARNING) << BLOCK_NUMBER(blockContext.number())
-                               << LOG_BADGE("BalancePrecompiled") << LOG_DESC("unregisterCaller")
-                               << LOG_KV("account", accountStr);
+                                 << LOG_BADGE("BalancePrecompiled") << LOG_DESC("unregisterCaller")
+                                 << LOG_KV("account", accountStr);
     }
     auto entry = table->getRow(accountStr);
     if (!entry.has_value())
