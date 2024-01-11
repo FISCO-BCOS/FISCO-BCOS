@@ -44,6 +44,7 @@ FrontService::FrontService()
 FrontService::~FrontService() noexcept
 {
     stop();
+    m_asyncGroup.wait();
     FRONT_LOG(INFO) << LOG_DESC("~FrontService") << LOG_KV("this", this);
 }
 

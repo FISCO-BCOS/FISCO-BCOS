@@ -52,6 +52,7 @@ WsService::WsService(std::string _moduleName) : m_moduleName(std::move(_moduleNa
 WsService::~WsService()
 {
     stop();
+    m_taskGroup.wait();
     WEBSOCKET_SERVICE(INFO) << LOG_KV("[DELOBJ][WsService]", this);
 }
 
