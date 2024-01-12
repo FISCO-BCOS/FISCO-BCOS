@@ -146,12 +146,8 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
                         input->delegateCallCode = toBytes(entry->get());
                         break;
                     }
-                }
 
-                output->data = bytes();
-                if (m_blockContext.lock()->features().get(
-                        ledger::Features::Flag::bugfix_call_noaddr_return))
-                {
+                    output->data = bytes();
                     // This is eth's bug, but we still need to compat with it :)
                     // https://docs.soliditylang.org/en/v0.8.17/control-structures.html#error-handling-assert-require-revert-and-exceptions
                     output->status = (int32_t)TransactionStatus::None;
@@ -159,6 +155,7 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
                 }
                 else
                 {
+                    output->data = bytes();
                     output->status = (int32_t)TransactionStatus::RevertInstruction;
                     output->evmStatus = EVMC_REVERT;
                 }
