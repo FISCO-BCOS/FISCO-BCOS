@@ -217,6 +217,10 @@ public:
         m_peersParamLimit = peersParamLimit;
     }
     void setMaxNodesLimit(uint32_t const& maxNodesLimit) { m_maxNodesLimit = maxNodesLimit; }
+    virtual void setConnectionWarning(bool _connectionWarning)
+    {
+        m_connectionWarning = _connectionWarning;
+    }
 
 private:
     void callDisconnectHandlers(dev::network::NetworkException _e, P2PSession::Ptr _p2pSession);
@@ -306,6 +310,8 @@ private:
     mutable RecursiveMutex x_fileOperation;
     std::atomic<uint32_t> m_peersParamLimit = {10};
     std::atomic<uint32_t> m_maxNodesLimit = {100};
+
+    bool m_connectionWarning = true;
 };
 
 }  // namespace p2p
