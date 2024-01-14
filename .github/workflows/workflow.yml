@@ -58,6 +58,11 @@ jobs:
       - name: install Ubuntu dependencies
         if: runner.os == 'Linux'
         run: sudo apt install -y g++ libssl-dev openssl cmake git build-essential autoconf texinfo flex patch bison libgmp-dev zlib1g-dev automake libtool
+      - name: Setup cmake
+        if: runner.os == 'Linux'
+        uses: jwlawson/actions-setup-cmake@v1.14
+        with:
+          cmake-version: '3.21.0'
       - name: configure
         run: CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DTESTS=ON -DBUILD_STATIC=ON -DTOOL=ON -DCMAKE_BUILD_TYPE=Release .
       - name: compile

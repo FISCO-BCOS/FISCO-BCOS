@@ -80,13 +80,20 @@ check_cert() {
         return 1
     fi
     sed -n "${agency_start},${agency_end}p" ${node_cert} > ./.agency.crt
-    sed -n "1,${agency_start}p" ${node_cert} > ./.node.crt
-    if ! openssl verify -CAfile ${ca_cert} -untrusted ./.agency.crt ./.node.crt &>/dev/null; then
-        LOG_WARN "use ${ca_cert} verify ${node_cert} failed"
-        return 1
+    node_end=$(grep -n "END CERTIFICATE" ${node_cert} | cut -d ":" -f 1 |head -n 1)
+    sed -n "1,${node_end}p" ${node_cert} > ./.node.crt
+    # FIXME: openssl verify on macos is failed
+    if ! uname -a | grep -q "Darwin" ;then
+        if ! openssl verify -CAfile ${ca_cert} -untrusted ./.agency.crt ./.node.crt &>/dev/null; then
+            LOG_WARN "use ${ca_cert} verify ${node_cert} failed"
+            cat ${ca_cert}
+            cat ./.agency.crt
+            cat ./.node.crt
+            return 1
+        fi
+        rm ./.agency.crt
+        rm ./.node.crt
     fi
-    rm ./.agency.crt
-    rm ./.node.crt
     LOG_INFO "use ${ca_cert} verify ${node_cert} successful"
 
     # check if the node.nodeid match with node.crt

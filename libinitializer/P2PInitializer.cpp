@@ -41,6 +41,7 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
     INITIALIZER_LOG(DEBUG) << LOG_BADGE("P2PInitializer") << LOG_DESC("initConfig");
     std::string listenIP = _pt.get<std::string>("p2p.listen_ip", "0.0.0.0");
     int listenPort = _pt.get<int>("p2p.listen_port", 30300);
+    bool connectionWarning = _pt.get<bool>("p2p.connection_warning", true);
     if (!isValidPort(listenPort))
     {
         BOOST_THROW_EXCEPTION(
@@ -91,8 +92,7 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
                         boost::asio::ip::address ip_address =
                             boost::asio::ip::make_address(s[0].data() + 1);
                         uint16_t port = boost::lexical_cast<uint16_t>(s[1].data() + 1);
-                        nodes.insert(
-                            std::make_pair(NodeIPEndpoint{ip_address, port}, NodeID()));
+                        nodes.insert(std::make_pair(NodeIPEndpoint{ip_address, port}, NodeID()));
                     }
                     else if (s.size() == 1)
                     {  // ipv4 and ipv4 host
@@ -178,6 +178,7 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
         host->setMessageFactory(messageFactory);
         host->setHostPort(listenIP, listenPort);
         host->setThreadPool(std::make_shared<ThreadPool>("P2P", 4));
+        host->setConnectionWarning(connectionWarning);
         host->setCRL(certBlacklist);
 
         m_p2pService = std::make_shared<Service>();
@@ -188,6 +189,7 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
         m_p2pService->setWhitelist(whitelist);
         m_p2pService->setPeersParamLimit(peersParamLimit);
         m_p2pService->setMaxNodesLimit(maxNodesLimit);
+        m_p2pService->setConnectionWarning(connectionWarning);
         // start the p2pService
         m_p2pService->start();
     }

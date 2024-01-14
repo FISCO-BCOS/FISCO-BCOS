@@ -215,7 +215,7 @@ void Session::write()
             else
             {
                 SESSION_LOG(WARNING)
-                    << "sending socket is closed!" << LOG_KV("endpoint", nodeIPEndpoint());
+                    << "sending socket is closed" << LOG_KV("endpoint", nodeIPEndpoint());
                 drop(TCPError);
                 return;
             }
@@ -229,7 +229,7 @@ void Session::write()
     }
     catch (std::exception& e)
     {
-        SESSION_LOG(ERROR) << LOG_DESC("write error") << LOG_KV("endpoint", nodeIPEndpoint())
+        SESSION_LOG(ERROR) << LOG_DESC("write failed") << LOG_KV("endpoint", nodeIPEndpoint())
                            << LOG_KV("what", boost::diagnostic_information(e));
         drop(TCPError);
         return;
@@ -240,7 +240,9 @@ void Session::drop(DisconnectReason _reason)
 {
     auto server = m_server.lock();
     if (!m_actived)
+    {
         return;
+    }
 
     if (m_readIdleTimer)
     {
@@ -260,7 +262,7 @@ void Session::drop(DisconnectReason _reason)
         errorMsg = "DuplicateSession";
     }
 
-    SESSION_LOG(INFO) << "drop, call and erase all callbackFunc in this session!"
+    SESSION_LOG(INFO) << "drop, call and erase all callbackFunc of the session!"
                       << LOG_KV("endpoint", nodeIPEndpoint());
     RecursiveGuard l(x_seq2Callback);
     for (auto& it : *m_seq2Callback)
@@ -326,7 +328,7 @@ void Session::drop(DisconnectReason _reason)
                 if (error == boost::asio::error::operation_aborted)
                 {
                     SESSION_LOG(DEBUG)
-                        << "[drop] operation aborted  by async_shutdown"
+                        << "[drop] operation aborted by async_shutdown"
                         << LOG_KV("code", error.value()) << LOG_KV("message", error.message());
                     return;
                 }

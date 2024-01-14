@@ -166,9 +166,9 @@ inline std::string reasonOf(DisconnectReason _r)
     case DisconnectRequested:
         return "Disconnect was requested.";
     case TCPError:
-        return "Low-level TCP communication error.";
+        return "Low-level TCP communication failed.";
     case BadProtocol:
-        return "Data format error.";
+        return "Data format is wrong.";
     case UselessPeer:
         return "Peer had no use for this node.";
     case TooManyPeers:
@@ -240,13 +240,13 @@ struct NodeIPEndpoint
     std::string address() const { return m_host; };
     bool isIPv6() const { return m_ipv6; }
 
-    std::string toString() const 
+    std::string toString() const
     {
-        if (isIPv6()) 
+        if (isIPv6())
         {
-            return  "[" + m_host + "]:" + std::to_string(m_port);
+            return "[" + m_host + "]:" + std::to_string(m_port);
         }
-        
+
         return m_host + ":" + std::to_string(m_port);
     }
 
