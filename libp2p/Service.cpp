@@ -322,7 +322,7 @@ void Service::onDisconnect(dev::network::NetworkException e, P2PSession::Ptr p2p
         if (e.errorCode() == dev::network::P2PExceptionType::DuplicateSession)
             return;
         SERVICE_LOG(INFO) << LOG_DESC("onDisconnect") << LOG_KV("code", e.errorCode())
-                             << LOG_KV("what", boost::diagnostic_information(e));
+                          << LOG_KV("what", boost::diagnostic_information(e));
         RecursiveGuard l(x_nodes);
         for (auto& it : m_staticNodes)
         {
@@ -356,9 +356,9 @@ void Service::onMessage(dev::network::NetworkException e, dev::network::SessionF
         if (e.errorCode())
         {
             SERVICE_LOG(INFO) << LOG_DESC("disconnect inactive P2PSession")
-                                 << LOG_KV("nodeID", nodeID.abridged())
-                                 << LOG_KV("endpoint", nodeIPEndpoint)
-                                 << LOG_KV("errorCode", e.errorCode()) << LOG_KV("what", e.what());
+                              << LOG_KV("nodeID", nodeID.abridged())
+                              << LOG_KV("endpoint", nodeIPEndpoint) << LOG_KV("code", e.errorCode())
+                              << LOG_KV("what", e.what());
 
             if (p2pSession)
             {
@@ -400,7 +400,7 @@ void Service::onMessage(dev::network::NetworkException e, dev::network::SessionF
                // all amop message will be filter out
                 auto groupID = ret.first;
                 if (ret.second != dev::eth::ProtocolID::BlockSync)
-                { // filter all request not from sealer
+                {  // filter all request not from sealer
                     RecursiveGuard guard(x_sealerList);
                     auto it = m_groupID2SealerList.find(groupID);
                     if (it == m_groupID2SealerList.end())
@@ -496,9 +496,9 @@ P2PMessage::Ptr Service::sendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr mess
         if (error.errorCode() != 0)
         {
             SERVICE_LOG(WARNING) << LOG_DESC("asyncSendMessageByNodeID failed")
-                               << LOG_KV("nodeID", nodeID.abridged())
-                               << LOG_KV("code", error.errorCode())
-                               << LOG_KV("what", error.what());
+                                 << LOG_KV("nodeID", nodeID.abridged())
+                                 << LOG_KV("code", error.errorCode())
+                                 << LOG_KV("what", error.what());
             BOOST_THROW_EXCEPTION(error);
         }
 
@@ -507,8 +507,8 @@ P2PMessage::Ptr Service::sendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr mess
     catch (std::exception& e)
     {
         SERVICE_LOG(WARNING) << LOG_DESC("asyncSendMessageByNodeID failed")
-                           << LOG_KV("nodeID", nodeID.abridged())
-                           << LOG_KV("what", boost::diagnostic_information(e));
+                             << LOG_KV("nodeID", nodeID.abridged())
+                             << LOG_KV("what", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(e);
     }
 
@@ -660,7 +660,7 @@ void Service::asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
     catch (std::exception& e)
     {
         SERVICE_LOG(WARNING) << "asyncSendMessageByNodeID" << LOG_KV("nodeID", nodeID.abridged())
-                           << LOG_KV("what", boost::diagnostic_information(e));
+                             << LOG_KV("what", boost::diagnostic_information(e));
 
         if (callback)
         {
@@ -705,8 +705,8 @@ P2PMessage::Ptr Service::sendMessageByTopic(std::string topic, P2PMessage::Ptr m
         if (error.errorCode() != 0)
         {
             SERVICE_LOG(WARNING) << LOG_DESC("sendMessageByTopic failed") << LOG_KV("topic", topic)
-                               << LOG_KV("code", error.errorCode())
-                               << LOG_KV("what", error.what());
+                                 << LOG_KV("code", error.errorCode())
+                                 << LOG_KV("what", error.what());
             BOOST_THROW_EXCEPTION(error);
         }
 
@@ -715,7 +715,7 @@ P2PMessage::Ptr Service::sendMessageByTopic(std::string topic, P2PMessage::Ptr m
     catch (std::exception& e)
     {
         SERVICE_LOG(WARNING) << "sendMessageByTopic failed"
-                           << LOG_KV("what", boost::diagnostic_information(e));
+                             << LOG_KV("what", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(e);
     }
 
