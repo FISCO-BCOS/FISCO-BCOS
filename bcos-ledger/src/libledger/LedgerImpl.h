@@ -731,6 +731,23 @@ private:
         co_await impl_setBlock<concepts::ledger::HEADER>(std::move(block));
     }
 
+    task::Task<void> impl_checkGenesisBlock(bcos::concepts::block::Block auto block)
+    {
+        try
+        {
+            decltype(block) currentBlock;
+
+            co_await impl_getBlock<concepts::ledger::HEADER>(0, currentBlock);
+            co_return;
+        }
+        catch (NotFoundBlockHeader& e)
+        {
+            LEDGER_LOG(INFO) << "Not found genesis block, may be not initialized";
+            BOOST_THROW_EXCEPTION(
+                NotFoundBlockHeader{} << bcos::error::ErrorMessage{"Not found genesis block!"});
+        }
+    }
+
     auto& storage() { return bcos::concepts::getRef(m_storage); }
 
     Hasher m_hasher;

@@ -51,17 +51,27 @@ private:
         (processGetBlockFlags<Flags>(request.onlyHeader), ...);
 
         bcostars::ResponseBlock response;
-        auto nodeIDs = co_await p2p().getAllNodeID();
+        bcos::crypto::NodeIDs nodeIDs;
+        try
+        {
+            nodeIDs = co_await p2p().getAllNodeID();
+        }
+        catch (std::exception const& e)
+        {
+            LIGHTNODE_LOG(ERROR) << "lightNode getAllNodeID failed, error: " << e.what();
+            response.block = {};
+            std::swap(response.block, block);
+        }
         size_t failedNodeCount = 0;
-        for(auto& nodeID : nodeIDs)
+        for (auto& nodeID : nodeIDs)
         {
             co_await p2p().sendMessageByNodeID(
                 bcos::protocol::LIGHTNODE_GET_BLOCK, nodeID, request, response);
-            if(response.error.errorCode)
+            if (response.error.errorCode)
             {
                 LIGHTNODE_LOG(WARNING) << "getBlock failed, request nodeID: " << nodeID->hex()
-                                       << "response errorCode: " << response.error.errorCode
-                                       << " " << response.error.errorMessage;
+                                       << "response errorCode: " << response.error.errorCode << " "
+                                       << response.error.errorMessage;
                 continue;
             }
             else

@@ -190,7 +190,11 @@ public:
 
         if (nodeID.empty())
         {
-            BOOST_THROW_EXCEPTION(NoNodeAvailable{});
+            LIGHTNODE_LOG(INFO) << LOG_DESC(
+                "randomSelectNode failed, nodeID is empty, no node available");
+            BOOST_THROW_EXCEPTION(
+                NoNodeAvailable{} << bcos::error::ErrorMessage{
+                    "no node available, please check the node and network status"});
         }
 
         bcos::bytes nodeIDBin;
@@ -282,7 +286,9 @@ public:
         }
         if (nodeIDs.empty())
         {
-            BOOST_THROW_EXCEPTION(NoNodeAvailable{});
+            BOOST_THROW_EXCEPTION(
+                NoNodeAvailable{} << bcos::error::ErrorMessage{
+                    "no node available, please check the node and network status"});
         }
         co_return nodeIDs;
     }
