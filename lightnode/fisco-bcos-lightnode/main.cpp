@@ -131,8 +131,8 @@ static auto startSyncerThread(bcos::concepts::ledger::Ledger auto fromLedger,
 }
 
 
-void starLightnode(bcos::tool::NodeConfig::Ptr nodeConfig, auto ledger, auto front, auto gateway,
-    auto keyFactory, auto nodeID)
+void starLightnode(bcos::tool::NodeConfig::Ptr nodeConfig, auto ledger, auto nodeLedger, auto front,
+    auto gateway, auto keyFactory, auto nodeID)
 {
     LIGHTNODE_LOG(INFO) << "Init lightnode p2p client...";
     auto p2pClient = std::make_shared<bcos::p2p::P2PClientImpl>(
@@ -143,6 +143,20 @@ void starLightnode(bcos::tool::NodeConfig::Ptr nodeConfig, auto ledger, auto fro
     auto transactionPool =
         std::make_shared<bcos::transaction_pool::TransactionPoolClientImpl>(p2pClient);
     auto scheduler = std::make_shared<bcos::scheduler::SchedulerClientImpl>(p2pClient);
+
+    // check genesisBlock exists
+    bcostars::Block genesisBlock;
+    try
+    {
+        bcos::task::syncWait(ledger->checkGenesisBlock(std::move(genesisBlock)));
+    }
+    catch (const std::exception& e)
+    {
+        LIGHTNODE_LOG(INFO) << "get genesis block failed, genesisBlock maybe not exist, prepare "
+                               "buildGenesisBlock, error:"
+                            << boost::diagnostic_information(e);
+        nodeLedger->buildGenesisBlock(nodeConfig->genesisConfig(), *nodeConfig->ledgerConfig());
+    }
 
 
     LIGHTNODE_LOG(INFO) << "Init lightnode rpc...";
@@ -231,34 +245,35 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
     // local ledger
     auto storage = newStorage(nodeConfig->storagePath());
     bcos::storage::StorageImpl storageWrapper(storage);
-
+    std::shared_ptr<bcos::ledger::Ledger> nodeLedger;
     if (nodeConfig->smCryptoType())
     {
-        auto localLedger = std::make_shared<bcos::ledger::LedgerImpl<
+        auto lightNodeLedger = std::make_shared<bcos::ledger::LedgerImpl<
+            bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher, decltype(storageWrapper)>>(
+            bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher{}, std::move(storageWrapper),
+            protocolInitializer.blockFactory(), storage);
+        nodeLedger = std::make_shared<bcos::ledger::LedgerImpl<
             bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher, decltype(storageWrapper)>>(
             bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher{}, std::move(storageWrapper),
             protocolInitializer.blockFactory(), storage);
 
-        LIGHTNODE_LOG(INFO) << "prepare genesis block...";
-        bcos::initializer::LedgerInitializer::build(
-            protocolInitializer.blockFactory(), storage, nodeConfig);
-
         LIGHTNODE_LOG(INFO) << "start sm light node...";
-        starLightnode(nodeConfig, localLedger, front, gateway, keyFactory, nodeID);
+        starLightnode(nodeConfig, lightNodeLedger, nodeLedger, front, gateway, keyFactory, nodeID);
     }
     else
     {
-        auto localLedger = std::make_shared<bcos::ledger::LedgerImpl<
+        auto lightNodeLedger = std::make_shared<bcos::ledger::LedgerImpl<
             bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher, decltype(storageWrapper)>>(
             bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher{}, std::move(storageWrapper),
             protocolInitializer.blockFactory(), storage);
 
-        LIGHTNODE_LOG(INFO) << "prepare genesis block...";
-        bcos::initializer::LedgerInitializer::build(
-            protocolInitializer.blockFactory(), storage, nodeConfig);
+        nodeLedger = std::make_shared<bcos::ledger::LedgerImpl<
+            bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher, decltype(storageWrapper)>>(
+            bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher{}, std::move(storageWrapper),
+            protocolInitializer.blockFactory(), storage);
 
         LIGHTNODE_LOG(INFO) << "start light node...";
-        starLightnode(nodeConfig, localLedger, front, gateway, keyFactory, nodeID);
+        starLightnode(nodeConfig, lightNodeLedger, nodeLedger, front, gateway, keyFactory, nodeID);
     }
 
     return 0;
