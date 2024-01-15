@@ -380,51 +380,53 @@ void SystemConfigPrecompiled::registerGovernorToCaller(
     const std::shared_ptr<executor::TransactionExecutive>& _executive,
     const PrecompiledExecResult::Ptr& _callParameters, CodecWrapper const& codec)
 {
+    std::vector<Address> governorAddress;
     try
     {
-        auto governorAddress = getGovernorList(_executive, _callParameters, codec);
-        if (governorAddress.empty())
+        governorAddress = getGovernorList(_executive, _callParameters, codec);
+    }
+    catch (std::exception const& e)
+    {
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("SystemConfigPrecompiled, registerGovernorToCaller")
+                              << LOG_DESC("get governor list failed")
+                              << LOG_KV("info", boost::diagnostic_information(e));
+        BOOST_THROW_EXCEPTION(
+            PrecompiledError("get governor list failed, maybe current is wasm model, "
+                             "feature_balance_precompiled is not supported in wasm model."));
+    }
+    if (governorAddress.empty())
+    {
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("SystemConfigPrecompiled")
+                              << LOG_DESC("get governor is empty, maybe governor is not set");
+        return;
+    }
+    // register governor to caller
+    auto table = _executive->storage().openTable(ledger::SYS_BALANCE_CALLER);
+    if (!table)
+    {
+        std::string tableStr(SYS_BALANCE_CALLER);
+        table = _executive->storage().createTable(tableStr, "value");
+        for (auto const& address : governorAddress)
         {
-            PRECOMPILED_LOG(INFO) << LOG_BADGE("SystemConfigPrecompiled")
-                                  << LOG_DESC("get governor is empty, maybe governor is not set");
-            return;
+            auto entry = table->newEntry();
+            Entry CallerEntry;
+            CallerEntry.importFields({"1"});
+            _executive->storage().setRow(SYS_BALANCE_CALLER, address.hex(), std::move(CallerEntry));
         }
-        // register governor to caller
-        auto table = _executive->storage().openTable(ledger::SYS_BALANCE_CALLER);
-        if (!table)
+        return;
+    }
+    else
+    {
+        for (auto const& address : governorAddress)
         {
-            std::string tableStr(SYS_BALANCE_CALLER);
-            table = _executive->storage().createTable(tableStr, "value");
-            for (auto const& address : governorAddress)
+            auto entry = table->getRow(address.hex());
+            if (!entry)
             {
-                auto entry = table->newEntry();
                 Entry CallerEntry;
                 CallerEntry.importFields({"1"});
                 _executive->storage().setRow(
                     SYS_BALANCE_CALLER, address.hex(), std::move(CallerEntry));
             }
-            return;
         }
-        else
-        {
-            for (auto const& address : governorAddress)
-            {
-                auto entry = table->getRow(address.hex());
-                if (!entry)
-                {
-                    Entry CallerEntry;
-                    CallerEntry.importFields({"1"});
-                    _executive->storage().setRow(
-                        SYS_BALANCE_CALLER, address.hex(), std::move(CallerEntry));
-                }
-            }
-        }
-    }
-    catch (std::exception const& e)
-    {
-        PRECOMPILED_LOG(INFO) << LOG_BADGE("SystemConfigPrecompiled")
-                              << LOG_DESC("get governor list failed, maybe it's a wasm chain")
-                              << LOG_KV("info", boost::diagnostic_information(e));
-        return;
     }
 }
