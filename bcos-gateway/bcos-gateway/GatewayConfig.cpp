@@ -199,6 +199,8 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
       nodes_path=./
       nodes_file=nodes.json
       readonly=false
+      enable_rip_protocol=true
+      connection_warning=true
       */
     m_uuid = _pt.get<std::string>("p2p.uuid", "");
     if (_uuidRequired && m_uuid.empty())
@@ -227,14 +229,16 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
     m_listenIP = listenIP;
     m_listenPort = (uint16_t)listenPort;
     m_readonly = _pt.get<bool>("p2p.readonly", false);
-    m_enableRIPProtocol = _pt.get<bool>("p2p.enable_rip_protocol", false);
+    m_enableRIPProtocol = _pt.get<bool>("p2p.enable_rip_protocol", true);
+    m_connectionWarning = _pt.get<bool>("p2p.connection_warning", true);
 
     GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("initP2PConfig ok!") << LOG_KV("listenIP", listenIP)
                              << LOG_KV("listenPort", listenPort) << LOG_KV("smSSL", smSSL)
                              << LOG_KV("nodePath", m_nodePath)
                              << LOG_KV("nodeFileName", m_nodeFileName)
                              << LOG_KV("readonly", m_readonly)
-                             << LOG_KV("enableRIPProtocol", m_enableRIPProtocol);
+                             << LOG_KV("enableRIPProtocol", m_enableRIPProtocol)
+                             << LOG_KV("connectionWarning", m_connectionWarning);
 }
 
 // load p2p connected peers

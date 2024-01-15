@@ -22,26 +22,39 @@
 #include "Log.h"
 #include <boost/log/core.hpp>
 
-namespace bcos
-{
-std::string const FileLogger = "FileLogger";
+std::string const bcos::FileLogger = "FileLogger";
 boost::log::sources::severity_channel_logger_mt<boost::log::trivial::severity_level, std::string>
-    FileLoggerHandler(boost::log::keywords::channel = FileLogger);
+    bcos::FileLoggerHandler(boost::log::keywords::channel = bcos::FileLogger);
 
-std::string const StatFileLogger = "StatFileLogger";
+std::string const bcos::StatFileLogger = "StatFileLogger";
 boost::log::sources::severity_channel_logger_mt<boost::log::trivial::severity_level, std::string>
-    StatFileLoggerHandler(boost::log::keywords::channel = StatFileLogger);
+    bcos::StatFileLoggerHandler(boost::log::keywords::channel = bcos::StatFileLogger);
 
-LogLevel c_fileLogLevel = LogLevel::TRACE;
-LogLevel c_statLogLevel = LogLevel::INFO;
+bcos::LogLevel bcos::c_fileLogLevel = bcos::LogLevel::TRACE;
+bcos::LogLevel bcos::c_statLogLevel = bcos::LogLevel::INFO;
 
-void setFileLogLevel(LogLevel const& _level)
+void bcos::setFileLogLevel(bcos::LogLevel const& _level)
 {
-    c_fileLogLevel = _level;
+    bcos::c_fileLogLevel = _level;
 }
 
-void setStatLogLevel(LogLevel const& _level)
+void bcos::setStatLogLevel(bcos::LogLevel const& _level)
 {
-    c_statLogLevel = _level;
+    bcos::c_statLogLevel = _level;
 }
-}  // namespace bcos
+
+bcos::Logger::Logger(LogLevel level)
+  : m_record(bcos::FileLoggerHandler.open_record(
+        boost::log::keywords::severity = (boost::log::trivial::severity_level)level)),
+    m_stream(m_record),
+    m_level(level)
+{}
+
+bcos::Logger::~Logger() noexcept
+{
+    if (m_level >= bcos::c_fileLogLevel)
+    {
+        m_stream.flush();
+        bcos::FileLoggerHandler.push_record(std::move(m_record));
+    }
+}

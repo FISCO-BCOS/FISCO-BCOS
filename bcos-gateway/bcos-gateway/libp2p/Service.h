@@ -8,6 +8,7 @@
  */
 
 #pragma once
+#include "bcos-utilities/BoostLog.h"
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-framework/protocol/ProtocolInfoCodec.h>
@@ -20,9 +21,7 @@
 #include <stdexcept>
 #include <unordered_map>
 
-namespace bcos
-{
-namespace gateway
+namespace bcos::gateway
 {
 class Host;
 class P2PMessage;
@@ -31,8 +30,8 @@ class Gateway;
 class Service : public P2PInterface, public std::enable_shared_from_this<Service>
 {
 public:
-    Service(std::string const& _nodeID);
-    virtual ~Service() { stop(); }
+    Service(std::string const& _nodeID, bool connectionWarning);
+    ~Service() override { stop(); }
 
     using Ptr = std::shared_ptr<Service>;
 
@@ -270,7 +269,7 @@ protected:
     std::function<bool(SessionFace::Ptr, Message::Ptr, SessionCallbackFunc)> m_beforeMessageHandler;
 
     std::function<void(SessionFace::Ptr, Message::Ptr)> m_onMessageHandler;
+    bcos::LogLevel m_connectionLogLevel = bcos::LogLevel::WARNING;
 };
 
-}  // namespace gateway
-}  // namespace bcos
+}  // namespace bcos::gateway

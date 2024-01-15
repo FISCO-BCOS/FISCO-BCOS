@@ -24,8 +24,9 @@
 using namespace bcos;
 using namespace bcos::gateway;
 
-ServiceV2::ServiceV2(std::string const& _nodeID, RouterTableFactory::Ptr _routerTableFactory)
-  : Service(_nodeID),
+ServiceV2::ServiceV2(
+    std::string const& _nodeID, RouterTableFactory::Ptr _routerTableFactory, bool connectionWarning)
+  : Service(_nodeID, connectionWarning),
     m_routerTableFactory(_routerTableFactory),
     m_routerTable(m_routerTableFactory->createRouterTable())
 {
