@@ -3,6 +3,7 @@
  *  @date 20180910
  */
 
+#include "bcos-utilities/BoostLog.h"
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-gateway/libnetwork/ASIOInterface.h>  // for ASIOInterface
 #include <bcos-gateway/libnetwork/Common.h>         // for SocketFace
@@ -20,7 +21,8 @@ using namespace bcos::protocol;
 
 static const uint32_t CHECK_INTERVEL = 10000;
 
-Service::Service(std::string const& _nodeID) : m_nodeID(_nodeID)
+Service::Service(std::string const& _nodeID, bool connectionWarning)
+  : m_nodeID(_nodeID), m_connectionLogLevel(connectionWarning ? WARNING : DEBUG)
 {
     m_localProtocol = g_BCOSConfig.protocolInfo(ProtocolModuleID::GatewayService);
     m_codec = g_BCOSConfig.codec();
@@ -241,8 +243,9 @@ void Service::onDisconnect(NetworkException e, P2PSession::Ptr p2pSession)
 
         if (e.errorCode() == P2PExceptionType::DuplicateSession)
             return;
-        SERVICE_LOG(WARNING) << LOG_DESC("onDisconnect") << LOG_KV("code", e.errorCode())
-                             << LOG_KV("what", boost::diagnostic_information(e));
+        SERVICE_LOG(m_connectionLogLevel)
+            << LOG_DESC("onDisconnect") << LOG_KV("code", e.errorCode())
+            << LOG_KV("what", boost::diagnostic_information(e));
         RecursiveGuard l(x_nodes);
         for (auto& it : m_staticNodes)
         {
@@ -329,9 +332,10 @@ void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message::P
 
         if (e.errorCode())
         {
-            SERVICE_LOG(WARNING) << LOG_DESC("disconnect error P2PSession")
-                                 << LOG_KV("p2pid", p2pID) << LOG_KV("endpoint", nodeIPEndpoint)
-                                 << LOG_KV("code", e.errorCode()) << LOG_KV("message", e.what());
+            SERVICE_LOG(m_connectionLogLevel)
+                << LOG_DESC("disconnect error P2PSession") << LOG_KV("p2pid", p2pID)
+                << LOG_KV("endpoint", nodeIPEndpoint) << LOG_KV("code", e.errorCode())
+                << LOG_KV("message", e.what());
 
             if (p2pSession)
             {
@@ -482,7 +486,7 @@ void Service::asyncSendMessageByNodeID(
                 NetworkException e(-1, "send message failed for no network established");
                 callback(e, nullptr, nullptr);
             }
-            SERVICE_LOG(WARNING) << "Node inactived" << LOG_KV("nodeid", nodeID);
+            SERVICE_LOG(m_connectionLogLevel) << "Node inactived" << LOG_KV("nodeid", nodeID);
         }
     }
     catch (std::exception& e)
@@ -580,14 +584,15 @@ void Service::asyncSendMessageByP2PNodeID(int16_t _type, P2pID _dstNodeID, bytes
     auto p2pMessage = newP2PMessage(_type, _payload);
     asyncSendMessageByNodeID(
         _dstNodeID, p2pMessage,
-        [_dstNodeID, _callback](NetworkException _e, std::shared_ptr<P2PSession>,
+        [this, _dstNodeID, _callback](NetworkException _e, std::shared_ptr<P2PSession>,
             std::shared_ptr<P2PMessage> _p2pMessage) {
             auto packetType = _p2pMessage ? _p2pMessage->packetType() : 0;
             if (_e.errorCode() != 0)
             {
-                SERVICE_LOG(WARNING) << LOG_DESC("asyncSendMessageByP2PNodeID failed")
-                                     << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what())
-                                     << LOG_KV("type", packetType) << LOG_KV("dst", _dstNodeID);
+                SERVICE_LOG(m_connectionLogLevel)
+                    << LOG_DESC("asyncSendMessageByP2PNodeID failed")
+                    << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what())
+                    << LOG_KV("type", packetType) << LOG_KV("dst", _dstNodeID);
                 if (_callback)
                 {
                     _callback(

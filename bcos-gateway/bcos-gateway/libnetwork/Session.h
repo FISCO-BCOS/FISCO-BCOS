@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include "bcos-utilities/BoostLog.h"
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/SessionCallback.h>
 #include <bcos-gateway/libnetwork/SessionFace.h>
@@ -19,9 +20,7 @@
 #include <set>
 #include <utility>
 
-namespace bcos
-{
-namespace gateway
+namespace bcos::gateway
 {
 class Host;
 class SocketFace;
@@ -29,8 +28,8 @@ class SocketFace;
 class Session : public SessionFace, public std::enable_shared_from_this<Session>
 {
 public:
-    Session(size_t _bufferSize = 4096);
-    virtual ~Session();
+    Session(size_t _bufferSize);
+    ~Session() override;
 
     using Ptr = std::shared_ptr<Session>;
 
@@ -45,25 +44,24 @@ public:
     bool actived() const override;
 
     virtual std::weak_ptr<Host> host() { return m_server; }
-    virtual void setHost(std::weak_ptr<Host> host) { m_server = host; }
+    virtual void setHost(std::weak_ptr<Host> host) { m_server = std::move(host); }
 
     std::shared_ptr<SocketFace> socket() override { return m_socket; }
     virtual void setSocket(const std::shared_ptr<SocketFace>& socket) { m_socket = socket; }
 
     virtual MessageFactory::Ptr messageFactory() const { return m_messageFactory; }
-    virtual void setMessageFactory(const MessageFactory::Ptr& _messageFactory)
+    virtual void setMessageFactory(MessageFactory::Ptr _messageFactory)
     {
-        m_messageFactory = _messageFactory;
+        m_messageFactory = std::move(_messageFactory);
     }
 
     SessionCallbackManagerInterface::Ptr sessionCallbackManager()
     {
         return m_sessionCallbackManager;
     }
-    void setSessionCallbackManager(
-        const SessionCallbackManagerInterface::Ptr& _sessionCallbackManager)
+    void setSessionCallbackManager(SessionCallbackManagerInterface::Ptr _sessionCallbackManager)
     {
-        m_sessionCallbackManager = _sessionCallbackManager;
+        m_sessionCallbackManager = std::move(_sessionCallbackManager);
     }
 
     virtual std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> messageHandler()
@@ -160,19 +158,20 @@ private:
 class SessionFactory
 {
 public:
-    SessionFactory(std::string const& _hostNodeID) : m_hostNodeID(_hostNodeID) {}
-    virtual ~SessionFactory(){};
+    SessionFactory(std::string _hostNodeID) : m_hostNodeID(std::move(_hostNodeID)) {}
+    virtual ~SessionFactory() = default;
 
     virtual std::shared_ptr<SessionFace> create_session(std::weak_ptr<Host> _server,
         std::shared_ptr<SocketFace> const& _socket, MessageFactory::Ptr _messageFactory,
         SessionCallbackManagerInterface::Ptr _sessionCallbackManager)
     {
-        std::shared_ptr<Session> session = std::make_shared<Session>();
+        constexpr auto static const bufferSize = 4 * 1024;
+        std::shared_ptr<Session> session = std::make_shared<Session>(bufferSize);
         session->setHostNodeID(m_hostNodeID);
-        session->setHost(_server);
+        session->setHost(std::move(_server));
         session->setSocket(_socket);
-        session->setMessageFactory(_messageFactory);
-        session->setSessionCallbackManager(_sessionCallbackManager);
+        session->setMessageFactory(std::move(_messageFactory));
+        session->setSessionCallbackManager(std::move(_sessionCallbackManager));
         return session;
     }
 
@@ -180,5 +179,4 @@ private:
     std::string m_hostNodeID;
 };
 
-}  // namespace gateway
-}  // namespace bcos
+}  // namespace bcos::gateway

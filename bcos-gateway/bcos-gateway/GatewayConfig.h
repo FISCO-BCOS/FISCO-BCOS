@@ -172,6 +172,7 @@ public:
 
     bool readonly() const { return m_readonly; }
     bool enableRIPProtocol() const { return m_enableRIPProtocol; }
+    bool connectionWarning() const { return m_connectionWarning; }
 
     // NodeIDType:
     // h512(true == m_smSSL)
@@ -235,6 +236,7 @@ private:
 
     bool m_readonly = false;
     bool m_enableRIPProtocol = true;
+    bool m_connectionWarning = true;
 };
 
 }  // namespace gateway

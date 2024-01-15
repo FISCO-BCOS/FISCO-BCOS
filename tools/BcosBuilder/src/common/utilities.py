@@ -37,7 +37,7 @@ class ServiceInfo:
     executor_name = "executor"
     scheduler_name = "scheduler"
     txpool_name = "txpool"
-    
+
     max_node_service = "BcosMaxNodeService"
     max_node_service_obj = single_node_obj_name_list
     executor_service = "BcosExecutorService"
@@ -99,7 +99,7 @@ class CommandInfo:
     network_add_vxlan = "add-vxlan"
     download_binary = "download_binary"
     download_type = ["cdn", "git"]
-    default_binary_version = "v3.2.5"
+    default_binary_version = "v3.2.6"
     command_list = [gen_config, upload, deploy,
                     upgrade, undeploy, expand, start, stop]
     service_command_list_str = ', '.join(command_list)
@@ -112,7 +112,7 @@ class CommandInfo:
         gen_config: "gen_executor_config", expand: "expand_executors"}
     service_command_impl = {gen_config: "gen_service_config", upload: "upload_service", deploy: "deploy_service",
                             upgrade: "upgrade_service", undeploy: "delete_service", start: "start_service", stop: "stop_service", expand: "expand_service"}
-    
+
     build_package_parser_name = "build"
     build_command_type_list = ["rpc", "gateway", "node", "all"]
     build_command_type_list_str = ', '.join(build_command_type_list)
@@ -121,6 +121,7 @@ class CommandInfo:
     # merge_config_type_list = ["p2p", "tars"]
     merge_config_type_list = ["tars"]
     merge_config_type_str = ', '.join(merge_config_type_list)
+
 
 def log_error(error_msg):
     logging.error("\033[31m%s \033[0m" % error_msg)
@@ -172,9 +173,11 @@ def mkdir(path):
     if not os.path.exists(path):
         os.makedirs(path)
 
+
 def removeDir(path):
     if os.path.exists(path):
         os.removedirs(path)
+
 
 def mkfiledir(filepath):
     parent_dir = os.path.abspath(os.path.join(filepath, ".."))
@@ -304,10 +307,12 @@ def print_split_info():
 def print_badge(badge):
     log_info("----------- %s -----------" % badge)
 
+
 def file_must_exist(file_path):
     if not os.path.exists(file_path):
         log_error("%s does not exist, please check" % file_path)
         sys.exit(-1)
+
 
 def try_to_rename_tgz_package(root_path, tars_pkg_path, service_name, org_service_name):
     renamed_package_path = ""

@@ -327,16 +327,16 @@ void Host::handshakeServer(const boost::system::error_code& error,
 {
     if (error)
     {
-        HOST_LOG(WARNING) << LOG_DESC("handshakeServer Handshake failed")
-                          << LOG_KV("value", error.value()) << LOG_KV("message", error.message())
-                          << LOG_KV("endpoint", socket->nodeIPEndpoint());
+        HOST_LOG(m_connectionLogLevel)
+            << LOG_DESC("handshakeServer Handshake failed") << LOG_KV("value", error.value())
+            << LOG_KV("message", error.message()) << LOG_KV("endpoint", socket->nodeIPEndpoint());
         socket->close();
         return;
     }
     if (endpointPublicKey->empty())
     {
-        HOST_LOG(WARNING) << LOG_DESC("handshakeServer get p2pID failed")
-                          << LOG_KV("remote endpoint", socket->remoteEndpoint());
+        HOST_LOG(m_connectionLogLevel) << LOG_DESC("handshakeServer get p2pID failed")
+                                       << LOG_KV("remote endpoint", socket->remoteEndpoint());
         socket->close();
         return;
     }
@@ -376,14 +376,15 @@ void Host::startPeerSession(P2PInfo const& p2pInfo, std::shared_ptr<SocketFace> 
         weakHost, socket, m_messageFactory, m_sessionCallbackManager);
 
     auto connectionHandler = m_connectionHandler;
-    m_threadPool->enqueue([ps, connectionHandler, p2pInfo]() {
+    m_threadPool->enqueue([this, ps, connectionHandler, p2pInfo]() {
         if (connectionHandler)
         {
             connectionHandler(NetworkException(0, ""), p2pInfo, ps);
         }
         else
         {
-            HOST_LOG(WARNING) << LOG_DESC("No connectionHandler, new connection may lost");
+            HOST_LOG(m_connectionLogLevel)
+                << LOG_DESC("No connectionHandler, new connection may lost");
         }
     });
     HOST_LOG(INFO) << LOG_DESC("startPeerSession, Remote=") << socket->remoteEndpoint()
