@@ -122,60 +122,36 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
         assert(!m_blockContext.isWasm());
         auto tableName = getContractTableName(input->codeAddress, false);
 
-        // get codeHash in contract table
-        auto codeHashEntry = storage().getRow(tableName, ACCOUNT_CODE_HASH);
-        do
+        bool needTryFromContractTable =
+            m_blockContext.features().get(ledger::Features::Flag::bugfix_call_noaddr_return);
+        auto codeEntry = getCodeByContractTableName(tableName, needTryFromContractTable);
+        if (codeEntry && codeEntry.has_value() && !codeEntry->get().empty())
         {
-            if (!codeHashEntry || codeHashEntry->get().empty())
+            input->delegateCallCode = toBytes(codeEntry->get());
+        }
+        else
+        {
+            EXECUTIVE_LOG(DEBUG) << "Could not getCode during externalCall"
+                                 << LOG_KV("codeAddress", input->codeAddress)
+                                 << LOG_KV("needTryFromContractTable", needTryFromContractTable);
+            input->delegateCallCode = bytes();
+
+            auto& output = input;
+            output->data = bytes();
+            if (m_blockContext.features().get(ledger::Features::Flag::bugfix_call_noaddr_return))
             {
-                auto& output = input;
-                EXECUTIVE_LOG(DEBUG) << "Could not getCodeHash during externalCall"
-                                     << LOG_KV("codeAddress", input->codeAddress);
-
-                if (m_blockContext.features().get(
-                        ledger::Features::Flag::bugfix_call_noaddr_return))
-                {
-                    auto entry = storage().getRow(tableName, ACCOUNT_CODE);
-                    if (entry && !entry->get().empty())
-                    {
-                        input->delegateCallCode = toBytes(entry->get());
-                        break;
-                    }
-                }
-
-                output->data = bytes();
-                if (m_blockContext.features().get(
-                        ledger::Features::Flag::bugfix_call_noaddr_return))
-                {
-                    // This is eth's bug, but we still need to compat with it :)
-                    // https://docs.soliditylang.org/en/v0.8.17/control-structures.html#error-handling-assert-require-revert-and-exceptions
-                    output->status = (int32_t)TransactionStatus::None;
-                    output->evmStatus = EVMC_SUCCESS;
-                }
-                else
-                {
-                    output->status = (int32_t)TransactionStatus::RevertInstruction;
-                    output->evmStatus = EVMC_REVERT;
-                }
-                return std::move(output);
+                // This is eth's bug, but we still need to compat with it :)
+                // https://docs.soliditylang.org/en/v0.8.17/control-structures.html#error-handling-assert-require-revert-and-exceptions
+                output->status = (int32_t)TransactionStatus::None;
+                output->evmStatus = EVMC_SUCCESS;
             }
-
-            auto codeHash = codeHashEntry->getField(0);
-
-            // get code in code binary table
-            auto entry = storage().getRow(bcos::ledger::SYS_CODE_BINARY, codeHash);
-            if (!entry || entry->get().empty())
+            else
             {
-                auto& output = input;
-                EXECUTIVE_LOG(DEBUG) << "Could not getCode during externalCall"
-                                     << LOG_KV("codeAddress", input->codeAddress);
-                output->data = bytes();
                 output->status = (int32_t)TransactionStatus::RevertInstruction;
                 output->evmStatus = EVMC_REVERT;
-                return std::move(output);
             }
-            input->delegateCallCode = toBytes(entry->get());
-        } while (0);
+            return std::move(output);
+        }
     }
 
     if (input->data == bcos::protocol::GET_CODE_INPUT_BYTES)
@@ -184,43 +160,25 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
                              << LOG_KV("codeAddress", input->codeAddress);
 
         auto tableName = getContractTableName(input->codeAddress, false);
-
         auto& output = input;
-        // get codeHash in contract table
-        auto codeHashEntry = storage().getRow(tableName, ACCOUNT_CODE_HASH);
-        if (!codeHashEntry || codeHashEntry->get().empty())
-        {
-            if (m_blockContext.features().get(ledger::Features::Flag::bugfix_call_noaddr_return))
-            {
-                auto entry = storage().getRow(tableName, ACCOUNT_CODE);
-                if (entry && !entry->get().empty())
-                {
-                    output->data = toBytes(entry->get());
-                    return std::move(output);
-                }
-            }
 
-            EXECUTIVE_LOG(DEBUG) << "Could not get external code hash from local storage"
-                                 << LOG_KV("codeAddress", input->codeAddress);
-            output->data = bytes();
+        bool needTryFromContractTable =
+            m_blockContext.features().get(ledger::Features::Flag::bugfix_call_noaddr_return);
+        auto codeEntry = getCodeByContractTableName(tableName, needTryFromContractTable);
+        if (codeEntry && codeEntry.has_value() && !codeEntry->get().empty())
+        {
+            output->data = toBytes(codeEntry->get());
             return std::move(output);
         }
-
-        auto codeHash = codeHashEntry->getField(0);
-
-        // get code in code binary table
-        auto entry = storage().getRow(bcos::ledger::SYS_CODE_BINARY, codeHash);
-        if (!entry || entry->get().empty())
+        else
         {
             EXECUTIVE_LOG(DEBUG) << "Could not get external code from local storage"
-                                 << LOG_KV("codeAddress", input->codeAddress);
+                                 << LOG_KV("codeAddress", input->codeAddress)
+                                 << LOG_KV("needTryFromContractTable", needTryFromContractTable);
             output->data = bytes();
             return std::move(output);
         }
-        output->data = toBytes(entry->get());
-        return std::move(output);
     }
-
 
     auto executive =
         buildChildExecutive(input->codeAddress, m_contextID, newSeq, ExecutiveType::common);
@@ -286,7 +244,7 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
             callResults = std::move(callParameters);
             callResults->type = CallParameters::FINISHED;
             callResults->status = (int32_t)TransactionStatus::None;
-            return callResults;          
+            return callResults;
         }
     }
 
@@ -317,6 +275,57 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
 }
 
 
+crypto::HashType TransactionExecutive::getCodeHash(const std::string_view& contractTableName)
+{
+    auto entry = storage().getRow(contractTableName, ACCOUNT_CODE_HASH);
+    if (entry)
+    {
+        auto code = entry->getField(0);
+        return crypto::HashType(code, crypto::HashType::StringDataType::FromBinary);
+    }
+
+    return {};
+}
+
+std::optional<storage::Entry> TransactionExecutive::getCodeEntryFromContractTable(
+    const std::string_view contractTableName)
+{
+    return storage().getRow(contractTableName, ACCOUNT_CODE);
+}
+
+std::optional<storage::Entry> TransactionExecutive::getCodeByHash(const std::string_view& codeHash)
+{
+    auto entry = storage().getRow(bcos::ledger::SYS_CODE_BINARY, codeHash);
+    if (entry && !entry->get().empty())
+    {
+        return entry;
+    }
+    else
+    {
+        return {};
+    }
+}
+
+std::optional<storage::Entry> TransactionExecutive::getCodeByContractTableName(
+    const std::string_view& contractTableName, bool tryFromContractTable)
+{
+    auto hash = getCodeHash(contractTableName);
+    auto entry = getCodeByHash(std::string_view((char*)hash.data(), hash.size()));
+    if (entry && entry.has_value() && !entry->get().empty())
+    {
+        return entry;
+    }
+
+    if (tryFromContractTable)
+    {
+        return getCodeEntryFromContractTable(contractTableName);
+    }
+    else
+    {
+        return {};
+    }
+}
+
 bool TransactionExecutive::transferBalance(std::string_view origin, std::string_view sender,
     std::string_view receiver, const u256& value, int64_t gas)
 {
@@ -324,15 +333,14 @@ bool TransactionExecutive::transferBalance(std::string_view origin, std::string_
     // sender 是合约地址
     // receiver 是转账接收方
     EXECUTIVE_LOG(TRACE) << LOG_BADGE("Execute") << "now to transferBalance"
-                         << LOG_KV("origin", origin)
-                         << LOG_KV("subAccount", sender)
+                         << LOG_KV("origin", origin) << LOG_KV("subAccount", sender)
                          << LOG_KV("addAccount", receiver)
-                         << LOG_KV("receiveAddress", ACCOUNT_ADDRESS) 
-                         << LOG_KV("value", value)
+                         << LOG_KV("receiveAddress", ACCOUNT_ADDRESS) << LOG_KV("value", value)
                          << LOG_KV("gas", gas);
     if (isPrecompiled(std::string(receiver)))
     {
-        EXECUTIVE_LOG(DEBUG) << LOG_BADGE("Execute") << "transferBalance, receiverAddress is precompiled address";
+        EXECUTIVE_LOG(DEBUG) << LOG_BADGE("Execute")
+                             << "transferBalance, receiverAddress is precompiled address";
         return false;
     }
     // first subAccountBalance, then addAccountBalance
@@ -374,7 +382,8 @@ bool TransactionExecutive::transferBalance(std::string_view origin, std::string_
     {
         EXECUTIVE_LOG(DEBUG) << LOG_BADGE("Execute")
                              << LOG_DESC("transferBalance add failed, need to restore")
-                             << LOG_KV("tableName", formTableName) << LOG_KV("will add balance", value);
+                             << LOG_KV("tableName", formTableName)
+                             << LOG_KV("will add balance", value);
 
         // if receiver add failed, sender need to restore
         // sender = sender + value
