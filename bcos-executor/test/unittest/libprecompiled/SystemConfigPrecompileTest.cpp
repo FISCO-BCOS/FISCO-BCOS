@@ -165,15 +165,19 @@ BOOST_AUTO_TEST_CASE(upgradeVersion)
         codec.decode(bcos::ref(result->execResult()), code);
         BOOST_CHECK_EQUAL(code, 0);
 
-        auto entry = co_await storage2::readOne(*backendStorage,
+        // Check if all bugfix set to backend storage, not only statestorage
+        auto entry = co_await storage2::readOne(
+            *stateStorage, transaction_executor::StateKeyView(ledger::SYS_CONFIG, "bugfix_revert"));
+        BOOST_CHECK(entry);
+
+        entry = co_await storage2::readOne(*backendStorage,
             transaction_executor::StateKeyView(ledger::SYS_CONFIG, "bugfix_revert"));
-        BOOST_CHECK(!entry);
+        BOOST_CHECK(entry);
 
         result = systemConfigPrecompiled.call(executive, getRevertParameters);
         codec.decode(bcos::ref(result->execResult()), value);
         BOOST_CHECK_EQUAL(value, "1");
 
-        // Check if set feature_sharding to backend storage
         setInput = codec.encodeWithSig("setValueByKey(string,string)",
             std::string(bcos::ledger::SYSTEM_KEY_COMPATIBILITY_VERSION), std::string("3.3.0"));
         setParameters->m_input = bcos::ref(setInput);
