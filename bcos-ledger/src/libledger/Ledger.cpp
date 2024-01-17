@@ -1463,9 +1463,9 @@ void Ledger::asyncGetSystemTableEntry(const std::string_view& table, const std::
 }
 
 template <typename MerkleType, typename HashRangeType>
-static std::vector<h256> getMerkleTreeFromCache(int64_t blockNumber, Ledger::CacheType& cache,
-    RecursiveMutex& mutex, const std::string& cacheName, const MerkleType& merkle,
-    const HashRangeType& hashesRange)
+static std::shared_ptr<std::vector<h256>> getMerkleTreeFromCache(int64_t blockNumber,
+    Ledger::CacheType& cache, RecursiveMutex& mutex, const std::string& cacheName,
+    const MerkleType& merkle, const HashRangeType& hashesRange)
 {
     std::shared_ptr<std::vector<h256>> merkleTree = std::make_shared<std::vector<h256>>();
     {
@@ -1475,7 +1475,7 @@ static std::vector<h256> getMerkleTreeFromCache(int64_t blockNumber, Ledger::Cac
         {
             cache.insert(blockNumber, merkleTree);
         }
-        else if (!merkleTreePtr.get()->empty())
+        else
         {
             merkleTree = merkleTreePtr.get();
             LEDGER_LOG(DEBUG) << LOG_BADGE(cacheName) << LOG_DESC("Hit cache")
@@ -1491,7 +1491,7 @@ static std::vector<h256> getMerkleTreeFromCache(int64_t blockNumber, Ledger::Cac
         merkle.template generateMerkle(hashesRange, *newMerkleTree);
         {
             RecursiveGuard l(mutex);
-            merkleTree.reset(newMerkleTree.get());
+            *merkleTree = std::move(*newMerkleTree);
         }
 
         LEDGER_LOG(DEBUG) << LOG_BADGE(cacheName)
@@ -1500,7 +1500,7 @@ static std::vector<h256> getMerkleTreeFromCache(int64_t blockNumber, Ledger::Cac
                           << LOG_KV("blockNumber", blockNumber);
     }
 
-    return *merkleTree;
+    return merkleTree;
 }
 
 void Ledger::getTxProof(
@@ -1556,7 +1556,7 @@ void Ledger::getTxProof(
                                 getMerkleTreeFromCache(blockNumber, m_txProofMerkleCache,
                                     m_txMerkleMtx, "getTxProof", merkle, hashesRange);
                             merkle.template generateMerkleProof(
-                                hashesRange, merkleTree, _txHash, *merkleProofPtr);
+                                hashesRange, *merkleTree, _txHash, *merkleProofPtr);
 
                             LEDGER_LOG(TRACE)
                                 << LOG_BADGE("getTxProof") << LOG_DESC("get merkle proof success")
@@ -1604,7 +1604,7 @@ void Ledger::getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
                         m_receiptMerkleMtx, "getReceiptProof", merkle, hashesRange);
 
                     merkle.template generateMerkleProof(
-                        hashesRange, merkleTree, receiptHash, *merkleProofPtr);
+                        hashesRange, *merkleTree, receiptHash, *merkleProofPtr);
 
                     LEDGER_LOG(TRACE)
                         << LOG_BADGE("getReceiptProof") << LOG_DESC("get merkle proof success")
