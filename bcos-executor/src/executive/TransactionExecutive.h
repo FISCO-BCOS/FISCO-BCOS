@@ -145,6 +145,13 @@ public:
 
     bool isWasm() { return m_blockContext.lock()->isWasm(); }
 
+    crypto::HashType getCodeHash(const std::string_view& contractTableName);
+    std::optional<storage::Entry> getCodeEntryFromContractTable(
+        const std::string_view contractTableName);
+    std::optional<storage::Entry> getCodeByHash(const std::string_view& codeHash);
+    std::optional<storage::Entry> getCodeByContractTableName(
+        const std::string_view& contractTableName, bool needTryFromContractTable = true);
+
 protected:
     std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> call(
         CallParameters::UniquePtr callParameters);
