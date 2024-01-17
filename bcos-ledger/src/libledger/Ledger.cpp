@@ -1467,26 +1467,39 @@ static std::vector<h256> getMerkleTreeFromCache(int64_t blockNumber, Ledger::Cac
     RecursiveMutex& mutex, const std::string& cacheName, const MerkleType& merkle,
     const HashRangeType& hashesRange)
 {
-    std::shared_ptr<std::vector<h256>> merkleTree;
+    std::shared_ptr<std::vector<h256>> merkleTree = std::make_shared<std::vector<h256>>();
     {
         RecursiveGuard l(mutex);
-        if (!cache.contains(blockNumber))
+        auto merkleTreePtr = cache.get(blockNumber);
+        if (!merkleTreePtr.has_value())
         {
-            merkleTree = std::make_shared<std::vector<h256>>();
-            merkle.template generateMerkle(hashesRange, *merkleTree);
             cache.insert(blockNumber, merkleTree);
-            LEDGER_LOG(DEBUG)
-                << LOG_BADGE(cacheName)
-                << LOG_DESC("Failed to hit the cache and build a new Merkel tree from scratch")
-                << LOG_KV("blockNumber", blockNumber);
         }
-        else
+        else if (!merkleTreePtr.get()->empty())
         {
-            merkleTree = *(cache.get(blockNumber));
+            merkleTree = merkleTreePtr.get();
             LEDGER_LOG(DEBUG) << LOG_BADGE(cacheName) << LOG_DESC("Hit cache")
                               << LOG_KV("blockNumber", blockNumber);
         }
     }
+
+    if (merkleTree->empty())
+    {
+        auto newMerkleTree = std::make_shared<std::vector<h256>>();
+        // Notice: generateMerkle will use tbb thread. Should not place in RecursiveGuard below to
+        // avoid locking each other in tbb thread pool and RecursiveGuard
+        merkle.template generateMerkle(hashesRange, *newMerkleTree);
+        {
+            RecursiveGuard l(mutex);
+            merkleTree.reset(newMerkleTree.get());
+        }
+
+        LEDGER_LOG(DEBUG) << LOG_BADGE(cacheName)
+                          << LOG_DESC(
+                                 "Failed to hit the cache and build a new Merkel tree from scratch")
+                          << LOG_KV("blockNumber", blockNumber);
+    }
+
     return *merkleTree;
 }
 
