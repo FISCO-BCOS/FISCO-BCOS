@@ -50,7 +50,7 @@ public:
         // rpcService && SDK
         c_supportedProtocols.insert({ProtocolModuleID::RpcService,
             std::make_shared<ProtocolInfo>(
-                ProtocolModuleID::RpcService, ProtocolVersion::V0, ProtocolVersion::V1)});
+                ProtocolModuleID::RpcService, ProtocolVersion::V0, ProtocolVersion::V2)});
         // executorService
         c_supportedProtocols.insert({ProtocolModuleID::ExecutorService,
             std::make_shared<ProtocolInfo>(
