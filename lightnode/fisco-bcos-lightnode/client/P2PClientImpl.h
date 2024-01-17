@@ -68,7 +68,7 @@ public:
                         {
                             bcos::concepts::serialize::decode(data, m_response);
                             LIGHTNODE_LOG(DEBUG) << LOG_DESC("P2P client receive message success: ")
-                                                 << LOG_KV("data size",data.size());
+                                                 << LOG_KV("data size", data.size());
                         }
                         else
                         {
@@ -208,7 +208,7 @@ public:
         struct Awaitable
         {
             Awaitable(bcos::gateway::GatewayInterface::Ptr& gateway, std::string& groupID)
-                : m_gateway(gateway), m_groupID(groupID)
+              : m_gateway(gateway), m_groupID(groupID)
             {}
 
             constexpr bool await_ready() const noexcept { return false; }
@@ -217,44 +217,44 @@ public:
                 bcos::concepts::getRef(m_gateway).asyncGetPeers(
                     [this, m_handle = handle](Error::Ptr error, const gateway::GatewayInfo::Ptr&,
                         const gateway::GatewayInfosPtr& peerGatewayInfos) mutable {
-                      if (error)
-                      {
-                          m_error = std::move(error);
-                      }
-                      else
-                      {
-                          if (!peerGatewayInfos->empty())
-                          {
-                              std::set<std::string> nodeIDs;
-                              for (const auto& peerGatewayInfo : *peerGatewayInfos)
-                              {
-                                  auto nodeIDInfo = peerGatewayInfo->nodeIDInfo();
-                                  auto nodeInfo = nodeIDInfo.find(m_groupID);
+                        if (error)
+                        {
+                            m_error = std::move(error);
+                        }
+                        else
+                        {
+                            if (!peerGatewayInfos->empty())
+                            {
+                                std::set<std::string> nodeIDs;
+                                for (const auto& peerGatewayInfo : *peerGatewayInfos)
+                                {
+                                    auto nodeIDInfo = peerGatewayInfo->nodeIDInfo();
+                                    auto nodeInfo = nodeIDInfo.find(m_groupID);
 
-                                  if (nodeInfo != nodeIDInfo.end() && !nodeInfo->second.empty())
-                                  {
-                                      for (auto& it : nodeInfo->second)
-                                      {
-                                          if (it.second ==
-                                              bcos::protocol::NodeType::CONSENSUS_NODE ||
-                                              it.second ==
-                                              bcos::protocol::NodeType::OBSERVER_NODE)
-                                          {
-                                              nodeIDs.insert(it.first);
-                                              LIGHTNODE_LOG(TRACE)
-                                                      << LOG_KV("NodeID:", it.first)
-                                                      << LOG_KV("nodeType:", it.second);
-                                          }
-                                      }
-                                  }
-                              }
-                              if (!nodeIDs.empty())
-                              {
-                                  m_nodeIDList = std::move(nodeIDs);
-                              }
-                          }
-                      }
-                      m_handle.resume();
+                                    if (nodeInfo != nodeIDInfo.end() && !nodeInfo->second.empty())
+                                    {
+                                        for (auto& it : nodeInfo->second)
+                                        {
+                                            if (it.second ==
+                                                    bcos::protocol::NodeType::CONSENSUS_NODE ||
+                                                it.second ==
+                                                    bcos::protocol::NodeType::OBSERVER_NODE)
+                                            {
+                                                nodeIDs.insert(it.first);
+                                                LIGHTNODE_LOG(TRACE)
+                                                    << LOG_KV("NodeID:", it.first)
+                                                    << LOG_KV("nodeType:", it.second);
+                                            }
+                                        }
+                                    }
+                                }
+                                if (!nodeIDs.empty())
+                                {
+                                    m_nodeIDList = std::move(nodeIDs);
+                                }
+                            }
+                        }
+                        m_handle.resume();
                     });
             }
             void await_resume()

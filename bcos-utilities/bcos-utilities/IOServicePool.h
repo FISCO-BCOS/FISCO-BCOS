@@ -59,10 +59,9 @@ public:
         // one io_context per thread
         for (const auto& ioService : m_ioServices)
         {
-            auto weakService = std::weak_ptr<IOService>(ioService);
-            m_threads.emplace_back([weakService]() {
+            // https://github.com/chriskohlhoff/asio/issues/932#issuecomment-968103444
+            m_threads.emplace_back([ioService]() {
                 bcos::pthread_setThreadName("ioService");
-                auto ioService = weakService.lock();
                 ioService->run();
             });
         }

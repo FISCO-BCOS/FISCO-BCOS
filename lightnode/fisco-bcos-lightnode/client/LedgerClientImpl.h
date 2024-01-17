@@ -14,13 +14,15 @@
 #include <boost/throw_exception.hpp>
 #include <algorithm>
 #include <iterator>
+#include <random>
 #include <stdexcept>
 #include <type_traits>
-#include <random>
 
 namespace bcos::ledger
 {
-struct GetBlockFailed: public bcos::error::Exception {};
+struct GetBlockFailed : public bcos::error::Exception
+{
+};
 class LedgerClientImpl : public bcos::concepts::ledger::LedgerBase<LedgerClientImpl>
 {
     friend bcos::concepts::ledger::LedgerBase<LedgerClientImpl>;
@@ -76,10 +78,10 @@ private:
             }
             else
             {
-               std::swap(response.block, block);
-               LIGHTNODE_LOG(DEBUG) << LOG_DESC("lightNodeGetBlock")
-                                    << LOG_KV("BlockNumber", blockNumber);
-               co_return;
+                std::swap(response.block, block);
+                LIGHTNODE_LOG(DEBUG)
+                    << LOG_DESC("lightNodeGetBlock") << LOG_KV("BlockNumber", blockNumber);
+                co_return;
             }
         }
 
@@ -101,7 +103,8 @@ private:
 
         (processGetBlockFlags<Flags>(request.onlyHeader), ...);
         // if nodeList is empty, return
-        if(nodeList.size() == 0){
+        if (nodeList.size() == 0)
+        {
             response.block = {};
             std::swap(response.block, block);
             co_return;
@@ -117,14 +120,15 @@ private:
             ++nodeIDIt;
         }
         auto nodeID = *nodeIDIt;
-        LIGHTNODE_LOG(TRACE) << LOG_DESC("lightNode getBlockByNodeList")
-                             << LOG_KV("step", step) << LOG_KV("nodeID", nodeID->hex());
-        co_await p2p().sendMessageByNodeID(bcos::protocol::LIGHTNODE_GET_BLOCK, nodeID, request, response);
-        if(response.error.errorCode)
+        LIGHTNODE_LOG(TRACE) << LOG_DESC("lightNode getBlockByNodeList") << LOG_KV("step", step)
+                             << LOG_KV("nodeID", nodeID->hex());
+        co_await p2p().sendMessageByNodeID(
+            bcos::protocol::LIGHTNODE_GET_BLOCK, nodeID, request, response);
+        if (response.error.errorCode)
         {
             LIGHTNODE_LOG(WARNING) << "getBlock failed, request nodeID: " << nodeID->hex()
-                                   << "response errorCode: " << response.error.errorCode
-                                   << " " << response.error.errorMessage;
+                                   << "response errorCode: " << response.error.errorCode << " "
+                                   << response.error.errorMessage;
             response.block = {};
         }
         std::swap(response.block, block);
@@ -228,22 +232,24 @@ private:
         std::map<crypto::NodeIDPtr, bcos::protocol::BlockNumber> allPeersStatus;
 
         auto nodeIDs = co_await p2p().getAllNodeID();
-        LIGHTNODE_LOG(DEBUG) << "Got all peers status from remote, nodeIDs size: " << nodeIDs.size();
-        for(auto& nodeID : nodeIDs){
+        LIGHTNODE_LOG(DEBUG) << "Got all peers status from remote, nodeIDs size: "
+                             << nodeIDs.size();
+        for (auto& nodeID : nodeIDs)
+        {
             co_await p2p().sendMessageByNodeID(
                 protocol::LIGHTNODE_GET_STATUS, nodeID, request, response);
 
             if (response.error.errorCode)
             {
-                LIGHTNODE_LOG(WARNING) << "Get status failed, errorCode: " << response.error.errorCode
-                                       << " " << response.error.errorMessage;
+                LIGHTNODE_LOG(WARNING)
+                    << "Get status failed, errorCode: " << response.error.errorCode << " "
+                    << response.error.errorMessage;
                 BOOST_THROW_EXCEPTION(std::runtime_error(response.error.errorMessage));
             }
             allPeersStatus[nodeID] = response.blockNumber;
 
             LIGHTNODE_LOG(DEBUG) << "Got status from remote, nodeID: " << nodeID->hex()
-                                 << "blockNumber :"
-                                 << response.blockNumber;
+                                 << "blockNumber :" << response.blockNumber;
         }
 
         co_return allPeersStatus;
