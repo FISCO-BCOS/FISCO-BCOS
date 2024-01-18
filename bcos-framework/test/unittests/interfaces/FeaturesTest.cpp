@@ -137,6 +137,7 @@ BOOST_AUTO_TEST_CASE(feature)
         "feature_dmc2serial",
         "feature_sharding",
         "feature_rpbft",
+        "feature_paillier",
         "feature_balance",
         "feature_balance_precompiled",
         "feature_balance_policy1",
