@@ -147,12 +147,17 @@ void bcos::pthread_setThreadName(std::string const& _n)
 
 std::string bcos::pthread_getThreadName()
 {
-    std::string name;
-    name.resize(32);
+#if defined(__GLIBC__) || defined(__APPLE__)
+    std::array<char, 16> name = {0};
     auto err = pthread_getname_np(pthread_self(), (char*)name.data(), name.size());
     if (err == 0)
     {
-        return name;
+        if (name[0] == '\0')
+        {
+            return "";
+        }
+        return {name.data()};
     }
+#endif
     return "";
 }
