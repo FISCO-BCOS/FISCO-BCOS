@@ -79,6 +79,11 @@ public:
             BOOST_THROW_EXCEPTION(
                 PreconditionMismatchError{} << errinfo_comment("must set feature_balance first"));
         }
+        if (flag == Flag::feature_balance_policy1 && !get(Flag::feature_balance_precompiled))
+        {
+            BOOST_THROW_EXCEPTION(PreconditionMismatchError{}
+                                  << errinfo_comment("must set feature_balance_precompiled first"));
+        }
     }
 
     bool get(Flag flag) const
