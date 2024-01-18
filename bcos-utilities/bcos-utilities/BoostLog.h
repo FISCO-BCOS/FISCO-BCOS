@@ -23,6 +23,7 @@
 
 #include <boost/log/attributes/constant.hpp>
 #include <boost/log/attributes/scoped_attribute.hpp>
+#include <boost/log/sinks/text_file_backend.hpp>
 #include <boost/log/sources/severity_channel_logger.hpp>
 #include <boost/log/trivial.hpp>
 
@@ -83,4 +84,12 @@ void setStatLogLevel(LogLevel const& _level);
         bcos::FileLoggerHandler, (boost::log::trivial::severity_level)(bcos::LogLevel::level))
 // for block number log
 #define BLOCK_NUMBER(NUMBER) "[blk-" << (NUMBER) << "]"
+
+namespace log
+{
+boost::shared_ptr<boost::log::sinks::file::collector> make_collector(
+    boost::filesystem::path const& target_dir, uintmax_t max_size, uintmax_t min_free_space,
+    uintmax_t max_files, bool convert_tar_gz);
+}
+
 }  // namespace bcos
