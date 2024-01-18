@@ -156,5 +156,6 @@ struct Exception;
 void errorExit(std::stringstream& _exitInfo, Exception const& exception);
 
 void pthread_setThreadName(std::string const& _n);
+std::string pthread_getThreadName();
 
 }  // namespace bcos

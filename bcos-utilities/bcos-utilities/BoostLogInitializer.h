@@ -21,6 +21,7 @@
 #pragma once
 
 #include "Common.h"
+#include <sys/types.h>
 #include <boost/log/core.hpp>
 #include <boost/log/expressions.hpp>
 #include <boost/log/expressions/formatters/named_scope.hpp>
@@ -59,14 +60,8 @@ public:
     void initLog(const std::string& _configFile, std::string const& _logger = bcos::FileLogger,
         std::string const& _logPrefix = "log");
 
-    void initStatLog(const std::string& _configFile,
-        std::string const& _logger = bcos::StatFileLogger, std::string const& _logPrefix = "stat");
-
     void initLog(boost::property_tree::ptree const& _pt,
         std::string const& _logger = bcos::FileLogger, std::string const& _logPrefix = "log");
-
-    void initStatLog(boost::property_tree::ptree const& _pt,
-        std::string const& _logger = bcos::StatFileLogger, std::string const& _logPrefix = "stat");
 
     void stopLogging();
 
@@ -76,34 +71,51 @@ public:
     std::string logPath() const { return m_logPath; }
 
 private:
+    void initStatLog(boost::property_tree::ptree const& _pt,
+        std::string const& _logger = bcos::StatFileLogger, std::string const& _logPrefix = "stat");
+    void initStatLog(const std::string& _configFile,
+        std::string const& _logger = bcos::StatFileLogger, std::string const& _logPrefix = "stat");
     bool canRotate(size_t const& _index);
 
-    boost::shared_ptr<sink_t> initLogSink(boost::property_tree::ptree const& _pt,
-        unsigned const& _logLevel, std::string const& _logPath, std::string const& _logPrefix,
-        std::string const& channel);
+    boost::shared_ptr<sink_t> initLogSink(std::string const& _logPath, std::string const& channel);
 
     // rotate the log file the log every hour
-    boost::shared_ptr<sink_t> initHourLogSink(boost::property_tree::ptree const& _pt,
-        unsigned const& _logLevel, std::string const& _logPath, std::string const& _logPrefix,
-        std::string const& channel);
+    boost::shared_ptr<sink_t> initHourLogSink(
+        std::string const& _logPath, std::string const& _logPrefix, std::string const& channel);
 
-    boost::shared_ptr<console_sink_t> initConsoleLogSink(boost::property_tree::ptree const& _pt,
-        unsigned const& _logLevel, std::string const& channel);
+    boost::shared_ptr<console_sink_t> initConsoleLogSink(
+        boost::property_tree::ptree const& _pt, unsigned _logLevel, std::string const& channel);
 
     template <typename T>
-    void setLogFormatter(T _sink)
+    void setLogFormatter(T _sink, const std::string& format = "")
     {
         /// set file format
         /// log-level|timestamp|thread-id|message
-        _sink->set_formatter(
-            boost::log::expressions::stream
-            << boost::log::expressions::attr<boost::log::trivial::severity_level>("Severity") << "|"
-            << boost::log::expressions::format_date_time<boost::posix_time::ptime>(
-                   "TimeStamp", "%Y-%m-%d %H:%M:%S.%f")
-            << "|"
-            << boost::log::expressions::attr<boost::log::attributes::current_thread_id::value_type>(
-                   "ThreadID")
-            << "|" << boost::log::expressions::smessage);
+        if (!format.empty())
+        {
+            try
+            {
+                auto formatter = boost::log::parse_formatter(format);
+                _sink->set_formatter(formatter);
+            }
+            catch (std::exception& e)
+            {
+                std::cout << "set log format failed, error = " << e.what() << std::endl;
+            }
+        }
+        else
+        {
+            _sink->set_formatter(
+                boost::log::expressions::stream
+                << boost::log::expressions::attr<boost::log::trivial::severity_level>("Severity")
+                << "|"
+                << boost::log::expressions::format_date_time<boost::posix_time::ptime>(
+                       "TimeStamp", "%Y-%m-%d %H:%M:%S.%f")
+                << "|" << boost::log::expressions::attr<std::string>("ThreadName") << "-"
+                << boost::log::expressions::attr<
+                       boost::log::attributes::current_thread_id::value_type>("ThreadID")
+                << "|" << boost::log::expressions::smessage);
+        }
     }
 
     template <typename T>
@@ -128,6 +140,19 @@ private:
 
     std::vector<int> m_currentHourVec;
     std::string m_logPath;
+    unsigned m_logLevel = 2;
+    bool m_consoleLog = false;
+    std::string m_logNamePattern;
+    std::string m_logFormat;
+    bool m_compressArchive = false;
+    std::string m_archivePath;
+    std::string m_rotateFileNamePattern;
+    uint64_t m_rotateSize = 0;
+    uint64_t m_maxArchiveSize = 0;
+    uint64_t m_minFreeSpace = 0;
+    uint32_t m_maxArchiveFiles = 0;
+    bool m_autoFlush = true;
+    bool m_enableLog = true;
     std::atomic_bool m_running = {false};
 };
 }  // namespace bcos
