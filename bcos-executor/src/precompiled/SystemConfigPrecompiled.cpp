@@ -126,6 +126,15 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl) : P
             }
             return version;
         }));
+    m_valueConverter.insert(std::make_pair(
+        SYSTEM_KEY_TX_GAS_PRICE, [](const std::string& _value, uint32_t blockVersion) -> uint64_t {
+            if (versionCompareTo(blockVersion, BlockVersion::V3_6_VERSION) < 0) [[unlikely]]
+            {
+                BOOST_THROW_EXCEPTION(
+                    PrecompiledError("unsupported key " + std::string(SYSTEM_KEY_TX_GAS_PRICE)));
+            }
+            return 0;
+        }));
 }
 
 std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
@@ -244,8 +253,7 @@ int64_t SystemConfigPrecompiled::validate(
         }
         else
         {
-            if (key != std::string(SYSTEM_KEY_TX_GAS_PRICE))
-                configuredValue = boost::lexical_cast<int64_t>(value);
+            configuredValue = boost::lexical_cast<int64_t>(value);
         }
     }
     catch (bcos::tool::InvalidVersion const& e)

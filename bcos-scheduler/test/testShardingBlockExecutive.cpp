@@ -170,7 +170,7 @@ BOOST_AUTO_TEST_CASE(prepareTest)
     SCHEDULER_LOG(DEBUG) << LOG_KV("metaTx size:", block->transactionsMetaDataSize())
                          << LOG_KV("transaction size", block->transactionsSize());
 
-    std::string gasPrice("0x4a817c800");
+    std::string gasPrice("0x1");
     auto blockExecutive = std::make_shared<bcos::scheduler::BlockExecutive>(block, scheduler.get(),
         0, transactionSubmitResultFactory, false, blockFactory, txPool, 3000000000, gasPrice,
         false);
@@ -500,7 +500,7 @@ BOOST_AUTO_TEST_CASE(callTest)
     executorManager->addExecutor("executor1", executor1);
 
     // Build blockExecutive
-    std::string gasPrice("0x4a817c800");
+    std::string gasPrice("0x1");
     auto blockExecutive = std::make_shared<bcos::scheduler::BlockExecutive>(block, scheduler.get(),
         0, transactionSubmitResultFactory, false, blockFactory, txPool, 3000000000, gasPrice,
         false);
@@ -536,7 +536,7 @@ BOOST_AUTO_TEST_CASE(executeWithSystemError)
     auto executor1 = std::make_shared<MockDmcExecutor>("executor1");
     executorManager->addExecutor("executor1", executor1);
 
-    std::string gasPrice("0x4a817c800");
+    std::string gasPrice("0x1");
     auto blockExecutive = std::make_shared<bcos::scheduler::BlockExecutive>(block, scheduler.get(),
         0, transactionSubmitResultFactory, false, blockFactory, txPool, 3000000000, gasPrice,
         false);

@@ -166,7 +166,7 @@ private:
     uint64_t m_blockTxCountLimit = 0;
     uint64_t m_leaderSwitchPeriod = 1;
     std::tuple<uint64_t, protocol::BlockNumber> m_gasLimit = {3000000000, 0};
-    std::tuple<std::string, protocol::BlockNumber> m_gasPrice = {std::string("0x4a817c800"), 0};
+    std::tuple<std::string, protocol::BlockNumber> m_gasPrice = {"0x0", 0};
     std::tuple<uint64_t, protocol::BlockNumber> m_epochSealerNum = {4, 0};
     std::tuple<uint64_t, protocol::BlockNumber> m_epochBlockNum = {1000, 0};
     uint64_t m_notifyRotateFlagInfo{0};
