@@ -1478,7 +1478,7 @@ static std::shared_ptr<std::vector<h256>> getMerkleTreeFromCache(int64_t blockNu
         else
         {
             merkleTree = merkleTreePtr.get();
-            LEDGER_LOG(DEBUG) << LOG_BADGE(cacheName) << LOG_DESC("Hit cache")
+            LEDGER_LOG(DEBUG) << LOG_BADGE(cacheName) << LOG_DESC("Hit ptr cache")
                               << LOG_KV("blockNumber", blockNumber);
         }
     }
@@ -1491,13 +1491,20 @@ static std::shared_ptr<std::vector<h256>> getMerkleTreeFromCache(int64_t blockNu
         merkle.template generateMerkle(hashesRange, *newMerkleTree);
         {
             RecursiveGuard l(mutex);
-            *merkleTree = std::move(*newMerkleTree);
+            if (!merkleTree->empty())
+            {
+                LEDGER_LOG(DEBUG) << LOG_BADGE(cacheName) << LOG_DESC("Hit cache")
+                                  << LOG_KV("blockNumber", blockNumber);
+            }
+            else
+            {
+                *merkleTree = std::move(*newMerkleTree);
+                LEDGER_LOG(DEBUG)
+                    << LOG_BADGE(cacheName)
+                    << LOG_DESC("Failed to hit the cache and build a new Merkel tree from scratch")
+                    << LOG_KV("blockNumber", blockNumber);
+            }
         }
-
-        LEDGER_LOG(DEBUG) << LOG_BADGE(cacheName)
-                          << LOG_DESC(
-                                 "Failed to hit the cache and build a new Merkel tree from scratch")
-                          << LOG_KV("blockNumber", blockNumber);
     }
 
     return merkleTree;
