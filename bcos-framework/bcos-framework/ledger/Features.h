@@ -73,11 +73,15 @@ public:
 
     void validate(Flag flag) const
     {
-        if ((flag == Flag::feature_balance_policy1 || flag == Flag::feature_balance_precompiled) &&
-            !get(Flag::feature_balance))
+        if (flag == Flag::feature_balance_precompiled && !get(Flag::feature_balance))
         {
             BOOST_THROW_EXCEPTION(
                 PreconditionMismatchError{} << errinfo_comment("must set feature_balance first"));
+        }
+        if (flag == Flag::feature_balance_policy1 && !get(Flag::feature_balance_precompiled))
+        {
+            BOOST_THROW_EXCEPTION(PreconditionMismatchError{}
+                                  << errinfo_comment("must set feature_balance_precompiled first"));
         }
     }
 
