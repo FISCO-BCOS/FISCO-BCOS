@@ -237,9 +237,6 @@ bcos::task::Task<bcos::ledger::SystemConfigEntry> bcos::ledger::tag_invoke(
                            bcos::protocol::BlockNumber blockNumber) {
                     if (error)
                     {
-                        // LEDGER2_LOG(DEBUG) << "Get " << m_key << " failed"
-                        //     << LOG_KV("code", error->errorCode()) << LOG_KV("message",
-                        //     error->errorMessage());
                         m_result.emplace<Error::Ptr>(std::move(error));
                     }
                     else
