@@ -32,9 +32,6 @@ if(TESTS)
     add_subdirectory(test)
 endif()
 
-if (NOT WIN32)
-    target_compile_options(bcos-utilities PRIVATE -Wno-error=unused-function) #FIXME: remove this line
-endif()
 include(GNUInstallDirs)
 install(TARGETS bcos-utilities EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
 install(DIRECTORY "bcos-utilities" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/" FILES_MATCHING PATTERN "*.h")

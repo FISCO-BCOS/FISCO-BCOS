@@ -281,13 +281,14 @@ boost::shared_ptr<bcos::BoostLogInitializer::sink_t> BoostLogInitializer::initLo
     sink->set_filter(boost::log::expressions::attr<std::string>("Channel") == channel);
     if (!m_archivePath.empty())
     {
+#if 0
         sink->locked_backend()->set_file_collector(boost::log::sinks::file::make_collector(
             boost::log::keywords::target = m_archivePath,           // to store rotated files
             boost::log::keywords::max_size = m_maxArchiveSize,      // maximum size(bytes)
             boost::log::keywords::min_free_space = m_minFreeSpace,  // minimum free space(bytes)
             boost::log::keywords::max_files = m_maxArchiveFiles  // maximum number of stored files
             ));
-#if 0
+#endif
         boost::filesystem::path targetDir(m_archivePath);
         sink->locked_backend()->set_file_collector(
             bcos::log::make_collector(targetDir,  // where to store rotated files
@@ -295,7 +296,6 @@ boost::shared_ptr<bcos::BoostLogInitializer::sink_t> BoostLogInitializer::initLo
                 m_minFreeSpace,                   // minimum free space, in bytes
                 m_maxArchiveFiles,                // maximum number of stored files
                 m_compressArchive));
-#endif
     }
     sink->locked_backend()->scan_for_files();
     boost::log::core::get()->add_sink(sink);
