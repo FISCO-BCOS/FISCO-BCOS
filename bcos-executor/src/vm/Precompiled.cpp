@@ -478,7 +478,7 @@ pair<bool, bytes> ecRecover(bytesConstRef _in)
         return {false, {}};
     }
 
-    if (_in.size() != 64 + RSV_LENGTH)
+    if (_in.size() != 64 + RSV_LENGTH - 1)
     {
         BCOS_LOG(TRACE) << LOG_BADGE("Precompiled") << LOG_DESC("ecRecover: invalid input size");
         return {true, {}};
