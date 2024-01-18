@@ -611,29 +611,20 @@ std::optional<storage::Entry> HostContext::code()
 {
     if (blockVersion() >= uint32_t(bcos::protocol::BlockVersion::V3_1_VERSION))
     {
-        auto codehash = codeHash();
-
-        auto key = std::string_view((char*)codehash.data(), codehash.size());
-        auto entry = m_executive->storage().getRow(bcos::ledger::SYS_CODE_BINARY, key);
-        if (entry && !entry->get().empty())
+        auto hash = codeHash();
+        auto entry = m_executive->getCodeByHash(std::string_view((char*)hash.data(), hash.size()));
+        if (entry && entry.has_value() && !entry->get().empty())
         {
             return entry;
         }
     }
 
-    return m_executive->storage().getRow(m_tableName, ACCOUNT_CODE);
+    return m_executive->getCodeEntryFromContractTable(m_tableName);
 }
 
 crypto::HashType HostContext::codeHash()
 {
-    auto entry = m_executive->storage().getRow(m_tableName, ACCOUNT_CODE_HASH);
-    if (entry)
-    {
-        auto code = entry->getField(0);
-        return crypto::HashType(code, crypto::HashType::StringDataType::FromBinary);
-    }
-
-    return {};
+    return m_executive->getCodeHash(m_tableName);
 }
 
 bool HostContext::isWasm()
