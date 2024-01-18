@@ -192,6 +192,7 @@ private:
 
     std::atomic_int64_t m_calledContextID = 1;
 
+    std::string m_gasPrice = std::string("");
     uint64_t m_gasLimit = 0;
     uint32_t m_blockVersion = 0;
 

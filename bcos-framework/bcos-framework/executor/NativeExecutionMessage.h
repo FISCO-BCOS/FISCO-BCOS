@@ -58,10 +58,10 @@ public:
     {
         m_maxPriorityFeePerGas = std::move(maxPriorityFeePerGas);
     }
-    std::string_view effectiveGasPrice() const override { return m_maxPriorityFeePerGas; }
+    std::string_view effectiveGasPrice() const override { return m_effectiveGasPrice; }
     void setEffectiveGasPrice(std::string effectiveGasPrice) override
     {
-        m_maxPriorityFeePerGas = std::move(effectiveGasPrice);
+        m_effectiveGasPrice = std::move(effectiveGasPrice);
     }
 
     int32_t depth() const override { return m_depth; }

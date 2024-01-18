@@ -63,6 +63,15 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl) : P
         std::make_pair(SYSTEM_KEY_TX_GAS_LIMIT, [defaultCmp](int64_t _value, uint32_t version) {
             defaultCmp(SYSTEM_KEY_TX_GAS_LIMIT, _value, TX_GAS_LIMIT_MIN, version);
         }));
+    m_sysValueCmp.insert(
+        std::make_pair(SYSTEM_KEY_TX_GAS_PRICE, [](int64_t _value, uint32_t version) {
+            if (versionCompareTo(version, BlockVersion::V3_6_VERSION) < 0) [[unlikely]]
+            {
+                BOOST_THROW_EXCEPTION(
+                    PrecompiledError("unsupported key " + std::string(SYSTEM_KEY_TX_GAS_PRICE)));
+            }
+            return;
+        }));
     m_sysValueCmp.insert(std::make_pair(
         SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, [defaultCmp](int64_t _value, uint32_t version) {
             defaultCmp(SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, _value, 1, version);
@@ -235,7 +244,8 @@ int64_t SystemConfigPrecompiled::validate(
         }
         else
         {
-            configuredValue = boost::lexical_cast<int64_t>(value);
+            if (key != std::string(SYSTEM_KEY_TX_GAS_PRICE))
+                configuredValue = boost::lexical_cast<int64_t>(value);
         }
     }
     catch (bcos::tool::InvalidVersion const& e)

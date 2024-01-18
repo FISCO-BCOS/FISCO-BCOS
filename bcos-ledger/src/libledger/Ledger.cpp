@@ -1901,6 +1901,10 @@ bool Ledger::buildGenesisBlock(
         SystemConfigEntry{boost::lexical_cast<std::string>(genesis.m_txGasLimit), 0});
     sysTable->setRow(SYSTEM_KEY_TX_GAS_LIMIT, std::move(gasLimitEntry));
 
+    Entry gasPriceEntry;
+    gasPriceEntry.setObject(SystemConfigEntry("0x0", 0));
+    sysTable->setRow(SYSTEM_KEY_TX_GAS_PRICE, std::move(gasPriceEntry));
+
     if (RPBFT_CONSENSUS_TYPE == genesis.m_consensusType &&
         versionNumber >= (uint32_t)protocol::BlockVersion::V3_5_VERSION)
     {

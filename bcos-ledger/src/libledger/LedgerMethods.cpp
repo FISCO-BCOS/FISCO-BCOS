@@ -237,6 +237,9 @@ bcos::task::Task<bcos::ledger::SystemConfigEntry> bcos::ledger::tag_invoke(
                            bcos::protocol::BlockNumber blockNumber) {
                     if (error)
                     {
+                        // LEDGER2_LOG(DEBUG) << "Get " << m_key << " failed"
+                        //     << LOG_KV("code", error->errorCode()) << LOG_KV("message",
+                        //     error->errorMessage());
                         m_result.emplace<Error::Ptr>(std::move(error));
                     }
                     else
@@ -332,6 +335,8 @@ bcos::task::Task<bcos::ledger::LedgerConfig::Ptr> bcos::ledger::tag_invoke(
         co_await getSystemConfigOrDefault(ledger, SYSTEM_KEY_TX_GAS_LIMIT, 0));
     ledgerConfig->setCompatibilityVersion(tool::toVersionNumber(
         std::get<0>(co_await getSystemConfig(ledger, SYSTEM_KEY_COMPATIBILITY_VERSION))));
+    ledgerConfig->setGasPrice(
+        co_await bcos::ledger::getSystemConfig(ledger, SYSTEM_KEY_TX_GAS_PRICE));
 
     auto blockNumber = co_await getCurrentBlockNumber(ledger);
     ledgerConfig->setBlockNumber(blockNumber);
