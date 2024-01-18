@@ -471,6 +471,19 @@ const int RSV_LENGTH = 65;
 const int PUBLIC_KEY_LENGTH = 64;
 pair<bool, bytes> ecRecover(bytesConstRef _in)
 {  // _in is hash(32),v(32),r(32),s(32), return address
+
+    if (_in == bytesConstRef())
+    {
+        BCOS_LOG(TRACE) << LOG_BADGE("Precompiled") << LOG_DESC("ecRecover: nullptr input");
+        return {false, {}};
+    }
+
+    if (_in.size() != 64 + RSV_LENGTH)
+    {
+        BCOS_LOG(TRACE) << LOG_BADGE("Precompiled") << LOG_DESC("ecRecover: invalid input size");
+        return {true, {}};
+    }
+
     BCOS_LOG(TRACE) << LOG_BADGE("Precompiled") << LOG_DESC("ecRecover: ") << _in.size();
     byte rawRSV[RSV_LENGTH];
     memcpy(rawRSV, _in.data() + 64, RSV_LENGTH - 1);
