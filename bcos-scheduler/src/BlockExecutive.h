@@ -204,7 +204,7 @@ protected:
     bcos::txpool::TxPoolInterface::Ptr m_txPool;
 
     size_t m_gasLimit = TRANSACTION_GAS;
-    std::string m_gasPrice = std::string("");
+    std::string m_gasPrice = std::string("0x0");
     std::atomic_bool m_isSysBlock = false;
 
     bool m_staticCall = false;

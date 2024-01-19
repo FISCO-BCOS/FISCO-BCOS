@@ -2467,7 +2467,8 @@ std::unique_ptr<protocol::ExecutionMessage> TransactionExecutor::toExecutionResu
     message->setSeq(params->seq);
     message->setOrigin(std::move(params->origin));
     message->setGasAvailable(params->gas);
-    message->setEffectiveGasPrice(boost::lexical_cast<std::string>(params->effectiveGasPrice));
+    std::string eGasPriceStr = "0x" + params->effectiveGasPrice.str(256, std::ios_base::hex);
+    message->setEffectiveGasPrice(eGasPriceStr);
     message->setData(std::move(params->data));
     message->setStaticCall(params->staticCall);
     message->setCreate(params->create);
