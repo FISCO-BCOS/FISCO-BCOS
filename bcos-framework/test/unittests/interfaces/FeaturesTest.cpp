@@ -126,22 +126,28 @@ BOOST_AUTO_TEST_CASE(feature)
     BOOST_CHECK_EQUAL(features7.get("feature_balance_policy1"), true);
 
     auto keys = Features::featureKeys();
-
-    BOOST_CHECK_EQUAL(keys.size(), 14);
-    BOOST_CHECK_EQUAL(keys[0], "bugfix_revert");
-    BOOST_CHECK_EQUAL(keys[1], "bugfix_statestorage_hash");
-    BOOST_CHECK_EQUAL(keys[2], "bugfix_evm_create2_delegatecall_staticcall_codecopy");
-    BOOST_CHECK_EQUAL(keys[3], "bugfix_event_log_order");
-    BOOST_CHECK_EQUAL(keys[4], "bugfix_call_noaddr_return");
-    BOOST_CHECK_EQUAL(keys[5], "bugfix_precompiled_codehash");
-    BOOST_CHECK_EQUAL(keys[6], "feature_dmc2serial");
-    BOOST_CHECK_EQUAL(keys[7], "feature_sharding");
-    BOOST_CHECK_EQUAL(keys[8], "feature_rpbft");
-    BOOST_CHECK_EQUAL(keys[9], "feature_paillier");
-    BOOST_CHECK_EQUAL(keys[10], "feature_balance");
-    BOOST_CHECK_EQUAL(keys[11], "feature_balance_precompiled");
-    BOOST_CHECK_EQUAL(keys[12], "feature_balance_policy1");
-    BOOST_CHECK_EQUAL(keys[13], "feature_paillier_add_raw");
+    // clang-format off
+    std::vector<std::string> compareKeys = {
+        "bugfix_revert",
+        "bugfix_statestorage_hash",
+        "bugfix_evm_create2_delegatecall_staticcall_codecopy",
+        "bugfix_event_log_order",
+        "bugfix_call_noaddr_return",
+        "bugfix_precompiled_codehash",
+        "feature_dmc2serial",
+        "feature_sharding",
+        "feature_rpbft",
+        "feature_paillier",
+        "feature_balance",
+        "feature_balance_precompiled",
+        "feature_balance_policy1",
+        "feature_paillier_add_raw"
+    };
+    // clang-format on
+    for (size_t i = 0; i < keys.size(); ++i)
+    {
+        BOOST_CHECK_EQUAL(keys[i], compareKeys[i]);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()
