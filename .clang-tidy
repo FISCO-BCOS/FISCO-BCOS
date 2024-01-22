@@ -235,6 +235,6 @@ CheckOptions:
   - key:             llvm-else-after-return.WarnOnUnfixable
     value:           'false'
   - key:             readability-identifier-length.IgnoredVariableNames
-    value:           'it|ar|i|j|k|e|id|ss|os|tx|db'
+    value:           'it|ar|i|j|k|e|id|ss|os|tx|db|to'
 ...
 
