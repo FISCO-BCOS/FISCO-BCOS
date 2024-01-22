@@ -315,9 +315,10 @@ void Session::drop(DisconnectReason _reason)
             }
             else
             {
-                SESSION_LOG(WARNING) << "[drop] closing remote " << m_socket->remoteEndpoint()
-                                     << LOG_KV("reason", reasonOf(_reason))
-                                     << LOG_KV("endpoint", m_socket->nodeIPEndpoint());
+                SESSION_LOG(server->connectionLogLevel())
+                    << "[drop] closing remote " << m_socket->remoteEndpoint()
+                    << LOG_KV("reason", reasonOf(_reason))
+                    << LOG_KV("endpoint", m_socket->nodeIPEndpoint());
             }
 
             /// if get Host object failed, close the socket directly
@@ -357,11 +358,11 @@ void Session::drop(DisconnectReason _reason)
 
             /// async shutdown normally
             socket->sslref().async_shutdown(
-                [socket, shutdown_timer](const boost::system::error_code& error) {
+                [this, socket, shutdown_timer](const boost::system::error_code& error) {
                     shutdown_timer->cancel();
                     if (error)
                     {
-                        SESSION_LOG(WARNING)
+                        SESSION_LOG(m_server.lock()->connectionLogLevel())
                             << "[drop] shutdown failed " << LOG_KV("value", error.value())
                             << LOG_KV("message", error.message());
                     }
@@ -416,7 +417,7 @@ void Session::doRead()
             {
                 if (ec)
                 {
-                    SESSION_LOG(WARNING)
+                    SESSION_LOG(s->m_server.lock()->connectionLogLevel())
                         << LOG_DESC("doRead failed") << LOG_KV("endpoint", s->nodeIPEndpoint())
                         << LOG_KV("message", ec.message());
                     s->drop(TCPError);

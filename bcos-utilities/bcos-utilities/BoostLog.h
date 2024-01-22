@@ -23,6 +23,7 @@
 
 #include <boost/log/attributes/constant.hpp>
 #include <boost/log/attributes/scoped_attribute.hpp>
+#include <boost/log/sources/record_ostream.hpp>
 #include <boost/log/sources/severity_channel_logger.hpp>
 #include <boost/log/trivial.hpp>
 
@@ -83,4 +84,30 @@ void setStatLogLevel(LogLevel const& _level);
         bcos::FileLoggerHandler, (boost::log::trivial::severity_level)(bcos::LogLevel::level))
 // for block number log
 #define BLOCK_NUMBER(NUMBER) "[blk-" << (NUMBER) << "]"
+
+class Logger
+{
+private:
+    boost::log::record m_record;
+    boost::log::record_ostream m_stream;
+    bcos::LogLevel m_level;
+
+public:
+    Logger(const Logger&) = delete;
+    Logger(Logger&&) = delete;
+    Logger& operator=(const Logger&) = delete;
+    Logger& operator=(Logger&&) = delete;
+    Logger(LogLevel level);
+
+    ~Logger() noexcept;
+    Logger& operator<<(auto&& message)
+    {
+        if (m_level >= bcos::c_fileLogLevel)
+        {
+            m_stream << std::forward<decltype(message)>(message);
+        }
+        return *this;
+    }
+};
+
 }  // namespace bcos

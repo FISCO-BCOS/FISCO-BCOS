@@ -67,7 +67,6 @@ void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforc
     }
     loadCertConfig(_pt);
     loadRpcConfig(_pt);
-    loadGatewayConfig(_pt);
     loadSealerConfig(_pt);
     loadTxPoolConfig(_pt);
     loadStorageSecurityConfig(_pt);
@@ -367,33 +366,6 @@ void NodeConfig::loadRpcConfig(boost::property_tree::ptree const& _pt)
     NodeConfig_LOG(INFO) << LOG_DESC("loadRpcConfig") << LOG_KV("listenIP", listenIP)
                          << LOG_KV("listenPort", listenPort) << LOG_KV("listenPort", listenPort)
                          << LOG_KV("smSsl", smSsl) << LOG_KV("disableSsl", disableSsl);
-}
-
-void NodeConfig::loadGatewayConfig(boost::property_tree::ptree const& _pt)
-{
-    /*
-    [p2p]
-    listen_ip=0.0.0.0
-    listen_port=30300
-    sm_ssl=false
-    nodes_path=./
-    nodes_file=nodes.json
-    */
-    std::string listenIP = _pt.get<std::string>("p2p.listen_ip", "0.0.0.0");
-    int listenPort = _pt.get<int>("p2p.listen_port", 30300);
-    std::string nodesDir = _pt.get<std::string>("p2p.nodes_path", "./");
-    std::string nodesFile = _pt.get<std::string>("p2p.nodes_file", "nodes.json");
-    bool smSsl = _pt.get<bool>("p2p.sm_ssl", false);
-
-    m_p2pListenIP = listenIP;
-    m_p2pListenPort = listenPort;
-    m_p2pNodeDir = nodesDir;
-    m_p2pSmSsl = smSsl;
-    m_p2pNodeFileName = nodesFile;
-
-    NodeConfig_LOG(INFO) << LOG_DESC("loadGatewayConfig") << LOG_KV("listenIP", listenIP)
-                         << LOG_KV("listenPort", listenPort) << LOG_KV("listenPort", listenPort)
-                         << LOG_KV("smSsl", smSsl) << LOG_KV("nodesFile", nodesFile);
 }
 
 void NodeConfig::loadCertConfig(boost::property_tree::ptree const& _pt)
