@@ -2596,7 +2596,12 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     {
         // padding zero
         callParameters->origin = std::string(addressSize - input.origin().size(), '0');
-        callParameters->senderAddress = std::string(addressSize - input.from().size(), '0');
+        // NOTE: if wasm and use dmc static call external call, should not padding zero, because it
+        // is contract address
+        if (!(m_isWasm && input.origin() != input.from())) [[unlikely]]
+        {
+            callParameters->senderAddress = std::string(addressSize - input.from().size(), '0');
+        }
     }
     callParameters->origin += input.origin();
     callParameters->senderAddress += input.from();

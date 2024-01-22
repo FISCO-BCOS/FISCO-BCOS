@@ -144,7 +144,7 @@ install(
 )
 # copy pre-commit to git hook
 
-if(NOT EXISTS ${CMAKE_SOURCE_DIR}/.git/hooks/pre-commit)
+if(NOT EXISTS ${CMAKE_SOURCE_DIR}/.git/hooks/pre-commit AND EXISTS ${CMAKE_SOURCE_DIR}/.git/hooks)
     file(COPY ${CMAKE_SOURCE_DIR}/tools/.ci/pre-commit DESTINATION ${CMAKE_SOURCE_DIR}/.git/hooks
             FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
 endif()
