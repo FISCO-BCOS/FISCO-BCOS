@@ -123,7 +123,7 @@ enum class BlockVersion : uint32_t
     V3_0_VERSION = 0x03000000,
     RC4_VERSION = 4,
     MIN_VERSION = RC4_VERSION,
-    MAX_VERSION = V3_2_6_VERSION,
+    MAX_VERSION = V3_2_7_VERSION,
 };
 const std::string RC4_VERSION_STR = "3.0.0-rc4";
 const std::string V3_0_VERSION_STR = "3.0.0";
