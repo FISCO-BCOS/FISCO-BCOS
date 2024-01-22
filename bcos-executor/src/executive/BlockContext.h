@@ -52,18 +52,21 @@ public:
     BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
         LedgerCache::Ptr ledgerCache, crypto::Hash::Ptr _hashImpl,
         bcos::protocol::BlockNumber blockNumber, h256 blockHash, uint64_t timestamp,
-        uint32_t blockVersion, const VMSchedule& _schedule, bool _isWasm, bool _isAuthCheck);
+        uint32_t blockVersion, const VMSchedule& _schedule, bool _isWasm, bool _isAuthCheck,
+        storage::StorageInterface::Ptr backendStorage);
 
     BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
         LedgerCache::Ptr ledgerCache, crypto::Hash::Ptr _hashImpl,
         protocol::BlockHeader::ConstPtr _current, const VMSchedule& _schedule, bool _isWasm,
-        bool _isAuthCheck, std::shared_ptr<std::set<std::string, std::less<>>> = nullptr);
+        bool _isAuthCheck, storage::StorageInterface::Ptr backendStorage,
+        std::shared_ptr<std::set<std::string, std::less<>>> = nullptr);
 
     using getTxCriticalsHandler = std::function<std::shared_ptr<std::vector<std::string>>(
-        const protocol::Transaction::ConstPtr& _tx)>;
+        const protocol::Transaction::ConstPtr&)>;
     virtual ~BlockContext() = default;
 
     std::shared_ptr<storage::StateStorageInterface> storage() { return m_storage; }
+    storage::StorageInterface& backendStorage() & { return *m_backendStorage; }
 
     uint64_t txGasLimit() const { return m_ledgerCache->fetchTxGasLimit(); }
 
@@ -128,7 +131,6 @@ public:
     }
 
     auto keyPageIgnoreTables() const { return m_keyPageIgnoreTables; }
-
     const ledger::Features& features() const;
 
 private:
@@ -144,6 +146,7 @@ private:
     bool m_isWasm = false;
     bool m_isAuthCheck = false;
     std::shared_ptr<storage::StateStorageInterface> m_storage;
+    storage::StorageInterface::Ptr m_backendStorage;
     crypto::Hash::Ptr m_hashImpl;
     std::function<void()> f_onNeedSwitchEvent;
     std::shared_ptr<std::set<std::string, std::less<>>> m_keyPageIgnoreTables;

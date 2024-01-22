@@ -32,8 +32,8 @@ public:
     std::shared_ptr<TransactionExecutive> build(const std::string&, int64_t, int64_t, bool) override
     {
         auto ledgerCache = std::make_shared<LedgerCache>(std::make_shared<MockLedger>());
-        std::shared_ptr<BlockContext> blockContext = std::make_shared<BlockContext>(
-            nullptr, ledgerCache, nullptr, 0, h256(), 0, 0, FiscoBcosSchedule, false, false);
+        std::shared_ptr<BlockContext> blockContext = std::make_shared<BlockContext>(nullptr,
+            ledgerCache, nullptr, 0, h256(), 0, 0, FiscoBcosSchedule, false, false, nullptr);
         auto executive =
             std::make_shared<MockTransactionExecutive>(blockContext, "0x00", 0, 0, instruction);
         return executive;

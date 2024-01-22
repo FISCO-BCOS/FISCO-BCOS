@@ -41,12 +41,13 @@ struct SystemConfigPrecompiledFixture : public bcos::test::PrecompiledFixture
     std::shared_ptr<LedgerCache> ledgerCache =
         std::make_shared<LedgerCache>(std::make_shared<bcos::test::MockLedger>());
     std::shared_ptr<wasm::GasInjector> gasInjector;
-    std::shared_ptr<StateStorage> stateStorage = std::make_shared<StateStorage>(nullptr);
+    std::shared_ptr<StateStorage> backendStorage = std::make_shared<StateStorage>(nullptr);
+    std::shared_ptr<StateStorage> stateStorage = std::make_shared<StateStorage>(backendStorage);
 
     std::shared_ptr<BlockContext> blockContext310 =
         std::make_shared<BlockContext>(stateStorage, ledgerCache, hashImpl, 0, h256(), utcTime(),
             static_cast<uint32_t>(protocol::BlockVersion::V3_1_VERSION), FiscoBcosSchedule, false,
-            false);
+            false, backendStorage);
     std::shared_ptr<MockTransactionExecutive> executive310 =
         std::make_shared<MockTransactionExecutive>(
             std::weak_ptr<BlockContext>(blockContext310), "", 100, 0, gasInjector);
@@ -54,7 +55,7 @@ struct SystemConfigPrecompiledFixture : public bcos::test::PrecompiledFixture
     std::shared_ptr<BlockContext> blockContext323 =
         std::make_shared<BlockContext>(stateStorage, ledgerCache, hashImpl, 0, h256(), utcTime(),
             static_cast<uint32_t>(protocol::BlockVersion::V3_2_3_VERSION), FiscoBcosSchedule, false,
-            false);
+            false, backendStorage);
     std::shared_ptr<MockTransactionExecutive> executive323 =
         std::make_shared<MockTransactionExecutive>(
             std::weak_ptr<BlockContext>(blockContext323), "", 100, 0, gasInjector);
@@ -130,6 +131,20 @@ BOOST_AUTO_TEST_CASE(upgradeVersion)
     result = systemConfigPrecompiled.call(executive310, getParameters);
     codec.decode(bcos::ref(result->execResult()), value);
     BOOST_CHECK_EQUAL(value, "1");
+
+    std::promise<void> promise;
+    // check entry in backend storage
+    backendStorage->asyncGetRow(ledger::SYS_CONFIG, "bugfix_revert",
+        [&](Error::UniquePtr error, std::optional<Entry> entry) {
+            BOOST_CHECK(!error);
+            BOOST_CHECK(entry);
+
+            auto config = entry->getObject<SystemConfigEntry>();
+            auto&& [value, blockNumber] = config;
+            BOOST_CHECK_EQUAL(value, "1");
+            promise.set_value();
+        });
+    promise.get_future().wait();
 }
 
 BOOST_AUTO_TEST_SUITE_END()

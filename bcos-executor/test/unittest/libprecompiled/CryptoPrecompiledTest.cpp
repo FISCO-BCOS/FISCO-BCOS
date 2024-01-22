@@ -293,7 +293,7 @@ public:
         m_blockContext =
             std::make_shared<BlockContext>(nullptr, m_ledgerCache, m_cryptoSuite->hashImpl(), 0,
                 h256(), utcTime(), (uint32_t)(bcos::protocol::BlockVersion::V3_0_VERSION),
-                FiscoBcosSchedule, false, false);
+                FiscoBcosSchedule, false, false, nullptr);
         std::shared_ptr<wasm::GasInjector> gasInjector = nullptr;
         m_executive = std::make_shared<TransactionExecutive>(
             std::weak_ptr<BlockContext>(m_blockContext), "", 100, 0, gasInjector);

@@ -319,7 +319,20 @@ void SystemConfigPrecompiled::upgradeChain(
             {
                 Entry entry;
                 entry.setObject(SystemConfigEntry{boost::lexical_cast<std::string>((int)value), 0});
-                _executive->storage().setRow(SYS_CONFIG, name, std::move(entry));
+                std::promise<void> promise;
+                auto future = promise.get_future();
+                _executive->blockContext().lock()->backendStorage().asyncSetRow(
+                    SYS_CONFIG, name, std::move(entry), [&](Error::UniquePtr error) {
+                        if (error)
+                        {
+                            promise.set_exception(std::make_exception_ptr(*error));
+                        }
+                        else
+                        {
+                            promise.set_value();
+                        }
+                    });
+                future.get();
             }
         }
     }

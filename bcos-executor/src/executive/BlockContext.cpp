@@ -46,7 +46,8 @@ using namespace std;
 BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
     LedgerCache::Ptr ledgerCache, crypto::Hash::Ptr _hashImpl,
     bcos::protocol::BlockNumber blockNumber, h256 blockHash, uint64_t timestamp,
-    uint32_t blockVersion, const VMSchedule& _schedule, bool _isWasm, bool _isAuthCheck)
+    uint32_t blockVersion, const VMSchedule& _schedule, bool _isWasm, bool _isAuthCheck,
+    storage::StorageInterface::Ptr backendStorage)
   : m_blockNumber(blockNumber),
     m_blockHash(blockHash),
     m_timeStamp(timestamp),
@@ -55,6 +56,7 @@ BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> stora
     m_isWasm(_isWasm),
     m_isAuthCheck(_isAuthCheck),
     m_storage(std::move(storage)),
+    m_backendStorage(std::move(backendStorage)),
     m_hashImpl(_hashImpl),
     m_ledgerCache(ledgerCache)
 {
@@ -71,9 +73,11 @@ BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> stora
 BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
     LedgerCache::Ptr ledgerCache, crypto::Hash::Ptr _hashImpl,
     protocol::BlockHeader::ConstPtr _current, const VMSchedule& _schedule, bool _isWasm,
-    bool _isAuthCheck, std::shared_ptr<std::set<std::string, std::less<>>> _keyPageIgnoreTables)
+    bool _isAuthCheck, storage::StorageInterface::Ptr backendStorage,
+    std::shared_ptr<std::set<std::string, std::less<>>> _keyPageIgnoreTables)
   : BlockContext(std::move(storage), ledgerCache, _hashImpl, _current->number(), _current->hash(),
-        _current->timestamp(), _current->version(), _schedule, _isWasm, _isAuthCheck)
+        _current->timestamp(), _current->version(), _schedule, _isWasm, _isAuthCheck,
+        std::move(backendStorage))
 {
     m_keyPageIgnoreTables = std::move(_keyPageIgnoreTables);
 }

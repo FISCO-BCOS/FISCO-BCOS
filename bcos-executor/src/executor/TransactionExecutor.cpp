@@ -351,7 +351,7 @@ BlockContext::Ptr TransactionExecutor::createBlockContext(
 {
     BlockContext::Ptr context = make_shared<BlockContext>(storage, m_ledgerCache, m_hashImpl,
         currentHeader, getVMSchedule((uint32_t)currentHeader->version()), m_isWasm, m_isAuthCheck,
-        m_keyPageIgnoreTables);
+        m_backendStorage, m_keyPageIgnoreTables);
     context->setVMFactory(m_vmFactory);
     if (f_onNeedSwitchEvent)
     {
@@ -367,7 +367,7 @@ std::shared_ptr<BlockContext> TransactionExecutor::createBlockContextForCall(
 {
     BlockContext::Ptr context = make_shared<BlockContext>(storage, m_ledgerCache, m_hashImpl,
         blockNumber, blockHash, timestamp, blockVersion, getVMSchedule((uint32_t)blockVersion),
-        m_isWasm, m_isAuthCheck);
+        m_isWasm, m_isAuthCheck, m_backendStorage);
     context->setVMFactory(m_vmFactory);
     return context;
 }
