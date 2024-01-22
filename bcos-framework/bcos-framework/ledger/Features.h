@@ -7,6 +7,7 @@
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Task.h"
+#include "bcos-tool/Exceptions.h"
 #include <bcos-utilities/Ranges.h>
 #include <boost/throw_exception.hpp>
 #include <array>
@@ -17,9 +18,6 @@ namespace bcos::ledger
 {
 
 struct NoSuchFeatureError : public bcos::error::Exception
-{
-};
-struct PreconditionMismatchError : public bcos::Exception
 {
 };
 
@@ -75,12 +73,12 @@ public:
     {
         if (flag == Flag::feature_balance_precompiled && !get(Flag::feature_balance))
         {
-            BOOST_THROW_EXCEPTION(
-                PreconditionMismatchError{} << errinfo_comment("must set feature_balance first"));
+            BOOST_THROW_EXCEPTION(bcos::tool::InvalidSetFeature{}
+                                  << errinfo_comment("must set feature_balance first"));
         }
         if (flag == Flag::feature_balance_policy1 && !get(Flag::feature_balance_precompiled))
         {
-            BOOST_THROW_EXCEPTION(PreconditionMismatchError{}
+            BOOST_THROW_EXCEPTION(bcos::tool::InvalidSetFeature{}
                                   << errinfo_comment("must set feature_balance_precompiled first"));
         }
     }

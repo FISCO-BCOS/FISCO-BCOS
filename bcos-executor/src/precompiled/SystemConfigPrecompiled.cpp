@@ -251,11 +251,11 @@ int64_t SystemConfigPrecompiled::validate(
                               << LOG_KV("info", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(PrecompiledError(errorMsg));
     }
-    catch (bcos::Exception const& e)
+    catch (bcos::tool::InvalidSetFeature const& e)
     {
         PRECOMPILED_LOG(INFO) << LOG_DESC("SystemConfigPrecompiled: set feature failed")
                               << LOG_KV("info", boost::diagnostic_information(e));
-        BOOST_THROW_EXCEPTION(PrecompiledError(boost::diagnostic_information(e)));
+        BOOST_THROW_EXCEPTION(PrecompiledError(*boost::get_error_info<bcos::errinfo_comment>(e)));
     }
     catch (std::exception const& e)
     {
