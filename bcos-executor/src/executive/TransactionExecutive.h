@@ -149,6 +149,13 @@ public:
     void creatAuthTable(std::string_view _tableName, std::string_view _origin,
         std::string_view _sender, uint32_t _version);
 
+    crypto::HashType getCodeHash(const std::string_view& contractTableName);
+    std::optional<storage::Entry> getCodeEntryFromContractTable(
+        const std::string_view contractTableName);
+    std::optional<storage::Entry> getCodeByHash(const std::string_view& codeHash);
+    std::optional<storage::Entry> getCodeByContractTableName(
+        const std::string_view& contractTableName, bool needTryFromContractTable = true);
+
 protected:
     bool transferBalance(std::string_view origin, std::string_view sender,
         std::string_view receiver, const u256& value, int64_t gas);

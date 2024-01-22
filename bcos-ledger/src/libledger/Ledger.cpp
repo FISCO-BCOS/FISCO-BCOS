@@ -1463,31 +1463,51 @@ void Ledger::asyncGetSystemTableEntry(const std::string_view& table, const std::
 }
 
 template <typename MerkleType, typename HashRangeType>
-static std::vector<h256> getMerkleTreeFromCache(int64_t blockNumber, Ledger::CacheType& cache,
-    RecursiveMutex& mutex, const std::string& cacheName, const MerkleType& merkle,
-    const HashRangeType& hashesRange)
+static std::shared_ptr<std::vector<h256>> getMerkleTreeFromCache(int64_t blockNumber,
+    Ledger::CacheType& cache, RecursiveMutex& mutex, const std::string& cacheName,
+    const MerkleType& merkle, const HashRangeType& hashesRange)
 {
-    std::shared_ptr<std::vector<h256>> merkleTree;
+    std::shared_ptr<std::vector<h256>> merkleTree = std::make_shared<std::vector<h256>>();
     {
         RecursiveGuard l(mutex);
-        if (!cache.contains(blockNumber))
+        auto merkleTreePtr = cache.get(blockNumber);
+        if (!merkleTreePtr.has_value())
         {
-            merkleTree = std::make_shared<std::vector<h256>>();
-            merkle.template generateMerkle(hashesRange, *merkleTree);
             cache.insert(blockNumber, merkleTree);
-            LEDGER_LOG(DEBUG)
-                << LOG_BADGE(cacheName)
-                << LOG_DESC("Failed to hit the cache and build a new Merkel tree from scratch")
-                << LOG_KV("blockNumber", blockNumber);
         }
         else
         {
-            merkleTree = *(cache.get(blockNumber));
-            LEDGER_LOG(DEBUG) << LOG_BADGE(cacheName) << LOG_DESC("Hit cache")
+            merkleTree = merkleTreePtr.get();
+            LEDGER_LOG(DEBUG) << LOG_BADGE(cacheName) << LOG_DESC("Hit ptr cache")
                               << LOG_KV("blockNumber", blockNumber);
         }
     }
-    return *merkleTree;
+
+    if (merkleTree->empty())
+    {
+        auto newMerkleTree = std::make_shared<std::vector<h256>>();
+        // Notice: generateMerkle will use tbb thread. Should not place in RecursiveGuard below to
+        // avoid locking each other in tbb thread pool and RecursiveGuard
+        merkle.template generateMerkle(hashesRange, *newMerkleTree);
+        {
+            RecursiveGuard l(mutex);
+            if (!merkleTree->empty())
+            {
+                LEDGER_LOG(DEBUG) << LOG_BADGE(cacheName) << LOG_DESC("Hit cache")
+                                  << LOG_KV("blockNumber", blockNumber);
+            }
+            else
+            {
+                *merkleTree = std::move(*newMerkleTree);
+                LEDGER_LOG(DEBUG)
+                    << LOG_BADGE(cacheName)
+                    << LOG_DESC("Failed to hit the cache and build a new Merkel tree from scratch")
+                    << LOG_KV("blockNumber", blockNumber);
+            }
+        }
+    }
+
+    return merkleTree;
 }
 
 void Ledger::getTxProof(
@@ -1543,7 +1563,7 @@ void Ledger::getTxProof(
                                 getMerkleTreeFromCache(blockNumber, m_txProofMerkleCache,
                                     m_txMerkleMtx, "getTxProof", merkle, hashesRange);
                             merkle.template generateMerkleProof(
-                                hashesRange, merkleTree, _txHash, *merkleProofPtr);
+                                hashesRange, *merkleTree, _txHash, *merkleProofPtr);
 
                             LEDGER_LOG(TRACE)
                                 << LOG_BADGE("getTxProof") << LOG_DESC("get merkle proof success")
@@ -1591,7 +1611,7 @@ void Ledger::getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
                         m_receiptMerkleMtx, "getReceiptProof", merkle, hashesRange);
 
                     merkle.template generateMerkleProof(
-                        hashesRange, merkleTree, receiptHash, *merkleProofPtr);
+                        hashesRange, *merkleTree, receiptHash, *merkleProofPtr);
 
                     LEDGER_LOG(TRACE)
                         << LOG_BADGE("getReceiptProof") << LOG_DESC("get merkle proof success")

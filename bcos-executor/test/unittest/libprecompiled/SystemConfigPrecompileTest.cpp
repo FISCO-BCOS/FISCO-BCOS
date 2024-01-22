@@ -128,10 +128,7 @@ BOOST_AUTO_TEST_CASE(getAndSetFeature)
     setInput = codec.encodeWithSig(
         "setValueByKey(string,string)", std::string("feature_balance_policy1"), std::string("1"));
     setParameters->m_input = bcos::ref(setInput);
-    auto featureBalancePolResult = systemConfigPrecompiled.call(newExecutive, setParameters);
-
-    codec.decode(bcos::ref(featureBalancePolResult->execResult()), code);
-    BOOST_CHECK_EQUAL(code, 0);
+    BOOST_CHECK_THROW(systemConfigPrecompiled.call(newExecutive, setParameters), PrecompiledError);
 }
 
 BOOST_AUTO_TEST_CASE(upgradeVersion)

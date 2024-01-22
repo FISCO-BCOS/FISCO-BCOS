@@ -449,10 +449,10 @@ private:
     }
 
     template <class Type>
-    requires std::same_as<Type, concepts::ledger::TRANSACTIONS> ||
-        std::same_as<Type, concepts::ledger::RECEIPTS>
-            task::Task<void> getBlockData(
-                std::string_view blockNumberKey, bcos::concepts::block::Block auto& block)
+        requires std::same_as<Type, concepts::ledger::TRANSACTIONS> ||
+                 std::same_as<Type, concepts::ledger::RECEIPTS>
+    task::Task<void> getBlockData(
+        std::string_view blockNumberKey, bcos::concepts::block::Block auto& block)
     {
         LEDGER_LOG(DEBUG) << "getBlockData transactions or receipts: " << blockNumberKey;
 
@@ -462,10 +462,11 @@ private:
             co_return;
         }
 
-        auto hashesRange = block.transactionsMetaData | RANGES::views::transform([
-        ](typename decltype(block.transactionsMetaData)::value_type const& metaData) -> auto& {
-            return metaData.hash;
-        });
+        auto hashesRange =
+            block.transactionsMetaData |
+            RANGES::views::transform(
+                [](typename decltype(block.transactionsMetaData)::value_type const& metaData)
+                    -> auto& { return metaData.hash; });
         auto outputSize = RANGES::size(block.transactionsMetaData);
 
         if constexpr (std::is_same_v<Type, concepts::ledger::TRANSACTIONS>)
