@@ -7,42 +7,20 @@
 namespace bcos::concepts::hash
 {
 
-namespace detail
-{
-template <class ObjectType, class Hasher>
-concept HasADL = requires(ObjectType object, std::string out1, std::vector<char> out2,
+// ADL-based customization points
+template <class ObjectType>
+concept Hashable = requires(ObjectType object, std::string out1, std::vector<char> out2,
     std::vector<unsigned char> out3, std::vector<std::byte> out4)
 {
-    bcos::crypto::hasher::Hasher<Hasher>;
-    impl_calculate<Hasher>(object, out1);
-    impl_calculate<Hasher>(object, out2);
-    impl_calculate<Hasher>(object, out3);
-    impl_calculate<Hasher>(object, out4);
+    impl_calculate(object, out1);
+    impl_calculate(object, out2);
+    impl_calculate(object, out3);
+    impl_calculate(object, out4);
 };
 
 template <bcos::crypto::hasher::Hasher Hasher>
-struct calculate
+auto calculate(auto const& obj, ByteBuffer auto& out)
 {
-    void operator()(auto const& object, ByteBuffer auto& out) const
-    {
-        using ObjectType = std::remove_cvref_t<decltype(object)>;
-
-        if constexpr (HasADL<ObjectType, Hasher>)
-        {
-            return impl_calculate<Hasher>(object, out);
-        }
-        else
-        {
-            static_assert(!sizeof(object), "Not found adl!");
-        }
-    }
-};
-}  // namespace detail
-
-template <bcos::crypto::hasher::Hasher Hasher>
-constexpr inline detail::calculate<Hasher> calculate{};
-
-template <class Object>
-concept Hashable = true;
-
+    return impl_calculate<Hasher>(obj, out);
+}
 }  // namespace bcos::concepts::hash

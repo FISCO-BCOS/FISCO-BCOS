@@ -43,13 +43,6 @@ public:
     }
 
     template <DataFlag... Flags>
-    auto getBlockByNodeList(bcos::concepts::block::BlockNumber auto blockNumber,
-        bcos::concepts::block::Block auto& block, bcos::crypto::NodeIDs const& nodeList)
-    {
-        return impl().template impl_getBlockByNodeList<Flags...>(blockNumber, block, nodeList);
-    }
-
-    template <DataFlag... Flags>
     auto setBlock(bcos::concepts::block::Block auto block)
     {
         return impl().template impl_setBlock<Flags...>(std::move(block));
@@ -67,7 +60,10 @@ public:
         return impl().impl_getBlockHashByNumber(number, hash);
     }
 
-    auto getABI(std::string contractAddress) { return impl().impl_getABI(contractAddress); }
+    auto getABI(std::string contractAddress)
+    {
+        return impl().impl_getABI(contractAddress);
+    }
 
 
     auto getTransactions(RANGES::range auto const& hashes, RANGES::range auto& out) requires
@@ -77,8 +73,6 @@ public:
     }
 
     auto getStatus() { return impl().impl_getStatus(); }
-
-    auto getAllPeersStatus() { return impl().impl_getAllPeersStatus(); }
 
     template <bcos::crypto::hasher::Hasher Hasher>
     auto setTransactions(RANGES::range auto const& inputs) requires bcos::concepts::ledger::

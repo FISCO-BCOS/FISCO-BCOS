@@ -20,6 +20,8 @@
  */
 #pragma once
 #include "bcos-utilities/BoostLog.h"
+#include <fmt/compile.h>
+#include <fmt/format.h>
 #include <boost/algorithm/string.hpp>
 #include <limits>
 #include <memory>
@@ -113,13 +115,18 @@ enum ProtocolVersion : uint32_t
 enum class BlockVersion : uint32_t
 {
     V3_3_VERSION = 0x03030000,
+    V3_2_6_VERSION = 0x03020600,
+    V3_2_5_VERSION = 0x03020500,
+    V3_2_4_VERSION = 0x03020400,
+    V3_2_3_VERSION = 0x03020300,
     V3_2_VERSION = 0x03020000,
     V3_1_VERSION = 0x03010000,
     V3_0_VERSION = 0x03000000,
     RC4_VERSION = 4,
     MIN_VERSION = RC4_VERSION,
-    MAX_VERSION = V3_3_VERSION,
+    MAX_VERSION = V3_2_6_VERSION,
 };
+
 const std::string RC4_VERSION_STR = "3.0.0-rc4";
 const std::string V3_0_VERSION_STR = "3.0.0";
 const std::string V3_1_VERSION_STR = "3.1.0";
@@ -174,30 +181,21 @@ constexpr bool operator>=(std::variant<uint32_t, BlockVersion> const& _v1, Block
     return flag;
 }
 
-inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::BlockVersion const& _version)
+inline std::ostream& operator<<(std::ostream& out, bcos::protocol::BlockVersion version)
 {
-    switch (_version)
+    if (version == bcos::protocol::BlockVersion::RC4_VERSION)
     {
-    case bcos::protocol::BlockVersion::RC4_VERSION:
-        _out << RC4_VERSION_STR;
-        break;
-    case bcos::protocol::BlockVersion::V3_0_VERSION:
-        _out << V3_0_VERSION_STR;
-        break;
-    case bcos::protocol::BlockVersion::V3_1_VERSION:
-        _out << V3_1_VERSION_STR;
-        break;
-    case bcos::protocol::BlockVersion::V3_2_VERSION:
-        _out << V3_2_VERSION_STR;
-        break;
-    case bcos::protocol::BlockVersion::V3_3_VERSION:
-        _out << V3_3_VERSION_STR;
-        break;
-    default:
-        _out << "Unknown";
-        break;
+        out << RC4_VERSION_STR;
+        return out;
     }
-    return _out;
+
+    auto versionNumber = static_cast<uint32_t>(version);
+    auto num1 = (versionNumber >> 24) & (0xff);
+    auto num2 = (versionNumber >> 16) & (0xff);
+    auto num3 = (versionNumber >> 8) & (0xff);
+
+    out << fmt::format(FMT_COMPILE("{}.{}.{}"), num1, num2, num3);
+    return out;
 }
 inline std::ostream& operator<<(std::ostream& _out, NodeType const& _nodeType)
 {

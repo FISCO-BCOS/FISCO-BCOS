@@ -27,17 +27,21 @@
 #include "../protocol/ProtocolTypeDef.h"
 #include "Common.h"
 #include "Entry.h"
+#include "bcos-task/Task.h"
 #include <bcos-utilities/Error.h>
 #include <boost/range.hpp>
 #include <boost/range/iterator.hpp>
+#include <exception>
 #include <map>
 #include <memory>
 #include <optional>
 #include <range/v3/view/any_view.hpp>
 #include <string>
+#include <variant>
 
 namespace bcos::storage
 {
+
 class Table;
 class StorageInterface
 {
@@ -91,6 +95,8 @@ public:
         return nullptr;
     };
 
+    virtual void stop(){};
+
     virtual std::pair<bcos::Error::UniquePtr, std::optional<Entry>> getRow(
         const std::string_view& table, const std::string_view& _key)
     {
@@ -101,7 +107,43 @@ public:
         });
         return result;
     };
-    virtual void stop(){};
+
+    auto coGetRow(std::string_view table, std::string_view key)
+    {
+        struct Awaitable
+        {
+            StorageInterface* m_self;
+            std::string_view m_table;
+            std::string_view m_key;
+            std::variant<std::monostate, std::optional<Entry>, std::exception_ptr> m_result;
+
+            constexpr static bool await_ready() noexcept { return false; }
+            void await_suspend(CO_STD::coroutine_handle<> handle)
+            {
+                m_self->asyncGetRow(m_table, m_key,
+                    [this, handle](Error::UniquePtr error, std::optional<Entry> entry) mutable {
+                        if (error)
+                        {
+                            m_result.emplace<std::exception_ptr>(std::make_exception_ptr(*error));
+                        }
+                        else
+                        {
+                            m_result.emplace<std::optional<Entry>>(std::move(entry));
+                        }
+                        handle.resume();
+                    });
+            }
+            std::optional<Entry> await_resume()
+            {
+                if (std::holds_alternative<std::exception_ptr>(m_result))
+                {
+                    std::rethrow_exception(std::get<std::exception_ptr>(m_result));
+                }
+                return std::move(std::get<std::optional<Entry>>(m_result));
+            }
+        };
+        return Awaitable{.m_self = this, .m_table = table, .m_key = key, .m_result = {}};
+    };
 };
 
 class TraverseStorageInterface : public virtual StorageInterface

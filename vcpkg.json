@@ -12,6 +12,7 @@
       "name": "vcpkg-cmake-config",
       "host": true
     },
+    "magic-enum",
     "boost-log",
     "boost-beast",
     "boost-uuid",
@@ -29,6 +30,7 @@
     "ms-gsl",
     "zstd",
     "tbb",
+    "fmt",
     "zlib",
     {
       "name": "redis-plus-plus",

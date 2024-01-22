@@ -22,6 +22,7 @@
  */
 
 #include "Ledger.h"
+#include "bcos-framework/ledger/Features.h"
 #include "bcos-tool/VersionConverter.h"
 #include "utilities/Common.h"
 #include <bcos-codec/scale/Scale.h>
@@ -1793,6 +1794,19 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit
     if (!sysTable)
     {
         BOOST_THROW_EXCEPTION(BCOS_ERROR(LedgerError::OpenTableFailed, "Open SYS_CONFIG failed!"));
+    }
+
+    // Write default features
+    Features features;
+    features.setToDefault(protocol::BlockVersion(versionNumber));
+    for (auto [flag, name, value] : features.flags())
+    {
+        if (value)
+        {
+            Entry entry;
+            entry.setObject(SystemConfigEntry{boost::lexical_cast<std::string>((int)value), 0});
+            sysTable->setRow(name, std::move(entry));
+        }
     }
 
     // tx count limit
