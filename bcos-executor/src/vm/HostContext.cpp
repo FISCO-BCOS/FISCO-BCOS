@@ -322,6 +322,12 @@ evmc_result HostContext::callBuiltInPrecompiled(
         }
     }
 
+    if (features().get(ledger::Features::Flag::bugfix_event_log_order))
+    {
+        // put event log by stack(dfs) order
+        m_callParameters->logEntries = std::move(_request->logEntries);
+    }
+
     if (resultCode != (int32_t)TransactionStatus::None)
     {
         callResults->type = CallParameters::REVERT;
