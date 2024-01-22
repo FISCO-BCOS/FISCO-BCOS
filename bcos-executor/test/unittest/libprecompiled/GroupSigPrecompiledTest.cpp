@@ -26,6 +26,15 @@
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <json/json.h>
 
+#ifndef WITH_WASM
+namespace bcos::wasm
+{
+class GasInjector
+{
+};
+}  // namespace bcos::wasm
+#endif
+
 using namespace bcos;
 using namespace bcos::precompiled;
 using namespace bcos::executor;

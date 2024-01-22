@@ -32,6 +32,15 @@
 #include <json/json.h>
 #include <wedpr-crypto/WedprCrypto.h>
 
+#ifndef WITH_WASM
+namespace bcos::wasm
+{
+class GasInjector
+{
+};
+}  // namespace bcos::wasm
+#endif
+
 using namespace bcos;
 using namespace bcos::crypto;
 using namespace bcos::precompiled;

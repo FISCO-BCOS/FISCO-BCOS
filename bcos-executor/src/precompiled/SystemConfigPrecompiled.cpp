@@ -101,13 +101,13 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
 {
     // parse function name
     uint32_t func = getParamFunc(_callParameters->input());
-    auto blockContext = _executive->blockContext().lock();
+    auto const& blockContext = _executive->blockContext();
 
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     if (func == name2Selector[SYSCONFIG_METHOD_SET_STR])
     {
         // setValueByKey(string,string)
-        if (blockContext->isAuthCheck() && !checkSenderFromAuth(_callParameters->m_sender))
+        if (blockContext.isAuthCheck() && !checkSenderFromAuth(_callParameters->m_sender))
         {
             PRECOMPILED_LOG(DEBUG)
                 << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("sender is not from sys")
@@ -121,21 +121,21 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
             codec.decode(_callParameters->params(), configKey, configValue);
             // Uniform lowercase configKey
             boost::to_lower(configKey);
-            PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext->number())
+            PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number())
                                   << LOG_BADGE("SystemConfigPrecompiled")
                                   << LOG_DESC("setValueByKey") << LOG_KV("configKey", configKey)
                                   << LOG_KV("configValue", configValue);
 
-            int64_t value = validate(configKey, configValue, blockContext->blockVersion());
+            int64_t value = validate(configKey, configValue, blockContext.blockVersion());
             auto table = _executive->storage().openTable(ledger::SYS_CONFIG);
 
             auto entry = table->newEntry();
-            auto systemConfigEntry = SystemConfigEntry{configValue, blockContext->number() + 1};
+            auto systemConfigEntry = SystemConfigEntry{configValue, blockContext.number() + 1};
             entry.setObject(systemConfigEntry);
 
             table->setRow(configKey, std::move(entry));
 
-            if (shouldUpgradeChain(configKey, blockContext->blockVersion(), value))
+            if (shouldUpgradeChain(configKey, blockContext.blockVersion(), value))
             {
                 upgradeChain(_executive, _callParameters, codec, value);
             }
@@ -143,7 +143,7 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
             PRECOMPILED_LOG(INFO) << LOG_BADGE("SystemConfigPrecompiled")
                                   << LOG_DESC("set system config") << LOG_KV("configKey", configKey)
                                   << LOG_KV("configValue", configValue)
-                                  << LOG_KV("enableNum", blockContext->number() + 1);
+                                  << LOG_KV("enableNum", blockContext.number() + 1);
             _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
         }
     }
@@ -269,18 +269,18 @@ void SystemConfigPrecompiled::upgradeChain(
     const PrecompiledExecResult::Ptr& _callParameters, CodecWrapper const& codec,
     uint32_t toVersion)
 {
-    auto blockContext = _executive->blockContext().lock();
+    const auto& blockContext = _executive->blockContext();
 
-    if (blockContext->blockVersion() <= static_cast<uint32_t>(BlockVersion::V3_0_VERSION) &&
+    if (blockContext.blockVersion() <= static_cast<uint32_t>(BlockVersion::V3_0_VERSION) &&
         toVersion >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION))
     {
         // rebuild Bfs
         auto input = codec.encodeWithSig(
-            "rebuildBfs(uint256,uint256)", blockContext->blockVersion(), toVersion);
+            "rebuildBfs(uint256,uint256)", blockContext.blockVersion(), toVersion);
         std::string sender =
-            blockContext->isWasm() ? precompiled::SYS_CONFIG_NAME : precompiled::SYS_CONFIG_ADDRESS;
+            blockContext.isWasm() ? precompiled::SYS_CONFIG_NAME : precompiled::SYS_CONFIG_ADDRESS;
         std::string toAddress =
-            blockContext->isWasm() ? precompiled::BFS_NAME : precompiled::BFS_ADDRESS;
+            blockContext.isWasm() ? precompiled::BFS_NAME : precompiled::BFS_ADDRESS;
         auto response = externalRequest(_executive, ref(input), _callParameters->m_origin, sender,
             toAddress, false, false, _callParameters->m_gasLeft);
 
