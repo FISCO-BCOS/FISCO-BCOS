@@ -49,10 +49,12 @@ class Host : public std::enable_shared_from_this<Host>
 {
 public:
     Host(std::shared_ptr<ASIOInterface> _asioInterface,
-        std::shared_ptr<SessionFactory> _sessionFactory, MessageFactory::Ptr _messageFactory)
+        std::shared_ptr<SessionFactory> _sessionFactory, MessageFactory::Ptr _messageFactory,
+        bool connectionWarning)
       : m_asioInterface(_asioInterface),
         m_sessionFactory(_sessionFactory),
-        m_messageFactory(_messageFactory){};
+        m_messageFactory(_messageFactory),
+        m_connectionLogLevel(connectionWarning ? WARNING : DEBUG){};
     virtual ~Host() { stop(); };
 
     using Ptr = std::shared_ptr<Host>;
@@ -138,6 +140,8 @@ public:
     }
     virtual PeerBlackWhitelistInterface::Ptr peerWhitelist() { return m_peerWhitelist; }
 
+    auto connectionLogLevel() const { return m_connectionLogLevel; }
+
 private:
     /// obtain the common name from the subject:
     /// the subject format is: /CN=xx/O=xxx/OU=xxx/ commonly
@@ -213,6 +217,8 @@ private:
     // Peer black list
     PeerBlackWhitelistInterface::Ptr m_peerBlacklist{nullptr};
     PeerBlackWhitelistInterface::Ptr m_peerWhitelist{nullptr};
+
+    LogLevel m_connectionLogLevel = LogLevel::WARNING;
 };
 }  // namespace gateway
 

@@ -20,16 +20,15 @@
 #pragma once
 #include "Service.h"
 #include "router/RouterTableInterface.h"
-namespace bcos
-{
-namespace gateway
+namespace bcos::gateway
 {
 class ServiceV2 : public Service
 {
 public:
     using Ptr = std::shared_ptr<ServiceV2>;
-    ServiceV2(std::string const& _nodeID, RouterTableFactory::Ptr _routerTableFactory);
-    ~ServiceV2() override {}
+    ServiceV2(std::string const& _nodeID, RouterTableFactory::Ptr _routerTableFactory,
+        bool connectionWarning);
+    ~ServiceV2() override = default;
 
     void start() override;
     void stop() override;
@@ -108,5 +107,4 @@ protected:
     std::vector<std::function<void(std::string)>> m_unreachableHandlers;
     mutable SharedMutex x_unreachableHandlers;
 };
-}  // namespace gateway
-}  // namespace bcos
+}  // namespace bcos::gateway

@@ -22,8 +22,8 @@
 #include <bcos-utilities/Exceptions.h>
 namespace ba = boost::asio;
 namespace bi = boost::asio::ip;
-#define HOST_LOG(LEVEL) BCOS_LOG(LEVEL) << "[NETWORK][Host]"
-#define SESSION_LOG(LEVEL) BCOS_LOG(LEVEL) << "[SESSION][Session]"
+#define HOST_LOG(LEVEL) bcos::Logger(LEVEL) << "[NETWORK][Host]"
+#define SESSION_LOG(LEVEL) bcos::Logger(LEVEL) << "[SESSION][Session]"
 #define ASIO_LOG(LEVEL) BCOS_LOG(LEVEL) << "[ASIO][ASIO]"
 
 namespace bcos

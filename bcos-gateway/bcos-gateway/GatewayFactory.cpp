@@ -599,7 +599,8 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
             std::make_shared<PeerWhitelist>(_config->peerWhitelist(), _config->enableWhitelist());
 
         // init Host
-        auto host = std::make_shared<Host>(asioInterface, sessionFactory, messageFactory);
+        auto host = std::make_shared<Host>(
+            asioInterface, sessionFactory, messageFactory, _config->connectionWarning());
         host->setHostPort(_config->listenIP(), _config->listenPort());
         host->setThreadPool(std::make_shared<ThreadPool>("P2P", _config->threadPoolSize()));
         host->setSSLContextPubHandler(m_sslContextPubHandler);
@@ -608,16 +609,17 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         host->setPeerWhitelist(peerWhitelist);
         host->setSessionCallbackManager(sessionCallbackManager);
 
+
         // init Service
         Service::Ptr service;
         if (_config->enableRIPProtocol())
         {
-            service =
-                std::make_shared<ServiceV2>(pubHex, std::make_shared<RouterTableFactoryImpl>());
+            service = std::make_shared<ServiceV2>(
+                pubHex, std::make_shared<RouterTableFactoryImpl>(), _config->connectionWarning());
         }
         else
         {
-            service = std::make_shared<Service>(pubHex);
+            service = std::make_shared<Service>(pubHex, _config->connectionWarning());
         }
 
         service->setHost(host);

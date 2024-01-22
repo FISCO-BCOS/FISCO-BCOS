@@ -176,13 +176,6 @@ public:
     bool rpcSmSsl() const { return m_rpcSmSsl; }
     bool rpcDisableSsl() const { return m_rpcDisableSsl; }
 
-    // the gateway configurations
-    const std::string& p2pListenIP() const { return m_p2pListenIP; }
-    uint16_t p2pListenPort() const { return m_p2pListenPort; }
-    bool p2pSmSsl() const { return m_p2pSmSsl; }
-    const std::string& p2pNodeDir() const { return m_p2pNodeDir; }
-    const std::string& p2pNodeFileName() const { return m_p2pNodeFileName; }
-
     // config for cert
     const std::string& certPath() { return m_certPath; }
     void setCertPath(const std::string& _certPath) { m_certPath = _certPath; }
@@ -240,7 +233,6 @@ public:
 protected:
     virtual void loadChainConfig(boost::property_tree::ptree const& _pt, bool _enforceGroupId);
     virtual void loadRpcConfig(boost::property_tree::ptree const& _pt);
-    virtual void loadGatewayConfig(boost::property_tree::ptree const& _pt);
     virtual void loadCertConfig(boost::property_tree::ptree const& _pt);
     virtual void loadTxPoolConfig(boost::property_tree::ptree const& _pt);
     virtual void loadSecurityConfig(boost::property_tree::ptree const& _pt);
@@ -364,13 +356,6 @@ private:
     uint32_t m_rpcThreadPoolSize;
     bool m_rpcSmSsl;
     bool m_rpcDisableSsl = false;
-
-    // config for gateway
-    std::string m_p2pListenIP;
-    uint16_t m_p2pListenPort;
-    bool m_p2pSmSsl;
-    std::string m_p2pNodeDir;
-    std::string m_p2pNodeFileName;
 
     // config for cert
     std::string m_certPath;
