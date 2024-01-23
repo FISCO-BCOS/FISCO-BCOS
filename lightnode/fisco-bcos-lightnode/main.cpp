@@ -210,14 +210,16 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
 
     auto front = std::make_shared<bcos::front::FrontService>();
     // gateway
-    bcos::gateway::GatewayFactory gatewayFactory(nodeConfig->chainId(), "local", nullptr);
-    auto gateway = gatewayFactory.buildGateway(configFile, true, nullptr, "localGateway");
-    auto protocolInfo = g_BCOSConfig.protocolInfo(bcos::protocol::ProtocolModuleID::GatewayService);
-    gateway->gatewayNodeManager()->registerNode(nodeConfig->groupId(),
-        protocolInitializer.keyPair()->publicKey(), bcos::protocol::NodeType::LIGHT_NODE, front,
-        protocolInfo);
+    bcos::gateway::Gateway::Ptr gateway;
     try
     {
+        bcos::gateway::GatewayFactory gatewayFactory(nodeConfig->chainId(), "local", nullptr);
+        gateway = gatewayFactory.buildGateway(configFile, true, nullptr, "localGateway");
+        auto protocolInfo =
+            g_BCOSConfig.protocolInfo(bcos::protocol::ProtocolModuleID::GatewayService);
+        gateway->gatewayNodeManager()->registerNode(nodeConfig->groupId(),
+            protocolInitializer.keyPair()->publicKey(), bcos::protocol::NodeType::LIGHT_NODE, front,
+            protocolInfo);
         gateway->start();
     }
     catch (std::exception const& e)
