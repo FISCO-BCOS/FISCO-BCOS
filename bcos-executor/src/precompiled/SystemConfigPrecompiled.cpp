@@ -133,6 +133,18 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl) : P
                 BOOST_THROW_EXCEPTION(
                     PrecompiledError("unsupported key " + std::string(SYSTEM_KEY_TX_GAS_PRICE)));
             }
+            if ("0x" != _value.substr(0, 2))
+            {
+                BOOST_THROW_EXCEPTION(PrecompiledError(
+                    "Invalid value " + _value + " ,the value for " +
+                    std::string{SYSTEM_KEY_TX_GAS_PRICE} + " must be a hex number like 0xa."));
+            }
+            if (!isHexNumStr(_value.substr(2)))
+            {
+                BOOST_THROW_EXCEPTION(PrecompiledError(
+                    "Invalid value " + _value + " ,the value for " +
+                    std::string{SYSTEM_KEY_TX_GAS_PRICE} + " must be a hex number like 0xa."));
+            }
             return 0;
         }));
 }

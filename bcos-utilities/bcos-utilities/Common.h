@@ -131,6 +131,23 @@ inline bool isNumStr(std::string const& _stringData)
     return true;
 }
 
+inline bool isHexNumStr(std::string const& _stringData)
+{
+    if (_stringData.empty())
+    {
+        return false;
+    }
+    for (const auto& ch : _stringData)
+    {
+        if (ishexnumber(ch))
+        {
+            continue;
+        }
+        return false;
+    }
+    return true;
+}
+
 double calcAvgRate(uint64_t _data, uint32_t _intervalMS);
 uint32_t calcAvgQPS(uint64_t _requestCount, uint32_t _intervalMS);
 
