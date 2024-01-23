@@ -21,6 +21,7 @@
 #include "LedgerConfigFetcher.h"
 #include "Exceptions.h"
 #include "VersionConverter.h"
+#include "bcos-framework/protocol/Protocol.h"
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-utilities/Common.h>
@@ -191,8 +192,8 @@ void LedgerConfigFetcher::fetchCompatibilityVersion()
     if (versionStr.empty())
     {
         m_ledgerConfig->setCompatibilityVersion((uint32_t)(bcos::protocol::DEFAULT_VERSION));
-        TOOL_LOG(INFO) << LOG_DESC("fetchCompatibilityVersion: empty version, use " +
-                                   bcos::protocol::DEFAULT_VERSION_STR + " as default version.");
+        TOOL_LOG(INFO) << "fetchCompatibilityVersion: empty version, use "
+                       << bcos::protocol::DEFAULT_VERSION << " as default version.";
         return;
     }
     auto version = toVersionNumber(versionStr);
