@@ -28,7 +28,7 @@ download_java_sdk()
         git pull
     else
         rm -rf ${java_sdk_file}
-        git clone -b ${java_sdk_branch} --depth 5  https://ghproxy.com/github.com/FISCO-BCOS/java-sdk.git
+        git clone -b ${java_sdk_branch} --depth 5  https://github.com/FISCO-BCOS/java-sdk.git
     fi
 }
 

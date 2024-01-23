@@ -28,7 +28,7 @@ download_console()
         git pull
     else
         rm -rf ${console_file}
-        git clone -b ${console_branch} --depth 5  https://ghproxy.com/github.com/FISCO-BCOS/console.git
+        git clone -b ${console_branch} --depth 5  https://github.com/FISCO-BCOS/console.git
     fi
 }
 
