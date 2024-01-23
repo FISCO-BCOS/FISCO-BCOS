@@ -144,7 +144,7 @@ clear_node()
 }
 
 if [[ -n "${1}" ]]; then
-     console_branch=release-3.3.0
+     console_branch=v3.3.0
 fi
 
 # non-sm test
