@@ -318,6 +318,24 @@ static bcos::task::Task<std::tuple<uint64_t, bcos::protocol::BlockNumber>> getSy
     }
 }
 
+static bcos::task::Task<std::tuple<std::string, bcos::protocol::BlockNumber>>
+getSystemConfigOrDefault(
+    bcos::ledger::LedgerInterface& ledger, std::string_view key, std::string defaultValue)
+{
+    try
+    {
+        auto [value, blockNumber] = co_await bcos::ledger::getSystemConfig(ledger, key);
+        co_return std::tuple<std::string, bcos::protocol::BlockNumber>{value, blockNumber};
+    }
+    catch (std::exception& e)
+    {
+        LEDGER2_LOG(DEBUG) << "Get " << key << " failed, use default value"
+                           << LOG_KV("defaultValue", defaultValue)
+                           << boost::diagnostic_information(e);
+        co_return std::tuple<std::string, bcos::protocol::BlockNumber>{defaultValue, 0};
+    }
+}
+
 bcos::task::Task<bcos::ledger::LedgerConfig::Ptr> bcos::ledger::tag_invoke(
     ledger::tag_t<getLedgerConfig> /*unused*/, LedgerInterface& ledger)
 {
@@ -332,6 +350,8 @@ bcos::task::Task<bcos::ledger::LedgerConfig::Ptr> bcos::ledger::tag_invoke(
         co_await getSystemConfigOrDefault(ledger, SYSTEM_KEY_TX_GAS_LIMIT, 0));
     ledgerConfig->setCompatibilityVersion(tool::toVersionNumber(
         std::get<0>(co_await getSystemConfig(ledger, SYSTEM_KEY_COMPATIBILITY_VERSION))));
+    ledgerConfig->setGasPrice(
+        co_await getSystemConfigOrDefault(ledger, SYSTEM_KEY_TX_GAS_PRICE, "0x0"));
 
     auto blockNumber = co_await getCurrentBlockNumber(ledger);
     ledgerConfig->setBlockNumber(blockNumber);

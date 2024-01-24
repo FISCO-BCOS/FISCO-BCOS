@@ -2467,6 +2467,8 @@ std::unique_ptr<protocol::ExecutionMessage> TransactionExecutor::toExecutionResu
     message->setSeq(params->seq);
     message->setOrigin(std::move(params->origin));
     message->setGasAvailable(params->gas);
+    std::string eGasPriceStr = "0x" + params->effectiveGasPrice.str(256, std::ios_base::hex);
+    message->setEffectiveGasPrice(eGasPriceStr);
     message->setData(std::move(params->data));
     message->setStaticCall(params->staticCall);
     message->setCreate(params->create);
@@ -2646,6 +2648,7 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->value = u256(input.value());
     callParameters->gasPrice = u256(input.gasPrice());
     callParameters->gasLimit = input.gasLimit();
+    callParameters->effectiveGasPrice = u256(input.effectiveGasPrice());
     callParameters->maxFeePerGas = u256(input.maxFeePerGas());
     callParameters->maxPriorityFeePerGas = u256(input.maxPriorityFeePerGas());
 

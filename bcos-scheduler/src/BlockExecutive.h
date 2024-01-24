@@ -50,13 +50,15 @@ public:
         size_t startContextID,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
         bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
-        bcos::txpool::TxPoolInterface::Ptr _txPool, uint64_t _gasLimit, bool _syncBlock)
+        bcos::txpool::TxPoolInterface::Ptr _txPool, uint64_t _gasLimit, std::string& _gasPrice,
+        bool _syncBlock)
       : BlockExecutive(std::move(block), scheduler, startContextID,
             std::move(transactionSubmitResultFactory), staticCall, std::move(_blockFactory),
             std::move(_txPool))
     {
         m_syncBlock = _syncBlock;
         m_gasLimit = _gasLimit;
+        m_gasPrice = _gasPrice;
     }
 
     BlockExecutive(const BlockExecutive&) = delete;
@@ -202,6 +204,7 @@ protected:
     bcos::txpool::TxPoolInterface::Ptr m_txPool;
 
     size_t m_gasLimit = TRANSACTION_GAS;
+    std::string m_gasPrice = std::string("0x0");
     std::atomic_bool m_isSysBlock = false;
 
     bool m_staticCall = false;

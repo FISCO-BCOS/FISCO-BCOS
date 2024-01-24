@@ -36,6 +36,7 @@ constexpr static int32_t RECEIPTS = 0x0002;
 
 // get system config key
 constexpr static std::string_view SYSTEM_KEY_TX_GAS_LIMIT = "tx_gas_limit";
+constexpr static std::string_view SYSTEM_KEY_TX_GAS_PRICE = "tx_gas_price";
 constexpr static std::string_view SYSTEM_KEY_TX_COUNT_LIMIT = "tx_count_limit";
 constexpr static std::string_view SYSTEM_KEY_CONSENSUS_LEADER_PERIOD = "consensus_leader_period";
 constexpr static std::string_view SYSTEM_KEY_AUTH_CHECK_STATUS = "auth_check_status";
