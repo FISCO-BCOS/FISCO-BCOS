@@ -11,6 +11,7 @@ CallParameters::UniquePtr BillingTransactionExecutive::start(CallParameters::Uni
     uint64_t currentSeq = input->seq;
     std::string currentSenderAddr = input->senderAddress;
     bool staticCall = input->staticCall;
+    u256 gasPrice = input->gasPrice;
     auto message = TransactionExecutive::execute(std::move(input));
 
     if ((currentSeq == 0) && !staticCall)
@@ -20,9 +21,6 @@ CallParameters::UniquePtr BillingTransactionExecutive::start(CallParameters::Uni
         auto codec = CodecWrapper(m_blockContext.hashHandler(), m_blockContext.isWasm());
         callParam4AccountPre->senderAddress = TXEXEC_GAS_CONSUMER_ADDRESS;
         callParam4AccountPre->receiveAddress = ACCOUNT_ADDRESS;
-
-        // Todo: need to get from block.
-        u256 gasPrice = 1;
 
         int64_t gasUsed = originGas - message->gas;
         bytes subBalanceIn = codec.encodeWithSig("subAccountBalance(uint256)", gasUsed * gasPrice);

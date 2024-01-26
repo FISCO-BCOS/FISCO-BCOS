@@ -109,6 +109,12 @@ public:
         m_gasLimit = std::move(mGasLimit);
     }
 
+    std::tuple<std::string, protocol::BlockNumber> const& gasPrice() const { return m_gasPrice; }
+    void setGasPrice(std::tuple<std::string, protocol::BlockNumber> mGasPrice)
+    {
+        m_gasPrice = std::move(mGasPrice);
+    }
+
     // Not enforce to set this field, in memory data
     void setSealerId(int64_t _sealerId) { m_sealerId = _sealerId; }
     int64_t sealerId() const { return m_sealerId; }
@@ -160,6 +166,7 @@ private:
     uint64_t m_blockTxCountLimit = 0;
     uint64_t m_leaderSwitchPeriod = 1;
     std::tuple<uint64_t, protocol::BlockNumber> m_gasLimit = {3000000000, 0};
+    std::tuple<std::string, protocol::BlockNumber> m_gasPrice = {"0x0", 0};
     std::tuple<uint64_t, protocol::BlockNumber> m_epochSealerNum = {4, 0};
     std::tuple<uint64_t, protocol::BlockNumber> m_epochBlockNum = {1000, 0};
     uint64_t m_notifyRotateFlagInfo{0};

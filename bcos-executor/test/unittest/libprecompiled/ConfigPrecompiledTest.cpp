@@ -682,6 +682,67 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
         simpleSetFunc(
             number++, 106, std::string(ledger::SYSTEM_KEY_AUTH_CHECK_STATUS), std::string("1"));
     }
+
+    // simple set SYSTEM_KEY_TX_GAS_PRICE
+    {
+        simpleSetFunc(
+            number++, 108, std::string{ledger::SYSTEM_KEY_TX_GAS_PRICE}, std::string("0xa"));
+    }
+    // simple get SYSTEM_KEY_TX_GAS_PRICE
+    {
+        nextBlock(number++);
+        bytes in = codec->encodeWithSig(
+            "getValueByKeyTest(string)", std::string(ledger::SYSTEM_KEY_TX_GAS_PRICE));
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
+        sender = boost::algorithm::hex_lower(std::string(tx->sender()));
+        auto hash = tx->hash();
+        txpool->hash2Transaction.emplace(hash, tx);
+        auto params2 = std::make_unique<NativeExecutionMessage>();
+        params2->setTransactionHash(hash);
+        params2->setContextID(109);
+        params2->setSeq(1000);
+        params2->setDepth(0);
+        params2->setFrom(sender);
+        params2->setTo(sysTestAddress);
+        params2->setOrigin(sender);
+        params2->setStaticCall(false);
+        params2->setGasAvailable(gas);
+        params2->setData(std::move(in));
+        params2->setType(NativeExecutionMessage::TXHASH);
+
+        std::promise<ExecutionMessage::UniquePtr> executePromise2;
+        executor->dmcExecuteTransaction(std::move(params2),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise2.set_value(std::move(result));
+            });
+        auto result2 = executePromise2.get_future().get();
+
+        // call precompiled setValueByKey
+        result2->setSeq(1001);
+
+        std::promise<ExecutionMessage::UniquePtr> executePromise3;
+        executor->dmcExecuteTransaction(std::move(result2),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise3.set_value(std::move(result));
+            });
+        auto result3 = executePromise3.get_future().get();
+        std::string gasPriceStr;
+        u256 number;
+        codec->decode(result3->data(), gasPriceStr, number);
+        std::string i32Num = number.str(256, std::ios_base::dec);
+        BCOS_LOG(DEBUG) << LOG_BADGE("sysConfig_test") << LOG_KV("gasPriceStr", gasPriceStr)
+                        << LOG_KV("number", i32Num);
+        BOOST_CHECK(result3->data().toBytes() == codec->encode(std::string("0xa"), u256(11)));
+        commitBlock(7);
+    }
+    // set SYSTEM_KEY_TX_GAS_PRICE error
+    {
+        simpleSetFunc(number++, 110, std::string{ledger::SYSTEM_KEY_TX_GAS_PRICE},
+            std::string("error"), bcos::protocol::TransactionStatus::PrecompiledError);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(consensus_test)

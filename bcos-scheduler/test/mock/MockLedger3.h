@@ -105,6 +105,10 @@ public:
         {
             _onGetConfig(nullptr, "300000000", commitBlockNumber);
         }
+        else if (_key == ledger::SYSTEM_KEY_TX_GAS_PRICE)
+        {
+            _onGetConfig(nullptr, "0x1", commitBlockNumber);
+        }
         else if (_key == ledger::SYSTEM_KEY_COMPATIBILITY_VERSION)
         {
             _onGetConfig(nullptr, bcos::protocol::RC4_VERSION_STR, commitBlockNumber);
