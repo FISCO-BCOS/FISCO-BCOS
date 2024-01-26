@@ -39,7 +39,7 @@ ca_dir=""
 prometheus_dir=""
 config_path=""
 docker_mode=
-default_version="v3.5.0"
+default_version="v3.6.0"
 compatibility_version=${default_version}
 default_mtail_version="3.0.0-rc49"
 compatibility_mtail_version=${default_mtail_version}
@@ -69,11 +69,11 @@ supported_consensus=(pbft rpbft)
 
 # for pro or max default setting
 bcos_builder_package=BcosBuilder.tgz
-bcos_builder_version=v3.5.0
+bcos_builder_version=v3.6.0
 use_exist_binary="false"
 download_specific_binary_flag="false"
 download_service_binary_type="cdn"
-service_binary_version="v3.5.0"
+service_binary_version="v3.6.0"
 download_service_binary_path="binary"
 download_service_binary_path_flag="false"
 service_type="all"
@@ -624,11 +624,11 @@ deploy pro service e.g
     bash $0 -p 30300,20200 -l 172.31.184.227:2,172.30.93.111:2 -C deploy -V pro -o generate -t all
     bash $0 -p 30300,20200 -l 172.31.184.227:2,172.30.93.111:2 -C deploy -V pro -o generate -t all -s
     bash $0 -p 30300,20200 -l 172.31.184.227:2,172.30.93.111:2 -C deploy -V pro -o generate -e ./binary
-    bash $0 -p 30300,20200,40400 -l 172.31.184.227:2,172.30.93.111:2 -C deploy -V pro -o generate -y cdn -v v3.5.0 -r ./binaryPath
+    bash $0 -p 30300,20200,40400 -l 172.31.184.227:2,172.30.93.111:2 -C deploy -V pro -o generate -y cdn -v ${service_binary_version} -r ./binaryPath
 deploy max service e.g
     bash $0 -p 30300,20200,40400,2379 -l 172.31.184.227:1,172.30.93.111:1,172.31.184.54:1,172.31.185.59:1 -C deploy -V max -o generate -t all
     bash $0 -p 30300,20200,40400,2379 -l 172.31.184.227:1,172.30.93.111:1,172.31.184.54:1,172.31.185.59:1 -C deploy -V max -o generate -t all -e ./binary -s
-    bash $0 -p 30300,20200,40400,2379 -l 172.31.184.227:1,172.30.93.111:1,172.31.184.54:1,172.31.185.59:1 -C deploy -V max -o generate -y cdn -v v3.5.0 -r ./binaryPath 
+    bash $0 -p 30300,20200,40400,2379 -l 172.31.184.227:1,172.30.93.111:1,172.31.184.54:1,172.31.185.59:1 -C deploy -V max -o generate -y cdn -v ${service_binary_version} -r ./binaryPath
     bash $0 -c config.toml -C deploy -V max -o generate -t all
 expand pro node e.g
     bash $0 -C expand_node -V pro -o expand_node -c ./config.toml
@@ -1727,7 +1727,7 @@ generate_genesis_config() {
 
 [version]
     ; compatible version, can be dynamically upgraded through setSystemConfig
-    ; the default is 3.5.0
+    ; the default is ${compatibility_version//[vV]/}
     compatibility_version=${compatibility_version//[vV]/}
 [tx]
     ; transaction gas limit
