@@ -149,8 +149,8 @@ const std::string V3_6_VERSION_STR = "3.6.0";
 
 const std::string RC_VERSION_PREFIX = "3.0.0-rc";
 
-const BlockVersion DEFAULT_VERSION = bcos::protocol::BlockVersion::V3_5_VERSION;
-const std::string DEFAULT_VERSION_STR = V3_5_VERSION_STR;
+const BlockVersion DEFAULT_VERSION = bcos::protocol::BlockVersion::V3_6_VERSION;
+const std::string DEFAULT_VERSION_STR = V3_6_VERSION_STR;
 const uint8_t MAX_MAJOR_VERSION = std::numeric_limits<uint8_t>::max();
 const uint8_t MIN_MAJOR_VERSION = 3;
 

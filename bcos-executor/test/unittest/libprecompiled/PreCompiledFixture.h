@@ -141,7 +141,8 @@ public:
         }
     }
 
-    void createSysTable(protocol::BlockVersion version)
+    void createSysTable(protocol::BlockVersion version,
+        std::vector<std::string> features = {"feature_sharding", "bugfix_event_log_order"})
     {
         // create sys table
         {
@@ -153,14 +154,16 @@ public:
                 });
             auto table = promise1.get_future().get();
             auto entry = table->newEntry();
-
             entry.setObject(SystemConfigEntry{"3000000", 0});
-
             table->setRow(SYSTEM_KEY_TX_GAS_LIMIT, std::move(entry));
 
-            Entry entry2;
-            entry2.setObject(SystemConfigEntry{"1", 0});
-            table->setRow("feature_sharding", entry2);
+            // for each feature
+            for (auto& feature : features)
+            {
+                Entry featureEntry;
+                featureEntry.setObject(SystemConfigEntry{"1", 0});
+                table->setRow(feature, std::move(featureEntry));
+            }
         }
 
         m_blockVersion = version;
