@@ -431,6 +431,8 @@ void PBFTEngine::onRecvProposal(bool _containSysTxs, bytesConstRef _proposalData
     }
     else
     {
+        PBFT_LOG(INFO) << LOG_DESC("handlePrePrepareMsg failed") << printPBFTProposal(pbftMessage)
+                       << LOG_KV("costT(ms)", utcSteadyTime() - beginHandleT);
         resetSealedTxs(pbftMessage);
     }
 }
@@ -711,7 +713,13 @@ CheckResult PBFTEngine::checkPBFTMsgState(PBFTMessageInterface::Ptr _pbftReq) co
                         << LOG_KV("proposalCommitted", proposalCommitted);
         return CheckResult::INVALID;
     }
-    // case index equal
+    // Note: Accept pbft message with larger view then local view, for other nodes may viewchange to
+    // a larger view, and the node-self is not aware of the viewchange.
+    // In normal case, it will not happen, node-self will recover the view from the viewchange, and
+    // soon will reach to new view.
+    // BUT in the Byzantium case, malicious node will send the pre-prepare message with a larger
+    // view, to lay down some specific txs.
+    // FIXME: to check this logic.
     if (_pbftReq->view() < m_config->view())
     {
         PBFT_LOG(DEBUG) << LOG_DESC("checkPBFTMsgState: invalid pbftMsg for invalid view")
@@ -890,6 +898,9 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
     auto result = checkPrePrepareMsg(_prePrepareMsg);
     if (result == CheckResult::INVALID)
     {
+        PBFT_LOG(INFO) << LOG_DESC("handlePrePrepareMsg checkPrePrepareMsg failed")
+                       << printPBFTMsgInfo(_prePrepareMsg) << m_config->printCurrentState()
+                       << LOG_KV("utc", utcSteadyTime());
         return false;
     }
     if (!_generatedFromNewView)

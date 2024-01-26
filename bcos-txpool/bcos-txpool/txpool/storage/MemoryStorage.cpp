@@ -1168,7 +1168,7 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::Ptr _block)
 
 bool MemoryStorage::batchVerifyProposal(std::shared_ptr<HashList> _txsHashList)
 {
-    bool has = true;
+    bool has = false;
     m_txsTable.batchFind<TxsMap::ReadAccessor>(
         *_txsHashList, [&has](auto const& txHash, TxsMap::ReadAccessor::Ptr accessor) {
             has = (accessor != nullptr);
@@ -1311,7 +1311,7 @@ void MemoryStorage::batchImportTxs(TransactionsPtr _txs)
         {
             continue;
         }
-        // not checkLimit when receive txs from p2p
+        // will check ledger nonce, txpool nonce and blockLimit when import txs
         auto ret = verifyAndSubmitTransaction(tx, nullptr, false, false);
         if (ret != TransactionStatus::None)
         {

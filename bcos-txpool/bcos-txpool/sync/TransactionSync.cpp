@@ -451,7 +451,7 @@ bool TransactionSync::importDownloadedTxs(TransactionsPtr _txs, Block::Ptr _veri
                 }
             }
         });
-    if (!verifySuccess)
+    if (enforceImport && !verifySuccess)
     {
         return false;
     }
