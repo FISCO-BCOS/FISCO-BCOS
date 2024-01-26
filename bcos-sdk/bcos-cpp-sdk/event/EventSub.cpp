@@ -63,7 +63,7 @@ void EventSub::stop()
 {
     if (!m_running)
     {
-        EVENT_SUB(INFO) << LOG_BADGE("stop") << LOG_DESC("event sub is not running");
+        // EVENT_SUB(INFO) << LOG_BADGE("stop") << LOG_DESC("event sub is not running");
         return;
     }
 
@@ -75,10 +75,9 @@ void EventSub::stop()
     }
     if (m_service)
     {
+        // EVENT_SUB(INFO) << LOG_BADGE("stop") << LOG_DESC("stop event sub successfully");
         m_service->stop();
     }
-
-    EVENT_SUB(INFO) << LOG_BADGE("stop") << LOG_DESC("stop event sub successfully");
 }
 
 void EventSub::doLoop()
