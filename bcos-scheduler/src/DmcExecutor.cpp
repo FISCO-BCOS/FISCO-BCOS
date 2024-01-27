@@ -37,7 +37,16 @@ bool DmcExecutor::prepare()
     // prepare all that need to
     m_executivePool.forEachAndClear(ExecutivePool::MessageHint::NEED_PREPARE,
         [this](int64_t contextID, ExecutiveState::Ptr executiveState) {
-            auto hint = handleExecutiveMessage(executiveState);
+            DmcExecutor::MessageHint hint;
+            if (m_enablePreFinishType)
+            {
+                hint = handleExecutiveMessageV2(executiveState);
+            }
+            else
+            {
+                hint = handleExecutiveMessage(executiveState);
+            }
+
             m_executivePool.markAs(contextID, hint);
             DMC_LOG(TRACE) << " 2.AfterPrepare: \t [..] " << executiveState->toString() << " "
                            << ExecutivePool::toString(hint);
@@ -352,6 +361,110 @@ void DmcExecutor::handleCreateMessage(
 }
 
 DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr executiveState)
+{
+    // handle create message first, create address and convert to normal message
+    handleCreateMessage(executiveState);
+
+    // handle normal message
+    auto& message = executiveState->message;
+
+    if (f_getAddr(message->to()) != m_contractAddress)
+    {
+        return MessageHint::NEED_SCHEDULE_OUT;
+    }
+
+    switch (message->type())
+    {
+        // Request type, push stack
+    case protocol::ExecutionMessage::MESSAGE:
+    case protocol::ExecutionMessage::TXHASH:
+    {
+        if (executiveState->message->data().toBytes() == bcos::protocol::GET_CODE_INPUT_BYTES)
+        {
+            auto newSeq = executiveState->currentSeq++;
+            executiveState->callStack.push(newSeq);
+            executiveState->message->setSeq(newSeq);
+
+            // getCode
+            DMC_LOG(DEBUG) << "Get external code in scheduler"
+                           << LOG_KV("codeAddress", executiveState->message->delegateCallAddress());
+            bytes code = f_onGetCodeEvent(executiveState->message->delegateCallAddress());
+            DMC_LOG(TRACE) << "Get external code success in scheduler"
+                           << LOG_KV("codeAddress", executiveState->message->delegateCallAddress())
+                           << LOG_KV("codeSize", code.size());
+            executiveState->message->setData(code);
+            executiveState->message->setType(protocol::ExecutionMessage::FINISHED);
+            return MessageHint::NEED_PREPARE;
+        }
+
+        // update my key locks in m_keyLocks
+        m_keyLocks->batchAcquireKeyLock(
+            message->from(), message->keyLocks(), message->contextID(), message->seq());
+
+        auto newSeq = executiveState->currentSeq++;
+        executiveState->callStack.push(newSeq);
+        executiveState->message->setSeq(newSeq);
+
+        if (executiveState->message->delegateCall())
+        {
+            bytes code = f_onGetCodeEvent(message->delegateCallAddress());
+            if (code.empty())
+            {
+                DMC_LOG(DEBUG)
+                    << "Could not getCode() from correspond executor during delegateCall: "
+                    << message->toString();
+                message->setType(protocol::ExecutionMessage::REVERT);
+                message->setCreate(false);
+                message->setKeyLocks({});
+                return MessageHint::NEED_PREPARE;
+            }
+
+            executiveState->message->setDelegateCallCode(code);
+        }
+
+        return MessageHint::NEED_SEND;
+    }
+        // Return type, pop stack
+    case protocol::ExecutionMessage::FINISHED:
+    case protocol::ExecutionMessage::REVERT:
+    {
+        executiveState->callStack.pop();
+        if (executiveState->callStack.empty())
+        {
+            // Empty stack, execution is finished
+            f_onTxFinished(std::move(message));
+            return MessageHint::END;
+        }
+
+        message->setSeq(executiveState->callStack.top());
+        message->setCreate(false);
+        return MessageHint::NEED_SEND;
+    }
+        // Retry type, send again
+    case protocol::ExecutionMessage::KEY_LOCK:
+    {
+        m_keyLocks->batchAcquireKeyLock(
+            message->from(), message->keyLocks(), message->contextID(), message->seq());
+
+        executiveState->message = std::move(message);
+
+        return MessageHint::LOCKED;
+    }
+    default:
+    {
+        DMC_LOG(FATAL) << "Unrecognized message type: " << message->toString();
+        assert(false);
+        break;
+    }
+    }
+
+    // never goes here
+    DMC_LOG(FATAL) << "Message end with illegal manner" << message->toString();
+    assert(false);
+    return MessageHint::END;
+}
+
+DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessageV2(ExecutiveState::Ptr executiveState)
 {
     // handle create message first, create address and convert to normal message
     handleCreateMessage(executiveState);

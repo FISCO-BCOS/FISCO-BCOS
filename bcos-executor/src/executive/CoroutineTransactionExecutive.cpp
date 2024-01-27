@@ -20,7 +20,10 @@ CallParameters::UniquePtr CoroutineTransactionExecutive::start(CallParameters::U
 
         m_exchangeMessage = execute(std::move(callParameters));
 
-        m_exchangeMessage = waitingFinish(std::move(m_exchangeMessage));
+        if (m_blockContext.features().get(ledger::Features::Flag::bugfix_dmc_revert))
+        {
+            m_exchangeMessage = waitingFinish(std::move(m_exchangeMessage));
+        }
 
         // Execute is finished, erase the key locks
         m_exchangeMessage->keyLocks.clear();
