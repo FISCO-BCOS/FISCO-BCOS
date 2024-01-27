@@ -45,7 +45,7 @@ public:
     ~JsonRpcImpl() override
     {
         stop();
-        BCOS_LOG(INFO) << LOG_KV("[DELOBJ][JsonRpcImpl]", this);
+        // BCOS_LOG(INFO) << LOG_KV("[DELOBJ][JsonRpcImpl]", this);
     }
 
 public:

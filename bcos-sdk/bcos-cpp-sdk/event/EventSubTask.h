@@ -53,7 +53,9 @@ class EventSubTask
 public:
     using Ptr = std::shared_ptr<EventSubTask>;
     EventSubTask() { EVENT_TASK(DEBUG) << LOG_KV("[NEWOBJ][EventSubTask]", this); }
-    ~EventSubTask() { EVENT_TASK(DEBUG) << LOG_KV("[DELOBJ][EventSubTask]", this); }
+    ~EventSubTask()
+    {  // EVENT_TASK(DEBUG) << LOG_KV("[DELOBJ][EventSubTask]", this);
+    }
 
 public:
     void setSession(std::shared_ptr<bcos::boostssl::ws::WsSession> _session)
