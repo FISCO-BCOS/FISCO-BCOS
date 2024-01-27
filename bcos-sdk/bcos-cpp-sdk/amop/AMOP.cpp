@@ -40,22 +40,21 @@ void AMOP::start()
     if (m_service)
     {  // start websocket service
         m_service->start();
+        AMOP_CLIENT(INFO) << LOG_BADGE("start") << LOG_DESC("start amop");
     }
     else
     {
         AMOP_CLIENT(WARNING) << LOG_BADGE("start")
                              << LOG_DESC("websocket service is not uninitialized");
     }
-
-    AMOP_CLIENT(INFO) << LOG_BADGE("start") << LOG_DESC("start amop");
 }
 void AMOP::stop()
 {
     if (m_service)
     {
+        // AMOP_CLIENT(INFO) << LOG_BADGE("stop") << LOG_DESC("stop amop");
         m_service->stop();
     }
-    AMOP_CLIENT(INFO) << LOG_BADGE("stop") << LOG_DESC("stop amop");
 }
 
 // subscribe topics

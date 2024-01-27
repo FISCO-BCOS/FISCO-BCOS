@@ -103,8 +103,7 @@ void WsService::stop()
 {
     if (!m_running)
     {
-        WEBSOCKET_SERVICE(INFO) << LOG_BADGE("stop")
-                                << LOG_DESC("websocket service has been stopped");
+        // WEBSOCKET_SERVICE(INFO) << LOG_DESC("websocket service has been stopped");
         return;
     }
     m_running = false;
@@ -114,6 +113,8 @@ void WsService::stop()
     {
         m_ioservicePool->stop();
     }
+    m_taskGroup.cancel();
+    m_taskGroup.wait();
 
     // cancel reconnect task
     if (m_reconnect)
@@ -132,7 +133,7 @@ void WsService::stop()
         m_httpServer->stop();
     }
 
-    WEBSOCKET_SERVICE(INFO) << LOG_BADGE("stop") << LOG_DESC("stop websocket service successfully");
+    // WEBSOCKET_SERVICE(INFO) << LOG_DESC("stop websocket service successfully");
 }
 
 
