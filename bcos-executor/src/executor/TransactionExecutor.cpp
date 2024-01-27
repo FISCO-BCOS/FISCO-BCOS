@@ -644,6 +644,7 @@ void TransactionExecutor::dmcCall(bcos::protocol::ExecutionMessage::UniquePtr in
     }
     case protocol::ExecutionMessage::FINISHED:
     case protocol::ExecutionMessage::REVERT:
+    case protocol::ExecutionMessage::PRE_FINISH:
     {
         tbb::concurrent_hash_map<std::tuple<int64_t, int64_t>, CallState, HashCombine>::accessor it;
         m_calledContext->find(it, std::tuple{input->contextID(), input->seq()});
@@ -812,6 +813,7 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
     }
     case protocol::ExecutionMessage::FINISHED:
     case protocol::ExecutionMessage::REVERT:
+    case protocol::ExecutionMessage::PRE_FINISH:
     {
         tbb::concurrent_hash_map<std::tuple<int64_t, int64_t>, CallState, HashCombine>::accessor it;
         m_calledContext->find(it, std::tuple{input->contextID(), input->seq()});
@@ -964,6 +966,7 @@ void TransactionExecutor::executeTransactionsInternal(std::string contractAddres
             case bcos::protocol::ExecutionMessage::REVERT:
             case bcos::protocol::ExecutionMessage::FINISHED:
             case bcos::protocol::ExecutionMessage::KEY_LOCK:
+            case bcos::protocol::ExecutionMessage::PRE_FINISH:
             {
                 callParametersList->at(i) = createCallParameters(*params, params->staticCall());
                 break;
@@ -2354,6 +2357,7 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
     case bcos::protocol::ExecutionMessage::MESSAGE:
     case bcos::protocol::ExecutionMessage::REVERT:
     case bcos::protocol::ExecutionMessage::FINISHED:
+    case bcos::protocol::ExecutionMessage::PRE_FINISH:
     case bcos::protocol::ExecutionMessage::KEY_LOCK:
     {
         auto callParameters = createCallParameters(*input, input->staticCall());
@@ -2460,6 +2464,12 @@ std::unique_ptr<protocol::ExecutionMessage> TransactionExecutor::toExecutionResu
         message->setFrom(std::move(params->receiveAddress));
         message->setTo(std::move(params->senderAddress));
         message->setType(ExecutionMessage::REVERT);
+        break;
+    case CallParameters::PRE_FINISH:
+        // Response message, Swap the from and to
+        message->setFrom(std::move(params->receiveAddress));
+        message->setTo(std::move(params->senderAddress));
+        message->setType(ExecutionMessage::PRE_FINISH);
         break;
     }
 
@@ -2588,6 +2598,11 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
         BOOST_THROW_EXCEPTION(BCOS_ERROR(
             ExecuteError::EXECUTE_ERROR, "Unexpected execution message type: " +
                                              boost::lexical_cast<std::string>(input.type())));
+    }
+    case ExecutionMessage::PRE_FINISH:
+    {
+        // just set to finish type
+        callParameters->type = CallParameters::FINISHED;
     }
     }
 

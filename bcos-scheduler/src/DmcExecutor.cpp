@@ -384,7 +384,7 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr
                            << LOG_KV("codeAddress", executiveState->message->delegateCallAddress())
                            << LOG_KV("codeSize", code.size());
             executiveState->message->setData(code);
-            executiveState->message->setType(protocol::ExecutionMessage::FINISHED);
+            executiveState->message->setType(protocol::ExecutionMessage::PRE_FINISH);
             return MessageHint::NEED_PREPARE;
         }
 
@@ -393,7 +393,13 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr
             message->from(), message->keyLocks(), message->contextID(), message->seq());
 
         auto newSeq = executiveState->currentSeq++;
+        if (newSeq > 0 && executiveState->callStack.empty())
+        {
+            // sharding optimize by ignore pushing seq = 0 to stack, we need to push here
+            executiveState->callStack.push(0);
+        }
         executiveState->callStack.push(newSeq);
+        executiveState->revertStack.push({newSeq, std::string(message->to())});
         executiveState->message->setSeq(newSeq);
 
         if (executiveState->message->delegateCall())
@@ -407,6 +413,9 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr
                 message->setType(protocol::ExecutionMessage::REVERT);
                 message->setCreate(false);
                 message->setKeyLocks({});
+
+                executiveState->isRevertStackMessage = true;
+
                 return MessageHint::NEED_PREPARE;
             }
 
@@ -416,9 +425,81 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr
         return MessageHint::NEED_SEND;
     }
         // Return type, pop stack
+    case protocol::ExecutionMessage::PRE_FINISH:
+    {
+        // update my key locks in m_keyLocks
+        m_keyLocks->batchAcquireKeyLock(
+            message->from(), message->keyLocks(), message->contextID(), message->seq());
+
+        if (!executiveState->callStack.empty())
+        {
+            executiveState->callStack.pop();
+        }
+
+        assert(!executiveState->callStack.empty());
+
+        message->setSeq(executiveState->callStack.top());
+        message->setCreate(false);
+        return MessageHint::NEED_SEND;
+    }
     case protocol::ExecutionMessage::FINISHED:
+    {
+        if (executiveState->isRevertStackMessage)
+        {
+            // handle schedule in message
+            executiveState->isRevertStackMessage = false;
+            return MessageHint::NEED_SEND;
+        }
+
+        if (executiveState->revertStack.empty()
+            // no need to consider
+            || executiveState->revertStack.top().first == 0)
+        {
+            // Empty stack, execution is finished
+            f_onTxFinished(std::move(message));
+            return MessageHint::END;
+        }
+
+        // generate new finish message and scheduler out
+        auto [seq, to] = executiveState->revertStack.top();
+        executiveState->revertStack.pop();
+        executiveState->isRevertStackMessage = true;
+        message->setSeq(seq);
+        message->setFrom(std::string(message->to()));  // record parent address
+        message->setTo(std::string(to));
+        message->setCreate(false);
+        return MessageHint::NEED_PREPARE;
+    }
     case protocol::ExecutionMessage::REVERT:
     {
+        if (executiveState->isRevertStackMessage)
+        {
+            // handle schedule in message
+            executiveState->isRevertStackMessage = false;
+            return MessageHint::NEED_SEND;
+        }
+
+        if (!executiveState->revertStack.empty())
+        {
+            if (executiveState->callStack.top() < executiveState->revertStack.top().first)
+            {
+                // need revert child executive
+                auto [seq, to] = executiveState->revertStack.top();
+                executiveState->revertStack.pop();
+                executiveState->isRevertStackMessage = true;
+                message->setSeq(seq);
+                message->setFrom(std::string(message->to()));  // record parent address
+                message->setTo(std::string(to));
+                message->setCreate(false);
+                return MessageHint::NEED_PREPARE;
+            }
+            else if (executiveState->callStack.top() == executiveState->revertStack.top().first)
+            {
+                // just pop this revertStack for this executive has been reverted
+                executiveState->revertStack.pop();
+            }
+        }
+
         executiveState->callStack.pop();
         if (executiveState->callStack.empty())
         {

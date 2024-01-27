@@ -45,7 +45,7 @@ public:
         ERROR,
         NEED_PREPARE = 1,
         PAUSED = 2,
-        FINISHED = 3
+        FINISHED = 3,
     };
 
     using Ptr = std::shared_ptr<DmcExecutor>;
