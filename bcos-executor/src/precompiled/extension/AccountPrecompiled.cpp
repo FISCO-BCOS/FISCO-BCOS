@@ -312,8 +312,8 @@ void AccountPrecompiled::addAccountBalance(const std::string& accountTableName,
     auto entry = _executive->storage().getRow(accountTableName, ACCOUNT_BALANCE);
     if (entry.has_value())
     {
-        u256 balance = u256(std::string(entry->get()));
-        if (balance >= (u256(-1) - value))
+        u256 balance = u256(entry->get());
+        if (balance + value > (u256(-1)))
         {
             PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number())
                                   << LOG_BADGE("AccountPrecompiled, addAccountBalance")
@@ -382,7 +382,7 @@ void AccountPrecompiled::subAccountBalance(const std::string& accountTableName,
     auto entry = _executive->storage().getRow(accountTableName, ACCOUNT_BALANCE);
     if (entry.has_value())
     {
-        u256 balance = u256(std::string(entry->get()));
+        u256 balance = u256(entry->get());
         // if balance not enough, revert
         if (balance < value)
         {
