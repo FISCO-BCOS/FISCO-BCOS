@@ -102,8 +102,7 @@ evmc_bytes32 getBalance(evmc_host_context* _context, const evmc_address* _addr) 
         const auto& codec = bcos::CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
         // get balance from account table
         auto params = codec.encodeWithSig("getAccountBalance()");
-        auto tableName =
-            getContractTableName(executor::USER_APPS_PREFIX, address2HexString(_msg.recipient));
+        auto tableName = hostContext.getContractTableName(address2HexString(_msg.recipient));
         std::vector<std::string> tableNameVector = {tableName};
         auto input = codec.encode(tableNameVector, params);
         bytes_view getBalance = bytes_view(input.data(), input.size());
@@ -200,8 +199,7 @@ bool selfdestruct(evmc_host_context* _context, const evmc_address* _addr,
         // get _addr balance
         const auto& codec = bcos::CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
         bytes params = codec.encodeWithSig("getAccountBalance()");
-        auto tableName =
-            getContractTableName(executor::USER_APPS_PREFIX, address2HexString(_msg.recipient));
+        auto tableName = hostContext.getContractTableName(address2HexString(_msg.recipient));
         std::vector<std::string> tableNameVector = {tableName};
         auto getBalanceIn = codec.encode(tableNameVector, params);
 
@@ -239,8 +237,7 @@ bool selfdestruct(evmc_host_context* _context, const evmc_address* _addr,
         //  _beneficiary += balance
         _msg.recipient = *_beneficiary;
         bytes addParams = codec.encodeWithSig("addAccountBalance(uint256)", balance);
-        auto addTableName =
-            getContractTableName(executor::USER_APPS_PREFIX, address2HexString(_msg.recipient));
+        auto addTableName = hostContext.getContractTableName(address2HexString(_msg.recipient));
         std::vector<std::string> addTableNameVector = {addTableName};
         auto addBalanceIn = codec.encode(addTableNameVector, addParams);
         bytes_view addBalance = bytes_view(addBalanceIn.data(), addBalanceIn.size());
