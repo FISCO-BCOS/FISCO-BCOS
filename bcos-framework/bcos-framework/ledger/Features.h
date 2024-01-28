@@ -152,12 +152,19 @@ public:
     void setGenesisFeatures(protocol::BlockVersion to)
     {
         if (to == protocol::BlockVersion::V3_3_VERSION ||
-            to == protocol::BlockVersion::V3_4_VERSION ||
-            to == protocol::BlockVersion::V3_5_VERSION)
+            to == protocol::BlockVersion::V3_4_VERSION)
         {
             return;
         }
-        setUpgradeFeatures(protocol::BlockVersion::MIN_VERSION, to);
+
+        if (to == protocol::BlockVersion::V3_5_VERSION)
+        {
+            setUpgradeFeatures(protocol::BlockVersion::V3_4_VERSION, to);
+        }
+        else
+        {
+            setUpgradeFeatures(protocol::BlockVersion::MIN_VERSION, to);
+        }
         setToShardingDefault(to);
     }
 
