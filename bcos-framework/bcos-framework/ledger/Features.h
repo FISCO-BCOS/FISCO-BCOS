@@ -117,25 +117,47 @@ public:
         }
     }
 
-    void setToDefault(protocol::BlockVersion version)
+    void setUpgradeFeatures(protocol::BlockVersion from, protocol::BlockVersion to)
     {
-        if (version >= protocol::BlockVersion::V3_2_3_VERSION)
+        struct UpgradeFeatures
         {
-            set(Flag::bugfix_revert);
-        }
-        if (version >= protocol::BlockVersion::V3_2_4_VERSION)
-        {
-            set(Flag::bugfix_statestorage_hash);
-            set(Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy);
-        }
-        if (version >= protocol::BlockVersion::V3_2_6_VERSION)
-        {
-            set(Flag::bugfix_event_log_order);
-            set(Flag::bugfix_call_noaddr_return);
-            set(Flag::bugfix_precompiled_codehash);
-        }
+            protocol::BlockVersion from;
+            protocol::BlockVersion to;
+            std::vector<Flag> flags;
+        };
+        const static auto upgradeRoadmap = std::to_array<UpgradeFeatures>(
+            {{protocol::BlockVersion::V3_2_VERSION, protocol::BlockVersion::V3_2_3_VERSION,
+                 {Flag::bugfix_revert, Flag::bugfix_statestorage_hash,
+                     Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy}},
+                {protocol::BlockVersion::V3_2_3_VERSION, protocol::BlockVersion::V3_2_4_VERSION,
+                    {Flag::bugfix_statestorage_hash,
+                        Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy}},
+                {protocol::BlockVersion::V3_2_4_VERSION, protocol::BlockVersion::V3_2_7_VERSION,
+                    {Flag::bugfix_event_log_order, Flag::bugfix_call_noaddr_return,
+                        Flag::bugfix_precompiled_codehash}}});
 
-        setToShardingDefault(version);
+        for (const auto& upgradeFeatures : upgradeRoadmap)
+        {
+            if (from <= upgradeFeatures.from && to >= upgradeFeatures.to)
+            {
+                for (auto flag : upgradeFeatures.flags)
+                {
+                    set(flag);
+                }
+            }
+        }
+    }
+
+    void setGenesisFeatures(protocol::BlockVersion to)
+    {
+        if (to == protocol::BlockVersion::V3_3_VERSION ||
+            to == protocol::BlockVersion::V3_4_VERSION ||
+            to == protocol::BlockVersion::V3_5_VERSION)
+        {
+            return;
+        }
+        setUpgradeFeatures(protocol::BlockVersion::MIN_VERSION, to);
+        setToShardingDefault(to);
     }
 
     auto flags() const
