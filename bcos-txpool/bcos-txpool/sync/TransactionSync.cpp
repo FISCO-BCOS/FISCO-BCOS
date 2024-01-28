@@ -155,6 +155,7 @@ void TransactionSync::requestMissedTxs(PublicPtr _generatedNodeID, HashListPtr _
             {
                 return;
             }
+            // if _generatedNodeID == nullptr, then it means request txs in schduler
             if (!_generatedNodeID ||
                 _generatedNodeID->data() == txsSync->m_config->nodeID()->data())
             {
@@ -264,6 +265,7 @@ void TransactionSync::requestMissedTxsFromPeer(PublicPtr _generatedNodeID, HashL
                 }
                 auto networkT = utcTime() - startT;
                 auto recordT = utcTime();
+                // verify fetch txs response
                 transactionSync->verifyFetchedTxs(_error, _nodeID, _data, _missedTxs,
                     _verifiedProposal,
                     [networkT, recordT, proposalHeader, _onVerifyFinished](
@@ -353,10 +355,10 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
         _onVerifyFinished(
             BCOS_ERROR_PTR(CommonError::TransactionsMissing, "TransactionsMissing"), false);
         // try to import the transactions even when verify failed
-        importDownloadedTxs(transactions);
+        importDownloadedTxsByBlock(transactions);
         return;
     }
-    if (!importDownloadedTxs(transactions, _verifiedProposal))
+    if (!importDownloadedTxsByBlock(transactions, _verifiedProposal))
     {
         _onVerifyFinished(BCOS_ERROR_PTR(CommonError::TxsSignatureVerifyFailed,
                               "invalid transaction for invalid signature or nonce or blockLimit"),
@@ -383,9 +385,11 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
                     << LOG_KV("timecost", (utcTime() - recordT));
 }
 
-bool TransactionSync::importDownloadedTxs(Block::Ptr _txsBuffer, Block::Ptr _verifiedProposal)
+bool TransactionSync::importDownloadedTxsByBlock(
+    Block::Ptr _txsBuffer, Block::Ptr _verifiedProposal)
 {
     auto txs = std::make_shared<Transactions>();
+    txs->reserve(_txsBuffer->transactionsSize());
     for (size_t i = 0; i < _txsBuffer->transactionsSize(); i++)
     {
         txs->emplace_back(std::const_pointer_cast<Transaction>(_txsBuffer->transaction(i)));
@@ -403,6 +407,7 @@ bool TransactionSync::importDownloadedTxs(TransactionsPtr _txs, Block::Ptr _veri
     // Note: only need verify the signature for the transactions
     bool enforceImport = false;
     BlockHeader::Ptr proposalHeader = nullptr;
+    // if _verifiedProposal is null, it means import txs from ledger
     if (_verifiedProposal && _verifiedProposal->blockHeader())
     {
         proposalHeader = _verifiedProposal->blockHeader();
@@ -410,7 +415,7 @@ bool TransactionSync::importDownloadedTxs(TransactionsPtr _txs, Block::Ptr _veri
     }
     auto recordT = utcTime();
     auto startT = utcTime();
-    // verify the transactions
+    // verify the transactions signature
     std::atomic_bool verifySuccess = {true};
     tbb::parallel_for(tbb::blocked_range<size_t>(0, txsSize),
         [&_txs, &_verifiedProposal, &proposalHeader, this, &verifySuccess](
@@ -433,6 +438,7 @@ bool TransactionSync::importDownloadedTxs(TransactionsPtr _txs, Block::Ptr _veri
                 }
                 try
                 {
+                    // verify failed, it will throw exception
                     tx->verify(*m_hashImpl, *m_signatureImpl);
                 }
                 catch (std::exception const& e)
