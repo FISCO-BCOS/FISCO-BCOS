@@ -133,7 +133,9 @@ public:
                         Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy}},
                 {protocol::BlockVersion::V3_2_4_VERSION, protocol::BlockVersion::V3_2_7_VERSION,
                     {Flag::bugfix_event_log_order, Flag::bugfix_call_noaddr_return,
-                        Flag::bugfix_precompiled_codehash}}});
+                        Flag::bugfix_precompiled_codehash}},
+                {protocol::BlockVersion::V3_4_VERSION, protocol::BlockVersion::V3_5_VERSION,
+                    {Flag::bugfix_revert}}});
 
         for (const auto& upgradeFeatures : upgradeRoadmap)
         {
@@ -198,7 +200,8 @@ public:
     {
         for (auto [flag, name, value] : flags())
         {
-            if (value)
+            if (value && !co_await storage2::existsOne(
+                             storage, transaction_executor::StateKey(ledger::SYS_CONFIG, name)))
             {
                 storage::Entry entry;
                 entry.setObject(

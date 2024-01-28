@@ -189,18 +189,34 @@ BOOST_AUTO_TEST_CASE(upgrade)
     Features features4;
     features4.setUpgradeFeatures(
         bcos::protocol::BlockVersion::V3_2_7_VERSION, bcos::protocol::BlockVersion::V3_6_VERSION);
-    BOOST_CHECK(validFlags(features4).empty());
+    auto expect4 = std::to_array<std::string_view>({"bugfix_revert"});
+    BOOST_CHECK_EQUAL(validFlags(features4).size(), expect4.size());
+    for (auto feature : expect4)
+    {
+        BOOST_CHECK(features4.get(feature));
+    }
 
     // 3.2.4 to 3.6.0
     Features features5;
     features5.setUpgradeFeatures(
         bcos::protocol::BlockVersion::V3_2_4_VERSION, bcos::protocol::BlockVersion::V3_6_VERSION);
-    auto expect2 = std::to_array<std::string_view>(
-        {"bugfix_event_log_order", "bugfix_call_noaddr_return", "bugfix_precompiled_codehash"});
+    auto expect2 = std::to_array<std::string_view>({"bugfix_event_log_order",
+        "bugfix_call_noaddr_return", "bugfix_precompiled_codehash", "bugfix_revert"});
     BOOST_CHECK_EQUAL(validFlags(features5).size(), expect2.size());
     for (auto feature : expect2)
     {
         BOOST_CHECK(features5.get(feature));
+    }
+
+    // 3.4 to 3.5
+    Features features6;
+    features6.setUpgradeFeatures(
+        bcos::protocol::BlockVersion::V3_4_VERSION, bcos::protocol::BlockVersion::V3_5_VERSION);
+    auto expect3 = std::to_array<std::string_view>({"bugfix_revert"});
+    BOOST_CHECK_EQUAL(validFlags(features6).size(), expect3.size());
+    for (auto feature : expect3)
+    {
+        BOOST_CHECK(features6.get(feature));
     }
 }
 
@@ -215,6 +231,18 @@ BOOST_AUTO_TEST_CASE(genesis)
     for (auto feature : expect1)
     {
         BOOST_CHECK(features1.get(feature));
+    }
+
+    // 3.6.0
+    Features features2;
+    features2.setGenesisFeatures(bcos::protocol::BlockVersion::V3_6_VERSION);
+    auto expect2 = std::to_array<std::string_view>({"bugfix_revert", "bugfix_statestorage_hash",
+        "bugfix_evm_create2_delegatecall_staticcall_codecopy", "bugfix_event_log_order",
+        "bugfix_call_noaddr_return", "bugfix_precompiled_codehash"});
+    BOOST_CHECK_EQUAL(validFlags(features2).size(), expect2.size());
+    for (auto feature : expect2)
+    {
+        BOOST_CHECK(features2.get(feature));
     }
 }
 
