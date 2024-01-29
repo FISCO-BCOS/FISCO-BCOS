@@ -126,7 +126,7 @@ public:
             std::vector<Flag> flags;
         };
         const static auto upgradeRoadmap = std::to_array<UpgradeFeatures>(
-            {{protocol::BlockVersion::V3_2_VERSION, protocol::BlockVersion::V3_2_3_VERSION,
+            {{protocol::BlockVersion::V3_2_2_VERSION, protocol::BlockVersion::V3_2_3_VERSION,
                  {Flag::bugfix_revert}},
                 {protocol::BlockVersion::V3_2_3_VERSION, protocol::BlockVersion::V3_2_4_VERSION,
                     {Flag::bugfix_statestorage_hash,

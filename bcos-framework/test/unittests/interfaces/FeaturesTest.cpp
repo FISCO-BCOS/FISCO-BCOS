@@ -218,6 +218,17 @@ BOOST_AUTO_TEST_CASE(upgrade)
     {
         BOOST_CHECK(features6.get(feature));
     }
+
+    // 3.2.2 to 3.2.3
+    Features features7;
+    features7.setUpgradeFeatures(
+        bcos::protocol::BlockVersion::V3_2_2_VERSION, bcos::protocol::BlockVersion::V3_2_3_VERSION);
+    auto expect5 = std::to_array<std::string_view>({"bugfix_revert"});
+    BOOST_CHECK_EQUAL(validFlags(features7).size(), expect5.size());
+    for (auto feature : expect5)
+    {
+        BOOST_CHECK(features7.get(feature));
+    }
 }
 
 BOOST_AUTO_TEST_CASE(genesis)
