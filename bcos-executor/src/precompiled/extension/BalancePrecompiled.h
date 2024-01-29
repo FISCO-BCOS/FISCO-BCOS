@@ -62,7 +62,7 @@ private:
         PrecompiledExecResult::Ptr const& _callParameters, const CodecWrapper& codec,
         std::string_view accountHex);
 
-    inline std::string getContractTableName(
+    std::string getContractTableName(
         const std::shared_ptr<executor::TransactionExecutive>& _executive,
         const std::string_view& _address);
 
