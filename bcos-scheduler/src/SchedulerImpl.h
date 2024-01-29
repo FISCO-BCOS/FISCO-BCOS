@@ -188,7 +188,7 @@ private:
     std::mutex m_blocksMutex;
 
     std::mutex m_executeMutex;
-    std::mutex m_commitMutex;
+    std::timed_mutex m_commitMutex;
 
     std::atomic_int64_t m_calledContextID = 1;
 

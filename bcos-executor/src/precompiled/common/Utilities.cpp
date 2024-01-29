@@ -414,7 +414,7 @@ std::vector<Address> precompiled::getGovernorList(
     const PrecompiledExecResult::Ptr& _callParameters, const CodecWrapper& codec)
 {
     const auto& blockContext = _executive->blockContext();
-    const auto* sender = blockContext.isWasm() ? ACCOUNT_MANAGER_NAME : ACCOUNT_MGR_ADDRESS;
+    const auto& sender = _executive->contractAddress();
     auto getCommittee = codec.encodeWithSig("_committee()");
     auto getCommitteeResponse = externalRequest(_executive, ref(getCommittee),
         _callParameters->m_origin, sender, AUTH_COMMITTEE_ADDRESS, _callParameters->m_staticCall,
