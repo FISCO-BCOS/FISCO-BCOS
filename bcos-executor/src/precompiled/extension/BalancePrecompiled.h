@@ -62,6 +62,10 @@ private:
         PrecompiledExecResult::Ptr const& _callParameters, const CodecWrapper& codec,
         std::string_view accountHex);
 
+    std::string getContractTableName(
+        const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        const std::string_view& _address);
+
 private:
     mutable std::map<std::string, u256> m_fakeBalancePrecompiled;
 };

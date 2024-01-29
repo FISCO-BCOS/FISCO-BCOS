@@ -172,6 +172,11 @@ public:
         return m_executive->blockContext().features();
     }
 
+    std::string getContractTableName(const std::string_view& _address)
+    {
+        return m_executive->getContractTableName(_address, isWasm(), isCreate());
+    }
+
 protected:
     const CallParameters::UniquePtr& getCallParameters() const { return m_callParameters; }
     virtual bcos::bytes externalCodeRequest(const std::string_view& address);

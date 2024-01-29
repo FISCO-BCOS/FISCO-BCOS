@@ -9,7 +9,7 @@ CallParameters::UniquePtr BillingTransactionExecutive::start(CallParameters::Uni
 {
     int64_t originGas = input->gas;
     uint64_t currentSeq = input->seq;
-    std::string currentSenderAddr = input->senderAddress;
+    std::string currentSenderAddr = input->origin;
     bool staticCall = input->staticCall;
     u256 gasPrice = input->gasPrice;
     auto message = TransactionExecutive::execute(std::move(input));

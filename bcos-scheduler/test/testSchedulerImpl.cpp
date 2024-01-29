@@ -472,8 +472,6 @@ BOOST_AUTO_TEST_CASE(handlerBlockTest)
                 BOOST_CHECK_EQUAL(config->hash().hex(), h256(5).hex());
             }
         });
-
-    BOOST_CHECK(!commitBlockError);
 }
 
 

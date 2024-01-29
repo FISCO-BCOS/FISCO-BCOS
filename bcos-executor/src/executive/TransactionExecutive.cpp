@@ -347,7 +347,7 @@ bool TransactionExecutive::transferBalance(std::string_view origin, std::string_
     // sender = sender - value
     auto codec = CodecWrapper(m_blockContext.hashHandler(), m_blockContext.isWasm());
     auto params = codec.encodeWithSig("subAccountBalance(uint256)", value);
-    auto formTableName = bcos::getContractTableName(executor::USER_APPS_PREFIX, sender);
+    auto formTableName = getContractTableName(sender, m_blockContext.isWasm());
     std::vector<std::string> fromTableNameVector = {formTableName};
     auto inputParams = codec.encode(fromTableNameVector, params);
     auto subParams = codec.encode(std::string(ACCOUNT_ADDRESS), inputParams);
@@ -368,7 +368,7 @@ bool TransactionExecutive::transferBalance(std::string_view origin, std::string_
     // to add balance
     // receiver = receiver + value
     auto params1 = codec.encodeWithSig("addAccountBalance(uint256)", value);
-    auto toTableName = bcos::getContractTableName(executor::USER_APPS_PREFIX, receiver);
+    auto toTableName = getContractTableName(receiver, m_blockContext.isWasm());
     std::vector<std::string> toTableNameVector = {toTableName};
     auto inputParams1 = codec.encode(toTableNameVector, params1);
     auto addParams = codec.encode(std::string(ACCOUNT_ADDRESS), inputParams1);
@@ -1693,4 +1693,38 @@ uint8_t TransactionExecutive::checkAccountAvailable(const CallParameters::Unique
 
     return precompiled::AccountPrecompiled::getAccountStatus(
         callParameters->origin, shared_from_this());
+}
+
+std::string TransactionExecutive::getContractTableName(
+    const std::string_view& _address, bool isWasm, bool isCreate)
+{
+    auto version = m_blockContext.blockVersion();
+
+    if (m_blockContext.isAuthCheck() ||
+        protocol::versionCompareTo(version, protocol::BlockVersion::V3_3_VERSION) >= 0)
+    {
+        if (_address.starts_with(precompiled::SYS_ADDRESS_PREFIX))
+        {
+            return std::string(USER_SYS_PREFIX).append(_address);
+        }
+    }
+
+    std::string_view formatAddress = _address;
+    if (isWasm)
+    {
+        // NOTE: if version < 3.2, then it will allow deploying contracts under /tables. It's a
+        // bug, but it should maintain data compatibility.
+        // NOTE2: if it's internalCreate it should allow creating table under /tables
+        if (protocol::versionCompareTo(version, protocol::BlockVersion::V3_2_VERSION) < 0 ||
+            !isCreate)
+        {
+            if (_address.starts_with(USER_TABLE_PREFIX))
+            {
+                return std::string(formatAddress);
+            }
+        }
+        formatAddress = formatAddress.starts_with('/') ? formatAddress.substr(1) : formatAddress;
+    }
+
+    return std::string(USER_APPS_PREFIX).append(formatAddress);
 }
