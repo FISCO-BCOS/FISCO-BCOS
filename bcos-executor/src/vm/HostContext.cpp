@@ -174,7 +174,15 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
                 request->delegateCall = true;
                 request->codeAddress = evmAddress2String(_msg->code_address);
                 request->delegateCallSender = evmAddress2String(_msg->sender);
-                request->receiveAddress = codeAddress();
+
+                if (features().get(ledger::Features::Flag::bugfix_call_noaddr_return))
+                {
+                    request->receiveAddress = myAddress();
+                }
+                else
+                {
+                    request->receiveAddress = codeAddress();
+                }
                 request->data.assign(_msg->input_data, _msg->input_data + _msg->input_size);
                 break;
             }
@@ -319,6 +327,27 @@ evmc_result HostContext::callBuiltInPrecompiled(
         catch (std::exception& e)
         {
             resultCode = (int32_t)TransactionStatus::Unknown;
+        }
+    }
+
+    if (features().get(ledger::Features::Flag::bugfix_event_log_order))
+    {
+        // put event log by stack(dfs) order
+        m_callParameters->logEntries = std::move(_request->logEntries);
+    }
+
+    if (features().get(ledger::Features::Flag::feature_balance) && _request->value > 0) [[unlikely]]
+    {
+        // must transfer balance
+        if (!m_executive->transferBalance(_request->origin, _request->senderAddress,
+                _request->receiveAddress, static_cast<u256>(_request->value), _request->gas))
+        {
+            callResults->type = CallParameters::REVERT;
+            callResults->status = (int32_t)TransactionStatus::NotEnoughCash;
+            preResult.status_code = EVMC_INSUFFICIENT_BALANCE;
+            preResult.gas_left = _request->gas;
+            m_responseStore.emplace_back(std::move(callResults));
+            return preResult;
         }
     }
 

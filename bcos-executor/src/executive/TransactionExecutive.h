@@ -156,9 +156,13 @@ public:
     std::optional<storage::Entry> getCodeByContractTableName(
         const std::string_view& contractTableName, bool needTryFromContractTable = true);
 
-protected:
     bool transferBalance(std::string_view origin, std::string_view sender,
         std::string_view receiver, const u256& value, int64_t gas);
+
+    std::string getContractTableName(
+        const std::string_view& _address, bool isWasm = false, bool isCreate = false);
+
+protected:
     std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> call(
         CallParameters::UniquePtr callParameters);
     CallParameters::UniquePtr callPrecompiled(CallParameters::UniquePtr callParameters);
@@ -192,41 +196,6 @@ protected:
         bcos::codec::abi::ContractABICodec abi(m_hashImpl);
         auto codecOutput = abi.abiIn("Error(string)", errInfo);
         _callParameters.data = std::move(codecOutput);
-    }
-
-    inline std::string getContractTableName(
-        const std::string_view& _address, bool isWasm = false, bool isCreate = false)
-    {
-        auto version = m_blockContext.blockVersion();
-
-        if (m_blockContext.isAuthCheck() ||
-            protocol::versionCompareTo(version, protocol::BlockVersion::V3_3_VERSION) >= 0)
-        {
-            if (_address.starts_with(precompiled::SYS_ADDRESS_PREFIX))
-            {
-                return std::string(USER_SYS_PREFIX).append(_address);
-            }
-        }
-
-        std::string_view formatAddress = _address;
-        if (isWasm)
-        {
-            // NOTE: if version < 3.2, then it will allow deploying contracts under /tables. It's a
-            // bug, but it should maintain data compatibility.
-            // NOTE2: if it's internalCreate it should allow creating table under /tables
-            if (protocol::versionCompareTo(version, protocol::BlockVersion::V3_2_VERSION) < 0 ||
-                !isCreate)
-            {
-                if (_address.starts_with(USER_TABLE_PREFIX))
-                {
-                    return std::string(formatAddress);
-                }
-            }
-            formatAddress =
-                formatAddress.starts_with('/') ? formatAddress.substr(1) : formatAddress;
-        }
-
-        return std::string(USER_APPS_PREFIX).append(formatAddress);
     }
 
     bool checkExecAuth(const CallParameters::UniquePtr& callParameters);

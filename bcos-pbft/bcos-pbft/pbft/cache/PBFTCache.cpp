@@ -304,7 +304,11 @@ void PBFTCache::resetCache(ViewType _curView)
     m_precommitted = false;
     PBFT_LOG(INFO) << LOG_DESC("resetCache") << LOG_KV("precommit", m_precommit ? "true" : "false")
                    << LOG_KV("prePrepare", m_prePrepare ? "true" : "false")
-                   << LOG_KV("curView", _curView);
+                   << LOG_KV("prepareView", m_prePrepare ? m_prePrepare->view() : 0)
+                   << LOG_KV("curView", _curView)
+                   << ((m_prePrepare && m_prePrepare->consensusProposal()) ?
+                              printPBFTProposal(m_prePrepare->consensusProposal()) :
+                              "consensusProposal is null");
     if (!m_precommit && m_prePrepare && m_prePrepare->consensusProposal() &&
         m_prePrepare->view() < _curView)
     {
@@ -315,31 +319,8 @@ void PBFTCache::resetCache(ViewType _curView)
         // reset the exceptioned txs to unsealed
         m_config->validator()->asyncResetTxsFlag(m_prePrepare->consensusProposal()->data(), false);
         m_prePrepare = nullptr;
-        m_exceptionPrePrepare = nullptr;
     }
-    if (m_exceptionPrePrepare)
-    {
-        auto validPrePrepare = (m_precommit || (m_prePrepare && m_prePrepare->consensusProposal() &&
-                                                   m_prePrepare->view() >= _curView));
-        if (validPrePrepare &&
-            (m_prePrepare && m_prePrepare->hash() == m_exceptionPrePrepare->hash()))
-        {
-            if (c_fileLogLevel == TRACE) [[unlikely]]
-            {
-                PBFT_LOG(TRACE) << LOG_DESC("resetCache : exceptionPrePrepare but finally be valid")
-                                << printPBFTProposal(m_exceptionPrePrepare->consensusProposal());
-            }
-        }
-        else
-        {
-            PBFT_LOG(INFO) << LOG_DESC("resetCache : asyncResetTxsFlag exceptionPrePrepare")
-                           << printPBFTProposal(m_exceptionPrePrepare->consensusProposal());
-            m_config->validator()->asyncResetTxsFlag(
-                m_exceptionPrePrepare->consensusProposal()->data(), false);
-            m_prePrepare = nullptr;
-            m_exceptionPrePrepare = nullptr;
-        }
-    }
+    resetExceptionCache(_curView);
     // clear the expired prepare cache
     resetCacheAfterViewChange(m_prepareCacheList, _curView);
     // clear the expired commit cache
@@ -349,6 +330,43 @@ void PBFTCache::resetCache(ViewType _curView)
     recalculateQuorum(m_prepareReqWeight, m_prepareCacheList);
     // recalculate m_commitReqWeight
     recalculateQuorum(m_commitReqWeight, m_commitCacheList);
+}
+
+void PBFTCache::resetExceptionCache(ViewType _curView)
+{
+    if (m_exceptionPrePrepareList.empty()) [[likely]]
+    {
+        return;
+    }
+    for (auto exceptionPrePrepare = m_exceptionPrePrepareList.begin();
+         exceptionPrePrepare != m_exceptionPrePrepareList.end();)
+    {
+        auto validPrePrepare = (m_precommit || (m_prePrepare && m_prePrepare->consensusProposal() &&
+                                                   m_prePrepare->view() >= _curView));
+        if (validPrePrepare &&
+            (m_prePrepare && m_prePrepare->hash() == (*exceptionPrePrepare)->hash()))
+        {
+            if (c_fileLogLevel == TRACE) [[unlikely]]
+            {
+                PBFT_LOG(TRACE) << LOG_DESC("resetCache : exceptionPrePrepare but finally be valid")
+                                << printPBFTProposal((*exceptionPrePrepare)->consensusProposal());
+            }
+        }
+        else
+        {
+            PBFT_LOG(INFO) << LOG_DESC("resetCache : asyncResetTxsFlag exceptionPrePrepare")
+                           << printPBFTProposal((*exceptionPrePrepare)->consensusProposal());
+            m_config->validator()->asyncResetTxsFlag(
+                (*exceptionPrePrepare)->consensusProposal()->data(), false);
+            exceptionPrePrepare = m_exceptionPrePrepareList.erase(exceptionPrePrepare);
+            if (exceptionPrePrepare == m_exceptionPrePrepareList.end())
+            {
+                m_prePrepare = nullptr;
+                break;
+            }
+        }
+        exceptionPrePrepare++;
+    }
 }
 
 void PBFTCache::setCheckPointProposal(PBFTProposalInterface::Ptr _proposal)
