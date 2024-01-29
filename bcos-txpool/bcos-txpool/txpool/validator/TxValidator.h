@@ -42,8 +42,16 @@ public:
     ~TxValidator() override = default;
 
     bcos::protocol::TransactionStatus verify(bcos::protocol::Transaction::ConstPtr _tx) override;
-    bcos::protocol::TransactionStatus submittedToChain(
+    bcos::protocol::TransactionStatus checkLedgerNonceAndBlockLimit(
         bcos::protocol::Transaction::ConstPtr _tx) override;
+    bcos::protocol::TransactionStatus checkTxpoolNonce(
+        bcos::protocol::Transaction::ConstPtr _tx) override;
+
+    LedgerNonceChecker::Ptr ledgerNonceChecker() override { return m_ledgerNonceChecker; }
+    void setLedgerNonceChecker(LedgerNonceChecker::Ptr _ledgerNonceChecker) override
+    {
+        m_ledgerNonceChecker = std::move(_ledgerNonceChecker);
+    }
 
 protected:
     virtual inline bool isSystemTransaction(bcos::protocol::Transaction::ConstPtr const& _tx)
@@ -52,7 +60,11 @@ protected:
     }
 
 private:
+    // check the transaction nonce in txpool
     NonceCheckerInterface::Ptr m_txPoolNonceChecker;
+    // check the transaction nonce in ledger, maintenance block number to nonce list mapping, and
+    // nonce list which already committed to ledger
+    LedgerNonceChecker::Ptr m_ledgerNonceChecker;
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
     std::string m_groupId;
     std::string m_chainId;

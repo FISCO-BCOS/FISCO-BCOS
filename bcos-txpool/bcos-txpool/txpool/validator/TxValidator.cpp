@@ -26,26 +26,27 @@ using namespace bcos::txpool;
 
 TransactionStatus TxValidator::verify(bcos::protocol::Transaction::ConstPtr _tx)
 {
-    if (_tx->invalid())
+    if (_tx->invalid()) [[unlikely]]
     {
         return TransactionStatus::InvalidSignature;
     }
     // check groupId and chainId
-    if (_tx->groupId() != m_groupId)
+    if (_tx->groupId() != m_groupId) [[unlikely]]
     {
         return TransactionStatus::InvalidGroupId;
     }
-    if (_tx->chainId() != m_chainId)
+    if (_tx->chainId() != m_chainId) [[unlikely]]
     {
         return TransactionStatus::InvalidChainId;
     }
-    // compare with nonces cached in memory
-    auto status = m_txPoolNonceChecker->checkNonce(_tx, false);
+    // compare with nonces cached in memory, only check nonce in txpool
+    auto status = checkTxpoolNonce(_tx);
     if (status != TransactionStatus::None)
     {
         return status;
     }
-    status = submittedToChain(_tx);
+    // check ledger nonce and block limit
+    status = checkLedgerNonceAndBlockLimit(_tx);
     if (status != TransactionStatus::None)
     {
         return status;
@@ -55,7 +56,7 @@ TransactionStatus TxValidator::verify(bcos::protocol::Transaction::ConstPtr _tx)
     {
         _tx->verify(*m_cryptoSuite->hashImpl(), *m_cryptoSuite->signatureImpl());
     }
-    catch (std::exception const& e)
+    catch (...)
     {
         return TransactionStatus::InvalidSignature;
     }
@@ -68,9 +69,10 @@ TransactionStatus TxValidator::verify(bcos::protocol::Transaction::ConstPtr _tx)
     return TransactionStatus::None;
 }
 
-TransactionStatus TxValidator::submittedToChain(bcos::protocol::Transaction::ConstPtr _tx)
+TransactionStatus TxValidator::checkLedgerNonceAndBlockLimit(
+    bcos::protocol::Transaction::ConstPtr _tx)
 {
-    // compare with nonces stored on-chain
+    // compare with nonces stored on-chain, and check block limit inside
     auto status = m_ledgerNonceChecker->checkNonce(_tx);
     if (status != TransactionStatus::None)
     {
@@ -81,4 +83,9 @@ TransactionStatus TxValidator::submittedToChain(bcos::protocol::Transaction::Con
         _tx->setSystemTx(true);
     }
     return TransactionStatus::None;
+}
+
+TransactionStatus TxValidator::checkTxpoolNonce(bcos::protocol::Transaction::ConstPtr _tx)
+{
+    return m_txPoolNonceChecker->checkNonce(_tx, false);
 }

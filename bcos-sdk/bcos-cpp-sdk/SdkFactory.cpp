@@ -136,7 +136,7 @@ bcos::cppsdk::jsonrpc::JsonRpcImpl::Ptr SdkFactory::buildJsonRpc(
         msg->setPayload(data);
 
         _service->asyncSendMessageByGroupAndNode(_group, _node, msg, Options(),
-            [_respFunc](auto&& _error, auto&& _msg, auto&& _session) {
+            [_respFunc](Error::Ptr _error, MessageFace::Ptr _msg, auto&& _session) {
                 (void)_session;
                 _respFunc(_error, _msg ? _msg->payload() : nullptr);
             });
