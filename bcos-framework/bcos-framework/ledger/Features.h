@@ -208,7 +208,7 @@ public:
         for (auto [flag, name, value] : flags())
         {
             if (value && !co_await storage2::existsOne(
-                             storage, transaction_executor::StateKey(ledger::SYS_CONFIG, name)))
+                             storage, transaction_executor::StateKeyView(ledger::SYS_CONFIG, name)))
             {
                 storage::Entry entry;
                 entry.setObject(
