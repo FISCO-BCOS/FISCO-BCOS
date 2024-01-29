@@ -913,7 +913,7 @@ void SchedulerImpl::preExecuteBlock(
 
         setPreparedBlock(blockNumber, timestamp, blockExecutive);
 
-        m_preExeWorker.enqueue([this, blockNumber, timestamp, block, blockExecutive,
+        m_preExeWorker.enqueue([this, blockNumber, timestamp, blockExecutive,
                                    callback = std::move(callback)]() {
             try
             {
