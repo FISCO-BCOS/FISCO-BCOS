@@ -50,9 +50,9 @@ void JsonRpcImpl::stop()
 {
     if (m_service)
     {
+        // RPCIMPL_LOG(INFO) << LOG_BADGE("stop") << LOG_DESC("stop rpc");
         m_service->stop();
     }
-    RPCIMPL_LOG(INFO) << LOG_BADGE("stop") << LOG_DESC("stop rpc");
 }
 
 void JsonRpcImpl::genericMethod(const std::string& _data, RespFunc _respFunc)

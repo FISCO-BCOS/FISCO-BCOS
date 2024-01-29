@@ -854,6 +854,7 @@ void PBFTCacheProcessor::removeConsensusedCache(
         if (pcache->first <= _consensusedNumber)
         {
             m_proposalsToStableConsensus.erase(pcache->first);
+            pcache->second->resetExceptionCache(_view);
             pcache = m_caches.erase(pcache);
             eraseSize++;
             continue;

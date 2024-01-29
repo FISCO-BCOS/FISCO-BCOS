@@ -42,7 +42,7 @@ public:
     ~EventSub() override
     {
         stop();
-        EVENT_SUB(INFO) << LOG_KV("[DELOBJ][EventSub]", this);
+        // EVENT_SUB(INFO) << LOG_KV("[DELOBJ][EventSub]", this);
     }
 
 public:

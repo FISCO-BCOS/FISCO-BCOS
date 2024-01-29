@@ -102,6 +102,14 @@ std::shared_ptr<PrecompiledExecResult> BalancePrecompiled::call(
     return _callParameters;
 }
 
+
+std::string BalancePrecompiled::getContractTableName(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    const std::string_view& _address)
+{
+    return _executive->getContractTableName(_address, _executive->isWasm(), false);
+}
+
 void BalancePrecompiled::createAccount(
     const std::shared_ptr<executor::TransactionExecutive>& _executive,
     const PrecompiledExecResult::Ptr& _callParameters, const bcos::CodecWrapper& codec,
@@ -141,7 +149,7 @@ void BalancePrecompiled::getBalance(
 
     // get balance from account table
     auto params = codec.encodeWithSig("getAccountBalance()");
-    auto tableName = getContractTableName(executor::USER_APPS_PREFIX, accountStr);
+    auto tableName = getContractTableName(_executive, accountStr);
     std::vector<std::string> tableNameVector = {tableName};
     auto params2 = codec.encode(tableNameVector, params);
     auto input = codec.encode(std::string(ACCOUNT_ADDRESS), params2);
@@ -198,7 +206,7 @@ void BalancePrecompiled::addBalance(
                            << LOG_KV("callerEntry", entry->get());
 
     // check the account whether exist, if not exist, create the account
-    auto accountTableName = getContractTableName(executor::USER_APPS_PREFIX, accountStr);
+    auto accountTableName = getContractTableName(_executive, accountStr);
     auto table1 = _executive->storage().openTable(accountTableName);
     if (!table1)
     {
@@ -259,7 +267,7 @@ void BalancePrecompiled::subBalance(
     }
 
     // check the account whether exist, if not exist, create the account
-    auto accountTableName = getContractTableName(executor::USER_APPS_PREFIX, accountStr);
+    auto accountTableName = getContractTableName(_executive, accountStr);
     auto table1 = _executive->storage().openTable(accountTableName);
     if (!table1)
     {
@@ -275,7 +283,7 @@ void BalancePrecompiled::subBalance(
 
     // AccountPrecompiledAddress  + subAccountBalance(value), internal call
     auto balanceParams = codec.encodeWithSig("subAccountBalance(uint256)", value);
-    auto tableName = getContractTableName(executor::USER_APPS_PREFIX, accountStr);
+    auto tableName = getContractTableName(_executive, accountStr);
     std::vector<std::string> tableNameVector = {tableName};
     auto inputParams = codec.encode(tableNameVector, balanceParams);
 
@@ -329,12 +337,12 @@ void BalancePrecompiled::transfer(const std::shared_ptr<executor::TransactionExe
     // first subAccountBalance, then addAccountBalance
 
     auto params = codec.encodeWithSig("subAccountBalance(uint256)", value);
-    auto formTableName = getContractTableName(executor::USER_APPS_PREFIX, fromStr);
+    auto formTableName = getContractTableName(_executive, fromStr);
     std::vector<std::string> fromTableNameVector = {formTableName};
     auto inputParams = codec.encode(fromTableNameVector, params);
 
     // check the from account whether exist, if not exist, create the account
-    auto fromAccountTableName = getContractTableName(executor::USER_APPS_PREFIX, fromStr);
+    auto fromAccountTableName = getContractTableName(_executive, fromStr);
     auto fromTable = _executive->storage().openTable(fromAccountTableName);
     if (!fromTable)
     {
@@ -356,13 +364,13 @@ void BalancePrecompiled::transfer(const std::shared_ptr<executor::TransactionExe
     if (subBalanceResult->status == int32_t(CODE_SUCCESS))
     {
         auto params1 = codec.encodeWithSig("addAccountBalance(uint256)", value);
-        auto toTableName = getContractTableName(executor::USER_APPS_PREFIX, toStr);
+        auto toTableName = getContractTableName(_executive, toStr);
         std::vector<std::string> toTableNameVector = {toTableName};
         auto inputParams1 = codec.encode(toTableNameVector, params1);
         auto addParams = codec.encode(std::string(ACCOUNT_ADDRESS), inputParams1);
 
         // check the to account whether exist, if not exist, create the account
-        auto toAccountTableName = getContractTableName(executor::USER_APPS_PREFIX, toStr);
+        auto toAccountTableName = getContractTableName(_executive, toStr);
         auto toTable = _executive->storage().openTable(toAccountTableName);
         if (!toTable)
         {
