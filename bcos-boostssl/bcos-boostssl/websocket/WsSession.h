@@ -18,6 +18,7 @@
  * @date 2021-07-28
  */
 #pragma once
+#include "bcos-boostssl/interfaces/MessageFace.h"
 #include "bcos-utilities/ObjectCounter.h"
 #include <bcos-boostssl/httpserver/Common.h>
 #include <bcos-boostssl/websocket/Common.h>
@@ -86,12 +87,6 @@ public:
     std::string endPoint() const { return m_endPoint; }
     void setEndPoint(const std::string& _endPoint) { m_endPoint = _endPoint; }
 
-    std::string connectedEndPoint() const { return m_connectedEndPoint; }
-    void setConnectedEndPoint(const std::string& _connectedEndPoint)
-    {
-        m_connectedEndPoint = _connectedEndPoint;
-    }
-
     void setConnectHandler(WsConnectHandler _connectHandler)
     {
         m_connectHandler = std::move(_connectHandler);
@@ -139,8 +134,14 @@ public:
 
     std::size_t writeQueueSize()
     {
-        bcos::ReadGuard lockGuard(x_writeQueue);
+        bcos::Guard lockGuard(x_writeQueue);
         return m_writeQueue.size();
+    }
+
+    std::size_t callbackQueueSize()
+    {
+        bcos::Guard lockGuard(x_callback);
+        return m_callbacks.size();
     }
 
     std::string nodeId() { return m_nodeId; }
@@ -163,8 +164,8 @@ public:
         std::shared_ptr<boost::asio::deadline_timer> timer;
     };
     virtual void addRespCallback(const std::string& _seq, CallBack::Ptr _callback);
-    CallBack::Ptr getAndRemoveRespCallback(const std::string& _seq, bool _remove = true,
-        std::shared_ptr<MessageFace> _message = nullptr);
+    CallBack::Ptr getAndRemoveRespCallback(
+        const std::string& _seq, std::shared_ptr<MessageFace> _message = nullptr);
     virtual void onRespTimeout(const boost::system::error_code& _error, const std::string& _seq);
 
     virtual void onWsAccept(boost::beast::error_code _ec);
@@ -185,7 +186,7 @@ public:
 
 protected:
     tbb::task_group& m_taskGroup;
-    // flag for message that need to check respond packet like p2pmessage
+    // flag for message that need to check respond packet like p2p message
     bool m_needCheckRspPacket = false;
     //
     std::atomic_bool m_isDrop = false;
@@ -197,7 +198,6 @@ protected:
     boost::beast::flat_buffer m_buffer;
 
     std::string m_endPoint;
-    std::string m_connectedEndPoint;
     std::string m_nodeId;
 
     //
@@ -208,7 +208,7 @@ protected:
     //
     WsStreamDelegate::Ptr m_wsStreamDelegate;
     // callbacks
-    mutable bcos::SharedMutex x_callback;
+    mutable bcos::Mutex x_callback;
     std::unordered_map<std::string, CallBack::Ptr> m_callbacks;
 
     // callback handler
@@ -224,7 +224,7 @@ protected:
     // ioc
     std::shared_ptr<boost::asio::io_context> m_ioc;
     // send message queue
-    mutable bcos::SharedMutex x_writeQueue;
+    mutable bcos::Mutex x_writeQueue;
     std::priority_queue<std::shared_ptr<Message>> m_writeQueue;
     std::atomic_bool m_writing = {false};
 };
