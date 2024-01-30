@@ -37,7 +37,16 @@ bool DmcExecutor::prepare()
     // prepare all that need to
     m_executivePool.forEachAndClear(ExecutivePool::MessageHint::NEED_PREPARE,
         [this](int64_t contextID, ExecutiveState::Ptr executiveState) {
-            auto hint = handleExecutiveMessage(executiveState);
+            DmcExecutor::MessageHint hint;
+            if (m_enablePreFinishType)
+            {
+                hint = handleExecutiveMessageV2(executiveState);
+            }
+            else
+            {
+                hint = handleExecutiveMessage(executiveState);
+            }
+
             m_executivePool.markAs(contextID, hint);
             DMC_LOG(TRACE) << " 2.AfterPrepare: \t [..] " << executiveState->toString() << " "
                            << ExecutivePool::toString(hint);
@@ -419,6 +428,191 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr
     case protocol::ExecutionMessage::FINISHED:
     case protocol::ExecutionMessage::REVERT:
     {
+        executiveState->callStack.pop();
+        if (executiveState->callStack.empty())
+        {
+            // Empty stack, execution is finished
+            f_onTxFinished(std::move(message));
+            return MessageHint::END;
+        }
+
+        message->setSeq(executiveState->callStack.top());
+        message->setCreate(false);
+        return MessageHint::NEED_SEND;
+    }
+        // Retry type, send again
+    case protocol::ExecutionMessage::KEY_LOCK:
+    {
+        m_keyLocks->batchAcquireKeyLock(
+            message->from(), message->keyLocks(), message->contextID(), message->seq());
+
+        executiveState->message = std::move(message);
+
+        return MessageHint::LOCKED;
+    }
+    default:
+    {
+        DMC_LOG(FATAL) << "Unrecognized message type: " << message->toString();
+        assert(false);
+        break;
+    }
+    }
+
+    // never goes here
+    DMC_LOG(FATAL) << "Message end with illegal manner" << message->toString();
+    assert(false);
+    return MessageHint::END;
+}
+
+DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessageV2(ExecutiveState::Ptr executiveState)
+{
+    // handle create message first, create address and convert to normal message
+    handleCreateMessage(executiveState);
+
+    // handle normal message
+    auto& message = executiveState->message;
+
+    if (f_getAddr(message->to()) != m_contractAddress)
+    {
+        return MessageHint::NEED_SCHEDULE_OUT;
+    }
+
+    switch (message->type())
+    {
+        // Request type, push stack
+    case protocol::ExecutionMessage::MESSAGE:
+    case protocol::ExecutionMessage::TXHASH:
+    {
+        if (executiveState->message->data().toBytes() == bcos::protocol::GET_CODE_INPUT_BYTES)
+        {
+            auto newSeq = executiveState->currentSeq++;
+            executiveState->callStack.push(newSeq);
+            executiveState->message->setSeq(newSeq);
+
+            // getCode
+            DMC_LOG(DEBUG) << "Get external code in scheduler"
+                           << LOG_KV("codeAddress", executiveState->message->delegateCallAddress());
+            bytes code = f_onGetCodeEvent(executiveState->message->delegateCallAddress());
+            DMC_LOG(TRACE) << "Get external code success in scheduler"
+                           << LOG_KV("codeAddress", executiveState->message->delegateCallAddress())
+                           << LOG_KV("codeSize", code.size());
+            executiveState->message->setData(code);
+            executiveState->message->setType(protocol::ExecutionMessage::PRE_FINISH);
+            return MessageHint::NEED_PREPARE;
+        }
+
+        // update my key locks in m_keyLocks
+        m_keyLocks->batchAcquireKeyLock(
+            message->from(), message->keyLocks(), message->contextID(), message->seq());
+
+        auto newSeq = executiveState->currentSeq++;
+        if (newSeq > 0 && executiveState->callStack.empty())
+        {
+            // sharding optimize by ignore pushing seq = 0 to stack, we need to push here
+            executiveState->callStack.push(0);
+        }
+        executiveState->callStack.push(newSeq);
+        executiveState->revertStack.push({newSeq, std::string(message->to())});
+        executiveState->message->setSeq(newSeq);
+
+        if (executiveState->message->delegateCall())
+        {
+            bytes code = f_onGetCodeEvent(message->delegateCallAddress());
+            if (code.empty())
+            {
+                DMC_LOG(DEBUG)
+                    << "Could not getCode() from correspond executor during delegateCall: "
+                    << message->toString();
+                message->setType(protocol::ExecutionMessage::REVERT);
+                message->setCreate(false);
+                message->setKeyLocks({});
+
+                executiveState->isRevertStackMessage = true;
+
+                return MessageHint::NEED_PREPARE;
+            }
+
+            executiveState->message->setDelegateCallCode(code);
+        }
+
+        return MessageHint::NEED_SEND;
+    }
+        // Return type, pop stack
+    case protocol::ExecutionMessage::PRE_FINISH:
+    {
+        // update my key locks in m_keyLocks
+        m_keyLocks->batchAcquireKeyLock(
+            message->from(), message->keyLocks(), message->contextID(), message->seq());
+
+        if (!executiveState->callStack.empty())
+        {
+            executiveState->callStack.pop();
+        }
+
+        assert(!executiveState->callStack.empty());
+
+        message->setSeq(executiveState->callStack.top());
+        message->setCreate(false);
+        return MessageHint::NEED_SEND;
+    }
+    case protocol::ExecutionMessage::FINISHED:
+    {
+        if (executiveState->isRevertStackMessage)
+        {
+            // handle schedule in message
+            executiveState->isRevertStackMessage = false;
+            return MessageHint::NEED_SEND;
+        }
+
+        if (executiveState->revertStack.empty()
+            // no need to consider
+            || executiveState->revertStack.top().first == 0)
+        {
+            // Empty stack, execution is finished
+            f_onTxFinished(std::move(message));
+            return MessageHint::END;
+        }
+
+        // generate new finish message and scheduler out
+        auto [seq, to] = executiveState->revertStack.top();
+        executiveState->revertStack.pop();
+        executiveState->isRevertStackMessage = true;
+        message->setSeq(seq);
+        message->setFrom(std::string(message->to()));  // record parent address
+        message->setTo(std::string(to));
+        message->setCreate(false);
+        return MessageHint::NEED_PREPARE;
+    }
+    case protocol::ExecutionMessage::REVERT:
+    {
+        if (executiveState->isRevertStackMessage)
+        {
+            // handle schedule in message
+            executiveState->isRevertStackMessage = false;
+            return MessageHint::NEED_SEND;
+        }
+
+        if (!executiveState->revertStack.empty())
+        {
+            if (executiveState->callStack.top() < executiveState->revertStack.top().first)
+            {
+                // need revert child executive
+                auto [seq, to] = executiveState->revertStack.top();
+                executiveState->revertStack.pop();
+                executiveState->isRevertStackMessage = true;
+                message->setSeq(seq);
+                message->setFrom(std::string(message->to()));  // record parent address
+                message->setTo(std::string(to));
+                message->setCreate(false);
+                return MessageHint::NEED_PREPARE;
+            }
+            else if (executiveState->callStack.top() == executiveState->revertStack.top().first)
+            {
+                // just pop this revertStack for this executive has been reverted
+                executiveState->revertStack.pop();
+            }
+        }
+
         executiveState->callStack.pop();
         if (executiveState->callStack.empty())
         {

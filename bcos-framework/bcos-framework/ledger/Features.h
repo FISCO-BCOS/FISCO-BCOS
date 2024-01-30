@@ -34,6 +34,7 @@ public:
         bugfix_event_log_order,
         bugfix_call_noaddr_return,
         bugfix_precompiled_codehash,
+        bugfix_dmc_revert,
         feature_dmc2serial,
         feature_sharding,
         feature_rpbft,
@@ -133,7 +134,7 @@ public:
                         Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy}},
                 {protocol::BlockVersion::V3_2_4_VERSION, protocol::BlockVersion::V3_2_7_VERSION,
                     {Flag::bugfix_event_log_order, Flag::bugfix_call_noaddr_return,
-                        Flag::bugfix_precompiled_codehash}},
+                        Flag::bugfix_precompiled_codehash, Flag::bugfix_dmc_revert}},
                 {protocol::BlockVersion::V3_4_VERSION, protocol::BlockVersion::V3_5_VERSION,
                     {Flag::bugfix_revert}}});
 
