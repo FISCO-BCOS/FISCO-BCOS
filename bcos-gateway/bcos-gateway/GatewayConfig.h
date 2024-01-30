@@ -185,6 +185,8 @@ public:
     bool isValidIP(const std::string& _ip);
     // MB to bit
     int64_t doubleMBToBit(double _d);
+    bool isIPAddress(const std::string& _input);
+    bool isHostname(const std::string& _input);
     void hostAndPort2Endpoint(const std::string& _host, NodeIPEndpoint& _endpoint);
     void parseConnectedJson(const std::string& _json, std::set<NodeIPEndpoint>& _nodeIPEndpointSet);
     // loads p2p configuration items from the configuration file

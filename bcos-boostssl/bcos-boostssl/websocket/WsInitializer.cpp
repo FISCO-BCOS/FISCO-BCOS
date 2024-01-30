@@ -31,6 +31,7 @@
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/ThreadPool.h>
+#include <boost/system/detail/error_code.hpp>
 #include <cstddef>
 #include <memory>
 
@@ -130,7 +131,7 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
         auto connectPeers = _config->connectPeers();
         WEBSOCKET_INITIALIZER(INFO)
             << LOG_BADGE("initWsService") << LOG_DESC("start websocket service as client")
-            << LOG_KV("connected size", connectPeers ? connectPeers->size() : 0);
+            << LOG_KV("connected endpoints size", connectPeers ? connectPeers->size() : 0);
 
         if (connectPeers)
         {
@@ -138,8 +139,23 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
             {
                 if (!WsTools::validIP(peer.address()))
                 {
-                    BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
-                                              "invalid connected peer, value: " + peer.address()));
+                    boost::system::error_code err;
+
+                    // test if the address domain name
+                    boost::asio::ip::tcp::resolver::query qry(
+                        peer.address(), boost::lexical_cast<std::string>(0));
+                    resolver->resolve(qry, err);
+
+                    if (err)
+                    {
+                        BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                                  "invalid connection host, ipv4/ipv6/domain name "
+                                                  "support, current: " +
+                                                  peer.address()));
+                    }
+                    WEBSOCKET_INITIALIZER(INFO)
+                        << LOG_BADGE("initWsService") << LOG_DESC("domain name has been set")
+                        << LOG_KV("host", peer.address());
                 }
 
                 if (!WsTools::validPort(peer.port()))
