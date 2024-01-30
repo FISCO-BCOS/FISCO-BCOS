@@ -19,6 +19,7 @@
  */
 #pragma once
 
+#include "bcos-utilities/NewTimer.h"
 #include "bcos-utilities/ObjectAllocatorMonitor.h"
 #include <bcos-boostssl/httpserver/HttpServer.h>
 #include <bcos-boostssl/interfaces/MessageFace.h>
@@ -153,6 +154,11 @@ public:
     {
         m_httpServer = std::move(_httpServer);
     }
+    void setTimerFactory(timer::TimerFactory::Ptr _timerFactory)
+    {
+        m_timerFactory = std::move(_timerFactory);
+    }
+    timer::TimerFactory::Ptr timerFactory() const { return m_timerFactory; }
 
     bool registerMsgHandler(uint16_t _msgType, MsgHandler _msgHandler);
 
@@ -211,12 +217,13 @@ private:
 
     // ws connector
     std::shared_ptr<WsConnector> m_connector;
+    std::shared_ptr<timer::Timer> m_statTimer;
     // reconnect timer
-    std::shared_ptr<boost::asio::deadline_timer> m_reconnect;
-    // heartbeat timer
-    std::shared_ptr<boost::asio::deadline_timer> m_heartbeat;
+    std::shared_ptr<timer::Timer> m_reconnectTimer;
     // http server
     std::shared_ptr<bcos::boostssl::http::HttpServer> m_httpServer;
+    // timer
+    timer::TimerFactory::Ptr m_timerFactory = nullptr;
 
     // mutex for m_sessions
     mutable boost::shared_mutex x_mutex;

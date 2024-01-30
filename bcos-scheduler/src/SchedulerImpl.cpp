@@ -913,38 +913,38 @@ void SchedulerImpl::preExecuteBlock(
 
         setPreparedBlock(blockNumber, timestamp, blockExecutive);
 
-        m_preExeWorker.enqueue([this, blockNumber, timestamp, blockExecutive,
-                                   callback = std::move(callback)]() {
-            try
-            {
-                if (!m_isRunning)
+        m_preExeWorker.enqueue(
+            [this, blockNumber, timestamp, blockExecutive, callback = std::move(callback)]() {
+                try
                 {
-                    return;
-                }
+                    if (!m_isRunning)
+                    {
+                        return;
+                    }
 
-                auto currentBlockNumber = getCurrentBlockNumber();
-                if (blockNumber <= currentBlockNumber)
-                {
-                    SCHEDULER_LOG(DEBUG)
-                        << "preExeBlock: block has executed. " << LOG_KV("needNumber", blockNumber)
-                        << LOG_KV("currentNumber", currentBlockNumber)
-                        << LOG_KV("timestamp", timestamp);
+                    auto currentBlockNumber = getCurrentBlockNumber();
+                    if (blockNumber <= currentBlockNumber)
+                    {
+                        SCHEDULER_LOG(DEBUG) << "preExeBlock: block has executed. "
+                                             << LOG_KV("needNumber", blockNumber)
+                                             << LOG_KV("currentNumber", currentBlockNumber)
+                                             << LOG_KV("timestamp", timestamp);
+                        callback(nullptr);
+                        return;
+                    }
+
+                    blockExecutive->prepare();
+
                     callback(nullptr);
-                    return;
                 }
-
-                blockExecutive->prepare();
-
-                callback(nullptr);
-            }
-            catch (bcos::Error& e)
-            {
-                SCHEDULER_LOG(WARNING)
-                    << "preExeBlock in worker exception: " << LOG_KV("code", e.errorCode())
-                    << LOG_KV("message", e.errorMessage());
-                callback(BCOS_ERROR_PTR(e.errorCode(), e.errorMessage()));
-            }
-        });
+                catch (bcos::Error& e)
+                {
+                    SCHEDULER_LOG(WARNING)
+                        << "preExeBlock in worker exception: " << LOG_KV("code", e.errorCode())
+                        << LOG_KV("message", e.errorMessage());
+                    callback(BCOS_ERROR_PTR(e.errorCode(), e.errorMessage()));
+                }
+            });
     }
     catch (bcos::Error& e)
     {

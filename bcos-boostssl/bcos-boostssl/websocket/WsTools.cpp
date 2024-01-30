@@ -30,6 +30,7 @@ bool WsTools::stringToEndPoint(const std::string& _peer, NodeIPEndpoint& _endpoi
 {
     // ipv4: 127.0.0.1:12345 => NodeIPEndpoint
     // ipv6: [0:1]:12345 => NodeIPEndpoint
+    // domain name: xxxxxx:port
 
     std::string ip;
     uint16_t port = 0;
@@ -54,16 +55,7 @@ bool WsTools::stringToEndPoint(const std::string& _peer, NodeIPEndpoint& _endpoi
 
     valid = validIP(ip) && validPort(port);
 
-    if (!valid)
-    {
-        WEBSOCKET_TOOL(WARNING) << LOG_DESC("peer is not valid ip:port format")
-                                << LOG_KV("peer", _peer);
-    }
-
-    if (valid)
-    {
-        _endpoint = NodeIPEndpoint(ip, port);
-    }
+    _endpoint = NodeIPEndpoint(ip, port);
 
     return valid;
 }

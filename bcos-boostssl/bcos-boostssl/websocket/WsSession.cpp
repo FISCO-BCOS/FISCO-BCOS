@@ -66,10 +66,10 @@ void WsSession::drop(uint32_t _reason)
         auto error =
             BCOS_ERROR_PTR(WsError::SessionDisconnect, "the session has been disconnected");
 
-        ReadGuard l(x_callback);
         WEBSOCKET_SESSION(INFO) << LOG_BADGE("drop") << LOG_KV("reason", _reason)
                                 << LOG_KV("endpoint", m_endPoint)
                                 << LOG_KV("cb size", m_callbacks.size()) << LOG_KV("session", this);
+        Guard lockGuard(x_callback);
 
         for (auto& cbEntry : m_callbacks)
         {
@@ -90,7 +90,7 @@ void WsSession::drop(uint32_t _reason)
 
     // clear callbacks
     {
-        WriteGuard lock(x_callback);
+        Guard lockGuard(x_callback);
         m_callbacks.clear();
     }
 
@@ -190,7 +190,7 @@ void WsSession::onMessage(bcos::boostssl::MessageFace::Ptr _message)
         {
             return;
         }
-        auto callback = session->getAndRemoveRespCallback(_message->seq(), true, _message);
+        auto callback = session->getAndRemoveRespCallback(_message->seq(), _message);
         if (callback)
         {
             if (callback->timer)
@@ -255,7 +255,7 @@ void WsSession::onWritePacket()
     {
         return;
     }
-    WriteGuard l(x_writeQueue);
+    Guard l(x_writeQueue);
     if (m_writing)
     {
         return;
@@ -322,7 +322,7 @@ void WsSession::send(std::shared_ptr<bytes> buffer)
     auto msg = std::make_shared<Message>();
     msg->buffer = std::move(buffer);
     {
-        WriteGuard lock(x_writeQueue);
+        Guard lock(x_writeQueue);
         // data to be sent is always enqueue first
         m_writeQueue.push(msg);
     }
@@ -387,6 +387,7 @@ void WsSession::asyncSendMessage(
         WEBSOCKET_SESSION(WARNING)
             << LOG_BADGE("asyncSendMessage") << LOG_DESC("message encode failed")
             << LOG_KV("endpoint", endPoint()) << LOG_KV("seq", seq)
+            << LOG_KV("packetType", _msg->packetType())
             << LOG_KV("msgSize", _msg->payload()->size())
             << LOG_KV("maxWriteMsgSize", maxWriteMsgSize());
         return;
@@ -404,7 +405,7 @@ void WsSession::asyncSendMessage(
                 *m_ioc, boost::posix_time::milliseconds(timeout));
 
             callback->timer = timer;
-            auto self = std::weak_ptr<WsSession>(shared_from_this());
+            auto self = weak_from_this();
             timer->async_wait([self, seq](const boost::system::error_code& e) {
                 auto session = self.lock();
                 if (session)
@@ -425,12 +426,12 @@ void WsSession::asyncSendMessage(
 
 void WsSession::addRespCallback(const std::string& _seq, CallBack::Ptr _callback)
 {
-    WriteGuard lock(x_callback);
+    Guard lockGuard(x_callback);
     m_callbacks[_seq] = std::move(_callback);
 }
 
 WsSession::CallBack::Ptr WsSession::getAndRemoveRespCallback(
-    const std::string& _seq, bool _remove, std::shared_ptr<MessageFace> _message)
+    const std::string& _seq, std::shared_ptr<MessageFace> _message)
 {
     // Session need check response packet and message isn't a respond packet, so message don't have
     // a callback. Otherwise message has a callback.
@@ -441,16 +442,13 @@ WsSession::CallBack::Ptr WsSession::getAndRemoveRespCallback(
 
     CallBack::Ptr callback = nullptr;
     {
-        UpgradableGuard l(x_callback);
+        Guard lockGuard(x_callback);
+
         auto it = m_callbacks.find(_seq);
         if (it != m_callbacks.end())
         {
             callback = it->second;
-            if (_remove)
-            {
-                UpgradeGuard ul(l);
-                m_callbacks.erase(it);
-            }
+            m_callbacks.erase(it);
         }
     }
 
