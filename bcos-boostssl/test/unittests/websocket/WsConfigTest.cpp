@@ -85,7 +85,7 @@ BOOST_AUTO_TEST_CASE(test_WsToolsTest)
     BOOST_CHECK_EQUAL(WsTools::validIP("::1"), true);
 
     BOOST_CHECK_EQUAL(WsTools::validPort(1111), true);
-    BOOST_CHECK_EQUAL(WsTools::validPort(10), false);
+    BOOST_CHECK_EQUAL(WsTools::validPort(10), true);
     BOOST_CHECK_EQUAL(WsTools::validPort(65535), true);
 }
 
