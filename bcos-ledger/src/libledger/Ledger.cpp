@@ -1887,7 +1887,7 @@ bool Ledger::buildGenesisBlock(
 
     // Write default features
     Features features;
-    features.setToDefault(protocol::BlockVersion(versionNumber));
+    features.setGenesisFeatures(protocol::BlockVersion(versionNumber));
 
     // tx count limit
     Entry txLimitEntry;

@@ -22,6 +22,7 @@
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/ledger/Features.h"
+#include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-task/Wait.h"
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
@@ -382,21 +383,19 @@ void SystemConfigPrecompiled::upgradeChain(
     }
 
     // Write default features when data version changes
-    if (toVersion >= static_cast<uint32_t>(BlockVersion::V3_2_3_VERSION))
-    {
-        Features bugfixFeatures;
-        bugfixFeatures.setToDefault(protocol::BlockVersion(toVersion));
-        task::syncWait(bugfixFeatures.writeToStorage(*_executive->blockContext().storage(), 0));
+    Features bugfixFeatures;
+    bugfixFeatures.setUpgradeFeatures(static_cast<protocol::BlockVersion>(version),
+        static_cast<protocol::BlockVersion>(toVersion));
+    task::syncWait(bugfixFeatures.writeToStorage(*_executive->blockContext().storage(), 0));
 
-        // From 3.3 / 3.4 or to 3.3 / 3.4, enable the feature_sharding
-        if ((version >= BlockVersion::V3_3_VERSION && version <= BlockVersion::V3_4_VERSION) ||
-            (toVersion >= BlockVersion::V3_3_VERSION && toVersion <= BlockVersion::V3_4_VERSION))
-        {
-            Features shardingFeatures;
-            shardingFeatures.set(ledger::Features::Flag::feature_sharding);
-            task::syncWait(
-                shardingFeatures.writeToStorage(*_executive->blockContext().backendStorage(), 0));
-        }
+    // From 3.3 / 3.4 or to 3.3 / 3.4, enable the feature_sharding
+    if ((version >= BlockVersion::V3_3_VERSION && version <= BlockVersion::V3_4_VERSION) ||
+        (toVersion >= BlockVersion::V3_3_VERSION && toVersion <= BlockVersion::V3_4_VERSION))
+    {
+        Features shardingFeatures;
+        shardingFeatures.set(ledger::Features::Flag::feature_sharding);
+        task::syncWait(
+            shardingFeatures.writeToStorage(*_executive->blockContext().backendStorage(), 0));
     }
 }
 
