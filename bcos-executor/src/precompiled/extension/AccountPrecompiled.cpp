@@ -313,7 +313,7 @@ void AccountPrecompiled::addAccountBalance(const std::string& accountTableName,
     if (entry.has_value())
     {
         u256 balance = u256(std::string(entry->get()));
-        if (balance >= (u256(-1) - value))
+        if (balance + value < balance)
         {
             PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number())
                                   << LOG_BADGE("AccountPrecompiled, addAccountBalance")

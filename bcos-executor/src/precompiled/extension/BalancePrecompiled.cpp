@@ -20,6 +20,7 @@
 
 #include "BalancePrecompiled.h"
 #include "AccountManagerPrecompiled.h"
+#include "bcos-framework/bcos-framework/storage/Table.h"
 #include "libinitializer/AuthInitializer.h"
 #include <bcos-tool/BfsFileFactory.h>
 #include <boost/archive/binary_iarchive.hpp>
@@ -464,6 +465,19 @@ void BalancePrecompiled::registerCaller(
     }
     else
     {
+        // check table size whether exceed the limit
+        auto keyCondition = std::make_optional<storage::Condition>();
+        keyCondition->limit(0, USER_TABLE_MAX_LIMIT_COUNT);
+        auto tableKeyList = table->getPrimaryKeys(*keyCondition);
+        if (tableKeyList.size() >= USER_TABLE_MAX_LIMIT_COUNT)
+        {
+            PRECOMPILED_LOG(TRACE)
+                << BLOCK_NUMBER(blockContext.number()) << LOG_BADGE("registerCaller")
+                << LOG_DESC("failed to register, caller table size exceed limit")
+                << LOG_KV("caller", accountStr) << LOG_KV("tableKeyList size", tableKeyList.size());
+            BOOST_THROW_EXCEPTION(protocol::PrecompiledError("caller table size exceed limit"));
+            return;
+        }
         auto callerEntry = table->getRow(accountStr);
         if (callerEntry && callerEntry->get() == "1")
         {
@@ -499,9 +513,11 @@ void BalancePrecompiled::unregisterCaller(
                            << LOG_KV("account address", accountStr);
     if (RANGES::find(governors, Address(origin)) == governors.end())
     {
-        PRECOMPILED_LOG(TRACE) << BLOCK_NUMBER(blockContext.number()) << LOG_BADGE("registerCaller")
-                               << LOG_DESC("failed to register, only governor can register caller");
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError("only governor can register caller"));
+        PRECOMPILED_LOG(TRACE) << BLOCK_NUMBER(blockContext.number())
+                               << LOG_BADGE("unregisterCaller")
+                               << LOG_DESC(
+                                      "failed to unregister, only governor can unregister caller");
+        BOOST_THROW_EXCEPTION(protocol::PrecompiledError("only governor can unregister caller"));
         return;
     }
 
@@ -520,10 +536,14 @@ void BalancePrecompiled::unregisterCaller(
         BOOST_THROW_EXCEPTION(protocol::PrecompiledError("caller not exist"));
     }
 
-    // unregister callers, set value to 0
-    Entry caller;
-    caller.importFields({"0"});
-    _executive->storage().setRow(SYS_BALANCE_CALLER, accountStr, std::move(caller));
+    // unregister callers, set entry to deleted state
+    auto deletedEntry = std::make_optional(table->newDeletedEntry());
+    table->setRow(accountStr, std::move(*deletedEntry));
+    auto checkEntry = table->getRow(accountStr);
+    if (checkEntry.has_value())
+    {
+        BOOST_THROW_EXCEPTION(protocol::PrecompiledError("unregister caller failed"));
+    }
     _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
 
     PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number()) << LOG_BADGE("BalancePrecompiled")
