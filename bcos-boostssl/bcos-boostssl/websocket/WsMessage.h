@@ -84,7 +84,10 @@ public:
     std::string const& seq() const override { return m_seq; }
     void setSeq(std::string _seq) override { m_seq = _seq; }
     std::shared_ptr<bcos::bytes> payload() const override { return m_payload; }
-    void setPayload(std::shared_ptr<bcos::bytes> _payload) override { m_payload = _payload; }
+    void setPayload(std::shared_ptr<bcos::bytes> _payload) override
+    {
+        m_payload = std::move(_payload);
+    }
     uint16_t ext() const override { return m_ext; }
     void setExt(uint16_t _ext) override { m_ext = _ext; }
 
