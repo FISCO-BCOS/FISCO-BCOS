@@ -62,6 +62,33 @@ BOOST_AUTO_TEST_CASE(test_validIP)
     BOOST_CHECK(config->isValidIP("1111::1111:1111:1111:1111"));
 }
 
+BOOST_AUTO_TEST_CASE(test_isIPAddress)
+{
+    auto config = std::make_shared<GatewayConfig>();
+
+    BOOST_CHECK(!config->isIPAddress("a"));
+    BOOST_CHECK(!config->isIPAddress("127"));
+    BOOST_CHECK(!config->isIPAddress("127.0"));
+    BOOST_CHECK(!config->isIPAddress("127.0.0"));
+    BOOST_CHECK(!config->isIPAddress("127.0.0.1.0"));
+
+    // ipv4
+    BOOST_CHECK(config->isIPAddress("127.0.0.1"));
+    BOOST_CHECK(config->isIPAddress("192.168.0.1"));
+    BOOST_CHECK(config->isIPAddress("64.120.121.206"));
+
+    // ipv6
+    BOOST_CHECK(config->isIPAddress("::1"));
+    BOOST_CHECK(config->isIPAddress("fe80::58da:28ff:fe08:5d91"));
+    BOOST_CHECK(config->isIPAddress("1111::1111:1111:1111:1111"));
+}
+
+BOOST_AUTO_TEST_CASE(test_isHostname)
+{
+    auto config = std::make_shared<GatewayConfig>();
+    BOOST_CHECK(config->isHostname("localhost"));
+}
+
 BOOST_AUTO_TEST_CASE(test_hostAndPort2Endpoint)
 {
     auto config = std::make_shared<GatewayConfig>();
@@ -71,6 +98,14 @@ BOOST_AUTO_TEST_CASE(test_hostAndPort2Endpoint)
         BOOST_CHECK_NO_THROW(config->hostAndPort2Endpoint("127.0.0.1:1111", endpoint));
         BOOST_CHECK_EQUAL(endpoint.address(), "127.0.0.1");
         BOOST_CHECK_EQUAL(endpoint.port(), 1111);
+        BOOST_CHECK(!endpoint.isIPv6());
+    }
+
+    {
+        NodeIPEndpoint endpoint;
+        BOOST_CHECK_NO_THROW(config->hostAndPort2Endpoint("localhost:2333", endpoint));
+        BOOST_CHECK_EQUAL(endpoint.address(), "127.0.0.1");
+        BOOST_CHECK_EQUAL(endpoint.port(), 2333);
         BOOST_CHECK(!endpoint.isIPv6());
     }
 

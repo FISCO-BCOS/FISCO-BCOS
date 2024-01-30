@@ -16,6 +16,7 @@
 #include <boost/throw_exception.hpp>
 #include <algorithm>
 #include <limits>
+#include <regex>
 #include <string>
 #include <vector>
 
@@ -43,6 +44,32 @@ int64_t GatewayConfig::doubleMBToBit(double _d)
     _d *= (1024 * 1024 / 8);
 
     return (int64_t)_d;
+}
+
+bool GatewayConfig::isIPAddress(const std::string& _input)
+{
+    const std::regex ipv4_regex("^([0-9]{1,3}\\.){3}[0-9]{1,3}$");
+    const std::regex ipv6_regex(
+        "^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|:|((([0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4})?::("
+        "([0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4})?))$");
+
+    return std::regex_match(_input, ipv4_regex) || std::regex_match(_input, ipv6_regex);
+}
+
+bool GatewayConfig::isHostname(const std::string& _input)
+{
+    boost::asio::io_context io_context;
+    boost::asio::ip::tcp::resolver resolver(io_context);
+
+    try
+    {
+        boost::asio::ip::tcp::resolver::results_type results = resolver.resolve(_input, "80");
+        return true;
+    }
+    catch (const std::exception& e)
+    {
+        return false;
+    }
 }
 
 void GatewayConfig::hostAndPort2Endpoint(const std::string& _host, NodeIPEndpoint& _endpoint)
@@ -85,7 +112,39 @@ void GatewayConfig::hostAndPort2Endpoint(const std::string& _host, NodeIPEndpoin
     }
 
     boost::system::error_code ec;
-    boost::asio::ip::address ip_address = boost::asio::ip::make_address(ip, ec);
+    boost::asio::ip::address ip_address;
+    // ip
+    if (isIPAddress(ip))
+    {
+        ip_address = boost::asio::ip::make_address(ip, ec);
+    }
+    // hostname
+    else if (isHostname(ip))
+    {
+        boost::asio::io_context io_context;
+        boost::asio::ip::tcp::resolver resolver(io_context);
+        boost::asio::ip::tcp::resolver::query query(boost::asio::ip::tcp::v4(), ip, "80");
+        boost::asio::ip::tcp::resolver::results_type results = resolver.resolve(query, ec);
+        if (!ec)
+        {
+            ip_address = results.begin()->endpoint().address();
+        }
+        else
+        {
+            GATEWAY_CONFIG_LOG(ERROR)
+                << LOG_DESC("parse host name failed") << LOG_KV("host name", ip);
+            BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                      "GatewayConfig: parse host name failed, host name=" + ip));
+        }
+    }
+    else
+    {
+        GATEWAY_CONFIG_LOG(ERROR) << "the host is not a valid ip or a hostname"
+                                  << LOG_KV("host:", _host);
+        BOOST_THROW_EXCEPTION(
+            InvalidParameter() << errinfo_comment(
+                "GatewayConfig: the host is not a valid ip or a hostname, host=" + _host));
+    }
     if (ec.value() != 0)
     {
         GATEWAY_CONFIG_LOG(ERROR) << LOG_DESC("the host is invalid, make_address failed")

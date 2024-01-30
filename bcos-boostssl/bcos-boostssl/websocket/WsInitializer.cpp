@@ -131,7 +131,7 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
         auto connectPeers = _config->connectPeers();
         WEBSOCKET_INITIALIZER(INFO)
             << LOG_BADGE("initWsService") << LOG_DESC("start websocket service as client")
-            << LOG_KV("connected size", connectPeers ? connectPeers->size() : 0);
+            << LOG_KV("connected endpoints size", connectPeers ? connectPeers->size() : 0);
 
         if (connectPeers)
         {
