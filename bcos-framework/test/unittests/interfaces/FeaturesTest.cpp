@@ -166,7 +166,7 @@ BOOST_AUTO_TEST_CASE(upgrade)
         bcos::protocol::BlockVersion::V3_2_VERSION, bcos::protocol::BlockVersion::V3_2_7_VERSION);
     auto expect1 = std::to_array<std::string_view>({"bugfix_revert", "bugfix_statestorage_hash",
         "bugfix_evm_create2_delegatecall_staticcall_codecopy", "bugfix_event_log_order",
-        "bugfix_call_noaddr_return", "bugfix_precompiled_codehash"});
+        "bugfix_call_noaddr_return", "bugfix_precompiled_codehash", "bugfix_dmc_revert"});
     auto flags1 = validFlags(features1);
     BOOST_CHECK_EQUAL(flags1.size(), expect1.size());
     for (auto feature : expect1)
@@ -201,8 +201,9 @@ BOOST_AUTO_TEST_CASE(upgrade)
     Features features5;
     features5.setUpgradeFeatures(
         bcos::protocol::BlockVersion::V3_2_4_VERSION, bcos::protocol::BlockVersion::V3_6_VERSION);
-    auto expect2 = std::to_array<std::string_view>({"bugfix_event_log_order",
-        "bugfix_call_noaddr_return", "bugfix_precompiled_codehash", "bugfix_revert"});
+    auto expect2 =
+        std::to_array<std::string_view>({"bugfix_event_log_order", "bugfix_call_noaddr_return",
+            "bugfix_precompiled_codehash", "bugfix_revert", "bugfix_dmc_revert"});
     BOOST_CHECK_EQUAL(validFlags(features5).size(), expect2.size());
     for (auto feature : expect2)
     {
@@ -260,7 +261,7 @@ BOOST_AUTO_TEST_CASE(genesis)
     features3.setGenesisFeatures(bcos::protocol::BlockVersion::V3_6_VERSION);
     auto expect3 = std::to_array<std::string_view>({"bugfix_revert", "bugfix_statestorage_hash",
         "bugfix_evm_create2_delegatecall_staticcall_codecopy", "bugfix_event_log_order",
-        "bugfix_call_noaddr_return", "bugfix_precompiled_codehash"});
+        "bugfix_call_noaddr_return", "bugfix_precompiled_codehash", "bugfix_dmc_revert"});
     BOOST_CHECK_EQUAL(validFlags(features3).size(), expect3.size());
     for (auto feature : expect3)
     {
