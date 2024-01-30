@@ -19,6 +19,12 @@ CallParameters::UniquePtr CoroutineTransactionExecutive::start(CallParameters::U
         }
 
         m_exchangeMessage = execute(std::move(callParameters));
+
+        if (m_blockContext.features().get(ledger::Features::Flag::bugfix_dmc_revert))
+        {
+            m_exchangeMessage = waitingFinish(std::move(m_exchangeMessage));
+        }
+
         // Execute is finished, erase the key locks
         m_exchangeMessage->keyLocks.clear();
 
@@ -111,6 +117,35 @@ CallParameters::UniquePtr CoroutineTransactionExecutive::externalCall(
     // Set the keyLocks
     m_syncStorageWrapper.importExistsKeyLocks(output->keyLocks);
 
+    return output;
+}
+
+CallParameters::UniquePtr CoroutineTransactionExecutive::waitingFinish(
+    CallParameters::UniquePtr input)
+{
+    if (input->type != CallParameters::FINISHED
+        // seq == 0 no need to waiting, just return
+        || input->seq == 0)
+    {
+        // only finish need to waiting
+        return input;
+    }
+
+    std::string returnAddress = input->senderAddress;
+
+    input->type = CallParameters::PRE_FINISH;
+    input->keyLocks = m_syncStorageWrapper.exportKeyLocks();
+
+    spawnAndCall([this, inputPtr = input.release()](
+                     ResumeHandler) { m_exchangeMessage = CallParameters::UniquePtr(inputPtr); });
+
+
+    // When resume, exchangeMessage set to output
+    auto output = std::move(m_exchangeMessage);
+    if (output->type == CallParameters::REVERT)
+    {
+        revert();
+    }
     return output;
 }
 

@@ -34,6 +34,7 @@ public:
         bugfix_event_log_order,
         bugfix_call_noaddr_return,
         bugfix_precompiled_codehash,
+        bugfix_dmc_revert,
         feature_dmc2serial,
         feature_sharding,
         feature_rpbft,
@@ -133,6 +134,7 @@ public:
             set(Flag::bugfix_event_log_order);
             set(Flag::bugfix_call_noaddr_return);
             set(Flag::bugfix_precompiled_codehash);
+            set(Flag::bugfix_dmc_revert);
         }
 
         setToShardingDefault(version);

@@ -134,6 +134,7 @@ BOOST_AUTO_TEST_CASE(feature)
         "bugfix_event_log_order",
         "bugfix_call_noaddr_return",
         "bugfix_precompiled_codehash",
+        "bugfix_dmc_revert",
         "feature_dmc2serial",
         "feature_sharding",
         "feature_rpbft",
