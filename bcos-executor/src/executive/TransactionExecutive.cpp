@@ -227,24 +227,39 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
     if (m_blockContext.features().get(ledger::Features::Flag::feature_balance) &&
         callParameters->value > 0)
     {
-        if (false == transferBalance(callParameters->origin, callParameters->senderAddress,
-                         callParameters->receiveAddress, static_cast<u256>(callParameters->value),
-                         callParameters->gas))
+        if (m_blockContext.features().get(ledger::Features::Flag::feature_balance_policy1))
         {
-            EXECUTIVE_LOG(DEBUG) << LOG_BADGE("Execute")
-                                 << LOG_DESC("transferBalance failed and will revet");
-            revert();
-            callResults = std::move(callParameters);
-            callResults->type = CallParameters::REVERT;
-            callResults->status = (int32_t)TransactionStatus::RevertInstruction;
-            return callResults;
+            // policy1 disable transfer
+            callParameters->type = CallParameters::REVERT;
+            callParameters->status = (int32_t)TransactionStatus::PermissionDenied;
+            callParameters->evmStatus = EVMC_REVERT;
+            callParameters->message = "Permission denied(feature_balance_policy1 has enabled)";
+            return callParameters;
         }
-        else if (callParameters->data.empty())
+
+        bool onlyTransfer = callParameters->data.empty();
+        bool transferFromEVM = callParameters->seq != 0;
+        int64_t requiredGas = transferFromEVM ? 0 : BALANCE_TRANSFER_GAS;
+        auto currentContextAddress = callParameters->receiveAddress;
+
+        callParameters =
+            transferBalance(std::move(callParameters), requiredGas, currentContextAddress);
+
+        if (callParameters->status != (int32_t)TransactionStatus::None)
         {
-            callResults = std::move(callParameters);
-            callResults->type = CallParameters::FINISHED;
-            callResults->status = (int32_t)TransactionStatus::None;
-            return callResults;
+            revert();  // direct transfer need revert by hand
+            EXECUTIVE_LOG(DEBUG) << LOG_BADGE("Execute")
+                                 << LOG_DESC("transferBalance failed and will revert");
+            return callParameters;
+        }
+
+        if (onlyTransfer)
+        {
+            callParameters->type = CallParameters::FINISHED;
+            callParameters->status = (int32_t)TransactionStatus::None;
+            callParameters->evmStatus = EVMC_SUCCESS;
+            // only transfer, not call contract
+            return callParameters;
         }
     }
 
@@ -326,59 +341,80 @@ std::optional<storage::Entry> TransactionExecutive::getCodeByContractTableName(
     }
 }
 
-bool TransactionExecutive::transferBalance(std::string_view origin, std::string_view sender,
-    std::string_view receiver, const u256& value, int64_t gas)
+CallParameters::UniquePtr TransactionExecutive::transferBalance(
+    CallParameters::UniquePtr callParameters, int64_t requireGas,
+    std::string_view currentContextAddress)
 {
-    // origin 是发送方
-    // sender 是合约地址
-    // receiver 是转账接收方
-    EXECUTIVE_LOG(TRACE) << LOG_BADGE("Execute") << "now to transferBalance"
-                         << LOG_KV("origin", origin) << LOG_KV("subAccount", sender)
-                         << LOG_KV("addAccount", receiver)
-                         << LOG_KV("receiveAddress", ACCOUNT_ADDRESS) << LOG_KV("value", value)
-                         << LOG_KV("gas", gas);
-    if (isPrecompiled(std::string(receiver)))
+    // origin: SDK account(EOA)
+    // sender: account to sub
+    // receiver: account to add
+    auto& addAccount = callParameters->receiveAddress;
+    auto& subAccount = callParameters->senderAddress;
+    auto& origin = callParameters->origin;
+    auto value = callParameters->value;
+    auto& myAddress = currentContextAddress;
+
+    // check enough gas
+    if (callParameters->gas < requireGas)
     {
-        EXECUTIVE_LOG(DEBUG) << LOG_BADGE("Execute")
-                             << "transferBalance, receiverAddress is precompiled address";
-        return false;
+        EXECUTIVE_LOG(DEBUG) << LOG_BADGE("Execute") << "out of gas in transferBalance"
+                             << LOG_KV("origin", origin) << LOG_KV("subAccount", subAccount)
+                             << LOG_KV("addAccount", addAccount) << LOG_KV("value", value)
+                             << LOG_KV("gas", callParameters->gas)
+                             << LOG_KV("requireGas", requireGas);
+        callParameters->type = CallParameters::REVERT;
+        callParameters->status = (int32_t)TransactionStatus::OutOfGas;
+        callParameters->evmStatus = EVMC_OUT_OF_GAS;
+        return callParameters;
     }
+    else
+    {
+        callParameters->gas -= requireGas;
+    }
+
+    auto gas = callParameters->gas;
+
+
+    EXECUTIVE_LOG(TRACE) << LOG_BADGE("Execute") << "now to transferBalance"
+                         << LOG_KV("origin", origin) << LOG_KV("subAccount", subAccount)
+                         << LOG_KV("addAccount", addAccount) << LOG_KV("value", value)
+                         << LOG_KV("gas", gas);
+
     // first subAccountBalance, then addAccountBalance
     // sender = sender - value
     auto codec = CodecWrapper(m_blockContext.hashHandler(), m_blockContext.isWasm());
     auto params = codec.encodeWithSig("subAccountBalance(uint256)", value);
-    auto formTableName = getContractTableName(sender, m_blockContext.isWasm());
+    auto formTableName = getContractTableName(subAccount, m_blockContext.isWasm());
     std::vector<std::string> fromTableNameVector = {formTableName};
     auto inputParams = codec.encode(fromTableNameVector, params);
     auto subParams = codec.encode(std::string(ACCOUNT_ADDRESS), inputParams);
     EXECUTIVE_LOG(TRACE) << LOG_BADGE("Execute") << "transferBalance start, now is sub."
                          << LOG_KV("tableName", formTableName) << LOG_KV("will sub balance", value);
 
-    auto reposeSub = externalRequest(shared_from_this(), ref(subParams), origin,
-        std::string(EVM_BALANCE_SENDER_ADDRESS), receiver, false, false, gas, true);
-    s256 result;
-    codec.decode(ref(reposeSub->data), result);
-    if (result != s256((int)bcos::precompiled::PrecompiledErrorCode::CODE_SUCCESS))
+    auto reposeSub = externalRequest(shared_from_this(), ref(subParams),
+        std::string(EVM_BALANCE_SENDER_ADDRESS), myAddress, subAccount, false, false, gas, true);
+
+    if (reposeSub->status != (int32_t)TransactionStatus::None)
     {
         EXECUTIVE_LOG(DEBUG) << LOG_BADGE("Execute") << LOG_DESC("transferBalance sub failed")
                              << LOG_KV("subAccount", origin) << LOG_KV("tablename", formTableName);
-        return false;
+        return reposeSub;
     }
 
     // to add balance
     // receiver = receiver + value
     auto params1 = codec.encodeWithSig("addAccountBalance(uint256)", value);
-    auto toTableName = getContractTableName(receiver, m_blockContext.isWasm());
+    auto toTableName = getContractTableName(addAccount, m_blockContext.isWasm());
     std::vector<std::string> toTableNameVector = {toTableName};
     auto inputParams1 = codec.encode(toTableNameVector, params1);
     auto addParams = codec.encode(std::string(ACCOUNT_ADDRESS), inputParams1);
 
     EXECUTIVE_LOG(TRACE) << LOG_BADGE("Execute") << "transferBalance start, now is add."
                          << LOG_KV("tableName", toTableName) << LOG_KV("will add balance", value);
-    auto reposeAdd = externalRequest(shared_from_this(), ref(addParams), origin,
-        std::string(EVM_BALANCE_SENDER_ADDRESS), receiver, false, false, gas, true);
-    codec.decode(ref(reposeAdd->data), result);
-    if (result != s256((int)bcos::precompiled::PrecompiledErrorCode::CODE_SUCCESS))
+    auto reposeAdd = externalRequest(shared_from_this(), ref(addParams),
+        std::string(EVM_BALANCE_SENDER_ADDRESS), myAddress, addAccount, false, false, gas, true);
+
+    if (reposeAdd->status != (int32_t)TransactionStatus::None)
     {
         EXECUTIVE_LOG(DEBUG) << LOG_BADGE("Execute")
                              << LOG_DESC("transferBalance add failed, need to restore")
@@ -389,27 +425,28 @@ bool TransactionExecutive::transferBalance(std::string_view origin, std::string_
         // sender = sender + value
         auto revertParams = codec.encode(fromTableNameVector, params1);
         auto addParams1 = codec.encode(std::string(ACCOUNT_ADDRESS), revertParams);
-        auto reponseRestore = externalRequest(shared_from_this(), ref(addParams1), origin,
-            std::string(EVM_BALANCE_SENDER_ADDRESS), receiver, false, false, gas, true);
-        s256 addResult;
-        codec.decode(ref(reponseRestore->data), addResult);
-        if (addResult != s256((int)bcos::precompiled::PrecompiledErrorCode::CODE_SUCCESS))
+        auto reponseRestore = externalRequest(shared_from_this(), ref(addParams1),
+            std::string(EVM_BALANCE_SENDER_ADDRESS), myAddress, subAccount, false, false, gas,
+            true);
+        if (reponseRestore->status != (int32_t)TransactionStatus::None)
         {
             EXECUTIVE_LOG(DEBUG)
                 << LOG_BADGE("Execute")
                 << LOG_DESC(
                        "transferBalance to sub success but add failed, strike a balance failed.")
-                << LOG_KV("restoreAccount", origin) << LOG_KV("tablename", formTableName);
+                << LOG_KV("restoreAccount", subAccount) << LOG_KV("tablename", formTableName);
             BOOST_THROW_EXCEPTION(PrecompiledError(
                 "transferBalance to sub success but add failed, strike a balance failed."));
         }
-        return false;
+
+        return reposeAdd;
     }
-    EXECUTIVE_LOG(DEBUG) << LOG_BADGE("Execute") << "transferBalance finished."
-                         << LOG_KV("subAccount", sender) << LOG_KV("addAccount", receiver)
-                         << LOG_KV("receiveAddress", ACCOUNT_ADDRESS) << LOG_KV("value", value)
-                         << LOG_KV("gas", gas);
-    return true;
+    EXECUTIVE_LOG(DEBUG) << LOG_BADGE("Execute") << "transferBalance success"
+                         << LOG_KV("subAccount", subAccount) << LOG_KV("addAccount", addAccount)
+                         << LOG_KV("value", value) << LOG_KV("gas", gas);
+
+
+    return callParameters;
 }
 
 
@@ -476,6 +513,20 @@ CallParameters::UniquePtr TransactionExecutive::callPrecompiled(
             return callParameters;
         }
         precompiledCallParams->takeDataToCallParameter(callParameters);
+    }
+    // NotEnoughCashError
+    catch (protocol::NotEnoughCashError const& e)
+    {
+        EXECUTIVE_LOG(INFO) << "Revert transaction: "
+                            << "NotEnoughCashError"
+                            << LOG_KV("address", precompiledCallParams->m_precompiledAddress)
+                            << LOG_KV("message", e.what());
+        writeErrInfoToOutput(e.what(), *callParameters);
+        revert();
+        callParameters->type = CallParameters::REVERT;
+        callParameters->status = (int32_t)TransactionStatus::NotEnoughCash;
+        callParameters->evmStatus = EVMC_INSUFFICIENT_BALANCE;
+        callParameters->message = e.what();
     }
     catch (protocol::PrecompiledError const& e)
     {
@@ -562,16 +613,30 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
     // Create table
     try
     {
-        m_storageWrapper->createTable(tableName, std::string(STORAGE_VALUE));
-        EXECUTIVE_LOG(DEBUG) << "create contract table " << LOG_KV("table", tableName)
-                             << LOG_KV("sender", callParameters->senderAddress);
-        if (m_blockContext.isAuthCheck() ||
-            (!m_blockContext.isWasm() &&
-                m_blockContext.blockVersion() >= BlockVersion::V3_3_VERSION))
+        if (callParameters->value == 0)
         {
-            // Create auth table, always create auth table when version >= 3.3.0
-            creatAuthTable(tableName, callParameters->origin, callParameters->senderAddress,
-                m_blockContext.blockVersion());
+            // only create table when value is 0 need to create table, if value > 0, table is
+            // created in accountPrecompiled addBalance()
+            m_storageWrapper->createTable(tableName, std::string(STORAGE_VALUE));
+
+
+            EXECUTIVE_LOG(DEBUG) << "create contract table " << LOG_KV("table", tableName)
+                                 << LOG_KV("sender", callParameters->senderAddress);
+            if (m_blockContext.isAuthCheck() ||
+                (!m_blockContext.isWasm() &&
+                    m_blockContext.blockVersion() >= BlockVersion::V3_3_VERSION))
+            {
+                // Create auth table, always create auth table when version >= 3.3.0
+                creatAuthTable(tableName, callParameters->origin, callParameters->senderAddress,
+                    m_blockContext.blockVersion());
+            }
+        }
+        else
+        {
+            EXECUTIVE_LOG(DEBUG) << "no need create contract table when deploy with value "
+                                 << LOG_KV("table", tableName)
+                                 << LOG_KV("sender", callParameters->senderAddress)
+                                 << LOG_KV("value", callParameters->value);
         }
 
         if (m_blockContext.features().get(ledger::Features::Flag::feature_sharding))
@@ -769,7 +834,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
             evmcMessage.flags = flags;
             evmcMessage.depth = 0;  // depth own by scheduler
             evmcMessage.gas = leftGas;
-            evmcMessage.value = toEvmC(h256(0));
+            evmcMessage.value = toEvmC(hostContext.value());
             evmcMessage.create2_salt = toEvmC(0x0_cppui256);
 
             if (blockContext.isWasm())
@@ -1040,7 +1105,6 @@ CallParameters::UniquePtr TransactionExecutive::go(
                 hostContext.codeHash(), bytes_view((uint8_t*)code.data(), code.size()));
             auto evmcMessage = getEVMCMessage(m_blockContext, hostContext);
             auto ret = vm.execute(hostContext, &evmcMessage);
-
             auto callResults = hostContext.takeCallParameters();
             callResults = parseEVMCResult(std::move(callResults), ret);
 

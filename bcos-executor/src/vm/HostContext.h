@@ -132,6 +132,7 @@ public:
     bool isCreate() const { return m_callParameters->create; }
     bool staticCall() const { return m_callParameters->staticCall; }
     int64_t gas() const { return m_callParameters->gas; }
+    u256 value() const { return m_callParameters->value; }
     void suicide()
     {
         m_executive->setContractTableChanged();
@@ -142,6 +143,9 @@ public:
             blockContext.suicide(m_tableName);
         }
     }
+
+    evmc_bytes32 getBalance(const evmc_address* _addr);
+    bool selfdestruct(const evmc_address* _addr, const evmc_address* _beneficiary);
 
     CallParameters::UniquePtr&& takeCallParameters()
     {

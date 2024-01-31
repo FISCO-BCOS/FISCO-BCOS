@@ -114,6 +114,7 @@ struct CallParameters
            << "receiveAddress:" << receiveAddress << "|"
            << "origin:" << origin << "|"
            << "gas:" << gas << "|"
+           << "value:" << value << "|"
            << "dataSize:" << data.size() << "|"
            << "abiSize:" << abi.size() << "|"
            << "acquireKeyLock:" << acquireKeyLock << "|"
