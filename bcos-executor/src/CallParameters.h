@@ -18,6 +18,7 @@ struct CallParameters
         KEY_LOCK = 1,
         FINISHED = 2,
         REVERT = 3,
+        PRE_FINISH = 4,
     };
 
     explicit CallParameters(Type _type) : type(_type) {}
@@ -93,6 +94,9 @@ struct CallParameters
             break;
         case REVERT:
             ss << "REVERT";
+            break;
+        case PRE_FINISH:
+            ss << "PRE_FINISH";
             break;
         };
         ss << "]";

@@ -259,6 +259,7 @@ void ShardingTransactionExecutor::preExecuteTransactions(int64_t schedulerTermId
                 case bcos::protocol::ExecutionMessage::REVERT:
                 case bcos::protocol::ExecutionMessage::FINISHED:
                 case bcos::protocol::ExecutionMessage::KEY_LOCK:
+                case bcos::protocol::ExecutionMessage::PRE_FINISH:
                 {
                     callParametersList->at(i) = createCallParameters(*params, params->staticCall());
                     break;

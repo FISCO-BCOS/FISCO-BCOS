@@ -30,7 +30,7 @@ BOOST_AUTO_TEST_CASE(feature)
     BOOST_CHECK_EQUAL(features2.get("bugfix_revert"), true);
 
     Features features3;
-    features3.setToDefault(bcos::protocol::BlockVersion::V3_2_VERSION);
+    features3.setGenesisFeatures(bcos::protocol::BlockVersion::V3_2_VERSION);
     auto flags = features3.flags();
     bcos::ledger::Features::Flag flag{};
     std::string_view name;
@@ -43,7 +43,7 @@ BOOST_AUTO_TEST_CASE(feature)
     BOOST_CHECK_EQUAL(name, "bugfix_revert");
     BOOST_CHECK_EQUAL(value, false);
 
-    features3.setToDefault(bcos::protocol::BlockVersion::V3_2_3_VERSION);
+    features3.setGenesisFeatures(bcos::protocol::BlockVersion::V3_2_3_VERSION);
     flags = features3.flags();
     flag = std::get<0>(flags[0]);
     name = std::get<1>(flags[0]);
@@ -134,6 +134,7 @@ BOOST_AUTO_TEST_CASE(feature)
         "bugfix_event_log_order",
         "bugfix_call_noaddr_return",
         "bugfix_precompiled_codehash",
+        "bugfix_dmc_revert",
         "feature_dmc2serial",
         "feature_sharding",
         "feature_rpbft",
@@ -148,6 +149,129 @@ BOOST_AUTO_TEST_CASE(feature)
     {
         BOOST_CHECK_EQUAL(keys[i], compareKeys[i]);
     }
+}
+
+auto validFlags(const Features& features)
+{
+    return features.flags() |
+           RANGES::views::filter([](auto feature) { return std::get<2>(feature); }) |
+           RANGES::to<std::vector>();
+}
+
+BOOST_AUTO_TEST_CASE(upgrade)
+{
+    // 3.2 to 3.2.7
+    Features features1;
+    features1.setUpgradeFeatures(
+        bcos::protocol::BlockVersion::V3_2_VERSION, bcos::protocol::BlockVersion::V3_2_7_VERSION);
+    auto expect1 = std::to_array<std::string_view>({"bugfix_revert", "bugfix_statestorage_hash",
+        "bugfix_evm_create2_delegatecall_staticcall_codecopy", "bugfix_event_log_order",
+        "bugfix_call_noaddr_return", "bugfix_precompiled_codehash", "bugfix_dmc_revert"});
+    auto flags1 = validFlags(features1);
+    BOOST_CHECK_EQUAL(flags1.size(), expect1.size());
+    for (auto feature : expect1)
+    {
+        BOOST_CHECK(features1.get(feature));
+    }
+
+    // 3.2.7 to 3.3
+    Features features2;
+    features2.setUpgradeFeatures(
+        bcos::protocol::BlockVersion::V3_2_7_VERSION, bcos::protocol::BlockVersion::V3_3_VERSION);
+    BOOST_CHECK(validFlags(features2).empty());
+
+    // 3.3 to 3.4
+    Features features3;
+    features3.setUpgradeFeatures(
+        bcos::protocol::BlockVersion::V3_3_VERSION, bcos::protocol::BlockVersion::V3_4_VERSION);
+    BOOST_CHECK(validFlags(features3).empty());
+
+    // 3.2.7 to 3.6.0
+    Features features4;
+    features4.setUpgradeFeatures(
+        bcos::protocol::BlockVersion::V3_2_7_VERSION, bcos::protocol::BlockVersion::V3_6_VERSION);
+    auto expect4 = std::to_array<std::string_view>({"bugfix_revert"});
+    BOOST_CHECK_EQUAL(validFlags(features4).size(), expect4.size());
+    for (auto feature : expect4)
+    {
+        BOOST_CHECK(features4.get(feature));
+    }
+
+    // 3.2.4 to 3.6.0
+    Features features5;
+    features5.setUpgradeFeatures(
+        bcos::protocol::BlockVersion::V3_2_4_VERSION, bcos::protocol::BlockVersion::V3_6_VERSION);
+    auto expect2 =
+        std::to_array<std::string_view>({"bugfix_event_log_order", "bugfix_call_noaddr_return",
+            "bugfix_precompiled_codehash", "bugfix_revert", "bugfix_dmc_revert"});
+    BOOST_CHECK_EQUAL(validFlags(features5).size(), expect2.size());
+    for (auto feature : expect2)
+    {
+        BOOST_CHECK(features5.get(feature));
+    }
+
+    // 3.4 to 3.5
+    Features features6;
+    features6.setUpgradeFeatures(
+        bcos::protocol::BlockVersion::V3_4_VERSION, bcos::protocol::BlockVersion::V3_5_VERSION);
+    auto expect3 = std::to_array<std::string_view>({"bugfix_revert"});
+    BOOST_CHECK_EQUAL(validFlags(features6).size(), expect3.size());
+    for (auto feature : expect3)
+    {
+        BOOST_CHECK(features6.get(feature));
+    }
+
+    // 3.2.2 to 3.2.3
+    Features features7;
+    features7.setUpgradeFeatures(
+        bcos::protocol::BlockVersion::V3_2_2_VERSION, bcos::protocol::BlockVersion::V3_2_3_VERSION);
+    auto expect5 = std::to_array<std::string_view>({"bugfix_revert"});
+    BOOST_CHECK_EQUAL(validFlags(features7).size(), expect5.size());
+    for (auto feature : expect5)
+    {
+        BOOST_CHECK(features7.get(feature));
+    }
+}
+
+BOOST_AUTO_TEST_CASE(genesis)
+{
+    // 3.2.4
+    Features features1;
+    features1.setGenesisFeatures(bcos::protocol::BlockVersion::V3_2_4_VERSION);
+    auto expect1 = std::to_array<std::string_view>({"bugfix_revert", "bugfix_statestorage_hash",
+        "bugfix_evm_create2_delegatecall_staticcall_codecopy"});
+    BOOST_CHECK_EQUAL(validFlags(features1).size(), expect1.size());
+    for (auto feature : expect1)
+    {
+        BOOST_CHECK(features1.get(feature));
+    }
+
+    // 3.5.0
+    Features features2;
+    features2.setGenesisFeatures(bcos::protocol::BlockVersion::V3_5_VERSION);
+    auto expect2 = std::to_array<std::string_view>({"bugfix_revert"});
+    BOOST_CHECK_EQUAL(validFlags(features2).size(), expect2.size());
+    for (auto feature : expect2)
+    {
+        BOOST_CHECK(features2.get(feature));
+    }
+
+    // 3.6.0
+    Features features3;
+    features3.setGenesisFeatures(bcos::protocol::BlockVersion::V3_6_VERSION);
+    auto expect3 = std::to_array<std::string_view>({"bugfix_revert", "bugfix_statestorage_hash",
+        "bugfix_evm_create2_delegatecall_staticcall_codecopy", "bugfix_event_log_order",
+        "bugfix_call_noaddr_return", "bugfix_precompiled_codehash", "bugfix_dmc_revert"});
+    BOOST_CHECK_EQUAL(validFlags(features3).size(), expect3.size());
+    for (auto feature : expect3)
+    {
+        BOOST_CHECK(features3.get(feature));
+    }
+
+    // 3.3.0
+    Features features4;
+    features4.setGenesisFeatures(bcos::protocol::BlockVersion::V3_4_VERSION);
+    BOOST_CHECK(validFlags(features4).empty());
 }
 
 BOOST_AUTO_TEST_SUITE_END()
