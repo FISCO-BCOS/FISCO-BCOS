@@ -764,12 +764,16 @@ void BFSPrecompiled::touch(const std::shared_ptr<executor::TransactionExecutive>
         _callParameters->setExecResult(codec.encode(int32_t(CODE_FILE_INVALID_TYPE)));
         return;
     }
-    if (!checkPathPrefixValid(absolutePath, blockContext.blockVersion(), type))
-    {
-        _callParameters->setExecResult(codec.encode(int32_t(CODE_FILE_INVALID_PATH)));
-        return;
-    }
 
+    if (_callParameters->m_origin.compare(ACCOUNT_ADDRESS) != 0)
+    {
+        // if comming from accountPrecompiled, check path prefix
+        if (!checkPathPrefixValid(absolutePath, blockContext.blockVersion(), type))
+        {
+            _callParameters->setExecResult(codec.encode(int32_t(CODE_FILE_INVALID_PATH)));
+            return;
+        }
+    }
 
     std::string parentDir;
     std::string baseName;

@@ -92,32 +92,7 @@ evmc_bytes32 getBalance(evmc_host_context* _context, const evmc_address* _addr) 
     EXECUTIVE_LOG(DEBUG) << "start getBalance in evm";
     if (blockContext.features().get(ledger::Features::Flag::feature_balance))
     {
-        evmc_message _msg;
-        _msg.kind = evmc_call_kind::EVMC_CALL;
-        _msg.code_address = unhexAddress(bcos::precompiled::ACCOUNT_ADDRESS);
-        _msg.sender = unhexAddress(hostContext.myAddress());
-        _msg.recipient = *_addr;
-        _msg.gas = hostContext.gas();
-        _msg.value = toEvmC(h256(0));
-        const auto& codec = bcos::CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
-        // get balance from account table
-        auto params = codec.encodeWithSig("getAccountBalance()");
-        auto tableName = hostContext.getContractTableName(address2HexString(_msg.recipient));
-        std::vector<std::string> tableNameVector = {tableName};
-        auto input = codec.encode(tableNameVector, params);
-        bytes_view getBalance = bytes_view(input.data(), input.size());
-        _msg.input_data = getBalance.data();
-        _msg.input_size = getBalance.size();
-
-        EXECUTIVE_LOG(TRACE) << LOG_DESC("EVM getbalance") << LOG_KV("tableName", tableName);
-        evmc_result output = hostContext.externalRequest(&_msg);
-        bytes resultBytes = bytes(output.output_data, output.output_data + output.output_size);
-        u256 result;
-        codec.decode(ref(resultBytes), result);
-
-        EXECUTIVE_LOG(DEBUG) << LOG_DESC("EVM getbalance successful")
-                             << LOG_KV("balance result", result);
-        return toEvmC(result);
+        return hostContext.getBalance(_addr);
     }
     else
     {
@@ -188,74 +163,7 @@ bool selfdestruct(evmc_host_context* _context, const evmc_address* _addr,
     EXECUTIVE_LOG(DEBUG) << "EVM suicide start ";
     if (blockContext.features().get(ledger::Features::Flag::feature_balance))
     {
-        evmc_message _msg;
-        _msg.kind = evmc_call_kind::EVMC_CALL;
-        _msg.code_address = unhexAddress(bcos::precompiled::ACCOUNT_ADDRESS);
-        _msg.sender = unhexAddress(bcos::precompiled::
-                EVM_BALANCE_SENDER_ADDRESS);  // std::string(EVM_BALANCE_SENDER_ADDRESS)
-        _msg.recipient = *_addr;
-        _msg.gas = hostContext.gas();
-        _msg.value = toEvmC(h256(0));
-        // get _addr balance
-        const auto& codec = bcos::CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
-        bytes params = codec.encodeWithSig("getAccountBalance()");
-        auto tableName = hostContext.getContractTableName(address2HexString(_msg.recipient));
-        std::vector<std::string> tableNameVector = {tableName};
-        auto getBalanceIn = codec.encode(tableNameVector, params);
-
-        EXECUTIVE_LOG(TRACE) << LOG_DESC("EVM selfdestruct, first getBalance")
-                             << LOG_KV("tableName", tableName);
-        bytes_view getBalance = bytes_view(getBalanceIn.data(), getBalanceIn.size());
-        _msg.input_data = getBalance.data();
-        _msg.input_size = getBalance.size();
-        evmc_result output = hostContext.externalRequest(&_msg);
-        bytes resultBytes = bytes(output.output_data, output.output_data + output.output_size);
-        u256 balance;
-        codec.decode(ref(resultBytes), balance);
-
-        EXECUTIVE_LOG(TRACE) << LOG_DESC("EVM selfdestruct, second subBalance, set to 0 ")
-                             << LOG_KV("tableName", tableName)
-                             << LOG_KV("will sub balance", balance);
-        // _addr -= balance, set to 0;
-        bytes subParams = codec.encodeWithSig("subAccountBalance(uint256)", balance);
-        auto subBalanceIn = codec.encode(tableNameVector, subParams);
-        bytes_view subBalance = bytes_view(subBalanceIn.data(), subBalanceIn.size());
-        _msg.input_data = subBalance.data();
-        _msg.input_size = subBalance.size();
-        _msg.value = toEvmC(h256(0));
-        output = hostContext.externalRequest(&_msg);
-        resultBytes = bytes(output.output_data, output.output_data + output.output_size);
-        s256 value;
-        codec.decode(ref(resultBytes), value);
-        if (value != s256((int)bcos::precompiled::PrecompiledErrorCode::CODE_SUCCESS))
-        {
-            EXECUTIVE_LOG(DEBUG) << "EVM subAccountBalance failed";
-            BOOST_THROW_EXCEPTION(bcos::protocol::PrecompiledError(
-                "selfdestruct ,call AccountPrecompiled to subAccountBalance(uint256) failed"));
-        }
-
-        //  _beneficiary += balance
-        _msg.recipient = *_beneficiary;
-        bytes addParams = codec.encodeWithSig("addAccountBalance(uint256)", balance);
-        auto addTableName = hostContext.getContractTableName(address2HexString(_msg.recipient));
-        std::vector<std::string> addTableNameVector = {addTableName};
-        auto addBalanceIn = codec.encode(addTableNameVector, addParams);
-        bytes_view addBalance = bytes_view(addBalanceIn.data(), addBalanceIn.size());
-        _msg.input_data = addBalance.data();
-        _msg.input_size = addBalance.size();
-        EXECUTIVE_LOG(TRACE) << LOG_DESC("EVM selfdestruct, then addBalance")
-                             << LOG_KV("addTableName", addTableName)
-                             << LOG_KV("will add balance", balance);
-
-        output = hostContext.externalRequest(&_msg);
-        resultBytes = bytes(output.output_data, output.output_data + output.output_size);
-        codec.decode(ref(resultBytes), value);
-        if (value != s256((int)bcos::precompiled::PrecompiledErrorCode::CODE_SUCCESS))
-        {
-            EXECUTIVE_LOG(DEBUG) << "EVM addAccountBalance failed";
-            BOOST_THROW_EXCEPTION(bcos::protocol::PrecompiledError(
-                "selfdestruct ,call AccountPrecompiled to addAccountBalance(uint256) failed"));
-        }
+        hostContext.selfdestruct(_addr, _beneficiary);
     }
     EXECUTIVE_LOG(DEBUG) << "selfdestruct successful";
 
