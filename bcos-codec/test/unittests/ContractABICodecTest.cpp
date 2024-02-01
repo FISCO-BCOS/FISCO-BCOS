@@ -307,7 +307,7 @@ BOOST_AUTO_TEST_CASE(ContractABIType_integer)
         codec.decode(ref(b), ri32);
         BOOST_CHECK(i32 == ri32);
     }
-    
+
     // int64
     {
         int64_t i64 = INT64_MAX;
@@ -317,7 +317,7 @@ BOOST_AUTO_TEST_CASE(ContractABIType_integer)
         int64_t ri64;
         codec.decode(ref(b), ri64);
         BOOST_CHECK(i64 == ri64);
-        
+
         i64 = INT64_MIN;
         b = codec.encode(i64);
         r = *toHexString(b);
@@ -325,7 +325,7 @@ BOOST_AUTO_TEST_CASE(ContractABIType_integer)
         codec.decode(ref(b), ri64);
         BOOST_CHECK(i64 == ri64);
     }
-    
+
     // uint8
     {
         uint8_t u8 = UINT8_MAX;
@@ -335,7 +335,7 @@ BOOST_AUTO_TEST_CASE(ContractABIType_integer)
         uint8_t ru8;
         codec.decode(ref(b), ru8);
         BOOST_CHECK(u8 == ru8);
-        
+
         u8 = 0;
         b = codec.encode(u8);
         r = *toHexString(b);
@@ -379,7 +379,7 @@ BOOST_AUTO_TEST_CASE(ContractABIType_integer)
         codec.decode(ref(b), ru32);
         BOOST_CHECK(u32 == ru32);
     }
-    
+
     // uint64
     {
         uint64_t u64 = UINT64_MAX;
@@ -389,13 +389,23 @@ BOOST_AUTO_TEST_CASE(ContractABIType_integer)
         uint64_t ru64;
         codec.decode(ref(b), ru64);
         BOOST_CHECK(u64 == ru64);
-        
+
         u64 = 0;
         b = codec.encode(u64);
         r = *toHexString(b);
         BOOST_CHECK_EQUAL(r, "0000000000000000000000000000000000000000000000000000000000000000");
         codec.decode(ref(b), ru64);
         BOOST_CHECK(u64 == ru64);
+    }
+
+    {
+        std::string s = "test1";
+        std::string_view sv = "test1";
+        auto r1 = codec.encode(s);
+        auto r2 = codec.encode(sv);
+        auto rs1 = toHexStringWithPrefix(r1);
+        auto rs2 = toHexStringWithPrefix(r2);
+        BOOST_CHECK(rs1 == rs2);
     }
 }
 

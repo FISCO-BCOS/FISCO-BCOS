@@ -126,6 +126,15 @@ bytes ContractABICodec::serialise(const std::string& _in)
     return ret;
 }
 
+bytes ContractABICodec::serialise(std::string_view _in)
+{
+    bytes ret;
+    ret = h256(u256(_in.size())).asBytes();
+    ret.resize(ret.size() + (_in.size() + 31) / MAX_BYTE_LENGTH * MAX_BYTE_LENGTH);
+    bytesConstRef(_in.data()).populate(bytesRef(&ret).getCroppedData(32));
+    return ret;
+}
+
 void ContractABICodec::deserialize(s256& out, std::size_t _offset)
 {
     validOffset(_offset + MAX_BYTE_LENGTH - 1);

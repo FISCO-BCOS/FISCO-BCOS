@@ -13,7 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file TransactionBuilderV2.h
+ * @file TransactionBuilderV1.h
  * @author: kyonGuo
  * @date 2023/11/9
  */
@@ -34,7 +34,7 @@
 
 namespace bcos::cppsdk::utilities
 {
-class TransactionBuilderV2 : public TransactionBuilder
+class TransactionBuilderV1 : public TransactionBuilder
 {
 public:
     /**
