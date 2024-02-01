@@ -295,7 +295,7 @@ contract TestEvmPrecompiled {
         require(block.basefee == 0, "basefee must be 0");
     }
 
-    function getGasPrice() external view returns (uint256) {
+    function getGasPrice() public view returns (uint256) {
         return tx.gasprice;
     }
 }
