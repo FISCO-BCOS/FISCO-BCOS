@@ -23,6 +23,8 @@
 #include "../Common.h"
 #include "../executive/TransactionExecutive.h"
 #include "EVMHostInterface.h"
+#include "bcos-codec/wrapper/CodecWrapper.h"
+#include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/storage/Table.h"
 #include "bcos-table/src/StateStorage.h"
@@ -129,17 +131,9 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
     request->status = 0;
     request->value = fromEvmC(_msg->value);
     const auto& blockContext = m_executive->blockContext();
-    if (blockContext.features().get(ledger::Features::Flag::feature_balance) &&
-        evmAddress2String(_msg->sender) ==
-            std::string(bcos::precompiled::EVM_BALANCE_SENDER_ADDRESS))
-    {
-        // comes from selfdestruct() getAccountBalance use EVM_BALANCE_SENDER_ADDRESS as msg->sender
-        request->senderAddress = std::string(bcos::precompiled::EVM_BALANCE_SENDER_ADDRESS);
-    }
-    else
-    {
-        request->senderAddress = myAddress();
-    }
+
+    request->senderAddress = myAddress();
+
     switch (_msg->kind)
     {
     case EVMC_CREATE2:
@@ -336,21 +330,6 @@ evmc_result HostContext::callBuiltInPrecompiled(
         m_callParameters->logEntries = std::move(_request->logEntries);
     }
 
-    if (features().get(ledger::Features::Flag::feature_balance) && _request->value > 0) [[unlikely]]
-    {
-        // must transfer balance
-        if (!m_executive->transferBalance(_request->origin, _request->senderAddress,
-                _request->receiveAddress, static_cast<u256>(_request->value), _request->gas))
-        {
-            callResults->type = CallParameters::REVERT;
-            callResults->status = (int32_t)TransactionStatus::NotEnoughCash;
-            preResult.status_code = EVMC_INSUFFICIENT_BALANCE;
-            preResult.gas_left = _request->gas;
-            m_responseStore.emplace_back(std::move(callResults));
-            return preResult;
-        }
-    }
-
     if (resultCode != (int32_t)TransactionStatus::None)
     {
         callResults->type = CallParameters::REVERT;
@@ -359,6 +338,29 @@ evmc_result HostContext::callBuiltInPrecompiled(
         preResult.gas_left = 0;
         m_responseStore.emplace_back(std::move(callResults));
         return preResult;
+    }
+
+    if (features().get(ledger::Features::Flag::feature_balance) && _request->value > 0) [[unlikely]]
+    {
+        // must transfer balance
+        auto callParameters = std::make_unique<CallParameters>(CallParameters::MESSAGE);
+        callParameters->origin = bcos::precompiled::EVM_BALANCE_SENDER_ADDRESS;
+        callParameters->senderAddress = _request->senderAddress;
+        callParameters->receiveAddress = _request->receiveAddress;
+        callParameters->value = _request->value;
+        callParameters->staticCall = staticCall();
+
+        callParameters->gas = callResults->gas;
+
+        callResults = m_executive->transferBalance(std::move(callParameters), 0, myAddress());
+
+        if (callResults->status != (int32_t)TransactionStatus::None)
+        {
+            preResult.status_code = (evmc_status_code)callResults->evmStatus;
+            preResult.gas_left = callResults->gas;
+            m_responseStore.emplace_back(std::move(callResults));
+            return preResult;
+        }
     }
 
     preResult.gas_left = callResults->gas;
@@ -411,6 +413,14 @@ bool HostContext::setCode(bytes code)
 
             // dry code hash in account table
             m_executive->storage().setRow(m_tableName, ACCOUNT_CODE_HASH, std::move(codeHashEntry));
+
+            if (features().get(ledger::Features::Flag::feature_balance))
+            {
+                // update account's special code
+                Entry entryToDelete;
+                entryToDelete.setStatus(Entry::DELETED);
+                m_executive->storage().setRow(m_tableName, ACCOUNT_CODE, std::move(entryToDelete));
+            }
             return true;
         }
         return false;
@@ -660,5 +670,72 @@ bool HostContext::isWasm()
 {
     return m_executive->isWasm();
 }
+
+evmc_bytes32 HostContext::getBalance(const evmc_address* _addr)
+{
+    // address
+    auto addr2GetBalance = address2HexString(*_addr);
+
+    // input
+    auto codec = bcos::CodecWrapper(
+        m_executive->blockContext().hashHandler(), m_executive->blockContext().isWasm());
+    // get balance from account table
+    auto params = codec.encodeWithSig("getAccountBalance()");
+    auto tableName = getContractTableName(addr2GetBalance);
+    std::vector<std::string> tableNameVector = {tableName};
+    auto params2 = codec.encode(tableNameVector, params);
+    auto input = codec.encode(std::string(precompiled::ACCOUNT_ADDRESS), params2);
+
+    auto response = bcos::precompiled::externalRequest(m_executive, ref(input),
+        std::string(bcos::precompiled::EVM_BALANCE_SENDER_ADDRESS), myAddress(), addr2GetBalance,
+        false, false, gas(), true);
+
+    u256 result;
+    codec.decode(ref(response->data), result);
+
+    EXECUTIVE_LOG(DEBUG) << LOG_DESC("EVM getBalance successful")
+                         << LOG_KV("balance result", result);
+
+    // Put response to store in order to avoid data lost
+    m_responseStore.emplace_back(std::move(response));
+
+    return toEvmC(result);
+}
+
+bool HostContext::selfdestruct(const evmc_address* _addr, const evmc_address* _beneficiary)
+{
+    if (features().get(ledger::Features::Flag::feature_balance_policy1))
+    {
+        EXECUTIVE_LOG(DEBUG) << LOG_DESC("EVM selfdestruct disable transfer")
+                             << LOG_KV("reason", "feature_balance_policy1 is enabled");
+        return false;
+    }
+
+    auto value = fromEvmC(getBalance(_addr));
+    if (value > 0)
+    {
+        auto callParameters = std::make_unique<CallParameters>(CallParameters::MESSAGE);
+        callParameters->origin = bcos::precompiled::EVM_BALANCE_SENDER_ADDRESS;
+        callParameters->senderAddress = address2HexString(*_addr);
+        callParameters->receiveAddress = address2HexString(*_beneficiary);
+        callParameters->value = value;
+        callParameters->staticCall = staticCall();
+        callParameters->gas = gas();
+
+        auto callResults = m_executive->transferBalance(std::move(callParameters), 0, myAddress());
+        if (callResults->status != (int32_t)TransactionStatus::None)
+        {
+            EXECUTIVE_LOG(ERROR) << LOG_DESC("EVM selfdestruct failed")
+                                 << LOG_KV("type", callResults->type)
+                                 << LOG_KV("status", callResults->status)
+                                 << LOG_KV("message", callResults->message)
+                                 << LOG_KV("subAccount", address2HexString(*_addr))
+                                 << LOG_KV("addAccount", address2HexString(*_beneficiary))
+                                 << LOG_KV("value", value);
+        }
+    }
+    return false;  // just use default
+}
+
 
 }  // namespace bcos::executor
