@@ -66,6 +66,9 @@ private:
         const std::shared_ptr<executor::TransactionExecutive>& _executive,
         const std::string_view& _address);
 
+    void checkOriginAuth(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        PrecompiledExecResult::Ptr const& _callParameters, const CodecWrapper& codec);
+
 private:
     mutable std::map<std::string, u256> m_fakeBalancePrecompiled;
 };
