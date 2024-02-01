@@ -384,8 +384,18 @@ void SystemConfigPrecompiled::upgradeChain(
 
     // Write default features when data version changes
     Features bugfixFeatures;
-    bugfixFeatures.setUpgradeFeatures(static_cast<protocol::BlockVersion>(version),
-        static_cast<protocol::BlockVersion>(toVersion));
+    auto fromVersionNum = static_cast<protocol::BlockVersion>(version);
+    auto toVersionNum = static_cast<protocol::BlockVersion>(toVersion);
+    bugfixFeatures.setUpgradeFeatures(fromVersionNum, toVersionNum);
+    PRECOMPILED_LOG(INFO) << "Upgrade chain, from: " << fromVersionNum << ", to: " << toVersionNum;
+    for (auto [flag, name, value] : bugfixFeatures.flags())
+    {
+        if (value)
+        {
+            PRECOMPILED_LOG(INFO) << "Add set flag: " << name;
+        }
+    }
+
     task::syncWait(bugfixFeatures.writeToStorage(*_executive->blockContext().storage(), 0));
 
     // From 3.3 / 3.4 or to 3.3 / 3.4, enable the feature_sharding
