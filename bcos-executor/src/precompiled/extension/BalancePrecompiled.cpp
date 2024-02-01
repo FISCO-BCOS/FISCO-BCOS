@@ -111,6 +111,25 @@ std::string BalancePrecompiled::getContractTableName(
     return _executive->getContractTableName(_address, _executive->isWasm(), false);
 }
 
+void BalancePrecompiled::checkOriginAuth(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    PrecompiledExecResult::Ptr const& _callParameters, const CodecWrapper& codec)
+{
+    auto origin = _callParameters->m_origin;
+    auto governors = getGovernorList(_executive, _callParameters, codec);
+    PRECOMPILED_LOG(TRACE) << BLOCK_NUMBER(_executive->blockContext().number())
+                           << LOG_BADGE("BalancePrecompiled") << LOG_DESC("checkOriginAuth")
+                           << LOG_KV("governors size", governors.size())
+                           << LOG_KV("origin address", origin);
+    if (RANGES::find(governors, Address(origin)) == governors.end())
+    {
+        PRECOMPILED_LOG(TRACE)
+            << BLOCK_NUMBER(_executive->blockContext().number()) << LOG_BADGE("BalancePrecompiled")
+            << LOG_DESC("checkOriginAuth, failed to register, only governor can register caller");
+        BOOST_THROW_EXCEPTION(protocol::PrecompiledError("only governor can register caller"));
+    }
+}
+
 void BalancePrecompiled::createAccount(
     const std::shared_ptr<executor::TransactionExecutive>& _executive,
     const PrecompiledExecResult::Ptr& _callParameters, const bcos::CodecWrapper& codec,
@@ -192,15 +211,15 @@ void BalancePrecompiled::addBalance(
                                << LOG_KV("account", accountStr) << LOG_KV("value", value)
                                << LOG_KV("caller", caller) << LOG_KV("callerTableNotExist", "true");
         BOOST_THROW_EXCEPTION(
-            protocol::PrecompiledError("caller table not exist, addBalance failed"));
+            protocol::PrecompiledError("Permission denied. Please use \"listBalanceGovernor\" to "
+                                       "check which account(or contract) can addBalance"));
     }
     auto entry = _executive->storage().getRow(SYS_BALANCE_CALLER, caller);
-    if (!entry.has_value() || entry->get() == "0")
+    if (!entry.has_value())
     {
         BOOST_THROW_EXCEPTION(
             protocol::PrecompiledError("Permission denied. Please use \"listBalanceGovernor\" to "
                                        "check which account(or contract) can addBalance"));
-        return;
     }
     PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext.number()) << LOG_BADGE("BalancePrecompiled")
                            << LOG_DESC("addBalance") << LOG_KV("account", accountStr)
@@ -260,13 +279,14 @@ void BalancePrecompiled::subBalance(
                                  << LOG_KV("callerTableNotExist", "true");
         BOOST_THROW_EXCEPTION(
             protocol::PrecompiledError("Permission denied. Please use \"listBalanceGovernor\" to "
-                                       "check which account(or contract) can addBalance"));
-        return;
+                                       "check which account(or contract) can subBalance"));
     }
     auto entry = table->getRow(caller);
-    if (!entry.has_value() || entry->get() == "0")
+    if (!entry.has_value())
     {
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError("caller not exist, subBalance failed"));
+        BOOST_THROW_EXCEPTION(
+            protocol::PrecompiledError("Permission denied. Please use \"listBalanceGovernor\" to "
+                                       "check which account(or contract) can subBalance"));
     }
 
     // check the account whether exist, if not exist, create the account
@@ -295,7 +315,6 @@ void BalancePrecompiled::subBalance(
     auto subBalanceResult = externalRequest(_executive, ref(internalParams),
         _callParameters->m_origin, _callParameters->m_codeAddress, accountStr,
         _callParameters->m_staticCall, _callParameters->m_create, _callParameters->m_gasLeft, true);
-
     _callParameters->setExternalResult(std::move(subBalanceResult));
 }
 
@@ -327,16 +346,16 @@ void BalancePrecompiled::transfer(const std::shared_ptr<executor::TransactionExe
                                  << LOG_KV("value", value) << LOG_KV("caller", caller)
                                  << LOG_KV("callerTableNotExist", "true");
         BOOST_THROW_EXCEPTION(
-            protocol::PrecompiledError("caller table not exist, transfer failed"));
-        return;
+            protocol::PrecompiledError("Permission denied. Please use \"listBalanceGovernor\" to "
+                                       "check which account(or contract) can transferBalance"));
     }
     auto entry = table->getRow(caller);
-    if (!entry || entry->get() == "0")
+    if (!entry)
     {
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError("Permission denied"));
+        BOOST_THROW_EXCEPTION(
+            protocol::PrecompiledError("Permission denied. Please use \"listBalanceGovernor\" to "
+                                       "check which account(or contract) can transferBalance"));
     }
-
-
     // first subAccountBalance, then addAccountBalance
 
     auto params = codec.encodeWithSig("subAccountBalance(uint256)", value);
@@ -433,21 +452,7 @@ void BalancePrecompiled::registerCaller(
     codec.decode(_callParameters->params(), account);
     std::string accountStr = account.hex();
     // check is governor
-    auto origin = _callParameters->m_origin;
-    auto governors = getGovernorList(_executive, _callParameters, codec);
-    PRECOMPILED_LOG(TRACE) << BLOCK_NUMBER(blockContext.number()) << LOG_BADGE("registerCaller")
-                           << LOG_KV("governors size", governors.size())
-                           << LOG_KV("governors[0] address", governors[0].hex())
-                           << LOG_KV("origin address", origin)
-                           << LOG_KV("account address", accountStr);
-
-    if (RANGES::find(governors, Address(origin)) == governors.end())
-    {
-        PRECOMPILED_LOG(TRACE) << BLOCK_NUMBER(blockContext.number()) << LOG_BADGE("registerCaller")
-                               << LOG_DESC("failed to register, only governor can register caller");
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError("only governor can register caller"));
-        return;
-    }
+    checkOriginAuth(_executive, _callParameters, codec);
 
     // check the sender whether belong to callers
     auto table = _executive->storage().openTable(SYS_BALANCE_CALLER);
@@ -478,13 +483,11 @@ void BalancePrecompiled::registerCaller(
                 << LOG_DESC("failed to register, caller table size exceed limit")
                 << LOG_KV("caller", accountStr) << LOG_KV("tableKeyList size", tableKeyList.size());
             BOOST_THROW_EXCEPTION(protocol::PrecompiledError("caller table size exceed limit"));
-            return;
         }
         auto callerEntry = table->getRow(accountStr);
-        if (callerEntry && callerEntry->get() == "1")
+        if (callerEntry)
         {
             BOOST_THROW_EXCEPTION(protocol::PrecompiledError("caller already exist"));
-            return;
         }
         Entry CallerEntry;
         CallerEntry.importFields({"1"});
@@ -506,23 +509,7 @@ void BalancePrecompiled::unregisterCaller(
     codec.decode(_callParameters->params(), account);
     std::string accountStr = account.hex();
     // check is governor
-    auto origin = _callParameters->m_origin;
-    auto governors = getGovernorList(_executive, _callParameters, codec);
-    PRECOMPILED_LOG(TRACE) << BLOCK_NUMBER(blockContext.number()) << LOG_BADGE("unregisterCaller")
-                           << LOG_KV("governors size", governors.size())
-                           << LOG_KV("governors[0] address", governors[0].hex())
-                           << LOG_KV("origin address", origin)
-                           << LOG_KV("account address", accountStr);
-    if (RANGES::find(governors, Address(origin)) == governors.end())
-    {
-        PRECOMPILED_LOG(TRACE) << BLOCK_NUMBER(blockContext.number())
-                               << LOG_BADGE("unregisterCaller")
-                               << LOG_DESC(
-                                      "failed to unregister, only governor can unregister caller");
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError("only governor can unregister caller"));
-        return;
-    }
-
+    checkOriginAuth(_executive, _callParameters, codec);
     auto table = _executive->storage().openTable(SYS_BALANCE_CALLER);
     if (!table)
     {
@@ -541,11 +528,6 @@ void BalancePrecompiled::unregisterCaller(
     // unregister callers, set entry to deleted state
     auto deletedEntry = std::make_optional(table->newDeletedEntry());
     table->setRow(accountStr, std::move(*deletedEntry));
-    auto checkEntry = table->getRow(accountStr);
-    if (checkEntry.has_value())
-    {
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError("unregister caller failed"));
-    }
     _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
 
     PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number()) << LOG_BADGE("BalancePrecompiled")
@@ -568,13 +550,9 @@ void BalancePrecompiled::listCaller(
                               << LOG_DESC("listCaller failed, caller table not exist");
         BOOST_THROW_EXCEPTION(protocol::PrecompiledError("caller table not exist."));
     }
-
     auto keyCondition = std::make_optional<storage::Condition>();
     keyCondition->limit(0, USER_TABLE_MAX_LIMIT_COUNT);
     auto tableKeyList = table->getPrimaryKeys(*keyCondition);
-    PRECOMPILED_LOG(TRACE) << BLOCK_NUMBER(blockContext.number()) << LOG_BADGE("BalancePrecompiled")
-                           << LOG_DESC("listCaller get from caller table")
-                           << LOG_KV("tableKeyList size", tableKeyList.size());
     if (tableKeyList.size() == 0)
     {
         PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number())
@@ -586,7 +564,7 @@ void BalancePrecompiled::listCaller(
     for (auto& it : tableKeyList)
     {
         auto entry = table->getRow(it);
-        if (entry && entry->get() == "1")
+        if (entry)
         {
             addresses.emplace_back(Address(it));
         }

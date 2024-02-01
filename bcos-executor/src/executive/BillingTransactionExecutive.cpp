@@ -20,7 +20,7 @@ CallParameters::UniquePtr BillingTransactionExecutive::start(CallParameters::Uni
         CallParameters::UniquePtr callParam4AccountPre =
             std::make_unique<CallParameters>(CallParameters::MESSAGE);
         auto codec = CodecWrapper(m_blockContext.hashHandler(), m_blockContext.isWasm());
-        callParam4AccountPre->origin = TXEXEC_GAS_CONSUMER_ADDRESS;
+        callParam4AccountPre->origin = BALANCE_PRECOMPILED_ADDRESS;
         callParam4AccountPre->senderAddress =
             contractAddress();  // because seq = 0, not delegatecall
         callParam4AccountPre->receiveAddress = ACCOUNT_ADDRESS;
