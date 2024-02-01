@@ -198,7 +198,8 @@ void BalancePrecompiled::addBalance(
     if (!entry.has_value() || entry->get() == "0")
     {
         BOOST_THROW_EXCEPTION(
-            protocol::PrecompiledError("the request's sender not caller, addBalance failed"));
+            protocol::PrecompiledError("Permission denied. Please use \"listBalanceGovernor\" to "
+                                       "check which account(or contract) can addBalance"));
         return;
     }
     PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext.number()) << LOG_BADGE("BalancePrecompiled")
@@ -258,7 +259,8 @@ void BalancePrecompiled::subBalance(
                                  << LOG_KV("caller", caller)
                                  << LOG_KV("callerTableNotExist", "true");
         BOOST_THROW_EXCEPTION(
-            protocol::PrecompiledError("the request's sender not caller, subBalance failed"));
+            protocol::PrecompiledError("Permission denied. Please use \"listBalanceGovernor\" to "
+                                       "check which account(or contract) can addBalance"));
         return;
     }
     auto entry = table->getRow(caller);
@@ -331,7 +333,7 @@ void BalancePrecompiled::transfer(const std::shared_ptr<executor::TransactionExe
     auto entry = table->getRow(caller);
     if (!entry || entry->get() == "0")
     {
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError("caller not exist"));
+        BOOST_THROW_EXCEPTION(protocol::PrecompiledError("Permission denied"));
     }
 
 
@@ -570,6 +572,9 @@ void BalancePrecompiled::listCaller(
     auto keyCondition = std::make_optional<storage::Condition>();
     keyCondition->limit(0, USER_TABLE_MAX_LIMIT_COUNT);
     auto tableKeyList = table->getPrimaryKeys(*keyCondition);
+    PRECOMPILED_LOG(TRACE) << BLOCK_NUMBER(blockContext.number()) << LOG_BADGE("BalancePrecompiled")
+                           << LOG_DESC("listCaller get from caller table")
+                           << LOG_KV("tableKeyList size", tableKeyList.size());
     if (tableKeyList.size() == 0)
     {
         PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number())

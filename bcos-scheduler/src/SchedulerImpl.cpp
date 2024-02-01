@@ -998,9 +998,9 @@ void SchedulerImpl::fetchConfig(protocol::BlockNumber _number)
         auto [e, value] = p.get_future().get();
         if (e)
         {
-            SCHEDULER_LOG(WARNING)
-                << BLOCK_NUMBER(_number) << LOG_DESC("fetchGasPrice failed")
-                << LOG_KV("code", e->errorCode()) << LOG_KV("message", e->errorMessage());
+            SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(_number) << LOG_DESC("fetchGasPrice failed")
+                                 << LOG_KV("code", e->errorCode())
+                                 << LOG_KV("message", e->errorMessage());
             // BOOST_THROW_EXCEPTION(
             //     BCOS_ERROR(SchedulerError::fetchGasLimitError, e->errorMessage()));
             value = "0x0";

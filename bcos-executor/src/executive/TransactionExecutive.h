@@ -97,6 +97,7 @@ public:
     int64_t contextID() const { return m_contextID; }
     int64_t seq() const { return m_seq; }
 
+    // in delegatecall this is codeAddress
     std::string_view contractAddress() const { return m_contractAddress; }
 
     CallParameters::UniquePtr execute(
@@ -156,8 +157,8 @@ public:
     std::optional<storage::Entry> getCodeByContractTableName(
         const std::string_view& contractTableName, bool needTryFromContractTable = true);
 
-    bool transferBalance(std::string_view origin, std::string_view sender,
-        std::string_view receiver, const u256& value, int64_t gas);
+    CallParameters::UniquePtr transferBalance(CallParameters::UniquePtr callParameters,
+        int64_t requireGas, std::string_view currentContextAddress);
 
     std::string getContractTableName(
         const std::string_view& _address, bool isWasm = false, bool isCreate = false);
