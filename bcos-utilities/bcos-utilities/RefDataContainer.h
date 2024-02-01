@@ -39,7 +39,6 @@ public:
         std::vector<typename std::remove_const<T>::type> const*, std::vector<T>*>;
     using RequiredStringRefType =
         std::conditional_t<std::is_const<T>::value, std::string const, std::string>;
-
     RefDataContainer(RequiredStringPointerType _data)
       : m_dataPointer(reinterpret_cast<T*>(_data->data())), m_dataCount(_data->size() / sizeof(T))
     {}

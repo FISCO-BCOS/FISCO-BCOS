@@ -114,6 +114,11 @@ struct ABIStringType<std::string> : std::true_type
 {
 };
 
+template <>
+struct ABIStringType<std::string_view> : std::true_type
+{
+};
+
 // check if type of static array
 template <class T>
 struct ABIStaticArray : std::false_type
@@ -286,14 +291,14 @@ public:
     }
 
     template <class T>
-    requires std::signed_integral<T> &&(!std::same_as<T, char>)
+        requires std::signed_integral<T> && (!std::same_as<T, char>)
     bytes serialise(const T& _in)
     {
         return serialise(s256(_in));
     }
 
     template <class T>
-    requires std::unsigned_integral<T> &&(!std::same_as<T, bool>)
+        requires std::unsigned_integral<T> && (!std::same_as<T, bool>)
     bytes serialise(const T& _in)
     {
         return serialise(u256(_in));
@@ -321,6 +326,7 @@ public:
 
     // dynamic sized unicode string assumed to be UTF-8 encoded.
     bytes serialise(const std::string& _in);
+    bytes serialise(std::string_view _in);
 
     // static array
     template <class T, std::size_t N>
@@ -348,7 +354,7 @@ public:
     void deserialize(bool& _out, std::size_t _offset);
 
     template <class T>
-    requires std::signed_integral<T> && (!std::same_as<T, char>)
+        requires std::signed_integral<T> && (!std::same_as<T, char>)
     void deserialize(T& _out, std::size_t _offset)
     {
         s256 out;
@@ -357,7 +363,7 @@ public:
     }
 
     template <class T>
-    requires std::unsigned_integral<T> && (!std::same_as<T, bool>)
+        requires std::unsigned_integral<T> && (!std::same_as<T, bool>)
     void deserialize(T& _out, std::size_t _offset)
     {
         u256 out;

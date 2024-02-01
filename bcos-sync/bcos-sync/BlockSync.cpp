@@ -670,16 +670,22 @@ void BlockSync::maintainDownloadingQueue()
     {
         if (expectedBlock <= m_config->applyingBlock())
         {
-            // expectedBlock is applying, no need to print warning log
+            // expectedBlock is applying, no need to print log
             return;
         }
-        BLKSYNC_LOG(WARNING) << LOG_DESC("Discontinuous block") << LOG_KV("topNumber", topNumber)
-                             << LOG_KV("curNumber", m_config->blockNumber())
-                             << LOG_KV("expectedBlock", expectedBlock)
-                             << LOG_KV("commitQueueSize", m_downloadingQueue->commitQueueSize())
-                             << LOG_KV("isSyncing", isSyncing())
-                             << LOG_KV("knownHighestNumber", m_config->knownHighestNumber())
-                             << LOG_KV("node", m_config->nodeID()->shortHex());
+
+        if (m_downloadingQueue->commitQueueSize() > 0)
+        {
+            // still have block not committed, no need to print log
+            return;
+        }
+        BLKSYNC_LOG(INFO) << LOG_DESC("Discontinuous block") << LOG_KV("topNumber", topNumber)
+                          << LOG_KV("curNumber", m_config->blockNumber())
+                          << LOG_KV("expectedBlock", expectedBlock)
+                          << LOG_KV("commitQueueSize", m_downloadingQueue->commitQueueSize())
+                          << LOG_KV("isSyncing", isSyncing())
+                          << LOG_KV("knownHighestNumber", m_config->knownHighestNumber())
+                          << LOG_KV("node", m_config->nodeID()->shortHex());
         return;
     }
     // execute the expected block
