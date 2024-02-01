@@ -132,6 +132,7 @@ public:
     bool isCreate() const { return m_callParameters->create; }
     bool staticCall() const { return m_callParameters->staticCall; }
     int64_t gas() const { return m_callParameters->gas; }
+    u256 gasPrice() const { return m_callParameters->gasPrice; }
     u256 value() const { return m_callParameters->value; }
     void suicide()
     {

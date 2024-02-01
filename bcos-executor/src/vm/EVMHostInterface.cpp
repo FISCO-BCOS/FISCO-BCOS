@@ -215,11 +215,14 @@ evmc_tx_context getTxContext(evmc_host_context* _context) noexcept
     result.block_number = hostContext.blockNumber();
     result.block_timestamp = hostContext.timestamp();
     result.block_gas_limit = hostContext.blockGasLimit();
+    result.tx_gas_price = toEvmC(hostContext.gasPrice());
 
-    memset(result.tx_gas_price.bytes, 0, 32);
     memset(result.block_coinbase.bytes, 0, 20);
     memset(result.block_prev_randao.bytes, 0, 32);
     memset(result.chain_id.bytes, 0, 32);
+    memset(result.block_base_fee.bytes, 0, 32);
+
+
     return result;
 }
 
