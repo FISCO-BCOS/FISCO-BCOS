@@ -61,6 +61,10 @@ private:
         const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
         PrecompiledExecResult::Ptr const& _callParameters) const;
 
+    std::string getContractTableName(
+        const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        const std::string_view& _address) const;
+
 private:
     // Fake storage for balance,should be removed after real implementation
     mutable std::map<std::string, u256> m_fakeAccountBalances;

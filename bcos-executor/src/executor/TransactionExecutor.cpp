@@ -1081,6 +1081,16 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
         bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
         _callback)
 {
+    if (!m_isWasm)
+    {
+        // padding the address
+        constexpr static auto addressSize = Address::SIZE * 2;
+        if (contractAddress.size() < addressSize) [[unlikely]]
+        {
+            contractAddress.insert(0, addressSize - contractAddress.size(), '0');
+        }
+    }
+
     executeTransactionsInternal(
         std::move(contractAddress), std::move(inputs), true, std::move(_callback));
 }
@@ -2476,6 +2486,7 @@ std::unique_ptr<protocol::ExecutionMessage> TransactionExecutor::toExecutionResu
     message->setContextID(params->contextID);
     message->setSeq(params->seq);
     message->setOrigin(std::move(params->origin));
+    message->setValue("0x" + params->value.str(256, std::ios_base::hex));
     message->setGasAvailable(params->gas);
     std::string eGasPriceStr = "0x" + params->effectiveGasPrice.str(256, std::ios_base::hex);
     message->setEffectiveGasPrice(eGasPriceStr);

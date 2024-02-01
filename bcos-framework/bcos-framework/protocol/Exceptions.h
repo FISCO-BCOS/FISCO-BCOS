@@ -47,5 +47,13 @@ public:
     PrecompiledError() : Exception() {}
     PrecompiledError(std::string const& _msg) : Exception(_msg) {}
 };
+
+class NotEnoughCashError : public Exception
+{
+public:
+    NotEnoughCashError() : Exception() {}
+    NotEnoughCashError(std::string const& _msg) : Exception(_msg) {}
+};
+
 }  // namespace protocol
 }  // namespace bcos
