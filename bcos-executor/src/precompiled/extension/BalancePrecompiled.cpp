@@ -211,13 +211,15 @@ void BalancePrecompiled::addBalance(
                                << LOG_KV("account", accountStr) << LOG_KV("value", value)
                                << LOG_KV("caller", caller) << LOG_KV("callerTableNotExist", "true");
         BOOST_THROW_EXCEPTION(
-            protocol::PrecompiledError("caller table not exist, addBalance failed"));
+            protocol::PrecompiledError("Permission denied. Please use \"listBalanceGovernor\" to "
+                                       "check which account(or contract) can addBalance"));
     }
     auto entry = _executive->storage().getRow(SYS_BALANCE_CALLER, caller);
     if (!entry.has_value())
     {
         BOOST_THROW_EXCEPTION(
-            protocol::PrecompiledError("the request's sender not caller, addBalance failed"));
+            protocol::PrecompiledError("Permission denied. Please use \"listBalanceGovernor\" to "
+                                       "check which account(or contract) can addBalance"));
     }
     PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext.number()) << LOG_BADGE("BalancePrecompiled")
                            << LOG_DESC("addBalance") << LOG_KV("account", accountStr)
@@ -276,12 +278,15 @@ void BalancePrecompiled::subBalance(
                                  << LOG_KV("caller", caller)
                                  << LOG_KV("callerTableNotExist", "true");
         BOOST_THROW_EXCEPTION(
-            protocol::PrecompiledError("the request's sender not caller, subBalance failed"));
+            protocol::PrecompiledError("Permission denied. Please use \"listBalanceGovernor\" to "
+                                       "check which account(or contract) can subBalance"));
     }
     auto entry = table->getRow(caller);
     if (!entry.has_value())
     {
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError("caller not exist, subBalance failed"));
+        BOOST_THROW_EXCEPTION(
+            protocol::PrecompiledError("Permission denied. Please use \"listBalanceGovernor\" to "
+                                       "check which account(or contract) can subBalance"));
     }
 
     // check the account whether exist, if not exist, create the account
@@ -341,12 +346,15 @@ void BalancePrecompiled::transfer(const std::shared_ptr<executor::TransactionExe
                                  << LOG_KV("value", value) << LOG_KV("caller", caller)
                                  << LOG_KV("callerTableNotExist", "true");
         BOOST_THROW_EXCEPTION(
-            protocol::PrecompiledError("caller table not exist, transfer failed"));
+            protocol::PrecompiledError("Permission denied. Please use \"listBalanceGovernor\" to "
+                                       "check which account(or contract) can transferBalance"));
     }
     auto entry = table->getRow(caller);
     if (!entry)
     {
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError("caller not exist"));
+        BOOST_THROW_EXCEPTION(
+            protocol::PrecompiledError("Permission denied. Please use \"listBalanceGovernor\" to "
+                                       "check which account(or contract) can transferBalance"));
     }
     // first subAccountBalance, then addAccountBalance
 
@@ -520,11 +528,6 @@ void BalancePrecompiled::unregisterCaller(
     // unregister callers, set entry to deleted state
     auto deletedEntry = std::make_optional(table->newDeletedEntry());
     table->setRow(accountStr, std::move(*deletedEntry));
-    auto checkEntry = table->getRow(accountStr);
-    if (checkEntry.has_value())
-    {
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError("unregister caller failed"));
-    }
     _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
 
     PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number()) << LOG_BADGE("BalancePrecompiled")
