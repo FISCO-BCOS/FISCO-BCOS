@@ -122,25 +122,27 @@ public:
     {
         struct UpgradeFeatures
         {
-            protocol::BlockVersion from;
             protocol::BlockVersion to;
             std::vector<Flag> flags;
         };
         const static auto upgradeRoadmap = std::to_array<UpgradeFeatures>(
-            {{protocol::BlockVersion::V3_2_2_VERSION, protocol::BlockVersion::V3_2_3_VERSION,
-                 {Flag::bugfix_revert}},
-                {protocol::BlockVersion::V3_2_3_VERSION, protocol::BlockVersion::V3_2_4_VERSION,
+            {{protocol::BlockVersion::V3_2_3_VERSION, {Flag::bugfix_revert}},
+                {protocol::BlockVersion::V3_2_4_VERSION,
                     {Flag::bugfix_statestorage_hash,
                         Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy}},
-                {protocol::BlockVersion::V3_2_4_VERSION, protocol::BlockVersion::V3_2_7_VERSION,
+                {protocol::BlockVersion::V3_2_7_VERSION,
                     {Flag::bugfix_event_log_order, Flag::bugfix_call_noaddr_return,
                         Flag::bugfix_precompiled_codehash, Flag::bugfix_dmc_revert}},
-                {protocol::BlockVersion::V3_4_VERSION, protocol::BlockVersion::V3_5_VERSION,
-                    {Flag::bugfix_revert}}});
+                {protocol::BlockVersion::V3_5_VERSION, {Flag::bugfix_revert}},
+                {protocol::BlockVersion::V3_6_VERSION,
+                    {Flag::bugfix_statestorage_hash,
+                        Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy,
+                        Flag::bugfix_event_log_order, Flag::bugfix_call_noaddr_return,
+                        Flag::bugfix_precompiled_codehash, Flag::bugfix_dmc_revert}}});
 
         for (const auto& upgradeFeatures : upgradeRoadmap)
         {
-            if (from <= upgradeFeatures.from && to >= upgradeFeatures.to)
+            if (from < upgradeFeatures.to && to >= upgradeFeatures.to)
             {
                 for (auto flag : upgradeFeatures.flags)
                 {

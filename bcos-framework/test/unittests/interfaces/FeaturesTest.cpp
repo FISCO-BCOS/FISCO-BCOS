@@ -190,7 +190,10 @@ BOOST_AUTO_TEST_CASE(upgrade)
     Features features4;
     features4.setUpgradeFeatures(
         bcos::protocol::BlockVersion::V3_2_7_VERSION, bcos::protocol::BlockVersion::V3_6_VERSION);
-    auto expect4 = std::to_array<std::string_view>({"bugfix_revert"});
+    auto expect4 =
+        std::to_array<std::string_view>({"bugfix_event_log_order", "bugfix_call_noaddr_return",
+            "bugfix_precompiled_codehash", "bugfix_revert", "bugfix_dmc_revert",
+            "bugfix_statestorage_hash", "bugfix_evm_create2_delegatecall_staticcall_codecopy"});
     BOOST_CHECK_EQUAL(validFlags(features4).size(), expect4.size());
     for (auto feature : expect4)
     {
@@ -203,7 +206,8 @@ BOOST_AUTO_TEST_CASE(upgrade)
         bcos::protocol::BlockVersion::V3_2_4_VERSION, bcos::protocol::BlockVersion::V3_6_VERSION);
     auto expect2 =
         std::to_array<std::string_view>({"bugfix_event_log_order", "bugfix_call_noaddr_return",
-            "bugfix_precompiled_codehash", "bugfix_revert", "bugfix_dmc_revert"});
+            "bugfix_precompiled_codehash", "bugfix_revert", "bugfix_dmc_revert",
+            "bugfix_statestorage_hash", "bugfix_evm_create2_delegatecall_staticcall_codecopy"});
     BOOST_CHECK_EQUAL(validFlags(features5).size(), expect2.size());
     for (auto feature : expect2)
     {
@@ -230,6 +234,31 @@ BOOST_AUTO_TEST_CASE(upgrade)
     for (auto feature : expect5)
     {
         BOOST_CHECK(features7.get(feature));
+    }
+
+    // 3.2.5 to 3.2.7
+    Features features8;
+    features8.setUpgradeFeatures(
+        bcos::protocol::BlockVersion::V3_2_5_VERSION, bcos::protocol::BlockVersion::V3_2_7_VERSION);
+    auto expect6 = std::to_array<std::string_view>({"bugfix_event_log_order",
+        "bugfix_call_noaddr_return", "bugfix_precompiled_codehash", "bugfix_dmc_revert"});
+    BOOST_CHECK_EQUAL(validFlags(features8).size(), expect6.size());
+    for (auto feature : expect6)
+    {
+        BOOST_CHECK(features8.get(feature));
+    }
+
+    // 3.5.0 to 3.6.0
+    Features features9;
+    features9.setUpgradeFeatures(
+        bcos::protocol::BlockVersion::V3_5_VERSION, bcos::protocol::BlockVersion::V3_6_VERSION);
+    auto expect7 = std::to_array<std::string_view>({"bugfix_statestorage_hash",
+        "bugfix_evm_create2_delegatecall_staticcall_codecopy", "bugfix_event_log_order",
+        "bugfix_call_noaddr_return", "bugfix_precompiled_codehash", "bugfix_dmc_revert"});
+    BOOST_CHECK_EQUAL(validFlags(features9).size(), expect7.size());
+    for (auto feature : expect7)
+    {
+        BOOST_CHECK(features9.get(feature));
     }
 }
 
