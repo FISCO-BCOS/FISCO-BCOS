@@ -520,6 +520,21 @@ void BalancePrecompiled::unregisterCaller(
                                  << LOG_KV("account", accountStr);
     }
     auto entry = table->getRow(accountStr);
+    // check the caller whether is last entry, if it is, prohibit to unregister
+    auto keyCondition = std::make_optional<storage::Condition>();
+    keyCondition->limit(0, USER_TABLE_MAX_LIMIT_COUNT);
+    auto tableKeyList = table->getPrimaryKeys(*keyCondition);
+    if (tableKeyList.size() == 1)
+    {
+        PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number())
+                              << LOG_BADGE("BalancePrecompiled")
+                              << LOG_DESC(
+                                     "unregisterCaller failed, caller table only has one entry, "
+                                     "prohibit to unregister")
+                              << LOG_KV("account", accountStr);
+        BOOST_THROW_EXCEPTION(protocol::PrecompiledError(
+            "BalanceGovernor table only has one account, prohibit to unregister"));
+    }
     if (!entry.has_value())
     {
         BOOST_THROW_EXCEPTION(protocol::PrecompiledError("caller not exist"));
