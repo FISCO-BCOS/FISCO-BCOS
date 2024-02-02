@@ -80,7 +80,7 @@ void GatewayConfig::hostAndPort2Endpoint(const std::string& _host, NodeIPEndpoin
     std::vector<std::string> result;
     boost::split(result, _host, boost::is_any_of("]"), boost::token_compress_on);
     if (result.size() == 2)
-    { // ipv6 format is [IP]:Port
+    {  // ipv6 format is [IP]:Port
         ip = result[0].substr(1);
         port = boost::lexical_cast<int>(result[1].substr(1));
     }
@@ -477,6 +477,17 @@ void GatewayConfig::initSMCertConfig(const boost::property_tree::ptree& _pt)
                              << LOG_KV("multi_ca_path", smCertConfig.multiCaPath);
 }
 
+inline void mustNoLessThan(const std::string& _configName, int32_t _value, int32_t _min)
+{
+    // check and throw
+    if (_value < _min)
+    {
+        BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                  "The value of " + _configName + " must no less than " +
+                                  std::to_string(_min) + " current is" + std::to_string(_value)));
+    }
+}
+
 // loads rate limit configuration items from the configuration file
 void GatewayConfig::initFlowControlConfig(const boost::property_tree::ptree& _pt)
 {
@@ -495,6 +506,7 @@ void GatewayConfig::initFlowControlConfig(const boost::property_tree::ptree& _pt
      */
     // time_window_sec=1
     int32_t timeWindowSec = _pt.get<int32_t>("flow_control.time_window_sec", 1);
+    mustNoLessThan("time_window_sec", timeWindowSec, 0);
 
     // enable_distributed_ratelimit=false
     bool enableDistributedRatelimit =
@@ -505,8 +517,12 @@ void GatewayConfig::initFlowControlConfig(const boost::property_tree::ptree& _pt
     // enable_distributed_ratelimit=false
     int32_t distributedRateLimitCachePercent =
         _pt.get<int32_t>("flow_control.distributed_ratelimit_cache_percent", 20);
+    mustNoLessThan("distributed_ratelimit_cache_percent", distributedRateLimitCachePercent, 0);
+
     // stat_reporter_interval=60000
     int32_t statInterval = _pt.get<int32_t>("flow_control.stat_reporter_interval", 60000);
+    mustNoLessThan("stat_reporter_interval", statInterval, 0);
+
     // stat_reporter_interval=60000
     bool enableConnectDebugInfo = _pt.get<bool>("flow_control.enable_connect_debug_info", false);
 
@@ -802,8 +818,12 @@ void GatewayConfig::initFlowControlConfig(const boost::property_tree::ptree& _pt
     // incoming_p2p_basic_msg_type_qps_limit = -1
     int32_t p2pBasicMsgQPS =
         _pt.get<int32_t>("flow_control.incoming_p2p_basic_msg_type_qps_limit", -1);
+    mustNoLessThan("flow_control.incoming_p2p_basic_msg_type_qps_limit", p2pBasicMsgQPS, -1);
+
     // incoming_module_msg_type_qps_limit = -1
     int32_t moduleMsgQPS = _pt.get<int32_t>("flow_control.incoming_module_msg_type_qps_limit", -1);
+    mustNoLessThan("flow_control.incoming_module_msg_type_qps_limit", moduleMsgQPS, -1);
+
     // module id => qps
     if (_pt.get_child_optional("flow_control"))
     {
@@ -829,6 +849,11 @@ void GatewayConfig::initFlowControlConfig(const boost::property_tree::ptree& _pt
                                              << LOG_DESC("load flow_control config items")
                                              << LOG_KV("key", "flow_control." + key)
                                              << LOG_KV("module", module) << LOG_KV("qps", qps);
+                }
+                else
+                {
+                    BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                              "flow_control.key should greater than 0"));
                 }
             }
         }
