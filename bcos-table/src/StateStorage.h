@@ -324,16 +324,16 @@ public:
             updatedCapacity -= entryOld->size();
 
             bucket->container.modify(it, [&entry](Data& data) { data.entry = std::move(entry); });
-
-            if constexpr (enableLRU)
-            {
-                updateMRUAndCheck(*bucket, it);
-            }
         }
         else
         {
-            bucket->container.emplace(
+            auto [iter, _] = bucket->container.emplace(
                 Data{std::string(tableView), std::string(keyView), std::move(entry)});
+            it = iter;
+        }
+        if constexpr (enableLRU)
+        {
+            updateMRUAndCheck(*bucket, it);
         }
 
         if (m_recoder.local())
