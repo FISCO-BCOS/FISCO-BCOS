@@ -297,10 +297,15 @@ BOOST_AUTO_TEST_CASE(genesis)
         BOOST_CHECK(features3.get(feature));
     }
 
-    // 3.3.0
+    // 3.4.0
     Features features4;
     features4.setGenesisFeatures(bcos::protocol::BlockVersion::V3_4_VERSION);
-    BOOST_CHECK(validFlags(features4).empty());
+    auto expect4 = std::to_array<std::string_view>({"feature_sharding"});
+    BOOST_CHECK_EQUAL(validFlags(features4).size(), expect4.size());
+    for (auto feature : expect4)
+    {
+        BOOST_CHECK(features4.get(feature));
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

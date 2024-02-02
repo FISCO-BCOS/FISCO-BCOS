@@ -154,6 +154,7 @@ public:
 
     void setGenesisFeatures(protocol::BlockVersion to)
     {
+        setToShardingDefault(to);
         if (to == protocol::BlockVersion::V3_3_VERSION ||
             to == protocol::BlockVersion::V3_4_VERSION)
         {
@@ -168,7 +169,6 @@ public:
         {
             setUpgradeFeatures(protocol::BlockVersion::MIN_VERSION, to);
         }
-        setToShardingDefault(to);
     }
 
     auto flags() const
