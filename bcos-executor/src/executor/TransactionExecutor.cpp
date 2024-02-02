@@ -2504,7 +2504,8 @@ void TransactionExecutor::removeCommittedState()
         if (it != m_stateStorages.end())
         {
             EXECUTOR_NAME_LOG(INFO)
-                << "Set state number, " << it->number << " prev to cachedStorage";
+                << "Set state number, " << it->number << " prev to cachedStorage"
+                << LOG_KV("stateStorageSize", m_stateStorages.size());
             it->storage->setPrev(m_cachedStorage);
         }
     }
