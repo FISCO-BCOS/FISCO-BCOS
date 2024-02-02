@@ -14,8 +14,7 @@ CallParameters::UniquePtr BillingTransactionExecutive::start(CallParameters::Uni
     u256 gasPrice = input->gasPrice;
     auto message = TransactionExecutive::execute(std::move(input));
 
-    if ((currentSeq == 0) && !staticCall &&
-        message->status == (int32_t)protocol::TransactionStatus::None)
+    if ((currentSeq == 0) && !staticCall)
     {
         CallParameters::UniquePtr callParam4AccountPre =
             std::make_unique<CallParameters>(CallParameters::MESSAGE);
@@ -43,10 +42,11 @@ CallParameters::UniquePtr BillingTransactionExecutive::start(CallParameters::Uni
         callParam4AccountPre->senderAddress, callParam4AccountPre->receiveAddress, false, false,
                                                 message->gas, true);
                                              */
-        if (subBalanceRet->type == CallParameters::REVERT)
+        if (subBalanceRet->status != (int32_t)protocol::TransactionStatus::None)
         {
             message->type = subBalanceRet->type;
             message->status = subBalanceRet->status;
+            message->evmStatus = subBalanceRet->evmStatus;
             message->message = subBalanceRet->message;
             EXECUTIVE_LOG(TRACE) << LOG_BADGE("Billing") << "SubAccount balance failed: "
                                  << LOG_KV("subBalance", gasUsed * gasPrice)
