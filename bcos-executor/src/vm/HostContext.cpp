@@ -344,7 +344,7 @@ evmc_result HostContext::callBuiltInPrecompiled(
     {
         // must transfer balance
         auto callParameters = std::make_unique<CallParameters>(CallParameters::MESSAGE);
-        callParameters->origin = bcos::precompiled::EVM_BALANCE_SENDER_ADDRESS;
+        callParameters->origin = bcos::precompiled::BALANCE_PRECOMPILED_ADDRESS;
         callParameters->senderAddress = _request->senderAddress;
         callParameters->receiveAddress = _request->receiveAddress;
         callParameters->value = _request->value;
@@ -687,7 +687,7 @@ evmc_bytes32 HostContext::getBalance(const evmc_address* _addr)
     auto input = codec.encode(std::string(precompiled::ACCOUNT_ADDRESS), params2);
 
     auto response = bcos::precompiled::externalRequest(m_executive, ref(input),
-        std::string(bcos::precompiled::EVM_BALANCE_SENDER_ADDRESS), myAddress(), addr2GetBalance,
+        std::string(bcos::precompiled::BALANCE_PRECOMPILED_ADDRESS), myAddress(), addr2GetBalance,
         false, false, gas(), true);
 
     u256 result;
@@ -715,7 +715,7 @@ bool HostContext::selfdestruct(const evmc_address* _addr, const evmc_address* _b
     if (value > 0)
     {
         auto callParameters = std::make_unique<CallParameters>(CallParameters::MESSAGE);
-        callParameters->origin = bcos::precompiled::EVM_BALANCE_SENDER_ADDRESS;
+        callParameters->origin = bcos::precompiled::BALANCE_PRECOMPILED_ADDRESS;
         callParameters->senderAddress = address2HexString(*_addr);
         callParameters->receiveAddress = address2HexString(*_beneficiary);
         callParameters->value = value;

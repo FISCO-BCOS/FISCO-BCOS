@@ -392,7 +392,7 @@ CallParameters::UniquePtr TransactionExecutive::transferBalance(
                          << LOG_KV("tableName", formTableName) << LOG_KV("will sub balance", value);
 
     auto reposeSub = externalRequest(shared_from_this(), ref(subParams),
-        std::string(EVM_BALANCE_SENDER_ADDRESS), myAddress, subAccount, false, false, gas, true);
+        std::string(BALANCE_PRECOMPILED_ADDRESS), myAddress, subAccount, false, false, gas, true);
 
     if (reposeSub->status != (int32_t)TransactionStatus::None)
     {
@@ -412,7 +412,7 @@ CallParameters::UniquePtr TransactionExecutive::transferBalance(
     EXECUTIVE_LOG(TRACE) << LOG_BADGE("Execute") << "transferBalance start, now is add."
                          << LOG_KV("tableName", toTableName) << LOG_KV("will add balance", value);
     auto reposeAdd = externalRequest(shared_from_this(), ref(addParams),
-        std::string(EVM_BALANCE_SENDER_ADDRESS), myAddress, addAccount, false, false, gas, true);
+        std::string(BALANCE_PRECOMPILED_ADDRESS), myAddress, addAccount, false, false, gas, true);
 
     if (reposeAdd->status != (int32_t)TransactionStatus::None)
     {
@@ -426,7 +426,7 @@ CallParameters::UniquePtr TransactionExecutive::transferBalance(
         auto revertParams = codec.encode(fromTableNameVector, params1);
         auto addParams1 = codec.encode(std::string(ACCOUNT_ADDRESS), revertParams);
         auto reponseRestore = externalRequest(shared_from_this(), ref(addParams1),
-            std::string(EVM_BALANCE_SENDER_ADDRESS), myAddress, subAccount, false, false, gas,
+            std::string(BALANCE_PRECOMPILED_ADDRESS), myAddress, subAccount, false, false, gas,
             true);
         if (reponseRestore->status != (int32_t)TransactionStatus::None)
         {

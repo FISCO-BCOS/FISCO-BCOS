@@ -203,6 +203,10 @@ void BoostLogInitializer::initLog(boost::property_tree::ptree const& _pt,
         {
             m_logPath = _pt.get<std::string>("log.log_path", "log");
         }
+        if (m_archivePath.empty())
+        {
+            m_archivePath = m_logPath;
+        }
         // if (!m_archivePath.empty() && m_archivePath == m_logPath)
         // {
         //     throw std::runtime_error("log.archive_path must be different from log.log_path");
