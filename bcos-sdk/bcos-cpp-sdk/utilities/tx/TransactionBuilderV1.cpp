@@ -13,13 +13,13 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file TransactionBuilderV2.cpp
+ * @file TransactionBuilderV1.cpp
  * @author: kyonGuo
  * @date 2023/11/21
  */
 
 
-#include "TransactionBuilderV2.h"
+#include "TransactionBuilderV1.h"
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 
 #include <utility>
@@ -28,7 +28,7 @@ using namespace bcos;
 using namespace bcos::cppsdk;
 using namespace bcos::cppsdk::utilities;
 
-bcostars::TransactionDataUniquePtr TransactionBuilderV2::createTransactionData(int32_t _version,
+bcostars::TransactionDataUniquePtr TransactionBuilderV1::createTransactionData(int32_t _version,
     std::string _groupID, std::string _chainID, std::string _to, std::string _nonce,
     bcos::bytes _input, std::string _abi, int64_t _blockLimit, std::string _value,
     std::string _gasPrice, int64_t _gasLimit, std::string _maxFeePerGas,
@@ -51,7 +51,7 @@ bcostars::TransactionDataUniquePtr TransactionBuilderV2::createTransactionData(i
     return txData;
 }
 
-crypto::HashType TransactionBuilderV2::calculateTransactionDataHash(CryptoType _cryptoType,
+crypto::HashType TransactionBuilderV1::calculateTransactionDataHash(CryptoType _cryptoType,
     int32_t _version, std::string _groupID, std::string _chainID, std::string _to,
     std::string _nonce, bcos::bytes _input, std::string _abi, int64_t _blockLimit,
     std::string _value, std::string _gasPrice, int64_t _gasLimit, std::string _maxFeePerGas,
@@ -64,7 +64,7 @@ crypto::HashType TransactionBuilderV2::calculateTransactionDataHash(CryptoType _
     return calculateTransactionDataHash(_cryptoType, *txData);
 }
 
-crypto::HashType TransactionBuilderV2::calculateTransactionDataHashWithJson(
+crypto::HashType TransactionBuilderV1::calculateTransactionDataHashWithJson(
     CryptoType _cryptoType, std::string _jsonData)
 {
     auto txData = std::make_unique<bcostars::TransactionData>();
@@ -72,7 +72,7 @@ crypto::HashType TransactionBuilderV2::calculateTransactionDataHashWithJson(
     return calculateTransactionDataHash(_cryptoType, *txData);
 }
 
-bcostars::TransactionUniquePtr TransactionBuilderV2::createTransaction(bcos::bytes _signData,
+bcostars::TransactionUniquePtr TransactionBuilderV1::createTransaction(bcos::bytes _signData,
     crypto::HashType _hash, int32_t _attribute, int32_t _version, std::string _groupID,
     std::string _chainID, std::string _to, std::string _nonce, bcos::bytes _input, std::string _abi,
     int64_t _blockLimit, std::string _value, std::string _gasPrice, int64_t _gasLimit,
@@ -99,7 +99,7 @@ bcostars::TransactionUniquePtr TransactionBuilderV2::createTransaction(bcos::byt
     return tx;
 }
 
-std::pair<std::string, std::string> TransactionBuilderV2::createSignedTransaction(
+std::pair<std::string, std::string> TransactionBuilderV1::createSignedTransaction(
     bcos::crypto::KeyPairInterface const& _keyPair, int32_t _attribute, int32_t _version,
     std::string _groupID, std::string _chainID, std::string _to, std::string _nonce,
     bcos::bytes _input, std::string _abi, int64_t _blockLimit, std::string _value,

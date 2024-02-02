@@ -290,4 +290,12 @@ contract TestEvmPrecompiled {
     function blockHashTest(uint256 blockNumber) public view returns (bytes32) {
         return blockhash(blockNumber);
     }
+
+    function checkBaseFee() public view returns (uint256) {
+        require(block.basefee == 0, "basefee must be 0");
+    }
+
+    function getGasPrice() public view returns (uint256) {
+        return tx.gasprice;
+    }
 }
