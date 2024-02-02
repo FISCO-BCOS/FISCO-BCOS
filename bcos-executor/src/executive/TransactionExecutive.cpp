@@ -224,19 +224,15 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
                              << LOG_KV("value", callParameters->value);
     }
 
+    if (m_blockContext.features().get(ledger::Features::Flag::feature_balance_policy1))
+    {
+        // policy1 disable transfer balance
+        callParameters->value = 0;
+    }
+
     if (m_blockContext.features().get(ledger::Features::Flag::feature_balance) &&
         callParameters->value > 0)
     {
-        if (m_blockContext.features().get(ledger::Features::Flag::feature_balance_policy1))
-        {
-            // policy1 disable transfer
-            callParameters->type = CallParameters::REVERT;
-            callParameters->status = (int32_t)TransactionStatus::PermissionDenied;
-            callParameters->evmStatus = EVMC_REVERT;
-            callParameters->message = "Permission denied(feature_balance_policy1 has enabled)";
-            return callParameters;
-        }
-
         bool onlyTransfer = callParameters->data.empty();
         bool transferFromEVM = callParameters->seq != 0;
         int64_t requiredGas = transferFromEVM ? 0 : BALANCE_TRANSFER_GAS;

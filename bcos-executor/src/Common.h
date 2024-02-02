@@ -227,6 +227,14 @@ inline evmc_address toEvmC(const std::string_view& addr)
     return ret;
 }
 
+inline evmc_uint256be toEvmC(const u256& _n)
+{
+    evmc_uint256be ret;
+    auto gasPriceBytes = toBigEndian(_n);
+    std::uninitialized_copy(gasPriceBytes.begin(), gasPriceBytes.end(), ret.bytes);
+    return ret;
+}
+
 /**
  * @brief : trans ethereum hash to evm hash
  * @param _h : hash value
