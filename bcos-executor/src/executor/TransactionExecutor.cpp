@@ -2443,6 +2443,19 @@ std::unique_ptr<ExecutionMessage> TransactionExecutor::toExecutionResult(
     return message;
 }
 
+inline std::string value2String(u256& value)
+{
+    if (value > 0)
+    {
+        return "0x" + value.str(256, std::ios_base::hex);
+    }
+    else
+    {
+        return {};
+    }
+}
+
+
 std::unique_ptr<protocol::ExecutionMessage> TransactionExecutor::toExecutionResult(
     std::unique_ptr<CallParameters> params)
 {
@@ -2486,10 +2499,19 @@ std::unique_ptr<protocol::ExecutionMessage> TransactionExecutor::toExecutionResu
     message->setContextID(params->contextID);
     message->setSeq(params->seq);
     message->setOrigin(std::move(params->origin));
-    message->setValue("0x" + params->value.str(256, std::ios_base::hex));
     message->setGasAvailable(params->gas);
-    std::string eGasPriceStr = "0x" + params->effectiveGasPrice.str(256, std::ios_base::hex);
-    message->setEffectiveGasPrice(eGasPriceStr);
+
+    message->setValue(value2String(params->value));
+    // message->setGasLimit(params->gasLimit); // Notice: gasLimit will get from storage when
+    // execute
+
+    // Notice: gasPrice should pass here,
+    // could not fetch from storage during execution for future user will set in a tx
+    message->setGasPrice(value2String(params->gasPrice));
+    message->setMaxFeePerGas(value2String(params->maxFeePerGas));
+    message->setMaxPriorityFeePerGas(value2String(params->maxPriorityFeePerGas));
+    message->setEffectiveGasPrice(value2String(params->effectiveGasPrice));
+
     message->setData(std::move(params->data));
     message->setStaticCall(params->staticCall);
     message->setCreate(params->create);

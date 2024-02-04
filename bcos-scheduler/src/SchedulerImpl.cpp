@@ -246,7 +246,7 @@ void SchedulerImpl::executeBlockInternal(bcos::protocol::Block::Ptr block, bool 
     }
 
     SCHEDULER_LOG(INFO) << METRIC << BLOCK_NUMBER(requestBlockNumber) << "ExecuteBlock request"
-                        << LOG_KV("gasLimit", m_gasLimit) << LOG_KV("gasPrice", m_gasPrice)
+                        << LOG_KV("gasLimit", m_gasLimit) << LOG_KV("gasPrice", getGasPrice())
                         << LOG_KV("verify", verify) << LOG_KV("signatureSize", signature.size())
                         << LOG_KV("txCount", block->transactionsSize())
                         << LOG_KV("metaTxCount", block->transactionsMetaDataSize())
@@ -358,7 +358,7 @@ void SchedulerImpl::executeBlockInternal(bcos::protocol::Block::Ptr block, bool 
             //     m_gasLimit, verify);
             blockExecutive = m_blockExecutiveFactory->build(std::move(block), this, 0,
                 m_transactionSubmitResultFactory, false, m_blockFactory, m_txPool, m_gasLimit,
-                m_gasPrice, verify);
+                getGasPrice(), verify);
 
             blockExecutive->setOnNeedSwitchEventHandler([this]() { triggerSwitch(); });
         }
@@ -744,7 +744,7 @@ void SchedulerImpl::call(protocol::Transaction::Ptr tx,
     //     m_txPool, m_gasLimit, false);
     auto blockExecutive = m_blockExecutiveFactory->build(std::move(block), this,
         m_calledContextID.fetch_add(1), m_transactionSubmitResultFactory, true, m_blockFactory,
-        m_txPool, m_gasLimit, m_gasPrice, false);
+        m_txPool, m_gasLimit, getGasPrice(), false);
     blockExecutive->setOnNeedSwitchEventHandler([this]() { triggerSwitch(); });
 
     blockExecutive->asyncCall([callback = std::move(callback)](Error::UniquePtr&& error,
@@ -907,7 +907,7 @@ void SchedulerImpl::preExecuteBlock(
         // blockExecutive
         blockExecutive = m_blockExecutiveFactory->build(std::move(block), this, 0,
             m_transactionSubmitResultFactory, false, m_blockFactory, m_txPool, m_gasLimit,
-            m_gasPrice, verify);
+            getGasPrice(), verify);
 
         blockExecutive->setOnNeedSwitchEventHandler([this]() { triggerSwitch(); });
 
@@ -1006,7 +1006,7 @@ void SchedulerImpl::fetchConfig(protocol::BlockNumber _number)
             value = "0x0";
         }
 
-        m_gasPrice = value;
+        setGasPrice(value);  // must use function to acquire lock
     }
 
     if (m_gasLimit > 0 && m_blockVersion > 0)

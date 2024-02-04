@@ -1,6 +1,7 @@
 #include "DmcExecutor.h"
 #include "bcos-crypto/bcos-crypto/ChecksumAddress.h"
 #include "bcos-framework/executor/ExecuteError.h"
+#include <bcos-protocol/TransactionStatus.h>
 #include <boost/format.hpp>
 
 
@@ -415,6 +416,7 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr
                     << "Could not getCode() from correspond executor during delegateCall: "
                     << message->toString();
                 message->setType(protocol::ExecutionMessage::REVERT);
+                message->setStatus((int32_t)protocol::TransactionStatus::CallAddressError);
                 message->setCreate(false);
                 message->setKeyLocks({});
                 return MessageHint::NEED_PREPARE;
@@ -486,10 +488,6 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessageV2(ExecutiveState::P
     {
         if (executiveState->message->data().toBytes() == bcos::protocol::GET_CODE_INPUT_BYTES)
         {
-            auto newSeq = executiveState->currentSeq++;
-            executiveState->callStack.push(newSeq);
-            executiveState->message->setSeq(newSeq);
-
             // getCode
             DMC_LOG(DEBUG) << "Get external code in scheduler"
                            << LOG_KV("codeAddress", executiveState->message->delegateCallAddress());
@@ -499,6 +497,9 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessageV2(ExecutiveState::P
                            << LOG_KV("codeSize", code.size());
             executiveState->message->setData(code);
             executiveState->message->setType(protocol::ExecutionMessage::PRE_FINISH);
+
+            executiveState->isRevertStackMessage = true;
+
             return MessageHint::NEED_PREPARE;
         }
 
@@ -525,6 +526,7 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessageV2(ExecutiveState::P
                     << "Could not getCode() from correspond executor during delegateCall: "
                     << message->toString();
                 message->setType(protocol::ExecutionMessage::REVERT);
+                message->setStatus((int32_t)protocol::TransactionStatus::CallAddressError);
                 message->setCreate(false);
                 message->setKeyLocks({});
 
@@ -541,6 +543,13 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessageV2(ExecutiveState::P
         // Return type, pop stack
     case protocol::ExecutionMessage::PRE_FINISH:
     {
+        if (executiveState->isRevertStackMessage)
+        {
+            // handle schedule in message
+            executiveState->isRevertStackMessage = false;
+            return MessageHint::NEED_SEND;
+        }
+
         // update my key locks in m_keyLocks
         m_keyLocks->batchAcquireKeyLock(
             message->from(), message->keyLocks(), message->contextID(), message->seq());
