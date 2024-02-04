@@ -2451,7 +2451,7 @@ inline std::string value2String(u256& value)
     }
     else
     {
-        return "0x0";
+        return {};
     }
 }
 
