@@ -129,7 +129,13 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
 
     request->origin = origin();
     request->status = 0;
-    request->value = fromEvmC(_msg->value);
+
+    if (features().get(ledger::Features::Flag::feature_balance))
+    {
+        request->value = fromEvmC(_msg->value);
+        request->gasPrice = gasPrice();
+    }
+
     const auto& blockContext = m_executive->blockContext();
 
     request->senderAddress = myAddress();

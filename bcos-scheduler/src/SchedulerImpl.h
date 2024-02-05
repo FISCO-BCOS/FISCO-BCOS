@@ -176,6 +176,18 @@ private:
 
     bcos::protocol::BlockNumber getBlockNumberFromStorage();
 
+    std::string getGasPrice()
+    {
+        bcos::ReadGuard lock(x_gasPrice);
+        return m_gasPrice;
+    }
+
+    void setGasPrice(std::string const& _gasPrice)
+    {
+        bcos::WriteGuard lock(x_gasPrice);
+        m_gasPrice = _gasPrice;
+    }
+
     std::shared_ptr<std::list<BlockExecutive::Ptr>> m_blocks =
         std::make_shared<std::list<BlockExecutive::Ptr>>();
 
@@ -193,6 +205,8 @@ private:
     std::atomic_int64_t m_calledContextID = 1;
 
     std::string m_gasPrice = std::string("0x0");
+    mutable bcos::SharedMutex x_gasPrice;
+
     uint64_t m_gasLimit = 0;
     uint32_t m_blockVersion = 0;
 

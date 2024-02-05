@@ -80,26 +80,37 @@ CallParameters::UniquePtr CoroutineTransactionExecutive::externalCall(
     // When resume, exchangeMessage set to output
     auto output = std::move(m_exchangeMessage);
 
-    if (output->delegateCall && output->type != CallParameters::FINISHED)
+    if (m_blockContext.features().get(ledger::Features::Flag::bugfix_call_noaddr_return))
     {
-        output->data = bytes();
-        if (m_blockContext.features().get(ledger::Features::Flag::bugfix_call_noaddr_return))
+        if (output->delegateCall &&
+            output->status == (int32_t)bcos::protocol::TransactionStatus::CallAddressError)
         {
             // This is eth's bug, but we still need to compat with it :)
             // https://docs.soliditylang.org/en/v0.8.17/control-structures.html#error-handling-assert-require-revert-and-exceptions
+            output->data = bytes();
             output->type = CallParameters::FINISHED;
             output->status = (int32_t)bcos::protocol::TransactionStatus::None;
             output->evmStatus = EVMC_SUCCESS;
+
+            EXECUTIVE_LOG(DEBUG) << "Could not getCode during DMC externalCall, but return success"
+                                 << LOG_KV("codeAddress", output->codeAddress)
+                                 << LOG_KV("status", output->status)
+                                 << LOG_KV("evmStatus", output->evmStatus);
         }
-        else
+    }
+    else
+    {
+        if (output->delegateCall && output->type != CallParameters::FINISHED)
         {
+            output->data = bytes();
             output->status = (int32_t)bcos::protocol::TransactionStatus::RevertInstruction;
             output->evmStatus = EVMC_REVERT;
+
+            EXECUTIVE_LOG(DEBUG) << "Could not getCode during DMC externalCall"
+                                 << LOG_KV("codeAddress", output->codeAddress)
+                                 << LOG_KV("status", output->status)
+                                 << LOG_KV("evmStatus", output->evmStatus);
         }
-        EXECUTIVE_LOG(DEBUG) << "Could not getCode during DMC externalCall"
-                             << LOG_KV("codeAddress", output->codeAddress)
-                             << LOG_KV("status", output->status)
-                             << LOG_KV("evmStatus", output->evmStatus);
     }
 
     if (versionCompareTo(m_blockContext.blockVersion(), protocol::BlockVersion::V3_3_VERSION) >= 0)

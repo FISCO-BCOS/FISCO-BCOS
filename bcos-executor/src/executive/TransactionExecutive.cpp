@@ -830,7 +830,15 @@ CallParameters::UniquePtr TransactionExecutive::go(
             evmcMessage.flags = flags;
             evmcMessage.depth = 0;  // depth own by scheduler
             evmcMessage.gas = leftGas;
-            evmcMessage.value = toEvmC(hostContext.value());
+
+            if (hostContext.features().get(ledger::Features::Flag::feature_balance))
+            {
+                evmcMessage.value = toEvmC(hostContext.value());
+            }
+            else
+            {
+                evmcMessage.value = toEvmC(h256(0));
+            }
             evmcMessage.create2_salt = toEvmC(0x0_cppui256);
 
             if (blockContext.isWasm())
