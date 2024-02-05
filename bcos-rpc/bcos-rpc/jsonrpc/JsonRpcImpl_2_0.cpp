@@ -460,6 +460,7 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
             auto transactionData = decodeData(data);
             auto transaction = nodeService->blockFactory()->transactionFactory()->createTransaction(
                 bcos::ref(transactionData), false, true);
+            transaction->forceSender({});  // must clear sender here for future verify
 
             if (c_fileLogLevel <= TRACE)
             {
