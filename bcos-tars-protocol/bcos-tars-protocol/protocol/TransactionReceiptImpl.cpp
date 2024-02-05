@@ -54,6 +54,10 @@ bcos::crypto::HashType TransactionReceiptImpl::hash() const
 
     return hashResult;
 }
+void bcostars::protocol::TransactionReceiptImpl::calculateHash(const bcos::crypto::Hash& hashImpl)
+{
+    bcos::concepts::hash::calculate(hashImpl.hasher(), *m_inner(), m_inner()->dataHash);
+}
 
 bcos::u256 TransactionReceiptImpl::gasUsed() const
 {
@@ -97,6 +101,14 @@ gsl::span<const bcos::protocol::LogEntry> bcostars::protocol::TransactionReceipt
 bcos::protocol::BlockNumber bcostars::protocol::TransactionReceiptImpl::blockNumber() const
 {
     return m_inner()->data.blockNumber;
+}
+std::string_view bcostars::protocol::TransactionReceiptImpl::effectiveGasPrice() const
+{
+    return m_inner()->data.effectiveGasPrice;
+}
+void bcostars::protocol::TransactionReceiptImpl::setEffectiveGasPrice(std::string effectiveGasPrice)
+{
+    m_inner()->data.effectiveGasPrice = std::move(effectiveGasPrice);
 }
 const bcostars::TransactionReceipt& bcostars::protocol::TransactionReceiptImpl::inner() const
 {

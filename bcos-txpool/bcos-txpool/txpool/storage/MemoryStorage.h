@@ -23,7 +23,7 @@
 #include "bcos-task/Task.h"
 #include "bcos-txpool/TxPoolConfig.h"
 #include "bcos-txpool/txpool/utilities/Common.h"
-#include <bcos-txpool/bcos-txpool/txpool/utilities/TransactionBucket.h>
+#include <bcos-txpool/txpool/utilities/TransactionBucket.h>
 #include <bcos-utilities/BucketMap.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <bcos-utilities/RateCollector.h>
@@ -75,7 +75,10 @@ public:
         std::function<void()> afterInsertHook = nullptr) override;
 
     bcos::protocol::TransactionStatus insert(bcos::protocol::Transaction::Ptr transaction) override;
-    void batchInsert(bcos::protocol::Transactions const& _txs) override;
+
+    [[deprecated(
+        "do not use raw insert tx pool without check, use batchVerifyAndSubmitTransaction")]] void
+    batchInsert(bcos::protocol::Transactions const& _txs) override;
 
     bcos::protocol::Transaction::Ptr remove(bcos::crypto::HashType const& _txHash) override;
     // invoke when scheduler finished block executed and notify txpool new block result
@@ -84,7 +87,7 @@ public:
     bcos::protocol::Transaction::Ptr removeSubmittedTx(
         bcos::protocol::TransactionSubmitResult::Ptr _txSubmitResult) override;
 
-    bcos::protocol::TransactionsPtr fetchTxs(
+    bcos::protocol::ConstTransactionsPtr fetchTxs(
         bcos::crypto::HashList& _missedTxs, bcos::crypto::HashList const& _txsList) override;
 
     // FIXME: deprecated, after using txpool::broadcastTransaction

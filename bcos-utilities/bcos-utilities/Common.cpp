@@ -20,14 +20,15 @@
 
 #define NOMINMAX
 
-#include "Common.h"
-#include "Exceptions.h"
-#include <csignal>
 #if defined(WIN32) || defined(WIN64) || defined(_WIN32) || defined(_WIN32_)
+#define _WIN32_WINNT 0x0601
 #include <windows.h>
 #else
 #include <sys/time.h>
 #endif
+#include "Common.h"
+#include "Exceptions.h"
+#include <csignal>
 #ifdef __APPLE__
 #include <pthread.h>
 #endif
@@ -142,4 +143,21 @@ void bcos::pthread_setThreadName(std::string const& _n)
 #elif defined(__APPLE__)
     pthread_setname_np(_n.c_str());
 #endif
+}
+
+std::string bcos::pthread_getThreadName()
+{
+#if defined(__GLIBC__) || defined(__APPLE__)
+    std::array<char, 16> name = {0};
+    auto err = pthread_getname_np(pthread_self(), (char*)name.data(), name.size());
+    if (err == 0)
+    {
+        if (name[0] == '\0')
+        {
+            return "";
+        }
+        return {name.data()};
+    }
+#endif
+    return "";
 }

@@ -22,6 +22,7 @@
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/ledger/Features.h"
+#include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-task/Wait.h"
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
@@ -62,6 +63,15 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl) : P
     m_sysValueCmp.insert(
         std::make_pair(SYSTEM_KEY_TX_GAS_LIMIT, [defaultCmp](int64_t _value, uint32_t version) {
             defaultCmp(SYSTEM_KEY_TX_GAS_LIMIT, _value, TX_GAS_LIMIT_MIN, version);
+        }));
+    m_sysValueCmp.insert(
+        std::make_pair(SYSTEM_KEY_TX_GAS_PRICE, [](int64_t _value, uint32_t version) {
+            if (versionCompareTo(version, BlockVersion::V3_6_VERSION) < 0) [[unlikely]]
+            {
+                BOOST_THROW_EXCEPTION(
+                    PrecompiledError("unsupported key " + std::string(SYSTEM_KEY_TX_GAS_PRICE)));
+            }
+            return;
         }));
     m_sysValueCmp.insert(std::make_pair(
         SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, [defaultCmp](int64_t _value, uint32_t version) {
@@ -117,6 +127,21 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl) : P
             }
             return version;
         }));
+    m_valueConverter.insert(std::make_pair(
+        SYSTEM_KEY_TX_GAS_PRICE, [](const std::string& _value, uint32_t blockVersion) -> uint64_t {
+            if (versionCompareTo(blockVersion, BlockVersion::V3_6_VERSION) < 0) [[unlikely]]
+            {
+                BOOST_THROW_EXCEPTION(
+                    PrecompiledError("unsupported key " + std::string(SYSTEM_KEY_TX_GAS_PRICE)));
+            }
+            if (!isHexStringV2(_value))
+            {
+                BOOST_THROW_EXCEPTION(PrecompiledError(
+                    "Invalid value " + _value + " ,the value for " +
+                    std::string{SYSTEM_KEY_TX_GAS_PRICE} + " must be a hex number like 0xa."));
+            }
+            return 0;
+        }));
 }
 
 std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
@@ -150,7 +175,8 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
                                   << LOG_DESC("setValueByKey") << LOG_KV("configKey", configKey)
                                   << LOG_KV("configValue", configValue);
 
-            int64_t value = validate(configKey, configValue, blockContext.blockVersion());
+            int64_t value =
+                validate(_executive, configKey, configValue, blockContext.blockVersion());
             auto table = _executive->storage().openTable(ledger::SYS_CONFIG);
 
             auto entry = table->newEntry();
@@ -162,6 +188,12 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
             if (shouldUpgradeChain(configKey, blockContext.blockVersion(), value))
             {
                 upgradeChain(_executive, _callParameters, codec, value);
+            }
+            // if feature_balance_precompiled is enabled, register governor to caller
+            if (configKey == SYSTEM_KEY_BALANCE_PRECOMPILED_SWITCH &&
+                blockContext.blockVersion() >= BlockVersion::V3_6_VERSION)
+            {
+                registerGovernorToCaller(_executive, _callParameters, codec);
             }
 
             PRECOMPILED_LOG(INFO) << LOG_BADGE("SystemConfigPrecompiled")
@@ -194,7 +226,8 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
 }
 
 int64_t SystemConfigPrecompiled::validate(
-    std::string_view _key, std::string_view value, uint32_t blockVersion)
+    const std::shared_ptr<executor::TransactionExecutive>& _executive, std::string_view _key,
+    std::string_view value, uint32_t blockVersion)
 {
     int64_t configuredValue = 0;
     std::string key = std::string(_key);
@@ -214,6 +247,11 @@ int64_t SystemConfigPrecompiled::validate(
         if (setFeature && value != "1")
         {
             BOOST_THROW_EXCEPTION(PrecompiledError("The value for " + key + " must be 1."));
+        }
+
+        if (setFeature)
+        {
+            _executive->blockContext().features().validate(key);
         }
 
         if (m_valueConverter.contains(key))
@@ -237,6 +275,12 @@ int64_t SystemConfigPrecompiled::validate(
         PRECOMPILED_LOG(INFO) << LOG_DESC("SystemConfigPrecompiled: invalid version")
                               << LOG_KV("info", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(PrecompiledError(errorMsg));
+    }
+    catch (bcos::tool::InvalidSetFeature const& e)
+    {
+        PRECOMPILED_LOG(INFO) << LOG_DESC("SystemConfigPrecompiled: set feature failed")
+                              << LOG_KV("info", boost::diagnostic_information(e));
+        BOOST_THROW_EXCEPTION(PrecompiledError(*boost::get_error_info<bcos::errinfo_comment>(e)));
     }
     catch (std::exception const& e)
     {
@@ -339,20 +383,83 @@ void SystemConfigPrecompiled::upgradeChain(
     }
 
     // Write default features when data version changes
-    if (toVersion >= static_cast<uint32_t>(BlockVersion::V3_2_3_VERSION))
+    Features bugfixFeatures;
+    auto fromVersionNum = static_cast<protocol::BlockVersion>(version);
+    auto toVersionNum = static_cast<protocol::BlockVersion>(toVersion);
+    bugfixFeatures.setUpgradeFeatures(fromVersionNum, toVersionNum);
+    PRECOMPILED_LOG(INFO) << "Upgrade chain, from: " << fromVersionNum << ", to: " << toVersionNum;
+    for (auto [flag, name, value] : bugfixFeatures.flags())
     {
-        Features bugfixFeatures;
-        bugfixFeatures.setToDefault(protocol::BlockVersion(toVersion));
-        task::syncWait(bugfixFeatures.writeToStorage(*_executive->blockContext().storage(), 0));
-
-        // From 3.3 / 3.4 or to 3.3 / 3.4, enable the feature_sharding
-        if ((version >= BlockVersion::V3_3_VERSION && version <= BlockVersion::V3_4_VERSION) ||
-            (toVersion >= BlockVersion::V3_3_VERSION && toVersion <= BlockVersion::V3_4_VERSION))
+        if (value)
         {
-            Features shardingFeatures;
-            shardingFeatures.set(ledger::Features::Flag::feature_sharding);
-            task::syncWait(
-                shardingFeatures.writeToStorage(*_executive->blockContext().backendStorage(), 0));
+            PRECOMPILED_LOG(INFO) << "Add set flag: " << name;
+        }
+    }
+
+    task::syncWait(bugfixFeatures.writeToStorage(*_executive->blockContext().storage(), 0));
+
+    // From 3.3 / 3.4 or to 3.3 / 3.4, enable the feature_sharding
+    if ((version >= BlockVersion::V3_3_VERSION && version <= BlockVersion::V3_4_VERSION) ||
+        (toVersion >= BlockVersion::V3_3_VERSION && toVersion <= BlockVersion::V3_4_VERSION))
+    {
+        Features shardingFeatures;
+        shardingFeatures.set(ledger::Features::Flag::feature_sharding);
+        task::syncWait(
+            shardingFeatures.writeToStorage(*_executive->blockContext().backendStorage(), 0));
+    }
+}
+
+void SystemConfigPrecompiled::registerGovernorToCaller(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    const PrecompiledExecResult::Ptr& _callParameters, CodecWrapper const& codec)
+{
+    std::vector<Address> governorAddress;
+    try
+    {
+        governorAddress = getGovernorList(_executive, _callParameters, codec);
+    }
+    catch (std::exception const& e)
+    {
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("SystemConfigPrecompiled, registerGovernorToCaller")
+                              << LOG_DESC("get governor list failed")
+                              << LOG_KV("info", boost::diagnostic_information(e));
+        BOOST_THROW_EXCEPTION(
+            PrecompiledError("get governor list failed, maybe current is wasm model, "
+                             "feature_balance_precompiled is not supported in wasm model."));
+    }
+    if (governorAddress.empty())
+    {
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("SystemConfigPrecompiled")
+                              << LOG_DESC("get governor is empty, maybe governor is not set");
+        return;
+    }
+    // register governor to caller
+    auto table = _executive->storage().openTable(ledger::SYS_BALANCE_CALLER);
+    if (!table)
+    {
+        std::string tableStr(SYS_BALANCE_CALLER);
+        table = _executive->storage().createTable(tableStr, "value");
+        for (auto const& address : governorAddress)
+        {
+            auto entry = table->newEntry();
+            Entry CallerEntry;
+            CallerEntry.importFields({"1"});
+            _executive->storage().setRow(SYS_BALANCE_CALLER, address.hex(), std::move(CallerEntry));
+        }
+        return;
+    }
+    else
+    {
+        for (auto const& address : governorAddress)
+        {
+            auto entry = table->getRow(address.hex());
+            if (!entry)
+            {
+                Entry CallerEntry;
+                CallerEntry.importFields({"1"});
+                _executive->storage().setRow(
+                    SYS_BALANCE_CALLER, address.hex(), std::move(CallerEntry));
+            }
         }
     }
 }

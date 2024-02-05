@@ -1,15 +1,14 @@
 #pragma once
 #include "../protocol/Protocol.h"
 #include "../storage/Entry.h"
-#include "../storage/StorageInterface.h"
-#include "../storage/StorageInvokes.h"
+#include "../storage/LegacyStorageMethods.h"
 #include "../storage2/Storage.h"
+#include "bcos-concepts/Exception.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Task.h"
-#include <bcos-concepts/Exception.h>
+#include "bcos-tool/Exceptions.h"
 #include <bcos-utilities/Ranges.h>
-#include <boost/archive/binary_iarchive.hpp>
-#include <boost/archive/binary_oarchive.hpp>
 #include <boost/throw_exception.hpp>
 #include <array>
 #include <bitset>
@@ -30,15 +29,61 @@ public:
     enum class Flag
     {
         bugfix_revert,  // https://github.com/FISCO-BCOS/FISCO-BCOS/issues/3629
+        bugfix_statestorage_hash,
+        bugfix_evm_create2_delegatecall_staticcall_codecopy,
+        bugfix_event_log_order,
+        bugfix_call_noaddr_return,
+        bugfix_precompiled_codehash,
+        bugfix_dmc_revert,
+        feature_dmc2serial,
         feature_sharding,
         feature_rpbft,
         feature_paillier,
+        feature_balance,
+        feature_balance_precompiled,
+        feature_balance_policy1,
+        feature_paillier_add_raw,
     };
 
 private:
     std::bitset<magic_enum::enum_count<Flag>()> m_flags;
 
 public:
+    static Flag string2Flag(std::string_view str)
+    {
+        auto value = magic_enum::enum_cast<Flag>(str);
+        if (!value)
+        {
+            BOOST_THROW_EXCEPTION(NoSuchFeatureError{});
+        }
+        return *value;
+    }
+
+    void validate(std::string flag) const
+    {
+        auto value = magic_enum::enum_cast<Flag>(flag);
+        if (!value)
+        {
+            BOOST_THROW_EXCEPTION(NoSuchFeatureError{});
+        }
+
+        validate(*value);
+    }
+
+    void validate(Flag flag) const
+    {
+        if (flag == Flag::feature_balance_precompiled && !get(Flag::feature_balance))
+        {
+            BOOST_THROW_EXCEPTION(bcos::tool::InvalidSetFeature{}
+                                  << errinfo_comment("must set feature_balance first"));
+        }
+        if (flag == Flag::feature_balance_policy1 && !get(Flag::feature_balance_precompiled))
+        {
+            BOOST_THROW_EXCEPTION(bcos::tool::InvalidSetFeature{}
+                                  << errinfo_comment("must set feature_balance_precompiled first"));
+        }
+    }
+
     bool get(Flag flag) const
     {
         auto index = magic_enum::enum_index(flag);
@@ -49,15 +94,7 @@ public:
 
         return m_flags[*index];
     }
-    bool get(std::string_view flag) const
-    {
-        auto value = magic_enum::enum_cast<Flag>(flag);
-        if (!value)
-        {
-            BOOST_THROW_EXCEPTION(NoSuchFeatureError{});
-        }
-        return get(*value);
-    }
+    bool get(std::string_view flag) const { return get(string2Flag(flag)); }
 
     void set(Flag flag)
     {
@@ -66,17 +103,11 @@ public:
         {
             BOOST_THROW_EXCEPTION(NoSuchFeatureError{});
         }
+
+        validate(flag);
         m_flags[*index] = true;
     }
-    void set(std::string_view flag)
-    {
-        auto value = magic_enum::enum_cast<Flag>(flag);
-        if (!value)
-        {
-            BOOST_THROW_EXCEPTION(NoSuchFeatureError{});
-        }
-        set(*value);
-    }
+    void set(std::string_view flag) { set(string2Flag(flag)); }
 
     void setToShardingDefault(protocol::BlockVersion version)
     {
@@ -87,13 +118,57 @@ public:
         }
     }
 
-    void setToDefault(protocol::BlockVersion version)
+    void setUpgradeFeatures(protocol::BlockVersion from, protocol::BlockVersion to)
     {
-        if (version >= protocol::BlockVersion::V3_2_3_VERSION)
+        struct UpgradeFeatures
         {
-            set(Flag::bugfix_revert);
+            protocol::BlockVersion to;
+            std::vector<Flag> flags;
+        };
+        const static auto upgradeRoadmap = std::to_array<UpgradeFeatures>(
+            {{protocol::BlockVersion::V3_2_3_VERSION, {Flag::bugfix_revert}},
+                {protocol::BlockVersion::V3_2_4_VERSION,
+                    {Flag::bugfix_statestorage_hash,
+                        Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy}},
+                {protocol::BlockVersion::V3_2_7_VERSION,
+                    {Flag::bugfix_event_log_order, Flag::bugfix_call_noaddr_return,
+                        Flag::bugfix_precompiled_codehash, Flag::bugfix_dmc_revert}},
+                {protocol::BlockVersion::V3_5_VERSION, {Flag::bugfix_revert}},
+                {protocol::BlockVersion::V3_6_VERSION,
+                    {Flag::bugfix_statestorage_hash,
+                        Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy,
+                        Flag::bugfix_event_log_order, Flag::bugfix_call_noaddr_return,
+                        Flag::bugfix_precompiled_codehash, Flag::bugfix_dmc_revert}}});
+
+        for (const auto& upgradeFeatures : upgradeRoadmap)
+        {
+            if (from < upgradeFeatures.to && to >= upgradeFeatures.to)
+            {
+                for (auto flag : upgradeFeatures.flags)
+                {
+                    set(flag);
+                }
+            }
         }
-        setToShardingDefault(version);
+    }
+
+    void setGenesisFeatures(protocol::BlockVersion to)
+    {
+        setToShardingDefault(to);
+        if (to == protocol::BlockVersion::V3_3_VERSION ||
+            to == protocol::BlockVersion::V3_4_VERSION)
+        {
+            return;
+        }
+
+        if (to == protocol::BlockVersion::V3_5_VERSION)
+        {
+            setUpgradeFeatures(protocol::BlockVersion::V3_4_VERSION, to);
+        }
+        else
+        {
+            setUpgradeFeatures(protocol::BlockVersion::MIN_VERSION, to);
+        }
     }
 
     auto flags() const
@@ -114,15 +189,15 @@ public:
                });
     }
 
-    task::Task<void> readFromStorage(storage::StorageInterface& storage, long blockNumber)
+    task::Task<void> readFromStorage(auto& storage, long blockNumber)
     {
         for (auto key : bcos::ledger::Features::featureKeys())
         {
-            auto entry =
-                co_await storage2::readOne(storage, std::make_tuple(ledger::SYS_CONFIG, key));
+            auto entry = co_await storage2::readOne(
+                storage, transaction_executor::StateKeyView(ledger::SYS_CONFIG, key));
             if (entry)
             {
-                auto [value, enableNumber] = entry->getObject<ledger::SystemConfigEntry>();
+                auto [value, enableNumber] = entry->template getObject<ledger::SystemConfigEntry>();
                 if (blockNumber >= enableNumber)
                 {
                     set(key);
@@ -131,17 +206,18 @@ public:
         }
     }
 
-    task::Task<void> writeToStorage(storage::StorageInterface& storage, long blockNumber) const
+    task::Task<void> writeToStorage(auto& storage, long blockNumber) const
     {
         for (auto [flag, name, value] : flags())
         {
-            if (value)
+            if (value && !co_await storage2::existsOne(
+                             storage, transaction_executor::StateKeyView(ledger::SYS_CONFIG, name)))
             {
                 storage::Entry entry;
                 entry.setObject(
                     SystemConfigEntry{boost::lexical_cast<std::string>((int)value), blockNumber});
-                co_await storage2::writeOne(
-                    storage, std::make_tuple(ledger::SYS_CONFIG, name), std::move(entry));
+                co_await storage2::writeOne(storage,
+                    transaction_executor::StateKey(ledger::SYS_CONFIG, name), std::move(entry));
             }
         }
     }
@@ -149,6 +225,7 @@ public:
 
 inline std::ostream& operator<<(std::ostream& stream, Features::Flag flag)
 {
+    stream << magic_enum::enum_name(flag);
     return stream;
 }
 

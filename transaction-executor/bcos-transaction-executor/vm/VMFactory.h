@@ -42,56 +42,16 @@ struct UnknownVMError : public bcos::Error {};
 
 class VMFactory
 {
-private:
-    storage2::memory_storage::MemoryStorage<crypto::HashType,
-        std::shared_ptr<evmone::advanced::AdvancedCodeAnalysis const>,
-        storage2::memory_storage::Attribute(
-            storage2::memory_storage::CONCURRENT | storage2::memory_storage::MRU),
-        std::hash<crypto::HashType>>
-        m_evmoneCodeAnalysisCache;
-
 public:
-    /// Creates a VM instance of the global kind.
-    static VMInstance create() { return create(VMKind::evmone); }
-
-    /// Creates a VM instance of the kind provided.
-    static VMInstance create(VMKind kind)
-    {
-        switch (kind)
-        {
-        case VMKind::evmone:
-            return VMInstance{evmc_create_evmone()};
-        default:
-            BOOST_THROW_EXCEPTION(UnknownVMError{});
-        }
-    }
-
-    VMInstance create(
-        VMKind kind, const bcos::h256& codeHash, std::string_view code, evmc_revision mode)
+    static VMInstance create(VMKind kind, bytesConstRef code, evmc_revision mode)
     {
         switch (kind)
         {
         case VMKind::evmone:
         {
-            std::shared_ptr<evmone::advanced::AdvancedCodeAnalysis const> codeAnalysis;
-            auto it = m_evmoneCodeAnalysisCache.read(RANGES::views::single(codeHash)).toValue();
-            it.next().toValue();
-            if (it.hasValue().toValue())
-            {
-                codeAnalysis = it.value().toValue();
-                it.release();
-            }
-            else
-            {
-                it.release();
-                codeAnalysis = std::make_shared<evmone::advanced::AdvancedCodeAnalysis>(
-                    evmone::advanced::analyze(
-                        mode, evmone::bytes_view((const uint8_t*)code.data(), code.size())));
-                (void)m_evmoneCodeAnalysisCache.write(RANGES::views::single(codeHash),
-                    RANGES::views::single(std::as_const(codeAnalysis)));
-            }
-
-            return VMInstance{std::move(codeAnalysis)};
+            return VMInstance{
+                std::make_shared<evmone::baseline::CodeAnalysis>(evmone::baseline::analyze(
+                    mode, evmone::bytes_view((const uint8_t*)code.data(), code.size())))};
         }
         default:
             BOOST_THROW_EXCEPTION(UnknownVMError{});

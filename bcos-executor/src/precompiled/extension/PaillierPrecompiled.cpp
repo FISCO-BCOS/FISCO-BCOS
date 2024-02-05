@@ -41,11 +41,14 @@ contract Paillier
 #endif
 
 const char* const PAILLIER_METHOD_SET_STR = "paillierAdd(string,string)";
+const char* const PAILLIER_METHOD_ADD_RAW_STR = "paillierAdd(bytes,bytes)";
 
 PaillierPrecompiled::PaillierPrecompiled(const crypto::Hash::Ptr& _hashImpl)
   : Precompiled(_hashImpl), m_callPaillier(std::make_shared<CallPaillier>())
 {
     name2Selector[PAILLIER_METHOD_SET_STR] = getFuncSelector(PAILLIER_METHOD_SET_STR, _hashImpl);
+    name2Selector[PAILLIER_METHOD_ADD_RAW_STR] =
+        getFuncSelector(PAILLIER_METHOD_ADD_RAW_STR, _hashImpl);
 }
 
 PrecompiledExecResult::Ptr PaillierPrecompiled::call(
@@ -79,6 +82,28 @@ PrecompiledExecResult::Ptr PaillierPrecompiled::call(
             PRECOMPILED_LOG(INFO) << LOG_BADGE("PaillierPrecompiled")
                                   << LOG_DESC(std::string(e.what())) << LOG_KV("cipher1", cipher1)
                                   << LOG_KV("cipher2", cipher2);
+            getErrorCodeOut(_callParameters->mutableExecResult(), CODE_INVALID_CIPHERS, codec);
+        }
+    }
+    else if (func == name2Selector[PAILLIER_METHOD_ADD_RAW_STR] &&
+             blockContext.features().get(ledger::Features::Flag::feature_paillier_add_raw))
+    {  // paillierAdd(bytes,bytes)
+        bytes cipher1;
+        bytes cipher2;
+        codec.decode(data, cipher1, cipher2);
+        bytes result;
+        try
+        {
+            result = m_callPaillier->paillierAdd(cipher1, cipher2);
+            gasPricer->appendOperation(InterfaceOpcode::PaillierAdd);
+            _callParameters->setExecResult(codec.encode(result));
+        }
+        catch (CallException& e)
+        {
+            PRECOMPILED_LOG(INFO) << LOG_BADGE("PaillierPrecompiled")
+                                  << LOG_DESC(std::string(e.what()))
+                                  << LOG_KV("cipher1", toHex(cipher1))
+                                  << LOG_KV("cipher2", toHex(cipher2));
             getErrorCodeOut(_callParameters->mutableExecResult(), CODE_INVALID_CIPHERS, codec);
         }
     }

@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Precompiled.h"
-#include "bcos-utilities/FixedBytes.h"
 #include <utility>
 
 namespace bcos::transaction_executor

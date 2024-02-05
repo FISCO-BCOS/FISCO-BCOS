@@ -97,15 +97,18 @@ public:
     int64_t contextID() const { return m_contextID; }
     int64_t seq() const { return m_seq; }
 
+    // in delegatecall this is codeAddress
     std::string_view contractAddress() const { return m_contractAddress; }
 
     CallParameters::UniquePtr execute(
         CallParameters::UniquePtr callParameters);  // execute parameters in
                                                     // current corouitine
 
-    bool isPrecompiled(const std::string& _address) const;
+    virtual bool isPrecompiled(const std::string& _address) const;
 
     std::shared_ptr<precompiled::Precompiled> getPrecompiled(const std::string& _address) const;
+    virtual std::shared_ptr<precompiled::Precompiled> getPrecompiled(const std::string& _address,
+        uint32_t version, bool isAuth, const ledger::Features& features) const;
 
     void setStaticPrecompiled(std::shared_ptr<const std::set<std::string>> _staticPrecompiled)
     {
@@ -143,6 +146,23 @@ public:
     bool hasContractTableChanged() const { return m_hasContractTableChanged; }
     void setContractTableChanged() { m_hasContractTableChanged = true; }
 
+    bool checkAuth(const CallParameters::UniquePtr& callParameters);
+    void creatAuthTable(std::string_view _tableName, std::string_view _origin,
+        std::string_view _sender, uint32_t _version);
+
+    crypto::HashType getCodeHash(const std::string_view& contractTableName);
+    std::optional<storage::Entry> getCodeEntryFromContractTable(
+        const std::string_view contractTableName);
+    std::optional<storage::Entry> getCodeByHash(const std::string_view& codeHash);
+    std::optional<storage::Entry> getCodeByContractTableName(
+        const std::string_view& contractTableName, bool needTryFromContractTable = true);
+
+    CallParameters::UniquePtr transferBalance(CallParameters::UniquePtr callParameters,
+        int64_t requireGas, std::string_view currentContextAddress);
+
+    std::string getContractTableName(
+        const std::string_view& _address, bool isWasm = false, bool isCreate = false);
+
 protected:
     std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> call(
         CallParameters::UniquePtr callParameters);
@@ -155,14 +175,16 @@ protected:
     CallParameters::UniquePtr callDynamicPrecompiled(
         CallParameters::UniquePtr callParameters, const std::string& code);
 
+    //    virtual TransactionExecutive::Ptr buildChildExecutive(const std::string& _contractAddress,
+    //        int64_t contextID, int64_t seq, bool useCoroutine = true)
     virtual TransactionExecutive::Ptr buildChildExecutive(const std::string& _contractAddress,
-        int64_t contextID, int64_t seq, bool useCoroutine = true)
+        int64_t contextID, int64_t seq, ExecutiveType execType = ExecutiveType::coroutine)
     {
         auto executiveFactory = std::make_shared<ExecutiveFactory>(
             m_blockContext, m_evmPrecompiled, m_precompiled, m_staticPrecompiled, m_gasInjector);
 
 
-        return executiveFactory->build(_contractAddress, contextID, seq, useCoroutine);
+        return executiveFactory->build(_contractAddress, contextID, seq, execType);
     }
 
     void revert();
@@ -177,48 +199,9 @@ protected:
         _callParameters.data = std::move(codecOutput);
     }
 
-    inline std::string getContractTableName(
-        const std::string_view& _address, bool isWasm = false, bool isCreate = false)
-    {
-        auto version = m_blockContext.blockVersion();
-
-        if (m_blockContext.isAuthCheck() ||
-            protocol::versionCompareTo(version, protocol::BlockVersion::V3_3_VERSION) >= 0)
-        {
-            if (_address.starts_with(precompiled::SYS_ADDRESS_PREFIX))
-            {
-                return std::string(USER_SYS_PREFIX).append(_address);
-            }
-        }
-
-        std::string_view formatAddress = _address;
-        if (isWasm)
-        {
-            // NOTE: if version < 3.2, then it will allow deploying contracts under /tables. It's a
-            // bug, but it should maintain data compatibility.
-            // NOTE2: if it's internalCreate it should allow creating table under /tables
-            if (protocol::versionCompareTo(version, protocol::BlockVersion::V3_2_VERSION) < 0 ||
-                !isCreate)
-            {
-                if (_address.starts_with(USER_TABLE_PREFIX))
-                {
-                    return std::string(formatAddress);
-                }
-            }
-            formatAddress =
-                formatAddress.starts_with('/') ? formatAddress.substr(1) : formatAddress;
-        }
-
-        return std::string(USER_APPS_PREFIX).append(formatAddress);
-    }
-
-    bool checkAuth(const CallParameters::UniquePtr& callParameters);
     bool checkExecAuth(const CallParameters::UniquePtr& callParameters);
     int32_t checkContractAvailable(const CallParameters::UniquePtr& callParameters);
     uint8_t checkAccountAvailable(const CallParameters::UniquePtr& callParameters);
-
-    void creatAuthTable(std::string_view _tableName, std::string_view _origin,
-        std::string_view _sender, uint32_t _version);
 
     bool buildBfsPath(std::string_view _absoluteDir, std::string_view _origin,
         std::string_view _sender, std::string_view _type, int64_t gasLeft);

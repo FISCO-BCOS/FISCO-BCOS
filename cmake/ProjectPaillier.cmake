@@ -8,11 +8,11 @@ endif()
 
 ExternalProject_Add(paillier
     PREFIX ${CMAKE_SOURCE_DIR}/deps
-    DOWNLOAD_NAME paillier-1daf3b23.tar.gz
+    DOWNLOAD_NAME paillier-8c9336a4.tar.gz
     DOWNLOAD_NO_PROGRESS 1
-    URL https://github.com/FISCO-BCOS/paillier-lib/archive/1daf3b23b01121e8522a8b264be933f6d236fdb8.tar.gz
-        https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/FISCO-BCOS/deps/paillier-1daf3b23.tar.gz
-    URL_HASH SHA256=574c8315961ea2ba9534a739675172a0e580ca140c9b2a6fb1008aaf608ae1c9
+    URL https://github.com/FISCO-BCOS/paillier-lib/archive/8c9336a41e324f361bed60f1259e297db06b441a.tar.gz
+        # https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/FISCO-BCOS/deps/paillier-1daf3b23.tar.gz
+    URL_HASH SHA256=6519a7ed8eed01b4258d13aa8ffb1e34890d905e97572f2ea6201555fa95dde3
     BUILD_IN_SOURCE 1
     CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
     -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_BUILD_TYPE=Release

@@ -27,6 +27,7 @@ namespace tool
 DERIVE_BCOS_EXCEPTION(LedgerConfigFetcherException);
 DERIVE_BCOS_EXCEPTION(InvalidConfig);
 DERIVE_BCOS_EXCEPTION(InvalidVersion);
+DERIVE_BCOS_EXCEPTION(InvalidSetFeature);
 
 class ExceptionHolder
 {

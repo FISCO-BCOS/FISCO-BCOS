@@ -27,6 +27,8 @@
 #include "wedpr-crypto/WedprBn128.h"
 #include "wedpr-crypto/WedprCrypto.h"
 #include <bcos-utilities/Log.h>
+#include <algorithm>
+
 
 using namespace std;
 using namespace bcos;
@@ -470,15 +472,31 @@ bytes blake2FCompression(uint32_t _rounds, bytesConstRef _stateVector, bytesCons
 const int RSV_LENGTH = 65;
 const int PUBLIC_KEY_LENGTH = 64;
 pair<bool, bytes> ecRecover(bytesConstRef _in)
-{  // _in is hash(32),v(32),r(32),s(32), return address
+{                                // _in is hash(32),v(32),r(32),s(32), return address
+    if (_in.size() <= 128 - 32)  // must has hash(32),v(32),r(32),s(32)
+    {
+        BCOS_LOG(TRACE) << LOG_BADGE("Precompiled")
+                        << LOG_DESC("ecRecover: must has hash(32),v(32),r(32),s(32)");
+        return {true, {}};
+    }
+
     BCOS_LOG(TRACE) << LOG_BADGE("Precompiled") << LOG_DESC("ecRecover: ") << _in.size();
-    byte rawRSV[RSV_LENGTH];
-    memcpy(rawRSV, _in.data() + 64, RSV_LENGTH - 1);
+    byte rawRSV[RSV_LENGTH] = {0};
+    memcpy(rawRSV, _in.data() + 64, std::min(_in.size() - 64, (size_t)(RSV_LENGTH - 1)));
     rawRSV[RSV_LENGTH - 1] = (byte)((int)_in[63] - 27);
     crypto::HashType mHash;
     memcpy(mHash.data(), _in.data(), crypto::HashType::SIZE);
 
-    auto pk = crypto::secp256k1Recover(mHash, bytesConstRef(rawRSV, RSV_LENGTH));
+    PublicPtr pk;
+    try
+    {
+        pk = crypto::secp256k1Recover(mHash, bytesConstRef(rawRSV, RSV_LENGTH));
+    }
+    catch (...)
+    {
+        // is also ok and return 0x0000000000000000000000000000000000000084
+        return {true, {}};
+    }
 
     pair<bool, bytes> ret{true, bytes(crypto::HashType::SIZE, 0)};
     BCOS_LOG(TRACE) << LOG_BADGE("Precompiled") << LOG_DESC("wedpr_secp256k1_recover_public_key")

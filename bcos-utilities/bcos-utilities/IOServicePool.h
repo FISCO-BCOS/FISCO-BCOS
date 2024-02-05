@@ -31,7 +31,7 @@ public:
     using ExecutorType = boost::asio::io_context::executor_type;
     using Work = boost::asio::executor_work_guard<ExecutorType>;
     using WorkPtr = std::unique_ptr<Work>;
-    IOServicePool(size_t _workerNum = std::thread::hardware_concurrency())
+    explicit IOServicePool(size_t _workerNum = std::thread::hardware_concurrency())
       : m_works(_workerNum), m_nextIOService(0)
     {
         // create the ioservices
@@ -57,10 +57,13 @@ public:
         }
 
         // one io_context per thread
-        for (size_t i = 0; i < m_ioServices.size(); ++i)
+        for (const auto& ioService : m_ioServices)
         {
-            auto ioService = m_ioServices[i];
-            m_threads.emplace_back([ioService]() { ioService->run(); });
+            // https://github.com/chriskohlhoff/asio/issues/932#issuecomment-968103444
+            m_threads.emplace_back([ioService]() {
+                bcos::pthread_setThreadName("ioService");
+                ioService->run();
+            });
         }
     }
 

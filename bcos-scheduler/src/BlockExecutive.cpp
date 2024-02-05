@@ -159,6 +159,14 @@ bcos::protocol::ExecutionMessage::UniquePtr BlockExecutive::buildMessage(
         message->setABI(std::string(tx->abi()));
     }
 
+    // set value
+    message->setValue(std::string(tx->value()));
+    message->setGasLimit(tx->gasLimit());
+    message->setGasPrice(m_gasPrice);
+    message->setMaxFeePerGas(std::string(tx->maxFeePerGas()));
+    message->setMaxPriorityFeePerGas(std::string(tx->maxPriorityFeePerGas()));
+    message->setEffectiveGasPrice(m_gasPrice);
+
     return message;
 }
 
@@ -190,6 +198,8 @@ void BlockExecutive::buildExecutivesFromMetaData()
 
                     auto& [toAddress, message, enableDAG] = results[i];
                     message = buildMessage(contextID, (*m_blockTxs)[i]);
+                    // recoder tx version
+                    m_executiveResults[i].version = (*m_blockTxs)[i]->version();
                     toAddress = {message->to().data(), message->to().size()};
                     enableDAG = metaData.attribute() & bcos::protocol::Transaction::Attribute::DAG;
                 }
@@ -197,62 +207,8 @@ void BlockExecutive::buildExecutivesFromMetaData()
     }
     else
     {
-        tbb::parallel_for(tbb::blocked_range<size_t>(0U, m_block->transactionsMetaDataSize()),
-            [&](auto const& range) {
-                for (auto i = range.begin(); i < range.end(); ++i)
-                {
-                    auto metaData = blockImpl->transactionMetaDataImpl(i);
-                    // if (metaData)
-                    {
-                        m_executiveResults[i].transactionHash = metaData.hash();
-                        m_executiveResults[i].source = metaData.source();
-                    }
-
-                    auto contextID = i + m_startContextID;
-
-                    auto& [to, message, enableDAG] = results[i];
-                    message = m_scheduler->m_executionMessageFactory->createExecutionMessage();
-                    message->setContextID(contextID);
-                    message->setType(protocol::ExecutionMessage::TXHASH);
-                    // Note: set here for fetching txs when send_back
-                    message->setTransactionHash(metaData.hash());
-
-                    if (metaData.attribute() &
-                        bcos::protocol::Transaction::Attribute::LIQUID_SCALE_CODEC)
-                    {
-                        // LIQUID
-                        if (metaData.attribute() &
-                            bcos::protocol::Transaction::Attribute::LIQUID_CREATE)
-                        {
-                            message->setCreate(true);
-                        }
-                        message->setTo(std::string(metaData.to()));
-                    }
-                    else
-                    {
-                        // SOLIDITY
-                        if (metaData.to().empty())
-                        {
-                            message->setCreate(true);
-                        }
-                        else
-                        {
-                            message->setTo(preprocessAddress(metaData.to()));
-                        }
-                    }
-
-                    message->setDepth(0);
-                    message->setGasAvailable(m_gasLimit);
-                    auto toAddress = metaData.to();
-                    if (precompiled::c_systemTxsAddress.contains(toAddress))
-                    {
-                        message->setGasAvailable(TRANSACTION_GAS);
-                    }
-                    message->setStaticCall(false);
-                    enableDAG = metaData.attribute() & bcos::protocol::Transaction::Attribute::DAG;
-                    to = {message->to().data(), message->to().size()};
-                }
-            });
+        BOOST_THROW_EXCEPTION(BCOS_ERROR(
+            SchedulerError::BuildBlockError, "buildExecutivesFromMetaData: fetchBlockTxs error"));
     }
 
     for (auto& it : results)
@@ -283,6 +239,7 @@ void BlockExecutive::buildExecutivesFromNormalTransaction()
             {
                 auto tx = m_block->transaction(i);
                 m_executiveResults[i].transactionHash = tx->hash();
+                m_executiveResults[i].version = tx->version();
 
                 auto contextID = i + m_startContextID;
                 auto& [to, message, enableDAG] = results[i];
@@ -303,12 +260,12 @@ void BlockExecutive::buildExecutivesFromNormalTransaction()
     }
 }
 
-bcos::protocol::TransactionsPtr BlockExecutive::fetchBlockTxsFromTxPool(
+bcos::protocol::ConstTransactionsPtr BlockExecutive::fetchBlockTxsFromTxPool(
     bcos::protocol::Block::Ptr block, bcos::txpool::TxPoolInterface::Ptr txPool)
 {
     SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(number()) << "BlockExecutive prepare: fillBlock start"
                          << LOG_KV("txNum", block->transactionsMetaDataSize());
-    bcos::protocol::TransactionsPtr txs = nullptr;
+    bcos::protocol::ConstTransactionsPtr txs = nullptr;
     auto lastT = utcTime();
     if (txPool != nullptr)
     {
@@ -325,10 +282,10 @@ bcos::protocol::TransactionsPtr BlockExecutive::fetchBlockTxsFromTxPool(
                 SCHEDULER_LOG(TRACE) << "fetch: " << tx.abridged();
             }
         }
-        std::shared_ptr<std::promise<bcos::protocol::TransactionsPtr>> txsPromise =
-            std::make_shared<std::promise<bcos::protocol::TransactionsPtr>>();
+        std::shared_ptr<std::promise<bcos::protocol::ConstTransactionsPtr>> txsPromise =
+            std::make_shared<std::promise<bcos::protocol::ConstTransactionsPtr>>();
         txPool->asyncFillBlock(
-            txHashes, [txsPromise](Error::Ptr error, bcos::protocol::TransactionsPtr txs) {
+            txHashes, [txsPromise](Error::Ptr error, bcos::protocol::ConstTransactionsPtr txs) {
                 if (!txsPromise)
                 {
                     return;
@@ -481,8 +438,7 @@ void BlockExecutive::asyncExecute(
 
 void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
 {
-    auto stateStorage =
-        std::make_shared<storage::StateStorage>(m_scheduler->m_storage, m_block->version());
+    auto stateStorage = std::make_shared<storage::StateStorage>(m_scheduler->m_storage);
 
     m_currentTimePoint = std::chrono::system_clock::now();
     SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(number()) << LOG_DESC("BlockExecutive commit block");
@@ -1508,7 +1464,7 @@ DmcExecutor::Ptr BlockExecutive::buildDmcExecutor(const std::string& name,
     bcos::executor::ParallelTransactionExecutorInterface::Ptr executor)
 {
     auto dmcExecutor = std::make_shared<DmcExecutor>(name, contractAddress, m_block, executor,
-        m_keyLocks, m_scheduler->m_hashImpl, m_dmcRecorder);
+        m_keyLocks, m_scheduler->m_hashImpl, m_dmcRecorder, isCall());
     return dmcExecutor;
 }
 
@@ -1555,6 +1511,11 @@ DmcExecutor::Ptr BlockExecutive::registerAndGetDmcExecutor(std::string contractA
         }
 
         auto dmcExecutor = buildDmcExecutor(executorInfo->name, contractAddress, executor);
+        if (m_scheduler->ledgerConfig().features().get(ledger::Features::Flag::bugfix_dmc_revert))
+        {
+            dmcExecutor->setEnablePreFinishType(true);
+        }
+
         m_dmcExecutors.emplace(contractAddress, dmcExecutor);
 
         // register functions
@@ -1620,17 +1581,44 @@ void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr outp
         txGasUsed = 0;
     }
     m_gasUsed.fetch_add(txGasUsed);
-    auto receipt = m_scheduler->m_blockFactory->receiptFactory()->createReceipt(txGasUsed,
-        std::string(output->newEVMContractAddress()), output->takeLogEntries(), output->status(),
-        output->data(), number());
-
-    // write receipt in results
-    SCHEDULER_LOG(TRACE) << " 6.GenReceipt:\t [^^] " << output->toString()
-                         << " -> contextID:" << output->contextID() - m_startContextID
-                         << ", receipt: " << receipt->hash() << ", gasUsed: " << receipt->gasUsed()
-                         << ", version: " << receipt->version()
-                         << ", status: " << receipt->status();
-    m_executiveResults[output->contextID() - m_startContextID].receipt = std::move(receipt);
+    auto version = m_executiveResults[output->contextID() - m_startContextID].version;
+    switch (version)
+    {
+    case int32_t(bcos::protocol::TransactionVersion::V0_VERSION):
+    {
+        auto receipt = m_scheduler->m_blockFactory->receiptFactory()->createReceipt(txGasUsed,
+            std::string(output->newEVMContractAddress()), output->takeLogEntries(),
+            output->status(), output->data(), number());
+        // write receipt in results
+        SCHEDULER_LOG(TRACE) << " 6.GenReceipt:\t [^^] " << output->toString()
+                             << " -> contextID:" << output->contextID() - m_startContextID
+                             << ", receipt: " << receipt->hash()
+                             << ", gasUsed: " << receipt->gasUsed()
+                             << ", version: " << receipt->version()
+                             << ", status: " << receipt->status();
+        m_executiveResults[output->contextID() - m_startContextID].receipt = std::move(receipt);
+        break;
+    }
+    case int32_t(bcos::protocol::TransactionVersion::V1_VERSION):
+    {
+        auto receipt = m_scheduler->m_blockFactory->receiptFactory()->createReceipt2(txGasUsed,
+            std::string(output->newEVMContractAddress()), output->takeLogEntries(),
+            output->status(), output->data(), number(), std::string(output->effectiveGasPrice()));
+        // write receipt in results
+        SCHEDULER_LOG(TRACE) << " 6.GenReceipt:\t [^^] " << output->toString()
+                             << " -> contextID:" << output->contextID() - m_startContextID
+                             << ", receipt: " << receipt->hash()
+                             << ", gasUsed: " << receipt->gasUsed()
+                             << ", version: " << receipt->version()
+                             << ", status: " << receipt->status()
+                             << ", effectiveGasPrice: " << receipt->effectiveGasPrice();
+        m_executiveResults[output->contextID() - m_startContextID].receipt = std::move(receipt);
+        break;
+    }
+    default:
+        BOOST_THROW_EXCEPTION(BCOS_ERROR(SchedulerError::InvalidTransactionVersion,
+            "Invalid receipt version: " + std::to_string(version)));
+    }
 }
 
 

@@ -56,7 +56,8 @@ public:
         SchedulerImpl* scheduler, size_t startContextID,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
         bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
-        bcos::txpool::TxPoolInterface::Ptr _txPool, uint64_t _gasLimit, bool _syncBlock);
+        bcos::txpool::TxPoolInterface::Ptr _txPool, uint64_t _gasLimit, std::string _gasPrice,
+        bool _syncBlock);
 
 private:
     bool m_isSerialExecute;

@@ -24,12 +24,9 @@
 #include <bcos-cpp-sdk/event/EventSubInterface.h>
 #include <bcos-cpp-sdk/event/EventSubParams.h>
 #include <atomic>
+#include <utility>
 
-namespace bcos
-{
-namespace cppsdk
-{
-namespace event
+namespace bcos::cppsdk::event
 {
 class EventSubTaskState
 {
@@ -56,12 +53,14 @@ class EventSubTask
 public:
     using Ptr = std::shared_ptr<EventSubTask>;
     EventSubTask() { EVENT_TASK(DEBUG) << LOG_KV("[NEWOBJ][EventSubTask]", this); }
-    ~EventSubTask() { EVENT_TASK(DEBUG) << LOG_KV("[DELOBJ][EventSubTask]", this); }
+    ~EventSubTask()
+    {  // EVENT_TASK(DEBUG) << LOG_KV("[DELOBJ][EventSubTask]", this);
+    }
 
 public:
     void setSession(std::shared_ptr<bcos::boostssl::ws::WsSession> _session)
     {
-        m_session = _session;
+        m_session = std::move(_session);
     }
     std::shared_ptr<bcos::boostssl::ws::WsSession> session() const { return m_session; }
 
@@ -71,13 +70,13 @@ public:
     void setGroup(const std::string& _group) { m_group = _group; }
     std::string group() const { return m_group; }
 
-    void setParams(std::shared_ptr<const EventSubParams> _params) { m_params = _params; }
+    void setParams(std::shared_ptr<const EventSubParams> _params) { m_params = std::move(_params); }
     std::shared_ptr<const EventSubParams> params() const { return m_params; }
 
-    void setState(std::shared_ptr<EventSubTaskState> _state) { m_state = _state; }
+    void setState(std::shared_ptr<EventSubTaskState> _state) { m_state = std::move(_state); }
     std::shared_ptr<EventSubTaskState> state() const { return m_state; }
 
-    void setCallback(Callback _callback) { m_callback = _callback; }
+    void setCallback(Callback _callback) { m_callback = std::move(_callback); }
     Callback callback() const { return m_callback; }
 
 private:
@@ -90,6 +89,4 @@ private:
 };
 
 using EventSubTaskPtrs = std::vector<EventSubTask::Ptr>;
-}  // namespace event
-}  // namespace cppsdk
-}  // namespace bcos
+}  // namespace bcos::cppsdk::event

@@ -84,7 +84,7 @@ protected:
         Error::Ptr _error, bcos::protocol::TransactionsPtr _fetchedTxs,
         bcos::protocol::Block::Ptr _verifiedProposal, VerifyResponseCallback _onVerifyFinished);
 
-    virtual bool importDownloadedTxs(bcos::protocol::Block::Ptr _txsBuffer,
+    virtual bool importDownloadedTxsByBlock(bcos::protocol::Block::Ptr _txsBuffer,
         bcos::protocol::Block::Ptr _verifiedProposal = nullptr);
 
     virtual bool importDownloadedTxs(bcos::protocol::TransactionsPtr _txs,

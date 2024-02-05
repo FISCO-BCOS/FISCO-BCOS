@@ -19,14 +19,13 @@
  * @date 2022-11-09
  */
 #pragma once
-#include "bcos-boostssl/bcos-boostssl/httpserver/HttpServer.h"
-#include "bcos-boostssl/bcos-boostssl/httpserver/HttpStream.h"
-#include "bcos-framework/bcos-framework/protocol/Transaction.h"
-#include "bcos-framework/bcos-framework/protocol/TransactionReceipt.h"
+#include "bcos-boostssl/httpserver/HttpServer.h"
+#include "bcos-boostssl/httpserver/HttpStream.h"
 #include "bcos-framework/protocol/Transaction.h"
+#include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-ledger/src/libledger/Ledger.h"
-#include "bcos-rpc/bcos-rpc/jsonrpc/Common.h"
-#include "bcos-rpc/bcos-rpc/jsonrpc/JsonRpcInterface.h"
+#include "bcos-rpc/jsonrpc/Common.h"
+#include "bcos-rpc/jsonrpc/JsonRpcInterface.h"
 #include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-utilities/Error.h>
 #include <json/json.h>

@@ -14,7 +14,7 @@
 #include <bcos-executor/src/Common.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-table/src/StateStorageFactory.h>
-#include <bcos-tool/bcos-tool/VersionConverter.h>
+#include <bcos-tool/VersionConverter.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Ranges.h>
 #include <tbb/blocked_range.h>
@@ -462,10 +462,11 @@ private:
             co_return;
         }
 
-        auto hashesRange = block.transactionsMetaData | RANGES::views::transform([
-        ](typename decltype(block.transactionsMetaData)::value_type const& metaData) -> auto& {
-            return metaData.hash;
-        });
+        auto hashesRange =
+            block.transactionsMetaData |
+            RANGES::views::transform(
+                [](typename decltype(block.transactionsMetaData)::value_type const& metaData)
+                    -> auto& { return metaData.hash; });
         auto outputSize = RANGES::size(block.transactionsMetaData);
 
         if constexpr (std::is_same_v<Type, concepts::ledger::TRANSACTIONS>)
@@ -729,6 +730,23 @@ private:
         }
 
         co_await impl_setBlock<concepts::ledger::HEADER>(std::move(block));
+    }
+
+    task::Task<void> impl_checkGenesisBlock(bcos::concepts::block::Block auto block)
+    {
+        try
+        {
+            decltype(block) currentBlock;
+
+            co_await impl_getBlock<concepts::ledger::HEADER>(0, currentBlock);
+            co_return;
+        }
+        catch (NotFoundBlockHeader& e)
+        {
+            LEDGER_LOG(INFO) << "Not found genesis block, may be not initialized";
+            BOOST_THROW_EXCEPTION(
+                NotFoundBlockHeader{} << bcos::error::ErrorMessage{"Not found genesis block!"});
+        }
     }
 
     auto& storage() { return bcos::concepts::getRef(m_storage); }

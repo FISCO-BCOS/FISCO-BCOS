@@ -46,7 +46,10 @@ public:
         protocol::Transaction::Ptr transaction, std::function<void()> afterInsertHook) = 0;
 
     virtual bcos::protocol::TransactionStatus insert(bcos::protocol::Transaction::Ptr _tx) = 0;
-    virtual void batchInsert(bcos::protocol::Transactions const& _txs) = 0;
+    [[deprecated(
+        "do not use raw insert tx pool without check, use "
+        "batchVerifyAndSubmitTransaction")]] virtual void
+    batchInsert(bcos::protocol::Transactions const& _txs) = 0;
 
     virtual bcos::protocol::Transaction::Ptr remove(bcos::crypto::HashType const& _txHash) = 0;
     virtual bcos::protocol::Transaction::Ptr removeSubmittedTx(
@@ -55,7 +58,7 @@ public:
         bcos::protocol::TransactionSubmitResults const& _txsResult) = 0;
 
     // Note: the transactions may be missing from the transaction pool
-    virtual bcos::protocol::TransactionsPtr fetchTxs(
+    virtual bcos::protocol::ConstTransactionsPtr fetchTxs(
         bcos::crypto::HashList& _missedTxs, bcos::crypto::HashList const& _txsList) = 0;
 
     virtual bool batchVerifyAndSubmitTransaction(

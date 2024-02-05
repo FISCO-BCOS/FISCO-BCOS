@@ -6,10 +6,20 @@ endif()
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 
-set(VERSION "3.5.0")
+set(VERSION "3.6.0")
 set(VERSION_SUFFIX "")
 include(Options)
 configure_project()
+
+if (WIN32)
+# to fix boost log link error in Windows8 API
+# https://github.com/microsoft/vcpkg/discussions/22762
+#    add_definitions(-D_WIN32_WINNT=0x0601)
+#    set(VCPKG_C_FLAGS -D_WIN32_WINNT=0x0601 -DWINVER=0x0601)
+#    set(VCPKG_CXX_FLAGS -D_WIN32_WINNT=0x0601 -DWINVER=0x0601)
+    add_definitions(-DBOOST_USE_WINAPI_VERSION=BOOST_WINAPI_VERSION_WIN7)
+    set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS "ON")
+endif ()
 
 # vcpkg init
 if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
@@ -34,11 +44,14 @@ add_subdirectory(bcos-crypto)
 add_subdirectory(bcos-utilities)
 add_subdirectory(concepts)
 add_subdirectory(libtask)
-add_subdirectory(bcos-protocol)
-add_subdirectory(bcos-tars-protocol)
+if(NOT ONLY_CPP_SDK)
+    add_subdirectory(bcos-protocol)
+    add_subdirectory(bcos-tars-protocol)
+endif ()
 add_subdirectory(bcos-codec)
-include(ProjectITTAPI)
-include(ProjectSDF)
+if(NOT ONLY_CPP_SDK)
+    include(ProjectITTAPI)
+endif ()
 
 if(WITH_LIGHTNODE)
     add_subdirectory(lightnode)
@@ -129,3 +142,9 @@ install(
     DESTINATION share/fiscobcos
     NAMESPACE fiscobcos::
 )
+# copy pre-commit to git hook
+
+if(NOT EXISTS ${CMAKE_SOURCE_DIR}/.git/hooks/pre-commit AND EXISTS ${CMAKE_SOURCE_DIR}/.git/hooks)
+    file(COPY ${CMAKE_SOURCE_DIR}/tools/.ci/pre-commit DESTINATION ${CMAKE_SOURCE_DIR}/.git/hooks
+            FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+endif()

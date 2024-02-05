@@ -292,8 +292,15 @@ public:
                 }
                 else
                 {
-                    co_await self->remoteLedger().template getBlock<bcos::concepts::ledger::ALL>(
-                        blockNumber, block);
+                    try
+                    {
+                        co_await self->remoteLedger()
+                            .template getBlock<bcos::concepts::ledger::ALL>(blockNumber, block);
+                    }
+                    catch (const std::exception& e)
+                    {
+                        BOOST_THROW_EXCEPTION(std::runtime_error{e.what()});
+                    }
                     if (RANGES::empty(block.transactionsMetaData) && blockNumber != 0)
                     {
                         LIGHTNODE_LOG(ERROR)

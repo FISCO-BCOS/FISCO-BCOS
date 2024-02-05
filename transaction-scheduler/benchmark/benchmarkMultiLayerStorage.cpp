@@ -1,3 +1,4 @@
+#include "bcos-framework/transaction-executor/StateKey.h"
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
 #include <bcos-task/Wait.h>
@@ -9,14 +10,7 @@ using namespace bcos;
 using namespace bcos::storage2::memory_storage;
 using namespace bcos::transaction_scheduler;
 
-struct TableNameHash
-{
-    size_t operator()(const bcos::transaction_executor::StateKey& key) const
-    {
-        auto const& tableID = std::get<0>(key);
-        return std::hash<std::string_view>{}(tableID);
-    }
-};
+using namespace std::string_view_literals;
 
 struct Fixture
 {
@@ -30,7 +24,8 @@ struct Fixture
         task::syncWait([this](int64_t count) -> task::Task<void> {
             auto view = multiLayerStorage.fork(true);
             allKeys = RANGES::views::iota(0, count) | RANGES::views::transform([](int num) {
-                return transaction_executor::StateKey{"test_table", fmt::format("key: {}", num)};
+                auto key = fmt::format("key: {}", num);
+                return transaction_executor::StateKey{"test_table"sv, std::string_view(key)};
             }) | RANGES::to<decltype(allKeys)>();
 
             auto allValues = RANGES::views::iota(0, count) | RANGES::views::transform([](int num) {
@@ -40,7 +35,7 @@ struct Fixture
                 return entry;
             });
 
-            co_await view.write(allKeys, allValues);
+            co_await storage2::writeSome(view, allKeys, allValues);
         }(count));
 
         for (auto i = 0; i < layer; ++i)
@@ -52,8 +47,9 @@ struct Fixture
 
     using MutableStorage = MemoryStorage<transaction_executor::StateKey,
         transaction_executor::StateValue, Attribute(ORDERED | LOGICAL_DELETION)>;
-    using BackendStorage = MemoryStorage<transaction_executor::StateKey,
-        transaction_executor::StateValue, Attribute(ORDERED | CONCURRENT), TableNameHash>;
+    using BackendStorage =
+        MemoryStorage<transaction_executor::StateKey, transaction_executor::StateValue,
+            Attribute(ORDERED | CONCURRENT), std::hash<transaction_executor::StateKey>>;
 
     BackendStorage m_backendStorage;
     MultiLayerStorage<MutableStorage, void, BackendStorage> multiLayerStorage;
@@ -112,8 +108,9 @@ static void write1(benchmark::State& state)
         {
             storage::Entry entry;
             entry.set(fmt::format("value: {}", i));
+            auto key = fmt::format("key: {}", i);
             co_await storage2::writeOne(view,
-                transaction_executor::StateKey{"test_table", fmt::format("key: {}", i)},
+                transaction_executor::StateKey{"test_table"sv, std::string_view(key)},
                 std::move(entry));
             ++i;
         }

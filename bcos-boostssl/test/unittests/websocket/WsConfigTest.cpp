@@ -21,6 +21,7 @@
 
 #define BOOST_TEST_MAIN
 
+#include <bcos-boostssl/context/ContextBuilder.h>
 #include <bcos-boostssl/websocket/WsConfig.h>
 #include <bcos-boostssl/websocket/WsTools.h>
 
@@ -84,8 +85,21 @@ BOOST_AUTO_TEST_CASE(test_WsToolsTest)
     BOOST_CHECK_EQUAL(WsTools::validIP("::1"), true);
 
     BOOST_CHECK_EQUAL(WsTools::validPort(1111), true);
-    BOOST_CHECK_EQUAL(WsTools::validPort(10), false);
+    BOOST_CHECK_EQUAL(WsTools::validPort(10), true);
     BOOST_CHECK_EQUAL(WsTools::validPort(65535), true);
+}
+
+BOOST_AUTO_TEST_CASE(test_WsConfigReadConfig)
+{
+    auto contextBuilder = boostssl::context::ContextBuilder();
+    boostssl::context::ContextConfig contextConfig{};
+    contextConfig.setSslType("ssl");
+    boostssl::context::ContextConfig::CertConfig certConfig{};
+    certConfig.caCert = "ca.crt";
+    certConfig.nodeCert = "node.crt";
+    certConfig.nodeKey = "node.key";
+    contextConfig.setCertConfig(certConfig);
+    BOOST_CHECK_THROW(contextBuilder.buildSslContext(false, contextConfig), std::exception);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -30,11 +30,7 @@
 #include <mutex>
 #include <utility>
 
-namespace bcos
-{
-namespace cppsdk
-{
-namespace event
+namespace bcos::cppsdk::event
 {
 class EventSub : public EventSubInterface
 {
@@ -42,8 +38,12 @@ public:
     using Ptr = std::shared_ptr<EventSub>;
     using UniquePtr = std::unique_ptr<EventSub>;
 
-    EventSub() {}
-    virtual ~EventSub() { stop(); }
+    EventSub() = default;
+    ~EventSub() override
+    {
+        stop();
+        // EVENT_SUB(INFO) << LOG_KV("[DELOBJ][EventSub]", this);
+    }
 
 public:
     virtual void start() override;
@@ -132,6 +132,4 @@ private:
     //
     boostssl::ws::WsConfig::ConstPtr m_config;
 };
-}  // namespace event
-}  // namespace cppsdk
-}  // namespace bcos
+}  // namespace bcos::cppsdk::event

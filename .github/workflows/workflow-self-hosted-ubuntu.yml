@@ -33,8 +33,8 @@ jobs:
         uses: actions/setup-java@v3
         with:
           distribution: 'zulu'
-          java-version: 8
-          java-package: jdk
+          java-version: '8.0.382'
+
       - name: Set up Node.js 16.x
         uses: actions/setup-node@v2
         with:
@@ -64,7 +64,7 @@ jobs:
 
       - name: update vcpkg
         run: |
-          cd ${{ env.VCPKG_ROOT }} && git checkout master #&& git pull
+          cd ${{ env.VCPKG_ROOT }} && git fetch --all && git checkout master && git pull
           cd -
 
       - name: Build for linux
@@ -87,7 +87,7 @@ jobs:
         run: cd tools && bash .ci/rpcapi_ci_prepare.sh
 
       - name: FISCO BCOS RpcApiTest
-        uses: matt-ball/newman-action@master
+        uses: matt-ball/newman-action@v1.0.4
         with:
           collection: https://raw.githubusercontent.com/FISCO-BCOS/FISCOBCOS-RPC-API/main/fiscobcos.rpcapi.collection.json
 

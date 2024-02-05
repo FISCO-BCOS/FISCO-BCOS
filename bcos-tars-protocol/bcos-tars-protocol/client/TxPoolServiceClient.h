@@ -99,7 +99,7 @@ public:
         auto tarsCallback = std::make_unique<TarsCallback>();
         tarsCallback->m_cryptoSuite = m_cryptoSuite;
 
-        auto awaitable = Awaitable{.m_callback = tarsCallback.release(),
+        Awaitable awaitable{.m_callback = tarsCallback.release(),
             .m_transaction = std::move(transaction),
             .m_proxy = m_proxy};
 
@@ -272,14 +272,14 @@ public:
     }
 
     void asyncFillBlock(bcos::crypto::HashListPtr _txsHash,
-        std::function<void(bcos::Error::Ptr, bcos::protocol::TransactionsPtr)> _onBlockFilled)
+        std::function<void(bcos::Error::Ptr, bcos::protocol::ConstTransactionsPtr)> _onBlockFilled)
         override
     {
         class Callback : public bcostars::TxPoolServicePrxCallback
         {
         public:
-            Callback(
-                std::function<void(bcos::Error::Ptr, bcos::protocol::TransactionsPtr)> callback,
+            Callback(std::function<void(bcos::Error::Ptr, bcos::protocol::ConstTransactionsPtr)>
+                         callback,
                 bcos::crypto::CryptoSuite::Ptr cryptoSuite)
               : m_callback(callback), m_cryptoSuite(cryptoSuite)
             {}
@@ -288,7 +288,7 @@ public:
                 const bcostars::Error& ret, const vector<bcostars::Transaction>& filled) override
             {
                 auto mutableFilled = const_cast<vector<bcostars::Transaction>*>(&filled);
-                auto txs = std::make_shared<bcos::protocol::Transactions>();
+                auto txs = std::make_shared<bcos::protocol::ConstTransactions>();
                 for (auto&& it : *mutableFilled)
                 {
                     auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
@@ -304,7 +304,7 @@ public:
             }
 
         private:
-            std::function<void(bcos::Error::Ptr, bcos::protocol::TransactionsPtr)> m_callback;
+            std::function<void(bcos::Error::Ptr, bcos::protocol::ConstTransactionsPtr)> m_callback;
             bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
         };
 

@@ -14,6 +14,7 @@ DelegateHostContext::DelegateHostContext(CallParameters::UniquePtr callParameter
     }
     setCode(getCallParameters()->delegateCallCode);
     m_delegateCallSender = getCallParameters()->delegateCallSender;
+    m_thisAddress = getCallParameters()->receiveAddress;
 }
 
 std::optional<storage::Entry> DelegateHostContext::code()
@@ -33,6 +34,16 @@ bool DelegateHostContext::setCode(bytes code)
 h256 DelegateHostContext::codeHash()
 {
     return m_codeHash;
+}
+
+std::string_view DelegateHostContext::myAddress() const
+{
+    if (this->features().get(ledger::Features::Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy))
+    {
+        return m_thisAddress;
+    }
+
+    return HostContext::myAddress();
 }
 
 std::string_view DelegateHostContext::caller() const

@@ -1,10 +1,5 @@
 name: Centos CI Check
 on:
-  push:
-    paths-ignore:
-      - "docs/**"
-      - "Changelog.md"
-      - "README.md"
   pull_request:
     paths-ignore:
       - "docs/**"
@@ -34,8 +29,8 @@ jobs:
         uses: actions/setup-java@v3
         with:
           distribution: 'zulu'
-          java-version: 8
-          java-package: jdk
+          java-version: '8.0.382'
+
       - name: Set up Node.js 16.x
         uses: actions/setup-node@v2
         with:
@@ -62,10 +57,9 @@ jobs:
       - name: Remove cache if correspond dir change
         run: ./tools/.ci/clear_build_cache.sh
 
-
       - name: update vcpkg
         run: |
-          cd ${{ env.VCPKG_ROOT }} && git checkout master #&& git pull
+          cd ${{ env.VCPKG_ROOT }} && git fetch --all && git checkout master && git pull
           cd -
 
       - name: Build for linux
@@ -74,8 +68,8 @@ jobs:
           . /opt/rh/rh-perl530/enable
           export LIBCLANG_PATH=/opt/rh/llvm-toolset-7.0/root/lib64/
           . /opt/rh/llvm-toolset-7.0/enable
-          alias cmake='cmake3'
-          cd build && cmake3 -DALLOCATOR=jemalloc -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON .. || cat *.log
+          cd build && cmake -DALLOCATOR=jemalloc -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON .. || cat *.log
+
           make -j8
       - name: Test
         run:
@@ -106,7 +100,7 @@ jobs:
         run: cd tools && bash .ci/rpcapi_ci_prepare.sh
 
       - name: FISCO BCOS RpcApiTest
-        uses: matt-ball/newman-action@master
+        uses: matt-ball/newman-action@v1.0.4
         with:
           collection: https://raw.githubusercontent.com/FISCO-BCOS/FISCOBCOS-RPC-API/main/fiscobcos.rpcapi.collection.json
 

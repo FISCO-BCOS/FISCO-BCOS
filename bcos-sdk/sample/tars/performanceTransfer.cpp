@@ -10,20 +10,16 @@
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
-#include <bcos-utilities/ratelimiter/TimeWindowRateLimiter.h>
 #include <oneapi/tbb/blocked_range.h>
 #include <oneapi/tbb/parallel_for.h>
 #include <boost/exception/diagnostic_information.hpp>
+#include <boost/thread/latch.hpp>
 #include <boost/throw_exception.hpp>
 #include <atomic>
 #include <chrono>
 #include <exception>
-#include <string>
-#ifdef __APPLE__
-#include <jthread.hpp>
-#endif
-#include <latch>
 #include <random>
+#include <string>
 #include <thread>
 
 std::atomic_long blockNumber = 0;
@@ -34,12 +30,12 @@ const static std::string DAG_TRANSFER_ADDRESS = "0000000000000000000000000000000
 class PerformanceCallback : public bcos::sdk::Callback
 {
 private:
-    std::latch& m_latch;
+    boost::latch& m_latch;
     bcos::sample::Collector& m_collector;
     long m_startTime;
 
 public:
-    PerformanceCallback(std::latch& latch, bcos::sample::Collector& collector)
+    PerformanceCallback(boost::latch& latch, bcos::sample::Collector& collector)
       : m_latch(latch), m_collector(collector), m_startTime(bcos::sample::currentTime())
     {}
 
@@ -55,7 +51,7 @@ std::vector<std::atomic_long> query(bcos::sdk::RPCClient& rpcClient,
     int userCount)
 {
     bcostars::protocol::TransactionFactoryImpl transactionFactory(cryptoSuite);
-    std::latch latch(userCount);
+    boost::latch latch(userCount);
     std::vector<std::optional<bcos::sdk::Call>> handles(userCount);
 
     bcos::sample::Collector collector(userCount, "Query");
@@ -116,7 +112,7 @@ int issue(bcos::sdk::RPCClient& rpcClient, std::shared_ptr<bcos::crypto::CryptoS
     int userCount, [[maybe_unused]] int qps, std::vector<std::atomic_long>& balances)
 {
     bcostars::protocol::TransactionFactoryImpl transactionFactory(cryptoSuite);
-    std::latch latch(userCount);
+    boost::latch latch(userCount);
     std::vector<std::optional<bcos::sdk::SendTransaction>> handles(userCount);
 
     bcos::sample::Collector collector(userCount, "Issue");
@@ -176,7 +172,7 @@ int transfer(bcos::sdk::RPCClient& rpcClient,
     [[maybe_unused]] int qps, std::vector<std::atomic_long>& balances)
 {
     bcostars::protocol::TransactionFactoryImpl transactionFactory(cryptoSuite);
-    std::latch latch(transactionCount);
+    boost::latch latch(transactionCount);
     std::vector<std::optional<bcos::sdk::SendTransaction>> handles(transactionCount);
 
     bcos::ratelimiter::TimeWindowRateLimiter limiter(qps);
@@ -236,6 +232,7 @@ int transfer(bcos::sdk::RPCClient& rpcClient,
     return 0;
 }
 
+#if __cpp_lib_jthread
 void loopFetchBlockNumber(std::stop_token& token, bcos::sdk::RPCClient& rpcClient)
 {
     while (!token.stop_requested())
@@ -251,6 +248,23 @@ void loopFetchBlockNumber(std::stop_token& token, bcos::sdk::RPCClient& rpcClien
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
 }
+#else
+void loopFetchBlockNumber(bcos::sdk::RPCClient& rpcClient)
+{
+    while (true)
+    {
+        try
+        {
+            blockNumber = bcos::sdk::BlockNumber(rpcClient).send().get();
+        }
+        catch (std::exception& e)
+        {
+            std::cout << boost::diagnostic_information(e);
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+}
+#endif
 
 int main(int argc, char* argv[])
 {
@@ -277,9 +291,12 @@ int main(int argc, char* argv[])
         .timeoutMs = 600000,
     };
     bcos::sdk::RPCClient rpcClient(config);
+#if __cpp_lib_jthread
     std::jthread getBlockNumber(
         [&](std::stop_token token) { loopFetchBlockNumber(token, rpcClient); });
-
+#else
+    std::thread getBlockNumber([&]() { loopFetchBlockNumber(rpcClient); });
+#endif
     auto cryptoSuite =
         std::make_shared<bcos::crypto::CryptoSuite>(std::make_shared<bcos::crypto::Keccak256>(),
             std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr);
@@ -321,6 +338,10 @@ int main(int argc, char* argv[])
             exit(1);
         }
     }
+#if __cpp_lib_jthread
     getBlockNumber.request_stop();
+#else
+    getBlockNumber.join();
+#endif
     return 0;
 }

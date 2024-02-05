@@ -6,6 +6,7 @@ import requests
 import sys
 import os
 import tarfile
+import platform
 
 
 class BinaryController:
@@ -13,7 +14,12 @@ class BinaryController:
         self.version = version
         self.mtail_version = "3.0.0-rc49"
         self.binary_path = binary_path
-        self.binary_postfix = "-linux-x86_64.tgz"
+        if platform.system() == "Darwin":
+            self.binary_postfix = "-macOS-x86_64.tgz"
+        elif platform.system() == "Linux" and platform.machine() == "aarch64":
+            self.binary_postfix = "-linux-aarch64.tgz"
+        else:
+            self.binary_postfix = "-linux-x86_64.tgz"
         self.mtail_binary_name = "mtail_3.0.0-rc49_Linux_x86_64.tar.gz"
         self.cdn_link_header = "https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS"
         if node_type == "pro":

@@ -83,7 +83,7 @@ bcostars::Error TxPoolServiceServer::asyncFillBlock(const vector<vector<tars::Ch
     }
 
     m_txpoolInitializer->txpool()->asyncFillBlock(
-        hashList, [current](bcos::Error::Ptr error, bcos::protocol::TransactionsPtr txs) {
+        hashList, [current](bcos::Error::Ptr error, bcos::protocol::ConstTransactionsPtr txs) {
             std::vector<bcostars::Transaction> txList;
             if (error)
             {
@@ -96,7 +96,8 @@ bcostars::Error TxPoolServiceServer::asyncFillBlock(const vector<vector<tars::Ch
             for (auto tx : *txs)
             {
                 txList.push_back(
-                    std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(tx)->inner());
+                    std::dynamic_pointer_cast<const bcostars::protocol::TransactionImpl>(tx)
+                        ->inner());
             }
 
             async_response_asyncFillBlock(current, toTarsError(error), txList);

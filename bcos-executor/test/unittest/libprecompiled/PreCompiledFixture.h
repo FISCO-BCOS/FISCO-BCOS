@@ -19,15 +19,6 @@
  */
 
 #pragma once
-#include "bcos-executor/src/precompiled/common/Common.h"
-#include "bcos-executor/src/precompiled/common/Utilities.h"
-#include "bcos-framework/bcos-framework/testutils/faker/FakeBlock.h"
-#include "bcos-framework/bcos-framework/testutils/faker/FakeBlockHeader.h"
-#include "bcos-framework/ledger/LedgerTypeDef.h"
-#include "bcos-framework/protocol/Protocol.h"
-#include "bcos-framework/protocol/ProtocolTypeDef.h"
-#include "bcos-table/src/StateStorageFactory.h"
-#include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "executive/BlockContext.h"
 #include "executive/TransactionExecutive.h"
 #include "executor/TransactionExecutorFactory.h"
@@ -40,8 +31,17 @@
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-crypto/signature/sm2.h>
+#include <bcos-executor/src/precompiled/common/Common.h>
+#include <bcos-executor/src/precompiled/common/Utilities.h>
 #include <bcos-framework/executor/NativeExecutionMessage.h>
+#include <bcos-framework/ledger/LedgerTypeDef.h>
+#include <bcos-framework/protocol/Protocol.h>
+#include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/storage/Table.h>
+#include <bcos-framework/testutils/faker/FakeBlock.h>
+#include <bcos-framework/testutils/faker/FakeBlockHeader.h>
+#include <bcos-table/src/StateStorageFactory.h>
+#include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
 #include <bcos-tool/BfsFileFactory.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <libinitializer/AuthInitializer.h>
@@ -141,7 +141,8 @@ public:
         }
     }
 
-    void createSysTable(protocol::BlockVersion version)
+    void createSysTable(protocol::BlockVersion version,
+        std::vector<std::string> features = {"feature_sharding", "bugfix_event_log_order"})
     {
         // create sys table
         {
@@ -153,14 +154,16 @@ public:
                 });
             auto table = promise1.get_future().get();
             auto entry = table->newEntry();
-
             entry.setObject(SystemConfigEntry{"3000000", 0});
-
             table->setRow(SYSTEM_KEY_TX_GAS_LIMIT, std::move(entry));
 
-            Entry entry2;
-            entry2.setObject(SystemConfigEntry{"1", 0});
-            table->setRow("feature_sharding", entry2);
+            // for each feature
+            for (auto& feature : features)
+            {
+                Entry featureEntry;
+                featureEntry.setObject(SystemConfigEntry{"1", 0});
+                table->setRow(feature, std::move(featureEntry));
+            }
         }
 
         m_blockVersion = version;

@@ -21,7 +21,7 @@
 #pragma once
 #include "PBFTLogSync.h"
 #include "bcos-pbft/core/ConsensusEngine.h"
-#include "bcos-rpbft/bcos-rpbft/rpbft/config/RPBFTConfigTools.h"
+#include "bcos-rpbft/rpbft/config/RPBFTConfigTools.h"
 #include <bcos-tool/LedgerConfigFetcher.h>
 #include <bcos-utilities/ConcurrentQueue.h>
 #include <bcos-utilities/Error.h>

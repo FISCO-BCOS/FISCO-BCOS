@@ -49,10 +49,10 @@ public:
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
         bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
         bcos::txpool::TxPoolInterface::Ptr _txPool,
-        std::shared_ptr<ShardCache> _contract2ShardCache, uint64_t _gasLimit, bool _syncBlock,
-        size_t _keyPageSize)
+        std::shared_ptr<ShardCache> _contract2ShardCache, uint64_t _gasLimit,
+        std::string& _gasPrice, bool _syncBlock, size_t _keyPageSize)
       : BlockExecutive(block, scheduler, startContextID, transactionSubmitResultFactory, staticCall,
-            _blockFactory, _txPool, _gasLimit, _syncBlock),
+            _blockFactory, _txPool, _gasLimit, _gasPrice, _syncBlock),
         m_contract2ShardCache(_contract2ShardCache),
         m_keyPageSize(_keyPageSize)
     {}

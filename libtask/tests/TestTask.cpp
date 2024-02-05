@@ -1,3 +1,4 @@
+#include "bcos-task/Generator.h"
 #include "bcos-utilities/Overloaded.h"
 #include <bcos-task/Task.h>
 #include <bcos-task/Wait.h>
@@ -9,8 +10,10 @@
 #include <tbb/task.h>
 #include <tbb/task_group.h>
 #include <boost/test/unit_test.hpp>
+#include <boost/throw_exception.hpp>
 #include <chrono>
 #include <iostream>
+#include <stdexcept>
 #include <thread>
 
 using namespace bcos::task;
@@ -55,6 +58,20 @@ Task<void> level1()
 
     std::cout << "Level1 execute finished" << std::endl;
     co_return;
+}
+
+void innerThrow()
+{
+    BOOST_THROW_EXCEPTION(std::runtime_error("error11"));
+}
+
+BOOST_AUTO_TEST_CASE(taskException)
+{
+    BOOST_CHECK_THROW(bcos::task::wait([]() -> bcos::task::Task<void> {
+        innerThrow();
+        co_return;
+    }()),
+        std::runtime_error);
 }
 
 BOOST_AUTO_TEST_CASE(normalTask)
@@ -135,6 +152,7 @@ BOOST_AUTO_TEST_CASE(asyncTask)
 
         BOOST_CHECK_EQUAL(result, 200);
         std::cout << "Got async result" << std::endl;
+        co_return;
     }(taskGroup));
 
     std::cout << "Top task destroyed" << std::endl;
@@ -180,5 +198,23 @@ struct SleepTask
     }
     constexpr void await_resume() const {}
 };
+
+bcos::task::Generator<int> genInt()
+{
+    co_yield 1;
+    co_yield 2;
+    co_yield 3;
+}
+
+BOOST_AUTO_TEST_CASE(generator)
+{
+    int j = 0;
+    for (auto i : genInt())
+    {
+        BOOST_CHECK_EQUAL(i, ++j);
+        std::cout << i << std::endl;
+    }
+    std::cout << "All outputed" << std::endl;
+}
 
 BOOST_AUTO_TEST_SUITE_END()

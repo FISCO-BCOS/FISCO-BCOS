@@ -413,7 +413,7 @@ void TxPool::notifyObserverNodeList(
 }
 
 void TxPool::getTxsFromLocalLedger(HashListPtr _txsHash, HashListPtr _missedTxs,
-    std::function<void(Error::Ptr, TransactionsPtr)> _onBlockFilled)
+    std::function<void(Error::Ptr, ConstTransactionsPtr)> _onBlockFilled)
 {
     // fetch from the local ledger
     auto self = weak_from_this();
@@ -449,13 +449,13 @@ void TxPool::getTxsFromLocalLedger(HashListPtr _txsHash, HashListPtr _missedTxs,
 
 // Note: the transaction must be all hit in local txpool
 void TxPool::asyncFillBlock(
-    HashListPtr _txsHash, std::function<void(Error::Ptr, TransactionsPtr)> _onBlockFilled)
+    HashListPtr _txsHash, std::function<void(Error::Ptr, ConstTransactionsPtr)> _onBlockFilled)
 {
     fillBlock(std::move(_txsHash), std::move(_onBlockFilled), true);
 }
 
 void TxPool::fillBlock(HashListPtr _txsHash,
-    std::function<void(Error::Ptr, TransactionsPtr)> _onBlockFilled, bool _fetchFromLedger)
+    std::function<void(Error::Ptr, ConstTransactionsPtr)> _onBlockFilled, bool _fetchFromLedger)
 {
     HashListPtr missedTxs = std::make_shared<HashList>();
     auto txs = m_txpoolStorage->fetchTxs(*missedTxs, *_txsHash);
@@ -544,9 +544,10 @@ void TxPool::init()
     TXPOOL_LOG(INFO) << LOG_DESC("fetch history nonces success");
 
     // create LedgerNonceChecker and set it into the validator
-    TXPOOL_LOG(INFO) << LOG_DESC("init txs validator");
-    auto ledgerNonceChecker = std::make_shared<LedgerNonceChecker>(
-        ledgerConfigFetcher->nonceList(), ledgerConfig->blockNumber(), blockLimit);
+    TXPOOL_LOG(INFO) << LOG_DESC("init txs validator")
+                     << LOG_KV("checkBlockLimit", m_checkBlockLimit);
+    auto ledgerNonceChecker = std::make_shared<LedgerNonceChecker>(ledgerConfigFetcher->nonceList(),
+        ledgerConfig->blockNumber(), blockLimit, m_checkBlockLimit);
 
     auto validator = std::dynamic_pointer_cast<TxValidator>(m_config->txValidator());
     validator->setLedgerNonceChecker(ledgerNonceChecker);
@@ -626,8 +627,8 @@ void TxPool::storeVerifiedBlock(bcos::protocol::Block::Ptr _block)
 
     auto self = weak_from_this();
     auto startT = utcTime();
-    asyncFillBlock(
-        txsHashList, [self, startT, blockHeader, _block](Error::Ptr _error, TransactionsPtr _txs) {
+    asyncFillBlock(txsHashList,
+        [self, startT, blockHeader, _block](Error::Ptr _error, ConstTransactionsPtr _txs) {
             if (_error)
             {
                 TXPOOL_LOG(WARNING)

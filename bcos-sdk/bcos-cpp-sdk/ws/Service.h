@@ -29,16 +29,13 @@
 #include <functional>
 #include <set>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
-namespace bcos
-{
-namespace cppsdk
-{
-namespace service
+namespace bcos::cppsdk::service
 {
 using WsHandshakeSucHandler = std::function<void(bcos::boostssl::ws::WsSession::Ptr)>;
-using BlockNotifierCallback = std::function<void(const std::string& _group, int64_t _blockNumber)>;
+using BlockNotifierCallback = std::function<void(const std::string&, int64_t)>;
 using BlockNotifierCallbacks = std::vector<BlockNotifierCallback>;
 
 class Service : public bcos::boostssl::ws::WsService
@@ -51,16 +48,16 @@ public:
 
     // ---------------------overide begin------------------------------------
 
-    virtual void start() override;
-    virtual void stop() override;
+    void start() override;
+    void stop() override;
 
-    virtual void onConnect(
+    void onConnect(
         bcos::Error::Ptr _error, std::shared_ptr<bcos::boostssl::ws::WsSession> _session) override;
 
-    virtual void onDisconnect(
+    void onDisconnect(
         bcos::Error::Ptr _error, std::shared_ptr<bcos::boostssl::ws::WsSession> _session) override;
 
-    virtual void onRecvMessage(std::shared_ptr<bcos::boostssl::MessageFace> _msg,
+    void onRecvMessage(std::shared_ptr<bcos::boostssl::MessageFace> _msg,
         std::shared_ptr<bcos::boostssl::ws::WsSession> _session) override;
     // ---------------------overide end -------------------------------------
 
@@ -74,15 +71,14 @@ public:
     // ---------------------oversend message begin----------------------------
 
     virtual void startHandshake(std::shared_ptr<bcos::boostssl::ws::WsSession> _session);
-    virtual bool checkHandshakeDone(std::shared_ptr<bcos::boostssl::ws::WsSession> _session);
+    virtual bool checkHandshakeDone(std::shared_ptr<bcos::boostssl::ws::WsSession> const& _session);
 
     void clearGroupInfoByEp(const std::string& _endPoint);
     void clearGroupInfoByEp(const std::string& _endPoint, const std::string& _groupID);
     void updateGroupInfoByEp(const std::string& _endPoint, bcos::group::GroupInfo::Ptr _groupInfo);
+    void onNotifyGroupInfo(const std::string& _groupInfo, const std::string& endPoint);
     void onNotifyGroupInfo(
-        const std::string& _groupInfo, std::shared_ptr<bcos::boostssl::ws::WsSession> _session);
-    void onNotifyGroupInfo(std::shared_ptr<bcos::boostssl::ws::WsMessage> _msg,
-        std::shared_ptr<bcos::boostssl::ws::WsSession> _session);
+        std::shared_ptr<bcos::boostssl::ws::WsMessage> _msg, const std::string& endPoint);
 
     //------------------------------ Block Notifier begin --------------------------
     bool getBlockNumber(const std::string& _group, int64_t& _blockNumber);
@@ -122,15 +118,39 @@ public:
 
     void registerWsHandshakeSucHandler(WsHandshakeSucHandler _handler)
     {
-        m_wsHandshakeSucHandlers.push_back(_handler);
+        m_wsHandshakeSucHandlers.push_back(std::move(_handler));
     }
 
-    void callWsHandshakeSucHandlers(std::shared_ptr<bcos::boostssl::ws::WsSession> _session)
+    void callWsHandshakeSucHandlers(const std::shared_ptr<bcos::boostssl::ws::WsSession>& _session)
     {
         for (auto& handler : m_wsHandshakeSucHandlers)
         {
             handler(_session);
         }
+    }
+
+    void setStrictConnectVersion(int64_t _strictVersion)
+    {
+        m_strictConnectVersion = _strictVersion;
+    }
+
+    uint32_t localProtocolInfo() const { return m_localProtocol->version(); }
+    uint32_t negotiatedProtocolInfo()
+    {
+        uint16_t maxVersion = 0;
+        uint16_t minVersion = UINT16_MAX;
+        for (const auto& session : sessions())
+        {
+            if (session->version() > maxVersion)
+            {
+                maxVersion = session->version();
+            }
+            if (session->version() < minVersion)
+            {
+                minVersion = session->version();
+            }
+        }
+        return maxVersion << 16 | minVersion;
     }
 
 private:
@@ -163,8 +183,8 @@ private:
     bcos::group::GroupInfoFactory::Ptr m_groupInfoFactory;
 
     bcos::protocol::ProtocolInfo::ConstPtr m_localProtocol;
+
+    int64_t m_strictConnectVersion = -1;
 };
 
-}  // namespace service
-}  // namespace cppsdk
-}  // namespace bcos
+}  // namespace bcos::cppsdk::service
