@@ -67,8 +67,9 @@ bcostars::Error bcos::rpc::RPCServer::call(const bcostars::Transaction& request,
                     return;
                 }
 
-                auto receipt = dynamic_cast<bcostars::protocol::TransactionReceiptImpl const&>(
-                    *transactionReceiptPtr);
+                auto const& receipt =
+                    dynamic_cast<bcostars::protocol::TransactionReceiptImpl const&>(
+                        *transactionReceiptPtr);
                 bcos::rpc::RPCServer::async_response_call(current, tarsError, receipt.inner());
             }
             catch (std::exception& e)
@@ -100,7 +101,7 @@ bcostars::Error bcos::rpc::RPCServer::sendTransaction(const bcostars::Transactio
             auto& txpool = self->m_params.node->txpoolRef();
             txpool.broadcastTransaction(*transaction);
             auto submitResult = co_await txpool.submitTransaction(std::move(transaction));
-            auto receipt = dynamic_cast<bcostars::protocol::TransactionReceiptImpl const&>(
+            const auto& receipt = dynamic_cast<bcostars::protocol::TransactionReceiptImpl const&>(
                 *submitResult->transactionReceipt());
 
             bcos::rpc::RPCServer::async_response_sendTransaction(current, error, receipt.inner());

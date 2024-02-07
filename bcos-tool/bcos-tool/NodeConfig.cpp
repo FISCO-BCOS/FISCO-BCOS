@@ -60,9 +60,10 @@ void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforc
     bool _enforceChainConfig, bool _enforceGroupId)
 {
     // if version < 3.1.0, config.ini include chainConfig
-    if (_enforceChainConfig ||
-        (m_compatibilityVersion < (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION &&
-            m_compatibilityVersion >= (uint32_t)bcos::protocol::BlockVersion::MIN_VERSION))
+    if (_enforceChainConfig || (m_genesisConfig.m_compatibilityVersion <
+                                       (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION &&
+                                   m_genesisConfig.m_compatibilityVersion >=
+                                       (uint32_t)bcos::protocol::BlockVersion::MIN_VERSION))
     {
         loadChainConfig(_pt, _enforceGroupId);
     }
@@ -86,16 +87,18 @@ void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforc
 void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisConfig)
 {
     // if version >= 3.1.0, genesisBlock include chainConfig
-    m_compatibilityVersionStr = _genesisConfig.get<std::string>(
+    auto compatibilityVersion = _genesisConfig.get<std::string>(
         "version.compatibility_version", bcos::protocol::RC4_VERSION_STR);
-    m_compatibilityVersion = toVersionNumber(m_compatibilityVersionStr);
-    if (m_compatibilityVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+    m_genesisConfig.m_compatibilityVersion = toVersionNumber(compatibilityVersion);
+    if (m_genesisConfig.m_compatibilityVersion >=
+        (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
     {
         loadChainConfig(_genesisConfig, true);
     }
+    loadGenesisFeatures(_genesisConfig);
+
     loadLedgerConfig(_genesisConfig);
     loadExecutorConfig(_genesisConfig);
-    generateGenesisData();
 }
 
 std::string NodeConfig::getServiceName(boost::property_tree::ptree const& _pt,
@@ -510,9 +513,11 @@ void NodeConfig::loadTxPoolConfig(boost::property_tree::ptree const& _pt)
     m_txsExpirationTime = std::max(
         {txsExpirationTime * 1000, (int64_t)DEFAULT_MIN_CONSENSUS_TIME_MS, (int64_t)m_minSealTime});
 
+    m_checkBlockLimit = _pt.get<bool>("txpool.check_block_limit", true);
     NodeConfig_LOG(INFO) << LOG_DESC("loadTxPoolConfig") << LOG_KV("txpoolLimit", m_txpoolLimit)
                          << LOG_KV("notifierWorkers", m_notifyWorkerNum)
                          << LOG_KV("verifierWorkers", m_verifierWorkerNum)
+                         << LOG_KV("checkBlockLimit", m_checkBlockLimit)
                          << LOG_KV("txsExpirationTime(ms)", m_txsExpirationTime);
 }
 
@@ -520,20 +525,22 @@ void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt, bool _e
 {
     try
     {
-        m_smCryptoType = _pt.get<bool>("chain.sm_crypto", false);
+        m_genesisConfig.m_smCrypto = _pt.get<bool>("chain.sm_crypto", false);
         if (_enforceGroupId)
         {
-            m_groupId = _pt.get<std::string>("chain.group_id", "group");
+            m_genesisConfig.m_groupID = _pt.get<std::string>("chain.group_id", "group");
         }
-        m_chainId = _pt.get<std::string>("chain.chain_id", "chain");
+        m_genesisConfig.m_chainID = _pt.get<std::string>("chain.chain_id", "chain");
     }
     catch (std::exception const& e)
     {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "config.genesis chain.sm_crypto/chain.group_id/chain.chain_id is "
-                                  "null, please set it!"));
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "chain.sm_crypto/chain.group_id/chain.chain_id is null, please set it,"
+                " if compatibility_version in genesis block >= 3.1.0,"
+                " 'chain' config should appear in config.genesis, else in config.ini."));
     }
-    if (!isalNumStr(m_chainId))
+    if (!isalNumStr(m_genesisConfig.m_chainID))
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment("The chainId must be number or digit"));
@@ -546,8 +553,10 @@ void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt, bool _e
                                   std::to_string(MAX_BLOCK_LIMIT) + " !"));
     }
     NodeConfig_LOG(INFO) << METRIC << LOG_DESC("loadChainConfig")
-                         << LOG_KV("smCrypto", m_smCryptoType) << LOG_KV("chainId", m_chainId)
-                         << LOG_KV("groupId", m_groupId) << LOG_KV("blockLimit", m_blockLimit);
+                         << LOG_KV("smCrypto", m_genesisConfig.m_smCrypto)
+                         << LOG_KV("chainId", m_genesisConfig.m_chainID)
+                         << LOG_KV("groupId", m_genesisConfig.m_groupID)
+                         << LOG_KV("blockLimit", m_blockLimit);
 }
 
 void NodeConfig::loadSecurityConfig(boost::property_tree::ptree const& _pt)
@@ -638,7 +647,7 @@ void NodeConfig::loadSyncConfig(const boost::property_tree::ptree& _pt)
 
 void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
 {
-    m_storagePath = _pt.get<std::string>("storage.data_path", "data/" + m_groupId);
+    m_storagePath = _pt.get<std::string>("storage.data_path", "data/" + m_genesisConfig.m_groupID);
     m_storageType = _pt.get<std::string>("storage.type", "RocksDB");
     m_keyPageSize = _pt.get<int32_t>("storage.key_page_size", 10240);
     m_maxWriteBufferNumber = _pt.get<int32_t>("storage.max_write_buffer_number", 4);
@@ -647,6 +656,7 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
     m_minWriteBufferNumberToMerge = _pt.get<int32_t>("storage.min_write_buffer_number_to_merge", 1);
     m_blockCacheSize = _pt.get<size_t>("storage.block_cache_size", 128 << 20);
     m_enableDBStatistics = _pt.get<bool>("storage.enable_statistics", false);
+    m_enableRocksDBBlob = _pt.get<bool>("storage.enable_rocksdb_blob", false);
     m_pdCaPath = _pt.get<std::string>("storage.pd_ssl_ca_path", "");
     m_pdCertPath = _pt.get<std::string>("storage.pd_ssl_cert_path", "");
     m_pdKeyPath = _pt.get<std::string>("storage.pd_ssl_key_path", "");
@@ -673,6 +683,7 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("enableArchive", m_enableArchive)
                          << LOG_KV("archiveListenIP", m_archiveListenIP)
                          << LOG_KV("archiveListenPort", m_archiveListenPort)
+                         << LOG_KV("enable_rocksdb_blob", m_enableRocksDBBlob)
                          << LOG_KV("enableLRUCacheStorage", m_enableLRUCacheStorage);
 }
 
@@ -756,15 +767,16 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
     // consensus type
     try
     {
-        m_consensusType = _genesisConfig.get<std::string>("consensus.consensus_type", "pbft");
+        m_genesisConfig.m_consensusType =
+            _genesisConfig.get<std::string>("consensus.consensus_type", "pbft");
     }
     catch (std::exception const& e)
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment("consensus.consensus_type is null, please set it!"));
     }
-    if (m_consensusType != bcos::ledger::PBFT_CONSENSUS_TYPE &&
-        m_consensusType != bcos::ledger::RPBFT_CONSENSUS_TYPE)
+    if (m_genesisConfig.m_consensusType != bcos::ledger::PBFT_CONSENSUS_TYPE &&
+        m_genesisConfig.m_consensusType != bcos::ledger::RPBFT_CONSENSUS_TYPE)
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment(
@@ -779,6 +791,8 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
                                   "Please set consensus.block_tx_count_limit to positive!"));
     }
     m_ledgerConfig->setBlockTxCountLimit(blockTxCountLimit);
+    m_genesisConfig.m_txCountLimit = blockTxCountLimit;
+
     // txGasLimit
     auto txGasLimit = checkAndGetValue(_genesisConfig, "tx.gas_limit", "3000000000");
     if (txGasLimit <= TX_GAS_LIMIT_MIN)
@@ -787,13 +801,12 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
             InvalidConfig() << errinfo_comment(
                 "Please set tx.gas_limit to more than " + std::to_string(TX_GAS_LIMIT_MIN) + " !"));
     }
-
-    m_txGasLimit = txGasLimit;
+    m_genesisConfig.m_txGasLimit = txGasLimit;
     // the compatibility version
-    m_compatibilityVersionStr = _genesisConfig.get<std::string>(
+    auto compatibilityVersion = _genesisConfig.get<std::string>(
         "version.compatibility_version", bcos::protocol::RC4_VERSION_STR);
     // must call here to check the compatibility_version
-    m_compatibilityVersion = toVersionNumber(m_compatibilityVersionStr);
+    m_genesisConfig.m_compatibilityVersion = toVersionNumber(compatibilityVersion);
     // sealerList
     auto consensusNodeList = parseConsensusNodeList(_genesisConfig, "consensus", "node.");
     if (!consensusNodeList || consensusNodeList->empty())
@@ -803,10 +816,12 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
     m_ledgerConfig->setConsensusNodeList(*consensusNodeList);
 
     // rpbft
-    if (m_consensusType == RPBFT_CONSENSUS_TYPE)
+    if (m_genesisConfig.m_consensusType == RPBFT_CONSENSUS_TYPE)
     {
-        m_epochSealerNum = _genesisConfig.get<std::uint32_t>("consensus.epoch_sealer_num", 4);
-        m_epochBlockNum = _genesisConfig.get<std::uint32_t>("consensus.epoch_block_num", 1000);
+        m_genesisConfig.m_epochSealerNum =
+            _genesisConfig.get<std::uint32_t>("consensus.epoch_sealer_num", 4);
+        m_genesisConfig.m_epochBlockNum =
+            _genesisConfig.get<std::uint32_t>("consensus.epoch_block_num", 1000);
     }
 
     // leaderSwitchPeriod
@@ -817,14 +832,14 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
             InvalidConfig() << errinfo_comment("Please set consensus.leader_period to positive!"));
     }
     m_ledgerConfig->setLeaderSwitchPeriod(consensusLeaderPeriod);
-    NodeConfig_LOG(INFO) << LOG_DESC("loadLedgerConfig")
-                         << LOG_KV("consensus_type", m_consensusType)
-                         << LOG_KV("block_tx_count_limit", m_ledgerConfig->blockTxCountLimit())
-                         << LOG_KV("gas_limit", m_txGasLimit)
-                         << LOG_KV("leader_period", m_ledgerConfig->leaderSwitchPeriod())
-                         << LOG_KV("minSealTime", m_minSealTime)
-                         << LOG_KV("compatibilityVersion",
-                                (bcos::protocol::BlockVersion)m_compatibilityVersion);
+    NodeConfig_LOG(INFO)
+        << LOG_DESC("loadLedgerConfig") << LOG_KV("consensus_type", m_genesisConfig.m_consensusType)
+        << LOG_KV("block_tx_count_limit", m_ledgerConfig->blockTxCountLimit())
+        << LOG_KV("gas_limit", m_genesisConfig.m_txGasLimit)
+        << LOG_KV("leader_period", m_ledgerConfig->leaderSwitchPeriod())
+        << LOG_KV("minSealTime", m_minSealTime)
+        << LOG_KV("compatibilityVersion",
+               (bcos::protocol::BlockVersion)m_genesisConfig.m_compatibilityVersion);
 }
 
 ConsensusNodeListPtr NodeConfig::parseConsensusNodeList(boost::property_tree::ptree const& _pt,
@@ -880,57 +895,14 @@ ConsensusNodeListPtr NodeConfig::parseConsensusNodeList(boost::property_tree::pt
     return nodeList;
 }
 
-void NodeConfig::generateGenesisData()
-{
-    std::string versionData = "";
-    std::string executorConfig = "";
-    std::string genesisdata = "";
-    if (m_compatibilityVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
-    {
-        auto genesisData = std::make_shared<bcos::ledger::GenesisConfig>(m_smCryptoType, m_chainId,
-            m_groupId, m_consensusType, m_ledgerConfig->blockTxCountLimit(),
-            m_ledgerConfig->leaderSwitchPeriod(), m_compatibilityVersionStr, m_txGasLimit, m_isWasm,
-            m_isAuthCheck, m_authAdminAddress, m_isSerialExecute, m_epochSealerNum,
-            m_epochBlockNum);
-        genesisdata = genesisData->genesisDataOutPut();
-        size_t j = 0;
-        for (const auto& node : m_ledgerConfig->consensusNodeList())
-        {
-            genesisdata = genesisdata + "node." + boost::lexical_cast<std::string>(j) + ":" +
-                          *toHexString(node->nodeID()->data()) + "," +
-                          std::to_string(node->weight()) + "\n";
-            ++j;
-        }
-        NodeConfig_LOG(INFO) << LOG_BADGE("generateGenesisData")
-                             << LOG_KV("genesisData", genesisdata);
-        m_genesisData = genesisdata;
-        return;
-    }
-
-    versionData = m_compatibilityVersionStr + "-";
-    std::stringstream ss;
-    ss << m_isWasm << "-" << m_isAuthCheck << "-" << m_authAdminAddress << "-" << m_isSerialExecute;
-    executorConfig = ss.str();
-
-    ss.str("");
-    ss << m_ledgerConfig->blockTxCountLimit() << "-" << m_ledgerConfig->leaderSwitchPeriod() << "-"
-       << m_txGasLimit << "-" << versionData << executorConfig;
-    for (const auto& node : m_ledgerConfig->consensusNodeList())
-    {
-        ss << *toHexString(node->nodeID()->data()) << "," << node->weight() << ";";
-    }
-    m_genesisData = ss.str();
-    NodeConfig_LOG(INFO) << LOG_BADGE("generateGenesisData")
-                         << LOG_KV("genesisData", m_genesisData);
-}
-
 void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisConfig)
 {
     try
     {
-        m_isWasm = _genesisConfig.get<bool>("executor.is_wasm", false);
-        m_isAuthCheck = _genesisConfig.get<bool>("executor.is_auth_check", false);
-        m_isSerialExecute = _genesisConfig.get<bool>("executor.is_serial_execute", false);
+        m_genesisConfig.m_isWasm = _genesisConfig.get<bool>("executor.is_wasm", false);
+        m_genesisConfig.m_isAuthCheck = _genesisConfig.get<bool>("executor.is_auth_check", false);
+        m_genesisConfig.m_isSerialExecute =
+            _genesisConfig.get<bool>("executor.is_serial_execute", false);
     }
     catch (std::exception const& e)
     {
@@ -938,9 +910,10 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
                                   "executor.is_wasm/executor.is_auth_check/"
                                   "executor.is_serial_execute is null, please set it!"));
     }
-    if (m_isWasm && !m_isSerialExecute)
+    if (m_genesisConfig.m_isWasm && !m_genesisConfig.m_isSerialExecute)
     {
-        if (m_compatibilityVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+        if (m_genesisConfig.m_compatibilityVersion >=
+            (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
         {
             BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                       "loadExecutorConfig wasm only support serial executing, "
@@ -950,9 +923,10 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
             << METRIC
             << LOG_DESC("loadExecutorConfig wasm with serial executing is not recommended");
     }
-    if (m_isWasm && m_isAuthCheck)
+    if (m_genesisConfig.m_isWasm && m_genesisConfig.m_isAuthCheck)
     {
-        if (m_compatibilityVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+        if (m_genesisConfig.m_compatibilityVersion >=
+            (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
         {
             BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                       "loadExecutorConfig auth only support solidity, "
@@ -964,9 +938,11 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     }
     try
     {
-        m_authAdminAddress = _genesisConfig.get<std::string>("executor.auth_admin_account", "");
-        if (m_authAdminAddress.empty() &&
-            (m_isAuthCheck || m_compatibilityVersion >= BlockVersion::V3_3_VERSION)) [[unlikely]]
+        m_genesisConfig.m_authAdminAccount =
+            _genesisConfig.get<std::string>("executor.auth_admin_account", "");
+        if (m_genesisConfig.m_authAdminAccount.empty() &&
+            (m_genesisConfig.m_isAuthCheck ||
+                m_genesisConfig.m_compatibilityVersion >= BlockVersion::V3_3_VERSION)) [[unlikely]]
         {
             BOOST_THROW_EXCEPTION(
                 InvalidConfig() << errinfo_comment("executor.auth_admin_account is empty, "
@@ -975,17 +951,19 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     }
     catch (std::exception const& e)
     {
-        if (m_isAuthCheck || m_compatibilityVersion >= BlockVersion::V3_3_VERSION)
+        if (m_genesisConfig.m_isAuthCheck ||
+            m_genesisConfig.m_compatibilityVersion >= BlockVersion::V3_3_VERSION)
         {
             BOOST_THROW_EXCEPTION(
                 InvalidConfig() << errinfo_comment("executor.auth_admin_account is null, "
                                                    "please set correct auth_admin_account"));
         }
     }
-    NodeConfig_LOG(INFO) << METRIC << LOG_DESC("loadExecutorConfig") << LOG_KV("isWasm", m_isWasm)
-                         << LOG_KV("isAuthCheck", m_isAuthCheck)
-                         << LOG_KV("authAdminAccount", m_authAdminAddress)
-                         << LOG_KV("ismSerialExecute", m_isSerialExecute);
+    NodeConfig_LOG(INFO) << METRIC << LOG_DESC("loadExecutorConfig")
+                         << LOG_KV("isWasm", m_genesisConfig.m_isWasm)
+                         << LOG_KV("isAuthCheck", m_genesisConfig.m_isAuthCheck)
+                         << LOG_KV("authAdminAccount", m_genesisConfig.m_authAdminAccount)
+                         << LOG_KV("ismSerialExecute", m_genesisConfig.m_isSerialExecute);
 }
 
 // load config.ini
@@ -1032,7 +1010,103 @@ int64_t NodeConfig::checkAndGetValue(
 
 bool NodeConfig::isValidPort(int port)
 {
-    if (port <= 1024 || port > 65535)
-        return false;
-    return true;
+    return !(port <= 1024 || port > 65535);
+}
+
+void bcos::tool::NodeConfig::loadGenesisFeatures(boost::property_tree::ptree const& ptree)
+{
+    if (auto node = ptree.get_child_optional("features"))
+    {
+        for (const auto& it : *node)
+        {
+            auto flag = it.first;
+            auto enableNumber = it.second.get_value<bool>();
+            m_genesisConfig.m_features.emplace_back(ledger::FeatureSet{
+                .flag = ledger::Features::string2Flag(flag), .enable = enableNumber});
+        }
+    }
+}
+
+std::string bcos::tool::NodeConfig::getDefaultServiceName(
+    std::string const& _nodeName, std::string const& _serviceName) const
+{
+    return m_genesisConfig.m_chainID + "." + _nodeName + _serviceName;
+}
+
+std::string bcos::tool::generateGenesisData(
+    ledger::GenesisConfig const& genesisConfig, ledger::LedgerConfig const& ledgerConfig)
+{
+    if (genesisConfig.m_compatibilityVersion >=
+        (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+    {
+        std::stringstream ss;
+        ss << "[chain]" << '\n'
+           << "sm_crypto:" << genesisConfig.m_smCrypto << '\n'
+           << "chainID: " << genesisConfig.m_chainID << '\n'
+           << "grouID: " << genesisConfig.m_groupID << '\n'
+           << "[consensys]" << '\n'
+           << "consensus_type: " << genesisConfig.m_consensusType << '\n'
+           << "block_tx_count_limit:" << genesisConfig.m_txCountLimit << '\n'
+           << "leader_period:" << genesisConfig.m_leaderSwitchPeriod << '\n'
+           << "[version]" << '\n'
+           << "compatibility_version:"
+           << bcos::protocol::BlockVersion(genesisConfig.m_compatibilityVersion) << '\n'
+           << "[tx]" << '\n'
+           << "gaslimit:" << genesisConfig.m_txGasLimit << '\n'
+           << "[executor]" << '\n'
+           << "iswasm: " << genesisConfig.m_isWasm << '\n'
+           << "isAuthCheck:" << genesisConfig.m_isAuthCheck << '\n'
+           << "authAdminAccount:" << genesisConfig.m_authAdminAccount << '\n'
+           << "isSerialExecute:" << genesisConfig.m_isSerialExecute << '\n';
+        if (genesisConfig.m_compatibilityVersion >=
+            (uint32_t)bcos::protocol::BlockVersion::V3_5_VERSION)
+        {
+            ss << "epochSealerNum:" << genesisConfig.m_epochSealerNum << '\n'
+               << "epochBlockNum:" << genesisConfig.m_epochBlockNum << '\n';
+        }
+        if (!genesisConfig.m_features.empty())  // TODO: Need version check?
+        {
+            ss << "[features]" << '\n';
+            for (const auto& feature : genesisConfig.m_features)
+            {
+                ss << feature.flag << ":" << feature.enable << '\n';
+            }
+        }
+
+        size_t j = 0;
+        for (const auto& node : ledgerConfig.consensusNodeList())
+        {
+            ss << "node." + boost::lexical_cast<std::string>(j) + ":" +
+                      *toHexString(node->nodeID()->data()) + "," + std::to_string(node->weight()) +
+                      "\n";
+            ++j;
+        }
+        std::string genesisdata = ss.str();
+        NodeConfig_LOG(INFO) << LOG_BADGE("generateGenesisData")
+                             << LOG_KV("genesisData", genesisdata);
+
+        return genesisdata;
+    }
+
+    std::stringstream executorStream;
+    executorStream << genesisConfig.m_isWasm << "-" << genesisConfig.m_isAuthCheck << "-"
+                   << genesisConfig.m_authAdminAccount << "-" << genesisConfig.m_isSerialExecute;
+
+    std::stringstream ss;
+    ss << ledgerConfig.blockTxCountLimit() << "-" << ledgerConfig.leaderSwitchPeriod() << "-"
+       << genesisConfig.m_txGasLimit << "-"
+       << protocol::BlockVersion(genesisConfig.m_compatibilityVersion) << "-"
+       << executorStream.str();
+    for (const auto& node : ledgerConfig.consensusNodeList())
+    {
+        ss << *toHexString(node->nodeID()->data()) << "," << node->weight() << ";";
+    }
+    auto genesisdata = ss.str();
+    NodeConfig_LOG(INFO) << LOG_BADGE("generateGenesisData") << LOG_KV("genesisData", genesisdata);
+
+    return genesisdata;
+}
+bcos::ledger::GenesisConfig const& bcos::tool::NodeConfig::genesisConfig() const
+{
+    return m_genesisConfig;
 }

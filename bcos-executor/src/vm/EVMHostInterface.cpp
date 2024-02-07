@@ -25,7 +25,11 @@
 
 #include "EVMHostInterface.h"
 #include "../Common.h"
+#include "../precompiled/common/Common.h"
 #include "HostContext.h"
+#include "bcos-codec/abi/ContractABICodec.h"
+#include "bcos-codec/wrapper/CodecWrapper.h"
+#include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include <bcos-utilities/Common.h>
 #include <evmc/evmc.h>
 #include <boost/algorithm/hex.hpp>
@@ -83,10 +87,20 @@ evmc_storage_status setStorage(evmc_host_context* context,
 
 evmc_bytes32 getBalance(evmc_host_context* _context, const evmc_address* _addr) noexcept
 {
-    // always return 0
-    (void)_context;
-    (void)_addr;
-    return toEvmC(h256(0));
+    auto& hostContext = static_cast<HostContext&>(*_context);
+    const auto& blockContext = hostContext.getTransactionExecutive()->blockContext();
+    EXECUTIVE_LOG(DEBUG) << "start getBalance in evm";
+    if (blockContext.features().get(ledger::Features::Flag::feature_balance))
+    {
+        return hostContext.getBalance(_addr);
+    }
+    else
+    {
+        // always return 0
+        (void)_context;
+        (void)_addr;
+        return toEvmC(h256(0));
+    }
 }
 
 size_t getCodeSize(evmc_host_context* _context, const evmc_address* _addr)
@@ -114,10 +128,25 @@ evmc_bytes32 getCodeHash(evmc_host_context* _context, const evmc_address* _addr)
  * @param _bufferSize : code size to copy
  * @return size_t : return copied code size(in byte)
  */
-size_t copyCode(evmc_host_context* _context, const evmc_address*, size_t, uint8_t* _bufferData,
-    size_t _bufferSize)
+size_t copyCode(evmc_host_context* _context, const evmc_address* _addr, size_t _codeOffset,
+    uint8_t* _bufferData, size_t _bufferSize)
 {
     auto& hostContext = static_cast<HostContext&>(*_context);
+    if (hostContext.features().get(
+            ledger::Features::Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy))
+    {
+        auto addr = fromEvmC(*_addr);
+        bytes const& code = hostContext.codeAt(addr);
+
+        // Handle "big offset" edge case.
+        if (_codeOffset >= code.size())
+            return 0;
+
+        size_t maxToCopy = code.size() - _codeOffset;
+        size_t numToCopy = std::min(maxToCopy, _bufferSize);
+        std::copy_n(&code[_codeOffset], numToCopy, _bufferData);
+        return numToCopy;
+    }
 
     hostContext.setCode(bytes((bcos::byte*)_bufferData, (bcos::byte*)_bufferData + _bufferSize));
     return _bufferSize;
@@ -130,6 +159,13 @@ bool selfdestruct(evmc_host_context* _context, const evmc_address* _addr,
     (void)_addr;
     (void)_beneficiary;
     auto& hostContext = static_cast<HostContext&>(*_context);
+    const auto& blockContext = hostContext.getTransactionExecutive()->blockContext();
+    EXECUTIVE_LOG(DEBUG) << "EVM suicide start ";
+    if (blockContext.features().get(ledger::Features::Flag::feature_balance))
+    {
+        hostContext.selfdestruct(_addr, _beneficiary);
+    }
+    EXECUTIVE_LOG(DEBUG) << "selfdestruct successful";
 
     hostContext.suicide();  // FISCO BCOS has no _beneficiary
     return false;
@@ -179,11 +215,14 @@ evmc_tx_context getTxContext(evmc_host_context* _context) noexcept
     result.block_number = hostContext.blockNumber();
     result.block_timestamp = hostContext.timestamp();
     result.block_gas_limit = hostContext.blockGasLimit();
+    result.tx_gas_price = toEvmC(hostContext.gasPrice());
 
-    memset(result.tx_gas_price.bytes, 0, 32);
     memset(result.block_coinbase.bytes, 0, 20);
     memset(result.block_prev_randao.bytes, 0, 32);
     memset(result.chain_id.bytes, 0, 32);
+    memset(result.block_base_fee.bytes, 0, 32);
+
+
     return result;
 }
 

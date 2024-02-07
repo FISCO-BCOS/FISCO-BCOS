@@ -23,54 +23,33 @@
 
 #pragma once
 #include "../Common.h"
+#include "bcos-executor/src/Common.h"
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Overloaded.h>
 #include <evmc/evmc.h>
+#include <evmone/evmone.h>
 #include <evmone/advanced_analysis.hpp>
 #include <evmone/advanced_execution.hpp>
+#include <evmone/baseline.hpp>
+#include <evmone/vm.hpp>
 #include <variant>
 
 namespace bcos::transaction_executor
 {
 
-/// Translate the VMSchedule to VMInstance-C revision.
-evmc_revision toRevision(VMSchedule const& _schedule);
+struct ReleaseEVMC
+{
+    void operator()(evmc_vm* ptr) const noexcept;
+};
 
 /// The RAII wrapper for an VMInstance-C instance.
 class VMInstance
 {
 private:
-    struct ReleaseEVMC
-    {
-        void operator()(evmc_vm* ptr) const noexcept;
-    };
-    using EVMC_VM = std::unique_ptr<evmc_vm, ReleaseEVMC>;
-    using EVMC_ANALYSIS_RESULT = std::shared_ptr<evmone::advanced::AdvancedCodeAnalysis const>;
-    std::variant<EVMC_VM, EVMC_ANALYSIS_RESULT> m_instance;
+    std::shared_ptr<evmone::baseline::CodeAnalysis const> m_instance;
 
 public:
-    template <class Instance>
-    explicit VMInstance(Instance instance) noexcept
-        requires std::same_as<Instance, evmc_vm*> ||
-                 std::same_as<Instance,
-                     std::shared_ptr<evmone::advanced::AdvancedCodeAnalysis const>>
-    {
-        if constexpr (std::is_same_v<Instance, evmc_vm*>)
-        {
-            assert(instance->abi_version == EVMC_ABI_VERSION);
-            if (instance->set_option != nullptr)
-            {
-                instance->set_option(instance, "advanced", "");
-                instance->set_option(instance, "trace", "");
-                // instance->set_option(instance, "baseline", "");
-            }
-            m_instance.emplace<EVMC_VM>(instance);
-        }
-        else
-        {
-            m_instance.emplace<EVMC_ANALYSIS_RESULT>(std::move(instance));
-        }
-    }
+    explicit VMInstance(std::shared_ptr<evmone::baseline::CodeAnalysis const> instance) noexcept;
     ~VMInstance() noexcept = default;
 
     VMInstance(VMInstance const&) = delete;
@@ -85,3 +64,21 @@ public:
 };
 
 }  // namespace bcos::transaction_executor
+
+template <>
+struct std::equal_to<evmc_address>
+{
+    bool operator()(const evmc_address& lhs, const evmc_address& rhs) const noexcept;
+};
+
+template <>
+struct boost::hash<evmc_address>
+{
+    size_t operator()(const evmc_address& address) const noexcept;
+};
+
+template <>
+struct std::hash<evmc_address>
+{
+    size_t operator()(const evmc_address& address) const noexcept;
+};

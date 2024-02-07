@@ -75,6 +75,9 @@ public:
     CallParameters::UniquePtr externalCall(CallParameters::UniquePtr input) override;  // call by
     // hostContext
 
+    // Execute finish and waiting for FINISH or REVERT
+    virtual CallParameters::UniquePtr waitingFinish(CallParameters::UniquePtr input);
+
     // External request key locks, throw exception if dead lock detected
     void externalAcquireKeyLocks(std::string acquireKeyLock);
 

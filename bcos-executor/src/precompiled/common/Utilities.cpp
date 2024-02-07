@@ -198,16 +198,16 @@ std::string bcos::precompiled::checkCreateTableParam(const std::string_view& _ta
 }
 
 uint32_t bcos::precompiled::getFuncSelector(
-    std::string const& _functionName, const crypto::Hash::Ptr& _hashImpl)
+    std::string_view functionName, const crypto::Hash::Ptr& _hashImpl)
 {
     // global function selector cache
-    auto it = s_name2SelectCache.find(_functionName);
+    auto it = s_name2SelectCache.find(std::string(functionName));
     if (it != s_name2SelectCache.end())
     {
         return it->second;
     }
-    auto selector = getFuncSelectorByFunctionName(_functionName, _hashImpl);
-    s_name2SelectCache.insert(std::make_pair(_functionName, selector));
+    auto selector = getFuncSelectorByFunctionName(functionName, _hashImpl);
+    s_name2SelectCache.insert(std::make_pair(functionName, selector));
     return selector;
 }
 
@@ -234,7 +234,7 @@ uint32_t bcos::precompiled::getParamFunc(bytesConstRef _param)
 }
 
 uint32_t bcos::precompiled::getFuncSelectorByFunctionName(
-    std::string const& _functionName, const crypto::Hash::Ptr& _hashImpl)
+    std::string_view _functionName, const crypto::Hash::Ptr& _hashImpl)
 {
     uint32_t func = *(uint32_t*)(_hashImpl->hash(_functionName).ref().getCroppedData(0, 4).data());
     uint32_t selector = ((func & 0x000000FF) << 24) | ((func & 0x0000FF00) << 8) |
@@ -414,7 +414,7 @@ std::vector<Address> precompiled::getGovernorList(
     const PrecompiledExecResult::Ptr& _callParameters, const CodecWrapper& codec)
 {
     const auto& blockContext = _executive->blockContext();
-    const auto* sender = blockContext.isWasm() ? ACCOUNT_MANAGER_NAME : ACCOUNT_MGR_ADDRESS;
+    const auto& sender = _executive->contractAddress();
     auto getCommittee = codec.encodeWithSig("_committee()");
     auto getCommitteeResponse = externalRequest(_executive, ref(getCommittee),
         _callParameters->m_origin, sender, AUTH_COMMITTEE_ADDRESS, _callParameters->m_staticCall,

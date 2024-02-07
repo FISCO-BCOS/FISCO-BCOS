@@ -16,6 +16,7 @@
 #include <boost/throw_exception.hpp>
 #include <algorithm>
 #include <limits>
+#include <regex>
 #include <string>
 #include <vector>
 
@@ -45,6 +46,32 @@ int64_t GatewayConfig::doubleMBToBit(double _d)
     return (int64_t)_d;
 }
 
+bool GatewayConfig::isIPAddress(const std::string& _input)
+{
+    const std::regex ipv4_regex("^([0-9]{1,3}\\.){3}[0-9]{1,3}$");
+    const std::regex ipv6_regex(
+        "^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|:|((([0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4})?::("
+        "([0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4})?))$");
+
+    return std::regex_match(_input, ipv4_regex) || std::regex_match(_input, ipv6_regex);
+}
+
+bool GatewayConfig::isHostname(const std::string& _input)
+{
+    boost::asio::io_context io_context;
+    boost::asio::ip::tcp::resolver resolver(io_context);
+
+    try
+    {
+        boost::asio::ip::tcp::resolver::results_type results = resolver.resolve(_input, "80");
+        return true;
+    }
+    catch (const std::exception& e)
+    {
+        return false;
+    }
+}
+
 void GatewayConfig::hostAndPort2Endpoint(const std::string& _host, NodeIPEndpoint& _endpoint)
 {
     std::string ip;
@@ -53,7 +80,7 @@ void GatewayConfig::hostAndPort2Endpoint(const std::string& _host, NodeIPEndpoin
     std::vector<std::string> result;
     boost::split(result, _host, boost::is_any_of("]"), boost::token_compress_on);
     if (result.size() == 2)
-    { // ipv6 format is [IP]:Port
+    {  // ipv6 format is [IP]:Port
         ip = result[0].substr(1);
         port = boost::lexical_cast<int>(result[1].substr(1));
     }
@@ -85,7 +112,39 @@ void GatewayConfig::hostAndPort2Endpoint(const std::string& _host, NodeIPEndpoin
     }
 
     boost::system::error_code ec;
-    boost::asio::ip::address ip_address = boost::asio::ip::make_address(ip, ec);
+    boost::asio::ip::address ip_address;
+    // ip
+    if (isIPAddress(ip))
+    {
+        ip_address = boost::asio::ip::make_address(ip, ec);
+    }
+    // hostname
+    else if (isHostname(ip))
+    {
+        boost::asio::io_context io_context;
+        boost::asio::ip::tcp::resolver resolver(io_context);
+        boost::asio::ip::tcp::resolver::query query(boost::asio::ip::tcp::v4(), ip, "80");
+        boost::asio::ip::tcp::resolver::results_type results = resolver.resolve(query, ec);
+        if (!ec)
+        {
+            ip_address = results.begin()->endpoint().address();
+        }
+        else
+        {
+            GATEWAY_CONFIG_LOG(ERROR)
+                << LOG_DESC("parse host name failed") << LOG_KV("host name", ip);
+            BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                      "GatewayConfig: parse host name failed, host name=" + ip));
+        }
+    }
+    else
+    {
+        GATEWAY_CONFIG_LOG(ERROR) << "the host is not a valid ip or a hostname"
+                                  << LOG_KV("host:", _host);
+        BOOST_THROW_EXCEPTION(
+            InvalidParameter() << errinfo_comment(
+                "GatewayConfig: the host is not a valid ip or a hostname, host=" + _host));
+    }
     if (ec.value() != 0)
     {
         GATEWAY_CONFIG_LOG(ERROR) << LOG_DESC("the host is invalid, make_address failed")
@@ -202,6 +261,7 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
       listen_port=30300
       nodes_path=./
       nodes_file=nodes.json
+      readonly=false
 
       enable_rip_protocol=true
       allow_max_msg_size=
@@ -234,7 +294,7 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
     }
 
     m_nodeFileName = _pt.get<std::string>("p2p.nodes_file", "nodes.json");
-
+    m_readonly = _pt.get<bool>("p2p.readonly", false);
     m_enableRIPProtocol = _pt.get<bool>("p2p.enable_rip_protocol", true);
 
     m_enableCompress = _pt.get<bool>("p2p.enable_compression", true);
@@ -282,7 +342,8 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
                              << LOG_KV("p2p.session_max_send_msg_count", m_maxSendMsgCount)
                              << LOG_KV("p2p.thread_count", m_threadPoolSize)
                              << LOG_KV("p2p.nodes_path", m_nodePath)
-                             << LOG_KV("p2p.nodes_file", m_nodeFileName);
+                             << LOG_KV("p2p.nodes_file", m_nodeFileName)
+                             << LOG_KV("p2p.readonly", m_readonly);
 }
 
 // load p2p connected peers
@@ -416,6 +477,17 @@ void GatewayConfig::initSMCertConfig(const boost::property_tree::ptree& _pt)
                              << LOG_KV("multi_ca_path", smCertConfig.multiCaPath);
 }
 
+inline void mustNoLessThan(const std::string& _configName, int32_t _value, int32_t _min)
+{
+    // check and throw
+    if (_value < _min)
+    {
+        BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                  "The value of " + _configName + " must no less than " +
+                                  std::to_string(_min) + " current is" + std::to_string(_value)));
+    }
+}
+
 // loads rate limit configuration items from the configuration file
 void GatewayConfig::initFlowControlConfig(const boost::property_tree::ptree& _pt)
 {
@@ -434,6 +506,7 @@ void GatewayConfig::initFlowControlConfig(const boost::property_tree::ptree& _pt
      */
     // time_window_sec=1
     int32_t timeWindowSec = _pt.get<int32_t>("flow_control.time_window_sec", 1);
+    mustNoLessThan("time_window_sec", timeWindowSec, 0);
 
     // enable_distributed_ratelimit=false
     bool enableDistributedRatelimit =
@@ -444,8 +517,12 @@ void GatewayConfig::initFlowControlConfig(const boost::property_tree::ptree& _pt
     // enable_distributed_ratelimit=false
     int32_t distributedRateLimitCachePercent =
         _pt.get<int32_t>("flow_control.distributed_ratelimit_cache_percent", 20);
+    mustNoLessThan("distributed_ratelimit_cache_percent", distributedRateLimitCachePercent, 0);
+
     // stat_reporter_interval=60000
     int32_t statInterval = _pt.get<int32_t>("flow_control.stat_reporter_interval", 60000);
+    mustNoLessThan("stat_reporter_interval", statInterval, 0);
+
     // stat_reporter_interval=60000
     bool enableConnectDebugInfo = _pt.get<bool>("flow_control.enable_connect_debug_info", false);
 
@@ -741,8 +818,12 @@ void GatewayConfig::initFlowControlConfig(const boost::property_tree::ptree& _pt
     // incoming_p2p_basic_msg_type_qps_limit = -1
     int32_t p2pBasicMsgQPS =
         _pt.get<int32_t>("flow_control.incoming_p2p_basic_msg_type_qps_limit", -1);
+    mustNoLessThan("flow_control.incoming_p2p_basic_msg_type_qps_limit", p2pBasicMsgQPS, -1);
+
     // incoming_module_msg_type_qps_limit = -1
     int32_t moduleMsgQPS = _pt.get<int32_t>("flow_control.incoming_module_msg_type_qps_limit", -1);
+    mustNoLessThan("flow_control.incoming_module_msg_type_qps_limit", moduleMsgQPS, -1);
+
     // module id => qps
     if (_pt.get_child_optional("flow_control"))
     {
@@ -768,6 +849,11 @@ void GatewayConfig::initFlowControlConfig(const boost::property_tree::ptree& _pt
                                              << LOG_DESC("load flow_control config items")
                                              << LOG_KV("key", "flow_control." + key)
                                              << LOG_KV("module", module) << LOG_KV("qps", qps);
+                }
+                else
+                {
+                    BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                              "flow_control.key should greater than 0"));
                 }
             }
         }

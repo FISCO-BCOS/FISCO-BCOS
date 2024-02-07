@@ -32,11 +32,7 @@
 #include <mutex>
 #include <utility>
 
-namespace bcos
-{
-namespace boostssl
-{
-namespace http
+namespace bcos::boostssl::http
 {
 // The http session for connection
 class HttpSession : public std::enable_shared_from_this<HttpSession>
@@ -45,7 +41,7 @@ public:
     using Ptr = std::shared_ptr<HttpSession>;
 
 public:
-    HttpSession(std::string _moduleName) : m_moduleName(_moduleName)
+    explicit HttpSession(std::string _moduleName) : m_moduleName(std::move(_moduleName))
     {
         HTTP_SESSION(DEBUG) << LOG_KV("[NEWOBJ][HTTPSESSION]", this);
     }
@@ -251,24 +247,27 @@ public:
     }
 
     HttpReqHandler httpReqHandler() const { return m_httpReqHandler; }
-    void setRequestHandler(HttpReqHandler _httpReqHandler) { m_httpReqHandler = _httpReqHandler; }
+    void setRequestHandler(HttpReqHandler _httpReqHandler)
+    {
+        m_httpReqHandler = std::move(_httpReqHandler);
+    }
 
     WsUpgradeHandler wsUpgradeHandler() const { return m_wsUpgradeHandler; }
     void setWsUpgradeHandler(WsUpgradeHandler _wsUpgradeHandler)
     {
-        m_wsUpgradeHandler = _wsUpgradeHandler;
+        m_wsUpgradeHandler = std::move(_wsUpgradeHandler);
     }
     std::shared_ptr<Queue> queue() { return m_queue; }
-    void setQueue(std::shared_ptr<Queue> _queue) { m_queue = _queue; }
+    void setQueue(std::shared_ptr<Queue> _queue) { m_queue = std::move(_queue); }
 
     HttpStream::Ptr httpStream() { return m_httpStream; }
-    void setHttpStream(HttpStream::Ptr _httpStream) { m_httpStream = _httpStream; }
+    void setHttpStream(HttpStream::Ptr _httpStream) { m_httpStream = std::move(_httpStream); }
 
     std::shared_ptr<std::string> nodeId() { return m_nodeId; }
-    void setNodeId(std::shared_ptr<std::string> _nodeId) { m_nodeId = _nodeId; }
+    void setNodeId(std::shared_ptr<std::string> _nodeId) { m_nodeId = std::move(_nodeId); }
 
     std::string moduleName() { return m_moduleName; }
-    void setModuleName(std::string _moduleName) { m_moduleName = _moduleName; }
+    void setModuleName(std::string _moduleName) { m_moduleName = std::move(_moduleName); }
 
 
 private:
@@ -286,6 +285,4 @@ private:
     std::string m_moduleName = "DEFAULT";
 };
 
-}  // namespace http
-}  // namespace boostssl
-}  // namespace bcos
+}  // namespace bcos::boostssl::http

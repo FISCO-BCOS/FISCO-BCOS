@@ -31,7 +31,7 @@ CallParameters::UniquePtr ExecutiveState::go()
     {
         m_executive =
             std::dynamic_pointer_cast<CoroutineTransactionExecutive>(m_executiveFactory->build(
-                m_input->codeAddress, m_input->contextID, m_input->seq, true));
+                m_input->codeAddress, m_input->contextID, m_input->seq, ExecutiveType::coroutine));
     }
 
     // run
@@ -62,6 +62,7 @@ CallParameters::UniquePtr ExecutiveState::go()
     {
     case CallParameters::MESSAGE:
     case CallParameters::KEY_LOCK:
+    case CallParameters::PRE_FINISH:
         m_status = PAUSED;
         break;
     case CallParameters::FINISHED:

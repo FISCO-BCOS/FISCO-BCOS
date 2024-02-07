@@ -123,6 +123,10 @@ public:
     {
         return impl().template impl_setupGenesisBlock(std::move(block));
     }
+    auto checkGenesisBlock(bcos::concepts::block::Block auto block)
+    {
+        return impl().template impl_checkGenesisBlock(std::move(block));
+    }
 
 private:
     friend Impl;

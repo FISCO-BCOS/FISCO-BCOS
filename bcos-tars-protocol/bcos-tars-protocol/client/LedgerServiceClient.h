@@ -44,21 +44,22 @@ public:
     ~LedgerServiceClient() override {}
 
     // TODO: implement this
-    void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr, bcos::protocol::TransactionsPtr,
-        bcos::protocol::Block::ConstPtr, std::function<void(bcos::Error::Ptr&&)>, bool) override
+    void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr,
+        bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr,
+        std::function<void(bcos::Error::Ptr&&)>, bool) override
     {
         BCOS_LOG(ERROR) << LOG_DESC("unimplemented method asyncPrewriteBlock");
     }
 
-    void asyncPreStoreBlockTxs(bcos::protocol::TransactionsPtr, bcos::protocol::Block::ConstPtr,
-        std::function<void(bcos::Error::UniquePtr&&)>) override
+    void asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr,
+        bcos::protocol::Block::ConstPtr, std::function<void(bcos::Error::UniquePtr&&)>) override
     {
         BCOS_LOG(ERROR) << LOG_DESC("unimplemented method asyncPreStoreBlockTxs");
     }
 
     // TODO: implement this
     bcos::Error::Ptr storeTransactionsAndReceipts(
-        bcos::protocol::TransactionsPtr, bcos::protocol::Block::ConstPtr) override
+        bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr) override
     {
         BCOS_LOG(ERROR) << LOG_DESC("unimplemented method");
         return nullptr;

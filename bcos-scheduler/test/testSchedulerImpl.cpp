@@ -472,8 +472,6 @@ BOOST_AUTO_TEST_CASE(handlerBlockTest)
                 BOOST_CHECK_EQUAL(config->hash().hex(), h256(5).hex());
             }
         });
-
-    BOOST_CHECK(!commitBlockError);
 }
 
 
@@ -567,7 +565,7 @@ BOOST_AUTO_TEST_CASE(testDeploySysContract)
     block->blockHeader()->setNumber(0);
     block->blockHeader()->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
 
-    auto tx = blockFactory->transactionFactory()->createTransaction(3,
+    auto tx = blockFactory->transactionFactory()->createTransaction(0,
         precompiled::AUTH_COMMITTEE_ADDRESS, {}, std::to_string(1), 500, "chainId", "groupId",
         utcTime());
     block->appendTransaction(std::move(tx));
@@ -595,7 +593,7 @@ BOOST_AUTO_TEST_CASE(testCallSysContract)
     auto executor1 = std::make_shared<MockParallelExecutorForCall>("executor1");
     executorManager->addExecutor("executor1", executor1);
 
-    auto tx = blockFactory->transactionFactory()->createTransaction(3,
+    auto tx = blockFactory->transactionFactory()->createTransaction(0,
         precompiled::AUTH_COMMITTEE_ADDRESS, {}, std::to_string(1), 500, "chainId", "groupId",
         utcTime());
 

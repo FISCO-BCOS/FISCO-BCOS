@@ -98,7 +98,9 @@ public:
             return std::make_shared<bcos::storage::KeyPageStorage>(
                 storage, m_keyPageSize, compatibilityVersion, keyPageIgnoreTables, ignoreNotExist);
         }
-        return std::make_shared<bcos::storage::StateStorage>(storage, compatibilityVersion);
+
+        // Pass useHashV310 flag to hash() insted of compatibilityVersion
+        return std::make_shared<bcos::storage::StateStorage>(storage);
     }
 
 private:

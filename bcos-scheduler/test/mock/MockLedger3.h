@@ -1,19 +1,21 @@
 #pragma once
 
-#include "bcos-framework/bcos-framework/ledger/LedgerConfig.h"
-#include "bcos-framework/bcos-framework/ledger/LedgerInterface.h"
-#include "bcos-framework/bcos-framework/ledger/LedgerTypeDef.h"
-#include "bcos-framework/bcos-framework/protocol/Block.h"
-#include "bcos-framework/bcos-framework/protocol/Protocol.h"
-#include "bcos-framework/bcos-framework/protocol/Transaction.h"
-#include "bcos-framework/bcos-framework/protocol/TransactionReceipt.h"
-#include "bcos-framework/bcos-framework/storage/StorageInterface.h"
+#include "bcos-framework/ledger/Features.h"
+#include "bcos-framework/ledger/LedgerConfig.h"
+#include "bcos-framework/ledger/LedgerInterface.h"
+#include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/protocol/Block.h"
+#include "bcos-framework/protocol/Protocol.h"
+#include "bcos-framework/protocol/Transaction.h"
+#include "bcos-framework/protocol/TransactionReceipt.h"
+#include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-ledger/src/libledger/utilities/Common.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-utilities/Error.h>
 #include <boost/test/unit_test.hpp>
 #include <gsl/span>
 #include <map>
+#include <range/v3/algorithm/find.hpp>
 
 using namespace bcos::ledger;
 
@@ -28,7 +30,7 @@ public:
     MockLedger3() : LedgerInterface() {}
     using Ptr = std::shared_ptr<MockLedger3>;
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
-        bcos::protocol::TransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
+        bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
         std::function<void(Error::Ptr&&)> callback, bool writeTxsAndReceipts) override
     {
         auto blockNumber = block->blockHeaderConst()->number();
@@ -41,8 +43,8 @@ public:
         callback(nullptr);
     }
 
-    bcos::Error::Ptr storeTransactionsAndReceipts(
-        bcos::protocol::TransactionsPtr blockTxs, bcos::protocol::Block::ConstPtr block) override
+    bcos::Error::Ptr storeTransactionsAndReceipts(bcos::protocol::ConstTransactionsPtr blockTxs,
+        bcos::protocol::Block::ConstPtr block) override
     {
         return nullptr;
     }
@@ -103,6 +105,10 @@ public:
         {
             _onGetConfig(nullptr, "300000000", commitBlockNumber);
         }
+        else if (_key == ledger::SYSTEM_KEY_TX_GAS_PRICE)
+        {
+            _onGetConfig(nullptr, "0x1", commitBlockNumber);
+        }
         else if (_key == ledger::SYSTEM_KEY_COMPATIBILITY_VERSION)
         {
             _onGetConfig(nullptr, bcos::protocol::RC4_VERSION_STR, commitBlockNumber);
@@ -120,6 +126,14 @@ public:
             _onGetConfig(nullptr, "1000", commitBlockNumber);
         }
         else if (_key == ledger::INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE)
+        {
+            _onGetConfig(nullptr, "0", commitBlockNumber);
+        }
+        else if (RANGES::count(ledger::Features::featureKeys(), _key) > 0)
+        {
+            _onGetConfig(BCOS_ERROR_PTR(-1, "Not found!"), "0", commitBlockNumber);
+        }
+        else if (_key == SYSTEM_KEY_AUTH_CHECK_STATUS)
         {
             _onGetConfig(nullptr, "0", commitBlockNumber);
         }
@@ -156,7 +170,7 @@ public:
             _onGetList) override
     {}
 
-    void asyncPreStoreBlockTxs(bcos::protocol::TransactionsPtr _blockTxs,
+    void asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr _blockTxs,
         bcos::protocol::Block::ConstPtr block,
         std::function<void(Error::UniquePtr&&)> _callback) override
     {}

@@ -19,6 +19,7 @@
  */
 #pragma once
 
+#include "bcos-utilities/NewTimer.h"
 #include "bcos-utilities/ObjectAllocatorMonitor.h"
 #include <bcos-boostssl/httpserver/HttpServer.h>
 #include <bcos-boostssl/interfaces/MessageFace.h>
@@ -53,13 +54,13 @@ using MsgHandler =
 using ConnectHandler = std::function<void(std::shared_ptr<WsSession>)>;
 using DisconnectHandler = std::function<void(std::shared_ptr<WsSession>)>;
 using HandshakeHandler = std::function<void(
-    bcos::Error::Ptr _error, std::shared_ptr<boostssl::MessageFace>, std::shared_ptr<WsSession>)>;
+    bcos::Error::Ptr, std::shared_ptr<boostssl::MessageFace>, std::shared_ptr<WsSession>)>;
 
 class WsService : public std::enable_shared_from_this<WsService>
 {
 public:
     using Ptr = std::shared_ptr<WsService>;
-    WsService(std::string _moduleName = "DEFAULT");
+    explicit WsService(std::string _moduleName = "DEFAULT");
     virtual ~WsService();
 
     virtual void start();
@@ -71,7 +72,8 @@ public:
         std::promise<std::tuple<boost::beast::error_code, std::string, std::string>>>>>
     asyncConnectToEndpoints(EndPointsPtr _peers);
 
-    std::string genConnectError(const std::string& _error, const std::string& endpoint, bool end);
+    inline static std::string genConnectError(
+        const std::string& _error, const std::string& endpoint, bool end);
     void syncConnectToEndpoints(EndPointsPtr _peers);
 
     std::shared_ptr<WsSession> newSession(
@@ -107,45 +109,56 @@ public:
     std::shared_ptr<MessageFaceFactory> messageFactory() { return m_messageFactory; }
     void setMessageFactory(std::shared_ptr<MessageFaceFactory> _messageFactory)
     {
-        m_messageFactory = _messageFactory;
+        m_messageFactory = std::move(_messageFactory);
     }
 
     std::shared_ptr<WsSessionFactory> sessionFactory() { return m_sessionFactory; }
     void setSessionFactory(std::shared_ptr<WsSessionFactory> _sessionFactory)
     {
-        m_sessionFactory = _sessionFactory;
+        m_sessionFactory = std::move(_sessionFactory);
     }
     int32_t waitConnectFinishTimeout() const { return m_waitConnectFinishTimeout; }
     void setWaitConnectFinishTimeout(int32_t _timeout) { m_waitConnectFinishTimeout = _timeout; }
 
-    std::string moduleName() { return m_moduleName; }
-    void setModuleName(std::string _moduleName) { m_moduleName = _moduleName; }
+    std::string moduleName() const noexcept { return m_moduleName; }
+    void setModuleName(std::string _moduleName) { m_moduleName = std::move(_moduleName); }
 
     void setIOServicePool(IOServicePool::Ptr _ioservicePool)
     {
-        m_ioservicePool = _ioservicePool;
+        m_ioservicePool = std::move(_ioservicePool);
         m_timerIoc = m_ioservicePool->getIOService();
     }
 
-    std::shared_ptr<WsConnector> connector() const { return m_connector; }
-    void setConnector(std::shared_ptr<WsConnector> _connector) { m_connector = _connector; }
+    std::shared_ptr<WsConnector> connector() const noexcept { return m_connector; }
+    void setConnector(std::shared_ptr<WsConnector> _connector)
+    {
+        m_connector = std::move(_connector);
+    }
 
     void setHostPort(std::string host, uint16_t port)
     {
-        m_listenHost = host;
+        m_listenHost = std::move(host);
         m_listenPort = port;
     }
-    std::string listenHost() { return m_listenHost; }
-    uint16_t listenPort() { return m_listenPort; }
+    std::string listenHost() const noexcept { return m_listenHost; }
+    uint16_t listenPort() const noexcept { return m_listenPort; }
 
-    WsConfig::Ptr config() const { return m_config; }
-    void setConfig(WsConfig::Ptr _config) { m_config = _config; }
+    WsConfig::Ptr config() const noexcept { return m_config; }
+    void setConfig(WsConfig::Ptr _config) { m_config = std::move(_config); }
 
-    std::shared_ptr<bcos::boostssl::http::HttpServer> httpServer() const { return m_httpServer; }
+    std::shared_ptr<bcos::boostssl::http::HttpServer> httpServer() const noexcept
+    {
+        return m_httpServer;
+    }
     void setHttpServer(std::shared_ptr<bcos::boostssl::http::HttpServer> _httpServer)
     {
-        m_httpServer = _httpServer;
+        m_httpServer = std::move(_httpServer);
     }
+    void setTimerFactory(timer::TimerFactory::Ptr _timerFactory)
+    {
+        m_timerFactory = std::move(_timerFactory);
+    }
+    timer::TimerFactory::Ptr timerFactory() const { return m_timerFactory; }
 
     bool registerMsgHandler(uint16_t _msgType, MsgHandler _msgHandler);
 
@@ -155,23 +168,23 @@ public:
 
     void registerConnectHandler(ConnectHandler _connectHandler)
     {
-        m_connectHandlers.push_back(_connectHandler);
+        m_connectHandlers.push_back(std::move(_connectHandler));
     }
 
     void registerDisconnectHandler(DisconnectHandler _disconnectHandler)
     {
-        m_disconnectHandlers.push_back(_disconnectHandler);
+        m_disconnectHandlers.push_back(std::move(_disconnectHandler));
     }
 
     void registerHandshakeHandler(HandshakeHandler _handshakeHandler)
     {
-        m_handshakeHandlers.push_back(_handshakeHandler);
+        m_handshakeHandlers.push_back(std::move(_handshakeHandler));
     }
 
     void setReconnectedPeers(EndPointsPtr _reconnectedPeers)
     {
         WriteGuard l(x_peers);
-        m_reconnectedPeers = _reconnectedPeers;
+        m_reconnectedPeers = std::move(_reconnectedPeers);
     }
     EndPointsPtr reconnectedPeers() const
     {
@@ -204,12 +217,13 @@ private:
 
     // ws connector
     std::shared_ptr<WsConnector> m_connector;
+    std::shared_ptr<timer::Timer> m_statTimer;
     // reconnect timer
-    std::shared_ptr<boost::asio::deadline_timer> m_reconnect;
-    // heartbeat timer
-    std::shared_ptr<boost::asio::deadline_timer> m_heartbeat;
+    std::shared_ptr<timer::Timer> m_reconnectTimer;
     // http server
     std::shared_ptr<bcos::boostssl::http::HttpServer> m_httpServer;
+    // timer
+    timer::TimerFactory::Ptr m_timerFactory = nullptr;
 
     // mutex for m_sessions
     mutable boost::shared_mutex x_mutex;

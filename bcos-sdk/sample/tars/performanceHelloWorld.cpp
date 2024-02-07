@@ -11,9 +11,9 @@
 #include <oneapi/tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
 #include <boost/exception/diagnostic_information.hpp>
+#include <boost/thread/latch.hpp>
 #include <atomic>
 #include <exception>
-#include <latch>
 #include <random>
 
 int performance()
@@ -62,7 +62,7 @@ int performance()
         tbb::task_group taskGroup;
         bcos::task::tbb::TBBScheduler tbbScheduler(taskGroup);
 
-        std::latch latch(count);
+        boost::latch latch(count);
         tbb::parallel_for(tbb::blocked_range(0LU, count), [&](const auto& range) {
             auto rand = std::mt19937(std::random_device{}());
             for (auto it = range.begin(); it != range.end(); ++it)

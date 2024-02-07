@@ -2,6 +2,7 @@
 pragma solidity >=0.6.10 <0.8.20;
 
 contract TestEvmPrecompiled {
+    event beforeCallGas(uint256);
     event callGasUsed(uint256);
 
     function keccak256Test(bytes memory b) public returns (bytes32 result) {
@@ -21,6 +22,7 @@ contract TestEvmPrecompiled {
         bytes32 _s
     ) public returns (address pub) {
         uint256 gasLeft1 = gasleft();
+        emit beforeCallGas(gasLeft1);
         pub = ecrecover(_hash, _v, _r, _s);
         uint256 gasLeft2 = gasleft();
         uint256 gasUsed = gasLeft1 - gasLeft2;
@@ -31,6 +33,7 @@ contract TestEvmPrecompiled {
     // 0x02
     function sha256Test(bytes memory b) public returns (bytes32 result) {
         uint256 gasLeft1 = gasleft();
+        emit beforeCallGas(gasLeft1);
         result = sha256(b);
         uint256 gasLeft2 = gasleft();
         uint256 gasUsed = gasLeft1 - gasLeft2;
@@ -41,6 +44,7 @@ contract TestEvmPrecompiled {
     // 0x03
     function ripemd160Test(bytes memory b) public returns (bytes32 result) {
         uint256 gasLeft1 = gasleft();
+        emit beforeCallGas(gasLeft1);
         result = ripemd160(b);
         uint256 gasLeft2 = gasleft();
         uint256 gasUsed = gasLeft1 - gasLeft2;
@@ -52,6 +56,7 @@ contract TestEvmPrecompiled {
     function callDatacopy(bytes memory data) public returns (bytes memory) {
         bytes memory ret = new bytes(data.length);
         uint256 gasLeft1 = gasleft();
+        emit beforeCallGas(gasLeft1);
         assembly {
             let len := mload(data)
             if iszero(
@@ -74,6 +79,7 @@ contract TestEvmPrecompiled {
         bytes32 modulus
     ) public returns (bytes32 result) {
         uint256 gasLeft1 = gasleft();
+        emit beforeCallGas(gasLeft1);
         assembly {
         // free memory pointer
             let memPtr := mload(0x40)
@@ -117,6 +123,7 @@ contract TestEvmPrecompiled {
         input[2] = bx;
         input[3] = by;
         uint256 gasLeft1 = gasleft();
+        emit beforeCallGas(gasLeft1);
         assembly {
             let success := call(gas(), 0x06, 0, input, 0x80, result, 0x40)
             switch success
@@ -141,6 +148,7 @@ contract TestEvmPrecompiled {
         input[1] = y;
         input[2] = scalar;
         uint256 gasLeft1 = gasleft();
+        emit beforeCallGas(gasLeft1);
         assembly {
             let success := call(gas(), 0x07, 0, input, 0x60, result, 0x40)
             switch success
@@ -163,6 +171,7 @@ contract TestEvmPrecompiled {
         uint256 len = input.length;
         require(len % 192 == 0);
         uint256 gasLeft1 = gasleft();
+        emit beforeCallGas(gasLeft1);
         assembly {
             let memPtr := mload(0x40)
             let success := call(
@@ -211,6 +220,7 @@ contract TestEvmPrecompiled {
             f
         );
         uint256 gasLeft1 = gasleft();
+        emit beforeCallGas(gasLeft1);
         assembly {
             if iszero(
             staticcall(not(0), 0x09, add(args, 32), 0xd5, output, 0x40)
@@ -231,6 +241,7 @@ contract TestEvmPrecompiled {
         uint256 k
     ) public returns (uint256) {
         uint256 gasLeft1 = gasleft();
+        emit beforeCallGas(gasLeft1);
         uint256 result = addmod(x, y, k);
         uint256 gasLeft2 = gasleft();
         uint256 gasUsed = gasLeft1 - gasLeft2;
@@ -278,5 +289,13 @@ contract TestEvmPrecompiled {
 
     function blockHashTest(uint256 blockNumber) public view returns (bytes32) {
         return blockhash(blockNumber);
+    }
+
+    function checkBaseFee() public view returns (uint256) {
+        require(block.basefee == 0, "basefee must be 0");
+    }
+
+    function getGasPrice() public view returns (uint256) {
+        return tx.gasprice;
     }
 }

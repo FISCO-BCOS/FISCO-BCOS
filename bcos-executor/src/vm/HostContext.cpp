@@ -23,6 +23,8 @@
 #include "../Common.h"
 #include "../executive/TransactionExecutive.h"
 #include "EVMHostInterface.h"
+#include "bcos-codec/wrapper/CodecWrapper.h"
+#include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/storage/Table.h"
 #include "bcos-table/src/StateStorage.h"
@@ -56,7 +58,6 @@ namespace bcos::executor
 {
 namespace
 {
-constexpr evmc_gas_metrics ethMetrics{32000, 20000, 5000, 200, 9000, 2300, 25000};
 
 evmc_bytes32 evm_hash_fn(const uint8_t* data, size_t size)
 {
@@ -126,14 +127,29 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
     // Convert evmc_message to CallParameters
     auto request = std::make_unique<CallParameters>(CallParameters::MESSAGE);
 
-    request->senderAddress = myAddress();
     request->origin = origin();
     request->status = 0;
+
+    if (features().get(ledger::Features::Flag::feature_balance))
+    {
+        request->value = fromEvmC(_msg->value);
+        request->gasPrice = gasPrice();
+    }
+
     const auto& blockContext = m_executive->blockContext();
+
+    request->senderAddress = myAddress();
+
     switch (_msg->kind)
     {
     case EVMC_CREATE2:
         request->createSalt = fromEvmC(_msg->create2_salt);
+        if (features().get(
+                ledger::Features::Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy))
+        {
+            request->data.assign(_msg->input_data, _msg->input_data + _msg->input_size);
+            request->create = true;
+        }
         break;
     case EVMC_CALL:
         if (blockContext.isWasm())
@@ -158,7 +174,15 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
                 request->delegateCall = true;
                 request->codeAddress = evmAddress2String(_msg->code_address);
                 request->delegateCallSender = evmAddress2String(_msg->sender);
-                request->receiveAddress = codeAddress();
+
+                if (features().get(ledger::Features::Flag::bugfix_call_noaddr_return))
+                {
+                    request->receiveAddress = myAddress();
+                }
+                else
+                {
+                    request->receiveAddress = codeAddress();
+                }
                 request->data.assign(_msg->input_data, _msg->input_data + _msg->input_size);
                 break;
             }
@@ -210,6 +234,15 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
 
     request->staticCall = m_callParameters->staticCall;
 
+    if (features().get(ledger::Features::Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy))
+    {
+        // EVM STATICCALL opcode support
+        if (_msg->flags & EVMC_STATIC)
+        {
+            request->staticCall = true;
+        }
+    }
+
     auto response = m_executive->externalCall(std::move(request));
 
     // Convert CallParameters to evmc_resultx
@@ -222,6 +255,11 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
         .create_address = toEvmC(boost::algorithm::unhex(response->newEVMContractAddress)),
         .padding = {}};
 
+    if (features().get(ledger::Features::Flag::bugfix_event_log_order))
+    {
+        // put event log by stack(dfs) order
+        m_callParameters->logEntries = std::move(response->logEntries);
+    }
     // Put response to store in order to avoid data lost
     m_responseStore.emplace_back(std::move(response));
 
@@ -258,11 +296,18 @@ evmc_result HostContext::callBuiltInPrecompiled(
         {
             callResults->gas = _request->gas - gasUsed;
         }
-        auto [success, output] =
-            m_executive->executeOriginPrecompiled(_request->receiveAddress, ref(_request->data));
-        resultCode =
-            (int32_t)(success ? TransactionStatus::None : TransactionStatus::RevertInstruction);
-        resultData.swap(output);
+        try
+        {
+            auto [success, output] = m_executive->executeOriginPrecompiled(
+                _request->receiveAddress, ref(_request->data));
+            resultCode =
+                (int32_t)(success ? TransactionStatus::None : TransactionStatus::RevertInstruction);
+            resultData.swap(output);
+        }
+        catch (...)
+        {
+            resultCode = (int32_t)TransactionStatus::RevertInstruction;
+        }
     }
     else
     {
@@ -285,6 +330,12 @@ evmc_result HostContext::callBuiltInPrecompiled(
         }
     }
 
+    if (features().get(ledger::Features::Flag::bugfix_event_log_order))
+    {
+        // put event log by stack(dfs) order
+        m_callParameters->logEntries = std::move(_request->logEntries);
+    }
+
     if (resultCode != (int32_t)TransactionStatus::None)
     {
         callResults->type = CallParameters::REVERT;
@@ -293,6 +344,29 @@ evmc_result HostContext::callBuiltInPrecompiled(
         preResult.gas_left = 0;
         m_responseStore.emplace_back(std::move(callResults));
         return preResult;
+    }
+
+    if (features().get(ledger::Features::Flag::feature_balance) && _request->value > 0) [[unlikely]]
+    {
+        // must transfer balance
+        auto callParameters = std::make_unique<CallParameters>(CallParameters::MESSAGE);
+        callParameters->origin = bcos::precompiled::BALANCE_PRECOMPILED_ADDRESS;
+        callParameters->senderAddress = _request->senderAddress;
+        callParameters->receiveAddress = _request->receiveAddress;
+        callParameters->value = _request->value;
+        callParameters->staticCall = staticCall();
+
+        callParameters->gas = callResults->gas;
+
+        callResults = m_executive->transferBalance(std::move(callParameters), 0, myAddress());
+
+        if (callResults->status != (int32_t)TransactionStatus::None)
+        {
+            preResult.status_code = (evmc_status_code)callResults->evmStatus;
+            preResult.gas_left = callResults->gas;
+            m_responseStore.emplace_back(std::move(callResults));
+            return preResult;
+        }
     }
 
     preResult.gas_left = callResults->gas;
@@ -345,6 +419,14 @@ bool HostContext::setCode(bytes code)
 
             // dry code hash in account table
             m_executive->storage().setRow(m_tableName, ACCOUNT_CODE_HASH, std::move(codeHashEntry));
+
+            if (features().get(ledger::Features::Flag::feature_balance))
+            {
+                // update account's special code
+                Entry entryToDelete;
+                entryToDelete.setStatus(Entry::DELETED);
+                m_executive->storage().setRow(m_tableName, ACCOUNT_CODE, std::move(entryToDelete));
+            }
             return true;
         }
         return false;
@@ -459,6 +541,15 @@ h256 HostContext::codeHashAt(const std::string_view& address)
             return {0};
         }
         auto code = externalCodeRequest(address);
+
+        if (code.empty())
+        {
+            if (features().get(ledger::Features::Flag::bugfix_precompiled_codehash))
+            {
+                return {0};
+            }
+        }
+
         auto hash = hashImpl()->hash(code).asBytes();
         return h256(hash);
     }
@@ -565,34 +656,92 @@ std::optional<storage::Entry> HostContext::code()
 {
     if (blockVersion() >= uint32_t(bcos::protocol::BlockVersion::V3_1_VERSION))
     {
-        auto codehash = codeHash();
-
-        auto key = std::string_view((char*)codehash.data(), codehash.size());
-        auto entry = m_executive->storage().getRow(bcos::ledger::SYS_CODE_BINARY, key);
-        if (entry && !entry->get().empty())
+        auto hash = codeHash();
+        auto entry = m_executive->getCodeByHash(std::string_view((char*)hash.data(), hash.size()));
+        if (entry && entry.has_value() && !entry->get().empty())
         {
             return entry;
         }
     }
 
-    return m_executive->storage().getRow(m_tableName, ACCOUNT_CODE);
+    return m_executive->getCodeEntryFromContractTable(m_tableName);
 }
 
 crypto::HashType HostContext::codeHash()
 {
-    auto entry = m_executive->storage().getRow(m_tableName, ACCOUNT_CODE_HASH);
-    if (entry)
-    {
-        auto code = entry->getField(0);
-        return crypto::HashType(code, crypto::HashType::StringDataType::FromBinary);
-    }
-
-    return {};
+    return m_executive->getCodeHash(m_tableName);
 }
 
 bool HostContext::isWasm()
 {
     return m_executive->isWasm();
 }
+
+evmc_bytes32 HostContext::getBalance(const evmc_address* _addr)
+{
+    // address
+    auto addr2GetBalance = address2HexString(*_addr);
+
+    // input
+    auto codec = bcos::CodecWrapper(
+        m_executive->blockContext().hashHandler(), m_executive->blockContext().isWasm());
+    // get balance from account table
+    auto params = codec.encodeWithSig("getAccountBalance()");
+    auto tableName = getContractTableName(addr2GetBalance);
+    std::vector<std::string> tableNameVector = {tableName};
+    auto params2 = codec.encode(tableNameVector, params);
+    auto input = codec.encode(std::string(precompiled::ACCOUNT_ADDRESS), params2);
+
+    auto response = bcos::precompiled::externalRequest(m_executive, ref(input),
+        std::string(bcos::precompiled::BALANCE_PRECOMPILED_ADDRESS), myAddress(), addr2GetBalance,
+        false, false, gas(), true);
+
+    u256 result;
+    codec.decode(ref(response->data), result);
+
+    EXECUTIVE_LOG(DEBUG) << LOG_DESC("EVM getBalance successful")
+                         << LOG_KV("balance result", result);
+
+    // Put response to store in order to avoid data lost
+    m_responseStore.emplace_back(std::move(response));
+
+    return toEvmC(result);
+}
+
+bool HostContext::selfdestruct(const evmc_address* _addr, const evmc_address* _beneficiary)
+{
+    if (features().get(ledger::Features::Flag::feature_balance_policy1))
+    {
+        EXECUTIVE_LOG(DEBUG) << LOG_DESC("EVM selfdestruct disable transfer")
+                             << LOG_KV("reason", "feature_balance_policy1 is enabled");
+        return false;
+    }
+
+    auto value = fromEvmC(getBalance(_addr));
+    if (value > 0)
+    {
+        auto callParameters = std::make_unique<CallParameters>(CallParameters::MESSAGE);
+        callParameters->origin = bcos::precompiled::BALANCE_PRECOMPILED_ADDRESS;
+        callParameters->senderAddress = address2HexString(*_addr);
+        callParameters->receiveAddress = address2HexString(*_beneficiary);
+        callParameters->value = value;
+        callParameters->staticCall = staticCall();
+        callParameters->gas = gas();
+
+        auto callResults = m_executive->transferBalance(std::move(callParameters), 0, myAddress());
+        if (callResults->status != (int32_t)TransactionStatus::None)
+        {
+            EXECUTIVE_LOG(ERROR) << LOG_DESC("EVM selfdestruct failed")
+                                 << LOG_KV("type", callResults->type)
+                                 << LOG_KV("status", callResults->status)
+                                 << LOG_KV("message", callResults->message)
+                                 << LOG_KV("subAccount", address2HexString(*_addr))
+                                 << LOG_KV("addAccount", address2HexString(*_beneficiary))
+                                 << LOG_KV("value", value);
+        }
+    }
+    return false;  // just use default
+}
+
 
 }  // namespace bcos::executor

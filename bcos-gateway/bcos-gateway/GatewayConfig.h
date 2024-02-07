@@ -185,6 +185,8 @@ public:
     bool isValidIP(const std::string& _ip);
     // MB to bit
     int64_t doubleMBToBit(double _d);
+    bool isIPAddress(const std::string& _input);
+    bool isHostname(const std::string& _input);
     void hostAndPort2Endpoint(const std::string& _host, NodeIPEndpoint& _endpoint);
     void parseConnectedJson(const std::string& _json, std::set<NodeIPEndpoint>& _nodeIPEndpointSet);
     // loads p2p configuration items from the configuration file
@@ -245,6 +247,7 @@ public:
     std::string const& uuid() const { return m_uuid; }
     void setUUID(std::string const& _uuid) { m_uuid = _uuid; }
 
+    bool readonly() const { return m_readonly; }
     void setEnableRIPProtocol(bool _enableRIPProtocol) { m_enableRIPProtocol = _enableRIPProtocol; }
     bool enableRIPProtocol() const { return m_enableRIPProtocol; }
 
@@ -341,6 +344,8 @@ private:
     std::string m_nodePath;
     std::string m_nodeFileName;
     std::string m_configFile;
+
+    bool m_readonly = false;
 };
 
 }  // namespace bcos

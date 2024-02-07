@@ -20,6 +20,8 @@
 #pragma once
 #include <bcos-boostssl/httpserver/Common.h>
 
+#include <utility>
+
 namespace bcos::boostssl::http
 {
 // The queue for http request pipeline
@@ -36,7 +38,7 @@ private:
 public:
     explicit Queue(std::size_t _limit = 16) : m_limit(_limit) { m_allResp.reserve(m_limit); }
 
-    void setSender(std::function<void(HttpResponsePtr)> _sender) { m_sender = _sender; }
+    void setSender(std::function<void(HttpResponsePtr)> _sender) { m_sender = std::move(_sender); }
     std::function<void(HttpResponsePtr)> sender() const { return m_sender; }
 
     std::size_t limit() const { return m_limit; }
@@ -62,7 +64,7 @@ public:
     // enqueue and waiting called by the HTTP handler to send a response.
     void enqueue(HttpResponsePtr _msg)
     {
-        m_allResp.push_back(_msg);
+        m_allResp.push_back(std::move(_msg));
         // there was no previous work, start this one
         if (m_allResp.size() == 1)
         {
@@ -70,4 +72,4 @@ public:
         }
     }
 };
-}  // namespace bcos
+}  // namespace bcos::boostssl::http

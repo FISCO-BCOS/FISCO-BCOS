@@ -1,5 +1,4 @@
 #include "bcos-ledger/src/libledger/LedgerImpl.h"
-#include "bcos-ledger/src/libledger/LedgerImpl2.h"
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-concepts/Serialize.h>
 #include <bcos-concepts/ledger/Ledger.h>

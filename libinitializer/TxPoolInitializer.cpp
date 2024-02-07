@@ -47,7 +47,7 @@ TxPoolInitializer::TxPoolInitializer(bcos::tool::NodeConfig::Ptr _nodeConfig,
 
     m_txpool = txpoolFactory->createTxPool(m_nodeConfig->notifyWorkerNum(),
         m_nodeConfig->verifierWorkerNum(), m_nodeConfig->txsExpirationTime());
-
+    m_txpool->setCheckBlockLimit(m_nodeConfig->checkBlockLimit());
     if (m_nodeConfig->enableSendTxByTree())
     {
         INITIALIZER_LOG(INFO) << LOG_DESC("enableSendTxByTree");

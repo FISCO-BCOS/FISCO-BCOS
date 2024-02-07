@@ -103,7 +103,7 @@ private:
     std::string const c_fileSeparator = "/";
     std::shared_ptr<bcos::archive::ArchiveService> m_archiveService = nullptr;
 
-    std::function<void()> m_baselineSchedulerInitializerHolder;
+    std::function<std::shared_ptr<scheduler::SchedulerInterface>()> m_baselineSchedulerHolder;
     std::function<void(std::function<void(protocol::BlockNumber)>)>
         m_setBaselineSchedulerBlockNumberNotifier;
 };

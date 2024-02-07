@@ -1,3 +1,4 @@
+#include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
@@ -16,13 +17,16 @@ using namespace bcos;
 using namespace bcos::storage2;
 using namespace bcos::transaction_executor;
 using namespace bcos::transaction_scheduler;
+using namespace std::string_view_literals;
 
 struct MockExecutor
 {
     friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
-        bcos::transaction_executor::tag_t<bcos::transaction_executor::execute> /*unused*/,
+        bcos::transaction_executor::tag_t<
+            bcos::transaction_executor::executeTransaction> /*unused*/,
         MockExecutor& executor, auto& storage, protocol::BlockHeader const& blockHeader,
-        protocol::Transaction const& transaction, int contextID)
+        protocol::Transaction const& transaction, int contextID, ledger::LedgerConfig const&,
+        auto&& waitOperator)
     {
         co_return std::shared_ptr<bcos::protocol::TransactionReceipt>();
     }
@@ -70,9 +74,11 @@ BOOST_AUTO_TEST_CASE(simple)
 
         multiLayerStorage.newMutable();
         auto view = multiLayerStorage.fork(true);
-        auto receipts =
-            co_await bcos::transaction_scheduler::execute(scheduler, view, executor, blockHeader,
-                transactions | RANGES::views::transform([](auto& ptr) -> auto& { return *ptr; }));
+        ledger::LedgerConfig ledgerConfig;
+        auto receipts = co_await bcos::transaction_scheduler::executeBlock(scheduler, view,
+            executor, blockHeader,
+            transactions | RANGES::views::transform([](auto& ptr) -> auto& { return *ptr; }),
+            ledgerConfig);
         BOOST_CHECK_EQUAL(transactions.size(), receipts.size());
 
         co_return;
@@ -84,9 +90,11 @@ constexpr static size_t MOCK_USER_COUNT = 1000;
 struct MockConflictExecutor
 {
     friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
-        bcos::transaction_executor::tag_t<bcos::transaction_executor::execute> /*unused*/,
+        bcos::transaction_executor::tag_t<
+            bcos::transaction_executor::executeTransaction> /*unused*/,
         MockConflictExecutor& executor, auto& storage, protocol::BlockHeader const& blockHeader,
-        protocol::Transaction const& transaction, int contextID)
+        protocol::Transaction const& transaction, int contextID, ledger::LedgerConfig const&,
+        auto&& waitOperator)
     {
         auto input = transaction.input();
         auto inputNum =
@@ -96,14 +104,14 @@ struct MockConflictExecutor
         auto toAddress = std::to_string((inputNum + (MOCK_USER_COUNT / 2)) % MOCK_USER_COUNT);
 
         // Read fromKey and -1
-        StateKey fromKey{"t_test", fromAddress};
+        StateKey fromKey{"t_test"sv, fromAddress};
         auto fromEntry = co_await storage2::readOne(storage, fromKey);
         fromEntry->set(
             boost::lexical_cast<std::string>(boost::lexical_cast<int>(fromEntry->get()) - 1));
         co_await storage2::writeOne(storage, fromKey, *fromEntry);
 
         // Read toKey and +1
-        StateKey toKey{"t_test", toAddress};
+        StateKey toKey{"t_test"sv, toAddress};
         auto toEntry = co_await storage2::readOne(storage, toKey);
         toEntry->set(
             boost::lexical_cast<std::string>(boost::lexical_cast<int>(toEntry->get()) + 1));
@@ -125,7 +133,7 @@ BOOST_AUTO_TEST_CASE(conflict)
         constexpr static int INITIAL_VALUE = 100000;
         for (auto i : RANGES::views::iota(0LU, MOCK_USER_COUNT))
         {
-            StateKey key{"t_test", boost::lexical_cast<std::string>(i)};
+            StateKey key{"t_test"sv, boost::lexical_cast<std::string>(i)};
             storage::Entry entry;
             entry.set(boost::lexical_cast<std::string>(INITIAL_VALUE));
             co_await storage2::writeOne(multiLayerStorage.mutableStorage(), key, std::move(entry));
@@ -148,12 +156,13 @@ BOOST_AUTO_TEST_CASE(conflict)
         auto transactionRefs =
             transactions | RANGES::views::transform([](auto& ptr) -> auto& { return *ptr; });
         auto view = multiLayerStorage.fork(true);
-        auto receipts = co_await bcos::transaction_scheduler::execute(
-            scheduler, view, executor, blockHeader, transactionRefs);
+        ledger::LedgerConfig ledgerConfig;
+        auto receipts = co_await bcos::transaction_scheduler::executeBlock(
+            scheduler, view, executor, blockHeader, transactionRefs, ledgerConfig);
 
         for (auto i : RANGES::views::iota(0LU, MOCK_USER_COUNT))
         {
-            StateKey key{"t_test", boost::lexical_cast<std::string>(i)};
+            StateKey key{"t_test"sv, boost::lexical_cast<std::string>(i)};
             auto entry = co_await storage2::readOne(multiLayerStorage.mutableStorage(), key);
             BOOST_CHECK_EQUAL(boost::lexical_cast<int>(entry->get()), INITIAL_VALUE);
         }

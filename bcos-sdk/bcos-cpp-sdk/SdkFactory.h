@@ -18,6 +18,7 @@
  * @date 2021-08-21
  */
 #pragma once
+#include "./rpc/JsonRpcServiceImpl.h"
 #include <bcos-boostssl/websocket/WsConfig.h>
 #include <bcos-boostssl/websocket/WsService.h>
 #include <bcos-cpp-sdk/Sdk.h>
@@ -26,37 +27,34 @@
 #include <bcos-cpp-sdk/rpc/JsonRpcImpl.h>
 #include <bcos-cpp-sdk/ws/Service.h>
 #include <bcos-utilities/ThreadPool.h>
+#include <utility>
 
-namespace bcos
+namespace bcos::cppsdk
 {
-namespace cppsdk
-{
-class SdkFactory : public std::enable_shared_from_this<SdkFactory>
+class SdkFactory
 {
 public:
-    using Ptr = std::shared_ptr<SdkFactory>;
-
     SdkFactory();
+    ~SdkFactory() = default;
+    SdkFactory(const SdkFactory&) = delete;
+    SdkFactory& operator=(const SdkFactory&) = delete;
+    SdkFactory(SdkFactory&&) = delete;
+    SdkFactory& operator=(SdkFactory&&) = delete;
 
-public:
     bcos::cppsdk::service::Service::Ptr buildService(
         std::shared_ptr<bcos::boostssl::ws::WsConfig> _config);
     bcos::cppsdk::jsonrpc::JsonRpcImpl::Ptr buildJsonRpc(
-        bcos::cppsdk::service::Service::Ptr _service);
-    bcos::cppsdk::amop::AMOP::Ptr buildAMOP(bcos::cppsdk::service::Service::Ptr _service);
-    bcos::cppsdk::event::EventSub::Ptr buildEventSub(bcos::cppsdk::service::Service::Ptr _service);
+        const bcos::cppsdk::service::Service::Ptr& _service,
+        bool _sendRequestToHighestBlockNode = true);
+    bcos::cppsdk::jsonrpc::JsonRpcServiceImpl::Ptr buildJsonRpcService(
+        const bcos::cppsdk::jsonrpc::JsonRpcImpl::Ptr& _jsonRpc);
+    bcos::cppsdk::amop::AMOP::Ptr buildAMOP(const bcos::cppsdk::service::Service::Ptr& _service);
+    bcos::cppsdk::event::EventSub::Ptr buildEventSub(
+        const bcos::cppsdk::service::Service::Ptr& _service);
 
-public:
     bcos::cppsdk::Sdk::UniquePtr buildSdk(
-        std::shared_ptr<bcos::boostssl::ws::WsConfig> _config = nullptr);
+        std::shared_ptr<bcos::boostssl::ws::WsConfig> _config = nullptr,
+        bool _sendRequestToHighestBlockNode = true);
     bcos::cppsdk::Sdk::UniquePtr buildSdk(const std::string& _configFile);
-
-public:
-    std::shared_ptr<bcos::boostssl::ws::WsConfig> config() const { return m_config; }
-    void setConfig(std::shared_ptr<bcos::boostssl::ws::WsConfig> _config) { m_config = _config; }
-
-private:
-    std::shared_ptr<bcos::boostssl::ws::WsConfig> m_config;
 };
-}  // namespace cppsdk
-}  // namespace bcos
+}  // namespace bcos::cppsdk

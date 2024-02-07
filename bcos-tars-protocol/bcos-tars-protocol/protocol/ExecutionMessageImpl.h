@@ -88,6 +88,37 @@ public:
     std::string_view abi() const override { return m_inner()->abi; }
     void setABI(std::string abi) override { m_inner()->abi = abi; }
 
+    // balance transfer
+    std::string_view value() const override { return m_inner()->value; }
+    void setValue(std::string value) override { m_inner()->value = value; }
+
+    std::string_view gasPrice() const override { return m_inner()->gasPrice; }
+    void setGasPrice(std::string gasPrice) override { m_inner()->gasPrice = gasPrice; }
+
+    int64_t gasLimit() const override { return m_inner()->gasLimit; }
+    void setGasLimit(int64_t gasLimit) override { m_inner()->gasLimit = gasLimit; }
+
+    std::string_view maxFeePerGas() const override { return m_inner()->maxFeePerGas; }
+    void setMaxFeePerGas(std::string maxFeePerGas) override
+    {
+        m_inner()->maxFeePerGas = maxFeePerGas;
+    }
+
+    std::string_view maxPriorityFeePerGas() const override
+    {
+        return m_inner()->maxPriorityFeePerGas;
+    }
+    void setMaxPriorityFeePerGas(std::string maxPriorityFeePerGas) override
+    {
+        m_inner()->maxPriorityFeePerGas = maxPriorityFeePerGas;
+    }
+
+    std::string_view effectiveGasPrice() const override { return m_inner()->effectiveGasPrice; }
+    void setEffectiveGasPrice(std::string effectiveGasPrice) override
+    {
+        m_inner()->effectiveGasPrice = effectiveGasPrice;
+    }
+
     int32_t depth() const override { return m_inner()->depth; }
     void setDepth(int32_t depth) override { m_inner()->depth = depth; }
 

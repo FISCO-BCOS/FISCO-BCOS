@@ -43,6 +43,7 @@
 #include "../precompiled/extension/AccountManagerPrecompiled.h"
 #include "../precompiled/extension/AccountPrecompiled.h"
 #include "../precompiled/extension/AuthManagerPrecompiled.h"
+#include "../precompiled/extension/BalancePrecompiled.h"
 #include "../precompiled/extension/ContractAuthMgrPrecompiled.h"
 #include "../precompiled/extension/DagTransferPrecompiled.h"
 #include "../precompiled/extension/GroupSigPrecompiled.h"
@@ -51,6 +52,7 @@
 #include "../precompiled/extension/UserPrecompiled.h"
 #include "../precompiled/extension/ZkpPrecompiled.h"
 #include "../vm/Precompiled.h"
+
 #include <array>
 #include <cstring>
 
@@ -305,6 +307,12 @@ void TransactionExecutor::initEvmEnvironment()
         CpuHeavyPrecompiled::registerPrecompiled(m_precompiled, m_hashImpl);
         SmallBankPrecompiled::registerPrecompiled(m_precompiled, m_hashImpl);
     }
+
+    m_precompiled->insert(BALANCE_PRECOMPILED_ADDRESS,
+        std::make_shared<BalancePrecompiled>(m_hashImpl),
+        [](uint32_t version, bool isAuthCheck, ledger::Features const& features) {
+            return features.get(ledger::Features::Flag::feature_balance_precompiled);
+        });
 }
 
 void TransactionExecutor::initWasmEnvironment()
@@ -362,6 +370,12 @@ void TransactionExecutor::initWasmEnvironment()
         CpuHeavyPrecompiled::registerPrecompiled(m_precompiled, m_hashImpl);
         SmallBankPrecompiled::registerPrecompiled(m_precompiled, m_hashImpl);
     }
+    // according to feature flag to register precompiled
+    m_precompiled->insert(BALANCE_PRECOMPILED_NAME,
+        std::make_shared<BalancePrecompiled>(m_hashImpl),
+        [](uint32_t, bool, ledger::Features const& features) {
+            return features.get(ledger::Features::Flag::feature_balance_precompiled);
+        });
 }
 
 void TransactionExecutor::initTestPrecompiledTable(storage::StorageInterface::Ptr storage)
@@ -630,6 +644,7 @@ void TransactionExecutor::dmcCall(bcos::protocol::ExecutionMessage::UniquePtr in
     }
     case protocol::ExecutionMessage::FINISHED:
     case protocol::ExecutionMessage::REVERT:
+    case protocol::ExecutionMessage::PRE_FINISH:
     {
         tbb::concurrent_hash_map<std::tuple<int64_t, int64_t>, CallState, HashCombine>::accessor it;
         m_calledContext->find(it, std::tuple{input->contextID(), input->seq()});
@@ -798,6 +813,7 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
     }
     case protocol::ExecutionMessage::FINISHED:
     case protocol::ExecutionMessage::REVERT:
+    case protocol::ExecutionMessage::PRE_FINISH:
     {
         tbb::concurrent_hash_map<std::tuple<int64_t, int64_t>, CallState, HashCombine>::accessor it;
         m_calledContext->find(it, std::tuple{input->contextID(), input->seq()});
@@ -950,6 +966,7 @@ void TransactionExecutor::executeTransactionsInternal(std::string contractAddres
             case bcos::protocol::ExecutionMessage::REVERT:
             case bcos::protocol::ExecutionMessage::FINISHED:
             case bcos::protocol::ExecutionMessage::KEY_LOCK:
+            case bcos::protocol::ExecutionMessage::PRE_FINISH:
             {
                 callParametersList->at(i) = createCallParameters(*params, params->staticCall());
                 break;
@@ -967,25 +984,17 @@ void TransactionExecutor::executeTransactionsInternal(std::string contractAddres
         }
     });
 
-    if (isStaticCall)
-    {
-        EXECUTOR_NAME_LOG(FATAL)
-            << "executeTransactionsInternal() only handle non static transactions but "
-               "receive static call";
-        assert(false);
-    }
-
     auto prepareT = utcTime() - startT;
     startT = utcTime();
 
     if (!txHashes->empty())
     {
-        m_txpool->asyncFillBlock(txHashes,
-            [this, startT, useCoroutine, contractAddress, indexes = std::move(indexes),
-                fillInputs = std::move(fillInputs),
-                callParametersList = std::move(callParametersList), callback = std::move(callback),
-                txHashes,
-                blockNumber](Error::Ptr error, protocol::TransactionsPtr transactions) mutable {
+        m_txpool->asyncFillBlock(
+            txHashes, [this, startT, useCoroutine, contractAddress, indexes = std::move(indexes),
+                          fillInputs = std::move(fillInputs),
+                          callParametersList = std::move(callParametersList),
+                          callback = std::move(callback), txHashes, blockNumber](
+                          Error::Ptr error, protocol::ConstTransactionsPtr transactions) mutable {
                 auto fillTxsT = (utcTime() - startT);
 
                 if (!m_isRunning)
@@ -1072,6 +1081,16 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
         bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
         _callback)
 {
+    if (!m_isWasm)
+    {
+        // padding the address
+        constexpr static auto addressSize = Address::SIZE * 2;
+        if (contractAddress.size() < addressSize) [[unlikely]]
+        {
+            contractAddress.insert(0, addressSize - contractAddress.size(), '0');
+        }
+    }
+
     executeTransactionsInternal(
         std::move(contractAddress), std::move(inputs), true, std::move(_callback));
 }
@@ -1115,7 +1134,8 @@ void TransactionExecutor::getHash(bcos::protocol::BlockNumber number,
     // remove suicides beforehand
     m_blockContext->killSuicides();
     auto start = utcTime();
-    auto hash = last.storage->hash(m_hashImpl);
+    auto hash = last.storage->hash(m_hashImpl,
+        m_blockContext->features().get(ledger::Features::Flag::bugfix_statestorage_hash));
     auto end = utcTime();
     EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(number) << "GetTableHashes success"
                             << LOG_KV("hash", hash.hex()) << LOG_KV("time(ms)", (end - start));
@@ -1212,8 +1232,8 @@ void TransactionExecutor::dagExecuteTransactions(
         m_txpool->asyncFillBlock(txHashes,
             [this, startT, indexes = std::move(indexes), fillInputs = std::move(fillInputs),
                 callParametersList = std::move(callParametersList), callback = std::move(callback),
-                txHashes,
-                blockNumber](Error::Ptr error, protocol::TransactionsPtr transactions) mutable {
+                txHashes, blockNumber](
+                Error::Ptr error, protocol::ConstTransactionsPtr transactions) mutable {
                 auto fillTxsT = utcTime() - startT;
 
                 if (!m_isRunning)
@@ -1504,7 +1524,7 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                     auto executiveFactory = std::make_shared<ExecutiveFactory>(*m_blockContext,
                         m_evmPrecompiled, m_precompiled, m_staticPrecompiled, *m_gasInjector);
                     auto executive = executiveFactory->build(
-                        params->codeAddress, params->contextID, params->seq, false);
+                        params->codeAddress, params->contextID, params->seq, ExecutiveType::common);
                     auto p = executive->getPrecompiled(params->receiveAddress);
                     if (p)
                     {
@@ -2129,7 +2149,7 @@ void TransactionExecutor::getABI(
     {
         auto codeHash = getCodeHash(contractTableName, stateStorage);
         // asyncGetRow key should not be empty
-        std::string abiKey = codeHash.empty() ? ACCOUNT_ABI : codeHash;
+        std::string abiKey = codeHash.empty() ? std::string(ACCOUNT_ABI) : codeHash;
         // try to get abi from SYS_CONTRACT_ABI first
         EXECUTOR_LOG(TRACE) << LOG_DESC("get abi") << LOG_KV("abiKey", abiKey);
 
@@ -2269,7 +2289,8 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
 
         m_txpool->asyncFillBlock(std::move(txHashes),
             [this, useCoroutine, inputPtr = input.release(), blockContext = std::move(blockContext),
-                callback](Error::Ptr error, bcos::protocol::TransactionsPtr transactions) mutable {
+                callback](
+                Error::Ptr error, bcos::protocol::ConstTransactionsPtr transactions) mutable {
                 if (!m_isRunning)
                 {
                     callback(BCOS_ERROR_UNIQUE_PTR(
@@ -2346,6 +2367,7 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
     case bcos::protocol::ExecutionMessage::MESSAGE:
     case bcos::protocol::ExecutionMessage::REVERT:
     case bcos::protocol::ExecutionMessage::FINISHED:
+    case bcos::protocol::ExecutionMessage::PRE_FINISH:
     case bcos::protocol::ExecutionMessage::KEY_LOCK:
     {
         auto callParameters = createCallParameters(*input, input->staticCall());
@@ -2421,6 +2443,19 @@ std::unique_ptr<ExecutionMessage> TransactionExecutor::toExecutionResult(
     return message;
 }
 
+inline std::string value2String(u256& value)
+{
+    if (value > 0)
+    {
+        return "0x" + value.str(256, std::ios_base::hex);
+    }
+    else
+    {
+        return {};
+    }
+}
+
+
 std::unique_ptr<protocol::ExecutionMessage> TransactionExecutor::toExecutionResult(
     std::unique_ptr<CallParameters> params)
 {
@@ -2453,12 +2488,30 @@ std::unique_ptr<protocol::ExecutionMessage> TransactionExecutor::toExecutionResu
         message->setTo(std::move(params->senderAddress));
         message->setType(ExecutionMessage::REVERT);
         break;
+    case CallParameters::PRE_FINISH:
+        // Response message, Swap the from and to
+        message->setFrom(std::move(params->receiveAddress));
+        message->setTo(std::move(params->senderAddress));
+        message->setType(ExecutionMessage::PRE_FINISH);
+        break;
     }
 
     message->setContextID(params->contextID);
     message->setSeq(params->seq);
     message->setOrigin(std::move(params->origin));
     message->setGasAvailable(params->gas);
+
+    message->setValue(value2String(params->value));
+    // message->setGasLimit(params->gasLimit); // Notice: gasLimit will get from storage when
+    // execute
+
+    // Notice: gasPrice should pass here,
+    // could not fetch from storage during execution for future user will set in a tx
+    message->setGasPrice(value2String(params->gasPrice));
+    message->setMaxFeePerGas(value2String(params->maxFeePerGas));
+    message->setMaxPriorityFeePerGas(value2String(params->maxPriorityFeePerGas));
+    message->setEffectiveGasPrice(value2String(params->effectiveGasPrice));
+
     message->setData(std::move(params->data));
     message->setStaticCall(params->staticCall);
     message->setCreate(params->create);
@@ -2523,7 +2576,8 @@ void TransactionExecutor::removeCommittedState()
         if (it != m_stateStorages.end())
         {
             EXECUTOR_NAME_LOG(INFO)
-                << "Set state number, " << it->number << " prev to cachedStorage";
+                << "Set state number, " << it->number << " prev to cachedStorage"
+                << LOG_KV("stateStorageSize", m_stateStorages.size());
             it->storage->setPrev(m_cachedStorage);
         }
     }
@@ -2579,6 +2633,11 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
             ExecuteError::EXECUTE_ERROR, "Unexpected execution message type: " +
                                              boost::lexical_cast<std::string>(input.type())));
     }
+    case ExecutionMessage::PRE_FINISH:
+    {
+        // just set to finish type
+        callParameters->type = CallParameters::FINISHED;
+    }
     }
 
     callParameters->contextID = input.contextID();
@@ -2588,7 +2647,12 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     {
         // padding zero
         callParameters->origin = std::string(addressSize - input.origin().size(), '0');
-        callParameters->senderAddress = std::string(addressSize - input.from().size(), '0');
+        // NOTE: if wasm and use dmc static call external call, should not padding zero, because it
+        // is contract address
+        if (!(m_isWasm && input.origin() != input.from())) [[unlikely]]
+        {
+            callParameters->senderAddress = std::string(addressSize - input.from().size(), '0');
+        }
     }
     callParameters->origin += input.origin();
     callParameters->senderAddress += input.from();
@@ -2630,6 +2694,12 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
                 0, addressSize - callParameters->receiveAddress.size(), '0');
         }
     }
+    callParameters->value = u256(input.value());
+    callParameters->gasPrice = u256(input.gasPrice());
+    callParameters->gasLimit = input.gasLimit();
+    callParameters->effectiveGasPrice = u256(input.effectiveGasPrice());
+    callParameters->maxFeePerGas = u256(input.maxFeePerGas());
+    callParameters->maxPriorityFeePerGas = u256(input.maxPriorityFeePerGas());
 
     return callParameters;
 }
@@ -2659,6 +2729,12 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->delegateCall = false;
     callParameters->delegateCallCode = bytes();
     callParameters->delegateCallSender = "";
+    callParameters->value = u256(input.value());
+    callParameters->gasPrice = u256(input.gasPrice());
+    callParameters->gasLimit = input.gasLimit();
+    callParameters->maxFeePerGas = u256(input.maxFeePerGas());
+    callParameters->maxPriorityFeePerGas = u256(input.maxPriorityFeePerGas());
+
 
     if (!m_isWasm && !callParameters->create)
     {
@@ -2677,6 +2753,7 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     return callParameters;
 }
 
+
 void TransactionExecutor::executeTransactionsWithCriticals(
     critical::CriticalFieldsInterface::Ptr criticals,
     gsl::span<std::unique_ptr<CallParameters>> inputs,
@@ -2693,8 +2770,8 @@ void TransactionExecutor::executeTransactionsWithCriticals(
         auto& input = inputs[id];
         auto executiveFactory = std::make_shared<ExecutiveFactory>(
             *m_blockContext, m_evmPrecompiled, m_precompiled, m_staticPrecompiled, *m_gasInjector);
-        auto executive =
-            executiveFactory->build(input->codeAddress, input->contextID, input->seq, false);
+        auto executive = executiveFactory->build(
+            input->codeAddress, input->contextID, input->seq, ExecutiveType::common);
 
         EXECUTOR_NAME_LOG(TRACE) << LOG_BADGE("executeTransactionsWithCriticals")
                                  << LOG_DESC("Start transaction")

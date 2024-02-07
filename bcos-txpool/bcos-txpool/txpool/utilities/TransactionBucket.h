@@ -1,7 +1,7 @@
-#include "bcos-crypto/bcos-crypto/interfaces/crypto/CommonType.h"
-#include "bcos-framework/bcos-framework/protocol/Transaction.h"
-#include "bcos-utilities/bcos-utilities/BucketMap.h"
-#include "bcos-utilities/bcos-utilities/FixedBytes.h"
+#include "bcos-crypto/interfaces/crypto/CommonType.h"
+#include "bcos-framework/protocol/Transaction.h"
+#include "bcos-utilities/BucketMap.h"
+#include "bcos-utilities/FixedBytes.h"
 #include "boost/multi_index/hashed_index.hpp"
 #include "boost/multi_index/mem_fun.hpp"
 #include "boost/multi_index/member.hpp"
@@ -45,18 +45,18 @@ public:
     {
     public:
         IteratorImpl(typename Container::nth_index<0>::type::iterator& it)
-          : first(it->txHash),
+          : m_iterator(it),
+            first(m_iterator->txHash),
             // we assume that _transaction is not indexed so we can cast it to non-const
-            second(const_cast<bcos::protocol::Transaction::Ptr&>(it->transaction)),
-            m_iterator(it)
+            second(const_cast<bcos::protocol::Transaction::Ptr&>(m_iterator->transaction))
         {}
 
         IteratorImpl(const bcos::crypto::HashType& _first,
             const bcos::protocol::Transaction::Ptr& _transaction)
-          : first(_first),
+          : m_iterator(),
+            first(_first),
             // we assume that _transaction is not indexed so we can cast it to non-const
-            second(const_cast<bcos::protocol::Transaction::Ptr&>(_transaction)),
-            m_iterator()
+            second(const_cast<bcos::protocol::Transaction::Ptr&>(_transaction))
         {}
 
         friend bool operator==(
@@ -71,13 +71,13 @@ public:
 
         bool operator==(const IteratorImpl& other) const { return m_iterator == other.m_iterator; }
 
-        Container::nth_index<0>::type::iterator getIterator() const { return m_iterator; }
-
-        const bcos::crypto::HashType& first;
-        bcos::protocol::Transaction::Ptr& second;
 
     private:
         typename Container::nth_index<0>::type::iterator m_iterator;
+
+    public:
+        const bcos::crypto::HashType& first;
+        bcos::protocol::Transaction::Ptr& second;
     };
     using iterator = std::shared_ptr<IteratorImpl>;
 
@@ -133,7 +133,7 @@ public:
     {
         return multiIndexMap.get<0>().find(key) != multiIndexMap.get<0>().end();
     }
-    void erase(std::shared_ptr<IteratorImpl> it_ptr)
+    void erase(std::shared_ptr<IteratorImpl>& it_ptr)
     {
         auto eraseCount = multiIndexMap.get<0>().erase(it_ptr->first);
         if (eraseCount == 0)
@@ -141,7 +141,6 @@ public:
             if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
             {
                 TXPOOL_LOG(TRACE) << LOG_DESC("bucket erase failed")
-                                  << LOG_KV("txHash", it_ptr->first)
                                   << LOG_KV("eraseCount", eraseCount);
             }
         }
@@ -150,7 +149,6 @@ public:
             if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
             {
                 TXPOOL_LOG(TRACE) << LOG_DESC("bucket erase success")
-                                  << LOG_KV("txHash", it_ptr->first)
                                   << LOG_KV("eraseCount", eraseCount);
             }
         }

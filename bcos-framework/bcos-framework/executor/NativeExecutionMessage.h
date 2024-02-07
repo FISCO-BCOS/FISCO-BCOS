@@ -39,6 +39,31 @@ public:
     std::string_view abi() const override { return m_abi; }
     void setABI(std::string abi) override { m_abi = std::move(abi); }
 
+    std::string_view value() const override { return m_value; }
+    void setValue(std::string value) override { m_value = std::move(value); }
+
+    std::string_view gasPrice() const override { return m_gasPrice; }
+    void setGasPrice(std::string gasPrice) override { m_gasPrice = std::move(gasPrice); }
+
+    int64_t gasLimit() const override { return m_gasLimit; }
+    void setGasLimit(int64_t gasLimit) override { m_gasLimit = gasLimit; }
+
+    std::string_view maxFeePerGas() const override { return m_maxFeePerGas; }
+    void setMaxFeePerGas(std::string maxFeePerGas) override
+    {
+        m_maxFeePerGas = std::move(maxFeePerGas);
+    }
+    std::string_view maxPriorityFeePerGas() const override { return m_maxPriorityFeePerGas; }
+    void setMaxPriorityFeePerGas(std::string maxPriorityFeePerGas) override
+    {
+        m_maxPriorityFeePerGas = std::move(maxPriorityFeePerGas);
+    }
+    std::string_view effectiveGasPrice() const override { return m_effectiveGasPrice; }
+    void setEffectiveGasPrice(std::string effectiveGasPrice) override
+    {
+        m_effectiveGasPrice = std::move(effectiveGasPrice);
+    }
+
     int32_t depth() const override { return m_depth; }
     void setDepth(int32_t depth) override { m_depth = depth; }
 
@@ -143,6 +168,13 @@ public:
     std::string m_from;
     std::string m_to;
     std::string m_abi;
+
+    std::string m_value;
+    std::string m_gasPrice;
+    int64_t m_gasLimit;
+    std::string m_maxFeePerGas;
+    std::string m_maxPriorityFeePerGas;
+    std::string m_effectiveGasPrice;
 
     int64_t m_gasAvailable = 0;
     bcos::bytes m_data;

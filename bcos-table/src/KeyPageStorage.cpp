@@ -361,7 +361,8 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
     KeyPage_LOG(INFO) << LOG_DESC("parallelTraverse") << LOG_KV("size", m_size);
 }
 
-auto KeyPageStorage::hash(const bcos::crypto::Hash::Ptr& hashImpl) const -> crypto::HashType
+auto KeyPageStorage::hash(const bcos::crypto::Hash::Ptr& hashImpl, bool /*useHashV310*/) const
+    -> crypto::HashType
 {
     bcos::crypto::HashType pagesHash(0);
     bcos::crypto::HashType entriesHash(0);

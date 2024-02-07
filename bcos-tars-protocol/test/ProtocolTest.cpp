@@ -23,6 +23,8 @@
 #include <gsl/span>
 #include <memory>
 
+using namespace std::string_view_literals;
+
 namespace bcostars
 {
 namespace test
@@ -66,6 +68,16 @@ inline std::vector<bcos::bytes> fakeSealerList(
         sealerList.emplace_back(*(keyPair->publicKey()->encode()));
     }
     return sealerList;
+}
+
+BOOST_AUTO_TEST_CASE(strAndLexical)
+{
+    bcos::u256 num(1234567890);
+
+    auto str1 = boost::lexical_cast<std::string>(num);
+    auto str2 = num.backend().str({}, {});
+
+    BOOST_CHECK_EQUAL(str1, str2);
 }
 
 BOOST_AUTO_TEST_CASE(transaction)
@@ -630,7 +642,7 @@ BOOST_AUTO_TEST_CASE(testExecutionMessage)
     executionMsg->setType((bcos::protocol::ExecutionMessage::Type)type);
     executionMsg->transactionHash();
 
-    auto txsHash = cryptoSuite->hash("###abc");
+    auto txsHash = cryptoSuite->hash("###abc"sv);
     executionMsg->setTransactionHash(txsHash);
     int64_t contextID = 10000;
     executionMsg->setContextID(contextID);

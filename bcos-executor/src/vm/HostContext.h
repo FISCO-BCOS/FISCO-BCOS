@@ -115,10 +115,12 @@ public:
     void log(h256s&& _topics, bytesConstRef _data);
 
     /// ------ get interfaces related to HostContext------
-    std::string_view myAddress() const;
+    virtual std::string_view myAddress() const;
     virtual std::string_view caller() const { return m_callParameters->senderAddress; }
     std::string_view origin() const { return m_callParameters->origin; }
     std::string_view codeAddress() const { return m_callParameters->codeAddress; }
+    std::string_view receiveAddress() const { return m_callParameters->receiveAddress; }
+
     bytes_view data() const
     {
         return bytes_view(m_callParameters->data.data(), m_callParameters->data.size());
@@ -130,6 +132,8 @@ public:
     bool isCreate() const { return m_callParameters->create; }
     bool staticCall() const { return m_callParameters->staticCall; }
     int64_t gas() const { return m_callParameters->gas; }
+    u256 gasPrice() const { return m_callParameters->gasPrice; }
+    u256 value() const { return m_callParameters->value; }
     void suicide()
     {
         m_executive->setContractTableChanged();
@@ -140,6 +144,9 @@ public:
             blockContext.suicide(m_tableName);
         }
     }
+
+    evmc_bytes32 getBalance(const evmc_address* _addr);
+    bool selfdestruct(const evmc_address* _addr, const evmc_address* _beneficiary);
 
     CallParameters::UniquePtr&& takeCallParameters()
     {
@@ -159,6 +166,21 @@ public:
     static crypto::Hash::Ptr& hashImpl() { return GlobalHashImpl::g_hashImpl; }
 
     bool isWasm();
+    const std::shared_ptr<TransactionExecutive>& getTransactionExecutive() const
+    {
+        return m_executive;
+    }
+
+    bcos::bytes codeAt(const std::string_view& address) { return externalCodeRequest(address); }
+    const bcos::ledger::Features& features() const
+    {
+        return m_executive->blockContext().features();
+    }
+
+    std::string getContractTableName(const std::string_view& _address)
+    {
+        return m_executive->getContractTableName(_address, isWasm(), isCreate());
+    }
 
 protected:
     const CallParameters::UniquePtr& getCallParameters() const { return m_callParameters; }

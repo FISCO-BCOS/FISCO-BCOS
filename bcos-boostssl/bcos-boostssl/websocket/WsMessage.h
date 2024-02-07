@@ -18,7 +18,10 @@
  * @date 2021-07-28
  */
 #pragma once
-
+#if defined(__linux__)
+// Fix for Boost UUID on old kernel version Linux.  See https://github.com/boostorg/uuid/issues/91
+#define BOOST_UUID_RANDOM_PROVIDER_FORCE_POSIX
+#endif
 #include "bcos-boostssl/websocket/Common.h"
 #include <bcos-boostssl/interfaces/MessageFace.h>
 #include <bcos-framework/protocol/Protocol.h>
@@ -81,7 +84,10 @@ public:
     std::string const& seq() const override { return m_seq; }
     void setSeq(std::string _seq) override { m_seq = _seq; }
     std::shared_ptr<bcos::bytes> payload() const override { return m_payload; }
-    void setPayload(std::shared_ptr<bcos::bytes> _payload) override { m_payload = _payload; }
+    void setPayload(std::shared_ptr<bcos::bytes> _payload) override
+    {
+        m_payload = std::move(_payload);
+    }
     uint16_t ext() const override { return m_ext; }
     void setExt(uint16_t _ext) override { m_ext = _ext; }
 
@@ -91,9 +97,9 @@ public:
 
     bool isRespPacket() const override
     {
-        return (m_ext & bcos::protocol::MessageExtFieldFlag::Response) != 0;
+        return (m_ext & bcos::protocol::MessageExtFieldFlag::RESPONSE) != 0;
     }
-    void setRespPacket() override { m_ext |= bcos::protocol::MessageExtFieldFlag::Response; }
+    void setRespPacket() override { m_ext |= bcos::protocol::MessageExtFieldFlag::RESPONSE; }
 
     uint32_t length() const override { return m_length; }
 

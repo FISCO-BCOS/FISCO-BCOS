@@ -48,6 +48,28 @@ public:
             [m_transaction = bcostars::Transaction()]() mutable { return &m_transaction; });
 
         transaction->decode(txData);
+        // check value or gasPrice or maxFeePerGas or maxPriorityFeePerGas is hex string
+        if (transaction->version() == int32_t(bcos::protocol::TransactionVersion::V1_VERSION))
+        {
+            if (!bcos::isHexStringV2(transaction->mutableInner().data.value) ||
+                !bcos::isHexStringV2(transaction->mutableInner().data.gasPrice) ||
+                !bcos::isHexStringV2(transaction->mutableInner().data.maxFeePerGas) ||
+                !bcos::isHexStringV2(transaction->mutableInner().data.maxPriorityFeePerGas))
+            {
+                BCOS_LOG(INFO) << LOG_DESC(
+                                      "the transaction value or gasPrice or maxFeePerGas or "
+                                      "maxPriorityFeePerGas is not hex string")
+                               << LOG_KV("value", transaction->mutableInner().data.value)
+                               << LOG_KV("gasPrice", transaction->mutableInner().data.gasPrice)
+                               << LOG_KV(
+                                      "maxFeePerGas", transaction->mutableInner().data.maxFeePerGas)
+                               << LOG_KV("maxPriorityFeePerGas",
+                                      transaction->mutableInner().data.maxPriorityFeePerGas);
+                BOOST_THROW_EXCEPTION(
+                    std::invalid_argument("transaction value or gasPrice or maxFeePerGas or "
+                                          "maxPriorityFeePerGas is not hex string"));
+            }
+        }
 
         auto originDataHash = std::move(transaction->mutableInner().dataHash);
         transaction->mutableInner().dataHash.clear();
@@ -81,7 +103,9 @@ public:
 
     std::shared_ptr<bcos::protocol::Transaction> createTransaction(int32_t _version,
         std::string _to, bcos::bytes const& _input, std::string const& _nonce, int64_t _blockLimit,
-        std::string _chainId, std::string _groupId, int64_t _importTime, std::string _abi = "") override
+        std::string _chainId, std::string _groupId, int64_t _importTime, std::string _abi = "",
+        std::string _value = "", std::string _gasPrice = "", int64_t _gasLimit = 0,
+        std::string _maxFeePerGas = "", std::string _maxPriorityFeePerGas = "") override
     {
         auto transaction = std::make_shared<bcostars::protocol::TransactionImpl>(
             [m_transaction = bcostars::Transaction()]() mutable { return &m_transaction; });
@@ -94,6 +118,39 @@ public:
         inner.data.groupID = std::move(_groupId);
         inner.data.nonce = boost::lexical_cast<std::string>(_nonce);
         inner.data.abi = std::move(_abi);
+        if (_version == int32_t(bcos::protocol::TransactionVersion::V0_VERSION))
+        {
+            inner.data.value = "0x0";
+            inner.data.gasPrice = "0x0";
+            inner.data.gasLimit = 0;
+            inner.data.maxFeePerGas = "0x0";
+            inner.data.maxPriorityFeePerGas = "0x0";
+        }
+
+        if (_version == int32_t(bcos::protocol::TransactionVersion::V1_VERSION))
+        {
+            if (bcos::isHexStringV2(_value) && bcos::isHexStringV2(_gasPrice) &&
+                bcos::isHexStringV2(_maxFeePerGas) && bcos::isHexStringV2(_maxPriorityFeePerGas))
+            {
+                inner.data.value = std::move(_value);
+                inner.data.gasPrice = std::move(_gasPrice);
+                inner.data.gasLimit = _gasLimit;
+                inner.data.maxFeePerGas = std::move(_maxFeePerGas);
+                inner.data.maxPriorityFeePerGas = std::move(_maxPriorityFeePerGas);
+            }
+            else
+            {
+                BCOS_LOG(WARNING) << LOG_DESC(
+                                         "the transaction value or gasPrice or maxFeePerGas or "
+                                         "maxPriorityFeePerGas is not hex string")
+                                  << LOG_KV("value", _value) << LOG_KV("gasPrice", _gasPrice)
+                                  << LOG_KV("maxFeePerGas", _maxFeePerGas)
+                                  << LOG_KV("maxPriorityFeePerGas", _maxPriorityFeePerGas);
+                BOOST_THROW_EXCEPTION(
+                    std::invalid_argument("transaction value or gasPrice or maxFeePerGas or "
+                                          "maxPriorityFeePerGas is not hex string"));
+            }
+        }
         inner.importTime = _importTime;
 
         // Update the hash field
@@ -102,13 +159,27 @@ public:
         return transaction;
     }
 
+
     bcos::protocol::Transaction::Ptr createTransaction(int32_t _version, std::string _to,
         bcos::bytes const& _input, std::string const& _nonce, int64_t _blockLimit,
         std::string _chainId, std::string _groupId, int64_t _importTime,
-        const bcos::crypto::KeyPairInterface& keyPair, std::string _abi = "") override
+        const bcos::crypto::KeyPairInterface& keyPair, std::string _abi = "",
+        std::string _value = "", std::string _gasPrice = "", int64_t _gasLimit = 0,
+        std::string _maxFeePerGas = "", std::string _maxPriorityFeePerGas = "") override
     {
-        auto tx = createTransaction(_version, std::move(_to), _input, _nonce, _blockLimit,
-            std::move(_chainId), std::move(_groupId), _importTime, std::move(_abi));
+        bcos::protocol::Transaction::Ptr tx;
+        if (_version == int32_t(bcos::protocol::TransactionVersion::V0_VERSION))
+        {
+            tx = createTransaction(_version, std::move(_to), _input, _nonce, _blockLimit,
+                std::move(_chainId), std::move(_groupId), _importTime, std::move(_abi));
+        }
+        else
+        {
+            tx = createTransaction(_version, std::move(_to), _input, _nonce, _blockLimit,
+                std::move(_chainId), std::move(_groupId), _importTime, std::move(_abi),
+                std::move(_value), std::move(_gasPrice), _gasLimit, std::move(_maxFeePerGas),
+                std::move(_maxPriorityFeePerGas));
+        }
         auto sign = m_cryptoSuite->signatureImpl()->sign(keyPair, tx->hash(), true);
 
         auto tarsTx = std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(tx);

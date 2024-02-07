@@ -18,6 +18,7 @@ struct CallParameters
         KEY_LOCK = 1,
         FINISHED = 2,
         REVERT = 3,
+        PRE_FINISH = 4,
     };
 
     explicit CallParameters(Type _type) : type(_type) {}
@@ -40,6 +41,14 @@ struct CallParameters
     int64_t gas = 0;   // common field
     bcos::bytes data;  // common field, transaction data, binary format
     std::string abi;   // common field, contract abi, json format
+
+    // balance
+    u256 value = 0;
+    u256 gasPrice = 0;
+    u256 effectiveGasPrice = 0;
+    int64_t gasLimit = 0;
+    u256 maxFeePerGas = 0;
+    u256 maxPriorityFeePerGas = 0;
 
     std::vector<std::string> keyLocks;  // common field
     std::string acquireKeyLock;         // by response
@@ -86,6 +95,9 @@ struct CallParameters
         case REVERT:
             ss << "REVERT";
             break;
+        case PRE_FINISH:
+            ss << "PRE_FINISH";
+            break;
         };
         ss << "]";
         return ss.str();
@@ -102,6 +114,7 @@ struct CallParameters
            << "receiveAddress:" << receiveAddress << "|"
            << "origin:" << origin << "|"
            << "gas:" << gas << "|"
+           << "value:" << value << "|"
            << "dataSize:" << data.size() << "|"
            << "abiSize:" << abi.size() << "|"
            << "acquireKeyLock:" << acquireKeyLock << "|"

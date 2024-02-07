@@ -116,7 +116,7 @@ public:
      * @param _onBlockFilled callback to be called after the block has been filled
      */
     virtual void asyncFillBlock(bcos::crypto::HashListPtr _txsHash,
-        std::function<void(Error::Ptr, bcos::protocol::TransactionsPtr)> _onBlockFilled) = 0;
+        std::function<void(Error::Ptr, bcos::protocol::ConstTransactionsPtr)> _onBlockFilled) = 0;
 
     /**
      * @brief After the blockchain is on-chain, the interface is called to notify the transaction
@@ -157,7 +157,4 @@ public:
     virtual void tryToSyncTxsFromPeers() {}
 };
 
-template <class T>
-concept IsTxPool = std::derived_from<std::remove_cvref_t<T>, TxPoolInterface> ||
-    std::same_as<std::remove_cvref_t<T>, TxPoolInterface>;
 }  // namespace bcos::txpool

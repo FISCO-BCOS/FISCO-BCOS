@@ -39,33 +39,41 @@ using namespace bcos::storage;
 using namespace bcos::precompiled;
 using namespace bcos::protocol;
 
-constexpr const char* const FILE_SYSTEM_METHOD_LIST = "list(string)";
-constexpr const char* const FILE_SYSTEM_METHOD_LIST_PAGE = "list(string,uint256,uint256)";
-constexpr const char* const FILE_SYSTEM_METHOD_MKDIR = "mkdir(string)";
-constexpr const char* const FILE_SYSTEM_METHOD_LINK_CNS = "link(string,string,string,string)";
-constexpr const char* const FILE_SYSTEM_METHOD_LINK = "link(string,string,string)";
-constexpr const char* const FILE_SYSTEM_METHOD_RLINK = "readlink(string)";
-constexpr const char* const FILE_SYSTEM_METHOD_TOUCH = "touch(string,string)";
-constexpr const char* const FILE_SYSTEM_METHOD_INIT = "initBfs()";
-constexpr const char* const FILE_SYSTEM_METHOD_REBUILD = "rebuildBfs(uint256,uint256)";
-constexpr const char* const FILE_SYSTEM_METHOD_FIX = "fixBfs(uint256)";
+static constexpr std::string_view FILE_SYSTEM_METHOD_LIST = "list(string)";
+static constexpr std::string_view FILE_SYSTEM_METHOD_LIST_PAGE = "list(string,uint256,uint256)";
+static constexpr std::string_view FILE_SYSTEM_METHOD_MKDIR = "mkdir(string)";
+static constexpr std::string_view FILE_SYSTEM_METHOD_LINK_CNS = "link(string,string,string,string)";
+static constexpr std::string_view FILE_SYSTEM_METHOD_LINK = "link(string,string,string)";
+static constexpr std::string_view FILE_SYSTEM_METHOD_RLINK = "readlink(string)";
+static constexpr std::string_view FILE_SYSTEM_METHOD_TOUCH = "touch(string,string)";
+static constexpr std::string_view FILE_SYSTEM_METHOD_INIT = "initBfs()";
+static constexpr std::string_view FILE_SYSTEM_METHOD_REBUILD = "rebuildBfs(uint256,uint256)";
+static constexpr std::string_view FILE_SYSTEM_METHOD_FIX = "fixBfs(uint256)";
 
 BFSPrecompiled::BFSPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl)
 {
-    name2Selector[FILE_SYSTEM_METHOD_LIST] = getFuncSelector(FILE_SYSTEM_METHOD_LIST, _hashImpl);
-    name2Selector[FILE_SYSTEM_METHOD_LIST_PAGE] =
+    name2Selector[std::string(FILE_SYSTEM_METHOD_LIST)] =
+        getFuncSelector(FILE_SYSTEM_METHOD_LIST, _hashImpl);
+    name2Selector[std::string(FILE_SYSTEM_METHOD_LIST_PAGE)] =
         getFuncSelector(FILE_SYSTEM_METHOD_LIST_PAGE, _hashImpl);
-    name2Selector[FILE_SYSTEM_METHOD_MKDIR] = getFuncSelector(FILE_SYSTEM_METHOD_MKDIR, _hashImpl);
-    name2Selector[FILE_SYSTEM_METHOD_LINK] = getFuncSelector(FILE_SYSTEM_METHOD_LINK, _hashImpl);
-    name2Selector[FILE_SYSTEM_METHOD_LINK_CNS] =
+    name2Selector[std::string(FILE_SYSTEM_METHOD_MKDIR)] =
+        getFuncSelector(FILE_SYSTEM_METHOD_MKDIR, _hashImpl);
+    name2Selector[std::string(FILE_SYSTEM_METHOD_LINK)] =
+        getFuncSelector(FILE_SYSTEM_METHOD_LINK, _hashImpl);
+    name2Selector[std::string(FILE_SYSTEM_METHOD_LINK_CNS)] =
         getFuncSelector(FILE_SYSTEM_METHOD_LINK_CNS, _hashImpl);
-    name2Selector[FILE_SYSTEM_METHOD_TOUCH] = getFuncSelector(FILE_SYSTEM_METHOD_TOUCH, _hashImpl);
-    name2Selector[FILE_SYSTEM_METHOD_RLINK] = getFuncSelector(FILE_SYSTEM_METHOD_RLINK, _hashImpl);
-    name2Selector[FILE_SYSTEM_METHOD_INIT] = getFuncSelector(FILE_SYSTEM_METHOD_INIT, _hashImpl);
-    name2Selector[FILE_SYSTEM_METHOD_REBUILD] =
+    name2Selector[std::string(FILE_SYSTEM_METHOD_TOUCH)] =
+        getFuncSelector(FILE_SYSTEM_METHOD_TOUCH, _hashImpl);
+    name2Selector[std::string(FILE_SYSTEM_METHOD_RLINK)] =
+        getFuncSelector(FILE_SYSTEM_METHOD_RLINK, _hashImpl);
+    name2Selector[std::string(FILE_SYSTEM_METHOD_INIT)] =
+        getFuncSelector(FILE_SYSTEM_METHOD_INIT, _hashImpl);
+    name2Selector[std::string(FILE_SYSTEM_METHOD_REBUILD)] =
         getFuncSelector(FILE_SYSTEM_METHOD_REBUILD, _hashImpl);
-    name2Selector[FILE_SYSTEM_METHOD_FIX] = getFuncSelector(FILE_SYSTEM_METHOD_FIX, _hashImpl);
-    BfsTypeSet = {FS_TYPE_DIR, FS_TYPE_CONTRACT, FS_TYPE_LINK};
+    name2Selector[std::string(FILE_SYSTEM_METHOD_FIX)] =
+        getFuncSelector(FILE_SYSTEM_METHOD_FIX, _hashImpl);
+    BfsTypeSet = {
+        std::string(FS_TYPE_DIR), std::string(FS_TYPE_CONTRACT), std::string(FS_TYPE_LINK)};
 }
 
 std::shared_ptr<PrecompiledExecResult> BFSPrecompiled::call(
@@ -75,54 +83,55 @@ std::shared_ptr<PrecompiledExecResult> BFSPrecompiled::call(
     uint32_t func = getParamFunc(_callParameters->input());
     uint32_t version = _executive->blockContext().blockVersion();
 
-    if (func == name2Selector[FILE_SYSTEM_METHOD_LIST])
+    if (func == name2Selector[std::string(FILE_SYSTEM_METHOD_LIST)])
     {
         // list(string) => (int32,fileList)
         listDir(_executive, _callParameters);
     }
     else if (version >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION) &&
-             func == name2Selector[FILE_SYSTEM_METHOD_LIST_PAGE])
+             func == name2Selector[std::string(FILE_SYSTEM_METHOD_LIST_PAGE)])
     {
         // list(string,uint,uint) => (int32,fileList)
         listDirPage(_executive, _callParameters);
     }
-    else if (func == name2Selector[FILE_SYSTEM_METHOD_MKDIR])
+    else if (func == name2Selector[std::string(FILE_SYSTEM_METHOD_MKDIR)])
     {
         // mkdir(string) => int32
         makeDir(_executive, _callParameters);
     }
-    else if (func == name2Selector[FILE_SYSTEM_METHOD_LINK_CNS])
+    else if (func == name2Selector[std::string(FILE_SYSTEM_METHOD_LINK_CNS)])
     {
         // link(string name, string version, address, abi) => int32
         linkAdaptCNS(_executive, _callParameters);
     }
     else if (version >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION) &&
-             func == name2Selector[FILE_SYSTEM_METHOD_LINK])
+             func == name2Selector[std::string(FILE_SYSTEM_METHOD_LINK)])
     {
         // link(absolutePath, address, abi) => int32
         link(_executive, _callParameters);
     }
-    else if (func == name2Selector[FILE_SYSTEM_METHOD_RLINK])
+    else if (func == name2Selector[std::string(FILE_SYSTEM_METHOD_RLINK)])
     {
         readLink(_executive, _callParameters);
     }
-    else if (func == name2Selector[FILE_SYSTEM_METHOD_TOUCH])
+    else if (func == name2Selector[std::string(FILE_SYSTEM_METHOD_TOUCH)])
     {
         // touch(string absolute,string type) => int32
         touch(_executive, _callParameters);
     }
     else if (version >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION) &&
-             func == name2Selector[FILE_SYSTEM_METHOD_INIT])
+             func == name2Selector[std::string(FILE_SYSTEM_METHOD_INIT)])
     {
         // initBfs for the first time
         initBfs(_executive, _callParameters);
     }
-    else if (func == name2Selector[FILE_SYSTEM_METHOD_REBUILD])
+    else if (func == name2Selector[std::string(FILE_SYSTEM_METHOD_REBUILD)])
     {
         // initBfs for the first time
         rebuildBfs(_executive, _callParameters);
     }
-    else if (version >= BlockVersion::V3_3_VERSION && func == name2Selector[FILE_SYSTEM_METHOD_FIX])
+    else if (version >= BlockVersion::V3_3_VERSION &&
+             func == name2Selector[std::string(FILE_SYSTEM_METHOD_FIX)])
     {
         fixBfs(_executive, _callParameters);
     }
@@ -316,7 +325,8 @@ void BFSPrecompiled::listDir(const std::shared_ptr<executor::TransactionExecutiv
                 auto abiEntry = _executive->storage().getRow(absolutePath, FS_LINK_ABI);
                 std::vector<std::string> ext = {std::string(addressEntry->getField(0)),
                     abiEntry.has_value() ? std::string(abiEntry->getField(0)) : ""};
-                BfsTuple link = std::make_tuple(baseName, FS_TYPE_LINK, std::move(ext));
+                BfsTuple link =
+                    std::make_tuple(baseName, std::string(FS_TYPE_LINK), std::move(ext));
                 files.emplace_back(std::move(link));
             }
             else if (baseFields[0] == tool::FS_TYPE_CONTRACT)
@@ -356,15 +366,16 @@ void BFSPrecompiled::listDir(const std::shared_ptr<executor::TransactionExecutiv
                 auto abiEntry = _executive->storage().getRow(absolutePath, FS_LINK_ABI);
                 std::vector<std::string> ext = {std::string(addressEntry->getField(0)),
                     abiEntry.has_value() ? std::string(abiEntry->getField(0)) : ""};
-                BfsTuple link = std::make_tuple(baseName, FS_TYPE_LINK, std::move(ext));
+                BfsTuple link =
+                    std::make_tuple(baseName, std::string(FS_TYPE_LINK), std::move(ext));
                 files.emplace_back(std::move(link));
             }
         }
         else
         {
             // fail to get type, this is contract
-            BfsTuple file =
-                std::make_tuple(baseName, FS_TYPE_CONTRACT, std::vector<std::string>({}));
+            BfsTuple file = std::make_tuple(
+                baseName, std::string(FS_TYPE_CONTRACT), std::vector<std::string>({}));
             files.emplace_back(std::move(file));
         }
 
@@ -474,7 +485,7 @@ void BFSPrecompiled::listDirPage(const std::shared_ptr<executor::TransactionExec
         auto abiEntry = _executive->storage().getRow(absolutePath, FS_LINK_ABI);
         std::vector<std::string> ext = {std::string(addressEntry->getField(0)),
             abiEntry.has_value() ? std::string(abiEntry->getField(0)) : ""};
-        BfsTuple link = std::make_tuple(baseName, FS_TYPE_LINK, std::move(ext));
+        BfsTuple link = std::make_tuple(baseName, std::string(FS_TYPE_LINK), std::move(ext));
         files.emplace_back(std::move(link));
     }
     else if (baseFields[0] == tool::FS_TYPE_CONTRACT)
@@ -578,7 +589,8 @@ void BFSPrecompiled::linkImpl(const std::string& _absolutePath, const std::strin
         _callParameters->setExecResult(codec.encode(s256((int)CODE_FILE_BUILD_DIR_FAILED)));
         return;
     }
-    auto newLinkTable = _executive->storage().createTable(linkTableName, STORAGE_VALUE);
+    auto newLinkTable =
+        _executive->storage().createTable(linkTableName, std::string(STORAGE_VALUE));
     // set link info to link table
     tool::BfsFileFactory::buildLink(newLinkTable.value(), contractAddress, _contractAbi);
     _callParameters->setExecResult(codec.encode(s256((int)CODE_SUCCESS)));
@@ -655,7 +667,8 @@ void BFSPrecompiled::linkAdaptCNS(const std::shared_ptr<executor::TransactionExe
         _callParameters->setExecResult(codec.encode((int32_t)CODE_FILE_BUILD_DIR_FAILED));
         return;
     }
-    auto newLinkTable = _executive->storage().createTable(linkTableName, STORAGE_VALUE);
+    auto newLinkTable =
+        _executive->storage().createTable(linkTableName, std::string(STORAGE_VALUE));
     // set link info to link table
     tool::BfsFileFactory::buildLink(
         newLinkTable.value(), contractAddress, contractAbi, contractVersion);
@@ -751,12 +764,16 @@ void BFSPrecompiled::touch(const std::shared_ptr<executor::TransactionExecutive>
         _callParameters->setExecResult(codec.encode(int32_t(CODE_FILE_INVALID_TYPE)));
         return;
     }
-    if (!checkPathPrefixValid(absolutePath, blockContext.blockVersion(), type))
-    {
-        _callParameters->setExecResult(codec.encode(int32_t(CODE_FILE_INVALID_PATH)));
-        return;
-    }
 
+    if (_callParameters->m_origin.compare(ACCOUNT_ADDRESS) != 0)
+    {
+        // if comming from accountPrecompiled, check path prefix
+        if (!checkPathPrefixValid(absolutePath, blockContext.blockVersion(), type))
+        {
+            _callParameters->setExecResult(codec.encode(int32_t(CODE_FILE_INVALID_PATH)));
+            return;
+        }
+    }
 
     std::string parentDir;
     std::string baseName;

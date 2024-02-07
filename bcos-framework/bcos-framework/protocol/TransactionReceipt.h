@@ -38,6 +38,7 @@ public:
     virtual void decode(bytesConstRef _receiptData) = 0;
     virtual void encode(bytes& _encodedData) const = 0;
     virtual bcos::crypto::HashType hash() const = 0;
+    virtual void calculateHash(const crypto::Hash& hashImpl) = 0;
     virtual int32_t version() const = 0;
     virtual bcos::u256 gasUsed() const = 0;
     virtual std::string_view contractAddress() const = 0;
@@ -45,6 +46,8 @@ public:
     virtual bcos::bytesConstRef output() const = 0;
     virtual gsl::span<const LogEntry> logEntries() const = 0;
     virtual protocol::BlockNumber blockNumber() const = 0;
+    virtual std::string_view effectiveGasPrice() const = 0;
+    virtual void setEffectiveGasPrice(std::string effectiveGasPrice) = 0;
 
     // additional information on transaction execution, no need to be involved in the hash
     // calculation

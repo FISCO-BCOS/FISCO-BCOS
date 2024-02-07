@@ -31,6 +31,7 @@
 #include "bcos-gateway/libp2p/ServiceV2.h"
 #include "bcos-gateway/protocol/GatewayNodeStatus.h"
 #include "bcos-utilities/BoostLog.h"
+#include "filter/Filter.h"
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-gateway/Common.h>
 #include <bcos-gateway/Gateway.h>
@@ -186,7 +187,6 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, int _moduleI
         return;
     }
 
-    auto retry = std::make_shared<Retry>();
     auto message =
         std::static_pointer_cast<P2PMessage>(m_p2pInterface->messageFactory()->buildMessage());
 
@@ -205,14 +205,9 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, int _moduleI
     options->setSrcNodeID(_srcNodeID->encode());
     options->dstNodeIDs().push_back(_dstNodeID->encode());
 
-    retry->m_p2pMessage = message;
-    retry->m_p2pIDs.insert(retry->m_p2pIDs.begin(), p2pIDs.begin(), p2pIDs.end());
-    retry->m_respFunc = _errorRespFunc;
-    retry->m_srcNodeID = _srcNodeID;
-    retry->m_dstNodeID = _dstNodeID;
-    retry->m_p2pInterface = m_p2pInterface;
-    retry->m_moduleID = _moduleID;
-
+    auto retry = std::make_shared<Retry>(std::move(_srcNodeID), std::move(_dstNodeID),
+        std::move(message), m_p2pInterface, std::move(_errorRespFunc), _moduleID);
+    retry->insertP2pIDs(p2pIDs);
     retry->trySendMessage();
 }
 
@@ -400,6 +395,15 @@ void Gateway::onReceiveP2PMessage(
                            << LOG_KV("seq", _msg->seq()) << LOG_KV("payload size", payload.size());
     }
 
+    // Readonly filter
+    if (m_readonlyFilter && !filter(*m_readonlyFilter, groupID, moduleID, {}))
+    {
+        GATEWAY_LOG(WARNING) << "P2PMessage moduleID: " << moduleID << " filter by readOnlyFilter";
+
+        // Drop the message
+        return;
+    }
+
     if (m_gatewayRateLimiter)
     {
         // The moduleID is not obtained,
@@ -479,6 +483,14 @@ void Gateway::onReceiveBroadcastMessage(
                            << LOG_KV("seq", _msg->seq()) << LOG_KV("payload size", payload->size());
     }
 
+    // Readonly filter
+    if (m_readonlyFilter && !filter(*m_readonlyFilter, groupID, moduleID, bytesConstRef{}))
+    {
+        GATEWAY_LOG(WARNING) << "BroadcastMessage moduleID: " << moduleID
+                             << " filter by readOnlyFilter";
+        return;
+    }
+
     if (m_gatewayRateLimiter)
     {
         auto result = ((moduleID == 0) ?
@@ -502,4 +514,9 @@ void Gateway::onReceiveBroadcastMessage(
     auto type = _msg->ext();
     m_gatewayNodeManager->localRouterTable()->asyncBroadcastMsg(type, groupID, moduleID,
         srcNodeIDPtr, bytesConstRef(_msg->payload()->data(), _msg->payload()->size()));
+}
+
+void bcos::gateway::Gateway::enableReadOnlyMode()
+{
+    m_readonlyFilter.emplace();
 }

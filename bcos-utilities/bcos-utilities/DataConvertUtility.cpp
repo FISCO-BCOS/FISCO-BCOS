@@ -18,6 +18,7 @@
 
 #include "DataConvertUtility.h"
 #include <random>
+#include <regex>
 
 #include "Exceptions.h"
 
@@ -55,6 +56,17 @@ bool bcos::isHexString(string const& _string)
         }
     }
     return true;
+}
+
+bool bcos::isHexStringV2(string const& _string)
+{
+    // if string is null, default return true
+    if (_string.length() == 0)
+    {
+        return true;
+    }
+    std::regex pattern("0x[0-9a-fA-F]*");
+    return std::regex_match(_string, pattern);
 }
 
 std::shared_ptr<bytes> bcos::fromHexString(std::string const& _hexedString)

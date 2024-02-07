@@ -62,6 +62,33 @@ BOOST_AUTO_TEST_CASE(test_validIP)
     BOOST_CHECK(config->isValidIP("1111::1111:1111:1111:1111"));
 }
 
+BOOST_AUTO_TEST_CASE(test_isIPAddress)
+{
+    auto config = std::make_shared<GatewayConfig>();
+
+    BOOST_CHECK(!config->isIPAddress("a"));
+    BOOST_CHECK(!config->isIPAddress("127"));
+    BOOST_CHECK(!config->isIPAddress("127.0"));
+    BOOST_CHECK(!config->isIPAddress("127.0.0"));
+    BOOST_CHECK(!config->isIPAddress("127.0.0.1.0"));
+
+    // ipv4
+    BOOST_CHECK(config->isIPAddress("127.0.0.1"));
+    BOOST_CHECK(config->isIPAddress("192.168.0.1"));
+    BOOST_CHECK(config->isIPAddress("64.120.121.206"));
+
+    // ipv6
+    BOOST_CHECK(config->isIPAddress("::1"));
+    BOOST_CHECK(config->isIPAddress("fe80::58da:28ff:fe08:5d91"));
+    BOOST_CHECK(config->isIPAddress("1111::1111:1111:1111:1111"));
+}
+
+BOOST_AUTO_TEST_CASE(test_isHostname)
+{
+    auto config = std::make_shared<GatewayConfig>();
+    BOOST_CHECK(config->isHostname("localhost"));
+}
+
 BOOST_AUTO_TEST_CASE(test_hostAndPort2Endpoint)
 {
     auto config = std::make_shared<GatewayConfig>();
@@ -71,6 +98,14 @@ BOOST_AUTO_TEST_CASE(test_hostAndPort2Endpoint)
         BOOST_CHECK_NO_THROW(config->hostAndPort2Endpoint("127.0.0.1:1111", endpoint));
         BOOST_CHECK_EQUAL(endpoint.address(), "127.0.0.1");
         BOOST_CHECK_EQUAL(endpoint.port(), 1111);
+        BOOST_CHECK(!endpoint.isIPv6());
+    }
+
+    {
+        NodeIPEndpoint endpoint;
+        BOOST_CHECK_NO_THROW(config->hostAndPort2Endpoint("localhost:2333", endpoint));
+        BOOST_CHECK_EQUAL(endpoint.address(), "127.0.0.1");
+        BOOST_CHECK_EQUAL(endpoint.port(), 2333);
         BOOST_CHECK(!endpoint.isIPv6());
     }
 
@@ -186,6 +221,80 @@ BOOST_AUTO_TEST_CASE(test_initSMConfig)
         BOOST_CHECK(!smCertConfig.enNodeCert.empty());
         BOOST_CHECK(!smCertConfig.enNodeKey.empty());
     }
+}
+
+void replaceConfigValue(
+    const std::string& filename, const std::string& searchStr, const std::string& newValue)
+{
+    std::ifstream inFile(filename);
+    if (!inFile.is_open())
+    {
+        std::cerr << "Error opening file: " << filename << std::endl;
+        return;
+    }
+
+    std::string line;
+    std::ofstream outFile("tempfile.tmp");  // 创建一个临时文件用于保存替换后的内容
+    if (!outFile.is_open())
+    {
+        std::cerr << "Error creating temporary file." << std::endl;
+        inFile.close();
+        return;
+    }
+
+    while (std::getline(inFile, line))
+    {
+        size_t found = line.find(searchStr);
+        if (found != std::string::npos && line.find(searchStr) != std::string::npos)
+        {
+            // 找到包含搜索字符串和 "stat_reporter_interval=" 的行
+            size_t startPos = line.find('=') + 1;  // 找到等号后的位置
+            line.replace(startPos, line.length() - startPos, newValue);
+        }
+        outFile << line << std::endl;
+    }
+
+    inFile.close();
+    outFile.close();
+
+    // 删除原文件并将临时文件重命名为原文件名
+    if (std::remove(filename.c_str()) != 0)
+    {
+        std::cerr << "Error deleting original file: " << filename << std::endl;
+        return;
+    }
+
+    if (std::rename("tempfile.tmp", filename.c_str()) != 0)
+    {
+        std::cerr << "Error renaming temporary file." << std::endl;
+    }
+}
+
+inline void checkInvalidGatewayConfigValue(const std::string& filename, const std::string& key,
+    const std::string& okValue, const std::string& invalidValue)
+{
+    replaceConfigValue(filename, key, invalidValue);
+    std::string configIni(filename);
+
+    boost::property_tree::ptree pt;
+    boost::property_tree::ini_parser::read_ini(configIni, pt);
+
+    auto config = std::make_shared<GatewayConfig>();
+    BOOST_REQUIRE_THROW(config->initFlowControlConfig(pt), bcos::InvalidParameter);
+    replaceConfigValue(filename, key, okValue);
+}
+
+BOOST_AUTO_TEST_CASE(test_invalidFlowControlConfig)
+{
+    std::string configIni("data/config/invalid_config.ini");
+    checkInvalidGatewayConfigValue(configIni, "time_window_sec", "1", "0");
+    checkInvalidGatewayConfigValue(configIni, "distributed_ratelimit_cache_percent", "0", "-1");
+    checkInvalidGatewayConfigValue(configIni, "stat_reporter_interval", "0", "-1");
+    checkInvalidGatewayConfigValue(configIni, "incoming_p2p_basic_msg_type_qps_limit", "-1", "-2");
+    checkInvalidGatewayConfigValue(configIni, "incoming_module_msg_type_qps_limit", "-1", "-2");
+    checkInvalidGatewayConfigValue(configIni, "incoming_module_qps_limit_1", "0", "-1");
+    checkInvalidGatewayConfigValue(configIni, "incoming_module_qps_limit_5", "0", "-1");
+    checkInvalidGatewayConfigValue(configIni, "incoming_module_qps_limit_7", "0", "-1");
 }
 
 BOOST_AUTO_TEST_CASE(test_initFlowControlConfig)
