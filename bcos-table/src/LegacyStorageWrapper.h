@@ -150,7 +150,7 @@ public:
     }
 
     crypto::HashType hash(
-        const bcos::crypto::Hash::Ptr& hashImpl, bool /*useHashV310*/) const override
+        const bcos::crypto::Hash::Ptr& hashImpl, const ledger::Features& features) const override
     {
         BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
     }
