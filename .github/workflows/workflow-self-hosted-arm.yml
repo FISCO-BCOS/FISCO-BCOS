@@ -61,7 +61,7 @@ jobs:
 
       - name: update vcpkg
         run: |
-          cd ${{ env.VCPKG_ROOT }} && git fetch --all
+          cd vcpkg && git pull origin master && ./bootstrap-vcpkg.sh
           cd -
 
       - name: Build for linux
@@ -70,7 +70,6 @@ jobs:
           . /opt/rh/rh-perl530/enable
           export LIBCLANG_PATH=/opt/rh/llvm-toolset-7.0/root/lib64/
           . /opt/rh/llvm-toolset-7.0/enable
-          cd vcpkg && ./bootstrap-vcpkg.sh && cd ..
           mkdir -p build && cd build
           cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON .. || cat *.log
           make -j8
