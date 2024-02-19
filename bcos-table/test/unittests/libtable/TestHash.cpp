@@ -27,11 +27,13 @@ BOOST_AUTO_TEST_CASE(testTwoHash)
     }
 
     auto hashImpl = std::make_shared<bcos::crypto::Keccak256>();
-    auto hash1 = stateStorage.hash(hashImpl, false);
-    auto hash2 = keyPageStorage.hash(hashImpl, false);
+    auto hash1 = stateStorage.hash(hashImpl, bcos::ledger::Features());
+    auto hash2 = keyPageStorage.hash(hashImpl, bcos::ledger::Features());
     BOOST_CHECK_NE(hash1, hash2);
 
-    auto hash3 = stateStorage.hash(hashImpl, true);
+    bcos::ledger::Features f;
+    f.set(bcos::ledger::Features::Flag::bugfix_statestorage_hash);
+    auto hash3 = stateStorage.hash(hashImpl, f);
     BOOST_CHECK_EQUAL(hash3, hash2);
 }
 
