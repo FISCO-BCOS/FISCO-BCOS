@@ -391,11 +391,13 @@ public:
         STORAGE_LOG(INFO) << "Successful merged records" << LOG_KV("count", count);
     }
 
-    crypto::HashType hash(const bcos::crypto::Hash::Ptr& hashImpl, bool useHashV310) const override
+    crypto::HashType hash(
+        const bcos::crypto::Hash::Ptr& hashImpl, const ledger::Features& features) const override
     {
         bcos::crypto::HashType totalHash;
-        auto blockVersion = useHashV310 ? (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION :
-                                          (uint32_t)bcos::protocol::BlockVersion::V3_0_VERSION;
+        auto blockVersion = features.get(ledger::Features::Flag::bugfix_statestorage_hash) ?
+                                (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION :
+                                (uint32_t)bcos::protocol::BlockVersion::V3_0_VERSION;
 
         std::vector<bcos::crypto::HashType> hashes(m_buckets.size());
         tbb::parallel_for(tbb::blocked_range<size_t>(0U, m_buckets.size()), [&, this](
@@ -433,7 +435,6 @@ public:
         {
             totalHash ^= it;
         }
-
 
         return totalHash;
     }

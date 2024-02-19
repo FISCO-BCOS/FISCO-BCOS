@@ -32,6 +32,7 @@ public:
         bugfix_event_log_order,
         bugfix_call_noaddr_return,
         bugfix_precompiled_codehash,
+        bugfix_keypage_system_entry_hash,
         feature_dmc2serial,
     };
 
