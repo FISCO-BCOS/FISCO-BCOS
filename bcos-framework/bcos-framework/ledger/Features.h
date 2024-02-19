@@ -35,6 +35,7 @@ public:
         bugfix_call_noaddr_return,
         bugfix_precompiled_codehash,
         bugfix_dmc_revert,
+        bugfix_keypage_system_entry_hash,
         feature_dmc2serial,
         feature_sharding,
         feature_rpbft,
@@ -138,7 +139,9 @@ public:
                     {Flag::bugfix_statestorage_hash,
                         Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy,
                         Flag::bugfix_event_log_order, Flag::bugfix_call_noaddr_return,
-                        Flag::bugfix_precompiled_codehash, Flag::bugfix_dmc_revert}}});
+                        Flag::bugfix_precompiled_codehash, Flag::bugfix_dmc_revert}},
+                {protocol::BlockVersion::V3_6_1_VERSION,
+                    {Flag::bugfix_keypage_system_entry_hash}}});
 
         for (const auto& upgradeFeatures : upgradeRoadmap)
         {
