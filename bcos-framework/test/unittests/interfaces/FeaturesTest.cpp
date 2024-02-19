@@ -135,6 +135,7 @@ BOOST_AUTO_TEST_CASE(feature)
         "bugfix_call_noaddr_return",
         "bugfix_precompiled_codehash",
         "bugfix_dmc_revert",
+        "bugfix_keypage_system_entry_hash",
         "feature_dmc2serial",
         "feature_sharding",
         "feature_rpbft",
