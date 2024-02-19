@@ -95,6 +95,10 @@ public:
             set(Flag::bugfix_call_noaddr_return);
             set(Flag::bugfix_precompiled_codehash);
         }
+        if (version >= protocol::BlockVersion::V3_2_7_VERSION)
+        {
+            set(Flag::bugfix_keypage_system_entry_hash);
+        }
     }
 
     auto flags() const
