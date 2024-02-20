@@ -12,7 +12,8 @@ void DmcExecutor::releaseOutdatedLock()
         MessageHint::NEED_PREPARE, [this](int64_t, ExecutiveState::Ptr executiveState) {
             auto& message = executiveState->message;
             if (message->type() == bcos::protocol::ExecutionMessage::FINISHED ||
-                message->type() == bcos::protocol::ExecutionMessage::REVERT)
+                (message->type() == bcos::protocol::ExecutionMessage::REVERT &&
+                    !executiveState->isRevertStackMessage))
             {
                 m_keyLocks->releaseKeyLocks(message->contextID(), message->seq());
             }
@@ -441,7 +442,7 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessageV2(ExecutiveState::P
     // handle normal message
     auto& message = executiveState->message;
 
-    if (f_getAddr(message->to()) != m_contractAddress)
+    if (message->to() != m_contractAddress)
     {
         return MessageHint::NEED_SCHEDULE_OUT;
     }
