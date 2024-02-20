@@ -148,7 +148,7 @@ CallParameters::UniquePtr CoroutineTransactionExecutive::waitingFinish(
     std::string returnAddress = input->senderAddress;
 
     input->type = CallParameters::PRE_FINISH;
-    input->keyLocks = m_syncStorageWrapper.exportKeyLocks();
+    input->keyLocks = m_syncStorageWrapper->exportKeyLocks();
 
     spawnAndCall([this, inputPtr = input.release()](
                      ResumeHandler) { m_exchangeMessage = CallParameters::UniquePtr(inputPtr); });
