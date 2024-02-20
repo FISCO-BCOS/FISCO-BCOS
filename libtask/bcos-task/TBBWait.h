@@ -9,11 +9,11 @@
 namespace bcos::task::tbb
 {
 
-struct SyncWait
+constexpr inline struct SyncWait
 {
     template <class Task>
-    auto operator()(Task&& task) const -> AwaitableReturnType<std::remove_cvref_t<Task>>
-        requires IsAwaitable<Task> && std::is_rvalue_reference_v<decltype(task)>
+    auto operator()(Task task) const -> AwaitableReturnType<std::remove_cvref_t<Task>>
+        requires IsAwaitable<Task>
     {
         using ReturnType = AwaitableReturnType<std::remove_cvref_t<Task>>;
         using ReturnTypeWrap = std::conditional_t<std::is_reference_v<ReturnType>,
@@ -27,7 +27,7 @@ struct SyncWait
         boost::atomic<oneapi::tbb::task::suspend_point> suspendPoint{};
 
         auto waitTask =
-            [](Task&& task, decltype(result)& result, boost::atomic_flag& finished,
+            [](Task task, decltype(result)& result, boost::atomic_flag& finished,
                 boost::atomic<oneapi::tbb::task::suspend_point>& suspendPoint) -> task::Task<void> {
             try
             {
@@ -92,7 +92,6 @@ struct SyncWait
             }
         }
     }
-};
-constexpr inline SyncWait syncWait{};
+} syncWait{};
 
 }  // namespace bcos::task::tbb

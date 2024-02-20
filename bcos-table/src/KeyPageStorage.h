@@ -144,7 +144,7 @@ public:
                                               callback) const override;
 
     crypto::HashType hash(
-        const bcos::crypto::Hash::Ptr& hashImpl, bool /*useHashV310*/) const override;
+        const bcos::crypto::Hash::Ptr& hashImpl, const ledger::Features& features) const override;
 
     void rollback(const Recoder& recoder) override;
 
@@ -889,9 +889,9 @@ public:
             if (!entries.empty() && pageKey != entries.rbegin()->first)
             {
                 KeyPage_LOG(DEBUG) << LOG_DESC("import page with invalid pageKey")
-                                     << LOG_KV("pageKey", toHex(pageKey))
-                                     << LOG_KV("validPageKey", toHex(entries.rbegin()->first))
-                                     << LOG_KV("count", entries.size());
+                                   << LOG_KV("pageKey", toHex(pageKey))
+                                   << LOG_KV("validPageKey", toHex(entries.rbegin()->first))
+                                   << LOG_KV("count", entries.size());
                 m_invalidPageKeys.insert(std::string(pageKey));
             }
             if (entries.empty())

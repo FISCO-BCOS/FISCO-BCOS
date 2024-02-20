@@ -3,28 +3,27 @@
 #include "Trait.h"
 #include <boost/atomic/atomic_flag.hpp>
 #include <exception>
-#include <future>
+#include <memory>
 #include <type_traits>
 #include <variant>
 
 namespace bcos::task
 {
 
-struct Wait
+constexpr inline struct Wait
 {
     void operator()(auto&& task) const
         requires std::is_rvalue_reference_v<decltype(task)>
     {
         task.start();
     }
-};
-constexpr inline Wait wait{};
+} wait{};
 
-struct SyncWait
+constexpr inline struct SyncWait
 {
     template <class Task>
-    auto operator()(Task&& task) const -> AwaitableReturnType<std::remove_cvref_t<Task>>
-        requires IsAwaitable<Task> && std::is_rvalue_reference_v<decltype(task)>
+    auto operator()(Task task) const -> AwaitableReturnType<std::remove_cvref_t<Task>>
+        requires IsAwaitable<Task>
     {
         using ReturnType = AwaitableReturnType<std::remove_cvref_t<Task>>;
         using ReturnTypeWrap = std::conditional_t<std::is_reference_v<ReturnType>,
@@ -36,7 +35,7 @@ struct SyncWait
         boost::atomic_flag finished;
         boost::atomic_flag waitFlag;
 
-        auto waitTask = [](Task&& task, decltype(result)& result, boost::atomic_flag& finished,
+        auto waitTask = [](Task task, decltype(result)& result, boost::atomic_flag& finished,
                             boost::atomic_flag& waitFlag) -> task::Task<void> {
             try
             {
@@ -97,7 +96,6 @@ struct SyncWait
             }
         }
     }
-};
-constexpr inline SyncWait syncWait{};
+} syncWait{};
 
 }  // namespace bcos::task
