@@ -167,7 +167,15 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
                 request->delegateCall = true;
                 request->codeAddress = evmAddress2String(_msg->code_address);
                 request->delegateCallSender = evmAddress2String(_msg->sender);
-                request->receiveAddress = codeAddress();
+
+                if (features().get(ledger::Features::Flag::bugfix_call_noaddr_return))
+                {
+                    request->receiveAddress = myAddress();
+                }
+                else
+                {
+                    request->receiveAddress = codeAddress();
+                }
                 request->data.assign(_msg->input_data, _msg->input_data + _msg->input_size);
                 break;
             }

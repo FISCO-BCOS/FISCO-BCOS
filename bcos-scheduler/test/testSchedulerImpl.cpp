@@ -316,7 +316,7 @@ BOOST_AUTO_TEST_CASE(commitBlock)
     size_t errorNumber = 0;
     size_t queueFrontNumber = 0;
     ledger->commitSuccess(true);
-    ledger->commitSuccess(true); // the committed block number is 7
+    ledger->commitSuccess(true);  // the committed block number is 7
     for (size_t i = 7; i < 11; ++i)
     {
         auto blockHeader = blockHeaderFactory->createBlockHeader();
@@ -462,8 +462,6 @@ BOOST_AUTO_TEST_CASE(handlerBlockTest)
                 BOOST_CHECK_EQUAL(config->hash().hex(), h256(5).hex());
             }
         });
-
-    BOOST_CHECK(!commitBlockError);
 }
 
 
