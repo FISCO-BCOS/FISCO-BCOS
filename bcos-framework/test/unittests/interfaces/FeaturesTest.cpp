@@ -69,15 +69,23 @@ BOOST_AUTO_TEST_CASE(feature)
     BOOST_CHECK_EQUAL(features5.get("bugfix_keypage_system_entry_hash"), true);
 
     auto keys = Features::featureKeys();
-    BOOST_CHECK_EQUAL(keys.size(), 8);
-    BOOST_CHECK_EQUAL(keys[0], "bugfix_revert");
-    BOOST_CHECK_EQUAL(keys[1], "bugfix_statestorage_hash");
-    BOOST_CHECK_EQUAL(keys[2], "bugfix_evm_create2_delegatecall_staticcall_codecopy");
-    BOOST_CHECK_EQUAL(keys[3], "bugfix_event_log_order");
-    BOOST_CHECK_EQUAL(keys[4], "bugfix_call_noaddr_return");
-    BOOST_CHECK_EQUAL(keys[5], "bugfix_precompiled_codehash");
-    BOOST_CHECK_EQUAL(keys[6], "bugfix_keypage_system_entry_hash");
-    BOOST_CHECK_EQUAL(keys[7], "feature_dmc2serial");
+    // clang-format off
+    std::vector<std::string> compareKeys = {
+        "bugfix_revert",
+        "bugfix_statestorage_hash",
+        "bugfix_evm_create2_delegatecall_staticcall_codecopy",
+        "bugfix_event_log_order",
+        "bugfix_call_noaddr_return",
+        "bugfix_precompiled_codehash",
+        "bugfix_dmc_revert",
+        "feature_dmc2serial"
+    };
+
+    // clang-format on
+    for (size_t i = 0; i < keys.size(); ++i)
+    {
+        BOOST_CHECK_EQUAL(keys[i], compareKeys[i]);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()
