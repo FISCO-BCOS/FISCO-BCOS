@@ -54,6 +54,7 @@ public:
         KEY_LOCK,    // Send a wait key lock to scheduler, or release key lock
         SEND_BACK,   // Send a dag refuse to scheduler
         REVERT,      // Send/Receive a revert to/from previous external call
+        PRE_FINISH,  // Execution finished, and waiting for FINISHED or REVERT
     };
 
     static std::string getTypeName(Type type)
@@ -72,6 +73,8 @@ public:
             return "SEND_BACK";
         case REVERT:
             return "REVERT";
+        case PRE_FINISH:
+            return "PRE_FINISH";
         }
         return "Unknown";
     }
@@ -81,7 +84,8 @@ public:
         std::stringstream ss;
         ss << "[" << (staticCall() ? "call" : "tx") << "|" << contextID() << "|" << seq() << "|"
            << getTypeName(type()) << "|" << from() << "->" << to() << "|" << gasAvailable() << "|"
-           << toHex(keyLockAcquired()) << "|" << keyLocks().size() << ":";
+           << toHex(keyLockAcquired()) << "|" << logEntries().size() << "|" << keyLocks().size()
+           << ":";
         for (auto& lock : keyLocks())
         {
             ss << toHex(lock) << ".";

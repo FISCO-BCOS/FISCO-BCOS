@@ -420,13 +420,13 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
     auto whenQueueFront = [this, requestBlockNumber, header = std::move(header), callback](
                               BlockExecutive::Ptr blockExecutive) {
         // acquire lock
-        std::shared_ptr<std::unique_lock<std::mutex>> commitLock =
-            std::make_shared<std::unique_lock<std::mutex>>(m_commitMutex, std::try_to_lock);
+        std::shared_ptr<std::unique_lock<std::timed_mutex>> commitLock =
+            std::make_shared<std::unique_lock<std::timed_mutex>>(m_commitMutex, std::try_to_lock);
 
-        if (!commitLock->owns_lock())
+        if (!commitLock->owns_lock() && !commitLock->try_lock_for(std::chrono::seconds(1)))
         {
             std::string message = (boost::format("commitBlock: Another block is committing! Block "
-                                                 "number: %ld, hash: %s") %
+                                                 "number: %ld, hash: %s, waiting for it") %
                                    requestBlockNumber % header->hash().abridged())
                                       .str();
 
@@ -994,8 +994,8 @@ void SchedulerImpl::asyncGetLedgerConfig(
                        decltype(collector) collector) -> task::Task<void> {
             try
             {
-                auto features =
-                    co_await ledger::Features::readFeaturesFromStorage(*self->m_storage, number + 1);
+                auto features = co_await ledger::Features::readFeaturesFromStorage(
+                    *self->m_storage, number + 1);
                 collector({}, features);
             }
             catch (Error& error)

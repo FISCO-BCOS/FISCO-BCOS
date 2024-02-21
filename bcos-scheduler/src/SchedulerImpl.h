@@ -218,7 +218,7 @@ public:
 
     bcos::crypto::Hash::Ptr getHashImpl() { return m_hashImpl; }
     const ledger::LedgerConfig& ledgerConfig() const { return *m_ledgerConfig; }
-    
+
 private:
     void handleBlockQueue(bcos::protocol::BlockNumber requestBlockNumber,
         std::function<void(bcos::protocol::BlockNumber)> whenOlder,  // whenOlder(frontNumber)
@@ -257,7 +257,7 @@ private:
     std::mutex m_blocksMutex;
 
     std::mutex m_executeMutex;
-    std::mutex m_commitMutex;
+    std::timed_mutex m_commitMutex;
 
     std::atomic_int64_t m_calledContextID = 1;
 

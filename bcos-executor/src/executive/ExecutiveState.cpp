@@ -62,6 +62,7 @@ CallParameters::UniquePtr ExecutiveState::go()
     {
     case CallParameters::MESSAGE:
     case CallParameters::KEY_LOCK:
+    case CallParameters::PRE_FINISH:
         m_status = PAUSED;
         break;
     case CallParameters::FINISHED:
