@@ -260,7 +260,7 @@ BOOST_AUTO_TEST_CASE(setBlockAndGetInfo)
         bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher{}, block.transactions));
 
     bcos::concepts::hash::calculate(
-        bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher{}, block, block.blockHeader.dataHash);
+        block, bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher{}, block.blockHeader.dataHash);
 
     BOOST_CHECK_NO_THROW(bcos::task::syncWait(ledger.setBlock<bcos::concepts::ledger::ALL>(block)));
     bcostars::Block gotBlock;
@@ -279,7 +279,7 @@ BOOST_AUTO_TEST_CASE(setBlockAndGetInfo)
 
     std::array<std::byte, 32> blockHash;
     bcos::concepts::hash::calculate(
-        bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher{}, gotBlock, blockHash);
+        gotBlock, bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher{}, blockHash);
 
     int64_t newNumber = 100;
     bcos::task::syncWait(ledger.getBlockNumberByHash(hash, newNumber));
@@ -322,7 +322,7 @@ BOOST_AUTO_TEST_CASE(ledgerSync)
     bcos::task::syncWait(toLedger.setupGenesisBlock(genesisBlock));
 
     std::array<std::byte, 32> lastBlockHash;
-    bcos::concepts::hash::calculate(Hasher{}, genesisBlock, lastBlockHash);
+    bcos::concepts::hash::calculate(genesisBlock, Hasher{}, lastBlockHash);
 
     constexpr static size_t blockCount = 50;
     for (auto number = 1U; number <= blockCount; ++number)
@@ -351,7 +351,7 @@ BOOST_AUTO_TEST_CASE(ledgerSync)
             }
 
             bcostars::TransactionMetaData metaData;
-            bcos::concepts::hash::calculate(Hasher{}, transaction, metaData.hash);
+            bcos::concepts::hash::calculate(transaction, Hasher{}, metaData.hash);
 
             block.transactionsMetaData.emplace_back(std::move(metaData));
             block.transactions.emplace_back(std::move(transaction));
@@ -364,7 +364,7 @@ BOOST_AUTO_TEST_CASE(ledgerSync)
 
         BOOST_CHECK_NO_THROW(
             bcos::task::syncWait(fromLedger.setBlock<bcos::concepts::ledger::ALL>(block)));
-        bcos::concepts::hash::calculate(Hasher{}, block, lastBlockHash);
+        bcos::concepts::hash::calculate(block, Hasher{}, lastBlockHash);
     }
 
     bcos::task::syncWait(toLedger.sync<decltype(fromLedger), bcostars::Block>(fromLedger, false));

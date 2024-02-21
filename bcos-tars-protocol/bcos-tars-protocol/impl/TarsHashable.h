@@ -1,9 +1,9 @@
 #pragma once
 #include "../Common.h"
+#include "bcos-concepts/ByteBuffer.h"
+#include "bcos-concepts/Hash.h"
+#include "bcos-crypto/hasher/Hasher.h"
 #include "bcos-tars-protocol/tars/TransactionReceipt.h"
-#include <bcos-concepts/Basic.h>
-#include <bcos-concepts/ByteBuffer.h>
-#include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-tars-protocol/tars/Block.h>
 #include <bcos-tars-protocol/tars/Transaction.h>
 #include <boost/endian/conversion.hpp>
@@ -13,8 +13,9 @@
 namespace bcostars
 {
 
-void impl_calculate(bcos::crypto::hasher::Hasher auto hasher,
-    bcostars::Transaction const& transaction, bcos::concepts::bytebuffer::ByteBuffer auto& out)
+void tag_invoke(bcos::concepts::hash::tag_t<bcos::concepts::hash::calculate> /*unused*/,
+    Transaction const& transaction, bcos::crypto::hasher::Hasher auto&& hasher,
+    bcos::concepts::bytebuffer::ByteBuffer auto& out)
 {
     if (!transaction.dataHash.empty())
     {
@@ -48,8 +49,9 @@ void impl_calculate(bcos::crypto::hasher::Hasher auto hasher,
     hasher.final(out);
 }
 
-void impl_calculate(bcos::crypto::hasher::Hasher auto hasher,
-    bcostars::TransactionReceipt const& receipt, bcos::concepts::bytebuffer::ByteBuffer auto& out)
+void tag_invoke(bcos::concepts::hash::tag_t<bcos::concepts::hash::calculate> /*unused*/,
+    TransactionReceipt const& receipt, bcos::crypto::hasher::Hasher auto&& hasher,
+    bcos::concepts::bytebuffer::ByteBuffer auto& out)
 {
     if (!receipt.dataHash.empty())
     {
@@ -59,25 +61,21 @@ void impl_calculate(bcos::crypto::hasher::Hasher auto hasher,
 
     auto const& hashFields = receipt.data;
     int32_t version = boost::endian::native_to_big((int32_t)hashFields.version);
+    hasher.update(version);
+    hasher.update(hashFields.gasUsed);
+    hasher.update(hashFields.contractAddress);
+    int32_t status = boost::endian::native_to_big((int32_t)hashFields.status);
+    hasher.update(status);
+
     switch (hashFields.version)
     {
     case int32_t(bcos::protocol::TransactionVersion::V0_VERSION):
     {
-        hasher.update(version);
-        hasher.update(hashFields.gasUsed);
-        hasher.update(hashFields.contractAddress);
-        int32_t status = boost::endian::native_to_big((int32_t)hashFields.status);
-        hasher.update(status);
         hasher.update(hashFields.output);
         break;
     }
     case int32_t(bcos::protocol::TransactionVersion::V1_VERSION):
     {
-        hasher.update(version);
-        hasher.update(hashFields.gasUsed);
-        hasher.update(hashFields.contractAddress);
-        int32_t status = boost::endian::native_to_big((int32_t)hashFields.status);
-        hasher.update(status);
         hasher.update(hashFields.output);
         hasher.update(hashFields.effectiveGasPrice);
         break;
@@ -100,8 +98,9 @@ void impl_calculate(bcos::crypto::hasher::Hasher auto hasher,
     hasher.final(out);
 }
 
-auto impl_calculate(bcos::crypto::hasher::Hasher auto hasher,
-    bcostars::BlockHeader const& blockHeader, bcos::concepts::bytebuffer::ByteBuffer auto& out)
+void tag_invoke(bcos::concepts::hash::tag_t<bcos::concepts::hash::calculate> /*unused*/,
+    BlockHeader const& blockHeader, bcos::crypto::hasher::Hasher auto&& hasher,
+    bcos::concepts::bytebuffer::ByteBuffer auto& out)
 {
     if (!blockHeader.dataHash.empty())
     {
@@ -149,7 +148,8 @@ auto impl_calculate(bcos::crypto::hasher::Hasher auto hasher,
     hasher.final(out);
 }
 
-auto impl_calculate(bcos::crypto::hasher::Hasher auto hasher, bcostars::Block const& block,
+void tag_invoke(bcos::concepts::hash::tag_t<bcos::concepts::hash::calculate> /*unused*/,
+    Block const& block, bcos::crypto::hasher::Hasher auto&& hasher,
     bcos::concepts::bytebuffer::ByteBuffer auto& out)
 {
     if (!block.blockHeader.dataHash.empty())
@@ -158,7 +158,7 @@ auto impl_calculate(bcos::crypto::hasher::Hasher auto hasher, bcostars::Block co
         return;
     }
 
-    impl_calculate(std::move(hasher), block.blockHeader, out);
+    bcos::concepts::hash::calculate(block.blockHeader, std::forward<decltype(hasher)>(hasher), out);
 }
 
 }  // namespace bcostars

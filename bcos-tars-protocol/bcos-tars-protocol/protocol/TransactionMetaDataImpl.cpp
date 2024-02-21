@@ -69,23 +69,3 @@ void bcostars::protocol::TransactionMetaDataImpl::setInner(bcostars::Transaction
 {
     *m_inner() = std::move(inner);
 }
-RANGES::any_view<std::tuple<bcos::bytesConstRef, bool>>
-bcostars::protocol::TransactionMetaDataImpl::conflictFields() const
-{
-    return m_inner()->conflictFields |
-           RANGES::views::transform([](const auto& tuple) -> std::tuple<bcos::bytesConstRef, bool> {
-               auto& [field, isWrite] = tuple;
-               return {bcos::bytesConstRef((const uint8_t*)field.data(), field.size()), isWrite};
-           });
-}
-void bcostars::protocol::TransactionMetaDataImpl::setConflictFields(
-    RANGES::any_view<std::tuple<bcos::bytesConstRef, bool>> conflictFields)
-{
-    m_inner()->conflictFields.clear();
-    for (auto const& [field, isWrite] : conflictFields)
-    {
-        auto& item = m_inner()->conflictFields.emplace_back();
-        item.field.assign(field.begin(), field.end());
-        item.isWrite = isWrite;
-    }
-}

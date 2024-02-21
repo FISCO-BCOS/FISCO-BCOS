@@ -21,8 +21,8 @@
 
 #include "BlockHeaderImpl.h"
 #include "../impl/TarsHashable.h"
-#include <bcos-concepts/Hash.h>
-#include <bcos-utilities/Common.h>
+#include "bcos-concepts/Hash.h"
+#include "bcos-utilities/Common.h"
 #include <boost/endian/conversion.hpp>
 
 using namespace bcostars;
