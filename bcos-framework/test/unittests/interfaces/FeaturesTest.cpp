@@ -136,6 +136,7 @@ BOOST_AUTO_TEST_CASE(feature)
         "bugfix_precompiled_codehash",
         "bugfix_dmc_revert",
         "bugfix_keypage_system_entry_hash",
+        "bugfix_internal_create_storage",
         "feature_dmc2serial",
         "feature_sharding",
         "feature_rpbft",
