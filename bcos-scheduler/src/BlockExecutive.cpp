@@ -1522,6 +1522,12 @@ DmcExecutor::Ptr BlockExecutive::registerAndGetDmcExecutor(std::string contractA
 
         auto dmcExecutor = std::make_shared<DmcExecutor>(executorInfo->name, contractAddress,
             m_block, executor, m_keyLocks, m_scheduler->m_hashImpl, m_dmcRecorder, isCall());
+
+        if (m_scheduler->ledgerConfig().features().get(ledger::Features::Flag::bugfix_dmc_revert))
+        {
+            dmcExecutor->setEnablePreFinishType(true);
+        }
+
         m_dmcExecutors.emplace(contractAddress, dmcExecutor);
 
         // register functions

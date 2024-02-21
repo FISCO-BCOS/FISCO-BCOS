@@ -45,7 +45,7 @@ public:
         ERROR,
         NEED_PREPARE = 1,
         PAUSED = 2,
-        FINISHED = 3
+        FINISHED = 3,
     };
 
     using Ptr = std::shared_ptr<DmcExecutor>;
@@ -116,8 +116,11 @@ public:
 
     void setIsCall(bool isCall) { m_isCall = isCall; }
 
-private:
+    void setEnablePreFinishType(bool enable) { m_enablePreFinishType = enable; }
+
+protected:
     MessageHint handleExecutiveMessage(ExecutiveState::Ptr executive);
+    MessageHint handleExecutiveMessageV2(ExecutiveState::Ptr executive);
     void handleExecutiveOutputs(std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs);
     void scheduleOut(ExecutiveState::Ptr executiveState);
 
@@ -137,6 +140,7 @@ private:
     DmcStepRecorder::Ptr m_dmcRecorder;
     ExecutivePool m_executivePool;
     bool m_isCall;
+    bool m_enablePreFinishType = false;
 
 
     mutable SharedMutex x_concurrentLock;

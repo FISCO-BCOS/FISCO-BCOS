@@ -136,7 +136,8 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
     {
     case EVMC_CREATE2:
         request->createSalt = fromEvmC(_msg->create2_salt);
-        if (features().get(ledger::Features::Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy))
+        if (features().get(
+                ledger::Features::Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy))
         {
             request->data.assign(_msg->input_data, _msg->input_data + _msg->input_size);
             request->create = true;
@@ -166,7 +167,15 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
                 request->delegateCall = true;
                 request->codeAddress = evmAddress2String(_msg->code_address);
                 request->delegateCallSender = evmAddress2String(_msg->sender);
-                request->receiveAddress = codeAddress();
+
+                if (features().get(ledger::Features::Flag::bugfix_call_noaddr_return))
+                {
+                    request->receiveAddress = myAddress();
+                }
+                else
+                {
+                    request->receiveAddress = codeAddress();
+                }
                 request->data.assign(_msg->input_data, _msg->input_data + _msg->input_size);
                 break;
             }
@@ -312,6 +321,12 @@ evmc_result HostContext::callBuiltInPrecompiled(
         {
             resultCode = (int32_t)TransactionStatus::Unknown;
         }
+    }
+
+    if (features().get(ledger::Features::Flag::bugfix_event_log_order))
+    {
+        // put event log by stack(dfs) order
+        m_callParameters->logEntries = std::move(_request->logEntries);
     }
 
     if (resultCode != (int32_t)TransactionStatus::None)
