@@ -166,8 +166,8 @@ private:
     {
         return std::visit(
             bcos::overloaded{
-                [this](const evmc_message* message) -> evmc_message const& { return *message; },
-                [this](const evmc_message& message) -> evmc_message const& { return message; }},
+                [](const evmc_message* message) -> evmc_message const& { return *message; },
+                [](const evmc_message& message) -> evmc_message const& { return message; }},
             m_message);
     }
 
