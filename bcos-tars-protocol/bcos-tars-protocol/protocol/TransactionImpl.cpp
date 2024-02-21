@@ -19,10 +19,9 @@
  * @date 2021-04-20
  */
 
+#include "TransactionImpl.h"
 #include "../impl/TarsHashable.h"
 #include "../impl/TarsSerializable.h"
-
-#include "TransactionImpl.h"
 #include "bcos-concepts/Exception.h"
 #include <bcos-concepts/Hash.h>
 #include <bcos-concepts/Serialize.h>
@@ -57,6 +56,11 @@ bcos::crypto::HashType TransactionImpl::hash() const
         (bcos::byte*)m_inner()->dataHash.data(), m_inner()->dataHash.size());
 
     return hashResult;
+}
+
+void bcostars::protocol::TransactionImpl::calculateHash(const bcos::crypto::Hash& hashImpl)
+{
+    bcos::concepts::hash::calculate(*m_inner(), hashImpl.hasher(), m_inner()->dataHash);
 }
 
 const std::string& TransactionImpl::nonce() const

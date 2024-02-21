@@ -54,7 +54,7 @@ public:
         if (inner.dataHash.empty())
         {
             // Update the hash field
-            bcos::concepts::hash::calculate(m_hashImpl->hasher(), inner, inner.dataHash);
+            bcos::concepts::hash::calculate(inner, m_hashImpl->hasher(), inner.dataHash);
 
             BCOS_LOG(TRACE) << LOG_BADGE("createBlockHeader")
                             << LOG_DESC("recalculate blockHeader dataHash");

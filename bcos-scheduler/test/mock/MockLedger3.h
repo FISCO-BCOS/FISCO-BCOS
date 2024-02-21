@@ -15,7 +15,6 @@
 #include <boost/test/unit_test.hpp>
 #include <gsl/span>
 #include <map>
-#include <range/v3/algorithm/find.hpp>
 
 using namespace bcos::ledger;
 

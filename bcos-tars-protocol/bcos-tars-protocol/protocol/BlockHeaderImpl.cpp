@@ -21,8 +21,8 @@
 
 #include "BlockHeaderImpl.h"
 #include "../impl/TarsHashable.h"
-#include <bcos-concepts/Hash.h>
-#include <bcos-utilities/Common.h>
+#include "bcos-concepts/Hash.h"
+#include "bcos-utilities/Common.h"
 #include <boost/endian/conversion.hpp>
 
 using namespace bcostars;
@@ -64,7 +64,7 @@ bcos::crypto::HashType BlockHeaderImpl::hash() const
 void BlockHeaderImpl::calculateHash(const bcos::crypto::Hash& hashImpl)
 {
     bcos::crypto::HashType hashResult;
-    bcos::concepts::hash::calculate(hashImpl.hasher(), *m_inner(), hashResult);
+    bcos::concepts::hash::calculate(*m_inner(), hashImpl.hasher(), hashResult);
     m_inner()->dataHash.assign(hashResult.begin(), hashResult.end());
 }
 

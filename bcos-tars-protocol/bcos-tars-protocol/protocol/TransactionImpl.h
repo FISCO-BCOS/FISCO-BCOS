@@ -21,7 +21,6 @@
 
 #pragma once
 
-#include "../impl/TarsHashable.h"
 #include "bcos-concepts/ByteBuffer.h"
 #include "bcos-concepts/Hash.h"
 #include "bcos-tars-protocol/tars/Transaction.h"
@@ -55,13 +54,7 @@ public:
     void encode(bcos::bytes& txData) const override;
 
     bcos::crypto::HashType hash() const override;
-
-    template <class Hasher>
-    void calculateHash(Hasher&& hasher)
-    {
-        bcos::concepts::hash::calculate(
-            std::forward<decltype(hasher)>(hasher), *m_inner(), m_inner()->dataHash);
-    }
+    void calculateHash(const bcos::crypto::Hash& hashImpl);
 
     int32_t version() const override;
     std::string_view chainId() const override;

@@ -1,14 +1,14 @@
 #pragma once
+#include "../ledger/LedgerTypeDef.h"
 #include "../protocol/Protocol.h"
 #include "../storage/Entry.h"
 #include "../storage/LegacyStorageMethods.h"
 #include "../storage2/Storage.h"
+#include "../transaction-executor/StateKey.h"
 #include "bcos-concepts/Exception.h"
-#include "bcos-framework/ledger/LedgerTypeDef.h"
-#include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Task.h"
 #include "bcos-tool/Exceptions.h"
-#include <bcos-utilities/Ranges.h>
+#include "bcos-utilities/Ranges.h"
 #include <boost/throw_exception.hpp>
 #include <array>
 #include <bitset>
@@ -60,7 +60,7 @@ public:
         return *value;
     }
 
-    void validate(std::string flag) const
+    void validate(std::string_view flag) const
     {
         auto value = magic_enum::enum_cast<Flag>(flag);
         if (!value)
@@ -225,6 +225,43 @@ public:
         }
     }
 };
+
+inline task::Task<void> readFromStorage(Features& features, auto&& storage, long blockNumber)
+{
+    decltype(auto) keys = bcos::ledger::Features::featureKeys();
+    auto entries = co_await storage2::readSome(std::forward<decltype(storage)>(storage),
+        keys | RANGES::views::transform([](std::string_view key) {
+            return transaction_executor::StateKeyView(ledger::SYS_CONFIG, key);
+        }));
+    for (auto&& [key, entry] : RANGES::views::zip(keys, entries))
+    {
+        if (entry)
+        {
+            auto [value, enableNumber] = entry->template getObject<ledger::SystemConfigEntry>();
+            if (blockNumber >= enableNumber)
+            {
+                features.set(key);
+            }
+        }
+    }
+}
+
+inline task::Task<void> writeToStorage(Features const& features, auto&& storage, long blockNumber)
+{
+    decltype(auto) flags =
+        features.flags() | RANGES::views::filter([](auto&& tuple) { return std::get<2>(tuple); });
+    co_await storage2::writeSome(std::forward<decltype(storage)>(storage),
+        RANGES::views::transform(flags,
+            [](auto&& tuple) {
+                return transaction_executor::StateKey(ledger::SYS_CONFIG, std::get<1>(tuple));
+            }),
+        RANGES::views::transform(flags, [&](auto&& tuple) {
+            storage::Entry entry;
+            entry.setObject(SystemConfigEntry{
+                boost::lexical_cast<std::string>((int)std::get<2>(tuple)), blockNumber});
+            return entry;
+        }));
+}
 
 inline std::ostream& operator<<(std::ostream& stream, Features::Flag flag)
 {

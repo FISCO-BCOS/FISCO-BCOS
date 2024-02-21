@@ -34,17 +34,30 @@ private:
     friend task::Task<std::optional<storage::Entry>> tag_invoke(
         tag_t<code> /*unused*/, EVMAccount& account)
     {
-        auto codeHashEntry = co_await storage2::readOne(account.m_storage,
-            transaction_executor::StateKeyView{concepts::bytebuffer::toView(account.m_tableName),
-                ACCOUNT_TABLE_FIELDS::CODE_HASH});
-        if (codeHashEntry)
+        // 先通过code hash从s_code_binary找代码
+        // Start by using the code hash to find the code from the s_code_binary
+        if (auto codeHashEntry = co_await storage2::readOne(
+                account.m_storage, transaction_executor::StateKeyView{
+                                       concepts::bytebuffer::toView(account.m_tableName),
+                                       ACCOUNT_TABLE_FIELDS::CODE_HASH}))
         {
-            auto codeEntry = co_await storage2::readOne(account.m_storage,
-                transaction_executor::StateKeyView{ledger::SYS_CODE_BINARY, codeHashEntry->get()});
-            if (codeEntry)
+            if (auto codeEntry = co_await storage2::readOne(
+                    account.m_storage, transaction_executor::StateKeyView{
+                                           ledger::SYS_CODE_BINARY, codeHashEntry->get()}))
             {
                 co_return codeEntry;
             }
+        }
+
+        // 在s_code_binary里没找到，可能是老版本部署的合约或internal
+        // precompiled，代码在合约表的code字段里
+        // I can't find it in the s_code_binary, it may be a contract deployed in the old version or
+        // internal precompiled, and the code is in the code field of the contract table
+        if (auto codeEntry = co_await storage2::readOne(account.m_storage,
+                transaction_executor::StateKeyView{
+                    concepts::bytebuffer::toView(account.m_tableName), ACCOUNT_TABLE_FIELDS::CODE}))
+        {
+            co_return codeEntry;
         }
         co_return std::optional<storage::Entry>{};
     }
