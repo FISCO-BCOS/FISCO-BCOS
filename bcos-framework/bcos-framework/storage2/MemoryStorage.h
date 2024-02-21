@@ -395,7 +395,6 @@ public:
                 toIndex.swap(fromIndex);
                 continue;
             }
-
             auto hintIt = toIndex.end();
             while (!fromIndex.empty())
             {

@@ -29,10 +29,14 @@ class LogEntry
 public:
     using Ptr = std::shared_ptr<LogEntry>;
     LogEntry() = default;
+    LogEntry(const LogEntry&) = default;
+    LogEntry(LogEntry&&) noexcept = default;
+    LogEntry& operator=(const LogEntry&) = default;
+    LogEntry& operator=(LogEntry&&) noexcept = default;
     LogEntry(bytes address, h256s topics, bytes data)
       : m_address(std::move(address)), m_topics(std::move(topics)), m_data(std::move(data))
     {}
-    ~LogEntry() = default;
+    ~LogEntry() noexcept = default;
 
     std::string_view address() const { return {(const char*)m_address.data(), m_address.size()}; }
     gsl::span<const bcos::h256> topics() const { return {m_topics.data(), m_topics.size()}; }
@@ -52,8 +56,8 @@ public:
     }
 
 private:
-    bcos::bytes m_address;
-    bcos::h256s m_topics;
+    bytes m_address;
+    h256s m_topics;
     bytes m_data;
 };
 
