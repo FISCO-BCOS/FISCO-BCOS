@@ -1,4 +1,5 @@
 #pragma once
+#include "../EVMCResult.h"
 #include "ExecutiveWrapper.h"
 #include "bcos-executor/src/Common.h"
 #include "bcos-executor/src/executive/BlockContext.h"
@@ -6,7 +7,6 @@
 #include "bcos-executor/src/vm/Precompiled.h"
 #include "bcos-table/src/LegacyStorageWrapper.h"
 #include "bcos-table/src/StateStorage.h"
-#include "bcos-transaction-executor/Common.h"
 #include "bcos-utilities/Overloaded.h"
 #include <evmc/evmc.h>
 #include <boost/throw_exception.hpp>
@@ -96,7 +96,7 @@ inline EVMCResult callPrecompiled(Precompiled const& precompiled, auto& storage,
                 auto buffer = std::unique_ptr<uint8_t>(new uint8_t[params->m_execResult.size()]);
                 std::copy(params->m_execResult.begin(), params->m_execResult.end(), buffer.get());
                 EVMCResult result{evmc_result{
-                    .status_code = (evmc_status_code)(int32_t)protocol::TransactionStatus::None,
+                    .status_code = (evmc_status_code)protocol::TransactionStatus::None,
                     .gas_left = response->m_gasLeft,
                     .gas_refund = 0,
                     .output_data = buffer.release(),

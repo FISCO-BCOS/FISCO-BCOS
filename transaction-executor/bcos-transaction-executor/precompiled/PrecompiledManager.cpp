@@ -106,3 +106,20 @@ bcos::transaction_executor::PrecompiledManager::getPrecompiled(unsigned long con
 
     return nullptr;
 }
+
+bcos::transaction_executor::Precompiled const*
+bcos::transaction_executor::PrecompiledManager::getPrecompiled(const evmc_address& address) const
+{
+    constexpr static unsigned long MAX_PRECOMPILED_ADDRESS = 100000;
+
+    u160 intAddress;
+    boost::multiprecision::import_bits(
+        intAddress, address.bytes, address.bytes + sizeof(address.bytes));
+    if (intAddress > 0 && intAddress < MAX_PRECOMPILED_ADDRESS)
+    {
+        auto addressUL = intAddress.convert_to<unsigned long>();
+        return getPrecompiled(addressUL);
+    }
+
+    return nullptr;
+}

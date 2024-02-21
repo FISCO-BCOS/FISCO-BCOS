@@ -1,14 +1,36 @@
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.1;
 
 contract ToBeDeploy {
     int m_value;
 
-    function get() public view returns(int) {
+    function get() public view returns (int) {
         return m_value;
     }
 
     function set(int value) public {
         m_value = value;
+    }
+}
+
+contract ToBeDeployWithMapping {
+    mapping(address => int) public address2Int;
+    address[] public addresses;
+
+    constructor() {
+        for (int i = 0; i < 10; ++i) {
+            address addr = address(new ToBeDeploy());
+            address2Int[addr] = i;
+            addresses.push(addr);
+        }
+    }
+
+    function all() public view returns (address[] memory) {
+        return addresses;
+    }
+
+    function get(address addr) public view returns (int) {
+        return address2Int[addr];
     }
 }
 
@@ -22,14 +44,26 @@ contract DelegateCallTarget {
     }
 }
 
+contract DeployWithDeploy {
+    address m_deployedAddress;
+
+    constructor() {
+        m_deployedAddress = address(new ToBeDeployWithMapping());
+    }
+
+    function getAddress() public view returns (address) {
+        return m_deployedAddress;
+    }
+}
+
 contract HelloWorld {
     int m_intValue;
     string m_stringValue;
-    mapping (address => int) m_accounts;
+    mapping(address => int) m_accounts;
 
     event EventExample(int value1, string value2);
 
-    function balance(address to) public view returns(int) {
+    function balance(address to) public view returns (int) {
         return m_accounts[to];
     }
 
@@ -42,7 +76,7 @@ contract HelloWorld {
         m_accounts[to] += count;
     }
 
-    function getInt() public view returns(int) {
+    function getInt() public view returns (int) {
         return m_intValue;
     }
 
@@ -50,7 +84,7 @@ contract HelloWorld {
         m_intValue = value;
     }
 
-    function getString() public view returns(string memory) {
+    function getString() public view returns (string memory) {
         return m_stringValue;
     }
 
@@ -58,19 +92,19 @@ contract HelloWorld {
         m_stringValue = value;
     }
 
-    function deployAndCall(int value) public returns(int) {
+    function deployAndCall(int value) public returns (int) {
         ToBeDeploy contract2 = new ToBeDeploy();
 
         contract2.set(value);
         return contract2.get();
     }
 
-    function returnRevert() public returns(int) {
+    function returnRevert() public returns (int) {
         m_intValue = 1006;
         revert();
     }
 
-    function returnRequire() public returns(int) {
+    function returnRequire() public returns (int) {
         m_intValue = 1005;
         require(false);
     }
@@ -93,5 +127,9 @@ contract HelloWorld {
         ToBeDeploy contract2 = new ToBeDeploy();
 
         require(contract1 != contract2);
+    }
+
+    function deployWithDeploy() public returns (address) {
+        return address(new ToBeDeployWithMapping());
     }
 }
