@@ -1,7 +1,9 @@
 #pragma once
-#include "../Common.h"
+#include "../EVMCResult.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
+#include "bcos-crypto/ChecksumAddress.h"
 #include "bcos-executor/src/executive/TransactionExecutive.h"
+#include "bcos-executor/src/vm/HostContext.h"
 #include <evmc/evmc.h>
 #include <memory>
 
@@ -61,6 +63,15 @@ public:
     executor::CallParameters::UniquePtr externalCall(
         executor::CallParameters::UniquePtr input) override
     {
+        if (input->internalCreate)
+        {
+            auto newSeq = seq() + 1;
+            input->codeAddress =
+                bcos::newEVMAddress(m_hashImpl, m_blockContext->number(), m_contextID, newSeq);
+            auto tuple = create(std::move(input));
+            return std::move(std::get<1>(tuple));
+        }
+
         evmc_message evmcMessage{.kind = input->create ? EVMC_CREATE : EVMC_CALL,
             .flags = 0,
             .depth = 0,
@@ -77,7 +88,12 @@ public:
             .create2_salt = toEvmC(0x0_cppui256),
             .code_address = unhexAddress(input->codeAddress)};
 
-        std::optional<std::tuple<std::string, bcos::bytes>> internalCallParams;
+        struct InternalCallParams
+        {
+            std::string precompiledContract;
+            bcos::bytes precompiledInput;
+        };
+        std::optional<InternalCallParams> internalCallParams;
         if (input->internalCall)
         {
             internalCallParams.emplace();
@@ -88,7 +104,6 @@ public:
             evmcMessage.input_data = precompiledInput.data();
             evmcMessage.input_size = precompiledInput.size();
         }
-
         auto result = m_externalCaller(evmcMessage);
 
         auto callResult =

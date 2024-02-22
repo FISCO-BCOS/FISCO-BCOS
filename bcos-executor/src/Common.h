@@ -50,6 +50,7 @@ namespace executor
 {
 
 constexpr static evmc_address EMPTY_EVM_ADDRESS = {};
+constexpr static evmc_bytes32 EMPTY_EVM_BYTES32 = {};
 using bytes_view = std::basic_string_view<uint8_t>;
 
 #define EXECUTOR_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTOR")

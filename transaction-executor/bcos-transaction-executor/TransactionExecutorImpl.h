@@ -7,6 +7,7 @@
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-task/Generator.h"
+#include "bcos-task/Trait.h"
 #include "bcos-transaction-executor/vm/VMFactory.h"
 #include "precompiled/PrecompiledManager.h"
 #include "vm/HostContext.h"
@@ -22,10 +23,9 @@ namespace bcos::transaction_executor
 {
 #define TRANSACTION_EXECUTOR_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("TRANSACTION_EXECUTOR")
 
-// clang-format off
-struct InvalidArgumentsError: public bcos::Error {};
-// clang-format on
-
+struct InvalidArgumentsError : public bcos::Error
+{
+};
 class TransactionExecutorImpl
 {
 public:
@@ -35,13 +35,37 @@ public:
         m_hashImpl(std::move(hashImpl)),
         m_precompiledManager(m_hashImpl)
     {}
-
+    constexpr static bool defaultRetryFlag = false;
 
 private:
-    VMFactory m_vmFactory;
     protocol::TransactionReceiptFactory const& m_receiptFactory;
     crypto::Hash::Ptr m_hashImpl;
     PrecompiledManager m_precompiledManager;
+
+    static evmc_message newEVMCMessage(protocol::Transaction const& transaction, int64_t gasLimit)
+    {
+        auto toAddress = unhexAddress(transaction.to());
+        evmc_message message = {.kind = transaction.to().empty() ? EVMC_CREATE : EVMC_CALL,
+            .flags = 0,
+            .depth = 0,
+            .gas = gasLimit,
+            .recipient = toAddress,
+            .destination_ptr = nullptr,
+            .destination_len = 0,
+            .sender = (!transaction.sender().empty() &&
+                          transaction.sender().size() == sizeof(evmc_address)) ?
+                          *(evmc_address*)transaction.sender().data() :
+                          evmc_address{},
+            .sender_ptr = nullptr,
+            .sender_len = 0,
+            .input_data = transaction.input().data(),
+            .input_size = transaction.input().size(),
+            .value = {},
+            .create2_salt = {},
+            .code_address = toAddress};
+
+        return message;
+    }
 
     friend task::Generator<protocol::TransactionReceipt::Ptr> tag_invoke(
         tag_t<execute3Step> /*unused*/, TransactionExecutorImpl& executor, auto& storage,
@@ -59,26 +83,7 @@ private:
 
             Rollbackable<std::decay_t<decltype(storage)>> rollbackableStorage(storage);
             auto gasLimit = static_cast<int64_t>(std::get<0>(ledgerConfig.gasLimit()));
-
-            auto toAddress = unhexAddress(transaction.to());
-            evmc_message evmcMessage = {.kind = transaction.to().empty() ? EVMC_CREATE : EVMC_CALL,
-                .flags = 0,
-                .depth = 0,
-                .gas = gasLimit,
-                .recipient = toAddress,
-                .destination_ptr = nullptr,
-                .destination_len = 0,
-                .sender = (!transaction.sender().empty() &&
-                              transaction.sender().size() == sizeof(evmc_address)) ?
-                              *(evmc_address*)transaction.sender().data() :
-                              evmc_address{},
-                .sender_ptr = nullptr,
-                .sender_len = 0,
-                .input_data = transaction.input().data(),
-                .input_size = transaction.input().size(),
-                .value = {},
-                .create2_salt = {},
-                .code_address = toAddress};
+            auto evmcMessage = newEVMCMessage(transaction, gasLimit);
 
             if (blockHeader.number() == 0 &&
                 transaction.to() == precompiled::AUTH_COMMITTEE_ADDRESS)
@@ -100,7 +105,7 @@ private:
 
             bcos::bytesConstRef output;
             std::string newContractAddress;
-            if (!RANGES::equal(evmcResult.create_address.bytes, executor::EMPTY_EVM_ADDRESS.bytes))
+            if (evmcMessage.kind == EVMC_CREATE)
             {
                 newContractAddress.reserve(sizeof(evmcResult.create_address) * 2);
                 boost::algorithm::hex_lower(evmcResult.create_address.bytes,
