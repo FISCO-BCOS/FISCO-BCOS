@@ -22,6 +22,7 @@
 #include "executive/BlockContext.h"
 #include "executive/TransactionExecutive.h"
 #include "executor/TransactionExecutorFactory.h"
+#include "libtask/bcos-task/Wait.h"
 #include "mock/MockKeyPageStorage.h"
 #include "mock/MockLedger.h"
 #include "mock/MockTransactionalStorage.h"
@@ -289,6 +290,26 @@ public:
         auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
             [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
         blockHeader->setNumber(blockNumber);
+        Features features;
+        features.setUpgradeFeatures(BlockVersion::V3_0_VERSION, version);
+        std::vector<std::string> keys;
+        std::vector<std::string> values;
+        for (auto [_, name, value] : features.flags())
+        {
+            if (value)
+            {
+                storage::Entry entry;
+                entry.setObject(
+                    SystemConfigEntry{boost::lexical_cast<std::string>((int)value), blockNumber});
+                keys.push_back(std::string(name));
+                values.push_back(std::string(entry.get()));
+            }
+        }
+
+        if (!keys.empty())
+        {
+            storage->setRows(SYS_CONFIG, keys, values);
+        }
 
         bcos::protocol::ParentInfo p{
             .blockNumber = blockNumber - 1, .blockHash = h256(blockNumber - 1)};
@@ -395,7 +416,7 @@ public:
             });
 
         auto result2 = executePromise2.get_future().get();
-        BOOST_CHECK_EQUAL((int32_t)result2->type(), (int32_t)ExecutionMessage::FINISHED);
+        BOOST_CHECK_EQUAL((int32_t)result2->type(), (int32_t)ExecutionMessage::PRE_FINISH);
         BOOST_CHECK_EQUAL(result2->evmStatus(), 0);
 
         result2->setSeq(1000);
@@ -460,7 +481,7 @@ public:
             });
 
         auto result6 = executePromise6.get_future().get();
-        BOOST_CHECK_EQUAL(result6->type(), ExecutionMessage::FINISHED);
+        BOOST_CHECK_EQUAL(result6->type(), ExecutionMessage::PRE_FINISH);
         BOOST_CHECK_EQUAL(result6->contextID(), 99);
         BOOST_CHECK_EQUAL(result6->seq(), 1002);
         BOOST_CHECK_EQUAL(result6->create(), false);
@@ -590,7 +611,7 @@ public:
         auto result14 = executePromise14.get_future().get();
 
         result14->setSeq(1006);
-        BOOST_CHECK_EQUAL((int32_t)result14->type(), (int32_t)ExecutionMessage::FINISHED);
+        BOOST_CHECK_EQUAL((int32_t)result14->type(), (int32_t)ExecutionMessage::PRE_FINISH);
 
         // committee callback to voteComputer
         std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise15;
@@ -601,7 +622,7 @@ public:
                 executePromise15.set_value(std::move(result));
             });
         auto result15 = executePromise15.get_future().get();
-        BOOST_CHECK_EQUAL((int32_t)result15->type(), (int32_t)ExecutionMessage::FINISHED);
+        BOOST_CHECK_EQUAL((int32_t)result15->type(), (int32_t)ExecutionMessage::PRE_FINISH);
 
         result15->setSeq(1004);
 
@@ -616,7 +637,7 @@ public:
 
         auto result16 = executePromise16.get_future().get();
 
-        BOOST_CHECK_EQUAL((int32_t)result16->type(), (int32_t)ExecutionMessage::FINISHED);
+        BOOST_CHECK_EQUAL((int32_t)result16->type(), (int32_t)ExecutionMessage::PRE_FINISH);
         BOOST_CHECK_EQUAL(result16->contextID(), 99);
         BOOST_CHECK_EQUAL(result16->seq(), 1004);
         BOOST_CHECK_EQUAL(result16->create(), false);
@@ -636,7 +657,7 @@ public:
             });
 
         auto result17 = executePromise17.get_future().get();
-        BOOST_CHECK_EQUAL(result17->type(), ExecutionMessage::FINISHED);
+        BOOST_CHECK_EQUAL(result17->type(), ExecutionMessage::PRE_FINISH);
         BOOST_CHECK_EQUAL(result17->contextID(), 99);
         BOOST_CHECK_EQUAL(result17->seq(), 1000);
         BOOST_CHECK_EQUAL(result17->create(), false);
