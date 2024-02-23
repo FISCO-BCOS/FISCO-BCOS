@@ -399,7 +399,7 @@ auto KeyPageStorage::hash(const bcos::crypto::Hash::Ptr& hashImpl,
                     {  // sys table
                         auto hash = entry.hash(data->table, data->key, hashImpl, m_blockVersion);
                         if (!features.get(ledger::Features::Flag::bugfix_keypage_system_entry_hash))
-                        {  // v3.6.1 open this bugfix default
+                        {  // v3.2.7 and v3.6.1 open this bugfix default
                             hash ^= hashImpl->hash(data->table);
                             hash ^= hashImpl->hash(data->key);
                         }
