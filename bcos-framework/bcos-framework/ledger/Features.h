@@ -36,7 +36,7 @@ public:
         bugfix_precompiled_codehash,
         bugfix_dmc_revert,
         bugfix_keypage_system_entry_hash,
-        bugfix_internal_create_storage,  // to perf internal create code and abi storage
+        bugfix_internal_create_redundant_storage,  // to perf internal create code and abi storage
         feature_dmc2serial,
         feature_sharding,
         feature_rpbft,
@@ -142,7 +142,8 @@ public:
                     Flag::bugfix_event_log_order, Flag::bugfix_call_noaddr_return,
                     Flag::bugfix_precompiled_codehash, Flag::bugfix_dmc_revert}},
             {protocol::BlockVersion::V3_6_1_VERSION,
-                {Flag::bugfix_keypage_system_entry_hash, Flag::bugfix_internal_create_storage}},
+                {Flag::bugfix_keypage_system_entry_hash,
+                    Flag::bugfix_internal_create_redundant_storage}},
         });
 
         for (const auto& upgradeFeatures : upgradeRoadmap)
