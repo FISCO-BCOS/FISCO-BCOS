@@ -835,7 +835,8 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
         auto codeTable = getContractTableName(newAddress, false);
         m_storageWrapper->createTable(codeTable, std::string(STORAGE_VALUE));
 
-        if (m_blockContext.features().get(ledger::Features::Flag::bugfix_internal_create_storage))
+        if (m_blockContext.features().get(
+                ledger::Features::Flag::bugfix_internal_create_redundant_storage))
         {
             setCode(codeTable, std::move(codeString));
             if (!callParameters->abi.empty())
