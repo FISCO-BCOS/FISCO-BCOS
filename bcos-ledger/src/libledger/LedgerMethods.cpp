@@ -377,8 +377,6 @@ bcos::task::Task<bcos::ledger::LedgerConfig::Ptr> bcos::ledger::tag_invoke(
     ledgerConfig->setAuthCheckStatus(
         std::get<0>(co_await getSystemConfigOrDefault(ledger, SYSTEM_KEY_AUTH_CHECK_STATUS, 0)));
 
-    LEDGER_LOG(INFO) << "LEDGER_CONFIG auth check status: " << ledgerConfig->authCheckStatus();
-
     co_return ledgerConfig;
 }
 

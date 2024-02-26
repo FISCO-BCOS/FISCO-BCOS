@@ -9,7 +9,6 @@
 #include <boost/filesystem.hpp>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
-#include <range/v3/view/enumerate.hpp>
 #include <string_view>
 
 using namespace bcos;

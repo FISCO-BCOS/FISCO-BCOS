@@ -2,6 +2,7 @@
 #include "bcos-framework/storage/Common.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-framework/storage2/Storage.h"
+#include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-table/src/StateStorageInterface.h"
 #include "bcos-task/Task.h"
@@ -28,7 +29,24 @@ public:
         const std::optional<storage::Condition const>& condition,
         std::function<void(Error::UniquePtr, std::vector<std::string>)> _callback) override
     {
-        _callback(BCOS_ERROR_UNIQUE_PTR(-1, "asyncGetPrimaryKeys error!"), {});
+        task::wait(
+            [](decltype(this) self, std::string table,
+                std::optional<storage::Condition const> condition,
+                decltype(_callback) callback) -> task::Task<void> {
+                STORAGE_LOG(WARNING)
+                    << "Using unstable LegacyStorageWrapper::asyncGetPrimaryKeys method!";
+                std::set<std::string> keys;
+
+                for (const auto& [cond, key] : condition->m_conditions)
+                {
+                    if (co_await storage2::existsOne(
+                            self->m_storage, transaction_executor::StateKeyView{table, key}))
+                    {
+                        keys.emplace(key);
+                    }
+                }
+                callback(nullptr, keys | RANGES::to<std::vector>());
+            }(this, std::string(table), condition, std::move(_callback)));
     }
 
     void asyncGetRow(std::string_view table, std::string_view key,
