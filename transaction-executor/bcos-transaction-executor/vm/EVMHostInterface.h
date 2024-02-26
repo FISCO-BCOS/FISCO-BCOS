@@ -118,9 +118,8 @@ struct EVMHostInterface
         return false;
     }
 
-    static void log(evmc_host_context* context, [[maybe_unused]] const evmc_address* addr,
-        uint8_t const* data, size_t dataSize, const evmc_bytes32 topics[],
-        size_t numTopics) noexcept
+    static void log(evmc_host_context* context, const evmc_address* addr, uint8_t const* data,
+        size_t dataSize, const evmc_bytes32 topics[], size_t numTopics) noexcept
     {
         auto& hostContext = static_cast<HostContextType&>(*context);
         h256s hashTopics;
@@ -129,7 +128,7 @@ struct EVMHostInterface
         {
             hashTopics.emplace_back(topics[i].bytes, sizeof(evmc_bytes32));
         }
-        hostContext.log(std::move(hashTopics), bytesConstRef{data, dataSize});
+        hostContext.log(*addr, std::move(hashTopics), bytesConstRef{data, dataSize});
     }
 
     static evmc_access_status access_account([[maybe_unused]] evmc_host_context* context,
