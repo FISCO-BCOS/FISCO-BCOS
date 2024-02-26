@@ -125,7 +125,8 @@ public:
             }
 
             if (view.size() != N)
-            {}
+            {
+            }
 
             auto startIndex = 0;
             if (_alignType == DataAlignType::AlignRight) [[likely]]
@@ -298,6 +299,8 @@ public:
     auto end() const -> typename std::array<byte, N>::const_iterator { return m_data.end(); }
     /// @returns a copy of the object's data as a byte vector.
     bytes asBytes() const { return bytes(data(), data() + N); }
+
+    std::string toRawString() const { return std::string(data(), data() + N); }
 
     /// Populate with random data.
     template <class Engine>

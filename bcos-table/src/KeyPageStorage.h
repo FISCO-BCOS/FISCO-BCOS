@@ -1039,7 +1039,7 @@ public:
                     continue;
                 }
                 ++count;
-                ar& i.first;
+                ar & i.first;
                 auto value = i.second.get();
                 ar&(uint32_t)value.size();
                 ar.save_binary(value.data(), value.size());
@@ -1051,15 +1051,15 @@ public:
         {
             std::ignore = version;
             uint32_t count = 0;
-            ar& count;
+            ar & count;
             m_validCount = count;
             auto iter = entries.begin();
             for (size_t i = 0; i < m_validCount; ++i)
             {
                 std::string key;
-                ar& key;
+                ar & key;
                 uint32_t len = 0;
-                ar& len;
+                ar & len;
                 m_size += len;
                 m_size += key.size();
                 auto value = std::make_shared<std::vector<uint8_t>>(len, 0);
