@@ -249,11 +249,18 @@ public:
                 std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values));
         }
 
-        friend auto tag_invoke(bcos::storage2::tag_t<storage2::writeOne> /*unused*/, View& storage,
+        friend auto tag_invoke(storage2::tag_t<storage2::writeOne> /*unused*/, View& storage,
             auto&& key, auto&& value) -> task::Task<void>
         {
             co_await storage2::writeOne(storage.mutableStorage(), std::forward<decltype(key)>(key),
                 std::forward<decltype(value)>(value));
+        }
+
+        friend task::Task<void> tag_invoke(
+            storage2::tag_t<storage2::merge> /*unused*/, View& toStorage, auto&& fromStorage)
+        {
+            co_await storage2::merge(
+                toStorage.mutableStorage(), std::forward<decltype(fromStorage)>(fromStorage));
         }
 
         friend task::Task<void> tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/,
@@ -378,7 +385,7 @@ public:
         m_mutableStorage.reset();
     }
 
-    task::Task<void> mergeAndPopImmutableBack()
+    task::Task<std::shared_ptr<MutableStorage>> mergeAndPopImmutableBack()
     {
         std::unique_lock mergeLock(m_mergeMutex);
         std::unique_lock immutablesLock(m_listMutex);
@@ -402,6 +409,8 @@ public:
 
         immutablesLock.lock();
         m_immutableStorages.pop_back();
+
+        co_return immutableStorage;
     }
 
     std::shared_ptr<MutableStorageType> frontImmutableStorage()

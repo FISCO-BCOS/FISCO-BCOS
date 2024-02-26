@@ -36,7 +36,7 @@ struct Report
     Report& operator=(const Report&) = delete;
     Report& operator=(Report&&) = default;
     ~Report() noexcept { release(); }
-    void release()
+    void release() noexcept
     {
         if (!m_released)
         {
@@ -76,11 +76,22 @@ struct ITT_DOMAINS
     __itt_string_handle* SET_BLOCK = __itt_string_handle_create("setBlock");
     __itt_string_handle* MERGE_STATE = __itt_string_handle_create("mergeState");
 
+    const __itt_domain* const SERIAL_SCHEDULER = __itt_domain_create("serialScheduler");
+    __itt_string_handle* SERIAL_EXECUTE = __itt_string_handle_create("serialExecute");
+    __itt_string_handle* STAGE_1 = __itt_string_handle_create("stage1");
+    __itt_string_handle* STAGE_2 = __itt_string_handle_create("stage2");
+    __itt_string_handle* STAGE_3 = __itt_string_handle_create("stage3");
+    __itt_string_handle* STAGE_4 = __itt_string_handle_create("stage4");
+    __itt_string_handle* STAGE_5 = __itt_string_handle_create("stage5");
+
     const __itt_domain* const PARALLEL_SCHEDULER = __itt_domain_create("parallelScheduler");
     __itt_string_handle* PARALLEL_EXECUTE = __itt_string_handle_create("parallelExecute");
     __itt_string_handle* SINGLE_PASS = __itt_string_handle_create("singlePass");
     __itt_string_handle* DETECT_RAW = __itt_string_handle_create("detectRAW");
-    __itt_string_handle* EXECUTE_CHUNK = __itt_string_handle_create("executeChunk");
+    __itt_string_handle* EXECUTE_CHUNK1 = __itt_string_handle_create("executeChunk1");
+    __itt_string_handle* EXECUTE_CHUNK2 = __itt_string_handle_create("executeChunk2");
+    __itt_string_handle* EXECUTE_CHUNK3 = __itt_string_handle_create("executeChunk3");
+    __itt_string_handle* RELEASE_CONFLICT = __itt_string_handle_create("releaseConflict");
     __itt_string_handle* MERGE_RWSET = __itt_string_handle_create("mergeRWSet");
     __itt_string_handle* MERGE_CHUNK = __itt_string_handle_create("mergeChunk");
     __itt_string_handle* MERGE_LAST_CHUNK = __itt_string_handle_create("mergeLastChunk");

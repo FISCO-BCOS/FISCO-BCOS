@@ -48,6 +48,7 @@
 #include <evmc/instructions.h>
 #include <evmone/evmone.h>
 #include <fmt/format.h>
+#include <boost/algorithm/hex.hpp>
 #include <boost/multiprecision/cpp_int/import_export.hpp>
 #include <boost/throw_exception.hpp>
 #include <atomic>
@@ -281,9 +282,12 @@ public:
     int64_t blockGasLimit() const { return std::get<0>(m_ledgerConfig.gasLimit()); }
 
     /// Revert any changes made (by any of the other calls).
-    void log(h256s topics, bytesConstRef data)
+    void log(const evmc_address& address, h256s topics, bytesConstRef data)
     {
-        m_logs.emplace_back(bytes{}, std::move(topics), data.toBytes());
+        auto& msg = message();
+        std::span<const uint8_t> view(address.bytes, address.bytes + sizeof(address.bytes));
+        m_logs.emplace_back(
+            toHex<decltype(view), bcos::bytes>(view), std::move(topics), data.toBytes());
     }
 
     void suicide()
