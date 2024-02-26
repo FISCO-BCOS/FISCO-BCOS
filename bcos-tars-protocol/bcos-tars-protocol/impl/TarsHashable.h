@@ -22,8 +22,12 @@ void impl_calculate(bcos::crypto::hasher::Hasher auto hasher,
         return;
     }
 
-    auto const& hashFields = transaction.data;
+    impl_calculate(std::forward<decltype(hasher)>(hasher), transaction.data, out);
+}
 
+void impl_calculate(bcos::crypto::hasher::Hasher auto hasher,
+    bcostars::TransactionData const& hashFields, bcos::concepts::bytebuffer::ByteBuffer auto& out)
+{
     int32_t version = boost::endian::native_to_big((int32_t)hashFields.version);
     hasher.update(version);
     hasher.update(hashFields.chainID);
@@ -45,6 +49,11 @@ void impl_calculate(bcos::crypto::hasher::Hasher auto hasher,
         hasher.update(hashFields.maxFeePerGas);
         hasher.update(hashFields.maxPriorityFeePerGas);
     }
+    if (hashFields.version == (uint32_t)bcos::protocol::TransactionVersion::V2_VERSION)
+    {
+        hasher.update(hashFields.extensions);
+    }
+
     hasher.final(out);
 }
 
@@ -57,7 +66,13 @@ void impl_calculate(bcos::crypto::hasher::Hasher auto hasher,
         return;
     }
 
-    auto const& hashFields = receipt.data;
+    impl_calculate(std::forward<decltype(hasher)>(hasher), receipt.data, out);
+}
+
+void impl_calculate(bcos::crypto::hasher::Hasher auto hasher,
+    bcostars::TransactionReceiptData const& hashFields,
+    bcos::concepts::bytebuffer::ByteBuffer auto& out)
+{
     int32_t version = boost::endian::native_to_big((int32_t)hashFields.version);
     switch (hashFields.version)
     {

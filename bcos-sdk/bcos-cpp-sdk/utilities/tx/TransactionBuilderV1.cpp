@@ -67,8 +67,7 @@ crypto::HashType TransactionBuilderV1::calculateTransactionDataHash(CryptoType _
 crypto::HashType TransactionBuilderV1::calculateTransactionDataHashWithJson(
     CryptoType _cryptoType, std::string _jsonData)
 {
-    auto txData = std::make_unique<bcostars::TransactionData>();
-    txData->readFromJsonString(_jsonData);
+    auto txData = TarsTransactionDataReadFromJsonString(std::move(_jsonData));
     return calculateTransactionDataHash(_cryptoType, *txData);
 }
 
