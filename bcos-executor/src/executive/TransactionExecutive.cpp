@@ -337,6 +337,51 @@ std::optional<storage::Entry> TransactionExecutive::getCodeByContractTableName(
     }
 }
 
+bool TransactionExecutive::setCode(std::string_view contractTableName,
+    std::variant<std::string_view, std::string, bcos::bytes> code)
+{
+    auto contractTable = storage().openTable(contractTableName);
+    // set code hash in contract table
+    if (contractTable)
+    {
+        crypto::HashType codeHash;
+        Entry codeEntry;
+        std::visit(
+            [&codeHash, &codeEntry, this](auto&& code) {
+                codeHash = m_hashImpl->hash(code);
+                codeEntry.importFields({std::move(code)});
+            },
+            code);
+        Entry codeHashEntry;
+        codeHashEntry.importFields({codeHash.asBytes()});
+
+        // not exist in code binary table, set it
+        if (!storage().getRow(bcos::ledger::SYS_CODE_BINARY, codeHash.toRawString()))
+        {
+            // set code in code binary table
+            storage().setRow(
+                bcos::ledger::SYS_CODE_BINARY, codeHash.toRawString(), std::move(codeEntry));
+        }
+
+        // dry code hash in account table
+        storage().setRow(contractTableName, ACCOUNT_CODE_HASH, std::move(codeHashEntry));
+        return true;
+    }
+    return false;
+}
+
+void TransactionExecutive::setAbiByCodeHash(std::string_view codeHash, std::string_view abi)
+{
+    if (!storage().getRow(bcos::ledger::SYS_CONTRACT_ABI, codeHash))
+    {
+        Entry abiEntry;
+        abiEntry.importFields({std::move(abi)});
+
+        storage().setRow(bcos::ledger::SYS_CONTRACT_ABI, codeHash, std::move(abiEntry));
+    }
+}
+
+
 CallParameters::UniquePtr TransactionExecutive::transferBalance(
     CallParameters::UniquePtr callParameters, int64_t requireGas,
     std::string_view currentContextAddress)
@@ -588,6 +633,9 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
         revert();
         return {nullptr, std::move(callParameters)};
     }
+
+    this->setContractTableChanged();
+
     if (callParameters->internalCreate)
     {
         callParameters->abi = std::move(extraData->abi);
@@ -787,15 +835,28 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
         auto codeTable = getContractTableName(newAddress, false);
         m_storageWrapper->createTable(codeTable, std::string(STORAGE_VALUE));
 
-        /// set code field
-        Entry entry = {};
-        entry.importFields({codeString});
-        m_storageWrapper->setRow(codeTable, ACCOUNT_CODE, std::move(entry));
-        if (!callParameters->abi.empty())
+        if (m_blockContext.features().get(
+                ledger::Features::Flag::bugfix_internal_create_redundant_storage))
         {
-            Entry abiEntry = {};
-            abiEntry.importFields({std::move(callParameters->abi)});
-            m_storageWrapper->setRow(codeTable, ACCOUNT_ABI, std::move(abiEntry));
+            setCode(codeTable, std::move(codeString));
+            if (!callParameters->abi.empty())
+            {
+                auto codeHash = m_hashImpl->hash(codeString);
+                setAbiByCodeHash(codeHash.toRawString(), std::move(callParameters->abi));
+            }
+        }
+        else
+        {
+            /// set code field
+            Entry entry = {};
+            entry.importFields({std::move(codeString)});
+            m_storageWrapper->setRow(codeTable, ACCOUNT_CODE, std::move(entry));
+            if (!callParameters->abi.empty())
+            {
+                Entry abiEntry = {};
+                abiEntry.importFields({std::move(callParameters->abi)});
+                m_storageWrapper->setRow(codeTable, ACCOUNT_ABI, std::move(abiEntry));
+            }
         }
 
         /// set link data

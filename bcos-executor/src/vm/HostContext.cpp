@@ -390,36 +390,15 @@ evmc_result HostContext::callBuiltInPrecompiled(
 
 bool HostContext::setCode(bytes code)
 {
-    m_executive->setContractTableChanged();
-
     // set code will cause exception when exec revert
     // new logic
     if (blockVersion() >= uint32_t(bcos::protocol::BlockVersion::V3_1_VERSION))
     {
         auto contractTable = m_executive->storage().openTable(m_tableName);
         // set code hash in contract table
-        auto codeHash = hashImpl()->hash(code);
         if (contractTable)
         {
-            Entry codeHashEntry;
-            codeHashEntry.importFields({codeHash.asBytes()});
-
-            auto codeEntry = m_executive->storage().getRow(
-                bcos::ledger::SYS_CODE_BINARY, codeHashEntry.getField(0));
-
-            if (!codeEntry)
-            {
-                codeEntry = std::make_optional<Entry>();
-                codeEntry->importFields({std::move(code)});
-
-                // set code in code binary table
-                m_executive->storage().setRow(bcos::ledger::SYS_CODE_BINARY,
-                    codeHashEntry.getField(0), std::move(codeEntry.value()));
-            }
-
-            // dry code hash in account table
-            m_executive->storage().setRow(m_tableName, ACCOUNT_CODE_HASH, std::move(codeHashEntry));
-
+            m_executive->setCode(m_tableName, std::move(code));
             if (features().get(ledger::Features::Flag::feature_balance))
             {
                 // update account's special code
@@ -477,6 +456,7 @@ void HostContext::setCodeAndAbi(bytes code, string abi)
                 m_executive->storage().setRow(
                     bcos::ledger::SYS_CONTRACT_ABI, codeHash, std::move(abiEntry.value()));
             }
+            m_executive->setAbiByCodeHash(codeHash, std::move(abi));
 
             return;
         }
