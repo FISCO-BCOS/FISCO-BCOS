@@ -137,6 +137,7 @@ BOOST_AUTO_TEST_CASE(feature)
         "bugfix_dmc_revert",
         "bugfix_keypage_system_entry_hash",
         "bugfix_internal_create_redundant_storage",
+        "bugfix_internal_create_permission_denied",
         "feature_dmc2serial",
         "feature_sharding",
         "feature_rpbft",
@@ -262,6 +263,18 @@ BOOST_AUTO_TEST_CASE(upgrade)
     {
         BOOST_CHECK(features9.get(feature));
     }
+
+    // 3.6.0 to 3.7.0
+    Features features10;
+    features10.setUpgradeFeatures(
+        bcos::protocol::BlockVersion::V3_6_VERSION, bcos::protocol::BlockVersion::V3_7_0_VERSION);
+    auto expect8 = std::to_array<std::string_view>({"bugfix_keypage_system_entry_hash",
+        "bugfix_internal_create_redundant_storage", "bugfix_internal_create_permission_denied"});
+    BOOST_CHECK_EQUAL(validFlags(features10).size(), expect8.size());
+    for (auto feature : expect8)
+    {
+        BOOST_CHECK(features10.get(feature));
+    }
 }
 
 BOOST_AUTO_TEST_CASE(genesis)
@@ -307,6 +320,20 @@ BOOST_AUTO_TEST_CASE(genesis)
     for (auto feature : expect4)
     {
         BOOST_CHECK(features4.get(feature));
+    }
+
+    // 3.7.0
+    Features features5;
+    features5.setGenesisFeatures(bcos::protocol::BlockVersion::V3_7_0_VERSION);
+    auto expect5 = std::to_array<std::string_view>({"bugfix_revert", "bugfix_statestorage_hash",
+        "bugfix_evm_create2_delegatecall_staticcall_codecopy", "bugfix_event_log_order",
+        "bugfix_call_noaddr_return", "bugfix_precompiled_codehash", "bugfix_dmc_revert",
+        "bugfix_keypage_system_entry_hash", "bugfix_internal_create_redundant_storage",
+        "bugfix_internal_create_permission_denied"});
+    BOOST_CHECK_EQUAL(validFlags(features5).size(), expect5.size());
+    for (auto feature : expect5)
+    {
+        BOOST_CHECK(features5.get(feature));
     }
 }
 

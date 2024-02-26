@@ -1659,8 +1659,14 @@ bool TransactionExecutive::checkAuth(const CallParameters::UniquePtr& callParame
     }
     if (callParameters->create)
     {
-        // if create contract, then
-        //      check exec auth
+        // if create contract, then check exec auth
+        // if bugfix_internal_create_permission_denied is set, then internal call will not check
+        if (m_blockContext.features().get(
+                ledger::Features::Flag::bugfix_internal_create_permission_denied) &&
+            callParameters->internalCall)
+        {
+            return true;
+        }
         if (!checkExecAuth(callParameters))
         {
             auto newAddress = string(callParameters->codeAddress);

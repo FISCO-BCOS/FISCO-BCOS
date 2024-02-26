@@ -37,6 +37,7 @@ public:
         bugfix_dmc_revert,
         bugfix_keypage_system_entry_hash,
         bugfix_internal_create_redundant_storage,  // to perf internal create code and abi storage
+        bugfix_internal_create_permission_denied,
         feature_dmc2serial,
         feature_sharding,
         feature_rpbft,
@@ -144,6 +145,8 @@ public:
             {protocol::BlockVersion::V3_6_1_VERSION,
                 {Flag::bugfix_keypage_system_entry_hash,
                     Flag::bugfix_internal_create_redundant_storage}},
+            {protocol::BlockVersion::V3_7_0_VERSION,
+                {Flag::bugfix_internal_create_permission_denied}},
         });
 
         for (const auto& upgradeFeatures : upgradeRoadmap)
