@@ -9,6 +9,7 @@
 #include "bcos-task/Generator.h"
 #include "bcos-task/Trait.h"
 #include "bcos-transaction-executor/vm/VMFactory.h"
+#include "bcos-utilities/DataConvertUtility.h"
 #include "precompiled/PrecompiledManager.h"
 #include "vm/HostContext.h"
 #include "vm/VMInstance.h"
@@ -78,7 +79,7 @@ private:
             if (c_fileLogLevel <= LogLevel::TRACE)
             {
                 TRANSACTION_EXECUTOR_LOG(TRACE)
-                    << "Execte transaction: " << transaction.hash().hex();
+                    << "Execte transaction: " << toHex(transaction.hash());
             }
 
             Rollbackable<std::decay_t<decltype(storage)>> rollbackableStorage(storage);
@@ -123,9 +124,22 @@ private:
             }
 
             auto const& logEntries = hostContext.logs();
-            receipt = executor.m_receiptFactory.createReceipt(gasLimit - evmcResult.gas_left,
-                std::move(newContractAddress), logEntries, evmcResult.status_code, output,
-                blockHeader.number());
+            switch (static_cast<bcos::protocol::TransactionVersion>(transaction.version()))
+            {
+            case bcos::protocol::TransactionVersion::V0_VERSION:
+                receipt = executor.m_receiptFactory.createReceipt(gasLimit - evmcResult.gas_left,
+                    newContractAddress, logEntries, evmcResult.status_code, output,
+                    blockHeader.number());
+                break;
+            case bcos::protocol::TransactionVersion::V1_VERSION:
+                receipt = executor.m_receiptFactory.createReceipt2(gasLimit - evmcResult.gas_left,
+                    newContractAddress, logEntries, evmcResult.status_code, output,
+                    blockHeader.number());
+                break;
+            default:
+                BOOST_THROW_EXCEPTION(std::runtime_error(
+                    "Invalid receipt version: " + std::to_string(transaction.version())));
+            }
         }
         catch (NotFoundCodeError& e)
         {
@@ -145,6 +159,15 @@ private:
                 0, {}, {}, EVMC_INTERNAL_ERROR, {}, blockHeader.number());
             receipt->setMessage(boost::diagnostic_information(e));
         }
+
+        if (c_fileLogLevel <= LogLevel::TRACE)
+        {
+            TRANSACTION_EXECUTOR_LOG(TRACE)
+                << "Execte transaction finished: " << receipt->version() << " | "
+                << receipt->status() << " | [" << receipt->message() << "] | "
+                << receipt->logEntries().size() << " | " << receipt->gasUsed();
+        }
+
         co_yield receipt;  // 完成第三步 Complete the third step
     }
 
