@@ -19,6 +19,8 @@
  */
 
 #include "ReceiptBuilder.h"
+#include <bcos-tars-protocol/impl/TarsHashable.h>
+
 bcostars::ReceiptDataUniquePtr bcos::cppsdk::utilities::ReceiptBuilder::createReceiptData(
     const std::string& _gasUsed, const std::string& _contractAddress, const bcos::bytes& _output,
     int64_t _blockNumber)
@@ -37,16 +39,14 @@ bcostars::ReceiptDataUniquePtr bcos::cppsdk::utilities::ReceiptBuilder::createRe
 bcostars::ReceiptDataUniquePtr bcos::cppsdk::utilities::ReceiptBuilder::createReceiptDataWithJson(
     const std::string& _json)
 {
-    auto _receipt = std::make_unique<bcostars::TransactionReceiptData>();
-    _receipt->readFromJsonString(_json);
+    auto _receipt = TarsReceiptDataReadFromJsonString(_json);
     return _receipt;
 }
 
 bcos::crypto::HashType bcos::cppsdk::utilities::ReceiptBuilder::calculateReceiptDataHashWithJson(
     bcos::cppsdk::utilities::CryptoType _cryptoType, const std::string& _json)
 {
-    auto _receipt = std::make_unique<bcostars::TransactionReceiptData>();
-    _receipt->readFromJsonString(_json);
+    auto _receipt = createReceiptDataWithJson(_json);
     return calculateReceiptDataHash(_cryptoType, *_receipt);
 }
 
@@ -64,7 +64,9 @@ bcos::crypto::HashType bcos::cppsdk::utilities::ReceiptBuilder::calculateReceipt
     {
         cryptoSuite = &*m_ecdsaCryptoSuite;
     }
-    return _receiptData.hash(cryptoSuite->hashImpl());
+    crypto::HashType receiptHash;
+    bcos::concepts::hash::calculate(cryptoSuite->hashImpl()->hasher(), _receiptData, receiptHash);
+    return receiptHash;
 }
 
 bcos::bytesConstPtr bcos::cppsdk::utilities::ReceiptBuilder::encodeReceipt(
@@ -82,8 +84,8 @@ std::string bcos::cppsdk::utilities::ReceiptBuilder::decodeReceiptDataToJsonObj(
 {
     tars::TarsInputStream<tars::BufferReader> inputStream;
     inputStream.setBuffer((const char*)_receiptBytes.data(), _receiptBytes.size());
-    auto receiptData = std::make_unique<bcostars::TransactionReceiptData>();
-    receiptData->readFrom(inputStream);
-    auto receiptDataJson = receiptData->writeToJsonString();
+    bcostars::TransactionReceiptData receiptData;
+    receiptData.readFrom(inputStream);
+    auto receiptDataJson = TarsReceiptDataWriteToJsonString(receiptData);
     return receiptDataJson;
 }
