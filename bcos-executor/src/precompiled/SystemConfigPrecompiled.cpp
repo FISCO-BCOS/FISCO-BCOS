@@ -424,9 +424,7 @@ void SystemConfigPrecompiled::registerGovernorToCaller(
                               << LOG_DESC("get governor list failed")
                               << LOG_KV("info", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(
-            PrecompiledError("get governor list failed, maybe governor is not set，please "
-                             "initialize it through initAuth;"
-                             "And please check whether it is currently in wasm mode, "
+            PrecompiledError("get governor list failed, maybe current is wasm model, "
                              "feature_balance_precompiled is not supported in wasm model."));
     }
     if (governorAddress.empty())
