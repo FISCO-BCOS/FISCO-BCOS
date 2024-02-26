@@ -1,40 +1,41 @@
 #pragma once
 
 #include "bcos-crypto/interfaces/crypto/Hash.h"
+#include "bcos-crypto/merkle/Merkle.h"
+#include "bcos-framework/dispatcher/SchedulerInterface.h"
+#include "bcos-framework/dispatcher/SchedulerTypeDef.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
+#include "bcos-framework/protocol/Block.h"
+#include "bcos-framework/protocol/BlockFactory.h"
 #include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/protocol/BlockHeaderFactory.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
+#include "bcos-framework/protocol/TransactionSubmitResultFactory.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
+#include "bcos-framework/txpool/TxPoolInterface.h"
 #include "bcos-ledger/src/libledger/LedgerMethods.h"
 #include "bcos-task/TBBWait.h"
+#include "bcos-task/Wait.h"
 #include "bcos-tool/VersionConverter.h"
 #include "bcos-utilities/Common.h"
-#include <bcos-crypto/merkle/Merkle.h>
-#include <bcos-framework/dispatcher/SchedulerInterface.h>
-#include <bcos-framework/dispatcher/SchedulerTypeDef.h>
-#include <bcos-framework/protocol/BlockFactory.h>
-#include <bcos-framework/protocol/TransactionSubmitResultFactory.h>
-#include <bcos-framework/txpool/TxPoolInterface.h>
-#include <bcos-task/Wait.h>
 #include <bcos-utilities/ITTAPI.h>
 #include <fmt/format.h>
-#include <ittnotify.h>
 #include <oneapi/tbb/blocked_range.h>
-#include <oneapi/tbb/concurrent_vector.h>
-#include <oneapi/tbb/parallel_for_each.h>
 #include <oneapi/tbb/parallel_invoke.h>
+#include <oneapi/tbb/parallel_pipeline.h>
 #include <oneapi/tbb/parallel_reduce.h>
+#include <oneapi/tbb/task_arena.h>
 #include <oneapi/tbb/task_group.h>
+#include <boost/atomic.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
 #include <chrono>
@@ -77,7 +78,6 @@ bcos::h256 calcauteTransactionRoot(protocol::Block const& block, crypto::Hash co
  */
 std::chrono::milliseconds::rep current();
 
-
 /**
  * Calculates the state root of the given storage using the specified hash implementation.
  *
@@ -85,7 +85,8 @@ std::chrono::milliseconds::rep current();
  * @param hashImpl The hash implementation to use for the calculation.
  * @return A task that will eventually resolve to the calculated state root.
  */
-task::Task<h256> calculateStateRoot(auto& storage, crypto::Hash const& hashImpl)
+task::Task<h256> calculateStateRoot(
+    auto& storage, uint32_t blockVersion, crypto::Hash const& hashImpl)
 {
     constexpr static auto STATE_ROOT_CHUNK_SIZE = 64;
     auto range = co_await storage2::range(storage);
@@ -139,18 +140,11 @@ task::Task<h256> calculateStateRoot(auto& storage, crypto::Hash const& hashImpl)
     co_return xorHash.m_hash;
 }
 
-task::Task<std::tuple<u256, h256>> calculateReceiptHashAndRoot(
-    auto& receipts, auto& block, crypto::Hash const& hashImpl)
+task::Task<std::tuple<u256, h256>> calculateReceiptRoot(
+    RANGES::range auto const& receipts, protocol::Block& block, crypto::Hash const& hashImpl)
 {
     u256 gasUsed;
     h256 receiptRoot;
-    tbb::parallel_for(tbb::blocked_range(0LU, RANGES::size(receipts)), [&](auto const& range) {
-        for (auto i = range.begin(); i != range.end(); ++i)
-        {
-            auto& receipt = receipts[i];
-            receipt->calculateHash(hashImpl);
-        }
-    });
 
     tbb::parallel_invoke(
         [&]() {
@@ -191,8 +185,9 @@ task::Task<std::tuple<u256, h256>> calculateReceiptHashAndRoot(
  * @param newBlock The updated block.
  * @param hashImpl The hash implementation used to calculate the block hash.
  */
-void finishExecute(auto& storage, RANGES::range auto& receipts,
-    protocol::BlockHeader& newBlockHeader, protocol::Block& block, crypto::Hash const& hashImpl)
+void finishExecute(auto& storage, RANGES::range auto const& receipts,
+    protocol::BlockHeader& newBlockHeader, protocol::Block& block,
+    RANGES::input_range auto const& transactions, bool& sysBlock, crypto::Hash const& hashImpl)
 {
     ittapi::Report finishReport(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
         ittapi::ITT_DOMAINS::instance().FINISH_EXECUTE);
@@ -202,10 +197,18 @@ void finishExecute(auto& storage, RANGES::range auto& receipts,
     h256 receiptRoot;
 
     tbb::parallel_invoke([&]() { transactionRoot = calcauteTransactionRoot(block, hashImpl); },
-        [&]() { stateRoot = task::tbb::syncWait(calculateStateRoot(storage, hashImpl)); },
+        [&]() {
+            stateRoot = task::tbb::syncWait(
+                calculateStateRoot(storage, block.blockHeaderConst()->version(), hashImpl));
+        },
         [&]() {
             std::tie(gasUsed, receiptRoot) =
-                task::tbb::syncWait(calculateReceiptHashAndRoot(receipts, block, hashImpl));
+                task::tbb::syncWait(calculateReceiptRoot(receipts, block, hashImpl));
+        },
+        [&]() {
+            sysBlock = RANGES::any_of(transactions, [](auto const& transaction) {
+                return bcos::precompiled::c_systemTxsAddress.contains(transaction->to());
+            });
         });
     newBlockHeader.setGasUsed(gasUsed);
     newBlockHeader.setTxsRoot(transactionRoot);
@@ -230,7 +233,8 @@ private:
         std::function<void(Error::Ptr)>)>
         m_transactionNotifier;
     crypto::Hash const& m_hashImpl;
-    ledger::LedgerConfig::Ptr m_ledgerConfig;
+    std::shared_ptr<ledger::LedgerConfig> m_ledgerConfig;
+    std::mutex m_ledgerConfigMutex;
 
     int64_t m_lastExecutedBlockNumber = -1;
     std::mutex m_executeMutex;
@@ -320,21 +324,25 @@ private:
             auto now = current();
             scheduler.m_multiLayerStorage.newMutable();
             auto view = scheduler.m_multiLayerStorage.fork(true);
-            auto constTransactions = co_await getTransactions(scheduler.m_txpool, *block);
+            auto transactions = co_await getTransactions(scheduler.m_txpool, *block);
 
-            auto ledgerConfig = scheduler.m_ledgerConfig;
+            ledger::LedgerConfig::Ptr ledgerConfig;
+            {
+                std::unique_lock ledgerConfigLock(scheduler.m_ledgerConfigMutex);
+                ledgerConfig = scheduler.m_ledgerConfig;
+            }
             auto receipts = co_await transaction_scheduler::executeBlock(scheduler.m_schedulerImpl,
                 view, scheduler.m_executor, *blockHeader,
-                constTransactions |
-                    RANGES::views::transform(
-                        [](protocol::Transaction::ConstPtr const& transactionPtr)
-                            -> protocol::Transaction const& { return *transactionPtr; }),
+                transactions | RANGES::views::transform(
+                                   [](protocol::Transaction::ConstPtr const& transactionPtr)
+                                       -> protocol::Transaction const& { return *transactionPtr; }),
                 *ledgerConfig);
 
             auto executedBlockHeader =
                 scheduler.m_blockHeaderFactory.populateBlockHeader(blockHeader);
+            bool sysBlock = false;
             finishExecute(scheduler.m_multiLayerStorage.mutableStorage(), receipts,
-                *executedBlockHeader, *block, scheduler.m_hashImpl);
+                *executedBlockHeader, *block, transactions, sysBlock, scheduler.m_hashImpl);
 
             if (verify && (executedBlockHeader->hash() != blockHeader->hash()))
             {
@@ -349,13 +357,11 @@ private:
 
             scheduler.m_multiLayerStorage.pushMutableToImmutableFront();
             scheduler.m_lastExecutedBlockNumber = blockHeader->number();
-            scheduler.m_asyncGroup.run([view = std::move(view)]() {});
 
-            bool sysBlock = false;
             std::unique_lock resultsLock(scheduler.m_resultsMutex);
             scheduler.m_results.push_front(
                 {.m_transactions =
-                        std::make_shared<protocol::ConstTransactions>(std::move(constTransactions)),
+                        std::make_shared<protocol::ConstTransactions>(std::move(transactions)),
                     .m_receipts = std::move(receipts),
                     .m_executedBlockHeader = executedBlockHeader,
                     .m_block = std::move(block),
@@ -368,7 +374,7 @@ private:
                 << " | stateRoot: " << executedBlockHeader->stateRoot()
                 << " | txRoot: " << executedBlockHeader->txsRoot()
                 << " | receiptRoot: " << executedBlockHeader->receiptsRoot()
-                << " | gasUsed: " << executedBlockHeader->gasUsed()
+                << " | gasUsed: " << executedBlockHeader->gasUsed() << " | sysBlock: " << sysBlock
                 << " | elapsed: " << (current() - now) << "ms";
 
             co_return std::make_tuple(nullptr, std::move(executedBlockHeader), sysBlock);
@@ -447,13 +453,16 @@ private:
                 co_await ledger::prewriteBlock(
                     scheduler.m_ledger, result.m_transactions, result.m_block, false, *lastStorage);
             }
-            co_await scheduler.m_multiLayerStorage.mergeAndPopImmutableBack();
+            auto mergedStorage = co_await scheduler.m_multiLayerStorage.mergeAndPopImmutableBack();
             co_await ledger::storeTransactionsAndReceipts(
                 scheduler.m_ledger, result.m_transactions, result.m_block);
 
             auto ledgerConfig = co_await ledger::getLedgerConfig(scheduler.m_ledger);
             ledgerConfig->setHash(header->hash());
-            scheduler.m_ledgerConfig = ledgerConfig;
+            {
+                std::unique_lock ledgerConfigLock(scheduler.m_ledgerConfigMutex);
+                scheduler.m_ledgerConfig = ledgerConfig;
+            }
             BASELINE_SCHEDULER_LOG(INFO) << "Commit block finished: " << header->number()
                                          << " | elapsed: " << (current() - now) << "ms";
             commitLock.unlock();
@@ -484,7 +493,7 @@ private:
 
                             return submitResult;
                         }) |
-                    RANGES::to<std::vector<protocol::TransactionSubmitResult::Ptr>>();
+                    RANGES::to<std::vector>();
 
                 auto submitResultsPtr = std::make_shared<bcos::protocol::TransactionSubmitResults>(
                     std::move(submitResults));
@@ -568,13 +577,18 @@ public:
             auto view = self->m_multiLayerStorage.fork(false);
             view.newTemporaryMutable();
             auto blockHeader = self->m_blockHeaderFactory.createBlockHeader();
-            auto ledgerConfig = self->m_ledgerConfig;
+            ledger::LedgerConfig::Ptr ledgerConfig;
+            {
+                std::unique_lock ledgerConfigLock(self->m_ledgerConfigMutex);
+                ledgerConfig = self->m_ledgerConfig;
+            }
 
             protocol::TransactionReceipt::Ptr receipt;
             if (ledgerConfig)
             {
                 blockHeader->setVersion(ledgerConfig->compatibilityVersion());
-                blockHeader->setNumber(ledgerConfig->blockNumber());
+                blockHeader->setNumber(ledgerConfig->blockNumber() + 1);  // Use next block number
+                blockHeader->calculateHash(self->m_hashImpl);
                 receipt = co_await transaction_executor::executeTransaction(self->m_executor, view,
                     *blockHeader, *transaction, 0, *ledgerConfig, task::syncWait);
             }
@@ -582,6 +596,7 @@ public:
             {
                 ledger::LedgerConfig emptyLedgerConfig;
                 blockHeader->setVersion((uint32_t)bcos::protocol::BlockVersion::V3_2_4_VERSION);
+                blockHeader->calculateHash(self->m_hashImpl);
                 receipt = co_await transaction_executor::executeTransaction(self->m_executor, view,
                     *blockHeader, *transaction, 0, emptyLedgerConfig, task::syncWait);
             }

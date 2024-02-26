@@ -84,9 +84,6 @@ bcos::transaction_scheduler::BaselineSchedulerInitializer::build(::rocksdb::DB& 
     if (config.parallel)
     {
         auto scheduler = std::make_shared<SchedulerParallelImpl>();
-        scheduler->setChunkSize(config.chunkSize);
-        scheduler->setMaxToken(config.maxThread);
-
         return buildBaselineHolder(std::move(scheduler));
     }
 

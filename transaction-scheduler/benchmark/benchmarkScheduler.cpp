@@ -4,6 +4,7 @@
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-storage/RocksDBStorage2.h"
+#include "bcos-tars-protocol/impl/TarsHashable.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
@@ -16,9 +17,9 @@
 #include "bcos-transaction-scheduler/SchedulerParallelImpl.h"
 #include "bcos-transaction-scheduler/SchedulerSerialImpl.h"
 #include "bcos-utilities/ITTAPI.h"
+#include "transaction-executor/tests/TestBytecode.h"
 #include <benchmark/benchmark.h>
 #include <fmt/format.h>
-#include <transaction-executor/tests/TestBytecode.h>
 #include <boost/throw_exception.hpp>
 #include <variant>
 
@@ -86,13 +87,14 @@ struct Fixture
                             });
                         createTransaction.mutableInner().data.input.assign(
                             m_helloworldBytecodeBinary.begin(), m_helloworldBytecodeBinary.end());
+                        createTransaction.calculateHash(*m_cryptoSuite->hashImpl());
 
                         auto block = m_blockFactory->createBlock();
                         auto blockHeader = block->blockHeader();
                         blockHeader->setNumber(1);
-                        blockHeader->calculateHash(*m_cryptoSuite->hashImpl());
                         blockHeader->setVersion(
                             (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
+                        blockHeader->calculateHash(*m_cryptoSuite->hashImpl());
 
                         auto transactions =
                             RANGES::single_view(std::addressof(createTransaction)) |
@@ -146,6 +148,7 @@ struct Fixture
                 inner.data.to = m_contractAddress;
                 auto input = abiCodec.abiIn("issue(address,int256)", address, singleIssue);
                 inner.data.input.assign(input.begin(), input.end());
+                transaction->calculateHash(*m_cryptoSuite->hashImpl());
                 return transaction;
             }) |
             RANGES::to<decltype(m_transactions)>();
@@ -167,6 +170,7 @@ struct Fixture
                 auto input = abiCodec.abiIn(
                     "transfer(address,address,int256)", fromAddress, toAddress, singleTransfer);
                 inner.data.input.assign(input.begin(), input.end());
+                transaction->calculateHash(*m_cryptoSuite->hashImpl());
                 return transaction;
             }) |
             RANGES::to<decltype(m_transactions)>();
@@ -193,6 +197,7 @@ struct Fixture
                 auto input = abiCodec.abiIn(
                     "transfer(address,address,int256)", fromAddress, toAddress, singleTransfer);
                 inner.data.input.assign(input.begin(), input.end());
+                transaction->calculateHash(*m_cryptoSuite->hashImpl());
                 return transaction;
             }) |
             RANGES::to<decltype(m_transactions)>();
@@ -231,6 +236,7 @@ struct Fixture
 
                             auto input = abiCodec.abiIn("balance(address)", address);
                             inner.data.input.assign(input.begin(), input.end());
+                            transaction->calculateHash(*m_cryptoSuite->hashImpl());
                             return transaction;
                         }) |
                         RANGES::to<
@@ -341,6 +347,7 @@ static void issue(benchmark::State& state)
                                     balance.template convert_to<std::string>())));
                         }
                     }
+                    fixture.m_multiLayerStorage.pushMutableToImmutableFront();
                 }(state));
             }
         },
@@ -436,7 +443,7 @@ static void transfer(benchmark::State& state)
                         }
                     }
 
-                    co_return;
+                    fixture.m_multiLayerStorage.pushMutableToImmutableFront();
                 }(state));
             }
         },
@@ -543,6 +550,7 @@ static void conflictTransfer(benchmark::State& state)
                             }
                         }
                     }
+                    fixture.m_multiLayerStorage.pushMutableToImmutableFront();
                 }(state));
             }
         },
