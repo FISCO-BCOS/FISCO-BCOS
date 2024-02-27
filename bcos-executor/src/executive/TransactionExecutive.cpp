@@ -1663,7 +1663,7 @@ bool TransactionExecutive::checkAuth(const CallParameters::UniquePtr& callParame
         // if bugfix_internal_create_permission_denied is set, then internal call will not check
         if (m_blockContext.features().get(
                 ledger::Features::Flag::bugfix_internal_create_permission_denied) &&
-            callParameters->internalCall)
+            callParameters->internalCreate)
         {
             return true;
         }
