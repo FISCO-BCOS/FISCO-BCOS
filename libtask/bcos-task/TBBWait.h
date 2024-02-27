@@ -44,7 +44,7 @@ constexpr inline struct SyncWait
                     }
                     else
                     {
-                        result = co_await task;
+                        result.template emplace<ReturnType>(co_await task);
                     }
                 }
             }
