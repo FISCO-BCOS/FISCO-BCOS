@@ -20,7 +20,6 @@
 
 #pragma once
 
-#include <bcos-cpp-sdk/utilities/tx/Transaction.h>
 #include <bcos-cpp-sdk/utilities/tx/TransactionBuilder.h>
 #include <bcos-cpp-sdk/utilities/tx/TransactionUtils.h>
 #include <bcos-crypto/hash/Keccak256.h>
@@ -28,6 +27,7 @@
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-crypto/signature/sm2/SM2Crypto.h>
+#include <bcos-tars-protocol/tars/Transaction.h>
 #include <bcos-utilities/Common.h>
 #include <memory>
 #include <mutex>

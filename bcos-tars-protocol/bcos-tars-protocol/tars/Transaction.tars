@@ -13,6 +13,7 @@ module bcostars {
         11 optional long         gasLimit;
         12 optional string       maxFeePerGas;
         13 optional string       maxPriorityFeePerGas;
+        14 optional vector<byte> extensions;
     };
 
     struct Transaction {
