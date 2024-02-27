@@ -1,5 +1,5 @@
 #include "Common.h"
-#include "WBA20ByteCode.h"
+#include "Transfer20ByteCode.h"
 #include "bcos-codec/abi/ContractABICodec.h"
 #include "bcos-cpp-sdk/tarsRPC/CoRPCClient.h"
 #include "bcos-cpp-sdk/tarsRPC/Handle.h"
@@ -235,7 +235,7 @@ int main(int argc, char* argv[])
 
         bcostars::protocol::TransactionFactoryImpl transactionFactory(cryptoSuite);
         bcos::bytes deployBin;
-        boost::algorithm::unhex(WBA20_BYTECODE, std::back_inserter(deployBin));
+        boost::algorithm::unhex(TRANSFER20_BYTECODE, std::back_inserter(deployBin));
 
         auto deployTransaction =
             transactionFactory.createTransaction(0, "", deployBin, rpcClient.generateNonce(),
