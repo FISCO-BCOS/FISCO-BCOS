@@ -267,7 +267,7 @@ BOOST_AUTO_TEST_CASE(upgrade)
     // 3.6.0 to 3.7.0
     Features features10;
     features10.setUpgradeFeatures(
-        bcos::protocol::BlockVersion::V3_6_VERSION, bcos::protocol::BlockVersion::V3_7_0_VERSION);
+        bcos::protocol::BlockVersion::V3_6_VERSION, bcos::protocol::BlockVersion::V3_7_VERSION);
     auto expect8 = std::to_array<std::string_view>({"bugfix_keypage_system_entry_hash",
         "bugfix_internal_create_redundant_storage", "bugfix_internal_create_permission_denied"});
     BOOST_CHECK_EQUAL(validFlags(features10).size(), expect8.size());
@@ -324,7 +324,7 @@ BOOST_AUTO_TEST_CASE(genesis)
 
     // 3.7.0
     Features features5;
-    features5.setGenesisFeatures(bcos::protocol::BlockVersion::V3_7_0_VERSION);
+    features5.setGenesisFeatures(bcos::protocol::BlockVersion::V3_7_VERSION);
     auto expect5 = std::to_array<std::string_view>({"bugfix_revert", "bugfix_statestorage_hash",
         "bugfix_evm_create2_delegatecall_staticcall_codecopy", "bugfix_event_log_order",
         "bugfix_call_noaddr_return", "bugfix_precompiled_codehash", "bugfix_dmc_revert",

@@ -145,7 +145,7 @@ public:
             {protocol::BlockVersion::V3_6_1_VERSION,
                 {Flag::bugfix_keypage_system_entry_hash,
                     Flag::bugfix_internal_create_redundant_storage}},
-            {protocol::BlockVersion::V3_7_0_VERSION,
+            {protocol::BlockVersion::V3_7_VERSION,
                 {Flag::bugfix_internal_create_permission_denied}},
         });
 
