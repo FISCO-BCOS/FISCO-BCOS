@@ -11,6 +11,7 @@
 #include <bcos-gateway/libnetwork/PeerBlacklist.h>
 #include <bcos-gateway/libnetwork/PeerWhitelist.h>
 #include <bcos-utilities/Common.h>  // for Guard, Mutex
+#include <oneapi/tbb/task_arena.h>
 #include <oneapi/tbb/task_group.h>
 #include <openssl/x509.h>
 #include <boost/asio/deadline_timer.hpp>  // for deadline_timer
@@ -189,6 +190,7 @@ protected:
         }
     }
 
+    tbb::task_arena m_taskArena;
     tbb::task_group m_asyncGroup;
     std::shared_ptr<SessionCallbackManagerInterface> m_sessionCallbackManager;
 

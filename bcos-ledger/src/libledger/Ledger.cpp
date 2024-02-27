@@ -1632,7 +1632,7 @@ static task::Task<void> setGenesisFeatures(RANGES::input_range auto const& featu
             features.set(featureSet.flag);
         }
     }
-    co_await features.writeToStorage(storage, 0);
+    co_await writeToStorage(features, storage, 0);
 }
 
 static task::Task<void> setAllocs(
@@ -1756,8 +1756,8 @@ bool Ledger::buildGenesisBlock(
 
                     Features shardingFeature;
                     shardingFeature.setToShardingDefault((protocol::BlockVersion)storageVersion);
-                    co_await shardingFeature.writeToStorage(
-                        *m_storage, boost::lexical_cast<long>(blockNumberEntry->get()));
+                    co_await writeToStorage(shardingFeature, *m_storage,
+                        boost::lexical_cast<long>(blockNumberEntry->get()));
                 }
             }());
 
