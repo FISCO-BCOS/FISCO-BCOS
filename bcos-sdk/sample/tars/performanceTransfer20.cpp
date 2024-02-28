@@ -116,9 +116,9 @@ void issue(bcos::sdk::RPCClient& rpcClient, std::shared_ptr<bcos::crypto::Crypto
             collector.send(true, 0);
 
             auto now = bcos::sample::currentTime();
-            auto receipt = bcos::task::tbb::syncWait(
-                bcos::sdk::async::sendTransaction(rpcClient, *transaction))
-                               .get();
+            auto handle = bcos::task::tbb::syncWait(
+                bcos::sdk::async::sendTransaction(rpcClient, *transaction));
+            auto receipt = handle.get();
 
             auto elapsed = bcos::sample::currentTime() - now;
             if (receipt->status() != 0)

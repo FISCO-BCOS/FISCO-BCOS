@@ -3,7 +3,7 @@
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-tars-protocol/tars/RPC.h"
-#include "detail/Handle.h"
+#include "detail/RPCHandle.h"
 
 namespace bcos::sdk
 {
@@ -31,21 +31,21 @@ public:
     std::string generateNonce();
 };
 
-class SendTransaction : public bcos::sdk::Handle<bcos::protocol::TransactionReceipt::Ptr>
+class SendTransaction : public bcos::sdk::RPCHandle<bcos::protocol::TransactionReceipt::Ptr>
 {
 public:
     SendTransaction(RPCClient& rpcClient);
     SendTransaction& send(const bcos::protocol::Transaction& transaction);
 };
 
-class Call : public bcos::sdk::Handle<protocol::TransactionReceipt::Ptr>
+class Call : public bcos::sdk::RPCHandle<protocol::TransactionReceipt::Ptr>
 {
 public:
     Call(RPCClient& rpcClient);
     Call& send(const protocol::Transaction& transaction);
 };
 
-class BlockNumber : public bcos::sdk::Handle<long>
+class BlockNumber : public bcos::sdk::RPCHandle<long>
 {
 public:
     BlockNumber(RPCClient& rpcClient);

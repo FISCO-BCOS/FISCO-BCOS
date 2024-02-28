@@ -74,7 +74,7 @@ std::string bcos::sdk::RPCClient::generateNonce()
     return nonce;
 }
 
-bcos::sdk::SendTransaction::SendTransaction(RPCClient& rpcClient) : Handle(rpcClient) {}
+bcos::sdk::SendTransaction::SendTransaction(RPCClient& rpcClient) : RPCHandle(rpcClient) {}
 bcos::sdk::SendTransaction& bcos::sdk::SendTransaction::send(
     const bcos::protocol::Transaction& transaction)
 {
@@ -91,7 +91,7 @@ bcos::sdk::SendTransaction& bcos::sdk::SendTransaction::send(
     return *this;
 }
 
-bcos::sdk::Call::Call(RPCClient& rpcClient) : Handle(rpcClient) {}
+bcos::sdk::Call::Call(RPCClient& rpcClient) : RPCHandle(rpcClient) {}
 bcos::sdk::Call& bcos::sdk::Call::send(const protocol::Transaction& transaction)
 {
     auto const& tarsTransaction =
@@ -107,7 +107,7 @@ bcos::sdk::Call& bcos::sdk::Call::send(const protocol::Transaction& transaction)
     return *this;
 }
 
-bcos::sdk::BlockNumber::BlockNumber(RPCClient& rpcClient) : Handle(rpcClient) {}
+bcos::sdk::BlockNumber::BlockNumber(RPCClient& rpcClient) : RPCHandle(rpcClient) {}
 bcos::sdk::BlockNumber& bcos::sdk::BlockNumber::send()
 {
     std::promise<tars::ReqMessagePtr> promise;

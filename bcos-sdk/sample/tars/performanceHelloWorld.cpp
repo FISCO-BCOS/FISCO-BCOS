@@ -59,7 +59,6 @@ int performance()
         std::atomic_int failed = 0;
         std::cout << "Sending transaction..." << std::endl;
 
-        tbb::task_group taskGroup;
         boost::latch latch(count);
         tbb::parallel_for(tbb::blocked_range(0LU, count), [&](const auto& range) {
             auto rand = std::mt19937(std::random_device{}());
@@ -94,7 +93,6 @@ int performance()
         long sendElapsed = bcos::sample::currentTime() - elapsed;
 
         latch.wait();
-        taskGroup.wait();
         elapsed = bcos::sample::currentTime() - elapsed;
 
         std::cout << std::endl << "=======================================" << std::endl;

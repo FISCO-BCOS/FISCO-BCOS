@@ -1,7 +1,6 @@
 #pragma once
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-tars-protocol/tars/RPC.h"
-#include <any>
 #include <variant>
 
 namespace bcos::sdk
