@@ -50,14 +50,14 @@ constexpr inline struct SyncWait
             }
             catch (...)
             {
-                result = std::current_exception();
+                result.template emplace<std::exception_ptr>(std::current_exception());
             }
 
             if (finished.test_and_set())
             {
-                // finished已经被设置,说明外部已经suspend了,此处要获取spsendPoint并resume
+                // finished已经被设置,说明外部已经suspend了,此处要获取suspendPoint并resume
                 // finished has been set, which means that the external has been suspended, here you
-                // need to get spsendPoint and resume
+                // need to get suspendPoint and resume
                 suspendPoint.wait({});
                 oneapi::tbb::task::resume(suspendPoint.load());
             }

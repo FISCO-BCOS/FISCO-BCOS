@@ -1,4 +1,6 @@
 #pragma once
+
+#include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-utilities/FixedBytes.h"
 #include <indicators/block_progress_bar.hpp>
 #include <indicators/cursor_control.hpp>
@@ -35,5 +37,7 @@ public:
     void receive(bool success, long elapsed);
     void report();
 };
+
+std::string parseRevertMessage(bcos::bytesConstRef output, bcos::crypto::Hash::Ptr hashImpl);
 
 }  // namespace bcos::sample

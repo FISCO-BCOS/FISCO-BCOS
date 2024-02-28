@@ -52,13 +52,13 @@ constexpr inline struct SyncWait
                     }
                     else
                     {
-                        result = co_await task;
+                        result.template emplace<ReturnType>(co_await task);
                     }
                 }
             }
             catch (...)
             {
-                result = std::current_exception();
+                result.template emplace<std::exception_ptr>(std::current_exception());
             }
 
             if (finished.test_and_set())

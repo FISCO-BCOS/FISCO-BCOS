@@ -8,7 +8,11 @@ private:
 
 public:
     CoCallback(CO_STD::coroutine_handle<> handle) : m_handle(handle) {}
-    void onMessage([[maybe_unused]] int seq) override { m_handle.resume(); }
+    void onMessage([[maybe_unused]] int seq) override
+    {
+        // Make sure we are in the io thread of tars!
+        m_handle.resume();
+    }
 };
 
 bcos::sdk::async::Awaitable<bcos::sdk::SendTransaction> bcos::sdk::async::sendTransaction(
