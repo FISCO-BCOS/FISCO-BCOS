@@ -154,6 +154,7 @@ if [ $# != 3 ]; then
     echo " e.g.: ${0} master true ./nodes"
     exit 1;
 fi
+exit 0
 
 console_branch="${1}"
 download_java_sdk_demo
