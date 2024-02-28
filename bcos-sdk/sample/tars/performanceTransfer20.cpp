@@ -2,8 +2,6 @@
 #include "Transfer20ByteCode.h"
 #include "bcos-codec/abi/ContractABICodec.h"
 #include "bcos-cpp-sdk/tarsRPC/CoRPCClient.h"
-#include "bcos-cpp-sdk/tarsRPC/Handle.h"
-#include "bcos-cpp-sdk/tarsRPC/RPCClient.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
@@ -15,6 +13,7 @@
 #include "bcos-utilities/ratelimiter/TimeWindowRateLimiter.h"
 #include <oneapi/tbb/blocked_range.h>
 #include <oneapi/tbb/parallel_for.h>
+#include <boost/algorithm/hex.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
 #include <atomic>
@@ -154,8 +153,7 @@ void transfer(bcos::sdk::RPCClient& rpcClient,
             auto toAddress = ((it + (users.size() / 2)) % users.size());
 
             bcos::codec::abi::ContractABICodec abiCodec(cryptoSuite->hashImpl());
-            bcos::bytes input;
-            input = abiCodec.abiIn("transfer(address,uint256)",
+            auto input = abiCodec.abiIn("transfer(address,uint256)",
                 users[toAddress].keyPair->address(cryptoSuite->hashImpl()), bcos::u256(1));
             auto transaction = transactionFactory.createTransaction(0, contractAddress, input,
                 rpcClient.generateNonce(), blockNumber + blockLimit, "chain0", "group0", 0,
@@ -234,12 +232,16 @@ int main(int argc, char* argv[])
             cryptoSuite->signatureImpl()->generateKeyPair());
 
         bcostars::protocol::TransactionFactoryImpl transactionFactory(cryptoSuite);
+
         bcos::bytes deployBin;
         boost::algorithm::unhex(TRANSFER20_BYTECODE, std::back_inserter(deployBin));
+        bcos::codec::abi::ContractABICodec abiCodec(cryptoSuite->hashImpl());
+        auto deployParam = abiCodec.abiIn("", std::string("test_token"), std::string("tt"), false);
+        deployBin.insert(deployBin.end(), deployParam.begin(), deployParam.end());
 
         auto deployTransaction =
             transactionFactory.createTransaction(0, "", deployBin, rpcClient.generateNonce(),
-                blockNumber + blockLimit, "chain0", "group0", 0, *adminKeyPair, "");
+                blockNumber + blockLimit, "chain0", "group0", 0, *adminKeyPair);
         auto receipt =
             (co_await bcos::sdk::async::sendTransaction(rpcClient, *deployTransaction)).get();
 

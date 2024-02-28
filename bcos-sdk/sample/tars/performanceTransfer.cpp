@@ -1,5 +1,4 @@
 #include "Common.h"
-#include "bcos-cpp-sdk/tarsRPC/Handle.h"
 #include "bcos-cpp-sdk/tarsRPC/RPCClient.h"
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include "bcos-framework/protocol/Transaction.h"

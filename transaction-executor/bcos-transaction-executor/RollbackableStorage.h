@@ -63,6 +63,7 @@ public:
             }
             else
             {
+                // 此处需要特殊处理，不然会留下Delete entry导致state root变化，如传一个READ_FRONT
                 co_await storage2::removeOne(*m_storage, record.key);
             }
             m_records.pop_back();
