@@ -61,7 +61,7 @@ jobs:
 
       - name: update vcpkg
         run: |
-          cd vcpkg && git pull origin master && ./bootstrap-vcpkg.sh
+          cd vcpkg && git pull origin master
           cd -
 
       - name: Build for linux
