@@ -60,9 +60,7 @@ jobs:
         run: ./tools/.ci/clear_build_cache.sh
 
       - name: update vcpkg
-        run: |
-          cd vcpkg && git fetch origin master && ./bootstrap-vcpkg.sh
-          cd -
+        run: ./tools/.ci/update_vcpkg.sh
 
       - name: Build for linux
         run: |
