@@ -60,7 +60,7 @@ jobs:
         run: ./tools/.ci/clear_build_cache.sh
 
       - name: update vcpkg
-        run: bash /tools/.ci/vcpkg_update.sh
+        run: cd tools && bash .ci/vcpkg_update.sh
 
       - name: Build for linux
         run: |
