@@ -95,8 +95,9 @@ config_console()
     rm -rf dist
     # use 0.6 solc
     ${sed_cmd} "s/org.fisco-bcos:solcJ:0.8.11.1/org.fisco-bcos:solcJ:0.6.10.1/g" build.gradle
-
     bash gradlew ass
+    git reset --hard # modify back
+
     cp -r ${node_path}/sdk/* ./dist/conf/
     cp ./dist/conf/config-example.toml ./dist/conf/config.toml
     ${sed_cmd} "s/peers=\[\"127.0.0.1:20200\", \"127.0.0.1:20201\"\]/peers=\[\"127.0.0.1:20201\"\]/g" ./dist/conf/config.toml
