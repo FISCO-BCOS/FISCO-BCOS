@@ -860,7 +860,8 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
         }
 
         /// set link data
-        tool::BfsFileFactory::buildLink(linkTable.value(), newAddress, "");
+        tool::BfsFileFactory::buildLink(
+            linkTable.value(), newAddress, "", blockContext().blockVersion());
     }
     callParameters->type = CallParameters::FINISHED;
     callParameters->status = (int32_t)TransactionStatus::None;
