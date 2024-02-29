@@ -29,7 +29,6 @@
 std::atomic_long blockNumber = 0;
 constexpr static long blockLimit = 900;
 constexpr static int64_t initialValue = 1000000000;
-
 struct User
 {
     User() = default;
