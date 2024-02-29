@@ -1436,5 +1436,43 @@ BOOST_AUTO_TEST_CASE(genesisBlockWithAllocs)
     }());
 }
 
+BOOST_AUTO_TEST_CASE(replaceBinary)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        auto hashImpl = std::make_shared<Keccak256>();
+        auto memoryStorage = std::make_shared<StateStorage>(nullptr);
+        auto storage = std::make_shared<MockStorage>(memoryStorage);
+        auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+
+        LedgerConfig param;
+        param.setBlockNumber(0);
+        param.setHash(HashType(""));
+        param.setBlockTxCountLimit(0);
+
+        GenesisConfig genesisConfig;
+        genesisConfig.m_txGasLimit = 3000000000;
+        genesisConfig.m_compatibilityVersion =
+            tool::toVersionNumber(bcos::protocol::V3_5_VERSION_STR);
+        auto code = "I am a solidity code!"s;
+        std::string hexCode;
+        boost::algorithm::hex_lower(code, std::back_inserter(hexCode));
+
+        co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param);
+
+        // Delete the bugfix_statestorage_hash
+        BOOST_CHECK(co_await storage2::existsOne(*storage,
+            transaction_executor::StateKeyView(ledger::SYS_CONFIG, "bugfix_statestorage_hash")));
+        Entry entry;
+        entry.setStatus(Entry::DELETED);
+        co_await storage2::writeOne(*storage,
+            transaction_executor::StateKey(ledger::SYS_CONFIG, "bugfix_statestorage_hash"), entry);
+
+        co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param);
+        auto result = co_await storage2::readOne(*storage,
+            transaction_executor::StateKeyView(ledger::SYS_CONFIG, "bugfix_statestorage_hash"));
+        BOOST_REQUIRE(result);
+    }());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
