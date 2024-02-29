@@ -24,7 +24,7 @@ jobs:
       VCPKG_ROOT: c:/vcpkg
     strategy:
       matrix:
-        os: [ windows-2019 ]
+        os: [windows-2019]
     steps:
       - uses: actions/checkout@v2
         with:
@@ -40,10 +40,10 @@ jobs:
           restore-keys: |
             vcpkg-msvc-v3-notest-${{ hashFiles('.github/workflows/workflow.yml') }}
             vcpkg-msvc-v3-notest-
-#      - name: update vcpkg
-#        run: |
-#          cd ${{ env.VCPKG_ROOT }} && git fetch --all && git checkout master && git pull
-#          cd -
+      #      - name: update vcpkg
+      #        run: |
+      #          cd ${{ env.VCPKG_ROOT }} && git fetch --all && git checkout master && git pull
+      #          cd -
       - name: Add MSbuild to PATH
         uses: microsoft/setup-msbuild@v1.1
       - name: configure and build
@@ -81,7 +81,7 @@ jobs:
 #          fetch-depth: 5
 #      - uses: actions-rs/toolchain@v1
 #        with:
-#          toolchain: nightly-2022-07-28
+#          toolchain: nightly-2024-01-10
 #          override: true
 #      - name: Prepare vcpkg
 #        if: runner.os != 'Windows'
@@ -172,7 +172,7 @@ jobs:
 ##        with: { committish: 7e3dcf74e37034eea358934a90a11d618520e139 }
 ##      - uses: actions-rs/toolchain@v1
 ##        with:
-##          toolchain: nightly-2022-07-28
+##          toolchain: nightly-2024-01-10
 ##          override: true
 ##      - name: Build
 ##        run: |

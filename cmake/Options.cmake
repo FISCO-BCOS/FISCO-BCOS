@@ -111,9 +111,6 @@ macro(configure_project)
         add_compile_definitions(WITH_SM2_OPTIMIZE)
     endif()
 
-    if(APPLE)
-        list(APPEND VCPKG_MANIFEST_FEATURES "jthread")
-    endif()
 
     if(NOT ALLOCATOR)
         if(APPLE)
