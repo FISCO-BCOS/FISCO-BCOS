@@ -621,7 +621,6 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                         callback(BCOS_ERROR_UNIQUE_PTR(
                                      SchedulerError::Stopped, "Scheduler is not running"),
                             nullptr);
-                        co_return;
                     }
 
                     auto blockNumber = ledgerConfig->blockNumber();

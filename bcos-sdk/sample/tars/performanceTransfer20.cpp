@@ -13,7 +13,9 @@
 #include "bcos-utilities/FixedBytes.h"
 #include "bcos-utilities/ratelimiter/TimeWindowRateLimiter.h"
 #include <oneapi/tbb/blocked_range.h>
+#include <oneapi/tbb/global_control.h>
 #include <oneapi/tbb/parallel_for.h>
+#include <oneapi/tbb/task_group.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
@@ -70,13 +72,14 @@ void query(bcos::sdk::RPCClient& rpcClient, std::shared_ptr<bcos::crypto::Crypto
     bcos::ratelimiter::TimeWindowRateLimiter limiter(qps);
     bcos::sample::Collector collector(users.size(), "Query");
 
-    tbb::parallel_for(tbb::blocked_range(0LU, users.size()), [&](const auto& range) {
-        for (auto i = range.begin(); i != range.end(); ++i)
-        {
+    tbb::task_group group;
+    for (auto& user : users)
+    {
+        group.run([&]() {
             limiter.acquire(1);
             bcos::codec::abi::ContractABICodec abiCodec1(cryptoSuite->hashImpl());
             auto input = abiCodec1.abiIn(
-                "availableBalance(address)", users[i].keyPair->address(cryptoSuite->hashImpl()));
+                "availableBalance(address)", user.keyPair->address(cryptoSuite->hashImpl()));
             auto transaction = transactionFactory.createTransaction(0, contractAddress, input,
                 rpcClient.generateNonce(), blockNumber + blockLimit, "chain0", "group0", 0);
 
@@ -99,11 +102,12 @@ void query(bcos::sdk::RPCClient& rpcClient, std::shared_ptr<bcos::crypto::Crypto
                 bcos::codec::abi::ContractABICodec abiCodec2(cryptoSuite->hashImpl());
                 bcos::s256 balance;
                 abiCodec2.abiOut(output, balance);
-                users[i].balance = balance.convert_to<long>();
+                user.balance = balance.convert_to<long>();
                 collector.receive(true, elapsed);
             }
-        }
-    });
+        });
+    }
+    group.wait();
     collector.finishSend();
     collector.report();
 }
@@ -117,13 +121,14 @@ void issue(bcos::sdk::RPCClient& rpcClient, std::shared_ptr<bcos::crypto::Crypto
     bcos::sample::Collector collector(users.size(), "Issue");
 
     tbb::task_group group;
-    for (auto& user : users)
+    tbb::task_group_context context;
+    for (auto& it : users)
     {
-        group.run([&]() {
+        group.run([&, user = std::addressof(it)]() {
             limiter.acquire(1);
             bcos::codec::abi::ContractABICodec abiCodec1(cryptoSuite->hashImpl());
             auto input = abiCodec1.abiIn("mint(address,uint256)",
-                user.keyPair->address(cryptoSuite->hashImpl()), bcos::u256(initialValue));
+                user->keyPair->address(cryptoSuite->hashImpl()), bcos::u256(initialValue));
             auto transaction = transactionFactory.createTransaction(0, contractAddress, input,
                 rpcClient.generateNonce(), blockNumber + blockLimit, "chain0", "group0", 0,
                 *adminKeyPair);
@@ -146,7 +151,7 @@ void issue(bcos::sdk::RPCClient& rpcClient, std::shared_ptr<bcos::crypto::Crypto
             }
             else
             {
-                user.balance += initialValue;
+                user->balance += initialValue;
                 collector.receive(true, elapsed);
             }
         });
@@ -168,7 +173,7 @@ void transfer(bcos::sdk::RPCClient& rpcClient,
     tbb::task_group group;
     for (auto it : RANGES::views::iota(0, transactionCount))
     {
-        group.run([&, i = it]() {
+        group.run([&, i = static_cast<int>(it)]() {
             limiter.acquire(1);
             auto fromAddress = i % users.size();
             auto toAddress = ((i + (users.size() / 2)) % users.size());
@@ -236,7 +241,9 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    tbb::task_group group;
+    oneapi::tbb::global_control global_limit(
+        tbb::global_control::thread_stack_size, 8 * 1024 * 1024);
+
     std::string connectionString = argv[1];
     int userCount = boost::lexical_cast<int>(argv[2]);
     int transactionCount = boost::lexical_cast<int>(argv[3]);

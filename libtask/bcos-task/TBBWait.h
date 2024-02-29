@@ -3,12 +3,21 @@
 #include "Task.h"
 #include "Trait.h"
 #include <oneapi/tbb/task.h>
+#include <oneapi/tbb/task_group.h>
 #include <boost/atomic/atomic.hpp>
 #include <boost/atomic/atomic_flag.hpp>
 
 namespace bcos::task::tbb
 {
 
+/*
+经测试，bcos::task::tbb::syncWait仅在配合tbb::task_group使用时，才能有协程切换的效果，在下列函数中会阻塞外部线程，限制并发数：
+After testing, bcos::task::tbb::syncWait can only have the effect of coroutine switching when used
+with tbb::task_group, and will block external threads and limit the number of concurrent
+transactions in the following functions
+- tbb::parallel_for
+- tbb::parallel_for_each
+*/
 constexpr inline struct SyncWait
 {
     template <class Task>
