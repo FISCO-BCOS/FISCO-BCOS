@@ -317,5 +317,6 @@ int main(int argc, char* argv[])
         }
     }
     stopFlag.test_and_set();
+    getBlockNumber.join();
     return 0;
 }

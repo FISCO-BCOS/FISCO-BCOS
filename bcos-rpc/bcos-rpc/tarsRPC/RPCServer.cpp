@@ -112,6 +112,7 @@ bcostars::Error bcos::rpc::RPCServer::sendTransaction(const bcostars::Transactio
                 *submitResult->transactionReceipt());
 
             bcos::rpc::RPCServer::async_response_sendTransaction(current, error, receipt.inner());
+            co_return;
         }
         catch (bcos::Error& e)
         {
