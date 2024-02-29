@@ -1,11 +1,13 @@
 #include "bcos-rpc/jsonrpc/Common.h"
 #include "bcos-task/Generator.h"
+#include "bcos-task/TBBWait.h"
 #include "bcos-task/Task.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Overloaded.h"
 #include <oneapi/tbb/blocked_range.h>
 #include <oneapi/tbb/concurrent_vector.h>
 #include <oneapi/tbb/parallel_for.h>
+#include <oneapi/tbb/parallel_for_each.h>
 #include <oneapi/tbb/task.h>
 #include <oneapi/tbb/task_arena.h>
 #include <oneapi/tbb/task_group.h>
@@ -169,7 +171,7 @@ struct SleepTask
 {
     inline static oneapi::tbb::concurrent_vector<std::future<void>> futures;
 
-    constexpr bool await_ready() const { return false; }
+    constexpr static bool await_ready() { return false; }
     void await_suspend(CO_STD::coroutine_handle<> handle)
     {
         futures.emplace_back(std::async([m_handle = handle]() mutable {
@@ -197,6 +199,59 @@ BOOST_AUTO_TEST_CASE(generator)
         std::cout << i << std::endl;
     }
     std::cout << "All outputed" << std::endl;
+}
+
+struct ResumableTask
+{
+    ResumableTask() = default;
+    ResumableTask(const ResumableTask&) = delete;
+    ResumableTask& operator=(const ResumableTask&) = delete;
+    ResumableTask(ResumableTask&&) = default;
+    ResumableTask& operator=(ResumableTask&&) = default;
+    ~ResumableTask() noexcept = default;
+
+    CO_STD::coroutine_handle<> m_handle;
+
+    constexpr bool static await_ready() { return false; }
+    void await_suspend(CO_STD::coroutine_handle<> handle)
+    {
+        std::cout << "Task suspend!" << std::endl;
+        m_handle = handle;
+    }
+    constexpr void await_resume() const {}
+};
+
+BOOST_AUTO_TEST_CASE(tbbWait)
+{
+    constexpr static auto count = 20;
+    std::vector<ResumableTask> tasks(count);
+
+    ::tbb::task_arena arena(2);
+    ::tbb::task_group group1;
+    arena.execute([&]() {
+        for (auto i = 0; i < 10; ++i)
+        {
+            group1.run([&tasks, i]() {
+                std::cout << "Task " << i << " started" << std::endl;
+                bcos::task::tbb::syncWait(tasks[i]);
+                std::cout << "Task " << i << " ended" << std::endl;
+            });
+        }
+
+        group1.run([&]() {
+            using namespace std::chrono_literals;
+            std::this_thread::sleep_for(1s);
+
+            for (auto& task : tasks)
+            {
+                BOOST_REQUIRE(task.m_handle);
+                task.m_handle.resume();
+            }
+        });
+    });
+
+
+    group1.wait();
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -116,13 +116,14 @@ void issue(bcos::sdk::RPCClient& rpcClient, std::shared_ptr<bcos::crypto::Crypto
     bcos::ratelimiter::TimeWindowRateLimiter limiter(qps);
     bcos::sample::Collector collector(users.size(), "Issue");
 
-    tbb::parallel_for(tbb::blocked_range(0LU, users.size()), [&](const auto& range) {
-        for (auto i = range.begin(); i != range.end(); ++i)
-        {
+    tbb::task_group group;
+    for (auto& user : users)
+    {
+        group.run([&]() {
             limiter.acquire(1);
             bcos::codec::abi::ContractABICodec abiCodec1(cryptoSuite->hashImpl());
             auto input = abiCodec1.abiIn("mint(address,uint256)",
-                users[i].keyPair->address(cryptoSuite->hashImpl()), bcos::u256(initialValue));
+                user.keyPair->address(cryptoSuite->hashImpl()), bcos::u256(initialValue));
             auto transaction = transactionFactory.createTransaction(0, contractAddress, input,
                 rpcClient.generateNonce(), blockNumber + blockLimit, "chain0", "group0", 0,
                 *adminKeyPair);
@@ -145,11 +146,12 @@ void issue(bcos::sdk::RPCClient& rpcClient, std::shared_ptr<bcos::crypto::Crypto
             }
             else
             {
-                users[i].balance += initialValue;
+                user.balance += initialValue;
                 collector.receive(true, elapsed);
             }
-        }
-    });
+        });
+    }
+    group.wait();
     collector.finishSend();
     collector.report();
 }
@@ -162,12 +164,14 @@ void transfer(bcos::sdk::RPCClient& rpcClient,
     bcostars::protocol::TransactionFactoryImpl transactionFactory(cryptoSuite);
     bcos::ratelimiter::TimeWindowRateLimiter limiter(qps);
     bcos::sample::Collector collector(transactionCount, "Transfer");
-    tbb::parallel_for(tbb::blocked_range(0LU, (size_t)transactionCount), [&](const auto& range) {
-        for (auto it = range.begin(); it != range.end(); ++it)
-        {
+
+    tbb::task_group group;
+    for (auto i : RANGES::views::iota(0, transactionCount))
+    {
+        group.run([&]() {
             limiter.acquire(1);
-            auto fromAddress = it % users.size();
-            auto toAddress = ((it + (users.size() / 2)) % users.size());
+            auto fromAddress = i % users.size();
+            auto toAddress = ((i + (users.size() / 2)) % users.size());
 
             bcos::codec::abi::ContractABICodec abiCodec(cryptoSuite->hashImpl());
             auto input = abiCodec.abiIn("transfer(address,uint256)",
@@ -196,8 +200,9 @@ void transfer(bcos::sdk::RPCClient& rpcClient,
                 --users[fromAddress].balance;
                 ++users[toAddress].balance;
             }
-        }
-    });
+        });
+    }
+    group.wait();
     collector.finishSend();
     collector.report();
 }

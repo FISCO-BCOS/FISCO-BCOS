@@ -22,7 +22,7 @@ constexpr inline struct Wait
 constexpr inline struct SyncWait
 {
     template <class Task>
-    auto operator()(Task task) const -> AwaitableReturnType<std::remove_cvref_t<Task>>
+    auto operator()(Task&& task) const -> AwaitableReturnType<std::remove_cvref_t<Task>>
         requires IsAwaitable<Task>
     {
         using ReturnType = AwaitableReturnType<std::remove_cvref_t<Task>>;
@@ -35,7 +35,7 @@ constexpr inline struct SyncWait
         boost::atomic_flag finished;
         boost::atomic_flag waitFlag;
 
-        auto waitTask = [](Task task, decltype(result)& result, boost::atomic_flag& finished,
+        auto waitTask = [](Task&& task, decltype(result)& result, boost::atomic_flag& finished,
                             boost::atomic_flag& waitFlag) -> task::Task<void> {
             try
             {
