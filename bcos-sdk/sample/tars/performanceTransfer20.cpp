@@ -166,9 +166,9 @@ void transfer(bcos::sdk::RPCClient& rpcClient,
     bcos::sample::Collector collector(transactionCount, "Transfer");
 
     tbb::task_group group;
-    for (auto i : RANGES::views::iota(0, transactionCount))
+    for (auto it : RANGES::views::iota(0, transactionCount))
     {
-        group.run([&]() {
+        group.run([&, i = it]() {
             limiter.acquire(1);
             auto fromAddress = i % users.size();
             auto toAddress = ((i + (users.size() / 2)) % users.size());
