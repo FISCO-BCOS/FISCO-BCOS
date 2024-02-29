@@ -496,7 +496,8 @@ void BFSPrecompiled::link(const std::shared_ptr<executor::TransactionExecutive>&
         if (typeEntry && typeEntry->getField(0) == FS_TYPE_LINK)
         {
             // contract name and version exist, overwrite address and abi
-            tool::BfsFileFactory::buildLink(linkTable.value(), contractAddress, contractAbi);
+            tool::BfsFileFactory::buildLink(
+                linkTable.value(), contractAddress, _contractAbi, blockContext.blockVersion());
             _callParameters->setExecResult(codec.encode(s256((int)CODE_SUCCESS)));
             return;
         }
@@ -520,7 +521,9 @@ void BFSPrecompiled::link(const std::shared_ptr<executor::TransactionExecutive>&
     }
     auto newLinkTable = _executive->storage().createTable(linkTableName, STORAGE_VALUE);
     // set link info to link table
-    tool::BfsFileFactory::buildLink(newLinkTable.value(), contractAddress, contractAbi);
+    tool::BfsFileFactory::buildLink(
+        newLinkTable.value(), contractAddress, _contractAbi, blockContext.blockVersion());
+# 4262))
     _callParameters->setExecResult(codec.encode(s256((int)CODE_SUCCESS)));
 }
 
@@ -596,8 +599,8 @@ void BFSPrecompiled::linkAdaptCNS(const std::shared_ptr<executor::TransactionExe
     }
     auto newLinkTable = _executive->storage().createTable(linkTableName, STORAGE_VALUE);
     // set link info to link table
-    tool::BfsFileFactory::buildLink(
-        newLinkTable.value(), contractAddress, contractAbi, contractVersion);
+    tool::BfsFileFactory::buildLink(newLinkTable.value(), contractAddress, contractAbi,
+        blockContext.blockVersion(), contractVersion);
     _callParameters->setExecResult(codec.encode((int32_t)CODE_SUCCESS));
 }
 
@@ -1050,6 +1053,7 @@ void BFSPrecompiled::buildSysSubs(const std::shared_ptr<executor::TransactionExe
             continue;
         }
         auto linkTable = _executive->storage().createTable(std::string(name), SYS_VALUE_FIELDS);
-        tool::BfsFileFactory::buildLink(linkTable.value(), std::string(address), "");
+        tool::BfsFileFactory::buildLink(
+            linkTable.value(), std::string(address), "", _executive->blockContext().blockVersion());
     }
 }
