@@ -241,9 +241,6 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    oneapi::tbb::global_control global_limit(
-        tbb::global_control::thread_stack_size, 8 * 1024 * 1024);
-
     std::string connectionString = argv[1];
     int userCount = boost::lexical_cast<int>(argv[2]);
     int transactionCount = boost::lexical_cast<int>(argv[3]);
