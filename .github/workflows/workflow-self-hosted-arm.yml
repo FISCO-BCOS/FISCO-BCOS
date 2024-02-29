@@ -33,7 +33,7 @@ jobs:
       - name: Set up Node.js 16.x
         uses: actions/setup-node@v2
         with:
-          node-version: '16.x'
+          node-version: "16.x"
 
       - name: Prepare centos tools
         run: |
@@ -41,14 +41,14 @@ jobs:
           sudo yum install -y devtoolset-10 llvm-toolset-7.0 rh-perl530-perl zlib-devel ccache lcov python-devel python3-devel python3-pip automake
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2022-07-28
+          toolchain: nightly-2024-01-10
           override: true
 
       - name: Set up JDK 1.8
         uses: actions/setup-java@v3
         with:
-          distribution: 'zulu'
-          java-version: '8.0.382'
+          distribution: "zulu"
+          java-version: "8.0.382"
 
       - name: Reuse build cache
         run: |
@@ -61,7 +61,7 @@ jobs:
 
       - name: update vcpkg
         run: |
-          cd vcpkg && git pull origin master && ./bootstrap-vcpkg.sh
+          cd vcpkg && git fetch origin master
           cd -
 
       - name: Build for linux
@@ -74,8 +74,7 @@ jobs:
           cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON .. || cat *.log
           make -j8
       - name: Test
-        run:
-          cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
+        run: cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
 
       - name: prepare RPCAPI Tests
         run: cd tools && bash .ci/rpcapi_ci_prepare.sh
