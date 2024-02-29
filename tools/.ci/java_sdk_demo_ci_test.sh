@@ -106,7 +106,7 @@ config_console()
     # config test contract
     cp -r  ${current_path}/java-sdk-demo/src/main/java/org/fisco/bcos/sdk/demo/contract/sol/* dist/contracts/solidity/
     if [ "${use_sm}" == "true" ]; then
-        sed_cmd "s/ECRecoverTest/ECRecoverSMTest" dist/contracts/solidity/ContractTestAll.sol
+        ${sed_cmd} "s/ECRecoverTest/ECRecoverSMTest/g" dist/contracts/solidity/ContractTestAll.sol
     fi
 
     # config admin
