@@ -18,6 +18,7 @@
 #include <oneapi/tbb/task_group.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/exception/diagnostic_information.hpp>
+#include <boost/thread/latch.hpp>
 #include <boost/throw_exception.hpp>
 #include <atomic>
 #include <chrono>
@@ -64,51 +65,72 @@ std::vector<User> initUsers(int userCount, bcos::crypto::CryptoSuite& cryptoSuit
     return users;
 }
 
+class PerformanceCallback : public bcos::sdk::Callback
+{
+private:
+    boost::latch& m_latch;
+    bcos::sample::Collector& m_collector;
+    long m_startTime;
+
+public:
+    PerformanceCallback(boost::latch& latch, bcos::sample::Collector& collector)
+      : m_latch(latch), m_collector(collector), m_startTime(bcos::sample::currentTime())
+    {}
+
+    void onMessage([[maybe_unused]] int seq) override
+    {
+        m_latch.count_down();
+        m_collector.receive(true, bcos::sample::currentTime() - m_startTime);
+    }
+};
+
 void query(bcos::sdk::RPCClient& rpcClient, std::shared_ptr<bcos::crypto::CryptoSuite> cryptoSuite,
     std::string contractAddress, std::vector<User>& users, int qps)
 {
     bcostars::protocol::TransactionFactoryImpl transactionFactory(cryptoSuite);
     bcos::ratelimiter::TimeWindowRateLimiter limiter(qps);
     bcos::sample::Collector collector(users.size(), "Query");
+    std::vector<std::optional<bcos::sdk::Call>> handles(users.size());
+    boost::latch latch(users.size());
 
-    tbb::task_group group;
-    for (auto& user : users)
-    {
-        group.run([&]() {
+    tbb::parallel_for(::tbb::blocked_range(0LU, users.size()), [&](const auto& range) {
+        for (auto i = range.begin(); i != range.end(); ++i)
+        {
             limiter.acquire(1);
             bcos::codec::abi::ContractABICodec abiCodec1(cryptoSuite->hashImpl());
             auto input = abiCodec1.abiIn(
-                "availableBalance(address)", user.keyPair->address(cryptoSuite->hashImpl()));
+                "availableBalance(address)", users[i].keyPair->address(cryptoSuite->hashImpl()));
             auto transaction = transactionFactory.createTransaction(0, contractAddress, input,
                 rpcClient.generateNonce(), blockNumber + blockLimit, "chain0", "group0", 0);
 
+
+            handles[i].emplace(rpcClient);
+            handles[i]->setCallback(std::make_shared<PerformanceCallback>(latch, collector));
+            handles[i]->send(*transaction);
             collector.send(true, 0);
-            auto now = bcos::sample::currentTime();
+        }
+    });
+    collector.finishSend();
+    latch.wait();
+    collector.report();
 
-            auto receipt =
-                bcos::task::tbb::syncWait(bcos::sdk::async::call(rpcClient, *transaction)).get();
-
-            auto elapsed = bcos::sample::currentTime() - now;
+    tbb::parallel_for(::tbb::blocked_range(0LU, users.size()), [&](const auto& range) {
+        for (auto i = range.begin(); i != range.end(); ++i)
+        {
+            auto receipt = handles[i]->get();
             if (receipt->status() != 0)
             {
                 std::cout << "Query with error! " << receipt->status() << std::endl;
                 BOOST_THROW_EXCEPTION(std::runtime_error("Query with error!"));
-                collector.receive(false, elapsed);
             }
-            else
-            {
-                auto output = receipt->output();
-                bcos::codec::abi::ContractABICodec abiCodec2(cryptoSuite->hashImpl());
-                bcos::s256 balance;
-                abiCodec2.abiOut(output, balance);
-                user.balance = balance.convert_to<long>();
-                collector.receive(true, elapsed);
-            }
-        });
-    }
-    group.wait();
-    collector.finishSend();
-    collector.report();
+
+            auto output = receipt->output();
+            bcos::codec::abi::ContractABICodec abiCodec(cryptoSuite->hashImpl());
+            bcos::s256 balance;
+            abiCodec.abiOut(output, balance);
+            users[i].balance = balance.convert_to<long>();
+        }
+    });
 }
 
 void issue(bcos::sdk::RPCClient& rpcClient, std::shared_ptr<bcos::crypto::CryptoSuite> cryptoSuite,
@@ -118,46 +140,44 @@ void issue(bcos::sdk::RPCClient& rpcClient, std::shared_ptr<bcos::crypto::Crypto
     bcostars::protocol::TransactionFactoryImpl transactionFactory(cryptoSuite);
     bcos::ratelimiter::TimeWindowRateLimiter limiter(qps);
     bcos::sample::Collector collector(users.size(), "Issue");
+    std::vector<std::optional<bcos::sdk::SendTransaction>> handles(users.size());
+    boost::latch latch(users.size());
 
-    tbb::task_group group;
-    tbb::task_group_context context;
-    for (auto& it : users)
-    {
-        group.run([&, user = std::addressof(it)]() {
+    tbb::parallel_for(::tbb::blocked_range(0LU, users.size()), [&](const auto& range) {
+        for (auto i = range.begin(); i != range.end(); ++i)
+        {
             limiter.acquire(1);
-            bcos::codec::abi::ContractABICodec abiCodec1(cryptoSuite->hashImpl());
-            auto input = abiCodec1.abiIn("mint(address,uint256)",
-                user->keyPair->address(cryptoSuite->hashImpl()), bcos::u256(initialValue));
+            bcos::codec::abi::ContractABICodec abiCodec(cryptoSuite->hashImpl());
+            auto input = abiCodec.abiIn("mint(address,uint256)",
+                users[i].keyPair->address(cryptoSuite->hashImpl()), bcos::u256(initialValue));
             auto transaction = transactionFactory.createTransaction(0, contractAddress, input,
                 rpcClient.generateNonce(), blockNumber + blockLimit, "chain0", "group0", 0,
                 *adminKeyPair);
 
+            handles[i].emplace(rpcClient);
+            handles[i]->setCallback(std::make_shared<PerformanceCallback>(latch, collector));
+            handles[i]->send(*transaction);
+
             collector.send(true, 0);
-            auto now = bcos::sample::currentTime();
+            users[i].balance += initialValue;
+        }
+    });
+    collector.finishSend();
+    latch.wait();
+    collector.report();
 
-            auto receipt = bcos::task::tbb::syncWait(
-                bcos::sdk::async::sendTransaction(rpcClient, *transaction))
-                               .get();
-
-            auto elapsed = bcos::sample::currentTime() - now;
+    // Check result
+    tbb::parallel_for(tbb::blocked_range(0LU, users.size()), [&](const auto& range) {
+        for (auto i = range.begin(); i != range.end(); ++i)
+        {
+            auto receipt = handles[i]->get();
             if (receipt->status() != 0)
             {
-                std::cout << "Issue with error! " << receipt->status() << " | "
-                          << bcos::sample::parseRevertMessage(
-                                 receipt->output(), cryptoSuite->hashImpl())
-                          << std::endl;
-                collector.receive(false, elapsed);
+                std::cout << "Issue with error! " << receipt->status() << std::endl;
+                BOOST_THROW_EXCEPTION(std::runtime_error("Issue with error!"));
             }
-            else
-            {
-                user->balance += initialValue;
-                collector.receive(true, elapsed);
-            }
-        });
-    }
-    group.wait();
-    collector.finishSend();
-    collector.report();
+        }
+    });
 }
 
 void transfer(bcos::sdk::RPCClient& rpcClient,
@@ -168,11 +188,12 @@ void transfer(bcos::sdk::RPCClient& rpcClient,
     bcostars::protocol::TransactionFactoryImpl transactionFactory(cryptoSuite);
     bcos::ratelimiter::TimeWindowRateLimiter limiter(qps);
     bcos::sample::Collector collector(transactionCount, "Transfer");
+    std::vector<std::optional<bcos::sdk::SendTransaction>> handles(transactionCount);
+    boost::latch latch(transactionCount);
 
-    tbb::task_group group;
-    for (auto it : RANGES::views::iota(0, transactionCount))
-    {
-        group.run([&, i = static_cast<int>(it)]() {
+    tbb::parallel_for(::tbb::blocked_range(0, transactionCount), [&](const auto& range) {
+        for (auto i = range.begin(); i != range.end(); ++i)
+        {
             limiter.acquire(1);
             auto fromAddress = i % users.size();
             auto toAddress = ((i + (users.size() / 2)) % users.size());
@@ -183,32 +204,31 @@ void transfer(bcos::sdk::RPCClient& rpcClient,
             auto transaction = transactionFactory.createTransaction(0, contractAddress, input,
                 rpcClient.generateNonce(), blockNumber + blockLimit, "chain0", "group0", 0,
                 *users[fromAddress].keyPair);
-            collector.send(true, 0);
+            handles[i].emplace(rpcClient);
+            handles[i]->setCallback(std::make_shared<PerformanceCallback>(latch, collector));
+            handles[i]->send(*transaction);
 
-            auto now = bcos::sample::currentTime();
-            auto receipt = bcos::task::tbb::syncWait(
-                bcos::sdk::async::sendTransaction(rpcClient, *transaction))
-                               .get();
-            auto elapsed = bcos::sample::currentTime() - now;
+            collector.send(true, 0);
+            --users[fromAddress].balance;
+            ++users[toAddress].balance;
+        }
+    });
+    collector.finishSend();
+    latch.wait();
+    collector.report();
+
+    // Check result
+    tbb::parallel_for(tbb::blocked_range(0LU, (size_t)transactionCount), [&](const auto& range) {
+        for (auto i = range.begin(); i != range.end(); ++i)
+        {
+            auto receipt = handles[i]->get();
             if (receipt->status() != 0)
             {
-                std::cout << "Transfer with error! " << receipt->status() << " | "
-                          << bcos::sample::parseRevertMessage(
-                                 receipt->output(), cryptoSuite->hashImpl())
-                          << std::endl;
-                collector.receive(false, elapsed);
+                std::cout << "Transfer with error! " << receipt->status() << std::endl;
+                BOOST_THROW_EXCEPTION(std::runtime_error("Transfer with error!"));
             }
-            else
-            {
-                collector.receive(true, elapsed);
-                --users[fromAddress].balance;
-                ++users[toAddress].balance;
-            }
-        });
-    }
-    group.wait();
-    collector.finishSend();
-    collector.report();
+        }
+    });
 }
 
 void loopFetchBlockNumber(bcos::sdk::RPCClient& rpcClient, boost::atomic_flag const& stopFlag)
