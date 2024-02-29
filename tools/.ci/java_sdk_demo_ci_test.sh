@@ -102,7 +102,14 @@ config_console()
     cp ./dist/conf/config-example.toml ./dist/conf/config.toml
     ${sed_cmd} "s/peers=\[\"127.0.0.1:20200\", \"127.0.0.1:20201\"\]/peers=\[\"127.0.0.1:20201\"\]/g" ./dist/conf/config.toml
     ${sed_cmd} "s/messageTimeout = \"10000\"/messageTimeout = \"10000000\"/g" ./dist/conf/config.toml
+
+    # config test contract
     cp -r  ${current_path}/java-sdk-demo/src/main/java/org/fisco/bcos/sdk/demo/contract/sol/* dist/contracts/solidity/
+    if [ "${use_sm}" == "true" ]; then
+        sed_cmd "s/ECRecoverTest/ECRecoverSMTest" dist/contracts/solidity/ContractTestAll.sol
+    fi
+
+    # config admin
     [ -d ${node_path}/../ca/accounts ] && echo "copy account" && mkdir -p ./dist/account/ecdsa/ && cp -r ${node_path}/../ca/accounts/* ./dist/account/ecdsa/
     [ -d ${node_path}/../ca/accounts_gm ] && echo "copy account_gm" && mkdir -p ./dist/account/gm/ && cp -r ${node_path}/../ca/accounts_gm/* ./dist/account/gm/
 
@@ -133,17 +140,24 @@ contract_test()
 
     local test_contract_address=$(bash console.sh deploy ContractTestAll |grep "contract address" |awk '{print $3}')
 
+    if [ -z "$test_contract_address" ]; then
+        LOG_ERROR  "java-sdk-demo contract test, deploy contract failed:"
+        bash console.sh deploy ContractTestAll
+        exit 1;
+
+    fi
+
     LOG_INFO "addBalance to contract ${test_contract_address}"
     bash console.sh addBalance ${test_contract_address} 10000000
 
     LOG_INFO "run tests"
     local output=$(bash console.sh call ContractTestAll ${test_contract_address} check)
-    echo ${output}
 
     if [[ $output == *"transaction status: 0"* ]]; then
         LOG_INFO "java-sdk-demo contract test success"
     else
-        echo "java-sdk-demo contract test error"
+        LOG_ERROR "java-sdk-demo contract test error:"
+        bash console.sh call ContractTestAll ${test_contract_address} check
         exit 1
     fi
 }
