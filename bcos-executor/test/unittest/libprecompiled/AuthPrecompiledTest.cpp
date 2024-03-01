@@ -185,7 +185,7 @@ public:
         }
         else
         {
-            BOOST_CHECK_EQUAL(result3->type(), ExecutionMessage::FINISHED);
+            BOOST_CHECK_EQUAL(result3->type(), ExecutionMessage::PRE_FINISH);
             BOOST_CHECK_EQUAL(result3->newEVMContractAddress(), newAddress);
             BOOST_CHECK_LT(result3->gasAvailable(), gas);
         }

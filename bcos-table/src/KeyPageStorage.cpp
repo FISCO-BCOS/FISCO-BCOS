@@ -361,8 +361,8 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
     KeyPage_LOG(INFO) << LOG_DESC("parallelTraverse") << LOG_KV("size", m_size);
 }
 
-auto KeyPageStorage::hash(const bcos::crypto::Hash::Ptr& hashImpl, bool /*useHashV310*/) const
-    -> crypto::HashType
+auto KeyPageStorage::hash(const bcos::crypto::Hash::Ptr& hashImpl,
+    const ledger::Features& features) const -> crypto::HashType
 {
     bcos::crypto::HashType pagesHash(0);
     bcos::crypto::HashType entriesHash(0);
@@ -397,9 +397,12 @@ auto KeyPageStorage::hash(const bcos::crypto::Hash::Ptr& hashImpl, bool /*useHas
                     }
                     else
                     {  // sys table
-                        auto hash = hashImpl->hash(data->table);
-                        hash ^= hashImpl->hash(data->key);
-                        hash ^= entry.hash(data->table, data->key, *hashImpl, m_blockVersion);
+                        auto hash = entry.hash(data->table, data->key, *hashImpl, m_blockVersion);
+                        if (!features.get(ledger::Features::Flag::bugfix_keypage_system_entry_hash))
+                        {  // v3.6.1 open this bugfix default
+                            hash ^= hashImpl->hash(data->table);
+                            hash ^= hashImpl->hash(data->key);
+                        }
                         localEntriesHash ^= hash;
                         ++entrycount;
                     }
@@ -413,6 +416,7 @@ auto KeyPageStorage::hash(const bcos::crypto::Hash::Ptr& hashImpl, bool /*useHas
     totalHash ^= pagesHash;
     totalHash ^= entriesHash;
     KeyPage_LOG(INFO) << LOG_DESC("hash") << LOG_KV("size", allData.size())
+                      << LOG_KV("blockVersion", m_blockVersion)
                       << LOG_KV("readLength", m_readLength) << LOG_KV("writeLength", m_writeLength)
                       << LOG_KV("pageCount", pageCount) << LOG_KV("entrycount", entrycount)
                       << LOG_KV("entriesHash", entriesHash.hex())

@@ -174,6 +174,13 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
     {
         initEvmEnvironment();
     }
+
+    if (m_blockVersion == (uint32_t)protocol::BlockVersion::V3_0_VERSION)
+    {
+        // This 3.0.x's bug, but we still need to compatible with it
+        initTestPrecompiledTable(m_backendStorage);
+    }
+
     assert(m_precompiled != nullptr && m_precompiled->size() > 0);
     start();
 }
@@ -1134,8 +1141,7 @@ void TransactionExecutor::getHash(bcos::protocol::BlockNumber number,
     // remove suicides beforehand
     m_blockContext->killSuicides();
     auto start = utcTime();
-    auto hash = last.storage->hash(m_hashImpl,
-        m_blockContext->features().get(ledger::Features::Flag::bugfix_statestorage_hash));
+    auto hash = last.storage->hash(m_hashImpl, m_blockContext->features());
     auto end = utcTime();
     EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(number) << "GetTableHashes success"
                             << LOG_KV("hash", hash.hex()) << LOG_KV("time(ms)", (end - start));

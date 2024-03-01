@@ -61,7 +61,7 @@ jobs:
 
       - name: update vcpkg
         run: |
-          cd ${{ env.VCPKG_ROOT }} && git fetch --all
+          cd vcpkg && git pull origin master
           cd -
 
       - name: Build for linux

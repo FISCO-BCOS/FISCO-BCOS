@@ -91,9 +91,6 @@ public:
     BfsFileFactory(BfsFileFactory&&) noexcept = delete;
     BfsFileFactory& operator=(const BfsFileFactory&) = delete;
     BfsFileFactory& operator=(BfsFileFactory&&) noexcept = delete;
-    static void buildAsync(bcos::storage::StorageInterface::Ptr const& _storage,
-        std::string_view fileName, FileType fileType,
-        std::function<void(Error::UniquePtr&&)> _callback);
 
     static bool buildDir(storage::Table& _table);
     // sync create dir
@@ -102,7 +99,7 @@ public:
     static void buildDirEntry(storage::Entry& _mutableEntry,
         std::variant<FileType, std::string, std::string_view> fileType);
     static bool buildLink(storage::Table& _table, const std::string& _address,
-        const std::string& _abi, const std::string& name = "");
+        const std::string& _abi, uint32_t blockVersion, const std::string& name = "");
     static bool buildAuth(storage::Table& _table, const std::string& _admin);
     static bool buildContract(storage::Table& _table);
 };

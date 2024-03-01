@@ -1742,7 +1742,9 @@ bool Ledger::buildGenesisBlock(
                         ", No support this version"));
             }
 
-            // Before return, make sure sharding flag is placed
+            // 已有的链，仅替换了二进制，还没有执行升级版本交易
+            // The existing chain, which only replaces the binary, has not yet executed the upgraded
+            // version of the transaction
             task::syncWait([&]() -> task::Task<void> {
                 auto versionEntry = co_await storage2::readOne(
                     *m_storage, transaction_executor::StateKeyView(
@@ -1754,8 +1756,12 @@ bool Ledger::buildGenesisBlock(
                     auto [versionStr, _] = versionEntry->getObject<SystemConfigEntry>();
                     auto storageVersion = tool::toVersionNumber(versionStr);
 
+                    // 设置sharding default，相关的bugfix也要设置上，否则会不一致
+                    // Set sharding default, and related bugfixes should also be set, otherwise it
+                    // will be inconsistent
                     Features shardingFeature;
                     shardingFeature.setToShardingDefault((protocol::BlockVersion)storageVersion);
+                    shardingFeature.setGenesisFeatures((protocol::BlockVersion)storageVersion);
                     co_await shardingFeature.writeToStorage(
                         *m_storage, boost::lexical_cast<long>(blockNumberEntry->get()));
                 }
