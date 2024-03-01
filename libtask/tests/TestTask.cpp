@@ -229,7 +229,7 @@ BOOST_AUTO_TEST_CASE(tbbWait)
     ::tbb::task_arena arena(2);
     ::tbb::task_group group1;
     arena.execute([&]() {
-        for (auto i = 0; i < 10; ++i)
+        for (auto i = 0; i < count; ++i)
         {
             group1.run([&tasks, i]() {
                 std::cout << "Task " << i << " started" << std::endl;
