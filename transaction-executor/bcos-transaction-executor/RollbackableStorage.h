@@ -63,6 +63,10 @@ public:
             }
             else
             {
+                // TODO: 此处需要特殊处理，不然会留下Delete entry导致state
+                // root变化，如传一个READ_FRONT
+                // TODO: Special handling is required here, otherwise it will leave a Delete entry
+                // and cause the state root to change, such as passing a READ_FRONT
                 co_await storage2::removeOne(*m_storage, record.key);
             }
             m_records.pop_back();

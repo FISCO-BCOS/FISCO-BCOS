@@ -44,6 +44,13 @@ bcostars::Error bcos::rpc::RPCServer::handshake(
 bcostars::Error bcos::rpc::RPCServer::call(const bcostars::Transaction& request,
     bcostars::TransactionReceipt& response, tars::TarsCurrentPtr current)
 {
+    if (c_fileLogLevel <= LogLevel::TRACE)
+    {
+        std::stringstream ss;
+        request.displaySimple(ss);
+        RPC_LOG(TRACE) << "RPC call request" << ss.str();
+    }
+
     current->setResponse(false);
     auto transaction = std::make_shared<bcostars::protocol::TransactionImpl>(
         [inner = std::move(const_cast<bcostars::Transaction&>(request))]() mutable {

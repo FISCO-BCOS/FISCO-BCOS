@@ -131,9 +131,9 @@ public:
     Awaitable operator co_await() { return Awaitable(*static_cast<Task*>(this)); }
 
     explicit Task(CO_STD::coroutine_handle<promise_type> handle) : m_handle(handle) {}
-    Task(const Task&) = default;
+    Task(const Task&) = delete;
     Task(Task&& task) noexcept : m_handle(task.m_handle) { task.m_handle = nullptr; }
-    Task& operator=(const Task&) = default;
+    Task& operator=(const Task&) = delete;
     Task& operator=(Task&& task) noexcept
     {
         m_handle = task.m_handle;

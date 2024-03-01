@@ -1,5 +1,5 @@
 #pragma once
-#include "detail/Core.h"
+#include "TarsCallback.h"
 #include <servant/Communicator.h>
 #include <future>
 
@@ -21,7 +21,7 @@ public:
 };
 
 template <class Response>
-class Handle
+class RPCHandle
 {
 private:
     RPCClient& m_rpcClient;
@@ -35,12 +35,12 @@ protected:
     std::shared_ptr<Callback> callback() const { return m_callback; }
 
 public:
-    Handle(RPCClient& rpcClient) : m_rpcClient(rpcClient){};
-    Handle(Handle const&) = delete;
-    Handle& operator=(Handle const&) = delete;
-    Handle(Handle&&) noexcept = default;
-    Handle& operator=(Handle&&) noexcept = default;
-    ~Handle() noexcept = default;
+    RPCHandle(RPCClient& rpcClient) : m_rpcClient(rpcClient){};
+    RPCHandle(RPCHandle const&) = delete;
+    RPCHandle& operator=(RPCHandle const&) = delete;
+    RPCHandle(RPCHandle&&) noexcept = default;
+    RPCHandle& operator=(RPCHandle&&) noexcept = default;
+    ~RPCHandle() noexcept = default;
 
     Response get()
     {
