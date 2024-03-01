@@ -250,12 +250,12 @@ void loopFetchBlockNumber(bcos::sdk::RPCClient& rpcClient, boost::atomic_flag co
 
 int main(int argc, char* argv[])
 {
-    if (argc < 5)
+    if (argc < 6)
     {
         std::cout << "Usage: " << argv[0]
-                  << " <connectionString> <userCount> <transactionCount> <qps>" << std::endl
+                  << " <connectionString> <userCount> <transactionCount> <qps> <proxy>" << std::endl
                   << "Example: " << argv[0]
-                  << " \"fiscobcos.rpc.RPCObj@tcp -h 127.0.0.1 -p 20021\" 100 1000 100"
+                  << " \"fiscobcos.rpc.RPCObj@tcp -h 127.0.0.1 -p 20021\" 100 1000 100 0"
                   << std::endl;
 
         return 1;
@@ -265,6 +265,7 @@ int main(int argc, char* argv[])
     int userCount = boost::lexical_cast<int>(argv[2]);
     int transactionCount = boost::lexical_cast<int>(argv[3]);
     int qps = boost::lexical_cast<int>(argv[4]);
+    bool proxy = boost::lexical_cast<bool>(argv[5]);
 
     bcos::sdk::Config config = {
         .connectionString = connectionString,
@@ -320,8 +321,16 @@ int main(int argc, char* argv[])
         std::cout << "Deploy tup failed" << receipt2->status() << std::endl;
         return 1;
     }
-    auto contractAddress = receipt2->contractAddress();
-    std::cout << "Tup contract address is:" << contractAddress << std::endl;
+    std::string contractAddress;
+    if (proxy)
+    {
+        contractAddress = receipt2->contractAddress();
+    }
+    else
+    {
+        contractAddress = transfer20ContractAddress;
+    }
+    std::cout << "Target contract address is:" << contractAddress << std::endl;
 
     auto users = initUsers(userCount, *cryptoSuite);
     query(rpcClient, cryptoSuite, std::string(contractAddress), users, qps);
