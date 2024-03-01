@@ -312,20 +312,18 @@ int main(int argc, char* argv[])
 
     auto deployTupTransaction = transactionFactory.createTransaction(0, "", tupBin,
         rpcClient.generateNonce(), blockNumber + blockLimit, "chain0", "group0", 0, *adminKeyPair);
-    receipt =
+    auto receipt2 =
         bcos::task::syncWait(bcos::sdk::async::sendTransaction(rpcClient, *deployTupTransaction))
             .get();
-    if (receipt->status() != 0)
+    if (receipt2->status() != 0)
     {
-        std::cout << "Deploy tup failed" << receipt->status() << std::endl;
+        std::cout << "Deploy tup failed" << receipt2->status() << std::endl;
         return 1;
     }
-    auto contractAddress = receipt->contractAddress();
+    auto contractAddress = receipt2->contractAddress();
     std::cout << "Tup contract address is:" << contractAddress << std::endl;
 
     auto users = initUsers(userCount, *cryptoSuite);
-
-    std::cout << "Contract address is:" << contractAddress << std::endl;
     query(rpcClient, cryptoSuite, std::string(contractAddress), users, qps);
     issue(rpcClient, cryptoSuite, std::string(contractAddress), adminKeyPair, users, qps);
     transfer(rpcClient, cryptoSuite, std::string(contractAddress), adminKeyPair, users,
