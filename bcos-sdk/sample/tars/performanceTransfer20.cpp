@@ -1,5 +1,6 @@
 #include "Common.h"
 #include "Transfer20ByteCode.h"
+#include "TransparentUpgradeableProxyByteCode.h"
 #include "bcos-codec/abi/ContractABICodec.h"
 #include "bcos-cpp-sdk/tarsRPC/CoRPCClient.h"
 #include "bcos-cpp-sdk/tarsRPC/RPCClient.h"
@@ -281,24 +282,47 @@ int main(int argc, char* argv[])
 
     bcostars::protocol::TransactionFactoryImpl transactionFactory(cryptoSuite);
 
-    bcos::bytes deployBin;
-    boost::algorithm::unhex(TRANSFER20_BYTECODE, std::back_inserter(deployBin));
+    bcos::bytes transfer20Bin;
+    boost::algorithm::unhex(TRANSFER20_BYTECODE, std::back_inserter(transfer20Bin));
     bcos::codec::abi::ContractABICodec abiCodec(cryptoSuite->hashImpl());
     auto deployParam = abiCodec.abiIn("", std::string("test_token"), std::string("tt"), false);
-    deployBin.insert(deployBin.end(), deployParam.begin(), deployParam.end());
+    transfer20Bin.insert(transfer20Bin.end(), deployParam.begin(), deployParam.end());
 
-    auto deployTransaction = transactionFactory.createTransaction(0, "", deployBin,
+    auto deployTransfer20Transaction = transactionFactory.createTransaction(0, "", transfer20Bin,
         rpcClient.generateNonce(), blockNumber + blockLimit, "chain0", "group0", 0, *adminKeyPair);
-    auto receipt =
-        bcos::task::syncWait(bcos::sdk::async::sendTransaction(rpcClient, *deployTransaction))
-            .get();
-
+    auto receipt = bcos::task::syncWait(
+        bcos::sdk::async::sendTransaction(rpcClient, *deployTransfer20Transaction))
+                       .get();
     if (receipt->status() != 0)
     {
         std::cout << "Deploy contract failed" << receipt->status() << std::endl;
         return 1;
     }
+    auto transfer20ContractAddress = receipt->contractAddress();
+    std::cout << "Transfer20 contract address is:" << transfer20ContractAddress << std::endl;
+
+    bcos::bytes tupBin;
+    boost::algorithm::unhex(TRANSPARENT_UPGRADEABLE_PROXY_BYTECODE, std::back_inserter(tupBin));
+    bcos::codec::abi::ContractABICodec abiCodec2(cryptoSuite->hashImpl());
+    auto ownerKeyPair = std::shared_ptr<bcos::crypto::KeyPairInterface>(
+        cryptoSuite->signatureImpl()->generateKeyPair());
+    auto tupParam = abiCodec2.abiIn("", bcos::toAddress(std::string(transfer20ContractAddress)),
+        ownerKeyPair->address(cryptoSuite->hashImpl()), bcos::bytes{});
+    tupBin.insert(tupBin.end(), tupParam.begin(), tupParam.end());
+
+    auto deployTupTransaction = transactionFactory.createTransaction(0, "", tupBin,
+        rpcClient.generateNonce(), blockNumber + blockLimit, "chain0", "group0", 0, *adminKeyPair);
+    receipt =
+        bcos::task::syncWait(bcos::sdk::async::sendTransaction(rpcClient, *deployTupTransaction))
+            .get();
+    if (receipt->status() != 0)
+    {
+        std::cout << "Deploy tup failed" << receipt->status() << std::endl;
+        return 1;
+    }
     auto contractAddress = receipt->contractAddress();
+    std::cout << "Tup contract address is:" << contractAddress << std::endl;
+
     auto users = initUsers(userCount, *cryptoSuite);
 
     std::cout << "Contract address is:" << contractAddress << std::endl;
