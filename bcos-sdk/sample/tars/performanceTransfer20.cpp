@@ -1,5 +1,6 @@
 #include "Common.h"
 #include "Transfer20ByteCode.h"
+#include "TransparentUpgradeableProxyByteCode.h"
 #include "bcos-codec/abi/ContractABICodec.h"
 #include "bcos-cpp-sdk/tarsRPC/CoRPCClient.h"
 #include "bcos-cpp-sdk/tarsRPC/RPCClient.h"
@@ -249,12 +250,12 @@ void loopFetchBlockNumber(bcos::sdk::RPCClient& rpcClient, boost::atomic_flag co
 
 int main(int argc, char* argv[])
 {
-    if (argc < 5)
+    if (argc < 6)
     {
         std::cout << "Usage: " << argv[0]
-                  << " <connectionString> <userCount> <transactionCount> <qps>" << std::endl
+                  << " <connectionString> <userCount> <transactionCount> <qps> <proxy>" << std::endl
                   << "Example: " << argv[0]
-                  << " \"fiscobcos.rpc.RPCObj@tcp -h 127.0.0.1 -p 20021\" 100 1000 100"
+                  << " \"fiscobcos.rpc.RPCObj@tcp -h 127.0.0.1 -p 20021\" 100 1000 100 0"
                   << std::endl;
 
         return 1;
@@ -264,6 +265,7 @@ int main(int argc, char* argv[])
     int userCount = boost::lexical_cast<int>(argv[2]);
     int transactionCount = boost::lexical_cast<int>(argv[3]);
     int qps = boost::lexical_cast<int>(argv[4]);
+    bool proxy = boost::lexical_cast<bool>(argv[5]);
 
     bcos::sdk::Config config = {
         .connectionString = connectionString,
@@ -281,27 +283,56 @@ int main(int argc, char* argv[])
 
     bcostars::protocol::TransactionFactoryImpl transactionFactory(cryptoSuite);
 
-    bcos::bytes deployBin;
-    boost::algorithm::unhex(TRANSFER20_BYTECODE, std::back_inserter(deployBin));
+    bcos::bytes transfer20Bin;
+    boost::algorithm::unhex(TRANSFER20_BYTECODE, std::back_inserter(transfer20Bin));
     bcos::codec::abi::ContractABICodec abiCodec(cryptoSuite->hashImpl());
     auto deployParam = abiCodec.abiIn("", std::string("test_token"), std::string("tt"), false);
-    deployBin.insert(deployBin.end(), deployParam.begin(), deployParam.end());
+    transfer20Bin.insert(transfer20Bin.end(), deployParam.begin(), deployParam.end());
 
-    auto deployTransaction = transactionFactory.createTransaction(0, "", deployBin,
+    auto deployTransfer20Transaction = transactionFactory.createTransaction(0, "", transfer20Bin,
         rpcClient.generateNonce(), blockNumber + blockLimit, "chain0", "group0", 0, *adminKeyPair);
-    auto receipt =
-        bcos::task::syncWait(bcos::sdk::async::sendTransaction(rpcClient, *deployTransaction))
-            .get();
-
+    auto receipt = bcos::task::syncWait(
+        bcos::sdk::async::sendTransaction(rpcClient, *deployTransfer20Transaction))
+                       .get();
     if (receipt->status() != 0)
     {
         std::cout << "Deploy contract failed" << receipt->status() << std::endl;
         return 1;
     }
-    auto contractAddress = receipt->contractAddress();
-    auto users = initUsers(userCount, *cryptoSuite);
+    auto transfer20ContractAddress = receipt->contractAddress();
+    std::cout << "Transfer20 contract address is:" << transfer20ContractAddress << std::endl;
 
-    std::cout << "Contract address is:" << contractAddress << std::endl;
+    bcos::bytes tupBin;
+    boost::algorithm::unhex(TRANSPARENT_UPGRADEABLE_PROXY_BYTECODE, std::back_inserter(tupBin));
+    bcos::codec::abi::ContractABICodec abiCodec2(cryptoSuite->hashImpl());
+    auto ownerKeyPair = std::shared_ptr<bcos::crypto::KeyPairInterface>(
+        cryptoSuite->signatureImpl()->generateKeyPair());
+    auto tupParam = abiCodec2.abiIn("", bcos::toAddress(std::string(transfer20ContractAddress)),
+        ownerKeyPair->address(cryptoSuite->hashImpl()), bcos::bytes{});
+    tupBin.insert(tupBin.end(), tupParam.begin(), tupParam.end());
+
+    auto deployTupTransaction = transactionFactory.createTransaction(0, "", tupBin,
+        rpcClient.generateNonce(), blockNumber + blockLimit, "chain0", "group0", 0, *adminKeyPair);
+    auto receipt2 =
+        bcos::task::syncWait(bcos::sdk::async::sendTransaction(rpcClient, *deployTupTransaction))
+            .get();
+    if (receipt2->status() != 0)
+    {
+        std::cout << "Deploy tup failed" << receipt2->status() << std::endl;
+        return 1;
+    }
+    std::string contractAddress;
+    if (proxy)
+    {
+        contractAddress = receipt2->contractAddress();
+    }
+    else
+    {
+        contractAddress = transfer20ContractAddress;
+    }
+    std::cout << "Target contract address is:" << contractAddress << std::endl;
+
+    auto users = initUsers(userCount, *cryptoSuite);
     query(rpcClient, cryptoSuite, std::string(contractAddress), users, qps);
     issue(rpcClient, cryptoSuite, std::string(contractAddress), adminKeyPair, users, qps);
     transfer(rpcClient, cryptoSuite, std::string(contractAddress), adminKeyPair, users,
