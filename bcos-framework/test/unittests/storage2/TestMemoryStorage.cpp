@@ -291,4 +291,20 @@ BOOST_AUTO_TEST_CASE(merge)
     }());
 }
 
+BOOST_AUTO_TEST_CASE(directDelete)
+{
+    task::syncWait([]() -> task::Task<void> {
+        MemoryStorage<int, int, bcos::storage2::memory_storage::LOGICAL_DELETION> storage;
+        co_await storage2::writeSome(
+            storage, RANGES::iota_view<int, int>(0, 10), RANGES::repeat_view<int>(100));
+
+        auto range1 = co_await storage2::range(storage);
+        BOOST_CHECK_EQUAL(RANGES::size(range1), 10);
+
+        co_await storage2::removeOne(storage, 6, bcos::storage2::DIRECT);
+        auto range2 = co_await storage2::range(storage);
+        BOOST_CHECK_EQUAL(RANGES::size(range2), 9);
+    }());
+}
+
 BOOST_AUTO_TEST_SUITE_END()

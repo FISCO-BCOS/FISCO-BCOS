@@ -13,13 +13,13 @@ template <class Storage>
 concept HasReadOneDirect =
     requires(Storage& storage) {
         requires !std::is_void_v<task::AwaitableReturnType<decltype(storage2::readOne(
-            storage, std::declval<typename Storage::Key>(), storage2::READ_FRONT))>>;
+            storage, std::declval<typename Storage::Key>(), storage2::DIRECT))>>;
     };
 template <class Storage>
 concept HasReadSomeDirect =
     requires(Storage& storage) {
         requires RANGES::range<task::AwaitableReturnType<decltype(storage2::readSome(
-            storage, std::declval<std::vector<typename Storage::Key>>(), storage2::READ_FRONT))>>;
+            storage, std::declval<std::vector<typename Storage::Key>>(), storage2::DIRECT))>>;
     };
 
 template <class Storage>
@@ -30,7 +30,7 @@ private:
     {
         StateKey key;
         task::AwaitableReturnType<std::invoke_result_t<decltype(storage2::readOne), Storage&,
-            typename Storage::Key, storage2::READ_FRONT_TYPE>>
+            typename Storage::Key, storage2::DIRECT_TYPE>>
             oldValue;
     };
     std::vector<Record> m_records;
@@ -98,7 +98,7 @@ public:
         requires HasReadSomeDirect<Storage>
     {
         auto oldValues =
-            co_await storage2::readSome(*storage.m_storage, keys, storage2::READ_FRONT);
+            co_await storage2::readSome(*storage.m_storage, keys, storage2::DIRECT);
         for (auto&& [key, oldValue] : RANGES::views::zip(keys, oldValues))
         {
             storage.m_records.emplace_back(Record{.key = typename Storage::Key{key},
@@ -117,7 +117,7 @@ public:
     {
         auto& record = storage.m_records.emplace_back();
         record.key = key;
-        record.oldValue = co_await storage2::readOne(*storage.m_storage, key, storage2::READ_FRONT);
+        record.oldValue = co_await storage2::readOne(*storage.m_storage, key, storage2::DIRECT);
         co_await storage2::writeOne(
             *storage.m_storage, record.key, std::forward<decltype(value)>(value));
     }
@@ -129,7 +129,7 @@ public:
     {
         // Store values to history
         auto oldValues =
-            co_await storage2::readSome(*storage.m_storage, keys, storage2::READ_FRONT);
+            co_await storage2::readSome(*storage.m_storage, keys, storage2::DIRECT);
         for (auto&& [key, value] : RANGES::views::zip(keys, oldValues))
         {
             if (value)

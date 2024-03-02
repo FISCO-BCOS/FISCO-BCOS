@@ -9,9 +9,9 @@
 namespace bcos::storage2
 {
 
-inline constexpr struct READ_FRONT_TYPE
+inline constexpr struct DIRECT_TYPE
 {
-} READ_FRONT{};
+} DIRECT{};
 
 template <class Invoke>
 using ReturnType = typename task::AwaitableReturnType<Invoke>;
@@ -51,12 +51,13 @@ inline constexpr struct WriteSome
 
 inline constexpr struct RemoveSome
 {
-    auto operator()(auto&& storage, RANGES::input_range auto&& keys) const
-        -> task::Task<ReturnType<decltype(tag_invoke(
-            *this, std::forward<decltype(storage)>(storage), std::forward<decltype(keys)>(keys)))>>
+    auto operator()(auto&& storage, RANGES::input_range auto&& keys, auto&&... args) const
+        -> task::Task<
+            ReturnType<decltype(tag_invoke(*this, std::forward<decltype(storage)>(storage),
+                std::forward<decltype(keys)>(keys), std::forward<decltype(args)>(args)...))>>
     {
-        co_await tag_invoke(
-            *this, std::forward<decltype(storage)>(storage), std::forward<decltype(keys)>(keys));
+        co_await tag_invoke(*this, std::forward<decltype(storage)>(storage),
+            std::forward<decltype(keys)>(keys), std::forward<decltype(args)>(args)...);
     }
 } removeSome{};
 

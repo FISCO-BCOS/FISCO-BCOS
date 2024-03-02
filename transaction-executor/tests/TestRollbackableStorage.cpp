@@ -31,7 +31,7 @@ BOOST_AUTO_TEST_CASE(addRollback)
         Rollbackable rollbackableStorage(memoryStorage);
 
         auto view = RANGES::single_view(StateKey{"table1"sv, "Key1"sv});
-        co_await storage2::readSome(memoryStorage, view, storage2::READ_FRONT);
+        co_await storage2::readSome(memoryStorage, view, storage2::DIRECT);
 
         std::string_view tableID = "table1";
         auto point = rollbackableStorage.current();

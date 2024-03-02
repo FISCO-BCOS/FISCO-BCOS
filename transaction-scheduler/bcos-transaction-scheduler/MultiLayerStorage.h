@@ -157,7 +157,7 @@ public:
         }
 
         friend auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, View& storage,
-            RANGES::input_range auto&& keys, const storage2::READ_FRONT_TYPE& /*unused*/)
+            RANGES::input_range auto&& keys, const storage2::DIRECT_TYPE& /*unused*/)
             -> task::Task<task::AwaitableReturnType<
                 std::invoke_result_t<storage2::ReadSome, MutableStorageType&, decltype(keys)>>>
         {
@@ -216,7 +216,7 @@ public:
         }
 
         friend auto tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/, View& storage,
-            auto&& key, storage2::READ_FRONT_TYPE /*unused*/)
+            auto&& key, storage2::DIRECT_TYPE /*unused*/)
             -> task::Task<task::AwaitableReturnType<
                 std::invoke_result_t<storage2::ReadOne, MutableStorageType&, decltype(key)>>>
         {

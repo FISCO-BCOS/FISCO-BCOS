@@ -329,6 +329,18 @@ public:
     friend task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/,
         MemoryStorage& storage, RANGES::input_range auto&& keys)
     {
+        return removeSome(storage, std::forward<decltype(keys)>(keys), false);
+    }
+
+    friend task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/,
+        MemoryStorage& storage, RANGES::input_range auto&& keys, DIRECT_TYPE /*unused*/)
+    {
+        return removeSome(storage, std::forward<decltype(keys)>(keys), true);
+    }
+
+    static task::AwaitableValue<void> removeSome(
+        MemoryStorage& storage, RANGES::input_range auto&& keys, bool direct)
+    {
         for (auto&& key : keys)
         {
             auto& bucket = storage.getBucket(key);
@@ -356,9 +368,16 @@ public:
 
                 if constexpr (std::decay_t<decltype(storage)>::withLogicalDeletion)
                 {
-                    bucket.container.modify(it, [](Data& data) mutable {
-                        data.value.template emplace<Deleted>(Deleted{});
-                    });
+                    if (!direct)
+                    {
+                        bucket.container.modify(it, [](Data& data) mutable {
+                            data.value.template emplace<Deleted>(Deleted{});
+                        });
+                    }
+                    else
+                    {
+                        bucket.container.erase(it);
+                    }
                 }
                 else
                 {
