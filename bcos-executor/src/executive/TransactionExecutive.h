@@ -72,6 +72,10 @@ public:
         m_hashImpl = m_blockContext.hashHandler();
         m_storageWrapperObj.setCodeCache(m_blockContext.getCodeCache());
         m_storageWrapperObj.setCodeHashCache(m_blockContext.getCodeHashCache());
+
+        setExternalCallHandler([this](CallParameters::UniquePtr input) {
+            return externalCallInternal(std::move(input));
+        });
     }
 
     TransactionExecutive(TransactionExecutive const&) = delete;
@@ -85,6 +89,13 @@ public:
 
     // External call request
     virtual CallParameters::UniquePtr externalCall(CallParameters::UniquePtr input);
+    CallParameters::UniquePtr externalCallInternal(CallParameters::UniquePtr input);
+
+    void setExternalCallHandler(
+        std::function<CallParameters::UniquePtr(CallParameters::UniquePtr)> _handler)
+    {
+        m_externalCallHandler = std::move(_handler);
+    }
 
     auto& storage()
     {
@@ -180,14 +191,14 @@ protected:
 
     //    virtual TransactionExecutive::Ptr buildChildExecutive(const std::string& _contractAddress,
     //        int64_t contextID, int64_t seq, bool useCoroutine = true)
-    virtual TransactionExecutive::Ptr buildChildExecutive(const std::string& _contractAddress,
-        int64_t contextID, int64_t seq, ExecutiveType execType = ExecutiveType::coroutine)
+    virtual TransactionExecutive::Ptr buildChildExecutive(
+        const std::string& _contractAddress, int64_t contextID, int64_t seq)
     {
         auto executiveFactory = std::make_shared<ExecutiveFactory>(
             m_blockContext, m_evmPrecompiled, m_precompiled, m_staticPrecompiled, m_gasInjector);
 
 
-        return executiveFactory->build(_contractAddress, contextID, seq, execType);
+        return executiveFactory->build(_contractAddress, contextID, seq, ExecutiveType::common);
     }
 
     void revert();
@@ -227,6 +238,8 @@ protected:
     storage::StorageWrapper m_storageWrapperObj;
     storage::StorageWrapper* m_storageWrapper;
     bool m_hasContractTableChanged = false;
+
+    std::function<CallParameters::UniquePtr(CallParameters::UniquePtr)> m_externalCallHandler;
 };
 
 }  // namespace executor

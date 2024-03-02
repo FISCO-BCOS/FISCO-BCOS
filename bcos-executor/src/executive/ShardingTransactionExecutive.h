@@ -40,13 +40,23 @@ public:
 
     CallParameters::UniquePtr resume() override;
 
-    TransactionExecutive::Ptr buildChildExecutive(const std::string& _contractAddress,
-        int64_t contextID, int64_t seq, ExecutiveType execType = ExecutiveType::coroutine) override
+    TransactionExecutive::Ptr buildChildExecutive(
+        const std::string& _contractAddress, int64_t contextID, int64_t seq) override
     {
         ShardingExecutiveFactory executiveFactory = ShardingExecutiveFactory(
             m_blockContext, m_evmPrecompiled, m_precompiled, m_staticPrecompiled, m_gasInjector);
 
-        return executiveFactory.build(_contractAddress, contextID, seq, execType);
+        auto executive =
+            executiveFactory.build(_contractAddress, contextID, seq, ExecutiveType::common);
+        if (m_blockContext.features().get(
+                ledger::Features::Flag::bugfix_sharding_call_in_child_executive))
+        {
+            executive->setExternalCallHandler([this](CallParameters::UniquePtr input) {
+                return this->externalCall(std::move(input));
+            });
+        }
+
+        return executive;
     }
 
     std::string getContractShard(const std::string_view& contractAddress);
@@ -55,4 +65,5 @@ private:
     std::optional<std::string> m_shardName;
     bool m_usePromise;
 };
+
 }  // namespace bcos::executor

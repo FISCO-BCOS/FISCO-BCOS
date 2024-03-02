@@ -42,16 +42,16 @@ CallParameters::UniquePtr ShardingTransactionExecutive::start(CallParameters::Un
 CallParameters::UniquePtr ShardingTransactionExecutive::externalCall(
     CallParameters::UniquePtr input)
 {
+    // set DMC contextID and seq
+    input->contextID = contextID();
+    input->seq = seq();
+
     if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
     {
         EXECUTIVE_LOG(TRACE) << LOG_BADGE("Sharding")
                              << "ShardingTransactionExecutive externalCall: "
                              << input->toFullString() << LOG_KV("usePromise", m_usePromise);
     }
-
-    // set DMC contextID and seq
-    input->contextID = contextID();
-    input->seq = seq();
 
     if (!std::empty(input->receiveAddress))
     {
@@ -81,7 +81,7 @@ CallParameters::UniquePtr ShardingTransactionExecutive::externalCall(
 
     EXECUTIVE_LOG(DEBUG) << LOG_BADGE("Sharding") << "ShardingTransactionExecutive call local"
                          << input->toFullString();
-    return TransactionExecutive::externalCall(std::move(input));
+    return TransactionExecutive::externalCallInternal(std::move(input));
 }
 
 CallParameters::UniquePtr ShardingTransactionExecutive::resume()
