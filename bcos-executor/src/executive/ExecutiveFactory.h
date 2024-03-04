@@ -82,6 +82,8 @@ protected:
     bcos::ThreadPool::Ptr m_poolForPromiseWait;
 };
 
+class ShardingTransactionExecutive;
+
 class ShardingExecutiveFactory : public ExecutiveFactory
 {
 public:
@@ -99,6 +101,9 @@ public:
 
     std::shared_ptr<TransactionExecutive> build(const std::string& _contractAddress,
         int64_t contextID, int64_t seq, ExecutiveType execType = ExecutiveType::coroutine) override;
+
+    std::shared_ptr<TransactionExecutive> buildChild(ShardingTransactionExecutive* parent,
+        const std::string& _contractAddress, int64_t contextID, int64_t seq);
 };
 
 }  // namespace bcos::executor
