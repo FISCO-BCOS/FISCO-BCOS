@@ -63,11 +63,7 @@ public:
             }
             else
             {
-                // TODO: 此处需要特殊处理，不然会留下Delete entry导致state
-                // root变化，如传一个READ_FRONT
-                // TODO: Special handling is required here, otherwise it will leave a Delete entry
-                // and cause the state root to change, such as passing a READ_FRONT
-                co_await storage2::removeOne(*m_storage, record.key);
+                co_await storage2::removeOne(*m_storage, record.key, storage2::DIRECT);
             }
             m_records.pop_back();
         }
@@ -97,8 +93,7 @@ public:
             std::invoke_result_t<storage2::WriteSome, Storage&, decltype(keys), decltype(values)>>>
         requires HasReadSomeDirect<Storage>
     {
-        auto oldValues =
-            co_await storage2::readSome(*storage.m_storage, keys, storage2::DIRECT);
+        auto oldValues = co_await storage2::readSome(*storage.m_storage, keys, storage2::DIRECT);
         for (auto&& [key, oldValue] : RANGES::views::zip(keys, oldValues))
         {
             storage.m_records.emplace_back(Record{.key = typename Storage::Key{key},
@@ -128,8 +123,7 @@ public:
             std::invoke_result_t<storage2::RemoveSome, Storage&, decltype(keys)>>>
     {
         // Store values to history
-        auto oldValues =
-            co_await storage2::readSome(*storage.m_storage, keys, storage2::DIRECT);
+        auto oldValues = co_await storage2::readSome(*storage.m_storage, keys, storage2::DIRECT);
         for (auto&& [key, value] : RANGES::views::zip(keys, oldValues))
         {
             if (value)
@@ -140,6 +134,14 @@ public:
         }
 
         co_return co_await storage2::removeSome(*storage.m_storage, keys);
+    }
+
+    friend auto tag_invoke(bcos::storage2::tag_t<storage2::range> /*unused*/, Rollbackable& storage,
+        auto&&... args) -> task::Task<storage2::ReturnType<std::invoke_result_t<storage2::Range,
+        std::remove_pointer_t<decltype(*storage.m_storage)>, decltype(args)...>>>
+    {
+        co_return co_await storage2::range(
+            *storage.m_storage, std::forward<decltype(args)>(args)...);
     }
 };
 

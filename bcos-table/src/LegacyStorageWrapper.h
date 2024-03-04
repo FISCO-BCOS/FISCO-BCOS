@@ -32,19 +32,25 @@ public:
         task::wait(
             [](decltype(this) self, std::string table,
                 std::optional<storage::Condition const> condition,
-                decltype(_callback) callback) -> task::Task<void> {
+                const decltype(_callback)& callback) -> task::Task<void> {
                 STORAGE_LOG(WARNING)
                     << "Using unstable LegacyStorageWrapper::asyncGetPrimaryKeys method!";
-                std::set<std::string> keys;
+                std::vector<std::string> keys;
 
-                for (const auto& [cond, key] : condition->m_conditions)
+                auto range = co_await storage2::range(self->m_storage);
+                for (auto [key, value] : range)
                 {
-                    if (co_await storage2::existsOne(
-                            self->m_storage, transaction_executor::StateKeyView{table, key}))
+                    if (key)
                     {
-                        keys.emplace(key);
+                        transaction_executor::StateKeyView stateKeyView(*key);
+                        auto [entryTable, entryKey] = stateKeyView.getTableAndKey();
+                        if (entryTable == table && (!condition || condition->isValid(entryKey)))
+                        {
+                            keys.emplace_back(std::string(entryKey));
+                        }
                     }
                 }
+
                 callback(nullptr, keys | RANGES::to<std::vector>());
             }(this, std::string(table), condition, std::move(_callback)));
     }
@@ -78,7 +84,7 @@ public:
                        decltype(callback) callback) -> task::Task<void> {
             try
             {
-                auto stateKeys = keys | RANGES::views::transform([&table](auto&& key) -> auto {
+                auto stateKeys = keys | RANGES::views::transform([&table](auto&& key) -> auto{
                     return transaction_executor::StateKeyView{
                         table, std::forward<decltype(key)>(key)};
                 }) | RANGES::to<std::vector>();
@@ -130,7 +136,7 @@ public:
                         keys | RANGES::views::transform([&](std::string_view key) {
                             return transaction_executor::StateKey{tableName, key};
                         }),
-                        values | RANGES::views::transform([](std::string_view value) -> auto {
+                        values | RANGES::views::transform([](std::string_view value) -> auto{
                             storage::Entry entry;
                             entry.setField(0, value);
                             return entry;

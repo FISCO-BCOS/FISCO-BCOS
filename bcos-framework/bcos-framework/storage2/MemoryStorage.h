@@ -13,9 +13,6 @@
 #include <boost/multi_index/sequenced_index.hpp>
 #include <boost/multi_index_container.hpp>
 #include <boost/throw_exception.hpp>
-#include <functional>
-#include <mutex>
-#include <thread>
 #include <type_traits>
 #include <utility>
 #include <variant>

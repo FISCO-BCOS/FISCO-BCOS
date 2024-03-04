@@ -24,16 +24,13 @@
 #include "bcos-framework/txpool/TxPoolInterface.h"
 #include "bcos-ledger/src/libledger/LedgerMethods.h"
 #include "bcos-task/TBBWait.h"
-#include "bcos-task/Wait.h"
 #include "bcos-tool/VersionConverter.h"
 #include "bcos-utilities/Common.h"
 #include <bcos-utilities/ITTAPI.h>
 #include <fmt/format.h>
 #include <oneapi/tbb/blocked_range.h>
 #include <oneapi/tbb/parallel_invoke.h>
-#include <oneapi/tbb/parallel_pipeline.h>
 #include <oneapi/tbb/parallel_reduce.h>
-#include <oneapi/tbb/task_arena.h>
 #include <oneapi/tbb/task_group.h>
 #include <boost/atomic.hpp>
 #include <boost/exception/diagnostic_information.hpp>
@@ -47,9 +44,9 @@ namespace bcos::transaction_scheduler
 {
 #define BASELINE_SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("BASELINE_SCHEDULER")
 
-// clang-format off
-struct NotFoundTransactionError: public bcos::Error {};
-// clang-format on
+struct NotFoundTransactionError : public bcos::Error
+{
+};
 
 /**
  * Retrieves a vector of transactions from the provided transaction pool and block.
