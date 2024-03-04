@@ -14,7 +14,7 @@ concurrency:
 jobs:
   build_ubuntu:
     name: ubuntu static build
-    if:  github.event.pull_request.merged == true
+    if: github.event.pull_request.merged == true
     runs-on: self-hosted-static-ubuntu
     strategy:
       fail-fast: false
@@ -28,7 +28,7 @@ jobs:
       - name: Set up JDK 1.8
         uses: actions/setup-java@v3
         with:
-          distribution: 'zulu'
+          distribution: "zulu"
           java-version: 8
           java-package: jdk
 
@@ -37,12 +37,12 @@ jobs:
           sudo apt update
           sudo apt install -y  lcov ccache wget python3-dev git curl zip unzip tar
           sudo apt install -y --no-install-recommends \
-              clang make build-essential cmake libssl-dev zlib1g-dev ca-certificates \
-              libgmp-dev flex bison patch libzstd-dev ninja-build pkg-config ccache uuid-runtime automake
+              clang make build-essential cmake zlib1g-dev ca-certificates \
+              libgmp-dev flex bison patch libzstd-dev ninja-build pkg-config ccache uuid-runtime automake libssl-dev
 
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2022-07-28
+          toolchain: nightly-2024-01-10
           override: true
 
       - name: Reuse build cache
@@ -64,4 +64,3 @@ jobs:
           export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
           cd build && cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_STATIC=On -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=ON -DWITH_TARS_SERVICES=ON .. || cat *.log
           make -j4
-
