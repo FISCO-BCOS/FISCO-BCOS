@@ -163,14 +163,14 @@ contract_test()
     LOG_INFO "addBalance to account ${account}"
     bash console.sh addBalance ${account} 10000000000
 
-    LOG_INFO "Test default mode"
+    LOG_INFO "\n=====> Test default mode"
     check_all_contract
 
-    LOG_INFO "Test serial: set feature_dmc2serial"
+    LOG_INFO "\n=====> Test serial: set feature_dmc2serial"
     bash console.sh setSystemConfigByKey feature_dmc2serial 1
     check_all_contract
 
-    LOG_INFO "Test sharding: set feature_sharding"
+    LOG_INFO "\n=====> Test sharding: set feature_sharding"
     bash console.sh setSystemConfigByKey feature_sharding 1
     check_all_contract
 }
