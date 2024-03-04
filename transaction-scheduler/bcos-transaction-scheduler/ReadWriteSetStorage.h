@@ -54,7 +54,7 @@ public:
 
     friend auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/,
         ReadWriteSetStorage& storage, RANGES::input_range auto&& keys,
-        const storage2::DIRECT_TYPE& /*unused*/)
+        storage2::DIRECT_TYPE /*unused*/)
         -> task::Task<task::AwaitableReturnType<
             std::invoke_result_t<storage2::ReadSome, Storage&, decltype(keys)>>>
     {
