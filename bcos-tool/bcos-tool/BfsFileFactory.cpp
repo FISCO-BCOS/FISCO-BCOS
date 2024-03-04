@@ -94,7 +94,7 @@ bool BfsFileFactory::buildLink(Table& _table, const std::string& _address, const
         _table.setRow(FS_LINK_ABI, std::move(abiEntry));
     }
 
-    if (!name.empty())
+    if (!name.empty() || blockVersion == (uint32_t)protocol::BlockVersion::V3_0_VERSION)
     {
         Entry nameEntry;
         nameEntry.importFields({name});
