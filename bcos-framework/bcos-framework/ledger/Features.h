@@ -38,6 +38,7 @@ public:
         bugfix_keypage_system_entry_hash,
         bugfix_internal_create_redundant_storage,  // to perf internal create code and abi storage
         bugfix_internal_create_permission_denied,
+        bugfix_sharding_call_in_child_executive,
         feature_dmc2serial,
         feature_sharding,
         feature_rpbft,
@@ -147,9 +148,9 @@ public:
                 {Flag::bugfix_keypage_system_entry_hash,
                     Flag::bugfix_internal_create_redundant_storage}},
             {protocol::BlockVersion::V3_7_VERSION,
-                {Flag::bugfix_internal_create_permission_denied}},
+                {Flag::bugfix_internal_create_permission_denied,
+                  Flag::bugfix_sharding_call_in_child_executive}},
         });
-
         for (const auto& upgradeFeatures : upgradeRoadmap)
         {
             if (from < upgradeFeatures.to && to >= upgradeFeatures.to)

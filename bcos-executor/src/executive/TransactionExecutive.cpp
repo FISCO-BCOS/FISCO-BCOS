@@ -88,14 +88,15 @@ CallParameters::UniquePtr TransactionExecutive::start(CallParameters::UniquePtr 
 
 CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::UniquePtr input)
 {
-    if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
-    {
-        EXECUTIVE_LOG(TRACE) << "externalCall start\t" << input->toFullString();
-    }
     auto newSeq = seq() + 1;
     bool isCreate = input->create;
     input->seq = newSeq;
     input->contextID = m_contextID;
+
+    if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
+    {
+        EXECUTIVE_LOG(TRACE) << "externalCall start\t" << input->toFullString();
+    }
 
     std::string newAddress;
     // if internalCreate, sometimes it will use given address, if receiveAddress is empty then give
@@ -180,8 +181,7 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
         }
     }
 
-    auto executive =
-        buildChildExecutive(input->codeAddress, m_contextID, newSeq, ExecutiveType::common);
+    auto executive = buildChildExecutive(input->codeAddress, m_contextID, newSeq);
 
     m_childExecutives.push_back(executive);  // add child executive for revert() if needed
 
