@@ -122,6 +122,31 @@ config_console()
     LOG_INFO "Build and Config console success ..."
 }
 
+check_all_contract() {
+
+    local test_contract_address=$(bash console.sh deploy ContractTestAll |grep "contract address" |awk '{print $3}')
+
+    if [ -z "$test_contract_address" ]; then
+        LOG_ERROR  "java-sdk-demo contract test, deploy contract failed:"
+        bash console.sh deploy ContractTestAll
+        exit 1;
+    fi
+
+    LOG_INFO "addBalance to contract ${test_contract_address}"
+    bash console.sh addBalance ${test_contract_address} 10000000
+
+    LOG_INFO "run ContractTestAll " ${test_contract_address}
+    local output=$(bash console.sh call ContractTestAll ${test_contract_address} check)
+
+    if [[ $output == *"transaction status: 0"* ]]; then
+        LOG_INFO "java-sdk-demo contract test success"
+    else
+        LOG_ERROR "java-sdk-demo contract test error:"
+        bash console.sh call ContractTestAll ${test_contract_address} check
+        exit 1
+    fi
+}
+
 contract_test()
 {
     cd "${current_path}/console/dist/"
@@ -138,28 +163,16 @@ contract_test()
     LOG_INFO "addBalance to account ${account}"
     bash console.sh addBalance ${account} 10000000000
 
-    local test_contract_address=$(bash console.sh deploy ContractTestAll |grep "contract address" |awk '{print $3}')
+    LOG_INFO "\n=====> Test default mode"
+    check_all_contract
 
-    if [ -z "$test_contract_address" ]; then
-        LOG_ERROR  "java-sdk-demo contract test, deploy contract failed:"
-        bash console.sh deploy ContractTestAll
-        exit 1;
+    LOG_INFO "\n=====> Test serial: set feature_dmc2serial"
+    bash console.sh setSystemConfigByKey feature_dmc2serial 1
+    check_all_contract
 
-    fi
-
-    LOG_INFO "addBalance to contract ${test_contract_address}"
-    bash console.sh addBalance ${test_contract_address} 10000000
-
-    LOG_INFO "run tests"
-    local output=$(bash console.sh call ContractTestAll ${test_contract_address} check)
-
-    if [[ $output == *"transaction status: 0"* ]]; then
-        LOG_INFO "java-sdk-demo contract test success"
-    else
-        LOG_ERROR "java-sdk-demo contract test error:"
-        bash console.sh call ContractTestAll ${test_contract_address} check
-        exit 1
-    fi
+    LOG_INFO "\n=====> Test sharding: set feature_sharding"
+    bash console.sh setSystemConfigByKey feature_sharding 1
+    check_all_contract
 }
 
 

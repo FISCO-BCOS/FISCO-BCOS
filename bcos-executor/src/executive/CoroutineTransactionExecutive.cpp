@@ -8,29 +8,29 @@ CallParameters::UniquePtr CoroutineTransactionExecutive::start(CallParameters::U
         COROUTINE_TRACE_LOG(TRACE, m_contextID, m_seq) << "Create new coroutine";
 
         // Take ownership from input
-        m_pushMessage.emplace(std::move(push));
+        getPushMessage().emplace(std::move(push));
 
         auto callParameters = std::unique_ptr<CallParameters>(inputPtr);
 
 
         if (!callParameters->keyLocks.empty())
         {
-            m_syncStorageWrapper.importExistsKeyLocks(callParameters->keyLocks);
+            m_syncStorageWrapper->importExistsKeyLocks(callParameters->keyLocks);
         }
 
-        m_exchangeMessage = execute(std::move(callParameters));
+        getExchangeMessageRef() = execute(std::move(callParameters));
 
         if (m_blockContext.features().get(ledger::Features::Flag::bugfix_dmc_revert))
         {
-            m_exchangeMessage =
-                CoroutineTransactionExecutive::waitingFinish(std::move(m_exchangeMessage));
+            getExchangeMessageRef() =
+                CoroutineTransactionExecutive::waitingFinish(std::move(getExchangeMessageRef()));
         }
 
         // Execute is finished, erase the key locks
-        m_exchangeMessage->keyLocks.clear();
+        getExchangeMessageRef()->keyLocks.clear();
 
         // Return the ownership to input
-        push = std::move(*m_pushMessage);
+        push = std::move(*getPushMessage());
 
         COROUTINE_TRACE_LOG(TRACE, m_contextID, m_seq) << "Finish coroutine executing";
     });
@@ -42,7 +42,7 @@ CallParameters::UniquePtr CoroutineTransactionExecutive::dispatcher()
 {
     try
     {
-        for (auto it = RANGES::begin(*m_pullMessage); it != RANGES::end(*m_pullMessage); ++it)
+        for (auto it = RANGES::begin(*getPullMessage()); it != RANGES::end(*getPullMessage()); ++it)
         {
             if (*it)
             {
@@ -51,11 +51,11 @@ CallParameters::UniquePtr CoroutineTransactionExecutive::dispatcher()
                 (*it)(ResumeHandler(*this));
             }
 
-            if (m_exchangeMessage)
+            if (getExchangeMessageRef())
             {
                 COROUTINE_TRACE_LOG(TRACE, m_contextID, m_seq)
                     << "Context switch to main coroutine to return output";
-                return std::move(m_exchangeMessage);
+                return std::move(getExchangeMessageRef());
             }
         }
     }
@@ -67,19 +67,20 @@ CallParameters::UniquePtr CoroutineTransactionExecutive::dispatcher()
     }
 
     COROUTINE_TRACE_LOG(TRACE, m_contextID, m_seq) << "Context switch to main coroutine, Finished!";
-    return std::move(m_exchangeMessage);
+    return std::move(getExchangeMessageRef());
 }
 
 CallParameters::UniquePtr CoroutineTransactionExecutive::externalCall(
     CallParameters::UniquePtr input)
 {
-    input->keyLocks = m_syncStorageWrapper.exportKeyLocks();
+    input->keyLocks = m_syncStorageWrapper->exportKeyLocks();
 
-    spawnAndCall([this, inputPtr = input.release()](
-                     ResumeHandler) { m_exchangeMessage = CallParameters::UniquePtr(inputPtr); });
+    spawnAndCall([this, inputPtr = input.release()](ResumeHandler) {
+        getExchangeMessageRef() = CallParameters::UniquePtr(inputPtr);
+    });
 
     // When resume, exchangeMessage set to output
-    auto output = std::move(m_exchangeMessage);
+    auto output = std::move(getExchangeMessageRef());
 
     if (m_blockContext.features().get(ledger::Features::Flag::bugfix_call_noaddr_return))
     {
@@ -124,10 +125,10 @@ CallParameters::UniquePtr CoroutineTransactionExecutive::externalCall(
     }
 
     // After coroutine switch, set the recoder
-    m_syncStorageWrapper.setRecoder(m_recoder);
+    m_syncStorageWrapper->setRecoder(m_recoder);
 
     // Set the keyLocks
-    m_syncStorageWrapper.importExistsKeyLocks(output->keyLocks);
+    m_syncStorageWrapper->importExistsKeyLocks(output->keyLocks);
 
     return output;
 }
@@ -146,14 +147,15 @@ CallParameters::UniquePtr CoroutineTransactionExecutive::waitingFinish(
     std::string returnAddress = input->senderAddress;
 
     input->type = CallParameters::PRE_FINISH;
-    input->keyLocks = m_syncStorageWrapper.exportKeyLocks();
+    input->keyLocks = m_syncStorageWrapper->exportKeyLocks();
 
-    spawnAndCall([this, inputPtr = input.release()](
-                     ResumeHandler) { m_exchangeMessage = CallParameters::UniquePtr(inputPtr); });
+    spawnAndCall([this, inputPtr = input.release()](ResumeHandler) {
+        getExchangeMessageRef() = CallParameters::UniquePtr(inputPtr);
+    });
 
 
     // When resume, exchangeMessage set to output
-    auto output = std::move(m_exchangeMessage);
+    auto output = std::move(getExchangeMessageRef());
     if (output->type == CallParameters::REVERT)
     {
         revert();
@@ -167,16 +169,17 @@ void CoroutineTransactionExecutive::externalAcquireKeyLocks(std::string acquireK
 
     auto callParameters = std::make_unique<CallParameters>(CallParameters::KEY_LOCK);
     callParameters->senderAddress = m_contractAddress;
-    callParameters->keyLocks = m_syncStorageWrapper.exportKeyLocks();
+    callParameters->keyLocks = m_syncStorageWrapper->exportKeyLocks();
     callParameters->acquireKeyLock = std::move(acquireKeyLock);
 
-    spawnAndCall([this, inputPtr = callParameters.release()](
-                     ResumeHandler) { m_exchangeMessage = CallParameters::UniquePtr(inputPtr); });
+    spawnAndCall([this, inputPtr = callParameters.release()](ResumeHandler) {
+        getExchangeMessageRef() = CallParameters::UniquePtr(inputPtr);
+    });
 
     // After coroutine switch, set the recoder, before the exception throw
-    m_syncStorageWrapper.setRecoder(m_recoder);
+    m_syncStorageWrapper->setRecoder(m_recoder);
 
-    auto output = std::move(m_exchangeMessage);
+    auto output = std::move(getExchangeMessageRef());
     if (output->type == CallParameters::REVERT)
     {
         // Deadlock, revert
@@ -186,10 +189,10 @@ void CoroutineTransactionExecutive::externalAcquireKeyLocks(std::string acquireK
     }
 
     // Set the keyLocks
-    m_syncStorageWrapper.importExistsKeyLocks(output->keyLocks);
+    m_syncStorageWrapper->importExistsKeyLocks(output->keyLocks);
 }
 
 void CoroutineTransactionExecutive::spawnAndCall(std::function<void(ResumeHandler)> function)
 {
-    (*m_pushMessage)(std::move(function));
+    (*getPushMessage())(std::move(function));
 }

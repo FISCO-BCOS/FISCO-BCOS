@@ -137,6 +137,7 @@ BOOST_AUTO_TEST_CASE(feature)
         "bugfix_dmc_revert",
         "bugfix_keypage_system_entry_hash",
         "bugfix_internal_create_redundant_storage",
+        "bugfix_sharding_call_in_child_executive",
         "feature_dmc2serial",
         "feature_sharding",
         "feature_rpbft",

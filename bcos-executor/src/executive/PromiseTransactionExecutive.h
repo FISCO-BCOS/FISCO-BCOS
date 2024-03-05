@@ -104,8 +104,13 @@ public:
         return exchangeMessage;
     }
 
+    MessagePromiseSwapper::Ptr getPromiseMessageSwapper() { return m_messageSwapper; }
+    void setPromiseMessageSwapper(MessagePromiseSwapper::Ptr swapper)
+    {
+        m_messageSwapper = swapper;
+    }
+
 private:
-    std::shared_ptr<SyncStorageWrapper> m_syncStorageWrapper;
     MessagePromiseSwapper::Ptr m_messageSwapper;
 };
 }  // namespace executor
