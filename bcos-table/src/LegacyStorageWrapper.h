@@ -29,30 +29,30 @@ public:
         const std::optional<storage::Condition const>& condition,
         std::function<void(Error::UniquePtr, std::vector<std::string>)> _callback) override
     {
-        task::wait(
-            [](decltype(this) self, std::string table,
-                std::optional<storage::Condition const> condition,
-                const decltype(_callback)& callback) -> task::Task<void> {
-                STORAGE_LOG(WARNING)
-                    << "Using unstable LegacyStorageWrapper::asyncGetPrimaryKeys method!";
-                std::vector<std::string> keys;
+        task::wait([](decltype(this) self, std::string table,
+                       std::optional<storage::Condition const> condition,
+                       const decltype(_callback)& callback) -> task::Task<void> {
+            // STORAGE_LOG(WARNING)
+            //     << "Using unstable LegacyStorageWrapper::asyncGetPrimaryKeys method!";
+            std::vector<std::string> keys;
 
-                auto range = co_await storage2::range(self->m_storage);
-                for (auto [key, value] : range)
-                {
-                    if (key)
-                    {
-                        transaction_executor::StateKeyView stateKeyView(*key);
-                        auto [entryTable, entryKey] = stateKeyView.getTableAndKey();
-                        if (entryTable == table && (!condition || condition->isValid(entryKey)))
-                        {
-                            keys.emplace_back(std::string(entryKey));
-                        }
-                    }
-                }
+            // auto range = co_await storage2::range(self->m_storage);
+            // for (auto [key, value] : range)
+            // {
+            //     if (key)
+            //     {
+            //         transaction_executor::StateKeyView stateKeyView(*key);
+            //         auto [entryTable, entryKey] = stateKeyView.getTableAndKey();
+            //         if (entryTable == table && (!condition || condition->isValid(entryKey)))
+            //         {
+            //             keys.emplace_back(std::string(entryKey));
+            //         }
+            //     }
+            // }
 
-                callback(nullptr, keys | RANGES::to<std::vector>());
-            }(this, std::string(table), condition, std::move(_callback)));
+            callback(nullptr, keys | RANGES::to<std::vector>());
+            co_return;
+        }(this, std::string(table), condition, std::move(_callback)));
     }
 
     void asyncGetRow(std::string_view table, std::string_view key,

@@ -2,6 +2,7 @@
 #include "bcos-task/Task.h"
 #include "bcos-task/Trait.h"
 #include "bcos-utilities/Ranges.h"
+#include <concepts>
 #include <optional>
 #include <type_traits>
 
@@ -61,12 +62,16 @@ inline constexpr struct RemoveSome
     }
 } removeSome{};
 
-
+template <class IteratorType>
+concept Iterator =
+    requires(IteratorType iterator) { requires task::IsAwaitable<decltype(iterator.next())>; };
 inline constexpr struct Range
 {
     auto operator()(auto&& storage, auto&&... args) const
         -> task::Task<ReturnType<decltype(tag_invoke(*this,
             std::forward<decltype(storage)>(storage), std::forward<decltype(args)>(args)...))>>
+        requires Iterator<
+            ReturnType<decltype(tag_invoke(*this, storage, std::forward<decltype(args)>(args)...))>>
     {
         co_return co_await tag_invoke(
             *this, std::forward<decltype(storage)>(storage), std::forward<decltype(args)>(args)...);
@@ -171,30 +176,11 @@ inline constexpr struct Merge
 {
     auto operator()(auto& toStorage, auto&& fromStorage, auto&&... args) const -> task::Task<void>
     {
-        if constexpr (HasTag<Merge, decltype(toStorage), decltype(fromStorage), decltype(args)...>)
-        {
-            co_await tag_invoke(*this, toStorage, std::forward<decltype(fromStorage)>(fromStorage),
-                std::forward<decltype(args)>(args)...);
-        }
-        else
-        {
-            auto range = co_await storage2::range(fromStorage);
-            for (auto [key, value] : range)
-            {
-                if (value)
-                {
-                    co_await storage2::writeOne(toStorage, *key, *value);
-                }
-                else
-                {
-                    co_await storage2::removeOne(toStorage, *key);
-                }
-            }
-        }
+        co_await tag_invoke(*this, toStorage, std::forward<decltype(fromStorage)>(fromStorage),
+            std::forward<decltype(args)>(args)...);
     }
 } merge{};
 
 template <auto& Tag>
 using tag_t = std::decay_t<decltype(Tag)>;
-
 }  // namespace bcos::storage2
