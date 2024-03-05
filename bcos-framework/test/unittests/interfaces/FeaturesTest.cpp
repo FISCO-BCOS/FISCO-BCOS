@@ -138,6 +138,7 @@ BOOST_AUTO_TEST_CASE(feature)
         "bugfix_keypage_system_entry_hash",
         "bugfix_internal_create_redundant_storage",
         "bugfix_sharding_call_in_child_executive",
+        "bugfix_empty_abi_reset",
         "feature_dmc2serial",
         "feature_sharding",
         "feature_rpbft",
@@ -309,6 +310,20 @@ BOOST_AUTO_TEST_CASE(genesis)
     for (auto feature : expect3)
     {
         BOOST_CHECK(features3.get(feature));
+    }
+
+    // 3.7.0
+    Features features37;
+    features37.setGenesisFeatures(bcos::protocol::BlockVersion::V3_7_0_VERSION);
+    auto expect37 = std::to_array<std::string_view>({"bugfix_revert", "bugfix_statestorage_hash",
+        "bugfix_evm_create2_delegatecall_staticcall_codecopy", "bugfix_event_log_order",
+        "bugfix_call_noaddr_return", "bugfix_precompiled_codehash", "bugfix_dmc_revert",
+        "bugfix_keypage_system_entry_hash", "bugfix_internal_create_redundant_storage",
+        "bugfix_sharding_call_in_child_executive", "bugfix_empty_abi_reset"});
+    BOOST_CHECK_EQUAL(validFlags(features37).size(), expect37.size());
+    for (auto feature : expect37)
+    {
+        BOOST_CHECK(features37.get(feature));
     }
 
     // 3.4.0
