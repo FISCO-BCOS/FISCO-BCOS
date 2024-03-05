@@ -54,7 +54,7 @@ namespace bcos::cppsdk::utilities
         root["logEntries"].append(logEntry);
     }
     root["blockNumber"] = (int64_t)receiptData.blockNumber;
-    if (receiptData.version == (uint32_t)protocol::TransactionVersion::V1_VERSION)
+    if ((uint32_t)receiptData.version >= (uint32_t)protocol::TransactionVersion::V1_VERSION)
     {
         root["effectiveGasPrice"] = receiptData.effectiveGasPrice;
     }
@@ -118,7 +118,7 @@ namespace bcos::cppsdk::utilities
         }
     }
     receiptData->blockNumber = root["blockNumber"].asUInt64();
-    if (receiptData->version == (uint32_t)protocol::TransactionVersion::V1_VERSION)
+    if ((uint32_t)receiptData->version >= (uint32_t)protocol::TransactionVersion::V1_VERSION)
     {
         receiptData->effectiveGasPrice = root["effectiveGasPrice"].asUInt();
     }
