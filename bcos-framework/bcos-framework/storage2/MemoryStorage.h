@@ -473,8 +473,9 @@ public:
         bcos::storage2::tag_t<storage2::range> /*unused*/, MemoryStorage const& storage)
         requires(!withConcurrent)
     {
-        return task::AwaitableValue(
-            Iterator(storage.m_buckets[0].container.begin(), storage.m_buckets[0].container.end()));
+        return task::AwaitableValue(Iterator<decltype(storage.m_buckets[0].container.begin()),
+            decltype(storage.m_buckets[0].container.end())>(
+            storage.m_buckets[0].container.begin(), storage.m_buckets[0].container.end()));
     }
 
     bool empty() const
