@@ -132,12 +132,14 @@ public:
     friend auto tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/, RocksDBStorage2& storage,
         auto&& key) -> task::AwaitableValue<std::optional<ValueType>>
     {
+        task::AwaitableValue<std::optional<ValueType>> result;
+
         auto rocksDBKey = storage.m_keyResolver.encode(key);
-        std::string result;
+        std::string value;
         auto status =
             storage.m_rocksDB.Get(::rocksdb::ReadOptions(), storage.m_rocksDB.DefaultColumnFamily(),
                 ::rocksdb::Slice(RANGES::data(rocksDBKey), RANGES::size(rocksDBKey)),
-                std::addressof(result));
+                std::addressof(value));
         if (!status.ok())
         {
             if (!status.IsNotFound())
@@ -145,10 +147,11 @@ public:
                 BOOST_THROW_EXCEPTION(
                     RocksDBException{} << bcos::Error::ErrorMessage(status.ToString()));
             }
-            return {std::optional<ValueType>{}};
+            return result;
         }
+        result.value().emplace(storage.m_valueResolver.decode(std::move(value)));
 
-        return {std::make_optional(storage.m_valueResolver.decode(std::move(result)))};
+        return result;
     }
 
     friend task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/,
@@ -315,6 +318,61 @@ public:
         {
             BOOST_THROW_EXCEPTION(RocksDBException{} << error::ErrorMessage(status.ToString()));
         }
+    }
+
+    class Iterator
+    {
+    private:
+        std::unique_ptr<::rocksdb::Iterator> m_iterator;
+        const RocksDBStorage2* m_storage;
+
+    public:
+        Iterator(::rocksdb::Iterator* iterator, const RocksDBStorage2* storage)
+          : m_iterator(iterator), m_storage(storage)
+        {}
+
+        task::AwaitableValue<std::optional<std::tuple<KeyType, ValueType>>> next()
+        {
+            task::AwaitableValue<std::optional<std::tuple<KeyType, ValueType>>> result;
+            if (m_iterator->Valid())
+            {
+                auto key = m_storage->m_keyResolver.decode(m_iterator->key().ToStringView());
+                auto value = m_storage->m_valueResolver.decode(m_iterator->value().ToStringView());
+                m_iterator->Next();
+                result.value().emplace(std::move(key), std::move(value));
+            }
+            return result;
+        }
+    };
+
+    static task::AwaitableValue<Iterator> range(
+        RocksDBStorage2& storage, const ::rocksdb::Slice* startSlice = nullptr)
+    {
+        auto* iterator = storage.m_rocksDB.NewIterator(::rocksdb::ReadOptions{});
+        if (startSlice != nullptr)
+        {
+            iterator->Seek(*startSlice);
+        }
+        else
+        {
+            iterator->SeekToFirst();
+        }
+        return Iterator{iterator, std::addressof(storage)};
+    }
+
+    friend task::AwaitableValue<Iterator> tag_invoke(
+        bcos::storage2::tag_t<storage2::range> /*unused*/, RocksDBStorage2& storage)
+    {
+        return range(storage);
+    }
+
+    friend task::AwaitableValue<Iterator> tag_invoke(
+        bcos::storage2::tag_t<storage2::range> /*unused*/, RocksDBStorage2& storage,
+        auto&& startKey)
+    {
+        auto encodedKey = storage.m_keyResolver.encode(startKey);
+        ::rocksdb::Slice slice(RANGES::data(encodedKey), RANGES::size(encodedKey));
+        return range(storage, std::addressof(slice));
     }
 };
 
