@@ -9,6 +9,8 @@
 #include <boost/throw_exception.hpp>
 #include <functional>
 #include <iterator>
+#include <range/v3/algorithm/min_element.hpp>
+#include <range/v3/view/enumerate.hpp>
 #include <stdexcept>
 #include <type_traits>
 #include <variant>
@@ -268,6 +270,96 @@ public:
         {
             co_await storage2::removeSome(storage.mutableStorage(),
                 std::forward<decltype(keys)>(keys), std::forward<decltype(args)>(args)...);
+        }
+
+        class Iterator
+        {
+        private:
+            using StorageIterator =
+                std::variant<task::AwaitableReturnType<std::invoke_result_t<storage2::Range,
+                                 std::add_lvalue_reference_t<MutableStorage>>>,
+                    task::AwaitableReturnType<std::invoke_result_t<storage2::Range,
+                        std::add_lvalue_reference_t<BackendStorage>>>>;
+            using RangeValue = std::optional<
+                std::tuple<typename MutableStorage::Key, typename MutableStorage::Value>>;
+            std::vector<std::tuple<StorageIterator, RangeValue>> m_iterators;
+
+        public:
+            task::Task<void> init(View& view, auto&&... args)
+            {
+                if (view.m_mutableStorage)
+                {
+                    m_iterators.emplace_back(co_await storage2::range(*view.m_mutableStorage,
+                                                 std::forward<decltype(args)>(args)...),
+                        RangeValue{});
+                }
+                for (auto& storage : view.m_immutableStorages)
+                {
+                    m_iterators.emplace_back(
+                        co_await storage2::range(*storage, std::forward<decltype(args)>(args)...),
+                        RangeValue{});
+                }
+                m_iterators.emplace_back(co_await storage2::range(view.m_backendStorage,
+                                             std::forward<decltype(args)>(args)...),
+                    RangeValue{});
+                for (auto& [variantIterator, value] : m_iterators)
+                {
+                    value = co_await std::visit(
+                        [](auto& iterator) -> task::Task<RangeValue> {
+                            co_return co_await iterator.next();
+                        },
+                        variantIterator);
+                }
+            }
+
+            task::Task<RangeValue> next()
+            {
+                // 基于合并排序，找到所有迭代器的最小值，推进迭代器并返回值
+                // Based on merge sort, find the minimum value of all iterators, advance the
+                // iterator and return its value
+                auto iterators = m_iterators | RANGES::views::filter([](auto const& rangeValue) {
+                    return std::get<1>(rangeValue).has_value();
+                });
+                if (RANGES::empty(iterators))
+                {
+                    co_return std::nullopt;
+                }
+
+                auto minItem = RANGES::min(iterators, [](auto const& lhs, auto const& rhs) {
+                    auto& lhsKey = std::get<0>(*std::get<1>(lhs));
+                    auto& rhsKey = std::get<0>(*std::get<1>(rhs));
+                    return lhsKey < rhsKey;
+                });
+
+                // 多个迭代器可能有重复的key，推进所有重复key的迭代器
+                // Multiple iterators may have duplicate keys, advance the iterator with all
+                // duplicate keys
+                auto duplicateIterators = iterators | RANGES::views::filter([&](auto& iterator) {
+                    return std::get<0>(*std::get<1>(iterator)) ==
+                           std::get<0>(*std::get<1>(minItem));
+                });
+
+                auto result = std::get<1>(duplicateIterators.front());
+                for (auto& it : duplicateIterators)
+                {
+                    auto& [variantIterator, value] = it;
+                    value = co_await std::visit(
+                        [](auto& input) -> task::Task<RangeValue> {
+                            co_return co_await input.next();
+                        },
+                        variantIterator);
+                }
+
+                co_return result;
+            };
+        };
+
+        friend task::Task<Iterator> tag_invoke(
+            bcos::storage2::tag_t<storage2::range> /*unused*/, View& storage, auto&&... args)
+        {
+            Iterator iterator;
+            co_await iterator.init(storage, std::forward<decltype(args)>(args)...);
+            co_return iterator;
         }
 
         MutableStorageType& mutableStorage()
