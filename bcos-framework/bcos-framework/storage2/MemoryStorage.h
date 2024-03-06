@@ -171,7 +171,7 @@ public:
         RANGES::input_range auto&& keys)
         -> task::AwaitableValue<std::vector<std::optional<ValueType>>>
     {
-        task::AwaitableValue<std::vector<std::optional<ValueType>>> result({});
+        task::AwaitableValue<std::vector<std::optional<ValueType>>> result;
         if (RANGES::sized_range<decltype(keys)>)
         {
             result.value().reserve(RANGES::size(keys));
@@ -219,7 +219,7 @@ public:
     friend task::AwaitableValue<std::optional<ValueType>> tag_invoke(
         storage2::tag_t<storage2::readOne> /*unused*/, MemoryStorage& storage, auto&& key)
     {
-        task::AwaitableValue<std::optional<ValueType>> result({});
+        task::AwaitableValue<std::optional<ValueType>> result;
         auto& bucket = storage.getBucket(key);
         Lock lock(bucket.mutex, false);
 

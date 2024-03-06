@@ -64,12 +64,11 @@ public:
 
 class StateKeyView
 {
-private:
+public:
     std::string_view m_table;
     std::string_view m_key;
     friend class StateKey;
 
-public:
     explicit StateKeyView(const StateKey& stateKey) noexcept
       : m_table(stateKey.data(), stateKey.m_split),
         m_key(stateKey.data() + stateKey.m_split + 1, stateKey.size() - stateKey.m_split - 1)
