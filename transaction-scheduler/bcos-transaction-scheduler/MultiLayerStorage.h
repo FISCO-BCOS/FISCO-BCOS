@@ -264,10 +264,10 @@ public:
         }
 
         friend task::Task<void> tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/,
-            View& storage, RANGES::input_range auto&& keys)
+            View& storage, RANGES::input_range auto&& keys, auto&&... args)
         {
-            co_await storage2::removeSome(
-                storage.mutableStorage(), std::forward<decltype(keys)>(keys));
+            co_await storage2::removeSome(storage.mutableStorage(),
+                std::forward<decltype(keys)>(keys), std::forward<decltype(args)>(args)...);
         }
 
         MutableStorageType& mutableStorage()
@@ -301,7 +301,7 @@ public:
             m_mutableStorage = std::make_shared<MutableStorageType>(args...);
         }
 
-        BackendStorage& backendStorage() { return m_backendStorage; }
+        BackendStorage& backendStorage() & { return m_backendStorage; }
     };
 
     using Key = KeyType;

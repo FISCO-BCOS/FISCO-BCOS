@@ -13,9 +13,6 @@
 #include <boost/multi_index/sequenced_index.hpp>
 #include <boost/multi_index_container.hpp>
 #include <boost/throw_exception.hpp>
-#include <functional>
-#include <mutex>
-#include <thread>
 #include <type_traits>
 #include <utility>
 #include <variant>
@@ -143,27 +140,6 @@ private:
         return sizeof(ObjectType);
     }
 
-    friend auto tag_invoke(
-        bcos::storage2::tag_t<storage2::range> /*unused*/, MemoryStorage const& storage)
-        requires(!withConcurrent)
-    {
-        auto range = RANGES::views::transform(storage.m_buckets[0].container,
-            [&](Data const& data) -> std::tuple<const KeyType*, const ValueType*> {
-                if constexpr (std::decay_t<decltype(storage)>::withLogicalDeletion)
-                {
-                    return std::make_tuple(std::addressof(data.key),
-                        std::holds_alternative<Deleted>(data.value) ?
-                            nullptr :
-                            std::addressof(std::get<ValueType>(data.value)));
-                }
-                else
-                {
-                    return std::make_tuple(std::addressof(data.key), std::addressof(data.value));
-                }
-            });
-        return task::AwaitableValue<decltype(range)>(std::move(range));
-    }
-
 public:
     using Key = KeyType;
     using Value = ValueType;
@@ -253,6 +229,7 @@ public:
         {
             if constexpr (std::decay_t<decltype(storage)>::withMRU)
             {
+                lock.upgrade_to_writer();
                 storage.updateMRUAndCheck(bucket, it);
             }
 
@@ -345,7 +322,6 @@ public:
         {
             auto& bucket = storage.getBucket(key);
             Lock lock(bucket.mutex, true);
-
             auto const& index = bucket.container.template get<0>();
 
             auto it = index.find(key);
@@ -426,6 +402,80 @@ public:
             }
         }
         return {};
+    }
+
+    friend task::Task<void> tag_invoke(
+        storage2::tag_t<merge> /*unused*/, MemoryStorage& toStorage, auto&& fromStorage)
+    {
+        auto range = co_await storage2::range(fromStorage);
+        while (auto item = co_await range.next())
+        {
+            auto&& [key, value] = *item;
+            if constexpr (std::is_pointer_v<decltype(value)>)
+            {
+                if (value)
+                {
+                    co_await storage2::writeOne(toStorage, key, *value);
+                }
+                else
+                {
+                    co_await storage2::removeOne(toStorage, key);
+                }
+            }
+            else
+            {
+                co_await storage2::writeOne(toStorage, key, value);
+            }
+        }
+    }
+
+    template <class Begin, class End>
+    class Iterator
+    {
+    private:
+        Begin m_begin;
+        End m_end;
+
+    public:
+        Iterator(Begin begin, End end) : m_begin(begin), m_end(end) {}
+
+        auto next()
+        {
+            if constexpr (withLogicalDeletion)
+            {
+                std::optional<std::tuple<const Key&, const ValueType*>> result;
+                if (m_begin != m_end)
+                {
+                    auto const& data = *m_begin;
+                    result.emplace(std::make_tuple(
+                        std::cref(data.key), std::holds_alternative<Deleted>(data.value) ?
+                                                 nullptr :
+                                                 std::addressof(std::get<Value>(data.value))));
+                    ++m_begin;
+                }
+                return task::AwaitableValue(std::move(result));
+            }
+            else
+            {
+                std::optional<std::tuple<const Key&, const ValueType&>> result;
+                if (m_begin != m_end)
+                {
+                    auto const& data = *m_begin;
+                    result.emplace(std::make_tuple(std::cref(data.key), std::cref(data.value)));
+                    ++m_begin;
+                }
+                return task::AwaitableValue(std::move(result));
+            }
+        }
+    };
+
+    friend auto tag_invoke(
+        bcos::storage2::tag_t<storage2::range> /*unused*/, MemoryStorage const& storage)
+        requires(!withConcurrent)
+    {
+        return task::AwaitableValue(Iterator<decltype(storage.m_buckets[0].container.begin()),
+            decltype(storage.m_buckets[0].container.end())>(
+            storage.m_buckets[0].container.begin(), storage.m_buckets[0].container.end()));
     }
 
     bool empty() const

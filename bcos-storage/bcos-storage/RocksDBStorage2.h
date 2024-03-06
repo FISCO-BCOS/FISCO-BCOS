@@ -5,6 +5,7 @@
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-task/AwaitableValue.h"
+#include "bcos-task/Trait.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Error.h"
 #include "bcos-utilities/Overloaded.h"
@@ -244,7 +245,8 @@ public:
     {
         auto range = co_await storage2::range(fromStorage);
 
-        using RangeValueType = RANGES::range_value_t<decltype(range)>;
+        using RangeValueType = typename task::AwaitableReturnType<
+            std::invoke_result_t<decltype(&decltype(range)::next), decltype(range)>>::value_type;
         using RocksDBKeyValueTuple = std::tuple<
             decltype(storage.m_keyResolver.encode(
                 std::declval<std::remove_pointer_t<std::tuple_element_t<0, RangeValueType>>>())),
@@ -253,18 +255,18 @@ public:
 
         std::atomic_size_t totalReservedLength = ROCKSDB_SEP_HEADER_SIZE;
         tbb::concurrent_vector<RocksDBKeyValueTuple> rocksDBKeyValues;
-        auto chunkRange = range | RANGES::views::chunk(ROCKSDB_WRITE_CHUNK_SIZE);
         tbb::task_group mergeGroup;
-        for (auto&& subrange : chunkRange)
+        while (auto keyValue = co_await range.next())
         {
             mergeGroup.run([&rocksDBKeyValues, &storage, &totalReservedLength,
-                               subrange = std::forward<decltype(subrange)>(subrange)]() {
+                               keyValue = std::move(keyValue)]() {
+                auto&& [key, value] = *keyValue;
                 size_t localReservedLength = 0;
-                for (auto [key, value] : subrange)
+                if constexpr (std::is_pointer_v<decltype(value)>)
                 {
                     if (value)
                     {
-                        auto it = rocksDBKeyValues.emplace_back(storage.m_keyResolver.encode(*key),
+                        auto it = rocksDBKeyValues.emplace_back(storage.m_keyResolver.encode(key),
                             std::make_optional(storage.m_valueResolver.encode(*value)));
                         auto&& [keyBuffer, valueBuffer] = *it;
                         localReservedLength += getRocksDBKeyPairSize(
@@ -272,12 +274,20 @@ public:
                     }
                     else
                     {
-                        auto it = rocksDBKeyValues.emplace_back(storage.m_keyResolver.encode(*key),
+                        auto it = rocksDBKeyValues.emplace_back(storage.m_keyResolver.encode(key),
                             std::tuple_element_t<1, RocksDBKeyValueTuple>{});
                         auto&& [keyBuffer, valueBuffer] = *it;
                         localReservedLength +=
                             getRocksDBKeyPairSize(false, RANGES::size(keyBuffer), 0);
                     }
+                }
+                else
+                {
+                    auto it = rocksDBKeyValues.emplace_back(storage.m_keyResolver.encode(key),
+                        std::make_optional(storage.m_valueResolver.encode(value)));
+                    auto&& [keyBuffer, valueBuffer] = *it;
+                    localReservedLength += getRocksDBKeyPairSize(
+                        false, RANGES::size(keyBuffer), RANGES::size(*valueBuffer));
                 }
                 totalReservedLength += localReservedLength;
             });

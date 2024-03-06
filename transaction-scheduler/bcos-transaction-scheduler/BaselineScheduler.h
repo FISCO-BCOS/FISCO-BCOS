@@ -24,16 +24,13 @@
 #include "bcos-framework/txpool/TxPoolInterface.h"
 #include "bcos-ledger/src/libledger/LedgerMethods.h"
 #include "bcos-task/TBBWait.h"
-#include "bcos-task/Wait.h"
 #include "bcos-tool/VersionConverter.h"
 #include "bcos-utilities/Common.h"
 #include <bcos-utilities/ITTAPI.h>
 #include <fmt/format.h>
 #include <oneapi/tbb/blocked_range.h>
 #include <oneapi/tbb/parallel_invoke.h>
-#include <oneapi/tbb/parallel_pipeline.h>
 #include <oneapi/tbb/parallel_reduce.h>
-#include <oneapi/tbb/task_arena.h>
 #include <oneapi/tbb/task_group.h>
 #include <boost/atomic.hpp>
 #include <boost/exception/diagnostic_information.hpp>
@@ -47,9 +44,9 @@ namespace bcos::transaction_scheduler
 {
 #define BASELINE_SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("BASELINE_SCHEDULER")
 
-// clang-format off
-struct NotFoundTransactionError: public bcos::Error {};
-// clang-format on
+struct NotFoundTransactionError : public bcos::Error
+{
+};
 
 /**
  * Retrieves a vector of transactions from the provided transaction pool and block.
@@ -90,33 +87,25 @@ task::Task<h256> calculateStateRoot(
 {
     constexpr static auto STATE_ROOT_CHUNK_SIZE = 64;
     auto range = co_await storage2::range(storage);
-    auto chunkedRange = range | RANGES::views::chunk(STATE_ROOT_CHUNK_SIZE);
-
     storage::Entry deletedEntry;
     deletedEntry.setStatus(storage::Entry::DELETED);
 
-    std::vector<h256, tbb::cache_aligned_allocator<h256>> hashes(RANGES::size(chunkedRange));
+    tbb::concurrent_vector<h256> hashes;
     tbb::task_group hashGroup;
-    auto index = 0U;
-    for (auto&& subrange : chunkedRange)
+    while (auto keyValue = co_await range.next())
     {
-        hashGroup.run([index = index, subrange = std::forward<decltype(subrange)>(subrange),
-                          &hashes, &deletedEntry, &hashImpl]() {
-            auto& localHash = hashes[index];
-            for (auto [key, entry] : subrange)
+        hashGroup.run([keyValue = std::move(keyValue), &hashes, &deletedEntry, &hashImpl]() {
+            auto [key, entry] = *keyValue;
+            transaction_executor::StateKeyView view(key);
+            auto [tableName, keyName] = view.getTableAndKey();
+            if (!entry)
             {
-                transaction_executor::StateKeyView view(*key);
-                auto [tableName, keyName] = view.getTableAndKey();
-                if (!entry)
-                {
-                    entry = std::addressof(deletedEntry);
-                }
-
-                localHash ^= entry->hash(tableName, keyName, hashImpl,
-                    static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION));
+                entry = std::addressof(deletedEntry);
             }
+
+            hashes.emplace_back(entry->hash(tableName, keyName, hashImpl,
+                static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION)));
         });
-        ++index;
     }
     hashGroup.wait();
 

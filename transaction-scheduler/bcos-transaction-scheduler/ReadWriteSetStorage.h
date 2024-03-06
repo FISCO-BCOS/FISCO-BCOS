@@ -94,15 +94,25 @@ public:
     }
 
     friend auto tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/,
-        ReadWriteSetStorage& storage, RANGES::input_range auto const& keys)
-        -> task::Task<task::AwaitableReturnType<
-            std::invoke_result_t<storage2::RemoveSome, Storage&, decltype(keys)>>>
+        ReadWriteSetStorage& storage, RANGES::input_range auto const& keys, auto&&... args)
+        -> task::Task<task::AwaitableReturnType<std::invoke_result_t<storage2::RemoveSome, Storage&,
+            decltype(keys), decltype(args)...>>>
     {
         for (auto&& key : keys)
         {
             storage.putSet(true, key);
         }
-        co_return co_await storage2::removeSome(storage.m_storage, keys);
+        co_return co_await storage2::removeSome(
+            storage.m_storage, keys, std::forward<decltype(args)>(args)...);
+    }
+
+    friend auto tag_invoke(bcos::storage2::tag_t<storage2::range> /*unused*/,
+        ReadWriteSetStorage& storage, auto&&... args)
+        -> task::Task<
+            storage2::ReturnType<std::invoke_result_t<storage2::Range, Storage, decltype(args)...>>>
+    {
+        co_return co_await storage2::range(
+            storage.m_storage, std::forward<decltype(args)>(args)...);
     }
 
     using Key = KeyType;
