@@ -137,6 +137,7 @@ BOOST_AUTO_TEST_CASE(feature)
         "bugfix_dmc_revert",
         "bugfix_keypage_system_entry_hash",
         "bugfix_internal_create_redundant_storage",
+        "bugfix_internal_create_permission_denied",
         "bugfix_sharding_call_in_child_executive",
         "bugfix_empty_abi_reset",
         "feature_dmc2serial",
@@ -265,7 +266,7 @@ BOOST_AUTO_TEST_CASE(upgrade)
         BOOST_CHECK(features9.get(feature));
     }
 
-    // 3.5.0
+    // 3.4.0  to 3.5.0
     Features features10;
     features10.setUpgradeFeatures(
         bcos::protocol::BlockVersion::V3_4_VERSION, bcos::protocol::BlockVersion::V3_5_VERSION);
@@ -274,6 +275,19 @@ BOOST_AUTO_TEST_CASE(upgrade)
     for (auto feature : expect8)
     {
         BOOST_CHECK(features10.get(feature));
+    }
+    
+    // 3.6.0 to 3.7.0
+    Features features11;
+    features11.setUpgradeFeatures(
+        bcos::protocol::BlockVersion::V3_6_VERSION, bcos::protocol::BlockVersion::V3_7_0_VERSION);
+    auto expect9 = std::to_array<std::string_view>({"bugfix_keypage_system_entry_hash",
+        "bugfix_internal_create_redundant_storage", "bugfix_empty_abi_reset",
+        "bugfix_sharding_call_in_child_executive", "bugfix_internal_create_permission_denied"});
+    BOOST_CHECK_EQUAL(validFlags(features11).size(), expect9.size());
+    for (auto feature : expect9)
+    {
+        BOOST_CHECK(features11.get(feature));
     }
 }
 
@@ -319,7 +333,8 @@ BOOST_AUTO_TEST_CASE(genesis)
         "bugfix_evm_create2_delegatecall_staticcall_codecopy", "bugfix_event_log_order",
         "bugfix_call_noaddr_return", "bugfix_precompiled_codehash", "bugfix_dmc_revert",
         "bugfix_keypage_system_entry_hash", "bugfix_internal_create_redundant_storage",
-        "bugfix_sharding_call_in_child_executive", "bugfix_empty_abi_reset"});
+        "bugfix_empty_abi_reset", "bugfix_sharding_call_in_child_executive",
+        "bugfix_internal_create_permission_denied"});
     BOOST_CHECK_EQUAL(validFlags(features37).size(), expect37.size());
     for (auto feature : expect37)
     {
@@ -335,6 +350,7 @@ BOOST_AUTO_TEST_CASE(genesis)
     {
         BOOST_CHECK(features4.get(feature));
     }
+
 }
 
 BOOST_AUTO_TEST_SUITE_END()
