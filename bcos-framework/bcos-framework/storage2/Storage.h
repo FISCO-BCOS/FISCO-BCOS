@@ -70,8 +70,8 @@ inline constexpr struct Range
     auto operator()(auto&& storage, auto&&... args) const
         -> task::Task<ReturnType<decltype(tag_invoke(*this,
             std::forward<decltype(storage)>(storage), std::forward<decltype(args)>(args)...))>>
-        requires Iterator<
-            ReturnType<decltype(tag_invoke(*this, storage, std::forward<decltype(args)>(args)...))>>
+        requires Iterator<ReturnType<decltype(tag_invoke(*this,
+            std::forward<decltype(storage)>(storage), std::forward<decltype(args)>(args)...))>>
     {
         co_return co_await tag_invoke(
             *this, std::forward<decltype(storage)>(storage), std::forward<decltype(args)>(args)...);
