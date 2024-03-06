@@ -39,6 +39,7 @@ public:
         bugfix_internal_create_redundant_storage,  // to perf internal create code and abi storage
         bugfix_internal_create_permission_denied,
         bugfix_sharding_call_in_child_executive,
+        bugfix_empty_abi_reset,  // support empty abi reset of same code
         feature_dmc2serial,
         feature_sharding,
         feature_rpbft,
@@ -147,9 +148,10 @@ public:
             {protocol::BlockVersion::V3_6_1_VERSION,
                 {Flag::bugfix_keypage_system_entry_hash,
                     Flag::bugfix_internal_create_redundant_storage}},
-            {protocol::BlockVersion::V3_7_VERSION,
-                {Flag::bugfix_internal_create_permission_denied,
-                  Flag::bugfix_sharding_call_in_child_executive}},
+            {protocol::BlockVersion::V3_7_0_VERSION,
+                {Flag::bugfix_empty_abi_reset, 
+                    Flag::bugfix_sharding_call_in_child_executive,
+                    Flag::bugfix_internal_create_permission_denied}},
         });
         for (const auto& upgradeFeatures : upgradeRoadmap)
         {

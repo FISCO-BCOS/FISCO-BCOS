@@ -743,7 +743,7 @@ parse_params() {
                     exit 1;
                 fi
             ;;
-        y)  
+        y)
             download_service_binary_type="${OPTARG}"
             download_specific_binary_flag="true"
             ;;
@@ -753,7 +753,7 @@ parse_params() {
             ;;
         V)
             chain_version="${OPTARG}";;
-           
+
         h) help ;;
         *) help ;;
         esac
@@ -761,8 +761,8 @@ parse_params() {
 
     if [[ "$chain_version" == "air" ]];then
         if [[ "$mtail_binary_path" != "" ]]; then
-            file_must_exists "${mtail_binary_path}"  
-        fi       
+            file_must_exists "${mtail_binary_path}"
+        fi
         if [[ "$use_exist_binary" = "true" ]]; then
             file_must_exists "${binary_path}"
         fi
@@ -2358,7 +2358,7 @@ download_bcos_builder(){
     if [[ "$(ls -al . | grep "BcosBuilder.tgz" | awk '{print $5}')" -lt "1048576" ]];then
         exit_with_clean "Download bcos-builder tools failed, please try again. Or download and extract it manually from ${Download_Link}."
     fi
-    tar -zxf ${bcos_builder_package} 
+    tar -zxf ${bcos_builder_package}
 }
 
 download_service_bin(){
@@ -2586,19 +2586,19 @@ gen_gateway_config() {
     gen_group_template "${config_path}"
     local k=0
     if [[ -z ${proOrmax_port_start[2]} ]];then
-       tars_listen_port=40400 
+       tars_listen_port=40400
     else
         tars_listen_port=${proOrmax_port_start[2]}
     fi
 
     if [[ -z ${proOrmax_port_start[3]} ]];then
-        tikv_listen_port=2379 
+        tikv_listen_port=2379
     else
         tikv_listen_port=${proOrmax_port_start[3]}
     fi
 
     if [[ -z ${proOrmax_port_start[4]} ]];then
-        monitor_listen_port=3901 
+        monitor_listen_port=3901
     else
         monitor_listen_port=${proOrmax_port_start[4]}
     fi
@@ -2610,7 +2610,7 @@ gen_gateway_config() {
         fi
         letter=$(printf "\\$(printf '%03o' $((k + 65)))")
         (( k += 1 ))
-        
+
         gen_gateway_template agency${letter} ${ip} ${num} ${config_path} "${peers_str}"
     done
 }
@@ -2647,7 +2647,7 @@ deploy_pro_or_max_nodes(){
     fi
     if [[ "$config_path" != "" ]]; then
         config_path=$(convert_to_absolute_path "$config_path")
-        file_must_exists "${config_path}"         
+        file_must_exists "${config_path}"
     else
         config_path=${BcosBuilder_path}/${chain_version}/config.toml
         gen_gateway_config "${config_path}"
@@ -2665,7 +2665,7 @@ removeExcessFiles(){
     for file in "$folder_path"/*
     do
         filename=$(basename "$file")
-        
+
         # Determine if the file name is named with IP
         if [[ $filename =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             # Keep only group_node files, remove rpc gateway files
@@ -2701,7 +2701,7 @@ expand_pro_max(){
         config_path=${BcosBuilder_path}/${chain_version}/config.toml
     fi
 
-    file_must_exists "${config_path}"         
+    file_must_exists "${config_path}"
     # echo ${config_path}
     expand_dir=$(convert_to_absolute_path "$expand_dir")
     cd "${BcosBuilder_path}/${chain_version}"

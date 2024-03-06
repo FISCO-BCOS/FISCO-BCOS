@@ -121,7 +121,7 @@ public:
 
         paramsBak.setSeq(1001);
         std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise2;
-        executor->dmcExecuteTransaction(std::make_unique<decltype(paramsBak)>(paramsBak),
+        executor->executeTransaction(std::make_unique<decltype(paramsBak)>(paramsBak),
             [&](bcos::Error::UniquePtr&& error,
                 bcos::protocol::ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
@@ -229,7 +229,7 @@ BOOST_AUTO_TEST_CASE(testSM3AndKeccak256)
         params2->setType(NativeExecutionMessage::TXHASH);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
-        executor->dmcExecuteTransaction(std::move(params2),
+        executor->executeTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise2.set_value(std::move(result));
@@ -274,7 +274,7 @@ BOOST_AUTO_TEST_CASE(testSM3AndKeccak256)
         params2->setType(NativeExecutionMessage::TXHASH);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
-        executor->dmcExecuteTransaction(std::move(params2),
+        executor->executeTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise2.set_value(std::move(result));
@@ -395,7 +395,7 @@ BOOST_AUTO_TEST_CASE(testEVMPrecompiled)
         params2->setType(NativeExecutionMessage::TXHASH);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
-        executor->dmcExecuteTransaction(std::move(params2),
+        executor->executeTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise2.set_value(std::move(result));

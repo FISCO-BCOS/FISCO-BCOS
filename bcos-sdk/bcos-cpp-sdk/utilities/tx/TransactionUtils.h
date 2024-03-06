@@ -49,7 +49,7 @@ namespace bcos::cppsdk::utilities
     root["to"] = txData.to;
     root["input"] = bcos::toHexStringWithPrefix(txData.input);
     root["abi"] = txData.abi;
-    if ((int)txData.version == (uint32_t)bcos::protocol::TransactionVersion::V1_VERSION)
+    if ((uint32_t)txData.version >= (uint32_t)bcos::protocol::TransactionVersion::V1_VERSION)
     {
         root["value"] = txData.value;
         root["gasPrice"] = txData.gasPrice;
@@ -57,9 +57,9 @@ namespace bcos::cppsdk::utilities
         root["maxFeePerGas"] = txData.maxFeePerGas;
         root["maxPriorityFeePerGas"] = txData.maxPriorityFeePerGas;
     }
-    if ((int)txData.version == (uint32_t)bcos::protocol::TransactionVersion::V2_VERSION)
+    if ((uint32_t)txData.version >= (uint32_t)bcos::protocol::TransactionVersion::V2_VERSION)
     {
-        root["extensions"] = bcos::toHexStringWithPrefix(txData.extensions);
+        root["extension"] = bcos::toHexStringWithPrefix(txData.extension);
     }
     Json::FastWriter writer;
     auto json = writer.write(root);
@@ -105,7 +105,7 @@ namespace bcos::cppsdk::utilities
     {
         txData->abi = root["abi"].asString();
     }
-    if ((int)txData->version == (uint32_t)bcos::protocol::TransactionVersion::V1_VERSION)
+    if ((uint32_t)txData->version >= (uint32_t)bcos::protocol::TransactionVersion::V1_VERSION)
     {
         if (root.isMember("value") && root["value"].isString())
         {
@@ -128,12 +128,12 @@ namespace bcos::cppsdk::utilities
             txData->maxPriorityFeePerGas = root["maxPriorityFeePerGas"].asString();
         }
     }
-    if ((int)txData->version == (uint32_t)bcos::protocol::TransactionVersion::V2_VERSION)
+    if ((uint32_t)txData->version >= (uint32_t)bcos::protocol::TransactionVersion::V2_VERSION)
     {
-        if (root.isMember("extensions") && root["extensions"].isString())
+        if (root.isMember("extension") && root["extension"].isString())
         {
-            auto inputBytes = bcos::fromHexWithPrefix(root["extensions"].asString());
-            std::copy(inputBytes.begin(), inputBytes.end(), std::back_inserter(txData->extensions));
+            auto inputBytes = bcos::fromHexWithPrefix(root["extension"].asString());
+            std::copy(inputBytes.begin(), inputBytes.end(), std::back_inserter(txData->extension));
         }
     }
     return txData;

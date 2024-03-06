@@ -20,6 +20,7 @@
 #include <bcos-cpp-sdk/utilities/receipt/ReceiptBuilder.h>
 #include <bcos-cpp-sdk/utilities/tx/TransactionBuilder.h>
 #include <bcos-cpp-sdk/utilities/tx/TransactionBuilderV1.h>
+#include <bcos-cpp-sdk/utilities/tx/TransactionBuilderV2.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 
@@ -73,7 +74,7 @@ BOOST_AUTO_TEST_CASE(test_transaction)
     BOOST_CHECK_EQUAL(hash3, "0359a5588c5e9c9dcfd2f4ece850d6f4c41bc88e2c27cc051890f26ef0ef118f");
 }
 
-BOOST_AUTO_TEST_CASE(test_transaction_v2)
+BOOST_AUTO_TEST_CASE(test_transaction_v1)
 {
     auto cryptoSuite =
         std::make_shared<bcos::crypto::CryptoSuite>(std::make_shared<bcos::crypto::Keccak256>(),
@@ -118,6 +119,83 @@ BOOST_AUTO_TEST_CASE(test_transaction_v2)
         txData.abi, txData.blockLimit, txData.value, txData.gasPrice, txData.gasLimit,
         txData.maxFeePerGas, txData.maxPriorityFeePerGas);
     BOOST_CHECK(newHash2.hex() == hex);
+}
+
+BOOST_AUTO_TEST_CASE(test_transaction_v2)
+{
+    auto cryptoSuite =
+        std::make_shared<bcos::crypto::CryptoSuite>(std::make_shared<bcos::crypto::Keccak256>(),
+            std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr);
+
+    auto fixedSec1 = h256(
+        "722ecc9325297d801632938d7d1bd0a922f8db10e86f5953431686ad9e37db04f47aac0468c655e678dd85869e"
+        "abaab14b034f79df97ccc6e9c7714d574aed89");
+    auto sec1 = std::make_shared<bcos::crypto::KeyImpl>(fixedSec1.asBytes());
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
+    auto keyPair1 = signatureImpl->createKeyPair(sec1);
+    TransactionBuilderV2 transactionBuilderV2;
+    // clang-format off
+    bcos::bytes  input = fromHex(std::string("1a10012606636861696e30360667726f7570304100855628313331343736363932313039343437323233313631323634333933363134333635383636353733317d00010426608060405234801561001057600080fd5b506040518060400160405280600d81526020017f48656c6c6f2c20576f726c6421000000000000000000000000000000000000008152506000908051906020019061005c929190610062565b50610107565b828054600181600116156101000203166002900490600052602060002090601f016020900481019282601f106100a357805160ff19168380011785556100d1565b828001600101855582156100d1579182015b828111156100d05782518255916020019190600101906100b5565b5b5090506100de91906100e2565b5090565b61010491905b808211156101005760008160009055506001016100e8565b5090565b90565b610310806101166000396000f3fe608060405234801561001057600080fd5b50600436106100365760003560e01c80634ed3885e1461003b5780636d4ce63c146100f6575b600080fd5b6100f46004803603602081101561005157600080fd5b810190808035906020019064010000000081111561006e57600080fd5b82018360208201111561008057600080fd5b803590602001918460018302840111640100000000831117156100a257600080fd5b91908080601f016020809104026020016040519081016040528093929190818152602001838380828437600081840152601f19601f820116905080830192505050505050509192919290505050610179565b005b6100fe610193565b6040518080602001828103825283818151815260200191508051906020019080838360005b8381101561013e578082015181840152602081019050610123565b50505050905090810190601f16801561016b5780820380516001836020036101000a031916815260200191505b509250505060405180910390f35b806000908051906020019061018f929190610235565b5050565b606060008054600181600116156101000203166002900480601f01602080910402602001604051908101604052809291908181526020018280546001816001161561010002031660029004801561022b5780601f106102005761010080835404028352916020019161022b565b820191906000526020600020905b81548152906001019060200180831161020e57829003601f168201915b5050505050905090565b828054600181600116156101000203166002900490600052602060002090601f016020900481019282601f1061027657805160ff19168380011785556102a4565b828001600101855582156102a4579182015b828111156102a3578251825591602001919060010190610288565b5b5090506102b191906102b5565b5090565b6102d791905b808211156102d35760008160009055506001016102bb565b5090565b9056fea2646970667358221220b5943f43c48cc93c6d71cdcf27aee5072566c88755ce9186e32ce83b24e8dc6c64736f6c634300060a0033b0010b2d000020f03b8fdfa96a9b2128a83c22ddc691e6f1d9e0589b7c34088675e33cb059dbb23d000041313563c18509553f1d83747c004f29ec67f1137bb1c3104e8551ecc4c057187609c58a9d0220f02971abcf3f9bc6ba44423de56cb435b20b1fcf5eee4587840b01"));
+    // clang-format on
+    auto tx = transactionBuilderV2.decodeTransaction(input);
+    auto txJson = transactionBuilderV2.decodeTransactionToJsonObj(input);
+    std::cout << txJson << std::endl;
+    auto txData = tx->data;
+    auto hash = transactionBuilderV2.calculateTransactionDataHash(CryptoType::Secp256K1, tx->data);
+
+
+    auto hex1 = hash.hex();
+    std::string hex = toHex(tx->dataHash);
+    BOOST_CHECK(hex == hex1);
+    BOOST_CHECK(hex == "f03b8fdfa96a9b2128a83c22ddc691e6f1d9e0589b7c34088675e33cb059dbb2");
+
+    bytes txDataInput;
+    txDataInput.insert(txDataInput.begin(), txData.input.begin(), txData.input.end());
+
+    auto newTxData =
+        transactionBuilderV2.createTransactionData(txData.version, txData.groupID, txData.chainID,
+            txData.to, txData.nonce, txDataInput, txData.abi, txData.blockLimit, txData.value,
+            txData.gasPrice, txData.gasLimit, txData.maxFeePerGas, txData.maxPriorityFeePerGas);
+
+    auto newHash = transactionBuilderV2.TransactionBuilder::calculateTransactionDataHash(
+        CryptoType::Secp256K1, *newTxData);
+    BOOST_CHECK(newHash.hex() == hex);
+
+    auto newHash2 = transactionBuilderV2.calculateTransactionDataHash(CryptoType::Secp256K1,
+        txData.version, txData.groupID, txData.chainID, txData.to, txData.nonce, txDataInput,
+        txData.abi, txData.blockLimit, txData.value, txData.gasPrice, txData.gasLimit,
+        txData.maxFeePerGas, txData.maxPriorityFeePerGas);
+    BOOST_CHECK(newHash2.hex() == hex);
+
+
+    auto [txHash, _] = transactionBuilderV2.createSignedTransaction(*keyPair1, txData);
+    BOOST_CHECK(newHash2.hex() == toHex(txHash));
+
+    // set extension
+    std::string_view extension = "Hello World!";
+    txData.extension.insert(txData.extension.begin(), extension.begin(), extension.end());
+    txData.version = (uint32_t)protocol::TransactionVersion::V2_VERSION;
+    auto [txHash2, signedTx] = transactionBuilderV2.createSignedTransaction(*keyPair1, txData);
+    BOOST_CHECK(newHash2.hex() != toHex(txHash2));
+
+    auto newTx = transactionBuilderV2.decodeTransaction(signedTx);
+    BOOST_CHECK(newTx->data.extension == txData.extension);
+
+    HashType v2Hash(txHash2);
+    auto signature = transactionBuilderV2.signTransactionDataHash(*keyPair1, v2Hash);
+    // wrong hash
+    BOOST_CHECK_THROW(
+        transactionBuilderV2.createSignedTransactionWithSign(*signature, newHash2, txData),
+        std::invalid_argument);
+
+    // wrong hash algorithm
+    BOOST_CHECK_THROW(transactionBuilderV2.createSignedTransactionWithSign(
+                          *signature, v2Hash, txData, 0, "", true, CryptoType::SM2),
+        std::invalid_argument);
+
+    auto newSignedTx =
+        transactionBuilderV2.createSignedTransactionWithSign(*signature, v2Hash, txData);
+    BOOST_CHECK(newSignedTx == signedTx);
 }
 
 BOOST_AUTO_TEST_CASE(test_receipt)
