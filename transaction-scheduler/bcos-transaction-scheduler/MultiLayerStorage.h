@@ -325,30 +325,77 @@ public:
                     co_return std::nullopt;
                 }
 
-                auto minItem = RANGES::min(iterators, [](auto const& lhs, auto const& rhs) {
-                    auto& lhsKey = std::get<0>(*std::get<1>(lhs));
-                    auto& rhsKey = std::get<0>(*std::get<1>(rhs));
-                    return lhsKey < rhsKey;
-                });
-
-                // 多个迭代器可能有重复的key，推进所有重复key的迭代器
-                // Multiple iterators may have duplicate keys, advance the iterator with all
-                // duplicate keys
-                auto duplicateIterators = iterators | RANGES::views::filter([&](auto& iterator) {
-                    return std::get<0>(*std::get<1>(iterator)) ==
-                           std::get<0>(*std::get<1>(minItem));
-                });
-
-                auto result = std::get<1>(duplicateIterators.front());
-                for (auto& it : duplicateIterators)
+                std::vector<std::tuple<StorageIterator, RangeValue>*> minIterators;
+                for (auto& it : iterators)
                 {
-                    auto& [variantIterator, value] = it;
+                    if (minIterators.empty())
+                    {
+                        minIterators.emplace_back(std::addressof(it));
+                    }
+                    else
+                    {
+                        auto& [variantIterator, value] = it;
+                        auto& key = std::get<0>(*value);
+                        auto& existsKey = std::get<0>(*std::get<1>(*minIterators[0]));
+
+                        if (key < existsKey)
+                        {
+                            minIterators.clear();
+                            minIterators.emplace_back(std::addressof(it));
+                        }
+                        else if (key == existsKey)
+                        {
+                            minIterators.emplace_back(std::addressof(it));
+                        }
+                    }
+                }
+
+                RangeValue result;
+                auto& value = std::get<1>(*std::get<1>(*minIterators[0]));
+                if constexpr (std::is_pointer_v<decltype(value)>)
+                {
+                    result.emplace(std::get<1>(*std::get<0>(*minIterators[0])), *value);
+                }
+                else
+                {
+                    result.emplace(std::move((*std::get<1>(*minIterators[0]))));
+                }
+
+                for (auto& it : minIterators)
+                {
+                    auto& [variantIterator, value] = *it;
                     value = co_await std::visit(
                         [](auto& input) -> task::Task<RangeValue> {
                             co_return co_await input.next();
                         },
                         variantIterator);
                 }
+
+
+                // auto minItem = RANGES::min(iterators, [](auto const& lhs, auto const& rhs) {
+                //     auto&& lhsKey = std::get<0>(*std::get<1>(lhs));
+                //     auto&& rhsKey = std::get<0>(*std::get<1>(rhs));
+                //     return lhsKey < rhsKey;
+                // });
+
+                // 多个迭代器可能有重复的key，推进所有重复key的迭代器
+                // Multiple iterators may have duplicate keys, advance the iterator with all
+                // duplicate keys
+                // auto duplicateIterators = iterators | RANGES::views::filter([&](auto& iterator) {
+                //     return std::get<0>(*std::get<1>(iterator)) ==
+                //            std::get<0>(*std::get<1>(minItem));
+                // });
+
+                // auto result = std::get<1>(duplicateIterators.front());
+                // for (auto& it : duplicateIterators)
+                // {
+                //     auto& [variantIterator, value] = it;
+                //     value = co_await std::visit(
+                //         [](auto& input) -> task::Task<RangeValue> {
+                //             co_return co_await input.next();
+                //         },
+                //         variantIterator);
+                // }
 
                 co_return result;
             };

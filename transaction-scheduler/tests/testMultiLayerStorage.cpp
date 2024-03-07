@@ -3,6 +3,7 @@
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-task/Wait.h"
 #include "bcos-transaction-scheduler/MultiLayerStorage.h"
+#include "bcos-transaction-scheduler/ReadWriteSetStorage.h"
 #include <bcos-task/Wait.h>
 #include <fmt/format.h>
 #include <boost/test/tools/old/interface.hpp>
@@ -195,6 +196,9 @@ BOOST_AUTO_TEST_CASE(rangeMulti)
         }
         BOOST_CHECK_EQUAL_COLLECTIONS(
             vecList2.begin(), vecList2.end(), expectList.begin(), expectList.end());
+
+        ReadWriteSetStorage<decltype(view2), int> readWriteSetStorage(view2);
+        auto range2 = co_await storage2::range(readWriteSetStorage);
     }());
 }
 
