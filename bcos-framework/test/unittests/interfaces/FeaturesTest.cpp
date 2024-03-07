@@ -276,7 +276,7 @@ BOOST_AUTO_TEST_CASE(upgrade)
     {
         BOOST_CHECK(features10.get(feature));
     }
-    
+
     // 3.6.0 to 3.7.0
     Features features11;
     features11.setUpgradeFeatures(
@@ -350,7 +350,6 @@ BOOST_AUTO_TEST_CASE(genesis)
     {
         BOOST_CHECK(features4.get(feature));
     }
-
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -149,8 +149,7 @@ public:
                 {Flag::bugfix_keypage_system_entry_hash,
                     Flag::bugfix_internal_create_redundant_storage}},
             {protocol::BlockVersion::V3_7_0_VERSION,
-                {Flag::bugfix_empty_abi_reset, 
-                    Flag::bugfix_sharding_call_in_child_executive,
+                {Flag::bugfix_empty_abi_reset, Flag::bugfix_sharding_call_in_child_executive,
                     Flag::bugfix_internal_create_permission_denied}},
         });
         for (const auto& upgradeFeatures : upgradeRoadmap)
