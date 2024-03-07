@@ -20,7 +20,10 @@
  */
 
 #pragma once
-
+// if windows, manual include tup/Tars.h first
+#ifdef _WIN32
+#include <tup/Tars.h>
+#endif
 #include "bcos-tars-protocol/tars/Block.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>

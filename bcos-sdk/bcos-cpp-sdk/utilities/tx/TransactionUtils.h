@@ -19,7 +19,10 @@
  */
 
 #pragma once
-
+// if windows, manual include tup/Tars.h first
+#ifdef _WIN32
+#include <tup/Tars.h>
+#endif
 #include <bcos-framework/protocol/ProtocolInfo.h>
 #include <bcos-tars-protocol/tars/Transaction.h>
 #include <bcos-utilities/DataConvertUtility.h>
