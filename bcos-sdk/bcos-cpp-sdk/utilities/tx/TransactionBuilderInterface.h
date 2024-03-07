@@ -18,6 +18,10 @@
  * @date 2022-01-13
  */
 #pragma once
+// if windows, manual include tup/Tars.h first
+#ifdef _WIN32
+#include <tup/Tars.h>
+#endif
 #include <bcos-cpp-sdk/utilities/crypto/Common.h>
 #include <bcos-cpp-sdk/utilities/tx/TransactionUtils.h>
 #include <bcos-crypto/signature/key/KeyPair.h>

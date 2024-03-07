@@ -21,6 +21,10 @@
 
 #pragma once
 
+// if windows, manual include tup/Tars.h first
+#ifdef _WIN32
+#include <tup/Tars.h>
+#endif
 #include "../impl/TarsHashable.h"
 #include "bcos-concepts/ByteBuffer.h"
 #include "bcos-concepts/Hash.h"

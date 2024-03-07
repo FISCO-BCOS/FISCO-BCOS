@@ -196,6 +196,21 @@ BOOST_AUTO_TEST_CASE(test_transaction_v2)
     auto newSignedTx =
         transactionBuilderV2.createSignedTransactionWithSign(*signature, v2Hash, txData);
     BOOST_CHECK(newSignedTx == signedTx);
+
+    auto jsonTx = TarsTransactionWriteToJsonString(newTx);
+    auto txDecodeFromJson = TarsTransactionReadFromJsonString(jsonTx);
+    {
+        auto txBytes1 = transactionBuilderV2.encodeTransaction(*txDecodeFromJson);
+        auto txBytes2 = transactionBuilderV2.encodeTransaction(*newTx);
+        BOOST_CHECK(toHex(*txBytes1) == toHex(*txBytes2));
+    }
+    auto jsonTxData = TarsTransactionDataWriteToJsonString(newTx->data);
+    auto txDataDecodeFromJson = TarsTransactionDataReadFromJsonString(jsonTxData);
+    {
+        auto txDataBytes1 = transactionBuilderV2.encodeTransactionData(*txDataDecodeFromJson);
+        auto txDataBytes2 = transactionBuilderV2.encodeTransactionData(newTx->data);
+        BOOST_CHECK(toHex(*txDataBytes1) == toHex(*txDataBytes2));
+    }
 }
 
 BOOST_AUTO_TEST_CASE(test_receipt)

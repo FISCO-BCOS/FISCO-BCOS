@@ -22,6 +22,10 @@
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
+// if windows, manual include tup/Tars.h first
+#ifdef _WIN32
+#include <tup/Tars.h>
+#endif
 #include <bcos-framework/protocol/ProtocolInfoCodec.h>
 #include <bcos-tars-protocol/tars/ProtocolInfo.h>
 

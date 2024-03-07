@@ -19,7 +19,10 @@
  */
 
 #pragma once
-
+// if windows, manual include tup/Tars.h first
+#ifdef _WIN32
+#include <tup/Tars.h>
+#endif
 #include <bcos-cpp-sdk/utilities/tx/TransactionBuilder.h>
 #include <bcos-cpp-sdk/utilities/tx/TransactionUtils.h>
 #include <bcos-crypto/hash/Keccak256.h>

@@ -19,7 +19,10 @@
  */
 
 #pragma once
-
+// if windows, manual include tup/Tars.h first
+#ifdef _WIN32
+#include <tup/Tars.h>
+#endif
 #include <bcos-framework/protocol/ProtocolInfo.h>
 #include <bcos-tars-protocol/tars/Transaction.h>
 #include <bcos-utilities/DataConvertUtility.h>
@@ -37,7 +40,7 @@ using TransactionConstPtr = std::shared_ptr<const bcostars::Transaction>;
 namespace bcos::cppsdk::utilities
 {
 // txData
-[[maybe_unused]] static std::string TarsTransactionDataWriteToJsonString(
+[[maybe_unused]] static Json::Value TarsTransactionDataWriteToJsonValue(
     bcostars::TransactionData const& txData)
 {
     Json::Value root;
@@ -61,6 +64,13 @@ namespace bcos::cppsdk::utilities
     {
         root["extension"] = bcos::toHexStringWithPrefix(txData.extension);
     }
+    return root;
+}
+
+[[maybe_unused]] static std::string TarsTransactionDataWriteToJsonString(
+    bcostars::TransactionData const& txData)
+{
+    Json::Value root = TarsTransactionDataWriteToJsonValue(txData);
     Json::FastWriter writer;
     auto json = writer.write(root);
     return json;
@@ -156,7 +166,7 @@ namespace bcos::cppsdk::utilities
     bcostars::TransactionUniquePtr const& tx)
 {
     Json::Value root;
-    root["data"] = TarsTransactionDataWriteToJsonString(tx->data);
+    root["data"] = TarsTransactionDataWriteToJsonValue(tx->data);
     root["dataHash"] = bcos::toHexStringWithPrefix(tx->dataHash);
     root["signature"] = bcos::toHexStringWithPrefix(tx->signature);
     root["importTime"] = (uint64_t)tx->importTime;
@@ -167,6 +177,7 @@ namespace bcos::cppsdk::utilities
     auto json = writer.write(root);
     return json;
 }
+
 [[maybe_unused]] static bcostars::TransactionUniquePtr TarsTransactionReadFromJsonString(
     std::string json)
 {
