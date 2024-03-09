@@ -9,9 +9,6 @@
 #include <boost/throw_exception.hpp>
 #include <functional>
 #include <iterator>
-#include <range/v3/algorithm/min_element.hpp>
-#include <range/v3/view/enumerate.hpp>
-#include <range/v3/view/transform.hpp>
 #include <stdexcept>
 #include <type_traits>
 #include <variant>
