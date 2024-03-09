@@ -11,6 +11,7 @@
 #include <iterator>
 #include <range/v3/algorithm/min_element.hpp>
 #include <range/v3/view/enumerate.hpp>
+#include <range/v3/view/transform.hpp>
 #include <stdexcept>
 #include <type_traits>
 #include <variant>
@@ -284,6 +285,30 @@ public:
                 std::tuple<typename MutableStorage::Key, typename MutableStorage::Value>>;
             std::vector<std::tuple<StorageIterator, RangeValue>> m_iterators;
 
+            task::Task<void> forwardIterators(auto&& iterators)
+            {
+                for (auto& it : iterators)
+                {
+                    auto& [variantIterator, item] = it;
+                    item = co_await std::visit(
+                        [](auto& input) -> task::Task<RangeValue> {
+                            RangeValue item;
+                            auto rangeValue = co_await input.next();
+                            auto&& [key, value] = *rangeValue;
+                            if constexpr (std::is_pointer_v<decltype(value)>)
+                            {
+                                item.emplace(key, *value);
+                            }
+                            else
+                            {
+                                item = std::move(rangeValue);
+                            }
+                            co_return item;
+                        },
+                        variantIterator);
+                }
+            }
+
         public:
             task::Task<void> init(View& view, auto&&... args)
             {
@@ -302,14 +327,7 @@ public:
                 m_iterators.emplace_back(co_await storage2::range(view.m_backendStorage,
                                              std::forward<decltype(args)>(args)...),
                     RangeValue{});
-                for (auto& [variantIterator, value] : m_iterators)
-                {
-                    value = co_await std::visit(
-                        [](auto& iterator) -> task::Task<RangeValue> {
-                            co_return co_await iterator.next();
-                        },
-                        variantIterator);
-                }
+                co_await forwardIterators(m_iterators);
             }
 
             task::Task<RangeValue> next()
@@ -350,53 +368,9 @@ public:
                     }
                 }
 
-                RangeValue result;
-                auto& value = std::get<1>(*std::get<1>(*minIterators[0]));
-                if constexpr (std::is_pointer_v<decltype(value)>)
-                {
-                    result.emplace(std::get<1>(*std::get<0>(*minIterators[0])), *value);
-                }
-                else
-                {
-                    result.emplace(std::move((*std::get<1>(*minIterators[0]))));
-                }
-
-                for (auto& it : minIterators)
-                {
-                    auto& [variantIterator, value] = *it;
-                    value = co_await std::visit(
-                        [](auto& input) -> task::Task<RangeValue> {
-                            co_return co_await input.next();
-                        },
-                        variantIterator);
-                }
-
-
-                // auto minItem = RANGES::min(iterators, [](auto const& lhs, auto const& rhs) {
-                //     auto&& lhsKey = std::get<0>(*std::get<1>(lhs));
-                //     auto&& rhsKey = std::get<0>(*std::get<1>(rhs));
-                //     return lhsKey < rhsKey;
-                // });
-
-                // 多个迭代器可能有重复的key，推进所有重复key的迭代器
-                // Multiple iterators may have duplicate keys, advance the iterator with all
-                // duplicate keys
-                // auto duplicateIterators = iterators | RANGES::views::filter([&](auto& iterator) {
-                //     return std::get<0>(*std::get<1>(iterator)) ==
-                //            std::get<0>(*std::get<1>(minItem));
-                // });
-
-                // auto result = std::get<1>(duplicateIterators.front());
-                // for (auto& it : duplicateIterators)
-                // {
-                //     auto& [variantIterator, value] = it;
-                //     value = co_await std::visit(
-                //         [](auto& input) -> task::Task<RangeValue> {
-                //             co_return co_await input.next();
-                //         },
-                //         variantIterator);
-                // }
-
+                RangeValue result = std::get<1>(*minIterators[0]);
+                co_await forwardIterators(
+                    minIterators | RANGES::views::transform([](auto* it) -> auto& { return *it; }));
                 co_return result;
             };
         };
