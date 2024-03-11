@@ -3,9 +3,9 @@
 #include "bcos-concepts/ByteBuffer.h"
 #include "bcos-concepts/Hash.h"
 #include "bcos-crypto/hasher/Hasher.h"
+#include "bcos-tars-protocol/tars/Block.h"
+#include "bcos-tars-protocol/tars/Transaction.h"
 #include "bcos-tars-protocol/tars/TransactionReceipt.h"
-#include <bcos-tars-protocol/tars/Block.h>
-#include <bcos-tars-protocol/tars/Transaction.h>
 #include <boost/endian/conversion.hpp>
 #include <string>
 #include <vector>
@@ -23,11 +23,12 @@ void tag_invoke(bcos::concepts::hash::tag_t<bcos::concepts::hash::calculate> /*u
         return;
     }
 
-    impl_calculate(std::forward<decltype(hasher)>(hasher), transaction.data, out);
+    bcos::concepts::hash::calculate(transaction.data, std::forward<decltype(hasher)>(hasher), out);
 }
 
-void impl_calculate(bcos::crypto::hasher::Hasher auto hasher,
-    bcostars::TransactionData const& hashFields, bcos::concepts::bytebuffer::ByteBuffer auto& out)
+void tag_invoke(bcos::concepts::hash::tag_t<bcos::concepts::hash::calculate> /*unused*/,
+    bcostars::TransactionData const& hashFields, bcos::crypto::hasher::Hasher auto hasher,
+    bcos::concepts::bytebuffer::ByteBuffer auto& out)
 {
     int32_t version = boost::endian::native_to_big((int32_t)hashFields.version);
     hasher.update(version);
@@ -68,11 +69,11 @@ void tag_invoke(bcos::concepts::hash::tag_t<bcos::concepts::hash::calculate> /*u
         return;
     }
 
-    impl_calculate(std::forward<decltype(hasher)>(hasher), receipt.data, out);
+    bcos::concepts::hash::calculate(receipt.data, std::forward<decltype(hasher)>(hasher), out);
 }
 
-void impl_calculate(bcos::crypto::hasher::Hasher auto hasher,
-    bcostars::TransactionReceiptData const& hashFields,
+void tag_invoke(bcos::concepts::hash::tag_t<bcos::concepts::hash::calculate> /*unused*/,
+    bcostars::TransactionReceiptData const& hashFields, bcos::crypto::hasher::Hasher auto hasher,
     bcos::concepts::bytebuffer::ByteBuffer auto& out)
 {
     int32_t version = boost::endian::native_to_big((int32_t)hashFields.version);
