@@ -237,7 +237,11 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::Transaction const
     }
     if (transaction.version() >= (int32_t)bcos::protocol::TransactionVersion::V2_VERSION)
     {
-        jResp["extension"] = toHexStringWithPrefix(transaction.extension());
+        jResp["extension"] = Json::Value(Json::arrayValue);
+        for (const auto& ext : transaction.extension())
+        {
+            jResp["extension"].append(ext);
+        }
     }
 }
 
