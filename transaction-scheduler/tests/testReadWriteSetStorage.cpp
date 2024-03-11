@@ -47,4 +47,25 @@ BOOST_AUTO_TEST_CASE(readWriteSet)
     }());
 }
 
+BOOST_AUTO_TEST_CASE(rangeReadWrite)
+{
+    task::syncWait([]() -> task::Task<void> {
+        Storage lhsStorage;
+        ReadWriteSetStorage<decltype(lhsStorage), int> firstStorage(lhsStorage);
+
+        co_await storage2::writeOne(firstStorage, 100, 1);
+        co_await storage2::writeOne(firstStorage, 200, 1);
+        co_await storage2::writeOne(firstStorage, 300, 1);
+
+        std::vector<int> result;
+        auto range = co_await storage2::range(firstStorage);
+        while (auto keyValue = co_await range.next())
+        {
+            result.emplace_back(std::get<1>(*keyValue));
+        }
+
+        BOOST_CHECK_EQUAL(result.size(), 3);
+    }());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
