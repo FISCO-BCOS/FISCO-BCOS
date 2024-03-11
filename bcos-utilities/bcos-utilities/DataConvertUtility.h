@@ -57,6 +57,11 @@ Out fromHex(const Hex& hex, std::string_view prefix = std::string_view())
 
     if ((hex.size() < prefix.size() + 2) || (hex.size() % 2 != 0))
     {
+        // can be 0x
+        if (hex == prefix)
+        {
+            return {};
+        }
         BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "Invalid input hex string size"));
     }
 
@@ -208,7 +213,8 @@ inline bytes toCompactBigEndian(T _val, unsigned _min = 0)
         "only unsigned types or bigint supported");  // bigint does not carry sign bit on shift
     unsigned i = 0;
     for (T v = _val; v; ++i, v >>= 8)
-    {}
+    {
+    }
     bytes ret((std::max)(_min, i), 0);
     toBigEndian(_val, ret);
     return ret;
@@ -224,7 +230,8 @@ inline std::string toCompactBigEndianString(T _val, unsigned _min = 0)
         "only unsigned types or bigint supported");  // bigint does not carry sign bit on shift
     unsigned i = 0;
     for (T v = _val; v; ++i, v >>= 8)
-    {}
+    {
+    }
     std::string ret((std::max)(_min, i), '\0');
     toBigEndian(_val, ret);
     return ret;

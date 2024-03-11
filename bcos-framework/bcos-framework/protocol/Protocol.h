@@ -139,6 +139,7 @@ enum class TransactionVersion : uint32_t
 {
     V0_VERSION = 0x00000000,
     V1_VERSION = 0x00000001,
+    V2_VERSION = 0x00000002,
 
 };
 

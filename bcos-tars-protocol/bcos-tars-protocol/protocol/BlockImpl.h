@@ -19,7 +19,10 @@
  * @date 2021-04-20
  */
 #pragma once
-
+// if windows, manual include tup/Tars.h first
+#ifdef _WIN32
+#include <tup/Tars.h>
+#endif
 #include "../Common.h"
 #include "../impl/TarsHashable.h"
 #include "BlockHeaderImpl.h"

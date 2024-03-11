@@ -18,7 +18,6 @@
  * @date 2022-01-13
  */
 #pragma once
-#include <bcos-cpp-sdk/utilities/tx/Transaction.h>
 #include <bcos-cpp-sdk/utilities/tx/TransactionBuilderInterface.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>

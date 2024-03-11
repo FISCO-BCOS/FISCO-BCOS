@@ -447,8 +447,9 @@ void HostContext::setCodeAndAbi(bytes code, string abi)
             }
 
             auto abiEntry = m_executive->storage().getRow(bcos::ledger::SYS_CONTRACT_ABI, codeHash);
-
-            if (!abiEntry)
+            // if abiEntry is empty, also need set abi
+            if (!abiEntry || (features().get(ledger::Features::Flag::bugfix_empty_abi_reset) &&
+                                 abiEntry && abiEntry->size() == 0))
             {
                 abiEntry = std::make_optional<Entry>();
                 abiEntry->importFields({std::move(abi)});

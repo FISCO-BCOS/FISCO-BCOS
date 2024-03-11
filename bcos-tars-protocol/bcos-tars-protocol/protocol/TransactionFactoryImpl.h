@@ -49,7 +49,7 @@ public:
 
         transaction->decode(txData);
         // check value or gasPrice or maxFeePerGas or maxPriorityFeePerGas is hex string
-        if (transaction->version() == int32_t(bcos::protocol::TransactionVersion::V1_VERSION))
+        if (transaction->version() >= int32_t(bcos::protocol::TransactionVersion::V1_VERSION))
         {
             if (!bcos::isHexStringV2(transaction->mutableInner().data.value) ||
                 !bcos::isHexStringV2(transaction->mutableInner().data.gasPrice) ||
@@ -127,7 +127,7 @@ public:
             inner.data.maxPriorityFeePerGas = "0x0";
         }
 
-        if (_version == int32_t(bcos::protocol::TransactionVersion::V1_VERSION))
+        if (_version >= int32_t(bcos::protocol::TransactionVersion::V1_VERSION))
         {
             if (bcos::isHexStringV2(_value) && bcos::isHexStringV2(_gasPrice) &&
                 bcos::isHexStringV2(_maxFeePerGas) && bcos::isHexStringV2(_maxPriorityFeePerGas))

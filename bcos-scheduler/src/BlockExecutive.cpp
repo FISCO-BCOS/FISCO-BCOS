@@ -1600,6 +1600,7 @@ void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr outp
         break;
     }
     case int32_t(bcos::protocol::TransactionVersion::V1_VERSION):
+    case int32_t(bcos::protocol::TransactionVersion::V2_VERSION):
     {
         auto receipt = m_scheduler->m_blockFactory->receiptFactory()->createReceipt2(txGasUsed,
             std::string(output->newEVMContractAddress()), output->takeLogEntries(),
