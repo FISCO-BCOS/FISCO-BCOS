@@ -19,6 +19,7 @@
  * @date 2021-04-20
  */
 #pragma once
+#include "../Common.h"
 #include "../impl/TarsHashable.h"
 #include "TransactionReceiptImpl.h"
 #include "bcos-utilities/BoostLog.h"

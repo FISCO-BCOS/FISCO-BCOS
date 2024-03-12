@@ -105,6 +105,9 @@ public:
     virtual std::string_view maxFeePerGas() const = 0;
     virtual std::string_view maxPriorityFeePerGas() const = 0;
 
+    // v2
+    virtual bcos::bytesConstRef extension() const = 0;
+
     virtual std::string_view extraData() const = 0;
     virtual void setExtraData(std::string const& _extraData) = 0;
 

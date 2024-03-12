@@ -17,15 +17,17 @@
  * @author: octopus
  * @date 2022-01-13
  */
+#include <bcos-concepts/Hash.h>
 #include <bcos-cpp-sdk/utilities/Common.h>
-#include <bcos-cpp-sdk/utilities/tx/Transaction.h>
 #include <bcos-cpp-sdk/utilities/tx/TransactionBuilder.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/hsmSM2/HsmSM2Crypto.h>
+#include <bcos-tars-protocol/impl/TarsHashable.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <time.h>
+
 #include <chrono>
 #include <memory>
 #include <string>
@@ -68,8 +70,7 @@ bcostars::TransactionDataUniquePtr TransactionBuilder::createTransactionData(
 bcostars::TransactionDataUniquePtr TransactionBuilder::createTransactionDataWithJson(
     const std::string& _json)
 {
-    auto _transactionData = std::make_unique<bcostars::TransactionData>();
-    _transactionData->readFromJsonString(_json);
+    auto _transactionData = TarsTransactionDataReadFromJsonString(_json);
     return _transactionData;
 }
 
@@ -103,7 +104,7 @@ bcostars::TransactionDataUniquePtr TransactionBuilder::decodeTransactionData(
 std::string TransactionBuilder::decodeTransactionDataToJsonObj(const bcos::bytes& _txBytes)
 {
     auto txData = decodeTransactionData(_txBytes);
-    auto txDataJson = txData->writeToJsonString();
+    auto txDataJson = TarsTransactionDataWriteToJsonString(*txData);
     return txDataJson;
 }
 
@@ -127,7 +128,10 @@ crypto::HashType TransactionBuilder::calculateTransactionDataHash(
     {
         cryptoSuite = &*m_ecdsaCryptoSuite;
     }
-    return _transactionData.hash(cryptoSuite->hashImpl());
+    crypto::HashType txDataHash;
+    bcos::concepts::hash::calculate(
+        _transactionData, cryptoSuite->hashImpl()->hasher(), txDataHash);
+    return txDataHash;
 }
 
 /**
@@ -212,8 +216,7 @@ bcostars::TransactionUniquePtr TransactionBuilder::createTransaction(
 bcostars::TransactionUniquePtr TransactionBuilder::createTransactionWithJson(
     const std::string& _json)
 {
-    auto _transaction = std::make_unique<bcostars::Transaction>();
-    _transaction->readFromJsonString(_json);
+    auto _transaction = TarsTransactionReadFromJsonString(_json);
     return _transaction;
 }
 
@@ -245,8 +248,7 @@ bcostars::TransactionUniquePtr TransactionBuilder::decodeTransaction(const bcos:
 std::string TransactionBuilder::decodeTransactionToJsonObj(const bcos::bytes& _txBytes)
 {
     auto tx = decodeTransaction(_txBytes);
-    auto txDataJson = tx->writeToJsonString();
-    return txDataJson;
+    return TarsTransactionWriteToJsonString(tx);
 }
 
 /**
