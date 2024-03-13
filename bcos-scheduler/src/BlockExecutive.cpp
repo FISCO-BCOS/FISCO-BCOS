@@ -1604,7 +1604,8 @@ void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr outp
     {
         auto receipt = m_scheduler->m_blockFactory->receiptFactory()->createReceipt2(txGasUsed,
             std::string(output->newEVMContractAddress()), output->takeLogEntries(),
-            output->status(), output->data(), number(), std::string(output->effectiveGasPrice()));
+            output->status(), output->data(), number(), std::string(output->effectiveGasPrice()),
+            static_cast<protocol::TransactionVersion>(version));
         // write receipt in results
         SCHEDULER_LOG(TRACE) << " 6.GenReceipt:\t [^^] " << output->toString()
                              << " -> contextID:" << output->contextID() - m_startContextID
