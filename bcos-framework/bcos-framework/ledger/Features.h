@@ -40,7 +40,7 @@ public:
         bugfix_internal_create_permission_denied,
         bugfix_sharding_call_in_child_executive,
         bugfix_empty_abi_reset,  // support empty abi reset of same code
-        bugfix_uppercase_addr,
+        bugfix_eip55_addr,
         feature_dmc2serial,
         feature_sharding,
         feature_rpbft,
@@ -150,7 +150,7 @@ public:
                 {Flag::bugfix_keypage_system_entry_hash,
                     Flag::bugfix_internal_create_redundant_storage}},
             {protocol::BlockVersion::V3_7_0_VERSION,
-                {Flag::bugfix_empty_abi_reset, Flag::bugfix_uppercase_addr,
+                {Flag::bugfix_empty_abi_reset, Flag::bugfix_eip55_addr,
                     Flag::bugfix_sharding_call_in_child_executive,
                     Flag::bugfix_internal_create_permission_denied}},
         });

@@ -1715,7 +1715,7 @@ std::string BlockExecutive::preprocessAddress(const std::string_view& address)
         out = std::string(address);
     }
 
-    if (m_scheduler->ledgerConfig().features().get(ledger::Features::Flag::bugfix_uppercase_addr))
+    if (m_scheduler->ledgerConfig().features().get(ledger::Features::Flag::bugfix_eip55_addr))
     {
         boost::to_lower(out);  // support sdk pass EIP55 address
     }

@@ -140,7 +140,7 @@ BOOST_AUTO_TEST_CASE(feature)
         "bugfix_internal_create_permission_denied",
         "bugfix_sharding_call_in_child_executive",
         "bugfix_empty_abi_reset",
-        "bugfix_uppercase_addr",
+        "bugfix_eip55_addr",
         "feature_dmc2serial",
         "feature_sharding",
         "feature_rpbft",
@@ -284,7 +284,7 @@ BOOST_AUTO_TEST_CASE(upgrade)
         bcos::protocol::BlockVersion::V3_6_VERSION, bcos::protocol::BlockVersion::V3_7_0_VERSION);
     auto expect9 = std::to_array<std::string_view>(
         {"bugfix_keypage_system_entry_hash", "bugfix_internal_create_redundant_storage",
-            "bugfix_empty_abi_reset", "bugfix_uppercase_addr",
+            "bugfix_empty_abi_reset", "bugfix_eip55_addr",
             "bugfix_sharding_call_in_child_executive", "bugfix_internal_create_permission_denied"});
     BOOST_CHECK_EQUAL(validFlags(features11).size(), expect9.size());
     for (auto feature : expect9)
@@ -335,7 +335,7 @@ BOOST_AUTO_TEST_CASE(genesis)
         "bugfix_evm_create2_delegatecall_staticcall_codecopy", "bugfix_event_log_order",
         "bugfix_call_noaddr_return", "bugfix_precompiled_codehash", "bugfix_dmc_revert",
         "bugfix_keypage_system_entry_hash", "bugfix_internal_create_redundant_storage",
-        "bugfix_empty_abi_reset", "bugfix_uppercase_addr",
+        "bugfix_empty_abi_reset", "bugfix_eip55_addr",
         "bugfix_sharding_call_in_child_executive", "bugfix_internal_create_permission_denied"});
     BOOST_CHECK_EQUAL(validFlags(features37).size(), expect37.size());
     for (auto feature : expect37)
