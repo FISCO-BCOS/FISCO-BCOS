@@ -208,7 +208,7 @@ BOOST_AUTO_TEST_CASE(asyncExecuteTest2)
     {
         std::string inputStr = "Hello world! request";
 
-        auto tx = blockFactory->transactionFactory()->createTransaction(0, "0xaabbccdd",
+        auto tx = blockFactory->transactionFactory()->createTransaction(0, "0xAabBccdd",
             bytes(inputStr.begin(), inputStr.end()), std::to_string(j), 300, "chain", "group", 500,
             keyPair);
         auto hash = tx->hash();
@@ -402,7 +402,7 @@ BOOST_AUTO_TEST_CASE(dagTest2)
     for (size_t j = 0; j < 10; ++j)
     {
         std::string inputStr = "Hello world! request";
-        auto tx = blockFactory->transactionFactory()->createTransaction(0, "0xaabbccdd",
+        auto tx = blockFactory->transactionFactory()->createTransaction(0, "0xAaBbCcDd",
             bytes(inputStr.begin(), inputStr.end()), std::to_string(j), 300, "chain", "group", 500,
             keyPair);
         auto hash = tx->hash();
@@ -510,7 +510,7 @@ BOOST_AUTO_TEST_CASE(executeWithSystemError)
     block->blockHeader()->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
 
     auto tx = blockFactory->transactionFactory()->createTransaction(
-        0, "0xaabbccdd", {}, std::to_string(1), 500, "chainId", "groupId", utcTime());
+        0, "0xAaBbCcDd", {}, std::to_string(1), 500, "chainId", "groupId", utcTime());
     block->appendTransaction(std::move(tx));
 
     // Add Executor
