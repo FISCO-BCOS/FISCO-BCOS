@@ -208,7 +208,7 @@ BOOST_AUTO_TEST_CASE(asyncExecuteTest2)
     {
         std::string inputStr = "Hello world! request";
 
-        auto tx = blockFactory->transactionFactory()->createTransaction(0, "0xAabBccdd",
+        auto tx = blockFactory->transactionFactory()->createTransaction(0, "0xaabbccdd",
             bytes(inputStr.begin(), inputStr.end()), std::to_string(j), 300, "chain", "group", 500,
             keyPair);
         auto hash = tx->hash();
@@ -402,7 +402,7 @@ BOOST_AUTO_TEST_CASE(dagTest2)
     for (size_t j = 0; j < 10; ++j)
     {
         std::string inputStr = "Hello world! request";
-        auto tx = blockFactory->transactionFactory()->createTransaction(0, "0xAaBbCcDd",
+        auto tx = blockFactory->transactionFactory()->createTransaction(0, "0xaabbccdd",
             bytes(inputStr.begin(), inputStr.end()), std::to_string(j), 300, "chain", "group", 500,
             keyPair);
         auto hash = tx->hash();

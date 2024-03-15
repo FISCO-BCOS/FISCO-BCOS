@@ -988,6 +988,11 @@ bcos::protocol::BlockNumber SchedulerImpl::getCurrentBlockNumber()
 
 void SchedulerImpl::fetchConfig(protocol::BlockNumber _number)
 {
+    if (m_gasLimit > 0 && m_blockVersion > 0)
+    {
+        return;
+    }
+
     {
         std::promise<std::tuple<Error::Ptr, std::string>> p;
         m_ledger->asyncGetSystemConfigByKey(ledger::SYSTEM_KEY_TX_GAS_PRICE,
@@ -1009,10 +1014,6 @@ void SchedulerImpl::fetchConfig(protocol::BlockNumber _number)
         setGasPrice(value);  // must use function to acquire lock
     }
 
-    if (m_gasLimit > 0 && m_blockVersion > 0)
-    {
-        return;
-    }
     SCHEDULER_LOG(INFO) << LOG_DESC("fetch gas limit from storage before execute block")
                         << LOG_KV("requestBlockNumber", _number);
 
