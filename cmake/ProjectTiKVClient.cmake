@@ -22,7 +22,7 @@ set(ENV{OPENSSL_DIR} ${OPENSSL_INCLUDE_DIR}/../)
 ExternalProject_Add(tikv_client_cpp
   PREFIX ${CMAKE_SOURCE_DIR}/deps
   GIT_REPOSITORY https://${URL_BASE}/FISCO-BCOS/tikv-client-cpp.git
-  GIT_TAG        047b09474fa1015be456bbf58d6d97cdf60b8c49
+  GIT_TAG        677de47e9ea1d5786c3ad5712a20fda2770847d7
   BUILD_IN_SOURCE true
 #   PATCH_COMMAND ${CARGO_COMMAND} install cxxbridge-cmd@1.0.75
 #   BUILD_COMMAND ${CARGO_COMMAND} build && ${CARGO_COMMAND} build --release && make target/${TIKV_BUILD_MODE}/libtikv_client.a
