@@ -29,6 +29,8 @@
 #include <boost/log/core/core.hpp>
 #include <boost/log/support/date_time.hpp>
 #include <boost/log/utility/setup/common_attributes.hpp>
+#include <algorithm>
+#include <string>
 
 using namespace bcos;
 
@@ -163,16 +165,34 @@ void BoostLogInitializer::initStatLog(
 void BoostLogInitializer::initLog(boost::property_tree::ptree const& _pt,
     std::string const& _logger, std::string const& _logPrefix)
 {
+    // replace ~ with %, because only % is used as escape character in boost log
+    char toReplace = '~';
+    char replacement = '%';
+
     m_running.store(true);
     // get log level
     m_logLevel = getLogLevel(_pt.get<std::string>("log.level", "info"));
     m_consoleLog = _pt.get<bool>("log.enable_console_output", false);
+
     m_logFormat = _pt.get<std::string>("log.format", "");
+    std::replace_if(
+        m_logFormat.begin(), m_logFormat.end(), [&toReplace](char c) { return c == toReplace; },
+        replacement);
+
     m_logNamePattern = _pt.get<std::string>("log.log_name_pattern", "log_%Y%m%d_%H%M.log");
+    std::replace_if(
+        m_logNamePattern.begin(), m_logNamePattern.end(),
+        [&toReplace](char c) { return c == toReplace; }, replacement);
+
     m_compressArchive = _pt.get<bool>("log.compress_archive_file", false);
     m_archivePath = _pt.get<std::string>("log.archive_path", "");
+
     m_rotateFileNamePattern =
         _pt.get<std::string>("log.rotate_name_pattern", "log_%Y%m%d%H.%M.log");
+    std::replace_if(
+        m_rotateFileNamePattern.begin(), m_rotateFileNamePattern.end(),
+        [&toReplace](char c) { return c == toReplace; }, replacement);
+
     m_rotateSize = _pt.get<uint64_t>("log.max_log_file_size", 1024) * MB_IN_BYTES;
     if (m_rotateSize < 100 * MB_IN_BYTES)
     {
