@@ -88,7 +88,8 @@ public:
             BCOS_LOG(WARNING) << LOG_DESC("the transaction hash does not match")
                               << LOG_KV("originHash", originHashResult.hex())
                               << LOG_KV("realHash", hashResult.hex());
-            BOOST_THROW_EXCEPTION(std::invalid_argument("transaction hash mismatching"));
+            BOOST_THROW_EXCEPTION(std::invalid_argument(
+                "transaction hash mismatching, maybe transaction version not support."));
         }
 
         if (checkSig)

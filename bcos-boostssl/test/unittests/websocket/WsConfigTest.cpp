@@ -85,8 +85,34 @@ BOOST_AUTO_TEST_CASE(test_WsToolsTest)
     BOOST_CHECK_EQUAL(WsTools::validIP("::1"), true);
 
     BOOST_CHECK_EQUAL(WsTools::validPort(1111), true);
-    BOOST_CHECK_EQUAL(WsTools::validPort(10), true);
+    BOOST_CHECK_EQUAL(WsTools::validPort(10), false);
     BOOST_CHECK_EQUAL(WsTools::validPort(65535), true);
+
+    NodeIPEndpoint endpoint;
+    auto valid = WsTools::hostAndPort2Endpoint("", endpoint);
+    BOOST_CHECK(!valid);
+    valid = WsTools::hostAndPort2Endpoint("127.0.0.1:", endpoint);
+    BOOST_CHECK(!valid);
+    valid = WsTools::hostAndPort2Endpoint("127.0.0.1:-1", endpoint);
+    BOOST_CHECK(!valid);
+    valid = WsTools::hostAndPort2Endpoint(":20200", endpoint);
+    BOOST_CHECK(!valid);
+    valid = WsTools::hostAndPort2Endpoint("[0:1]:20200", endpoint);
+    BOOST_CHECK(!valid);
+    valid = WsTools::hostAndPort2Endpoint("[::1]:20200", endpoint);
+    BOOST_CHECK(valid);
+    BOOST_CHECK(endpoint.isIPv6());
+    BOOST_CHECK(endpoint.m_host == "::1");
+    BOOST_CHECK(endpoint.m_port == 20200);
+
+    valid =
+        WsTools::hostAndPort2Endpoint("[2001:0db8:85a3:0000:0000:8a2e:0370:7334]:20200", endpoint);
+    BOOST_CHECK(valid);
+    BOOST_CHECK(endpoint.isIPv6());
+    BOOST_CHECK(endpoint.m_host == "2001:db8:85a3::8a2e:370:7334");
+    BOOST_CHECK(endpoint.m_port == 20200);
+
+    WsTools::hostAndPort2Endpoint("node:20200", endpoint);
 }
 
 BOOST_AUTO_TEST_CASE(test_WsConfigReadConfig)
