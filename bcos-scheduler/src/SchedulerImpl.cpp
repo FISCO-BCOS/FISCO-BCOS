@@ -625,12 +625,18 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                     }
 
                     auto blockNumber = ledgerConfig->blockNumber();
-                    auto gasNumber = ledgerConfig->gasLimit();
+                    auto gasLimitAndEnableNumber = ledgerConfig->gasLimit();
+                    auto gasPriceAndEnableNumber = ledgerConfig->gasPrice();
                     // Note: takes effect in next block. we query the enableNumber of blockNumber
                     // + 1.
-                    if (std::get<1>(gasNumber) <= (blockNumber + 1))
+                    if (std::get<1>(gasLimitAndEnableNumber) <= (blockNumber + 1))
                     {
-                        self->m_gasLimit = std::get<0>(gasNumber);
+                        self->m_gasLimit = std::get<0>(gasLimitAndEnableNumber);
+                    }
+
+                    if (std::get<1>(gasPriceAndEnableNumber) <= (blockNumber + 1))
+                    {
+                        self->setGasPrice(std::get<0>(gasPriceAndEnableNumber));
                     }
 
                     self->m_blockVersion = ledgerConfig->compatibilityVersion();
