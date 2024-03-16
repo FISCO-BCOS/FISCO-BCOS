@@ -53,13 +53,19 @@ public:
 
                 transaction_executor::StateKeyView stateKeyView(key);
                 auto [entryTable, entryKey] = stateKeyView.getTableAndKey();
-                if (entryTable == table && (start == 0 || index >= start) &&
-                    (count == 0 || index < start + count) &&
-                    (!condition || condition->isValid(entryKey)))
+                if (entryTable == table && (!condition || condition->isValid(entryKey)))
                 {
-                    keys.emplace_back(entryKey);
+                    if ((start != 0 || count != 0) &&
+                        ((start == 0 || index >= start) && (count == 0 || index < start + count)))
+                    {
+                        keys.emplace_back(entryKey);
+                        ++index;
+                    }
+                    else
+                    {
+                        keys.emplace_back(entryKey);
+                    }
                 }
-                ++index;
             }
 
             callback(nullptr, keys | RANGES::to<std::vector>());
