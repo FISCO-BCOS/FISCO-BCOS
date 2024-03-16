@@ -291,14 +291,17 @@ public:
                         [](auto& input) -> task::Task<RangeValue> {
                             RangeValue item;
                             auto rangeValue = co_await input.next();
-                            auto&& [key, value] = *rangeValue;
-                            if constexpr (std::is_pointer_v<decltype(value)>)
+                            if (rangeValue)
                             {
-                                item.emplace(key, *value);
-                            }
-                            else
-                            {
-                                item = std::move(rangeValue);
+                                auto&& [key, value] = *rangeValue;
+                                if constexpr (std::is_pointer_v<decltype(value)>)
+                                {
+                                    item.emplace(key, *value);
+                                }
+                                else
+                                {
+                                    item = std::move(rangeValue);
+                                }
                             }
                             co_return item;
                         },
