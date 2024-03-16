@@ -34,6 +34,10 @@ public:
                        const decltype(_callback)& callback) -> task::Task<void> {
             std::vector<std::string> keys;
 
+            int index = 0;
+            int start = 0;
+            int count = 0;
+            std::tie(start, count) = condition->getLimit();
             auto range = co_await storage2::range(self->m_storage);
             while (auto keyValue = co_await range.next())
             {
@@ -42,16 +46,20 @@ public:
                 {
                     if (!value)
                     {
+                        ++index;
                         continue;
                     }
                 }
 
                 transaction_executor::StateKeyView stateKeyView(key);
                 auto [entryTable, entryKey] = stateKeyView.getTableAndKey();
-                if (entryTable == table && (!condition || condition->isValid(entryKey)))
+                if (entryTable == table && (start == 0 || index >= start) &&
+                    (count == 0 || index < start + count) &&
+                    (!condition || condition->isValid(entryKey)))
                 {
                     keys.emplace_back(entryKey);
                 }
+                ++index;
             }
 
             callback(nullptr, keys | RANGES::to<std::vector>());
