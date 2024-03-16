@@ -36,7 +36,6 @@ public:
         m_hashImpl(std::move(hashImpl)),
         m_precompiledManager(m_hashImpl)
     {}
-    constexpr static bool defaultRetryFlag = false;
 
 private:
     protocol::TransactionReceiptFactory const& m_receiptFactory;
