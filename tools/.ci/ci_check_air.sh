@@ -75,6 +75,9 @@ init()
     perl -p -i -e 's/baseline_scheduler=false/baseline_scheduler=true/g' nodes/127.0.0.1/node2/config.ini
     perl -p -i -e 's/baseline_scheduler=false/baseline_scheduler=true/g' nodes/127.0.0.1/node3/config.ini
 
+    perl -p -i -e 's/level=info/level=trace/g' nodes/127.0.0.1/node1/config.ini
+    perl -p -i -e 's/level=info/level=trace/g' nodes/127.0.0.1/node2/config.ini
+
     cd nodes/127.0.0.1 && wait_and_start
 }
 
