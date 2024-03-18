@@ -36,8 +36,8 @@ download_java_sdk()
         fi
     else
         rm -rf ${java_sdk_file}
-        git clone https://github.com/FISCO-BCOS/java-sdk.git
-        cd java-sdk
+        git clone https://github.com/FISCO-BCOS/java-sdk.git || exit 1
+        cd java-sdk || exit 1
         if [ -n "$(git branch -a | grep origin/${java_sdk_branch})" ]; then
             git checkout origin/${java_sdk_branch}
         else

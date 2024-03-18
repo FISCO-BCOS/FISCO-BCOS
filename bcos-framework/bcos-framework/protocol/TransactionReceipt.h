@@ -22,6 +22,7 @@
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <gsl/span>
+#include <ostream>
 #include <utility>
 
 namespace bcos::protocol
@@ -53,6 +54,8 @@ public:
     // calculation
     virtual std::string const& message() const = 0;
     virtual void setMessage(std::string message) = 0;
+
+    virtual std::string toString() const { return {}; }
 };
 using Receipts = std::vector<TransactionReceipt::Ptr>;
 using ReceiptsPtr = std::shared_ptr<Receipts>;

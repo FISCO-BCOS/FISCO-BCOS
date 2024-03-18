@@ -6,6 +6,7 @@
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
+#include "bcos-protocol/TransactionStatus.h"
 #include "bcos-task/Generator.h"
 #include "bcos-task/Trait.h"
 #include "bcos-transaction-executor/vm/VMFactory.h"
@@ -36,7 +37,6 @@ public:
         m_hashImpl(std::move(hashImpl)),
         m_precompiledManager(m_hashImpl)
     {}
-    constexpr static bool defaultRetryFlag = false;
 
 private:
     protocol::TransactionReceiptFactory const& m_receiptFactory;
@@ -73,6 +73,7 @@ private:
         protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
         int contextID, ledger::LedgerConfig const& ledgerConfig, auto&& waitOperator)
     {
+        int64_t gasLimit{};
         protocol::TransactionReceipt::Ptr receipt;
         try
         {
@@ -83,7 +84,7 @@ private:
             }
 
             Rollbackable<std::decay_t<decltype(storage)>> rollbackableStorage(storage);
-            auto gasLimit = static_cast<int64_t>(std::get<0>(ledgerConfig.gasLimit()));
+            gasLimit = static_cast<int64_t>(std::get<0>(ledgerConfig.gasLimit()));
             auto evmcMessage = newEVMCMessage(transaction, gasLimit);
 
             if (blockHeader.number() == 0 &&
@@ -123,18 +124,22 @@ private:
                 TRANSACTION_EXECUTOR_LOG(DEBUG) << "Transaction revert: " << evmcResult.status_code;
             }
 
+            int32_t receiptStatus =
+                evmcResult.status_code == EVMC_REVERT ?
+                    static_cast<int32_t>(protocol::TransactionStatus::RevertInstruction) :
+                    evmcResult.status_code;
             auto const& logEntries = hostContext.logs();
             switch (static_cast<bcos::protocol::TransactionVersion>(transaction.version()))
             {
             case bcos::protocol::TransactionVersion::V0_VERSION:
                 receipt = executor.m_receiptFactory.createReceipt(gasLimit - evmcResult.gas_left,
-                    newContractAddress, logEntries, evmcResult.status_code, output,
-                    blockHeader.number());
+                    newContractAddress, logEntries, receiptStatus, output, blockHeader.number());
                 break;
             case bcos::protocol::TransactionVersion::V1_VERSION:
+            case bcos::protocol::TransactionVersion::V2_VERSION:
                 receipt = executor.m_receiptFactory.createReceipt2(gasLimit - evmcResult.gas_left,
-                    newContractAddress, logEntries, evmcResult.status_code, output,
-                    blockHeader.number());
+                    newContractAddress, logEntries, receiptStatus, output, blockHeader.number(),
+                    "");
                 break;
             default:
                 BOOST_THROW_EXCEPTION(std::runtime_error(
@@ -163,9 +168,7 @@ private:
         if (c_fileLogLevel <= LogLevel::TRACE)
         {
             TRANSACTION_EXECUTOR_LOG(TRACE)
-                << "Execte transaction finished: " << receipt->version() << " | "
-                << receipt->status() << " | [" << receipt->message() << "] | "
-                << receipt->logEntries().size() << " | " << receipt->gasUsed();
+                << "Execte transaction finished: " << receipt->toString();
         }
 
         co_yield receipt;  // 完成第三步 Complete the third step
