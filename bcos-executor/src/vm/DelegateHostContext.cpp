@@ -12,8 +12,9 @@ DelegateHostContext::DelegateHostContext(CallParameters::UniquePtr callParameter
                             << getCallParameters()->toFullString();
         exit(1);
     }
-    setCode(getCallParameters()->delegateCallCode);
     m_codeHash = getCallParameters()->delegateCallCodeHash;
+    setCode(getCallParameters()->delegateCallCode);
+    
     m_delegateCallSender = getCallParameters()->delegateCallSender;
     m_thisAddress = getCallParameters()->receiveAddress;
 }
