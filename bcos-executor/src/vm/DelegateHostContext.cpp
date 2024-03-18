@@ -2,6 +2,8 @@
 #include "bcos-executor/src/Common.h"
 #include "bcos-table/src/LegacyStorageWrapper.h"
 #include "bcos-task/Wait.h"
+#include <boost/exception/diagnostic_information.hpp>
+#include <exception>
 #include <utility>
 using namespace bcos;
 using namespace bcos::executor;
@@ -17,6 +19,7 @@ DelegateHostContext::DelegateHostContext(CallParameters::UniquePtr callParameter
         exit(1);
     }
     setCode(getCallParameters()->delegateCallCode);
+    m_codeHash = getCallParameters()->delegateCallCodeHash;
     m_delegateCallSender = getCallParameters()->delegateCallSender;
     m_thisAddress = getCallParameters()->receiveAddress;
 }
@@ -31,20 +34,10 @@ bool DelegateHostContext::setCode(bytes code)
     storage::Entry codeEntry;
     codeEntry.importFields({code});
     m_code = codeEntry;
-
-    task::syncWait([&]() -> task::Task<void> {
-        auto codeHashEntry = co_await storage2::readOne(executive().storage().storage(),
-            transaction_executor::StateKeyView(getTableName(), ACCOUNT_CODE_HASH));
-        if (codeHashEntry)
-        {
-            auto view = codeHashEntry->get();
-            m_codeHash = h256((const uint8_t*)view.data(), view.size());
-        }
-        else
-        {
-            m_codeHash = hashImpl()->hash(code);
-        }
-    }());
+    if (m_codeHash == h256{})
+    {
+        m_codeHash = hashImpl()->hash(code);
+    }
 
     return true;
 }
