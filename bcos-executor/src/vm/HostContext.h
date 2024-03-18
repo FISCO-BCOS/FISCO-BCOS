@@ -97,7 +97,19 @@ public:
     int64_t blockNumber() const;
     uint32_t blockVersion() const;
     uint64_t timestamp() const;
-    int64_t blockGasLimit() const;
+    int64_t blockGasLimit() const
+    {
+        if (m_executive->blockContext().blockVersion() >=
+            (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+        {
+            // FISCO BCOS only has tx Gas limit. We use it as block gas limit
+            return m_executive->blockContext().txGasLimit();
+        }
+        else
+        {
+            return 3000000000;
+        }
+    }
 
     /// Revert any changes made (by any of the other calls).
     void log(h256s&& _topics, bytesConstRef _data);
@@ -109,7 +121,10 @@ public:
     std::string_view codeAddress() const { return m_callParameters->codeAddress; }
     std::string_view receiveAddress() const { return m_callParameters->receiveAddress; }
 
-    bytes_view data() const;
+    bytes_view data() const
+    {
+        return bytes_view(m_callParameters->data.data(), m_callParameters->data.size());
+    }
     virtual std::optional<storage::Entry> code();
     virtual h256 codeHash();
     u256 salt() const { return m_salt; }
@@ -119,30 +134,57 @@ public:
     int64_t gas() const { return m_callParameters->gas; }
     u256 gasPrice() const { return m_callParameters->gasPrice; }
     u256 value() const { return m_callParameters->value; }
-    void suicide();
+    void suicide()
+    {
+        m_executive->setContractTableChanged();
+        if (m_executive->blockContext().blockVersion() >=
+            (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+        {
+            auto& blockContext = const_cast<BlockContext&>(m_executive->blockContext());
+            blockContext.suicide(m_tableName);
+        }
+    }
 
     evmc_bytes32 getBalance(const evmc_address* _addr);
     bool selfdestruct(const evmc_address* _addr, const evmc_address* _beneficiary);
 
-    CallParameters::UniquePtr&& takeCallParameters();
+    CallParameters::UniquePtr&& takeCallParameters()
+    {
+        if (m_executive->blockContext().blockVersion() >=
+            (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+        {
+            for (const auto& response : m_responseStore)
+            {
+                m_callParameters->logEntries.insert(m_callParameters->logEntries.end(),
+                    std::make_move_iterator(response->logEntries.begin()),
+                    std::make_move_iterator(response->logEntries.end()));
+            }
+        }
+        return std::move(m_callParameters);
+    }
 
     static crypto::Hash::Ptr& hashImpl() { return GlobalHashImpl::g_hashImpl; }
 
     bool isWasm();
-    const std::shared_ptr<TransactionExecutive>& getTransactionExecutive() const;
+    const std::shared_ptr<TransactionExecutive>& getTransactionExecutive() const
+    {
+        return m_executive;
+    }
 
-    bcos::bytes codeAt(const std::string_view& address);
-    const bcos::ledger::Features& features() const;
+    bcos::bytes codeAt(const std::string_view& address) { return externalCodeRequest(address); }
+    const bcos::ledger::Features& features() const
+    {
+        return m_executive->blockContext().features();
+    }
 
-    std::string getContractTableName(const std::string_view& _address);
-
-    std::string_view getTableName() const;
+    std::string getContractTableName(const std::string_view& _address)
+    {
+        return m_executive->getContractTableName(_address, isWasm(), isCreate());
+    }
 
 protected:
     const CallParameters::UniquePtr& getCallParameters() const { return m_callParameters; }
     virtual bcos::bytes externalCodeRequest(const std::string_view& address);
-
-    TransactionExecutive& executive();
 
 private:
     void depositFungibleAsset(
