@@ -1,10 +1,4 @@
 #include "DelegateHostContext.h"
-#include "bcos-executor/src/Common.h"
-#include "bcos-table/src/LegacyStorageWrapper.h"
-#include "bcos-task/Wait.h"
-#include <boost/exception/diagnostic_information.hpp>
-#include <exception>
-#include <utility>
 using namespace bcos;
 using namespace bcos::executor;
 
