@@ -1,4 +1,5 @@
 #include "DelegateHostContext.h"
+#include "bcos-executor/src/Common.h"
 #include "bcos-table/src/LegacyStorageWrapper.h"
 #include "bcos-task/Wait.h"
 #include <utility>
@@ -33,7 +34,7 @@ bool DelegateHostContext::setCode(bytes code)
 
     task::syncWait([&]() -> task::Task<void> {
         auto codeHashEntry = co_await storage2::readOne(executive().storage().storage(),
-            transaction_executor::StateKeyView(getTableName(), "codeHash"));
+            transaction_executor::StateKeyView(getTableName(), ACCOUNT_CODE_HASH));
         if (codeHashEntry)
         {
             auto view = codeHashEntry->get();
