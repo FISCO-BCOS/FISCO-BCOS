@@ -232,8 +232,8 @@ LOG_INFO "======== clear node after sm test success ========"
 # baseline暂时不支持balance precompiled，故不测试java_sdk_demo_ci_test
 # baseline does not support balance precompiled temporarily, so java_sdk_demo_ci_test is not tested
 LOG_INFO "======== check baseline cases ========"
-init_baseline ""
-expand_node ""
+init_baseline "-s"
+expand_node "-s"
 bash ${current_path}/.ci/console_ci_test.sh ${console_branch} "true" "${current_path}/nodes/127.0.0.1"
 if [[ ${?} == "0" ]]; then
         LOG_INFO "console_integrationTest success"
