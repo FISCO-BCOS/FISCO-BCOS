@@ -232,7 +232,8 @@
     },
     {
       "name": "upb",
-      "version": "2021-10-19"
+      "version": "2022-06-21",
+      "port-version": 1
     },
     {
       "name": "tbb",
@@ -258,11 +259,12 @@
     },
     {
       "name": "grpc",
-      "version": "1.44.0"
+      "version": "1.51.1",
+      "port-version": 1
     },
     {
       "name": "abseil",
-      "version": "20211102.1"
+      "version": "20230802.1"
     },
     {
       "name": "intx",
