@@ -43,7 +43,7 @@ public:
         GetPrimaryKeysReponse value;
         m_storage->asyncGetPrimaryKeys(
             table, _condition, [&value](auto&& error, auto&& keys) mutable {
-                value = {std::move(error), std::move(keys)};
+                value = {std::forward<decltype(error)>(error), std::forward<decltype(keys)>(keys)};
             });
 
         // After coroutine switch, set the recoder
@@ -124,9 +124,11 @@ public:
             keys)
     {
         GetRowsResponse value;
-        m_storage->asyncGetRows(table, keys, [&value](auto&& error, auto&& entries) mutable {
-            value = {std::move(error), std::move(entries)};
-        });
+        m_storage->asyncGetRows(
+            table, std::move(keys), [&value](auto&& error, auto&& entries) mutable {
+                value = {
+                    std::forward<decltype(error)>(error), std::forward<decltype(entries)>(entries)};
+            });
 
 
         auto& [error, entries] = value;
@@ -144,8 +146,9 @@ public:
     {
         SetRowResponse value;
 
-        m_storage->asyncSetRow(table, key, std::move(entry),
-            [&value](auto&& error) mutable { value = std::tuple{std::move(error)}; });
+        m_storage->asyncSetRow(table, key, std::move(entry), [&value](auto&& error) mutable {
+            value = std::tuple{std::forward<decltype(error)>(error)};
+        });
 
         auto& [error] = value;
 
@@ -157,7 +160,7 @@ public:
 
     std::optional<storage::Table> createTable(std::string _tableName, std::string _valueFields)
     {
-        auto ret = createTableWithoutException(_tableName, _valueFields);
+        auto ret = createTableWithoutException(std::move(_tableName), std::move(_valueFields));
         if (std::get<0>(ret))
         {
             BOOST_THROW_EXCEPTION(*(std::get<0>(ret)));
@@ -172,7 +175,7 @@ public:
         std::promise<OpenTableResponse> createPromise;
         m_storage->asyncCreateTable(std::move(_tableName), std::move(_valueFields),
             [&](Error::UniquePtr&& error, auto&& table) mutable {
-                createPromise.set_value({std::move(error), std::move(table)});
+                createPromise.set_value({std::move(error), std::forward<decltype(table)>(table)});
             });
         auto value = createPromise.get_future().get();
         return value;
@@ -181,7 +184,7 @@ public:
     std::optional<storage::Table> openTable(std::string_view tableName)
     {
         auto it = m_tableCache.find(std::string(tableName));
-        if ( it != m_tableCache.end())
+        if (it != m_tableCache.end())
         {
             return it->second;
         }
@@ -209,7 +212,8 @@ public:
     {
         std::promise<OpenTableResponse> openPromise;
         m_storage->asyncOpenTable(tableName, [&](auto&& error, auto&& table) mutable {
-            openPromise.set_value({std::move(error), std::move(table)});
+            openPromise.set_value(
+                {std::forward<decltype(error)>(error), std::forward<decltype(table)>(table)});
         });
         auto value = openPromise.get_future().get();
         return value;
@@ -217,8 +221,9 @@ public:
 
     void setRecoder(storage::Recoder::Ptr recoder) { m_storage->setRecoder(std::move(recoder)); }
 
-    void setCodeCache(EntryCachePtr cache) { m_codeCache = cache; }
-    void setCodeHashCache(EntryCachePtr cache) { m_codeHashCache = cache; }
+    void setCodeCache(EntryCachePtr cache) { m_codeCache = std::move(cache); }
+    void setCodeHashCache(EntryCachePtr cache) { m_codeHashCache = std::move(cache); }
+    auto& storage() { return *m_storage; }
 
 private:
     storage::StateStorageInterface::Ptr m_storage;
