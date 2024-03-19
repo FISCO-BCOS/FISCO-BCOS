@@ -157,7 +157,7 @@ public:
     bool setCode(std::string_view contractTableName,
         std::variant<std::string_view, std::string, bcos::bytes> code);
     void setAbiByCodeHash(std::string_view codeHash, std::string_view abi);
-    std::optional<storage::Entry> getCodeByContractTableName(
+    std::tuple<h256, std::optional<storage::Entry>> getCodeByContractTableName(
         const std::string_view& contractTableName, bool needTryFromContractTable = true);
 
     CallParameters::UniquePtr transferBalance(CallParameters::UniquePtr callParameters,
