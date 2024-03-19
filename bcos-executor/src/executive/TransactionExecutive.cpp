@@ -129,9 +129,11 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
 
         bool needTryFromContractTable = m_blockContext.lock()->features().get(
             ledger::Features::Flag::bugfix_call_noaddr_return);
-        auto codeEntry = getCodeByContractTableName(tableName, needTryFromContractTable);
+        auto [codeHash, codeEntry] =
+            getCodeByContractTableName(tableName, needTryFromContractTable);
         if (codeEntry && codeEntry.has_value() && !codeEntry->get().empty())
         {
+            input->delegateCallCodeHash = codeHash;
             input->delegateCallCode = toBytes(codeEntry->get());
         }
         else
@@ -170,7 +172,8 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
 
         bool needTryFromContractTable = m_blockContext.lock()->features().get(
             ledger::Features::Flag::bugfix_call_noaddr_return);
-        auto codeEntry = getCodeByContractTableName(tableName, needTryFromContractTable);
+        auto [codeHash, codeEntry] =
+            getCodeByContractTableName(tableName, needTryFromContractTable);
         if (codeEntry && codeEntry.has_value() && !codeEntry->get().empty())
         {
             output->data = toBytes(codeEntry->get());
@@ -268,30 +271,24 @@ std::optional<storage::Entry> TransactionExecutive::getCodeByHash(const std::str
     {
         return entry;
     }
-    else
-    {
-        return {};
-    }
+    return {};
 }
 
-std::optional<storage::Entry> TransactionExecutive::getCodeByContractTableName(
+std::tuple<h256, std::optional<storage::Entry>> TransactionExecutive::getCodeByContractTableName(
     const std::string_view& contractTableName, bool tryFromContractTable)
 {
     auto hash = getCodeHash(contractTableName);
     auto entry = getCodeByHash(std::string_view((char*)hash.data(), hash.size()));
     if (entry && entry.has_value() && !entry->get().empty())
     {
-        return entry;
+        return {hash, std::move(entry)};
     }
 
     if (tryFromContractTable)
     {
-        return getCodeEntryFromContractTable(contractTableName);
+        return {hash, getCodeEntryFromContractTable(contractTableName)};
     }
-    else
-    {
-        return {};
-    }
+    return {};
 }
 
 

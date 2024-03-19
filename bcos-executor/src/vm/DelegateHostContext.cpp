@@ -4,7 +4,7 @@ using namespace bcos::executor;
 
 DelegateHostContext::DelegateHostContext(CallParameters::UniquePtr callParameters,
     std::shared_ptr<TransactionExecutive> executive, std::string tableName)
-  : HostContext(std::move(callParameters), executive, tableName)
+  : HostContext(std::move(callParameters), std::move(executive), std::move(tableName))
 {
     if (!getCallParameters()->delegateCall)
     {
@@ -12,7 +12,9 @@ DelegateHostContext::DelegateHostContext(CallParameters::UniquePtr callParameter
                             << getCallParameters()->toFullString();
         exit(1);
     }
+    m_codeHash = getCallParameters()->delegateCallCodeHash;
     setCode(getCallParameters()->delegateCallCode);
+    
     m_delegateCallSender = getCallParameters()->delegateCallSender;
     m_thisAddress = getCallParameters()->receiveAddress;
 }
@@ -27,7 +29,11 @@ bool DelegateHostContext::setCode(bytes code)
     storage::Entry codeEntry;
     codeEntry.importFields({code});
     m_code = codeEntry;
-    m_codeHash = hashImpl()->hash(code);
+    if (m_codeHash == h256{})
+    {
+        m_codeHash = hashImpl()->hash(code);
+    }
+
     return true;
 }
 
@@ -38,7 +44,8 @@ h256 DelegateHostContext::codeHash()
 
 std::string_view DelegateHostContext::myAddress() const
 {
-    if (this->features().get(ledger::Features::Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy))
+    if (this->features().get(
+            ledger::Features::Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy))
     {
         return m_thisAddress;
     }

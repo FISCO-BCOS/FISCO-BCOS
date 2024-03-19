@@ -66,6 +66,7 @@ struct CallParameters
     // delegateCall
     bool delegateCall = false;
     bytes delegateCallCode;
+    h256 delegateCallCodeHash;
     std::string delegateCallSender;
 
     std::string toString()
