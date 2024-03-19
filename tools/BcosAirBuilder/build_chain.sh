@@ -2622,7 +2622,7 @@ install_python_package(){
         # package not exit,install now
         while IFS= read -r package; do
             if ! python3 -c "import $package" >/dev/null 2>&1; then
-                pip3 install $package >/dev/null 2>&1
+                LOG_INFO "python package ${package} not install, please install it, eg: sudo pip3 install ${package}"
             fi
         done < "${BcosBuilder_path}/requirements.txt"
     fi
