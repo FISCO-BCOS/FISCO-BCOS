@@ -139,8 +139,7 @@ const std::set<std::string_view, std::less<>> c_systemTxsAddress = {
     bcos::precompiled::CONSENSUS_TABLE_NAME, bcos::precompiled::AUTH_COMMITTEE_ADDRESS,
     bcos::precompiled::AUTH_MANAGER_ADDRESS, bcos::precompiled::ACCOUNT_ADDRESS,
     bcos::precompiled::ACCOUNT_MGR_ADDRESS, bcos::precompiled::ACCOUNT_MANAGER_NAME,
-    bcos::precompiled::SHARDING_PRECOMPILED_ADDRESS,
-    bcos::precompiled::BALANCE_PRECOMPILED_ADDRESS};
+    bcos::precompiled::SHARDING_PRECOMPILED_ADDRESS};
 
 /// for testing
 // CpuHeavy test: 0x5200 ~ (0x5200 + 128)
