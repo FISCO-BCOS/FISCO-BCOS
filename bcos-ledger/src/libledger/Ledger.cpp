@@ -125,12 +125,12 @@ void Ledger::asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr _blockTx
 
 void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
-    std::function<void(Error::Ptr&&)> callback,
+    std::function<void(std::string, Error::Ptr&&)> callback,
     bool writeTxsAndReceipts)  // Unused flag writeTxsAndReceipts
 {
     if (!block)
     {
-        callback(
+        callback("",
             BCOS_ERROR_PTR(LedgerError::ErrorArgument, "asyncPrewriteBlock failed, empty block"));
         return;
     }
@@ -149,7 +149,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
                                       << LOG_KV("msg", error->errorMessage())
                                       << LOG_KV("code", error->errorCode());
                 }
-                callback(std::forward<decltype(error)>(error));
+                callback("", std::forward<decltype(error)>(error));
             });
         return;
     }
@@ -163,9 +163,11 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     {  // 9 storage callbacks and write hash=>tx
         TOTAL_CALLBACK = 9;
     }
+    auto primiaryKey = bcos::storage::toDBKey(
+        SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(header->hash()));
     auto setRowCallback = [total = std::make_shared<std::atomic<size_t>>(TOTAL_CALLBACK),
                               failed = std::make_shared<bool>(false),
-                              callback = std::move(callback)](
+                              callback = std::move(callback), primiaryKey = std::move(primiaryKey)](
                               Error::UniquePtr&& error, size_t count = 1) {
         *total -= count;
         if (error)
@@ -180,12 +182,12 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
             if (*failed)
             {
                 LEDGER_LOG(ERROR) << "PrewriteBlock error";
-                callback(
+                callback("",
                     BCOS_ERROR_PTR(LedgerError::CollectAsyncCallbackError, "PrewriteBlock error"));
                 return;
             }
 
-            callback(nullptr);
+            callback(primiaryKey, nullptr);
         }
     };
 
@@ -1862,9 +1864,10 @@ bool Ledger::buildGenesisBlock(
     block->setBlockHeader(header);
 
     std::promise<Error::Ptr> genesisBlockPromise;
-    asyncPrewriteBlock(m_storage, nullptr, block, [&genesisBlockPromise](Error::Ptr&& error) {
-        genesisBlockPromise.set_value(std::move(error));
-    });
+    asyncPrewriteBlock(
+        m_storage, nullptr, block, [&genesisBlockPromise](std::string, Error::Ptr&& error) {
+            genesisBlockPromise.set_value(std::move(error));
+        });
 
     auto error = genesisBlockPromise.get_future().get();
     if (error)
