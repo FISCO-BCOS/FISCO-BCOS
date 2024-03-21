@@ -118,10 +118,7 @@ public:
     virtual std::optional<Coroutine::push_type>& getPushMessage() { return m_pushMessage; }
     virtual CallParameters::UniquePtr& getExchangeMessageRef() { return m_exchangeMessage; }
 
-    virtual std::shared_ptr<SyncStorageWrapper> getSyncStorageWrapper()
-    {
-        return m_syncStorageWrapper;
-    }
+    std::shared_ptr<SyncStorageWrapper> getSyncStorageWrapper() { return m_syncStorageWrapper; }
 
 protected:
     CallParameters::UniquePtr m_exchangeMessage = nullptr;

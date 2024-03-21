@@ -34,7 +34,7 @@ public:
     SyncStorageWrapper& operator=(SyncStorageWrapper&&) = delete;
 
 
-    std::optional<storage::Entry> getRow(
+    virtual std::optional<storage::Entry> getRow(
         const std::string_view& table, const std::string_view& _key) override
     {
         acquireKeyLock(_key);
@@ -42,7 +42,7 @@ public:
         return StorageWrapper::getRow(table, _key);
     }
 
-    std::vector<std::optional<storage::Entry>> getRows(const std::string_view& table,
+    virtual std::vector<std::optional<storage::Entry>> getRows(const std::string_view& table,
         RANGES::any_view<std::string_view,
             RANGES::category::input | RANGES::category::random_access | RANGES::category::sized>
             keys) override
@@ -55,7 +55,7 @@ public:
         return StorageWrapper::getRows(table, keys);
     }
 
-    void setRow(
+    virtual void setRow(
         const std::string_view& table, const std::string_view& key, storage::Entry entry) override
     {
         acquireKeyLock(key);
@@ -63,7 +63,7 @@ public:
         StorageWrapper::setRow(table, key, std::move(entry));
     }
 
-    void importExistsKeyLocks(gsl::span<std::string> keyLocks)
+    virtual void importExistsKeyLocks(gsl::span<std::string> keyLocks)
     {
         m_existsKeyLocks.clear();
 
@@ -73,7 +73,7 @@ public:
         }
     }
 
-    std::vector<std::string> exportKeyLocks()
+    virtual std::vector<std::string> exportKeyLocks()
     {
         std::vector<std::string> keyLocks;
         keyLocks.reserve(m_myKeyLocks.size());
@@ -85,6 +85,11 @@ public:
         m_myKeyLocks.clear();
 
         return keyLocks;
+    }
+
+    std::function<void(std::string)> takeExternalAcquireKeyLocks()
+    {
+        return std::move(m_externalAcquireKeyLocks);
     }
 
 private:
