@@ -23,7 +23,7 @@ set(ENV{PROTOC} ${OPENSSL_INCLUDE_DIR}/../tools/protobuf/protoc)
 ExternalProject_Add(tikv_client_cpp
   PREFIX ${CMAKE_SOURCE_DIR}/deps
   GIT_REPOSITORY https://${URL_BASE}/FISCO-BCOS/tikv-client-cpp.git
-  GIT_TAG        0d2368b8667b4b78ea2325ab0b09974da457ec1f
+  GIT_TAG        4cfdf8e22cbd0be5c665aa5b08e2e4a296a65903
 
   BUILD_IN_SOURCE true
 #   PATCH_COMMAND ${CARGO_COMMAND} install cxxbridge-cmd@1.0.75

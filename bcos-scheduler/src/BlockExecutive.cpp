@@ -445,7 +445,8 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
 
     m_scheduler->m_ledger->asyncPrewriteBlock(
         stateStorage, m_blockTxs, m_block,
-        [this, stateStorage, callback = std::move(callback)](Error::Ptr&& error) mutable {
+        [this, stateStorage, callback = std::move(callback)](
+            std::string primiaryKey, Error::Ptr&& error) mutable {
             if (error)
             {
                 SCHEDULER_LOG(ERROR) << "Prewrite block error!" << error->errorMessage();
@@ -534,7 +535,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
 
             bcos::protocol::TwoPCParams params;
             params.number = number();
-            params.primaryKey = "";
+            params.primaryKey = std::move(primiaryKey);
             m_scheduler->m_storage->asyncPrepare(params, *stateStorage,
                 [status, this, callback](
                     Error::Ptr&& error, uint64_t startTimeStamp, const std::string& primaryKey) {
