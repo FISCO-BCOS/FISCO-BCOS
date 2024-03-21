@@ -15,7 +15,6 @@
 #include <boost/throw_exception.hpp>
 #include <type_traits>
 #include <utility>
-#include <variant>
 
 namespace bcos::storage2::memory_storage
 {
@@ -26,9 +25,6 @@ concept HasMemberSize = requires(Object object) { { object.size() } -> std::inte
 // clang-format on
 
 struct Empty
-{
-};
-struct Deleted
 {
 };
 
@@ -62,7 +58,7 @@ private:
         utilities::NullLock>;
     using BucketMutex = std::conditional_t<withConcurrent, Mutex, Empty>;
     using DataValueType =
-        std::conditional_t<withLogicalDeletion, std::variant<Deleted, ValueType>, ValueType>;
+        std::conditional_t<withLogicalDeletion, std::optional<ValueType>, ValueType>;
     struct Data
     {
         KeyType key;
@@ -186,21 +182,7 @@ public:
             auto it = index.find(key);
             if (it != index.end())
             {
-                if constexpr (std::decay_t<decltype(storage)>::withLogicalDeletion)
-                {
-                    std::visit(bcos::overloaded{[&](ValueType const& value) {
-                                                    result.value().emplace_back(
-                                                        std::make_optional(value));
-                                                },
-                                   [&](Deleted const&) {
-                                       result.value().emplace_back(std::optional<ValueType>{});
-                                   }},
-                        it->value);
-                }
-                else
-                {
-                    result.value().emplace_back(it->value);
-                }
+                result.value().emplace_back(it->value);
 
                 if constexpr (std::decay_t<decltype(storage)>::withMRU)
                 {
@@ -233,17 +215,7 @@ public:
                 storage.updateMRUAndCheck(bucket, it);
             }
 
-            if constexpr (std::decay_t<decltype(storage)>::withLogicalDeletion)
-            {
-                std::visit(
-                    bcos::overloaded{[&](ValueType const& value) { result.value().emplace(value); },
-                        [&](Deleted const&) {}},
-                    it->value);
-            }
-            else
-            {
-                result.value().emplace(it->value);
-            }
+            result.value() = it->value;
         }
         return result;
     }
@@ -330,7 +302,7 @@ public:
                 auto& existsValue = it->value;
                 if constexpr (std::decay_t<decltype(storage)>::withLogicalDeletion)
                 {
-                    if (std::holds_alternative<Deleted>(existsValue))
+                    if (!existsValue)
                     {
                         // Already deleted
                         return {};
@@ -346,9 +318,7 @@ public:
                 {
                     if (!direct)
                     {
-                        bucket.container.modify(it, [](Data& data) mutable {
-                            data.value.template emplace<Deleted>(Deleted{});
-                        });
+                        bucket.container.modify(it, [](Data& data) mutable { data.value.reset(); });
                     }
                     else
                     {
@@ -364,7 +334,7 @@ public:
             {
                 if constexpr (std::decay_t<decltype(storage)>::withLogicalDeletion)
                 {
-                    it = bucket.container.emplace_hint(it, Data{.key = key, .value = Deleted{}});
+                    it = bucket.container.emplace_hint(it, Data{.key = key, .value = {}});
                 }
             }
         }
@@ -448,9 +418,7 @@ public:
                 {
                     auto const& data = *m_begin;
                     result.emplace(std::make_tuple(
-                        std::cref(data.key), std::holds_alternative<Deleted>(data.value) ?
-                                                 nullptr :
-                                                 std::addressof(std::get<Value>(data.value))));
+                        std::cref(data.key), data.value ? nullptr : std::addressof(*(data.value))));
                     ++m_begin;
                 }
                 return task::AwaitableValue(std::move(result));
