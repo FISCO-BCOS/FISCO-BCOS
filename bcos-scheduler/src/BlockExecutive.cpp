@@ -578,7 +578,8 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                                     ++status->failed;
                                     SCHEDULER_LOG(ERROR)
                                         << BLOCK_NUMBER(number())
-                                        << "asyncPrepare executor failed: " << error->what();
+                                        << "asyncPrepare executor failed: "
+                                        << LOG_KV("code", error->errorCode()) << error->what();
 
                                     if (error->errorCode() ==
                                         bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
