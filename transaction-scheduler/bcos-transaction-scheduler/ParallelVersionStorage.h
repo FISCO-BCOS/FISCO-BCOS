@@ -97,14 +97,11 @@ private:
         auto& bucket = storage.getBucket(key);
         Lock lock(bucket.mutex, false);
 
-        auto const& index = bucket.container.template get<0>();
+        auto const& index = bucket.container;
         auto it = index.find(key);
         if (it != index.end())
         {
-            std::visit(
-                bcos::overloaded{[&](ValueType const& value) { result.value().emplace(value); },
-                    [&](Deleted const&) {}},
-                it->value);
+            result.value() = it->second;
         }
         return result;
     }
@@ -117,12 +114,12 @@ private:
         {
             auto& bucket = storage.getBucket(key);
             Lock lock(bucket.mutex, true);
-            auto const& index = bucket.container.template get<0>();
+            auto const& index = bucket.container;
 
             auto it = index.lower_bound(key);
-            if (it != index.end() && std::equal_to<Key>{}(it->key, key))
+            if (it != index.end() && std::equal_to<Key>{}(it->first, key))
             {
-                it->value = std::forward<decltype(value)>(value);
+                it->second = std::forward<decltype(value)>(value);
             }
             else
             {
@@ -141,26 +138,25 @@ private:
         {
             auto& bucket = storage.getBucket(key);
             Lock lock(bucket.mutex, true);
-            auto const& index = bucket.container.template get<0>();
+            auto const& index = bucket.container;
 
             auto it = index.find(key);
             if (it != index.end())
             {
-                auto& existsValue = it->value;
-                if (std::holds_alternative<Deleted>(existsValue))
-                {
-                    // Already deleted
-                    return {};
-                }
-
-                bucket.container.modify(it,
-                    [](Data& data) mutable { data.value.template emplace<Deleted>(Deleted{}); });
-            }
-            else
-            {
+                auto& existsValue = it->second;
                 if constexpr (std::decay_t<decltype(storage)>::withLogicalDeletion)
                 {
-                    it = bucket.container.emplace_hint(it, Data{.key = key, .value = Deleted{}});
+                    if (!existsValue)
+                    {
+                        // Already deleted
+                        return {};
+                    }
+
+                    existsValue.reset();
+                }
+                else
+                {
+                    index.erase(it);
                 }
             }
         }
