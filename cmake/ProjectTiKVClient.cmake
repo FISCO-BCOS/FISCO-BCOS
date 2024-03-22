@@ -7,10 +7,15 @@ else()
     set(TIKV_BUILD_MODE "release")
 endif()
 
+if (NOT CMAKE_AR)
+    set(CMAKE_AR ar)
+endif()
+
 if (APPLE)
-    set(CUSTOM_INSTALL_COMMAND "")
+    set(CUSTOM_INSTALL_COMMAND ${CMAKE_AR} -dv <SOURCE_DIR>/${TIKV_BUILD_MODE}/libtikvrust.a slice_buffer.cc.o  time_util.cc.o memory_quota.cc.o ev_posix.cc.o subchannel.cc.o parse_address.cc.o call_combiner.cc.o completion_queue.cc.o server.cc.o channel.cc.o channel_create.cc.o channel_create_posix.cc.o secure_channel_create.cc.o slice.cc.o socket_utils_common_posix.cc.o transport.cc.o hpack_encoder.cc.o pollset.cc.o handshaker.cc.o table.c.o executor.cc.o timer.cc.o iomgr_internal.cc.o tcp_posix.cc.o server_chttp2_posix.cc.o tcp_client_posix.cc.o chttp2_server.cc.o chttp2_transport.cc.o chttp2_connector.cc.o server_chttp2.cc.o server_secure_chttp2.cc.o )
+
 else()
-    set(CUSTOM_INSTALL_COMMAND "${CMAKE_AR} d <SOURCE_DIR>/target/${TIKV_BUILD_MODE}/libtikv_client.a error.cc.o error_utils.cc.o memory_quota.cc.o parse_address.cc.o symbolize.cc.o tcp_client_posix.cc.o tcp_posix.cc.o unix_sockets_posix.cc.o uri_parser.cc.o")
+    set(CUSTOM_INSTALL_COMMAND ${CMAKE_AR} d <SOURCE_DIR>/${TIKV_BUILD_MODE}/libtikvrust.a slice_buffer.cc.o resolver_registry.cc.o memory_quota.cc.o ev_posix.cc.o subchannel.cc.o call_combiner.cc.o error.cc.o error_utils.cc.o parse_address.cc.o symbolize.cc.o tcp_client_posix.cc.o tcp_posix.cc.o unix_sockets_posix.cc.o uri_parser.cc.o)
 endif()
 find_program(CARGO_COMMAND NAMES cargo REQUIRED PATHS "${USER_HOME}\\.cargo\\bin")
 find_package(OpenSSL REQUIRED)
@@ -22,14 +27,17 @@ set(ENV{PROTOC} ${OPENSSL_INCLUDE_DIR}/../tools/protobuf/protoc)
 
 ExternalProject_Add(tikv_client_cpp
   PREFIX ${CMAKE_SOURCE_DIR}/deps
-  GIT_REPOSITORY https://${URL_BASE}/FISCO-BCOS/tikv-client-cpp.git
-  GIT_TAG        677de47e9ea1d5786c3ad5712a20fda2770847d7
+  # GIT_REPOSITORY https://${URL_BASE}/FISCO-BCOS/tikv-client-cpp.git
+  GIT_REPOSITORY https://${URL_BASE}/bxq2011hust/tikv-client-cpp.git
+  GIT_TAG        179fa623cd48013ce342eba8de7022ba46eefbf3
+
 
   BUILD_IN_SOURCE true
 #   PATCH_COMMAND ${CARGO_COMMAND} install cxxbridge-cmd@1.0.75
 #   BUILD_COMMAND ${CARGO_COMMAND} build && ${CARGO_COMMAND} build --release && make target/${TIKV_BUILD_MODE}/libtikv_client.a
 #   BUILD_COMMAND cmake -S . -B . && cmake --build .
   CMAKE_ARGS -DPROTOC=${OPENSSL_INCLUDE_DIR}/../tools/protobuf/protoc -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DOPENSSL_DIR=${OPENSSL_INCLUDE_DIR}/../
+  # INSTALL_COMMAND "${CUSTOM_INSTALL_COMMAND}"
   INSTALL_COMMAND ""
   BUILD_BYPRODUCTS <SOURCE_DIR>/libtikvcpp.a <SOURCE_DIR>/${TIKV_BUILD_MODE}/libtikvrust.a
   LOG_BUILD true
