@@ -273,7 +273,7 @@ bool ABIFunc::parser(const std::string& _sig)
 
     // set function name
     this->strFuncName = strFuncName;
-    // set function sigature
+    // set function signature
     this->strFuncSignature = sig;
 
     return true;
