@@ -156,7 +156,8 @@ public:
         });
         for (const auto& upgradeFeatures : upgradeRoadmap)
         {
-            if (from < upgradeFeatures.to && to >= upgradeFeatures.to)
+            if (((to < protocol::BlockVersion::V3_2_7_VERSION) && (to >= upgradeFeatures.to)) ||
+                (from < upgradeFeatures.to && to >= upgradeFeatures.to))
             {
                 for (auto flag : upgradeFeatures.flags)
                 {
@@ -225,8 +226,8 @@ public:
     {
         for (auto [flag, name, value] : flags())
         {
-            if (value && !(!ignoreDuplicate &&
-                             !co_await storage2::existsOne(storage,
+            if (value && !(ignoreDuplicate &&
+                             co_await storage2::existsOne(storage,
                                  transaction_executor::StateKeyView(ledger::SYS_CONFIG, name))))
             {
                 storage::Entry entry;

@@ -397,7 +397,7 @@ void SystemConfigPrecompiled::upgradeChain(
     }
 
     task::syncWait(bugfixFeatures.writeToStorage(*_executive->blockContext().storage(), 0,
-        toVersionNum <= protocol::BlockVersion::V3_2_7_VERSION));
+        toVersionNum > protocol::BlockVersion::V3_2_7_VERSION));
 
     // From 3.3 / 3.4 or to 3.3 / 3.4, enable the feature_sharding
     if ((version >= BlockVersion::V3_3_VERSION && version <= BlockVersion::V3_4_VERSION) ||
