@@ -220,12 +220,14 @@ public:
         }
     }
 
-    task::Task<void> writeToStorage(auto& storage, long blockNumber) const
+    task::Task<void> writeToStorage(
+        auto& storage, long blockNumber, bool ignoreDuplicate = true) const
     {
         for (auto [flag, name, value] : flags())
         {
-            if (value && !co_await storage2::existsOne(
-                             storage, transaction_executor::StateKeyView(ledger::SYS_CONFIG, name)))
+            if (value && !(!ignoreDuplicate &&
+                             !co_await storage2::existsOne(storage,
+                                 transaction_executor::StateKeyView(ledger::SYS_CONFIG, name))))
             {
                 storage::Entry entry;
                 entry.setObject(
