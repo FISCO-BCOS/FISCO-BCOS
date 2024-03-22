@@ -32,6 +32,7 @@
 #include <bcos-rpc/RpcFactory.h>
 #include <bcos-rpc/event/EventSubMatcher.h>
 #include <bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h>
+#include <bcos-rpc/jsonrpc/Web3JsonRpcImpl.h>
 #include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Exceptions.h>
@@ -335,6 +336,9 @@ bcos::boostssl::ws::WsService::Ptr RpcFactory::buildWsService(
 bcos::rpc::JsonRpcImpl_2_0::Ptr RpcFactory::buildJsonRpc(int sendTxTimeout,
     const std::shared_ptr<boostssl::ws::WsService>& _wsService, GroupManager::Ptr _groupManager)
 {
+    // auto web3Rpc = std::make_shared<bcos::rpc::Web3JsonRpcImpl>(_groupManager, m_gateway,
+    // _wsService);
+
     // JsonRpcImpl_2_0
     //*
     auto jsonRpcInterface =

@@ -153,7 +153,7 @@ protected:
         }
     }
 
-private:
+protected:
     void gatewayInfoToJson(Json::Value& _response, bcos::gateway::GatewayInfo::Ptr _gatewayInfo);
     void gatewayInfoToJson(Json::Value& _response, bcos::gateway::GatewayInfo::Ptr _localP2pInfo,
         bcos::gateway::GatewayInfosPtr _peersInfo);

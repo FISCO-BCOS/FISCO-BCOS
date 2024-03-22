@@ -33,6 +33,7 @@ namespace bcos::rpc
 {
 using Sender = std::function<void(bcos::bytes)>;
 using RespFunc = std::function<void(bcos::Error::Ptr, Json::Value&)>;
+using MethodMap = std::unordered_map<std::string, std::function<void(Json::Value, RespFunc)>>;
 
 class JsonRpcInterface
 {
@@ -122,7 +123,7 @@ public:
 public:
     void onRPCRequest(std::string_view _requestBody, Sender _sender);
 
-private:
+protected:
     void initMethod();
 
     std::unordered_map<std::string, std::function<void(Json::Value, RespFunc)>> m_methodToFunc;
