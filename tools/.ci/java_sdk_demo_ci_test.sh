@@ -122,6 +122,37 @@ config_console()
     LOG_INFO "Build and Config console success ..."
 }
 
+config_java_sdk_demo()
+{
+    cd "${current_path}/java-sdk-demo/"
+    local use_sm="${1}"
+    local node_path="${2}"
+    local sed_cmd="sed -i"
+    if [ "$(uname)" == "Darwin" ];then
+        sed_cmd="sed -i .bkp"
+    fi
+
+    rm -rf dist
+    bash gradlew ass
+
+    cp -r ${node_path}/sdk/* ./dist/conf/
+    cp ./dist/conf/config-example.toml ./dist/conf/config.toml
+    ${sed_cmd} "s/peers=\[\"127.0.0.1:20200\", \"127.0.0.1:20201\"\]/peers=\[\"127.0.0.1:20201\"\]/g" ./dist/conf/config.toml
+    ${sed_cmd} "s/messageTimeout = \"10000\"/messageTimeout = \"10000000\"/g" ./dist/conf/config.toml
+
+    # config admin
+    [ -d ${node_path}/../ca/accounts ] && echo "copy account" && mkdir -p ./dist/account/ecdsa/ && cp -r ${node_path}/../ca/accounts/* ./dist/account/ecdsa/
+    [ -d ${node_path}/../ca/accounts_gm ] && echo "copy account_gm" && mkdir -p ./dist/account/gm/ && cp -r ${node_path}/../ca/accounts_gm/* ./dist/account/gm/
+
+    local not_use_sm="true"
+    if [ "${use_sm}" == "true" ]; then
+        not_use_sm="false"
+    fi
+    use_sm_str="useSMCrypto = \"${use_sm}\""
+    ${sed_cmd} "s/useSMCrypto = \"${not_use_sm}\"/${use_sm_str}/g" ./dist/conf/config.toml
+    LOG_INFO "Build and Config java-sdk-demo success ..."
+}
+
 check_all_contract() {
 
     local test_contract_address=$(bash console.sh deploy ContractTestAll |grep "contract address" |awk '{print $3}')
@@ -145,6 +176,18 @@ check_all_contract() {
         bash console.sh call ContractTestAll ${test_contract_address} check
         exit 1
     fi
+}
+
+check_all_dmc_transfer()
+{
+    cd "${current_path}/java-sdk-demo/dist/"
+
+    java -cp 'conf/:lib/*:apps/*' org.fisco.bcos.sdk.demo.perf.DMCTransferDag group0 4 50 10 true
+    java -cp 'conf/:lib/*:apps/*' org.fisco.bcos.sdk.demo.perf.DMCTransferDag group0 4 50 10 false
+    java -cp 'conf/:lib/*:apps/*' org.fisco.bcos.sdk.demo.perf.DMCTransferMyself group0 3 50 10 true
+    java -cp 'conf/:lib/*:apps/*' org.fisco.bcos.sdk.demo.perf.DMCTransferMyself group0 3 50 10 false
+    java -cp 'conf/:lib/*:apps/*' org.fisco.bcos.sdk.demo.perf.DMCTransferStar group0 5 50 10 true
+    java -cp 'conf/:lib/*:apps/*' org.fisco.bcos.sdk.demo.perf.DMCTransferStar group0 5 50 10 false
 }
 
 contract_test()
@@ -186,4 +229,6 @@ console_branch="${1}"
 download_java_sdk_demo
 download_console
 config_console "${2}" "${3}"
+config_java_sdk_demo "${2}" "${3}"
 contract_test
+check_all_dmc_transfer
