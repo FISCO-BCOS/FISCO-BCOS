@@ -166,6 +166,8 @@ public:
     std::string getContractTableName(
         const std::string_view& _address, bool isWasm = false, bool isCreate = false);
 
+    std::shared_ptr<storage::Recoder> getRecoder() { return m_recoder; }
+
 protected:
     std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> call(
         CallParameters::UniquePtr callParameters);

@@ -73,8 +73,8 @@ bool GraphKeyLocks::acquireKeyLock(
     KEY_LOCK_LOG(TRACE) << " [" << std::string(contract) << ":" << toHex(key) << "]  -> "
                         << contextID << " | " << seq;
 
-    SCHEDULER_LOG(TRACE) << "Acquire key lock success, contract: " << contract << " key: " << key
-                         << " contextID: " << contextID << " seq: " << seq;
+    SCHEDULER_LOG(TRACE) << "Acquire key lock success, contract: " << std::string(contract)
+                         << " key: " << key << " contextID: " << contextID << " seq: " << seq;
 
     return true;
 }
