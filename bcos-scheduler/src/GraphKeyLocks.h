@@ -35,14 +35,15 @@ public:
     GraphKeyLocks(GraphKeyLocks&&) = delete;
     GraphKeyLocks& operator=(const GraphKeyLocks&) = delete;
     GraphKeyLocks& operator=(GraphKeyLocks&&) = delete;
+    virtual ~GraphKeyLocks() = default;
 
     bool batchAcquireKeyLock(std::string_view contract, gsl::span<std::string const> keyLocks,
         ContextID contextID, Seq seq);
 
-    bool acquireKeyLock(
+    virtual bool acquireKeyLock(
         std::string_view contract, std::string_view key, ContextID contextID, Seq seq);
 
-    std::vector<std::string> getKeyLocksNotHoldingByContext(
+    virtual std::vector<std::string> getKeyLocksNotHoldingByContext(
         std::string_view contract, ContextID excludeContextID) const;
 
     void releaseKeyLocks(ContextID contextID, Seq seq);

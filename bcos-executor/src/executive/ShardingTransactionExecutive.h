@@ -72,21 +72,7 @@ public:
     ShardingChildTransactionExecutive(ShardingTransactionExecutive* parent,
         const BlockContext& blockContext, std::string contractAddress, int64_t contextID,
         int64_t seq, const wasm::GasInjector& gasInjector, ThreadPool::Ptr pool = nullptr,
-        bool usePromise = false)
-      : ShardingTransactionExecutive(
-            blockContext, contractAddress, contextID, seq, gasInjector, pool, usePromise),
-
-        // for coroutine
-        m_pullMessageRef(parent->getPullMessage()),
-        m_pushMessageRef(parent->getPushMessage()),
-        m_exchangeMessageRef(parent->getExchangeMessageRef())
-    {
-        m_syncStorageWrapper = parent->getSyncStorageWrapper();
-        m_storageWrapper = m_syncStorageWrapper.get();
-
-        // for promise executive
-        setPromiseMessageSwapper(parent->getPromiseMessageSwapper());
-    }
+        bool usePromise = false);
 
     CallParameters::UniquePtr start(CallParameters::UniquePtr input) override
     {
