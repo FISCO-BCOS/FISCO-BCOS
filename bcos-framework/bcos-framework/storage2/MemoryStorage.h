@@ -5,6 +5,7 @@
 #include "bcos-utilities/NullLock.h"
 #include "bcos-utilities/Overloaded.h"
 #include <oneapi/tbb/spin_rw_mutex.h>
+#include <boost/mp11/algorithm.hpp>
 #include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/identity.hpp>
 #include <boost/multi_index/key.hpp>
@@ -27,6 +28,7 @@ concept HasMemberSize = requires(Object object) {
                         };
 
 using Empty = std::monostate;
+using RWVersion = int;
 enum Attribute : int
 {
     NONE = 0,
@@ -60,12 +62,13 @@ private:
         utilities::NullLock>;
     using BucketMutex = std::conditional_t<withConcurrent, Mutex, Empty>;
     using DataValue = std::conditional_t<withLogicalDeletion, std::optional<ValueType>, ValueType>;
-    using RWVersion = std::conditional_t<withRWVersion, int, Empty>;
+    using DataRWVersion = std::conditional_t<withRWVersion, RWVersion, Empty>;
     struct Data
     {
         KeyType key;
         [[no_unique_address]] DataValue value;
-        [[no_unique_address]] RWVersion rwVersion{};
+        [[no_unique_address]] DataRWVersion readVersion{};
+        [[no_unique_address]] DataRWVersion writeVersion{};
     };
 
     using IndexType = std::conditional_t<withOrdered,
@@ -165,6 +168,19 @@ public:
         m_maxCapacity = capacity;
     }
 
+    template <class... Args>
+    static std::optional<int> getRWVersionParam(Args&&... args)
+        requires withRWVersion
+    {
+        using ArgsType = boost::mp11::mp_list<std::decay_t<Args>...>;
+        constexpr auto index = boost::mp11::mp_find<ArgsType, RWVersion>::value;
+        if (index != sizeof...(Args))
+        {
+            return std::get<index>(std::tie(args...));
+        }
+        return {};
+    }
+
     friend auto tag_invoke(bcos::storage2::tag_t<readSome> /*unused*/, MemoryStorage& storage,
         RANGES::input_range auto&& keys, auto&&... args)
         -> task::AwaitableValue<std::vector<std::optional<ValueType>>>
@@ -184,6 +200,12 @@ public:
             auto it = index.find(key);
             if (it != index.end())
             {
+                if constexpr (withRWVersion)
+                {
+                    if (auto rwVersion = getRWVersionParam(args...))
+                    {}
+                }
+
                 result.value().emplace_back(it->value);
 
                 if constexpr (std::decay_t<decltype(storage)>::withLRU)
