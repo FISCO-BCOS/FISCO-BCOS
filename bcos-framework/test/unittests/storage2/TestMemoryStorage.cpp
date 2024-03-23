@@ -139,7 +139,7 @@ BOOST_AUTO_TEST_CASE(writeReadModifyRemove)
 BOOST_AUTO_TEST_CASE(mru)
 {
     task::syncWait([]() -> task::Task<void> {
-        MemoryStorage<int, storage::Entry, Attribute(ORDERED | MRU)> storage(1);
+        MemoryStorage<int, storage::Entry, Attribute(ORDERED | LRU)> storage(1);
         storage.setMaxCapacity(1000);
 
         // write 10 100byte value
@@ -202,7 +202,7 @@ BOOST_AUTO_TEST_CASE(logicalDeletion)
         while (auto item = co_await values.next())
         {
             auto [key, value] = *item;
-            if ((i + 2) % 2 == 0)
+            if (i % 2 == 0)
             {
                 BOOST_CHECK(!value);
             }

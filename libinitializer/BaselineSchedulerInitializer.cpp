@@ -30,7 +30,7 @@ bcos::transaction_scheduler::BaselineSchedulerInitializer::build(::rocksdb::DB& 
             transaction_executor::StateValue,
             storage2::memory_storage::Attribute(storage2::memory_storage::ORDERED |
                                                 storage2::memory_storage::CONCURRENT |
-                                                storage2::memory_storage::MRU),
+                                                storage2::memory_storage::LRU),
             std::hash<bcos::transaction_executor::StateKey>>;
 
         CacheStorage m_cacheStorage;

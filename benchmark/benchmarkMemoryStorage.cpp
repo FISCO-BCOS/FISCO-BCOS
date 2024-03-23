@@ -46,10 +46,10 @@ void setCapacityForMRU(auto& storage)
 {
     if constexpr (std::is_same_v<std::remove_cvref_t<decltype(storage)>,
                       MemoryStorage<Key, storage::Entry,
-                          memory_storage::Attribute(ORDERED | CONCURRENT | MRU), std::hash<Key>>> ||
+                          memory_storage::Attribute(ORDERED | CONCURRENT | LRU), std::hash<Key>>> ||
                   std::is_same_v<std::remove_cvref_t<decltype(storage)>,
                       MemoryStorage<Key, storage::Entry,
-                          memory_storage::Attribute(CONCURRENT | MRU), std::hash<Key>>>)
+                          memory_storage::Attribute(CONCURRENT | LRU), std::hash<Key>>>)
     {
         storage.setMaxCapacity(1000 * 1000 * 1000);
     }
@@ -59,11 +59,11 @@ Fixture fixture;
 std::variant<MemoryStorage<Key, storage::Entry, memory_storage::Attribute(ORDERED)>,
     MemoryStorage<Key, storage::Entry, memory_storage::Attribute(ORDERED | CONCURRENT),
         std::hash<Key>>,
-    MemoryStorage<Key, storage::Entry, memory_storage::Attribute(ORDERED | CONCURRENT | MRU),
+    MemoryStorage<Key, storage::Entry, memory_storage::Attribute(ORDERED | CONCURRENT | LRU),
         std::hash<Key>>,
     MemoryStorage<Key, storage::Entry>,
     MemoryStorage<Key, storage::Entry, memory_storage::Attribute(CONCURRENT), std::hash<Key>>,
-    MemoryStorage<Key, storage::Entry, memory_storage::Attribute(CONCURRENT | MRU), std::hash<Key>>>
+    MemoryStorage<Key, storage::Entry, memory_storage::Attribute(CONCURRENT | LRU), std::hash<Key>>>
     allStorage;
 
 template <class Storage>
@@ -221,7 +221,7 @@ BENCHMARK(read<MemoryStorage<Key, storage::Entry, memory_storage::Attribute(ORDE
     ->Threads(1)
     ->Threads(8);
 BENCHMARK(read<MemoryStorage<Key, storage::Entry,
-              memory_storage::Attribute(ORDERED | CONCURRENT | MRU), std::hash<Key>>>)
+              memory_storage::Attribute(ORDERED | CONCURRENT | LRU), std::hash<Key>>>)
     ->Arg(100000)
     ->Arg(1000000)
     ->Threads(1)
@@ -245,7 +245,7 @@ BENCHMARK(
         MemoryStorage<Key, storage::Entry, memory_storage::Attribute(CONCURRENT), std::hash<Key>>>)
     ->Threads(1)
     ->Threads(8);
-BENCHMARK(read<MemoryStorage<Key, storage::Entry, memory_storage::Attribute(CONCURRENT | MRU),
+BENCHMARK(read<MemoryStorage<Key, storage::Entry, memory_storage::Attribute(CONCURRENT | LRU),
               std::hash<Key>>>)
     ->Arg(100000)
     ->Arg(1000000)
