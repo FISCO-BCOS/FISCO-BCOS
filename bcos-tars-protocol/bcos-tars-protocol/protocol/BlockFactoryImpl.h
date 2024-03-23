@@ -20,7 +20,10 @@
  */
 #pragma once
 
-#include "../Common.h"
+// if windows, manual include tup/Tars.h first
+#ifdef _WIN32
+#include <tup/Tars.h>
+#endif
 #include "BlockImpl.h"
 #include "bcos-tars-protocol/tars/Block.h"
 #include <bcos-framework/protocol/BlockFactory.h>

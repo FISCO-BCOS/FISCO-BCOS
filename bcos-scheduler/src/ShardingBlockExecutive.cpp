@@ -1,12 +1,33 @@
 #include "ShardingBlockExecutive.h"
 #include "SchedulerImpl.h"
 #include "ShardingDmcExecutor.h"
+#include "ShardingGraphKeyLocks.h"
 #include <bcos-framework/executor/ExecuteError.h>
 #include <bcos-table/src/KeyPageStorage.h>
 #include <tbb/parallel_for_each.h>
 
 using namespace bcos::scheduler;
 using namespace bcos::storage;
+
+ShardingBlockExecutive::ShardingBlockExecutive(bcos::protocol::Block::Ptr block,
+    SchedulerImpl* scheduler, size_t startContextID,
+    bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
+    bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
+    bcos::txpool::TxPoolInterface::Ptr _txPool, std::shared_ptr<ShardCache> _contract2ShardCache,
+    uint64_t _gasLimit, std::string& _gasPrice, bool _syncBlock, size_t _keyPageSize)
+  : BlockExecutive(block, scheduler, startContextID, transactionSubmitResultFactory, staticCall,
+        _blockFactory, _txPool, _gasLimit, _gasPrice, _syncBlock),
+    m_contract2ShardCache(_contract2ShardCache),
+    m_keyPageSize(_keyPageSize)
+{
+    if (scheduler->ledgerConfig().features().get(ledger::Features::Flag::bugfix_dmc_revert))
+    {
+        auto shardingKeyLocks = std::make_shared<ShardingGraphKeyLocks>();
+        shardingKeyLocks->setGetAddrHandler(
+            [this](const std::string_view& addr) { return getContractShard(std::string(addr)); });
+        m_keyLocks = shardingKeyLocks;
+    }
+}
 
 void ShardingBlockExecutive::prepare()
 {

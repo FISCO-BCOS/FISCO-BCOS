@@ -31,16 +31,16 @@ public:
     using Ptr = std::shared_ptr<MockLedger3>;
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
-        std::function<void(Error::Ptr&&)> callback, bool writeTxsAndReceipts) override
+        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts) override
     {
         auto blockNumber = block->blockHeaderConst()->number();
-        SCHEDULER_LOG(DEBUG) << LOG_KV("blockNumber", blockNumber);
         if (blockNumber == 1024)
         {
-            callback(BCOS_ERROR_PTR(LedgerError::CollectAsyncCallbackError, "PrewriteBlock error"));
+            callback(
+                "", BCOS_ERROR_PTR(LedgerError::CollectAsyncCallbackError, "PrewriteBlock error"));
             return;
         }
-        callback(nullptr);
+        callback("", nullptr);
     }
 
     bcos::Error::Ptr storeTransactionsAndReceipts(bcos::protocol::ConstTransactionsPtr blockTxs,

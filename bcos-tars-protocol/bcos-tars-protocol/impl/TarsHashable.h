@@ -1,9 +1,13 @@
 #pragma once
-#include "../Common.h"
+// if windows, manual include tup/Tars.h first
+#ifdef _WIN32
+#include <tup/Tars.h>
+#endif
 #include "bcos-tars-protocol/tars/TransactionReceipt.h"
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-crypto/hasher/Hasher.h>
+#include <bcos-framework/protocol/Protocol.h>
 #include <bcos-tars-protocol/tars/Block.h>
 #include <bcos-tars-protocol/tars/Transaction.h>
 #include <boost/endian/conversion.hpp>
@@ -22,8 +26,12 @@ void impl_calculate(bcos::crypto::hasher::Hasher auto hasher,
         return;
     }
 
-    auto const& hashFields = transaction.data;
+    impl_calculate(std::forward<decltype(hasher)>(hasher), transaction.data, out);
+}
 
+void impl_calculate(bcos::crypto::hasher::Hasher auto hasher,
+    bcostars::TransactionData const& hashFields, bcos::concepts::bytebuffer::ByteBuffer auto& out)
+{
     int32_t version = boost::endian::native_to_big((int32_t)hashFields.version);
     hasher.update(version);
     hasher.update(hashFields.chainID);
@@ -36,7 +44,7 @@ void impl_calculate(bcos::crypto::hasher::Hasher auto hasher,
     hasher.update(hashFields.abi);
     // if version == 1, update value, gasPrice, gasLimit, maxFeePerGas, maxPriorityFeePerGas to
     // hashBuffer calculate hash
-    if (hashFields.version == (uint32_t)bcos::protocol::TransactionVersion::V1_VERSION)
+    if ((uint32_t)hashFields.version >= (uint32_t)bcos::protocol::TransactionVersion::V1_VERSION)
     {
         hasher.update(hashFields.value);
         hasher.update(hashFields.gasPrice);
@@ -45,6 +53,11 @@ void impl_calculate(bcos::crypto::hasher::Hasher auto hasher,
         hasher.update(hashFields.maxFeePerGas);
         hasher.update(hashFields.maxPriorityFeePerGas);
     }
+    if ((uint32_t)hashFields.version >= (uint32_t)bcos::protocol::TransactionVersion::V2_VERSION)
+    {
+        hasher.update(hashFields.extension);
+    }
+
     hasher.final(out);
 }
 
@@ -57,35 +70,24 @@ void impl_calculate(bcos::crypto::hasher::Hasher auto hasher,
         return;
     }
 
-    auto const& hashFields = receipt.data;
+    impl_calculate(std::forward<decltype(hasher)>(hasher), receipt.data, out);
+}
+
+void impl_calculate(bcos::crypto::hasher::Hasher auto hasher,
+    bcostars::TransactionReceiptData const& hashFields,
+    bcos::concepts::bytebuffer::ByteBuffer auto& out)
+{
     int32_t version = boost::endian::native_to_big((int32_t)hashFields.version);
-    switch (hashFields.version)
+    hasher.update(version);
+    hasher.update(hashFields.gasUsed);
+    hasher.update(hashFields.contractAddress);
+    int32_t status = boost::endian::native_to_big((int32_t)hashFields.status);
+    hasher.update(status);
+    hasher.update(hashFields.output);
+    if (hashFields.version >= int32_t(bcos::protocol::TransactionVersion::V1_VERSION))
     {
-    case int32_t(bcos::protocol::TransactionVersion::V0_VERSION):
-    {
-        hasher.update(version);
-        hasher.update(hashFields.gasUsed);
-        hasher.update(hashFields.contractAddress);
-        int32_t status = boost::endian::native_to_big((int32_t)hashFields.status);
-        hasher.update(status);
-        hasher.update(hashFields.output);
-        break;
-    }
-    case int32_t(bcos::protocol::TransactionVersion::V1_VERSION):
-    {
-        hasher.update(version);
-        hasher.update(hashFields.gasUsed);
-        hasher.update(hashFields.contractAddress);
-        int32_t status = boost::endian::native_to_big((int32_t)hashFields.status);
-        hasher.update(status);
-        hasher.update(hashFields.output);
         hasher.update(hashFields.effectiveGasPrice);
-        break;
     }
-    default:
-        BOOST_THROW_EXCEPTION(std::runtime_error("not support version"));
-    }
-    // vector<LogEntry> logEntries: 6
     for (auto const& log : hashFields.logEntries)
     {
         hasher.update(log.address);

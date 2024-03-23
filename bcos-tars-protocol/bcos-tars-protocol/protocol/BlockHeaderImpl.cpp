@@ -20,6 +20,7 @@
  */
 
 #include "BlockHeaderImpl.h"
+#include "../Common.h"
 #include "../impl/TarsHashable.h"
 #include <bcos-concepts/Hash.h>
 #include <bcos-utilities/Common.h>

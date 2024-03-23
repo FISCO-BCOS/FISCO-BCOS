@@ -88,14 +88,15 @@ CallParameters::UniquePtr TransactionExecutive::start(CallParameters::UniquePtr 
 
 CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::UniquePtr input)
 {
-    if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
-    {
-        EXECUTIVE_LOG(TRACE) << "externalCall start\t" << input->toFullString();
-    }
     auto newSeq = seq() + 1;
     bool isCreate = input->create;
     input->seq = newSeq;
     input->contextID = m_contextID;
+
+    if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
+    {
+        EXECUTIVE_LOG(TRACE) << "externalCall start\t" << input->toFullString();
+    }
 
     std::string newAddress;
     // if internalCreate, sometimes it will use given address, if receiveAddress is empty then give
@@ -124,9 +125,11 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
 
         bool needTryFromContractTable =
             m_blockContext.features().get(ledger::Features::Flag::bugfix_call_noaddr_return);
-        auto codeEntry = getCodeByContractTableName(tableName, needTryFromContractTable);
+        auto [codeHash, codeEntry] =
+            getCodeByContractTableName(tableName, needTryFromContractTable);
         if (codeEntry && codeEntry.has_value() && !codeEntry->get().empty())
         {
+            input->delegateCallCodeHash = codeHash;
             input->delegateCallCode = toBytes(codeEntry->get());
         }
         else
@@ -164,7 +167,8 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
 
         bool needTryFromContractTable =
             m_blockContext.features().get(ledger::Features::Flag::bugfix_call_noaddr_return);
-        auto codeEntry = getCodeByContractTableName(tableName, needTryFromContractTable);
+        auto [codeHash, codeEntry] =
+            getCodeByContractTableName(tableName, needTryFromContractTable);
         if (codeEntry && codeEntry.has_value() && !codeEntry->get().empty())
         {
             output->data = toBytes(codeEntry->get());
@@ -180,8 +184,7 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
         }
     }
 
-    auto executive =
-        buildChildExecutive(input->codeAddress, m_contextID, newSeq, ExecutiveType::common);
+    auto executive = buildChildExecutive(input->codeAddress, m_contextID, newSeq);
 
     m_childExecutives.push_back(executive);  // add child executive for revert() if needed
 
@@ -311,30 +314,24 @@ std::optional<storage::Entry> TransactionExecutive::getCodeByHash(const std::str
     {
         return entry;
     }
-    else
-    {
-        return {};
-    }
+    return {};
 }
 
-std::optional<storage::Entry> TransactionExecutive::getCodeByContractTableName(
+std::tuple<h256, std::optional<storage::Entry>> TransactionExecutive::getCodeByContractTableName(
     const std::string_view& contractTableName, bool tryFromContractTable)
 {
     auto hash = getCodeHash(contractTableName);
     auto entry = getCodeByHash(std::string_view((char*)hash.data(), hash.size()));
     if (entry && entry.has_value() && !entry->get().empty())
     {
-        return entry;
+        return {hash, std::move(entry)};
     }
 
     if (tryFromContractTable)
     {
-        return getCodeEntryFromContractTable(contractTableName);
+        return {hash, getCodeEntryFromContractTable(contractTableName)};
     }
-    else
-    {
-        return {};
-    }
+    return {};
 }
 
 bool TransactionExecutive::setCode(std::string_view contractTableName,
@@ -1674,8 +1671,14 @@ bool TransactionExecutive::checkAuth(const CallParameters::UniquePtr& callParame
     }
     if (callParameters->create)
     {
-        // if create contract, then
-        //      check exec auth
+        // if create contract, then check exec auth
+        // if bugfix_internal_create_permission_denied is set, then internal create will not check
+        if (m_blockContext.features().get(
+                ledger::Features::Flag::bugfix_internal_create_permission_denied) &&
+            callParameters->internalCreate)
+        {
+            return true;
+        }
         if (!checkExecAuth(callParameters))
         {
             auto newAddress = string(callParameters->codeAddress);

@@ -40,7 +40,7 @@ std::shared_ptr<TransactionExecutive> ExecutiveFactory::build(
     const std::string& _contractAddress, int64_t contextID, int64_t seq, ExecutiveType execType)
 {
     std::shared_ptr<TransactionExecutive> executive;
-    switch(execType)
+    switch (execType)
     {
     case ExecutiveType::coroutine:
         /*
@@ -96,12 +96,12 @@ std::shared_ptr<TransactionExecutive> ShardingExecutiveFactory::build(
 {
     std::shared_ptr<TransactionExecutive> executive;
     bool needUsePromise = false;
-    switch(execType)
+    switch (execType)
     {
     case ExecutiveType::coroutine:
         needUsePromise = m_isTiKVStorage;  // tikv storage need to use promise executive
-        executive = std::make_shared<ShardingTransactionExecutive>(m_blockContext,
-            _contractAddress, contextID, seq, m_gasInjector, m_poolForPromiseWait, needUsePromise);
+        executive = std::make_shared<ShardingTransactionExecutive>(m_blockContext, _contractAddress,
+            contextID, seq, m_gasInjector, m_poolForPromiseWait, needUsePromise);
         break;
     default:
         assert(execType != ExecutiveType::billing);
@@ -111,4 +111,15 @@ std::shared_ptr<TransactionExecutive> ShardingExecutiveFactory::build(
 
     setParams(executive);
     return executive;
+}
+
+std::shared_ptr<TransactionExecutive> ShardingExecutiveFactory::buildChild(
+    ShardingTransactionExecutive* parent, const std::string& _contractAddress, int64_t contextID,
+    int64_t seq)
+{
+    TransactionExecutive::Ptr childExecutive = std::make_shared<ShardingChildTransactionExecutive>(
+        parent, m_blockContext, _contractAddress, contextID, seq, m_gasInjector,
+        m_poolForPromiseWait, parent->isUsePromise());
+    setParams(childExecutive);
+    return childExecutive;
 }

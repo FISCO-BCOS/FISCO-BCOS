@@ -123,6 +123,12 @@ std::string_view bcostars::protocol::TransactionImpl::maxPriorityFeePerGas() con
     return m_inner()->data.maxPriorityFeePerGas;
 }
 
+bcos::bytesConstRef bcostars::protocol::TransactionImpl::extension() const
+{
+    return {reinterpret_cast<const bcos::byte*>(m_inner()->data.extension.data()),
+        m_inner()->data.extension.size()};
+}
+
 int64_t bcostars::protocol::TransactionImpl::importTime() const
 {
     return m_inner()->importTime;

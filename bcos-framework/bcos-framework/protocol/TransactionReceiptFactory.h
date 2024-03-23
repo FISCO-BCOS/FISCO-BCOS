@@ -19,6 +19,7 @@
  * @date: 2021-03-23
  */
 #pragma once
+#include "Protocol.h"
 #include "TransactionReceipt.h"
 #include "bcos-utilities/Common.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
@@ -45,6 +46,7 @@ public:
     virtual TransactionReceipt::Ptr createReceipt2(u256 const& gasUsed, std::string contractAddress,
         const std::vector<LogEntry>& logEntries, int32_t status, bcos::bytesConstRef output,
         BlockNumber blockNumber, std::string effectiveGasPrice = "1",
+        TransactionVersion version = TransactionVersion::V1_VERSION,
         bool withHash = true) const = 0;
 };
 

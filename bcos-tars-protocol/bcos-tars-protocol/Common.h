@@ -19,20 +19,26 @@
  */
 
 #pragma once
-#include "bcos-framework/executor/ParallelTransactionExecutorInterface.h"
+// if windows, manual include tup/Tars.h first
+#ifdef _WIN32
+#include <tup/Tars.h>
+#endif
 #include "bcos-tars-protocol/tars/GatewayInfo.h"
+#include "bcos-tars-protocol/tars/TransactionReceipt.h"
+#include <bcos-crypto/interfaces/crypto/Hash.h>
+#include <bcos-framework/protocol/LogEntry.h>
+#if !ONLY_CPP_SDK
+#include "bcos-framework/executor/ParallelTransactionExecutorInterface.h"
 #include "bcos-tars-protocol/tars/GroupInfo.h"
 #include "bcos-tars-protocol/tars/LedgerConfig.h"
-#include "bcos-tars-protocol/tars/TransactionReceipt.h"
 #include "bcos-tars-protocol/tars/TwoPCParams.h"
-#include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/consensus/ConsensusNode.h>
 #include <bcos-framework/gateway/GatewayTypeDef.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/multigroup/ChainNodeInfoFactory.h>
 #include <bcos-framework/multigroup/GroupInfoFactory.h>
-#include <bcos-framework/protocol/LogEntry.h>
+#endif
 #include <bcos-framework/protocol/ProtocolInfo.h>
 #include <bcos-utilities/Common.h>
 #include <cstdint>
@@ -75,10 +81,7 @@ public:
 
     ~BufferWriter() {}
 
-    void reset()
-    {
-        _len = 0;
-    }
+    void reset() { _len = 0; }
 
     void writeBuf(const ByteType* buf, size_t len)
     {
@@ -97,14 +100,8 @@ public:
         _buffer.resize(_len);
         return _buffer;
     }
-    const ByteType* getBuffer() const
-    {
-        return _buf;
-    }
-    size_t getLength() const
-    {
-        return _len;
-    }
+    const ByteType* getBuffer() const { return _buf; }
+    size_t getLength() const { return _len; }
     void swap(std::vector<ByteType>& v)
     {
         _buffer.resize(_len);
@@ -126,6 +123,8 @@ using BufferWriterByteVector = BufferWriter<std::vector<bcos::byte>>;
 using BufferWriterStdByteVector = BufferWriter<std::vector<std::byte>>;
 using BufferWriterString = BufferWriter<std::string>;
 }  // namespace protocol
+
+#if !ONLY_CPP_SDK
 
 inline bcos::group::ChainNodeInfo::Ptr toBcosChainNodeInfo(
     bcos::group::ChainNodeInfoFactory::Ptr _factory, bcostars::ChainNodeInfo const& _tarsNodeInfo)
@@ -389,6 +388,26 @@ inline bcos::gateway::GatewayInfo::Ptr fromTarsGatewayInfo(bcostars::GatewayInfo
     return bcosGatewayInfo;
 }
 
+inline bcos::protocol::TwoPCParams toBcosTwoPCParams(bcostars::TwoPCParams const& _param)
+{
+    bcos::protocol::TwoPCParams bcosTwoPCParams;
+    bcosTwoPCParams.number = _param.blockNumber;
+    bcosTwoPCParams.primaryKey = _param.primaryKey;
+    bcosTwoPCParams.timestamp = _param.timePoint;
+    return bcosTwoPCParams;
+}
+
+inline bcostars::TwoPCParams toTarsTwoPCParams(bcos::protocol::TwoPCParams _param)
+{
+    bcostars::TwoPCParams tarsTwoPCParams;
+    tarsTwoPCParams.blockNumber = _param.number;
+    tarsTwoPCParams.primaryKey = _param.primaryKey;
+    tarsTwoPCParams.timePoint = _param.timestamp;
+    return tarsTwoPCParams;
+}
+
+#endif
+
 inline bcostars::LogEntry toTarsLogEntry(bcos::protocol::LogEntry const& _logEntry)
 {
     bcostars::LogEntry logEntry;
@@ -410,23 +429,5 @@ inline bcos::protocol::LogEntry toBcosLogEntry(bcostars::LogEntry const& _logEnt
     }
     return bcos::protocol::LogEntry(bcos::bytes(_logEntry.address.begin(), _logEntry.address.end()),
         topics, bcos::bytes(_logEntry.data.begin(), _logEntry.data.end()));
-}
-
-inline bcos::protocol::TwoPCParams toBcosTwoPCParams(bcostars::TwoPCParams const& _param)
-{
-    bcos::protocol::TwoPCParams bcosTwoPCParams;
-    bcosTwoPCParams.number = _param.blockNumber;
-    bcosTwoPCParams.primaryKey = _param.primaryKey;
-    bcosTwoPCParams.timestamp = _param.timePoint;
-    return bcosTwoPCParams;
-}
-
-inline bcostars::TwoPCParams toTarsTwoPCParams(bcos::protocol::TwoPCParams _param)
-{
-    bcostars::TwoPCParams tarsTwoPCParams;
-    tarsTwoPCParams.blockNumber = _param.number;
-    tarsTwoPCParams.primaryKey = _param.primaryKey;
-    tarsTwoPCParams.timePoint = _param.timestamp;
-    return tarsTwoPCParams;
 }
 }  // namespace bcostars
