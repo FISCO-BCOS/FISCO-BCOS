@@ -76,7 +76,8 @@ void TiKVStorage::asyncGetPrimaryKeys(std::string_view _table,
         std::string keyPrefix;
         keyPrefix = string(_table) + TABLE_KEY_SPLIT;
         // snapshot is not threadsafe so create it every time
-        auto snap = m_cluster->snapshot();
+
+        auto snap = getSnapshot();
         // TODO: check performance and add limit of primary keys
         bool finished = false;
         auto lastKey = keyPrefix;
@@ -139,7 +140,7 @@ void TiKVStorage::asyncGetRow(std::string_view _table, std::string_view _key,
         }
         auto start = utcTime();
         auto dbKey = toDBKey(_table, _key);
-        auto snap = m_cluster->snapshot();
+        auto snap = getSnapshot();
         auto value = snap->get(dbKey);
         auto end = utcTime();
         if (!value.has_value())
@@ -201,7 +202,7 @@ void TiKVStorage::asyncGetRows(std::string_view _table,
                     realKeys[i] = toDBKey(_table, keys[i]);
                 }
             });
-        auto snap = m_cluster->snapshot();
+        auto snap = getSnapshot();
         auto result = snap->batch_get(realKeys);
         auto end = utcTime();
         size_t validCount = 0;
@@ -290,6 +291,7 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageI
         {
             STORAGE_TIKV_LOG(INFO)
                 << LOG_DESC("asyncPrepare") << LOG_KV("blockNumber", params.number)
+                << LOG_KV("timestamp", params.timestamp)
                 << LOG_KV("primary", params.timestamp > 0 ? "false" : "true");
             auto start = utcTime();
             std::mutex writeMutex;
@@ -408,7 +410,8 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageI
         else
         {
             STORAGE_TIKV_LOG(INFO)
-                << "asyncPrepare try_lock failed" << LOG_KV("blockNumber", params.number);
+                << "asyncPrepare try_lock failed" << LOG_KV("blockNumber", params.number)
+                << LOG_KV("timestamp", params.timestamp);
             callback(BCOS_ERROR_UNIQUE_PTR(TryLockFailed, "asyncPrepare try_lock failed"), 0, "");
         }
     }
@@ -437,13 +440,15 @@ void TiKVStorage::asyncCommit(
             if (m_committer)
             {
                 if (params.timestamp > 0)
-                {
+                {  // secondary
                     m_committer->commit_secondary(params.timestamp);
+                    m_lastCommittedTS = params.timestamp;
                 }
                 else
-                {
+                {  // primary
                     timestamp = m_committer->commit_primary();
                     m_committer->commit_secondary(timestamp);
+                    m_lastCommittedTS = timestamp;
                 }
                 m_committer = nullptr;
             }
@@ -640,4 +645,22 @@ void TiKVStorage::triggerSwitch()
         STORAGE_TIKV_LOG(INFO) << LOG_DESC("Trigger switch");
         f_onNeedSwitchEvent();
     }
+}
+std::shared_ptr<tikv_client::Snapshot> TiKVStorage::getSnapshot()
+{
+    return m_cluster->snapshot();
+#if 0
+    if (m_lastCommittedTS == 0)
+    {  // on start
+        if (m_currentStartTS == 0)
+        {
+            m_lastCommittedTS = m_cluster->current_timestamp();
+        }
+        else
+        {
+            m_lastCommittedTS = m_currentStartTS - 1;
+        }
+    }
+    return m_cluster->snapshot(m_lastCommittedTS);
+#endif
 }

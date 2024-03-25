@@ -445,7 +445,8 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
 
     m_scheduler->m_ledger->asyncPrewriteBlock(
         stateStorage, m_blockTxs, m_block,
-        [this, stateStorage, callback = std::move(callback)](Error::Ptr&& error) mutable {
+        [this, stateStorage, callback = std::move(callback)](
+            std::string primiaryKey, Error::Ptr&& error) mutable {
             if (error)
             {
                 SCHEDULER_LOG(ERROR) << "Prewrite block error!" << error->errorMessage();
@@ -534,7 +535,7 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
 
             bcos::protocol::TwoPCParams params;
             params.number = number();
-            params.primaryKey = "";
+            params.primaryKey = std::move(primiaryKey);
             m_scheduler->m_storage->asyncPrepare(params, *stateStorage,
                 [status, this, callback](
                     Error::Ptr&& error, uint64_t startTimeStamp, const std::string& primaryKey) {
@@ -578,7 +579,8 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                                     ++status->failed;
                                     SCHEDULER_LOG(ERROR)
                                         << BLOCK_NUMBER(number())
-                                        << "asyncPrepare executor failed: " << error->what();
+                                        << "asyncPrepare executor failed: "
+                                        << LOG_KV("code", error->errorCode()) << error->what();
 
                                     if (error->errorCode() ==
                                         bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
@@ -1604,7 +1606,8 @@ void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr outp
     {
         auto receipt = m_scheduler->m_blockFactory->receiptFactory()->createReceipt2(txGasUsed,
             std::string(output->newEVMContractAddress()), output->takeLogEntries(),
-            output->status(), output->data(), number(), std::string(output->effectiveGasPrice()));
+            output->status(), output->data(), number(), std::string(output->effectiveGasPrice()),
+            static_cast<protocol::TransactionVersion>(version));
         // write receipt in results
         SCHEDULER_LOG(TRACE) << " 6.GenReceipt:\t [^^] " << output->toString()
                              << " -> contextID:" << output->contextID() - m_startContextID
@@ -1714,7 +1717,11 @@ std::string BlockExecutive::preprocessAddress(const std::string_view& address)
         out = std::string(address);
     }
 
-    // boost::to_lower(out); no need to be lower
+    if (m_scheduler->ledgerConfig().features().get(ledger::Features::Flag::bugfix_eip55_addr))
+    {
+        boost::to_lower(out);  // support sdk pass EIP55 address
+    }
+
     return out;
 }
 
