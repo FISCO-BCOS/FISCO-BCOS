@@ -5,6 +5,7 @@
 #include "bcos-utilities/NullLock.h"
 #include "bcos-utilities/Overloaded.h"
 #include <oneapi/tbb/spin_rw_mutex.h>
+#include <boost/atomic/atomic_flag.hpp>
 #include <boost/mp11/algorithm.hpp>
 #include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/identity.hpp>
@@ -28,7 +29,12 @@ concept HasMemberSize = requires(Object object) {
                         };
 
 using Empty = std::monostate;
-using RWVersion = int;
+
+constexpr inline struct RAWVersionTag
+{
+} rawVersionTag;
+using RAWVersion = int;
+
 enum Attribute : int
 {
     NONE = 0,
@@ -62,13 +68,15 @@ private:
         utilities::NullLock>;
     using BucketMutex = std::conditional_t<withConcurrent, Mutex, Empty>;
     using DataValue = std::conditional_t<withLogicalDeletion, std::optional<ValueType>, ValueType>;
-    using DataRWVersion = std::conditional_t<withRWVersion, RWVersion, Empty>;
+
+    using DataRAWVersion = std::conditional_t<withRWVersion, RAWVersion, Empty>;
+    using DataRAWFlag = std::conditional_t<withRWVersion, boost::atomic_flag, Empty>;
     struct Data
     {
         KeyType key;
         [[no_unique_address]] DataValue value;
-        [[no_unique_address]] DataRWVersion readVersion{};
-        [[no_unique_address]] DataRWVersion writeVersion{};
+        [[no_unique_address]] DataRAWVersion readVersion{};
+        [[no_unique_address]] DataRAWVersion writeVersion{};
     };
 
     using IndexType = std::conditional_t<withOrdered,
@@ -88,6 +96,7 @@ private:
 
     Buckets m_buckets;
     [[no_unique_address]] std::conditional_t<withLRU, int64_t, Empty> m_maxCapacity;
+    [[no_unique_address]] DataRAWFlag m_detectedRAW;
 
     Bucket& getBucket(auto const& key) & noexcept
     {
@@ -169,16 +178,38 @@ public:
     }
 
     template <class... Args>
-    static std::optional<int> getRWVersionParam(Args&&... args)
+    static std::optional<int> getRAWVersionParam(Args&&... args)
         requires withRWVersion
     {
         using ArgsType = boost::mp11::mp_list<std::decay_t<Args>...>;
-        constexpr auto index = boost::mp11::mp_find<ArgsType, RWVersion>::value;
+        constexpr auto index = boost::mp11::mp_find<ArgsType, RAWVersionTag>::value;
         if (index != sizeof...(Args))
         {
-            return std::get<index>(std::tie(args...));
+            return std::get<index + 1>(std::tie(args...));
         }
         return {};
+    }
+
+    /* key 1 2 3 4 5 6 7 8 9
+       read  5 3 4 2 1 6 7 8 9
+       write 8 3 4 2 1 6 7 5 9
+     */
+    template <class... Args>
+    static bool checkReadVersion(Data& data, Args&&... args)
+        requires withRWVersion
+    {
+        if (auto readVersion = getRAWVersionParam(args...))
+        {
+            auto existsVersion = data.readVersion;
+            if (*readVersion < existsVersion)
+            {
+                data.readVersion = *readVersion;
+            }
+            if (*readVersion > data.writeVersion)
+            {}
+        }
+
+        return true;
     }
 
     friend auto tag_invoke(bcos::storage2::tag_t<readSome> /*unused*/, MemoryStorage& storage,
@@ -202,8 +233,19 @@ public:
             {
                 if constexpr (withRWVersion)
                 {
-                    if (auto rwVersion = getRWVersionParam(args...))
-                    {}
+                    if (auto readVersion = getRAWVersionParam(args...))
+                    {
+                        if (*readVersion < it->writeVersion)
+                        {
+                            result.value().clear();
+                            storage.m_detectedRAW.test_and_set();
+                            break;
+                        }
+                        if (*readVersion < it->readVersion)
+                        {
+                            it->readVersion = *readVersion;
+                        }
+                    }
                 }
 
                 result.value().emplace_back(it->value);
@@ -223,7 +265,8 @@ public:
     }
 
     friend task::AwaitableValue<std::optional<ValueType>> tag_invoke(
-        storage2::tag_t<storage2::readOne> /*unused*/, MemoryStorage& storage, auto&& key)
+        storage2::tag_t<storage2::readOne> /*unused*/, MemoryStorage& storage, auto&& key,
+        auto&&... args)
     {
         task::AwaitableValue<std::optional<ValueType>> result;
         auto& bucket = storage.getBucket(key);
@@ -233,6 +276,18 @@ public:
         auto it = index.find(key);
         if (it != index.end())
         {
+            if constexpr (withRWVersion)
+            {
+                if (auto readVersion = getRAWVersionParam(args...))
+                {
+                    if (*readVersion < it->writeVersion)
+                    {
+                        storage.m_detectedRAW.test_and_set();
+                        return result;
+                    }
+                }
+            }
+
             if constexpr (std::decay_t<decltype(storage)>::withLRU)
             {
                 lock.upgrade_to_writer();
