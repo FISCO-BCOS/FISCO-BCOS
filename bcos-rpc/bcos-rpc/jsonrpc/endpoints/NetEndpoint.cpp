@@ -13,16 +13,16 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file NetEntryPoint.cpp
+ * @file NetEndpoint.cpp
  * @author: kyonGuo
  * @date 2024/3/21
  */
 
-#include "NetEntryPoint.h"
+#include "NetEndpoint.h"
 
 using namespace bcos;
 using namespace bcos::rpc;
 
-NetEntryPoint::NetEntryPoint(bcos::rpc::GroupManager::Ptr groupManager)
+NetEndpoint::NetEndpoint(bcos::rpc::GroupManager::Ptr groupManager)
   : m_groupManager(std::move(groupManager))
 {}

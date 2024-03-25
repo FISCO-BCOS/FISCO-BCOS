@@ -13,32 +13,16 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file Web3EntryPoint.h
+ * @file EthEndpoint.cpp
  * @author: kyonGuo
  * @date 2024/3/21
  */
 
-#pragma once
-#include "EntryPointInterface.h"
-#include "bcos-rpc/groupmgr/GroupManager.h"
-#include <bcos-rpc/jsonrpc/JsonRpcInterface.h>
-#include <json/json.h>
-#include <tbb/concurrent_hash_map.h>
-#include <unordered_map>
+#include "EthEndpoint.h"
 
-namespace bcos::rpc
-{
-class Web3EntryPoint : public EntryPointInterface
-{
-public:
-    explicit Web3EntryPoint(bcos::rpc::GroupManager::Ptr groupManager);
-    std::string getEntryName() const override { return "web3"; }
-    MethodMap const& exportMethods() override { return m_methods; }
-    void clientVersion(RespFunc) {}
-    void sha3(RespFunc) {}
+using namespace bcos;
+using namespace bcos::rpc;
 
-private:
-    bcos::rpc::GroupManager::Ptr m_groupManager;
-};
-
-}  // namespace bcos::rpc
+EthEndpoint::EthEndpoint(bcos::rpc::GroupManager::Ptr groupManager)
+  : m_groupManager(std::move(groupManager))
+{}

@@ -13,15 +13,15 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file Web3EntryPoint.cpp
+ * @file Web3Endpoint.cpp
  * @author: kyonGuo
  * @date 2024/3/21
  */
 
-#include "Web3EntryPoint.h"
+#include "Web3Endpoint.h"
 
 using namespace bcos::rpc;
 
-Web3EntryPoint::Web3EntryPoint(bcos::rpc::GroupManager::Ptr groupManager)
+Web3Endpoint::Web3Endpoint(bcos::rpc::GroupManager::Ptr groupManager)
   : m_groupManager(std::move(groupManager))
 {}

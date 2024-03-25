@@ -13,14 +13,14 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file EthEntryPoint.h
+ * @file EthEndpoint.h
  * @author: kyonGuo
  * @date 2024/3/21
  */
 
 #pragma once
 #include "bcos-rpc/groupmgr/GroupManager.h"
-#include "bcos-rpc/jsonrpc/entrypoint/EntryPointInterface.h"
+#include "bcos-rpc/jsonrpc/endpoints/EndpointInterface.h"
 #include <bcos-rpc/jsonrpc/JsonRpcInterface.h>
 #include <json/json.h>
 #include <tbb/concurrent_hash_map.h>
@@ -33,10 +33,10 @@ namespace bcos::rpc
 /**
  * eth entry point to match 'eth_' methods
  */
-class EthEntryPoint : public EntryPointInterface
+class EthEndpoint : public EndpointInterface
 {
 public:
-    explicit EthEntryPoint(bcos::rpc::GroupManager::Ptr group_manager);
+    explicit EthEndpoint(bcos::rpc::GroupManager::Ptr group_manager);
     std::string getEntryName() const override { return "eth"; }
     MethodMap const& exportMethods() override { return m_methods; }
     void protoclVersion(RespFunc) {}

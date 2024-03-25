@@ -21,10 +21,10 @@
 #pragma once
 #include "bcos-rpc/groupmgr/GroupManager.h"
 #include "bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h"
-#include "bcos-rpc/jsonrpc/entrypoint/EntryPointInterface.h"
-#include "bcos-rpc/jsonrpc/entrypoint/EthEntryPoint.h"
-#include "bcos-rpc/jsonrpc/entrypoint/NetEntryPoint.h"
-#include "bcos-rpc/jsonrpc/entrypoint/Web3EntryPoint.h"
+#include "bcos-rpc/jsonrpc/endpoints/EndpointInterface.h"
+#include "bcos-rpc/jsonrpc/endpoints/EthEndpoint.h"
+#include "bcos-rpc/jsonrpc/endpoints/NetEndpoint.h"
+#include "bcos-rpc/jsonrpc/endpoints/Web3Endpoint.h"
 #include "bcos-rpc/validator/CallValidator.h"
 #include <bcos-boostssl/websocket/WsService.h>
 #include <bcos-framework/gateway/GatewayInterface.h>
@@ -36,9 +36,9 @@
 
 namespace bcos::rpc
 {
-class EthEntryPoint;
-class NetEntryPoint;
-class Web3EntryPoint;
+class EthEndpoint;
+class NetEndpoint;
+class Web3Endpoint;
 class Web3JsonRpcImpl : public JsonRpcImpl_2_0, public std::enable_shared_from_this<Web3JsonRpcImpl>
 {
 public:
@@ -47,9 +47,9 @@ public:
         std::shared_ptr<boostssl::ws::WsService> _wsService)
       : JsonRpcImpl_2_0(
             std::move(_groupManager), std::move(_gatewayInterface), std::move(_wsService)),
-        m_ethEntryPoint(std::make_unique<EthEntryPoint>(m_groupManager)),
-        m_netEntryPoint(std::make_unique<NetEntryPoint>(m_groupManager)),
-        m_web3EntryPoint(std::make_unique<Web3EntryPoint>(m_groupManager))
+        m_ethEntryPoint(std::make_unique<EthEndpoint>(m_groupManager)),
+        m_netEntryPoint(std::make_unique<NetEndpoint>(m_groupManager)),
+        m_web3EntryPoint(std::make_unique<Web3Endpoint>(m_groupManager))
     {
         m_methodToFunc.insert(
             m_ethEntryPoint->exportMethods().begin(), m_ethEntryPoint->exportMethods().end());
@@ -61,8 +61,8 @@ public:
     ~Web3JsonRpcImpl() override = default;
 
 private:
-    EthEntryPoint::UniquePtr m_ethEntryPoint;
-    NetEntryPoint::UniquePtr m_netEntryPoint;
-    Web3EntryPoint::UniquePtr m_web3EntryPoint;
+    EthEndpoint::UniquePtr m_ethEntryPoint;
+    NetEndpoint::UniquePtr m_netEntryPoint;
+    Web3Endpoint::UniquePtr m_web3EntryPoint;
 };
 }  // namespace bcos::rpc

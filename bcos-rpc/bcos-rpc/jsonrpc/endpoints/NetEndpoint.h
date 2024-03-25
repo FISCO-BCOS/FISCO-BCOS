@@ -13,13 +13,13 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file NetEntryPoint.h
+ * @file NetEndpoint.h
  * @author: kyonGuo
  * @date 2024/3/21
  */
 
 #pragma once
-#include "EntryPointInterface.h"
+#include "EndpointInterface.h"
 #include "bcos-rpc/groupmgr/GroupManager.h"
 #include <bcos-rpc/jsonrpc/JsonRpcInterface.h>
 #include <json/json.h>
@@ -29,10 +29,10 @@
 
 namespace bcos::rpc
 {
-class NetEntryPoint : public EntryPointInterface
+class NetEndpoint : public EndpointInterface
 {
 public:
-    explicit NetEntryPoint(bcos::rpc::GroupManager::Ptr groupManager);
+    explicit NetEndpoint(bcos::rpc::GroupManager::Ptr groupManager);
     std::string getEntryName() const override { return "net"; }
     MethodMap const& exportMethods() override { return m_methods; }
     void verison(RespFunc) {}

@@ -13,7 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file EntryPointInterface.h
+ * @file EndpointInterface.h
  * @author: kyonGuo
  * @date 2024/3/21
  */
@@ -25,16 +25,16 @@
 
 namespace bcos::rpc
 {
-class EntryPointInterface
+class EndpointInterface
 {
 public:
-    using UniquePtr = std::unique_ptr<EntryPointInterface>;
-    EntryPointInterface() = default;
-    virtual ~EntryPointInterface() = default;
-    EntryPointInterface(const EntryPointInterface&) = delete;
-    EntryPointInterface& operator=(const EntryPointInterface&) = delete;
-    EntryPointInterface(EntryPointInterface&&) = delete;
-    EntryPointInterface& operator=(EntryPointInterface&&) = delete;
+    using UniquePtr = std::unique_ptr<EndpointInterface>;
+    EndpointInterface() = default;
+    virtual ~EndpointInterface() = default;
+    EndpointInterface(const EndpointInterface&) = delete;
+    EndpointInterface& operator=(const EndpointInterface&) = delete;
+    EndpointInterface(EndpointInterface&&) = delete;
+    EndpointInterface& operator=(EndpointInterface&&) = delete;
 
     virtual std::string getEntryName() const = 0;
     virtual MethodMap const& exportMethods() = 0;
