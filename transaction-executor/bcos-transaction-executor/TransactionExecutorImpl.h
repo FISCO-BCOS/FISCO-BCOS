@@ -129,7 +129,9 @@ private:
                     static_cast<int32_t>(protocol::TransactionStatus::RevertInstruction) :
                     evmcResult.status_code;
             auto const& logEntries = hostContext.logs();
-            switch (static_cast<bcos::protocol::TransactionVersion>(transaction.version()))
+            auto transactionVersion =
+                static_cast<bcos::protocol::TransactionVersion>(transaction.version());
+            switch (transactionVersion)
             {
             case bcos::protocol::TransactionVersion::V0_VERSION:
                 receipt = executor.m_receiptFactory.createReceipt(gasLimit - evmcResult.gas_left,
@@ -138,8 +140,8 @@ private:
             case bcos::protocol::TransactionVersion::V1_VERSION:
             case bcos::protocol::TransactionVersion::V2_VERSION:
                 receipt = executor.m_receiptFactory.createReceipt2(gasLimit - evmcResult.gas_left,
-                    newContractAddress, logEntries, receiptStatus, output, blockHeader.number(),
-                    "");
+                    newContractAddress, logEntries, receiptStatus, output, blockHeader.number(), "",
+                    transactionVersion);
                 break;
             default:
                 BOOST_THROW_EXCEPTION(std::runtime_error(
