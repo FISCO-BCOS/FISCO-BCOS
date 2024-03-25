@@ -23,7 +23,7 @@ bcos::task::Task<void> bcos::ledger::prewriteBlockToStorage(LedgerInterface& led
         {
             m_ledger.asyncPrewriteBlock(
                 m_storage, std::move(m_transactions), std::move(m_block),
-                [this, handle](Error::Ptr error) {
+                [this, handle](std::string, Error::Ptr error) {
                     if (error)
                     {
                         m_error = std::move(error);

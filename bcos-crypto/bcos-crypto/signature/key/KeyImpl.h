@@ -74,14 +74,14 @@ public:
     {
         if (m_hex.empty())
         {
-            m_hex = std::move(*toHexString(*m_keyData));
+            m_hex = toHex(*m_keyData);
         }
         return m_hex;
     }
 
 private:
     std::shared_ptr<bytes> m_keyData;
-    std::string m_hex;
+    std::string m_hex = {};
 };
 }  // namespace crypto
 }  // namespace bcos
