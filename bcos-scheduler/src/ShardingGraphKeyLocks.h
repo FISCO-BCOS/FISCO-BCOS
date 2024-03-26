@@ -10,7 +10,7 @@ class ShardingGraphKeyLocks : public GraphKeyLocks
 public:
     using Ptr = std::shared_ptr<ShardingGraphKeyLocks>;
 
-    virtual ~ShardingGraphKeyLocks() = default;
+    ~ShardingGraphKeyLocks() override = default;
 
     virtual bool acquireKeyLock(
         std::string_view contract, std::string_view key, ContextID contextID, Seq seq) override
