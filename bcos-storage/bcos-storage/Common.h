@@ -26,20 +26,11 @@
 
 namespace bcos::storage
 {
-const char* const TABLE_KEY_SPLIT = ":";
 
 extern const __itt_string_handle* const ITT_STRING_STORAGE_PREPARE;
 extern const __itt_string_handle* const ITT_STRING_STORAGE_COMMIT;
 extern const __itt_string_handle* const ITT_STRING_STORAGE_ROLLBACK;
 extern const __itt_string_handle* const ITT_STRING_STORAGE_SET_ROWS;
-
-inline std::string toDBKey(const std::string_view& tableName, const std::string_view& key)
-{
-    std::string dbKey;
-    dbKey.reserve(tableName.size() + 1 + key.size());
-    dbKey.append(tableName).append(TABLE_KEY_SPLIT).append(key);
-    return dbKey;
-}
 
 inline bool isValid(const std::string_view& tableName)
 {

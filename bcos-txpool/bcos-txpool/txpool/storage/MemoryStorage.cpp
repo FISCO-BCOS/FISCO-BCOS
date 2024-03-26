@@ -978,7 +978,8 @@ bool MemoryStorage::batchMarkTxsWithoutLock(
             continue;
         }
         // the tx has already been re-sealed, can not enforce unseal
-        // TODO: if tx->batchHash() is empty，should be re-sealed?
+        // if tx batch id is -1 or batchHash is empty, it means node-self generate proposal verify
+        // failed, so in this case should unsealed the txs.
         if ((tx->batchId() != _batchId || tx->batchHash() != _batchHash) && tx->sealed() &&
             !_sealFlag)
         {

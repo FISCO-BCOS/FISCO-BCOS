@@ -2619,10 +2619,12 @@ install_python_package(){
     if command -v python >/dev/null 2>&1; then
         file_must_exists "${BcosBuilder_path}/requirements.txt"
         dir_must_exists "${BcosBuilder_path}/${chain_version}"
-        # package not exit,install now
+        # package not exist, install it
         while IFS= read -r package; do
             if ! python3 -c "import $package" >/dev/null 2>&1; then
-                pip3 install $package >/dev/null 2>&1
+                if ! pip3 install $package >/dev/null 2>&1; then
+                    LOG_FATAL "Failed to install python package ${package}. Please install it manually, e.g., sudo pip3 install ${package}"
+                fi
             fi
         done < "${BcosBuilder_path}/requirements.txt"
     fi

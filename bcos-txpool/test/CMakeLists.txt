@@ -30,4 +30,5 @@ find_package(Boost REQUIRED unit_test_framework)
 
 target_link_libraries(${TEST_BINARY_NAME} ${TXPOOL_TARGET} bcos-crypto ${TARS_PROTOCOL_TARGET} Boost::unit_test_framework)
 target_link_libraries(${DEMO_BINARY_NAME} ${TXPOOL_TARGET} bcos-crypto ${TARS_PROTOCOL_TARGET} Boost::unit_test_framework)
-add_test(NAME test-txpool WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
+#add_test(NAME test-txpool WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
+config_test_cases("" "${SOURCES}" ${TEST_BINARY_NAME} "")
