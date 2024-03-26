@@ -290,8 +290,8 @@ public:
 
             // write other meta data
             std::promise<bool> prewritePromise;
-            m_ledger->asyncPrewriteBlock(
-                m_storage, nullptr, block, [&](Error::Ptr&&) { prewritePromise.set_value(true); });
+            m_ledger->asyncPrewriteBlock(m_storage, nullptr, block,
+                [&](std::string, Error::Ptr&&) { prewritePromise.set_value(true); });
 
             prewritePromise.get_future().get();
         }
@@ -326,7 +326,7 @@ public:
 
             std::promise<bool> p3;
             m_ledger->asyncPrewriteBlock(
-                m_storage, nullptr, m_fakeBlocks->at(i), [&](Error::Ptr&& error) {
+                m_storage, nullptr, m_fakeBlocks->at(i), [&](std::string, Error::Ptr&& error) {
                     BOOST_CHECK(!error);
                     p3.set_value(true);
                 });
@@ -1305,7 +1305,7 @@ BOOST_AUTO_TEST_CASE(testSyncBlock)
     auto transactions = std::make_shared<Transactions>();
     transactions->push_back(tx);
     m_ledger->asyncPrewriteBlock(
-        m_storage, blockTxs, block, [](Error::Ptr&& error) { BOOST_CHECK(!error); });
+        m_storage, blockTxs, block, [](std::string, Error::Ptr&& error) { BOOST_CHECK(!error); });
 
     m_ledger->asyncGetBlockDataByNumber(
         100, TRANSACTIONS, [tx](Error::Ptr error, bcos::protocol::Block::Ptr block) {

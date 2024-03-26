@@ -126,7 +126,7 @@ void Config::loadPeers(
         }
 
         NodeIPEndpoint ep;
-        if (!WsTools::stringToEndPoint(it.second.data(), ep))
+        if (!WsTools::hostAndPort2Endpoint(it.second.data(), ep))
         {
             BCOS_LOG(WARNING)
                 << LOG_BADGE("loadPeers")
