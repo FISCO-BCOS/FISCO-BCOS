@@ -33,7 +33,7 @@ jobs:
       - name: install macOS dependencies
         run: brew install ccache libomp gmp
       - name: check tag v3.7.0
-        run: git checkout master && git pull && git checkout v3.7.0
+        run: git branch -a
       - name: configure
         run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON
       - name: compile
