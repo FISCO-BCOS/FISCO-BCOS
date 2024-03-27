@@ -118,9 +118,9 @@ public:
     void initContext()
     {
         // init storage and tables
-        ExecutiveContextFactory factory;
+        ExecutiveContextFactory factory(false);
         auto storageStateFactory = std::make_shared<StorageStateFactory>(h256(0));
-        auto tableFactoryFactory = std::make_shared<MemoryTableFactoryFactory2>();
+        auto tableFactoryFactory = std::make_shared<MemoryTableFactoryFactory2>(false);
         auto memStorage = std::make_shared<MemoryStorage2>();
         cachedStorage = std::make_shared<CachedStorage>();
         cachedStorage->setBackend(memStorage);
@@ -152,7 +152,7 @@ public:
     {
         auto table = openTable(context, SYS_CONFIG);
         auto valueInfo =
-            dev::precompiled::getSysteConfigByKey(table, _key, context->blockInfo().number + 1);
+            dev::precompiled::getSysConfigByKey(table, _key, context->blockInfo().number + 1);
         return *valueInfo;
     }
 

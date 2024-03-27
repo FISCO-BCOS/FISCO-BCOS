@@ -1428,8 +1428,6 @@ void benchmarkPrecompiled(char const name[], vector_ref<const PrecompiledTest> t
     }
 
     PrecompiledExecutor exec = PrecompiledRegistrar::executor(name);
-    Timer timer;
-
     for (auto&& test : tests)
     {
         bytes input = fromHex(test.input);
@@ -1438,15 +1436,9 @@ void benchmarkPrecompiled(char const name[], vector_ref<const PrecompiledTest> t
         auto res = exec(inputRef);
         BOOST_REQUIRE_MESSAGE(res.first, test.name);
         BOOST_REQUIRE_EQUAL(toHex(res.second), test.expected);
-
-        timer.restart();
         for (int i = 0; i < n; ++i)
             exec(inputRef);
-        auto d = timer.duration() / n;
-
-        auto t = std::chrono::duration_cast<std::chrono::nanoseconds>(d).count();
-        std::cout << ut::framework::current_test_case().p_name << "/" << test.name << ": " << t
-                  << " ns\n";
+        std::cout << ut::framework::current_test_case().p_name << "/" << test.name << "\n";
     }
 }
 }  // namespace

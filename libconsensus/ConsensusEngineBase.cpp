@@ -22,6 +22,7 @@
  * @date: 2018-09-28
  */
 #include "ConsensusEngineBase.h"
+#include <libprecompiled/Common.h>
 using namespace dev::eth;
 using namespace dev::db;
 using namespace dev::blockverifier;
@@ -183,7 +184,9 @@ void ConsensusEngineBase::updateConsensusNodeList()
         s2 << "Observers:";
         dev::h512s observerList = m_blockChain->observerList();
         for (dev::h512 node : observerList)
+        {
             s2 << node.abridged() << ",";
+        }
 
         if (m_lastNodeList != s2.str())
         {
@@ -194,6 +197,9 @@ void ConsensusEngineBase::updateConsensusNodeList()
             // get all nodes
             dev::h512s nodeList = sealerList + observerList;
             std::sort(nodeList.begin(), nodeList.end());
+            // check the node exists in the group or not(observer node or sealer node)
+            auto it = std::find(nodeList.begin(), nodeList.end(), m_keyPair.pub());
+            m_existsInGroup = (it != nodeList.end());
             if (m_blockSync->syncTreeRouterEnabled())
             {
                 if (m_sealerListUpdated)
@@ -207,6 +213,7 @@ void ConsensusEngineBase::updateConsensusNodeList()
                 }
             }
             m_service->setNodeListByGroupID(m_groupId, nodeList);
+            m_service->setSealerListByGroupID(m_groupId, observerList);
 
             m_lastNodeList = s2.str();
         }
@@ -222,6 +229,8 @@ void ConsensusEngineBase::updateConsensusNodeList()
 void ConsensusEngineBase::resetConfig()
 {
     updateMaxBlockTransactions();
+    updateGasChargeManageSwitch();
+    updateGasFreeAccounts();
     auto node_idx = MAXIDX;
     m_accountType = NodeAccountType::ObserverAccount;
     size_t nodeNum = 0;
@@ -263,33 +272,109 @@ void ConsensusEngineBase::reportBlock(dev::eth::Block const& _block)
     {
         return;
     }
+    statGasUsed(_block);
+}
+
+void ConsensusEngineBase::statGasUsed(dev::eth::Block const& _block)
+{
     // print the block gasUsed
     auto txsNum = _block.transactions()->size();
     if (txsNum == 0)
     {
         return;
     }
-    auto blockGasUsed = (*_block.transactionReceipts())[txsNum - 1]->gasUsed();
-    STAT_LOG(INFO) << LOG_TYPE("BlockGasUsed") << LOG_KV("g", m_groupId) << LOG_KV("txNum", txsNum)
-                   << LOG_KV("gasUsed", blockGasUsed)
-                   << LOG_KV("blockNumber", _block.blockHeader().number())
-                   << LOG_KV("sealerIdx", _block.blockHeader().sealer())
-                   << LOG_KV("blockHash", toHex(_block.blockHeader().hash()))
-                   << LOG_KV("nodeID", toHex(m_keyPair.pub()));
     // print the gasUsed for each transaction
     u256 prevGasUsed = 0;
     uint64_t receiptIndex = 0;
     auto receipts = _block.transactionReceipts();
+    u256 totalGas = 0;
     for (auto const& tx : *_block.transactions())
     {
         auto receipt = (*receipts)[receiptIndex];
-        auto gasUsed = receipt->gasUsed() - prevGasUsed;
+        u256 gasUsed = receipt->gasUsed();
+        if (g_BCOSConfig.version() < V2_9_0 && (receiptIndex > 0))
+        {
+            gasUsed = receipt->gasUsed() - prevGasUsed;
+        }
         STAT_LOG(INFO) << LOG_TYPE("TxsGasUsed") << LOG_KV("g", m_groupId)
                        << LOG_KV("txHash", toHex(tx->hash())) << LOG_KV("gasUsed", gasUsed);
         prevGasUsed = receipt->gasUsed();
         receiptIndex++;
+        totalGas += gasUsed;
+    }
+    STAT_LOG(INFO) << LOG_TYPE("BlockGasUsed") << LOG_KV("g", m_groupId) << LOG_KV("txNum", txsNum)
+                   << LOG_KV("gasUsed", totalGas)
+                   << LOG_KV("blockNumber", _block.blockHeader().number())
+                   << LOG_KV("sealerIdx", _block.blockHeader().sealer())
+                   << LOG_KV("blockHash", toHex(_block.blockHeader().hash()))
+                   << LOG_KV("nodeID", toHex(m_keyPair.pub()));
+}
+
+void ConsensusEngineBase::updateMaxBlockTransactions()
+{
+    /// update m_maxBlockTransactions stored in sealer when reporting a new block
+    std::string ret =
+        m_blockChain->getSystemConfigByKey(dev::precompiled::SYSTEM_KEY_TX_COUNT_LIMIT);
+    {
+        m_maxBlockTransactions = boost::lexical_cast<uint64_t>(ret);
+    }
+    ENGINE_LOG(DEBUG) << LOG_DESC("resetConfig: updateMaxBlockTransactions")
+                      << LOG_KV("txCountLimit", m_maxBlockTransactions);
+}
+
+void ConsensusEngineBase::updateGasChargeManageSwitch()
+{
+    // only support GasChargeManage when supported_version >= 2.9.0
+    if (g_BCOSConfig.version() < V2_9_0)
+    {
+        return;
+    }
+    std::string ret =
+        m_blockChain->getSystemConfigByKey(dev::precompiled::SYSTEM_KEY_CHARGE_MANAGE_SWITCH);
+    if (ret.compare(dev::precompiled::SYSTEM_KEY_CHARGE_MANAGE_SWITCH_ON) == 0)
+    {
+        m_enableGasCharge = true;
+        m_blockVerifier->setEnableGasCharge(true);
+        ENGINE_LOG(DEBUG) << LOG_DESC("updateGasChargeManageSwitch")
+                          << LOG_KV("enableGasCharge", true);
+    }
+    if (ret.compare(dev::precompiled::SYSTEM_KEY_CHARGE_MANAGE_SWITCH_OFF) == 0)
+    {
+        m_enableGasCharge = false;
+        m_blockVerifier->setEnableGasCharge(false);
+        ENGINE_LOG(DEBUG) << LOG_DESC("updateGasChargeManageSwitch")
+                          << LOG_KV("enableGasCharge", false);
     }
 }
 
+void ConsensusEngineBase::updateGasFreeAccounts()
+{
+    if (!m_enableGasCharge)
+    {
+        return;
+    }
+    // the chargers use gas for free
+    std::string chargers =
+        m_blockChain->getSystemConfigByKey(dev::precompiled::SYSTEM_KEY_CHARGER_LIST);
+    auto currentGasFreeAccount = convertStringToAddressSet(chargers, ",");
+
+    // the committees use gas for free
+    auto committees = m_blockChain->getCommitteeMembers();
+    if (committees->size() > 0)
+    {
+        currentGasFreeAccount->insert(committees->begin(), committees->end());
+    }
+    UpgradableGuard l(x_gasFreeAccounts);
+    // Note: the set is ordered
+    if (*m_gasFreeAccounts != *currentGasFreeAccount)
+    {
+        m_blockVerifier->setGasFreeAccounts(*currentGasFreeAccount);
+        ENGINE_LOG(DEBUG) << LOG_DESC("updateGasFreeAccounts")
+                          << LOG_KV("currentGasFreeAccount", *currentGasFreeAccount)
+                          << LOG_KV("orgGasFreeAccount", *m_gasFreeAccounts);
+        UpgradeGuard ul(l);
+        *m_gasFreeAccounts = *currentGasFreeAccount;
+    }
+}
 }  // namespace consensus
 }  // namespace dev

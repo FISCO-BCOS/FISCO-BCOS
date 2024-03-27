@@ -298,7 +298,7 @@ int SM2::sm2GetZ(std::string const& _privateKey, const EC_KEY* _ecKey, unsigned 
     if (c_mapTozValueCache.count(_privateKey))
     {
         auto cache = c_mapTozValueCache[_privateKey];
-        memcpy(_zValue, cache.first.get(), cache.second);
+        memcpyWithCheck(_zValue, _zValueLen, cache.first.get(), cache.second);
         _zValueLen = cache.second;
         return 1;
     }
@@ -310,69 +310,11 @@ int SM2::sm2GetZ(std::string const& _privateKey, const EC_KEY* _ecKey, unsigned 
     }
     // update the zValue cache
     std::shared_ptr<unsigned char> zValueCache(new unsigned char[SM3_DIGEST_LENGTH]);
-    memcpy(zValueCache.get(), _zValue, _zValueLen);
+    memcpyWithCheck(zValueCache.get(), SM3_DIGEST_LENGTH, _zValue, _zValueLen);
     std::pair<std::shared_ptr<unsigned char>, size_t> cache =
         std::make_pair(zValueCache, _zValueLen);
     c_mapTozValueCache[_privateKey] = cache;
     return ret;
-}
-
-int SM2::sm2GetZFromPublicKey(std::string const & _publicKeyHex, unsigned char* _zValue, size_t& _zValueLen){
-    bool lresult = false;
-    EC_KEY* sm2Key = NULL;
-    EC_POINT* pubPoint = NULL;
-    EC_GROUP* sm2Group = NULL;
-    _zValueLen = SM3_DIGEST_LENGTH;
-    sm2Group = EC_GROUP_new_by_curve_name(NID_sm2);
-    if (sm2Group == NULL)
-    {
-        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of Verify EC_GROUP_new_by_curve_name"
-                          << LOG_KV("pubKey", _publicKeyHex);
-        goto err;
-    }
-
-    if ((pubPoint = EC_POINT_new(sm2Group)) == NULL)
-    {
-        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of Verify EC_POINT_new"
-                          << LOG_KV("pubKey", _publicKeyHex);
-        goto err;
-    }
-
-    if (!EC_POINT_hex2point(sm2Group, (const char*)_publicKeyHex.c_str(), pubPoint, NULL))
-    {
-        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of Verify EC_POINT_hex2point"
-                          << LOG_KV("pubKey", _publicKeyHex);
-        goto err;
-    }
-    sm2Key = EC_KEY_new_by_curve_name(NID_sm2);
-    if (sm2Key == NULL)
-    {
-        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of Verify EC_KEY_new_by_curve_name"
-                          << LOG_KV("pubKey", _publicKeyHex);
-        goto err;
-    }
-
-    if (!EC_KEY_set_public_key(sm2Key, pubPoint))
-    {
-        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of Verify EC_KEY_set_public_key"
-                          << LOG_KV("pubKey", _publicKeyHex);
-        goto err;
-    }
-
-    if (!ECDSA_sm2_get_Z((const EC_KEY*)sm2Key, NULL, NULL, 0, _zValue, &_zValueLen))
-    {
-        CRYPTO_LOG(ERROR) << "[SM2::veify] Error Of Compute Z" << LOG_KV("pubKey", _publicKeyHex);
-        goto err;
-    }
-    lresult = true;
-    err:
-        if (sm2Key)
-            EC_KEY_free(sm2Key);
-        if (pubPoint)
-            EC_POINT_free(pubPoint);
-        if (sm2Group)
-            EC_GROUP_free(sm2Group);
-        return lresult;
 }
 
 string SM2::priToPub(const string& pri)

@@ -230,7 +230,8 @@ bool Ledger::initTxPool()
         return false;
     }
     auto txPool = std::make_shared<dev::txpool::TxPool>(m_service, m_blockChain, protocol_id,
-        m_param->mutableTxPoolParam().txPoolLimit, m_param->mutableTxPoolParam().notifyWorkerNum);
+        m_param->mutableTxPoolParam().txPoolLimit, m_param->mutableTxPoolParam().notifyWorkerNum,
+        m_param->mutableTxPoolParam().txsExpirationTime);
     txPool->setMaxBlockLimit(g_BCOSConfig.c_blockLimit);
     txPool->setMaxMemoryLimit(m_param->mutableTxPoolParam().maxTxPoolMemorySize);
     m_txPool = txPool;
@@ -254,7 +255,8 @@ bool Ledger::initBlockVerifier()
     blockVerifier->setExecutiveContextFactory(m_dbInitializer->executiveContextFactory());
     std::shared_ptr<BlockChainImp> blockChain =
         std::dynamic_pointer_cast<BlockChainImp>(m_blockChain);
-    blockVerifier->setNumberHash(boost::bind(&BlockChainImp::numberHash, blockChain, _1));
+    blockVerifier->setNumberHash(
+        boost::bind(&BlockChainImp::numberHash, blockChain, boost::placeholders::_1));
     blockVerifier->setEvmFlags(m_param->mutableGenesisParam().evmFlags);
 
     m_blockVerifier = blockVerifier;
@@ -562,7 +564,7 @@ bool Ledger::initSync()
         m_blockVerifier, protocol_id, m_keyPair.pub(), genesisHash,
         m_param->mutableSyncParam().idleWaitMs, m_param->mutableSyncParam().gossipInterval,
         m_param->mutableSyncParam().gossipPeers, enableSendTxsByTree, enableSendBlockStatusByTree,
-        m_param->mutableSyncParam().syncTreeWidth);
+        m_param->mutableSyncParam().syncTreeWidth, m_param->mutableSyncParam().enableFreeNodeRead, m_param->mutableSyncParam().syncInfoPrintInterval);
 
     // create and setSyncMsgPacketFactory
     SyncMsgPacketFactory::Ptr syncMsgPacketFactory;

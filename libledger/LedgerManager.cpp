@@ -370,6 +370,7 @@ void LedgerManager::stopByGroupID(GROUP_ID const& _groupID)
         setGroupStatus(_groupID, LedgerStatus::STOPPED);
     }
 #ifndef FISCO_DEBUG
+    Ledger_LOG(INFO) << LOG_DESC("LedgerManager: stopByGroupID and ReleaseFreeMemory");
     MallocExtension::instance()->ReleaseFreeMemory();
 #endif
 }

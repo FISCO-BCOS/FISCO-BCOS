@@ -22,6 +22,8 @@
 
 #include "EVMHostInterface.h"
 #include "EVMHostContext.h"
+#include "libdevcore/Address.h"
+#include "libdevcore/FixedHash.h"
 #include "libethcore/Exceptions.h"
 #include <libblockverifier/ExecutiveContext.h>
 
@@ -158,6 +160,11 @@ evmc_tx_context getTxContext(evmc_host_context* _context) noexcept
     result.block_number = env.envInfo().number();
     result.block_timestamp = env.envInfo().timestamp();
     result.block_gas_limit = static_cast<int64_t>(env.envInfo().gasLimit());
+
+    result.block_coinbase = toEvmC(Address());
+    result.block_difficulty = toEvmC(h256());
+    result.chain_id = toEvmC(h256());
+
     return result;
 }
 

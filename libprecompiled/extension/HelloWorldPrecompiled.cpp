@@ -153,7 +153,7 @@ PrecompiledExecResult::Ptr HelloWorldPrecompiled::call(
     {  // unknown function call
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC(" unknown func ")
                                << LOG_KV("func", func);
-        callResult->setExecResult(abi.abiIn("", u256(CODE_UNKNOW_FUNCTION_CALL)));
+        callResult->setExecResult(abi.abiIn("", u256(int32_t(CODE_UNKNOW_FUNCTION_CALL))));
     }
 
     return callResult;

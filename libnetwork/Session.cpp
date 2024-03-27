@@ -78,12 +78,11 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, CallbackFu
     auto server = m_server.lock();
     if (!actived())
     {
-        SESSION_LOG(WARNING) << "Session inactived";
+        SESSION_LOG(INFO) << LOG_DESC("Session inactive") << LOG_KV("endpoint", nodeIPEndpoint());
         if (callback)
         {
-            server->threadPool()->enqueue([callback] {
-                callback(NetworkException(-1, "Session inactived"), Message::Ptr());
-            });
+            server->threadPool()->enqueue(
+                [callback] { callback(NetworkException(-1, "Session inactive"), Message::Ptr()); });
         }
         return;
     }
@@ -145,7 +144,7 @@ void Session::onWrite(boost::system::error_code ec, std::size_t, std::shared_ptr
         updateIdleTimer(m_writeIdleTimer);
         if (ec)
         {
-            SESSION_LOG(WARNING) << LOG_DESC("onWrite error sending")
+            SESSION_LOG(WARNING) << LOG_DESC("onWrite failed, drop session")
                                  << LOG_KV("message", ec.message())
                                  << LOG_KV("endpoint", nodeIPEndpoint());
             drop(TCPError);
@@ -162,7 +161,7 @@ void Session::onWrite(boost::system::error_code ec, std::size_t, std::shared_ptr
     }
     catch (std::exception& e)
     {
-        SESSION_LOG(ERROR) << LOG_DESC("onWrite error") << LOG_KV("endpoint", nodeIPEndpoint())
+        SESSION_LOG(ERROR) << LOG_DESC("onWrite failed") << LOG_KV("endpoint", nodeIPEndpoint())
                            << LOG_KV("what", boost::diagnostic_information(e));
         drop(TCPError);
         return;
@@ -216,7 +215,7 @@ void Session::write()
             else
             {
                 SESSION_LOG(WARNING)
-                    << "Error sending ssl socket is close!" << LOG_KV("endpoint", nodeIPEndpoint());
+                    << "sending socket is closed!" << LOG_KV("endpoint", nodeIPEndpoint());
                 drop(TCPError);
                 return;
             }
@@ -306,9 +305,9 @@ void Session::drop(DisconnectReason _reason)
             }
             else
             {
-                SESSION_LOG(WARNING) << "[drop] closing remote " << m_socket->remoteEndpoint()
-                                     << LOG_KV("reason", reasonOf(_reason))
-                                     << LOG_KV("endpoint", m_socket->nodeIPEndpoint());
+                SESSION_LOG(INFO) << "[drop] closing remote " << m_socket->remoteEndpoint()
+                                  << LOG_KV("reason", reasonOf(_reason))
+                                  << LOG_KV("endpoint", m_socket->nodeIPEndpoint());
             }
 
             /// if get Host object failed, close the socket directly
@@ -326,16 +325,16 @@ void Session::drop(DisconnectReason _reason)
                 /// drop operation has been aborted
                 if (error == boost::asio::error::operation_aborted)
                 {
-                    SESSION_LOG(DEBUG) << "[drop] operation aborted  by async_shutdown"
-                                       << LOG_KV("errorValue", error.value())
-                                       << LOG_KV("message", error.message());
+                    SESSION_LOG(DEBUG)
+                        << "[drop] operation aborted  by async_shutdown"
+                        << LOG_KV("code", error.value()) << LOG_KV("message", error.message());
                     return;
                 }
                 /// shutdown timer error
                 if (error && error != boost::asio::error::operation_aborted)
                 {
-                    SESSION_LOG(WARNING)
-                        << "[drop] shutdown timer error" << LOG_KV("errorValue", error.value())
+                    SESSION_LOG(INFO)
+                        << "[drop] shutdown timer failed" << LOG_KV("code", error.value())
                         << LOG_KV("message", error.message());
                 }
                 /// force to shutdown when timeout
@@ -348,27 +347,25 @@ void Session::drop(DisconnectReason _reason)
             });
 
             /// async shutdown normally
-            socket->sslref().async_shutdown(
-                [socket, shutdown_timer](const boost::system::error_code& error) {
-                    shutdown_timer->cancel();
-                    if (error)
-                    {
-                        SESSION_LOG(WARNING)
-                            << "[drop] shutdown failed " << LOG_KV("errorValue", error.value())
-                            << LOG_KV("message", error.message());
-                    }
-                    /// force to close the socket
-                    if (socket->ref().is_open())
-                    {
-                        SESSION_LOG(WARNING) << LOG_DESC("force to shutdown session")
-                                             << LOG_KV("endpoint", socket->nodeIPEndpoint());
-                        socket->close();
-                    }
-                });
+            socket->sslref().async_shutdown([socket, shutdown_timer](
+                                                const boost::system::error_code& error) {
+                shutdown_timer->cancel();
+                if (error)
+                {
+                    SESSION_LOG(INFO) << "[drop] shutdown failed " << LOG_KV("code", error.value())
+                                      << LOG_KV("message", error.message());
+                }
+                /// force to close the socket
+                if (socket->ref().is_open())
+                {
+                    SESSION_LOG(WARNING) << LOG_DESC("force to shutdown session")
+                                         << LOG_KV("endpoint", socket->nodeIPEndpoint());
+                    socket->close();
+                }
+            });
         }
         catch (...)
-        {
-        }
+        {}
     }
 }
 
@@ -405,8 +402,8 @@ void Session::doRead()
             {
                 if (ec)
                 {
-                    SESSION_LOG(WARNING)
-                        << LOG_DESC("doRead error") << LOG_KV("endpoint", s->nodeIPEndpoint())
+                    SESSION_LOG(INFO)
+                        << LOG_DESC("doRead failed") << LOG_KV("endpoint", s->nodeIPEndpoint())
                         << LOG_KV("message", ec.message());
                     s->drop(TCPError);
                     return;
@@ -451,16 +448,16 @@ void Session::doRead()
         }
         else
         {
-            SESSION_LOG(WARNING) << LOG_DESC("Error Reading ssl socket is close!");
+            SESSION_LOG(INFO) << LOG_DESC("Reading socket is closed!");
             drop(TCPError);
             return;
         }
     }
     else
     {
-        SESSION_LOG(ERROR) << LOG_DESC("callback doRead failed for session inactived")
-                           << LOG_KV("active", m_actived)
-                           << LOG_KV("haveNetwork", server->haveNetwork());
+        SESSION_LOG(INFO) << LOG_DESC("callback doRead failed for session inactive")
+                          << LOG_KV("active", m_actived)
+                          << LOG_KV("haveNetwork", server->haveNetwork());
     }
 }
 
@@ -469,7 +466,7 @@ bool Session::checkRead(boost::system::error_code _ec)
     if (_ec && _ec.category() != boost::asio::error::get_misc_category() &&
         _ec.value() != boost::asio::error::eof)
     {
-        SESSION_LOG(WARNING) << LOG_DESC("checkRead error") << LOG_KV("message", _ec.message());
+        SESSION_LOG(WARNING) << LOG_DESC("checkRead failed") << LOG_KV("message", _ec.message());
         drop(TCPError);
 
         return false;
@@ -556,7 +553,7 @@ void Session::updateIdleTimer(std::shared_ptr<boost::asio::deadline_timer> _idle
 {
     if (!m_actived)
     {
-        SESSION_LOG(ERROR) << LOG_DESC("Session inactived");
+        SESSION_LOG(INFO) << LOG_DESC("Session inactive") << LOG_KV("endpoint", nodeIPEndpoint());
 
         return;
     }
@@ -581,14 +578,13 @@ void Session::onIdle(const boost::system::error_code& error)
     {
         if (!m_actived)
         {
-            SESSION_LOG(ERROR) << LOG_DESC("Session inactived");
-
+            SESSION_LOG(INFO) << LOG_DESC("Session inactive");
             return;
         }
         if (error != boost::asio::error::operation_aborted)
         {
-            SESSION_LOG(ERROR) << LOG_DESC("Idle connection, disconnect ")
-                               << LOG_KV("endpoint", m_socket->nodeIPEndpoint());
+            SESSION_LOG(INFO) << LOG_DESC("Idle connection, disconnect ")
+                              << LOG_KV("endpoint", m_socket->nodeIPEndpoint());
             drop(IdleWaitTimeout);
         }
     }

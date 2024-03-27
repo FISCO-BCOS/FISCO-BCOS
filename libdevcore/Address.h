@@ -43,4 +43,9 @@ extern Address const MaxAddress;
 /// The SYSTEM address.
 extern Address const SystemAddress;
 
+/// Convert the given string into an address.
+Address toAddress(std::string const& _s);
+
+std::shared_ptr<std::set<Address>> convertStringToAddressSet(
+    std::string const& _addressListStr, std::string const& _splitStr);
 }  // namespace dev

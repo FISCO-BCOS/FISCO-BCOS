@@ -21,6 +21,7 @@
  */
 
 #include "VM.h"
+#include "CommonData.h"
 #include "interpreter.h"
 #include "libconfig/GlobalConfigure.h"
 #include "libdevcrypto/CryptoInterface.h"
@@ -109,7 +110,7 @@ evmc_result execute(evmc_instance* _instance, evmc_context* _context, evmc_revis
     {
         // Make a copy of the output.
         auto outputData = new uint8_t[output.size()];
-        std::memcpy(outputData, output.data(), output.size());
+        memcpyWithCheck(outputData, output.size(), output.data(), output.size());
         result.output_data = outputData;
         result.output_size = output.size();
         result.release = delete_output;
@@ -440,7 +441,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(MSTORE)
+        CASE(MSTORE)
         {
             ON_OP();
             updateMem(toInt63(m_SP[0]) + 32);
@@ -450,7 +451,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(MSTORE8)
+        CASE(MSTORE8)
         {
             ON_OP();
             updateMem(toInt63(m_SP[0]) + 1);
@@ -460,7 +461,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(SHA3)
+        CASE(SHA3)
         {
             ON_OP();
             int64_t sha3Gas = m_vmSchedule->sha3Gas;
@@ -475,7 +476,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(LOG0)
+        CASE(LOG0)
         {
             ON_OP();
             if (m_message->flags & EVMC_STATIC)
@@ -492,7 +493,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(LOG1)
+        CASE(LOG1)
         {
             ON_OP();
             if (m_message->flags & EVMC_STATIC)
@@ -512,7 +513,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(LOG2)
+        CASE(LOG2)
         {
             ON_OP();
             if (m_message->flags & EVMC_STATIC)
@@ -532,7 +533,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(LOG3)
+        CASE(LOG3)
         {
             ON_OP();
             if (m_message->flags & EVMC_STATIC)
@@ -552,7 +553,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(LOG4)
+        CASE(LOG4)
         {
             ON_OP();
             if (m_message->flags & EVMC_STATIC)
@@ -573,7 +574,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(EXP)
+        CASE(EXP)
         {
             u256 expon = m_SP[1];
             const int64_t byteCost = m_rev >= EVMC_SPURIOUS_DRAGON ? 50 : 10;
@@ -587,11 +588,11 @@ void VM::interpretCases()
         }
         NEXT
 
-            //
-            // ordinary instructions
-            //
+        //
+        // ordinary instructions
+        //
 
-            CASE(ADD)
+        CASE(ADD)
         {
             ON_OP();
             updateIOGas();
@@ -601,7 +602,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(MUL)
+        CASE(MUL)
         {
             ON_OP();
             updateIOGas();
@@ -611,7 +612,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(SUB)
+        CASE(SUB)
         {
             ON_OP();
             updateIOGas();
@@ -620,7 +621,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(DIV)
+        CASE(DIV)
         {
             ON_OP();
             updateIOGas();
@@ -629,7 +630,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(SDIV)
+        CASE(SDIV)
         {
             ON_OP();
             updateIOGas();
@@ -639,7 +640,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(MOD)
+        CASE(MOD)
         {
             ON_OP();
             updateIOGas();
@@ -648,7 +649,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(SMOD)
+        CASE(SMOD)
         {
             ON_OP();
             updateIOGas();
@@ -657,7 +658,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(NOT)
+        CASE(NOT)
         {
             ON_OP();
             updateIOGas();
@@ -666,7 +667,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(LT)
+        CASE(LT)
         {
             ON_OP();
             updateIOGas();
@@ -675,7 +676,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(GT)
+        CASE(GT)
         {
             ON_OP();
             updateIOGas();
@@ -684,7 +685,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(SLT)
+        CASE(SLT)
         {
             ON_OP();
             updateIOGas();
@@ -693,7 +694,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(SGT)
+        CASE(SGT)
         {
             ON_OP();
             updateIOGas();
@@ -702,7 +703,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(EQ)
+        CASE(EQ)
         {
             ON_OP();
             updateIOGas();
@@ -711,7 +712,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(ISZERO)
+        CASE(ISZERO)
         {
             ON_OP();
             updateIOGas();
@@ -720,7 +721,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(AND)
+        CASE(AND)
         {
             ON_OP();
             updateIOGas();
@@ -729,7 +730,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(OR)
+        CASE(OR)
         {
             ON_OP();
             updateIOGas();
@@ -738,7 +739,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(XOR)
+        CASE(XOR)
         {
             ON_OP();
             updateIOGas();
@@ -747,7 +748,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(BYTE)
+        CASE(BYTE)
         {
             ON_OP();
             updateIOGas();
@@ -756,7 +757,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(SHL)
+        CASE(SHL)
         {
             // Pre-constantinople
             if (m_rev < EVMC_CONSTANTINOPLE)
@@ -772,7 +773,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(SHR)
+        CASE(SHR)
         {
             // Pre-constantinople
             if (m_rev < EVMC_CONSTANTINOPLE)
@@ -788,7 +789,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(SAR)
+        CASE(SAR)
         {
             // Pre-constantinople
             if (m_rev < EVMC_CONSTANTINOPLE)
@@ -819,7 +820,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(ADDMOD)
+        CASE(ADDMOD)
         {
             ON_OP();
             updateIOGas();
@@ -828,7 +829,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(MULMOD)
+        CASE(MULMOD)
         {
             ON_OP();
             updateIOGas();
@@ -837,7 +838,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(SIGNEXTEND)
+        CASE(SIGNEXTEND)
         {
             ON_OP();
             updateIOGas();
@@ -855,8 +856,8 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(JUMPTO) CASE(JUMPIF) CASE(JUMPV) CASE(JUMPSUB) CASE(JUMPSUBV) CASE(RETURNSUB)
-                CASE(BEGINSUB) CASE(BEGINDATA) CASE(GETLOCAL) CASE(PUTLOCAL)
+        CASE(JUMPTO) CASE(JUMPIF) CASE(JUMPV) CASE(JUMPSUB) CASE(JUMPSUBV) CASE(RETURNSUB)
+            CASE(BEGINSUB) CASE(BEGINDATA) CASE(GETLOCAL) CASE(PUTLOCAL)
         {
             throwBadInstruction();
         }
@@ -894,7 +895,10 @@ void VM::interpretCases()
         CASE(XPUT)
         CASE(XGET)
         CASE(XSWIZZLE)
-        CASE(XSHUFFLE) { throwBadInstruction(); }
+        CASE(XSHUFFLE)
+        {
+            throwBadInstruction();
+        }
         CONTINUE
 
         CASE(ADDRESS)
@@ -906,7 +910,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(ORIGIN)
+        CASE(ORIGIN)
         {
             ON_OP();
             updateIOGas();
@@ -915,7 +919,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(BALANCE)
+        CASE(BALANCE)
         {
             m_runGas = m_rev >= EVMC_TANGERINE_WHISTLE ? 400 : 20;
             ON_OP();
@@ -929,7 +933,7 @@ void VM::interpretCases()
         NEXT
 
 
-            CASE(CALLER)
+        CASE(CALLER)
         {
             ON_OP();
             updateIOGas();
@@ -938,7 +942,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(CALLVALUE)
+        CASE(CALLVALUE)
         {
             ON_OP();
             updateIOGas();
@@ -948,7 +952,7 @@ void VM::interpretCases()
         NEXT
 
 
-            CASE(CALLDATALOAD)
+        CASE(CALLDATALOAD)
         {
             ON_OP();
             updateIOGas();
@@ -972,7 +976,7 @@ void VM::interpretCases()
         NEXT
 
 
-            CASE(CALLDATASIZE)
+        CASE(CALLDATASIZE)
         {
             ON_OP();
             updateIOGas();
@@ -981,7 +985,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(RETURNDATASIZE)
+        CASE(RETURNDATASIZE)
         {
             if (m_rev < EVMC_BYZANTIUM)
                 throwBadInstruction();
@@ -993,7 +997,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(CODESIZE)
+        CASE(CODESIZE)
         {
             ON_OP();
             updateIOGas();
@@ -1002,7 +1006,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(EXTCODESIZE)
+        CASE(EXTCODESIZE)
         {
             m_runGas = m_rev >= EVMC_TANGERINE_WHISTLE ? 700 : 20;
             ON_OP();
@@ -1014,7 +1018,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(CALLDATACOPY)
+        CASE(CALLDATACOPY)
         {
             ON_OP();
             m_copyMemSize = toInt63(m_SP[2]);
@@ -1026,7 +1030,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(RETURNDATACOPY)
+        CASE(RETURNDATACOPY)
         {
             ON_OP();
             if (m_rev < EVMC_BYZANTIUM)
@@ -1043,7 +1047,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(EXTCODEHASH)
+        CASE(EXTCODEHASH)
         {
             ON_OP();
             if (m_rev < EVMC_CONSTANTINOPLE)
@@ -1059,7 +1063,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(CODECOPY)
+        CASE(CODECOPY)
         {
             ON_OP();
             m_copyMemSize = toInt63(m_SP[2]);
@@ -1070,7 +1074,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(EXTCODECOPY)
+        CASE(EXTCODECOPY)
         {
             ON_OP();
             m_runGas = m_rev >= EVMC_TANGERINE_WHISTLE ? 700 : 20;
@@ -1095,7 +1099,7 @@ void VM::interpretCases()
         NEXT
 
 
-            CASE(GASPRICE)
+        CASE(GASPRICE)
         {
             ON_OP();
             updateIOGas();
@@ -1104,7 +1108,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(BLOCKHASH)
+        CASE(BLOCKHASH)
         {
             ON_OP();
             m_runGas = m_vmSchedule->stepGas6;
@@ -1125,7 +1129,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(COINBASE)
+        CASE(COINBASE)
         {
             ON_OP();
             updateIOGas();
@@ -1134,7 +1138,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(TIMESTAMP)
+        CASE(TIMESTAMP)
         {
             ON_OP();
             updateIOGas();
@@ -1143,7 +1147,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(NUMBER)
+        CASE(NUMBER)
         {
             ON_OP();
             updateIOGas();
@@ -1152,7 +1156,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(DIFFICULTY)
+        CASE(DIFFICULTY)
         {
             ON_OP();
             updateIOGas();
@@ -1161,7 +1165,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(GASLIMIT)
+        CASE(GASLIMIT)
         {
             ON_OP();
             updateIOGas();
@@ -1170,7 +1174,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(POP)
+        CASE(POP)
         {
             ON_OP();
             updateIOGas();
@@ -1179,7 +1183,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(PUSHC)
+        CASE(PUSHC)
         {
 #if EVM_USE_CONSTANT_POOL
             ON_OP();
@@ -1333,9 +1337,9 @@ void VM::interpretCases()
         NEXT
 
 
-            CASE(SWAP1) CASE(SWAP2) CASE(SWAP3) CASE(SWAP4) CASE(SWAP5) CASE(SWAP6) CASE(SWAP7)
-                CASE(SWAP8) CASE(SWAP9) CASE(SWAP10) CASE(SWAP11) CASE(SWAP12) CASE(SWAP13)
-                    CASE(SWAP14) CASE(SWAP15) CASE(SWAP16)
+        CASE(SWAP1) CASE(SWAP2) CASE(SWAP3) CASE(SWAP4) CASE(SWAP5) CASE(SWAP6) CASE(SWAP7)
+            CASE(SWAP8) CASE(SWAP9) CASE(SWAP10) CASE(SWAP11) CASE(SWAP12) CASE(SWAP13) CASE(SWAP14)
+                CASE(SWAP15) CASE(SWAP16)
         {
             ON_OP();
             updateIOGas();
@@ -1346,7 +1350,7 @@ void VM::interpretCases()
         NEXT
 
 
-            CASE(SLOAD)
+        CASE(SLOAD)
         {
             m_runGas = m_rev >= EVMC_TANGERINE_WHISTLE ? m_vmSchedule->sloadGas : 50;
 
@@ -1360,7 +1364,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(SSTORE)
+        CASE(SSTORE)
         {
             ON_OP();
             if (m_message->flags & EVMC_STATIC)
@@ -1385,7 +1389,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(PC)
+        CASE(PC)
         {
             ON_OP();
             updateIOGas();
@@ -1394,7 +1398,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(MSIZE)
+        CASE(MSIZE)
         {
             ON_OP();
             updateIOGas();
@@ -1403,7 +1407,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(GAS)
+        CASE(GAS)
         {
             ON_OP();
             updateIOGas();
@@ -1412,7 +1416,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(JUMPDEST)
+        CASE(JUMPDEST)
         {
             m_runGas = m_vmSchedule->jumpdestGas;
             ON_OP();
@@ -1420,7 +1424,7 @@ void VM::interpretCases()
         }
         NEXT
 
-            CASE(INVALID) DEFAULT
+        CASE(INVALID) DEFAULT
         {
             throwBadInstruction();
         }

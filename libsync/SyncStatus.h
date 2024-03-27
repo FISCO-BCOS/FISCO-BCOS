@@ -142,6 +142,12 @@ public:
 
     DownloadingBlockQueue& bq() { return m_downloadingBlockQueue; }
 
+    size_t size() const
+    {
+        ReadGuard l(x_peerStatus);
+        return m_peersStatus.size();
+    }
+
 private:
     int64_t selectPeers(int64_t const& _neighborSize, std::shared_ptr<NodeIDs> _nodeIds);
 

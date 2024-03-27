@@ -390,7 +390,7 @@ void ContractLifeCyclePrecompiled::listManager(
                 for (size_t i = 0; i < entries->size(); i++)
                 {
                     auto authority = entries->get(i)->getField(storagestate::STORAGE_VALUE);
-                    addrs.push_back(dev::eth::toAddress(authority));
+                    addrs.push_back(toAddress(authority));
                 }
             }
             else

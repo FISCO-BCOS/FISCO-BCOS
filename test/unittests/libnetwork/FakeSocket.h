@@ -47,8 +47,7 @@ public:
         try
         {
             m_wsSocket =
-                std::make_shared<boost::beast::websocket::stream<ba::ssl::stream<bi::tcp::socket>>>(
-                    _ioService, _sslContext);
+                std::make_shared<ba::ssl::stream<bi::tcp::socket>>(_ioService, _sslContext);
         }
         catch (Exception const& _e)
         {
@@ -119,12 +118,8 @@ public:
     }
     void setRemoteEndpoint(const bi::tcp::endpoint& end) { m_nodeIPEndpoint = end; }
 
-    bi::tcp::socket& ref() override { return m_wsSocket->next_layer().next_layer(); }
-    ba::ssl::stream<bi::tcp::socket>& sslref() override { return m_wsSocket->next_layer(); }
-    boost::beast::websocket::stream<ba::ssl::stream<bi::tcp::socket>>& wsref() override
-    {
-        return *m_wsSocket;
-    }
+    virtual bi::tcp::socket& ref() override { return m_wsSocket->next_layer(); }
+    virtual ba::ssl::stream<bi::tcp::socket>& sslref() override { return *m_wsSocket; }
 
     const NodeIPEndpoint& nodeIPEndpoint() const override { return m_nodeIPEndpoint; }
     void setNodeIPEndpoint(NodeIPEndpoint _nodeIPEndpoint) override
@@ -137,7 +132,7 @@ protected:
     bool m_alive = true;
     NodeIPEndpoint m_nodeIPEndpoint;
     std::queue<std::shared_ptr<boost::asio::streambuf>> m_queue;
-    std::shared_ptr<boost::beast::websocket::stream<ba::ssl::stream<bi::tcp::socket>>> m_wsSocket;
+    std::shared_ptr<ba::ssl::stream<bi::tcp::socket>> m_wsSocket;
 };
 
 }  // namespace network

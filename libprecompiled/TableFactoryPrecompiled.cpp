@@ -140,9 +140,19 @@ PrecompiledExecResult::Ptr TableFactoryPrecompiled::call(ExecutiveContext::Ptr c
                 tableName.size() > (size_t)USER_TABLE_NAME_MAX_LENGTH_S))
         {  // mysql TableName and fieldName length limit is 64
            // 2.2.0 user tableName length limit is 50-2=48
-            BOOST_THROW_EXCEPTION(StorageException(
-                CODE_TABLE_NAME_LENGTH_OVERFLOW, std::string("tableName length overflow ") +
-                                                     std::to_string(USER_TABLE_NAME_MAX_LENGTH)));
+
+            if (g_BCOSConfig.version() >= V2_9_0)
+            {
+                BOOST_THROW_EXCEPTION(StorageException(CODE_TABLE_NAME_LENGTH_OVERFLOW,
+                    std::string("tableName length overflow ") +
+                        std::to_string(USER_TABLE_NAME_MAX_LENGTH_S)));
+            }
+            else
+            {
+                BOOST_THROW_EXCEPTION(StorageException(CODE_TABLE_NAME_LENGTH_OVERFLOW,
+                    std::string("tableName length overflow ") +
+                        std::to_string(USER_TABLE_NAME_MAX_LENGTH)));
+            }
         }
 
         int result = 0;

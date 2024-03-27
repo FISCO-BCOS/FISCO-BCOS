@@ -1,5 +1,6 @@
 
 #include "EventLogFilterManager.h"
+#include "libdevcore/Log.h"
 #include <json/json.h>
 #include <libblockchain/BlockChainInterface.h>
 #include <libdevcore/TopicInfo.h>
@@ -67,10 +68,10 @@ filter_status EventLogFilterManager::executeFilter(EventLogFilter::Ptr _filter)
         BlockNumber nextBlockToProcess = filter->getNextBlockToProcess();
 
         auto result = (filter->getSessionCheckerCallback())(filter->getParams()->getGroupID());
-        // check if session is actived
+        // check if session is active
         if (result == filter_status::CALLBACK_FAILED)
         {
-            // maybe sesseion disconnect
+            // maybe session disconnect
             strDesc = "session not active";
             status = filter_status::CALLBACK_FAILED;
             break;
@@ -88,13 +89,20 @@ filter_status EventLogFilterManager::executeFilter(EventLogFilter::Ptr _filter)
             break;
         }
 
-        int64_t leftBlockCanProcess = blockNumber - nextBlockToProcess + 1;
+        int64_t leftBlock = filter->getParams()->getToBlock() - nextBlockToProcess + 1;
+
+        int64_t maxBlockCanProcess = blockNumber - nextBlockToProcess + 1;
         // Process up to m_maxBlockPerFilter blocks at a time, default MAX_BLOCK_PER_PROCESS
         int64_t thisLoopBlockCanProcess = MAX_BLOCK_PER_PROCESS;
         int64_t maxBlockPerLoopFilter = getMaxBlockPerFilter();
-        if (maxBlockPerLoopFilter > 0 && maxBlockPerLoopFilter > leftBlockCanProcess)
+        if (maxBlockPerLoopFilter > 0 && maxBlockPerLoopFilter > maxBlockCanProcess)
         {
-            thisLoopBlockCanProcess = leftBlockCanProcess;
+            thisLoopBlockCanProcess = maxBlockCanProcess;
+        }
+
+        if (thisLoopBlockCanProcess > leftBlock)
+        {
+            thisLoopBlockCanProcess = leftBlock;
         }
 
         Json::Value response(Json::arrayValue);
@@ -111,7 +119,7 @@ filter_status EventLogFilterManager::executeFilter(EventLogFilter::Ptr _filter)
         // call back
         if (!response.empty() && !filter->getResponseCallback()(filter->getParams()->getFilterID(),
                                      0, response, filter->getParams()->getGroupID()))
-        {  // call back failed, maybe sesseion disconnect
+        {  // call back failed, maybe session disconnect
             strDesc = "response callback failed, session not active";
             status = filter_status::CALLBACK_FAILED;
             break;
@@ -128,8 +136,8 @@ filter_status EventLogFilterManager::executeFilter(EventLogFilter::Ptr _filter)
 
         // There are remaining blocks to continue processing in the next loop
         status =
-            (leftBlockCanProcess > thisLoopBlockCanProcess ? filter_status::WAIT_FOR_NEXT_LOOP :
-                                                             filter_status::WAIT_FOR_MORE_BLOCK);
+            (maxBlockCanProcess > thisLoopBlockCanProcess ? filter_status::WAIT_FOR_NEXT_LOOP :
+                                                            filter_status::WAIT_FOR_MORE_BLOCK);
     } while (0);
 
     return status;
@@ -195,43 +203,30 @@ int32_t EventLogFilterManager::addEventLogFilterByRequest(const EventLogFilterPa
 void EventLogFilterManager::addEventLogFilter(EventLogFilter::Ptr _filter)
 {
     {
-        std::lock_guard<std::mutex> l(m_addMetux);
+        std::lock_guard<std::mutex> l(m_addMutex);
         m_waitAddFilter.push_back(_filter);
         m_waitAddCount += 1;
     }
 }
 
 // delete EventLogFilter in m_filters by client json request
-int32_t EventLogFilterManager::cancelEventLogFilterByRequest(const EventLogFilterParams::Ptr _params, uint32_t _version)
+int32_t EventLogFilterManager::cancelEventLogFilterByRequest(
+    const EventLogFilterParams::Ptr _params, uint32_t _version)
 {
     ResponseCode responseCode = ResponseCode::SUCCESS;
-    
-    EventLogFilter::Ptr filter = NULL;
-    for (auto it = m_filters.begin(); it != m_filters.end(); it++)
-    {
-        if ((*it)->getParams()->getFilterID() == _params->getFilterID()) 
-        {
-            filter = *it;
-        }
-    }
-    if (filter != NULL)
-    {
-        cancelEventLogFilter(filter);
-    } else {
-        responseCode = NONEXISTENT_EVENT;
-    }
-
+    cancelEventLogFilter(_params->getFilterID());
     EVENT_LOG(INFO) << LOG_BADGE("cancelEventLogFilterByRequest") << LOG_KV("result", responseCode)
-                    << LOG_KV("channel protocol version", _version);
+                    << LOG_KV("channel protocol version", _version)
+                    << LOG_KV("filterID", _params->getFilterID());
     return responseCode;
 }
 
 // delete _filter in m_filters waiting for loop thread to process
-void EventLogFilterManager::cancelEventLogFilter(EventLogFilter::Ptr _filter)
+void EventLogFilterManager::cancelEventLogFilter(const std::string& _filterID)
 {
     {
-        std::lock_guard<std::mutex> l(m_cancelMetux);
-        m_waitCancelFilter.push_back(_filter);
+        std::lock_guard<std::mutex> l(m_cancelMutex);
+        m_waitCancelFilterIDs.push_back(_filterID);
         m_waitCancelCount += 1;
     }
 }
@@ -241,7 +236,7 @@ void EventLogFilterManager::addFilter()
     uint64_t addCount = m_waitAddCount.load(std::memory_order_relaxed);
     if (addCount > 0)
     {
-        std::lock_guard<std::mutex> l(m_addMetux);
+        std::lock_guard<std::mutex> l(m_addMutex);
         {
             // insert all waiting filters to m_filters to be processed
             m_filters.insert(m_filters.begin(), m_waitAddFilter.begin(), m_waitAddFilter.end());
@@ -257,27 +252,28 @@ void EventLogFilterManager::cancelFilter()
     uint64_t cancelCount = m_waitCancelCount.load(std::memory_order_relaxed);
     if (cancelCount > 0)
     {
-        std::lock_guard<std::mutex> l(m_cancelMetux);
+        std::lock_guard<std::mutex> l(m_cancelMutex);
         {
-            // delelte all waiting filters in m_filters to be processed
-            for (EventLogFilter::Ptr filter : m_waitCancelFilter) {
-                string cannelFilterID = filter->getParams()->getFilterID();
+            // delete all waiting filters in m_filters to be processed
+            for (const std::string& cannelFilterID : m_waitCancelFilterIDs)
+            {
                 for (auto it = m_filters.begin(); it != m_filters.end();)
                 {
                     string filterID = (*it)->getParams()->getFilterID();
                     if (filterID == cannelFilterID)
                     {
-                        EVENT_LOG(TRACE) << LOG_BADGE("cancelFilter") << LOG_KV("filterID", filterID);
+                        EVENT_LOG(TRACE)
+                            << LOG_BADGE("cancelFilter") << LOG_KV("filterID", filterID);
                         m_filters.erase(it);
-                    } 
-                    else 
+                    }
+                    else
                     {
                         it++;
                     }
                 }
             }
 
-            m_waitCancelFilter.clear();
+            m_waitCancelFilterIDs.clear();
             m_waitCancelCount = 0;
         }
     }
@@ -290,7 +286,8 @@ void EventLogFilterManager::executeFilters()
     for (auto it = m_filters.begin(); it != m_filters.end();)
     {
         EventLogFilter::Ptr filter = *it;
-        EVENT_LOG(TRACE) << LOG_BADGE("executeFilters") << LOG_KV("filterId", filter->getParams()->getFilterID())
+        EVENT_LOG(TRACE) << LOG_BADGE("executeFilters")
+                         << LOG_KV("filterId", filter->getParams()->getFilterID())
                          << LOG_KV("groupID", filter->getParams()->getGroupID())
                          << LOG_KV("nextBlockToProcess", filter->getNextBlockToProcess())
                          << LOG_KV("startBlockNumber", filter->getParams()->getFromBlock())

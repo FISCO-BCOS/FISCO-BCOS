@@ -22,7 +22,9 @@
 #include "Service.h"
 #include "Common.h"
 #include "P2PMessage.h"
-#include "libdevcore/FixedHash.h"      // for FixedHash, hash
+#include "libdevcore/FixedHash.h"  // for FixedHash, hash
+#include "libdevcore/Guards.h"
+#include "libdevcore/Log.h"
 #include "libdevcore/ThreadPool.h"     // for ThreadPool
 #include "libnetwork/ASIOInterface.h"  // for ASIOInterface
 #include "libnetwork/Common.h"         // for SocketFace
@@ -31,7 +33,11 @@
 #include "libp2p/P2PMessageFactory.h"  // for P2PMessageFa...
 #include "libp2p/P2PSession.h"         // for P2PSession
 #include <libstat/NetworkStatHandler.h>
+#include <boost/filesystem.hpp>
 #include <boost/random.hpp>
+#include <boost/regex.hpp>
+#include <fstream>
+#include <iostream>
 #include <unordered_map>
 
 using namespace dev;
@@ -233,7 +239,7 @@ void Service::onConnect(dev::network::NetworkException e, dev::network::NodeInfo
     }
     if (e.errorCode())
     {
-        SERVICE_LOG(WARNING) << LOG_DESC("onConnect") << LOG_KV("errorCode", e.errorCode())
+        SERVICE_LOG(WARNING) << LOG_DESC("onConnect") << LOG_KV("code", e.errorCode())
                              << LOG_KV("nodeID", nodeID.abridged())
                              << LOG_KV("nodeName", nodeInfo.nodeName) << LOG_KV("endpoint", peer)
                              << LOG_KV("what", e.what());
@@ -263,11 +269,12 @@ void Service::onConnect(dev::network::NetworkException e, dev::network::NodeInfo
     }
 
     auto p2pSession = std::make_shared<P2PSession>();
+    auto p2pSessionWeakPtr = std::weak_ptr<P2PSession>(p2pSession);
     p2pSession->setSession(session);
     p2pSession->setNodeInfo(nodeInfo);
     p2pSession->setService(std::weak_ptr<Service>(shared_from_this()));
     p2pSession->session()->setMessageHandler(std::bind(&Service::onMessage, shared_from_this(),
-        std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, p2pSession));
+        std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, p2pSessionWeakPtr));
     p2pSession->start();
     updateStaticNodes(session->socket(), nodeID);
     if (it != m_sessions.end())
@@ -314,7 +321,7 @@ void Service::onDisconnect(dev::network::NetworkException e, P2PSession::Ptr p2p
         m_sessions.erase(it);
         if (e.errorCode() == dev::network::P2PExceptionType::DuplicateSession)
             return;
-        SERVICE_LOG(WARNING) << LOG_DESC("onDisconnect") << LOG_KV("errorCode", e.errorCode())
+        SERVICE_LOG(INFO) << LOG_DESC("onDisconnect") << LOG_KV("code", e.errorCode())
                              << LOG_KV("what", boost::diagnostic_information(e));
         RecursiveGuard l(x_nodes);
         for (auto& it : m_staticNodes)
@@ -329,10 +336,15 @@ void Service::onDisconnect(dev::network::NetworkException e, P2PSession::Ptr p2p
 }
 
 void Service::onMessage(dev::network::NetworkException e, dev::network::SessionFace::Ptr session,
-    dev::network::Message::Ptr message, P2PSession::Ptr p2pSession)
+    dev::network::Message::Ptr message, std::weak_ptr<P2PSession> p2pSessionWeakPtr)
 {
     try
     {
+        auto p2pSession = p2pSessionWeakPtr.lock();
+        if (!p2pSession)
+        {  // P2PSession is released
+            return;
+        }
         NodeID nodeID = id();
         NodeIPEndpoint nodeIPEndpoint(boost::asio::ip::address(), 0);
         if (session && p2pSession)
@@ -343,7 +355,7 @@ void Service::onMessage(dev::network::NetworkException e, dev::network::SessionF
 
         if (e.errorCode())
         {
-            SERVICE_LOG(WARNING) << LOG_DESC("disconnect error P2PSession")
+            SERVICE_LOG(INFO) << LOG_DESC("disconnect inactive P2PSession")
                                  << LOG_KV("nodeID", nodeID.abridged())
                                  << LOG_KV("endpoint", nodeIPEndpoint)
                                  << LOG_KV("errorCode", e.errorCode()) << LOG_KV("what", e.what());
@@ -379,8 +391,40 @@ void Service::onMessage(dev::network::NetworkException e, dev::network::SessionF
             updateIncomingTraffic(p2pMessage);
         }
 
+
         if (p2pMessage->isRequestPacket())
         {
+            auto ret = dev::eth::getGroupAndProtocol(abs(p2pMessage->protocolID()));
+            if (g_BCOSConfig.enableIgnoreObserverWriteRequest())
+            {  // only BlockSync message and the other messages from sealer is permitted
+               // all amop message will be filter out
+                auto groupID = ret.first;
+                if (ret.second != dev::eth::ProtocolID::BlockSync)
+                { // filter all request not from sealer
+                    RecursiveGuard guard(x_sealerList);
+                    auto it = m_groupID2SealerList.find(groupID);
+                    if (it == m_groupID2SealerList.end())
+                    {  // group not exist
+                        SERVICE_LOG(WARNING)
+                            << LOG_BADGE("Write-filter")
+                            << LOG_DESC("ignore unregistered group request")
+                            << LOG_KV("endpoint", nodeIPEndpoint) << LOG_KV("nodeID", nodeID.hex())
+                            << LOG_KV("groupID", groupID) << LOG_KV("protocolID", ret.second)
+                            << LOG_KV("messageSize", p2pMessage->length());
+                        return;
+                    }
+                    if (std::find(it->second.begin(), it->second.end(), nodeID) == it->second.end())
+                    {  // fromNode is not sealer
+                        SERVICE_LOG(WARNING)
+                            << LOG_BADGE("Write-filter")
+                            << LOG_DESC("ignore unregistered node request")
+                            << LOG_KV("endpoint", nodeIPEndpoint) << LOG_KV("nodeID", nodeID.hex())
+                            << LOG_KV("groupID", groupID) << LOG_KV("protocolID", ret.second)
+                            << LOG_KV("messageSize", p2pMessage->length());
+                        return;
+                    }
+                }
+            }
             CallbackFuncWithSession callback;
             {
                 RecursiveGuard lock(x_protocolID2Handler);
@@ -451,9 +495,9 @@ P2PMessage::Ptr Service::sendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr mess
         dev::network::NetworkException error = callback->error;
         if (error.errorCode() != 0)
         {
-            SERVICE_LOG(ERROR) << LOG_DESC("asyncSendMessageByNodeID error")
+            SERVICE_LOG(WARNING) << LOG_DESC("asyncSendMessageByNodeID failed")
                                << LOG_KV("nodeID", nodeID.abridged())
-                               << LOG_KV("errorCode", error.errorCode())
+                               << LOG_KV("code", error.errorCode())
                                << LOG_KV("what", error.what());
             BOOST_THROW_EXCEPTION(error);
         }
@@ -462,7 +506,7 @@ P2PMessage::Ptr Service::sendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr mess
     }
     catch (std::exception& e)
     {
-        SERVICE_LOG(ERROR) << LOG_DESC("asyncSendMessageByNodeID error")
+        SERVICE_LOG(WARNING) << LOG_DESC("asyncSendMessageByNodeID failed")
                            << LOG_KV("nodeID", nodeID.abridged())
                            << LOG_KV("what", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(e);
@@ -610,12 +654,12 @@ void Service::asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
         }
         else
         {
-            SERVICE_LOG(WARNING) << "Node inactived" << LOG_KV("nodeID", nodeID.abridged());
+            SERVICE_LOG(DEBUG) << "Node inactive" << LOG_KV("nodeID", nodeID.abridged());
         }
     }
     catch (std::exception& e)
     {
-        SERVICE_LOG(ERROR) << "asyncSendMessageByNodeID" << LOG_KV("nodeID", nodeID.abridged())
+        SERVICE_LOG(WARNING) << "asyncSendMessageByNodeID" << LOG_KV("nodeID", nodeID.abridged())
                            << LOG_KV("what", boost::diagnostic_information(e));
 
         if (callback)
@@ -660,8 +704,8 @@ P2PMessage::Ptr Service::sendMessageByTopic(std::string topic, P2PMessage::Ptr m
         dev::network::NetworkException error = callback->error;
         if (error.errorCode() != 0)
         {
-            SERVICE_LOG(ERROR) << LOG_DESC("sendMessageByTopic error") << LOG_KV("topic", topic)
-                               << LOG_KV("errorCode", error.errorCode())
+            SERVICE_LOG(WARNING) << LOG_DESC("sendMessageByTopic failed") << LOG_KV("topic", topic)
+                               << LOG_KV("code", error.errorCode())
                                << LOG_KV("what", error.what());
             BOOST_THROW_EXCEPTION(error);
         }
@@ -670,7 +714,7 @@ P2PMessage::Ptr Service::sendMessageByTopic(std::string topic, P2PMessage::Ptr m
     }
     catch (std::exception& e)
     {
-        SERVICE_LOG(ERROR) << "sendMessageByTopic error"
+        SERVICE_LOG(WARNING) << "sendMessageByTopic failed"
                            << LOG_KV("what", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(e);
     }
@@ -705,7 +749,7 @@ void Service::asyncSendMessageByTopic(std::string topic, P2PMessage::Ptr message
             {
                 if (e.errorCode() != 0)
                 {
-                    SERVICE_LOG(WARNING) << LOG_DESC("Send topics message error")
+                    SERVICE_LOG(WARNING) << LOG_DESC("Send topics message failed")
                                          << LOG_KV("to", m_current) << LOG_KV("what", e.what());
                 }
 
@@ -1123,4 +1167,178 @@ void Service::removeGroupBandwidthLimiter(GROUP_ID const& _groupID)
     m_group2BandwidthLimiter->erase(_groupID);
     SERVICE_LOG(INFO) << LOG_DESC("removeGroupBandwidthLimiter")
                       << LOG_KV("group", std::to_string(_groupID));
+}
+
+bool Service::addPeers(
+    std::vector<dev::network::NodeIPEndpoint> const& endpoints, std::string& response)
+{
+    if (endpoints.size() > m_peersParamLimit)
+    {
+        response = "refused for too many param peers. peers_param_limit: " +
+                   std::to_string(m_peersParamLimit);
+        return false;
+    }
+    auto nodes = staticNodes();
+    auto siz = nodes.size();
+    for (auto& endpoint : endpoints)
+    {
+        nodes.insert(std::make_pair(endpoint, NodeID()));
+    }
+    if (nodes.size() == siz)
+    {
+        SERVICE_LOG(INFO) << LOG_DESC("all the inserted peers already exist");
+        response = "all the inserted peers already exist";
+        return true;
+    }
+    if (nodes.size() > m_maxNodesLimit)
+    {
+        SERVICE_LOG(INFO) << LOG_DESC("refused for too many peers")
+                          << LOG_KV("LIMIT", m_maxNodesLimit);
+        response =
+            "refused for too many peers. max_nodes_limit: " + std::to_string(m_maxNodesLimit);
+        return false;
+    }
+    setStaticNodes(nodes);
+    SERVICE_LOG(INFO) << LOG_DESC("add peers to the running node successfully!");
+    SERVICE_LOG(DEBUG) << LOG_DESC("try to update the configfile now");
+    return updatePeersToIni(nodes, response);
+}
+
+bool Service::erasePeers(
+    std::vector<dev::network::NodeIPEndpoint> const& endpoints, std::string& response)
+{
+    if (endpoints.size() > m_peersParamLimit)
+    {
+        response = "refused for too many param peers. peers_param_limit: " +
+                   std::to_string(m_peersParamLimit);
+        return false;
+    }
+    auto nodes = staticNodes();
+    auto siz = nodes.size();
+    for (auto& endpoint : endpoints)
+    {
+        auto it = nodes.find(endpoint);
+        if (nodes.end() != it)
+        {
+            nodes.erase(it);
+        }
+    }
+    if (nodes.size() == siz)
+    {
+        SERVICE_LOG(INFO) << LOG_DESC("none of the erased peers exist");
+        response = "none of the erased peers exist";
+        return true;
+    }
+    setStaticNodes(nodes);
+    SERVICE_LOG(INFO) << LOG_DESC("erase peers to the running node successfully!");
+    SERVICE_LOG(DEBUG) << LOG_DESC("try to update the configfile now");
+    return updatePeersToIni(nodes, response);
+}
+
+bool Service::updatePeersToIni(
+    std::map<dev::network::NodeIPEndpoint, NodeID> const& nodes, std::string& response)
+{
+    std::string tmpData = "";
+    int _count = 0;
+    for (auto it = nodes.begin(); it != nodes.end(); it++)
+    {
+        tmpData += "    node." + std::to_string(_count) + (it->first.m_ipv6 ? "=[" : "=") +
+                   it->first.m_host + (it->first.m_ipv6 ? "]:" : ":") +
+                   std::to_string(it->first.m_port) + "\n";
+        _count++;
+    }
+
+    // output the nodes to the file "config.ini"
+    auto confDir = g_BCOSConfig.iniDir();
+    auto tmpConfDir = confDir + ".tmp";
+    std::string fileData;
+    std::string line;
+    boost::regex expNode("node\\.([0-9])+=(\\S)+:([0-9])+");
+    boost::regex expComment("[\\s]*;.*");
+    bool tmpDataUsed{false};
+    RecursiveGuard l(x_fileOperation);
+
+    std::ifstream configFile(confDir);
+    if (!configFile.is_open())
+    {
+        SERVICE_LOG(WARNING) << LOG_DESC("fail to open config file") << LOG_KV("path", confDir);
+        response = "fail to open config file";
+        return false;
+    }
+    else
+    {
+        bool lastLineEmpty = false;
+        while (!configFile.eof())
+        {
+            std::getline(configFile, line);
+            if (line.empty())
+            {
+                fileData += (lastLineEmpty ? "\n" : "");
+                lastLineEmpty = true;
+            }
+            else if (boost::regex_match(line, expComment) || !boost::regex_search(line, expNode))
+            {
+                fileData += (lastLineEmpty ? "\n" : "") + line + "\n";
+                // only '[p2p]' is ahead of the line
+                if (line.find("[p2p]") == 0)
+                {
+                    fileData += tmpData;
+                    tmpDataUsed = true;
+                }
+                lastLineEmpty = false;
+            }
+            else
+            {
+                // ignore the line that KV is about IP&port match regex expNode
+            }
+        }
+        configFile.close();
+    }
+    // if not find '[p2p]' section
+    if (!tmpDataUsed)
+    {
+        SERVICE_LOG(WARNING) << LOG_DESC("fail to insert peers' data into config file")
+                             << LOG_KV("path", confDir);
+        response = "fail to insert peers' data into config file";
+        return false;
+    }
+
+    std::ofstream tmpConfigFile(tmpConfDir);
+    if (!tmpConfigFile.is_open())
+    {
+        SERVICE_LOG(WARNING) << LOG_DESC("fail to create a tmp config file")
+                             << LOG_KV("path", tmpConfDir);
+        response = "fail to create a tmp config file";
+        return false;
+    }
+    else
+    {
+        tmpConfigFile.flush();
+        tmpConfigFile << fileData;
+        tmpConfigFile.close();
+        SERVICE_LOG(DEBUG) << LOG_DESC("try to output data to config file");
+    }
+    // make sure the output all right
+    boost::filesystem::path tmpConfigPath(tmpConfDir);
+    if (fileData.size() == boost::filesystem::file_size(tmpConfigPath))
+    {
+        SERVICE_LOG(INFO) << LOG_DESC("output data to config file successfully");
+    }
+    else
+    {
+        SERVICE_LOG(WARNING) << LOG_DESC("fail to output data to config file as expected");
+        response = "fail to output data to config file as expected";
+        return false;
+    }
+
+    if (0 != std::rename(tmpConfDir.c_str(), confDir.c_str()))
+    {
+        SERVICE_LOG(WARNING) << LOG_DESC("fail to rename the config file")
+                             << LOG_KV("path", tmpConfDir) << LOG_KV("error", std::strerror(errno));
+        response = "fail to rename the config file";
+        return false;
+    }
+    SERVICE_LOG(INFO) << LOG_DESC("update config file successfully") << LOG_KV("path", confDir);
+    response = "update config file successfully";
+    return true;
 }

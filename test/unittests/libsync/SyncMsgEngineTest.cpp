@@ -76,7 +76,7 @@ public:
                 onPeerTxsStatus(_packet, _peer, _msg);
                 break;
             // receive txs-requests,  _msg is only used to ensure the life-time for rlps of _packet
-            case TxsRequestPacekt:
+            case TxsRequestPacket:
                 onReceiveTxsRequest(_packet, _peer, _msg);
                 break;
             case StatusPacket:
@@ -85,7 +85,7 @@ public:
             case BlocksPacket:
                 onPeerBlocks(*_packet);
                 break;
-            case ReqBlocskPacket:
+            case ReqBlocksPacket:
                 onPeerRequestBlocks(*_packet);
                 break;
             default:
@@ -203,6 +203,11 @@ public:
     {
         return nullptr;
     }
+
+    std::map<dev::network::NodeIPEndpoint, NodeID> staticNodes() override
+    {
+        return std::map<dev::network::NodeIPEndpoint, NodeID>();
+    }
 };
 
 BOOST_FIXTURE_TEST_SUITE(SyncMsgEngineTest, SyncMsgEngineFixture)
@@ -278,7 +283,7 @@ BOOST_AUTO_TEST_CASE(SyncReqBlockPacketTest)
 BOOST_AUTO_TEST_CASE(BatchSendTest)
 {
     size_t maxPayloadSize =
-        dev::p2p::P2PMessage::MAX_LENGTH - 2048;  // should be the same as syncMsgEngine.cpp
+        dev::p2p::P2PMessage::MAX_MESSAGE_LENGTH - 2048;  // should be the same as syncMsgEngine.cpp
     size_t quarterPayloadSize = maxPayloadSize / 4;
 
     FakeServiceForDownloadBlocksContainer::Ptr service =

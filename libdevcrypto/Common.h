@@ -70,7 +70,7 @@ public:
     /// Normal constructor - populates object from the given secret key.
     /// If the secret key is invalid the constructor succeeds, but public key
     /// and address stay "null".
-    KeyPair(Secret const& _sec) : m_secret(_sec), m_public(toPublic(_sec))
+    KeyPair(Secret const& _sec) : m_secret(_sec), m_public(toPublic(_sec)), m_isInternalKey(false)
     {
         // Assign address only if the secret key is valid.
         if (m_public)
@@ -90,6 +90,18 @@ public:
     /// Retrieve the associated address of the public key.
     Address const& address() const { return m_address; }
 
+    /// Retrieve the key index
+    unsigned int keyIndex() const { return m_keyIndex; }
+
+    /// Get key type
+    bool isInternalKey() const { return m_isInternalKey; }
+
+    /// Set key index
+    void setKeyIndex(unsigned int keyIndex)
+    {
+        m_keyIndex = keyIndex;
+        m_isInternalKey = true;
+    }
     bool operator==(KeyPair const& _c) const { return m_public == _c.m_public; }
     bool operator!=(KeyPair const& _c) const { return m_public != _c.m_public; }
 
@@ -97,6 +109,8 @@ private:
     Secret m_secret;
     Public m_public;
     Address m_address;
+    bool m_isInternalKey;
+    unsigned int m_keyIndex;
 };
 
 namespace crypto

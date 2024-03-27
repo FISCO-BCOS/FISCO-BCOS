@@ -29,6 +29,7 @@ commands:
     steps:
       - run:
           name: Compile
+          no_output_timeout: 40m
           command: |
             mkdir -p build && cd build
             << parameters.compiler >> cmake << parameters.options >> ..
@@ -125,11 +126,12 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - deps-v2-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
-            - deps-v2-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
-            - deps-v2-{{ .Environment.CIRCLE_JOB }}-
+            - deps-v4-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+            - deps-v4-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
+            - deps-v4-{{ .Environment.CIRCLE_JOB }}-
       - run:
           name: Compile
+          no_output_timeout: 40m
           command: |
             source /opt/rh/devtoolset-7/enable
             yum list devtoolset-7\*
@@ -137,7 +139,7 @@ jobs:
             cmake3 -DTESTS=ON -DTOOL=ON -DDEMO=ON ..
             make -j2
       - save_cache:
-          key: deps-v2-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+          key: deps-v4-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
           paths:
             - deps
             - /ccache
@@ -161,12 +163,12 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - deps-cache-v1-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+            - deps-cache-v2-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
       - compile:
           options: "-DBUILD_STATIC=ON"
           compiler: "CC=/usr/bin/clang CXX=/usr/bin/clang++"
       - save_cache:
-          key: deps-cache-v1-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+          key: deps-cache-v2-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
           paths:
             - deps
             - /ccache
@@ -184,34 +186,6 @@ jobs:
       - store_artifacts:
           path: /FISCO-BCOS/build/bin/fisco-bcos-mini.tar.gz
           destination: fisco-bcos-mini.tar.gz
-
-  deploy_static:
-    working_directory: /FISCO-BCOS
-    executor: ubuntu-build-env
-    steps:
-      - install_depencies:
-          packages: "ca-certificates golang-go libgmp-dev flex bison patch"
-      - checkout
-      - compile:
-          options: "-DTOOL=ON -DBUILD_STATIC=ON -DCMAKE_BUILD_TYPE=Release"
-          compiler: "CC=/usr/bin/clang CXX=/usr/bin/clang++"
-      - run:
-          name: Strip
-          command: |
-            cd build/bin
-            tar -zcf fisco-bcos-withSymbols.tar.gz fisco-bcos
-            strip fisco-bcos
-            tar -zcf fisco-bcos.tar.gz fisco-bcos
-            strip fisco-sync
-            tar -zcf fisco-sync.tar.gz fisco-sync
-      - run:
-          name: Upload to GitHub Release
-          command: |
-            go get github.com/tcnksm/ghr
-            ~/go/bin/ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -replace ${CIRCLE_TAG} /FISCO-BCOS/tools/build_chain.sh
-            ~/go/bin/ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -replace ${CIRCLE_TAG} /FISCO-BCOS/build/bin/fisco-bcos.tar.gz
-            ~/go/bin/ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -replace ${CIRCLE_TAG} /FISCO-BCOS/build/bin/fisco-sync.tar.gz
-            ~/go/bin/ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -replace ${CIRCLE_TAG} /FISCO-BCOS/build/bin/fisco-bcos-withSymbols.tar.gz
 
 workflows:
   version: 2
@@ -255,13 +229,4 @@ workflows:
             branches:
               ignore: /^pull.*/
             tags:
-              ignore: /.*/
-  deploy:
-    jobs:
-      - deploy_static:
-          filters:
-            tags:
-              only:
-                - /v2.*/
-            branches:
               ignore: /.*/

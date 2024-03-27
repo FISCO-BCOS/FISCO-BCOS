@@ -52,8 +52,8 @@ void testMemoryTable2(size_t round, size_t count, bool verify)
 {
     boost::filesystem::create_directories("./RocksDB");
     rocksdb::Options options;
-    options.IncreaseParallelism();
-    options.OptimizeLevelStyleCompaction();
+    // options.IncreaseParallelism();
+    // options.OptimizeLevelStyleCompaction();
     options.create_if_missing = true;
     options.max_open_files = 1000;
     options.compression = rocksdb::kSnappyCompression;
@@ -73,7 +73,7 @@ void testMemoryTable2(size_t round, size_t count, bool verify)
     cachedStorage->setMaxCapacity(32 * 1024 * 1024);
     cachedStorage->setMaxForwardBlock(5);
 
-    auto factoryFactory = std::make_shared<MemoryTableFactoryFactory2>();
+    auto factoryFactory = std::make_shared<MemoryTableFactoryFactory2>(false);
     factoryFactory->setStorage(cachedStorage);
 
     auto createFactory = factoryFactory->newTableFactory(dev::h256(0), 0);

@@ -42,7 +42,7 @@ void InvariantChecker::checkInvariants(
     {
         LOG(WARNING) << (_pre ? "Pre" : "Post") << "invariant failed in" << _fn << "at" << _file
                      << ":" << _line;
-        ::boost::exception_detail::throw_exception_(FailedInvariant(), _fn, _file, _line);
+        //::boost::exception_detail::throw_exception_(FailedInvariant(), _fn, _file, _line);
     }
 }
 

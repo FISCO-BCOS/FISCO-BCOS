@@ -51,9 +51,7 @@ static void ExecuteTransaction(
     /// execute transaction
     if (!executive.execute())
     {
-        /// Timer timer;
         executive.go();
-        /// double execTime = timer.elapsed();
     }
     executive.finalize();
 }
@@ -117,7 +115,8 @@ int main()
     FakeBlockHeader(header, param);
     /// Fake envInfo
     std::shared_ptr<FakeBlockChain> blockChain = std::make_shared<FakeBlockChain>();
-    EnvInfo envInfo(header, boost::bind(&FakeBlockChain::numberHash, blockChain, _1), u256(0));
+    EnvInfo envInfo(header,
+        boost::bind(&FakeBlockChain::numberHash, blockChain, boost::placeholders::_1), u256(0));
     /// init state
     std::shared_ptr<MPTState> mptState = std::make_shared<MPTState>(
         u256(0), MPTState::openDB("./", keccak256("0x1234")), BaseState::Empty);

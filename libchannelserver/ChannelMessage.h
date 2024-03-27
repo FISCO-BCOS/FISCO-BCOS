@@ -48,7 +48,8 @@ enum ChannelMessageType
     CLIENT_HEARTBEAT = 0x13,              // type for heart beat for sdk
     CLIENT_HANDSHAKE = 0x14,              // type for hand shake
     CLIENT_REGISTER_EVENT_LOG = 0x15,     // type for event log filter register request and response
-    CLIENT_UNREGISTER_EVENT_LOG = 0x16,   // type for event log filter unregister request and response
+    CLIENT_UNREGISTER_EVENT_LOG = 0x16,   // type for event log filter unregister request and
+                                          // response
     AMOP_REQUEST = 0x30,                  // type for request from sdk
     AMOP_RESPONSE = 0x31,                 // type for response to sdk
     AMOP_CLIENT_SUBSCRIBE_TOPICS = 0x32,  // type for topic request
@@ -93,13 +94,13 @@ public:
         }
 
         m_length = ntohl(*((uint32_t*)&buffer[0]));
-
-#if 0
-        if (_length > MAX_LENGTH)
+        // invalid packet
+        if (m_length > MAX_LENGTH)
         {
+            CHANNEL_LOG(WARNING) << LOG_DESC("Illegal message packet") << LOG_KV("length", m_length)
+                                 << LOG_KV("maxLen", MAX_LENGTH);
             return -1;
         }
-#endif
 
         if (size < m_length)
         {
@@ -119,7 +120,7 @@ protected:
     const static size_t MIN_HEADER_LENGTH = 4;
 
     const static size_t HEADER_LENGTH = 4 + 2 + 32 + 4;
-    const static size_t MAX_LENGTH = ULONG_MAX;  // max 4G
+    const static size_t MAX_LENGTH = 100 * 1024 * 1024;  // max 100MB
 };
 
 class ChannelMessageFactory : public MessageFactory

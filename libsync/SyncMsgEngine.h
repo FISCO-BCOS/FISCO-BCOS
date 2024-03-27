@@ -63,7 +63,8 @@ public:
         m_genesisHash(_genesisHash)
     {
         m_service->registerHandlerByProtoclID(
-            m_protocolId, boost::bind(&SyncMsgEngine::messageHandler, this, _1, _2, _3));
+            m_protocolId, boost::bind(&SyncMsgEngine::messageHandler, this, boost::placeholders::_1,
+                              boost::placeholders::_2, boost::placeholders::_3));
         m_txsWorker = std::make_shared<dev::ThreadPool>("SyncMsgE-" + std::to_string(m_groupId), 1);
         m_txsSender =
             std::make_shared<dev::ThreadPool>("TxsSender-" + std::to_string(m_groupId), 1);
@@ -99,6 +100,18 @@ public:
     }
 
     NodeTimeMaintenance::Ptr nodeTimeMaintenance() { return m_nodeTimeMaintenance; }
+
+    void setSealerList(dev::h512s sealerList)
+    {
+        std::lock_guard<std::mutex> lock(x_sealerList);
+        m_sealerList = std::move(sealerList);
+    }
+
+    void setGroupNodeList(dev::h512s groupNodeList)
+    {
+        std::lock_guard<std::mutex> lock(x_groupNodeList);
+        m_groupNodeList = std::move(groupNodeList);
+    }
 
 private:
     bool checkSession(std::shared_ptr<dev::p2p::P2PSession> _session);
@@ -145,6 +158,10 @@ protected:
 
     // factory used to create sync related packet
     SyncMsgPacketFactory::Ptr m_syncMsgPacketFactory;
+    std::mutex x_sealerList;
+    dev::h512s m_sealerList;
+    std::mutex x_groupNodeList;
+    dev::h512s m_groupNodeList;
 };
 
 class DownloadBlocksContainer

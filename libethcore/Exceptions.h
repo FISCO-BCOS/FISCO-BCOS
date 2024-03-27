@@ -45,6 +45,7 @@ using BadFieldError = boost::tuple<errinfo_field, errinfo_data>;
 /// gas related exceptions
 DEV_SIMPLE_EXCEPTION(OutOfGasBase);
 DEV_SIMPLE_EXCEPTION(OutOfGasIntrinsic);
+DEV_SIMPLE_EXCEPTION(NotEnoughRemainGas);
 DEV_SIMPLE_EXCEPTION(NotEnoughCash);
 DEV_SIMPLE_EXCEPTION(GasPriceTooLow);
 DEV_SIMPLE_EXCEPTION(BlockGasLimitReached);
@@ -92,7 +93,6 @@ DEV_SIMPLE_EXCEPTION(InvalidSyncPeerCreation);
 /// common exceptions
 DEV_SIMPLE_EXCEPTION(InvalidNonce);
 DEV_SIMPLE_EXCEPTION(InvalidSignature);
-DEV_SIMPLE_EXCEPTION(InvalidAddress);
 DEV_SIMPLE_EXCEPTION(AddressAlreadyUsed);
 DEV_SIMPLE_EXCEPTION(InvalidTimestamp);
 DEV_SIMPLE_EXCEPTION(InvalidProtocolID);

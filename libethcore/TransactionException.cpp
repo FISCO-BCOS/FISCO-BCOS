@@ -186,6 +186,9 @@ std::ostream& dev::eth::operator<<(std::ostream& _out, TransactionException cons
     case TransactionException::OverGroupMemoryLimit:
         _out << "OverGroupMemoryLimit";
         break;
+    case TransactionException::NotEnoughRemainGas:
+        _out << "NotEnoughRemainGas";
+        break;
     default:
         _out << "Unknown";
         break;

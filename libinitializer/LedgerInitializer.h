@@ -44,6 +44,7 @@ public:
     void reloadSDKAllowList();
 
     std::shared_ptr<ledger::LedgerManager> ledgerManager() { return m_ledgerManager; }
+
     void setLedgerManager(std::shared_ptr<ledger::LedgerManager> _ledgerManager)
     {
         m_ledgerManager = _ledgerManager;
@@ -63,13 +64,13 @@ public:
 
     void startAll()
     {
-        if (m_ledgerManager)
+        if (nullptr != m_ledgerManager)
             m_ledgerManager->startAll();
     }
 
     void stopAll()
     {
-        if (m_ledgerManager)
+        if (nullptr != m_ledgerManager)
             m_ledgerManager->stopAll();
     }
 

@@ -258,7 +258,7 @@ PrecompiledExecResult::Ptr ChainGovernancePrecompiled::call(
                 CHAIN_GOVERNANCE_LOG(INFO)
                     << LOG_DESC("query member not exist") << LOG_KV("member", member);
                 callResult->setExecResult(
-                    abi.abiIn("", false, s256(CODE_COMMITTEE_MEMBER_NOT_EXIST)));
+                    abi.abiIn("", false, s256((int32_t)CODE_COMMITTEE_MEMBER_NOT_EXIST)));
                 break;
             }
             auto entry = entries->get(0);
@@ -316,12 +316,14 @@ int ChainGovernancePrecompiled::grantCommitteeMember(
     Table::Ptr acTable = openTable(_context, SYS_ACCESS_TABLE);
     auto condition = acTable->newCondition();
     auto entries = acTable->select(SYS_ACCESS_TABLE, condition);
-    if (entries->size() == 0u)
+
+    if (entries->size() == 0u || (_context->enableReconfirmCommittee() && entries->size() == 1))
     {  // grant committee member
         result = grantTablePermission(_context, SYS_ACCESS_TABLE, _member, _origin);
         grantTablePermission(_context, SYS_CONFIG, _member, _origin);
         grantTablePermission(_context, SYS_CONSENSUS, _member, _origin);
         // write weight
+
         auto committeeTable = getCommitteeTable(_context);
         auto entry = committeeTable->newEntry();
         entry->setField(CGP_COMMITTEE_TABLE_VALUE, to_string(1));
@@ -332,6 +334,7 @@ int ChainGovernancePrecompiled::grantCommitteeMember(
                                    << LOG_KV("return", result);
         return result;
     }
+
     condition = acTable->newCondition();
     condition->EQ(SYS_AC_ADDRESS, _member);
     auto addrEntries = acTable->select(SYS_ACCESS_TABLE, condition);
@@ -444,7 +447,7 @@ int ChainGovernancePrecompiled::grantOperator(
                                  " can't grantOperator operator " + _userAddress));
         return result;
     }
-    CHAIN_GOVERNANCE_LOG(INFO) << LOG_DESC("revokeCommitteeMember")
+    CHAIN_GOVERNANCE_LOG(INFO) << LOG_DESC("grantOperator")
                                << LOG_KV("origin", _origin.hexPrefixed())
                                << LOG_KV("operator", _userAddress) << LOG_KV("return", result);
     return result;
@@ -826,24 +829,6 @@ int ChainGovernancePrecompiled::revokeTablePermission(
     return acTable->remove(_tableName, condition, make_shared<AccessOptions>(_origin));
 }
 
-bool ChainGovernancePrecompiled::isCommitteeMember(
-    ExecutiveContext::Ptr context, Address const& account)
-{
-    auto acTable = openTable(context, SYS_ACCESS_TABLE);
-    auto condition = acTable->newCondition();
-    condition->EQ(SYS_AC_ADDRESS, account.hexPrefixed());
-    auto entries = acTable->select(SYS_ACCESS_TABLE, condition);
-    if (entries->size() != 0u)
-    {
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ChainGovernancePrecompiled")
-                               << LOG_DESC("account is a committee meember")
-                               << LOG_KV("account", account.hexPrefixed());
-        return true;
-    }
-
-    return false;
-}
-
 bool ChainGovernancePrecompiled::isOperator(ExecutiveContext::Ptr context, string const& account)
 {
     auto acTable = openTable(context, SYS_ACCESS_TABLE);
@@ -880,34 +865,7 @@ bool ChainGovernancePrecompiled::hasOperatorPermissions(
 AccountStatus ChainGovernancePrecompiled::getAccountStatus(
     ExecutiveContext::Ptr context, std::string const& tableName)
 {
-    Table::Ptr table = openTable(context, tableName);
-    if (!table)
-    {
-        return AccountStatus::AccAddressNonExistent;
-    }
-
-    auto codeHashEntries = table->select(storagestate::ACCOUNT_CODE_HASH, table->newCondition());
-    if (EmptyHash != h256(codeHashEntries->get(0)->getFieldBytes(storagestate::STORAGE_VALUE)))
-    {
-        return AccountStatus::InvalidAccountAddress;
-    }
-
-    auto frozenEntries = table->select(storagestate::ACCOUNT_FROZEN, table->newCondition());
-    if (frozenEntries->size() > 0 &&
-        "true" == frozenEntries->get(0)->getField(storagestate::STORAGE_VALUE))
-    {
-        return AccountStatus::AccFrozen;
-    }
-    else
-    {
-        return AccountStatus::AccAvailable;
-    }
-
-    PRECOMPILED_LOG(ERROR) << LOG_BADGE("ChainGovernancePrecompiled")
-                           << LOG_DESC("getAccountStatus error")
-                           << LOG_KV("account table name", tableName);
-
-    return AccountStatus::AccInvalid;
+    return dev::precompiled::getAccountStatus(context, tableName).first;
 }
 
 int ChainGovernancePrecompiled::updateFrozenStatus(ExecutiveContext::Ptr context,
@@ -954,13 +912,13 @@ void ChainGovernancePrecompiled::freezeAccount(ExecutiveContext::Ptr context, by
     {
         result = CODE_INVALID_ACCOUNT_ADDRESS;
     }
-    else if (!isCommitteeMember(context, origin))
+    else if (!dev::precompiled::isCommitteeMember(context, origin))
     {
         result = storage::CODE_NO_AUTHORIZED;
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ChainGovernancePrecompiled")
                                << LOG_DESC("permission denied");
     }
-    else if (isCommitteeMember(context, accountAddress))
+    else if (dev::precompiled::isCommitteeMember(context, accountAddress))
     {
         result = storage::CODE_NO_AUTHORIZED;
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ChainGovernancePrecompiled")
@@ -998,7 +956,7 @@ void ChainGovernancePrecompiled::unfreezeAccount(ExecutiveContext::Ptr context, 
     {
         result = CODE_INVALID_ACCOUNT_ADDRESS;
     }
-    else if (!isCommitteeMember(context, origin))
+    else if (!dev::precompiled::isCommitteeMember(context, origin))
     {
         result = storage::CODE_NO_AUTHORIZED;
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ChainGovernancePrecompiled")

@@ -32,7 +32,7 @@ class SnappyCompress
 {
 public:
     static size_t compress(bytesConstRef inputData, bytes& compressedData);
-    static size_t uncompress(bytesConstRef compressedData, bytes& uncompressedData);
+    static size_t uncompress(bytesConstRef compressedData, bytes& uncompressedData, size_t maxUncompressedLen = 0);
 };
 }  // namespace compress
 }  // namespace dev

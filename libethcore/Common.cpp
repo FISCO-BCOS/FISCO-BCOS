@@ -44,20 +44,6 @@ const unsigned c_BlockFieldSize = 4;
 const unsigned c_databaseVersion =
     c_databaseBaseVersion + (c_databaseVersionModifier << 8) + (23 << 9);
 
-Address toAddress(std::string const& _s)
-{
-    try
-    {
-        auto b = fromHex(_s.substr(0, 2) == "0x" ? _s.substr(2) : _s, WhenError::Throw);
-        if (b.size() == 20)
-            return Address(b);
-    }
-    catch (BadHexCharacter&)
-    {
-    }
-    BOOST_THROW_EXCEPTION(InvalidAddress());
-}
-
 static void badBlockInfo(BlockHeader const& _bi, string const& _err)
 {
     string const c_line = string(80, ' ');

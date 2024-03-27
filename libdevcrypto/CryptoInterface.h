@@ -66,8 +66,6 @@ void initCrypto();
 
 size_t signatureLength();
 
-size_t signatureLength();
-
 template <unsigned N>
 inline SecureFixedHash<32> Hash(SecureFixedHash<N>&& _data)
 {

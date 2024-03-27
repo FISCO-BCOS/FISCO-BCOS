@@ -113,7 +113,10 @@ public:
     explicit FixedHash(bytes const& _b, ConstructFromHashType _t = FailIfDifferent)
     {
         if (_b.size() == N)
-            memcpy(m_data.data(), _b.data(), std::min<unsigned>(_b.size(), N));
+        {
+            memcpyWithCheck(
+                m_data.data(), m_data.size(), _b.data(), std::min<unsigned>(_b.size(), N));
+        }
         else
         {
             m_data.fill(0);
@@ -131,7 +134,10 @@ public:
     explicit FixedHash(bytesConstRef _b, ConstructFromHashType _t = FailIfDifferent)
     {
         if (_b.size() == N)
-            memcpy(m_data.data(), _b.data(), std::min<unsigned>(_b.size(), N));
+        {
+            memcpyWithCheck(
+                m_data.data(), m_data.size(), _b.data(), std::min<unsigned>(_b.size(), N));
+        }
         else
         {
             m_data.fill(0);
@@ -146,7 +152,10 @@ public:
     }
 
     /// Explicitly construct, copying from a bytes in memory with given pointer.
-    explicit FixedHash(byte const* _bs, ConstructFromPointerType) { memcpy(m_data.data(), _bs, N); }
+    explicit FixedHash(byte const* _bs, ConstructFromPointerType)
+    {
+        memcpyWithCheck(m_data.data(), m_data.size(), _bs, N);
+    }
 
     /// Explicitly construct, copying from a  string.
     explicit FixedHash(std::string const& _s, ConstructFromStringType _t = FromHex,
@@ -213,8 +222,7 @@ public:
     FixedHash& operator++()
     {
         for (unsigned i = size; i > 0 && !++m_data[--i];)
-        {
-        }
+        {}
         return *this;
     }
 
@@ -340,8 +348,7 @@ public:
                     if (d & 0x80)
                         return ret;
                     else
-                    {
-                    }
+                    {}
             else
                 ret += 8;
         return ret;
@@ -587,15 +594,7 @@ using h160Hash = std::unordered_set<h160>;
 inline h160 right160(h256 const& _t)
 {
     h160 ret;
-    memcpy(ret.data(), _t.data() + 12, 20);
-    return ret;
-}
-
-/// Convert the given value into h160 (160-bit unsigned integer) using the left 20 bytes.
-inline h160 left160(h256 const& _t)
-{
-    h160 ret;
-    memcpy(&ret[0], _t.data(), 20);
+    memcpyWithCheck(ret.data(), ret.size, _t.data() + 12, 20);
     return ret;
 }
 

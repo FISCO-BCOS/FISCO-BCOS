@@ -1,5 +1,5 @@
 
-file(GLOB HEADERS "*.h")
+file(GLOB_RECURSE HEADERS "*.h")
 set(USER_PRECOMPILED_HEADER "")
 foreach(header ${HEADERS})
     string (REPLACE "${CMAKE_SOURCE_DIR}/" "" header "${header}")

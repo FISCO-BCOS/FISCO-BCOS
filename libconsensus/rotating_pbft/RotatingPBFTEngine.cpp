@@ -535,8 +535,8 @@ void RotatingPBFTEngine::createPBFTReqCache()
     // only broadcast rawPrepareStatus randomly when broadcast prepare by tree
     if (m_treeRouter)
     {
-        m_rpbftReqCache->setRandomSendRawPrepareStatusCallback(
-            boost::bind(&RotatingPBFTEngine::sendRawPrepareStatusRandomly, this, _1));
+        m_rpbftReqCache->setRandomSendRawPrepareStatusCallback(boost::bind(
+            &RotatingPBFTEngine::sendRawPrepareStatusRandomly, this, boost::placeholders::_1));
     }
     m_reqCache = m_rpbftReqCache;
     if (m_enablePrepareWithTxsHash)
@@ -840,7 +840,7 @@ void RotatingPBFTEngine::onReceiveRawPrepareResponse(
                            << LOG_KV("consNumber", m_consensusBlockNumber)
                            << LOG_KV("curView", m_view) << LOG_KV("idx", m_idx);
 
-    Guard l(m_mutex);
+    RecursiveGuard l(m_mutex);
     handlePrepareMsg(prepareReq, pbftMsgPacket->endpoint);
 }
 

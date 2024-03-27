@@ -40,6 +40,7 @@ void Initializer::init(std::string const& _path)
         m_logInitializer->initLog(pt);
         /// init global config. must init before DB, for compatibility
         initGlobalConfig(pt);
+        g_BCOSConfig.setiniDir(_path);
 
         // init the statLog
         if (g_BCOSConfig.enableStat())

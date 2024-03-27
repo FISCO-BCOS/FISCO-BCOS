@@ -47,6 +47,24 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
             InvalidPort() << errinfo_comment(
                 "P2PInitializer:  initConfig for P2PInitializer failed! Invalid ListenPort!"));
     }
+    int peersParamLimit = _pt.get<int>("p2p.peers_param_limit", 10);
+    if (peersParamLimit <= 0)
+    {
+        INITIALIZER_LOG(ERROR) << LOG_BADGE("P2PInitializer") << LOG_DESC("Invalid peersParamLimit")
+                               << LOG_KV("peers_param_limit", peersParamLimit);
+        ERROR_OUTPUT << LOG_BADGE("P2PInitializer") << LOG_DESC("Invalid peersParamLimit")
+                     << LOG_KV("peers_param_limit", peersParamLimit) << std::endl;
+        exit(1);
+    }
+    int maxNodesLimit = _pt.get<int>("p2p.max_nodes_limit", 100);
+    if (maxNodesLimit <= 0)
+    {
+        INITIALIZER_LOG(ERROR) << LOG_BADGE("P2PInitializer") << LOG_DESC("Invalid maxNodesLimit")
+                               << LOG_KV("max_nodes_limit", maxNodesLimit);
+        ERROR_OUTPUT << LOG_BADGE("P2PInitializer") << LOG_DESC("Invalid maxNodesLimit")
+                     << LOG_KV("max_nodes_limit", maxNodesLimit) << std::endl;
+        exit(1);
+    }
     std::string certBlacklistSection = "crl";
     if (_pt.get_child_optional("certificate_blacklist"))
     {
@@ -88,10 +106,10 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
                     else
                     {
                         INITIALIZER_LOG(ERROR) << LOG_BADGE("P2PInitializer")
-                                               << LOG_DESC("initConfig parse config faield")
+                                               << LOG_DESC("initConfig parse config failed")
                                                << LOG_KV("data", it.second.data());
                         ERROR_OUTPUT << LOG_BADGE("P2PInitializer")
-                                     << LOG_DESC("initConfig parse config faield")
+                                     << LOG_DESC("initConfig parse config failed")
                                      << LOG_KV("endpoint", it.second.data()) << std::endl;
                         exit(1);
                     }
@@ -99,10 +117,10 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
                 catch (std::exception& e)
                 {
                     INITIALIZER_LOG(ERROR)
-                        << LOG_BADGE("P2PInitializer") << LOG_DESC("parse address faield")
+                        << LOG_BADGE("P2PInitializer") << LOG_DESC("parse address failed")
                         << LOG_KV("endpoint", it.second.data())
                         << LOG_KV("EINFO", boost::diagnostic_information(e));
-                    ERROR_OUTPUT << LOG_BADGE("P2PInitializer") << LOG_DESC("parse address faield")
+                    ERROR_OUTPUT << LOG_BADGE("P2PInitializer") << LOG_DESC("parse address failed")
                                  << LOG_KV("endpoint", it.second.data())
                                  << LOG_KV("EINFO", boost::diagnostic_information(e)) << std::endl;
                     exit(1);
@@ -168,6 +186,8 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
         m_p2pService->setKeyPair(m_keyPair);
         m_p2pService->setP2PMessageFactory(messageFactory);
         m_p2pService->setWhitelist(whitelist);
+        m_p2pService->setPeersParamLimit(peersParamLimit);
+        m_p2pService->setMaxNodesLimit(maxNodesLimit);
         // start the p2pService
         m_p2pService->start();
     }

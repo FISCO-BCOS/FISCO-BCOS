@@ -65,7 +65,7 @@ public:
         std::shared_ptr<dev::network::SessionFace> session);
     virtual void onDisconnect(dev::network::NetworkException e, P2PSession::Ptr p2pSession);
     virtual void onMessage(dev::network::NetworkException e, dev::network::SessionFace::Ptr session,
-        dev::network::Message::Ptr message, P2PSession::Ptr p2pSession);
+        dev::network::Message::Ptr message, std::weak_ptr<P2PSession> p2pSessionWeakPtr);
 
     void onLocalAMOPMessage(
         P2PMessage::Ptr message, CallbackFuncWithSession callback, dev::network::Options options);
@@ -99,9 +99,14 @@ public:
 
     void registerHandlerByTopic(std::string topic, CallbackFuncWithSession handler) override;
 
-    virtual std::map<dev::network::NodeIPEndpoint, NodeID> staticNodes() { return m_staticNodes; }
+    virtual std::map<dev::network::NodeIPEndpoint, NodeID> staticNodes() override
+    {
+        RecursiveGuard l(x_nodes);
+        return m_staticNodes;
+    }
     virtual void setStaticNodes(std::map<dev::network::NodeIPEndpoint, NodeID> staticNodes)
     {
+        RecursiveGuard l(x_nodes);
         m_staticNodes = staticNodes;
     }
 
@@ -122,6 +127,11 @@ public:
     {
         RecursiveGuard l(x_nodeList);
         m_groupID2NodeList[_groupID] = _nodeList;
+    }
+    void setSealerListByGroupID(GROUP_ID _groupID, const dev::h512s& _sealerList) override
+    {
+        RecursiveGuard guard(x_sealerList);
+        m_groupID2SealerList[_groupID] = _sealerList;
     }
 
     virtual uint32_t topicSeq() { return m_topicSeq; }
@@ -198,6 +208,16 @@ public:
         m_channelNetworkStatHandler = _channelNetworkStatHandler;
     }
 
+    bool addPeers(
+        std::vector<dev::network::NodeIPEndpoint> const& endpoints, std::string& response) override;
+    bool erasePeers(
+        std::vector<dev::network::NodeIPEndpoint> const& endpoints, std::string& response) override;
+    void setPeersParamLimit(uint32_t const& peersParamLimit)
+    {
+        m_peersParamLimit = peersParamLimit;
+    }
+    void setMaxNodesLimit(uint32_t const& maxNodesLimit) { m_maxNodesLimit = maxNodesLimit; }
+
 private:
     void callDisconnectHandlers(dev::network::NetworkException _e, P2PSession::Ptr _p2pSession);
 
@@ -219,6 +239,8 @@ private:
     void updateIncomingTraffic(P2PMessage::Ptr _msg);
     void updateOutgoingTraffic(P2PMessage::Ptr _msg);
     void acquirePermits(P2PMessage::Ptr _msg);
+    bool updatePeersToIni(
+        std::map<dev::network::NodeIPEndpoint, NodeID> const& nodes, std::string& response);
 
 private:
     std::map<dev::network::NodeIPEndpoint, NodeID> m_staticNodes;
@@ -238,6 +260,9 @@ private:
     ///< the data is currently statically loaded and not synchronized between nodes
     mutable RecursiveMutex x_nodeList;
     std::map<GROUP_ID, h512s> m_groupID2NodeList;
+
+    mutable RecursiveMutex x_sealerList;
+    std::map<GROUP_ID, h512s> m_groupID2SealerList;
 
     std::shared_ptr<std::unordered_map<uint32_t, CallbackFuncWithSession>> m_protocolID2Handler;
     RecursiveMutex x_protocolID2Handler;
@@ -276,6 +301,11 @@ private:
     std::shared_ptr<std::unordered_map<uint32_t,
         std::pair<std::shared_ptr<boost::asio::deadline_timer>, dev::p2p::CallbackFuncWithSession>>>
         m_localAMOPCallbacks;
+
+    // for config file Operation
+    mutable RecursiveMutex x_fileOperation;
+    std::atomic<uint32_t> m_peersParamLimit = {10};
+    std::atomic<uint32_t> m_maxNodesLimit = {100};
 };
 
 }  // namespace p2p

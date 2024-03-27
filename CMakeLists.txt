@@ -16,15 +16,15 @@
 # You should have received a copy of the GNU General Public License
 # along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
 #
-# (c) 2016-2018 fisco-dev contributors.
+# (c) 2016-2023 fisco-dev contributors.
 #------------------------------------------------------------------------------
 
 cmake_minimum_required(VERSION 3.12)
 set(FISCO_BCOS_CMAKE_DIR "${CMAKE_CURRENT_LIST_DIR}/cmake" CACHE PATH "The path to the cmake directory")
 list(APPEND CMAKE_MODULE_PATH ${FISCO_BCOS_CMAKE_DIR})
-set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum OS X deployment version")
+set(CMAKE_OSX_DEPLOYMENT_TARGET "13" CACHE STRING "Minimum OS X deployment version")
 
-project(FISCO-BCOS VERSION "2.8.0")
+project(FISCO-BCOS VERSION "2.10.2")
 # Suffix like "-rc1" e.t.c. to append to versions wherever needed.
 set(VERSION_SUFFIX "")
 
@@ -51,19 +51,19 @@ include(ProjectCryptopp)
 include(ProjectSecp256k1)
 include(ProjectJsonCpp)
 include(ProjectJsonRpcCpp)
-include(ProjectTASSL)
 include(ProjectBoost)
 include(ProjectLibzdb)
 include(ProjectTCMalloc)
 include(ProjectLibFF)
 include(ProjectPaillier)
-include(ProjectGroupSig)
 include(ProjectEVMC)
 include(ProjectVRF)
 include(ProjectEVMONE)
+include(ProjectTASSL)
+include(ProjectGroupSig)
 
 if(USE_HSM_SDF)
-include(ProjectSDF)
+  include(ProjectSDF)
 endif()
 
 include_directories("${CMAKE_SOURCE_DIR}")

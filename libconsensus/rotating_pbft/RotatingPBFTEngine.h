@@ -48,7 +48,7 @@ public:
         m_chosedConsensusNodes = std::make_shared<std::set<dev::h512>>();
         // only broadcast PBFT message to the current consensus nodes
         m_broacastTargetsFilter =
-            boost::bind(&RotatingPBFTEngine::filterBroadcastTargets, this, _1);
+            boost::bind(&RotatingPBFTEngine::filterBroadcastTargets, this, boost::placeholders::_1);
         // only send transactions to the current consensus nodes
         m_blockSync->registerTxsReceiversFilter(
             [&](std::shared_ptr<std::set<dev::network::NodeID>> _peers) {
@@ -73,6 +73,7 @@ public:
             std::make_shared<dev::ThreadPool>("reqWait-" + std::to_string(m_groupId), 1);
     }
 
+    ~RotatingPBFTEngine() override {}
     // create TreeTopology to forward prepare message
     void createTreeTopology(unsigned const& _treeWidth)
     {

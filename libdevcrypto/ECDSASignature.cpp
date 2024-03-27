@@ -58,8 +58,8 @@ std::vector<unsigned char> dev::crypto::ECDSASignature::asBytes() const
 {
     std::vector<unsigned char> data;
     data.resize(65);
-    memcpy(data.data(), r.data(), 32);
-    memcpy(data.data() + 32, s.data(), 32);
+    memcpyWithCheck(data.data(), data.size(), r.data(), 32);
+    memcpyWithCheck(data.data() + 32, data.size() - 32, s.data(), 32);
     data[64] = v;
     return data;
 }
@@ -93,7 +93,7 @@ secp256k1_context const* getSecp256k1Ctx()
 
 std::shared_ptr<crypto::Signature> dev::ecdsaSignatureFromRLP(RLP const& _rlp, size_t _start)
 {
-    byte v = _rlp[_start++].toInt<byte>() - VBase;
+    ::byte v = _rlp[_start++].toInt<::byte>() - VBase;
     u256 r = _rlp[_start++].toInt<u256>();
     u256 s = _rlp[_start++].toInt<u256>();
     return std::make_shared<ECDSASignature>(r, s, v);
@@ -125,10 +125,10 @@ std::shared_ptr<crypto::Signature> dev::ecdsaSign(KeyPair const& _keyPair, h256 
     auto ss = std::make_shared<ECDSASignature>();
     ss->r = h256(s, FixedHash<32>::ConstructFromPointerType::ConstructFromPointer);
     ss->s = h256(s + 32, FixedHash<32>::ConstructFromPointerType::ConstructFromPointer);
-    ss->v = static_cast<byte>(v);
+    ss->v = static_cast<::byte>(v);
     if (ss->s > c_secp256k1n / 2)
     {
-        ss->v = static_cast<byte>(ss->v ^ 1);
+        ss->v = static_cast<::byte>(ss->v ^ 1);
         ss->s = h256(c_secp256k1n - u256(ss->s));
     }
     assert(ss->s <= c_secp256k1n / 2);
@@ -164,7 +164,7 @@ Public dev::ecdsaRecover(std::shared_ptr<crypto::Signature> _s, h256 const& _mes
     if (!secp256k1_ecdsa_recover(ctx, &rawPubkey, &rawSig, _message.data()))
         return {};
 
-    std::array<byte, 65> serializedPubkey;
+    std::array<::byte, 65> serializedPubkey;
     size_t serializedPubkeySize = serializedPubkey.size();
     secp256k1_ec_pubkey_serialize(
         ctx, serializedPubkey.data(), &serializedPubkeySize, &rawPubkey, SECP256K1_EC_UNCOMPRESSED);
@@ -185,13 +185,13 @@ pair<bool, bytes> dev::ecRecover(bytesConstRef _in)
         h256 s;
     } in;
 
-    memcpy(&in, _in.data(), min(_in.size(), sizeof(in)));
+    memcpyWithCheck(&in, sizeof(h256) * 4, _in.data(), min(_in.size(), sizeof(in)));
 
     h256 ret;
     u256 v = (u256)in.v;
     if (v >= 27 && v <= 28)
     {
-        auto sig = std::make_shared<ECDSASignature>(in.r, in.s, (byte)((int)v - 27));
+        auto sig = std::make_shared<ECDSASignature>(in.r, in.s, (::byte)((int)v - 27));
         if (sig->isValid())
         {
             try
@@ -211,8 +211,7 @@ pair<bool, bytes> dev::ecRecover(bytesConstRef _in)
                 }
             }
             catch (...)
-            {
-            }
+            {}
         }
     }
     return {true, {}};

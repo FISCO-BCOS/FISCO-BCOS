@@ -132,7 +132,7 @@ PrecompiledExecResult::Ptr CRUDPrecompiled::call(
         {
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("CRUDPrecompiled") << LOG_DESC("table open error")
                                    << LOG_KV("tableName", tableName);
-            callResult->setExecResult(abi.abiIn("", u256(CODE_TABLE_NOT_EXIST)));
+            callResult->setExecResult(abi.abiIn("", u256(int32_t(CODE_TABLE_NOT_EXIST))));
         }
 
         return callResult;
@@ -159,7 +159,8 @@ PrecompiledExecResult::Ptr CRUDPrecompiled::call(
                 PRECOMPILED_LOG(ERROR)
                     << LOG_BADGE("CRUDPrecompiled") << LOG_DESC("can't update the key")
                     << LOG_KV("table", tableName) << LOG_KV("key", table->tableInfo()->key);
-                callResult->setExecResult(abi.abiIn("", u256(CODE_INVALID_UPDATE_TABLE_KEY)));
+                callResult->setExecResult(
+                    abi.abiIn("", u256(int32_t(CODE_INVALID_UPDATE_TABLE_KEY))));
                 return callResult;
             }
             Condition::Ptr condition = table->newCondition();
@@ -190,7 +191,7 @@ PrecompiledExecResult::Ptr CRUDPrecompiled::call(
         {
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("CRUDPrecompiled") << LOG_DESC("table open error")
                                    << LOG_KV("tableName", tableName);
-            callResult->setExecResult(abi.abiIn("", u256(CODE_TABLE_NOT_EXIST)));
+            callResult->setExecResult(abi.abiIn("", u256(int32_t(CODE_TABLE_NOT_EXIST))));
         }
 
         return callResult;
@@ -222,7 +223,7 @@ PrecompiledExecResult::Ptr CRUDPrecompiled::call(
         {
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("CRUDPrecompiled") << LOG_DESC("table open error")
                                    << LOG_KV("tableName", tableName);
-            callResult->setExecResult(abi.abiIn("", u256(CODE_TABLE_NOT_EXIST)));
+            callResult->setExecResult(abi.abiIn("", u256(int32_t(CODE_TABLE_NOT_EXIST))));
         }
 
         return callResult;
@@ -270,7 +271,7 @@ PrecompiledExecResult::Ptr CRUDPrecompiled::call(
         {
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("CRUDPrecompiled") << LOG_DESC("table open error")
                                    << LOG_KV("tableName", tableName);
-            callResult->setExecResult(abi.abiIn("", u256(CODE_TABLE_NOT_EXIST)));
+            callResult->setExecResult(abi.abiIn("", u256(int32_t(CODE_TABLE_NOT_EXIST))));
         }
 
         return callResult;
@@ -279,7 +280,7 @@ PrecompiledExecResult::Ptr CRUDPrecompiled::call(
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("CRUDPrecompiled")
                                << LOG_DESC("call undefined function") << LOG_KV("func", func);
-        callResult->setExecResult(abi.abiIn("", u256(CODE_UNKNOW_FUNCTION_CALL)));
+        callResult->setExecResult(abi.abiIn("", u256(int32_t(CODE_UNKNOW_FUNCTION_CALL))));
 
         return callResult;
     }

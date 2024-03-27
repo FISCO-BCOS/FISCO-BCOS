@@ -25,7 +25,7 @@
 
 #include <libnetwork/Common.h>
 #include <boost/asio.hpp>
-#include <boost/bind.hpp>
+#include <boost/bind/bind.hpp>
 #include <iostream>
 
 
@@ -43,8 +43,10 @@ void dev::channel::ChannelServer::run()
     OPENSSL_free((void*)issuer);
 
     // ChannelReq process more request, should be larger
-    m_requestThreadPool = std::make_shared<ThreadPool>("ChannelReq", 16);
-    m_responseThreadPool = std::make_shared<ThreadPool>("ChannelResp", 8);
+    m_requestThreadPool =
+        std::make_shared<ThreadPool>("ChannelReq", m_threadPoolSize > 0 ? m_threadPoolSize : 16);
+    m_responseThreadPool =
+        std::make_shared<ThreadPool>("ChannelResp", m_threadPoolSize > 0 ? m_threadPoolSize : 8);
     if (!m_listenHost.empty() && m_listenPort > 0)
     {
         m_acceptor = std::make_shared<boost::asio::ip::tcp::acceptor>(
@@ -54,6 +56,9 @@ void dev::channel::ChannelServer::run()
         boost::asio::socket_base::reuse_address optionReuseAddress(true);
         m_acceptor->set_option(optionReuseAddress);
     }
+
+    CHANNEL_LOG(INFO) << LOG_BADGE("ChannelServer::run")
+                      << LOG_KV("threadPoolSize", m_threadPoolSize);
 
     m_serverThread = std::make_shared<std::thread>([=]() {
         pthread_setThreadName("ChannelServer");
@@ -91,9 +96,9 @@ void dev::channel::ChannelServer::onAccept(
     {
         boost::system::error_code ec;
         auto remoteEndpoint = session->sslSocket()->lowest_layer().remote_endpoint(ec);
-        CHANNEL_LOG(TRACE) << LOG_DESC("Receive new connection")
-                           << LOG_KV("from", remoteEndpoint.address().to_string()) << ":"
-                           << remoteEndpoint.port();
+        CHANNEL_LOG(INFO) << LOG_DESC("Receive new connection")
+                          << LOG_KV("from", remoteEndpoint.address().to_string()) << ":"
+                          << remoteEndpoint.port();
 
         session->setHost(remoteEndpoint.address().to_string());
         session->setPort(remoteEndpoint.port());
@@ -152,7 +157,7 @@ dev::channel::ChannelServer::newVerifyCallback(std::shared_ptr<std::string> _sdk
             X509* cert = X509_STORE_CTX_get_current_cert(ctx.native_handle());
             if (!cert)
             {
-                CHANNEL_LOG(ERROR) << LOG_DESC("Get cert failed");
+                CHANNEL_LOG(WARNING) << LOG_DESC("Get cert failed");
                 return preverified;
             }
 
@@ -161,7 +166,7 @@ dev::channel::ChannelServer::newVerifyCallback(std::shared_ptr<std::string> _sdk
                 (BASIC_CONSTRAINTS*)X509_get_ext_d2i(cert, NID_basic_constraints, &crit, NULL);
             if (!basic)
             {
-                CHANNEL_LOG(ERROR) << LOG_DESC("Get ca basic failed");
+                CHANNEL_LOG(WARNING) << LOG_DESC("Get ca basic failed");
                 return preverified;
             }
             /// ignore ca
@@ -268,7 +273,6 @@ void dev::channel::ChannelServer::onHandshake(const boost::system::error_code& e
     {
         if (!error)
         {
-            CHANNEL_LOG(TRACE) << LOG_DESC("SSL handshake success");
             if (m_connectionHandler)
             {
                 m_connectionHandler(ChannelException(), session);
@@ -277,11 +281,20 @@ void dev::channel::ChannelServer::onHandshake(const boost::system::error_code& e
             {
                 CHANNEL_LOG(ERROR) << LOG_DESC("connectionHandler empty");
             }
-            session->setRemotePublicKey(dev::h512(*_sdkPublicKey));
+
+            if (!_sdkPublicKey->empty())
+            {
+                session->setRemotePublicKey(dev::h512(*_sdkPublicKey));
+            }
+
+            CHANNEL_LOG(DEBUG) << LOG_DESC("Channel Server SSL handshake success")
+                               << LOG_KV("pubKey", *_sdkPublicKey);
         }
         else
         {
             CHANNEL_LOG(WARNING) << LOG_DESC("SSL handshake error")
+                                 << LOG_KV("remoteHost", session->host())
+                                 << LOG_KV("remotePort", session->port())
                                  << LOG_KV("message", error.message());
 
             try

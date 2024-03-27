@@ -9,6 +9,7 @@ ExternalProject_Add(mpir
     DOWNLOAD_NAME mpir-cmake-47910ac6.tar.gz
     DOWNLOAD_NO_PROGRESS TRUE
     URL https://github.com/FISCO-BCOS/mpir/archive/47910ac631c599774577b155a33fa3a372155c1d.tar.gz
+        https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/FISCO-BCOS/deps/mpir-cmake-47910ac6.tar.gz
     URL_HASH SHA256=f09fab14ce96624ddfb2803f515326b9fbb503010258fd8b74d290ea205b463c
     CMAKE_ARGS
         -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>

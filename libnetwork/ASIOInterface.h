@@ -148,12 +148,6 @@ public:
                     ba::async_write(socket->sslref(), buffers, handler);
                     break;
                 }
-                case WEBSOCKET:
-                {
-                    // ba::async_write(socket->wsref(), buffers, handler);
-                    socket->wsref().async_write(buffers, handler);
-                    break;
-                }
                 }
             }
         });
@@ -174,11 +168,6 @@ public:
             ba::async_read(socket->sslref(), buffers, handler);
             break;
         }
-        case WEBSOCKET:
-        {
-            ba::async_read(socket->wsref(), buffers, handler);
-            break;
-        }
         }
     }
 
@@ -197,18 +186,14 @@ public:
             socket->sslref().async_read_some(buffers, handler);
             break;
         }
-        case WEBSOCKET:
-        {
-            socket->wsref().async_read_some(buffers, handler);
-            break;
-        }
         }
     }
 
     virtual void asyncHandshake(std::shared_ptr<SocketFace> socket,
         ba::ssl::stream_base::handshake_type type, Handler_Type handler)
     {
-        socket->sslref().async_handshake(type, handler);
+            socket->sslref().async_handshake(type, handler);
+        
     }
 
     virtual void asyncWait(boost::asio::deadline_timer* m_timer,

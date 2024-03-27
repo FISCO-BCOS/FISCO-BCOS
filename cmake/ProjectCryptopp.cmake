@@ -24,16 +24,19 @@
 include(ExternalProject)
 include(GNUInstallDirs)
 
+set(prefix "${CMAKE_CURRENT_SOURCE_DIR}/deps")
+set(CRYPTOPP_LIBRARY ${prefix}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}cryptopp${CMAKE_STATIC_LIBRARY_SUFFIX})
+set(CRYPTOPP_INCLUDE_DIR ${prefix}/include)
+
 ExternalProject_Add(cryptopp
-    PREFIX ${CMAKE_SOURCE_DIR}/deps
+    PREFIX ${prefix}
     # This points to unreleased version 5.6.5+ but contains very small
     # warning fix:
     # https://github.com/weidai11/cryptopp/commit/903b8feaa70199eb39a313b32a71268745ddb600
     DOWNLOAD_NAME cryptopp_bccc6443.tar.gz
     DOWNLOAD_NO_PROGRESS 1
-    URL https://github.com/weidai11/cryptopp/archive/bccc6443c4d4d611066c2de4c17109380cf97704.tar.gz
-        https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/cryptopp_bccc6443.tar.gz
-    URL_HASH SHA256=f1fddacadd2a0873f795d5614a85fecd5b6ff1d1c6e21dedc251703c54ce63aa
+    URL https://github.com/abdes/cryptopp-cmake/archive/f857b775bcb4ff24e4993d85cce811587f8b0616.tar.gz
+    URL_HASH SHA256=e8e350cddc1fdabe3cdd734348686850c66223d77d9d16f71aa7e5c51a57bf72
     PATCH_COMMAND ${CMAKE_COMMAND} -E remove
         3way.cpp
         adler32.cpp
@@ -137,9 +140,11 @@ ExternalProject_Add(cryptopp
         zlib.cpp
     CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
         -DCMAKE_BUILD_TYPE=Release
+        -DCMAKE_INSTALL_LIBDIR=lib
         # Build static lib but suitable to be included in a shared lib.
         -DCMAKE_POSITION_INDEPENDENT_CODE=${BUILD_SHARED_LIBS}
         -DBUILD_SHARED=OFF
+        -DCRYPTOPP_BUILD_TESTING=off
         -DBUILD_TESTING=OFF
         -DCMAKE_C_FLAGS='${MARCH_TYPE}'
         -DCMAKE_CXX_FLAGS='${MARCH_TYPE}'
@@ -150,14 +155,14 @@ ExternalProject_Add(cryptopp
     LOG_CONFIGURE 1
     LOG_BUILD 1
     LOG_INSTALL 1
-    BUILD_BYPRODUCTS <INSTALL_DIR>/${CMAKE_INSTALL_LIBDIR}/libcryptopp.a
+    ${_overwrite_install_command}
+    BUILD_BYPRODUCTS "${CRYPTOPP_LIBRARY}"
 )
 ExternalProject_Get_Property(cryptopp INSTALL_DIR)
 add_library(Cryptopp STATIC IMPORTED)
 
-set(CRYPTOPP_LIBRARY ${INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}/${CMAKE_STATIC_LIBRARY_PREFIX}cryptopp${CMAKE_STATIC_LIBRARY_SUFFIX})
-set(CRYPTOPP_INCLUDE_DIR ${INSTALL_DIR}/include)
 file(MAKE_DIRECTORY ${CRYPTOPP_INCLUDE_DIR})  # Must exist.
+
 set_property(TARGET Cryptopp PROPERTY IMPORTED_LOCATION ${CRYPTOPP_LIBRARY})
 set_property(TARGET Cryptopp PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${CRYPTOPP_INCLUDE_DIR})
 add_dependencies(Cryptopp cryptopp)

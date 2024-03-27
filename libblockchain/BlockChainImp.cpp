@@ -731,6 +731,62 @@ void BlockChainImp::initSystemConfig(
     _tb->insert(_key, entry);
 }
 
+std::shared_ptr<std::set<Address>> BlockChainImp::getCommitteeMembers()
+{
+    auto blockNumber = number();
+    // hit the cache
+    {
+        ReadGuard l(x_committeeCacheToBlockNumber);
+        if (m_committeeCacheToBlockNumber.first != nullptr &&
+            m_committeeCacheToBlockNumber.second == blockNumber)
+        {
+            return m_committeeCacheToBlockNumber.first;
+        }
+    }
+    auto committeeList = std::make_shared<std::set<Address>>();
+    try
+    {
+        auto acTable = getMemoryTableFactory()->openTable(SYS_ACCESS_TABLE);
+
+        if (!acTable)
+        {
+            return committeeList;
+        }
+        auto condition = acTable->newCondition();
+        condition->LE(SYS_AC_ENABLENUM, to_string(blockNumber));
+        auto entries = acTable->select(SYS_ACCESS_TABLE, condition);
+        if (!entries)
+        {
+            return committeeList;
+        }
+        for (size_t i = 0; i < entries->size(); i++)
+        {
+            auto entry = entries->get(i);
+            try
+            {
+                committeeList->insert(toAddress(entry->getField(SYS_AC_ADDRESS)));
+            }
+            catch (Exception const& _e)
+            {
+                BLOCKCHAIN_LOG(WARNING)
+                    << LOG_DESC("convert restored committee member to address failed")
+                    << LOG_KV("restoredCommittee", entry->getField(SYS_AC_ADDRESS))
+                    << LOG_KV("error", boost::diagnostic_information(_e));
+            }
+        }
+
+        WriteGuard l(x_committeeCacheToBlockNumber);
+        m_committeeCacheToBlockNumber = std::make_pair(committeeList, blockNumber);
+        return committeeList;
+    }
+    catch (Exception const& _e)
+    {
+        BLOCKCHAIN_LOG(ERROR) << LOG_DESC("getCommitteeMembers exceptioned")
+                              << LOG_KV("error", boost::diagnostic_information(_e));
+    }
+    return committeeList;
+}
+
 dev::h512s BlockChainImp::getNodeListByType(int64_t blockNumber, std::string const& type)
 {
     dev::h512s list;
@@ -836,7 +892,7 @@ std::pair<std::string, BlockNumber> BlockChainImp::getSystemConfigInfoByKey(
             BLOCKCHAIN_LOG(ERROR) << LOG_DESC("[#getSystemConfigByKey]Open table error");
             return *result;
         }
-        result = dev::precompiled::getSysteConfigByKey(m_stateStorage, key, blockNumber);
+        result = dev::precompiled::getSysConfigByKey(m_stateStorage, key, blockNumber);
     }
     catch (std::exception& e)
     {

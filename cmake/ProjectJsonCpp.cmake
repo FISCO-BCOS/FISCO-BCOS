@@ -33,6 +33,7 @@ ExternalProject_Add(jsoncpp
     DOWNLOAD_NAME jsoncpp-1.7.7.tar.gz
     DOWNLOAD_NO_PROGRESS 1
     URL https://github.com/open-source-parsers/jsoncpp/archive/1.7.7.tar.gz
+        https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/FISCO-BCOS/deps/jsoncpp-1.7.7.tar.gz
         https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/jsoncpp-1.7.7.tar.gz
     URL_HASH SHA256=087640ebcf7fbcfe8e2717a0b9528fff89c52fcf69fa2a18cc2b538008098f97
     CMAKE_COMMAND ${JSONCPP_CMAKE_COMMAND}
@@ -44,13 +45,13 @@ ExternalProject_Add(jsoncpp
                -DJSONCPP_WITH_PKGCONFIG_SUPPORT=OFF
                	# -DCMAKE_C_FLAGS=-Wa,-march=generic64
                	# -DCMAKE_CXX_FLAGS=-Wa,-march=generic64
-               	-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
-        		-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
+               	-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER} -Wno-error
+        		-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER} -Wno-error
     LOG_CONFIGURE 1
     LOG_BUILD 1
     BUILD_COMMAND ""
     ${_overwrite_install_command}
-    LOG_INSTALL 1
+    LOG_INSTALL 0
     BUILD_BYPRODUCTS <INSTALL_DIR>/lib/libjsoncpp.a
 )
 

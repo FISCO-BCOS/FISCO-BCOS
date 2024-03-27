@@ -100,6 +100,8 @@ public:
 
     /// get system config
     virtual std::string getSystemConfigByKey(std::string const& key, int64_t number = -1) = 0;
+    virtual std::shared_ptr<std::set<Address>> getCommitteeMembers() { return nullptr; }
+
     virtual std::pair<std::string, dev::eth::BlockNumber> getSystemConfigInfoByKey(
         std::string const&, int64_t const& _num = -1)
     {

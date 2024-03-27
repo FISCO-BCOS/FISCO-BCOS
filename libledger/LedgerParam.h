@@ -41,6 +41,7 @@ namespace ledger
 #define SYNC_TX_POOL_SIZE_DEFAULT 102400
 #define TX_POOL_DEFAULT_MEMORY_SIZE 512
 #define MAX_BLOCK_RANGE_EVENT_FILTER (0)
+#define DEFAULT_TXS_EXPIRATION_TIME_SECOND 600
 struct TxPoolParam
 {
     int64_t txPoolLimit = SYNC_TX_POOL_SIZE_DEFAULT;
@@ -48,6 +49,8 @@ struct TxPoolParam
     int64_t maxTxPoolMemorySize = TX_POOL_DEFAULT_MEMORY_SIZE;
     // txPool notify worker size
     int64_t notifyWorkerNum = 2;
+    // transaction expiration time, in seconds, default is 10min
+    int64_t txsExpirationTime = DEFAULT_TXS_EXPIRATION_TIME_SECOND;
 };
 struct ConsensusParam
 {
@@ -114,6 +117,10 @@ struct SyncParam
     int64_t maxQueueSizeForBlockSync = 512 * 1024 * 1024;
     // limit the peers number the txs-status gossip to
     signed txsStatusGossipMaxPeers = 5;
+    // send blocks to free node or not
+    bool enableFreeNodeRead = false;
+    // sync info print interval in minutes
+    int32_t syncInfoPrintInterval = 10;
 };
 
 /// modification 2019.03.20: add timeStamp field to GenesisParam
@@ -157,6 +164,7 @@ struct StorageParam
     uint32_t initConnections;
     uint32_t maxConnections;
     int maxForwardBlock;
+    bool enableReconfirmCommittee = false;
 };
 struct StateParam
 {

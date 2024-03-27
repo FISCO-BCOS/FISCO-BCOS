@@ -110,6 +110,7 @@ Public dev::toPublic(Secret const& _secret)
     }
 }
 
+
 KeyPair KeyPair::create()
 {
     while (true)

@@ -20,23 +20,25 @@
 include(ExternalProject)
 
 if("${CMAKE_HOST_SYSTEM_NAME}" MATCHES "Linux")
-    if("${ARCHITECTURE}" MATCHES "aarch64")
-        set(SDF_LIB_NAME libsdf-crypto_arm.a)
-    else()
-        message(FATAL "HSM  SDF only support aarch64 Linux, the ${CMAKE_HOST_SYSTEM_NAME} ${ARCHITECTURE} is not supported.")
-    endif()
+    set(SDF_LIB_NAME libsdf-crypto_arm.a)
 elseif(APPLE)
-    message(FATAL "HSM  SDF only support aarch64 Linux, the ${CMAKE_HOST_SYSTEM_NAME} ${ARCHITECTURE} is not supported.")
+    message(FATAL "HSM  SDF only support Linux, the ${CMAKE_HOST_SYSTEM_NAME} ${ARCHITECTURE} is not supported.")
 else()
-    message(FATAL "HSM  SDF only support aarch64 Linux, the ${CMAKE_HOST_SYSTEM_NAME} ${ARCHITECTURE} is not supported.")
+    message(FATAL "HSM  SDF only support Linux, the ${CMAKE_HOST_SYSTEM_NAME} ${ARCHITECTURE} is not supported.")
+endif()
+
+EXECUTE_PROCESS(COMMAND uname -m COMMAND tr -d '\n' OUTPUT_VARIABLE ARCHITECTURE)
+set(SDF_LIB_NAME "libsdf-crypto_arm.a")
+if("${ARCHITECTURE}" MATCHES "x86_64")
+    set(SDF_LIB_NAME "libsdf-crypto_x86.a")
 endif()
 
 ExternalProject_Add(libsdf
     PREFIX ${CMAKE_SOURCE_DIR}/deps
-    DOWNLOAD_NAME sdf.tar.gz
+    DOWNLOAD_NAME sdf.zip
     DOWNLOAD_NO_PROGRESS 1
-    URL https://github.com/WeBankBlockchain/sdf-crypto/archive/refs/tags/V0.1.0.tar.gz
-    URL_HASH SHA256=9942cadef59fd9f5c75265ca0efd4d3212e3d43317da6501baab3cee23af0d05
+    URL https://github.com/WeBankBlockchain/hsm-crypto/archive/refs/tags/GMT0018.tar.gz
+    URL_HASH SHA256=f69484f4225c14be4eb85f507f6c699638e5fb43e46ccde31778a7df337c5fd2
     BUILD_IN_SOURCE 1
     LOG_CONFIGURE 1
     LOG_BUILD 1
@@ -49,12 +51,17 @@ ExternalProject_Add(libsdf
 ExternalProject_Get_Property(libsdf SOURCE_DIR)
 add_library(SDF STATIC IMPORTED)
 
-set(SDF_INCLUDE_DIR ${SOURCE_DIR}/include)
+set(HSM_INCLUDE_DIR ${SOURCE_DIR}/include)
+set(SDF_INCLUDE_DIR ${SOURCE_DIR}/include/sdf)
 file(MAKE_DIRECTORY ${SDF_INCLUDE_DIR})  # Must exist.
 
-set(SDF_LIB "${SOURCE_DIR}/lib/libsdf-crypto_arm.a")
+set(SDF_LIB "${SOURCE_DIR}/lib/${SDF_LIB_NAME}")
+find_library(GMT0018 gmt0018)
+if(NOT GMT0018)
+    message(FATAL " Can not find library libgmt0018.so under default library path, please make sure you have a crypto PCI card on your machine, as well as the the driver and libraries are installed.")
+endif()
 
 set_property(TARGET SDF PROPERTY IMPORTED_LOCATION ${SDF_LIB})
-set_property(TARGET SDF PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${SDF_INCLUDE_DIR})
+set_property(TARGET SDF PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${HSM_INCLUDE_DIR} ${SDF_INCLUDE_DIR})
 add_dependencies(SDF libsdf)
 unset(SOURCE_DIR)

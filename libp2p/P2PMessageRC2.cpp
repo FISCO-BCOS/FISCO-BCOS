@@ -105,6 +105,12 @@ ssize_t P2PMessageRC2::decode(const byte* buffer, size_t size)
 
     int32_t offset = 0;
     m_length = ntohl(*((uint32_t*)&buffer[offset]));
+    if (m_length > P2PMessage::MAX_MESSAGE_LENGTH)
+    {
+        SESSION_LOG(WARNING) << LOG_DESC("Illegal p2p message packet") << LOG_KV("length", m_length)
+                             << LOG_KV("maxLen", P2PMessage::MAX_MESSAGE_LENGTH);
+        return dev::network::PACKET_ERROR;
+    }
 
     if (size < m_length)
     {
@@ -134,7 +140,8 @@ ssize_t P2PMessageRC2::decode(const byte* buffer, size_t size)
         /// uncompress data
         SnappyCompress::uncompress(
             bytesConstRef((const byte*)(&buffer[HEADER_LENGTH]), m_length - HEADER_LENGTH),
-            *m_buffer);
+            *m_buffer,
+            P2PMessage::MAX_MESSAGE_LENGTH);
         // reset version
         m_version &= (~dev::eth::CompressFlag);
     }

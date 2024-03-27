@@ -67,7 +67,8 @@ public:
         createPBFTMsgFactory();
         m_blockFactory = std::make_shared<dev::eth::BlockFactory>();
         m_reqCache = std::make_shared<PBFTReqCache>();
-        m_reqCache->setCheckSignCallback(boost::bind(&FakePBFTEngine::checkSign, this, _1));
+        m_reqCache->setCheckSignCallback(
+            boost::bind(&FakePBFTEngine::checkSign, this, boost::placeholders::_1));
     }
     void updateConsensusNodeList() override {}
     void fakeUpdateConsensusNodeList() { return PBFTEngine::updateConsensusNodeList(); }
@@ -135,6 +136,7 @@ public:
 
     void setMaxBlockTransactions(size_t const& maxTrans) { m_maxBlockTransactions = maxTrans; }
     void updateMaxBlockTransactions() override {}
+    virtual void updateGasChargeManageSwitch() override {}
     bool checkBlock(dev::eth::Block const& block)
     {
         auto orgNumber = m_blockChain->number();
@@ -183,8 +185,8 @@ public:
 
     void onNotifyNextLeaderReset()
     {
-        PBFTEngine::onNotifyNextLeaderReset(
-            boost::bind(&FakePBFTEngine::resetBlockForNextLeaderTest, this, _1));
+        PBFTEngine::onNotifyNextLeaderReset(boost::bind(
+            &FakePBFTEngine::resetBlockForNextLeaderTest, this, boost::placeholders::_1));
     }
     void resetBlockForNextLeaderTest(dev::h256Hash const&) {}
 

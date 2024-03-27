@@ -240,6 +240,16 @@ struct NodeIPEndpoint
     std::string address() const { return m_host; };
     bool isIPv6() const { return m_ipv6; }
 
+    std::string toString() const 
+    {
+        if (isIPv6()) 
+        {
+            return  "[" + m_host + "]:" + std::to_string(m_port);
+        }
+        
+        return m_host + ":" + std::to_string(m_port);
+    }
+
     std::string m_host;
     uint16_t m_port;
     bool m_ipv6 = false;

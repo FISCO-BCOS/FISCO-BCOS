@@ -25,6 +25,7 @@
 #include <libnetwork/ASIOInterface.h>
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
+#include <thread>
 
 #define ERROR_SOCKET_PORT 8889
 #define EMPTY_CERT_SOCKET_PORT 8887

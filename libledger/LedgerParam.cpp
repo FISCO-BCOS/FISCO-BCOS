@@ -27,7 +27,7 @@
 #include <libconfig/GlobalConfigure.h>
 #include <libeventfilter/EventLogFilterManager.h>
 #include <boost/algorithm/string.hpp>
-#include <boost/bind.hpp>
+#include <boost/bind/bind.hpp>
 #include <boost/function_output_iterator.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 
@@ -187,16 +187,7 @@ void LedgerParam::initTxExecuteConfig(ptree const& pt)
 {
     if (dev::stringCmpIgnoreCase(mutableStateParam().type, "storage") == 0)
     {
-        // enable parallel since v2.3.0 when stateType is storage
-        if (g_BCOSConfig.version() >= V2_3_0)
-        {
-            mutableTxParam().enableParallel = true;
-        }
-        // can configure enable_parallel before v2.3.0
-        else
-        {
-            mutableTxParam().enableParallel = pt.get<bool>("tx_execute.enable_parallel", true);
-        }
+        mutableTxParam().enableParallel = pt.get<bool>("tx_execute.enable_parallel", true);
     }
     else
     {
@@ -235,10 +226,27 @@ void LedgerParam::initTxPoolConfig(ptree const& pt)
                                       "Please set tx_pool.notify_worker_num to positive !"));
         }
         mutableTxPoolParam().notifyWorkerNum = notifyWorkerNum;
+        auto txsExpirationTime =
+            pt.get<int64_t>("tx_pool.txs_expiration_time", DEFAULT_TXS_EXPIRATION_TIME_SECOND);
+        if (txsExpirationTime * 1000 <= mutableConsensusParam().consensusTimeout)
+        {
+            mutableTxPoolParam().txsExpirationTime = mutableConsensusParam().consensusTimeout;
+            LedgerParam_LOG(INFO) << LOG_DESC(
+                                         "configurated txs is smaller than consensusTimeout, "
+                                         "enforce to consensusTimeout")
+                                  << LOG_KV("consensusTimeout",
+                                         mutableConsensusParam().consensusTimeout);
+        }
+        else
+        {
+            mutableTxPoolParam().txsExpirationTime = txsExpirationTime * 1000;
+        }
         LedgerParam_LOG(INFO) << LOG_BADGE("initTxPoolConfig")
                               << LOG_KV("txPoolLimit", mutableTxPoolParam().txPoolLimit)
                               << LOG_KV("memorySizeLimit(MB)", memorySizeLimit)
-                              << LOG_KV("notifyWorkerNum", notifyWorkerNum);
+                              << LOG_KV("notifyWorkerNum", notifyWorkerNum)
+                              << LOG_KV("txsExpirationTime(ms)",
+                                     mutableTxPoolParam().txsExpirationTime);
     }
     catch (std::exception& e)
     {
@@ -427,6 +435,13 @@ void LedgerParam::initConsensusConfig(ptree const& pt)
     // if the consensus node id is invalid, throw InvalidConfiguration exception
     parsePublicKeyListOfSection(mutableConsensusParam().sealerList, pt, "consensus", "node.");
     std::stringstream nodeListMark;
+    // sort the sealerList
+    if (g_BCOSConfig.version() >= V2_9_0)
+    {
+        std::sort(
+            mutableConsensusParam().sealerList.begin(), mutableConsensusParam().sealerList.end());
+    }
+
     // init nodeListMark
     for (auto const& node : mutableConsensusParam().sealerList)
     {
@@ -543,7 +558,14 @@ void LedgerParam::initSyncConfig(ptree const& pt)
                                   "txs_gossip_max_peers_num must be no smaller than zero"));
     }
     mutableSyncParam().maxQueueSizeForBlockSync *= 1024 * 1024;
+    mutableSyncParam().enableFreeNodeRead = pt.get<bool>("sync.allow_free_node", false);
+    mutableSyncParam().syncInfoPrintInterval = pt.get<int>("sync.print_info_interval", 10);
 
+    if (mutableSyncParam().syncInfoPrintInterval <= 1)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfiguration() << errinfo_comment(
+                                  "print_info_interval must be bigger than 1"));
+    }
     LedgerParam_LOG(INFO)
         << LOG_BADGE("initSyncConfig")
         << LOG_KV("enableSendBlockStatusByTree", mutableSyncParam().enableSendBlockStatusByTree)
@@ -551,7 +573,9 @@ void LedgerParam::initSyncConfig(ptree const& pt)
         << LOG_KV("gossipPeers", mutableSyncParam().gossipPeers)
         << LOG_KV("syncTreeWidth", mutableSyncParam().syncTreeWidth)
         << LOG_KV("maxQueueSizeForBlockSync", mutableSyncParam().maxQueueSizeForBlockSync)
-        << LOG_KV("txsStatusGossipMaxPeers", mutableSyncParam().txsStatusGossipMaxPeers);
+        << LOG_KV("txsStatusGossipMaxPeers", mutableSyncParam().txsStatusGossipMaxPeers)
+        << LOG_KV("syncInfoPrintInterval", mutableSyncParam().syncInfoPrintInterval)
+        << LOG_KV("freeNodeRead", mutableSyncParam().enableFreeNodeRead);
 }
 
 std::string LedgerParam::uriEncode(const std::string& keyWord)
@@ -632,6 +656,8 @@ void LedgerParam::initStorageConfig(ptree const& pt)
     mutableStorageParam().dbCharset = pt.get<std::string>("storage.db_charset", "utf8mb4");
     mutableStorageParam().initConnections = pt.get<int>("storage.init_connections", 15);
     mutableStorageParam().maxConnections = pt.get<int>("storage.max_connections", 50);
+    mutableStorageParam().enableReconfirmCommittee =
+        pt.get<bool>("storage.enable_reconfirm_committee", false);
 
     LedgerParam_LOG(INFO) << LOG_BADGE("initStorageConfig")
                           << LOG_KV("stateType", mutableStateParam().type)
@@ -644,7 +670,9 @@ void LedgerParam::initStorageConfig(ptree const& pt)
                           << LOG_KV("dbcharset", mutableStorageParam().dbCharset)
                           << LOG_KV("initconnections", mutableStorageParam().initConnections)
                           << LOG_KV("maxconnections", mutableStorageParam().maxConnections)
-                          << LOG_KV("scrollThreshold", mutableStorageParam().scrollThreshold);
+                          << LOG_KV("scrollThreshold", mutableStorageParam().scrollThreshold)
+                          << LOG_KV("enableReconfirmCommittee",
+                                 mutableStorageParam().enableReconfirmCommittee);
 }
 
 void LedgerParam::initEventLogFilterManagerConfig(boost::property_tree::ptree const& pt)

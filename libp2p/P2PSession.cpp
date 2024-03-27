@@ -77,7 +77,6 @@ void P2PSession::heartBeat()
             std::string s = boost::lexical_cast<std::string>(service->topicSeq());
             buffer->assign(s.begin(), s.end());
             message->setBuffer(buffer);
-            std::shared_ptr<bytes> msgBuf = std::make_shared<bytes>();
             m_session->asyncSendMessage(message);
         }
 
@@ -207,7 +206,7 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
 
             default:
             {
-                SESSION_LOG(ERROR) << LOG_DESC("Unknown topic packet type")
+                SESSION_LOG(WARNING) << LOG_DESC("Unknown topic packet type")
                                    << LOG_KV("type", message->packetType());
                 break;
             }

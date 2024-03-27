@@ -131,6 +131,8 @@ public:
     /// @warning Only valid after finalise().
     u256 gasUsed() const;
 
+    u256 remainGas(Address const& _account);
+
     owning_bytes_ref takeOutput() { return std::move(m_output); }
 
     /// Set up the executive for evaluating a bare CREATE (contract-creation) operation.
@@ -192,8 +194,19 @@ public:
         m_logs.clear();
         m_t.reset();
     }
+    void setGasFreeAccounts(std::set<Address> _gasFreeAccounts)
+    {
+        m_gasFreeAccounts = _gasFreeAccounts;
+    }
+    void setEnableGasCharge(bool _enableGasCharge) { m_enableGasCharge = _enableGasCharge; }
+
+    void deductRuntimeGas(dev::eth::Transaction::Ptr _tx, u256 const& _refundedGas);
 
 private:
+    bool shouldCheckAccountGas(dev::eth::Transaction::Ptr _tx);
+    bool adminChargerTx(dev::eth::Transaction::Ptr _tx);
+    void checkAccountRemainGas(dev::eth::Transaction::Ptr _tx, int64_t const& _requiredGas);
+
     void parseEVMCResult(std::shared_ptr<eth::Result> _result);
     /// @returns false iff go() must be called (and thus a VM execution in required).
     bool executeCreate(Address const& _txSender, u256 const& _endowment, u256 const& _gasPrice,
@@ -239,6 +252,9 @@ private:
 
     // determine whether the freeStorageVMSchedule enabled or not
     bool m_enableFreeStorage = false;
+
+    bool m_enableGasCharge = false;
+    std::set<Address> m_gasFreeAccounts;
 };
 
 }  // namespace executive

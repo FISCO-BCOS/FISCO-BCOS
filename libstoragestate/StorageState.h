@@ -26,6 +26,7 @@
 #include "libexecutive/StateFace.h"
 #include <libstorage/MemoryTableFactory.h>
 #include <tbb/concurrent_unordered_map.h>
+
 #include <string>
 
 namespace dev
@@ -41,6 +42,7 @@ const char* const ACCOUNT_NONCE = "nonce";
 const char* const ACCOUNT_ALIVE = "alive";
 const char* const ACCOUNT_AUTHORITY = "authority";
 const char* const ACCOUNT_FROZEN = "frozen";
+const char* const REMAIN_GAS = "remain_gas";
 
 class StorageState : public dev::executive::StateFace
 {
@@ -177,11 +179,21 @@ public:
         m_memoryTableFactory = _memoryTableFactory;
     }
 
+    std::pair<bool, u256> remainGas(Address const& _accountAddress) override;
+    bool updateRemainGas(
+        Address const& accountAddress, u256 const& updatedGas, Address const& _origin) override;
+
+    dev::executive::StateType getStateType() override
+    {
+        return dev::executive::StateType::StorageState;
+    }
+
 private:
     void createAccount(Address const& _address, u256 const& _nonce, u256 const& _amount = u256(0));
     std::shared_ptr<dev::storage::Table> getTable(Address const& _address) const;
     u256 m_accountStartNonce;
     std::shared_ptr<dev::storage::TableFactory> m_memoryTableFactory;
+    tbb::concurrent_unordered_map<Address, u256, std::hash<Address>> m_accountGasCache;
 };
 }  // namespace storagestate
 }  // namespace dev

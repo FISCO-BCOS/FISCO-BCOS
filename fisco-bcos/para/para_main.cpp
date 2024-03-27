@@ -30,6 +30,7 @@
 #include <libledger/DBInitializer.h>
 #include <libledger/LedgerManager.h>
 #include <unistd.h>
+#include <boost/lexical_cast.hpp>
 #include <chrono>
 #include <ctime>
 
@@ -173,7 +174,8 @@ static void startExecute(int _totalUser, int _totalTxs)
     blockVerifier->setExecutiveContextFactory(dbInitializer->executiveContextFactory());
     std::shared_ptr<BlockChainImp> _blockChain =
         std::dynamic_pointer_cast<BlockChainImp>(blockChain);
-    blockVerifier->setNumberHash(boost::bind(&BlockChainImp::numberHash, _blockChain, _1));
+    blockVerifier->setNumberHash(
+        boost::bind(&BlockChainImp::numberHash, _blockChain, boost::placeholders::_1));
 
     auto height = blockChain->number();
     auto parentBlock = blockChain->getBlockByNumber(height);
@@ -214,8 +216,8 @@ int main(int argc, const char* argv[])
         return 0;
     }
     keyPair = make_shared<KeyPair>(KeyPair::create());
-    int totalUser = atoi(argv[1]);
-    int totalTxs = atoi(argv[2]);
+    auto totalUser = boost::lexical_cast<int>(argv[1]);
+    auto totalTxs = boost::lexical_cast<int>(argv[2]);
     startExecute(totalUser, totalTxs);
     return 0;
 }

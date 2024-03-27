@@ -79,6 +79,20 @@ bool SafeHttpServer::StartListening()
                 return false;
             }
         }
+
+
+        int ioMultiDevice = MHD_USE_EPOLL_INTERNAL_THREAD;
+
+#if __APPLE__
+        ioMultiDevice = MHD_USE_POLL_INTERNAL_THREAD;
+
+        LOG(INFO) << LOG_BADGE("SafeHttpServer::StartListening")
+                  << LOG_DESC("use poll for apple macos platform");
+#else
+        LOG(INFO) << LOG_BADGE("SafeHttpServer::StartListening") << LOG_DESC("use default epoll");
+#endif
+
+
         if (ipv6Enabled)
         {
             struct sockaddr_in6 sock;
@@ -90,20 +104,21 @@ bool SafeHttpServer::StartListening()
                 LOG(ERROR) << LOG_BADGE("SafeHttpServer parse ipv6 failed");
                 return false;
             }
+
             if (this->path_sslcert != "" && this->path_sslkey != "")
             {
-                this->daemon = MHD_start_daemon(
-                    MHD_USE_DUAL_STACK | MHD_USE_SSL | MHD_USE_EPOLL_INTERNAL_THREAD, this->port,
-                    NULL, NULL, SafeHttpServer::callback, this, MHD_OPTION_SOCK_ADDR, &sock,
-                    MHD_OPTION_HTTPS_MEM_KEY, this->sslkey.c_str(), MHD_OPTION_HTTPS_MEM_CERT,
-                    this->sslcert.c_str(), MHD_OPTION_THREAD_POOL_SIZE, this->threads,
-                    MHD_OPTION_CONNECTION_LIMIT, 1000000, MHD_OPTION_END);
+                this->daemon = MHD_start_daemon(MHD_USE_DUAL_STACK | MHD_USE_SSL | ioMultiDevice,
+                    this->port, NULL, NULL, SafeHttpServer::callback, this, MHD_OPTION_SOCK_ADDR,
+                    &sock, MHD_OPTION_HTTPS_MEM_KEY, this->sslkey.c_str(),
+                    MHD_OPTION_HTTPS_MEM_CERT, this->sslcert.c_str(), MHD_OPTION_THREAD_POOL_SIZE,
+                    this->threads, MHD_OPTION_CONNECTION_LIMIT, 1000000, MHD_OPTION_END);
             }
             else
             {
-                this->daemon = MHD_start_daemon(MHD_USE_SELECT_INTERNALLY | MHD_USE_DUAL_STACK,
-                    this->port, NULL, NULL, SafeHttpServer::callback, this, MHD_OPTION_SOCK_ADDR,
-                    &sock, MHD_OPTION_THREAD_POOL_SIZE, this->threads, MHD_OPTION_END);
+                this->daemon = MHD_start_daemon(
+                    ioMultiDevice | MHD_USE_DUAL_STACK | MHD_FEATURE_MESSAGES, this->port, NULL,
+                    NULL, SafeHttpServer::callback, this, MHD_OPTION_SOCK_ADDR, &sock,
+                    MHD_OPTION_THREAD_POOL_SIZE, this->threads, MHD_OPTION_END);
             }
             LOG(INFO) << LOG_BADGE("SafeHttpServer use ipv6") << LOG_KV("address", m_address)
                       << LOG_KV("ipv6 supported", this->daemon ? "true" : "false");
@@ -116,15 +131,15 @@ bool SafeHttpServer::StartListening()
             sock.sin_addr.s_addr = inet_addr(m_address.c_str());
             if (this->path_sslcert != "" && this->path_sslkey != "")
             {
-                this->daemon = MHD_start_daemon(MHD_USE_SSL | MHD_USE_EPOLL_INTERNAL_THREAD,
-                    this->port, NULL, NULL, SafeHttpServer::callback, this, MHD_OPTION_SOCK_ADDR,
-                    &sock, MHD_OPTION_HTTPS_MEM_KEY, this->sslkey.c_str(),
-                    MHD_OPTION_HTTPS_MEM_CERT, this->sslcert.c_str(), MHD_OPTION_THREAD_POOL_SIZE,
-                    this->threads, MHD_OPTION_CONNECTION_LIMIT, 1000000, MHD_OPTION_END);
+                this->daemon = MHD_start_daemon(MHD_USE_SSL | ioMultiDevice, this->port, NULL, NULL,
+                    SafeHttpServer::callback, this, MHD_OPTION_SOCK_ADDR, &sock,
+                    MHD_OPTION_HTTPS_MEM_KEY, this->sslkey.c_str(), MHD_OPTION_HTTPS_MEM_CERT,
+                    this->sslcert.c_str(), MHD_OPTION_THREAD_POOL_SIZE, this->threads,
+                    MHD_OPTION_CONNECTION_LIMIT, 1000000, MHD_OPTION_END);
             }
             else
             {
-                this->daemon = MHD_start_daemon(MHD_USE_SELECT_INTERNALLY, this->port, NULL, NULL,
+                this->daemon = MHD_start_daemon(ioMultiDevice, this->port, NULL, NULL,
                     SafeHttpServer::callback, this, MHD_OPTION_SOCK_ADDR, &sock,
                     MHD_OPTION_THREAD_POOL_SIZE, this->threads, MHD_OPTION_END);
             }
