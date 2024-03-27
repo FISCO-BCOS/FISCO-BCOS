@@ -24,6 +24,8 @@
 #include "bcos-rpc/amop/AirAMOPClient.h"
 #include "bcos-rpc/groupmgr/AirGroupManager.h"
 #include "bcos-rpc/groupmgr/GroupManager.h"
+#include "web3jsonrpc/Web3JsonRpcImpl.h"
+
 #include <bcos-boostssl/websocket/WsConfig.h>
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/consensus/ConsensusInterface.h>
@@ -57,6 +59,8 @@ public:
 
     std::shared_ptr<boostssl::ws::WsConfig> initConfig(
         const bcos::tool::NodeConfig::Ptr& _nodeConfig);
+    std::shared_ptr<boostssl::ws::WsConfig> initWeb3RpcServiceConfig(
+        const bcos::tool::NodeConfig::Ptr& _nodeConfig);
     std::shared_ptr<boostssl::ws::WsService> buildWsService(
         bcos::boostssl::ws::WsConfig::Ptr _config);
 
@@ -86,6 +90,9 @@ protected:
     bcos::rpc::JsonRpcImpl_2_0::Ptr buildJsonRpc(int sendTxTimeout,
         const std::shared_ptr<boostssl::ws::WsService>& _wsService,
         GroupManager::Ptr _groupManager);
+
+    bcos::rpc::Web3JsonRpcImpl::Ptr buildWeb3JsonRpc(int sendTxTimeout,
+        boostssl::ws::WsService::Ptr _wsService, GroupManager::Ptr _groupManager);
     bcos::event::EventSub::Ptr buildEventSub(
         const std::shared_ptr<boostssl::ws::WsService>& _wsService,
         GroupManager::Ptr _groupManager);

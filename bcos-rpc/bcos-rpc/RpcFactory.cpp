@@ -32,7 +32,6 @@
 #include <bcos-rpc/RpcFactory.h>
 #include <bcos-rpc/event/EventSubMatcher.h>
 #include <bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h>
-#include <bcos-rpc/jsonrpc/Web3JsonRpcImpl.h>
 #include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Exceptions.h>
@@ -320,6 +319,24 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
     return wsConfig;
 }
 
+std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initWeb3RpcServiceConfig(
+    const bcos::tool::NodeConfig::Ptr& _nodeConfig)
+{
+    auto wsConfig = std::make_shared<boostssl::ws::WsConfig>();
+    wsConfig->setModel(bcos::boostssl::ws::WsModel::Server);
+
+    wsConfig->setListenIP(_nodeConfig->web3RpcListenIP());
+    wsConfig->setListenPort(_nodeConfig->web3RpcListenPort());
+    wsConfig->setThreadPoolSize(_nodeConfig->web3RpcThreadSize());
+    wsConfig->setDisableSsl(true);
+    RPC_LOG(INFO) << LOG_BADGE("initWeb3RpcServiceConfig")
+                  << LOG_KV("listenIP", wsConfig->listenIP())
+                  << LOG_KV("listenPort", wsConfig->listenPort())
+                  << LOG_KV("threadCount", wsConfig->threadPoolSize())
+                  << LOG_KV("asServer", wsConfig->asServer());
+    return wsConfig;
+}
+
 bcos::boostssl::ws::WsService::Ptr RpcFactory::buildWsService(
     bcos::boostssl::ws::WsConfig::Ptr _config)
 {
@@ -336,9 +353,6 @@ bcos::boostssl::ws::WsService::Ptr RpcFactory::buildWsService(
 bcos::rpc::JsonRpcImpl_2_0::Ptr RpcFactory::buildJsonRpc(int sendTxTimeout,
     const std::shared_ptr<boostssl::ws::WsService>& _wsService, GroupManager::Ptr _groupManager)
 {
-    // auto web3Rpc = std::make_shared<bcos::rpc::Web3JsonRpcImpl>(_groupManager, m_gateway,
-    // _wsService);
-
     // JsonRpcImpl_2_0
     //*
     auto jsonRpcInterface =
@@ -352,6 +366,22 @@ bcos::rpc::JsonRpcImpl_2_0::Ptr RpcFactory::buildJsonRpc(int sendTxTimeout,
     }
     return jsonRpcInterface;
 }
+
+bcos::rpc::Web3JsonRpcImpl::Ptr RpcFactory::buildWeb3JsonRpc(
+    int sendTxTimeout, boostssl::ws::WsService::Ptr _wsService, GroupManager::Ptr _groupManager)
+{
+    auto web3JsonRpc =
+        std::make_shared<Web3JsonRpcImpl>(std::move(_groupManager), m_gateway, _wsService);
+    web3JsonRpc->setSendTxTimeout(sendTxTimeout);
+    auto httpServer = _wsService->httpServer();
+    if (httpServer)
+    {
+        httpServer->setHttpReqHandler(std::bind(&bcos::rpc::Web3JsonRpcImpl::onRPCRequest,
+            web3JsonRpc, std::placeholders::_1, std::placeholders::_2));
+    }
+    return web3JsonRpc;
+}
+
 
 bcos::event::EventSub::Ptr RpcFactory::buildEventSub(
     const std::shared_ptr<boostssl::ws::WsService>& _wsService, GroupManager::Ptr _groupManager)
@@ -391,6 +421,15 @@ Rpc::Ptr RpcFactory::buildLocalRpc(
     auto groupManager = buildAirGroupManager(_groupInfo, _nodeService);
     auto amopClient = buildAirAMOPClient(wsService);
     auto rpc = buildRpc(m_nodeConfig->sendTxTimeout(), wsService, groupManager, amopClient);
+    if (m_nodeConfig->enableWeb3Rpc())
+    {
+        auto web3Config = initWeb3RpcServiceConfig(m_nodeConfig);
+        auto web3WsService = buildWsService(std::move(web3Config));
+        auto web3JsonRpc =
+            buildWeb3JsonRpc(m_nodeConfig->sendTxTimeout(), web3WsService, groupManager);
+        rpc->setWeb3Service(std::move(web3WsService));
+        rpc->setWeb3JsonRpcImpl(std::move(web3JsonRpc));
+    }
     // Note: init groupManager after create rpc and register the handlers
     groupManager->init();
     return rpc;

@@ -69,6 +69,7 @@ void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforc
     }
     loadCertConfig(_pt);
     loadRpcConfig(_pt);
+    loadWeb3RpcConfig(_pt);
     loadGatewayConfig(_pt);
     loadSealerConfig(_pt);
     loadTxPoolConfig(_pt);
@@ -377,6 +378,30 @@ void NodeConfig::loadRpcConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("listenPort", listenPort) << LOG_KV("listenPort", listenPort)
                          << LOG_KV("smSsl", smSsl) << LOG_KV("disableSsl", disableSsl)
                          << LOG_KV("needRetInput", needRetInput);
+}
+
+void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
+{
+    /*
+    [web3_rpc]
+        enble=false
+        listen_ip=0.0.0.0
+        listen_port=8545
+        thread_count=16
+    */
+    const std::string listenIP = _pt.get<std::string>("web3_rpc.listen_ip", "0.0.0.0");
+    const int listenPort = _pt.get<int>("web3_rpc.listen_port", 8545);
+    const int threadCount = _pt.get<int>("web3_rpc.thread_count", 8);
+    const bool enableWeb3Rpc = _pt.get<bool>("web3_rpc.enable", false);
+
+    m_web3RpcListenIP = listenIP;
+    m_web3RpcListenPort = listenPort;
+    m_web3RpcThreadSize = threadCount;
+    m_enableWeb3Rpc = enableWeb3Rpc;
+
+    NodeConfig_LOG(INFO) << LOG_DESC("loadWeb3RpcConfig") << LOG_KV("enableWeb3Rpc", enableWeb3Rpc)
+                         << LOG_KV("listenIP", listenIP) << LOG_KV("listenPort", listenPort)
+                         << LOG_KV("listenPort", listenPort);
 }
 
 void NodeConfig::loadGatewayConfig(boost::property_tree::ptree const& _pt)
