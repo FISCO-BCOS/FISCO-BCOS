@@ -12,7 +12,7 @@ class MockLedger2 : public bcos::ledger::LedgerInterface
 public:
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr block,
-        std::function<void(Error::Ptr&&)> callback, bool writeTxsAndReceipts)
+        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts)
     {
         auto mutableBlock = std::const_pointer_cast<bcos::protocol::Block>(block);
         auto header = mutableBlock->blockHeader();
@@ -25,7 +25,7 @@ public:
                 {
                     BOOST_FAIL("asyncSetRow failed" + error->errorMessage());
                 }
-                callback(nullptr);
+                callback("", nullptr);
             });
         // TODO: write receipts and tx count
     }

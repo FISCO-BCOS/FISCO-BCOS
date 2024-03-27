@@ -91,12 +91,14 @@ public:
     TransactionReceiptImpl::Ptr createReceipt2(bcos::u256 const& gasUsed,
         std::string contractAddress, const std::vector<bcos::protocol::LogEntry>& logEntries,
         int32_t status, bcos::bytesConstRef output, bcos::protocol::BlockNumber blockNumber,
-        std::string effectiveGasPrice = "1") const override
+        std::string effectiveGasPrice = "1",
+        bcos::protocol::TransactionVersion version = bcos::protocol::TransactionVersion::V1_VERSION,
+        bool withHash = true) const override
     {
         auto transactionReceipt = std::make_shared<TransactionReceiptImpl>(
             [m_receipt = bcostars::TransactionReceipt()]() mutable { return &m_receipt; });
         auto& inner = transactionReceipt->mutableInner();
-        inner.data.version = 1;
+        inner.data.version = static_cast<uint32_t>(version);
         inner.data.gasUsed = boost::lexical_cast<std::string>(gasUsed);
         inner.data.contractAddress = std::move(contractAddress);
         inner.data.status = status;

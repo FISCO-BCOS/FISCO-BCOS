@@ -287,11 +287,11 @@ public:
         params2->setStaticCall(false);
         params2->setGasAvailable(gas);
         params2->setData(std::move(in));
-        params2->setType(NativeExecutionMessage::TXHASH);
+        params2->setType(NativeExecutionMessage::MESSAGE);
 
         // call precompiled
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
-        executor->executeTransaction(std::move(params2),
+        executor->call(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise2.set_value(std::move(result));

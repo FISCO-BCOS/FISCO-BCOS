@@ -43,6 +43,7 @@ public:
 
     IOServicePool(const IOServicePool&) = delete;
     IOServicePool& operator=(const IOServicePool&) = delete;
+    virtual ~IOServicePool() { stop(); }
 
     void start()
     {
@@ -60,7 +61,12 @@ public:
         for (const auto& ioService : m_ioServices)
         {
             // https://github.com/chriskohlhoff/asio/issues/932#issuecomment-968103444
-            m_threads.emplace_back([ioService]() {
+            m_threads.emplace_back([ioService, running = &m_running]() {
+                if (!running)
+                {
+                    return;
+                }
+
                 bcos::pthread_setThreadName("ioService");
                 ioService->run();
             });

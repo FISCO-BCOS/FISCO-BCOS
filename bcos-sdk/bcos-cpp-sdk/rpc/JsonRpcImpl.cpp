@@ -151,7 +151,7 @@ void JsonRpcImpl::sendTransaction(const std::string& _groupID, const std::string
     auto s = request->toJson();
     */
 
-    m_sender(_groupID, _nodeName, json, _respFunc);
+    m_sender(_groupID, name, json, _respFunc);
     if (c_fileLogLevel <= DEBUG) [[unlikely]]
     {
         RPCIMPL_LOG(DEBUG) << LOG_BADGE("sendTransaction")
