@@ -13,32 +13,32 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file Web3Endpoint.h
+ * @file EndpointInterface.h
  * @author: kyonGuo
  * @date 2024/3/21
  */
 
 #pragma once
-#include "EndpointInterface.h"
-#include "bcos-rpc/groupmgr/GroupManager.h"
+
+#include <bcos-rpc/groupmgr/GroupManager.h>
 #include <bcos-rpc/jsonrpc/JsonRpcInterface.h>
-#include <json/json.h>
-#include <tbb/concurrent_hash_map.h>
-#include <unordered_map>
+#include <bcos-rpc/web3jsonrpc/endpoints/EthMethods.h>
 
 namespace bcos::rpc
 {
-class Web3Endpoint : public EndpointInterface
+class EndpointInterface
 {
 public:
-    explicit Web3Endpoint(bcos::rpc::GroupManager::Ptr groupManager);
-    std::string getEntryName() const override { return "web3"; }
-    MethodMap const& exportMethods() override { return m_methods; }
-    void clientVersion(RespFunc) {}
-    void sha3(RespFunc) {}
+    using UniquePtr = std::unique_ptr<EndpointInterface>;
+    EndpointInterface() = default;
+    virtual ~EndpointInterface() = default;
+    EndpointInterface(const EndpointInterface&) = delete;
+    EndpointInterface& operator=(const EndpointInterface&) = delete;
+    EndpointInterface(EndpointInterface&&) = delete;
+    EndpointInterface& operator=(EndpointInterface&&) = delete;
+    virtual MethodMap&& exportMethods() = 0;
 
-private:
-    bcos::rpc::GroupManager::Ptr m_groupManager;
+protected:
+    MethodMap m_methods;
 };
-
 }  // namespace bcos::rpc

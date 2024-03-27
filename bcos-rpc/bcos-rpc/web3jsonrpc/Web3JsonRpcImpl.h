@@ -21,11 +21,11 @@
 #pragma once
 #include "bcos-rpc/groupmgr/GroupManager.h"
 #include "bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h"
-#include "bcos-rpc/jsonrpc/endpoints/EndpointInterface.h"
-#include "bcos-rpc/jsonrpc/endpoints/EthEndpoint.h"
-#include "bcos-rpc/jsonrpc/endpoints/NetEndpoint.h"
-#include "bcos-rpc/jsonrpc/endpoints/Web3Endpoint.h"
 #include "bcos-rpc/validator/CallValidator.h"
+#include "bcos-rpc/web3jsonrpc/endpoints/EndpointInterface.h"
+#include "bcos-rpc/web3jsonrpc/endpoints/EthEndpoint.h"
+#include "bcos-rpc/web3jsonrpc/endpoints/NetEndpoint.h"
+#include "bcos-rpc/web3jsonrpc/endpoints/Web3Endpoint.h"
 #include <bcos-boostssl/websocket/WsService.h>
 #include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-rpc/jsonrpc/JsonRpcInterface.h>
@@ -42,27 +42,27 @@ class Web3Endpoint;
 class Web3JsonRpcImpl : public JsonRpcImpl_2_0, public std::enable_shared_from_this<Web3JsonRpcImpl>
 {
 public:
-    Web3JsonRpcImpl(GroupManager::Ptr _groupManager,
+    Web3JsonRpcImpl(bcos::rpc::GroupManager::Ptr _groupManager,
         bcos::gateway::GatewayInterface::Ptr _gatewayInterface,
         std::shared_ptr<boostssl::ws::WsService> _wsService)
       : JsonRpcImpl_2_0(
             std::move(_groupManager), std::move(_gatewayInterface), std::move(_wsService)),
-        m_ethEntryPoint(std::make_unique<EthEndpoint>(m_groupManager)),
-        m_netEntryPoint(std::make_unique<NetEndpoint>(m_groupManager)),
-        m_web3EntryPoint(std::make_unique<Web3Endpoint>(m_groupManager))
+        m_ethEndpoint(std::make_unique<EthEndpoint>(m_groupManager)),
+        m_netEndpoint(std::make_unique<NetEndpoint>(m_groupManager)),
+        m_web3Endpoint(std::make_unique<Web3Endpoint>(m_groupManager))
     {
-        m_methodToFunc.insert(
-            m_ethEntryPoint->exportMethods().begin(), m_ethEntryPoint->exportMethods().end());
-        m_methodToFunc.insert(
-            m_netEntryPoint->exportMethods().begin(), m_netEntryPoint->exportMethods().end());
-        m_methodToFunc.insert(
-            m_web3EntryPoint->exportMethods().begin(), m_web3EntryPoint->exportMethods().end());
+        auto&& ethMap = m_ethEndpoint->exportMethods();
+        auto&& netMap = m_netEndpoint->exportMethods();
+        auto&& web3Map = m_web3Endpoint->exportMethods();
+        m_methodToFunc.insert(ethMap.begin(), ethMap.end());
+        m_methodToFunc.insert(netMap.begin(), netMap.end());
+        m_methodToFunc.insert(web3Map.begin(), web3Map.end());
     }
     ~Web3JsonRpcImpl() override = default;
 
 private:
-    EthEndpoint::UniquePtr m_ethEntryPoint;
-    NetEndpoint::UniquePtr m_netEntryPoint;
-    Web3Endpoint::UniquePtr m_web3EntryPoint;
+    EthEndpoint::UniquePtr m_ethEndpoint;
+    NetEndpoint::UniquePtr m_netEndpoint;
+    Web3Endpoint::UniquePtr m_web3Endpoint;
 };
 }  // namespace bcos::rpc

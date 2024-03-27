@@ -91,7 +91,10 @@ void JsonRpcInterface::onRPCRequest(std::string_view _requestBody, Sender _sende
             BOOST_THROW_EXCEPTION(JsonRpcException(
                 JsonRpcError::MethodNotFound, "The method does not exist/is not available."));
         }
-        RPC_IMPL_LOG(TRACE) << LOG_BADGE("onRPCRequest") << LOG_KV("request", _requestBody);
+        if (c_fileLogLevel == TRACE) [[unlikely]]
+        {
+            RPC_IMPL_LOG(TRACE) << LOG_BADGE("onRPCRequest") << LOG_KV("request", _requestBody);
+        }
         it->second(
             request.params, [response, _sender](Error::Ptr _error, Json::Value& _result) mutable {
                 if (_error && (_error->errorCode() != bcos::protocol::CommonError::SUCCESS))
@@ -105,10 +108,13 @@ void JsonRpcInterface::onRPCRequest(std::string_view _requestBody, Sender _sende
                     response.result.swap(_result);
                 }
                 auto strResp = toStringResponse(std::move(response));
-                RPC_IMPL_LOG(TRACE)
-                    << LOG_BADGE("onRPCRequest")
-                    << LOG_KV("response",
-                           std::string_view((const char*)strResp.data(), strResp.size()));
+                if (c_fileLogLevel == TRACE) [[unlikely]]
+                {
+                    RPC_IMPL_LOG(TRACE)
+                        << LOG_BADGE("onRPCRequest")
+                        << LOG_KV("response",
+                               std::string_view((const char*)strResp.data(), strResp.size()));
+                }
                 _sender(std::move(strResp));
             });
 

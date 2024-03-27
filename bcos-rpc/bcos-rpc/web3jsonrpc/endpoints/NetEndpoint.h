@@ -1,5 +1,5 @@
 /**
- *  Copyright (C) 2024 FISCO BCOS.
+ *  Copyright (C) 2022 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -13,33 +13,34 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file EndpointInterface.h
+ * @file NetEndpoint.h
  * @author: kyonGuo
  * @date 2024/3/21
  */
 
 #pragma once
-
+#include "EndpointInterface.h"
 #include "bcos-rpc/groupmgr/GroupManager.h"
 #include <bcos-rpc/jsonrpc/JsonRpcInterface.h>
+#include <json/json.h>
+#include <tbb/concurrent_hash_map.h>
+#include <boost/core/ignore_unused.hpp>
+#include <unordered_map>
 
 namespace bcos::rpc
 {
-class EndpointInterface
+class NetEndpoint : public EndpointInterface
 {
 public:
-    using UniquePtr = std::unique_ptr<EndpointInterface>;
-    EndpointInterface() = default;
-    virtual ~EndpointInterface() = default;
-    EndpointInterface(const EndpointInterface&) = delete;
-    EndpointInterface& operator=(const EndpointInterface&) = delete;
-    EndpointInterface(EndpointInterface&&) = delete;
-    EndpointInterface& operator=(EndpointInterface&&) = delete;
+    explicit NetEndpoint(bcos::rpc::GroupManager::Ptr groupManager);
+    void initMethod();
+    MethodMap&& exportMethods() override { return std::move(m_methods); }
+    void verison(RespFunc) {}
+    void listening(RespFunc) {}
+    void peerCount(RespFunc) {}
 
-    virtual std::string getEntryName() const = 0;
-    virtual MethodMap const& exportMethods() = 0;
-
-protected:
-    MethodMap m_methods;
+private:
+    bcos::rpc::GroupManager::Ptr m_groupManager;
 };
+
 }  // namespace bcos::rpc

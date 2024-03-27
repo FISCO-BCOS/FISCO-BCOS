@@ -21,6 +21,8 @@
 
 #pragma once
 #include "bcos-rpc/groupmgr/GroupManager.h"
+#include "web3jsonrpc/Web3JsonRpcImpl.h"
+
 #include <bcos-framework/rpc/RPCInterface.h>
 #include <bcos-rpc/amop/AMOPClient.h>
 #include <bcos-rpc/event/EventSub.h>
@@ -85,6 +87,16 @@ public:
         m_amopClient->asyncNotifySubscribeTopic(_callback);
     }
 
+    void setWeb3Service(boostssl::ws::WsService::Ptr _web3Service)
+    {
+        m_web3Service = std::move(_web3Service);
+    }
+
+    void setWeb3JsonRpcImpl(bcos::rpc::Web3JsonRpcImpl::Ptr _web3JsonRpcImpl)
+    {
+        m_web3JsonRpcImpl = std::move(_web3JsonRpcImpl);
+    }
+
     GroupManager::Ptr groupManager() { return m_groupManager; }
 
 protected:
@@ -102,6 +114,8 @@ private:
     bcos::event::EventSub::Ptr m_eventSub;
     AMOPClient::Ptr m_amopClient;
     GroupManager::Ptr m_groupManager;
+    boostssl::ws::WsService::Ptr m_web3Service = nullptr;
+    bcos::rpc::Web3JsonRpcImpl::Ptr m_web3JsonRpcImpl = nullptr;
 
     bcos::protocol::ProtocolInfo::ConstPtr m_localProtocol;
 };

@@ -74,6 +74,10 @@ void Rpc::start()
     // start websocket service
     m_wsService->start();
     m_amopClient->start();
+    if (m_web3Service)
+    {
+        m_web3Service->start();
+    }
     RPC_LOG(INFO) << LOG_DESC("start rpc successfully");
 }
 
@@ -93,6 +97,10 @@ void Rpc::stop()
     if (m_amopClient)
     {
         m_amopClient->stop();
+    }
+    if (m_web3Service)
+    {
+        m_web3Service->stop();
     }
 
     RPC_LOG(INFO) << LOG_DESC("[RPC][RPC][stop]") << LOG_DESC("stop rpc successfully");
