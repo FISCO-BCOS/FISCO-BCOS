@@ -114,6 +114,9 @@ protected:
 private:
     // Note: this function should not be called frequently
     std::string printBlockHeader(bcos::protocol::BlockHeader::Ptr const& _header) const noexcept;
+    // Note: this function only use for Error log
+    std::string printBlockHeaderDiff(bcos::protocol::BlockHeader::Ptr const& orgHeader,
+        bcos::protocol::BlockHeader::Ptr const& execHeader) const noexcept;
     void fetchAndUpdateLedgerConfig();
 
     BlockSyncConfig::Ptr m_config;

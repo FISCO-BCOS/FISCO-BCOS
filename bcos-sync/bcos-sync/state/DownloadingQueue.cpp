@@ -200,12 +200,49 @@ bool DownloadingQueue::verifyExecutedBlock(bcos::protocol::Block::Ptr const& _bl
     {
         BLKSYNC_LOG(ERROR) << LOG_DESC("verifyExecutedBlock failed for inconsistent hash")
                            << LOG_KV("orgHeader", printBlockHeader(orgBlockHeader)) << "\n"
-                           << LOG_KV("executedHeader", printBlockHeader(_blockHeader));
+                           << LOG_KV("executedHeader", printBlockHeader(_blockHeader)) << "\n"
+                           << printBlockHeaderDiff(orgBlockHeader, _blockHeader);
 
         return false;
     }
     return true;
 }
+
+std::string DownloadingQueue::printBlockHeaderDiff(
+    BlockHeader::Ptr const& orgHeader, BlockHeader::Ptr const& execHeader) const noexcept
+{
+    std::stringstream oss;
+    oss << "BlockHeader diff: \n";
+    oss << "-orgHash:       " << orgHeader->hash() << "\n"
+        << "+exeHash:       " << execHeader->hash() << "\n";
+    if (orgHeader->version() != execHeader->version()) [[unlikely]]
+    {
+        oss << "-orgVersion:    " << orgHeader->version() << "\n"
+            << "+exeVersion:    " << execHeader->version() << "\n";
+    }
+    if (orgHeader->txsRoot() != execHeader->txsRoot()) [[unlikely]]
+    {
+        oss << "-orgTxsRoot:    " << orgHeader->txsRoot() << "\n"
+            << "+exeTxsRoot:    " << execHeader->txsRoot() << "\n";
+    }
+    if (orgHeader->receiptsRoot() != execHeader->receiptsRoot()) [[likely]]
+    {
+        oss << "-orgRcptsRoot:  " << orgHeader->receiptsRoot() << "\n"
+            << "+exeRcptsRoot:  " << execHeader->receiptsRoot() << "\n";
+    }
+    if (orgHeader->stateRoot() != execHeader->stateRoot()) [[likely]]
+    {
+        oss << "-orgStateRoot:  " << orgHeader->stateRoot() << "\n"
+            << "+exeStateRoot:  " << execHeader->stateRoot() << "\n";
+    }
+    if (orgHeader->gasUsed() != execHeader->gasUsed()) [[likely]]
+    {
+        oss << "-orgGasUsed:    " << orgHeader->gasUsed() << "\n"
+            << "+exeGasUsed:    " << execHeader->gasUsed() << "\n";
+    }
+    return oss.str();
+}
+
 
 std::string DownloadingQueue::printBlockHeader(BlockHeader::Ptr const& _header) const noexcept
 {

@@ -26,6 +26,7 @@
 #include <boost/beast/websocket.hpp>
 #include <boost/thread/thread.hpp>
 #include <atomic>
+#include <regex>
 #include <unordered_map>
 #include <utility>
 
@@ -35,16 +36,45 @@ static std::string m_moduleName = "DEFAULT";
 class WsTools
 {
 public:
+    static bool isIPAddress(std::string const& _input)
+    {
+        const std::regex ipv4_regex("^([0-9]{1,3}\\.){3}[0-9]{1,3}$");
+        const std::regex ipv6_regex(
+            "^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|:|((([0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4})"
+            "?::("
+            "([0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4})?))$");
+
+        return std::regex_match(_input, ipv4_regex) || std::regex_match(_input, ipv6_regex);
+    }
     static bool validIP(const std::string& _ip)
     {
         boost::system::error_code ec;
-        boost::asio::ip::address::from_string(_ip, ec);
+        boost::asio::ip::make_address(_ip, ec);
         return !static_cast<bool>(ec);
     }
 
-    static bool validPort(uint16_t _port) { return _port > 0; }
+    static bool isHostname(const std::string& _input)
+    {
+        if (_input.empty())
+        {
+            return false;
+        }
+        boost::asio::io_context io_context;
+        boost::asio::ip::tcp::resolver resolver(io_context);
 
-    static bool stringToEndPoint(const std::string& peer, NodeIPEndpoint& _endpoint);
+        try
+        {
+            boost::asio::ip::tcp::resolver::results_type results = resolver.resolve(_input, "80");
+            return true;
+        }
+        catch (...)
+        {
+            return false;
+        }
+    }
+
+    static bool validPort(uint16_t _port) { return _port > 1024; }
+    static bool hostAndPort2Endpoint(const std::string& _host, NodeIPEndpoint& _endpoint);
 
     static void close(boost::asio::ip::tcp::socket& skt);
 
