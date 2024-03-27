@@ -50,6 +50,8 @@ public:
     SQLBasicAccess();
     virtual ~SQLBasicAccess() {}
     typedef std::shared_ptr<SQLBasicAccess> Ptr;
+    virtual int SelectTableDataByNum(int64_t num, TableInfo::Ptr tableInfo, uint64_t start, uint32_t counts,
+                                     std::vector<std::map<std::string, std::string>>& _values);
     virtual int Select(int64_t _num, const std::string& _table, const std::string& _key,
         Condition::Ptr _condition, std::vector<std::map<std::string, std::string>>& _values);
     virtual int Commit(int64_t _num, const std::vector<TableData::Ptr>& _datas);

@@ -24,20 +24,19 @@
 #include "include/BuildInfo.h"
 #include "libinitializer/Initializer.h"
 #include "libledger/DBInitializer.h"
+#include "StashDBInitializer.h"
 #include "libledger/LedgerParam.h"
 #include "libstorage/BasicRocksDB.h"
 #include "libstorage/MemoryTableFactoryFactory2.h"
-#include "libstorage/RocksDBStorage.h"
 #include "libstorage/RocksDBStorageFactory.h"
 #include "libstorage/SQLStorage.h"
 #include "libstorage/ZdbStorage.h"
+#include "StashStorage.h"
 #include <boost/algorithm/string.hpp>
 #include <boost/archive/text_iarchive.hpp>
 #include <boost/archive/text_oarchive.hpp>
 #include <boost/lexical_cast.hpp>
-#include <boost/serialization/serialization.hpp>
 #include <boost/serialization/unordered_map.hpp>
-#include <clocale>
 #include <ctime>
 #include <iostream>
 #include <memory>
@@ -151,11 +150,11 @@ vector<TableInfo::Ptr> parseTableNames(TableData::Ptr data, SyncRecorder::Ptr re
     return res;
 }
 
-TableData::Ptr getBlockToNonceData(ZdbStorage::Ptr _reader, int64_t _blockNumber)
+TableData::Ptr getBlockToNonceData(StashStorage::Ptr _reader, int64_t _blockNumber)
 {
     cout << endl << "[" << getCurrentDateTime() << "] process " << SYS_BLOCK_2_NONCES;
 
-    auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>(false);
+    auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>();
     tableFactoryFactory->setStorage(_reader);
     auto memoryTableFactory = tableFactoryFactory->newTableFactory(dev::h256(), _blockNumber);
     Table::Ptr tb = memoryTableFactory->openTable(SYS_BLOCK_2_NONCES);
@@ -183,11 +182,11 @@ TableData::Ptr getBlockToNonceData(ZdbStorage::Ptr _reader, int64_t _blockNumber
     }
 }
 
-TableData::Ptr getHashToBlockData(ZdbStorage::Ptr _reader, int64_t _blockNumber)
+TableData::Ptr getHashToBlockData(StashStorage::Ptr _reader, int64_t _blockNumber)
 {
     cout << endl << "[" << getCurrentDateTime() << "] process " << SYS_HASH_2_BLOCK;
 
-    auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>(false);
+    auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>();
     tableFactoryFactory->setStorage(_reader);
     auto memoryTableFactory = tableFactoryFactory->newTableFactory(dev::h256(), _blockNumber);
     Table::Ptr tb = memoryTableFactory->openTable(SYS_NUMBER_2_HASH);
@@ -292,7 +291,7 @@ void conversionData(const std::string& tableName, TableData::Ptr tableData)
     LOG(TRACE) << LOG_BADGE("STORAGE") << LOG_DESC("conversion end!");
 }
 
-void syncData_Link(ZdbStorage::Ptr _reader, Storage::Ptr _writer, uint64_t _stopBlockNumber,
+void syncData_Link(StashStorage::Ptr _reader, Storage::Ptr _writer, uint64_t _stopBlockNumber,
                     std::shared_ptr<LedgerParamInterface> _param, bool _fullSync)
 {
     const std::string& _dataPath = _param->mutableStorageParam().path;
@@ -437,14 +436,14 @@ void syncData_Link(ZdbStorage::Ptr _reader, Storage::Ptr _writer, uint64_t _stop
 }
 
 
-void fastSyncData(std::shared_ptr<LedgerParamInterface> _param, uint64_t _stopBlockNumber = 0)
+void fastSyncData(std::shared_ptr<LedgerParamInterface> _param, std::shared_ptr<LedgerParamInterface> stashParam, uint64_t _stopBlockNumber = 0)
 {
     cout << "fastSyncData begin ... " << endl;
 
-    auto readerStorage = createStashStorage(_param, [](std::exception& e) {
+    auto readerStorage = createStashStorage(stashParam, [](std::exception& e) {
       LOG(ERROR) << LOG_BADGE("STORAGE") << LOG_BADGE("MySQL")
                  << "access mysql failed exit:" << e.what();
-      cout << "createZdbStorage create failed " << endl;
+      cout << "createStashStorage create failed " << endl;
       cout << e.what() << endl;
 
       raise(SIGTERM);
@@ -459,6 +458,15 @@ void fastSyncData(std::shared_ptr<LedgerParamInterface> _param, uint64_t _stopBl
     if (!dev::stringCmpIgnoreCase(_param->mutableStorageParam().type, "RocksDB"))
     {
         writerStorage = createRocksDBStorage(_param->mutableStorageParam().path, bytes(), false, true);
+    }
+    else if (!dev::stringCmpIgnoreCase(_param->mutableStorageParam().type, "MySQL"))
+    {
+        writerStorage = createZdbStorage(_param, [](std::exception& e) {
+          LOG(ERROR) << LOG_BADGE("STORAGE") << LOG_BADGE("MySQL")
+                     << "access mysql failed exit:" << e.what();
+          raise(SIGTERM);
+          BOOST_THROW_EXCEPTION(e);
+        });
     }
     else if(!dev::stringCmpIgnoreCase(_param->mutableStorageParam().type, "Scalable"))
     {
@@ -481,7 +489,7 @@ void fastSyncData(std::shared_ptr<LedgerParamInterface> _param, uint64_t _stopBl
     }
 
     // fast sync data
-    syncData_Link(dynamic_pointer_cast<ZdbStorage>(readerStorage), writerStorage, _stopBlockNumber, _param, fullSync);
+    syncData_Link(dynamic_pointer_cast<StashStorage>(readerStorage), writerStorage, _stopBlockNumber, _param, fullSync);
 
 }
 
@@ -505,8 +513,8 @@ int main(int argc, const char* argv[])
         ("password,p",boost::program_options::value<std::string>()->default_value("123456"),"MYSQL password")
         ("limit,l",boost::program_options::value<uint32_t>()->default_value(10000), "page counts of table")
         ("sys_limit,s", boost::program_options::value<uint32_t>()->default_value(50),"page counts of system table")
-        ("configpath,c", boost::program_options::value<std::string>()->default_value("./data"),"configpath")
-        ("type,e", boost::program_options::value<std::string>()->default_value("RocksDB"), "Storage type,RocksDB/Scalable");
+        ("config,c",boost::program_options::value<std::string>()->default_value("./config.ini"),"node config path")
+        ("group,g", boost::program_options::value<uint>()->default_value(1), "sync specific group");
 
     boost::program_options::variables_map vm;
     try
@@ -534,36 +542,60 @@ int main(int argc, const char* argv[])
     uint32_t port = vm["port"].as<uint32_t>();
     uint64_t stopBlockNumber = vm["stopnumber"].as<uint64_t>();
     string dbName = vm["dbname"].as<std::string>();
-    string type = vm["type"].as<std::string>();
-    string configpath = vm["configpath"].as<std::string>();
+    int groupID = vm["group"].as<uint>();
+    string configPath = vm["config"].as<std::string>();
+
 
     try
     {
+        /// init log
+        boost::property_tree::ptree pt;
+        boost::property_tree::read_ini(configPath, pt);
         auto logInitializer = std::make_shared<LogInitializer>();
-        auto params = std::make_shared<LedgerParam>();
-        params->mutableStorageParam().dbIP = ip;
-        params->mutableStorageParam().dbPort = port;
-        params->mutableStorageParam().dbName = dbName;
-        params->mutableStorageParam().dbUsername = name;
-        params->mutableStorageParam().dbPasswd = password;
-        params->mutableStorageParam().dbType = "mysql";
-        params->mutableStorageParam().dbCharset = "utf8mb4";
-        params->mutableStorageParam().initConnections = 15;
-        params->mutableStorageParam().maxConnections = 50;
-        params->mutableStorageParam().type=type;
-        params->mutableStorageParam().maxRetry=5;
-        params->mutableStorageParam().path=configpath;
+        logInitializer->initLog(pt);
 
-        std::cout << "begin sync ..." << std::endl;
-        fastSyncData(params,stopBlockNumber);
-        std::cout << "end sync ..." << std::endl;
+        /// init global config. must init before DB, for compatibility
+        initGlobalConfig(pt);
+        auto groupConfigPath = pt.get<string>("group.group_config_path", "conf/");
+        auto dataPath = pt.get<string>("group.group_data_path", "data/");
+        boost::filesystem::path path(groupConfigPath);
+        if (fs::is_directory(path))
+        {
+            fs::directory_iterator endIter;
+            for (fs::directory_iterator iter(path); iter != endIter; iter++)
+            {
+                if (fs::extension(*iter) == ".genesis" &&
+                    iter->path().stem().string() == "group." + to_string(groupID))
+                {
+                    std::cout << "[" << getCurrentDateTime() << "] The sync-tool is syncing group "
+                              << groupID << ". config file " << iter->path().string() << std::endl;
+                    auto params = std::make_shared<LedgerParam>();
+                    params->init(iter->path().string(), dataPath);
 
-    }
-    catch (std::exception& e)
-    {
+                    auto stashParams = std::make_shared<LedgerParam>();
+                    stashParams->mutableStorageParam().dbIP = ip;
+                    stashParams->mutableStorageParam().dbPort = port;
+                    stashParams->mutableStorageParam().dbName = dbName;
+                    stashParams->mutableStorageParam().dbUsername = name;
+                    stashParams->mutableStorageParam().dbPasswd = password;
+                    stashParams->mutableStorageParam().dbCharset = "utf8mb4";
+                    stashParams->mutableStorageParam().initConnections = 15;
+                    stashParams->mutableStorageParam().maxConnections = 50;
+                    stashParams->mutableStorageParam().maxRetry = 5;
+                    fastSyncData(params, stashParams, stopBlockNumber);
+
+                    std::cout << endl
+                              << "[" << getCurrentDateTime() << "] sync complete." << std::endl;
+                    return 0;
+                }
+            }
+        }
+        }
+        catch (std::exception& e)
+       {
         std::cerr << boost::diagnostic_information(e);
         return -1;
-    }
+       }
 
     return 0;
 }
