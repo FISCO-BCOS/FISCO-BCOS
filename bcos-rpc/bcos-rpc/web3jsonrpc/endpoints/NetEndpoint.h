@@ -35,9 +35,14 @@ public:
     explicit NetEndpoint(bcos::rpc::GroupManager::Ptr groupManager);
     void initMethod();
     MethodMap&& exportMethods() override { return std::move(m_methods); }
-    void verison(RespFunc) {}
-    void listening(RespFunc) {}
-    void peerCount(RespFunc) {}
+    void verison(RespFunc);
+    void listening(RespFunc);
+    void peerCount(RespFunc);
+
+protected:
+    void versionInterface(Json::Value const&, RespFunc func) { verison(std::move(func)); }
+    void listeningInterface(Json::Value const&, RespFunc func) { listening(std::move(func)); }
+    void peerCountInterface(Json::Value const&, RespFunc func) { peerCount(std::move(func)); }
 
 private:
     bcos::rpc::GroupManager::Ptr m_groupManager;

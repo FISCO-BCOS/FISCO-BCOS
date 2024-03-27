@@ -1373,6 +1373,12 @@ generate_config_ini() {
     ; return input params in sendTransaction() return, default: true
     ; return_input_params=false
 
+[web3_rpc]
+    enable=false
+    listen_ip=0.0.0.0
+    listen_port=8545
+    thread_count=8
+
 [cert]
     ; directory the certificates located in
     ca_path=./conf
@@ -1580,6 +1586,12 @@ generate_sm_config_ini() {
     ${disable_ssl_content}
     ; return input params in sendTransaction() return, default: true
     ; return_input_params=false
+
+[web3_rpc]
+    enable=false
+    listen_ip=0.0.0.0
+    listen_port=8545
+    thread_count=8
 
 [cert]
     ; directory the certificates located in

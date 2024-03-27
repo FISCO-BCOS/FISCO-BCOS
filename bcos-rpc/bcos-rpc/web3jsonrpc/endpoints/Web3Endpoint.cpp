@@ -20,8 +20,31 @@
 
 #include "Web3Endpoint.h"
 
+#include <bcos-rpc/Common.h>
+
 using namespace bcos::rpc;
 
 Web3Endpoint::Web3Endpoint(bcos::rpc::GroupManager::Ptr groupManager)
   : m_groupManager(std::move(groupManager))
-{}
+{
+    initMethod();
+}
+
+void Web3Endpoint::initMethod()
+{
+    // clang-format off
+    m_methods[methodString(EthMethod::web3_clientVersion)] = std::bind(&Web3Endpoint::clientVersionInterface, this, std::placeholders::_1, std::placeholders::_2);
+    m_methods[methodString(EthMethod::web3_sha3)] = std::bind(&Web3Endpoint::sha3Interface, this, std::placeholders::_1, std::placeholders::_2);
+    // clang-format on
+}
+
+void Web3Endpoint::clientVersion(RespFunc func)
+{
+    Json::Value result;
+    func(BCOS_ERROR_PTR(MethodNotFound, "This API has not been implemented yet!"), result);
+}
+void Web3Endpoint::sha3(RespFunc func)
+{
+    Json::Value result;
+    func(BCOS_ERROR_PTR(MethodNotFound, "This API has not been implemented yet!"), result);
+}
