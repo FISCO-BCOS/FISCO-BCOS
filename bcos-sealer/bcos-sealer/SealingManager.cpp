@@ -127,6 +127,7 @@ void SealingManager::notifyResetTxsFlag(HashListPtr _txsHashList, bool _flag, si
 void SealingManager::notifyResetProposal(bcos::protocol::Block::Ptr _block)
 {
     auto txsHashList = std::make_shared<HashList>();
+    txsHashList->reserve(_block->transactionsHashSize());
     for (size_t i = 0; i < _block->transactionsHashSize(); i++)
     {
         txsHashList->push_back(_block->transactionHash(i));

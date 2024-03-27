@@ -748,11 +748,34 @@ CheckResult PBFTEngine::checkPrePrepareMsg(std::shared_ptr<PBFTMessageInterface>
     // already has prePrepare msg
     if (m_cacheProcessor->conflictWithProcessedReq(_prePrepareMsg))
     {
+        PBFT_LOG(DEBUG) << LOG_DESC("handlePrePrepareMsg: already has prePrepare msg")
+                        << LOG_KV("committedIndex", m_config->committedProposal()->index())
+                        << LOG_KV("recvIndex", _prePrepareMsg->index())
+                        << LOG_KV("hash", _prePrepareMsg->hash().abridged())
+                        << m_config->printCurrentState();
         return CheckResult::INVALID;
     }
     // check conflict
     if (m_cacheProcessor->conflictWithPrecommitReq(_prePrepareMsg))
     {
+        PBFT_LOG(DEBUG) << LOG_DESC("handlePrePrepareMsg: conflictWithPrecommitReq")
+                        << LOG_KV("committedIndex", m_config->committedProposal()->index())
+                        << LOG_KV("recvIndex", _prePrepareMsg->index())
+                        << LOG_KV("hash", _prePrepareMsg->hash().abridged())
+                        << m_config->printCurrentState();
+        return CheckResult::INVALID;
+    }
+    // TODO: to check this fix is proper
+    // refuse pre-prepare massage from too large view node
+    if (m_config->view() + m_config->waterMarkLimit() < _prePrepareMsg->view())
+    {
+        PBFT_LOG(INFO) << LOG_DESC(
+                              "handlePrePrepareMsg: refuse pre-prepare massage from too large view")
+                       << LOG_KV("committedIndex", m_config->committedProposal()->index())
+                       << LOG_KV("recvIndex", _prePrepareMsg->index())
+                       << LOG_KV("recvView", _prePrepareMsg->view())
+                       << LOG_KV("hash", _prePrepareMsg->hash().abridged())
+                       << m_config->printCurrentState();
         return CheckResult::INVALID;
     }
     return CheckResult::VALID;
