@@ -92,6 +92,12 @@ public:
         return *m_storageWrapper;
     }
 
+    auto& transientStorage()
+    {
+        assert(m_storageWrapper);
+        return *m_storageWrapper;
+    }
+
     const BlockContext& blockContext() { return m_blockContext; }
 
     int64_t contextID() const { return m_contextID; }
