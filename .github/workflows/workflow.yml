@@ -34,6 +34,8 @@ jobs:
         run: brew install ccache libomp gmp
       - name: configure
         run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON
+      - name: check tag v3.7.0
+        run: git checkout v3.7.0
       - name: compile
         run: make -j2 && make tar
       - name: tar BcosBuilder
