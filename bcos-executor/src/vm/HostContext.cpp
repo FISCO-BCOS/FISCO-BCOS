@@ -559,6 +559,23 @@ evmc_bytes32 HostContext::store(const evmc_bytes32* key)
     }
     return result;
 }
+evmc_bytes32 HostContext::storeTransient(const evmc_bytes32* key)
+{
+    evmc_bytes32 result;
+    auto keyView = std::string_view((char*)key->bytes, sizeof(key->bytes));
+
+    auto entry = m_executive->transientStorage().getRow(m_tableName, keyView);
+    if (entry)
+    {
+        auto field = entry->getField(0);
+        std::uninitialized_copy_n(field.data(), sizeof(result), result.bytes);
+    }
+    else
+    {
+        std::uninitialized_fill_n(result.bytes, sizeof(result), 0);
+    }
+    return result;
+}
 
 void HostContext::setStore(const evmc_bytes32* key, const evmc_bytes32* value)
 {
@@ -568,6 +585,16 @@ void HostContext::setStore(const evmc_bytes32* key, const evmc_bytes32* value)
     Entry entry;
     entry.importFields({std::move(valueBytes)});
     m_executive->storage().setRow(m_tableName, keyView, std::move(entry));
+}
+
+void HostContext::setTransientStore(const evmc_bytes32* key, const evmc_bytes32* value)
+{
+    auto keyView = std::string_view((char*)key->bytes, sizeof(key->bytes));
+    bytes valueBytes(value->bytes, value->bytes + sizeof(value->bytes));
+
+    Entry entry;
+    entry.importFields({std::move(valueBytes)});
+    m_executive->transientStorage().setRow(m_tableName, keyView, std::move(entry));
 }
 
 void HostContext::log(h256s&& _topics, bytesConstRef _data)

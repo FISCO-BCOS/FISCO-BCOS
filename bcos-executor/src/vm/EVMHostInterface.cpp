@@ -68,6 +68,18 @@ evmc_bytes32 getStorage(
     return hostContext.store(key);
 }
 
+evmc_bytes32 getTransientStorage(
+    evmc_host_context* context, [[maybe_unused]] const evmc_address* addr, const evmc_bytes32* key)
+{
+    auto& hostContext = static_cast<HostContext&>(*context);
+
+    // programming assert for debug
+    assert(fromEvmC(*addr) == boost::algorithm::unhex(std::string(hostContext.myAddress())));
+
+    return hostContext.storeTransient(key);
+}
+
+
 evmc_storage_status setStorage(evmc_host_context* context,
     [[maybe_unused]] const evmc_address* addr, const evmc_bytes32* key, const evmc_bytes32* value)
 {
@@ -84,6 +96,21 @@ evmc_storage_status setStorage(evmc_host_context* context,
     hostContext.setStore(key, value);  // Interface uses native endianness
     return status;
 }
+
+void setTransientStorage(evmc_host_context* context, [[maybe_unused]] const evmc_address* addr,
+    const evmc_bytes32* key, const evmc_bytes32* value)
+{
+    auto& hostContext = static_cast<HostContext&>(*context);
+
+    assert(fromEvmC(*addr) == boost::algorithm::unhex(std::string(hostContext.myAddress())));
+    // TODO: use evmc_storage_status 5-8
+    if (value == 0)  // TODO: Should use 32 bytes 0
+    {
+        hostContext.sub().refunds += hostContext.vmSchedule().sstoreRefundGas;
+    }
+    hostContext.setTransientStore(key, value);  // Interface uses native endianness
+}
+
 
 evmc_bytes32 getBalance(evmc_host_context* _context, const evmc_address* _addr) noexcept
 {
@@ -281,6 +308,8 @@ evmc_host_interface const fnTable = {
     log,
     access_account,
     access_storage,
+    getTransientStorage,
+    setTransientStorage,
 };
 // clang-format on
 
