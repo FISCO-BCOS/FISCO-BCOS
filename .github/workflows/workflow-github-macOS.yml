@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   compile_macOS_release:
-    name: upload standard binary of macOS
+    name: macOS
     runs-on: macos-13
 
     steps:
@@ -42,7 +42,7 @@ jobs:
         run: brew install ccache libomp gmp
 
       - name: configure
-        run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON .. || cat *.log
+        run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && mkdir build && cd build && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON .. || cat *.log
 
       - name: compile
         run: make -j2
