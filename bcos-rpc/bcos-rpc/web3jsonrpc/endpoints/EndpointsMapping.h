@@ -13,32 +13,37 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file Web3Endpoint.h
+ * @file EndpointsMapping.h
  * @author: kyonGuo
- * @date 2024/3/21
+ * @date 2024/3/28
  */
 
 #pragma once
-#include "bcos-rpc/groupmgr/GroupManager.h"
-#include <bcos-rpc/jsonrpc/JsonRpcInterface.h>
+
+#include "Endpoints.h"
+
+#include <bcos-task/Task.h>
 #include <json/json.h>
-#include <tbb/concurrent_hash_map.h>
-#include <unordered_map>
 
 namespace bcos::rpc
 {
-class Web3Endpoint
+class EndpointsMapping
 {
 public:
-    explicit Web3Endpoint(NodeService::Ptr nodeService) : m_nodeService(std::move(nodeService)) {}
-    virtual ~Web3Endpoint() = default;
+    using Handler = task::Task<void> (Endpoints::*)(const Json::Value&, Json::Value&);
+    EndpointsMapping() { addHandlers(); };
+    ~EndpointsMapping() = default;
+    EndpointsMapping(const EndpointsMapping&) = delete;
+    EndpointsMapping& operator=(const EndpointsMapping&) = delete;
 
-protected:
-    task::Task<void> clientVersion(const Json::Value&, Json::Value&);
-    task::Task<void> sha3(const Json::Value&, Json::Value&);
+    [[nodiscard]] std::optional<Handler> findHandler(const std::string& _method) const;
 
 private:
-    NodeService::Ptr m_nodeService;
-};
+    void addHandlers();
+    void addEthHandlers();
+    void addNetHandlers();
+    void addWeb3Handlers();
 
+    std::unordered_map<std::string, Handler> m_handlers;
+};
 }  // namespace bcos::rpc

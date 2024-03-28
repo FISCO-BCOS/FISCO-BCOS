@@ -13,32 +13,29 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file EndpointInterface.h
+ * @file Endpoints.h
  * @author: kyonGuo
- * @date 2024/3/21
+ * @date 2024/3/28
  */
 
 #pragma once
+#include "EthEndpoint.h"
+#include "NetEndpoint.h"
+#include "Web3Endpoint.h"
 
-#include <bcos-rpc/groupmgr/GroupManager.h>
-#include <bcos-rpc/jsonrpc/JsonRpcInterface.h>
-#include <bcos-rpc/web3jsonrpc/endpoints/EthMethods.h>
+#include <bcos-rpc/groupmgr/NodeService.h>
 
 namespace bcos::rpc
 {
-class EndpointInterface
+class Endpoints : protected EthEndpoint, NetEndpoint, Web3Endpoint
 {
 public:
-    using UniquePtr = std::unique_ptr<EndpointInterface>;
-    EndpointInterface() = default;
-    virtual ~EndpointInterface() = default;
-    EndpointInterface(const EndpointInterface&) = delete;
-    EndpointInterface& operator=(const EndpointInterface&) = delete;
-    EndpointInterface(EndpointInterface&&) = delete;
-    EndpointInterface& operator=(EndpointInterface&&) = delete;
-    virtual MethodMap&& exportMethods() = 0;
-
-protected:
-    MethodMap m_methods;
+    explicit Endpoints(NodeService::Ptr _nodeService)
+      : EthEndpoint(_nodeService), NetEndpoint(_nodeService), Web3Endpoint(_nodeService)
+    {}
+    ~Endpoints() override = default;
+    Endpoints(const Endpoints&) = delete;
+    Endpoints& operator=(const Endpoints&) = delete;
+    friend class EndpointsMapping;
 };
 }  // namespace bcos::rpc
