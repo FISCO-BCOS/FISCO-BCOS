@@ -221,6 +221,7 @@ protected:
     std::shared_ptr<std::map<std::string, std::shared_ptr<PrecompiledContract>>> m_evmPrecompiled;
     std::shared_ptr<PrecompiledMap> m_precompiled;
     std::shared_ptr<const std::set<std::string>> m_staticPrecompiled;
+    std::shared_ptr<storage::StateStorageInterface> m_transientStateStorage;
 
     std::string m_contractAddress;
     int64_t m_contextID;
