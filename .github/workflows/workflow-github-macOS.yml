@@ -45,11 +45,11 @@ jobs:
         run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && mkdir build && cd build && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON .. || cat *.log
 
       - name: compile
-        run: make -j2
+        run: cd build && make -j2
 
       - name: Test
         run: |
-          CTEST_OUTPUT_ON_FAILURE=TRUE make test
+          cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
 
       - name: prepare RPCAPI Tests
         run: cd tools && bash .ci/rpcapi_ci_prepare.sh
