@@ -34,8 +34,15 @@ public:
     explicit Web3Endpoint(bcos::rpc::GroupManager::Ptr groupManager);
     void initMethod();
     MethodMap&& exportMethods() override { return std::move(m_methods); }
-    void clientVersion(RespFunc) {}
-    void sha3(RespFunc) {}
+    void clientVersion(RespFunc);
+    void sha3(RespFunc);
+
+protected:
+    void clientVersionInterface(Json::Value const&, RespFunc func)
+    {
+        clientVersion(std::move(func));
+    }
+    void sha3Interface(Json::Value const&, RespFunc func) { sha3(std::move(func)); };
 
 private:
     bcos::rpc::GroupManager::Ptr m_groupManager;

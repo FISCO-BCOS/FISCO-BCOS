@@ -31,19 +31,10 @@
 
 namespace bcos::rpc
 {
-struct string_hash
-{
-    using hash_type = std::hash<std::string_view>;
-    using is_transparent = void;
 
-    std::size_t operator()(const char* str) const { return hash_type{}(str); }
-    std::size_t operator()(std::string_view str) const { return hash_type{}(str); }
-    std::size_t operator()(std::string const& str) const { return hash_type{}(str); }
-};
 using Sender = std::function<void(bcos::bytes)>;
 using RespFunc = std::function<void(bcos::Error::Ptr, Json::Value&)>;
-using MethodMap = std::unordered_map<std::string, std::function<void(Json::Value&, RespFunc)>,
-    string_hash, std::equal_to<>>;
+using MethodMap = std::unordered_map<std::string, std::function<void(Json::Value&, RespFunc)>>;
 
 class JsonRpcInterface
 {
