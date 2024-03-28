@@ -32,8 +32,12 @@ namespace bcos::rpc
 class NetEndpoint : public EndpointInterface
 {
 public:
-    explicit NetEndpoint(bcos::rpc::GroupManager::Ptr groupManager);
+    explicit NetEndpoint(std::string _groupId, bcos::rpc::GroupManager::Ptr groupManager);
     void initMethod();
+    NodeService::Ptr getNodeService() override
+    {
+        return m_groupManager->getNodeService(m_groupId, "");
+    }
     MethodMap&& exportMethods() override { return std::move(m_methods); }
     void verison(RespFunc);
     void listening(RespFunc);
@@ -45,6 +49,7 @@ protected:
     void peerCountInterface(Json::Value const&, RespFunc func) { peerCount(std::move(func)); }
 
 private:
+    std::string m_groupId;
     bcos::rpc::GroupManager::Ptr m_groupManager;
 };
 

@@ -42,14 +42,15 @@ class Web3Endpoint;
 class Web3JsonRpcImpl : public JsonRpcImpl_2_0, public std::enable_shared_from_this<Web3JsonRpcImpl>
 {
 public:
-    Web3JsonRpcImpl(bcos::rpc::GroupManager::Ptr _groupManager,
+    Web3JsonRpcImpl(std::string _groupId, bcos::rpc::GroupManager::Ptr _groupManager,
         bcos::gateway::GatewayInterface::Ptr _gatewayInterface,
         std::shared_ptr<boostssl::ws::WsService> _wsService)
       : JsonRpcImpl_2_0(
             std::move(_groupManager), std::move(_gatewayInterface), std::move(_wsService)),
-        m_ethEndpoint(std::make_unique<EthEndpoint>(m_groupManager)),
-        m_netEndpoint(std::make_unique<NetEndpoint>(m_groupManager)),
-        m_web3Endpoint(std::make_unique<Web3Endpoint>(m_groupManager))
+        m_groupId(std::move(_groupId)),
+        m_ethEndpoint(std::make_unique<EthEndpoint>(m_groupId, m_groupManager)),
+        m_netEndpoint(std::make_unique<NetEndpoint>(m_groupId, m_groupManager)),
+        m_web3Endpoint(std::make_unique<Web3Endpoint>(m_groupId, m_groupManager))
     {
         auto&& ethMap = m_ethEndpoint->exportMethods();
         auto&& netMap = m_netEndpoint->exportMethods();
@@ -61,6 +62,8 @@ public:
     ~Web3JsonRpcImpl() override = default;
 
 private:
+    // Note: only use in one group
+    std::string m_groupId;
     EthEndpoint::UniquePtr m_ethEndpoint;
     NetEndpoint::UniquePtr m_netEndpoint;
     Web3Endpoint::UniquePtr m_web3Endpoint;

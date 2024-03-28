@@ -36,9 +36,13 @@ namespace bcos::rpc
 class EthEndpoint : public EndpointInterface
 {
 public:
-    explicit EthEndpoint(bcos::rpc::GroupManager::Ptr group_manager);
+    explicit EthEndpoint(std::string _groupId, bcos::rpc::GroupManager::Ptr group_manager);
     void initMethod();
     MethodMap&& exportMethods() override { return std::move(m_methods); }
+    NodeService::Ptr getNodeService() override
+    {
+        return m_groupManager->getNodeService(m_groupId, "");
+    }
     void protocolVersion(RespFunc);
     void syning(RespFunc);
     void coinbase(RespFunc);
@@ -220,6 +224,7 @@ protected:
     }
 
 private:
+    std::string m_groupId;
     bcos::rpc::GroupManager::Ptr m_groupManager;
 };
 

@@ -27,8 +27,8 @@
 using namespace bcos;
 using namespace bcos::rpc;
 
-EthEndpoint::EthEndpoint(bcos::rpc::GroupManager::Ptr groupManager)
-  : m_groupManager(std::move(groupManager))
+EthEndpoint::EthEndpoint(std::string _groupId, bcos::rpc::GroupManager::Ptr groupManager)
+  : m_groupId(std::move(_groupId)), m_groupManager(std::move(groupManager))
 {
     initMethod();
 }
@@ -92,8 +92,9 @@ void EthEndpoint::protocolVersion(RespFunc func)
 
 void EthEndpoint::syning(RespFunc func)
 {
-    Json::Value result;
-    func(BCOS_ERROR_PTR(MethodNotFound, "This API has not been implemented yet!"), result);
+    // TODO: add get sync object in sync interface
+    Json::Value result = false;
+    func(nullptr, result);
 }
 void EthEndpoint::coinbase(RespFunc func)
 {
@@ -107,8 +108,8 @@ void EthEndpoint::chainId(RespFunc func)
 }
 void EthEndpoint::mining(RespFunc func)
 {
-    Json::Value result;
-    func(BCOS_ERROR_PTR(MethodNotFound, "This API has not been implemented yet!"), result);
+    Json::Value result = false;
+    func(nullptr, result);
 }
 void EthEndpoint::hashrate(RespFunc func)
 {
@@ -117,18 +118,33 @@ void EthEndpoint::hashrate(RespFunc func)
 }
 void EthEndpoint::gasPrice(RespFunc func)
 {
-    Json::Value result;
-    func(BCOS_ERROR_PTR(MethodNotFound, "This API has not been implemented yet!"), result);
+    // TODO: add get gas price interface
+    Json::Value result = "0x1";
+    func(nullptr, result);
 }
 void EthEndpoint::accounts(RespFunc func)
 {
-    Json::Value result;
-    func(BCOS_ERROR_PTR(MethodNotFound, "This API has not been implemented yet!"), result);
+    // return empty array by default
+    Json::Value result = Json::arrayValue;
+    func(nullptr, result);
 }
 void EthEndpoint::blockNumber(RespFunc func)
 {
-    Json::Value result;
-    func(BCOS_ERROR_PTR(MethodNotFound, "This API has not been implemented yet!"), result);
+    auto ledger = getNodeService()->ledger();
+    checkService(ledger, "ledger");
+    ledger->asyncGetBlockNumber(
+        [m_respFunc = std::move(func)](Error::Ptr _error, protocol::BlockNumber _blockNumber) {
+            if (_error && (_error->errorCode() != bcos::protocol::CommonError::SUCCESS))
+            {
+                RPC_IMPL_LOG(INFO) << LOG_BADGE("getBlockNumber failed")
+                                   << LOG_KV("code", _error ? _error->errorCode() : 0)
+                                   << LOG_KV("message", _error ? _error->errorMessage() : "success")
+                                   << LOG_KV("blockNumber", _blockNumber);
+            }
+
+            Json::Value jResp = toQuantity(_blockNumber);
+            m_respFunc(_error, jResp);
+        });
 }
 void EthEndpoint::getBalance(std::string_view, std::string_view, RespFunc func)
 {
@@ -145,25 +161,82 @@ void EthEndpoint::getTransactionCount(std::string_view, std::string_view, RespFu
     Json::Value result;
     func(BCOS_ERROR_PTR(MethodNotFound, "This API has not been implemented yet!"), result);
 }
-void EthEndpoint::getBlockTxCountByHash(std::string_view, RespFunc func)
+void EthEndpoint::getBlockTxCountByHash(std::string_view hash, RespFunc func)
 {
-    Json::Value result;
-    func(BCOS_ERROR_PTR(MethodNotFound, "This API has not been implemented yet!"), result);
+    auto ledger = getNodeService()->ledger();
+    checkService(ledger, "ledger");
+    auto weakLedger = std::weak_ptr<ledger::LedgerInterface>(ledger);
+    ledger->asyncGetBlockNumberByHash(bcos::crypto::HashType(hash, crypto::HashType::FromHex),
+        [m_hash = std::string(hash), m_func = std::move(func), weakLedger](
+            auto&& _error, protocol::BlockNumber blockNumber) {
+            if (!_error || _error->errorCode() == bcos::protocol::CommonError::SUCCESS)
+            {
+                auto ledger = weakLedger.lock();
+                if (ledger)
+                {
+                    ledger->asyncGetBlockDataByNumber(blockNumber, bcos::ledger::TRANSACTIONS_HASH,
+                        [m_func = std::move(m_func), blockNumber](
+                            auto&& error, protocol::Block::Ptr block) {
+                            Json::Value jResp;
+                            if (error && error->errorCode() != bcos::protocol::CommonError::SUCCESS)
+                            {
+                                RPC_IMPL_LOG(INFO)
+                                    << LOG_BADGE("getBlockByNumber failed")
+                                    << LOG_KV("blockNumber", blockNumber)
+                                    << LOG_KV("code", error ? error->errorCode() : 0)
+                                    << LOG_KV("message", error ? error->errorMessage() : "success");
+                            }
+                            else
+                            {
+                                auto size = block->transactionsSize();
+                                jResp = toQuantity(size);
+                            }
+                            m_func(error, jResp);
+                        });
+                }
+            }
+            else
+            {
+                RPC_IMPL_LOG(INFO)
+                    << LOG_BADGE("getBlockTxCountByHash failed") << LOG_KV("blockHash", m_hash)
+                    << LOG_KV("code", _error ? _error->errorCode() : 0)
+                    << LOG_KV("message", _error ? _error->errorMessage() : "success");
+                Json::Value jResp;
+                m_func(_error, jResp);
+            }
+        });
 }
-void EthEndpoint::getBlockTxCountByNumber(std::string_view, RespFunc func)
+void EthEndpoint::getBlockTxCountByNumber(std::string_view number, RespFunc func)
 {
-    Json::Value result;
-    func(BCOS_ERROR_PTR(MethodNotFound, "This API has not been implemented yet!"), result);
+    // auto ledger = getNodeService()->ledger();
+    // checkService(ledger, "ledger");
+    // ledger->asyncGetBlockDataByNumber(blockNumber, bcos::ledger::TRANSACTIONS_HASH,
+    //     [m_func = std::move(func), blockNumber](auto&& error, protocol::Block::Ptr block) {
+    //         Json::Value jResp;
+    //         if (error && error->errorCode() != bcos::protocol::CommonError::SUCCESS)
+    //         {
+    //             RPC_IMPL_LOG(INFO)
+    //                 << LOG_BADGE("getBlockByNumber failed") << LOG_KV("blockNumber", blockNumber)
+    //                 << LOG_KV("code", error ? error->errorCode() : 0)
+    //                 << LOG_KV("message", error ? error->errorMessage() : "success");
+    //         }
+    //         else
+    //         {
+    //             auto size = block->transactionsSize();
+    //             jResp = toQuantity(size);
+    //         }
+    //         m_func(error, jResp);
+    //     });
 }
 void EthEndpoint::getUncleCountByBlockHash(std::string_view, RespFunc func)
 {
-    Json::Value result;
-    func(BCOS_ERROR_PTR(MethodNotFound, "This API has not been implemented yet!"), result);
+    Json::Value result = "0x0";
+    func(nullptr, result);
 }
 void EthEndpoint::getUncleCountByBlockNumber(std::string_view, RespFunc func)
 {
-    Json::Value result;
-    func(BCOS_ERROR_PTR(MethodNotFound, "This API has not been implemented yet!"), result);
+    Json::Value result = "0x0";
+    func(nullptr, result);
 }
 void EthEndpoint::getCode(std::string_view, std::string_view, RespFunc func)
 {

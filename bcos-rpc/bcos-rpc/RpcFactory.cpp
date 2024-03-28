@@ -370,8 +370,8 @@ bcos::rpc::JsonRpcImpl_2_0::Ptr RpcFactory::buildJsonRpc(int sendTxTimeout,
 bcos::rpc::Web3JsonRpcImpl::Ptr RpcFactory::buildWeb3JsonRpc(
     int sendTxTimeout, boostssl::ws::WsService::Ptr _wsService, GroupManager::Ptr _groupManager)
 {
-    auto web3JsonRpc =
-        std::make_shared<Web3JsonRpcImpl>(std::move(_groupManager), m_gateway, _wsService);
+    auto web3JsonRpc = std::make_shared<Web3JsonRpcImpl>(
+        m_nodeConfig->groupId(), std::move(_groupManager), m_gateway, _wsService);
     web3JsonRpc->setSendTxTimeout(sendTxTimeout);
     auto httpServer = _wsService->httpServer();
     if (httpServer)

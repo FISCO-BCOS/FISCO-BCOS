@@ -24,8 +24,8 @@
 
 using namespace bcos::rpc;
 
-Web3Endpoint::Web3Endpoint(bcos::rpc::GroupManager::Ptr groupManager)
-  : m_groupManager(std::move(groupManager))
+Web3Endpoint::Web3Endpoint(std::string _groupId, bcos::rpc::GroupManager::Ptr groupManager)
+  : m_groupId(std::move(_groupId)), m_groupManager(std::move(groupManager))
 {
     initMethod();
 }

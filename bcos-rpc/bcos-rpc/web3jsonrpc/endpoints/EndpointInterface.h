@@ -37,6 +37,17 @@ public:
     EndpointInterface(EndpointInterface&&) = delete;
     EndpointInterface& operator=(EndpointInterface&&) = delete;
     virtual MethodMap&& exportMethods() = 0;
+    virtual NodeService::Ptr getNodeService() = 0;
+    template <typename T>
+    static void checkService(T& _service, std::string_view _serviceName)
+    {
+        if (!_service) [[unlikely]]
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                JsonRpcError::ServiceNotInitCompleted, "The service " + std::string(_serviceName) +
+                                                           " has not been initted completed yet!"));
+        }
+    }
 
 protected:
     MethodMap m_methods;

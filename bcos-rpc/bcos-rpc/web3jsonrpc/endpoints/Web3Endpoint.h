@@ -31,8 +31,12 @@ namespace bcos::rpc
 class Web3Endpoint : public EndpointInterface
 {
 public:
-    explicit Web3Endpoint(bcos::rpc::GroupManager::Ptr groupManager);
+    explicit Web3Endpoint(std::string _groupId, bcos::rpc::GroupManager::Ptr groupManager);
     void initMethod();
+    NodeService::Ptr getNodeService() override
+    {
+        return m_groupManager->getNodeService(m_groupId, "");
+    }
     MethodMap&& exportMethods() override { return std::move(m_methods); }
     void clientVersion(RespFunc);
     void sha3(RespFunc);
@@ -45,6 +49,7 @@ protected:
     void sha3Interface(Json::Value const&, RespFunc func) { sha3(std::move(func)); };
 
 private:
+    std::string m_groupId;
     bcos::rpc::GroupManager::Ptr m_groupManager;
 };
 
