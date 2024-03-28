@@ -37,6 +37,10 @@ public:
         bugfix_dmc_revert,
         bugfix_keypage_system_entry_hash,
         bugfix_internal_create_redundant_storage,  // to perf internal create code and abi storage
+        bugfix_internal_create_permission_denied,
+        bugfix_sharding_call_in_child_executive,
+        bugfix_empty_abi_reset,  // support empty abi reset of same code
+        bugfix_eip55_addr,
         feature_dmc2serial,
         feature_sharding,
         feature_rpbft,
@@ -145,11 +149,15 @@ public:
             {protocol::BlockVersion::V3_6_1_VERSION,
                 {Flag::bugfix_keypage_system_entry_hash,
                     Flag::bugfix_internal_create_redundant_storage}},
+            {protocol::BlockVersion::V3_7_0_VERSION,
+                {Flag::bugfix_empty_abi_reset, Flag::bugfix_eip55_addr,
+                    Flag::bugfix_sharding_call_in_child_executive,
+                    Flag::bugfix_internal_create_permission_denied}},
         });
-
         for (const auto& upgradeFeatures : upgradeRoadmap)
         {
-            if (from < upgradeFeatures.to && to >= upgradeFeatures.to)
+            if (((to < protocol::BlockVersion::V3_2_7_VERSION) && (to >= upgradeFeatures.to)) ||
+                (from < upgradeFeatures.to && to >= upgradeFeatures.to))
             {
                 for (auto flag : upgradeFeatures.flags)
                 {
@@ -213,12 +221,14 @@ public:
         }
     }
 
-    task::Task<void> writeToStorage(auto& storage, long blockNumber) const
+    task::Task<void> writeToStorage(
+        auto& storage, long blockNumber, bool ignoreDuplicate = true) const
     {
         for (auto [flag, name, value] : flags())
         {
-            if (value && !co_await storage2::existsOne(
-                             storage, transaction_executor::StateKeyView(ledger::SYS_CONFIG, name)))
+            if (value && !(ignoreDuplicate &&
+                             co_await storage2::existsOne(storage,
+                                 transaction_executor::StateKeyView(ledger::SYS_CONFIG, name))))
             {
                 storage::Entry entry;
                 entry.setObject(

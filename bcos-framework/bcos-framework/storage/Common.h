@@ -63,8 +63,8 @@ struct Condition
     ~Condition() = default;
 
     // string compare, "2" > "12"
-    void GT(const std::string& value) 
-    {  
+    void GT(const std::string& value)
+    {
         if (m_hasConflictCond)
         {
             return;
@@ -80,15 +80,15 @@ struct Condition
         // 2. x > a && x <= b && a >= b (not exist)
         auto it1 = m_conditions.find(Comparator::LT);
         auto it2 = m_conditions.find(Comparator::LE);
-        if ((it1 != m_conditions.end() && it->second >= it1->second) || 
+        if ((it1 != m_conditions.end() && it->second >= it1->second) ||
             (it2 != m_conditions.end() && it->second >= it2->second))
         {
             m_hasConflictCond = true;
         }
     }
 
-    void GE(const std::string& value) 
-    {          
+    void GE(const std::string& value)
+    {
         if (m_hasConflictCond)
         {
             return;
@@ -104,7 +104,7 @@ struct Condition
         // 2. x >= a && x <= b && a > b (not exist)
         auto it1 = m_conditions.find(Comparator::LT);
         auto it2 = m_conditions.find(Comparator::LE);
-        if ((it1 != m_conditions.end() && it->second >= it1->second) || 
+        if ((it1 != m_conditions.end() && it->second >= it1->second) ||
             (it2 != m_conditions.end() && it->second > it2->second))
         {
             m_hasConflictCond = true;
@@ -112,13 +112,13 @@ struct Condition
     }
 
     // string compare, "12" < "2"
-    void LT(const std::string& value) 
-    {          
+    void LT(const std::string& value)
+    {
         if (m_hasConflictCond)
         {
             return;
         }
-      
+
         auto [it, inserted] = m_conditions.try_emplace(Comparator::LT, value);
         if (!inserted && value < it->second)
         {
@@ -129,7 +129,7 @@ struct Condition
         // 2. x >= a && x < b && a >= b (not exist)
         auto it1 = m_conditions.find(Comparator::GT);
         auto it2 = m_conditions.find(Comparator::GE);
-        if ((it1 != m_conditions.end() && it->second <= it1->second) || 
+        if ((it1 != m_conditions.end() && it->second <= it1->second) ||
             (it2 != m_conditions.end() && it->second <= it2->second))
         {
             m_hasConflictCond = true;
@@ -137,7 +137,7 @@ struct Condition
     }
 
     void LE(const std::string& value)
-    {          
+    {
         if (m_hasConflictCond)
         {
             return;
@@ -152,41 +152,41 @@ struct Condition
         // 2. x >= a && x <= b && a > b (not exist)
         auto it1 = m_conditions.find(Comparator::GT);
         auto it2 = m_conditions.find(Comparator::GE);
-        if ((it1 != m_conditions.end() && it->second <= it1->second) || 
+        if ((it1 != m_conditions.end() && it->second <= it1->second) ||
             (it2 != m_conditions.end() && it->second < it2->second))
         {
             m_hasConflictCond = true;
         }
     }
 
-    void EQ(const std::string& value) 
-    { 
+    void EQ(const std::string& value)
+    {
         if (m_hasConflictCond)
         {
             return;
-        }    
+        }
         // x == a  <==>  x >= a && x <= a
         // Convert single point queries to range queries
         GE(value);
         LE(value);
     }
 
-    void NE(const std::string& value) 
-    { 
+    void NE(const std::string& value)
+    {
         if (m_hasConflictCond)
         {
             return;
         }
-        m_repeatableConditions.emplace_back(Comparator::NE, value); 
+        m_repeatableConditions.emplace_back(Comparator::NE, value);
     }
-    
+
     void startsWith(const std::string& value, bool updateGE = true)
     {
         if (m_hasConflictCond)
         {
             return;
         }
-        
+
         auto [it, inserted] = m_conditions.try_emplace(Comparator::STARTS_WITH, value);
         if (inserted)
         {
@@ -195,7 +195,7 @@ struct Condition
                 GE(value);
             }
             return;
-        }   
+        }
 
         // it->second = abc, value = abcd
         if (value.starts_with(it->second))
@@ -211,11 +211,11 @@ struct Condition
         {
             m_hasConflictCond = true;
         }
-        // it->second = abcd, value = abc 
+        // it->second = abcd, value = abc
     }
 
     void endsWith(const std::string& value)
-    { 
+    {
         if (m_hasConflictCond)
         {
             return;
@@ -225,8 +225,8 @@ struct Condition
         if (inserted)
         {
             return;
-        }       
-        
+        }
+
         // it->second = def, value = cdef
         if (value.ends_with(it->second))
         {
@@ -237,11 +237,11 @@ struct Condition
         {
             m_hasConflictCond = true;
         }
-        // it->second = cdef, value = def 
+        // it->second = cdef, value = def
     }
 
     void contains(const std::string& value)
-    {         
+    {
         if (m_hasConflictCond)
         {
             return;
@@ -253,9 +253,9 @@ struct Condition
 
     std::pair<size_t, size_t> getLimit() const { return m_limit; }
 
-    template<typename Container>
+    template <typename Container>
     static bool isValid(const std::string_view& key, const Container& conds)
-    {  
+    {
         // all conditions must be satisfied
         for (auto& it : conds)
         {  // conditions should few, so not parallel check for now
@@ -324,7 +324,7 @@ struct Condition
     }
 
     bool isValid(const std::string_view& key) const
-    {  
+    {
         // If there are conflicting conditions, it means that no key can meet the conditions.
         if (m_hasConflictCond)
         {
@@ -345,7 +345,7 @@ struct Condition
         ENDS_WITH = 7,
         CONTAINS = 8
     };
-    
+
     static std::string toString(const std::pair<Comparator, std::string>& cond)
     {
         std::string cmpStr;
@@ -385,8 +385,8 @@ struct Condition
     std::map<Comparator, std::string> m_conditions;
     std::vector<std::pair<Comparator, std::string>> m_repeatableConditions;
     std::pair<size_t, size_t> m_limit;
-    bool m_hasConflictCond = false;    
-    
+    bool m_hasConflictCond = false;
+
     // this method only for trace log
     std::string toString() const
     {
@@ -452,6 +452,16 @@ private:
     void* operator new(size_t s) { return malloc(s); };
     void operator delete(void* p) { free(p); };
 };
+
+const char* const TABLE_KEY_SPLIT = ":";
+
+inline std::string toDBKey(const std::string_view& tableName, const std::string_view& key)
+{
+    std::string dbKey;
+    dbKey.reserve(tableName.size() + 1 + key.size());
+    dbKey.append(tableName).append(TABLE_KEY_SPLIT).append(key);
+    return dbKey;
+}
 
 }  // namespace storage
 }  // namespace bcos

@@ -6,12 +6,6 @@ CallParameters::UniquePtr PromiseTransactionExecutive::start(CallParameters::Uni
 {
     auto spawnCall = [this, &input]() {
         auto& blockContext = m_blockContext;
-        m_syncStorageWrapper = std::make_unique<SyncStorageWrapper>(blockContext.storage(),
-            std::bind(
-                &PromiseTransactionExecutive::externalAcquireKeyLocks, this, std::placeholders::_1),
-            m_recoder);
-
-        m_storageWrapper = m_syncStorageWrapper.get();  // must set to base class
 
         if (!input->keyLocks.empty())
         {

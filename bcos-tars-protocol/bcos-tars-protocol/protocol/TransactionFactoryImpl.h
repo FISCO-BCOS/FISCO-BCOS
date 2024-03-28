@@ -49,7 +49,7 @@ public:
 
         transaction->decode(txData);
         // check value or gasPrice or maxFeePerGas or maxPriorityFeePerGas is hex string
-        if (transaction->version() == int32_t(bcos::protocol::TransactionVersion::V1_VERSION))
+        if (transaction->version() >= int32_t(bcos::protocol::TransactionVersion::V1_VERSION))
         {
             if (!bcos::isHexStringV2(transaction->mutableInner().data.value) ||
                 !bcos::isHexStringV2(transaction->mutableInner().data.gasPrice) ||
@@ -88,7 +88,8 @@ public:
             BCOS_LOG(WARNING) << LOG_DESC("the transaction hash does not match")
                               << LOG_KV("originHash", originHashResult.hex())
                               << LOG_KV("realHash", hashResult.hex());
-            BOOST_THROW_EXCEPTION(std::invalid_argument("transaction hash mismatching"));
+            BOOST_THROW_EXCEPTION(std::invalid_argument(
+                "transaction hash mismatching, maybe transaction version not support."));
         }
 
         if (checkSig)
@@ -127,7 +128,7 @@ public:
             inner.data.maxPriorityFeePerGas = "0x0";
         }
 
-        if (_version == int32_t(bcos::protocol::TransactionVersion::V1_VERSION))
+        if (_version >= int32_t(bcos::protocol::TransactionVersion::V1_VERSION))
         {
             if (bcos::isHexStringV2(_value) && bcos::isHexStringV2(_gasPrice) &&
                 bcos::isHexStringV2(_maxFeePerGas) && bcos::isHexStringV2(_maxPriorityFeePerGas))

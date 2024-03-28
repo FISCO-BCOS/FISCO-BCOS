@@ -205,5 +205,14 @@ void AccountManagerPrecompiled::getAccountStatus(
         _callParameters->setExecResult(codec.encode((uint8_t)0));
         return;
     }
+    // NOTE: if the address not exist, and feature set bugfix_call_noaddr_return, it will return
+    // SUCCESS status, so it should be add special logic here.
+    if (blockContext.features().get(ledger::Features::Flag::bugfix_call_noaddr_return) &&
+        response->status == 0 && !response->message.empty())
+    {
+        // if the address not exist, return normal by default
+        _callParameters->setExecResult(codec.encode((uint8_t)0));
+        return;
+    }
     _callParameters->setExternalResult(std::move(response));
 }

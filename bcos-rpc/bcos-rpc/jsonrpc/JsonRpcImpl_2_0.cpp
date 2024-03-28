@@ -227,13 +227,21 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::Transaction const
     jResp["abi"] = std::string(transaction.abi());
     jResp["signature"] = toHexStringWithPrefix(transaction.signatureData());
     jResp["extraData"] = std::string(transaction.extraData());
-    if (transaction.version() == int32_t(bcos::protocol::TransactionVersion::V1_VERSION))
+    if (transaction.version() >= int32_t(bcos::protocol::TransactionVersion::V1_VERSION))
     {
         jResp["value"] = std::string(transaction.value());
         jResp["gasPrice"] = std::string(transaction.gasPrice());
         jResp["gasLimit"] = transaction.gasLimit();
         jResp["maxFeePerGas"] = std::string(transaction.maxFeePerGas());
         jResp["maxPriorityFeePerGas"] = std::string(transaction.maxPriorityFeePerGas());
+    }
+    if (transaction.version() >= (int32_t)bcos::protocol::TransactionVersion::V2_VERSION)
+    {
+        jResp["extension"] = Json::Value(Json::arrayValue);
+        for (const auto& ext : transaction.extension())
+        {
+            jResp["extension"].append(ext);
+        }
     }
 }
 
@@ -298,7 +306,7 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, std::string_view _txHash,
         jLog["data"] = toHexStringWithPrefix(logEntry.data());
         jResp["logEntries"].append(jLog);
     }
-    if (transactionReceipt.version() == int32_t(bcos::protocol::TransactionVersion::V1_VERSION))
+    if (transactionReceipt.version() >= int32_t(bcos::protocol::TransactionVersion::V1_VERSION))
     {
         jResp["effectiveGasPrice"] = std::string(transactionReceipt.effectiveGasPrice());
     }

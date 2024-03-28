@@ -86,7 +86,7 @@ public:
         // --------------------------------
 
         std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
-        executor->dmcExecuteTransaction(
+        executor->executeTransaction(
             std::move(params), [&](bcos::Error::UniquePtr&& error,
                                    bcos::protocol::ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
@@ -101,47 +101,20 @@ public:
             return result;
         }
 
-        /// call Auth manager to check deploy auth
-        result->setSeq(1001);
+        BOOST_CHECK_EQUAL(result->type(), ExecutionMessage::FINISHED);
+        BOOST_CHECK_EQUAL(result->newEVMContractAddress(), newAddress);
+        BOOST_CHECK_LT(result->gasAvailable(), gas);
 
-        std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise2;
-        executor->dmcExecuteTransaction(
-            std::move(result), [&](bcos::Error::UniquePtr&& error,
-                                   bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
-                executePromise2.set_value(std::move(result));
-            });
-
-        auto result2 = executePromise2.get_future().get();
-
-        /// callback to create context
-        result2->setSeq(1000);
-
-        std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise3;
-        executor->dmcExecuteTransaction(
-            std::move(result2), [&](bcos::Error::UniquePtr&& error,
-                                    bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
-                executePromise3.set_value(std::move(result));
-            });
-
-        auto result3 = executePromise3.get_future().get();
-
-
-        BOOST_CHECK_EQUAL(result3->type(), ExecutionMessage::PRE_FINISH);
-        BOOST_CHECK_EQUAL(result3->newEVMContractAddress(), newAddress);
-        BOOST_CHECK_LT(result3->gasAvailable(), gas);
-
-        BOOST_CHECK_EQUAL(result3->contextID(), 99);
-        BOOST_CHECK_EQUAL(result3->seq(), 1000);
-        BOOST_CHECK_EQUAL(result3->create(), false);
-        BOOST_CHECK_EQUAL(result3->origin(), sender);
-        BOOST_CHECK_EQUAL(result3->from(), newAddress);
-        BOOST_CHECK(result3->to() == sender);
+        BOOST_CHECK_EQUAL(result->contextID(), 99);
+        BOOST_CHECK_EQUAL(result->seq(), 1000);
+        BOOST_CHECK_EQUAL(result->create(), false);
+        BOOST_CHECK_EQUAL(result->origin(), sender);
+        BOOST_CHECK_EQUAL(result->from(), newAddress);
+        BOOST_CHECK(result->to() == sender);
 
         commitBlock(_number);
 
-        return result3;
+        return result;
     }
 
     ExecutionMessage::UniquePtr helloGet(
@@ -173,7 +146,7 @@ public:
         params2->setType(NativeExecutionMessage::TXHASH);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
-        executor->dmcExecuteTransaction(std::move(params2),
+        executor->executeTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise2.set_value(std::move(result));
@@ -218,7 +191,7 @@ public:
         params2->setType(NativeExecutionMessage::TXHASH);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
-        executor->dmcExecuteTransaction(std::move(params2),
+        executor->executeTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise2.set_value(std::move(result));
@@ -263,194 +236,31 @@ public:
 
         // call account manager
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
-        executor->dmcExecuteTransaction(std::move(params2),
+        executor->executeTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
 
-        result2->setSeq(1001);
-        result2->takeKeyLocks();
-
-        // call committee manager to get _committee
-        std::promise<ExecutionMessage::UniquePtr> executePromise3;
-        executor->dmcExecuteTransaction(std::move(result2),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
-                executePromise3.set_value(std::move(result));
-            });
-        auto result3 = executePromise3.get_future().get();
-
-        BOOST_CHECK(result3->status() == 0);
-        BOOST_CHECK(result3->to() == ACCOUNT_MGR_ADDRESS);
-        BOOST_CHECK(result3->from() == AUTH_COMMITTEE_ADDRESS);
-        BOOST_CHECK(result3->type() == ExecutionMessage::PRE_FINISH);
-
-        result3->setSeq(1000);
-
-        /// committee manager call back to account manager
-        std::promise<ExecutionMessage::UniquePtr> executePromise4;
-        executor->dmcExecuteTransaction(std::move(result3),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
-                executePromise4.set_value(std::move(result));
-            });
-        auto result4 = executePromise4.get_future().get();
-
-        BOOST_CHECK(result4->status() == 0);
-        BOOST_CHECK(result4->from() == ACCOUNT_MGR_ADDRESS);
-        BOOST_CHECK(result4->type() == ExecutionMessage::MESSAGE);
-
-        result4->setSeq(1002);
-
-        /// account manager call to committee, get committee info
-        std::promise<ExecutionMessage::UniquePtr> executePromise5;
-        executor->dmcExecuteTransaction(std::move(result4),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
-                executePromise5.set_value(std::move(result));
-            });
-        auto result5 = executePromise5.get_future().get();
-
-        BOOST_CHECK(result5->status() == 0);
-        BOOST_CHECK(result5->to() == ACCOUNT_MGR_ADDRESS);
-        BOOST_CHECK(result5->type() == ExecutionMessage::PRE_FINISH);
-
-        result5->setSeq(1000);
-
-        /// committee call back to account manager
-        std::promise<ExecutionMessage::UniquePtr> executePromise6;
-        executor->dmcExecuteTransaction(std::move(result5),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
-                executePromise6.set_value(std::move(result));
-            });
-        auto result6 = executePromise6.get_future().get();
 
         if (errorInAccountManager)
         {
             if (_errorCode != 0)
             {
-                BOOST_CHECK(result6->data().toBytes() == codec->encode(int32_t(_errorCode)));
+                BOOST_CHECK(result2->data().toBytes() == codec->encode(int32_t(_errorCode)));
             }
             commitBlock(_number);
-            return result6;
+            return result2;
         }
-
-        result6->setSeq(1003);
-
-        // external create
-        std::promise<ExecutionMessage::UniquePtr> executePromise7;
-        executor->dmcExecuteTransaction(std::move(result6),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
-                executePromise7.set_value(std::move(result));
-            });
-        auto result7 = executePromise7.get_future().get();
-
-        if (exist)
-        {
-            // if account exist, just callback
-            result7->setSeq(1000);
-            std::promise<ExecutionMessage::UniquePtr> executePromise8;
-            executor->dmcExecuteTransaction(std::move(result7),
-                [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                    BOOST_CHECK(!error);
-                    executePromise8.set_value(std::move(result));
-                });
-            auto result8 = executePromise8.get_future().get();
-            if (_errorCode != 0)
-            {
-                BOOST_CHECK(result8->data().toBytes() == codec->encode(s256(_errorCode)));
-            }
-
-            commitBlock(_number);
-            return result8;
-        }
-
-        result7->setSeq(1004);
-
-        // external get deploy auth
-        std::promise<ExecutionMessage::UniquePtr> executePromise8;
-        executor->dmcExecuteTransaction(std::move(result7),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
-                executePromise8.set_value(std::move(result));
-            });
-        auto result8 = executePromise8.get_future().get();
-
-        result8->setSeq(1003);
-
-        // get deploy auth
-        std::promise<ExecutionMessage::UniquePtr> executePromise9;
-        executor->dmcExecuteTransaction(std::move(result8),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
-                executePromise9.set_value(std::move(result));
-            });
-        auto result9 = executePromise9.get_future().get();
-
-        result9->setSeq(1005);
-
-        // external call bfs
-        std::promise<ExecutionMessage::UniquePtr> executePromise10;
-        executor->dmcExecuteTransaction(std::move(result9),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
-                executePromise10.set_value(std::move(result));
-            });
-        auto result10 = executePromise10.get_future().get();
-
-        // call bfs success, callback to create
-        result10->setSeq(1003);
-
-        std::promise<ExecutionMessage::UniquePtr> executePromise11;
-        executor->dmcExecuteTransaction(std::move(result10),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
-                executePromise11.set_value(std::move(result));
-            });
-        auto result11 = executePromise11.get_future().get();
-
-        // create success, callback to precompiled
-        result11->setSeq(1000);
-
-        std::promise<ExecutionMessage::UniquePtr> executePromise12;
-        executor->dmcExecuteTransaction(std::move(result11),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
-                executePromise12.set_value(std::move(result));
-            });
-        auto result12 = executePromise12.get_future().get();
-
-        // external call, set account status
-        result12->setSeq(1006);
-        std::promise<ExecutionMessage::UniquePtr> executePromise13;
-        executor->dmcExecuteTransaction(std::move(result12),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
-                executePromise13.set_value(std::move(result));
-            });
-        auto result13 = executePromise13.get_future().get();
-
-        // external call back
-        result13->setSeq(1000);
-        std::promise<ExecutionMessage::UniquePtr> executePromise14;
-        executor->dmcExecuteTransaction(std::move(result13),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
-                executePromise14.set_value(std::move(result));
-            });
-        auto result14 = executePromise14.get_future().get();
 
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result14->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_CHECK(result2->data().toBytes() == codec->encode(s256(_errorCode)));
         }
 
         commitBlock(_number);
-        return result14;
+        return result2;
     };
 
     ExecutionMessage::UniquePtr getAccountStatusByManager(protocol::BlockNumber _number,
@@ -477,11 +287,11 @@ public:
         params2->setStaticCall(false);
         params2->setGasAvailable(gas);
         params2->setData(std::move(in));
-        params2->setType(NativeExecutionMessage::TXHASH);
+        params2->setType(NativeExecutionMessage::MESSAGE);
 
         // call precompiled
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
-        executor->dmcExecuteTransaction(std::move(params2),
+        executor->call(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise2.set_value(std::move(result));
@@ -498,37 +308,13 @@ public:
             return result2;
         }
 
-        result2->setSeq(1001);
-        result2->takeKeyLocks();
-
-        // external call
-        std::promise<ExecutionMessage::UniquePtr> executePromise3;
-        executor->dmcExecuteTransaction(std::move(result2),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
-                executePromise3.set_value(std::move(result));
-            });
-        auto result3 = executePromise3.get_future().get();
-
-        result3->setSeq(1000);
-        result3->takeKeyLocks();
-
-        // external call callback
-        std::promise<ExecutionMessage::UniquePtr> executePromise4;
-        executor->dmcExecuteTransaction(std::move(result3),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
-                executePromise4.set_value(std::move(result));
-            });
-        auto result4 = executePromise4.get_future().get();
-
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result4->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_CHECK(result2->data().toBytes() == codec->encode(s256(_errorCode)));
         }
 
         commitBlock(_number);
-        return result4;
+        return result2;
     };
 
     ExecutionMessage::UniquePtr getAccountStatus(
