@@ -7,7 +7,7 @@ on:
       - "README.md"
     branches:
       - release-3.*
-      - feature-3.*
+      - feature-*
       - master
   release:
     types: [push]
