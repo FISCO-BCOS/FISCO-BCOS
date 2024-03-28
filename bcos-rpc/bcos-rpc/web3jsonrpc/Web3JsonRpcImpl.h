@@ -22,23 +22,17 @@
 #include "bcos-rpc/groupmgr/GroupManager.h"
 #include "bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h"
 #include "bcos-rpc/validator/CallValidator.h"
-#include "bcos-rpc/web3jsonrpc/endpoints/EndpointInterface.h"
-#include "bcos-rpc/web3jsonrpc/endpoints/EthEndpoint.h"
-#include "bcos-rpc/web3jsonrpc/endpoints/NetEndpoint.h"
-#include "bcos-rpc/web3jsonrpc/endpoints/Web3Endpoint.h"
 #include <bcos-boostssl/websocket/WsService.h>
 #include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-rpc/jsonrpc/JsonRpcInterface.h>
+#include <bcos-rpc/web3jsonrpc/endpoints/Endpoints.h>
+#include <bcos-rpc/web3jsonrpc/endpoints/EndpointsMapping.h>
 #include <json/json.h>
-#include <tbb/concurrent_hash_map.h>
 #include <boost/core/ignore_unused.hpp>
 #include <unordered_map>
 
 namespace bcos::rpc
 {
-class EthEndpoint;
-class NetEndpoint;
-class Web3Endpoint;
 class Web3JsonRpcImpl : public JsonRpcImpl_2_0, public std::enable_shared_from_this<Web3JsonRpcImpl>
 {
 public:
@@ -48,24 +42,14 @@ public:
       : JsonRpcImpl_2_0(
             std::move(_groupManager), std::move(_gatewayInterface), std::move(_wsService)),
         m_groupId(std::move(_groupId)),
-        m_ethEndpoint(std::make_unique<EthEndpoint>(m_groupId, m_groupManager)),
-        m_netEndpoint(std::make_unique<NetEndpoint>(m_groupId, m_groupManager)),
-        m_web3Endpoint(std::make_unique<Web3Endpoint>(m_groupId, m_groupManager))
-    {
-        auto&& ethMap = m_ethEndpoint->exportMethods();
-        auto&& netMap = m_netEndpoint->exportMethods();
-        auto&& web3Map = m_web3Endpoint->exportMethods();
-        m_methodToFunc.insert(ethMap.begin(), ethMap.end());
-        m_methodToFunc.insert(netMap.begin(), netMap.end());
-        m_methodToFunc.insert(web3Map.begin(), web3Map.end());
-    }
+        m_endpoints(_groupManager->getNodeService(m_groupId, ""))
+    {}
     ~Web3JsonRpcImpl() override = default;
 
 private:
     // Note: only use in one group
     std::string m_groupId;
-    EthEndpoint::UniquePtr m_ethEndpoint;
-    NetEndpoint::UniquePtr m_netEndpoint;
-    Web3Endpoint::UniquePtr m_web3Endpoint;
+    Endpoints m_endpoints;
+    EndpointsMapping m_endpointsMapping;
 };
 }  // namespace bcos::rpc

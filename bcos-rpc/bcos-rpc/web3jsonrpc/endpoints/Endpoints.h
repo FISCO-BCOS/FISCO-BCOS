@@ -13,12 +13,29 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file NetEndpoint.cpp
+ * @file Endpoints.h
  * @author: kyonGuo
- * @date 2024/3/21
+ * @date 2024/3/28
  */
 
+#pragma once
+#include "EthEndpoint.h"
 #include "NetEndpoint.h"
+#include "Web3Endpoint.h"
 
-using namespace bcos;
-using namespace bcos::rpc;
+#include <bcos-rpc/groupmgr/NodeService.h>
+
+namespace bcos::rpc
+{
+class Endpoints : protected EthEndpoint, NetEndpoint, Web3Endpoint
+{
+public:
+    explicit Endpoints(NodeService::Ptr _nodeService)
+      : EthEndpoint(_nodeService), NetEndpoint(_nodeService), Web3Endpoint(_nodeService)
+    {}
+    ~Endpoints() override = default;
+    Endpoints(const Endpoints&) = delete;
+    Endpoints& operator=(const Endpoints&) = delete;
+    friend class EndpointsMapping;
+};
+}  // namespace bcos::rpc

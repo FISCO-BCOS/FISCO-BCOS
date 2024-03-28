@@ -78,7 +78,7 @@ concept Number = std::is_integral_v<T> || std::same_as<T, bigint>;
 static std::string toQuantity(Number auto number)
 {
     std::basic_string<byte> bytes(8, '\0');
-    boost::endian::store_big_u64(&bytes, number);
+    boost::endian::store_big_u64(bytes.data(), number);
     return toQuantity(bytes);
 }
 

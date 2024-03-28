@@ -19,7 +19,6 @@
  */
 
 #pragma once
-#include "EndpointInterface.h"
 #include "bcos-rpc/groupmgr/GroupManager.h"
 #include <bcos-rpc/jsonrpc/JsonRpcInterface.h>
 #include <json/json.h>
@@ -29,28 +28,19 @@
 
 namespace bcos::rpc
 {
-class NetEndpoint : public EndpointInterface
+class NetEndpoint
 {
 public:
-    explicit NetEndpoint(std::string _groupId, bcos::rpc::GroupManager::Ptr groupManager);
-    void initMethod();
-    NodeService::Ptr getNodeService() override
-    {
-        return m_groupManager->getNodeService(m_groupId, "");
-    }
-    MethodMap&& exportMethods() override { return std::move(m_methods); }
-    void verison(RespFunc);
-    void listening(RespFunc);
-    void peerCount(RespFunc);
+    explicit NetEndpoint(NodeService::Ptr nodeService) : m_nodeService(std::move(nodeService)) {}
+    virtual ~NetEndpoint() = default;
 
 protected:
-    void versionInterface(Json::Value const&, RespFunc func) { verison(std::move(func)); }
-    void listeningInterface(Json::Value const&, RespFunc func) { listening(std::move(func)); }
-    void peerCountInterface(Json::Value const&, RespFunc func) { peerCount(std::move(func)); }
+    task::Task<void> verison(const Json::Value&, Json::Value&);
+    task::Task<void> listening(const Json::Value&, Json::Value&);
+    task::Task<void> peerCount(const Json::Value&, Json::Value&);
 
 private:
-    std::string m_groupId;
-    bcos::rpc::GroupManager::Ptr m_groupManager;
+    NodeService::Ptr m_nodeService;
 };
 
 }  // namespace bcos::rpc
