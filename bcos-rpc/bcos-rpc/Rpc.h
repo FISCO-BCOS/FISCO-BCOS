@@ -99,6 +99,8 @@ public:
 
     GroupManager::Ptr groupManager() { return m_groupManager; }
 
+    bcos::rpc::Web3JsonRpcImpl::Ptr web3JsonRpc() const { return m_web3JsonRpcImpl; }
+
 protected:
     virtual void notifyGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo);
 

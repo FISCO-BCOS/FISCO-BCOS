@@ -52,61 +52,61 @@ void EndpointsMapping::addHandlers()
 void EndpointsMapping::addEthHandlers()
 {
     // clang-format off
-    // m_handlers[methodString(EthMethod::eth_protocolVersion)] = &Endpoints::protocolVersion;
-    // m_handlers[methodString(EthMethod::eth_syncing)] = &Endpoints::syning;
-    // m_handlers[methodString(EthMethod::eth_coinbase)] = &Endpoints::coinbase;
-    // m_handlers[methodString(EthMethod::eth_chainId)] = &Endpoints::chainId;
-    // m_handlers[methodString(EthMethod::eth_mining)] = &Endpoints::mining;
-    // m_handlers[methodString(EthMethod::eth_hashrate)] = &Endpoints::hashrate;
-    // m_handlers[methodString(EthMethod::eth_gasPrice)] = &Endpoints::gasPrice;
-    // m_handlers[methodString(EthMethod::eth_accounts)] = &Endpoints::accounts;
-    // m_handlers[methodString(EthMethod::eth_blockNumber)] = &Endpoints::blockNumber;
-    // m_handlers[methodString(EthMethod::eth_getBalance)] = &Endpoints::getBalance;
-    // m_handlers[methodString(EthMethod::eth_getStorageAt)] = &Endpoints::getStorageAt;
-    // m_handlers[methodString(EthMethod::eth_getTransactionCount)] = &Endpoints::getTransactionCount;
-    // m_handlers[methodString(EthMethod::eth_getBlockTransactionCountByHash)] = &Endpoints::getBlockTxCountByHash;
-    // m_handlers[methodString(EthMethod::eth_getBlockTransactionCountByNumber)] = &Endpoints::getBlockTxCountByNumber;
-    // m_handlers[methodString(EthMethod::eth_getUncleCountByBlockHash)] = &Endpoints::getUncleCountByBlockHash;
-    // m_handlers[methodString(EthMethod::eth_getUncleCountByBlockNumber)] = &Endpoints::getUncleCountByBlockNumber;
-    // m_handlers[methodString(EthMethod::eth_getCode)] = &Endpoints::getCode;
-    // m_handlers[methodString(EthMethod::eth_sign)] = &Endpoints::sign;
-    // m_handlers[methodString(EthMethod::eth_sendTransaction)] = &Endpoints::sendTransaction;
-    // m_handlers[methodString(EthMethod::eth_signTransaction)] = &Endpoints::signTransaction;
-    // m_handlers[methodString(EthMethod::eth_sendRawTransaction)] = &Endpoints::sendRawTransaction;
-    // m_handlers[methodString(EthMethod::eth_call)] = &Endpoints::call;
-    // m_handlers[methodString(EthMethod::eth_estimateGas)] = &Endpoints::estimateGas;
-    // m_handlers[methodString(EthMethod::eth_getBlockByHash)] = &Endpoints::getBlockByHash;
-    // m_handlers[methodString(EthMethod::eth_getBlockByNumber)] = &Endpoints::getBlockByNumber;
-    // m_handlers[methodString(EthMethod::eth_getTransactionByHash)] = &Endpoints::getTransactionByHash;
-    // m_handlers[methodString(EthMethod::eth_getTransactionByBlockHashAndIndex)] = &Endpoints::getTransactionByBlockHashAndIndex;
-    // m_handlers[methodString(EthMethod::eth_getTransactionByBlockNumberAndIndex)] = &Endpoints::getTransactionByBlockNumberAndIndex;
-    // m_handlers[methodString(EthMethod::eth_getTransactionReceipt)] = &Endpoints::getTransactionReceipt;
-    // m_handlers[methodString(EthMethod::eth_getUncleByBlockHashAndIndex)] = &Endpoints::getUncleByBlockHashAndIndex;
-    // m_handlers[methodString(EthMethod::eth_getUncleByBlockNumberAndIndex)] = &Endpoints::getUncleByBlockNumberAndIndex;
-    // m_handlers[methodString(EthMethod::eth_newFilter)] = &Endpoints::newFilter;
-    // m_handlers[methodString(EthMethod::eth_newBlockFilter)] = &Endpoints::newBlockFilter;
-    // m_handlers[methodString(EthMethod::eth_newPendingTransactionFilter)] = &Endpoints::newPendingTransactionFilter;
-    // m_handlers[methodString(EthMethod::eth_uninstallFilter)] = &Endpoints::uninstallFilter;
-    // m_handlers[methodString(EthMethod::eth_getFilterChanges)] = &Endpoints::getFilterChanges;
-    // m_handlers[methodString(EthMethod::eth_getFilterLogs)] = &Endpoints::getFilterLogs;
-    // m_handlers[methodString(EthMethod::eth_getLogs)] = &Endpoints::getLogs;
+    m_handlers[methodString(EthMethod::eth_protocolVersion)] = &Endpoints::protocolVersion;
+    m_handlers[methodString(EthMethod::eth_syncing)] = &Endpoints::syning;
+    m_handlers[methodString(EthMethod::eth_coinbase)] = &Endpoints::coinbase;
+    m_handlers[methodString(EthMethod::eth_chainId)] = &Endpoints::chainId;
+    m_handlers[methodString(EthMethod::eth_mining)] = &Endpoints::mining;
+    m_handlers[methodString(EthMethod::eth_hashrate)] = &Endpoints::hashrate;
+    m_handlers[methodString(EthMethod::eth_gasPrice)] = &Endpoints::gasPrice;
+    m_handlers[methodString(EthMethod::eth_accounts)] = &Endpoints::accounts;
+    m_handlers[methodString(EthMethod::eth_blockNumber)] = &Endpoints::blockNumber;
+    m_handlers[methodString(EthMethod::eth_getBalance)] = &Endpoints::getBalance;
+    m_handlers[methodString(EthMethod::eth_getStorageAt)] = &Endpoints::getStorageAt;
+    m_handlers[methodString(EthMethod::eth_getTransactionCount)] = &Endpoints::getTransactionCount;
+    m_handlers[methodString(EthMethod::eth_getBlockTransactionCountByHash)] = &Endpoints::getBlockTxCountByHash;
+    m_handlers[methodString(EthMethod::eth_getBlockTransactionCountByNumber)] = &Endpoints::getBlockTxCountByNumber;
+    m_handlers[methodString(EthMethod::eth_getUncleCountByBlockHash)] = &Endpoints::getUncleCountByBlockHash;
+    m_handlers[methodString(EthMethod::eth_getUncleCountByBlockNumber)] = &Endpoints::getUncleCountByBlockNumber;
+    m_handlers[methodString(EthMethod::eth_getCode)] = &Endpoints::getCode;
+    m_handlers[methodString(EthMethod::eth_sign)] = &Endpoints::sign;
+    m_handlers[methodString(EthMethod::eth_sendTransaction)] = &Endpoints::sendTransaction;
+    m_handlers[methodString(EthMethod::eth_signTransaction)] = &Endpoints::signTransaction;
+    m_handlers[methodString(EthMethod::eth_sendRawTransaction)] = &Endpoints::sendRawTransaction;
+    m_handlers[methodString(EthMethod::eth_call)] = &Endpoints::call;
+    m_handlers[methodString(EthMethod::eth_estimateGas)] = &Endpoints::estimateGas;
+    m_handlers[methodString(EthMethod::eth_getBlockByHash)] = &Endpoints::getBlockByHash;
+    m_handlers[methodString(EthMethod::eth_getBlockByNumber)] = &Endpoints::getBlockByNumber;
+    m_handlers[methodString(EthMethod::eth_getTransactionByHash)] = &Endpoints::getTransactionByHash;
+    m_handlers[methodString(EthMethod::eth_getTransactionByBlockHashAndIndex)] = &Endpoints::getTransactionByBlockHashAndIndex;
+    m_handlers[methodString(EthMethod::eth_getTransactionByBlockNumberAndIndex)] = &Endpoints::getTransactionByBlockNumberAndIndex;
+    m_handlers[methodString(EthMethod::eth_getTransactionReceipt)] = &Endpoints::getTransactionReceipt;
+    m_handlers[methodString(EthMethod::eth_getUncleByBlockHashAndIndex)] = &Endpoints::getUncleByBlockHashAndIndex;
+    m_handlers[methodString(EthMethod::eth_getUncleByBlockNumberAndIndex)] = &Endpoints::getUncleByBlockNumberAndIndex;
+    m_handlers[methodString(EthMethod::eth_newFilter)] = &Endpoints::newFilter;
+    m_handlers[methodString(EthMethod::eth_newBlockFilter)] = &Endpoints::newBlockFilter;
+    m_handlers[methodString(EthMethod::eth_newPendingTransactionFilter)] = &Endpoints::newPendingTransactionFilter;
+    m_handlers[methodString(EthMethod::eth_uninstallFilter)] = &Endpoints::uninstallFilter;
+    m_handlers[methodString(EthMethod::eth_getFilterChanges)] = &Endpoints::getFilterChanges;
+    m_handlers[methodString(EthMethod::eth_getFilterLogs)] = &Endpoints::getFilterLogs;
+    m_handlers[methodString(EthMethod::eth_getLogs)] = &Endpoints::getLogs;
     // clang-format on
 }
 
 void EndpointsMapping::addNetHandlers()
 {
     // clang-format off
-    // m_handlers[methodString(EthMethod::net_version)] = &Endpoints::verison;
-    // m_handlers[methodString(EthMethod::net_peerCount)] = &Endpoints::peerCount;
-    // m_handlers[methodString(EthMethod::net_listening)] = &Endpoints::listening;
+    m_handlers[methodString(EthMethod::net_version)] = &Endpoints::verison;
+    m_handlers[methodString(EthMethod::net_peerCount)] = &Endpoints::peerCount;
+    m_handlers[methodString(EthMethod::net_listening)] = &Endpoints::listening;
     // clang-format on
 }
 
 void EndpointsMapping::addWeb3Handlers()
 {
     // clang-format off
-    //m_handlers[methodString(EthMethod::web3_clientVersion)] = &Endpoints::clientVersion;
-    //m_handlers[methodString(EthMethod::web3_sha3)] = &Endpoints::sha3;
+    m_handlers[methodString(EthMethod::web3_clientVersion)] = &Endpoints::clientVersion;
+    m_handlers[methodString(EthMethod::web3_sha3)] = &Endpoints::sha3;
     // clang-format on
 }
 }  // namespace bcos::rpc

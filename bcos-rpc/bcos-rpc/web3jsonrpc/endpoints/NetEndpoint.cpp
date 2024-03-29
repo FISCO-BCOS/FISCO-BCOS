@@ -22,3 +22,15 @@
 
 using namespace bcos;
 using namespace bcos::rpc;
+task::Task<void> NetEndpoint::verison(const Json::Value&, Json::Value&)
+{
+    co_return;
+}
+task::Task<void> NetEndpoint::listening(const Json::Value&, Json::Value&)
+{
+    co_return;
+}
+task::Task<void> NetEndpoint::peerCount(const Json::Value&, Json::Value&)
+{
+    co_return;
+}

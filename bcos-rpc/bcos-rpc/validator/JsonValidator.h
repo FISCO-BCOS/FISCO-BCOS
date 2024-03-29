@@ -13,21 +13,26 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file Web3Endpoint.cpp
+ * @file JsonValidator.h
  * @author: kyonGuo
- * @date 2024/3/21
+ * @date 2024/3/28
  */
 
-#include "Web3Endpoint.h"
+#pragma once
 
 #include <bcos-rpc/Common.h>
+#include <json/json.h>
+#include <string>
+#include <vector>
 
-using namespace bcos::rpc;
-bcos::task::Task<void> Web3Endpoint::clientVersion(const Json::Value&, Json::Value&)
+
+namespace bcos::rpc
 {
-    co_return;
-}
-bcos::task::Task<void> Web3Endpoint::sha3(const Json::Value&, Json::Value&)
+class JsonValidator
 {
-    co_return;
-}
+public:
+    static std::tuple<bool, std::string> validate(const Json::Value& _json);
+    static std::tuple<bool, std::string> checkRequestFields(const Json::Value& _json);
+};
+
+}  // namespace bcos::rpc

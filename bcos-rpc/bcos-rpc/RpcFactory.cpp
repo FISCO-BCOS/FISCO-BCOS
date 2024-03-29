@@ -372,7 +372,6 @@ bcos::rpc::Web3JsonRpcImpl::Ptr RpcFactory::buildWeb3JsonRpc(
 {
     auto web3JsonRpc = std::make_shared<Web3JsonRpcImpl>(
         m_nodeConfig->groupId(), std::move(_groupManager), m_gateway, _wsService);
-    web3JsonRpc->setSendTxTimeout(sendTxTimeout);
     auto httpServer = _wsService->httpServer();
     if (httpServer)
     {

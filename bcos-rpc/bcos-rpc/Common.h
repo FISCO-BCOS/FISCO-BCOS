@@ -18,7 +18,12 @@
  * @date 2021-07-02
  */
 #pragma once
+#include "bcos-utilities/Common.h"
 #include <bcos-framework/Common.h>
+#include <boost/iostreams/device/array.hpp>
+#include <boost/iostreams/device/back_inserter.hpp>
+#include <boost/iostreams/filtering_stream.hpp>
+#include <boost/iostreams/stream.hpp>
 #include <iostream>
 #include <memory>
 
@@ -32,5 +37,21 @@ enum AMOPClientMessageType
     AMOP_REQUEST = 0x111,    // 273
     AMOP_BROADCAST = 0x112,  // 274
     AMOP_RESPONSE = 0x113    // 275
+};
+class JsonSink
+{
+public:
+    typedef char char_type;
+    typedef boost::iostreams::sink_tag category;
+
+    explicit JsonSink(bcos::bytes& buffer) : m_buffer(buffer) {}
+
+    std::streamsize write(const char* s, std::streamsize n)
+    {
+        m_buffer.insert(m_buffer.end(), (bcos::byte*)s, (bcos::byte*)s + n);
+        return n;
+    }
+
+    bcos::bytes& m_buffer;
 };
 }  // namespace bcos::rpc
