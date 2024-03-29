@@ -384,7 +384,7 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
 {
     /*
     [web3_rpc]
-        enble=false
+        enable=false
         listen_ip=0.0.0.0
         listen_port=8545
         thread_count=16
