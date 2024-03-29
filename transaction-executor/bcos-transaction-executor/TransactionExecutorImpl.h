@@ -54,7 +54,7 @@ private:
             if (c_fileLogLevel <= LogLevel::TRACE)
             {
                 TRANSACTION_EXECUTOR_LOG(TRACE)
-                    << "Execte transaction: " << transaction.hash().hex();
+                    << "Execute transaction: " << transaction.hash().hex();
             }
 
             Rollbackable<std::decay_t<decltype(storage)>> rollbackableStorage(storage);
