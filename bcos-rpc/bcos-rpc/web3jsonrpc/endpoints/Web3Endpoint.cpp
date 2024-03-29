@@ -19,15 +19,29 @@
  */
 
 #include "Web3Endpoint.h"
-
-#include <bcos-rpc/Common.h>
-
+#include "include/BuildInfo.h"
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-rpc/web3jsonrpc/utils/util.h>
 using namespace bcos::rpc;
-bcos::task::Task<void> Web3Endpoint::clientVersion(const Json::Value&, Json::Value&)
+bcos::task::Task<void> Web3Endpoint::clientVersion(
+    const Json::Value& request, Json::Value& response)
 {
+    std::string version = "FISCO-BCOS-Web3RPC/" + std::string(FISCO_BCOS_PROJECT_VERSION) + "-" +
+                          std::string(FISCO_BCOS_BUILD_TYPE) + "/" +
+                          std::string(FISCO_BCOS_BUILD_PLATFORM) + "/" +
+                          std::string(FISCO_BCOS_COMMIT_HASH);
+    Json::Value result = version;
+    buildJsonContent(result, response);
     co_return;
 }
-bcos::task::Task<void> Web3Endpoint::sha3(const Json::Value&, Json::Value&)
+bcos::task::Task<void> Web3Endpoint::sha3(const Json::Value& request, Json::Value& response)
 {
+    auto msg = toView(request[0U]);
+    crypto::hasher::openssl::OpenSSL_Keccak256_Hasher hasher;
+    hasher.update(bytesConstRef((byte*)msg.data(), msg.size()));
+    crypto::HashType out;
+    hasher.final(out);
+    Json::Value result = out.hexPrefixed();
+    buildJsonContent(result, response);
     co_return;
 }

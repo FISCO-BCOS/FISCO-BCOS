@@ -13,32 +13,29 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file NetEndpoint.cpp
+ * @file util.cpp
  * @author: kyonGuo
- * @date 2024/3/21
+ * @date 2024/3/29
  */
 
-#include "NetEndpoint.h"
+#include "util.h"
 
-#include <bcos-rpc/web3jsonrpc/utils/util.h>
-
-using namespace bcos;
 using namespace bcos::rpc;
-task::Task<void> NetEndpoint::verison(const Json::Value& request, Json::Value& response)
+
+void bcos::rpc::buildJsonContent(Json::Value& result, Json::Value& response)
 {
-    // TODO: get chain id
-    Json::Value result = "0x4ee8";  // 20200
-    buildJsonContent(result, response);
-    co_return;
+    response["jsonrpc"] = "2.0";
+    response["result"].swap(result);
 }
-task::Task<void> NetEndpoint::listening(const Json::Value& request, Json::Value& response)
+
+void bcos::rpc::buildJsonError(
+    Json::Value const& request, int32_t code, std::string message, Json::Value& response)
 {
-    Json::Value result = true;
-    buildJsonContent(result, response);
-    co_return;
-}
-task::Task<void> NetEndpoint::peerCount(const Json::Value&, Json::Value&)
-{
-    // TODO: get gateway peer
-    co_return;
+    response["jsonrpc"] = "2.0";
+    // maybe request not init
+    response["id"] = request.isMember("id") ? request["id"] : "null";
+    Json::Value error;
+    error["code"] = code;
+    error["message"] = std::move(message);
+    response["error"] = std::move(error);
 }

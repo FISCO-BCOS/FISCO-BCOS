@@ -53,7 +53,7 @@ void EndpointsMapping::addEthHandlers()
 {
     // clang-format off
     m_handlers[methodString(EthMethod::eth_protocolVersion)] = &Endpoints::protocolVersion;
-    m_handlers[methodString(EthMethod::eth_syncing)] = &Endpoints::syning;
+    m_handlers[methodString(EthMethod::eth_syncing)] = &Endpoints::syncing;
     m_handlers[methodString(EthMethod::eth_coinbase)] = &Endpoints::coinbase;
     m_handlers[methodString(EthMethod::eth_chainId)] = &Endpoints::chainId;
     m_handlers[methodString(EthMethod::eth_mining)] = &Endpoints::mining;
