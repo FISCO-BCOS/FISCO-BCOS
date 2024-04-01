@@ -97,7 +97,7 @@ async fn main() -> tide::Result<()> {
     } else if let Some(pd_addrs) = args.pd_addrs {
         info!("pd_addrs: {:?}", pd_addrs);
         let pd_endpoints = pd_addrs.split(",").map(|s| s.to_owned()).collect();
-        let client = tikv_client::TransactionClient::new(pd_endpoints, None).await?;
+        let client = tikv_client::TransactionClient::new(pd_endpoints).await?;
         storage = Arc::new(Mutex::new(Storage::TiKV(client)));
     } else {
         panic!("one of rocksdb path/pd_addrs must be set");
