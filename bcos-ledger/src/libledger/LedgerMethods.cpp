@@ -220,6 +220,48 @@ bcos::task::Task<bcos::crypto::HashType> bcos::ledger::tag_invoke(
     Awaitable awaitable{.m_ledger = ledger, .m_blockNumber = blockNumber, .m_result = {}};
     co_return co_await awaitable;
 }
+
+bcos::task::Task<bcos::protocol::BlockNumber> bcos::ledger::tag_invoke(
+    bcos::ledger::tag_t<bcos::ledger::getBlockNumber> /*unused*/,
+    bcos::ledger::LedgerInterface& ledger, bcos::crypto::HashType hash)
+{
+    struct Awaitable
+    {
+        bcos::ledger::LedgerInterface& m_ledger;
+        bcos::crypto::HashType m_hash;
+
+        std::variant<bcos::Error::Ptr, bcos::protocol::BlockNumber> m_result;
+
+        constexpr static bool await_ready() noexcept { return false; }
+        void await_suspend(CO_STD::coroutine_handle<> handle)
+        {
+            m_ledger.asyncGetBlockNumberByHash(
+                m_hash, [this, handle](bcos::Error::Ptr error, bcos::protocol::BlockNumber number) {
+                    if (error)
+                    {
+                        m_result.emplace<bcos::Error::Ptr>(std::move(error));
+                    }
+                    else
+                    {
+                        m_result.emplace<bcos::protocol::BlockNumber>(number);
+                    }
+                    handle.resume();
+                });
+        }
+        bcos::protocol::BlockNumber await_resume()
+        {
+            if (std::holds_alternative<bcos::Error::Ptr>(m_result))
+            {
+                BOOST_THROW_EXCEPTION(*std::get<bcos::Error::Ptr>(m_result));
+            }
+            return std::get<bcos::protocol::BlockNumber>(m_result);
+        }
+    };
+
+    Awaitable awaitable{.m_ledger = ledger, .m_hash = std::move(hash), .m_result = {}};
+    co_return co_await awaitable;
+}
+
 bcos::task::Task<bcos::ledger::SystemConfigEntry> bcos::ledger::tag_invoke(
     ledger::tag_t<getSystemConfig> /*unused*/, LedgerInterface& ledger, std::string_view key)
 {

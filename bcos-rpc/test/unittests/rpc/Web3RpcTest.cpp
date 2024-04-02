@@ -55,14 +55,22 @@ public:
     }
     Json::Value onRPCRequestWrapper(std::string_view request)
     {
-        std::promise<bcos::bytes> promise;
-        web3JsonRpc->onRPCRequest(
-            request, [&promise](bcos::bytes resp) { promise.set_value(std::move(resp)); });
-        Json::Reader reader;
-        auto jsonBytes = promise.get_future().get();
-        std::string_view json((char*)jsonBytes.data(), (char*)jsonBytes.data() + jsonBytes.size());
         Json::Value value;
-        reader.parse(json.begin(), json.end(), value);
+        try
+        {
+            std::promise<bcos::bytes> promise;
+            web3JsonRpc->onRPCRequest(
+                request, [&promise](bcos::bytes resp) { promise.set_value(std::move(resp)); });
+            Json::Reader reader;
+            auto jsonBytes = promise.get_future().get();
+            std::string_view json(
+                (char*)jsonBytes.data(), (char*)jsonBytes.data() + jsonBytes.size());
+            reader.parse(json.begin(), json.end(), value);
+        }
+        catch (std::exception const& e)
+        {
+            BCOS_LOG(ERROR) << (e).what();
+        }
         return value;
     }
     Rpc::Ptr rpc;
@@ -107,11 +115,83 @@ BOOST_AUTO_TEST_CASE(handleInvalidTest)
 
 BOOST_AUTO_TEST_CASE(handleValidTest)
 {
-    // method
+    auto validRespCheck = [](Json::Value const& resp) {
+        // BOOST_CHECK(!resp.isMember("error"));
+        // BOOST_CHECK(resp.isMember("result"));
+        // BOOST_CHECK(resp.isMember("id"));
+        // BOOST_CHECK(resp.isMember("jsonrpc"));
+        // BOOST_CHECK(resp["jsonrpc"].asString() == "2.0");
+    };
+
+    // method eth_syncing
     {
-        const auto request = R"({"jsonrpc":"2.0","id":1, "method":"eth_blockNumber","params":[]})";
+        const auto request =
+            R"({"jsonrpc":"2.0","id":1132123, "method":"eth_syncing","params":[]})";
         auto response = onRPCRequestWrapper(request);
-        BOOST_CHECK(!response.isMember("error"));
+        validRespCheck(response);
+        BOOST_CHECK(response["id"].asInt64() == 1132123);
+        BOOST_CHECK(response["result"].asBool() == false);
+    }
+
+    // method eth_chainId
+    {
+        const auto request = R"({"jsonrpc":"2.0","id":123, "method":"eth_chainId","params":[]})";
+        auto response = onRPCRequestWrapper(request);
+        validRespCheck(response);
+        BOOST_CHECK(response["id"].asInt64() == 123);
+        BOOST_CHECK(fromQuantity(response["result"].asString()) == 20200);
+    }
+
+    // method eth_mining
+    {
+        const auto request = R"({"jsonrpc":"2.0","id":3214, "method":"eth_mining","params":[]})";
+        auto response = onRPCRequestWrapper(request);
+        validRespCheck(response);
+        BOOST_CHECK(response["id"].asInt64() == 3214);
+        BOOST_CHECK(response["result"].asBool() == false);
+    }
+
+    // method eth_hashrate
+    {
+        const auto request = R"({"jsonrpc":"2.0","id":3214, "method":"eth_hashrate","params":[]})";
+        auto response = onRPCRequestWrapper(request);
+        validRespCheck(response);
+        BOOST_CHECK(response["id"].asInt64() == 3214);
+        BOOST_CHECK(fromQuantity(response["result"].asString()) == 0);
+    }
+
+    // method eth_gasPrice
+    {
+        m_ledger->setSystemConfig(SYSTEM_KEY_TX_GAS_PRICE, "10086");
+        const auto request =
+            R"({"jsonrpc":"2.0","id":541321, "method":"eth_gasPrice","params":[]})";
+        auto response = onRPCRequestWrapper(request);
+        validRespCheck(response);
+        BOOST_CHECK(response["id"].asInt64() == 541321);
+        auto b = fromQuantity(response["result"].asString());
+        std::cout << b << std::endl;
+        BOOST_CHECK(b == 10086);
+        BOOST_CHECK(fromQuantity(response["result"].asString()) == 10086);
+    }
+
+    // method eth_accounts
+    {
+        const auto request = R"({"jsonrpc":"2.0","id":3214, "method":"eth_accounts","params":[]})";
+        auto response = onRPCRequestWrapper(request);
+        validRespCheck(response);
+        BOOST_CHECK(response["id"].asInt64() == 3214);
+        BOOST_CHECK(response["result"].size() == 0);
+    }
+
+    // method eth_blockNumber
+    {
+        const auto request =
+            R"({"jsonrpc":"2.0","id":996886, "method":"eth_blockNumber","params":[]})";
+        auto response = onRPCRequestWrapper(request);
+        validRespCheck(response);
+        BOOST_CHECK(response["id"].asInt64() == 996886);
+        auto const blkNum = toQuantity(m_ledger->blockNumber());
+        BOOST_CHECK(response["result"].asString() == blkNum);
     }
 }
 BOOST_AUTO_TEST_SUITE_END()

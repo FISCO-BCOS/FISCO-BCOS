@@ -19,6 +19,8 @@
  */
 
 #pragma once
+#include <bcos-rpc/web3jsonrpc/utils/util.h>
+
 #include <bcos-boostssl/websocket/WsService.h>
 #include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-rpc/groupmgr/GroupManager.h>
@@ -50,15 +52,9 @@ public:
     void onRPCRequest(std::string_view _requestBody, Sender _sender);
 
 private:
-    task::Task<void> handleRequest(
-        EndpointsMapping::Handler handler, Json::Value const& request, Json::Value& response);
     static std::tuple<bool, std::string> parseRequestAndValidate(
         std::string_view request, Json::Value& root);
     static bcos::bytes toBytesResponse(Json::Value const& jResp);
-    static void buildJsonError(Json::Value const& request, int32_t code, std::string const& message,
-        Json::Value& response);
-
-
     // Note: only use in one group
     GroupManager::Ptr m_groupManager;
     bcos::gateway::GatewayInterface::Ptr m_gatewayInterface;

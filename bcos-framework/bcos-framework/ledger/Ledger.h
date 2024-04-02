@@ -81,6 +81,14 @@ inline constexpr struct GetBlockHash
     }
 } getBlockHash{};
 
+inline constexpr struct GetBlockNumber
+{
+    task::Task<protocol::BlockNumber> operator()(auto& ledger, crypto::HashType hash) const
+    {
+        co_return co_await tag_invoke(*this, ledger, std::move(hash));
+    }
+} getBlockNumber{};
+
 using SystemConfigEntry = std::tuple<std::string, protocol::BlockNumber>;
 inline constexpr struct GetSystemConfig
 {

@@ -19,7 +19,9 @@
  */
 
 #pragma once
-#include "bcos-rpc/groupmgr/GroupManager.h"
+#include <bcos-framework/ledger/Ledger.h>
+#include <bcos-ledger/src/libledger/LedgerMethods.h>
+#include <bcos-rpc/groupmgr/GroupManager.h>
 #include <bcos-rpc/jsonrpc/JsonRpcInterface.h>
 #include <json/json.h>
 #include <tbb/concurrent_hash_map.h>
@@ -40,7 +42,7 @@ public:
 
 protected:
     task::Task<void> protocolVersion(const Json::Value&, Json::Value&);
-    task::Task<void> syning(const Json::Value&, Json::Value&);
+    task::Task<void> syncing(const Json::Value&, Json::Value&);
     task::Task<void> coinbase(const Json::Value&, Json::Value&);
     task::Task<void> chainId(const Json::Value&, Json::Value&);
     task::Task<void> mining(const Json::Value&, Json::Value&);
@@ -77,6 +79,8 @@ protected:
     task::Task<void> getFilterChanges(const Json::Value&, Json::Value&);
     task::Task<void> getFilterLogs(const Json::Value&, Json::Value&);
     task::Task<void> getLogs(const Json::Value&, Json::Value&);
+    task::Task<std::tuple<protocol::BlockNumber, bool>> getBlockNumberByTag(
+        std::string_view blockTag);
 
 private:
     NodeService::Ptr m_nodeService;
