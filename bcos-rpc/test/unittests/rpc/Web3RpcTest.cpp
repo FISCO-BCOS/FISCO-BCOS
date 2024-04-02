@@ -116,11 +116,11 @@ BOOST_AUTO_TEST_CASE(handleInvalidTest)
 BOOST_AUTO_TEST_CASE(handleValidTest)
 {
     auto validRespCheck = [](Json::Value const& resp) {
-        // BOOST_CHECK(!resp.isMember("error"));
-        // BOOST_CHECK(resp.isMember("result"));
-        // BOOST_CHECK(resp.isMember("id"));
-        // BOOST_CHECK(resp.isMember("jsonrpc"));
-        // BOOST_CHECK(resp["jsonrpc"].asString() == "2.0");
+        BOOST_CHECK(!resp.isMember("error"));
+        BOOST_CHECK(resp.isMember("result"));
+        BOOST_CHECK(resp.isMember("id"));
+        BOOST_CHECK(resp.isMember("jsonrpc"));
+        BOOST_CHECK(resp["jsonrpc"].asString() == "2.0");
     };
 
     // method eth_syncing
@@ -192,6 +192,39 @@ BOOST_AUTO_TEST_CASE(handleValidTest)
         BOOST_CHECK(response["id"].asInt64() == 996886);
         auto const blkNum = toQuantity(m_ledger->blockNumber());
         BOOST_CHECK(response["result"].asString() == blkNum);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(handleWeb3NamespaceValidTest)
+{
+    auto validRespCheck = [](Json::Value const& resp) {
+        BOOST_CHECK(!resp.isMember("error"));
+        BOOST_CHECK(resp.isMember("result"));
+        BOOST_CHECK(resp.isMember("id"));
+        BOOST_CHECK(resp.isMember("jsonrpc"));
+        BOOST_CHECK(resp["jsonrpc"].asString() == "2.0");
+    };
+
+    // method web3_clientVersion
+    {
+        const auto request =
+            R"({"jsonrpc":"2.0","id":24243, "method":"web3_clientVersion","params":[]})";
+        auto response = onRPCRequestWrapper(request);
+        validRespCheck(response);
+        BOOST_CHECK(response["id"].asInt64() == 24243);
+        std::string result = response["result"].asString();
+        BOOST_CHECK(result.find("FISCO-BCOS-Web3RPC") != std::string::npos);
+    }
+
+    // method web3_sha3
+    {
+        const auto request =
+            R"({"jsonrpc":"2.0","id":321314, "method":"web3_sha3","params":["0x68656c6c6f20776f726c64"]})";
+        auto response = onRPCRequestWrapper(request);
+        validRespCheck(response);
+        BOOST_CHECK(response["id"].asInt64() == 321314);
+        BOOST_CHECK(response["result"].asString() ==
+                    "0x47173285a8d7341e5e972fc677286384f802f8ef42a5ec5f03bbfa254cb01fad");
     }
 }
 BOOST_AUTO_TEST_SUITE_END()
