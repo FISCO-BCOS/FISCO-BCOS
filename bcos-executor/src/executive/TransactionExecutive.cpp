@@ -592,15 +592,30 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
         Entry entry = {};
         entry.importFields({codeString});
         m_storageWrapper->setRow(codeTable, ACCOUNT_CODE, std::move(entry));
-        if (!callParameters->abi.empty())
+        if (!callParameters->abi.empty() &&
+            blockContext->blockVersion() != (uint32_t)protocol::BlockVersion::V3_0_VERSION)
         {
             Entry abiEntry = {};
             abiEntry.importFields({std::move(callParameters->abi)});
             m_storageWrapper->setRow(codeTable, ACCOUNT_ABI, std::move(abiEntry));
         }
 
-        /// set link data
-        tool::BfsFileFactory::buildLink(linkTable.value(), newAddress, "");
+        if (blockContext->blockVersion() == (uint32_t)protocol::BlockVersion::V3_0_VERSION)
+        {
+            /// set link data
+            Entry addressEntry = {};
+            addressEntry.importFields({newAddress});
+            m_storageWrapper->setRow(tableName, FS_LINK_ADDRESS, std::move(addressEntry));
+            Entry typeEntry = {};
+            typeEntry.importFields({FS_TYPE_LINK});
+            m_storageWrapper->setRow(tableName, FS_KEY_TYPE, std::move(typeEntry));
+        }
+        else
+        {
+            /// set link data
+            tool::BfsFileFactory::buildLink(
+                linkTable.value(), newAddress, "", blockContext->blockVersion());
+        }
     }
     callParameters->type = CallParameters::FINISHED;
     callParameters->status = (int32_t)TransactionStatus::None;
