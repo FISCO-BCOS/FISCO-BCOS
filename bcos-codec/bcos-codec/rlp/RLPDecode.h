@@ -25,6 +25,8 @@
 #include <utility>
 #include <vector>
 
+// THANKS TO: RLP implement based on silkworm: https://github.com/erigontech/silkworm.git
+// Note:https://ethereum.org/en/developers/docs/data-structures-and-encoding/rlp/
 namespace bcos::codec::rlp
 {
 
@@ -48,6 +50,17 @@ inline std::tuple<bcos::Error::UniquePtr, Header> decodeHeader(bytesRef& from) n
         // remove first byte
         from = from.getCroppedData(1);
         header.payloadLength = byte - BYTES_HEAD_BASE;
+        if (header.payloadLength == 1)
+        {
+            if (from.empty())
+            {
+                return {BCOS_ERROR_UNIQUE_PTR(InputTooShort, "Input data is too short"), Header()};
+            }
+            if (from[0] < 0x80)
+            {
+                return {BCOS_ERROR_UNIQUE_PTR(NonCanonicalSize, "NonCanonicalSize"), Header()};
+            }
+        }
     }
     else if (byte < LIST_HEAD_BASE)
     {
@@ -56,8 +69,7 @@ inline std::tuple<bcos::Error::UniquePtr, Header> decodeHeader(bytesRef& from) n
         const auto lenOfLen{byte - LONG_BYTES_HEAD_BASE};
         if (std::cmp_greater(lenOfLen, from.size()))
         {
-            return {BCOS_ERROR_UNIQUE_PTR(DecodingError::InputTooShort, "Input data is too short"),
-                Header()};
+            return {BCOS_ERROR_UNIQUE_PTR(InputTooShort, "Input data is too short"), Header()};
         }
         auto payloadSize =
             fromBigEndian<uint64_t, bcos::bytesConstRef>(from.getCroppedData(0, lenOfLen));
@@ -65,8 +77,8 @@ inline std::tuple<bcos::Error::UniquePtr, Header> decodeHeader(bytesRef& from) n
         from = from.getCroppedData(lenOfLen);
         if (header.payloadLength < 56)
         {
-            return {BCOS_ERROR_UNIQUE_PTR(DecodingError::NonCanonicalSize,
-                        "The length of the payload is less than 56"),
+            return {BCOS_ERROR_UNIQUE_PTR(
+                        NonCanonicalSize, "The length of the payload is less than 56"),
                 Header()};
         }
     }
@@ -107,7 +119,7 @@ inline std::tuple<bcos::Error::UniquePtr, Header> decodeHeader(bytesRef& from) n
     return {nullptr, header};
 }
 
-inline bcos::Error::UniquePtr decode(bytesRef& from, bcos::bytes& to) noexcept
+inline bcos::Error::UniquePtr decode(bytesRef& from, bcos::concepts::ByteBuffer auto& to) noexcept
 {
     auto&& [error, header] = decodeHeader(from);
     if (error)
@@ -118,16 +130,36 @@ inline bcos::Error::UniquePtr decode(bytesRef& from, bcos::bytes& to) noexcept
     {
         return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnexpectedList, "Unexpected list");
     }
-    to = from.getCroppedData(0, header.payloadLength).toBytes();
-    from = from.getCroppedData(header.payloadLength);
-    if (!from.empty())
+    if constexpr (std::same_as<std::decay_t<decltype(to)>, bcos::bytes>)
     {
-        return BCOS_ERROR_UNIQUE_PTR(DecodingError::InputTooLong, "Input data is too long");
+        to = from.getCroppedData(0, header.payloadLength).toBytes();
     }
+    else if constexpr (std::same_as<std::decay_t<decltype(to)>, bcos::bytesRef>)
+    {
+        to = from.getCroppedData(0, header.payloadLength);
+    }
+    else if constexpr (bcos::concepts::StringLike<std::decay_t<decltype(to)>>)
+    {
+        to =
+            from.getCroppedData(0, header.payloadLength).toStringLike<std::decay_t<decltype(to)>>();
+    }
+    else if constexpr (std::same_as<std::decay_t<decltype(to)>, bcos::FixedBytes<32>>)
+    {
+        to = FixedBytes<32>{from.getCroppedData(0, header.payloadLength)};
+    }
+    else if constexpr (std::same_as<std::decay_t<decltype(to)>, bcos::FixedBytes<20>>)
+    {
+        to = FixedBytes<20>{from.getCroppedData(0, header.payloadLength)};
+    }
+    //     else
+    //     {
+    //         static_assert("Unsupported type");
+    //     }
+    from = from.getCroppedData(header.payloadLength);
     return nullptr;
 }
 
-inline bcos::Error::UniquePtr decode(bytesRef& from, std::unsigned_integral auto& to) noexcept
+inline bcos::Error::UniquePtr decode(bytesRef& from, UnsignedIntegral auto& to) noexcept
 {
     auto&& [error, header] = decodeHeader(from);
     if (error)
@@ -138,12 +170,9 @@ inline bcos::Error::UniquePtr decode(bytesRef& from, std::unsigned_integral auto
     {
         return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnexpectedList, "Unexpected list");
     }
-    to = fromBigEndian<decltype(to), bcos::bytesRef>(from.getCroppedData(0, header.payloadLength));
+    to = fromBigEndian<std::decay_t<decltype(to)>, bcos::bytesRef>(
+        from.getCroppedData(0, header.payloadLength));
     from = from.getCroppedData(header.payloadLength);
-    if (!from.empty())
-    {
-        return BCOS_ERROR_UNIQUE_PTR(DecodingError::InputTooLong, "Input data is too long");
-    }
     return nullptr;
 }
 
@@ -168,6 +197,7 @@ inline bcos::Error::UniquePtr decode(bytesRef& from, bool& to) noexcept
 }
 
 template <typename T>
+    requires(!std::same_as<std::remove_cvref_t<T>, bcos::byte>)
 inline bcos::Error::UniquePtr decode(bytesRef& from, std::vector<T>& to) noexcept
 {
     auto&& [error, header] = decodeHeader(from);
@@ -190,10 +220,6 @@ inline bcos::Error::UniquePtr decode(bytesRef& from, std::vector<T>& to) noexcep
         }
     }
     from = from.getCroppedData(header.payloadLength);
-    if (!from.empty())
-    {
-        return BCOS_ERROR_UNIQUE_PTR(DecodingError::InputTooLong, "Input data is too long");
-    }
     return nullptr;
 }
 
