@@ -66,7 +66,9 @@ public:
         m_seq(seq),
         m_gasInjector(gasInjector),
         m_storageWrapperObj(m_blockContext.storage(), m_recoder),
-        m_storageWrapper(&m_storageWrapperObj)
+        m_transientStorageWrapperObj(m_transientStateStorage, m_recoder),
+        m_storageWrapper(&m_storageWrapperObj),
+        m_transientStorageWrapper(&m_transientStorageWrapperObj)
     {
         m_recoder = std::make_shared<storage::Recoder>();
         m_hashImpl = m_blockContext.hashHandler();
@@ -94,8 +96,8 @@ public:
 
     auto& transientStorage()
     {
-        assert(m_storageWrapper);
-        return *m_storageWrapper;
+        assert(m_transientStorageWrapper);
+        return *m_transientStorageWrapper;
     }
 
     const BlockContext& blockContext() { return m_blockContext; }
@@ -234,7 +236,9 @@ protected:
     std::vector<TransactionExecutive::Ptr> m_childExecutives;
 
     storage::StorageWrapper m_storageWrapperObj;
+    storage::StorageWrapper m_transientStorageWrapperObj;
     storage::StorageWrapper* m_storageWrapper;
+    storage::StorageWrapper* m_transientStorageWrapper;
     bool m_hasContractTableChanged = false;
 };
 
