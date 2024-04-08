@@ -33,7 +33,7 @@ void bcos::rpc::buildJsonError(
 {
     response["jsonrpc"] = "2.0";
     // maybe request not init
-    response["id"] = request.isMember("id") ? request["id"] : "null";
+    response["id"] = request.isMember("id") ? request["id"] : Json::Value::null;
     Json::Value error;
     error["code"] = code;
     error["message"] = std::move(message);

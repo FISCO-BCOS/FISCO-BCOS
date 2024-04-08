@@ -69,6 +69,10 @@ void Web3JsonRpcImpl::onRPCRequest(std::string_view _requestBody, Sender _sender
     {
         buildJsonError(request, InternalError, e.errorMessage(), response);
     }
+    catch (const boost::exception& e)
+    {
+        buildJsonError(request, InternalError, boost::diagnostic_information(e), response);
+    }
     catch (const std::exception& e)
     {
         buildJsonError(request, InternalError, e.what(), response);

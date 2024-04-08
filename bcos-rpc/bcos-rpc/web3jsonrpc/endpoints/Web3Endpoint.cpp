@@ -36,9 +36,12 @@ bcos::task::Task<void> Web3Endpoint::clientVersion(
 }
 bcos::task::Task<void> Web3Endpoint::sha3(const Json::Value& request, Json::Value& response)
 {
-    auto msg = toView(request[0U]);
+    // sha3 in eth means keccak256, not sha3-256, ref:
+    // https://ethereum.org/zh/developers/docs/apis/json-rpc/#web3_sha3
+    auto const msg = toView(request[0U]);
+    auto const bytes = fromHexWithPrefix(msg);
     crypto::hasher::openssl::OpenSSL_Keccak256_Hasher hasher;
-    hasher.update(bytesConstRef((byte*)msg.data(), msg.size()));
+    hasher.update(bytesConstRef(bytes.data(), bytes.size()));
     crypto::HashType out;
     hasher.final(out);
     Json::Value result = out.hexPrefixed();
