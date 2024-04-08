@@ -550,6 +550,8 @@ expand node e.g
     bash $0 -C expand -c config -d config/ca -o nodes/127.0.0.1/node5 -e ./fisco-bcos
     bash $0 -C expand -c config -d config/ca -o nodes/127.0.0.1/node5 -e ./fisco-bcos -m -i 127.0.0.1:5 -M monitor/prometheus/prometheus.yml
     bash $0 -C expand -c config -d config/ca -o nodes/127.0.0.1/node5 -e ./fisco-bcos -s
+    bash $0 -C expand_lightnode -c config -d config/ca -o nodes/lightnode1
+    bash $0 -C expand_lightnode -c config -d config/ca -o nodes/lightnode1 -L ./fisco-bcos-lightnode
 EOF
     exit 0
 }
@@ -1674,6 +1676,57 @@ expand_node()
     LOG_INFO "All completed. Files in ${output_dir}"
 }
 
+expand_lighenode()
+{
+    local sm_mode="${1}"
+    local ca_dir="${2}"
+    local lightnode_dir="${3}"
+    local config_path="${4}"
+    local mtail_ip_param="${5}"
+    local prometheus_dir="${6}"
+    if [ -d "${lightnode_dir}" ];then
+        LOG_FATAL "expand node failed for ${lightnode_dir} already exists!"
+    fi
+    file_must_exists "${config_path}/config.ini"
+    file_must_exists "${config_path}/config.genesis"
+    file_must_exists "${config_path}/nodes.json"
+    # check binary,parent_path is ./nodes
+    parent_path=$(dirname ${lightnode_dir})
+    mkdir -p "${lightnode_dir}"
+    if [ "${lightnode_flag}" == "true" ] && [ -f  "${lightnode_binary_path}" ]; then
+        echo "Checking ${lightnode_flag}, lightnode_binary_path is ${lightnode_binary_path}, lightnode_dir is ${lightnode_dir}"
+        chmod u+x ${lightnode_binary_path}
+        cp "${lightnode_binary_path}" ${lightnode_dir}/
+    elif [ "${lightnode_flag}" == "false" ]; then
+        download_lightnode_bin
+        cp "${lightnode_binary_path}" ${lightnode_dir}/
+    fi
+
+    LOG_INFO "generate_lightnode_scripts ..."
+    generate_lightnode_scripts "${lightnode_dir}" "fisco-bcos-lightnode"
+    LOG_INFO "generate_lightnode_scripts success..."
+
+    # generate cert
+    LOG_INFO "generate_lightnode_cert ..."
+    generate_node_cert "${sm_mode}" "${ca_dir}" "${lightnode_dir}/conf"
+    LOG_INFO "generate_lightnode_cert success..."
+    # generate node account
+    LOG_INFO "generate_lightnode_account ..."
+    generate_node_account "${sm_mode}" "${lightnode_dir}/conf" "${i}"
+    LOG_INFO "generate_lightnode_account success..."
+
+    LOG_INFO "copy configurations ..."
+    cp "${config_path}/config.ini" "${lightnode_dir}"
+    cp "${config_path}/config.genesis" "${lightnode_dir}"
+    cp "${config_path}/nodes.json" "${lightnode_dir}"
+    LOG_INFO "copy configurations success..."
+    echo "=============================================================="
+
+    LOG_INFO "SM Model         : ${sm_mode}"
+    LOG_INFO "output dir         : ${output_dir}"
+    LOG_INFO "All completed. Files in ${output_dir}"
+}
+
 deploy_nodes()
 {
     dir_must_not_exists "${output_dir}"
@@ -1819,9 +1872,8 @@ deploy_nodes()
         local lightnode_account_dir="${lightnode_dir}/conf"
         generate_node_account "${sm_mode}" "${lightnode_account_dir}" ${count}
 
-        local node_count=$(get_value ${ip//./}_count)
-        local p2p_port=$((p2p_listen_port + node_count))
-        local rpc_port=$((rpc_listen_port + node_count))
+        local p2p_port=$((p2p_listen_port + num))
+        local rpc_port=$((rpc_listen_port + num))
         generate_config "${sm_mode}" "${lightnode_dir}/config.ini" "${listen_ip}" "${p2p_port}" "${listen_ip}" "${rpc_port}"
         generate_p2p_connected_conf "${lightnode_dir}/${p2p_connected_conf_name}" "${connected_nodes}" "false"
 
@@ -1964,6 +2016,9 @@ main() {
     elif [[ "${command}" == "expand" ]]; then
         dir_must_exists "${ca_dir}"
         expand_node "${sm_mode}" "${ca_dir}" "${output_dir}" "${config_path}" "${mtail_ip_param}" "${prometheus_dir}"
+    elif [[ "${command}" == "expand_lightnode" ]]; then
+            dir_must_exists "${ca_dir}"
+            expand_lighenode "${sm_mode}" "${ca_dir}" "${output_dir}" "${config_path}" "${mtail_ip_param}" "${prometheus_dir}"
     elif [[ "${command}" == "generate-template-package"  ]]; then
         local node_name="node0"
         if [[ -n "${genesis_conf_path}" ]]; then
