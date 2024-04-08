@@ -299,6 +299,7 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, std::string_view _txHash,
             jLog["topics"].append(topic.hexPrefixed());
         }
         jLog["data"] = toHexStringWithPrefix(logEntry.data());
+        jLog["blockNumber"] = transactionReceipt.blockNumber();
         jResp["logEntries"].append(jLog);
     }
 }
