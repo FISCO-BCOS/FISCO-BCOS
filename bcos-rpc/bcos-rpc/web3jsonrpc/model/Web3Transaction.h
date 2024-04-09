@@ -43,6 +43,10 @@ struct AccessListEntry
 {
     Address account{};
     std::vector<crypto::HashType> storageKeys{};
+    friend bool operator==(const AccessListEntry& lhs, const AccessListEntry& rhs) noexcept
+    {
+        return lhs.account == rhs.account && lhs.storageKeys == rhs.storageKeys;
+    }
 };
 
 class Web3Transaction

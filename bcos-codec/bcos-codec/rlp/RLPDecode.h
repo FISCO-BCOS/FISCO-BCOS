@@ -151,10 +151,10 @@ inline bcos::Error::UniquePtr decode(bytesRef& from, bcos::concepts::ByteBuffer 
     {
         to = FixedBytes<20>{from.getCroppedData(0, header.payloadLength)};
     }
-    //     else
-    //     {
-    //         static_assert("Unsupported type");
-    //     }
+    else
+    {
+        static_assert(!sizeof(to), "Unsupported type");
+    }
     from = from.getCroppedData(header.payloadLength);
     return nullptr;
 }
@@ -257,10 +257,6 @@ inline bcos::Error::UniquePtr decode(bytesRef& from, Arg1& arg1, Arg2& arg2, Arg
         return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnexpectedString, "Unexpected string");
     }
     const uint64_t leftover{from.size() - header.payloadLength};
-    if (leftover)
-    {
-        return BCOS_ERROR_UNIQUE_PTR(DecodingError::InputTooLong, "Input data is too long");
-    }
 
     if (auto decodeError = decodeItems(from, arg1, arg2, args...); decodeError != nullptr)
     {
