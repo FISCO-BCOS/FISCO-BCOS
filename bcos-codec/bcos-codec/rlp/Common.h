@@ -20,7 +20,7 @@
 
 #pragma once
 #include <bcos-utilities/Common.h>
-#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/FixedBytes.h>
 #include <concepts/bcos-concepts/Basic.h>
 #include <utility>
 #include <vector>
@@ -39,6 +39,9 @@ constexpr static uint8_t BYTES_HEAD_BASE{0x80};       // 128
 constexpr static uint8_t LONG_BYTES_HEAD_BASE{0xb7};  // 183
 constexpr static uint8_t LIST_HEAD_BASE{0xc0};        // 192
 constexpr static uint8_t LONG_LIST_HEAD_BASE{0xf7};   // 247
+template <typename T>
+concept UnsignedIntegral =
+    std::unsigned_integral<T> || std::same_as<T, u160> || std::same_as<T, u256>;
 
 struct Header
 {
@@ -116,6 +119,12 @@ inline size_t length(bcos::concepts::StringLike auto const& bytes) noexcept
 }
 
 inline size_t length(const bcos::bytes& v) noexcept
+{
+    return length(bcos::bytesConstRef(v.data(), v.size()));
+}
+
+template <unsigned N>
+inline size_t length(const bcos::FixedBytes<N>& v) noexcept
 {
     return length(bcos::bytesConstRef(v.data(), v.size()));
 }

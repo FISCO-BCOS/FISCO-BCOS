@@ -28,6 +28,7 @@
 #include <utility>
 #include <vector>
 
+// THANKS TO: RLP implement based on silkworm: https://github.com/erigontech/silkworm.git
 // Note:https://ethereum.org/en/developers/docs/data-structures-and-encoding/rlp/
 namespace bcos::codec::rlp
 {
@@ -56,9 +57,8 @@ inline void encodeHeader(bcos::bytes& to, Header const& header) noexcept
 
 // encode single byte
 template <typename T>
-concept UnsignedIntegral = std::unsigned_integral<T> || std::same_as<T, unsigned char> ||
-                           std::same_as<T, u160> || std::same_as<T, u256>;
-inline void encode(bcos::bytes& to, UnsignedIntegral auto const& b) noexcept
+concept UnsignedByte = UnsignedIntegral<T> || std::same_as<T, unsigned char>;
+inline void encode(bcos::bytes& to, UnsignedByte auto const& b) noexcept
 {
     if (b == 0)
     {
@@ -93,6 +93,12 @@ inline void encode(bcos::bytes& to, bcos::concepts::StringLike auto const& bytes
 }
 
 inline void encode(bcos::bytes& to, bcos::bytes const& in) noexcept
+{
+    encode(to, bytesConstRef{in.data(), in.size()});
+}
+
+template <unsigned N>
+inline void encode(bcos::bytes& to, bcos::FixedBytes<N> const& in) noexcept
 {
     encode(to, bytesConstRef{in.data(), in.size()});
 }
