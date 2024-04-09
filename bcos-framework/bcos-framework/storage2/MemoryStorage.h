@@ -34,6 +34,7 @@ constexpr inline struct RAWVersionTag
 {
 } rawVersionTag;
 using RAWVersion = int;
+using RAWVersionParam = std::tuple<int, bool&>;
 
 enum Attribute : int
 {
@@ -134,7 +135,7 @@ private:
         while (bucket.capacity > m_maxCapacity && !bucket.container.empty())
         {
             auto const& item = index.front();
-            bucket.capacity -= getSize(item.value);
+            bucket.capacity -= (getSize(item.key) + getSize(item.value));
             index.pop_front();
         }
     }
@@ -178,7 +179,7 @@ public:
     }
 
     template <class... Args>
-    static std::optional<int> getRAWVersionParam(Args&&... args)
+    static std::optional<RAWVersionParam> getRAWVersionParam(Args&&... args)
         requires withRWVersion
     {
         using ArgsType = boost::mp11::mp_list<std::decay_t<Args>...>;
@@ -195,21 +196,21 @@ public:
        write 8 3 4 2 1 6 7 5 9
      */
     template <class... Args>
-    static bool checkReadVersion(Data& data, Args&&... args)
+    static bool checkReadVersionConflicit(Data& data, const RAWVersionParam& rawParam)
         requires withRWVersion
     {
-        if (auto readVersion = getRAWVersionParam(args...))
+        auto const& [readVersion, flag] = rawParam;
+        auto existsVersion = data.readVersion;
+        if (readVersion < existsVersion)
         {
-            auto existsVersion = data.readVersion;
-            if (*readVersion < existsVersion)
-            {
-                data.readVersion = *readVersion;
-            }
-            if (*readVersion > data.writeVersion)
-            {}
+            data.readVersion = readVersion;
+        }
+        if (readVersion > data.writeVersion)
+        {
+            return true;
         }
 
-        return true;
+        return false;
     }
 
     friend auto tag_invoke(bcos::storage2::tag_t<readSome> /*unused*/, MemoryStorage& storage,
@@ -312,7 +313,7 @@ public:
                 updatedCapacity;
             if constexpr (std::decay_t<decltype(storage)>::withLRU)
             {
-                updatedCapacity = getSize(value);
+                updatedCapacity = getSize(key) + getSize(value);
             }
 
             typename Container::iterator it;
@@ -329,7 +330,7 @@ public:
                 if constexpr (std::decay_t<decltype(storage)>::withLRU)
                 {
                     auto& existsValue = it->value;
-                    updatedCapacity -= getSize(existsValue);
+                    updatedCapacity -= (getSize(key) + getSize(existsValue));
                 }
 
                 bucket.container.modify(
@@ -390,7 +391,7 @@ public:
 
                 if constexpr (withLRU)
                 {
-                    bucket.capacity -= getSize(existsValue);
+                    bucket.capacity -= (getSize(key) + getSize(existsValue));
                 }
 
                 if constexpr (withLogicalDeletion)
