@@ -77,7 +77,8 @@ inline size_t lengthOfLength(std::unsigned_integral auto payloadLength) noexcept
     }
     else
     {
-        auto significantBytes = (sizeof(payloadLength) - std::countl_zero(payloadLength) + 7) / 8;
+        auto significantBytes =
+            (sizeof(payloadLength) * 8 - std::countl_zero(payloadLength) + 7) / 8;
         return 1 + significantBytes;
     }
 }

@@ -93,7 +93,8 @@ namespace codec::rlp
 {
 Header header(const AccessListEntry& entry) noexcept
 {
-    return {.isList = true, .payloadLength = Address::SIZE + 1 + length(entry.storageKeys)};
+    auto len = length(entry.storageKeys);
+    return {.isList = true, .payloadLength = Address::SIZE + 1 + len};
 }
 
 size_t length(AccessListEntry const& entry) noexcept
@@ -176,6 +177,9 @@ void encode(bcos::bytes& out, const Web3Transaction& tx) noexcept
         encode(out, tx.to.ref());
         encode(out, tx.value);
         encode(out, tx.data);
+        encode(out, tx.getSignatureV());
+        encode(out, tx.signatureR);
+        encode(out, tx.signatureS);
     }
     else
     {
@@ -195,7 +199,7 @@ void encode(bcos::bytes& out, const Web3Transaction& tx) noexcept
         encode(out, tx.nonce);
         if (tx.type != TransactionType::EIP2930)
         {
-            encode(out, tx.maxFeePerGas);
+            encode(out, tx.maxPriorityFeePerGas);
         }
         // for EIP2930 it means gasPrice; for EIP1559 and EIP4844, it means max priority fee per gas
         encode(out, tx.maxFeePerGas);
@@ -209,10 +213,10 @@ void encode(bcos::bytes& out, const Web3Transaction& tx) noexcept
             encode(out, tx.maxFeePerBlobGas);
             encode(out, tx.blobVersionedHashes);
         }
+        encode(out, tx.signatureV);
+        encode(out, tx.signatureR);
+        encode(out, tx.signatureS);
     }
-    encode(out, tx.getSignatureV());
-    encode(out, tx.signatureR);
-    encode(out, tx.signatureS);
 }
 bcos::Error::UniquePtr decode(bcos::bytesRef& in, AccessListEntry& out) noexcept
 {
@@ -247,30 +251,34 @@ bcos::Error::UniquePtr decode(bcos::bytesRef& in, Web3Transaction& out) noexcept
         }
         if (!header.isList)
         {
-            return BCOS_ERROR_UNIQUE_PTR(UnexpectedList, "Unexpected list");
+            return BCOS_ERROR_UNIQUE_PTR(UnexpectedString, "Unexpected String");
         }
-        if (auto error = decodeItems(in, out.chainId.value(), out.nonce, out.maxFeePerGas); !error)
+        uint64_t chainId = 0;
+        if (auto error = decodeItems(in, chainId, out.nonce, out.maxPriorityFeePerGas);
+            error != nullptr)
         {
             return error;
         }
+        out.chainId.emplace(chainId);
         if (out.type == TransactionType::EIP2930)
         {
             out.maxFeePerGas = out.maxPriorityFeePerGas;
         }
-        else if (auto error = decode(in, out.maxPriorityFeePerGas); !error)
+        else if (auto error = decode(in, out.maxFeePerGas); error != nullptr)
         {
             return error;
         }
 
         if (auto error = decodeItems(in, out.gasLimit, out.to, out.value, out.data, out.accessList);
-            !error)
+            error != nullptr)
         {
             return error;
         }
 
         if (out.type == TransactionType::EIP4844)
         {
-            if (auto error = decodeItems(in, out.maxFeePerBlobGas, out.blobVersionedHashes); !error)
+            if (auto error = decodeItems(in, out.maxFeePerBlobGas, out.blobVersionedHashes);
+                error != nullptr)
             {
                 return error;
             }
