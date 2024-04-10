@@ -1053,6 +1053,8 @@ void BFSPrecompiled::buildSysSubs(const std::shared_ptr<executor::TransactionExe
         }
         auto linkTable = _executive->storage().createTable(std::string(name), SYS_VALUE_FIELDS);
         tool::BfsFileFactory::buildLink(linkTable.value(), std::string(address), "",
-            _executive->blockContext().lock()->blockVersion());
+            std::holds_alternative<BlockVersion>(toVersion) ?
+                (uint32_t)std::get<BlockVersion>(toVersion) :
+                std::get<uint32_t>(toVersion));
     }
 }
