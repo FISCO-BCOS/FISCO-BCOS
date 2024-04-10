@@ -1,6 +1,6 @@
 name: Centos CI Upload
 on:
-  pull_request:
+  push:
     paths-ignore:
       - "docs/**"
       - "Changelog.md"
@@ -69,15 +69,12 @@ jobs:
           export LIBCLANG_PATH=/opt/rh/llvm-toolset-7.0/root/lib64/
           . /opt/rh/llvm-toolset-7.0/enable
           cd build && cmake -DALLOCATOR=jemalloc -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DTESTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON .. || cat *.log
-
           make -j8
+          chmod +x ./fisco-bcos-air/fisco-bcos
+          ./fisco-bcos-air/fisco-bcos -v
       - name: Test
         run: cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
       - uses: actions/upload-artifact@v2
         with:
-          name: fisco-bcos.tar.gz
+          name: fisco-bcos.zip
           path: build/fisco-bcos-air/fisco-bcos
-      - uses: actions/upload-artifact@v2
-        with:
-          name: fisco-bcos-lightnode.tar.gz
-          path: build/lightnode/fisco-bcos-lightnode/fisco-bcos-lightnode
