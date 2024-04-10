@@ -115,6 +115,12 @@ task::Task<protocol::TransactionSubmitResult::Ptr> TxPool::submitTransaction(
     co_return co_await m_txpoolStorage->submitTransaction(std::move(transaction));
 }
 
+task::Task<protocol::TransactionSubmitResult::Ptr> TxPool::submitTransactionWithoutReceipt(
+    protocol::Transaction::Ptr transaction)
+{
+    co_return co_await m_txpoolStorage->submitTransactionWithoutReceipt(std::move(transaction));
+}
+
 task::Task<protocol::TransactionSubmitResult::Ptr> TxPool::submitTransactionWithHook(
     protocol::Transaction::Ptr transaction, std::function<void()> onTxSubmitted)
 {

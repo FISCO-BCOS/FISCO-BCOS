@@ -65,7 +65,7 @@ bcos::bytes bcos::Web3Transaction::encode() const
         codec::rlp::encode(out, nonce);
         if (type != TransactionType::EIP2930)
         {
-            codec::rlp::encode(out, maxFeePerGas);
+            codec::rlp::encode(out, maxPriorityFeePerGas);
         }
         // for EIP2930 it means gasPrice; for EIP1559 and EIP4844, it means max priority fee per gas
         codec::rlp::encode(out, maxFeePerGas);
@@ -89,6 +89,42 @@ bcos::crypto::HashType bcos::Web3Transaction::hash() const
     codec::rlp::encode(encoded, *this);
     return bcos::crypto::keccak256Hash(bcos::ref(encoded));
 }
+
+bcostars::Transaction Web3Transaction::toTarsTransaction() const
+{
+    bcostars::Transaction tarsTx{};
+    tarsTx.data.nonce = std::to_string(this->nonce);
+    tarsTx.data.to = this->to.hexPrefixed();
+    tarsTx.data.input.insert(tarsTx.data.input.end(), this->data.begin(), this->data.end());
+    tarsTx.data.value = std::to_string(this->value);
+    tarsTx.data.gasLimit = this->gasLimit;
+    if (static_cast<uint8_t>(this->type) >= static_cast<uint8_t>(TransactionType::EIP1559))
+    {
+        tarsTx.data.maxFeePerGas = std::to_string(this->maxFeePerGas);
+        tarsTx.data.maxPriorityFeePerGas = std::to_string(this->maxPriorityFeePerGas);
+    }
+    else
+    {
+        tarsTx.data.gasPrice = std::to_string(this->maxPriorityFeePerGas);
+    }
+    auto hash = this->hash();
+    auto encodedForSign = this->encode();
+    tarsTx.dataHash.insert(tarsTx.dataHash.end(), hash.begin(), hash.end());
+    // FISCO BCOS signature is r||s||v
+    tarsTx.signature.insert(
+        tarsTx.signature.end(), this->signatureR.begin(), this->signatureR.end());
+    tarsTx.signature.insert(
+        tarsTx.signature.end(), this->signatureS.begin(), this->signatureS.end());
+    tarsTx.signature.push_back(static_cast<tars::Char>(this->signatureV));
+
+    tarsTx.type = 1;
+
+    tarsTx.extraTransactionBytes.insert(
+        tarsTx.extraTransactionBytes.end(), encodedForSign.begin(), encodedForSign.end());
+
+    return tarsTx;
+}
+
 namespace codec::rlp
 {
 Header header(const AccessListEntry& entry) noexcept

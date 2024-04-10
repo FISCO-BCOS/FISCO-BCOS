@@ -69,7 +69,7 @@ inline void checkTransaction(
     // check the fields
     BOOST_CHECK(decodedTransaction->hash() == pbTransaction->hash());
     BOOST_CHECK(decodedTransaction->sender() == pbTransaction->sender());
-    BOOST_CHECK(decodedTransaction->type() == pbTransaction->type());
+    BOOST_CHECK(decodedTransaction->txOp() == pbTransaction->txOp());
     BOOST_CHECK(decodedTransaction->to() == pbTransaction->to());
     // check the transaction hash fields
     BOOST_CHECK(decodedTransaction->input().toBytes() == pbTransaction->input().toBytes());
@@ -92,11 +92,11 @@ inline Transaction::Ptr testTransaction(CryptoSuite::Ptr _cryptoSuite,
     {
         if (_to.empty())
         {
-            BOOST_CHECK(pbTransaction->type() == TransactionType::ContractCreation);
+            BOOST_CHECK(pbTransaction->txOp() == TransactionOp::ContractCreation);
         }
         else
         {
-            BOOST_CHECK(pbTransaction->type() == TransactionType::MessageCall);
+            BOOST_CHECK(pbTransaction->txOp() == TransactionOp::MessageCall);
         }
         BOOST_CHECK(pbTransaction->sender() == std::string_view((char*)addr.data(), 20));
     }

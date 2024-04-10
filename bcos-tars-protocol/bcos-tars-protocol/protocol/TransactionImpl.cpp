@@ -60,6 +60,7 @@ bcos::crypto::HashType TransactionImpl::hash() const
 
 void bcostars::protocol::TransactionImpl::calculateHash(const bcos::crypto::Hash& hashImpl)
 {
+    // TODO: based on type to switch
     bcos::concepts::hash::calculate(*m_inner(), hashImpl.hasher(), m_inner()->dataHash);
 }
 
@@ -174,6 +175,16 @@ void bcostars::protocol::TransactionImpl::setExtraData(std::string const& _extra
 {
     m_inner()->extraData = _extraData;
 }
+uint8_t bcostars::protocol::TransactionImpl::type() const
+{
+    return static_cast<uint8_t>(m_inner()->type);
+}
+bcos::bytesConstRef TransactionImpl::extraTransactionBytes() const
+{
+    return {reinterpret_cast<const bcos::byte*>(m_inner()->extraTransactionBytes.data()),
+        m_inner()->extraTransactionBytes.size()};
+}
+
 const bcostars::Transaction& bcostars::protocol::TransactionImpl::inner() const
 {
     return *m_inner();

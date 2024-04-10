@@ -20,6 +20,8 @@
  */
 #include "bcos-txpool/txpool/storage/MemoryStorage.h"
 #include "bcos-utilities/Common.h"
+
+#include <bcos-protocol/TransactionSubmitResultImpl.h>
 #include <oneapi/tbb/blocked_range.h>
 #include <oneapi/tbb/parallel_for_each.h>
 #include <tbb/parallel_for.h>
@@ -170,6 +172,69 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
         .m_submitResult = {}};
     co_return co_await awaitable;
 }
+
+task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransactionWithoutReceipt(
+    protocol::Transaction::Ptr transaction)
+{
+    transaction->setImportTime(utcTime());
+    struct Awaitable
+    {
+        [[maybe_unused]] constexpr bool await_ready() { return false; }
+        [[maybe_unused]] void await_suspend(CO_STD::coroutine_handle<> handle)
+        {
+            try
+            {
+                auto result = m_self->verifyAndSubmitTransaction(
+                    std::move(m_transaction), nullptr, true, true);
+
+                if (result != TransactionStatus::None)
+                {
+                    TXPOOL_LOG(DEBUG)
+                        << "Submit transaction failed! "
+                        << LOG_KV("TxHash", m_transaction ? m_transaction->hash().hex() : "")
+                        << LOG_KV("result", result);
+                    m_submitResult.emplace<Error::Ptr>(
+                        BCOS_ERROR_PTR((int32_t)result, bcos::protocol::toString(result)));
+                }
+                else
+                {
+                    auto res = std::make_shared<TransactionSubmitResultImpl>();
+                    res->setStatus(static_cast<uint32_t>(result));
+                    m_submitResult.emplace<TransactionSubmitResult::Ptr>(std::move(res));
+                }
+                handle.resume();
+            }
+            catch (std::exception& e)
+            {
+                TXPOOL_LOG(WARNING) << "Unexpected exception: " << boost::diagnostic_information(e);
+                m_submitResult.emplace<Error::Ptr>(
+                    BCOS_ERROR_PTR((int32_t)TransactionStatus::Malformed, "Unknown exception"));
+                handle.resume();
+            }
+        }
+        bcos::protocol::TransactionSubmitResult::Ptr await_resume()
+        {
+            if (std::holds_alternative<Error::Ptr>(m_submitResult))
+            {
+                BOOST_THROW_EXCEPTION(*std::get<Error::Ptr>(m_submitResult));
+            }
+
+            return std::move(
+                std::get<bcos::protocol::TransactionSubmitResult::Ptr>(m_submitResult));
+        }
+
+        protocol::Transaction::Ptr m_transaction;
+        std::shared_ptr<MemoryStorage> m_self;
+        std::variant<std::monostate, bcos::protocol::TransactionSubmitResult::Ptr, Error::Ptr>
+            m_submitResult;
+    };
+
+    Awaitable awaitable{.m_transaction = std::move(transaction),
+        .m_self = shared_from_this(),
+        .m_submitResult = {}};
+    co_return co_await awaitable;
+}
+
 
 std::vector<protocol::Transaction::ConstPtr> MemoryStorage::getTransactions(
     RANGES::any_view<bcos::h256, RANGES::category::mask | RANGES::category::sized> hashes)

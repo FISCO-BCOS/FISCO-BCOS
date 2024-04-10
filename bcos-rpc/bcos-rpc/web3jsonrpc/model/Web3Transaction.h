@@ -24,7 +24,9 @@
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
+#include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-utilities/FixedBytes.h>
+#include <ostream>
 namespace bcos
 {
 
@@ -61,7 +63,7 @@ public:
 
     bcos::bytes encode() const;
     bcos::crypto::HashType hash() const;
-
+    bcostars::Transaction toTarsTransaction() const;
     uint64_t getSignatureV() const
     {
         // EIP-155: Simple replay attack protection
@@ -70,6 +72,22 @@ public:
             return chainId.value() * 2 + 35 + signatureV;
         }
         return signatureV + 27;
+    }
+
+    std::string toString() const noexcept
+    {
+        std::stringstream stringstream{};
+        stringstream << "chainId: " << this->chainId.value()
+                     << " type: " << static_cast<uint8_t>(this->type) << " to: " << this->to
+                     << " data: " << this->data << " value: " << this->value
+                     << " nonce: " << this->nonce << " gasLimit: " << this->gasLimit
+                     << " maxPriorityFeePerGas: " << this->maxPriorityFeePerGas
+                     << " maxFeePerGas: " << this->maxFeePerGas
+                     << " maxFeePerBlobGas: " << this->maxFeePerBlobGas
+                     << " blobVersionedHashes: " << this->blobVersionedHashes
+                     << " signatureR: " << this->signatureR << " signatureS: " << this->signatureS
+                     << " signatureV: " << this->signatureV;
+        return stringstream.str();
     }
 
     std::optional<uint64_t> chainId{std::nullopt};  // nullopt means a pre-EIP-155 transaction

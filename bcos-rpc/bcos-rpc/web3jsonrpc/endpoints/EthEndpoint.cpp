@@ -20,9 +20,14 @@
 
 #include "EthEndpoint.h"
 
+#include <bcos-codec/rlp/Common.h>
+#include <bcos-codec/rlp/RLPDecode.h>
+#include <bcos-codec/rlp/RLPEncode.h>
+#include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-rpc/Common.h>
 #include <bcos-rpc/web3jsonrpc/Web3JsonRpcImpl.h>
 #include <bcos-rpc/web3jsonrpc/endpoints/EthMethods.h>
+#include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 
@@ -95,7 +100,7 @@ task::Task<void> EthEndpoint::getBalance(const Json::Value& request, Json::Value
 {
     // params: address(DATA), blockNumber(QTY|TAG)
     // result: balance(QTY)
-    // FIXME: get balance from ledger
+    // TODO: get balance from ledger
     co_return;
 }
 task::Task<void> EthEndpoint::getStorageAt(const Json::Value&, Json::Value&)
@@ -110,7 +115,7 @@ task::Task<void> EthEndpoint::getTransactionCount(const Json::Value& request, Js
 {
     // params: address(DATA), blockNumber(QTY|TAG)
     // result: nonce(QTY)
-    // FIXME: impliment getTransactionCount
+    // TODO: impliment getTransactionCount
     co_return;
 }
 task::Task<void> EthEndpoint::getBlockTxCountByHash(
@@ -161,42 +166,73 @@ task::Task<void> EthEndpoint::getCode(const Json::Value&, Json::Value&)
         JsonRpcException(MethodNotFound, "This API has not been implemented yet!"));
     co_return;
 }
-task::Task<void> EthEndpoint::sign(const Json::Value&, Json::Value&)
+task::Task<void> EthEndpoint::sign(const Json::Value&, Json::Value& response)
 {
     // params: address(DATA), message(DATA)
     // result: signature(DATA)
-    BOOST_THROW_EXCEPTION(
-        JsonRpcException(MethodNotFound, "This API has not been implemented yet!"));
+    Json::Value result = "0x0";
+    buildJsonContent(result, response);
     co_return;
 }
-task::Task<void> EthEndpoint::signTransaction(const Json::Value&, Json::Value&)
+task::Task<void> EthEndpoint::signTransaction(const Json::Value&, Json::Value& response)
 {
     // params: transaction(TX), address(DATA)
     // result: signedTransaction(DATA)
-    BOOST_THROW_EXCEPTION(
-        JsonRpcException(MethodNotFound, "This API has not been implemented yet!"));
+    Json::Value result = "0x0";
+    buildJsonContent(result, response);
     co_return;
 }
-task::Task<void> EthEndpoint::sendTransaction(const Json::Value&, Json::Value&)
+task::Task<void> EthEndpoint::sendTransaction(const Json::Value&, Json::Value& response)
 {
     // params: transaction(TX)
     // result: transactionHash(DATA)
-    BOOST_THROW_EXCEPTION(
-        JsonRpcException(MethodNotFound, "This API has not been implemented yet!"));
+    Json::Value result = "0x0";
+    buildJsonContent(result, response);
     co_return;
 }
 task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Json::Value& response)
 {
     // params: signedTransaction(DATA)
     // result: transactionHash(DATA)
-    // FIXME: impl this
+    auto txpool = m_nodeService->txpool();
+    if (!txpool) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(JsonRpcError::InternalError, "TXPool not available!"));
+    }
+    auto rawTx = toView(request[0U]);
+    auto rawTxBytes = fromHexWithPrefix(rawTx);
+    auto bytesRef = bcos::ref(rawTxBytes);
+    Web3Transaction web3Tx;
+    if (auto const error = codec::rlp::decode(bytesRef, web3Tx); error != nullptr) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, error->errorMessage()));
+    }
+    auto tarsTx = web3Tx.toTarsTransaction();
+
+    auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
+        [m_tx = std::move(tarsTx)]() mutable { return &m_tx; });
+
+    if (c_fileLogLevel == TRACE)
+    {
+        RPC_IMPL_LOG(TRACE) << LOG_DESC("sendRawTransaction") << web3Tx.toString();
+    }
+    txpool->broadcastTransaction(*tx);
+    auto const txResult = co_await txpool->submitTransactionWithoutReceipt(std::move(tx));
+    crypto::HashType hash{};
+    if (txResult->status() == 0)
+    {
+        hash = tx->hash();
+    }
+    Json::Value result = hash.hexPrefixed();
+    buildJsonContent(result, response);
     co_return;
 }
 task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& response)
 {
     // params: transaction(TX), blockNumber(QTY|TAG)
     // result: data(DATA)
-    // FIXME: impl this
+    // TODO: impl this
     co_return;
 }
 task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Value& response)
@@ -332,6 +368,7 @@ task::Task<void> EthEndpoint::getLogs(const Json::Value&, Json::Value&)
     co_return;
 }
 
+// return (actual block number, isLatest block)
 task::Task<std::tuple<protocol::BlockNumber, bool>> EthEndpoint::getBlockNumberByTag(
     std::string_view blockTag)
 {
