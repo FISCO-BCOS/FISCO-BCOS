@@ -172,16 +172,7 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
 
         if (codeEntry && codeEntry.has_value() && !codeEntry->get().empty())
         {
-            auto codeStrView = codeEntry->get();
-            if (m_blockContext.features().get(ledger::Features::Flag::bugfix_eoa_as_contract) &&
-                hasPrecompiledPrefix(codeStrView))
-            {
-                output->data = bytes();
-            }
-            else
-            {
-                output->data = toBytes(codeStrView);
-            }
+            output->data = toBytes(codeEntry->get());
             return std::move(output);
         }
         else
