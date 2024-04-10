@@ -330,22 +330,37 @@ public:
     private:
         const ::rocksdb::Snapshot* m_snapshot;
         std::unique_ptr<::rocksdb::Iterator> m_iterator;
-        const RocksDBStorage2& m_storage;
+        const RocksDBStorage2* m_storage;
 
     public:
         Iterator(const Iterator&) = delete;
-        Iterator(Iterator&&) noexcept = default;
+        Iterator(Iterator&& iterator) noexcept
+          : m_snapshot(iterator.m_snapshot),
+            m_iterator(std::move(iterator.m_iterator)),
+            m_storage(iterator.m_storage)
+        {
+            iterator.m_snapshot = nullptr;
+            iterator.m_storage = nullptr;
+        }
         Iterator& operator=(const Iterator&) = delete;
-        Iterator& operator=(Iterator&&) noexcept = default;
+        Iterator& operator=(Iterator&& iterator) noexcept
+        {
+            m_snapshot = iterator.m_snapshot;
+            m_iterator = std::move(iterator.m_iterator);
+            m_storage = iterator.m_storage;
+            iterator.m_snapshot = nullptr;
+            iterator.m_storage = nullptr;
+            return *this;
+        }
         Iterator(const ::rocksdb::Snapshot* snapshot, ::rocksdb::Iterator* iterator,
-            const RocksDBStorage2& storage)
+            const RocksDBStorage2* storage)
           : m_snapshot(snapshot), m_iterator(iterator), m_storage(storage)
         {}
         ~Iterator() noexcept
         {
-            if (m_snapshot != nullptr)
+            if (m_snapshot != nullptr && m_storage != nullptr)
             {
-                m_storage.m_rocksDB.ReleaseSnapshot(m_snapshot);
+                m_storage->m_rocksDB.ReleaseSnapshot(m_snapshot);
             }
         }
 
@@ -354,8 +369,8 @@ public:
             task::AwaitableValue<std::optional<std::tuple<KeyType, ValueType>>> result;
             if (m_iterator->Valid())
             {
-                auto key = m_storage.m_keyResolver.decode(m_iterator->key().ToStringView());
-                auto value = m_storage.m_valueResolver.decode(m_iterator->value().ToStringView());
+                auto key = m_storage->m_keyResolver.decode(m_iterator->key().ToStringView());
+                auto value = m_storage->m_valueResolver.decode(m_iterator->value().ToStringView());
                 m_iterator->Next();
                 result.value().emplace(std::move(key), std::move(value));
             }
@@ -378,7 +393,7 @@ public:
         {
             iterator->SeekToFirst();
         }
-        return Iterator{snapshot, iterator, storage};
+        return Iterator{snapshot, iterator, std::addressof(storage)};
     }
 
     friend task::AwaitableValue<Iterator> tag_invoke(
