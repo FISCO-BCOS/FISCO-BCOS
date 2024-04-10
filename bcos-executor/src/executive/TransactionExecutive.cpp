@@ -431,8 +431,6 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
         return {nullptr, std::move(callParameters)};
     }
 
-    this->setContractTableChanged();
-
     if (callParameters->internalCreate)
     {
         callParameters->abi = std::move(extraData->abi);
