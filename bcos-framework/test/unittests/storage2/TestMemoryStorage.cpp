@@ -136,11 +136,11 @@ BOOST_AUTO_TEST_CASE(writeReadModifyRemove)
     }());
 }
 
-BOOST_AUTO_TEST_CASE(mru)
+BOOST_AUTO_TEST_CASE(lru)
 {
     task::syncWait([]() -> task::Task<void> {
         MemoryStorage<int, storage::Entry, Attribute(ORDERED | LRU)> storage(1);
-        storage.setMaxCapacity(1000);
+        storage.setMaxCapacity(1040);
 
         // write 10 100byte value
         storage::Entry entry;
