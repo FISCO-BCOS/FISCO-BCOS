@@ -69,7 +69,7 @@ class VMInstance
 public:
     explicit VMInstance(evmc_vm* instance, evmc_revision revision, bytes_view code) noexcept;
     explicit VMInstance(std::shared_ptr<evmoneCodeAnalysis> analysis, evmc_revision revision,
-        bytes_view code, bytes_view data) noexcept;
+        bytes_view code) noexcept;
     ~VMInstance()
     {
         if (m_instance)
