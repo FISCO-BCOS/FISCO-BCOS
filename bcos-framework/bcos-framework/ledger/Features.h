@@ -41,6 +41,7 @@ public:
         bugfix_sharding_call_in_child_executive,
         bugfix_empty_abi_reset,  // support empty abi reset of same code
         bugfix_eip55_addr,
+        bugfix_eoa_as_contract,
         feature_dmc2serial,
         feature_sharding,
         feature_rpbft,
@@ -131,29 +132,29 @@ public:
             protocol::BlockVersion to;
             std::vector<Flag> flags;
         };
-        const static auto upgradeRoadmap = std::to_array<UpgradeFeatures>({
-            {protocol::BlockVersion::V3_2_3_VERSION, {Flag::bugfix_revert}},
-            {protocol::BlockVersion::V3_2_4_VERSION,
-                {Flag::bugfix_statestorage_hash,
-                    Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy}},
-            {protocol::BlockVersion::V3_2_7_VERSION,
-                {Flag::bugfix_event_log_order, Flag::bugfix_call_noaddr_return,
-                    Flag::bugfix_precompiled_codehash, Flag::bugfix_dmc_revert}},
-            {protocol::BlockVersion::V3_5_VERSION,
-                {Flag::bugfix_revert, Flag::bugfix_statestorage_hash}},
-            {protocol::BlockVersion::V3_6_VERSION,
-                {Flag::bugfix_statestorage_hash,
-                    Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy,
-                    Flag::bugfix_event_log_order, Flag::bugfix_call_noaddr_return,
-                    Flag::bugfix_precompiled_codehash, Flag::bugfix_dmc_revert}},
-            {protocol::BlockVersion::V3_6_1_VERSION,
-                {Flag::bugfix_keypage_system_entry_hash,
-                    Flag::bugfix_internal_create_redundant_storage}},
-            {protocol::BlockVersion::V3_7_0_VERSION,
-                {Flag::bugfix_empty_abi_reset, Flag::bugfix_eip55_addr,
-                    Flag::bugfix_sharding_call_in_child_executive,
-                    Flag::bugfix_internal_create_permission_denied}},
-        });
+        const static auto upgradeRoadmap = std::to_array<UpgradeFeatures>(
+            {{protocol::BlockVersion::V3_2_3_VERSION, {Flag::bugfix_revert}},
+                {protocol::BlockVersion::V3_2_4_VERSION,
+                    {Flag::bugfix_statestorage_hash,
+                        Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy}},
+                {protocol::BlockVersion::V3_2_7_VERSION,
+                    {Flag::bugfix_event_log_order, Flag::bugfix_call_noaddr_return,
+                        Flag::bugfix_precompiled_codehash, Flag::bugfix_dmc_revert}},
+                {protocol::BlockVersion::V3_5_VERSION,
+                    {Flag::bugfix_revert, Flag::bugfix_statestorage_hash}},
+                {protocol::BlockVersion::V3_6_VERSION,
+                    {Flag::bugfix_statestorage_hash,
+                        Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy,
+                        Flag::bugfix_event_log_order, Flag::bugfix_call_noaddr_return,
+                        Flag::bugfix_precompiled_codehash, Flag::bugfix_dmc_revert}},
+                {protocol::BlockVersion::V3_6_1_VERSION,
+                    {Flag::bugfix_keypage_system_entry_hash,
+                        Flag::bugfix_internal_create_redundant_storage}},
+                {protocol::BlockVersion::V3_7_0_VERSION,
+                    {Flag::bugfix_empty_abi_reset, Flag::bugfix_eip55_addr,
+                        Flag::bugfix_sharding_call_in_child_executive,
+                        Flag::bugfix_internal_create_permission_denied}},
+                {protocol::BlockVersion::V3_7_2_VERSION, {Flag::bugfix_eoa_as_contract}}});
         for (const auto& upgradeFeatures : upgradeRoadmap)
         {
             if (((to < protocol::BlockVersion::V3_2_7_VERSION) && (to >= upgradeFeatures.to)) ||
