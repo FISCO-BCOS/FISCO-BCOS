@@ -5,8 +5,6 @@
 #include "bcos-utilities/NullLock.h"
 #include "bcos-utilities/Overloaded.h"
 #include <oneapi/tbb/spin_rw_mutex.h>
-#include <boost/atomic/atomic_flag.hpp>
-#include <boost/mp11/algorithm.hpp>
 #include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/identity.hpp>
 #include <boost/multi_index/key.hpp>
@@ -30,20 +28,13 @@ concept HasMemberSize = requires(Object object) {
 
 using Empty = std::monostate;
 
-constexpr inline struct RAWVersionTag
-{
-} rawVersionTag;
-using RAWVersion = int;
-using RAWVersionParam = std::tuple<int, bool&>;
-
 enum Attribute : int
 {
     NONE = 0,
     ORDERED = 1,
     CONCURRENT = 1 << 1,
     LRU = 1 << 2,
-    LOGICAL_DELETION = 1 << 3,
-    RW_VERSION = 1 << 4
+    LOGICAL_DELETION = 1 << 3
 };
 
 template <class KeyType, class ValueType = Empty, Attribute attribute = Attribute::NONE,
@@ -55,13 +46,11 @@ public:
     constexpr static bool withConcurrent = (attribute & Attribute::CONCURRENT) != 0;
     constexpr static bool withLRU = (attribute & Attribute::LRU) != 0;
     constexpr static bool withLogicalDeletion = (attribute & Attribute::LOGICAL_DELETION) != 0;
-    constexpr static bool withRWVersion = (attribute & Attribute::RW_VERSION) != 0;
 
 private:
     constexpr static unsigned BUCKETS_COUNT = 64;  // Magic number 64
     constexpr unsigned getBucketSize() { return withConcurrent ? BUCKETS_COUNT : 1; }
     static_assert(!withConcurrent || !std::is_void_v<BucketHasher>);
-    static_assert(!withRWVersion || (withConcurrent && withRWVersion));
 
     constexpr static unsigned DEFAULT_CAPACITY = 32 * 1024 * 1024;  // For mru
     using Mutex = tbb::spin_rw_mutex;
@@ -70,14 +59,10 @@ private:
     using BucketMutex = std::conditional_t<withConcurrent, Mutex, Empty>;
     using DataValue = std::conditional_t<withLogicalDeletion, std::optional<ValueType>, ValueType>;
 
-    using DataRAWVersion = std::conditional_t<withRWVersion, RAWVersion, Empty>;
-    using DataRAWFlag = std::conditional_t<withRWVersion, boost::atomic_flag, Empty>;
     struct Data
     {
         KeyType key;
         [[no_unique_address]] DataValue value;
-        [[no_unique_address]] DataRAWVersion readVersion{};
-        [[no_unique_address]] DataRAWVersion writeVersion{};
     };
 
     using IndexType = std::conditional_t<withOrdered,
@@ -91,13 +76,12 @@ private:
     {
         Container container;
         [[no_unique_address]] BucketMutex mutex;  // For concurrent
-        [[no_unique_address]] std::conditional_t<withLRU, int64_t, Empty> capacity = {};  // MRU
+        [[no_unique_address]] std::conditional_t<withLRU, int64_t, Empty> capacity = {};  // LRU
     };
     using Buckets = std::conditional_t<withConcurrent, std::vector<Bucket>, std::array<Bucket, 1>>;
 
     Buckets m_buckets;
     [[no_unique_address]] std::conditional_t<withLRU, int64_t, Empty> m_maxCapacity;
-    [[no_unique_address]] DataRAWFlag m_detectedRAW;
 
     Bucket& getBucket(auto const& key) & noexcept
     {
@@ -178,43 +162,8 @@ public:
         m_maxCapacity = capacity;
     }
 
-    template <class... Args>
-    static std::optional<RAWVersionParam> getRAWVersionParam(Args&&... args)
-        requires withRWVersion
-    {
-        using ArgsType = boost::mp11::mp_list<std::decay_t<Args>...>;
-        constexpr auto index = boost::mp11::mp_find<ArgsType, RAWVersionTag>::value;
-        if (index != sizeof...(Args))
-        {
-            return std::get<index + 1>(std::tie(args...));
-        }
-        return {};
-    }
-
-    /* key 1 2 3 4 5 6 7 8 9
-       read  5 3 4 2 1 6 7 8 9
-       write 8 3 4 2 1 6 7 5 9
-     */
-    template <class... Args>
-    static bool checkReadVersionConflicit(Data& data, const RAWVersionParam& rawParam)
-        requires withRWVersion
-    {
-        auto const& [readVersion, flag] = rawParam;
-        auto existsVersion = data.readVersion;
-        if (readVersion < existsVersion)
-        {
-            data.readVersion = readVersion;
-        }
-        if (readVersion > data.writeVersion)
-        {
-            return true;
-        }
-
-        return false;
-    }
-
     friend auto tag_invoke(bcos::storage2::tag_t<readSome> /*unused*/, MemoryStorage& storage,
-        RANGES::input_range auto&& keys, auto&&... args)
+        RANGES::input_range auto&& keys)
         -> task::AwaitableValue<std::vector<std::optional<ValueType>>>
     {
         task::AwaitableValue<std::vector<std::optional<ValueType>>> result;
@@ -232,23 +181,6 @@ public:
             auto it = index.find(key);
             if (it != index.end())
             {
-                if constexpr (withRWVersion)
-                {
-                    if (auto readVersion = getRAWVersionParam(args...))
-                    {
-                        if (*readVersion < it->writeVersion)
-                        {
-                            result.value().clear();
-                            storage.m_detectedRAW.test_and_set();
-                            break;
-                        }
-                        if (*readVersion < it->readVersion)
-                        {
-                            it->readVersion = *readVersion;
-                        }
-                    }
-                }
-
                 result.value().emplace_back(it->value);
 
                 if constexpr (std::decay_t<decltype(storage)>::withLRU)
@@ -266,8 +198,7 @@ public:
     }
 
     friend task::AwaitableValue<std::optional<ValueType>> tag_invoke(
-        storage2::tag_t<storage2::readOne> /*unused*/, MemoryStorage& storage, auto&& key,
-        auto&&... args)
+        storage2::tag_t<storage2::readOne> /*unused*/, MemoryStorage& storage, auto&& key)
     {
         task::AwaitableValue<std::optional<ValueType>> result;
         auto& bucket = storage.getBucket(key);
@@ -277,18 +208,6 @@ public:
         auto it = index.find(key);
         if (it != index.end())
         {
-            if constexpr (withRWVersion)
-            {
-                if (auto readVersion = getRAWVersionParam(args...))
-                {
-                    if (*readVersion < it->writeVersion)
-                    {
-                        storage.m_detectedRAW.test_and_set();
-                        return result;
-                    }
-                }
-            }
-
             if constexpr (std::decay_t<decltype(storage)>::withLRU)
             {
                 lock.upgrade_to_writer();
@@ -457,8 +376,8 @@ public:
     friend task::Task<void> tag_invoke(
         storage2::tag_t<merge> /*unused*/, MemoryStorage& toStorage, auto&& fromStorage)
     {
-        auto range = co_await storage2::range(fromStorage);
-        while (auto item = co_await range.next())
+        auto iterator = co_await storage2::range(fromStorage);
+        while (auto item = co_await iterator.next())
         {
             auto&& [key, value] = *item;
             if constexpr (std::is_pointer_v<decltype(value)>)
