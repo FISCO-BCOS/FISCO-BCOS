@@ -148,6 +148,14 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
 
     m_threadPool = std::make_shared<bcos::ThreadPool>(name, std::thread::hardware_concurrency());
     setBlockVersion(m_ledgerCache->ledgerConfig()->compatibilityVersion());
+
+
+    if (m_blockVersion == (uint32_t)protocol::BlockVersion::V3_0_VERSION)
+    {
+        // This 3.0.x's bug, but we still need to compatible with it
+        initTestPrecompiledTable(m_backendStorage);
+    }
+
     assert(!m_constantPrecompiled->empty());
     assert(m_builtInPrecompiled);
     start();
