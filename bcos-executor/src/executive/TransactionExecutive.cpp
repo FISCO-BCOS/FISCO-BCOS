@@ -84,6 +84,9 @@ CallParameters::UniquePtr TransactionExecutive::start(CallParameters::UniquePtr 
 
     auto message = execute(std::move(callParameters));
 
+    message->contextID = contextID();
+    message->seq = seq();
+
     EXECUTIVE_LOG(TRACE) << "Execute finish\t" << message->toFullString();
 
     return message;
@@ -91,14 +94,15 @@ CallParameters::UniquePtr TransactionExecutive::start(CallParameters::UniquePtr 
 
 CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::UniquePtr input)
 {
-    if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
-    {
-        EXECUTIVE_LOG(TRACE) << "externalCall start\t" << input->toFullString();
-    }
     auto newSeq = seq() + 1;
     bool isCreate = input->create;
     input->seq = newSeq;
     input->contextID = m_contextID;
+
+    if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
+    {
+        EXECUTIVE_LOG(TRACE) << "externalCall start\t" << input->toFullString();
+    }
 
     std::string newAddress;
     // if internalCreate, sometimes it will use given address, if receiveAddress is empty then give

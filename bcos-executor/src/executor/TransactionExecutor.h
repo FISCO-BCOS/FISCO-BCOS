@@ -307,7 +307,7 @@ protected:
             std::make_shared<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>();
     mutable bcos::SharedMutex x_constantPrecompiled;
 
-    std::shared_ptr<const std::set<std::string>> m_builtInPrecompiled;
+    std::shared_ptr<std::set<std::string>> m_builtInPrecompiled;
     unsigned int m_DAGThreadNum = std::max(std::thread::hardware_concurrency(), (unsigned int)1);
     std::shared_ptr<wasm::GasInjector> m_gasInjector = nullptr;
     mutable bcos::RecursiveMutex x_executiveFlowLock;

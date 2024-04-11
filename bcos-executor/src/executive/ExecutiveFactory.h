@@ -43,7 +43,7 @@ public:
             precompiledContract,
         std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
             constantPrecompiled,
-        std::shared_ptr<const std::set<std::string>> builtInPrecompiled,
+        std::shared_ptr<std::set<std::string>> builtInPrecompiled,
         std::shared_ptr<wasm::GasInjector> gasInjector)
       : m_precompiledContract(precompiledContract),
         m_constantPrecompiled(constantPrecompiled),
@@ -62,7 +62,7 @@ private:
         m_precompiledContract;
     std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
         m_constantPrecompiled;
-    std::shared_ptr<const std::set<std::string>> m_builtInPrecompiled;
+    std::shared_ptr<std::set<std::string>> m_builtInPrecompiled;
     std::weak_ptr<BlockContext> m_blockContext;
     std::shared_ptr<wasm::GasInjector> m_gasInjector;
 };
