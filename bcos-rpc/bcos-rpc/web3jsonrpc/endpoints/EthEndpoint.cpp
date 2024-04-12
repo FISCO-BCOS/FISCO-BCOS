@@ -27,6 +27,8 @@
 #include <bcos-rpc/Common.h>
 #include <bcos-rpc/web3jsonrpc/Web3JsonRpcImpl.h>
 #include <bcos-rpc/web3jsonrpc/endpoints/EthMethods.h>
+#include <bcos-rpc/web3jsonrpc/model/CallRequest.h>
+#include <bcos-rpc/web3jsonrpc/model/ReceiptResponse.h>
 #include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
@@ -232,7 +234,72 @@ task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& resp
 {
     // params: transaction(TX), blockNumber(QTY|TAG)
     // result: data(DATA)
-    // TODO: impl this
+    auto scheduler = m_nodeService->scheduler();
+    if (!scheduler)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(JsonRpcError::InternalError, "Scheduler not available!"));
+    }
+    auto [valid, call] = decodeCallRequest(request[0u]);
+    if (!valid)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid call request!"));
+    }
+    if (c_fileLogLevel == TRACE)
+    {
+        RPC_IMPL_LOG(TRACE) << LOG_DESC("eth_call") << call;
+    }
+    auto&& tx = call.takeToTransaction(m_nodeService->blockFactory()->transactionFactory());
+    // TODO: ignore params blockNumber here, use it after historical data is available
+
+    // MOVE it into a new file
+    struct Awaitable
+    {
+        bcos::scheduler::SchedulerInterface& m_scheduler;
+        bcos::protocol::Transaction::Ptr m_tx;
+        std::variant<Error::Ptr, protocol::TransactionReceipt::Ptr> m_result{};
+        constexpr static bool await_ready() noexcept { return false; }
+        void await_suspend(CO_STD::coroutine_handle<> handle) noexcept
+        {
+            m_scheduler.call(m_tx, [this, handle](Error::Ptr&& error, auto&& result) {
+                if (error)
+                {
+                    m_result.emplace<Error::Ptr>(std::move(error));
+                }
+                else
+                {
+                    m_result.emplace<protocol::TransactionReceipt::Ptr>(std::move(result));
+                }
+                handle.resume();
+            });
+        }
+        protocol::TransactionReceipt::Ptr await_resume() noexcept
+        {
+            if (std::holds_alternative<Error::Ptr>(m_result))
+            {
+                BOOST_THROW_EXCEPTION(*std::get<Error::Ptr>(m_result));
+            }
+            return std::move(std::get<protocol::TransactionReceipt::Ptr>(m_result));
+        }
+    };
+    auto const result = co_await Awaitable{.m_scheduler = *scheduler, .m_tx = std::move(tx)};
+
+    Json::Value jsonResult;
+    auto output = toHexStringWithPrefix(result->output());
+    if (result->status() == static_cast<int32_t>(protocol::TransactionStatus::None))
+    {
+        jsonResult = std::move(output);
+    }
+    else
+    {
+        // https://docs.infura.io/api/networks/ethereum/json-rpc-methods/eth_call#returns
+        jsonResult = Json::objectValue;
+        jsonResult["code"] = result->status();
+        jsonResult["message"] = result->message();
+        jsonResult["data"] = std::move(output);
+        response["jsonrpc"] = "2.0";
+        response["error"] = std::move(jsonResult);
+    }
     co_return;
 }
 task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Value& response)
@@ -283,14 +350,32 @@ task::Task<void> EthEndpoint::getTransactionByBlockNumberAndIndex(const Json::Va
         JsonRpcException(MethodNotFound, "This API has not been implemented yet!"));
     co_return;
 }
-task::Task<void> EthEndpoint::getTransactionReceipt(const Json::Value&, Json::Value&)
+task::Task<void> EthEndpoint::getTransactionReceipt(
+    const Json::Value& request, Json::Value& response)
 {
     // params: transactionHash(DATA)
     // result: transactionReceipt(RECEIPT)
-
-    BOOST_THROW_EXCEPTION(
-        JsonRpcException(MethodNotFound, "This API has not been implemented yet!"));
-
+    auto const hashStr = toView(request[0U]);
+    auto hash = crypto::HashType(hashStr, crypto::HashType::FromHex);
+    auto const ledger = m_nodeService->ledger();
+    auto receipt = co_await ledger::getReceipt(*ledger, hash);
+    auto receiptResponse = ReceiptResponse(std::move(receipt));
+    auto hashList = std::make_shared<crypto::HashList>();
+    hashList->push_back(hash);
+    auto txs = co_await ledger::getTransactions(*ledger, std::move(hashList));
+    if (txs->size() == 1)
+    {
+        receiptResponse.updateTxInfo(*txs->at(0));
+    }
+    auto block = co_await ledger::getBlockData(*ledger, receiptResponse.blockNumber,
+        bcos::ledger::HEADER & bcos::ledger::TRANSACTIONS_HASH);
+    if (block) [[likely]]
+    {
+        receiptResponse.updateBlockInfo(*block);
+    }
+    Json::Value result = Json::objectValue;
+    receiptResponse.toJson(result);
+    buildJsonContent(result, response);
     co_return;
 }
 task::Task<void> EthEndpoint::getUncleByBlockHashAndIndex(const Json::Value&, Json::Value& response)

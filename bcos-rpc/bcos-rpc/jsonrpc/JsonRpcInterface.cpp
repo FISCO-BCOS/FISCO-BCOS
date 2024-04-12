@@ -225,7 +225,10 @@ void bcos::rpc::parseRpcRequestJson(std::string_view _requestBody, JsonRequest& 
 bcos::bytes bcos::rpc::toStringResponse(JsonResponse _jsonResponse)
 {
     auto jResp = toJsonResponse(std::move(_jsonResponse));
-    std::unique_ptr<Json::StreamWriter> writer(Json::StreamWriterBuilder().newStreamWriter());
+    auto builder = Json::StreamWriterBuilder();
+    builder["commentStyle"] = "None";
+    builder["indentation"] = "";
+    std::unique_ptr<Json::StreamWriter> writer(builder.newStreamWriter());
     class JsonSink
     {
     public:

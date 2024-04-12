@@ -29,7 +29,8 @@
 #include <ostream>
 namespace bcos
 {
-
+namespace rpc
+{
 // EIP-2718 transaction type
 // https://github.com/ethereum/eth1.0-specs/tree/master/lists/signature-types
 enum class TransactionType : uint8_t
@@ -39,6 +40,12 @@ enum class TransactionType : uint8_t
     EIP1559 = 2,  // https://eips.ethereum.org/EIPS/eip-1559
     EIP4844 = 3,  // https://eips.ethereum.org/EIPS/eip-4844
 };
+
+[[maybe_unused]] static std::ostream& operator<<(std::ostream& _out, const TransactionType& _in)
+{
+    _out << magic_enum::enum_name(_in);
+    return _out;
+}
 
 // EIP-2930: Access lists
 struct AccessListEntry
@@ -77,15 +84,16 @@ public:
     std::string toString() const noexcept
     {
         std::stringstream stringstream{};
-        stringstream << "chainId: " << this->chainId.value()
+        stringstream << "chainId: " << this->chainId.value_or(0)
                      << " type: " << static_cast<uint8_t>(this->type) << " to: " << this->to
-                     << " data: " << this->data << " value: " << this->value
+                     << " data: " << toHex(this->data) << " value: " << this->value
                      << " nonce: " << this->nonce << " gasLimit: " << this->gasLimit
                      << " maxPriorityFeePerGas: " << this->maxPriorityFeePerGas
                      << " maxFeePerGas: " << this->maxFeePerGas
                      << " maxFeePerBlobGas: " << this->maxFeePerBlobGas
                      << " blobVersionedHashes: " << this->blobVersionedHashes
-                     << " signatureR: " << this->signatureR << " signatureS: " << this->signatureS
+                     << " signatureR: " << toHex(this->signatureR)
+                     << " signatureS: " << toHex(this->signatureS)
                      << " signatureV: " << this->signatureV;
         return stringstream.str();
     }
@@ -104,23 +112,24 @@ public:
     uint64_t maxFeePerGas{0};
     // EIP-4844: Shard Blob Transactions
     uint64_t maxFeePerBlobGas{0};
-    std::vector<bcos::bytes> blobVersionedHashes{};
+    h256s blobVersionedHashes{};
     bcos::bytes signatureR{};
     bcos::bytes signatureS{};
     uint64_t signatureV{0};
 };
+}  // namespace rpc
 namespace codec::rlp
 {
-Header header(const AccessListEntry& entry) noexcept;
-void encode(bcos::bytes& out, const AccessListEntry&) noexcept;
-size_t length(const AccessListEntry&) noexcept;
+Header header(const rpc::AccessListEntry& entry) noexcept;
+void encode(bcos::bytes& out, const rpc::AccessListEntry&) noexcept;
+size_t length(const rpc::AccessListEntry&) noexcept;
 
-size_t length(const Web3Transaction&) noexcept;
-Header headerForSign(const Web3Transaction& tx) noexcept;
-Header headerTxBase(const Web3Transaction& tx) noexcept;
-Header header(const Web3Transaction& tx) noexcept;
-void encode(bcos::bytes& out, const Web3Transaction&) noexcept;
-bcos::Error::UniquePtr decode(bcos::bytesRef& in, AccessListEntry&) noexcept;
-bcos::Error::UniquePtr decode(bcos::bytesRef& in, Web3Transaction&) noexcept;
+size_t length(const rpc::Web3Transaction&) noexcept;
+Header headerForSign(const rpc::Web3Transaction& tx) noexcept;
+Header headerTxBase(const rpc::Web3Transaction& tx) noexcept;
+Header header(const rpc::Web3Transaction& tx) noexcept;
+void encode(bcos::bytes& out, const rpc::Web3Transaction&) noexcept;
+bcos::Error::UniquePtr decode(bcos::bytesRef& in, rpc::AccessListEntry&) noexcept;
+bcos::Error::UniquePtr decode(bcos::bytesRef& in, rpc::Web3Transaction&) noexcept;
 }  // namespace codec::rlp
 }  // namespace bcos
