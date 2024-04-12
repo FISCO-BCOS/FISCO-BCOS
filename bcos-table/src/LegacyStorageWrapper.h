@@ -128,7 +128,7 @@ public:
                 if (entry.status() == storage::Entry::Status::DELETED)
                 {
                     co_await storage2::removeOne(
-                        self->m_storage, transaction_executor::StateKey(table, key));
+                        self->m_storage, transaction_executor::StateKeyView(table, key));
                 }
                 else
                 {

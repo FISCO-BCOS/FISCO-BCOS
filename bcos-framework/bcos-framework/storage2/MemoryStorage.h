@@ -333,7 +333,14 @@ public:
             {
                 if constexpr (withLogicalDeletion)
                 {
-                    it = bucket.container.emplace_hint(it, Data{.key = key, .value = {}});
+                    if constexpr (std::is_same_v<std::decay_t<decltype(key)>, KeyType>)
+                    {
+                        it = bucket.container.emplace_hint(it, Data{.key = key, .value = {}});
+                    }
+                    else
+                    {
+                        it = bucket.container.emplace_hint(it, Data{.key = Key{key}, .value = {}});
+                    }
                 }
             }
         }
