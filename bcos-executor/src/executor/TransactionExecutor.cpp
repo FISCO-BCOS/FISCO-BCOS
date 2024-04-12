@@ -276,6 +276,7 @@ void TransactionExecutor::initEvmEnvironment()
         {RING_SIG_ADDRESS, std::make_shared<precompiled::RingSigPrecompiled>(m_hashImpl)});
 
     set<string> builtIn = {CRYPTO_ADDRESS, GROUP_SIG_ADDRESS, RING_SIG_ADDRESS};
+
     m_builtInPrecompiled = make_shared<set<string>>(builtIn);
 
     // create the zkp-precompiled
@@ -484,6 +485,14 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
         {
             m_ledgerCache->setBlockNumber2Hash(
                 blockHeader->number() - 1, (*parentInfoIt).blockHash);
+        }
+
+        if (m_blockContext->features().get(ledger::Features::Flag::bugfix_call_noaddr_return))
+        {
+            if (m_builtInPrecompiled->count(CAST_ADDRESS) == 0)
+            {
+                m_builtInPrecompiled->insert(CAST_ADDRESS);
+            }
         }
 
         EXECUTOR_NAME_LOG(DEBUG) << BLOCK_NUMBER(blockHeader->number()) << "NextBlockHeader success"

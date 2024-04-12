@@ -21,7 +21,7 @@ public:
             precompiledContract,
         std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
             constantPrecompiled,
-        std::shared_ptr<const std::set<std::string>> builtInPrecompiled,
+        std::shared_ptr<std::set<std::string>> builtInPrecompiled,
         std::shared_ptr<wasm::GasInjector> gasInjector)
       : ExecutiveFactory(std::move(blockContext), precompiledContract, constantPrecompiled,
             builtInPrecompiled, gasInjector)

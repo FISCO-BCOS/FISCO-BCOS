@@ -105,7 +105,7 @@ public:
     void setConstantPrecompiled(
         const std::string& _address, std::shared_ptr<precompiled::Precompiled> precompiled);
 
-    void setBuiltInPrecompiled(std::shared_ptr<const std::set<std::string>> _builtInPrecompiled)
+    void setBuiltInPrecompiled(std::shared_ptr<std::set<std::string>> _builtInPrecompiled)
     {
         m_builtInPrecompiled = _builtInPrecompiled;
     }
@@ -226,7 +226,7 @@ protected:
         m_constantPrecompiled;
     std::shared_ptr<const std::map<std::string, std::shared_ptr<PrecompiledContract>>>
         m_evmPrecompiled;
-    std::shared_ptr<const std::set<std::string>> m_builtInPrecompiled;
+    std::shared_ptr<std::set<std::string>> m_builtInPrecompiled;
 
     std::string m_contractAddress;
     int64_t m_contextID;
