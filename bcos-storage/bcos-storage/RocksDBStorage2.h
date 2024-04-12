@@ -14,12 +14,9 @@
 #include <oneapi/tbb/parallel_pipeline.h>
 #include <rocksdb/db.h>
 #include <rocksdb/iterator.h>
-#include <rocksdb/options.h>
 #include <rocksdb/slice.h>
-#include <rocksdb/snapshot.h>
 #include <boost/throw_exception.hpp>
 #include <functional>
-#include <memory>
 #include <type_traits>
 #include <variant>
 
@@ -328,41 +325,13 @@ public:
     class Iterator
     {
     private:
-        const ::rocksdb::Snapshot* m_snapshot;
         std::unique_ptr<::rocksdb::Iterator> m_iterator;
         const RocksDBStorage2* m_storage;
 
     public:
-        Iterator(const Iterator&) = delete;
-        Iterator(Iterator&& iterator) noexcept
-          : m_snapshot(iterator.m_snapshot),
-            m_iterator(std::move(iterator.m_iterator)),
-            m_storage(iterator.m_storage)
-        {
-            iterator.m_snapshot = nullptr;
-            iterator.m_storage = nullptr;
-        }
-        Iterator& operator=(const Iterator&) = delete;
-        Iterator& operator=(Iterator&& iterator) noexcept
-        {
-            m_snapshot = iterator.m_snapshot;
-            m_iterator = std::move(iterator.m_iterator);
-            m_storage = iterator.m_storage;
-            iterator.m_snapshot = nullptr;
-            iterator.m_storage = nullptr;
-            return *this;
-        }
-        Iterator(const ::rocksdb::Snapshot* snapshot, ::rocksdb::Iterator* iterator,
-            const RocksDBStorage2* storage)
-          : m_snapshot(snapshot), m_iterator(iterator), m_storage(storage)
+        Iterator(::rocksdb::Iterator* iterator, const RocksDBStorage2* storage)
+          : m_iterator(iterator), m_storage(storage)
         {}
-        ~Iterator() noexcept
-        {
-            if (m_snapshot != nullptr && m_storage != nullptr)
-            {
-                m_storage->m_rocksDB.ReleaseSnapshot(m_snapshot);
-            }
-        }
 
         task::AwaitableValue<std::optional<std::tuple<KeyType, ValueType>>> next()
         {
@@ -381,10 +350,7 @@ public:
     static task::AwaitableValue<Iterator> range(
         RocksDBStorage2& storage, const ::rocksdb::Slice* startSlice = nullptr)
     {
-        const auto* snapshot = storage.m_rocksDB.GetSnapshot();
-        ::rocksdb::ReadOptions readOptions;
-        readOptions.snapshot = snapshot;
-        auto* iterator = storage.m_rocksDB.NewIterator(readOptions);
+        auto* iterator = storage.m_rocksDB.NewIterator(::rocksdb::ReadOptions{});
         if (startSlice != nullptr)
         {
             iterator->Seek(*startSlice);
@@ -393,7 +359,7 @@ public:
         {
             iterator->SeekToFirst();
         }
-        return Iterator{snapshot, iterator, std::addressof(storage)};
+        return Iterator{iterator, std::addressof(storage)};
     }
 
     friend task::AwaitableValue<Iterator> tag_invoke(

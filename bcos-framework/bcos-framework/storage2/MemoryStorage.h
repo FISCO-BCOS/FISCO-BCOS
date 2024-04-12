@@ -15,26 +15,30 @@
 #include <boost/throw_exception.hpp>
 #include <type_traits>
 #include <utility>
+#include <variant>
 
 namespace bcos::storage2::memory_storage
 {
 
+// clang-format off
 template <class Object>
-concept HasMemberSize = requires(Object object) {
-                            {
-                                object.size()
-                                } -> std::integral;
-                        };
+concept HasMemberSize = requires(Object object) { { object.size() } -> std::integral; };
+// clang-format on
 
-using Empty = std::monostate;
+struct Empty
+{
+};
+struct Deleted
+{
+};
 
 enum Attribute : int
 {
     NONE = 0,
     ORDERED = 1,
     CONCURRENT = 1 << 1,
-    LRU = 1 << 2,
-    LOGICAL_DELETION = 1 << 3
+    MRU = 1 << 2,
+    LOGICAL_DELETION = 1 << 3,
 };
 
 template <class KeyType, class ValueType = Empty, Attribute attribute = Attribute::NONE,
@@ -44,7 +48,7 @@ class MemoryStorage
 public:
     constexpr static bool withOrdered = (attribute & Attribute::ORDERED) != 0;
     constexpr static bool withConcurrent = (attribute & Attribute::CONCURRENT) != 0;
-    constexpr static bool withLRU = (attribute & Attribute::LRU) != 0;
+    constexpr static bool withMRU = (attribute & Attribute::MRU) != 0;
     constexpr static bool withLogicalDeletion = (attribute & Attribute::LOGICAL_DELETION) != 0;
 
 private:
@@ -57,18 +61,18 @@ private:
     using Lock = std::conditional_t<withConcurrent, typename tbb::spin_rw_mutex::scoped_lock,
         utilities::NullLock>;
     using BucketMutex = std::conditional_t<withConcurrent, Mutex, Empty>;
-    using DataValue = std::conditional_t<withLogicalDeletion, std::optional<ValueType>, ValueType>;
-
+    using DataValueType =
+        std::conditional_t<withLogicalDeletion, std::variant<Deleted, ValueType>, ValueType>;
     struct Data
     {
         KeyType key;
-        [[no_unique_address]] DataValue value;
+        [[no_unique_address]] DataValueType value;
     };
 
     using IndexType = std::conditional_t<withOrdered,
         boost::multi_index::ordered_unique<boost::multi_index::member<Data, KeyType, &Data::key>>,
         boost::multi_index::hashed_unique<boost::multi_index::member<Data, KeyType, &Data::key>>>;
-    using Container = std::conditional_t<withLRU,
+    using Container = std::conditional_t<withMRU,
         boost::multi_index_container<Data,
             boost::multi_index::indexed_by<IndexType, boost::multi_index::sequenced<>>>,
         boost::multi_index_container<Data, boost::multi_index::indexed_by<IndexType>>>;
@@ -76,12 +80,12 @@ private:
     {
         Container container;
         [[no_unique_address]] BucketMutex mutex;  // For concurrent
-        [[no_unique_address]] std::conditional_t<withLRU, int64_t, Empty> capacity = {};  // LRU
+        [[no_unique_address]] std::conditional_t<withMRU, int64_t, Empty> capacity = {};  // For mru
     };
     using Buckets = std::conditional_t<withConcurrent, std::vector<Bucket>, std::array<Bucket, 1>>;
 
     Buckets m_buckets;
-    [[no_unique_address]] std::conditional_t<withLRU, int64_t, Empty> m_maxCapacity;
+    [[no_unique_address]] std::conditional_t<withMRU, int64_t, Empty> m_maxCapacity;
 
     Bucket& getBucket(auto const& key) & noexcept
     {
@@ -110,7 +114,7 @@ private:
 
     void updateMRUAndCheck(
         Bucket& bucket, typename Container::template nth_index<0>::type::iterator entryIt)
-        requires withLRU
+        requires withMRU
     {
         auto& index = bucket.container.template get<1>();
         auto seqIt = index.iterator_to(*entryIt);
@@ -119,7 +123,7 @@ private:
         while (bucket.capacity > m_maxCapacity && !bucket.container.empty())
         {
             auto const& item = index.front();
-            bucket.capacity -= (getSize(item.key) + getSize(item.value));
+            bucket.capacity -= getSize(item.value);
             index.pop_front();
         }
     }
@@ -131,6 +135,7 @@ private:
         {
             return object.size();
         }
+
         // Treat any no-size() object as trivial, TODO: fix it
         return sizeof(ObjectType);
     }
@@ -145,7 +150,7 @@ public:
         {
             m_buckets = decltype(m_buckets)(std::min(buckets, getBucketSize()));
         }
-        if constexpr (withLRU)
+        if constexpr (withMRU)
         {
             m_maxCapacity = DEFAULT_CAPACITY;
         }
@@ -157,7 +162,7 @@ public:
     ~MemoryStorage() noexcept = default;
 
     void setMaxCapacity(int64_t capacity)
-        requires withLRU
+        requires withMRU
     {
         m_maxCapacity = capacity;
     }
@@ -167,7 +172,7 @@ public:
         -> task::AwaitableValue<std::vector<std::optional<ValueType>>>
     {
         task::AwaitableValue<std::vector<std::optional<ValueType>>> result;
-        if constexpr (RANGES::sized_range<decltype(keys)>)
+        if (RANGES::sized_range<decltype(keys)>)
         {
             result.value().reserve(RANGES::size(keys));
         }
@@ -181,9 +186,23 @@ public:
             auto it = index.find(key);
             if (it != index.end())
             {
-                result.value().emplace_back(it->value);
+                if constexpr (std::decay_t<decltype(storage)>::withLogicalDeletion)
+                {
+                    std::visit(bcos::overloaded{[&](ValueType const& value) {
+                                                    result.value().emplace_back(
+                                                        std::make_optional(value));
+                                                },
+                                   [&](Deleted const&) {
+                                       result.value().emplace_back(std::optional<ValueType>{});
+                                   }},
+                        it->value);
+                }
+                else
+                {
+                    result.value().emplace_back(it->value);
+                }
 
-                if constexpr (std::decay_t<decltype(storage)>::withLRU)
+                if constexpr (std::decay_t<decltype(storage)>::withMRU)
                 {
                     lock.upgrade_to_writer();
                     storage.updateMRUAndCheck(bucket, it);
@@ -208,13 +227,23 @@ public:
         auto it = index.find(key);
         if (it != index.end())
         {
-            if constexpr (std::decay_t<decltype(storage)>::withLRU)
+            if constexpr (std::decay_t<decltype(storage)>::withMRU)
             {
                 lock.upgrade_to_writer();
                 storage.updateMRUAndCheck(bucket, it);
             }
 
-            result.value() = it->value;
+            if constexpr (std::decay_t<decltype(storage)>::withLogicalDeletion)
+            {
+                std::visit(
+                    bcos::overloaded{[&](ValueType const& value) { result.value().emplace(value); },
+                        [&](Deleted const&) {}},
+                    it->value);
+            }
+            else
+            {
+                result.value().emplace(it->value);
+            }
         }
         return result;
     }
@@ -228,11 +257,11 @@ public:
             Lock lock(bucket.mutex, true);
             auto const& index = bucket.container.template get<0>();
 
-            std::conditional_t<std::decay_t<decltype(storage)>::withLRU, int64_t, Empty>
+            std::conditional_t<std::decay_t<decltype(storage)>::withMRU, int64_t, Empty>
                 updatedCapacity;
-            if constexpr (std::decay_t<decltype(storage)>::withLRU)
+            if constexpr (std::decay_t<decltype(storage)>::withMRU)
             {
-                updatedCapacity = getSize(key) + getSize(value);
+                updatedCapacity = getSize(value);
             }
 
             typename Container::iterator it;
@@ -246,10 +275,10 @@ public:
             }
             if (it != index.end() && std::equal_to<Key>{}(it->key, key))
             {
-                if constexpr (std::decay_t<decltype(storage)>::withLRU)
+                if constexpr (std::decay_t<decltype(storage)>::withMRU)
                 {
                     auto& existsValue = it->value;
-                    updatedCapacity -= (getSize(key) + getSize(existsValue));
+                    updatedCapacity -= getSize(existsValue);
                 }
 
                 bucket.container.modify(
@@ -264,7 +293,7 @@ public:
                             .value = std::forward<decltype(value)>(value)});
             }
 
-            if constexpr (std::decay_t<decltype(storage)>::withLRU)
+            if constexpr (std::decay_t<decltype(storage)>::withMRU)
             {
                 bucket.capacity += updatedCapacity;
                 storage.updateMRUAndCheck(bucket, it);
@@ -301,23 +330,25 @@ public:
                 auto& existsValue = it->value;
                 if constexpr (std::decay_t<decltype(storage)>::withLogicalDeletion)
                 {
-                    if (!existsValue)
+                    if (std::holds_alternative<Deleted>(existsValue))
                     {
                         // Already deleted
                         return {};
                     }
                 }
 
-                if constexpr (withLRU)
+                if constexpr (std::decay_t<decltype(storage)>::withMRU)
                 {
-                    bucket.capacity -= (getSize(key) + getSize(existsValue));
+                    bucket.capacity -= getSize(existsValue);
                 }
 
-                if constexpr (withLogicalDeletion)
+                if constexpr (std::decay_t<decltype(storage)>::withLogicalDeletion)
                 {
                     if (!direct)
                     {
-                        bucket.container.modify(it, [](Data& data) mutable { data.value.reset(); });
+                        bucket.container.modify(it, [](Data& data) mutable {
+                            data.value.template emplace<Deleted>(Deleted{});
+                        });
                     }
                     else
                     {
@@ -331,16 +362,9 @@ public:
             }
             else
             {
-                if constexpr (withLogicalDeletion)
+                if constexpr (std::decay_t<decltype(storage)>::withLogicalDeletion)
                 {
-                    if constexpr (std::is_same_v<std::decay_t<decltype(key)>, KeyType>)
-                    {
-                        it = bucket.container.emplace_hint(it, Data{.key = key, .value = {}});
-                    }
-                    else
-                    {
-                        it = bucket.container.emplace_hint(it, Data{.key = Key{key}, .value = {}});
-                    }
+                    it = bucket.container.emplace_hint(it, Data{.key = key, .value = Deleted{}});
                 }
             }
         }
@@ -383,8 +407,8 @@ public:
     friend task::Task<void> tag_invoke(
         storage2::tag_t<merge> /*unused*/, MemoryStorage& toStorage, auto&& fromStorage)
     {
-        auto iterator = co_await storage2::range(fromStorage);
-        while (auto item = co_await iterator.next())
+        auto range = co_await storage2::range(fromStorage);
+        while (auto item = co_await range.next())
         {
             auto&& [key, value] = *item;
             if constexpr (std::is_pointer_v<decltype(value)>)
@@ -417,25 +441,31 @@ public:
 
         auto next()
         {
-            using IteratorValue =
-                std::conditional_t<withLogicalDeletion, const ValueType*, const ValueType&>;
-
-            std::optional<std::tuple<const Key&, IteratorValue>> result;
-            if (m_begin != m_end)
+            if constexpr (withLogicalDeletion)
             {
-                auto const& data = *m_begin;
-                if constexpr (withLogicalDeletion)
+                std::optional<std::tuple<const Key&, const ValueType*>> result;
+                if (m_begin != m_end)
                 {
+                    auto const& data = *m_begin;
                     result.emplace(std::make_tuple(
-                        std::cref(data.key), data.value ? std::addressof(*(data.value)) : nullptr));
+                        std::cref(data.key), std::holds_alternative<Deleted>(data.value) ?
+                                                 nullptr :
+                                                 std::addressof(std::get<Value>(data.value))));
+                    ++m_begin;
                 }
-                else
-                {
-                    result.emplace(std::make_tuple(std::cref(data.key), std::cref(data.value)));
-                }
-                ++m_begin;
+                return task::AwaitableValue(std::move(result));
             }
-            return task::AwaitableValue(std::move(result));
+            else
+            {
+                std::optional<std::tuple<const Key&, const ValueType&>> result;
+                if (m_begin != m_end)
+                {
+                    auto const& data = *m_begin;
+                    result.emplace(std::make_tuple(std::cref(data.key), std::cref(data.value)));
+                    ++m_begin;
+                }
+                return task::AwaitableValue(std::move(result));
+            }
         }
     };
 
