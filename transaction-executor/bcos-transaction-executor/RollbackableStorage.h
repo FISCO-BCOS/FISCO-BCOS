@@ -119,8 +119,8 @@ public:
 
     friend auto tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/, Rollbackable& storage,
         RANGES::input_range auto const& keys)
-        -> task::Task<task::AwaitableReturnType<
-            std::invoke_result_t<storage2::RemoveSome, Storage, decltype(keys)>>>
+        -> task::Task<task::AwaitableReturnType<std::invoke_result_t<storage2::RemoveSome,
+            std::add_lvalue_reference_t<Storage>, decltype(keys)>>>
     {
         // Store values to history
         auto oldValues = co_await storage2::readSome(*storage.m_storage, keys, storage2::DIRECT);

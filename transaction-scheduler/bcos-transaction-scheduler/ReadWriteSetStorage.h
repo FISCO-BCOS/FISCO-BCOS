@@ -95,8 +95,8 @@ public:
 
     friend auto tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/,
         ReadWriteSetStorage& storage, RANGES::input_range auto const& keys, auto&&... args)
-        -> task::Task<task::AwaitableReturnType<std::invoke_result_t<storage2::RemoveSome, Storage&,
-            decltype(keys), decltype(args)...>>>
+        -> task::Task<task::AwaitableReturnType<std::invoke_result_t<storage2::RemoveSome,
+            std::add_lvalue_reference_t<Storage>, decltype(keys), decltype(args)...>>>
     {
         for (auto&& key : keys)
         {

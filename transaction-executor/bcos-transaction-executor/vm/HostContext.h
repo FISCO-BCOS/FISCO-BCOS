@@ -376,7 +376,7 @@ private:
     {
         static storage2::memory_storage::MemoryStorage<evmc_address, std::shared_ptr<Executable>,
             storage2::memory_storage::Attribute(
-                storage2::memory_storage::MRU | storage2::memory_storage::CONCURRENT),
+                storage2::memory_storage::LRU | storage2::memory_storage::CONCURRENT),
             std::hash<evmc_address>>
             cachedExecutables;
 
