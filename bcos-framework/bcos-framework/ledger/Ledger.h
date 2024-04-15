@@ -122,6 +122,24 @@ inline constexpr struct GetFeatures
     }
 } getFeatures{};
 
+inline constexpr struct GetReceipt
+{
+    task::Task<protocol::TransactionReceipt::ConstPtr> operator()(
+        auto& ledger, crypto::HashType hash) const
+    {
+        co_return co_await tag_invoke(*this, ledger, hash);
+    }
+} getReceipt{};
+
+inline constexpr struct GetTransactions
+{
+    task::Task<protocol::TransactionsConstPtr> operator()(
+        auto& ledger, crypto::HashListPtr hashes) const
+    {
+        co_return co_await tag_invoke(*this, ledger, std::move(hashes));
+    }
+} getTransactions{};
+
 template <auto& Tag>
 using tag_t = std::decay_t<decltype(Tag)>;
 }  // namespace bcos::ledger

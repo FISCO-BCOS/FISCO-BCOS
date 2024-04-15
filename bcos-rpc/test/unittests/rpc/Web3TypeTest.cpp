@@ -50,7 +50,7 @@ BOOST_AUTO_TEST_CASE(testLegacyTransactionDecode)
     Web3Transaction tx{};
     auto e = codec::rlp::decode(bRef, tx);
     BOOST_CHECK(!e);
-    BOOST_CHECK(tx.type == TransactionType::Legacy);
+    BOOST_CHECK(tx.type == rpc::TransactionType::Legacy);
     BOOST_CHECK(tx.chainId.has_value());
     BOOST_CHECK_EQUAL(tx.chainId.value(), 1);
     BOOST_CHECK_EQUAL(tx.nonce, 12);
@@ -85,7 +85,7 @@ BOOST_AUTO_TEST_CASE(testEIP2930Transaction)
     Web3Transaction tx{};
     auto e = codec::rlp::decode(bRef, tx);
     BOOST_CHECK(e == nullptr);
-    BOOST_CHECK(tx.type == TransactionType::EIP2930);
+    BOOST_CHECK(tx.type == rpc::TransactionType::EIP2930);
     BOOST_CHECK(tx.chainId.has_value());
     BOOST_CHECK_EQUAL(tx.chainId.value(), 5);
     BOOST_CHECK_EQUAL(tx.nonce, 7);
@@ -118,7 +118,7 @@ BOOST_AUTO_TEST_CASE(testEIP1559Transaction)
     Web3Transaction tx{};
     auto e = codec::rlp::decode(bRef, tx);
     BOOST_CHECK(e == nullptr);
-    BOOST_CHECK(tx.type == TransactionType::EIP1559);
+    BOOST_CHECK(tx.type == rpc::TransactionType::EIP1559);
     BOOST_CHECK(tx.chainId.has_value());
     BOOST_CHECK_EQUAL(tx.chainId.value(), 5);
     BOOST_CHECK_EQUAL(tx.nonce, 7);
@@ -151,7 +151,7 @@ BOOST_AUTO_TEST_CASE(testEIP4844Transaction)
     Web3Transaction tx{};
     auto e = codec::rlp::decode(bRef, tx);
     BOOST_CHECK(e == nullptr);
-    BOOST_CHECK(tx.type == TransactionType::EIP4844);
+    BOOST_CHECK(tx.type == rpc::TransactionType::EIP4844);
     BOOST_CHECK(tx.chainId.has_value());
     BOOST_CHECK_EQUAL(tx.chainId.value(), 5);
     BOOST_CHECK_EQUAL(tx.nonce, 7);
@@ -190,7 +190,7 @@ BOOST_AUTO_TEST_CASE(recoverAddress)
     Web3Transaction tx{};
     auto e = codec::rlp::decode(bRef, tx);
     BOOST_CHECK(!e);
-    BOOST_CHECK(tx.type == TransactionType::Legacy);
+    BOOST_CHECK(tx.type == rpc::TransactionType::Legacy);
     bcos::bytes encoded{};
     codec::rlp::encode(encoded, tx);
     auto rawTx2 = toHexStringWithPrefix(encoded);
@@ -221,7 +221,7 @@ BOOST_AUTO_TEST_CASE(EIP1559Recover)
     Web3Transaction tx{};
     auto e = codec::rlp::decode(bRef, tx);
     BOOST_CHECK(e == nullptr);
-    BOOST_CHECK(tx.type == TransactionType::EIP1559);
+    BOOST_CHECK(tx.type == rpc::TransactionType::EIP1559);
     BOOST_CHECK(tx.chainId.has_value());
     BOOST_CHECK_EQUAL(tx.chainId.value(), 1);
     BOOST_CHECK_EQUAL(tx.nonce, 88852);
@@ -264,7 +264,7 @@ BOOST_AUTO_TEST_CASE(EIP4844Recover)
     Web3Transaction tx{};
     auto e = codec::rlp::decode(bRef, tx);
     BOOST_CHECK(e == nullptr);
-    BOOST_CHECK(tx.type == TransactionType::EIP4844);
+    BOOST_CHECK(tx.type == rpc::TransactionType::EIP4844);
     BOOST_CHECK(tx.chainId.has_value());
     BOOST_CHECK_EQUAL(tx.chainId.value(), 1);
     BOOST_CHECK_EQUAL(tx.nonce, 536312);

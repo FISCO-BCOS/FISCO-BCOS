@@ -88,4 +88,11 @@ task::Task<LedgerConfig::Ptr> tag_invoke(
     ledger::tag_t<getLedgerConfig> /*unused*/, LedgerInterface& ledger);
 
 task::Task<Features> tag_invoke(ledger::tag_t<getFeatures> /*unused*/, LedgerInterface& ledger);
+
+task::Task<protocol::TransactionReceipt::ConstPtr> tag_invoke(
+    ledger::tag_t<getReceipt>, LedgerInterface& ledger, crypto::HashType const& txHash);
+
+task::Task<protocol::TransactionsConstPtr> tag_invoke(
+    ledger::tag_t<getTransactions>, LedgerInterface& ledger, crypto::HashListPtr hashes);
+
 }  // namespace bcos::ledger

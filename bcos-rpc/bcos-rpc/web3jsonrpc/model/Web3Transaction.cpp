@@ -24,11 +24,13 @@
 
 namespace bcos
 {
+namespace rpc
+{
 using codec::rlp::decode;
 using codec::rlp::encode;
 using codec::rlp::header;
 using codec::rlp::length;
-bcos::bytes bcos::Web3Transaction::encode() const
+bcos::bytes Web3Transaction::encode() const
 {
     bcos::bytes out;
     if (type == TransactionType::Legacy)
@@ -83,7 +85,7 @@ bcos::bytes bcos::Web3Transaction::encode() const
     return out;
 }
 
-bcos::crypto::HashType bcos::Web3Transaction::hash() const
+bcos::crypto::HashType Web3Transaction::hash() const
 {
     bcos::bytes encoded{};
     codec::rlp::encode(encoded, *this);
@@ -124,9 +126,11 @@ bcostars::Transaction Web3Transaction::toTarsTransaction() const
 
     return tarsTx;
 }
+}  // namespace rpc
 
 namespace codec::rlp
 {
+using namespace bcos::rpc;
 Header header(const AccessListEntry& entry) noexcept
 {
     auto len = length(entry.storageKeys);
