@@ -212,6 +212,16 @@ public:
         co_await ledger::account::setStorage(m_myAccount, *key, *value);
     }
 
+    task::Task<evmc_bytes32> getTransient(const evmc_bytes32* key)
+    {
+        co_return co_await ledger::account::transientStorage(m_myAccount, *key);
+    }
+
+    task::Task<void> setTransient(const evmc_bytes32* key, const evmc_bytes32* value)
+    {
+        co_await ledger::account::setTransientStorage(m_myAccount, *key, *value);
+    }
+
     task::Task<std::optional<storage::Entry>> code(const evmc_address& address)
     {
         auto executable = co_await getExecutable(m_rollbackableStorage, address);

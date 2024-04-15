@@ -28,7 +28,15 @@
 #include "wedpr-crypto/WedprCrypto.h"
 #include <bcos-utilities/Log.h>
 #include <algorithm>
-
+#if _MSC_VER
+#define ALWAYS_INLINE __forceinline
+#elif __has_attribute(always_inline)
+#define ALWAYS_INLINE __attribute__((always_inline))
+#else
+#define ALWAYS_INLINE
+#endif
+#define CHUNK_SIZE 64
+#define TOTAL_LEN_LEN 8
 
 using namespace std;
 using namespace bcos;
@@ -287,6 +295,35 @@ ETH_REGISTER_PRECOMPILED_PRICER(blake2_compression)
     return rounds;
 }
 
+// ETH_REGISTER_PRECOMPILED(point_evaluation)(bytesConstRef _in)
+//{
+//     static constexpr size_t versioned_hash_size = 32;
+//     static constexpr size_t z_end_bound = 64;
+//     static constexpr size_t y_end_bound = 96;
+//     static constexpr size_t commitment_end_bound = 144;
+//     static constexpr size_t proof_end_bound = 192;
+//
+//     if(_in.size() != 192)
+//         return {false, {}};
+//
+//     auto const versioned_hash = _in.getCroppedData(0, versioned_hash_size);
+//     auto const z = _in.getCroppedData(versioned_hash_size, z_end_bound);
+//     auto const y = _in.getCroppedData(z_end_bound, y_end_bound);
+//     auto const commitment = _in.getCroppedData(y_end_bound, commitment_end_bound);
+//     auto const proof = _in.getCroppedData(commitment_end_bound, proof_end_bound);
+//
+//     if(kzg2VersionedHash(commitment) != versioned_hash)
+//         return {false, {}};
+//
+//     if(!verifyKZGProof(proof, commitment, z, y))
+//         return {false, {}};
+//
+// }
+//
+// ETH_REGISTER_PRECOMPILED_PRICER(point_evaluation)(bytesConstRef _in)
+//{
+//     return 45000;
+// }
 
 }  // namespace
 
@@ -346,6 +383,14 @@ struct blake2b_state
     uint8_t last_node;
 };
 
+// struct buffer_state
+//{
+//     const void* p;
+//     size_t len;
+//     size_t total_len;
+//     bool single_one_delivered;
+//     bool total_len_delivered;
+// };
 // clang-format off
 constexpr uint64_t blake2b_IV[8] =
 {
@@ -522,6 +567,193 @@ pair<bool, bytes> ecRecover(bytesConstRef _in)
     return ret;
 }
 
+// static const uint32_t k[] = {
+//     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
+//     0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe,
+//     0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f,
+//     0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
+//     0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc,
+//     0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b,
+//     0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116,
+//     0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+//     0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7,
+//     0xc67178f2};
+//
+// static void init_buf_state(struct buffer_state* state, const void* input, size_t len) {
+//     state->p = input;
+//     state->len = len;
+//     state->total_len = len;
+//     state->single_one_delivered = false;
+//     state->total_len_delivered = false;
+// }
+//
+// static bool calc_chunk(uint8_t chunk[CHUNK_SIZE], struct buffer_state* state) {
+//     if (state->total_len_delivered) {
+//         return false;
+//     }
+//
+//     if (state->len >= CHUNK_SIZE) {
+//         memcpy(chunk, state->p, CHUNK_SIZE);
+//         state->p += CHUNK_SIZE;
+//         state->len -= CHUNK_SIZE;
+//         return true;
+//     }
+//
+//     size_t space_in_chunk = CHUNK_SIZE - state->len;
+//     if (state->len) {  // avoid adding 0 to nullptr
+//         memcpy(chunk, state->p, state->len);
+//         chunk += state->len;
+//         state->p += state->len;
+//     }
+//     state->len = 0;
+//
+//     /* If we are here, space_in_chunk is one at minimum. */
+//     if (!state->single_one_delivered) {
+//         *chunk++ = 0x80;
+//         space_in_chunk -= 1;
+//         state->single_one_delivered = true;
+//     }
+//
+//     /*
+//      * Now:
+//      * - either there is enough space left for the total length, and we can conclude,
+//      * - or there is too little space left, and we have to pad the rest of this chunk with
+//      zeroes.
+//      * In the latter case, we will conclude at the next invocation of this function.
+//      */
+//     if (space_in_chunk >= TOTAL_LEN_LEN) {
+//         const size_t left = space_in_chunk - TOTAL_LEN_LEN;
+//         size_t len = state->total_len;
+//         int i = 0;
+//         memset(chunk, 0x00, left);
+//         chunk += left;
+//
+//         /* Storing of len * 8 as a big endian 64-bit without overflow. */
+//         chunk[7] = (uint8_t)(len << 3);
+//         len >>= 5;
+//         for (i = 6; i >= 0; i--) {
+//             chunk[i] = (uint8_t)len;
+//             len >>= 8;
+//         }
+//         state->total_len_delivered = true;
+//     } else {
+//         memset(chunk, 0x00, space_in_chunk);
+//     }
+//
+//     return true;
+// }
+//
+// static inline ALWAYS_INLINE void sha_256_implementation(uint32_t h[8], const void* input, size_t
+// len){
+//     struct buffer_state state;
+//     init_buf_state(&state, input, len);
+//
+//     /* 512-bit chunks is what we will operate on. */
+//     uint8_t chunk[CHUNK_SIZE];
+//
+//     while (calc_chunk(chunk, &state)) {
+//         unsigned i = 0, j = 0;
+//
+//         uint32_t ah[8];
+//         /* Initialize working variables to current hash value: */
+//         for (i = 0; i < 8; i++) {
+//             ah[i] = h[i];
+//         }
+//
+//         const uint8_t* p = chunk;
+//
+//         uint32_t w[16];
+//
+//         /* Compression function main loop: */
+//         for (i = 0; i < 4; i++) {
+//             for (j = 0; j < 16; j++) {
+//                 if (i == 0) {
+//                     w[j] = (uint32_t)p[0] << 24 | (uint32_t)p[1] << 16 | (uint32_t)p[2] << 8 |
+//                     (uint32_t)p[3]; p += 4;
+//                 } else {
+//                     /* Extend the first 16 words into the remaining 48 words w[16..63] of the
+//                     message schedule array: */ const uint32_t s0 =
+//                         rotr64(w[(j + 1) & 0xf], 7) ^ rotr64(w[(j + 1) & 0xf], 18) ^ (w[(j + 1) &
+//                         0xf] >> 3);
+//                     const uint32_t s1 =
+//                         rotr64(w[(j + 14) & 0xf], 17) ^ rotr64(w[(j + 14) & 0xf], 19) ^ (w[(j +
+//                         14) & 0xf] >> 10);
+//                     w[j] = w[j] + s0 + w[(j + 9) & 0xf] + s1;
+//                 }
+//                 const uint32_t s1 = rotr64(ah[4], 6) ^ rotr64(ah[4], 11) ^ rotr64(ah[4], 25);
+//                 const uint32_t ch = (ah[4] & ah[5]) ^ (~ah[4] & ah[6]);
+//                 const uint32_t temp1 = ah[7] + s1 + ch + k[i << 4 | j] + w[j];
+//                 const uint32_t s0 = rotr64(ah[0], 2) ^ rotr64(ah[0], 13) ^ rotr64(ah[0], 22);
+//                 const uint32_t maj = (ah[0] & ah[1]) ^ (ah[0] & ah[2]) ^ (ah[1] & ah[2]);
+//                 const uint32_t temp2 = s0 + maj;
+//
+//                 ah[7] = ah[6];
+//                 ah[6] = ah[5];
+//                 ah[5] = ah[4];
+//                 ah[4] = ah[3] + temp1;
+//                 ah[3] = ah[2];
+//                 ah[2] = ah[1];
+//                 ah[1] = ah[0];
+//                 ah[0] = temp1 + temp2;
+//             }
+//         }
+//
+//         /* Add the compressed chunk to the current hash value: */
+//         for (i = 0; i < 8; i++) {
+//             h[i] += ah[i];
+//         }
+//     }
+// }
+//
+// static void sha_256_generic(uint32_t h[8], const void* input, size_t len) {
+// sha_256_implementation(h, input, len); } static void (*sha_256_best)(uint32_t h[8], const void*
+// input, size_t len) = sha_256_generic;
+//
+//
+//
+// void silkworm_sha256(uint8_t hash[32], const uint8_t* input, size_t len, bool
+// use_cpu_extensions){
+//     uint32_t h[] = {0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c,
+//     0x1f83d9ab, 0x5be0cd19};
+//
+//     if (use_cpu_extensions) {
+//         sha_256_best(h, input, len);
+//     } else {
+//         sha_256_generic(h, input, len);
+//     }
+//
+//     /* Produce the final hash value (big-endian): */
+//     for (unsigned i = 0, j = 0; i < 8; i++) {
+//         hash[j++] = (uint8_t)(h[i] >> 24);
+//         hash[j++] = (uint8_t)(h[i] >> 16);
+//         hash[j++] = (uint8_t)(h[i] >> 8);
+//         hash[j++] = (uint8_t)h[i];
+//     }
+// }
+//
+// evmc::bytes32 kzg2VersionedHash(bytesConstRef input){
+//     evmc::bytes32 hash;
+//     silkworm_sha256(hash.bytes, input.data(), input.size(), true);
+//     hash.bytes[0] = bcos::executor::kBlobCommitmentVersionKzg;
+//     return hash;
+// }
+//
+// using G1 = blst_p1;
+// using G2 = blst_p2;
+// using Fr = blst_fr;
+//
+// bool verifyKZGProof(bytesConstRef commitment, bytesConstRef z, bytesConstRef y, bytesConstRef
+// proof){
+//     Fr z_fr, y_fr;
+//     G1 commitment_g1, proof_g1;
+//    return verifyKZGProofImpl(commitment, z, y, proof);
+//
+// }
+//
+// static bool verifyKZGProofImpl(bytesConstRef commitment, bytesConstRef z, bytesConstRef y,
+// bytesConstRef proof){
+//     return true;
+// }
 
 }  // namespace crypto
 
