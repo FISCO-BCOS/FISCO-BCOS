@@ -1,0 +1,90 @@
+name: macOS binary release
+on:
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "Changelog.md"
+      - "README.md"
+    branches:
+      - release-3.*
+      - feature-3.*
+      - master
+    release:
+      types: [ push ]
+  concurrency:
+    group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+    cancel-in-progress: true
+
+jobs:
+  compile_macOS_release:
+    name: upload standard binary of macOS
+    runs-on: macos-13
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 5
+      - name: install rust language
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2024-01-10
+          override: true
+      - name: install macOS dependencies
+        run: brew install ccache libomp gmp
+      - name: git clone 3.7.1
+        run: git clone https://github.com/FISCO-BCOS/FISCO-BCOS.git && cd FISCO-BCOS && git checkout v3.7.1 && git log -1
+      - name: configure
+        run: cd FISCO-BCOS && export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON && make -j2 && make tar
+      - name: tar BcosBuilder
+        run: mv FISCO-BCOS/tools/BcosBuilder . && tar -cvzf BcosBuilder.tgz BcosBuilder
+      - name: tar fisco-bcos for macOS
+        run: mv FISCO-BCOS/fisco-bcos-air/ bin/ && mv FISCO-BCOS/lightnode/fisco-bcos-lightnode/fisco-bcos-lightnode bin/ && cp FISCO-BCOS/tools/BcosAirBuilder/build_chain.sh bin/ && cd bin && strip fisco-bcos && strip fisco-bcos-lightnode && tar -cvzf lightnode.tar.gz fisco-bcos-lightnode && tar -cvzf fisco-bcos.tar.gz fisco-bcos build_chain.sh
+
+      - name: Upload fisco-bcos binaries to release
+        uses: actions/upload-artifact@v4
+        with:
+          name: fisco-bcos-macOS-x86_64.tar.gz
+          path: bin/fisco-bcos.tar.gz
+
+      - name: Upload fisco-bcos-lightnode binaries to release
+        uses: actions/upload-artifact@v4
+        with:
+          name: fisco-bcos-lightnode-macOS-x86_64.tar.gz
+          path: bin/lightnode.tar.gz
+
+      - name: Upload BcosNodeService binaries to release
+        uses: actions/upload-artifact@v4
+        with:
+          name: BcosNodeService-macOS-x86_64.tgz
+          path: FISCO-BCOS/fisco-bcos-tars-service/BcosNodeService.tgz
+
+      - name: Upload BcosRpcService binaries to release
+        uses: actions/upload-artifact@v4
+        with:
+          name: BcosRpcService-macOS-x86_64.tgz
+          path: FISCO-BCOS/fisco-bcos-tars-service/BcosRpcService.tgz
+
+
+      - name: Upload BcosGatewayService binaries to release
+        uses: actions/upload-artifact@v4
+        with:
+          name: BcosGatewayService-macOS-x86_64.tgz
+          path: FISCO-BCOS/fisco-bcos-tars-service/BcosGatewayService.tgz
+
+      - name: Upload BcosMaxNodeService binaries to release
+        uses: actions/upload-artifact@v4
+        with:
+          name: BcosMaxNodeService-macOS-x86_64.tgz
+          path: FISCO-BCOS/fisco-bcos-tars-service/BcosMaxNodeService.tgz
+
+      - name: Upload BcosExecutorService binaries to release
+        uses: actions/upload-artifact@v4
+        with:
+          name: BcosExecutorService-macOS-x86_64.tgz
+          path: FISCO-BCOS/fisco-bcos-tars-service/BcosExecutorService.tgz
+
+      - name: Upload BcosBuilder
+        uses: actions/upload-artifact@v4
+        with:
+          name: BcosBuilder.tgz
+          path: BcosBuilder.tgz
