@@ -407,6 +407,16 @@ void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message::P
             return;
         }
 
+        if (message->packetType() == gateway::AMOPMessageType)
+        {
+            // AMOP May be disable by config.ini
+            SERVICE_LOG(DEBUG) << LOG_DESC("Unrecognized message type")
+                               << LOG_DESC(": AMOP is disabled!") << LOG_KV("seq", message->seq())
+                               << LOG_KV("packetType", packetType) << LOG_KV("ext", ext)
+                               << LOG_KV("version", version)
+                               << LOG_KV("dst p2p", p2pMessage->dstP2PNodeID());
+            return;
+        }
         SERVICE_LOG(ERROR) << LOG_DESC("Unrecognized message type") << LOG_KV("seq", message->seq())
                            << LOG_KV("packetType", packetType) << LOG_KV("ext", ext)
                            << LOG_KV("version", version)
