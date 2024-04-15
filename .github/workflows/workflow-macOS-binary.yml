@@ -1,19 +1,21 @@
 name: macOS binary release
 on:
+  push:
+    paths-ignore:
+      - "docs/**"
+      - "Changelog.md"
+      - "README.md"
   pull_request:
     paths-ignore:
       - "docs/**"
       - "Changelog.md"
       - "README.md"
-    branches:
-      - release-3.*
-      - feature-3.*
-      - master
-    release:
-      types: [ push ]
-  concurrency:
-    group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-    cancel-in-progress: true
+  release:
+    types: [ push ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   compile_macOS_release:
