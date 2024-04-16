@@ -19,7 +19,7 @@ concurrency:
 jobs:
   compile_macOS_release:
     name: upload standard binary of macOS
-    runs-on: macos-13
+    runs-on: self-hosted-mac
 
     steps:
       - uses: actions/checkout@v3
