@@ -34,8 +34,8 @@ jobs:
         run: brew install ccache libomp gmp
       - name: check tag v3.7.1
         run: git clone https://github.com/FISCO-BCOS/FISCO-BCOS.git && cd FISCO-BCOS && git checkout v3.7.1
-      - name: check git log
-        run: cd FISCO-BCOS && git log -1
+      - name: update vcpkg to latest
+        run: cd FISCO-BCOS/vcpkg && git checkout master && git pull && ./bootstrap-vcpkg.sh
       - name: configure
         run: cd FISCO-BCOS && export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON
       - name: compile
