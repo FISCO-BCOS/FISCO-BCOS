@@ -175,6 +175,10 @@
       "version": "1.80.0"
     },
     {
+      "name": "boost-asio",
+      "version": "1.79.0"
+    },
+    {
       "name": "boost-property-map",
       "version": "1.83.0"
     },
