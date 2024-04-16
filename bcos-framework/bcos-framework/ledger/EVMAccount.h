@@ -105,9 +105,32 @@ private:
     friend task::Task<std::optional<storage::Entry>> tag_invoke(
         tag_t<abi> /*unused*/, EVMAccount& account)
     {
-        co_return co_await storage2::readOne(account.m_storage,
-            transaction_executor::StateKeyView{
-                concepts::bytebuffer::toView(account.m_tableName), ACCOUNT_TABLE_FIELDS::ABI});
+        // 先通过code hash从s_contract_abi找代码
+        // Start by using the code hash to find the code from the s_contract_abi
+        if (auto codeHashEntry = co_await storage2::readOne(
+                account.m_storage, transaction_executor::StateKeyView{
+                                       concepts::bytebuffer::toView(account.m_tableName),
+                                       ACCOUNT_TABLE_FIELDS::CODE_HASH}))
+        {
+            if (auto abiEntry = co_await storage2::readOne(
+                    account.m_storage, transaction_executor::StateKeyView{
+                                           ledger::SYS_CONTRACT_ABI, codeHashEntry->get()}))
+            {
+                co_return abiEntry;
+            }
+        }
+
+        // 在s_code_binary里没找到，可能是老版本部署的合约或internal
+        // precompiled，代码在合约表的code字段里
+        // I can't find it in the s_code_binary, it may be a contract deployed in the old version or
+        // internal precompiled, and the code is in the code field of the contract table
+        if (auto abiEntry = co_await storage2::readOne(account.m_storage,
+                transaction_executor::StateKeyView{
+                    concepts::bytebuffer::toView(account.m_tableName), ACCOUNT_TABLE_FIELDS::ABI}))
+        {
+            co_return abiEntry;
+        }
+        co_return std::optional<storage::Entry>{};
     }
 
     friend task::Task<u256> tag_invoke(tag_t<balance> /*unused*/, EVMAccount& account)
