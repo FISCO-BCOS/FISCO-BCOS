@@ -19,23 +19,26 @@ concurrency:
 jobs:
   compile_macOS_release:
     name: upload standard binary of macOS
-    runs-on: self-hosted-mac
+    runs-on: macos-13
 
     steps:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 5
+
       - name: install rust language
         uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2024-01-10
           override: true
+
       - name: install macOS dependencies
         run: brew install ccache libomp gmp
+
       - name: check tag v3.7.1
         run: git clone https://github.com/FISCO-BCOS/FISCO-BCOS.git && cd FISCO-BCOS && git checkout -b 371 origin/release-3.7.1
       - name: update vcpkg to latest
-        run: cd FISCO-BCOS/vcpkg && git fetch origin master && git pull && ls
+        run: cd FISCO-BCOS/vcpkg && git fetch origin master && git pull && bash bootstrap-vcpkg.sh
       - name: configure
         run: cd FISCO-BCOS && export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON
       - name: compile
