@@ -176,30 +176,10 @@ const uint8_t MIN_MAJOR_VERSION = 3;
     return flag;
 }
 
-constexpr auto operator<=>(std::variant<uint32_t, BlockVersion> const& _v1, BlockVersion const& _v2)
+constexpr auto operator<=>(BlockVersion lhs, auto rhs)
+    requires std::same_as<decltype(rhs), BlockVersion> || std::same_as<decltype(rhs), uint32_t>
 {
-    auto flag = std::strong_ordering::equal;
-    std::visit(
-        [&_v2, &flag](auto&& arg) {
-            auto ver1 = static_cast<uint32_t>(arg);
-            auto ver2 = static_cast<uint32_t>(_v2);
-            flag = (ver1 <=> ver2);
-        },
-        _v1);
-    return flag;
-}
-
-constexpr bool operator>=(std::variant<uint32_t, BlockVersion> const& _v1, BlockVersion const& _v2)
-{
-    auto flag = false;
-    std::visit(
-        [&_v2, &flag](auto&& arg) {
-            auto ver1 = static_cast<uint32_t>(arg);
-            auto ver2 = static_cast<uint32_t>(_v2);
-            flag = (ver1 >= ver2);
-        },
-        _v1);
-    return flag;
+    return static_cast<uint32_t>(lhs) <=> static_cast<uint32_t>(rhs);
 }
 
 inline std::ostream& operator<<(std::ostream& out, bcos::protocol::BlockVersion version)
