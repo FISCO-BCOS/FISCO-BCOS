@@ -316,15 +316,24 @@ static bcos::task::Task<std::tuple<std::string, bcos::protocol::BlockNumber>>
 getSystemConfigOrDefault(
     bcos::ledger::LedgerInterface& ledger, std::string_view key, std::string defaultValue)
 {
-    auto config = co_await bcos::ledger::getSystemConfig(ledger, key);
-    if (!config)
+    try
+    {
+        auto config = co_await bcos::ledger::getSystemConfig(ledger, key);
+        if (!config)
+        {
+            LEDGER2_LOG(DEBUG) << "Get " << key << " failed, use default value"
+                               << LOG_KV("defaultValue", defaultValue);
+            co_return std::tuple<std::string, bcos::protocol::BlockNumber>{defaultValue, 0};
+        }
+        auto [value, blockNumber] = *config;
+        co_return std::tuple<std::string, bcos::protocol::BlockNumber>{value, blockNumber};
+    }
+    catch (std::exception& e)
     {
         LEDGER2_LOG(DEBUG) << "Get " << key << " failed, use default value"
                            << LOG_KV("defaultValue", defaultValue);
         co_return std::tuple<std::string, bcos::protocol::BlockNumber>{defaultValue, 0};
     }
-    auto [value, blockNumber] = *config;
-    co_return std::tuple<std::string, bcos::protocol::BlockNumber>{value, blockNumber};
 }
 
 static bcos::task::Task<std::tuple<int64_t, bcos::protocol::BlockNumber>> getSystemConfigOrDefault(
@@ -362,7 +371,7 @@ bcos::task::Task<bcos::ledger::LedgerConfig::Ptr> bcos::ledger::tag_invoke(
         ledgerConfig->setCompatibilityVersion(tool::toVersionNumber(std::get<0>(*versionConfig)));
     }
     ledgerConfig->setGasPrice(
-        co_await getSystemConfigOrDefault(ledger, SYSTEM_KEY_TX_GAS_PRICE, std::string("0x0")));
+        co_await getSystemConfigOrDefault(ledger, SYSTEM_KEY_TX_GAS_PRICE, "0x0"));
 
     auto blockNumber = co_await getCurrentBlockNumber(ledger);
     ledgerConfig->setBlockNumber(blockNumber);
@@ -398,16 +407,23 @@ bcos::task::Task<bcos::ledger::Features> bcos::ledger::tag_invoke(
     Features features;
     for (auto key : bcos::ledger::Features::featureKeys())
     {
-        auto value = co_await getSystemConfig(ledger, key);
-        if (!value)
+        try
+        {
+            auto value = co_await getSystemConfig(ledger, key);
+            if (!value)
+            {
+                LEDGER2_LOG(DEBUG) << "Not found system config: " << key;
+                continue;
+            }
+
+            if (blockNumber + 1 >= std::get<1>(*value))
+            {
+                features.set(key);
+            }
+        }
+        catch (std::exception& e)
         {
             LEDGER2_LOG(DEBUG) << "Not found system config: " << key;
-            continue;
-        }
-
-        if (blockNumber + 1 >= std::get<1>(*value))
-        {
-            features.set(key);
         }
     }
 
