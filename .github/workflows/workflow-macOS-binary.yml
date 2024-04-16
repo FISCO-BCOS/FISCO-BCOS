@@ -1,4 +1,4 @@
-name: macOS binary release
+name: macOS-13 CI check
 on:
   push:
     paths-ignore:
@@ -12,7 +12,6 @@ on:
       - "README.md"
   release:
     types: [ push ]
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -33,20 +32,18 @@ jobs:
           override: true
       - name: install macOS dependencies
         run: brew install ccache libomp gmp
-      - name: git clone 3.7.1
+      - name: check tag v3.7.1
         run: git clone https://github.com/FISCO-BCOS/FISCO-BCOS.git && cd FISCO-BCOS && git checkout v3.7.1
+      - name: check git log
+        run: cd FISCO-BCOS && git log -1
       - name: configure
-        run: |
-          cd FISCO-BCOS 
-          export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON .. || cat *.log
+        run: cd FISCO-BCOS && export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON
       - name: compile
         run: cd FISCO-BCOS && make -j2 && make tar
-
       - name: tar BcosBuilder
         run: cd FISCO-BCOS && mv tools/BcosBuilder . && tar -cvzf BcosBuilder.tgz BcosBuilder
       - name: tar fisco-bcos for macOS
         run: cd FISCO-BCOS && mv fisco-bcos-air/ bin/ && mv lightnode/fisco-bcos-lightnode/fisco-bcos-lightnode bin/ && cp tools/BcosAirBuilder/build_chain.sh bin/ && cd bin && strip fisco-bcos && strip fisco-bcos-lightnode && tar -cvzf lightnode.tar.gz fisco-bcos-lightnode && tar -cvzf fisco-bcos.tar.gz fisco-bcos build_chain.sh
-
       - name: Upload fisco-bcos binaries to release
         uses: actions/upload-artifact@v4
         with:
