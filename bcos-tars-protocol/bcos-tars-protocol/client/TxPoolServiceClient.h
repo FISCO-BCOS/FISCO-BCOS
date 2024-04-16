@@ -117,7 +117,7 @@ public:
                 m_error = toBcosError(ret);
                 m_handle.resume();
             }
-            void callback_submit_exception(tars::Int32 ret) override
+            void callback_broadcastPushTransaction_exception(tars::Int32 ret) override
             {
                 m_error = toBcosError(ret);
                 m_handle.resume();
