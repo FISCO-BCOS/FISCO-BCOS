@@ -63,8 +63,6 @@ private:
     bool recursiveBuildDir(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         const std::string& _absoluteDir);
     std::set<std::string> BfsTypeSet;
-    void buildSysSubs(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        std::variant<uint32_t, protocol::BlockVersion> toVersion) const;
 
 protected:
     void makeDirImpl(const std::string& _absolutePath,
