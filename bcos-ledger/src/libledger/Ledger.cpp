@@ -1028,8 +1028,8 @@ void Ledger::asyncGetSystemConfigByKey(const std::string_view& _key,
                     if (!entry)
                     {
                         LEDGER_LOG(DEBUG) << "asyncGetSystemTableEntry: entry doesn't exists";
-                        callback(
-                            BCOS_ERROR_PTR(-1, "asyncGetSystemTableEntry failed for empty entry"),
+                        callback(BCOS_ERROR_PTR(LedgerError::EmptyEntry,
+                                     "asyncGetSystemTableEntry failed for empty entry"),
                             "", -1);
                         return;
                     }
