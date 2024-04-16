@@ -19,6 +19,7 @@
  */
 
 #pragma once
+#include <bcos-framework/protocol/Block.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
@@ -26,7 +27,33 @@
 
 namespace bcos::rpc
 {
-class BlockResponse
+[[maybe_unused]] static void combineBlockResponse(
+    Json::Value& result, bcos::protocol::Block::Ptr&& block, bool fullTxs = false)
 {
-};
+    result["number"] = toQuantity(block->blockHeader()->number());
+    result["hash"] = block->blockHeader()->hash().hexPrefixed();
+    for (const auto& info : block->blockHeader()->parentInfo())
+    {
+        result["parentHash"] = info.blockHash.hexPrefixed();
+    }
+    result["nonce"] = "0x0000000000000000";
+    // result["sha3Uncles"] = "0x";
+    // result["logsBloom"] = "0x";
+    result["transactionsRoot"] = block->blockHeader()->txsRoot().hexPrefixed();
+    result["stateRoot"] = block->blockHeader()->stateRoot().hexPrefixed();
+    result["receiptsRoot"] = block->blockHeader()->receiptsRoot().hexPrefixed();
+    result["miner"] = Address().hexPrefixed();
+    result["difficulty"] = "0x0";
+    result["totalDifficulty"] = "0x0";
+    result["extraData"] = toHexStringWithPrefix(block->blockHeader()->extraData());
+    result["size"] = "0xffff";
+    result["gasLimit"] = toQuantity(3000000000ull);
+    result["gasUsed"] = toQuantity((uint64_t)block->blockHeader()->gasUsed());
+    result["timestamp"] = toQuantity(block->blockHeader()->timestamp());
+    // if (fullTxs)
+    // {
+    //     result["transactions"] = Json::Value(Json::arrayValue);
+    // }
+    result["uncles"] = Json::Value(Json::arrayValue);
+}
 }  // namespace bcos::rpc

@@ -27,8 +27,10 @@
 #include <bcos-rpc/Common.h>
 #include <bcos-rpc/web3jsonrpc/Web3JsonRpcImpl.h>
 #include <bcos-rpc/web3jsonrpc/endpoints/EthMethods.h>
+#include <bcos-rpc/web3jsonrpc/model/BlockResponse.h>
 #include <bcos-rpc/web3jsonrpc/model/CallRequest.h>
 #include <bcos-rpc/web3jsonrpc/model/ReceiptResponse.h>
+#include <bcos-rpc/web3jsonrpc/model/TransactionResponse.h>
 #include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
@@ -38,12 +40,14 @@ using namespace bcos::rpc;
 
 task::Task<void> EthEndpoint::protocolVersion(const Json::Value&, Json::Value&)
 {
+    // TODO: impl this
     BOOST_THROW_EXCEPTION(
         JsonRpcException(MethodNotFound, "This API has not been implemented yet!"));
     co_return;
 }
 task::Task<void> EthEndpoint::syncing(const Json::Value&, Json::Value& response)
 {
+    // TODO: impl this
     Json::Value result = false;
     buildJsonContent(result, response);
     co_return;
@@ -56,7 +60,6 @@ task::Task<void> EthEndpoint::coinbase(const Json::Value&, Json::Value&)
 }
 task::Task<void> EthEndpoint::chainId(const Json::Value&, Json::Value& response)
 {
-    // TODO: get chain id
     Json::Value result = "0x4ee8";  // 20200
     buildJsonContent(result, response);
     co_return;
@@ -103,6 +106,8 @@ task::Task<void> EthEndpoint::getBalance(const Json::Value& request, Json::Value
     // params: address(DATA), blockNumber(QTY|TAG)
     // result: balance(QTY)
     // TODO: get balance from ledger
+    Json::Value result = "0xfffffffffffffff";
+    buildJsonContent(result, response);
     co_return;
 }
 task::Task<void> EthEndpoint::getStorageAt(const Json::Value&, Json::Value&)
@@ -118,6 +123,18 @@ task::Task<void> EthEndpoint::getTransactionCount(const Json::Value& request, Js
     // params: address(DATA), blockNumber(QTY|TAG)
     // result: nonce(QTY)
     // TODO: impliment getTransactionCount
+    static thread_local std::mt19937 generator(std::random_device{}());
+    std::uniform_int_distribution<int> dis(0, 255);
+    std::array<bcos::byte, 16> randomFixedBytes;
+    for (auto& element : randomFixedBytes)
+    {
+        element = dis(generator);
+    }
+
+    uint16_t* firstNum = (uint16_t*)randomFixedBytes.data();
+    // uint64_t* lastNum = (uint64_t*)(randomFixedBytes.data() + sizeof(uint64_t));
+    Json::Value result = toQuantity(*firstNum);
+    buildJsonContent(result, response);
     co_return;
 }
 task::Task<void> EthEndpoint::getBlockTxCountByHash(
@@ -214,17 +231,26 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
 
     auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
         [m_tx = std::move(tarsTx)]() mutable { return &m_tx; });
+    // for web3.eth.sendRawTransaction, return the hash of raw transaction
+    auto web3TxHash = bcos::crypto::keccak256Hash(bcos::ref(rawTxBytes));
+    tx->mutableInner().dataHash.assign(web3TxHash.begin(), web3TxHash.end());
 
     if (c_fileLogLevel == TRACE)
     {
-        RPC_IMPL_LOG(TRACE) << LOG_DESC("sendRawTransaction") << web3Tx.toString();
+        WEB3_LOG(TRACE) << LOG_DESC("sendRawTransaction") << web3Tx.toString();
     }
     txpool->broadcastTransaction(*tx);
     auto const txResult = co_await txpool->submitTransactionWithoutReceipt(std::move(tx));
     crypto::HashType hash{};
     if (txResult->status() == 0)
     {
-        hash = tx->hash();
+        hash = std::move(web3TxHash);
+    }
+    if (c_fileLogLevel == TRACE)
+    {
+        WEB3_LOG(TRACE) << LOG_DESC("sendRawTransaction finished")
+                        << LOG_KV("status", txResult->status())
+                        << LOG_KV("hash", hash.hexPrefixed());
     }
     Json::Value result = hash.hexPrefixed();
     buildJsonContent(result, response);
@@ -247,7 +273,7 @@ task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& resp
     }
     if (c_fileLogLevel == TRACE)
     {
-        RPC_IMPL_LOG(TRACE) << LOG_DESC("eth_call") << call;
+        WEB3_LOG(TRACE) << LOG_DESC("eth_call") << call;
     }
     auto&& tx = call.takeToTransaction(m_nodeService->blockFactory()->transactionFactory());
     // TODO: ignore params blockNumber here, use it after historical data is available
@@ -284,16 +310,16 @@ task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& resp
     };
     auto const result = co_await Awaitable{.m_scheduler = *scheduler, .m_tx = std::move(tx)};
 
-    Json::Value jsonResult;
     auto output = toHexStringWithPrefix(result->output());
     if (result->status() == static_cast<int32_t>(protocol::TransactionStatus::None))
     {
-        jsonResult = std::move(output);
+        response["jsonrpc"] = "2.0";
+        response["result"] = std::move(output);
     }
     else
     {
         // https://docs.infura.io/api/networks/ethereum/json-rpc-methods/eth_call#returns
-        jsonResult = Json::objectValue;
+        Json::Value jsonResult = Json::objectValue;
         jsonResult["code"] = result->status();
         jsonResult["message"] = result->message();
         jsonResult["data"] = std::move(output);
@@ -310,44 +336,105 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
     buildJsonContent(result, response);
     co_return;
 }
-task::Task<void> EthEndpoint::getBlockByHash(const Json::Value&, Json::Value&)
+task::Task<void> EthEndpoint::getBlockByHash(const Json::Value& request, Json::Value& response)
 {
     // params: blockHash(DATA), fullTransaction(Boolean)
     // result: block(BLOCK)
-    BOOST_THROW_EXCEPTION(
-        JsonRpcException(MethodNotFound, "This API has not been implemented yet!"));
+    auto blockHash = toView(request[0u]);
+    auto fullTransaction = request[1u].asBool();
+    auto const ledger = m_nodeService->ledger();
+    auto number = co_await ledger::getBlockNumber(
+        *ledger, crypto::HashType(blockHash, crypto::HashType::FromHex));
+    auto block = co_await ledger::getBlockData(*ledger, number, bcos::ledger::FULL_BLOCK);
+    Json::Value result = Json::objectValue;
+    combineBlockResponse(result, std::move(block), fullTransaction);
+    buildJsonContent(result, response);
     co_return;
 }
-task::Task<void> EthEndpoint::getBlockByNumber(const Json::Value&, Json::Value&)
+task::Task<void> EthEndpoint::getBlockByNumber(const Json::Value& request, Json::Value& response)
 {
     // params: blockNumber(QTY|TAG), fullTransaction(Boolean)
     // result: block(BLOCK)
-    BOOST_THROW_EXCEPTION(
-        JsonRpcException(MethodNotFound, "This API has not been implemented yet!"));
+    auto blockTag = toView(request[0u]);
+    auto fullTransaction = request[1u].asBool();
+    auto [blockNumber, _] = co_await getBlockNumberByTag(blockTag);
+    auto const ledger = m_nodeService->ledger();
+    auto block = co_await ledger::getBlockData(*ledger, blockNumber, bcos::ledger::FULL_BLOCK);
+    Json::Value result = Json::objectValue;
+    combineBlockResponse(result, std::move(block), fullTransaction);
+    buildJsonContent(result, response);
     co_return;
 }
-task::Task<void> EthEndpoint::getTransactionByHash(const Json::Value&, Json::Value&)
+task::Task<void> EthEndpoint::getTransactionByHash(
+    const Json::Value& request, Json::Value& response)
 {
     // params: transactionHash(DATA)
     // result: transaction(TX)
-    BOOST_THROW_EXCEPTION(
-        JsonRpcException(MethodNotFound, "This API has not been implemented yet!"));
+    auto txHash = toView(request[0u]);
+    auto hash = crypto::HashType(txHash, crypto::HashType::FromHex);
+    auto hashList = std::make_shared<crypto::HashList>();
+    hashList->push_back(hash);
+    auto const ledger = m_nodeService->ledger();
+    auto txs = co_await ledger::getTransactions(*ledger, std::move(hashList));
+    auto receipt = co_await ledger::getReceipt(*ledger, hash);
+    if (!receipt || !txs || txs->empty())
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(InvalidParams, "Invalid transaction hash: " + hash.hexPrefixed()));
+    }
+    auto block = co_await ledger::getBlockData(
+        *ledger, receipt->blockNumber(), bcos::ledger::HEADER | bcos::ledger::TRANSACTIONS_HASH);
+    Json::Value result = Json::objectValue;
+    combineTxResponse(result, txs->at(0), std::move(receipt), std::move(block));
+    buildJsonContent(result, response);
     co_return;
 }
-task::Task<void> EthEndpoint::getTransactionByBlockHashAndIndex(const Json::Value&, Json::Value&)
+task::Task<void> EthEndpoint::getTransactionByBlockHashAndIndex(
+    const Json::Value& request, Json::Value& response)
 {
     // params: blockHash(DATA), transactionIndex(QTY)
     // result: transaction(TX)
-    BOOST_THROW_EXCEPTION(
-        JsonRpcException(MethodNotFound, "This API has not been implemented yet!"));
+    // auto blockHash = toView(request[0u]);
+    // auto transactionIndex = fromQuantity(std::string(toView(request[1u])));
+    // auto hash = crypto::HashType(blockHash, crypto::HashType::FromHex);
+    // auto const ledger = m_nodeService->ledger();
+    // auto number = co_await ledger::getBlockNumber(*ledger, hash);
+    // if (number <= 0) [[unlikely]]
+    // {
+    //     BOOST_THROW_EXCEPTION(
+    //         JsonRpcException(InvalidParams, "Invalid block hash: " + hash.hexPrefixed()));
+    // }
+    // auto block = co_await ledger::getBlockData(
+    //     *ledger, number, bcos::ledger::TRANSACTIONS | bcos::ledger::HEADER);
+    // if (!block || transactionIndex >= block->transactionsSize()) [[unlikely]]
+    // {
+    //     BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid transaction index!"));
+    // }
+    // auto tx = block->transaction(transactionIndex);
+    // Json::Value result = Json::objectValue;
+    // combineTxResponse(result, std::move(tx), nullptr, std::move(block));
+    // buildJsonContent(result, response);
     co_return;
 }
-task::Task<void> EthEndpoint::getTransactionByBlockNumberAndIndex(const Json::Value&, Json::Value&)
+task::Task<void> EthEndpoint::getTransactionByBlockNumberAndIndex(
+    const Json::Value& request, Json::Value& response)
 {
     // params: blockNumber(QTY|TAG), transactionIndex(QTY)
     // result: transaction(TX)
-    BOOST_THROW_EXCEPTION(
-        JsonRpcException(MethodNotFound, "This API has not been implemented yet!"));
+    // auto blockTag = toView(request[0u]);
+    // auto transactionIndex = fromQuantity(std::string(toView(request[1u])));
+    // auto [blockNumber, _] = co_await getBlockNumberByTag(blockTag);
+    // auto const ledger = m_nodeService->ledger();
+    // auto block = co_await ledger::getBlockData(
+    //     *ledger, blockNumber, bcos::ledger::TRANSACTIONS | bcos::ledger::HEADER);
+    // if (!block || transactionIndex >= block->transactionsSize()) [[unlikely]]
+    // {
+    //     BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid transaction index!"));
+    // }
+    // auto tx = block->transaction(transactionIndex);
+    // Json::Value result = Json::objectValue;
+    // combineTxResponse(result, std::move(tx), nullptr, std::move(block));
+    // buildJsonContent(result, response);
     co_return;
 }
 task::Task<void> EthEndpoint::getTransactionReceipt(
@@ -359,22 +446,18 @@ task::Task<void> EthEndpoint::getTransactionReceipt(
     auto hash = crypto::HashType(hashStr, crypto::HashType::FromHex);
     auto const ledger = m_nodeService->ledger();
     auto receipt = co_await ledger::getReceipt(*ledger, hash);
-    auto receiptResponse = ReceiptResponse(std::move(receipt));
     auto hashList = std::make_shared<crypto::HashList>();
     hashList->push_back(hash);
     auto txs = co_await ledger::getTransactions(*ledger, std::move(hashList));
-    if (txs->size() == 1)
+    if (!receipt || !txs || txs->empty())
     {
-        receiptResponse.updateTxInfo(*txs->at(0));
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(InvalidParams, "Invalid transaction hash: " + hash.hexPrefixed()));
     }
-    auto block = co_await ledger::getBlockData(*ledger, receiptResponse.blockNumber,
-        bcos::ledger::HEADER & bcos::ledger::TRANSACTIONS_HASH);
-    if (block) [[likely]]
-    {
-        receiptResponse.updateBlockInfo(*block);
-    }
+    auto block = co_await ledger::getBlockData(
+        *ledger, receipt->blockNumber(), bcos::ledger::HEADER | bcos::ledger::TRANSACTIONS_HASH);
     Json::Value result = Json::objectValue;
-    receiptResponse.toJson(result);
+    combineReceiptResponse(result, std::move(receipt), txs->at(0), std::move(block));
     buildJsonContent(result, response);
     co_return;
 }

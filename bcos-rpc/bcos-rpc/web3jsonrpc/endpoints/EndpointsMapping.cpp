@@ -44,9 +44,9 @@ void EndpointsMapping::addHandlers()
     addWeb3Handlers();
     for (auto& [method, _] : m_handlers)
     {
-        RPC_IMPL_LOG(INFO) << LOG_BADGE("initHandler") << LOG_KV("method", method);
+        WEB3_LOG(INFO) << LOG_BADGE("initHandler") << LOG_KV("method", method);
     }
-    RPC_IMPL_LOG(INFO) << LOG_BADGE("initHandler") << LOG_KV("size", m_handlers.size());
+    WEB3_LOG(INFO) << LOG_BADGE("initHandler") << LOG_KV("size", m_handlers.size());
 }
 
 void EndpointsMapping::addEthHandlers()

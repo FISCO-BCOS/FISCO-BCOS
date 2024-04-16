@@ -25,6 +25,7 @@
 #include <exception>
 
 #define RPC_IMPL_LOG(LEVEL) BCOS_LOG(LEVEL) << "[RPC][JSONRPC]"
+#define WEB3_LOG(LEVEL) BCOS_LOG(LEVEL) << "[RPC][WEB3]"
 
 namespace bcos
 {

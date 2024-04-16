@@ -35,6 +35,7 @@
 namespace bcos
 {
 template <class Binary, class Out = std::string>
+    requires RANGES::range<Binary> && RANGES::sized_range<Binary>
 Out toHex(const Binary& binary, std::string_view prefix = std::string_view())
 {
     Out out;
@@ -49,6 +50,14 @@ Out toHex(const Binary& binary, std::string_view prefix = std::string_view())
     return out;
 }
 
+template <class Out = std::string>
+Out toHex(std::unsigned_integral auto number, std::string_view prefix = std::string_view())
+{
+    std::basic_string<byte> bytes(8, '\0');
+    boost::endian::store_big_u64(bytes.data(), number);
+    return toHex(bytes, prefix);
+}
+
 template <class T>
 concept Binary = RANGES::contiguous_range<T>;
 static std::string toQuantity(const Binary auto& binary)
@@ -59,7 +68,7 @@ static std::string toQuantity(const Binary auto& binary)
     }
     auto&& hex = toHex(binary);
     auto it = hex.begin();
-    while (it != hex.end())
+    while ((it + 1) != hex.end())
     {
         if (*it != '0')
         {

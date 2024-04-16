@@ -27,7 +27,8 @@
 
 namespace bcos
 {
-inline void toChecksumAddress(std::string& _addr, const std::string_view& addressHashHex)
+inline void toChecksumAddress(
+    std::string& _addr, const std::string_view& addressHashHex, std::string_view prefix = "")
 {
     auto convertHexCharToInt = [](char byte) {
         int ret = 0;
@@ -45,7 +46,7 @@ inline void toChecksumAddress(std::string& _addr, const std::string_view& addres
         }
         return ret;
     };
-    for (size_t i = 0; i < _addr.size(); ++i)
+    for (size_t i = prefix.size(); i < _addr.size(); ++i)
     {
         if (isdigit(_addr[i]))
         {
