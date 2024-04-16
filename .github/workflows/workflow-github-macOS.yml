@@ -25,6 +25,7 @@ jobs:
       - uses: actions/checkout@v3
         with:
           clean: false
+
       - name: Set up JDK 1.8
         uses: actions/setup-java@v3
         with:
@@ -41,26 +42,76 @@ jobs:
       - name: install macOS dependencies
         run: brew install ccache libomp gmp
 
+      - name: check tag v3.7.1
+        run: git clone https://github.com/FISCO-BCOS/FISCO-BCOS.git && cd FISCO-BCOS && git checkout v3.7.1
+
+      - name: check git log
+        run: cd FISCO-BCOS && git log -1
+
       - name: configure
-        run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && mkdir build && cd build && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON .. || cat *.log
+        run: cd FISCO-BCOS && export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON
 
       - name: compile
-        run: cd build && make -j2
+        run: cd FISCO-BCOS && make -j2 && make tar
 
-      - name: Test
-        run: |
-          cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
+      - name: tar BcosBuilder
+        run: cd FISCO-BCOS && mv tools/BcosBuilder . && tar -cvzf BcosBuilder.tgz BcosBuilder
 
-      - name: prepare RPCAPI Tests
-        run: cd tools && bash .ci/rpcapi_ci_prepare.sh
+      - name: tar fisco-bcos for macOS
+        run: cd FISCO-BCOS && mv fisco-bcos-air/ bin/ && mv lightnode/fisco-bcos-lightnode/fisco-bcos-lightnode bin/ && cp tools/BcosAirBuilder/build_chain.sh bin/ && cd bin && strip fisco-bcos && strip fisco-bcos-lightnode && tar -cvzf lightnode.tar.gz fisco-bcos-lightnode && tar -cvzf fisco-bcos.tar.gz fisco-bcos build_chain.sh
 
-      - name: FISCO BCOS RpcApiTest
-        uses: matt-ball/newman-action@v1.0.4
+      - name: Upload fisco-bcos binaries to release
+        uses: actions/upload-artifact@v4
         with:
-          collection: https://raw.githubusercontent.com/FISCO-BCOS/FISCOBCOS-RPC-API/main/fiscobcos.rpcapi.collection.json
+          name: fisco-bcos-macOS-x86_64.tar.gz
+          path: FISCO-BCOS/bin/fisco-bcos.tar.gz
 
-      - name: Integration test - Air
-        run: cd tools && bash .ci/ci_check_air.sh ${{ github.base_ref }}
+      - name: Upload fisco-bcos-lightnode binaries to release
+        uses: actions/upload-artifact@v4
+        with:
+          name: fisco-bcos-lightnode-macOS-x86_64.tar.gz
+          path: FISCO-BCOS/bin/lightnode.tar.gz
 
-      - name: Integration test - Pro
-        run: cd tools && bash .ci/ci_check_pro.sh ${{ github.base_ref }}
+      - name: Upload BcosNodeService binaries to release
+        uses: actions/upload-artifact@v4
+        with:
+          name: BcosNodeService-macOS-x86_64.tgz
+          path: FISCO-BCOS/fisco-bcos-tars-service/BcosNodeService.tgz
+
+      - name: Upload BcosRpcService binaries to release
+        uses: actions/upload-artifact@v4
+        with:
+          name: BcosRpcService-macOS-x86_64.tgz
+          path: FISCO-BCOS/fisco-bcos-tars-service/BcosRpcService.tgz
+
+      - name: Upload BcosGatewayService binaries to release
+        uses: actions/upload-artifact@v4
+        with:
+          name: BcosGatewayService-macOS-x86_64.tgz
+          path: FISCO-BCOS/fisco-bcos-tars-service/BcosGatewayService.tgz
+
+      - name: Upload BcosMaxNodeService binaries to release
+        uses: actions/upload-artifact@v4
+        with:
+          name: BcosMaxNodeService-macOS-x86_64.tgz
+          path: FISCO-BCOS/fisco-bcos-tars-service/BcosMaxNodeService.tgz
+
+      - name: Upload BcosExecutorService binaries to release
+        uses: actions/upload-artifact@v4
+        with:
+          name: BcosExecutorService-macOS-x86_64.tgz
+          path: FISCO-BCOS/fisco-bcos-tars-service/BcosExecutorService.tgz
+
+
+      - name: Upload build_chain.sh
+        uses: actions/upload-artifact@v4
+        with:
+          name: build_chain.sh
+          path: FISCO-BCOS/tools/BcosAirBuilder/build_chain.sh
+
+
+      - name: Upload BcosBuilder
+        uses: actions/upload-artifact@v4
+        with:
+          name: BcosBuilder.tgz
+          path: FISCO-BCOS/BcosBuilder.tgz
