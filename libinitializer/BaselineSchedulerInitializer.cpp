@@ -1,4 +1,5 @@
 #include "BaselineSchedulerInitializer.h"
+#include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/Protocol.h"
@@ -16,11 +17,11 @@
 #include <boost/throw_exception.hpp>
 #include <stdexcept>
 
-static bcos::task::Task<void> checkRequirements(bcos::ledger::LedgerInterface& ledger)
+bcos::task::Task<void> bcos::transaction_scheduler::BaselineSchedulerInitializer::checkRequirements(
+    bcos::ledger::LedgerInterface& ledger, bool dmc, bool wasm)
 {
     // 版本号必须大于3.7才能开启baseline scheduler
     // The version number must be greater than 3.7 to enable baseline scheduler
-
     auto versionConfig = co_await bcos::ledger::getSystemConfig(
         ledger, bcos::ledger::SYSTEM_KEY_COMPATIBILITY_VERSION);
     if (!versionConfig)
@@ -39,6 +40,16 @@ static bcos::task::Task<void> checkRequirements(bcos::ledger::LedgerInterface& l
         INITIALIZER_LOG(ERROR) << message;
         BOOST_THROW_EXCEPTION(std::runtime_error(message));
     }
+
+    // baseline不支持dmc模式或wasm模式
+    // Baseline does not support DMC mode or WASM mode
+    if (dmc || wasm)
+    {
+        auto message = fmt::format(
+            "Baseline does not support DMC mode or WASM mode, dmc: {} wasm: {}", dmc, wasm);
+        INITIALIZER_LOG(ERROR) << message;
+        BOOST_THROW_EXCEPTION(std::runtime_error(message));
+    }
 }
 
 std::tuple<std::function<std::shared_ptr<bcos::scheduler::SchedulerInterface>()>,
@@ -50,8 +61,6 @@ bcos::transaction_scheduler::BaselineSchedulerInitializer::build(::rocksdb::DB& 
     std::shared_ptr<ledger::LedgerInterface> ledger,
     tool::NodeConfig::BaselineSchedulerConfig const& config)
 {
-    task::syncWait(checkRequirements(*ledger));
-
     struct Data
     {
         using MutableStorage =
