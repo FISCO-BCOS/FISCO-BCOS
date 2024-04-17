@@ -115,7 +115,10 @@ public:
             {
                 m_error = toBcosError(ret);
             }
-            void callback_submit_exception(tars::Int32 ret) override { m_error = toBcosError(ret); }
+            void callback_broadcastTransaction_exception(tars::Int32 ret) override
+            {
+                m_error = toBcosError(ret);
+            }
 
             bcos::Error::Ptr m_error;
         };
@@ -139,7 +142,7 @@ public:
                     BOOST_THROW_EXCEPTION(*error);
                 }
             }
-            void callback_submit_exception(tars::Int32 ret) override
+            void callback_broadcastTransactionBuffer_exception(tars::Int32 ret) override
             {
                 auto error = toBcosError(ret);
                 if (error)

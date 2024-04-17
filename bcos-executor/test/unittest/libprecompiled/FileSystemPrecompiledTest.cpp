@@ -18,6 +18,7 @@
  * @date 2021-06-20
  */
 
+#include "bcos-framework/protocol/Protocol.h"
 #include "libprecompiled/PreCompiledFixture.h"
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-tool/VersionConverter.h>
@@ -1857,7 +1858,8 @@ BOOST_AUTO_TEST_CASE(rebuildBfsBySysTest)
     // upgrade to v3.1.0
     boost::log::core::get()->set_logging_enabled(false);
     auto updateNumber = _number++;
-    rebuildBfsBySysConfig(_number++, V3_1_VERSION_STR, 0, [&]() {
+    auto versionStr = boost::lexical_cast<std::string>(bcos::protocol::BlockVersion::V3_1_VERSION);
+    rebuildBfsBySysConfig(_number++, versionStr, 0, [&]() {
         for (const auto& item : tool::FS_ROOT_SUBS)
         {
             //            keyPageIgnoreTables->erase(std::string(item));

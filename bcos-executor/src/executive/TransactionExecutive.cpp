@@ -169,6 +169,7 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
             m_blockContext.features().get(ledger::Features::Flag::bugfix_call_noaddr_return);
         auto [codeHash, codeEntry] =
             getCodeByContractTableName(tableName, needTryFromContractTable);
+
         if (codeEntry && codeEntry.has_value() && !codeEntry->get().empty())
         {
             output->data = toBytes(codeEntry->get());
@@ -179,6 +180,7 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
             EXECUTIVE_LOG(DEBUG) << "Could not get external code from local storage"
                                  << LOG_KV("codeAddress", input->codeAddress)
                                  << LOG_KV("needTryFromContractTable", needTryFromContractTable);
+
             output->data = bytes();
             return std::move(output);
         }
