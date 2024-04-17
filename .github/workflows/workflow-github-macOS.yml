@@ -19,19 +19,13 @@ concurrency:
 jobs:
   compile_macOS_release:
     name: macOS
-    runs-on: macos-12
+    runs-on: macos-latest
 
     steps:
       - uses: actions/checkout@v3
         with:
           clean: false
 
-      - name: Set up JDK 1.8
-        uses: actions/setup-java@v3
-        with:
-          distribution: 'zulu'
-          java-version: 8
-          java-package: jdk
 
       - name: install rust language
         uses: actions-rs/toolchain@v1
@@ -44,9 +38,6 @@ jobs:
 
       - name: check tag v3.7.1
         run: git clone https://github.com/FISCO-BCOS/FISCO-BCOS.git && cd FISCO-BCOS && git checkout v3.7.1
-
-      - name: check git log
-        run: cd FISCO-BCOS && git log -1
 
       - name: configure
         run: cd FISCO-BCOS &&  cmake . -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON  && cat ../vcpkg/buildtrees/grpc/config-x64-osx-dbg-err.log
