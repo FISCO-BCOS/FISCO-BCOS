@@ -356,16 +356,32 @@ public:
             m_origin, {}, m_contextID, m_seq, m_precompiledManager, m_ledgerConfig, m_hashImpl,
             interface);
 
-        co_await hostcontext.prepare();
-        auto result = co_await hostcontext.execute();
-        auto& logs = hostcontext.logs();
-        if (result.status_code == EVMC_SUCCESS && !logs.empty())
+        try
         {
-            m_logs.reserve(m_logs.size() + RANGES::size(logs));
-            RANGES::move(logs, std::back_inserter(m_logs));
+            co_await hostcontext.prepare();
+            auto result = co_await hostcontext.execute();
+            auto& logs = hostcontext.logs();
+            if (result.status_code == EVMC_SUCCESS && !logs.empty())
+            {
+                m_logs.reserve(m_logs.size() + RANGES::size(logs));
+                RANGES::move(logs, std::back_inserter(m_logs));
+            }
+            co_return result;
         }
-
-        co_return result;
+        catch (NotFoundCodeError& e)
+        {
+            // Static call时，合约不存在要返回EVMC_SUCCESS
+            // STATIC_CALL, the EVMC_SUCCESS is returned when the contract does not exist
+            co_return EVMCResult{evmc_result{
+                .status_code = (message.flags == EVMC_STATIC ? EVMC_SUCCESS : EVMC_REVERT),
+                .gas_left = message.gas,
+                .gas_refund = 0,
+                .output_data = nullptr,
+                .output_size = 0,
+                .release = nullptr,
+                .create_address = {},
+                .padding = {}}};
+        }
     }
 
     std::vector<protocol::LogEntry>& logs() & { return m_logs; }
