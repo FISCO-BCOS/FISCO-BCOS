@@ -42,7 +42,7 @@ jobs:
       #          cd FISCO-BCOS && cd vcpkg && pwd
       #          git fetch origin master && git pull
       - name: configure
-        run: mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON .. || cat *.log
+        run: mkdir build && cd build && export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON .. || cat *.log
       - name: compile
         run: cd build && make -j2 && make tar
 #      - name: tar BcosBuilder
