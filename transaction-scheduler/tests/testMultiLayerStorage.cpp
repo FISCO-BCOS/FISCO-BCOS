@@ -155,7 +155,7 @@ BOOST_AUTO_TEST_CASE(rangeMulti)
     using MutableStorage =
         memory_storage::MemoryStorage<int, int, memory_storage::Attribute(memory_storage::ORDERED)>;
     using BackendStorage = memory_storage::MemoryStorage<int, int,
-        memory_storage::Attribute(memory_storage::ORDERED | memory_storage::MRU)>;
+        memory_storage::Attribute(memory_storage::ORDERED | memory_storage::LRU)>;
 
     task::syncWait([]() -> task::Task<void> {
         BackendStorage backendStorage;

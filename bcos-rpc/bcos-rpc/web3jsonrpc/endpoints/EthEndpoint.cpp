@@ -81,9 +81,18 @@ task::Task<void> EthEndpoint::gasPrice(const Json::Value&, Json::Value& response
     // result: gasPrice(QTY)
     auto ledger = m_nodeService->ledger();
     // TODO: to check gas price is hex value or not
-    auto [gasPrice, _] = co_await ledger::getSystemConfig(*ledger, ledger::SYSTEM_KEY_TX_GAS_PRICE);
-    auto value = std::stoull(gasPrice);
-    Json::Value result = toQuantity(value);
+    auto config = co_await ledger::getSystemConfig(*ledger, ledger::SYSTEM_KEY_TX_GAS_PRICE);
+    Json::Value result;
+    if (config.has_value())
+    {
+        auto [gasPrice, _] = config.value();
+        auto const value = std::stoull(gasPrice);
+        result = toQuantity(value);
+    }
+    else
+    {
+        result = "0x5208";  // 21000
+    }
     buildJsonContent(result, response);
     co_return;
 }

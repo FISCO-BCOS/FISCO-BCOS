@@ -78,7 +78,7 @@ task::Task<crypto::HashType> tag_invoke(ledger::tag_t<getBlockHash> /*unused*/,
 task::Task<protocol::BlockNumber> tag_invoke(
     ledger::tag_t<getBlockNumber> /*unused*/, LedgerInterface& ledger, crypto::HashType hash);
 
-task::Task<SystemConfigEntry> tag_invoke(
+task::Task<std::optional<SystemConfigEntry>> tag_invoke(
     ledger::tag_t<getSystemConfig> /*unused*/, LedgerInterface& ledger, std::string_view key);
 
 task::Task<consensus::ConsensusNodeList> tag_invoke(

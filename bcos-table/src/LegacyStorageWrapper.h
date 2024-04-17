@@ -125,8 +125,16 @@ public:
                        decltype(entry) entry, decltype(callback) callback) -> task::Task<void> {
             try
             {
-                co_await storage2::writeOne(
-                    self->m_storage, transaction_executor::StateKey(table, key), std::move(entry));
+                if (entry.status() == storage::Entry::Status::DELETED)
+                {
+                    co_await storage2::removeOne(
+                        self->m_storage, transaction_executor::StateKeyView(table, key));
+                }
+                else
+                {
+                    co_await storage2::writeOne(self->m_storage,
+                        transaction_executor::StateKey(table, key), std::move(entry));
+                }
                 callback(nullptr);
             }
             catch (std::exception& e)

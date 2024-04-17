@@ -5,6 +5,7 @@
 #include "bcos-framework/dispatcher/SchedulerInterface.h"
 #include "bcos-framework/dispatcher/SchedulerTypeDef.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
+#include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
@@ -603,13 +604,40 @@ public:
     void getCode(
         std::string_view contract, std::function<void(Error::Ptr, bcos::bytes)> callback) override
     {
-        callback(nullptr, {});
+        task::wait([](decltype(this) self, std::string_view contract,
+                       decltype(callback) callback) -> task::Task<void> {
+            auto view = self->m_multiLayerStorage.fork(false);
+            auto contractAddress = unhexAddress(contract);
+            ledger::account::EVMAccount account(view, contractAddress);
+            auto code = co_await ledger::account::code(account);
+
+            if (!code)
+            {
+                callback(nullptr, {});
+                co_return;
+            }
+            auto bytesView = code->get();
+            callback(nullptr, bcos::bytes(bytesView.begin(), bytesView.end()));
+        }(this, contract, std::move(callback)));
     }
 
     void getABI(
         std::string_view contract, std::function<void(Error::Ptr, std::string)> callback) override
     {
-        callback(nullptr, {});
+        task::wait([](decltype(this) self, std::string_view contract,
+                       decltype(callback) callback) -> task::Task<void> {
+            auto view = self->m_multiLayerStorage.fork(false);
+            auto contractAddress = unhexAddress(contract);
+            ledger::account::EVMAccount account(view, contractAddress);
+            auto abi = co_await ledger::account::abi(account);
+
+            if (!abi)
+            {
+                callback(nullptr, {});
+                co_return;
+            }
+            callback(nullptr, std::string(abi->get()));
+        }(this, contract, std::move(callback)));
     }
 
     void preExecuteBlock([[maybe_unused]] bcos::protocol::Block::Ptr block,

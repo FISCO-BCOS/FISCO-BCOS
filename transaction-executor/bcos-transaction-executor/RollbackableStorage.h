@@ -10,17 +10,15 @@ namespace bcos::transaction_executor
 {
 
 template <class Storage>
-concept HasReadOneDirect =
-    requires(Storage& storage) {
-        requires !std::is_void_v<task::AwaitableReturnType<decltype(storage2::readOne(
-            storage, std::declval<typename Storage::Key>(), storage2::DIRECT))>>;
-    };
+concept HasReadOneDirect = requires(Storage& storage) {
+    requires !std::is_void_v<task::AwaitableReturnType<decltype(storage2::readOne(
+        storage, std::declval<typename Storage::Key>(), storage2::DIRECT))>>;
+};
 template <class Storage>
-concept HasReadSomeDirect =
-    requires(Storage& storage) {
-        requires RANGES::range<task::AwaitableReturnType<decltype(storage2::readSome(
-            storage, std::declval<std::vector<typename Storage::Key>>(), storage2::DIRECT))>>;
-    };
+concept HasReadSomeDirect = requires(Storage& storage) {
+    requires RANGES::range<task::AwaitableReturnType<decltype(storage2::readSome(
+        storage, std::declval<std::vector<typename Storage::Key>>(), storage2::DIRECT))>>;
+};
 
 template <class Storage>
 class Rollbackable
@@ -119,8 +117,8 @@ public:
 
     friend auto tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/, Rollbackable& storage,
         RANGES::input_range auto const& keys)
-        -> task::Task<task::AwaitableReturnType<
-            std::invoke_result_t<storage2::RemoveSome, Storage, decltype(keys)>>>
+        -> task::Task<task::AwaitableReturnType<std::invoke_result_t<storage2::RemoveSome,
+            std::add_lvalue_reference_t<Storage>, decltype(keys)>>>
     {
         // Store values to history
         auto oldValues = co_await storage2::readSome(*storage.m_storage, keys, storage2::DIRECT);

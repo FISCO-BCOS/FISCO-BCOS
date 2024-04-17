@@ -1,0 +1,66 @@
+name: macOS-13 CI check
+on:
+  push:
+    paths-ignore:
+      - "docs/**"
+      - "Changelog.md"
+      - "README.md"
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "Changelog.md"
+      - "README.md"
+  release:
+    types: [ push ]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compile_macOS_release:
+    name: macOS
+    runs-on: macos-13
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          clean: false
+      - name: Set up JDK 1.8
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: 8
+          java-package: jdk
+
+      - name: install rust language
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2024-02-25
+          override: true
+
+      - name: install macOS dependencies
+        run: brew install ccache libomp gmp
+
+      - name: configure
+        run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && mkdir build && cd build && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON .. || cat *.log
+
+      - name: compile
+        run: cd build && make -j2
+
+      - name: Test
+        run: |
+          cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
+
+      - name: prepare RPCAPI Tests
+        run: cd tools && bash .ci/rpcapi_ci_prepare.sh
+
+      - name: FISCO BCOS RpcApiTest
+        uses: matt-ball/newman-action@v1.0.4
+        with:
+          collection: https://raw.githubusercontent.com/FISCO-BCOS/FISCOBCOS-RPC-API/main/fiscobcos.rpcapi.collection.json
+
+      - name: Integration test - Air
+        run: cd tools && bash .ci/ci_check_air.sh ${{ github.base_ref }}
+
+      - name: Integration test - Pro
+        run: cd tools && bash .ci/ci_check_pro.sh ${{ github.base_ref }}
