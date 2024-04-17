@@ -111,6 +111,10 @@ public:
         std::function<void(Error::Ptr&&, std::optional<bcos::storage::Entry>&&)> _callback)
         override;
 
+    void asyncGetStorageAt(std::string_view _address, std::string_view _key,
+        protocol::BlockNumber _blockNumber,
+        std::function<void(Error::Ptr, std::string)> _onGetStorage) override;
+
     bool buildGenesisBlock(GenesisConfig const& genesis, ledger::LedgerConfig const& ledgerConfig);
 
     void asyncGetBlockTransactionHashes(bcos::protocol::BlockNumber blockNumber,

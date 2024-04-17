@@ -89,20 +89,20 @@ public:
         return signatureV + 27;
     }
 
-    // std::string sender() const
-    // {
-    //     bcos::bytes sign{};
-    //     sign.reserve(crypto::SECP256K1_SIGNATURE_LEN);
-    //     sign.insert(sign.end(), signatureR.begin(), signatureR.end());
-    //     sign.insert(sign.end(), signatureS.begin(), signatureS.end());
-    //     sign.push_back(signatureV);
-    //     bcos::crypto::Keccak256 hashImpl;
-    //     auto encodeForSign = encode();
-    //     auto hash = bcos::crypto::keccak256Hash(ref(encodeForSign));
-    //     const bcos::crypto::Secp256k1Crypto signatureImpl;
-    //     auto [_, addr] = signatureImpl.recoverAddress(hashImpl, hash, ref(sign));
-    //     return toHexStringWithPrefix(addr);
-    // }
+    std::string sender() const
+    {
+        bcos::bytes sign{};
+        sign.reserve(crypto::SECP256K1_SIGNATURE_LEN);
+        sign.insert(sign.end(), signatureR.begin(), signatureR.end());
+        sign.insert(sign.end(), signatureS.begin(), signatureS.end());
+        sign.push_back(signatureV);
+        bcos::crypto::Keccak256 hashImpl;
+        auto encodeForSign = encode();
+        auto hash = bcos::crypto::keccak256Hash(ref(encodeForSign));
+        const bcos::crypto::Secp256k1Crypto signatureImpl;
+        auto [_, addr] = signatureImpl.recoverAddress(hashImpl, hash, ref(sign));
+        return toHexStringWithPrefix(addr);
+    }
 
     std::string toString() const noexcept
     {

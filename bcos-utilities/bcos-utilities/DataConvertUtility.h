@@ -83,13 +83,17 @@ static std::string toQuantity(const Binary auto& binary)
 }
 
 template <class T>
-concept Number = std::is_integral_v<T> || std::same_as<T, bigint>;
+concept Number = std::is_integral_v<T>;
 static std::string toQuantity(Number auto number)
 {
     std::basic_string<byte> bytes(8, '\0');
     boost::endian::store_big_u64(bytes.data(), number);
     return toQuantity(bytes);
 }
+
+template <class T>
+concept BigNumber = !std::is_integral_v<T> && std::convertible_to<T, bigint>;
+static std::string toQuantity(BigNumber auto number);
 
 template <class Hex, class Out = bytes>
 Out fromHex(const Hex& hex, std::string_view prefix = std::string_view())
@@ -416,4 +420,14 @@ inline std::string toString<uint8_t>(uint8_t const& _u)
     o << static_cast<uint16_t>(_u);
     return o.str();
 }
+
+std::string toQuantity(BigNumber auto number)
+{
+    if (number == 0)
+    {
+        return "0x0";
+    }
+    return toCompactBigEndianString(number);
+}
+
 }  // namespace bcos
