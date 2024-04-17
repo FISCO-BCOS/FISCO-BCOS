@@ -35,16 +35,13 @@ jobs:
       - name: install macOS dependencies
         run: brew install ccache libomp gmp
 
-      #      - name: check tag v3.7.1
-      #        run: git clone https://github.com/FISCO-BCOS/FISCO-BCOS.git && cd FISCO-BCOS && git checkout -b 371 origin/release-3.7.1 && cd -
-      #      - name: update vcpkg to latest
-      #        run: |
-      #          cd FISCO-BCOS && cd vcpkg && pwd
-      #          git fetch origin master && git pull
+      - name: check tag v3.7.1
+        run: git clone https://github.com/FISCO-BCOS/FISCO-BCOS.git && cd FISCO-BCOS && git checkout -b 371 origin/release-3.7.1
+
       - name: configure
-        run: mkdir build && cd build && export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON .. || cat *.log
+        run: cd FISCO-BCOS &&  mkdir build && cd build && export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON .. || cat *.log
       - name: compile
-        run: cd build && make -j2 && make tar
+        run: cd FISCO-BCOS && cd build && make -j2 && make tar
 #      - name: tar BcosBuilder
 #        run: cd FISCO-BCOS && mv tools/BcosBuilder . && tar -cvzf BcosBuilder.tgz BcosBuilder
 #      - name: tar fisco-bcos for macOS
