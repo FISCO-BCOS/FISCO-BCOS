@@ -1,6 +1,6 @@
-name: Centos CI Check
+name: Centos CI Upload
 on:
-  pull_request:
+  push:
     paths-ignore:
       - "docs/**"
       - "Changelog.md"
@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   build_centos:
-    name: centos ci check
+    name: centos ci upload
     runs-on: self-hosted-centos
     strategy:
       fail-fast: false
@@ -45,7 +45,7 @@ jobs:
 
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-02-25
+          toolchain: nightly-2024-01-10
           override: true
 
       - name: Reuse build cache
@@ -68,40 +68,13 @@ jobs:
           . /opt/rh/rh-perl530/enable
           export LIBCLANG_PATH=/opt/rh/llvm-toolset-7.0/root/lib64/
           . /opt/rh/llvm-toolset-7.0/enable
-          cd build && cmake -DALLOCATOR=jemalloc -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON .. || cat *.log
-
+          cd build && cmake -DALLOCATOR=jemalloc -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DTESTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON .. || cat *.log
           make -j8
+          chmod +x ./fisco-bcos-air/fisco-bcos
+          ./fisco-bcos-air/fisco-bcos -v
       - name: Test
-        run: cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test #&& make coverage && curl -LO https://codecov.io/bash && /bin/bash ./bash && bash ../tools/.ci/check_coverage.sh
-      #       - name: Add comment
-      #         env:
-      #           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      #         run: |
-      #           PR_NUMBER=$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }') &&
-      #           cd build && curl -L -X POST \
-      #             -H "Accept: application/vnd.github+json" \
-      #             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-      #             -H "X-GitHub-Api-Version: 2022-11-28" \
-      #             "https://api.github.com/repos/FISCO-BCOS/FISCO-BCOS/pulls/${PR_NUMBER}/comments" \
-      #             --data '{"body":"$(bash ../tools/.ci/check_coverage.sh)"}'
-
-      #      - name: upload coverage report
-      #        uses: codecov/codecov-action@v2
-      #        with:
-      #          files: ./build/coverage.info
-      #          version: "v0.1.15"
-      #          flags: unittests
-      #          name: FISCO BCOS coverage
-      #          fail_ci_if_error: false
-      #          verbose: true
-
-      - name: prepare RPCAPI Tests
-        run: cd tools && bash .ci/rpcapi_ci_prepare.sh
-
-      - name: FISCO BCOS RpcApiTest
-        uses: matt-ball/newman-action@v1.0.4
+        run: cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
+      - uses: actions/upload-artifact@v2
         with:
-          collection: https://raw.githubusercontent.com/FISCO-BCOS/FISCOBCOS-RPC-API/main/fiscobcos.rpcapi.collection.json
-
-      - name: Integration test - Air
-        run: cd tools && bash .ci/ci_check_air.sh ${{ github.base_ref }}
+          name: fisco-bcos.zip
+          path: build/fisco-bcos-air/fisco-bcos

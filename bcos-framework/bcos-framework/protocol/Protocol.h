@@ -116,6 +116,8 @@ enum ProtocolVersion : uint32_t
 enum class BlockVersion : uint32_t
 {
     V3_8_0_VERSION = 0x03080000,
+    V3_7_2_VERSION = 0x03070200,
+    V3_7_1_VERSION = 0x03070100,
     V3_7_0_VERSION = 0x03070000,
     V3_6_1_VERSION = 0x03060100,
     V3_6_VERSION = 0x03060000,
@@ -145,16 +147,8 @@ enum class TransactionVersion : uint32_t
 };
 
 const std::string RC4_VERSION_STR = "3.0.0-rc4";
-const std::string V3_0_VERSION_STR = "3.0.0";
-const std::string V3_1_VERSION_STR = "3.1.0";
-const std::string V3_2_VERSION_STR = "3.2.0";
-const std::string V3_3_VERSION_STR = "3.3.0";
-const std::string V3_4_VERSION_STR = "3.4.0";
-const std::string V3_5_VERSION_STR = "3.5.0";
-const std::string V3_6_VERSION_STR = "3.6.0";
-const std::string V3_8_VERSION_STR = "3.8.0";
-
 const std::string RC_VERSION_PREFIX = "3.0.0-rc";
+const std::string V3_8_VERSION_STR = "3.8.0";
 
 const BlockVersion DEFAULT_VERSION = bcos::protocol::BlockVersion::V3_8_0_VERSION;
 const std::string DEFAULT_VERSION_STR = V3_8_VERSION_STR;
@@ -176,30 +170,10 @@ const uint8_t MIN_MAJOR_VERSION = 3;
     return flag;
 }
 
-constexpr auto operator<=>(std::variant<uint32_t, BlockVersion> const& _v1, BlockVersion const& _v2)
+constexpr auto operator<=>(BlockVersion lhs, auto rhs)
+    requires std::same_as<decltype(rhs), BlockVersion> || std::same_as<decltype(rhs), uint32_t>
 {
-    auto flag = std::strong_ordering::equal;
-    std::visit(
-        [&_v2, &flag](auto&& arg) {
-            auto ver1 = static_cast<uint32_t>(arg);
-            auto ver2 = static_cast<uint32_t>(_v2);
-            flag = (ver1 <=> ver2);
-        },
-        _v1);
-    return flag;
-}
-
-constexpr bool operator>=(std::variant<uint32_t, BlockVersion> const& _v1, BlockVersion const& _v2)
-{
-    auto flag = false;
-    std::visit(
-        [&_v2, &flag](auto&& arg) {
-            auto ver1 = static_cast<uint32_t>(arg);
-            auto ver2 = static_cast<uint32_t>(_v2);
-            flag = (ver1 >= ver2);
-        },
-        _v1);
-    return flag;
+    return static_cast<uint32_t>(lhs) <=> static_cast<uint32_t>(rhs);
 }
 
 inline std::ostream& operator<<(std::ostream& out, bcos::protocol::BlockVersion version)

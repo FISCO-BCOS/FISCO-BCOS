@@ -92,7 +92,8 @@ inline constexpr struct GetBlockNumber
 using SystemConfigEntry = std::tuple<std::string, protocol::BlockNumber>;
 inline constexpr struct GetSystemConfig
 {
-    task::Task<SystemConfigEntry> operator()(auto& ledger, std::string_view key) const
+    task::Task<std::optional<SystemConfigEntry>> operator()(
+        auto& ledger, std::string_view key) const
     {
         co_return co_await tag_invoke(*this, ledger, key);
     }

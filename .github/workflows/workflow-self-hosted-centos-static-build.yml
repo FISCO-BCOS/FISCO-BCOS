@@ -38,7 +38,7 @@ jobs:
           sudo yum install -y -q devtoolset-11 llvm-toolset-7.0 rh-perl530-perl zlib-devel ccache lcov python-devel python3-devel python3-pip automake
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-01-10
+          toolchain: nightly-2024-02-25
           override: true
 
       - name: Remove cache if correspond dir change
