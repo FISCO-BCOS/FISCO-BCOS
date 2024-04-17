@@ -16,7 +16,6 @@ jobs:
   compile_macOS_release:
     name: upload standard binary of macOS
     runs-on: macos-12
-    # if: startsWith(github.ref,'v2')
     steps:
       - uses: actions/checkout@v3
         with:
@@ -32,85 +31,86 @@ jobs:
         run: brew install ccache libomp gmp
 
       - name: configure
-        run: mkdir build && cd build && export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON ..
+        run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON
+        
       - name: compile
-        run: cd build && make -j2 && make tar
-  #      - name: tar BcosBuilder
-  #        run: mv tools/BcosBuilder . && tar -cvzf BcosBuilder.tgz BcosBuilder
-  #      - name: tar fisco-bcos for macOS
-  #        run:  mv fisco-bcos-air/ bin/ && mv lightnode/fisco-bcos-lightnode/fisco-bcos-lightnode bin/ && cp tools/BcosAirBuilder/build_chain.sh bin/ && cd bin && strip fisco-bcos && strip fisco-bcos-lightnode && tar -cvzf lightnode.tar.gz fisco-bcos-lightnode && tar -cvzf fisco-bcos.tar.gz fisco-bcos build_chain.sh
-  #      - name: Upload fisco-bcos binaries to release
-  #        uses: svenstaro/upload-release-action@v1-release
-  #        with:
-  #          repo_token: ${{ secrets.GITHUB_TOKEN }}
-  #          file: bin/fisco-bcos.tar.gz
-  #          asset_name: fisco-bcos-macOS-x86_64.tar.gz
-  #          tag: ${{ github.ref }}
-  #          overwrite: true
-  #      - name: Upload fisco-bcos-lightnode binaries to release
-  #        uses: svenstaro/upload-release-action@v1-release
-  #        with:
-  #          repo_token: ${{ secrets.GITHUB_TOKEN }}
-  #          file: bin/lightnode.tar.gz
-  #          asset_name: fisco-bcos-lightnode-macOS-x86_64.tar.gz
-  #          tag: ${{ github.ref }}
-  #          overwrite: true
-  #      - name: Upload BcosNodeService binaries to release
-  #        uses: svenstaro/upload-release-action@v1-release
-  #        with:
-  #          repo_token: ${{ secrets.GITHUB_TOKEN }}
-  #          file: fisco-bcos-tars-service/BcosNodeService.tgz
-  #          asset_name: BcosNodeService-macOS-x86_64.tgz
-  #          tag: ${{ github.ref }}
-  #          overwrite: true
-  #      - name: Upload BcosRpcService binaries to release
-  #        uses: svenstaro/upload-release-action@v1-release
-  #        with:
-  #          repo_token: ${{ secrets.GITHUB_TOKEN }}
-  #          file: fisco-bcos-tars-service/BcosRpcService.tgz
-  #          asset_name: BcosRpcService-macOS-x86_64.tgz
-  #          tag: ${{ github.ref }}
-  #          overwrite: true
-  #      - name: Upload BcosGatewayService binaries to release
-  #        uses: svenstaro/upload-release-action@v1-release
-  #        with:
-  #          repo_token: ${{ secrets.GITHUB_TOKEN }}
-  #          file: fisco-bcos-tars-service/BcosGatewayService.tgz
-  #          asset_name: BcosGatewayService-macOS-x86_64.tgz
-  #          tag: ${{ github.ref }}
-  #          overwrite: true
-  #      - name: Upload BcosMaxNodeService binaries to release
-  #        uses: svenstaro/upload-release-action@v1-release
-  #        with:
-  #          repo_token: ${{ secrets.GITHUB_TOKEN }}
-  #          file: fisco-bcos-tars-service/BcosMaxNodeService.tgz
-  #          asset_name: BcosMaxNodeService-macOS-x86_64.tgz
-  #          tag: ${{ github.ref }}
-  #          overwrite: true
-  #      - name: Upload BcosExecutorService binaries to release
-  #        uses: svenstaro/upload-release-action@v1-release
-  #        with:
-  #          repo_token: ${{ secrets.GITHUB_TOKEN }}
-  #          file: fisco-bcos-tars-service/BcosExecutorService.tgz
-  #          asset_name: BcosExecutorService-macOS-x86_64.tgz
-  #          tag: ${{ github.ref }}
-  #          overwrite: true
-  #      - name: Upload build_chain.sh
-  #        uses: svenstaro/upload-release-action@v1-release
-  #        with:
-  #          repo_token: ${{ secrets.GITHUB_TOKEN }}
-  #          file: tools/BcosAirBuilder/build_chain.sh
-  #          asset_name: build_chain.sh
-  #          tag: ${{ github.ref }}
-  #          overwrite: true
-  #      - name: Upload BcosBuilder
-  #        uses: svenstaro/upload-release-action@v1-release
-  #        with:
-  #          repo_token: ${{ secrets.GITHUB_TOKEN }}
-  #          file: BcosBuilder.tgz
-  #          asset_name: BcosBuilder.tgz
-  #          tag: ${{ github.ref }}
-  #          overwrite: true
+        run: make -j2 && make tar
+      - name: tar BcosBuilder
+        run: mv tools/BcosBuilder . && tar -cvzf BcosBuilder.tgz BcosBuilder
+      - name: tar fisco-bcos for macOS
+        run: mv fisco-bcos-air/ bin/ && mv lightnode/fisco-bcos-lightnode/fisco-bcos-lightnode bin/ && cp tools/BcosAirBuilder/build_chain.sh bin/ && cd bin && strip fisco-bcos && strip fisco-bcos-lightnode && tar -cvzf lightnode.tar.gz fisco-bcos-lightnode && tar -cvzf fisco-bcos.tar.gz fisco-bcos build_chain.sh
+      - name: Upload fisco-bcos binaries to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: bin/fisco-bcos.tar.gz
+          asset_name: fisco-bcos-macOS-x86_64.tar.gz
+          tag: ${{ github.ref }}
+          overwrite: true
+      - name: Upload fisco-bcos-lightnode binaries to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: bin/lightnode.tar.gz
+          asset_name: fisco-bcos-lightnode-macOS-x86_64.tar.gz
+          tag: ${{ github.ref }}
+          overwrite: true
+      - name: Upload BcosNodeService binaries to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: fisco-bcos-tars-service/BcosNodeService.tgz
+          asset_name: BcosNodeService-macOS-x86_64.tgz
+          tag: ${{ github.ref }}
+          overwrite: true
+      - name: Upload BcosRpcService binaries to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: fisco-bcos-tars-service/BcosRpcService.tgz
+          asset_name: BcosRpcService-macOS-x86_64.tgz
+          tag: ${{ github.ref }}
+          overwrite: true
+      - name: Upload BcosGatewayService binaries to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: fisco-bcos-tars-service/BcosGatewayService.tgz
+          asset_name: BcosGatewayService-macOS-x86_64.tgz
+          tag: ${{ github.ref }}
+          overwrite: true
+      - name: Upload BcosMaxNodeService binaries to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: fisco-bcos-tars-service/BcosMaxNodeService.tgz
+          asset_name: BcosMaxNodeService-macOS-x86_64.tgz
+          tag: ${{ github.ref }}
+          overwrite: true
+      - name: Upload BcosExecutorService binaries to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: fisco-bcos-tars-service/BcosExecutorService.tgz
+          asset_name: BcosExecutorService-macOS-x86_64.tgz
+          tag: ${{ github.ref }}
+          overwrite: true
+      - name: Upload build_chain.sh
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: tools/BcosAirBuilder/build_chain.sh
+          asset_name: build_chain.sh
+          tag: ${{ github.ref }}
+          overwrite: true
+      - name: Upload BcosBuilder
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: BcosBuilder.tgz
+          asset_name: BcosBuilder.tgz
+          tag: ${{ github.ref }}
+          overwrite: true
 
   compile_centos_release:
     name: upload standard binary of linux
