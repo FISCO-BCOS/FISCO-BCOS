@@ -18,6 +18,7 @@
  * @date 2021-07-28
  */
 #include "bcos-boostssl/websocket/WsStream.h"
+#include "bcos-framework/gateway/GatewayTypeDef.h"
 #include <bcos-boostssl/websocket/Common.h>
 #include <bcos-boostssl/websocket/WsError.h>
 #include <bcos-boostssl/websocket/WsService.h>
@@ -557,6 +558,17 @@ void WsService::onRecvMessage(
     }
     else
     {
+        if (message->packetType() == gateway::AMOPMessageType)
+        {
+            // AMOP May be disable by config.ini
+            WEBSOCKET_SERVICE(DEBUG)
+                << LOG_BADGE("onRecvMessage") << LOG_DESC("AMOP is disabled!")
+                << LOG_KV("type", message->packetType()) << LOG_KV("endpoint", session->endPoint())
+                << LOG_KV("seq", seq) << LOG_KV("data size", message->payload()->size())
+                << LOG_KV("use_count", session.use_count());
+            return;
+        }
+
         WEBSOCKET_SERVICE(WARNING)
             << LOG_BADGE("onRecvMessage") << LOG_DESC("unrecognized message type")
             << LOG_KV("type", message->packetType()) << LOG_KV("endpoint", session->endPoint())
