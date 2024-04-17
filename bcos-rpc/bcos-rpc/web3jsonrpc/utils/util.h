@@ -27,6 +27,13 @@ namespace bcos::rpc
 void buildJsonContent(Json::Value& result, Json::Value& response);
 void buildJsonError(
     Json::Value const& request, int32_t code, std::string message, Json::Value& response);
+inline auto printJson(const Json::Value& value)
+{
+    Json::StreamWriterBuilder builder;
+    builder["commentStyle"] = "None";
+    builder["indentation"] = "";
+    return Json::writeString(builder, value);
+}
 inline std::string_view toView(const Json::Value& value)
 {
     const char* begin = nullptr;

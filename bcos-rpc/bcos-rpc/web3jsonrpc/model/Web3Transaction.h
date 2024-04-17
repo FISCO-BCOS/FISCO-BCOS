@@ -23,6 +23,7 @@
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-utilities/FixedBytes.h>
@@ -40,6 +41,13 @@ enum class TransactionType : uint8_t
     EIP1559 = 2,  // https://eips.ethereum.org/EIPS/eip-1559
     EIP4844 = 3,  // https://eips.ethereum.org/EIPS/eip-4844
 };
+
+[[maybe_unused]] constexpr auto operator<=>(TransactionType const& ltype, auto rtype)
+    requires std::same_as<decltype(rtype), TransactionType> ||
+             std::unsigned_integral<decltype(rtype)>
+{
+    return static_cast<uint8_t>(ltype) <=> static_cast<uint8_t>(rtype);
+}
 
 [[maybe_unused]] static std::ostream& operator<<(std::ostream& _out, const TransactionType& _in)
 {
@@ -81,11 +89,26 @@ public:
         return signatureV + 27;
     }
 
+    // std::string sender() const
+    // {
+    //     bcos::bytes sign{};
+    //     sign.reserve(crypto::SECP256K1_SIGNATURE_LEN);
+    //     sign.insert(sign.end(), signatureR.begin(), signatureR.end());
+    //     sign.insert(sign.end(), signatureS.begin(), signatureS.end());
+    //     sign.push_back(signatureV);
+    //     bcos::crypto::Keccak256 hashImpl;
+    //     auto encodeForSign = encode();
+    //     auto hash = bcos::crypto::keccak256Hash(ref(encodeForSign));
+    //     const bcos::crypto::Secp256k1Crypto signatureImpl;
+    //     auto [_, addr] = signatureImpl.recoverAddress(hashImpl, hash, ref(sign));
+    //     return toHexStringWithPrefix(addr);
+    // }
+
     std::string toString() const noexcept
     {
         std::stringstream stringstream{};
-        stringstream << "chainId: " << this->chainId.value_or(0)
-                     << " type: " << static_cast<uint8_t>(this->type) << " to: " << this->to
+        stringstream << " chainId: " << this->chainId.value_or(0)
+                     << " type: " << static_cast<uint16_t>(this->type) << " to: " << this->to
                      << " data: " << toHex(this->data) << " value: " << this->value
                      << " nonce: " << this->nonce << " gasLimit: " << this->gasLimit
                      << " maxPriorityFeePerGas: " << this->maxPriorityFeePerGas

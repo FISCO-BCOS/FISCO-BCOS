@@ -34,29 +34,49 @@ void Web3JsonRpcImpl::onRPCRequest(std::string_view _requestBody, Sender _sender
         {
             BOOST_THROW_EXCEPTION(JsonRpcException(InvalidRequest, msg));
         }
+        response["id"] = request["id"];
         if (auto const handler = m_endpointsMapping.findHandler(request["method"].asString());
             handler.has_value())
         {
             if (c_fileLogLevel == TRACE) [[unlikely]]
             {
-                RPC_IMPL_LOG(TRACE) << LOG_BADGE("onRPCRequest") << LOG_KV("request", _requestBody);
+                WEB3_LOG(TRACE) << LOG_BADGE("Web3Request")
+                                << LOG_KV("request", printJson(request));
             }
             task::wait([](Web3JsonRpcImpl* self, EndpointsMapping::Handler _handler,
                            Json::Value _request, Sender sender) -> task::Task<void> {
-                Json::Value const& params = _request["params"];
                 Json::Value resp;
-                co_await (self->m_endpoints.*_handler)(params, resp);
-                resp["id"] = _request["id"];
+                try
+                {
+                    // FIXME: throw exception here will core dump
+                    Json::Value const& params = _request["params"];
+
+                    co_await (self->m_endpoints.*_handler)(params, resp);
+                    resp["id"] = _request["id"];
+                }
+                catch (const JsonRpcException& e)
+                {
+                    buildJsonError(_request, e.code(), e.msg(), resp);
+                }
+                catch (bcos::Error const& e)
+                {
+                    buildJsonError(_request, InternalError, e.errorMessage(), resp);
+                }
+                catch (const std::exception& e)
+                {
+                    buildJsonError(_request, InternalError, boost::diagnostic_information(e), resp);
+                }
                 auto&& respBytes = toBytesResponse(resp);
                 if (c_fileLogLevel == TRACE) [[unlikely]]
                 {
-                    RPC_IMPL_LOG(TRACE)
-                        << LOG_BADGE("onRPCRequest")
+                    std::string method = _request["method"].asString();
+                    WEB3_LOG(TRACE)
+                        << LOG_BADGE("Web3Response") << LOG_KV("method", method)
                         << LOG_KV("response",
                                std::string_view((const char*)(respBytes.data()), respBytes.size()));
                 }
                 sender(std::move(respBytes));
-            }(this, handler.value(), std::move(request), std::move(_sender)));
+            }(this, handler.value(), std::move(request), _sender));
             return;
         }
         BOOST_THROW_EXCEPTION(JsonRpcException(MethodNotFound, "Method not found"));
@@ -65,27 +85,14 @@ void Web3JsonRpcImpl::onRPCRequest(std::string_view _requestBody, Sender _sender
     {
         buildJsonError(request, e.code(), e.msg(), response);
     }
-    catch (bcos::Error const& e)
-    {
-        buildJsonError(request, InternalError, e.errorMessage(), response);
-    }
-    catch (const boost::exception& e)
-    {
-        buildJsonError(request, InternalError, boost::diagnostic_information(e), response);
-    }
-    catch (const std::exception& e)
-    {
-        buildJsonError(request, InternalError, e.what(), response);
-    }
     catch (...)
     {
         buildJsonError(request, InternalError, "Internal error", response);
     }
     auto&& resp = toBytesResponse(response);
-    RPC_IMPL_LOG(DEBUG) << LOG_BADGE("onRPCRequest") << LOG_DESC("response with exception")
-                        << LOG_KV("request", _requestBody)
-                        << LOG_KV(
-                               "response", std::string_view((const char*)resp.data(), resp.size()));
+    WEB3_LOG(DEBUG) << LOG_BADGE("onRPCRequest") << LOG_DESC("response with exception")
+                    << LOG_KV("request", _requestBody)
+                    << LOG_KV("response", std::string_view((const char*)resp.data(), resp.size()));
     _sender(std::move(resp));
 }
 

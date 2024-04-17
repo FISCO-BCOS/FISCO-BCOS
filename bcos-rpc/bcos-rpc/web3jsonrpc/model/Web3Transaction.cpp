@@ -21,6 +21,9 @@
 #include "Web3Transaction.h"
 
 #include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
+#include <bcos-framework/protocol/Transaction.h>
+#include <bcos-rpc/jsonrpc/Common.h>
 
 namespace bcos
 {
@@ -41,7 +44,14 @@ bcos::bytes Web3Transaction::encode() const
         // for legacy tx, it means gas price
         codec::rlp::encode(out, maxFeePerGas);
         codec::rlp::encode(out, gasLimit);
-        codec::rlp::encode(out, to.ref());
+        if (to != Address())
+        {
+            codec::rlp::encode(out, to.ref());
+        }
+        else
+        {
+            out.push_back(codec::rlp::BYTES_HEAD_BASE);
+        }
         codec::rlp::encode(out, value);
         codec::rlp::encode(out, data);
         if (chainId)
@@ -95,19 +105,19 @@ bcos::crypto::HashType Web3Transaction::hash() const
 bcostars::Transaction Web3Transaction::toTarsTransaction() const
 {
     bcostars::Transaction tarsTx{};
-    tarsTx.data.nonce = std::to_string(this->nonce);
-    tarsTx.data.to = this->to.hexPrefixed();
+    tarsTx.data.nonce = toHex(this->nonce);
+    tarsTx.data.to = (this->to == Address()) ? "" : this->to.hexPrefixed();
     tarsTx.data.input.insert(tarsTx.data.input.end(), this->data.begin(), this->data.end());
-    tarsTx.data.value = std::to_string(this->value);
+    tarsTx.data.value = toHex(this->value);
     tarsTx.data.gasLimit = this->gasLimit;
     if (static_cast<uint8_t>(this->type) >= static_cast<uint8_t>(TransactionType::EIP1559))
     {
-        tarsTx.data.maxFeePerGas = std::to_string(this->maxFeePerGas);
-        tarsTx.data.maxPriorityFeePerGas = std::to_string(this->maxPriorityFeePerGas);
+        tarsTx.data.maxFeePerGas = toHex(this->maxFeePerGas);
+        tarsTx.data.maxPriorityFeePerGas = toHex(this->maxPriorityFeePerGas);
     }
     else
     {
-        tarsTx.data.gasPrice = std::to_string(this->maxPriorityFeePerGas);
+        tarsTx.data.gasPrice = toHex(this->maxPriorityFeePerGas);
     }
     auto hash = this->hash();
     auto encodedForSign = this->encode();
@@ -119,7 +129,7 @@ bcostars::Transaction Web3Transaction::toTarsTransaction() const
         tarsTx.signature.end(), this->signatureS.begin(), this->signatureS.end());
     tarsTx.signature.push_back(static_cast<tars::Char>(this->signatureV));
 
-    tarsTx.type = 1;
+    tarsTx.type = static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transacion);
 
     tarsTx.extraTransactionBytes.insert(
         tarsTx.extraTransactionBytes.end(), encodedForSign.begin(), encodedForSign.end());
@@ -158,7 +168,7 @@ Header headerTxBase(const Web3Transaction& tx) noexcept
     }
     h.payloadLength += length(tx.maxFeePerGas);
     h.payloadLength += length(tx.gasLimit);
-    h.payloadLength += tx.to ? (Address::SIZE + 1) : 1;
+    h.payloadLength += (tx.to != Address()) ? (Address::SIZE + 1) : 1;
     h.payloadLength += length(tx.value);
     h.payloadLength += length(tx.data);
 
@@ -339,6 +349,15 @@ bcos::Error::UniquePtr decode(bcos::bytesRef& in, Web3Transaction& out) noexcept
     out.type = TransactionType::Legacy;
     auto decodeError = decodeItems(in, out.nonce, out.maxPriorityFeePerGas, out.gasLimit, out.to,
         out.value, out.data, out.signatureV, out.signatureR, out.signatureS);
+    if (out.signatureR.size() < crypto::SECP256K1_SIGNATURE_LEN / 2)
+    {
+        out.signatureR.insert(out.signatureR.begin(), bcos::byte(0));
+    }
+    if (out.signatureS.size() < crypto::SECP256K1_SIGNATURE_LEN / 2)
+    {
+        out.signatureS.insert(out.signatureS.begin(), bcos::byte(0));
+    }
+    // TODO: EIP-155 chainId decode from encoded bytes for sign
     out.maxFeePerGas = out.maxPriorityFeePerGas;
     auto v = out.signatureV;
     if (v == 27 || v == 28)

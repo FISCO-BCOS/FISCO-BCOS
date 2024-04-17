@@ -69,6 +69,8 @@ BOOST_AUTO_TEST_CASE(testLegacyTransactionDecode)
         toHex(tx.signatureS), "2d690516512020171c1ec870f6ff45398cc8609250326be89915fb538e7bd718");
     BOOST_CHECK_EQUAL(tx.getSignatureV(), tx.chainId.value() * 2 + 35 + 1);
 
+    auto hash = tx.hash().hexPrefixed();
+    BOOST_CHECK_EQUAL(hash, bcos::crypto::keccak256Hash(ref(bytes)).hexPrefixed());
     bcos::bytes encoded{};
     codec::rlp::encode(encoded, tx);
     auto rawTx2 = toHexStringWithPrefix(encoded);
@@ -234,6 +236,8 @@ BOOST_AUTO_TEST_CASE(EIP1559Recover)
     BOOST_CHECK_EQUAL(tx.getSignatureV(), tx.chainId.value() * 2 + 35);
     BOOST_CHECK_EQUAL(tx.hash().hexPrefixed(),
         "0xcf6b53ec88659fc86e854af2e8453fa519ca261f949ef291e33c5f44ead870dc");
+    auto txHash = bcos::crypto::keccak256Hash(ref(bytes)).hexPrefixed();
+    BOOST_CHECK_EQUAL(txHash, "0xcf6b53ec88659fc86e854af2e8453fa519ca261f949ef291e33c5f44ead870dc");
     bcos::bytes encoded{};
     codec::rlp::encode(encoded, tx);
     auto rawTx2 = toHexStringWithPrefix(encoded);

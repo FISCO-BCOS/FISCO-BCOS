@@ -29,10 +29,12 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <json/json.h>
 
+#include <bcos-crypto/ChecksumAddress.h>
 #include <ostream>
 
 namespace bcos::rpc
 {
+// maybe this struct is unnecessary...
 struct ReceiptResponse
 {
     ReceiptResponse() = default;
@@ -103,4 +105,106 @@ struct ReceiptResponse
     void toJson(Json::Value&) {}
 };
 
+[[maybe_unused]] static void combineReceiptResponse(Json::Value& result,
+    protocol::TransactionReceipt::ConstPtr&& receipt, bcos::protocol::Transaction::ConstPtr&& tx,
+    bcos::protocol::Block::Ptr&& block)
+{
+    if (!result.isObject())
+    {
+        return;
+    }
+    uint8_t status = (receipt->status() == 0 ? 1 : 0);
+    result["status"] = toQuantity(status);
+    result["transactionHash"] = tx->hash().hexPrefixed();
+    size_t transactionIndex = 0;
+    crypto::HashType blockHash;
+    uint64_t blockNumber = 0;
+    if (block)
+    {
+        blockHash = block->blockHeader()->hash();
+        blockNumber = block->blockHeader()->number();
+        for (; transactionIndex < block->transactionsHashSize(); transactionIndex++)
+        {
+            if (block->transactionHash(transactionIndex) == tx->hash())
+            {
+                break;
+            }
+        }
+    }
+    result["transactionIndex"] = toQuantity(transactionIndex);
+    result["blockHash"] = blockHash.hexPrefixed();
+    result["blockNumber"] = toQuantity(blockNumber);
+    auto from = toHexStringWithPrefix(tx->sender());
+    toChecksumAddress(from, bcos::crypto::keccak256Hash(from).hexPrefixed(), "0x");
+    result["from"] = std::move(from);
+    if (tx->to().empty())
+    {
+        result["to"] = "";
+    }
+    else
+    {
+        auto to = std::string(tx->to());
+        toChecksumAddress(to, bcos::crypto::keccak256Hash(to).hex());
+        result["to"] = "0x" + std::move(to);
+    }
+    result["cumulativeGasUsed"] = "0x0";
+    result["effectiveGasPrice"] =
+        receipt->effectiveGasPrice().empty() ? "0x0" : std::string(receipt->effectiveGasPrice());
+    result["gasUsed"] = toQuantity((uint64_t)receipt->gasUsed());
+    if (receipt->contractAddress().empty())
+    {
+        result["contractAddress"] = Json::nullValue;
+    }
+    else
+    {
+        auto contractAddress = std::string(receipt->contractAddress());
+        toChecksumAddress(contractAddress, bcos::crypto::keccak256Hash(contractAddress).hex());
+        result["contractAddress"] = "0x" + std::move(contractAddress);
+    }
+    result["logs"] = Json::arrayValue;
+    auto mutableReceipt = const_cast<bcos::protocol::TransactionReceipt*>(receipt.get());
+    auto receiptLog = mutableReceipt->takeLogEntris();
+    for (size_t i = 0; i < receiptLog.size(); i++)
+    {
+        Json::Value log;
+        auto address = std::string(receiptLog[i].address());
+        toChecksumAddress(address, bcos::crypto::keccak256Hash(address).hex());
+        log["address"] = "0x" + std::move(address);
+        log["topics"] = Json::arrayValue;
+        for (const auto& topic : receiptLog[i].topics())
+        {
+            log["topics"].append(topic.hexPrefixed());
+        }
+        log["data"] = toHexStringWithPrefix(receiptLog[i].data());
+        log["logIndex"] = toQuantity(i);
+        log["blockNumber"] = toQuantity(blockNumber);
+        log["blockHash"] = blockHash.hexPrefixed();
+        log["transactionIndex"] = toQuantity(transactionIndex);
+        log["transactionHash"] = receipt->hash().hexPrefixed();
+        log["removed"] = false;
+        result["logs"].append(std::move(log));
+    }
+    Logs logs;
+    logs.reserve(receiptLog.size());
+    for (size_t i = 0; i < receiptLog.size(); i++)
+    {
+        rpc::Log log{.address = std::move(receiptLog[i].takeAddress()),
+            .topics = std::move(receiptLog[i].takeTopics()),
+            .data = std::move(receiptLog[i].takeData())};
+        log.logIndex = i;
+        logs.push_back(std::move(log));
+    }
+    auto logsBloom = getLogsBloom(logs);
+    result["logsBloom"] = toHexStringWithPrefix(logsBloom);
+    auto type = TransactionType::Legacy;
+    if (!tx->extraTransactionBytes().empty())
+    {
+        if (auto firstByte = tx->extraTransactionBytes()[0];
+            firstByte < bcos::codec::rlp::BYTES_HEAD_BASE)
+        {
+            type = static_cast<TransactionType>(firstByte);
+        }
+    }
+    result["type"] = toQuantity(static_cast<uint64_t>(type));
+}
 }  // namespace bcos::rpc
