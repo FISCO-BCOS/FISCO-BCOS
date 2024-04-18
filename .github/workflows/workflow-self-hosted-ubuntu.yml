@@ -79,8 +79,8 @@ jobs:
           curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
           source /home/ci/.bashrc
           tiup update --self && tiup update playground
-          tiup install playground tikv:v5.4.2 pd:v5.4.2
-          nohup tiup playground v5.4.2 --mode tikv-slim --without-monitor &
+          tiup install playground tikv:v6.5.9 pd:v6.5.9
+          nohup tiup playground v6.5.9 --mode tikv-slim --without-monitor &
           sleep 30 && cd build && CTEST_OUTPUT_ON_FAILURE=TRUE ctest
 
       - name: prepare RPCAPI Tests

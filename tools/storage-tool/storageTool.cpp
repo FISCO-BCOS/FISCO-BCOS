@@ -762,7 +762,11 @@ int main(int argc, const char* argv[])
             if (params.count("stateSize") || params.count("S"))
             {  // calculate contract data size
                 auto* db = createSecondaryRocksDB(nodeConfig->storagePath(), secondaryPath);
+                getTableSize(db, storage::FS_ROOT);
                 getTableSize(db, storage::FS_APPS);
+                getTableSize(db, storage::FS_USER);
+                getTableSize(db, storage::FS_SYS_BIN);
+                getTableSize(db, storage::FS_USER_TABLE);
             }
         }
         else if (boost::iequals(nodeConfig->storageType(), "TiKV"))
