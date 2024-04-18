@@ -39,6 +39,7 @@
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/merkle/Merkle.h>
+#include <bcos-executor/src/Common.h>
 #include <bcos-framework/consensus/ConsensusNode.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
@@ -122,6 +123,48 @@ void Ledger::asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr _blockTx
     }
     _callback(nullptr);
 }
+
+void Ledger::asyncGetStorageAt(std::string_view _address, std::string_view _key,
+    protocol::BlockNumber _blockNumber, std::function<void(Error::Ptr, std::string)> _onGetStorage)
+{
+    auto contractTableName = getContractTableName(SYS_DIRECTORY::USER_APPS, _address);
+    // TODO: blockNumber is not used nowadays
+    std::ignore = _blockNumber;
+    LEDGER_LOG(TRACE) << LOG_DESC("asyncGetStorageAt") << LOG_KV("address", _address)
+                      << LOG_KV("key", _key) << LOG_KV("blockNumber", _blockNumber);
+    m_storage->asyncGetRow(contractTableName, _key,
+        [onGetStorage = std::move(_onGetStorage)](auto&& _error, auto&& _entry) {
+            if (_error)
+            {
+                onGetStorage(std::move(_error), "");
+                return;
+            }
+            if (!_entry)
+            {
+                onGetStorage(
+                    BCOS_ERROR_PTR(GetStorageError, "Cannot get storage in address and key"), "");
+                return;
+            }
+            auto value = _entry->exportFields();
+            std::visit(
+                [onGetStorage = std::move(onGetStorage)](auto&& valueInside) {
+                    std::string realValue{};
+                    if constexpr (concepts::PointerLike<decltype(valueInside)>)
+                    {
+                        realValue = std::string(
+                            reinterpret_cast<char*>(valueInside->data()), valueInside->size());
+                    }
+                    else
+                    {
+                        realValue = std::string(
+                            reinterpret_cast<char*>(valueInside.data()), valueInside.size());
+                    }
+                    onGetStorage(nullptr, std::move(realValue));
+                },
+                value);
+        });
+}
+
 
 void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,

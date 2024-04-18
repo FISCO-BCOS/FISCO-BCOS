@@ -162,6 +162,12 @@ public:
         _callback(nullptr);
     }
 
+    void asyncGetStorageAt(std::string_view, std::string_view, protocol::BlockNumber,
+        std::function<void(Error::Ptr, std::string)> _onGetStorage) override
+    {
+        _onGetStorage(nullptr, "");
+    }
+
     // the txpool module use this interface to store txs
     bcos::Error::Ptr storeTransactionsAndReceipts(bcos::protocol::ConstTransactionsPtr blockTxs,
         bcos::protocol::Block::ConstPtr block) override
