@@ -64,8 +64,8 @@ void sendMessage(std::shared_ptr<MessageFace> _msg, std::shared_ptr<WsService> _
                 {
                     TEST_LOG(WARNING, "TEST_CLIENT_MODULE")
                         << LOG_BADGE(" [Main] ===>>>> ") << LOG_DESC("callback response error")
-                        << LOG_KV("errorCode", _error->errorCode())
-                        << LOG_KV("errorMessage", _error->errorMessage());
+                        << LOG_KV("code", _error->errorCode())
+                        << LOG_KV("message", _error->errorMessage());
                     return;
                 }
                 BCOS_LOG(INFO) << LOG_DESC("receiveResponse, timecost:") << (utcTime() - startT)

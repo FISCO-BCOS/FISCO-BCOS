@@ -114,7 +114,7 @@ std::pair<bool, bytes> SM2Crypto::recoverAddress(Hash::Ptr _hashImpl, bytesConst
     catch (const std::exception& e)
     {
         CRYPTO_LOG(WARNING) << LOG_DESC("sm2Recover failed")
-                            << LOG_KV("error", boost::diagnostic_information(e));
+                            << LOG_KV("message", boost::diagnostic_information(e));
     }
     return {false, {}};
 }

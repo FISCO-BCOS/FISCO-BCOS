@@ -205,9 +205,9 @@ int main(int argc, char** argv)
         [&contractAddress, &p](bcos::Error::Ptr _error, std::shared_ptr<bcos::bytes> _resp) {
             if (_error && _error->errorCode() != 0)
             {
-                std::cout << LOG_DESC(" [DeployHello] send transaction response error")
-                          << LOG_KV("errorCode", _error->errorCode())
-                          << LOG_KV("errorMessage", _error->errorMessage()) << std::endl;
+                std::cout << LOG_DESC(" [DeployHello] send transaction response failed")
+                          << LOG_KV("code", _error->errorCode())
+                          << LOG_KV("message", _error->errorMessage()) << std::endl;
                 exit(0);
             }
             else
@@ -257,9 +257,9 @@ int main(int argc, char** argv)
                     recvRateReporter->update(1, true);
                     if (_error && _error->errorCode() != 0)
                     {
-                        std::cout << LOG_DESC(" [DeployHello] send transaction response error")
-                                  << LOG_KV("errorCode", _error->errorCode())
-                                  << LOG_KV("errorMessage", _error->errorMessage()) << std::endl;
+                        std::cout << LOG_DESC(" [DeployHello] send transaction response failed")
+                                  << LOG_KV("code", _error->errorCode())
+                                  << LOG_KV("message", _error->errorMessage()) << std::endl;
                     }
                 });
         }

@@ -15,7 +15,7 @@ concurrency:
 jobs:
   compile_macOS_release:
     name: upload standard binary of macOS
-    runs-on: macos-12
+    runs-on: macos-13
     # runs-on: self-hosted-mac
     # if: startsWith(github.ref,'v2')
     steps:

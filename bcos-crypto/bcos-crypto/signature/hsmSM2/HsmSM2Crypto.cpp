@@ -89,7 +89,7 @@ std::shared_ptr<bytes> HsmSM2Crypto::sign(
     if (code != SDR_OK)
     {
         CRYPTO_LOG(ERROR) << "[HSMSignature::sign] ERROR of Sign"
-                          << LOG_KV("error", provider.GetErrorMessage(code));
+                          << LOG_KV("message", provider.GetErrorMessage(code));
         return nullptr;
     }
 
@@ -130,7 +130,7 @@ bool HsmSM2Crypto::verify(
     if (code != SDR_OK)
     {
         CRYPTO_LOG(ERROR) << "[HSMSignature::verify] ERROR of Hash"
-                          << LOG_KV("error", provider.GetErrorMessage(code));
+                          << LOG_KV("message", provider.GetErrorMessage(code));
         return false;
     }
 
@@ -139,7 +139,7 @@ bool HsmSM2Crypto::verify(
     if (code != SDR_OK)
     {
         CRYPTO_LOG(ERROR) << "[HSMSignature::verify] ERROR of Verify"
-                          << LOG_KV("error", provider.GetErrorMessage(code));
+                          << LOG_KV("message", provider.GetErrorMessage(code));
         return false;
     }
     return true;
@@ -184,7 +184,7 @@ std::pair<bool, bytes> HsmSM2Crypto::recoverAddress(Hash::Ptr _hashImpl, bytesCo
     catch (const std::exception& e)
     {
         CRYPTO_LOG(WARNING) << LOG_DESC("Hsm SM2 recoverAddress failed")
-                            << LOG_KV("error", boost::diagnostic_information(e));
+                            << LOG_KV("message", boost::diagnostic_information(e));
     }
     return {false, {}};
 }

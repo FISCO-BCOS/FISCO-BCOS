@@ -447,7 +447,7 @@ void Session::drop(DisconnectReason _reason)
                 if (error && error != boost::asio::error::operation_aborted)
                 {
                     SESSION_LOG(WARNING)
-                        << "[drop] shutdown timer error" << LOG_KV("errorValue", error.value())
+                        << "[drop] shutdown timer failed" << LOG_KV("failedValue", error.value())
                         << LOG_KV("message", error.message());
                 }
                 /// force to shutdown when timeout
@@ -466,7 +466,7 @@ void Session::drop(DisconnectReason _reason)
                     if (error)
                     {
                         SESSION_LOG(INFO)
-                            << "[drop] shutdown failed " << LOG_KV("errorValue", error.value())
+                            << "[drop] shutdown failed " << LOG_KV("failedValue", error.value())
                             << LOG_KV("message", error.message());
                     }
                     /// force to close the socket
