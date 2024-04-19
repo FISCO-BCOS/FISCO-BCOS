@@ -281,6 +281,7 @@ public:
 
 protected:
     virtual void loadChainConfig(boost::property_tree::ptree const& _pt, bool _enforceGroupId);
+    virtual void loadWeb3ChainConfig(boost::property_tree::ptree const& _pt);
     virtual void loadRpcConfig(boost::property_tree::ptree const& _pt);
     virtual void loadWeb3RpcConfig(boost::property_tree::ptree const& _pt);
     virtual void loadGatewayConfig(boost::property_tree::ptree const& _pt);

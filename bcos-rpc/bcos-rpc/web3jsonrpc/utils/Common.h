@@ -25,6 +25,7 @@
 
 namespace bcos::rpc
 {
+constexpr const uint64_t LowestGasPrice{21000};
 constexpr const std::string_view EarliestBlock{"earliest"};
 constexpr const std::string_view LatestBlock{"latest"};
 constexpr const std::string_view PendingBlock{"pending"};

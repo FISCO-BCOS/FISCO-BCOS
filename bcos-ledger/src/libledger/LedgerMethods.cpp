@@ -553,46 +553,9 @@ bcos::task::Task<bcos::protocol::TransactionsConstPtr> bcos::ledger::tag_invoke(
     co_return co_await awaitable;
 }
 
-bcos::task::Task<std::string> bcos::ledger::tag_invoke(ledger::tag_t<getStorageAt>,
-    LedgerInterface& ledger, std::string_view address, std::string_view key,
-    bcos::protocol::BlockNumber number)
+bcos::task::Task<std::optional<bcos::storage::Entry>> bcos::ledger::tag_invoke(
+    ledger::tag_t<getStorageAt>, LedgerInterface& ledger, std::string_view address,
+    std::string_view key, bcos::protocol::BlockNumber number)
 {
-    struct Awaitable
-    {
-        bcos::ledger::LedgerInterface& m_ledger;
-        std::string_view m_address;
-        std::string_view m_key;
-        bcos::protocol::BlockNumber m_number;
-
-        std::variant<bcos::Error::Ptr, std::string> m_result;
-
-        constexpr static bool await_ready() noexcept { return false; }
-        void await_suspend(CO_STD::coroutine_handle<> handle)
-        {
-            m_ledger.asyncGetStorageAt(
-                m_address, m_key, m_number, [this, handle](auto&& error, auto&& value) {
-                    if (error)
-                    {
-                        m_result.emplace<bcos::Error::Ptr>(std::move(error));
-                    }
-                    else
-                    {
-                        m_result.emplace<std::string>(value);
-                    }
-                    handle.resume();
-                });
-        }
-        std::string await_resume()
-        {
-            if (std::holds_alternative<bcos::Error::Ptr>(m_result))
-            {
-                BOOST_THROW_EXCEPTION(*std::get<bcos::Error::Ptr>(m_result));
-            }
-            return std::get<std::string>(m_result);
-        }
-    };
-
-    Awaitable awaitable{
-        .m_ledger = ledger, .m_address = address, .m_key = key, .m_number = number, .m_result = {}};
-    co_return co_await awaitable;
+    co_return co_await ledger.getStorageAt(address, key, number);
 }

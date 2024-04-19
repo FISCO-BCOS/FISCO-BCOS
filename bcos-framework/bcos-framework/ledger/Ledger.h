@@ -143,8 +143,8 @@ inline constexpr struct GetTransactions
 
 inline constexpr struct GetStorageAt
 {
-    task::Task<std::string> operator()(auto& ledger, std::string_view address, std::string_view key,
-        bcos::protocol::BlockNumber number) const
+    task::Task<std::optional<bcos::storage::Entry>> operator()(auto& ledger,
+        std::string_view address, std::string_view key, bcos::protocol::BlockNumber number) const
     {
         co_return co_await tag_invoke(*this, ledger, address, key, number);
     }

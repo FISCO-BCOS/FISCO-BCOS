@@ -39,11 +39,6 @@ public:
         }
         _callback(nullptr);
     }
-    void asyncGetStorageAt(std::string_view, std::string_view, protocol::BlockNumber,
-        std::function<void(Error::Ptr, std::string)> _onGetStorage) override
-    {
-        _onGetStorage(nullptr, "");
-    }
 
     bcos::Error::Ptr storeTransactionsAndReceipts(
         bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr) override

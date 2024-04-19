@@ -35,6 +35,7 @@ constexpr static int32_t TRANSACTIONS = 0x0004;
 constexpr static int32_t RECEIPTS = 0x0002;
 
 // get system config key
+constexpr static std::string_view SYSTEM_KEY_WEB3_CHAIN_ID = "web3_chain_id";
 constexpr static std::string_view SYSTEM_KEY_TX_GAS_LIMIT = "tx_gas_limit";
 constexpr static std::string_view SYSTEM_KEY_TX_GAS_PRICE = "tx_gas_price";
 constexpr static std::string_view SYSTEM_KEY_TX_COUNT_LIMIT = "tx_count_limit";

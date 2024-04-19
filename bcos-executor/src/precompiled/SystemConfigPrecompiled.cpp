@@ -142,6 +142,21 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl) : P
             }
             return 0;
         }));
+    m_valueConverter.insert(std::make_pair(
+        SYSTEM_KEY_WEB3_CHAIN_ID, [](const std::string& _value, uint32_t blockVersion) -> uint64_t {
+            if (blockVersion < BlockVersion::V3_9_0_VERSION)
+            {
+                BOOST_THROW_EXCEPTION(
+                    PrecompiledError(fmt::format("unsupported key {}", SYSTEM_KEY_WEB3_CHAIN_ID)));
+            }
+            if (!isNumStr(_value))
+            {
+                BOOST_THROW_EXCEPTION(PrecompiledError(
+                    fmt::format("Invalid value {}, the value for {} must be a number string.",
+                        _value, SYSTEM_KEY_WEB3_CHAIN_ID)));
+            }
+            return 0;
+        }));
 }
 
 std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(

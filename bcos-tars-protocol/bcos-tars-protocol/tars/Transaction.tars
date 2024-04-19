@@ -18,7 +18,7 @@ module bcostars {
 
     struct Transaction {
         1 optional TransactionData data;
-        2 optional vector<byte> dataHash;
+        2 optional vector<byte> dataHash; // type == 0, hash(1); type == 1, hash(extraTransactionBytes)
         3 optional vector<byte> signature;
         4 optional long importTime;
         5 optional int attribute;
@@ -27,5 +27,6 @@ module bcostars {
         8 optional string extraData;
         9 optional byte type;
         10 optional vector<byte> extraTransactionBytes;
+        11 optional vector<byte> extraTransactionHash; // hash(rlp(10|3))
     };
 };

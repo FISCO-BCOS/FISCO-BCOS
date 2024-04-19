@@ -170,18 +170,20 @@ public:
         std::function<void(Error::UniquePtr&&)> _callback) = 0;
 
     /**
-     * @brief Async get storage value by address and key and block number. It will access the table
-     * of address like /apps/[address] and get the value of key. NOTE: blockNumber is ignored
+     * @brief get storage value by address and key and block number in coroutine. It will access the
+     * table of address like /apps/[address] and get the value of key. NOTE: blockNumber is ignored
      * nowadays, it will always get the latest value of key in address.
      * @param _address the address of contract/EOA. if in EVM, it should be the address of contract,
      * hex string; if in WASM, it should be the path name of contract.
      * @param _key the key of storage
      * @param _blockNumber the block number to get the storage value
-     * @param _onGetStorage callback when get storage value, <error, value>
+     * @return the storage value of key in address
      */
-    virtual void asyncGetStorageAt(std::string_view _address, std::string_view _key,
-        protocol::BlockNumber _blockNumber,
-        std::function<void(Error::Ptr, std::string)> _onGetStorage) = 0;
+    virtual task::Task<std::optional<storage::Entry>> getStorageAt(
+        std::string_view _address, std::string_view _key, protocol::BlockNumber _blockNumber)
+    {
+        co_return std::nullopt;
+    }
 };
 
 }  // namespace bcos::ledger

@@ -59,7 +59,25 @@ task::Task<void> EthEndpoint::coinbase(const Json::Value&, Json::Value&)
 }
 task::Task<void> EthEndpoint::chainId(const Json::Value&, Json::Value& response)
 {
-    Json::Value result = "0x4ee8";  // 20200
+    auto const ledger = m_nodeService->ledger();
+    auto config = co_await ledger::getSystemConfig(*ledger, ledger::SYSTEM_KEY_WEB3_CHAIN_ID);
+    Json::Value result;
+    if (config.has_value())
+    {
+        try
+        {
+            auto [chainId, _] = config.value();
+            result = toQuantity(std::stoull(chainId));
+        }
+        catch (...)
+        {
+            result = "0x4ee8";  // 20200
+        }
+    }
+    else
+    {
+        result = "0x4ee8";  // 20200
+    }
     buildJsonContent(result, response);
     co_return;
 }
@@ -78,15 +96,14 @@ task::Task<void> EthEndpoint::hashrate(const Json::Value&, Json::Value& response
 task::Task<void> EthEndpoint::gasPrice(const Json::Value&, Json::Value& response)
 {
     // result: gasPrice(QTY)
-    auto ledger = m_nodeService->ledger();
-    // TODO: to check gas price is hex value or not
+    auto const ledger = m_nodeService->ledger();
     auto config = co_await ledger::getSystemConfig(*ledger, ledger::SYSTEM_KEY_TX_GAS_PRICE);
     Json::Value result;
     if (config.has_value())
     {
         auto [gasPrice, _] = config.value();
         auto const value = std::stoull(gasPrice);
-        result = toQuantity(value);
+        result = toQuantity(value < LowestGasPrice ? LowestGasPrice : value);
     }
     else
     {
@@ -113,25 +130,31 @@ task::Task<void> EthEndpoint::getBalance(const Json::Value& request, Json::Value
 {
     // params: address(DATA), blockNumber(QTY|TAG)
     // result: balance(QTY)
-    auto const address = toView(request[0u]);
+    auto address = toView(request[0u]);
+    if (address.starts_with("0x") || address.starts_with("0X"))
+    {
+        address.remove_prefix(2);
+    }
+    std::string addressStr(address);
+    boost::algorithm::to_lower(addressStr);
     // TODO)): blockNumber is ignored nowadays
     // auto const blockTag = toView(request[1u]);
     // auto [blockNumber, _] = co_await getBlockNumberByTag(blockTag);
     auto const ledger = m_nodeService->ledger();
-    u256 balance;
-    try
+    u256 balance = 0;
+    if (auto const entry = co_await ledger::getStorageAt(
+            *ledger, addressStr, bcos::executor::ACCOUNT_BALANCE, /*blockNumber*/ 0);
+        entry.has_value())
     {
-        auto const value = co_await ledger::getStorageAt(
-            *ledger, address, bcos::executor::ACCOUNT_BALANCE, /*blockNumber*/ 0);
-        balance = u256(value);
+        auto const balanceStr = std::string(entry.value().get());
+        balance = u256(balanceStr);
     }
-    catch (...)
+    else
     {
         WEB3_LOG(TRACE) << LOG_DESC("getBalance failed, return 0 by defualt")
                         << LOG_KV("address", address);
-        balance = 0;
     }
-    Json::Value result = toQuantity(balance);
+    Json::Value result = toQuantity(std::move(balance));
     buildJsonContent(result, response);
     co_return;
 }
@@ -139,14 +162,29 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
 {
     // params: address(DATA), position(QTY), blockNumber(QTY|TAG)
     // result: value(DATA)
-    auto const address = toView(request[0u]);
+    auto address = toView(request[0u]);
+    if (address.starts_with("0x") || address.starts_with("0X"))
+    {
+        address.remove_prefix(2);
+    }
+    std::string addressStr(address);
+    boost::algorithm::to_lower(addressStr);
     auto const position = toView(request[1u]);
     // TODO)): blockNumber is ignored nowadays
     // auto const blockTag = toView(request[2u]);
     // auto [blockNumber, _] = co_await getBlockNumberByTag(blockTag);
     auto const ledger = m_nodeService->ledger();
-    auto const value = co_await ledger::getStorageAt(*ledger, address, position, /*blockNumber*/ 0);
-    Json::Value result = value;
+    Json::Value result;
+    if (auto const entry =
+            co_await ledger::getStorageAt(*ledger, addressStr, position, /*blockNumber*/ 0);
+        entry.has_value())
+    {
+        result = std::string(entry.value().get());
+    }
+    else
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(JsonRpcError::InvalidParams, "Invalid params!"));
+    }
     buildJsonContent(result, response);
     co_return;
 }
@@ -154,19 +192,25 @@ task::Task<void> EthEndpoint::getTransactionCount(const Json::Value& request, Js
 {
     // params: address(DATA), blockNumber(QTY|TAG)
     // result: nonce(QTY)
-    auto const address = toView(request[0u]);
+    auto address = toView(request[0u]);
+    if (address.starts_with("0x") || address.starts_with("0X"))
+    {
+        address.remove_prefix(2);
+    }
+    std::string addressStr(address);
+    boost::algorithm::to_lower(addressStr);
     // TODO)): blockNumber is ignored nowadays
     // auto const blockTag = toView(request[1u]);
     // auto [blockNumber, _] = co_await getBlockNumberByTag(blockTag);
     auto const ledger = m_nodeService->ledger();
     uint64_t nonce = 0;
-    try
+    if (auto const entry = co_await ledger::getStorageAt(
+            *ledger, addressStr, bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE, /*blockNumber*/ 0);
+        entry.has_value())
     {
-        auto const value = co_await ledger::getStorageAt(
-            *ledger, address, bcos::executor::ACCOUNT_NONCE, /*blockNumber*/ 0);
-        nonce = std::stoull(value);
+        nonce = std::stoull(std::string(entry.value().get()));
     }
-    catch (...)
+    else
     {
         WEB3_LOG(TRACE) << LOG_DESC("get address nonce failed, return random value by defualt")
                         << LOG_KV("address", address);
@@ -210,15 +254,13 @@ task::Task<void> EthEndpoint::getBlockTxCountByNumber(
     buildJsonContent(result, response);
     co_return;
 }
-task::Task<void> EthEndpoint::getUncleCountByBlockHash(
-    const Json::Value& request, Json::Value& response)
+task::Task<void> EthEndpoint::getUncleCountByBlockHash(const Json::Value&, Json::Value& response)
 {
     Json::Value result = "0x0";
     buildJsonContent(result, response);
     co_return;
 }
-task::Task<void> EthEndpoint::getUncleCountByBlockNumber(
-    const Json::Value& request, Json::Value& response)
+task::Task<void> EthEndpoint::getUncleCountByBlockNumber(const Json::Value&, Json::Value& response)
 {
     Json::Value result = "0x0";
     buildJsonContent(result, response);
@@ -228,7 +270,13 @@ task::Task<void> EthEndpoint::getCode(const Json::Value& request, Json::Value& r
 {
     // params: address(DATA), blockNumber(QTY|TAG)
     // result: code(DATA)
-    auto const address = toView(request[0u]);
+    auto address = toView(request[0u]);
+    if (address.starts_with("0x") || address.starts_with("0X"))
+    {
+        address.remove_prefix(2);
+    }
+    std::string addressStr(address);
+    boost::algorithm::to_lower(addressStr);
     // TODO)): blockNumber is ignored nowadays
     // auto const blockTag = toView(request[1u]);
     // auto [blockNumber, _] = co_await getBlockNumberByTag(blockTag);
@@ -236,7 +284,7 @@ task::Task<void> EthEndpoint::getCode(const Json::Value& request, Json::Value& r
     struct Awaitable
     {
         bcos::scheduler::SchedulerInterface::Ptr m_scheduler;
-        std::string_view m_address;
+        std::string m_address;
         std::variant<Error::Ptr, bcos::bytes> m_result{};
         constexpr static bool await_ready() noexcept { return false; }
         void await_suspend(CO_STD::coroutine_handle<> handle) noexcept
@@ -264,7 +312,7 @@ task::Task<void> EthEndpoint::getCode(const Json::Value& request, Json::Value& r
     };
     auto const code = co_await Awaitable{
         .m_scheduler = scheduler,
-        .m_address = address,
+        .m_address = std::move(addressStr),
     };
     Json::Value result = toHexStringWithPrefix(code);
     buildJsonContent(result, response);
@@ -312,13 +360,13 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, error->errorMessage()));
     }
-    auto tarsTx = web3Tx.toTarsTransaction();
+    auto tarsTx = web3Tx.takeToTarsTransaction();
 
     auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
         [m_tx = std::move(tarsTx)]() mutable { return &m_tx; });
     // for web3.eth.sendRawTransaction, return the hash of raw transaction
     auto web3TxHash = bcos::crypto::keccak256Hash(bcos::ref(rawTxBytes));
-    tx->mutableInner().dataHash.assign(web3TxHash.begin(), web3TxHash.end());
+    tx->mutableInner().extraTransactionHash.assign(web3TxHash.begin(), web3TxHash.end());
 
     if (c_fileLogLevel == TRACE)
     {

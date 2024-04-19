@@ -42,6 +42,20 @@ enum class TransactionType : uint8_t
     Web3Transacion = 1,
 };
 
+constexpr auto operator<=>(bcos::protocol::TransactionType const& _lhs, auto _rhs)
+    requires(std::same_as<decltype(_rhs), bcos::protocol::TransactionType> ||
+             std::unsigned_integral<decltype(_rhs)>)
+{
+    return static_cast<uint8_t>(_lhs) <=> static_cast<uint8_t>(_rhs);
+}
+
+constexpr auto operator==(bcos::protocol::TransactionType const& _lhs, auto _rhs)
+    requires(std::same_as<decltype(_rhs), bcos::protocol::TransactionType> ||
+             std::unsigned_integral<decltype(_rhs)>)
+{
+    return static_cast<uint8_t>(_lhs) == static_cast<uint8_t>(_rhs);
+}
+
 enum TransactionOp
 {
     NullTransaction = 0,

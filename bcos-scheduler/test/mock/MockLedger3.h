@@ -169,12 +169,6 @@ public:
             _onGetList) override
     {}
 
-    void asyncGetStorageAt(std::string_view, std::string_view, protocol::BlockNumber,
-        std::function<void(Error::Ptr, std::string)> _onGetStorage) override
-    {
-        _onGetStorage(nullptr, "");
-    }
-
     void asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr _blockTxs,
         bcos::protocol::Block::ConstPtr block,
         std::function<void(Error::UniquePtr&&)> _callback) override

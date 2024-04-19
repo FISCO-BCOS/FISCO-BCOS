@@ -69,7 +69,7 @@ BOOST_AUTO_TEST_CASE(testLegacyTransactionDecode)
         toHex(tx.signatureS), "2d690516512020171c1ec870f6ff45398cc8609250326be89915fb538e7bd718");
     BOOST_CHECK_EQUAL(tx.getSignatureV(), tx.chainId.value() * 2 + 35 + 1);
 
-    auto hash = tx.hash().hexPrefixed();
+    auto hash = tx.txHash().hexPrefixed();
     BOOST_CHECK_EQUAL(hash, bcos::crypto::keccak256Hash(ref(bytes)).hexPrefixed());
     bcos::bytes encoded{};
     codec::rlp::encode(encoded, tx);
@@ -234,7 +234,7 @@ BOOST_AUTO_TEST_CASE(EIP1559Recover)
     BOOST_CHECK_EQUAL(tx.value, 498134000000000000ull);
     BOOST_CHECK_EQUAL(toHex(tx.data), "");
     BOOST_CHECK_EQUAL(tx.getSignatureV(), tx.chainId.value() * 2 + 35);
-    BOOST_CHECK_EQUAL(tx.hash().hexPrefixed(),
+    BOOST_CHECK_EQUAL(tx.txHash().hexPrefixed(),
         "0xcf6b53ec88659fc86e854af2e8453fa519ca261f949ef291e33c5f44ead870dc");
     auto txHash = bcos::crypto::keccak256Hash(ref(bytes)).hexPrefixed();
     BOOST_CHECK_EQUAL(txHash, "0xcf6b53ec88659fc86e854af2e8453fa519ca261f949ef291e33c5f44ead870dc");
@@ -281,7 +281,7 @@ BOOST_AUTO_TEST_CASE(EIP4844Recover)
     BOOST_CHECK_EQUAL(toHex(tx.data), "3e5aa082000000000000000000000000000000000000000000000000000000000008f7060000000000000000000000000000000000000000000000000000000000168763000000000000000000000000e64a54e2533fd126c2e452c5fab544d80e2e4eb5000000000000000000000000000000000000000000000000000000000a8cc7c7000000000000000000000000000000000000000000000000000000000a8ccabe");
     // clang-format on
     BOOST_CHECK_EQUAL(tx.getSignatureV(), tx.chainId.value() * 2 + 36);
-    BOOST_CHECK_EQUAL(tx.hash().hexPrefixed(),
+    BOOST_CHECK_EQUAL(tx.txHash().hexPrefixed(),
         "0x8bb97c1480b533396b0940a0f94ef5974c4989954f52d928e06e38d363bbd560");
 
     BOOST_CHECK_EQUAL(tx.blobVersionedHashes.size(), 6);

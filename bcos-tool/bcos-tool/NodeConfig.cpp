@@ -96,6 +96,7 @@ void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisCo
     {
         loadChainConfig(_genesisConfig, true);
     }
+    loadWeb3ChainConfig(_genesisConfig);
     loadGenesisFeatures(_genesisConfig);
 
     loadLedgerConfig(_genesisConfig);
@@ -385,11 +386,11 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
     /*
     [web3_rpc]
         enable=false
-        listen_ip=0.0.0.0
+        listen_ip=127.0.0.1
         listen_port=8545
         thread_count=16
     */
-    const std::string listenIP = _pt.get<std::string>("web3_rpc.listen_ip", "0.0.0.0");
+    const std::string listenIP = _pt.get<std::string>("web3_rpc.listen_ip", "127.0.0.1");
     const int listenPort = _pt.get<int>("web3_rpc.listen_port", 8545);
     const int threadCount = _pt.get<int>("web3_rpc.thread_count", 8);
     const bool enableWeb3Rpc = _pt.get<bool>("web3_rpc.enable", false);
@@ -582,6 +583,18 @@ void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt, bool _e
                          << LOG_KV("chainId", m_genesisConfig.m_chainID)
                          << LOG_KV("groupId", m_genesisConfig.m_groupID)
                          << LOG_KV("blockLimit", m_blockLimit);
+}
+
+void NodeConfig::NodeConfig::loadWeb3ChainConfig(boost::property_tree::ptree const& _pt)
+{
+    m_genesisConfig.m_web3ChainID = _pt.get<std::string>("web3_chain.chain_id", "0");
+    if (!isNumStr(m_genesisConfig.m_web3ChainID))
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment("The web3ChainId must be number string"));
+    }
+    NodeConfig_LOG(INFO) << LOG_DESC("loadWeb3ChainConfig")
+                         << LOG_KV("web3ChainID", m_genesisConfig.m_web3ChainID);
 }
 
 void NodeConfig::loadSecurityConfig(boost::property_tree::ptree const& _pt)

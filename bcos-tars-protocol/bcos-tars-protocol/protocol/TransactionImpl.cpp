@@ -47,11 +47,17 @@ void TransactionImpl::encode(bcos::bytes& txData) const
 
 bcos::crypto::HashType TransactionImpl::hash() const
 {
-    if (m_inner()->dataHash.empty())
+    if (m_inner()->dataHash.empty() && m_inner()->extraTransactionHash.empty())
     {
         BOOST_THROW_EXCEPTION(EmptyTransactionHash{});
     }
 
+    if (type() == static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transacion))
+    {
+        bcos::crypto::HashType hashResult((bcos::byte*)m_inner()->extraTransactionHash.data(),
+            m_inner()->extraTransactionHash.size());
+        return hashResult;
+    }
     bcos::crypto::HashType hashResult(
         (bcos::byte*)m_inner()->dataHash.data(), m_inner()->dataHash.size());
 
@@ -60,7 +66,6 @@ bcos::crypto::HashType TransactionImpl::hash() const
 
 void bcostars::protocol::TransactionImpl::calculateHash(const bcos::crypto::Hash& hashImpl)
 {
-    // TODO: based on type to switch
     bcos::concepts::hash::calculate(*m_inner(), hashImpl.hasher(), m_inner()->dataHash);
 }
 
