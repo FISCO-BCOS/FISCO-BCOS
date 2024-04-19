@@ -346,18 +346,22 @@ public:
             }
         }
 
-        // 如果本次调用系统合约失败，也不消耗gas
-        if (auto hexAddress = address2HexString(message().code_address);
-            bcos::precompiled::c_systemTxsAddress.find(hexAddress) !=
-                bcos::precompiled::c_systemTxsAddress.end() &&
-            evmResult->status_code != EVMC_SUCCESS)
+        // 如果本次调用系统合约失败，不消耗gas
+        // If the call to system contract failed, the gasUsed is cleared to zero
+        if (evmResult->status_code != EVMC_SUCCESS)
         {
-            evmResult->gas_left = message().gas;
-            HOST_CONTEXT_LOG(TRACE)
-                << "System contract call failed, clear gasUsed, gas_left: " << evmResult->gas_left;
+            if (auto hexAddress = address2HexString(message().code_address);
+                bcos::precompiled::c_systemTxsAddress.find(hexAddress) !=
+                bcos::precompiled::c_systemTxsAddress.end())
+            {
+                evmResult->gas_left = message().gas;
+                HOST_CONTEXT_LOG(TRACE) << "System contract call failed, clear gasUsed, gas_left: "
+                                        << evmResult->gas_left;
+            }
         }
 
-        // 如果本次调用由系统合约发起，则不消耗gas
+
+        // 如果本次调用由系统合约发起，不消耗gas
         // If the call is initiated by the system contract, the gasUsed is cleared to zero
         if (auto hexAddress = address2HexString(message().sender);
             bcos::precompiled::c_systemTxsAddress.find(hexAddress) !=
