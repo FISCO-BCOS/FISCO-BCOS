@@ -27,7 +27,8 @@ namespace bcos::transaction_executor
 {
 
 inline auto buildLegacyExecutive(auto& storage, protocol::BlockHeader const& blockHeader,
-    std::string contractAddress, ExternalCaller auto externalCaller, auto const& precompiledManager)
+    std::string contractAddress, ExternalCaller auto externalCaller, auto const& precompiledManager,
+    int64_t contextID, int64_t seq)
 {
     auto storageWrapper =
         std::make_shared<storage::LegacyStateStorageWrapper<std::decay_t<decltype(storage)>>>(
@@ -38,7 +39,7 @@ inline auto buildLegacyExecutive(auto& storage, protocol::BlockHeader const& blo
         blockHeader.timestamp(), blockHeader.version(), bcos::executor::VMSchedule{}, false, false);
     return std::make_shared<
         ExecutiveWrapper<decltype(externalCaller), std::decay_t<decltype(precompiledManager)>>>(
-        std::move(blockContext), std::move(contractAddress), 0, 0, wasm::GasInjector{},
+        std::move(blockContext), std::move(contractAddress), contextID, seq, wasm::GasInjector{},
         std::move(externalCaller), precompiledManager);
 }
 
@@ -48,7 +49,7 @@ using Precompiled =
 inline EVMCResult callPrecompiled(Precompiled const& precompiled, auto& storage,
     protocol::BlockHeader const& blockHeader, evmc_message const& message,
     evmc_address const& origin, ExternalCaller auto&& externalCaller,
-    auto const& precompiledManager)
+    auto const& precompiledManager, int64_t contextID, int64_t seq)
 {
     return std::visit(
         bcos::overloaded{
@@ -79,7 +80,8 @@ inline EVMCResult callPrecompiled(Precompiled const& precompiled, auto& storage,
             [&](std::shared_ptr<precompiled::Precompiled> const& precompiled) {
                 auto contractAddress = address2HexString(message.code_address);
                 auto executive = buildLegacyExecutive(storage, blockHeader, contractAddress,
-                    std::forward<decltype(externalCaller)>(externalCaller), precompiledManager);
+                    std::forward<decltype(externalCaller)>(externalCaller), precompiledManager,
+                    contextID, seq);
 
                 auto params = std::make_shared<precompiled::PrecompiledExecResult>();
                 params->m_sender = address2HexString(message.sender);
