@@ -12,7 +12,7 @@ namespace bcos::transaction_executor
 
 inline std::shared_ptr<precompiled::Precompiled> getInnerPrecompiled(auto const& precompiled)
 {
-    return std::get<std::shared_ptr<precompiled::Precompiled>>(precompiled);
+    return std::get<std::shared_ptr<precompiled::Precompiled>>(precompiled.m_precompiled);
 }
 
 template <class T>
