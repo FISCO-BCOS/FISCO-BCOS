@@ -866,7 +866,6 @@ void CachedStorage::checkAndClear()
     TIME_RECORD("Check and clear");
 
     bool needClear = false;
-    size_t clearTimes = 0;
 
     auto currentCapacity = m_capacity.load();
 
@@ -932,7 +931,6 @@ void CachedStorage::checkAndClear()
                     ++it;
                 }
             }
-            ++clearTimes;
         }
     } while (needClear && m_running->load());
 

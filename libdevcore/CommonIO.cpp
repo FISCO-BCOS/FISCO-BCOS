@@ -25,6 +25,7 @@
 #include <stdio.h>
 #include <termios.h>
 #include <boost/filesystem.hpp>
+#include <boost/filesystem/fstream.hpp>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>

@@ -235,7 +235,7 @@ void RocksDBStorage::processEntries(int64_t num,
                     stringstream ss(value);
                     boost::archive::binary_iarchive ia(ss);
                     ia >> res;
-                    it = key2value->emplace(key, move(res)).first;
+                    it = key2value->emplace(key, std::move(res)).first;
                 }
             }
         }
@@ -270,7 +270,7 @@ void RocksDBStorage::processEntries(int64_t num,
         {  // new entry
             map<string, string> value;
             copyFromEntry(value, entry);
-            it->second.push_back(move(value));
+            it->second.push_back(std::move(value));
         }
     }
 }

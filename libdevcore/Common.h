@@ -422,4 +422,20 @@ void pthread_setThreadName(std::string const& _n);
 
 constexpr static int RECONFIRM_COMMITTEE_COUNT = 2;
 
+inline std::string pthread_getThreadName()
+{
+#if defined(__GLIBC__) || defined(__APPLE__)
+    std::array<char, 16> name = {0};
+    auto err = pthread_getname_np(pthread_self(), (char*)name.data(), name.size());
+    if (err == 0)
+    {
+        if (name[0] == '\0')
+        {
+            return "";
+        }
+        return {name.data()};
+    }
+#endif
+    return "";
+}
 }  // namespace dev

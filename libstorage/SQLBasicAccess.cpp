@@ -104,7 +104,7 @@ int SQLBasicAccess::Select(int64_t, const string& _table, const string&, Conditi
                     }
                 }
             }
-            _values.push_back(move(value));
+            _values.push_back(std::move(value));
         }
     }
     CATCH(SQLException)

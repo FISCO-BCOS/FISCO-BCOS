@@ -24,6 +24,7 @@
 
 #include <boost/log/attributes/constant.hpp>
 #include <boost/log/attributes/scoped_attribute.hpp>
+#include <boost/log/sinks/text_file_backend.hpp>
 #include <boost/log/sources/severity_channel_logger.hpp>
 #include <boost/log/trivial.hpp>
 
@@ -72,4 +73,11 @@ void setStatLogLevel(LogLevel const& _level);
     if (dev::LogLevel::level >= dev::c_statLogLevel) \
     BOOST_LOG_SEV(dev::StatFileLoggerHandler,        \
         (boost::log::v2s_mt_posix::trivial::severity_level)(dev::LogLevel::level))
+
+namespace log
+{
+boost::shared_ptr<boost::log::sinks::file::collector> make_collector(
+    boost::filesystem::path const& target_dir, uintmax_t max_size, uintmax_t min_free_space,
+    uintmax_t max_files, bool convert_tar_gz);
+}
 }  // namespace dev

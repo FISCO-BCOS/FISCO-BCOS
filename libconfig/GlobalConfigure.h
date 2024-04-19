@@ -140,6 +140,8 @@ public:
 
     std::atomic_bool shouldExit;
 
+    std::mutex& signalMutex() const { return x_signalMutex; }
+
 private:
     VERSION m_version = RC3_VERSION;
     bool m_compress;
@@ -163,6 +165,7 @@ private:
 #else
     bool m_enableIgnoreObserverWriteRequest = false;
 #endif
+    mutable std::mutex x_signalMutex;
 };
 
 #define g_BCOSConfig GlobalConfigure::instance()

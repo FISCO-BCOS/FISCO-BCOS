@@ -150,7 +150,7 @@ vector<dev::GROUP_ID> LedgerInitializer::foreachLedgerConfigure(
         fs::directory_iterator endIter;
         for (fs::directory_iterator iter(path); iter != endIter; iter++)
         {
-            if (fs::extension(*iter) == ".genesis")
+            if (iter->path().extension() == ".genesis")
             {
                 // parse group id
                 boost::property_tree::ptree pt;

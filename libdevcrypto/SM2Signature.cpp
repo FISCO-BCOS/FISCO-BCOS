@@ -42,7 +42,6 @@ using namespace std;
 using namespace dev;
 using namespace dev::crypto;
 
-static const u512 VBase = 0;
 using VType = h512;
 using NumberVType = u512;
 
