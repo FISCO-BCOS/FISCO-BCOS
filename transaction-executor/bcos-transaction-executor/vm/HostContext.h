@@ -317,7 +317,7 @@ public:
         {
             HOST_CONTEXT_LOG(DEBUG) << "Checking auth..." << m_ledgerConfig.authCheckStatus();
             auto [result, param] = checkAuth(m_rollbackableStorage, m_blockHeader, message(),
-                m_origin, buildLegacyExternalCaller(), m_precompiledManager);
+                m_origin, buildLegacyExternalCaller(), m_precompiledManager, m_contextID, m_seq);
             if (!result)
             {
                 co_return EVMCResult{
@@ -344,13 +344,13 @@ public:
 
     task::Task<EVMCResult> externalCall(const evmc_message& message)
     {
+        ++m_seq;
         if (c_fileLogLevel <= LogLevel::TRACE) [[unlikely]]
         {
-            HOST_CONTEXT_LOG(TRACE) << "External call, kind: " << message.kind
+            HOST_CONTEXT_LOG(TRACE) << "External call, kind: " << message.kind << " seq:" << m_seq
                                     << " sender:" << address2HexString(message.sender)
                                     << " recipient:" << address2HexString(message.recipient);
         }
-        ++m_seq;
 
         HostContext hostcontext(innerConstructor, m_rollbackableStorage, m_blockHeader, message,
             m_origin, {}, m_contextID, m_seq, m_precompiledManager, m_ledgerConfig, m_hashImpl,
@@ -427,7 +427,7 @@ private:
         {
             createAuthTable(m_rollbackableStorage, m_blockHeader, message(), m_origin,
                 co_await ledger::account::path(m_myAccount), buildLegacyExternalCaller(),
-                m_precompiledManager);
+                m_precompiledManager, m_contextID, m_seq);
         }
 
         auto& ref = message();
@@ -517,7 +517,7 @@ private:
         {
             result.emplace(transaction_executor::callPrecompiled(*m_preparedPrecompiled,
                 m_rollbackableStorage, m_blockHeader, message(), m_origin,
-                buildLegacyExternalCaller(), m_precompiledManager));
+                buildLegacyExternalCaller(), m_precompiledManager, m_contextID, m_seq));
         }
         else
         {
