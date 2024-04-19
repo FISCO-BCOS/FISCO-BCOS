@@ -456,8 +456,12 @@ private:
     {
         if (auto const* precompiled = m_precompiledManager.getPrecompiled(message().code_address))
         {
-            m_preparedPrecompiled = precompiled;
-            co_return;
+            if (auto flag = transaction_executor::requiredFlag(*precompiled);
+                !flag || m_ledgerConfig.features().get(*flag))
+            {
+                m_preparedPrecompiled = precompiled;
+                co_return;
+            }
         }
 
         m_executable = co_await getExecutable(m_rollbackableStorage, message().code_address);

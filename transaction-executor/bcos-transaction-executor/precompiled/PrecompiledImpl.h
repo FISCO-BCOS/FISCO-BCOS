@@ -5,6 +5,7 @@
 #include "bcos-executor/src/executive/BlockContext.h"
 #include "bcos-executor/src/executive/TransactionExecutive.h"
 #include "bcos-executor/src/vm/Precompiled.h"
+#include "bcos-framework/ledger/Features.h"
 #include "bcos-table/src/LegacyStorageWrapper.h"
 #include "bcos-table/src/StateStorage.h"
 #include "bcos-utilities/Overloaded.h"
@@ -43,8 +44,22 @@ inline auto buildLegacyExecutive(auto& storage, protocol::BlockHeader const& blo
         std::move(externalCaller), precompiledManager);
 }
 
-using Precompiled =
-    std::variant<executor::PrecompiledContract, std::shared_ptr<precompiled::Precompiled>>;
+struct Precompiled
+{
+    std::variant<executor::PrecompiledContract, std::shared_ptr<precompiled::Precompiled>>
+        m_precompiled;
+    std::optional<ledger::Features::Flag> m_flag;
+
+    explicit Precompiled(auto precompiled) : m_precompiled(std::move(precompiled)) {}
+    explicit Precompiled(auto precompiled, ledger::Features::Flag flag)
+      : m_precompiled(std::move(precompiled)), m_flag(flag)
+    {}
+};
+
+inline std::optional<ledger::Features::Flag> requiredFlag(Precompiled const& precompiled)
+{
+    return precompiled.m_flag;
+}
 
 inline EVMCResult callPrecompiled(Precompiled const& precompiled, auto& storage,
     protocol::BlockHeader const& blockHeader, evmc_message const& message,
@@ -111,7 +126,8 @@ inline EVMCResult callPrecompiled(Precompiled const& precompiled, auto& storage,
 
                 return result;
             }},
-        precompiled);
+        precompiled.m_precompiled);
 }
+
 
 }  // namespace bcos::transaction_executor
