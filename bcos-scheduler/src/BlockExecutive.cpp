@@ -1581,15 +1581,14 @@ void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr outp
 
     if (bcos::precompiled::c_systemTxsAddress.contains(output->from()))
     {
-        if (m_scheduler->ledgerConfig().features().get(
-                ledger::Features::Flag::bugfix_dmc_deploy_gas_used))
-        {
-            if (output->create())
-            {
-                txGasUsed = 0;
-            }
-        }
-        else
+        // Note: We will not consume gas when EOA call sys contract directly.
+        // When dmc return, sys contract is from(), to() is EOA address.
+        // But if this tx is a deploy tx, from() is sys contract but to() is new address.
+        // So we need to fix this bug here: only consider output->newEVMContractAddress().empty()
+        // here. Leaving only EOA call sys contract here.
+        auto hasBugfix = m_scheduler->ledgerConfig().features().get(
+            ledger::Features::Flag::bugfix_dmc_deploy_gas_used);
+        if (!hasBugfix || (hasBugfix && output->newEVMContractAddress().empty()))
         {
             txGasUsed = 0;
         }
