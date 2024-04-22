@@ -275,9 +275,12 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
     try
     {
         std::atomic<bool> isWarnedTimeout(false);
+
+#if defined(WITH_TBB)
         tbb::parallel_for(tbb::blocked_range<unsigned int>(0, m_threadNum),
             [&](const tbb::blocked_range<unsigned int>& _r) {
                 (void)_r;
+#endif
                 EnvInfo envInfo(block.blockHeader(), m_pNumberHash, 0);
                 envInfo.setPrecompiledEngine(executiveContext);
                 auto executive = createAndInitExecutive(executiveContext->getState(), envInfo);
@@ -295,7 +298,9 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
 
                     txDag->executeUnit(executive);
                 }
+#if defined(WITH_TBB)
             });
+#endif
     }
     catch (exception& e)
     {

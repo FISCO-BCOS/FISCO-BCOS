@@ -51,11 +51,15 @@ h256 getHash256(const std::vector<dev::bytes>& _bytesCaches)
     while (bytesCachesTemp.size() > 1)
     {
         std::vector<dev::bytes> higherLevelList;
-        int size = (bytesCachesTemp.size() + MAX_CHILD_COUNT - 1) / MAX_CHILD_COUNT;
+        size_t size = (bytesCachesTemp.size() + MAX_CHILD_COUNT - 1) / MAX_CHILD_COUNT;
         higherLevelList.resize(size);
+#if defined(WITH_TBB)
         tbb::parallel_for(
             tbb::blocked_range<size_t>(0, size), [&](const tbb::blocked_range<size_t>& _r) {
                 for (uint32_t i = _r.begin(); i < _r.end(); ++i)
+#else
+        for (size_t i = 0; i < size; ++i)
+#endif
                 {
                     bytes byteValue;
                     for (uint32_t j = 0; j < MAX_CHILD_COUNT; j++)
@@ -69,7 +73,9 @@ h256 getHash256(const std::vector<dev::bytes>& _bytesCaches)
                     }
                     higherLevelList[i] = crypto::Hash(byteValue).asBytes();
                 }
+#if defined(WITH_TBB)
             });
+#endif
         bytesCachesTemp = std::move(higherLevelList);
     }
     return crypto::Hash(bytesCachesTemp[0]);
@@ -90,11 +96,15 @@ void getMerkleProof(const std::vector<dev::bytes>& _bytesCaches,
     while (bytesCachesTemp.size() > 1)
     {
         std::vector<dev::bytes> higherLevelList;
-        int size = (bytesCachesTemp.size() + MAX_CHILD_COUNT - 1) / MAX_CHILD_COUNT;
+        size_t size = (bytesCachesTemp.size() + MAX_CHILD_COUNT - 1) / MAX_CHILD_COUNT;
         higherLevelList.resize(size);
+#if defined(WITH_TBB)
         tbb::parallel_for(
             tbb::blocked_range<size_t>(0, size), [&](const tbb::blocked_range<size_t>& _r) {
                 for (uint32_t i = _r.begin(); i < _r.end(); ++i)
+#else
+        for (size_t i = 0; i < size; ++i)
+#endif
                 {
                     bytes byteValue;
                     std::vector<dev::bytes> childList;
@@ -116,7 +126,9 @@ void getMerkleProof(const std::vector<dev::bytes>& _bytesCaches,
                         (*_parent2ChildList)[parentNode].emplace_back(toHex(child));
                     }
                 }
+#if defined(WITH_TBB)
             });
+#endif
         bytesCachesTemp = std::move(higherLevelList);
     }
 

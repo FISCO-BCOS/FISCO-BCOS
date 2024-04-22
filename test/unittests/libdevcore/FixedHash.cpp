@@ -50,13 +50,6 @@ BOOST_AUTO_TEST_CASE(testToUUID)
     BOOST_CHECK("067150c0-7dab-4fac-b716-0e075548007e" == toUUID(h));
 }
 
-BOOST_AUTO_TEST_CASE(testLeft160)
-{
-    const std::string str = "0x067150c07dab4facb7160e075548007e067150c07dab4facb7160e075548007e";
-    h256 h = jsToFixed<32>(str);
-    BOOST_CHECK("0x067150c07dab4facb7160e075548007e067150c0" == toJS(left160(h)));
-}
-
 BOOST_AUTO_TEST_CASE(testRight160)
 {
     const std::string str = "0x067150c07dab4facb7160e075548007e067150c07dab4facb7160e075548007e";

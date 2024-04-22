@@ -55,13 +55,19 @@ void PartiallyBlock::calTxsHashBytes()
     std::shared_ptr<dev::bytes> txsHashBytes = std::make_shared<dev::bytes>();
     // get transaction hash
     m_txsHash->resize(m_transactions->size());
+#if defined(WITH_TBB)
     tbb::parallel_for(tbb::blocked_range<size_t>(0, m_transactions->size()),
         [&](const tbb::blocked_range<size_t>& _r) {
             for (uint32_t i = _r.begin(); i < _r.end(); ++i)
+#else
+    for (size_t i = 0; i < m_transactions->size(); ++i)
+#endif
             {
                 (*m_txsHash)[i] = (*m_transactions)[i]->hash();
             }
+#if defined(WITH_TBB)
         });
+#endif
 }
 
 void PartiallyBlock::decodeProposal(bytesConstRef _blockBytes, bool const& _onlyTxsHash)
