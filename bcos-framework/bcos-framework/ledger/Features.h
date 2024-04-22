@@ -154,7 +154,7 @@ public:
                     {Flag::bugfix_empty_abi_reset, Flag::bugfix_eip55_addr,
                         Flag::bugfix_sharding_call_in_child_executive,
                         Flag::bugfix_internal_create_permission_denied}},
-                {protocol::BlockVersion::V3_7_2_VERSION, {Flag::bugfix_eoa_as_contract}}});
+                {protocol::BlockVersion::V3_7_3_VERSION, {Flag::bugfix_eoa_as_contract}}});
         for (const auto& upgradeFeatures : upgradeRoadmap)
         {
             if (((to < protocol::BlockVersion::V3_2_7_VERSION) && (to >= upgradeFeatures.to)) ||
