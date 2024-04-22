@@ -61,7 +61,7 @@ public:
         PROTOCOL_ID const& _protocolId, NodeID const& _nodeId, h256 const& _genesisHash,
         unsigned const& _idleWaitMs = 200, int64_t const& _gossipInterval = 1000,
         int64_t const& _gossipPeers = 3, bool const& _enableSendTxsByTree = false,
-        bool const& _enableSendBlockStatusByTree = true, int64_t const& _syncTreeWidth = 3, bool _enableFreeNodeRead = false)
+        bool const& _enableSendBlockStatusByTree = true, int64_t const& _syncTreeWidth = 3, bool _enableFreeNodeRead = false, int32_t _syncInfoPrintInterval = 10)
       : SyncInterface(),
         Worker("Sync-" + std::to_string(_protocolId), _idleWaitMs),
         m_service(_service),
@@ -74,7 +74,8 @@ public:
         m_genesisHash(_genesisHash),
         m_enableSendTxsByTree(_enableSendTxsByTree),
         m_enableSendBlockStatusByTree(_enableSendBlockStatusByTree),
-        m_enableFreeNodeRead(_enableFreeNodeRead)
+        m_enableFreeNodeRead(_enableFreeNodeRead),
+        m_syncInfoPrintInterval(_syncInfoPrintInterval)
     {
         /// set thread name
         std::string threadName = "Sync-" + std::to_string(m_groupId);
@@ -350,6 +351,7 @@ private:
 
     bool m_enableFreeNodeRead = false;
     bool m_syncInfoPrinted = false;
+    int32_t m_syncInfoPrintInterval = 10; // in minutes
 
 public:
     void maintainBlocks();

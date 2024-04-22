@@ -86,7 +86,9 @@ void Host::startAccept(boost::system::error_code boost_error)
                 /// network acception failed
                 if (ec || !m_run)
                 {
-                    HOST_LOG(ERROR) << "Error: " << ec;
+                    HOST_LOG(ERROR)
+                        << LOG_DESC("accept connection failed") << LOG_KV("endpoint", endpoint)
+                        << LOG_KV("code", ec.value()) << LOG_KV("message", ec.message());
                     socket->close();
                     startAccept();
 
@@ -144,7 +146,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
                 (BASIC_CONSTRAINTS*)X509_get_ext_d2i(cert, NID_basic_constraints, &crit, NULL);
             if (!basic)
             {
-                HOST_LOG(WARNING) << LOG_DESC("Get ca basic failed");
+                HOST_LOG(INFO) << LOG_DESC("Get ca basic failed");
                 return preverified;
             }
             /// ignore ca
@@ -241,7 +243,7 @@ NodeInfo Host::nodeInfo()
     catch (std::exception& e)
     {
         HOST_LOG(INFO) << LOG_DESC("Get node information from cert failed.")
-                        << boost::diagnostic_information(e);
+                       << boost::diagnostic_information(e);
         return m_nodeInfo;
     }
     return m_nodeInfo;
@@ -315,17 +317,26 @@ void Host::handshakeServer(const boost::system::error_code& error,
 {
     if (error)
     {
-        HOST_LOG(WARNING) << LOG_DESC("handshakeServer Handshake failed")
-                          << LOG_KV("code", error.value())
-                          << LOG_KV("message", error.message())
-                          << LOG_KV("endpoint", socket->nodeIPEndpoint());
+        if (m_connectionWarning)
+        {
+            HOST_LOG(WARNING) << LOG_DESC("handshakeServer failed")
+                              << LOG_KV("remote endpoint", socket->remoteEndpoint())
+                              << LOG_KV("code", error.value())
+                              << LOG_KV("message", error.message());
+        }
+        else
+        {
+            HOST_LOG(DEBUG) << LOG_DESC("handshakeServer failed")
+                            << LOG_KV("remote endpoint", socket->remoteEndpoint())
+                            << LOG_KV("code", error.value()) << LOG_KV("message", error.message());
+        }
         socket->close();
         return;
     }
     if (endpointPublicKey->empty())
     {
-        HOST_LOG(WARNING) << LOG_DESC("handshakeServer get nodeID failed")
-                          << LOG_KV("remote endpoint", socket->remoteEndpoint());
+        HOST_LOG(INFO) << LOG_DESC("handshakeServer get nodeID failed")
+                       << LOG_KV("remote endpoint", socket->remoteEndpoint());
         socket->close();
         return;
     }
@@ -452,9 +463,8 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
         /// connection timer error
         if (error && error != boost::asio::error::operation_aborted)
         {
-            HOST_LOG(INFO) << LOG_DESC("AsyncConnect timer failed")
-                            << LOG_KV("code", error.value())
-                            << LOG_KV("message", error.message());
+            HOST_LOG(INFO) << LOG_DESC("AsyncConnect timer failed") << LOG_KV("code", error.value())
+                           << LOG_KV("message", error.message());
         }
         if (socket->isConnected())
         {
@@ -469,8 +479,8 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
         if (ec)
         {
             HOST_LOG(WARNING) << LOG_DESC("TCP Connection refused by node")
-                            << LOG_KV("endpoint", _nodeIPEndpoint)
-                            << LOG_KV("message", ec.message());
+                              << LOG_KV("endpoint", _nodeIPEndpoint)
+                              << LOG_KV("message", ec.message());
             socket->close();
 
             m_threadPool->enqueue([callback, _nodeIPEndpoint]() {
@@ -509,10 +519,8 @@ void Host::handshakeClient(const boost::system::error_code& error,
     erasePendingConns(_nodeIPEndpoint);
     if (error)
     {
-        HOST_LOG(INFO) << LOG_DESC("handshakeClient failed")
-                          << LOG_KV("endpoint", _nodeIPEndpoint)
-                          << LOG_KV("code", error.value())
-                          << LOG_KV("message", error.message());
+        HOST_LOG(INFO) << LOG_DESC("handshakeClient failed") << LOG_KV("endpoint", _nodeIPEndpoint)
+                       << LOG_KV("code", error.value()) << LOG_KV("message", error.message());
 
         if (socket->isConnected())
         {

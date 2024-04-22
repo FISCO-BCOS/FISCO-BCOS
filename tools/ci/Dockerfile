@@ -16,7 +16,6 @@ RUN apt-get -q update && apt-get install -qy --no-install-recommends \
     && apt-get install -qy --no-install-recommends tzdata \
     && dpkg-reconfigure --frontend noninteractive tzdata \
     && rm -rf /var/lib/apt/lists/*
-
 RUN if [ "${TARGETARCH}" = "amd64" ]; then \
       wget -q https://github.com/Kitware/CMake/releases/download/v3.21.0/cmake-3.21.0-Linux-x86_64.sh -O /tmp/cmake-3.21.0-Linux-x86_64.sh && \
       chmod +x /tmp/cmake-3.21.0-Linux-x86_64.sh && \
@@ -28,8 +27,6 @@ RUN if [ "${TARGETARCH}" = "amd64" ]; then \
       /tmp/cmake-3.21.0-Linux-aarch64.sh --prefix=/usr/local --exclude-subdir --skip-license && \
       rm /tmp/cmake-3.21.0-Linux-aarch64.sh; \
     fi
-
-
 RUN git clone https://github.com/FISCO-BCOS/FISCO-BCOS.git && cd FISCO-BCOS \
     && git checkout ${SOURCE} && if [ "${TARGETARCH}" != "amd64" ]; then cmake -DARCH_NATIVE=on . ;else cmake .;fi && make -j2 && strip bin/fisco-bcos
 

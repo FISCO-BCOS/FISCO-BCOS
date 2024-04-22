@@ -27,6 +27,7 @@
 
 #include "Common.h"
 #include "SocketFace.h"
+#include "libdevcore/Log.h"
 #include <libdevcore/FileSystem.h>
 #include <openssl/ec.h>
 #include <openssl/ssl.h>
@@ -51,8 +52,8 @@ public:
         }
         catch (Exception const& _e)
         {
-            SESSION_LOG(ERROR) << "ERROR: " << diagnostic_information(_e);
-            SESSION_LOG(ERROR) << "Ssl Socket Init Fail! Please Check CERTIFICATE!";
+            SESSION_LOG(ERROR) << LOG_DESC("Ssl Socket Init Fail! Please Check CERTIFICATE!")
+                               << LOG_KV("message", diagnostic_information(_e));
         }
     }
     ~Socket() { close(); }
@@ -69,8 +70,7 @@ public:
                 m_wsSocket->lowest_layer().close();
         }
         catch (...)
-        {
-        }
+        {}
     }
 
     virtual bi::tcp::endpoint remoteEndpoint(

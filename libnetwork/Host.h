@@ -121,7 +121,10 @@ public:
     virtual void setWhitelist(dev::PeerWhitelist::Ptr _whitelist) { m_whitelist = _whitelist; }
     virtual dev::PeerWhitelist::Ptr whitelist() { return m_whitelist; }
     virtual NodeInfo nodeInfo();
-
+    virtual void setConnectionWarning(bool _connectionWarning)
+    {
+        m_connectionWarning = _connectionWarning;
+    }
 
 private:
     /// obtain the common name from the subject:
@@ -180,13 +183,14 @@ private:
 
     MessageFactory::Ptr m_messageFactory;
 
-    std::string m_listenHost = "";
+    std::string m_listenHost;
     uint16_t m_listenPort = 0;
 
     std::function<void(NetworkException, NodeInfo const&, std::shared_ptr<SessionFace>)>
         m_connectionHandler;
 
     bool m_run = false;
+    bool m_connectionWarning = true;
 
     std::shared_ptr<std::thread> m_hostThread;
 
