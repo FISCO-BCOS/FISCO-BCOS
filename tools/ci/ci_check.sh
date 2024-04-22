@@ -102,7 +102,7 @@ check_consensus_and_sync()
     local sleep_seconds=${1}
     bash start_all.sh && sleep 2
     send_transaction
-    sleep 3
+    sleep "${sleep_seconds}"
     check_reports 1 4 "check report block failed!" "==============check report block is ok"
     bash stop_all.sh
     rm -rf node0/data/ node*/log

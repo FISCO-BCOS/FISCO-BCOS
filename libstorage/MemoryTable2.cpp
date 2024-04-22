@@ -358,24 +358,34 @@ dev::storage::TableData::Ptr MemoryTable2::dumpWithoutOptimize()
         m_tableData = std::make_shared<dev::storage::TableData>();
         m_tableData->info = m_tableInfo;
         m_tableData->dirtyEntries = std::make_shared<Entries>();
+        m_tableData->newEntries = std::make_shared<Entries>();
 
         auto tempEntries = tbb::concurrent_vector<Entry::Ptr>();
-
-        tbb::parallel_for_each(
-            m_dirty.begin(), m_dirty.end(), [&](const std::pair<const uint64_t, Entry::Ptr>& _p) {
+#if defined(WITH_TBB)
+        tbb::parallel_for_each(m_dirty.begin(), m_dirty.end(),
+            [&](const std::pair<const uint64_t, Entry::Ptr>& _p)
+#else
+        for (auto& _p : m_dirty)
+#endif
+            {
                 if (!_p.second->deleted())
                 {
                     m_tableData->dirtyEntries->addEntry(_p.second);
                     tempEntries.push_back(_p.second);
                 }
-            });
-
-        m_tableData->newEntries = std::make_shared<Entries>();
+            }
+#if defined(WITH_TBB)
+        );
         tbb::parallel_for_each(m_newEntries.begin(), m_newEntries.end(),
             [&](const std::pair<const std::string, Entries::Ptr>& _p) {
                 tbb::parallel_for(tbb::blocked_range<size_t>(0, _p.second->size(), 1000),
                     [&](tbb::blocked_range<size_t>& rangeIndex) {
                         for (auto i = rangeIndex.begin(); i < rangeIndex.end(); ++i)
+#else
+        for (auto& _p : m_newEntries)
+        {
+            for (size_t i = 0; i < _p.second->size(); i++)
+#endif
                         {
                             if (!_p.second->get(i)->deleted())
                             {
@@ -383,8 +393,12 @@ dev::storage::TableData::Ptr MemoryTable2::dumpWithoutOptimize()
                                 tempEntries.push_back(_p.second->get(i));
                             }
                         }
+#if defined(WITH_TBB)
                     });
             });
+#else
+        }
+#endif
 
         TIME_RECORD("Sort data");
         tbb::parallel_sort(tempEntries.begin(), tempEntries.end(), EntryLessNoLock(m_tableInfo));
@@ -444,9 +458,13 @@ void MemoryTable2::parallelGenData(
     {
         return;
     }
+#if defined(WITH_TBB)
     tbb::parallel_for(tbb::blocked_range<uint64_t>(0, _offsetVec->size() - 1),
         [&](const tbb::blocked_range<uint64_t>& range) {
             for (uint64_t i = range.begin(); i < range.end(); i++)
+#else
+    for (size_t i = 0; i < _offsetVec->size() - 1; i++)
+#endif
             {
                 auto entry = (*_entries)[i];
                 auto startOffSet = (*_offsetVec)[i];
@@ -460,15 +478,19 @@ void MemoryTable2::parallelGenData(
                             fieldIt.first.size());
                         startOffSet += fieldIt.first.size();
 
-                        memcpyWithCheck(&_generatedData[startOffSet],_generatedData.size() - startOffSet, &fieldIt.second[0],
+                        memcpyWithCheck(&_generatedData[startOffSet],
+                            _generatedData.size() - startOffSet, &fieldIt.second[0],
                             fieldIt.second.size());
                         startOffSet += fieldIt.second.size();
                     }
                 }
                 char status = (char)entry->getStatus();
-                memcpyWithCheck(&_generatedData[startOffSet],_generatedData.size() - startOffSet, &status, sizeof(status));
+                memcpyWithCheck(&_generatedData[startOffSet], _generatedData.size() - startOffSet,
+                    &status, sizeof(status));
             }
+#if defined(WITH_TBB)
         });
+#endif
 }
 
 std::shared_ptr<std::vector<size_t>> MemoryTable2::genDataOffset(
@@ -497,22 +519,34 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
         m_tableData = std::make_shared<dev::storage::TableData>();
         m_tableData->info = m_tableInfo;
         m_tableData->dirtyEntries = std::make_shared<Entries>();
+        m_tableData->newEntries = std::make_shared<Entries>();
 
-        tbb::parallel_for_each(
-            m_dirty.begin(), m_dirty.end(), [&](const std::pair<const uint64_t, Entry::Ptr>& _p) {
+#if defined(WITH_TBB)
+        tbb::parallel_for_each(m_dirty.begin(), m_dirty.end(),
+            [&](const std::pair<const uint64_t, Entry::Ptr>& _p)
+#else
+        for (auto& _p : m_dirty)
+#endif
+            {
                 if (!_p.second->deleted())
                 {
                     m_tableData->dirtyEntries->addEntry(_p.second);
                     allSize += (_p.second->capacityOfHashField() + 1);  // 1 for status field
                 }
-            });
+            }
+#if defined(WITH_TBB)
+        );
 
-        m_tableData->newEntries = std::make_shared<Entries>();
         tbb::parallel_for_each(m_newEntries.begin(), m_newEntries.end(),
             [&](const std::pair<const std::string, Entries::Ptr>& _p) {
                 tbb::parallel_for(tbb::blocked_range<size_t>(0, _p.second->size(), 1000),
                     [&](tbb::blocked_range<size_t>& rangeIndex) {
                         for (auto i = rangeIndex.begin(); i < rangeIndex.end(); ++i)
+#else
+        for (auto& _p : m_newEntries)
+        {
+            for (size_t i = 0; i < _p.second->size(); i++)
+#endif
                         {
                             if (!_p.second->get(i)->deleted())
                             {
@@ -521,8 +555,12 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
                                 allSize += (_p.second->get(i)->capacityOfHashField() + 1);
                             }
                         }
+#if defined(WITH_TBB)
                     });
             });
+#else
+        }
+#endif
 
         if (m_tableInfo->enableConsensus)
         {
@@ -550,7 +588,8 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
             {
                 newEntriesOffset = genDataOffset(m_tableData->newEntries, insertDataStartOffset);
             }
-            // Parallel processing dirtyEntries and newEntries
+// Parallel processing dirtyEntries and newEntries
+#if defined(WITH_TBB)
             tbb::parallel_invoke(
                 [this, allData, dirtyEntriesOffset]() {
                     parallelGenData(*allData, dirtyEntriesOffset, m_tableData->dirtyEntries);
@@ -558,6 +597,10 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
                 [this, allData, newEntriesOffset]() {
                     parallelGenData(*allData, newEntriesOffset, m_tableData->newEntries);
                 });
+#else
+            parallelGenData(*allData, dirtyEntriesOffset, m_tableData->dirtyEntries);
+            parallelGenData(*allData, newEntriesOffset, m_tableData->newEntries);
+#endif
 
 
 #if FISCO_DEBUG
@@ -596,10 +639,10 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
                 }
                 else
                 {
-                    // in previous version(<= 2.4.0), we use sha256(...) to calculate hash of the
-                    // data, for now, to keep consistent with transction's implementation, we decide
-                    // to use keccak256(...) to calculate hash of the data. This `else` branch is
-                    // just for compatibility.
+                    // in previous version(<= 2.4.0), we use sha256(...) to calculate hash of
+                    // the data, for now, to keep consistent with transction's implementation,
+                    // we decide to use keccak256(...) to calculate hash of the data. This
+                    // `else` branch is just for compatibility.
                     m_hash = dev::sha256(bR);
                 }
             }

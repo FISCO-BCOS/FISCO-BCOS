@@ -107,7 +107,7 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install openssl@1.1 ccache gmp cmake zlib
       - name: configure
-        run: CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DTESTS=ON -DBUILD_STATIC=ON -DTOOL=ON -DCMAKE_BUILD_TYPE=Release .
+        run: CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DTESTS=ON -DCMAKE_BUILD_TYPE=Release .
       - name: compile
         run: make -j2
       - name: run uint tests

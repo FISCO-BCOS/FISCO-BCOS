@@ -133,9 +133,13 @@ void DownloadingTxsQueue::pop2TxPool(
             record_time = utcTime();
 
             // parallel verify transaction before import
+#if defined(WITH_TBB)
             tbb::parallel_for(tbb::blocked_range<size_t>(0, txs->size()),
                 [&](const tbb::blocked_range<size_t>& _r) {
                     for (size_t j = _r.begin(); j != _r.end(); ++j)
+#else
+            for (size_t j = 0; i < txs->size(); ++j)
+#endif
                     {
                         try
                         {
@@ -151,7 +155,9 @@ void DownloadingTxsQueue::pop2TxPool(
                                               << LOG_KV("hash", (*txs)[j]->hash());
                         }
                     }
+#if defined(WITH_TBB)
                 });
+#endif
             verifySig_time_cost += (utcTime() - record_time);
 
             // import into tx pool

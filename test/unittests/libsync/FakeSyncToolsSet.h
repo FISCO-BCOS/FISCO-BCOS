@@ -107,7 +107,7 @@ public:
 
     Block& getBlock() { return *m_fakeBlock.getBlock(); }
 
-    P2PSession::Ptr createSession(std::string _ip = "127.0.0.1")
+    P2PSession::Ptr createSession(NodeID nodeId = NodeID(), std::string _ip = "127.0.0.1")
     {
         NodeIPEndpoint peer_endpoint(boost::asio::ip::make_address(_ip), m_listenPort);
         KeyPair key_pair = KeyPair::create();
@@ -119,7 +119,7 @@ public:
         std::shared_ptr<SessionFace> session =
             std::make_shared<FakeSessionForHost>(m_host, peer, peer_info);
 #endif
-        std::shared_ptr<P2PSession> session = std::make_shared<FakeSession>(NodeID());
+        std::shared_ptr<P2PSession> session = std::make_shared<FakeSession>(nodeId);
         session->start();
         return session;
     }

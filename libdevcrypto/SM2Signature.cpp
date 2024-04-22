@@ -139,7 +139,7 @@ pair<bool, bytes> dev::recover(bytesConstRef _in)
         h256 r;
         h256 s;
     } in;
-    memcpyWithCheck(&in, sizeof(h256) * 4, _in.data(), min(_in.size(), sizeof(in)));
+    memcpyWithCheck(&in, sizeof(h256) * 5, _in.data(), min(_in.size(), sizeof(in)));
     auto sig = std::make_shared<SM2Signature>(in.r, in.s, in.v);
     if (!sig->isValid())
     {
