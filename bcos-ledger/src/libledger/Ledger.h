@@ -29,6 +29,7 @@
 #include "bcos-framework/storage/Common.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "utilities/Common.h"
+#include <bcos-table/src/StateStorageFactory.h>
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>
@@ -118,6 +119,33 @@ public:
 
     void asyncGetBlockTransactionHashes(bcos::protocol::BlockNumber blockNumber,
         std::function<void(Error::Ptr&&, std::vector<std::string>&&)> callback);
+    void setKeyPageSize(size_t keyPageSize) { m_keyPageSize = keyPageSize; }
+
+protected:
+    storage::StateStorageInterface::Ptr getStateStorage()
+    {
+        if (m_keyPageSize > 0)
+        {
+            // create keyPageStorage
+            storage::StateStorageFactory stateStorageFactory(m_keyPageSize);
+            // getABI function begin in version 320
+            auto keyPageIgnoreTables = std::make_shared<std::set<std::string, std::less<>>>(
+                storage::IGNORED_ARRAY_310.begin(), storage::IGNORED_ARRAY_310.end());
+            auto [error, entry] =
+                m_storage->getRow(ledger::SYS_CONFIG, ledger::SYSTEM_KEY_COMPATIBILITY_VERSION);
+            if (!entry || error)
+            {
+                BOOST_THROW_EXCEPTION(
+                    BCOS_ERROR(GetStorageError, "Not found compatibilityVersion."));
+            }
+            auto [compatibilityVersionStr, _] = entry->template getObject<SystemConfigEntry>();
+            auto const version = bcos::tool::toVersionNumber(compatibilityVersionStr);
+            auto stateStorage = stateStorageFactory.createStateStorage(
+                m_storage, version, true, std::move(keyPageIgnoreTables));
+            return stateStorage;
+        }
+        return std::make_shared<bcos::storage::StateStorage>(m_storage);
+    }
 
 private:
     Error::Ptr checkTableValid(Error::UniquePtr&& error,
@@ -175,5 +203,6 @@ private:
     RecursiveMutex m_receiptMerkleMtx;
     CacheType m_txProofMerkleCache;
     CacheType m_receiptProofMerkleCache;
+    size_t m_keyPageSize = 0;
 };
 }  // namespace bcos::ledger

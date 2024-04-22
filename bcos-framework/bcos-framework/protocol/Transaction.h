@@ -49,7 +49,7 @@ constexpr auto operator<=>(bcos::protocol::TransactionType const& _lhs, auto _rh
     return static_cast<uint8_t>(_lhs) <=> static_cast<uint8_t>(_rhs);
 }
 
-constexpr auto operator==(bcos::protocol::TransactionType const& _lhs, auto _rhs)
+constexpr bool operator==(bcos::protocol::TransactionType const& _lhs, auto _rhs)
     requires(std::same_as<decltype(_rhs), bcos::protocol::TransactionType> ||
              std::unsigned_integral<decltype(_rhs)>)
 {

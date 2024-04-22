@@ -587,7 +587,7 @@ void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt, bool _e
 
 void NodeConfig::NodeConfig::loadWeb3ChainConfig(boost::property_tree::ptree const& _pt)
 {
-    m_genesisConfig.m_web3ChainID = _pt.get<std::string>("web3_chain.chain_id", "0");
+    m_genesisConfig.m_web3ChainID = _pt.get<std::string>("web3.chain_id", "0");
     if (!isNumStr(m_genesisConfig.m_web3ChainID))
     {
         BOOST_THROW_EXCEPTION(

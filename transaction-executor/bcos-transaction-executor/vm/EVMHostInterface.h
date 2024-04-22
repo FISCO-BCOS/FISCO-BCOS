@@ -155,7 +155,7 @@ struct EVMHostInterface
             .block_timestamp = hostContext.timestamp(),
             .block_gas_limit = hostContext.blockGasLimit(),
             .block_prev_randao = {},
-            .chain_id = {},
+            .chain_id = hostContext.chainId(),
             .block_base_fee = {},
         };
         return result;

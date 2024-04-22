@@ -280,6 +280,7 @@ public:
     int64_t timestamp() const { return m_blockHeader.timestamp(); }
     evmc_address const& origin() const { return m_origin; }
     int64_t blockGasLimit() const { return std::get<0>(m_ledgerConfig.gasLimit()); }
+    evmc_uint256be chainId() const { return m_ledgerConfig.chainId().value_or(evmc_uint256be{}); }
 
     /// Revert any changes made (by any of the other calls).
     void log(const evmc_address& address, h256s topics, bytesConstRef data)

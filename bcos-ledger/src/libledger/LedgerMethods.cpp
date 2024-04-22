@@ -438,7 +438,8 @@ bcos::task::Task<bcos::ledger::LedgerConfig::Ptr> bcos::ledger::tag_invoke(
     }
     ledgerConfig->setAuthCheckStatus(
         std::get<0>(co_await getSystemConfigOrDefault(ledger, SYSTEM_KEY_AUTH_CHECK_STATUS, 0)));
-
+    auto [chainId, _] = co_await getSystemConfigOrDefault(ledger, SYSTEM_KEY_WEB3_CHAIN_ID, "0");
+    ledgerConfig->setChainId(bcos::toEvmC(boost::lexical_cast<u256>(chainId)));
     co_return ledgerConfig;
 }
 

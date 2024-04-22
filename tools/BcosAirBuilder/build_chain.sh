@@ -1721,7 +1721,7 @@ generate_genesis_config() {
     ; the chain id, should nerver be changed
     chain_id=${default_chainid}
 
-[web3_chain]
+[web3]
     chain_id=${default_web3_chainid}
 
 [consensus]

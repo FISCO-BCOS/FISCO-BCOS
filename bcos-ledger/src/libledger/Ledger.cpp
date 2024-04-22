@@ -130,9 +130,9 @@ task::Task<std::optional<storage::Entry>> Ledger::getStorageAt(
     // TODO)): blockNumber is not used nowadays
     std::ignore = _blockNumber;
     auto const contractTableName = getContractTableName(SYS_DIRECTORY::USER_APPS, _address);
-    auto keyPageStorage = bcos::storage::KeyPageStorage(m_storage);
+    auto const stateStorage = getStateStorage();
     co_return co_await bcos::storage2::readOne(
-        keyPageStorage, transaction_executor::StateKeyView{contractTableName, _key});
+        *stateStorage, transaction_executor::StateKeyView{contractTableName, _key});
 }
 
 void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
