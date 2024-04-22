@@ -1578,9 +1578,21 @@ void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr outp
 {
     auto txGasUsed = m_gasLimit - output->gasAvailable();
     // Calc the gas set to header
+
     if (bcos::precompiled::c_systemTxsAddress.contains(output->from()))
     {
-        txGasUsed = 0;
+        if (m_scheduler->ledgerConfig().features().get(
+                ledger::Features::Flag::bugfix_dmc_deploy_gas_used))
+        {
+            if (output->create())
+            {
+                txGasUsed = 0;
+            }
+        }
+        else
+        {
+            txGasUsed = 0;
+        }
     }
     m_gasUsed.fetch_add(txGasUsed);
     auto version = m_executiveResults[output->contextID() - m_startContextID].version;
