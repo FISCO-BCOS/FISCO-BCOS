@@ -323,18 +323,10 @@ evmc_result HostContext::callBuiltInPrecompiled(
         catch (protocol::PrecompiledError& e)
         {
             resultCode = (int32_t)TransactionStatus::PrecompiledError;
-            if (features().get(ledger::Features::Flag::bugfix_evm_exception_gas_used))
-            {
-                callResults->gas = _result.gasLeft();
-            }
         }
         catch (std::exception& e)
         {
             resultCode = (int32_t)TransactionStatus::Unknown;
-            if (features().get(ledger::Features::Flag::bugfix_evm_exception_gas_used))
-            {
-                callResults->gas = _result.gasLeft();
-            }
         }
     }
 
