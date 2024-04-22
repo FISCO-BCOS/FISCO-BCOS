@@ -145,6 +145,7 @@ BOOST_AUTO_TEST_CASE(feature)
         "bugfix_dmc_deploy_gas_used",
         "bugfix_staticcall_noaddr_return",
         "bugfix_support_transfer_receive_fallback",
+        "bugfix_evm_exception_gas_used",
         "feature_dmc2serial",
         "feature_sharding",
         "feature_rpbft",
