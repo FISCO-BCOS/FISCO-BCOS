@@ -164,7 +164,7 @@ check_all_contract() {
     fi
 
     LOG_INFO "check block gasUsed"
-    local current_block_number=$(bash console.sh getBlockNumber)
+    local current_block_number=$(bash console.sh getBlockNumber|grep -v error)
     LOG_INFO "check block gasUsed, current number is ${current_block_number}"
     local gas_used=$(bash console.sh getBlockByNumber ${current_block_number} |grep gasUsed |awk -F "'" '{print $2}')
     if [ ${gas_used} -ne 0 ]; then
