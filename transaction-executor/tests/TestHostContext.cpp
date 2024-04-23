@@ -7,6 +7,7 @@
 #include "bcos-crypto/interfaces/crypto/CryptoSuite.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-executor/src/Common.h"
+#include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/GenesisConfig.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-ledger/src/libledger/Ledger.h"
@@ -353,7 +354,7 @@ BOOST_AUTO_TEST_CASE(precompiled)
             message, origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
             bcos::task::syncWait);
         syncWait(hostContext.prepare());
-        auto result = syncWait(hostContext.execute());
+        BOOST_CHECK_NO_THROW(auto result = syncWait(hostContext.execute()));
     }
 
     std::optional<EVMCResult> result;
@@ -384,7 +385,17 @@ BOOST_AUTO_TEST_CASE(precompiled)
             message, origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
             bcos::task::syncWait);
         syncWait(hostContext.prepare());
-        result.emplace(syncWait(hostContext.execute()));
+        BOOST_CHECK_THROW(result.emplace(syncWait(hostContext.execute())),
+            bcos::transaction_executor::NotFoundCodeError);
+
+
+        auto& features = const_cast<bcos::ledger::Features&>(ledgerConfig.features());
+        features.set(bcos::ledger::Features::Flag::feature_sharding);
+        HostContext<decltype(rollbackableStorage)> hostContext2(rollbackableStorage, blockHeader,
+            message, origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
+            bcos::task::syncWait);
+        syncWait(hostContext2.prepare());
+        BOOST_CHECK_NO_THROW(result.emplace(syncWait(hostContext2.execute())));
     }
 
     BOOST_CHECK_EQUAL(result->status_code, 0);

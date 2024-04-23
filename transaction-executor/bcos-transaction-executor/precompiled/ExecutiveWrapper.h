@@ -2,17 +2,20 @@
 #include "../EVMCResult.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
 #include "bcos-crypto/ChecksumAddress.h"
+#include "bcos-executor/src/Common.h"
 #include "bcos-executor/src/executive/TransactionExecutive.h"
 #include "bcos-executor/src/vm/HostContext.h"
 #include <evmc/evmc.h>
 #include <memory>
+
+#define EXECUTIVE_WRAPPER(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTIVE_WRAPPER")
 
 namespace bcos::transaction_executor
 {
 
 inline std::shared_ptr<precompiled::Precompiled> getInnerPrecompiled(auto const& precompiled)
 {
-    return std::get<std::shared_ptr<precompiled::Precompiled>>(precompiled);
+    return std::get<std::shared_ptr<precompiled::Precompiled>>(precompiled.m_precompiled);
 }
 
 template <class T>
@@ -68,6 +71,8 @@ public:
             auto newSeq = seq() + 1;
             input->codeAddress =
                 bcos::newEVMAddress(m_hashImpl, m_blockContext->number(), m_contextID, newSeq);
+            EXECUTIVE_WRAPPER(TRACE)
+                << "InternalCreate newSeq:" << newSeq << " codeAddress:" << input->codeAddress;
             auto tuple = create(std::move(input));
             return std::move(std::get<1>(tuple));
         }

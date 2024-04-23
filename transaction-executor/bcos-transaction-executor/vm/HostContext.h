@@ -29,6 +29,7 @@
 #include "bcos-concepts/ByteBuffer.h"
 #include "bcos-crypto/hasher/Hasher.h"
 #include "bcos-executor/src/Common.h"
+#include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/ledger/Account.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
@@ -313,14 +314,15 @@ public:
 
     task::Task<EVMCResult> execute()
     {
+        std::optional<EVMCResult> evmResult;
         if (m_ledgerConfig.authCheckStatus() != 0U)
         {
             HOST_CONTEXT_LOG(DEBUG) << "Checking auth..." << m_ledgerConfig.authCheckStatus();
             auto [result, param] = checkAuth(m_rollbackableStorage, m_blockHeader, message(),
-                m_origin, buildLegacyExternalCaller(), m_precompiledManager);
+                m_origin, buildLegacyExternalCaller(), m_precompiledManager, m_contextID, m_seq);
             if (!result)
             {
-                co_return EVMCResult{
+                evmResult.emplace(
                     evmc_result{.status_code = static_cast<evmc_status_code>(param->evmStatus),
                         .gas_left = param->gas,
                         .gas_refund = 0,
@@ -328,29 +330,60 @@ public:
                         .output_size = 0,
                         .release = nullptr,
                         .create_address = {},
-                        .padding = {}}};
+                        .padding = {}});
             };
         }
 
-        if (message().kind == EVMC_CREATE || message().kind == EVMC_CREATE2)
+        if (!evmResult)
         {
-            co_return co_await executeCreate();
+            if (message().kind == EVMC_CREATE || message().kind == EVMC_CREATE2)
+            {
+                evmResult.emplace(co_await executeCreate());
+            }
+            else
+            {
+                evmResult.emplace(co_await executeCall());
+            }
         }
-        else
+
+        // 如果本次调用系统合约失败，不消耗gas
+        // If the call to system contract failed, the gasUsed is cleared to zero
+        if (evmResult->status_code != EVMC_SUCCESS)
         {
-            co_return co_await executeCall();
+            if (auto hexAddress = address2HexString(message().code_address);
+                bcos::precompiled::c_systemTxsAddress.find(hexAddress) !=
+                bcos::precompiled::c_systemTxsAddress.end())
+            {
+                evmResult->gas_left = message().gas;
+                HOST_CONTEXT_LOG(TRACE) << "System contract call failed, clear gasUsed, gas_left: "
+                                        << evmResult->gas_left;
+            }
         }
+
+
+        // 如果本次调用由系统合约发起，不消耗gas
+        // If the call is initiated by the system contract, the gasUsed is cleared to zero
+        if (auto hexAddress = address2HexString(message().sender);
+            bcos::precompiled::c_systemTxsAddress.find(hexAddress) !=
+            bcos::precompiled::c_systemTxsAddress.end())
+        {
+            evmResult->gas_left = message().gas;
+            HOST_CONTEXT_LOG(TRACE)
+                << "System contract sender call, clear gasUsed, gas_left: " << evmResult->gas_left;
+        }
+        co_return std::move(*evmResult);
     }
 
     task::Task<EVMCResult> externalCall(const evmc_message& message)
     {
+        ++m_seq;
         if (c_fileLogLevel <= LogLevel::TRACE) [[unlikely]]
         {
-            HOST_CONTEXT_LOG(TRACE) << "External call, kind: " << message.kind
-                                    << " sender:" << address2HexString(message.sender)
-                                    << " recipient:" << address2HexString(message.recipient);
+            HOST_CONTEXT_LOG(TRACE)
+                << "External call, kind: " << message.kind << " seq:" << m_seq
+                << " sender:" << address2HexString(message.sender)
+                << " recipient:" << address2HexString(message.recipient) << " gas:" << message.gas;
         }
-        ++m_seq;
 
         HostContext hostcontext(innerConstructor, m_rollbackableStorage, m_blockHeader, message,
             m_origin, {}, m_contextID, m_seq, m_precompiledManager, m_ledgerConfig, m_hashImpl,
@@ -427,7 +460,7 @@ private:
         {
             createAuthTable(m_rollbackableStorage, m_blockHeader, message(), m_origin,
                 co_await ledger::account::path(m_myAccount), buildLegacyExternalCaller(),
-                m_precompiledManager);
+                m_precompiledManager, m_contextID, m_seq);
         }
 
         auto& ref = message();
@@ -456,8 +489,12 @@ private:
     {
         if (auto const* precompiled = m_precompiledManager.getPrecompiled(message().code_address))
         {
-            m_preparedPrecompiled = precompiled;
-            co_return;
+            if (auto flag = transaction_executor::requiredFlag(*precompiled);
+                !flag || m_ledgerConfig.features().get(*flag))
+            {
+                m_preparedPrecompiled = precompiled;
+                co_return;
+            }
         }
 
         m_executable = co_await getExecutable(m_rollbackableStorage, message().code_address);
@@ -517,7 +554,7 @@ private:
         {
             result.emplace(transaction_executor::callPrecompiled(*m_preparedPrecompiled,
                 m_rollbackableStorage, m_blockHeader, message(), m_origin,
-                buildLegacyExternalCaller(), m_precompiledManager));
+                buildLegacyExternalCaller(), m_precompiledManager, m_contextID, m_seq));
         }
         else
         {
@@ -539,11 +576,13 @@ private:
 
         if (result->status_code != 0)
         {
-            HOST_CONTEXT_LOG(DEBUG)
-                << "Execute transaction failed, status: " << result->status_code;
+            HOST_CONTEXT_LOG(DEBUG) << "Execute failed, status: " << result->status_code;
             co_await m_rollbackableStorage.rollback(savepoint);
         }
 
+        HOST_CONTEXT_LOG(DEBUG) << "Execute finished, status: " << result->status_code
+                                << " gas_left: " << result->gas_left
+                                << " gas refund: " << result->gas_refund;
         co_return std::move(*result);
     }
 };

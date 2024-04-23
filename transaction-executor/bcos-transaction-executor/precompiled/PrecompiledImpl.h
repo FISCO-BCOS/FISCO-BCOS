@@ -5,6 +5,7 @@
 #include "bcos-executor/src/executive/BlockContext.h"
 #include "bcos-executor/src/executive/TransactionExecutive.h"
 #include "bcos-executor/src/vm/Precompiled.h"
+#include "bcos-framework/ledger/Features.h"
 #include "bcos-table/src/LegacyStorageWrapper.h"
 #include "bcos-table/src/StateStorage.h"
 #include "bcos-utilities/Overloaded.h"
@@ -27,7 +28,8 @@ namespace bcos::transaction_executor
 {
 
 inline auto buildLegacyExecutive(auto& storage, protocol::BlockHeader const& blockHeader,
-    std::string contractAddress, ExternalCaller auto externalCaller, auto const& precompiledManager)
+    std::string contractAddress, ExternalCaller auto externalCaller, auto const& precompiledManager,
+    int64_t contextID, int64_t seq)
 {
     auto storageWrapper =
         std::make_shared<storage::LegacyStateStorageWrapper<std::decay_t<decltype(storage)>>>(
@@ -38,17 +40,31 @@ inline auto buildLegacyExecutive(auto& storage, protocol::BlockHeader const& blo
         blockHeader.timestamp(), blockHeader.version(), bcos::executor::VMSchedule{}, false, false);
     return std::make_shared<
         ExecutiveWrapper<decltype(externalCaller), std::decay_t<decltype(precompiledManager)>>>(
-        std::move(blockContext), std::move(contractAddress), 0, 0, wasm::GasInjector{},
+        std::move(blockContext), std::move(contractAddress), contextID, seq, wasm::GasInjector{},
         std::move(externalCaller), precompiledManager);
 }
 
-using Precompiled =
-    std::variant<executor::PrecompiledContract, std::shared_ptr<precompiled::Precompiled>>;
+struct Precompiled
+{
+    std::variant<executor::PrecompiledContract, std::shared_ptr<precompiled::Precompiled>>
+        m_precompiled;
+    std::optional<ledger::Features::Flag> m_flag;
+
+    explicit Precompiled(auto precompiled) : m_precompiled(std::move(precompiled)) {}
+    explicit Precompiled(auto precompiled, ledger::Features::Flag flag)
+      : m_precompiled(std::move(precompiled)), m_flag(flag)
+    {}
+};
+
+inline std::optional<ledger::Features::Flag> requiredFlag(Precompiled const& precompiled)
+{
+    return precompiled.m_flag;
+}
 
 inline EVMCResult callPrecompiled(Precompiled const& precompiled, auto& storage,
     protocol::BlockHeader const& blockHeader, evmc_message const& message,
     evmc_address const& origin, ExternalCaller auto&& externalCaller,
-    auto const& precompiledManager)
+    auto const& precompiledManager, int64_t contextID, int64_t seq)
 {
     return std::visit(
         bcos::overloaded{
@@ -79,7 +95,8 @@ inline EVMCResult callPrecompiled(Precompiled const& precompiled, auto& storage,
             [&](std::shared_ptr<precompiled::Precompiled> const& precompiled) {
                 auto contractAddress = address2HexString(message.code_address);
                 auto executive = buildLegacyExecutive(storage, blockHeader, contractAddress,
-                    std::forward<decltype(externalCaller)>(externalCaller), precompiledManager);
+                    std::forward<decltype(externalCaller)>(externalCaller), precompiledManager,
+                    contextID, seq);
 
                 auto params = std::make_shared<precompiled::PrecompiledExecResult>();
                 params->m_sender = address2HexString(message.sender);
@@ -109,7 +126,8 @@ inline EVMCResult callPrecompiled(Precompiled const& precompiled, auto& storage,
 
                 return result;
             }},
-        precompiled);
+        precompiled.m_precompiled);
 }
+
 
 }  // namespace bcos::transaction_executor

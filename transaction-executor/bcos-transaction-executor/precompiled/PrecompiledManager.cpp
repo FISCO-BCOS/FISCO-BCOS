@@ -17,6 +17,7 @@
 #include "bcos-executor/src/precompiled/extension/PaillierPrecompiled.h"
 #include "bcos-executor/src/precompiled/extension/RingSigPrecompiled.h"
 #include "bcos-executor/src/precompiled/extension/ZkpPrecompiled.h"
+#include "bcos-transaction-executor/precompiled/PrecompiledImpl.h"
 #include <memory>
 
 
@@ -79,7 +80,8 @@ bcos::transaction_executor::PrecompiledManager::PrecompiledManager(crypto::Hash:
     m_address2Precompiled.emplace_back(
         0x10002, std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl, false));
     m_address2Precompiled.emplace_back(
-        0x1010, std::make_shared<precompiled::ShardingPrecompiled>(m_hashImpl));
+        0x1010, Precompiled{std::make_shared<precompiled::ShardingPrecompiled>(m_hashImpl),
+                    ledger::Features::Flag::feature_sharding});
     m_address2Precompiled.emplace_back(
         0x100f, std::make_shared<precompiled::CastPrecompiled>(m_hashImpl));
     m_address2Precompiled.emplace_back(
