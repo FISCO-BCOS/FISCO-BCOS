@@ -172,8 +172,8 @@ check_all_contract() {
     else
         LOG_ERROR "check block gasUsed failed, gas is ${gas_used}"
         exit 1;
-    fi
-    
+    fif
+
     LOG_INFO "addBalance to contract ${test_contract_address}"
     bash console.sh addBalance ${test_contract_address} 10000000
 
