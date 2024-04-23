@@ -20,10 +20,14 @@ class EVMAccount
 private:
     constexpr static auto EVM_TABLE_NAME_LENGTH =
         ledger::SYS_DIRECTORY::USER_APPS.size() + sizeof(evmc_address::bytes) * 2;
-    using EVMTableName = std::array<char, EVM_TABLE_NAME_LENGTH>;
 
     Storage& m_storage;
-    EVMTableName m_tableName;
+    struct EVMTableName
+    {
+        std::array<char, 6> dir;
+        std::array<char, 40> table;
+    } m_tableNameStorage;
+    std::string_view m_tableName;
 
     friend task::Task<void> tag_invoke(tag_t<create> /*unused*/, EVMAccount& account)
     {
@@ -194,33 +198,30 @@ private:
         co_return concepts::bytebuffer::toView(account.m_tableName);
     }
 
-    static EVMTableName getTableName(const evmc_address& address)
-    {
-        EVMTableName tableName;
-        auto fixedAddressBytes = bcos::address2FixedArray(address);
-        char* lastIt = tableName.data();
-        if (bcos::precompiled::c_systemTxsAddress.contains(fixedAddressBytes))
-        {
-            lastIt = std::uninitialized_copy(ledger::SYS_DIRECTORY::SYS_APPS.begin(),
-                ledger::SYS_DIRECTORY::SYS_APPS.end(), tableName.data());
-        }
-        else
-        {
-            lastIt = std::uninitialized_copy(ledger::SYS_DIRECTORY::USER_APPS.begin(),
-                ledger::SYS_DIRECTORY::USER_APPS.end(), tableName.data());
-        }
-        boost::algorithm::hex_lower(concepts::bytebuffer::toView(address.bytes), lastIt);
-        return tableName;
-    }
-
 public:
     EVMAccount(const EVMAccount&) = delete;
     EVMAccount(EVMAccount&&) = delete;
     EVMAccount& operator=(const EVMAccount&) = delete;
     EVMAccount& operator=(EVMAccount&&) = delete;
-    EVMAccount(Storage& storage, const evmc_address& address)
-      : m_storage(storage), m_tableName(getTableName(address))
-    {}
+    EVMAccount(Storage& storage, const evmc_address& address) : m_storage(storage)
+    {
+        boost::algorithm::hex_lower(
+            concepts::bytebuffer::toView(address.bytes), m_tableNameStorage.table.data());
+        if (auto table =
+                std::string_view{m_tableNameStorage.table.data(), m_tableNameStorage.table.size()};
+            bcos::precompiled::c_systemTxsAddress.contains(table))
+        {
+            std::uninitialized_copy(ledger::SYS_DIRECTORY::SYS_APPS.begin(),
+                ledger::SYS_DIRECTORY::SYS_APPS.end(), m_tableNameStorage.dir.data() + 1);
+            m_tableName = {m_tableNameStorage.dir.data() + 1, sizeof(m_tableNameStorage) - 1};
+        }
+        else
+        {
+            std::uninitialized_copy(ledger::SYS_DIRECTORY::USER_APPS.begin(),
+                ledger::SYS_DIRECTORY::USER_APPS.end(), m_tableNameStorage.dir.data());
+            m_tableName = {m_tableNameStorage.dir.data(), sizeof(m_tableNameStorage)};
+        }
+    }
     ~EVMAccount() noexcept = default;
 };
 
