@@ -43,6 +43,7 @@ enum VERSION : uint32_t
     V2_8_0 = 0x02080000,
     V2_9_0 = 0x02090000,
     V2_10_0 = 0x020A0000,
+    V2_11_0 = 0x020B0000,
 };
 
 enum ProtocolVersion : uint32_t
@@ -140,6 +141,8 @@ public:
 
     std::atomic_bool shouldExit;
 
+    std::mutex& signalMutex() const { return x_signalMutex; }
+
 private:
     VERSION m_version = RC3_VERSION;
     bool m_compress;
@@ -163,6 +166,7 @@ private:
 #else
     bool m_enableIgnoreObserverWriteRequest = false;
 #endif
+    mutable std::mutex x_signalMutex;
 };
 
 #define g_BCOSConfig GlobalConfigure::instance()

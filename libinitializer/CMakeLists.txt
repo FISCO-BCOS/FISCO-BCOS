@@ -4,7 +4,7 @@ file(GLOB HEADERS "*.h")
 add_library(initializer ${SRC_LIST} ${HEADERS})
 target_include_directories(initializer SYSTEM BEFORE PUBLIC ${BOOST_INCLUDE_DIR})
 
-target_link_libraries(initializer PUBLIC channelserver rpc ledger TBB devcore eventfilter)
+target_link_libraries(initializer PUBLIC channelserver rpc ledger TBB devcore eventfilter Boost::LogSetup)
 if (NOT DEBUG)
     target_link_libraries(initializer PUBLIC TCMalloc)
 endif()

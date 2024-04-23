@@ -26,7 +26,58 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 5
+      - name: check commit
+        if: ${{ runner.os == 'Linux' && github.base_ref != 'master' && github.event_name == 'pull_request' }}
+        run: bash tools/ci/check-commit.sh
+      - uses: actions/cache@v2
+        id: cache
+        with:
+          path: deps/src
+          key: deps-v10-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          restore-keys: |
+            deps-v10-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            deps-v10-${{ runner.temp }}-${{ github.base_ref }}-
+            deps-v10-${{ runner.temp }}-
+      - uses: actions/cache@v2
+        id: ccache
+        with:
+          path: ccache
+          key: ccache-v4-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          restore-keys: |
+            ccache-v4-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            ccache-v4-${{ runner.temp }}-${{ github.base_ref }}-
+            ccache-v4-${{ runner.temp }}-
+      - name: install Ubuntu dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt install -y g++ libssl-dev openssl cmake git build-essential autoconf texinfo flex patch bison libgmp-dev zlib1g-dev automake libtool
+      - name: Setup cmake
+        if: runner.os == 'Linux'
+        uses: jwlawson/actions-setup-cmake@v1.14
+        with:
+          cmake-version: '3.21.0'
+      - name: configure
+        run: cmake -DTESTS=ON -DBUILD_STATIC=ON -DTOOL=ON -DCMAKE_BUILD_TYPE=Release .
+      - name: compile
+        run: make -j2
+      - name: run uint tests
+        run: CTEST_OUTPUT_ON_FAILURE=TRUE make test
+      - name: tar fisco-bcos for ubuntu
+        run: cp tools/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -zcf fisco-bcos.tar.gz fisco-bcos build_chain.sh
+      - uses: actions/upload-artifact@v2
+        with:
+          name: fisco-bcos.tar.gz
+          path: bin/fisco-bcos.tar.gz
+  build_macOS:
+    name: build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [macos-latest]
     steps:
       - uses: actions/checkout@v2
         with:
@@ -54,15 +105,7 @@ jobs:
             ccache-v4-${{ runner.temp }}-
       - name: install macOS dependencies
         if: runner.os == 'macOS'
-        run: brew install openssl@1.1 ccache gmp cmake
-      - name: install Ubuntu dependencies
-        if: runner.os == 'Linux'
-        run: sudo apt install -y g++ libssl-dev openssl cmake git build-essential autoconf texinfo flex patch bison libgmp-dev zlib1g-dev automake libtool
-      - name: Setup cmake
-        if: runner.os == 'Linux'
-        uses: jwlawson/actions-setup-cmake@v1.14
-        with:
-          cmake-version: '3.21.0'
+        run: brew install openssl@1.1 ccache gmp cmake zlib
       - name: configure
         run: CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DTESTS=ON -DBUILD_STATIC=ON -DTOOL=ON -DCMAKE_BUILD_TYPE=Release .
       - name: compile
@@ -75,6 +118,7 @@ jobs:
         with:
           name: fisco-bcos.tar.gz
           path: bin/fisco-bcos.tar.gz
+
   macOS_integration_test:
     name: build_integration_test
     runs-on: macos-latest
