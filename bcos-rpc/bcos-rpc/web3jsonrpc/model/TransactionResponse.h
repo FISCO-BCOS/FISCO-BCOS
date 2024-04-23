@@ -71,21 +71,36 @@ static void combineTxResponse(Json::Value& result, bcos::protocol::Transaction::
     result["gasPrice"] = std::string(receipt ? receipt->effectiveGasPrice() : tx->gasPrice());
     result["hash"] = tx->hash().hexPrefixed();
     result["input"] = toHexStringWithPrefix(tx->input());
-    Web3Transaction web3Tx;
-    auto extraBytesRef = bcos::bytesRef(
-        const_cast<byte*>(tx->extraTransactionBytes().data()), tx->extraTransactionBytes().size());
-    codec::rlp::decode(extraBytesRef, web3Tx);
-    result["nonce"] = toQuantity(web3Tx.nonce);
-    result["type"] = toQuantity(static_cast<uint8_t>(web3Tx.type));
-    result["value"] = toQuantity(web3Tx.value);
+
+    if (tx->type() == bcos::protocol::TransactionType::BCOSTransaction) [[unlikely]]
+    {
+        result["type"] = toQuantity(UINT32_MAX);
+        result["nonce"] = tx->nonce();
+        result["value"] = std::string(tx->value().empty() ? "0x0" : tx->value());
+        result["maxPriorityFeePerGas"] =
+            std::string(tx->maxPriorityFeePerGas().empty() ? "0x0" : tx->maxPriorityFeePerGas());
+        result["maxFeePerGas"] =
+            std::string(tx->maxFeePerGas().empty() ? "0x0" : tx->maxFeePerGas());
+        result["chainId"] = "0x0";
+    }
+    else [[likely]]
+    {
+        Web3Transaction web3Tx;
+        auto extraBytesRef = bcos::bytesRef(const_cast<byte*>(tx->extraTransactionBytes().data()),
+            tx->extraTransactionBytes().size());
+        codec::rlp::decode(extraBytesRef, web3Tx);
+        result["nonce"] = toQuantity(web3Tx.nonce);
+        result["type"] = toQuantity(static_cast<uint8_t>(web3Tx.type));
+        result["value"] = toQuantity(web3Tx.value);
+        if (web3Tx.type >= TransactionType::EIP1559)
+        {
+            result["maxPriorityFeePerGas"] = toQuantity(web3Tx.maxPriorityFeePerGas);
+            result["maxFeePerGas"] = toQuantity(web3Tx.maxFeePerGas);
+        }
+        result["chainId"] = toQuantity(web3Tx.chainId.value_or(0));
+    }
     result["r"] = toQuantity(tx->signatureData().getCroppedData(0, 32));
     result["s"] = toQuantity(tx->signatureData().getCroppedData(32, 32));
     result["v"] = toQuantity(tx->signatureData().getCroppedData(64, 1));
-    if (web3Tx.type >= TransactionType::EIP1559)
-    {
-        result["maxPriorityFeePerGas"] = toQuantity(web3Tx.maxPriorityFeePerGas);
-        result["maxFeePerGas"] = toQuantity(web3Tx.maxFeePerGas);
-    }
-    result["chainId"] = toQuantity(web3Tx.chainId.value_or(0));
 }
 }  // namespace bcos::rpc

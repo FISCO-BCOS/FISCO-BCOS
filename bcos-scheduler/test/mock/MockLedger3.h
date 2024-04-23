@@ -128,6 +128,10 @@ public:
         {
             _onGetConfig(nullptr, "0", commitBlockNumber);
         }
+        else if (_key == ledger::SYSTEM_KEY_WEB3_CHAIN_ID)
+        {
+            _onGetConfig(nullptr, "20200", commitBlockNumber);
+        }
         else if (RANGES::count(ledger::Features::featureKeys(), _key) > 0)
         {
             _onGetConfig(BCOS_ERROR_PTR(-1, "Not found!"), "0", commitBlockNumber);
@@ -168,12 +172,6 @@ public:
             Error::Ptr, std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>>)>
             _onGetList) override
     {}
-
-    void asyncGetStorageAt(std::string_view, std::string_view, protocol::BlockNumber,
-        std::function<void(Error::Ptr, std::string)> _onGetStorage) override
-    {
-        _onGetStorage(nullptr, "");
-    }
 
     void asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr _blockTxs,
         bcos::protocol::Block::ConstPtr block,

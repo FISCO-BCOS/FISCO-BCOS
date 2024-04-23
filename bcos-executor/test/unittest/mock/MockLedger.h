@@ -39,11 +39,6 @@ public:
         }
         _callback(nullptr);
     }
-    void asyncGetStorageAt(std::string_view, std::string_view, protocol::BlockNumber,
-        std::function<void(Error::Ptr, std::string)> _onGetStorage) override
-    {
-        _onGetStorage(nullptr, "");
-    }
 
     bcos::Error::Ptr storeTransactionsAndReceipts(
         bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr) override
@@ -138,6 +133,11 @@ public:
         else if (std::string(bcos::ledger::SYSTEM_KEY_TX_GAS_LIMIT) == std::string(_key))
         {
             _onGetConfig(nullptr, std::to_string(MockLedger::TX_GAS_LIMIT), m_blockNumber);
+            return;
+        }
+        else if (std::string(bcos::ledger::SYSTEM_KEY_WEB3_CHAIN_ID) == std::string(_key))
+        {
+            _onGetConfig(nullptr, "20200", m_blockNumber);
             return;
         }
         else if (std::string(bcos::ledger::SYSTEM_KEY_AUTH_CHECK_STATUS) == std::string(_key))

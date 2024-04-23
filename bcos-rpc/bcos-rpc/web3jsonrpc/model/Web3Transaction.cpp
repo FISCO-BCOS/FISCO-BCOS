@@ -95,19 +95,25 @@ bcos::bytes Web3Transaction::encode() const
     return out;
 }
 
-bcos::crypto::HashType Web3Transaction::hash() const
+bcos::crypto::HashType Web3Transaction::txHash() const
 {
     bcos::bytes encoded{};
     codec::rlp::encode(encoded, *this);
     return bcos::crypto::keccak256Hash(bcos::ref(encoded));
 }
 
-bcostars::Transaction Web3Transaction::toTarsTransaction() const
+bcos::crypto::HashType Web3Transaction::hashForSign() const
+{
+    auto encodeForSign = this->encode();
+    return bcos::crypto::keccak256Hash(bcos::ref(encodeForSign));
+}
+
+bcostars::Transaction Web3Transaction::takeToTarsTransaction()
 {
     bcostars::Transaction tarsTx{};
-    tarsTx.data.nonce = toHex(this->nonce);
     tarsTx.data.to = (this->to == Address()) ? "" : this->to.hexPrefixed();
-    tarsTx.data.input.insert(tarsTx.data.input.end(), this->data.begin(), this->data.end());
+    tarsTx.data.input.reserve(this->data.size());
+    RANGES::move(this->data, std::back_inserter(tarsTx.data.input));
     tarsTx.data.value = toHex(this->value);
     tarsTx.data.gasLimit = this->gasLimit;
     if (static_cast<uint8_t>(this->type) >= static_cast<uint8_t>(TransactionType::EIP1559))
@@ -119,21 +125,28 @@ bcostars::Transaction Web3Transaction::toTarsTransaction() const
     {
         tarsTx.data.gasPrice = toHex(this->maxPriorityFeePerGas);
     }
-    auto hash = this->hash();
+    tarsTx.type = static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transacion);
+    auto hashForSign = this->hashForSign();
     auto encodedForSign = this->encode();
-    tarsTx.dataHash.insert(tarsTx.dataHash.end(), hash.begin(), hash.end());
     // FISCO BCOS signature is r||s||v
-    tarsTx.signature.insert(
-        tarsTx.signature.end(), this->signatureR.begin(), this->signatureR.end());
-    tarsTx.signature.insert(
-        tarsTx.signature.end(), this->signatureS.begin(), this->signatureS.end());
+    tarsTx.signature.reserve(crypto::SECP256K1_SIGNATURE_LEN);
+    RANGES::move(this->signatureR, std::back_inserter(tarsTx.signature));
+    RANGES::move(this->signatureS, std::back_inserter(tarsTx.signature));
     tarsTx.signature.push_back(static_cast<tars::Char>(this->signatureV));
 
-    tarsTx.type = static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transacion);
+    tarsTx.extraTransactionBytes.reserve(encodedForSign.size());
+    RANGES::move(encodedForSign, std::back_inserter(tarsTx.extraTransactionBytes));
 
-    tarsTx.extraTransactionBytes.insert(
-        tarsTx.extraTransactionBytes.end(), encodedForSign.begin(), encodedForSign.end());
-
+    const bcos::crypto::Secp256k1Crypto signatureImpl;
+    bcos::crypto::Keccak256 hashImpl;
+    auto signRef = bcos::bytesConstRef(
+        reinterpret_cast<const bcos::byte*>(tarsTx.signature.data()), tarsTx.signature.size());
+    auto [_, sender] = signatureImpl.recoverAddress(hashImpl, hashForSign, signRef);
+    tarsTx.data.nonce = toHexStringWithPrefix(sender) + toQuantity(this->nonce);
+    tarsTx.dataHash.reserve(crypto::HashType::SIZE);
+    RANGES::move(hashForSign, std::back_inserter(tarsTx.dataHash));
+    tarsTx.sender.reserve(sender.size());
+    RANGES::move(sender, std::back_inserter(tarsTx.sender));
     return tarsTx;
 }
 }  // namespace rpc

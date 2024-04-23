@@ -181,7 +181,7 @@ BOOST_AUTO_TEST_CASE(handleValidTest)
 
     // method eth_gasPrice
     {
-        m_ledger->setSystemConfig(SYSTEM_KEY_TX_GAS_PRICE, "10086");
+        m_ledger->setSystemConfig(SYSTEM_KEY_TX_GAS_PRICE, "10086000");
         const auto request =
             R"({"jsonrpc":"2.0","id":541321, "method":"eth_gasPrice","params":[]})";
         auto response = onRPCRequestWrapper(request);
@@ -189,8 +189,8 @@ BOOST_AUTO_TEST_CASE(handleValidTest)
         BOOST_CHECK(response["id"].asInt64() == 541321);
         auto b = fromQuantity(response["result"].asString());
         std::cout << b << std::endl;
-        BOOST_CHECK(b == 10086);
-        BOOST_CHECK(fromQuantity(response["result"].asString()) == 10086);
+        BOOST_CHECK(b == 10086000);
+        BOOST_CHECK(fromQuantity(response["result"].asString()) == 10086000);
     }
 
     // method eth_accounts

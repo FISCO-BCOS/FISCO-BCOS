@@ -57,12 +57,6 @@ public:
         BCOS_LOG(ERROR) << LOG_DESC("unimplemented method asyncPreStoreBlockTxs");
     }
 
-    void asyncGetStorageAt(std::string_view, std::string_view, bcos::protocol::BlockNumber,
-        std::function<void(bcos::Error::Ptr, std::string)>) override
-    {
-        BCOS_LOG(ERROR) << LOG_DESC("unimplemented method asyncGetStorageAt");
-    }
-
     // TODO: implement this
     bcos::Error::Ptr storeTransactionsAndReceipts(
         bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr) override

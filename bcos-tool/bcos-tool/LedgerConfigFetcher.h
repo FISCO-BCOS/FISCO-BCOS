@@ -56,6 +56,7 @@ public:
     virtual void fetchEpochBlockNum();
     virtual void fetchNotifyRotateFlagInfo();
     virtual bcos::crypto::HashType fetchBlockHash(bcos::protocol::BlockNumber _blockNumber);
+    virtual void fetchChainId();
 
     // consensus_leader_period
     virtual bcos::ledger::LedgerConfig::Ptr ledgerConfig() { return m_ledgerConfig; }

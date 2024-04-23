@@ -124,47 +124,16 @@ void Ledger::asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr _blockTx
     _callback(nullptr);
 }
 
-void Ledger::asyncGetStorageAt(std::string_view _address, std::string_view _key,
-    protocol::BlockNumber _blockNumber, std::function<void(Error::Ptr, std::string)> _onGetStorage)
+task::Task<std::optional<storage::Entry>> Ledger::getStorageAt(
+    std::string_view _address, std::string_view _key, protocol::BlockNumber _blockNumber)
 {
-    auto contractTableName = getContractTableName(SYS_DIRECTORY::USER_APPS, _address);
-    // TODO: blockNumber is not used nowadays
+    // TODO)): blockNumber is not used nowadays
     std::ignore = _blockNumber;
-    LEDGER_LOG(TRACE) << LOG_DESC("asyncGetStorageAt") << LOG_KV("address", _address)
-                      << LOG_KV("key", _key) << LOG_KV("blockNumber", _blockNumber);
-    m_storage->asyncGetRow(contractTableName, _key,
-        [onGetStorage = std::move(_onGetStorage)](auto&& _error, auto&& _entry) {
-            if (_error)
-            {
-                onGetStorage(std::move(_error), "");
-                return;
-            }
-            if (!_entry)
-            {
-                onGetStorage(
-                    BCOS_ERROR_PTR(GetStorageError, "Cannot get storage in address and key"), "");
-                return;
-            }
-            auto value = _entry->exportFields();
-            std::visit(
-                [onGetStorage = std::move(onGetStorage)](auto&& valueInside) {
-                    std::string realValue{};
-                    if constexpr (concepts::PointerLike<decltype(valueInside)>)
-                    {
-                        realValue = std::string(
-                            reinterpret_cast<char*>(valueInside->data()), valueInside->size());
-                    }
-                    else
-                    {
-                        realValue = std::string(
-                            reinterpret_cast<char*>(valueInside.data()), valueInside.size());
-                    }
-                    onGetStorage(nullptr, std::move(realValue));
-                },
-                value);
-        });
+    auto const contractTableName = getContractTableName(SYS_DIRECTORY::USER_APPS, _address);
+    auto const stateStorage = getStateStorage();
+    co_return co_await bcos::storage2::readOne(
+        *stateStorage, transaction_executor::StateKeyView{contractTableName, _key});
 }
-
 
 void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
@@ -2009,6 +1978,14 @@ bool Ledger::buildGenesisBlock(
         Entry authCheckStatusEntry;
         authCheckStatusEntry.setObject(SystemConfigEntry{genesis.m_isAuthCheck ? "1" : "0", 0});
         sysTable->setRow(SYSTEM_KEY_AUTH_CHECK_STATUS, std::move(authCheckStatusEntry));
+    }
+
+    if (versionNumber >= BlockVersion::V3_9_0_VERSION)
+    {
+        // write web3 chain id
+        Entry chainIdEntry;
+        chainIdEntry.setObject(SystemConfigEntry{genesis.m_web3ChainID, 0});
+        sysTable->setRow(SYSTEM_KEY_WEB3_CHAIN_ID, std::move(chainIdEntry));
     }
 
     // write consensus node list

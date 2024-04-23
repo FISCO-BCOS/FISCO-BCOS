@@ -60,6 +60,7 @@ download_timeout=240
 make_tar=
 default_group="group0"
 default_chainid="chain0"
+default_web3_chainid="20200"
 use_ipv6=""
 # for modifying multipy ca node
 modify_node_path=""
@@ -1719,6 +1720,9 @@ generate_genesis_config() {
     group_id=${default_group}
     ; the chain id, should nerver be changed
     chain_id=${default_chainid}
+
+[web3]
+    chain_id=${default_web3_chainid}
 
 [consensus]
     ; consensus algorithm now support PBFT(consensus_type=pbft), rPBFT(consensus_type=rpbft)

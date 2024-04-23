@@ -162,12 +162,6 @@ public:
         _callback(nullptr);
     }
 
-    void asyncGetStorageAt(std::string_view, std::string_view, protocol::BlockNumber,
-        std::function<void(Error::Ptr, std::string)> _onGetStorage) override
-    {
-        _onGetStorage(nullptr, "");
-    }
-
     // the txpool module use this interface to store txs
     bcos::Error::Ptr storeTransactionsAndReceipts(bcos::protocol::ConstTransactionsPtr blockTxs,
         bcos::protocol::Block::ConstPtr block) override
@@ -264,7 +258,7 @@ public:
         }
         else
         {
-            _onGetConfig(BCOS_ERROR_PTR(-1, "key not found"), "", m_ledgerConfig->blockNumber());
+            _onGetConfig(BCOS_ERROR_PTR(3008, "key not found"), "", m_ledgerConfig->blockNumber());
             return;
         }
         _onGetConfig(nullptr, value, m_ledgerConfig->blockNumber());

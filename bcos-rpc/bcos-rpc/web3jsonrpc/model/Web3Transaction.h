@@ -77,8 +77,11 @@ public:
     Web3Transaction& operator=(Web3Transaction&&) = default;
 
     bcos::bytes encode() const;
-    bcos::crypto::HashType hash() const;
-    bcostars::Transaction toTarsTransaction() const;
+    // tx hash = keccak256(rlp(tx_payload,v,r,s))
+    bcos::crypto::HashType txHash() const;
+    // hash for sign = keccak256(rlp(tx_payload))
+    bcos::crypto::HashType hashForSign() const;
+    bcostars::Transaction takeToTarsTransaction();
     uint64_t getSignatureV() const
     {
         // EIP-155: Simple replay attack protection
@@ -136,6 +139,7 @@ public:
     // EIP-4844: Shard Blob Transactions
     uint64_t maxFeePerBlobGas{0};
     h256s blobVersionedHashes{};
+    // TODO)) blob
     bcos::bytes signatureR{};
     bcos::bytes signatureS{};
     uint64_t signatureV{0};

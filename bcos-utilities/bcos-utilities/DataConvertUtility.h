@@ -427,7 +427,8 @@ std::string toQuantity(BigNumber auto number)
     {
         return "0x0";
     }
-    return toCompactBigEndianString(number);
+    auto bytes = toCompactBigEndian(number);
+    return toQuantity(bytes);
 }
 
 }  // namespace bcos

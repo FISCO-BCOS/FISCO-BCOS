@@ -95,7 +95,8 @@ task::Task<protocol::TransactionReceipt::ConstPtr> tag_invoke(
 task::Task<protocol::TransactionsConstPtr> tag_invoke(
     ledger::tag_t<getTransactions>, LedgerInterface& ledger, crypto::HashListPtr hashes);
 
-task::Task<std::string> tag_invoke(ledger::tag_t<getStorageAt>, LedgerInterface& ledger,
-    std::string_view address, std::string_view key, bcos::protocol::BlockNumber number);
+task::Task<std::optional<bcos::storage::Entry>> tag_invoke(ledger::tag_t<getStorageAt>,
+    LedgerInterface& ledger, std::string_view address, std::string_view key,
+    bcos::protocol::BlockNumber number);
 
 }  // namespace bcos::ledger
