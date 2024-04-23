@@ -2073,14 +2073,14 @@ void TransactionExecutor::getCode(
                 auto code = entry->getField(0);
                 if (m_blockContext->features().get(
                         ledger::Features::Flag::bugfix_eoa_as_contract) &&
-                    hasPrecompiledPrefix(code))
+                    bcos::precompiled::isDynamicPrecompiledAccountCode(code))
                 {
-                    EXECUTOR_NAME_LOG(INFO) << "Get eoa code success";
+                    EXECUTOR_NAME_LOG(DEBUG) << "Get eoa code success, return empty code to evm";
                     callback(nullptr, bcos::bytes());
                 }
                 else
                 {
-                    EXECUTOR_NAME_LOG(INFO)
+                    EXECUTOR_NAME_LOG(DEBUG)
                         << "Get code success" << LOG_KV("code size", code.size());
                     auto codeBytes = bcos::bytes(code.begin(), code.end());
                     callback(nullptr, std::move(codeBytes));
