@@ -1,5 +1,7 @@
 #pragma once
 #include "bcos-concepts/ByteBuffer.h"
+#include "bcos-executor/src/Common.h"
+#include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/ledger/Account.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/storage/Entry.h"
@@ -195,8 +197,18 @@ private:
     static EVMTableName getTableName(const evmc_address& address)
     {
         EVMTableName tableName;
-        auto* lastIt = std::uninitialized_copy(ledger::SYS_DIRECTORY::USER_APPS.begin(),
-            ledger::SYS_DIRECTORY::USER_APPS.end(), tableName.data());
+        auto fixedAddressBytes = bcos::address2FixedArray(address);
+        char* lastIt = tableName.data();
+        if (bcos::precompiled::c_systemTxsAddress.contains(fixedAddressBytes))
+        {
+            lastIt = std::uninitialized_copy(ledger::SYS_DIRECTORY::SYS_APPS.begin(),
+                ledger::SYS_DIRECTORY::SYS_APPS.end(), tableName.data());
+        }
+        else
+        {
+            lastIt = std::uninitialized_copy(ledger::SYS_DIRECTORY::USER_APPS.begin(),
+                ledger::SYS_DIRECTORY::USER_APPS.end(), tableName.data());
+        }
         boost::algorithm::hex_lower(concepts::bytebuffer::toView(address.bytes), lastIt);
         return tableName;
     }

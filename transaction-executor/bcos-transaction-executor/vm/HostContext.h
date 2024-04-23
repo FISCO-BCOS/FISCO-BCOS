@@ -314,14 +314,25 @@ public:
 
     task::Task<EVMCResult> execute()
     {
+        if (c_fileLogLevel <= LogLevel::TRACE) [[unlikely]]
+        {
+            HOST_CONTEXT_LOG(TRACE)
+                << "HostContext execute, kind: " << message().kind << " seq:" << m_seq
+                << " sender:" << address2HexString(message().sender)
+                << " recipient:" << address2HexString(message().recipient)
+                << " gas:" << message().gas;
+        }
+
         std::optional<EVMCResult> evmResult;
         if (m_ledgerConfig.authCheckStatus() != 0U)
         {
-            HOST_CONTEXT_LOG(DEBUG) << "Checking auth..." << m_ledgerConfig.authCheckStatus();
+            HOST_CONTEXT_LOG(DEBUG) << "Checking auth..." << m_ledgerConfig.authCheckStatus()
+                                    << " gas: " << message().gas;
             auto [result, param] = checkAuth(m_rollbackableStorage, m_blockHeader, message(),
                 m_origin, buildLegacyExternalCaller(), m_precompiledManager, m_contextID, m_seq);
             if (!result)
             {
+                HOST_CONTEXT_LOG(DEBUG) << "Auth check failed";
                 evmResult.emplace(
                     evmc_result{.status_code = static_cast<evmc_status_code>(param->evmStatus),
                         .gas_left = param->gas,
@@ -360,16 +371,22 @@ public:
             }
         }
 
-
-        // 如果本次调用由系统合约发起，不消耗gas
-        // If the call is initiated by the system contract, the gasUsed is cleared to zero
-        if (auto hexAddress = address2HexString(message().sender);
-            bcos::precompiled::c_systemTxsAddress.find(hexAddress) !=
-            bcos::precompiled::c_systemTxsAddress.end())
+        // 如果本次调用的sender或recipient是系统合约，不消耗gas
+        // If the sender or recipient of this call is a system contract, gas is not consumed
+        if (auto [senderAddress, recipientAddress] = std::tuple{address2HexString(message().sender),
+                address2HexString(message().recipient)};
+            bcos::precompiled::c_systemTxsAddress.contains(senderAddress) ||
+            bcos::precompiled::c_systemTxsAddress.contains(recipientAddress))
         {
             evmResult->gas_left = message().gas;
             HOST_CONTEXT_LOG(TRACE)
                 << "System contract sender call, clear gasUsed, gas_left: " << evmResult->gas_left;
+        }
+
+        if (c_fileLogLevel <= LogLevel::TRACE) [[unlikely]]
+        {
+            HOST_CONTEXT_LOG(TRACE) << "HostContext execute finished, kind: "
+                                    << " gas:" << evmResult->gas_left;
         }
         co_return std::move(*evmResult);
     }
