@@ -32,6 +32,7 @@
 #include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-protocol/TransactionStatus.h"
+#include "bcos-table/src/StateStorage.h"
 #include <bcos-codec/abi/ContractABICodec.h>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <functional>
@@ -66,7 +67,7 @@ public:
         m_seq(seq),
         m_gasInjector(gasInjector),
         m_storageWrapperObj(m_blockContext.storage(), m_recoder),
-        m_transientStorageWrapperObj(m_transientStateStorage, m_recoder),
+        m_transientStorageWrapperObj(createStateStorage(), m_recoder),
         m_storageWrapper(&m_storageWrapperObj),
         m_transientStorageWrapper(&m_transientStorageWrapperObj)
     {
@@ -210,6 +211,12 @@ protected:
         bcos::codec::abi::ContractABICodec abi(m_hashImpl);
         auto codecOutput = abi.abiIn("Error(string)", errInfo);
         _callParameters.data = std::move(codecOutput);
+    }
+
+    std::shared_ptr<storage::StateStorageInterface> createStateStorage()
+    {
+        m_transientStateStorage = std::shared_ptr<bcos::storage::StateStorage>(nullptr);
+        return m_transientStateStorage;
     }
 
     bool checkExecAuth(const CallParameters::UniquePtr& callParameters);

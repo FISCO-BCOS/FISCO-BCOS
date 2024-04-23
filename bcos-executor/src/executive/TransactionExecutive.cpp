@@ -1374,7 +1374,7 @@ void TransactionExecutive::revert()
     }
 
     m_blockContext.storage()->rollback(*m_recoder);
-    m_transientStateStorage->rollback(*m_recoder);
+    //    m_transientStateStorage->rollback(*m_recoder);
     m_recoder->clear();
 }
 
