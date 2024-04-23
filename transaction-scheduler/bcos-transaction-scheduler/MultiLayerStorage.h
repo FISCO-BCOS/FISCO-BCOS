@@ -396,7 +396,7 @@ public:
         View& operator=(const View&) = delete;
         View(View&&) noexcept = default;
         View& operator=(View&&) noexcept = default;
-        ~View() noexcept = default;
+        ~View() noexcept { release(); }
 
         using Key = KeyType;
         using Value = ValueType;

@@ -1,5 +1,4 @@
 #pragma once
-#include "bcos-concepts/ByteBuffer.h"
 #include "bcos-executor/src/Common.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/ledger/Account.h"
@@ -32,8 +31,7 @@ private:
     friend task::Task<void> tag_invoke(tag_t<create> /*unused*/, EVMAccount& account)
     {
         co_await storage2::writeOne(account.m_storage,
-            transaction_executor::StateKey(
-                SYS_TABLES, concepts::bytebuffer::toView(account.m_tableName)),
+            transaction_executor::StateKey(SYS_TABLES, account.m_tableName),
             storage::Entry{std::string_view{"value"}});
     }
 
@@ -44,8 +42,7 @@ private:
         // Start by using the code hash to find the code from the s_code_binary
         if (auto codeHashEntry = co_await storage2::readOne(
                 account.m_storage, transaction_executor::StateKeyView{
-                                       concepts::bytebuffer::toView(account.m_tableName),
-                                       ACCOUNT_TABLE_FIELDS::CODE_HASH}))
+                                       account.m_tableName, ACCOUNT_TABLE_FIELDS::CODE_HASH}))
         {
             if (auto codeEntry = co_await storage2::readOne(
                     account.m_storage, transaction_executor::StateKeyView{
@@ -59,9 +56,9 @@ private:
         // precompiled，代码在合约表的code字段里
         // I can't find it in the s_code_binary, it may be a contract deployed in the old version or
         // internal precompiled, and the code is in the code field of the contract table
-        if (auto codeEntry = co_await storage2::readOne(account.m_storage,
-                transaction_executor::StateKeyView{
-                    concepts::bytebuffer::toView(account.m_tableName), ACCOUNT_TABLE_FIELDS::CODE}))
+        if (auto codeEntry = co_await storage2::readOne(
+                account.m_storage, transaction_executor::StateKeyView{
+                                       account.m_tableName, ACCOUNT_TABLE_FIELDS::CODE}))
         {
             co_return codeEntry;
         }
@@ -89,8 +86,7 @@ private:
         }
 
         co_await storage2::writeOne(account.m_storage,
-            transaction_executor::StateKey{
-                concepts::bytebuffer::toView(account.m_tableName), ACCOUNT_TABLE_FIELDS::CODE_HASH},
+            transaction_executor::StateKey{account.m_tableName, ACCOUNT_TABLE_FIELDS::CODE_HASH},
             std::move(codeHashEntry));
     }
 
@@ -98,8 +94,7 @@ private:
     {
         if (auto codeHashEntry = co_await storage2::readOne(
                 account.m_storage, transaction_executor::StateKeyView{
-                                       concepts::bytebuffer::toView(account.m_tableName),
-                                       ACCOUNT_TABLE_FIELDS::CODE_HASH}))
+                                       account.m_tableName, ACCOUNT_TABLE_FIELDS::CODE_HASH}))
         {
             auto view = codeHashEntry->get();
             h256 codeHash((const bcos::byte*)view.data(), view.size());
@@ -115,8 +110,7 @@ private:
         // Start by using the code hash to find the code from the s_contract_abi
         if (auto codeHashEntry = co_await storage2::readOne(
                 account.m_storage, transaction_executor::StateKeyView{
-                                       concepts::bytebuffer::toView(account.m_tableName),
-                                       ACCOUNT_TABLE_FIELDS::CODE_HASH}))
+                                       account.m_tableName, ACCOUNT_TABLE_FIELDS::CODE_HASH}))
         {
             if (auto abiEntry = co_await storage2::readOne(
                     account.m_storage, transaction_executor::StateKeyView{
@@ -131,8 +125,7 @@ private:
         // I can't find it in the s_code_binary, it may be a contract deployed in the old version or
         // internal precompiled, and the code is in the code field of the contract table
         if (auto abiEntry = co_await storage2::readOne(account.m_storage,
-                transaction_executor::StateKeyView{
-                    concepts::bytebuffer::toView(account.m_tableName), ACCOUNT_TABLE_FIELDS::ABI}))
+                transaction_executor::StateKeyView{account.m_tableName, ACCOUNT_TABLE_FIELDS::ABI}))
         {
             co_return abiEntry;
         }
@@ -143,8 +136,7 @@ private:
     {
         if (auto balanceEntry = co_await storage2::readOne(
                 account.m_storage, transaction_executor::StateKeyView{
-                                       concepts::bytebuffer::toView(account.m_tableName),
-                                       ACCOUNT_TABLE_FIELDS::BALANCE}))
+                                       account.m_tableName, ACCOUNT_TABLE_FIELDS::BALANCE}))
         {
             auto view = balanceEntry->get();
             auto balance = boost::lexical_cast<u256>(view);
@@ -158,8 +150,7 @@ private:
     {
         storage::Entry balanceEntry(balance.str({}, {}));
         co_await storage2::writeOne(account.m_storage,
-            transaction_executor::StateKey{
-                concepts::bytebuffer::toView(account.m_tableName), ACCOUNT_TABLE_FIELDS::BALANCE},
+            transaction_executor::StateKey{account.m_tableName, ACCOUNT_TABLE_FIELDS::BALANCE},
             std::move(balanceEntry));
     }
 
@@ -168,8 +159,7 @@ private:
     {
         evmc_bytes32 value;
         if (auto valueEntry = co_await storage2::readOne(
-                account.m_storage, transaction_executor::StateKeyView{
-                                       concepts::bytebuffer::toView(account.m_tableName),
+                account.m_storage, transaction_executor::StateKeyView{account.m_tableName,
                                        concepts::bytebuffer::toView(key.bytes)}))
         {
             auto field = valueEntry->get();
@@ -188,14 +178,14 @@ private:
         storage::Entry valueEntry(concepts::bytebuffer::toView(value.bytes));
 
         co_await storage2::writeOne(account.m_storage,
-            transaction_executor::StateKey{concepts::bytebuffer::toView(account.m_tableName),
-                concepts::bytebuffer::toView(key.bytes)},
+            transaction_executor::StateKey{
+                account.m_tableName, concepts::bytebuffer::toView(key.bytes)},
             std::move(valueEntry));
     }
 
     friend task::Task<std::string_view> tag_invoke(tag_t<path> /*unused*/, EVMAccount& account)
     {
-        co_return concepts::bytebuffer::toView(account.m_tableName);
+        co_return account.m_tableName;
     }
 
 public:
