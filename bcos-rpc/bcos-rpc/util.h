@@ -13,22 +13,17 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file FilterRequest.h
- * @author: kyonGuo
- * @date 2024/4/11
+ * @file util.h
+ * @author: jdkuang
+ * @date 2024/4/24
  */
 
 #pragma once
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/DataConvertUtility.h>
-#include <json/value.h>
+#include <bcos-rpc/Common.h>
 
 namespace bcos::rpc
 {
-
-class FilterRequest
-{
-};
-
+std::tuple<protocol::BlockNumber, bool> getBlockNumberByTag(
+    protocol::BlockNumber latest, std::string_view blockTag);
 }  // namespace bcos::rpc

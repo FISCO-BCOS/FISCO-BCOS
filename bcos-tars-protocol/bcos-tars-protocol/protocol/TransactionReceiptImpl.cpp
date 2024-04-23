@@ -98,6 +98,19 @@ gsl::span<const bcos::protocol::LogEntry> bcostars::protocol::TransactionReceipt
 
     return {m_logEntries.data(), m_logEntries.size()};
 }
+bcos::protocol::LogEntries&& bcostars::protocol::TransactionReceiptImpl::takeLogEntries()
+{
+    if (m_logEntries.empty())
+    {
+        m_logEntries.reserve(m_inner()->data.logEntries.size());
+        for (auto& it : m_inner()->data.logEntries)
+        {
+            auto bcosLogEntry = toBcosLogEntry(it);
+            m_logEntries.emplace_back(std::move(bcosLogEntry));
+        }
+    }
+    return std::move(m_logEntries); 
+}
 bcos::protocol::BlockNumber bcostars::protocol::TransactionReceiptImpl::blockNumber() const
 {
     return m_inner()->data.blockNumber;
