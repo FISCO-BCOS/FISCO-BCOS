@@ -73,15 +73,24 @@ public:
                 bcos::newEVMAddress(m_hashImpl, m_blockContext->number(), m_contextID, newSeq);
             EXECUTIVE_WRAPPER(TRACE)
                 << "InternalCreate newSeq:" << newSeq << " codeAddress:" << input->codeAddress;
-            auto tuple = create(std::move(input));
-            return std::move(std::get<1>(tuple));
+            auto tableName =
+                getContractTableName(input->codeAddress, m_blockContext->isWasm(), input->create);
+            auto senderAddress = input->senderAddress;
+            auto response = internalCreate(std::move(input));
+            if (m_blockContext->isAuthCheck())
+            {
+                creatAuthTable(tableName, response->origin, std::move(senderAddress),
+                    m_blockContext->blockVersion());
+            }
+
+            return response;
         }
 
         evmc_message evmcMessage{.kind = input->create ? EVMC_CREATE : EVMC_CALL,
             .flags = 0,
             .depth = 0,
             .gas = input->gas,
-            .recipient = toEvmC(input->receiveAddress),
+            .recipient = unhexAddress(input->receiveAddress),
             .destination_ptr = nullptr,
             .destination_len = 0,
             .sender = unhexAddress(input->senderAddress),

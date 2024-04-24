@@ -18,7 +18,8 @@ inline void createAuthTable(auto& storage, protocol::BlockHeader const& blockHea
     auto originAddress = address2HexString(origin);
     auto senderAddress = address2HexString(message.sender);
     auto executive = buildLegacyExecutive(storage, blockHeader, contractAddress,
-        std::forward<decltype(externalCaller)>(externalCaller), precompiledManager, contextID, seq);
+        std::forward<decltype(externalCaller)>(externalCaller), precompiledManager, contextID, seq,
+        true);
 
     executive->creatAuthTable(tableName, originAddress, senderAddress, blockHeader.version());
 }
@@ -26,11 +27,12 @@ inline void createAuthTable(auto& storage, protocol::BlockHeader const& blockHea
 inline std::tuple<bool, std::unique_ptr<executor::CallParameters>> checkAuth(auto& storage,
     protocol::BlockHeader const& blockHeader, evmc_message const& message,
     evmc_address const& origin, ExternalCaller auto&& externalCaller, auto& precompiledManager,
-    int64_t contextID, int64_t seq)
+    int64_t contextID, int64_t seq, bool authCheck)
 {
     auto contractAddress = address2HexString(message.code_address);
     auto executive = buildLegacyExecutive(storage, blockHeader, contractAddress,
-        std::forward<decltype(externalCaller)>(externalCaller), precompiledManager, contextID, seq);
+        std::forward<decltype(externalCaller)>(externalCaller), precompiledManager, contextID, seq,
+        true);
 
     auto params = std::make_unique<executor::CallParameters>(executor::CallParameters::MESSAGE);
     params->senderAddress = address2HexString(message.sender);

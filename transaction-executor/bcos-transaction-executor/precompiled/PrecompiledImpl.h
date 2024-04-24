@@ -33,15 +33,15 @@ namespace bcos::transaction_executor
 
 inline auto buildLegacyExecutive(auto& storage, protocol::BlockHeader const& blockHeader,
     std::string contractAddress, ExternalCaller auto externalCaller, auto const& precompiledManager,
-    int64_t contextID, int64_t seq)
+    int64_t contextID, int64_t seq, bool authCheck)
 {
     auto storageWrapper =
         std::make_shared<storage::LegacyStateStorageWrapper<std::decay_t<decltype(storage)>>>(
             storage);
-
     auto blockContext = std::make_unique<executor::BlockContext>(storageWrapper, nullptr,
         executor::GlobalHashImpl::g_hashImpl, blockHeader.number(), blockHeader.hash(),
-        blockHeader.timestamp(), blockHeader.version(), bcos::executor::VMSchedule{}, false, false);
+        blockHeader.timestamp(), blockHeader.version(), bcos::executor::VMSchedule{}, false,
+        authCheck);
     return std::make_shared<
         ExecutiveWrapper<decltype(externalCaller), std::decay_t<decltype(precompiledManager)>>>(
         std::move(blockContext), std::move(contractAddress), contextID, seq, wasm::GasInjector{},
@@ -68,7 +68,7 @@ inline std::optional<ledger::Features::Flag> requiredFlag(Precompiled const& pre
 inline EVMCResult callPrecompiled(Precompiled const& precompiled, auto& storage,
     protocol::BlockHeader const& blockHeader, evmc_message const& message,
     evmc_address const& origin, ExternalCaller auto&& externalCaller,
-    auto const& precompiledManager, int64_t contextID, int64_t seq) noexcept
+    auto const& precompiledManager, int64_t contextID, int64_t seq, bool authCheck) noexcept
 {
     return std::visit(
         bcos::overloaded{
@@ -100,7 +100,7 @@ inline EVMCResult callPrecompiled(Precompiled const& precompiled, auto& storage,
                 auto contractAddress = address2HexString(message.code_address);
                 auto executive = buildLegacyExecutive(storage, blockHeader, contractAddress,
                     std::forward<decltype(externalCaller)>(externalCaller), precompiledManager,
-                    contextID, seq);
+                    contextID, seq, authCheck);
 
                 auto params = std::make_shared<precompiled::PrecompiledExecResult>();
                 params->m_sender = address2HexString(message.sender);
