@@ -17,14 +17,12 @@ class EVMAccount
 {
     // All interface Need block version >= 3.1
 private:
-    constexpr static auto EVM_TABLE_NAME_LENGTH =
-        ledger::SYS_DIRECTORY::USER_APPS.size() + sizeof(evmc_address::bytes) * 2;
-
     Storage& m_storage;
+    static_assert(ledger::SYS_DIRECTORY::USER_APPS.size() > ledger::SYS_DIRECTORY::SYS_APPS.size());
     struct EVMTableName
     {
-        std::array<char, 6> dir;
-        std::array<char, 40> table;
+        std::array<char, ledger::SYS_DIRECTORY::USER_APPS.size()> dir;
+        std::array<char, sizeof(evmc_address::bytes) * 2> table;
     } m_tableNameStorage;
     std::string_view m_tableName;
 
@@ -195,6 +193,8 @@ public:
     EVMAccount& operator=(EVMAccount&&) = delete;
     EVMAccount(Storage& storage, const evmc_address& address) : m_storage(storage)
     {
+        constexpr static auto diff =
+            ledger::SYS_DIRECTORY::USER_APPS.size() - ledger::SYS_DIRECTORY::SYS_APPS.size();
         boost::algorithm::hex_lower(
             concepts::bytebuffer::toView(address.bytes), m_tableNameStorage.table.data());
         if (auto table =
@@ -202,8 +202,8 @@ public:
             bcos::precompiled::c_systemTxsAddress.contains(table))
         {
             std::uninitialized_copy(ledger::SYS_DIRECTORY::SYS_APPS.begin(),
-                ledger::SYS_DIRECTORY::SYS_APPS.end(), m_tableNameStorage.dir.data() + 1);
-            m_tableName = {m_tableNameStorage.dir.data() + 1, sizeof(m_tableNameStorage) - 1};
+                ledger::SYS_DIRECTORY::SYS_APPS.end(), m_tableNameStorage.dir.data() + diff);
+            m_tableName = {m_tableNameStorage.dir.data() + diff, sizeof(m_tableNameStorage) - diff};
         }
         else
         {
