@@ -336,10 +336,27 @@ private:
 
             if (verify && (executedBlockHeader->hash() != blockHeader->hash()))
             {
-                auto message = fmt::format("Unmatch block hash! Expect: {} got: {}",
-                    blockHeader->hash().hex(), executedBlockHeader->hash().hex());
+                auto message = fmt::format("Sync block error, mismatch block hash: {} | {}",
+                    executedBlockHeader->hash().hex(), blockHeader->hash().hex());
+                if (executedBlockHeader->stateRoot() != blockHeader->stateRoot())
+                {
+                    message.append(fmt::format(", state root: {} | {}",
+                        executedBlockHeader->stateRoot().hex(), blockHeader->stateRoot().hex()));
+                }
+                if (executedBlockHeader->txsRoot() != blockHeader->txsRoot())
+                {
+                    message.append(fmt::format(", tx root: {} | {}",
+                        executedBlockHeader->txsRoot().hex(), blockHeader->txsRoot().hex()));
+                }
+                if (executedBlockHeader->receiptsRoot() != blockHeader->receiptsRoot())
+                {
+                    message.append(fmt::format(", receipt root: {} | {}",
+                        executedBlockHeader->receiptsRoot().hex(),
+                        blockHeader->receiptsRoot().hex()));
+                }
                 BASELINE_SCHEDULER_LOG(ERROR) << message;
 
+                scheduler.m_multiLayerStorage.removeMutable();
                 co_return std::make_tuple(
                     BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlocks, message),
                     nullptr, false);

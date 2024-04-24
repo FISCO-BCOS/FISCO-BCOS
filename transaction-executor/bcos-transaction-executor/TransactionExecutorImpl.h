@@ -170,7 +170,13 @@ private:
         if (c_fileLogLevel <= LogLevel::TRACE)
         {
             TRANSACTION_EXECUTOR_LOG(TRACE)
-                << "Execte transaction finished: " << receipt->toString();
+                << "Execte transaction finished"
+                << ", gasUsed: " << receipt->gasUsed()
+                << ", newContractAddress: " << receipt->contractAddress()
+                << ", logEntries: " << receipt->logEntries().size()
+                << ", status: " << receipt->status() << ", output: " << toHex(receipt->output())
+                << ", blockNumber: " << receipt->blockNumber() << ", receipt: " << receipt->hash()
+                << ", version: " << receipt->version();
         }
 
         co_yield receipt;  // 完成第三步 Complete the third step

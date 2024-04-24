@@ -10,7 +10,9 @@
 #include "bcos-table/src/StateStorage.h"
 #include "bcos-utilities/Overloaded.h"
 #include <evmc/evmc.h>
+#include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
+#include <exception>
 #include <memory>
 #include <type_traits>
 #include <typeinfo>
@@ -26,6 +28,8 @@ class bcos::wasm::GasInjector
 
 namespace bcos::transaction_executor
 {
+
+#define PRECOMPILE_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("PRECOMPILE")
 
 inline auto buildLegacyExecutive(auto& storage, protocol::BlockHeader const& blockHeader,
     std::string contractAddress, ExternalCaller auto externalCaller, auto const& precompiledManager,
@@ -64,7 +68,7 @@ inline std::optional<ledger::Features::Flag> requiredFlag(Precompiled const& pre
 inline EVMCResult callPrecompiled(Precompiled const& precompiled, auto& storage,
     protocol::BlockHeader const& blockHeader, evmc_message const& message,
     evmc_address const& origin, ExternalCaller auto&& externalCaller,
-    auto const& precompiledManager, int64_t contextID, int64_t seq)
+    auto const& precompiledManager, int64_t contextID, int64_t seq) noexcept
 {
     return std::visit(
         bcos::overloaded{
@@ -108,23 +112,68 @@ inline EVMCResult callPrecompiled(Precompiled const& precompiled, auto& storage,
                 params->m_staticCall = (message.kind == EVMC_CALL);
                 params->m_create = (message.kind == EVMC_CREATE);
 
-                auto response = precompiled->call(executive, params);
+                try
+                {
+                    auto response = precompiled->call(executive, params);
 
-                auto buffer = std::unique_ptr<uint8_t>(new uint8_t[params->m_execResult.size()]);
-                std::copy(params->m_execResult.begin(), params->m_execResult.end(), buffer.get());
-                EVMCResult result{evmc_result{
-                    .status_code = (evmc_status_code)protocol::TransactionStatus::None,
-                    .gas_left = response->m_gasLeft,
-                    .gas_refund = 0,
-                    .output_data = buffer.release(),
-                    .output_size = params->m_execResult.size(),
-                    .release =
-                        [](const struct evmc_result* result) { delete[] result->output_data; },
-                    .create_address = {},
-                    .padding = {},
-                }};
+                    auto buffer =
+                        std::unique_ptr<uint8_t>(new uint8_t[params->m_execResult.size()]);
+                    std::uninitialized_copy(
+                        params->m_execResult.begin(), params->m_execResult.end(), buffer.get());
+                    EVMCResult result{evmc_result{
+                        .status_code = (evmc_status_code)protocol::TransactionStatus::None,
+                        .gas_left = response->m_gasLeft,
+                        .gas_refund = 0,
+                        .output_data = buffer.release(),
+                        .output_size = params->m_execResult.size(),
+                        .release =
+                            [](const struct evmc_result* result) { delete[] result->output_data; },
+                        .create_address = {},
+                        .padding = {},
+                    }};
 
-                return result;
+                    return result;
+                }
+                catch (protocol::PrecompiledError const& e)
+                {
+                    std::string_view errorMessage(e.what());
+                    PRECOMPILE_LOG(WARNING)
+                        << "Revert transaction: PrecompiledFailed"
+                        << LOG_KV("address", contractAddress) << LOG_KV("message", errorMessage);
+
+                    bcos::codec::abi::ContractABICodec abi(executor::GlobalHashImpl::g_hashImpl);
+                    auto codecOutput = abi.abiIn("Error(string)", errorMessage);
+                    auto buffer = std::unique_ptr<uint8_t>(new uint8_t[codecOutput.size()]);
+                    std::uninitialized_copy_n(codecOutput.data(), codecOutput.size(), buffer.get());
+                    return EVMCResult{evmc_result{
+                        .status_code =
+                            (evmc_status_code)protocol::TransactionStatus::RevertInstruction,
+                        .gas_left = message.gas,
+                        .gas_refund = 0,
+                        .output_data = buffer.release(),
+                        .output_size = codecOutput.size(),
+                        .release =
+                            [](const struct evmc_result* result) { delete[] result->output_data; },
+                        .create_address = {},
+                        .padding = {},
+                    }};
+                }
+                catch (std::exception& e)
+                {
+                    PRECOMPILE_LOG(WARNING)
+                        << "Precompiled execute error: " << boost::diagnostic_information(e);
+                    return EVMCResult{evmc_result{
+                        .status_code =
+                            (evmc_status_code)protocol::TransactionStatus::RevertInstruction,
+                        .gas_left = message.gas,
+                        .gas_refund = 0,
+                        .output_data = nullptr,
+                        .output_size = 0,
+                        .release = nullptr,
+                        .create_address = {},
+                        .padding = {},
+                    }};
+                }
             }},
         precompiled.m_precompiled);
 }

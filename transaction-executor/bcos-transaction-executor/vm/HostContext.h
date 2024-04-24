@@ -314,14 +314,26 @@ public:
 
     task::Task<EVMCResult> execute()
     {
+        if (c_fileLogLevel <= LogLevel::TRACE) [[unlikely]]
+        {
+            HOST_CONTEXT_LOG(TRACE)
+                << "HostContext execute, kind: " << message().kind << " seq:" << m_seq
+                << " sender:" << address2HexString(message().sender)
+                << " recipient:" << address2HexString(message().recipient)
+                << " gas:" << message().gas;
+        }
+
+        auto savepoint = m_rollbackableStorage.current();
         std::optional<EVMCResult> evmResult;
         if (m_ledgerConfig.authCheckStatus() != 0U)
         {
-            HOST_CONTEXT_LOG(DEBUG) << "Checking auth..." << m_ledgerConfig.authCheckStatus();
+            HOST_CONTEXT_LOG(DEBUG) << "Checking auth..." << m_ledgerConfig.authCheckStatus()
+                                    << " gas: " << message().gas;
             auto [result, param] = checkAuth(m_rollbackableStorage, m_blockHeader, message(),
                 m_origin, buildLegacyExternalCaller(), m_precompiledManager, m_contextID, m_seq);
             if (!result)
             {
+                HOST_CONTEXT_LOG(DEBUG) << "Auth check failed";
                 evmResult.emplace(
                     evmc_result{.status_code = static_cast<evmc_status_code>(param->evmStatus),
                         .gas_left = param->gas,
@@ -350,9 +362,11 @@ public:
         // If the call to system contract failed, the gasUsed is cleared to zero
         if (evmResult->status_code != EVMC_SUCCESS)
         {
-            if (auto hexAddress = address2HexString(message().code_address);
-                bcos::precompiled::c_systemTxsAddress.find(hexAddress) !=
-                bcos::precompiled::c_systemTxsAddress.end())
+            co_await m_rollbackableStorage.rollback(savepoint);
+
+            if (auto hexAddress = address2FixedArray(message().code_address);
+                bcos::precompiled::c_systemTxsAddress.find(concepts::bytebuffer::toView(
+                    hexAddress)) != bcos::precompiled::c_systemTxsAddress.end())
             {
                 evmResult->gas_left = message().gas;
                 HOST_CONTEXT_LOG(TRACE) << "System contract call failed, clear gasUsed, gas_left: "
@@ -360,16 +374,24 @@ public:
             }
         }
 
-
-        // 如果本次调用由系统合约发起，不消耗gas
-        // If the call is initiated by the system contract, the gasUsed is cleared to zero
-        if (auto hexAddress = address2HexString(message().sender);
-            bcos::precompiled::c_systemTxsAddress.find(hexAddress) !=
-            bcos::precompiled::c_systemTxsAddress.end())
+        // 如果本次调用的sender或recipient是系统合约，不消耗gas
+        // If the sender or recipient of this call is a system contract, gas is not consumed
+        auto senderAddress = address2FixedArray(message().sender);
+        auto recipientAddress = address2FixedArray(message().recipient);
+        if (bcos::precompiled::c_systemTxsAddress.contains(
+                concepts::bytebuffer::toView(senderAddress)) ||
+            bcos::precompiled::c_systemTxsAddress.contains(
+                concepts::bytebuffer::toView(recipientAddress)))
         {
             evmResult->gas_left = message().gas;
             HOST_CONTEXT_LOG(TRACE)
                 << "System contract sender call, clear gasUsed, gas_left: " << evmResult->gas_left;
+        }
+
+        if (c_fileLogLevel <= LogLevel::TRACE) [[unlikely]]
+        {
+            HOST_CONTEXT_LOG(TRACE) << "HostContext execute finished, kind: "
+                                    << " gas:" << evmResult->gas_left;
         }
         co_return std::move(*evmResult);
     }
@@ -455,7 +477,6 @@ private:
 
     task::Task<EVMCResult> executeCreate()
     {
-        auto savepoint = m_rollbackableStorage.current();
         if (m_blockHeader.number() != 0)
         {
             createAuthTable(m_rollbackableStorage, m_blockHeader, message(), m_origin,
@@ -476,10 +497,6 @@ private:
 
             result.gas_left -= result.output_size * vmSchedule().createDataGas;
             result.create_address = message().code_address;
-        }
-        else
-        {
-            co_await m_rollbackableStorage.rollback(savepoint);
         }
 
         co_return result;
@@ -548,9 +565,8 @@ private:
 
     task::Task<EVMCResult> executeCall()
     {
-        auto savepoint = m_rollbackableStorage.current();
         std::optional<EVMCResult> result;
-        if (m_preparedPrecompiled != nullptr) [[unlikely]]
+        if (m_preparedPrecompiled != nullptr)
         {
             result.emplace(transaction_executor::callPrecompiled(*m_preparedPrecompiled,
                 m_rollbackableStorage, m_blockHeader, message(), m_origin,
@@ -572,12 +588,6 @@ private:
             result.emplace(
                 m_executable->m_vmInstance.execute(interface, this, mode, std::addressof(ref),
                     (const uint8_t*)m_executable->m_code->data(), m_executable->m_code->size()));
-        }
-
-        if (result->status_code != 0)
-        {
-            HOST_CONTEXT_LOG(DEBUG) << "Execute failed, status: " << result->status_code;
-            co_await m_rollbackableStorage.rollback(savepoint);
         }
 
         HOST_CONTEXT_LOG(DEBUG) << "Execute finished, status: " << result->status_code
