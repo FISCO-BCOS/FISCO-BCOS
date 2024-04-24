@@ -1,0 +1,58 @@
+name: FISCO-BCOS GitHub Actions arm
+on:
+  push:
+    branches-ignore:
+      - "**-1.3"
+      - "**-1.5"
+    tags-ignore:
+      - v1.*
+    paths-ignore:
+      - "docs/**"
+      - "Changelog.md"
+      - "README.md"
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "Changelog.md"
+      - "README.md"
+  release:
+    types: [published, created, edited]
+env:
+  CCACHE_DIR: ${{ github.workspace }}/ccache
+
+jobs:
+  build:
+    name: build_arm
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 5
+
+      - uses: actions/cache@v3
+        id: cache
+        with:
+          path: $RUNNER_TEMP/deps/src
+          key: deps-v10-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          restore-keys: |
+            deps-v10-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            deps-v10-${{ runner.temp }}-${{ github.base_ref }}-
+            deps-v10-${{ runner.temp }}-
+      - uses: pguyot/arm-runner-action@v2
+        with:
+          commands: |
+            # install ubuntu dependencies
+            sudo apt install -y g++ libssl-dev openssl git build-essential autoconf texinfo flex patch bison libgmp-dev zlib1g-dev automake libtool
+            # configure and compile
+            cmake . -DTESTS=ON -DARCH_NATIVE=ON; make -j2
+            # run test
+            CTEST_OUTPUT_ON_FAILURE=TRUE make test
+      # - name: tar fisco-bcos for Linux
+      #   run: cp tools/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -zcf fisco-bcos.tar.gz fisco-bcos build_chain.sh
+      # - uses: actions/upload-artifact@v2
+      #   with:
+      #     name: fisco-bcos.tar.gz
+      #     path: bin/fisco-bcos.tar.gz
