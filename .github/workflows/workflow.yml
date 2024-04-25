@@ -17,6 +17,9 @@ on:
       - "README.md"
   release:
     types: [published, created, edited]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 env:
   CCACHE_DIR: ${{ github.workspace }}/ccache
 
@@ -73,11 +76,8 @@ jobs:
           name: fisco-bcos.tar.gz
           path: bin/fisco-bcos.tar.gz
   build_macOS:
-    name: build
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [macos-latest]
+    name: build_macOS
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v2
         with:
@@ -105,9 +105,13 @@ jobs:
             ccache-v4-${{ runner.temp }}-
       - name: install macOS dependencies
         if: runner.os == 'macOS'
-        run: brew install openssl@1.1 ccache gmp cmake zlib
+        run: brew install openssl@1.1 ccache gmp zlib cmake
+      # - name: Setup cmake
+      #   uses: jwlawson/actions-setup-cmake@v2
+      #   with:
+      #     cmake-version: '3.21.0'
       - name: configure
-        run: CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DTESTS=ON -DCMAKE_BUILD_TYPE=Release .
+        run: cmake -DTESTS=ON .
       - name: compile
         run: make -j2
       - name: run uint tests
@@ -121,7 +125,7 @@ jobs:
 
   macOS_integration_test:
     name: build_integration_test
-    runs-on: macos-latest
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v2
         with:
@@ -130,12 +134,12 @@ jobs:
         id: cache
         with:
           path: deps/src
-          key: deps-v6-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: deps-v7-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            deps-v6-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            deps-v6-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            deps-v6-notest-${{ runner.temp }}-
-            deps-v6-${{ runner.temp }}-
+            deps-v7-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            deps-v7-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            deps-v7-notest-${{ runner.temp }}-
+            deps-v7-${{ runner.temp }}-
       - uses: actions/cache@v2
         id: ccache
         with:
@@ -147,10 +151,14 @@ jobs:
             ccache-v2-notest-${{ runner.temp }}-
       - name: install macOS dependencies
         run: brew install openssl@1.1 ccache cmake
+      # - name: Setup cmake
+      #   uses: jwlawson/actions-setup-cmake@v2
+      #   with:
+      #     cmake-version: '3.21.0'
       - name: configure
-        run: cmake .
+        run: xcode-select -p;export SDKROOT="`xcrun --show-sdk-path`";CC=/usr/bin/clang CXX=/usr/bin/clang++;cmake .
       - name: compile
-        run: make -j2
+        run: export SDKROOT="`xcrun --show-sdk-path`";CC=/usr/bin/clang CXX=/usr/bin/clang++;make -j2
       - name: run integration testing
         run: cd tools && bash ci/ci_check.sh
       - name: tar fisco-bcos for macOS
@@ -189,13 +197,13 @@ jobs:
       - name: install ubuntu dependencies
         run: sudo apt install -y g++ libssl-dev openssl git build-essential autoconf texinfo flex patch bison libgmp-dev zlib1g-dev automake libtool && sudo apt -y remove libtbb-dev
       - name: Setup cmake
-        uses: jwlawson/actions-setup-cmake@v1.14
+        uses: jwlawson/actions-setup-cmake@v2
         with:
           cmake-version: '3.21.0'
       - name: configure
         run: cmake . -DBUILD_STATIC=ON
       - name: compile
-        run: make -j2
+        run: export SDKROOT="`xcrun --show-sdk-path`";make -j2
       - name: run integration testing
         run: cd tools && bash ci/ci_check.sh
       - name: tar fisco-bcos for Linux

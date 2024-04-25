@@ -148,18 +148,19 @@ ExternalProject_Add(cryptopp
         -DBUILD_TESTING=OFF
         -DCMAKE_C_FLAGS='${MARCH_TYPE}'
         -DCMAKE_CXX_FLAGS='${MARCH_TYPE}'
-        -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
-        -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
+        # -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
+        # -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
     BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --config Release
     INSTALL_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --config Release --target install
-    LOG_CONFIGURE 1
-    LOG_BUILD 1
+    LOG_CONFIGURE 0
+    LOG_BUILD 0
     LOG_INSTALL 1
     ${_overwrite_install_command}
     BUILD_BYPRODUCTS "${CRYPTOPP_LIBRARY}"
 )
 ExternalProject_Get_Property(cryptopp INSTALL_DIR)
 add_library(Cryptopp STATIC IMPORTED)
+message(STATUS "CMAKE_OSX_SYSROOT === ${CMAKE_OSX_SYSROOT}")
 
 file(MAKE_DIRECTORY ${CRYPTOPP_INCLUDE_DIR})  # Must exist.
 

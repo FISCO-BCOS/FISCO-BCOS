@@ -1,6 +1,12 @@
 include(ExternalProject)
 include(GNUInstallDirs)
 
+if (APPLE)
+    set(SED_CMMAND sed -i .bkp)
+else()
+    set(SED_CMMAND sed -i)
+endif()
+
 ExternalProject_Add(evmc
         PREFIX ${CMAKE_SOURCE_DIR}/deps
         DOWNLOAD_NO_PROGRESS 1
@@ -10,6 +16,7 @@ ExternalProject_Add(evmc
         URL_HASH SHA256=bc75110885ac5524dcbe8af0d3670add5b414697d8154ec2e885b1d6806f9332
         # GIT_REPOSITORY https://github.com/FISCO-BCOS/evmc.git
         # GIT_TAG e0bd9d5dc68ec3a00fe9a3c5e81c98946449a20d
+        PATCH_COMMAND ${SED_CMMAND} "s#evmc_last_error_msg()#evmc_last_error_msg(void)#g" include/evmc/loader.h COMMAND ${SED_CMMAND} "s#evmc_last_error_msg()#evmc_last_error_msg(void)#g" lib/loader/loader.c
         CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
                 -DHUNTER_USE_CACHE_SERVERS=NO
         BUILD_IN_SOURCE 1
