@@ -330,7 +330,8 @@ public:
             HOST_CONTEXT_LOG(DEBUG) << "Checking auth..." << m_ledgerConfig.authCheckStatus()
                                     << " gas: " << message().gas;
             auto [result, param] = checkAuth(m_rollbackableStorage, m_blockHeader, message(),
-                m_origin, buildLegacyExternalCaller(), m_precompiledManager, m_contextID, m_seq);
+                m_origin, buildLegacyExternalCaller(), m_precompiledManager, m_contextID, m_seq,
+                m_ledgerConfig.authCheckStatus());
             if (!result)
             {
                 HOST_CONTEXT_LOG(DEBUG) << "Auth check failed";
@@ -390,8 +391,10 @@ public:
 
         if (c_fileLogLevel <= LogLevel::TRACE) [[unlikely]]
         {
-            HOST_CONTEXT_LOG(TRACE) << "HostContext execute finished, kind: "
-                                    << " gas:" << evmResult->gas_left;
+            HOST_CONTEXT_LOG(TRACE)
+                << "HostContext execute finished, kind: "
+                << " gas:" << evmResult->gas_left << " output: "
+                << toHex(bytesConstRef(evmResult->output_data, evmResult->output_size));
         }
         co_return std::move(*evmResult);
     }
@@ -565,12 +568,12 @@ private:
 
     task::Task<EVMCResult> executeCall()
     {
-        std::optional<EVMCResult> result;
         if (m_preparedPrecompiled != nullptr)
         {
-            result.emplace(transaction_executor::callPrecompiled(*m_preparedPrecompiled,
+            co_return transaction_executor::callPrecompiled(*m_preparedPrecompiled,
                 m_rollbackableStorage, m_blockHeader, message(), m_origin,
-                buildLegacyExternalCaller(), m_precompiledManager, m_contextID, m_seq));
+                buildLegacyExternalCaller(), m_precompiledManager, m_contextID, m_seq,
+                m_ledgerConfig.authCheckStatus());
         }
         else
         {
@@ -585,15 +588,9 @@ private:
                 BOOST_THROW_EXCEPTION(NotFoundCodeError());
             }
             auto& ref = message();
-            result.emplace(
-                m_executable->m_vmInstance.execute(interface, this, mode, std::addressof(ref),
-                    (const uint8_t*)m_executable->m_code->data(), m_executable->m_code->size()));
+            co_return m_executable->m_vmInstance.execute(interface, this, mode, std::addressof(ref),
+                (const uint8_t*)m_executable->m_code->data(), m_executable->m_code->size());
         }
-
-        HOST_CONTEXT_LOG(DEBUG) << "Execute finished, status: " << result->status_code
-                                << " gas_left: " << result->gas_left
-                                << " gas refund: " << result->gas_refund;
-        co_return std::move(*result);
     }
 };
 

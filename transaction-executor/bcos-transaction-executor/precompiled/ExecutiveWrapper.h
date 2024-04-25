@@ -81,7 +81,7 @@ public:
             .flags = 0,
             .depth = 0,
             .gas = input->gas,
-            .recipient = toEvmC(input->receiveAddress),
+            .recipient = unhexAddress(input->receiveAddress),
             .destination_ptr = nullptr,
             .destination_len = 0,
             .sender = unhexAddress(input->senderAddress),

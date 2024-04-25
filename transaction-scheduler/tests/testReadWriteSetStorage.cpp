@@ -5,6 +5,7 @@
 #include <bcos-transaction-scheduler/ReadWriteSetStorage.h>
 #include <fmt/format.h>
 #include <boost/test/unit_test.hpp>
+#include <optional>
 #include <type_traits>
 
 using namespace bcos;
@@ -65,6 +66,36 @@ BOOST_AUTO_TEST_CASE(rangeReadWrite)
         }
 
         BOOST_CHECK_EQUAL(result.size(), 3);
+    }());
+}
+
+struct MockStorage
+{
+    using Value = int;
+};
+
+task::Task<std::optional<int>> tag_invoke(
+    storage2::tag_t<storage2::readOne> /*unused*/, MockStorage& storage, auto&& key)
+{
+    BOOST_FAIL("Unexcept to here!");
+    co_return std::nullopt;
+}
+
+task::Task<std::optional<int>> tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/,
+    MockStorage& storage, auto&& key, storage2::DIRECT_TYPE direct)
+{
+    co_return std::make_optional(100);
+}
+
+BOOST_AUTO_TEST_CASE(directFlag)
+{
+    task::syncWait([]() -> task::Task<void> {
+        MockStorage lhsStorage;
+        ReadWriteSetStorage<decltype(lhsStorage), int> firstStorage(lhsStorage);
+
+        auto value = co_await storage2::readOne(firstStorage, 100, storage2::DIRECT);
+        BOOST_CHECK(value);
+        BOOST_CHECK_EQUAL(*value, 100);
     }());
 }
 
