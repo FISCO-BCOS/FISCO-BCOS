@@ -28,6 +28,7 @@
 #include "VMFactory.h"
 #include "bcos-concepts/ByteBuffer.h"
 #include "bcos-crypto/hasher/Hasher.h"
+#include "bcos-crypto/interfaces/crypto/CommonType.h"
 #include "bcos-executor/src/Common.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/ledger/Account.h"
@@ -43,6 +44,7 @@
 #include "bcos-transaction-executor/EVMCResult.h"
 #include "bcos-transaction-executor/vm/VMInstance.h"
 #include "bcos-utilities/Common.h"
+#include "bcos-utilities/DataConvertUtility.h"
 #include <bcos-task/Wait.h>
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
@@ -54,6 +56,7 @@
 #include <boost/throw_exception.hpp>
 #include <atomic>
 #include <functional>
+#include <intx/intx.hpp>
 #include <iterator>
 #include <map>
 #include <memory>
@@ -144,14 +147,20 @@ private:
             message.emplace<evmc_message>(inputMessage);
             auto& ref = std::get<evmc_message>(m_message);
 
-            auto field1 = m_hashImpl.hash(bytes{0xff});
-            auto field2 = bytesConstRef(ref.sender.bytes, sizeof(ref.sender.bytes));
-            auto field3 = toBigEndian(fromEvmC(inputMessage.create2_salt));
-            auto field4 = m_hashImpl.hash(bytesConstRef(ref.input_data, ref.input_size));
-            auto hashView = RANGES::views::concat(field1, field2, field3, field4);
+            std::array<uint8_t, 1 + sizeof(ref.sender.bytes) + sizeof(inputMessage.create2_salt) +
+                                    crypto::HashType::SIZE>
+                buffer;
+            uint8_t* ptr = buffer.data();
+            *ptr++ = 0xff;
+            ptr = std::uninitialized_copy_n(ref.sender.bytes, sizeof(ref.sender.bytes), ptr);
+            auto salt = toBigEndian(fromEvmC(inputMessage.create2_salt));
+            ptr = std::uninitialized_copy(salt.begin(), salt.end(), ptr);
+            auto inputHash = m_hashImpl.hash(bytesConstRef(ref.input_data, ref.input_size));
+            ptr = std::uninitialized_copy(inputHash.begin(), inputHash.end(), ptr);
+            auto addressHash = m_hashImpl.hash(bytesConstRef(buffer.data(), buffer.size()));
 
             std::copy_n(
-                hashView.begin() + 12, sizeof(ref.code_address.bytes), ref.code_address.bytes);
+                addressHash.begin() + 12, sizeof(ref.code_address.bytes), ref.code_address.bytes);
             ref.recipient = ref.code_address;
             break;
         }
