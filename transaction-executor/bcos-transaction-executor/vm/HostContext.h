@@ -28,6 +28,7 @@
 #include "VMFactory.h"
 #include "bcos-concepts/ByteBuffer.h"
 #include "bcos-crypto/hasher/Hasher.h"
+#include "bcos-crypto/interfaces/crypto/CommonType.h"
 #include "bcos-executor/src/Common.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/ledger/Account.h"
@@ -43,6 +44,7 @@
 #include "bcos-transaction-executor/EVMCResult.h"
 #include "bcos-transaction-executor/vm/VMInstance.h"
 #include "bcos-utilities/Common.h"
+#include "bcos-utilities/DataConvertUtility.h"
 #include <bcos-task/Wait.h>
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
@@ -54,6 +56,7 @@
 #include <boost/throw_exception.hpp>
 #include <atomic>
 #include <functional>
+#include <intx/intx.hpp>
 #include <iterator>
 #include <map>
 #include <memory>
@@ -144,14 +147,20 @@ private:
             message.emplace<evmc_message>(inputMessage);
             auto& ref = std::get<evmc_message>(m_message);
 
-            auto field1 = m_hashImpl.hash(bytes{0xff});
-            auto field2 = bytesConstRef(ref.sender.bytes, sizeof(ref.sender.bytes));
-            auto field3 = toBigEndian(fromEvmC(inputMessage.create2_salt));
-            auto field4 = m_hashImpl.hash(bytesConstRef(ref.input_data, ref.input_size));
-            auto hashView = RANGES::views::concat(field1, field2, field3, field4);
+            std::array<uint8_t, 1 + sizeof(ref.sender.bytes) + sizeof(inputMessage.create2_salt) +
+                                    crypto::HashType::SIZE>
+                buffer;
+            uint8_t* ptr = buffer.data();
+            *ptr++ = 0xff;
+            ptr = std::uninitialized_copy_n(ref.sender.bytes, sizeof(ref.sender.bytes), ptr);
+            auto salt = toBigEndian(fromEvmC(inputMessage.create2_salt));
+            ptr = std::uninitialized_copy(salt.begin(), salt.end(), ptr);
+            auto inputHash = m_hashImpl.hash(bytesConstRef(ref.input_data, ref.input_size));
+            ptr = std::uninitialized_copy(inputHash.begin(), inputHash.end(), ptr);
+            auto addressHash = m_hashImpl.hash(bytesConstRef(buffer.data(), buffer.size()));
 
             std::copy_n(
-                hashView.begin() + 12, sizeof(ref.code_address.bytes), ref.code_address.bytes);
+                addressHash.begin() + 12, sizeof(ref.code_address.bytes), ref.code_address.bytes);
             ref.recipient = ref.code_address;
             break;
         }
@@ -241,9 +250,9 @@ public:
 
     task::Task<size_t> codeSizeAt(const evmc_address& address)
     {
-        if (m_precompiledManager.getPrecompiled(address) != nullptr)
+        if (auto const* precompiled = m_precompiledManager.getPrecompiled(address))
         {
-            co_return 1;
+            co_return transaction_executor::size(*precompiled);
         }
 
         if (auto codeEntry = co_await code(address))
@@ -428,10 +437,14 @@ public:
         }
         catch (NotFoundCodeError& e)
         {
-            // Static call时，合约不存在要返回EVMC_SUCCESS
-            // STATIC_CALL, the EVMC_SUCCESS is returned when the contract does not exist
+            // Static call或delegate call时，合约不存在要返回EVMC_SUCCESS
+            // STATIC_CALL or DELEGATE_CALL, the EVMC_SUCCESS is returned when the contract does not
+            // exist
             co_return EVMCResult{evmc_result{
-                .status_code = (message.flags == EVMC_STATIC ? EVMC_SUCCESS : EVMC_REVERT),
+                .status_code =
+                    ((message.flags == EVMC_STATIC || message.kind == EVMC_DELEGATECALL) ?
+                            EVMC_SUCCESS :
+                            EVMC_REVERT),
                 .gas_left = message.gas,
                 .gas_refund = 0,
                 .output_data = nullptr,
@@ -507,13 +520,19 @@ private:
 
     task::Task<void> prepareCall()
     {
-        if (auto const* precompiled = m_precompiledManager.getPrecompiled(message().code_address))
+        // 不允许delegatecall static precompiled
+        // delegatecall static precompiled is not allowed
+        if (message().kind != EVMC_DELEGATECALL)
         {
-            if (auto flag = transaction_executor::requiredFlag(*precompiled);
-                !flag || m_ledgerConfig.features().get(*flag))
+            if (auto const* precompiled =
+                    m_precompiledManager.getPrecompiled(message().code_address))
             {
-                m_preparedPrecompiled = precompiled;
-                co_return;
+                if (auto flag = transaction_executor::featureFlag(*precompiled);
+                    !flag || m_ledgerConfig.features().get(*flag))
+                {
+                    m_preparedPrecompiled = precompiled;
+                    co_return;
+                }
             }
         }
 
