@@ -115,14 +115,6 @@ inline StateKey::StateKey(StateKeyView const& view) : StateKey(view.m_table, vie
 
 }  // namespace bcos::transaction_executor
 
-inline std::ostream& operator<<(
-    std::ostream& stream, const bcos::transaction_executor::StateKey& stateKey)
-{
-    bcos::transaction_executor::StateKeyView view(stateKey);
-    stream << view.m_table << "-" << bcos::toHex(view.m_key);
-    return stream;
-}
-
 template <>
 struct std::less<bcos::transaction_executor::StateKey>
 {
