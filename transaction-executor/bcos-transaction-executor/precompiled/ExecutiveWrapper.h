@@ -73,8 +73,8 @@ public:
                 bcos::newEVMAddress(m_hashImpl, m_blockContext->number(), m_contextID, newSeq);
             EXECUTIVE_WRAPPER(TRACE)
                 << "InternalCreate newSeq:" << newSeq << " codeAddress:" << input->codeAddress;
-            auto [_, result] = create(std::move(input));
-            return result;
+            auto tuple = create(std::move(input));
+            return std::move(std::get<1>(tuple));
         }
 
         evmc_message evmcMessage{.kind = input->create ? EVMC_CREATE : EVMC_CALL,
