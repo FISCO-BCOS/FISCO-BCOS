@@ -250,9 +250,9 @@ public:
 
     task::Task<size_t> codeSizeAt(const evmc_address& address)
     {
-        if (m_precompiledManager.getPrecompiled(address) != nullptr)
+        if (auto const* precompiled = m_precompiledManager.getPrecompiled(address))
         {
-            co_return 1;
+            co_return transaction_executor::size(*precompiled);
         }
 
         if (auto codeEntry = co_await code(address))
@@ -437,10 +437,14 @@ public:
         }
         catch (NotFoundCodeError& e)
         {
-            // Static call时，合约不存在要返回EVMC_SUCCESS
-            // STATIC_CALL, the EVMC_SUCCESS is returned when the contract does not exist
+            // Static call或delegate call时，合约不存在要返回EVMC_SUCCESS
+            // STATIC_CALL or DELEGATE_CALL, the EVMC_SUCCESS is returned when the contract does not
+            // exist
             co_return EVMCResult{evmc_result{
-                .status_code = (message.flags == EVMC_STATIC ? EVMC_SUCCESS : EVMC_REVERT),
+                .status_code =
+                    ((message.flags == EVMC_STATIC || message.kind == EVMC_DELEGATECALL) ?
+                            EVMC_SUCCESS :
+                            EVMC_REVERT),
                 .gas_left = message.gas,
                 .gas_refund = 0,
                 .output_data = nullptr,
@@ -516,13 +520,19 @@ private:
 
     task::Task<void> prepareCall()
     {
-        if (auto const* precompiled = m_precompiledManager.getPrecompiled(message().code_address))
+        // 不允许delegatecall static precompiled
+        // delegatecall static precompiled is not allowed
+        if (message().kind != EVMC_DELEGATECALL)
         {
-            if (auto flag = transaction_executor::requiredFlag(*precompiled);
-                !flag || m_ledgerConfig.features().get(*flag))
+            if (auto const* precompiled =
+                    m_precompiledManager.getPrecompiled(message().code_address))
             {
-                m_preparedPrecompiled = precompiled;
-                co_return;
+                if (auto flag = transaction_executor::featureFlag(*precompiled);
+                    !flag || m_ledgerConfig.features().get(*flag))
+                {
+                    m_preparedPrecompiled = precompiled;
+                    co_return;
+                }
             }
         }
 

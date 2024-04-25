@@ -25,31 +25,43 @@ bcos::transaction_executor::PrecompiledManager::PrecompiledManager(crypto::Hash:
   : m_hashImpl(std::move(hashImpl))
 {
     m_address2Precompiled.emplace_back(
-        1, executor::PrecompiledContract(
-               3000, 0, executor::PrecompiledRegistrar::executor("ecrecover")));
-    m_address2Precompiled.emplace_back(2,
-        executor::PrecompiledContract(60, 12, executor::PrecompiledRegistrar::executor("sha256")));
+        1, Precompiled{executor::PrecompiledContract(
+                           3000, 0, executor::PrecompiledRegistrar::executor("ecrecover")),
+               0});
     m_address2Precompiled.emplace_back(
-        3, executor::PrecompiledContract(
-               600, 120, executor::PrecompiledRegistrar::executor("ripemd160")));
-    m_address2Precompiled.emplace_back(4,
-        executor::PrecompiledContract(15, 3, executor::PrecompiledRegistrar::executor("identity")));
+        2, Precompiled{executor::PrecompiledContract(
+                           60, 12, executor::PrecompiledRegistrar::executor("sha256")),
+               0});
     m_address2Precompiled.emplace_back(
-        5, executor::PrecompiledContract(executor::PrecompiledRegistrar::pricer("modexp"),
-               executor::PrecompiledRegistrar::executor("modexp")));
+        3, Precompiled{executor::PrecompiledContract(
+                           600, 120, executor::PrecompiledRegistrar::executor("ripemd160")),
+               0});
     m_address2Precompiled.emplace_back(
-        6, executor::PrecompiledContract(
-               150, 0, executor::PrecompiledRegistrar::executor("alt_bn128_G1_add")));
+        4, Precompiled{executor::PrecompiledContract(
+                           15, 3, executor::PrecompiledRegistrar::executor("identity")),
+               0});
+    m_address2Precompiled.emplace_back(5,
+        Precompiled{executor::PrecompiledContract(executor::PrecompiledRegistrar::pricer("modexp"),
+                        executor::PrecompiledRegistrar::executor("modexp")),
+            0});
     m_address2Precompiled.emplace_back(
-        7, executor::PrecompiledContract(
-               6000, 0, executor::PrecompiledRegistrar::executor("alt_bn128_G1_mul")));
+        6, Precompiled{executor::PrecompiledContract(
+                           150, 0, executor::PrecompiledRegistrar::executor("alt_bn128_G1_add")),
+               0});
     m_address2Precompiled.emplace_back(
-        8, executor::PrecompiledContract(
-               executor::PrecompiledRegistrar::pricer("alt_bn128_pairing_product"),
-               executor::PrecompiledRegistrar::executor("alt_bn128_pairing_product")));
-    m_address2Precompiled.emplace_back(9,
-        executor::PrecompiledContract(executor::PrecompiledRegistrar::pricer("blake2_compression"),
-            executor::PrecompiledRegistrar::executor("blake2_compression")));
+        7, Precompiled{executor::PrecompiledContract(
+                           6000, 0, executor::PrecompiledRegistrar::executor("alt_bn128_G1_mul")),
+               0});
+    m_address2Precompiled.emplace_back(
+        8, Precompiled{executor::PrecompiledContract(
+                           executor::PrecompiledRegistrar::pricer("alt_bn128_pairing_product"),
+                           executor::PrecompiledRegistrar::executor("alt_bn128_pairing_product")),
+               0});
+    m_address2Precompiled.emplace_back(
+        9, Precompiled{executor::PrecompiledContract(
+                           executor::PrecompiledRegistrar::pricer("blake2_compression"),
+                           executor::PrecompiledRegistrar::executor("blake2_compression")),
+               0});
 
     m_address2Precompiled.emplace_back(
         0x1000, std::make_shared<precompiled::SystemConfigPrecompiled>(m_hashImpl));
