@@ -238,9 +238,9 @@ public:
                 hasher.final(entryHash);
                 if (c_fileLogLevel == TRACE) [[unlikely]]
                 {
-                    STORAGE_LOG(TRACE) << "Entry hash, dirty entry: " << table << " | "
-                                       << toHex(key) << " | " << toHex(table) << toHex(key)
-                                       << toHex(data) << LOG_KV("hash", entryHash.abridged());
+                    STORAGE_LOG(TRACE)
+                        << "Entry hash, dirty entry: " << table << " | " << toHex(key) << " | "
+                        << toHex(data) << LOG_KV("hash", entryHash.abridged());
                 }
                 break;
             }

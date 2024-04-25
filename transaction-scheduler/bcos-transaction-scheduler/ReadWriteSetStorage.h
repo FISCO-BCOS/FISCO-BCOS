@@ -53,13 +53,12 @@ public:
     }
 
     friend auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/,
-        ReadWriteSetStorage& storage, RANGES::input_range auto&& keys,
-        storage2::DIRECT_TYPE /*unused*/)
+        ReadWriteSetStorage& storage, RANGES::input_range auto&& keys, storage2::DIRECT_TYPE direct)
         -> task::Task<task::AwaitableReturnType<
             std::invoke_result_t<storage2::ReadSome, Storage&, decltype(keys)>>>
     {
         co_return co_await storage2::readSome(
-            storage.m_storage, std::forward<decltype(keys)>(keys));
+            storage.m_storage, std::forward<decltype(keys)>(keys), direct);
     }
 
     friend auto tag_invoke(
@@ -72,11 +71,12 @@ public:
     }
 
     friend auto tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/,
-        ReadWriteSetStorage& storage, auto&& key, storage2::DIRECT_TYPE /*unused*/)
+        ReadWriteSetStorage& storage, auto&& key, storage2::DIRECT_TYPE direct)
         -> task::Task<task::AwaitableReturnType<
             std::invoke_result_t<storage2::ReadOne, Storage&, decltype(key)>>>
     {
-        co_return co_await storage2::readOne(storage.m_storage, std::forward<decltype(key)>(key));
+        co_return co_await storage2::readOne(
+            storage.m_storage, std::forward<decltype(key)>(key), direct);
     }
 
     friend auto tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/,
