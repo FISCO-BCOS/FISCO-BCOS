@@ -254,6 +254,7 @@ private:
         m_beforeMessageHandler;
 
     std::function<std::optional<bcos::Error>(SessionFace::Ptr, Message::Ptr)> m_onMessageHandler;
+    bcos::LogLevel m_connectionLogLevel = bcos::LogLevel::WARNING;
 };
 
 }  // namespace gateway

@@ -1,6 +1,6 @@
 {
   "name": "fiscobcos",
-  "version-string": "3.7.0",
+  "version-string": "3.7.1",
   "homepage": "https://github.com/FISCO-BCOS/FISCO-BCOS",
   "description": "FISCO BCOS",
   "dependencies": [
@@ -173,6 +173,10 @@
     {
       "name": "boost-context",
       "version": "1.80.0"
+    },
+    {
+      "name": "boost-asio",
+      "version": "1.79.0"
     },
     {
       "name": "boost-property-map",

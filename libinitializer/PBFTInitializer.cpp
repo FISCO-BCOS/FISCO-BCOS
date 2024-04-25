@@ -453,6 +453,7 @@ void PBFTInitializer::createSync()
         m_nodeConfig->enableSendBlockStatusByTree(), m_nodeConfig->treeWidth());
     m_blockSync = blockSyncFactory->createBlockSync();
     m_blockSync->setFaultyNodeBlockDelta(m_nodeConfig->pipelineSize());
+    m_blockSync->setAllowFreeNodeSync(m_nodeConfig->allowFreeNodeSync());
 }
 
 std::shared_ptr<bcos::txpool::TxPoolInterface> PBFTInitializer::txpool()

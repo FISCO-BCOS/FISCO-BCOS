@@ -156,7 +156,8 @@ public:
         BOOST_CHECK(m_ledger != nullptr);
     }
 
-    inline void initFixture(std::string version = bcos::protocol::V3_1_VERSION_STR)
+    inline void initFixture(
+        bcos::protocol::BlockVersion version = bcos::protocol::BlockVersion::V3_1_VERSION)
     {
         m_param = std::make_shared<LedgerConfig>();
         m_param->setBlockNumber(0);
@@ -182,7 +183,7 @@ public:
         LEDGER_LOG(TRACE) << "build genesis for first time";
         GenesisConfig genesisConfig;
         genesisConfig.m_txGasLimit = 3000000000;
-        genesisConfig.m_compatibilityVersion = tool::toVersionNumber(version);
+        genesisConfig.m_compatibilityVersion = static_cast<uint32_t>(version);
 
         auto result = m_ledger->buildGenesisBlock(genesisConfig, *m_param);
         BOOST_CHECK(result);
@@ -201,21 +202,21 @@ public:
         GenesisConfig genesisConfig1;
         genesisConfig1.m_txGasLimit = 3000000000;
         genesisConfig1.m_compatibilityVersion =
-            tool::toVersionNumber(bcos::protocol::V3_1_VERSION_STR);
+            static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION);
         auto result1 = m_ledger->buildGenesisBlock(genesisConfig1, *m_param);
         BOOST_CHECK(result1);
 
         GenesisConfig genesisConfig2;
         genesisConfig2.m_txGasLimit = 30;
         genesisConfig2.m_compatibilityVersion =
-            tool::toVersionNumber(bcos::protocol::V3_1_VERSION_STR);
+            static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION);
         auto result2 = m_ledger->buildGenesisBlock(genesisConfig2, *m_param);
         BOOST_CHECK(!result2);
 
         GenesisConfig genesisConfig3;
         genesisConfig3.m_txGasLimit = 3000000000;
         genesisConfig3.m_compatibilityVersion =
-            tool::toVersionNumber(bcos::protocol::V3_1_VERSION_STR);
+            static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION);
         auto result3 = m_ledger->buildGenesisBlock(genesisConfig3, *m_param);
         BOOST_CHECK(result3);
     }
@@ -419,7 +420,7 @@ BOOST_AUTO_TEST_CASE(testFixtureLedger)
 
 BOOST_AUTO_TEST_CASE(test_3_0_FixtureLedger)
 {
-    initFixture(V3_0_VERSION_STR);
+    initFixture(bcos::protocol::BlockVersion::V3_0_VERSION);
     std::promise<bool> p1;
     auto f1 = p1.get_future();
     m_ledger->asyncGetBlockNumber([&](Error::Ptr _error, bcos::protocol::BlockNumber _number) {
@@ -1394,7 +1395,7 @@ BOOST_AUTO_TEST_CASE(genesisBlockWithAllocs)
         GenesisConfig genesisConfig;
         genesisConfig.m_txGasLimit = 3000000000;
         genesisConfig.m_compatibilityVersion =
-            tool::toVersionNumber(bcos::protocol::V3_6_VERSION_STR);
+            static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_6_VERSION);
         auto code = "I am a solidity code!"s;
         std::string hexCode;
         boost::algorithm::hex_lower(code, std::back_inserter(hexCode));
@@ -1452,7 +1453,7 @@ BOOST_AUTO_TEST_CASE(replaceBinary)
         GenesisConfig genesisConfig;
         genesisConfig.m_txGasLimit = 3000000000;
         genesisConfig.m_compatibilityVersion =
-            tool::toVersionNumber(bcos::protocol::V3_5_VERSION_STR);
+            static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_5_VERSION);
         auto code = "I am a solidity code!"s;
         std::string hexCode;
         boost::algorithm::hex_lower(code, std::back_inserter(hexCode));

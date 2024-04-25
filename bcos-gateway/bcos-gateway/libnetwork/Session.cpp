@@ -419,9 +419,9 @@ void Session::drop(DisconnectReason _reason)
             }
             else
             {
-                SESSION_LOG(WARNING) << "[drop] closing remote " << m_socket->remoteEndpoint()
-                                     << LOG_KV("reason", reasonOf(_reason))
-                                     << LOG_KV("endpoint", m_socket->nodeIPEndpoint());
+                SESSION_LOG(INFO) << "[drop] closing remote " << m_socket->remoteEndpoint()
+                                  << LOG_KV("reason", reasonOf(_reason))
+                                  << LOG_KV("endpoint", m_socket->nodeIPEndpoint());
             }
 
             /// if get Host object failed, close the socket directly
@@ -465,7 +465,7 @@ void Session::drop(DisconnectReason _reason)
                     shutdown_timer->cancel();
                     if (error)
                     {
-                        SESSION_LOG(WARNING)
+                        SESSION_LOG(INFO)
                             << "[drop] shutdown failed " << LOG_KV("errorValue", error.value())
                             << LOG_KV("message", error.message());
                     }
@@ -530,7 +530,7 @@ void Session::doRead()
             {
                 if (ec)
                 {
-                    SESSION_LOG(WARNING)
+                    SESSION_LOG(INFO)
                         << LOG_DESC("doRead error") << LOG_KV("endpoint", session->nodeIPEndpoint())
                         << LOG_KV("message", ec.message());
                     session->drop(TCPError);

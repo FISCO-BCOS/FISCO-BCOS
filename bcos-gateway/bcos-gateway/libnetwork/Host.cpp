@@ -329,16 +329,16 @@ void Host::handshakeServer(const boost::system::error_code& error,
 {
     if (error)
     {
-        HOST_LOG(WARNING) << LOG_DESC("handshakeServer Handshake failed")
-                          << LOG_KV("value", error.value()) << LOG_KV("message", error.message())
-                          << LOG_KV("endpoint", socket->nodeIPEndpoint());
+        HOST_LOG(INFO) << LOG_DESC("handshakeServer Handshake failed")
+                       << LOG_KV("value", error.value()) << LOG_KV("message", error.message())
+                       << LOG_KV("endpoint", socket->nodeIPEndpoint());
         socket->close();
         return;
     }
     if (endpointPublicKey->empty())
     {
-        HOST_LOG(WARNING) << LOG_DESC("handshakeServer get p2pID failed")
-                          << LOG_KV("remote endpoint", socket->remoteEndpoint());
+        HOST_LOG(INFO) << LOG_DESC("handshakeServer get p2pID failed")
+                       << LOG_KV("remote endpoint", socket->remoteEndpoint());
         socket->close();
         return;
     }
@@ -389,7 +389,7 @@ void Host::startPeerSession(P2PInfo const& p2pInfo, std::shared_ptr<SocketFace> 
         }
         else
         {
-            HOST_LOG(WARNING) << LOG_DESC("No connectionHandler, new connection may lost");
+            HOST_LOG(INFO) << LOG_DESC("No connectionHandler, new connection may lost");
         }
     });
     HOST_LOG(INFO) << LOG_DESC("startPeerSession, Remote=") << socket->remoteEndpoint()
