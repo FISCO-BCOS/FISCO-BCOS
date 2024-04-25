@@ -603,7 +603,10 @@ void SQLBasicAccess::ExecuteSql(const string& _sql)
         THROW(SQLException, "PreparedStatement_executeQuery");
     }
 
-    TRY { Connection_execute(conn, "%s", _sql.c_str()); }
+    TRY
+    {
+        Connection_execute(conn, "%s", _sql.c_str());
+    }
     CATCH(SQLException)
     {
         SQLBasicAccess_LOG(ERROR) << "execute sql failed sql:" << _sql;

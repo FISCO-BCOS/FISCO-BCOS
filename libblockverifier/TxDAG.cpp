@@ -47,15 +47,20 @@ void TxDAG::init(
     std::vector<std::shared_ptr<std::vector<std::string>>> txsCriticals;
     auto txsSize = _txs->size();
     txsCriticals.resize(txsSize);
+#if defined(WITH_TBB)
     tbb::parallel_for(
         tbb::blocked_range<uint64_t>(0, txsSize), [&](const tbb::blocked_range<uint64_t>& range) {
             for (uint64_t i = range.begin(); i < range.end(); i++)
+#else
+    for (size_t i = 0; i < txsSize; ++i)
+#endif
             {
                 auto& tx = (*_txs)[i];
                 txsCriticals[i] = _ctx->getTxCriticals(*tx);
             }
+#if defined(WITH_TBB)
         });
-
+#endif
     CriticalField<string> latestCriticals;
 
     for (ID id = 0; id < txsSize; ++id)

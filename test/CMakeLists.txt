@@ -73,4 +73,7 @@ target_include_directories(test-fisco-bcos PRIVATE ..)
 target_include_directories(test-fisco-bcos PRIVATE ../utils)
 target_include_directories(test-fisco-bcos PRIVATE ${ROCKSDB_INCLUDE_DIR})
 target_link_libraries(test-fisco-bcos Boost::UnitTestFramework initializer channelserver)
-
+target_compile_options(test-fisco-bcos PRIVATE -Wno-error)
+if (NOT APPLE)
+    target_compile_options(test-fisco-bcos PRIVATE -Wno-error -Wno-maybe-uninitialized)
+endif()

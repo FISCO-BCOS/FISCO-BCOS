@@ -127,9 +127,13 @@ size_t RocksDBStorage::commit(int64_t num, const vector<TableData::Ptr>& datas)
         auto start_time = utcTime();
 
         WriteBatch batch;
+#if defined(WITH_TBB)
         tbb::parallel_for(tbb::blocked_range<size_t>(0, datas.size()),
             [&](const tbb::blocked_range<size_t>& range) {
                 for (size_t i = range.begin(); i < range.end(); ++i)
+#else
+        for (size_t i = 0; i < datas.size(); ++i)
+#endif
                 {
                     shared_ptr<map<string, vector<map<string, string>>>> key2value =
                         make_shared<map<string, vector<map<string, string>>>>();
@@ -157,7 +161,9 @@ size_t RocksDBStorage::commit(int64_t num, const vector<TableData::Ptr>& datas)
                         }
                     }
                 }
+#if defined(WITH_TBB)
             });
+#endif
         auto encode_time_cost = utcTime();
 
         WriteOptions options;
