@@ -62,6 +62,7 @@ if(FULLNODE)
     endif()
     include(ProjectGroupSig)
     include(ProjectPaillier)
+    include(ProjectBLST)
 
     add_subdirectory(bcos-sealer)
     add_subdirectory(bcos-security)

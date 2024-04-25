@@ -49,6 +49,9 @@ bcos::transaction_executor::PrecompiledManager::PrecompiledManager(crypto::Hash:
     m_address2Precompiled.emplace_back(9,
         executor::PrecompiledContract(executor::PrecompiledRegistrar::pricer("blake2_compression"),
             executor::PrecompiledRegistrar::executor("blake2_compression")));
+    //    m_address2Precompiled.emplace_back(10,
+    //        executor::PrecompiledContract(executor::PrecompiledRegistrar::pricer("point_evaluation"),
+    //            executor::PrecompiledRegistrar::executor("point_evaluation")));
 
     m_address2Precompiled.emplace_back(
         0x1000, std::make_shared<precompiled::SystemConfigPrecompiled>(m_hashImpl));

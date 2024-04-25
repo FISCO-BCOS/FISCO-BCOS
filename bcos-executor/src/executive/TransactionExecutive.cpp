@@ -216,6 +216,7 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
                              << LOG_KV("blockNumber", m_blockContext.number());
     }
     m_storageWrapper->setRecoder(m_recoder);
+    m_transientStorageWrapper->setRecoder(m_transientRecoder);
     std::unique_ptr<HostContext> hostContext;
     CallParameters::UniquePtr callResults;
     if (c_fileLogLevel <= LogLevel::TRACE)
@@ -1374,7 +1375,7 @@ void TransactionExecutive::revert()
     }
 
     m_blockContext.storage()->rollback(*m_recoder);
-    //    m_transientStateStorage->rollback(*m_recoder);
+    m_transientStateStorage->rollback(*m_transientRecoder);
     m_recoder->clear();
 }
 

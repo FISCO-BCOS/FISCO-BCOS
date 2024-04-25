@@ -62,16 +62,18 @@ public:
     TransactionExecutive(const BlockContext& blockContext, std::string contractAddress,
         int64_t contextID, int64_t seq, const wasm::GasInjector& gasInjector)
       : m_blockContext(blockContext),
+        m_transientStateStorage(std::make_shared<bcos::storage::StateStorage>(nullptr)),
         m_contractAddress(std::move(contractAddress)),
         m_contextID(contextID),
         m_seq(seq),
         m_gasInjector(gasInjector),
         m_storageWrapperObj(m_blockContext.storage(), m_recoder),
-        m_transientStorageWrapperObj(createStateStorage(), m_recoder),
+        m_transientStorageWrapperObj(m_transientStateStorage, m_transientRecoder),
         m_storageWrapper(&m_storageWrapperObj),
         m_transientStorageWrapper(&m_transientStorageWrapperObj)
     {
         m_recoder = std::make_shared<storage::Recoder>();
+        m_transientRecoder = std::make_shared<storage::Recoder>();
         m_hashImpl = m_blockContext.hashHandler();
         m_storageWrapperObj.setCodeCache(m_blockContext.getCodeCache());
         m_storageWrapperObj.setCodeHashCache(m_blockContext.getCodeHashCache());
@@ -213,12 +215,6 @@ protected:
         _callParameters.data = std::move(codecOutput);
     }
 
-    std::shared_ptr<storage::StateStorageInterface> createStateStorage()
-    {
-        m_transientStateStorage = std::shared_ptr<bcos::storage::StateStorage>(nullptr);
-        return m_transientStateStorage;
-    }
-
     bool checkExecAuth(const CallParameters::UniquePtr& callParameters);
     int32_t checkContractAvailable(const CallParameters::UniquePtr& callParameters);
     uint8_t checkAccountAvailable(const CallParameters::UniquePtr& callParameters);
@@ -230,7 +226,7 @@ protected:
     std::shared_ptr<std::map<std::string, std::shared_ptr<PrecompiledContract>>> m_evmPrecompiled;
     std::shared_ptr<PrecompiledMap> m_precompiled;
     std::shared_ptr<const std::set<std::string>> m_staticPrecompiled;
-    std::shared_ptr<storage::StateStorageInterface> m_transientStateStorage;
+    std::shared_ptr<storage::StateStorageInterface> m_transientStateStorage = nullptr;
 
     std::string m_contractAddress;
     int64_t m_contextID;
@@ -240,6 +236,7 @@ protected:
     const wasm::GasInjector& m_gasInjector;
 
     bcos::storage::Recoder::Ptr m_recoder;
+    bcos::storage::Recoder::Ptr m_transientRecoder;
     std::vector<TransactionExecutive::Ptr> m_childExecutives;
 
     storage::StorageWrapper m_storageWrapperObj;

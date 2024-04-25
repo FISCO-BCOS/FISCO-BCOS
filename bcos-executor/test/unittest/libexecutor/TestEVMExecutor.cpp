@@ -1809,6 +1809,58 @@ contract HelloWorld {
     executePromise3.get_future().get();
 }
 
+//BOOST_AUTO_TEST_CASE(transientStorageTest)
+//{
+//    // test opcode tstore and tload
+//    /*  solidity code
+//    pragma solidity ^0.8.24;
+//
+//    contract Reentrancy {
+//        // A constant key for the reentrancy guard stored in Transient Storage.
+//        // This acts as a unique identifier for the reentrancy lock.
+//        bytes32 constant REENTRANCY_GUARD = keccak256("REENTRANCY_GUARD");
+//
+//        // Modifier to prevent reentrant calls.
+//        // It checks if the reentrancy guard is set (indicating an ongoing execution)
+//        // and sets the guard before proceeding with the function execution.
+//        // After the function executes, it resets the guard to allow future calls.
+//        modifier nonReentrant() {
+//            // Ensure the guard is not set (i.e., no ongoing execution).
+//            require(tload(REENTRANCY_GUARD) == 0, "Reentrant call detected.");
+//
+//            // Set the guard to block reentrant calls.
+//            tstore(REENTRANCY_GUARD, 1);
+//
+//            _; // Execute the function body.
+//
+//            // Reset the guard after execution to allow future calls.
+//            tstore(REENTRANCY_GUARD, 0);
+//        }
+//
+//        // Uses inline assembly to access the Transient Storage's tstore operation.
+//        function tstore(bytes32 location, uint value) private {
+//            assembly {
+//                tstore(location, value)
+//            }
+//        }
+//
+//        // Uses inline assembly to access the Transient Storage's tload operation.
+//        // Returns the value stored at the given location.
+//        function tload(bytes32 location) private returns (uint value) {
+//            assembly {
+//            value := tload(location)
+//            }
+//        }
+//
+//    }
+//    */
+//    std::string codeBin = "6080604052348015600e575f80fd5b50603e80601a5f395ff3fe60806040525f80fdfea26469706"
+//        "67358221220b3bb4a28ab06e712666d621e644d1a436ac6ed71b8f51fa315ae56a0cb1840c564736f6c63430008190033";
+//
+//
+//
+//}
+
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
