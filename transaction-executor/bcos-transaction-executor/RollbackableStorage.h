@@ -58,13 +58,11 @@ public:
             auto& record = m_records[index - 1];
             if (record.oldValue)
             {
-                STORAGE_LOG(DEBUG) << "Rollback: write old value: " << record.key;
                 co_await storage2::writeOne(
                     *m_storage, std::move(record.key), std::move(*record.oldValue));
             }
             else
             {
-                STORAGE_LOG(DEBUG) << "Rollback: remove entry: " << record.key;
                 co_await storage2::removeOne(*m_storage, record.key, storage2::DIRECT);
             }
             m_records.pop_back();
