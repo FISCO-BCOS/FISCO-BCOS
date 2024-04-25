@@ -436,4 +436,29 @@ BOOST_AUTO_TEST_CASE(nestConstructor)
     }());
 }
 
+BOOST_AUTO_TEST_CASE(codeSize)
+{
+    syncWait([this]() -> Task<void> {
+        bcostars::protocol::BlockHeaderImpl blockHeader(
+            [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+        blockHeader.setVersion(static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_3_VERSION));
+
+        static std::atomic_int64_t number = 0;
+        blockHeader.setNumber(number++);
+        blockHeader.calculateHash(*hashImpl);
+
+        evmc_message message{};
+
+        HostContext<decltype(rollbackableStorage)> codeSizeHostContext(rollbackableStorage,
+            blockHeader, message, {}, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
+            bcos::task::syncWait);
+
+        auto builtinAddress = bcos::unhexAddress("0000000000000000000000000000000000000001");
+        auto size = co_await codeSizeHostContext.codeSizeAt(builtinAddress);
+        BOOST_CHECK_EQUAL(size, 0);
+
+        co_return;
+    }());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
