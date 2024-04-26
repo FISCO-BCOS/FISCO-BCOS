@@ -152,8 +152,8 @@ ExternalProject_Add(cryptopp
         # -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
     BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --config Release
     INSTALL_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --config Release --target install
-    LOG_CONFIGURE 0
-    LOG_BUILD 0
+    LOG_CONFIGURE 1
+    LOG_BUILD 1
     LOG_INSTALL 1
     ${_overwrite_install_command}
     BUILD_BYPRODUCTS "${CRYPTOPP_LIBRARY}"
