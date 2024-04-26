@@ -54,12 +54,12 @@ inline auto fakeTransaction(CryptoSuite::Ptr _cryptoSuite, KeyPairInterface::Ptr
     auto pbTransaction = std::make_shared<bcostars::protocol::TransactionImpl>(
         [m_transaction = std::move(transaction)]() mutable { return &m_transaction; });
     // set signature
-    pbTransaction->calculateHash(_cryptoSuite->hashImpl()->hasher());
+    pbTransaction->calculateHash(*_cryptoSuite->hashImpl());
 
     auto signData = _cryptoSuite->signatureImpl()->sign(*_keyPair, pbTransaction->hash(), true);
     pbTransaction->setSignatureData(*signData);
     pbTransaction->forceSender(_keyPair->address(_cryptoSuite->hashImpl()).asBytes());
-    pbTransaction->calculateHash(_cryptoSuite->hashImpl()->hasher());
+    pbTransaction->calculateHash(*_cryptoSuite->hashImpl());
     return pbTransaction;
 }
 

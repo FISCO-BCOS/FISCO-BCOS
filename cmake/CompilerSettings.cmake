@@ -76,7 +76,7 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
     endif()
 
     # Configuration-specific compiler settings.
-    set(CMAKE_CXX_FLAGS_DEBUG "-Og -g")
+    set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g")
     set(CMAKE_CXX_FLAGS_MINSIZEREL "-Os -DNDEBUG")
     if(ONLY_CPP_SDK)
         set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")

@@ -129,6 +129,13 @@ TransactionMetaDataImpl BlockImpl::transactionMetaDataImpl(uint64_t _index) cons
         [inner = m_inner, _index]() { return &inner->transactionsMetaData[_index]; });
 }
 
+bcos::crypto::HashType bcostars::protocol::BlockImpl::transactionHash(uint64_t _index) const
+{
+    const auto& hashBytes = m_inner->transactionsMetaData[_index].hash;
+    return bcos::crypto::HashType{
+        bcos::bytesConstRef((const bcos::byte*)hashBytes.data(), hashBytes.size())};
+}
+
 void BlockImpl::appendTransactionMetaData(bcos::protocol::TransactionMetaData::Ptr _txMetaData)
 {
     auto txMetaDataImpl =
@@ -192,7 +199,7 @@ bcos::crypto::HashType bcostars::protocol::BlockImpl::calculateTransactionRoot(
             m_inner->transactions |
             RANGES::views::transform([&](const bcostars::Transaction& transaction) {
                 bcos::bytes hash;
-                bcos::concepts::hash::calculate(hashImpl.hasher(), transaction, hash);
+                bcos::concepts::hash::calculate(transaction, hashImpl.hasher(), hash);
                 return hash;
             });
         merkle.generateMerkle(hashesRange, m_inner->transactionsMerkle);
@@ -222,7 +229,7 @@ bcos::crypto::HashType bcostars::protocol::BlockImpl::calculateReceiptRoot(
     auto hashesRange = m_inner->receipts |
                        RANGES::views::transform([&](const bcostars::TransactionReceipt& receipt) {
                            bcos::bytes hash;
-                           bcos::concepts::hash::calculate(hashImpl.hasher(), receipt, hash);
+                           bcos::concepts::hash::calculate(receipt, hashImpl.hasher(), hash);
                            return hash;
                        });
     bcos::crypto::merkle::Merkle merkle(hashImpl.hasher());

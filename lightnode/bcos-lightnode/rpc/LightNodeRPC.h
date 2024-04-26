@@ -1,13 +1,12 @@
 #pragma once
 
-#include <bcos-tars-protocol/impl/TarsHashable.h>
-
 #include "../Log.h"
 #include "Converter.h"
 #include "bcos-concepts/Basic.h"
 #include "bcos-concepts/ByteBuffer.h"
 #include "bcos-concepts/Exception.h"
 #include "bcos-concepts/Hash.h"
+#include "bcos-tars-protocol/impl/TarsSerializable.h"
 #include "bcos-tars-protocol/tars/TransactionMetaData.h"
 #include "bcos-tars-protocol/tars/TransactionReceipt.h"
 #include "bcos-utilities/DataConvertUtility.h"
@@ -17,6 +16,7 @@
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-crypto/merkle/Merkle.h>
 #include <bcos-rpc/jsonrpc/JsonRpcInterface.h>
+#include <bcos-tars-protocol/impl/TarsHashable.h>
 #include <bcos-tars-protocol/tars/Block.h>
 #include <bcos-tars-protocol/tars/Transaction.h>
 #include <bcos-task/Wait.h>
@@ -111,7 +111,7 @@ public:
             if (transaction.dataHash.empty())
             {
                 bcos::concepts::hash::calculate(
-                    self->m_hasher.clone(), transaction, transaction.dataHash);
+                    transaction, self->m_hasher.clone(), transaction.dataHash);
             }
 
             bcostars::TransactionReceipt receipt;
@@ -156,7 +156,7 @@ public:
                 if (transaction.dataHash.empty())
                 {
                     bcos::concepts::hash::calculate(
-                        self->m_hasher.clone(), transaction, transaction.dataHash);
+                        transaction, self->m_hasher.clone(), transaction.dataHash);
                 }
                 auto& txHash = transaction.dataHash;
                 std::string txHashStr;
@@ -314,11 +314,10 @@ public:
                     {
                         // Check transaction merkle
                         crypto::merkle::Merkle<Hasher> merkle(self->m_hasher.clone());
-                        auto hashesRange =
-                            block.transactionsMetaData |
-                            RANGES::views::transform(
-                                [](const bcostars::TransactionMetaData& transactionMetaData)
-                                    -> auto& { return transactionMetaData.hash; });
+                        auto hashesRange = block.transactionsMetaData | RANGES::views::transform([
+                        ](const bcostars::TransactionMetaData& transactionMetaData) -> auto& {
+                            return transactionMetaData.hash;
+                        });
                         std::vector<bcos::bytes> merkles;
                         merkle.generateMerkle(hashesRange, merkles);
 
@@ -369,7 +368,7 @@ public:
 
                         std::array<std::byte, Hasher::HASH_SIZE> parentHash;
                         bcos::concepts::hash::calculate(
-                            self->m_hasher.clone(), parentBlock, parentHash);
+                            parentBlock, self->m_hasher.clone(), parentHash);
 
                         if (RANGES::empty(block.blockHeader.data.parentInfo) ||
                             (block.blockHeader.data.parentInfo[0].blockNumber !=

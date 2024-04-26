@@ -38,7 +38,7 @@ public:
     EVMCResult& operator=(const EVMCResult&) = delete;
     EVMCResult& operator=(EVMCResult&& from) noexcept
     {
-        static_cast<evmc_result&>(*this) = from;
+        evmc_result::operator=(from);
         from.release = nullptr;
         from.output_data = nullptr;
         from.output_size = 0;

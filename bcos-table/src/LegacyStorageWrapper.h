@@ -2,6 +2,7 @@
 #include "bcos-framework/storage/Common.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-framework/storage2/Storage.h"
+#include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-table/src/StateStorageInterface.h"
 #include "bcos-task/Task.h"
@@ -28,7 +29,47 @@ public:
         const std::optional<storage::Condition const>& condition,
         std::function<void(Error::UniquePtr, std::vector<std::string>)> _callback) override
     {
-        _callback(BCOS_ERROR_UNIQUE_PTR(-1, "asyncGetPrimaryKeys error!"), {});
+        task::wait([](decltype(this) self, std::string table,
+                       std::optional<storage::Condition const> condition,
+                       const decltype(_callback)& callback) -> task::Task<void> {
+            std::vector<std::string> keys;
+
+            int index = 0;
+            int start = 0;
+            int count = 0;
+            std::tie(start, count) = condition->getLimit();
+            auto range = co_await storage2::range(self->m_storage);
+            while (auto keyValue = co_await range.next())
+            {
+                auto&& [key, value] = *keyValue;
+                if constexpr (std::is_pointer_v<decltype(value)>)
+                {
+                    if (!value)
+                    {
+                        ++index;
+                        continue;
+                    }
+                }
+
+                transaction_executor::StateKeyView stateKeyView(key);
+                auto [entryTable, entryKey] = stateKeyView.getTableAndKey();
+                if (entryTable == table && (!condition || condition->isValid(entryKey)))
+                {
+                    if ((start != 0 || count != 0) &&
+                        ((start == 0 || index >= start) && (count == 0 || index < start + count)))
+                    {
+                        keys.emplace_back(entryKey);
+                        ++index;
+                    }
+                    else
+                    {
+                        keys.emplace_back(entryKey);
+                    }
+                }
+            }
+
+            callback(nullptr, keys | RANGES::to<std::vector>());
+        }(this, std::string(table), condition, std::move(_callback)));
     }
 
     void asyncGetRow(std::string_view table, std::string_view key,
@@ -60,7 +101,7 @@ public:
                        decltype(callback) callback) -> task::Task<void> {
             try
             {
-                auto stateKeys = keys | RANGES::views::transform([&table](auto&& key) -> auto {
+                auto stateKeys = keys | RANGES::views::transform([&table](auto&& key) -> auto{
                     return transaction_executor::StateKeyView{
                         table, std::forward<decltype(key)>(key)};
                 }) | RANGES::to<std::vector>();
@@ -84,8 +125,16 @@ public:
                        decltype(entry) entry, decltype(callback) callback) -> task::Task<void> {
             try
             {
-                co_await storage2::writeOne(
-                    self->m_storage, transaction_executor::StateKey(table, key), std::move(entry));
+                if (entry.status() == storage::Entry::Status::DELETED)
+                {
+                    co_await storage2::removeOne(
+                        self->m_storage, transaction_executor::StateKeyView(table, key));
+                }
+                else
+                {
+                    co_await storage2::writeOne(self->m_storage,
+                        transaction_executor::StateKey(table, key), std::move(entry));
+                }
                 callback(nullptr);
             }
             catch (std::exception& e)
@@ -112,7 +161,7 @@ public:
                         keys | RANGES::views::transform([&](std::string_view key) {
                             return transaction_executor::StateKey{tableName, key};
                         }),
-                        values | RANGES::views::transform([](std::string_view value) -> auto {
+                        values | RANGES::views::transform([](std::string_view value) -> auto{
                             storage::Entry entry;
                             entry.setField(0, value);
                             return entry;

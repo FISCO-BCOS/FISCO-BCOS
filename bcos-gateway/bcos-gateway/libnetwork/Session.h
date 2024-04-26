@@ -16,7 +16,6 @@
 #include <bcos-gateway/libnetwork/SessionCallback.h>
 #include <bcos-gateway/libnetwork/SessionFace.h>
 #include <bcos-utilities/Timer.h>
-#include <oneapi/tbb/task_group.h>
 #include <boost/heap/priority_queue.hpp>
 #include <array>
 #include <cstddef>

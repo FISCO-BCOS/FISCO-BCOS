@@ -1,16 +1,16 @@
+#include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
+#include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
+#include "bcos-task/Generator.h"
 #include "bcos-transaction-scheduler/MultiLayerStorage.h"
-#include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-framework/transaction-executor/TransactionExecutor.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-task/Wait.h>
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
 #include <boost/test/unit_test.hpp>
-#include <range/v3/view/transform.hpp>
 
 using namespace bcos;
 using namespace bcos::storage2;
@@ -19,9 +19,18 @@ using namespace bcos::transaction_scheduler;
 
 struct MockExecutor
 {
+    friend task::Generator<protocol::TransactionReceipt::Ptr> tag_invoke(
+        transaction_executor::tag_t<execute3Step> /*unused*/, MockExecutor& executor, auto& storage,
+        protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
+        int contextID, ledger::LedgerConfig const& ledgerConfig, auto&& waitOperator)
+    {
+        co_yield std::shared_ptr<bcos::protocol::TransactionReceipt>();
+        co_yield std::shared_ptr<bcos::protocol::TransactionReceipt>();
+        co_yield std::shared_ptr<bcos::protocol::TransactionReceipt>();
+    }
+
     friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
-        bcos::transaction_executor::tag_t<
-            bcos::transaction_executor::executeTransaction> /*unused*/,
+        transaction_executor::tag_t<transaction_executor::executeTransaction> /*unused*/,
         MockExecutor& executor, auto& storage, protocol::BlockHeader const& blockHeader,
         protocol::Transaction const& transaction, int contextID, ledger::LedgerConfig const&,
         auto&& waitOperator)

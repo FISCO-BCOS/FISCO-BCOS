@@ -1,15 +1,11 @@
 #pragma once
-// if windows, manual include tup/Tars.h first
-#ifdef _WIN32
-#include <tup/Tars.h>
-#endif
+#include "../Common.h"
+#include "bcos-concepts/ByteBuffer.h"
+#include "bcos-concepts/Hash.h"
+#include "bcos-crypto/hasher/Hasher.h"
+#include "bcos-tars-protocol/tars/Block.h"
+#include "bcos-tars-protocol/tars/Transaction.h"
 #include "bcos-tars-protocol/tars/TransactionReceipt.h"
-#include <bcos-concepts/Basic.h>
-#include <bcos-concepts/ByteBuffer.h>
-#include <bcos-crypto/hasher/Hasher.h>
-#include <bcos-framework/protocol/Protocol.h>
-#include <bcos-tars-protocol/tars/Block.h>
-#include <bcos-tars-protocol/tars/Transaction.h>
 #include <boost/endian/conversion.hpp>
 #include <string>
 #include <vector>
@@ -17,8 +13,9 @@
 namespace bcostars
 {
 
-void impl_calculate(bcos::crypto::hasher::Hasher auto hasher,
-    bcostars::Transaction const& transaction, bcos::concepts::bytebuffer::ByteBuffer auto& out)
+void tag_invoke(bcos::concepts::hash::tag_t<bcos::concepts::hash::calculate> /*unused*/,
+    Transaction const& transaction, bcos::crypto::hasher::Hasher auto&& hasher,
+    bcos::concepts::bytebuffer::ByteBuffer auto& out)
 {
     if (!transaction.dataHash.empty())
     {
@@ -26,11 +23,12 @@ void impl_calculate(bcos::crypto::hasher::Hasher auto hasher,
         return;
     }
 
-    impl_calculate(std::forward<decltype(hasher)>(hasher), transaction.data, out);
+    bcos::concepts::hash::calculate(transaction.data, std::forward<decltype(hasher)>(hasher), out);
 }
 
-void impl_calculate(bcos::crypto::hasher::Hasher auto hasher,
-    bcostars::TransactionData const& hashFields, bcos::concepts::bytebuffer::ByteBuffer auto& out)
+void tag_invoke(bcos::concepts::hash::tag_t<bcos::concepts::hash::calculate> /*unused*/,
+    bcostars::TransactionData const& hashFields, bcos::crypto::hasher::Hasher auto hasher,
+    bcos::concepts::bytebuffer::ByteBuffer auto& out)
 {
     int32_t version = boost::endian::native_to_big((int32_t)hashFields.version);
     hasher.update(version);
@@ -61,8 +59,9 @@ void impl_calculate(bcos::crypto::hasher::Hasher auto hasher,
     hasher.final(out);
 }
 
-void impl_calculate(bcos::crypto::hasher::Hasher auto hasher,
-    bcostars::TransactionReceipt const& receipt, bcos::concepts::bytebuffer::ByteBuffer auto& out)
+void tag_invoke(bcos::concepts::hash::tag_t<bcos::concepts::hash::calculate> /*unused*/,
+    TransactionReceipt const& receipt, bcos::crypto::hasher::Hasher auto&& hasher,
+    bcos::concepts::bytebuffer::ByteBuffer auto& out)
 {
     if (!receipt.dataHash.empty())
     {
@@ -70,11 +69,11 @@ void impl_calculate(bcos::crypto::hasher::Hasher auto hasher,
         return;
     }
 
-    impl_calculate(std::forward<decltype(hasher)>(hasher), receipt.data, out);
+    bcos::concepts::hash::calculate(receipt.data, std::forward<decltype(hasher)>(hasher), out);
 }
 
-void impl_calculate(bcos::crypto::hasher::Hasher auto hasher,
-    bcostars::TransactionReceiptData const& hashFields,
+void tag_invoke(bcos::concepts::hash::tag_t<bcos::concepts::hash::calculate> /*unused*/,
+    bcostars::TransactionReceiptData const& hashFields, bcos::crypto::hasher::Hasher auto hasher,
     bcos::concepts::bytebuffer::ByteBuffer auto& out)
 {
     int32_t version = boost::endian::native_to_big((int32_t)hashFields.version);
@@ -102,8 +101,9 @@ void impl_calculate(bcos::crypto::hasher::Hasher auto hasher,
     hasher.final(out);
 }
 
-auto impl_calculate(bcos::crypto::hasher::Hasher auto hasher,
-    bcostars::BlockHeader const& blockHeader, bcos::concepts::bytebuffer::ByteBuffer auto& out)
+void tag_invoke(bcos::concepts::hash::tag_t<bcos::concepts::hash::calculate> /*unused*/,
+    BlockHeader const& blockHeader, bcos::crypto::hasher::Hasher auto&& hasher,
+    bcos::concepts::bytebuffer::ByteBuffer auto& out)
 {
     if (!blockHeader.dataHash.empty())
     {
@@ -151,7 +151,8 @@ auto impl_calculate(bcos::crypto::hasher::Hasher auto hasher,
     hasher.final(out);
 }
 
-auto impl_calculate(bcos::crypto::hasher::Hasher auto hasher, bcostars::Block const& block,
+void tag_invoke(bcos::concepts::hash::tag_t<bcos::concepts::hash::calculate> /*unused*/,
+    Block const& block, bcos::crypto::hasher::Hasher auto&& hasher,
     bcos::concepts::bytebuffer::ByteBuffer auto& out)
 {
     if (!block.blockHeader.dataHash.empty())
@@ -160,7 +161,7 @@ auto impl_calculate(bcos::crypto::hasher::Hasher auto hasher, bcostars::Block co
         return;
     }
 
-    impl_calculate(std::move(hasher), block.blockHeader, out);
+    bcos::concepts::hash::calculate(block.blockHeader, std::forward<decltype(hasher)>(hasher), out);
 }
 
 }  // namespace bcostars

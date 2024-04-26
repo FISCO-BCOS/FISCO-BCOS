@@ -157,7 +157,7 @@ public:
         }
 
         friend auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, View& storage,
-            RANGES::input_range auto&& keys, const storage2::READ_FRONT_TYPE& /*unused*/)
+            RANGES::input_range auto&& keys, storage2::DIRECT_TYPE /*unused*/)
             -> task::Task<task::AwaitableReturnType<
                 std::invoke_result_t<storage2::ReadSome, MutableStorageType&, decltype(keys)>>>
         {
@@ -216,7 +216,7 @@ public:
         }
 
         friend auto tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/, View& storage,
-            auto&& key, storage2::READ_FRONT_TYPE /*unused*/)
+            auto&& key, storage2::DIRECT_TYPE /*unused*/)
             -> task::Task<task::AwaitableReturnType<
                 std::invoke_result_t<storage2::ReadOne, MutableStorageType&, decltype(key)>>>
         {
@@ -249,18 +249,138 @@ public:
                 std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values));
         }
 
-        friend auto tag_invoke(bcos::storage2::tag_t<storage2::writeOne> /*unused*/, View& storage,
+        friend auto tag_invoke(storage2::tag_t<storage2::writeOne> /*unused*/, View& storage,
             auto&& key, auto&& value) -> task::Task<void>
         {
             co_await storage2::writeOne(storage.mutableStorage(), std::forward<decltype(key)>(key),
                 std::forward<decltype(value)>(value));
         }
 
-        friend task::Task<void> tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/,
-            View& storage, RANGES::input_range auto&& keys)
+        friend task::Task<void> tag_invoke(
+            storage2::tag_t<storage2::merge> /*unused*/, View& toStorage, auto&& fromStorage)
         {
-            co_await storage2::removeSome(
-                storage.mutableStorage(), std::forward<decltype(keys)>(keys));
+            co_await storage2::merge(
+                toStorage.mutableStorage(), std::forward<decltype(fromStorage)>(fromStorage));
+        }
+
+        friend task::Task<void> tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/,
+            View& storage, RANGES::input_range auto&& keys, auto&&... args)
+        {
+            co_await storage2::removeSome(storage.mutableStorage(),
+                std::forward<decltype(keys)>(keys), std::forward<decltype(args)>(args)...);
+        }
+
+        class Iterator
+        {
+        private:
+            using StorageIterator =
+                std::variant<task::AwaitableReturnType<std::invoke_result_t<storage2::Range,
+                                 std::add_lvalue_reference_t<MutableStorage>>>,
+                    task::AwaitableReturnType<std::invoke_result_t<storage2::Range,
+                        std::add_lvalue_reference_t<BackendStorage>>>>;
+            using RangeValue = std::optional<
+                std::tuple<typename MutableStorage::Key, typename MutableStorage::Value>>;
+            std::vector<std::tuple<StorageIterator, RangeValue>> m_iterators;
+
+            task::Task<void> forwardIterators(auto&& iterators)
+            {
+                for (auto& it : iterators)
+                {
+                    auto& [variantIterator, item] = it;
+                    item = co_await std::visit(
+                        [](auto& input) -> task::Task<RangeValue> {
+                            RangeValue item;
+                            auto rangeValue = co_await input.next();
+                            if (rangeValue)
+                            {
+                                auto&& [key, value] = *rangeValue;
+                                if constexpr (std::is_pointer_v<decltype(value)>)
+                                {
+                                    item.emplace(key, *value);
+                                }
+                                else
+                                {
+                                    item = std::move(rangeValue);
+                                }
+                            }
+                            co_return item;
+                        },
+                        variantIterator);
+                }
+            }
+
+        public:
+            task::Task<void> init(View& view, auto&&... args)
+            {
+                if (view.m_mutableStorage)
+                {
+                    m_iterators.emplace_back(co_await storage2::range(*view.m_mutableStorage,
+                                                 std::forward<decltype(args)>(args)...),
+                        RangeValue{});
+                }
+                for (auto& storage : view.m_immutableStorages)
+                {
+                    m_iterators.emplace_back(
+                        co_await storage2::range(*storage, std::forward<decltype(args)>(args)...),
+                        RangeValue{});
+                }
+                m_iterators.emplace_back(co_await storage2::range(view.m_backendStorage,
+                                             std::forward<decltype(args)>(args)...),
+                    RangeValue{});
+                co_await forwardIterators(m_iterators);
+            }
+
+            task::Task<RangeValue> next()
+            {
+                // 基于合并排序，找到所有迭代器的最小值，推进迭代器并返回值
+                // Based on merge sort, find the minimum value of all iterators, advance the
+                // iterator and return its value
+                auto iterators = m_iterators | RANGES::views::filter([](auto const& rangeValue) {
+                    return std::get<1>(rangeValue).has_value();
+                });
+                if (RANGES::empty(iterators))
+                {
+                    co_return std::nullopt;
+                }
+
+                std::vector<std::tuple<StorageIterator, RangeValue>*> minIterators;
+                for (auto& it : iterators)
+                {
+                    if (minIterators.empty())
+                    {
+                        minIterators.emplace_back(std::addressof(it));
+                    }
+                    else
+                    {
+                        auto& [variantIterator, value] = it;
+                        auto& key = std::get<0>(*value);
+                        auto& existsKey = std::get<0>(*std::get<1>(*minIterators[0]));
+
+                        if (key < existsKey)
+                        {
+                            minIterators.clear();
+                            minIterators.emplace_back(std::addressof(it));
+                        }
+                        else if (key == existsKey)
+                        {
+                            minIterators.emplace_back(std::addressof(it));
+                        }
+                    }
+                }
+
+                RangeValue result = std::get<1>(*minIterators[0]);
+                co_await forwardIterators(
+                    minIterators | RANGES::views::transform([](auto* it) -> auto& { return *it; }));
+                co_return result;
+            };
+        };
+
+        friend task::Task<Iterator> tag_invoke(
+            bcos::storage2::tag_t<storage2::range> /*unused*/, View& storage, auto&&... args)
+        {
+            Iterator iterator;
+            co_await iterator.init(storage, std::forward<decltype(args)>(args)...);
+            co_return iterator;
         }
 
         MutableStorageType& mutableStorage()
@@ -276,12 +396,18 @@ public:
         View& operator=(const View&) = delete;
         View(View&&) noexcept = default;
         View& operator=(View&&) noexcept = default;
-        ~View() noexcept = default;
+        ~View() noexcept { release(); }
 
         using Key = KeyType;
         using Value = ValueType;
 
-        void release() { m_mutableLock.unlock(); }
+        void release()
+        {
+            if (m_mutableLock.owns_lock())
+            {
+                m_mutableLock.unlock();
+            }
+        }
 
         template <class... Args>
         void newTemporaryMutable(Args... args)
@@ -294,7 +420,7 @@ public:
             m_mutableStorage = std::make_shared<MutableStorageType>(args...);
         }
 
-        BackendStorage& backendStorage() { return m_backendStorage; }
+        BackendStorage& backendStorage() & { return m_backendStorage; }
     };
 
     using Key = KeyType;
@@ -367,6 +493,12 @@ public:
         m_mutableStorage = std::make_shared<MutableStorageType>(args...);
     }
 
+    void removeMutable()
+    {
+        std::unique_lock lock(m_listMutex);
+        m_mutableStorage.reset();
+    }
+
     void pushMutableToImmutableFront()
     {
         if (!m_mutableStorage)
@@ -378,7 +510,7 @@ public:
         m_mutableStorage.reset();
     }
 
-    task::Task<void> mergeAndPopImmutableBack()
+    task::Task<std::shared_ptr<MutableStorage>> mergeAndPopImmutableBack()
     {
         std::unique_lock mergeLock(m_mergeMutex);
         std::unique_lock immutablesLock(m_listMutex);
@@ -402,6 +534,8 @@ public:
 
         immutablesLock.lock();
         m_immutableStorages.pop_back();
+
+        co_return immutableStorage;
     }
 
     std::shared_ptr<MutableStorageType> frontImmutableStorage()

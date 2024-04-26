@@ -22,7 +22,7 @@
  */
 
 #pragma once
-#include "../Common.h"
+#include "../EVMCResult.h"
 #include "bcos-executor/src/Common.h"
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Overloaded.h>

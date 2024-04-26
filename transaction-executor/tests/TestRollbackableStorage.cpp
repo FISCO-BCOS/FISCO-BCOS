@@ -13,6 +13,7 @@
 using namespace bcos;
 using namespace bcos::storage2;
 using namespace bcos::transaction_executor;
+using namespace std::string_literals;
 using namespace std::string_view_literals;
 
 class TestRollbackableStorageFixture
@@ -31,7 +32,7 @@ BOOST_AUTO_TEST_CASE(addRollback)
         Rollbackable rollbackableStorage(memoryStorage);
 
         auto view = RANGES::single_view(StateKey{"table1"sv, "Key1"sv});
-        co_await storage2::readSome(memoryStorage, view, storage2::READ_FRONT);
+        co_await storage2::readSome(memoryStorage, view, storage2::DIRECT);
 
         std::string_view tableID = "table1";
         auto point = rollbackableStorage.current();
@@ -63,6 +64,24 @@ BOOST_AUTO_TEST_CASE(addRollback)
         {
             BOOST_REQUIRE(!value);
         }
+
+        // Update and check
+        co_await storage2::writeOne(
+            rollbackableStorage, StateKey{tableID, "Key1"sv}, storage::Entry{"OK!"});
+
+        auto savepoint2 = rollbackableStorage.current();
+        co_await storage2::writeOne(
+            rollbackableStorage, StateKey{tableID, "Key1"s}, storage::Entry{"OK3!"});
+        auto value3 =
+            co_await storage2::readOne(rollbackableStorage, StateKeyView{tableID, "Key1"sv});
+        BOOST_CHECK(value3);
+        BOOST_CHECK_EQUAL(value3->get(), "OK3!");
+
+        co_await rollbackableStorage.rollback(savepoint2);
+        auto value4 =
+            co_await storage2::readOne(rollbackableStorage, StateKeyView{tableID, "Key1"sv});
+        BOOST_CHECK(value4);
+        BOOST_CHECK_EQUAL(value4->get(), "OK!");
 
         co_return;
     }());

@@ -377,20 +377,22 @@ void Host::startPeerSession(P2PInfo const& p2pInfo, std::shared_ptr<SocketFace> 
     std::shared_ptr<SessionFace> session = m_sessionFactory->create_session(
         weakHost, socket, m_messageFactory, m_sessionCallbackManager);
 
-    m_asyncGroup.run([weakHost, session = std::move(session), p2pInfo]() {
-        auto host = weakHost.lock();
-        if (!host)
-        {
-            return;
-        }
-        if (host->m_connectionHandler)
-        {
-            host->m_connectionHandler(NetworkException(0, ""), p2pInfo, session);
-        }
-        else
-        {
-            HOST_LOG(INFO) << LOG_DESC("No connectionHandler, new connection may lost");
-        }
+    m_taskArena.execute([&]() {
+        m_asyncGroup.run([weakHost, session = std::move(session), p2pInfo]() {
+            auto host = weakHost.lock();
+            if (!host)
+            {
+                return;
+            }
+            if (host->m_connectionHandler)
+            {
+                host->m_connectionHandler(NetworkException(0, ""), p2pInfo, session);
+            }
+            else
+            {
+                HOST_LOG(WARNING) << LOG_DESC("No connectionHandler, new connection may lost");
+            }
+        });
     });
     HOST_LOG(INFO) << LOG_DESC("startPeerSession, Remote=") << socket->remoteEndpoint()
                    << LOG_KV("local endpoint", socket->localEndpoint())
@@ -477,8 +479,10 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
                                 << LOG_KV("message", ec.message());
                 socket->close();
 
-                m_asyncGroup.run([callback = std::move(callback)]() {
-                    callback(NetworkException(ConnectError, "Connect failed"), {}, {});
+                m_taskArena.execute([&]() {
+                    m_asyncGroup.run([callback = std::move(callback)]() {
+                        callback(NetworkException(ConnectError, "Connect failed"), {}, {});
+                    });
                 });
                 return;
             }

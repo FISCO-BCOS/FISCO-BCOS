@@ -3,6 +3,7 @@
 #include "bcos-tool/VersionConverter.h"
 #include <boost/exception/diagnostic_information.hpp>
 #include <exception>
+#include <type_traits>
 
 bcos::task::Task<void> bcos::ledger::prewriteBlockToStorage(LedgerInterface& ledger,
     bcos::protocol::ConstTransactionsPtr transactions, bcos::protocol::Block::ConstPtr block,
@@ -220,14 +221,14 @@ bcos::task::Task<bcos::crypto::HashType> bcos::ledger::tag_invoke(
     Awaitable awaitable{.m_ledger = ledger, .m_blockNumber = blockNumber, .m_result = {}};
     co_return co_await awaitable;
 }
-bcos::task::Task<bcos::ledger::SystemConfigEntry> bcos::ledger::tag_invoke(
+bcos::task::Task<std::optional<bcos::ledger::SystemConfigEntry>> bcos::ledger::tag_invoke(
     ledger::tag_t<getSystemConfig> /*unused*/, LedgerInterface& ledger, std::string_view key)
 {
     struct Awaitable
     {
         LedgerInterface& m_ledger;
         std::string_view m_key;
-        std::variant<Error::Ptr, SystemConfigEntry> m_result;
+        std::variant<Error::Ptr, std::optional<SystemConfigEntry>> m_result;
 
         constexpr static bool await_ready() noexcept { return false; }
         void await_suspend(CO_STD::coroutine_handle<> handle)
@@ -237,28 +238,39 @@ bcos::task::Task<bcos::ledger::SystemConfigEntry> bcos::ledger::tag_invoke(
                            bcos::protocol::BlockNumber blockNumber) {
                     if (error)
                     {
-                        m_result.emplace<Error::Ptr>(std::move(error));
+                        if (error->errorCode() == LedgerError::EmptyEntry ||
+                            error->errorCode() == LedgerError::ErrorArgument ||
+                            error->errorCode() == LedgerError::GetStorageError)
+                        {
+                            m_result.emplace<std::optional<SystemConfigEntry>>();
+                        }
+                        else
+                        {
+                            m_result.emplace<Error::Ptr>(std::move(error));
+                        }
                     }
                     else
                     {
-                        m_result.emplace<SystemConfigEntry>(std::move(value), blockNumber);
+                        m_result.emplace<std::optional<SystemConfigEntry>>(
+                            std::in_place, std::move(value), blockNumber);
                     }
                     handle.resume();
                 });
         }
-        SystemConfigEntry await_resume()
+        std::optional<SystemConfigEntry> await_resume()
         {
             if (std::holds_alternative<Error::Ptr>(m_result))
             {
                 BOOST_THROW_EXCEPTION(*std::get<Error::Ptr>(m_result));
             }
-            return std::move(std::get<SystemConfigEntry>(m_result));
+            return std::move(std::get<std::optional<SystemConfigEntry>>(m_result));
         }
     };
 
     Awaitable awaitable{.m_ledger = ledger, .m_key = key, .m_result = {}};
     co_return co_await awaitable;
 }
+
 bcos::task::Task<bcos::consensus::ConsensusNodeList> bcos::ledger::tag_invoke(
     ledger::tag_t<getNodeList> /*unused*/, LedgerInterface& ledger, std::string_view type)
 {
@@ -300,40 +312,39 @@ bcos::task::Task<bcos::consensus::ConsensusNodeList> bcos::ledger::tag_invoke(
     co_return co_await awaitable;
 }
 
-static bcos::task::Task<std::tuple<uint64_t, bcos::protocol::BlockNumber>> getSystemConfigOrDefault(
-    bcos::ledger::LedgerInterface& ledger, std::string_view key, int64_t defaultValue)
-{
-    try
-    {
-        auto [value, blockNumber] = co_await bcos::ledger::getSystemConfig(ledger, key);
-        co_return std::tuple<uint64_t, bcos::protocol::BlockNumber>{
-            boost::lexical_cast<uint64_t>(value), blockNumber};
-    }
-    catch (std::exception& e)
-    {
-        LEDGER2_LOG(DEBUG) << "Get " << key << " failed, use default value"
-                           << LOG_KV("defaultValue", defaultValue)
-                           << boost::diagnostic_information(e);
-        co_return std::tuple<uint64_t, bcos::protocol::BlockNumber>{defaultValue, 0};
-    }
-}
-
 static bcos::task::Task<std::tuple<std::string, bcos::protocol::BlockNumber>>
 getSystemConfigOrDefault(
     bcos::ledger::LedgerInterface& ledger, std::string_view key, std::string defaultValue)
 {
     try
     {
-        auto [value, blockNumber] = co_await bcos::ledger::getSystemConfig(ledger, key);
+        auto config = co_await bcos::ledger::getSystemConfig(ledger, key);
+        if (!config)
+        {
+            LEDGER2_LOG(DEBUG) << "Get " << key << " failed, use default value"
+                               << LOG_KV("defaultValue", defaultValue);
+            co_return std::tuple<std::string, bcos::protocol::BlockNumber>{defaultValue, 0};
+        }
+        auto [value, blockNumber] = *config;
         co_return std::tuple<std::string, bcos::protocol::BlockNumber>{value, blockNumber};
     }
     catch (std::exception& e)
     {
         LEDGER2_LOG(DEBUG) << "Get " << key << " failed, use default value"
-                           << LOG_KV("defaultValue", defaultValue)
-                           << boost::diagnostic_information(e);
+                           << LOG_KV("defaultValue", defaultValue);
         co_return std::tuple<std::string, bcos::protocol::BlockNumber>{defaultValue, 0};
     }
+}
+
+static bcos::task::Task<std::tuple<int64_t, bcos::protocol::BlockNumber>> getSystemConfigOrDefault(
+    bcos::ledger::LedgerInterface& ledger, std::string_view key, int64_t defaultValue)
+{
+    auto [value, blockNumber] = co_await getSystemConfigOrDefault(ledger, key, "");
+    if (value.empty())
+    {
+        co_return std::make_tuple(defaultValue, 0);
+    }
+    co_return std::make_tuple(boost::lexical_cast<int64_t>(value), blockNumber);
 }
 
 bcos::task::Task<bcos::ledger::LedgerConfig::Ptr> bcos::ledger::tag_invoke(
@@ -342,14 +353,23 @@ bcos::task::Task<bcos::ledger::LedgerConfig::Ptr> bcos::ledger::tag_invoke(
     auto ledgerConfig = std::make_shared<ledger::LedgerConfig>();
     ledgerConfig->setConsensusNodeList(co_await getNodeList(ledger, ledger::CONSENSUS_SEALER));
     ledgerConfig->setObserverNodeList(co_await getNodeList(ledger, ledger::CONSENSUS_OBSERVER));
-    ledgerConfig->setBlockTxCountLimit(boost::lexical_cast<uint64_t>(
-        std::get<0>(co_await getSystemConfig(ledger, SYSTEM_KEY_TX_COUNT_LIMIT))));
-    ledgerConfig->setLeaderSwitchPeriod(boost::lexical_cast<uint64_t>(
-        std::get<0>(co_await getSystemConfig(ledger, SYSTEM_KEY_CONSENSUS_LEADER_PERIOD))));
+    if (auto txLimitConfig = co_await getSystemConfig(ledger, SYSTEM_KEY_TX_COUNT_LIMIT))
+    {
+        ledgerConfig->setBlockTxCountLimit(
+            boost::lexical_cast<uint64_t>(std::get<0>(*txLimitConfig)));
+    }
+    if (auto ledgerSwitchPeriodConfig =
+            co_await getSystemConfig(ledger, SYSTEM_KEY_CONSENSUS_LEADER_PERIOD))
+    {
+        ledgerConfig->setLeaderSwitchPeriod(
+            boost::lexical_cast<uint64_t>(std::get<0>(*ledgerSwitchPeriodConfig)));
+    }
     ledgerConfig->setGasLimit(
         co_await getSystemConfigOrDefault(ledger, SYSTEM_KEY_TX_GAS_LIMIT, 0));
-    ledgerConfig->setCompatibilityVersion(tool::toVersionNumber(
-        std::get<0>(co_await getSystemConfig(ledger, SYSTEM_KEY_COMPATIBILITY_VERSION))));
+    if (auto versionConfig = co_await getSystemConfig(ledger, SYSTEM_KEY_COMPATIBILITY_VERSION))
+    {
+        ledgerConfig->setCompatibilityVersion(tool::toVersionNumber(std::get<0>(*versionConfig)));
+    }
     ledgerConfig->setGasPrice(
         co_await getSystemConfigOrDefault(ledger, SYSTEM_KEY_TX_GAS_PRICE, "0x0"));
 
@@ -377,8 +397,6 @@ bcos::task::Task<bcos::ledger::LedgerConfig::Ptr> bcos::ledger::tag_invoke(
     ledgerConfig->setAuthCheckStatus(
         std::get<0>(co_await getSystemConfigOrDefault(ledger, SYSTEM_KEY_AUTH_CHECK_STATUS, 0)));
 
-    LEDGER_LOG(INFO) << "LEDGER_CONFIG auth check status: " << ledgerConfig->authCheckStatus();
-
     co_return ledgerConfig;
 }
 
@@ -392,7 +410,13 @@ bcos::task::Task<bcos::ledger::Features> bcos::ledger::tag_invoke(
         try
         {
             auto value = co_await getSystemConfig(ledger, key);
-            if (blockNumber + 1 >= std::get<1>(value))
+            if (!value)
+            {
+                LEDGER2_LOG(DEBUG) << "Not found system config: " << key;
+                continue;
+            }
+
+            if (blockNumber + 1 >= std::get<1>(*value))
             {
                 features.set(key);
             }

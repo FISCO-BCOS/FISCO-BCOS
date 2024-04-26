@@ -22,7 +22,7 @@ inline constexpr struct BuildGenesisBlock
     }
 } buildGenesisBlock{};
 
-struct PrewriteBlock
+inline constexpr struct PrewriteBlock
 {
     task::Task<void> operator()(auto& ledger, bcos::protocol::ConstTransactionsPtr transactions,
         bcos::protocol::Block::ConstPtr block, bool withTransactionsAndReceipts,
@@ -31,28 +31,25 @@ struct PrewriteBlock
         co_await tag_invoke(*this, ledger, std::move(transactions), std::move(block),
             withTransactionsAndReceipts, storage);
     }
-};
-inline constexpr PrewriteBlock prewriteBlock{};
+} prewriteBlock{};
 
-struct StoreTransactionsAndReceipts
+inline constexpr struct StoreTransactionsAndReceipts
 {
     task::Task<void> operator()(auto& ledger, bcos::protocol::ConstTransactionsPtr transactions,
         bcos::protocol::Block::ConstPtr block) const
     {
         co_await tag_invoke(*this, ledger, std::move(transactions), std::move(block));
     }
-};
-inline constexpr StoreTransactionsAndReceipts storeTransactionsAndReceipts{};
+} storeTransactionsAndReceipts{};
 
-struct GetBlockData
+inline constexpr struct GetBlockData
 {
     task::Task<protocol::Block::Ptr> operator()(
         auto& ledger, protocol::BlockNumber blockNumber, int32_t blockFlag) const
     {
         co_return co_await tag_invoke(*this, ledger, blockNumber, blockFlag);
     }
-};
-inline constexpr GetBlockData getBlockData{};
+} getBlockData{};
 
 struct TransactionCount
 {
@@ -60,69 +57,62 @@ struct TransactionCount
     int64_t failed{};
     bcos::protocol::BlockNumber blockNumber{};
 };
-struct GetTransactionCount
+inline constexpr struct GetTransactionCount
 {
     task::Task<TransactionCount> operator()(auto& ledger) const
     {
         co_return co_await tag_invoke(*this, ledger);
     }
-};
-inline constexpr GetTransactionCount getTransactionCount{};
+} getTransactionCount{};
 
-struct GetCurrentBlockNumber
+inline constexpr struct GetCurrentBlockNumber
 {
     task::Task<protocol::BlockNumber> operator()(auto& ledger) const
     {
         co_return co_await tag_invoke(*this, ledger);
     }
-};
-inline constexpr GetCurrentBlockNumber getCurrentBlockNumber{};
+} getCurrentBlockNumber{};
 
-struct GetBlockHash
+inline constexpr struct GetBlockHash
 {
     task::Task<crypto::HashType> operator()(auto& ledger, protocol::BlockNumber blockNumber) const
     {
         co_return co_await tag_invoke(*this, ledger, blockNumber);
     }
-};
-inline constexpr GetBlockHash getBlockHash{};
+} getBlockHash{};
 
-using SystemConfigEntry = std::tuple<std::string, protocol::BlockNumber>;
-struct GetSystemConfig
+inline constexpr struct GetSystemConfig
 {
-    task::Task<SystemConfigEntry> operator()(auto& ledger, std::string_view key) const
+    task::Task<std::optional<SystemConfigEntry>> operator()(
+        auto& ledger, std::string_view key) const
     {
         co_return co_await tag_invoke(*this, ledger, key);
     }
-};
-inline constexpr GetSystemConfig getSystemConfig{};
+} getSystemConfig{};
 
-struct GetNodeList
+inline constexpr struct GetNodeList
 {
     task::Task<consensus::ConsensusNodeList> operator()(auto& ledger, std::string_view type) const
     {
         co_return co_await tag_invoke(*this, ledger, type);
     }
-};
-inline constexpr GetNodeList getNodeList{};
+} getNodeList{};
 
-struct GetLedgerConfig
+inline constexpr struct GetLedgerConfig
 {
     task::Task<LedgerConfig::Ptr> operator()(auto& ledger) const
     {
         co_return co_await tag_invoke(*this, ledger);
     }
-};
-inline constexpr GetLedgerConfig getLedgerConfig{};
+} getLedgerConfig{};
 
-struct GetFeatures
+inline constexpr struct GetFeatures
 {
     task::Task<Features> operator()(auto& ledger) const
     {
         co_return co_await tag_invoke(*this, ledger);
     }
-};
-inline constexpr GetFeatures getFeatures{};
+} getFeatures{};
 
 template <auto& Tag>
 using tag_t = std::decay_t<decltype(Tag)>;

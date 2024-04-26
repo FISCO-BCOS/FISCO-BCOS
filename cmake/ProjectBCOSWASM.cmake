@@ -30,7 +30,7 @@ STRING(REGEX MATCH "[0-9]+\\.[0-9]+\\.[0-9]+" RUSTC_VERSION ${RUSTC_VERSION_INFO
 
 # same as https://github.com/WeBankBlockchain/WeDPR-Lab-Crypto/blob/main/rust-toolchain
 if(NOT RUSTC_VERSION_REQUIRED)
-    set(RUSTC_VERSION_REQUIRED "nightly-2024-01-10")
+    set(RUSTC_VERSION_REQUIRED "nightly-2024-02-25")
 endif()
 message(STATUS "set rustc to ${RUSTC_VERSION_REQUIRED} of path ${CMAKE_CURRENT_SOURCE_DIR}/deps/src/")
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/deps/src/)
@@ -61,11 +61,11 @@ ExternalProject_Add(bcos_wasm_project
         PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/deps
         # DOWNLOAD_NO_PROGRESS 1
         GIT_REPOSITORY https://${URL_BASE}/FISCO-BCOS/bcos-wasm.git
-        GIT_TAG 1afb430aaab0bcbeaf31c9ced7c06a5427d24651
+        GIT_TAG ab031fcf447da42dc307c533097baba38a3c35fd
         GIT_SHALLOW false
         BUILD_IN_SOURCE 1
         CONFIGURE_COMMAND ""
-        BUILD_COMMAND ${CARGO_COMMAND} build && ${CARGO_COMMAND} build --release && ${CMAKE_AR_D} <SOURCE_DIR>/target/release/libbcos_wasm.a ${ZSTD_DUP_OBJECT} && ${CMAKE_AR_D} <SOURCE_DIR>/target/debug/libbcos_wasm.a ${ZSTD_DUP_OBJECT}
+        BUILD_COMMAND ${CARGO_COMMAND} build && ${CARGO_COMMAND} build --release #&& ${CMAKE_AR_D} <SOURCE_DIR>/target/release/libbcos_wasm.a ${ZSTD_DUP_OBJECT} && ${CMAKE_AR_D} <SOURCE_DIR>/target/debug/libbcos_wasm.a ${ZSTD_DUP_OBJECT}
         INSTALL_COMMAND ""
         LOG_DOWNLOAD 1
         LOG_CONFIGURE 1

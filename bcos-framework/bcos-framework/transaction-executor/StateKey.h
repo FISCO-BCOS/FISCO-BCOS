@@ -18,8 +18,6 @@ struct NoTableSpliterError : public bcos::Exception
 };
 
 using StateValue = storage::Entry;
-using EncodedKey = std::string;
-
 class StateKeyView;
 
 class StateKey
@@ -29,11 +27,10 @@ public:
     size_t m_split{};
 
     StateKey() = default;
-    StateKey(std::string_view table, std::string_view key)
+    StateKey(std::string_view table, std::string_view key) : m_split(table.size())
     {
         m_tableAndKey.reserve(table.size() + 1 + key.size());
         m_tableAndKey.append(table);
-        m_split = m_tableAndKey.size();
         m_tableAndKey.push_back(':');
         m_tableAndKey.append(key);
     }
@@ -67,12 +64,11 @@ public:
 
 class StateKeyView
 {
-private:
+public:
     std::string_view m_table;
     std::string_view m_key;
     friend class StateKey;
 
-public:
     explicit StateKeyView(const StateKey& stateKey) noexcept
       : m_table(stateKey.data(), stateKey.m_split),
         m_key(stateKey.data() + stateKey.m_split + 1, stateKey.size() - stateKey.m_split - 1)

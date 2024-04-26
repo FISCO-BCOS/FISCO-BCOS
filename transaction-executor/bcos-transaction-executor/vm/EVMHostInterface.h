@@ -21,13 +21,15 @@
 
 #pragma once
 
-#include "../Common.h"
+#include "../EVMCResult.h"
 #include "HostContext.h"
+#include "bcos-concepts/ByteBuffer.h"
 #include "bcos-executor/src/Common.h"
 #include <evmc/evmc.h>
 #include <evmc/instructions.h>
 #include <boost/core/pointer_traits.hpp>
 #include <functional>
+#include <memory>
 #include <set>
 
 namespace bcos::transaction_executor
@@ -57,10 +59,11 @@ struct EVMHostInterface
         [[maybe_unused]] const evmc_address* addr, const evmc_bytes32* key,
         const evmc_bytes32* value) noexcept
     {
+        assert(!concepts::bytebuffer::equalTo(addr->bytes, executor::EMPTY_EVM_ADDRESS.bytes));
         auto& hostContext = static_cast<HostContextType&>(*context);
 
         auto status = EVMC_STORAGE_MODIFIED;
-        if (value == nullptr)  // TODO: Should use 32 bytes 0
+        if (concepts::bytebuffer::equalTo(value->bytes, executor::EMPTY_EVM_BYTES32.bytes))
         {
             status = EVMC_STORAGE_DELETED;
         }
@@ -115,9 +118,8 @@ struct EVMHostInterface
         return false;
     }
 
-    static void log(evmc_host_context* context, [[maybe_unused]] const evmc_address* addr,
-        uint8_t const* data, size_t dataSize, const evmc_bytes32 topics[],
-        size_t numTopics) noexcept
+    static void log(evmc_host_context* context, const evmc_address* addr, uint8_t const* data,
+        size_t dataSize, const evmc_bytes32 topics[], size_t numTopics) noexcept
     {
         auto& hostContext = static_cast<HostContextType&>(*context);
         h256s hashTopics;
@@ -126,16 +128,16 @@ struct EVMHostInterface
         {
             hashTopics.emplace_back(topics[i].bytes, sizeof(evmc_bytes32));
         }
-        hostContext.log(std::move(hashTopics), bytesConstRef{data, dataSize});
+        hostContext.log(*addr, std::move(hashTopics), bytesConstRef{data, dataSize});
     }
 
-    static evmc_access_status access_account([[maybe_unused]] evmc_host_context* context,
+    static evmc_access_status accessAccount([[maybe_unused]] evmc_host_context* context,
         [[maybe_unused]] const evmc_address* addr) noexcept
     {
         return EVMC_ACCESS_COLD;
     }
 
-    static evmc_access_status access_storage([[maybe_unused]] evmc_host_context* context,
+    static evmc_access_status accessStorage([[maybe_unused]] evmc_host_context* context,
         [[maybe_unused]] const evmc_address* addr,
         [[maybe_unused]] const evmc_bytes32* key) noexcept
     {
@@ -200,8 +202,8 @@ const evmc_host_interface* getHostInterface(auto&& waitOperator)
         HostContextImpl::getTxContext,
         HostContextImpl::getBlockHash,
         HostContextImpl::log,
-        HostContextImpl::access_account,
-        HostContextImpl::access_storage,
+        HostContextImpl::accessAccount,
+        HostContextImpl::accessStorage,
     };
     return &fnTable;
 }

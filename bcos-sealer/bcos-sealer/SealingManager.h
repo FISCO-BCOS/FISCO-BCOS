@@ -103,10 +103,7 @@ public:
     }
 
     virtual void resetLatestNumber(int64_t _latestNumber) { m_latestNumber = _latestNumber; }
-    virtual void resetLatestHash(crypto::HashType _latestHash)
-    {
-        m_latestHash = std::move(_latestHash);
-    }
+    virtual void resetLatestHash(crypto::HashType _latestHash) { m_latestHash = _latestHash; }
     virtual int64_t latestNumber() const { return m_latestNumber; }
     virtual crypto::HashType latestHash() const { return m_latestHash; }
     virtual void fetchTransactions();

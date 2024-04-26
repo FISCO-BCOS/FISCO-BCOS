@@ -50,6 +50,7 @@ namespace executor
 {
 
 constexpr static evmc_address EMPTY_EVM_ADDRESS = {};
+constexpr static evmc_bytes32 EMPTY_EVM_BYTES32 = {};
 using bytes_view = std::basic_string_view<uint8_t>;
 
 #define EXECUTOR_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTOR")
@@ -303,8 +304,8 @@ inline std::string getContractTableName(
 }
 
 bytes getComponentBytes(size_t index, const std::string& typeName, const bytesConstRef& data);
-
 evmc_address unhexAddress(std::string_view view);
 std::string addressBytesStr2HexString(std::string_view receiveAddressBytes);
 std::string address2HexString(const evmc_address& address);
+std::array<char, sizeof(evmc_address) * 2> address2FixedArray(const evmc_address& address);
 }  // namespace bcos

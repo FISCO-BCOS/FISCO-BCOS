@@ -64,7 +64,7 @@ public:
     void checkParentBlock(BlockType parentBlock, BlockType block)
     {
         std::array<std::byte, Hasher::HASH_SIZE> parentHash;
-        bcos::concepts::hash::calculate(m_hasher.clone(), parentBlock, parentHash);
+        bcos::concepts::hash::calculate(parentBlock, m_hasher.clone(), parentHash);
 
         if (RANGES::empty(block.blockHeader.data.parentInfo) ||
             (block.blockHeader.data.parentInfo[0].blockNumber !=
@@ -585,7 +585,7 @@ private:
                 [&block, this](const tbb::blocked_range<size_t>& range) {
                     for (auto i = range.begin(); i < range.end(); ++i)
                     {
-                        bcos::concepts::hash::calculate(m_hasher.clone(), block.transactions[i],
+                        bcos::concepts::hash::calculate(block.transactions[i], m_hasher.clone(),
                             block.transactionsMetaData[i].hash);
                     }
                 });

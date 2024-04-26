@@ -1028,8 +1028,8 @@ void Ledger::asyncGetSystemConfigByKey(const std::string_view& _key,
                     if (!entry)
                     {
                         LEDGER_LOG(DEBUG) << "asyncGetSystemTableEntry: entry doesn't exists";
-                        callback(
-                            BCOS_ERROR_PTR(-1, "asyncGetSystemTableEntry failed for empty entry"),
+                        callback(BCOS_ERROR_PTR(LedgerError::EmptyEntry,
+                                     "asyncGetSystemTableEntry failed for empty entry"),
                             "", -1);
                         return;
                     }
@@ -1633,7 +1633,7 @@ static task::Task<void> setGenesisFeatures(RANGES::input_range auto const& featu
             features.set(featureSet.flag);
         }
     }
-    co_await features.writeToStorage(storage, 0);
+    co_await writeToStorage(features, storage, 0);
 }
 
 static task::Task<void> setAllocs(

@@ -244,6 +244,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         auto existsRocksDB = std::dynamic_pointer_cast<storage::RocksDBStorage>(storage);
 
         auto baselineSchedulerConfig = m_nodeConfig->baselineSchedulerConfig();
+        task::syncWait(transaction_scheduler::BaselineSchedulerInitializer::checkRequirements(
+            *ledger, !m_nodeConfig->genesisConfig().m_isSerialExecute,
+            m_nodeConfig->genesisConfig().m_isWasm));
         std::tie(m_baselineSchedulerHolder, m_setBaselineSchedulerBlockNumberNotifier) =
             transaction_scheduler::BaselineSchedulerInitializer::build(existsRocksDB->rocksDB(),
                 m_protocolInitializer->blockFactory(), m_txpoolInitializer->txpool(),

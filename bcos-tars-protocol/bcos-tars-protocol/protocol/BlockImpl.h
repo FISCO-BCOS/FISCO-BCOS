@@ -42,7 +42,6 @@
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <gsl/span>
 #include <memory>
-#include <ranges>
 #include <type_traits>
 
 namespace bcostars::protocol
@@ -72,6 +71,8 @@ public:
     bcos::protocol::TransactionMetaData::ConstPtr transactionMetaData(
         uint64_t _index) const override;
     TransactionMetaDataImpl transactionMetaDataImpl(uint64_t _index) const;
+    bcos::crypto::HashType transactionHash(uint64_t _index) const override;
+
     void setBlockType(bcos::protocol::BlockType _blockType) override;
 
     // set blockHeader
