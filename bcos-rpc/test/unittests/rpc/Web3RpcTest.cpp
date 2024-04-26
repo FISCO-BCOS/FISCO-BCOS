@@ -43,7 +43,6 @@
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 
 #include <bcos-rpc/filter/LogMatcher.h>
-#include <bcos-rpc/filter/Filter.h>
 #include <bcos-rpc/web3jsonrpc/model/Web3FilterRequest.h>
 
 using namespace bcos;
@@ -465,7 +464,7 @@ BOOST_AUTO_TEST_CASE(logMatcherTest)
         protocol::LogEntry log2(address1, {C, D}, bytes());
         auto params1 = std::make_shared<Web3FilterRequest>();
         auto params2 = std::make_shared<Web3FilterRequest>();
-        params2->addAddress(*toHexString(address1));
+        params2->addAddress(toHexStringWithPrefix(address1));
         BOOST_CHECK(matcher.matches(params1, log1));
         BOOST_CHECK(matcher.matches(params1, log2));
         BOOST_CHECK(!matcher.matches(params2, log1));
@@ -475,7 +474,7 @@ BOOST_AUTO_TEST_CASE(logMatcherTest)
     {
         auto params = std::make_shared<Web3FilterRequest>();
         params->resizeTopic(1);
-        params->addTopic(0, *toHexString(A));
+        params->addTopic(0, toHexStringWithPrefix(A));
         protocol::LogEntry log;
         // [A]
         log = protocol::LogEntry(address1, {A}, bytes());
@@ -494,7 +493,7 @@ BOOST_AUTO_TEST_CASE(logMatcherTest)
     {
         auto params = std::make_shared<Web3FilterRequest>();
         params->resizeTopic(2);
-        params->addTopic(1, *toHexString(B));
+        params->addTopic(1, toHexStringWithPrefix(B));
         protocol::LogEntry log;
         // matched
         // [A, B]
@@ -539,8 +538,8 @@ BOOST_AUTO_TEST_CASE(logMatcherTest)
     {
         auto params = std::make_shared<Web3FilterRequest>();
         params->resizeTopic(2);
-        params->addTopic(0, *toHexString(A));
-        params->addTopic(1, *toHexString(B));
+        params->addTopic(0, toHexStringWithPrefix(A));
+        params->addTopic(1, toHexStringWithPrefix(B));
         protocol::LogEntry log;
 
         // matched
@@ -579,10 +578,10 @@ BOOST_AUTO_TEST_CASE(logMatcherTest)
     {
         auto params = std::make_shared<Web3FilterRequest>();
         params->resizeTopic(2);
-        params->addTopic(0, *toHexString(A));
-        params->addTopic(0, *toHexString(B));
-        params->addTopic(1, *toHexString(C));
-        params->addTopic(1, *toHexString(D));
+        params->addTopic(0, toHexStringWithPrefix(A));
+        params->addTopic(0, toHexStringWithPrefix(B));
+        params->addTopic(1, toHexStringWithPrefix(C));
+        params->addTopic(1, toHexStringWithPrefix(D));
         protocol::LogEntry log;
 
         // matched

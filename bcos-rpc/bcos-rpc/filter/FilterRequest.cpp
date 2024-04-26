@@ -25,33 +25,22 @@
 using namespace bcos;
 using namespace bcos::rpc;
 
-static inline std::string removePrefix(const std::string& str)
-{
-    if ((str.compare(0, 2, "0x") == 0) || (str.compare(0, 2, "0X") == 0))
-    {
-        return str.substr(2);
-    }
-    return str;
-}
-
 void FilterRequest::fromJson(const Json::Value& jParams, protocol::BlockNumber latest)
 {
     // default: LatestBlockNumber
     m_fromBlock = latest;
     if (jParams.isMember("fromBlock") && !jParams["fromBlock"].isNull())
     {
-        auto [blockNumber, isLatest] = getBlockNumberByTag(latest, jParams["fromBlock"].asString());
-        m_fromBlock = blockNumber;
-        m_fromIsLatest = isLatest;
+        std::tie(m_fromBlock, m_fromIsLatest) =
+            getBlockNumberByTag(latest, jParams["fromBlock"].asString());
     }
 
     // default: LatestBlockNumber
     m_toBlock = latest;
     if (jParams.isMember("toBlock") && !jParams["toBlock"].isNull())
     {
-        auto [blockNumber, isLatest] = getBlockNumberByTag(latest, jParams["toBlock"].asString());
-        m_toBlock = blockNumber;
-        m_toIsLatest = isLatest;
+        std::tie(m_toBlock, m_toIsLatest) =
+            getBlockNumberByTag(latest, jParams["toBlock"].asString());
     }
 
     if (jParams.isMember("address") && !jParams["address"].isNull())
@@ -61,12 +50,12 @@ void FilterRequest::fromJson(const Json::Value& jParams, protocol::BlockNumber l
         {
             for (Json::Value::ArrayIndex index = 0; index < jAddresses.size(); ++index)
             {
-                addAddress(removePrefix(jAddresses[index].asString()));
+                addAddress(jAddresses[index].asString());
             }
         }
         else
         {
-            addAddress(removePrefix(jAddresses.asString()));
+            addAddress(jAddresses.asString());
         }
     }
 
@@ -95,12 +84,12 @@ void FilterRequest::fromJson(const Json::Value& jParams, protocol::BlockNumber l
                 for (Json::Value::ArrayIndex innerIndex = 0; innerIndex < jIndex.size();
                      ++innerIndex)
                 {
-                    addTopic(index, removePrefix(jIndex[innerIndex].asString()));
+                    addTopic(index, jIndex[innerIndex].asString());
                 }
             }
             else
             {  // single topic, string value
-                addTopic(index, removePrefix(jIndex.asString()));
+                addTopic(index, jIndex.asString());
             }
         }
     }

@@ -66,11 +66,11 @@ public:
 
     void setFromBlock(int64_t _fromBlock) { m_fromBlock = _fromBlock; }
     void setToBlock(int64_t _toBlock) { m_toBlock = _toBlock; }
-    void addAddress(const std::string& _address) { m_addresses.insert(_address); }
+    void addAddress(std::string _address) { m_addresses.insert(std::move(_address)); }
     void resizeTopic(size_t size) { m_topics.resize(size); }
-    void addTopic(std::size_t _index, const std::string& _topic)
+    void addTopic(std::size_t _index, std::string _topic)
     {
-        m_topics[_index].insert(_topic);
+        m_topics[_index].insert(std::move(_topic));
     }
     void setBlockHash(const std::string& _hash) { m_blockHash = _hash; }
     void fromJson(const Json::Value& jParams, protocol::BlockNumber latest);

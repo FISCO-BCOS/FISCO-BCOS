@@ -18,15 +18,14 @@ public:
     ~LogMatcher() {}
 
 public:
-    bool matches(
-        FilterRequest::ConstPtr _params, const bcos::protocol::LogEntry& _logEntry);
+    bool matches(FilterRequest::ConstPtr _params, const bcos::protocol::LogEntry& _logEntry);
 
     uint32_t matches(FilterRequest::ConstPtr _params, bcos::crypto::HashType&& _blockHash,
-        bcos::protocol::TransactionReceipt::ConstPtr&& _receipt,
-        bcos::protocol::TransactionMetaData::ConstPtr&& _tx, std::size_t _txIndex, Json::Value& _result);
+        bcos::protocol::TransactionReceipt::ConstPtr&& _receipt, bcos::crypto::HashType&& _txHash,
+        std::size_t _txIndex, Json::Value& _result);
 
-    uint32_t matches(
-        FilterRequest::ConstPtr _params, bcos::protocol::Block::ConstPtr _block, Json::Value& _result);
+    uint32_t matches(FilterRequest::ConstPtr _params, bcos::protocol::Block::ConstPtr _block,
+        Json::Value& _result);
 };
 
 }  // namespace rpc
