@@ -50,7 +50,6 @@ public:
     StateKey& operator=(StateKey&&) noexcept = default;
     ~StateKey() noexcept = default;
 
-    friend std::strong_ordering operator<=>(const StateKey& lhs, const StateKey& rhs) = default;
     friend bool operator==(const StateKey& lhs, const StateKey& rhs) = default;
     friend ::std::ostream& operator<<(
         ::std::ostream& stream, const bcos::transaction_executor::StateKey& stateKey)
@@ -69,12 +68,17 @@ public:
     std::string_view m_key;
     friend class StateKey;
 
+    StateKeyView(StateKeyView&&) noexcept = default;
+    StateKeyView& operator=(const StateKeyView&) = default;
+    StateKeyView& operator=(StateKeyView&&) noexcept = default;
+    StateKeyView(const StateKeyView& stateKeyView) noexcept = default;
     explicit StateKeyView(const StateKey& stateKey) noexcept
       : m_table(stateKey.data(), stateKey.m_split),
         m_key(stateKey.data() + stateKey.m_split + 1, stateKey.size() - stateKey.m_split - 1)
     {}
     StateKeyView(std::string_view table, std::string_view key) noexcept : m_table(table), m_key(key)
     {}
+    ~StateKeyView() noexcept = default;
 
     friend std::strong_ordering operator<=>(
         const StateKeyView& lhs, const StateKeyView& rhs) noexcept
@@ -86,11 +90,7 @@ public:
         }
         return cmp;
     }
-    friend std::strong_ordering operator<=>(const StateKeyView& lhs, const StateKey& rhs) noexcept
-    {
-        StateKeyView rhsView(rhs);
-        return lhs <=> rhsView;
-    }
+
     friend bool operator==(const StateKeyView& lhs, const StateKeyView& rhs) noexcept = default;
     friend ::std::ostream& operator<<(::std::ostream& stream, const StateKeyView& stateKeyView)
     {
@@ -113,25 +113,48 @@ public:
 
 inline StateKey::StateKey(StateKeyView const& view) : StateKey(view.m_table, view.m_key) {}
 
+template <class RHS>
+inline bool operator==(const bcos::transaction_executor::StateKey& lhs, const RHS& rhs) noexcept
+    requires std::same_as<std::decay_t<RHS>, bcos::transaction_executor::StateKey> ||
+             std::same_as<std::decay_t<RHS>, bcos::transaction_executor::StateKeyView>
+{
+    auto lhsView = bcos::transaction_executor::StateKeyView(lhs);
+    if constexpr (std::same_as<RHS, bcos::transaction_executor::StateKey>)
+    {
+        return std::is_eq(lhsView <=> bcos::transaction_executor::StateKeyView(rhs));
+    }
+    else
+    {
+        return std::is_eq(lhsView <=> rhs);
+    }
+}
+
+template <class RHS>
+inline std::strong_ordering operator<=>(const StateKey& lhs, const RHS& rhs) noexcept
+    requires std::same_as<std::decay_t<RHS>, bcos::transaction_executor::StateKey> ||
+             std::same_as<std::decay_t<RHS>, bcos::transaction_executor::StateKeyView>
+{
+    auto lhsView = bcos::transaction_executor::StateKeyView(lhs);
+    if constexpr (std::same_as<RHS, bcos::transaction_executor::StateKey>)
+    {
+        return lhsView <=> bcos::transaction_executor::StateKeyView(rhs);
+    }
+    else
+    {
+        return lhsView <=> rhs;
+    }
+}
+
 }  // namespace bcos::transaction_executor
 
 template <>
 struct std::less<bcos::transaction_executor::StateKey>
 {
-    auto operator()(bcos::transaction_executor::StateKey const& left,
-        bcos::transaction_executor::StateKeyView const& rightView) const noexcept -> bool
+    auto operator()(auto const& lhs, auto const& rhs) const noexcept -> bool
     {
-        return left < rightView;
-    }
-    auto operator()(bcos::transaction_executor::StateKeyView const& leftView,
-        bcos::transaction_executor::StateKey const& right) const noexcept -> bool
-    {
-        return leftView < right;
-    }
-    auto operator()(bcos::transaction_executor::StateKey const& lhs,
-        bcos::transaction_executor::StateKey const& rhs) const noexcept -> bool
-    {
-        return lhs < rhs;
+        bcos::transaction_executor::StateKeyView lhsView(lhs);
+        bcos::transaction_executor::StateKeyView rhsView(rhs);
+        return lhsView < rhsView;
     }
 };
 
@@ -146,52 +169,33 @@ struct std::hash<bcos::transaction_executor::StateKeyView>
 
 template <>
 struct boost::hash<bcos::transaction_executor::StateKeyView>
+  : public std::hash<bcos::transaction_executor::StateKeyView>
 {
-    size_t operator()(const bcos::transaction_executor::StateKeyView& stateKeyView) const noexcept
-    {
-        return stateKeyView.hash();
-    }
 };
 
 template <>
 struct std::hash<bcos::transaction_executor::StateKey>
 {
-    size_t operator()(const bcos::transaction_executor::StateKey& stateKey) const noexcept
+    size_t operator()(const auto& stateKey) const noexcept
     {
-        auto view = bcos::transaction_executor::StateKeyView(stateKey);
+        bcos::transaction_executor::StateKeyView view(stateKey);
         return std::hash<bcos::transaction_executor::StateKeyView>{}(view);
-    }
-    size_t operator()(const bcos::transaction_executor::StateKeyView& stateKeyView) const noexcept
-    {
-        return stateKeyView.hash();
     }
 };
 
 template <>
 struct boost::hash<bcos::transaction_executor::StateKey>
+  : public std::hash<bcos::transaction_executor::StateKey>
 {
-    size_t operator()(const bcos::transaction_executor::StateKey& stateKey) const noexcept
-    {
-        return std::hash<bcos::transaction_executor::StateKey>{}(stateKey);
-    }
-    size_t operator()(const bcos::transaction_executor::StateKeyView& stateKeyView) const noexcept
-    {
-        return stateKeyView.hash();
-    }
 };
 
 template <>
 struct std::equal_to<bcos::transaction_executor::StateKey>
 {
-    bool operator()(bcos::transaction_executor::StateKey const& lhs,
-        bcos::transaction_executor::StateKey const& rhs) const noexcept
+    bool operator()(auto const& lhs, auto const& rhs) const noexcept
     {
-        return std::is_eq(lhs <=> rhs);
-    }
-    bool operator()(bcos::transaction_executor::StateKeyView const& lhsView,
-        bcos::transaction_executor::StateKey const& rhs) const noexcept
-    {
-        auto rhsView = bcos::transaction_executor::StateKeyView(rhs);
-        return std::is_eq(lhsView <=> rhsView);
+        bcos::transaction_executor::StateKeyView lhsView(lhs);
+        bcos::transaction_executor::StateKeyView rhsView(rhs);
+        return lhsView == rhsView;
     }
 };
