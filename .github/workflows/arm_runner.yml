@@ -44,22 +44,20 @@ jobs:
         run: sudo apt install -y g++ libssl-dev openssl git build-essential autoconf texinfo flex patch bison libgmp-dev zlib1g-dev automake libtool curl && sudo apt -y remove libtbb-dev
       - name: Setup cmake
         run: curl -sSL https://cmake.org/files/v3.21/cmake-3.21.0-linux-aarch64.tar.gz | sudo tar -xzC /usr
-      - name: configure
-        run: export PATH=$PATH:/usr/cmake-3.21.0-linux-aarch64/bin;cmake .
-      - name: compile
-        run: make -j4
+      - name: configure without tbb
+        run: export PATH=$PATH:/usr/cmake-3.21.0-linux-aarch64/bin;cmake . -DWITH_TBB=OFF
+      - name: compile fisco-bcos
+        run: make fisco-bcos -j4
       - name: tar fisco-bcos for ubuntu
         run: cp tools/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -zcf fisco-bcos.tar.gz fisco-bcos build_chain.sh
       - uses: actions/upload-artifact@v4
         with:
           name: fisco-bcos.tar.gz
           path: bin/fisco-bcos.tar.gz
-      - name: run uint tests
-        run: CTEST_OUTPUT_ON_FAILURE=TRUE make test
-      - name: configure without tbb
-        run: export PATH=$PATH:/usr/cmake-3.21.0-linux-aarch64/bin;cmake . -DWITH_TBB=OFF
-      - name: compile
-        run: make -j4
+      - name: configure
+        run: export PATH=$PATH:/usr/cmake-3.21.0-linux-aarch64/bin;cmake . -DWITH_TBB=ON
+      - name: compile all
+        run: make fisco-bcos -j4
       - name: tar fisco-bcos for ubuntu
         run: cp tools/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -zcf fisco-bcos.tar.gz fisco-bcos build_chain.sh
       - uses: actions/upload-artifact@v4

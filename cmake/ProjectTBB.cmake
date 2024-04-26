@@ -5,11 +5,7 @@ if (APPLE)
     set(ENABLE_STD_LIB stdlib=libc++)
 endif()
 
-if(WITH_TBB)
-    set(TBB_BUILD_CMD make extra_inc=big_iron.inc ${ENABLE_STD_LIB})
-else()
-    set(TBB_BUILD_CMD "")
-endif()
+set(TBB_BUILD_CMD make extra_inc=big_iron.inc ${ENABLE_STD_LIB})
 
 ExternalProject_Add(tbb
     PREFIX ${CMAKE_SOURCE_DIR}/deps
@@ -43,13 +39,8 @@ set(TBB_INCLUDE_DIR ${SOURCE_DIR}/include)
 set(TBB_LIBRARY ${CMAKE_SOURCE_DIR}/deps/lib/libtbb.${TBB_LIB_SUFFIX})
 file(MAKE_DIRECTORY ${TBB_INCLUDE_DIR})  # Must exist.
 file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/deps/lib/)  # Must exist.
-if (WITH_TBB)
-    add_library(TBB STATIC IMPORTED)
-    set_property(TARGET TBB PROPERTY IMPORTED_LOCATION ${TBB_LIBRARY})
-    set_property(TARGET TBB PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${TBB_INCLUDE_DIR})
-else()
-    add_library(TBB INTERFACE)
-    target_include_directories(TBB INTERFACE ${TBB_INCLUDE_DIR})
-endif()
+add_library(TBB STATIC IMPORTED)
+set_property(TARGET TBB PROPERTY IMPORTED_LOCATION ${TBB_LIBRARY})
+set_property(TARGET TBB PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${TBB_INCLUDE_DIR})
 add_dependencies(TBB tbb)
 unset(SOURCE_DIR)
