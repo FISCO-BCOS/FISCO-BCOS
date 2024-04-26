@@ -1327,7 +1327,7 @@ while getopts "v:V:f" option;do
     esac
 done
 
-default_version=2.10.0
+default_version=2.11.0
 download_version=\${default_version}
 sm_crypto=\$(cat "\${SHELL_FOLDER}"/node*/config.ini | grep sm_crypto_channel= | cut -d = -f 2 | head -n 1)
 download_link=https://github.com/FISCO-BCOS/console/releases/download/v\${download_version}/\${package_name}

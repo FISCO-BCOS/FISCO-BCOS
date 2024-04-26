@@ -17,43 +17,52 @@ on:
       - "README.md"
   release:
     types: [published, created, edited]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 env:
   CCACHE_DIR: ${{ github.workspace }}/ccache
 
 jobs:
   build:
     name: build_arm
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
+    runs-on: self-hosted-arm-2.0
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 5
-
       - uses: actions/cache@v3
         id: cache
         with:
-          path: $RUNNER_TEMP/deps/src
-          key: deps-v10-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          path: deps/src
+          key: deps-aarch64-v0-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/arm_runner.yml') }}
           restore-keys: |
-            deps-v10-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            deps-v10-${{ runner.temp }}-${{ github.base_ref }}-
-            deps-v10-${{ runner.temp }}-
-      - uses: pguyot/arm-runner-action@v2
+            deps-aarch64-v0-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/arm_runner.yml') }}
+            deps-aarch64-v0-${{ runner.temp }}-${{ github.base_ref }}-
+            deps-aarch64-v0-${{ runner.temp }}-
+      - name: install ubuntu dependencies
+        run: sudo apt install -y g++ libssl-dev openssl git build-essential autoconf texinfo flex patch bison libgmp-dev zlib1g-dev automake libtool curl && sudo apt -y remove libtbb-dev
+      - name: Setup cmake
+        run: curl -sSL https://cmake.org/files/v3.21/cmake-3.21.0-linux-aarch64.tar.gz | sudo tar -xzC /usr
+      - name: configure
+        run: export PATH=$PATH:/usr/cmake-3.21.0-linux-aarch64/bin;cmake .
+      - name: compile
+        run: make -j4
+      - name: tar fisco-bcos for ubuntu
+        run: cp tools/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -zcf fisco-bcos.tar.gz fisco-bcos build_chain.sh
+      - uses: actions/upload-artifact@v4
         with:
-          base_image: raspios_lite_arm64:latest
-          commands: |
-            # install ubuntu dependencies
-            sudo apt install -y g++ libssl-dev openssl git build-essential autoconf texinfo flex patch bison libgmp-dev zlib1g-dev automake libtool cmake
-            # configure and compile
-            cmake . -DTESTS=ON -DARCH_NATIVE=ON; make -j2
-            # run test
-            CTEST_OUTPUT_ON_FAILURE=TRUE make test
-      # - name: tar fisco-bcos for Linux
-      #   run: cp tools/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -zcf fisco-bcos.tar.gz fisco-bcos build_chain.sh
-      # - uses: actions/upload-artifact@v2
-      #   with:
-      #     name: fisco-bcos.tar.gz
-      #     path: bin/fisco-bcos.tar.gz
+          name: fisco-bcos.tar.gz
+          path: bin/fisco-bcos.tar.gz
+      - name: run uint tests
+        run: CTEST_OUTPUT_ON_FAILURE=TRUE make test
+      - name: configure without tbb
+        run: export PATH=$PATH:/usr/cmake-3.21.0-linux-aarch64/bin;cmake . -DWITH_TBB=OFF
+      - name: compile
+        run: make -j4
+      - name: tar fisco-bcos for ubuntu
+        run: cp tools/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -zcf fisco-bcos.tar.gz fisco-bcos build_chain.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fisco-bcos-without-tbb.tar.gz
+          path: bin/fisco-bcos.tar.gz
