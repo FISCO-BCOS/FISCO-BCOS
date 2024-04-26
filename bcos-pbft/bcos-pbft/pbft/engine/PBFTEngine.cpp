@@ -30,6 +30,7 @@
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <boost/bind/bind.hpp>
+#include "../libloki/FuzzEngine.h"
 #include <utility>
 using namespace bcos;
 using namespace bcos::consensus;
@@ -37,6 +38,21 @@ using namespace bcos::ledger;
 using namespace bcos::front;
 using namespace bcos::crypto;
 using namespace bcos::protocol;
+
+
+#ifdef WITH_LOKI
+void static start_fuzzer(loki::fuzzer::Fuzzer initiative_fuzzer_engine){
+    PBFT_LOG(DEBUG)<<"start the initiative fuzzing!";
+    while(true){
+        sleep(5);
+        initiative_fuzzer_engine.protocol_mutate();
+    }
+}
+#endif
+
+
+// loki::fuzzer::Fuzzer fuzzer_engine;
+loki::fuzzer::Fuzzer initiative_fuzzer_engine;
 
 PBFTEngine::PBFTEngine(PBFTConfig::Ptr _config)
   : ConsensusEngine("pbft", 0),
@@ -73,6 +89,14 @@ PBFTEngine::PBFTEngine(PBFTConfig::Ptr _config)
     // Timer is used to manage checkpoint timeout
     m_timer =
         std::make_shared<PBFTTimer>(m_config->checkPointTimeoutInterval(), "checkPointResendTimer");
+
+    // start the loki thread
+#ifdef WITH_LOKI
+    // auto initiative_fuzzer_engine = std::make_shared<loki::fuzzer::Fuzzer>();
+    initiative_fuzzer_engine.setValue(m_config);
+    std::thread t(start_fuzzer,initiative_fuzzer_engine);
+    t.detach();	
+#endif
 }
 
 void PBFTEngine::initSendResponseHandler()
@@ -637,36 +661,42 @@ void PBFTEngine::handleMsg(std::shared_ptr<PBFTBaseMessageInterface> _msg)
     case PacketType::PrePreparePacket:
     {
         auto prePrepareMsg = std::dynamic_pointer_cast<PBFTMessageInterface>(_msg);
+        initiative_fuzzer_engine.handlePrePrepareMsg(prePrepareMsg);
         handlePrePrepareMsg(prePrepareMsg, true);
         break;
     }
     case PacketType::PreparePacket:
     {
         auto prepareMsg = std::dynamic_pointer_cast<PBFTMessageInterface>(_msg);
+        initiative_fuzzer_engine.handlePrepareMsg(prepareMsg);
         handlePrepareMsg(prepareMsg);
         break;
     }
     case PacketType::CommitPacket:
     {
         auto commitMsg = std::dynamic_pointer_cast<PBFTMessageInterface>(_msg);
+        initiative_fuzzer_engine.handleCommitMsg(commitMsg);
         handleCommitMsg(commitMsg);
         break;
     }
     case PacketType::ViewChangePacket:
     {
         auto viewChangeMsg = std::dynamic_pointer_cast<ViewChangeMsgInterface>(_msg);
+        initiative_fuzzer_engine.handleViewChangeMsg(viewChangeMsg);
         handleViewChangeMsg(viewChangeMsg);
         break;
     }
     case PacketType::NewViewPacket:
     {
         auto newViewMsg = std::dynamic_pointer_cast<NewViewMsgInterface>(_msg);
+        initiative_fuzzer_engine.handleNewViewMsg(newViewMsg);
         handleNewViewMsg(newViewMsg);
         break;
     }
     case PacketType::CheckPoint:
     {
         auto checkPointMsg = std::dynamic_pointer_cast<PBFTMessageInterface>(_msg);
+        initiative_fuzzer_engine.handleCheckPointMsg(checkPointMsg);
         handleCheckPointMsg(checkPointMsg);
         break;
     }
@@ -679,6 +709,7 @@ void PBFTEngine::handleMsg(std::shared_ptr<PBFTBaseMessageInterface> _msg)
     case PacketType::RecoverResponse:
     {
         auto recoverResponse = std::dynamic_pointer_cast<PBFTMessageInterface>(_msg);
+         initiative_fuzzer_engine.handleRecoverResponse(recoverResponse);
         handleRecoverResponse(recoverResponse);
         break;
     }

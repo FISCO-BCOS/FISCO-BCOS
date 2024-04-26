@@ -53,7 +53,12 @@ PBFTFactory::PBFTFactory(bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
 
 PBFTImpl::Ptr PBFTFactory::createPBFT()
 {
-    auto pbftMessageFactory = std::make_shared<PBFTMessageFactoryImpl>();
+    std::shared_ptr<PBFTMessageFactory> pbftMessageFactory;
+    
+    pbftMessageFactory = std::make_shared<PBFTMessageFactoryImpl>();
+#ifdef WITH_LOKI
+    pbftMessageFactory = std::make_shared<PBFTMessageFactoryLOKIImpl>();
+#endif
     PBFT_LOG(INFO) << LOG_DESC("create PBFTCodec");
     auto pbftCodec = std::make_shared<PBFTCodec>(m_keyPair, m_cryptoSuite, pbftMessageFactory);
 
