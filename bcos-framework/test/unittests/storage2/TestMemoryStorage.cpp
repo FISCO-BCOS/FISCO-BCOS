@@ -1,5 +1,6 @@
 #include "bcos-framework/storage/Entry.h"
 #include "bcos-framework/storage2/Storage.h"
+#include "transaction-executor/StateKey.h"
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-task/Wait.h>
 #include <fmt/format.h>
@@ -324,6 +325,20 @@ BOOST_AUTO_TEST_CASE(directDelete)
         }
         BOOST_CHECK_EQUAL(count2, 9);
     }());
+}
+
+BOOST_AUTO_TEST_CASE(keyComp)
+{
+    transaction_executor::StateKey key1("/tables/t_testV320", "type");
+    transaction_executor::StateKeyView key2("/tables/t_testV320", "type");
+
+    BOOST_CHECK(key1 == key2);
+    BOOST_CHECK(!(key1 > key2));
+    BOOST_CHECK(!(key1 < key2));
+
+    auto hash1 = std::hash<decltype(key1)>{}(key1);
+    auto hash2 = std::hash<decltype(key2)>{}(key2);
+    BOOST_CHECK_EQUAL(hash1, hash2);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
