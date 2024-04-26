@@ -24,6 +24,7 @@
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-rpc/Common.h>
+#include <bcos-rpc/util.h>
 #include <bcos-rpc/web3jsonrpc/Web3JsonRpcImpl.h>
 #include <bcos-rpc/web3jsonrpc/endpoints/EthMethods.h>
 #include <bcos-rpc/web3jsonrpc/model/BlockResponse.h>
@@ -668,33 +669,11 @@ task::Task<void> EthEndpoint::getLogs(const Json::Value&, Json::Value&)
 
     co_return;
 }
-
-// return (actual block number, isLatest block)
 task::Task<std::tuple<protocol::BlockNumber, bool>> EthEndpoint::getBlockNumberByTag(
     std::string_view blockTag)
 {
-    if (blockTag == EarliestBlock)
-    {
-        co_return std::make_tuple(0, false);
-    }
-    else if (blockTag == LatestBlock || blockTag == SafeBlock || blockTag == FinalizedBlock ||
-             blockTag == PendingBlock)
-    {
-        auto ledger = m_nodeService->ledger();
-        auto number = co_await ledger::getCurrentBlockNumber(*ledger);
-        co_return std::make_tuple(number, true);
-    }
-    else
-    {
-        static const std::regex hexRegex("^0x[0-9a-fA-F]+$");
-        if (std::regex_match(blockTag.data(), hexRegex))
-        {
-            auto ledger = m_nodeService->ledger();
-            auto number = co_await ledger::getCurrentBlockNumber(*ledger);
-            auto blockNumber = fromQuantity(std::string(blockTag));
-            co_return std::make_tuple(blockNumber, std::cmp_equal(number, blockNumber));
-        }
-        BOOST_THROW_EXCEPTION(
-            JsonRpcException(InvalidParams, "Invalid Block Number: " + std::string(blockTag)));
-    }
+    auto ledger = m_nodeService->ledger();
+    auto latest = co_await ledger::getCurrentBlockNumber(*ledger);
+    auto [number, _] = bcos::rpc::getBlockNumberByTag(latest, blockTag);
+    co_return std::make_tuple(number, std::cmp_equal(latest, number));
 }

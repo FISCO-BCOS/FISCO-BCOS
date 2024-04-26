@@ -92,7 +92,7 @@ namespace bcos::rpc
     }
     result["logs"] = Json::arrayValue;
     auto mutableReceipt = const_cast<bcos::protocol::TransactionReceipt*>(receipt.get());
-    auto receiptLog = mutableReceipt->takeLogEntris();
+    auto receiptLog = mutableReceipt->takeLogEntries();
     for (size_t i = 0; i < receiptLog.size(); i++)
     {
         Json::Value log;

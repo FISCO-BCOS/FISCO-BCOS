@@ -42,6 +42,10 @@
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 
+#include <bcos-rpc/filter/LogMatcher.h>
+#include <bcos-rpc/filter/Filter.h>
+#include <bcos-rpc/web3jsonrpc/model/Web3FilterRequest.h>
+
 using namespace bcos;
 using namespace bcos::rpc;
 using namespace bcos::crypto;
@@ -435,6 +439,261 @@ BOOST_AUTO_TEST_CASE(handleEIP4844TxTest)
     testEIP4844Tx("0x03f9013a0182a8f98477359400850432ec4812825208946f54ca6f6ede96662024ffd61bfd18f3f4e34dff8080c0843b9aca00f8c6a001fb60d5b0abeff9e3d47099386a31eed62cd55d54aa146b42d10eb81b0a9b2aa00156b2193030eb7c9496d8586492934a57a5ebd0fac816ef1ea01dc4d09498c5a001bd78704a4b015adec86a654a123045312b083641ababec0e60ef17be4453e7a001b59b9a8b8d35bd6afcff91c6afc56ebcaf4a62f6e83f5e57aac4484f022cc4a00110aac506aff4957e40d4640f0763015b84bbb8c23f50f1b13d501067bea878a001f100a97a70563cd623e588c976155ffe5999d1e9258302d969964d7524bd0280a08c1cff27365c5fe0a6ebfe5e010b3460747489302547f3ba5b181390fad485ada02af2f430e0dfad48ba78853b59486ea7425835c3a7034bb22702234f8994288f",
         "0xa8fd95a70b4f2b6cea8c52bcb782b5c3f806a0d5250cf75a1d97a6e899f09979");
     // clang-format on
+}
+BOOST_AUTO_TEST_CASE(logMatcherTest)
+{
+    // clang-format off
+    h256 A(fromHexWithPrefix(std::string("0x7ac7a04970319ae8fc5b92fe177d000fee3c00c92f8e78aae13d6571f17c351f")));
+    h256 B(fromHexWithPrefix(std::string("0x1fe46fe782fa5618721cdf61de2e50c0639f4b26f6568f9c67b128f5610ced68")));
+    h256 C(fromHexWithPrefix(std::string("0x0c5ace674d8e621803f806d73d9d03a49b2694f13186b8d657c9df689fe4e478")));
+    h256 D(fromHexWithPrefix(std::string("0xf0173383cebedea9e486292201bc460817279651f0b05c46c0ad1f5e094e62d9")));
+    h256 E(fromHexWithPrefix(std::string("0x7b0682ce692786e3ad67f5ff45e7fe63c1dbed629f5f016c605b814d905b6447")));
+    h256 F(fromHexWithPrefix(std::string("0xa0f422234f24bda551aee9753bb806b078efa605b128061af1be03e7ce54e64d")));
+    h256 G(fromHexWithPrefix(std::string("0xba2b5bce04969801bc79406f18a929f465e83afbb138834d5ef55a0112018a8f")));
+    h256 H(fromHexWithPrefix(std::string("0x8518c89a1be62e684eac2fcfad1682ea6fbccff0e436fb7c8ce19c64ad569f79")));
+    bytes address1(fromHexWithPrefix(std::string("0x6849f21d1e455e9f0712b1e99fa4fcd23758e8f1")));
+    bytes address2(fromHexWithPrefix(std::string("0xc75ebd24f8ae4f17be209b30dc8dea4fadcf67ce")));
+    // clang-format on
+
+    LogMatcher matcher;
+
+    // 1.[] "anything"
+    {
+        // [A, B]
+        protocol::LogEntry log1(address1, {A, B}, bytes());
+        // [C, D]
+        protocol::LogEntry log2(address1, {C, D}, bytes());
+        auto params1 = std::make_shared<Web3FilterRequest>();
+        auto params2 = std::make_shared<Web3FilterRequest>();
+        params2->addAddress(*toHexString(address1));
+        BOOST_CHECK(matcher.matches(params1, log1));
+        BOOST_CHECK(matcher.matches(params1, log2));
+        BOOST_CHECK(!matcher.matches(params2, log1));
+        BOOST_CHECK(!matcher.matches(params2, log2));
+    }
+    // 2.[A] "A in first position (and anything after)"
+    {
+        auto params = std::make_shared<Web3FilterRequest>();
+        params->resizeTopic(1);
+        params->addTopic(0, *toHexString(A));
+        protocol::LogEntry log;
+        // [A]
+        log = protocol::LogEntry(address1, {A}, bytes());
+        BOOST_CHECK(matcher.matches(params, log));
+        // [A, B]
+        log = protocol::LogEntry(address1, {A, B}, bytes());
+        BOOST_CHECK(matcher.matches(params, log));
+        // [C]
+        log = protocol::LogEntry(address1, {C}, bytes());
+        BOOST_CHECK(!matcher.matches(params, log));
+        // [C, D]
+        log = protocol::LogEntry(address1, {C}, bytes());
+        BOOST_CHECK(!matcher.matches(params, log));
+    }
+    // 3.[null, B] "anything in first position AND B in second position (and anything after)"
+    {
+        auto params = std::make_shared<Web3FilterRequest>();
+        params->resizeTopic(2);
+        params->addTopic(1, *toHexString(B));
+        protocol::LogEntry log;
+        // matched
+        // [A, B]
+        log = protocol::LogEntry(address1, {A, B}, bytes());
+        BOOST_CHECK(matcher.matches(params, log));
+        // [C, B]
+        log = protocol::LogEntry(address1, {C, B}, bytes());
+        BOOST_CHECK(matcher.matches(params, log));
+        // [A, B, F]
+        log = protocol::LogEntry(address1, {A, B, F}, bytes());
+        BOOST_CHECK(matcher.matches(params, log));
+        // [A, B, E]
+        log = protocol::LogEntry(address1, {A, B, E}, bytes());
+        BOOST_CHECK(matcher.matches(params, log));
+        // [C, B, F]
+        log = protocol::LogEntry(address1, {C, B, F}, bytes());
+        BOOST_CHECK(matcher.matches(params, log));
+        // [C, B, E]
+        log = protocol::LogEntry(address1, {C, B, E}, bytes());
+        BOOST_CHECK(matcher.matches(params, log));
+        // mismatched
+        // [A, G]
+        log = protocol::LogEntry(address1, {A, G}, bytes());
+        BOOST_CHECK(!matcher.matches(params, log));
+        // [C, G]
+        log = protocol::LogEntry(address1, {C, G}, bytes());
+        BOOST_CHECK(!matcher.matches(params, log));
+        // [A, G, F]
+        log = protocol::LogEntry(address1, {A, G, F}, bytes());
+        BOOST_CHECK(!matcher.matches(params, log));
+        // [A, G, E]
+        log = protocol::LogEntry(address1, {A, G, E}, bytes());
+        BOOST_CHECK(!matcher.matches(params, log));
+        // [C, G, F]
+        log = protocol::LogEntry(address1, {C, G, F}, bytes());
+        BOOST_CHECK(!matcher.matches(params, log));
+        // [C, G, E]
+        log = protocol::LogEntry(address1, {C, G, E}, bytes());
+        BOOST_CHECK(!matcher.matches(params, log));
+    }
+    // 4.[A, B] "A in first position AND B in second position (and anything after)"
+    {
+        auto params = std::make_shared<Web3FilterRequest>();
+        params->resizeTopic(2);
+        params->addTopic(0, *toHexString(A));
+        params->addTopic(1, *toHexString(B));
+        protocol::LogEntry log;
+
+        // matched
+        // [A, B]
+        log = protocol::LogEntry(address1, {A, B}, bytes());
+        BOOST_CHECK(matcher.matches(params, log));
+        // [A, B, C]
+        log = protocol::LogEntry(address1, {A, B, C}, bytes());
+        BOOST_CHECK(matcher.matches(params, log));
+        // [A, B, E]
+        log = protocol::LogEntry(address1, {A, B, E}, bytes());
+        BOOST_CHECK(matcher.matches(params, log));
+
+        // mismatched
+        // [A]
+        log = protocol::LogEntry(address1, {A}, bytes());
+        BOOST_CHECK(!matcher.matches(params, log));
+        // [A, C]
+        log = protocol::LogEntry(address1, {A, C}, bytes());
+        BOOST_CHECK(!matcher.matches(params, log));
+        // [A, C, F]
+        log = protocol::LogEntry(address1, {A, C, F}, bytes());
+        BOOST_CHECK(!matcher.matches(params, log));
+        // [B]
+        log = protocol::LogEntry(address1, {B}, bytes());
+        BOOST_CHECK(!matcher.matches(params, log));
+        // [B, C]
+        log = protocol::LogEntry(address1, {B, C}, bytes());
+        BOOST_CHECK(!matcher.matches(params, log));
+        // [B, C, F]
+        log = protocol::LogEntry(address1, {B, C, F}, bytes());
+        BOOST_CHECK(!matcher.matches(params, log));
+    }
+    // 5.[[A, B], [A, B]] "(A OR B) in first position AND (A OR B) in second position (and anything
+    // after)"
+    {
+        auto params = std::make_shared<Web3FilterRequest>();
+        params->resizeTopic(2);
+        params->addTopic(0, *toHexString(A));
+        params->addTopic(0, *toHexString(B));
+        params->addTopic(1, *toHexString(C));
+        params->addTopic(1, *toHexString(D));
+        protocol::LogEntry log;
+
+        // matched
+        {
+            // [A, C]
+            log = protocol::LogEntry(address1, {A, C}, bytes());
+            BOOST_CHECK(matcher.matches(params, log));
+            // [A, D]
+            log = protocol::LogEntry(address1, {A, D}, bytes());
+            BOOST_CHECK(matcher.matches(params, log));
+            // [B, C]
+            log = protocol::LogEntry(address1, {B, C}, bytes());
+            BOOST_CHECK(matcher.matches(params, log));
+            // [B, D]
+            log = protocol::LogEntry(address1, {B, D}, bytes());
+            BOOST_CHECK(matcher.matches(params, log));
+        }
+        {
+            // [A, C, E]
+            log = protocol::LogEntry(address1, {A, C, E}, bytes());
+            BOOST_CHECK(matcher.matches(params, log));
+            // [A, D, E]
+            log = protocol::LogEntry(address1, {A, D, E}, bytes());
+            BOOST_CHECK(matcher.matches(params, log));
+            // [B, C, E]
+            log = protocol::LogEntry(address1, {B, C, E}, bytes());
+            BOOST_CHECK(matcher.matches(params, log));
+            // [B, D, E]
+            log = protocol::LogEntry(address1, {B, D, E}, bytes());
+            BOOST_CHECK(matcher.matches(params, log));
+        }
+        {
+            // [A, C, F]
+            log = protocol::LogEntry(address1, {A, C, F}, bytes());
+            BOOST_CHECK(matcher.matches(params, log));
+            // [A, D, F]
+            log = protocol::LogEntry(address1, {A, D, F}, bytes());
+            BOOST_CHECK(matcher.matches(params, log));
+            // [B, C, F]
+            log = protocol::LogEntry(address1, {B, C, F}, bytes());
+            BOOST_CHECK(matcher.matches(params, log));
+            // [B, D, F]
+            log = protocol::LogEntry(address1, {B, D, F}, bytes());
+            BOOST_CHECK(matcher.matches(params, log));
+        }
+        // mismatched
+        {
+            // [A]
+            log = protocol::LogEntry(address1, {A}, bytes());
+            BOOST_CHECK(!matcher.matches(params, log));
+            // [B]
+            log = protocol::LogEntry(address1, {B}, bytes());
+            BOOST_CHECK(!matcher.matches(params, log));
+        }
+        {
+            // [E, C]
+            log = protocol::LogEntry(address1, {E, C}, bytes());
+            BOOST_CHECK(!matcher.matches(params, log));
+            // [E, D]
+            log = protocol::LogEntry(address1, {E, D}, bytes());
+            BOOST_CHECK(!matcher.matches(params, log));
+            // [F, C]
+            log = protocol::LogEntry(address1, {F, C}, bytes());
+            BOOST_CHECK(!matcher.matches(params, log));
+            // [F, D]
+            log = protocol::LogEntry(address1, {F, D}, bytes());
+            BOOST_CHECK(!matcher.matches(params, log));
+        }
+        {
+            // [A, E]
+            log = protocol::LogEntry(address1, {A, E}, bytes());
+            BOOST_CHECK(!matcher.matches(params, log));
+            // [A, F]
+            log = protocol::LogEntry(address1, {A, F}, bytes());
+            BOOST_CHECK(!matcher.matches(params, log));
+            // [B, E]
+            log = protocol::LogEntry(address1, {B, E}, bytes());
+            BOOST_CHECK(!matcher.matches(params, log));
+            // [B, F]
+            log = protocol::LogEntry(address1, {B, F}, bytes());
+            BOOST_CHECK(!matcher.matches(params, log));
+        }
+        {
+            // [E, C, G]
+            log = protocol::LogEntry(address1, {E, C, G}, bytes());
+            BOOST_CHECK(!matcher.matches(params, log));
+            // [E, D, G]
+            log = protocol::LogEntry(address1, {E, D, G}, bytes());
+            BOOST_CHECK(!matcher.matches(params, log));
+            // [F, C, G]
+            log = protocol::LogEntry(address1, {F, C, G}, bytes());
+            BOOST_CHECK(!matcher.matches(params, log));
+            // [F, D, G]
+            log = protocol::LogEntry(address1, {F, D, G}, bytes());
+            BOOST_CHECK(!matcher.matches(params, log));
+        }
+        {
+            // [A, E, G]
+            log = protocol::LogEntry(address1, {A, E, G}, bytes());
+            BOOST_CHECK(!matcher.matches(params, log));
+            // [A, F, G]
+            log = protocol::LogEntry(address1, {A, F, G}, bytes());
+            BOOST_CHECK(!matcher.matches(params, log));
+            // [B, E, G]
+            log = protocol::LogEntry(address1, {B, E, G}, bytes());
+            BOOST_CHECK(!matcher.matches(params, log));
+            // [B, F, G]
+            log = protocol::LogEntry(address1, {B, F, G}, bytes());
+            BOOST_CHECK(!matcher.matches(params, log));
+        }
+    }
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

@@ -26,9 +26,8 @@
 namespace bcos::rpc
 {
 constexpr const uint64_t LowestGasPrice{21000};
-constexpr const std::string_view EarliestBlock{"earliest"};
-constexpr const std::string_view LatestBlock{"latest"};
-constexpr const std::string_view PendingBlock{"pending"};
-constexpr const std::string_view SafeBlock{"safe"};
-constexpr const std::string_view FinalizedBlock{"finalized"};
+enum Web3JsonRpcError : int32_t
+{
+    Web3DefautError = -32000,
+};
 }  // namespace bcos::rpc
