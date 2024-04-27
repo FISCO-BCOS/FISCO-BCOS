@@ -7,7 +7,6 @@
 #include "bcos-executor/src/vm/Precompiled.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-table/src/LegacyStorageWrapper.h"
-#include "bcos-table/src/StateStorage.h"
 #include "bcos-utilities/Overloaded.h"
 #include <evmc/evmc.h>
 #include <boost/exception/diagnostic_information.hpp>
@@ -15,7 +14,6 @@
 #include <exception>
 #include <memory>
 #include <type_traits>
-#include <typeinfo>
 #include <variant>
 
 #ifdef WITH_WASM
