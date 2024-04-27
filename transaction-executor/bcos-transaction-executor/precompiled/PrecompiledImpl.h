@@ -36,9 +36,9 @@ inline auto buildLegacyExecutive(auto& storage, protocol::BlockHeader const& blo
     auto storageWrapper =
         std::make_shared<storage::LegacyStateStorageWrapper<std::decay_t<decltype(storage)>>>(
             storage);
+
     auto blockContext = std::make_unique<executor::BlockContext>(storageWrapper, nullptr,
-        executor::GlobalHashImpl::g_hashImpl, blockHeader.number(), blockHeader.hash(),
-        blockHeader.timestamp(), blockHeader.version(), bcos::executor::VMSchedule{}, false,
+        executor::GlobalHashImpl::g_hashImpl, blockHeader, bcos::executor::VMSchedule{}, false,
         authCheck);
     return std::make_shared<
         ExecutiveWrapper<decltype(externalCaller), std::decay_t<decltype(precompiledManager)>>>(

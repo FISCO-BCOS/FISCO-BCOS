@@ -401,7 +401,7 @@ BlockContext::Ptr TransactionExecutor::createBlockContext(
         backend = m_cachedStorage;
     }
     BlockContext::Ptr context = make_shared<BlockContext>(storage, m_ledgerCache, m_hashImpl,
-        currentHeader, getVMSchedule((uint32_t)currentHeader->version()), m_isWasm, m_isAuthCheck,
+        *currentHeader, getVMSchedule((uint32_t)currentHeader->version()), m_isWasm, m_isAuthCheck,
         std::move(backend), m_keyPageIgnoreTables);
     context->setVMFactory(m_vmFactory);
     if (f_onNeedSwitchEvent)
