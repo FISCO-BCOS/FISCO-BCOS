@@ -2,6 +2,7 @@
 #include "../storage/Entry.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/Exceptions.h"
+#include "bcos-utilities/ThreeWay4StringView.h"
 #include <boost/throw_exception.hpp>
 #include <compare>
 #include <functional>
