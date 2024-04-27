@@ -8,26 +8,22 @@
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
-#include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-framework/protocol/Block.h"
-#include "bcos-framework/protocol/BlockFactory.h"
 #include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/protocol/BlockHeaderFactory.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
-#include "bcos-framework/protocol/TransactionReceiptFactory.h"
 #include "bcos-framework/protocol/TransactionSubmitResultFactory.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
-#include "bcos-ledger/src/libledger/LedgerMethods.h"
 #include "bcos-task/TBBWait.h"
-#include "bcos-tool/VersionConverter.h"
+#include "bcos-task/Wait.h"
 #include "bcos-utilities/Common.h"
-#include <bcos-utilities/ITTAPI.h>
+#include "bcos-utilities/ITTAPI.h"
 #include <fmt/format.h>
 #include <oneapi/tbb/blocked_range.h>
 #include <oneapi/tbb/parallel_invoke.h>
@@ -39,7 +35,6 @@
 #include <chrono>
 #include <exception>
 #include <memory>
-#include <type_traits>
 
 namespace bcos::transaction_scheduler
 {
@@ -664,7 +659,7 @@ public:
         callback(nullptr);
     }
 
-    void stop() override{};
+    void stop() override {};
 
     void registerTransactionNotifier(std::function<void(bcos::protocol::BlockNumber,
             bcos::protocol::TransactionSubmitResultsPtr, std::function<void(Error::Ptr)>)>

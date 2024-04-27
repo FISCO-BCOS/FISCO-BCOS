@@ -1,15 +1,11 @@
 #pragma once
 #include "bcos-framework/storage2/Storage.h"
-#include "bcos-framework/transaction-executor/TransactionExecutor.h"
-#include "bcos-task/AwaitableValue.h"
 #include "bcos-task/Trait.h"
 #include "bcos-task/Wait.h"
-#include "transaction-executor/bcos-transaction-executor/RollbackableStorage.h"
+#include "bcos-utilities/Error.h"
 #include <oneapi/tbb/parallel_invoke.h>
 #include <boost/throw_exception.hpp>
 #include <functional>
-#include <iterator>
-#include <stdexcept>
 #include <type_traits>
 #include <variant>
 
@@ -43,8 +39,7 @@ private:
 
     BackendStorage& m_backendStorage;
     [[no_unique_address]] std::conditional_t<withCacheStorage,
-        std::add_lvalue_reference_t<CachedStorage>, std::monostate>
-        m_cacheStorage;
+        std::add_lvalue_reference_t<CachedStorage>, std::monostate> m_cacheStorage;
 
     // 同一时间只允许一个可以修改的view
     // Only one view that can be modified is allowed at a time
@@ -62,8 +57,7 @@ public:
         std::deque<std::shared_ptr<MutableStorageType>> m_immutableStorages;
         BackendStorage& m_backendStorage;
         [[no_unique_address]] std::conditional_t<withCacheStorage,
-            std::add_lvalue_reference_t<CachedStorage>, std::monostate>
-            m_cacheStorage;
+            std::add_lvalue_reference_t<CachedStorage>, std::monostate> m_cacheStorage;
         std::unique_lock<std::mutex> m_mutableLock;
 
         View(BackendStorage& backendStorage)

@@ -6,13 +6,10 @@
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
-#include "bcos-framework/protocol/TransactionReceiptFactory.h"
-#include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-task/TBBWait.h"
-#include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/ITTAPI.h"
 #include <oneapi/tbb/cache_aligned_allocator.h>
 #include <oneapi/tbb/parallel_pipeline.h>
@@ -20,10 +17,7 @@
 #include <boost/throw_exception.hpp>
 #include <atomic>
 #include <cstddef>
-#include <iterator>
-#include <limits>
 #include <memory>
-#include <stdexcept>
 #include <type_traits>
 
 namespace bcos::transaction_scheduler

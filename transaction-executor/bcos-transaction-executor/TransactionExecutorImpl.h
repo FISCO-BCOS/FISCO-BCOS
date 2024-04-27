@@ -3,17 +3,12 @@
 #include "RollbackableStorage.h"
 #include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
-#include "bcos-framework/storage2/MemoryStorage.h"
-#include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include "bcos-task/Generator.h"
-#include "bcos-task/Trait.h"
-#include "bcos-transaction-executor/vm/VMFactory.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include "precompiled/PrecompiledManager.h"
 #include "vm/HostContext.h"
-#include "vm/VMInstance.h"
 #include <evmc/evmc.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/exception/diagnostic_information.hpp>
@@ -25,48 +20,18 @@ namespace bcos::transaction_executor
 {
 #define TRANSACTION_EXECUTOR_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("TRANSACTION_EXECUTOR")
 
-struct InvalidArgumentsError : public bcos::Error
-{
-};
 class TransactionExecutorImpl
 {
 public:
     TransactionExecutorImpl(
-        protocol::TransactionReceiptFactory const& receiptFactory, crypto::Hash::Ptr hashImpl)
-      : m_receiptFactory(receiptFactory),
-        m_hashImpl(std::move(hashImpl)),
-        m_precompiledManager(m_hashImpl)
-    {}
+        protocol::TransactionReceiptFactory const& receiptFactory, crypto::Hash::Ptr hashImpl);
 
 private:
     protocol::TransactionReceiptFactory const& m_receiptFactory;
     crypto::Hash::Ptr m_hashImpl;
     PrecompiledManager m_precompiledManager;
 
-    static evmc_message newEVMCMessage(protocol::Transaction const& transaction, int64_t gasLimit)
-    {
-        auto toAddress = unhexAddress(transaction.to());
-        evmc_message message = {.kind = transaction.to().empty() ? EVMC_CREATE : EVMC_CALL,
-            .flags = 0,
-            .depth = 0,
-            .gas = gasLimit,
-            .recipient = toAddress,
-            .destination_ptr = nullptr,
-            .destination_len = 0,
-            .sender = (!transaction.sender().empty() &&
-                          transaction.sender().size() == sizeof(evmc_address)) ?
-                          *(evmc_address*)transaction.sender().data() :
-                          evmc_address{},
-            .sender_ptr = nullptr,
-            .sender_len = 0,
-            .input_data = transaction.input().data(),
-            .input_size = transaction.input().size(),
-            .value = {},
-            .create2_salt = {},
-            .code_address = toAddress};
-
-        return message;
-    }
+    static evmc_message newEVMCMessage(protocol::Transaction const& transaction, int64_t gasLimit);
 
     friend task::Generator<protocol::TransactionReceipt::Ptr> tag_invoke(
         tag_t<execute3Step> /*unused*/, TransactionExecutorImpl& executor, auto& storage,
@@ -170,8 +135,7 @@ private:
         if (c_fileLogLevel <= LogLevel::TRACE)
         {
             TRANSACTION_EXECUTOR_LOG(TRACE)
-                << "Execte transaction finished"
-                << ", gasUsed: " << receipt->gasUsed()
+                << "Execte transaction finished" << ", gasUsed: " << receipt->gasUsed()
                 << ", newContractAddress: " << receipt->contractAddress()
                 << ", logEntries: " << receipt->logEntries().size()
                 << ", status: " << receipt->status() << ", output: " << toHex(receipt->output())

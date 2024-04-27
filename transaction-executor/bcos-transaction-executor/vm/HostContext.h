@@ -27,21 +27,16 @@
 #include "EVMHostInterface.h"
 #include "VMFactory.h"
 #include "bcos-concepts/ByteBuffer.h"
-#include "bcos-crypto/hasher/Hasher.h"
-#include "bcos-crypto/interfaces/crypto/CommonType.h"
 #include "bcos-executor/src/Common.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/ledger/Account.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
-#include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/protocol/LogEntry.h"
-#include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/Storage.h"
-#include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-transaction-executor/EVMCResult.h"
 #include "bcos-transaction-executor/vm/VMInstance.h"
 #include "bcos-utilities/Common.h"
@@ -54,11 +49,9 @@
 #include <boost/algorithm/hex.hpp>
 #include <boost/multiprecision/cpp_int/import_export.hpp>
 #include <boost/throw_exception.hpp>
-#include <atomic>
 #include <functional>
 #include <intx/intx.hpp>
 #include <iterator>
-#include <map>
 #include <memory>
 #include <set>
 #include <stdexcept>
@@ -383,8 +376,8 @@ public:
         if (c_fileLogLevel <= LogLevel::TRACE) [[unlikely]]
         {
             HOST_CONTEXT_LOG(TRACE)
-                << "HostContext execute finished, kind: "
-                << " gas:" << evmResult->gas_left << " output: "
+                << "HostContext execute finished, kind: " << " gas:" << evmResult->gas_left
+                << " output: "
                 << toHex(bytesConstRef(evmResult->output_data, evmResult->output_size));
         }
         co_return std::move(*evmResult);

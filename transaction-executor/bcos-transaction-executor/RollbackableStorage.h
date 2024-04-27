@@ -1,8 +1,7 @@
 #pragma once
 
 #include "bcos-framework/storage2/Storage.h"
-#include "bcos-framework/transaction-executor/TransactionExecutor.h"
-#include "bcos-table/src/StateStorage.h"
+#include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Trait.h"
 #include <type_traits>
 
@@ -10,17 +9,15 @@ namespace bcos::transaction_executor
 {
 
 template <class Storage>
-concept HasReadOneDirect =
-    requires(Storage& storage) {
-        requires !std::is_void_v<task::AwaitableReturnType<decltype(storage2::readOne(
-            storage, std::declval<typename Storage::Key>(), storage2::DIRECT))>>;
-    };
+concept HasReadOneDirect = requires(Storage& storage) {
+    requires !std::is_void_v<task::AwaitableReturnType<decltype(storage2::readOne(
+        storage, std::declval<typename Storage::Key>(), storage2::DIRECT))>>;
+};
 template <class Storage>
-concept HasReadSomeDirect =
-    requires(Storage& storage) {
-        requires RANGES::range<task::AwaitableReturnType<decltype(storage2::readSome(
-            storage, std::declval<std::vector<typename Storage::Key>>(), storage2::DIRECT))>>;
-    };
+concept HasReadSomeDirect = requires(Storage& storage) {
+    requires RANGES::range<task::AwaitableReturnType<decltype(storage2::readSome(
+        storage, std::declval<std::vector<typename Storage::Key>>(), storage2::DIRECT))>>;
+};
 
 template <class Storage>
 class Rollbackable
@@ -79,10 +76,9 @@ public:
             *storage.m_storage, std::forward<decltype(keys)>(keys));
     }
 
-    friend auto tag_invoke(
-        storage2::tag_t<storage2::readOne> /*unused*/, Rollbackable& storage, auto&& key)
-        -> task::Task<task::AwaitableReturnType<
-            std::invoke_result_t<storage2::ReadOne, Storage&, decltype(key)>>>
+    friend auto tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/, Rollbackable& storage,
+        auto&& key) -> task::Task<task::AwaitableReturnType<std::invoke_result_t<storage2::ReadOne,
+                        Storage&, decltype(key)>>>
     {
         co_return co_await storage2::readOne(*storage.m_storage, std::forward<decltype(key)>(key));
     }
@@ -138,7 +134,7 @@ public:
 
     friend auto tag_invoke(bcos::storage2::tag_t<storage2::range> /*unused*/, Rollbackable& storage,
         auto&&... args) -> task::Task<storage2::ReturnType<std::invoke_result_t<storage2::Range,
-        std::add_lvalue_reference_t<Storage>, decltype(args)...>>>
+                            std::add_lvalue_reference_t<Storage>, decltype(args)...>>>
     {
         co_return co_await storage2::range(
             *(storage.m_storage), std::forward<decltype(args)>(args)...);
