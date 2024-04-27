@@ -2,14 +2,10 @@
 #include "../storage/Entry.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/Exceptions.h"
-#include "bcos-utilities/Overloaded.h"
-#include "bcos-utilities/Ranges.h"
-#include "bcos-utilities/ThreeWay4StringView.h"
 #include <boost/throw_exception.hpp>
 #include <compare>
 #include <functional>
 #include <string_view>
-#include <variant>
 
 namespace bcos::transaction_executor
 {
