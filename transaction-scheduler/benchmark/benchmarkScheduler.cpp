@@ -169,7 +169,7 @@ struct Fixture
 
     void prepareConflictTransfer(size_t count)
     {
-        bcos::codec::abi::ContractABICodec abiCodec(bcos::executor::GlobalHashImpl::g_hashImpl);
+        bcos::codec::abi::ContractABICodec abiCodec(*bcos::executor::GlobalHashImpl::g_hashImpl);
         m_transactions =
             RANGES::views::zip(m_addresses, RANGES::views::iota(0LU, m_addresses.size())) |
             RANGES::views::transform([this, &abiCodec](auto&& tuple) {
