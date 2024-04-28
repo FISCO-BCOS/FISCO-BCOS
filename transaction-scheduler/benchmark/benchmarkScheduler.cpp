@@ -1,27 +1,19 @@
 #include "bcos-codec/bcos-codec/abi/ContractABICodec.h"
 #include "bcos-crypto/hash/Keccak256.h"
-#include "bcos-framework/protocol/ServiceDesc.h"
+#include "bcos-executor/src/Common.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
-#include "bcos-framework/transaction-executor/TransactionExecutor.h"
-#include "bcos-storage/RocksDBStorage2.h"
-#include "bcos-tars-protocol/impl/TarsHashable.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
-#include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
 #include "bcos-task/Wait.h"
 #include "bcos-transaction-executor/TransactionExecutorImpl.h"
-#include "bcos-transaction-executor/precompiled/PrecompiledManager.h"
 #include "bcos-transaction-scheduler/MultiLayerStorage.h"
 #include "bcos-transaction-scheduler/SchedulerParallelImpl.h"
 #include "bcos-transaction-scheduler/SchedulerSerialImpl.h"
-#include "bcos-utilities/ITTAPI.h"
 #include "transaction-executor/tests/TestBytecode.h"
 #include <benchmark/benchmark.h>
-#include <fmt/format.h>
 #include <boost/throw_exception.hpp>
-#include <variant>
 
 using namespace bcos;
 using namespace bcos::storage2::memory_storage;
@@ -245,11 +237,10 @@ struct Fixture
                     ledger::LedgerConfig ledgerConfig;
                     auto receipts = co_await transaction_scheduler::executeBlock(scheduler, view,
                         m_executor, blockHeader,
-                        checkTransactions | RANGES::views::transform([
-                        ](const std::unique_ptr<bcostars::protocol::TransactionImpl>& transaction)
-                                                                         -> auto& {
-                            return *transaction;
-                        }),
+                        checkTransactions |
+                            RANGES::views::transform(
+                                [](const std::unique_ptr<bcostars::protocol::TransactionImpl>&
+                                        transaction) -> auto& { return *transaction; }),
                         ledgerConfig);
 
                     auto balances = receipts |
@@ -327,11 +318,10 @@ static void issue(benchmark::State& state)
                             co_await transaction_scheduler::executeBlock(scheduler, view,
                                 fixture.m_executor, blockHeader,
                                 fixture.m_transactions |
-                                    RANGES::views::transform([
-                                    ](const std::unique_ptr<bcostars::protocol::TransactionImpl>&
-                                                                     transaction) -> auto& {
-                                        return *transaction;
-                                    }),
+                                    RANGES::views::transform(
+                                        [](const std::unique_ptr<
+                                            bcostars::protocol::TransactionImpl>& transaction)
+                                            -> auto& { return *transaction; }),
                                 ledgerConfig);
                     }
 
@@ -386,11 +376,10 @@ static void transfer(benchmark::State& state)
                     ledger::LedgerConfig ledgerConfig;
                     [[maybe_unused]] auto receipts = co_await transaction_scheduler::executeBlock(
                         scheduler, view, fixture.m_executor, blockHeader,
-                        fixture.m_transactions | RANGES::views::transform([
-                        ](const std::unique_ptr<bcostars::protocol::TransactionImpl>& transaction)
-                                                                              -> auto& {
-                            return *transaction;
-                        }),
+                        fixture.m_transactions |
+                            RANGES::views::transform(
+                                [](const std::unique_ptr<bcostars::protocol::TransactionImpl>&
+                                        transaction) -> auto& { return *transaction; }),
                         ledgerConfig);
 
                     fixture.m_transactions.clear();
@@ -411,11 +400,10 @@ static void transfer(benchmark::State& state)
                             co_await transaction_scheduler::executeBlock(scheduler, view,
                                 fixture.m_executor, blockHeader,
                                 fixture.m_transactions |
-                                    RANGES::views::transform([
-                                    ](const std::unique_ptr<bcostars::protocol::TransactionImpl>&
-                                                                     transaction) -> auto& {
-                                        return *transaction;
-                                    }),
+                                    RANGES::views::transform(
+                                        [](const std::unique_ptr<
+                                            bcostars::protocol::TransactionImpl>& transaction)
+                                            -> auto& { return *transaction; }),
                                 ledgerConfig);
                     }
 
@@ -482,11 +470,10 @@ static void conflictTransfer(benchmark::State& state)
                     ledger::LedgerConfig ledgerConfig;
                     [[maybe_unused]] auto receipts = co_await transaction_scheduler::executeBlock(
                         scheduler, view, fixture.m_executor, blockHeader,
-                        fixture.m_transactions | RANGES::views::transform([
-                        ](const std::unique_ptr<bcostars::protocol::TransactionImpl>& transaction)
-                                                                              -> auto& {
-                            return *transaction;
-                        }),
+                        fixture.m_transactions |
+                            RANGES::views::transform(
+                                [](const std::unique_ptr<bcostars::protocol::TransactionImpl>&
+                                        transaction) -> auto& { return *transaction; }),
                         ledgerConfig);
 
                     fixture.m_transactions.clear();
@@ -507,11 +494,10 @@ static void conflictTransfer(benchmark::State& state)
                             co_await transaction_scheduler::executeBlock(scheduler, view,
                                 fixture.m_executor, blockHeader,
                                 fixture.m_transactions |
-                                    RANGES::views::transform([
-                                    ](const std::unique_ptr<bcostars::protocol::TransactionImpl>&
-                                                                     transaction) -> auto& {
-                                        return *transaction;
-                                    }),
+                                    RANGES::views::transform(
+                                        [](const std::unique_ptr<
+                                            bcostars::protocol::TransactionImpl>& transaction)
+                                            -> auto& { return *transaction; }),
                                 ledgerConfig);
                     }
 

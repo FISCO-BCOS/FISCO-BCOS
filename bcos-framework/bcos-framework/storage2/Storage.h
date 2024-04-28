@@ -2,7 +2,6 @@
 #include "bcos-task/Task.h"
 #include "bcos-task/Trait.h"
 #include "bcos-utilities/Ranges.h"
-#include <concepts>
 #include <optional>
 #include <type_traits>
 
@@ -17,10 +16,9 @@ inline constexpr struct DIRECT_TYPE
 template <class Invoke>
 using ReturnType = typename task::AwaitableReturnType<Invoke>;
 template <class Tag, class Storage, class... Args>
-concept HasTag =
-    requires(Tag tag, Storage storage, Args&&... args) {
-        requires task::IsAwaitable<decltype(tag_invoke(tag, storage, std::forward<Args>(args)...))>;
-    };
+concept HasTag = requires(Tag tag, Storage storage, Args&&... args) {
+    requires task::IsAwaitable<decltype(tag_invoke(tag, storage, std::forward<Args>(args)...))>;
+};
 
 inline constexpr struct ReadSome
 {
@@ -116,8 +114,8 @@ inline constexpr struct ReadOne
 
 inline constexpr struct WriteOne
 {
-    auto operator()(auto&& storage, auto&& key, auto&& value, auto&&... args) const
-        -> task::Task<void>
+    auto operator()(
+        auto&& storage, auto&& key, auto&& value, auto&&... args) const -> task::Task<void>
     {
         if constexpr (HasTag<WriteOne, decltype(storage), decltype(key), decltype(value),
                           decltype(args)...>)
