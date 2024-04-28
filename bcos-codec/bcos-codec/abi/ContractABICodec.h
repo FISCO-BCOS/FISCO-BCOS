@@ -280,7 +280,8 @@ struct Offset<T>
 class ContractABICodec
 {
 public:
-    explicit ContractABICodec(bcos::crypto::Hash::Ptr _hashImpl) : m_hashImpl(_hashImpl) {}
+    explicit ContractABICodec(const bcos::crypto::Hash& hashImpl) : m_hashImpl(hashImpl) {}
+    // explicit ContractABICodec(bcos::crypto::Hash::Ptr _hashImpl) : m_hashImpl(_hashImpl) {}
 
     template <class T, std::enable_if_t<!std::is_integral<T>::value>>
     bytes serialise(const T& _t)
@@ -389,7 +390,7 @@ public:
     void deserialize(std::tuple<T...>& out, std::size_t _offset);
 
 private:
-    bcos::crypto::Hash::Ptr m_hashImpl;
+    const bcos::crypto::Hash& m_hashImpl;
     static const int MAX_BYTE_LENGTH = 32;
     // encode or decode offset
     std::size_t offset{0};
@@ -515,7 +516,7 @@ public:
 
         return _sig.empty() ?
                    fixed + dynamic :
-                   m_hashImpl->hash(_sig).ref().getCroppedData(0, 4).toBytes() + fixed + dynamic;
+                   m_hashImpl.hash(_sig).ref().getCroppedData(0, 4).toBytes() + fixed + dynamic;
     }
 
     template <class... T>

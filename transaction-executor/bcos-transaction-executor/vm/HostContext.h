@@ -320,7 +320,7 @@ public:
             {
                 HOST_CONTEXT_LOG(DEBUG) << "Auth check failed";
                 evmResult.emplace(
-                    evmc_result{.status_code = static_cast<evmc_status_code>(param->evmStatus),
+                    evmc_result{.status_code = static_cast<evmc_status_code>(param->status),
                         .gas_left = param->gas,
                         .gas_refund = 0,
                         .output_data = nullptr,
@@ -376,8 +376,8 @@ public:
         if (c_fileLogLevel <= LogLevel::TRACE) [[unlikely]]
         {
             HOST_CONTEXT_LOG(TRACE)
-                << "HostContext execute finished, kind: " << " gas:" << evmResult->gas_left
-                << " output: "
+                << "HostContext execute finished, kind: " << ref.kind << " status"
+                << evmResult->status_code << " gas:" << evmResult->gas_left << " output: "
                 << toHex(bytesConstRef(evmResult->output_data, evmResult->output_size));
         }
         co_return std::move(*evmResult);
