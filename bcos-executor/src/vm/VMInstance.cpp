@@ -77,6 +77,10 @@ evmc_revision toRevision(VMSchedule const& _schedule)
     {
         return EVMC_PARIS;
     }
+    if (_schedule.enableCanCun)
+    {
+        return EVMC_CANCUN;
+    }
     return EVMC_LONDON;
 }
 }  // namespace bcos::executor

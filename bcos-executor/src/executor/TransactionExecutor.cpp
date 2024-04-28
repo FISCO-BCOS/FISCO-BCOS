@@ -60,8 +60,10 @@
 #include "../vm/gas_meter/GasInjector.h"
 #endif
 
+#include "../Common.h"
 #include "ExecuteOutputs.h"
 #include "bcos-codec/abi/ContractABIType.h"
+#include "bcos-executor/src/executive/BlockContext.h"
 #include "bcos-executor/src/precompiled/common/Common.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
@@ -76,6 +78,7 @@
 #include "bcos-table/src/KeyPageStorage.h"
 #include "bcos-table/src/StateStorage.h"
 #include "bcos-table/src/StateStorageFactory.h"
+#include "bcos-task/Wait.h"
 #include "bcos-tool/BfsFileFactory.h"
 #include "tbb/flow_graph.h"
 #include <bcos-framework/executor/ExecuteError.h>
@@ -410,6 +413,20 @@ BlockContext::Ptr TransactionExecutor::createBlockContext(
     }
 
     return context;
+}
+VMSchedule const& TransactionExecutor::getVMSchedule(uint32_t currentVersion)
+{
+    ledger::Features features;
+    task::syncWait(features.readFromStorage(*m_backendStorage, m_lastCommittedBlockNumber + 1));
+    if (features.get(ledger::Features::Flag::feature_evm_cancun))
+    {
+        return FiscoBcosScheduleCanCun;
+    }
+    if (currentVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION)
+    {
+        return FiscoBcosScheduleV320;
+    }
+    return FiscoBcosSchedule;
 }
 
 std::shared_ptr<BlockContext> TransactionExecutor::createBlockContextForCall(

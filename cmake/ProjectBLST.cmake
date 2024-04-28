@@ -9,6 +9,8 @@ if (NOT BASH_COMMAND)
     message(FATAL_ERROR "bash not found")
 endif ()
 
+set(BLST_LIB_NAME "libblst.a")
+
 ExternalProject_Add(blst
         PREFIX ${CMAKE_SOURCE_DIR}/deps
         GIT_REPOSITORY https://${URL_BASE}/supranational/blst.git
@@ -22,7 +24,7 @@ ExternalProject_Add(blst
         LOG_BUILD true
         LOG_INSTALL true
         LOG_CONFIGURE true
-        BUILD_BYPRODUCTS <SOURCE_DIR>/libblst.a
+        BUILD_BYPRODUCTS libblst.a
         )
 
 ExternalProject_Get_Property(blst INSTALL_DIR)
@@ -31,7 +33,7 @@ set(BLST_INCLUDE_DIR ${INSTALL_DIR}/include/)
 file(MAKE_DIRECTORY ${BLST_INCLUDE_DIR})  #Must exist
 
 
-set(BLST_LIBRARY ${INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}/libblst.a)
+set(BLST_LIBRARY ${INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}/${BLST_LIB_NAME})
 add_library(BLST STATIC IMPORTED GLOBAL)
 
 set_property(TARGET BLST PROPERTY IMPORTED_LOCATION ${BLST_LIBRARY})
