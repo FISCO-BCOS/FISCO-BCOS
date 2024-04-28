@@ -375,8 +375,7 @@ bcos::task::Task<bcos::ledger::LedgerConfig::Ptr> bcos::ledger::tag_invoke(
 
     auto blockNumber = co_await getCurrentBlockNumber(ledger);
     ledgerConfig->setBlockNumber(blockNumber);
-    auto hash = co_await getBlockHash(ledger, blockNumber);
-    ledgerConfig->setHash(hash);
+    ledgerConfig->setHash(co_await getBlockHash(ledger, blockNumber));
     ledgerConfig->setFeatures(co_await getFeatures(ledger));
 
     auto enableRPBFT =
