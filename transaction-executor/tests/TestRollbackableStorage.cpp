@@ -3,12 +3,9 @@
 #include "TestMemoryStorage.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/Storage.h"
-#include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-task/Task.h"
-#include "bcos-task/Trait.h"
 #include "bcos-task/Wait.h"
 #include <boost/test/unit_test.hpp>
-#include <iostream>
 
 using namespace bcos;
 using namespace bcos::storage2;
