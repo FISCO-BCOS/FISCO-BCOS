@@ -587,7 +587,7 @@ void HostContext::setStore(const evmc_bytes32* key, const evmc_bytes32* value)
     m_executive->storage().setRow(m_tableName, keyView, std::move(entry));
 }
 
-void HostContext::setTransientStore(const evmc_bytes32* key, const evmc_bytes32* value)
+void HostContext::setTransient(const evmc_bytes32* key, const evmc_bytes32* value)
 {
     auto keyView = std::string_view((char*)key->bytes, sizeof(key->bytes));
     bytes valueBytes(value->bytes, value->bytes + sizeof(value->bytes));

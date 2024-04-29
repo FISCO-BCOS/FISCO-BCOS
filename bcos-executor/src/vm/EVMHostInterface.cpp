@@ -101,7 +101,7 @@ void setTransientStorage(evmc_host_context* context, [[maybe_unused]] const evmc
     const evmc_bytes32* key, const evmc_bytes32* value)
 {
     auto& hostContext = static_cast<HostContext&>(*context);
-    hostContext.setTransientStore(key, value);  // Interface uses native endianness
+    hostContext.setTransient(key, value);  // Interface uses native endianness
 }
 
 
