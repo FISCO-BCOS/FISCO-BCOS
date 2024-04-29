@@ -46,6 +46,13 @@ inline auto buildLegacyExecutive(auto& storage, protocol::BlockHeader const& blo
         std::move(externalCaller), precompiledManager);
 }
 
+struct ErrorMessage
+{
+    std::unique_ptr<uint8_t> buffer;
+    size_t size{};
+};
+ErrorMessage buildErrorMessage(std::string_view message, crypto::Hash const& hashImpl);
+
 struct Precompiled
 {
     std::variant<executor::PrecompiledContract, std::shared_ptr<precompiled::Precompiled>>
@@ -156,7 +163,7 @@ inline constexpr struct
                                                 << LOG_KV("message", errorMessage);
 
                         bcos::codec::abi::ContractABICodec abi(
-                            executor::GlobalHashImpl::g_hashImpl);
+                            *executor::GlobalHashImpl::g_hashImpl);
                         auto codecOutput = abi.abiIn("Error(string)", errorMessage);
                         auto buffer = std::unique_ptr<uint8_t>(new uint8_t[codecOutput.size()]);
                         std::uninitialized_copy_n(

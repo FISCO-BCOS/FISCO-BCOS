@@ -63,7 +63,7 @@ int performance()
             auto rand = std::mt19937(std::random_device{}());
             for (auto it = range.begin(); it != range.end(); ++it)
             {
-                bcos::codec::abi::ContractABICodec abiCodec(cryptoSuite->hashImpl());
+                bcos::codec::abi::ContractABICodec abiCodec(*cryptoSuite->hashImpl());
                 auto input = abiCodec.abiIn("setInt(int256)", bcos::s256(it));
                 auto setTransaction = transactionFactory.createTransaction(0,
                     std::string(contractAddress), input, boost::lexical_cast<std::string>(rand()),

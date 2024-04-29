@@ -94,7 +94,7 @@ static void call_setInt(benchmark::State& state)
     bcostars::protocol::TransactionImpl transaction(
         [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
 
-    bcos::codec::abi::ContractABICodec abiCodec(bcos::executor::GlobalHashImpl::g_hashImpl);
+    bcos::codec::abi::ContractABICodec abiCodec(*bcos::executor::GlobalHashImpl::g_hashImpl);
 
     task::syncWait([&](benchmark::State& state) -> task::Task<void> {
         int contextID = 0;
@@ -121,7 +121,7 @@ static void call_setString(benchmark::State& state)
     bcostars::protocol::TransactionImpl transaction(
         [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
 
-    bcos::codec::abi::ContractABICodec abiCodec(bcos::executor::GlobalHashImpl::g_hashImpl);
+    bcos::codec::abi::ContractABICodec abiCodec(*bcos::executor::GlobalHashImpl::g_hashImpl);
 
     task::syncWait([&](benchmark::State& state) -> task::Task<void> {
         int contextID = 0;
@@ -145,7 +145,7 @@ static void call_delegateCall(benchmark::State& state)
     Fixture fixture;
     std::string contractAddress = fixture.deployContract();
 
-    bcos::codec::abi::ContractABICodec abiCodec(bcos::executor::GlobalHashImpl::g_hashImpl);
+    bcos::codec::abi::ContractABICodec abiCodec(*bcos::executor::GlobalHashImpl::g_hashImpl);
     bcostars::protocol::TransactionImpl transaction1(
         [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
     auto input = abiCodec.abiIn("delegateCall()");
@@ -170,7 +170,7 @@ static void call_deployAndCall(benchmark::State& state)
     Fixture fixture;
     std::string contractAddress = fixture.deployContract();
 
-    bcos::codec::abi::ContractABICodec abiCodec(bcos::executor::GlobalHashImpl::g_hashImpl);
+    bcos::codec::abi::ContractABICodec abiCodec(*bcos::executor::GlobalHashImpl::g_hashImpl);
     bcostars::protocol::TransactionImpl transaction1(
         [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
     auto input = abiCodec.abiIn("deployAndCall(int256)", bcos::s256(999));

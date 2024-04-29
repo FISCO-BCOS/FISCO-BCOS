@@ -45,7 +45,7 @@ public:
         if (m_type == VMType::EVM)
         {
             // Note: the codec is not thread-safe, so we can't share this object
-            codec::abi::ContractABICodec abi(m_hash);
+            codec::abi::ContractABICodec abi(*m_hash);
             return abi.abiIn("", _args...);
         }
         else
@@ -62,7 +62,7 @@ public:
         if (m_type == VMType::EVM)
         {
             // Note: the codec is not thread-safe, so we can't share this object
-            codec::abi::ContractABICodec abi(m_hash);
+            codec::abi::ContractABICodec abi(*m_hash);
             return abi.abiIn(_sig, _args...);
         }
         else
@@ -79,7 +79,7 @@ public:
         if (m_type == VMType::EVM)
         {
             // Note: the codec is not thread-safe, so we can't share this object
-            codec::abi::ContractABICodec abi(m_hash);
+            codec::abi::ContractABICodec abi(*m_hash);
             return abi.abiIn(_sig);
         }
         else
@@ -95,7 +95,7 @@ public:
         assert(m_type != VMType::UNDEFINED);
         if (m_type == VMType::EVM)
         {
-            codec::abi::ContractABICodec abi(m_hash);
+            codec::abi::ContractABICodec abi(*m_hash);
             abi.abiOut(_data, _t...);
         }
         else if (m_type == VMType::WASM)
