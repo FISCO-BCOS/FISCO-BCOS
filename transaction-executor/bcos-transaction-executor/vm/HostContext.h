@@ -26,6 +26,8 @@
 #include "../precompiled/PrecompiledManager.h"
 #include "EVMHostInterface.h"
 #include "VMFactory.h"
+#include "bcos-codec/abi/ContractABICodec.h"
+#include "bcos-codec/wrapper/CodecWrapper.h"
 #include "bcos-executor/src/Common.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/ledger/Account.h"
@@ -78,8 +80,8 @@ struct Executable
 {
     explicit Executable(storage::Entry code)
       : m_code(std::make_optional(std::move(code))),
-        m_vmInstance(VMFactory::create(
-            VMKind::evmone, bytesConstRef((const uint8_t*)m_code->data(), m_code->size()), mode))
+        m_vmInstance(VMFactory::create(VMKind::evmone,
+            bytesConstRef(reinterpret_cast<const uint8_t*>(m_code->data()), m_code->size()), mode))
     {}
     explicit Executable(bytesConstRef code)
       : m_vmInstance(VMFactory::create(VMKind::evmone, code, mode))
@@ -267,7 +269,7 @@ public:
     /// Revert any changes made (by any of the other calls).
     void log(const evmc_address& address, h256s topics, bytesConstRef data)
     {
-        std::span<const uint8_t> view(address.bytes, address.bytes + sizeof(address.bytes));
+        std::span<const uint8_t> view(address.bytes);
         m_logs.emplace_back(
             toHex<decltype(view), bcos::bytes>(view), std::move(topics), data.toBytes());
     }
@@ -484,7 +486,7 @@ private:
 
             auto& message = std::get<evmc_message>(m_message);
             const auto* code = m_executable->m_code->data();
-            auto codec = CodecWrapper(executor::GlobalHashImpl::g_hashImpl, false);
+
             std::vector<std::string> codeParameters{};
             boost::split(codeParameters, code, boost::is_any_of(","));
             if (codeParameters.size() < 3)
@@ -497,8 +499,10 @@ private:
             // Consider Delegate Call
             message.recipient = unhexAddress(codeParameters[1]);
             codeParameters.erase(codeParameters.begin(), codeParameters.begin() + 2);
-            m_dynamicPrecompiledInput.emplace(codec.encode(codeParameters,
-                bcos::bytes(message.input_data, message.input_data + message.input_size)));
+
+            codec::abi::ContractABICodec codec2(m_hashImpl);
+            m_dynamicPrecompiledInput.emplace(codec2.abiIn(
+                "", codeParameters, bcos::bytesConstRef(message.input_data, message.input_size)));
 
             message.input_data = m_dynamicPrecompiledInput->data();
             message.input_size = m_dynamicPrecompiledInput->size();

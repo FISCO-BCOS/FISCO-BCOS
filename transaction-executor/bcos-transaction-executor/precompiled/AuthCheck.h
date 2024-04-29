@@ -42,11 +42,11 @@ inline std::optional<EVMCResult> checkAuth(auto& storage, protocol::BlockHeader 
     params->origin = address2HexString(origin);
     params->data.assign(message.input_data, message.input_data + message.input_size);
     params->gas = message.gas;
-    params->staticCall = (message.kind == EVMC_CALL);
+    params->staticCall = (message.flags & EVMC_STATIC) != 0;
     params->create = (message.kind == EVMC_CREATE);
     auto result = executive->checkAuth(params);
 
-    if (result)
+    if (!result)
     {
         auto [errorMessage, size] = buildErrorMessage(params->message, hashImpl);
         return std::make_optional(
