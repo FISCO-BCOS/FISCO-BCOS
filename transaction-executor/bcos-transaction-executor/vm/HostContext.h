@@ -313,21 +313,12 @@ public:
             HOST_CONTEXT_LOG(DEBUG)
                 << "Checking auth..." << m_ledgerConfig.authCheckStatus() << " gas: " << ref.gas;
 
-            if (auto [result, param] = checkAuth(m_rollbackableStorage, m_blockHeader, ref,
-                    m_origin, buildLegacyExternalCaller(), m_precompiledManager, m_contextID, m_seq,
-                    m_ledgerConfig.authCheckStatus());
-                !result)
+            if (auto result = checkAuth(m_rollbackableStorage, m_blockHeader, ref, m_origin,
+                    buildLegacyExternalCaller(), m_precompiledManager, m_contextID, m_seq,
+                    m_hashImpl))
             {
                 HOST_CONTEXT_LOG(DEBUG) << "Auth check failed";
-                evmResult.emplace(
-                    evmc_result{.status_code = static_cast<evmc_status_code>(param->status),
-                        .gas_left = param->gas,
-                        .gas_refund = 0,
-                        .output_data = nullptr,
-                        .output_size = 0,
-                        .release = nullptr,
-                        .create_address = {},
-                        .padding = {}});
+                evmResult = std::move(result);
             };
         }
 

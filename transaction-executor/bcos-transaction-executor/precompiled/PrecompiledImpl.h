@@ -157,24 +157,19 @@ inline constexpr struct
                     }
                     catch (protocol::PrecompiledError const& e)
                     {
-                        std::string_view errorMessage(e.what());
-                        PRECOMPILE_LOG(WARNING) << "Revert transaction: PrecompiledFailed"
-                                                << LOG_KV("address", contractAddress)
-                                                << LOG_KV("message", errorMessage);
+                        PRECOMPILE_LOG(WARNING)
+                            << "Revert transaction: PrecompiledFailed"
+                            << LOG_KV("address", contractAddress) << LOG_KV("message", e.what());
 
-                        bcos::codec::abi::ContractABICodec abi(
-                            *executor::GlobalHashImpl::g_hashImpl);
-                        auto codecOutput = abi.abiIn("Error(string)", errorMessage);
-                        auto buffer = std::unique_ptr<uint8_t>(new uint8_t[codecOutput.size()]);
-                        std::uninitialized_copy_n(
-                            codecOutput.data(), codecOutput.size(), buffer.get());
+                        auto [errorMessage, size] =
+                            buildErrorMessage(e.what(), *executor::GlobalHashImpl::g_hashImpl);
                         return EVMCResult{evmc_result{
                             .status_code =
                                 (evmc_status_code)protocol::TransactionStatus::RevertInstruction,
                             .gas_left = message.gas,
                             .gas_refund = 0,
-                            .output_data = buffer.release(),
-                            .output_size = codecOutput.size(),
+                            .output_data = errorMessage.release(),
+                            .output_size = size,
                             .release =
                                 [](const struct evmc_result* result) {
                                     delete[] result->output_data;
