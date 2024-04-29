@@ -41,7 +41,6 @@ namespace executor
 class BlockContext;
 using PrecompiledExecutor = std::function<std::pair<bool, bytes>(bytesConstRef _in)>;
 using PrecompiledPricer = std::function<bigint(bytesConstRef _in)>;
-inline constexpr uint8_t kBlobCommitmentVersionKzg{1};
 
 DERIVE_BCOS_EXCEPTION(ExecutorNotFound);
 DERIVE_BCOS_EXCEPTION(PricerNotFound);
@@ -292,12 +291,6 @@ bytes blake2FCompression(uint32_t _rounds, bytesConstRef _stateVector, bytesCons
     bytesConstRef _t1, bool _lastBlock, bytesConstRef _messageBlock);
 
 std::pair<bool, bytes> ecRecover(bytesConstRef _in);
-// evmc_bytes32 kzg2VersionedHash(bytesConstRef _in);
-// void silkworm_sha256(uint8_t hash[32], const uint8_t* input, size_t len, bool use_cpu_extension);
-//
-// bool verifyKZGProof(bytesConstRef commitment, bytesConstRef z, bytesConstRef y, bytesConstRef
-// proof); static bool verifyKZGProofImpl(bytesConstRef commitment, bytesConstRef z, bytesConstRef
-// y, bytesConstRef proof);
 }  // namespace crypto
 
 namespace executor

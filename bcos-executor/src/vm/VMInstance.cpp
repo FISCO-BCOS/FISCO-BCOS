@@ -59,9 +59,8 @@ Result VMInstance::execute(HostContext& _hostContext, evmc_message* _msg)
         return Result(m_instance->execute(m_instance, _hostContext.interface, &_hostContext,
             m_revision, _msg, m_code.data(), m_code.size()));
     }
-    bytes_view data{};
-    auto state = std::make_unique<evmone::ExecutionState>(
-        *_msg, m_revision, *_hostContext.interface, &_hostContext, m_code, data);
+    auto state = std::unique_ptr<evmone::ExecutionState>(new evmone::ExecutionState(
+        *_msg, m_revision, *_hostContext.interface, &_hostContext, m_code, {}));
     {                                             // baseline
         static auto* evm = evmc_create_evmone();  // baseline use the vm to get options
         return Result(evmone::baseline::execute(

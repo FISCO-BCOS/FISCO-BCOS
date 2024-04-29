@@ -188,7 +188,7 @@ static const VMSchedule FiscoBcosScheduleV320 = [] {
     return schedule;
 }();
 
-static const VMSchedule FiscoBcosScheduleCanCun = [] {
+static const VMSchedule FiscoBcosScheduleCancun = [] {
     VMSchedule schedule = VMSchedule();
     schedule.enablePairs = false;
     schedule.enableCanCun = true;

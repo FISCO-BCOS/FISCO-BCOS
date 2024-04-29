@@ -559,7 +559,7 @@ evmc_bytes32 HostContext::store(const evmc_bytes32* key)
     }
     return result;
 }
-evmc_bytes32 HostContext::storeTransient(const evmc_bytes32* key)
+evmc_bytes32 HostContext::getTransient(const evmc_bytes32* key)
 {
     evmc_bytes32 result;
     auto keyView = std::string_view((char*)key->bytes, sizeof(key->bytes));

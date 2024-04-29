@@ -67,13 +67,13 @@ public:
         m_contextID(contextID),
         m_seq(seq),
         m_gasInjector(gasInjector),
+        m_recoder(std::make_shared<storage::Recoder>()),
+        m_transientRecoder(std::make_shared<storage::Recoder>()),
         m_storageWrapperObj(m_blockContext.storage(), m_recoder),
         m_transientStorageWrapperObj(m_transientStateStorage, m_transientRecoder),
         m_storageWrapper(&m_storageWrapperObj),
         m_transientStorageWrapper(&m_transientStorageWrapperObj)
     {
-        m_recoder = std::make_shared<storage::Recoder>();
-        m_transientRecoder = std::make_shared<storage::Recoder>();
         m_hashImpl = m_blockContext.hashHandler();
         m_storageWrapperObj.setCodeCache(m_blockContext.getCodeCache());
         m_storageWrapperObj.setCodeHashCache(m_blockContext.getCodeHashCache());

@@ -19,9 +19,8 @@ bcos::transaction_executor::EVMCResult bcos::transaction_executor::VMInstance::e
     {
         executionState = std::make_unique<evmone::advanced::AdvancedExecutionState>();
     }
-    bytes_view data{};
     executionState->reset(
-        *msg, rev, *host, context, std::basic_string_view<uint8_t>(code, codeSize), data);
+        *msg, rev, *host, context, std::basic_string_view<uint8_t>(code, codeSize), {});
     auto result = EVMCResult(evmone::baseline::execute(
         *static_cast<evmone::VM const*>(evm), msg->gas, *executionState, *m_instance));
 

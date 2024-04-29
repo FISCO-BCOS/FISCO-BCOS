@@ -64,7 +64,7 @@ public:
 
     /// Read storage location.
     evmc_bytes32 store(const evmc_bytes32* key);
-    evmc_bytes32 storeTransient(const evmc_bytes32* key);
+    evmc_bytes32 getTransient(const evmc_bytes32* key);
 
     /// Write a value in storage.
     // void setStore(const u256& _n, const u256& _v);

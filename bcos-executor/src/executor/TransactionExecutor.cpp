@@ -420,7 +420,7 @@ VMSchedule const& TransactionExecutor::getVMSchedule(uint32_t currentVersion)
     task::syncWait(features.readFromStorage(*m_backendStorage, m_lastCommittedBlockNumber + 1));
     if (features.get(ledger::Features::Flag::feature_evm_cancun))
     {
-        return FiscoBcosScheduleCanCun;
+        return FiscoBcosScheduleCancun;
     }
     if (currentVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION)
     {
