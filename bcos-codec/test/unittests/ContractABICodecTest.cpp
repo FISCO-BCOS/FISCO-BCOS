@@ -20,17 +20,20 @@
 #include "bcos-codec/abi/ContractABICodec.h"
 #include "bcos-codec/abi/ContractABIType.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
+#include "bcos-utilities/Common.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
+#include <boost/algorithm/hex.hpp>
 #include <boost/test/unit_test.hpp>
-#include <typeinfo>
+#include <iterator>
 
 using namespace std;
 using namespace bcos;
 using namespace bcos::codec::abi;
 using namespace bcos::codec;
 using namespace bcos::crypto;
+
 namespace bcos
 {
 namespace test
@@ -1114,6 +1117,24 @@ BOOST_AUTO_TEST_CASE(testABITuple)
         BOOST_CHECK(std::get<4>(test1DecodeTupleV2[1])[0] == std::get<4>(tuple1)[0]);
         BOOST_CHECK(std::get<4>(test1DecodeTupleV2[1])[1] == std::get<4>(tuple1)[1]);
     }
+}
+
+BOOST_AUTO_TEST_CASE(wrapper)
+{
+    using namespace std::string_view_literals;
+
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto codec = CodecWrapper(hashImpl, false);
+
+    std::vector<std::string> list3{"a1", "b2", "c3"};
+    auto hex = "1b2c3d1f2f"sv;
+    bcos::bytes buffer;
+    boost::algorithm::unhex(hex, std::back_insert_iterator(buffer));
+    auto encoded1 = codec.encode(list3, buffer);
+
+    codec::abi::ContractABICodec abi(*hashImpl);
+    auto encoded2 = abi.abiIn("", list3, buffer);
+    BOOST_CHECK_EQUAL(encoded1, encoded2);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

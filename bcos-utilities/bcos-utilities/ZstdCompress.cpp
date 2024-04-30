@@ -20,6 +20,7 @@
  * @date 2022-09-22
  */
 #include "ZstdCompress.h"
+#include "BoostLog.h"
 
 namespace bcos
 {
