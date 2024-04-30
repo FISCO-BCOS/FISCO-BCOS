@@ -1124,16 +1124,18 @@ BOOST_AUTO_TEST_CASE(wrapper)
     using namespace std::string_view_literals;
 
     auto hashImpl = std::make_shared<Keccak256>();
-    auto codec = CodecWrapper(hashImpl, false);
 
-    std::vector<std::string> list3{"a1", "b2", "c3"};
-    auto hex = "1b2c3d1f2f"sv;
-    bcos::bytes buffer;
-    boost::algorithm::unhex(hex, std::back_insert_iterator(buffer));
-    auto encoded1 = codec.encode(list3, buffer);
+    std::vector<std::string> list{boost::algorithm::unhex("0a"s)};
+    auto hex = boost::algorithm::unhex("1b2c3d1f"s);
+    bcos::bytes buffer(hex.begin(), hex.end());
 
     codec::abi::ContractABICodec abi(*hashImpl);
-    auto encoded2 = abi.abiIn("", list3, buffer);
+    auto encoded1 = abi.abiIn("", list, buffer);
+
+    bcos::bytesConstRef ref(buffer.data(), hex.size());
+    codec::abi::ContractABICodec abi2(*hashImpl);
+    auto encoded2 = abi2.abiIn("", list, ref);
+
     BOOST_CHECK_EQUAL(encoded1, encoded2);
 }
 
