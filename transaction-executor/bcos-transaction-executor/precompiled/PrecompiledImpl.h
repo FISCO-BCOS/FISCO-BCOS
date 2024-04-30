@@ -128,7 +128,7 @@ inline constexpr struct
                     params->m_origin = address2HexString(origin);
                     params->m_input = {message.input_data, message.input_size};
                     params->m_gasLeft = message.gas;
-                    params->m_staticCall = (message.kind == EVMC_CALL);
+                    params->m_staticCall = (message.flags & EVMC_STATIC) != 0;
                     params->m_create = (message.kind == EVMC_CREATE);
 
                     try
