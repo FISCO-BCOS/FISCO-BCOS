@@ -24,6 +24,9 @@
  */
 #pragma once
 #include "bcos-storage/RocksDBStorage.h"
+#ifdef WITH_TIKV
+#include "bcos-storage/TiKVStorage.h"
+#endif
 #include "rocksdb/convenience.h"
 #include "rocksdb/filter_policy.h"
 #include <bcos-framework/security/DataEncryptInterface.h>
