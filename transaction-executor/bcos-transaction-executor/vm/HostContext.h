@@ -499,16 +499,16 @@ private:
             message.recipient = unhexAddress(codeParameters[1]);
             codeParameters.erase(codeParameters.begin(), codeParameters.begin() + 2);
 
-            auto codec = CodecWrapper(executor::GlobalHashImpl::g_hashImpl, false);
-            m_dynamicPrecompiledInput.emplace(codec.encode(codeParameters,
-                bcos::bytes(message.input_data, message.input_data + message.input_size)));
+            // auto codec = CodecWrapper(executor::GlobalHashImpl::g_hashImpl, false);
+            // m_dynamicPrecompiledInput.emplace(codec.encode(codeParameters,
+            //     bcos::bytesConstRef(message.input_data, message.input_size)));
 
             // 这段代码无法正常工作，待查明原因
             // This code is not working properly and the cause is to be identified
-            //  codec::abi::ContractABICodec codec2(m_hashImpl);
-            //  m_dynamicPrecompiledInput.emplace(codec2.abiIn(
-            //      "", codeParameters, bcos::bytesConstRef(message.input_data,
-            //      message.input_size)));
+             codec::abi::ContractABICodec codec2(m_hashImpl);
+             m_dynamicPrecompiledInput.emplace(codec2.abiIn(
+                 "", codeParameters, bcos::bytesConstRef(message.input_data,
+                 message.input_size)));
             //  assert(result1 == *m_dynamicPrecompiledInput);
 
             message.input_data = m_dynamicPrecompiledInput->data();
