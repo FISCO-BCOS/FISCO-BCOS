@@ -21,15 +21,10 @@
 #pragma once
 #include <json/json.h>
 #include <atomic>
-#include <list>
 #include <memory>
 #include <string>
 
-namespace bcos
-{
-namespace cppsdk
-{
-namespace jsonrpc
+namespace bcos::cppsdk::jsonrpc
 {
 class JsonRpcException : public std::exception
 {
@@ -37,7 +32,6 @@ public:
     JsonRpcException(int32_t _code, std::string const& _msg) : m_code(_code), m_msg(_msg) {}
     virtual const char* what() const noexcept override { return m_msg.c_str(); }
 
-public:
     int32_t code() const noexcept { return m_code; }
     std::string msg() const noexcept { return m_msg; }
 
@@ -117,6 +111,4 @@ private:
     std::atomic<int64_t> id{0};
 };
 
-}  // namespace jsonrpc
-}  // namespace cppsdk
-}  // namespace bcos
+}  // namespace bcos::cppsdk::jsonrpc
