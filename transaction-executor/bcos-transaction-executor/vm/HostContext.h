@@ -27,7 +27,6 @@
 #include "EVMHostInterface.h"
 #include "VMFactory.h"
 #include "bcos-codec/abi/ContractABICodec.h"
-#include "bcos-codec/wrapper/CodecWrapper.h"
 #include "bcos-executor/src/Common.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/ledger/Account.h"
