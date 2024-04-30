@@ -309,21 +309,22 @@ public:
     bytes serialise(const u256& _in);
 
     // two’s complement signed integer type int256.
-    bytes serialise(const s256& _in);
+    static bytes serialise(const s256& _in);
 
     // equivalent to uint8 restricted to the values 0 and 1. For computing the function selector,
     // bool is used
-    bytes serialise(const bool& _in);
+    static bytes serialise(const bool& _in);
 
     // equivalent to uint160, except for the assumed interpretation and language typing. For
     // computing the function selector, address is used.
     // bool is used.
-    bytes serialise(const Address& _in);
+    static bytes serialise(const Address& _in);
 
     // binary type of 32 bytes
-    bytes serialise(const string32& _in);
+    static bytes serialise(const string32& _in);
 
-    bytes serialise(const bytes& _in);
+    static bytes serialise(bytesConstRef input);
+    static bytes serialise(const bytes& _in);
 
     // dynamic sized unicode string assumed to be UTF-8 encoded.
     bytes serialise(const std::string& _in);

@@ -20,12 +20,9 @@
  */
 #pragma once
 
-#include "../protocol/ProtocolTypeDef.h"
-#include "boost/algorithm/string.hpp"
 #include <bcos-utilities/Error.h>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
-#include <any>
 #include <cstdlib>
 #include <gsl/span>
 #include <map>

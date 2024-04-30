@@ -21,16 +21,11 @@
 
 #pragma once
 
-#include "../EVMCResult.h"
-#include "HostContext.h"
 #include "bcos-concepts/ByteBuffer.h"
 #include "bcos-executor/src/Common.h"
 #include <evmc/evmc.h>
 #include <evmc/instructions.h>
 #include <boost/core/pointer_traits.hpp>
-#include <functional>
-#include <memory>
-#include <set>
 
 namespace bcos::transaction_executor
 {

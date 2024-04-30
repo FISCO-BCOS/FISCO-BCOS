@@ -19,13 +19,12 @@
  * @date 2021-04-21
  */
 #pragma once
-#include "bcos-utilities/Exceptions.h"
+#include "bcos-utilities/BoostLog.h"
 #include <fmt/compile.h>
 #include <fmt/format.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/throw_exception.hpp>
 #include <limits>
-#include <memory>
 #include <optional>
 #include <ostream>
 #include <string>
