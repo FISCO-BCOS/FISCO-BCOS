@@ -26,7 +26,7 @@
 #include "../precompiled/PrecompiledManager.h"
 #include "EVMHostInterface.h"
 #include "VMFactory.h"
-#include "bcos-concepts/ByteBuffer.h"
+#include "bcos-codec/abi/ContractABICodec.h"
 #include "bcos-executor/src/Common.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/ledger/Account.h"
@@ -79,8 +79,8 @@ struct Executable
 {
     explicit Executable(storage::Entry code)
       : m_code(std::make_optional(std::move(code))),
-        m_vmInstance(VMFactory::create(
-            VMKind::evmone, bytesConstRef((const uint8_t*)m_code->data(), m_code->size()), mode))
+        m_vmInstance(VMFactory::create(VMKind::evmone,
+            bytesConstRef(reinterpret_cast<const uint8_t*>(m_code->data()), m_code->size()), mode))
     {}
     explicit Executable(bytesConstRef code)
       : m_vmInstance(VMFactory::create(VMKind::evmone, code, mode))
@@ -268,7 +268,7 @@ public:
     /// Revert any changes made (by any of the other calls).
     void log(const evmc_address& address, h256s topics, bytesConstRef data)
     {
-        std::span<const uint8_t> view(address.bytes, address.bytes + sizeof(address.bytes));
+        std::span<const uint8_t> view(address.bytes);
         m_logs.emplace_back(
             toHex<decltype(view), bcos::bytes>(view), std::move(topics), data.toBytes());
     }
@@ -313,21 +313,12 @@ public:
             HOST_CONTEXT_LOG(DEBUG)
                 << "Checking auth..." << m_ledgerConfig.authCheckStatus() << " gas: " << ref.gas;
 
-            if (auto [result, param] = checkAuth(m_rollbackableStorage, m_blockHeader, ref,
-                    m_origin, buildLegacyExternalCaller(), m_precompiledManager, m_contextID, m_seq,
-                    m_ledgerConfig.authCheckStatus());
-                !result)
+            if (auto result = checkAuth(m_rollbackableStorage, m_blockHeader, ref, m_origin,
+                    buildLegacyExternalCaller(), m_precompiledManager, m_contextID, m_seq,
+                    m_hashImpl))
             {
                 HOST_CONTEXT_LOG(DEBUG) << "Auth check failed";
-                evmResult.emplace(
-                    evmc_result{.status_code = static_cast<evmc_status_code>(param->status),
-                        .gas_left = param->gas,
-                        .gas_refund = 0,
-                        .output_data = nullptr,
-                        .output_size = 0,
-                        .release = nullptr,
-                        .create_address = {},
-                        .padding = {}});
+                evmResult = std::move(result);
             };
         }
 
@@ -494,7 +485,7 @@ private:
 
             auto& message = std::get<evmc_message>(m_message);
             const auto* code = m_executable->m_code->data();
-            auto codec = CodecWrapper(executor::GlobalHashImpl::g_hashImpl, false);
+
             std::vector<std::string> codeParameters{};
             boost::split(codeParameters, code, boost::is_any_of(","));
             if (codeParameters.size() < 3)
@@ -507,8 +498,18 @@ private:
             // Consider Delegate Call
             message.recipient = unhexAddress(codeParameters[1]);
             codeParameters.erase(codeParameters.begin(), codeParameters.begin() + 2);
+
+            auto codec = CodecWrapper(executor::GlobalHashImpl::g_hashImpl, false);
             m_dynamicPrecompiledInput.emplace(codec.encode(codeParameters,
                 bcos::bytes(message.input_data, message.input_data + message.input_size)));
+
+            // 这段代码无法正常工作，待查明原因
+            // This code is not working properly and the cause is to be identified
+            //  codec::abi::ContractABICodec codec2(m_hashImpl);
+            //  m_dynamicPrecompiledInput.emplace(codec2.abiIn(
+            //      "", codeParameters, bcos::bytesConstRef(message.input_data,
+            //      message.input_size)));
+            //  assert(result1 == *m_dynamicPrecompiledInput);
 
             message.input_data = m_dynamicPrecompiledInput->data();
             message.input_size = m_dynamicPrecompiledInput->size();

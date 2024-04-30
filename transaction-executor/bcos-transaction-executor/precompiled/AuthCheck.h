@@ -2,6 +2,8 @@
 
 #include "ExecutiveWrapper.h"
 #include "bcos-executor/src/CallParameters.h"
+#include "bcos-transaction-executor/EVMCResult.h"
+#include "bcos-transaction-executor/precompiled/PrecompiledImpl.h"
 #include <evmc/evmc.h>
 #include <boost/throw_exception.hpp>
 #include <memory>
@@ -24,10 +26,9 @@ inline void createAuthTable(auto& storage, protocol::BlockHeader const& blockHea
     executive->creatAuthTable(tableName, originAddress, senderAddress, blockHeader.version());
 }
 
-inline std::tuple<bool, std::unique_ptr<executor::CallParameters>> checkAuth(auto& storage,
-    protocol::BlockHeader const& blockHeader, evmc_message const& message,
-    evmc_address const& origin, ExternalCaller auto&& externalCaller, auto& precompiledManager,
-    int64_t contextID, int64_t seq, bool authCheck)
+inline std::optional<EVMCResult> checkAuth(auto& storage, protocol::BlockHeader const& blockHeader,
+    evmc_message const& message, evmc_address const& origin, ExternalCaller auto&& externalCaller,
+    auto& precompiledManager, int64_t contextID, int64_t seq, crypto::Hash const& hashImpl)
 {
     auto contractAddress = address2HexString(message.code_address);
     auto executive = buildLegacyExecutive(storage, blockHeader, contractAddress,
@@ -41,11 +42,24 @@ inline std::tuple<bool, std::unique_ptr<executor::CallParameters>> checkAuth(aut
     params->origin = address2HexString(origin);
     params->data.assign(message.input_data, message.input_data + message.input_size);
     params->gas = message.gas;
-    params->staticCall = (message.kind == EVMC_CALL);
+    params->staticCall = (message.flags & EVMC_STATIC) != 0;
     params->create = (message.kind == EVMC_CREATE);
-
     auto result = executive->checkAuth(params);
-    return {result, std::move(params)};
+
+    if (!result)
+    {
+        auto [errorMessage, size] = buildErrorMessage(params->message, hashImpl);
+        return std::make_optional(
+            EVMCResult{evmc_result{.status_code = static_cast<evmc_status_code>(params->status),
+                .gas_left = params->gas,
+                .gas_refund = 0,
+                .output_data = errorMessage.release(),
+                .output_size = size,
+                .release = [](const struct evmc_result* result) { delete[] result->output_data; },
+                .create_address = {},
+                .padding = {}}});
+    }
+    return {};
 }
 
 }  // namespace bcos::transaction_executor

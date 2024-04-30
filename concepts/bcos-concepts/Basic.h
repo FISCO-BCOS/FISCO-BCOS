@@ -2,8 +2,6 @@
 #include "Exception.h"
 #include <bcos-utilities/Ranges.h>
 #include <boost/throw_exception.hpp>
-#include <algorithm>
-#include <stdexcept>
 #include <type_traits>
 
 namespace bcos::concepts
@@ -14,14 +12,14 @@ struct NoEnoughSpace : public bcos::error::Exception {};
 // clang-format on
 
 template <class ByteBufferType>
-concept ByteBuffer = RANGES::contiguous_range<ByteBufferType> &&
+concept ByteBuffer =
+    RANGES::contiguous_range<ByteBufferType> &&
     std::is_trivial_v<RANGES::range_value_t<std::remove_cvref_t<ByteBufferType>>> &&
     std::is_standard_layout_v<RANGES::range_value_t<std::remove_cvref_t<ByteBufferType>>> &&
     (sizeof(RANGES::range_value_t<std::remove_cvref_t<ByteBufferType>>) == 1);
 
 template <class Pointer>
-concept PointerLike = requires(Pointer pointer)
-{
+concept PointerLike = requires(Pointer pointer) {
     *pointer;
     pointer.operator->();
 };
@@ -40,8 +38,7 @@ auto& getRef(Input& input)
 }
 
 template <class Range>
-concept DynamicRange = requires(Range range, size_t newSize)
-{
+concept DynamicRange = requires(Range range, size_t newSize) {
     requires RANGES::range<Range>;
     range.resize(newSize);
     range.reserve(newSize);

@@ -1,6 +1,5 @@
 #include "../bcos-transaction-executor/precompiled/PrecompiledManager.h"
 #include "../bcos-transaction-executor/vm/HostContext.h"
-#include "../bcos-transaction-executor/vm/VMInstance.h"
 #include "TestBytecode.h"
 #include "TestMemoryStorage.h"
 #include "bcos-codec/bcos-codec/abi/ContractABICodec.h"
@@ -19,7 +18,6 @@
 #include "bcos-task/Wait.h"
 #include "bcos-tool/VersionConverter.h"
 #include "bcos-transaction-executor/RollbackableStorage.h"
-#include "bcos-transaction-executor/vm/VMFactory.h"
 #include "bcos-utilities/FixedBytes.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/storage2/MemoryStorage.h>

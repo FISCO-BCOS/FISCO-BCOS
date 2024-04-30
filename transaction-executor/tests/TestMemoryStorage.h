@@ -1,7 +1,7 @@
 #pragma once
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/Storage.h"
-#include "bcos-framework/transaction-executor/TransactionExecutor.h"
+#include "bcos-framework/transaction-executor/StateKey.h"
 
 namespace bcos::transaction_executor
 {
