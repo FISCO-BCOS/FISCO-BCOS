@@ -24,11 +24,8 @@
  */
 #pragma once
 #include "bcos-storage/RocksDBStorage.h"
-#include "bcos-storage/TiKVStorage.h"
-#include "boost/filesystem.hpp"
 #include "rocksdb/convenience.h"
 #include "rocksdb/filter_policy.h"
-#include "rocksdb/write_batch.h"
 #include <bcos-framework/security/DataEncryptInterface.h>
 #include <bcos-framework/storage/StorageInterface.h>
 

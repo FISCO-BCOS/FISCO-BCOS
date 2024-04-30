@@ -1,14 +1,12 @@
 #pragma once
 
+#include "GenesisConfig.h"
 #include "LedgerConfig.h"
 #include "LedgerTypeDef.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/protocol/Block.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
-#include "bcos-ledger/src/libledger/LedgerImpl.h"
 #include "bcos-task/Task.h"
-#include "bcos-task/Trait.h"
-#include "bcos-tool/ConsensusNode.h"
 #include <type_traits>
 
 namespace bcos::ledger

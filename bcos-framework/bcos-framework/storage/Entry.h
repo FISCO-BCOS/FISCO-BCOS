@@ -11,9 +11,7 @@
 #include <boost/iostreams/stream.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
-#include <compare>
 #include <cstdint>
-#include <exception>
 #include <initializer_list>
 #include <type_traits>
 #include <variant>

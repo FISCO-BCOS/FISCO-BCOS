@@ -165,7 +165,7 @@ inline constexpr struct
                             buildErrorMessage(e.what(), *executor::GlobalHashImpl::g_hashImpl);
                         return EVMCResult{evmc_result{
                             .status_code =
-                                (evmc_status_code)protocol::TransactionStatus::RevertInstruction,
+                                (evmc_status_code)protocol::TransactionStatus::PrecompiledError,
                             .gas_left = message.gas,
                             .gas_refund = 0,
                             .output_data = errorMessage.release(),
@@ -184,7 +184,7 @@ inline constexpr struct
                             << "Precompiled execute error: " << boost::diagnostic_information(e);
                         return EVMCResult{evmc_result{
                             .status_code =
-                                (evmc_status_code)protocol::TransactionStatus::RevertInstruction,
+                                (evmc_status_code)protocol::TransactionStatus::PrecompiledError,
                             .gas_left = message.gas,
                             .gas_refund = 0,
                             .output_data = nullptr,
