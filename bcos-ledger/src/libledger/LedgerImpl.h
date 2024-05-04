@@ -7,7 +7,6 @@
 #include <bcos-concepts/Exception.h>
 #include <bcos-concepts/Hash.h>
 #include <bcos-concepts/ledger/Ledger.h>
-#include <bcos-concepts/protocol/Block.h>
 #include <bcos-concepts/storage/Storage.h>
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-crypto/merkle/Merkle.h>
@@ -22,9 +21,6 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <atomic>
-#include <future>
-#include <stdexcept>
-#include <tuple>
 #include <type_traits>
 
 namespace bcos::ledger

@@ -3,7 +3,6 @@
 #include "bcos-concepts/Exception.h"
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
-#include <concepts>
 #include <exception>
 #include <memory>
 #include <type_traits>

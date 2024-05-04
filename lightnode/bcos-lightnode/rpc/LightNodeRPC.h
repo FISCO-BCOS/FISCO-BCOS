@@ -21,16 +21,13 @@
 #include <bcos-tars-protocol/tars/Transaction.h>
 #include <bcos-task/Wait.h>
 #include <json/value.h>
-#include <string.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
 #include <exception>
 #include <iterator>
 #include <memory>
-#include <ranges>
 #include <stdexcept>
-#include <type_traits>
 
 namespace bcos::rpc
 {
@@ -164,8 +161,7 @@ public:
                 boost::algorithm::hex_lower(
                     txHash.begin(), txHash.end(), std::back_inserter(txHashStr));
 
-                LIGHTNODE_LOG(INFO) << "RPC send transaction request: "
-                                    << "0x" << txHashStr;
+                LIGHTNODE_LOG(INFO) << "RPC send transaction request: " << "0x" << txHashStr;
 
                 bcostars::TransactionReceipt receipt;
                 co_await self->remoteTransactionPool().submitTransaction(
@@ -314,10 +310,11 @@ public:
                     {
                         // Check transaction merkle
                         crypto::merkle::Merkle<Hasher> merkle(self->m_hasher.clone());
-                        auto hashesRange = block.transactionsMetaData | RANGES::views::transform([
-                        ](const bcostars::TransactionMetaData& transactionMetaData) -> auto& {
-                            return transactionMetaData.hash;
-                        });
+                        auto hashesRange =
+                            block.transactionsMetaData |
+                            RANGES::views::transform(
+                                [](const bcostars::TransactionMetaData& transactionMetaData)
+                                    -> auto& { return transactionMetaData.hash; });
                         std::vector<bcos::bytes> merkles;
                         merkle.generateMerkle(hashesRange, merkles);
 

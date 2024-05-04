@@ -6,7 +6,6 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <json/value.h>
 #include <boost/algorithm/hex.hpp>
-#include <iterator>
 
 namespace bcos::rpc
 {
