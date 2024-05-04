@@ -149,6 +149,11 @@ struct ABIDynamicArray<std::vector<T>> : std::true_type
 {
 };
 
+template <>
+struct ABIDynamicArray<bytesConstRef> : std::true_type
+{
+};
+
 template <typename>
 struct is_tuple : std::false_type
 {

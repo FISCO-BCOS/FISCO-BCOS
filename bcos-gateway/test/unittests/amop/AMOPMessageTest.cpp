@@ -51,7 +51,7 @@ BOOST_AUTO_TEST_CASE(test_initAMOPMessage)
         std::string data = "Hello, FISCO-BCOS 3.0";
         auto message = messageFactory->buildMessage();
         message->setType(type);
-        message->setData(data);
+        message->setData(bytesConstRef(data));
         auto buffer = std::make_shared<bytes>();
         message->encode(*buffer.get());
 

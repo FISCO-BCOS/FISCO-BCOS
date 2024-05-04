@@ -38,7 +38,8 @@ BOOST_AUTO_TEST_CASE(testTxsSyncMsg)
     auto hashImpl = std::make_shared<Keccak256>();
     for (int i = 0; i < 10; i++)
     {
-        hashList.emplace_back(hashImpl->hash(std::to_string(i)));
+        auto value = std::to_string(i);
+        hashList.emplace_back(hashImpl->hash(bytesConstRef(value)));
     }
     std::string data = "adflwerjw39ewelrew";
     bytes txsData = bytes(data.begin(), data.end());

@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include "BoostLog.h"
 #include "DataConvertUtility.h"
 #include "Exceptions.h"
 #include <boost/algorithm/hex.hpp>
@@ -28,7 +29,6 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
-#include <iterator>
 #include <random>
 #include <stdexcept>
 

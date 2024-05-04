@@ -48,12 +48,10 @@ public:
             codec::abi::ContractABICodec abi(*m_hash);
             return abi.abiIn("", _args...);
         }
-        else
-        {
-            codec::scale::ScaleEncoderStream s;
-            (s << ... << std::forward<Args>(_args));
-            return s.data();
-        }
+
+        codec::scale::ScaleEncoderStream s;
+        (s << ... << std::forward<Args>(_args));
+        return s.data();
     }
     template <typename... Args>
     bytes encodeWithSig(const std::string& _sig, Args&&... _args) const
