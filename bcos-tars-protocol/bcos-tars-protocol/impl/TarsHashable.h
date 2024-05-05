@@ -1,13 +1,12 @@
 #pragma once
-#include "../Common.h"
 #include "bcos-concepts/ByteBuffer.h"
 #include "bcos-concepts/Hash.h"
 #include "bcos-crypto/hasher/Hasher.h"
+#include "bcos-framework/protocol/Protocol.h"
 #include "bcos-tars-protocol/tars/Block.h"
 #include "bcos-tars-protocol/tars/Transaction.h"
 #include "bcos-tars-protocol/tars/TransactionReceipt.h"
 #include <boost/endian/conversion.hpp>
-#include <string>
 #include <vector>
 
 namespace bcostars

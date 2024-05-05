@@ -23,6 +23,7 @@
 #include "../protocol/BlockImpl.h"
 #include "../protocol/TransactionImpl.h"
 #include "../protocol/TransactionReceiptImpl.h"
+#include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 
 using namespace bcostars;
 

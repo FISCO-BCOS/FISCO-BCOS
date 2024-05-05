@@ -20,8 +20,6 @@
  */
 
 #pragma once
-#pragma GCC diagnostic ignored "-Wunused-variable"
-#pragma GCC diagnostic ignored "-Wunused-parameter"
 #include "../ErrorConverter.h"
 #include <bcos-framework/consensus/ConsensusInterface.h>
 #include <bcos-framework/sealer/SealerInterface.h>

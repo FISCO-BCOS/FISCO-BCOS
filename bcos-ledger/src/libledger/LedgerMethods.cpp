@@ -1,9 +1,8 @@
 #include "LedgerMethods.h"
-#include "bcos-ledger/src/libledger/Ledger.h"
 #include "bcos-tool/VersionConverter.h"
+#include "utilities/Common.h"
 #include <boost/exception/diagnostic_information.hpp>
 #include <exception>
-#include <type_traits>
 
 bcos::task::Task<void> bcos::ledger::prewriteBlockToStorage(LedgerInterface& ledger,
     bcos::protocol::ConstTransactionsPtr transactions, bcos::protocol::Block::ConstPtr block,

@@ -1,7 +1,6 @@
 #pragma once
 #include <tup/Tars.h>
 #include <concepts>
-#include <string>
 
 namespace bcostars::protocol::impl
 {

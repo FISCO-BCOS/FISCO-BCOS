@@ -25,16 +25,13 @@
 
 #pragma once
 
-#include "CallParameters.h"
-#include "bcos-framework/executor/ExecutionMessage.h"
-#include "bcos-framework/protocol/BlockHeader.h"
+#include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include <bcos-framework/protocol/LogEntry.h>
 #include <bcos-utilities/Exceptions.h>
 #include <evmc/instructions.h>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <algorithm>
-#include <functional>
 #include <iterator>
 #include <memory>
 #include <set>
