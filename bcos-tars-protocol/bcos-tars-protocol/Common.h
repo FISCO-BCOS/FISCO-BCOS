@@ -28,7 +28,6 @@
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-framework/protocol/LogEntry.h>
 #if !ONLY_CPP_SDK
-#include "bcos-framework/executor/ParallelTransactionExecutorInterface.h"
 #include "bcos-tars-protocol/tars/GroupInfo.h"
 #include "bcos-tars-protocol/tars/LedgerConfig.h"
 #include "bcos-tars-protocol/tars/TwoPCParams.h"

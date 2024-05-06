@@ -22,6 +22,7 @@
 
 #pragma once
 #include "BlockExecutive.h"
+#include "ExecutorManager.h"
 
 #define SERIAL_EXECUTE_LOG(LEVEL) SCHEDULER_LOG(LEVEL) << LOG_BADGE("serialExecute")
 
@@ -67,7 +68,7 @@ private:
     void onExecuteFinish(
         std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback) override;
 
-    void serialPrepareExecutor() override{
+    void serialPrepareExecutor() override {
         // do nothing
     };
 

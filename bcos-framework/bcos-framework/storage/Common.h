@@ -33,9 +33,7 @@
 
 #define STORAGE_LOG(LEVEL) BCOS_LOG(LEVEL) << "[STORAGE]"
 
-namespace bcos
-{
-namespace storage
+namespace bcos::storage
 {
 enum StorageError
 {
@@ -460,5 +458,4 @@ inline std::string toDBKey(const std::string_view& tableName, const std::string_
     return dbKey;
 }
 
-}  // namespace storage
-}  // namespace bcos
+}  // namespace bcos::storage

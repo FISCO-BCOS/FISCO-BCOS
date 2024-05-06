@@ -20,8 +20,12 @@
  */
 
 #include "BlockImpl.h"
+#include "../impl/TarsHashable.h"
 #include "../impl/TarsSerializable.h"
-#include <bcos-concepts/Serialize.h>
+#include "bcos-concepts/Serialize.h"
+#include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
+#include "bcos-tars-protocol/protocol/TransactionImpl.h"
+#include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
 
 using namespace bcostars;
 using namespace bcostars::protocol;

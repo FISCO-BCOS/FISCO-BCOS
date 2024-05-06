@@ -1,9 +1,7 @@
-#include "bcos-rpc/jsonrpc/Common.h"
 #include "bcos-task/Generator.h"
 #include "bcos-task/TBBWait.h"
 #include "bcos-task/Task.h"
 #include "bcos-task/Wait.h"
-#include "bcos-utilities/Overloaded.h"
 #include <oneapi/tbb/blocked_range.h>
 #include <oneapi/tbb/concurrent_vector.h>
 #include <oneapi/tbb/parallel_for.h>
@@ -17,7 +15,6 @@
 #include <chrono>
 #include <future>
 #include <iostream>
-#include <memory>
 #include <stdexcept>
 #include <thread>
 

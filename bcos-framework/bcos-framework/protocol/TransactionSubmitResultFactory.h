@@ -18,9 +18,6 @@
  * @date: 2021-05-08
  */
 #pragma once
-#include "BlockHeader.h"
-#include "Transaction.h"
-#include "TransactionReceipt.h"
 #include "TransactionSubmitResult.h"
 
 namespace bcos::protocol

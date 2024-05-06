@@ -20,9 +20,8 @@
  */
 #pragma once
 #include <memory>
-namespace bcos
-{
-namespace protocol
+
+namespace bcos::protocol
 {
 class MemberInterface
 {
@@ -64,5 +63,4 @@ public:
     virtual MemberInterface::Ptr createMember() = 0;
     virtual MemberInterface::Ptr createMember(std::string const& _memberData) = 0;
 };
-}  // namespace protocol
-}  // namespace bcos
+}  // namespace bcos::protocol
