@@ -21,6 +21,7 @@
 
 #include "PBFTServiceServer.h"
 #include "../Common/TarsUtils.h"
+#include "bcos-tars-protocol/Common.h"
 
 using namespace bcostars;
 using namespace bcos::consensus;
