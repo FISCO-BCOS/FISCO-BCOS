@@ -48,7 +48,7 @@ class BaseStorage : public virtual storage::StateStorageInterface,
 public:
     using Ptr = std::shared_ptr<BaseStorage<enableLRU>>;
 
-    explicit BaseStorage(std::shared_ptr<StorageInterface> prev, bool setRowWithDirtyFlag)
+    BaseStorage(std::shared_ptr<StorageInterface> prev, bool setRowWithDirtyFlag)
       : storage::StateStorageInterface(prev),
         m_buckets(std::thread::hardware_concurrency()),
         m_setRowWithDirtyFlag(setRowWithDirtyFlag)

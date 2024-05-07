@@ -44,8 +44,8 @@ struct SystemConfigPrecompiledFixture : public bcos::test::PrecompiledFixture
     std::shared_ptr<LedgerCache> ledgerCache =
         std::make_shared<LedgerCache>(std::make_shared<bcos::test::MockLedger>());
     std::shared_ptr<wasm::GasInjector> gasInjector;
-    std::shared_ptr<StateStorage> backendStorage = std::make_shared<StateStorage>(nullptr);
-    std::shared_ptr<StateStorage> stateStorage = std::make_shared<StateStorage>(backendStorage);
+    std::shared_ptr<StateStorage> backendStorage = std::make_shared<StateStorage>(nullptr, false);
+    std::shared_ptr<StateStorage> stateStorage = std::make_shared<StateStorage>(backendStorage, false);
     std::shared_ptr<BlockContext> blockContext =
         std::make_shared<BlockContext>(stateStorage, ledgerCache, hashImpl, 0, h256(), utcTime(),
             static_cast<uint32_t>(protocol::BlockVersion::V3_1_VERSION), FiscoBcosSchedule, false,

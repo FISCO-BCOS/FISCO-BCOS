@@ -70,7 +70,8 @@ public:
         STORAGE_LOG(TRACE) << LOG_KV("compatibilityVersion", compatibilityVersion)
                            << LOG_KV("protocol::BlockVersion::V3_1_VERSION",
                                   (uint32_t)protocol::BlockVersion::V3_1_VERSION)
-                           << LOG_KV("keyPageSize", m_keyPageSize);
+                           << LOG_KV("keyPageSize", m_keyPageSize)
+                           << LOG_KV("setRowWithDirtyFlag", setRowWithDirtyFlag);
 
         if (m_keyPageSize > 0)
         {

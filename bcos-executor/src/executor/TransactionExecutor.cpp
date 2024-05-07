@@ -455,17 +455,17 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
             bcos::storage::StateStorageInterface::Ptr stateStorage;
             if (m_stateStorages.empty())
             {
+                auto withDirtyFlag =
+                    m_blockContext ? m_blockContext->features().get(
+                                         ledger::Features::Flag::bugfix_set_row_with_dirty_flag) :
+                                     false;
                 if (m_cachedStorage)
                 {
-                    stateStorage = createStateStorage(m_cachedStorage, false,
-                        m_blockContext->features().get(
-                            ledger::Features::Flag::bugfix_set_row_with_dirty_flag));
+                    stateStorage = createStateStorage(m_cachedStorage, false, withDirtyFlag);
                 }
                 else
                 {
-                    stateStorage = createStateStorage(m_backendStorage, false,
-                        m_blockContext->features().get(
-                            ledger::Features::Flag::bugfix_set_row_with_dirty_flag));
+                    stateStorage = createStateStorage(m_backendStorage, false, withDirtyFlag);
                 }
 
                 // check storage block Number
