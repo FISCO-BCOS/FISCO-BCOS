@@ -171,7 +171,8 @@ BlockContext::Ptr ShardingTransactionExecutor::createTmpBlockContext(
     }
     else
     {
-        stateStorage = createStateStorage(m_backendStorage, true,m_blockContext->features().get(ledger::Features::Flag::bugfix_set_row_with_dirty_flag));
+        stateStorage = createStateStorage(m_backendStorage, true,
+            m_blockContext->features().get(ledger::Features::Flag::bugfix_set_row_with_dirty_flag));
     }
 
     return createBlockContext(currentHeader, stateStorage);
