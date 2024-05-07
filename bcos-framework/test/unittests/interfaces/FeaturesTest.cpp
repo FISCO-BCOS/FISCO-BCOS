@@ -143,6 +143,7 @@ BOOST_AUTO_TEST_CASE(feature)
         "bugfix_eip55_addr",
         "bugfix_eoa_as_contract",
         "bugfix_evm_exception_gas_used",
+        "bugfix_dmc_deploy_gas_used",
         "feature_dmc2serial",
         "feature_sharding",
         "feature_rpbft",
@@ -365,7 +366,7 @@ BOOST_AUTO_TEST_CASE(genesis)
         "bugfix_keypage_system_entry_hash", "bugfix_internal_create_redundant_storage",
         "bugfix_empty_abi_reset", "bugfix_eip55_addr", "bugfix_sharding_call_in_child_executive",
         "bugfix_internal_create_permission_denied", "bugfix_eoa_as_contract",
-        "bugfix_evm_exception_gas_used"});
+        "bugfix_dmc_deploy_gas_used", "bugfix_evm_exception_gas_used"});
 
     BOOST_CHECK_EQUAL(validFlags(features38).size(), expect38.size());
     for (auto feature : expect38)
