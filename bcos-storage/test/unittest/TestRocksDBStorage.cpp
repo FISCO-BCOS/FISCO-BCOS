@@ -594,7 +594,7 @@ BOOST_AUTO_TEST_CASE(writeReadDelete_1Table)
 
 BOOST_AUTO_TEST_CASE(commitAndCheck)
 {
-    auto initState = std::make_shared<StateStorage>(nullptr, false);
+    auto initState = std::make_shared<StateStorage>(rocksDBStorage, false);
 
     initState->asyncCreateTable(
         "test_table1", "value", [](Error::UniquePtr error, std::optional<Table> table) {
@@ -636,7 +636,7 @@ BOOST_AUTO_TEST_CASE(commitAndCheck)
 
     for (size_t i = 100; i < 1000; i += 100)
     {
-        auto state = std::make_shared<StateStorage>(nullptr, false);
+        auto state = std::make_shared<StateStorage>(rocksDBStorage, false);
 
         STORAGE_LOG(INFO) << "Expected: " << i;
         for (size_t keyIndex = 0; keyIndex < 100; ++keyIndex)
