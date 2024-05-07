@@ -143,6 +143,7 @@ BOOST_AUTO_TEST_CASE(feature)
         "bugfix_eip55_addr",
         "bugfix_eoa_as_contract",
         "bugfix_evm_exception_gas_used",
+        "bugfix_dmc_deploy_gas_used",
         "feature_dmc2serial",
         "feature_sharding",
         "feature_rpbft",

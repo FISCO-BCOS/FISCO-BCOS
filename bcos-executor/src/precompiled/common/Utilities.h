@@ -87,6 +87,11 @@ inline std::string getDynamicPrecompiledCodeString(
     return boost::join(std::vector<std::string>({PRECOMPILED_CODE_FIELD, _address, _params}), ",");
 }
 
+inline bool isDynamicPrecompiledAccountCode(const std::string_view& _code)
+{
+    return std::string_view(getDynamicPrecompiledCodeString(ACCOUNT_ADDRESS, "")) == _code;
+}
+
 inline std::string trimHexPrefix(const std::string& _hex)
 {
     if (_hex.size() >= 2 && _hex[1] == 'x' && _hex[0] == '0')

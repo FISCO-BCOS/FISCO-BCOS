@@ -258,7 +258,7 @@ void SchedulerImpl::executeBlockInternal(bcos::protocol::Block::Ptr block, bool 
         SCHEDULER_LOG(DEBUG) << METRIC << BLOCK_NUMBER(requestBlockNumber)
                              << "ExecuteBlock response"
 
-                             << LOG_KV(error ? "error" : "ok", error ? error->what() : "ok");
+                             << LOG_KV(error ? "failed" : "ok", error ? error->what() : "ok");
 
         _callback(error == nullptr ? nullptr : std::move(error), std::move(blockHeader), _sysBlock);
     };
@@ -477,7 +477,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                         bcos::Error::Ptr&& error, bcos::ledger::LedgerConfig::Ptr&& config) {
         __itt_frame_end_v3(ITT_DOMAIN_SCHEDULER_COMMIT, nullptr);
         SCHEDULER_LOG(DEBUG) << METRIC << BLOCK_NUMBER(requestBlockNumber) << "CommitBlock response"
-                             << LOG_KV(error ? "error" : "ok", error ? error->what() : "ok");
+                             << LOG_KV(error ? "failed" : "ok", error ? error->what() : "ok");
         _callback(error == nullptr ? nullptr : std::move(error), std::move(config));
     };
 
