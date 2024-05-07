@@ -29,8 +29,6 @@
 #include <bcos-framework/consensus/ConsensusNodeInterface.h>
 #include <bcos-framework/protocol/Block.h>
 #include <tbb/concurrent_unordered_map.h>
-#include <map>
-
 
 namespace bcos::storage
 {
@@ -66,7 +64,7 @@ public:
 
     virtual storage::StateStorageInterface::Ptr createStateStorage(
         bcos::storage::StorageInterface::Ptr storage, uint32_t compatibilityVersion,
-        bool ignoreNotExist = false,
+        bool setRowWithDirtyFlag, bool ignoreNotExist = false,
         std::shared_ptr<std::set<std::string, std::less<>>> const& keyPageIgnoreTables = nullptr)
     {
         STORAGE_LOG(TRACE) << LOG_KV("compatibilityVersion", compatibilityVersion)
@@ -100,7 +98,7 @@ public:
         }
 
         // Pass useHashV310 flag to hash() insted of compatibilityVersion
-        return std::make_shared<bcos::storage::StateStorage>(storage);
+        return std::make_shared<bcos::storage::StateStorage>(storage, setRowWithDirtyFlag);
     }
 
 private:
