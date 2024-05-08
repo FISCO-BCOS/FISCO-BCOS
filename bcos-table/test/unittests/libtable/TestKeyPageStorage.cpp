@@ -622,9 +622,9 @@ BOOST_AUTO_TEST_CASE(hash_V3_1_0)
     auto hashImpl2 = make_shared<Header256Hash>();
     auto memoryStorage2 = make_shared<StateStorage>(nullptr, false);
     auto tableFactory2 = make_shared<KeyPageStorage>(
-        memoryStorage2, 10240, (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
+        memoryStorage2, false, 10240, (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
     auto tableFactory1 = make_shared<KeyPageStorage>(
-        memoryStorage2, 10240, (uint32_t)bcos::protocol::BlockVersion::V3_0_VERSION);
+        memoryStorage2, false, 10240, (uint32_t)bcos::protocol::BlockVersion::V3_0_VERSION);
 
     for (int i = 10; i < 20; ++i)
     {
