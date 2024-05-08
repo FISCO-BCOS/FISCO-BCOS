@@ -119,7 +119,7 @@ int main(int argc, const char* argv[])
     }
     else
     {
-        storage = std::make_shared<StateStorage>(rocksDBStorage);
+        storage = std::make_shared<StateStorage>(nullptr, false);
     }
     std::vector<StateStorageInterface::Ptr> storages;
     // create Table
@@ -150,7 +150,7 @@ int main(int argc, const char* argv[])
         }
         else
         {
-            storage = std::make_shared<StateStorage>(storage);
+            storage = std::make_shared<StateStorage>(nullptr, false);
         }
         table = storage->openTable(testTableName).value();
     }
@@ -210,7 +210,7 @@ int main(int argc, const char* argv[])
     }
     else
     {
-        storage = std::make_shared<StateStorage>(rocksDBStorage);
+        storage = std::make_shared<StateStorage>(nullptr, false);
     }
     auto prepareCleanStorageEnd = std::chrono::system_clock::now();
 
@@ -281,7 +281,7 @@ int main(int argc, const char* argv[])
     }
     else
     {
-        storage = std::make_shared<StateStorage>(rocksDBStorage);
+        storage = std::make_shared<StateStorage>(nullptr, false);
     }
     table = storage->createTable(testTableName, "value");
     if (!table)
@@ -318,7 +318,7 @@ int main(int argc, const char* argv[])
         }
         else
         {
-            storage = std::make_shared<StateStorage>(storage);
+            storage = std::make_shared<StateStorage>(nullptr, false);
         }
         table = storage->openTable(testTableName).value();
     }

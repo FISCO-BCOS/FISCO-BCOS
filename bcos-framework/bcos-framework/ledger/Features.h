@@ -44,6 +44,7 @@ public:
         bugfix_eoa_as_contract,
         bugfix_evm_exception_gas_used,
         bugfix_dmc_deploy_gas_used,
+        bugfix_set_row_with_dirty_flag,
         feature_dmc2serial,
         feature_sharding,
         feature_rpbft,
@@ -158,7 +159,8 @@ public:
                         Flag::bugfix_internal_create_permission_denied}},
                 {protocol::BlockVersion::V3_7_3_VERSION,
                     {Flag::bugfix_eoa_as_contract, Flag::bugfix_dmc_deploy_gas_used}},
-                {protocol::BlockVersion::V3_8_0_VERSION, {Flag::bugfix_evm_exception_gas_used}}});
+                {protocol::BlockVersion::V3_8_0_VERSION,
+                    {Flag::bugfix_evm_exception_gas_used, Flag::bugfix_set_row_with_dirty_flag}}});
         for (const auto& upgradeFeatures : upgradeRoadmap)
         {
             if (((to < protocol::BlockVersion::V3_2_7_VERSION) && (to >= upgradeFeatures.to)) ||

@@ -65,8 +65,8 @@ struct TableFixture
     TableFixture()
     {
         hashImpl = make_shared<Header256Hash>();
-        memoryStorage = make_shared<StateStorage>(nullptr);
-        tableFactory = make_shared<StateStorage>(memoryStorage);
+        memoryStorage = make_shared<StateStorage>(nullptr, false);
+        tableFactory = make_shared<StateStorage>(memoryStorage, false);
     }
 
     ~TableFixture() {}
@@ -81,7 +81,7 @@ BOOST_AUTO_TEST_CASE(constructor)
 {
     auto threadPool = ThreadPool("a", 1);
     auto table = std::make_shared<Table>(nullptr, nullptr);
-    auto tableFactory = std::make_shared<StateStorage>(memoryStorage);
+    auto tableFactory = std::make_shared<StateStorage>(nullptr, false);
 }
 
 BOOST_AUTO_TEST_CASE(tableInfo)
@@ -226,7 +226,7 @@ BOOST_AUTO_TEST_CASE(removeFromCache)
 
     auto hashs = tableFactory->hash(hashImpl, ledger::Features());
 
-    auto tableFactory2 = std::make_shared<StateStorage>(nullptr);
+    auto tableFactory2 = std::make_shared<StateStorage>(nullptr, false);
     BOOST_CHECK(tableFactory2->createTable(tableName, valueField));
     auto table2 = tableFactory2->openTable(tableName);
     BOOST_TEST(table2);
