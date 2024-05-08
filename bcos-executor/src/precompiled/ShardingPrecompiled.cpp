@@ -209,7 +209,7 @@ void ShardingPrecompiled::makeShard(
         {
             int32_t code;
             codec.decode(ref(_callParameters->execResult()), code);
-            message = "code: " + std::to_string(code);
+            message = "errorCode: " + std::to_string(code);
         }
 
         PRECOMPILED_LOG(WARNING) << LOG_BADGE("ShardPrecompiled") << LOG_DESC("BFS makeDir error: ")
