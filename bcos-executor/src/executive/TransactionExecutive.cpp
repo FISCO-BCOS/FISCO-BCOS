@@ -557,8 +557,7 @@ CallParameters::UniquePtr TransactionExecutive::callPrecompiled(
     // NotEnoughCashError
     catch (protocol::NotEnoughCashError const& e)
     {
-        EXECUTIVE_LOG(INFO) << "Revert transaction: "
-                            << "NotEnoughCashError"
+        EXECUTIVE_LOG(INFO) << "Revert transaction: " << "NotEnoughCashError"
                             << LOG_KV("address", precompiledCallParams->m_precompiledAddress)
                             << LOG_KV("message", e.what());
         writeErrInfoToOutput(e.what(), *callParameters);
@@ -570,8 +569,7 @@ CallParameters::UniquePtr TransactionExecutive::callPrecompiled(
     }
     catch (protocol::PrecompiledError const& e)
     {
-        EXECUTIVE_LOG(INFO) << "Revert transaction: "
-                            << "PrecompiledFailed"
+        EXECUTIVE_LOG(INFO) << "Revert transaction: " << "PrecompiledFailed"
                             << LOG_KV("address", precompiledCallParams->m_precompiledAddress)
                             << LOG_KV("message", e.what());
         // Note: considering the scenario where the contract calls the contract, the error message

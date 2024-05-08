@@ -70,19 +70,15 @@ private:
             auto evmcResult = waitOperator(hostContext.execute());
             co_yield receipt;  // 完成第二步 Complete the second step
 
-            bcos::bytesConstRef output;
             std::string newContractAddress;
-            if (evmcMessage.kind == EVMC_CREATE)
+            if (evmcMessage.kind == EVMC_CREATE && evmcResult.status_code == EVMC_SUCCESS)
             {
                 newContractAddress.reserve(sizeof(evmcResult.create_address) * 2);
                 boost::algorithm::hex_lower(evmcResult.create_address.bytes,
                     evmcResult.create_address.bytes + sizeof(evmcResult.create_address.bytes),
                     std::back_inserter(newContractAddress));
             }
-            else
-            {
-                output = {evmcResult.output_data, evmcResult.output_size};
-            }
+            auto output = bcos::bytesConstRef{evmcResult.output_data, evmcResult.output_size};
 
             if (evmcResult.status_code != 0)
             {
