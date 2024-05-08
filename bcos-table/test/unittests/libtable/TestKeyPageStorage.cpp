@@ -686,9 +686,9 @@ BOOST_AUTO_TEST_CASE(hash_different_table_same_data)
     auto memoryStorage2 = make_shared<StateStorage>(nullptr, false);
 
     auto tableFactory1 = make_shared<KeyPageStorage>(
-        memoryStorage2, 10240, (uint32_t)bcos::protocol::BlockVersion::V3_0_VERSION);
+        memoryStorage2, false, 10240, (uint32_t)bcos::protocol::BlockVersion::V3_0_VERSION);
     auto tableFactory2 = make_shared<KeyPageStorage>(
-        memoryStorage2, 10240, (uint32_t)bcos::protocol::BlockVersion::V3_0_VERSION);
+        memoryStorage2, false, 10240, (uint32_t)bcos::protocol::BlockVersion::V3_0_VERSION);
     BOOST_REQUIRE(tableFactory1 != nullptr);
     BOOST_REQUIRE(tableFactory2 != nullptr);
 
@@ -731,9 +731,9 @@ BOOST_AUTO_TEST_CASE(hash_different_table_same_data)
     BOOST_REQUIRE_EQUAL(dbHash1.hex(), dbHash2.hex());
 
     auto tableFactory3 = make_shared<KeyPageStorage>(
-        memoryStorage2, 10240, (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
+        memoryStorage2, false, 10240, (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
     auto tableFactory4 = make_shared<KeyPageStorage>(
-        memoryStorage2, 10240, (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
+        memoryStorage2, false, 10240, (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
 
     setData1(tableFactory3);
     setData2(tableFactory4);
@@ -3078,7 +3078,7 @@ BOOST_AUTO_TEST_CASE(bugfix_keypage_system_entry_hash)
         return storage->hash(hashImpl, f);
     };
     auto keypage = std::make_shared<KeyPageStorage>(
-        prev0, pageSize, (uint32_t)protocol::BlockVersion::V3_6_1_VERSION);
+        prev0, false, pageSize, (uint32_t)protocol::BlockVersion::V3_6_1_VERSION);
     auto state = std::make_shared<StateStorage>(prev0, false);
     auto hash0 = getHashLambda(keypage, features);
     auto hash1 = getHashLambda(state, features);
