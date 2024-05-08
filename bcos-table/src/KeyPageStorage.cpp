@@ -188,6 +188,12 @@ void KeyPageStorage::asyncSetRow(std::string_view tableView, std::string_view ke
             BCOS_ERROR_UNIQUE_PTR(StorageError::ReadOnly, "Try to operate a read-only storage"));
         return;
     }
+
+    if (m_setRowWithDirtyFlag && entry.status() == Entry::NORMAL)
+    {
+        entry.setStatus(Entry::MODIFIED);
+    }
+
     m_writeLength += keyView.size();
     m_writeLength += entry.size();
     // if sys table, write cache and write to prev, return
@@ -557,8 +563,8 @@ void KeyPageStorage::rollback(const Recoder& recoder)
 }
 
 // if data not exist, create an empty one
-auto KeyPageStorage::getData(std::string_view tableView, std::string_view key, bool mustExist)
-    -> std::tuple<Error::UniquePtr, std::optional<KeyPageStorage::Data*>>
+auto KeyPageStorage::getData(std::string_view tableView, std::string_view key,
+    bool mustExist) -> std::tuple<Error::UniquePtr, std::optional<KeyPageStorage::Data*>>
 {
     // find from cache
     auto [bucket, lock] = getBucket(tableView, key);
@@ -679,8 +685,8 @@ auto KeyPageStorage::getData(std::string_view tableView, std::string_view key, b
     }
 }
 
-auto KeyPageStorage::getEntryFromPage(std::string_view table, std::string_view key)
-    -> std::pair<Error::UniquePtr, std::optional<Entry>>
+auto KeyPageStorage::getEntryFromPage(std::string_view table,
+    std::string_view key) -> std::pair<Error::UniquePtr, std::optional<Entry>>
 {
     // key is empty means the data is TableMeta
     auto [error, data] = getData(table, TABLE_META_KEY);
@@ -795,8 +801,8 @@ auto KeyPageStorage::getEntryFromPage(std::string_view table, std::string_view k
     return std::make_pair(nullptr, std::nullopt);
 }
 
-auto KeyPageStorage::setEntryToPage(std::string table, std::string key, Entry entry)
-    -> Error::UniquePtr
+auto KeyPageStorage::setEntryToPage(
+    std::string table, std::string key, Entry entry) -> Error::UniquePtr
 {
     auto [error, data] = getData(table, TABLE_META_KEY);
     if (error)
@@ -998,8 +1004,8 @@ auto KeyPageStorage::setEntryToPage(std::string table, std::string key, Entry en
     return nullptr;
 }
 
-auto KeyPageStorage::getRawEntryFromStorage(std::string_view table, std::string_view key)
-    -> std::pair<Error::UniquePtr, std::optional<Entry>>
+auto KeyPageStorage::getRawEntryFromStorage(std::string_view table,
+    std::string_view key) -> std::pair<Error::UniquePtr, std::optional<Entry>>
 {
     auto prev = getPrev();  // prev must not null
     if (!prev)
@@ -1016,8 +1022,8 @@ auto KeyPageStorage::getRawEntryFromStorage(std::string_view table, std::string_
     });
     return getPromise.get_future().get();
 }
-auto KeyPageStorage::getSysTableRawEntry(std::string_view table, std::string_view key)
-    -> std::pair<Error::UniquePtr, std::optional<Entry>>
+auto KeyPageStorage::getSysTableRawEntry(std::string_view table,
+    std::string_view key) -> std::pair<Error::UniquePtr, std::optional<Entry>>
 {
     auto [bucket, lock] = getBucket(table, key);
     boost::ignore_unused(lock);
@@ -1039,8 +1045,8 @@ auto KeyPageStorage::getSysTableRawEntry(std::string_view table, std::string_vie
     return std::make_pair(std::move(error), entryOption);
 }
 
-auto KeyPageStorage::importExistingEntry(std::string_view table, std::string_view key, Entry entry)
-    -> Entry
+auto KeyPageStorage::importExistingEntry(
+    std::string_view table, std::string_view key, Entry entry) -> Entry
 {
     if (m_readOnly)
     {
