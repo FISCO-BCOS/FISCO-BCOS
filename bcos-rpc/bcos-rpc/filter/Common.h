@@ -25,5 +25,11 @@ enum SubscriptionType
     LastIndexSubscription
 };
 
+// Trigger a filter cleanup operation every 3s
+static constexpr const uint64_t CLEANUP_FILTER_TIME = 3000;
+static constexpr const uint64_t MAX_TRAVERSE_FILTERS_COUNT = 10000;
+// the filter expiration time, default is 5 minutes
+static constexpr const uint64_t FILTER_DEFAULT_EXPIRATION_TIME = uint64_t(60 * 5 * 1000);
+
 }  // namespace rpc
 }  // namespace bcos

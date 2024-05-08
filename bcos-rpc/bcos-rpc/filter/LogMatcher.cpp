@@ -12,15 +12,15 @@ uint32_t LogMatcher::matches(
     for (std::size_t index = 0; index < _block->transactionsMetaDataSize(); index++)
     {
         count += matches(_params, _block->blockHeaderConst()->hash(), _block->receipt(index),
-            _block->transactionMetaData(index), index, _result);
+            _block->transactionHash(index), index, _result);
     }
 
     return count;
 }
 
 uint32_t LogMatcher::matches(FilterRequest::ConstPtr _params, bcos::crypto::HashType&& _blockHash,
-    bcos::protocol::TransactionReceipt::ConstPtr&& _receipt,
-    bcos::protocol::TransactionMetaData::ConstPtr&& _tx, std::size_t _txIndex, Json::Value& _result)
+    bcos::protocol::TransactionReceipt::ConstPtr&& _receipt, bcos::crypto::HashType&& _txHash,
+    std::size_t _txIndex, Json::Value& _result)
 {
     uint32_t count = 0;
     auto blockNumber = _receipt->blockNumber();
@@ -38,7 +38,7 @@ uint32_t LogMatcher::matches(FilterRequest::ConstPtr _params, bcos::crypto::Hash
             log["blockNumber"] = toQuantity(blockNumber);
             log["blockHash"] = _blockHash.hexPrefixed();
             log["transactionIndex"] = toQuantity(_txIndex);
-            log["transactionHash"] = _tx->hash().hexPrefixed();
+            log["transactionHash"] = _txHash.hexPrefixed();
             log["removed"] = false;
             log["address"] = "0x" + std::string(logEntry.address());
             Json::Value jTopics(Json::arrayValue);
@@ -63,7 +63,7 @@ bool LogMatcher::matches(FilterRequest::ConstPtr _params, const bcos::protocol::
                       << LOG_KV("logEntry topics", _logEntry.topics().size());
 
     // An empty address array matches all values otherwise log.address must be in addresses
-    if (!addresses.empty() && !addresses.count(std::string(_logEntry.address())))
+    if (!addresses.empty() && !addresses.count("0x" + std::string(_logEntry.address())))
     {
         return false;
     }
@@ -80,7 +80,7 @@ bool LogMatcher::matches(FilterRequest::ConstPtr _params, const bcos::protocol::
         {
             continue;
         }
-        if (!sub.contains(logTopics[i].hex()))
+        if (!sub.contains(logTopics[i].hexPrefixed()))
         {
             return false;
         }
