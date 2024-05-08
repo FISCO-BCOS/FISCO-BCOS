@@ -138,7 +138,7 @@ void DownloadingTxsQueue::pop2TxPool(
                 [&](const tbb::blocked_range<size_t>& _r) {
                     for (size_t j = _r.begin(); j != _r.end(); ++j)
 #else
-            for (size_t j = 0; i < txs->size(); ++j)
+            for (size_t j = 0; j < txs->size(); ++j)
 #endif
                     {
                         try
