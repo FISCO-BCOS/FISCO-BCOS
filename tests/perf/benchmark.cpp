@@ -115,7 +115,7 @@ int main(int argc, const char* argv[])
 
     if (keyPageSize > 0)
     {
-        storage = std::make_shared<KeyPageStorage>(rocksDBStorage, keyPageSize);
+        storage = std::make_shared<KeyPageStorage>(rocksDBStorage, false, keyPageSize);
     }
     else
     {
@@ -146,7 +146,7 @@ int main(int argc, const char* argv[])
         storages.push_back(storage);
         if (keyPageSize > 0)
         {
-            storage = std::make_shared<KeyPageStorage>(storage, keyPageSize);
+            storage = std::make_shared<KeyPageStorage>(storage, false, keyPageSize);
         }
         else
         {
@@ -206,7 +206,7 @@ int main(int argc, const char* argv[])
         std::make_shared<bcos::storage::RocksDBStorage>(std::unique_ptr<rocksdb::DB>(db), nullptr);
     if (keyPageSize > 0)
     {
-        storage = std::make_shared<KeyPageStorage>(rocksDBStorage, keyPageSize);
+        storage = std::make_shared<KeyPageStorage>(rocksDBStorage, false, keyPageSize);
     }
     else
     {
@@ -277,7 +277,7 @@ int main(int argc, const char* argv[])
         std::make_shared<bcos::storage::RocksDBStorage>(std::unique_ptr<rocksdb::DB>(db), nullptr);
     if (keyPageSize > 0)
     {
-        storage = std::make_shared<KeyPageStorage>(rocksDBStorage, keyPageSize);
+        storage = std::make_shared<KeyPageStorage>(rocksDBStorage, false, keyPageSize);
     }
     else
     {
@@ -314,7 +314,7 @@ int main(int argc, const char* argv[])
         storages.push_back(storage);
         if (keyPageSize > 0)
         {
-            storage = std::make_shared<KeyPageStorage>(storage, keyPageSize);
+            storage = std::make_shared<KeyPageStorage>(storage, false, keyPageSize);
         }
         else
         {

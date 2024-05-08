@@ -94,8 +94,8 @@ public:
                                << LOG_KV("keyPageIgnoreTables size",
                                       keyPageIgnoreTables == nullptr ? 0 :
                                                                        keyPageIgnoreTables->size());
-            return std::make_shared<bcos::storage::KeyPageStorage>(
-                storage, m_keyPageSize, compatibilityVersion, keyPageIgnoreTables, ignoreNotExist);
+            return std::make_shared<bcos::storage::KeyPageStorage>(storage, setRowWithDirtyFlag,
+                m_keyPageSize, compatibilityVersion, keyPageIgnoreTables, ignoreNotExist);
         }
 
         // Pass useHashV310 flag to hash() insted of compatibilityVersion
