@@ -76,7 +76,7 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
     set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g")
 
     if (USE_LD_GOLD)
-        message("CompilerSettings: USE_LD_GOLD")
+        # message("CompilerSettings: USE_LD_GOLD")
         execute_process(COMMAND ${CMAKE_C_COMPILER} -fuse-ld=gold -Wl,--version ERROR_QUIET OUTPUT_VARIABLE LD_VERSION)
         if ("${LD_VERSION}" MATCHES "GNU gold")
             set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fuse-ld=gold")

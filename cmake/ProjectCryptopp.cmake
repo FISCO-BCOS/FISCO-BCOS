@@ -160,7 +160,6 @@ ExternalProject_Add(cryptopp
 )
 ExternalProject_Get_Property(cryptopp INSTALL_DIR)
 add_library(Cryptopp STATIC IMPORTED)
-message(STATUS "CMAKE_OSX_SYSROOT === ${CMAKE_OSX_SYSROOT}")
 
 file(MAKE_DIRECTORY ${CRYPTOPP_INCLUDE_DIR})  # Must exist.
 
