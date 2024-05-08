@@ -52,7 +52,8 @@ public:
         m_frontService = std::make_shared<FakeFrontService>(m_nodeId);
 
         // create KVStorageHelper
-        m_storage = std::make_shared<KVStorageHelper>(std::make_shared<StateStorage>(nullptr));
+        m_storage =
+            std::make_shared<KVStorageHelper>(std::make_shared<StateStorage>(nullptr, false));
 
         m_ledger = std::make_shared<FakeLedger>(m_blockFactory, 20, 10, 10);
         m_ledger->setSystemConfig(SYSTEM_KEY_TX_COUNT_LIMIT, std::to_string(1000));

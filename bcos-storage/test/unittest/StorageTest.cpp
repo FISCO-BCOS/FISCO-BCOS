@@ -6,7 +6,7 @@ using namespace bcos::storage;
 
 struct StorageSyncWrapperFixture
 {
-    StorageSyncWrapperFixture() : storage(std::make_shared<StateStorage>(nullptr)) {}
+    StorageSyncWrapperFixture() : storage(std::make_shared<StateStorage>(nullptr), false) {}
 
     StorageImpl<StateStorage::Ptr> storage;
 };
