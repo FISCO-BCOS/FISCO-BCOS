@@ -25,7 +25,6 @@
 #pragma once
 
 #include "StateStorageInterface.h"
-#include "bcos-framework/storage/Table.h"
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-utilities/Error.h>
 #include <tbb/blocked_range.h>
@@ -49,8 +48,10 @@ class BaseStorage : public virtual storage::StateStorageInterface,
 public:
     using Ptr = std::shared_ptr<BaseStorage<enableLRU>>;
 
-    explicit BaseStorage(std::shared_ptr<StorageInterface> prev)
-      : storage::StateStorageInterface(prev), m_buckets(std::thread::hardware_concurrency())
+    BaseStorage(std::shared_ptr<StorageInterface> prev, bool setRowWithDirtyFlag)
+      : storage::StateStorageInterface(prev),
+        m_buckets(std::thread::hardware_concurrency()),
+        m_setRowWithDirtyFlag(setRowWithDirtyFlag)
     {}
 
     BaseStorage(const BaseStorage&) = delete;
@@ -312,9 +313,11 @@ public:
         ssize_t updatedCapacity = entry.size();
         std::optional<Entry> entryOld;
 
+        if (m_setRowWithDirtyFlag && entry.status() == Entry::NORMAL)
+        {
+            entry.setStatus(Entry::MODIFIED);
+        }
         auto [bucket, lock] = getBucket(tableView, keyView);
-        boost::ignore_unused(lock);
-
         auto it = bucket->container.find(std::make_tuple(tableView, keyView));
         if (it != bucket->container.end())
         {
@@ -591,6 +594,7 @@ private:
     };
     uint32_t m_blockVersion = 0;
     std::vector<Bucket> m_buckets;
+    bool m_setRowWithDirtyFlag = false;
 
     std::tuple<Bucket*, std::unique_lock<std::mutex>> getBucket(
         const std::string_view& table, const std::string_view& key)
