@@ -28,6 +28,10 @@ project(FISCO-BCOS VERSION "2.11.0")
 # Suffix like "-rc1" e.t.c. to append to versions wherever needed.
 set(VERSION_SUFFIX "")
 
+# if cmake version > 3.24, set CMP0135 to NEW
+if(${CMAKE_VERSION} VERSION_GREATER "3.24.0")
+  cmake_policy(SET CMP0135 NEW)
+endif()
 find_package(Git QUIET)
 if(NOT GIT_FOUND)
   message(FATAL_ERROR "Please install git")
