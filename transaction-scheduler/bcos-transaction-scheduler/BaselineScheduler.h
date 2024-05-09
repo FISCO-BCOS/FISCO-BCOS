@@ -449,7 +449,7 @@ private:
             resultsLock.unlock();
 
             result.m_block->setBlockHeader(header);
-            auto lastStorage = scheduler.m_multiLayerStorage.get().lastImmutableStorage();
+            auto lastStorage = scheduler.m_multiLayerStorage.get().lastStorage();
             if (result.m_block->blockHeaderConst()->number() != 0)
             {
                 ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
@@ -622,7 +622,7 @@ public:
     {
         task::wait([](decltype(this) self, std::string_view contract,
                        decltype(callback) callback) -> task::Task<void> {
-            auto view = self->m_multiLayerStorage.get().fork(false);
+            auto view = self->m_multiLayerStorage.get().fork();
             auto contractAddress = unhexAddress(contract);
             ledger::account::EVMAccount account(view, contractAddress);
             auto code = co_await ledger::account::code(account);
@@ -642,7 +642,7 @@ public:
     {
         task::wait([](decltype(this) self, std::string_view contract,
                        decltype(callback) callback) -> task::Task<void> {
-            auto view = self->m_multiLayerStorage.get().fork(false);
+            auto view = self->m_multiLayerStorage.get().fork();
             auto contractAddress = unhexAddress(contract);
             ledger::account::EVMAccount account(view, contractAddress);
             auto abi = co_await ledger::account::abi(account);
