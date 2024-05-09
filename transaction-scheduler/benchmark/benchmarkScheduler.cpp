@@ -103,8 +103,8 @@ struct Fixture
                                 receipts[0]->status(), receipts[0]->message());
                             co_return;
                         }
-                        m_multiLayerStorage.pushMutableToImmutableFront();
-                        co_await m_multiLayerStorage.mergeAndPopImmutableBack();
+                        m_multiLayerStorage.mergeView();
+                        co_await m_multiLayerStorage.mergeBackStorage();
 
                         m_contractAddress = receipts[0]->contractAddress();
                     }());

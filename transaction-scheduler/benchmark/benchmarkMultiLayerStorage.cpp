@@ -18,11 +18,10 @@ struct Fixture
 
     void prepareData(int64_t count, int layer = 0)
     {
-        multiLayerStorage.newMutable();
-
         // Write count data
         task::syncWait([this](int64_t count) -> task::Task<void> {
-            auto view = multiLayerStorage.fork(true);
+            auto view = multiLayerStorage.fork();
+            view.newMutable();
             allKeys = RANGES::views::iota(0, count) | RANGES::views::transform([](int num) {
                 auto key = fmt::format("key: {}", num);
                 return transaction_executor::StateKey{"test_table"sv, std::string_view(key)};
@@ -36,12 +35,14 @@ struct Fixture
             });
 
             co_await storage2::writeSome(view, allKeys, allValues);
+            multiLayerStorage.pushView(std::move(view));
         }(count));
 
         for (auto i = 0; i < layer; ++i)
         {
-            multiLayerStorage.pushMutableToImmutableFront();
-            multiLayerStorage.newMutable();
+            auto view = multiLayerStorage.fork();
+            view.newMutable();
+            multiLayerStorage.pushView(std::move(view));
         }
     }
 
@@ -64,7 +65,7 @@ static void read1(benchmark::State& state)
 
     int i = 0;
     task::syncWait([&](benchmark::State& state) -> task::Task<void> {
-        auto view = fixture.multiLayerStorage.fork(false);
+        auto view = fixture.multiLayerStorage.fork();
         for (auto const& it : state)
         {
             [[maybe_unused]] auto data =
@@ -84,7 +85,7 @@ static void read10(benchmark::State& state)
 
     int i = 0;
     task::syncWait([&](benchmark::State& state) -> task::Task<void> {
-        auto view = fixture.multiLayerStorage.fork(false);
+        auto view = fixture.multiLayerStorage.fork();
         for (auto const& it : state)
         {
             [[maybe_unused]] auto data =
@@ -99,11 +100,11 @@ static void read10(benchmark::State& state)
 static void write1(benchmark::State& state)
 {
     Fixture fixture;
-    fixture.multiLayerStorage.newMutable();
 
     int i = 0;
     task::syncWait([&](benchmark::State& state) -> task::Task<void> {
-        auto view = fixture.multiLayerStorage.fork(true);
+        auto view = fixture.multiLayerStorage.fork();
+        view.newMutable();
         for (auto const& it : state)
         {
             storage::Entry entry;
