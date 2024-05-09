@@ -163,7 +163,7 @@ inline constexpr struct
 
                         static_assert(sizeof(EVMCResult::create_address) > sizeof(ErrorMessage));
                         auto errorMessage = buildErrorMessage(error);
-                        decltype(EVMCResult::create_address) wrapAddress;
+                        decltype(EVMCResult::create_address) wrapAddress{};
                         *(ErrorMessage*)wrapAddress.bytes = errorMessage;
 
                         return EVMCResult{evmc_result{
