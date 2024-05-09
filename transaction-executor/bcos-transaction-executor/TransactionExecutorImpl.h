@@ -27,7 +27,7 @@ public:
         protocol::TransactionReceiptFactory const& receiptFactory, crypto::Hash::Ptr hashImpl);
 
 private:
-    protocol::TransactionReceiptFactory const& m_receiptFactory;
+    std::reference_wrapper<protocol::TransactionReceiptFactory const> m_receiptFactory;
     crypto::Hash::Ptr m_hashImpl;
     PrecompiledManager m_precompiledManager;
 
@@ -95,14 +95,15 @@ private:
             switch (transactionVersion)
             {
             case bcos::protocol::TransactionVersion::V0_VERSION:
-                receipt = executor.m_receiptFactory.createReceipt(gasLimit - evmcResult.gas_left,
-                    newContractAddress, logEntries, receiptStatus, output, blockHeader.number());
+                receipt = executor.m_receiptFactory.get().createReceipt(
+                    gasLimit - evmcResult.gas_left, newContractAddress, logEntries, receiptStatus,
+                    output, blockHeader.number());
                 break;
             case bcos::protocol::TransactionVersion::V1_VERSION:
             case bcos::protocol::TransactionVersion::V2_VERSION:
-                receipt = executor.m_receiptFactory.createReceipt2(gasLimit - evmcResult.gas_left,
-                    newContractAddress, logEntries, receiptStatus, output, blockHeader.number(), "",
-                    transactionVersion);
+                receipt = executor.m_receiptFactory.get().createReceipt2(
+                    gasLimit - evmcResult.gas_left, newContractAddress, logEntries, receiptStatus,
+                    output, blockHeader.number(), "", transactionVersion);
                 break;
             default:
                 BOOST_THROW_EXCEPTION(std::runtime_error(
@@ -114,7 +115,7 @@ private:
             TRANSACTION_EXECUTOR_LOG(DEBUG)
                 << "Not found code exception: " << boost::diagnostic_information(e);
 
-            receipt = executor.m_receiptFactory.createReceipt(
+            receipt = executor.m_receiptFactory.get().createReceipt(
                 0, {}, {}, EVMC_REVERT, {}, blockHeader.number());
             receipt->setMessage(boost::diagnostic_information(e));
         }
@@ -123,7 +124,7 @@ private:
             TRANSACTION_EXECUTOR_LOG(DEBUG)
                 << "Execute exception: " << boost::diagnostic_information(e);
 
-            receipt = executor.m_receiptFactory.createReceipt(
+            receipt = executor.m_receiptFactory.get().createReceipt(
                 0, {}, {}, EVMC_INTERNAL_ERROR, {}, blockHeader.number());
             receipt->setMessage(boost::diagnostic_information(e));
         }

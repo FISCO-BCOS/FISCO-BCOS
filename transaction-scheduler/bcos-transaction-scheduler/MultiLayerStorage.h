@@ -37,9 +37,10 @@ private:
     std::mutex m_listMutex;
     std::mutex m_mergeMutex;
 
-    BackendStorage& m_backendStorage;
+    std::reference_wrapper<std::remove_reference_t<BackendStorage>> m_backendStorage;
     [[no_unique_address]] std::conditional_t<withCacheStorage,
-        std::add_lvalue_reference_t<CachedStorage>, std::monostate> m_cacheStorage;
+        std::reference_wrapper<std::remove_reference_t<CachedStorage>>, std::monostate>
+        m_cacheStorage;
 
     // 同一时间只允许一个可以修改的view
     // Only one view that can be modified is allowed at a time
@@ -55,9 +56,10 @@ public:
     private:
         std::shared_ptr<MutableStorageType> m_mutableStorage;
         std::deque<std::shared_ptr<MutableStorageType>> m_immutableStorages;
-        BackendStorage& m_backendStorage;
+        std::reference_wrapper<std::remove_reference_t<BackendStorage>> m_backendStorage;
         [[no_unique_address]] std::conditional_t<withCacheStorage,
-            std::add_lvalue_reference_t<CachedStorage>, std::monostate> m_cacheStorage;
+            std::reference_wrapper<std::remove_reference_t<CachedStorage>>, std::monostate>
+            m_cacheStorage;
         std::unique_lock<std::mutex> m_mutableLock;
 
         View(BackendStorage& backendStorage)
@@ -140,13 +142,13 @@ public:
 
             if constexpr (withCacheStorage)
             {
-                if (co_await fillMissingValues(storage.m_cacheStorage, keys, values))
+                if (co_await fillMissingValues(storage.m_cacheStorage.get(), keys, values))
                 {
                     co_return values;
                 }
             }
 
-            co_await fillMissingValues(storage.m_backendStorage, keys, values);
+            co_await fillMissingValues(storage.m_backendStorage.get(), keys, values);
             co_return values;
         }
 
@@ -170,11 +172,11 @@ public:
             if constexpr (withCacheStorage)
             {
                 co_return co_await storage2::readSome(
-                    storage.m_cacheStorage, std::forward<decltype(keys)>(keys));
+                    storage.m_cacheStorage.get(), std::forward<decltype(keys)>(keys));
             }
 
             co_return co_await storage2::readSome(
-                storage.m_backendStorage, std::forward<decltype(keys)>(keys));
+                storage.m_backendStorage.get(), std::forward<decltype(keys)>(keys));
         }
 
         friend auto tag_invoke(
@@ -200,13 +202,13 @@ public:
 
             if constexpr (withCacheStorage)
             {
-                if (auto value = co_await storage2::readOne(storage.m_cacheStorage, key))
+                if (auto value = co_await storage2::readOne(storage.m_cacheStorage.get(), key))
                 {
                     co_return value;
                 }
             }
 
-            co_return co_await storage2::readOne(storage.m_backendStorage, key);
+            co_return co_await storage2::readOne(storage.m_backendStorage.get(), key);
         }
 
         friend auto tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/, View& storage,
@@ -229,11 +231,11 @@ public:
             if constexpr (withCacheStorage)
             {
                 co_return co_await storage2::readOne(
-                    storage.m_cacheStorage, std::forward<decltype(key)>(key));
+                    storage.m_cacheStorage.get(), std::forward<decltype(key)>(key));
             }
 
             co_return co_await storage2::readOne(
-                storage.m_backendStorage, std::forward<decltype(key)>(key));
+                storage.m_backendStorage.get(), std::forward<decltype(key)>(key));
         }
 
         friend task::Task<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/,
@@ -318,7 +320,7 @@ public:
                         co_await storage2::range(*storage, std::forward<decltype(args)>(args)...),
                         RangeValue{});
                 }
-                m_iterators.emplace_back(co_await storage2::range(view.m_backendStorage,
+                m_iterators.emplace_back(co_await storage2::range(view.m_backendStorage.get(),
                                              std::forward<decltype(args)>(args)...),
                     RangeValue{});
                 co_await forwardIterators(m_iterators);
@@ -364,7 +366,8 @@ public:
 
                 RangeValue result = std::get<1>(*minIterators[0]);
                 co_await forwardIterators(
-                    minIterators | RANGES::views::transform([](auto* it) -> auto& { return *it; }));
+                    minIterators |
+                    RANGES::views::transform([](auto* iterator) -> auto& { return *iterator; }));
                 co_return result;
             };
         };
@@ -518,12 +521,16 @@ public:
         if constexpr (withCacheStorage)
         {
             tbb::parallel_invoke(
-                [&]() { task::syncWait(storage2::merge(m_backendStorage, *immutableStorage)); },
-                [&]() { task::syncWait(storage2::merge(m_cacheStorage, *immutableStorage)); });
+                [&]() {
+                    task::syncWait(storage2::merge(m_backendStorage.get(), *immutableStorage));
+                },
+                [&]() {
+                    task::syncWait(storage2::merge(m_cacheStorage.get(), *immutableStorage));
+                });
         }
         else
         {
-            co_await storage2::merge(m_backendStorage, *immutableStorage);
+            co_await storage2::merge(m_backendStorage.get(), *immutableStorage);
         }
 
         immutablesLock.lock();
