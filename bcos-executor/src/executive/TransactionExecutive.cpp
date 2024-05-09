@@ -1535,6 +1535,10 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
                 "Execution tried to execute an operation which is restricted in static mode.",
                 *callResults);
         }
+        if (m_blockContext.features().get(ledger::Features::Flag::bugfix_staticcall_noaddr_return))
+        {
+            callResults->data = bytes();
+        }
         callResults->status = (int32_t)TransactionStatus::Unknown;
         revert();
         break;
