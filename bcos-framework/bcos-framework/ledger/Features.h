@@ -43,6 +43,8 @@ public:
         bugfix_eip55_addr,
         bugfix_eoa_as_contract,
         bugfix_dmc_deploy_gas_used,
+        bugfix_staticcall_noaddr_return,
+        bugfix_support_transfer_receive_fallback,
         feature_dmc2serial,
         feature_sharding,
         feature_rpbft,
@@ -156,7 +158,9 @@ public:
                         Flag::bugfix_sharding_call_in_child_executive,
                         Flag::bugfix_internal_create_permission_denied}},
                 {protocol::BlockVersion::V3_7_3_VERSION,
-                    {Flag::bugfix_eoa_as_contract, Flag::bugfix_dmc_deploy_gas_used}}});
+                    {Flag::bugfix_eoa_as_contract, Flag::bugfix_dmc_deploy_gas_used,
+                        Flag::bugfix_staticcall_noaddr_return,
+                        Flag::bugfix_support_transfer_receive_fallback}}});
         for (const auto& upgradeFeatures : upgradeRoadmap)
         {
             if (((to < protocol::BlockVersion::V3_2_7_VERSION) && (to >= upgradeFeatures.to)) ||
