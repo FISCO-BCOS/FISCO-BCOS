@@ -254,10 +254,6 @@ BOOST_AUTO_TEST_CASE(range)
             BOOST_CHECK(kv);
             auto& [key, value] = *kv;
             auto& [tableName, keyName] = key;
-            // BOOST_CHECK_EQUAL(tableName, "table");
-            // BOOST_CHECK_EQUAL(keyName, "key:" + boost::lexical_cast<std::string>(num));
-            // BOOST_CHECK_EQUAL(value->get(), "Hello world!" +
-            // boost::lexical_cast<std::string>(num));
             BOOST_CHECK_LT(num, 100);
             ++num;
         }
@@ -339,6 +335,38 @@ BOOST_AUTO_TEST_CASE(keyComp)
     auto hash1 = std::hash<decltype(key1)>{}(key1);
     auto hash2 = std::hash<decltype(key2)>{}(key2);
     BOOST_CHECK_EQUAL(hash1, hash2);
+}
+
+BOOST_AUTO_TEST_CASE(concurrentMerge)
+{
+    task::syncWait([]() -> task::Task<void> {
+        constexpr static int count = 100;
+
+        MemoryStorage<std::string, storage::Entry,
+            Attribute(ORDERED | bcos::storage2::memory_storage::CONCURRENT), std::hash<std::string>>
+            storage;
+
+        co_await storage2::writeSome(storage,
+            RANGES::iota_view<int, int>(0, count) | RANGES::views::transform([](auto num) {
+                return boost::lexical_cast<std::string>(num);
+            }),
+            RANGES::iota_view<int, int>(0, count) | RANGES::views::transform([](auto num) {
+                storage::Entry entry;
+                entry.set("Hello world!" + boost::lexical_cast<std::string>(num));
+                return entry;
+            }));
+
+        auto range = co_await storage2::range(storage);
+        auto expect = count;
+        while (auto value = co_await range.next())
+        {
+            --expect;
+            auto&& [key, entry] = *value;
+            auto index = boost::lexical_cast<int>(key);
+            BOOST_CHECK_LT(index, count);
+        }
+        BOOST_CHECK_EQUAL(expect, 0);
+    }());
 }
 
 BOOST_AUTO_TEST_SUITE_END()
