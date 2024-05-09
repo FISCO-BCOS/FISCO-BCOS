@@ -1,6 +1,7 @@
 #pragma once
 
 #include <bcos-rpc/filter/FilterRequest.h>
+#include <bcos-rpc/filter/FilterSystem.h>
 #include <bcos-rpc/jsonrpc/Common.h>
 
 namespace bcos
@@ -29,7 +30,17 @@ public:
     }
 };
 
-// class JsonRpcFilterSystem;
+class JsonRpcFilterSystem : public FilterSystem
+{
+public:
+    JsonRpcFilterSystem(GroupManager::Ptr groupManager, const std::string& groupId, int threadNum,
+        int filterTimeout, int maxBlockProcessPerReq)
+      : FilterSystem(groupManager, groupId, std::make_shared<JsonRpcFilterRequestFactory>(),
+            threadNum, filterTimeout, maxBlockProcessPerReq)
+    {}
+
+    virtual int32_t InvalidParamsCode() override { return JsonRpcError::InvalidParams; }
+};
 
 }  // namespace rpc
 }  // namespace bcos

@@ -30,9 +30,12 @@ namespace bcos::rpc
 class Endpoints : protected EthEndpoint, NetEndpoint, Web3Endpoint
 {
 public:
-    explicit Endpoints(NodeService::Ptr _nodeService)
-      : EthEndpoint(_nodeService), NetEndpoint(_nodeService), Web3Endpoint(_nodeService)
+    explicit Endpoints(NodeService::Ptr _nodeService, FilterSystem::Ptr filterSystem)
+      : EthEndpoint(_nodeService, filterSystem),
+        NetEndpoint(_nodeService),
+        Web3Endpoint(_nodeService)
     {}
+
     ~Endpoints() override = default;
     Endpoints(const Endpoints&) = delete;
     Endpoints& operator=(const Endpoints&) = delete;

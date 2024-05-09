@@ -40,12 +40,13 @@ public:
     using Sender = std::function<void(bcos::bytes)>;
     Web3JsonRpcImpl(std::string _groupId, bcos::rpc::GroupManager::Ptr _groupManager,
         bcos::gateway::GatewayInterface::Ptr _gatewayInterface,
-        std::shared_ptr<boostssl::ws::WsService> _wsService)
+        std::shared_ptr<boostssl::ws::WsService> _wsService,
+        FilterSystem::Ptr filterSystem)
       : m_groupManager(std::move(_groupManager)),
         m_gatewayInterface(std::move(_gatewayInterface)),
         m_wsService(std::move(_wsService)),
         m_groupId(std::move(_groupId)),
-        m_endpoints(m_groupManager->getNodeService(m_groupId, ""))
+        m_endpoints(m_groupManager->getNodeService(m_groupId, ""), filterSystem)
     {}
     ~Web3JsonRpcImpl() = default;
 

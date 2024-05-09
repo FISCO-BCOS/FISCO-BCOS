@@ -31,7 +31,9 @@
 #include <bcos-framework/security/DataEncryptInterface.h>
 #include <bcos-rpc/RpcFactory.h>
 #include <bcos-rpc/event/EventSubMatcher.h>
+#include <bcos-rpc/jsonrpc/JsonRpcFilterSystem.h>
 #include <bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h>
+#include <bcos-rpc/web3jsonrpc/Web3FilterSystem.h>
 #include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Exceptions.h>
@@ -354,9 +356,11 @@ bcos::rpc::JsonRpcImpl_2_0::Ptr RpcFactory::buildJsonRpc(int sendTxTimeout,
     const std::shared_ptr<boostssl::ws::WsService>& _wsService, GroupManager::Ptr _groupManager)
 {
     // JsonRpcImpl_2_0
-    //*
-    auto jsonRpcInterface =
-        std::make_shared<bcos::rpc::JsonRpcImpl_2_0>(_groupManager, m_gateway, _wsService);
+    auto filterSystem = std::make_shared<JsonRpcFilterSystem>(_groupManager,
+        m_nodeConfig->groupId(), m_nodeConfig->rpcFilterThreadSize(),
+        m_nodeConfig->rpcFilterTimeout(), m_nodeConfig->rpcMaxProcessBlock());
+    auto jsonRpcInterface = std::make_shared<bcos::rpc::JsonRpcImpl_2_0>(
+        _groupManager, m_gateway, _wsService, filterSystem);
     jsonRpcInterface->setSendTxTimeout(sendTxTimeout);
     auto httpServer = _wsService->httpServer();
     if (httpServer)
@@ -370,8 +374,11 @@ bcos::rpc::JsonRpcImpl_2_0::Ptr RpcFactory::buildJsonRpc(int sendTxTimeout,
 bcos::rpc::Web3JsonRpcImpl::Ptr RpcFactory::buildWeb3JsonRpc(
     int sendTxTimeout, boostssl::ws::WsService::Ptr _wsService, GroupManager::Ptr _groupManager)
 {
+    auto web3FilterSystem = std::make_shared<Web3FilterSystem>(_groupManager,
+        m_nodeConfig->groupId(), m_nodeConfig->web3FilterThreadSize(),
+        m_nodeConfig->web3FilterTimeout(), m_nodeConfig->web3MaxProcessBlock());
     auto web3JsonRpc = std::make_shared<Web3JsonRpcImpl>(
-        m_nodeConfig->groupId(), std::move(_groupManager), m_gateway, _wsService);
+        m_nodeConfig->groupId(), std::move(_groupManager), m_gateway, _wsService, web3FilterSystem);
     auto httpServer = _wsService->httpServer();
     if (httpServer)
     {

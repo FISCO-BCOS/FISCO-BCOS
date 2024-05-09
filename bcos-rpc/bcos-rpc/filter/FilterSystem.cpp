@@ -302,3 +302,75 @@ task::Task<Json::Value> FilterSystem::getFilterLogsImpl(std::string_view groupId
     auto params = m_factory->create(*(filter->params()));
     co_return co_await getLogsImpl(groupId, params, false);
 }
+
+task::Task<Json::Value> FilterSystem::getLogsImpl(
+    std::string_view groupId, FilterRequest::Ptr params, bool needCheckRange)
+{
+    // getLatestBlockNumber and getLogsInPool use the same ledger
+    auto ledger = getNodeService(groupId, "getLogsImpl")->ledger();
+    if (!params->blockHash().empty())
+    {  // when blockHash is not empty, match logs within the specified block
+        auto matcher = m_matcher;
+        int64_t blockNumber = 0;
+        try
+        {
+            blockNumber = co_await ledger::getBlockNumber(*ledger,
+                bcos::crypto::HashType(params->blockHash(), bcos::crypto::HashType::FromHex));
+        }
+        catch (std::exception& e)
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParamsCode(), "unknown block"));
+        }
+        auto block = co_await ledger::getBlockData(*ledger, blockNumber,
+            bcos::ledger::HEADER | bcos::ledger::RECEIPTS | bcos::ledger::TRANSACTIONS_HASH);
+        Json::Value jArray(Json::arrayValue);
+        matcher->matches(params, block, jArray);
+        co_return jArray;
+    }
+    else
+    {
+        auto latestBlockNumber = getLatestBlockNumber(*ledger);
+        auto fromBlock = params->fromBlock();
+        auto toBlock = params->toBlock();
+        if (needCheckRange && !params->checkBlockRange())
+        {
+            FILTER_LOG(WARNING) << LOG_BADGE("getLogsImpl")
+                                << LOG_DESC("invalid block range params")
+                                << LOG_KV("fromBlock", fromBlock) << LOG_KV("toBlock", toBlock);
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(InvalidParamsCode(), "invalid block range params"));
+        }
+        fromBlock = params->fromIsLatest() ? latestBlockNumber : fromBlock;
+        toBlock = params->toIsLatest() ? latestBlockNumber : toBlock;
+        if (fromBlock > latestBlockNumber)
+        {  // the block of interest has not been generated yet
+            co_return Json::Value(Json::arrayValue);
+        }
+        params->setFromBlock(fromBlock);
+        params->setToBlock(std::min(toBlock, latestBlockNumber));  
+        // TODO：getLogsInPool
+        co_return co_await getLogsInternal(*ledger, std::move(params));
+    }
+}
+
+task::Task<Json::Value> FilterSystem::getLogsInPool(
+    bcos::ledger::LedgerInterface::Ptr _ledger, FilterRequest::Ptr _params)
+{
+    co_return Json::Value(Json::arrayValue);
+}
+
+task::Task<Json::Value> FilterSystem::getLogsInternal(
+    bcos::ledger::LedgerInterface& ledger, FilterRequest::Ptr params)
+{
+    auto fromBlock = params->fromBlock();
+    auto toBlock = params->toBlock();
+    Json::Value jArray(Json::arrayValue);
+    auto matcher = m_matcher;
+    for (auto number = fromBlock; number <= toBlock; ++number)
+    {
+        auto block = co_await ledger::getBlockData(ledger, number,
+            bcos::ledger::HEADER | bcos::ledger::RECEIPTS | bcos::ledger::TRANSACTIONS_HASH);
+        matcher->matches(params, block, jArray);
+    }
+    co_return jArray;
+}

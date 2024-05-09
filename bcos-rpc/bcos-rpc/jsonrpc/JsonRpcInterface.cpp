@@ -66,6 +66,23 @@ void JsonRpcInterface::initMethod()
     m_methodToFunc["getGroupNodeInfo"] = std::bind(
         &JsonRpcInterface::getGroupNodeInfoI, this, std::placeholders::_1, std::placeholders::_2);
 
+    // filter interface
+    m_methodToFunc["newBlockFilter"] = std::bind(
+        &JsonRpcInterface::newBlockFilterI, this, std::placeholders::_1, std::placeholders::_2);
+    m_methodToFunc["newPendingTransactionFilter"] =
+        std::bind(&JsonRpcInterface::newPendingTransactionFilterI, this, std::placeholders::_1,
+            std::placeholders::_2);
+    m_methodToFunc["newFilter"] = std::bind(
+        &JsonRpcInterface::newFilterI, this, std::placeholders::_1, std::placeholders::_2);
+    m_methodToFunc["uninstallFilter"] = std::bind(
+        &JsonRpcInterface::uninstallFilterI, this, std::placeholders::_1, std::placeholders::_2);
+    m_methodToFunc["getFilterChanges"] = std::bind(
+        &JsonRpcInterface::getFilterChangesI, this, std::placeholders::_1, std::placeholders::_2);
+    m_methodToFunc["getFilterLogs"] = std::bind(
+        &JsonRpcInterface::getFilterLogsI, this, std::placeholders::_1, std::placeholders::_2);
+    m_methodToFunc["getLogs"] =
+        std::bind(&JsonRpcInterface::getLogsI, this, std::placeholders::_1, std::placeholders::_2);
+
     for (const auto& method : m_methodToFunc)
     {
         RPC_IMPL_LOG(INFO) << LOG_BADGE("initMethod") << LOG_KV("method", method.first);

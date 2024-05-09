@@ -121,6 +121,20 @@ public:
 
     virtual void getGroupBlockNumber(RespFunc _respFunc) = 0;
 
+    // filter interface
+    virtual void newBlockFilter(std::string_view _groupID, RespFunc _respFunc) = 0;
+    virtual void newPendingTransactionFilter(std::string_view _groupID, RespFunc _respFunc) = 0;
+    virtual void newFilter(
+        std::string_view _groupID, const Json::Value& params, RespFunc _respFunc) = 0;
+    virtual void uninstallFilter(
+        std::string_view _groupID, std::string_view filterID, RespFunc _respFunc) = 0;
+    virtual void getFilterChanges(
+        std::string_view _groupID, std::string_view filterID, RespFunc _respFunc) = 0;
+    virtual void getFilterLogs(
+        std::string_view _groupID, std::string_view filterID, RespFunc _respFunc) = 0;
+    virtual void getLogs(
+        std::string_view _groupID, const Json::Value& params, RespFunc _respFunc) = 0;
+
     void onRPCRequest(std::string_view _requestBody, Sender _sender);
 
 protected:
@@ -287,6 +301,35 @@ protected:
     void getGroupNodeInfoI(const Json::Value& _req, RespFunc _respFunc)
     {
         getGroupNodeInfo(toView(_req[0u]), toView(_req[1u]), std::move(_respFunc));
+    }
+    // filter interface
+    void newBlockFilterI(const Json::Value& _req, RespFunc _respFunc)
+    {
+        newBlockFilter(toView(_req[0u]), std::move(_respFunc));
+    }
+    void newPendingTransactionFilterI(const Json::Value& _req, RespFunc _respFunc)
+    {
+        newPendingTransactionFilter(toView(_req[0u]), std::move(_respFunc));
+    }
+    void newFilterI(const Json::Value& _req, RespFunc _respFunc)
+    {
+        newFilter(toView(_req[0u]), _req[1u], std::move(_respFunc));
+    }
+    void uninstallFilterI(const Json::Value& _req, RespFunc _respFunc)
+    {
+        uninstallFilter(toView(_req[0u]), toView(_req[1u]), std::move(_respFunc));
+    }
+    void getFilterChangesI(const Json::Value& _req, RespFunc _respFunc)
+    {
+        getFilterChanges(toView(_req[0u]), toView(_req[1u]), std::move(_respFunc));
+    }
+    void getFilterLogsI(const Json::Value& _req, RespFunc _respFunc)
+    {
+        getFilterLogs(toView(_req[0u]), toView(_req[1u]), std::move(_respFunc));
+    }
+    void getLogsI(const Json::Value& _req, RespFunc _respFunc)
+    {
+        getLogs(toView(_req[0u]), _req[1u], std::move(_respFunc));
     }
 };
 void parseRpcRequestJson(std::string_view _requestBody, JsonRequest& _jsonRequest);
