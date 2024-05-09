@@ -337,7 +337,7 @@ BOOST_AUTO_TEST_CASE(keyComp)
     BOOST_CHECK_EQUAL(hash1, hash2);
 }
 
-BOOST_AUTO_TEST_CASE(concurrentMerge)
+BOOST_AUTO_TEST_CASE(concurrentRange)
 {
     task::syncWait([]() -> task::Task<void> {
         constexpr static int count = 100;
