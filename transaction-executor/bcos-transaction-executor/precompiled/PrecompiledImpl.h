@@ -161,7 +161,7 @@ inline constexpr struct
                         auto encodedErrorMessage =
                             buildEncodeErrorMessage(error, *executor::GlobalHashImpl::g_hashImpl);
 
-                        static_assert(sizeof(EVMCResult::create_address) > sizeof(uint8_t*));
+                        static_assert(sizeof(EVMCResult::create_address) > sizeof(ErrorMessage));
                         auto errorMessage = buildErrorMessage(error);
                         decltype(EVMCResult::create_address) wrapAddress;
                         *(ErrorMessage*)wrapAddress.bytes = errorMessage;

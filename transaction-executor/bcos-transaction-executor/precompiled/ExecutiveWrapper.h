@@ -128,7 +128,7 @@ public:
         if (result.status_code != 0)
         {
             if (auto* errorMessage = (ErrorMessage*)result.create_address.bytes;
-                errorMessage->buffer != nullptr)
+                errorMessage->buffer != nullptr && errorMessage->size > 0)
             {
                 callResult->message.assign(
                     errorMessage->buffer, errorMessage->buffer + errorMessage->size);
