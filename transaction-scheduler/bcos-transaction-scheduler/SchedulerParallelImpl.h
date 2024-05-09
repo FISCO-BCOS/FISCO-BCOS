@@ -17,6 +17,7 @@
 #include <boost/throw_exception.hpp>
 #include <atomic>
 #include <cstddef>
+#include <functional>
 #include <memory>
 #include <type_traits>
 
@@ -50,9 +51,9 @@ private:
         }
 
         int64_t m_chunkIndex = 0;
-        boost::atomic_flag const& m_hasRAW;
+        std::reference_wrapper<boost::atomic_flag const> m_hasRAW;
         ContextRange m_contextRange;
-        Executor& m_executor;
+        std::reference_wrapper<Executor> m_executor;
         typename StorageTrait<Storage>::LocalStorage m_localStorage;
         typename StorageTrait<Storage>::LocalStorageView m_localStorageView;
         typename StorageTrait<Storage>::LocalReadWriteSetStorage m_localReadWriteSetStorage;
@@ -81,7 +82,7 @@ private:
                 ittapi::ITT_DOMAINS::instance().EXECUTE_CHUNK1);
             for (auto&& [index, context] : RANGES::views::enumerate(m_contextRange))
             {
-                if (m_hasRAW.test())
+                if (m_hasRAW.get().test())
                 {
                     PARALLEL_SCHEDULER_LOG(DEBUG)
                         << "Chunk: " << m_chunkIndex << " aborted in step1, executed " << index
@@ -89,11 +90,11 @@ private:
                     break;
                 }
 
-                context.coro.emplace(transaction_executor::execute3Step(m_executor,
-                    m_localReadWriteSetStorage, blockHeader, context.transaction, context.contextID,
-                    ledgerConfig, task::tbb::syncWait));
+                context.coro.emplace(transaction_executor::execute3Step(m_executor.get(),
+                    m_localReadWriteSetStorage, blockHeader, context.transaction.get(),
+                    context.contextID, ledgerConfig, task::tbb::syncWait));
                 context.iterator = context.coro->begin();
-                context.receipt = *context.iterator;
+                context.receipt.get() = *context.iterator;
             }
         }
 
@@ -103,16 +104,16 @@ private:
                 ittapi::ITT_DOMAINS::instance().EXECUTE_CHUNK2);
             for (auto&& [index, context] : RANGES::views::enumerate(m_contextRange))
             {
-                if (m_hasRAW.test())
+                if (m_hasRAW.get().test())
                 {
                     PARALLEL_SCHEDULER_LOG(DEBUG)
                         << "Chunk: " << m_chunkIndex << " aborted in step2, executed " << index
                         << " transactions";
                     break;
                 }
-                if (!context.receipt && context.iterator != context.coro->end())
+                if (!context.receipt.get() && context.iterator != context.coro->end())
                 {
-                    context.receipt = *(++context.iterator);
+                    context.receipt.get() = *(++context.iterator);
                 }
             }
         }
@@ -123,9 +124,9 @@ private:
                 ittapi::ITT_DOMAINS::instance().EXECUTE_CHUNK3);
             for (auto& context : m_contextRange)
             {
-                if (!context.receipt && context.iterator != context.coro->end())
+                if (!context.receipt.get() && context.iterator != context.coro->end())
                 {
-                    context.receipt = *(++context.iterator);
+                    context.receipt.get() = *(++context.iterator);
                 }
             }
         }
@@ -282,9 +283,9 @@ private:
     template <class CoroType>
     struct ExecutionContext
     {
-        int contextID;
-        const protocol::Transaction& transaction;
-        protocol::TransactionReceipt::Ptr& receipt;
+        int contextID{};
+        std::reference_wrapper<const protocol::Transaction> transaction;
+        std::reference_wrapper<protocol::TransactionReceipt::Ptr> receipt;
         std::optional<CoroType> coro;
         typename CoroType::Iterator iterator;
     };
@@ -320,7 +321,8 @@ private:
                 .iterator = {}});
         }
 
-        static tbb::task_arena arena(8);
+        constexpr static auto DEFAULT_PARALLEL_ARENA = 8;
+        static tbb::task_arena arena(DEFAULT_PARALLEL_ARENA);
         arena.execute([&]() {
             auto retryCount = executeSinglePass(scheduler, storage, executor, blockHeader,
                 ledgerConfig, contexts, scheduler.m_grainSize);

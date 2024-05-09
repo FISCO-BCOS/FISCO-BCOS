@@ -46,12 +46,8 @@ inline auto buildLegacyExecutive(auto& storage, protocol::BlockHeader const& blo
         std::move(externalCaller), precompiledManager);
 }
 
-struct ErrorMessage
-{
-    std::unique_ptr<uint8_t> buffer;
-    size_t size{};
-};
-ErrorMessage buildErrorMessage(std::string_view message, crypto::Hash const& hashImpl);
+ErrorMessage buildEncodeErrorMessage(std::string_view message, crypto::Hash const& hashImpl);
+ErrorMessage buildErrorMessage(std::string_view message);
 
 struct Precompiled
 {
@@ -161,20 +157,28 @@ inline constexpr struct
                             << "Revert transaction: PrecompiledFailed"
                             << LOG_KV("address", contractAddress) << LOG_KV("message", e.what());
 
-                        auto [errorMessage, size] =
-                            buildErrorMessage(e.what(), *executor::GlobalHashImpl::g_hashImpl);
+                        std::string_view error(e.what());
+                        auto encodedErrorMessage =
+                            buildEncodeErrorMessage(error, *executor::GlobalHashImpl::g_hashImpl);
+
+                        static_assert(sizeof(EVMCResult::create_address) > sizeof(uint8_t*));
+                        auto errorMessage = buildErrorMessage(error);
+                        decltype(EVMCResult::create_address) wrapAddress;
+                        *(ErrorMessage*)wrapAddress.bytes = errorMessage;
+
                         return EVMCResult{evmc_result{
                             .status_code =
                                 (evmc_status_code)protocol::TransactionStatus::PrecompiledError,
                             .gas_left = message.gas,
                             .gas_refund = 0,
-                            .output_data = errorMessage.release(),
-                            .output_size = size,
+                            .output_data = encodedErrorMessage.buffer,
+                            .output_size = encodedErrorMessage.size,
                             .release =
                                 [](const struct evmc_result* result) {
                                     delete[] result->output_data;
+                                    delete[] ((ErrorMessage*)result->create_address.bytes)->buffer;
                                 },
-                            .create_address = {},
+                            .create_address = wrapAddress,
                             .padding = {},
                         }};
                     }
