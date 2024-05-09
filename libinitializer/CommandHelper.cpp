@@ -81,7 +81,7 @@ bcos::initializer::Params bcos::initializer::initAirNodeCommandLine(
         boost::program_options::value<std::string>()->default_value("./config.ini"),
         "config file path, eg. config.ini")("genesis,g",
         boost::program_options::value<std::string>()->default_value("./config.genesis"),
-        "genesis config file path, eg. genesis.ini");
+        "genesis config file path, eg. genesis.ini")("prune,p", "prune the node data");
 
     if (_autoSendTx)
     {
@@ -148,5 +148,10 @@ bcos::initializer::Params bcos::initializer::initAirNodeCommandLine(
             txSpeed = vm["txSpeed"].as<float>();
         }
     }
-    return bcos::initializer::Params{configPath, genesisFilePath, txSpeed};
+    auto op = Params::operation::None;
+    if (vm.count("prune"))
+    {
+        op = Params::operation::Prune;
+    }
+    return bcos::initializer::Params{configPath, genesisFilePath, txSpeed, op};
 }

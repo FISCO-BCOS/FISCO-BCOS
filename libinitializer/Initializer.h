@@ -53,6 +53,7 @@ public:
 
     virtual void start();
     virtual void stop();
+    virtual void prune();
 
     bcos::tool::NodeConfig::Ptr nodeConfig() { return m_nodeConfig; }
     ProtocolInitializer::Ptr protocolInitializer() { return m_protocolInitializer; }
@@ -82,6 +83,7 @@ public:
 
     /// NOTE: this should be last called
     void initSysContract();
+    bcos::storage::TransactionalStorageInterface::Ptr storage() { return m_storage; }
 
 private:
     bcos::tool::NodeConfig::Ptr m_nodeConfig;
@@ -100,6 +102,7 @@ private:
     std::string const c_consensusStorageDBName = "consensus_log";
     std::string const c_fileSeparator = "/";
     std::shared_ptr<bcos::archive::ArchiveService> m_archiveService = nullptr;
+    bcos::storage::TransactionalStorageInterface::Ptr m_storage = nullptr;
 
     std::function<std::shared_ptr<scheduler::SchedulerInterface>()> m_baselineSchedulerHolder;
     std::function<void(std::function<void(protocol::BlockNumber)>)>

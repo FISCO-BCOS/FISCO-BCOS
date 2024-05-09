@@ -149,7 +149,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     INITIALIZER_LOG(INFO) << LOG_DESC("initNode") << LOG_KV("storagePath", storagePath)
                           << LOG_KV("storageType", m_nodeConfig->storageType())
                           << LOG_KV("consensusStoragePath", consensusStoragePath);
-    bcos::storage::TransactionalStorageInterface::Ptr storage = nullptr;
+
     bcos::storage::TransactionalStorageInterface::Ptr schedulerStorage = nullptr;
     bcos::storage::TransactionalStorageInterface::Ptr consensusStorage = nullptr;
     bcos::storage::TransactionalStorageInterface::Ptr airExecutorStorage = nullptr;
@@ -165,18 +165,18 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         option.enable_blob_files = m_nodeConfig->enableRocksDBBlob();
 
         // m_protocolInitializer->dataEncryption() will return nullptr when storage_security = false
-        storage =
+        m_storage =
             StorageInitializer::build(storagePath, option, m_protocolInitializer->dataEncryption(),
                 m_nodeConfig->keyPageSize(), m_nodeConfig->enableStatistics());
-        schedulerStorage = storage;
+        schedulerStorage = m_storage;
         consensusStorage = StorageInitializer::build(
             consensusStoragePath, option, m_protocolInitializer->dataEncryption(), 0);
-        airExecutorStorage = storage;
+        airExecutorStorage = m_storage;
     }
 #ifdef WITH_TIKV
     else if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
     {
-        storage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
+        m_storage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
             m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
         if (_nodeArchType == bcos::protocol::NodeArchitectureType::MAX)
         {  // TODO: in max node, scheduler will use storage to commit but the ledger only use
@@ -184,8 +184,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
            // scheduler is committing block
             schedulerStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
                 m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
-            consensusStorage = storage;
-            airExecutorStorage = storage;
+            consensusStorage = m_storage;
+            airExecutorStorage = m_storage;
         }
         else
         {  // in AIR/PRO node, scheduler and executor in one process so need different storage
@@ -205,7 +205,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
     // build ledger
     auto ledger =
-        LedgerInitializer::build(m_protocolInitializer->blockFactory(), storage, m_nodeConfig);
+        LedgerInitializer::build(m_protocolInitializer->blockFactory(), m_storage, m_nodeConfig);
     m_ledger = ledger;
 
     bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory = nullptr;
@@ -237,7 +237,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         bcos::executor::GlobalHashImpl::g_hashImpl =
             m_protocolInitializer->cryptoSuite()->hashImpl();
         // using Hasher = std::remove_cvref_t<decltype(hasher)>;
-        auto existsRocksDB = std::dynamic_pointer_cast<storage::RocksDBStorage>(storage);
+        auto existsRocksDB = std::dynamic_pointer_cast<storage::RocksDBStorage>(m_storage);
 
         auto baselineSchedulerConfig = m_nodeConfig->baselineSchedulerConfig();
         task::syncWait(transaction_scheduler::BaselineSchedulerInitializer::checkRequirements(
@@ -290,7 +290,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     if (m_nodeConfig->enableLRUCacheStorage())
     {
         cacheFactory = std::make_shared<bcos::storage::CacheStorageFactory>(
-            storage, m_nodeConfig->cacheSize());
+            m_storage, m_nodeConfig->cacheSize());
         INITIALIZER_LOG(INFO) << "initNode: enableLRUCacheStorage, size: "
                               << m_nodeConfig->cacheSize();
     }
@@ -398,16 +398,17 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     {
         INITIALIZER_LOG(INFO) << LOG_BADGE("create archive service");
         m_archiveService = std::make_shared<bcos::archive::ArchiveService>(
-            storage, ledger, m_nodeConfig->archiveListenIP(), m_nodeConfig->archiveListenPort());
+            m_storage, ledger, m_nodeConfig->archiveListenIP(), m_nodeConfig->archiveListenPort());
     }
 #ifdef WITH_LIGHTNODE
-    bcos::storage::StorageImpl<bcos::storage::StorageInterface::Ptr> storageWrapper(storage);
+    bcos::storage::StorageImpl<bcos::storage::StorageInterface::Ptr> storageWrapper(m_storage);
 
     auto hasher = m_protocolInitializer->cryptoSuite()->hashImpl()->hasher();
     using Hasher = std::remove_cvref_t<decltype(hasher)>;
     auto lightNodeLedger =
         std::make_shared<bcos::ledger::LedgerImpl<Hasher, decltype(storageWrapper)>>(hasher.clone(),
-            std::move(storageWrapper), m_protocolInitializer->blockFactory(), storage);
+            std::move(storageWrapper), m_protocolInitializer->blockFactory(), m_storage,
+            m_nodeConfig->blockLimit());
     lightNodeLedger->setKeyPageSize(m_nodeConfig->keyPageSize());
 
     auto txpool = m_txpoolInitializer->txpool();
@@ -605,5 +606,58 @@ void Initializer::stop()
     {
         std::cout << "stop bcos-node failed for " << boost::diagnostic_information(e);
         exit(-1);
+    }
+}
+
+
+void Initializer::prune()
+{
+    auto blockLimit = (protocol::BlockNumber)m_nodeConfig->blockLimit();
+    bcos::protocol::BlockNumber currentBlockNumber = 0;
+    auto ledger = m_ledger;
+    std::promise<protocol::BlockNumber> blockNumberFuture;
+    ledger->asyncGetBlockNumber(
+        [&blockNumberFuture](Error::Ptr error, protocol::BlockNumber number) {
+            if (error)
+            {
+                INITIALIZER_LOG(ERROR)
+                    << LOG_DESC("get block number failed") << LOG_DESC(error->errorMessage());
+            }
+            else
+            {
+                blockNumberFuture.set_value(number);
+            }
+        });
+    currentBlockNumber = blockNumberFuture.get_future().get();
+
+    if (currentBlockNumber <= blockLimit)
+    {
+        return;
+    }
+    auto endBlockNumber = currentBlockNumber - blockLimit;
+    for (bcos::protocol::BlockNumber i = blockLimit + 1; i < endBlockNumber; i++)
+    {
+        ledger->removeExpiredNonce(i, true);
+        if (i % 1000 == 0 || i == endBlockNumber)
+        {
+            std::cout << "removed nonces of block " << i << "\r";
+        }
+    }
+    std::cout << std::endl;
+    // rocksDB compaction
+    if (boost::iequals("rocksdb", m_nodeConfig->storageType()))
+    {
+        auto storage = std::dynamic_pointer_cast<storage::RocksDBStorage>(m_storage);
+        auto& rocksDB = storage->rocksDB();
+        auto startKey = rocksdb::Slice(bcos::storage::toDBKey(
+            bcos::ledger::SYS_BLOCK_NUMBER_2_NONCES, std::to_string(blockLimit + 1)));
+        auto endKey = rocksdb::Slice(bcos::storage::toDBKey(
+            bcos::ledger::SYS_BLOCK_NUMBER_2_NONCES, std::to_string(endBlockNumber)));
+        auto status = rocksDB.CompactRange(rocksdb::CompactRangeOptions(), &startKey, &endKey);
+        if (!status.ok())
+        {
+            std::cerr << LOG_DESC("rocksDB compact range failed") << LOG_DESC(status.ToString());
+        }
+        std::cout << "rocksDB compact range success" << std::endl;
     }
 }

@@ -24,6 +24,7 @@
 #include "bcos-utilities/BoostLog.h"
 #include <bcos-framework/bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-utilities/RateCollector.h>
+#include <boost/algorithm/string/split.hpp>
 #include <boost/core/null_deleter.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/log/core/core.hpp>
@@ -173,6 +174,18 @@ void BoostLogInitializer::initLog(boost::property_tree::ptree const& _pt,
     m_archivePath = _pt.get<std::string>("log.archive_path", "");
     m_rotateFileNamePattern =
         _pt.get<std::string>("log.rotate_name_pattern", "log_%Y%m%d%H.%M.log");
+    auto rotateTimePoint = _pt.get<std::string>("log.rotate_time_point", "0:0:0");
+    std::vector<std::string> rotateTimePointVec;
+    boost::split(rotateTimePointVec, rotateTimePoint, boost::is_any_of(":"));
+    if (rotateTimePointVec.size() != 3)
+    {
+        throw std::runtime_error(
+            "log.rotate_time_point must be in format of HH:MM:SS, current is " + rotateTimePoint);
+    }
+    for (size_t i = 0; i < rotateTimePointVec.size(); i++)
+    {
+        m_rotateTimePoint[i] = std::stoi(rotateTimePointVec[i]);
+    }
     m_rotateSize = _pt.get<uint64_t>("log.max_log_file_size", 1024) * MB_IN_BYTES;
     if (m_rotateSize < 100 * MB_IN_BYTES)
     {
@@ -274,8 +287,8 @@ boost::shared_ptr<bcos::BoostLogInitializer::sink_t> BoostLogInitializer::initLo
     boost::shared_ptr<sink_t> sink(new sink_t());
     sink->locked_backend()->enable_final_rotation(false);
     sink->locked_backend()->set_open_mode(std::ios::app);
-    sink->locked_backend()->set_time_based_rotation(
-        boost::log::sinks::file::rotation_at_time_point(0, 0, 0));
+    sink->locked_backend()->set_time_based_rotation(boost::log::sinks::file::rotation_at_time_point(
+        m_rotateTimePoint[0], m_rotateTimePoint[1], m_rotateTimePoint[2]));
     sink->locked_backend()->set_file_name_pattern(_logPath + "/" + m_logNamePattern);
     sink->locked_backend()->set_target_file_name_pattern(_logPath + "/" + m_rotateFileNamePattern);
     /// set rotation size MB

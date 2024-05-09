@@ -152,7 +152,7 @@ public:
         storage->setEnableTraverse(true);
         m_storage = storage;
         BOOST_TEST(m_storage != nullptr);
-        m_ledger = std::make_shared<Ledger>(m_blockFactory, m_storage);
+        m_ledger = std::make_shared<Ledger>(m_blockFactory, m_storage, 1000);
         BOOST_CHECK(m_ledger != nullptr);
     }
 

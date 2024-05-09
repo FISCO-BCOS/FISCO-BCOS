@@ -43,14 +43,14 @@ public:
             ledger = std::make_shared<bcos::ledger::LedgerImpl<
                 bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher, decltype(storageWrapper)>>(
                 bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher{}, std::move(storageWrapper),
-                blockFactory, storage);
+                blockFactory, storage, nodeConfig->blockLimit());
         }
         else
         {
             ledger = std::make_shared<bcos::ledger::LedgerImpl<
                 bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher, decltype(storageWrapper)>>(
                 bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher{},
-                std::move(storageWrapper), blockFactory, storage);
+                std::move(storageWrapper), blockFactory, storage, nodeConfig->blockLimit());
         }
 
         ledger->buildGenesisBlock(nodeConfig->genesisConfig(), *nodeConfig->ledgerConfig());

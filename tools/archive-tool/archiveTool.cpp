@@ -344,8 +344,8 @@ void reimportBlocks(auto archiveStorage, TransactionalStorageInterface::Ptr loca
     // create factory
     auto protocolInitializer = std::make_shared<ProtocolInitializer>();
     protocolInitializer->init(nodeConfig);
-    auto ledger =
-        std::make_shared<bcos::ledger::Ledger>(protocolInitializer->blockFactory(), localStorage);
+    auto ledger = std::make_shared<bcos::ledger::Ledger>(
+        protocolInitializer->blockFactory(), localStorage, nodeConfig->blockLimit());
     auto blockFactory = protocolInitializer->blockFactory();
     auto transactionFactory = blockFactory->transactionFactory();
     auto receiptFactory = blockFactory->receiptFactory();
@@ -641,8 +641,8 @@ int main(int argc, const char* argv[])
         createBackendStorage(nodeConfig, logInitializer->logPath(), !isArchive, secondaryPath);
     auto protocolInitializer = std::make_shared<ProtocolInitializer>();
     protocolInitializer->init(nodeConfig);
-    auto ledger =
-        std::make_shared<bcos::ledger::Ledger>(protocolInitializer->blockFactory(), localStorage);
+    auto ledger = std::make_shared<bcos::ledger::Ledger>(
+        protocolInitializer->blockFactory(), localStorage, nodeConfig->blockLimit());
     std::promise<int64_t> promise;
     ledger->asyncGetBlockNumber(
         [&promise](const Error::Ptr& error, bcos::protocol::BlockNumber number) {

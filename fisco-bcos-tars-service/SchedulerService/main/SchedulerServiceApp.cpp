@@ -150,7 +150,8 @@ void SchedulerServiceApp::createScheduler()
     auto blockFactory = m_protocolInitializer->blockFactory();
     auto ledger = std::make_shared<bcos::ledger::Ledger>(blockFactory,
         StorageInitializer::build(m_nodeConfig->pdAddrs(), getLogPath(), m_nodeConfig->pdCaPath(),
-            m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath()));
+            m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath()),
+        m_nodeConfig->blockLimit());
     auto executionMessageFactory =
         std::make_shared<bcostars::protocol::ExecutionMessageFactoryImpl>();
     auto executorManager = std::make_shared<bcos::scheduler::RemoteExecutorManager>(

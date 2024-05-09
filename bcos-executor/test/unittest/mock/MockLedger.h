@@ -170,5 +170,7 @@ public:
     {
         BOOST_CHECK(false);  // Need implementations
     };
+
+    void removeExpiredNonce(protocol::BlockNumber blockNumber, bool sync) override {}
 };
 }  // namespace bcos::test
