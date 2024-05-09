@@ -367,9 +367,9 @@ public:
         if (c_fileLogLevel <= LogLevel::TRACE) [[unlikely]]
         {
             HOST_CONTEXT_LOG(TRACE)
-                << "HostContext execute finished, kind: " << ref.kind << " status"
-                << evmResult->status_code << " gas:" << evmResult->gas_left << " output: "
-                << toHex(bytesConstRef(evmResult->output_data, evmResult->output_size));
+                << "HostContext execute finished, kind: " << ref.kind
+                << " status: " << evmResult->status_code << " gas: " << evmResult->gas_left
+                << " output: " << bytesConstRef(evmResult->output_data, evmResult->output_size);
         }
         co_return std::move(*evmResult);
     }
@@ -452,6 +452,15 @@ private:
 
             result.gas_left -= result.output_size * vmSchedule().createDataGas;
             result.create_address = message().code_address;
+
+            // Clear the output
+            if (result.release)
+            {
+                result.release(std::addressof(result));
+                result.release = nullptr;
+            }
+            result.output_data = nullptr;
+            result.output_size = 0;
         }
 
         co_return result;
@@ -499,8 +508,8 @@ private:
             message.recipient = unhexAddress(codeParameters[1]);
             codeParameters.erase(codeParameters.begin(), codeParameters.begin() + 2);
 
-            codec::abi::ContractABICodec codec2(m_hashImpl);
-            m_dynamicPrecompiledInput.emplace(codec2.abiIn(
+            codec::abi::ContractABICodec codec(m_hashImpl);
+            m_dynamicPrecompiledInput.emplace(codec.abiIn(
                 "", codeParameters, bcos::bytesConstRef(message.input_data, message.input_size)));
 
             message.input_data = m_dynamicPrecompiledInput->data();

@@ -157,11 +157,20 @@ std::string pthread_getThreadName();
 namespace std
 {
 template <class BytesType>
-    requires std::constructible_from<bcos::bytesConstRef, std::add_pointer_t<BytesType>> &&
-             (!std::same_as<BytesType, std::string>) && (!std::same_as<BytesType, char>)
+    requires std::same_as<BytesType, bcos::bytesConstRef> ||
+             (std::constructible_from<bcos::bytesConstRef, std::add_pointer_t<BytesType>> &&
+                 (!std::same_as<BytesType, std::string>) && (!std::same_as<BytesType, char>))
 inline ostream& operator<<(ostream& stream, const BytesType& bytes)
 {
-    bcos::bytesConstRef ref(std::addressof(bytes));
+    bcos::bytesConstRef ref;
+    if constexpr (std::same_as<BytesType, bcos::bytesConstRef>)
+    {
+        ref = bytes;
+    }
+    else
+    {
+        ref = bcos::bytesConstRef{std::addressof(bytes)};
+    }
     std::string hex;
     hex.reserve(ref.size() * 2);
     boost::algorithm::hex_lower(ref.begin(), ref.end(), std::back_insert_iterator(hex));
