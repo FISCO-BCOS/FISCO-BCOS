@@ -239,6 +239,18 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
         callParameters->value > 0)
     {
         bool onlyTransfer = callParameters->data.empty();
+        if (m_blockContext.features().get(
+                ledger::Features::Flag::bugfix_support_transfer_receive_fallback))
+        {
+            // Note: To support receive fallback.
+            // Transfer from EOA or contract tx's data is empty. But we still need to executive as
+            // an normal transaction.
+            // If "to" is contract, go to contract's receive() fallback.
+            // If "to" is EOA, go to AccountPrecompiled receive() logic.
+            onlyTransfer = false;
+        }
+
+
         bool transferFromEVM = callParameters->seq != 0;
         int64_t requiredGas = transferFromEVM ? 0 : BALANCE_TRANSFER_GAS;
         auto currentContextAddress = callParameters->receiveAddress;
@@ -1142,11 +1154,14 @@ CallParameters::UniquePtr TransactionExecutive::go(
                 )
                 {
                     // Note: to be the same as eth
-                    // Just fix DMC:
                     // if bugfix_call_noaddr_return is not set, callResult->evmStatus is still
                     // default to EVMC_SUCCESS and serial mode is execute same as eth, but DMC is
                     // using callResult->status, so we need to compat with DMC here
-
+                    if (m_blockContext.features().get(
+                            ledger::Features::Flag::bugfix_staticcall_noaddr_return))
+                    {
+                        callResult->data = bytes();
+                    }
                     callResult->type = CallParameters::FINISHED;
                     callResult->evmStatus = EVMC_SUCCESS;
                     callResult->status = (int32_t)TransactionStatus::None;
