@@ -404,8 +404,7 @@ BlockContext::Ptr TransactionExecutor::createBlockContext(
         backend = m_cachedStorage;
     }
     BlockContext::Ptr context = make_shared<BlockContext>(storage, m_ledgerCache, m_hashImpl,
-        currentHeader, getVMSchedule((uint32_t)currentHeader->version()), m_isWasm, m_isAuthCheck,
-        std::move(backend), m_keyPageIgnoreTables);
+        currentHeader, m_isWasm, m_isAuthCheck, std::move(backend), m_keyPageIgnoreTables);
     context->setVMFactory(m_vmFactory);
     if (f_onNeedSwitchEvent)
     {
@@ -414,28 +413,13 @@ BlockContext::Ptr TransactionExecutor::createBlockContext(
 
     return context;
 }
-VMSchedule const& TransactionExecutor::getVMSchedule(uint32_t currentVersion)
-{
-    ledger::Features features;
-    task::syncWait(features.readFromStorage(*m_backendStorage, m_lastCommittedBlockNumber + 1));
-    if (features.get(ledger::Features::Flag::feature_evm_cancun))
-    {
-        return FiscoBcosScheduleCancun;
-    }
-    if (currentVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION)
-    {
-        return FiscoBcosScheduleV320;
-    }
-    return FiscoBcosSchedule;
-}
 
 std::shared_ptr<BlockContext> TransactionExecutor::createBlockContextForCall(
     bcos::protocol::BlockNumber blockNumber, h256 blockHash, uint64_t timestamp,
     int32_t blockVersion, storage::StateStorageInterface::Ptr storage)
 {
     BlockContext::Ptr context = make_shared<BlockContext>(storage, m_ledgerCache, m_hashImpl,
-        blockNumber, blockHash, timestamp, blockVersion, getVMSchedule((uint32_t)blockVersion),
-        m_isWasm, m_isAuthCheck);
+        blockNumber, blockHash, timestamp, blockVersion, m_isWasm, m_isAuthCheck);
     context->setVMFactory(m_vmFactory);
     return context;
 }

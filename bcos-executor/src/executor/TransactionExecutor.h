@@ -333,7 +333,6 @@ protected:
     void initWasmEnvironment();
     void resetEnvironment();
     void initTestPrecompiledTable(storage::StorageInterface::Ptr storage);
-    VMSchedule const& getVMSchedule(uint32_t currentVersion);
     std::function<void()> f_onNeedSwitchEvent;
 
     LedgerCache::Ptr m_ledgerCache;

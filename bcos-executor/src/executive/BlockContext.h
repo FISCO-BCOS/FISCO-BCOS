@@ -53,13 +53,13 @@ public:
     BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
         LedgerCache::Ptr ledgerCache, crypto::Hash::Ptr _hashImpl,
         bcos::protocol::BlockNumber blockNumber, h256 blockHash, uint64_t timestamp,
-        uint32_t blockVersion, const VMSchedule& _schedule, bool _isWasm, bool _isAuthCheck,
+        uint32_t blockVersion, bool _isWasm, bool _isAuthCheck,
         storage::StorageInterface::Ptr backendStorage = nullptr);
 
     BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
         LedgerCache::Ptr ledgerCache, crypto::Hash::Ptr _hashImpl,
-        protocol::BlockHeader::ConstPtr _current, const VMSchedule& _schedule, bool _isWasm,
-        bool _isAuthCheck, storage::StorageInterface::Ptr backendStorage = nullptr,
+        protocol::BlockHeader::ConstPtr _current, bool _isWasm, bool _isAuthCheck,
+        storage::StorageInterface::Ptr backendStorage = nullptr,
         std::shared_ptr<std::set<std::string, std::less<>>> = nullptr);
 
     using getTxCriticalsHandler = std::function<std::shared_ptr<std::vector<std::string>>(
