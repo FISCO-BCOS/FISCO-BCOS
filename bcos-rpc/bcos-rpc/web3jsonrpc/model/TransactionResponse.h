@@ -19,6 +19,10 @@
  */
 
 #pragma once
+#include "Web3Transaction.h"
+
+
+#include <bcos-crypto/ChecksumAddress.h>
 #include <bcos-framework/protocol/Block.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/protocol/Transaction.h>
@@ -30,7 +34,7 @@ namespace bcos::rpc
 {
 // block and receipt are nullable
 static void combineTxResponse(Json::Value& result, bcos::protocol::Transaction::ConstPtr&& tx,
-    protocol::TransactionReceipt::ConstPtr&& receipt, bcos::protocol::Block::Ptr&& block)
+    protocol::TransactionReceipt::ConstPtr&& receipt, bcos::protocol::Block::Ptr const& block)
 {
     if (!result.isObject())
     {
@@ -54,21 +58,24 @@ static void combineTxResponse(Json::Value& result, bcos::protocol::Transaction::
     result["blockHash"] = blockHash.hexPrefixed();
     result["blockNumber"] = toQuantity(blockNumber);
     result["transactionIndex"] = toQuantity(transactionIndex);
-    auto from = toHexStringWithPrefix(tx->sender());
-    toChecksumAddress(from, bcos::crypto::keccak256Hash(from).hexPrefixed(), "0x");
-    result["from"] = std::move(from);
+    auto from = toHex(tx->sender());
+    toChecksumAddress(from, bcos::crypto::keccak256Hash(from).hex());
+    result["from"] = "0x" + std::move(from);
     if (tx->to().empty())
     {
         result["to"] = Json::nullValue;
     }
     else
     {
-        auto to = std::string(tx->to());
+        auto toView = tx->to();
+        auto to = std::string(toView.starts_with("0x") ? toView.substr(2) : toView);
         toChecksumAddress(to, bcos::crypto::keccak256Hash(to).hex());
         result["to"] = "0x" + std::move(to);
     }
     result["gas"] = toQuantity(tx->gasLimit());
-    result["gasPrice"] = std::string(receipt ? receipt->effectiveGasPrice() : tx->gasPrice());
+    auto const gasPrice = receipt ? receipt->effectiveGasPrice() : tx->gasPrice();
+    // FIXME)): return will case coredump in executor
+    result["gasPrice"] = std::string(gasPrice.empty() ? "20200" /*21000*/ : gasPrice);
     result["hash"] = tx->hash().hexPrefixed();
     result["input"] = toHexStringWithPrefix(tx->input());
 

@@ -24,7 +24,7 @@ public:
       : m_fullTx(fullTx),
         m_type(type),
         m_id(id),
-        m_params(params),        
+        m_params(params),
         m_startBlockNumber(startBlockNumber),
         m_lastAccessTime(utcTime()),
         m_group(group)
