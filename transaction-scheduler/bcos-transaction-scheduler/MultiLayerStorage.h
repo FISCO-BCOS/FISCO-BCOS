@@ -29,6 +29,7 @@ public:
     constexpr static bool withCacheStorage = !std::is_void_v<CachedStorage>;
     using KeyType = std::remove_cvref_t<typename MutableStorageType::Key>;
     using ValueType = std::remove_cvref_t<typename MutableStorageType::Value>;
+    using MutableStorage = MutableStorageType;
 
     std::shared_ptr<MutableStorageType> m_mutableStorage;
     std::deque<std::shared_ptr<MutableStorageType>> m_immutableStorages;
@@ -81,8 +82,6 @@ public:
 
         co_return count == RANGES::size(gotValues);
     }
-
-    using MutableStorage = MutableStorageType;
 
     friend auto tag_invoke(
         storage2::tag_t<storage2::readSome> /*unused*/, View& view, RANGES::input_range auto&& keys)
@@ -370,14 +369,15 @@ public:
     using Value = ValueType;
 
     template <class... Args>
-    void newMutable(Args... args)
+    void newMutable(Args&&... args)
     {
         if (m_mutableStorage)
         {
             BOOST_THROW_EXCEPTION(DuplicateMutableStorageError{});
         }
 
-        m_mutableStorage = std::make_shared<MutableStorageType>(args...);
+        m_mutableStorage =
+            std::make_shared<MutableStorageType>(std::forward<decltype(args)>(args)...);
     }
 
     BackendStorage& backendStorage() & { return m_backendStorage; }
@@ -392,9 +392,6 @@ private:
     using KeyType = std::remove_cvref_t<typename MutableStorageType::Key>;
     using ValueType = std::remove_cvref_t<typename MutableStorageType::Value>;
     using ViewType = View<MutableStorageType, CachedStorage, BackendStorage>;
-
-    static_assert(std::same_as<typename MutableStorageType::Key, typename BackendStorage::Key>);
-    static_assert(std::same_as<typename MutableStorageType::Value, typename BackendStorage::Value>);
 
     std::deque<std::shared_ptr<MutableStorageType>> m_storages;
     std::mutex m_listMutex;
@@ -411,22 +408,30 @@ public:
     using Key = KeyType;
     using Value = ValueType;
 
-    explicit MultiLayerStorage(BackendStorage& backendStorage)
+    explicit MultiLayerStorage(BackendStorage& backendStorage) noexcept
         requires(!withCacheStorage)
       : m_backendStorage(backendStorage)
-    {}
+    {
+        static_assert(std::same_as<typename MutableStorageType::Key, typename BackendStorage::Key>);
+        static_assert(
+            std::same_as<typename MutableStorageType::Value, typename BackendStorage::Value>);
+    }
 
     MultiLayerStorage(BackendStorage& backendStorage,
         std::conditional_t<withCacheStorage, std::add_lvalue_reference_t<CachedStorage>,
             std::monostate>
-            cacheStorage)
+            cacheStorage) noexcept
         requires(withCacheStorage)
       : m_backendStorage(backendStorage), m_cacheStorage(cacheStorage)
-    {}
+    {
+        static_assert(std::same_as<typename MutableStorageType::Key, typename CachedStorage::Key>);
+        static_assert(
+            std::same_as<typename MutableStorageType::Value, typename CachedStorage::Value>);
+    }
     MultiLayerStorage(const MultiLayerStorage&) = delete;
-    MultiLayerStorage(MultiLayerStorage&&) noexcept = delete;
+    MultiLayerStorage(MultiLayerStorage&&) noexcept = default;
     MultiLayerStorage& operator=(const MultiLayerStorage&) = delete;
-    MultiLayerStorage& operator=(MultiLayerStorage&&) noexcept = delete;
+    MultiLayerStorage& operator=(MultiLayerStorage&&) noexcept = default;
     ~MultiLayerStorage() noexcept = default;
 
     ViewType fork()
@@ -471,15 +476,17 @@ public:
         {
             tbb::parallel_invoke(
                 [&]() {
-                    task::tbb::syncWait(storage2::merge(m_backendStorage.get(), *immutableStorage));
+                    task::tbb::syncWait(
+                        storage2::merge(m_backendStorage.get(), std::as_const(*immutableStorage)));
                 },
                 [&]() {
-                    task::tbb::syncWait(storage2::merge(m_cacheStorage.get(), *immutableStorage));
+                    task::tbb::syncWait(
+                        storage2::merge(m_cacheStorage.get(), std::as_const(*immutableStorage)));
                 });
         }
         else
         {
-            co_await storage2::merge(m_backendStorage.get(), *immutableStorage);
+            co_await storage2::merge(m_backendStorage.get(), std::as_const(*immutableStorage));
         }
 
         immutablesLock.lock();
@@ -498,7 +505,7 @@ public:
 
         return m_storages.front();
     }
-    std::shared_ptr<MutableStorageType> lastStorage()
+    std::shared_ptr<MutableStorageType> backStorage()
     {
         std::unique_lock immutablesLock(m_listMutex);
         if (m_storages.empty())

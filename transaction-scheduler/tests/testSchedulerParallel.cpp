@@ -74,7 +74,7 @@ BOOST_AUTO_TEST_CASE(simple)
 {
     task::syncWait([&, this]() -> task::Task<void> {
         MockExecutor executor;
-        SchedulerParallelImpl scheduler;
+        SchedulerParallelImpl<MutableStorage> scheduler;
 
         bcostars::protocol::BlockHeaderImpl blockHeader(
             [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
@@ -139,7 +139,7 @@ BOOST_AUTO_TEST_CASE(conflict)
 {
     task::syncWait([&, this]() -> task::Task<void> {
         MockConflictExecutor executor;
-        SchedulerParallelImpl scheduler;
+        SchedulerParallelImpl<MutableStorage> scheduler;
 
         auto view1 = multiLayerStorage.fork();
         view1.newMutable();

@@ -26,37 +26,29 @@ namespace bcos::transaction_scheduler
 
 #define PARALLEL_SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("PARALLEL_SCHEDULER")
 
+template <class MutableStorage, class Storage>
+struct StorageTrait
+{
+    using LocalStorageView = View<MutableStorage, void, Storage>;
+    using LocalReadWriteSetStorage =
+        ReadWriteSetStorage<LocalStorageView, transaction_executor::StateKey>;
+};
+
+template <class MutableStorage>
 class SchedulerParallelImpl
 {
 private:
-    template <class Storage>
-    struct StorageTrait
-    {
-        using LocalStorage = MultiLayerStorage<typename Storage::MutableStorage, void, Storage>;
-        using LocalStorageView =
-            std::invoke_result_t<decltype(&LocalStorage::fork), LocalStorage, bool>;
-        using LocalReadWriteSetStorage =
-            ReadWriteSetStorage<LocalStorageView, transaction_executor::StateKey>;
-    };
-
     template <class Storage, class Executor, class ContextRange>
     class ChunkStatus
     {
     private:
-        auto forkAndMutable(auto& storage)
-        {
-            storage.newMutable();
-            auto view = storage.fork(true);
-            return view;
-        }
-
         int64_t m_chunkIndex = 0;
         std::reference_wrapper<boost::atomic_flag const> m_hasRAW;
         ContextRange m_contextRange;
         std::reference_wrapper<Executor> m_executor;
-        typename StorageTrait<Storage>::LocalStorage m_localStorage;
-        typename StorageTrait<Storage>::LocalStorageView m_localStorageView;
-        typename StorageTrait<Storage>::LocalReadWriteSetStorage m_localReadWriteSetStorage;
+        typename StorageTrait<MutableStorage, Storage>::LocalStorageView m_storageView;
+        typename StorageTrait<MutableStorage, Storage>::LocalReadWriteSetStorage
+            m_readWriteSetStorage;
 
     public:
         ChunkStatus(int64_t chunkIndex, boost::atomic_flag const& hasRAW, ContextRange contextRange,
@@ -65,15 +57,16 @@ private:
             m_hasRAW(hasRAW),
             m_contextRange(std::move(contextRange)),
             m_executor(executor),
-            m_localStorage(storage),
-            m_localStorageView(forkAndMutable(m_localStorage)),
-            m_localReadWriteSetStorage(m_localStorageView)
-        {}
+            m_storageView(storage),
+            m_readWriteSetStorage(m_storageView)
+        {
+            m_storageView.newMutable();
+        }
 
         int64_t chunkIndex() const { return m_chunkIndex; }
         auto count() const { return RANGES::size(m_contextRange); }
-        auto& localStorage() & { return m_localStorage; }
-        auto& readWriteSetStorage() & { return m_localReadWriteSetStorage; }
+        auto& storageView() & { return m_storageView; }
+        auto& readWriteSetStorage() & { return m_readWriteSetStorage; }
 
         void executeStep1(
             protocol::BlockHeader const& blockHeader, ledger::LedgerConfig const& ledgerConfig)
@@ -91,7 +84,7 @@ private:
                 }
 
                 context.coro.emplace(transaction_executor::execute3Step(m_executor.get(),
-                    m_localReadWriteSetStorage, blockHeader, context.transaction.get(),
+                    m_readWriteSetStorage, blockHeader, context.transaction.get(),
                     context.contextID, ledgerConfig, task::tbb::syncWait));
                 context.iterator = context.coro->begin();
                 context.receipt.get() = *context.iterator;
@@ -162,7 +155,7 @@ private:
 
         boost::atomic_flag hasRAW;
         ChunkStorage lastStorage;
-        const auto contextChunks = RANGES::views::chunk(contexts, chunkSize);
+        auto contextChunks = RANGES::views::chunk(contexts, chunkSize);
 
         std::atomic_size_t offset = 0;
         std::atomic_size_t chunkIndex = 0;
@@ -261,7 +254,7 @@ private:
                                 << "Merging storage... " << chunk->chunkIndex() << " | "
                                 << chunk->count();
                             task::tbb::syncWait(storage2::merge(
-                                lastStorage, std::move(chunk->localStorage().mutableStorage())));
+                                lastStorage, std::move(chunk->storageView().mutableStorage())));
                             scheduler.m_gc.collect(std::move(chunk));
                         }
                     }));
@@ -283,7 +276,7 @@ private:
     template <class CoroType>
     struct ExecutionContext
     {
-        int contextID{};
+        int contextID;
         std::reference_wrapper<const protocol::Transaction> transaction;
         std::reference_wrapper<protocol::TransactionReceipt::Ptr> receipt;
         std::optional<CoroType> coro;
@@ -303,11 +296,12 @@ private:
         std::vector<protocol::TransactionReceipt::Ptr> receipts(count);
 
         using Storage = std::decay_t<decltype(storage)>;
-        using CoroType = std::invoke_result_t<transaction_executor::Execute3Step,
-            decltype(executor),
-            std::add_lvalue_reference_t<typename StorageTrait<Storage>::LocalReadWriteSetStorage>,
-            protocol::BlockHeader const&, protocol::Transaction const&, int,
-            ledger::LedgerConfig const&, task::tbb::SyncWait>;
+        using CoroType =
+            std::invoke_result_t<transaction_executor::Execute3Step, decltype(executor),
+                std::add_lvalue_reference_t<
+                    typename StorageTrait<MutableStorage, Storage>::LocalReadWriteSetStorage>,
+                protocol::BlockHeader const&, protocol::Transaction const&, int,
+                ledger::LedgerConfig const&, task::tbb::SyncWait>;
         std::vector<ExecutionContext<CoroType>,
             tbb::cache_aligned_allocator<ExecutionContext<CoroType>>>
             contexts;
