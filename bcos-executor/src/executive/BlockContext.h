@@ -97,6 +97,7 @@ public:
     void setExecutiveFlow(std::string codeAddress, ExecutiveFlowInterface::Ptr executiveFlow);
 
     std::shared_ptr<VMFactory> getVMFactory() const { return m_vmFactory; }
+    void setVMSchedule();
     void setVMFactory(std::shared_ptr<VMFactory> factory) { m_vmFactory = factory; }
 
     void stop()

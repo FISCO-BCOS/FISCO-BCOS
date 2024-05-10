@@ -76,7 +76,7 @@ evmc_bytes32 getTransientStorage(
     // programming assert for debug
     assert(fromEvmC(*addr) == boost::algorithm::unhex(std::string(hostContext.myAddress())));
 
-    return hostContext.getTransient(key);
+    return hostContext.getTransientStorage(key);
 }
 
 
@@ -101,7 +101,7 @@ void setTransientStorage(evmc_host_context* context, [[maybe_unused]] const evmc
     const evmc_bytes32* key, const evmc_bytes32* value)
 {
     auto& hostContext = static_cast<HostContext&>(*context);
-    hostContext.setTransient(key, value);  // Interface uses native endianness
+    hostContext.setTransientStorage(key, value);  // Interface uses native endianness
 }
 
 

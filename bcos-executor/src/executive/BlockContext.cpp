@@ -66,14 +66,7 @@ BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> stora
     }
 
     task::syncWait(m_features.readFromStorage(*m_storage, m_blockNumber));
-    if (m_features.get(ledger::Features::Flag::feature_evm_cancun))
-    {
-        m_schedule = FiscoBcosScheduleCancun;
-    }
-    if (blockVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION)
-    {
-        m_schedule = FiscoBcosScheduleV320;
-    }
+    setVMSchedule();
 }
 
 BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
@@ -110,14 +103,7 @@ BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> stora
             }
         }
     }
-    if (_current->version() >= (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION)
-    {
-        m_schedule = FiscoBcosScheduleV320;
-    }
-    if (m_features.get(ledger::Features::Flag::feature_evm_cancun))
-    {
-        m_schedule = FiscoBcosScheduleCancun;
-    }
+    setVMSchedule();
 }
 
 
@@ -143,6 +129,21 @@ void BlockContext::setExecutiveFlow(
 {
     bcos::ReadGuard l(x_executiveFlows);
     m_executiveFlows.emplace(codeAddress, executiveFlow);
+}
+void BlockContext::setVMSchedule()
+{
+    if (m_features.get(ledger::Features::Flag::feature_evm_cancun))
+    {
+        m_schedule = FiscoBcosScheduleCancun;
+    }
+    else if (m_blockVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION)
+    {
+        m_schedule = FiscoBcosScheduleV320;
+    }
+    else
+    {
+        m_schedule = FiscoBcosSchedule;
+    }
 }
 
 void BlockContext::suicide(std::string_view contract2Suicide)

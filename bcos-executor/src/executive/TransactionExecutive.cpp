@@ -1890,6 +1890,10 @@ std::shared_ptr<storage::StateStorageInterface> TransactionExecutive::getTransie
     {
         tssMap::ReadAccessor::Ptr readAccessor;
         has = transientStorageMap->find<tssMap::ReadAccessor>(readAccessor, transientStorageMapKey);
+        if (has)
+        {
+            transientStorage = readAccessor->value();
+        }
     }
     if (!has)
     {
@@ -1908,14 +1912,6 @@ std::shared_ptr<storage::StateStorageInterface> TransactionExecutive::getTransie
             {
                 transientStorage = writeAccessor->value();
             }
-        }
-    }
-    else
-    {
-        {
-            tssMap::ReadAccessor::Ptr readAccess;
-            transientStorageMap->find<tssMap::ReadAccessor>(readAccess, transientStorageMapKey);
-            transientStorage = readAccess->value();
         }
     }
     return transientStorage;

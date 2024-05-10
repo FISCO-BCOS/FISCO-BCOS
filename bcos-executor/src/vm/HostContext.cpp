@@ -559,7 +559,7 @@ evmc_bytes32 HostContext::store(const evmc_bytes32* key)
     }
     return result;
 }
-evmc_bytes32 HostContext::getTransient(const evmc_bytes32* key)
+evmc_bytes32 HostContext::getTransientStorage(const evmc_bytes32* key)
 {
     evmc_bytes32 result;
     auto keyView = std::string_view((char*)key->bytes, sizeof(key->bytes));
@@ -600,7 +600,7 @@ void HostContext::setStore(const evmc_bytes32* key, const evmc_bytes32* value)
     m_executive->storage().setRow(m_tableName, keyView, std::move(entry));
 }
 
-void HostContext::setTransient(const evmc_bytes32* key, const evmc_bytes32* value)
+void HostContext::setTransientStorage(const evmc_bytes32* key, const evmc_bytes32* value)
 {
     auto keyView = std::string_view((char*)key->bytes, sizeof(key->bytes));
     bytes valueBytes(value->bytes, value->bytes + sizeof(value->bytes));
@@ -618,6 +618,10 @@ void HostContext::setTransient(const evmc_bytes32* key, const evmc_bytes32* valu
         TSMap::ReadAccessor::Ptr readAccessor;
         // find the transient storage by transientStorageMapKey(contextID + contractAddress)
         has = transientStorageMap->find<TSMap::ReadAccessor>(readAccessor, transientStorageMapKey);
+        if (has)
+        {
+            transientStorage = readAccessor->value();
+        }
     }
     if (!has)
     {
@@ -635,14 +639,6 @@ void HostContext::setTransient(const evmc_bytes32* key, const evmc_bytes32* valu
             {
                 transientStorage = writeAccessor->value();
             }
-        }
-    }
-    else
-    {
-        {
-            TSMap::ReadAccessor::Ptr readAccess;
-            transientStorageMap->find<TSMap::ReadAccessor>(readAccess, transientStorageMapKey);
-            transientStorage = readAccess->value();
         }
     }
 

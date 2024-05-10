@@ -64,12 +64,12 @@ public:
 
     /// Read storage location.
     evmc_bytes32 store(const evmc_bytes32* key);
-    evmc_bytes32 getTransient(const evmc_bytes32* key);
+    evmc_bytes32 getTransientStorage(const evmc_bytes32* key);
 
     /// Write a value in storage.
     // void setStore(const u256& _n, const u256& _v);
     void setStore(const evmc_bytes32* key, const evmc_bytes32* value);
-    void setTransient(const evmc_bytes32* key, const evmc_bytes32* value);
+    void setTransientStorage(const evmc_bytes32* key, const evmc_bytes32* value);
 
     /// Create a new contract.
     evmc_result externalRequest(const evmc_message* _msg);
