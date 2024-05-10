@@ -62,7 +62,6 @@ public:
     TransactionExecutive(const BlockContext& blockContext, std::string contractAddress,
         int64_t contextID, int64_t seq, const wasm::GasInjector& gasInjector)
       : m_blockContext(blockContext),
-        m_transientStateStorage(std::make_shared<bcos::storage::StateStorage>(nullptr)),
         m_contractAddress(std::move(contractAddress)),
         m_contextID(contextID),
         m_seq(seq),
@@ -70,9 +69,7 @@ public:
         m_recoder(std::make_shared<storage::Recoder>()),
         m_transientRecoder(std::make_shared<storage::Recoder>()),
         m_storageWrapperObj(m_blockContext.storage(), m_recoder),
-        m_transientStorageWrapperObj(m_transientStateStorage, m_transientRecoder),
-        m_storageWrapper(&m_storageWrapperObj),
-        m_transientStorageWrapper(&m_transientStorageWrapperObj)
+        m_storageWrapper(&m_storageWrapperObj)
     {
         m_hashImpl = m_blockContext.hashHandler();
         m_storageWrapperObj.setCodeCache(m_blockContext.getCodeCache());
@@ -97,11 +94,6 @@ public:
         return *m_storageWrapper;
     }
 
-    auto& transientStorage()
-    {
-        assert(m_transientStorageWrapper);
-        return *m_transientStorageWrapper;
-    }
 
     const BlockContext& blockContext() { return m_blockContext; }
 
@@ -149,6 +141,7 @@ public:
     std::shared_ptr<precompiled::PrecompiledExecResult> execPrecompiled(
         precompiled::PrecompiledExecResult::Ptr const& _precompiledParams);
 
+    using tssMap = bcos::BucketMap<std::string, std::shared_ptr<storage::StateStorageInterface>>;
 
     VMSchedule const& vmSchedule() const { return m_blockContext.vmSchedule(); }
 
@@ -176,6 +169,9 @@ public:
 
     std::string getContractTableName(
         const std::string_view& _address, bool isWasm = false, bool isCreate = false);
+
+    std::shared_ptr<storage::StateStorageInterface> getTransientStateStorage(
+        int64_t contextID, std::string contractAddress);
 
     std::shared_ptr<storage::Recoder> getRecoder() { return m_recoder; }
 
@@ -226,7 +222,6 @@ protected:
     std::shared_ptr<std::map<std::string, std::shared_ptr<PrecompiledContract>>> m_evmPrecompiled;
     std::shared_ptr<PrecompiledMap> m_precompiled;
     std::shared_ptr<const std::set<std::string>> m_staticPrecompiled;
-    std::shared_ptr<storage::StateStorageInterface> m_transientStateStorage = nullptr;
 
     std::string m_contractAddress;
     int64_t m_contextID;
@@ -240,9 +235,7 @@ protected:
     std::vector<TransactionExecutive::Ptr> m_childExecutives;
 
     storage::StorageWrapper m_storageWrapperObj;
-    storage::StorageWrapper m_transientStorageWrapperObj;
     storage::StorageWrapper* m_storageWrapper;
-    storage::StorageWrapper* m_transientStorageWrapper;
     bool m_hasContractTableChanged = false;
 };
 

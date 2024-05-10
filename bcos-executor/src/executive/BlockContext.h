@@ -32,6 +32,7 @@
 #include "bcos-framework/storage/EntryCache.h"
 #include "bcos-framework/storage/Table.h"
 #include "bcos-table/src/StateStorage.h"
+#include "bcos-utilities/BucketMap.h"
 #include <tbb/concurrent_unordered_map.h>
 #include <atomic>
 #include <functional>
@@ -66,6 +67,12 @@ public:
     virtual ~BlockContext() = default;
 
     std::shared_ptr<storage::StateStorageInterface> storage() const { return m_storage; }
+    using transientStorageMap =
+        BucketMap<std::string, std::shared_ptr<storage::StateStorageInterface>>;
+    std::shared_ptr<transientStorageMap> getTransientStorageMap() const
+    {
+        return m_transientStorageMap;
+    }
 
     uint64_t txGasLimit() const { return m_ledgerCache->fetchTxGasLimit(); }
 
@@ -151,6 +158,7 @@ private:
     bool m_isWasm = false;
     bool m_isAuthCheck = false;
     std::shared_ptr<storage::StateStorageInterface> m_storage;
+    transientStorageMap::Ptr m_transientStorageMap;
     crypto::Hash::Ptr m_hashImpl;
     std::function<void()> f_onNeedSwitchEvent;
     std::shared_ptr<std::set<std::string, std::less<>>> m_keyPageIgnoreTables;

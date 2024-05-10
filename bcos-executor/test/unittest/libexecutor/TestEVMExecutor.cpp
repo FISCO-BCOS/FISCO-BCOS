@@ -1815,51 +1815,8 @@ contract HelloWorld {
 
 BOOST_AUTO_TEST_CASE(transientStorageTest)
 {
-    // test opcode tstore and tload
-    /*  solidity code
-    pragma solidity ^0.8.24;
-
-    contract Reentrancy {
-        // A constant key for the reentrancy guard stored in Transient Storage.
-        // This acts as a unique identifier for the reentrancy lock.
-        bytes32 constant REENTRANCY_GUARD = keccak256("REENTRANCY_GUARD");
-
-        // Modifier to prevent reentrant calls.
-        // It checks if the reentrancy guard is set (indicating an ongoing execution)
-        // and sets the guard before proceeding with the function execution.
-        // After the function executes, it resets the guard to allow future calls.
-        modifier nonReentrant() {
-            // Ensure the guard is not set (i.e., no ongoing execution).
-            require(tload(REENTRANCY_GUARD) == 0, "Reentrant call detected.");
-
-            // Set the guard to block reentrant calls.
-            tstore(REENTRANCY_GUARD, 1);
-
-            _; // Execute the function body.
-
-            // Reset the guard after execution to allow future calls.
-            tstore(REENTRANCY_GUARD, 0);
-        }
-
-        // Uses inline assembly to access the Transient Storage's tstore operation.
-        function tstore(bytes32 location, uint value) private {
-            assembly {
-                tstore(location, value)
-            }
-        }
-
-        // Uses inline assembly to access the Transient Storage's tload operation.
-        // Returns the value stored at the given location.
-        function tload(bytes32 location) private returns (uint value) {
-            assembly {
-            value := tload(location)
-            }
-        }
-
-    }
-    */
-    std::string transientCodeBin = "6080604052348015600e575f80fd5b50603e80601a5f395ff3fe60806040525f80fdfea26469706"
-        "67358221220b3bb4a28ab06e712666d621e644d1a436ac6ed71b8f51fa315ae56a0cb1840c564736f6c63430008190033";
+    // test opcode tstore and tload, contracts: https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/utils/StorageSlot.sol
+    std::string transientCodeBin = "6055604b600b8282823980515f1a607314603f577f4e487b71000000000000000000000000000000000000000000000000000000005f525f60045260245ffd5b305f52607381538281f3fe730000000000000000000000000000000000000000301460806040525f80fdfea26469706673582212207526c07cd3e62e96aa8c4f0b0ac69463d336dd0abeb9929c60cb4627f469b2de64736f6c63430008190033";
 
     bytes input;
     boost::algorithm::unhex(transientCodeBin, std::back_inserter(input));
@@ -1948,8 +1905,7 @@ BOOST_AUTO_TEST_CASE(transientStorageTest2)
     auto newExecutor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, lruStorage,
         newStorage, executionResultFactory, stateStorageFactory, hashImpl, false, false);
 
-    std::string transientCodeBin = "6080604052348015600e575f80fd5b50603e80601a5f395ff3fe60806040525f80fdfea26469706"
-        "67358221220b3bb4a28ab06e712666d621e644d1a436ac6ed71b8f51fa315ae56a0cb1840c564736f6c63430008190033";
+    std::string transientCodeBin = "6055604b600b8282823980515f1a607314603f577f4e487b71000000000000000000000000000000000000000000000000000000005f525f60045260245ffd5b305f52607381538281f3fe730000000000000000000000000000000000000000301460806040525f80fdfea26469706673582212204c6b43d05b303b04da76464e7081b4e87fc3e5a5aa828d7b6962899a0637538264736f6c63430008190033";
     bytes input;
     boost::algorithm::unhex(transientCodeBin, std::back_inserter(input));
 
@@ -2378,6 +2334,117 @@ BOOST_AUTO_TEST_CASE(blobHash_test){
     BOOST_CHECK_EQUAL(result->status(), 0);
     BOOST_CHECK_EQUAL(result->evmStatus(), 0);
 }
+
+BOOST_AUTO_TEST_CASE(getTransientStorageTest)
+{
+    // turn on feature_evm_cuncan swtich
+    std::shared_ptr<MockTransactionalStorage> newStorage = std::make_shared<MockTransactionalStorage>(hashImpl);
+    Entry entry;
+    bcos::protocol::BlockNumber blockNumber = 0;
+    entry.setObject(
+        ledger::SystemConfigEntry{boost::lexical_cast<std::string>((int)1), blockNumber});
+    newStorage->asyncSetRow(ledger::SYS_CONFIG, "feature_evm_cancun", entry, [](Error::UniquePtr error)
+        {
+            BOOST_CHECK_EQUAL(error.get(), nullptr);
+        });
+    // check feature_evm_cancun whether is on
+    auto entry1 = newStorage->getRow(ledger::SYS_CONFIG, "feature_evm_cancun");
+    //    BOOST_CHECK_EQUAL(value, "1");
+    //    BOOST_CHECK_EQUAL(enableNumber, 0);
+
+    auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
+    auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(0);
+    auto lruStorage = std::make_shared<bcos::storage::LRUStateStorage>(newStorage);
+    auto newExecutor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, lruStorage,
+        newStorage, executionResultFactory, stateStorageFactory, hashImpl, false, false);
+
+    std::string transientCodeBin = "60806040527fe3598e46f24394be411dcf68a978c22ef80d97a0ef7c630d9b8e35d241c021006001553480156032575f80fd5b506106a9806100405f395ff3fe608060405234801561000f575f80fd5b5060043610610055575f3560e01c806320965255146100595780632a130724146100775780635524107714610093578063613d81e1146100af57806374f7ca87146100b9575b5f80fd5b6100616100d7565b60405161006e91906103a4565b60405180910390f35b610091600480360381019061008c919061041b565b6100eb565b005b6100ad60048036038101906100a89190610470565b61012d565b005b6100b761013a565b005b6100c1610369565b6040516100ce91906104aa565b60405180910390f35b5f8060015490505f815c9050809250505090565b805f806101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff16021790555050565b5f600154905081815d5050565b5f73ffffffffffffffffffffffffffffffffffffffff165f8054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16036101c7576040517f08c379a00000000000000000000000000000000000000000000000000000000081526004016101be9061051d565b60405180910390fd5b5f805f9054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff166040516024016040516020818303038152906040527fb7fd2786000000000000000000000000000000000000000000000000000000007bffffffffffffffffffffffffffffffffffffffffffffffffffffffff19166020820180517bffffffffffffffffffffffffffffffffffffffffffffffffffffffff838183161783525050505060405161028f919061058d565b5f604051808303815f865af19150503d805f81146102c8576040519150601f19603f3d011682016040523d82523d5f602084013e6102cd565b606091505b5050905080610311576040517f08c379a0000000000000000000000000000000000000000000000000000000008152600401610308906105ed565b60405180910390fd5b5f61031a6100d7565b90506103246100d7565b8114610365576040517f08c379a000000000000000000000000000000000000000000000000000000000815260040161035c90610655565b60405180910390fd5b5050565b5f8054906101000a900473ffffffffffffffffffffffffffffffffffffffff1681565b5f819050919050565b61039e8161038c565b82525050565b5f6020820190506103b75f830184610395565b92915050565b5f80fd5b5f73ffffffffffffffffffffffffffffffffffffffff82169050919050565b5f6103ea826103c1565b9050919050565b6103fa816103e0565b8114610404575f80fd5b50565b5f81359050610415816103f1565b92915050565b5f602082840312156104305761042f6103bd565b5b5f61043d84828501610407565b91505092915050565b61044f8161038c565b8114610459575f80fd5b50565b5f8135905061046a81610446565b92915050565b5f60208284031215610485576104846103bd565b5b5f6104928482850161045c565b91505092915050565b6104a4816103e0565b82525050565b5f6020820190506104bd5f83018461049b565b92915050565b5f82825260208201905092915050565b7f4220636f6e74726163742061646472657373206e6f74207365740000000000005f82015250565b5f610507601a836104c3565b9150610512826104d3565b602082019050919050565b5f6020820190508181035f830152610534816104fb565b9050919050565b5f81519050919050565b5f81905092915050565b8281835e5f83830152505050565b5f6105678261053b565b6105718185610545565b935061058181856020860161054f565b80840191505092915050565b5f610598828461055d565b915081905092915050565b7f43616c6c20746f204220636f6e7472616374206661696c6564000000000000005f82015250565b5f6105d76019836104c3565b91506105e2826105a3565b602082019050919050565b5f6020820190508181035f830152610604816105cb565b9050919050565b7f53746f7265642076616c756520646f6573206e6f74206d6174636800000000005f82015250565b5f61063f601b836104c3565b915061064a8261060b565b602082019050919050565b5f6020820190508181035f83015261066c81610633565b905091905056fea264697066735822122032dafff81aab17ab191d852a4391e85e6339bf0c051c273ddc9ac4134825fb5464736f6c63430008190033";
+    bytes input;
+    boost::algorithm::unhex(transientCodeBin, std::back_inserter(input));
+
+    auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(100), 100000, "1", "1");
+    auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
+    // The contract address
+    h256 addressCreate("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e");
+    std::string address = addressCreate.hex().substr(0, 40);
+
+    auto hash = tx->hash();
+    txpool->hash2Transaction.emplace(hash, tx);
+
+
+    auto params1 = std::make_unique<NativeExecutionMessage>();
+    params1->setContextID(101);
+    params1->setSeq(1001);
+    params1->setDepth(0);
+    params1->setOrigin(std::string(sender));
+    params1->setFrom(std::string(sender));
+
+    // The contract address
+    params1->setTo(sender);
+    params1->setStaticCall(false);
+    params1->setGasAvailable(gas);
+    params1->setData(input);
+    params1->setType(NativeExecutionMessage::TXHASH);
+    params1->setTransactionHash(hash);
+    params1->setCreate(true);
+
+    NativeExecutionMessage paramsBak1 = *params1;
+
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>([m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    blockHeader->setNumber(1);
+    blockHeader->setVersion((uint32_t)bcos::protocol::BlockVersion::MAX_VERSION);
+
+    std::vector<bcos::protocol::ParentInfo> parentInfos{
+        {{blockHeader->number() - 1, h256(blockHeader->number() - 1)}}
+    };
+    blockHeader->setParentInfo(parentInfos);
+    ledger->setBlockNumber(blockHeader->number() - 1);
+    blockHeader->calculateHash(*cryptoSuite->hashImpl());
+    std::promise<void> nextPromise;
+    newExecutor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
+        BOOST_CHECK(!error);
+        nextPromise.set_value();
+    });
+    nextPromise.get_future().get();
+
+    // --------------------------
+    // Deploy
+    // --------------------------
+    std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
+    newExecutor->executeTransaction(std::move(params1),
+        [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+            BOOST_CHECK(!error);
+            executePromise.set_value(std::move(result));
+        });
+    auto result = executePromise.get_future().get();
+    BOOST_CHECK(result);
+
+    BOOST_CHECK_EQUAL(result->type(), NativeExecutionMessage::FINISHED);
+    BOOST_CHECK_EQUAL(result->status(), 0);
+    BOOST_CHECK_EQUAL(result->evmStatus(), 0);
+}
+
+
+//BOOST_AUTO_TEST_CASE(contract_call){
+
+// }
+//BOOST_AUTO_TEST_CASE(point_evaluation_test) {
+//    bcos::bytes input{};
+//    static constexpr intx::uint256 kBlsModulus = intx::from_string<intx::uint256>(
+//        "52435875175126190479447740508185965837690552500527637822603658699938581184513");
+//
+//    std::string date = "014edfed8547661f6cb416eba53061a2f6dce872c0497e6dd485a876fe2567f1564"
+//        "c0a11a0f704f4fc3e8acfe0f8245f0ad1347b378fbf96e206da11a5d363066d928e13fe443e957d82e"
+//        "3e71d48cb65d51028eb4483e719bf8efcdf12f7c321a421e229565952cfff4ef3517100a97da1d4fe5"
+//        "7956fa50a442f92af03b1bf37adacc8ad4ed209b31287ea5bb94d9d06a444d6bb5aadc3ceb615b50d6"
+//        "606bd54bfe529f59247987cd1ab848d19de599a9052f1835fb0d0d44cf70183e19a68c9";
+//
+//    input = bcos::bytes(date.begin(), date.end());
+//
+//
+//
+//
+//}
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace bcos

@@ -216,7 +216,8 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
                              << LOG_KV("blockNumber", m_blockContext.number());
     }
     m_storageWrapper->setRecoder(m_recoder);
-    m_transientStorageWrapper->setRecoder(m_transientRecoder);
+    auto transientStorage = getTransientStateStorage(m_contextID, m_contractAddress);
+    transientStorage->setRecoder(m_transientRecoder);
     std::unique_ptr<HostContext> hostContext;
     CallParameters::UniquePtr callResults;
     if (c_fileLogLevel <= LogLevel::TRACE)
@@ -1375,7 +1376,8 @@ void TransactionExecutive::revert()
     }
 
     m_blockContext.storage()->rollback(*m_recoder);
-    m_transientStateStorage->rollback(*m_transientRecoder);
+    auto transientStateStorage = getTransientStateStorage(m_contextID, m_contractAddress);
+    transientStateStorage->rollback(*m_transientRecoder);
     m_recoder->clear();
 }
 
@@ -1876,4 +1878,45 @@ std::string TransactionExecutive::getContractTableName(
     }
 
     return std::string(USER_APPS_PREFIX).append(formatAddress);
+}
+
+std::shared_ptr<storage::StateStorageInterface> TransactionExecutive::getTransientStateStorage(
+    int64_t contextID, std::string contractAddress)
+{
+    auto transientStorageMap = blockContext().getTransientStorageMap();
+    std::string transientStorageMapKey = std::to_string(contextID) + contractAddress;
+    bcos::storage::StateStorageInterface::Ptr transientStorage;
+    bool has;
+    {
+        tssMap::ReadAccessor::Ptr readAccessor;
+        has = transientStorageMap->find<tssMap::ReadAccessor>(readAccessor, transientStorageMapKey);
+    }
+    if (!has)
+    {
+        {
+            tssMap::WriteAccessor::Ptr writeAccessor;
+            auto hasWrite = transientStorageMap->find<tssMap::WriteAccessor>(
+                writeAccessor, transientStorageMapKey);
+
+            if (!hasWrite)
+            {
+                transientStorage = std::make_shared<bcos::storage::StateStorage>(nullptr);
+                transientStorageMap->insert(
+                    writeAccessor, {transientStorageMapKey, transientStorage});
+            }
+            else
+            {
+                transientStorage = writeAccessor->value();
+            }
+        }
+    }
+    else
+    {
+        {
+            tssMap::ReadAccessor::Ptr readAccess;
+            transientStorageMap->find<tssMap::ReadAccessor>(readAccess, transientStorageMapKey);
+            transientStorage = readAccess->value();
+        }
+    }
+    return transientStorage;
 }
