@@ -39,3 +39,15 @@ void bcos::rpc::buildJsonError(
     error["message"] = std::move(message);
     response["error"] = std::move(error);
 }
+
+void bcos::rpc::buildJsonErrorWithData(
+    Json::Value& data, int32_t code, std::string message, Json::Value& response)
+{
+    response["jsonrpc"] = "2.0";
+    // maybe request not init
+    Json::Value error = Json::objectValue;
+    error["code"] = code;
+    error["message"] = std::move(message);
+    error["data"].swap(data);
+    response["error"] = std::move(error);
+}

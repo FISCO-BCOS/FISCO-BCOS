@@ -128,16 +128,16 @@ public:
     TransactionType type{TransactionType::Legacy};
     Address to{};
     bcos::bytes data{};
-    uint64_t value{0};
+    u256 value{0};
     uint64_t nonce{0};
     uint64_t gasLimit{0};
     // EIP-2930: Optional access lists
     std::vector<AccessListEntry> accessList{};
     // EIP-1559: Fee market change for ETH 1.0 chain
-    uint64_t maxPriorityFeePerGas{0};  // for legacy tx, it stands for gasPrice
-    uint64_t maxFeePerGas{0};
+    u256 maxPriorityFeePerGas{0};  // for legacy tx, it stands for gasPrice
+    u256 maxFeePerGas{0};
     // EIP-4844: Shard Blob Transactions
-    uint64_t maxFeePerBlobGas{0};
+    u256 maxFeePerBlobGas{0};
     h256s blobVersionedHashes{};
     // TODO)) blob
     bcos::bytes signatureR{};

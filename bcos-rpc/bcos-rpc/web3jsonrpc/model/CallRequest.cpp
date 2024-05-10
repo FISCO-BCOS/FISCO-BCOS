@@ -29,6 +29,11 @@ bcos::protocol::Transaction::Ptr CallRequest::takeToTransaction(
     auto tx = factory->createTransaction(0, std::move(this->to), std::move(this->data), "", 0, {},
         {}, 0, "", value.value_or(""), gasPrice.value_or(""), gas.value_or(0),
         maxFeePerGas.value_or(""), maxPriorityFeePerGas.value_or(""));
+    if (from.has_value())
+    {
+        auto sender = fromHexWithPrefix(from.value());
+        tx->forceSender(std::move(sender));
+    }
     return tx;
 }
 

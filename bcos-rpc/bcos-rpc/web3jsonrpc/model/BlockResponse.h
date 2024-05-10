@@ -21,6 +21,7 @@
 #pragma once
 #include <bcos-framework/protocol/Block.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
+#include <bcos-rpc/web3jsonrpc/model/TransactionResponse.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <json/json.h>
@@ -50,10 +51,27 @@ namespace bcos::rpc
     result["gasLimit"] = toQuantity(3000000000ull);
     result["gasUsed"] = toQuantity((uint64_t)block->blockHeader()->gasUsed());
     result["timestamp"] = toQuantity(block->blockHeader()->timestamp());
-    // if (fullTxs)
-    // {
-    //     result["transactions"] = Json::Value(Json::arrayValue);
-    // }
+    if (fullTxs)
+    {
+        Json::Value txList = Json::arrayValue;
+        for (size_t i = 0; i < block->transactionsSize(); i++)
+        {
+            Json::Value txJson;
+            auto tx = block->transaction(i);
+            combineTxResponse(txJson, std::move(tx), nullptr, block);
+            txList.append(txJson);
+        }
+        result["transactions"] = std::move(txList);
+    }
+    else
+    {
+        Json::Value txHashesList = Json::arrayValue;
+        for (size_t i = 0; i < block->transactionsHashSize(); i++)
+        {
+            txHashesList.append(block->transactionHash(i).hexPrefixed());
+        }
+        result["transactions"] = std::move(txHashesList);
+    }
     result["uncles"] = Json::Value(Json::arrayValue);
 }
 }  // namespace bcos::rpc

@@ -31,10 +31,7 @@ public:
     Web3FilterRequest() = default;
     ~Web3FilterRequest() = default;
     Web3FilterRequest(const FilterRequest& oth) : FilterRequest(oth) {}
-    virtual int32_t InvalidParamsCode() override 
-    {
-        return Web3JsonRpcError::Web3DefautError;
-    }
+    virtual int32_t InvalidParamsCode() override { return Web3JsonRpcError::Web3DefautError; }
 };
 
 class Web3FilterRequestFactory : public FilterRequestFactory
@@ -42,10 +39,7 @@ class Web3FilterRequestFactory : public FilterRequestFactory
 public:
     Web3FilterRequestFactory() = default;
     ~Web3FilterRequestFactory() = default;
-    FilterRequest::Ptr create() override
-    {
-        return std::make_shared<Web3FilterRequest>();
-    }
+    FilterRequest::Ptr create() override { return std::make_shared<Web3FilterRequest>(); }
     FilterRequest::Ptr create(const FilterRequest& req) override
     {
         return std::make_shared<Web3FilterRequest>(req);

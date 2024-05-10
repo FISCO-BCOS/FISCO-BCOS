@@ -48,7 +48,7 @@ void Web3JsonRpcImpl::onRPCRequest(std::string_view _requestBody, Sender _sender
                 Json::Value resp;
                 try
                 {
-                    // FIXME: throw exception here will core dump
+                    // FIXME)): throw exception here will core dump
                     Json::Value const& params = _request["params"];
 
                     co_await (self->m_endpoints.*_handler)(params, resp);
