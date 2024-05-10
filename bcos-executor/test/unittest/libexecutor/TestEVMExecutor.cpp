@@ -2424,27 +2424,6 @@ BOOST_AUTO_TEST_CASE(getTransientStorageTest)
     BOOST_CHECK_EQUAL(result->evmStatus(), 0);
 }
 
-
-//BOOST_AUTO_TEST_CASE(contract_call){
-
-// }
-//BOOST_AUTO_TEST_CASE(point_evaluation_test) {
-//    bcos::bytes input{};
-//    static constexpr intx::uint256 kBlsModulus = intx::from_string<intx::uint256>(
-//        "52435875175126190479447740508185965837690552500527637822603658699938581184513");
-//
-//    std::string date = "014edfed8547661f6cb416eba53061a2f6dce872c0497e6dd485a876fe2567f1564"
-//        "c0a11a0f704f4fc3e8acfe0f8245f0ad1347b378fbf96e206da11a5d363066d928e13fe443e957d82e"
-//        "3e71d48cb65d51028eb4483e719bf8efcdf12f7c321a421e229565952cfff4ef3517100a97da1d4fe5"
-//        "7956fa50a442f92af03b1bf37adacc8ad4ed209b31287ea5bb94d9d06a444d6bb5aadc3ceb615b50d6"
-//        "606bd54bfe529f59247987cd1ab848d19de599a9052f1835fb0d0d44cf70183e19a68c9";
-//
-//    input = bcos::bytes(date.begin(), date.end());
-//
-//
-//
-//
-//}
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace bcos
