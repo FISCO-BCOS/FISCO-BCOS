@@ -20,6 +20,7 @@
 
 #pragma once
 #include <bcos-rpc/Common.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <json/json.h>
 
 namespace bcos::rpc
@@ -27,6 +28,8 @@ namespace bcos::rpc
 void buildJsonContent(Json::Value& result, Json::Value& response);
 void buildJsonError(
     Json::Value const& request, int32_t code, std::string message, Json::Value& response);
+void buildJsonErrorWithData(
+    Json::Value& data, int32_t code, std::string message, Json::Value& response);
 inline auto printJson(const Json::Value& value)
 {
     Json::StreamWriterBuilder builder;

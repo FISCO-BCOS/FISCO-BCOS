@@ -109,6 +109,32 @@ inline size_t length(std::unsigned_integral auto n) noexcept
     }
 }
 
+template <typename T>
+inline size_t length(T const& n) noexcept
+    requires(std::convertible_to<T, bigint> && !std::integral<T>)
+{
+    if (n < BYTES_HEAD_BASE)
+    {
+        return 1;
+    }
+    size_t word = n.backend().internal_limb_count;
+    for (; word > 0; --word)
+    {
+        if (n.backend().limbs()[word - 1] != 0)
+        {
+            break;
+        }
+    }
+    if (word != 0)
+    {
+        auto significantBytes =
+            (64u - std::countl_zero(n.backend().limbs()[word - 1]) + 7) / 8u + (word - 1) * 8;
+        const size_t n_bytes{significantBytes};
+        return n_bytes + lengthOfLength(n_bytes);
+    }
+    return 1;
+}
+
 inline size_t length(bool) noexcept
 {
     return 1;

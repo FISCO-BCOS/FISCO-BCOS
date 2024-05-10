@@ -114,16 +114,18 @@ bcostars::Transaction Web3Transaction::takeToTarsTransaction()
     tarsTx.data.to = (this->to == Address()) ? "" : this->to.hexPrefixed();
     tarsTx.data.input.reserve(this->data.size());
     RANGES::move(this->data, std::back_inserter(tarsTx.data.input));
-    tarsTx.data.value = toHex(this->value);
+
+    tarsTx.data.value = "0x" + this->value.str(0, std::ios_base::hex);
     tarsTx.data.gasLimit = this->gasLimit;
     if (static_cast<uint8_t>(this->type) >= static_cast<uint8_t>(TransactionType::EIP1559))
     {
-        tarsTx.data.maxFeePerGas = toHex(this->maxFeePerGas);
-        tarsTx.data.maxPriorityFeePerGas = toHex(this->maxPriorityFeePerGas);
+        tarsTx.data.maxFeePerGas = "0x" + this->maxFeePerGas.str(0, std::ios_base::hex);
+        tarsTx.data.maxPriorityFeePerGas =
+            "0x" + this->maxPriorityFeePerGas.str(0, std::ios_base::hex);
     }
     else
     {
-        tarsTx.data.gasPrice = toHex(this->maxPriorityFeePerGas);
+        tarsTx.data.gasPrice = "0x" + this->maxPriorityFeePerGas.str(0, std::ios_base::hex);
     }
     tarsTx.type = static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transacion);
     auto hashForSign = this->hashForSign();
@@ -143,6 +145,7 @@ bcostars::Transaction Web3Transaction::takeToTarsTransaction()
         reinterpret_cast<const bcos::byte*>(tarsTx.signature.data()), tarsTx.signature.size());
     auto [_, sender] = signatureImpl.recoverAddress(hashImpl, hashForSign, signRef);
     tarsTx.data.nonce = toHexStringWithPrefix(sender) + toQuantity(this->nonce);
+    tarsTx.data.chainID = std::to_string(this->chainId.value_or(0));
     tarsTx.dataHash.reserve(crypto::HashType::SIZE);
     RANGES::move(hashForSign, std::back_inserter(tarsTx.dataHash));
     tarsTx.sender.reserve(sender.size());
@@ -364,11 +367,13 @@ bcos::Error::UniquePtr decode(bcos::bytesRef& in, Web3Transaction& out) noexcept
         out.value, out.data, out.signatureV, out.signatureR, out.signatureS);
     if (out.signatureR.size() < crypto::SECP256K1_SIGNATURE_LEN / 2)
     {
-        out.signatureR.insert(out.signatureR.begin(), bcos::byte(0));
+        out.signatureR.insert(
+            out.signatureR.begin(), crypto::SECP256K1_SIGNATURE_R_LEN - out.signatureR.size(), 0);
     }
     if (out.signatureS.size() < crypto::SECP256K1_SIGNATURE_LEN / 2)
     {
-        out.signatureS.insert(out.signatureS.begin(), bcos::byte(0));
+        out.signatureS.insert(out.signatureS.begin(),
+            crypto::SECP256K1_SIGNATURE_R_LEN - out.signatureS.size(), bcos::byte(0));
     }
     // TODO: EIP-155 chainId decode from encoded bytes for sign
     out.maxFeePerGas = out.maxPriorityFeePerGas;

@@ -63,16 +63,17 @@ namespace bcos::rpc
     result["transactionIndex"] = toQuantity(transactionIndex);
     result["blockHash"] = blockHash.hexPrefixed();
     result["blockNumber"] = toQuantity(blockNumber);
-    auto from = toHexStringWithPrefix(tx->sender());
-    toChecksumAddress(from, bcos::crypto::keccak256Hash(from).hexPrefixed(), "0x");
-    result["from"] = std::move(from);
+    auto from = toHex(tx->sender());
+    toChecksumAddress(from, bcos::crypto::keccak256Hash(from).hex());
+    result["from"] = "0x" + std::move(from);
     if (tx->to().empty())
     {
-        result["to"] = "";
+        result["to"] = Json::nullValue;
     }
     else
     {
-        auto to = std::string(tx->to());
+        auto toView = tx->to();
+        auto to = std::string(toView.starts_with("0x") ? toView.substr(2) : toView);
         toChecksumAddress(to, bcos::crypto::keccak256Hash(to).hex());
         result["to"] = "0x" + std::move(to);
     }
@@ -109,7 +110,7 @@ namespace bcos::rpc
         log["blockNumber"] = toQuantity(blockNumber);
         log["blockHash"] = blockHash.hexPrefixed();
         log["transactionIndex"] = toQuantity(transactionIndex);
-        log["transactionHash"] = receipt->hash().hexPrefixed();
+        log["transactionHash"] = tx->hash().hexPrefixed();
         log["removed"] = false;
         result["logs"].append(std::move(log));
     }
