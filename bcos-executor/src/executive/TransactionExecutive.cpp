@@ -1466,6 +1466,10 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
                             << LOG_KV("to", callResults->receiveAddress);
         callResults->status = (int32_t)TransactionStatus::BadInstruction;
         revert();
+        if (m_blockContext.features().get(ledger::Features::Flag::bugfix_evm_exception_gas_used))
+        {
+            callResults->gas = _result.gasLeft();
+        }
         if (versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
         {
             writeErrInfoToOutput("Execution invalid/undefined opcode.", *callResults);
@@ -1484,6 +1488,10 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
                 "Execution has violated the jump destination restrictions.", *callResults);
         }
         revert();
+        if (m_blockContext.features().get(ledger::Features::Flag::bugfix_evm_exception_gas_used))
+        {
+            callResults->gas = _result.gasLeft();
+        }
         break;
     }
     case EVMC_STACK_OVERFLOW:
@@ -1497,6 +1505,10 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
             writeErrInfoToOutput("Execution stack overflow.", *callResults);
         }
         revert();
+        if (m_blockContext.features().get(ledger::Features::Flag::bugfix_evm_exception_gas_used))
+        {
+            callResults->gas = _result.gasLeft();
+        }
         break;
     }
     case EVMC_STACK_UNDERFLOW:
@@ -1509,6 +1521,10 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
             writeErrInfoToOutput("Execution needs more items on EVM stack.", *callResults);
         }
         revert();
+        if (m_blockContext.features().get(ledger::Features::Flag::bugfix_evm_exception_gas_used))
+        {
+            callResults->gas = _result.gasLeft();
+        }
         break;
     }
     case EVMC_INVALID_MEMORY_ACCESS:
@@ -1522,6 +1538,10 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
             writeErrInfoToOutput("Execution tried to read outside memory bounds.", *callResults);
         }
         revert();
+        if (m_blockContext.features().get(ledger::Features::Flag::bugfix_evm_exception_gas_used))
+        {
+            callResults->gas = _result.gasLeft();
+        }
         break;
     }
     case EVMC_STATIC_MODE_VIOLATION:
@@ -1541,6 +1561,10 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
         }
         callResults->status = (int32_t)TransactionStatus::Unknown;
         revert();
+        if (m_blockContext.features().get(ledger::Features::Flag::bugfix_evm_exception_gas_used))
+        {
+            callResults->gas = _result.gasLeft();
+        }
         break;
     }
     case EVMC_CONTRACT_VALIDATION_FAILURE:
@@ -1554,6 +1578,10 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
             writeErrInfoToOutput("Contract validation has failed.", *callResults);
         }
         revert();
+        if (m_blockContext.features().get(ledger::Features::Flag::bugfix_evm_exception_gas_used))
+        {
+            callResults->gas = _result.gasLeft();
+        }
         break;
     }
     case EVMC_ARGUMENT_OUT_OF_RANGE:
@@ -1569,6 +1597,10 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
                 *callResults);
         }
         revert();
+        if (m_blockContext.features().get(ledger::Features::Flag::bugfix_evm_exception_gas_used))
+        {
+            callResults->gas = _result.gasLeft();
+        }
         break;
     }
     case EVMC_WASM_TRAP:
@@ -1584,6 +1616,10 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
             writeErrInfoToOutput("A WebAssembly trap has been hit during execution.", *callResults);
         }
         revert();
+        if (m_blockContext.features().get(ledger::Features::Flag::bugfix_evm_exception_gas_used))
+        {
+            callResults->gas = _result.gasLeft();
+        }
         break;
     }
     case EVMC_INTERNAL_ERROR:
@@ -1593,6 +1629,10 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
                                << LOG_KV("to", callResults->receiveAddress)
                                << LOG_KV("status", _result.status());
         revert();
+        if (m_blockContext.features().get(ledger::Features::Flag::bugfix_evm_exception_gas_used))
+        {
+            callResults->gas = _result.gasLeft();
+        }
         if (_result.status() <= EVMC_INTERNAL_ERROR)
         {
             BOOST_THROW_EXCEPTION(InternalVMError{} << errinfo_evmcStatusCode(_result.status()));

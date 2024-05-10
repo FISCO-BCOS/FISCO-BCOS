@@ -81,7 +81,7 @@ struct TransactionExecutorFixture
         ledger = std::make_shared<MockLedger>();
         auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
 
-        auto lruStorage = std::make_shared<bcos::storage::LRUStateStorage>(backend);
+        auto lruStorage = std::make_shared<bcos::storage::LRUStateStorage>(backend, false);
         auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(0);
         executor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, lruStorage,
             backend, executionResultFactory, stateStorageFactory, hashImpl, false, false);

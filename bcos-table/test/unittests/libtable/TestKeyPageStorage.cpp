@@ -86,7 +86,7 @@ struct KeyPageStorageFixture
     {
         boost::log::core::get()->set_logging_enabled(false);
         hashImpl = make_shared<Header256Hash>();
-        auto stateStorage = make_shared<StateStorage>(nullptr);
+        auto stateStorage = make_shared<StateStorage>(nullptr, false);
         stateStorage->setEnableTraverse(true);
         memoryStorage = stateStorage;
         BOOST_REQUIRE(memoryStorage != nullptr);
@@ -621,7 +621,7 @@ BOOST_AUTO_TEST_CASE(hash)
 BOOST_AUTO_TEST_CASE(hash_V3_1_0)
 {
     auto hashImpl2 = make_shared<Header256Hash>();
-    auto memoryStorage2 = make_shared<StateStorage>(nullptr);
+    auto memoryStorage2 = make_shared<StateStorage>(nullptr, false);
     auto tableFactory2 = make_shared<KeyPageStorage>(
         memoryStorage2, 10240, (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
     auto tableFactory1 = make_shared<KeyPageStorage>(
@@ -684,7 +684,7 @@ BOOST_AUTO_TEST_CASE(hash_V3_1_0)
 BOOST_AUTO_TEST_CASE(hash_different_table_same_data)
 {
     auto hashImpl2 = std::make_shared<Keccak256>();
-    auto memoryStorage2 = make_shared<StateStorage>(nullptr);
+    auto memoryStorage2 = make_shared<StateStorage>(nullptr, false);
 
     auto tableFactory1 = make_shared<KeyPageStorage>(
         memoryStorage2, 10240, (uint32_t)bcos::protocol::BlockVersion::V3_0_VERSION);
@@ -752,7 +752,7 @@ BOOST_AUTO_TEST_CASE(open_sysTables)
 BOOST_AUTO_TEST_CASE(openAndCommit)
 {
     auto hashImpl2 = make_shared<Header256Hash>();
-    auto memoryStorage2 = make_shared<StateStorage>(nullptr);
+    auto memoryStorage2 = make_shared<StateStorage>(nullptr, false);
     auto tableFactory2 = make_shared<KeyPageStorage>(memoryStorage2);
 
     for (int i = 10; i < 20; ++i)
@@ -783,7 +783,7 @@ BOOST_AUTO_TEST_CASE(openAndCommit)
 BOOST_AUTO_TEST_CASE(checkInvalidKeys)
 {
     auto hashImpl2 = make_shared<Header256Hash>();
-    auto memoryStorage2 = make_shared<StateStorage>(nullptr);
+    auto memoryStorage2 = make_shared<StateStorage>(nullptr, false);
     auto tableFactory2 = make_shared<KeyPageStorage>(memoryStorage2);
     BOOST_REQUIRE(tableFactory2 != nullptr);
 
@@ -832,7 +832,7 @@ BOOST_AUTO_TEST_CASE(chainLink)
     std::vector<KeyPageStorage::Ptr> storages;
     auto valueFields = "value1";
 
-    auto stateStorage = make_shared<StateStorage>(nullptr);
+    auto stateStorage = make_shared<StateStorage>(nullptr, false);
     StateStorageInterface::Ptr prev = stateStorage;
     for (int i = 0; i < 10; ++i)
     {
@@ -992,7 +992,7 @@ BOOST_AUTO_TEST_CASE(getRows)
     std::vector<KeyPageStorage::Ptr> storages;
     auto valueFields = "value1,value2,value3";
 
-    auto stateStorage = make_shared<StateStorage>(nullptr);
+    auto stateStorage = make_shared<StateStorage>(nullptr, false);
     auto prev = std::make_shared<KeyPageStorage>(stateStorage);
     auto tableStorage = std::make_shared<KeyPageStorage>(prev);
 
@@ -1154,7 +1154,7 @@ BOOST_AUTO_TEST_CASE(checkVersion)
 BOOST_AUTO_TEST_CASE(deleteAndGetRows)
 {
     KeyPageStorage::Ptr storage1 =
-        std::make_shared<KeyPageStorage>(make_shared<StateStorage>(nullptr));
+        std::make_shared<KeyPageStorage>(make_shared<StateStorage>(nullptr, false), false);
 
     storage1->asyncCreateTable(
         "table", "value", [](Error::UniquePtr error, std::optional<Table> table) {
@@ -1291,7 +1291,7 @@ BOOST_AUTO_TEST_CASE(readPageWithInvalidKeyAndDeleteNotChangePageKey)
 BOOST_AUTO_TEST_CASE(deletedAndGetRow)
 {
     KeyPageStorage::Ptr storage1 =
-        std::make_shared<KeyPageStorage>(make_shared<StateStorage>(nullptr));
+        std::make_shared<KeyPageStorage>(make_shared<StateStorage>(nullptr, false), false);
 
     storage1->asyncCreateTable(
         "table", "value", [](Error::UniquePtr error, std::optional<Table> table) {
@@ -1325,7 +1325,7 @@ BOOST_AUTO_TEST_CASE(deletedAndGetRow)
 BOOST_AUTO_TEST_CASE(deletedAndGetRows)
 {
     KeyPageStorage::Ptr storage1 =
-        std::make_shared<KeyPageStorage>(make_shared<StateStorage>(nullptr));
+        std::make_shared<KeyPageStorage>(make_shared<StateStorage>(nullptr, false), false);
 
     storage1->asyncCreateTable(
         "table", "value", [](Error::UniquePtr error, std::optional<Table> table) {
@@ -1357,7 +1357,7 @@ BOOST_AUTO_TEST_CASE(deletedAndGetRows)
 BOOST_AUTO_TEST_CASE(rollbackAndGetRow)
 {
     KeyPageStorage::Ptr storage1 =
-        std::make_shared<KeyPageStorage>(make_shared<StateStorage>(nullptr));
+        std::make_shared<KeyPageStorage>(make_shared<StateStorage>(nullptr, false), false);
 
     storage1->asyncCreateTable(
         "table", "value", [](Error::UniquePtr error, std::optional<Table> table) {
@@ -1398,7 +1398,7 @@ BOOST_AUTO_TEST_CASE(rollbackAndGetRow)
 BOOST_AUTO_TEST_CASE(rollbackAndGetRows)
 {
     KeyPageStorage::Ptr storage1 =
-        std::make_shared<KeyPageStorage>(make_shared<StateStorage>(nullptr));
+        std::make_shared<KeyPageStorage>(make_shared<StateStorage>(nullptr, false), false);
 
     storage1->asyncCreateTable(
         "table", "value", [](Error::UniquePtr error, std::optional<Table> table) {
@@ -1473,7 +1473,7 @@ BOOST_AUTO_TEST_CASE(randomRWHash)
     for (size_t times = 0; times < 10; ++times)
     {
         std::vector<bcos::crypto::HashType> hashes;
-        StateStorageInterface::Ptr prev = make_shared<StateStorage>(nullptr);
+        StateStorageInterface::Ptr prev = make_shared<StateStorage>(nullptr, false);
         for (size_t i = 0; i < 10; ++i)
         {
             KeyPageStorage::Ptr storage = std::make_shared<KeyPageStorage>(prev);
@@ -1605,7 +1605,7 @@ BOOST_AUTO_TEST_CASE(pageMerge)
 {
     auto valueFields = "value1";
 
-    auto stateStorage = make_shared<StateStorage>(nullptr);
+    auto stateStorage = make_shared<StateStorage>(nullptr, false);
     StateStorageInterface::Ptr prev = stateStorage;
 
     auto tableStorage = std::make_shared<KeyPageStorage>(prev, 1024);
@@ -1681,7 +1681,7 @@ BOOST_AUTO_TEST_CASE(pageMergeRandom)
 {
     auto valueFields = "value1";
 
-    auto stateStorage = make_shared<StateStorage>(nullptr);
+    auto stateStorage = make_shared<StateStorage>(nullptr, false);
     StateStorageInterface::Ptr prev = stateStorage;
 
     auto tableStorage = std::make_shared<KeyPageStorage>(prev, 1024);
@@ -1795,7 +1795,7 @@ BOOST_AUTO_TEST_CASE(pageMergeParallelRandom)
 {
     auto valueFields = "value1";
 
-    auto stateStorage = make_shared<StateStorage>(nullptr);
+    auto stateStorage = make_shared<StateStorage>(nullptr, false);
     StateStorageInterface::Ptr prev = stateStorage;
 
     auto tableStorage = std::make_shared<KeyPageStorage>(prev, 1024);
@@ -1880,7 +1880,7 @@ BOOST_AUTO_TEST_CASE(parallelMix)
 {
     auto valueFields = "value1";
 
-    auto stateStorage = make_shared<StateStorage>(nullptr);
+    auto stateStorage = make_shared<StateStorage>(nullptr, false);
     StateStorageInterface::Ptr prev = stateStorage;
 
     auto tableStorage = std::make_shared<KeyPageStorage>(prev, 1024);
@@ -1977,7 +1977,7 @@ BOOST_AUTO_TEST_CASE(pageSplit)
 {
     auto valueFields = "value1";
 
-    auto stateStorage = make_shared<StateStorage>(nullptr);
+    auto stateStorage = make_shared<StateStorage>(nullptr, false);
     StateStorageInterface::Ptr prev = stateStorage;
 
     auto tableStorage = std::make_shared<KeyPageStorage>(prev, 1024);
@@ -2027,7 +2027,7 @@ BOOST_AUTO_TEST_CASE(pageSplitRandom)
 {
     auto valueFields = "value1";
 
-    auto stateStorage = make_shared<StateStorage>(nullptr);
+    auto stateStorage = make_shared<StateStorage>(nullptr, false);
     StateStorageInterface::Ptr prev = stateStorage;
 
     auto tableStorage = std::make_shared<KeyPageStorage>(prev, 256);
@@ -2083,7 +2083,7 @@ BOOST_AUTO_TEST_CASE(pageSplitParallelRandom)
 {
     auto valueFields = "value1";
 
-    auto stateStorage = make_shared<StateStorage>(nullptr);
+    auto stateStorage = make_shared<StateStorage>(nullptr, false);
     StateStorageInterface::Ptr prev = stateStorage;
 
     auto tableStorage = std::make_shared<KeyPageStorage>(prev, 256);
@@ -2139,7 +2139,7 @@ BOOST_AUTO_TEST_CASE(asyncGetPrimaryKeys)
 {  // TODO: add ut for asyncGetPrimaryKeys and condition
     auto valueFields = "value1";
 
-    auto stateStorage = make_shared<StateStorage>(nullptr);
+    auto stateStorage = make_shared<StateStorage>(nullptr, false);
     StateStorageInterface::Ptr prev = stateStorage;
 
     auto tableStorage = std::make_shared<KeyPageStorage>(prev, 256);
@@ -2246,14 +2246,14 @@ BOOST_AUTO_TEST_CASE(BigTableAdd)
     auto valueFields = "value1";
     auto cacheSize = 256 * 1024 * 1024;
     auto pageSize = 512;
-    auto stateStorage0 = make_shared<LRUStateStorage>(nullptr);
+    auto stateStorage0 = make_shared<LRUStateStorage>(nullptr, false);
     stateStorage0->setMaxCapacity(cacheSize);
     StateStorageInterface::Ptr prev0 = stateStorage0;
 
     auto tableName = "table_0";
     BOOST_REQUIRE(prev0->createTable(tableName, valueFields));
 
-    auto stateStorage1 = make_shared<LRUStateStorage>(nullptr);
+    auto stateStorage1 = make_shared<LRUStateStorage>(nullptr, false);
     stateStorage1->setMaxCapacity(cacheSize);
     StateStorageInterface::Ptr prev1 = stateStorage1;
 
@@ -2323,14 +2323,14 @@ BOOST_AUTO_TEST_CASE(BigTableAddSerialize)
     auto valueFields = "value1";
     auto cacheSize = 256 * 1024 * 1024;
     auto pageSize = 512;
-    auto stateStorage0 = make_shared<LRUStateStorage>(nullptr);
+    auto stateStorage0 = make_shared<LRUStateStorage>(nullptr, false);
     stateStorage0->setMaxCapacity(cacheSize);
     StateStorageInterface::Ptr prev0 = stateStorage0;
 
     auto tableName = "table_0";
     BOOST_REQUIRE(prev0->createTable(tableName, valueFields));
 
-    auto stateStorage1 = make_shared<LRUStateStorage>(nullptr);
+    auto stateStorage1 = make_shared<LRUStateStorage>(nullptr, false);
     stateStorage1->setMaxCapacity(cacheSize);
     StateStorageInterface::Ptr prev1 = stateStorage1;
 
@@ -2396,19 +2396,19 @@ BOOST_AUTO_TEST_CASE(mockCommitProcess)
     auto valueFields = "value1";
     auto cacheSize = 256 * 1024 * 1024;
     auto pageSize = 512;
-    auto stateStorage0 = make_shared<LRUStateStorage>(nullptr);
+    auto stateStorage0 = make_shared<LRUStateStorage>(nullptr, false);
     stateStorage0->setMaxCapacity(cacheSize);
     StateStorageInterface::Ptr prev0 = stateStorage0;
 
     auto tableName = "table_0";
     BOOST_REQUIRE(prev0->createTable(tableName, valueFields));
 
-    auto stateStorage1 = make_shared<LRUStateStorage>(nullptr);
+    auto stateStorage1 = make_shared<LRUStateStorage>(nullptr, false);
     stateStorage1->setMaxCapacity(cacheSize);
     StateStorageInterface::Ptr prev1 = stateStorage1;
     BOOST_REQUIRE(prev1->createTable(tableName, valueFields));
 
-    auto stateStorage2 = make_shared<LRUStateStorage>(nullptr);
+    auto stateStorage2 = make_shared<LRUStateStorage>(nullptr, false);
     stateStorage2->setMaxCapacity(cacheSize);
     StateStorageInterface::Ptr prev2 = stateStorage2;
     BOOST_REQUIRE(prev2->createTable(tableName, valueFields));
@@ -2511,19 +2511,19 @@ BOOST_AUTO_TEST_CASE(mockCommitProcessParallel)
     auto valueFields = "value1";
     auto cacheSize = 256 * 1024 * 1024;
     auto pageSize = 512;
-    auto stateStorage0 = make_shared<LRUStateStorage>(nullptr);
+    auto stateStorage0 = make_shared<LRUStateStorage>(nullptr, false);
     stateStorage0->setMaxCapacity(cacheSize);
     StateStorageInterface::Ptr prev0 = stateStorage0;
 
     auto tableName = "table_0";
     BOOST_REQUIRE(prev0->createTable(tableName, valueFields));
 
-    auto stateStorage1 = make_shared<LRUStateStorage>(nullptr);
+    auto stateStorage1 = make_shared<LRUStateStorage>(nullptr, false);
     stateStorage1->setMaxCapacity(cacheSize);
     StateStorageInterface::Ptr prev1 = stateStorage1;
     BOOST_REQUIRE(prev1->createTable(tableName, valueFields));
 
-    auto stateStorage2 = make_shared<LRUStateStorage>(nullptr);
+    auto stateStorage2 = make_shared<LRUStateStorage>(nullptr, false);
     stateStorage2->setMaxCapacity(cacheSize);
     StateStorageInterface::Ptr prev2 = stateStorage2;
     BOOST_REQUIRE(prev2->createTable(tableName, valueFields));
@@ -2628,7 +2628,7 @@ BOOST_AUTO_TEST_CASE(pageMergeBig)
 {
     auto valueFields = "value1";
 
-    auto stateStorage = make_shared<StateStorage>(nullptr);
+    auto stateStorage = make_shared<StateStorage>(nullptr, false);
     StateStorageInterface::Ptr prev = stateStorage;
 
     auto tableStorage = std::make_shared<KeyPageStorage>(prev, 1024);
@@ -2776,7 +2776,7 @@ BOOST_AUTO_TEST_CASE(insertAndDelete)
     auto valueFields = "value1";
     auto cacheSize = 256 * 1024 * 1024;
     auto pageSize = 512;
-    auto stateStorage0 = make_shared<LRUStateStorage>(nullptr);
+    auto stateStorage0 = make_shared<LRUStateStorage>(nullptr, false);
     stateStorage0->setMaxCapacity(cacheSize);
     StateStorageInterface::Ptr prev0 = stateStorage0;
 
@@ -2857,7 +2857,7 @@ BOOST_AUTO_TEST_CASE(invalidPageKeyToValid)
     boost::log::core::get()->set_logging_enabled(true);
     auto valueFields = "value1";
 
-    auto stateStorage = make_shared<StateStorage>(nullptr);
+    auto stateStorage = make_shared<StateStorage>(nullptr, false);
     StateStorageInterface::Ptr prev = stateStorage;
 
     auto tableStorage = std::make_shared<KeyPageStorage>(prev, 2048);
@@ -2944,7 +2944,7 @@ BOOST_AUTO_TEST_CASE(DeleteTableToEmpty_InsertInvalidPageKey)
     boost::log::core::get()->set_logging_enabled(true);
     auto valueFields = "value1";
 
-    auto stateStorage = make_shared<StateStorage>(nullptr);
+    auto stateStorage = make_shared<StateStorage>(nullptr, false);
     StateStorageInterface::Ptr prev = stateStorage;
 
     auto tableStorage = std::make_shared<KeyPageStorage>(prev, 2048);
@@ -3056,7 +3056,7 @@ BOOST_AUTO_TEST_CASE(bugfix_keypage_system_entry_hash)
     auto valueFields = "value1";
     auto cacheSize = 256 * 1024 * 1024;
     auto pageSize = 512;
-    auto stateStorage0 = make_shared<LRUStateStorage>(nullptr);
+    auto stateStorage0 = make_shared<LRUStateStorage>(nullptr, false);
     stateStorage0->setMaxCapacity(cacheSize);
     StateStorageInterface::Ptr prev0 = stateStorage0;
 
@@ -3080,7 +3080,7 @@ BOOST_AUTO_TEST_CASE(bugfix_keypage_system_entry_hash)
     };
     auto keypage = std::make_shared<KeyPageStorage>(
         prev0, pageSize, (uint32_t)protocol::BlockVersion::V3_6_1_VERSION);
-    auto state = std::make_shared<StateStorage>(prev0);
+    auto state = std::make_shared<StateStorage>(prev0, false);
     auto hash0 = getHashLambda(keypage, features);
     auto hash1 = getHashLambda(state, features);
     BOOST_TEST(hash0.hex() != hash1.hex());

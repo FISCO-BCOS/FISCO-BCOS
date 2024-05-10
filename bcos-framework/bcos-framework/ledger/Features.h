@@ -45,6 +45,8 @@ public:
         bugfix_dmc_deploy_gas_used,
         bugfix_staticcall_noaddr_return,
         bugfix_support_transfer_receive_fallback,
+        bugfix_evm_exception_gas_used,
+        bugfix_set_row_with_dirty_flag,
         feature_dmc2serial,
         feature_sharding,
         feature_rpbft,
@@ -160,7 +162,10 @@ public:
                 {protocol::BlockVersion::V3_7_3_VERSION,
                     {Flag::bugfix_eoa_as_contract, Flag::bugfix_dmc_deploy_gas_used,
                         Flag::bugfix_staticcall_noaddr_return,
-                        Flag::bugfix_support_transfer_receive_fallback}}});
+                        Flag::bugfix_support_transfer_receive_fallback,
+                        Flag::bugfix_evm_exception_gas_used,
+                        Flag::bugfix_set_row_with_dirty_flag}}});
+
         for (const auto& upgradeFeatures : upgradeRoadmap)
         {
             if (((to < protocol::BlockVersion::V3_2_7_VERSION) && (to >= upgradeFeatures.to)) ||

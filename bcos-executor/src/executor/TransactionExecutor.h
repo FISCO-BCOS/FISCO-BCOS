@@ -127,7 +127,7 @@ public:
     void preExecuteTransactions(int64_t schedulerTermId,
         const bcos::protocol::BlockHeader::ConstPtr& blockHeader, std::string contractAddress,
         gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
-        std::function<void(bcos::Error::UniquePtr)> callback) override{
+        std::function<void(bcos::Error::UniquePtr)> callback) override {
         // do nothing
     };
 
@@ -249,7 +249,8 @@ protected:
 
 
     bcos::storage::StateStorageInterface::Ptr createStateStorage(
-        bcos::storage::StorageInterface::Ptr storage, bool ignoreNotExist = false);
+        bcos::storage::StorageInterface::Ptr storage, bool ignoreNotExist,
+        bool setRowWithDirtyFlag);
 
     protocol::BlockNumber getBlockNumberInStorage();
     protocol::BlockHeader::Ptr getBlockHeaderInStorage(protocol::BlockNumber number);
