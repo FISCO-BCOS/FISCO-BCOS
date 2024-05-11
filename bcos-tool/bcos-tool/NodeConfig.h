@@ -178,14 +178,20 @@ public:
     const std::string& rpcListenIP() const { return m_rpcListenIP; }
     uint16_t rpcListenPort() const { return m_rpcListenPort; }
     uint32_t rpcThreadPoolSize() const { return m_rpcThreadPoolSize; }
+    uint32_t rpcFilterTimeout() const { return m_rpcFilterTimeout; }
+    uint32_t rpcMaxProcessBlock() const { return m_rpcMaxProcessBlock; }
     bool rpcSmSsl() const { return m_rpcSmSsl; }
     bool rpcDisableSsl() const { return m_rpcDisableSsl; }
+    uint32_t rpcFilterThreadSize() const { return m_rpcFilterThreadSize; }
 
     // the web3 rpc configurations
     bool enableWeb3Rpc() const { return m_enableWeb3Rpc; }
     const std::string& web3RpcListenIP() const { return m_web3RpcListenIP; }
     uint16_t web3RpcListenPort() const { return m_web3RpcListenPort; }
     uint32_t web3RpcThreadSize() const { return m_web3RpcThreadSize; }
+    uint32_t web3FilterThreadSize() const { return m_web3FilterThreadSize; }
+    uint32_t web3FilterTimeout() const { return m_web3FilterTimeout; }
+    uint32_t web3MaxProcessBlock() const { return m_web3MaxProcessBlock; }
 
     // the gateway configurations
     const std::string& p2pListenIP() const { return m_p2pListenIP; }
@@ -425,6 +431,9 @@ private:
     std::string m_rpcListenIP;
     uint16_t m_rpcListenPort;
     uint32_t m_rpcThreadPoolSize;
+    uint32_t m_rpcFilterThreadSize;
+    uint32_t m_rpcFilterTimeout;
+    uint32_t m_rpcMaxProcessBlock;
     bool m_rpcSmSsl;
     bool m_rpcDisableSsl = false;
 
@@ -433,6 +442,9 @@ private:
     std::string m_web3RpcListenIP;
     uint16_t m_web3RpcListenPort;
     uint32_t m_web3RpcThreadSize;
+    uint32_t m_web3FilterThreadSize;
+    uint32_t m_web3FilterTimeout;
+    uint32_t m_web3MaxProcessBlock;
 
     // config for gateway
     std::string m_p2pListenIP;

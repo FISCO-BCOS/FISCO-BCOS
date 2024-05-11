@@ -314,10 +314,11 @@ public:
                     {
                         // Check transaction merkle
                         crypto::merkle::Merkle<Hasher> merkle(self->m_hasher.clone());
-                        auto hashesRange = block.transactionsMetaData | RANGES::views::transform([
-                        ](const bcostars::TransactionMetaData& transactionMetaData) -> auto& {
-                            return transactionMetaData.hash;
-                        });
+                        auto hashesRange =
+                            block.transactionsMetaData |
+                            RANGES::views::transform(
+                                [](const bcostars::TransactionMetaData& transactionMetaData)
+                                    -> auto& { return transactionMetaData.hash; });
                         std::vector<bcos::bytes> merkles;
                         merkle.generateMerkle(hashesRange, merkles);
 
@@ -574,7 +575,41 @@ public:
         Json::Value value;
         _respFunc(BCOS_ERROR_PTR(-1, "Unspported method!"), value);
     }
-
+    void newBlockFilter(std::string_view, RespFunc _respFunc) override
+    {
+        Json::Value value;
+        _respFunc(BCOS_ERROR_PTR(-1, "Unspported method!"), value);
+    }
+    void newPendingTransactionFilter(std::string_view, RespFunc _respFunc) override
+    {
+        Json::Value value;
+        _respFunc(BCOS_ERROR_PTR(-1, "Unspported method!"), value);
+    }
+    void newFilter(std::string_view, const Json::Value&, RespFunc _respFunc) override
+    {
+        Json::Value value;
+        _respFunc(BCOS_ERROR_PTR(-1, "Unspported method!"), value);
+    }
+    void uninstallFilter(std::string_view, std::string_view, RespFunc _respFunc) override
+    {
+        Json::Value value;
+        _respFunc(BCOS_ERROR_PTR(-1, "Unspported method!"), value);
+    }
+    void getFilterChanges(std::string_view, std::string_view, RespFunc _respFunc) override
+    {
+        Json::Value value;
+        _respFunc(BCOS_ERROR_PTR(-1, "Unspported method!"), value);
+    }
+    void getFilterLogs(std::string_view, std::string_view, RespFunc _respFunc) override
+    {
+        Json::Value value;
+        _respFunc(BCOS_ERROR_PTR(-1, "Unspported method!"), value);
+    }
+    void getLogs(std::string_view, const Json::Value&, RespFunc _respFunc) override
+    {
+        Json::Value value;
+        _respFunc(BCOS_ERROR_PTR(-1, "Unspported method!"), value);
+    }
     void getGroupBlockNumber(RespFunc respFunc) override
     {
         LIGHTNODE_LOG(INFO) << "RPC get group block number request";

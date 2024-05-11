@@ -5,6 +5,8 @@
 #include <bcos-rpc/groupmgr/GroupManager.h>
 #include <bcos-rpc/groupmgr/NodeService.h>
 #include <bcos-task/Task.h>
+#include <bcos-task/Wait.h>
+#include <bcos-ledger/src/libledger/LedgerMethods.h>
 #include <bcos-utilities/BucketMap.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <bcos-utilities/Timer.h>
@@ -124,9 +126,9 @@ public:
     }
     int64_t getLatestBlockNumber() { return getLatestBlockNumber(m_group); }
 
+    FilterRequestFactory::Ptr requestFactory() const { return m_factory; }
     ThreadPool::Ptr pool() const { return m_pool; }
     LogMatcher::Ptr matcher() const { return m_matcher; }
-    FilterRequest::Ptr createFilterRequest() { return m_factory->create(); }
     NodeService::Ptr getNodeService(std::string_view _groupID, std::string_view _command) const;
 
 protected:
@@ -140,20 +142,11 @@ protected:
     task::Task<Json::Value> getLogChangeImpl(std::string_view groupId, Filter::Ptr filter);
     task::Task<Json::Value> getFilterLogsImpl(std::string_view groupId, uint64_t filterID);
     task::Task<Json::Value> getLogsImpl(
-        std::string_view groupId, FilterRequest::Ptr params, bool needCheckRange)
-    {
-        co_return Json::Value(Json::arrayValue);
-    }
+        std::string_view groupId, FilterRequest::Ptr params, bool needCheckRange);
     task::Task<Json::Value> getLogsInPool(
-        bcos::ledger::LedgerInterface::Ptr ledger, FilterRequest::Ptr params)
-    {
-        co_return Json::Value(Json::arrayValue);
-    }
+        bcos::ledger::LedgerInterface::Ptr ledger, FilterRequest::Ptr params);
     task::Task<Json::Value> getLogsInternal(
-        bcos::ledger::LedgerInterface& ledger, FilterRequest::Ptr params)
-    {
-        co_return Json::Value(Json::arrayValue);
-    }
+        bcos::ledger::LedgerInterface& ledger, FilterRequest::Ptr params);
 
 protected:
     virtual int32_t InvalidParamsCode() = 0;

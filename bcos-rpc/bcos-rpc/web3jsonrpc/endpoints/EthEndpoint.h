@@ -23,6 +23,7 @@
 #include <bcos-ledger/src/libledger/LedgerMethods.h>
 #include <bcos-rpc/groupmgr/GroupManager.h>
 #include <bcos-rpc/jsonrpc/JsonRpcInterface.h>
+#include <bcos-rpc/web3jsonrpc/Web3FilterSystem.h>
 #include <json/json.h>
 #include <tbb/concurrent_hash_map.h>
 #include <boost/core/ignore_unused.hpp>
@@ -37,7 +38,9 @@ namespace bcos::rpc
 class EthEndpoint
 {
 public:
-    explicit EthEndpoint(NodeService::Ptr nodeService) : m_nodeService(std::move(nodeService)) {}
+    EthEndpoint(NodeService::Ptr nodeService, FilterSystem::Ptr filterSystem)
+      : m_nodeService(std::move(nodeService)), m_filterSystem(std::move(filterSystem))
+    {}
     virtual ~EthEndpoint() = default;
 
 protected:
@@ -84,6 +87,7 @@ protected:
 
 private:
     NodeService::Ptr m_nodeService;
+    FilterSystem::Ptr m_filterSystem;
 };
 
 }  // namespace bcos::rpc

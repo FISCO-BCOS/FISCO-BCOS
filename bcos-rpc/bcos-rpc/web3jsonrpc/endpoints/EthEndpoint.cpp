@@ -691,65 +691,67 @@ task::Task<void> EthEndpoint::getUncleByBlockNumberAndIndex(
     buildJsonContent(result, response);
     co_return;
 }
-task::Task<void> EthEndpoint::newFilter(const Json::Value&, Json::Value&)
+task::Task<void> EthEndpoint::newFilter(const Json::Value& request, Json::Value& response)
 {
     // params: filter(FILTER)
     // result: filterId(QTY)
-    BOOST_THROW_EXCEPTION(
-        JsonRpcException(MethodNotFound, "This API has not been implemented yet!"));
-
+    Json::Value jParams = request[0U];
+    auto params = m_filterSystem->requestFactory()->create();
+    params->fromJson(jParams);
+    Json::Value result = co_await m_filterSystem->newFilter(params);
+    buildJsonContent(result, response);
     co_return;
 }
-task::Task<void> EthEndpoint::newBlockFilter(const Json::Value&, Json::Value&)
+task::Task<void> EthEndpoint::newBlockFilter(const Json::Value&, Json::Value& response)
 {
     // result: filterId(QTY)
-    BOOST_THROW_EXCEPTION(
-        JsonRpcException(MethodNotFound, "This API has not been implemented yet!"));
-
+    Json::Value result = co_await m_filterSystem->newBlockFilter();
+    buildJsonContent(result, response);
     co_return;
 }
-task::Task<void> EthEndpoint::newPendingTransactionFilter(const Json::Value&, Json::Value&)
+task::Task<void> EthEndpoint::newPendingTransactionFilter(const Json::Value&, Json::Value& response)
 {
     // result: filterId(QTY)
-    BOOST_THROW_EXCEPTION(
-        JsonRpcException(MethodNotFound, "This API has not been implemented yet!"));
-
+    Json::Value result = co_await m_filterSystem->newPendingTxFilter();
+    buildJsonContent(result, response);
     co_return;
 }
-task::Task<void> EthEndpoint::uninstallFilter(const Json::Value&, Json::Value&)
+task::Task<void> EthEndpoint::uninstallFilter(const Json::Value& request, Json::Value& response)
 {
     // params: filterId(QTY)
     // result: success(Boolean)
-    BOOST_THROW_EXCEPTION(
-        JsonRpcException(MethodNotFound, "This API has not been implemented yet!"));
-
+    auto const id = fromQuantity(std::string(toView(request[0U])));
+    Json::Value result = co_await m_filterSystem->uninstallFilter(id);
+    buildJsonContent(result, response);
     co_return;
 }
-task::Task<void> EthEndpoint::getFilterChanges(const Json::Value&, Json::Value&)
+task::Task<void> EthEndpoint::getFilterChanges(const Json::Value& request, Json::Value& response)
 {
     // params: filterId(QTY)
     // result: logs(ARRAY)
-    BOOST_THROW_EXCEPTION(
-        JsonRpcException(MethodNotFound, "This API has not been implemented yet!"));
-
+    auto const id = fromQuantity(std::string(toView(request[0U])));
+    Json::Value result = co_await m_filterSystem->getFilterChanges(id);
+    buildJsonContent(result, response);
     co_return;
 }
-task::Task<void> EthEndpoint::getFilterLogs(const Json::Value&, Json::Value&)
+task::Task<void> EthEndpoint::getFilterLogs(const Json::Value& request, Json::Value& response)
 {
     // params: filterId(QTY)
     // result: logs(ARRAY)
-    BOOST_THROW_EXCEPTION(
-        JsonRpcException(MethodNotFound, "This API has not been implemented yet!"));
-
+    auto const id = fromQuantity(std::string(toView(request[0U])));
+    Json::Value result = co_await m_filterSystem->getFilterLogs(id);
+    buildJsonContent(result, response);
     co_return;
 }
-task::Task<void> EthEndpoint::getLogs(const Json::Value&, Json::Value&)
+task::Task<void> EthEndpoint::getLogs(const Json::Value& request, Json::Value& response)
 {
     // params: filter(FILTER)
     // result: logs(ARRAY)
-    BOOST_THROW_EXCEPTION(
-        JsonRpcException(MethodNotFound, "This API has not been implemented yet!"));
-
+    Json::Value jParams = request[0U];
+    auto params = m_filterSystem->requestFactory()->create();
+    params->fromJson(jParams);
+    Json::Value result = co_await m_filterSystem->getLogs(params);
+    buildJsonContent(result, response);
     co_return;
 }
 task::Task<std::tuple<protocol::BlockNumber, bool>> EthEndpoint::getBlockNumberByTag(
