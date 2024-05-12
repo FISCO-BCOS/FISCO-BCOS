@@ -76,7 +76,8 @@ jobs:
 
       - name: Build Normal node for linux
         run: |
-          cmake -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Debug -DLINKER=gold -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=ON -DWITH_LOKI=OFF -DWITH_TARS_SERVICES=ON -DTOOLS=ON .. || cat *.log
+          rm -rf build && mkdir -p ./build
+          cd build && cmake -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Debug -DLINKER=gold -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=ON -DWITH_LOKI=OFF -DWITH_TARS_SERVICES=ON -DTOOLS=ON .. || cat *.log
           make -j6
 
       - name: Test
