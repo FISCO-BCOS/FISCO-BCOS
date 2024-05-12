@@ -68,17 +68,18 @@ public:
     {
         if (input->internalCreate)
         {
-            auto newSeq = seq() + 1;
-            input->codeAddress =
-                bcos::newEVMAddress(m_hashImpl, m_blockContext->number(), m_contextID, newSeq);
-            EXECUTIVE_WRAPPER(TRACE)
-                << "InternalCreate newSeq:" << newSeq << " codeAddress:" << input->codeAddress;
+            if (input->codeAddress.empty())
+            {
+                input->codeAddress = bcos::newEVMAddress(
+                    m_hashImpl, m_blockContext->number(), m_contextID, seq() + 1);
+            }
+            EXECUTIVE_WRAPPER(TRACE) << "codeAddress:" << input->codeAddress;
             auto tuple = create(std::move(input));
             return std::move(std::get<1>(tuple));
         }
 
         evmc_message evmcMessage{.kind = input->create ? EVMC_CREATE : EVMC_CALL,
-            .flags = 0,
+            .flags = input->staticCall ? static_cast<uint32_t>(EVMC_STATIC) : 0,
             .depth = 0,
             .gas = input->gas,
             .recipient = unhexAddress(input->receiveAddress),
