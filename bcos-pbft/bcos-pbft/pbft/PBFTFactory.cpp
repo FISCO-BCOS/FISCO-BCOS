@@ -23,10 +23,12 @@
 #include "engine/Validator.h"
 #include "protocol/PB/PBFTCodec.h"
 #include "protocol/PB/PBFTMessageFactoryImpl.h"
+#include "protocol/PB/PBFTMessageFactoryLOKIImpl.h"
 #include "storage/LedgerStorage.h"
 #include "utilities/Common.h"
 #include <memory>
 #include <utility>
+#include "./libloki/FuzzEngine.h"
 
 using namespace bcos;
 using namespace bcos::consensus;
@@ -53,7 +55,12 @@ PBFTFactory::PBFTFactory(bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
 
 PBFTImpl::Ptr PBFTFactory::createPBFT()
 {
-    auto pbftMessageFactory = std::make_shared<PBFTMessageFactoryImpl>();
+    std::shared_ptr<PBFTMessageFactory> pbftMessageFactory;
+
+    pbftMessageFactory = std::make_shared<PBFTMessageFactoryImpl>();
+#ifdef WITH_LOKI
+    pbftMessageFactory = std::make_shared<PBFTMessageFactoryLOKIImpl>();
+#endif
     PBFT_LOG(INFO) << LOG_DESC("create PBFTCodec");
     auto pbftCodec = std::make_shared<PBFTCodec>(m_keyPair, m_cryptoSuite, pbftMessageFactory);
 
@@ -74,7 +81,7 @@ PBFTImpl::Ptr PBFTFactory::createPBFT()
 
     PBFT_LOG(INFO) << LOG_DESC("create PBFTEngine");
     auto pbftEngine = std::make_shared<PBFTEngine>(pbftConfig);
-
+    
     PBFT_LOG(INFO) << LOG_DESC("create PBFT");
     auto ledgerFetcher = std::make_shared<bcos::tool::LedgerConfigFetcher>(m_ledger);
     auto pbft = std::make_shared<PBFTImpl>(pbftEngine);
