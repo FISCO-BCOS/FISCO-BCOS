@@ -428,4 +428,4 @@ void MemoryTableFactory2::setAuthorizedAddress(storage::TableInfo::Ptr _tableInf
 uint64_t dev::storage::MemoryTableFactory2::ID()
 {
     return m_ID;
-};
+}
