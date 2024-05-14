@@ -25,8 +25,8 @@
 #include <boost/asio/ip/tcp.hpp>
 #include <cstdint>
 #include <memory>
+#include <set>
 #include <utility>
-#include <vector>
 
 #define MIN_HEART_BEAT_PERIOD_MS (10000)
 #define MIN_RECONNECT_PERIOD_MS (10000)

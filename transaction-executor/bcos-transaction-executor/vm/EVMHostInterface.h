@@ -21,16 +21,11 @@
 
 #pragma once
 
-#include "../EVMCResult.h"
-#include "HostContext.h"
 #include "bcos-concepts/ByteBuffer.h"
 #include "bcos-executor/src/Common.h"
 #include <evmc/evmc.h>
 #include <evmc/instructions.h>
 #include <boost/core/pointer_traits.hpp>
-#include <functional>
-#include <memory>
-#include <set>
 
 namespace bcos::transaction_executor
 {
@@ -131,13 +126,13 @@ struct EVMHostInterface
         hostContext.log(*addr, std::move(hashTopics), bytesConstRef{data, dataSize});
     }
 
-    static evmc_access_status access_account([[maybe_unused]] evmc_host_context* context,
+    static evmc_access_status accessAccount([[maybe_unused]] evmc_host_context* context,
         [[maybe_unused]] const evmc_address* addr) noexcept
     {
         return EVMC_ACCESS_COLD;
     }
 
-    static evmc_access_status access_storage([[maybe_unused]] evmc_host_context* context,
+    static evmc_access_status accessStorage([[maybe_unused]] evmc_host_context* context,
         [[maybe_unused]] const evmc_address* addr,
         [[maybe_unused]] const evmc_bytes32* key) noexcept
     {
@@ -202,8 +197,8 @@ const evmc_host_interface* getHostInterface(auto&& waitOperator)
         HostContextImpl::getTxContext,
         HostContextImpl::getBlockHash,
         HostContextImpl::log,
-        HostContextImpl::access_account,
-        HostContextImpl::access_storage,
+        HostContextImpl::accessAccount,
+        HostContextImpl::accessStorage,
     };
     return &fnTable;
 }

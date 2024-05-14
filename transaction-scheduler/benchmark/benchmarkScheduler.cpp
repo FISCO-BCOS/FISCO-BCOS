@@ -1,27 +1,19 @@
 #include "bcos-codec/bcos-codec/abi/ContractABICodec.h"
 #include "bcos-crypto/hash/Keccak256.h"
-#include "bcos-framework/protocol/ServiceDesc.h"
+#include "bcos-executor/src/Common.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
-#include "bcos-framework/transaction-executor/TransactionExecutor.h"
-#include "bcos-storage/RocksDBStorage2.h"
-#include "bcos-tars-protocol/impl/TarsHashable.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
-#include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
 #include "bcos-task/Wait.h"
 #include "bcos-transaction-executor/TransactionExecutorImpl.h"
-#include "bcos-transaction-executor/precompiled/PrecompiledManager.h"
 #include "bcos-transaction-scheduler/MultiLayerStorage.h"
 #include "bcos-transaction-scheduler/SchedulerParallelImpl.h"
 #include "bcos-transaction-scheduler/SchedulerSerialImpl.h"
-#include "bcos-utilities/ITTAPI.h"
 #include "transaction-executor/tests/TestBytecode.h"
 #include <benchmark/benchmark.h>
-#include <fmt/format.h>
 #include <boost/throw_exception.hpp>
-#include <variant>
 
 using namespace bcos;
 using namespace bcos::storage2::memory_storage;
@@ -137,7 +129,7 @@ struct Fixture
 
     void prepareIssue(size_t count)
     {
-        bcos::codec::abi::ContractABICodec abiCodec(bcos::executor::GlobalHashImpl::g_hashImpl);
+        bcos::codec::abi::ContractABICodec abiCodec(*bcos::executor::GlobalHashImpl::g_hashImpl);
         m_transactions =
             m_addresses | RANGES::views::transform([this, &abiCodec](const Address& address) {
                 auto transaction = std::make_unique<bcostars::protocol::TransactionImpl>(
@@ -155,7 +147,7 @@ struct Fixture
 
     void prepareTransfer(size_t count)
     {
-        bcos::codec::abi::ContractABICodec abiCodec(bcos::executor::GlobalHashImpl::g_hashImpl);
+        bcos::codec::abi::ContractABICodec abiCodec(*bcos::executor::GlobalHashImpl::g_hashImpl);
         m_transactions =
             m_addresses | RANGES::views::chunk(2) |
             RANGES::views::transform([this, &abiCodec](auto&& range) {
@@ -177,7 +169,7 @@ struct Fixture
 
     void prepareConflictTransfer(size_t count)
     {
-        bcos::codec::abi::ContractABICodec abiCodec(bcos::executor::GlobalHashImpl::g_hashImpl);
+        bcos::codec::abi::ContractABICodec abiCodec(*bcos::executor::GlobalHashImpl::g_hashImpl);
         m_transactions =
             RANGES::views::zip(m_addresses, RANGES::views::iota(0LU, m_addresses.size())) |
             RANGES::views::transform([this, &abiCodec](auto&& tuple) {
@@ -214,7 +206,7 @@ struct Fixture
                 else
                 {
                     bcos::codec::abi::ContractABICodec abiCodec(
-                        bcos::executor::GlobalHashImpl::g_hashImpl);
+                        *bcos::executor::GlobalHashImpl::g_hashImpl);
                     // Verify the data
                     bcostars::protocol::BlockHeaderImpl blockHeader(
                         [inner = bcostars::BlockHeader()]() mutable {

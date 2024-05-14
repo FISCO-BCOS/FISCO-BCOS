@@ -20,7 +20,6 @@
  */
 #pragma once
 #include "bcos-crypto/hasher/OpenSSLHasher.h"
-#include "bcos-task/Wait.h"
 #include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/storage/StorageInterface.h>

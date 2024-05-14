@@ -79,9 +79,9 @@ struct TableFactoryFixture
     TableFactoryFixture()
     {
         hashImpl = make_shared<Header256Hash>();
-        memoryStorage = make_shared<StateStorage>(nullptr);
+        memoryStorage = make_shared<StateStorage>(nullptr, false);
         BOOST_TEST(memoryStorage != nullptr);
-        tableFactory = make_shared<StateStorage>(memoryStorage);
+        tableFactory = make_shared<StateStorage>(memoryStorage, false);
         BOOST_TEST(tableFactory != nullptr);
     }
 
@@ -111,7 +111,7 @@ BOOST_FIXTURE_TEST_SUITE(StateStorageTest, TableFactoryFixture)
 BOOST_AUTO_TEST_CASE(constructor)
 {
     auto threadPool = ThreadPool("a", 1);
-    auto tf = std::make_shared<StateStorage>(memoryStorage);
+    auto tf = std::make_shared<StateStorage>(memoryStorage, false);
 }
 
 BOOST_AUTO_TEST_CASE(create_Table)
@@ -532,8 +532,8 @@ BOOST_AUTO_TEST_CASE(open_sysTables)
 BOOST_AUTO_TEST_CASE(openAndCommit)
 {
     auto hashImpl2 = make_shared<Header256Hash>();
-    auto memoryStorage2 = make_shared<StateStorage>(nullptr);
-    auto tableFactory2 = make_shared<StateStorage>(memoryStorage2);
+    auto memoryStorage2 = make_shared<StateStorage>(nullptr, false);
+    auto tableFactory2 = make_shared<StateStorage>(memoryStorage2, false);
 
     for (int i = 10; i < 20; ++i)
     {
@@ -568,7 +568,7 @@ BOOST_AUTO_TEST_CASE(chainLink)
     StateStorage::Ptr prev = nullptr;
     for (int i = 0; i < 10; ++i)
     {
-        auto tableStorage = std::make_shared<StateStorage>(prev);
+        auto tableStorage = std::make_shared<StateStorage>(prev, false);
         for (int j = 0; j < 10; ++j)
         {
             auto tableName = "table_" + boost::lexical_cast<std::string>(i) + "_" +
@@ -726,8 +726,8 @@ BOOST_AUTO_TEST_CASE(getRows)
     auto valueFields = "value1,value2,value3";
 
     StateStorage::Ptr prev = nullptr;
-    prev = std::make_shared<StateStorage>(prev);
-    auto tableStorage = std::make_shared<StateStorage>(prev);
+    prev = std::make_shared<StateStorage>(prev, false);
+    auto tableStorage = std::make_shared<StateStorage>(prev, false);
 
     BOOST_CHECK(prev->createTable("t_test", valueFields));
 
@@ -886,7 +886,7 @@ BOOST_AUTO_TEST_CASE(checkVersion)
 
 BOOST_AUTO_TEST_CASE(deleteAndGetRows)
 {
-    StateStorage::Ptr storage1 = std::make_shared<StateStorage>(nullptr);
+    StateStorage::Ptr storage1 = std::make_shared<StateStorage>(nullptr, false);
     storage1->setEnableTraverse(true);
 
     storage1->asyncCreateTable(
@@ -905,14 +905,14 @@ BOOST_AUTO_TEST_CASE(deleteAndGetRows)
     storage1->asyncSetRow(
         "table", "key2", std::move(entry2), [](Error::UniquePtr error) { BOOST_CHECK(!error); });
 
-    StateStorage::Ptr storage2 = std::make_shared<StateStorage>(storage1);
+    StateStorage::Ptr storage2 = std::make_shared<StateStorage>(storage1, false);
     storage2->setEnableTraverse(true);
     Entry deleteEntry;
     deleteEntry.setStatus(Entry::DELETED);
     storage2->asyncSetRow("table", "key2", std::move(deleteEntry),
         [](Error::UniquePtr error) { BOOST_CHECK(!error); });
 
-    StateStorage::Ptr storage3 = std::make_shared<StateStorage>(storage2);
+    StateStorage::Ptr storage3 = std::make_shared<StateStorage>(storage2, false);
     storage3->asyncGetPrimaryKeys(
         "table", std::nullopt, [](Error::UniquePtr error, std::vector<std::string> keys) {
             BOOST_CHECK(!error);
@@ -923,7 +923,7 @@ BOOST_AUTO_TEST_CASE(deleteAndGetRows)
 
 BOOST_AUTO_TEST_CASE(deletedAndGetRow)
 {
-    StateStorage::Ptr storage1 = std::make_shared<StateStorage>(nullptr);
+    StateStorage::Ptr storage1 = std::make_shared<StateStorage>(nullptr, false);
 
     storage1->asyncCreateTable(
         "table", "value", [](Error::UniquePtr error, std::optional<Table> table) {
@@ -936,7 +936,7 @@ BOOST_AUTO_TEST_CASE(deletedAndGetRow)
     storage1->asyncSetRow(
         "table", "key1", std::move(entry1), [](Error::UniquePtr error) { BOOST_CHECK(!error); });
 
-    StateStorage::Ptr storage2 = std::make_shared<StateStorage>(storage1);
+    StateStorage::Ptr storage2 = std::make_shared<StateStorage>(storage1, false);
     Entry deleteEntry;
     deleteEntry.setStatus(Entry::DELETED);
     storage2->asyncSetRow("table", "key1", std::move(deleteEntry),
@@ -955,7 +955,7 @@ BOOST_AUTO_TEST_CASE(deletedAndGetRow)
 
 BOOST_AUTO_TEST_CASE(deletedAndGetRows)
 {
-    StateStorage::Ptr storage1 = std::make_shared<StateStorage>(nullptr);
+    StateStorage::Ptr storage1 = std::make_shared<StateStorage>(nullptr, false);
 
     storage1->asyncCreateTable(
         "table", "value", [](Error::UniquePtr error, std::optional<Table> table) {
@@ -968,7 +968,7 @@ BOOST_AUTO_TEST_CASE(deletedAndGetRows)
     storage1->asyncSetRow(
         "table", "key1", std::move(entry1), [](Error::UniquePtr error) { BOOST_CHECK(!error); });
 
-    StateStorage::Ptr storage2 = std::make_shared<StateStorage>(storage1);
+    StateStorage::Ptr storage2 = std::make_shared<StateStorage>(storage1, false);
     Entry deleteEntry;
     deleteEntry.setStatus(Entry::DELETED);
     storage2->asyncSetRow("table", "key1", std::move(deleteEntry),
@@ -985,7 +985,7 @@ BOOST_AUTO_TEST_CASE(deletedAndGetRows)
 
 BOOST_AUTO_TEST_CASE(rollbackAndGetRow)
 {
-    StateStorage::Ptr storage1 = std::make_shared<StateStorage>(nullptr);
+    StateStorage::Ptr storage1 = std::make_shared<StateStorage>(nullptr, false);
 
     storage1->asyncCreateTable(
         "table", "value", [](Error::UniquePtr error, std::optional<Table> table) {
@@ -998,7 +998,7 @@ BOOST_AUTO_TEST_CASE(rollbackAndGetRow)
     storage1->asyncSetRow(
         "table", "key1", std::move(entry1), [](Error::UniquePtr error) { BOOST_CHECK(!error); });
 
-    StateStorage::Ptr storage2 = std::make_shared<StateStorage>(storage1);
+    StateStorage::Ptr storage2 = std::make_shared<StateStorage>(storage1, false);
     auto recoder = std::make_shared<Recoder>();
     storage2->setRecoder(recoder);
 
@@ -1024,7 +1024,7 @@ BOOST_AUTO_TEST_CASE(rollbackAndGetRow)
 
 BOOST_AUTO_TEST_CASE(rollbackAndGetRows)
 {
-    StateStorage::Ptr storage1 = std::make_shared<StateStorage>(nullptr);
+    StateStorage::Ptr storage1 = std::make_shared<StateStorage>(nullptr, false);
 
     storage1->asyncCreateTable(
         "table", "value", [](Error::UniquePtr error, std::optional<Table> table) {
@@ -1037,7 +1037,7 @@ BOOST_AUTO_TEST_CASE(rollbackAndGetRows)
     storage1->asyncSetRow(
         "table", "key1", std::move(entry1), [](Error::UniquePtr error) { BOOST_CHECK(!error); });
 
-    StateStorage::Ptr storage2 = std::make_shared<StateStorage>(storage1);
+    StateStorage::Ptr storage2 = std::make_shared<StateStorage>(storage1, false);
     auto recoder = std::make_shared<Recoder>();
     storage2->setRecoder(recoder);
 
@@ -1101,7 +1101,7 @@ BOOST_AUTO_TEST_CASE(randomRWHash)
         StateStorage::Ptr prev;
         for (size_t i = 0; i < 10; ++i)
         {
-            StateStorage::Ptr storage = std::make_shared<StateStorage>(prev);
+            StateStorage::Ptr storage = std::make_shared<StateStorage>(prev, false);
 
             for (auto& it : rwSet)
             {

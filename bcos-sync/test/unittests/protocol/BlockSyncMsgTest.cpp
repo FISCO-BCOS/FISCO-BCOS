@@ -136,8 +136,8 @@ BOOST_AUTO_TEST_CASE(testBlockSyncMsg)
     BlockNumber blockNumber = 123214;
     int32_t version = 10;
     auto hashImpl = std::make_shared<Keccak256>();
-    HashType hash = hashImpl->hash(std::string("hash"));
-    HashType genesisHash = hashImpl->hash(std::string("genesisHash"));
+    HashType hash = hashImpl->hash(bytesConstRef("hash"));
+    HashType genesisHash = hashImpl->hash(bytesConstRef("genesisHash"));
     size_t requestedSize = 1203;
     std::vector<bytes> blockData;
     size_t blockDataSize = 5;

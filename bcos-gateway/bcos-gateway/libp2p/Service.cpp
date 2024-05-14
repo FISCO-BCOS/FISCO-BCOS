@@ -153,7 +153,7 @@ void Service::heartBeat()
     m_timer->async_wait([self](const boost::system::error_code& error) {
         if (error)
         {
-            SERVICE_LOG(WARNING) << "timer canceled" << LOG_KV("errorCode", error);
+            SERVICE_LOG(WARNING) << "timer canceled" << LOG_KV("code", error);
             return;
         }
         auto service = self.lock();
@@ -271,7 +271,7 @@ void Service::onDisconnect(NetworkException e, P2PSession::Ptr p2pSession)
 
         if (e.errorCode() == P2PExceptionType::DuplicateSession)
             return;
-        SERVICE_LOG(INFO) << LOG_DESC("onDisconnect") << LOG_KV("errorCode", e.errorCode())
+        SERVICE_LOG(INFO) << LOG_DESC("onDisconnect") << LOG_KV("code", e.errorCode())
                           << LOG_KV("what", boost::diagnostic_information(e));
         RecursiveGuard l(x_nodes);
         for (auto& it : m_staticNodes)

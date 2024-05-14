@@ -1,5 +1,6 @@
 #include "TxPoolServiceServer.h"
 #include "../Common/TarsUtils.h"
+#include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include <bcos-task/Wait.h>
 using namespace bcostars;
 

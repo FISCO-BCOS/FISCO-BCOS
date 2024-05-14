@@ -259,7 +259,7 @@ std::string bcos::sample::parseRevertMessage(
     bcos::bytesConstRef output, bcos::crypto::Hash::Ptr hashImpl)
 {
     auto data = output.getCroppedData(4);
-    bcos::codec::abi::ContractABICodec abiCodec(hashImpl);
+    bcos::codec::abi::ContractABICodec abiCodec(*hashImpl);
 
     std::string message;
     abiCodec.abiOut(data, message);

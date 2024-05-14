@@ -19,10 +19,9 @@
  * @date 2021-04-22
  */
 #pragma once
-#include <stdint.h>
-namespace bcos
-{
-namespace protocol
+#include <cstdint>
+
+namespace bcos::protocol
 {
 enum CommonError : int32_t
 {
@@ -44,5 +43,4 @@ enum CommonError : int32_t
     UnSupportedPacketType = 3004,
 };
 
-}  // namespace protocol
-}  // namespace bcos
+}  // namespace bcos::protocol

@@ -1,17 +1,16 @@
 #pragma once
 
 #include "Basic.h"
-#include <bcos-utilities/Ranges.h>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
-#include <stdexcept>
 #include <type_traits>
 
 namespace bcos::concepts::bytebuffer
 {
 
 template <class ByteBufferType>
-concept ByteBuffer = RANGES::contiguous_range<ByteBufferType> &&
+concept ByteBuffer =
+    RANGES::contiguous_range<ByteBufferType> &&
     std::is_trivial_v<RANGES::range_value_t<std::remove_cvref_t<ByteBufferType>>> &&
     std::is_standard_layout_v<RANGES::range_value_t<std::remove_cvref_t<ByteBufferType>>> &&
     (sizeof(RANGES::range_value_t<std::remove_cvref_t<ByteBufferType>>) == 1);

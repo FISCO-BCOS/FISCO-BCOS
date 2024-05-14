@@ -25,16 +25,13 @@
 
 #pragma once
 
-#include "CallParameters.h"
-#include "bcos-framework/executor/ExecutionMessage.h"
-#include "bcos-framework/protocol/BlockHeader.h"
+#include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include <bcos-framework/protocol/LogEntry.h>
 #include <bcos-utilities/Exceptions.h>
 #include <evmc/instructions.h>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <algorithm>
-#include <functional>
 #include <iterator>
 #include <memory>
 #include <set>
@@ -304,8 +301,8 @@ inline std::string getContractTableName(
 }
 
 bytes getComponentBytes(size_t index, const std::string& typeName, const bytesConstRef& data);
-
 evmc_address unhexAddress(std::string_view view);
 std::string addressBytesStr2HexString(std::string_view receiveAddressBytes);
 std::string address2HexString(const evmc_address& address);
+std::array<char, sizeof(evmc_address) * 2> address2FixedArray(const evmc_address& address);
 }  // namespace bcos

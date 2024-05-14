@@ -8,18 +8,15 @@
 
 #pragma once
 
-#include <chrono>
-#include <set>
-#include <string>
-#include <vector>
-
-#include <boost/asio/ip/tcp.hpp>
-
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-framework/gateway/GatewayTypeDef.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
 #include <bcos-utilities/Exceptions.h>
+#include <boost/asio/ip/tcp.hpp>
+#include <set>
+#include <string>
+
 namespace ba = boost::asio;
 namespace bi = boost::asio::ip;
 #define HOST_LOG(LEVEL) BCOS_LOG(LEVEL) << "[NETWORK][Host]"

@@ -807,7 +807,7 @@ void BFSPrecompiled::touch(const std::shared_ptr<executor::TransactionExecutive>
         return;
     }
 
-    if (_callParameters->m_origin.compare(ACCOUNT_ADDRESS) != 0)
+    if (_callParameters->m_origin != ACCOUNT_ADDRESS)
     {
         // if comming from accountPrecompiled, check path prefix
         if (!checkPathPrefixValid(absolutePath, blockContext.blockVersion(), type))

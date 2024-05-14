@@ -1,13 +1,13 @@
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-storage/TiKVStorage.h"
 #include "bcos-table/src/StateStorage.h"
-#include "boost/filesystem.hpp"
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <rocksdb/write_batch.h>
 #include <tbb/concurrent_vector.h>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
+#include <boost/filesystem.hpp>
 #include <boost/iostreams/device/back_inserter.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <boost/lexical_cast.hpp>
@@ -100,7 +100,7 @@ struct TestTiKVStorageFixture
     {
         size_t tableEntries = count;
         auto hashImpl = std::make_shared<Header256Hash>();
-        auto stateStorage = std::make_shared<bcos::storage::StateStorage>(storage);
+        auto stateStorage = std::make_shared<bcos::storage::StateStorage>(storage, false);
         auto testTable = stateStorage->openTable(testTableName);
         BOOST_CHECK_EQUAL(testTable.has_value(), true);
         for (size_t i = 0; i < tableEntries; ++i)
@@ -201,13 +201,11 @@ BOOST_AUTO_TEST_CASE(asyncGetRow)
 {
     prepareTestTableData();
 
-#pragma omp parallel for
     for (size_t i = 0; i < 1050; ++i)
     {
         std::string key = "key" + boost::lexical_cast<std::string>(i);
         storage->asyncGetRow(
             testTableName, key, [&](Error::UniquePtr error, std::optional<Entry> entry) {
-#pragma omp critical
                 BOOST_CHECK_EQUAL(error.get(), nullptr);
                 if (i < total)
                 {
@@ -384,7 +382,7 @@ BOOST_AUTO_TEST_CASE(asyncPrepare)
     prepareTestTableData();
 
     auto hashImpl = std::make_shared<Header256Hash>();
-    auto stateStorage = std::make_shared<bcos::storage::StateStorage>(storage);
+    auto stateStorage = std::make_shared<bcos::storage::StateStorage>(storage, false);
     auto table1Name = "table1";
     auto table2Name = "table2";
     BOOST_CHECK_EQUAL(
@@ -488,7 +486,7 @@ BOOST_AUTO_TEST_CASE(asyncPrepareTimeout)
     prepareTestTableData();
 
     auto hashImpl = std::make_shared<Header256Hash>();
-    auto stateStorage = std::make_shared<bcos::storage::StateStorage>(storage);
+    auto stateStorage = std::make_shared<bcos::storage::StateStorage>(storage, false);
     auto table1Name = "table1";
     auto table2Name = "table2";
     BOOST_CHECK_EQUAL(
@@ -544,7 +542,7 @@ BOOST_AUTO_TEST_CASE(multiStorageCommit)
     auto storage2 = std::make_shared<TiKVStorage>(m_cluster);
     auto storage3 = std::make_shared<TiKVStorage>(m_cluster);
     auto hashImpl = std::make_shared<Header256Hash>();
-    auto stateStorage = std::make_shared<bcos::storage::StateStorage>(storage);
+    auto stateStorage = std::make_shared<bcos::storage::StateStorage>(storage, false);
     auto testTable = stateStorage->openTable(testTableName);
     BOOST_CHECK_EQUAL(testTable.has_value(), true);
     for (size_t i = 0; i < total; ++i)
@@ -554,8 +552,8 @@ BOOST_AUTO_TEST_CASE(multiStorageCommit)
         entry.importFields({"value_" + boost::lexical_cast<std::string>(i)});
         testTable->setRow(key, std::move(entry));
     }
-    auto stateStorage2 = std::make_shared<bcos::storage::StateStorage>(storage2);
-    auto stateStorage3 = std::make_shared<bcos::storage::StateStorage>(storage3);
+    auto stateStorage2 = std::make_shared<bcos::storage::StateStorage>(storage2, false);
+    auto stateStorage3 = std::make_shared<bcos::storage::StateStorage>(storage3, false);
     auto table1Name = "table1";
     auto table2Name = "table2";
     BOOST_CHECK_EQUAL(
@@ -589,7 +587,7 @@ BOOST_AUTO_TEST_CASE(multiStorageCommit)
     auto params1 = bcos::protocol::TwoPCParams();
     params1.number = 100;
     params1.primaryKey = testTableName + ":key0";
-    auto stateStorage0 = std::make_shared<bcos::storage::StateStorage>(storage);
+    auto stateStorage0 = std::make_shared<bcos::storage::StateStorage>(storage, false);
     // check empty storage error
     storage->asyncPrepare(
         params1, *stateStorage0, [&](Error::Ptr error, uint64_t ts, const std::string&) {
@@ -714,7 +712,7 @@ BOOST_AUTO_TEST_CASE(singleStorageRollback)
             BOOST_CHECK_EQUAL(error.get(), nullptr);
             BOOST_CHECK_EQUAL(keys.size(), 0);
         });
-    auto stateStorage = std::make_shared<bcos::storage::StateStorage>(storage);
+    auto stateStorage = std::make_shared<bcos::storage::StateStorage>(storage, false);
     BOOST_CHECK_EQUAL(
         stateStorage->createTable(table1Name, "value1,value2,value3").has_value(), true);
     auto table1 = stateStorage->openTable(table1Name);
@@ -751,7 +749,7 @@ BOOST_AUTO_TEST_CASE(multiStorageRollback)
     auto storage2 = std::make_shared<TiKVStorage>(m_cluster);
     auto storage3 = std::make_shared<TiKVStorage>(m_cluster);
     auto hashImpl = std::make_shared<Header256Hash>();
-    auto stateStorage = std::make_shared<bcos::storage::StateStorage>(storage);
+    auto stateStorage = std::make_shared<bcos::storage::StateStorage>(storage, false);
     auto testTable = stateStorage->openTable(testTableName);
     BOOST_CHECK_EQUAL(testTable.has_value(), true);
     for (size_t i = 0; i < total; ++i)
@@ -761,8 +759,8 @@ BOOST_AUTO_TEST_CASE(multiStorageRollback)
         entry.importFields({"value_" + boost::lexical_cast<std::string>(i)});
         testTable->setRow(key, std::move(entry));
     }
-    auto stateStorage2 = std::make_shared<bcos::storage::StateStorage>(storage2);
-    auto stateStorage3 = std::make_shared<bcos::storage::StateStorage>(storage3);
+    auto stateStorage2 = std::make_shared<bcos::storage::StateStorage>(storage2, false);
+    auto stateStorage3 = std::make_shared<bcos::storage::StateStorage>(storage3, false);
     auto table1Name = "table1";
     auto table2Name = "table2";
     BOOST_CHECK_EQUAL(
@@ -796,7 +794,7 @@ BOOST_AUTO_TEST_CASE(multiStorageRollback)
     auto params1 = bcos::protocol::TwoPCParams();
     params1.number = 100;
     params1.primaryKey = testTableName + ":key0";
-    auto stateStorage0 = std::make_shared<bcos::storage::StateStorage>(storage);
+    auto stateStorage0 = std::make_shared<bcos::storage::StateStorage>(storage, false);
     // check empty storage error
     storage->asyncPrepare(
         params1, *stateStorage0, [&](Error::Ptr error, uint64_t ts, const std::string&) {
@@ -845,7 +843,7 @@ BOOST_AUTO_TEST_CASE(secondaryRollbackAndPrimaryCommit)
     auto storage2 = std::make_shared<TiKVStorage>(m_cluster);
     auto storage3 = std::make_shared<TiKVStorage>(m_cluster);
     auto hashImpl = std::make_shared<Header256Hash>();
-    auto stateStorage = std::make_shared<bcos::storage::StateStorage>(storage);
+    auto stateStorage = std::make_shared<bcos::storage::StateStorage>(storage, false);
     auto testTable = stateStorage->openTable(testTableName);
     BOOST_CHECK_EQUAL(testTable.has_value(), true);
     for (size_t i = 0; i < total; ++i)
@@ -855,7 +853,7 @@ BOOST_AUTO_TEST_CASE(secondaryRollbackAndPrimaryCommit)
         entry.importFields({"value_" + boost::lexical_cast<std::string>(i)});
         testTable->setRow(key, std::move(entry));
     }
-    auto stateStorage1 = std::make_shared<bcos::storage::StateStorage>(storage2);
+    auto stateStorage1 = std::make_shared<bcos::storage::StateStorage>(storage2, false);
     auto table1Name = "table1";
     BOOST_CHECK_EQUAL(
         stateStorage1->createTable(table1Name, "value1,value2,value3").has_value(), true);
@@ -876,7 +874,7 @@ BOOST_AUTO_TEST_CASE(secondaryRollbackAndPrimaryCommit)
     auto params1 = bcos::protocol::TwoPCParams();
     params1.number = 100;
     params1.primaryKey = testTableName + ":key0";
-    auto stateStorage0 = std::make_shared<bcos::storage::StateStorage>(storage);
+    auto stateStorage0 = std::make_shared<bcos::storage::StateStorage>(storage, false);
 
     // prewrite
     storage->asyncPrepare(
@@ -917,7 +915,7 @@ BOOST_AUTO_TEST_CASE(multiStorageScondaryCrash)
     auto storage2 = std::make_shared<TiKVStorage>(m_cluster);
     auto storage3 = std::make_shared<TiKVStorage>(m_cluster);
     auto hashImpl = std::make_shared<Header256Hash>();
-    auto stateStorage = std::make_shared<bcos::storage::StateStorage>(storage);
+    auto stateStorage = std::make_shared<bcos::storage::StateStorage>(storage, false);
     auto testTable = stateStorage->openTable(testTableName);
     BOOST_CHECK_EQUAL(testTable.has_value(), true);
     for (size_t i = 0; i < total; ++i)
@@ -927,8 +925,8 @@ BOOST_AUTO_TEST_CASE(multiStorageScondaryCrash)
         entry.importFields({"value_" + boost::lexical_cast<std::string>(i)});
         testTable->setRow(key, std::move(entry));
     }
-    auto stateStorage2 = std::make_shared<bcos::storage::StateStorage>(storage2);
-    auto stateStorage3 = std::make_shared<bcos::storage::StateStorage>(storage3);
+    auto stateStorage2 = std::make_shared<bcos::storage::StateStorage>(storage2, false);
+    auto stateStorage3 = std::make_shared<bcos::storage::StateStorage>(storage3, false);
     auto table1Name = "table1";
     auto table2Name = "table2";
     BOOST_CHECK_EQUAL(
@@ -962,7 +960,7 @@ BOOST_AUTO_TEST_CASE(multiStorageScondaryCrash)
     auto params1 = bcos::protocol::TwoPCParams();
     params1.number = 100;
     params1.primaryKey = testTableName + ":key0";
-    auto stateStorage0 = std::make_shared<bcos::storage::StateStorage>(storage);
+    auto stateStorage0 = std::make_shared<bcos::storage::StateStorage>(storage, false);
     // check empty storage error
     storage->asyncPrepare(
         params1, *stateStorage0, [&](Error::Ptr error, uint64_t ts, const std::string&) {
@@ -1142,7 +1140,7 @@ BOOST_AUTO_TEST_CASE(multiStoragePrimaryCrash)
     auto storage2 = std::make_shared<TiKVStorage>(m_cluster);
     auto storage3 = std::make_shared<TiKVStorage>(m_cluster);
     auto hashImpl = std::make_shared<Header256Hash>();
-    auto stateStorage = std::make_shared<bcos::storage::StateStorage>(storage);
+    auto stateStorage = std::make_shared<bcos::storage::StateStorage>(storage, false);
     auto testTable = stateStorage->openTable(testTableName);
     BOOST_CHECK_EQUAL(testTable.has_value(), true);
     for (size_t i = 0; i < total; ++i)
@@ -1152,8 +1150,8 @@ BOOST_AUTO_TEST_CASE(multiStoragePrimaryCrash)
         entry.importFields({"value_" + boost::lexical_cast<std::string>(i)});
         testTable->setRow(key, std::move(entry));
     }
-    auto stateStorage2 = std::make_shared<bcos::storage::StateStorage>(storage2);
-    auto stateStorage3 = std::make_shared<bcos::storage::StateStorage>(storage3);
+    auto stateStorage2 = std::make_shared<bcos::storage::StateStorage>(storage2, false);
+    auto stateStorage3 = std::make_shared<bcos::storage::StateStorage>(storage3, false);
     auto table1Name = "table1";
     auto table2Name = "table2";
     BOOST_CHECK_EQUAL(
@@ -1187,7 +1185,7 @@ BOOST_AUTO_TEST_CASE(multiStoragePrimaryCrash)
     auto params1 = bcos::protocol::TwoPCParams();
     params1.number = 100;
     params1.primaryKey = testTableName + ":key0";
-    auto stateStorage0 = std::make_shared<bcos::storage::StateStorage>(storage);
+    auto stateStorage0 = std::make_shared<bcos::storage::StateStorage>(storage, false);
     // check empty storage error
     storage->asyncPrepare(
         params1, *stateStorage0, [&](Error::Ptr error, uint64_t ts, const std::string&) {
@@ -1213,7 +1211,7 @@ BOOST_AUTO_TEST_CASE(multiStoragePrimaryCrash)
     // just recommit prewrite
     storage = std::make_shared<TiKVStorage>(m_cluster);
     auto storage4 = std::make_shared<TiKVStorage>(m_cluster);
-    auto stateStorage4 = std::make_shared<bcos::storage::StateStorage>(storage3);
+    auto stateStorage4 = std::make_shared<bcos::storage::StateStorage>(storage3, false);
     params1.timestamp = 0;
     storage->asyncPrepare(
         params1, *stateStorage, [&](Error::Ptr error, uint64_t ts, const std::string&) {

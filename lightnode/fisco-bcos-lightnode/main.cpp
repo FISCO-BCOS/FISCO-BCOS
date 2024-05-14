@@ -23,6 +23,10 @@
 #include "RPCInitializer.h"
 #include "bcos-crypto/interfaces/crypto/CryptoSuite.h"
 #include "bcos-utilities/Common.h"
+#include "client/LedgerClientImpl.h"
+#include "client/P2PClientImpl.h"
+#include "client/SchedulerClientImpl.h"
+#include "client/TransactionPoolClientImpl.h"
 #include "libinitializer/CommandHelper.h"
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-ledger/src/libledger/Ledger.h>

@@ -1,18 +1,14 @@
 #pragma once
 
 #include "Executive.h"
-#include "ExecutorManager.h"
 #include "GraphKeyLocks.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
 #include "bcos-framework/executor/ParallelTransactionExecutorInterface.h"
 #include "bcos-framework/protocol/Block.h"
 #include "bcos-framework/protocol/BlockHeader.h"
-#include "bcos-framework/protocol/BlockHeaderFactory.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
-#include "bcos-framework/protocol/TransactionMetaData.h"
-#include "bcos-framework/protocol/TransactionReceiptFactory.h"
+#include "bcos-framework/protocol/TransactionSubmitResultFactory.h"
 #include "bcos-framework/storage/StorageInterface.h"
-#include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
@@ -21,11 +17,6 @@
 #include <boost/iterator/iterator_categories.hpp>
 #include <boost/range/any_range.hpp>
 #include <chrono>
-#include <forward_list>
-#include <mutex>
-#include <ratio>
-#include <stack>
-#include <thread>
 #include <utility>
 
 namespace bcos::scheduler

@@ -28,10 +28,6 @@
 #endif
 #include <bcos-crypto/hash/Keccak256.h>
 #include <boost/throw_exception.hpp>
-#include <concepts>
-#include <shared_mutex>
-#include <span>
-#include <type_traits>
 #include <utility>
 
 namespace bcos::protocol

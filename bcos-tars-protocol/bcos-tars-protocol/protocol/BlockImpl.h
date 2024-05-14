@@ -23,18 +23,9 @@
 #ifdef _WIN32
 #include <tup/Tars.h>
 #endif
-#include "../Common.h"
-#include "../impl/TarsHashable.h"
-#include "BlockHeaderImpl.h"
-#include "TransactionImpl.h"
 #include "TransactionMetaDataImpl.h"
-#include "TransactionReceiptImpl.h"
-#include "bcos-concepts/Hash.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-tars-protocol/tars/Block.h"
-#include "bcos-tars-protocol/tars/Transaction.h"
-#include "bcos-tars-protocol/tars/TransactionMetaData.h"
-#include "bcos-tars-protocol/tars/TransactionReceipt.h"
 #include <bcos-crypto/hasher/AnyHasher.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/merkle/Merkle.h>
@@ -42,7 +33,6 @@
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <gsl/span>
 #include <memory>
-#include <type_traits>
 
 namespace bcostars::protocol
 {

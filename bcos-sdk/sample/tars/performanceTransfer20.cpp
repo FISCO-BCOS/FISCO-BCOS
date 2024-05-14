@@ -98,7 +98,7 @@ void query(bcos::sdk::RPCClient& rpcClient, std::shared_ptr<bcos::crypto::Crypto
         for (auto i = range.begin(); i != range.end(); ++i)
         {
             limiter.acquire(1);
-            bcos::codec::abi::ContractABICodec abiCodec1(cryptoSuite->hashImpl());
+            bcos::codec::abi::ContractABICodec abiCodec1(*cryptoSuite->hashImpl());
             auto input = abiCodec1.abiIn(
                 "availableBalance(address)", users[i].keyPair->address(cryptoSuite->hashImpl()));
             auto transaction = transactionFactory.createTransaction(0, contractAddress, input,
@@ -126,7 +126,7 @@ void query(bcos::sdk::RPCClient& rpcClient, std::shared_ptr<bcos::crypto::Crypto
             }
 
             auto output = receipt->output();
-            bcos::codec::abi::ContractABICodec abiCodec(cryptoSuite->hashImpl());
+            bcos::codec::abi::ContractABICodec abiCodec(*cryptoSuite->hashImpl());
             bcos::s256 balance;
             abiCodec.abiOut(output, balance);
             users[i].balance = balance.convert_to<long>();
@@ -148,7 +148,7 @@ void issue(bcos::sdk::RPCClient& rpcClient, std::shared_ptr<bcos::crypto::Crypto
         for (auto i = range.begin(); i != range.end(); ++i)
         {
             limiter.acquire(1);
-            bcos::codec::abi::ContractABICodec abiCodec(cryptoSuite->hashImpl());
+            bcos::codec::abi::ContractABICodec abiCodec(*cryptoSuite->hashImpl());
             auto input = abiCodec.abiIn("mint(address,uint256)",
                 users[i].keyPair->address(cryptoSuite->hashImpl()), bcos::u256(initialValue));
             auto transaction = transactionFactory.createTransaction(0, contractAddress, input,
@@ -199,7 +199,7 @@ void transfer(bcos::sdk::RPCClient& rpcClient,
             auto fromAddress = i % users.size();
             auto toAddress = ((i + (users.size() / 2)) % users.size());
 
-            bcos::codec::abi::ContractABICodec abiCodec(cryptoSuite->hashImpl());
+            bcos::codec::abi::ContractABICodec abiCodec(*cryptoSuite->hashImpl());
             auto input = abiCodec.abiIn("transfer(address,uint256)",
                 users[toAddress].keyPair->address(cryptoSuite->hashImpl()), bcos::u256(1));
             auto transaction = transactionFactory.createTransaction(0, contractAddress, input,
@@ -285,7 +285,7 @@ int main(int argc, char* argv[])
 
     bcos::bytes transfer20Bin;
     boost::algorithm::unhex(TRANSFER20_BYTECODE, std::back_inserter(transfer20Bin));
-    bcos::codec::abi::ContractABICodec abiCodec(cryptoSuite->hashImpl());
+    bcos::codec::abi::ContractABICodec abiCodec(*cryptoSuite->hashImpl());
     auto deployParam = abiCodec.abiIn("", std::string("test_token"), std::string("tt"), false);
     transfer20Bin.insert(transfer20Bin.end(), deployParam.begin(), deployParam.end());
 
@@ -304,7 +304,7 @@ int main(int argc, char* argv[])
 
     bcos::bytes tupBin;
     boost::algorithm::unhex(TRANSPARENT_UPGRADEABLE_PROXY_BYTECODE, std::back_inserter(tupBin));
-    bcos::codec::abi::ContractABICodec abiCodec2(cryptoSuite->hashImpl());
+    bcos::codec::abi::ContractABICodec abiCodec2(*cryptoSuite->hashImpl());
     auto ownerKeyPair = std::shared_ptr<bcos::crypto::KeyPairInterface>(
         cryptoSuite->signatureImpl()->generateKeyPair());
     auto tupParam = abiCodec2.abiIn("", bcos::toAddress(std::string(transfer20ContractAddress)),

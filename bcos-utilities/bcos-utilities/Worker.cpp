@@ -23,6 +23,7 @@
 #include <pthread.h>
 #endif
 
+#include "BoostLog.h"
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <chrono>

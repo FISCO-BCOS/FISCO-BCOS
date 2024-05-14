@@ -23,8 +23,6 @@
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <gsl/span>
-#include <ostream>
-#include <utility>
 
 namespace bcos::protocol
 {

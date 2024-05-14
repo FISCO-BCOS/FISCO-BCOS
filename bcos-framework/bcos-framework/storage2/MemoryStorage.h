@@ -3,7 +3,6 @@
 #include "Storage.h"
 #include "bcos-task/AwaitableValue.h"
 #include "bcos-utilities/NullLock.h"
-#include "bcos-utilities/Overloaded.h"
 #include <oneapi/tbb/spin_rw_mutex.h>
 #include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/identity.hpp>

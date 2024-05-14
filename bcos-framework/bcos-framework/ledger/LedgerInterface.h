@@ -21,12 +21,11 @@
 
 #pragma once
 
+#include "../consensus/ConsensusNodeInterface.h"
 #include "../protocol/Block.h"
-#include "../protocol/BlockHeader.h"
 #include "../protocol/Transaction.h"
 #include "../protocol/TransactionReceipt.h"
 #include "../storage/StorageInterface.h"
-#include "LedgerConfig.h"
 #include "LedgerTypeDef.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-utilities/Error.h>
