@@ -59,7 +59,7 @@ static void combineTxResponse(Json::Value& result, bcos::protocol::Transaction::
     result["blockNumber"] = toQuantity(blockNumber);
     result["transactionIndex"] = toQuantity(transactionIndex);
     auto from = toHex(tx->sender());
-    toChecksumAddress(from, bcos::crypto::keccak256Hash(from).hex());
+    toChecksumAddress(from, bcos::crypto::keccak256Hash(bcos::bytesConstRef(from)).hex());
     result["from"] = "0x" + std::move(from);
     if (tx->to().empty())
     {
@@ -69,7 +69,7 @@ static void combineTxResponse(Json::Value& result, bcos::protocol::Transaction::
     {
         auto toView = tx->to();
         auto to = std::string(toView.starts_with("0x") ? toView.substr(2) : toView);
-        toChecksumAddress(to, bcos::crypto::keccak256Hash(to).hex());
+        toChecksumAddress(to, bcos::crypto::keccak256Hash(bcos::bytesConstRef(to)).hex());
         result["to"] = "0x" + std::move(to);
     }
     result["gas"] = toQuantity(tx->gasLimit());

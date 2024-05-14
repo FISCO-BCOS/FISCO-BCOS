@@ -28,6 +28,8 @@
 #include "../storage/StorageInterface.h"
 #include "LedgerTypeDef.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
+#include <bcos-task/Coroutine.h>
+#include <bcos-task/Task.h>
 #include <bcos-utilities/Error.h>
 #include <gsl/span>
 #include <map>

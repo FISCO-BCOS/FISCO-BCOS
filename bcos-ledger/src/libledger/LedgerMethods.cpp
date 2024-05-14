@@ -1,6 +1,9 @@
 #include "LedgerMethods.h"
 #include "bcos-tool/VersionConverter.h"
 #include "utilities/Common.h"
+
+#include <bcos-executor/src/Common.h>
+
 #include <boost/exception/diagnostic_information.hpp>
 #include <exception>
 
