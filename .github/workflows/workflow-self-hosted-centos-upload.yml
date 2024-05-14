@@ -7,11 +7,11 @@ on:
       - "README.md"
   release:
     types: [push]
-  # pull_request:
-  #   paths-ignore:
-  #     - "docs/**"
-  #     - "Changelog.md"
-  #     - "README.md"
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "Changelog.md"
+      - "README.md"
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -19,19 +19,19 @@ concurrency:
 jobs:
   build_centos:
     name: centos ci upload
-    runs-on: self-hosted-centos
+    runs-on: self-hosted-centos-2.0
     strategy:
       fail-fast: false
     env:
-      VCPKG_ROOT: ~/cache/vcpkg
       DEPS_ROOT: ~/cache/deps
     steps:
 
       - name: yum install
         run: |
+          sudo yum update -y
           sudo yum install -y -q epel-release centos-release-scl flex bison patch gmp-static  glibc-static glibc-devel libzstd-devel
           sudo yum install -y -q devtoolset-7 llvm-toolset-7.0 rh-perl530-perl cmake3 zlib-devel ccache python-devel python3-devel python3-pip automake openssl
-          sudo yum reinstall -y -q https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
+          sudo yum install -y -q https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
           sudo yum install -y -q git
       - uses: actions/checkout@v2
         with:
@@ -53,23 +53,27 @@ jobs:
         run: |
           . /opt/rh/devtoolset-7/enable
           . /opt/rh/rh-perl530/enable
-          cmake . -DWITH_TBB=OFF
+          mkdir -p build-2
+          cd build-2
+          cmake .. -DWITH_TBB=OFF
           make fisco-bcos -j4
       - name: tar fisco-bcos without tbb
-        run: cp tools/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -zcf fisco-bcos.tar.gz fisco-bcos build_chain.sh
+        run: cp tools/build_chain.sh build-2/bin/ && cd build-2/bin && strip fisco-bcos && tar -zcf fisco-bcos.tar.gz fisco-bcos build_chain.sh
       - uses: actions/upload-artifact@v2
         with:
           name: fisco-bcos.tar.gz
-          path: bin/fisco-bcos.tar.gz
+          path: build-2/bin/fisco-bcos.tar.gz
       - name: configure and compile
         run: |
           . /opt/rh/devtoolset-7/enable
           . /opt/rh/rh-perl530/enable
-          cmake . -DWITH_TBB=ON
+          mkdir -p build-2
+          cd build-2
+          cmake .. -DWITH_TBB=ON
           make fisco-bcos -j4
       - name: tar fisco-bcos tbb
-        run: cp tools/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -zcf fisco-bcos.tar.gz fisco-bcos build_chain.sh
+        run: cp tools/build_chain.sh build-2/bin/ && cd build-2/bin && strip fisco-bcos && tar -zcf fisco-bcos.tar.gz fisco-bcos build_chain.sh
       - uses: actions/upload-artifact@v2
         with:
           name: fisco-bcos-without-tbb.tar.gz
-          path: bin/fisco-bcos.tar.gz
+          path: build-2/bin/fisco-bcos.tar.gz
