@@ -4,7 +4,6 @@
 #include "bcos-task/Task.h"
 #include "bcos-task/Trait.h"
 #include "bcos-utilities/Ranges.h"
-#include <concepts>
 
 namespace bcos::transaction_scheduler
 {

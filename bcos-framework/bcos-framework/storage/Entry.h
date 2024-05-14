@@ -11,9 +11,7 @@
 #include <boost/iostreams/stream.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
-#include <compare>
 #include <cstdint>
-#include <exception>
 #include <initializer_list>
 #include <type_traits>
 #include <variant>
@@ -238,9 +236,9 @@ public:
                 hasher.final(entryHash);
                 if (c_fileLogLevel == TRACE) [[unlikely]]
                 {
-                    STORAGE_LOG(TRACE) << "Entry hash, dirty entry: " << table << " | "
-                                       << toHex(key) << " | " << toHex(table) << toHex(key)
-                                       << toHex(data) << LOG_KV("hash", entryHash.abridged());
+                    STORAGE_LOG(TRACE)
+                        << "Entry hash, dirty entry: " << table << " | " << toHex(key) << " | "
+                        << toHex(data) << LOG_KV("hash", entryHash.abridged());
                 }
                 break;
             }

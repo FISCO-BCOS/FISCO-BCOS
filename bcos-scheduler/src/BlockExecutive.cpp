@@ -2,18 +2,22 @@
 #include "Common.h"
 #include "DmcExecutor.h"
 #include "SchedulerImpl.h"
-#include "bcos-crypto/bcos-crypto/ChecksumAddress.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
 #include "bcos-framework/executor/ParallelTransactionExecutorInterface.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
+#include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-table/src/StateStorage.h"
 #include "bcos-tars-protocol/protocol/BlockImpl.h"
+#include "bcos-task/Wait.h"
 #include <bcos-framework/executor/ExecuteError.h>
 #include <bcos-utilities/Error.h>
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for_each.h>
 #include <boost/algorithm/hex.hpp>
+#include <boost/archive/basic_archive.hpp>
+#include <boost/archive/binary_iarchive.hpp>
+#include <boost/archive/binary_oarchive.hpp>
 #include <boost/asio/defer.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/format.hpp>
@@ -23,9 +27,6 @@
 #include <chrono>
 #include <cstdint>
 #include <exception>
-#include <iterator>
-#include <mutex>
-#include <thread>
 #include <utility>
 
 #ifdef USE_TCMALLOC
@@ -438,48 +439,52 @@ void BlockExecutive::asyncExecute(
 
 void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
 {
-    auto stateStorage = std::make_shared<storage::StateStorage>(m_scheduler->m_storage);
+    task::wait([this](decltype(callback) callback) -> task::Task<void> {
+        ledger::Features features;
+        co_await features.readFromStorage(*m_scheduler->m_storage, m_blockHeader->number());
+        auto stateStorage = std::make_shared<storage::StateStorage>(m_scheduler->m_storage,
+            features.get(ledger::Features::Flag::bugfix_set_row_with_dirty_flag));
 
-    m_currentTimePoint = std::chrono::system_clock::now();
-    SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(number()) << LOG_DESC("BlockExecutive commit block");
+        m_currentTimePoint = std::chrono::system_clock::now();
+        SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(number()) << LOG_DESC("BlockExecutive commit block");
 
-    m_scheduler->m_ledger->asyncPrewriteBlock(
-        stateStorage, m_blockTxs, m_block,
-        [this, stateStorage, callback = std::move(callback)](
-            std::string primiaryKey, Error::Ptr&& error) mutable {
-            if (error)
-            {
-                SCHEDULER_LOG(ERROR) << "Prewrite block error!" << error->errorMessage();
-
-                if (error->errorCode() == bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
+        m_scheduler->m_ledger->asyncPrewriteBlock(
+            stateStorage, m_blockTxs, m_block,
+            [this, stateStorage, callback = std::move(callback)](
+                std::string primiaryKey, Error::Ptr&& error) mutable {
+                if (error)
                 {
-                    triggerSwitch();
-                }
+                    SCHEDULER_LOG(ERROR) << "Prewrite block error!" << error->errorMessage();
 
-                callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(SchedulerError::PrewriteBlockError,
-                    "Prewrite block failed: " + error->errorMessage(), *error));
+                    if (error->errorCode() == bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
+                    {
+                        triggerSwitch();
+                    }
 
-                return;
-            }
+                    callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(SchedulerError::PrewriteBlockError,
+                        "Prewrite block failed: " + error->errorMessage(), *error));
 
-            auto status = std::make_shared<CommitStatus>();
-            // self + ledger(txs receipts) + executors = 1 + 1 + executors
-            status->total = 2 + getExecutorSize();
-            status->checkAndCommit = [this, callback](const CommitStatus& status) {
-                if (!m_isRunning)
-                {
-                    callback(BCOS_ERROR_UNIQUE_PTR(
-                        SchedulerError::Stopped, "BlockExecutive is stopped"));
                     return;
                 }
 
-                if (status.failed > 0)
-                {
-                    std::string errorMessage = "Prepare with errors, begin rollback, status: " +
-                                               boost::lexical_cast<std::string>(status.failed);
-                    SCHEDULER_LOG(WARNING) << BLOCK_NUMBER(number()) << errorMessage;
-                    batchBlockRollback(
-                        status.startTS, [this, callback, errorMessage](Error::UniquePtr&& error) {
+                auto status = std::make_shared<CommitStatus>();
+                // self + ledger(txs receipts) + executors = 1 + 1 + executors
+                status->total = 2 + getExecutorSize();
+                status->checkAndCommit = [this, callback](const CommitStatus& status) {
+                    if (!m_isRunning)
+                    {
+                        callback(BCOS_ERROR_UNIQUE_PTR(
+                            SchedulerError::Stopped, "BlockExecutive is stopped"));
+                        return;
+                    }
+
+                    if (status.failed > 0)
+                    {
+                        std::string errorMessage = "Prepare with errors, begin rollback, status: " +
+                                                   boost::lexical_cast<std::string>(status.failed);
+                        SCHEDULER_LOG(WARNING) << BLOCK_NUMBER(number()) << errorMessage;
+                        batchBlockRollback(status.startTS, [this, callback, errorMessage](
+                                                               Error::UniquePtr&& error) {
                             if (error)
                             {
                                 SCHEDULER_LOG(ERROR)
@@ -498,138 +503,139 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                             }
                         });
 
-                    return;
-                }
-
-                SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(number()) << "batchCommitBlock begin";
-                batchBlockCommit(status.startTS, [this, callback](Error::UniquePtr&& error) {
-                    if (error)
-                    {
-                        SCHEDULER_LOG(WARNING)
-                            << BLOCK_NUMBER(number()) << "Commit block to storage failed!"
-                            << error->errorMessage();
-
-                        if (error->errorCode() ==
-                            bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
-                        {
-                            triggerSwitch();
-                        }
-
-                        // FATAL ERROR, NEED MANUAL FIX!
-                        callback(std::move(error));
-
                         return;
                     }
 
-                    m_commitElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::system_clock::now() - m_currentTimePoint);
-                    SCHEDULER_LOG(DEBUG)
-                        << BLOCK_NUMBER(number()) << "CommitBlock: "
-                        << "success, execute elapsed: " << m_executeElapsed.count()
-                        << "ms hash elapsed: " << m_hashElapsed.count()
-                        << "ms commit elapsed: " << m_commitElapsed.count() << "ms";
+                    SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(number()) << "batchCommitBlock begin";
+                    batchBlockCommit(status.startTS, [this, callback](Error::UniquePtr&& error) {
+                        if (error)
+                        {
+                            SCHEDULER_LOG(WARNING)
+                                << BLOCK_NUMBER(number()) << "Commit block to storage failed!"
+                                << error->errorMessage();
 
-                    callback(nullptr);
-                });
-            };
+                            if (error->errorCode() ==
+                                bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
+                            {
+                                triggerSwitch();
+                            }
 
-            bcos::protocol::TwoPCParams params;
-            params.number = number();
-            params.primaryKey = std::move(primiaryKey);
-            m_scheduler->m_storage->asyncPrepare(params, *stateStorage,
-                [status, this, callback](
-                    Error::Ptr&& error, uint64_t startTimeStamp, const std::string& primaryKey) {
-                    if (error)
-                    {
+                            // FATAL ERROR, NEED MANUAL FIX!
+                            callback(std::move(error));
+
+                            return;
+                        }
+
+                        m_commitElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                            std::chrono::system_clock::now() - m_currentTimePoint);
+                        SCHEDULER_LOG(DEBUG)
+                            << BLOCK_NUMBER(number()) << "CommitBlock: "
+                            << "success, execute elapsed: " << m_executeElapsed.count()
+                            << "ms hash elapsed: " << m_hashElapsed.count()
+                            << "ms commit elapsed: " << m_commitElapsed.count() << "ms";
+
+                        callback(nullptr);
+                    });
+                };
+
+                bcos::protocol::TwoPCParams params;
+                params.number = number();
+                params.primaryKey = std::move(primiaryKey);
+                m_scheduler->m_storage->asyncPrepare(params, *stateStorage,
+                    [status, this, callback](Error::Ptr&& error, uint64_t startTimeStamp,
+                        const std::string& primaryKey) {
+                        if (error)
+                        {
+                            {
+                                WriteGuard lock(status->x_lock);
+                                ++status->failed;
+                            }
+                            SCHEDULER_LOG(WARNING) << BLOCK_NUMBER(number())
+                                                   << "scheduler asyncPrepare storage error: "
+                                                   << error->errorMessage();
+                            callback(BCOS_ERROR_UNIQUE_PTR(error->errorCode(),
+                                "asyncPrepare block error: " + error->errorMessage()));
+                            return;
+                        }
+                        else
                         {
                             WriteGuard lock(status->x_lock);
-                            ++status->failed;
+                            ++status->success;
                         }
-                        SCHEDULER_LOG(WARNING)
-                            << BLOCK_NUMBER(number())
-                            << "scheduler asyncPrepare storage error: " << error->errorMessage();
-                        callback(BCOS_ERROR_UNIQUE_PTR(error->errorCode(),
-                            "asyncPrepare block error: " + error->errorMessage()));
-                        return;
+
+                        SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(number())
+                                             << "primary prepare finished, call executor prepare"
+                                             << LOG_KV("startTimeStamp", startTimeStamp)
+                                             << LOG_KV("executors", getExecutorSize())
+                                             << LOG_KV("success", status->success)
+                                             << LOG_KV("failed", status->failed);
+                        bcos::protocol::TwoPCParams executorParams;
+                        executorParams.number = number();
+                        executorParams.primaryKey = primaryKey;
+                        executorParams.timestamp = startTimeStamp;
+                        status->startTS = startTimeStamp;
+                        for (const auto& executorIt : *(m_scheduler->m_executorManager))
+                        {
+                            executorIt->prepare(executorParams, [this, status](Error::Ptr&& error) {
+                                {
+                                    WriteGuard lock(status->x_lock);
+                                    if (error)
+                                    {
+                                        ++status->failed;
+                                        SCHEDULER_LOG(ERROR)
+                                            << BLOCK_NUMBER(number())
+                                            << "asyncPrepare executor failed: "
+                                            << LOG_KV("code", error->errorCode()) << error->what();
+
+                                        if (error->errorCode() ==
+                                            bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
+                                        {
+                                            triggerSwitch();
+                                        }
+                                    }
+                                    else
+                                    {
+                                        ++status->success;
+                                        SCHEDULER_LOG(DEBUG)
+                                            << BLOCK_NUMBER(number())
+                                            << "asyncPrepare executor success, success: "
+                                            << status->success;
+                                    }
+                                    if (status->success + status->failed < status->total)
+                                    {
+                                        return;
+                                    }
+                                }
+
+                                status->checkAndCommit(*status);
+                            });
+                        }
+                    });
+                // write transactions and receipts in another DB txn
+                auto err = m_scheduler->m_ledger->storeTransactionsAndReceipts(
+                    m_blockTxs, std::const_pointer_cast<const bcos::protocol::Block>(m_block));
+                {
+                    WriteGuard lock(status->x_lock);
+                    if (err)
+                    {
+                        ++status->failed;
+                        SCHEDULER_LOG(ERROR)
+                            << BLOCK_NUMBER(number()) << "write txs and receipts failed: "
+                            << LOG_KV("message", err->errorMessage());
                     }
                     else
                     {
-                        WriteGuard lock(status->x_lock);
                         ++status->success;
                     }
-
-                    SCHEDULER_LOG(DEBUG)
-                        << BLOCK_NUMBER(number())
-                        << "primary prepare finished, call executor prepare"
-                        << LOG_KV("startTimeStamp", startTimeStamp)
-                        << LOG_KV("executors", getExecutorSize())
-                        << LOG_KV("success", status->success) << LOG_KV("failed", status->failed);
-                    bcos::protocol::TwoPCParams executorParams;
-                    executorParams.number = number();
-                    executorParams.primaryKey = primaryKey;
-                    executorParams.timestamp = startTimeStamp;
-                    status->startTS = startTimeStamp;
-                    for (const auto& executorIt : *(m_scheduler->m_executorManager))
+                    if (status->success + status->failed < status->total)
                     {
-                        executorIt->prepare(executorParams, [this, status](Error::Ptr&& error) {
-                            {
-                                WriteGuard lock(status->x_lock);
-                                if (error)
-                                {
-                                    ++status->failed;
-                                    SCHEDULER_LOG(ERROR)
-                                        << BLOCK_NUMBER(number())
-                                        << "asyncPrepare executor failed: "
-                                        << LOG_KV("code", error->errorCode()) << error->what();
-
-                                    if (error->errorCode() ==
-                                        bcos::executor::ExecuteError::SCHEDULER_TERM_ID_ERROR)
-                                    {
-                                        triggerSwitch();
-                                    }
-                                }
-                                else
-                                {
-                                    ++status->success;
-                                    SCHEDULER_LOG(DEBUG)
-                                        << BLOCK_NUMBER(number())
-                                        << "asyncPrepare executor success, success: "
-                                        << status->success;
-                                }
-                                if (status->success + status->failed < status->total)
-                                {
-                                    return;
-                                }
-                            }
-
-                            status->checkAndCommit(*status);
-                        });
+                        return;
                     }
-                });
-            // write transactions and receipts in another DB txn
-            auto err = m_scheduler->m_ledger->storeTransactionsAndReceipts(
-                m_blockTxs, std::const_pointer_cast<const bcos::protocol::Block>(m_block));
-            {
-                WriteGuard lock(status->x_lock);
-                if (err)
-                {
-                    ++status->failed;
-                    SCHEDULER_LOG(ERROR)
-                        << BLOCK_NUMBER(number()) << "write txs and receipts failed: "
-                        << LOG_KV("message", err->errorMessage());
                 }
-                else
-                {
-                    ++status->success;
-                }
-                if (status->success + status->failed < status->total)
-                {
-                    return;
-                }
-            }
-            status->checkAndCommit(*status);
-        },
-        false);
+                status->checkAndCommit(*status);
+            },
+            false);
+    }(std::move(callback)));
 }
 
 void BlockExecutive::asyncNotify(
@@ -1004,14 +1010,13 @@ void BlockExecutive::onDmcExecuteFinish(
     auto dmcChecksum = m_dmcRecorder->dumpAndClearChecksum();
     if (m_staticCall)
     {
-        DMC_LOG(TRACE) << LOG_BADGE("Stat") << "DMCExecute.6:"
-                       << "\t " << LOG_BADGE("DMCRecorder") << " DMCExecute for call finished "
-                       << LOG_KV("blockNumber", number()) << LOG_KV("checksum", dmcChecksum);
+        DMC_LOG(TRACE) << LOG_BADGE("Stat") << "DMCExecute.6:" << "\t " << LOG_BADGE("DMCRecorder")
+                       << " DMCExecute for call finished " << LOG_KV("blockNumber", number())
+                       << LOG_KV("checksum", dmcChecksum);
     }
     else
     {
-        DMC_LOG(INFO) << LOG_BADGE("Stat") << "DMCExecute.6:"
-                      << "\t " << LOG_BADGE("DMCRecorder")
+        DMC_LOG(INFO) << LOG_BADGE("Stat") << "DMCExecute.6:" << "\t " << LOG_BADGE("DMCRecorder")
                       << " DMCExecute for transaction finished " << LOG_KV("blockNumber", number())
                       << LOG_KV("checksum", dmcChecksum);
 
@@ -1578,9 +1583,20 @@ void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr outp
 {
     auto txGasUsed = m_gasLimit - output->gasAvailable();
     // Calc the gas set to header
+
     if (bcos::precompiled::c_systemTxsAddress.contains(output->from()))
     {
-        txGasUsed = 0;
+        // Note: We will not consume gas when EOA call sys contract directly.
+        // When dmc return, sys contract is from(), to() is EOA address.
+        // But if this tx is a deploy tx, from() is sys contract but to() is new address.
+        // So we need to fix this bug here: only consider output->newEVMContractAddress().empty()
+        // here. Leaving only EOA call sys contract here.
+        auto hasBugfix = m_scheduler->ledgerConfig().features().get(
+            ledger::Features::Flag::bugfix_dmc_deploy_gas_used);
+        if (!hasBugfix || (hasBugfix && output->newEVMContractAddress().empty()))
+        {
+            txGasUsed = 0;
+        }
     }
     m_gasUsed.fetch_add(txGasUsed);
     auto version = m_executiveResults[output->contextID() - m_startContextID].version;

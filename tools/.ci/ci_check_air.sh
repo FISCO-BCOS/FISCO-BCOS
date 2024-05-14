@@ -69,11 +69,26 @@ init()
     ${fisco_bcos_path} -v
     clear_node
     bash ${build_chain_path} -l "127.0.0.1:4" -e ${fisco_bcos_path} "${sm_option}"
+    cd nodes/127.0.0.1 && wait_and_start
+}
+
+init_baseline()
+{
+    sm_option="${1}"
+    cd ${current_path}
+    echo " ==> fisco-bcos version: "
+    ${fisco_bcos_path} -v
+    clear_node
+    bash ${build_chain_path} -l "127.0.0.1:4" -e ${fisco_bcos_path} "${sm_option}"
 
     # 将node2、node3替换为baseline scheduler, 这样不一致时可立即发现
     # Replace node2 and node3 with baseline scheduler, so that inconsistencies can be detected immediately
-    # perl -p -i -e 's/baseline_scheduler=false/baseline_scheduler=true/g' nodes/127.0.0.1/node2/config.ini
-    # perl -p -i -e 's/baseline_scheduler=false/baseline_scheduler=true/g' nodes/127.0.0.1/node3/config.ini
+    perl -p -i -e 's/baseline_scheduler=false/baseline_scheduler=true/g' nodes/127.0.0.1/node2/config.ini
+    perl -p -i -e 's/baseline_scheduler=false/baseline_scheduler=true/g' nodes/127.0.0.1/node3/config.ini
+    perl -p -i -e 's/baseline_scheduler_parallel=false/baseline_scheduler_parallel=true/g' nodes/127.0.0.1/node3/config.ini
+
+    perl -p -i -e 's/level=info/level=trace/g' nodes/127.0.0.1/node1/config.ini
+    perl -p -i -e 's/level=info/level=trace/g' nodes/127.0.0.1/node2/config.ini
 
     cd nodes/127.0.0.1 && wait_and_start
 }
@@ -157,7 +172,6 @@ fi
 LOG_INFO "======== check non-sm case ========"
 init ""
 expand_node ""
-pwd
 bash ${current_path}/.ci/console_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
 if [[ ${?} == "0" ]]; then
         LOG_INFO "console_integrationTest success"
@@ -210,7 +224,31 @@ if [[ ${?} == "0" ]]; then
         echo "java_sdk_demo_ci_test error"
         exit 1
 fi
-stop_node
+
 LOG_INFO "======== check sm case success ========"
 clear_node
 LOG_INFO "======== clear node after sm test success ========"
+
+# baseline暂时不支持balance precompiled，故不测试java_sdk_demo_ci_test
+# baseline does not support balance precompiled temporarily, so java_sdk_demo_ci_test is not tested
+LOG_INFO "======== check baseline cases ========"
+init_baseline "-s"
+expand_node "-s"
+bash ${current_path}/.ci/console_ci_test.sh ${console_branch} "true" "${current_path}/nodes/127.0.0.1"
+if [[ ${?} == "0" ]]; then
+        LOG_INFO "console_integrationTest success"
+    else
+        echo "console_integrationTest error"
+        exit 1
+fi
+bash ${current_path}/.ci/java_sdk_ci_test.sh ${console_branch} "true" "${current_path}/nodes/127.0.0.1"
+if [[ ${?} == "0" ]]; then
+        LOG_INFO "java_sdk_integrationTest success"
+    else
+        echo "java_sdk_integrationTest error"
+        exit 1
+fi
+stop_node
+LOG_INFO "======== check baseline cases success ========"
+clear_node
+LOG_INFO "======== clear node after baseline test success ========"

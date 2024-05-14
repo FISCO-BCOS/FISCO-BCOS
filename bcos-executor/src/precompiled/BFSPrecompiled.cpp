@@ -50,6 +50,46 @@ static constexpr std::string_view FILE_SYSTEM_METHOD_INIT = "initBfs()";
 static constexpr std::string_view FILE_SYSTEM_METHOD_REBUILD = "rebuildBfs(uint256,uint256)";
 static constexpr std::string_view FILE_SYSTEM_METHOD_FIX = "fixBfs(uint256)";
 
+static void buildSysSubs(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive, auto toVersion)
+{
+    for (const auto& sysSub : BFS_SYS_SUBS)
+    {
+        if (sysSub == SHARDING_PRECOMPILED_NAME && toVersion <=> BlockVersion::V3_3_VERSION < 0)
+            [[unlikely]]
+        {
+            continue;
+        }
+        if (sysSub == CAST_NAME && versionCompareTo(toVersion, BlockVersion::V3_2_VERSION) < 0)
+        {
+            continue;
+        }
+        Entry entry;
+        // type, status, acl_type, acl_white, acl_black, extra
+        tool::BfsFileFactory::buildDirEntry(entry, tool::LINK);
+        _executive->storage().setRow(
+            tool::FS_SYS_BIN, sysSub.substr(tool::FS_SYS_BIN.length() + 1), std::move(entry));
+    }
+    // build sys contract
+    for (const auto& [name, address] : SYS_NAME_ADDRESS_MAP)
+    {
+        if (name == SHARDING_PRECOMPILED_NAME && toVersion < BlockVersion::V3_3_VERSION)
+            [[unlikely]]
+        {
+            continue;
+        }
+
+        if (name == CAST_NAME && toVersion < BlockVersion::V3_2_VERSION)
+
+        {
+            continue;
+        }
+        auto linkTable = _executive->storage().createTable(std::string(name), SYS_VALUE_FIELDS);
+        tool::BfsFileFactory::buildLink(
+            linkTable.value(), std::string(address), "", static_cast<uint32_t>(toVersion));
+    }
+}
+
 BFSPrecompiled::BFSPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl)
 {
     name2Selector[std::string(FILE_SYSTEM_METHOD_LIST)] =
@@ -767,7 +807,7 @@ void BFSPrecompiled::touch(const std::shared_ptr<executor::TransactionExecutive>
         return;
     }
 
-    if (_callParameters->m_origin.compare(ACCOUNT_ADDRESS) != 0)
+    if (_callParameters->m_origin != ACCOUNT_ADDRESS)
     {
         // if comming from accountPrecompiled, check path prefix
         if (!checkPathPrefixValid(absolutePath, blockContext.blockVersion(), type))
@@ -1232,46 +1272,4 @@ bool BFSPrecompiled::recursiveBuildDir(
         }
     }
     return true;
-}
-
-void BFSPrecompiled::buildSysSubs(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-    std::variant<uint32_t, BlockVersion> toVersion) const
-{
-    for (const auto& sysSub : BFS_SYS_SUBS)
-    {
-        if (sysSub == SHARDING_PRECOMPILED_NAME && toVersion <=> BlockVersion::V3_3_VERSION < 0)
-            [[unlikely]]
-        {
-            continue;
-        }
-        if (sysSub == CAST_NAME && versionCompareTo(toVersion, BlockVersion::V3_2_VERSION) < 0)
-        {
-            continue;
-        }
-        Entry entry;
-        // type, status, acl_type, acl_white, acl_black, extra
-        tool::BfsFileFactory::buildDirEntry(entry, tool::LINK);
-        _executive->storage().setRow(
-            tool::FS_SYS_BIN, sysSub.substr(tool::FS_SYS_BIN.length() + 1), std::move(entry));
-    }
-    // build sys contract
-    for (const auto& [name, address] : SYS_NAME_ADDRESS_MAP)
-    {
-        if (name == SHARDING_PRECOMPILED_NAME && toVersion <=> BlockVersion::V3_3_VERSION < 0)
-            [[unlikely]]
-        {
-            continue;
-        }
-
-        if (name == CAST_NAME && versionCompareTo(toVersion, BlockVersion::V3_2_VERSION) < 0)
-
-        {
-            continue;
-        }
-        auto linkTable = _executive->storage().createTable(std::string(name), SYS_VALUE_FIELDS);
-        tool::BfsFileFactory::buildLink(linkTable.value(), std::string(address), "",
-            std::holds_alternative<BlockVersion>(toVersion) ?
-                (uint32_t)std::get<BlockVersion>(toVersion) :
-                std::get<uint32_t>(toVersion));
-    }
 }

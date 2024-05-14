@@ -6,7 +6,6 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <json/value.h>
 #include <boost/algorithm/hex.hpp>
-#include <iterator>
 
 namespace bcos::rpc
 {
@@ -36,7 +35,7 @@ void toJsonResp(bcos::crypto::hasher::Hasher auto&& hasher,
 {
     resp["version"] = transaction.data.version;
     std::string hash;
-    bcos::concepts::hash::calculate(std::forward<decltype(hasher)>(hasher), transaction, hash);
+    bcos::concepts::hash::calculate(transaction, std::forward<decltype(hasher)>(hasher), hash);
     resp["hash"] = toHexStringWithPrefix(hash);
     resp["nonce"] = transaction.data.nonce;
     resp["blockLimit"] = Json::Value((Json::Int64)transaction.data.blockLimit);
@@ -64,7 +63,7 @@ void toJsonResp(bcos::crypto::hasher::Hasher auto&& hasher,
     resp["transactionHash"] = "0x" + std::string(txHash);
 
     std::string hash;
-    bcos::concepts::hash::calculate(std::forward<decltype(hasher)>(hasher), receipt, hash);
+    bcos::concepts::hash::calculate(receipt, std::forward<decltype(hasher)>(hasher), hash);
     resp["hash"] = toHexStringWithPrefix(hash);
     resp["logEntries"] = Json::Value(Json::arrayValue);
     for (const auto& logEntry : receipt.data.logEntries)
@@ -100,7 +99,7 @@ void toJsonResp(bcos::crypto::hasher::Hasher auto&& hasher,
 {
     auto const& blockHeader = block.blockHeader;
     std::string hash;
-    bcos::concepts::hash::calculate(hasher.clone(), block, hash);
+    bcos::concepts::hash::calculate(block, hasher.clone(), hash);
     jResp["hash"] = toHexStringWithPrefix(hash);
     jResp["version"] = Json::Value((Json::Int64)block.version);
     jResp["txsRoot"] = toHexStringWithPrefix(blockHeader.data.txsRoot);

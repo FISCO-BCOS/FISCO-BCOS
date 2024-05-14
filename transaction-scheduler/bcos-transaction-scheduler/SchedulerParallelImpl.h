@@ -1,29 +1,25 @@
 #pragma once
 
+#include "GC.h"
 #include "MultiLayerStorage.h"
 #include "ReadWriteSetStorage.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
-#include "bcos-framework/protocol/TransactionReceiptFactory.h"
-#include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
-#include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
-#include "bcos-utilities/Exceptions.h"
-#include <bcos-task/TBBWait.h>
-#include <bcos-task/Wait.h>
-#include <bcos-utilities/ITTAPI.h>
+#include "bcos-task/TBBWait.h"
+#include "bcos-utilities/ITTAPI.h"
+#include <oneapi/tbb/cache_aligned_allocator.h>
 #include <oneapi/tbb/parallel_pipeline.h>
-#include <oneapi/tbb/partitioner.h>
-#include <boost/exception/detail/exception_ptr.hpp>
+#include <oneapi/tbb/task_arena.h>
 #include <boost/throw_exception.hpp>
 #include <atomic>
 #include <cstddef>
-#include <iterator>
-#include <limits>
-#include <stdexcept>
+#include <functional>
+#include <memory>
+#include <type_traits>
 
 namespace bcos::transaction_scheduler
 {
@@ -32,12 +28,18 @@ namespace bcos::transaction_scheduler
 
 class SchedulerParallelImpl
 {
-    std::unique_ptr<tbb::task_group> m_asyncTaskGroup;
-    constexpr static size_t MIN_CHUNK_SIZE = 16;
-    size_t m_chunkSize = MIN_CHUNK_SIZE;
-    size_t m_maxToken = 0;
+private:
+    template <class Storage>
+    struct StorageTrait
+    {
+        using LocalStorage = MultiLayerStorage<typename Storage::MutableStorage, void, Storage>;
+        using LocalStorageView =
+            std::invoke_result_t<decltype(&LocalStorage::fork), LocalStorage, bool>;
+        using LocalReadWriteSetStorage =
+            ReadWriteSetStorage<LocalStorageView, transaction_executor::StateKey>;
+    };
 
-    template <class Storage, class Executor, class Range>
+    template <class Storage, class Executor, class ContextRange>
     class ChunkStatus
     {
     private:
@@ -49,67 +51,92 @@ class SchedulerParallelImpl
         }
 
         int64_t m_chunkIndex = 0;
-        std::atomic_int64_t const& m_lastChunkIndex;
-        Range m_transactionAndReceiptsRange;
-        Executor& m_executor;
-        MultiLayerStorage<typename Storage::MutableStorage, void, Storage> m_localStorage;
-        decltype(m_localStorage.fork(true)) m_localStorageView;
-        ReadWriteSetStorage<decltype(m_localStorageView), transaction_executor::StateKey>
-            m_localReadWriteSetStorage;
+        std::reference_wrapper<boost::atomic_flag const> m_hasRAW;
+        ContextRange m_contextRange;
+        std::reference_wrapper<Executor> m_executor;
+        typename StorageTrait<Storage>::LocalStorage m_localStorage;
+        typename StorageTrait<Storage>::LocalStorageView m_localStorageView;
+        typename StorageTrait<Storage>::LocalReadWriteSetStorage m_localReadWriteSetStorage;
 
     public:
-        ChunkStatus(int64_t chunkIndex, std::atomic_int64_t const& lastChunkIndex,
-            Range transactionAndReceiptsRange, Executor& executor, auto& storage)
+        ChunkStatus(int64_t chunkIndex, boost::atomic_flag const& hasRAW, ContextRange contextRange,
+            Executor& executor, auto& storage)
           : m_chunkIndex(chunkIndex),
-            m_lastChunkIndex(lastChunkIndex),
-            m_transactionAndReceiptsRange(transactionAndReceiptsRange),
+            m_hasRAW(hasRAW),
+            m_contextRange(std::move(contextRange)),
             m_executor(executor),
             m_localStorage(storage),
             m_localStorageView(forkAndMutable(m_localStorage)),
             m_localReadWriteSetStorage(m_localStorageView)
         {}
 
-        int64_t chunkIndex() { return m_chunkIndex; }
-        auto count() { return RANGES::size(m_transactionAndReceiptsRange); }
-        decltype(m_localStorage)& localStorage() & { return m_localStorage; }
+        int64_t chunkIndex() const { return m_chunkIndex; }
+        auto count() const { return RANGES::size(m_contextRange); }
+        auto& localStorage() & { return m_localStorage; }
         auto& readWriteSetStorage() & { return m_localReadWriteSetStorage; }
 
-        task::Task<void> execute(
+        void executeStep1(
             protocol::BlockHeader const& blockHeader, ledger::LedgerConfig const& ledgerConfig)
         {
             ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
-                ittapi::ITT_DOMAINS::instance().EXECUTE_CHUNK);
-            PARALLEL_SCHEDULER_LOG(DEBUG) << "Chunk " << m_chunkIndex << " executing...";
-            for (auto&& [contextID, transaction, receipt] : m_transactionAndReceiptsRange)
+                ittapi::ITT_DOMAINS::instance().EXECUTE_CHUNK1);
+            for (auto&& [index, context] : RANGES::views::enumerate(m_contextRange))
             {
-                if (m_chunkIndex >= m_lastChunkIndex)
+                if (m_hasRAW.get().test())
                 {
-                    PARALLEL_SCHEDULER_LOG(DEBUG) << "Chunk " << m_chunkIndex << " execute aborted";
-                    co_return;
+                    PARALLEL_SCHEDULER_LOG(DEBUG)
+                        << "Chunk: " << m_chunkIndex << " aborted in step1, executed " << index
+                        << " transactions";
+                    break;
                 }
-                *receipt = co_await transaction_executor::executeTransaction(m_executor,
-                    m_localReadWriteSetStorage, blockHeader, *transaction, contextID, ledgerConfig,
-                    task::tbb::syncWait);
-            }
 
-            PARALLEL_SCHEDULER_LOG(DEBUG) << "Chunk " << m_chunkIndex << " execute finished";
+                context.coro.emplace(transaction_executor::execute3Step(m_executor.get(),
+                    m_localReadWriteSetStorage, blockHeader, context.transaction.get(),
+                    context.contextID, ledgerConfig, task::tbb::syncWait));
+                context.iterator = context.coro->begin();
+                context.receipt.get() = *context.iterator;
+            }
+        }
+
+        void executeStep2()
+        {
+            ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
+                ittapi::ITT_DOMAINS::instance().EXECUTE_CHUNK2);
+            for (auto&& [index, context] : RANGES::views::enumerate(m_contextRange))
+            {
+                if (m_hasRAW.get().test())
+                {
+                    PARALLEL_SCHEDULER_LOG(DEBUG)
+                        << "Chunk: " << m_chunkIndex << " aborted in step2, executed " << index
+                        << " transactions";
+                    break;
+                }
+                if (!context.receipt.get() && context.iterator != context.coro->end())
+                {
+                    context.receipt.get() = *(++context.iterator);
+                }
+            }
+        }
+
+        void executeStep3()
+        {
+            ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
+                ittapi::ITT_DOMAINS::instance().EXECUTE_CHUNK3);
+            for (auto& context : m_contextRange)
+            {
+                if (!context.receipt.get() && context.iterator != context.coro->end())
+                {
+                    context.receipt.get() = *(++context.iterator);
+                }
+            }
         }
     };
 
-public:
-    SchedulerParallelImpl(const SchedulerParallelImpl&) = delete;
-    SchedulerParallelImpl(SchedulerParallelImpl&&) noexcept = default;
-    SchedulerParallelImpl& operator=(const SchedulerParallelImpl&) = delete;
-    SchedulerParallelImpl& operator=(SchedulerParallelImpl&&) noexcept = default;
+    constexpr static auto DEFAULT_TRANSACTION_GRAIN_SIZE = 16L;
+    GC m_gc;
+    size_t m_grainSize = DEFAULT_TRANSACTION_GRAIN_SIZE;
 
-    SchedulerParallelImpl() : m_asyncTaskGroup(std::make_unique<tbb::task_group>()) {}
-    ~SchedulerParallelImpl() noexcept { m_asyncTaskGroup->wait(); }
-
-    void setChunkSize(size_t chunkSize) { m_chunkSize = chunkSize; }
-    void setMaxToken(size_t maxToken) { m_maxToken = maxToken; }
-
-private:
-    static task::Task<void> mergeLastStorage(
+    friend task::Task<void> mergeLastStorage(
         SchedulerParallelImpl& scheduler, auto& storage, auto&& lastStorage)
     {
         ittapi::Report mergeReport(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
@@ -118,155 +145,196 @@ private:
         co_await storage2::merge(storage, std::forward<decltype(lastStorage)>(lastStorage));
     }
 
-    static void executeSinglePass(SchedulerParallelImpl& scheduler, auto& storage, auto& executor,
-        protocol::BlockHeader const& blockHeader, RANGES::input_range auto const& transactions,
-        ledger::LedgerConfig const& ledgerConfig, size_t offset,
-        std::vector<protocol::TransactionReceipt::Ptr>& receipts)
+    friend size_t executeSinglePass(SchedulerParallelImpl& scheduler, auto& storage, auto& executor,
+        protocol::BlockHeader const& blockHeader, ledger::LedgerConfig const& ledgerConfig,
+        RANGES::random_access_range auto& contexts, size_t chunkSize)
     {
         ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
             ittapi::ITT_DOMAINS::instance().SINGLE_PASS);
 
-        auto currentTransactionAndReceipts =
-            RANGES::views::iota(offset, (size_t)RANGES::size(receipts)) |
-            RANGES::views::transform([&](auto index) {
-                return std::make_tuple(
-                    index, std::addressof(transactions[index]), std::addressof(receipts[index]));
-            });
-
-        auto count = RANGES::size(transactions);
-        std::atomic_int64_t lastChunkIndex{std::numeric_limits<int64_t>::max()};
-        int64_t chunkIndex = 0;
+        const auto count = RANGES::size(contexts);
         ReadWriteSetStorage<decltype(storage), transaction_executor::StateKey> writeSet(storage);
 
-        auto chunkSize = std::max(
-            MIN_CHUNK_SIZE, RANGES::size(transactions) / (std::thread::hardware_concurrency() * 2));
-        auto chunks = currentTransactionAndReceipts | RANGES::views::chunk(chunkSize);
         using Chunk = SchedulerParallelImpl::ChunkStatus<std::decay_t<decltype(storage)>,
-            std::decay_t<decltype(executor)>, RANGES::range_value_t<decltype(chunks)>>;
-
-        PARALLEL_SCHEDULER_LOG(DEBUG) << "Start new chunk executing... " << offset << " | "
-                                      << RANGES::size(currentTransactionAndReceipts);
-
+            std::decay_t<decltype(executor)>,
+            decltype(RANGES::subrange<RANGES::iterator_t<decltype(contexts)>>(contexts))>;
         using ChunkStorage = typename std::decay_t<decltype(storage)>::MutableStorage;
 
+        boost::atomic_flag hasRAW;
         ChunkStorage lastStorage;
-        tbb::parallel_pipeline(
-            scheduler.m_maxToken == 0 ? std::thread::hardware_concurrency() : scheduler.m_maxToken,
+        const auto contextChunks = RANGES::views::chunk(contexts, chunkSize);
+
+        std::atomic_size_t offset = 0;
+        std::atomic_size_t chunkIndex = 0;
+
+        // 五级流水线：分片准备、并行执行、检测RAW冲突&合并读写集、生成回执、合并storage
+        // Five-stage pipeline: shard preparation, parallel execution, detection of RAW
+        // conflicts & merging read/write sets, generating receipts, and merging storage
+        tbb::parallel_pipeline(tbb::this_task_arena::max_concurrency(),
             tbb::make_filter<void, std::unique_ptr<Chunk>>(tbb::filter_mode::serial_in_order,
                 [&](tbb::flow_control& control) -> std::unique_ptr<Chunk> {
-                    if (chunkIndex >= RANGES::size(chunks))
+                    if (chunkIndex >= RANGES::size(contextChunks) || hasRAW.test())
                     {
                         control.stop();
                         return {};
                     }
+
+                    ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
+                        ittapi::ITT_DOMAINS::instance().STAGE_1);
                     PARALLEL_SCHEDULER_LOG(DEBUG) << "Chunk: " << chunkIndex;
                     auto chunk = std::make_unique<Chunk>(
-                        chunkIndex, lastChunkIndex, chunks[chunkIndex], executor, storage);
+                        chunkIndex, hasRAW, contextChunks[chunkIndex], executor, storage);
                     ++chunkIndex;
                     return chunk;
                 }) &
                 tbb::make_filter<std::unique_ptr<Chunk>, std::unique_ptr<Chunk>>(
                     tbb::filter_mode::parallel,
                     [&](std::unique_ptr<Chunk> chunk) -> std::unique_ptr<Chunk> {
-                        auto index = chunk->chunkIndex();
-                        if (index >= lastChunkIndex)
+                        ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
+                            ittapi::ITT_DOMAINS::instance().STAGE_2);
+                        if (chunk && !hasRAW.test())
                         {
-                            return chunk;
+                            chunk->executeStep1(blockHeader, ledgerConfig);
+                            chunk->executeStep2();
                         }
-                        task::tbb::syncWait(chunk->execute(blockHeader, ledgerConfig));
+
+                        return chunk;
+                    }) &
+                tbb::make_filter<std::unique_ptr<Chunk>, std::unique_ptr<Chunk>>(
+                    tbb::filter_mode::serial_in_order,
+                    [&](std::unique_ptr<Chunk> chunk) -> std::unique_ptr<Chunk> {
+                        ittapi::Report report1(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
+                            ittapi::ITT_DOMAINS::instance().STAGE_3);
+                        if (hasRAW.test())
+                        {
+                            scheduler.m_gc.collect(std::move(chunk));
+                            return {};
+                        }
+
+                        auto index = chunk->chunkIndex();
+                        if (index > 0)
+                        {
+                            ittapi::Report report2(
+                                ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
+                                ittapi::ITT_DOMAINS::instance().DETECT_RAW);
+                            if (writeSet.hasRAWIntersection(chunk->readWriteSetStorage()))
+                            {
+                                hasRAW.test_and_set();
+                                PARALLEL_SCHEDULER_LOG(DEBUG)
+                                    << "Detected RAW Intersection:" << index;
+                                scheduler.m_gc.collect(std::move(chunk));
+                                return {};
+                            }
+                        }
+
+                        PARALLEL_SCHEDULER_LOG(DEBUG)
+                            << "Merging rwset... " << index << " | " << chunk->count();
+                        ittapi::Report report3(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
+                            ittapi::ITT_DOMAINS::instance().MERGE_RWSET);
+                        writeSet.mergeWriteSet(chunk->readWriteSetStorage());
+                        return chunk;
+                    }) &
+                tbb::make_filter<std::unique_ptr<Chunk>, std::unique_ptr<Chunk>>(
+                    tbb::filter_mode::parallel,
+                    [&](std::unique_ptr<Chunk> chunk) -> std::unique_ptr<Chunk> {
+                        ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
+                            ittapi::ITT_DOMAINS::instance().STAGE_4);
+                        if (chunk)
+                        {
+                            chunk->executeStep3();
+                        }
 
                         return chunk;
                     }) &
                 tbb::make_filter<std::unique_ptr<Chunk>, void>(
                     tbb::filter_mode::serial_in_order, [&](std::unique_ptr<Chunk> chunk) {
-                        auto index = chunk->chunkIndex();
-                        if (index >= lastChunkIndex)
+                        if (chunk)
                         {
-                            return;
-                        }
-
-                        if (index > 0)
-                        {
-                            bool hasRAW = false;
-                            {
-                                ittapi::Report report(
-                                    ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
-                                    ittapi::ITT_DOMAINS::instance().DETECT_RAW);
-                                hasRAW = writeSet.hasRAWIntersection(chunk->readWriteSetStorage());
-                            }
-                            if (hasRAW)
-                            {
-                                // 检测到读写集冲突，立即合并已完成的storage并开始新一轮执行，不等待当前pipeline执行结束
-                                // When a read/write set conflict is detected, the system
-                                // immediately merges the completed storage and starts a new round
-                                // of execution without waiting for the current pipeline execution
-                                // to end
-                                PARALLEL_SCHEDULER_LOG(DEBUG)
-                                    << "Detected RAW Intersection:" << index;
-                                lastChunkIndex = index;
-
-                                task::tbb::syncWait(
-                                    mergeLastStorage(scheduler, storage, std::move(lastStorage)));
-                                executeSinglePass(scheduler, storage, executor, blockHeader,
-                                    transactions, ledgerConfig, offset, receipts);
-
-                                scheduler.m_asyncTaskGroup->run(
-                                    [chunk = std::move(chunk), readWriteSet =
-                                                                   std::move(writeSet)]() {});
-                                return;
-                            }
-                        }
-
-                        offset += (size_t)chunk->count();
-                        PARALLEL_SCHEDULER_LOG(DEBUG)
-                            << "Merging... " << index << " | " << chunk->count();
-                        tbb::parallel_invoke(
-                            [&]() {
-                                ittapi::Report report(
-                                    ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
-                                    ittapi::ITT_DOMAINS::instance().MERGE_RWSET);
-                                writeSet.mergeWriteSet(chunk->readWriteSetStorage());
-                            },
-                            [&]() {
-                                ittapi::Report report(
-                                    ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
-                                    ittapi::ITT_DOMAINS::instance().MERGE_CHUNK);
-                                task::tbb::syncWait(storage2::merge(lastStorage,
-                                    std::move(chunk->localStorage().mutableStorage())));
-                            });
-
-                        // 成功执行到最后一个chunk，合并数据并结束
-                        // Successfully executes to the last chunk, merges the data, and ends
-                        if (offset == count)
-                        {
-                            task::tbb::syncWait(
-                                mergeLastStorage(scheduler, storage, std::move(lastStorage)));
-                            scheduler.m_asyncTaskGroup->run(
-                                [chunk = std::move(chunk), readWriteSet = std::move(writeSet)]() {
-                                });
+                            ittapi::Report report1(
+                                ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
+                                ittapi::ITT_DOMAINS::instance().STAGE_5);
+                            offset += (size_t)chunk->count();
+                            ittapi::Report report2(
+                                ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
+                                ittapi::ITT_DOMAINS::instance().MERGE_CHUNK);
+                            PARALLEL_SCHEDULER_LOG(DEBUG)
+                                << "Merging storage... " << chunk->chunkIndex() << " | "
+                                << chunk->count();
+                            task::tbb::syncWait(storage2::merge(
+                                lastStorage, std::move(chunk->localStorage().mutableStorage())));
+                            scheduler.m_gc.collect(std::move(chunk));
                         }
                     }));
+
+        task::tbb::syncWait(mergeLastStorage(scheduler, storage, std::move(lastStorage)));
+        scheduler.m_gc.collect(std::move(writeSet));
+        if (offset < count)
+        {
+            PARALLEL_SCHEDULER_LOG(DEBUG)
+                << "Start new chunk executing... " << offset << " | " << RANGES::size(contexts);
+            auto nextView = RANGES::views::drop(contexts, offset);
+            return 1 + executeSinglePass(scheduler, storage, executor, blockHeader, ledgerConfig,
+                           nextView, chunkSize);
+        }
+
+        return 0;
     }
+
+    template <class CoroType>
+    struct ExecutionContext
+    {
+        int contextID{};
+        std::reference_wrapper<const protocol::Transaction> transaction;
+        std::reference_wrapper<protocol::TransactionReceipt::Ptr> receipt;
+        std::optional<CoroType> coro;
+        typename CoroType::Iterator iterator;
+    };
 
     friend task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
         tag_t<executeBlock> /*unused*/, SchedulerParallelImpl& scheduler, auto& storage,
         auto& executor, protocol::BlockHeader const& blockHeader,
-        RANGES::input_range auto const& transactions, ledger::LedgerConfig const& ledgerConfig)
+        RANGES::random_access_range auto const& transactions,
+        ledger::LedgerConfig const& ledgerConfig)
     {
+        auto count = RANGES::size(transactions);
+
         ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
             ittapi::ITT_DOMAINS::instance().PARALLEL_EXECUTE);
-        std::vector<protocol::TransactionReceipt::Ptr> receipts(RANGES::size(transactions));
+        std::vector<protocol::TransactionReceipt::Ptr> receipts(count);
 
-        size_t offset = 0;
-        size_t retryCount = 0;
+        using Storage = std::decay_t<decltype(storage)>;
+        using CoroType = std::invoke_result_t<transaction_executor::Execute3Step,
+            decltype(executor),
+            std::add_lvalue_reference_t<typename StorageTrait<Storage>::LocalReadWriteSetStorage>,
+            protocol::BlockHeader const&, protocol::Transaction const&, int,
+            ledger::LedgerConfig const&, task::tbb::SyncWait>;
+        std::vector<ExecutionContext<CoroType>,
+            tbb::cache_aligned_allocator<ExecutionContext<CoroType>>>
+            contexts;
+        contexts.reserve(RANGES::size(transactions));
+        for (auto index : RANGES::views::iota(0, (int)RANGES::size(transactions)))
+        {
+            contexts.emplace_back(ExecutionContext<CoroType>{.contextID = index,
+                .transaction = transactions[index],
+                .receipt = receipts[index],
+                .coro = {},
+                .iterator = {}});
+        }
 
-        executeSinglePass(scheduler, storage, executor, blockHeader, transactions, ledgerConfig,
-            offset, receipts);
+        constexpr static auto DEFAULT_PARALLEL_ARENA = 8;
+        static tbb::task_arena arena(DEFAULT_PARALLEL_ARENA);
+        arena.execute([&]() {
+            auto retryCount = executeSinglePass(scheduler, storage, executor, blockHeader,
+                ledgerConfig, contexts, scheduler.m_grainSize);
 
-        PARALLEL_SCHEDULER_LOG(INFO)
-            << "Parallel scheduler execute finished, retry counts: " << retryCount;
+            PARALLEL_SCHEDULER_LOG(INFO) << "Parallel execute block retry count: " << retryCount;
+            scheduler.m_gc.collect(std::move(contexts));
+        });
 
         co_return receipts;
     }
+
+public:
+    void setGrainSize(size_t grainSize) { m_grainSize = grainSize; }
 };
 }  // namespace bcos::transaction_scheduler

@@ -62,7 +62,7 @@ public:
                               << LOG_KV("authAdminAddress", _nodeConfig->authAdminAddress());
 
         // bytes code + abi encode constructor params
-        codec::abi::ContractABICodec abi(_protocol->cryptoSuite()->hashImpl());
+        codec::abi::ContractABICodec abi(*_protocol->cryptoSuite()->hashImpl());
         bytes input = code + abi.abiIn("", initGovernors, weights, codec::toString32(h256(0)),
                                  codec::toString32(h256(0)));
 

@@ -2,14 +2,7 @@
 
 #include "../protocol/BlockHeader.h"
 #include "../protocol/Transaction.h"
-#include "../protocol/TransactionReceipt.h"
-#include "../protocol/TransactionReceiptFactory.h"
-#include "../storage2/Storage.h"
-#include "StateKey.h"
-#include <bcos-concepts/ByteBuffer.h>
-#include <bcos-task/Trait.h>
-#include <compare>
-#include <tuple>
+#include "bcos-task/Task.h"
 #include <type_traits>
 #include <utility>
 
@@ -32,8 +25,8 @@ inline constexpr struct ExecuteTransaction
      * @return A task that resolves to a transaction receipt.
      */
     auto operator()(auto& executor, auto& storage, const protocol::BlockHeader& blockHeader,
-        const protocol::Transaction& transaction, auto&&... args) const
-        -> task::Task<protocol::TransactionReceipt::Ptr>
+        const protocol::Transaction& transaction,
+        auto&&... args) const -> task::Task<protocol::TransactionReceipt::Ptr>
     {
         co_return co_await tag_invoke(*this, executor, storage, blockHeader, transaction,
             std::forward<decltype(args)>(args)...);

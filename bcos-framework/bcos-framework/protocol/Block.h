@@ -21,10 +21,8 @@
 #pragma once
 #include "BlockHeader.h"
 #include "Transaction.h"
-#include "TransactionFactory.h"
 #include "TransactionMetaData.h"
 #include "TransactionReceipt.h"
-#include "TransactionReceiptFactory.h"
 
 namespace bcos::protocol
 {

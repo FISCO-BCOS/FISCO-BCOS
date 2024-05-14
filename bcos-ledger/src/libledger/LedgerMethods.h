@@ -1,6 +1,5 @@
 #pragma once
 
-#include "bcos-framework/consensus/ConsensusNode.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
@@ -8,18 +7,10 @@
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-table/src/LegacyStorageWrapper.h"
-#include "bcos-table/src/StateStorageInterface.h"
 #include "bcos-task/AwaitableValue.h"
-#include "bcos-tool/ConsensusNode.h"
-#include "bcos-tool/VersionConverter.h"
-#include "bcos-utilities/Common.h"
-#include "bcos-utilities/Error.h"
 #include <boost/throw_exception.hpp>
 #include <concepts>
-#include <exception>
-#include <iterator>
 #include <type_traits>
-#include <variant>
 
 #define LEDGER2_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("LEDGER2")
 namespace bcos::ledger
@@ -75,7 +66,7 @@ task::Task<protocol::BlockNumber> tag_invoke(
 task::Task<crypto::HashType> tag_invoke(ledger::tag_t<getBlockHash> /*unused*/,
     LedgerInterface& ledger, protocol::BlockNumber blockNumber);
 
-task::Task<SystemConfigEntry> tag_invoke(
+task::Task<std::optional<SystemConfigEntry>> tag_invoke(
     ledger::tag_t<getSystemConfig> /*unused*/, LedgerInterface& ledger, std::string_view key);
 
 task::Task<consensus::ConsensusNodeList> tag_invoke(

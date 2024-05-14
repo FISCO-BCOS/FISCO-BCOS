@@ -163,6 +163,17 @@ check_all_contract() {
         exit 1;
     fi
 
+    LOG_INFO "check block gasUsed"
+    local current_block_number=$(bash console.sh getBlockNumber|grep -v error)
+    LOG_INFO "check block gasUsed, current number is ${current_block_number}"
+    local gas_used=$(bash console.sh getBlockByNumber ${current_block_number} |grep gasUsed |awk -F "'" '{print $2}')
+    if [ ${gas_used} -ne 0 ]; then
+        LOG_INFO "check block gasUsed success, current gas is ${gas_used}"
+    else
+        LOG_ERROR "check block gasUsed failed, gas is ${gas_used}"
+        exit 1;
+    fi
+    
     LOG_INFO "addBalance to contract ${test_contract_address}"
     bash console.sh addBalance ${test_contract_address} 10000000
 

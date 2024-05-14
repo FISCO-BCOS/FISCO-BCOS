@@ -1,13 +1,13 @@
 #pragma once
 
 #include "Ledger.h"
+#include "bcos-framework/ledger/Ledger.h"
 #include "bcos-task/Task.h"
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-concepts/Exception.h>
 #include <bcos-concepts/Hash.h>
 #include <bcos-concepts/ledger/Ledger.h>
-#include <bcos-concepts/protocol/Block.h>
 #include <bcos-concepts/storage/Storage.h>
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-crypto/merkle/Merkle.h>
@@ -22,9 +22,6 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <atomic>
-#include <future>
-#include <stdexcept>
-#include <tuple>
 #include <type_traits>
 
 namespace bcos::ledger
@@ -64,7 +61,7 @@ public:
     void checkParentBlock(BlockType parentBlock, BlockType block)
     {
         std::array<std::byte, Hasher::HASH_SIZE> parentHash;
-        bcos::concepts::hash::calculate(m_hasher.clone(), parentBlock, parentHash);
+        bcos::concepts::hash::calculate(parentBlock, m_hasher.clone(), parentHash);
 
         if (RANGES::empty(block.blockHeader.data.parentInfo) ||
             (block.blockHeader.data.parentInfo[0].blockNumber !=
@@ -201,8 +198,12 @@ private:
         // getABI function begin in version 320
         auto keyPageIgnoreTables = std::make_shared<std::set<std::string, std::less<>>>(
             storage::IGNORED_ARRAY_310.begin(), storage::IGNORED_ARRAY_310.end());
+
+        // 此处为只读操作，不可能写，因此无需关注setRowWithDirtyFlag
+        // This is a read-only operation and it is impossible to write, so there is no need to pay
+        // attention to setRowWithDirtyFlag
         auto stateStorage = stateStorageFactory->createStateStorage(
-            m_backupStorage, m_compatibilityVersion, true, keyPageIgnoreTables);
+            m_backupStorage, m_compatibilityVersion, false, true, keyPageIgnoreTables);
 
         // try to get codeHash
         auto codeHashEntry = stateStorage->getRow(contractTableName, "codeHash");
@@ -585,7 +586,7 @@ private:
                 [&block, this](const tbb::blocked_range<size_t>& range) {
                     for (auto i = range.begin(); i < range.end(); ++i)
                     {
-                        bcos::concepts::hash::calculate(m_hasher.clone(), block.transactions[i],
+                        bcos::concepts::hash::calculate(block.transactions[i], m_hasher.clone(),
                             block.transactionsMetaData[i].hash);
                     }
                 });

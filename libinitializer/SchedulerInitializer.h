@@ -19,9 +19,7 @@
  * @date 2021-06-21
  */
 #pragma once
-#include "ProtocolInitializer.h"
 #include "bcos-framework/protocol/BlockFactory.h"
-#include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/executor/ExecutionMessage.h>
 #include <bcos-framework/executor/NativeExecutionMessage.h>
@@ -30,6 +28,8 @@
 #include <bcos-scheduler/src/SchedulerFactory.h>
 #include <bcos-scheduler/src/SchedulerImpl.h>
 #include <bcos-tool/NodeConfig.h>
+
+#include <utility>
 
 namespace bcos::initializer
 {
@@ -47,9 +47,9 @@ public:
         int64_t schedulerSeq)
     {
         bcos::scheduler::SchedulerFactory factory(std::move(executorManager), std::move(_ledger),
-            std::move(storage), executionMessageFactory, std::move(blockFactory), std::move(txPool),
-            std::move(transactionSubmitResultFactory), std::move(hashImpl), isAuthCheck, isWasm,
-            isSerialExecute);
+            std::move(storage), std::move(executionMessageFactory), std::move(blockFactory),
+            std::move(txPool), std::move(transactionSubmitResultFactory), std::move(hashImpl),
+            isAuthCheck, isWasm, isSerialExecute);
 
         return factory.build(schedulerSeq);
     }

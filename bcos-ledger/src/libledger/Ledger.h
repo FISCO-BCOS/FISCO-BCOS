@@ -18,15 +18,11 @@
  * @date 2021-04-13
  */
 #pragma once
-#include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/GenesisConfig.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/BlockFactory.h"
-#include "bcos-framework/protocol/BlockHeaderFactory.h"
-#include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
-#include "bcos-framework/storage/Common.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "utilities/Common.h"
 #include <bcos-tool/NodeConfig.h>

@@ -130,7 +130,7 @@ crypto::HashType TransactionBuilder::calculateTransactionDataHash(
     }
     crypto::HashType txDataHash;
     bcos::concepts::hash::calculate(
-        cryptoSuite->hashImpl()->hasher(), _transactionData, txDataHash);
+        _transactionData, cryptoSuite->hashImpl()->hasher(), txDataHash);
     return txDataHash;
 }
 

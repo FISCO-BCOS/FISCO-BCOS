@@ -306,6 +306,20 @@ protected:
 
 private:
     void loadGenesisFeatures(boost::property_tree::ptree const& ptree);
+    void loadAlloc(boost::property_tree::ptree const& ptree)
+    {
+        if (auto node = ptree.get_child_optional("alloc"))
+        {
+            for (const auto& it : *node)
+            {
+                auto flag = it.first;
+                auto enableNumber = it.second.get_value<bool>();
+                m_genesisConfig.m_features.emplace_back(
+                    ledger::FeatureSet{.flag = ledger::Features::string2Flag(flag),
+                        .enable = static_cast<int>(enableNumber)});
+            }
+        }
+    }
 
     bcos::consensus::ConsensusNodeListPtr parseConsensusNodeList(
         boost::property_tree::ptree const& _pt, std::string const& _sectionName,

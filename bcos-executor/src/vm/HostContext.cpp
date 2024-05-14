@@ -482,7 +482,17 @@ bcos::bytes HostContext::externalCodeRequest(const std::string_view& address)
     request->codeAddress = addressBytesStr2String(address);
     request->staticCall = staticCall();
     auto response = m_executive->externalCall(std::move(request));
-    return std::move(response->data);
+
+    if (m_executive->blockContext().features().get(
+            ledger::Features::Flag::bugfix_eoa_as_contract) &&
+        precompiled::isDynamicPrecompiledAccountCode(fromBytes(response->data)))
+    {
+        return bytes();
+    }
+    else
+    {
+        return std::move(response->data);
+    }
 }
 
 size_t HostContext::codeSizeAt(const std::string_view& address)

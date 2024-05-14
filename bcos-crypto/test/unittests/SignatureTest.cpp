@@ -107,7 +107,7 @@ BOOST_AUTO_TEST_CASE(testSecp256k1KeyPair)
 BOOST_AUTO_TEST_CASE(testSecp256k1SignAndVerify)
 {
     auto keyPair = secp256k1GenerateKeyPair();
-    auto hashData = keccak256Hash((std::string)("abcd"));
+    auto hashData = keccak256Hash(bytesConstRef((std::string)("abcd")));
     std::cout << "### hashData:" << *toHexString(hashData) << std::endl;
     std::cout << "#### publicKey:" << keyPair->publicKey()->hex() << std::endl;
     std::cout << "#### publicKey shortHex:" << keyPair->publicKey()->shortHex() << std::endl;
@@ -144,7 +144,7 @@ BOOST_AUTO_TEST_CASE(testSecp256k1SignAndVerify)
     BOOST_TEST(toHex(pub->data()) == toHex(keyPair->publicKey()->data()));
     /// exception check:
     // check1: invalid payload(hash)
-    h256 invalidHash = keccak256Hash((std::string)("abce"));
+    h256 invalidHash = keccak256Hash(bytesConstRef((std::string)("abce")));
     result = secp256k1Verify(
         keyPair->publicKey(), invalidHash, bytesConstRef(signData->data(), signData->size()));
     BOOST_CHECK(result == false);
@@ -168,8 +168,8 @@ BOOST_AUTO_TEST_CASE(testSecp256k1SignAndVerify)
         keyPair2->publicKey(), hashData, bytesConstRef(signData->data(), signData->size()));
     BOOST_CHECK(result == false);
 
-    h256 r(keccak256Hash(std::string("+++")));
-    h256 s(keccak256Hash(std::string("24324")));
+    h256 r(keccak256Hash(bytesConstRef(std::string("+++"))));
+    h256 s(keccak256Hash(bytesConstRef(std::string("24324"))));
     byte v = 4;
     auto signatureData = std::make_shared<SignatureDataWithV>(r, s, v);
     auto secp256k1Crypto = std::make_shared<Secp256k1Crypto>();
@@ -256,7 +256,7 @@ BOOST_AUTO_TEST_CASE(testSM2KeyPair)
 inline void SM2SignAndVerifyTest(SM2Crypto::Ptr _smCrypto)
 {
     auto hashCrypto = std::make_shared<SM3>();
-    auto hashData = hashCrypto->hash(std::string("abcd"));
+    auto hashData = hashCrypto->hash(bytesConstRef(std::string("abcd")));
 
     h256 secret("ca508b2b49c1d2dc46cbd5a011686fdc19937dbc704afe6c547a862b3e2b6c69");
     auto sec = std::make_shared<KeyImpl>(secret.asBytes());
@@ -291,7 +291,7 @@ inline void SM2SignAndVerifyTest(SM2Crypto::Ptr _smCrypto)
 
     // exception case
     // invalid payload(hash)
-    auto invalidHash = hashCrypto->hash(std::string("abce"));
+    auto invalidHash = hashCrypto->hash(bytesConstRef(std::string("abce")));
     result = _smCrypto->verify(
         keyPair->publicKey(), invalidHash, bytesConstRef(sig->data(), sig->size()));
     BOOST_CHECK(result == false);
@@ -356,7 +356,7 @@ BOOST_AUTO_TEST_CASE(testED25519SignAndVerify)
     auto signatureCrypto = std::make_shared<Ed25519Crypto>();
     auto hashCrypto = std::make_shared<class Sha3>();
     auto keyPair = signatureCrypto->generateKeyPair();
-    auto hashData = hashCrypto->hash(std::string("abcd"));
+    auto hashData = hashCrypto->hash(bytesConstRef(std::string("abcd")));
     // sign
     auto sig = signatureCrypto->sign(*keyPair, hashData, true);
     // verify
@@ -373,7 +373,7 @@ BOOST_AUTO_TEST_CASE(testED25519SignAndVerify)
 
     // exception case
     // invalid payload(hash)
-    auto invalidHash = hashCrypto->hash(std::string("abce"));
+    auto invalidHash = hashCrypto->hash(bytesConstRef(std::string("abce")));
     result = signatureCrypto->verify(
         keyPair->publicKey(), invalidHash, bytesConstRef(sig->data(), sig->size()));
     BOOST_CHECK(result == false);

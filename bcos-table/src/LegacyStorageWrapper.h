@@ -2,7 +2,7 @@
 #include "bcos-framework/storage/Common.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-framework/storage2/Storage.h"
-#include "bcos-framework/transaction-executor/TransactionExecutor.h"
+#include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-table/src/StateStorageInterface.h"
 #include "bcos-task/Task.h"
 #include "bcos-task/Wait.h"
@@ -19,16 +19,57 @@ template <class Storage>
 class LegacyStorageWrapper : public virtual bcos::storage::StorageInterface
 {
 private:
-    Storage& m_storage;
+    Storage* m_storage;
 
 public:
-    explicit LegacyStorageWrapper(Storage& m_storage) : m_storage(m_storage) {}
+    explicit LegacyStorageWrapper(Storage& m_storage) : m_storage(std::addressof(m_storage)) {}
 
     void asyncGetPrimaryKeys(std::string_view table,
         const std::optional<storage::Condition const>& condition,
         std::function<void(Error::UniquePtr, std::vector<std::string>)> _callback) override
     {
-        _callback(BCOS_ERROR_UNIQUE_PTR(-1, "asyncGetPrimaryKeys error!"), {});
+        task::wait([](decltype(this) self, std::string table,
+                       std::optional<storage::Condition const> condition,
+                       const decltype(_callback)& callback) -> task::Task<void> {
+            std::vector<std::string> keys;
+
+            size_t index = 0;
+            auto [start, count] = condition->getLimit();
+            auto range = co_await storage2::range(*self->m_storage);
+            while (auto keyValue = co_await range.next())
+            {
+                auto&& [key, value] = *keyValue;
+                if constexpr (std::is_pointer_v<decltype(value)>)
+                {
+                    if (!value)
+                    {
+                        ++index;
+                        continue;
+                    }
+                }
+
+                transaction_executor::StateKeyView stateKeyView(key);
+                auto [entryTable, entryKey] = stateKeyView.getTableAndKey();
+                if (entryTable == table && (!condition || condition->isValid(entryKey)))
+                {
+                    if (start != 0 || count != 0)
+                    {
+                        if (((start == 0 || index >= start) &&
+                                (count == 0 || index < start + count)))
+                        {
+                            keys.emplace_back(entryKey);
+                            ++index;
+                        }
+                    }
+                    else
+                    {
+                        keys.emplace_back(entryKey);
+                    }
+                }
+            }
+
+            callback(nullptr, keys);
+        }(this, std::string(table), condition, std::move(_callback)));
     }
 
     void asyncGetRow(std::string_view table, std::string_view key,
@@ -39,7 +80,7 @@ public:
             try
             {
                 auto value = co_await storage2::readOne(
-                    self->m_storage, transaction_executor::StateKeyView{table, key});
+                    *self->m_storage, transaction_executor::StateKeyView{table, key});
                 callback(nullptr, std::move(value));
             }
             catch (std::exception& e)
@@ -64,7 +105,7 @@ public:
                     return transaction_executor::StateKeyView{
                         table, std::forward<decltype(key)>(key)};
                 }) | RANGES::to<std::vector>();
-                auto values = co_await storage2::readSome(self->m_storage, stateKeys);
+                auto values = co_await storage2::readSome(*self->m_storage, stateKeys);
 
                 std::vector<std::optional<storage::Entry>> vectorValues(
                     std::make_move_iterator(values.begin()), std::make_move_iterator(values.end()));
@@ -84,8 +125,16 @@ public:
                        decltype(entry) entry, decltype(callback) callback) -> task::Task<void> {
             try
             {
-                co_await storage2::writeOne(
-                    self->m_storage, transaction_executor::StateKey(table, key), std::move(entry));
+                if (entry.status() == storage::Entry::Status::DELETED)
+                {
+                    co_await storage2::removeOne(
+                        *self->m_storage, transaction_executor::StateKeyView(table, key));
+                }
+                else
+                {
+                    co_await storage2::writeOne(*self->m_storage,
+                        transaction_executor::StateKey(table, key), std::move(entry));
+                }
                 callback(nullptr);
             }
             catch (std::exception& e)
@@ -108,7 +157,7 @@ public:
                 decltype(values)& values) -> task::Task<Error::Ptr> {
                 try
                 {
-                    co_await storage2::writeSome(self->m_storage,
+                    co_await storage2::writeSome(*self->m_storage,
                         keys | RANGES::views::transform([&](std::string_view key) {
                             return transaction_executor::StateKey{tableName, key};
                         }),

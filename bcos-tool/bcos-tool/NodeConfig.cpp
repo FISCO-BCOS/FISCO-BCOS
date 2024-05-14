@@ -733,8 +733,7 @@ void NodeConfig::loadOthersConfig(boost::property_tree::ptree const& _pt)
 
     m_tarsRPCConfig.host = _pt.get<std::string>("rpc.tars_rpc_host", "127.0.0.1");
     m_tarsRPCConfig.port = _pt.get<int>("rpc.tars_rpc_port", 0);
-    m_tarsRPCConfig.threadCount =
-        _pt.get<int>("rpc.tars_rpc_thread_count", std::thread::hardware_concurrency());
+    m_tarsRPCConfig.threadCount = _pt.get<int>("rpc.tars_rpc_thread_count", 8);
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadOthersConfig") << LOG_KV("sendTxTimeout", m_sendTxTimeout)
                          << LOG_KV("vmCacheSize", m_vmCacheSize);
@@ -1022,8 +1021,9 @@ void bcos::tool::NodeConfig::loadGenesisFeatures(boost::property_tree::ptree con
         {
             auto flag = it.first;
             auto enableNumber = it.second.get_value<bool>();
-            m_genesisConfig.m_features.emplace_back(ledger::FeatureSet{
-                .flag = ledger::Features::string2Flag(flag), .enable = enableNumber});
+            m_genesisConfig.m_features.emplace_back(
+                ledger::FeatureSet{.flag = ledger::Features::string2Flag(flag),
+                    .enable = static_cast<int>(enableNumber)});
         }
     }
 }

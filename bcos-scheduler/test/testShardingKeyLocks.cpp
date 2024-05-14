@@ -2,15 +2,14 @@
 #include "mock/MockExecutor.h"
 #include <bcos-utilities/Common.h>
 #include <boost/lexical_cast.hpp>
-#include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <memory>
 
 namespace bcos::test
 {
-struct KeyLocksFixture
+struct KeyLocksFixture2
 {
-    KeyLocksFixture()
+    KeyLocksFixture2()
     {
         keyLocks.setGetAddrHandler(
             [](const std::string_view& to) -> std::string { return "0x" + std::string(to); });
@@ -19,7 +18,7 @@ struct KeyLocksFixture
     scheduler::ShardingGraphKeyLocks keyLocks;
 };
 
-BOOST_FIXTURE_TEST_SUITE(TestShardingKeyLocks, KeyLocksFixture)
+BOOST_FIXTURE_TEST_SUITE(TestShardingKeyLocks, KeyLocksFixture2)
 
 BOOST_AUTO_TEST_CASE(acquireKeyLock)
 {

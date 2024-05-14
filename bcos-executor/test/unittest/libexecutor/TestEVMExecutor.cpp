@@ -22,14 +22,12 @@
 #include "../mock/MockLedger.h"
 #include "../mock/MockTransactionalStorage.h"
 #include "../mock/MockTxPool.h"
-// #include "Common.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
 #include "bcos-framework/bcos-framework/testutils/faker/FakeBlockHeader.h"
 #include "bcos-framework/bcos-framework/testutils/faker/FakeTransaction.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/protocol/Transaction.h"
-#include "bcos-table/src/StateStorage.h"
 #include "bcos-table/src/StateStorageFactory.h"
 #include "evmc/evmc.h"
 #include "executor/TransactionExecutorFactory.h"
@@ -41,7 +39,6 @@
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/executor/NativeExecutionMessage.h>
 #include <bcos-framework/protocol/Protocol.h>
-#include <tbb/task_group.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/exception/diagnostic_information.hpp>
@@ -81,7 +78,7 @@ struct TransactionExecutorFixture
         ledger = std::make_shared<MockLedger>();
         auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
 
-        auto lruStorage = std::make_shared<bcos::storage::LRUStateStorage>(backend);
+        auto lruStorage = std::make_shared<bcos::storage::LRUStateStorage>(backend, false);
         auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(0);
         executor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, lruStorage,
             backend, executionResultFactory, stateStorageFactory, hashImpl, false, false);
@@ -808,7 +805,7 @@ BOOST_AUTO_TEST_CASE(performance)
 
         // The contract address
         std::string addressSeed = "address" + boost::lexical_cast<std::string>(blockNumber);
-        h256 addressCreate(hashImpl->hash(addressSeed));
+        h256 addressCreate(hashImpl->hash(bytesConstRef(addressSeed)));
         // h256 addressCreate("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e");
         std::string addressString = addressCreate.hex().substr(0, 40);
         // toChecksumAddress(addressString, hashImpl);

@@ -1,11 +1,7 @@
 #pragma once
 #include "bcos-framework/storage2/Storage.h"
-#include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include <bcos-task/Trait.h>
-#include <oneapi/tbb.h>
-#include <compare>
 #include <type_traits>
-#include <variant>
 
 namespace bcos::transaction_scheduler
 {
@@ -14,18 +10,24 @@ template <class Storage, class KeyType>
 class ReadWriteSetStorage
 {
 private:
-    Storage& m_storage;
+    std::reference_wrapper<std::remove_reference_t<Storage>> m_storage;
     struct ReadWriteFlag
     {
         bool read = false;
         bool write = false;
     };
-    std::unordered_map<KeyType, ReadWriteFlag> m_readWriteSet;
+    std::unordered_map<size_t, ReadWriteFlag> m_readWriteSet;
 
     void putSet(bool write, auto const& key)
     {
+        auto hash = std::hash<KeyType>{}(key);
+        putSet(write, hash);
+    }
+
+    void putSet(bool write, size_t hash)
+    {
         auto [it, inserted] =
-            m_readWriteSet.try_emplace(KeyType(key), ReadWriteFlag{.read = !write, .write = write});
+            m_readWriteSet.try_emplace(hash, ReadWriteFlag{.read = !write, .write = write});
         if (!inserted)
         {
             it->second.write |= write;
@@ -44,17 +46,16 @@ public:
             storage.putSet(false, std::forward<decltype(key)>(key));
         }
         co_return co_await storage2::readSome(
-            storage.m_storage, std::forward<decltype(keys)>(keys));
+            storage.m_storage.get(), std::forward<decltype(keys)>(keys));
     }
 
     friend auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/,
-        ReadWriteSetStorage& storage, RANGES::input_range auto&& keys,
-        const storage2::READ_FRONT_TYPE& /*unused*/)
+        ReadWriteSetStorage& storage, RANGES::input_range auto&& keys, storage2::DIRECT_TYPE direct)
         -> task::Task<task::AwaitableReturnType<
             std::invoke_result_t<storage2::ReadSome, Storage&, decltype(keys)>>>
     {
         co_return co_await storage2::readSome(
-            storage.m_storage, std::forward<decltype(keys)>(keys));
+            storage.m_storage.get(), std::forward<decltype(keys)>(keys), direct);
     }
 
     friend auto tag_invoke(
@@ -63,15 +64,17 @@ public:
             std::invoke_result_t<storage2::ReadOne, Storage&, decltype(key)>>>
     {
         storage.putSet(false, key);
-        co_return co_await storage2::readOne(storage.m_storage, std::forward<decltype(key)>(key));
+        co_return co_await storage2::readOne(
+            storage.m_storage.get(), std::forward<decltype(key)>(key));
     }
 
     friend auto tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/,
-        ReadWriteSetStorage& storage, auto&& key, storage2::READ_FRONT_TYPE /*unused*/)
+        ReadWriteSetStorage& storage, auto&& key, storage2::DIRECT_TYPE direct)
         -> task::Task<task::AwaitableReturnType<
             std::invoke_result_t<storage2::ReadOne, Storage&, decltype(key)>>>
     {
-        co_return co_await storage2::readOne(storage.m_storage, std::forward<decltype(key)>(key));
+        co_return co_await storage2::readOne(
+            storage.m_storage.get(), std::forward<decltype(key)>(key), direct);
     }
 
     friend auto tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/,
@@ -82,29 +85,39 @@ public:
     {
         for (auto&& key : keys)
         {
-            storage.putSet(true, std::forward<decltype(key)>(key));
+            storage.putSet(true, key);
         }
         co_return co_await storage2::writeSome(
-            storage.m_storage, keys, std::forward<decltype(values)>(values));
+            storage.m_storage.get(), keys, std::forward<decltype(values)>(values));
     }
 
     friend auto tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/,
-        ReadWriteSetStorage& storage, RANGES::input_range auto const& keys)
-        -> task::Task<task::AwaitableReturnType<
-            std::invoke_result_t<storage2::RemoveSome, Storage&, decltype(keys)>>>
+        ReadWriteSetStorage& storage, RANGES::input_range auto const& keys, auto&&... args)
+        -> task::Task<task::AwaitableReturnType<std::invoke_result_t<storage2::RemoveSome,
+            std::add_lvalue_reference_t<Storage>, decltype(keys), decltype(args)...>>>
     {
         for (auto&& key : keys)
         {
-            storage.putSet(true, std::forward<decltype(key)>(key));
+            storage.putSet(true, key);
         }
-        co_return co_await storage2::removeSome(storage.m_storage, keys);
+        co_return co_await storage2::removeSome(
+            storage.m_storage.get(), keys, std::forward<decltype(args)>(args)...);
+    }
+
+    friend auto tag_invoke(bcos::storage2::tag_t<storage2::range> /*unused*/,
+        ReadWriteSetStorage& storage,
+        auto&&... args) -> task::Task<storage2::ReturnType<std::invoke_result_t<storage2::Range,
+                            std::add_lvalue_reference_t<Storage>, decltype(args)...>>>
+    {
+        co_return co_await storage2::range(
+            storage.m_storage.get(), std::forward<decltype(args)>(args)...);
     }
 
     using Key = KeyType;
     using Value = typename task::AwaitableReturnType<decltype(storage2::readOne(
-        m_storage, std::declval<KeyType>()))>::value_type;
+        m_storage.get(), std::declval<KeyType>()))>::value_type;
 
-    ReadWriteSetStorage(Storage& storage) : m_storage(storage) {}
+    ReadWriteSetStorage(Storage& storage) : m_storage(std::ref(storage)) {}
 
     auto& readWriteSet() { return m_readWriteSet; }
     auto const& readWriteSet() const { return m_readWriteSet; }

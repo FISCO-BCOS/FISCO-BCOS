@@ -18,10 +18,9 @@
  * @author: ancelmo
  * @date 2021-04-20
  */
+#include "TransactionReceiptImpl.h"
 #include "../impl/TarsHashable.h"
 #include "../impl/TarsSerializable.h"
-
-#include "TransactionReceiptImpl.h"
 #include <bcos-concepts/Hash.h>
 #include <bcos-concepts/Serialize.h>
 
@@ -56,7 +55,7 @@ bcos::crypto::HashType TransactionReceiptImpl::hash() const
 }
 void bcostars::protocol::TransactionReceiptImpl::calculateHash(const bcos::crypto::Hash& hashImpl)
 {
-    bcos::concepts::hash::calculate(hashImpl.hasher(), *m_inner(), m_inner()->dataHash);
+    bcos::concepts::hash::calculate(*m_inner(), hashImpl.hasher(), m_inner()->dataHash);
 }
 
 bcos::u256 TransactionReceiptImpl::gasUsed() const
@@ -151,4 +150,10 @@ std::string const& bcostars::protocol::TransactionReceiptImpl::message() const
 void bcostars::protocol::TransactionReceiptImpl::setMessage(std::string message)
 {
     m_inner()->message = std::move(message);
+}
+std::string bcostars::protocol::TransactionReceiptImpl::toString() const
+{
+    std::stringstream ss;
+    m_inner()->display(ss);
+    return ss.str();
 }

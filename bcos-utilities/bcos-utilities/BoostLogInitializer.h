@@ -20,7 +20,7 @@
  */
 #pragma once
 
-#include "Common.h"
+#include "BoostLog.h"
 #include <sys/types.h>
 #include <boost/log/core.hpp>
 #include <boost/log/expressions.hpp>
