@@ -67,8 +67,7 @@ public:
     virtual ~BlockContext() = default;
 
     std::shared_ptr<storage::StateStorageInterface> storage() const { return m_storage; }
-    using transientStorageMap =
-        BucketMap<std::string, std::shared_ptr<storage::StateStorageInterface>>;
+    using transientStorageMap = BucketMap<int64_t, std::shared_ptr<storage::StateStorageInterface>>;
     std::shared_ptr<transientStorageMap> getTransientStorageMap() const
     {
         return m_transientStorageMap;

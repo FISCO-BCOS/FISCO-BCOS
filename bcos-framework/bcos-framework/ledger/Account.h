@@ -93,17 +93,6 @@ inline constexpr struct Storage
     }
 } storage{};
 
-inline constexpr struct TransientStorage
-{
-    auto operator()(auto& account, auto&& key, auto&&... args) const
-        -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(*this, account,
-            std::forward<decltype(key)>(key), std::forward<decltype(args)>(args)...))>>
-    {
-        co_return co_await tag_invoke(*this, account, std::forward<decltype(key)>(key),
-            std::forward<decltype(args)>(args)...);
-    }
-} transientStorage{};
-
 inline constexpr struct SetStorage
 {
     auto operator()(auto& account, auto&& key, auto&& value, auto&&... args) const
@@ -115,18 +104,6 @@ inline constexpr struct SetStorage
             std::forward<decltype(value)>(value), std::forward<decltype(args)>(args)...);
     }
 } setStorage{};
-
-inline constexpr struct SetTransientStorage
-{
-    auto operator()(auto& account, auto&& key, auto&& value, auto&&... args) const
-        -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(*this, account,
-            std::forward<decltype(key)>(key), std::forward<decltype(value)>(value),
-            std::forward<decltype(args)>(args)...))>>
-    {
-        co_await tag_invoke(*this, account, std::forward<decltype(key)>(key),
-            std::forward<decltype(value)>(value), std::forward<decltype(args)>(args)...);
-    }
-} setTransientStorage{};
 
 inline constexpr struct Path
 {

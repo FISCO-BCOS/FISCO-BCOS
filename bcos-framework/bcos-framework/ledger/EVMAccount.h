@@ -142,38 +142,7 @@ private:
         co_return value;
     }
 
-    friend task::Task<evmc_bytes32> tag_invoke(
-        tag_t<transientStorage> /*unused*/, EVMAccount& account, const evmc_bytes32& key)
-    {
-        auto valueEntry = co_await storage2::readOne(account.m_storage,
-            transaction_executor::StateKeyView{concepts::bytebuffer::toView(account.m_tableName),
-                concepts::bytebuffer::toView(key.bytes)});
-
-        evmc_bytes32 value;
-        if (valueEntry)
-        {
-            auto field = valueEntry->get();
-            std::uninitialized_copy_n(field.data(), sizeof(value), value.bytes);
-        }
-        else
-        {
-            std::uninitialized_fill_n(value.bytes, sizeof(value), 0);
-        }
-        co_return value;
-    }
-
     friend task::Task<void> tag_invoke(tag_t<setStorage> /*unused*/, EVMAccount& account,
-        const evmc_bytes32& key, const evmc_bytes32& value)
-    {
-        storage::Entry valueEntry(concepts::bytebuffer::toView(value.bytes));
-
-        co_await storage2::writeOne(account.m_storage,
-            transaction_executor::StateKey{concepts::bytebuffer::toView(account.m_tableName),
-                concepts::bytebuffer::toView(key.bytes)},
-            std::move(valueEntry));
-    }
-
-    friend task::Task<void> tag_invoke(tag_t<setTransientStorage> /*unused*/, EVMAccount& account,
         const evmc_bytes32& key, const evmc_bytes32& value)
     {
         storage::Entry valueEntry(concepts::bytebuffer::toView(value.bytes));

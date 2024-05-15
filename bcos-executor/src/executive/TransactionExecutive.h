@@ -141,7 +141,7 @@ public:
     std::shared_ptr<precompiled::PrecompiledExecResult> execPrecompiled(
         precompiled::PrecompiledExecResult::Ptr const& _precompiledParams);
 
-    using tssMap = bcos::BucketMap<std::string, std::shared_ptr<storage::StateStorageInterface>>;
+    using tssMap = bcos::BucketMap<int64_t, std::shared_ptr<storage::StateStorageInterface>>;
 
     VMSchedule const& vmSchedule() const { return m_blockContext.vmSchedule(); }
 
@@ -170,8 +170,7 @@ public:
     std::string getContractTableName(
         const std::string_view& _address, bool isWasm = false, bool isCreate = false);
 
-    std::shared_ptr<storage::StateStorageInterface> getTransientStateStorage(
-        int64_t contextID, std::string contractAddress);
+    std::shared_ptr<storage::StateStorageInterface> getTransientStateStorage(int64_t contextID);
 
     std::shared_ptr<storage::Recoder> getRecoder() { return m_recoder; }
 

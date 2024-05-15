@@ -24,6 +24,7 @@
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-crypto/signature/codec/SignatureDataWithV.h"
 #include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
+#include "kzgPrecompiled.h"
 #include "wedpr-crypto/WedprBn128.h"
 #include "wedpr-crypto/WedprCrypto.h"
 #include <bcos-utilities/Log.h>
@@ -285,6 +286,38 @@ ETH_REGISTER_PRECOMPILED_PRICER(blake2_compression)
     auto const rounds = fromBigEndian<uint32_t>(_in.getCroppedData(0, 4));
     return rounds;
 }
+
+// ETH_REGISTER_PRECOMPILED(point_evaluation)(bytesConstRef _in)
+//{
+//     static constexpr size_t versioned_hash_size = 32;
+//     static constexpr size_t z_end_bound = 64;
+//     static constexpr size_t y_end_bound = 96;
+//     static constexpr size_t commitment_end_bound = 144;
+//     static constexpr size_t proof_end_bound = 192;
+//
+//     if(_in.size() != 192)
+//         return {false, {}};
+//
+//     auto const versioned_hash = _in.getCroppedData(0, versioned_hash_size);
+//     auto const z = _in.getCroppedData(versioned_hash_size, z_end_bound);
+//     auto const y = _in.getCroppedData(z_end_bound, y_end_bound);
+//     auto const commitment = _in.getCroppedData(y_end_bound, commitment_end_bound);
+//     auto const proof = _in.getCroppedData(commitment_end_bound, proof_end_bound);
+//
+//     auto kzg = make_shared<bcos::executor::crypto::kzgPrecompiled>();
+//     if(kzg->kzg2VersionedHash(commitment) != sha256(versioned_hash))
+//         return {false, {}};
+//
+//     if(!kzg->verifyKZGProof(proof, commitment, z, y))
+//         return {false, {}};
+//
+//     return {true, {}};
+// }
+//
+// ETH_REGISTER_PRECOMPILED_PRICER(point_evaluation)(bytesConstRef _in)
+//{
+//     return 45000;
+// }
 
 }  // namespace
 

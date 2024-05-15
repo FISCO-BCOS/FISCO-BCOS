@@ -58,6 +58,7 @@ private:
             }
 
             Rollbackable<std::decay_t<decltype(storage)>> rollbackableStorage(storage);
+            Rollbackable<std::decay_t<decltype(storage)>> rollbackableTransientStorage(storage);
             auto gasLimit = static_cast<int64_t>(std::get<0>(ledgerConfig.gasLimit()));
 
             auto toAddress = unhexAddress(transaction.to());
@@ -87,10 +88,12 @@ private:
             }
 
             int64_t seq = 0;
-            HostContext<decltype(rollbackableStorage)> hostContext(rollbackableStorage, blockHeader,
-                evmcMessage, evmcMessage.sender, transaction.abi(), contextID, seq,
-                executor.m_precompiledManager, ledgerConfig, *executor.m_hashImpl,
-                std::forward<decltype(waitOperator)>(waitOperator));
+            TRANSACTION_EXECUTOR_LOG(DEBUG) << LOG_KV("feature_evm_cancun",
+                ledgerConfig.features().get(ledger::Features::Flag::feature_evm_cancun));
+            HostContext<decltype(rollbackableStorage)> hostContext(rollbackableStorage,
+                rollbackableTransientStorage, blockHeader, evmcMessage, evmcMessage.sender,
+                transaction.abi(), contextID, seq, executor.m_precompiledManager, ledgerConfig,
+                *executor.m_hashImpl, std::forward<decltype(waitOperator)>(waitOperator));
 
             waitOperator(hostContext.prepare());
             co_yield receipt;  // 完成第一步 Complete the first step

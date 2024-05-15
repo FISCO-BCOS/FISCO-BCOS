@@ -1,4 +1,5 @@
 #include "VMInstance.h"
+#include "bcos-transaction-executor/TransactionExecutorImpl.h"
 using bytes_view = std::basic_string_view<uint8_t>;
 
 bcos::transaction_executor::VMInstance::VMInstance(
@@ -21,6 +22,7 @@ bcos::transaction_executor::EVMCResult bcos::transaction_executor::VMInstance::e
     }
     executionState->reset(
         *msg, rev, *host, context, std::basic_string_view<uint8_t>(code, codeSize), {});
+    TRANSACTION_EXECUTOR_LOG(DEBUG) << "Executing EVM code" << LOG_KV("rev", rev);
     auto result = EVMCResult(evmone::baseline::execute(
         *static_cast<evmone::VM const*>(evm), msg->gas, *executionState, *m_instance));
 

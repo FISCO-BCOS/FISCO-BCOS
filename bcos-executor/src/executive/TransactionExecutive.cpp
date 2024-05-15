@@ -216,7 +216,7 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
                              << LOG_KV("blockNumber", m_blockContext.number());
     }
     m_storageWrapper->setRecoder(m_recoder);
-    auto transientStorage = getTransientStateStorage(m_contextID, m_contractAddress);
+    auto transientStorage = getTransientStateStorage(m_contextID);
     transientStorage->setRecoder(m_transientRecoder);
     std::unique_ptr<HostContext> hostContext;
     CallParameters::UniquePtr callResults;
@@ -1376,7 +1376,7 @@ void TransactionExecutive::revert()
     }
 
     m_blockContext.storage()->rollback(*m_recoder);
-    auto transientStateStorage = getTransientStateStorage(m_contextID, m_contractAddress);
+    auto transientStateStorage = getTransientStateStorage(m_contextID);
     transientStateStorage->rollback(*m_transientRecoder);
     m_recoder->clear();
 }
@@ -1881,15 +1881,14 @@ std::string TransactionExecutive::getContractTableName(
 }
 
 std::shared_ptr<storage::StateStorageInterface> TransactionExecutive::getTransientStateStorage(
-    int64_t contextID, std::string contractAddress)
+    int64_t contextID)
 {
     auto transientStorageMap = blockContext().getTransientStorageMap();
-    std::string transientStorageMapKey = std::to_string(contextID) + contractAddress;
     bcos::storage::StateStorageInterface::Ptr transientStorage;
     bool has;
     {
         tssMap::ReadAccessor::Ptr readAccessor;
-        has = transientStorageMap->find<tssMap::ReadAccessor>(readAccessor, transientStorageMapKey);
+        has = transientStorageMap->find<tssMap::ReadAccessor>(readAccessor, contextID);
         if (has)
         {
             transientStorage = readAccessor->value();
@@ -1899,14 +1898,13 @@ std::shared_ptr<storage::StateStorageInterface> TransactionExecutive::getTransie
     {
         {
             tssMap::WriteAccessor::Ptr writeAccessor;
-            auto hasWrite = transientStorageMap->find<tssMap::WriteAccessor>(
-                writeAccessor, transientStorageMapKey);
+            auto hasWrite =
+                transientStorageMap->find<tssMap::WriteAccessor>(writeAccessor, contextID);
 
             if (!hasWrite)
             {
                 transientStorage = std::make_shared<bcos::storage::StateStorage>(nullptr);
-                transientStorageMap->insert(
-                    writeAccessor, {transientStorageMapKey, transientStorage});
+                transientStorageMap->insert(writeAccessor, {contextID, transientStorage});
             }
             else
             {
