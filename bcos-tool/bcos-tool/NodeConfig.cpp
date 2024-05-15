@@ -360,7 +360,6 @@ void NodeConfig::loadRpcConfig(boost::property_tree::ptree const& _pt)
         thread_count=16
         sm_ssl=false
         disable_ssl=false
-        filter_thread_count=4
         ; 300s
         filter_timeout=300
         filter_max_process_block=10
@@ -368,7 +367,6 @@ void NodeConfig::loadRpcConfig(boost::property_tree::ptree const& _pt)
     std::string listenIP = _pt.get<std::string>("rpc.listen_ip", "0.0.0.0");
     int listenPort = _pt.get<int>("rpc.listen_port", 20200);
     int threadCount = _pt.get<int>("rpc.thread_count", 8);
-    int filterThreadCount = _pt.get<int>("rpc.filter_thread_count", 4);
     int filterTimeout = _pt.get<int>("rpc.filter_timeout", 300);
     int maxProcessBlock = _pt.get<int>("rpc.filter_max_process_block", 10);
     bool smSsl = _pt.get<bool>("rpc.sm_ssl", false);
@@ -380,7 +378,6 @@ void NodeConfig::loadRpcConfig(boost::property_tree::ptree const& _pt)
     m_rpcThreadPoolSize = threadCount;
     m_rpcDisableSsl = disableSsl;
     m_rpcSmSsl = smSsl;
-    m_rpcFilterThreadSize = filterThreadCount;
     m_rpcFilterTimeout = filterTimeout;
     m_rpcMaxProcessBlock = maxProcessBlock;
     g_BCOSConfig.setNeedRetInput(needRetInput);
@@ -399,7 +396,6 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
         listen_ip=127.0.0.1
         listen_port=8545
         thread_count=16
-        filter_thread_count=4
         ; 300s
         filter_timeout=300
         filter_max_process_block=10
@@ -407,7 +403,6 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
     const std::string listenIP = _pt.get<std::string>("web3_rpc.listen_ip", "127.0.0.1");
     const int listenPort = _pt.get<int>("web3_rpc.listen_port", 8545);
     const int threadCount = _pt.get<int>("web3_rpc.thread_count", 8);
-    const int filterThreadCount = _pt.get<int>("web3_rpc.filter_thread_count", 4);
     const int filterTimeout = _pt.get<int>("web3_rpc.filter_timeout", 300);
     const int maxProcessBlock = _pt.get<int>("web3_rpc.filter_max_process_block", 10);
     const bool enableWeb3Rpc = _pt.get<bool>("web3_rpc.enable", false);
@@ -416,7 +411,6 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
     m_web3RpcListenPort = listenPort;
     m_web3RpcThreadSize = threadCount;
     m_enableWeb3Rpc = enableWeb3Rpc;
-    m_web3FilterThreadSize = filterThreadCount;
     m_web3FilterTimeout = filterTimeout;
     m_web3MaxProcessBlock = maxProcessBlock;
 
