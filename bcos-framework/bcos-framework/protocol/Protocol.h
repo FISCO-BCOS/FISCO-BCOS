@@ -19,13 +19,12 @@
  * @date 2021-04-21
  */
 #pragma once
-#include "bcos-utilities/Exceptions.h"
+#include "bcos-utilities/BoostLog.h"
 #include <fmt/compile.h>
 #include <fmt/format.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/throw_exception.hpp>
 #include <limits>
-#include <memory>
 #include <optional>
 #include <ostream>
 #include <string>
@@ -117,6 +116,7 @@ enum class BlockVersion : uint32_t
 {
     V3_9_0_VERSION = 0x03090000,
     V3_8_0_VERSION = 0x03080000,
+    V3_7_3_VERSION = 0x03070300,
     V3_7_2_VERSION = 0x03070200,
     V3_7_1_VERSION = 0x03070100,
     V3_7_0_VERSION = 0x03070000,

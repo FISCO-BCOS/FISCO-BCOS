@@ -21,11 +21,8 @@
 #pragma once
 
 #include <boost/thread/thread.hpp>
-#include <functional>
 #include <memory>
 #include <string>
-#include <unordered_map>
-#include <vector>
 
 namespace bcos::cppsdk::service
 {
@@ -35,7 +32,6 @@ public:
     using Ptr = std::shared_ptr<BlockNumberInfo>;
     using ConstPtr = std::shared_ptr<const BlockNumberInfo>;
 
-public:
     std::string group() const { return m_group; }
     void setGroup(const std::string& _group) { m_group = _group; }
     std::string node() const { return m_node; }
@@ -43,7 +39,6 @@ public:
     int64_t blockNumber() const { return m_blockNumber; }
     void setBlockNumber(int64_t _blockNumber) { m_blockNumber = _blockNumber; }
 
-public:
     std::string toJson();
     bool fromJson(const std::string& _json);
 

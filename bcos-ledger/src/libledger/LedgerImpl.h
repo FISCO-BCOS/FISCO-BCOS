@@ -1,13 +1,13 @@
 #pragma once
 
 #include "Ledger.h"
+#include "bcos-framework/ledger/Ledger.h"
 #include "bcos-task/Task.h"
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-concepts/Exception.h>
 #include <bcos-concepts/Hash.h>
 #include <bcos-concepts/ledger/Ledger.h>
-#include <bcos-concepts/protocol/Block.h>
 #include <bcos-concepts/storage/Storage.h>
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-crypto/merkle/Merkle.h>
@@ -22,9 +22,6 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <atomic>
-#include <future>
-#include <stdexcept>
-#include <tuple>
 #include <type_traits>
 
 namespace bcos::ledger
@@ -201,8 +198,12 @@ private:
         // getABI function begin in version 320
         auto keyPageIgnoreTables = std::make_shared<std::set<std::string, std::less<>>>(
             storage::IGNORED_ARRAY_310.begin(), storage::IGNORED_ARRAY_310.end());
+
+        // 此处为只读操作，不可能写，因此无需关注setRowWithDirtyFlag
+        // This is a read-only operation and it is impossible to write, so there is no need to pay
+        // attention to setRowWithDirtyFlag
         auto stateStorage = stateStorageFactory->createStateStorage(
-            m_backupStorage, m_compatibilityVersion, true, keyPageIgnoreTables);
+            m_backupStorage, m_compatibilityVersion, false, true, keyPageIgnoreTables);
 
         // try to get codeHash
         auto codeHashEntry = stateStorage->getRow(contractTableName, "codeHash");

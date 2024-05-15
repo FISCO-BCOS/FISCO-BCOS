@@ -1,6 +1,4 @@
 #pragma once
-#include "Basic.h"
-#include "ByteBuffer.h"
 
 namespace bcos::concepts::serialize
 {

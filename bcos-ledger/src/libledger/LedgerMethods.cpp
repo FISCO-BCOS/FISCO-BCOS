@@ -1,9 +1,11 @@
 #include "LedgerMethods.h"
-#include "bcos-ledger/src/libledger/Ledger.h"
 #include "bcos-tool/VersionConverter.h"
+#include "utilities/Common.h"
+
+#include <bcos-executor/src/Common.h>
+
 #include <boost/exception/diagnostic_information.hpp>
 #include <exception>
-#include <type_traits>
 
 bcos::task::Task<void> bcos::ledger::prewriteBlockToStorage(LedgerInterface& ledger,
     bcos::protocol::ConstTransactionsPtr transactions, bcos::protocol::Block::ConstPtr block,
@@ -417,8 +419,7 @@ bcos::task::Task<bcos::ledger::LedgerConfig::Ptr> bcos::ledger::tag_invoke(
 
     auto blockNumber = co_await getCurrentBlockNumber(ledger);
     ledgerConfig->setBlockNumber(blockNumber);
-    auto hash = co_await getBlockHash(ledger, blockNumber);
-    ledgerConfig->setHash(hash);
+    ledgerConfig->setHash(co_await getBlockHash(ledger, blockNumber));
     ledgerConfig->setFeatures(co_await getFeatures(ledger));
 
     auto enableRPBFT =

@@ -19,9 +19,11 @@
  * @date 2021-04-26
  */
 #pragma once
+#include "BoostLog.h"
 #include "Common.h"
 #include <boost/asio.hpp>
 #include <boost/asio/steady_timer.hpp>
+
 namespace bcos
 {
 class Timer : public std::enable_shared_from_this<Timer>

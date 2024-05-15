@@ -19,7 +19,8 @@
  * @date 2021-10-18
  */
 #include "SchedulerServiceServer.h"
-#include "fisco-bcos-tars-service/Common/TarsUtils.h"
+#include "bcos-tars-protocol/Common.h"
+#include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include <bcos-tars-protocol/ErrorConverter.h>
 #include <bcos-tars-protocol/client/ExecutorServiceClient.h>
 #include <bcos-tars-protocol/protocol/BlockImpl.h>

@@ -11,8 +11,6 @@
 #include <oneapi/tbb/partitioner.h>
 #include <oneapi/tbb/task_arena.h>
 #include <tbb/task_arena.h>
-#include <atomic>
-#include <thread>
 #include <type_traits>
 
 namespace bcos::transaction_scheduler
@@ -115,9 +113,8 @@ private:
 
         std::vector<protocol::TransactionReceipt::Ptr> receipts;
         receipts.reserve(count);
-        RANGES::move(
-            RANGES::views::transform(
-                contexts, [](ExecutionContext & context) -> auto& { return context.receipt; }),
+        RANGES::move(RANGES::views::transform(contexts,
+                         [](ExecutionContext& context) -> auto& { return context.receipt; }),
             RANGES::back_inserter(receipts));
         scheduler.m_gc.collect(std::move(contexts));
         co_return receipts;

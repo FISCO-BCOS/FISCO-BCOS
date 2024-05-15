@@ -1,8 +1,5 @@
 #pragma once
-#pragma GCC diagnostic ignored "-Wunused-variable"
-#pragma GCC diagnostic ignored "-Wunused-parameter"
 
-#include "libinitializer/ProtocolInitializer.h"
 #include "libinitializer/TxPoolInitializer.h"
 #include <bcos-framework/consensus/ConsensusNode.h>
 #include <bcos-tars-protocol/ErrorConverter.h>

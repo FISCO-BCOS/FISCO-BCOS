@@ -9,7 +9,6 @@
 #include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
-#include "bcos-utilities/CompositeBuffer.h"
 #include "bcos-utilities/Error.h"
 #include "bcos-utilities/ObjectCounter.h"
 #include <bcos-gateway/libnetwork/Common.h>
@@ -17,12 +16,8 @@
 #include <bcos-gateway/libnetwork/SessionFace.h>
 #include <bcos-utilities/Timer.h>
 #include <boost/heap/priority_queue.hpp>
-#include <array>
 #include <cstddef>
-#include <deque>
 #include <memory>
-#include <mutex>
-#include <set>
 #include <utility>
 
 namespace bcos

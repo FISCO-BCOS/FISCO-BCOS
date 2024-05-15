@@ -18,15 +18,11 @@
  * @date 2021-04-13
  */
 #pragma once
-#include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/GenesisConfig.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/BlockFactory.h"
-#include "bcos-framework/protocol/BlockHeaderFactory.h"
-#include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
-#include "bcos-framework/storage/Common.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "utilities/Common.h"
 #include <bcos-table/src/StateStorageFactory.h>
@@ -141,10 +137,10 @@ protected:
             auto [compatibilityVersionStr, _] = entry->template getObject<SystemConfigEntry>();
             auto const version = bcos::tool::toVersionNumber(compatibilityVersionStr);
             auto stateStorage = stateStorageFactory.createStateStorage(
-                m_storage, version, true, std::move(keyPageIgnoreTables));
+                m_storage, version, true, false, std::move(keyPageIgnoreTables));
             return stateStorage;
         }
-        return std::make_shared<bcos::storage::StateStorage>(m_storage);
+        return std::make_shared<bcos::storage::StateStorage>(m_storage, true);
     }
 
 private:

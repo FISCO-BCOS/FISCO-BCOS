@@ -1,10 +1,7 @@
 #pragma once
 #include "Basic.h"
-#include "ByteBuffer.h"
 #include <bcos-crypto/hasher/Hasher.h>
 #include <boost/type_traits.hpp>
-#include <array>
-#include <range/v3/range/concepts.hpp>
 
 namespace bcos::concepts::hash
 {

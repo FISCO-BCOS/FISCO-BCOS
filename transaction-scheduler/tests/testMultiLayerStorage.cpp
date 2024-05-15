@@ -1,14 +1,11 @@
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/Storage.h"
-#include "bcos-framework/transaction-executor/TransactionExecutor.h"
+#include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Wait.h"
 #include "bcos-transaction-scheduler/MultiLayerStorage.h"
 #include "bcos-transaction-scheduler/ReadWriteSetStorage.h"
-#include <bcos-task/Wait.h>
 #include <fmt/format.h>
-#include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
-#include <type_traits>
 
 using namespace bcos;
 using namespace bcos::storage2;

@@ -64,7 +64,7 @@ namespace bcos::rpc
     result["blockHash"] = blockHash.hexPrefixed();
     result["blockNumber"] = toQuantity(blockNumber);
     auto from = toHex(tx->sender());
-    toChecksumAddress(from, bcos::crypto::keccak256Hash(from).hex());
+    toChecksumAddress(from, bcos::crypto::keccak256Hash(bcos::bytesConstRef(from)).hex());
     result["from"] = "0x" + std::move(from);
     if (tx->to().empty())
     {
@@ -74,7 +74,7 @@ namespace bcos::rpc
     {
         auto toView = tx->to();
         auto to = std::string(toView.starts_with("0x") ? toView.substr(2) : toView);
-        toChecksumAddress(to, bcos::crypto::keccak256Hash(to).hex());
+        toChecksumAddress(to, bcos::crypto::keccak256Hash(bcos::bytesConstRef(to)).hex());
         result["to"] = "0x" + std::move(to);
     }
     result["cumulativeGasUsed"] = "0x0";
@@ -88,7 +88,8 @@ namespace bcos::rpc
     else
     {
         auto contractAddress = std::string(receipt->contractAddress());
-        toChecksumAddress(contractAddress, bcos::crypto::keccak256Hash(contractAddress).hex());
+        toChecksumAddress(contractAddress,
+            bcos::crypto::keccak256Hash(bcos::bytesConstRef(contractAddress)).hex());
         result["contractAddress"] = "0x" + std::move(contractAddress);
     }
     result["logs"] = Json::arrayValue;
@@ -98,7 +99,7 @@ namespace bcos::rpc
     {
         Json::Value log;
         auto address = std::string(receiptLog[i].address());
-        toChecksumAddress(address, bcos::crypto::keccak256Hash(address).hex());
+        toChecksumAddress(address, bcos::crypto::keccak256Hash(bcos::bytesConstRef(address)).hex());
         log["address"] = "0x" + std::move(address);
         log["topics"] = Json::arrayValue;
         for (const auto& topic : receiptLog[i].topics())

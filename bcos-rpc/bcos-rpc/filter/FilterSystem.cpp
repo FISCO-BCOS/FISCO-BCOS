@@ -347,7 +347,7 @@ task::Task<Json::Value> FilterSystem::getLogsImpl(
             co_return Json::Value(Json::arrayValue);
         }
         params->setFromBlock(fromBlock);
-        params->setToBlock(std::min(toBlock, latestBlockNumber));  
+        params->setToBlock(std::min(toBlock, latestBlockNumber));
         // TODO：getLogsInPool
         co_return co_await getLogsInternal(*ledger, std::move(params));
     }

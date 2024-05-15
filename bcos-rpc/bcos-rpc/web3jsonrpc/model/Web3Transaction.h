@@ -27,6 +27,7 @@
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-utilities/FixedBytes.h>
+#include <magic_enum.hpp>
 #include <ostream>
 namespace bcos
 {

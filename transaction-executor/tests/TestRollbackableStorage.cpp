@@ -3,16 +3,14 @@
 #include "TestMemoryStorage.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/Storage.h"
-#include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-task/Task.h"
-#include "bcos-task/Trait.h"
 #include "bcos-task/Wait.h"
 #include <boost/test/unit_test.hpp>
-#include <iostream>
 
 using namespace bcos;
 using namespace bcos::storage2;
 using namespace bcos::transaction_executor;
+using namespace std::string_literals;
 using namespace std::string_view_literals;
 
 class TestRollbackableStorageFixture
@@ -63,6 +61,24 @@ BOOST_AUTO_TEST_CASE(addRollback)
         {
             BOOST_REQUIRE(!value);
         }
+
+        // Update and check
+        co_await storage2::writeOne(
+            rollbackableStorage, StateKey{tableID, "Key1"sv}, storage::Entry{"OK!"});
+
+        auto savepoint2 = rollbackableStorage.current();
+        co_await storage2::writeOne(
+            rollbackableStorage, StateKey{tableID, "Key1"s}, storage::Entry{"OK3!"});
+        auto value3 =
+            co_await storage2::readOne(rollbackableStorage, StateKeyView{tableID, "Key1"sv});
+        BOOST_CHECK(value3);
+        BOOST_CHECK_EQUAL(value3->get(), "OK3!");
+
+        co_await rollbackableStorage.rollback(savepoint2);
+        auto value4 =
+            co_await storage2::readOne(rollbackableStorage, StateKeyView{tableID, "Key1"sv});
+        BOOST_CHECK(value4);
+        BOOST_CHECK_EQUAL(value4->get(), "OK!");
 
         co_return;
     }());

@@ -150,7 +150,7 @@ BOOST_AUTO_TEST_CASE(TestGroupSigVerify)
     GroupSigPrecompiledFixture fixture;
     auto hashImpl = fixture.m_hashImpl;
 
-    bcos::codec::abi::ContractABICodec abi(hashImpl);
+    bcos::codec::abi::ContractABICodec abi(*hashImpl);
     bytes in = abi.abiIn(
         "groupSigVerify(string,string,string,string)", signature, message1, gpkInfo, paramInfo);
 
@@ -187,7 +187,7 @@ BOOST_AUTO_TEST_CASE(ErrorFunc)
     auto executive = fixture.m_executive;
     auto groupSigPrecompiled = fixture.m_groupSigPrecompiled;
 
-    bcos::codec::abi::ContractABICodec abi(hashImpl);
+    bcos::codec::abi::ContractABICodec abi(*hashImpl);
     bytes in = abi.abiIn("groupSigVerify(string)", std::string("2AE3FFE2"));
     auto parameters = std::make_shared<PrecompiledExecResult>();
     parameters->m_input = bytesConstRef(in.data(), in.size());
@@ -208,7 +208,7 @@ BOOST_AUTO_TEST_CASE(InvalidInputs)
     auto groupSigPrecompiled = fixture.m_groupSigPrecompiled;
 
     // situation1
-    bcos::codec::abi::ContractABICodec abi(hashImpl);
+    bcos::codec::abi::ContractABICodec abi(*hashImpl);
     bytes in = abi.abiIn("groupSigVerify(string,string,string,string)", std::string("2AE3FFE2"),
         std::string("2AE3FFE2"), std::string("2AE3FFE2"), std::string("2AE3FFE2"));
     auto parameters = std::make_shared<PrecompiledExecResult>();

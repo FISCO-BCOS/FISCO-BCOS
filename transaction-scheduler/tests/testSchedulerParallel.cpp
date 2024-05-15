@@ -12,7 +12,6 @@
 #include <bcos-task/Wait.h>
 #include <bcos-transaction-scheduler/SchedulerParallelImpl.h>
 #include <boost/test/unit_test.hpp>
-#include <mutex>
 
 using namespace bcos;
 using namespace bcos::storage2;

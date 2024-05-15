@@ -150,4 +150,11 @@ std::string address2HexString(const evmc_address& address)
     auto receiveAddressBytes = fromEvmC(address);
     return addressBytesStr2HexString(receiveAddressBytes);
 }
+std::array<char, sizeof(evmc_address) * 2> address2FixedArray(const evmc_address& address)
+{
+    std::array<char, sizeof(evmc_address) * 2> array;
+    auto receiveAddressBytes = fromEvmC(address);
+    boost::algorithm::hex_lower(receiveAddressBytes, array.data());
+    return array;
+}
 }  // namespace bcos

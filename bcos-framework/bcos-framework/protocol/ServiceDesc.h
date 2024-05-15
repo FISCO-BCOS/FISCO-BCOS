@@ -19,12 +19,9 @@
  * @date: 2021-10-11
  */
 #pragma once
-#include <iostream>
-#include <memory>
 #include <string>
-namespace bcos
-{
-namespace protocol
+
+namespace bcos::protocol
 {
 enum ServiceType : int32_t
 {
@@ -134,5 +131,4 @@ inline std::string getServiceNameByType(ServiceType _type)
     }
     return UNKNOWN_SERVANT;
 }
-}  // namespace protocol
-}  // namespace bcos
+}  // namespace bcos::protocol

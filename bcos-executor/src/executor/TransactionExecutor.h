@@ -249,7 +249,8 @@ protected:
 
 
     bcos::storage::StateStorageInterface::Ptr createStateStorage(
-        bcos::storage::StorageInterface::Ptr storage, bool ignoreNotExist = false);
+        bcos::storage::StorageInterface::Ptr storage, bool ignoreNotExist,
+        bool setRowWithDirtyFlag);
 
     protocol::BlockNumber getBlockNumberInStorage();
     protocol::BlockHeader::Ptr getBlockHeaderInStorage(protocol::BlockNumber number);

@@ -96,6 +96,7 @@ constexpr static std::string_view SYS_BALANCE_CALLER{"s_balance_caller"};
 struct SYS_DIRECTORY
 {
     static constexpr std::string_view USER_APPS = "/apps/";
+    static constexpr std::string_view SYS_APPS = "/sys/";
 };
 // Table fields
 struct ACCOUNT_TABLE_FIELDS
