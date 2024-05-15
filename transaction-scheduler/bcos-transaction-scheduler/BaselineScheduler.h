@@ -310,8 +310,8 @@ private:
             }
 
             auto now = current();
-            scheduler.m_multiLayerStorage.get().newMutable();
-            auto view = scheduler.m_multiLayerStorage.get().fork(true);
+            auto view = scheduler.m_multiLayerStorage.get().fork();
+            view.newMutable();
             auto transactions = co_await getTransactions(scheduler.m_txpool.get(), *block);
 
             ledger::LedgerConfig::Ptr ledgerConfig;
@@ -329,8 +329,8 @@ private:
             auto executedBlockHeader =
                 scheduler.m_blockHeaderFactory.get().populateBlockHeader(blockHeader);
             bool sysBlock = false;
-            finishExecute(scheduler.m_multiLayerStorage.get().mutableStorage(), receipts,
-                *executedBlockHeader, *block, transactions, sysBlock, scheduler.m_hashImpl.get());
+            finishExecute(view.mutableStorage(), receipts, *executedBlockHeader, *block,
+                transactions, sysBlock, scheduler.m_hashImpl.get());
 
             if (verify && (executedBlockHeader->hash() != blockHeader->hash()))
             {
@@ -354,13 +354,12 @@ private:
                 }
                 BASELINE_SCHEDULER_LOG(ERROR) << message;
 
-                scheduler.m_multiLayerStorage.get().removeMutable();
                 co_return std::make_tuple(
                     BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlocks, message),
                     nullptr, false);
             }
 
-            scheduler.m_multiLayerStorage.get().pushMutableToImmutableFront();
+            scheduler.m_multiLayerStorage.get().pushView(std::move(view));
             scheduler.m_lastExecutedBlockNumber = blockHeader->number();
 
             std::unique_lock resultsLock(scheduler.m_resultsMutex);
@@ -449,7 +448,7 @@ private:
             resultsLock.unlock();
 
             result.m_block->setBlockHeader(header);
-            auto lastStorage = scheduler.m_multiLayerStorage.get().lastImmutableStorage();
+            auto lastStorage = scheduler.m_multiLayerStorage.get().backStorage();
             if (result.m_block->blockHeaderConst()->number() != 0)
             {
                 ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
@@ -458,8 +457,7 @@ private:
                 co_await ledger::prewriteBlock(scheduler.m_ledger.get(), result.m_transactions,
                     result.m_block, false, *lastStorage);
             }
-            auto mergedStorage =
-                co_await scheduler.m_multiLayerStorage.get().mergeAndPopImmutableBack();
+            auto mergedStorage = co_await scheduler.m_multiLayerStorage.get().mergeBackStorage();
             co_await ledger::storeTransactionsAndReceipts(
                 scheduler.m_ledger.get(), result.m_transactions, result.m_block);
 
@@ -580,8 +578,8 @@ public:
     {
         task::wait([](decltype(this) self, protocol::Transaction::Ptr transaction,
                        decltype(callback) callback) -> task::Task<void> {
-            auto view = self->m_multiLayerStorage.get().fork(false);
-            view.newTemporaryMutable();
+            auto view = self->m_multiLayerStorage.get().fork();
+            view.newMutable();
             auto blockHeader = self->m_blockHeaderFactory.get().createBlockHeader();
             ledger::LedgerConfig::Ptr ledgerConfig;
             {
@@ -622,7 +620,7 @@ public:
     {
         task::wait([](decltype(this) self, std::string_view contract,
                        decltype(callback) callback) -> task::Task<void> {
-            auto view = self->m_multiLayerStorage.get().fork(false);
+            auto view = self->m_multiLayerStorage.get().fork();
             auto contractAddress = unhexAddress(contract);
             ledger::account::EVMAccount account(view, contractAddress);
             auto code = co_await ledger::account::code(account);
@@ -642,7 +640,7 @@ public:
     {
         task::wait([](decltype(this) self, std::string_view contract,
                        decltype(callback) callback) -> task::Task<void> {
-            auto view = self->m_multiLayerStorage.get().fork(false);
+            auto view = self->m_multiLayerStorage.get().fork();
             auto contractAddress = unhexAddress(contract);
             ledger::account::EVMAccount account(view, contractAddress);
             auto abi = co_await ledger::account::abi(account);

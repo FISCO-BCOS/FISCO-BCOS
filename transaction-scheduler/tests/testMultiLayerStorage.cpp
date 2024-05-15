@@ -35,7 +35,7 @@ BOOST_FIXTURE_TEST_SUITE(TestMultiLayerStorage, TestMultiLayerStorageFixture)
 BOOST_AUTO_TEST_CASE(noMutable)
 {
     task::syncWait([this]() -> task::Task<void> {
-        auto view = multiLayerStorage.fork(true);
+        auto view = multiLayerStorage.fork();
         storage::Entry entry;
         BOOST_CHECK_THROW(co_await storage2::writeOne(
                               view, StateKey{"test_table"sv, "test_key"sv}, std::move(entry)),
@@ -48,11 +48,8 @@ BOOST_AUTO_TEST_CASE(noMutable)
 BOOST_AUTO_TEST_CASE(readWriteMutable)
 {
     task::syncWait([this]() -> task::Task<void> {
-        BOOST_CHECK_THROW(
-            multiLayerStorage.pushMutableToImmutableFront(), NotExistsMutableStorageError);
-
-        multiLayerStorage.newMutable();
-        auto view = std::make_optional(multiLayerStorage.fork(true));
+        auto view = std::make_optional(multiLayerStorage.fork());
+        view->newMutable();
         StateKey key{"test_table"sv, "test_key"sv};
 
         storage::Entry entry;
@@ -63,10 +60,9 @@ BOOST_AUTO_TEST_CASE(readWriteMutable)
         auto values = co_await storage2::readSome(*view, keyViews);
 
         BOOST_CHECK_EQUAL(values[0]->get(), entry.get());
+        BOOST_CHECK_NO_THROW(multiLayerStorage.pushView(std::move(*view)));
 
-        BOOST_CHECK_NO_THROW(multiLayerStorage.pushMutableToImmutableFront());
-        view.reset();
-        auto view2 = multiLayerStorage.fork(true);
+        auto view2 = multiLayerStorage.fork();
         BOOST_CHECK_THROW(
             co_await storage2::writeOne(view2, key, entry), NotExistsMutableStorageError);
 
@@ -77,11 +73,8 @@ BOOST_AUTO_TEST_CASE(readWriteMutable)
 BOOST_AUTO_TEST_CASE(merge)
 {
     task::syncWait([this]() -> task::Task<void> {
-        BOOST_CHECK_THROW(
-            multiLayerStorage.pushMutableToImmutableFront(), NotExistsMutableStorageError);
-
-        multiLayerStorage.newMutable();
-        auto view = std::make_optional(multiLayerStorage.fork(true));
+        auto view = std::make_optional(multiLayerStorage.fork());
+        view->newMutable();
         auto toKey = RANGES::views::transform(
             [](int num) { return StateKey{"test_table"sv, fmt::format("key: {}", num)}; });
         auto toValue = RANGES::views::transform([](int num) {
@@ -95,13 +88,12 @@ BOOST_AUTO_TEST_CASE(merge)
             RANGES::iota_view<int, int>(0, 100) | toValue);
 
         BOOST_CHECK_THROW(
-            co_await multiLayerStorage.mergeAndPopImmutableBack(), NotExistsImmutableStorageError);
+            co_await multiLayerStorage.mergeBackStorage(), NotExistsImmutableStorageError);
 
-        multiLayerStorage.pushMutableToImmutableFront();
-        co_await multiLayerStorage.mergeAndPopImmutableBack();
-        view.reset();
+        multiLayerStorage.pushView(std::move(*view));
+        co_await multiLayerStorage.mergeBackStorage();
 
-        auto view2 = multiLayerStorage.fork(false);
+        auto view2 = multiLayerStorage.fork();
         auto keys = RANGES::iota_view<int, int>(0, 100) | toKey;
         auto values = co_await storage2::readSome(view2, keys);
 
@@ -111,12 +103,11 @@ BOOST_AUTO_TEST_CASE(merge)
         }
         BOOST_CHECK_EQUAL(RANGES::size(values), 100);
 
-        multiLayerStorage.newMutable();
-
-        auto view3 = multiLayerStorage.fork(true);
+        auto view3 = multiLayerStorage.fork();
+        view3.newMutable();
         co_await storage2::removeSome(view3, RANGES::iota_view<int, int>(20, 30) | toKey);
-        multiLayerStorage.pushMutableToImmutableFront();
-        co_await multiLayerStorage.mergeAndPopImmutableBack();
+        multiLayerStorage.pushView(std::move(view3));
+        co_await multiLayerStorage.mergeBackStorage();
 
         auto values2 = co_await storage2::readSome(view3, keys);
         for (auto&& [index, value] : RANGES::views::enumerate(values2))
@@ -135,17 +126,6 @@ BOOST_AUTO_TEST_CASE(merge)
     }());
 }
 
-BOOST_AUTO_TEST_CASE(oneMutable)
-{
-    multiLayerStorage.newMutable();
-    auto view1 = std::make_optional(multiLayerStorage.fork(true));
-    auto view2 = multiLayerStorage.fork(false);
-    BOOST_CHECK_THROW(auto view3 = multiLayerStorage.fork(true), DuplicateMutableViewError);
-
-    view1.reset();
-    auto view4 = multiLayerStorage.fork(true);
-}
-
 BOOST_AUTO_TEST_CASE(rangeMulti)
 {
     using MutableStorage =
@@ -160,14 +140,13 @@ BOOST_AUTO_TEST_CASE(rangeMulti)
 
         MultiLayerStorage<MutableStorage, void, BackendStorage> myMultiLayerStorage(backendStorage);
 
-        myMultiLayerStorage.newMutable();
-        auto view1 = myMultiLayerStorage.fork(true);
+        auto view1 = myMultiLayerStorage.fork();
+        view1.newMutable();
         co_await storage2::writeSome(view1, RANGES::views::iota(2, 6), RANGES::views::repeat(1));
-        view1.release();
-        myMultiLayerStorage.pushMutableToImmutableFront();
+        myMultiLayerStorage.pushView(std::move(view1));
 
-        myMultiLayerStorage.newMutable();
-        auto view2 = myMultiLayerStorage.fork(true);
+        auto view2 = myMultiLayerStorage.fork();
+        view2.newMutable();
         co_await storage2::writeSome(view2, RANGES::views::iota(4, 8), RANGES::views::repeat(2));
 
         auto resultList = co_await storage2::readSome(view2, RANGES::views::iota(0, 8));
