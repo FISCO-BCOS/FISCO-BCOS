@@ -11,7 +11,7 @@ FISCO BCOS（读作/ˈfɪskl bi:ˈkɒz/） 是一个稳定、高效、安全的�
 单链配置下，性能TPS可达10万+。全面支持国密算法、国产操作系统与国产CPU架构。包含区块流水线、可拔插共识机制、全方位并行计算、区块链文件系统、权限治理框架、分布式存储等特性。
 
 ## 版本信息
-- 稳定版本（生产环境使用）：v3.2.3，版本内容可参考[《FISCO-BCOS v3.2.3版本说明》](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/tag/v3.2.3)
+- 稳定版本（生产环境使用）：v3.2.7，版本内容可参考[《FISCO-BCOS v3.2.7版本说明》](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/tag/v3.2.7)
 - 最新版本（用户体验新特性）：v3.8.0，版本内容可参考 [《FISCO-BCOS v3.8.0版本说明》](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/tag/v3.8.0)
 
 ## 系统概述
