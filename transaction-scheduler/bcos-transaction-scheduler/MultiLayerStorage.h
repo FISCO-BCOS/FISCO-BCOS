@@ -464,35 +464,32 @@ public:
     task::Task<std::shared_ptr<MutableStorage>> mergeBackStorage()
     {
         std::unique_lock mergeLock(m_mergeMutex);
-        std::unique_lock immutablesLock(m_listMutex);
+        std::unique_lock listLock(m_listMutex);
         if (m_storages.empty())
         {
             BOOST_THROW_EXCEPTION(NotExistsImmutableStorageError{});
         }
-        auto immutableStorage = m_storages.back();
-        immutablesLock.unlock();
+        auto backStoragePtr = m_storages.back();
+        auto const& backStorage = *backStoragePtr;
+        listLock.unlock();
 
         if constexpr (withCacheStorage)
         {
             tbb::parallel_invoke(
                 [&]() {
-                    task::tbb::syncWait(
-                        storage2::merge(m_backendStorage.get(), std::as_const(*immutableStorage)));
+                    task::tbb::syncWait(storage2::merge(m_backendStorage.get(), backStorage));
                 },
-                [&]() {
-                    task::tbb::syncWait(
-                        storage2::merge(m_cacheStorage.get(), std::as_const(*immutableStorage)));
-                });
+                [&]() { task::tbb::syncWait(storage2::merge(m_cacheStorage.get(), backStorage)); });
         }
         else
         {
-            co_await storage2::merge(m_backendStorage.get(), std::as_const(*immutableStorage));
+            co_await storage2::merge(m_backendStorage.get(), backStorage);
         }
 
-        immutablesLock.lock();
+        listLock.lock();
         m_storages.pop_back();
 
-        co_return immutableStorage;
+        co_return backStoragePtr;
     }
 
     std::shared_ptr<MutableStorageType> frontStorage()
