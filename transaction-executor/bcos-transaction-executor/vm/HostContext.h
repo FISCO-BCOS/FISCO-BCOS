@@ -69,7 +69,7 @@ struct NotFoundCodeError : public bcos::Error {};
 
 evmc_bytes32 evm_hash_fn(const uint8_t* data, size_t size);
 
-template <class Storage>
+template <class Storage, class TransientStorage>
 class HostContext : public evmc_host_context
 {
 private:
@@ -92,7 +92,7 @@ private:
     };
 
     Storage& m_rollbackableStorage;
-    Storage& m_rollbackableTransientStorage;
+    TransientStorage& m_rollbackableTransientStorage;
     protocol::BlockHeader const& m_blockHeader;
     const evmc_message& m_message;
     const evmc_address& m_origin;
@@ -164,7 +164,7 @@ private:
     {
     } innerConstructor{};
 
-    HostContext(InnerConstructor /*unused*/, Storage& storage, Storage& transientStorage,
+    HostContext(InnerConstructor /*unused*/, Storage& storage, TransientStorage& transientStorage,
         protocol::BlockHeader const& blockHeader, const evmc_message& message,
         const evmc_address& origin, std::string_view abi, int contextID, int64_t& seq,
         PrecompiledManager const& precompiledManager, ledger::LedgerConfig const& ledgerConfig,
@@ -199,7 +199,7 @@ private:
     }
 
 public:
-    HostContext(Storage& storage, Storage& transientStorage,
+    HostContext(Storage& storage, TransientStorage& transientStorage,
         protocol::BlockHeader const& blockHeader, const evmc_message& message,
         const evmc_address& origin, std::string_view abi, int contextID, int64_t& seq,
         PrecompiledManager const& precompiledManager, ledger::LedgerConfig const& ledgerConfig,

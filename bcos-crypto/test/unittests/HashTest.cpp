@@ -20,6 +20,7 @@
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/hash/Sha3.h>
+#include <bcos-crypto/hash/Sha256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
@@ -121,6 +122,19 @@ BOOST_AUTO_TEST_CASE(testSha3)
 
     BOOST_REQUIRE_EQUAL(cryptoSuite->hash("hello"sv),
         h256("3338be694f50c5f338814986cdf0686453a888b84f424d792af4b9202398f392"));
+}
+
+BOOST_AUTO_TEST_CASE(SHA256_test) {
+    HashType hash;
+    auto sha256 = std::make_shared<Sha256>();
+    bcos::bytes input{};
+    hash = sha256->hash(bcos::ref(input));
+    BOOST_CHECK_EQUAL(hash.hex(), "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+
+    std::string data = "1234567812345678123456781234567812345678123456781234567812345678123456781234567812345678123456781234567812345678";
+    input += bcos::fromHex(data);
+    hash = sha256->hash(bcos::ref(input));
+    BOOST_REQUIRE_EQUAL(hash.hex(), "7303caef875be8c39b2c2f1905ea24adcc024bef6830a965fe05370f3170dc52");
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test

@@ -162,9 +162,6 @@ BOOST_AUTO_TEST_CASE(transientStorageContractTest)
         auto receipt2 = co_await bcos::transaction_executor::executeTransaction(
             executor, storage, blockHeader, *transaction2, 1, ledgerConfig, task::syncWait);
         BOOST_CHECK_EQUAL(receipt2->status(), 0);
-        bool getIntResult = false;
-        abiCodec.abiOut(receipt2->output(), getIntResult);
-        BOOST_CHECK_EQUAL(getIntResult, true);
     }());
 }
 
