@@ -23,6 +23,7 @@
 #include "PBFTInitializer.h"
 #include "ProtocolInitializer.h"
 #include "TxPoolInitializer.h"
+#include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "tools/archive-tool/ArchiveService.h"
 #include <bcos-executor/src/executor/SwitchExecutorManager.h>
 #include <bcos-scheduler/src/SchedulerManager.h>
@@ -84,6 +85,12 @@ public:
     /// NOTE: this should be last called
     void initSysContract();
     bcos::storage::TransactionalStorageInterface::Ptr storage() { return m_storage; }
+    bcos::Error::Ptr generateSnapshot(const std::string& snapshotPath, bool withTxAndReceipts);
+    bcos::Error::Ptr generateSnapshotFromRocksDB(const std::string& rockDBPath,
+        const std::string& snapshotPath, bool withTxAndReceipts, size_t snapshotFileSize = 256);
+    bcos::Error::Ptr importSnapshot(const std::string& snapshotPath);
+    bcos::Error::Ptr importSnapshotToRocksDB(
+        const std::string& snapshotPath, const std::string& rockDBPath);
 
 private:
     bcos::tool::NodeConfig::Ptr m_nodeConfig;
@@ -107,6 +114,8 @@ private:
     std::function<std::shared_ptr<scheduler::SchedulerInterface>()> m_baselineSchedulerHolder;
     std::function<void(std::function<void(protocol::BlockNumber)>)>
         m_setBaselineSchedulerBlockNumberNotifier;
+
+    protocol::BlockNumber getCurrentBlockNumber();
 };
 }  // namespace initializer
 }  // namespace bcos
