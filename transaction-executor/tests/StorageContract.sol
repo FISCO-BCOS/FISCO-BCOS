@@ -51,4 +51,63 @@ contract StorageContract {
     function getInt256() public view returns (int256) {
         return int256Slot.tload();
     }
+
+    function storeIntTest(int256 _value) public returns (int256) {
+        int256Slot.tstore(_value);
+        return int256Slot.tload();
+    }
+}
+// Path: transaction-executor/tests/ContractA.sol
+pragma solidity ^0.8.25;
+
+import "./StorageSlot.sol";
+import "./ContractB.sol";
+
+contract ContractA {
+    using StorageSlot for *;
+
+    StorageSlot.Int256SlotType private intSlot;
+    constructor(int256 value){
+        StorageSlot.tstore(intSlot, value);
+    }
+
+    function getData() public view returns (int256) {
+        return StorageSlot.tload(intSlot);
+    }
+
+    function callContractB() public returns (int256){
+        ContractB b = new ContractB();
+        return b.callContractA(address(this));
+    }
+
+}
+
+// Path: transaction-executor/tests/ContractA.sol
+import "./StorageSlot.sol";
+import "./ContractA.sol";
+
+
+contract ContractB {
+
+    function callContractA(address a) public returns (int256){
+        ContractA a = ContractA(a);
+        int256 result = a.getData();
+        return result;
+    }
+
+}
+// Path: transaction-executor/tests/MainContract.sol
+import "./StorageSlot.sol";
+import "./ContractA.sol";
+import "./ContractB.sol";
+
+contract MainContract {
+
+
+    function checkAndVerifyIntValue(int256 value) public returns (bool) {
+        ContractA a = new ContractA(value);
+        int256 result = a.callContractB();
+        require(result == value, "store value not equal tload result");
+        return true;
+    }
 }
