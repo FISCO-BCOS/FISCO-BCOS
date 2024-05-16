@@ -260,7 +260,7 @@ public:
                         if (rangeValue)
                         {
                             auto&& [key, value] = *rangeValue;
-                            if constexpr (std::is_pointer_v<decltype(value)>)
+                            if constexpr (std::is_pointer_v<std::decay_t<decltype(value)>>)
                             {
                                 item.emplace(key, *value);
                             }

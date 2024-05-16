@@ -253,11 +253,27 @@ BOOST_AUTO_TEST_CASE(range)
         {
             BOOST_CHECK(kv);
             auto& [key, value] = *kv;
-            auto& [tableName, keyName] = key;
+            const auto& [tableName, keyName] = key;
             BOOST_CHECK_LT(num, 100);
             ++num;
         }
         BOOST_CHECK_EQUAL(num, 100);
+
+        MemoryStorage<int, int,
+            bcos::storage2::memory_storage::Attribute(
+                bcos::storage2::memory_storage::LOGICAL_DELETION |
+                bcos::storage2::memory_storage::ORDERED)>
+            intStorage;
+        co_await storage2::writeSome(
+            intStorage, RANGES::iota_view<int, int>(0, 10), RANGES::repeat_view<int>(100));
+        auto start = 4;
+        auto range3 = co_await storage2::range(intStorage, storage2::RANGE_SEEK, start);
+        while (auto pair = co_await range3.next())
+        {
+            auto&& [key, value] = *pair;
+            BOOST_CHECK_EQUAL(key, start++);
+        }
+        BOOST_CHECK_EQUAL(start, 10);
     }());
 }
 
