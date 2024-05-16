@@ -8,7 +8,6 @@
 #include <bcos-task/Task.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/BucketMap.h>
-#include <bcos-utilities/ThreadPool.h>
 #include <bcos-utilities/Timer.h>
 #include <boost/functional/hash.hpp>
 #include <atomic>
@@ -64,11 +63,9 @@ public:
     using ConstPtr = std::shared_ptr<const FilterSystem>;
 
     FilterSystem(GroupManager::Ptr groupManager, const std::string& groupId,
-        FilterRequestFactory::Ptr factory, int threadNum, int filterTimeout,
-        int maxBlockProcessPerReq);
+        FilterRequestFactory::Ptr factory, int filterTimeout, int maxBlockProcessPerReq);
     virtual ~FilterSystem()
     {
-        m_pool->stop();
         m_cleanUpTimer->stop();
     }
 
@@ -127,7 +124,6 @@ public:
     int64_t getLatestBlockNumber() { return getLatestBlockNumber(m_group); }
 
     FilterRequestFactory::Ptr requestFactory() const { return m_factory; }
-    ThreadPool::Ptr pool() const { return m_pool; }
     LogMatcher::Ptr matcher() const { return m_matcher; }
     NodeService::Ptr getNodeService(std::string_view _groupID, std::string_view _command) const;
 
@@ -143,8 +139,6 @@ protected:
     task::Task<Json::Value> getFilterLogsImpl(std::string_view groupId, uint64_t filterID);
     task::Task<Json::Value> getLogsImpl(
         std::string_view groupId, FilterRequest::Ptr params, bool needCheckRange);
-    task::Task<Json::Value> getLogsInPool(
-        bcos::ledger::LedgerInterface::Ptr ledger, FilterRequest::Ptr params);
     task::Task<Json::Value> getLogsInternal(
         bcos::ledger::LedgerInterface& ledger, FilterRequest::Ptr params);
 
@@ -178,7 +172,6 @@ protected:
     int64_t m_maxBlockProcessPerReq = 10;
     GroupManager::Ptr m_groupManager;
     std::string m_group;
-    ThreadPool::Ptr m_pool;
     LogMatcher::Ptr m_matcher;
     FilterRequestFactory::Ptr m_factory;
     FilterMap m_filters;

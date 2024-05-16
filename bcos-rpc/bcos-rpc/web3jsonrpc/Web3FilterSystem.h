@@ -12,9 +12,9 @@ namespace rpc
 class Web3FilterSystem : public FilterSystem
 {
 public:
-    Web3FilterSystem(GroupManager::Ptr groupManager, const std::string& groupId, int threadNum,
-        int filterTimeout, int maxBlockProcessPerReq)
-      : FilterSystem(groupManager, groupId, std::make_shared<Web3FilterRequestFactory>(), threadNum,
+    Web3FilterSystem(GroupManager::Ptr groupManager, const std::string& groupId, int filterTimeout,
+        int maxBlockProcessPerReq)
+      : FilterSystem(groupManager, groupId, std::make_shared<Web3FilterRequestFactory>(),
             filterTimeout, maxBlockProcessPerReq)
     {}
 

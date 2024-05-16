@@ -13,12 +13,11 @@ using namespace bcos::rpc;
 using namespace bcos::rpc::filter;
 
 FilterSystem::FilterSystem(GroupManager::Ptr groupManager, const std::string& groupId,
-    FilterRequestFactory::Ptr factory, int threadNum, int filterTimeout, int maxBlockProcessPerReq)
+    FilterRequestFactory::Ptr factory, int filterTimeout, int maxBlockProcessPerReq)
   : m_filterTimeout(filterTimeout * 1000),
     m_maxBlockProcessPerReq(maxBlockProcessPerReq),
     m_groupManager(groupManager),
     m_group(groupId),
-    m_pool(std::make_shared<ThreadPool>("t_filter_system", threadNum)),
     m_matcher(std::make_shared<LogMatcher>()),
     m_factory(factory),
     m_filters(CPU_CORES)
@@ -348,15 +347,8 @@ task::Task<Json::Value> FilterSystem::getLogsImpl(
         }
         params->setFromBlock(fromBlock);
         params->setToBlock(std::min(toBlock, latestBlockNumber));
-        // TODO：getLogsInPool
         co_return co_await getLogsInternal(*ledger, std::move(params));
     }
-}
-
-task::Task<Json::Value> FilterSystem::getLogsInPool(
-    bcos::ledger::LedgerInterface::Ptr _ledger, FilterRequest::Ptr _params)
-{
-    co_return Json::Value(Json::arrayValue);
 }
 
 task::Task<Json::Value> FilterSystem::getLogsInternal(
