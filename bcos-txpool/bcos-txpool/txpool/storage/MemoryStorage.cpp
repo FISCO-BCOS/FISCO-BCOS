@@ -238,15 +238,16 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
         }
         if (result == TransactionStatus::NonceCheckFail) [[unlikely]]
         {
-            if (tx)
+            if (!tx)
             {
-                TXPOOL_LOG(WARNING) << LOG_DESC("enforce to seal failed for nonce check failed: ")
-                                    << tx->hash().abridged() << LOG_KV("batchId", tx->batchId())
-                                    << LOG_KV("batchHash", tx->batchHash().abridged())
-                                    << LOG_KV("importBatchId", _tx->batchId())
-                                    << LOG_KV("importBatchHash", _tx->batchHash().abridged());
+                TXPOOL_LOG(WARNING)
+                    << LOG_DESC("enforce to seal failed for nonce check failed: ")
+                    << tx->hash().hex() << LOG_KV("batchId", tx->batchId())
+                    << LOG_KV("batchHash", tx->batchHash().abridged())
+                    << LOG_KV("importTxHash", txHash) << LOG_KV("importBatchId", _tx->batchId())
+                    << LOG_KV("importBatchHash", _tx->batchHash().abridged());
+                return TransactionStatus::NonceCheckFail;
             }
-            return TransactionStatus::NonceCheckFail;
         }
 
         // tx already in txpool
@@ -1316,8 +1317,8 @@ void MemoryStorage::batchImportTxs(TransactionsPtr _txs)
         auto ret = verifyAndSubmitTransaction(tx, nullptr, false, false);
         if (ret != TransactionStatus::None)
         {
-            TXPOOL_LOG(TRACE) << LOG_DESC("batchImportTxs failed")
-                              << LOG_KV("tx", tx->hash().abridged()) << LOG_KV("msg", ret);
+            TXPOOL_LOG(TRACE) << LOG_DESC("batchImportTxs failed") << LOG_KV("tx", tx->hash().hex())
+                              << LOG_KV("msg", ret);
             continue;
         }
         successCount++;
