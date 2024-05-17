@@ -127,9 +127,13 @@ size_t RocksDBStorage::commit(int64_t num, const vector<TableData::Ptr>& datas)
         auto start_time = utcTime();
 
         WriteBatch batch;
+#if defined(WITH_TBB)
         tbb::parallel_for(tbb::blocked_range<size_t>(0, datas.size()),
             [&](const tbb::blocked_range<size_t>& range) {
                 for (size_t i = range.begin(); i < range.end(); ++i)
+#else
+        for (size_t i = 0; i < datas.size(); ++i)
+#endif
                 {
                     shared_ptr<map<string, vector<map<string, string>>>> key2value =
                         make_shared<map<string, vector<map<string, string>>>>();
@@ -157,7 +161,9 @@ size_t RocksDBStorage::commit(int64_t num, const vector<TableData::Ptr>& datas)
                         }
                     }
                 }
+#if defined(WITH_TBB)
             });
+#endif
         auto encode_time_cost = utcTime();
 
         WriteOptions options;
@@ -235,7 +241,7 @@ void RocksDBStorage::processEntries(int64_t num,
                     stringstream ss(value);
                     boost::archive::binary_iarchive ia(ss);
                     ia >> res;
-                    it = key2value->emplace(key, move(res)).first;
+                    it = key2value->emplace(key, std::move(res)).first;
                 }
             }
         }
@@ -270,7 +276,7 @@ void RocksDBStorage::processEntries(int64_t num,
         {  // new entry
             map<string, string> value;
             copyFromEntry(value, entry);
-            it->second.push_back(move(value));
+            it->second.push_back(std::move(value));
         }
     }
 }

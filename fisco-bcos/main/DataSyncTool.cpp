@@ -575,7 +575,7 @@ int main(int argc, const char* argv[])
             fs::directory_iterator endIter;
             for (fs::directory_iterator iter(path); iter != endIter; iter++)
             {
-                if (fs::extension(*iter) == ".genesis" &&
+                if (iter->path().extension() == ".genesis" &&
                     iter->path().stem().string() == "group." + to_string(groupID))
                 {
                     std::cout << "[" << getCurrentDateTime() << "] The sync-tool is syncing group "

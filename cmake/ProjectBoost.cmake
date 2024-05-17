@@ -52,11 +52,10 @@ set(BOOST_BUILD_FILES ${BOOST_LIB_PREFIX}chrono.a ${BOOST_LIB_PREFIX}date_time.a
 ExternalProject_Add(boost
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NO_PROGRESS 1
-    URL https://nchc.dl.sourceforge.net/project/boost/boost/1.68.0/boost_1_68_0.tar.bz2
-        http://dl.bintray.com/boostorg/release/1.68.0/source/boost_1_68_0.tar.bz2
-        https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/boost_1_68_0.tar.bz2
-        https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/FISCO-BCOS/deps/boost_1_68_0.tar.bz2
-    URL_HASH SHA256=7f6130bc3cf65f56a618888ce9d5ea704fa10b462be126ad053e80e553d6d8b7
+    URL https://boostorg.jfrog.io/artifactory/main/release/1.85.0/source/boost_1_85_0.tar.bz2
+        https://jaist.dl.sourceforge.net/project/boost/boost/1.85.0/boost_1_85_0.tar.bz2
+        https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/FISCO-BCOS/deps/boost_1_85_0.tar.bz2
+    URL_HASH SHA256=7009fe1faa1697476bdc7027703a2badb84e849b7b0baad5086b087b971f8617
     BUILD_IN_SOURCE 1
     CONFIGURE_COMMAND ${BOOST_BOOTSTRAP_COMMAND}
     BUILD_COMMAND ${BOOST_BUILD_TOOL} stage
@@ -143,6 +142,12 @@ set_property(TARGET Boost::Log PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${BOOST_IN
 set_property(TARGET Boost::Log PROPERTY INTERFACE_LINK_LIBRARIES Boost::Filesystem Boost::Thread)
 add_dependencies(Boost::Log boost)
 
+add_library(Boost::LogSetup STATIC IMPORTED GLOBAL)
+set_property(TARGET Boost::LogSetup PROPERTY IMPORTED_LOCATION ${BOOST_LIB_DIR}/libboost_log_setup${BOOST_LIBRARY_SUFFIX})
+set_property(TARGET Boost::LogSetup PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${BOOST_INCLUDE_DIR})
+# set_property(TARGET Boost::LogSetup PROPERTY INTERFACE_LINK_LIBRARIES Boost::Filesystem Boost::Thread)
+add_dependencies(Boost::LogSetup boost)
+
 add_library(Boost::Serialization STATIC IMPORTED GLOBAL)
 set_property(TARGET Boost::Serialization PROPERTY IMPORTED_LOCATION ${BOOST_LIB_DIR}/libboost_serialization${BOOST_LIBRARY_SUFFIX})
 set_property(TARGET Boost::Serialization PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${BOOST_INCLUDE_DIR})
@@ -152,5 +157,10 @@ add_dependencies(Boost::Serialization boost)
 add_library(Boost::iostreams STATIC IMPORTED GLOBAL)
 set_property(TARGET Boost::iostreams PROPERTY IMPORTED_LOCATION ${BOOST_LIB_DIR}/libboost_iostreams${BOOST_LIBRARY_SUFFIX})
 set_property(TARGET Boost::iostreams PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${BOOST_INCLUDE_DIR})
+if(NOT APPLE)
+    # set_property(TARGET Boost::iostreams PROPERTY INTERFACE_LINK_LIBRARIES z)
+    find_package(ZLIB REQUIRED)
+    set_property(TARGET Boost::iostreams PROPERTY INTERFACE_LINK_LIBRARIES ZLIB::ZLIB)
+endif()
 add_dependencies(Boost::iostreams boost)
 unset(SOURCE_DIR)

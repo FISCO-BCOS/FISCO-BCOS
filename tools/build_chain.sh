@@ -49,7 +49,7 @@ days=36500 # 100 years
 timestamp=$(($(date '+%s')*1000))
 chain_id=1
 compatibility_version=""
-default_version="2.10.3"
+default_version="2.11.0"
 rsa_key_length=2048
 macOS=""
 x86_64_arch="false"
@@ -1327,7 +1327,7 @@ while getopts "v:V:f" option;do
     esac
 done
 
-default_version=2.10.0
+default_version=2.11.0
 download_version=\${default_version}
 sm_crypto=\$(cat "\${SHELL_FOLDER}"/node*/config.ini | grep sm_crypto_channel= | cut -d = -f 2 | head -n 1)
 download_link=https://github.com/FISCO-BCOS/console/releases/download/v\${download_version}/\${package_name}

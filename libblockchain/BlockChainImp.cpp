@@ -1118,22 +1118,27 @@ void BlockChainImp::parseMerkleMap(
     Child2ParentMap& child2Parent)
 {
     // trans parent2ChildList into child2Parent concurrently
+#if defined(WITH_TBB)
     tbb::parallel_for_each(parent2ChildList->begin(), parent2ChildList->end(),
-        [&](std::pair<const std::string, std::vector<std::string>>& _childListIterator) {
+        [&](std::pair<const std::string, std::vector<std::string>>& _childListIterator)
+#else
+    for (auto& _childListIterator : *parent2ChildList)
+#endif
+        {
             auto childList = _childListIterator.second;
             auto parent = _childListIterator.first;
-            tbb::parallel_for(tbb::blocked_range<size_t>(0, childList.size()),
-                [&](const tbb::blocked_range<size_t>& range) {
-                    for (size_t i = range.begin(); i < range.end(); i++)
-                    {
-                        std::string child = childList[i];
-                        if (!child.empty())
-                        {
-                            child2Parent[child] = parent;
-                        }
-                    }
-                });
-        });
+            for (size_t i = 0; i < childList.size(); i++)
+            {
+                std::string child = childList[i];
+                if (!child.empty())
+                {
+                    child2Parent[child] = parent;
+                }
+            }
+        }
+#if defined(WITH_TBB)
+    );
+#endif
 }
 
 void BlockChainImp::getMerkleProof(dev::bytes const& _txHash,
@@ -1469,11 +1474,15 @@ void BlockChainImp::writeTxToBlock(const Block& block, std::shared_ptr<Executive
         auto constructVector_time_cost = utcTime() - record_time;
         record_time = utcTime();
         std::string blockNumberStr = lexical_cast<std::string>(block.blockHeader().number());
+#if defined(WITH_TBB)
         tbb::parallel_invoke(
             [tb, txs, blockNumberStr]() {
                 tbb::parallel_for(tbb::blocked_range<size_t>(0, txs->size()),
                     [&](const tbb::blocked_range<size_t>& _r) {
                         for (size_t i = _r.begin(); i != _r.end(); ++i)
+#else
+        for (size_t i = 0; i < txs->size(); ++i)
+#endif
                         {
                             Entry::Ptr entry = std::make_shared<Entry>();
                             entry->setField(SYS_VALUE, blockNumberStr);
@@ -1483,9 +1492,11 @@ void BlockChainImp::writeTxToBlock(const Block& block, std::shared_ptr<Executive
                             tb->insert((*txs)[i]->hash().hex(), entry,
                                 std::make_shared<dev::storage::AccessOptions>(), false);
                         }
+#if defined(WITH_TBB)
                     });
             },
             [this, tb_nonces, txs, blockNumberStr]() {
+#endif
                 std::vector<dev::eth::NonceKeyType> nonce_vector(txs->size());
                 for (size_t i = 0; i < txs->size(); i++)
                 {
@@ -1503,7 +1514,9 @@ void BlockChainImp::writeTxToBlock(const Block& block, std::shared_ptr<Executive
 
                 entry_tb2nonces->setForce(true);
                 tb_nonces->insert(lexical_cast<std::string>(blockNumberStr), entry_tb2nonces);
+#if defined(WITH_TBB)
             });
+#endif
         auto insertTable_time_cost = utcTime() - record_time;
         BLOCKCHAIN_LOG(DEBUG) << LOG_BADGE("WriteTxOnCommit")
                               << LOG_DESC("Write tx to block time record")
@@ -1613,13 +1626,21 @@ CommitResult BlockChainImp::commitBlock(
                 return CommitResult::ERROR_PARENT_HASH;
             }
             auto write_record_time = utcTime();
+#if defined(WITH_TBB)
             tbb::parallel_invoke([this, block, context]() { writeHash2Block(*block, context); },
                 [this, block, context]() { writeNumber2Hash(*block, context); },
                 [this, block, context]() { writeNumber(*block, context); },
                 [this, block, context]() { writeTotalTransactionCount(*block, context); },
                 [this, block, context]() { writeTxToBlock(*block, context); },
                 [this, block, context]() { writeHash2BlockHeader(*block, context); });
-
+#else
+            writeHash2Block(*block, context);
+            writeNumber2Hash(*block, context);
+            writeNumber(*block, context);
+            writeTotalTransactionCount(*block, context);
+            writeTxToBlock(*block, context);
+            writeHash2BlockHeader(*block, context);
+#endif
             auto write_table_time = utcTime() - write_record_time;
 
             write_record_time = utcTime();

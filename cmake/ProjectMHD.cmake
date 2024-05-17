@@ -8,7 +8,7 @@ ExternalProject_Add(mhd
     DOWNLOAD_NO_PROGRESS 1
     DOWNLOAD_NAME libmicrohttpd-0.9.63.tar.gz
     URL https://ftp.gnu.org/gnu/libmicrohttpd/libmicrohttpd-0.9.63.tar.gz
-        https://mirrors.ustc.edu.cn/gnu/libmicrohttpd/libmicrohttpd-0.9.63.tar.gz 
+        https://mirrors.ustc.edu.cn/gnu/libmicrohttpd/libmicrohttpd-0.9.63.tar.gz
         https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/libmicrohttpd-0.9.63.tar.gz
     URL_HASH SHA256=37c36f1be177f0e37ef181a645cd3baac1000bd322a01c2eff70f3cc8c91749c
     BUILD_IN_SOURCE 1

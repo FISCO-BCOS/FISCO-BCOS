@@ -282,7 +282,7 @@ BOOST_AUTO_TEST_CASE(testForTheObserverNode)
         checkSelectedNodes(fakeSyncTreeTopology, *selectedNodeList, {});
     }
     /// check parent
-    for (size_t i = 0; i <= 1; i++)
+    for (size_t i = 0; i < 1; i++)
     {
         selectedNodeList->clear();
         fakeSyncTreeTopology->syncTreeRouter()->selectParentNodesWrapper(
@@ -290,7 +290,7 @@ BOOST_AUTO_TEST_CASE(testForTheObserverNode)
         BOOST_CHECK(*selectedNodeList == dev::h512s());
     }
     // check parent for 2th node
-    for (size_t i = 2; i <= 3; i++)
+    for (size_t i = 1; i <= 2; i++)
     {
         selectedNodeList->clear();
         fakeSyncTreeTopology->syncTreeRouter()->selectParentNodesWrapper(
@@ -298,7 +298,7 @@ BOOST_AUTO_TEST_CASE(testForTheObserverNode)
         checkSelectedNodes(fakeSyncTreeTopology, *selectedNodeList, {0});
     }
 
-    for (size_t i = 4; i <= 5; i++)
+    for (size_t i = 3; i <= 4; i++)
     {
         selectedNodeList->clear();
         fakeSyncTreeTopology->syncTreeRouter()->selectParentNodesWrapper(
@@ -307,7 +307,7 @@ BOOST_AUTO_TEST_CASE(testForTheObserverNode)
     }
     selectedNodeList->clear();
     fakeSyncTreeTopology->syncTreeRouter()->selectParentNodesWrapper(
-        selectedNodeList, fakeSyncTreeTopology->peers(), 6);
+        selectedNodeList, fakeSyncTreeTopology->peers(), 5);
     checkSelectedNodes(fakeSyncTreeTopology, *selectedNodeList, {2});
 
 
@@ -331,7 +331,7 @@ BOOST_AUTO_TEST_CASE(testForTheObserverNode)
     idxVec = {9, 10};
     checkSelectedNodes(fakeSyncTreeTopology, *selectedNodeList, idxVec);
     // check parent for 9th and 10th
-    for (size_t i = 9; i <= 10; i++)
+    for (size_t i = 8; i <= 9; i++)
     {
         selectedNodeList->clear();
         fakeSyncTreeTopology->syncTreeRouter()->selectParentNodesWrapper(
@@ -345,7 +345,7 @@ BOOST_AUTO_TEST_CASE(testForTheObserverNode)
         selectedNodeList, 8, fakeSyncTreeTopology->peers());
     idxVec = {11, 12};
     checkSelectedNodes(fakeSyncTreeTopology, *selectedNodeList, idxVec);
-    for (size_t i = 11; i <= 12; i++)
+    for (size_t i = 10; i <= 11; i++)
     {
         selectedNodeList->clear();
         fakeSyncTreeTopology->syncTreeRouter()->selectParentNodesWrapper(

@@ -15,7 +15,7 @@ init() {
 
     echo " ==> fisco-bcos version: "
     ../bin/fisco-bcos -v
-    
+
     cat >ipconf <<EOF
 127.0.0.1:2 agencyA 1,2
 127.0.0.1:2 agencyB 1
@@ -68,6 +68,7 @@ check_sync_consensus()
     send_transaction
     LOG_INFO "[round1]==============send a transaction is ok"
     LOG_INFO "[round1]==============check report block"
+    sleep 3
     check_reports 1 4 "check report block failed!" "[round1]==============check report block is ok"
 
     LOG_INFO "[round1]==============check sync block"
@@ -101,6 +102,7 @@ check_consensus_and_sync()
     local sleep_seconds=${1}
     bash start_all.sh && sleep 2
     send_transaction
+    sleep "${sleep_seconds}"
     check_reports 1 4 "check report block failed!" "==============check report block is ok"
     bash stop_all.sh
     rm -rf node0/data/ node*/log
@@ -177,7 +179,7 @@ check_ipv6_pbft()
     ${sed_cmd} "s/127.0.0.1:/\[::1\]:/g" node*/config.ini
     ${sed_cmd} "s/0.0.0.0/::/g" node*/config.ini
     ${sed_cmd} "s/consensus_type=${last_consensus_algorithm}/consensus_type=pbft/" node*/conf/group.1.genesis
-    check_consensus_and_sync 12 
+    check_consensus_and_sync 12
 }
 
 fisco_version=$(../bin/fisco-bcos -v | egrep "FISCO-BCOS Version" | egrep -o "2\.[0-9]{1,}\.[0-9]{1,}")

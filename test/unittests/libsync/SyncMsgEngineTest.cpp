@@ -187,6 +187,7 @@ public:
     dev::h512s getNodeListByGroupID(GROUP_ID) override { return dev::h512s(); };
     void setGroupID2NodeList(std::map<GROUP_ID, dev::h512s>) override{};
     void setNodeListByGroupID(GROUP_ID, const h512s&) override{};
+    void setSealerListByGroupID(GROUP_ID _groupID, const dev::h512s& _sealerList) override{};
 
     void setTopics(std::shared_ptr<std::set<std::string>>) override{};
 
@@ -229,13 +230,15 @@ BOOST_AUTO_TEST_CASE(SyncStatusPacketTest)
 
 BOOST_AUTO_TEST_CASE(SyncTransactionPacketTest)
 {
+    fakeMsgEngine.setGroupNodeList({NodeID(0xabcd), NodeID(0xabcdf)});
     auto txPacket = SyncTransactionsPacket();
     auto txPtr = fakeSyncToolsSet.createTransaction(0);
     vector<bytes> txRLPs;
     txRLPs.emplace_back(txPtr->rlp());
+    txPacket.nodeId = NodeID(0xabcdf);
     txPacket.encode(txRLPs);
     auto msgPtr = txPacket.toMessage(0x02);
-    auto fakeSessionPtr = fakeSyncToolsSet.createSession();
+    auto fakeSessionPtr = fakeSyncToolsSet.createSession(NodeID(0xabcdf));
     fakeMsgEngine.messageHandler(fakeException, fakeSessionPtr, msgPtr);
     std::cout << "onPeerTransactions finished" << std::endl;
     auto txPoolPtr = fakeSyncToolsSet.getTxPoolPtr();
@@ -243,7 +246,7 @@ BOOST_AUTO_TEST_CASE(SyncTransactionPacketTest)
     std::cout << "pop2TxPool finished" << std::endl;
     auto topTxs = txPoolPtr->topTransactions(1);
     std::cout << "topTransactions finished" << std::endl;
-    BOOST_CHECK(topTxs->size() == 1);
+    BOOST_TEST(topTxs->size() == 1);
     BOOST_CHECK_EQUAL((*topTxs)[0]->hash(), txPtr->hash());
     // TODO: this unit test may cause fatal error randomly
 }

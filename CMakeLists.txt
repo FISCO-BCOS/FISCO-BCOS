@@ -22,12 +22,16 @@
 cmake_minimum_required(VERSION 3.12)
 set(FISCO_BCOS_CMAKE_DIR "${CMAKE_CURRENT_LIST_DIR}/cmake" CACHE PATH "The path to the cmake directory")
 list(APPEND CMAKE_MODULE_PATH ${FISCO_BCOS_CMAKE_DIR})
-set(CMAKE_OSX_DEPLOYMENT_TARGET "13" CACHE STRING "Minimum OS X deployment version")
+set(CMAKE_OSX_DEPLOYMENT_TARGET "14" CACHE STRING "Minimum OS X deployment version")
 
-project(FISCO-BCOS VERSION "2.10.3")
+project(FISCO-BCOS VERSION "2.11.0")
 # Suffix like "-rc1" e.t.c. to append to versions wherever needed.
 set(VERSION_SUFFIX "")
 
+# if cmake version > 3.24, set CMP0135 to NEW
+if(${CMAKE_VERSION} VERSION_GREATER "3.24.0")
+  cmake_policy(SET CMP0135 NEW)
+endif()
 find_package(Git QUIET)
 if(NOT GIT_FOUND)
   message(FATAL_ERROR "Please install git")

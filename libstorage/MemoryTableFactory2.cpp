@@ -249,9 +249,13 @@ h256 MemoryTableFactory2::hash()
 
     bytes data;
     data.resize(tables.size() * 32);
+#if defined(WITH_TBB)
     tbb::parallel_for(
         tbb::blocked_range<size_t>(0, tables.size()), [&](const tbb::blocked_range<size_t>& range) {
             for (auto it = range.begin(); it != range.end(); ++it)
+#else
+    for (size_t it = 0; it != tables.size(); ++it)
+#endif
             {
                 auto table = tables[it];
                 h256 hash = table.second->hash();
@@ -276,7 +280,9 @@ h256 MemoryTableFactory2::hash()
                     << LOG_KV("hash", hash) << LOG_KV("blockNum", m_blockNum);
 #endif
             }
+#if defined(WITH_TBB)
         });
+#endif
 
     if (data.empty())
     {
@@ -422,4 +428,4 @@ void MemoryTableFactory2::setAuthorizedAddress(storage::TableInfo::Ptr _tableInf
 uint64_t dev::storage::MemoryTableFactory2::ID()
 {
     return m_ID;
-};
+}

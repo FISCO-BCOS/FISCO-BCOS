@@ -1,0 +1,66 @@
+name: FISCO-BCOS GitHub Actions arm
+on:
+  push:
+    branches-ignore:
+      - "**-1.3"
+      - "**-1.5"
+    tags-ignore:
+      - v1.*
+    paths-ignore:
+      - "docs/**"
+      - "Changelog.md"
+      - "README.md"
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "Changelog.md"
+      - "README.md"
+  release:
+    types: [published, created, edited]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+env:
+  CCACHE_DIR: ${{ github.workspace }}/ccache
+
+jobs:
+  build:
+    name: build_arm
+    runs-on: self-hosted-arm-2.0
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 5
+      - uses: actions/cache@v3
+        id: cache
+        with:
+          path: deps/src
+          key: deps-aarch64-v0-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/arm_runner.yml') }}
+          restore-keys: |
+            deps-aarch64-v0-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/arm_runner.yml') }}
+            deps-aarch64-v0-${{ runner.temp }}-${{ github.base_ref }}-
+            deps-aarch64-v0-${{ runner.temp }}-
+      - name: install ubuntu dependencies
+        run: sudo apt install -y g++ libssl-dev openssl git build-essential autoconf texinfo flex patch bison libgmp-dev zlib1g-dev automake libtool curl && sudo apt -y remove libtbb-dev
+      - name: Setup cmake
+        run: curl -sSL https://cmake.org/files/v3.21/cmake-3.21.0-linux-aarch64.tar.gz | sudo tar -xzC /usr
+      - name: configure without tbb
+        run: export PATH=$PATH:/usr/cmake-3.21.0-linux-aarch64/bin;cmake . -DWITH_TBB=OFF
+      - name: compile fisco-bcos
+        run: make fisco-bcos -j4
+      - name: tar fisco-bcos for ubuntu
+        run: cp tools/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -zcf fisco-bcos.tar.gz fisco-bcos build_chain.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fisco-bcos.tar.gz
+          path: bin/fisco-bcos.tar.gz
+      - name: configure
+        run: export PATH=$PATH:/usr/cmake-3.21.0-linux-aarch64/bin;cmake . -DWITH_TBB=ON
+      - name: compile all
+        run: make fisco-bcos -j4
+      - name: tar fisco-bcos for ubuntu
+        run: cp tools/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -zcf fisco-bcos.tar.gz fisco-bcos build_chain.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fisco-bcos-without-tbb.tar.gz
+          path: bin/fisco-bcos.tar.gz

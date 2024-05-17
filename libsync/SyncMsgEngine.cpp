@@ -292,11 +292,12 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket::Ptr _packet, dev::p2p::P2P
             auto it = std::find(m_groupNodeList.begin(), m_groupNodeList.end(), _packet->nodeId);
             if (it == m_groupNodeList.end())
             {
-                SYNC_ENGINE_LOG(WARNING)
-                    << LOG_BADGE("Tx") << LOG_DESC("Drop unknown peer transactions")
-                    << LOG_DESC("Ignore sync packet not from node in group")
-                    << LOG_KV("fromNodeId", _packet->nodeId.abridged())
-                    << LOG_KV("packetType", int(_packet->packetType));
+                SYNC_ENGINE_LOG(WARNING) << LOG_BADGE("Tx")
+                                         << LOG_DESC(
+                                                "Drop unknown peer transactions, Ignore sync "
+                                                "packet not from node in group")
+                                         << LOG_KV("fromNodeId", _packet->nodeId.abridged())
+                                         << LOG_KV("packetType", int(_packet->packetType));
                 return;
             }
         }

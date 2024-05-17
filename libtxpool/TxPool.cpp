@@ -252,9 +252,13 @@ ImportResult TxPool::import(Transaction::Ptr _tx, IfDropped)
 void TxPool::verifyAndSetSenderForBlock(dev::eth::Block& block)
 {
     auto trans_num = block.getTransactionSize();
+#if defined(WITH_TBB)
     tbb::parallel_for(
         tbb::blocked_range<size_t>(0, trans_num), [&](const tbb::blocked_range<size_t>& _r) {
             for (size_t i = _r.begin(); i != _r.end(); i++)
+#else
+    for (size_t i = 0; i < trans_num; ++i)
+#endif
             {
                 h256 txHash = (*block.transactions())[i]->hash();
 
@@ -273,7 +277,9 @@ void TxPool::verifyAndSetSenderForBlock(dev::eth::Block& block)
                     block.setSenderForTransaction(i);
                 }
             }
+#if defined(WITH_TBB)
         });
+#endif
 }
 
 bool TxPool::txExists(dev::h256 const& txHash)
@@ -514,6 +520,7 @@ void TxPool::removeInvalidTxs()
         return;
     }
 
+#if defined(WITH_TBB)
     tbb::parallel_invoke(
         [this]() {
             // remove invalid txs
@@ -538,6 +545,27 @@ void TxPool::removeInvalidTxs()
                 m_txsHashFilter->erase(item.second);
             }
         });
+#else
+    {
+        WriteGuard l(m_lock);
+        for (auto const& item : *m_invalidTxs)
+        {
+            removeTrans(item.first);
+            m_dropped.insert(item.first);
+        }
+    }
+    for (auto const& item : *m_invalidTxs)
+    {
+        m_txpoolNonceChecker->delCache(item.second);
+    }
+    {
+        WriteGuard txsLock(x_txsHashFilter);
+        for (auto const& item : *m_invalidTxs)
+        {
+            m_txsHashFilter->erase(item.second);
+        }
+    }
+#endif
 
     UpgradeGuard wl(l);
     m_invalidTxs->clear();

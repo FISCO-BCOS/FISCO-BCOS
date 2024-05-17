@@ -104,7 +104,7 @@ int SQLBasicAccess::Select(int64_t, const string& _table, const string&, Conditi
                     }
                 }
             }
-            _values.push_back(move(value));
+            _values.push_back(std::move(value));
         }
     }
     CATCH(SQLException)
@@ -603,7 +603,10 @@ void SQLBasicAccess::ExecuteSql(const string& _sql)
         THROW(SQLException, "PreparedStatement_executeQuery");
     }
 
-    TRY { Connection_execute(conn, "%s", _sql.c_str()); }
+    TRY
+    {
+        Connection_execute(conn, "%s", _sql.c_str());
+    }
     CATCH(SQLException)
     {
         SQLBasicAccess_LOG(ERROR) << "execute sql failed sql:" << _sql;
