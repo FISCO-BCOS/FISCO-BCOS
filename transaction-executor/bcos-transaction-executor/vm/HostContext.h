@@ -190,11 +190,11 @@ private:
     {
         if (m_ledgerConfig.features().get(ledger::Features::Flag::feature_evm_cancun))
         {
-            m_mode = evmc_revision::EVMC_CANCUN;
+            m_mode = EVMC_CANCUN;
         }
         else
         {
-            m_mode = evmc_revision::EVMC_LONDON;
+            m_mode = EVMC_PARIS;
         }
     }
 
@@ -226,7 +226,7 @@ public:
         co_await ledger::account::setStorage(m_myAccount, *key, *value);
     }
 
-    task::Task<evmc_bytes32> getTransient(const evmc_bytes32* key)
+    task::Task<evmc_bytes32> getTransientStorage(const evmc_bytes32* key)
     {
         auto valueEntry = co_await storage2::readOne(m_rollbackableTransientStorage,
             transaction_executor::StateKeyView{
@@ -245,7 +245,7 @@ public:
         co_return value;
     }
 
-    task::Task<void> setTransient(const evmc_bytes32* key, const evmc_bytes32* value)
+    task::Task<void> setTransientStorage(const evmc_bytes32* key, const evmc_bytes32* value)
     {
         storage::Entry valueEntry(concepts::bytebuffer::toView(value->bytes));
         StateKey stateKey =
@@ -432,7 +432,6 @@ private:
                 co_await ledger::account::path(m_myAccount), buildLegacyExternalCaller(),
                 m_precompiledManager);
         }
-        HOST_CONTEXT_LOG(TRACE) << "Executing create contract" << LOG_KV("EVM mode", m_mode);
         auto result = m_executable->m_vmInstance.execute(
             interface, this, m_mode, &m_message, m_message.input_data, m_message.input_size);
         if (result.status_code == 0)

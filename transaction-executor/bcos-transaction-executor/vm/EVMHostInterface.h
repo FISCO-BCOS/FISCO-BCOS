@@ -57,7 +57,7 @@ struct EVMHostInterface
         [[maybe_unused]] const evmc_address* addr, const evmc_bytes32* key) noexcept
     {
         auto& hostContext = static_cast<HostContextType&>(*context);
-        return waitOperator(hostContext.getTransient(key));
+        return waitOperator(hostContext.getTransientStorage(key));
     }
 
     static evmc_storage_status setStorage(evmc_host_context* context,
@@ -80,7 +80,7 @@ struct EVMHostInterface
         const evmc_bytes32* value) noexcept
     {
         auto& hostContext = static_cast<HostContextType&>(*context);
-        waitOperator(hostContext.setTransient(key, value));
+        waitOperator(hostContext.setTransientStorage(key, value));
     }
 
     static evmc_bytes32 getBalance([[maybe_unused]] evmc_host_context* context,
