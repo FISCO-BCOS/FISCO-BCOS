@@ -14,6 +14,7 @@
 #include <oneapi/tbb/cache_aligned_allocator.h>
 #include <oneapi/tbb/parallel_pipeline.h>
 #include <oneapi/tbb/task_arena.h>
+#include <oneapi/tbb/task_group.h>
 #include <boost/throw_exception.hpp>
 #include <atomic>
 #include <cstddef>
@@ -177,6 +178,7 @@ private:
         std::atomic_size_t offset = 0;
         std::atomic_size_t chunkIndex = 0;
 
+        tbb::task_group_context context;
         // 五级流水线：分片准备、并行执行、检测RAW冲突&合并读写集、生成回执、合并storage
         // Five-stage pipeline: shard preparation, parallel execution, detection of RAW
         // conflicts & merging read/write sets, generating receipts, and merging storage
@@ -256,8 +258,8 @@ private:
 
                         return chunk;
                     }) &
-                tbb::make_filter<std::unique_ptr<Chunk>, void>(
-                    tbb::filter_mode::serial_in_order, [&](std::unique_ptr<Chunk> chunk) {
+                tbb::make_filter<std::unique_ptr<Chunk>, void>(tbb::filter_mode::serial_in_order,
+                    [&](std::unique_ptr<Chunk> chunk) {
                         if (chunk)
                         {
                             ittapi::Report report1(
@@ -274,7 +276,12 @@ private:
                                 lastStorage, std::move(chunk->storageView().mutableStorage())));
                             scheduler.m_gc.collect(std::move(chunk));
                         }
-                    }));
+                        else
+                        {
+                            context.cancel_group_execution();
+                        }
+                    }),
+            context);
 
         task::tbb::syncWait(mergeLastStorage(scheduler, storage, std::move(lastStorage)));
         scheduler.m_gc.collect(std::move(writeSet));

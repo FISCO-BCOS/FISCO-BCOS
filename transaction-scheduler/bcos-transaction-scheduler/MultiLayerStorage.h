@@ -3,6 +3,7 @@
 #include "bcos-task/TBBWait.h"
 #include "bcos-task/Trait.h"
 #include "bcos-utilities/Error.h"
+#include "bcos-utilities/RecursiveLambda.h"
 #include <oneapi/tbb/parallel_invoke.h>
 #include <boost/throw_exception.hpp>
 #include <functional>
@@ -254,23 +255,28 @@ public:
             {
                 auto& [variantIterator, item] = it;
                 item = co_await std::visit(
-                    [](auto& input) -> task::Task<RangeValue> {
-                        RangeValue item;
-                        auto rangeValue = co_await input.next();
-                        if (rangeValue)
-                        {
-                            auto&& [key, value] = *rangeValue;
-                            if constexpr (std::is_pointer_v<std::decay_t<decltype(value)>>)
+                    bcos::recursiveLambda(
+                        [&](auto const& self, auto& input) -> task::Task<RangeValue> {
+                            RangeValue item;
+                            auto rangeValue = co_await input.next();
+                            if (rangeValue)
                             {
-                                item.emplace(key, *value);
+                                auto&& [key, value] = *rangeValue;
+                                if constexpr (std::is_pointer_v<std::decay_t<decltype(value)>>)
+                                {
+                                    if (!value)
+                                    {
+                                        co_return co_await self(self, input);
+                                    }
+                                    item.emplace(key, *value);
+                                }
+                                else
+                                {
+                                    item = std::move(rangeValue);
+                                }
                             }
-                            else
-                            {
-                                item = std::move(rangeValue);
-                            }
-                        }
-                        co_return item;
-                    },
+                            co_return item;
+                        }),
                     variantIterator);
             }
         }

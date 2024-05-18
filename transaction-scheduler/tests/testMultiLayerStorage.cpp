@@ -128,8 +128,8 @@ BOOST_AUTO_TEST_CASE(merge)
 
 BOOST_AUTO_TEST_CASE(rangeMulti)
 {
-    using MutableStorage =
-        memory_storage::MemoryStorage<int, int, memory_storage::Attribute(memory_storage::ORDERED)>;
+    using MutableStorage = memory_storage::MemoryStorage<int, int,
+        memory_storage::Attribute(memory_storage::ORDERED | memory_storage::LOGICAL_DELETION)>;
     using BackendStorage = memory_storage::MemoryStorage<int, int,
         memory_storage::Attribute(memory_storage::ORDERED | memory_storage::LRU)>;
 
@@ -143,6 +143,7 @@ BOOST_AUTO_TEST_CASE(rangeMulti)
         auto view1 = myMultiLayerStorage.fork();
         view1.newMutable();
         co_await storage2::writeSome(view1, RANGES::views::iota(2, 6), RANGES::views::repeat(1));
+        co_await storage2::removeOne(view1, 2);
         myMultiLayerStorage.pushView(std::move(view1));
 
         auto view2 = myMultiLayerStorage.fork();
@@ -153,7 +154,7 @@ BOOST_AUTO_TEST_CASE(rangeMulti)
         auto vecList = resultList | RANGES::views::transform([](auto input) { return *input; }) |
                        RANGES::to<std::vector>();
         BOOST_CHECK_EQUAL(resultList.size(), 8);
-        auto expectList = std::vector<int>({0, 0, 1, 1, 2, 2, 2, 2});
+        auto expectList = std::vector<int>({0, 0, 0, 1, 2, 2, 2, 2});
         BOOST_CHECK_EQUAL_COLLECTIONS(
             vecList.begin(), vecList.end(), expectList.begin(), expectList.end());
 
