@@ -21,12 +21,8 @@ bcos::transaction_executor::EVMCResult bcos::transaction_executor::VMInstance::e
     }
     executionState->reset(
         *msg, rev, *host, context, std::basic_string_view<uint8_t>(code, codeSize), {});
-    TRANSACTION_EXECUTOR_LOG(TRACE)
-        << "Begin Execute transaction" << LOG_KV("gas", msg->gas) << LOG_KV("revision", rev);
     auto result = EVMCResult(evmone::baseline::execute(
         *static_cast<evmone::VM const*>(evm), msg->gas, *executionState, *m_instance));
-    TRANSACTION_EXECUTOR_LOG(TRACE)
-        << "Behind Execute transaction" << LOG_KV("gas", msg->gas) << LOG_KV("revision", rev);
     if (!localExecutionState)
     {
         localExecutionState = std::move(executionState);

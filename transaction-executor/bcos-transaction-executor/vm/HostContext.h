@@ -242,8 +242,12 @@ public:
         {
             std::uninitialized_fill_n(value.bytes, sizeof(value), 0);
         }
-        HOST_CONTEXT_LOG(DEBUG) << "Get transient storage "
-                                << LOG_KV("value", concepts::bytebuffer::toView(value.bytes));
+        if (c_fileLogLevel <= LogLevel::TRACE)
+        {
+            HOST_CONTEXT_LOG(TRACE)
+                << "getTransientStorage:" << LOG_KV("key", concepts::bytebuffer::toView(key->bytes))
+                << LOG_KV("value", concepts::bytebuffer::toView(value.bytes));
+        }
         co_return value;
     }
 
@@ -253,8 +257,11 @@ public:
         StateKey stateKey =
             StateKey{concepts::bytebuffer::toView(co_await ledger::account::path(m_myAccount)),
                 concepts::bytebuffer::toView(key->bytes)};
-        HOST_CONTEXT_LOG(DEBUG) << "Set transient storage "
-                                << LOG_KV("key", concepts::bytebuffer::toView(key->bytes));
+        if (c_fileLogLevel <= LogLevel::TRACE)
+        {
+            HOST_CONTEXT_LOG(TRACE) << "setTransientStorage:"
+                                    << LOG_KV("key", concepts::bytebuffer::toView(key->bytes));
+        }
         co_await storage2::writeOne(
             m_rollbackableTransientStorage, stateKey, std::move(valueEntry));
     }

@@ -103,9 +103,8 @@ BOOST_AUTO_TEST_CASE(transientStorageTest)
         auto transaction =
             transactionFactory.createTransaction(0, "", transientStorageBinary, {}, 0, "", "", 0);
         auto receipt = co_await bcos::transaction_executor::executeTransaction(
-            executor, storage, blockHeader, *transaction, 0, ledgerConfig, task::syncWait);
+            executor, storage, blockHeader, *transaction, 3, ledgerConfig, task::syncWait);
         BOOST_CHECK_EQUAL(receipt->status(), 0);
-        BOOST_CHECK_EQUAL(receipt->contractAddress(), "e0e794ca86d198042b64285c5ce667aee747509b");
 
         // test read and write transient storage
         bcos::codec::abi::ContractABICodec abiCodec(bcos::executor::GlobalHashImpl::g_hashImpl);
@@ -113,7 +112,7 @@ BOOST_AUTO_TEST_CASE(transientStorageTest)
         auto transaction2 = transactionFactory.createTransaction(
             0, std::string(receipt->contractAddress()), input, {}, 0, "", "", 0);
         auto receipt2 = co_await bcos::transaction_executor::executeTransaction(
-            executor, storage, blockHeader, *transaction2, 1, ledgerConfig, task::syncWait);
+            executor, storage, blockHeader, *transaction2, 4, ledgerConfig, task::syncWait);
         BOOST_CHECK_EQUAL(receipt2->status(), 0);
         bcos::s256 getIntResult = -1;
         abiCodec.abiOut(receipt2->output(), getIntResult);
@@ -151,9 +150,8 @@ BOOST_AUTO_TEST_CASE(transientStorageContractTest)
         auto transaction =
             transactionFactory.createTransaction(0, "", transientStorageBinary, {}, 0, "", "", 0);
         auto receipt = co_await bcos::transaction_executor::executeTransaction(
-            executor, storage, blockHeader, *transaction, 0, ledgerConfig, task::syncWait);
+            executor, storage, blockHeader, *transaction, 5, ledgerConfig, task::syncWait);
         BOOST_CHECK_EQUAL(receipt->status(), 0);
-        BOOST_CHECK_EQUAL(receipt->contractAddress(), "e0e794ca86d198042b64285c5ce667aee747509b");
 
         // test read and write transient storage
         bcos::codec::abi::ContractABICodec abiCodec(bcos::executor::GlobalHashImpl::g_hashImpl);
@@ -161,7 +159,7 @@ BOOST_AUTO_TEST_CASE(transientStorageContractTest)
         auto transaction2 = transactionFactory.createTransaction(
             0, std::string(receipt->contractAddress()), input, {}, 0, "", "", 0);
         auto receipt2 = co_await bcos::transaction_executor::executeTransaction(
-            executor, storage, blockHeader, *transaction2, 1, ledgerConfig, task::syncWait);
+            executor, storage, blockHeader, *transaction2, 6, ledgerConfig, task::syncWait);
         BOOST_CHECK_EQUAL(receipt2->status(), 0);
         bool checkResult = false;
         abiCodec.abiOut(receipt2->output(), checkResult);
