@@ -32,15 +32,32 @@ struct Params
 {
     std::string configFilePath;
     std::string genesisFilePath;
+    std::string snapshotPath;  // import from or export to
     float txSpeed;
-    enum class operation
+    enum class operation : int
     {
-        None,
-        Prune,
-        Snapshot,
-        SnapshotWithoutTxAndReceipt,
+        None = 0,
+        Prune = 1,
+        Snapshot = 1 << 1,
+        SnapshotWithoutTxAndReceipt = 1 << 2,
+        ImportSnapshot = 1 << 3,
     } op;
+    bool hasOp(operation op) const
+    {
+        return (static_cast<int>(this->op) & static_cast<int>(op)) != 0;
+    }
 };
+
+inline Params::operation operator|(Params::operation left, Params::operation right)
+{
+    return static_cast<Params::operation>(static_cast<int>(left) | static_cast<int>(right));
+}
+
+inline Params::operation operator&(Params::operation left, Params::operation right)
+{
+    return static_cast<Params::operation>(static_cast<int>(left) & static_cast<int>(right));
+}
+
 Params initAirNodeCommandLine(int argc, const char* argv[], bool _autoSendTx);
 }  // namespace initializer
 }  // namespace bcos
