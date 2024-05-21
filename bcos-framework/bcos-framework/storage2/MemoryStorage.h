@@ -241,7 +241,8 @@ public:
     }
 
     friend task::AwaitableValue<std::optional<ValueType>> tag_invoke(
-        storage2::tag_t<storage2::readOne> /*unused*/, MemoryStorage& storage, auto&& key)
+        storage2::tag_t<storage2::readOne> /*unused*/, MemoryStorage& storage, auto&& key,
+        auto&&... args)
     {
         task::AwaitableValue<std::optional<ValueType>> result({});
         auto& bucket = storage.getBucket(key);

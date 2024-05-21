@@ -303,10 +303,9 @@ public:
         m_cryptoSuite = std::make_shared<bcos::crypto::CryptoSuite>(
             std::make_shared<Keccak256>(), std::make_shared<Secp256k1Crypto>(), nullptr);
         m_cryptoPrecompiled = std::make_shared<CryptoPrecompiled>(m_cryptoSuite->hashImpl());
-        m_blockContext =
-            std::make_shared<BlockContext>(nullptr, m_ledgerCache, m_cryptoSuite->hashImpl(), 0,
-                h256(), utcTime(), (uint32_t)(bcos::protocol::BlockVersion::V3_0_VERSION),
-                FiscoBcosSchedule, false, false);
+        m_blockContext = std::make_shared<BlockContext>(nullptr, m_ledgerCache,
+            m_cryptoSuite->hashImpl(), 0, h256(), utcTime(),
+            (uint32_t)(bcos::protocol::BlockVersion::V3_0_VERSION), false, false);
         m_executive =
             std::make_shared<TransactionExecutive>(*m_blockContext, "", 100, 0, m_gasInjector);
         m_abi = std::make_shared<bcos::codec::abi::ContractABICodec>(m_cryptoSuite->hashImpl());

@@ -60,8 +60,10 @@
 #include "../vm/gas_meter/GasInjector.h"
 #endif
 
+#include "../Common.h"
 #include "ExecuteOutputs.h"
 #include "bcos-codec/abi/ContractABIType.h"
+#include "bcos-executor/src/executive/BlockContext.h"
 #include "bcos-executor/src/precompiled/common/Common.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
@@ -76,6 +78,7 @@
 #include "bcos-table/src/KeyPageStorage.h"
 #include "bcos-table/src/StateStorage.h"
 #include "bcos-table/src/StateStorageFactory.h"
+#include "bcos-task/Wait.h"
 #include "bcos-tool/BfsFileFactory.h"
 #include "tbb/flow_graph.h"
 #include <bcos-framework/executor/ExecuteError.h>
@@ -401,8 +404,7 @@ BlockContext::Ptr TransactionExecutor::createBlockContext(
         backend = m_cachedStorage;
     }
     BlockContext::Ptr context = make_shared<BlockContext>(storage, m_ledgerCache, m_hashImpl,
-        currentHeader, getVMSchedule((uint32_t)currentHeader->version()), m_isWasm, m_isAuthCheck,
-        std::move(backend), m_keyPageIgnoreTables);
+        currentHeader, m_isWasm, m_isAuthCheck, std::move(backend), m_keyPageIgnoreTables);
     context->setVMFactory(m_vmFactory);
     if (f_onNeedSwitchEvent)
     {
@@ -417,8 +419,7 @@ std::shared_ptr<BlockContext> TransactionExecutor::createBlockContextForCall(
     int32_t blockVersion, storage::StateStorageInterface::Ptr storage)
 {
     BlockContext::Ptr context = make_shared<BlockContext>(storage, m_ledgerCache, m_hashImpl,
-        blockNumber, blockHash, timestamp, blockVersion, getVMSchedule((uint32_t)blockVersion),
-        m_isWasm, m_isAuthCheck);
+        blockNumber, blockHash, timestamp, blockVersion, m_isWasm, m_isAuthCheck);
     context->setVMFactory(m_vmFactory);
     return context;
 }

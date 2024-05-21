@@ -49,8 +49,8 @@ struct GroupSigPrecompiledFixture
         m_hashImpl = std::make_shared<bcos::crypto::Keccak256>();
         m_groupSigPrecompiled = std::make_shared<GroupSigPrecompiled>(m_hashImpl);
         m_ledgerCache = std::make_shared<LedgerCache>(std::make_shared<MockLedger>());
-        m_blockContext = std::make_shared<BlockContext>(nullptr, m_ledgerCache, m_hashImpl, 0,
-            h256(), utcTime(), 0, FiscoBcosSchedule, false, false);
+        m_blockContext = std::make_shared<BlockContext>(
+            nullptr, m_ledgerCache, m_hashImpl, 0, h256(), utcTime(), 0, false, false);
         m_executive =
             std::make_shared<TransactionExecutive>(*m_blockContext, "", 100, 0, m_gasInjector);
     }

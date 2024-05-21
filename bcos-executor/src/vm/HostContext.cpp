@@ -559,6 +559,36 @@ evmc_bytes32 HostContext::store(const evmc_bytes32* key)
     }
     return result;
 }
+evmc_bytes32 HostContext::getTransientStorage(const evmc_bytes32* key)
+{
+    evmc_bytes32 result;
+    auto keyView = std::string_view((char*)key->bytes, sizeof(key->bytes));
+
+    auto transientStorageMap = m_executive->blockContext().getTransientStorageMap();
+    using TSMap = bcos::BucketMap<int64_t, std::shared_ptr<storage::StateStorageInterface>>;
+    TSMap::ReadAccessor::Ptr readAccessor;
+    auto has =
+        transientStorageMap->find<TSMap::ReadAccessor>(readAccessor, m_executive->contextID());
+    if (!has)
+    {
+        EXECUTOR_LOG(DEBUG) << LOG_DESC("get transient storage failed")
+                            << LOG_KV("transientStorageMapKey", m_executive->contextID())
+                            << LOG_KV("key", keyView);
+        std::uninitialized_fill_n(result.bytes, sizeof(result), 0);
+        return result;
+    }
+    auto entry = readAccessor->value()->getRow(m_tableName, keyView);
+    if (!entry.first)
+    {
+        auto field = entry.second->getField(0);
+        std::uninitialized_copy_n(field.data(), sizeof(result), result.bytes);
+    }
+    else
+    {
+        std::uninitialized_fill_n(result.bytes, sizeof(result), 0);
+    }
+    return result;
+}
 
 void HostContext::setStore(const evmc_bytes32* key, const evmc_bytes32* value)
 {
@@ -568,6 +598,56 @@ void HostContext::setStore(const evmc_bytes32* key, const evmc_bytes32* value)
     Entry entry;
     entry.importFields({std::move(valueBytes)});
     m_executive->storage().setRow(m_tableName, keyView, std::move(entry));
+}
+
+void HostContext::setTransientStorage(const evmc_bytes32* key, const evmc_bytes32* value)
+{
+    auto keyView = std::string_view((char*)key->bytes, sizeof(key->bytes));
+    bytes valueBytes(value->bytes, value->bytes + sizeof(value->bytes));
+
+    Entry entry;
+    entry.importFields({std::move(valueBytes)});
+
+    auto transientStorageMap = m_executive->blockContext().getTransientStorageMap();
+    using TSMap = bcos::BucketMap<int64_t, std::shared_ptr<storage::StateStorageInterface>>;
+    bcos::storage::StateStorageInterface::Ptr transientStorage;
+
+    bool has;
+    {
+        TSMap::ReadAccessor::Ptr readAccessor;
+        has =
+            transientStorageMap->find<TSMap::ReadAccessor>(readAccessor, m_executive->contextID());
+        if (has)
+        {
+            transientStorage = readAccessor->value();
+        }
+    }
+    if (!has)
+    {
+        {
+            TSMap::WriteAccessor::Ptr writeAccessor;
+            auto hasWrite = transientStorageMap->find<TSMap::WriteAccessor>(
+                writeAccessor, m_executive->contextID());
+            if (!hasWrite)  // if not another write access, create a new one
+            {
+                transientStorage = std::make_shared<bcos::storage::StateStorage>(nullptr);
+                transientStorageMap->insert(
+                    writeAccessor, {m_executive->contextID(), transientStorage});
+            }
+            else  // if another write access, use the same storage
+            {
+                transientStorage = writeAccessor->value();
+            }
+        }
+    }
+
+    transientStorage->asyncSetRow(m_tableName, keyView, std::move(entry), [](auto&& error) {
+        if (error)
+        {
+            EXECUTOR_LOG(ERROR) << LOG_DESC("set transient storage failed")
+                                << LOG_KV("error", error);
+        }
+    });
 }
 
 void HostContext::log(h256s&& _topics, bytesConstRef _data)

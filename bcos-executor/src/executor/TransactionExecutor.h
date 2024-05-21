@@ -333,14 +333,6 @@ protected:
     void initWasmEnvironment();
     void resetEnvironment();
     void initTestPrecompiledTable(storage::StorageInterface::Ptr storage);
-    VMSchedule getVMSchedule(uint32_t currentVersion) const
-    {
-        if (currentVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION)
-        {
-            return FiscoBcosScheduleV320;
-        }
-        return FiscoBcosSchedule;
-    }
     std::function<void()> f_onNeedSwitchEvent;
 
     LedgerCache::Ptr m_ledgerCache;

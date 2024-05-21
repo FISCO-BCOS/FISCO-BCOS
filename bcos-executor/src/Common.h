@@ -167,6 +167,7 @@ struct VMSchedule
     bool exceptionalFailedCodeDeposit = true;
     bool enableLondon = true;
     bool enablePairs = false;
+    bool enableCanCun = false;
     unsigned sstoreRefundGas = 15000;
     unsigned suicideRefundGas = 24000;
     unsigned createDataGas = 20;
@@ -182,6 +183,15 @@ static const VMSchedule FiscoBcosSchedule = [] {
 static const VMSchedule FiscoBcosScheduleV320 = [] {
     VMSchedule schedule = VMSchedule();
     schedule.enablePairs = true;
+    schedule.maxEvmCodeSize = 0x100000;   // 1MB
+    schedule.maxWasmCodeSize = 0xF00000;  // 15MB
+    return schedule;
+}();
+
+static const VMSchedule FiscoBcosScheduleCancun = [] {
+    VMSchedule schedule = VMSchedule();
+    schedule.enablePairs = false;
+    schedule.enableCanCun = true;
     schedule.maxEvmCodeSize = 0x100000;   // 1MB
     schedule.maxWasmCodeSize = 0xF00000;  // 15MB
     return schedule;

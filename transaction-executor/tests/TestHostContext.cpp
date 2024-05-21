@@ -40,12 +40,21 @@ public:
     bcos::crypto::Hash::Ptr hashImpl = std::make_shared<bcos::crypto::Keccak256>();
     MutableStorage storage;
     Rollbackable<decltype(storage)> rollbackableStorage;
+    using MemoryStorageType =
+        bcos::storage2::memory_storage::MemoryStorage<bcos::transaction_executor::StateKey,
+            bcos::transaction_executor::StateValue,
+            bcos::storage2::memory_storage::Attribute(
+                bcos::storage2::memory_storage::ORDERED |
+                bcos::storage2::memory_storage::LOGICAL_DELETION)>;
+    MemoryStorageType transientStorage;
+    Rollbackable<MemoryStorageType> rollbackableTransientStorage;
     evmc_address helloworldAddress;
     int64_t seq = 0;
     std::optional<PrecompiledManager> precompiledManager;
     bcos::ledger::LedgerConfig ledgerConfig;
 
-    TestHostContextFixture() : rollbackableStorage(storage)
+    TestHostContextFixture()
+      : rollbackableStorage(storage), rollbackableTransientStorage(transientStorage)
     {
         bcos::executor::GlobalHashImpl::g_hashImpl = std::make_shared<bcos::crypto::Keccak256>();
         precompiledManager.emplace(hashImpl);
@@ -76,9 +85,10 @@ public:
             .code_address = {}};
         evmc_address origin = {};
 
-        HostContext<decltype(rollbackableStorage)> hostContext(rollbackableStorage, blockHeader,
-            message, origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
-            bcos::task::syncWait);
+        HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
+            hostContext(rollbackableStorage, rollbackableTransientStorage, blockHeader, message,
+                origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
+                bcos::task::syncWait);
         syncWait(hostContext.prepare());
         auto result = syncWait(hostContext.execute());
 
@@ -118,9 +128,10 @@ public:
             .code_address = helloworldAddress};
         evmc_address origin = {};
 
-        HostContext<decltype(rollbackableStorage)> hostContext(rollbackableStorage, blockHeader,
-            message, origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
-            bcos::task::syncWait);
+        HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
+            hostContext(rollbackableStorage, rollbackableTransientStorage, blockHeader, message,
+                origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
+                bcos::task::syncWait);
         co_await hostContext.prepare();
         auto result = co_await hostContext.execute();
 
@@ -335,9 +346,10 @@ BOOST_AUTO_TEST_CASE(precompiled)
             .code_address = callAddress};
         evmc_address origin = {};
 
-        HostContext<decltype(rollbackableStorage)> hostContext(rollbackableStorage, blockHeader,
-            message, origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
-            bcos::task::syncWait);
+        HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
+            hostContext(rollbackableStorage, rollbackableTransientStorage, blockHeader, message,
+                origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
+                bcos::task::syncWait);
         syncWait(hostContext.prepare());
         auto result = syncWait(hostContext.execute());
     }
@@ -366,9 +378,10 @@ BOOST_AUTO_TEST_CASE(precompiled)
             .code_address = callAddress};
         evmc_address origin = {};
 
-        HostContext<decltype(rollbackableStorage)> hostContext(rollbackableStorage, blockHeader,
-            message, origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
-            bcos::task::syncWait);
+        HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
+            hostContext(rollbackableStorage, rollbackableTransientStorage, blockHeader, message,
+                origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
+                bcos::task::syncWait);
         syncWait(hostContext.prepare());
         result.emplace(syncWait(hostContext.execute()));
     }

@@ -53,6 +53,13 @@ struct EVMHostInterface
         return waitOperator(hostContext.get(key));
     }
 
+    static evmc_bytes32 getTransientStorage(evmc_host_context* context,
+        [[maybe_unused]] const evmc_address* addr, const evmc_bytes32* key) noexcept
+    {
+        auto& hostContext = static_cast<HostContextType&>(*context);
+        return waitOperator(hostContext.getTransientStorage(key));
+    }
+
     static evmc_storage_status setStorage(evmc_host_context* context,
         [[maybe_unused]] const evmc_address* addr, const evmc_bytes32* key,
         const evmc_bytes32* value) noexcept
@@ -66,6 +73,14 @@ struct EVMHostInterface
         }
         waitOperator(hostContext.set(key, value));
         return status;
+    }
+
+    static void setTransientStorage(evmc_host_context* context,
+        [[maybe_unused]] const evmc_address* addr, const evmc_bytes32* key,
+        const evmc_bytes32* value) noexcept
+    {
+        auto& hostContext = static_cast<HostContextType&>(*context);
+        waitOperator(hostContext.setTransientStorage(key, value));
     }
 
     static evmc_bytes32 getBalance([[maybe_unused]] evmc_host_context* context,
@@ -155,6 +170,9 @@ struct EVMHostInterface
             .block_prev_randao = {},
             .chain_id = {},
             .block_base_fee = {},
+            .blob_base_fee = {},
+            .blob_hashes = {},
+            .blob_hashes_count = 0,
         };
         return result;
     }
@@ -202,6 +220,8 @@ const evmc_host_interface* getHostInterface(auto&& waitOperator)
         HostContextImpl::log,
         HostContextImpl::access_account,
         HostContextImpl::access_storage,
+        HostContextImpl::getTransientStorage,
+        HostContextImpl::setTransientStorage,
     };
     return &fnTable;
 }
