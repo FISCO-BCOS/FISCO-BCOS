@@ -167,6 +167,12 @@ public:
     virtual void asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr _blockTxs,
         bcos::protocol::Block::ConstPtr block,
         std::function<void(Error::UniquePtr&&)> _callback) = 0;
+
+    /**
+     * @brief remove expired tx nonces
+     * @param blockNumber the current block number
+     */
+    virtual void removeExpiredNonce(protocol::BlockNumber blockNumber, bool sync) = 0;
 };
 
 }  // namespace bcos::ledger

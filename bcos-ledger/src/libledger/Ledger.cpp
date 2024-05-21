@@ -1140,6 +1140,38 @@ void Ledger::asyncGetNonceList(bcos::protocol::BlockNumber _startNumber, int64_t
     });
 }
 
+void Ledger::removeExpiredNonce(protocol::BlockNumber blockNumber, bool sync)
+{
+    auto expiredNumber =
+        blockNumber > (protocol::BlockNumber)m_blockLimit ? blockNumber - m_blockLimit : 0;
+    if (expiredNumber > 0)
+    {
+        LEDGER_LOG(DEBUG) << "removeExpiredNonce" << LOG_KV("number", blockNumber)
+                          << LOG_KV("expiredNumber", expiredNumber);
+        auto deleteExpiredNonces = [expiredNumber, storage = m_storage]() {
+            Entry deletedEntry;
+            deletedEntry.setStatus(Entry::DELETED);
+            auto blockNumberStr = boost::lexical_cast<std::string>(expiredNumber);
+            storage->asyncSetRow(SYS_BLOCK_NUMBER_2_NONCES, blockNumberStr, std::move(deletedEntry),
+                [](auto&& error) {
+                    if (error)
+                    {
+                        LEDGER_LOG(WARNING) << LOG_DESC("removeExpiredNonce failed")
+                                            << LOG_KV("message", error->errorMessage());
+                    }
+                });
+        };
+        if (sync)
+        {
+            deleteExpiredNonces();
+        }
+        else
+        {
+            m_threadPool->enqueue(deleteExpiredNonces);
+        }
+    }
+}
+
 void Ledger::asyncGetNodeListByType(const std::string_view& _type,
     std::function<void(Error::Ptr, consensus::ConsensusNodeListPtr)> _onGetConfig)
 {

@@ -191,3 +191,8 @@ void AirNodeInitializer::stop()
         exit(-1);
     }
 }
+
+void AirNodeInitializer::prune()
+{
+    m_nodeInitializer->prune();
+}

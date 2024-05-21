@@ -46,8 +46,8 @@ class LedgerImpl : public bcos::concepts::ledger::LedgerBase<LedgerImpl<Hasher, 
 
 public:
     LedgerImpl(Hasher hasher, Storage storage, bcos::protocol::BlockFactory::Ptr blockFactory,
-        bcos::storage::StorageInterface::Ptr storageInterface)
-      : Ledger(std::move(blockFactory), storageInterface),
+        bcos::storage::StorageInterface::Ptr storageInterface, size_t blockLimit)
+      : Ledger(std::move(blockFactory), storageInterface, blockLimit),
         m_hasher(std::move(hasher)),
         m_backupStorage(storageInterface),
         m_storage{std::move(storage)},

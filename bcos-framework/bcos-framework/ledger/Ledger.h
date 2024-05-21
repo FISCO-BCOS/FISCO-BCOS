@@ -40,6 +40,14 @@ inline constexpr struct StoreTransactionsAndReceipts
     }
 } storeTransactionsAndReceipts{};
 
+inline constexpr struct RemoveExpiredNonce
+{
+    task::Task<void> operator()(auto& ledger, protocol::BlockNumber expiredNumber) const
+    {
+        co_await tag_invoke(*this, ledger, expiredNumber);
+    }
+} removeExpiredNonce{};
+
 inline constexpr struct GetBlockData
 {
     task::Task<protocol::Block::Ptr> operator()(

@@ -57,6 +57,15 @@ int main(int argc, const char* argv[])
     {
         auto param = bcos::initializer::initAirNodeCommandLine(argc, argv, false);
         initializer->init(param.configFilePath, param.genesisFilePath);
+        if (param.op == bcos::initializer::Params::operation::Prune)
+        {
+            std::cout << "[" << bcos::getCurrentDateTime() << "] ";
+            std::cout << "prune the node data..." << std::endl;
+            initializer->prune();
+            std::cout << "[" << bcos::getCurrentDateTime() << "] ";
+            std::cout << "prune the node data success." << std::endl;
+            return 0;
+        }
         bcos::initializer::showNodeVersionMetric();
 
         bcos::initializer::printVersion();

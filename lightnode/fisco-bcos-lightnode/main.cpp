@@ -257,11 +257,11 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
         auto lightNodeLedger = std::make_shared<bcos::ledger::LedgerImpl<
             bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher, decltype(storageWrapper)>>(
             bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher{}, std::move(storageWrapper),
-            protocolInitializer.blockFactory(), storage);
+            protocolInitializer.blockFactory(), storage, nodeConfig->blockLimit());
         nodeLedger = std::make_shared<bcos::ledger::LedgerImpl<
             bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher, decltype(storageWrapper)>>(
             bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher{}, std::move(storageWrapper),
-            protocolInitializer.blockFactory(), storage);
+            protocolInitializer.blockFactory(), storage, nodeConfig->blockLimit());
 
         LIGHTNODE_LOG(INFO) << "start sm light node...";
         starLightnode(nodeConfig, lightNodeLedger, nodeLedger, front, gateway, keyFactory, nodeID);
@@ -271,12 +271,12 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
         auto lightNodeLedger = std::make_shared<bcos::ledger::LedgerImpl<
             bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher, decltype(storageWrapper)>>(
             bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher{}, std::move(storageWrapper),
-            protocolInitializer.blockFactory(), storage);
+            protocolInitializer.blockFactory(), storage, nodeConfig->blockLimit());
 
         nodeLedger = std::make_shared<bcos::ledger::LedgerImpl<
             bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher, decltype(storageWrapper)>>(
             bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher{}, std::move(storageWrapper),
-            protocolInitializer.blockFactory(), storage);
+            protocolInitializer.blockFactory(), storage, nodeConfig->blockLimit());
 
         LIGHTNODE_LOG(INFO) << "start light node...";
         starLightnode(nodeConfig, lightNodeLedger, nodeLedger, front, gateway, keyFactory, nodeID);

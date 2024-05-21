@@ -122,6 +122,7 @@ public:
             Error::Ptr, std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>>)>
             _onGetList) override
     {}
+    void removeExpiredNonce(protocol::BlockNumber blockNumber, bool sync) override {}
 };
 #pragma GCC diagnostic pop
 }  // namespace bcos::test

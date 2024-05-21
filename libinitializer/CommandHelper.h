@@ -33,6 +33,13 @@ struct Params
     std::string configFilePath;
     std::string genesisFilePath;
     float txSpeed;
+    enum class operation
+    {
+        None,
+        Prune,
+        Snapshot,
+        SnapshotWithoutTxAndReceipt,
+    } op;
 };
 Params initAirNodeCommandLine(int argc, const char* argv[], bool _autoSendTx);
 }  // namespace initializer

@@ -43,10 +43,12 @@ public:
         boost::compute::detail::lru_cache<int64_t, std::shared_ptr<std::vector<h256>>>;
 
     Ledger(bcos::protocol::BlockFactory::Ptr _blockFactory,
-        bcos::storage::StorageInterface::Ptr _storage, int merkleTreeCacheSize = 100)
+        bcos::storage::StorageInterface::Ptr _storage, size_t _blockLimit,
+        int merkleTreeCacheSize = 100)
       : m_blockFactory(std::move(_blockFactory)),
         m_storage(std::move(_storage)),
-        m_threadPool(std::make_shared<ThreadPool>("WriteReceipts", 1)),
+        m_threadPool(std::make_shared<ThreadPool>("ledgerWrite", 2)),
+        m_blockLimit(_blockLimit),
         m_merkleTreeCacheSize(merkleTreeCacheSize),
         m_txProofMerkleCache(m_merkleTreeCacheSize),
         m_receiptProofMerkleCache(m_merkleTreeCacheSize)
@@ -99,6 +101,7 @@ public:
         std::function<void(
             Error::Ptr, std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>>)>
             _onGetList) override;
+    void removeExpiredNonce(protocol::BlockNumber blockNumber, bool sync = false) override;
 
     void asyncGetNodeListByType(const std::string_view& _type,
         std::function<void(Error::Ptr, consensus::ConsensusNodeListPtr)> _onGetConfig) override;
@@ -161,6 +164,7 @@ private:
 
     mutable RecursiveMutex m_mutex;
     std::shared_ptr<bcos::ThreadPool> m_threadPool;
+    size_t m_blockLimit;
 
     // Maintain merkle trees of 100 blocks
     int m_merkleTreeCacheSize;
