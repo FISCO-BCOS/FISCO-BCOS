@@ -54,6 +54,8 @@ public:
     // for rpc
     void asyncGetSyncInfo(std::function<void(Error::Ptr, std::string)> _onGetSyncInfo) override;
 
+    std::vector<PeerStatus::Ptr> getPeerStatus() override;
+
     // consensus notify sync module committed block number
     void asyncNotifyCommittedIndex(
         bcos::protocol::BlockNumber _number, std::function<void(Error::Ptr)> _onRecv) override
@@ -87,6 +89,8 @@ public:
         c_FaultyNodeBlockDelta = _delta;
     }
 
+    bool isSyncing() const override;
+
 protected:
     virtual void asyncNotifyBlockSyncMessage(Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,
         bytesConstRef _data, std::function<void(bytesConstRef)> _sendResponse,
@@ -105,7 +109,6 @@ protected:
         bcos::crypto::NodeIDPtr _nodeID, BlockSyncMsgInterface::Ptr _syncMsg);
 
     virtual bool shouldSyncing();
-    virtual bool isSyncing();
     virtual void tryToRequestBlocks();
     virtual void onDownloadTimeout();
     // block execute and submit

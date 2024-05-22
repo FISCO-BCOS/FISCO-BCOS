@@ -49,8 +49,8 @@ task::Task<void> EthEndpoint::protocolVersion(const Json::Value&, Json::Value&)
 }
 task::Task<void> EthEndpoint::syncing(const Json::Value&, Json::Value& response)
 {
-    // TODO: impl this
-    Json::Value result = false;
+    auto const sync = m_nodeService->sync();
+    Json::Value result = sync->isSyncing();
     buildJsonContent(result, response);
     co_return;
 }
@@ -105,7 +105,7 @@ task::Task<void> EthEndpoint::gasPrice(const Json::Value&, Json::Value& response
     if (config.has_value())
     {
         auto [gasPrice, _] = config.value();
-        auto const value = std::stoull(gasPrice);
+        auto const value = std::stoull(gasPrice, nullptr, 16);
         result = toQuantity(value < LowestGasPrice ? LowestGasPrice : value);
     }
     else
@@ -546,7 +546,9 @@ task::Task<void> EthEndpoint::getBlockByNumber(const Json::Value& request, Json:
     {
         auto [blockNumber, _] = co_await getBlockNumberByTag(blockTag);
         auto const ledger = m_nodeService->ledger();
-        auto block = co_await ledger::getBlockData(*ledger, blockNumber, bcos::ledger::FULL_BLOCK);
+        auto flag = bcos::ledger::HEADER;
+        flag |= fullTransaction ? bcos::ledger::TRANSACTIONS : bcos::ledger::TRANSACTIONS_HASH;
+        auto block = co_await ledger::getBlockData(*ledger, blockNumber, flag);
         combineBlockResponse(result, std::move(block), fullTransaction);
     }
     catch (...)

@@ -56,7 +56,7 @@ namespace bcos::rpc
         Json::Value txList = Json::arrayValue;
         for (size_t i = 0; i < block->transactionsSize(); i++)
         {
-            Json::Value txJson;
+            Json::Value txJson = Json::objectValue;
             auto tx = block->transaction(i);
             combineTxResponse(txJson, std::move(tx), nullptr, block);
             txList.append(txJson);
