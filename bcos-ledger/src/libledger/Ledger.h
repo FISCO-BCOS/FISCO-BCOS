@@ -25,6 +25,7 @@
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "utilities/Common.h"
+#include <bcos-framework/ledger/SystemConfigs.h>
 #include <bcos-table/src/StateStorageFactory.h>
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/Common.h>

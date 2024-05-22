@@ -47,11 +47,24 @@ static void combineTxResponse(Json::Value& result, bcos::protocol::Transaction::
     {
         blockHash = block->blockHeader()->hash();
         blockNumber = block->blockHeader()->number();
-        for (; transactionIndex < block->transactionsHashSize(); transactionIndex++)
+        if (block->transactionsSize() == 0)
         {
-            if (block->transactionHash(transactionIndex) == tx->hash())
+            for (; transactionIndex < block->transactionsHashSize(); transactionIndex++)
             {
-                break;
+                if (block->transactionHash(transactionIndex) == tx->hash())
+                {
+                    break;
+                }
+            }
+        }
+        else
+        {
+            for (; transactionIndex < block->transactionsSize(); transactionIndex++)
+            {
+                if (block->transaction(transactionIndex)->hash() == tx->hash())
+                {
+                    break;
+                }
             }
         }
     }

@@ -139,6 +139,12 @@ inline void nodeInfoToJson(Json::Value& _response, bcos::group::ChainNodeInfo::P
         featureKeys.append(key);
     }
     _response["featureKeys"] = std::move(featureKeys);
+    auto supportConfig = Json::Value(Json::arrayValue);
+    for (auto const& config : _nodeInfo->supportConfigs())
+    {
+        supportConfig.append(config);
+    }
+    _response["supportConfig"] = std::move(supportConfig);
     _response["protocol"] = protocolResponse;
 }
 

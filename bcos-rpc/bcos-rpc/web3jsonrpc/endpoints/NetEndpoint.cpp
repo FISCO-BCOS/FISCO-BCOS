@@ -20,25 +20,47 @@
 
 #include "NetEndpoint.h"
 
+#include <bcos-framework/ledger/Ledger.h>
+#include <bcos-ledger/src/libledger/LedgerMethods.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 
 using namespace bcos;
 using namespace bcos::rpc;
-task::Task<void> NetEndpoint::verison(const Json::Value& request, Json::Value& response)
+task::Task<void> NetEndpoint::verison(const Json::Value&, Json::Value& response)
 {
-    // TODO: get chain id
-    Json::Value result = "0x4ee8";  // 20200
+    auto const ledger = m_nodeService->ledger();
+    auto config = co_await ledger::getSystemConfig(*ledger, ledger::SYSTEM_KEY_WEB3_CHAIN_ID);
+    Json::Value result;
+    if (config.has_value())
+    {
+        try
+        {
+            auto [chainId, _] = config.value();
+            result = toQuantity(std::stoull(chainId));
+        }
+        catch (...)
+        {
+            result = "0x4ee8";  // 20200
+        }
+    }
+    else
+    {
+        result = "0x4ee8";  // 20200
+    }
     buildJsonContent(result, response);
     co_return;
 }
-task::Task<void> NetEndpoint::listening(const Json::Value& request, Json::Value& response)
+task::Task<void> NetEndpoint::listening(const Json::Value&, Json::Value& response)
 {
     Json::Value result = true;
     buildJsonContent(result, response);
     co_return;
 }
-task::Task<void> NetEndpoint::peerCount(const Json::Value&, Json::Value&)
+task::Task<void> NetEndpoint::peerCount(const Json::Value&, Json::Value& response)
 {
-    // TODO: get gateway peer
+    auto const sync = m_nodeService->sync();
+    auto const status = sync->getPeerStatus();
+    Json::Value result = Json::UInt64(status.size());
+    buildJsonContent(result, response);
     co_return;
 }

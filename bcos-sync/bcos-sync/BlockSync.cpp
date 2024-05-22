@@ -287,7 +287,7 @@ bool BlockSync::shouldSyncing()
     return true;
 }
 
-bool BlockSync::isSyncing()
+bool BlockSync::isSyncing() const
 {
     return (m_state == SyncState::Downloading);
 }
@@ -997,4 +997,15 @@ void BlockSync::asyncGetSyncInfo(std::function<void(Error::Ptr, std::string)> _o
     Json::FastWriter fastWriter;
     std::string statusStr = fastWriter.write(syncInfo);
     _onGetSyncInfo(nullptr, statusStr);
+}
+
+std::vector<PeerStatus::Ptr> BlockSync::getPeerStatus()
+{
+    std::vector<PeerStatus::Ptr> statuses{};
+    statuses.reserve(m_syncStatus->peersSize());
+    m_syncStatus->foreachPeer([&statuses](auto&& status) {
+        statuses.emplace_back(status);
+        return true;
+    });
+    return statuses;
 }
