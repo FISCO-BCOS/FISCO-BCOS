@@ -141,8 +141,13 @@ task::Task<void> EthEndpoint::getBalance(const Json::Value& request, Json::Value
     std::string addressStr(address);
     boost::algorithm::to_lower(addressStr);
     // TODO)): blockNumber is ignored nowadays
-    // auto const blockTag = toView(request[1u]);
-    // auto [blockNumber, _] = co_await getBlockNumberByTag(blockTag);
+    auto const blockTag = toView(request[1u]);
+    auto [blockNumber, _] = co_await getBlockNumberByTag(blockTag);
+    if (c_fileLogLevel == TRACE)
+    {
+        WEB3_LOG(TRACE) << "eth_getBalance" << LOG_KV("address", address)
+                        << LOG_KV("blockTag", blockTag) << LOG_KV("blockNumber", blockNumber);
+    }
     auto const ledger = m_nodeService->ledger();
     u256 balance = 0;
     if (auto const entry = co_await ledger::getStorageAt(
@@ -181,8 +186,14 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
     }
     const auto posistionBytes = FixedBytes<32>(positionStr, FixedBytes<32>::FromHex);
     // TODO)): blockNumber is ignored nowadays
-    // auto const blockTag = toView(request[2u]);
-    // auto [blockNumber, _] = co_await getBlockNumberByTag(blockTag);
+    auto const blockTag = toView(request[2u]);
+    auto [blockNumber, _] = co_await getBlockNumberByTag(blockTag);
+    if (c_fileLogLevel == TRACE)
+    {
+        WEB3_LOG(TRACE) << "eth_getStorageAt" << LOG_KV("address", address)
+                        << LOG_KV("pos", positionStr) << LOG_KV("blockTag", blockTag)
+                        << LOG_KV("blockNumber", blockNumber);
+    }
     auto const ledger = m_nodeService->ledger();
     Json::Value result;
     if (auto const entry = co_await ledger::getStorageAt(
@@ -308,8 +319,13 @@ task::Task<void> EthEndpoint::getCode(const Json::Value& request, Json::Value& r
     std::string addressStr(address);
     boost::algorithm::to_lower(addressStr);
     // TODO)): blockNumber is ignored nowadays
-    // auto const blockTag = toView(request[1u]);
-    // auto [blockNumber, _] = co_await getBlockNumberByTag(blockTag);
+    auto const blockTag = toView(request[1u]);
+    auto [blockNumber, _] = co_await getBlockNumberByTag(blockTag);
+    if (c_fileLogLevel == TRACE)
+    {
+        WEB3_LOG(TRACE) << "eth_getCode" << LOG_KV("address", address)
+                        << LOG_KV("blockTag", blockTag) << LOG_KV("blockNumber", blockNumber);
+    }
     auto const scheduler = m_nodeService->scheduler();
     struct Awaitable
     {
@@ -446,9 +462,12 @@ task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& resp
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid call request!"));
     }
+    auto const blockTag = toView(request[1u]);
+    auto [blockNumber, _] = co_await getBlockNumberByTag(blockTag);
     if (c_fileLogLevel == TRACE)
     {
-        WEB3_LOG(TRACE) << LOG_DESC("eth_call") << call;
+        WEB3_LOG(TRACE) << LOG_DESC("eth_call") << LOG_KV("call", call)
+                        << LOG_KV("blockTag", blockTag) << LOG_KV("blockNumber", blockNumber);
     }
     auto&& tx = call.takeToTransaction(m_nodeService->blockFactory()->transactionFactory());
     // TODO: ignore params blockNumber here, use it after historical data is available

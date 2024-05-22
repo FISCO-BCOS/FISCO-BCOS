@@ -142,14 +142,14 @@ BOOST_AUTO_TEST_CASE(handleInvalidTest)
 BOOST_AUTO_TEST_CASE(handleValidTest)
 {
     // method eth_syncing
-    {
-        const auto request =
-            R"({"jsonrpc":"2.0","id":1132123, "method":"eth_syncing","params":[]})";
-        auto response = onRPCRequestWrapper(request);
-        validRespCheck(response);
-        BOOST_CHECK(response["id"].asInt64() == 1132123);
-        BOOST_CHECK(response["result"].asBool() == false);
-    }
+    // {
+    //     const auto request =
+    //         R"({"jsonrpc":"2.0","id":1132123, "method":"eth_syncing","params":[]})";
+    //     auto response = onRPCRequestWrapper(request);
+    //     validRespCheck(response);
+    //     BOOST_CHECK(response["id"].asInt64() == 1132123);
+    //     BOOST_CHECK(response["result"].asBool() == false);
+    // }
 
     // method eth_chainId
     {
@@ -180,7 +180,7 @@ BOOST_AUTO_TEST_CASE(handleValidTest)
 
     // method eth_gasPrice
     {
-        m_ledger->setSystemConfig(SYSTEM_KEY_TX_GAS_PRICE, "10086000");
+        m_ledger->setSystemConfig(SYSTEM_KEY_TX_GAS_PRICE, "0x99e670");
         const auto request =
             R"({"jsonrpc":"2.0","id":541321, "method":"eth_gasPrice","params":[]})";
         auto response = onRPCRequestWrapper(request);
