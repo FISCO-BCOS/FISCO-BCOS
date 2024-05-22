@@ -5,9 +5,6 @@ target_include_directories(bcos-task INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-task>)
 target_link_libraries(bcos-task INTERFACE bcos-concepts)
-if (PRECOMPILED_HEADER)
-  target_precompile_headers(bcos-task REUSE_FROM precompiled-headers)
-endif()
 
 include(GNUInstallDirs)
 install(TARGETS bcos-task EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")

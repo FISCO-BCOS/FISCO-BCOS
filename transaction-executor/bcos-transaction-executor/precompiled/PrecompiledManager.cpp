@@ -17,6 +17,7 @@
 #include "bcos-executor/src/precompiled/extension/PaillierPrecompiled.h"
 #include "bcos-executor/src/precompiled/extension/RingSigPrecompiled.h"
 #include "bcos-executor/src/precompiled/extension/ZkpPrecompiled.h"
+#include "bcos-transaction-executor/precompiled/PrecompiledImpl.h"
 #include <memory>
 
 
@@ -24,34 +25,43 @@ bcos::transaction_executor::PrecompiledManager::PrecompiledManager(crypto::Hash:
   : m_hashImpl(std::move(hashImpl))
 {
     m_address2Precompiled.emplace_back(
-        1, executor::PrecompiledContract(
-               3000, 0, executor::PrecompiledRegistrar::executor("ecrecover")));
-    m_address2Precompiled.emplace_back(2,
-        executor::PrecompiledContract(60, 12, executor::PrecompiledRegistrar::executor("sha256")));
+        1, Precompiled{executor::PrecompiledContract(
+                           3000, 0, executor::PrecompiledRegistrar::executor("ecrecover")),
+               0});
     m_address2Precompiled.emplace_back(
-        3, executor::PrecompiledContract(
-               600, 120, executor::PrecompiledRegistrar::executor("ripemd160")));
-    m_address2Precompiled.emplace_back(4,
-        executor::PrecompiledContract(15, 3, executor::PrecompiledRegistrar::executor("identity")));
+        2, Precompiled{executor::PrecompiledContract(
+                           60, 12, executor::PrecompiledRegistrar::executor("sha256")),
+               0});
     m_address2Precompiled.emplace_back(
-        5, executor::PrecompiledContract(executor::PrecompiledRegistrar::pricer("modexp"),
-               executor::PrecompiledRegistrar::executor("modexp")));
+        3, Precompiled{executor::PrecompiledContract(
+                           600, 120, executor::PrecompiledRegistrar::executor("ripemd160")),
+               0});
     m_address2Precompiled.emplace_back(
-        6, executor::PrecompiledContract(
-               150, 0, executor::PrecompiledRegistrar::executor("alt_bn128_G1_add")));
+        4, Precompiled{executor::PrecompiledContract(
+                           15, 3, executor::PrecompiledRegistrar::executor("identity")),
+               0});
+    m_address2Precompiled.emplace_back(5,
+        Precompiled{executor::PrecompiledContract(executor::PrecompiledRegistrar::pricer("modexp"),
+                        executor::PrecompiledRegistrar::executor("modexp")),
+            0});
     m_address2Precompiled.emplace_back(
-        7, executor::PrecompiledContract(
-               6000, 0, executor::PrecompiledRegistrar::executor("alt_bn128_G1_mul")));
+        6, Precompiled{executor::PrecompiledContract(
+                           150, 0, executor::PrecompiledRegistrar::executor("alt_bn128_G1_add")),
+               0});
     m_address2Precompiled.emplace_back(
-        8, executor::PrecompiledContract(
-               executor::PrecompiledRegistrar::pricer("alt_bn128_pairing_product"),
-               executor::PrecompiledRegistrar::executor("alt_bn128_pairing_product")));
-    m_address2Precompiled.emplace_back(9,
-        executor::PrecompiledContract(executor::PrecompiledRegistrar::pricer("blake2_compression"),
-            executor::PrecompiledRegistrar::executor("blake2_compression")));
-    //    m_address2Precompiled.emplace_back(10,
-    //        executor::PrecompiledContract(executor::PrecompiledRegistrar::pricer("point_evaluation"),
-    //            executor::PrecompiledRegistrar::executor("point_evaluation")));
+        7, Precompiled{executor::PrecompiledContract(
+                           6000, 0, executor::PrecompiledRegistrar::executor("alt_bn128_G1_mul")),
+               0});
+    m_address2Precompiled.emplace_back(
+        8, Precompiled{executor::PrecompiledContract(
+                           executor::PrecompiledRegistrar::pricer("alt_bn128_pairing_product"),
+                           executor::PrecompiledRegistrar::executor("alt_bn128_pairing_product")),
+               0});
+    m_address2Precompiled.emplace_back(
+        9, Precompiled{executor::PrecompiledContract(
+                           executor::PrecompiledRegistrar::pricer("blake2_compression"),
+                           executor::PrecompiledRegistrar::executor("blake2_compression")),
+               0});
 
     m_address2Precompiled.emplace_back(
         0x1000, std::make_shared<precompiled::SystemConfigPrecompiled>(m_hashImpl));
@@ -82,7 +92,8 @@ bcos::transaction_executor::PrecompiledManager::PrecompiledManager(crypto::Hash:
     m_address2Precompiled.emplace_back(
         0x10002, std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl, false));
     m_address2Precompiled.emplace_back(
-        0x1010, std::make_shared<precompiled::ShardingPrecompiled>(m_hashImpl));
+        0x1010, Precompiled{std::make_shared<precompiled::ShardingPrecompiled>(m_hashImpl),
+                    ledger::Features::Flag::feature_sharding});
     m_address2Precompiled.emplace_back(
         0x100f, std::make_shared<precompiled::CastPrecompiled>(m_hashImpl));
     m_address2Precompiled.emplace_back(
@@ -92,6 +103,8 @@ bcos::transaction_executor::PrecompiledManager::PrecompiledManager(crypto::Hash:
 
     std::sort(m_address2Precompiled.begin(), m_address2Precompiled.end(),
         [](const auto& lhs, const auto& rhs) { return std::get<0>(lhs) < std::get<0>(rhs); });
+
+    // Init the AUTH_COMMITTEE_ADDRESS
 }
 
 bcos::transaction_executor::Precompiled const*
@@ -105,6 +118,23 @@ bcos::transaction_executor::PrecompiledManager::getPrecompiled(unsigned long con
     if (it != m_address2Precompiled.end() && std::get<0>(*it) == contractAddress)
     {
         return std::addressof(std::get<1>(*it));
+    }
+
+    return nullptr;
+}
+
+bcos::transaction_executor::Precompiled const*
+bcos::transaction_executor::PrecompiledManager::getPrecompiled(const evmc_address& address) const
+{
+    constexpr static unsigned long MAX_PRECOMPILED_ADDRESS = 100000;
+
+    u160 intAddress;
+    boost::multiprecision::import_bits(
+        intAddress, address.bytes, address.bytes + sizeof(address.bytes));
+    if (intAddress > 0 && intAddress < MAX_PRECOMPILED_ADDRESS)
+    {
+        auto addressUL = intAddress.convert_to<unsigned long>();
+        return getPrecompiled(addressUL);
     }
 
     return nullptr;

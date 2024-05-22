@@ -53,7 +53,7 @@ BOOST_AUTO_TEST_CASE(execute)
         BOOST_CHECK_EQUAL(receipt->contractAddress(), "e0e794ca86d198042b64285c5ce667aee747509b");
 
         // Set the value
-        bcos::codec::abi::ContractABICodec abiCodec(bcos::executor::GlobalHashImpl::g_hashImpl);
+        bcos::codec::abi::ContractABICodec abiCodec(*bcos::executor::GlobalHashImpl::g_hashImpl);
         auto input = abiCodec.abiIn("setInt(int256)", bcos::s256(10099));
         auto transaction2 = transactionFactory.createTransaction(
             0, std::string(receipt->contractAddress()), input, {}, 0, "", "", 0);
@@ -107,7 +107,7 @@ BOOST_AUTO_TEST_CASE(transientStorageTest)
         BOOST_CHECK_EQUAL(receipt->status(), 0);
 
         // test read and write transient storage
-        bcos::codec::abi::ContractABICodec abiCodec(bcos::executor::GlobalHashImpl::g_hashImpl);
+        bcos::codec::abi::ContractABICodec abiCodec(*bcos::executor::GlobalHashImpl::g_hashImpl);
         auto input = abiCodec.abiIn("storeIntTest(int256)", bcos::s256(10000));
         auto transaction2 = transactionFactory.createTransaction(
             0, std::string(receipt->contractAddress()), input, {}, 0, "", "", 0);
@@ -154,7 +154,7 @@ BOOST_AUTO_TEST_CASE(transientStorageContractTest)
         BOOST_CHECK_EQUAL(receipt->status(), 0);
 
         // test read and write transient storage
-        bcos::codec::abi::ContractABICodec abiCodec(bcos::executor::GlobalHashImpl::g_hashImpl);
+        bcos::codec::abi::ContractABICodec abiCodec(*bcos::executor::GlobalHashImpl::g_hashImpl);
         auto input = abiCodec.abiIn("checkAndVerifyIntValue(int256)", bcos::h256(12345));
         auto transaction2 = transactionFactory.createTransaction(
             0, std::string(receipt->contractAddress()), input, {}, 0, "", "", 0);

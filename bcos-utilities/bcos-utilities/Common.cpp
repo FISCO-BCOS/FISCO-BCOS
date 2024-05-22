@@ -18,8 +18,8 @@
  * @date 2021-02-24
  */
 
+#include "bcos-utilities/BoostLog.h"
 #define NOMINMAX
-
 #if defined(WIN32) || defined(WIN64) || defined(_WIN32) || defined(_WIN32_)
 #define _WIN32_WINNT 0x0601
 #include <windows.h>

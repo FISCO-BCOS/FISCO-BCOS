@@ -38,7 +38,7 @@ public:
     MockKeyPageStorage(bcos::crypto::Hash::Ptr hashImpl) : m_hashImpl(hashImpl)
     {
         auto pre = std::make_shared<MockTransactionalStorage>(hashImpl);
-        m_inner = std::make_shared<bcos::storage::KeyPageStorage>(std::move(pre));
+        m_inner = std::make_shared<bcos::storage::KeyPageStorage>(std::move(pre), false);
     }
 
     MockKeyPageStorage(bcos::crypto::Hash::Ptr hashImpl, uint32_t version,
@@ -47,7 +47,7 @@ public:
     {
         auto pre = std::make_shared<MockTransactionalStorage>(hashImpl);
         m_inner = std::make_shared<bcos::storage::KeyPageStorage>(
-            std::move(pre), 10240, version, _ignoreTables);
+            std::move(pre), false, 10240, version, _ignoreTables);
     }
 
     void asyncGetPrimaryKeys(std::string_view table,

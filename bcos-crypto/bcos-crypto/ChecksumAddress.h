@@ -64,7 +64,7 @@ inline void toCheckSumAddress(std::string& _hexAddress, crypto::Hash::Ptr _hashI
     toChecksumAddress(_hexAddress, _hashImpl->hash(_hexAddress).hex());
 }
 
-inline void toAddress(std::string& _hexAddress, [[maybe_unused]] crypto::Hash::Ptr _hashImpl)
+inline void toAddress(std::string& _hexAddress)
 {
     boost::algorithm::to_lower(_hexAddress);
     // toChecksumAddress(_hexAddress, _hashImpl->hash(_hexAddress).hex()); notice :
@@ -76,7 +76,7 @@ inline std::string toChecksumAddressFromBytes(
     const std::string_view& _AddressBytes, crypto::Hash::Ptr _hashImpl)
 {
     auto hexAddress = *toHexString(_AddressBytes);
-    toAddress(hexAddress, _hashImpl);
+    toAddress(hexAddress);
     return hexAddress;
 }
 
@@ -91,7 +91,7 @@ inline std::string newEVMAddress(
     hexAddress.reserve(40);
     boost::algorithm::hex(hash.data(), hash.data() + 20, std::back_inserter(hexAddress));
 
-    toAddress(hexAddress, _hashImpl);
+    toAddress(hexAddress);
 
     return hexAddress;
 }
@@ -108,7 +108,7 @@ inline std::string newEVMAddress(bcos::crypto::Hash::Ptr _hashImpl, const std::s
     hexAddress.reserve(40);
     boost::algorithm::hex(hash.data() + 12, hash.data() + 32, std::back_inserter(hexAddress));
 
-    toAddress(hexAddress, _hashImpl);
+    toAddress(hexAddress);
 
     return hexAddress;
 }

@@ -88,7 +88,7 @@ public:
     {
         auto hashesRange = inputs | RANGES::views::transform([&](auto const& input) {
             bcos::bytes hash;
-            bcos::concepts::hash::calculate(hasher.clone(), input, hash);
+            bcos::concepts::hash::calculate(input, hasher.clone(), hash);
             return hash;
         });
         auto buffersRange = inputs | RANGES::views::transform([](auto const& input) {

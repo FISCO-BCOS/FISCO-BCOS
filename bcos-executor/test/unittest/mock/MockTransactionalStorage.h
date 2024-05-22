@@ -16,7 +16,7 @@ class MockTransactionalStorage : public bcos::storage::TransactionalStorageInter
 public:
     MockTransactionalStorage(bcos::crypto::Hash::Ptr hashImpl) : m_hashImpl(std::move(hashImpl))
     {
-        m_inner = std::make_shared<bcos::storage::StateStorage>(nullptr);
+        m_inner = std::make_shared<bcos::storage::StateStorage>(nullptr, false);
         m_inner->setEnableTraverse(true);
     }
 

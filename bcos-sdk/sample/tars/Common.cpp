@@ -1,4 +1,5 @@
 #include "Common.h"
+#include "bcos-codec/abi/ContractABICodec.h"
 #include <chrono>
 
 constexpr static std::string_view HELLOWORLD_BYTECODE =
@@ -253,4 +254,14 @@ void bcos::sample::Collector::report()
     std::cout << "Send TPS: " << ((double)m_count / (double)sendElapsed) * 1000.0 << std::endl;
     std::cout << "Receive TPS: " << ((double)m_count / (double)receiveElapsed) * 1000.0
               << std::endl;
+}
+std::string bcos::sample::parseRevertMessage(
+    bcos::bytesConstRef output, bcos::crypto::Hash::Ptr hashImpl)
+{
+    auto data = output.getCroppedData(4);
+    bcos::codec::abi::ContractABICodec abiCodec(*hashImpl);
+
+    std::string message;
+    abiCodec.abiOut(data, message);
+    return message;
 }

@@ -16,3 +16,5 @@ target_include_directories(performanceQuery PUBLIC
         $<INSTALL_INTERFACE:include/bcos-codec>)
 target_link_libraries(performanceQuery PUBLIC ${BCOS_CPP_SDK_TARGET} ${TARS_PROTOCOL_TARGET} ${CODEC_TARGET} bcos-crypto bcos-boostssl bcos-utilities)
 
+add_executable(performanceTransfer20 performanceTransfer20.cpp Common.cpp)
+target_link_libraries(performanceTransfer20 PUBLIC ${BCOS_CPP_SDK_TARGET} ${TARS_PROTOCOL_TARGET} ${CODEC_TARGET} bcos-crypto bcos-boostssl bcos-utilities)

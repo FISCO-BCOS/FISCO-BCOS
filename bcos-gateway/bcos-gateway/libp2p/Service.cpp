@@ -153,7 +153,7 @@ void Service::heartBeat()
     m_timer->async_wait([self](const boost::system::error_code& error) {
         if (error)
         {
-            SERVICE_LOG(WARNING) << "timer canceled" << LOG_KV("errorCode", error);
+            SERVICE_LOG(WARNING) << "timer canceled" << LOG_KV("code", error);
             return;
         }
         auto service = self.lock();
@@ -271,8 +271,8 @@ void Service::onDisconnect(NetworkException e, P2PSession::Ptr p2pSession)
 
         if (e.errorCode() == P2PExceptionType::DuplicateSession)
             return;
-        SERVICE_LOG(WARNING) << LOG_DESC("onDisconnect") << LOG_KV("errorCode", e.errorCode())
-                             << LOG_KV("what", boost::diagnostic_information(e));
+        SERVICE_LOG(INFO) << LOG_DESC("onDisconnect") << LOG_KV("code", e.errorCode())
+                          << LOG_KV("what", boost::diagnostic_information(e));
         RecursiveGuard l(x_nodes);
         for (auto& it : m_staticNodes)
         {
@@ -359,9 +359,9 @@ void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message::P
 
         if (e.errorCode())
         {
-            SERVICE_LOG(WARNING) << LOG_DESC("disconnect error P2PSession")
-                                 << LOG_KV("p2pid", p2pID) << LOG_KV("endpoint", nodeIPEndpoint)
-                                 << LOG_KV("code", e.errorCode()) << LOG_KV("message", e.what());
+            SERVICE_LOG(INFO) << LOG_DESC("disconnect error P2PSession") << LOG_KV("p2pid", p2pID)
+                              << LOG_KV("endpoint", nodeIPEndpoint) << LOG_KV("code", e.errorCode())
+                              << LOG_KV("message", e.what());
 
             if (p2pSession)
             {
@@ -407,6 +407,16 @@ void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message::P
             return;
         }
 
+        if (message->packetType() == gateway::AMOPMessageType)
+        {
+            // AMOP May be disable by config.ini
+            SERVICE_LOG(DEBUG) << LOG_DESC("Unrecognized message type")
+                               << LOG_DESC(": AMOP is disabled!") << LOG_KV("seq", message->seq())
+                               << LOG_KV("packetType", packetType) << LOG_KV("ext", ext)
+                               << LOG_KV("version", version)
+                               << LOG_KV("dst p2p", p2pMessage->dstP2PNodeID());
+            return;
+        }
         SERVICE_LOG(ERROR) << LOG_DESC("Unrecognized message type") << LOG_KV("seq", message->seq())
                            << LOG_KV("packetType", packetType) << LOG_KV("ext", ext)
                            << LOG_KV("version", version)
@@ -524,7 +534,7 @@ void Service::asyncSendMessageByNodeID(
                 NetworkException e(-1, "send message failed for no network established");
                 callback(e, nullptr, nullptr);
             }
-            SERVICE_LOG(WARNING) << "Node inactive" << LOG_KV("nodeid", nodeID);
+            SERVICE_LOG(INFO) << "Node inactive" << LOG_KV("nodeid", nodeID);
         }
     }
     catch (std::exception& e)
@@ -632,9 +642,9 @@ void Service::asyncSendMessageByP2PNodeID(uint16_t _type, P2pID _dstNodeID, byte
             auto packetType = _p2pMessage ? _p2pMessage->packetType() : (uint16_t)0;
             if (_e.errorCode() != 0)
             {
-                SERVICE_LOG(WARNING) << LOG_DESC("asyncSendMessageByP2PNodeID error")
-                                     << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what())
-                                     << LOG_KV("type", packetType) << LOG_KV("dst", _dstNodeID);
+                SERVICE_LOG(INFO) << LOG_DESC("asyncSendMessageByP2PNodeID error")
+                                  << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what())
+                                  << LOG_KV("type", packetType) << LOG_KV("dst", _dstNodeID);
                 if (_callback)
                 {
                     _callback(

@@ -9,7 +9,6 @@
 #include <boost/filesystem.hpp>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
-#include <range/v3/view/enumerate.hpp>
 #include <string_view>
 
 using namespace bcos;
@@ -175,22 +174,36 @@ BOOST_AUTO_TEST_CASE(merge)
             rocksDB(*originRocksDB, StateKeyResolver{}, StateValueResolver{});
         co_await storage2::merge(rocksDB, memoryStorage);
 
-#if 0
-        auto seekIt = co_await rocksDB.seek(storage2::STORAGE_BEGIN);
+        auto seekIt = co_await storage2::range(rocksDB);
 
         int i = 0;
-        while (co_await seekIt.next())
+        while (auto keyValue = co_await seekIt.next())
         {
-            BOOST_CHECK(co_await seekIt.hasValue());
-
-            auto key = co_await seekIt.key();
-            auto& [tableName, keyName] = key;
-
-            auto value = co_await seekIt.value();
+            // auto&& [key, value] = *keyValue;
+            // auto [tableName, keyName] = StateKeyView(key);
+            // BOOST_CHECK_EQUAL(tableName, fmt::format("Table~{}", i % 10));
+            // BOOST_CHECK_EQUAL(keyName, fmt::format("Key~{}", i));
+            // BOOST_CHECK_EQUAL(
+            //     value.get(), fmt::format("Entry value is: i am a value!!!!!!! {}", i));
             ++i;
         }
         BOOST_CHECK_EQUAL(i, 100);
-#endif
+
+        StateKeyView seekKeyView{"Table~5"sv, "Key~5"sv};
+        auto seekIt2 = co_await storage2::range(rocksDB, seekKeyView);
+
+        int j = 54;
+        while (auto keyValue = co_await seekIt2.next())
+        {
+            // auto&& [key, value] = *keyValue;
+            // auto [tableName, keyName] = StateKeyView(key);
+            // BOOST_CHECK_EQUAL(tableName, fmt::format("Table~{}", j % 10));
+            // BOOST_CHECK_EQUAL(keyName, fmt::format("Key~{}", j));
+            // BOOST_CHECK_EQUAL(
+            //     value.get(), fmt::format("Entry value is: i am a value!!!!!!! {}", j));
+            ++j;
+        }
+        BOOST_CHECK_EQUAL(j, 100);
 
         co_return;
     }());

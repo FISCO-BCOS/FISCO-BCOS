@@ -73,7 +73,7 @@ public:
 
         auto originDataHash = std::move(transaction->mutableInner().dataHash);
         transaction->mutableInner().dataHash.clear();
-        transaction->calculateHash(m_cryptoSuite->hashImpl()->hasher());
+        transaction->calculateHash(*m_cryptoSuite->hashImpl());
 
         // check if hash matching
         if (checkHash && !originDataHash.empty() &&
@@ -155,7 +155,7 @@ public:
         inner.importTime = _importTime;
 
         // Update the hash field
-        bcos::concepts::hash::calculate(m_cryptoSuite->hashImpl()->hasher(), inner, inner.dataHash);
+        bcos::concepts::hash::calculate(inner, m_cryptoSuite->hashImpl()->hasher(), inner.dataHash);
 
         return transaction;
     }

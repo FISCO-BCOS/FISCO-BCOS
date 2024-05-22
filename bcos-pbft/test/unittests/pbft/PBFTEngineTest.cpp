@@ -20,7 +20,6 @@
  */
 #include "bcos-framework/bcos-framework/testutils/faker/FakeBlock.h"
 #include "bcos-framework/bcos-framework/testutils/faker/FakeBlockHeader.h"
-
 #include "test/unittests/pbft/PBFTFixture.h"
 #include "test/unittests/protocol/FakePBFTMessage.h"
 #include <bcos-crypto/hash/Keccak256.h>
@@ -179,7 +178,7 @@ BOOST_AUTO_TEST_CASE(testHandlePrePrepareMsg)
     block->encode(*blockData);
 
     // case1: invalid block number
-    auto hash = hashImpl->hash(std::string("invalidCase"));
+    auto hash = hashImpl->hash(bytesConstRef("invalidCase"));
     auto leaderMsgFixture =
         std::make_shared<PBFTMessageFixture>(cryptoSuite, leaderFaker->keyPair());
     auto index = (expectedIndex - 1);

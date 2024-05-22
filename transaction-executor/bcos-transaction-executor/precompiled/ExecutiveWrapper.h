@@ -1,17 +1,28 @@
 #pragma once
-#include "../Common.h"
+#include "../EVMCResult.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
+#include "bcos-crypto/ChecksumAddress.h"
+#include "bcos-executor/src/Common.h"
 #include "bcos-executor/src/executive/TransactionExecutive.h"
+#include "bcos-executor/src/vm/HostContext.h"
 #include <evmc/evmc.h>
 #include <memory>
+
+#define EXECUTIVE_WRAPPER(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTIVE_WRAPPER")
 
 namespace bcos::transaction_executor
 {
 
 inline std::shared_ptr<precompiled::Precompiled> getInnerPrecompiled(auto const& precompiled)
 {
-    return std::get<std::shared_ptr<precompiled::Precompiled>>(precompiled);
+    return std::get<std::shared_ptr<precompiled::Precompiled>>(precompiled.m_precompiled);
 }
+
+struct ErrorMessage
+{
+    uint8_t* buffer{};
+    size_t size{};
+};
 
 template <class T>
 concept ExternalCaller = std::is_invocable_r_v<EVMCResult, T, const evmc_message&>;
@@ -61,11 +72,23 @@ public:
     executor::CallParameters::UniquePtr externalCall(
         executor::CallParameters::UniquePtr input) override
     {
+        if (input->internalCreate)
+        {
+            if (input->codeAddress.empty())
+            {
+                input->codeAddress = bcos::newEVMAddress(
+                    m_hashImpl, m_blockContext->number(), m_contextID, seq() + 1);
+            }
+            EXECUTIVE_WRAPPER(TRACE) << "codeAddress:" << input->codeAddress;
+            auto tuple = create(std::move(input));
+            return std::move(std::get<1>(tuple));
+        }
+
         evmc_message evmcMessage{.kind = input->create ? EVMC_CREATE : EVMC_CALL,
-            .flags = 0,
+            .flags = input->staticCall ? static_cast<uint32_t>(EVMC_STATIC) : 0,
             .depth = 0,
             .gas = input->gas,
-            .recipient = toEvmC(input->receiveAddress),
+            .recipient = unhexAddress(input->receiveAddress),
             .destination_ptr = nullptr,
             .destination_len = 0,
             .sender = unhexAddress(input->senderAddress),
@@ -77,7 +100,12 @@ public:
             .create2_salt = toEvmC(0x0_cppui256),
             .code_address = unhexAddress(input->codeAddress)};
 
-        std::optional<std::tuple<std::string, bcos::bytes>> internalCallParams;
+        struct InternalCallParams
+        {
+            std::string precompiledContract;
+            bcos::bytes precompiledInput;
+        };
+        std::optional<InternalCallParams> internalCallParams;
         if (input->internalCall)
         {
             internalCallParams.emplace();
@@ -88,7 +116,6 @@ public:
             evmcMessage.input_data = precompiledInput.data();
             evmcMessage.input_size = precompiledInput.size();
         }
-
         auto result = m_externalCaller(evmcMessage);
 
         auto callResult =
@@ -97,6 +124,16 @@ public:
         callResult->status = result.status_code;
         callResult->gas = result.gas_left;
         callResult->data.assign(result.output_data, result.output_data + result.output_size);
+
+        if (result.status_code != 0)
+        {
+            if (auto* errorMessage = (ErrorMessage*)result.create_address.bytes;
+                errorMessage->buffer != nullptr && errorMessage->size > 0)
+            {
+                callResult->message.assign(
+                    errorMessage->buffer, errorMessage->buffer + errorMessage->size);
+            }
+        }
 
         return callResult;
     }

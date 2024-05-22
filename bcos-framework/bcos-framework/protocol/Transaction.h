@@ -27,10 +27,6 @@
 #include <bcos-utilities/ITTAPI.h>
 #endif
 #include <boost/throw_exception.hpp>
-#include <concepts>
-#include <shared_mutex>
-#include <span>
-#include <type_traits>
 #include <utility>
 
 namespace bcos::protocol

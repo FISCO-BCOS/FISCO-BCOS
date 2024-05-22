@@ -53,7 +53,7 @@ public:
         if (inner.dataHash.empty())
         {
             // Update the hash field
-            bcos::concepts::hash::calculate(m_hashImpl->hasher(), inner, inner.dataHash);
+            bcos::concepts::hash::calculate(inner, m_hashImpl->hasher(), inner.dataHash);
 
             BCOS_LOG(TRACE) << LOG_BADGE("createReceipt")
                             << LOG_DESC("recalculate receipt dataHash");
@@ -69,8 +69,8 @@ public:
 
     TransactionReceiptImpl::Ptr createReceipt(bcos::u256 const& gasUsed,
         std::string contractAddress, const std::vector<bcos::protocol::LogEntry>& logEntries,
-        int32_t status, bcos::bytesConstRef output, bcos::protocol::BlockNumber blockNumber,
-        bool withHash = true) const override
+        int32_t status, bcos::bytesConstRef output,
+        bcos::protocol::BlockNumber blockNumber) const override
     {
         auto transactionReceipt = std::make_shared<TransactionReceiptImpl>(
             [m_receipt = bcostars::TransactionReceipt()]() mutable { return &m_receipt; });
@@ -84,11 +84,7 @@ public:
         transactionReceipt->setLogEntries(logEntries);
         inner.data.blockNumber = blockNumber;
 
-        // Update the hash field
-        if (withHash)
-        {
-            bcos::concepts::hash::calculate(m_hashImpl->hasher(), inner, inner.dataHash);
-        }
+        bcos::concepts::hash::calculate(inner, m_hashImpl->hasher(), inner.dataHash);
         return transactionReceipt;
     }
 
@@ -112,10 +108,7 @@ public:
         inner.data.effectiveGasPrice = std::move(effectiveGasPrice);
 
         // Update the hash field
-        if (withHash)
-        {
-            bcos::concepts::hash::calculate(m_hashImpl->hasher(), inner, inner.dataHash);
-        }
+        bcos::concepts::hash::calculate(inner, m_hashImpl->hasher(), inner.dataHash);
         return transactionReceipt;
     }
 

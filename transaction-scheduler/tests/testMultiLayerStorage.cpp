@@ -1,11 +1,11 @@
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/Storage.h"
-#include "bcos-framework/transaction-executor/TransactionExecutor.h"
+#include "bcos-framework/transaction-executor/StateKey.h"
+#include "bcos-task/Wait.h"
 #include "bcos-transaction-scheduler/MultiLayerStorage.h"
-#include <bcos-task/Wait.h>
+#include "bcos-transaction-scheduler/ReadWriteSetStorage.h"
 #include <fmt/format.h>
 #include <boost/test/unit_test.hpp>
-#include <type_traits>
 
 using namespace bcos;
 using namespace bcos::storage2;
@@ -145,6 +145,58 @@ BOOST_AUTO_TEST_CASE(oneMutable)
 
     view1.reset();
     auto view4 = multiLayerStorage.fork(true);
+}
+
+BOOST_AUTO_TEST_CASE(rangeMulti)
+{
+    using MutableStorage =
+        memory_storage::MemoryStorage<int, int, memory_storage::Attribute(memory_storage::ORDERED)>;
+    using BackendStorage = memory_storage::MemoryStorage<int, int,
+        memory_storage::Attribute(memory_storage::ORDERED | memory_storage::LRU)>;
+
+    task::syncWait([]() -> task::Task<void> {
+        BackendStorage backendStorage;
+        co_await storage2::writeSome(
+            backendStorage, RANGES::views::iota(0, 4), RANGES::views::repeat(0));
+
+        MultiLayerStorage<MutableStorage, void, BackendStorage> myMultiLayerStorage(backendStorage);
+
+        myMultiLayerStorage.newMutable();
+        auto view1 = myMultiLayerStorage.fork(true);
+        co_await storage2::writeSome(view1, RANGES::views::iota(2, 6), RANGES::views::repeat(1));
+        view1.release();
+        myMultiLayerStorage.pushMutableToImmutableFront();
+
+        myMultiLayerStorage.newMutable();
+        auto view2 = myMultiLayerStorage.fork(true);
+        co_await storage2::writeSome(view2, RANGES::views::iota(4, 8), RANGES::views::repeat(2));
+
+        auto resultList = co_await storage2::readSome(view2, RANGES::views::iota(0, 8));
+        auto vecList = resultList | RANGES::views::transform([](auto input) { return *input; }) |
+                       RANGES::to<std::vector>();
+        BOOST_CHECK_EQUAL(resultList.size(), 8);
+        auto expectList = std::vector<int>({0, 0, 1, 1, 2, 2, 2, 2});
+        BOOST_CHECK_EQUAL_COLLECTIONS(
+            vecList.begin(), vecList.end(), expectList.begin(), expectList.end());
+
+        auto range = co_await storage2::range(view2);
+        auto i = 0;
+        std::vector<int> vecList2;
+        while (auto keyValue = co_await range.next())
+        {
+            auto& [key, value] = *keyValue;
+            std::cout << fmt::format("key: {}, value: {}\n", key, value);
+            BOOST_CHECK_EQUAL(key, i);
+            ++i;
+
+            vecList2.emplace_back(value);
+        }
+        BOOST_CHECK_EQUAL_COLLECTIONS(
+            vecList2.begin(), vecList2.end(), expectList.begin(), expectList.end());
+
+        ReadWriteSetStorage<decltype(view2), int> readWriteSetStorage(view2);
+        auto range2 = co_await storage2::range(readWriteSetStorage);
+    }());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

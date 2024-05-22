@@ -2,7 +2,6 @@
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
-#include "bcos-scheduler/test/mock/MockLedger.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
@@ -16,6 +15,7 @@
 #include <bcos-transaction-scheduler/BaselineScheduler.h>
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
 #include <boost/test/unit_test.hpp>
+#include <future>
 
 using namespace bcos;
 using namespace bcos::storage2;

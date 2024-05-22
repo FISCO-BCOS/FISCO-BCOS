@@ -1,9 +1,11 @@
 #include "bcos-framework/storage/Entry.h"
 #include "bcos-framework/storage2/Storage.h"
+#include "transaction-executor/StateKey.h"
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-task/Wait.h>
 #include <fmt/format.h>
 #include <boost/test/unit_test.hpp>
+#include <functional>
 
 using namespace bcos;
 using namespace bcos::storage2::memory_storage;
@@ -135,11 +137,11 @@ BOOST_AUTO_TEST_CASE(writeReadModifyRemove)
     }());
 }
 
-BOOST_AUTO_TEST_CASE(mru)
+BOOST_AUTO_TEST_CASE(lru)
 {
     task::syncWait([]() -> task::Task<void> {
-        MemoryStorage<int, storage::Entry, Attribute(ORDERED | MRU), std::hash<int>> storage(1);
-        storage.setMaxCapacity(1000);
+        MemoryStorage<int, storage::Entry, Attribute(ORDERED | LRU)> storage(1);
+        storage.setMaxCapacity(1040);
 
         // write 10 100byte value
         storage::Entry entry;
@@ -168,7 +170,12 @@ BOOST_AUTO_TEST_CASE(mru)
 
         // ensure all
         auto range = co_await storage2::range(storage);
-        BOOST_CHECK_EQUAL(range.size(), 10);
+        size_t count = 0;
+        while (co_await range.next())
+        {
+            ++count;
+        }
+        BOOST_CHECK_EQUAL(count, 10);
     }());
 }
 
@@ -193,18 +200,18 @@ BOOST_AUTO_TEST_CASE(logicalDeletion)
         // Query and check if deleted items
         int i = 0;
         auto values = co_await storage2::range(storage);
-        for (auto&& [i, tuple] : RANGES::views::enumerate(values))
+        while (auto item = co_await values.next())
         {
-            auto [key, value] = tuple;
-            if ((i + 2) % 2 == 0)
+            auto [key, value] = *item;
+            if (i % 2 == 0)
             {
                 BOOST_CHECK(!value);
             }
             else
             {
-                BOOST_CHECK(value);
                 BOOST_CHECK_EQUAL(value->get(), fmt::format("Item: {}", i));
             }
+            ++i;
         }
 
         co_return;
@@ -241,20 +248,20 @@ BOOST_AUTO_TEST_CASE(range)
         }
 
         auto seekRange = co_await storage2::range(storage);
-        BOOST_CHECK_EQUAL(RANGES::size(seekRange), 100);
-        for (auto&& [kv, num] : RANGES::views::zip(seekRange, RANGES::iota_view<size_t>(0)))
+        size_t num = 0;
+        while (auto kv = co_await seekRange.next())
         {
-            auto& [key, value] = kv;
-            BOOST_CHECK(key);
-            BOOST_CHECK(value);
-
-            auto& [tableName, keyName] = *key;
+            BOOST_CHECK(kv);
+            auto& [key, value] = *kv;
+            auto& [tableName, keyName] = key;
             // BOOST_CHECK_EQUAL(tableName, "table");
             // BOOST_CHECK_EQUAL(keyName, "key:" + boost::lexical_cast<std::string>(num));
             // BOOST_CHECK_EQUAL(value->get(), "Hello world!" +
             // boost::lexical_cast<std::string>(num));
             BOOST_CHECK_LT(num, 100);
+            ++num;
         }
+        BOOST_CHECK_EQUAL(num, 100);
     }());
 }
 
@@ -271,12 +278,13 @@ BOOST_AUTO_TEST_CASE(merge)
 
         co_await storage2::merge(storage1, storage2);
         auto values = co_await storage2::range(storage1);
-        BOOST_CHECK_EQUAL(RANGES::size(values), 19);
-        for (auto&& [i, tuple] : RANGES::views::enumerate(values))
+
+        int i = 0;
+        while (auto tuple = co_await values.next())
         {
-            auto [key, value] = tuple;
-            auto keyNum = *key;
-            auto valueNum = *value;
+            auto [key, value] = *tuple;
+            auto keyNum = key;
+            auto valueNum = value;
 
             BOOST_CHECK_EQUAL(keyNum, i);
             if (keyNum > 8)
@@ -287,8 +295,50 @@ BOOST_AUTO_TEST_CASE(merge)
             {
                 BOOST_CHECK_EQUAL(valueNum, 100);
             }
+            ++i;
         }
+        BOOST_CHECK_EQUAL(i, 19);
     }());
+}
+
+BOOST_AUTO_TEST_CASE(directDelete)
+{
+    task::syncWait([]() -> task::Task<void> {
+        MemoryStorage<int, int, bcos::storage2::memory_storage::LOGICAL_DELETION> storage;
+        co_await storage2::writeSome(
+            storage, RANGES::iota_view<int, int>(0, 10), RANGES::repeat_view<int>(100));
+
+        auto range1 = co_await storage2::range(storage);
+        int count1 = 0;
+        while (co_await range1.next())
+        {
+            ++count1;
+        }
+        BOOST_CHECK_EQUAL(count1, 10);
+
+        co_await storage2::removeOne(storage, 6, bcos::storage2::DIRECT);
+        auto range2 = co_await storage2::range(storage);
+        int count2 = 0;
+        while (co_await range2.next())
+        {
+            ++count2;
+        }
+        BOOST_CHECK_EQUAL(count2, 9);
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(keyComp)
+{
+    transaction_executor::StateKey key1("/tables/t_testV320", "type");
+    transaction_executor::StateKeyView key2("/tables/t_testV320", "type");
+
+    BOOST_CHECK(key1 == key2);
+    BOOST_CHECK(!(key1 > key2));
+    BOOST_CHECK(!(key1 < key2));
+
+    auto hash1 = std::hash<decltype(key1)>{}(key1);
+    auto hash2 = std::hash<decltype(key2)>{}(key2);
+    BOOST_CHECK_EQUAL(hash1, hash2);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

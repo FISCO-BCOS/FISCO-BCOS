@@ -188,6 +188,12 @@ void KeyPageStorage::asyncSetRow(std::string_view tableView, std::string_view ke
             BCOS_ERROR_UNIQUE_PTR(StorageError::ReadOnly, "Try to operate a read-only storage"));
         return;
     }
+
+    if (m_setRowWithDirtyFlag && entry.status() == Entry::NORMAL)
+    {
+        entry.setStatus(Entry::MODIFIED);
+    }
+
     m_writeLength += keyView.size();
     m_writeLength += entry.size();
     // if sys table, write cache and write to prev, return

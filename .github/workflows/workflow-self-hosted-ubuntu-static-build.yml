@@ -42,7 +42,7 @@ jobs:
 
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-01-10
+          toolchain: nightly-2024-02-25
           override: true
 
       - name: Reuse build cache

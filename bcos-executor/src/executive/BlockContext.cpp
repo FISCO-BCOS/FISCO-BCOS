@@ -21,12 +21,7 @@
 
 #include "BlockContext.h"
 #include "../vm/Precompiled.h"
-#include "ExecutiveStackFlow.h"
 #include "TransactionExecutive.h"
-#include "bcos-codec/abi/ContractABICodec.h"
-#include "bcos-executor/src/precompiled/common/Common.h"
-#include "bcos-executor/src/precompiled/common/Utilities.h"
-#include "bcos-framework/protocol/Exceptions.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-framework/storage/Table.h"
 #include "bcos-task/Wait.h"
@@ -65,22 +60,21 @@ BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> stora
         return;
     }
 
-    task::syncWait(m_features.readFromStorage(*m_storage, m_blockNumber));
+    task::syncWait(readFromStorage(m_features, *m_storage, m_blockNumber));
     setVMSchedule();
 }
 
 BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
-    LedgerCache::Ptr ledgerCache, crypto::Hash::Ptr _hashImpl,
-    protocol::BlockHeader::ConstPtr _current, bool _isWasm, bool _isAuthCheck,
-    storage::StorageInterface::Ptr backendStorage,
+    LedgerCache::Ptr ledgerCache, crypto::Hash::Ptr _hashImpl, protocol::BlockHeader const& current,
+    bool _isWasm, bool _isAuthCheck, storage::StorageInterface::Ptr backendStorage,
     std::shared_ptr<std::set<std::string, std::less<>>> _keyPageIgnoreTables)
-  : BlockContext(std::move(storage), std::move(ledgerCache), std::move(_hashImpl),
-        _current->number(), _current->hash(), _current->timestamp(), _current->version(), _isWasm,
-        _isAuthCheck, std::move(backendStorage))
+  : BlockContext(std::move(storage), std::move(ledgerCache), std::move(_hashImpl), current.number(),
+        current.hash(), current.timestamp(), current.version(), _isWasm, _isAuthCheck,
+        std::move(backendStorage))
 {
-    if (_current->number() > 0 && !_current->parentInfo().empty())
+    if (current.number() > 0 && !current.parentInfo().empty())
     {
-        auto view = _current->parentInfo();
+        auto view = current.parentInfo();
         auto it = view.begin();
         m_parentHash = (*it).blockHash;
     }
@@ -96,7 +90,7 @@ BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> stora
             if (entry)
             {
                 auto [value, enableNumber] = entry->getObject<ledger::SystemConfigEntry>();
-                if (_current->number() >= enableNumber)
+                if (current.number() >= enableNumber)
                 {
                     m_features.set(key);
                 }

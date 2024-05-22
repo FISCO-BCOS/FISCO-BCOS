@@ -24,9 +24,7 @@
 #include "ExecutiveFactory.h"
 #include "ExecutiveFlowInterface.h"
 #include "LedgerCache.h"
-#include "bcos-framework/executor/ExecutionMessage.h"
 #include "bcos-framework/ledger/Features.h"
-#include "bcos-framework/protocol/Block.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/storage/EntryCache.h"
@@ -34,10 +32,8 @@
 #include "bcos-table/src/StateStorage.h"
 #include "bcos-utilities/BucketMap.h"
 #include <tbb/concurrent_unordered_map.h>
-#include <atomic>
 #include <functional>
 #include <memory>
-#include <stack>
 #include <string_view>
 
 namespace bcos::executor
@@ -58,7 +54,7 @@ public:
 
     BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
         LedgerCache::Ptr ledgerCache, crypto::Hash::Ptr _hashImpl,
-        protocol::BlockHeader::ConstPtr _current, bool _isWasm, bool _isAuthCheck,
+        protocol::BlockHeader const& current, bool _isWasm, bool _isAuthCheck,
         storage::StorageInterface::Ptr backendStorage = nullptr,
         std::shared_ptr<std::set<std::string, std::less<>>> = nullptr);
 

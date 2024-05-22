@@ -1,5 +1,4 @@
 #include "Common.h"
-#include "bcos-cpp-sdk/tarsRPC/Handle.h"
 #include "bcos-cpp-sdk/tarsRPC/RPCClient.h"
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include "bcos-framework/protocol/Transaction.h"
@@ -58,7 +57,7 @@ std::vector<std::atomic_long> query(bcos::sdk::RPCClient& rpcClient,
     tbb::parallel_for(tbb::blocked_range(0LU, (size_t)userCount), [&](const auto& range) {
         for (auto it = range.begin(); it != range.end(); ++it)
         {
-            bcos::codec::abi::ContractABICodec abiCodec(cryptoSuite->hashImpl());
+            bcos::codec::abi::ContractABICodec abiCodec(*cryptoSuite->hashImpl());
             bcos::bytes input;
             if (contractAddress == DAG_TRANSFER_ADDRESS)
             {
@@ -96,7 +95,7 @@ std::vector<std::atomic_long> query(bcos::sdk::RPCClient& rpcClient,
             }
 
             auto output = receipt->output();
-            bcos::codec::abi::ContractABICodec abiCodec(cryptoSuite->hashImpl());
+            bcos::codec::abi::ContractABICodec abiCodec(*cryptoSuite->hashImpl());
             bcos::s256 balance;
             abiCodec.abiOut(output, balance);
 
@@ -119,7 +118,7 @@ int issue(bcos::sdk::RPCClient& rpcClient, std::shared_ptr<bcos::crypto::CryptoS
     tbb::parallel_for(tbb::blocked_range(0LU, (size_t)userCount), [&](const auto& range) {
         for (auto it = range.begin(); it != range.end(); ++it)
         {
-            bcos::codec::abi::ContractABICodec abiCodec(cryptoSuite->hashImpl());
+            bcos::codec::abi::ContractABICodec abiCodec(*cryptoSuite->hashImpl());
             bcos::bytes input;
             if (contractAddress == DAG_TRANSFER_ADDRESS)
             {
@@ -180,7 +179,7 @@ void perfQuery(bcos::sdk::RPCClient& rpcClient,
         {
             limiter.acquire(1);
             auto userIndex = it % userCount;
-            bcos::codec::abi::ContractABICodec abiCodec(cryptoSuite->hashImpl());
+            bcos::codec::abi::ContractABICodec abiCodec(*cryptoSuite->hashImpl());
             bcos::bytes input;
             if (contractAddress == DAG_TRANSFER_ADDRESS)
             {
@@ -218,7 +217,7 @@ void perfQuery(bcos::sdk::RPCClient& rpcClient,
             }
 
             auto output = receipt->output();
-            bcos::codec::abi::ContractABICodec abiCodec(cryptoSuite->hashImpl());
+            bcos::codec::abi::ContractABICodec abiCodec(*cryptoSuite->hashImpl());
             bcos::s256 balance;
             abiCodec.abiOut(output, balance);
 

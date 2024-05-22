@@ -19,7 +19,7 @@
  */
 
 #include "ReceiptBuilder.h"
-#include <bcos-tars-protocol/impl/TarsHashable.h>
+#include "bcos-tars-protocol/impl/TarsHashable.h"
 
 bcostars::ReceiptDataUniquePtr bcos::cppsdk::utilities::ReceiptBuilder::createReceiptData(
     const std::string& _gasUsed, const std::string& _contractAddress, const bcos::bytes& _output,
@@ -65,7 +65,7 @@ bcos::crypto::HashType bcos::cppsdk::utilities::ReceiptBuilder::calculateReceipt
         cryptoSuite = &*m_ecdsaCryptoSuite;
     }
     crypto::HashType receiptHash;
-    bcos::concepts::hash::calculate(cryptoSuite->hashImpl()->hasher(), _receiptData, receiptHash);
+    bcos::concepts::hash::calculate(_receiptData, cryptoSuite->hashImpl()->hasher(), receiptHash);
     return receiptHash;
 }
 

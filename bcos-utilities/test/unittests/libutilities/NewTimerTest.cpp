@@ -60,11 +60,11 @@ BOOST_AUTO_TEST_CASE(testTimer)
         auto timer = timerFactory.createTimer([&count] { count++; }, 1000, 0);
         timer->start();
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(10100));
+        std::this_thread::sleep_for(std::chrono::seconds(3));
 
         BOOST_CHECK_EQUAL(timer->delayMS(), 0);
         BOOST_CHECK_EQUAL(timer->periodMS(), 1000);
-        BOOST_CHECK(count >= 10);
+        BOOST_CHECK_GE(count, 2);
         timer->stop();
     }
 

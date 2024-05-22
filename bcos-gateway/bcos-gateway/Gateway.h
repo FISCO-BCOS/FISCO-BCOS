@@ -305,24 +305,42 @@ public:
     void asyncSendMessageByTopic(const std::string& _topic, bcos::bytesConstRef _data,
         std::function<void(bcos::Error::Ptr&&, int16_t, bytesPointer)> _respFunc) override
     {
-        m_amop->asyncSendMessageByTopic(_topic, _data, _respFunc);
+        if (m_amop)
+        {
+            m_amop->asyncSendMessageByTopic(_topic, _data, std::move(_respFunc));
+            return;
+        }
+        _respFunc(BCOS_ERROR_PTR(-1, "AMOP is not initialized"), 0, nullptr);
     }
     void asyncSendBroadcastMessageByTopic(
         const std::string& _topic, bcos::bytesConstRef _data) override
     {
-        m_amop->asyncSendBroadcastMessageByTopic(_topic, _data);
+        if (m_amop)
+        {
+            m_amop->asyncSendBroadcastMessageByTopic(_topic, _data);
+        }
     }
 
     void asyncSubscribeTopic(std::string const& _clientID, std::string const& _topicInfo,
         std::function<void(Error::Ptr&&)> _callback) override
     {
-        m_amop->asyncSubscribeTopic(_clientID, _topicInfo, _callback);
+        if (m_amop)
+        {
+            m_amop->asyncSubscribeTopic(_clientID, _topicInfo, std::move(_callback));
+            return;
+        }
+        _callback(BCOS_ERROR_PTR(-1, "AMOP is not initialized"));
     }
 
     void asyncRemoveTopic(std::string const& _clientID, std::vector<std::string> const& _topicList,
         std::function<void(Error::Ptr&&)> _callback) override
     {
-        m_amop->asyncRemoveTopic(_clientID, _topicList, _callback);
+        if (m_amop)
+        {
+            m_amop->asyncRemoveTopic(_clientID, _topicList, std::move(_callback));
+            return;
+        }
+        _callback(BCOS_ERROR_PTR(-1, "AMOP is not initialized"));
     }
 
     bcos::amop::AMOPImpl::Ptr amop() { return m_amop; }

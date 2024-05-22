@@ -42,7 +42,7 @@ public:
     virtual TransactionReceipt::Ptr createReceipt(bytes const& _receiptData) const = 0;
     virtual TransactionReceipt::Ptr createReceipt(u256 const& gasUsed, std::string contractAddress,
         const std::vector<LogEntry>& logEntries, int32_t status, bcos::bytesConstRef output,
-        BlockNumber blockNumber, bool withHash = true) const = 0;
+        BlockNumber blockNumber) const = 0;
     virtual TransactionReceipt::Ptr createReceipt2(u256 const& gasUsed, std::string contractAddress,
         const std::vector<LogEntry>& logEntries, int32_t status, bcos::bytesConstRef output,
         BlockNumber blockNumber, std::string effectiveGasPrice = "1",
