@@ -157,7 +157,7 @@ BOOST_AUTO_TEST_CASE(handleValidTest)
         auto response = onRPCRequestWrapper(request);
         validRespCheck(response);
         BOOST_CHECK(response["id"].asInt64() == 123);
-        BOOST_CHECK(fromQuantity(response["result"].asString()) == 20200);
+        BOOST_CHECK(fromQuantity(response["result"].asString()) == 0);
     }
 
     // method eth_mining

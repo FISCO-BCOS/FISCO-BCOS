@@ -132,6 +132,11 @@ inline uint64_t fromQuantity(std::string const& quantity)
     return std::stoull(quantity, nullptr, 16);
 }
 
+inline u256 fromBigQuantity(std::string_view quantity)
+{
+    return u256(quantity);
+}
+
 /**
  * @brief convert the specified bytes data into hex string
  *

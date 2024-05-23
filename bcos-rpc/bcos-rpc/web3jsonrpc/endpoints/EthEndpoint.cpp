@@ -74,12 +74,12 @@ task::Task<void> EthEndpoint::chainId(const Json::Value&, Json::Value& response)
         }
         catch (...)
         {
-            result = "0x4ee8";  // 20200
+            result = "0x0";  // 0x0 for default
         }
     }
     else
     {
-        result = "0x4ee8";  // 20200
+        result = "0x0";  // 0 for default
     }
     buildJsonContent(result, response);
     co_return;
@@ -223,8 +223,13 @@ task::Task<void> EthEndpoint::getTransactionCount(const Json::Value& request, Js
     std::string addressStr(address);
     boost::algorithm::to_lower(addressStr);
     // TODO)): blockNumber is ignored nowadays
-    // auto const blockTag = toView(request[1u]);
-    // auto [blockNumber, _] = co_await getBlockNumberByTag(blockTag);
+    auto const blockTag = toView(request[1u]);
+    auto [blockNumber, _] = co_await getBlockNumberByTag(blockTag);
+    if (c_fileLogLevel == TRACE)
+    {
+        WEB3_LOG(TRACE) << "eth_getTransactionCount" << LOG_KV("address", address)
+                        << LOG_KV("blockTag", blockTag) << LOG_KV("blockNumber", blockNumber);
+    }
     auto const ledger = m_nodeService->ledger();
     uint64_t nonce = 0;
     if (auto const entry = co_await ledger::getStorageAt(
@@ -526,6 +531,15 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
 {
     // params: transaction(TX), blockNumber(QTY|TAG)
     // result: gas(QTY)
+    auto const tx = request[0u];
+    auto const blockTag = toView(request[1u]);
+    auto [blockNumber, _] = co_await getBlockNumberByTag(blockTag);
+    if (c_fileLogLevel == TRACE)
+    {
+        WEB3_LOG(TRACE) << LOG_DESC("eth_estimateGas") << LOG_KV("tx", printJson(tx))
+                        << LOG_KV("blockTag", blockTag) << LOG_KV("blockNumber", blockNumber);
+    }
+    // FIXME)): fake now
     Json::Value result = "0x1";
     buildJsonContent(result, response);
     co_return;
@@ -743,7 +757,7 @@ task::Task<void> EthEndpoint::uninstallFilter(const Json::Value& request, Json::
 {
     // params: filterId(QTY)
     // result: success(Boolean)
-    auto const id = fromQuantity(std::string(toView(request[0U])));
+    auto const id = fromBigQuantity(toView(request[0U]));
     Json::Value result = co_await m_filterSystem->uninstallFilter(id);
     buildJsonContent(result, response);
     co_return;
@@ -752,7 +766,7 @@ task::Task<void> EthEndpoint::getFilterChanges(const Json::Value& request, Json:
 {
     // params: filterId(QTY)
     // result: logs(ARRAY)
-    auto const id = fromQuantity(std::string(toView(request[0U])));
+    auto const id = fromBigQuantity(toView(request[0U]));
     Json::Value result = co_await m_filterSystem->getFilterChanges(id);
     buildJsonContent(result, response);
     co_return;
@@ -761,7 +775,7 @@ task::Task<void> EthEndpoint::getFilterLogs(const Json::Value& request, Json::Va
 {
     // params: filterId(QTY)
     // result: logs(ARRAY)
-    auto const id = fromQuantity(std::string(toView(request[0U])));
+    auto const id = fromBigQuantity(toView(request[0U]));
     Json::Value result = co_await m_filterSystem->getFilterLogs(id);
     buildJsonContent(result, response);
     co_return;

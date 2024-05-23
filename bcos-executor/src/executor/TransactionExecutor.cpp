@@ -804,8 +804,8 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
         }
 
         // Create a temp storage
-        auto storage = createStateStorage(std::move(prev), true,
-            m_blockContext->features().get(ledger::Features::Flag::bugfix_set_row_with_dirty_flag));
+        auto storage =
+            createStateStorage(std::move(prev), true, false /*call storage no need set flag*/);
 
         // Create a temp block context
         blockContext = createBlockContextForCall(
