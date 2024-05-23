@@ -28,13 +28,13 @@ namespace bcos::storage2::rocksdb
 
 template <class ResolverType, class Item>
 concept Resolver = requires(ResolverType&& resolver) {
-                       {
-                           resolver.encode(std::declval<Item>())
-                       };
-                       {
-                           resolver.decode(std::string_view{})
-                           } -> std::convertible_to<Item>;
-                   };
+    {
+        resolver.encode(std::declval<Item>())
+    };
+    {
+        resolver.decode(std::string_view{})
+    } -> std::convertible_to<Item>;
+};
 
 // clang-format off
 struct RocksDBException : public bcos::Error {};

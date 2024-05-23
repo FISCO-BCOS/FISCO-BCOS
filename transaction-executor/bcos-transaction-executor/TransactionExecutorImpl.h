@@ -45,11 +45,20 @@ private:
             if (c_fileLogLevel <= LogLevel::TRACE)
             {
                 TRANSACTION_EXECUTOR_LOG(TRACE)
-                    << "Execte transaction: " << toHex(transaction.hash());
+                    << "Execute transaction: " << toHex(transaction.hash());
             }
 
             Rollbackable<std::decay_t<decltype(storage)>> rollbackableStorage(storage);
-            gasLimit = static_cast<int64_t>(std::get<0>(ledgerConfig.gasLimit()));
+            // create a transient storage
+            using MemoryStorageType =
+                bcos::storage2::memory_storage::MemoryStorage<bcos::transaction_executor::StateKey,
+                    bcos::transaction_executor::StateValue,
+                    bcos::storage2::memory_storage::Attribute(
+                        bcos::storage2::memory_storage::ORDERED |
+                        bcos::storage2::memory_storage::LOGICAL_DELETION)>;
+            MemoryStorageType transientStorage;
+            Rollbackable<MemoryStorageType> rollbackableTransientStorage(transientStorage);
+            auto gasLimit = static_cast<int64_t>(std::get<0>(ledgerConfig.gasLimit()));
             auto evmcMessage = newEVMCMessage(transaction, gasLimit);
 
             if (blockHeader.number() == 0 &&
@@ -59,10 +68,11 @@ private:
             }
 
             int64_t seq = 0;
-            HostContext<decltype(rollbackableStorage)> hostContext(rollbackableStorage, blockHeader,
-                evmcMessage, evmcMessage.sender, transaction.abi(), contextID, seq,
-                executor.m_precompiledManager, ledgerConfig, *executor.m_hashImpl,
-                std::forward<decltype(waitOperator)>(waitOperator));
+            HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
+                hostContext(rollbackableStorage, rollbackableTransientStorage, blockHeader,
+                    evmcMessage, evmcMessage.sender, transaction.abi(), contextID, seq,
+                    executor.m_precompiledManager, ledgerConfig, *executor.m_hashImpl,
+                    std::forward<decltype(waitOperator)>(waitOperator));
 
             waitOperator(hostContext.prepare());
             co_yield receipt;  // 完成第一步 Complete the first step

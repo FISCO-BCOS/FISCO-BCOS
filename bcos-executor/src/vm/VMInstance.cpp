@@ -20,10 +20,9 @@
  */
 
 #include "VMInstance.h"
-
 #include "HostContext.h"
-#include "evmone/advanced_analysis.hpp"
 #include "evmone/advanced_execution.hpp"
+#include "evmone/execution_state.hpp"
 #include <utility>
 
 using namespace std;
@@ -60,8 +59,8 @@ Result VMInstance::execute(HostContext& _hostContext, evmc_message* _msg)
         return Result(m_instance->execute(m_instance, _hostContext.interface, &_hostContext,
             m_revision, _msg, m_code.data(), m_code.size()));
     }
-    auto state = std::make_unique<evmone::advanced::AdvancedExecutionState>(
-        *_msg, m_revision, *_hostContext.interface, &_hostContext, m_code);
+    auto state = std::unique_ptr<evmone::ExecutionState>(new evmone::ExecutionState(
+        *_msg, m_revision, *_hostContext.interface, &_hostContext, m_code, {}));
     {                                             // baseline
         static auto* evm = evmc_create_evmone();  // baseline use the vm to get options
         return Result(evmone::baseline::execute(
@@ -76,6 +75,10 @@ evmc_revision toRevision(VMSchedule const& _schedule)
     if (_schedule.enablePairs)
     {
         return EVMC_PARIS;
+    }
+    if (_schedule.enableCanCun)
+    {
+        return EVMC_CANCUN;
     }
     return EVMC_LONDON;
 }

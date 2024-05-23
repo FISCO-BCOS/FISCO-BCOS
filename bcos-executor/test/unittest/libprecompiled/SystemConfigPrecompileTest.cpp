@@ -47,10 +47,9 @@ struct SystemConfigPrecompiledFixture : public bcos::test::PrecompiledFixture
     std::shared_ptr<StateStorage> backendStorage = std::make_shared<StateStorage>(nullptr, false);
     std::shared_ptr<StateStorage> stateStorage =
         std::make_shared<StateStorage>(backendStorage, false);
-    std::shared_ptr<BlockContext> blockContext =
-        std::make_shared<BlockContext>(stateStorage, ledgerCache, hashImpl, 0, h256(), utcTime(),
-            static_cast<uint32_t>(protocol::BlockVersion::V3_1_VERSION), FiscoBcosSchedule, false,
-            false, backendStorage);
+    std::shared_ptr<BlockContext> blockContext = std::make_shared<BlockContext>(stateStorage,
+        ledgerCache, hashImpl, 0, h256(), utcTime(),
+        static_cast<uint32_t>(protocol::BlockVersion::V3_1_VERSION), false, false, backendStorage);
     std::shared_ptr<MockTransactionExecutive> executive =
         std::make_shared<MockTransactionExecutive>(*blockContext, "", 100, 0, *gasInjector);
 };
@@ -114,8 +113,8 @@ BOOST_AUTO_TEST_CASE(getAndSetFeature)
         std::make_shared<LedgerCache>(std::make_shared<bcos::test::MockLedger>());
     std::shared_ptr<BlockContext> newBlockContext = std::make_shared<BlockContext>(
         executive->blockContext().storage(), ledgerCache, executive->blockContext().hashHandler(),
-        1, h256(), utcTime(), static_cast<uint32_t>(protocol::BlockVersion::V3_1_VERSION),
-        FiscoBcosSchedule, false, false, backendStorage);
+        1, h256(), utcTime(), static_cast<uint32_t>(protocol::BlockVersion::V3_1_VERSION), false,
+        false, backendStorage);
     std::shared_ptr<MockTransactionExecutive> newExecutive =
         std::make_shared<MockTransactionExecutive>(*newBlockContext, "", 100, 0, *gasInjector);
     setInput = codec.encodeWithSig("setValueByKey(string,string)",

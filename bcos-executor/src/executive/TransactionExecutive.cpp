@@ -218,6 +218,8 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
                              << LOG_KV("blockNumber", m_blockContext.number());
     }
     m_storageWrapper->setRecoder(m_recoder);
+    auto transientStorage = getTransientStateStorage(m_contextID);
+    transientStorage->setRecoder(m_transientRecoder);
     std::unique_ptr<HostContext> hostContext;
     CallParameters::UniquePtr callResults;
     if (c_fileLogLevel <= LogLevel::TRACE)
@@ -1391,6 +1393,8 @@ void TransactionExecutive::revert()
     }
 
     m_blockContext.storage()->rollback(*m_recoder);
+    auto transientStateStorage = getTransientStateStorage(m_contextID);
+    transientStateStorage->rollback(*m_transientRecoder);
     m_recoder->clear();
 }
 
@@ -1935,4 +1939,39 @@ std::string TransactionExecutive::getContractTableName(
     }
 
     return std::string(USER_APPS_PREFIX).append(formatAddress);
+}
+
+std::shared_ptr<storage::StateStorageInterface> TransactionExecutive::getTransientStateStorage(
+    int64_t contextID)
+{
+    auto transientStorageMap = blockContext().getTransientStorageMap();
+    bcos::storage::StateStorageInterface::Ptr transientStorage;
+    bool has;
+    {
+        tssMap::ReadAccessor::Ptr readAccessor;
+        has = transientStorageMap->find<tssMap::ReadAccessor>(readAccessor, contextID);
+        if (has)
+        {
+            transientStorage = readAccessor->value();
+        }
+    }
+    if (!has)
+    {
+        {
+            tssMap::WriteAccessor::Ptr writeAccessor;
+            auto hasWrite =
+                transientStorageMap->find<tssMap::WriteAccessor>(writeAccessor, contextID);
+
+            if (!hasWrite)
+            {
+                transientStorage = std::make_shared<bcos::storage::StateStorage>(nullptr, true);
+                transientStorageMap->insert(writeAccessor, {contextID, transientStorage});
+            }
+            else
+            {
+                transientStorage = writeAccessor->value();
+            }
+        }
+    }
+    return transientStorage;
 }

@@ -1,4 +1,6 @@
 #include "VMInstance.h"
+#include "bcos-transaction-executor/TransactionExecutorImpl.h"
+using bytes_view = std::basic_string_view<uint8_t>;
 
 bcos::transaction_executor::VMInstance::VMInstance(
     std::shared_ptr<evmone::baseline::CodeAnalysis const> instance) noexcept
@@ -10,20 +12,17 @@ bcos::transaction_executor::EVMCResult bcos::transaction_executor::VMInstance::e
     const evmc_message* msg, const uint8_t* code, size_t codeSize)
 {
     static auto const* evm = evmc_create_evmone();
-    static thread_local std::unique_ptr<evmone::advanced::AdvancedExecutionState>
-        localExecutionState;
+    static thread_local std::unique_ptr<evmone::ExecutionState> localExecutionState;
 
     auto executionState = std::move(localExecutionState);
     if (!executionState)
     {
-        executionState = std::make_unique<evmone::advanced::AdvancedExecutionState>();
+        executionState = std::make_unique<evmone::ExecutionState>();
     }
-
     executionState->reset(
-        *msg, rev, *host, context, std::basic_string_view<uint8_t>(code, codeSize));
+        *msg, rev, *host, context, std::basic_string_view<uint8_t>(code, codeSize), {});
     auto result = EVMCResult(evmone::baseline::execute(
         *static_cast<evmone::VM const*>(evm), msg->gas, *executionState, *m_instance));
-
     if (!localExecutionState)
     {
         localExecutionState = std::move(executionState);
