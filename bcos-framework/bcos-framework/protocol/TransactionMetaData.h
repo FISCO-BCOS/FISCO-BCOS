@@ -19,18 +19,18 @@
  * @date: 2021-08-20
  */
 #pragma once
-#include "Transaction.h"
-#include "TransactionSubmitResult.h"
-#include <bcos-crypto/interfaces/crypto/Hash.h>
-#include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 
-namespace bcos
-{
-namespace protocol
+#include "bcos-crypto/interfaces/crypto/CommonType.h"
+namespace bcos::protocol
 {
 class TransactionMetaData
 {
 public:
+    TransactionMetaData() = default;
+    TransactionMetaData(const TransactionMetaData&) = default;
+    TransactionMetaData(TransactionMetaData&&) = delete;
+    TransactionMetaData& operator=(const TransactionMetaData&) = default;
+    TransactionMetaData& operator=(TransactionMetaData&&) = delete;
     using Ptr = std::shared_ptr<TransactionMetaData>;
     using ConstPtr = std::shared_ptr<const TransactionMetaData>;
 
@@ -51,5 +51,4 @@ public:
 
 using TransactionMetaDataList = std::vector<TransactionMetaData::Ptr>;
 using TransactionMetaDataListPtr = std::shared_ptr<TransactionMetaDataList>;
-}  // namespace protocol
-}  // namespace bcos
+}  // namespace bcos::protocol

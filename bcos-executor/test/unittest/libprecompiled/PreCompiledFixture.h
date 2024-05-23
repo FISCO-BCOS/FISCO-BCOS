@@ -364,7 +364,7 @@ public:
         std::vector<Address> initGovernors({Address(admin)});
         std::vector<string32> weights({bcos::codec::toString32(h256(uint8_t(1)))});
         // bytes code + abi encode constructor params
-        codec::abi::ContractABICodec abi(hashImpl);
+        codec::abi::ContractABICodec abi(*hashImpl);
         bytes constructor = abi.abiIn("", initGovernors, weights,
             codec::toString32(h256(uint8_t(0))), codec::toString32(h256(uint8_t(0))));
         bytes input = code + constructor;

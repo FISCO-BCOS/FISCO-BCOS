@@ -18,6 +18,7 @@
  * @date 2021-05-24
  */
 
+#include "bcos-utilities/BoostLog.h"
 #include <bcos-cpp-sdk/rpc/Common.h>
 #include <bcos-cpp-sdk/rpc/JsonRpcRequest.h>
 #include <json/json.h>

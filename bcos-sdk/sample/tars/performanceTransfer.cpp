@@ -1,5 +1,4 @@
 #include "Common.h"
-#include "bcos-cpp-sdk/tarsRPC/Handle.h"
 #include "bcos-cpp-sdk/tarsRPC/RPCClient.h"
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include "bcos-framework/protocol/Transaction.h"
@@ -58,7 +57,7 @@ std::vector<std::atomic_long> query(bcos::sdk::RPCClient& rpcClient,
     tbb::parallel_for(tbb::blocked_range(0LU, (size_t)userCount), [&](const auto& range) {
         for (auto it = range.begin(); it != range.end(); ++it)
         {
-            bcos::codec::abi::ContractABICodec abiCodec(cryptoSuite->hashImpl());
+            bcos::codec::abi::ContractABICodec abiCodec(*cryptoSuite->hashImpl());
             bcos::bytes input;
             if (contractAddress == DAG_TRANSFER_ADDRESS)
             {
@@ -96,7 +95,7 @@ std::vector<std::atomic_long> query(bcos::sdk::RPCClient& rpcClient,
             }
 
             auto output = receipt->output();
-            bcos::codec::abi::ContractABICodec abiCodec(cryptoSuite->hashImpl());
+            bcos::codec::abi::ContractABICodec abiCodec(*cryptoSuite->hashImpl());
             bcos::s256 balance;
             abiCodec.abiOut(output, balance);
 
@@ -119,7 +118,7 @@ int issue(bcos::sdk::RPCClient& rpcClient, std::shared_ptr<bcos::crypto::CryptoS
     tbb::parallel_for(tbb::blocked_range(0LU, (size_t)userCount), [&](const auto& range) {
         for (auto it = range.begin(); it != range.end(); ++it)
         {
-            bcos::codec::abi::ContractABICodec abiCodec(cryptoSuite->hashImpl());
+            bcos::codec::abi::ContractABICodec abiCodec(*cryptoSuite->hashImpl());
             bcos::bytes input;
             if (contractAddress == DAG_TRANSFER_ADDRESS)
             {
@@ -184,7 +183,7 @@ int transfer(bcos::sdk::RPCClient& rpcClient,
             auto fromAddress = it % userCount;
             auto toAddress = ((it + (userCount / 2)) % userCount);
 
-            bcos::codec::abi::ContractABICodec abiCodec(cryptoSuite->hashImpl());
+            bcos::codec::abi::ContractABICodec abiCodec(*cryptoSuite->hashImpl());
             bcos::bytes input;
             if (contractAddress == DAG_TRANSFER_ADDRESS)
             {
@@ -232,10 +231,9 @@ int transfer(bcos::sdk::RPCClient& rpcClient,
     return 0;
 }
 
-#if __cpp_lib_jthread
-void loopFetchBlockNumber(std::stop_token& token, bcos::sdk::RPCClient& rpcClient)
+void loopFetchBlockNumber(bcos::sdk::RPCClient& rpcClient, boost::atomic_flag const& stopFlag)
 {
-    while (!token.stop_requested())
+    while (!stopFlag.test())
     {
         try
         {
@@ -248,23 +246,6 @@ void loopFetchBlockNumber(std::stop_token& token, bcos::sdk::RPCClient& rpcClien
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
 }
-#else
-void loopFetchBlockNumber(bcos::sdk::RPCClient& rpcClient)
-{
-    while (true)
-    {
-        try
-        {
-            blockNumber = bcos::sdk::BlockNumber(rpcClient).send().get();
-        }
-        catch (std::exception& e)
-        {
-            std::cout << boost::diagnostic_information(e);
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    }
-}
-#endif
 
 int main(int argc, char* argv[])
 {
@@ -275,7 +256,8 @@ int main(int argc, char* argv[])
             << " <connectionString> <solidity/precompiled> <userCount> <transactionCount> <qps>"
             << std::endl
             << "Example: " << argv[0]
-            << " \"fiscobcos.rpc.RPCObj@tcp -h 127.0.0.1 -p 20021\" 100 1000 0 " << std::endl;
+            << " solidity \"fiscobcos.rpc.RPCObj@tcp -h 127.0.0.1 -p 20021\" 100 1000 0 "
+            << std::endl;
 
         return 1;
     }
@@ -291,12 +273,8 @@ int main(int argc, char* argv[])
         .timeoutMs = 600000,
     };
     bcos::sdk::RPCClient rpcClient(config);
-#if __cpp_lib_jthread
-    std::jthread getBlockNumber(
-        [&](std::stop_token token) { loopFetchBlockNumber(token, rpcClient); });
-#else
-    std::thread getBlockNumber([&]() { loopFetchBlockNumber(rpcClient); });
-#endif
+    boost::atomic_flag stopFlag{};
+    std::thread getBlockNumber([&]() { loopFetchBlockNumber(rpcClient, stopFlag); });
     auto cryptoSuite =
         std::make_shared<bcos::crypto::CryptoSuite>(std::make_shared<bcos::crypto::Keccak256>(),
             std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr);
@@ -338,10 +316,7 @@ int main(int argc, char* argv[])
             exit(1);
         }
     }
-#if __cpp_lib_jthread
-    getBlockNumber.request_stop();
-#else
+    stopFlag.test_and_set();
     getBlockNumber.join();
-#endif
     return 0;
 }

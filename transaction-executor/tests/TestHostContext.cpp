@@ -1,12 +1,12 @@
 #include "../bcos-transaction-executor/precompiled/PrecompiledManager.h"
 #include "../bcos-transaction-executor/vm/HostContext.h"
-#include "../bcos-transaction-executor/vm/VMInstance.h"
 #include "TestBytecode.h"
 #include "TestMemoryStorage.h"
 #include "bcos-codec/bcos-codec/abi/ContractABICodec.h"
 #include "bcos-crypto/interfaces/crypto/CryptoSuite.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-executor/src/Common.h"
+#include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/GenesisConfig.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-ledger/src/libledger/Ledger.h"
@@ -18,7 +18,6 @@
 #include "bcos-task/Wait.h"
 #include "bcos-tool/VersionConverter.h"
 #include "bcos-transaction-executor/RollbackableStorage.h"
-#include "bcos-transaction-executor/vm/VMFactory.h"
 #include "bcos-utilities/FixedBytes.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
@@ -91,17 +90,17 @@ public:
                 bcos::task::syncWait);
         syncWait(hostContext.prepare());
         auto result = syncWait(hostContext.execute());
-
         BOOST_REQUIRE_EQUAL(result.status_code, 0);
 
         helloworldAddress = result.create_address;
+        BCOS_LOG(INFO) << "Hello world address: " << bcos::address2HexString(helloworldAddress);
     }
 
-    template <class... Arg>
-    Task<EVMCResult> call(std::string_view abi, evmc_address sender, Arg const&... args)
+    Task<EVMCResult> call(
+        const evmc_address& address, std::string_view abi, evmc_address sender, auto&&... args)
     {
-        bcos::codec::abi::ContractABICodec abiCodec(bcos::executor::GlobalHashImpl::g_hashImpl);
-        auto input = abiCodec.abiIn(std::string(abi), args...);
+        bcos::codec::abi::ContractABICodec abiCodec(*bcos::executor::GlobalHashImpl::g_hashImpl);
+        auto input = abiCodec.abiIn(std::string(abi), std::forward<decltype(args)>(args)...);
 
         bcostars::protocol::BlockHeaderImpl blockHeader(
             [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
@@ -115,7 +114,7 @@ public:
             .flags = 0,
             .depth = 0,
             .gas = 1000000,
-            .recipient = helloworldAddress,
+            .recipient = address,
             .destination_ptr = nullptr,
             .destination_len = 0,
             .sender = sender,
@@ -125,7 +124,7 @@ public:
             .input_size = input.size(),
             .value = {},
             .create2_salt = {},
-            .code_address = helloworldAddress};
+            .code_address = address};
         evmc_address origin = {};
 
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
@@ -136,6 +135,20 @@ public:
         auto result = co_await hostContext.execute();
 
         co_return result;
+    }
+
+    Task<EVMCResult> call(
+        const bcos::Address& address, std::string_view abi, evmc_address sender, auto&&... args)
+    {
+        evmc_address evmcAddress{};
+        std::copy(address.begin(), address.end(), evmcAddress.bytes);
+        co_return co_await call(evmcAddress, abi, sender, std::forward<decltype(args)>(args)...);
+    }
+
+    Task<EVMCResult> call(std::string_view abi, evmc_address sender, auto&&... args)
+    {
+        co_return co_await call(
+            helloworldAddress, abi, sender, std::forward<decltype(args)>(args)...);
     }
 };
 
@@ -158,11 +171,11 @@ BOOST_AUTO_TEST_CASE(bits)
 BOOST_AUTO_TEST_CASE(simpleCall)
 {
     syncWait([this]() -> Task<void> {
-        auto result = co_await call(std::string("getInt()"), {});
+        auto result = co_await call("getInt()", {});
 
         BOOST_CHECK_EQUAL(result.status_code, 0);
         bcos::s256 getIntResult = -1;
-        bcos::codec::abi::ContractABICodec abiCodec(bcos::executor::GlobalHashImpl::g_hashImpl);
+        bcos::codec::abi::ContractABICodec abiCodec(*bcos::executor::GlobalHashImpl::g_hashImpl);
         abiCodec.abiOut(bcos::bytesConstRef(result.output_data, result.output_size), getIntResult);
         BOOST_CHECK_EQUAL(getIntResult, 0);
 
@@ -184,7 +197,7 @@ BOOST_AUTO_TEST_CASE(executeAndCall)
         BOOST_CHECK_EQUAL(result3.status_code, 0);
         BOOST_CHECK_EQUAL(result4.status_code, 0);
         bcos::s256 getIntResult = -1;
-        bcos::codec::abi::ContractABICodec abiCodec(bcos::executor::GlobalHashImpl::g_hashImpl);
+        bcos::codec::abi::ContractABICodec abiCodec(*bcos::executor::GlobalHashImpl::g_hashImpl);
         abiCodec.abiOut(
             bcos::bytesConstRef(result2.output_data, result2.output_size), getIntResult);
         BOOST_CHECK_EQUAL(getIntResult, 10000);
@@ -204,7 +217,7 @@ BOOST_AUTO_TEST_CASE(contractDeploy)
 
         BOOST_CHECK_EQUAL(result.status_code, 0);
         bcos::s256 getIntResult = -1;
-        bcos::codec::abi::ContractABICodec abiCodec(bcos::executor::GlobalHashImpl::g_hashImpl);
+        bcos::codec::abi::ContractABICodec abiCodec(*bcos::executor::GlobalHashImpl::g_hashImpl);
         abiCodec.abiOut(bcos::bytesConstRef(result.output_data, result.output_size), getIntResult);
         BOOST_CHECK_EQUAL(getIntResult, 999);
 
@@ -225,7 +238,7 @@ BOOST_AUTO_TEST_CASE(createTwice)
 BOOST_AUTO_TEST_CASE(failure)
 {
     syncWait([this]() -> Task<void> {
-        bcos::codec::abi::ContractABICodec abiCodec(bcos::executor::GlobalHashImpl::g_hashImpl);
+        bcos::codec::abi::ContractABICodec abiCodec(*bcos::executor::GlobalHashImpl::g_hashImpl);
 
         auto result1 = co_await call("returnRequire()", {});
         BOOST_CHECK_EQUAL(result1.status_code, 2);
@@ -253,7 +266,7 @@ BOOST_AUTO_TEST_CASE(failure)
 BOOST_AUTO_TEST_CASE(delegateCall)
 {
     syncWait([this]() -> Task<void> {
-        bcos::codec::abi::ContractABICodec abiCodec(bcos::executor::GlobalHashImpl::g_hashImpl);
+        bcos::codec::abi::ContractABICodec abiCodec(*bcos::executor::GlobalHashImpl::g_hashImpl);
 
         evmc_address sender = bcos::unhexAddress("0x0000000000000000000000000000000000000050");
         auto result1 = co_await call("delegateCall()", sender);
@@ -323,7 +336,7 @@ BOOST_AUTO_TEST_CASE(precompiled)
     blockHeader.mutableInner().data.version = (int)bcos::protocol::BlockVersion::V3_5_VERSION;
     blockHeader.calculateHash(*bcos::executor::GlobalHashImpl::g_hashImpl);
 
-    bcos::codec::abi::ContractABICodec abiCodec(bcos::executor::GlobalHashImpl::g_hashImpl);
+    bcos::codec::abi::ContractABICodec abiCodec(*bcos::executor::GlobalHashImpl::g_hashImpl);
     {
         auto input = abiCodec.abiIn("initBfs()");
         auto address = bcos::Address(0x100e);
@@ -351,7 +364,7 @@ BOOST_AUTO_TEST_CASE(precompiled)
                 origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
                 bcos::task::syncWait);
         syncWait(hostContext.prepare());
-        auto result = syncWait(hostContext.execute());
+        BOOST_CHECK_NO_THROW(auto result = syncWait(hostContext.execute()));
     }
 
     std::optional<EVMCResult> result;
@@ -383,13 +396,82 @@ BOOST_AUTO_TEST_CASE(precompiled)
                 origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
                 bcos::task::syncWait);
         syncWait(hostContext.prepare());
-        result.emplace(syncWait(hostContext.execute()));
+        BOOST_CHECK_THROW(result.emplace(syncWait(hostContext.execute())),
+            bcos::transaction_executor::NotFoundCodeError);
+
+
+        auto& features = const_cast<bcos::ledger::Features&>(ledgerConfig.features());
+        features.set(bcos::ledger::Features::Flag::feature_sharding);
+        HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
+            hostContext2(rollbackableStorage, rollbackableTransientStorage, blockHeader, message,
+                origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
+                bcos::task::syncWait);
+        syncWait(hostContext2.prepare());
+        BOOST_CHECK_NO_THROW(result.emplace(syncWait(hostContext2.execute())));
     }
 
     BOOST_CHECK_EQUAL(result->status_code, 0);
     bcos::s256 getIntResult = -1;
     abiCodec.abiOut(bcos::bytesConstRef(result->output_data, result->output_size), getIntResult);
     BOOST_CHECK_EQUAL(getIntResult, 0);
+}
+
+BOOST_AUTO_TEST_CASE(nestConstructor)
+{
+    syncWait([this]() -> Task<void> {
+        auto result1 = co_await call("deployWithDeploy()", {});
+
+        BOOST_REQUIRE_EQUAL(result1.status_code, 0);
+        bcos::Address address1{};
+        bcos::codec::abi::ContractABICodec abiCodec(*hashImpl);
+        abiCodec.abiOut(bcos::bytesConstRef(result1.output_data, result1.output_size), address1);
+        BOOST_REQUIRE_NE(address1, bcos::Address{});
+
+        auto result2 = co_await call(address1, "all()", {});
+        std::vector<bcos::Address> addresses;
+        bcos::codec::abi::ContractABICodec abiCodec2(*hashImpl);
+        abiCodec2.abiOut(bcos::bytesConstRef(result2.output_data, result2.output_size), addresses);
+
+        BOOST_REQUIRE_EQUAL(addresses.size(), 10);
+        for (auto& address2 : addresses)
+        {
+            BOOST_CHECK_NE(address2, bcos::Address{});
+            auto result3 = co_await call(address1, "get(address)", {}, address2);
+
+            bcos::codec::abi::ContractABICodec abiCodec3(*hashImpl);
+            bcos::s256 num;
+            abiCodec3.abiOut(
+                bcos::bytesConstRef(result3.output_data, result3.output_size), addresses);
+        }
+
+        co_return;
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(codeSize)
+{
+    syncWait([this]() -> Task<void> {
+        bcostars::protocol::BlockHeaderImpl blockHeader(
+            [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+        blockHeader.setVersion(static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_3_VERSION));
+
+        static std::atomic_int64_t number = 0;
+        blockHeader.setNumber(number++);
+        blockHeader.calculateHash(*hashImpl);
+
+        evmc_message message{};
+
+        HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
+            codeSizeHostContext(rollbackableStorage, rollbackableTransientStorage, blockHeader,
+                message, {}, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
+                bcos::task::syncWait);
+
+        auto builtinAddress = bcos::unhexAddress("0000000000000000000000000000000000000001");
+        auto size = co_await codeSizeHostContext.codeSizeAt(builtinAddress);
+        BOOST_CHECK_EQUAL(size, 0);
+
+        co_return;
+    }());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

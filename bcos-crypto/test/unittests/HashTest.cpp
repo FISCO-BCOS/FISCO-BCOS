@@ -51,7 +51,7 @@ BOOST_AUTO_TEST_CASE(testKeccak256)
         {
             totolCount -= 1;
             auto data = "abcde" + std::to_string(totolCount.load());
-            keccak256->hash(data);
+            keccak256->hash(bytesConstRef(data));
         }
     });
     while (totolCount > 0)
@@ -64,7 +64,7 @@ BOOST_AUTO_TEST_CASE(testKeccak256)
 
     std::string hashData = "abcde";
 
-    ts = keccak256->hash(hashData).hex();
+    ts = keccak256->hash(bytesConstRef(hashData)).hex();
     BOOST_CHECK_EQUAL(
         ts, std::string("6377c7e66081cb65e473c1b95db5195a27d04a7108b468890224bedbe1a8a6eb"));
 
@@ -86,7 +86,7 @@ BOOST_AUTO_TEST_CASE(testSM3)
         ts, std::string("1ab21d8355cfa17f8e61194831e81a8f22bec8c728fefb747ed035eb5082aa2b"));
 
     std::string hashData = "abcde";
-    ts = sm3->hash(hashData).hex();
+    ts = sm3->hash(bytesConstRef(hashData)).hex();
     BOOST_CHECK_EQUAL(
         ts, std::string("afe4ccac5ab7d52bcae36373676215368baf52d3905e1fecbe369cc120e97628"));
 
@@ -109,7 +109,7 @@ BOOST_AUTO_TEST_CASE(testSha3)
         ts, std::string("a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a"));
 
     std::string hashData = "abcde";
-    ts = sha3->hash(hashData).hex();
+    ts = sha3->hash(bytesConstRef(hashData)).hex();
     BOOST_CHECK_EQUAL(
         ts, std::string("d716ec61e18904a8f58679b71cb065d4d5db72e0e0c3f155a4feff7add0e58eb"));
 

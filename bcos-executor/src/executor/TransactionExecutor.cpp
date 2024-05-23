@@ -404,7 +404,7 @@ BlockContext::Ptr TransactionExecutor::createBlockContext(
         backend = m_cachedStorage;
     }
     BlockContext::Ptr context = make_shared<BlockContext>(storage, m_ledgerCache, m_hashImpl,
-        currentHeader, m_isWasm, m_isAuthCheck, std::move(backend), m_keyPageIgnoreTables);
+        *currentHeader, m_isWasm, m_isAuthCheck, std::move(backend), m_keyPageIgnoreTables);
     context->setVMFactory(m_vmFactory);
     if (f_onNeedSwitchEvent)
     {
@@ -456,13 +456,17 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
             bcos::storage::StateStorageInterface::Ptr stateStorage;
             if (m_stateStorages.empty())
             {
+                auto withDirtyFlag =
+                    m_blockContext ? m_blockContext->features().get(
+                                         ledger::Features::Flag::bugfix_set_row_with_dirty_flag) :
+                                     false;
                 if (m_cachedStorage)
                 {
-                    stateStorage = createStateStorage(m_cachedStorage);
+                    stateStorage = createStateStorage(m_cachedStorage, false, withDirtyFlag);
                 }
                 else
                 {
-                    stateStorage = createStateStorage(m_backendStorage);
+                    stateStorage = createStateStorage(m_backendStorage, false, withDirtyFlag);
                 }
 
                 // check storage block Number
@@ -506,7 +510,9 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
                 }
 
                 prev.storage->setReadOnly(true);
-                stateStorage = createStateStorage(prev.storage);
+                stateStorage = createStateStorage(prev.storage, false,
+                    m_blockContext->features().get(
+                        ledger::Features::Flag::bugfix_set_row_with_dirty_flag));
             }
 
             if (m_blockContext)
@@ -629,7 +635,8 @@ void TransactionExecutor::dmcCall(bcos::protocol::ExecutionMessage::UniquePtr in
         }
 
         // Create a temp storage
-        auto storage = createStateStorage(std::move(prev), true);
+        auto storage = createStateStorage(std::move(prev), true,
+            m_blockContext->features().get(ledger::Features::Flag::bugfix_set_row_with_dirty_flag));
 
         // Create a temp block context
         blockContext = createBlockContextForCall(
@@ -798,7 +805,8 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
         }
 
         // Create a temp storage
-        auto storage = createStateStorage(std::move(prev), true);
+        auto storage = createStateStorage(std::move(prev), true,
+            m_blockContext->features().get(ledger::Features::Flag::bugfix_set_row_with_dirty_flag));
 
         // Create a temp block context
         blockContext = createBlockContextForCall(
@@ -1983,7 +1991,9 @@ void TransactionExecutor::getCode(
         std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
         if (!m_stateStorages.empty())
         {
-            stateStorage = createStateStorage(m_stateStorages.back().storage, true);
+            stateStorage = createStateStorage(m_stateStorages.back().storage, true,
+                m_blockContext->features().get(
+                    ledger::Features::Flag::bugfix_set_row_with_dirty_flag));
         }
     }
     // create temp state storage
@@ -1991,11 +2001,15 @@ void TransactionExecutor::getCode(
     {
         if (m_cachedStorage)
         {
-            stateStorage = createStateStorage(m_cachedStorage, true);
+            stateStorage = createStateStorage(m_cachedStorage, true,
+                m_blockContext->features().get(
+                    ledger::Features::Flag::bugfix_set_row_with_dirty_flag));
         }
         else
         {
-            stateStorage = createStateStorage(m_backendStorage, true);
+            stateStorage = createStateStorage(m_backendStorage, true,
+                m_blockContext->features().get(
+                    ledger::Features::Flag::bugfix_set_row_with_dirty_flag));
         }
     }
 
@@ -2072,10 +2086,20 @@ void TransactionExecutor::getCode(
                 }
 
                 auto code = entry->getField(0);
-                EXECUTOR_NAME_LOG(INFO) << "Get code success" << LOG_KV("code size", code.size());
-
-                auto codeBytes = bcos::bytes(code.begin(), code.end());
-                callback(nullptr, std::move(codeBytes));
+                if (m_blockContext->features().get(
+                        ledger::Features::Flag::bugfix_eoa_as_contract) &&
+                    bcos::precompiled::isDynamicPrecompiledAccountCode(code))
+                {
+                    EXECUTOR_NAME_LOG(DEBUG) << "Get eoa code success, return empty code to evm";
+                    callback(nullptr, bcos::bytes());
+                }
+                else
+                {
+                    EXECUTOR_NAME_LOG(DEBUG)
+                        << "Get code success" << LOG_KV("code size", code.size());
+                    auto codeBytes = bcos::bytes(code.begin(), code.end());
+                    callback(nullptr, std::move(codeBytes));
+                }
             });
         return;
     }
@@ -2101,7 +2125,9 @@ void TransactionExecutor::getABI(
         std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
         if (!m_stateStorages.empty())
         {
-            stateStorage = createStateStorage(m_stateStorages.back().storage, true);
+            stateStorage = createStateStorage(m_stateStorages.back().storage, true,
+                m_blockContext->features().get(
+                    ledger::Features::Flag::bugfix_set_row_with_dirty_flag));
         }
     }
     // create temp state storage
@@ -2109,11 +2135,15 @@ void TransactionExecutor::getABI(
     {
         if (m_cachedStorage)
         {
-            stateStorage = createStateStorage(m_cachedStorage, true);
+            stateStorage = createStateStorage(m_cachedStorage, true,
+                m_blockContext->features().get(
+                    ledger::Features::Flag::bugfix_set_row_with_dirty_flag));
         }
         else
         {
-            stateStorage = createStateStorage(m_backendStorage, true);
+            stateStorage = createStateStorage(m_backendStorage, true,
+                m_blockContext->features().get(
+                    ledger::Features::Flag::bugfix_set_row_with_dirty_flag));
         }
     }
 
@@ -2809,10 +2839,10 @@ void TransactionExecutor::executeTransactionsWithCriticals(
 }
 
 bcos::storage::StateStorageInterface::Ptr TransactionExecutor::createStateStorage(
-    bcos::storage::StorageInterface::Ptr storage, bool ignoreNotExist)
+    bcos::storage::StorageInterface::Ptr storage, bool ignoreNotExist, bool setRowWithDirtyFlag)
 {
-    auto stateStorage = m_stateStorageFactory->createStateStorage(
-        std::move(storage), m_blockVersion, ignoreNotExist, m_keyPageIgnoreTables);
+    auto stateStorage = m_stateStorageFactory->createStateStorage(std::move(storage),
+        m_blockVersion, setRowWithDirtyFlag, ignoreNotExist, m_keyPageIgnoreTables);
     return stateStorage;
 }
 

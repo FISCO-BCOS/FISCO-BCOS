@@ -22,8 +22,7 @@
  */
 
 #pragma once
-#include "../Common.h"
-#include "bcos-executor/src/Common.h"
+#include "../EVMCResult.h"
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Overloaded.h>
 #include <evmc/evmc.h>
@@ -32,7 +31,6 @@
 #include <evmone/advanced_execution.hpp>
 #include <evmone/baseline.hpp>
 #include <evmone/vm.hpp>
-#include <variant>
 
 namespace bcos::transaction_executor
 {

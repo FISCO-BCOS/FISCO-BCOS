@@ -24,24 +24,20 @@
  * @date 2021-10-23
  */
 
-#include <bcos-tars-protocol/impl/TarsSerializable.h>
-
+#include "Initializer.h"
 #include "AuthInitializer.h"
 #include "BfsInitializer.h"
-#include "ExecutorInitializer.h"
-#include "Initializer.h"
 #include "LedgerInitializer.h"
 #include "SchedulerInitializer.h"
 #include "StorageInitializer.h"
-#include "bcos-crypto/hasher/OpenSSLHasher.h"
 #include "bcos-executor/src/executor/SwitchExecutorManager.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-scheduler/src/TarsExecutorManager.h"
 #include "bcos-storage/RocksDBStorage.h"
-#include "bcos-tool/BfsFileFactory.h"
+#include "bcos-task/Wait.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include "libinitializer/BaselineSchedulerInitializer.h"
-#include "rocksdb/statistics.h"
+#include "libinitializer/ProPBFTInitializer.h"
 #include <bcos-crypto/hasher/AnyHasher.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
@@ -60,13 +56,13 @@
 #include <bcos-table/src/KeyPageStorage.h>
 #include <bcos-table/src/StateStorageFactory.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
+#include <bcos-tars-protocol/impl/TarsSerializable.h>
 #include <bcos-tars-protocol/protocol/ExecutionMessageImpl.h>
 #include <bcos-tool/LedgerConfigFetcher.h>
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-tool/NodeTimeMaintenance.h>
 #include <util/tc_clientsocket.h>
 #include <memory>
-#include <type_traits>
 #include <vector>
 
 using namespace bcos;
@@ -244,6 +240,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         auto existsRocksDB = std::dynamic_pointer_cast<storage::RocksDBStorage>(storage);
 
         auto baselineSchedulerConfig = m_nodeConfig->baselineSchedulerConfig();
+        task::syncWait(transaction_scheduler::BaselineSchedulerInitializer::checkRequirements(
+            *ledger, !m_nodeConfig->genesisConfig().m_isSerialExecute,
+            m_nodeConfig->genesisConfig().m_isWasm));
         std::tie(m_baselineSchedulerHolder, m_setBaselineSchedulerBlockNumberNotifier) =
             transaction_scheduler::BaselineSchedulerInitializer::build(existsRocksDB->rocksDB(),
                 m_protocolInitializer->blockFactory(), m_txpoolInitializer->txpool(),

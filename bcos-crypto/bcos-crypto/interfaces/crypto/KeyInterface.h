@@ -19,8 +19,9 @@
  * @date 2021-04-02
  */
 #pragma once
-#include <bcos-utilities/Common.h>
+#include "bcos-utilities/Common.h"
 #include <memory>
+#include <set>
 
 namespace bcos::crypto
 {

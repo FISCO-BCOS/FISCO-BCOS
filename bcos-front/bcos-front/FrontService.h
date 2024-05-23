@@ -25,6 +25,7 @@
 #include <bcos-framework/gateway/GroupNodeInfo.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/ThreadPool.h>
+#include <oneapi/tbb/task_arena.h>
 #include <oneapi/tbb/task_group.h>
 #include <boost/asio.hpp>
 #include <utility>
@@ -268,6 +269,7 @@ protected:
     virtual void protocolNegotiate(bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo);
 
 private:
+    tbb::task_arena m_taskArena;
     tbb::task_group m_asyncGroup;
     // timer
     std::shared_ptr<boost::asio::io_service> m_ioService;

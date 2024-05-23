@@ -12,10 +12,7 @@
 #include <boost/format.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
-#include <exception>
 #include <iterator>
-#include <memory>
-#include <span>
 #include <stdexcept>
 #include <type_traits>
 

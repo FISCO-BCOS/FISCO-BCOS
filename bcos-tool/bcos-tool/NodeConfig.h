@@ -120,6 +120,7 @@ public:
     std::string const& password() const { return m_password; }
 
     size_t minSealTime() const { return m_minSealTime; }
+    bool allowFreeNodeSync() const { return m_allowFreeNode; }
     size_t checkPointTimeoutInterval() const { return m_checkPointTimeoutInterval; }
     size_t pipelineSize() const { return m_pipelineSize; }
 
@@ -305,6 +306,20 @@ protected:
 
 private:
     void loadGenesisFeatures(boost::property_tree::ptree const& ptree);
+    void loadAlloc(boost::property_tree::ptree const& ptree)
+    {
+        if (auto node = ptree.get_child_optional("alloc"))
+        {
+            for (const auto& it : *node)
+            {
+                auto flag = it.first;
+                auto enableNumber = it.second.get_value<bool>();
+                m_genesisConfig.m_features.emplace_back(
+                    ledger::FeatureSet{.flag = ledger::Features::string2Flag(flag),
+                        .enable = static_cast<int>(enableNumber)});
+            }
+        }
+    }
 
     bcos::consensus::ConsensusNodeListPtr parseConsensusNodeList(
         boost::property_tree::ptree const& _pt, std::string const& _sectionName,
@@ -329,6 +344,7 @@ private:
 
     // sealer configuration
     size_t m_minSealTime = 0;
+    bool m_allowFreeNode = false;
     size_t m_checkPointTimeoutInterval;
     size_t m_pipelineSize = 50;
 

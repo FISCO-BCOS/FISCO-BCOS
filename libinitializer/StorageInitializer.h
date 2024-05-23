@@ -24,11 +24,11 @@
  */
 #pragma once
 #include "bcos-storage/RocksDBStorage.h"
+#ifdef WITH_TIKV
 #include "bcos-storage/TiKVStorage.h"
-#include "boost/filesystem.hpp"
+#endif
 #include "rocksdb/convenience.h"
 #include "rocksdb/filter_policy.h"
-#include "rocksdb/write_batch.h"
 #include <bcos-framework/security/DataEncryptInterface.h>
 #include <bcos-framework/storage/StorageInterface.h>
 

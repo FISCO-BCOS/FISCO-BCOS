@@ -486,8 +486,8 @@ void Gateway::onReceiveBroadcastMessage(
     // Readonly filter
     if (m_readonlyFilter && !filter(*m_readonlyFilter, groupID, moduleID, bytesConstRef{}))
     {
-        GATEWAY_LOG(WARNING) << "BroadcastMessage moduleID: " << moduleID
-                             << " filter by readOnlyFilter";
+        GATEWAY_LOG(INFO) << "BroadcastMessage moduleID: " << moduleID
+                          << " filter by readOnlyFilter";
         return;
     }
 

@@ -149,6 +149,14 @@ BOOST_AUTO_TEST_CASE(ecrecoverInvalidInputLenTest2)
     BOOST_CHECK(addressBytes.empty());  // but return empty
 }
 
+BOOST_AUTO_TEST_CASE(fixedArray)
+{
+    std::string_view lhs{"0000000000000000000000000000000000010003"};
+    evmc_address address = unhexAddress(lhs);
+    auto fixedArray = bcos::address2FixedArray(address);
+    std::string_view rhs(fixedArray.data(), fixedArray.size());
+    BOOST_CHECK_EQUAL(lhs, rhs);
+}
 
 BOOST_AUTO_TEST_SUITE_END()
 

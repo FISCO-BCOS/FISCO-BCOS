@@ -581,6 +581,7 @@ void NodeConfig::loadSecurityConfig(boost::property_tree::ptree const& _pt)
 void NodeConfig::loadSealerConfig(boost::property_tree::ptree const& _pt)
 {
     m_minSealTime = checkAndGetValue(_pt, "consensus.min_seal_time", "500");
+    m_allowFreeNode = _pt.get<bool>("sync.allow_free_node", false);
     if (m_minSealTime <= 0 || m_minSealTime > DEFAULT_MAX_SEAL_TIME_MS)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
@@ -732,8 +733,7 @@ void NodeConfig::loadOthersConfig(boost::property_tree::ptree const& _pt)
 
     m_tarsRPCConfig.host = _pt.get<std::string>("rpc.tars_rpc_host", "127.0.0.1");
     m_tarsRPCConfig.port = _pt.get<int>("rpc.tars_rpc_port", 0);
-    m_tarsRPCConfig.threadCount =
-        _pt.get<int>("rpc.tars_rpc_thread_count", std::thread::hardware_concurrency());
+    m_tarsRPCConfig.threadCount = _pt.get<int>("rpc.tars_rpc_thread_count", 8);
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadOthersConfig") << LOG_KV("sendTxTimeout", m_sendTxTimeout)
                          << LOG_KV("vmCacheSize", m_vmCacheSize);
@@ -1021,8 +1021,9 @@ void bcos::tool::NodeConfig::loadGenesisFeatures(boost::property_tree::ptree con
         {
             auto flag = it.first;
             auto enableNumber = it.second.get_value<bool>();
-            m_genesisConfig.m_features.emplace_back(ledger::FeatureSet{
-                .flag = ledger::Features::string2Flag(flag), .enable = enableNumber});
+            m_genesisConfig.m_features.emplace_back(
+                ledger::FeatureSet{.flag = ledger::Features::string2Flag(flag),
+                    .enable = static_cast<int>(enableNumber)});
         }
     }
 }

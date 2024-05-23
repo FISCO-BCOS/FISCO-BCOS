@@ -682,7 +682,10 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         {
             gatewayNodeManager =
                 std::make_shared<GatewayNodeManager>(_config->uuid(), pubHex, keyFactory, service);
-            amop = buildLocalAMOP(service, pubHex);
+            if (!_config->readonly())
+            {
+                amop = buildLocalAMOP(service, pubHex);
+            }
         }
         else
         {
@@ -697,8 +700,25 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
                 gatewayNodeManager = std::make_shared<ProGatewayNodeManager>(
                     _config->uuid(), pubHex, keyFactory, service);
             }
-            amop = buildAMOP(service, pubHex);
+
+            if (!_config->readonly())
+            {
+                amop = buildAMOP(service, pubHex);
+            }
+            else
+            {
+                // register a null amop message handler
+                service->registerHandlerByMsgType(GatewayMessageType::AMOPMessageType,
+                    [](const bcos::gateway::NetworkException& _e,
+                        const bcos::gateway::P2PSession::Ptr& session,
+                        const std::shared_ptr<bcos::gateway::P2PMessage>& message) {
+                        // 只读模式下, 不处理其它节点的amop消息
+                        // In read-only mode, AMOP messages from other nodes are not processed
+                        return;
+                    });
+            }
         }
+
 
         std::shared_ptr<ratelimiter::GatewayRateLimiter> gatewayRateLimiter;
         if (_config->rateLimiterConfig().enable)
@@ -710,6 +730,10 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         // init Gateway
         auto gateway = std::make_shared<Gateway>(
             _config, service, gatewayNodeManager, amop, gatewayRateLimiter, _gatewayServiceName);
+        if (_config->readonly())
+        {
+            gateway->enableReadOnlyMode();
+        }
         auto gatewayNodeManagerWeakPtr = std::weak_ptr<GatewayNodeManager>(gatewayNodeManager);
         // register disconnect handler
         service->registerDisconnectHandler(

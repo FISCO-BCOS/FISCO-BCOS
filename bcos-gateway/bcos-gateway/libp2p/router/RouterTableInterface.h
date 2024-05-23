@@ -20,6 +20,7 @@
 #pragma once
 #include <bcos-utilities/Common.h>
 #include <memory>
+#include <set>
 namespace bcos
 {
 namespace gateway

@@ -21,13 +21,10 @@
 
 #pragma once
 #include "VMInstance.h"
-#include "bcos-framework/storage2/MemoryStorage.h"
+#include "bcos-utilities/Error.h"
 #include <evmone/evmone.h>
 #include <boost/throw_exception.hpp>
 #include <memory>
-#include <string>
-#include <tuple>
-#include <vector>
 
 namespace bcos::transaction_executor
 {

@@ -18,9 +18,6 @@
  */
 #pragma once
 #include <bcos-utilities/Log.h>
-#include <signal.h>
-#include <memory>
-#include <string>
 
 #define METRIC LOG_BADGE("METRIC")
 

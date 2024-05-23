@@ -5,7 +5,7 @@
 #include <type_traits>
 #include <variant>
 
-namespace bcos::sdk
+namespace bcos::sdk::async
 {
 
 template <class Handle>
@@ -23,16 +23,8 @@ public:
     Handle await_resume() { return std::move(*m_handle); }
 };
 
-class CoRPCClient
-{
-private:
-    RPCClient& m_rpcClient;
-
-public:
-    CoRPCClient(RPCClient& rpcClient);
-
-    Awaitable<SendTransaction> sendTransaction(const bcos::protocol::Transaction& transaction);
-    Awaitable<Call> call(const bcos::protocol::Transaction& transaction);
-    Awaitable<BlockNumber> blockNumber();
-};
-}  // namespace bcos::sdk
+Awaitable<SendTransaction> sendTransaction(
+    RPCClient& rpcClient, const bcos::protocol::Transaction& transaction);
+Awaitable<Call> call(RPCClient& rpcClient, const bcos::protocol::Transaction& transaction);
+Awaitable<BlockNumber> blockNumber(RPCClient& rpcClient);
+}  // namespace bcos::sdk::async

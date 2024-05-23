@@ -482,7 +482,17 @@ bcos::bytes HostContext::externalCodeRequest(const std::string_view& address)
     request->codeAddress = addressBytesStr2String(address);
     request->staticCall = staticCall();
     auto response = m_executive->externalCall(std::move(request));
-    return std::move(response->data);
+
+    if (m_executive->blockContext().features().get(
+            ledger::Features::Flag::bugfix_eoa_as_contract) &&
+        precompiled::isDynamicPrecompiledAccountCode(fromBytes(response->data)))
+    {
+        return bytes();
+    }
+    else
+    {
+        return std::move(response->data);
+    }
 }
 
 size_t HostContext::codeSizeAt(const std::string_view& address)
@@ -608,38 +618,8 @@ void HostContext::setTransientStorage(const evmc_bytes32* key, const evmc_bytes3
     Entry entry;
     entry.importFields({std::move(valueBytes)});
 
-    auto transientStorageMap = m_executive->blockContext().getTransientStorageMap();
-    using TSMap = bcos::BucketMap<int64_t, std::shared_ptr<storage::StateStorageInterface>>;
-    bcos::storage::StateStorageInterface::Ptr transientStorage;
-
-    bool has;
-    {
-        TSMap::ReadAccessor::Ptr readAccessor;
-        has =
-            transientStorageMap->find<TSMap::ReadAccessor>(readAccessor, m_executive->contextID());
-        if (has)
-        {
-            transientStorage = readAccessor->value();
-        }
-    }
-    if (!has)
-    {
-        {
-            TSMap::WriteAccessor::Ptr writeAccessor;
-            auto hasWrite = transientStorageMap->find<TSMap::WriteAccessor>(
-                writeAccessor, m_executive->contextID());
-            if (!hasWrite)  // if not another write access, create a new one
-            {
-                transientStorage = std::make_shared<bcos::storage::StateStorage>(nullptr);
-                transientStorageMap->insert(
-                    writeAccessor, {m_executive->contextID(), transientStorage});
-            }
-            else  // if another write access, use the same storage
-            {
-                transientStorage = writeAccessor->value();
-            }
-        }
-    }
+    bcos::storage::StateStorageInterface::Ptr transientStorage =
+        m_executive->getTransientStateStorage(m_executive->contextID());
 
     transientStorage->asyncSetRow(m_tableName, keyView, std::move(entry), [](auto&& error) {
         if (error)

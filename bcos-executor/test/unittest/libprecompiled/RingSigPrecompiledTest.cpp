@@ -113,7 +113,7 @@ BOOST_AUTO_TEST_CASE(TestRingSigVerify)
     RingSigPrecompiledFixture fixture;
     auto hashImpl = fixture.m_hashImpl;
 
-    bcos::codec::abi::ContractABICodec abi(hashImpl);
+    bcos::codec::abi::ContractABICodec abi(*hashImpl);
     bytes in = abi.abiIn("ringSigVerify(string,string,string)", signature, message1, paramInfo);
 
 
@@ -148,7 +148,7 @@ BOOST_AUTO_TEST_CASE(ErrorFunc)
     auto executive = fixture.m_executive;
     auto ringSigPrecompiled = fixture.m_ringSigPrecompiled;
 
-    bcos::codec::abi::ContractABICodec abi(hashImpl);
+    bcos::codec::abi::ContractABICodec abi(*hashImpl);
     bytes in = abi.abiIn("ringSigVerify(string)", std::string("2AE3FFE2"));
     auto parameters = std::make_shared<PrecompiledExecResult>();
     parameters->m_input = bytesConstRef(in.data(), in.size());
@@ -169,7 +169,7 @@ BOOST_AUTO_TEST_CASE(InvalidInputs)
     auto ringSigPrecompiled = fixture.m_ringSigPrecompiled;
 
     // situation1
-    bcos::codec::abi::ContractABICodec abi(hashImpl);
+    bcos::codec::abi::ContractABICodec abi(*hashImpl);
     bytes in = abi.abiIn("ringSigVerify(string,string,string)", std::string("2AE3FFE2"),
         std::string("2AE3FFE2"), std::string("2AE3FFE2"));
     auto parameters = std::make_shared<PrecompiledExecResult>();

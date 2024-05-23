@@ -8,7 +8,7 @@ println("Notice: current gradle version is " + gradle.gradleVersion)
 
 allprojects {
     group = 'org.fisco-bcos'
-    version = '3.7.0'
+    version = '3.7.3'
 
     apply plugin: 'maven-publish'
     apply plugin: 'java'

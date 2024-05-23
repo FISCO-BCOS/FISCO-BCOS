@@ -42,9 +42,9 @@ public:
     ~ContractShardUtilsTestFixture() override = default;
 
 
-    StorageWrapper storage =
-        StorageWrapper(std::make_shared<bcos::storage::StateStorage>(PrecompiledFixture::storage),
-            std::make_shared<storage::Recoder>());
+    StorageWrapper storage = StorageWrapper(
+        std::make_shared<bcos::storage::StateStorage>(PrecompiledFixture::storage, false),
+        std::make_shared<storage::Recoder>());
 };
 
 BOOST_FIXTURE_TEST_SUITE(ContractShardUtilsTest, ContractShardUtilsTestFixture)

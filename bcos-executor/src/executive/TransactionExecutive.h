@@ -205,7 +205,7 @@ protected:
 
     void writeErrInfoToOutput(std::string const& errInfo, CallParameters& _callParameters)
     {
-        bcos::codec::abi::ContractABICodec abi(m_hashImpl);
+        bcos::codec::abi::ContractABICodec abi(*m_hashImpl);
         auto codecOutput = abi.abiIn("Error(string)", errInfo);
         _callParameters.data = std::move(codecOutput);
     }

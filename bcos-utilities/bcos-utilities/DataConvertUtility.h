@@ -22,10 +22,10 @@
 #include "Error.h"
 #include <boost/algorithm/hex.hpp>
 #include <boost/throw_exception.hpp>
-#include <boost/utility/string_view.hpp>
 #include <algorithm>
 #include <cstring>
 #include <iterator>
+#include <set>
 #include <string>
 #include <type_traits>
 #include <unordered_set>
@@ -44,12 +44,6 @@ Out toHex(const Binary& binary, std::string_view prefix = std::string_view())
     {
         out.insert(out.end(), prefix.begin(), prefix.end());
     }
-
-    if (binary.empty())
-    {
-        return out;
-    }
-
     boost::algorithm::hex_lower(binary.begin(), binary.end(), std::back_inserter(out));
     return out;
 }

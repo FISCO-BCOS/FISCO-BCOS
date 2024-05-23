@@ -21,7 +21,6 @@
 #pragma once
 #include "Transaction.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
-
 #include <utility>
 
 namespace bcos::protocol
@@ -52,7 +51,8 @@ public:
         std::string maxPriorityFeePerGas = "") = 0;
     Transaction::Ptr createTransaction(int32_t _version, std::string _to, bytes const& _input,
         std::string const& _nonce, int64_t _blockLimit, std::string _chainId, std::string _groupId,
-        int64_t _importTime, const bcos::crypto::KeyPairInterface::Ptr& keyPair, std::string _abi = "")
+        int64_t _importTime, const bcos::crypto::KeyPairInterface::Ptr& keyPair,
+        std::string _abi = "")
     {
         return createTransaction(_version, std::move(_to), _input, _nonce, _blockLimit,
             std::move(_chainId), std::move(_groupId), _importTime, *keyPair, std::move(_abi));

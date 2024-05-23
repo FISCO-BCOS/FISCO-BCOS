@@ -20,6 +20,8 @@
 
 #pragma once
 #include <bcos-cpp-sdk/utilities/logger/LogInitializer.h>
+#include <boost/algorithm/string/predicate.hpp>
+#include <boost/algorithm/string/trim.hpp>
 
 #define UTILITIES_ABI_LOG(LEVEL) BCOS_LOG(LEVEL) << "[UTILITIES][ABI]"
 #define UTILITIES_TX_LOG(LEVEL) BCOS_LOG(LEVEL) << "[UTILITIES][TX]"

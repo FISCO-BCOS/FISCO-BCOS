@@ -428,7 +428,8 @@ void BlockSync::onPeerStatus(NodeIDPtr _nodeID, BlockSyncMsgInterface::Ptr _sync
     // receive peer not exist in the group
     // Note: only should reject syncStatus from the node whose blockNumber falling behind of this
     // node
-    if (!m_config->existsInGroup(_nodeID) && _syncMsg->number() <= m_config->blockNumber())
+    if (!m_allowFreeNode && !m_config->existsInGroup(_nodeID) &&
+        _syncMsg->number() <= m_config->blockNumber())
     {
         return;
     }
@@ -461,7 +462,7 @@ void BlockSync::onPeerBlocksRequest(NodeIDPtr _nodeID, BlockSyncMsgInterface::Pt
                       << LOG_KV("size", blockRequest->size())
                       << LOG_KV("interval", blockRequest->blockInterval());
     auto peerStatus = m_syncStatus->peerStatus(_nodeID);
-    if (!peerStatus && m_config->existsInGroup(_nodeID))
+    if (!peerStatus && (m_config->existsInGroup(_nodeID) || m_allowFreeNode))
     {
         BLKSYNC_LOG(INFO) << LOG_BADGE("Download") << LOG_BADGE("onPeerBlocksRequest")
                           << LOG_DESC(
