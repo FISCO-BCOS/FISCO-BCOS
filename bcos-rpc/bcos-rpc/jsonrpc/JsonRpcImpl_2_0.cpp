@@ -1466,31 +1466,31 @@ void JsonRpcImpl_2_0::newFilter(
 void JsonRpcImpl_2_0::uninstallFilter(
     std::string_view _groupID, std::string_view filterID, RespFunc _respFunc)
 {
-    task::wait([](JsonRpcImpl_2_0* self, std::string_view groupID, uint64_t id,
+    task::wait([](JsonRpcImpl_2_0* self, std::string_view groupID, u256 id,
                    RespFunc respFunc) -> task::Task<void> {
         Json::Value jRes = co_await self->filterSystem().uninstallFilter(groupID, id);
         respFunc(nullptr, jRes);
-    }(this, _groupID, fromQuantity(std::string(filterID)), std::move(_respFunc)));
+    }(this, _groupID, fromBigQuantity(filterID), std::move(_respFunc)));
 }
 
 void JsonRpcImpl_2_0::getFilterChanges(
     std::string_view _groupID, std::string_view filterID, RespFunc _respFunc)
 {
-    task::wait([](JsonRpcImpl_2_0* self, std::string_view groupID, uint64_t id,
+    task::wait([](JsonRpcImpl_2_0* self, std::string_view groupID, u256 id,
                    RespFunc respFunc) -> task::Task<void> {
         Json::Value jRes = co_await self->filterSystem().getFilterChanges(groupID, id);
         respFunc(nullptr, jRes);
-    }(this, _groupID, fromQuantity(std::string(filterID)), std::move(_respFunc)));
+    }(this, _groupID, fromBigQuantity(filterID), std::move(_respFunc)));
 }
 
 void JsonRpcImpl_2_0::getFilterLogs(
     std::string_view _groupID, std::string_view filterID, RespFunc _respFunc)
 {
-    task::wait([](JsonRpcImpl_2_0* self, std::string_view groupID, uint64_t id,
+    task::wait([](JsonRpcImpl_2_0* self, std::string_view groupID, u256 id,
                    RespFunc respFunc) -> task::Task<void> {
         Json::Value jRes = co_await self->filterSystem().getFilterLogs(groupID, id);
         respFunc(nullptr, jRes);
-    }(this, _groupID, fromQuantity(std::string(filterID)), std::move(_respFunc)));
+    }(this, _groupID, fromBigQuantity(filterID), std::move(_respFunc)));
 }
 
 void JsonRpcImpl_2_0::getLogs(
