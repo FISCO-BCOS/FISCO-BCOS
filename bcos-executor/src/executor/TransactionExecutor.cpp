@@ -2731,6 +2731,7 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
                 0, addressSize - callParameters->receiveAddress.size(), '0');
         }
     }
+    // FIXME)): if input is hex without prefix, will throw exception and abort coredump
     callParameters->value = u256(input.value());
     callParameters->gasPrice = u256(input.gasPrice());
     callParameters->gasLimit = input.gasLimit();

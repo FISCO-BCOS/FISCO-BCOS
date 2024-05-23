@@ -41,6 +41,9 @@ public:
     std::string_view address() const { return {(const char*)m_address.data(), m_address.size()}; }
     gsl::span<const bcos::h256> topics() const { return {m_topics.data(), m_topics.size()}; }
     bcos::bytesConstRef data() const { return ref(m_data); }
+    bytes&& takeAddress() { return std::move(m_address); }
+    h256s&& takeTopics() { return std::move(m_topics); }
+    bytes&& takeData() { return std::move(m_data); }
     // Define the scale decode method, which cannot be modified at will
     template <class Stream, typename = std::enable_if_t<Stream::is_decoder_stream>>
     friend Stream& operator>>(Stream& _stream, LogEntry& _logEntry)

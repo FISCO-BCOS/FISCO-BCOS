@@ -20,7 +20,9 @@
 
 #include "Common.h"
 #include "Error.h"
+#include "Ranges.h"
 #include <boost/algorithm/hex.hpp>
+#include <boost/endian/conversion.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
 #include <cstring>
@@ -34,6 +36,7 @@
 namespace bcos
 {
 template <class Binary, class Out = std::string>
+    requires RANGES::range<Binary> && RANGES::sized_range<Binary>
 Out toHex(const Binary& binary, std::string_view prefix = std::string_view())
 {
     Out out;
@@ -47,6 +50,51 @@ Out toHex(const Binary& binary, std::string_view prefix = std::string_view())
     boost::algorithm::hex_lower(binary.begin(), binary.end(), std::back_inserter(out));
     return out;
 }
+
+template <class Out = std::string>
+Out toHex(std::unsigned_integral auto number, std::string_view prefix = std::string_view())
+{
+    std::basic_string<byte> bytes(8, '\0');
+    boost::endian::store_big_u64(bytes.data(), number);
+    return toHex(bytes, prefix);
+}
+
+template <class T>
+concept Binary = RANGES::contiguous_range<T>;
+static std::string toQuantity(const Binary auto& binary)
+{
+    if (binary.empty())
+    {
+        return "0x0";
+    }
+    auto&& hex = toHex(binary);
+    auto it = hex.begin();
+    while ((it + 1) != hex.end())
+    {
+        if (*it != '0')
+        {
+            break;
+        }
+        it++;
+    }
+    std::string out = "0x";
+    out.reserve(2 + std::distance(it, hex.end()));
+    out.insert(out.end(), it, hex.end());
+    return out;
+}
+
+template <class T>
+concept Number = std::is_integral_v<T>;
+static std::string toQuantity(Number auto number)
+{
+    std::basic_string<byte> bytes(8, '\0');
+    boost::endian::store_big_u64(bytes.data(), number);
+    return toQuantity(bytes);
+}
+
+template <class T>
+concept BigNumber = !std::is_integral_v<T> && std::convertible_to<T, bigint>;
+static std::string toQuantity(BigNumber auto number);
 
 template <class Hex, class Out = bytes>
 Out fromHex(const Hex& hex, std::string_view prefix = std::string_view())
@@ -77,6 +125,11 @@ template <class Hex, class Out = bytes>
 Out fromHexWithPrefix(const Hex& hex)
 {
     return fromHex(hex, "0x");
+}
+
+inline uint64_t fromQuantity(std::string const& quantity)
+{
+    return std::stoull(quantity, nullptr, 16);
 }
 
 /**
@@ -368,4 +421,15 @@ inline std::string toString<uint8_t>(uint8_t const& _u)
     o << static_cast<uint16_t>(_u);
     return o.str();
 }
+
+std::string toQuantity(BigNumber auto number)
+{
+    if (number == 0)
+    {
+        return "0x0";
+    }
+    auto bytes = toCompactBigEndian(number);
+    return toQuantity(bytes);
+}
+
 }  // namespace bcos

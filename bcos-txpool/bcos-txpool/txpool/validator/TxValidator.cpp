@@ -31,11 +31,13 @@ TransactionStatus TxValidator::verify(bcos::protocol::Transaction::ConstPtr _tx)
         return TransactionStatus::InvalidSignature;
     }
     // check groupId and chainId
-    if (_tx->groupId() != m_groupId) [[unlikely]]
+    if (_tx->groupId() != m_groupId &&
+        _tx->type() == static_cast<uint8_t>(TransactionType::BCOSTransaction)) [[unlikely]]
     {
         return TransactionStatus::InvalidGroupId;
     }
-    if (_tx->chainId() != m_chainId) [[unlikely]]
+    if (_tx->chainId() != m_chainId &&
+        _tx->type() == static_cast<uint8_t>(TransactionType::BCOSTransaction)) [[unlikely]]
     {
         return TransactionStatus::InvalidChainId;
     }

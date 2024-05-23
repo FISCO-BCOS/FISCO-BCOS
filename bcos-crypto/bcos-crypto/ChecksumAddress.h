@@ -22,12 +22,14 @@
 
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <fmt/format.h>
 #include <boost/algorithm/string.hpp>
 #include <string>
 
 namespace bcos
 {
-inline void toChecksumAddress(std::string& _addr, const std::string_view& addressHashHex)
+inline void toChecksumAddress(
+    std::string& _addr, const std::string_view& addressHashHex, std::string_view prefix = "")
 {
     auto convertHexCharToInt = [](char byte) {
         int ret = 0;
@@ -45,7 +47,7 @@ inline void toChecksumAddress(std::string& _addr, const std::string_view& addres
         }
         return ret;
     };
-    for (size_t i = 0; i < _addr.size(); ++i)
+    for (size_t i = prefix.size(); i < _addr.size(); ++i)
     {
         if (isdigit(_addr[i]))
         {
@@ -62,6 +64,19 @@ inline void toCheckSumAddress(std::string& _hexAddress, crypto::Hash::Ptr _hashI
 {
     boost::algorithm::to_lower(_hexAddress);
     toChecksumAddress(_hexAddress, _hashImpl->hash(_hexAddress).hex());
+}
+
+// for EIP-1191, hexAdress input should NOT have prefix "0x"
+inline void toCheckSumAddressWithChainId(
+    std::string& _hexAddress, crypto::Hash::Ptr _hashImpl, uint64_t _chainId = 0)
+{
+    boost::algorithm::to_lower(_hexAddress);
+    std::string hashInput = _hexAddress;
+    if (_chainId != 0 && _chainId != 1)
+    {
+        hashInput = fmt::format("{}0x{}", _chainId, _hexAddress);
+    }
+    toChecksumAddress(_hexAddress, _hashImpl->hash(hashInput).hex());
 }
 
 inline void toAddress(std::string& _hexAddress)

@@ -16,6 +16,10 @@ concept HasADLEncode =
     requires(Object const& object, Buffer& output) { impl_encode(object, output); };
 template <class Object, class Buffer>
 concept HasADLDecode = requires(Object object, const Buffer& input) { impl_decode(input, object); };
+template <class Object>
+concept HasADLPreEncode = requires(Object object) { impl_pre_encode(object); };
+template <class Object>
+concept HasADLAfterDecode = requires(Object object) { impl_after_decode(object); };
 
 struct encode
 {
@@ -50,10 +54,32 @@ struct decode
         impl_decode(input, object);
     }
 };
+
+struct PreEncode
+{
+    template <class Object>
+    void operator()(Object& object) const
+        requires HasADLPreEncode<Object>
+    {
+        impl_pre_encode(object);
+    }
+};
+
+struct AfterDecode
+{
+    template <class Object>
+    void operator()(Object& object) const
+        requires HasADLAfterDecode<Object>
+    {
+        impl_after_decode(object);
+    }
+};
 }  // namespace detail
 
 constexpr inline detail::encode encode{};
 constexpr inline detail::decode decode{};
+constexpr inline detail::PreEncode pre_encode{};
+constexpr inline detail::AfterDecode after_decode{};
 
 template <class Object>
 concept Serializable = true;

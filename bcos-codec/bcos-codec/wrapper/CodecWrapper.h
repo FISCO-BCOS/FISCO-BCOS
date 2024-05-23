@@ -21,10 +21,18 @@
 #pragma once
 
 #include "bcos-codec/abi/ContractABICodec.h"
+#include "bcos-codec/rlp/RLPDecode.h"
+#include "bcos-codec/rlp/RLPEncode.h"
 #include "bcos-codec/scale/Scale.h"
 
 namespace bcos
 {
+namespace codec::rlp
+{
+class RLPWrapper
+{
+};
+}  // namespace codec::rlp
 enum VMType
 {
     EVM,

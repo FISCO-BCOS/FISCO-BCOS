@@ -20,6 +20,8 @@
  */
 #include "bcos-txpool/txpool/storage/MemoryStorage.h"
 #include "bcos-utilities/Common.h"
+
+#include <bcos-protocol/TransactionSubmitResultImpl.h>
 #include <oneapi/tbb/blocked_range.h>
 #include <oneapi/tbb/parallel_for_each.h>
 #include <tbb/parallel_for.h>
@@ -171,6 +173,69 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
     co_return co_await awaitable;
 }
 
+task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransactionWithoutReceipt(
+    protocol::Transaction::Ptr transaction)
+{
+    transaction->setImportTime(utcTime());
+    struct Awaitable
+    {
+        [[maybe_unused]] constexpr bool await_ready() { return false; }
+        [[maybe_unused]] void await_suspend(CO_STD::coroutine_handle<> handle)
+        {
+            try
+            {
+                auto result = m_self->verifyAndSubmitTransaction(
+                    std::move(m_transaction), nullptr, true, true);
+
+                if (result != TransactionStatus::None)
+                {
+                    TXPOOL_LOG(DEBUG)
+                        << "Submit transaction failed! "
+                        << LOG_KV("TxHash", m_transaction ? m_transaction->hash().hex() : "")
+                        << LOG_KV("result", result);
+                    m_submitResult.emplace<Error::Ptr>(
+                        BCOS_ERROR_PTR((int32_t)result, bcos::protocol::toString(result)));
+                }
+                else
+                {
+                    auto res = std::make_shared<TransactionSubmitResultImpl>();
+                    res->setStatus(static_cast<uint32_t>(result));
+                    m_submitResult.emplace<TransactionSubmitResult::Ptr>(std::move(res));
+                }
+                handle.resume();
+            }
+            catch (std::exception& e)
+            {
+                TXPOOL_LOG(WARNING) << "Unexpected exception: " << boost::diagnostic_information(e);
+                m_submitResult.emplace<Error::Ptr>(
+                    BCOS_ERROR_PTR((int32_t)TransactionStatus::Malformed, "Unknown exception"));
+                handle.resume();
+            }
+        }
+        bcos::protocol::TransactionSubmitResult::Ptr await_resume()
+        {
+            if (std::holds_alternative<Error::Ptr>(m_submitResult))
+            {
+                BOOST_THROW_EXCEPTION(*std::get<Error::Ptr>(m_submitResult));
+            }
+
+            return std::move(
+                std::get<bcos::protocol::TransactionSubmitResult::Ptr>(m_submitResult));
+        }
+
+        protocol::Transaction::Ptr m_transaction;
+        std::shared_ptr<MemoryStorage> m_self;
+        std::variant<std::monostate, bcos::protocol::TransactionSubmitResult::Ptr, Error::Ptr>
+            m_submitResult;
+    };
+
+    Awaitable awaitable{.m_transaction = std::move(transaction),
+        .m_self = shared_from_this(),
+        .m_submitResult = {}};
+    co_return co_await awaitable;
+}
+
+
 std::vector<protocol::Transaction::ConstPtr> MemoryStorage::getTransactions(
     RANGES::any_view<bcos::h256, RANGES::category::mask | RANGES::category::sized> hashes)
 {
@@ -238,15 +303,16 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
         }
         if (result == TransactionStatus::NonceCheckFail) [[unlikely]]
         {
-            if (tx)
+            if (!tx)
             {
-                TXPOOL_LOG(WARNING) << LOG_DESC("enforce to seal failed for nonce check failed: ")
-                                    << tx->hash().abridged() << LOG_KV("batchId", tx->batchId())
-                                    << LOG_KV("batchHash", tx->batchHash().abridged())
-                                    << LOG_KV("importBatchId", _tx->batchId())
-                                    << LOG_KV("importBatchHash", _tx->batchHash().abridged());
+                TXPOOL_LOG(WARNING)
+                    << LOG_DESC("enforce to seal failed for nonce check failed: ")
+                    << tx->hash().hex() << LOG_KV("batchId", tx->batchId())
+                    << LOG_KV("batchHash", tx->batchHash().abridged())
+                    << LOG_KV("importTxHash", txHash) << LOG_KV("importBatchId", _tx->batchId())
+                    << LOG_KV("importBatchHash", _tx->batchHash().abridged());
+                return TransactionStatus::NonceCheckFail;
             }
-            return TransactionStatus::NonceCheckFail;
         }
 
         // tx already in txpool
@@ -1316,8 +1382,8 @@ void MemoryStorage::batchImportTxs(TransactionsPtr _txs)
         auto ret = verifyAndSubmitTransaction(tx, nullptr, false, false);
         if (ret != TransactionStatus::None)
         {
-            TXPOOL_LOG(TRACE) << LOG_DESC("batchImportTxs failed")
-                              << LOG_KV("tx", tx->hash().abridged()) << LOG_KV("msg", ret);
+            TXPOOL_LOG(TRACE) << LOG_DESC("batchImportTxs failed") << LOG_KV("tx", tx->hash().hex())
+                              << LOG_KV("msg", ret);
             continue;
         }
         successCount++;

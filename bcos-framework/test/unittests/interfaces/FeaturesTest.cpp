@@ -144,6 +144,8 @@ BOOST_AUTO_TEST_CASE(feature)
         "bugfix_eoa_as_contract",
         "bugfix_evm_exception_gas_used",
         "bugfix_dmc_deploy_gas_used",
+        "bugfix_staticcall_noaddr_return",
+        "bugfix_support_transfer_receive_fallback",
         "bugfix_set_row_with_dirty_flag",
         "feature_dmc2serial",
         "feature_sharding",
