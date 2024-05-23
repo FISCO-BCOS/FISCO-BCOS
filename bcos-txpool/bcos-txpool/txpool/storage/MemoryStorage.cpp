@@ -242,8 +242,8 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
             {
                 TXPOOL_LOG(WARNING)
                     << LOG_DESC("enforce to seal failed for nonce check failed: ")
-                    << tx->hash().hex() << LOG_KV("batchId", tx->batchId())
-                    << LOG_KV("batchHash", tx->batchHash().abridged())
+                    // << tx->hash().hex() << LOG_KV("batchId", tx->batchId())
+                    // << LOG_KV("batchHash", tx->batchHash().abridged())
                     << LOG_KV("importTxHash", txHash) << LOG_KV("importBatchId", _tx->batchId())
                     << LOG_KV("importBatchHash", _tx->batchHash().abridged());
                 return TransactionStatus::NonceCheckFail;
