@@ -131,8 +131,7 @@ task::Task<std::string> FilterSystem::newFilter(std::string_view groupId, Filter
     co_return toQuantity(id);
 }
 
-task::Task<Json::Value> FilterSystem::getFilterChangeImpl(
-    std::string_view groupId, uint64_t filterID)
+task::Task<Json::Value> FilterSystem::getFilterChangeImpl(std::string_view groupId, u256 filterID)
 {
     auto filter = getFilterByID(groupId, filterID);
     if (filter == nullptr)
@@ -289,7 +288,7 @@ task::Task<Json::Value> FilterSystem::getLogChangeImpl(std::string_view groupId,
     co_return co_await getLogsInternal(*ledger, std::move(params));
 }
 
-task::Task<Json::Value> FilterSystem::getFilterLogsImpl(std::string_view groupId, uint64_t filterID)
+task::Task<Json::Value> FilterSystem::getFilterLogsImpl(std::string_view groupId, u256 filterID)
 {
     auto filter = getFilterByID(groupId, filterID);
     if (filter == nullptr || filter->type() != LogsSubscription)

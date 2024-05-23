@@ -149,10 +149,21 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl) : P
                 BOOST_THROW_EXCEPTION(
                     PrecompiledError(fmt::format("unsupported key {}", SYSTEM_KEY_WEB3_CHAIN_ID)));
             }
-            if (!isNumStr(_value))
+            uint64_t number = 0;
+            try
+            {
+                number = std::stoull(_value);
+            }
+            catch (...)
             {
                 BOOST_THROW_EXCEPTION(PrecompiledError(
                     fmt::format("Invalid value {}, the value for {} must be a number string.",
+                        _value, SYSTEM_KEY_WEB3_CHAIN_ID)));
+            }
+            if (number > UINT32_MAX)
+            {
+                BOOST_THROW_EXCEPTION(PrecompiledError(
+                    fmt::format("Invalid value {}, the value for {} must be less than UINT32_MAX.",
                         _value, SYSTEM_KEY_WEB3_CHAIN_ID)));
             }
             return 0;

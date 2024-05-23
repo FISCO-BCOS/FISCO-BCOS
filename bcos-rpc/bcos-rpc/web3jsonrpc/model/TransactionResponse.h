@@ -86,9 +86,13 @@ static void combineTxResponse(Json::Value& result, bcos::protocol::Transaction::
         result["to"] = "0x" + std::move(to);
     }
     result["gas"] = toQuantity(tx->gasLimit());
-    auto const gasPrice = receipt ? receipt->effectiveGasPrice() : tx->gasPrice();
+    auto gasPrice = tx->gasPrice();
+    if (receipt && !receipt->effectiveGasPrice().empty())
+    {
+        gasPrice = receipt->effectiveGasPrice();
+    }
     // FIXME)): return will case coredump in executor
-    result["gasPrice"] = std::string(gasPrice.empty() ? "20200" /*21000*/ : gasPrice);
+    result["gasPrice"] = std::string(gasPrice.empty() ? "0x0" : gasPrice);
     result["hash"] = tx->hash().hexPrefixed();
     result["input"] = toHexStringWithPrefix(tx->input());
 

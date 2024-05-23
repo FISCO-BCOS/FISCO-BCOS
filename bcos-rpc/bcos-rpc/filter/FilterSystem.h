@@ -8,6 +8,7 @@
 #include <bcos-task/Task.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/BucketMap.h>
+#include <bcos-utilities/Common.h>
 #include <bcos-utilities/Timer.h>
 #include <boost/functional/hash.hpp>
 #include <atomic>
@@ -22,9 +23,9 @@ namespace bcos::rpc::filter
 struct KeyType
 {
     std::string group;
-    uint64_t id;
+    u256 id;
 
-    KeyType(std::string_view g, uint64_t i) : group(g), id(i) {}
+    KeyType(std::string_view g, u256 i) : group(g), id(i) {}
 
     friend bool operator==(const KeyType& l, const KeyType& r)
     {
@@ -48,7 +49,7 @@ struct std::hash<bcos::rpc::filter::KeyType>
     size_t operator()(const bcos::rpc::filter::KeyType& key) const noexcept
     {
         size_t seed = std::hash<std::string>{}(key.group);
-        boost::hash_combine(seed, std::hash<uint64_t>{}(key.id));
+        boost::hash_combine(seed, std::hash<bcos::u256>{}(key.id));
         return seed;
     }
 };
@@ -64,25 +65,22 @@ public:
 
     FilterSystem(GroupManager::Ptr groupManager, const std::string& groupId,
         FilterRequestFactory::Ptr factory, int filterTimeout, int maxBlockProcessPerReq);
-    virtual ~FilterSystem()
-    {
-        m_cleanUpTimer->stop();
-    }
+    virtual ~FilterSystem() { m_cleanUpTimer->stop(); }
 
 public:
     // jsonrpc
     task::Task<std::string> newBlockFilter(std::string_view groupId);
     task::Task<std::string> newPendingTxFilter(std::string_view groupId);
     task::Task<std::string> newFilter(std::string_view groupId, FilterRequest::Ptr params);
-    task::Task<bool> uninstallFilter(std::string_view groupId, uint64_t filterID)
+    task::Task<bool> uninstallFilter(std::string_view groupId, u256 filterID)
     {
         co_return uninstallFilterImpl(groupId, filterID);
     }
-    task::Task<Json::Value> getFilterChanges(std::string_view groupId, uint64_t filterID)
+    task::Task<Json::Value> getFilterChanges(std::string_view groupId, u256 filterID)
     {
         co_return co_await getFilterChangeImpl(groupId, filterID);
     }
-    task::Task<Json::Value> getFilterLogs(std::string_view groupId, uint64_t filterID)
+    task::Task<Json::Value> getFilterLogs(std::string_view groupId, u256 filterID)
     {
         co_return co_await getFilterLogsImpl(groupId, filterID);
     }
@@ -98,15 +96,15 @@ public:
     {
         co_return co_await newFilter(m_group, params);
     }
-    task::Task<bool> uninstallFilter(uint64_t filterID)
+    task::Task<bool> uninstallFilter(u256 filterID)
     {
         co_return co_await uninstallFilter(m_group, filterID);
     }
-    task::Task<Json::Value> getFilterChanges(uint64_t filterID)
+    task::Task<Json::Value> getFilterChanges(u256 filterID)
     {
         co_return co_await getFilterChanges(m_group, filterID);
     }
-    task::Task<Json::Value> getFilterLogs(uint64_t filterID)
+    task::Task<Json::Value> getFilterLogs(u256 filterID)
     {
         co_return co_await getFilterLogs(m_group, filterID);
     }
@@ -128,15 +126,15 @@ public:
     NodeService::Ptr getNodeService(std::string_view _groupID, std::string_view _command) const;
 
 protected:
-    bool uninstallFilterImpl(std::string_view groupId, uint64_t filterID)
+    bool uninstallFilterImpl(std::string_view groupId, u256 filterID)
     {
         return m_filters.remove(filter::KeyType(groupId, filterID)) != nullptr;
     }
-    task::Task<Json::Value> getFilterChangeImpl(std::string_view groupId, uint64_t filterID);
+    task::Task<Json::Value> getFilterChangeImpl(std::string_view groupId, u256 filterID);
     task::Task<Json::Value> getBlockChangeImpl(std::string_view groupId, Filter::Ptr filter);
     task::Task<Json::Value> getPendingTxChangeImpl(std::string_view groupId, Filter::Ptr filter);
     task::Task<Json::Value> getLogChangeImpl(std::string_view groupId, Filter::Ptr filter);
-    task::Task<Json::Value> getFilterLogsImpl(std::string_view groupId, uint64_t filterID);
+    task::Task<Json::Value> getFilterLogsImpl(std::string_view groupId, u256 filterID);
     task::Task<Json::Value> getLogsImpl(
         std::string_view groupId, FilterRequest::Ptr params, bool needCheckRange);
     task::Task<Json::Value> getLogsInternal(
@@ -147,7 +145,7 @@ protected:
     uint64_t insertFilter(Filter::Ptr filter);
     void cleanUpExpiredFilters();
 
-    Filter::Ptr getFilterByID(std::string_view groupId, uint64_t id)
+    Filter::Ptr getFilterByID(std::string_view groupId, u256 id)
     {
         FilterMap::ReadAccessor::Ptr accessor;
         if (!m_filters.find<FilterMap::ReadAccessor>(accessor, filter::KeyType(groupId, id)))
