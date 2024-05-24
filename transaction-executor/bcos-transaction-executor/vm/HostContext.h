@@ -121,15 +121,15 @@ template <class Storage>
 class HostContext : public evmc_host_context
 {
 private:
-    Storage& m_rollbackableStorage;
-    protocol::BlockHeader const& m_blockHeader;
-    const evmc_address& m_origin;
+    std::reference_wrapper<Storage> m_rollbackableStorage;
+    std::reference_wrapper<const protocol::BlockHeader> m_blockHeader;
+    std::reference_wrapper<const evmc_address> m_origin;
     std::string_view m_abi;
     int m_contextID;
-    int64_t& m_seq;
-    PrecompiledManager const& m_precompiledManager;
-    ledger::LedgerConfig const& m_ledgerConfig;
-    crypto::Hash const& m_hashImpl;
+    std::reference_wrapper<int64_t> m_seq;
+    std::reference_wrapper<const PrecompiledManager> m_precompiledManager;
+    std::reference_wrapper<const ledger::LedgerConfig> m_ledgerConfig;
+    std::reference_wrapper<const crypto::Hash> m_hashImpl;
     std::variant<const evmc_message*, evmc_message> m_message;
     Account<Storage> m_myAccount;
 
@@ -155,7 +155,7 @@ private:
 
     auto getMyAccount()
     {
-        return Account<std::decay_t<Storage>>(m_rollbackableStorage, message().recipient);
+        return Account<std::decay_t<Storage>>(m_rollbackableStorage.get(), message().recipient);
     }
 
     inline constexpr static struct InnerConstructor
@@ -182,7 +182,8 @@ private:
         m_precompiledManager(precompiledManager),
         m_ledgerConfig(ledgerConfig),
         m_hashImpl(hashImpl),
-        m_message(getMessage(message, m_blockHeader.number(), m_contextID, m_seq, m_hashImpl)),
+        m_message(
+            getMessage(message, m_blockHeader.get().number(), m_contextID, m_seq, m_hashImpl)),
         m_myAccount(getMyAccount())
     {}
 
@@ -214,7 +215,7 @@ public:
 
     task::Task<std::optional<storage::Entry>> code(const evmc_address& address)
     {
-        if (auto executable = co_await getExecutable(m_rollbackableStorage, address);
+        if (auto executable = co_await getExecutable(m_rollbackableStorage.get(), address);
             executable && executable->m_code)
         {
             co_return executable->m_code;
@@ -224,7 +225,7 @@ public:
 
     task::Task<size_t> codeSizeAt(const evmc_address& address)
     {
-        if (auto const* precompiled = m_precompiledManager.getPrecompiled(address))
+        if (auto const* precompiled = m_precompiledManager.get().getPrecompiled(address))
         {
             co_return transaction_executor::size(*precompiled);
         }
@@ -238,7 +239,7 @@ public:
 
     task::Task<h256> codeHashAt(const evmc_address& address)
     {
-        Account<Storage> account(m_rollbackableStorage, address);
+        Account<Storage> account(m_rollbackableStorage.get(), address);
         co_return co_await ledger::account::codeHash(account);
     }
 
@@ -259,12 +260,15 @@ public:
         BOOST_THROW_EXCEPTION(std::runtime_error("Unsupported method!"));
         co_return h256{};
     }
-    int64_t blockNumber() const { return m_blockHeader.number(); }
-    uint32_t blockVersion() const { return m_blockHeader.version(); }
-    int64_t timestamp() const { return m_blockHeader.timestamp(); }
+    int64_t blockNumber() const { return m_blockHeader.get().number(); }
+    uint32_t blockVersion() const { return m_blockHeader.get().version(); }
+    int64_t timestamp() const { return m_blockHeader.get().timestamp(); }
     evmc_address const& origin() const { return m_origin; }
-    int64_t blockGasLimit() const { return std::get<0>(m_ledgerConfig.gasLimit()); }
-    evmc_uint256be chainId() const { return m_ledgerConfig.chainId().value_or(evmc_uint256be{}); }
+    int64_t blockGasLimit() const { return std::get<0>(m_ledgerConfig.get().gasLimit()); }
+    evmc_uint256be chainId() const
+    {
+        return m_ledgerConfig.get().chainId().value_or(evmc_uint256be{});
+    }
 
     /// Revert any changes made (by any of the other calls).
     void log(const evmc_address& address, h256s topics, bytesConstRef data)
@@ -302,20 +306,20 @@ public:
         if (c_fileLogLevel <= LogLevel::TRACE) [[unlikely]]
         {
             HOST_CONTEXT_LOG(TRACE)
-                << "HostContext execute, kind: " << ref.kind << " seq:" << m_seq
+                << "HostContext execute, kind: " << ref.kind << " seq:" << m_seq.get()
                 << " sender:" << address2HexString(ref.sender)
                 << " recipient:" << address2HexString(ref.recipient) << " gas:" << ref.gas;
         }
 
-        auto savepoint = m_rollbackableStorage.current();
+        auto savepoint = m_rollbackableStorage.get().current();
         std::optional<EVMCResult> evmResult;
-        if (m_ledgerConfig.authCheckStatus() != 0U)
+        if (m_ledgerConfig.get().authCheckStatus() != 0U)
         {
-            HOST_CONTEXT_LOG(DEBUG)
-                << "Checking auth..." << m_ledgerConfig.authCheckStatus() << " gas: " << ref.gas;
+            HOST_CONTEXT_LOG(DEBUG) << "Checking auth..." << m_ledgerConfig.get().authCheckStatus()
+                                    << " gas: " << ref.gas;
 
-            if (auto result = checkAuth(m_rollbackableStorage, m_blockHeader, ref, m_origin,
-                    buildLegacyExternalCaller(), m_precompiledManager, m_contextID, m_seq,
+            if (auto result = checkAuth(m_rollbackableStorage.get(), m_blockHeader, ref, m_origin,
+                    buildLegacyExternalCaller(), m_precompiledManager.get(), m_contextID, m_seq,
                     m_hashImpl))
             {
                 HOST_CONTEXT_LOG(DEBUG) << "Auth check failed";
@@ -339,7 +343,7 @@ public:
         // If the call to system contract failed, the gasUsed is cleared to zero
         if (evmResult->status_code != EVMC_SUCCESS)
         {
-            co_await m_rollbackableStorage.rollback(savepoint);
+            co_await m_rollbackableStorage.get().rollback(savepoint);
 
             if (auto hexAddress = address2FixedArray(ref.code_address);
                 bcos::precompiled::c_systemTxsAddress.find(concepts::bytebuffer::toView(
@@ -386,9 +390,9 @@ public:
                 << " recipient:" << address2HexString(message.recipient) << " gas:" << message.gas;
         }
 
-        HostContext hostcontext(innerConstructor, m_rollbackableStorage, m_blockHeader, message,
-            m_origin, {}, m_contextID, m_seq, m_precompiledManager, m_ledgerConfig, m_hashImpl,
-            interface);
+        HostContext hostcontext(innerConstructor, m_rollbackableStorage.get(), m_blockHeader,
+            message, m_origin, {}, m_contextID, m_seq, m_precompiledManager.get(), m_ledgerConfig,
+            m_hashImpl, interface);
 
         try
         {
@@ -433,11 +437,11 @@ private:
 
     task::Task<EVMCResult> executeCreate()
     {
-        if (m_blockHeader.number() != 0)
+        if (m_blockHeader.get().number() != 0)
         {
-            createAuthTable(m_rollbackableStorage, m_blockHeader, message(), m_origin,
+            createAuthTable(m_rollbackableStorage.get(), m_blockHeader, message(), m_origin,
                 co_await ledger::account::path(m_myAccount), buildLegacyExternalCaller(),
-                m_precompiledManager, m_contextID, m_seq);
+                m_precompiledManager.get(), m_contextID, m_seq);
         }
 
         auto& ref = message();
@@ -447,7 +451,7 @@ private:
         if (result.status_code == 0)
         {
             auto code = bytesConstRef(result.output_data, result.output_size);
-            auto codeHash = m_hashImpl.hash(code);
+            auto codeHash = m_hashImpl.get().hash(code);
             co_await ledger::account::setCode(
                 m_myAccount, code.toBytes(), std::string(m_abi), codeHash);
 
@@ -474,10 +478,10 @@ private:
         if (message().kind != EVMC_DELEGATECALL)
         {
             if (auto const* precompiled =
-                    m_precompiledManager.getPrecompiled(message().code_address))
+                    m_precompiledManager.get().getPrecompiled(message().code_address))
             {
                 if (auto flag = transaction_executor::featureFlag(*precompiled);
-                    !flag || m_ledgerConfig.features().get(*flag))
+                    !flag || m_ledgerConfig.get().features().get(*flag))
                 {
                     m_preparedPrecompiled = precompiled;
                     co_return;
@@ -485,7 +489,7 @@ private:
             }
         }
 
-        m_executable = co_await getExecutable(m_rollbackableStorage, message().code_address);
+        m_executable = co_await getExecutable(m_rollbackableStorage.get(), message().code_address);
         if (m_executable && hasPrecompiledPrefix(m_executable->m_code->data()))
         {
             if (std::holds_alternative<const evmc_message*>(m_message))
@@ -524,7 +528,8 @@ private:
                     << LOG_KV("code", code);
             }
 
-            if (auto const* precompiled = m_precompiledManager.getPrecompiled(message.recipient))
+            if (auto const* precompiled =
+                    m_precompiledManager.get().getPrecompiled(message.recipient))
             {
                 m_preparedPrecompiled = precompiled;
             }
@@ -542,14 +547,16 @@ private:
         if (m_preparedPrecompiled != nullptr)
         {
             co_return transaction_executor::callPrecompiled(*m_preparedPrecompiled,
-                m_rollbackableStorage, m_blockHeader, ref, m_origin, buildLegacyExternalCaller(),
-                m_precompiledManager, m_contextID, m_seq, m_ledgerConfig.authCheckStatus());
+                m_rollbackableStorage.get(), m_blockHeader, ref, m_origin,
+                buildLegacyExternalCaller(), m_precompiledManager.get(), m_contextID, m_seq,
+                m_ledgerConfig.get().authCheckStatus());
         }
         else
         {
             if (!m_executable)
             {
-                m_executable = co_await getExecutable(m_rollbackableStorage, ref.code_address);
+                m_executable =
+                    co_await getExecutable(m_rollbackableStorage.get(), ref.code_address);
             }
 
             if (!m_executable)

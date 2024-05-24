@@ -49,6 +49,18 @@ bcos::task::Task<void> bcos::transaction_scheduler::BaselineSchedulerInitializer
     }
 }
 
+using MutableStorage = bcos::storage2::memory_storage::MemoryStorage<
+    bcos::transaction_executor::StateKey, bcos::transaction_executor::StateValue,
+    bcos::storage2::memory_storage::Attribute(bcos::storage2::memory_storage::ORDERED |
+                                              bcos::storage2::memory_storage::LOGICAL_DELETION)>;
+using CacheStorage =
+    bcos::storage2::memory_storage::MemoryStorage<bcos::transaction_executor::StateKey,
+        bcos::transaction_executor::StateValue,
+        bcos::storage2::memory_storage::Attribute(bcos::storage2::memory_storage::ORDERED |
+                                                  bcos::storage2::memory_storage::CONCURRENT |
+                                                  bcos::storage2::memory_storage::LRU),
+        std::hash<bcos::transaction_executor::StateKey>>;
+
 std::tuple<std::function<std::shared_ptr<bcos::scheduler::SchedulerInterface>()>,
     std::function<void(std::function<void(bcos::protocol::BlockNumber)>)>>
 bcos::transaction_scheduler::BaselineSchedulerInitializer::build(::rocksdb::DB& rocksDB,
@@ -60,18 +72,6 @@ bcos::transaction_scheduler::BaselineSchedulerInitializer::build(::rocksdb::DB& 
 {
     struct Data
     {
-        using MutableStorage =
-            storage2::memory_storage::MemoryStorage<transaction_executor::StateKey,
-                transaction_executor::StateValue,
-                storage2::memory_storage::Attribute(storage2::memory_storage::ORDERED |
-                                                    storage2::memory_storage::LOGICAL_DELETION)>;
-        using CacheStorage = storage2::memory_storage::MemoryStorage<transaction_executor::StateKey,
-            transaction_executor::StateValue,
-            storage2::memory_storage::Attribute(storage2::memory_storage::ORDERED |
-                                                storage2::memory_storage::CONCURRENT |
-                                                storage2::memory_storage::LRU),
-            std::hash<bcos::transaction_executor::StateKey>>;
-
         CacheStorage m_cacheStorage;
         storage2::rocksdb::RocksDBStorage2<transaction_executor::StateKey,
             transaction_executor::StateValue, storage2::rocksdb::StateKeyResolver,
@@ -126,7 +126,7 @@ bcos::transaction_scheduler::BaselineSchedulerInitializer::build(::rocksdb::DB& 
 
     if (config.parallel)
     {
-        return buildBaselineHolder(std::make_shared<SchedulerParallelImpl>());
+        return buildBaselineHolder(std::make_shared<SchedulerParallelImpl<MutableStorage>>());
     }
     return buildBaselineHolder(std::make_shared<SchedulerSerialImpl>());
 }
