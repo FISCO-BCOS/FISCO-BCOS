@@ -3,6 +3,7 @@
 #include "bcos-task/TBBWait.h"
 #include "bcos-task/Trait.h"
 #include "bcos-utilities/Error.h"
+#include "bcos-utilities/RecursiveLambda.h"
 #include <oneapi/tbb/parallel_invoke.h>
 #include <boost/throw_exception.hpp>
 #include <functional>
@@ -254,23 +255,28 @@ public:
             {
                 auto& [variantIterator, item] = it;
                 item = co_await std::visit(
-                    [](auto& input) -> task::Task<RangeValue> {
-                        RangeValue item;
-                        auto rangeValue = co_await input.next();
-                        if (rangeValue)
-                        {
-                            auto&& [key, value] = *rangeValue;
-                            if constexpr (std::is_pointer_v<decltype(value)>)
+                    bcos::recursiveLambda(
+                        [&](auto const& self, auto& input) -> task::Task<RangeValue> {
+                            RangeValue item;
+                            auto rangeValue = co_await input.next();
+                            if (rangeValue)
                             {
-                                item.emplace(key, *value);
+                                auto&& [key, value] = *rangeValue;
+                                if constexpr (std::is_pointer_v<std::decay_t<decltype(value)>>)
+                                {
+                                    if (!value)
+                                    {
+                                        co_return co_await self(self, input);
+                                    }
+                                    item.emplace(key, *value);
+                                }
+                                else
+                                {
+                                    item = std::move(rangeValue);
+                                }
                             }
-                            else
-                            {
-                                item = std::move(rangeValue);
-                            }
-                        }
-                        co_return item;
-                    },
+                            co_return item;
+                        }),
                     variantIterator);
             }
         }
@@ -464,35 +470,32 @@ public:
     task::Task<std::shared_ptr<MutableStorage>> mergeBackStorage()
     {
         std::unique_lock mergeLock(m_mergeMutex);
-        std::unique_lock immutablesLock(m_listMutex);
+        std::unique_lock listLock(m_listMutex);
         if (m_storages.empty())
         {
             BOOST_THROW_EXCEPTION(NotExistsImmutableStorageError{});
         }
-        auto immutableStorage = m_storages.back();
-        immutablesLock.unlock();
+        auto backStoragePtr = m_storages.back();
+        auto const& backStorage = *backStoragePtr;
+        listLock.unlock();
 
         if constexpr (withCacheStorage)
         {
             tbb::parallel_invoke(
                 [&]() {
-                    task::tbb::syncWait(
-                        storage2::merge(m_backendStorage.get(), std::as_const(*immutableStorage)));
+                    task::tbb::syncWait(storage2::merge(m_backendStorage.get(), backStorage));
                 },
-                [&]() {
-                    task::tbb::syncWait(
-                        storage2::merge(m_cacheStorage.get(), std::as_const(*immutableStorage)));
-                });
+                [&]() { task::tbb::syncWait(storage2::merge(m_cacheStorage.get(), backStorage)); });
         }
         else
         {
-            co_await storage2::merge(m_backendStorage.get(), std::as_const(*immutableStorage));
+            co_await storage2::merge(m_backendStorage.get(), backStorage);
         }
 
-        immutablesLock.lock();
+        listLock.lock();
         m_storages.pop_back();
 
-        co_return immutableStorage;
+        co_return backStoragePtr;
     }
 
     std::shared_ptr<MutableStorageType> frontStorage()

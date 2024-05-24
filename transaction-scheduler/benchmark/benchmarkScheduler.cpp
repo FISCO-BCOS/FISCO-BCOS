@@ -327,6 +327,7 @@ static void issue(benchmark::State& state)
                                 ledgerConfig);
                     }
 
+                    fixture.m_multiLayerStorage.pushView(std::move(view));
                     auto balances = co_await fixture.balances();
                     for (auto& balance : balances)
                     {
@@ -337,7 +338,7 @@ static void issue(benchmark::State& state)
                                     balance.template convert_to<std::string>())));
                         }
                     }
-                    fixture.m_multiLayerStorage.pushView(std::move(view));
+                    co_await fixture.m_multiLayerStorage.mergeBackStorage();
                 }(state));
             }
         },
@@ -409,6 +410,7 @@ static void transfer(benchmark::State& state)
                     }
 
                     // Check
+                    fixture.m_multiLayerStorage.pushView(std::move(view));
                     auto balances = co_await fixture.balances();
                     for (auto&& range : balances | RANGES::views::chunk(2))
                     {
@@ -429,8 +431,7 @@ static void transfer(benchmark::State& state)
                                     to.template convert_to<std::string>())));
                         }
                     }
-
-                    fixture.m_multiLayerStorage.pushView(std::move(view));
+                    co_await fixture.m_multiLayerStorage.mergeBackStorage();
                 }(state));
             }
         },
@@ -502,6 +503,7 @@ static void conflictTransfer(benchmark::State& state)
                     }
 
                     // Check
+                    fixture.m_multiLayerStorage.pushView(std::move(view));
                     auto balances = co_await fixture.balances();
                     for (auto&& [balance, index] :
                         RANGES::views::zip(balances, RANGES::views::iota(0LU)))
@@ -534,7 +536,7 @@ static void conflictTransfer(benchmark::State& state)
                             }
                         }
                     }
-                    fixture.m_multiLayerStorage.pushView(std::move(view));
+                    co_await fixture.m_multiLayerStorage.mergeBackStorage();
                 }(state));
             }
         },

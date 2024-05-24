@@ -190,7 +190,7 @@ BOOST_AUTO_TEST_CASE(merge)
         BOOST_CHECK_EQUAL(i, 100);
 
         StateKeyView seekKeyView{"Table~5"sv, "Key~5"sv};
-        auto seekIt2 = co_await storage2::range(rocksDB, seekKeyView);
+        auto seekIt2 = co_await storage2::range(rocksDB, storage2::RANGE_SEEK, seekKeyView);
 
         int j = 54;
         while (auto keyValue = co_await seekIt2.next())

@@ -448,12 +448,28 @@ public:
             }
             return task::AwaitableValue(std::move(result));
         }
+
+        auto seek(auto&& key)
+            requires(!withConcurrent && withOrdered)
+        {
+            auto const& index = m_buckets.get()[m_bucketIndex].container.template get<0>();
+            m_begin = index.lower_bound(std::forward<decltype(key)>(key));
+        }
     };
 
     friend auto tag_invoke(
         bcos::storage2::tag_t<storage2::range> /*unused*/, MemoryStorage const& storage)
     {
         return task::AwaitableValue(Iterator(storage.m_buckets));
+    }
+
+    friend auto tag_invoke(bcos::storage2::tag_t<storage2::range> /*unused*/,
+        MemoryStorage const& storage, RANGE_SEEK_TYPE /*unused*/, auto&& key)
+        requires(!withConcurrent && withOrdered)
+    {
+        auto iterator = Iterator(storage.m_buckets);
+        iterator.seek(std::forward<decltype(key)>(key));
+        return task::AwaitableValue(std::move(iterator));
     }
 
     bool empty() const
