@@ -19,7 +19,7 @@ class Filter
 public:
     using Ptr = std::shared_ptr<Filter>;
 
-    Filter(SubscriptionType type, uint64_t id, FilterRequest::Ptr params, bool fullTx,
+    Filter(SubscriptionType type, u256 id, FilterRequest::Ptr params, bool fullTx,
         bcos::protocol::BlockNumber startBlockNumber, std::string_view group)
       : m_fullTx(fullTx),
         m_type(type),
@@ -33,7 +33,7 @@ public:
     virtual ~Filter() {}
 
     SubscriptionType type() const { return m_type; }
-    uint64_t id() const { return m_id; }
+    u256 id() const { return m_id; }
     int64_t startBlockNumber() const { return m_startBlockNumber.load(); }
     FilterRequest::Ptr params() const { return m_params; }
     bool fullTx() const { return m_fullTx; }
@@ -42,12 +42,12 @@ public:
 
     void updateLastAccessTime() { m_lastAccessTime.store(utcTime()); }
     void setStartBlockNumber(int64_t number) { m_startBlockNumber.store(number); }
-    void setId(uint64_t id) { m_id = id; }
+    void setId(u256 id) { m_id = id; }
 
 private:
     bool m_fullTx;
     SubscriptionType m_type;
-    uint64_t m_id;
+    u256 m_id;
     FilterRequest::Ptr m_params;
     std::atomic<int64_t> m_startBlockNumber;
     std::atomic<uint64_t> m_lastAccessTime;
