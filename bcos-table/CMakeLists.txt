@@ -17,7 +17,6 @@
 #------------------------------------------------------------------------------
 
 cmake_minimum_required(VERSION 3.10)
-set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum OS X deployment version")
 
 project(bcos-table VERSION ${VERSION})
 
@@ -25,10 +24,9 @@ file(GLOB_RECURSE SRCS src/*.cpp)
 
 find_package(Boost REQUIRED serialization)
 find_package(TBB CONFIG REQUIRED)
-find_package(OpenMP 2.0 REQUIRED)
 
 add_library(${TABLE_TARGET} ${SRCS})
-target_link_libraries(${TABLE_TARGET} PUBLIC ${UTILITIES_TARGET} bcos-framework Boost::serialization TBB::tbb OpenMP::OpenMP_CXX)
+target_link_libraries(${TABLE_TARGET} PUBLIC ${UTILITIES_TARGET} bcos-framework Boost::serialization TBB::tbb)
 
 if (TESTS)
     enable_testing()
@@ -37,7 +35,10 @@ if (TESTS)
 endif()
 
 # for code coverage
-if (COVERAGE)
-    include(Coverage)
-    config_coverage("table-coverage" "'/usr*' '${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts*' '${CMAKE_CURRENT_SOURCE_DIR}/test/bcos-test*'")
-endif ()
+#if (COVERAGE)
+#    include(Coverage)
+#    config_coverage("table-coverage" "'/usr*' '${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts*' '${CMAKE_CURRENT_SOURCE_DIR}/test/bcos-test*'")
+#endif ()
+
+include(GNUInstallDirs)
+install(TARGETS ${TABLE_TARGET} EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")

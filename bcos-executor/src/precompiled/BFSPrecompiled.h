@@ -28,7 +28,7 @@ class BFSPrecompiled : public bcos::precompiled::Precompiled
 public:
     using Ptr = std::shared_ptr<BFSPrecompiled>;
     BFSPrecompiled(crypto::Hash::Ptr _hashImpl);
-    virtual ~BFSPrecompiled() = default;
+    ~BFSPrecompiled() override = default;
     std::shared_ptr<PrecompiledExecResult> call(
         std::shared_ptr<executor::TransactionExecutive> _executive,
         PrecompiledExecResult::Ptr _callParameters) override;
@@ -36,20 +36,51 @@ public:
 private:
     void listDir(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         PrecompiledExecResult::Ptr const& _callParameters);
+    void listDirPage(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        PrecompiledExecResult::Ptr const& _callParameters);
 
     void makeDir(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         PrecompiledExecResult::Ptr const& _callParameters);
     void link(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         PrecompiledExecResult::Ptr const& _callParameters);
+    void linkAdaptCNS(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        PrecompiledExecResult::Ptr const& _callParameters);
     void readLink(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         PrecompiledExecResult::Ptr const& _callParameters);
     void touch(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         PrecompiledExecResult::Ptr const& _callParameters);
+    void initBfs(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        PrecompiledExecResult::Ptr const& _callParameters);
+    void rebuildBfs(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        PrecompiledExecResult::Ptr const& _callParameters);
+    void rebuildBfs310(const std::shared_ptr<executor::TransactionExecutive>& _executive);
+    void fixBfs(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        PrecompiledExecResult::Ptr const& _callParameters);
+    void fixBfs330(const std::shared_ptr<executor::TransactionExecutive>& _executive);
     int checkLinkParam(std::shared_ptr<executor::TransactionExecutive> _executive,
         std::string const& _contractAddress, std::string& _contractName,
         std::string& _contractVersion, std::string const& _contractAbi);
     bool recursiveBuildDir(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         const std::string& _absoluteDir);
     std::set<std::string> BfsTypeSet;
+
+protected:
+    void makeDirImpl(const std::string& _absolutePath,
+        const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        PrecompiledExecResult::Ptr const& _callParameters);
+    void linkImpl(const std::string& _absolutePath, const std::string& _contractAddress,
+        const std::string& _contractAbi,
+        const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        PrecompiledExecResult::Ptr const& _callParameters);
+
+    virtual const char* getThisAddress(bool _isWasm) { return _isWasm ? BFS_NAME : BFS_ADDRESS; }
+    virtual std::string_view getLinkRootDir() { return executor::USER_APPS_PREFIX; }
+    virtual bool checkPathPrefixValid(
+        const std::string_view& path, uint32_t blockVersion, const std::string_view& type);
+
+    inline bool isShardPath(const std::string& _path)
+    {
+        return _path.starts_with(executor::USER_SHARD_PREFIX);
+    }
 };
 }  // namespace bcos::precompiled

@@ -21,12 +21,11 @@
 
 #pragma once
 
+#include "../consensus/ConsensusNodeInterface.h"
 #include "../protocol/Block.h"
-#include "../protocol/BlockHeader.h"
 #include "../protocol/Transaction.h"
 #include "../protocol/TransactionReceipt.h"
 #include "../storage/StorageInterface.h"
-#include "LedgerConfig.h"
 #include "LedgerTypeDef.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-utilities/Error.h>
@@ -41,7 +40,7 @@ class LedgerInterface
 public:
     using Ptr = std::shared_ptr<LedgerInterface>;
     LedgerInterface() = default;
-    virtual ~LedgerInterface() {}
+    virtual ~LedgerInterface() = default;
 
     /**
      * @brief async prewrite a block in scheduler module
@@ -49,8 +48,8 @@ public:
      * @param callback trigger this callback when write is finished
      */
     virtual void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
-        bcos::protocol::TransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
-        std::function<void(Error::Ptr&&)> callback) = 0;
+        bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
+        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts) = 0;
 
     /**
      * @brief async store txs in block when tx pool verify
@@ -58,8 +57,8 @@ public:
      * @param _txHashList tx hash list
      * @param _onTxsStored callback
      */
-    virtual void asyncStoreTransactions(std::shared_ptr<std::vector<bytesConstPtr>> _txToStore,
-        crypto::HashListPtr _txHashList, std::function<void(Error::Ptr)> _onTxStored) = 0;
+    virtual bcos::Error::Ptr storeTransactionsAndReceipts(
+        bcos::protocol::ConstTransactionsPtr blockTxs, bcos::protocol::Block::ConstPtr block) = 0;
 
     /**
      * @brief async get block by blockNumber
@@ -129,6 +128,14 @@ public:
             _callback) = 0;
 
     /**
+     * @brief async get current_state table to get total transaction count, archived block number
+     * and latest block number
+     * @param _callback callback totalTxCount, totalFailedTxCount, and latest block number
+     */
+    virtual void asyncGetCurrentStateByKey(std::string_view const& _key,
+        std::function<void(Error::Ptr&&, std::optional<bcos::storage::Entry>&&)> _callback) = 0;
+
+    /**
      * @brief async get system config by table key
      * @param _key the key of row, you can checkout all key in LedgerTypeDef.h
      * @param _onGetConfig callback when get config, <value, latest block number>
@@ -157,8 +164,9 @@ public:
             Error::Ptr, std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>>)>
             _onGetList) = 0;
 
-    virtual void asyncPreStoreBlockTxs(bcos::protocol::TransactionsPtr _blockTxs,
+    virtual void asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr _blockTxs,
         bcos::protocol::Block::ConstPtr block,
         std::function<void(Error::UniquePtr&&)> _callback) = 0;
 };
+
 }  // namespace bcos::ledger

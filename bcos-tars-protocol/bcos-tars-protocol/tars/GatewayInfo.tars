@@ -16,6 +16,7 @@ struct GroupNodeInfo
     2 optional vector<string> nodeIDList;
     3 optional int type;
     4 optional vector<ProtocolInfo> protocolList;
+    5 optional vector<int> nodeTypeList;
 };
 struct GatewayInfo
 {

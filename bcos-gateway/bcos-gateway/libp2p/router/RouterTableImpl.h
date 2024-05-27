@@ -36,8 +36,14 @@ public:
     RouterTableEntry()
       : m_inner([m_entry = bcostars::RouterTableEntry()]() mutable { return &m_entry; })
     {}
-    RouterTableEntry(std::function<bcostars::RouterTableEntry*()> _inner) : m_inner(_inner) {}
-    ~RouterTableEntry() override {}
+    RouterTableEntry(std::function<bcostars::RouterTableEntry*()> _inner)
+      : m_inner(std::move(_inner))
+    {}
+    RouterTableEntry(RouterTableEntry&&) = delete;
+    RouterTableEntry(const RouterTableEntry&) = delete;
+    RouterTableEntry& operator=(const RouterTableEntry&) = delete;
+    RouterTableEntry& operator=(RouterTableEntry&&) = delete;
+    ~RouterTableEntry() override = default;
 
     void setDstNode(std::string const& _dstNode) override { m_inner()->dstNode = _dstNode; }
     void setNextHop(std::string const& _nextHop) override { m_inner()->nextHop = _nextHop; }
@@ -61,7 +67,11 @@ public:
     using Ptr = std::shared_ptr<RouterTable>;
     RouterTable() : m_inner([m_table = bcostars::RouterTable()]() mutable { return &m_table; }) {}
     RouterTable(bytesConstRef _decodedData) : RouterTable() { decode(_decodedData); }
-    virtual ~RouterTable() {}
+    RouterTable(RouterTable&&) = delete;
+    RouterTable(const RouterTable&) = delete;
+    RouterTable& operator=(const RouterTable&) = delete;
+    RouterTable& operator=(RouterTable&&) = delete;
+    ~RouterTable() override = default;
 
     void encode(bcos::bytes& _encodedData) override;
     void decode(bcos::bytesConstRef _decodedData) override;
@@ -87,7 +97,6 @@ public:
     std::string getNextHop(std::string const& _nodeID) override;
     std::set<std::string> getAllReachableNode() override;
 
-private:
     bool updateDstNodeEntry(
         std::string const& _generatedFrom, RouterTableEntryInterface::Ptr _entry);
     void updateDistanceForAllRouterEntries(std::set<std::string>& _unreachableNodes,
@@ -106,9 +115,6 @@ class RouterTableFactoryImpl : public RouterTableFactory
 {
 public:
     using Ptr = std::shared_ptr<RouterTableFactoryImpl>;
-    RouterTableFactoryImpl() = default;
-    ~RouterTableFactoryImpl() override {}
-
     RouterTableInterface::Ptr createRouterTable() override
     {
         return std::make_shared<RouterTable>();

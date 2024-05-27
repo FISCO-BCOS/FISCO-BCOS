@@ -9,7 +9,6 @@
 #include <bcos-gateway/libnetwork/SessionFace.h>
 #include <bcos-gateway/libp2p/Common.h>
 #include <bcos-gateway/libp2p/P2PMessage.h>
-#include <bcos-gateway/libratelimit/BWRateLimiterInterface.h>
 
 namespace bcos
 {
@@ -29,12 +28,12 @@ using CallbackFuncWithSession =
 using DisconnectCallbackFuncWithSession =
     std::function<void(NetworkException, std::shared_ptr<P2PSession>)>;
 using P2PResponseCallback =
-    std::function<void(Error::Ptr&& _error, int16_t, std::shared_ptr<bytes> _data)>;
+    std::function<void(Error::Ptr&& _error, uint16_t, std::shared_ptr<bytes> _data)>;
 class P2PInterface
 {
 public:
     using Ptr = std::shared_ptr<P2PInterface>;
-    virtual ~P2PInterface(){};
+    virtual ~P2PInterface() = default;
 
     virtual void start() = 0;
     virtual void stop() = 0;
@@ -70,7 +69,7 @@ public:
      * @param options timeout option
      * @param _callback called when receive response
      */
-    virtual void asyncSendMessageByP2PNodeID(int16_t _type, P2pID _dstNodeID,
+    virtual void asyncSendMessageByP2PNodeID(uint16_t _type, P2pID _dstNodeID,
         bytesConstRef _payload, Options options = Options(),
         P2PResponseCallback _callback = nullptr) = 0;
 
@@ -81,23 +80,26 @@ public:
      * @param _payload the payload
      */
     virtual void asyncBroadcastMessageToP2PNodes(
-        int16_t _type, uint16_t moduleID, bytesConstRef _payload, Options _options) = 0;
+        uint16_t _type, uint16_t moduleID, bytesConstRef _payload, Options _options) = 0;
 
     /**
      * @brief send message to the given nodeIDs
      */
-    virtual void asyncSendMessageByP2PNodeIDs(int16_t _type, const std::vector<P2pID>& _nodeIDs,
+    virtual void asyncSendMessageByP2PNodeIDs(uint16_t _type, const std::vector<P2pID>& _nodeIDs,
         bytesConstRef _payload, Options _options) = 0;
 
     using MessageHandler =
         std::function<void(NetworkException, std::shared_ptr<P2PSession>, P2PMessage::Ptr)>;
 
-    virtual void registerHandlerByMsgType(int16_t _type, MessageHandler const& _msgHandler) = 0;
+    virtual bool registerHandlerByMsgType(uint16_t _type, MessageHandler const& _msgHandler) = 0;
 
-    virtual void eraseHandlerByMsgType(int16_t _type) = 0;
+    virtual void eraseHandlerByMsgType(uint16_t _type) = 0;
 
     virtual void sendRespMessageBySession(bytesConstRef _payload, P2PMessage::Ptr _p2pMessage,
         std::shared_ptr<P2PSession> _p2pSession) = 0;
+
+    virtual void updatePeerBlacklist(const std::set<std::string>& _strList, const bool _enable) = 0;
+    virtual void updatePeerWhitelist(const std::set<std::string>& _strList, const bool _enable) = 0;
 };
 
 }  // namespace gateway

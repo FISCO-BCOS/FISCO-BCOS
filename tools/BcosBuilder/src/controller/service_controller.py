@@ -70,8 +70,8 @@ class ServiceController:
                 utilities.log_info("upgrade service %s success" % service.name)
         return True
 
-    def gen_all_service_config(self, is_build_opr):
-        if self.config_generator.generate_all_config(is_build_opr) is False:
+    def gen_all_service_config(self):
+        if self.config_generator.generate_all_config() is False:
             utilities.log_error(
                 "gen configuration for %s service failed" % self.service_type)
             return False

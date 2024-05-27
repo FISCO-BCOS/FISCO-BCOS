@@ -70,10 +70,18 @@ public:
         return *toHexString(startIt, endIt) + "...";
     }
 
-    std::string hex() override { return *toHexString(*m_keyData); }
+    std::string hex() override
+    {
+        if (m_hex.empty())
+        {
+            m_hex = toHex(*m_keyData);
+        }
+        return m_hex;
+    }
 
 private:
     std::shared_ptr<bytes> m_keyData;
+    std::string m_hex = {};
 };
 }  // namespace crypto
 }  // namespace bcos

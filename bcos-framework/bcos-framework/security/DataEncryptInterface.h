@@ -35,8 +35,6 @@ public:
     virtual ~DataEncryptInterface() = default;
 
 public:
-    virtual void init() = 0;
-
     // use to decrypt node.key
     virtual std::shared_ptr<bytes> decryptContents(const std::shared_ptr<bytes>& contents) = 0;
     virtual std::shared_ptr<bytes> decryptFile(const std::string& filename) = 0;

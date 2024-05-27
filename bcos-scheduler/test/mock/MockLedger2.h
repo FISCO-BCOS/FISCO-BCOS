@@ -1,6 +1,7 @@
 #pragma once
 
 #include "bcos-framework/ledger/LedgerInterface.h"
+#include <cstddef>
 
 namespace bcos::test
 {
@@ -10,8 +11,8 @@ class MockLedger2 : public bcos::ledger::LedgerInterface
 {
 public:
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
-        bcos::protocol::TransactionsPtr, bcos::protocol::Block::ConstPtr block,
-        std::function<void(Error::Ptr&&)> callback)
+        bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr block,
+        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts)
     {
         auto mutableBlock = std::const_pointer_cast<bcos::protocol::Block>(block);
         auto header = mutableBlock->blockHeader();
@@ -24,13 +25,13 @@ public:
                 {
                     BOOST_FAIL("asyncSetRow failed" + error->errorMessage());
                 }
-                callback(nullptr);
+                callback("", nullptr);
             });
         // TODO: write receipts and tx count
     }
 
-    void asyncPreStoreBlockTxs(bcos::protocol::TransactionsPtr, bcos::protocol::Block::ConstPtr,
-        std::function<void(Error::UniquePtr&&)> _callback) override
+    void asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr,
+        bcos::protocol::Block::ConstPtr, std::function<void(Error::UniquePtr&&)> _callback) override
     {
         if (!_callback)
         {
@@ -38,9 +39,11 @@ public:
         }
         _callback(nullptr);
     }
-    void asyncStoreTransactions(std::shared_ptr<std::vector<bytesConstPtr>> _txToStore,
-        crypto::HashListPtr _txHashList, std::function<void(Error::Ptr)> _onTxStored)
-    {}
+    bcos::Error::Ptr storeTransactionsAndReceipts(bcos::protocol::ConstTransactionsPtr blockTxs,
+        bcos::protocol::Block::ConstPtr block) override
+    {
+        return nullptr;
+    }
 
     void asyncGetBlockDataByNumber(protocol::BlockNumber _blockNumber, int32_t _blockFlag,
         std::function<void(Error::Ptr, protocol::Block::Ptr)> _onGetBlock)

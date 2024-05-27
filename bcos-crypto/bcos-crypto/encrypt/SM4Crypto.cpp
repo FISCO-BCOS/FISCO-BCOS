@@ -38,7 +38,7 @@ bytesPointer bcos::crypto::SM4Encrypt(const unsigned char* _plainData, size_t _p
 
     auto encryptedData = std::make_shared<bytes>();
     encryptedData->resize(_plainDataSize + SM4_MAX_PADDING_LEN);
-    COutputBuffer ciper{(char*)encryptedData->data(), encryptedData->size()};
+    COutputBuffer ciper{(char*)(encryptedData->data()), encryptedData->size()};
 
     if (wedpr_sm4_encrypt(&plain, &key, &iv, &ciper) == WEDPR_ERROR)
     {

@@ -2,12 +2,10 @@
 #include "bcos-executor/src/CallParameters.h"
 #include "bcos-executor/src/executive/BlockContext.h"
 #include "bcos-executor/src/executive/ExecutiveState.h"
+#include "bcos-framework/bcos-framework/testutils/faker/FakeBlock.h"
+#include "bcos-framework/bcos-framework/testutils/faker/FakeBlockHeader.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
 #include "bcos-framework/executor/NativeExecutionMessage.h"
-#include "bcos-protocol/protobuf/PBBlock.h"
-#include "bcos-protocol/protobuf/PBBlockFactory.h"
-#include "bcos-protocol/testutils/protocol/FakeBlock.h"
-#include "bcos-protocol/testutils/protocol/FakeBlockHeader.h"
 #include "bcos-scheduler/src/DmcExecutor.h"
 #include "bcos-scheduler/src/DmcStepRecorder.h"
 #include "bcos-scheduler/src/GraphKeyLocks.h"
@@ -22,7 +20,6 @@
 #include <bcos-utilities/Common.h>
 #include <boost/test/unit_test.hpp>
 #include <string>
-
 
 using namespace std;
 using namespace bcos;
@@ -89,10 +86,11 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest)
     auto block = blockFactory->createBlock();
     auto blockHeader = blockFactory->blockHeaderFactory()->createBlockHeader();
     blockHeader->setNumber(1);
+    blockHeader->calculateHash(*hashImpl);
     block->setBlockHeader(blockHeader);
     // block = fakeBlock(cryptoSuite, blockFactory, 1, 1, 1);
     auto dmcExecutor = std::make_shared<DmcExecutor>(
-        "DmcExecutor1", "0xaabbccdd", block, executor1, keyLocks, hashImpl, dmcRecorder);
+        "DmcExecutor1", "0xaabbccdd", block, executor1, keyLocks, hashImpl, dmcRecorder, false);
 
     dmcExecutor->setSchedulerOutHandler(
         [this, &dmcFlagStruct](bcos::scheduler::ExecutiveState::Ptr executiveState) {
@@ -102,14 +100,15 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest)
             auto block = blockFactory->createBlock();
             auto blockHeader = blockFactory->blockHeaderFactory()->createBlockHeader();
             blockHeader->setNumber(2);
+            blockHeader->calculateHash(*hashImpl);
             block->setBlockHeader(blockHeader);
             auto dmcExecutor2 = std::make_shared<DmcExecutor>(
-                "DmcExecutor2", to, block, executor1, keyLocks, hashImpl, dmcRecorder);
+                "DmcExecutor2", to, block, executor1, keyLocks, hashImpl, dmcRecorder, false);
             dmcExecutor2->scheduleIn(executiveState);
         });
 
     dmcExecutor->setOnTxFinishedHandler(
-        [this, &dmcFlagStruct](bcos::protocol::ExecutionMessage::UniquePtr output) {
+        [&dmcFlagStruct](bcos::protocol::ExecutionMessage::UniquePtr output) {
             auto outputBytes = output->data();
             std::string outputStr((char*)outputBytes.data(), outputBytes.size());
             SCHEDULER_LOG(DEBUG) << LOG_KV("output data is ", outputStr);
@@ -133,13 +132,13 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest)
             }
         });
 
-    dmcExecutor->setOnNeedSwitchEventHandler([this, &dmcFlagStruct]() {
+    dmcExecutor->setOnNeedSwitchEventHandler([&dmcFlagStruct]() {
         SCHEDULER_LOG(DEBUG) << "Transaction Perform Error , Need Switch.";
         dmcFlagStruct.switchFlag = true;
     });
 
 
-    auto executorCallback = [this, &dmcFlagStruct](
+    auto executorCallback = [&dmcFlagStruct](
                                 bcos::Error::UniquePtr error, DmcExecutor::Status status) {
         if (error || status == DmcExecutor::Status::ERROR)
         {
@@ -227,6 +226,7 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest)
 
 
     // call
+    dmcExecutor->setIsCall(true);
     auto callMessage = createMessage(4, 0, 1, "0xaabbccdd", true);
     dmcExecutor->submit(std::move(callMessage), false);
     dmcExecutor->prepare();
@@ -250,10 +250,11 @@ BOOST_AUTO_TEST_CASE(keyLocksTest)
     auto block = blockFactory->createBlock();
     auto blockHeader = blockFactory->blockHeaderFactory()->createBlockHeader();
     blockHeader->setNumber(1);
+    blockHeader->calculateHash(*hashImpl);
     block->setBlockHeader(blockHeader);
     // block = fakeBlock(cryptoSuite, blockFactory, 1, 1, 1);
     auto dmcExecutor = std::make_shared<DmcExecutor>(
-        "DmcExecutor1", "0xaabbccdd", block, executor1, keyLocks, hashImpl, dmcRecorder);
+        "DmcExecutor1", "0xaabbccdd", block, executor1, keyLocks, hashImpl, dmcRecorder, false);
 
     dmcExecutor->setSchedulerOutHandler(
         [this, &dmcFlagStruct](bcos::scheduler::ExecutiveState::Ptr executiveState) {
@@ -263,14 +264,15 @@ BOOST_AUTO_TEST_CASE(keyLocksTest)
             auto block = blockFactory->createBlock();
             auto blockHeader = blockFactory->blockHeaderFactory()->createBlockHeader();
             blockHeader->setNumber(2);
+            blockHeader->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
             block->setBlockHeader(blockHeader);
             auto dmcExecutor2 = std::make_shared<DmcExecutor>(
-                "DmcExecutor2", to, block, executor1, keyLocks, hashImpl, dmcRecorder);
+                "DmcExecutor2", to, block, executor1, keyLocks, hashImpl, dmcRecorder, false);
             dmcExecutor2->scheduleIn(executiveState);
         });
 
     dmcExecutor->setOnTxFinishedHandler(
-        [this, &dmcFlagStruct](bcos::protocol::ExecutionMessage::UniquePtr output) {
+        [&dmcFlagStruct](bcos::protocol::ExecutionMessage::UniquePtr output) {
             auto outputBytes = output->data();
             std::string outputStr((char*)outputBytes.data(), outputBytes.size());
             SCHEDULER_LOG(DEBUG) << LOG_KV("output data is ", outputStr);
@@ -294,12 +296,12 @@ BOOST_AUTO_TEST_CASE(keyLocksTest)
             }
         });
 
-    dmcExecutor->setOnNeedSwitchEventHandler([this, &dmcFlagStruct]() {
+    dmcExecutor->setOnNeedSwitchEventHandler([&dmcFlagStruct]() {
         SCHEDULER_LOG(DEBUG) << "Transaction Perform Error , Need Switch.";
         dmcFlagStruct.switchFlag = true;
     });
 
-    auto executorCallback = [this, &dmcFlagStruct](
+    auto executorCallback = [&dmcFlagStruct](
                                 bcos::Error::UniquePtr error, DmcExecutor::Status status) {
         if (error || status == DmcExecutor::Status::ERROR)
         {

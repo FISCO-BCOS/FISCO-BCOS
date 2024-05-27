@@ -17,9 +17,7 @@
 #------------------------------------------------------------------------------
 
 cmake_minimum_required(VERSION 3.10)
-set(CMAKE_OSX_DEPLOYMENT_TARGET "11.3" CACHE STRING "Minimum OS X deployment version")
 
-include(Version)
 project(bcos-security VERSION ${VERSION})
 
 aux_source_directory(./bcos-security SRC_LIST)
@@ -29,3 +27,9 @@ add_library(${SECURITY_TARGET} ${SRC_LIST})
 find_package(jsoncpp REQUIRED)
 
 target_link_libraries(${SECURITY_TARGET} PUBLIC ${UTILITIES_TARGET} ${TOOL_TARGET} ${CRYPTO_TARGET} jsoncpp_static)
+
+if(TESTS)
+  enable_testing()
+  set(ENV{CTEST_OUTPUT_ON_FAILURE} True)
+  add_subdirectory(test)
+endif()

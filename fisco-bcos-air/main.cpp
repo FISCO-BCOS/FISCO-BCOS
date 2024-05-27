@@ -39,8 +39,8 @@ int main(int argc, const char* argv[])
     setDefaultOrCLocale();
     std::set_terminate([]() {
         std::cerr << "terminate handler called, print stacks" << std::endl;
-        void* trace_elems[20];
-        int trace_elem_count(backtrace(trace_elems, 20));
+        void* trace_elems[50];
+        int trace_elem_count(backtrace(trace_elems, 50));
         char** stack_syms(backtrace_symbols(trace_elems, trace_elem_count));
         for (int i = 0; i < trace_elem_count; ++i)
         {
@@ -50,11 +50,7 @@ int main(int argc, const char* argv[])
         std::cerr << "terminate handler called, print stack end" << std::endl;
         abort();
     });
-    // get datetime and output welcome info
-    ExitHandler exitHandler;
-    signal(SIGTERM, &ExitHandler::exitHandler);
-    signal(SIGABRT, &ExitHandler::exitHandler);
-    signal(SIGINT, &ExitHandler::exitHandler);
+
     // Note: the initializer must exist in the life time of the whole program
     auto initializer = std::make_shared<AirNodeInitializer>();
     try
@@ -62,6 +58,10 @@ int main(int argc, const char* argv[])
         auto param = bcos::initializer::initAirNodeCommandLine(argc, argv, false);
         initializer->init(param.configFilePath, param.genesisFilePath);
         bcos::initializer::showNodeVersionMetric();
+
+        bcos::initializer::printVersion();
+        std::cout << "[" << bcos::getCurrentDateTime() << "] ";
+        std::cout << "The fisco-bcos is running..." << std::endl;
         initializer->start();
     }
     catch (std::exception const& e)
@@ -72,13 +72,14 @@ int main(int argc, const char* argv[])
                   << std::endl;
         return -1;
     }
-    bcos::initializer::printVersion();
-    std::cout << "[" << bcos::getCurrentDateTime() << "] ";
-    std::cout << "The fisco-bcos is running..." << std::endl;
-    while (!exitHandler.shouldExit())
-    {
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    }
+
+    // get datetime and output welcome info
+    ExitHandler exitHandler;
+    signal(SIGTERM, &ExitHandler::exitHandler);
+    signal(SIGABRT, &ExitHandler::exitHandler);
+    signal(SIGINT, &ExitHandler::exitHandler);
+    ExitHandler::c_shouldExit.wait(false);
+
     initializer.reset();
     std::cout << "[" << bcos::getCurrentDateTime() << "] ";
     std::cout << "fisco-bcos program exit normally." << std::endl;

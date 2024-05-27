@@ -21,27 +21,31 @@
 
 #pragma once
 
-#include "../Common.h"
+// if windows, manual include tup/Tars.h first
+#ifdef _WIN32
+#include <tup/Tars.h>
+#endif
 #include "bcos-tars-protocol/tars/Transaction.h"
+#include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
-#include <memory>
 
-namespace bcostars
+namespace bcostars::protocol
 {
-namespace protocol
-{
+
 class TransactionImpl : public bcos::protocol::Transaction
 {
 public:
-    explicit TransactionImpl(
-        bcos::crypto::CryptoSuite::Ptr _cryptoSuite, std::function<bcostars::Transaction*()> inner)
-      : bcos::protocol::Transaction(_cryptoSuite), m_inner(inner)
+    explicit TransactionImpl(std::function<bcostars::Transaction*()> inner)
+      : m_inner(std::move(inner))
     {}
-
-    ~TransactionImpl() {}
+    ~TransactionImpl() override = default;
+    TransactionImpl& operator=(const TransactionImpl& _tx) = delete;
+    TransactionImpl(const TransactionImpl& _tx) = delete;
+    TransactionImpl& operator=(TransactionImpl&& _tx) = delete;
+    TransactionImpl(TransactionImpl&& _tx) = delete;
 
     friend class TransactionFactoryImpl;
 
@@ -50,52 +54,46 @@ public:
     void decode(bcos::bytesConstRef _txData) override;
     void encode(bcos::bytes& txData) const override;
 
-    bcos::crypto::HashType hash(bool _useCache = true) const override;
-    int32_t version() const override { return m_inner()->data.version; }
-    std::string_view chainId() const override { return m_inner()->data.chainID; }
-    std::string_view groupId() const override { return m_inner()->data.groupID; }
-    int64_t blockLimit() const override { return m_inner()->data.blockLimit; }
-    bcos::u256 nonce() const override;
-    std::string_view to() const override { return m_inner()->data.to; }
-    std::string_view abi() const override { return m_inner()->data.abi; }
+    bcos::crypto::HashType hash() const override;
+    void calculateHash(const bcos::crypto::Hash& hashImpl);
+
+    int32_t version() const override;
+    std::string_view chainId() const override;
+    std::string_view groupId() const override;
+    int64_t blockLimit() const override;
+    const std::string& nonce() const override;
+    // only for test
+    void setNonce(std::string nonce) override;
+    std::string_view to() const override;
+    std::string_view abi() const override;
+
+    std::string_view value() const override;
+    std::string_view gasPrice() const override;
+    int64_t gasLimit() const override;
+    std::string_view maxFeePerGas() const override;
+    std::string_view maxPriorityFeePerGas() const override;
+    bcos::bytesConstRef extension() const override;
+
     bcos::bytesConstRef input() const override;
-    int64_t importTime() const override { return m_inner()->importTime; }
-    void setImportTime(int64_t _importTime) override { m_inner()->importTime = _importTime; }
-    bcos::bytesConstRef signatureData() const override
-    {
-        return bcos::bytesConstRef(reinterpret_cast<const bcos::byte*>(m_inner()->signature.data()),
-            m_inner()->signature.size());
-    }
-    std::string_view sender() const override
-    {
-        return std::string_view(m_inner()->sender.data(), m_inner()->sender.size());
-    }
-    void forceSender(bcos::bytes _sender) const override
-    {
-        m_inner()->sender.assign(_sender.begin(), _sender.end());
-    }
+    int64_t importTime() const override;
+    void setImportTime(int64_t _importTime) override;
+    bcos::bytesConstRef signatureData() const override;
+    std::string_view sender() const override;
+    void forceSender(const bcos::bytes& _sender) const override;
 
-    void setSignatureData(bcos::bytes& signature)
-    {
-        m_inner()->signature.assign(signature.begin(), signature.end());
-    }
+    void setSignatureData(bcos::bytes& signature);
 
-    uint32_t attribute() const override { return m_inner()->attribute; }
-    void setAttribute(uint32_t attribute) override { m_inner()->attribute = attribute; }
+    int32_t attribute() const override;
+    void setAttribute(int32_t attribute) override;
 
-    std::string_view source() const override { return m_inner()->source; }
-    void setSource(std::string const& source) override { m_inner()->source = source; }
+    std::string_view extraData() const override;
+    void setExtraData(std::string const& _extraData) override;
 
-    const bcostars::Transaction& inner() const { return *m_inner(); }
-    void setInner(bcostars::Transaction inner) { *m_inner() = std::move(inner); }
-
-    std::function<bcostars::Transaction*()> const& innerGetter() { return m_inner; }
-
+    const bcostars::Transaction& inner() const;
+    bcostars::Transaction& mutableInner();
+    void setInner(bcostars::Transaction inner);
 
 private:
     std::function<bcostars::Transaction*()> m_inner;
-    mutable bcos::SharedMutex x_hash;
-    mutable bcos::u256 m_nonce;
 };
-}  // namespace protocol
-}  // namespace bcostars
+}  // namespace bcostars::protocol

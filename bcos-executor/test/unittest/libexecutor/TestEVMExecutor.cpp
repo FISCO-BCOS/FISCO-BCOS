@@ -22,12 +22,14 @@
 #include "../mock/MockLedger.h"
 #include "../mock/MockTransactionalStorage.h"
 #include "../mock/MockTxPool.h"
-// #include "Common.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
+#include "bcos-framework/bcos-framework/testutils/faker/FakeBlockHeader.h"
+#include "bcos-framework/bcos-framework/testutils/faker/FakeTransaction.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
+#include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/protocol/Transaction.h"
-#include "bcos-protocol/protobuf/PBBlockHeader.h"
-#include "bcos-table/src/StateStorage.h"
+#include "bcos-table/src/StateStorageFactory.h"
+#include "evmc/evmc.h"
 #include "executor/TransactionExecutorFactory.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
@@ -36,9 +38,7 @@
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/executor/NativeExecutionMessage.h>
-#include <bcos-protocol/testutils/protocol/FakeBlockHeader.h>
-#include <bcos-protocol/testutils/protocol/FakeTransaction.h>
-#include <tbb/task_group.h>
+#include <bcos-framework/protocol/Protocol.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/exception/diagnostic_information.hpp>
@@ -78,10 +78,10 @@ struct TransactionExecutorFixture
         ledger = std::make_shared<MockLedger>();
         auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
 
-        auto lruStorage = std::make_shared<bcos::storage::LRUStateStorage>(backend);
-
+        auto lruStorage = std::make_shared<bcos::storage::LRUStateStorage>(backend, false);
+        auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(0);
         executor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, lruStorage,
-            backend, executionResultFactory, hashImpl, false, false, false);
+            backend, executionResultFactory, stateStorageFactory, hashImpl, false, false);
 
 
         keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
@@ -156,7 +156,8 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
 
     bytes input;
     boost::algorithm::unhex(helloworld, std::back_inserter(input));
-    auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1");
+    auto tx =
+        fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
     auto sender = *toHexString(string_view((char*)tx->sender().data(), tx->sender().size()));
 
     auto hash = tx->hash();
@@ -182,9 +183,15 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
 
     NativeExecutionMessage paramsBak = *params;
 
-    auto blockHeader = std::make_shared<bcos::protocol::PBBlockHeader>(cryptoSuite);
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
+        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader->setNumber(1);
+
+    std::vector<bcos::protocol::ParentInfo> parentInfos{
+        {{blockHeader->number() - 1, h256(blockHeader->number() - 1)}}};
+    blockHeader->setParentInfo(parentInfos);
     ledger->setBlockNumber(blockHeader->number() - 1);
+    blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
     executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
         BOOST_CHECK(!error);
@@ -201,7 +208,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
 
     auto result = executePromise.get_future().get();
     BOOST_CHECK_EQUAL(result->status(), 0);
-
+    BOOST_CHECK_EQUAL(result->evmStatus(), 0);
     BOOST_CHECK_EQUAL(result->origin(), sender);
     BOOST_CHECK_EQUAL(result->from(), paramsBak.to());
     BOOST_CHECK_EQUAL(result->to(), sender);
@@ -222,15 +229,15 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
     });
     preparePromise.get_future().get();
 
+    ledger->setBlockHeader(blockHeader);
     std::promise<void> commitPromise;
     executor->commit(commitParams, [&](bcos::Error::Ptr&& error) {
         BOOST_CHECK(!error);
         commitPromise.set_value();
     });
     commitPromise.get_future().get();
-    auto tableName = std::string("/apps/") +
-                     std::string(result->newEVMContractAddress());  // TODO: ensure the contract
-                                                                    // address is hex
+    auto tableName = std::string("/apps/") + std::string(result->newEVMContractAddress());
+
 
     // test getCode()
     executor->getCode(address, [](Error::Ptr error, bcos::bytes code) {
@@ -253,9 +260,15 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
     BOOST_CHECK_GT(entry->getField(0).size(), 0);
 
     // start new block
-    auto blockHeader2 = std::make_shared<bcos::protocol::PBBlockHeader>(cryptoSuite);
+    auto blockHeader2 = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
+        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader2->setNumber(2);
+
+    parentInfos = {{{blockHeader2->number() - 1, h256(blockHeader2->number() - 1)}}};
+    blockHeader2->setParentInfo(parentInfos);
     ledger->setBlockNumber(blockHeader2->number() - 1);
+    blockHeader2->calculateHash(*cryptoSuite->hashImpl());
+
     std::promise<void> nextPromise2;
     executor->nextBlockHeader(0, std::move(blockHeader2), [&](bcos::Error::Ptr&& error) {
         BOOST_CHECK(!error);
@@ -295,9 +308,11 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
 
     BOOST_CHECK(result2);
     BOOST_CHECK_EQUAL(result2->status(), 0);
+    BOOST_CHECK_EQUAL(result2->evmStatus(), 0);
     BOOST_CHECK_EQUAL(result2->message(), "");
     BOOST_CHECK_EQUAL(result2->newEVMContractAddress(), "");
     BOOST_CHECK_LT(result2->gasAvailable(), gas);
+    ledger->setBlockHeader(blockHeader2);
 
     // read "fisco bcos"
     bytes queryBytes;
@@ -327,6 +342,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
 
     BOOST_CHECK(result3);
     BOOST_CHECK_EQUAL(result3->status(), 0);
+    BOOST_CHECK_EQUAL(result3->evmStatus(), 0);
     BOOST_CHECK_EQUAL(result3->message(), "");
     BOOST_CHECK_EQUAL(result3->newEVMContractAddress(), "");
     BOOST_CHECK_LT(result3->gasAvailable(), gas);
@@ -339,6 +355,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
         "000000000000000000000000000000000000000000005666973636f0000000000000000000000000000"
         "00000000000000000000000000");
 }
+
 
 BOOST_AUTO_TEST_CASE(externalCall)
 {
@@ -381,7 +398,8 @@ BOOST_AUTO_TEST_CASE(externalCall)
 
     bytes input;
     boost::algorithm::unhex(ABin, std::back_inserter(input));
-    auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1");
+    auto tx =
+        fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
     auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
     auto hash = tx->hash();
@@ -409,9 +427,15 @@ BOOST_AUTO_TEST_CASE(externalCall)
 
     NativeExecutionMessage paramsBak = *params;
 
-    auto blockHeader = std::make_shared<bcos::protocol::PBBlockHeader>(cryptoSuite);
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
+        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader->setNumber(1);
+
+    std::vector<bcos::protocol::ParentInfo> parentInfos{
+        {{blockHeader->number() - 1, h256(blockHeader->number() - 1)}}};
+    blockHeader->setParentInfo(parentInfos);
     ledger->setBlockNumber(blockHeader->number() - 1);
+    blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
     executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
         BOOST_CHECK(!error);
@@ -434,6 +458,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
     auto address = result->newEVMContractAddress();
     BOOST_CHECK_EQUAL(result->type(), NativeExecutionMessage::FINISHED);
     BOOST_CHECK_EQUAL(result->status(), 0);
+    BOOST_CHECK_EQUAL(result->evmStatus(), 0);
     BOOST_CHECK_GT(address.size(), 0);
     BOOST_CHECK(result->keyLocks().empty());
 
@@ -474,7 +499,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
     BOOST_CHECK_EQUAL(result2->from(), std::string(address));
     BOOST_CHECK(result2->to().empty());
     BOOST_CHECK_LT(result2->gasAvailable(), gas);
-    BOOST_CHECK_EQUAL(result2->keyLocks().size(), 1);
+    BOOST_CHECK_EQUAL(result2->keyLocks().size(), 2);  // code,codeHash
     BOOST_CHECK_EQUAL(result2->keyLocks()[0], "code");
 
     // --------------------------------
@@ -509,6 +534,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
     BOOST_CHECK_EQUAL(result3->newEVMContractAddress(), addressString2);
     BOOST_CHECK_EQUAL(result3->create(), false);
     BOOST_CHECK_EQUAL(result3->status(), 0);
+    BOOST_CHECK_EQUAL(result3->evmStatus(), 0);
     BOOST_CHECK(result3->logEntries().size() == 0);
     BOOST_CHECK(result3->keyLocks().empty());
 
@@ -569,6 +595,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
     BOOST_CHECK_EQUAL(result5->from(), std::string(addressString2));
     BOOST_CHECK_EQUAL(result5->to(), std::string(address));
     BOOST_CHECK_EQUAL(result5->status(), 0);
+    BOOST_CHECK_EQUAL(result5->evmStatus(), 0);
     BOOST_CHECK(result5->message().empty());
     BOOST_CHECK_EQUAL(result5->keyLocks().size(), 0);
 
@@ -594,6 +621,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
     BOOST_CHECK_EQUAL(result6->to(), std::string(sender));
     BOOST_CHECK_EQUAL(result6->origin(), std::string(sender));
     BOOST_CHECK_EQUAL(result6->status(), 0);
+    BOOST_CHECK_EQUAL(result6->evmStatus(), 0);
     BOOST_CHECK(result6->message().empty());
     BOOST_CHECK(result6->logEntries().size() == 1);
     BOOST_CHECK_EQUAL(result6->keyLocks().size(), 0);
@@ -608,7 +636,9 @@ BOOST_AUTO_TEST_CASE(externalCall)
     commitParams.number = 1;
 
     executor->prepare(commitParams, [](bcos::Error::Ptr error) { BOOST_CHECK(!error); });
+    ledger->setBlockHeader(blockHeader);
     executor->commit(commitParams, [](bcos::Error::Ptr error) { BOOST_CHECK(!error); });
+
 
     // execute a call request
     auto callParam = std::make_unique<NativeExecutionMessage>();
@@ -636,6 +666,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
 
     BOOST_CHECK_EQUAL(callResult->type(), protocol::ExecutionMessage::FINISHED);
     BOOST_CHECK_EQUAL(callResult->status(), 0);
+    BOOST_CHECK_EQUAL(callResult->evmStatus(), 0);
 
     auto expectResult = codec->encode(s256(1000));
     BOOST_CHECK(callResult->data().toBytes() == expectResult);
@@ -671,6 +702,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
 
     BOOST_CHECK_EQUAL(callResult2->type(), protocol::ExecutionMessage::FINISHED);
     BOOST_CHECK_EQUAL(callResult2->status(), 0);
+    BOOST_CHECK_EQUAL(callResult2->evmStatus(), 0);
 
     auto expectResult2 = codec->encode(s256(1000));
     BOOST_CHECK(callResult2->data().toBytes() == expectResult);
@@ -756,7 +788,8 @@ BOOST_AUTO_TEST_CASE(performance)
 
         bytes input;
         boost::algorithm::unhex(bin, std::back_inserter(input));
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1");
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
         auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
         auto hash = tx->hash();
@@ -772,7 +805,7 @@ BOOST_AUTO_TEST_CASE(performance)
 
         // The contract address
         std::string addressSeed = "address" + boost::lexical_cast<std::string>(blockNumber);
-        h256 addressCreate(hashImpl->hash(addressSeed));
+        h256 addressCreate(hashImpl->hash(bytesConstRef(addressSeed)));
         // h256 addressCreate("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e");
         std::string addressString = addressCreate.hex().substr(0, 40);
         // toChecksumAddress(addressString, hashImpl);
@@ -787,9 +820,15 @@ BOOST_AUTO_TEST_CASE(performance)
 
         NativeExecutionMessage paramsBak = *params;
 
-        auto blockHeader = std::make_shared<bcos::protocol::PBBlockHeader>(cryptoSuite);
+        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
+            [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
         blockHeader->setNumber(blockNumber);
+
+        std::vector<bcos::protocol::ParentInfo> parentInfos{
+            {blockHeader->number() - 1, h256(blockHeader->number() - 1)}};
+        blockHeader->setParentInfo(parentInfos);
         ledger->setBlockNumber(blockHeader->number() - 1);
+        blockHeader->calculateHash(*cryptoSuite->hashImpl());
         std::promise<void> nextPromise;
         executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
             BOOST_CHECK(!error);
@@ -964,7 +1003,7 @@ BOOST_AUTO_TEST_CASE(performance)
 
 BOOST_AUTO_TEST_CASE(multiDeploy)
 {
-    size_t count = 100;
+    size_t count = 10;
     std::vector<NativeExecutionMessage::UniquePtr> paramsList;
 
     for (size_t i = 0; i < count; ++i)
@@ -972,7 +1011,8 @@ BOOST_AUTO_TEST_CASE(multiDeploy)
         auto helloworld = string(helloBin);
         bytes input;
         boost::algorithm::unhex(helloworld, std::back_inserter(input));
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 100 + i, 100001, "1", "1");
+        auto tx = fakeTransaction(
+            cryptoSuite, keyPair, "", input, std::to_string(100 + i), 100001, "1", "1");
 
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -998,9 +1038,15 @@ BOOST_AUTO_TEST_CASE(multiDeploy)
         paramsList.emplace_back(std::move(params));
     }
 
-    auto blockHeader = std::make_shared<bcos::protocol::PBBlockHeader>(cryptoSuite);
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
+        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
     blockHeader->setNumber(1);
+
+    std::vector<bcos::protocol::ParentInfo> parentInfos{
+        {{blockHeader->number() - 1, h256(blockHeader->number() - 1)}}};
+    blockHeader->setParentInfo(parentInfos);
     ledger->setBlockNumber(blockHeader->number() - 1);
+    blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
     executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
         BOOST_CHECK(!error);
@@ -1035,7 +1081,7 @@ BOOST_AUTO_TEST_CASE(multiDeploy)
         }
 
         BOOST_CHECK_EQUAL(result->status(), 0);
-
+        BOOST_CHECK_EQUAL(result->evmStatus(), 0);
         BOOST_CHECK(result->message().empty());
         BOOST_CHECK(!result->newEVMContractAddress().empty());
         BOOST_CHECK_LT(result->gasAvailable(), gas);
@@ -1086,7 +1132,8 @@ BOOST_AUTO_TEST_CASE(deployErrorCode)
             "687c52312c9221962991e27bbddc409dfbd7c564736f6c634300060a0033";
         bytes input;
         boost::algorithm::unhex(errorBin, std::back_inserter(input));
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1");
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
         auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         h256 addressCreate("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e");
         std::string addressString = addressCreate.hex().substr(0, 40);
@@ -1113,9 +1160,15 @@ BOOST_AUTO_TEST_CASE(deployErrorCode)
 
         NativeExecutionMessage paramsBak = *params;
 
-        auto blockHeader = std::make_shared<bcos::protocol::PBBlockHeader>(cryptoSuite);
+        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
+            [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
         blockHeader->setNumber(1);
+
+        std::vector<bcos::protocol::ParentInfo> parentInfos{
+            {{blockHeader->number() - 1, h256(blockHeader->number() - 1)}}};
+        blockHeader->setParentInfo(parentInfos);
         ledger->setBlockNumber(blockHeader->number() - 1);
+        blockHeader->calculateHash(*cryptoSuite->hashImpl());
         std::promise<void> nextPromise;
         executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
             BOOST_CHECK(!error);
@@ -1138,6 +1191,7 @@ BOOST_AUTO_TEST_CASE(deployErrorCode)
         BOOST_CHECK(result);
         BOOST_CHECK_EQUAL(result->type(), ExecutionMessage::REVERT);
         BOOST_CHECK_EQUAL(result->status(), (int32_t)TransactionStatus::OutOfGas);
+        BOOST_CHECK_EQUAL(result->evmStatus(), (int32_t)evmc_status_code::EVMC_OUT_OF_GAS);
         BOOST_CHECK_EQUAL(result->contextID(), 99);
         BOOST_CHECK_EQUAL(result->seq(), 1000);
         BOOST_CHECK_EQUAL(result->create(), false);
@@ -1265,7 +1319,8 @@ BOOST_AUTO_TEST_CASE(deployErrorCode)
             "22032000280204470d0020";
         bytes input;
         boost::algorithm::unhex(errorBin, std::back_inserter(input));
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1");
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
         auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         h256 addressCreate("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e");
         std::string addressString = addressCreate.hex().substr(0, 40);
@@ -1292,10 +1347,15 @@ BOOST_AUTO_TEST_CASE(deployErrorCode)
 
         NativeExecutionMessage paramsBak = *params;
 
-        auto blockHeader = std::make_shared<bcos::protocol::PBBlockHeader>(cryptoSuite);
+        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
+            [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
         blockHeader->setNumber(2);
 
+        std::vector<bcos::protocol::ParentInfo> parentInfos{
+            {{blockHeader->number() - 1, h256(blockHeader->number() - 1)}}};
+        blockHeader->setParentInfo(parentInfos);
         ledger->setBlockNumber(blockHeader->number() - 1);
+        blockHeader->calculateHash(*cryptoSuite->hashImpl());
 
         std::promise<void> nextPromise;
         executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
@@ -1319,6 +1379,7 @@ BOOST_AUTO_TEST_CASE(deployErrorCode)
         BOOST_CHECK(result);
         BOOST_CHECK_EQUAL(result->type(), ExecutionMessage::REVERT);
         BOOST_CHECK_EQUAL(result->status(), (int32_t)TransactionStatus::Unknown);
+        BOOST_CHECK_EQUAL(result->evmStatus(), (int32_t)evmc_status_code::EVMC_SUCCESS);
         BOOST_CHECK_EQUAL(result->contextID(), 99);
         BOOST_CHECK_EQUAL(result->seq(), 1000);
         BOOST_CHECK_EQUAL(result->create(), false);
@@ -1345,6 +1406,406 @@ BOOST_AUTO_TEST_CASE(deployErrorCode)
         commitPromise.get_future().get();
     }
 }
+
+BOOST_AUTO_TEST_CASE(delegateCall)
+{
+    /*
+pragma solidity>=0.6.10 <0.8.20;
+
+contract DelegateCallTest {
+    int public value = 0;
+    address public sender;
+
+    function add() public returns(bytes memory) {
+        value += 1;
+        return "1";
+    }
+
+    function testFailed() public {
+        address addr = address(0x1001);
+
+        dCall(addr, "add()");
+    }
+
+    function testSuccess() public {
+        address addr = address(this);
+        dCall(addr, "add()");
+    }
+
+    function dCall(address addr, string memory func) private returns(bytes memory) {
+        bool success;
+        bytes memory ret;
+        (success, ret) = addr.delegatecall(abi.encodeWithSignature(func));
+        require(success, "delegatecall failed");
+
+        return ret;
+    }
+}
+
+{
+    "4f2be91f": "add()",
+    "67e404ce": "sender()",
+    "0ddbcc82": "testFailed()",
+    "713d3e3e": "testSuccess()",
+    "3fa4f245": "value()"
+}
+
+     */
+
+    std::string codeBin =
+        "60806040526000805534801561001457600080fd5b50610361806100246000396000f3fe608060405234801561"
+        "001057600080fd5b50600436106100575760003560e01c80630ddbcc821461005c5780633fa4f2451461006657"
+        "80634f2be91f1461008257806367e404ce14610097578063713d3e3e146100c2575b600080fd5b6100646100ca"
+        "565b005b61006f60005481565b6040519081526020015b60405180910390f35b61008a6100fc565b6040516100"
+        "799190610285565b6001546100aa906001600160a01b031681565b6040516001600160a01b0390911681526020"
+        "01610079565b610064610132565b600061100190506100f8816040518060400160405280600581526020016461"
+        "6464282960d81b81525061015a565b5050565b6060600160008082825461011091906102ce565b909155505060"
+        "40805180820190915260018152603160f81b6020820152919050565b60003090506100f8816040518060400160"
+        "4052806005815260200164616464282960d81b8152505b60408051600481526024810191829052606091600091"
+        "83916001600160a01b038716919061018990879061030f565b6040805191829003909120602083018051600160"
+        "0160e01b03166001600160e01b0319909216919091179052516101c0919061030f565b60006040518083038185"
+        "5af49150503d80600081146101fb576040519150601f19603f3d011682016040523d82523d6000602084013e61"
+        "0200565b606091505b5090925090508161024d5760405162461bcd60e51b815260206004820152601360248201"
+        "527219195b1959d85d1958d85b1b0819985a5b1959606a1b604482015260640160405180910390fd5b94935050"
+        "5050565b60005b83811015610270578181015183820152602001610258565b8381111561027f57600084840152"
+        "5b50505050565b60208152600082518060208401526102a4816040850160208701610255565b601f01601f1916"
+        "9190910160400192915050565b634e487b7160e01b600052601160045260246000fd5b60008082128015600160"
+        "0160ff1b03849003851316156102f0576102f06102b8565b600160ff1b83900384128116156103095761030961"
+        "02b8565b50500190565b60008251610321818460208701610255565b919091019291505056fea2646970667358"
+        "22122064d7211bf906a8ecf7041b98d7e2d2c243d6d8b7a79b19bb1e0968091916398e64736f6c634300080b00"
+        "33";
+
+
+    bytes input;
+    boost::algorithm::unhex(codeBin, std::back_inserter(input));
+
+    auto tx =
+        fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
+    auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
+    auto hash = tx->hash();
+    txpool->hash2Transaction.emplace(hash, tx);
+
+    auto params = std::make_unique<NativeExecutionMessage>();
+    params->setContextID(100);
+    params->setSeq(1000);
+    params->setDepth(0);
+
+    params->setOrigin(std::string(sender));
+    params->setFrom(std::string(sender));
+
+    // The contract address
+    h256 addressCreate("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e");
+    std::string address = addressCreate.hex().substr(0, 40);
+    params->setTo(address);
+
+    params->setStaticCall(false);
+    params->setGasAvailable(gas);
+    params->setData(input);
+    params->setType(NativeExecutionMessage::MESSAGE);
+    params->setTransactionHash(hash);
+    params->setCreate(true);
+
+    NativeExecutionMessage paramsBak = *params;
+
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
+        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    blockHeader->setVersion((uint32_t)bcos::protocol::BlockVersion::MAX_VERSION);
+    blockHeader->setNumber(1);
+
+    std::vector<bcos::protocol::ParentInfo> parentInfos{
+        {{blockHeader->number() - 1, h256(blockHeader->number() - 1)}}};
+    blockHeader->setParentInfo(parentInfos);
+    ledger->setBlockNumber(blockHeader->number() - 1);
+    blockHeader->calculateHash(*cryptoSuite->hashImpl());
+    std::promise<void> nextPromise;
+    executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
+        BOOST_CHECK(!error);
+        nextPromise.set_value();
+    });
+    nextPromise.get_future().get();
+
+    // --------------------------------
+    // Deploy
+    // --------------------------------
+    std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
+    executor->dmcExecuteTransaction(std::move(params),
+        [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+            BOOST_CHECK(!error);
+            executePromise.set_value(std::move(result));
+        });
+
+    auto result = executePromise.get_future().get();
+
+    BOOST_CHECK_EQUAL(result->type(), NativeExecutionMessage::FINISHED);
+    BOOST_CHECK_EQUAL(result->status(), 0);
+    BOOST_CHECK_EQUAL(result->evmStatus(), 0);
+
+
+    // --------------------------------
+    // Get code
+    // --------------------------------
+    std::promise<bcos::bytes> executePromise1;
+    executor->getCode(address, [&](Error::Ptr error, bcos::bytes code) {
+        BOOST_CHECK(!error);
+        BOOST_CHECK(!code.empty());
+        BOOST_CHECK_GT(code.size(), 0);
+        executePromise1.set_value(code);
+    });
+    auto code = executePromise1.get_future().get();
+
+    // --------------------------------
+    // DelegateCall
+    // --------------------------------
+    std::string testFailedSelector = "0ddbcc82";
+    input = bcos::bytes();
+    boost::algorithm::unhex(testFailedSelector, std::back_inserter(input));
+
+    tx = fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(102), 100002, "1", "1");
+    sender = boost::algorithm::hex_lower(std::string(tx->sender()));
+    hash = tx->hash();
+    txpool->hash2Transaction.emplace(hash, tx);
+
+    params = std::make_unique<NativeExecutionMessage>();
+    params->setContextID(101);
+    params->setSeq(1001);
+    params->setDepth(0);
+    params->setOrigin(std::string(sender));
+    params->setFrom(std::string(sender));
+    // The contract address
+    params->setTo(address);
+
+    params->setStaticCall(false);
+    params->setGasAvailable(gas);
+    params->setData(input);
+    params->setType(NativeExecutionMessage::MESSAGE);
+    params->setTransactionHash(hash);
+    params->setCreate(false);
+    params->setDelegateCall(true);
+    params->setDelegateCallCode(code);
+    params->setDelegateCallSender(sender);
+    params->setDelegateCallAddress(address);
+
+    std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise2;
+    executor->dmcExecuteTransaction(std::move(params),
+        [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+            BOOST_CHECK(!error);
+            executePromise2.set_value(std::move(result));
+        });
+
+    result = executePromise2.get_future().get();
+
+    BOOST_CHECK_EQUAL(result->delegateCall(), true);
+    BOOST_CHECK_EQUAL(result->delegateCallAddress(), "0000000000000000000000000000000000001001");
+    BOOST_CHECK_EQUAL(result->delegateCallSender(), sender);
+    BOOST_CHECK_EQUAL(result->keyLocks().size(), 0);  // no need to access codeHash flag
+}
+
+BOOST_AUTO_TEST_CASE(selfdestruct)
+{
+    // test-bcos-executor -t TestTransactionExecutor/selfdestruct
+
+    /*
+   pragma solidity>=0.6.10 <0.8.20;
+
+contract HelloWorld {
+    string name;
+
+    constructor() public {
+        name = "Hello, World!";
+    }
+
+    function get() public view returns (string memory) {
+        return name;
+    }
+
+    function set(string memory n) public {
+        name = n;
+    }
+
+    function selfdestructTest() public {
+        selfdestruct(payable(address(0)));
+    }
+}
+
+{
+    "6d4ce63c": "get()",
+    "fa967e1f": "selfdestructTest()",
+    "4ed3885e": "set(string)"
+}
+        */
+
+    std::string codeBin =
+        "608060405234801561001057600080fd5b506040518060400160405280600d81526020017f48656c6c6f2c2057"
+        "6f726c6421000000000000000000000000000000000000008152506000908051906020019061005c9291906100"
+        "62565b50610166565b82805461006e90610105565b90600052602060002090601f016020900481019282610090"
+        "57600085556100d7565b82601f106100a957805160ff19168380011785556100d7565b82800160010185558215"
+        "6100d7579182015b828111156100d65782518255916020019190600101906100bb565b5b5090506100e4919061"
+        "00e8565b5090565b5b808211156101015760008160009055506001016100e9565b5090565b6000600282049050"
+        "600182168061011d57607f821691505b6020821081141561013157610130610137565b5b50919050565b7f4e48"
+        "7b7100000000000000000000000000000000000000000000000000000000600052602260045260246000fd5b61"
+        "04d7806101756000396000f3fe608060405234801561001057600080fd5b50600436106100415760003560e01c"
+        "80634ed3885e146100465780636d4ce63c14610062578063fa967e1f14610080575b600080fd5b610060600480"
+        "360381019061005b9190610263565b61008a565b005b61006a6100a4565b60405161007791906102e5565b6040"
+        "5180910390f35b610088610136565b005b80600090805190602001906100a0929190610150565b5050565b6060"
+        "600080546100b3906103bb565b80601f0160208091040260200160405190810160405280929190818152602001"
+        "8280546100df906103bb565b801561012c5780601f106101015761010080835404028352916020019161012c56"
+        "5b820191906000526020600020905b81548152906001019060200180831161010f57829003601f168201915b50"
+        "50505050905090565b600073ffffffffffffffffffffffffffffffffffffffff16ff5b82805461015c906103bb"
+        "565b90600052602060002090601f01602090048101928261017e57600085556101c5565b82601f106101975780"
+        "5160ff19168380011785556101c5565b828001600101855582156101c5579182015b828111156101c457825182"
+        "55916020019190600101906101a9565b5b5090506101d291906101d6565b5090565b5b808211156101ef576000"
+        "8160009055506001016101d7565b5090565b60006102066102018461032c565b610307565b9050828152602081"
+        "0184848401111561022257610221610481565b5b61022d848285610379565b509392505050565b600082601f83"
+        "011261024a5761024961047c565b5b813561025a8482602086016101f3565b91505092915050565b6000602082"
+        "840312156102795761027861048b565b5b600082013567ffffffffffffffff8111156102975761029661048656"
+        "5b5b6102a384828501610235565b91505092915050565b60006102b78261035d565b6102c18185610368565b93"
+        "506102d1818560208601610388565b6102da81610490565b840191505092915050565b60006020820190508181"
+        "0360008301526102ff81846102ac565b905092915050565b6000610311610322565b905061031d82826103ed56"
+        "5b919050565b6000604051905090565b600067ffffffffffffffff8211156103475761034661044d565b5b6103"
+        "5082610490565b9050602081019050919050565b600081519050919050565b6000828252602082019050929150"
+        "50565b82818337600083830152505050565b60005b838110156103a65780820151818401526020810190506103"
+        "8b565b838111156103b5576000848401525b50505050565b600060028204905060018216806103d357607f8216"
+        "91505b602082108114156103e7576103e661041e565b5b50919050565b6103f682610490565b810181811067ff"
+        "ffffffffffffff821117156104155761041461044d565b5b80604052505050565b7f4e487b7100000000000000"
+        "000000000000000000000000000000000000000000600052602260045260246000fd5b7f4e487b710000000000"
+        "0000000000000000000000000000000000000000000000600052604160045260246000fd5b600080fd5b600080"
+        "fd5b600080fd5b600080fd5b6000601f19601f830116905091905056fea2646970667358221220b86cdade4230"
+        "cd8c479fc0822250b79a3f731a0e6d2dd04df1f043536198e02464736f6c63430008070033";
+
+
+    bytes input;
+    boost::algorithm::unhex(codeBin, std::back_inserter(input));
+
+    auto tx =
+        fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
+    auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
+    auto hash = tx->hash();
+    txpool->hash2Transaction.emplace(hash, tx);
+
+    auto params = std::make_unique<NativeExecutionMessage>();
+    params->setContextID(100);
+    params->setSeq(1000);
+    params->setDepth(0);
+
+    params->setOrigin(std::string(sender));
+    params->setFrom(std::string(sender));
+
+    // The contract address
+    h256 addressCreate("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310f");
+    std::string address = addressCreate.hex().substr(0, 40);
+    params->setTo(address);
+
+    params->setStaticCall(false);
+    params->setGasAvailable(gas);
+    params->setData(input);
+    params->setType(NativeExecutionMessage::MESSAGE);
+    params->setTransactionHash(hash);
+    params->setCreate(true);
+
+    NativeExecutionMessage paramsBak = *params;
+
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
+        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    blockHeader->setVersion((uint32_t)bcos::protocol::BlockVersion::MAX_VERSION);
+    blockHeader->setNumber(1);
+
+    std::vector<bcos::protocol::ParentInfo> parentInfos{
+        {blockHeader->number() - 1, h256(blockHeader->number() - 1)}};
+    blockHeader->setParentInfo(parentInfos);
+    ledger->setBlockNumber(blockHeader->number() - 1);
+    blockHeader->calculateHash(*cryptoSuite->hashImpl());
+    std::promise<void> nextPromise;
+    executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
+        BOOST_CHECK(!error);
+        nextPromise.set_value();
+    });
+    nextPromise.get_future().get();
+
+    // --------------------------------
+    // Deploy
+    // --------------------------------
+    std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
+    executor->dmcExecuteTransaction(std::move(params),
+        [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+            BOOST_CHECK(!error);
+            executePromise.set_value(std::move(result));
+        });
+
+    auto result = executePromise.get_future().get();
+
+    BOOST_CHECK_EQUAL(result->type(), NativeExecutionMessage::FINISHED);
+    BOOST_CHECK_EQUAL(result->status(), 0);
+    BOOST_CHECK_EQUAL(result->evmStatus(), 0);
+
+
+    // --------------------------------
+    // Get code
+    // --------------------------------
+    std::promise<bcos::bytes> executePromise1;
+    executor->getCode(address, [&](Error::Ptr error, bcos::bytes code) {
+        BOOST_CHECK(!error);
+        BOOST_CHECK(!code.empty());
+        BOOST_CHECK_GT(code.size(), 0);
+        executePromise1.set_value(code);
+    });
+    auto code = executePromise1.get_future().get();
+
+    // --------------------------------
+    // selfdestruct
+    // --------------------------------
+    std::string testFailedSelector = "fa967e1f";
+    input = bcos::bytes();
+    boost::algorithm::unhex(testFailedSelector, std::back_inserter(input));
+
+    tx = fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(102), 100002, "1", "1");
+    sender = boost::algorithm::hex_lower(std::string(tx->sender()));
+    hash = tx->hash();
+    txpool->hash2Transaction.emplace(hash, tx);
+
+    params = std::make_unique<NativeExecutionMessage>();
+    params->setContextID(101);
+    params->setSeq(1001);
+    params->setDepth(0);
+    params->setOrigin(std::string(sender));
+    params->setFrom(std::string(sender));
+    // The contract address
+    params->setTo(address);
+
+    params->setStaticCall(false);
+    params->setGasAvailable(gas);
+    params->setData(input);
+    params->setType(NativeExecutionMessage::MESSAGE);
+    params->setTransactionHash(hash);
+    params->setCreate(false);
+    params->setDelegateCall(false);
+    params->setDelegateCallCode(code);
+    params->setDelegateCallSender(sender);
+    params->setDelegateCallAddress(address);
+
+    std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise2;
+    executor->dmcExecuteTransaction(std::move(params),
+        [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+            BOOST_CHECK(!error);
+            executePromise2.set_value(std::move(result));
+        });
+    executePromise2.get_future().get();
+
+    // --------------------------------
+    // Get code again(should not get)
+    // --------------------------------
+    std::promise<bcos::bytes> executePromise3;
+    executor->getHash(1, [&](bcos::Error::UniquePtr, crypto::HashType) {
+        executor->getCode(address, [&](Error::Ptr error, bcos::bytes code) {
+            BOOST_CHECK(!error);
+            BOOST_CHECK(code.empty());
+            BOOST_CHECK_EQUAL(code.size(), 0);
+            executePromise3.set_value(code);
+        });
+    });
+
+    executePromise3.get_future().get();
+}
+
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test

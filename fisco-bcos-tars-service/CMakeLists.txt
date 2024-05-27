@@ -9,7 +9,7 @@ macro(compile_service SERVICE_SOURCE_PATH BINARY_NAME)
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/fisco-bcos-tars-service/${SERVICE_SOURCE_PATH}/${BINARY_NAME} ${CMAKE_BINARY_DIR}/fisco-bcos-tars-service/${BINARY_NAME}/${BINARY_NAME}
     COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR}/fisco-bcos-tars-service tar czfv ${BINARY_NAME}.tgz ${BINARY_NAME}/${BINARY_NAME}
-    COMMENT "Compressing ${BINARY_NAME}...")
+    COMMENT "Compressing ${BINARY_NAME}..." DEPENDS ${CMAKE_BINARY_DIR}/fisco-bcos-tars-service/${SERVICE_SOURCE_PATH}/${BINARY_NAME})
 
     add_custom_target(${BINARY_NAME}-tar DEPENDS ${BINARY_NAME}.tgz ${BINARY_NAME})
     list(APPEND SERVICE_TAR_LIST ${BINARY_NAME}-tar)

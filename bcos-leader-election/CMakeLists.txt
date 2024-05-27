@@ -17,16 +17,14 @@
 #------------------------------------------------------------------------------
 
 cmake_minimum_required(VERSION 3.10)
-set(CMAKE_OSX_DEPLOYMENT_TARGET "11.3" CACHE STRING "Minimum OS X deployment version")
 
 if(WITH_TIKV)
-    include(Version)
+
     project(bcos-leader-election VERSION ${VERSION})
 
     file(GLOB_RECURSE SRCS src/*.cpp)
-    include(ProjectEtcdCpp)
-    # find_package(etcd-cpp-api CONFIG REQUIRED)
-    # find_package(gRPC REQUIRED)
+    find_package(etcd-cpp-api CONFIG REQUIRED)
+    find_package(gRPC REQUIRED)
     add_library(${LEADER_ELECTION_TARGET} ${SRCS})
     target_link_libraries(${LEADER_ELECTION_TARGET} PUBLIC bcos-utilities bcos-framework etcd-cpp-api)
 endif()

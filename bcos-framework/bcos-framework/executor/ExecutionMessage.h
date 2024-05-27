@@ -14,7 +14,7 @@
  *  limitations under the License.
  *
  * @brief interface of ExecutionParams
- * @file ExecutionParams.h
+ * @file ExecutionMessage.h
  * @author: ancelmo
  * @date: 2021-09-22
  */
@@ -36,6 +36,8 @@ namespace protocol
 static const std::string SERIAL_EXECUTIVE_FLOW_ADDRESS =
     std::string("serial_executive_flow_address");
 
+const bcos::bytes GET_CODE_INPUT_BYTES = asBytes(std::string("getCode"));
+
 class ExecutionMessage
 {
 public:
@@ -52,6 +54,7 @@ public:
         KEY_LOCK,    // Send a wait key lock to scheduler, or release key lock
         SEND_BACK,   // Send a dag refuse to scheduler
         REVERT,      // Send/Receive a revert to/from previous external call
+        PRE_FINISH,  // Execution finished, and waiting for FINISHED or REVERT
     };
 
     static std::string getTypeName(Type type)
@@ -70,6 +73,8 @@ public:
             return "SEND_BACK";
         case REVERT:
             return "REVERT";
+        case PRE_FINISH:
+            return "PRE_FINISH";
         }
         return "Unknown";
     }
@@ -79,12 +84,19 @@ public:
         std::stringstream ss;
         ss << "[" << (staticCall() ? "call" : "tx") << "|" << contextID() << "|" << seq() << "|"
            << getTypeName(type()) << "|" << from() << "->" << to() << "|" << gasAvailable() << "|"
-           << toHex(keyLockAcquired()) << "|" << keyLocks().size() << ":";
+           << value() << "|" << toHex(keyLockAcquired()) << "|" << logEntries().size() << "|"
+           << keyLocks().size() << ":";
         for (auto& lock : keyLocks())
         {
             ss << toHex(lock) << ".";
         }
         ss << "]";
+
+        if (delegateCall())
+        {
+            ss << "(delegateCall|" << delegateCallSender() << "|" << from() << "->"
+               << delegateCallAddress() << "|code.size=" << delegateCallCode().size() << ")";
+        }
         return ss.str();
     }
 
@@ -128,6 +140,30 @@ public:
     virtual void setInternalCall(bool internalCall) = 0;
 
     // -----------------------------------------------
+    // balance fields
+    // -----------------------------------------------
+    virtual std::string_view value() const = 0;
+    virtual void setValue(std::string value) = 0;
+
+    virtual std::string_view gasPrice() const = 0;
+    virtual void setGasPrice(std::string gasPrice) = 0;
+
+    virtual int64_t gasLimit() const = 0;
+    virtual void setGasLimit(int64_t gasLimit) = 0;
+
+    virtual std::string_view maxFeePerGas() const = 0;
+    virtual void setMaxFeePerGas(std::string maxFeePerGas) = 0;
+
+    virtual std::string_view maxPriorityFeePerGas() const = 0;
+    virtual void setMaxPriorityFeePerGas(std::string maxPriorityFeePerGas) = 0;
+
+    // -----------------------------------------------
+    // balance receipt fields
+    // -----------------------------------------------
+    virtual std::string_view effectiveGasPrice() const = 0;
+    virtual void setEffectiveGasPrice(std::string effectiveGasPrice) = 0;
+
+    // -----------------------------------------------
     // Request / Response common fields
     // -----------------------------------------------
     virtual int64_t gasAvailable() const = 0;
@@ -150,6 +186,9 @@ public:
     virtual int32_t status() const = 0;
     virtual void setStatus(int32_t status) = 0;
 
+    virtual int32_t evmStatus() const = 0;
+    virtual void setEvmStatus(int32_t evmstatus) = 0;
+
     virtual std::string_view message() const = 0;
     virtual void setMessage(std::string message) = 0;
 
@@ -170,6 +209,22 @@ public:
 
     virtual std::string_view keyLockAcquired() const = 0;
     virtual void setKeyLockAcquired(std::string keyLock) = 0;
+
+    virtual bool delegateCall() const = 0;
+    virtual void setDelegateCall(bool delegateCall) = 0;
+
+    virtual std::string_view delegateCallAddress() const = 0;
+    virtual void setDelegateCallAddress(std::string delegateCallAddress) = 0;
+
+    virtual bcos::bytesConstRef delegateCallCode() const = 0;
+    virtual bytes takeDelegateCallCode() = 0;
+    virtual void setDelegateCallCode(bcos::bytes delegateCallCode) = 0;
+
+    virtual std::string_view delegateCallSender() const = 0;
+    virtual void setDelegateCallSender(std::string delegateCallSender) = 0;
+
+    virtual bool hasContractTableChanged() const = 0;
+    virtual void setHasContractTableChanged(bool hasChanged) = 0;
 };
 
 class ExecutionMessageFactory

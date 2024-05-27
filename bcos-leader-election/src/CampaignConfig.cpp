@@ -62,7 +62,7 @@ void CampaignConfig::fetchLeaderInfoFromEtcd()
     {
         ELECTION_LOG(WARNING) << LOG_DESC("fetchLeaderInfoFromEtcd exception")
                               << LOG_KV("leaderKey", m_leaderKey)
-                              << LOG_KV("error", boost::diagnostic_information(e));
+                              << LOG_KV("message", boost::diagnostic_information(e));
     }
 }
 
@@ -110,6 +110,11 @@ bool CampaignConfig::checkAndUpdateLeaderKey(etcd::Response _response)
     leader->setSeq(seq);
     leader->setLeaseID(_response.value().lease());
     resetLeader(leader);
+    // calls campaignLeader try to tryToSwitchToBackup if the leader is not the node-self
+    if (m_triggerCampaign)
+    {
+        m_triggerCampaign();
+    }
     ELECTION_LOG(INFO) << LOG_DESC("checkAndUpdateLeaderKey success")
                        << LOG_KV("leaderKey", m_leaderKey) << LOG_KV("leader", m_leader->memberID())
                        << LOG_KV("version", valueVersion) << LOG_KV("modifiedIndex", seq)
@@ -123,4 +128,18 @@ void CampaignConfig::onLeaderKeyChanged(etcd::Response _response)
     ELECTION_LOG(INFO) << LOG_DESC("onLeaderKeyChanged, checkAndUpdateLeaderKey")
                        << LOG_KV("leaderKey", m_leaderKey);
     checkAndUpdateLeaderKey(_response);
+}
+
+
+void CampaignConfig::onElectionClusterRecover()
+{
+    if (m_electionClusterOk.load())
+    {
+        return;
+    }
+    resetLeader(nullptr);
+    // fetch leader and trigger campaign again(Note: checkAndUpdateLeaderKey of fetchLeader will
+    // trigger leader campaign)
+    fetchLeader();
+    ElectionConfig::onElectionClusterRecover();
 }

@@ -25,9 +25,8 @@
 #include <bcos-utilities/Common.h>
 #include <json/json.h>
 #include <memory>
-namespace bcos
-{
-namespace group
+
+namespace bcos::group
 {
 class JsonChainNodeInfoCodec
 {
@@ -35,7 +34,7 @@ public:
     using Ptr = std::shared_ptr<JsonChainNodeInfoCodec>;
     using ConstPtr = std::shared_ptr<const JsonChainNodeInfoCodec>;
     JsonChainNodeInfoCodec() { m_chainNodeInfoFactory = std::make_shared<ChainNodeInfoFactory>(); }
-    virtual ~JsonChainNodeInfoCodec() {}
+    virtual ~JsonChainNodeInfoCodec() = default;
 
     virtual void deserializeIniConfig(ChainNodeInfo::Ptr _chainNodeInfo)
     {
@@ -88,7 +87,7 @@ public:
             BOOST_THROW_EXCEPTION(bcos::InvalidParameter() << bcos::errinfo_comment(
                                       "The chain node information must set the chain node type."));
         }
-        NodeCryptoType type = (NodeCryptoType)(value["type"].asUInt());
+        auto type = (NodeCryptoType)(value["type"].asUInt());
         chainNodeInfo->setNodeCryptoType(type);
 
         // required: parse iniConfig
@@ -192,5 +191,4 @@ public:
 private:
     ChainNodeInfoFactory::Ptr m_chainNodeInfoFactory;
 };
-}  // namespace group
-}  // namespace bcos
+}  // namespace bcos::group

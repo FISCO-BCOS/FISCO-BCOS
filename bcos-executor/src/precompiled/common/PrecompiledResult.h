@@ -22,23 +22,21 @@
 #include "PrecompiledGas.h"
 #include <bcos-utilities/Common.h>
 
-namespace bcos
-{
-namespace precompiled
+namespace bcos::precompiled
 {
 struct PrecompiledExecResult
 {
     using Ptr = std::shared_ptr<PrecompiledExecResult>;
     PrecompiledExecResult() = default;
-    PrecompiledExecResult(const executor::CallParameters::UniquePtr& _callParameters)
-      : m_sender(_callParameters->senderAddress),
-        m_codeAddress(_callParameters->codeAddress),
-        m_precompiledAddress(_callParameters->receiveAddress),
-        m_origin(_callParameters->origin),
-        m_input(ref(_callParameters->data)),
-        m_gas(_callParameters->gas),
-        m_staticCall(_callParameters->staticCall),
-        m_create(_callParameters->create)
+    PrecompiledExecResult(const executor::CallParameters& _callParameters)
+      : m_sender(_callParameters.senderAddress),
+        m_codeAddress(_callParameters.codeAddress),
+        m_precompiledAddress(_callParameters.receiveAddress),
+        m_origin(_callParameters.origin),
+        m_input(ref(_callParameters.data)),
+        m_gasLeft(_callParameters.gas),
+        m_staticCall(_callParameters.staticCall),
+        m_create(_callParameters.create)
     {}
     ~PrecompiledExecResult() = default;
     PrecompiledExecResult(const PrecompiledExecResult&) = delete;
@@ -54,8 +52,9 @@ struct PrecompiledExecResult
     /** for output **/
     bytes const& execResult() const { return m_execResult; }
     bytes& mutableExecResult() { return m_execResult; }
-    void setExecResult(bytes const& _execResult) { m_execResult = std::move(_execResult); }
-    void setGas(int64_t _gas) { m_gas = _gas; }
+    void setExecResult(bytes const& _execResult) { m_execResult = _execResult; }
+    void setExecResult(bytes&& _execResult) { m_execResult = std::move(_execResult); }
+    void setGasLeft(int64_t _gasLeft) { m_gasLeft = _gasLeft; }
     inline void setExternalResult(executor::CallParameters::UniquePtr _callParameter)
     {
         m_execResult = std::move(_callParameter->data);
@@ -69,7 +68,7 @@ struct PrecompiledExecResult
     inline void takeDataToCallParameter(executor::CallParameters::UniquePtr& callParameters)
     {
         callParameters->type = executor::CallParameters::FINISHED;
-        callParameters->gas = m_gas;
+        callParameters->gas = m_gasLeft;
         callParameters->status = (int32_t)protocol::TransactionStatus::None;
         callParameters->data = std::move(m_execResult);
         callParameters->internalCall = false;
@@ -82,9 +81,8 @@ struct PrecompiledExecResult
 
     bytesConstRef m_input;  // common field, transaction data, binary format
     bcos::bytes m_execResult;
-    int64_t m_gas = 0;
-    bool m_staticCall = false;    // common field
-    bool m_create = false;        // by request, is creation
+    int64_t m_gasLeft = 0;
+    bool m_staticCall = false;  // common field
+    bool m_create = false;      // by request, is creation
 };
-}  // namespace precompiled
-}  // namespace bcos
+}  // namespace bcos::precompiled

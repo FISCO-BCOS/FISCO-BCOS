@@ -22,44 +22,46 @@
 #include "bcos-txpool/txpool/validator/TxPoolNonceChecker.h"
 #include <bcos-framework/ledger/LedgerInterface.h>
 
-namespace bcos
-{
-namespace txpool
+namespace bcos::txpool
 {
 class LedgerNonceChecker : public TxPoolNonceChecker
 {
 public:
     LedgerNonceChecker(
         std::shared_ptr<std::map<int64_t, bcos::protocol::NonceListPtr> > _initialNonces,
-        bcos::protocol::BlockNumber _blockNumber, int64_t _blockLimit)
-      : TxPoolNonceChecker(), m_blockNumber(_blockNumber), m_blockLimit(_blockLimit)
+        bcos::protocol::BlockNumber _blockNumber, int64_t _blockLimit, bool _checkBlockLimit)
+      : TxPoolNonceChecker(),
+        m_blockNumber(_blockNumber),
+        m_blockLimit(_blockLimit),
+        m_checkBlockLimit(_checkBlockLimit)
     {
         if (_initialNonces)
         {
-            initNonceCache(*_initialNonces);
+            initNonceCache(std::move(_initialNonces));
         }
     }
     bcos::protocol::TransactionStatus checkNonce(
         bcos::protocol::Transaction::ConstPtr _tx, bool _shouldUpdate = false) override;
 
-    void batchInsert(
-        bcos::protocol::BlockNumber _batchId, bcos::protocol::NonceListPtr _nonceList) override;
+    void batchInsert(bcos::protocol::BlockNumber _batchId,
+        bcos::protocol::NonceListPtr const& _nonceList) override;
 
 protected:
     virtual bcos::protocol::TransactionStatus checkBlockLimit(
         bcos::protocol::Transaction::ConstPtr _tx);
-    virtual void initNonceCache(std::map<int64_t, bcos::protocol::NonceListPtr> _initialNonces);
+    void initNonceCache(
+        std::shared_ptr<std::map<int64_t, bcos::protocol::NonceListPtr> > _initialNonces);
 
 private:
     std::atomic<bcos::protocol::BlockNumber> m_blockNumber = {0};
     int64_t m_blockLimit;
+    bool m_checkBlockLimit = true;
 
     /// cache the block nonce to in case of accessing the DB to get nonces of given block frequently
     /// key: block number
     /// value: all the nonces of a given block
-    /// we cache at most m_blockLimit entries(occuppy about 32KB)
+    /// we cache at most m_blockLimit entries(occupy about 32KB)
     std::map<int64_t, bcos::protocol::NonceListPtr> m_blockNonceCache;
     mutable SharedMutex x_blockNonceCache;
 };
-}  // namespace txpool
-}  // namespace bcos
+}  // namespace bcos::txpool

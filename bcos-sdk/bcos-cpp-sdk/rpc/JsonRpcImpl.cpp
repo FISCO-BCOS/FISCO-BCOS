@@ -18,6 +18,7 @@
  * @date 2021-08-10
  */
 
+#include "boost/format.hpp"
 #include <bcos-boostssl/websocket/WsError.h>
 #include <bcos-cpp-sdk/rpc/Common.h>
 #include <bcos-cpp-sdk/rpc/JsonRpcImpl.h>
@@ -47,42 +48,60 @@ void JsonRpcImpl::start()
 
 void JsonRpcImpl::stop()
 {
-    RPCIMPL_LOG(INFO) << LOG_BADGE("stop") << LOG_DESC("stop rpc");
+    if (m_service)
+    {
+        // RPCIMPL_LOG(INFO) << LOG_BADGE("stop") << LOG_DESC("stop rpc");
+        m_service->stop();
+    }
 }
 
 void JsonRpcImpl::genericMethod(const std::string& _data, RespFunc _respFunc)
 {
     m_sender("", "", _data, _respFunc);
-    RPCIMPL_LOG(TRACE) << LOG_BADGE("genericMethod") << LOG_KV("request", _data);
+    if (c_fileLogLevel == TRACE) [[unlikely]]
+    {
+        RPCIMPL_LOG(TRACE) << LOG_BADGE("genericMethod") << LOG_KV("request", _data);
+    }
 }
 
 void JsonRpcImpl::genericMethod(
     const std::string& _groupID, const std::string& _data, RespFunc _respFunc)
 {
-    m_sender(_groupID, "", _data, _respFunc);
-    RPCIMPL_LOG(TRACE) << LOG_BADGE("genericMethod") << LOG_KV("group", _groupID)
-                       << LOG_KV("request", _data);
+    std::string name;
+    if (m_sendRequestToHighestBlockNode)
+    {
+        m_service->randomGetHighestBlockNumberNode(_groupID, name);
+    }
+    m_sender(_groupID, name, _data, _respFunc);
+    if (c_fileLogLevel == TRACE) [[unlikely]]
+    {
+        RPCIMPL_LOG(TRACE) << LOG_BADGE("genericMethod") << LOG_KV("group", _groupID)
+                           << LOG_KV("request", _data);
+    }
 }
 
 void JsonRpcImpl::genericMethod(const std::string& _groupID, const std::string& _nodeName,
     const std::string& _data, RespFunc _respFunc)
 {
     std::string name = _nodeName;
-    if (name.empty())
+    if (m_sendRequestToHighestBlockNode && name.empty())
     {
         m_service->randomGetHighestBlockNumberNode(_groupID, name);
     }
 
     m_sender(_groupID, name, _data, _respFunc);
-    RPCIMPL_LOG(TRACE) << LOG_BADGE("genericMethod") << LOG_KV("group", _groupID)
-                       << LOG_KV("nodeName", name) << LOG_KV("request", _data);
+    if (c_fileLogLevel == TRACE) [[unlikely]]
+    {
+        RPCIMPL_LOG(TRACE) << LOG_BADGE("genericMethod") << LOG_KV("group", _groupID)
+                           << LOG_KV("nodeName", name) << LOG_KV("request", _data);
+    }
 }
 
 void JsonRpcImpl::call(const std::string& _groupID, const std::string& _nodeName,
     const std::string& _to, const std::string& _data, RespFunc _respFunc)
 {
     std::string name = _nodeName;
-    if (name.empty())
+    if (m_sendRequestToHighestBlockNode && name.empty())
     {
         m_service->randomGetHighestBlockNumberNode(_groupID, name);
     }
@@ -94,31 +113,34 @@ void JsonRpcImpl::call(const std::string& _groupID, const std::string& _nodeName
     params.append(_data);
 
     auto request = m_factory->buildRequest("call", params);
-    auto s = request->toJson();
-    m_sender(_groupID, name, s, _respFunc);
-    RPCIMPL_LOG(DEBUG) << LOG_BADGE("call") << LOG_KV("request", s);
+    auto json = request->toJson();
+    m_sender(_groupID, name, json, _respFunc);
+    if (c_fileLogLevel <= DEBUG) [[unlikely]]
+    {
+        RPCIMPL_LOG(DEBUG) << LOG_BADGE("call") << LOG_KV("request", json);
+    }
 }
 
 void JsonRpcImpl::sendTransaction(const std::string& _groupID, const std::string& _nodeName,
     const std::string& _data, bool _requireProof, RespFunc _respFunc)
 {
     std::string name = _nodeName;
-    if (name.empty())
+    if (m_sendRequestToHighestBlockNode && name.empty())
     {
         m_service->randomGetHighestBlockNumberNode(_groupID, name);
     }
 
-    auto groupInfo = m_service->getGroupInfo(_groupID);
-    if (!groupInfo)
-    {
-        auto error = std::make_shared<Error>(bcos::boostssl::ws::WsError::EndPointNotExist,
-            "the group does not exist, group: " + _groupID);
-        _respFunc(error, nullptr);
-        return;
-    }
+    boost::format fmt(
+        "{\"id\":%1%,\"jsonrpc\":\"2.0\",\"method\":\"sendTransaction\",\"params\":[\"%2%\",\"%3%"
+        "\",\"%4%\",%5%]}");
+    fmt % m_factory->nextId();
+    fmt % _groupID;
+    fmt % name;
+    fmt % _data;
+    fmt % _requireProof;
 
-    auto txBytes = fromHexString(_data);
-
+    std::string json = fmt.str();
+    /*
     Json::Value params = Json::Value(Json::arrayValue);
     params.append(_groupID);
     params.append(name);
@@ -127,15 +149,23 @@ void JsonRpcImpl::sendTransaction(const std::string& _groupID, const std::string
 
     auto request = m_factory->buildRequest("sendTransaction", params);
     auto s = request->toJson();
-    m_sender(_groupID, name, s, _respFunc);
-    RPCIMPL_LOG(DEBUG) << LOG_BADGE("sendTransaction") << LOG_KV("request", s);
+    */
+
+    m_sender(_groupID, name, json, _respFunc);
+    if (c_fileLogLevel <= DEBUG) [[unlikely]]
+    {
+        RPCIMPL_LOG(DEBUG) << LOG_BADGE("sendTransaction")
+                           << LOG_KV(
+                                  "sendRequestToHighestBlockNode", m_sendRequestToHighestBlockNode)
+                           << LOG_KV("request", json);
+    }
 }
 
 void JsonRpcImpl::getTransaction(const std::string& _groupID, const std::string& _nodeName,
     const std::string& _txHash, bool _requireProof, RespFunc _respFunc)
 {
     std::string name = _nodeName;
-    if (name.empty())
+    if (m_sendRequestToHighestBlockNode && name.empty())
     {
         m_service->randomGetHighestBlockNumberNode(_groupID, name);
     }
@@ -147,16 +177,19 @@ void JsonRpcImpl::getTransaction(const std::string& _groupID, const std::string&
     params.append(_requireProof);
 
     auto request = m_factory->buildRequest("getTransaction", params);
-    auto s = request->toJson();
-    m_sender(_groupID, name, s, _respFunc);
-    RPCIMPL_LOG(DEBUG) << LOG_BADGE("getTransaction") << LOG_KV("request", s);
+    auto json = request->toJson();
+    m_sender(_groupID, name, json, _respFunc);
+    if (c_fileLogLevel <= DEBUG) [[unlikely]]
+    {
+        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getTransaction") << LOG_KV("request", json);
+    }
 }
 
 void JsonRpcImpl::getTransactionReceipt(const std::string& _groupID, const std::string& _nodeName,
     const std::string& _txHash, bool _requireProof, RespFunc _respFunc)
 {
     std::string name = _nodeName;
-    if (name.empty())
+    if (m_sendRequestToHighestBlockNode && name.empty())
     {
         m_service->randomGetHighestBlockNumberNode(_groupID, name);
     }
@@ -168,16 +201,19 @@ void JsonRpcImpl::getTransactionReceipt(const std::string& _groupID, const std::
     params.append(_requireProof);
 
     auto request = m_factory->buildRequest("getTransactionReceipt", params);
-    auto s = request->toJson();
-    m_sender(_groupID, name, s, _respFunc);
-    RPCIMPL_LOG(DEBUG) << LOG_BADGE("getTransactionReceipt") << LOG_KV("request", s);
+    auto json = request->toJson();
+    m_sender(_groupID, name, json, _respFunc);
+    if (c_fileLogLevel <= DEBUG) [[unlikely]]
+    {
+        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getTransactionReceipt") << LOG_KV("request", json);
+    }
 }
 
 void JsonRpcImpl::getBlockByHash(const std::string& _groupID, const std::string& _nodeName,
     const std::string& _blockHash, bool _onlyHeader, bool _onlyTxHash, RespFunc _respFunc)
 {
     std::string name = _nodeName;
-    if (name.empty())
+    if (m_sendRequestToHighestBlockNode && name.empty())
     {
         m_service->randomGetHighestBlockNumberNode(_groupID, name);
     }
@@ -190,16 +226,19 @@ void JsonRpcImpl::getBlockByHash(const std::string& _groupID, const std::string&
     params.append(_onlyTxHash);
 
     auto request = m_factory->buildRequest("getBlockByHash", params);
-    auto s = request->toJson();
-    m_sender(_groupID, name, s, _respFunc);
-    RPCIMPL_LOG(DEBUG) << LOG_BADGE("getBlockByHash") << LOG_KV("request", s);
+    auto json = request->toJson();
+    m_sender(_groupID, name, json, _respFunc);
+    if (c_fileLogLevel <= DEBUG) [[unlikely]]
+    {
+        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getBlockByHash") << LOG_KV("request", json);
+    }
 }
 
 void JsonRpcImpl::getBlockByNumber(const std::string& _groupID, const std::string& _nodeName,
     int64_t _blockNumber, bool _onlyHeader, bool _onlyTxHash, RespFunc _respFunc)
 {
     std::string name = _nodeName;
-    if (name.empty())
+    if (m_sendRequestToHighestBlockNode && name.empty())
     {
         m_service->randomGetHighestBlockNumberNode(_groupID, name);
     }
@@ -212,16 +251,19 @@ void JsonRpcImpl::getBlockByNumber(const std::string& _groupID, const std::strin
     params.append(_onlyTxHash);
 
     auto request = m_factory->buildRequest("getBlockByNumber", params);
-    auto s = request->toJson();
-    m_sender(_groupID, name, s, _respFunc);
-    RPCIMPL_LOG(DEBUG) << LOG_BADGE("getBlockByNumber") << LOG_KV("request", s);
+    auto json = request->toJson();
+    m_sender(_groupID, name, json, _respFunc);
+    if (c_fileLogLevel <= DEBUG) [[unlikely]]
+    {
+        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getBlockByNumber") << LOG_KV("request", json);
+    }
 }
 
 void JsonRpcImpl::getBlockHashByNumber(const std::string& _groupID, const std::string& _nodeName,
     int64_t _blockNumber, RespFunc _respFunc)
 {
     std::string name = _nodeName;
-    if (name.empty())
+    if (m_sendRequestToHighestBlockNode && name.empty())
     {
         m_service->randomGetHighestBlockNumberNode(_groupID, name);
     }
@@ -232,16 +274,19 @@ void JsonRpcImpl::getBlockHashByNumber(const std::string& _groupID, const std::s
     params.append(_blockNumber);
 
     auto request = m_factory->buildRequest("getBlockHashByNumber", params);
-    auto s = request->toJson();
-    m_sender(_groupID, name, s, _respFunc);
-    RPCIMPL_LOG(DEBUG) << LOG_BADGE("getBlockHashByNumber") << LOG_KV("request", s);
+    auto json = request->toJson();
+    m_sender(_groupID, name, json, _respFunc);
+    if (c_fileLogLevel <= DEBUG) [[unlikely]]
+    {
+        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getBlockHashByNumber") << LOG_KV("request", json);
+    }
 }
 
 void JsonRpcImpl::getBlockNumber(
     const std::string& _groupID, const std::string& _nodeName, RespFunc _respFunc)
 {
     std::string name = _nodeName;
-    if (name.empty())
+    if (m_sendRequestToHighestBlockNode && name.empty())
     {
         m_service->randomGetHighestBlockNumberNode(_groupID, name);
     }
@@ -251,16 +296,19 @@ void JsonRpcImpl::getBlockNumber(
     params.append(name);
 
     auto request = m_factory->buildRequest("getBlockNumber", params);
-    auto s = request->toJson();
-    m_sender(_groupID, name, s, _respFunc);
-    RPCIMPL_LOG(DEBUG) << LOG_BADGE("getBlockNumber") << LOG_KV("request", s);
+    auto json = request->toJson();
+    m_sender(_groupID, name, json, _respFunc);
+    if (c_fileLogLevel <= DEBUG) [[unlikely]]
+    {
+        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getBlockNumber") << LOG_KV("request", json);
+    }
 }
 
 void JsonRpcImpl::getCode(const std::string& _groupID, const std::string& _nodeName,
-    const std::string _contractAddress, RespFunc _respFunc)
+    const std::string& _contractAddress, RespFunc _respFunc)
 {
     std::string name = _nodeName;
-    if (name.empty())
+    if (m_sendRequestToHighestBlockNode && name.empty())
     {
         m_service->randomGetHighestBlockNumberNode(_groupID, name);
     }
@@ -271,16 +319,19 @@ void JsonRpcImpl::getCode(const std::string& _groupID, const std::string& _nodeN
     params.append(_contractAddress);
 
     auto request = m_factory->buildRequest("getCode", params);
-    auto s = request->toJson();
-    m_sender(_groupID, name, s, _respFunc);
-    RPCIMPL_LOG(DEBUG) << LOG_BADGE("getCode") << LOG_KV("request", s);
+    auto json = request->toJson();
+    m_sender(_groupID, name, json, _respFunc);
+    if (c_fileLogLevel <= DEBUG) [[unlikely]]
+    {
+        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getCode") << LOG_KV("request", json);
+    }
 }
 
 void JsonRpcImpl::getSealerList(
     const std::string& _groupID, const std::string& _nodeName, RespFunc _respFunc)
 {
     std::string name = _nodeName;
-    if (name.empty())
+    if (m_sendRequestToHighestBlockNode && name.empty())
     {
         m_service->randomGetHighestBlockNumberNode(_groupID, name);
     }
@@ -290,16 +341,19 @@ void JsonRpcImpl::getSealerList(
     params.append(name);
 
     auto request = m_factory->buildRequest("getSealerList", params);
-    auto s = request->toJson();
-    m_sender(_groupID, name, s, _respFunc);
-    RPCIMPL_LOG(DEBUG) << LOG_BADGE("getSealerList") << LOG_KV("request", s);
+    auto json = request->toJson();
+    m_sender(_groupID, name, json, _respFunc);
+    if (c_fileLogLevel <= DEBUG) [[unlikely]]
+    {
+        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getSealerList") << LOG_KV("request", json);
+    }
 }
 
 void JsonRpcImpl::getObserverList(
     const std::string& _groupID, const std::string& _nodeName, RespFunc _respFunc)
 {
     std::string name = _nodeName;
-    if (name.empty())
+    if (m_sendRequestToHighestBlockNode && name.empty())
     {
         m_service->randomGetHighestBlockNumberNode(_groupID, name);
     }
@@ -309,16 +363,19 @@ void JsonRpcImpl::getObserverList(
     params.append(name);
 
     auto request = m_factory->buildRequest("getObserverList", params);
-    auto s = request->toJson();
-    m_sender(_groupID, name, s, _respFunc);
-    RPCIMPL_LOG(DEBUG) << LOG_BADGE("getObserverList") << LOG_KV("request", s);
+    auto json = request->toJson();
+    m_sender(_groupID, name, json, _respFunc);
+    if (c_fileLogLevel <= DEBUG) [[unlikely]]
+    {
+        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getObserverList") << LOG_KV("request", json);
+    }
 }
 
 void JsonRpcImpl::getPbftView(
     const std::string& _groupID, const std::string& _nodeName, RespFunc _respFunc)
 {
     std::string name = _nodeName;
-    if (name.empty())
+    if (m_sendRequestToHighestBlockNode && name.empty())
     {
         m_service->randomGetHighestBlockNumberNode(_groupID, name);
     }
@@ -328,16 +385,19 @@ void JsonRpcImpl::getPbftView(
     params.append(name);
 
     auto request = m_factory->buildRequest("getPbftView", params);
-    auto s = request->toJson();
-    m_sender(_groupID, name, s, _respFunc);
-    RPCIMPL_LOG(DEBUG) << LOG_BADGE("getPbftView") << LOG_KV("request", s);
+    auto json = request->toJson();
+    m_sender(_groupID, name, json, _respFunc);
+    if (c_fileLogLevel <= DEBUG) [[unlikely]]
+    {
+        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getPbftView") << LOG_KV("request", json);
+    }
 }
 
 void JsonRpcImpl::getPendingTxSize(
     const std::string& _groupID, const std::string& _nodeName, RespFunc _respFunc)
 {
     std::string name = _nodeName;
-    if (name.empty())
+    if (m_sendRequestToHighestBlockNode && name.empty())
     {
         m_service->randomGetHighestBlockNumberNode(_groupID, name);
     }
@@ -347,16 +407,19 @@ void JsonRpcImpl::getPendingTxSize(
     params.append(name);
 
     auto request = m_factory->buildRequest("getPendingTxSize", params);
-    auto s = request->toJson();
-    m_sender(_groupID, name, s, _respFunc);
-    RPCIMPL_LOG(DEBUG) << LOG_BADGE("getPendingTxSize") << LOG_KV("request", s);
+    auto json = request->toJson();
+    m_sender(_groupID, name, json, _respFunc);
+    if (c_fileLogLevel <= DEBUG) [[unlikely]]
+    {
+        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getPendingTxSize") << LOG_KV("request", json);
+    }
 }
 
 void JsonRpcImpl::getSyncStatus(
     const std::string& _groupID, const std::string& _nodeName, RespFunc _respFunc)
 {
     std::string name = _nodeName;
-    if (name.empty())
+    if (m_sendRequestToHighestBlockNode && name.empty())
     {
         m_service->randomGetHighestBlockNumberNode(_groupID, name);
     }
@@ -366,16 +429,19 @@ void JsonRpcImpl::getSyncStatus(
     params.append(name);
 
     auto request = m_factory->buildRequest("getSyncStatus", params);
-    auto s = request->toJson();
-    m_sender(_groupID, name, s, _respFunc);
-    RPCIMPL_LOG(DEBUG) << LOG_BADGE("getSyncStatus") << LOG_KV("request", s);
+    auto json = request->toJson();
+    m_sender(_groupID, name, json, _respFunc);
+    if (c_fileLogLevel <= DEBUG) [[unlikely]]
+    {
+        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getSyncStatus") << LOG_KV("request", json);
+    }
 }
 
 void JsonRpcImpl::getConsensusStatus(
     const std::string& _groupID, const std::string& _nodeName, RespFunc _respFunc)
 {
     std::string name = _nodeName;
-    if (name.empty())
+    if (m_sendRequestToHighestBlockNode && name.empty())
     {
         m_service->randomGetHighestBlockNumberNode(_groupID, name);
     }
@@ -385,16 +451,19 @@ void JsonRpcImpl::getConsensusStatus(
     params.append(name);
 
     auto request = m_factory->buildRequest("getConsensusStatus", params);
-    auto s = request->toJson();
-    m_sender(_groupID, name, s, _respFunc);
-    RPCIMPL_LOG(DEBUG) << LOG_BADGE("getConsensusStatus") << LOG_KV("request", s);
+    auto json = request->toJson();
+    m_sender(_groupID, name, json, _respFunc);
+    if (c_fileLogLevel <= DEBUG) [[unlikely]]
+    {
+        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getConsensusStatus") << LOG_KV("request", json);
+    }
 }
 
 void JsonRpcImpl::getSystemConfigByKey(const std::string& _groupID, const std::string& _nodeName,
     const std::string& _keyValue, RespFunc _respFunc)
 {
     std::string name = _nodeName;
-    if (name.empty())
+    if (m_sendRequestToHighestBlockNode && name.empty())
     {
         m_service->randomGetHighestBlockNumberNode(_groupID, name);
     }
@@ -405,16 +474,19 @@ void JsonRpcImpl::getSystemConfigByKey(const std::string& _groupID, const std::s
     params.append(_keyValue);
 
     auto request = m_factory->buildRequest("getSystemConfigByKey", params);
-    auto s = request->toJson();
-    m_sender(_groupID, name, s, _respFunc);
-    RPCIMPL_LOG(DEBUG) << LOG_BADGE("getSystemConfigByKey") << LOG_KV("request", s);
+    auto json = request->toJson();
+    m_sender(_groupID, name, json, _respFunc);
+    if (c_fileLogLevel <= DEBUG) [[unlikely]]
+    {
+        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getSystemConfigByKey") << LOG_KV("request", json);
+    }
 }
 
 void JsonRpcImpl::getTotalTransactionCount(
     const std::string& _groupID, const std::string& _nodeName, RespFunc _respFunc)
 {
     std::string name = _nodeName;
-    if (name.empty())
+    if (m_sendRequestToHighestBlockNode && name.empty())
     {
         m_service->randomGetHighestBlockNumberNode(_groupID, name);
     }
@@ -424,27 +496,36 @@ void JsonRpcImpl::getTotalTransactionCount(
     params.append(name);
 
     auto request = m_factory->buildRequest("getTotalTransactionCount", params);
-    auto s = request->toJson();
-    m_sender(_groupID, name, s, _respFunc);
-    RPCIMPL_LOG(DEBUG) << LOG_BADGE("getTotalTransactionCount") << LOG_KV("request", s);
+    auto json = request->toJson();
+    m_sender(_groupID, name, json, _respFunc);
+    if (c_fileLogLevel <= DEBUG) [[unlikely]]
+    {
+        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getTotalTransactionCount") << LOG_KV("request", json);
+    }
 }
 
 void JsonRpcImpl::getPeers(RespFunc _respFunc)
 {
     Json::Value params = Json::Value(Json::arrayValue);
     auto request = m_factory->buildRequest("getPeers", params);
-    auto s = request->toJson();
-    m_sender("", "", s, _respFunc);
-    RPCIMPL_LOG(DEBUG) << LOG_BADGE("getPeers") << LOG_KV("request", s);
+    auto json = request->toJson();
+    m_sender("", "", json, _respFunc);
+    if (c_fileLogLevel <= DEBUG) [[unlikely]]
+    {
+        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getPeers") << LOG_KV("request", json);
+    }
 }
 
 void JsonRpcImpl::getGroupList(RespFunc _respFunc)
 {
     Json::Value params = Json::Value(Json::arrayValue);
     auto request = m_factory->buildRequest("getGroupList", params);
-    auto s = request->toJson();
-    m_sender("", "", s, _respFunc);
-    RPCIMPL_LOG(DEBUG) << LOG_BADGE("getGroupList") << LOG_KV("request", s);
+    auto json = request->toJson();
+    m_sender("", "", json, _respFunc);
+    if (c_fileLogLevel <= DEBUG) [[unlikely]]
+    {
+        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getGroupList") << LOG_KV("request", json);
+    }
 }
 
 void JsonRpcImpl::getGroupInfo(const std::string& _groupID, RespFunc _respFunc)
@@ -479,9 +560,12 @@ void JsonRpcImpl::getGroupInfoList(RespFunc _respFunc)
     Json::Value params = Json::Value(Json::arrayValue);
 
     auto request = m_factory->buildRequest("getGroupInfoList", params);
-    auto s = request->toJson();
-    m_sender("", "", s, _respFunc);
-    RPCIMPL_LOG(DEBUG) << LOG_BADGE("getGroupNodeInfo") << LOG_KV("request", s);
+    auto json = request->toJson();
+    m_sender("", "", json, _respFunc);
+    if (c_fileLogLevel <= DEBUG) [[unlikely]]
+    {
+        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getGroupNodeInfo") << LOG_KV("request", json);
+    }
 }
 
 void JsonRpcImpl::getGroupNodeInfo(
@@ -492,9 +576,12 @@ void JsonRpcImpl::getGroupNodeInfo(
     params.append(_nodeName);
 
     auto request = m_factory->buildRequest("getGroupNodeInfo", params);
-    auto s = request->toJson();
-    m_sender(_groupID, _nodeName, s, _respFunc);
-    RPCIMPL_LOG(DEBUG) << LOG_BADGE("getGroupNodeInfo") << LOG_KV("request", s);
+    auto json = request->toJson();
+    m_sender(_groupID, _nodeName, json, _respFunc);
+    if (c_fileLogLevel <= DEBUG) [[unlikely]]
+    {
+        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getGroupNodeInfo") << LOG_KV("request", json);
+    }
 }
 
 void JsonRpcImpl::getGroupPeers(std::string const& _groupID, RespFunc _respFunc)
@@ -505,5 +592,8 @@ void JsonRpcImpl::getGroupPeers(std::string const& _groupID, RespFunc _respFunc)
     auto request = m_factory->buildRequest("getGroupPeers", params);
     auto requestStr = request->toJson();
     m_sender("", "", requestStr, _respFunc);
-    RPCIMPL_LOG(DEBUG) << LOG_BADGE("getGroupPeers") << LOG_KV("request", requestStr);
+    if (c_fileLogLevel <= DEBUG) [[unlikely]]
+    {
+        RPCIMPL_LOG(DEBUG) << LOG_BADGE("getGroupPeers") << LOG_KV("request", requestStr);
+    }
 }

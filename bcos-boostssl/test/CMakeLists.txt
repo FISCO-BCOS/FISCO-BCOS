@@ -23,4 +23,6 @@ set(TEST_BINARY_NAME test-boostssl)
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE .)
 find_package(Boost REQUIRED unit_test_framework)
-target_link_libraries(${TEST_BINARY_NAME} boostssl-websocket boostssl-httpserver bcos-utilities bcos-framework Boost::unit_test_framework)
+target_link_libraries(${TEST_BINARY_NAME} bcos-boostssl bcos-utilities bcos-framework Boost::unit_test_framework)
+
+add_test(NAME test-boostssl WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND test-boostssl)

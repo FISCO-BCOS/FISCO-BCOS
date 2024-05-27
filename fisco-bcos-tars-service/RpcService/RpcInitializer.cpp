@@ -63,7 +63,8 @@ void RpcInitializer::init(std::string const& _configDir)
             std::make_shared<bcos::election::LeaderEntryPointFactoryImpl>(memberFactory);
         auto watchDir = "/" + m_nodeConfig->chainId() + bcos::election::CONSENSUS_LEADER_DIR;
         m_leaderEntryPoint = leaderEntryPointFactory->createLeaderEntryPoint(
-            m_nodeConfig->failOverClusterUrl(), watchDir, "watchLeaderChange");
+            m_nodeConfig->failOverClusterUrl(), watchDir, "watchLeaderChange",
+            m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
     }
 #endif
     // init rpc config
@@ -101,7 +102,6 @@ bcos::rpc::RpcFactory::Ptr RpcInitializer::initRpcFactory(bcos::tool::NodeConfig
     std::vector<tars::TC_Endpoint> endPoints;
     m_nodeConfig->getTarsClientProxyEndpoints(bcos::protocol::GATEWAY_NAME, endPoints);
 
-    // TODO: tars
     // get the gateway client
     auto gatewayPrx = bcostars::createServantProxy<bcostars::GatewayServicePrx>(
         withoutTarsFramework, gatewayServiceName, endPoints);
@@ -143,7 +143,7 @@ void RpcInitializer::stop()
 {
     if (!m_running)
     {
-        RPCSERVICE_LOG(WARNING) << LOG_DESC("The RpcService has already stopped!");
+        RPCSERVICE_LOG(INFO) << LOG_DESC("The RpcService has already stopped!");
         return;
     }
     m_running = false;

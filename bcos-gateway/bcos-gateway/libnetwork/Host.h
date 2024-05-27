@@ -4,30 +4,30 @@
  */
 #pragma once
 
+#include "bcos-gateway/libnetwork/SessionCallback.h"
+#include "bcos-utilities/ThreadPool.h"
 #include <bcos-gateway/libnetwork/Common.h>   // for  NodeIP...
 #include <bcos-gateway/libnetwork/Message.h>  // for Message
-#include <bcos-utilities/Common.h>            // for Guard, Mutex
-#include <bcos-utilities/ThreadPool.h>
+#include <bcos-gateway/libnetwork/PeerBlacklist.h>
+#include <bcos-gateway/libnetwork/PeerWhitelist.h>
+#include <bcos-utilities/Common.h>  // for Guard, Mutex
+#include <oneapi/tbb/task_arena.h>
+#include <oneapi/tbb/task_group.h>
 #include <openssl/x509.h>
 #include <boost/asio/deadline_timer.hpp>  // for deadline_timer
 #include <boost/system/error_code.hpp>    // for error_code
-#include <set>                            // for set
-#include <string>                         // for string
-#include <thread>                         // for thread
-#include <utility>                        // for swap, move
-#include <vector>                         // for vector
+#include <memory>
+#include <set>      // for set
+#include <string>   // for string
+#include <thread>   // for thread
+#include <utility>  // for swap, move
+#include <vector>   // for vector
 
 
-namespace boost
-{
-namespace asio
-{
-namespace ssl
+namespace boost::asio::ssl
 {
 class verify_context;
-}
-}  // namespace asio
-}  // namespace boost
+}  // namespace boost::asio::ssl
 namespace bcos
 {
 class ThreadPool;
@@ -44,11 +44,15 @@ using x509PubHandler = std::function<bool(X509* x509, std::string& pubHex)>;
 class Host : public std::enable_shared_from_this<Host>
 {
 public:
+    Host(const Host&) = delete;
+    Host(Host&&) = delete;
+    Host& operator=(const Host&) = delete;
+    Host& operator=(Host&&) = delete;
     Host(std::shared_ptr<ASIOInterface> _asioInterface,
         std::shared_ptr<SessionFactory> _sessionFactory, MessageFactory::Ptr _messageFactory)
-      : m_asioInterface(_asioInterface),
-        m_sessionFactory(_sessionFactory),
-        m_messageFactory(_messageFactory){};
+      : m_asioInterface(std::move(_asioInterface)),
+        m_sessionFactory(std::move(_sessionFactory)),
+        m_messageFactory(std::move(_messageFactory)){};
     virtual ~Host() { stop(); };
 
     using Ptr = std::shared_ptr<Host>;
@@ -67,7 +71,7 @@ public:
     virtual std::string listenHost() const { return m_listenHost; }
     virtual void setHostPort(std::string host, uint16_t port)
     {
-        m_listenHost = host;
+        m_listenHost = std::move(host);
         m_listenPort = port;
     }
 
@@ -80,7 +84,7 @@ public:
         std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>
             connectionHandler)
     {
-        m_connectionHandler = connectionHandler;
+        m_connectionHandler = std::move(connectionHandler);
     }
 
     virtual std::function<bool(X509* x509, std::string& pubHex)> sslContextPubHandler()
@@ -91,13 +95,25 @@ public:
     virtual void setSSLContextPubHandler(
         std::function<bool(X509* x509, std::string& pubHex)> _sslContextPubHandler)
     {
-        m_sslContextPubHandler = _sslContextPubHandler;
+        m_sslContextPubHandler = std::move(_sslContextPubHandler);
     }
 
-    virtual std::shared_ptr<bcos::ThreadPool> threadPool() const { return m_threadPool; }
-    virtual void setThreadPool(std::shared_ptr<bcos::ThreadPool> threadPool)
+    virtual std::function<bool(X509* x509, std::string& pubHex)>
+    sslContextPubHandlerWithoutExtInfo()
     {
-        m_threadPool = threadPool;
+        return m_sslContextPubHandlerWithoutExtInfo;
+    }
+
+    virtual void setSSLContextPubHandlerWithoutExtInfo(
+        std::function<bool(X509* x509, std::string& pubHex)> _sslContextPubHandlerWithoutExtInfo)
+    {
+        m_sslContextPubHandlerWithoutExtInfo = std::move(_sslContextPubHandlerWithoutExtInfo);
+    }
+
+    virtual void setSessionCallbackManager(
+        SessionCallbackManagerInterface::Ptr sessionCallbackManager)
+    {
+        m_sessionCallbackManager = std::move(sessionCallbackManager);
     }
 
     virtual std::shared_ptr<ASIOInterface> asioInterface() const { return m_asioInterface; }
@@ -105,13 +121,30 @@ public:
     virtual MessageFactory::Ptr messageFactory() const { return m_messageFactory; }
     virtual P2PInfo p2pInfo();
 
-private:
+    virtual void setPeerBlacklist(PeerBlackWhitelistInterface::Ptr _peerBlacklist)
+    {
+        m_peerBlacklist = std::move(_peerBlacklist);
+    }
+    virtual PeerBlackWhitelistInterface::Ptr peerBlacklist() { return m_peerBlacklist; }
+    virtual void setPeerWhitelist(PeerBlackWhitelistInterface::Ptr _peerWhitelist)
+    {
+        m_peerWhitelist = std::move(_peerWhitelist);
+    }
+    virtual PeerBlackWhitelistInterface::Ptr peerWhitelist() { return m_peerWhitelist; }
+
+    template <class F>
+    void asyncTo(F f)
+    {
+        m_asyncGroup.template run(std::move(f));
+    }
+
+protected:
     /// obtain the common name from the subject:
     /// the subject format is: /CN=xx/O=xxx/OU=xxx/ commonly
     std::string obtainCommonNameFromSubject(std::string const& subject);
 
     /// called by 'startedWorking' to accept connections
-    void startAccept(boost::system::error_code ec = boost::system::error_code());
+    void startAccept(boost::system::error_code error = boost::system::error_code());
     /// functions called after openssl handshake,
     /// maily to get node id and verify whether the certificate has been expired
     /// @return: node id of the connected peer
@@ -137,21 +170,29 @@ private:
             callback,
         NodeIPEndpoint _nodeIPEndpoint, std::shared_ptr<boost::asio::deadline_timer> timerPtr);
 
-    void erasePendingConns(NodeIPEndpoint const& _nodeIPEndpoint)
+    void erasePendingConns(NodeIPEndpoint const& nodeIPEndpoint)
     {
-        bcos::Guard l(x_pendingConns);
-        if (m_pendingConns.count(_nodeIPEndpoint))
-            m_pendingConns.erase(_nodeIPEndpoint);
+        bcos::Guard lock(x_pendingConns);
+        auto it = m_pendingConns.find(nodeIPEndpoint);
+        if (it != m_pendingConns.end())
+        {
+            m_pendingConns.erase(it);
+        }
     }
 
-    void insertPendingConns(NodeIPEndpoint const& _nodeIPEndpoint)
+    void insertPendingConns(NodeIPEndpoint const& nodeIPEndpoint)
     {
-        bcos::Guard l(x_pendingConns);
-        if (!m_pendingConns.count(_nodeIPEndpoint))
-            m_pendingConns.insert(_nodeIPEndpoint);
+        bcos::Guard lock(x_pendingConns);
+        auto it = m_pendingConns.lower_bound(nodeIPEndpoint);
+        if (it == m_pendingConns.end() || *it != nodeIPEndpoint)
+        {
+            m_pendingConns.emplace_hint(it, nodeIPEndpoint);
+        }
     }
 
-    std::shared_ptr<bcos::ThreadPool> m_threadPool;
+    tbb::task_arena m_taskArena;
+    tbb::task_group m_asyncGroup;
+    std::shared_ptr<SessionCallbackManagerInterface> m_sessionCallbackManager;
 
     /// representing to the network state
     std::shared_ptr<ASIOInterface> m_asioInterface;
@@ -159,10 +200,9 @@ private:
     int m_connectTimeThre = 50000;
     std::set<NodeIPEndpoint> m_pendingConns;
     bcos::Mutex x_pendingConns;
-
     MessageFactory::Ptr m_messageFactory;
 
-    std::string m_listenHost = "";
+    std::string m_listenHost;
     uint16_t m_listenPort = 0;
 
     std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>
@@ -170,10 +210,15 @@ private:
 
     // get the hex public key of the peer from the the SSL connection
     std::function<bool(X509* x509, std::string& pubHex)> m_sslContextPubHandler;
+    std::function<bool(X509* x509, std::string& pubHex)> m_sslContextPubHandlerWithoutExtInfo;
 
     bool m_run = false;
 
     P2PInfo m_p2pInfo;
+
+    // Peer black list
+    PeerBlackWhitelistInterface::Ptr m_peerBlacklist{nullptr};
+    PeerBlackWhitelistInterface::Ptr m_peerWhitelist{nullptr};
 };
 }  // namespace gateway
 

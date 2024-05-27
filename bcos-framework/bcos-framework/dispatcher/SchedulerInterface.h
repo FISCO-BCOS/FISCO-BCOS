@@ -56,14 +56,6 @@ public:
     virtual void call(protocol::Transaction::Ptr tx,
         std::function<void(Error::Ptr&&, protocol::TransactionReceipt::Ptr&&)>) = 0;
 
-    // by executor
-    virtual void registerExecutor(std::string name,
-        bcos::executor::ParallelTransactionExecutorInterface::Ptr executor,
-        std::function<void(Error::Ptr&&)> callback) = 0;
-
-    virtual void unregisterExecutor(
-        const std::string& name, std::function<void(Error::Ptr&&)> callback) = 0;
-
     // clear all status
     virtual void reset(std::function<void(Error::Ptr&&)> callback) = 0;
     virtual void getCode(
@@ -76,6 +68,6 @@ public:
     virtual void preExecuteBlock(bcos::protocol::Block::Ptr block, bool verify,
         std::function<void(Error::Ptr&&)> callback) = 0;
 
-    virtual void stop() {};
+    virtual void stop(){};
 };
 }  // namespace bcos::scheduler

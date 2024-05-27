@@ -18,16 +18,17 @@
  * @date 2021-02-24
  */
 
+#include "bcos-utilities/BoostLog.h"
 #define NOMINMAX
-
-#include "Common.h"
-#include "Exceptions.h"
-#include <csignal>
 #if defined(WIN32) || defined(WIN64) || defined(_WIN32) || defined(_WIN32_)
+#define _WIN32_WINNT 0x0601
 #include <windows.h>
 #else
 #include <sys/time.h>
 #endif
+#include "Common.h"
+#include "Exceptions.h"
+#include <csignal>
 #ifdef __APPLE__
 #include <pthread.h>
 #endif
@@ -40,37 +41,33 @@ bytes const NullBytes;
 /// get utc time(ms)
 uint64_t utcTime()
 {
-#if defined(WIN32) || defined(WIN64) || defined(_WIN32) || defined(_WIN32_)
-    return std::chrono::steady_clock::now().time_since_epoch().count() / 1000000;
-#else
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    return tv.tv_sec * 1000 + tv.tv_usec / 1000;
-#endif
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch())
+        .count();
 }
 
 // getSteadyTime(ms)
 uint64_t utcSteadyTime()
 {
     // trans (ns) into (ms)
-    return std::chrono::steady_clock::now().time_since_epoch().count() / 1000000;
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now().time_since_epoch())
+        .count();
 }
 
 /// get utc time(us)
 uint64_t utcTimeUs()
 {
-#if defined(WIN32) || defined(WIN64) || defined(_WIN32) || defined(_WIN32_)
-    return std::chrono::steady_clock::now().time_since_epoch().count() / 1000;
-#else
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    return tv.tv_sec * 1000000 + tv.tv_usec;
-#endif
+    return std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::system_clock::now().time_since_epoch())
+        .count();
 }
 
 uint64_t utcSteadyTimeUs()
 {
-    return std::chrono::steady_clock::now().time_since_epoch().count() / 1000;
+    return std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::steady_clock::now().time_since_epoch())
+        .count();
 }
 
 std::string getCurrentDateTime()
@@ -90,79 +87,53 @@ void errorExit(std::stringstream& _exitInfo, Exception const& _exception)
     BOOST_THROW_EXCEPTION(_exception << errinfo_comment(_exitInfo.str()));
 }
 
-thread_local std::string TimeRecorder::m_name;
-thread_local std::chrono::steady_clock::time_point TimeRecorder::m_timePoint;
-thread_local size_t TimeRecorder::m_heapCount = 0;
-thread_local std::vector<std::pair<std::string, std::chrono::steady_clock::time_point> >
-    TimeRecorder::m_record;
-
-TimeRecorder::TimeRecorder(const std::string& function, const std::string& name)
-  : m_function(function)
+s256 u2s(u256 _u)
 {
-    auto now = std::chrono::steady_clock::now();
-    if (m_timePoint == std::chrono::steady_clock::time_point())
-    {
-        m_name = name;
-        m_timePoint = now;
-    }
+    static const bigint c_end = bigint(1) << 256;
+    /// get the +/- symbols
+    if (boost::multiprecision::bit_test(_u, 255))
+        return s256(-(c_end - _u));
     else
-    {
-        m_record.push_back(std::make_pair(m_name, m_timePoint));
-
-        m_name = name;
-        m_timePoint = now;
-    }
-
-    ++m_heapCount;
+        return s256(_u);
 }
-
-TimeRecorder::~TimeRecorder()
+u256 s2u(s256 _u)
 {
-    --m_heapCount;
-
-    if (!m_heapCount && m_timePoint != std::chrono::steady_clock::time_point())
-    {
-        auto now = std::chrono::steady_clock::now();
-        auto end = now;
-        m_record.push_back(std::make_pair(m_name, m_timePoint));
-
-        std::vector<std::chrono::duration<double> > elapseds;
-        elapseds.resize(m_record.size());
-        std::stringstream ss;
-        for (auto i = m_record.size(); i > 0; --i)
-        {
-            std::chrono::duration<double> elapsed = now - m_record[i - 1].second;
-            now = m_record[i - 1].second;
-
-            elapseds[i - 1] = elapsed;
-        }
-
-        for (size_t i = 0; i < m_record.size(); ++i)
-        {
-            ss << " [" << m_record[i].first << "]: " << std::setiosflags(std::ios::fixed)
-               << std::setprecision(4) << elapseds[i].count();
-        }
-
-        std::chrono::duration<double> totalElapsed = end - m_record[0].second;
-        BCOS_LOG(DEBUG) << "[TIME RECORDER]-" << m_function
-                        << ": [TOTAL]: " << std::setiosflags(std::ios::fixed)
-                        << std::setprecision(4) << totalElapsed.count() << ss.str();
-
-        m_name = "";
-        m_timePoint = std::chrono::steady_clock::time_point();
-        m_record.clear();
-    }
+    static const bigint c_end = bigint(1) << 256;
+    if (_u >= 0)
+        return u256(_u);
+    else
+        return u256(c_end + _u);
 }
-
-std::string newSeq()
+bool isalNumStr(std::string const& _stringData)
 {
-    static std::atomic<size_t> seq;
-    size_t seqTmp = seq.fetch_add(1) + 1;
-    std::stringstream ss;
-    ss << std::setfill('0') << std::setw(32) << seqTmp;
-    return ss.str();
+    for (auto ch : _stringData)
+    {
+        if (isalnum(ch))
+        {
+            continue;
+        }
+        return false;
+    }
+    return true;
 }
-
+double calcAvgRate(uint64_t _data, uint32_t _intervalMS)
+{
+    if (_intervalMS > 0)
+    {
+        auto avgRate = (double)_data * 8 * 1000 / 1024 / 1024 / _intervalMS;
+        return avgRate;
+    }
+    return 0;
+}
+uint32_t calcAvgQPS(uint64_t _requestCount, uint32_t _intervalMS)
+{
+    if (_intervalMS > 0)
+    {
+        auto qps = _requestCount * 1000 / _intervalMS;
+        return qps;
+    }
+    return 0;
+}
 }  // namespace bcos
 
 void bcos::pthread_setThreadName(std::string const& _n)
@@ -172,4 +143,21 @@ void bcos::pthread_setThreadName(std::string const& _n)
 #elif defined(__APPLE__)
     pthread_setname_np(_n.c_str());
 #endif
+}
+
+std::string bcos::pthread_getThreadName()
+{
+#if defined(__GLIBC__) || defined(__APPLE__)
+    std::array<char, 16> name = {0};
+    auto err = pthread_getname_np(pthread_self(), (char*)name.data(), name.size());
+    if (err == 0)
+    {
+        if (name[0] == '\0')
+        {
+            return "";
+        }
+        return {name.data()};
+    }
+#endif
+    return "";
 }

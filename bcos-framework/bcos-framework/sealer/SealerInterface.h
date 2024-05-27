@@ -45,8 +45,12 @@ public:
 
     // interface for the consensus module to notify the latest block number
     virtual void asyncNoteLatestBlockNumber(int64_t _blockNumber) = 0;
+
+    virtual void asyncNoteLatestBlockHash(crypto::HashType _hash) = 0;
     // interface for the consensus module to notify reset the sealing transactions
     virtual void asyncResetSealing(std::function<void(Error::Ptr)> _onRecvResponse) = 0;
+
+    virtual uint16_t hookWhenSealBlock(bcos::protocol::Block::Ptr) = 0;
 };
 }  // namespace sealer
 }  // namespace bcos

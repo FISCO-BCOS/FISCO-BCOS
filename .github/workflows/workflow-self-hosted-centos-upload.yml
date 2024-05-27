@@ -1,0 +1,80 @@
+name: Centos CI Upload
+on:
+  push:
+    paths-ignore:
+      - "docs/**"
+      - "Changelog.md"
+      - "README.md"
+  release:
+    types: [push]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build_centos:
+    name: centos ci upload
+    runs-on: self-hosted-centos
+    strategy:
+      fail-fast: false
+    env:
+      VCPKG_ROOT: ~/cache/vcpkg
+      DEPS_ROOT: ~/cache/deps
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          clean: false
+
+      - name: Set up JDK 1.8
+        uses: actions/setup-java@v3
+        with:
+          distribution: "zulu"
+          java-version: "8.0.382"
+
+      - name: Set up Node.js 16.x
+        uses: actions/setup-node@v2
+        with:
+          node-version: "16.x"
+
+      - name: yum install
+        run: |
+          sudo yum install -y -q epel-release centos-release-scl flex bison patch gmp-static  glibc-static glibc-devel libzstd-devel
+          sudo yum install -y -q devtoolset-11 llvm-toolset-7.0 rh-perl530-perl cmake3 zlib-devel ccache python-devel python3-devel python3-pip automake openssl
+          sudo yum reinstall -y -q https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
+          sudo yum install -y -q git
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2024-01-10
+          override: true
+
+      - name: Reuse build cache
+        run: |
+          mkdir -p ./build
+          rm -rf deps
+          ln -s ${{ env.DEPS_ROOT }} deps
+
+      - name: Remove cache if correspond dir change
+        run: ./tools/.ci/clear_build_cache.sh
+
+      - name: update vcpkg
+        run: |
+          cd ${{ env.VCPKG_ROOT }} && git fetch --all && git checkout master && git pull
+          cd -
+
+      - name: Build for linux
+        run: |
+          . /opt/rh/devtoolset-11/enable
+          . /opt/rh/rh-perl530/enable
+          export LIBCLANG_PATH=/opt/rh/llvm-toolset-7.0/root/lib64/
+          . /opt/rh/llvm-toolset-7.0/enable
+          cd build && cmake -DALLOCATOR=jemalloc -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DTESTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON .. || cat *.log
+          make -j8
+          chmod +x ./fisco-bcos-air/fisco-bcos
+          ./fisco-bcos-air/fisco-bcos -v
+      - name: Test
+        run: cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
+      - uses: actions/upload-artifact@v2
+        with:
+          name: fisco-bcos.zip
+          path: build/fisco-bcos-air/fisco-bcos

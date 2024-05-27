@@ -17,13 +17,19 @@
 #------------------------------------------------------------------------------
 
 cmake_minimum_required(VERSION 3.10)
-set(CMAKE_OSX_DEPLOYMENT_TARGET "11.3" CACHE STRING "Minimum OS X deployment version")
 
-include(Version)
 project(bcos-sealer VERSION ${VERSION})
 
 aux_source_directory(./bcos-sealer SRC_LIST)
 include_directories(./bcos-sealer)
 add_library(${SEALER_TARGET} ${SRC_LIST})
 
-target_link_libraries(${SEALER_TARGET} PUBLIC ${UTILITIES_TARGET} bcos-framework)
+find_package(tarscpp REQUIRED)
+
+target_link_libraries(${SEALER_TARGET} PUBLIC ${TOOL_TARGET} ${UTILITIES_TARGET} bcos-framework ${TXPOOL_TARGET} ${TARS_PROTOCOL_TARGET})
+
+if(TESTS)
+  enable_testing()
+  set(ENV{CTEST_OUTPUT_ON_FAILURE} True)
+  add_subdirectory(test)
+endif()

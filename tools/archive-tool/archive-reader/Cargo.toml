@@ -1,0 +1,17 @@
+[package]
+name = "fisco-bcos-archive-reader"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+structopt = "0.3.16"
+log = { version ="0.4.0", features = ["max_level_debug", "release_max_level_info"] }
+serde_json = "1"
+env_logger = "0.8.4"
+prefix-hex = "0.5.0"
+async-std = { version = "1", features = ["attributes", "tokio1"] }
+tokio = { version = "1.32.0", features = [ "sync", "rt-multi-thread", "macros" ] }
+tide = "0.16.0"
+serde = { version = "1.0", features = ["derive"] }
+rocksdb = "0.19.0"
+tikv-client = { git = "https://github.com/FISCO-BCOS/tikv-client-rust.git", rev = "de5fb411a10ff92ea75d6cf382a0fdffa8c6955a" }

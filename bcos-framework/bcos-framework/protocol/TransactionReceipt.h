@@ -23,9 +23,7 @@
 #include <bcos-utilities/FixedBytes.h>
 #include <gsl/span>
 
-namespace bcos
-{
-namespace protocol
+namespace bcos::protocol
 {
 class LogEntry;
 class TransactionReceipt
@@ -33,35 +31,32 @@ class TransactionReceipt
 public:
     using Ptr = std::shared_ptr<TransactionReceipt>;
     using ConstPtr = std::shared_ptr<const TransactionReceipt>;
-    explicit TransactionReceipt(bcos::crypto::CryptoSuite::Ptr _cryptoSuite)
-      : m_cryptoSuite(_cryptoSuite)
-    {}
 
-    virtual ~TransactionReceipt() {}
+    virtual ~TransactionReceipt() = default;
 
     virtual void decode(bytesConstRef _receiptData) = 0;
     virtual void encode(bytes& _encodedData) const = 0;
     virtual bcos::crypto::HashType hash() const = 0;
+    virtual void calculateHash(const crypto::Hash& hashImpl) = 0;
     virtual int32_t version() const = 0;
-    virtual u256 gasUsed() const = 0;
+    virtual bcos::u256 gasUsed() const = 0;
     virtual std::string_view contractAddress() const = 0;
     virtual int32_t status() const = 0;
-    virtual bytesConstRef output() const = 0;
+    virtual bcos::bytesConstRef output() const = 0;
     virtual gsl::span<const LogEntry> logEntries() const = 0;
-    virtual bcos::crypto::CryptoSuite::Ptr cryptoSuite() { return m_cryptoSuite; }
-    virtual BlockNumber blockNumber() const = 0;
+    virtual protocol::BlockNumber blockNumber() const = 0;
+    virtual std::string_view effectiveGasPrice() const = 0;
+    virtual void setEffectiveGasPrice(std::string effectiveGasPrice) = 0;
 
     // additional information on transaction execution, no need to be involved in the hash
     // calculation
     virtual std::string const& message() const = 0;
-    virtual void setMessage(std::string const& _message) = 0;
-    virtual void setMessage(std::string&& _message) = 0;
+    virtual void setMessage(std::string message) = 0;
 
-protected:
-    bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
+    virtual std::string toString() const { return {}; }
 };
 using Receipts = std::vector<TransactionReceipt::Ptr>;
 using ReceiptsPtr = std::shared_ptr<Receipts>;
 using ReceiptsConstPtr = std::shared_ptr<const Receipts>;
-}  // namespace protocol
-}  // namespace bcos
+
+}  // namespace bcos::protocol

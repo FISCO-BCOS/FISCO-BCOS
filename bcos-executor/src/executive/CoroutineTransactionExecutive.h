@@ -13,7 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief The serial transaction execute context without coroutine
+ * @brief Execute transaction context with coroutine
  * @file CoroutineTransactionExecutive.h
  * @author: jimmyshi
  * @date: 2022-07-19
@@ -23,13 +23,10 @@
 
 #include "SyncStorageWrapper.h"
 #include "TransactionExecutive.h"
+#include <boost/coroutine2/coroutine.hpp>
 
-
-namespace bcos
+namespace bcos::executor
 {
-namespace executor
-{
-
 
 class CoroutineTransactionExecutive : public TransactionExecutive
 {
@@ -59,12 +56,17 @@ public:
     };
 
 
-    CoroutineTransactionExecutive(std::weak_ptr<BlockContext> blockContext,
-        std::string contractAddress, int64_t contextID, int64_t seq,
-        std::shared_ptr<wasm::GasInjector>& gasInjector)
+    CoroutineTransactionExecutive(const BlockContext& blockContext, std::string contractAddress,
+        int64_t contextID, int64_t seq, const wasm::GasInjector& gasInjector)
       : TransactionExecutive(
-            std::move(blockContext), std::move(contractAddress), contextID, seq, gasInjector)
-    {}
+            std::move(blockContext), std::move(contractAddress), contextID, seq, gasInjector),
+        m_syncStorageWrapper(std::make_shared<SyncStorageWrapper>(
+            m_blockContext.storage(),
+            [this](auto&& PH1) { externalAcquireKeyLocks(std::forward<decltype(PH1)>(PH1)); },
+            m_recoder))
+    {
+        m_storageWrapper = m_syncStorageWrapper.get();
+    }
 
     CallParameters::UniquePtr start(CallParameters::UniquePtr input) override;  // start a new
     // coroutine to
@@ -74,18 +76,34 @@ public:
     CallParameters::UniquePtr externalCall(CallParameters::UniquePtr input) override;  // call by
     // hostContext
 
+    // Execute finish and waiting for FINISH or REVERT
+    virtual CallParameters::UniquePtr waitingFinish(CallParameters::UniquePtr input);
+
     // External request key locks, throw exception if dead lock detected
     void externalAcquireKeyLocks(std::string acquireKeyLock);
 
     virtual void setExchangeMessage(CallParameters::UniquePtr callParameters)
     {
-        m_exchangeMessage = std::move(callParameters);
+        getExchangeMessageRef() = std::move(callParameters);
     }
+
+    std::string getExchangeMessageStr()
+    {
+        if (getExchangeMessageRef())
+        {
+            return getExchangeMessageRef()->toString();
+        }
+        else
+        {
+            return "[empty exchange message]";
+        }
+    }
+
 
     virtual void appendResumeKeyLocks(std::vector<std::string> keyLocks)
     {
-        std::copy(
-            keyLocks.begin(), keyLocks.end(), std::back_inserter(m_exchangeMessage->keyLocks));
+        std::copy(keyLocks.begin(), keyLocks.end(),
+            std::back_inserter(getExchangeMessageRef()->keyLocks));
     }
 
     virtual CallParameters::UniquePtr resume()
@@ -96,15 +114,21 @@ public:
         return dispatcher();
     }
 
+    virtual std::optional<Coroutine::pull_type>& getPullMessage() { return m_pullMessage; }
+    virtual std::optional<Coroutine::push_type>& getPushMessage() { return m_pushMessage; }
+    virtual CallParameters::UniquePtr& getExchangeMessageRef() { return m_exchangeMessage; }
+
+    std::shared_ptr<SyncStorageWrapper> getSyncStorageWrapper() { return m_syncStorageWrapper; }
+
+protected:
+    CallParameters::UniquePtr m_exchangeMessage = nullptr;
+    std::shared_ptr<SyncStorageWrapper> m_syncStorageWrapper;
+
 private:
     CallParameters::UniquePtr dispatcher();
     void spawnAndCall(std::function<void(ResumeHandler)> function);
 
-    std::shared_ptr<SyncStorageWrapper> m_syncStorageWrapper;
-    CallParameters::UniquePtr m_exchangeMessage = nullptr;
-
     std::optional<Coroutine::pull_type> m_pullMessage;
     std::optional<Coroutine::push_type> m_pushMessage;
 };
-}  // namespace executor
-}  // namespace bcos
+}  // namespace bcos::executor

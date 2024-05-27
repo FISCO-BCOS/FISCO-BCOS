@@ -51,15 +51,16 @@ bool GraphKeyLocks::acquireKeyLock(
         if (std::get<0>(*vertex) != contextID)
         {
             KEY_LOCK_LOG(TRACE) << boost::format(
-                                       "Acquire key lock failed, request: [%s, %s, %ld, %ld] "
+                                       "Acquire key lock failed, request: [%s:%s] -> %ld | %ld, "
                                        "exists: [%ld]") %
                                        contract % toHex(key) % contextID % seq %
                                        std::get<0>(*vertex);
 
             // Key lock holding by another context
             addEdge(contextVertex, keyVertex, seq);
-            KEY_LOCK_LOG(TRACE) << " [[" << std::string(contract) << ":" << toHex(key) << "]]  -> "
-                                << contextID << " | " << seq;
+            KEY_LOCK_LOG(TRACE) << " " << contextID << " | " << seq << " -> [["
+                                << std::string(contract) << ":" << toHex(key) << "]]";
+
             return false;
         }
     }
@@ -72,8 +73,8 @@ bool GraphKeyLocks::acquireKeyLock(
     KEY_LOCK_LOG(TRACE) << " [" << std::string(contract) << ":" << toHex(key) << "]  -> "
                         << contextID << " | " << seq;
 
-    SCHEDULER_LOG(TRACE) << "Acquire key lock success, contract: " << contract << " key: " << key
-                         << " contextID: " << contextID << " seq: " << seq;
+    SCHEDULER_LOG(TRACE) << "Acquire key lock success, contract: " << std::string(contract)
+                         << " key: " << key << " contextID: " << contextID << " seq: " << seq;
 
     return true;
 }
@@ -131,7 +132,7 @@ void GraphKeyLocks::releaseKeyLocks(int64_t contextID, int64_t seq)
             if (edgeSeq == seq)
             {
                 ++removed;
-                if (bcos::LogLevel::TRACE >= bcos::c_fileLogLevel)
+                if (bcos::LogLevel::TRACE <= bcos::c_fileLogLevel)
                 {
                     auto source =
                         boost::get(VertexPropertyTag(), boost::source(*range.first, *graph));

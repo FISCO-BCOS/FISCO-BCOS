@@ -1,0 +1,61 @@
+name: Centos Static build
+on:
+  pull_request:
+    branches:
+      - release-3.*
+      - feature-3.*
+      - master
+    types: [closed]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build_centos:
+    name: centos ci check
+    runs-on: self-hosted-static-centos
+    strategy:
+      fail-fast: false
+    env:
+      VCPKG_ROOT: ~/cache/vcpkg
+      DEPS_ROOT: ~/cache/deps
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          clean: false
+
+      - name: Set up JDK 1.8
+        uses: actions/setup-java@v3
+        with:
+          distribution: "zulu"
+          java-version: 8
+          java-package: jdk
+
+      - name: yum install
+        run: |
+          sudo yum install -y -q epel-release centos-release-scl flex bison patch gmp-static glibc-static glibc-devel libzstd-devel
+          sudo yum install -y -q devtoolset-11 llvm-toolset-7.0 rh-perl530-perl zlib-devel ccache lcov python-devel python3-devel python3-pip automake
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2024-02-25
+          override: true
+
+      - name: Remove cache if correspond dir change
+        run: ./tools/.ci/clear_build_cache.sh
+
+      - name: update vcpkg
+        run: |
+          cd ${{ env.VCPKG_ROOT }} && git fetch --all && git checkout master && git pull
+          cd -
+
+      - name: Build for linux
+        run: |
+          export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
+          . /opt/rh/devtoolset-11/enable
+          . /opt/rh/rh-perl530/enable
+          export LIBCLANG_PATH=/opt/rh/llvm-toolset-7.0/root/lib64/
+          . /opt/rh/llvm-toolset-7.0/enable
+          alias cmake='cmake3'
+          cd build && cmake3 -DCMAKE_BUILD_TYPE=Debug -DBUILD_STATIC=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=On -DWITH_TARS_SERVICES=ON .. || cat *.log
+          make -j4

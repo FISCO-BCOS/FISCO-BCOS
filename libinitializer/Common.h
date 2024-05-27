@@ -31,26 +31,25 @@
 #include <memory>
 
 #define INITIALIZER_LOG(LEVEL) BCOS_LOG(LEVEL) << "[INITIALIZER]"
-namespace bcos
-{
-namespace initializer
+namespace bcos::initializer
 {
 inline std::shared_ptr<bytes> loadPrivateKey(std::string const& _keyPath,
     unsigned _hexedPrivateKeySize, bcos::security::DataEncryptInterface::Ptr _certEncryptionHandler)
 {
-    auto content = readContents(boost::filesystem::path(_keyPath));
-    auto keyContent = content;
-    if (_certEncryptionHandler)
-    {
-        keyContent = _certEncryptionHandler->decryptContents(content);
-    }
-    if (keyContent->empty())
-    {
-        return nullptr;
-    }
     std::shared_ptr<EC_KEY> ecKey;
     try
     {
+        auto content = readContents(boost::filesystem::path(_keyPath));
+        auto keyContent = content;
+        if (_certEncryptionHandler)
+        {
+            keyContent = _certEncryptionHandler->decryptContents(content);
+        }
+        if (keyContent->empty())
+        {
+            return nullptr;
+        }
+
         INITIALIZER_LOG(INFO) << LOG_BADGE("SecureInitializer") << LOG_DESC("loading privateKey");
         std::shared_ptr<BIO> bioMem(BIO_new(BIO_s_mem()), [&](BIO* p) { BIO_free(p); });
         BIO_write(bioMem.get(), keyContent->data(), keyContent->size());
@@ -66,10 +65,10 @@ inline std::shared_ptr<bytes> loadPrivateKey(std::string const& _keyPath,
     catch (bcos::Exception& e)
     {
         INITIALIZER_LOG(ERROR) << LOG_BADGE("SecureInitializer")
-                               << LOG_DESC("parse privateKey failed")
+                               << LOG_DESC("parse privateKey failed") << LOG_KV("file", _keyPath)
                                << LOG_KV("EINFO", boost::diagnostic_information(e));
-        BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig()
-                              << errinfo_comment("SecureInitializer: parse privateKey failed"));
+        BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << errinfo_comment(
+                                  "SecureInitializer: parse privateKey failed:" + _keyPath));
     }
     std::shared_ptr<const BIGNUM> ecPrivateKey(
         EC_KEY_get0_private_key(ecKey.get()), [](const BIGNUM*) {});
@@ -87,5 +86,4 @@ inline std::shared_ptr<bytes> loadPrivateKey(std::string const& _keyPath,
     }
     return fromHexString(keyHex);
 }
-}  // namespace initializer
-}  // namespace bcos
+}  // namespace bcos::initializer

@@ -103,8 +103,8 @@ int main(int argc, char** argv)
             if (_error)
             {
                 // error and exit
-                std::cout << " \t something is wrong" << LOG_KV("error", _error->errorCode())
-                          << LOG_KV("errorMessage", _error->errorMessage()) << std::endl;
+                std::cout << " \t something is wrong" << LOG_KV("code", _error->errorCode())
+                          << LOG_KV("message", _error->errorMessage()) << std::endl;
                 std::exit(-1);
             }
             else
@@ -115,12 +115,10 @@ int main(int argc, char** argv)
             }
         });
 
-    int i = 0;
     while (true)
     {
         std::cout << LOG_DESC(" Main thread running ") << std::endl;
         std::this_thread::sleep_for(std::chrono::milliseconds(10000));
-        i++;
     }
 
     return EXIT_SUCCESS;

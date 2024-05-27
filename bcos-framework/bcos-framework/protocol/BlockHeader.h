@@ -25,9 +25,7 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <gsl/span>
 
-namespace bcos
-{
-namespace protocol
+namespace bcos::protocol
 {
 class BlockHeader
 {
@@ -35,35 +33,36 @@ public:
     using Ptr = std::shared_ptr<BlockHeader>;
     using ConstPtr = std::shared_ptr<const BlockHeader>;
     using BlockHeadersPtr = std::shared_ptr<std::vector<BlockHeader::Ptr> >;
-    explicit BlockHeader(bcos::crypto::CryptoSuite::Ptr _cryptoSuite) : m_cryptoSuite(_cryptoSuite)
-    {}
-
-    virtual ~BlockHeader() {}
+    BlockHeader() = default;
+    virtual ~BlockHeader() = default;
 
     virtual void decode(bytesConstRef _data) = 0;
     virtual void encode(bytes& _encodeData) const = 0;
 
-    virtual bcos::crypto::HashType hash() const { return {}; }
+    virtual bcos::crypto::HashType hash() const = 0;
+    virtual void calculateHash(const crypto::Hash& hashImpl) = 0;
 
-    virtual void populateFromParents(BlockHeadersPtr _parents, BlockNumber _number)
+    virtual void populateFromParents(const crypto::Hash& hashImpl,
+        const std::vector<BlockHeader::Ptr>& _parents, BlockNumber _number)
     {
         // set parentInfo
         ParentInfoList parentInfoList;
-        for (auto parentHeader : *_parents)
+        for (const auto& parentHeader : _parents)
         {
             ParentInfo parentInfo;
             parentInfo.blockNumber = parentHeader->number();
             parentInfo.blockHash = parentHeader->hash();
             parentInfoList.emplace_back(parentInfo);
         }
-        setParentInfo(std::move(parentInfoList));
+        setParentInfo(parentInfoList);
         setNumber(_number);
     }
 
     virtual void clear() = 0;
 
     // verifySignatureList verifys the signatureList
-    virtual void verifySignatureList() const
+    virtual void verifySignatureList(
+        const crypto::Hash& hashImpl, const crypto::SignatureCrypto& signatureImpl) const
     {
         auto signatures = signatureList();
         auto sealers = sealerList();
@@ -73,11 +72,11 @@ public:
                                       "Invalid blockHeader for the size of sealerList "
                                       "is smaller than the size of signatureList"));
         }
-        for (auto signature : signatures)
+        for (const auto& signature : signatures)
         {
             auto sealerIndex = signature.index;
             auto signatureData = signature.signature;
-            if (!m_cryptoSuite->signatureImpl()->verify(
+            if (!signatureImpl.verify(
                     std::shared_ptr<const bytes>(&((sealers)[sealerIndex]), [](const bytes*) {}),
                     hash(), bytesConstRef(signatureData.data(), signatureData.size())))
             {
@@ -99,7 +98,8 @@ public:
     // version returns the version of the blockHeader
     virtual uint32_t version() const = 0;
     // parentInfo returns the parent information, including (parentBlockNumber, parentHash)
-    virtual gsl::span<const ParentInfo> parentInfo() const = 0;
+    virtual RANGES::any_view<ParentInfo, RANGES::category::input | RANGES::category::sized>
+    parentInfo() const = 0;
     // txsRoot returns the txsRoot of the current block
     virtual bcos::crypto::HashType txsRoot() const = 0;
     // receiptsRoot returns the receiptsRoot of the current block
@@ -119,8 +119,7 @@ public:
     virtual gsl::span<const uint64_t> consensusWeights() const = 0;
 
     virtual void setVersion(uint32_t _version) = 0;
-    virtual void setParentInfo(gsl::span<const ParentInfo> const& _parentInfo) = 0;
-    virtual void setParentInfo(ParentInfoList&& _parentInfo) = 0;
+    virtual void setParentInfo(RANGES::any_view<bcos::protocol::ParentInfo> parentInfo) = 0;
 
     virtual void setTxsRoot(bcos::crypto::HashType _txsRoot) = 0;
     virtual void setReceiptsRoot(bcos::crypto::HashType _receiptsRoot) = 0;
@@ -141,10 +140,5 @@ public:
 
     virtual void setSignatureList(gsl::span<const Signature> const& _signatureList) = 0;
     virtual void setSignatureList(SignatureList&& _signatureList) = 0;
-    virtual bcos::crypto::CryptoSuite::Ptr cryptoSuite() { return m_cryptoSuite; }
-
-protected:
-    bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
 };
-}  // namespace protocol
-}  // namespace bcos
+}  // namespace bcos::protocol

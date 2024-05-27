@@ -19,25 +19,27 @@
  */
 
 #pragma once
-#include "bcos-framework/executor/ParallelTransactionExecutorInterface.h"
-#include "bcos-tars-protocol/impl/TarsServantProxyCallback.h"
+// if windows, manual include tup/Tars.h first
+#ifdef _WIN32
+#include <tup/Tars.h>
+#endif
 #include "bcos-tars-protocol/tars/GatewayInfo.h"
+#include "bcos-tars-protocol/tars/TransactionReceipt.h"
+#include <bcos-crypto/interfaces/crypto/Hash.h>
+#include <bcos-framework/protocol/LogEntry.h>
+#if !ONLY_CPP_SDK
 #include "bcos-tars-protocol/tars/GroupInfo.h"
 #include "bcos-tars-protocol/tars/LedgerConfig.h"
-#include "bcos-tars-protocol/tars/TransactionReceipt.h"
 #include "bcos-tars-protocol/tars/TwoPCParams.h"
-#include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/consensus/ConsensusNode.h>
 #include <bcos-framework/gateway/GatewayTypeDef.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/multigroup/ChainNodeInfoFactory.h>
 #include <bcos-framework/multigroup/GroupInfoFactory.h>
-#include <bcos-framework/protocol/LogEntry.h>
+#endif
 #include <bcos-framework/protocol/ProtocolInfo.h>
 #include <bcos-utilities/Common.h>
-#include <servant/Application.h>
-#include <tup/Tars.h>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -78,10 +80,7 @@ public:
 
     ~BufferWriter() {}
 
-    void reset()
-    {
-        _len = 0;
-    }
+    void reset() { _len = 0; }
 
     void writeBuf(const ByteType* buf, size_t len)
     {
@@ -100,14 +99,8 @@ public:
         _buffer.resize(_len);
         return _buffer;
     }
-    const ByteType* getBuffer() const
-    {
-        return _buf;
-    }
-    size_t getLength() const
-    {
-        return _len;
-    }
+    const ByteType* getBuffer() const { return _buf; }
+    size_t getLength() const { return _len; }
     void swap(std::vector<ByteType>& v)
     {
         _buffer.resize(_len);
@@ -130,6 +123,8 @@ using BufferWriterStdByteVector = BufferWriter<std::vector<std::byte>>;
 using BufferWriterString = BufferWriter<std::string>;
 }  // namespace protocol
 
+#if !ONLY_CPP_SDK
+
 inline bcos::group::ChainNodeInfo::Ptr toBcosChainNodeInfo(
     bcos::group::ChainNodeInfoFactory::Ptr _factory, bcostars::ChainNodeInfo const& _tarsNodeInfo)
 {
@@ -140,6 +135,7 @@ inline bcos::group::ChainNodeInfo::Ptr toBcosChainNodeInfo(
     nodeInfo->setIniConfig(_tarsNodeInfo.iniConfig);
     nodeInfo->setMicroService(_tarsNodeInfo.microService);
     nodeInfo->setNodeType((bcos::protocol::NodeType)_tarsNodeInfo.nodeType);
+    nodeInfo->setSmCryptoType(_tarsNodeInfo.nodeCryptoType == bcos::group::NodeCryptoType::SM_NODE);
     for (auto const& it : _tarsNodeInfo.serviceInfo)
     {
         nodeInfo->appendServiceInfo((bcos::protocol::ServiceType)it.first, it.second);
@@ -165,9 +161,17 @@ inline bcos::group::GroupInfo::Ptr toBcosGroupInfo(
     groupInfo->setGroupID(_tarsGroupInfo.groupID);
     groupInfo->setGenesisConfig(_tarsGroupInfo.genesisConfig);
     groupInfo->setIniConfig(_tarsGroupInfo.iniConfig);
+    groupInfo->setWasm(_tarsGroupInfo.isWasm != 0);
+    bool isFirst = true;
     for (auto const& tarsNodeInfo : _tarsGroupInfo.nodeList)
     {
-        groupInfo->appendNodeInfo(toBcosChainNodeInfo(_nodeFactory, tarsNodeInfo));
+        auto nodeInfo = toBcosChainNodeInfo(_nodeFactory, tarsNodeInfo);
+        if (isFirst)
+        {
+            groupInfo->setSmCryptoType(nodeInfo->smCryptoType());
+            isFirst = false;
+        }
+        groupInfo->appendNodeInfo(std::move(nodeInfo));
     }
     return groupInfo;
 }
@@ -211,6 +215,7 @@ inline bcostars::GroupInfo toTarsGroupInfo(bcos::group::GroupInfo::Ptr _groupInf
     tarsGroupInfo.groupID = _groupInfo->groupID();
     tarsGroupInfo.genesisConfig = _groupInfo->genesisConfig();
     tarsGroupInfo.iniConfig = _groupInfo->iniConfig();
+    tarsGroupInfo.isWasm = _groupInfo->wasm() ? 1 : 0;
     // set nodeList
     std::vector<bcostars::ChainNodeInfo> tarsNodeList;
     auto bcosNodeList = _groupInfo->nodeInfos();
@@ -281,6 +286,10 @@ inline vector<bcostars::ConsensusNode> toTarsConsensusNodeList(
 inline bcostars::LedgerConfig toTarsLedgerConfig(bcos::ledger::LedgerConfig::Ptr _ledgerConfig)
 {
     bcostars::LedgerConfig ledgerConfig;
+    if (!_ledgerConfig)
+    {
+        return ledgerConfig;
+    }
     auto hash = _ledgerConfig->hash().asBytes();
     ledgerConfig.hash.assign(hash.begin(), hash.end());
     ledgerConfig.blockNumber = _ledgerConfig->blockNumber();
@@ -308,12 +317,13 @@ inline bcostars::P2PInfo toTarsP2PInfo(bcos::gateway::P2PInfo const& _p2pInfo)
     return tarsP2PInfo;
 }
 
-inline bcostars::GroupNodeInfo toTarsNodeIDInfo(
-    std::string const& _groupID, std::set<std::string> const& _nodeIDList)
+inline bcostars::GroupNodeInfo toTarsNodeIDInfo(std::string const& _groupID,
+    std::set<std::string> const& _nodeIDList, std::set<std::uint32_t> const& _nodeTypeList)
 {
     GroupNodeInfo groupNodeIDInfo;
     groupNodeIDInfo.groupID = _groupID;
     groupNodeIDInfo.nodeIDList = std::vector<std::string>(_nodeIDList.begin(), _nodeIDList.end());
+    groupNodeIDInfo.nodeTypeList = std::vector<int32_t>(_nodeTypeList.begin(), _nodeTypeList.end());
     return groupNodeIDInfo;
 }
 inline bcostars::GatewayInfo toTarsGatewayInfo(bcos::gateway::GatewayInfo::Ptr _bcosGatewayInfo)
@@ -328,7 +338,18 @@ inline bcostars::GatewayInfo toTarsGatewayInfo(bcos::gateway::GatewayInfo::Ptr _
     std::vector<GroupNodeInfo> tarsNodeIDInfos;
     for (auto const& it : nodeIDList)
     {
-        tarsNodeIDInfos.emplace_back(toTarsNodeIDInfo(it.first, it.second));
+        auto gourpID = it.first;
+        auto nodeInfos = it.second;
+        std::set<std::string> nodeIDs;
+        std::set<uint32_t> nodeTypes;
+        for (auto const& nodeInfo : nodeInfos)
+        {
+            auto nodeID = nodeInfo.first;
+            auto nodeType = nodeInfo.second;
+            nodeIDs.insert(nodeID);
+            nodeTypes.insert(nodeType);
+        }
+        tarsNodeIDInfos.emplace_back(toTarsNodeIDInfo(it.first, nodeIDs, nodeTypes));
     }
     tarsGatewayInfo.nodeIDInfo = tarsNodeIDInfos;
     return tarsGatewayInfo;
@@ -349,47 +370,42 @@ inline bcos::gateway::GatewayInfo::Ptr fromTarsGatewayInfo(bcostars::GatewayInfo
 {
     auto bcosGatewayInfo = std::make_shared<bcos::gateway::GatewayInfo>();
     auto p2pInfo = toBcosP2PNodeInfo(_tarsGatewayInfo.p2pInfo);
-    std::map<std::string, std::set<std::string>, std::less<>> nodeIDInfos;
+    std::map<std::string, std::map<std::string, uint32_t>> nodeIDInfos;
     for (auto const& it : _tarsGatewayInfo.nodeIDInfo)
     {
         auto const& nodeIDListInfo = it.nodeIDList;
-        nodeIDInfos[it.groupID] =
-            std::set<std::string>(nodeIDListInfo.begin(), nodeIDListInfo.end());
+        auto const& nodeTypeInfo = it.nodeTypeList;
+        for (size_t i = 0; i < nodeIDListInfo.size(); ++i)
+        {
+            auto nodeID = nodeIDListInfo[i];
+            auto nodeType = nodeTypeInfo[i];
+            nodeIDInfos[it.groupID].insert(std::pair<std::string, uint32_t>(nodeID, nodeType));
+        }
     }
     bcosGatewayInfo->setP2PInfo(std::move(p2pInfo));
     bcosGatewayInfo->setNodeIDInfo(std::move(nodeIDInfos));
     return bcosGatewayInfo;
 }
 
-template <typename T>
-bool checkConnection(std::string const& _module, std::string const& _func, const T& prx,
-    std::function<void(bcos::Error::Ptr)> _errorCallback, bool _callsErrorCallback = true)
+inline bcos::protocol::TwoPCParams toBcosTwoPCParams(bcostars::TwoPCParams const& _param)
 {
-    auto cb = prx->tars_get_push_callback();
-    assert(cb);
-    auto* tarsServantProxyCallback = (TarsServantProxyCallback*)cb.get();
-
-    if (tarsServantProxyCallback->available())
-    {
-        return true;
-    }
-
-    if (_errorCallback && _callsErrorCallback)
-    {
-        std::string errorMessage =
-            _module + " calls interface " + _func + " failed for empty connection";
-        _errorCallback(std::make_shared<bcos::Error>(-1, errorMessage));
-    }
-    return false;
+    bcos::protocol::TwoPCParams bcosTwoPCParams;
+    bcosTwoPCParams.number = _param.blockNumber;
+    bcosTwoPCParams.primaryKey = _param.primaryKey;
+    bcosTwoPCParams.timestamp = _param.timePoint;
+    return bcosTwoPCParams;
 }
 
-template <typename T>
-auto tarsProxyAvailableEndPoints(const T& prx)
+inline bcostars::TwoPCParams toTarsTwoPCParams(bcos::protocol::TwoPCParams _param)
 {
-    auto cb = prx->tars_get_push_callback();
-    assert(cb);
-    return ((TarsServantProxyCallback*)cb.get())->activeEndpoints();
+    bcostars::TwoPCParams tarsTwoPCParams;
+    tarsTwoPCParams.blockNumber = _param.number;
+    tarsTwoPCParams.primaryKey = _param.primaryKey;
+    tarsTwoPCParams.timePoint = _param.timestamp;
+    return tarsTwoPCParams;
 }
+
+#endif
 
 inline bcostars::LogEntry toTarsLogEntry(bcos::protocol::LogEntry const& _logEntry)
 {
@@ -412,25 +428,5 @@ inline bcos::protocol::LogEntry toBcosLogEntry(bcostars::LogEntry const& _logEnt
     }
     return bcos::protocol::LogEntry(bcos::bytes(_logEntry.address.begin(), _logEntry.address.end()),
         topics, bcos::bytes(_logEntry.data.begin(), _logEntry.data.end()));
-}
-
-inline bcos::protocol::TwoPCParams toBcosTwoPCParams(bcostars::TwoPCParams const& _param)
-{
-    bcos::protocol::TwoPCParams bcosTwoPCParams;
-    bcosTwoPCParams.number = _param.blockNumber;
-    bcosTwoPCParams.primaryTableName = _param.primaryTableName;
-    bcosTwoPCParams.primaryTableKey = _param.primaryTableKey;
-    bcosTwoPCParams.timestamp = _param.startTS;
-    return bcosTwoPCParams;
-}
-
-inline bcostars::TwoPCParams toTarsTwoPCParams(bcos::protocol::TwoPCParams _param)
-{
-    bcostars::TwoPCParams tarsTwoPCParams;
-    tarsTwoPCParams.blockNumber = _param.number;
-    tarsTwoPCParams.primaryTableName = _param.primaryTableName;
-    tarsTwoPCParams.primaryTableKey = _param.primaryTableKey;
-    tarsTwoPCParams.startTS = _param.timestamp;
-    return tarsTwoPCParams;
 }
 }  // namespace bcostars

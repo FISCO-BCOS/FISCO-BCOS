@@ -23,10 +23,9 @@
 #include <boost/asio/ip/tcp.hpp>
 #include <iostream>
 #include <memory>
+#include <utility>
 
-namespace bcos
-{
-namespace boostssl
+namespace bcos::boostssl
 {
 
 /**
@@ -36,45 +35,49 @@ struct NodeIPEndpoint
 {
     using Ptr = std::shared_ptr<NodeIPEndpoint>;
     NodeIPEndpoint() = default;
-    NodeIPEndpoint(std::string const& _host, uint16_t _port) : m_host(_host), m_port(_port) {}
-    NodeIPEndpoint(const NodeIPEndpoint& _nodeIPEndpoint) = default;
-    NodeIPEndpoint(boost::asio::ip::address _addr, uint16_t _port)
+    NodeIPEndpoint(std::string _host, uint16_t _port) : m_host(std::move(_host)), m_port(_port) {}
+    NodeIPEndpoint(const boost::asio::ip::address& _addr, uint16_t _port)
       : m_host(_addr.to_string()), m_port(_port), m_ipv6(_addr.is_v6())
     {}
+    NodeIPEndpoint(const NodeIPEndpoint& _nodeIPEndpoint) = default;
+    NodeIPEndpoint(NodeIPEndpoint&& _nodeIPEndpoint) noexcept = default;
+    NodeIPEndpoint& operator=(const NodeIPEndpoint& _nodeIPEndpoint) = default;
+    NodeIPEndpoint& operator=(NodeIPEndpoint&& _nodeIPEndpoint) noexcept = default;
 
     virtual ~NodeIPEndpoint() = default;
     NodeIPEndpoint(const boost::asio::ip::tcp::endpoint& _endpoint)
-    {
-        m_host = _endpoint.address().to_string();
-        m_port = _endpoint.port();
-        m_ipv6 = _endpoint.address().is_v6();
-    }
+      : m_host(_endpoint.address().to_string()),
+        m_port(_endpoint.port()),
+        m_ipv6(_endpoint.address().is_v6())
+    {}
     bool operator<(const NodeIPEndpoint& rhs) const
     {
-        if (m_host + std::to_string(m_port) < rhs.m_host + std::to_string(rhs.m_port))
+        // return m_host + std::to_string(m_port) < rhs.m_host + std::to_string(rhs.m_port);
+
+        if (m_host != rhs.m_host)
         {
-            return true;
+            return m_host < rhs.m_host;
         }
-        return false;
+        return m_port < rhs.m_port;
     }
     bool operator==(const NodeIPEndpoint& rhs) const
     {
-        return (m_host + std::to_string(m_port) == rhs.m_host + std::to_string(rhs.m_port));
+        return m_host == rhs.m_host && m_port == rhs.m_port;
     }
     operator boost::asio::ip::tcp::endpoint() const
     {
-        return boost::asio::ip::tcp::endpoint(boost::asio::ip::make_address(m_host), m_port);
+        return {boost::asio::ip::make_address(m_host), m_port};
     }
 
     // Get the port associated with the endpoint.
-    uint16_t port() const { return m_port; };
+    uint16_t port() const { return m_port; }
 
     // Get the IP address associated with the endpoint.
-    std::string address() const { return m_host; };
+    std::string address() const { return m_host; }
     bool isIPv6() const { return m_ipv6; }
 
     std::string m_host;
-    uint16_t m_port;
+    uint16_t m_port = 0;
     bool m_ipv6 = false;
 };
 
@@ -84,5 +87,4 @@ inline std::ostream& operator<<(std::ostream& _out, NodeIPEndpoint const& _endpo
     return _out;
 }
 
-}  // namespace boostssl
-}  // namespace bcos
+}  // namespace bcos::boostssl

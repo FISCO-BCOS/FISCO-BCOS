@@ -23,9 +23,7 @@
 #include "TxPoolConfig.h"
 #include "sync/TransactionSyncConfig.h"
 #include <bcos-framework/txpool/TxPoolInterface.h>
-namespace bcos
-{
-namespace txpool
+namespace bcos::txpool
 {
 class TxPoolFactory
 {
@@ -36,11 +34,11 @@ public:
         bcos::protocol::BlockFactory::Ptr _blockFactory,
         bcos::front::FrontServiceInterface::Ptr _frontService,
         std::shared_ptr<bcos::ledger::LedgerInterface> _ledger, std::string const& _groupId,
-        std::string const& _chainId, int64_t _blockLimit);
+        std::string const& _chainId, int64_t _blockLimit, size_t _txpoolLimit = DEFAULT_POOL_LIMIT);
 
-    virtual ~TxPoolFactory() {}
-    TxPool::Ptr createTxPool(size_t _notifyWorkerNum = 2, size_t _verifierWorkerNum = 1,
-        int64_t _txsExpirationTime = 10 * 60 * 1000, bool _preStoreTxs = true);
+    virtual ~TxPoolFactory() = default;
+    TxPool::Ptr createTxPool(size_t _notifyWorkerNum = 2, size_t _verifierWorkerNum = 4,
+        uint64_t _txsExpirationTime = TX_DEFAULT_EXPIRATION_TIME);
 
 private:
     bcos::crypto::NodeIDPtr m_nodeId;
@@ -51,7 +49,7 @@ private:
     std::shared_ptr<bcos::ledger::LedgerInterface> m_ledger;
     std::string m_groupId;
     std::string m_chainId;
-    int64_t m_blockLimit = 1000;
+    int64_t m_blockLimit = DEFAULT_BLOCK_LIMIT;
+    size_t m_txpoolLimit = DEFAULT_POOL_LIMIT;
 };
-}  // namespace txpool
-}  // namespace bcos
+}  // namespace bcos::txpool

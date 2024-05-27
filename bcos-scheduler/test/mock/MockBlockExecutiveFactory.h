@@ -21,7 +21,9 @@ class MockBlockExecutiveFactory : public bcos::scheduler::BlockExecutiveFactory
 {
 public:
     using Ptr = std::shared_ptr<MockBlockExecutiveFactory>;
-    MockBlockExecutiveFactory(bool isSerialExecute) : BlockExecutiveFactory(isSerialExecute) {}
+    MockBlockExecutiveFactory(bool isSerialExecute, size_t keyPageSize = 10240)
+      : BlockExecutiveFactory(isSerialExecute, keyPageSize)
+    {}
     virtual ~MockBlockExecutiveFactory() {}
 
     std::shared_ptr<BlockExecutive> build(bcos::protocol::Block::Ptr block,
@@ -50,7 +52,8 @@ public:
         SchedulerImpl* scheduler, size_t startContextID,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
         bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
-        bcos::txpool::TxPoolInterface::Ptr _txPool, uint64_t _gasLimit, bool _syncBlock) override
+        bcos::txpool::TxPoolInterface::Ptr _txPool, uint64_t _gasLimit, std::string _gasPrice,
+        bool _syncBlock) override
     {
         if (m_isSerialExecute)
         {
@@ -58,7 +61,7 @@ public:
                                  << LOG_KV("serialExecuteFlag", m_isSerialExecute);
             auto serialBlockExecutive = std::make_shared<SerialBlockExecutive>(block, scheduler,
                 startContextID, transactionSubmitResultFactory, staticCall, _blockFactory, _txPool,
-                _gasLimit, _syncBlock);
+                _gasLimit, _gasPrice, _syncBlock);
             return serialBlockExecutive;
         }
         else

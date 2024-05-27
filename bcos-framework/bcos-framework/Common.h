@@ -18,7 +18,11 @@
  */
 #pragma once
 #include <bcos-utilities/Log.h>
-#include <memory>
-#include <string>
 
 #define METRIC LOG_BADGE("METRIC")
+
+
+//--------------- Definition of signal -----------------------
+
+#define GATEWAY_RELOAD_P2P_CONFIG SIGUSR1
+#define BOOST_LOG_RELOAD_LOG_LEVEL SIGUSR2

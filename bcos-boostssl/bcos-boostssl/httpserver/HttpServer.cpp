@@ -22,6 +22,7 @@
 #include <bcos-boostssl/httpserver/HttpServer.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <memory>
+#include <utility>
 
 using namespace bcos;
 using namespace bcos::boostssl;
@@ -47,7 +48,7 @@ void HttpServer::start()
     m_acceptor->open(endpoint.protocol(), ec);
     if (ec)
     {
-        HTTP_SERVER(WARNING) << LOG_BADGE("open") << LOG_KV("error", ec)
+        HTTP_SERVER(WARNING) << LOG_BADGE("open") << LOG_KV("failed", ec)
                              << LOG_KV("message", ec.message());
         BOOST_THROW_EXCEPTION(std::runtime_error("acceptor open failed"));
     }
@@ -56,7 +57,7 @@ void HttpServer::start()
     m_acceptor->set_option(boost::asio::socket_base::reuse_address(true), ec);
     if (ec)
     {
-        HTTP_SERVER(WARNING) << LOG_BADGE("set_option") << LOG_KV("error", ec)
+        HTTP_SERVER(WARNING) << LOG_BADGE("set_option") << LOG_KV("failed", ec)
                              << LOG_KV("message", ec.message());
 
         BOOST_THROW_EXCEPTION(std::runtime_error("acceptor set_option failed"));
@@ -65,7 +66,7 @@ void HttpServer::start()
     m_acceptor->bind(endpoint, ec);
     if (ec)
     {
-        HTTP_SERVER(WARNING) << LOG_BADGE("bind") << LOG_KV("error", ec)
+        HTTP_SERVER(WARNING) << LOG_BADGE("bind") << LOG_KV("failed", ec)
                              << LOG_KV("message", ec.message());
         BOOST_THROW_EXCEPTION(std::runtime_error("acceptor bind failed"));
     }
@@ -73,7 +74,7 @@ void HttpServer::start()
     m_acceptor->listen(boost::asio::socket_base::max_listen_connections, ec);
     if (ec)
     {
-        HTTP_SERVER(WARNING) << LOG_BADGE("listen") << LOG_KV("error", ec)
+        HTTP_SERVER(WARNING) << LOG_BADGE("listen") << LOG_KV("failed", ec)
                              << LOG_KV("message", ec.message());
         BOOST_THROW_EXCEPTION(std::runtime_error("acceptor listen failed"));
     }
@@ -107,16 +108,32 @@ void HttpServer::onAccept(boost::beast::error_code ec, boost::asio::ip::tcp::soc
 {
     if (ec)
     {
-        HTTP_SERVER(WARNING) << LOG_BADGE("accept") << LOG_KV("error", ec)
+        HTTP_SERVER(WARNING) << LOG_BADGE("accept") << LOG_KV("failed", ec)
                              << LOG_KV("message", ec.message());
         return doAccept();
     }
 
-    auto localEndpoint = socket.local_endpoint();
-    auto remoteEndpoint = socket.remote_endpoint();
+    boost::system::error_code sec;
+    auto localEndpoint = socket.local_endpoint(sec);
+    if (sec)
+    {
+        HTTP_SERVER(WARNING) << LOG_BADGE("accept") << LOG_KV("local_endpoint failed", sec)
+                             << LOG_KV("message", sec.message());
+        ws::WsTools::close(socket);
+        return doAccept();
+    }
+    auto remoteEndpoint = socket.remote_endpoint(sec);
+    if (sec)
+    {
+        HTTP_SERVER(WARNING) << LOG_BADGE("accept") << LOG_KV("remote_endpoint failed", sec)
+                             << LOG_KV("message", sec.message());
+        ws::WsTools::close(socket);
+        return doAccept();
+    }
+    socket.set_option(boost::asio::ip::tcp::no_delay(true));
 
-    HTTP_SERVER(INFO) << LOG_BADGE("accept") << LOG_KV("local_endpoint", socket.local_endpoint())
-                      << LOG_KV("remote_endpoint", socket.remote_endpoint());
+    HTTP_SERVER(INFO) << LOG_BADGE("accept") << LOG_KV("local_endpoint", localEndpoint)
+                      << LOG_KV("remote_endpoint", remoteEndpoint);
 
     bool useSsl = !disableSsl();
     if (!useSsl)
@@ -144,7 +161,7 @@ void HttpServer::onAccept(boost::beast::error_code ec, boost::asio::ip::tcp::soc
                                   << LOG_DESC("ssl handshake failed")
                                   << LOG_KV("local", localEndpoint)
                                   << LOG_KV("remote", remoteEndpoint)
-                                  << LOG_KV("error", _ec.message());
+                                  << LOG_KV("message", _ec.message());
                 ws::WsTools::close(ss->next_layer().socket());
                 return;
             }
@@ -194,7 +211,6 @@ HttpSession::Ptr HttpServer::buildHttpSession(
     session->setHttpStream(_httpStream);
     session->setRequestHandler(m_httpReqHandler);
     session->setWsUpgradeHandler(m_wsUpgradeHandler);
-    session->setThreadPool(threadPool());
     session->setNodeId(_nodeId);
 
     return session;
@@ -213,12 +229,11 @@ HttpServer::Ptr HttpServerFactory::buildHttpServer(const std::string& _listenIP,
     uint16_t _listenPort, std::shared_ptr<boost::asio::io_context> _ioc,
     std::shared_ptr<boost::asio::ssl::context> _ctx, std::string _moduleName)
 {
-    std::string m_moduleName = _moduleName;
     // create httpserver and launch a listening port
-    auto server = std::make_shared<HttpServer>(_listenIP, _listenPort, _moduleName);
+    auto server = std::make_shared<HttpServer>(_listenIP, _listenPort, std::move(_moduleName));
     auto acceptor = std::make_shared<boost::asio::ip::tcp::acceptor>((*_ioc));
     auto httpStreamFactory = std::make_shared<HttpStreamFactory>();
-    server->setCtx(_ctx);
+    server->setCtx(std::move(_ctx));
     server->setAcceptor(acceptor);
     server->setHttpStreamFactory(httpStreamFactory);
 

@@ -26,10 +26,11 @@
 #include <bcos-utilities/Timer.h>
 #include <servant/Application.h>
 
+#include <utility>
+
 #define AMOP_CLIENT_LOG(level) BCOS_LOG(level) << LOG_BADGE("AMOPClient")
-namespace bcos
-{
-namespace rpc
+
+namespace bcos::rpc
 {
 class AMOPClient : public std::enable_shared_from_this<AMOPClient>
 {
@@ -38,12 +39,12 @@ public:
     AMOPClient(std::shared_ptr<boostssl::ws::WsService> _wsService,
         std::shared_ptr<bcos::boostssl::MessageFaceFactory> _wsMessageFactory,
         std::shared_ptr<bcos::protocol::AMOPRequestFactory> _requestFactory,
-        bcos::gateway::GatewayInterface::Ptr _gateway, std::string const& _gatewayServiceName)
-      : m_wsService(_wsService),
-        m_wsMessageFactory(_wsMessageFactory),
-        m_requestFactory(_requestFactory),
-        m_gateway(_gateway),
-        m_gatewayServiceName(_gatewayServiceName)
+        bcos::gateway::GatewayInterface::Ptr _gateway, std::string _gatewayServiceName)
+      : m_wsService(std::move(_wsService)),
+        m_wsMessageFactory(std::move(_wsMessageFactory)),
+        m_requestFactory(std::move(_requestFactory)),
+        m_gateway(std::move(_gateway)),
+        m_gatewayServiceName(std::move(_gatewayServiceName))
     {
         initMsgHandler();
         // create gatewayStatusDetector to detect status of gateway periodically
@@ -51,7 +52,7 @@ public:
         m_gatewayStatusDetector->registerTimeoutHandler([this]() { pingGatewayAndNotifyTopics(); });
     }
 
-    virtual ~AMOPClient() {}
+    virtual ~AMOPClient() = default;
     /**
      * @brief receive amop request message from the gateway
      *
@@ -77,7 +78,7 @@ public:
         catch (std::exception const& e)
         {
             BCOS_LOG(WARNING) << LOG_DESC("asyncNotifyAMOPMessage exception")
-                              << LOG_KV("error", boost::diagnostic_information(e));
+                              << LOG_KV("message", boost::diagnostic_information(e));
         }
     }
 
@@ -89,7 +90,7 @@ public:
         if (m_gatewayStatusDetector)
         {
             auto activeEndPoints = getActiveGatewayEndPoints();
-            if (activeEndPoints.size() == 0)
+            if (activeEndPoints.empty())
             {
                 m_gatewayActivated.store(false);
             }
@@ -189,5 +190,4 @@ protected:
     std::atomic_bool m_gatewayActivated = {true};
     std::atomic_bool m_notifyTopicSuccess = {true};
 };
-}  // namespace rpc
-}  // namespace bcos
+}  // namespace bcos::rpc

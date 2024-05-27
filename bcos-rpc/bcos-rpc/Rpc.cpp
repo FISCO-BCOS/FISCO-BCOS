@@ -156,7 +156,7 @@ void Rpc::notifyGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo)
             continue;
         }
         Json::Value groupInfoJson;
-        groupInfoToJson(groupInfoJson, _groupInfo);
+        groupInfoToJson(groupInfoJson, *_groupInfo);
         auto response = groupInfoJson.toStyledString();
         auto message = m_wsService->messageFactory()->buildMessage();
         message->setPacketType(bcos::protocol::MessageType::GROUP_NOTIFY);
@@ -222,8 +222,7 @@ void Rpc::onRecvHandshakeRequest(
                 << LOG_BADGE(
                        "onRecvHandshakeRequest and response failed for get groupInfoList failed")
                 << LOG_KV("endpoint", _session ? _session->endPoint() : "unknown")
-                << LOG_KV("errorCode", _error->errorCode())
-                << LOG_KV("errorMessage", _error->errorMessage());
+                << LOG_KV("code", _error->errorCode()) << LOG_KV("message", _error->errorMessage());
             return;
         }
         auto rpc = self.lock();

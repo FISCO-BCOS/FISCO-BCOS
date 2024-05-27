@@ -18,18 +18,20 @@
  * @date 2021-12-04
  */
 #pragma once
+#include "rpc/JsonRpcServiceImpl.h"
+#include "utilities/logger/LogInitializer.h"
 #include <bcos-boostssl/websocket/WsConfig.h>
 #include <bcos-boostssl/websocket/WsService.h>
 #include <bcos-cpp-sdk/amop/AMOP.h>
 #include <bcos-cpp-sdk/event/EventSub.h>
 #include <bcos-cpp-sdk/rpc/JsonRpcImpl.h>
 #include <bcos-cpp-sdk/ws/Service.h>
+#include <bcos-utilities/BoostLogInitializer.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <memory>
+#include <utility>
 
-namespace bcos
-{
-namespace cppsdk
+namespace bcos::cppsdk
 {
 class Sdk
 {
@@ -40,9 +42,23 @@ public:
 public:
     Sdk(bcos::cppsdk::service::Service::Ptr _service,
         bcos::cppsdk::jsonrpc::JsonRpcImpl::Ptr _jsonRpc, bcos::cppsdk::amop::AMOP::Ptr _amop,
-        bcos::cppsdk::event::EventSub::Ptr _eventSub)
-      : m_service(_service), m_jsonRpc(_jsonRpc), m_amop(_amop), m_eventSub(_eventSub)
+        bcos::cppsdk::event::EventSub::Ptr _eventSub,
+        bcos::cppsdk::jsonrpc::JsonRpcServiceImpl::Ptr _jsonRpcService)
+      : m_service(std::move(_service)),
+        m_jsonRpc(std::move(_jsonRpc)),
+        m_amop(std::move(_amop)),
+        m_eventSub(std::move(_eventSub)),
+        m_jsonRpcService(std::move(_jsonRpcService))
     {}
+    Sdk(bcos::cppsdk::service::Service::Ptr _service,
+        bcos::cppsdk::jsonrpc::JsonRpcImpl::Ptr _jsonRpc, bcos::cppsdk::amop::AMOP::Ptr _amop,
+        bcos::cppsdk::event::EventSub::Ptr _eventSub,
+        bcos::cppsdk::jsonrpc::JsonRpcServiceImpl::Ptr _jsonRpcService, int strictConnectVersion)
+      : Sdk(std::move(_service), std::move(_jsonRpc), std::move(_amop), std::move(_eventSub),
+            std::move(_jsonRpcService))
+    {
+        this->m_service->setStrictConnectVersion(strictConnectVersion);
+    }
     virtual ~Sdk() { stop(); }
 
 private:
@@ -50,10 +66,16 @@ private:
     bcos::cppsdk::jsonrpc::JsonRpcImpl::Ptr m_jsonRpc;
     bcos::cppsdk::amop::AMOP::Ptr m_amop;
     bcos::cppsdk::event::EventSub::Ptr m_eventSub;
+    bcos::cppsdk::jsonrpc::JsonRpcServiceImpl::Ptr m_jsonRpcService;
 
 public:
     virtual void start()
     {
+        if (m_service)
+        {
+            m_service->start();
+        }
+
         if (m_jsonRpc)
         {
             m_jsonRpc->start();
@@ -67,11 +89,6 @@ public:
         if (m_eventSub)
         {
             m_eventSub->start();
-        }
-
-        if (m_service)
-        {
-            m_service->start();
         }
     }
 
@@ -99,12 +116,17 @@ public:
     }
 
 public:
-    bcos::cppsdk::service::Service::Ptr service() const { return m_service; }
-    bcos::cppsdk::jsonrpc::JsonRpcImpl::Ptr jsonRpc() const { return m_jsonRpc; }
-    bcos::cppsdk::amop::AMOP::Ptr amop() const { return m_amop; }
+    [[nodiscard]] bcos::cppsdk::service::Service::Ptr service() const { return m_service; }
+    [[nodiscard]] bcos::cppsdk::jsonrpc::JsonRpcImpl::Ptr jsonRpc() const { return m_jsonRpc; }
+    [[nodiscard]] bcos::cppsdk::jsonrpc::JsonRpcServiceImpl::Ptr jsonRpcService() const
+    {
+        return m_jsonRpcService;
+    }
+    [[nodiscard]] bcos::cppsdk::amop::AMOP::Ptr amop() const { return m_amop; }
 
-    bcos::cppsdk::event::EventSub::Ptr eventSub() const { return m_eventSub; }
+    [[nodiscard]] bcos::cppsdk::event::EventSub::Ptr eventSub() const { return m_eventSub; }
+    uint32_t localProtocolInfo() const { return m_service->localProtocolInfo(); }
+    uint32_t negotiatedProtocolInfo() { return m_service->negotiatedProtocolInfo(); }
 };
 
-}  // namespace cppsdk
-}  // namespace bcos
+}  // namespace bcos::cppsdk

@@ -20,18 +20,15 @@
 #pragma once
 #include <bcos-crypto/interfaces/crypto/KeyPairInterface.h>
 #include <bcos-utilities/Common.h>
-namespace bcos
-{
-namespace crypto
+namespace bcos::crypto
 {
 class KeyPairFactory
 {
 public:
     using Ptr = std::shared_ptr<KeyPairFactory>;
     KeyPairFactory() = default;
-    virtual ~KeyPairFactory() {}
+    virtual ~KeyPairFactory() = default;
     virtual KeyPairInterface::UniquePtr createKeyPair(SecretPtr _secretKey) = 0;
     virtual KeyPairInterface::UniquePtr generateKeyPair() = 0;
 };
-}  // namespace crypto
-}  // namespace bcos
+}  // namespace bcos::crypto

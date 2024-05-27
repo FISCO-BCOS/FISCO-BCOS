@@ -22,12 +22,9 @@
 #include <bcos-boostssl/websocket/WsConfig.h>
 #include <bcos-boostssl/websocket/WsService.h>
 #include <bcos-boostssl/websocket/WsSession.h>
+#include <utility>
 
-namespace bcos
-{
-namespace boostssl
-{
-namespace ws
+namespace bcos::boostssl::ws
 {
 class WsInitializer
 {
@@ -35,23 +32,21 @@ public:
     using Ptr = std::shared_ptr<WsInitializer>;
     using ConstPtr = std::shared_ptr<const WsInitializer>;
 
-public:
     std::shared_ptr<MessageFaceFactory> messageFactory() const { return m_messageFactory; }
     void setMessageFactory(std::shared_ptr<MessageFaceFactory> _messageFactory)
     {
-        m_messageFactory = _messageFactory;
+        m_messageFactory = std::move(_messageFactory);
     }
 
     std::shared_ptr<WsConfig> config() const { return m_config; }
-    void setConfig(std::shared_ptr<WsConfig> _config) { m_config = _config; }
+    void setConfig(std::shared_ptr<WsConfig> _config) { m_config = std::move(_config); }
 
     std::shared_ptr<WsSessionFactory> sessionFactory() { return m_sessionFactory; }
     void setSessionFactory(std::shared_ptr<WsSessionFactory> _sessionFactory)
     {
-        m_sessionFactory = _sessionFactory;
+        m_sessionFactory = std::move(_sessionFactory);
     }
 
-public:
     void initWsService(WsService::Ptr _wsService);
 
 private:
@@ -59,6 +54,4 @@ private:
     std::shared_ptr<WsConfig> m_config;
     WsSessionFactory::Ptr m_sessionFactory;
 };
-}  // namespace ws
-}  // namespace boostssl
-}  // namespace bcos
+}  // namespace bcos::boostssl::ws

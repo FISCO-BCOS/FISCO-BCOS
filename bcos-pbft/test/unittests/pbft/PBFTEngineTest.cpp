@@ -18,6 +18,8 @@
  * @author: yujiechen
  * @date 2021-05-31
  */
+#include "bcos-framework/bcos-framework/testutils/faker/FakeBlock.h"
+#include "bcos-framework/bcos-framework/testutils/faker/FakeBlockHeader.h"
 #include "test/unittests/pbft/PBFTFixture.h"
 #include "test/unittests/protocol/FakePBFTMessage.h"
 #include <bcos-crypto/hash/Keccak256.h>
@@ -130,11 +132,17 @@ void testPBFTEngineWithFaulty(size_t _consensusNodes, size_t _connectedNodes)
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
+
+    for (auto& item : fakerMap)
+    {
+        item.second->stop();
+    }
 }
 
 // TODO: Remove this test due to memory access violation
 BOOST_AUTO_TEST_CASE(testPBFTEngineWithAllNonFaulty)
 {
+    boost::log::core::get()->set_logging_enabled(false);
     size_t consensusNodeSize = 10;
     // case1: all non-faulty
     std::cout << "testPBFTEngineWithFaulty with 10 non-faulty" << std::endl;
@@ -144,6 +152,7 @@ BOOST_AUTO_TEST_CASE(testPBFTEngineWithAllNonFaulty)
     std::cout << "testPBFTEngineWithFaulty with 7 non-faulty" << std::endl;
     testPBFTEngineWithFaulty(consensusNodeSize, 7);
     std::cout << "testPBFTEngineWithFaulty with 7 non-faulty success" << std::endl;
+    boost::log::core::get()->set_logging_enabled(true);
 }
 
 BOOST_AUTO_TEST_CASE(testHandlePrePrepareMsg)
@@ -169,7 +178,7 @@ BOOST_AUTO_TEST_CASE(testHandlePrePrepareMsg)
     block->encode(*blockData);
 
     // case1: invalid block number
-    auto hash = hashImpl->hash(std::string("invalidCase"));
+    auto hash = hashImpl->hash(bytesConstRef("invalidCase"));
     auto leaderMsgFixture =
         std::make_shared<PBFTMessageFixture>(cryptoSuite, leaderFaker->keyPair());
     auto index = (expectedIndex - 1);

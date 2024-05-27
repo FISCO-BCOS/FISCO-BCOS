@@ -29,17 +29,15 @@ class P2PMessageV2 : public P2PMessage
 {
 public:
     using Ptr = std::shared_ptr<P2PMessageV2>;
-    P2PMessageV2() : P2PMessage() {}
-    ~P2PMessageV2() override {}
+    //~P2PMessageV2() override = default;
 
     virtual int16_t ttl() const { return m_ttl; }
     virtual void setTTL(int16_t _ttl) { m_ttl = _ttl; }
 
 protected:
-    ssize_t decodeHeader(bytesConstRef _buffer) override;
+    int32_t decodeHeader(const bytesConstRef& _buffer) override;
     bool encodeHeader(bytes& _buffer) override;
 
-protected:
     int16_t m_ttl = 10;
 };
 
@@ -47,8 +45,7 @@ class P2PMessageFactoryV2 : public MessageFactory
 {
 public:
     using Ptr = std::shared_ptr<P2PMessageFactoryV2>;
-    P2PMessageFactoryV2() = default;
-    ~P2PMessageFactoryV2() override {}
+
     Message::Ptr buildMessage() override
     {
         auto message = std::make_shared<P2PMessageV2>();

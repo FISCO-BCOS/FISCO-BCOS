@@ -1,4 +1,4 @@
-name: FISCO-BCOS release Actions
+name: Build and Publish Binary
 on:
   push:
     tags-ignore:
@@ -8,19 +8,24 @@ on:
   release:
     types: [published, created]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   compile_macOS_release:
     name: upload standard binary of macOS
-    runs-on: macos-12
+    runs-on: macos-13
+    # runs-on: self-hosted-mac
     # if: startsWith(github.ref,'v2')
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           fetch-depth: 5
       - name: install rust language
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2021-06-17
+          toolchain: nightly-2024-02-25
           override: true
       - name: install macOS dependencies
         run: brew install ccache libomp gmp
@@ -31,13 +36,21 @@ jobs:
       - name: tar BcosBuilder
         run: mv tools/BcosBuilder . && tar -cvzf BcosBuilder.tgz BcosBuilder
       - name: tar fisco-bcos for macOS
-        run:  mv fisco-bcos-air/ bin/ && cp tools/BcosAirBuilder/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -cvzf fisco-bcos.tar.gz fisco-bcos build_chain.sh
+        run: mv fisco-bcos-air/ bin/ && mv lightnode/fisco-bcos-lightnode/fisco-bcos-lightnode bin/ && cp tools/BcosAirBuilder/build_chain.sh bin/ && cd bin && strip fisco-bcos && strip fisco-bcos-lightnode && tar -cvzf lightnode.tar.gz fisco-bcos-lightnode && tar -cvzf fisco-bcos.tar.gz fisco-bcos build_chain.sh
       - name: Upload fisco-bcos binaries to release
         uses: svenstaro/upload-release-action@v1-release
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: bin/fisco-bcos.tar.gz
           asset_name: fisco-bcos-macOS-x86_64.tar.gz
+          tag: ${{ github.ref }}
+          overwrite: true
+      - name: Upload fisco-bcos-lightnode binaries to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: bin/lightnode.tar.gz
+          asset_name: fisco-bcos-lightnode-macOS-x86_64.tar.gz
           tag: ${{ github.ref }}
           overwrite: true
       - name: Upload BcosNodeService binaries to release
@@ -96,44 +109,51 @@ jobs:
           asset_name: BcosBuilder.tgz
           tag: ${{ github.ref }}
           overwrite: true
-      
+
   compile_centos_release:
     name: upload standard binary of linux
-    runs-on: ubuntu-latest
-    container:
-      image: docker.io/centos:7
-      volumes:
-        - /github/home/.hunter:/github/home/.hunter
-        - /__w/FISCO-BCOS:/__w/FISCO-BCOS
+    runs-on: self-hosted-centos
+    strategy:
+      fail-fast: false
+    env:
+      VCPKG_ROOT: ~/cache/vcpkg
+      DEPS_ROOT: ~/cache/deps
     steps:
-      - name: install CentOS dependencies
+      - uses: actions/checkout@v3
+        with:
+          clean: false
+
+      - name: yum install
         run: |
-          yum install -y epel-release centos-release-scl
-          yum install -y git make gcc gcc-c++ glibc-static glibc-devel gmp-static cmake3 patch ccache llvm-toolset-7 devtoolset-11 libzstd-devel zlib-devel flex bison python-devel python3-devel wget devtoolset-11 rh-perl530-perl
-          source /opt/rh/devtoolset-11/enable
-          alias cmake='cmake3'
-          yum install -y http://opensource.wandisco.com/centos/7/git/x86_64/wandisco-git-release-7-2.noarch.rpm
-          yum install -y git
-          git --version
-      - uses: actions/checkout@v2
+          sudo yum install -y -q epel-release centos-release-scl flex bison patch gmp-static  glibc-static glibc-devel libzstd-devel
+          sudo yum install -y -q devtoolset-11 llvm-toolset-7.0 rh-perl530-perl cmake3 zlib-devel ccache lcov python-devel python3-devel python3-pip
+          sudo yum reinstall -y -q https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
+          sudo yum install -y -q git
+      - uses: actions-rs/toolchain@v1
         with:
-          fetch-depth: 5
-      - name: install rust language
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly-2021-06-17
+          toolchain: nightly-2024-02-25
           override: true
-      - name: configure and compile
+
+      - name: Reuse build cache
         run: |
-          source /opt/rh/devtoolset-11/enable
-          source /opt/rh/rh-perl530/enable
-          export LIBCLANG_PATH=/opt/rh/llvm-toolset-7/root/lib64/
-          source /opt/rh/llvm-toolset-7/enable
-          cmake3 . -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON -DTEST=OFF
-          make -j4
-          make tar
+          mkdir -p ./build
+          rm -rf deps
+          ln -s ${{ env.DEPS_ROOT }} deps
+      - name: Remove cache if correspond dir change
+        run: ./tools/.ci/clear_build_cache.sh
+
+      - name: Build for linux
+        run: |
+          export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
+          . /opt/rh/devtoolset-11/enable
+          . /opt/rh/rh-perl530/enable
+          export LIBCLANG_PATH=/opt/rh/llvm-toolset-7.0/root/lib64/
+          . /opt/rh/llvm-toolset-7.0/enable
+          alias cmake='cmake3'
+          cd build && cmake3 -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=OFF -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=ON -DWITH_TARS_SERVICES=ON .. || cat *.log
+          make -j8 && make tar
       - name: tar fisco-bcos for CentOS
-        run:  mkdir bin && mv fisco-bcos-air/fisco-bcos bin && cd bin && strip fisco-bcos && tar -cvzf fisco-bcos.tar.gz fisco-bcos
+        run: mkdir -p bin && mv build/fisco-bcos-air/fisco-bcos bin && mv build/lightnode/fisco-bcos-lightnode/fisco-bcos-lightnode bin && cd bin && strip fisco-bcos && strip fisco-bcos-lightnode && tar -cvzf fisco-bcos.tar.gz fisco-bcos && tar -cvzf lightnode.tar.gz fisco-bcos-lightnode
       - name: Upload fisco-bcos binaries to release
         uses: svenstaro/upload-release-action@v1-release
         with:
@@ -142,11 +162,19 @@ jobs:
           asset_name: fisco-bcos-linux-x86_64.tar.gz
           tag: ${{ github.ref }}
           overwrite: true
+      - name: Upload fisco-bcos-lightnode binaries to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: bin/lightnode.tar.gz
+          asset_name: fisco-bcos-lightnode-linux-x86_64.tar.gz
+          tag: ${{ github.ref }}
+          overwrite: true
       - name: Upload BcosNodeService binaries to release
         uses: svenstaro/upload-release-action@v1-release
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: fisco-bcos-tars-service/BcosNodeService.tgz
+          file: build/fisco-bcos-tars-service/BcosNodeService.tgz
           asset_name: BcosNodeService-linux-x86_64.tgz
           tag: ${{ github.ref }}
           overwrite: true
@@ -154,7 +182,7 @@ jobs:
         uses: svenstaro/upload-release-action@v1-release
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: fisco-bcos-tars-service/BcosRpcService.tgz
+          file: build/fisco-bcos-tars-service/BcosRpcService.tgz
           asset_name: BcosRpcService-linux-x86_64.tgz
           tag: ${{ github.ref }}
           overwrite: true
@@ -162,7 +190,7 @@ jobs:
         uses: svenstaro/upload-release-action@v1-release
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: fisco-bcos-tars-service/BcosGatewayService.tgz
+          file: build/fisco-bcos-tars-service/BcosGatewayService.tgz
           asset_name: BcosGatewayService-linux-x86_64.tgz
           tag: ${{ github.ref }}
           overwrite: true
@@ -170,7 +198,7 @@ jobs:
         uses: svenstaro/upload-release-action@v1-release
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: fisco-bcos-tars-service/BcosMaxNodeService.tgz
+          file: build/fisco-bcos-tars-service/BcosMaxNodeService.tgz
           asset_name: BcosMaxNodeService-linux-x86_64.tgz
           tag: ${{ github.ref }}
           overwrite: true
@@ -178,7 +206,7 @@ jobs:
         uses: svenstaro/upload-release-action@v1-release
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: fisco-bcos-tars-service/BcosExecutorService.tgz
+          file: build/fisco-bcos-tars-service/BcosExecutorService.tgz
           asset_name: BcosExecutorService-linux-x86_64.tgz
           tag: ${{ github.ref }}
           overwrite: true
@@ -188,5 +216,108 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: tools/BcosAirBuilder/build_chain.sh
           asset_name: build_chain.sh
+          tag: ${{ github.ref }}
+          overwrite: true
+
+  compile_arm_release:
+    name: upload standard binary of arm
+    runs-on: self-hosted-arm
+    strategy:
+      fail-fast: false
+    env:
+      VCPKG_ROOT: ~/cache/vcpkg
+      DEPS_ROOT: ~/cache/deps
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          clean: false
+
+      - name: yum install
+        run: |
+          sudo yum install -y epel-release centos-release-scl flex bison patch gmp-static java glibc-static glibc-devel libzstd-devel
+          sudo yum install -y devtoolset-10 llvm-toolset-7.0 rh-perl530-perl zlib-devel ccache lcov python-devel python3-devel python3-pip
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2024-02-25
+          override: true
+
+      - name: Reuse build cache
+        run: |
+          mkdir -p ./build
+          rm -rf deps
+          ln -s ${{ env.DEPS_ROOT }} deps
+
+      - name: Remove cache if correspond dir change
+        run: ./tools/.ci/clear_build_cache.sh
+
+      - name: update vcpkg
+        run: |
+          cd vcpkg && git pull origin master && ./bootstrap-vcpkg.sh
+          cd -
+
+      - name: Build for Arm
+        run: |
+          export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
+          . /opt/rh/rh-perl530/enable
+          export LIBCLANG_PATH=/opt/rh/llvm-toolset-7.0/root/lib64/
+          . /opt/rh/llvm-toolset-7.0/enable
+          cd build && cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=OFF -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=ON -DWITH_TARS_SERVICES=ON .. || cat *.log
+          make -j8 && make tar
+      - name: tar fisco-bcos for Arm
+        run: mkdir -p bin && mv build/fisco-bcos-air/fisco-bcos bin && mv build/lightnode/fisco-bcos-lightnode/fisco-bcos-lightnode bin && cd bin && strip fisco-bcos && strip fisco-bcos-lightnode && tar -cvzf fisco-bcos.tar.gz fisco-bcos && tar -cvzf lightnode.tar.gz fisco-bcos-lightnode
+      - name: Upload fisco-bcos binaries to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: bin/fisco-bcos.tar.gz
+          asset_name: fisco-bcos-linux-aarch64.tar.gz
+          tag: ${{ github.ref }}
+          overwrite: true
+      - name: Upload fisco-bcos-lightnode binaries to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: bin/lightnode.tar.gz
+          asset_name: fisco-bcos-lightnode-linux-aarch64.tar.gz
+          tag: ${{ github.ref }}
+          overwrite: true
+      - name: Upload BcosNodeService binaries to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: build/fisco-bcos-tars-service/BcosNodeService.tgz
+          asset_name: BcosNodeService-linux-aarch64.tgz
+          tag: ${{ github.ref }}
+          overwrite: true
+      - name: Upload BcosRpcService binaries to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: build/fisco-bcos-tars-service/BcosRpcService.tgz
+          asset_name: BcosRpcService-linux-aarch64.tgz
+          tag: ${{ github.ref }}
+          overwrite: true
+      - name: Upload BcosGatewayService binaries to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: build/fisco-bcos-tars-service/BcosGatewayService.tgz
+          asset_name: BcosGatewayService-linux-aarch64.tgz
+          tag: ${{ github.ref }}
+          verwrite: true
+      - name: Upload BcosMaxNodeService binaries to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: build/fisco-bcos-tars-service/BcosMaxNodeService.tgz
+          asset_name: BcosMaxNodeService-linux-aarch64.tgz
+          tag: ${{ github.ref }}
+          overwrite: true
+      - name: Upload BcosExecutorService binaries to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: build/fisco-bcos-tars-service/BcosExecutorService.tgz
+          asset_name: BcosExecutorService-linux-aarch64.tgz
           tag: ${{ github.ref }}
           overwrite: true

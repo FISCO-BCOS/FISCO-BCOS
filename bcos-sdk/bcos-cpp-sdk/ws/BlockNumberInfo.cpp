@@ -18,6 +18,7 @@
  * @date 2021-10-04
  */
 
+#include "bcos-utilities/BoostLog.h"
 #include <bcos-cpp-sdk/ws/BlockNumberInfo.h>
 #include <bcos-cpp-sdk/ws/Common.h>
 #include <json/json.h>
@@ -92,12 +93,12 @@ bool BlockNumberInfo::fromJson(const std::string& _json)
         } while (0);
 
         RPC_BLOCKNUM_LOG(WARNING) << LOG_BADGE("fromJson") << LOG_DESC("Invalid JSON")
-                                  << LOG_KV("errorMessage", errorMessage);
+                                  << LOG_KV("message", errorMessage);
     }
     catch (const std::exception& e)
     {
         RPC_BLOCKNUM_LOG(WARNING) << LOG_BADGE("fromJson") << LOG_DESC("Invalid JSON")
-                                  << LOG_KV("error", boost::diagnostic_information(e));
+                                  << LOG_KV("msg", boost::diagnostic_information(e));
     }
 
     return false;

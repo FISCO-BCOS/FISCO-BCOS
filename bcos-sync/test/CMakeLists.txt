@@ -19,11 +19,12 @@ file(GLOB_RECURSE SOURCES "*.cpp" "*.h" "*.sol")
 
 # cmake settings
 set(TEST_BINARY_NAME test-bcos-sync)
+find_package(Protobuf REQUIRED)
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE . ../src ${CMAKE_SOURCE_DIR})
 
 find_package(Boost REQUIRED unit_test_framework)
 
-target_link_libraries(${TEST_BINARY_NAME} PUBLIC ${PBPROTOCOL_TARGET} ${SYNC_TARGET} ${CRYPTO_TARGET} ${TARS_PROTOCOL_TARGET}  Boost::unit_test_framework)
+target_link_libraries(${TEST_BINARY_NAME} PUBLIC ${PBPROTOCOL_TARGET} ${SYNC_TARGET} ${TXPOOL_TARGET} ${CRYPTO_TARGET} ${TARS_PROTOCOL_TARGET} protobuf::libprotobuf Boost::unit_test_framework)
 add_test(NAME test-sync WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})

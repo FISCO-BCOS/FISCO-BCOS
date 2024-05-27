@@ -21,7 +21,7 @@
 
 namespace bcos
 {
-std::string base64Encode(const byte* _begin, const size_t _dataSize);
+std::string base64Encode(const byte* _begin, size_t _dataSize);
 
 std::string base64Encode(std::string const& _data);
 std::string base64Encode(bytesConstRef _data);

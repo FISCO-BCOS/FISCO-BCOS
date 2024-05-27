@@ -22,42 +22,44 @@
 #include "../vm/Precompiled.h"
 #include "bcos-executor/src/precompiled/common/Common.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
+#include <bcos-framework/ledger/Features.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <set>
-namespace bcos
-{
-namespace precompiled
-{
-#if 0
-contract SystemConfigTable
-{
-    // Return 1 means successful setting, and 0 means cannot find the config key.
-    function setValueByKey(string key, string value) public returns(int256);
-}
-#endif
 
+namespace bcos::precompiled
+{
 class SystemConfigPrecompiled : public bcos::precompiled::Precompiled
 {
 public:
     using Ptr = std::shared_ptr<SystemConfigPrecompiled>;
 
-    SystemConfigPrecompiled(crypto::Hash::Ptr _hashImpl);
-    virtual ~SystemConfigPrecompiled(){};
+    SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl);
+    SystemConfigPrecompiled(const SystemConfigPrecompiled&) = default;
+    SystemConfigPrecompiled& operator=(const SystemConfigPrecompiled&) = delete;
+    SystemConfigPrecompiled(SystemConfigPrecompiled&&) = default;
+    SystemConfigPrecompiled& operator=(SystemConfigPrecompiled&&) = delete;
+    ~SystemConfigPrecompiled() override = default;
+
     std::shared_ptr<PrecompiledExecResult> call(
         std::shared_ptr<executor::TransactionExecutive> _executive,
         PrecompiledExecResult::Ptr _callParameters) override;
-    std::pair<std::string, protocol::BlockNumber> getSysConfigByKey(
-        const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        const std::string& _key) const;
+    static std::pair<std::string, protocol::BlockNumber> getSysConfigByKey(
+        const std::shared_ptr<executor::TransactionExecutive>& _executive, const std::string& _key);
 
 private:
-    void checkValueValid(std::string_view key, std::string_view value);
-    std::map<std::string, std::function<int64_t(std::string)>> m_valueConverter;
-    std::map<std::string, std::function<void(int64_t)>> m_sysValueCmp;
-    const std::set<std::string_view> c_supportedKey = {bcos::ledger::SYSTEM_KEY_TX_GAS_LIMIT,
-        bcos::ledger::SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, bcos::ledger::SYSTEM_KEY_TX_COUNT_LIMIT,
-        bcos::ledger::SYSTEM_KEY_COMPATIBILITY_VERSION};
+    int64_t validate(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        std::string_view key, std::string_view value, uint32_t blockVersion);
+    static bool shouldUpgradeChain(
+        std::string_view key, uint32_t fromVersion, uint32_t toVersion) noexcept;
+    static void upgradeChain(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        const PrecompiledExecResult::Ptr& _callParameters, CodecWrapper const& codec,
+        uint32_t toVersion);
+    static void registerGovernorToCaller(
+        const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        const PrecompiledExecResult::Ptr& _callParameters, CodecWrapper const& codec);
+
+    std::map<std::string, std::function<int64_t(std::string, uint32_t)>> m_valueConverter;
+    std::unordered_map<std::string, std::function<void(int64_t, uint32_t)>> m_sysValueCmp;
 };
 
-}  // namespace precompiled
-}  // namespace bcos
+}  // namespace bcos::precompiled

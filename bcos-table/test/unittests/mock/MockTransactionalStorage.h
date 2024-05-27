@@ -57,7 +57,7 @@ public:
 
     void asyncPrepare(const TwoPCParams& params,
         const bcos::storage::TraverseStorageInterface::ConstPtr& storage,
-        std::function<void(Error::Ptr, uint64_t)> callback) noexcept override
+        std::function<void(Error::Ptr, uint64_t, const std::string&)> callback) noexcept override
     {
         boost::ignore_unused(params, storage);
         callback(nullptr, 0);

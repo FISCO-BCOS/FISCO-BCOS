@@ -19,10 +19,9 @@
  * @date 2021-04-22
  */
 #pragma once
-#include <stdint.h>
-namespace bcos
-{
-namespace protocol
+#include <cstdint>
+
+namespace bcos::protocol
 {
 enum CommonError : int32_t
 {
@@ -31,16 +30,17 @@ enum CommonError : int32_t
     NotFoundFrontServiceSendMsg = 1001,
     NotFoundFrontServiceDispatchMsg = 1002,
     GatewaySendMsgFailed = 1003,
-    NetworkBandwidthOverFlow = 1004,
+    GatewayBandwidthOverFlow = 1004,
+    GatewayQPSOverFlow = 1005,
     TransactionsMissing = 2000,  // for transaction sync
     InconsistentTransactions = 2001,
     TxsSignatureVerifyFailed = 2002,
     FetchTransactionsFailed = 2003,
+    VerifyProposalFailed = 2004,
     NotFoundPeerByTopicSendMsg = 3001,
     NotFoundClientByTopicDispatchMsg = 3002,
     AMOPSendMsgFailed = 3003,
     UnSupportedPacketType = 3004,
 };
 
-}  // namespace protocol
-}  // namespace bcos
+}  // namespace bcos::protocol

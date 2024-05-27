@@ -32,28 +32,9 @@ using Parent2ChildListMap = std::map<std::string, std::vector<std::string>>;
 // child=>parent
 using Child2ParentMap = tbb::concurrent_unordered_map<std::string, std::string>;
 
-static const char* const SYS_VALUE = "value";
-static const char* const SYS_CONFIG_ENABLE_BLOCK_NUMBER = "enable_number";
-
-// FileSystem paths
-static const char* const FS_ROOT = "/";
-static const char* const FS_APPS = "/apps";
-static const char* const FS_USER = "/usr";
-static const char* const FS_SYS_BIN = "/sys";
-static const char* const FS_USER_TABLE = "/tables";
-
-// FileSystem keys
-static const char* const FS_KEY_NAME = "name";
-static const char* const FS_KEY_TYPE = "type";
-static const char* const FS_KEY_SUB = "sub";
-static const char* const FS_ACL_TYPE = "acl_type";
-static const char* const FS_ACL_WHITE = "acl_white";
-static const char* const FS_ACL_BLACK = "acl_black";
-static const char* const FS_KEY_EXTRA = "extra";
-
-// FileSystem file type
-static const char* const FS_TYPE_DIR = "directory";
-static const char* const FS_TYPE_CONTRACT = "contract";
+constexpr static const char* const SYS_VALUE = "value";
+constexpr static const char* const SYS_CONFIG_ENABLE_BLOCK_NUMBER = "enable_number";
+constexpr static const char* const SYS_VALUE_AND_ENABLE_BLOCK_NUMBER = "value,enable_number";
 
 enum LedgerError : int32_t
 {

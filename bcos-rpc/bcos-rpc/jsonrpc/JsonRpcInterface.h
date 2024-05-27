@@ -43,11 +43,14 @@ public:
     JsonRpcInterface(JsonRpcInterface&&) = default;
     JsonRpcInterface& operator=(const JsonRpcInterface&) = default;
     JsonRpcInterface& operator=(JsonRpcInterface&&) = default;
-    virtual ~JsonRpcInterface() {}
+    virtual ~JsonRpcInterface() = default;
 
 public:
     virtual void call(std::string_view _groupID, std::string_view _nodeName, std::string_view _to,
         std::string_view _data, RespFunc _respFunc) = 0;
+
+    virtual void call(std::string_view _groupID, std::string_view _nodeName, std::string_view _to,
+        std::string_view _data, std::string_view _sign, RespFunc _respFunc) = 0;
 
     virtual void sendTransaction(std::string_view _groupID, std::string_view _nodeName,
         std::string_view _data, bool _requireProof, RespFunc _respFunc) = 0;
@@ -81,6 +84,9 @@ public:
 
     virtual void getObserverList(
         std::string_view _groupID, std::string_view _nodeName, RespFunc _respFunc) = 0;
+
+    virtual void getNodeListByType(std::string_view _groupID, std::string_view _nodeName,
+        std::string_view _nodeType, RespFunc _respFunc) = 0;
 
     virtual void getPbftView(
         std::string_view _groupID, std::string_view _nodeName, RespFunc _respFunc) = 0;
@@ -121,24 +127,31 @@ private:
 
     std::unordered_map<std::string, std::function<void(Json::Value, RespFunc)>> m_methodToFunc;
 
-    static void parseRpcRequestJson(std::string_view _requestBody, JsonRequest& _jsonRequest);
-    static bcos::bytes toStringResponse(JsonResponse _jsonResponse);
-    static Json::Value toJsonResponse(JsonResponse _jsonResponse);
 
     std::string_view toView(const Json::Value& value)
     {
-        const char* begin;
-        const char* end;
-        value.getString(&begin, &end);
-
+        const char* begin = nullptr;
+        const char* end = nullptr;
+        if (!value.getString(&begin, &end))
+        {
+            return {};
+        }
         std::string_view view(begin, end - begin);
         return view;
     }
 
     void callI(const Json::Value& req, RespFunc _respFunc)
     {
-        call(toView(req[0u]), toView(req[1u]), toView(req[2u]), toView(req[3u]),
-            std::move(_respFunc));
+        if (req.size() == 5U) [[unlikely]]
+        {
+            call(toView(req[0U]), toView(req[1U]), toView(req[2U]), toView(req[3U]),
+                toView(req[4U]), std::move(_respFunc));
+        }
+        else [[likely]]
+        {
+            call(toView(req[0U]), toView(req[1U]), toView(req[2U]), toView(req[3U]),
+                std::move(_respFunc));
+        }
     }
 
     void sendTransactionI(const Json::Value& req, RespFunc _respFunc)
@@ -202,6 +215,11 @@ private:
     void getObserverListI(const Json::Value& req, RespFunc _respFunc)
     {
         getObserverList(toView(req[0u]), toView(req[1u]), std::move(_respFunc));
+    }
+
+    void getNodeListByTypeI(const Json::Value& req, RespFunc _respFunc)
+    {
+        getNodeListByType(toView(req[0u]), toView(req[1u]), toView(req[2u]), std::move(_respFunc));
     }
 
     void getPbftViewI(const Json::Value& req, RespFunc _respFunc)
@@ -270,5 +288,9 @@ private:
         getGroupNodeInfo(toView(_req[0u]), toView(_req[1u]), std::move(_respFunc));
     }
 };
+void parseRpcRequestJson(std::string_view _requestBody, JsonRequest& _jsonRequest);
+bcos::bytes toStringResponse(JsonResponse _jsonResponse);
+Json::Value toJsonResponse(JsonResponse _jsonResponse);
+
 
 }  // namespace bcos::rpc

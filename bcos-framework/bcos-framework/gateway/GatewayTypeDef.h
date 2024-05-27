@@ -28,7 +28,7 @@ namespace bcos
 namespace gateway
 {
 // Message type definition
-enum GatewayMessageType : int16_t
+enum GatewayMessageType : uint16_t
 {
     Heartbeat = 0x1,
     Handshake = 0x2,
@@ -43,6 +43,7 @@ enum GatewayMessageType : int16_t
     RouterTableResponse = 0xb,
     RouterTableRequest = 0xc,
     ForwardMessage = 0xd,
+    All = 0xff
 };
 /**
  * @brief client end endpoint. Node will connect to NodeIPEndpoint.
@@ -51,26 +52,22 @@ struct NodeIPEndpoint
 {
     using Ptr = std::shared_ptr<NodeIPEndpoint>;
     NodeIPEndpoint() = default;
-    NodeIPEndpoint(std::string const& _host, uint16_t _port) : m_host(_host), m_port(_port) {}
+    NodeIPEndpoint(std::string _host, uint16_t _port) : m_host(std::move(_host)), m_port(_port) {}
     NodeIPEndpoint(const NodeIPEndpoint& _nodeIPEndpoint) = default;
-    NodeIPEndpoint(boost::asio::ip::address _addr, uint16_t _port)
+    NodeIPEndpoint(const boost::asio::ip::address& _addr, uint16_t _port)
       : m_host(_addr.to_string()), m_port(_port), m_ipv6(_addr.is_v6())
     {}
-
-    virtual ~NodeIPEndpoint() = default;
-    NodeIPEndpoint(const boost::asio::ip::tcp::endpoint& _endpoint)
+    NodeIPEndpoint(const boost::asio::ip::tcp::endpoint& _endpoint) : m_port(_endpoint.port())
     {
         m_host = _endpoint.address().to_string();
-        m_port = _endpoint.port();
         m_ipv6 = _endpoint.address().is_v6();
     }
+
+    virtual ~NodeIPEndpoint() = default;
+
     bool operator<(const NodeIPEndpoint& rhs) const
     {
-        if (m_host + std::to_string(m_port) < rhs.m_host + std::to_string(rhs.m_port))
-        {
-            return true;
-        }
-        return false;
+        return m_host + std::to_string(m_port) < rhs.m_host + std::to_string(rhs.m_port);
     }
     bool operator==(const NodeIPEndpoint& rhs) const
     {
@@ -104,8 +101,9 @@ struct P2PInfo
 {
     using Ptr = std::shared_ptr<P2PInfo>;
     P2PInfo() = default;
-    ~P2PInfo() {}
+    ~P2PInfo() noexcept = default;
     std::string p2pID;
+    std::string p2pIDWithoutExtInfo;
     std::string agencyName;
     std::string nodeName;
     NodeIPEndpoint nodeIPEndpoint;
@@ -117,7 +115,7 @@ class GatewayInfo
 public:
     using Ptr = std::shared_ptr<GatewayInfo>;
     // groupID=>nodeList
-    using NodeIDInfoType = std::map<std::string, std::set<std::string>, std::less<>>;
+    using NodeIDInfoType = std::map<std::string, std::map<std::string, uint32_t>>;
     GatewayInfo()
       : m_p2pInfo(std::make_shared<P2PInfo>()), m_nodeIDInfo(std::make_shared<NodeIDInfoType>())
     {}

@@ -32,11 +32,8 @@
 #include <bcos-framework/testutils/faker/FakeSealer.h>
 #include <bcos-framework/testutils/faker/FakeTxPool.h>
 #include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
-#include <bcos-protocol/protobuf/PBBlockFactory.h>
-#include <bcos-protocol/protobuf/PBBlockHeaderFactory.h>
-#include <bcos-protocol/protobuf/PBTransactionFactory.h>
-#include <bcos-protocol/protobuf/PBTransactionReceiptFactory.h>
 #include <bcos-table/src/StateStorage.h>
+#include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <boost/bind/bind.hpp>
 #include <boost/test/unit_test.hpp>
 #include <chrono>
@@ -65,12 +62,15 @@ public:
         std::shared_ptr<PBFTMessageFactory> _pbftMessageFactory,
         std::shared_ptr<PBFTCodecInterface> _codec, std::shared_ptr<ValidatorInterface> _validator,
         std::shared_ptr<bcos::front::FrontServiceInterface> _frontService,
-        StateMachineInterface::Ptr _stateMachine, PBFTStorage::Ptr _storage)
+        StateMachineInterface::Ptr _stateMachine, PBFTStorage::Ptr _storage,
+        protocol::BlockFactory::Ptr _blockFactory)
       : PBFTConfig(_cryptoSuite, _keyPair, _pbftMessageFactory, _codec, _validator, _frontService,
-            _stateMachine, _storage)
+            _stateMachine, _storage, _blockFactory)
     {}
 
     ~FakePBFTConfig() override {}
+
+    void stop() override { PBFTConfig::stop(); }
 
     virtual void setMinRequiredQuorum(uint64_t _quorum) { m_minRequiredQuorum = _quorum; }
 };
@@ -220,7 +220,7 @@ public:
 
         auto pbftConfig = std::make_shared<FakePBFTConfig>(m_cryptoSuite, m_keyPair,
             orgPBFTConfig->pbftMessageFactory(), orgPBFTConfig->codec(), orgPBFTConfig->validator(),
-            orgPBFTConfig->frontService(), stateMachine, pbftStorage);
+            orgPBFTConfig->frontService(), stateMachine, pbftStorage, m_blockFactory);
         PBFT_LOG(DEBUG) << LOG_DESC("create PBFTEngine");
         auto pbftEngine = std::make_shared<FakePBFTEngine>(pbftConfig);
 
@@ -249,7 +249,8 @@ public:
         m_frontService = std::make_shared<FakeFrontService>(_keyPair->publicKey());
 
         // create KVStorageHelper
-        m_storage = std::make_shared<KVStorageHelper>(std::make_shared<StateStorage>(nullptr));
+        m_storage =
+            std::make_shared<KVStorageHelper>(std::make_shared<StateStorage>(nullptr, false));
 
         // create fakeLedger
         if (_ledger == nullptr)
@@ -257,6 +258,9 @@ public:
             m_ledger = std::make_shared<FakeLedger>(m_blockFactory, 20, 10, 10);
             m_ledger->setSystemConfig(SYSTEM_KEY_TX_COUNT_LIMIT, std::to_string(_txCountLimit));
             m_ledger->setSystemConfig(SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, std::to_string(1));
+            m_ledger->setSystemConfig(SYSTEM_KEY_AUTH_CHECK_STATUS, std::to_string(0));
+            m_ledger->setSystemConfig(
+                SYSTEM_KEY_COMPATIBILITY_VERSION, protocol::DEFAULT_VERSION_STR);
             // m_ledger->ledgerConfig()->setConsensusTimeout(_consensusTimeout * 20);
             m_ledger->ledgerConfig()->setBlockTxCountLimit(_txCountLimit);
         }
@@ -278,9 +282,37 @@ public:
         m_pbft->registerFaultyDiscriminator([](bcos::crypto::NodeIDPtr) { return false; });
     }
 
-    virtual ~PBFTFixture() {}
+    virtual ~PBFTFixture() { stop(); }
 
     void init() { m_pbft->init(); }
+
+    void stop()
+    {
+        if (m_txpool)
+        {
+            m_txpool->stop();
+        }
+        if (m_scheduler)
+        {
+            m_scheduler->stop();
+        }
+        if (m_frontService)
+        {
+            m_frontService->stop();
+        }
+        if (m_pbftEngine)
+        {
+            m_pbftEngine->stop();
+        }
+        if (m_pbft)
+        {
+            m_pbft->stop();
+        }
+        if (m_ledger)
+        {
+            m_ledger->stop();
+        }
+    }
 
     void appendConsensusNode(ConsensusNode::Ptr _node)
     {
@@ -363,6 +395,9 @@ inline std::map<IndexType, PBFTFixture::Ptr> createFakers(CryptoSuite::Ptr _cryp
             blockFactory, _currentBlockNumber + 1, 10, 0, ledger->sealerList());
         fakedLedger->setSystemConfig(SYSTEM_KEY_TX_COUNT_LIMIT, std::to_string(_txCountLimit));
         fakedLedger->setSystemConfig(SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, std::to_string(1));
+        fakedLedger->setSystemConfig(SYSTEM_KEY_AUTH_CHECK_STATUS, std::to_string(0));
+        fakedLedger->setSystemConfig(
+            SYSTEM_KEY_COMPATIBILITY_VERSION, protocol::DEFAULT_VERSION_STR);
         // fakedLedger->ledgerConfig()->setConsensusTimeout(_consensusTimeout * 1000);
         fakedLedger->ledgerConfig()->setBlockTxCountLimit(_txCountLimit);
         auto peerFaker = createPBFTFixture(_cryptoSuite, fakedLedger, _txCountLimit);

@@ -63,7 +63,7 @@ void Host::startAccept(boost::system::error_code boost_error)
                 /// connections
                 auto endpoint = socket->remoteEndpoint();
                 HOST_LOG(TRACE) << LOG_DESC("P2P Recv Connect, From=") << endpoint;
-                /// network acception failed
+                /// network accept failed
                 if (ec || !m_run)
                 {
                     HOST_LOG(ERROR) << "Error: " << ec;
@@ -116,6 +116,8 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             /// return early when the certificate is invalid
             if (!preverified)
             {
+                HOST_LOG(DEBUG) << LOG_DESC("ssl handshake certificate verify failed")
+                                << LOG_KV("preverified", preverified);
                 return false;
             }
             /// get the object points to certificate
@@ -126,7 +128,9 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
                 return preverified;
             }
 
-            if (!hostPtr->sslContextPubHandler()(cert, *nodeIDOut.get()))
+            // For compatibility, p2p communication between nodes still uses the old public key
+            // analysis method
+            if (!hostPtr->sslContextPubHandler()(cert, *nodeIDOut))
             {
                 return preverified;
             }
@@ -150,9 +154,32 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             }
 
             BASIC_CONSTRAINTS_free(basic);
-            // if (!hostPtr->sslContextPubHandler()(cert, *nodeIDOut.get())) {
-            //   return preverified;
-            // }
+
+            // The new public key analysis method is used for black and white lists
+            std::string nodeIDOutWithoutExtInfo;
+            if (!hostPtr->sslContextPubHandlerWithoutExtInfo()(cert, nodeIDOutWithoutExtInfo))
+            {
+                return preverified;
+            }
+            nodeIDOutWithoutExtInfo = boost::to_upper_copy(nodeIDOutWithoutExtInfo);
+
+            // If the node ID exists in the black and white lists at the same time, the black list
+            // takes precedence
+            if (nullptr != hostPtr->peerBlacklist() &&
+                true == hostPtr->peerBlacklist()->has(nodeIDOutWithoutExtInfo))
+            {
+                HOST_LOG(INFO) << LOG_DESC("NodeID in certificate blacklist")
+                               << LOG_KV("nodeID", NodeID(nodeIDOutWithoutExtInfo).abridged());
+                return false;
+            }
+
+            if (nullptr != hostPtr->peerWhitelist() &&
+                false == hostPtr->peerWhitelist()->has(nodeIDOutWithoutExtInfo))
+            {
+                HOST_LOG(INFO) << LOG_DESC("NodeID is not in certificate whitelist")
+                               << LOG_KV("nodeID", NodeID(nodeIDOutWithoutExtInfo).abridged());
+                return false;
+            }
 
             /// append cert-name and issuer name after node ID
             /// get subject name
@@ -161,11 +188,14 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             const char* issuerName = X509_NAME_oneline(X509_get_issuer_name(cert), NULL, 0);
             /// format: {nodeID}#{issuer-name}#{cert-name}
             nodeIDOut->append("#");
+            nodeIDOut->append(nodeIDOutWithoutExtInfo);
+            nodeIDOut->append("#");
             nodeIDOut->append(issuerName);
             nodeIDOut->append("#");
             nodeIDOut->append(certName);
             OPENSSL_free((void*)certName);
             OPENSSL_free((void*)issuerName);
+
             return preverified;
         }
         catch (std::exception& e)
@@ -201,6 +231,14 @@ P2PInfo Host::p2pInfo()
                 m_p2pInfo.p2pID = boost::to_upper_copy(nodeIDOut);
                 HOST_LOG(INFO) << LOG_DESC("Get node information from cert")
                                << LOG_KV("p2pid", m_p2pInfo.p2pID);
+            }
+
+            std::string nodeIDOutWithoutExtInfo;
+            if (m_sslContextPubHandlerWithoutExtInfo(cert, nodeIDOutWithoutExtInfo))
+            {
+                m_p2pInfo.p2pIDWithoutExtInfo = boost::to_upper_copy(nodeIDOutWithoutExtInfo);
+                HOST_LOG(INFO) << LOG_DESC("Get node information without ext info from cert")
+                               << LOG_KV("p2pid without ext info", m_p2pInfo.p2pIDWithoutExtInfo);
             }
 
             /// fill in the node informations
@@ -262,11 +300,15 @@ void Host::obtainNodeInfo(P2PInfo& info, std::string const& node_info)
     }
     if (node_info_vec.size() > 1)
     {
-        info.agencyName = obtainCommonNameFromSubject(node_info_vec[1]);
+        info.p2pIDWithoutExtInfo = node_info_vec[1];
     }
     if (node_info_vec.size() > 2)
     {
-        info.nodeName = obtainCommonNameFromSubject(node_info_vec[2]);
+        info.agencyName = obtainCommonNameFromSubject(node_info_vec[2]);
+    }
+    if (node_info_vec.size() > 3)
+    {
+        info.nodeName = obtainCommonNameFromSubject(node_info_vec[3]);
     }
 
     HOST_LOG(INFO) << "obtainP2pInfo " << LOG_KV("node_info", node_info)
@@ -287,17 +329,16 @@ void Host::handshakeServer(const boost::system::error_code& error,
 {
     if (error)
     {
-        HOST_LOG(WARNING) << LOG_DESC("handshakeServer Handshake failed")
-                          << LOG_KV("errorValue", error.value())
-                          << LOG_KV("message", error.message())
-                          << LOG_KV("endpoint", socket->nodeIPEndpoint());
+        HOST_LOG(INFO) << LOG_DESC("handshakeServer Handshake failed")
+                       << LOG_KV("value", error.value()) << LOG_KV("message", error.message())
+                       << LOG_KV("endpoint", socket->nodeIPEndpoint());
         socket->close();
         return;
     }
     if (endpointPublicKey->empty())
     {
-        HOST_LOG(WARNING) << LOG_DESC("handshakeServer get p2pID failed")
-                          << LOG_KV("remote endpoint", socket->remoteEndpoint());
+        HOST_LOG(INFO) << LOG_DESC("handshakeServer get p2pID failed")
+                       << LOG_KV("remote endpoint", socket->remoteEndpoint());
         socket->close();
         return;
     }
@@ -332,20 +373,26 @@ void Host::handshakeServer(const boost::system::error_code& error,
 void Host::startPeerSession(P2PInfo const& p2pInfo, std::shared_ptr<SocketFace> const& socket,
     std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>)
 {
-    auto weakHost = std::weak_ptr<Host>(shared_from_this());
-    std::shared_ptr<SessionFace> ps =
-        m_sessionFactory->create_session(weakHost, socket, m_messageFactory);
+    auto weakHost = weak_from_this();
+    std::shared_ptr<SessionFace> session = m_sessionFactory->create_session(
+        weakHost, socket, m_messageFactory, m_sessionCallbackManager);
 
-    auto connectionHandler = m_connectionHandler;
-    m_threadPool->enqueue([ps, connectionHandler, p2pInfo]() {
-        if (connectionHandler)
-        {
-            connectionHandler(NetworkException(0, ""), p2pInfo, ps);
-        }
-        else
-        {
-            HOST_LOG(WARNING) << LOG_DESC("No connectionHandler, new connection may lost");
-        }
+    m_taskArena.execute([&]() {
+        m_asyncGroup.run([weakHost, session = std::move(session), p2pInfo]() {
+            auto host = weakHost.lock();
+            if (!host)
+            {
+                return;
+            }
+            if (host->m_connectionHandler)
+            {
+                host->m_connectionHandler(NetworkException(0, ""), p2pInfo, session);
+            }
+            else
+            {
+                HOST_LOG(WARNING) << LOG_DESC("No connectionHandler, new connection may lost");
+            }
+        });
     });
     HOST_LOG(INFO) << LOG_DESC("startPeerSession, Remote=") << socket->remoteEndpoint()
                    << LOG_KV("local endpoint", socket->localEndpoint())
@@ -386,7 +433,8 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
     HOST_LOG(INFO) << LOG_DESC("Connecting to node") << LOG_KV("endpoint", _nodeIPEndpoint);
     {
         Guard l(x_pendingConns);
-        if (m_pendingConns.count(_nodeIPEndpoint))
+        auto it = m_pendingConns.find(_nodeIPEndpoint);
+        if (it != m_pendingConns.end())
         {
             BCOS_LOG(TRACE) << LOG_DESC("asyncConnected node is in the pending list")
                             << LOG_KV("endpoint", _nodeIPEndpoint);
@@ -396,9 +444,9 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
 
     std::shared_ptr<SocketFace> socket = m_asioInterface->newSocket(false, _nodeIPEndpoint);
     /// if async connect timeout, close the socket directly
-    auto connect_timer = std::make_shared<boost::asio::deadline_timer>(
+    auto connectTimer = std::make_shared<boost::asio::deadline_timer>(
         *(socket->ioService()), boost::posix_time::milliseconds(m_connectTimeThre));
-    connect_timer->async_wait([=, this](const boost::system::error_code& error) {
+    connectTimer->async_wait([=, this](const boost::system::error_code& error) {
         /// return when cancel has been called
         if (error == boost::asio::error::operation_aborted)
         {
@@ -421,32 +469,37 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
         }
     });
     /// callback async connect
-    m_asioInterface->asyncResolveConnect(socket, [=, this](boost::system::error_code const& ec) {
-        if (ec)
-        {
-            HOST_LOG(ERROR) << LOG_DESC("TCP Connection refused by node")
-                            << LOG_KV("endpoint", _nodeIPEndpoint)
-                            << LOG_KV("message", ec.message());
-            socket->close();
+    m_asioInterface->asyncResolveConnect(socket,
+        [this, callback = std::move(callback), _nodeIPEndpoint, socket,
+            connectTimer = std::move(connectTimer)](boost::system::error_code const& ec) mutable {
+            if (ec)
+            {
+                HOST_LOG(ERROR) << LOG_DESC("TCP Connection refused by node")
+                                << LOG_KV("endpoint", _nodeIPEndpoint)
+                                << LOG_KV("message", ec.message());
+                socket->close();
 
-            m_threadPool->enqueue([callback, _nodeIPEndpoint]() {
-                callback(NetworkException(ConnectError, "Connect failed"), P2PInfo(),
-                    std::shared_ptr<SessionFace>());
-            });
-            return;
-        }
-        else
-        {
+                m_taskArena.execute([&]() {
+                    m_asyncGroup.run([callback = std::move(callback)]() {
+                        callback(NetworkException(ConnectError, "Connect failed"), {}, {});
+                    });
+                });
+                return;
+            }
             insertPendingConns(_nodeIPEndpoint);
             /// get the public key of the server during handshake
             std::shared_ptr<std::string> endpointPublicKey = std::make_shared<std::string>();
             m_asioInterface->setVerifyCallback(socket, newVerifyCallback(endpointPublicKey));
             /// call handshakeClient after handshake succeed
             m_asioInterface->asyncHandshake(socket, ba::ssl::stream_base::client,
-                boost::bind(&Host::handshakeClient, shared_from_this(), ba::placeholders::error,
-                    socket, endpointPublicKey, callback, _nodeIPEndpoint, connect_timer));
-        }
-    });
+                [self = shared_from_this(), socket,
+                    endpointPublicKey = std::move(endpointPublicKey),
+                    callback = std::move(callback), nodeIPEndPoint = _nodeIPEndpoint,
+                    connectTimer = std::move(connectTimer)](auto error) mutable {
+                    self->handshakeClient(error, std::move(socket), endpointPublicKey,
+                        std::move(callback), nodeIPEndPoint, std::move(connectTimer));
+                });
+        });
 }
 
 /**
@@ -467,8 +520,7 @@ void Host::handshakeClient(const boost::system::error_code& error,
     if (error)
     {
         HOST_LOG(WARNING) << LOG_DESC("handshakeClient failed")
-                          << LOG_KV("endpoint", _nodeIPEndpoint)
-                          << LOG_KV("errorValue", error.value())
+                          << LOG_KV("endpoint", _nodeIPEndpoint) << LOG_KV("value", error.value())
                           << LOG_KV("message", error.message());
 
         if (socket->isConnected())
@@ -501,15 +553,14 @@ void Host::stop()
 {
     // ignore if already stopped/stopping
     if (!m_run)
+    {
         return;
+    }
     // signal run() to prepare for shutdown and reset m_timer
     m_run = false;
     if (m_asioInterface)
     {
         m_asioInterface->stop();
     }
-    if (m_threadPool)
-    {
-        m_threadPool->stop();
-    }
+    m_asyncGroup.wait();
 }

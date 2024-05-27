@@ -1,14 +1,11 @@
 #pragma once
 
-#include <bcos-concepts/Block.h>
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-concepts/Hash.h>
-#include <bcos-concepts/Receipt.h>
-#include <bcos-concepts/Transaction.h>
+#include <bcos-concepts/protocol/Block.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <json/value.h>
 #include <boost/algorithm/hex.hpp>
-#include <iterator>
 
 namespace bcos::rpc
 {
@@ -33,12 +30,12 @@ void hex2Bin(bcos::concepts::bytebuffer::ByteBuffer auto const& hex,
         (RANGES::range_value_t<decltype(view)>*)RANGES::data(out));
 }
 
-template <bcos::crypto::hasher::Hasher Hasher>
-void toJsonResp(bcos::concepts::transaction::Transaction auto const& transaction, Json::Value& resp)
+void toJsonResp(bcos::crypto::hasher::Hasher auto&& hasher,
+    bcos::concepts::transaction::Transaction auto const& transaction, Json::Value& resp)
 {
     resp["version"] = transaction.data.version;
     std::string hash;
-    bcos::concepts::hash::calculate<Hasher>(transaction, hash);
+    bcos::concepts::hash::calculate(transaction, std::forward<decltype(hasher)>(hasher), hash);
     resp["hash"] = toHexStringWithPrefix(hash);
     resp["nonce"] = transaction.data.nonce;
     resp["blockLimit"] = Json::Value((Json::Int64)transaction.data.blockLimit);
@@ -52,9 +49,9 @@ void toJsonResp(bcos::concepts::transaction::Transaction auto const& transaction
     resp["signature"] = toHexStringWithPrefix(transaction.signature);
 }
 
-template <bcos::crypto::hasher::Hasher Hasher>
-void toJsonResp(bcos::concepts::receipt::TransactionReceipt auto const& receipt,
-    std::string_view txHash, Json::Value& resp)
+void toJsonResp(bcos::crypto::hasher::Hasher auto&& hasher,
+    bcos::concepts::receipt::TransactionReceipt auto const& receipt, std::string_view txHash,
+    Json::Value& resp)
 {
     resp["version"] = Json::Value((Json::Int64)receipt.data.version);
     resp["contractAddress"] = receipt.data.contractAddress;
@@ -63,10 +60,10 @@ void toJsonResp(bcos::concepts::receipt::TransactionReceipt auto const& receipt,
     resp["blockNumber"] = Json::Value((Json::Int64)receipt.data.blockNumber);
     resp["output"] = toHexStringWithPrefix(receipt.data.output);
     resp["message"] = receipt.message;
-    resp["transactionHash"] = std::string(txHash);
+    resp["transactionHash"] = "0x" + std::string(txHash);
 
     std::string hash;
-    bcos::concepts::hash::calculate<Hasher>(receipt, hash);
+    bcos::concepts::hash::calculate(receipt, std::forward<decltype(hasher)>(hasher), hash);
     resp["hash"] = toHexStringWithPrefix(hash);
     resp["logEntries"] = Json::Value(Json::arrayValue);
     for (const auto& logEntry : receipt.data.logEntries)
@@ -85,12 +82,24 @@ void toJsonResp(bcos::concepts::receipt::TransactionReceipt auto const& receipt,
     }
 }
 
-template <bcos::crypto::hasher::Hasher Hasher>
-void toJsonResp(bcos::concepts::block::Block auto const& block, Json::Value& jResp, bool onlyHeader)
+void toJsonResp(bcos::crypto::hasher::Hasher auto&& hasher,
+    bcos::concepts::receipt::TransactionReceipt auto const& receipt,
+    bcos::concepts::transaction::Transaction auto const& transaction, std::string_view txHash,
+    Json::Value& resp)
+{
+    toJsonResp(std::forward<decltype(hasher)>(hasher), receipt, txHash, resp);
+
+    resp["input"] = toHexStringWithPrefix(transaction.data.input);
+    resp["from"] = toHexStringWithPrefix(transaction.sender);
+    resp["to"] = transaction.data.to;
+}
+
+void toJsonResp(bcos::crypto::hasher::Hasher auto&& hasher,
+    bcos::concepts::block::Block auto const& block, Json::Value& jResp, bool onlyHeader)
 {
     auto const& blockHeader = block.blockHeader;
     std::string hash;
-    bcos::concepts::hash::calculate<Hasher>(block, hash);
+    bcos::concepts::hash::calculate(block, hasher.clone(), hash);
     jResp["hash"] = toHexStringWithPrefix(hash);
     jResp["version"] = Json::Value((Json::Int64)block.version);
     jResp["txsRoot"] = toHexStringWithPrefix(blockHeader.data.txsRoot);
@@ -140,7 +149,7 @@ void toJsonResp(bcos::concepts::block::Block auto const& block, Json::Value& jRe
         for (auto const& transaction : block.transactions)
         {
             Json::Value transactionObject;
-            toJsonResp<Hasher>(transaction, transactionObject);
+            toJsonResp(hasher.clone(), transaction, transactionObject);
 
             transactions.append(std::move(transactionObject));
         }

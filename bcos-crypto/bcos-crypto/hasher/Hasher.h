@@ -8,19 +8,14 @@ namespace bcos::crypto::hasher
 {
 
 template <class HasherType>
-concept Hasher = requires(HasherType hasher, std::span<std::byte> out)
-{
-    HasherType{};
-    HasherType::HASH_SIZE > 0;
-    hasher.update(std::span<std::byte const>{});
-    hasher.final(out);
-};
-
-auto final(Hasher auto& hasher)
-{
-    std::array<std::byte, std::remove_cvref_t<decltype(hasher)>::HASH_SIZE> out;
-    hasher.final(out);
-    return out;
-}
+concept Hasher =
+    requires(HasherType hasher, std::span<std::byte> out) {
+        //    requires std::move_constructible<HasherType>;
+        hasher.update(std::span<std::byte const>{});
+        hasher.final(out);
+        requires std::same_as<std::decay_t<std::invoke_result_t<
+                                  decltype(&std::decay_t<HasherType>::clone), HasherType>>,
+            std::decay_t<HasherType>>;
+    };
 
 }  // namespace bcos::crypto::hasher

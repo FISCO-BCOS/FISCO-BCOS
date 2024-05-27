@@ -1,29 +1,61 @@
 #pragma once
-#include "Basic.h"
-#include "ByteBuffer.h"
-#include <vector>
 
 namespace bcos::concepts::serialize
 {
-
-template <class ObjectType>
-concept Serializable = requires(
-    ObjectType object, std::vector<std::byte> out, std::vector<std::byte> in)
+namespace detail
 {
-    impl_encode(object, out);
-    impl_decode(in, object);
+
+template <class Object, class Buffer>
+concept HasMemberFuncEncode =
+    requires(Object const& object, Buffer& output) { object.encode(output); };
+template <class Object, class Buffer>
+concept HasMemberFuncDecode =
+    requires(Object object, const Buffer& input) { object.decode(input); };
+template <class Object, class Buffer>
+concept HasADLEncode =
+    requires(Object const& object, Buffer& output) { impl_encode(object, output); };
+template <class Object, class Buffer>
+concept HasADLDecode = requires(Object object, const Buffer& input) { impl_decode(input, object); };
+
+struct encode
+{
+    template <class Object, class Buffer>
+    void operator()(const Object& object, Buffer& out) const
+        requires HasMemberFuncEncode<Object, Buffer>
+    {
+        object.encode(out);
+    }
+
+    template <class Object, class Buffer>
+    void operator()(const Object& object, Buffer& out) const
+        requires HasADLEncode<Object, Buffer>
+    {
+        impl_encode(object, out);
+    }
 };
 
-template <class ObjectType>
-auto encode(ObjectType const& in, bcos::concepts::bytebuffer::ByteBuffer auto& out)
+struct decode
 {
-    impl_encode(in, out);
-}
+    template <class Buffer, class Object>
+    void operator()(Buffer const& input, Object& object) const
+        requires HasMemberFuncDecode<Object, Buffer>
+    {
+        object.decode(input);
+    }
 
-template <class ObjectType>
-void decode(bcos::concepts::bytebuffer::ByteBuffer auto const& in, ObjectType& out)
-{
-    impl_decode(in, out);
-}
+    template <class Buffer, class Object>
+    void operator()(Buffer const& input, Object& object) const
+        requires HasADLDecode<Object, Buffer>
+    {
+        impl_decode(input, object);
+    }
+};
+}  // namespace detail
+
+constexpr inline detail::encode encode{};
+constexpr inline detail::decode decode{};
+
+template <class Object>
+concept Serializable = true;
 
 }  // namespace bcos::concepts::serialize

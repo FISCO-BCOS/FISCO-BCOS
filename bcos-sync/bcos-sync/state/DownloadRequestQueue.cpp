@@ -25,10 +25,10 @@ using namespace bcos;
 using namespace bcos::sync;
 using namespace bcos::protocol;
 
-void DownloadRequestQueue::push(BlockNumber _fromNumber, size_t _size)
+void DownloadRequestQueue::push(BlockNumber _fromNumber, size_t _size, size_t _interval)
 {
-    UpgradableGuard l(x_reqQueue);
-    // Note: the requester must has retry logic
+    UpgradableGuard lock(x_reqQueue);
+    // Note: the requester must have retry logic
     if (m_reqQueue.size() >= m_config->maxDownloadRequestQueueSize())
     {
         BLKSYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("Request")
@@ -38,51 +38,122 @@ void DownloadRequestQueue::push(BlockNumber _fromNumber, size_t _size)
                            << LOG_KV("nodeId", m_config->nodeID()->shortHex());
         return;
     }
-    UpgradeGuard ul(l);
-    m_reqQueue.push(std::make_shared<DownloadRequest>(_fromNumber, _size));
+    UpgradeGuard ulock(lock);
+    m_reqQueue.push(std::make_shared<DownloadRequest>(_fromNumber, _size, _interval));
     BLKSYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("Request")
                        << LOG_DESC("Push request in reqQueue req") << LOG_KV("from", _fromNumber)
-                       << LOG_KV("to", _fromNumber + _size - 1)
+                       << LOG_KV("size", _size) << LOG_KV("interval", _interval)
                        << LOG_KV("currentNumber", m_config->blockNumber())
                        << LOG_KV("queueSize", m_reqQueue.size())
                        << LOG_KV("peer", m_nodeId->shortHex())
                        << LOG_KV("nodeId", m_config->nodeID()->shortHex());
 }
 
-DownloadRequest::Ptr DownloadRequestQueue::topAndPop()
+DownloadRequest::UniquePtr DownloadRequestQueue::topAndPop()
 {
-    WriteGuard l(x_reqQueue);
+    UpgradableGuard lock(x_reqQueue);
     if (m_reqQueue.empty())
     {
         return nullptr;
     }
-    // "Tops" means that the merge result of all tops can merge at one turn
-    // Example:
-    // top[x] (fromNumber, size)    range       merged range    merged tops(fromNumber, size)
-    // top[0] (1, 3)                [1, 4)      [1, 4)          (1, 3)
-    // top[1] (1, 4)                [1, 5)      [1, 5)          (1, 4)
-    // top[2] (2, 1)                [2, 3)      [1, 5)          (1, 4)
-    // top[3] (2, 4)                [2, 6)      [1, 6)          (1, 5)
-    // top[4] (6, 2)                [6, 8)      [1, 8)          (1, 7)
-    // top[5] (10, 2)               [10, 12]    can not merge into (1, 7) leave it for next turn
-    size_t fromNumber = m_reqQueue.top()->fromNumber();
-    size_t size = 0;
-    while (!m_reqQueue.empty() && (fromNumber + size) >= (size_t)(m_reqQueue.top()->fromNumber()))
+
+    BlockNumber fromNumber = m_reqQueue.top()->fromNumber();
+    size_t size = m_reqQueue.top()->size();
+    size_t interval = m_reqQueue.top()->interval();
+    BlockNumber toNumber = m_reqQueue.top()->toNumber();
+    UpgradeGuard ulock(lock);
+    while (!m_reqQueue.empty() &&
+           std::cmp_greater_equal(toNumber + interval, m_reqQueue.top()->fromNumber()) &&
+           m_reqQueue.top()->interval() == interval)
     {
         auto topReq = m_reqQueue.top();
-        // m_queue is increasing by fromNumber, so fromNumber must no more than
-        // merged tops
-        size = std::max(size, (size_t)(topReq->fromNumber() + topReq->size() - fromNumber));
+        if (interval == 0)
+        {
+            /// means all use (number,size)
+            // clang-format off
+            // "Tops" means that the merge result of all tops can merge at one turn
+            // Example:
+            // top[x] (fromNumber, size)    range       merged range    merged tops(fromNumber, size)
+            // top[0] (1, 3)                [1, 4)      [1, 4)          (1, 3)
+            // top[1] (1, 4)                [1, 5)      [1, 5)          (1, 4)
+            // top[2] (2, 1)                [2, 3)      [1, 5)          (1, 4)
+            // top[3] (2, 4)                [2, 6)      [1, 6)          (1, 5)
+            // top[4] (6, 2)                [6, 8)      [1, 8)          (1, 7)
+            // top[5] (10, 2)               [10, 12]    can not merge into (1, 7) leave it for next turn
+            // clang-format on
+            size = std::max(size, (size_t)(topReq->fromNumber() + topReq->size() - fromNumber));
+            toNumber = fromNumber + size;
+        }
+        else
+        {
+            /// means all use (number,size,interval)
+            // clang-format off
+            // "Tops" means that the merge result of all tops can merge at one turn
+            // Example:
+            // top[x] (f, s, it)   range            merged range     merged tops(f, s, it)
+            // top[0] (1, 3, 3)    [1, 4, 7]        [1, 4, 7]           (1, 3, 3)
+            // top[1] (1, 4, 3)    [1, 4, 7, 10]    [1, 4, 7, 10]       (1, 4, 3)
+            // top[2] (4, 2, 3)    [4, 7]           [1, 4, 7, 10]       (1, 4, 3)
+            // top[3] (7, 4, 3)    [7, 10, 13, 16]  [1,4,7,10,13,16]    (1, 6, 3)
+            // top[4] (16, 1, 3)   [16]             [1,4,7,10,13,16]    (1, 6, 3)
+            // top[5] (19, 1, 3)   [19]             [1,4,7,10,13,16,19] (1, 7, 3)
+            // top[6] (20, 1, 3)   [20]             can not merge, break
+            // clang-format on
+            auto mergable = (toNumber >= topReq->fromNumber()) &&
+                            ((toNumber - topReq->fromNumber()) % interval == 0);
+            if (mergable || std::cmp_equal(interval + toNumber, topReq->fromNumber()))
+            {
+                // having intersection sequence, take union
+                size = (std::max(topReq->toNumber(), toNumber) - fromNumber) / interval + 1;
+                toNumber = fromNumber + (size - 1) * interval;
+            }
+            else
+            {
+                break;
+            }
+        }
         m_reqQueue.pop();
     }
-    BLKSYNC_LOG(TRACE) << LOG_BADGE("Download") << LOG_BADGE("Request")
-                       << LOG_DESC("Pop reqQueue top req") << LOG_KV("from", fromNumber)
-                       << LOG_KV("to", fromNumber + size - 1);
-    return std::make_shared<DownloadRequest>(fromNumber, size);
+    if (c_fileLogLevel == LogLevel::TRACE)
+    {
+        BLKSYNC_LOG(TRACE) << LOG_BADGE("Download") << LOG_BADGE("Request")
+                           << LOG_DESC("Pop reqQueue top req") << LOG_KV("from", fromNumber)
+                           << LOG_KV("size", size) << LOG_KV("interval", interval);
+    }
+    return std::make_unique<DownloadRequest>(fromNumber, size, interval);
 }
+
+std::set<protocol::BlockNumber, std::less<>> DownloadRequestQueue::mergeAndPop()
+{
+    UpgradableGuard lock(x_reqQueue);
+    if (m_reqQueue.empty())
+    {
+        return {{}, 0};
+    }
+    UpgradeGuard ulock(lock);
+    std::set<BlockNumber, std::less<>> fetchSet{};
+
+    while (!m_reqQueue.empty())
+    {
+        auto topReq = m_reqQueue.top();
+        auto interval = (topReq->interval() == 0 ? 1 : topReq->interval());
+        for (BlockNumber i = topReq->fromNumber(); i <= topReq->toNumber(); i += interval)
+        {
+            fetchSet.insert(i);
+        }
+        m_reqQueue.pop();
+    }
+    if (c_fileLogLevel == LogLevel::TRACE)
+    {
+        BLKSYNC_LOG(TRACE) << LOG_BADGE("Download") << LOG_BADGE("Request")
+                           << LOG_DESC("Pop reqQueue top req") << LOG_KV("size", fetchSet.size());
+    }
+    return fetchSet;
+}
+
 
 bool DownloadRequestQueue::empty()
 {
-    ReadGuard l(x_reqQueue);
+    ReadGuard lock(x_reqQueue);
     return m_reqQueue.empty();
 }

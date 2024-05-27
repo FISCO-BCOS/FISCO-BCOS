@@ -22,6 +22,7 @@
 
 #pragma once
 #include "BlockExecutive.h"
+#include "ExecutorManager.h"
 
 #define SERIAL_EXECUTE_LOG(LEVEL) SCHEDULER_LOG(LEVEL) << LOG_BADGE("serialExecute")
 
@@ -45,9 +46,10 @@ public:
         size_t startContextID,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
         bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
-        bcos::txpool::TxPoolInterface::Ptr _txPool, uint64_t _gasLimit, bool _syncBlock)
+        bcos::txpool::TxPoolInterface::Ptr _txPool, uint64_t _gasLimit, std::string& _gasPrice,
+        bool _syncBlock)
       : BlockExecutive(block, scheduler, startContextID, transactionSubmitResultFactory, staticCall,
-            _blockFactory, _txPool, _gasLimit, _syncBlock)
+            _blockFactory, _txPool, _gasLimit, _gasPrice, _syncBlock)
     {}
     virtual ~SerialBlockExecutive(){};
 
@@ -66,7 +68,7 @@ private:
     void onExecuteFinish(
         std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback) override;
 
-    void serialPrepareExecutor() override{
+    void serialPrepareExecutor() override {
         // do nothing
     };
 

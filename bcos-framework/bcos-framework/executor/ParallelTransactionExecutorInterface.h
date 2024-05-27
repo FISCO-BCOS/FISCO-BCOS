@@ -31,12 +31,9 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <boost/iterator/iterator_categories.hpp>
-#include <boost/range/any_range.hpp>
 #include <memory>
 
-namespace bcos
-{
-namespace executor
+namespace bcos::executor
 {
 class ParallelTransactionExecutorInterface
 {
@@ -50,9 +47,9 @@ public:
             callback)
     {
         // TODO: use pure virtual function
-        auto status = std::make_unique<bcos::protocol::ExecutorStatus>();
-        status->setSeq(m_seq);
-        callback(nullptr, std::move(status));
+        auto executorStatus = std::make_unique<bcos::protocol::ExecutorStatus>();
+        executorStatus->setSeq(m_seq);
+        callback(nullptr, std::move(executorStatus));
     };
 
     virtual void nextBlockHeader(int64_t schedulerTermId,
@@ -72,6 +69,11 @@ public:
         std::function<void(
             bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
             callback) = 0;
+
+    virtual void preExecuteTransactions(int64_t schedulerTermId,
+        const bcos::protocol::BlockHeader::ConstPtr& blockHeader, std::string contractAddress,
+        gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
+        std::function<void(bcos::Error::UniquePtr)> callback) = 0;
 
     virtual void dmcExecuteTransactions(std::string contractAddress,
         gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
@@ -134,8 +136,7 @@ public:
 
     virtual void stop(){};
 
-private:
+protected:
     int64_t m_seq = utcTime();
 };
-}  // namespace executor
-}  // namespace bcos
+}  // namespace bcos::executor

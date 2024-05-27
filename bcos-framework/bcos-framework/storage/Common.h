@@ -20,14 +20,9 @@
  */
 #pragma once
 
-#include "../protocol/ProtocolTypeDef.h"
-#include "boost/algorithm/string.hpp"
-#include "tbb/spin_mutex.h"
-#include "tbb/spin_rw_mutex.h"
 #include <bcos-utilities/Error.h>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
-#include <any>
 #include <cstdlib>
 #include <gsl/span>
 #include <map>
@@ -38,9 +33,7 @@
 
 #define STORAGE_LOG(LEVEL) BCOS_LOG(LEVEL) << "[STORAGE]"
 
-namespace bcos
-{
-namespace storage
+namespace bcos::storage
 {
 enum StorageError
 {
@@ -63,49 +56,256 @@ struct Condition
 {
     Condition() = default;
     ~Condition() = default;
-    void NE(const std::string& value) { m_conditions.emplace_back(Comparator::NE, value); }
+
     // string compare, "2" > "12"
-    void GT(const std::string& value) { m_conditions.emplace_back(Comparator::GT, value); }
-    void GE(const std::string& value) { m_conditions.emplace_back(Comparator::GE, value); }
+    void GT(const std::string& value)
+    {
+        if (m_hasConflictCond)
+        {
+            return;
+        }
+
+        auto [it, inserted] = m_conditions.try_emplace(Comparator::GT, value);
+        if (!inserted && value > it->second)
+        {
+            it->second = value;
+        }
+
+        // 1. x > a && x < b && a >= b (not exist)
+        // 2. x > a && x <= b && a >= b (not exist)
+        auto it1 = m_conditions.find(Comparator::LT);
+        auto it2 = m_conditions.find(Comparator::LE);
+        if ((it1 != m_conditions.end() && it->second >= it1->second) ||
+            (it2 != m_conditions.end() && it->second >= it2->second))
+        {
+            m_hasConflictCond = true;
+        }
+    }
+
+    void GE(const std::string& value)
+    {
+        if (m_hasConflictCond)
+        {
+            return;
+        }
+
+        auto [it, inserted] = m_conditions.try_emplace(Comparator::GE, value);
+        if (!inserted && value > it->second)
+        {
+            it->second = value;
+        }
+
+        // 1. x >= a && x < b && a >= b (not exist)
+        // 2. x >= a && x <= b && a > b (not exist)
+        auto it1 = m_conditions.find(Comparator::LT);
+        auto it2 = m_conditions.find(Comparator::LE);
+        if ((it1 != m_conditions.end() && it->second >= it1->second) ||
+            (it2 != m_conditions.end() && it->second > it2->second))
+        {
+            m_hasConflictCond = true;
+        }
+    }
+
     // string compare, "12" < "2"
-    void LT(const std::string& value) { m_conditions.emplace_back(Comparator::LT, value); }
-    void LE(const std::string& value) { m_conditions.emplace_back(Comparator::LE, value); }
+    void LT(const std::string& value)
+    {
+        if (m_hasConflictCond)
+        {
+            return;
+        }
+
+        auto [it, inserted] = m_conditions.try_emplace(Comparator::LT, value);
+        if (!inserted && value < it->second)
+        {
+            it->second = value;
+        }
+
+        // 1. x > a  && x < b && a >= b (not exist)
+        // 2. x >= a && x < b && a >= b (not exist)
+        auto it1 = m_conditions.find(Comparator::GT);
+        auto it2 = m_conditions.find(Comparator::GE);
+        if ((it1 != m_conditions.end() && it->second <= it1->second) ||
+            (it2 != m_conditions.end() && it->second <= it2->second))
+        {
+            m_hasConflictCond = true;
+        }
+    }
+
+    void LE(const std::string& value)
+    {
+        if (m_hasConflictCond)
+        {
+            return;
+        }
+        auto [it, inserted] = m_conditions.try_emplace(Comparator::LE, value);
+        if (!inserted && value < it->second)
+        {
+            it->second = value;
+        }
+
+        // 1. x > a  && x <= b && a >= b (not exist)
+        // 2. x >= a && x <= b && a > b (not exist)
+        auto it1 = m_conditions.find(Comparator::GT);
+        auto it2 = m_conditions.find(Comparator::GE);
+        if ((it1 != m_conditions.end() && it->second <= it1->second) ||
+            (it2 != m_conditions.end() && it->second < it2->second))
+        {
+            m_hasConflictCond = true;
+        }
+    }
+
+    void EQ(const std::string& value)
+    {
+        if (m_hasConflictCond)
+        {
+            return;
+        }
+        // x == a  <==>  x >= a && x <= a
+        // Convert single point queries to range queries
+        GE(value);
+        LE(value);
+    }
+
+    void NE(const std::string& value)
+    {
+        if (m_hasConflictCond)
+        {
+            return;
+        }
+        m_repeatableConditions.emplace_back(Comparator::NE, value);
+    }
+
+    void startsWith(const std::string& value, bool updateGE = true)
+    {
+        if (m_hasConflictCond)
+        {
+            return;
+        }
+
+        auto [it, inserted] = m_conditions.try_emplace(Comparator::STARTS_WITH, value);
+        if (inserted)
+        {
+            if (updateGE)
+            {
+                GE(value);
+            }
+            return;
+        }
+
+        // it->second = abc, value = abcd
+        if (value.starts_with(it->second))
+        {
+            it->second = value;
+            if (updateGE)
+            {
+                GE(value);
+            }
+        }
+        // it->second = abcf, value = abcd
+        else if (!it->second.starts_with(value))
+        {
+            m_hasConflictCond = true;
+        }
+        // it->second = abcd, value = abc
+    }
+
+    void endsWith(const std::string& value)
+    {
+        if (m_hasConflictCond)
+        {
+            return;
+        }
+
+        auto [it, inserted] = m_conditions.try_emplace(Comparator::ENDS_WITH, value);
+        if (inserted)
+        {
+            return;
+        }
+
+        // it->second = def, value = cdef
+        if (value.ends_with(it->second))
+        {
+            it->second = value;
+        }
+        // it->second = def, value = deh
+        else if (!it->second.ends_with(value))
+        {
+            m_hasConflictCond = true;
+        }
+        // it->second = cdef, value = def
+    }
+
+    void contains(const std::string& value)
+    {
+        if (m_hasConflictCond)
+        {
+            return;
+        }
+        m_repeatableConditions.emplace_back(Comparator::CONTAINS, value);
+    }
+
     void limit(size_t start, size_t count) { m_limit = std::pair<size_t, size_t>(start, count); }
 
     std::pair<size_t, size_t> getLimit() const { return m_limit; }
 
-    bool isValid(const std::string_view& key) const
-    {  // all conditions must be satisfied
-        for (auto& cond : m_conditions)
+    template <typename Container>
+    static bool isValid(const std::string_view& key, const Container& conds)
+    {
+        // all conditions must be satisfied
+        for (auto& it : conds)
         {  // conditions should few, so not parallel check for now
-            switch (cond.cmp)
+            switch (it.first)
             {
+            case Comparator::EQ:
+                if (key != it.second)
+                {
+                    return false;
+                }
+                break;
             case Comparator::NE:
-                if (key == cond.value)
+                if (key == it.second)
                 {
                     return false;
                 }
                 break;
             case Comparator::GT:
-                if (key <= cond.value)
+                if (key <= it.second)
                 {
                     return false;
                 }
                 break;
             case Comparator::GE:
-                if (key < cond.value)
+                if (key < it.second)
                 {
                     return false;
                 }
                 break;
             case Comparator::LT:
-                if (key >= cond.value)
+                if (key >= it.second)
                 {
                     return false;
                 }
                 break;
             case Comparator::LE:
-                if (key > cond.value)
+                if (key > it.second)
+                {
+                    return false;
+                }
+                break;
+            case Comparator::STARTS_WITH:
+                if (!key.starts_with(it.second))
+                {
+                    return false;
+                }
+                break;
+            case Comparator::ENDS_WITH:
+                if (!key.ends_with(it.second))
+                {
+                    return false;
+                }
+                break;
+            case Comparator::CONTAINS:
+                if (key.find(it.second) == std::string::npos)
                 {
                     return false;
                 }
@@ -118,58 +318,83 @@ struct Condition
         return true;
     }
 
-    enum class Comparator
+    bool isValid(const std::string_view& key) const
     {
-        EQ,
-        NE,
-        GT,
-        GE,
-        LT,
-        LE,
-    };
-    struct cond
-    {
-        cond(Comparator _cmp, const std::string& _value) : cmp(_cmp), value(_value) {}
-        Comparator cmp;
-        std::string value;
-        // this method only for trace log
-        std::string toString() const
+        // If there are conflicting conditions, it means that no key can meet the conditions.
+        if (m_hasConflictCond)
         {
-            std::string cmpStr;
-            switch (cmp)
-            {
-            case Comparator::EQ:
-                cmpStr = "EQ";
-                break;
-            case Comparator::NE:
-                cmpStr = "NE";
-                break;
-            case Comparator::GT:
-                cmpStr = "GT";
-                break;
-            case Comparator::GE:
-                cmpStr = "GE";
-                break;
-            case Comparator::LT:
-                cmpStr = "NE";
-                break;
-            case Comparator::LE:
-                cmpStr = "LE";
-                break;
-            }
-            return cmpStr + " " + value;
+            return false;
         }
+        return isValid(key, m_conditions) && isValid(key, m_repeatableConditions);
+    }
+
+    enum class Comparator : uint8_t
+    {
+        GT = 0,
+        GE = 1,
+        LT = 2,
+        LE = 3,
+        EQ = 4,
+        NE = 5,
+        STARTS_WITH = 6,
+        ENDS_WITH = 7,
+        CONTAINS = 8
     };
-    std::vector<cond> m_conditions;
+
+    static std::string toString(const std::pair<Comparator, std::string>& cond)
+    {
+        std::string cmpStr;
+        switch (cond.first)
+        {
+        case Comparator::EQ:
+            cmpStr = "EQ";
+            break;
+        case Comparator::NE:
+            cmpStr = "NE";
+            break;
+        case Comparator::GT:
+            cmpStr = "GT";
+            break;
+        case Comparator::GE:
+            cmpStr = "GE";
+            break;
+        case Comparator::LT:
+            cmpStr = "NE";
+            break;
+        case Comparator::LE:
+            cmpStr = "LE";
+            break;
+        case Comparator::STARTS_WITH:
+            cmpStr = "STARTS_WITH";
+            break;
+        case Comparator::ENDS_WITH:
+            cmpStr = "ENDS_WITH";
+            break;
+        case Comparator::CONTAINS:
+            cmpStr = "CONTAINS";
+            break;
+        }
+        return cmpStr + " " + cond.second;
+    }
+
+    std::map<Comparator, std::string> m_conditions;
+    std::vector<std::pair<Comparator, std::string>> m_repeatableConditions;
     std::pair<size_t, size_t> m_limit;
+    bool m_hasConflictCond = false;
+
     // this method only for trace log
     std::string toString() const
     {
         std::stringstream ss;
-        ss << "keyCond: ";
+        ss << "Condition: ";
         for (const auto& cond : m_conditions)
         {
-            ss << cond.toString() << ";";
+            ss << toString(cond) << ";";
+        }
+
+        for (const auto& cond : m_repeatableConditions)
+        {
+            ss << toString(cond) << ";";
         }
         ss << "limit start: " << m_limit.first << "limit count: " << m_limit.second;
         return ss.str();
@@ -223,5 +448,14 @@ private:
     void operator delete(void* p) { free(p); };
 };
 
-}  // namespace storage
-}  // namespace bcos
+const char* const TABLE_KEY_SPLIT = ":";
+
+inline std::string toDBKey(const std::string_view& tableName, const std::string_view& key)
+{
+    std::string dbKey;
+    dbKey.reserve(tableName.size() + 1 + key.size());
+    dbKey.append(tableName).append(TABLE_KEY_SPLIT).append(key);
+    return dbKey;
+}
+
+}  // namespace bcos::storage

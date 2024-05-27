@@ -102,7 +102,7 @@ public:
         size_t total = 0;
         if (_tableInfos.size() != _tableDatas.size())
         {
-            auto error = std::make_shared<Error>(-1, "");
+            auto error = BCOS_ERROR_PTR(-1, "");
             return {0, error};
         }
         std::shared_ptr<TableFactoryInterface> stateTableFactory = nullptr;
@@ -114,7 +114,7 @@ public:
             }
             else
             {
-                return {0, std::make_shared<Error>(StorageErrorCode::StateCacheNotFound,
+                return {0, BCOS_ERROR_PTR(StorageErrorCode::StateCacheNotFound,
                                std::to_string(_number) + "state cache not found")};
             }
             auto stateData = stateTableFactory->exportData(_number);
@@ -164,7 +164,7 @@ public:
                 time_t t = time(0);
                 auto keyList = storage->getPrimaryKeys(_tableInfo, _condition);
                 boost::this_thread::sleep_for(boost::chrono::milliseconds(SLEEP_MILLI_SECONDS));
-                auto success = std::make_shared<Error>(0, "");
+                auto success = BCOS_ERROR_PTR(0, "");
                 LEDGER_LOG(TRACE) << LOG_BADGE("asyncGetPrimaryKeys")
                                   << LOG_DESC("storage getKeys finish")
                                   << LOG_KV("tableName", _tableInfo->name)
@@ -178,7 +178,7 @@ public:
             }
             else
             {
-                _callback(std::make_shared<Error>(-1, ""), {});
+                _callback(BCOS_ERROR_PTR(-1, ""), {});
             }
         });
     }
@@ -209,7 +209,7 @@ public:
             }
             else
             {
-                _callback(std::make_shared<Error>(-1, ""), nullptr);
+                _callback(BCOS_ERROR_PTR(-1, ""), nullptr);
             }
         });
     }
@@ -238,7 +238,7 @@ public:
             }
             else
             {
-                _callback(std::make_shared<Error>(-1, ""), {});
+                _callback(BCOS_ERROR_PTR(-1, ""), {});
             }
         });
     }
@@ -258,7 +258,7 @@ public:
                 time_t t = time(0);
                 auto retPair = storage->commitBlock(_number, *_tableInfo, *_tableMap);
                 boost::this_thread::sleep_for(boost::chrono::milliseconds(SLEEP_MILLI_SECONDS));
-                auto error = std::make_shared<Error>(0, "");
+                auto error = BCOS_ERROR_PTR(0, "");
                 LEDGER_LOG(TRACE) << LOG_BADGE("asyncCommitBlock")
                                   << LOG_DESC("storage commit finish") << LOG_KV("number", _number)
                                   << LOG_KV("exec_time", time(0) - t);
@@ -269,7 +269,7 @@ public:
             }
             else
             {
-                _callback(std::make_shared<Error>(-1, ""), -1);
+                _callback(BCOS_ERROR_PTR(-1, ""), -1);
             }
         });
     }
@@ -291,7 +291,7 @@ public:
             }
             else
             {
-                _callback(std::make_shared<Error>(-1, ""));
+                _callback(BCOS_ERROR_PTR(-1, ""));
             }
         });
     }
@@ -309,12 +309,12 @@ public:
             {
                 auto tableFactory = storage->getStateCache(_blockNumber);
                 boost::this_thread::sleep_for(boost::chrono::milliseconds(SLEEP_MILLI_SECONDS));
-                auto error = std::make_shared<Error>(0, "");
+                auto error = BCOS_ERROR_PTR(0, "");
                 _callback(error, tableFactory);
             }
             else
             {
-                _callback(std::make_shared<Error>(-1, ""), nullptr);
+                _callback(BCOS_ERROR_PTR(-1, ""), nullptr);
             }
         });
     }
@@ -427,12 +427,12 @@ public:
         const std::shared_ptr<std::vector<std::shared_ptr<std::map<std::string, Entry::Ptr>>>>&,
         std::function<void(const Error::Ptr&, size_t)> _callback) override
     {
-        _callback(std::make_shared<Error>(-1, ""), 0);
+        _callback(BCOS_ERROR_PTR(-1, ""), 0);
     }
     void asyncAddStateCache(protocol::BlockNumber, const std::shared_ptr<TableFactoryInterface>&,
         std::function<void(const Error::Ptr&)> _callback) override
     {
-        _callback(std::make_shared<Error>(-1, ""));
+        _callback(BCOS_ERROR_PTR(-1, ""));
     }
     void asyncGetStateCache(protocol::BlockNumber _number,
         std::function<void(const Error::Ptr&, const std::shared_ptr<TableFactoryInterface>&)>
@@ -448,7 +448,7 @@ public:
             }
             else
             {
-                _callback(std::make_shared<Error>(-1, ""), nullptr);
+                _callback(BCOS_ERROR_PTR(-1, ""), nullptr);
             }
         }
         else

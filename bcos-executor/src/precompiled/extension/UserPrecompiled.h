@@ -26,6 +26,6 @@
 
 namespace bcos::precompiled
 {
-const char DEFAULT_PERMISSION_ADDRESS[] = "0000000000000000000000000000000000001005";
-// FIXME: 1005 is default, use static configurable address for more powerful permission
+static const constexpr std::string_view DEFAULT_PERMISSION_ADDRESS =
+    "0000000000000000000000000000000000001005";
 }  // namespace bcos::precompiled

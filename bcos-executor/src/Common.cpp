@@ -86,6 +86,75 @@ TransactionStatus toTransactionStatus(Exception const& _e)
         return TransactionStatus::AccountFrozen;
     return TransactionStatus::Unknown;
 }
+
 }  // namespace executor
 
+bytes getComponentBytes(size_t index, const std::string& typeName, const bytesConstRef& data)
+{
+    // the string length will never exceed uint64_t, so we use uint64_t to store the length
+    constexpr int32_t slotSize = 32;
+    constexpr int32_t offsetBegin = 24;
+    size_t indexOffset = index * slotSize;
+    if (data.size() < indexOffset + slotSize)
+    {  // the input is invalid(not match the abi)
+        return {};
+    }
+    if (typeName == "string" || typeName == "bytes")
+    {
+        uint64_t offset = 0;
+        const uint8_t* dynamicArrayLenData = data.data() + indexOffset + offsetBegin;
+        std::reverse_copy(
+            dynamicArrayLenData, dynamicArrayLenData + sizeof(uint64_t), (uint8_t*)&offset);
+        const uint8_t* dynamicArray = data.data() + offset;
+        uint64_t dataLength = 0;
+        // dataLength is the length of the string or bytes
+        // dynamicArray = [32 bytes length, dataLength bytes data]
+        std::reverse_copy(
+            dynamicArray + offsetBegin, dynamicArray + slotSize, (uint8_t*)&dataLength);
+        const uint8_t* rawData = dynamicArray + slotSize;
+        return {rawData, rawData + dataLength};
+    }
+    return {data.begin() + indexOffset, data.begin() + indexOffset + slotSize};
+}
+evmc_address unhexAddress(std::string_view view)
+{
+    if (view.empty())
+    {
+        return {};
+    }
+    if (view.starts_with("0x"))
+    {
+        view = view.substr(2);
+    }
+    evmc_address address;
+    if (view.empty())
+    {
+        std::uninitialized_fill(address.bytes, address.bytes + sizeof(address.bytes), 0);
+    }
+    else
+    {
+        boost::algorithm::unhex(view, address.bytes);
+    }
+    return address;
+}
+std::string addressBytesStr2HexString(std::string_view receiveAddressBytes)
+{
+    std::string strAddress;
+    strAddress.reserve(receiveAddressBytes.size() * 2);
+    boost::algorithm::hex_lower(
+        receiveAddressBytes.begin(), receiveAddressBytes.end(), std::back_inserter(strAddress));
+    return strAddress;
+}
+std::string address2HexString(const evmc_address& address)
+{
+    auto receiveAddressBytes = fromEvmC(address);
+    return addressBytesStr2HexString(receiveAddressBytes);
+}
+std::array<char, sizeof(evmc_address) * 2> address2FixedArray(const evmc_address& address)
+{
+    std::array<char, sizeof(evmc_address) * 2> array;
+    auto receiveAddressBytes = fromEvmC(address);
+    boost::algorithm::hex_lower(receiveAddressBytes, array.data());
+    return array;
+}
 }  // namespace bcos

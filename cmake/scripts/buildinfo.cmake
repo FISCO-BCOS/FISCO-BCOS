@@ -29,7 +29,7 @@ endif()
 execute_process(
     COMMAND git --git-dir=${FISCO_BCOS_SOURCE_DIR}/.git --work-tree=${FISCO_BCOS_SOURCE_DIR} rev-parse HEAD
     OUTPUT_VARIABLE FISCO_BCOS_COMMIT_HASH OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET
-) 
+)
 
 if (NOT FISCO_BCOS_COMMIT_HASH)
     set(FISCO_BCOS_COMMIT_HASH 0)
@@ -41,17 +41,17 @@ execute_process(
 )
 
 execute_process(
-    COMMAND date "+%Y%m%d %H:%M:%S" 
+    COMMAND date "+%Y%m%d %H:%M:%S"
     OUTPUT_VARIABLE FISCO_BCOS_BUILD_TIME OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET
     )
 
 execute_process(
-    COMMAND date "+%Y%m%d" 
+    COMMAND date "+%Y%m%d"
     OUTPUT_VARIABLE FISCO_BCOS_BUILD_NUMBER OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET
     )
 
 execute_process(
-    COMMAND git rev-parse --abbrev-ref HEAD 
+    COMMAND git rev-parse --abbrev-ref HEAD
     OUTPUT_VARIABLE FISCO_BCOS_BUILD_BRANCH OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET
     )
 

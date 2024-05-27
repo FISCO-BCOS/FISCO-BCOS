@@ -22,8 +22,12 @@
 #pragma once
 
 #include "../Common.h"
+#include "../executive/BlockContext.h"
+#include "../executive/TransactionExecutive.h"
 #include "bcos-framework/protocol/BlockHeader.h"
+#include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/storage/Table.h"
+#include <bcos-framework/protocol/Protocol.h>
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
 #include <evmc/instructions.h>
@@ -47,57 +51,40 @@ public:
     /// Full constructor.
     HostContext(CallParameters::UniquePtr callParameters,
         std::shared_ptr<TransactionExecutive> executive, std::string tableName);
-    ~HostContext(){
-        // auto total = utcTimeUs() - m_startTime;
-        // EXECUTIVE_LOG(DEBUG) << LOG_DESC("TxExecution time(us)") << LOG_KV("total", total)
-        //                      << LOG_KV("storageTimeProportion",
-        //                             (m_getTimeUsed + m_setTimeUsed) / (double)total)
-        //                      << LOG_KV("get", m_getTimeUsed) << LOG_KV("set", m_setTimeUsed);
-    };
+    virtual ~HostContext() noexcept = default;
 
     HostContext(HostContext const&) = delete;
     HostContext& operator=(HostContext const&) = delete;
+    HostContext(HostContext&&) = delete;
+    HostContext& operator=(HostContext&&) = delete;
 
     std::string get(const std::string_view& _key);
 
     void set(const std::string_view& _key, std::string _value);
 
-    bool registerAsset(const std::string& _assetName, const std::string_view& _issuer,
-        bool _fungible, uint64_t _total, const std::string& _description);
-    bool issueFungibleAsset(
-        const std::string_view& _to, const std::string& _assetName, uint64_t _amount);
-    uint64_t issueNotFungibleAsset(
-        const std::string_view& _to, const std::string& _assetName, const std::string& _uri);
-    std::string getNotFungibleAssetInfo(
-        const std::string_view& _owner, const std::string& _assetName, uint64_t _id);
-    bool transferAsset(const std::string_view& _to, const std::string& _assetName,
-        uint64_t _amountOrID, bool _fromSelf);
-
-    // if NFT return counts, else return value
-    uint64_t getAssetBanlance(const std::string_view& _account, const std::string& _assetName);
-
-    std::vector<uint64_t> getNotFungibleAssetIDs(
-        const std::string_view& _account, const std::string& _assetName);
-
     /// Read storage location.
-    u256 store(const u256& _n);
+    evmc_bytes32 store(const evmc_bytes32* key);
 
     /// Write a value in storage.
-    void setStore(const u256& _n, const u256& _v);
+    // void setStore(const u256& _n, const u256& _v);
+    void setStore(const evmc_bytes32* key, const evmc_bytes32* value);
 
     /// Create a new contract.
     evmc_result externalRequest(const evmc_message* _msg);
 
+    evmc_status_code toEVMStatus(
+        std::unique_ptr<CallParameters> const& response, const BlockContext& blockContext);
+
     evmc_result callBuiltInPrecompiled(
         std::unique_ptr<CallParameters> const& _request, bool _isEvmPrecompiled);
 
-    bool setCode(bytes code);
+    virtual bool setCode(bytes code);
 
     void setCodeAndAbi(bytes code, std::string abi);
 
-    size_t codeSizeAt(const std::string_view& _a);
+    size_t codeSizeAt(const std::string_view& address);
 
-    h256 codeHashAt(const std::string_view& _a);
+    h256 codeHashAt(const std::string_view& address);
 
     /// Does the account exist?
     bool exists(const std::string_view&) { return true; }
@@ -106,42 +93,98 @@ public:
     VMSchedule const& vmSchedule() const;
 
     /// Hash of a block if within the last 256 blocks, or h256() otherwise.
-    h256 blockHash() const;
+    h256 blockHash(int64_t _number) const;
     int64_t blockNumber() const;
-    int64_t timestamp() const;
+    uint32_t blockVersion() const;
+    uint64_t timestamp() const;
     int64_t blockGasLimit() const
     {
-        return 3000000000;  // TODO: add config
+        if (m_executive->blockContext().blockVersion() >=
+            (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+        {
+            // FISCO BCOS only has tx Gas limit. We use it as block gas limit
+            return m_executive->blockContext().txGasLimit();
+        }
+        else
+        {
+            return 3000000000;
+        }
     }
-
-    bool isPermitted();
 
     /// Revert any changes made (by any of the other calls).
     void log(h256s&& _topics, bytesConstRef _data);
 
     /// ------ get interfaces related to HostContext------
-    std::string_view myAddress() const;
-    std::string_view caller() const { return m_callParameters->senderAddress; }
+    virtual std::string_view myAddress() const;
+    virtual std::string_view caller() const { return m_callParameters->senderAddress; }
     std::string_view origin() const { return m_callParameters->origin; }
     std::string_view codeAddress() const { return m_callParameters->codeAddress; }
-    bytesConstRef data() const { return ref(m_callParameters->data); }
-    std::optional<storage::Entry> code();
-    bool isCodeHasPrefix(std::string_view _prefix) const;
-    h256 codeHash();
+    std::string_view receiveAddress() const { return m_callParameters->receiveAddress; }
+
+    bytes_view data() const
+    {
+        return bytes_view(m_callParameters->data.data(), m_callParameters->data.size());
+    }
+    virtual std::optional<storage::Entry> code();
+    virtual h256 codeHash();
     u256 salt() const { return m_salt; }
     SubState& sub() { return m_sub; }
     bool isCreate() const { return m_callParameters->create; }
     bool staticCall() const { return m_callParameters->staticCall; }
     int64_t gas() const { return m_callParameters->gas; }
+    u256 gasPrice() const { return m_callParameters->gasPrice; }
+    u256 value() const { return m_callParameters->value; }
+    void suicide()
+    {
+        m_executive->setContractTableChanged();
+        if (m_executive->blockContext().blockVersion() >=
+            (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+        {
+            auto& blockContext = const_cast<BlockContext&>(m_executive->blockContext());
+            blockContext.suicide(m_tableName);
+        }
+    }
 
-    CallParameters::UniquePtr&& takeCallParameters() { return std::move(m_callParameters); }
+    evmc_bytes32 getBalance(const evmc_address* _addr);
+    bool selfdestruct(const evmc_address* _addr, const evmc_address* _beneficiary);
 
-    static crypto::Hash::Ptr hashImpl() { return GlobalHashImpl::g_hashImpl; }
+    CallParameters::UniquePtr&& takeCallParameters()
+    {
+        if (m_executive->blockContext().blockVersion() >=
+            (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+        {
+            for (const auto& response : m_responseStore)
+            {
+                m_callParameters->logEntries.insert(m_callParameters->logEntries.end(),
+                    std::make_move_iterator(response->logEntries.begin()),
+                    std::make_move_iterator(response->logEntries.end()));
+            }
+        }
+        return std::move(m_callParameters);
+    }
 
-    uint64_t getStorageTimeUsed() { return m_getTimeUsed; }
-    uint64_t setStorageTimeUsed() { return m_setTimeUsed; }
+    static crypto::Hash::Ptr& hashImpl() { return GlobalHashImpl::g_hashImpl; }
 
     bool isWasm();
+    const std::shared_ptr<TransactionExecutive>& getTransactionExecutive() const
+    {
+        return m_executive;
+    }
+
+    bcos::bytes codeAt(const std::string_view& address) { return externalCodeRequest(address); }
+    const bcos::ledger::Features& features() const
+    {
+        return m_executive->blockContext().features();
+    }
+
+    std::string getContractTableName(const std::string_view& _address)
+    {
+        return m_executive->getContractTableName(_address, isWasm(), isCreate());
+    }
+
+protected:
+    const CallParameters::UniquePtr& getCallParameters() const { return m_callParameters; }
+    virtual bcos::bytes externalCodeRequest(const std::string_view& address);
 
 private:
     void depositFungibleAsset(
@@ -157,9 +200,6 @@ private:
     SubState m_sub;  ///< Sub-band VM state (suicides, refund counter, logs).
 
     std::list<CallParameters::UniquePtr> m_responseStore;
-    std::atomic_uint64_t m_getTimeUsed = {0};  // microsecond
-    std::atomic_uint64_t m_setTimeUsed = {0};  // microsecond
-    std::atomic_uint64_t m_startTime = {0};    // microsecond
 };
 
 }  // namespace executor

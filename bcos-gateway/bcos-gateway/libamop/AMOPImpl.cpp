@@ -18,6 +18,7 @@
  * @date 2021-10-26
  */
 #include "AMOPImpl.h"
+#include "bcos-utilities/BoostLog.h"
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-gateway/libamop/AMOPMessage.h>
 #include <bcos-gateway/libnetwork/Common.h>
@@ -79,30 +80,19 @@ void AMOPImpl::onReceiveTopicSeqMessage(P2pID const& _nodeID, AMOPMessage::Ptr _
         {
             return;
         }
-        AMOP_LOG(INFO) << LOG_BADGE(
-                              "onReceiveTopicSeqMessage: try to request latest AMOP information")
+        AMOP_LOG(INFO) << LOG_BADGE("onReceiveTopicSeqMessage")
+                       << LOG_BADGE("try to request latest AMOP information")
                        << LOG_KV("nodeID", _nodeID) << LOG_KV("topicSeq", topicSeq);
 
         auto buffer = buildAndEncodeMessage(AMOPMessage::Type::RequestTopic, bytesConstRef());
         Options option(0);
         m_network->asyncSendMessageByP2PNodeID(GatewayMessageType::AMOPMessageType, _nodeID,
-            bytesConstRef(buffer->data(), buffer->size()), option,
-            [_nodeID](Error::Ptr&& _error, int16_t, bytesPointer) {
-                if (_error && (_error->errorCode() != CommonError::SUCCESS))
-                {
-                    AMOP_LOG(WARNING)
-                        << LOG_BADGE("onReceiveTopicSeqMessage")
-                        << LOG_DESC("receive error callback") << LOG_KV("dstNode", _nodeID)
-                        << LOG_KV("errorCode", _error->errorCode())
-                        << LOG_KV("errorMessage", _error->errorMessage());
-                    return;
-                }
-            });
+            bytesConstRef(buffer->data(), buffer->size()), option, nullptr);
     }
     catch (const std::exception& e)
     {
         AMOP_LOG(ERROR) << LOG_DESC("onReceiveTopicSeqMessage") << LOG_KV("nodeID", _nodeID)
-                        << LOG_KV("error", boost::diagnostic_information(e));
+                        << LOG_KV("message", boost::diagnostic_information(e));
     }
 }
 
@@ -118,7 +108,7 @@ std::shared_ptr<bytes> AMOPImpl::buildAndEncodeMessage(uint32_t _type, bcos::byt
     message->setType(_type);
     message->setData(_data);
     auto buffer = std::make_shared<bytes>();
-    message->encode(*buffer.get());
+    message->encode(*buffer);
     return buffer;
 }
 
@@ -138,7 +128,7 @@ void AMOPImpl::onReceiveResponseTopicMessage(P2pID const& _nodeID, AMOPMessage::
     catch (const std::exception& e)
     {
         AMOP_LOG(ERROR) << LOG_BADGE("onReceiveResponseTopicMessage") << LOG_KV("nodeID", _nodeID)
-                        << LOG_KV("error", boost::diagnostic_information(e));
+                        << LOG_KV("message", boost::diagnostic_information(e));
     }
 }
 
@@ -165,15 +155,15 @@ void AMOPImpl::onReceiveRequestTopicMessage(P2pID const& _nodeID, AMOPMessage::P
                     AMOP_LOG(WARNING)
                         << LOG_BADGE("onReceiveRequestTopicMessage")
                         << LOG_DESC("callback response error") << LOG_KV("dstNode", _nodeID)
-                        << LOG_KV("errorCode", _error->errorCode())
-                        << LOG_KV("errorMessage", _error->errorMessage());
+                        << LOG_KV("code", _error->errorCode())
+                        << LOG_KV("message", _error->errorMessage());
                 }
             });
     }
     catch (const std::exception& e)
     {
         AMOP_LOG(ERROR) << LOG_BADGE("onReceiveRequestTopicMessage") << LOG_KV("nodeID", _nodeID)
-                        << LOG_KV("error", boost::diagnostic_information(e));
+                        << LOG_KV("message", boost::diagnostic_information(e));
     }
 }
 
@@ -235,7 +225,7 @@ void AMOPImpl::onReceiveAMOPMessage(P2pID const& _nodeID, std::string const& _to
             auto buffer = std::make_shared<bcos::bytes>();
             amopMsg->encode(*buffer);
             _responseCallback(buffer, GatewayMessageType::AMOPMessageType);
-            AMOP_LOG(WARNING) << LOG_DESC("asyncNotifyAMOPMessage error")
+            AMOP_LOG(WARNING) << LOG_DESC("asyncNotifyAMOPMessage failed")
                               << LOG_KV("code", _error->errorCode())
                               << LOG_KV("msg", _error->errorMessage());
         });
@@ -273,7 +263,7 @@ void AMOPImpl::onReceiveAMOPBroadcastMessage(P2pID const& _nodeID, AMOPMessage::
                 {
                     AMOP_LOG(WARNING)
                         << LOG_BADGE("onRecvAMOPBroadcastMessage")
-                        << LOG_DESC("asyncNotifyAMOPMessage error") << LOG_KV("client", client)
+                        << LOG_DESC("asyncNotifyAMOPMessage failed") << LOG_KV("client", client)
                         << LOG_KV("code", _error->errorCode())
                         << LOG_KV("msg", _error->errorMessage());
                 }
@@ -288,7 +278,7 @@ bool AMOPImpl::trySendTopicMessageToLocalClient(const std::string& _topic,
 {
     std::vector<std::string> clients;
     m_topicManager->queryClientsByTopic(_topic, clients);
-    if (clients.size() == 0)
+    if (clients.empty())
     {
         AMOP_LOG(INFO) << LOG_DESC("trySendTopicMessageToLocalClient failed for empty client")
                        << LOG_KV("topic", _topic);
@@ -319,7 +309,7 @@ void AMOPImpl::asyncSendMessageByTopic(const std::string& _topic, bcos::bytesCon
         {
             return;
         }
-        auto errorPtr = std::make_shared<Error>(CommonError::NotFoundPeerByTopicSendMsg,
+        auto errorPtr = BCOS_ERROR_PTR(CommonError::NotFoundPeerByTopicSendMsg,
             "there has no node subscribe this topic, topic: " + _topic);
         if (_respFunc)
         {
@@ -349,7 +339,7 @@ void AMOPImpl::asyncSendMessageByTopic(const std::string& _topic, bcos::bytesCon
         {
             if (m_nodeIDs.empty())
             {
-                auto errorPtr = std::make_shared<Error>(
+                auto errorPtr = BCOS_ERROR_PTR(
                     CommonError::AMOPSendMsgFailed, "unable to send message to peer by topic");
                 if (m_callback)
                 {
@@ -374,7 +364,7 @@ void AMOPImpl::asyncSendMessageByTopic(const std::string& _topic, bcos::bytesCon
                     {
                         AMOP_LOG(DEBUG)
                             << LOG_BADGE("RetrySender::sendMessage")
-                            << LOG_DESC("asyncSendMessageByNodeID callback response error")
+                            << LOG_DESC("asyncSendMessageByNodeID callback response failed")
                             << LOG_KV("nodeID", choosedNodeID)
                             << LOG_KV("code", _error->errorCode())
                             << LOG_KV("msg", _error->errorMessage());
@@ -398,7 +388,7 @@ void AMOPImpl::asyncSendMessageByTopic(const std::string& _topic, bcos::bytesCon
                                 "is online";
                             errorCode = -1;
                         }
-                        error = std::make_shared<Error>(errorCode, errorMessage);
+                        error = BCOS_ERROR_PTR(errorCode, errorMessage);
 
                         AMOP_LOG(INFO)
                             << LOG_DESC("asyncSendMessageByTopic error: receive responseData")
@@ -443,7 +433,7 @@ void AMOPImpl::onRecvAMOPResponse(int16_t _type, bytesPointer _responseData,
                 "is online";
             errorCode = -1;
         }
-        error = std::make_shared<Error>(errorCode, errorMessage);
+        error = BCOS_ERROR_PTR(errorCode, errorMessage);
 
         AMOP_LOG(INFO) << LOG_DESC("asyncSendMessageByTopic error: receive responseData")
                        << LOG_KV("status", amopMsg->status()) << LOG_KV("msg", errorMessage);
@@ -492,7 +482,7 @@ void AMOPImpl::onAMOPMessage(
         catch (std::exception const& e)
         {
             AMOP_LOG(WARNING) << LOG_DESC("dispatcher AMOPMessage exception")
-                              << LOG_KV("error", boost::diagnostic_information(e));
+                              << LOG_KV("message", boost::diagnostic_information(e));
         }
     });
 }
@@ -503,7 +493,7 @@ void AMOPImpl::dispatcherAMOPMessage(
     if (_e.errorCode() != 0 || !_message)
     {
         AMOP_LOG(WARNING) << LOG_DESC("onAMOPMessage error for NetworkException")
-                          << LOG_KV("error", _e.what()) << LOG_KV("code", _e.errorCode());
+                          << LOG_KV("message", _e.what()) << LOG_KV("code", _e.errorCode());
         return;
     }
     if (_message->packetType() != GatewayMessageType::AMOPMessageType)
@@ -531,8 +521,8 @@ void AMOPImpl::dispatcherAMOPMessage(
             [this, _session, _message](bytesPointer _responseData, int16_t _type) {
                 auto responseP2PMsg = std::dynamic_pointer_cast<P2PMessage>(
                     m_network->messageFactory()->buildMessage());
-                AMOP_LOG(INFO) << LOG_DESC("onReceiveAMOPMessage: sendResponse")
-                               << LOG_KV("type", _type) << LOG_KV("data", _responseData->size());
+                AMOP_LOG(DEBUG) << LOG_BADGE("onReceiveAMOPMessage") << LOG_DESC("send response")
+                                << LOG_KV("type", _type) << LOG_KV("data", _responseData->size());
                 responseP2PMsg->setDstP2PNodeID(_message->srcP2PNodeID());
                 responseP2PMsg->setSrcP2PNodeID(_message->dstP2PNodeID());
                 responseP2PMsg->setSeq(_message->seq());

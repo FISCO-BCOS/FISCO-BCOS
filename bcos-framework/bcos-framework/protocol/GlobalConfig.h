@@ -42,15 +42,15 @@ public:
         // nodeService
         c_supportedProtocols.insert({ProtocolModuleID::NodeService,
             std::make_shared<ProtocolInfo>(
-                ProtocolModuleID::NodeService, ProtocolVersion::V0, ProtocolVersion::V1)});
+                ProtocolModuleID::NodeService, ProtocolVersion::V0, ProtocolVersion::V2)});
         // gatewayService
         c_supportedProtocols.insert({ProtocolModuleID::GatewayService,
             std::make_shared<ProtocolInfo>(
-                ProtocolModuleID::GatewayService, ProtocolVersion::V0, ProtocolVersion::V1)});
+                ProtocolModuleID::GatewayService, ProtocolVersion::V0, ProtocolVersion::V2)});
         // rpcService && SDK
         c_supportedProtocols.insert({ProtocolModuleID::RpcService,
             std::make_shared<ProtocolInfo>(
-                ProtocolModuleID::RpcService, ProtocolVersion::V0, ProtocolVersion::V1)});
+                ProtocolModuleID::RpcService, ProtocolVersion::V0, ProtocolVersion::V2)});
         // executorService
         c_supportedProtocols.insert({ProtocolModuleID::ExecutorService,
             std::make_shared<ProtocolInfo>(
@@ -60,11 +60,12 @@ public:
 
     ProtocolInfo::ConstPtr protocolInfo(ProtocolModuleID _moduleID) const
     {
-        if (!c_supportedProtocols.count(_moduleID))
+        auto it = c_supportedProtocols.find(_moduleID);
+        if (it == c_supportedProtocols.end())
         {
             return nullptr;
         }
-        return c_supportedProtocols.at(_moduleID);
+        return it->second;
     }
 
     std::map<ProtocolModuleID, ProtocolInfo::Ptr> const& supportedProtocols() const
@@ -75,17 +76,34 @@ public:
     virtual void setCodec(ProtocolInfoCodec::Ptr _codec) { m_codec = _codec; }
     virtual ProtocolInfoCodec::Ptr codec() const { return m_codec; }
 
-    Version minSupportedVersion() const { return m_minSupportedVersion; }
-    Version maxSupportedVersion() const { return m_maxSupportedVersion; }
+    virtual void setIsWasm(bool _isWasm) noexcept { m_isWasm = _isWasm; }
+    virtual bool isWasm() const noexcept { return m_isWasm; }
+
+    void setStorageType(std::string const& _storageType) { m_storageType = _storageType; }
+    std::string const& storageType() const { return m_storageType; }
+
+    void setEnableDAG(bool _enableDAG) { m_enableDAG = _enableDAG; }
+    bool enableDAG() const { return m_enableDAG; }
+
+    void setNeedRetInput(bool _needRetInput) { m_needRetInput = _needRetInput; }
+    bool needRetInput() const { return m_needRetInput; }
+
+    BlockVersion minSupportedVersion() const { return m_minSupportedVersion; }
+    BlockVersion maxSupportedVersion() const { return m_maxSupportedVersion; }
+
+    std::mutex& signalMutex() const { return x_signalMutex; }
 
 private:
     std::map<ProtocolModuleID, ProtocolInfo::Ptr> c_supportedProtocols;
     // the minimum supported version
-    Version m_minSupportedVersion = Version::MIN_VERSION;
-    Version m_maxSupportedVersion = Version::MAX_VERSION;
-
+    BlockVersion m_minSupportedVersion = BlockVersion::MIN_VERSION;
+    BlockVersion m_maxSupportedVersion = BlockVersion::MAX_VERSION;
     ProtocolInfoCodec::Ptr m_codec;
-    mutable bcos::SharedMutex x_version;
+    std::string m_storageType;
+    bool m_enableDAG = true;
+    bool m_needRetInput = false;  // need add 'input' param in sendTransaction() return value
+    bool m_isWasm = false;
+    mutable std::mutex x_signalMutex;
 };
 }  // namespace protocol
 }  // namespace bcos

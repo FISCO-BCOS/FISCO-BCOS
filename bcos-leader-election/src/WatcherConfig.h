@@ -30,8 +30,10 @@ class WatcherConfig : public ElectionConfig
 public:
     using Ptr = std::shared_ptr<WatcherConfig>;
     WatcherConfig(std::string const& _etcdEndPoint, std::string const& _watchDir,
-        bcos::protocol::MemberFactoryInterface::Ptr _memberFactory, std::string const& _purpose)
-      : ElectionConfig(_etcdEndPoint, _memberFactory, _purpose)
+        bcos::protocol::MemberFactoryInterface::Ptr _memberFactory, std::string const& _purpose,
+        const std::string& _caPath = "", const std::string& _certPath = "",
+        const std::string& _keyPath = "")
+      : ElectionConfig(_etcdEndPoint, _memberFactory, _purpose, _caPath, _certPath, _keyPath)
     {
         m_watchDir = _watchDir;
         ELECTION_LOG(INFO) << LOG_DESC("WatcherConfig") << LOG_KV("watchDir", _watchDir);
@@ -55,11 +57,12 @@ public:
     bcos::protocol::MemberInterface::Ptr leader(std::string const& _key) const
     {
         ReadGuard l(x_keyToLeader);
-        if (!m_keyToLeader.count(_key))
+        auto it = m_keyToLeader.find(_key);
+        if (it == m_keyToLeader.end())
         {
             return nullptr;
         }
-        return m_keyToLeader.at(_key);
+        return it->second;
     }
 
     void addMemberChangeNotificationHandler(

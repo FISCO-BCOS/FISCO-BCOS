@@ -18,6 +18,7 @@
  * @date 2022-1-07
  */
 #include "GatewayStatus.h"
+#include <mutex>
 
 using namespace bcos;
 using namespace bcos::gateway;
@@ -29,7 +30,8 @@ void GatewayStatus::update(std::string const& _p2pNodeID, GatewayNodeStatus::Con
     {
         return;
     }
-    UpgradableGuard l(x_groupP2PNodeList);
+    // TODO: optimize the count below
+    std::lock_guard<std::mutex> guard(x_groupP2PNodeList);
     auto const& groupNodeInfos = _nodeStatus->groupNodeInfos();
     for (auto const& node : groupNodeInfos)
     {
@@ -40,7 +42,6 @@ void GatewayStatus::update(std::string const& _p2pNodeID, GatewayNodeStatus::Con
         {
             continue;
         }
-        UpgradeGuard ul(l);
         // remove the _p2pNodeID from the cache
         removeP2PIDWithoutLock(groupID, _p2pNodeID);
         // insert the new p2pNodeID
@@ -64,12 +65,12 @@ bool GatewayStatus::randomChooseP2PNode(
         ret = randomChooseNode(_p2pNodeID, GroupType::GROUP_WITH_CONSENSUS_NODE, _groupID);
     }
     // select the observer node
-    if (_type & NodeType::OBSERVER_NODE)
+    if (!ret && _type & NodeType::OBSERVER_NODE)
     {
         ret = randomChooseNode(_p2pNodeID, GroupType::GROUP_WITHOUT_CONSENSUS_NODE, _groupID);
     }
     // select the OUTSIDE_GROUP(AMOP message needed)
-    if (_type & NodeType::NODE_OUTSIDE_GROUP)
+    if (!ret && _type & NodeType::FREE_NODE)
     {
         ret = randomChooseNode(_p2pNodeID, GroupType::OUTSIDE_GROUP, _groupID);
     }
@@ -79,45 +80,57 @@ bool GatewayStatus::randomChooseP2PNode(
 bool GatewayStatus::randomChooseNode(
     std::string& _choosedNode, GroupType _type, std::string const& _groupID) const
 {
-    std::set<std::string> p2pNodeList;
+    const std::set<std::string>* p2pNodeList = nullptr;
+    std::map<std::string, std::map<bcos::gateway::GroupType, std::set<std::string>>>::const_iterator
+        it;
     {
-        ReadGuard l(x_groupP2PNodeList);
-        if (!m_groupP2PNodeList.count(_groupID) || !m_groupP2PNodeList.at(_groupID).count(_type))
+        // TODO: if the lock below can be removed?
+        std::lock_guard<std::mutex> guard(x_groupP2PNodeList);
+        it = m_groupP2PNodeList.find(_groupID);
+        if (it == m_groupP2PNodeList.end())
         {
             return false;
         }
-        p2pNodeList = m_groupP2PNodeList.at(_groupID).at(_type);
     }
-    if (p2pNodeList.size() == 0)
+    auto it2 = it->second.find(_type);
+    if (it2 == it->second.end())
     {
         return false;
     }
-    srand(utcTime());
-    auto selectedP2PNode = rand() % p2pNodeList.size();
-    auto it = p2pNodeList.begin();
+    p2pNodeList = &it2->second;
+    if (p2pNodeList->empty())
+    {
+        return false;
+    }
+    // srand(utcTime());
+    // TODO: if rand() can be replaced by a faster random function?
+    auto selectedP2PNode = rand() % p2pNodeList->size();
+    auto iterator = p2pNodeList->begin();
     if (selectedP2PNode > 0)
     {
-        std::advance(it, selectedP2PNode);
+        std::advance(iterator, selectedP2PNode);
     }
-    _choosedNode = *it;
+    _choosedNode = *iterator;
     return true;
 }
 
 void GatewayStatus::removeP2PIDWithoutLock(
     std::string const& _groupID, std::string const& _p2pNodeID)
 {
-    if (!m_groupP2PNodeList.count(_groupID))
+    auto it = m_groupP2PNodeList.find(_groupID);
+    if (it == m_groupP2PNodeList.end())
     {
         return;
     }
-    auto& p2pNodeList = m_groupP2PNodeList[_groupID];
+    auto& p2pNodeList = it->second;
     for (auto it = p2pNodeList.begin(); it != p2pNodeList.end();)
     {
-        if (it->second.count(_p2pNodeID))
+        auto p2pNodeIDIt = it->second.find(_p2pNodeID);
+        if (p2pNodeIDIt != it->second.end())
         {
-            it->second.erase(_p2pNodeID);
+            it->second.erase(p2pNodeIDIt);
         }
-        if (it->second.size() == 0)
+        if (it->second.empty())
         {
             it = p2pNodeList.erase(it);
             continue;
@@ -128,12 +141,12 @@ void GatewayStatus::removeP2PIDWithoutLock(
 
 void GatewayStatus::removeP2PNode(std::string const& _p2pNodeID)
 {
-    WriteGuard l(x_groupP2PNodeList);
+    std::lock_guard<std::mutex> guard(x_groupP2PNodeList);
     for (auto pGroupInfo = m_groupP2PNodeList.begin(); pGroupInfo != m_groupP2PNodeList.end();)
     {
         auto& p2pNodeList = m_groupP2PNodeList[pGroupInfo->first];
         removeP2PIDWithoutLock(pGroupInfo->first, _p2pNodeID);
-        if (p2pNodeList.size() == 0)
+        if (p2pNodeList.empty())
         {
             pGroupInfo = m_groupP2PNodeList.erase(pGroupInfo);
             continue;

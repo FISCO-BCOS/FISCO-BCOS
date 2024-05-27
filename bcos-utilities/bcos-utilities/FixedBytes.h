@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include "BoostLog.h"
 #include "DataConvertUtility.h"
 #include "Exceptions.h"
 #include <boost/algorithm/hex.hpp>
@@ -28,7 +29,6 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
-#include <iterator>
 #include <random>
 #include <stdexcept>
 
@@ -125,7 +125,8 @@ public:
             }
 
             if (view.size() != N)
-            {}
+            {
+            }
 
             auto startIndex = 0;
             if (_alignType == DataAlignType::AlignRight) [[likely]]
@@ -299,6 +300,8 @@ public:
     /// @returns a copy of the object's data as a byte vector.
     bytes asBytes() const { return bytes(data(), data() + N); }
 
+    std::string toRawString() const { return std::string(data(), data() + N); }
+
     /// Populate with random data.
     template <class Engine>
     void generateRandomFixedBytesByEngine(Engine& _eng)
@@ -318,14 +321,19 @@ public:
         return randomFixedBytes;
     }
 
+    static inline std::size_t calcHash(const FixedBytes& _value)
+    {
+        return boost::hash_range(_value.m_data.cbegin(), _value.m_data.cend());
+    }
+
     struct hash
     {
         /// Make a hash of the object's data.
-        size_t operator()(FixedBytes const& _value) const
-        {
-            return boost::hash_range(_value.m_data.cbegin(), _value.m_data.cend());
-        }
+        size_t operator()(FixedBytes const& _value) const { return calcHash(_value); }
     };
+
+    // for boost 1.79.0
+    friend std::size_t hash_value(const FixedBytes& _value) { return calcHash(_value); }
 
     template <unsigned P, unsigned M>
     inline FixedBytes& shiftBloom(FixedBytes<M> const& _FixedBytes)
@@ -708,6 +716,7 @@ inline Address toAddress(std::string const& _address)
     }
     BOOST_THROW_EXCEPTION(InvalidAddress());
 }
+
 }  // namespace bcos
 
 namespace std

@@ -24,9 +24,8 @@
 #include "bcos-framework/protocol/TransactionMetaData.h"
 #include <bcos-utilities/CallbackCollectionHandler.h>
 #include <bcos-utilities/ThreadPool.h>
-namespace bcos
-{
-namespace sealer
+#include <atomic>
+namespace bcos::sealer
 {
 using TxsMetaDataQueue = std::deque<bcos::protocol::TransactionMetaData::Ptr>;
 class SealingManager : public std::enable_shared_from_this<SealingManager>
@@ -35,7 +34,7 @@ public:
     using Ptr = std::shared_ptr<SealingManager>;
     using ConstPtr = std::shared_ptr<SealingManager const>;
     explicit SealingManager(SealerConfig::Ptr _config)
-      : m_config(_config),
+      : m_config(std::move(_config)),
         m_pendingTxs(std::make_shared<TxsMetaDataQueue>()),
         m_pendingSysTxs(std::make_shared<TxsMetaDataQueue>()),
         m_worker(std::make_shared<ThreadPool>("sealerWorker", 1))
@@ -54,11 +53,12 @@ public:
     virtual bool shouldGenerateProposal();
     virtual bool shouldFetchTransaction();
 
-    std::pair<bool, bcos::protocol::Block::Ptr> generateProposal();
+    std::pair<bool, bcos::protocol::Block::Ptr> generateProposal(
+        std::function<uint16_t(bcos::protocol::Block::Ptr)> = nullptr);
     virtual void setUnsealedTxsSize(size_t _unsealedTxsSize)
     {
         m_unsealedTxsSize = _unsealedTxsSize;
-        m_config->consensus()->asyncNoteUnSealedTxsSize(_unsealedTxsSize, [](Error::Ptr _error) {
+        m_config->consensus()->asyncNoteUnSealedTxsSize(_unsealedTxsSize, [](auto&& _error) {
             if (_error)
             {
                 SEAL_LOG(WARNING) << LOG_DESC(
@@ -85,6 +85,7 @@ public:
             m_startSealingNumber = _startSealingNumber;
             m_sealingNumber = _startSealingNumber;
             m_lastSealTime = utcSteadyTime();
+            // for sys block
             if (m_waitUntil >= m_startSealingNumber)
             {
                 SEAL_LOG(INFO) << LOG_DESC("resetSealingInfo: reset waitUntil for reseal");
@@ -97,17 +98,20 @@ public:
         SEAL_LOG(INFO) << LOG_DESC("resetSealingInfo") << LOG_KV("start", m_startSealingNumber)
                        << LOG_KV("end", m_endSealingNumber)
                        << LOG_KV("sealingNumber", m_sealingNumber)
-                       << LOG_KV("waitUntil", m_waitUntil);
+                       << LOG_KV("waitUntil", m_waitUntil)
+                       << LOG_KV("unsealedTxs", m_unsealedTxsSize);
     }
 
-    virtual void resetCurrentNumber(int64_t _currentNumber) { m_currentNumber = _currentNumber; }
-    virtual int64_t currentNumber() const { return m_currentNumber; }
+    virtual void resetLatestNumber(int64_t _latestNumber) { m_latestNumber = _latestNumber; }
+    virtual void resetLatestHash(crypto::HashType _latestHash) { m_latestHash = _latestHash; }
+    virtual int64_t latestNumber() const { return m_latestNumber; }
+    virtual crypto::HashType latestHash() const { return m_latestHash; }
     virtual void fetchTransactions();
 
     template <class T>
-    bcos::Handler<> onReady(T const& _t)
+    bcos::Handler<> onReady(T _t)
     {
-        return m_onReady.add(_t);
+        return m_onReady.add(std::move(_t));
     }
     virtual void notifyResetProposal(bcos::protocol::Block::Ptr _block);
 
@@ -140,13 +144,14 @@ private:
     std::atomic<ssize_t> m_endSealingNumber = {0};
     std::atomic<size_t> m_maxTxsPerBlock = {0};
 
+    // for sys block
     std::atomic<int64_t> m_waitUntil = {0};
 
     bcos::CallbackCollectionHandler<> m_onReady;
 
     std::atomic_bool m_fetchingTxs = {false};
 
-    std::atomic<ssize_t> m_currentNumber = {0};
+    std::atomic<ssize_t> m_latestNumber = {0};
+    bcos::crypto::HashType m_latestHash = {};
 };
-}  // namespace sealer
-}  // namespace bcos
+}  // namespace bcos::sealer

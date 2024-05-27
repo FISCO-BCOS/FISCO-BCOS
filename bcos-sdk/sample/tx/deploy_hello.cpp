@@ -17,23 +17,10 @@
  * @author: octopus
  * @date 2022-01-16
  */
-
-#include <bcos-tars-protocol/impl/TarsSerializable.h>
-
-#include "bcos-concepts/Serialize.h"
-#include "bcos-crypto/interfaces/crypto/KeyPairFactory.h"
-#include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
-#include "bcos-crypto/interfaces/crypto/Signature.h"
-#include "bcos-crypto/signature/secp256k1/Secp256k1KeyPair.h"
-#include "bcos-crypto/signature/sm2/SM2Crypto.h"
-#include "bcos-crypto/signature/sm2/SM2KeyPairFactory.h"
-#include "bcos-tars-protocol/protocol/TransactionImpl.h"
-#include "bcos-tars-protocol/tars/Transaction.h"
 #include <bcos-cpp-sdk/SdkFactory.h>
-#include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
-#include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
+#include <bcos-cpp-sdk/utilities/crypto/KeyPairBuilder.h>
+#include <bcos-cpp-sdk/utilities/tx/TransactionBuilder.h>
+#include <bcos-cpp-sdk/utilities/tx/TransactionBuilderService.h>
 #include <bcos-utilities/Common.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/algorithm/string/compare.hpp>
@@ -43,6 +30,7 @@
 
 using namespace bcos;
 using namespace bcos::cppsdk;
+using namespace bcos::cppsdk::utilities;
 using namespace bcos::boostssl;
 //----------------------------------------------------------------------------------------------------
 // HelloWorld Source Code:
@@ -90,7 +78,7 @@ constexpr static std::string_view hwBIN =
     "008160009055506001016102bb565b5090565b9056fea2646970667358221220b5943f43c48cc93c6d71cdcf27aee5"
     "072566c88755ce9186e32ce83b24e8dc6c64736f6c634300060a0033";
 
-constexpr static std::string_view hwSmBIN =
+const char* hwSmBIN =
     "608060405234801561001057600080fd5b506040518060400160405280600d81526020017f48656c6c6f2c20576f72"
     "6c6421000000000000000000000000000000000000008152506000908051906020019061005c929190610062565b50"
     "610107565b828054600181600116156101000203166002900490600052602060002090601f01602090048101928260"
@@ -200,21 +188,62 @@ int main(int argc, char** argv)
               << std::endl;
 
     auto hexBin = getBinary(groupInfo->smCryptoType());
+    auto binBytes = fromHexString(std::string(hexBin));
 
-    auto hashImpl = std::make_shared<bcos::crypto::Keccak256>();
-    bcos::crypto::CryptoSuite::Ptr cryptoSuite =
-        std::make_shared<bcos::crypto::CryptoSuite>(hashImpl, keyPairFactory, nullptr);
-    auto transactionFactory =
-        std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite);
-    bcos::bytes inputData;
-    boost::algorithm::unhex(hexBin.begin(), hexBin.end(), std::back_inserter(inputData));
-    auto tx = transactionFactory->createTransaction(0, "to", inputData, bcos::u256(100), 200,
-        "chain0", group, 1112, std::shared_ptr<bcos::crypto::KeyPairInterface>(std::move(keyPair)));
-    // auto r =
-    //     transactionBuilderService->createSignedTransaction(*keyPair, "", *binBytes.get(), "", 0);
+    auto rpcService = sdk->jsonRpcService();
+
+    std::promise<bool> p;
+    auto f = p.get_future();
+    rpcService->sendTransaction(*keyPair, group, "", "", std::move(*binBytes), "", 0, "extraData",
+        [&p](bcos::Error::Ptr _error, std::shared_ptr<bcos::bytes> _resp) {
+            if (_error && _error->errorCode() != 0)
+            {
+                std::cout << LOG_DESC(" [DeployHello] send transaction response failed")
+                          << LOG_KV("code", _error->errorCode())
+                          << LOG_KV("message", _error->errorMessage()) << std::endl;
+            }
+            else
+            {
+                std::string receipt = std::string(_resp->begin(), _resp->end());
+                std::cout << LOG_DESC(" [DeployHello] recv response success ")
+                          << LOG_KV("transaction receipt", receipt) << std::endl;
+
+                Json::Value root;
+                Json::Reader jsonReader;
+
+                try
+                {
+                    if (!jsonReader.parse(receipt, root))
+                    {
+                        std::cout << LOG_DESC(" [DeployHello] [ERROR] recv invalid json object")
+                                  << LOG_KV("resp", receipt) << std::endl;
+                        return;
+                    }
+
+                    std::cout << LOG_DESC(" [DeployHello] contract address ==> " +
+                                          root["result"]["contractAddress"].asString())
+                              << std::endl;
+                }
+                catch (const std::exception& _e)
+                {
+                    std::cout << LOG_DESC(" [DeployHello] [ERROR] recv invalid json object")
+                              << LOG_KV("resp", receipt) << std::endl;
+                }
+            }
+            p.set_value(true);
+        });
+
+    f.get();
+    /*
+
+    auto transactionBuilderService =
+        std::make_shared<TransactionBuilderService>(sdk->service(), group, transactionBuilder);
+
+    auto r =
+        transactionBuilderService->createSignedTransaction(*keyPair, "", *binBytes.get(), "", 0);
 
     std::cout << LOG_DESC(" [DeployHello] create signed transaction success")
-              << LOG_KV("tx hash", tx->hash(false)) << std::endl;
+              << LOG_KV("tx hash", tx->hash()) << std::endl;
 
     std::promise<bool> p;
     auto f = p.get_future();
@@ -228,9 +257,9 @@ int main(int argc, char** argv)
         [&p](bcos::Error::Ptr _error, std::shared_ptr<bcos::bytes> _resp) {
             if (_error && _error->errorCode() != 0)
             {
-                std::cout << LOG_DESC(" [DeployHello] send transaction response error")
-                          << LOG_KV("errorCode", _error->errorCode())
-                          << LOG_KV("errorMessage", _error->errorMessage()) << std::endl;
+                std::cout << LOG_DESC(" [DeployHello] send transaction response failed")
+                          << LOG_KV("code", _error->errorCode())
+                          << LOG_KV("message", _error->errorMessage()) << std::endl;
             }
             else
             {
@@ -263,6 +292,7 @@ int main(int argc, char** argv)
             p.set_value(true);
         });
     f.get();
+    */
 
     return 0;
 }

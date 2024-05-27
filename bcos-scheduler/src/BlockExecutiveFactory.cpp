@@ -21,12 +21,15 @@
 
 #include "BlockExecutiveFactory.h"
 #include "BlockExecutive.h"
+#include "SchedulerImpl.h"
 #include "SerialBlockExecutive.h"
-
+#include "ShardingBlockExecutive.h"
+#include "bcos-framework/ledger/Features.h"
 
 using namespace std;
 using namespace bcos::protocol;
 using namespace bcos::scheduler;
+using namespace bcos::ledger;
 
 
 std::shared_ptr<BlockExecutive> BlockExecutiveFactory::build(bcos::protocol::Block::Ptr block,
@@ -35,7 +38,8 @@ std::shared_ptr<BlockExecutive> BlockExecutiveFactory::build(bcos::protocol::Blo
     bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
     bcos::txpool::TxPoolInterface::Ptr _txPool)
 {
-    if (m_isSerialExecute)
+    if (m_isSerialExecute ||
+        scheduler->ledgerConfig().features().get(ledger::Features::Flag::feature_dmc2serial))
     {
         auto serialBlockExecutive = std::make_shared<SerialBlockExecutive>(block, scheduler,
             startContextID, transactionSubmitResultFactory, staticCall, _blockFactory, _txPool);
@@ -53,20 +57,28 @@ std::shared_ptr<BlockExecutive> BlockExecutiveFactory::build(bcos::protocol::Blo
     SchedulerImpl* scheduler, size_t startContextID,
     bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
     bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
-    bcos::txpool::TxPoolInterface::Ptr _txPool, uint64_t _gasLimit, bool _syncBlock)
+    bcos::txpool::TxPoolInterface::Ptr _txPool, uint64_t _gasLimit, std::string _gasPrice,
+    bool _syncBlock)
 {
-    if (m_isSerialExecute)
+    if (scheduler->ledgerConfig().features().get(ledger::Features::Flag::feature_sharding))
+    {
+        // Enable feature_shareding to combine dmc and serial
+        auto shardingBlockExecutive = std::make_shared<ShardingBlockExecutive>(block, scheduler,
+            startContextID, transactionSubmitResultFactory, staticCall, _blockFactory, _txPool,
+            m_contract2ShardCache, _gasLimit, _gasPrice, _syncBlock, m_keyPageSize);
+        return shardingBlockExecutive;
+    }
+
+    if (m_isSerialExecute ||
+        scheduler->ledgerConfig().features().get(ledger::Features::Flag::feature_dmc2serial))
     {
         auto serialBlockExecutive = std::make_shared<SerialBlockExecutive>(block, scheduler,
             startContextID, transactionSubmitResultFactory, staticCall, _blockFactory, _txPool,
-            _gasLimit, _syncBlock);
+            _gasLimit, _gasPrice, _syncBlock);
         return serialBlockExecutive;
     }
-    else
-    {
-        auto blockExecutive = std::make_shared<BlockExecutive>(block, scheduler, startContextID,
-            transactionSubmitResultFactory, staticCall, _blockFactory, _txPool, _gasLimit,
-            _syncBlock);
-        return blockExecutive;
-    }
+    auto blockExecutive = std::make_shared<BlockExecutive>(block, scheduler, startContextID,
+        transactionSubmitResultFactory, staticCall, _blockFactory, _txPool, _gasLimit, _gasPrice,
+        _syncBlock);
+    return blockExecutive;
 }

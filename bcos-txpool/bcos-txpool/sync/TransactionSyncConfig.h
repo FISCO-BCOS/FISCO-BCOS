@@ -25,6 +25,8 @@
 #include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/sync/SyncConfig.h>
+
+#include <utility>
 namespace bcos
 {
 namespace sync
@@ -39,15 +41,15 @@ public:
         bcos::sync::TxsSyncMsgFactory::Ptr _msgFactory,
         bcos::protocol::BlockFactory::Ptr _blockFactory,
         std::shared_ptr<bcos::ledger::LedgerInterface> _ledger)
-      : SyncConfig(_nodeId),
-        m_frontService(_frontService),
-        m_txpoolStorage(_txpoolStorage),
-        m_msgFactory(_msgFactory),
-        m_blockFactory(_blockFactory),
-        m_ledger(_ledger)
+      : SyncConfig(std::move(_nodeId)),
+        m_frontService(std::move(_frontService)),
+        m_txpoolStorage(std::move(_txpoolStorage)),
+        m_msgFactory(std::move(_msgFactory)),
+        m_blockFactory(std::move(_blockFactory)),
+        m_ledger(std::move(_ledger))
     {}
 
-    virtual ~TransactionSyncConfig() {}
+    ~TransactionSyncConfig() override = default;
 
     bcos::front::FrontServiceInterface::Ptr frontService() { return m_frontService; }
     bcos::txpool::TxPoolStorageInterface::Ptr txpoolStorage() { return m_txpoolStorage; }
@@ -64,7 +66,17 @@ public:
     // for ut
     void setTxPoolStorage(bcos::txpool::TxPoolStorageInterface::Ptr _txpoolStorage)
     {
-        m_txpoolStorage = _txpoolStorage;
+        m_txpoolStorage = std::move(_txpoolStorage);
+    }
+
+    void setMaxResponseTxsToNodesWithEmptyTxs(size_t blockTxCount)
+    {
+        m_maxResponseTxsToNodesWithEmptyTxs = blockTxCount;
+    }
+
+    size_t getMaxResponseTxsToNodesWithEmptyTxs() const
+    {
+        return m_maxResponseTxsToNodesWithEmptyTxs;
     }
 
 private:
@@ -78,6 +90,8 @@ private:
     unsigned m_networkTimeout = 500;
 
     unsigned m_forwardPercent = 25;
+
+    size_t m_maxResponseTxsToNodesWithEmptyTxs = 1000;
 };
 }  // namespace sync
 }  // namespace bcos

@@ -28,12 +28,14 @@
 #include <bcos-framework/testutils/faker/FakeScheduler.h>
 #include <bcos-framework/testutils/faker/FakeTxPool.h>
 #include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
+#include <bcos-tool/NodeTimeMaintenance.h>
 
 using namespace bcos;
 using namespace bcos::sync;
 using namespace bcos::crypto;
 using namespace bcos::protocol;
 using namespace bcos::scheduler;
+using namespace bcos::tool;
 
 namespace bcos
 {
@@ -76,10 +78,12 @@ public:
     using Ptr = std::shared_ptr<FakeBlockSyncFactory>;
     FakeBlockSyncFactory(PublicPtr _nodeId, BlockFactory::Ptr _blockFactory,
         LedgerInterface::Ptr _ledger, FrontServiceInterface::Ptr _frontService,
-        SchedulerInterface::Ptr _dispatcher, ConsensusInterface::Ptr _consensus)
+        SchedulerInterface::Ptr _dispatcher, ConsensusInterface::Ptr _consensus,
+        NodeTimeMaintenance::Ptr _nodeTimeMaintenance)
       : BlockSyncFactory(_nodeId, _blockFactory,
             std::make_shared<bcos::protocol::TransactionSubmitResultFactoryImpl>(), _ledger,
-            std::make_shared<FakeTxPoolForSync>(), _frontService, _dispatcher, _consensus)
+            std::make_shared<FakeTxPoolForSync>(), _frontService, _dispatcher, _consensus,
+            _nodeTimeMaintenance)
     {}
 
     BlockSync::Ptr createBlockSync() override
@@ -100,13 +104,20 @@ public:
         m_keyPair = _cryptoSuite->signatureImpl()->generateKeyPair();
         m_blockFactory = createBlockFactory(_cryptoSuite);
         m_ledger = std::make_shared<FakeLedger>(m_blockFactory, _blockNumber, 10, 0, _sealerList);
+        m_ledger->setSystemConfig(SYSTEM_KEY_TX_COUNT_LIMIT, std::to_string(1000));
+        m_ledger->setSystemConfig(SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, std::to_string(1));
+        m_ledger->setSystemConfig(SYSTEM_KEY_AUTH_CHECK_STATUS, std::to_string(0));
+        m_ledger->setSystemConfig(SYSTEM_KEY_COMPATIBILITY_VERSION, protocol::DEFAULT_VERSION_STR);
+        // m_ledger->ledgerConfig()->setConsensusTimeout(_consensusTimeout * 20);
         m_frontService = std::make_shared<FakeFrontService>(m_keyPair->publicKey());
         m_consensus = std::make_shared<FakeConsensus>();
+        m_nodeTimeMaintenance = std::make_shared<NodeTimeMaintenance>();
 
         // create FakeScheduler
         m_scheduler = std::make_shared<FakeScheduler>(m_ledger, m_blockFactory);
-        auto blockSyncFactory = std::make_shared<FakeBlockSyncFactory>(m_keyPair->publicKey(),
-            m_blockFactory, m_ledger, m_frontService, m_scheduler, m_consensus);
+        auto blockSyncFactory =
+            std::make_shared<FakeBlockSyncFactory>(m_keyPair->publicKey(), m_blockFactory, m_ledger,
+                m_frontService, m_scheduler, m_consensus, m_nodeTimeMaintenance);
         m_sync = std::dynamic_pointer_cast<FakeBlockSync>(blockSyncFactory->createBlockSync());
         if (_fakeGateWay)
         {
@@ -132,6 +143,31 @@ public:
         m_sync->config()->setObserverList(m_ledger->ledgerConfig()->observerNodeList());
     }
 
+    void setConsensus(std::vector<NodeIDPtr> _nodeIdList)
+    {
+        m_ledger->ledgerConfig()->mutableConsensusList()->clear();
+        for (auto const& node : _nodeIdList)
+        {
+            m_ledger->ledgerConfig()->mutableConsensusList()->emplace_back(
+                std::make_shared<ConsensusNode>(node));
+        }
+        m_sync->config()->setConsensusNodeList(m_ledger->ledgerConfig()->consensusNodeList());
+        bcos::crypto::NodeIDSet nodeIdSet;
+        for (const auto& node : m_ledger->ledgerConfig()->consensusNodeList())
+        {
+            nodeIdSet.insert(node->nodeID());
+        }
+        for (const auto& node : m_ledger->ledgerConfig()->observerNodeList())
+        {
+            nodeIdSet.insert(node->nodeID());
+        }
+        m_sync->config()->setConnectedNodeList(nodeIdSet);
+        m_frontService->setNodeIDList(m_sync->config()->connectedNodeList());
+
+        std::cout << "consensusNodeList size: "
+                  << m_ledger->ledgerConfig()->consensusNodeList().size() << std::endl;
+    }
+
     void setObservers(std::vector<NodeIDPtr> _nodeIdList)
     {
         m_ledger->ledgerConfig()->mutableObserverList()->clear();
@@ -142,11 +178,16 @@ public:
         }
         m_sync->config()->setObserverList(m_ledger->ledgerConfig()->observerNodeList());
         bcos::crypto::NodeIDSet nodeIdSet;
-        for (auto node : m_ledger->ledgerConfig()->observerNodeList())
+        for (const auto& node : m_ledger->ledgerConfig()->consensusNodeList())
+        {
+            nodeIdSet.insert(node->nodeID());
+        }
+        for (const auto& node : m_ledger->ledgerConfig()->observerNodeList())
         {
             nodeIdSet.insert(node->nodeID());
         }
         m_sync->config()->setConnectedNodeList(nodeIdSet);
+        m_frontService->setNodeIDList(m_sync->config()->connectedNodeList());
     }
 
     void init() { m_sync->init(); }
@@ -165,6 +206,7 @@ private:
 
     FakeScheduler::Ptr m_scheduler;
     FakeBlockSync::Ptr m_sync;
+    NodeTimeMaintenance::Ptr m_nodeTimeMaintenance;
 };
 }  // namespace test
 }  // namespace bcos

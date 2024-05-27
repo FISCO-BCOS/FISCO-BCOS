@@ -120,20 +120,20 @@ std::pair<bool, bytes> bcos::crypto::ed25519Recover(Hash::Ptr _hashImpl, bytesCo
     catch (const std::exception& e)
     {
         CRYPTO_LOG(WARNING) << LOG_DESC("ed25519Recover failed")
-                            << LOG_KV("error", boost::diagnostic_information(e));
+                            << LOG_KV("message", boost::diagnostic_information(e));
     }
     return {false, {}};
 }
 
 
-bool Ed25519Crypto::verify(
-    std::shared_ptr<bytes const> _pubKeyBytes, const HashType& _hash, bytesConstRef _signatureData)
+bool Ed25519Crypto::verify(std::shared_ptr<bytes const> _pubKeyBytes, const HashType& _hash,
+    bytesConstRef _signatureData) const
 {
     return ed25519Verify(
         std::make_shared<KeyImpl>(ED25519_PUBLIC_LEN, _pubKeyBytes), _hash, _signatureData);
 }
 
-KeyPairInterface::UniquePtr Ed25519Crypto::createKeyPair(SecretPtr _secretKey)
+KeyPairInterface::UniquePtr Ed25519Crypto::createKeyPair(SecretPtr _secretKey) const
 {
     return std::make_unique<Ed25519KeyPair>(_secretKey);
 }

@@ -19,6 +19,7 @@
  */
 #pragma once
 #include "Service.h"
+#include "bcos-utilities/ObjectCounter.h"
 #include "router/RouterTableInterface.h"
 namespace bcos
 {
@@ -29,7 +30,12 @@ class ServiceV2 : public Service
 public:
     using Ptr = std::shared_ptr<ServiceV2>;
     ServiceV2(std::string const& _nodeID, RouterTableFactory::Ptr _routerTableFactory);
-    ~ServiceV2() override {}
+    ServiceV2() = delete;
+    ServiceV2(const ServiceV2&) = delete;
+    ServiceV2(ServiceV2&&) = delete;
+    ServiceV2& operator=(const ServiceV2&) = delete;
+    ServiceV2& operator=(ServiceV2&&) = delete;
+    ~ServiceV2() override = default;
 
     void start() override;
     void stop() override;
@@ -37,7 +43,7 @@ public:
     void asyncSendMessageByNodeID(P2pID nodeID, std::shared_ptr<P2PMessage> message,
         CallbackFuncWithSession callback, Options options = Options()) override;
 
-    void onMessage(NetworkException e, SessionFace::Ptr session, Message::Ptr message,
+    void onMessage(NetworkException _error, SessionFace::Ptr session, Message::Ptr message,
         std::weak_ptr<P2PSession> p2pSessionWeakPtr) override;
     void sendRespMessageBySession(
         bytesConstRef _payload, P2PMessage::Ptr _p2pMessage, P2PSession::Ptr _p2pSession) override;
@@ -45,9 +51,9 @@ public:
     bool isReachable(P2pID const& _nodeID) const override;
 
     // handlers called when the node is unreachable
-    void registerUnreachableHandler(std::function<void(std::string)> _handler)
+    void registerUnreachableHandler(std::function<void(std::string)> _handler) override
     {
-        WriteGuard l(x_unreachableHandlers);
+        WriteGuard writeGuard(x_unreachableHandlers);
         m_unreachableHandlers.emplace_back(_handler);
     }
 
@@ -57,7 +63,7 @@ protected:
     {
         std::vector<std::function<void(std::string)>> handlers;
         {
-            ReadGuard l(x_unreachableHandlers);
+            ReadGuard readGuard(x_unreachableHandlers);
             handlers = m_unreachableHandlers;
         }
         // TODO: async here
@@ -71,14 +77,14 @@ protected:
     }
     // router related
     virtual void onReceivePeersRouterTable(
-        NetworkException _e, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message);
+        NetworkException _error, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message);
     virtual void joinRouterTable(
         std::string const& _generatedFrom, RouterTableInterface::Ptr _routerTable);
     virtual void onReceiveRouterTableRequest(
-        NetworkException _e, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message);
+        NetworkException _error, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message);
     virtual void broadcastRouterSeq();
     virtual void onReceiveRouterSeq(
-        NetworkException _e, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message);
+        NetworkException _error, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message);
 
     virtual void onNewSession(P2PSession::Ptr _session);
     virtual void onEraseSession(P2PSession::Ptr _session);
@@ -91,7 +97,7 @@ protected:
     virtual void asyncBroadcastMessageWithoutForward(
         std::shared_ptr<P2PMessage> message, Options options);
 
-protected:
+private:
     // for message forward
     std::shared_ptr<bcos::Timer> m_routerTimer;
     std::atomic<uint32_t> m_statusSeq{1};

@@ -9,6 +9,8 @@ pid=$(ps aux|grep ${service}|grep -v grep|awk '{print $2}')
 name=$(basename ${dirpath})
 
 if [ ! -z ${pid} ];then
+    kill -USR1 \${node_pid}
+    kill -USR2 \${node_pid}
     echo " ${name} is running, pid is ${pid}."
     exit 0
 else

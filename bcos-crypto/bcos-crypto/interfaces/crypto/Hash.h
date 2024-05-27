@@ -24,9 +24,7 @@
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <memory>
-namespace bcos
-{
-namespace crypto
+namespace bcos::crypto
 {
 enum HashImplType : int
 {
@@ -40,8 +38,12 @@ public:
     using Ptr = std::shared_ptr<Hash>;
     using UniquePtr = std::unique_ptr<Hash>;
     Hash() = default;
-    virtual ~Hash() {}
-    virtual HashType hash(bytesConstRef _data) = 0;
+    virtual ~Hash() = default;
+    virtual HashType hash(bytesConstRef _data) const = 0;
+    HashType hash(std::string_view view) const
+    {
+        return hash(bytesConstRef((const unsigned char*)view.data(), view.size()));
+    }
     virtual HashType emptyHash()
     {
         if (HashType() == m_emptyHash)
@@ -50,29 +52,28 @@ public:
         }
         return m_emptyHash;
     }
-    virtual HashType hash(bytes const& _data)
+    virtual HashType hash(bytes const& _data) const
     {
         return hash(bytesConstRef(_data.data(), _data.size()));
     }
-    virtual HashType hash(std::string const& _data) { return hash(bytesConstRef(_data)); }
+    virtual HashType hash(std::string const& _data) const { return hash(bytesConstRef(_data)); }
 
     template <unsigned N>
-    inline HashType hash(FixedBytes<N> const& _input)
+    inline HashType hash(FixedBytes<N> const& _input) const
     {
         return hash(_input.ref());
     }
 
-    inline HashType hash(PublicPtr _public) { return hash(_public->data()); }
+    inline HashType hash(const PublicPtr& _public) const { return hash(_public->data()); }
 
     inline void setHashImplType(HashImplType _type) { m_type = _type; }
 
     inline HashImplType getHashImplType() const { return m_type; }
 
-    virtual bcos::crypto::hasher::AnyHasher hasher() = 0;
+    virtual bcos::crypto::hasher::AnyHasher hasher() const = 0;
 
 private:
     HashType m_emptyHash = HashType();
     HashImplType m_type = Keccak256Hash;
 };
-}  // namespace crypto
-}  // namespace bcos
+}  // namespace bcos::crypto

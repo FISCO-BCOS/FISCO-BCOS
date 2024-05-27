@@ -57,7 +57,8 @@ public:
     virtual ~LeaderElectionFactoryInterface() {}
     virtual LeaderElectionInterface::Ptr createLeaderElection(std::string const& _memberID,
         std::string const& _memberConfig, std::string const& _etcdEndPoint,
-        std::string const& _leaderKey, std::string const& _purpose, unsigned _leaseTTL) = 0;
+        std::string const& _leaderKey, std::string const& _purpose, unsigned _leaseTTL,
+        const std::string& _caPath, const std::string& _certPath, const std::string& _keyPath) = 0;
 };
 
 }  // namespace election

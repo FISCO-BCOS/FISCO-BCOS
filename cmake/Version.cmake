@@ -1,2 +1,2 @@
-set(VERSION "3.0.0")
+set(VERSION "3.1.2")
 set(VERSION_SUFFIX "")

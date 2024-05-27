@@ -36,10 +36,20 @@ class ElectionConfig : public std::enable_shared_from_this<ElectionConfig>
 public:
     using Ptr = std::shared_ptr<ElectionConfig>;
     ElectionConfig(std::string const& _etcdEndPoint,
-        bcos::protocol::MemberFactoryInterface::Ptr _memberFactory, std::string const& _purpose)
+        bcos::protocol::MemberFactoryInterface::Ptr _memberFactory, std::string const& _purpose,
+        std::string const& _caPath = "", std::string const& _certPath = "",
+        std::string const& _keyPath = "")
       : m_memberFactory(_memberFactory), m_purpose(_purpose)
     {
-        m_etcdClient = std::make_shared<etcd::Client>(_etcdEndPoint);
+        if (!_caPath.empty() && !_certPath.empty() && !_keyPath.empty())
+        {
+            m_etcdClient = std::make_shared<etcd::Client>(
+                _etcdEndPoint, _caPath, _certPath, _keyPath, "", "round_robin");
+        }
+        else
+        {
+            m_etcdClient = std::make_shared<etcd::Client>(_etcdEndPoint);
+        }
     }
 
     virtual void start();
@@ -75,7 +85,7 @@ public:
 protected:
     virtual void refreshWatcher();
     virtual void reCreateWatcher() = 0;
-    void onElectionClusterRecover();
+    virtual void onElectionClusterRecover();
     void onElectionClusterDown();
 
 protected:

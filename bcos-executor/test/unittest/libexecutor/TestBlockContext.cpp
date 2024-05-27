@@ -2,6 +2,7 @@
 #include "../../../src/executive/ExecutiveFactory.h"
 #include "../../../src/executive/ExecutiveFlowInterface.h"
 #include "../mock/MockExecutiveFlow.h"
+#include "../mock/MockLedger.h"
 #include "bcos-table/src/StateStorage.h"
 #include <tbb/concurrent_unordered_map.h>
 #include <boost/test/unit_test.hpp>
@@ -24,12 +25,13 @@ BOOST_AUTO_TEST_CASE(BlockContextTest)
     auto executiveFlowName = std::vector<std::string>{
         "flow0", "flow1", "flow2", "flow3", "flow4", "flow5", "flow6", "flow7", "flow8", "flow9"};
 
+    LedgerCache::Ptr ledgerCache = std::make_shared<LedgerCache>(std::make_shared<MockLedger>());
+
     BlockContext::Ptr blockContext = std::make_shared<bcos::executor::BlockContext>(
-        nullptr, nullptr, 0, h256(), 0, 0, FiscoBcosScheduleV4, false, false);
+        nullptr, ledgerCache, nullptr, 0, h256(), 0, 0, FiscoBcosSchedule, false, false);
 
     h256 blockhash = blockContext->hash();
     EXECUTOR_LOG(DEBUG) << blockhash;
-    blockContext->setTxGasLimit(10000);
     BOOST_CHECK(blockContext->storage() == nullptr);
     // BOOST_CHECK(blockContext->lastStorage() == nullptr);
     BOOST_CHECK(!blockContext->isWasm());
@@ -38,8 +40,6 @@ BOOST_AUTO_TEST_CASE(BlockContextTest)
     BOOST_CHECK_EQUAL(blockContext->number(), 0);
     BOOST_CHECK_EQUAL(blockContext->timestamp(), 0);
     BOOST_CHECK_EQUAL(blockContext->blockVersion(), 0);
-    BOOST_CHECK_EQUAL(blockContext->gasLimit(), 0);
-    BOOST_CHECK_EQUAL(blockContext->txGasLimit(), 10000);
 
 
     for (int i = 0; i < 10; ++i)

@@ -1,15 +1,30 @@
-include(Version)
+
 project(bcos-utilities VERSION ${VERSION})
 
-aux_source_directory(bcos-utilities SRCS)
+find_package(Boost REQUIRED COMPONENTS log filesystem chrono thread serialization iostreams)
+find_package(ZLIB REQUIRED)
+if(NOT ONLY_CPP_SDK)
+    find_package(zstd CONFIG REQUIRED)
+    find_package(redis++ CONFIG REQUIRED)
+endif ()
 
-find_package(Boost REQUIRED COMPONENTS log filesystem chrono thread serialization)
+# aux_source_directory(bcos-utilities SRCS)
+file(GLOB_RECURSE SRCS "bcos-utilities/*.cpp")
+if (ONLY_CPP_SDK)
+    list(REMOVE_ITEM SRCS "${CMAKE_CURRENT_SOURCE_DIR}/bcos-utilities/ratelimiter/DistributedRateLimiter.cpp")
+    list(REMOVE_ITEM SRCS "${CMAKE_CURRENT_SOURCE_DIR}/bcos-utilities/ZstdCompress.cpp")
+    list(REMOVE_ITEM SRCS "${CMAKE_CURRENT_SOURCE_DIR}/bcos-utilities/ITTAPI.h")
+endif ()
 
 add_library(bcos-utilities ${SRCS})
 target_include_directories(bcos-utilities PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-utilities>)
-target_link_libraries(bcos-utilities PUBLIC Boost::log Boost::filesystem Boost::chrono Boost::thread Boost::serialization)
+if (ONLY_CPP_SDK)
+    target_link_libraries(bcos-utilities PUBLIC Boost::iostreams Boost::log Boost::filesystem Boost::chrono Boost::thread Boost::serialization ZLIB::ZLIB)
+else ()
+    target_link_libraries(bcos-utilities PUBLIC Boost::iostreams Boost::log Boost::filesystem Boost::chrono Boost::thread Boost::serialization redis++::redis++_static ZLIB::ZLIB zstd::libzstd_static ittapi)
+endif ()
 
 if(TESTS)
     enable_testing()

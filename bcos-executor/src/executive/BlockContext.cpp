@@ -21,19 +21,16 @@
 
 #include "BlockContext.h"
 #include "../vm/Precompiled.h"
-#include "ExecutiveStackFlow.h"
 #include "TransactionExecutive.h"
-#include "bcos-codec/abi/ContractABICodec.h"
-#include "bcos-executor/src/precompiled/common/Common.h"
-#include "bcos-executor/src/precompiled/common/Utilities.h"
-#include "bcos-framework/protocol/Exceptions.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-framework/storage/Table.h"
+#include "bcos-task/Wait.h"
 #include <bcos-utilities/Error.h>
 #include <boost/core/ignore_unused.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <string>
+#include <utility>
 
 using namespace bcos::executor;
 using namespace bcos::protocol;
@@ -41,9 +38,10 @@ using namespace bcos::precompiled;
 using namespace std;
 
 BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
-    crypto::Hash::Ptr _hashImpl, bcos::protocol::BlockNumber blockNumber, h256 blockHash,
-    uint64_t timestamp, uint32_t blockVersion, const VMSchedule& _schedule, bool _isWasm,
-    bool _isAuthCheck)
+    LedgerCache::Ptr ledgerCache, crypto::Hash::Ptr _hashImpl,
+    bcos::protocol::BlockNumber blockNumber, h256 blockHash, uint64_t timestamp,
+    uint32_t blockVersion, const VMSchedule& _schedule, bool _isWasm, bool _isAuthCheck,
+    storage::StorageInterface::Ptr backendStorage)
   : m_blockNumber(blockNumber),
     m_blockHash(blockHash),
     m_timeStamp(timestamp),
@@ -52,15 +50,54 @@ BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> stora
     m_isWasm(_isWasm),
     m_isAuthCheck(_isAuthCheck),
     m_storage(std::move(storage)),
-    m_hashImpl(_hashImpl)
-{}
+    m_hashImpl(std::move(_hashImpl)),
+    m_ledgerCache(std::move(ledgerCache)),
+    m_backendStorage(std::move(backendStorage))
+{
+    if (!m_storage)
+    {
+        EXECUTOR_LOG(WARNING) << "No available storage, make sure it's testing";
+        return;
+    }
+
+    task::syncWait(readFromStorage(m_features, *m_storage, m_blockNumber));
+}
 
 BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
-    crypto::Hash::Ptr _hashImpl, protocol::BlockHeader::ConstPtr _current,
-    const VMSchedule& _schedule, bool _isWasm, bool _isAuthCheck)
-  : BlockContext(storage, _hashImpl, _current->number(), _current->hash(), _current->timestamp(),
-        _current->version(), _schedule, _isWasm, _isAuthCheck)
-{}
+    LedgerCache::Ptr ledgerCache, crypto::Hash::Ptr _hashImpl, protocol::BlockHeader const& current,
+    const VMSchedule& _schedule, bool _isWasm, bool _isAuthCheck,
+    storage::StorageInterface::Ptr backendStorage,
+    std::shared_ptr<std::set<std::string, std::less<>>> _keyPageIgnoreTables)
+  : BlockContext(std::move(storage), std::move(ledgerCache), std::move(_hashImpl), current.number(),
+        current.hash(), current.timestamp(), current.version(), _schedule, _isWasm, _isAuthCheck,
+        std::move(backendStorage))
+{
+    if (current.number() > 0 && !current.parentInfo().empty())
+    {
+        auto view = current.parentInfo();
+        auto it = view.begin();
+        m_parentHash = (*it).blockHash;
+    }
+
+    m_keyPageIgnoreTables = std::move(_keyPageIgnoreTables);
+
+    auto table = m_storage->openTable(ledger::SYS_CONFIG);
+    if (table)
+    {
+        for (auto key : bcos::ledger::Features::featureKeys())
+        {
+            auto entry = table->getRow(key);
+            if (entry)
+            {
+                auto [value, enableNumber] = entry->getObject<ledger::SystemConfigEntry>();
+                if (current.number() >= enableNumber)
+                {
+                    m_features.set(key);
+                }
+            }
+        }
+    }
+}
 
 
 ExecutiveFlowInterface::Ptr BlockContext::getExecutiveFlow(std::string codeAddress)
@@ -85,4 +122,54 @@ void BlockContext::setExecutiveFlow(
 {
     bcos::ReadGuard l(x_executiveFlows);
     m_executiveFlows.emplace(codeAddress, executiveFlow);
+}
+
+void BlockContext::suicide(std::string_view contract2Suicide)
+{
+    {
+        bcos::WriteGuard l(x_suicides);
+        m_suicides.emplace(contract2Suicide);
+    }
+
+    EXECUTOR_LOG(TRACE) << LOG_BADGE("SUICIDE")
+                        << "Add suicide: " << LOG_KV("table2Suicide", contract2Suicide)
+                        << LOG_KV("suicides.size", m_suicides.size())
+                        << LOG_KV("blockNumber", m_blockNumber);
+}
+
+void BlockContext::killSuicides()
+{
+    bcos::ReadGuard l(x_suicides);
+    if (m_suicides.empty())
+    {
+        return;
+    }
+
+    auto emptyCodeHash = m_hashImpl->hash(""sv);
+    for (std::string_view table2Suicide : m_suicides)
+    {
+        auto contractTable = storage()->openTable(table2Suicide);
+
+        if (contractTable)
+        {
+            // set codeHash
+            bcos::storage::Entry emptyCodeHashEntry;
+            emptyCodeHashEntry.importFields({emptyCodeHash.asBytes()});
+            contractTable->setRow(ACCOUNT_CODE_HASH, std::move(emptyCodeHashEntry));
+
+            // delete binary
+            bcos::storage::Entry emptyCodeEntry;
+            emptyCodeEntry.importFields({""});
+            contractTable->setRow(ACCOUNT_CODE, std::move(emptyCodeEntry));
+        }
+
+        EXECUTOR_LOG(TRACE) << LOG_BADGE("SUICIDE")
+                            << "Kill contract: " << LOG_KV("contract2Suicide", table2Suicide)
+                            << LOG_KV("blockNumber", m_blockNumber);
+    }
+}
+
+const bcos::ledger::Features& bcos::executor::BlockContext::features() const
+{
+    return m_features;
 }

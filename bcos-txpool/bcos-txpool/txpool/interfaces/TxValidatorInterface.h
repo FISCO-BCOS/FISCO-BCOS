@@ -20,30 +20,24 @@
  */
 #pragma once
 #include "bcos-txpool/txpool/interfaces/NonceCheckerInterface.h"
+#include "bcos-txpool/txpool/validator/LedgerNonceChecker.h"
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-protocol/TransactionStatus.h>
-namespace bcos
-{
-namespace txpool
+namespace bcos::txpool
 {
 class TxValidatorInterface
 {
 public:
     using Ptr = std::shared_ptr<TxValidatorInterface>;
     TxValidatorInterface() = default;
-    virtual ~TxValidatorInterface() {}
+    virtual ~TxValidatorInterface() = default;
 
     virtual bcos::protocol::TransactionStatus verify(bcos::protocol::Transaction::ConstPtr _tx) = 0;
-    virtual bcos::protocol::TransactionStatus submittedToChain(
+    virtual bcos::protocol::TransactionStatus checkLedgerNonceAndBlockLimit(
         bcos::protocol::Transaction::ConstPtr _tx) = 0;
-    virtual NonceCheckerInterface::Ptr ledgerNonceChecker() { return m_ledgerNonceChecker; }
-    virtual void setLedgerNonceChecker(NonceCheckerInterface::Ptr _ledgerNonceChecker)
-    {
-        m_ledgerNonceChecker = _ledgerNonceChecker;
-    }
-
-protected:
-    NonceCheckerInterface::Ptr m_ledgerNonceChecker;
+    virtual bcos::protocol::TransactionStatus checkTxpoolNonce(
+        bcos::protocol::Transaction::ConstPtr _tx) = 0;
+    virtual LedgerNonceChecker::Ptr ledgerNonceChecker() = 0;
+    virtual void setLedgerNonceChecker(LedgerNonceChecker::Ptr _ledgerNonceChecker) = 0;
 };
-}  // namespace txpool
-}  // namespace bcos
+}  // namespace bcos::txpool

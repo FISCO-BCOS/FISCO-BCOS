@@ -30,21 +30,27 @@ BlockSyncFactory::BlockSyncFactory(bcos::crypto::PublicPtr _nodeId,
     bcos::ledger::LedgerInterface::Ptr _ledger, bcos::txpool::TxPoolInterface::Ptr _txpool,
     bcos::front::FrontServiceInterface::Ptr _frontService,
     bcos::scheduler::SchedulerInterface::Ptr _scheduler,
-    bcos::consensus::ConsensusInterface::Ptr _consensus)
-  : m_nodeId(_nodeId),
-    m_blockFactory(_blockFactory),
-    m_txResultFactory(_txResultFactory),
-    m_ledger(_ledger),
-    m_txpool(_txpool),
-    m_frontService(_frontService),
-    m_scheduler(_scheduler),
-    m_consensus(_consensus)
+    bcos::consensus::ConsensusInterface::Ptr _consensus,
+    bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance, bool _enableSendBlockStatusByTree,
+    std::uint32_t _syncTreeWidth)
+  : m_nodeId(std::move(_nodeId)),
+    m_blockFactory(std::move(_blockFactory)),
+    m_txResultFactory(std::move(_txResultFactory)),
+    m_ledger(std::move(_ledger)),
+    m_txpool(std::move(_txpool)),
+    m_frontService(std::move(_frontService)),
+    m_scheduler(std::move(_scheduler)),
+    m_consensus(std::move(_consensus)),
+    m_nodeTimeMaintenance(std::move(_nodeTimeMaintenance)),
+    m_enableSendBlockStatusByTree(_enableSendBlockStatusByTree),
+    m_syncTreeWidth(_syncTreeWidth)
 {}
 
 BlockSync::Ptr BlockSyncFactory::createBlockSync()
 {
     auto msgFactory = std::make_shared<BlockSyncMsgFactoryImpl>();
     auto syncConfig = std::make_shared<BlockSyncConfig>(m_nodeId, m_ledger, m_txpool,
-        m_blockFactory, m_txResultFactory, m_frontService, m_scheduler, m_consensus, msgFactory);
+        m_blockFactory, m_txResultFactory, m_frontService, m_scheduler, m_consensus, msgFactory,
+        m_nodeTimeMaintenance, m_enableSendBlockStatusByTree, m_syncTreeWidth);
     return std::make_shared<BlockSync>(syncConfig);
 }

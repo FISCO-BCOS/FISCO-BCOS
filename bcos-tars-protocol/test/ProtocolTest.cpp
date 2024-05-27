@@ -18,11 +18,12 @@
 #include <bcos-tars-protocol/protocol/TransactionSubmitResultImpl.h>
 #include <bcos-tars-protocol/tars/Block.h>
 #include <bcos-utilities/DataConvertUtility.h>
-#include <tbb/parallel_for.h>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <gsl/span>
 #include <memory>
+
+using namespace std::string_view_literals;
 
 namespace bcostars
 {
@@ -69,22 +70,33 @@ inline std::vector<bcos::bytes> fakeSealerList(
     return sealerList;
 }
 
+BOOST_AUTO_TEST_CASE(strAndLexical)
+{
+    bcos::u256 num(1234567890);
+
+    auto str1 = boost::lexical_cast<std::string>(num);
+    auto str2 = num.backend().str({}, {});
+
+    BOOST_CHECK_EQUAL(str1, str2);
+}
+
 BOOST_AUTO_TEST_CASE(transaction)
 {
     std::string to("Target");
     bcos::bytes input(bcos::asBytes("Arguments"));
-    bcos::u256 nonce(800);
+    std::string nonce("800");
 
     bcostars::protocol::TransactionFactoryImpl factory(cryptoSuite);
-    auto tx = factory.createTransaction(0, to, input, nonce, 100, "testChain", "testGroup", 1000,
-        cryptoSuite->signatureImpl()->generateKeyPair());
+    auto keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
+    auto tx = factory.createTransaction(
+        0, to, input, nonce, 100, "testChain", "testGroup", 1000, *keyPair);
 
-    tx->verify();
+    tx->verify(*cryptoSuite->hashImpl(), *cryptoSuite->signatureImpl());
     BOOST_CHECK(!tx->sender().empty());
     bcos::bytes buffer;
     tx->encode(buffer);
 
-    auto decodedTx = factory.createTransaction(buffer, true);
+    auto decodedTx = factory.createTransaction(bcos::ref(buffer), true);
 
     BOOST_CHECK_EQUAL(tx->hash(), decodedTx->hash());
     BOOST_CHECK_EQUAL(tx->version(), 0);
@@ -155,8 +167,8 @@ BOOST_AUTO_TEST_CASE(transactionReceipt)
     bcos::bytes output(bcos::asBytes("Output!"));
 
     bcostars::protocol::TransactionReceiptFactoryImpl factory(cryptoSuite);
-    auto receipt = factory.createReceipt(gasUsed, contractAddress,
-        std::make_shared<std::vector<bcos::protocol::LogEntry>>(*logEntries), 50, output, 888);
+    auto receipt =
+        factory.createReceipt(gasUsed, contractAddress, *logEntries, 50, bcos::ref(output), 888);
 
     bcos::bytes buffer;
     receipt->encode(buffer);
@@ -195,7 +207,7 @@ BOOST_AUTO_TEST_CASE(block)
 
     std::string to("Target");
     bcos::bytes input(bcos::asBytes("Arguments"));
-    bcos::u256 nonce(100);
+    std::string nonce("100");
 
     bcos::crypto::HashType stateRoot(bcos::asBytes("root1"));
     std::string contractAddress("contract Address!");
@@ -212,6 +224,7 @@ BOOST_AUTO_TEST_CASE(block)
 
     header->setSealerList(gsl::span<const bcos::bytes>(sealerList));
     BOOST_CHECK(header->sealerList().size() == 4);
+    header->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
 
     auto signatureList = std::make_shared<std::vector<bcos::protocol::Signature>>();
     for (int64_t i = 0; i < 2; i++)
@@ -224,21 +237,18 @@ BOOST_AUTO_TEST_CASE(block)
     }
     header->setSignatureList(*signatureList);
     BOOST_CHECK(header->signatureList().size() == 2);
-    header->hash();
     BOOST_CHECK(header->signatureList().size() == 2);
 
-    tbb::parallel_for(
-        tbb::blocked_range<size_t>(0, 50), [block](const tbb::blocked_range<size_t>& range) {
-            for (size_t i = range.begin(); i < range.end(); ++i)
-            {
-                auto constHeader = block->blockHeaderConst();
-                BOOST_CHECK(constHeader->signatureList().size() == 2);
-                std::cout << "### getHash:" << constHeader->hash().abridged() << std::endl;
+    for (size_t i = 0; i < 100; ++i)
+    {
+        auto constHeader = block->blockHeaderConst();
+        BOOST_CHECK(constHeader->signatureList().size() == 2);
+        std::cout << "### getHash:" << constHeader->hash().abridged() << std::endl;
 
-                auto header2 = block->blockHeader();
-                BOOST_CHECK(header2->signatureList().size() == 2);
-            }
-        });
+        auto header2 = block->blockHeader();
+        BOOST_CHECK(header2->signatureList().size() == 2);
+    }
+
     auto logEntries = std::make_shared<std::vector<bcos::protocol::LogEntry>>();
     for (auto i : {1, 2, 3})
     {
@@ -264,15 +274,15 @@ BOOST_AUTO_TEST_CASE(block)
             transaction->hash(), transaction->hash().abridged());
         block->appendTransactionMetaData(txMetaData);
 
-        auto receipt = transactionReceiptFactory->createReceipt(1000, contractAddress,
-            std::make_shared<std::vector<bcos::protocol::LogEntry>>(*logEntries), 50, output, i);
+        auto receipt = transactionReceiptFactory->createReceipt(
+            1000, contractAddress, *logEntries, 50, bcos::ref(output), i);
         block->appendReceipt(receipt);
     }
 
     bcos::bytes buffer;
     BOOST_CHECK_NO_THROW(block->encode(buffer));
 
-    auto decodedBlock = blockFactory->createBlock(buffer);
+    auto decodedBlock = blockFactory->createBlock(bcos::ref(buffer));
 
     BOOST_CHECK(decodedBlock->blockHeader()->sealerList().size() == header->sealerList().size());
     // ensure the sealerlist lifetime
@@ -312,7 +322,8 @@ BOOST_AUTO_TEST_CASE(block)
             // check if transaction hash re-encode
             bcos::bytes reencodeBuffer;
             rhs->encode(reencodeBuffer);
-            auto redecodeBlock = transactionFactory->createTransaction(reencodeBuffer, false);
+            auto redecodeBlock =
+                transactionFactory->createTransaction(bcos::ref(reencodeBuffer), false);
             BOOST_CHECK_EQUAL(redecodeBlock->hash().hex(), lhs->hash().hex());
 
             BOOST_CHECK_EQUAL(lhs->hash().hex(), rhs->hash().hex());
@@ -440,27 +451,39 @@ BOOST_AUTO_TEST_CASE(blockHeader)
     std::vector<bcos::protocol::ParentInfo> parentInfoList;
     parentInfoList.emplace_back(parentInfo);
 
-    header->setParentInfo(std::move(parentInfoList));
+    header->setParentInfo(parentInfoList);
+
+    auto headerImpl = std::dynamic_pointer_cast<bcostars::protocol::BlockHeaderImpl>(header);
+
+    BOOST_CHECK(headerImpl->inner().dataHash.empty());
 
     bcos::bytes buffer;
     header->encode(buffer);
 
+    // BOOST_CHECK_EQUAL(header->, decodedHeader->number());
+
     auto decodedHeader = blockHeaderFactory->createBlockHeader(buffer);
+
+    auto decodedBlockHeaderImpl =
+        std::dynamic_pointer_cast<bcostars::protocol::BlockHeaderImpl>(decodedHeader);
+
+    BOOST_CHECK(!decodedBlockHeaderImpl->inner().dataHash.empty());
 
     BOOST_CHECK_EQUAL(header->number(), decodedHeader->number());
     BOOST_CHECK_EQUAL(header->timestamp(), decodedHeader->timestamp());
     BOOST_CHECK_EQUAL(header->gasUsed(), decodedHeader->gasUsed());
     BOOST_CHECK_EQUAL(header->parentInfo().size(), decodedHeader->parentInfo().size());
-    for (auto i = 0u; i < decodedHeader->parentInfo().size(); ++i)
+    for (auto [originParentInfo, decodeParentInfo] :
+        RANGES::views::zip(header->parentInfo(), decodedHeader->parentInfo()))
     {
-        BOOST_CHECK_EQUAL(bcos::toString(header->parentInfo()[i].blockHash),
-            bcos::toString(decodedHeader->parentInfo()[i].blockHash));
         BOOST_CHECK_EQUAL(
-            header->parentInfo()[i].blockNumber, decodedHeader->parentInfo()[i].blockNumber);
+            bcos::toString(originParentInfo.blockHash), bcos::toString(decodeParentInfo.blockHash));
+        BOOST_CHECK_EQUAL(originParentInfo.blockNumber, decodeParentInfo.blockNumber);
     }
 
     BOOST_CHECK_NO_THROW(header->setExtraData(header->extraData().toBytes()));
 }
+
 
 BOOST_AUTO_TEST_CASE(emptyBlockHeader)
 {
@@ -480,10 +503,10 @@ BOOST_AUTO_TEST_CASE(emptyBlockHeader)
 
 BOOST_AUTO_TEST_CASE(submitResult)
 {
-    protocol::TransactionSubmitResultImpl submitResult(nullptr);
+    protocol::TransactionSubmitResultImpl submitResult;
     submitResult.setNonce(bcos::protocol::NonceType("1234567"));
 
-    BOOST_CHECK_EQUAL(submitResult.nonce().str(), "1234567");
+    BOOST_CHECK_EQUAL(submitResult.nonce(), "1234567");
 }
 
 BOOST_AUTO_TEST_CASE(tarsMovable)
@@ -619,7 +642,7 @@ BOOST_AUTO_TEST_CASE(testExecutionMessage)
     executionMsg->setType((bcos::protocol::ExecutionMessage::Type)type);
     executionMsg->transactionHash();
 
-    auto txsHash = cryptoSuite->hash("###abc");
+    auto txsHash = cryptoSuite->hash("###abc"sv);
     executionMsg->setTransactionHash(txsHash);
     int64_t contextID = 10000;
     executionMsg->setContextID(contextID);

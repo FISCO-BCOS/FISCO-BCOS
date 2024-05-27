@@ -23,27 +23,25 @@
 #include "../../vm/Precompiled.h"
 #include "bcos-executor/src/precompiled/common/Common.h"
 
-namespace bcos
-{
-namespace precompiled
+namespace bcos::precompiled
 {
 class CpuHeavyPrecompiled : public bcos::precompiled::Precompiled
 {
 public:
     using Ptr = std::shared_ptr<CpuHeavyPrecompiled>;
 
-    CpuHeavyPrecompiled(crypto::Hash::Ptr _hashImpl);
+    CpuHeavyPrecompiled(crypto::Hash::Ptr hashImpl);
 
-    virtual ~CpuHeavyPrecompiled(){};
+    ~CpuHeavyPrecompiled() override = default;
 
     std::shared_ptr<PrecompiledExecResult> call(
         std::shared_ptr<executor::TransactionExecutive> _executive,
         PrecompiledExecResult::Ptr _callParameters) override;
 
     // is this precompiled need parallel processing, default false.
-    virtual bool isParallelPrecompiled() override { return true; }
+    bool isParallelPrecompiled() override { return true; }
 
-    virtual std::vector<std::string> getParallelTag(bytesConstRef param, bool _isWasm) override
+    std::vector<std::string> getParallelTag(bytesConstRef param, bool _isWasm) override
     {
         (void)param;
         (void)_isWasm;
@@ -59,20 +57,17 @@ public:
     }
 
     static void registerPrecompiled(
-        std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
-            registeredMap,
-        crypto::Hash::Ptr _hashImpl)
+        executor::PrecompiledMap::Ptr const& registeredMap, crypto::Hash::Ptr hashImpl)
     {
         for (int id = 0; id < CPU_HEAVY_CONTRACT_NUM; id++)
         {
             std::string&& address = getAddress(id);
-            registeredMap->insert({std::move(address),
-                std::make_shared<precompiled::CpuHeavyPrecompiled>(_hashImpl)});
+            registeredMap->insert(
+                address, std::make_shared<precompiled::CpuHeavyPrecompiled>(hashImpl));
         }
         BCOS_LOG(TRACE) << LOG_BADGE("CpuHeavy") << "Register CpuHeavyPrecompiled complete"
                         << LOG_KV("addressFrom", getAddress(0))
                         << LOG_KV("addressTo", getAddress(CPU_HEAVY_CONTRACT_NUM - 1));
     }
 };
-}  // namespace precompiled
-}  // namespace bcos
+}  // namespace bcos::precompiled

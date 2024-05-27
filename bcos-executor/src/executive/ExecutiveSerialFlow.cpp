@@ -38,17 +38,39 @@ void ExecutiveSerialFlow::submit(std::shared_ptr<std::vector<CallParameters::Uni
 void ExecutiveSerialFlow::asyncRun(std::function<void(CallParameters::UniquePtr)> onTxReturn,
     std::function<void(bcos::Error::UniquePtr)> onFinished)
 {
-    asyncTo([this, onTxReturn = std::move(onTxReturn), onFinished = std::move(onFinished)]() {
-        try
-        {
-            run(onTxReturn, onFinished);
-        }
-        catch (std::exception& e)
-        {
-            onFinished(BCOS_ERROR_UNIQUE_PTR(ExecuteError::EXECUTE_ERROR,
-                "ExecutiveSerialFlow asyncRun exception:" + std::string(e.what())));
-        }
-    });
+    try
+    {
+        auto self = std::weak_ptr<ExecutiveSerialFlow>(shared_from_this());
+        asyncTo([self, onTxReturn = std::move(onTxReturn), onFinished = std::move(onFinished)]() {
+            try
+            {
+                auto flow = self.lock();
+                if (flow)
+                {
+                    flow->run(onTxReturn, onFinished);
+                }
+            }
+            catch (std::exception& e)
+            {
+                onFinished(BCOS_ERROR_UNIQUE_PTR(ExecuteError::EXECUTE_ERROR,
+                    "ExecutiveSerialFlow asyncRun exception:" + std::string(e.what())));
+            }
+        });
+    }
+    catch (std::exception const& e)
+    {
+        onFinished(BCOS_ERROR_UNIQUE_PTR(ExecuteError::EXECUTE_ERROR,
+            "ExecutiveSerialFlow asyncTo exception:" + std::string(e.what())));
+    }
+}
+
+std::shared_ptr<TransactionExecutive> ExecutiveSerialFlow::buildExecutive(
+    CallParameters::UniquePtr& input)
+{
+    bool isFeatureBalancePolicy1 =
+        m_executiveFactory->getBlockContext().features().get(ledger::Features::Flag::feature_balance_policy1);
+    return m_executiveFactory->build(input->codeAddress, input->contextID, input->seq,
+                isFeatureBalancePolicy1 ? ExecutiveType::billing : ExecutiveType::common);
 }
 
 void ExecutiveSerialFlow::run(std::function<void(CallParameters::UniquePtr)> onTxReturn,
@@ -68,6 +90,8 @@ void ExecutiveSerialFlow::run(std::function<void(CallParameters::UniquePtr)> onT
             if (!m_isRunning)
             {
                 EXECUTOR_LOG(DEBUG) << "ExecutiveSerialFlow has stopped during running";
+                onFinished(BCOS_ERROR_UNIQUE_PTR(
+                    ExecuteError::STOPPED, "ExecutiveSerialFlow has stopped during running"));
                 return;
             }
 
@@ -79,11 +103,11 @@ void ExecutiveSerialFlow::run(std::function<void(CallParameters::UniquePtr)> onT
                 continue;
             }
 
+            EXECUTOR_LOG(DEBUG) << "Serial execute tx start" << txInput->toString();
+
             auto seq = txInput->seq;
             // build executive
-            auto executive = m_executiveFactory->build(
-                txInput->codeAddress, txInput->contextID, txInput->seq, false);
-
+            auto executive = buildExecutive(txInput);
 
             // run evm
             CallParameters::UniquePtr output = executive->start(std::move(txInput));
@@ -93,6 +117,7 @@ void ExecutiveSerialFlow::run(std::function<void(CallParameters::UniquePtr)> onT
             output->seq = seq;
 
             // call back
+            EXECUTOR_LOG(DEBUG) << "Serial execute tx finish" << output->toString();
             onTxReturn(std::move(output));
         }
 
@@ -102,6 +127,6 @@ void ExecutiveSerialFlow::run(std::function<void(CallParameters::UniquePtr)> onT
     {
         EXECUTIVE_LOG(ERROR) << "ExecutiveSerialFlow run error: "
                              << boost::diagnostic_information(e);
-        onFinished(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "ExecutiveSerialFlow run error", e));
+        onFinished(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "ExecutiveSerialFlow run failed", e));
     }
 }

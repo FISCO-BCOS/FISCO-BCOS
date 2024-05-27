@@ -23,28 +23,24 @@
 #include <json/json.h>
 #include <algorithm>
 #include <unordered_map>
+#include <utility>
 
-
-namespace bcos
-{
-namespace cppsdk
-{
-namespace service
+namespace bcos::cppsdk::service
 {
 class HandshakeResponse
 {
 public:
     using Ptr = std::shared_ptr<HandshakeResponse>;
     using ConstPtr = std::shared_ptr<const HandshakeResponse>;
-    HandshakeResponse(bcos::group::GroupInfoCodec::Ptr _groupInfoCodec)
-      : m_groupInfoCodec(_groupInfoCodec)
+    explicit HandshakeResponse(bcos::group::GroupInfoCodec::Ptr _groupInfoCodec)
+      : m_groupInfoCodec(std::move(_groupInfoCodec))
     {}
-    virtual ~HandshakeResponse() {}
+    virtual ~HandshakeResponse() = default;
 
     virtual bool decode(std::string const& _data);
     virtual void encode(std::string& _encodedData) const;
 
-    int protocolVersion() const { return m_protocolVersion; }
+    uint32_t protocolVersion() const noexcept { return m_protocolVersion; }
     const std::vector<bcos::group::GroupInfo::Ptr>& groupInfoList() const
     {
         return m_groupInfoList;
@@ -69,10 +65,8 @@ private:
     std::unordered_map<std::string, int64_t> m_groupBlockNumber;
     bcos::group::GroupInfoCodec::Ptr m_groupInfoCodec;
     // Note: the nodes determine the protocol version
-    uint32_t m_protocolVersion;
+    uint32_t m_protocolVersion{};
     bcos::protocol::ProtocolInfo::Ptr m_localProtocol;
 };
 
-}  // namespace service
-}  // namespace cppsdk
-}  // namespace bcos
+}  // namespace bcos::cppsdk::service

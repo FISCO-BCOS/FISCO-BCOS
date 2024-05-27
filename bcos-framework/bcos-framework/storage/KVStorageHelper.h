@@ -8,7 +8,7 @@ class KVStorageHelper
 {
 public:
     KVStorageHelper(StorageInterface::Ptr storage) : m_storage(std::move(storage)) {}
-    ~KVStorageHelper() {}
+    ~KVStorageHelper() = default;
 
     void asyncGet(std::string_view _columnFamily, std::string_view _key,
         std::function<void(Error::UniquePtr, std::string_view value)> _callback)

@@ -44,23 +44,25 @@ public:
     ~LedgerServiceClient() override {}
 
     // TODO: implement this
-    void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr, bcos::protocol::TransactionsPtr,
-        bcos::protocol::Block::ConstPtr, std::function<void(bcos::Error::Ptr&&)>) override
+    void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr,
+        bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr,
+        std::function<void(std::string, bcos::Error::Ptr&&)>, bool) override
     {
-        BCOS_LOG(ERROR) << LOG_DESC("unimplement method asyncPrewriteBlock");
+        BCOS_LOG(ERROR) << LOG_DESC("unimplemented method asyncPrewriteBlock");
     }
 
-    void asyncPreStoreBlockTxs(bcos::protocol::TransactionsPtr, bcos::protocol::Block::ConstPtr,
-        std::function<void(bcos::Error::UniquePtr&&)>) override
+    void asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr,
+        bcos::protocol::Block::ConstPtr, std::function<void(bcos::Error::UniquePtr&&)>) override
     {
-        BCOS_LOG(ERROR) << LOG_DESC("unimplement method asyncPreStoreBlockTxs");
+        BCOS_LOG(ERROR) << LOG_DESC("unimplemented method asyncPreStoreBlockTxs");
     }
 
     // TODO: implement this
-    void asyncStoreTransactions(std::shared_ptr<std::vector<bcos::bytesConstPtr>>,
-        bcos::crypto::HashListPtr, std::function<void(bcos::Error::Ptr)>) override
+    bcos::Error::Ptr storeTransactionsAndReceipts(
+        bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr) override
     {
-        BCOS_LOG(ERROR) << LOG_DESC("unimplement method asyncStoreTransactions");
+        BCOS_LOG(ERROR) << LOG_DESC("unimplemented method");
+        return nullptr;
     }
 
     void asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber, int32_t _blockFlag,
@@ -88,6 +90,13 @@ public:
     void asyncGetTotalTransactionCount(std::function<void(bcos::Error::Ptr, int64_t _totalTxCount,
             int64_t _failedTxCount, bcos::protocol::BlockNumber _latestBlockNumber)>
             _callback) override;
+
+    virtual void asyncGetCurrentStateByKey(std::string_view const& _key,
+        std::function<void(bcos::Error::Ptr&&, std::optional<bcos::storage::Entry>&&)> _callback)
+        override
+    {
+        BCOS_LOG(ERROR) << LOG_DESC("unimplemented method asyncGetCurrentStateByKey");
+    }
 
     void asyncGetSystemConfigByKey(std::string_view const& _key,
         std::function<void(bcos::Error::Ptr, std::string, bcos::protocol::BlockNumber)>

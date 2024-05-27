@@ -47,7 +47,7 @@ public:
     {
         nextBlock(_number);
         bytes in = codec->encodeWithSig("openTable(string)", tableName);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 100, 10000, "1", "1");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(100), 10000, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -91,7 +91,7 @@ BOOST_AUTO_TEST_CASE(precompiled_gas_test)
 {
     // call precompiled gas overflow
     gas = 1;
-    BlockNumber number = 1;
+    bcos::protocol::BlockNumber number = 1;
     auto result = openTable(number++, "error_test");
     BOOST_CHECK(result->status() == (int32_t)TransactionStatus::OutOfGas);
 }

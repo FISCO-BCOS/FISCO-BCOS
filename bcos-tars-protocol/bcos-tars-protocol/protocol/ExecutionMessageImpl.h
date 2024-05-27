@@ -24,6 +24,10 @@
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
+// if windows, manual include tup/Tars.h first
+#ifdef _WIN32
+#include <tup/Tars.h>
+#endif
 #include <bcos-framework/executor/ExecutionMessage.h>
 #include <bcos-framework/protocol/LogEntry.h>
 #include <bcos-tars-protocol/tars/ExecutionMessage.h>
@@ -88,6 +92,37 @@ public:
     std::string_view abi() const override { return m_inner()->abi; }
     void setABI(std::string abi) override { m_inner()->abi = abi; }
 
+    // balance transfer
+    std::string_view value() const override { return m_inner()->value; }
+    void setValue(std::string value) override { m_inner()->value = value; }
+
+    std::string_view gasPrice() const override { return m_inner()->gasPrice; }
+    void setGasPrice(std::string gasPrice) override { m_inner()->gasPrice = gasPrice; }
+
+    int64_t gasLimit() const override { return m_inner()->gasLimit; }
+    void setGasLimit(int64_t gasLimit) override { m_inner()->gasLimit = gasLimit; }
+
+    std::string_view maxFeePerGas() const override { return m_inner()->maxFeePerGas; }
+    void setMaxFeePerGas(std::string maxFeePerGas) override
+    {
+        m_inner()->maxFeePerGas = maxFeePerGas;
+    }
+
+    std::string_view maxPriorityFeePerGas() const override
+    {
+        return m_inner()->maxPriorityFeePerGas;
+    }
+    void setMaxPriorityFeePerGas(std::string maxPriorityFeePerGas) override
+    {
+        m_inner()->maxPriorityFeePerGas = maxPriorityFeePerGas;
+    }
+
+    std::string_view effectiveGasPrice() const override { return m_inner()->effectiveGasPrice; }
+    void setEffectiveGasPrice(std::string effectiveGasPrice) override
+    {
+        m_inner()->effectiveGasPrice = effectiveGasPrice;
+    }
+
     int32_t depth() const override { return m_inner()->depth; }
     void setDepth(int32_t depth) override { m_inner()->depth = depth; }
 
@@ -149,6 +184,9 @@ public:
     int32_t status() const override { return m_inner()->status; }
     void setStatus(int32_t status) override { m_inner()->status = status; }
 
+    int32_t evmStatus() const override { return m_inner()->evmStatus; }
+    void setEvmStatus(int32_t evmStatus) override { m_inner()->evmStatus = evmStatus; }
+
     std::string_view message() const override { return m_inner()->message; }
     void setMessage(std::string message) override { m_inner()->message = message; }
 
@@ -170,6 +208,45 @@ public:
     gsl::span<bcos::protocol::LogEntry const> const logEntries() const override;
     std::vector<bcos::protocol::LogEntry> takeLogEntries() override;
     void setLogEntries(std::vector<bcos::protocol::LogEntry> logEntries) override;
+
+    bool delegateCall() const override { return m_inner()->delegateCall; }
+    void setDelegateCall(bool delegateCall) override { m_inner()->delegateCall = delegateCall; }
+
+    std::string_view delegateCallAddress() const override { return m_inner()->delegateCallAddress; }
+    void setDelegateCallAddress(std::string delegateCallAddress) override
+    {
+        m_inner()->delegateCallAddress = delegateCallAddress;
+    }
+
+
+    bcos::bytesConstRef delegateCallCode() const override
+    {
+        return bcos::bytesConstRef(
+            reinterpret_cast<const bcos::byte*>(m_inner()->delegateCallCode.data()),
+            m_inner()->delegateCallCode.size());
+    }
+
+    bcos::bytes takeDelegateCallCode() override
+    {
+        return bcos::bytes(m_inner()->delegateCallCode.begin(), m_inner()->delegateCallCode.end());
+    }
+    void setDelegateCallCode(bcos::bytes delegateCallCode) override
+    {
+        m_inner()->delegateCallCode.assign(delegateCallCode.begin(), delegateCallCode.end());
+    }
+
+
+    std::string_view delegateCallSender() const override { return m_inner()->delegateCallSender; }
+    void setDelegateCallSender(std::string delegateCallSender) override
+    {
+        m_inner()->delegateCallSender = delegateCallSender;
+    }
+
+    bool hasContractTableChanged() const override { return m_inner()->hasContractTableChanged; }
+    void setHasContractTableChanged(bool hasChanged) override
+    {
+        m_inner()->hasContractTableChanged = hasChanged;
+    }
 
     bcostars::ExecutionMessage inner() const { return *(m_inner()); }
 

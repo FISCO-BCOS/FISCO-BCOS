@@ -27,11 +27,7 @@
 #include <bcos-cpp-sdk/amop/TopicManager.h>
 #include <unordered_map>
 
-namespace bcos
-{
-namespace cppsdk
-{
-namespace amop
+namespace bcos::cppsdk::amop
 {
 class AMOP : public AMOPInterface
 {
@@ -136,6 +132,4 @@ private:
 
     std::shared_ptr<bcos::boostssl::ws::WsService> m_service;
 };
-}  // namespace amop
-}  // namespace cppsdk
-}  // namespace bcos
+}  // namespace bcos::cppsdk::amop

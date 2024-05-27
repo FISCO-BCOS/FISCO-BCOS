@@ -54,7 +54,7 @@ namespace std
 template <>
 struct hash<std::pair<std::string_view, std::string_view>>
 {
-    size_t operator()(const std::pair<std::string_view, std::string_view>& p) const
+    auto operator()(const std::pair<std::string_view, std::string_view>& p) const -> size_t
     {
         // calculate the hash result
         auto hash_result = std::hash<std::string_view>{}(p.first);
@@ -66,7 +66,7 @@ struct hash<std::pair<std::string_view, std::string_view>>
 template <>
 struct hash<std::pair<std::string, std::string>>
 {
-    size_t operator()(const std::pair<std::string, std::string>& p) const
+    auto operator()(const std::pair<std::string, std::string>& p) const -> size_t
     {
         // calculate the hash result
         auto hash_result = std::hash<std::string>{}(p.first);
@@ -89,22 +89,26 @@ class KeyPageStorage : public virtual storage::StateStorageInterface
 public:
     using Ptr = std::shared_ptr<KeyPageStorage>;
 
-    explicit KeyPageStorage(std::shared_ptr<StorageInterface> _prev, size_t _pageSize = 1024,
+    explicit KeyPageStorage(std::shared_ptr<StorageInterface> _prev, bool setRowWithDirtyFlag,
+        size_t _pageSize = 10240,
+        uint32_t _blockVersion = (uint32_t)bcos::protocol::BlockVersion::V3_0_VERSION,
         std::shared_ptr<const std::set<std::string, std::less<>>> _ignoreTables = nullptr,
         bool _ignoreNotExist = false)
-      : storage::StateStorageInterface(_prev),
+      : storage::StateStorageInterface(std::move(_prev)),
+        m_blockVersion(_blockVersion),
         m_pageSize(_pageSize > MIN_PAGE_SIZE ? _pageSize : MIN_PAGE_SIZE),
         m_splitSize(m_pageSize / 3 * 2),
         m_mergeSize(m_pageSize / 4),
         m_buckets(std::thread::hardware_concurrency()),
-        m_ignoreTables(_ignoreTables),
-        m_ignoreNotExist(_ignoreNotExist)
+        m_ignoreTables(std::move(_ignoreTables)),
+        m_ignoreNotExist(_ignoreNotExist),
+        m_setRowWithDirtyFlag(setRowWithDirtyFlag)
     {
-        if (!m_ignoreTables.get())
+        if (!m_ignoreTables)
         {
-            auto t = std::make_shared<std::set<std::string, std::less<>>>();
-            t->insert(std::string(SYS_TABLES));
-            m_ignoreTables = t;
+            auto ignore = std::make_shared<std::set<std::string, std::less<>>>();
+            ignore->insert(std::string(SYS_TABLES));
+            m_ignoreTables = ignore;
         }
     }
 
@@ -114,14 +118,10 @@ public:
     KeyPageStorage(KeyPageStorage&&) = delete;
     KeyPageStorage& operator=(KeyPageStorage&&) = delete;
 
-    virtual ~KeyPageStorage()
+    ~KeyPageStorage() override
     {
         m_recoder.clear();
-        // #pragma omp parallel for
-        for (size_t i = 0; i < m_buckets.size(); ++i)
-        {
-            m_buckets[i].container.clear();
-        }
+        m_buckets.clear();
     }
 
     void asyncGetPrimaryKeys(std::string_view table,
@@ -132,8 +132,9 @@ public:
         std::function<void(Error::UniquePtr, std::optional<Entry>)> _callback) override;
 
     void asyncGetRows(std::string_view tableView,
-        const std::variant<const gsl::span<std::string_view const>,
-            const gsl::span<std::string const>>& _keys,
+        RANGES::any_view<std::string_view,
+            RANGES::category::input | RANGES::category::random_access | RANGES::category::sized>
+            keys,
         std::function<void(Error::UniquePtr, std::vector<std::optional<Entry>>)> _callback)
         override;
 
@@ -144,7 +145,8 @@ public:
                                               const std::string_view& key, const Entry& entry)>
                                               callback) const override;
 
-    crypto::HashType hash(const bcos::crypto::Hash::Ptr& hashImpl) const override;
+    crypto::HashType hash(
+        const bcos::crypto::Hash::Ptr& hashImpl, const ledger::Features& features) const override;
 
     void rollback(const Recoder& recoder) override;
 
@@ -152,38 +154,63 @@ public:
     class PageInfo
     {  // all methods is not thread safe
     public:
-        bool operator<(const PageInfo& rhs) const { return m_data->pageKey < rhs.m_data->pageKey; }
-        PageInfo() {}
+        auto operator<(const PageInfo& rhs) const -> bool
+        {
+            return m_data->pageKey < rhs.m_data->pageKey;
+        }
+        PageInfo() = default;
+        ~PageInfo() = default;
         PageInfo(std::string _pageKey, uint16_t _count, uint16_t _size, Data* p)
           : m_data(std::make_shared<PageInfoData>(std::move(_pageKey), _count, _size)),
             m_pageData(p)
         {}
         PageInfo(PageInfo&&) = default;
-        PageInfo& operator=(PageInfo&&) = default;
-        PageInfo(const PageInfo& p) = default;
-        PageInfo& operator=(const PageInfo& p) = default;
+        auto operator=(PageInfo&&) -> PageInfo& = default;
+        PageInfo(const PageInfo& page) = default;
+        auto operator=(const PageInfo& page) -> PageInfo& = default;
 
         void setPageKey(std::string key)
         {
             prepareMyData();
             m_data->pageKey = std::move(key);
         }
-        std::string getPageKey() const { return m_data->pageKey; }
+        [[nodiscard]] auto getPageKey() const -> std::string
+        {
+            if (m_data)
+            {
+                return m_data->pageKey;
+            }
+            return {};
+        }
         void setCount(uint16_t _count)
         {
             prepareMyData();
             m_data->count = _count;
         }
-        uint16_t getCount() const { return m_data->count; }
+        [[nodiscard]] auto getCount() const -> uint16_t
+        {
+            if (m_data)
+            {
+                return m_data->count;
+            }
+            return 0;
+        }
         void setSize(uint16_t _size)
         {
             prepareMyData();
             m_data->size = _size;
         }
-        uint16_t getSize() const { return m_data->size; }
+        [[nodiscard]] auto getSize() const -> uint16_t
+        {
+            if (m_data)
+            {
+                return m_data->size;
+            }
+            return 0;
+        }
 
-        Data* getPageData() const { return m_pageData; }
-        void setPageData(Data* p) { m_pageData = p; }
+        [[nodiscard]] auto getPageData() const -> Data* { return m_pageData; }
+        void setPageData(Data* data) { m_pageData = data; }
 
     private:
         void prepareMyData()
@@ -196,7 +223,7 @@ public:
         }
         struct PageInfoData
         {
-            PageInfoData() {}
+            PageInfoData() = default;
             PageInfoData(std::string _endKey, uint16_t _count, uint16_t _size)
               : pageKey(std::move(_endKey)), count(_count), size(_size)
             {}
@@ -205,26 +232,26 @@ public:
             uint16_t count = 0;
             uint16_t size = 0;
         };
-        std::shared_ptr<PageInfoData> m_data = nullptr;
+        std::shared_ptr<PageInfoData> m_data = std::make_shared<PageInfoData>();
         Data* m_pageData = nullptr;
         friend class boost::serialization::access;
 
         template <class Archive>
-        void save(Archive& ar, const unsigned int version) const
+        void save(Archive& archive, const unsigned int version) const
         {
             std::ignore = version;
-            ar & m_data->pageKey;
-            ar & m_data->count;
-            ar & m_data->size;
+            archive & m_data->pageKey;
+            archive & m_data->count;
+            archive & m_data->size;
         }
         template <class Archive>
-        void load(Archive& ar, const unsigned int version)
+        void load(Archive& archive, const unsigned int version)
         {
             std::ignore = version;
             m_data = std::make_shared<PageInfoData>();
-            ar & m_data->pageKey;
-            ar & m_data->count;
-            ar & m_data->size;
+            archive & m_data->pageKey;
+            archive & m_data->count;
+            archive & m_data->size;
         }
         BOOST_SERIALIZATION_SPLIT_MEMBER()
     };
@@ -244,30 +271,34 @@ public:
             boost::archive::binary_iarchive archive(inputStream, ARCHIVE_FLAG);
             archive >> *this;
         }
-        TableMeta(const TableMeta& t)
+        TableMeta(const TableMeta& meta)
         {
             pages = std::make_unique<std::vector<PageInfo>>();
-            *pages = *t.pages;
+            pages->reserve(meta.pages->size());
+            auto readLock = meta.rLock();
+            *pages = *meta.pages;
         }
-        TableMeta& operator=(const TableMeta& t)
+        TableMeta& operator=(const TableMeta& meta)
         {
-            if (this != &t)
+            if (this != &meta)
             {
                 pages = std::make_unique<std::vector<PageInfo>>();
-                *pages = *t.pages;
+                pages->reserve(meta.pages->size());
+                auto readLock = meta.rLock();
+                *pages = *meta.pages;
             }
             return *this;
         }
-        TableMeta(TableMeta&& t) { pages = std::move(t.pages); }
-        TableMeta& operator=(TableMeta&& t)
+        TableMeta(TableMeta&& meta) noexcept : pages(std::move(meta.pages)) {}
+        TableMeta& operator=(TableMeta&& meta) noexcept
         {
-            if (this != &t)
+            if (this != &meta)
             {
-                pages = std::move(t.pages);
+                pages = std::move(meta.pages);
             }
             return *this;
         }
-        auto lower_bound(std::string_view key)
+        auto lower_bound(const std::string_view& key) const
         {
             return std::lower_bound(pages->begin(), pages->end(), key,
                 [](const PageInfo& lhs, const std::string_view& rhs) {
@@ -290,7 +321,7 @@ public:
             }
             if (lastPageInfoIndex < pages->size())
             {
-                auto lastPageInfo = &pages->at(lastPageInfoIndex);
+                auto* lastPageInfo = &pages->at(lastPageInfoIndex);
                 if (lastPageInfo->getPageData())
                 {
                     auto page = &std::get<0>(lastPageInfo->getPageData()->data);
@@ -316,7 +347,7 @@ public:
             return &pages->back();
         }
 
-        std::optional<std::string> getNextPageKeyNoLock(std::string_view key)
+        auto getNextPageKeyNoLock(std::string_view key) -> std::optional<std::string>
         {
             if (key.empty())
             {
@@ -366,7 +397,7 @@ public:
                         p->setPageData(nullptr);
                     }
                 }
-                if (c_fileLogLevel >= TRACE)
+                if (c_fileLogLevel <= TRACE)
                 {
                     KeyPage_LOG(TRACE)
                         << LOG_DESC("updatePageInfo")
@@ -392,10 +423,10 @@ public:
                 }
                 else
                 {
-                    KeyPage_LOG(FATAL)
-                        << LOG_DESC("updatePageInfo not found")
-                        << LOG_KV("oldEndKey", toHex(oldEndKey)) << LOG_KV("endKey", toHex(pageKey))
-                        << LOG_KV("valid", count) << LOG_KV("size", size);
+                    KeyPage_LOG(FATAL) << LOG_DESC("updatePageInfo not found")
+                                       << LOG_KV("oldEndKey", toHex(oldEndKey))
+                                       << LOG_KV("pageKey", toHex(pageKey))
+                                       << LOG_KV("valid", count) << LOG_KV("size", size);
                 }
             }
             return oldPageKey;
@@ -433,8 +464,9 @@ public:
                 it->setPageData(nullptr);
                 if (it->getCount() == 0 || it->getPageKey().empty())
                 {
-                    KeyPage_LOG(DEBUG) << LOG_DESC("TableMeta clean empty page")
-                                       << LOG_KV("pageKey", toHex(it->getPageKey()));
+                    KeyPage_LOG(DEBUG)
+                        << LOG_DESC("TableMeta clean empty page") << LOG_KV("size", pages->size())
+                        << LOG_KV("pageKey", toHex(it->getPageKey()));
                     it = pages->erase(it);
                 }
                 else
@@ -461,11 +493,19 @@ public:
             os << "]";
             return os;
         }
-        double hitRate() { return hit / (double)getPageInfoCount; }
+        double hitRate() const { return hit / (double)getPageInfoCount; }
+        uint64_t rowCount() const { return m_rows; }
+
+        bool pageExist(const std::string_view& pageKey) const
+        {
+            auto it = lower_bound(pageKey);
+            return it != pages->end() && it->getPageKey() == pageKey;
+        }
 
     private:
         uint32_t getPageInfoCount = 0;
         uint32_t hit = 0;
+        mutable uint64_t m_rows = 0;
         mutable std::shared_mutex mutex;
         std::unique_ptr<std::vector<PageInfo>> pages = nullptr;
         friend class boost::serialization::access;
@@ -485,6 +525,8 @@ public:
             //     ar & pages->at(i);
             // }
             int invalid = 0;
+            m_rows = 0;
+            auto writeLock = lock();
             for (auto it = pages->begin(); it != pages->end();)
             {
                 if (it->getCount() == 0 || it->getPageKey().empty())
@@ -498,6 +540,7 @@ public:
                 }
                 else
                 {
+                    m_rows += it->getCount();
                     ++it;
                 }
             }
@@ -546,13 +589,12 @@ public:
                 m_invalidPageKeys.insert(std::string(pageKey));
             }
         }
-        Page(const Page& p)
-        {
-            entries = p.entries;
-            m_size = p.m_size;
-            m_validCount = p.m_validCount;
-            m_invalidPageKeys = p.m_invalidPageKeys;
-        }
+        Page(const Page& page)
+          : entries(page.entries),
+            m_size(page.m_size),
+            m_validCount(page.m_validCount),
+            m_invalidPageKeys(page.m_invalidPageKeys)
+        {}
         Page& operator=(const Page& p)
         {
             if (this != &p)
@@ -564,7 +606,7 @@ public:
             }
             return *this;
         }
-        Page(Page&& p)
+        Page(Page&& p) noexcept
         {
             entries = std::move(p.entries);
             m_size = p.m_size;
@@ -589,8 +631,8 @@ public:
             auto it = entries.find(key);
             if (it != entries.end())
             {
-                // if (c_fileLogLevel >= bcos::LogLevel::TRACE)
-                // {  // FIXME: this log is only for debug, comment it when release
+                // if (c_fileLogLevel <= bcos::LogLevel::TRACE)
+                // {  // this log is only for debug, comment it when release
                 //     KeyPage_LOG(TRACE)
                 //         << LOG_DESC("getEntry") << LOG_KV("pageKey",
                 //         toHex(entries.begin()->first))
@@ -606,8 +648,8 @@ public:
             }
             else
             {
-                // if (c_fileLogLevel >= bcos::LogLevel::TRACE)
-                // {  // FIXME: this log is only for debug, comment it when release
+                // if (c_fileLogLevel <= bcos::LogLevel::TRACE)
+                // {  // this log is only for debug, comment it when release
                 //     KeyPage_LOG(TRACE)
                 //         << LOG_DESC("getEntry not found")
                 //         << LOG_KV(
@@ -627,7 +669,7 @@ public:
         }
         inline std::tuple<std::optional<Entry>, bool> setEntry(
             const std::string_view& key, Entry&& entry)
-        {  // TODO: do not exist entry optimization: insert a empty entry to cache, then
+        {  // do not exist entry optimization: insert a empty entry to cache, then
             // entry status none should return null optional
             bool pageInfoChanged = false;
             std::optional<Entry> ret;
@@ -643,6 +685,7 @@ public:
                     {
                         ++m_validCount;
                         pageInfoChanged = true;
+                        m_size += it->first.size();
                     }
                 }
                 else
@@ -651,6 +694,8 @@ public:
                     {
                         --m_validCount;
                         pageInfoChanged = true;
+                        m_size -= entry.size();
+                        m_size -= it->first.size();
                     }
                 }
                 if (m_invalidPageKeys.size() == 1)
@@ -659,8 +704,8 @@ public:
                 }
                 ret = std::move(it->second);
                 it->second = std::move(entry);
-                // if (c_fileLogLevel >= bcos::LogLevel::TRACE)
-                // {  // FIXME: this log is only for debug, comment it when release
+                // if (c_fileLogLevel <= bcos::LogLevel::TRACE)
+                // {  // this log is only for debug, comment it when release
                 //     KeyPage_LOG(TRACE)
                 //         << LOG_DESC("setEntry update")
                 //         << LOG_KV("pageKey", toHex(entries.rbegin()->first))
@@ -673,10 +718,15 @@ public:
             else
             {
                 pageInfoChanged = true;
-                m_size += key.size();
+
                 if (entry.status() != Entry::Status::DELETED)
                 {
                     ++m_validCount;
+                    m_size += key.size();
+                }
+                else
+                {
+                    m_size -= entry.size();
                 }
                 if (entries.empty() || key > entries.rbegin()->first)
                 {
@@ -693,8 +743,8 @@ public:
                     }
                 }
                 entries.insert(it, std::make_pair(std::string(key), std::move(entry)));
-                // if (c_fileLogLevel >= bcos::LogLevel::TRACE)
-                // {  // FIXME: this log is only for debug, comment it when release
+                // if (c_fileLogLevel <= bcos::LogLevel::TRACE)
+                // {  // this log is only for debug, comment it when release
                 //     KeyPage_LOG(TRACE) << LOG_DESC("setEntry insert")
                 //                        << LOG_KV("pageKey", toHex(entries.rbegin()->first))
                 //                        << LOG_KV("key", toHex(key)) << LOG_KV("valid",
@@ -705,28 +755,28 @@ public:
             }
             return std::make_tuple(std::move(ret), pageInfoChanged);
         }
-        size_t size() const
+        auto size() const -> size_t
         {
             std::shared_lock lock(mutex);
             return m_size;
         }
-        size_t validCount() const
+        auto validCount() const -> size_t
         {
             std::shared_lock lock(mutex);
             return m_validCount;
         }
-        size_t count() const
+        auto count() const -> size_t
         {
             std::shared_lock lock(mutex);
             return entries.size();
         }
-        const std::set<std::string>& invalidKeySet() const
+        auto invalidKeySet() const -> const std::set<std::string>&
         {
             std::shared_lock lock(mutex);
             return m_invalidPageKeys;
         }
-        size_t invalidKeyCount() const { return m_invalidPageKeys.size(); }
-        std::string startKey() const
+        auto invalidKeyCount() const -> size_t { return m_invalidPageKeys.size(); }
+        auto startKey() const -> std::string
         {
             std::shared_lock lock(mutex);
             if (entries.empty())
@@ -840,10 +890,10 @@ public:
             m_invalidPageKeys.clear();
             if (!entries.empty() && pageKey != entries.rbegin()->first)
             {
-                KeyPage_LOG(WARNING) << LOG_DESC("import page with invalid pageKey")
-                                     << LOG_KV("pageKey", toHex(pageKey))
-                                     << LOG_KV("validPageKey", toHex(entries.rbegin()->first))
-                                     << LOG_KV("count", entries.size());
+                KeyPage_LOG(DEBUG) << LOG_DESC("import page with invalid pageKey")
+                                   << LOG_KV("pageKey", toHex(pageKey))
+                                   << LOG_KV("validPageKey", toHex(entries.rbegin()->first))
+                                   << LOG_KV("count", entries.size());
                 m_invalidPageKeys.insert(std::string(pageKey));
             }
             if (entries.empty())
@@ -853,19 +903,27 @@ public:
                     << LOG_KV("count", entries.size());
             }
         }
-        crypto::HashType hash(
-            const std::string& table, const bcos::crypto::Hash::Ptr& hashImpl) const
+        auto hash(const std::string& table, const bcos::crypto::Hash::Ptr& hashImpl,
+            uint32_t blockVersion) const -> crypto::HashType
         {
             bcos::crypto::HashType pageHash(0);
             auto hash = hashImpl->hash(table);
             // std::shared_lock lock(mutex);
-            for (auto iter = entries.cbegin(); iter != entries.cend(); ++iter)
+            for (const auto& entry : entries)
             {
-                if (iter->second.dirty())
+                if (entry.second.dirty())
                 {
-                    auto entryHash = hash ^ hashImpl->hash(iter->first) ^
-                                     iter->second.hash(table, iter->first, hashImpl);
-                    // if (c_fileLogLevel >= TRACE)
+                    bcos::crypto::HashType entryHash(0);
+                    if (blockVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+                    {
+                        entryHash = entry.second.hash(table, entry.first, *hashImpl, blockVersion);
+                    }
+                    else
+                    {  // 3.0.0
+                        entryHash = hash ^ hashImpl->hash(entry.first) ^
+                                    entry.second.hash(table, entry.first, *hashImpl, blockVersion);
+                    }
+                    // if (c_fileLogLevel <= TRACE)
                     // {
                     //     KeyPage_LOG(TRACE)
                     //         << "Storage hash: " << LOG_KV("table", table)
@@ -886,7 +944,7 @@ public:
             {
                 if (it != entries.end())
                 {  // update
-                    if (c_fileLogLevel >= bcos::LogLevel::TRACE)
+                    if (c_fileLogLevel <= bcos::LogLevel::TRACE)
                     {
                         KeyPage_LOG(TRACE)
                             << "Revert update: " << change.table << " | " << toHex(change.key)
@@ -903,12 +961,12 @@ public:
                         --m_validCount;
                     }
                     m_size -= it->second.size();
-                    it->second = std::move(*change.entry);
+                    it->second = *change.entry;
                     m_size += it->second.size();
                 }
                 else
                 {  // delete, should not happen?
-                    if (c_fileLogLevel >= bcos::LogLevel::TRACE)
+                    if (c_fileLogLevel <= bcos::LogLevel::TRACE)
                     {
                         KeyPage_LOG(TRACE)
                             << "Revert delete: " << change.table << " | " << toHex(change.key)
@@ -926,7 +984,7 @@ public:
             {  // rollback insert
                 if (it != entries.end())
                 {  // insert or update
-                    if (c_fileLogLevel >= bcos::LogLevel::TRACE)
+                    if (c_fileLogLevel <= bcos::LogLevel::TRACE)
                     {
                         KeyPage_LOG(TRACE)
                             << "Revert insert: " << change.table << " | " << toHex(change.key);
@@ -955,8 +1013,10 @@ public:
                 }
             }
         }
-        std::unique_lock<std::shared_mutex> lock() { return std::unique_lock(mutex); }
-        std::shared_lock<std::shared_mutex> rLock() { return std::shared_lock(mutex); }
+        auto lock() -> std::unique_lock<std::shared_mutex> { return std::unique_lock(mutex); }
+        auto rLock() -> std::shared_lock<std::shared_mutex> { return std::shared_lock(mutex); }
+        void setTableMeta(TableMeta* _meta) { m_meta = _meta; }
+        TableMeta* myTableMeta() { return m_meta; }
 
     private:
         //   PageInfo* pageInfo;
@@ -967,20 +1027,22 @@ public:
         friend class boost::serialization::access;
         // if startKey changed the old startKey need keep to delete old page
         std::set<std::string> m_invalidPageKeys;
+        TableMeta* m_meta = nullptr;
+
         template <class Archive>
         void save(Archive& ar, const unsigned int version) const
         {
             std::ignore = version;
             ar&(uint32_t)m_validCount;
-            size_t count = 0;
-            for (auto& i : entries)
+            [[maybe_unused]] size_t count = 0;
+            for (const auto& i : entries)
             {
                 if (i.second.status() == Entry::Status::DELETED)
                 {  // skip deleted entry
                     continue;
                 }
                 ++count;
-                ar& i.first;
+                ar & i.first;
                 auto value = i.second.get();
                 ar&(uint32_t)value.size();
                 ar.save_binary(value.data(), value.size());
@@ -992,15 +1054,15 @@ public:
         {
             std::ignore = version;
             uint32_t count = 0;
-            ar& count;
+            ar & count;
             m_validCount = count;
             auto iter = entries.begin();
             for (size_t i = 0; i < m_validCount; ++i)
             {
                 std::string key;
-                ar& key;
+                ar & key;
                 uint32_t len = 0;
-                ar& len;
+                ar & len;
                 m_size += len;
                 m_size += key.size();
                 auto value = std::make_shared<std::vector<uint8_t>>(len, 0);
@@ -1022,7 +1084,7 @@ public:
             TableMeta = 1,
             NormalEntry = 2,
         };
-        Data(){};
+        Data() = default;
         ~Data() = default;
         Data(std::string _table, std::string _key, Entry _entry, Type _type)
           : table(std::move(_table)), key(std::move(_key)), type(_type), entry(std::move(_entry))
@@ -1030,7 +1092,7 @@ public:
             if (type == Type::TableMeta)
             {
                 auto meta = KeyPageStorage::TableMeta(entry.get());
-                if (c_fileLogLevel >= TRACE)
+                if (c_fileLogLevel <= TRACE)
                 {
                     KeyPage_LOG(TRACE) << LOG_DESC("Data TableMeta") << LOG_KV("table", table)
                                        << LOG_KV("len", entry.size()) << LOG_KV("size", meta.size())
@@ -1041,7 +1103,7 @@ public:
             else if (type == Type::Page)
             {
                 auto page = KeyPageStorage::Page(entry.get(), key);
-                if (c_fileLogLevel >= TRACE)
+                if (c_fileLogLevel <= TRACE)
                 {
                     KeyPage_LOG(TRACE)
                         << LOG_DESC("Data Page") << LOG_KV("table", table)
@@ -1056,6 +1118,22 @@ public:
             {  // sys table entry
             }
         };
+        KeyPageStorage::Page* getPage()
+        {
+            if (type == Type::Page)
+            {
+                return &std::get<0>(data);
+            }
+            return nullptr;
+        }
+        KeyPageStorage::TableMeta* getTableMeta()
+        {
+            if (type == Type::TableMeta)
+            {
+                return &std::get<1>(data);
+            }
+            return nullptr;
+        }
         Data(const Data& d) = default;
         Data& operator=(const Data& d) = default;
         Data(Data&& d) = default;
@@ -1073,8 +1151,7 @@ public:
 
     struct Bucket
     {
-        Bucket() {}
-        ~Bucket() = default;
+        Bucket() = default;
         std::unordered_map<std::pair<std::string, std::string>, std::shared_ptr<Data>> container;
         std::shared_mutex mutex;
         std::optional<Data*> find(std::string_view table, std::string_view key)
@@ -1098,7 +1175,9 @@ public:
         auto it = bucket->container.find(std::make_pair(std::string(table), std::string(key)));
         if (it != bucket->container.end())
         {
-            return std::make_optional(std::make_shared<Data>(*it->second));
+            // copy data also need clean
+            auto data = std::make_shared<Data>(*it->second);
+            return std::make_optional(std::move(data));
         }
         auto prevKeyPage = std::dynamic_pointer_cast<bcos::storage::KeyPageStorage>(getPrev());
         if (prevKeyPage)
@@ -1110,10 +1189,10 @@ public:
         {
             KeyPage_LOG(ERROR) << LOG_DESC("getData error") << LOG_KV("table", table)
                                << LOG_KV("key", toHex(key))
-                               << LOG_KV("error", error->errorMessage());
+                               << LOG_KV("message", error->errorMessage());
             return std::nullopt;
         }
-        if (c_fileLogLevel >= TRACE)
+        if (c_fileLogLevel <= TRACE)
         {
             KeyPage_LOG(TRACE) << LOG_DESC("get data from storage") << LOG_KV("table", table)
                                << LOG_KV("key", toHex(key))
@@ -1127,14 +1206,15 @@ public:
         }
         return std::nullopt;
     }
+    virtual std::pair<size_t, Error::Ptr> count(const std::string_view& table) override;
 
 private:
-    std::shared_ptr<StorageInterface> getPrev()
+    auto getPrev() -> std::shared_ptr<StorageInterface>
     {
         std::shared_lock<std::shared_mutex> lock(m_prevMutex);
         return m_prev;
     }
-    size_t getBucketIndex(std::string_view table, std::string_view key) const
+    auto getBucketIndex(std::string_view table, std::string_view key) const -> size_t
     {
         auto hash = std::hash<std::string_view>{}(table);
         std::ignore = key;
@@ -1143,8 +1223,8 @@ private:
         return hash % m_buckets.size();
     }
 
-    Data* changePageKey(std::string table, const std::string& oldPageKey,
-        const std::string& newPageKey, bool isRevert = false)
+    auto changePageKey(std::string table, const std::string& oldPageKey,
+        const std::string& newPageKey, bool isRevert = false) -> Data*
     {
         if (newPageKey.empty() && !isRevert)
         {
@@ -1156,14 +1236,14 @@ private:
 
         auto [bucket, lock] = getMutBucket(table, oldPageKey);
         boost::ignore_unused(lock);
-        auto n = bucket->container.extract(std::make_pair(table, oldPageKey));
-        auto page = &std::get<0>(n.mapped()->data);
+        auto node = bucket->container.extract(std::make_pair(table, oldPageKey));
+        auto* page = &std::get<0>(node.mapped()->data);
         KeyPage_LOG(DEBUG) << LOG_DESC("changePageKey") << LOG_KV("table", table)
                            << LOG_KV("oldPageKey", toHex(oldPageKey))
                            << LOG_KV("newPageKey", toHex(newPageKey))
                            << LOG_KV("validCount", page->validCount());
-        n.key().second = newPageKey;
-        n.mapped()->key = newPageKey;
+        node.key().second = newPageKey;
+        node.mapped()->key = newPageKey;
         if (newPageKey.empty())
         {
             return nullptr;
@@ -1173,7 +1253,7 @@ private:
         {  // erase old page to update data
             bucket->container.erase(it);
         }
-        auto ret = bucket->container.insert(std::move(n));
+        auto ret = bucket->container.insert(std::move(node));
         assert(ret.inserted);
         return ret.position->second.get();
         // the bucket also need to be updated
@@ -1231,15 +1311,17 @@ private:
     std::pair<Error::UniquePtr, std::optional<Entry>> getEntryFromPage(
         std::string_view table, std::string_view key);
     Error::UniquePtr setEntryToPage(std::string table, std::string key, Entry entry);
-
+    uint32_t m_blockVersion = 0;
     size_t m_pageSize = 8 * 1024;
     size_t m_splitSize;
     size_t m_mergeSize;
     std::atomic_uint64_t m_readLength{0};
     std::atomic_uint64_t m_writeLength{0};
+    mutable std::atomic_uint64_t m_size{0};
     std::vector<Bucket> m_buckets;
     std::shared_ptr<const std::set<std::string, std::less<>>> m_ignoreTables;
     bool m_ignoreNotExist = false;
+    bool m_setRowWithDirtyFlag = false;
 };
 
 }  // namespace bcos::storage

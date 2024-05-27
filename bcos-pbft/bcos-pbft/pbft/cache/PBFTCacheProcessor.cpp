@@ -22,15 +22,24 @@
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <boost/bind/bind.hpp>
+#include <utility>
 
 using namespace bcos;
 using namespace bcos::consensus;
 using namespace bcos::protocol;
 using namespace bcos::crypto;
 
+void PBFTCacheProcessor::tryToResendCheckPoint()
+{
+    for (auto const& cache : m_caches)
+    {
+        cache.second->onCheckPointTimeout();
+    }
+}
+
 void PBFTCacheProcessor::initState(PBFTProposalList const& _proposals, NodeIDPtr _fromNode)
 {
-    for (auto proposal : _proposals)
+    for (const auto& proposal : _proposals)
     {
         // the proposal has already been committed
         if (proposal->index() <= m_config->committedProposal()->index())
@@ -58,7 +67,7 @@ void PBFTCacheProcessor::loadAndVerifyProposal(
         return;
     }
     // Note: to fetch the remote proposal(the from node hits all transactions)
-    auto self = std::weak_ptr<PBFTCacheProcessor>(shared_from_this());
+    auto self = weak_from_this();
     m_config->validator()->verifyProposal(_fromNode, _proposal,
         [self, _fromNode, _proposal, _retryTime](Error::Ptr _error, bool _verifyResult) {
             try
@@ -103,7 +112,7 @@ void PBFTCacheProcessor::loadAndVerifyProposal(
             {
                 PBFT_LOG(WARNING) << LOG_DESC("loadAndVerifyProposal exception")
                                   << printPBFTProposal(_proposal)
-                                  << LOG_KV("error", boost::diagnostic_information(e));
+                                  << LOG_KV("msg", boost::diagnostic_information(e));
             }
         });
 }
@@ -112,7 +121,7 @@ void PBFTCacheProcessor::addPrePrepareCache(PBFTMessageInterface::Ptr _prePrepar
 {
     addCache(m_caches, _prePrepareMsg,
         [](PBFTCache::Ptr _pbftCache, PBFTMessageInterface::Ptr proposal) {
-            _pbftCache->addPrePrepareCache(proposal);
+            _pbftCache->addPrePrepareCache(std::move(proposal));
         });
     // notify the consensusing proposal index to the sync module
     notifyMaxProposalIndex(_prePrepareMsg->index());
@@ -120,6 +129,13 @@ void PBFTCacheProcessor::addPrePrepareCache(PBFTMessageInterface::Ptr _prePrepar
 
 void PBFTCacheProcessor::notifyMaxProposalIndex(bcos::protocol::BlockNumber _proposalIndex)
 {
+    // Note: should not notifyMaxProposalIndex when timeout-state, in-case of reset the
+    // committedProposalNumber of the sync-module with higher blockNumber than latest block, which
+    // will stop the node to syncing the latest block from other nodes
+    if (m_config->timeout())
+    {
+        return;
+    }
     // notify the consensusing proposal index to the sync module
     if (m_maxNotifyIndex < _proposalIndex)
     {
@@ -128,19 +144,19 @@ void PBFTCacheProcessor::notifyMaxProposalIndex(bcos::protocol::BlockNumber _pro
     }
 }
 
-bool PBFTCacheProcessor::existPrePrepare(PBFTMessageInterface::Ptr _prePrepareMsg)
+bool PBFTCacheProcessor::existPrePrepare(PBFTMessageInterface::Ptr const& _prePrepareMsg) const
 {
-    if (!m_caches.count(_prePrepareMsg->index()))
+    if (!m_caches.contains(_prePrepareMsg->index()))
     {
         return false;
     }
-    auto pbftCache = m_caches[_prePrepareMsg->index()];
+    auto pbftCache = m_caches.at(_prePrepareMsg->index());
     return pbftCache->existPrePrepare(_prePrepareMsg);
 }
 
 bool PBFTCacheProcessor::tryToFillProposal(PBFTMessageInterface::Ptr _prePrepareMsg)
 {
-    if (!m_caches.count(_prePrepareMsg->index()))
+    if (!m_caches.contains(_prePrepareMsg->index()))
     {
         return false;
     }
@@ -161,23 +177,24 @@ bool PBFTCacheProcessor::tryToFillProposal(PBFTMessageInterface::Ptr _prePrepare
     return true;
 }
 
-bool PBFTCacheProcessor::conflictWithProcessedReq(PBFTMessageInterface::Ptr _msg)
+bool PBFTCacheProcessor::conflictWithProcessedReq(PBFTMessageInterface::Ptr const& _msg) const
 {
-    if (!m_caches.count(_msg->index()))
+    if (!m_caches.contains(_msg->index()))
     {
         return false;
     }
-    auto pbftCache = m_caches[_msg->index()];
+    auto pbftCache = m_caches.at(_msg->index());
     return pbftCache->conflictWithProcessedReq(_msg);
 }
 
-bool PBFTCacheProcessor::conflictWithPrecommitReq(PBFTMessageInterface::Ptr _prePrepareMsg)
+bool PBFTCacheProcessor::conflictWithPrecommitReq(
+    PBFTMessageInterface::Ptr const& _prePrepareMsg) const
 {
-    if (!m_caches.count(_prePrepareMsg->index()))
+    if (!m_caches.contains(_prePrepareMsg->index()))
     {
         return false;
     }
-    auto pbftCache = m_caches[_prePrepareMsg->index()];
+    auto pbftCache = m_caches.at(_prePrepareMsg->index());
     return pbftCache->conflictWithPrecommitReq(_prePrepareMsg);
 }
 
@@ -186,7 +203,7 @@ void PBFTCacheProcessor::addCache(
 
 {
     auto index = _pbftReq->index();
-    if (!(_pbftCache.count(index)))
+    if (!_pbftCache.contains(index))
     {
         _pbftCache[index] = m_cacheFactory->createPBFTCache(m_config, index,
             boost::bind(
@@ -197,14 +214,14 @@ void PBFTCacheProcessor::addCache(
 
 void PBFTCacheProcessor::checkAndPreCommit()
 {
-    for (auto const& it : m_caches)
+    for (auto const& cache : m_caches)
     {
-        auto ret = it.second->checkAndPreCommit();
+        auto ret = cache.second->checkAndPreCommit();
         if (!ret)
         {
             continue;
         }
-        updateCommitQueue(it.second->preCommitCache()->consensusProposal());
+        updateCommitQueue(cache.second->preCommitCache()->consensusProposal());
         // refresh the timer when commit success
         m_config->timer()->restart();
         m_config->resetToView();
@@ -214,14 +231,14 @@ void PBFTCacheProcessor::checkAndPreCommit()
 
 void PBFTCacheProcessor::checkAndCommit()
 {
-    for (auto const& it : m_caches)
+    for (auto const& cache : m_caches)
     {
-        auto ret = it.second->checkAndCommit();
+        auto ret = cache.second->checkAndCommit();
         if (!ret)
         {
             continue;
         }
-        updateCommitQueue(it.second->preCommitCache()->consensusProposal());
+        updateCommitQueue(cache.second->preCommitCache()->consensusProposal());
         // refresh the timer when commit success
         m_config->timer()->restart();
         m_config->resetToView();
@@ -231,9 +248,9 @@ void PBFTCacheProcessor::checkAndCommit()
 
 void PBFTCacheProcessor::resetTimer()
 {
-    for (auto const& it : m_caches)
+    for (auto const& cache : m_caches)
     {
-        if (!it.second->shouldStopTimer())
+        if (!cache.second->shouldStopTimer())
         {
             // start the timer when there has proposals in consensus
             if (!m_config->timer()->running())
@@ -251,11 +268,16 @@ void PBFTCacheProcessor::resetTimer()
 void PBFTCacheProcessor::updateCommitQueue(PBFTProposalInterface::Ptr _committedProposal)
 {
     assert(_committedProposal);
-    if (m_executingProposals.count(_committedProposal->hash()))
+    if (m_executingProposals.contains(_committedProposal->hash()))
     {
         return;
     }
+    // the proposal has already been committed
     auto proposalIndex = _committedProposal->index();
+    if (proposalIndex <= m_config->committedProposal()->index())
+    {
+        return;
+    }
     notifyMaxProposalIndex(proposalIndex);
     m_committedQueue.push(_committedProposal);
     m_committedProposalList.insert(proposalIndex);
@@ -306,7 +328,7 @@ ProposalInterface::ConstPtr PBFTCacheProcessor::getAppliedCheckPointProposal(
         return m_config->committedProposal();
     }
 
-    if (!(m_caches.count(_index)))
+    if (!m_caches.contains(_index))
     {
         return nullptr;
     }
@@ -315,7 +337,8 @@ ProposalInterface::ConstPtr PBFTCacheProcessor::getAppliedCheckPointProposal(
 
 bool PBFTCacheProcessor::tryToPreApplyProposal(ProposalInterface::Ptr _proposal)
 {
-    m_config->stateMachine()->asyncPreApply(_proposal, [](bool success) { (void)success; });
+    m_config->stateMachine()->asyncPreApply(
+        std::move(_proposal), [](bool success) { (void)success; });
 
     return true;
 }
@@ -353,7 +376,7 @@ bool PBFTCacheProcessor::tryToApplyCommitQueue()
                               << m_config->printCurrentState();
             return false;
         }
-        if (m_executingProposals.count(proposal->hash()))
+        if (m_executingProposals.contains(proposal->hash()))
         {
             m_config->timer()->restart();
             PBFT_LOG(INFO) << LOG_DESC("the proposal is executing, not executed again")
@@ -378,15 +401,20 @@ void PBFTCacheProcessor::notifyToSealNextBlock()
     // the block
     auto committedIndex = m_config->committedProposal()->index();
     bcos::protocol::BlockNumber lastIndex = committedIndex;
-    for (auto const& it : m_proposalsToStableConsensus)
+    for (auto const& proposalIndex : m_proposalsToStableConsensus)
     {
-        if (lastIndex + 1 < it)
+        if (proposalIndex <= committedIndex)
+        {
+            lastIndex = proposalIndex;
+            continue;
+        }
+        if (lastIndex + 1 < proposalIndex)
         {
             break;
         }
-        lastIndex = it;
+        lastIndex = proposalIndex;
     }
-    auto nextProposalIndex = lastIndex + 1;
+    auto nextProposalIndex = std::max(lastIndex + 1, committedIndex + 1);
     m_config->notifySealer(nextProposalIndex);
     PBFT_LOG(INFO) << LOG_DESC("notify to seal next proposal")
                    << LOG_KV("nextProposalIndex", nextProposalIndex);
@@ -400,10 +428,11 @@ void PBFTCacheProcessor::applyStateMachine(
                    << LOG_KV("hash", _proposal->hash().abridged()) << m_config->printCurrentState()
                    << LOG_KV("unAppliedProposals", m_committedQueue.size());
     auto executedProposal = m_config->pbftMessageFactory()->createPBFTProposal();
-    auto self = std::weak_ptr<PBFTCacheProcessor>(shared_from_this());
+    auto self = weak_from_this();
     auto startT = utcTime();
-    m_config->stateMachine()->asyncApply(m_config->timer()->timeout(), _lastAppliedProposal,
-        _proposal, executedProposal, [self, startT, _proposal, executedProposal](int64_t _ret) {
+    m_config->stateMachine()->asyncApply(m_config->timer()->timeout(),
+        std::move(_lastAppliedProposal), _proposal, executedProposal,
+        [self, startT, _proposal, executedProposal](int64_t _ret) {
             try
             {
                 auto cache = self.lock();
@@ -436,7 +465,7 @@ void PBFTCacheProcessor::applyStateMachine(
             catch (std::exception const& e)
             {
                 PBFT_LOG(WARNING) << LOG_DESC("applyStateMachine failed")
-                                  << LOG_KV("error", boost::diagnostic_information(e));
+                                  << LOG_KV("message", boost::diagnostic_information(e));
             }
         });
 }
@@ -444,11 +473,11 @@ void PBFTCacheProcessor::applyStateMachine(
 void PBFTCacheProcessor::setCheckPointProposal(PBFTProposalInterface::Ptr _proposal)
 {
     auto index = _proposal->index();
-    if (!(m_caches.count(index)))
+    if (!m_caches.contains(index))
     {
         // Note: since cache is created and freed frequently, it should be safer to use weak_ptr in
         // the callback
-        auto self = std::weak_ptr<PBFTCacheProcessor>(shared_from_this());
+        auto self = weak_from_this();
         m_caches[index] = m_cacheFactory->createPBFTCache(
             m_config, index, [self](bcos::protocol::BlockNumber _proposalIndex) {
                 try
@@ -464,7 +493,7 @@ void PBFTCacheProcessor::setCheckPointProposal(PBFTProposalInterface::Ptr _propo
                 {
                     PBFT_LOG(WARNING) << LOG_DESC("notifyCommittedProposalIndex error")
                                       << LOG_KV("index", _proposalIndex)
-                                      << LOG_KV("errorInfo", boost::diagnostic_information(e));
+                                      << LOG_KV("msg", boost::diagnostic_information(e));
                 }
             });
     }
@@ -473,9 +502,9 @@ void PBFTCacheProcessor::setCheckPointProposal(PBFTProposalInterface::Ptr _propo
 
 void PBFTCacheProcessor::addCheckPointMsg(PBFTMessageInterface::Ptr _checkPointMsg)
 {
-    addCache(m_caches, _checkPointMsg,
+    addCache(m_caches, std::move(_checkPointMsg),
         [](PBFTCache::Ptr _pbftCache, PBFTMessageInterface::Ptr _checkPointMsg) {
-            _pbftCache->addCheckPointMsg(_checkPointMsg);
+            _pbftCache->addCheckPointMsg(std::move(_checkPointMsg));
         });
 }
 
@@ -483,7 +512,7 @@ void PBFTCacheProcessor::addViewChangeReq(ViewChangeMsgInterface::Ptr _viewChang
 {
     auto reqView = _viewChange->view();
     auto fromIdx = _viewChange->generatedFrom();
-    if (m_viewChangeCache.count(reqView) && m_viewChangeCache[reqView].count(fromIdx))
+    if (m_viewChangeCache.contains(reqView) && m_viewChangeCache[reqView].contains(fromIdx))
     {
         return;
     }
@@ -494,32 +523,33 @@ void PBFTCacheProcessor::addViewChangeReq(ViewChangeMsgInterface::Ptr _viewChang
         return;
     }
     m_viewChangeCache[reqView][fromIdx] = _viewChange;
-    if (!m_viewChangeWeight.count(reqView))
+    if (!m_viewChangeWeight.contains(reqView))
     {
         m_viewChangeWeight[reqView] = 0;
     }
     m_viewChangeWeight[reqView] += nodeInfo->weight();
     auto committedIndex = _viewChange->committedProposal()->index();
-    if (!m_maxCommittedIndex.count(reqView) || m_maxCommittedIndex[reqView] < committedIndex)
+    if (!m_maxCommittedIndex.contains(reqView) || m_maxCommittedIndex[reqView] < committedIndex)
     {
         m_maxCommittedIndex[reqView] = committedIndex;
     }
     // get the max precommitIndex
-    for (auto precommit : _viewChange->preparedProposals())
+    for (const auto& precommit : _viewChange->preparedProposals())
     {
         auto precommitIndex = precommit->index();
-        if (!m_maxPrecommitIndex.count(reqView) || m_maxPrecommitIndex[reqView] < precommitIndex)
+        if (!m_maxPrecommitIndex.contains(reqView) || m_maxPrecommitIndex[reqView] < precommitIndex)
         {
             m_maxPrecommitIndex[reqView] = precommitIndex;
         }
     }
     // print the prepared proposal info
     std::stringstream preparedProposalInfo;
-    preparedProposalInfo << "preparedProposalInfo: ";
-    for (auto proposal : _viewChange->preparedProposals())
+    preparedProposalInfo << " preparedProposalInfo: ";
+    for (const auto& proposal : _viewChange->preparedProposals())
     {
         preparedProposalInfo << LOG_KV("propIndex", proposal->index())
                              << LOG_KV("propHash", proposal->hash().abridged())
+                             << LOG_KV("fromIdx", proposal->generatedFrom())
                              << LOG_KV("dataSize", proposal->consensusProposal()->data().size());
     }
     PBFT_LOG(INFO) << LOG_DESC("addViewChangeReq") << printPBFTMsgInfo(_viewChange)
@@ -535,12 +565,12 @@ PBFTMessageList PBFTCacheProcessor::generatePrePrepareMsg(
     auto toView = m_config->toView();
     auto committedIndex = m_config->committedProposal()->index();
     auto maxCommittedIndex = committedIndex;
-    if (m_maxCommittedIndex.count(toView))
+    if (m_maxCommittedIndex.contains(toView))
     {
         maxCommittedIndex = m_maxCommittedIndex[toView];
     }
     auto maxPrecommitIndex = committedIndex;
-    if (m_maxPrecommitIndex.count(toView))
+    if (m_maxPrecommitIndex.contains(toView))
     {
         maxPrecommitIndex = m_maxPrecommitIndex[toView];
     }
@@ -550,10 +580,10 @@ PBFTMessageList PBFTCacheProcessor::generatePrePrepareMsg(
         maxPrecommitIndex = std::min(m_config->waitSealUntil(), maxPrecommitIndex);
     }
     std::map<BlockNumber, PBFTMessageInterface::Ptr> preparedProposals;
-    for (auto it : _viewChangeCache)
+    for (const auto& it : _viewChangeCache)
     {
         auto viewChangeReq = it.second;
-        for (auto proposal : viewChangeReq->preparedProposals())
+        for (const auto& proposal : viewChangeReq->preparedProposals())
         {
             // invalid precommit proposal
             if (proposal->index() < maxCommittedIndex)
@@ -561,14 +591,14 @@ PBFTMessageList PBFTCacheProcessor::generatePrePrepareMsg(
                 continue;
             }
             // repeated precommit proposal
-            if (preparedProposals.count(proposal->index()))
+            if (preparedProposals.contains(proposal->index()))
             {
                 auto precommitProposal = preparedProposals[proposal->index()];
                 if (precommitProposal->index() != proposal->index() ||
                     precommitProposal->hash() != proposal->hash())
                 {
                     // fatal case: two proposals in the same view with different hash
-                    if (precommitProposal->view() == proposal->view())
+                    if (precommitProposal->view() == proposal->view()) [[unlikely]]
                     {
                         PBFT_LOG(FATAL)
                             << LOG_DESC(
@@ -586,19 +616,18 @@ PBFTMessageList PBFTCacheProcessor::generatePrePrepareMsg(
                 }
                 continue;
             }
-            // new precommit proposla
+            // new precommit proposal
             preparedProposals[proposal->index()] = proposal;
-            proposal->setGeneratedFrom(viewChangeReq->generatedFrom());
         }
     }
-    // generate prepareMsg from maxCommittedIndex to  maxPrecommitIndex
+    // generate prepareMsg from maxCommittedIndex to maxPrecommitIndex
     PBFTMessageList prePrepareMsgList;
     for (auto i = (maxCommittedIndex + 1); i <= maxPrecommitIndex; i++)
     {
         PBFTProposalInterface::Ptr prePrepareProposal = nullptr;
         auto generatedFrom = m_config->nodeIndex();
         bool empty = false;
-        if (preparedProposals.count(i))
+        if (preparedProposals.contains(i))
         {
             prePrepareProposal = preparedProposals[i]->consensusProposal();
             generatedFrom = preparedProposals[i]->generatedFrom();
@@ -634,7 +663,7 @@ NewViewMsgInterface::Ptr PBFTCacheProcessor::checkAndTryIntoNewView()
         return nullptr;
     }
     auto toView = m_config->toView();
-    if (!m_viewChangeWeight.count(toView))
+    if (!m_viewChangeWeight.contains(toView))
     {
         return nullptr;
     }
@@ -741,13 +770,13 @@ bool PBFTCacheProcessor::checkPrecommitMsg(PBFTMessageInterface::Ptr _precommitM
         return false;
     }
     auto ret = checkPrecommitWeight(_precommitMsg);
-    if (ret == true)
+    if (ret)
     {
         return ret;
     }
     // avoid the failure to verify proposalWeight due to the modification of consensus node list and
     // consensus weight
-    if (!m_caches.count(_precommitMsg->index()))
+    if (!m_caches.contains(_precommitMsg->index()))
     {
         return ret;
     }
@@ -813,28 +842,39 @@ ViewChangeMsgInterface::Ptr PBFTCacheProcessor::fetchPrecommitData(
     return pbftMessage;
 }
 
-void PBFTCacheProcessor::removeConsensusedCache(ViewType _view, BlockNumber _consensusedNumber)
+void PBFTCacheProcessor::removeConsensusedCache(
+    ViewType _view, bcos::protocol::BlockNumber _consensusedNumber)
 {
     m_proposalsToStableConsensus.erase(_consensusedNumber);
+    uint32_t eraseSize = 0;
     for (auto pcache = m_caches.begin(); pcache != m_caches.end();)
     {
         // Note: can't remove stabledCommitted cache here for need to fetch
         // lastAppliedProposalCheckPoint when apply the next proposal
         if (pcache->first <= _consensusedNumber)
         {
+            m_proposalsToStableConsensus.erase(pcache->first);
+            pcache->second->resetExceptionCache(_view);
             pcache = m_caches.erase(pcache);
+            eraseSize++;
             continue;
         }
         pcache++;
     }
     removeInvalidViewChange(_view, _consensusedNumber);
+    PBFT_LOG(INFO) << LOG_DESC("removeConsensusedCache finalizeConsensus") << LOG_KV("view", _view)
+                   << LOG_KV("number", _consensusedNumber) << LOG_KV("eraseSize", eraseSize)
+                   << LOG_KV("cacheSize", m_caches.size());
     m_newViewGenerated = false;
 }
 
 
 void PBFTCacheProcessor::resetCacheAfterViewChange(
-    ViewType _view, BlockNumber _latestCommittedProposal)
+    ViewType _view, bcos::protocol::BlockNumber _latestCommittedProposal)
 {
+    PBFT_LOG(INFO) << LOG_DESC("resetCacheAfterViewChange") << LOG_KV("view", _view)
+                   << LOG_KV("number", _latestCommittedProposal)
+                   << LOG_KV("cacheSize", m_caches.size());
     for (auto const& it : m_caches)
     {
         it.second->resetCache(_view);
@@ -862,7 +902,7 @@ void PBFTCacheProcessor::removeInvalidRecoverCache(ViewType _view)
 }
 
 void PBFTCacheProcessor::removeInvalidViewChange(
-    ViewType _view, BlockNumber _latestCommittedProposal)
+    ViewType _view, bcos::protocol::BlockNumber _latestCommittedProposal)
 {
     for (auto it = m_viewChangeCache.begin(); it != m_viewChangeCache.end();)
     {
@@ -915,7 +955,7 @@ void PBFTCacheProcessor::reCalculateViewChangeWeight()
                 m_maxCommittedIndex[view] = committedIndex;
             }
             // get the max precommitIndex
-            for (auto precommit : viewChangeReq->preparedProposals())
+            for (const auto& precommit : viewChangeReq->preparedProposals())
             {
                 auto precommitIndex = precommit->index();
                 if (!m_maxPrecommitIndex.count(view) || m_maxPrecommitIndex[view] < precommitIndex)
@@ -930,18 +970,18 @@ void PBFTCacheProcessor::reCalculateViewChangeWeight()
 void PBFTCacheProcessor::checkAndCommitStableCheckPoint()
 {
     std::vector<PBFTCache::Ptr> stabledCacheList;
-    for (auto const& it : m_caches)
+    for (auto const& [_, cache] : m_caches)
     {
-        auto ret = it.second->checkAndCommitStableCheckPoint();
+        auto ret = cache->checkAndCommitStableCheckPoint();
         if (!ret)
         {
             continue;
         }
-        stabledCacheList.emplace_back(it.second);
+        stabledCacheList.emplace_back(cache);
     }
     // Note: since updateStableCheckPointQueue may update m_caches after commitBlock
     // must call it after iterator m_caches
-    for (auto cache : stabledCacheList)
+    for (const auto& cache : stabledCacheList)
     {
         updateStableCheckPointQueue(cache->checkPointProposal());
     }
@@ -987,19 +1027,23 @@ void PBFTCacheProcessor::tryToCommitStableCheckPoint()
 bool PBFTCacheProcessor::shouldRequestCheckPoint(PBFTMessageInterface::Ptr _checkPointMsg)
 {
     auto checkPointIndex = _checkPointMsg->index();
+    auto committedIndex = m_config->committedProposal()->index();
     // expired checkpoint
-    if (checkPointIndex <= m_config->committedProposal()->index() ||
-        checkPointIndex <= m_config->syncingHighestNumber())
+    if (checkPointIndex <= committedIndex || checkPointIndex <= m_config->syncingHighestNumber())
+    {
+        return false;
+    }
+    if (checkPointIndex > (committedIndex + m_config->waterMarkLimit()))
     {
         return false;
     }
     // hit in the local committedProposalList or already been requested
-    if (m_committedProposalList.count(checkPointIndex))
+    if (m_committedProposalList.contains(checkPointIndex))
     {
         return false;
     }
     // the local cache already has the checkPointProposal
-    if (m_caches.count(checkPointIndex) && m_caches[checkPointIndex]->checkPointProposal())
+    if (m_caches.contains(checkPointIndex) && m_caches[checkPointIndex]->checkPointProposal())
     {
         return false;
     }
@@ -1009,8 +1053,8 @@ bool PBFTCacheProcessor::shouldRequestCheckPoint(PBFTMessageInterface::Ptr _chec
         return true;
     }
     // no-timeout
-    // has not receive any checkPoint message before, wait for generating local checkPoint
-    if (!m_caches.count(checkPointIndex))
+    // has not received any checkPoint message before, wait for generating local checkPoint
+    if (!m_caches.contains(checkPointIndex))
     {
         return false;
     }
@@ -1035,7 +1079,7 @@ bool PBFTCacheProcessor::shouldRequestCheckPoint(PBFTMessageInterface::Ptr _chec
 
 void PBFTCacheProcessor::eraseCommittedProposalList(bcos::protocol::BlockNumber _index)
 {
-    if (!m_committedProposalList.count(_index))
+    if (!m_committedProposalList.contains(_index))
     {
         return;
     }
@@ -1078,7 +1122,6 @@ void PBFTCacheProcessor::addRecoverReqCache(PBFTMessageInterface::Ptr _recoverRe
     m_recoverCacheWeight[view] += nodeInfo->weight();
     PBFT_LOG(INFO) << LOG_DESC("addRecoverReqCache") << LOG_KV("weight", m_recoverCacheWeight[view])
                    << printPBFTMsgInfo(_recoverResponse) << m_config->printCurrentState();
-    return;
 }
 
 bool PBFTCacheProcessor::checkAndTryToRecover()
@@ -1097,12 +1140,18 @@ bool PBFTCacheProcessor::checkAndTryToRecover()
     {
         return false;
     }
+    // the node has already been recovered
+    if (!m_config->timeout())
+    {
+        return false;
+    }
     m_config->resetNewViewState(recoveredView);
     resetCacheAfterViewChange(recoveredView, m_config->committedProposal()->index());
     // clear the recoverReqCache
     m_recoverReqCache.clear();
     m_recoverCacheWeight.clear();
     // try to preCommit/commit after no-timeout
+    // Note: the checkAndPreCommit and checkAndCommit will trigger fast-view-change
     checkAndPreCommit();
     checkAndCommit();
     PBFT_LOG(INFO) << LOG_DESC("checkAndTryToRecoverView: reachNewView")
@@ -1113,7 +1162,7 @@ bool PBFTCacheProcessor::checkAndTryToRecover()
 PBFTProposalInterface::Ptr PBFTCacheProcessor::fetchPrecommitProposal(
     bcos::protocol::BlockNumber _index)
 {
-    if (!m_caches.count(_index))
+    if (!m_caches.contains(_index))
     {
         return nullptr;
     }
@@ -1134,7 +1183,7 @@ void PBFTCacheProcessor::updatePrecommit(PBFTProposalInterface::Ptr _proposal)
     pbftMessage->setHash(_proposal->hash());
     addCache(
         m_caches, pbftMessage, [](PBFTCache::Ptr _pbftCache, PBFTMessageInterface::Ptr _precommit) {
-            _pbftCache->setPrecommitCache(_precommit);
+            _pbftCache->setPrecommitCache(std::move(_precommit));
         });
 }
 

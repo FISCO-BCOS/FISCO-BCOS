@@ -25,5 +25,6 @@ add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR})
 
 find_package(Boost REQUIRED unit_test_framework)
-target_link_libraries(${TEST_BINARY_NAME} ${BCOS_CPP_SDK_TARGET} bcos-utilities ${TARS_PROTOCOL_TARGET} Boost::unit_test_framework)
-add_test(NAME ${TEST_BINARY_NAME} COMMAND ${TEST_BINARY_NAME})
+target_link_libraries(${TEST_BINARY_NAME} ${BCOS_CPP_SDK_TARGET} ${TABLE_TARGET} bcos-utilities ${TARS_PROTOCOL_TARGET} Boost::unit_test_framework)
+#add_test(NAME ${TEST_BINARY_NAME} COMMAND ${TEST_BINARY_NAME})
+config_test_cases("" "${SOURCES}" ${TEST_BINARY_NAME} "")

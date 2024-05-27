@@ -13,12 +13,14 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
+#include "../mock/MockLedger.h"
 #include "bcos-codec/abi/ContractABICodec.h"
 #include "bcos-executor/src/executive/BlockContext.h"
 #include "bcos-executor/src/executive/TransactionExecutive.h"
 #include "bcos-executor/src/precompiled/CryptoPrecompiled.h"
 #include "bcos-executor/src/precompiled/common/Common.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
+#include "vm/gas_meter/GasInjector.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
@@ -35,6 +37,16 @@ using namespace bcos::crypto;
 using namespace bcos::precompiled;
 using namespace bcos::executor;
 using namespace bcos::storage;
+
+#ifndef WITH_WASM
+namespace bcos::wasm
+{
+class GasInjector
+{
+};
+}  // namespace bcos::wasm
+#endif
+
 namespace bcos::test
 {
 class VRFPrecompiledFixture
@@ -54,20 +66,23 @@ public:
                 std::make_shared<SM3>(), std::make_shared<SM2Crypto>(), nullptr);
         }
         m_cryptoPrecompiled = std::make_shared<CryptoPrecompiled>(m_cryptoSuite->hashImpl());
-        m_blockContext = std::make_shared<BlockContext>(nullptr, m_cryptoSuite->hashImpl(), 0,
-            h256(), utcTime(), _blockVersion, FiscoBcosScheduleV4, false, false);
-        std::shared_ptr<wasm::GasInjector> gasInjector = nullptr;
-        m_executive = std::make_shared<TransactionExecutive>(
-            std::weak_ptr<BlockContext>(m_blockContext), "", 100, 0, gasInjector);
-        m_abi = std::make_shared<bcos::codec::abi::ContractABICodec>(m_cryptoSuite->hashImpl());
+        m_ledgerCache = std::make_shared<LedgerCache>(std::make_shared<MockLedger>());
+        m_blockContext =
+            std::make_shared<BlockContext>(nullptr, m_ledgerCache, m_cryptoSuite->hashImpl(), 0,
+                h256(), utcTime(), _blockVersion, FiscoBcosSchedule, false, false);
+        m_executive =
+            std::make_shared<TransactionExecutive>(*m_blockContext, "", 100, 0, m_gasInjector);
+        m_abi = std::make_shared<bcos::codec::abi::ContractABICodec>(*m_cryptoSuite->hashImpl());
     }
 
     ~VRFPrecompiledFixture() {}
 
+    LedgerCache::Ptr m_ledgerCache;
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
     BlockContext::Ptr m_blockContext;
     TransactionExecutive::Ptr m_executive;
     CryptoPrecompiled::Ptr m_cryptoPrecompiled;
+    wasm::GasInjector m_gasInjector;
     std::string m_vrfVerifyFunction = "curve25519VRFVerify(bytes,bytes,bytes)";
     std::shared_ptr<bcos::codec::abi::ContractABICodec> m_abi;
 };
@@ -155,12 +170,12 @@ void testVRFVerify(VRFPrecompiledFixture _fixture)
 
 BOOST_AUTO_TEST_CASE(testCurve25519VRFVerify)
 {
-    VRFPrecompiledFixture fixture(false, (uint32_t)(bcos::protocol::Version::V3_0_VERSION));
+    VRFPrecompiledFixture fixture(false, (uint32_t)(bcos::protocol::BlockVersion::V3_0_VERSION));
     testVRFVerify(fixture);
 }
 BOOST_AUTO_TEST_CASE(testSMCurve25519VRFVerify)
 {
-    VRFPrecompiledFixture fixture(true, (uint32_t)(bcos::protocol::Version::V3_0_VERSION));
+    VRFPrecompiledFixture fixture(true, (uint32_t)(bcos::protocol::BlockVersion::V3_0_VERSION));
     testVRFVerify(fixture);
 }
 BOOST_AUTO_TEST_SUITE_END()

@@ -21,11 +21,8 @@
 #pragma once
 #include "bcos-sync/interfaces/BlockSyncStatusInterface.h"
 #include "bcos-sync/protocol/PB/BlockSyncMsgImpl.h"
-#include "bcos-sync/utilities/Common.h"
 
-namespace bcos
-{
-namespace sync
+namespace bcos::sync
 {
 class BlockSyncStatusImpl : public BlockSyncStatusInterface, public BlockSyncMsgImpl
 {
@@ -44,14 +41,16 @@ public:
 
     explicit BlockSyncStatusImpl(bytesConstRef _data) : BlockSyncStatusImpl() { decode(_data); }
 
-    ~BlockSyncStatusImpl() override {}
+    ~BlockSyncStatusImpl() override = default;
 
     void decode(bytesConstRef _data) override;
     bcos::crypto::HashType const& hash() const override { return m_hash; }
     bcos::crypto::HashType const& genesisHash() const override { return m_genesisHash; }
+    std::int64_t time() const override { return m_time; }
 
     void setHash(bcos::crypto::HashType const& _hash) override;
     void setGenesisHash(bcos::crypto::HashType const& _gensisHash) override;
+    void setTime(std::int64_t const time) override;
 
 protected:
     virtual void deserializeObject();
@@ -59,6 +58,6 @@ protected:
 private:
     bcos::crypto::HashType m_hash;
     bcos::crypto::HashType m_genesisHash;
+    std::int64_t m_time;
 };
-}  // namespace sync
-}  // namespace bcos
+}  // namespace bcos::sync

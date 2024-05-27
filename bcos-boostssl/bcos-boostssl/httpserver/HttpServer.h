@@ -23,11 +23,8 @@
 #include <bcos-utilities/IOServicePool.h>
 #include <exception>
 #include <thread>
-namespace bcos
-{
-namespace boostssl
-{
-namespace http
+#include <utility>
+namespace bcos::boostssl::http
 {
 // The http server impl
 class HttpServer : public std::enable_shared_from_this<HttpServer>
@@ -36,8 +33,10 @@ public:
     using Ptr = std::shared_ptr<HttpServer>;
 
 public:
-    HttpServer(const std::string& _listenIP, uint16_t _listenPort, std::string _moduleName)
-      : m_listenIP(_listenIP), m_listenPort(_listenPort), m_moduleName(_moduleName)
+    HttpServer(std::string _listenIP, uint16_t _listenPort, std::string _moduleName)
+      : m_listenIP(std::move(_listenIP)),
+        m_listenPort(_listenPort),
+        m_moduleName(std::move(_moduleName))
     {}
 
     ~HttpServer() { stop(); }
@@ -58,33 +57,30 @@ public:
 
 public:
     HttpReqHandler httpReqHandler() const { return m_httpReqHandler; }
-    void setHttpReqHandler(HttpReqHandler _httpReqHandler) { m_httpReqHandler = _httpReqHandler; }
+    void setHttpReqHandler(HttpReqHandler _httpReqHandler)
+    {
+        m_httpReqHandler = std::move(_httpReqHandler);
+    }
 
     std::shared_ptr<boost::asio::ip::tcp::acceptor> acceptor() const { return m_acceptor; }
     void setAcceptor(std::shared_ptr<boost::asio::ip::tcp::acceptor> _acceptor)
     {
-        m_acceptor = _acceptor;
+        m_acceptor = std::move(_acceptor);
     }
 
     std::shared_ptr<boost::asio::ssl::context> ctx() const { return m_ctx; }
-    void setCtx(std::shared_ptr<boost::asio::ssl::context> _ctx) { m_ctx = _ctx; }
-
-    std::shared_ptr<bcos::ThreadPool> threadPool() const { return m_threadPool; }
-    void setThreadPool(std::shared_ptr<bcos::ThreadPool> _threadPool)
-    {
-        m_threadPool = _threadPool;
-    }
+    void setCtx(std::shared_ptr<boost::asio::ssl::context> _ctx) { m_ctx = std::move(_ctx); }
 
     WsUpgradeHandler wsUpgradeHandler() const { return m_wsUpgradeHandler; }
     void setWsUpgradeHandler(WsUpgradeHandler _wsUpgradeHandler)
     {
-        m_wsUpgradeHandler = _wsUpgradeHandler;
+        m_wsUpgradeHandler = std::move(_wsUpgradeHandler);
     }
 
     HttpStreamFactory::Ptr httpStreamFactory() const { return m_httpStreamFactory; }
     void setHttpStreamFactory(HttpStreamFactory::Ptr _httpStreamFactory)
     {
-        m_httpStreamFactory = _httpStreamFactory;
+        m_httpStreamFactory = std::move(_httpStreamFactory);
     }
 
     bool disableSsl() const { return m_disableSsl; }
@@ -94,13 +90,13 @@ public:
 
     void setIOServicePool(bcos::IOServicePool::Ptr _ioservicePool)
     {
-        m_ioservicePool = _ioservicePool;
+        m_ioservicePool = std::move(_ioservicePool);
     }
 
 private:
     std::string m_listenIP;
     uint16_t m_listenPort;
-    bool m_disableSsl;
+    bool m_disableSsl = false;
     std::string m_moduleName;
 
     HttpReqHandler m_httpReqHandler;
@@ -109,7 +105,6 @@ private:
     std::shared_ptr<boost::asio::ip::tcp::acceptor> m_acceptor;
     std::shared_ptr<boost::asio::ssl::context> m_ctx;
 
-    std::shared_ptr<bcos::ThreadPool> m_threadPool;
     std::shared_ptr<HttpStreamFactory> m_httpStreamFactory;
     bcos::IOServicePool::Ptr m_ioservicePool;
 };
@@ -134,6 +129,4 @@ public:
         std::shared_ptr<boost::asio::ssl::context> _ctx, std::string _moduleName);
 };
 
-}  // namespace http
-}  // namespace boostssl
-}  // namespace bcos
+}  // namespace bcos::boostssl::http

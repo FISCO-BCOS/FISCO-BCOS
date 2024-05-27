@@ -25,9 +25,7 @@
 #include "TransactionReceiptFactory.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 
-namespace bcos
-{
-namespace protocol
+namespace bcos::protocol
 {
 
 class BlockFactory
@@ -35,21 +33,30 @@ class BlockFactory
 public:
     using Ptr = std::shared_ptr<BlockFactory>;
     BlockFactory() = default;
-    virtual ~BlockFactory() {}
+    BlockFactory(const BlockFactory&) = default;
+    BlockFactory(BlockFactory&&) = default;
+    BlockFactory& operator=(const BlockFactory&) = default;
+    BlockFactory& operator=(BlockFactory&&) = default;
+    virtual ~BlockFactory() = default;
+
     virtual Block::Ptr createBlock() = 0;
-    virtual Block::Ptr createBlock(
-        bytes const& _data, bool _calculateHash = true, bool _checkSig = true) = 0;
+
+    Block::Ptr createBlock(
+        bcos::bytes const& _data, bool _calculateHash = true, bool _checkSig = true)
+    {
+        return createBlock(bcos::ref(_data), _calculateHash, _checkSig);
+    }
+
     virtual Block::Ptr createBlock(
         bytesConstRef _data, bool _calculateHash = true, bool _checkSig = true) = 0;
 
     virtual TransactionMetaData::Ptr createTransactionMetaData() = 0;
     virtual TransactionMetaData::Ptr createTransactionMetaData(
-        bcos::crypto::HashType const _hash, std::string const& _to) = 0;
+        bcos::crypto::HashType _hash, std::string const& _to) = 0;
 
     virtual bcos::crypto::CryptoSuite::Ptr cryptoSuite() = 0;
     virtual BlockHeaderFactory::Ptr blockHeaderFactory() = 0;
     virtual TransactionFactory::Ptr transactionFactory() = 0;
     virtual TransactionReceiptFactory::Ptr receiptFactory() = 0;
 };
-}  // namespace protocol
-}  // namespace bcos
+}  // namespace bcos::protocol

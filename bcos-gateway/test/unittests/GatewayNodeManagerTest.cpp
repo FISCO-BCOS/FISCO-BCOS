@@ -324,14 +324,17 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_query)
     std::vector<GroupNodeInfo::Ptr> groupInfos;
     std::string group1 = "group1";
     auto group1Info = createGroupNodeInfo(group1, {"a0", "b0", "c0"});
+    group1Info->setType(GroupType::GROUP_WITH_CONSENSUS_NODE);
     groupInfos.emplace_back(group1Info);
 
     std::string group2 = "group2";
     auto group2Info = createGroupNodeInfo(group2, {"a1", "b1", "c1"});
+    group2Info->setType(GroupType::GROUP_WITHOUT_CONSENSUS_NODE);
     groupInfos.emplace_back(group2Info);
 
     std::string group3 = "group3";
     auto group3Info = createGroupNodeInfo(group3, {"a2", "b2", "c2"});
+    group3Info->setType(GroupType::OUTSIDE_GROUP);
     groupInfos.emplace_back(group3Info);
 
     auto status = createGatewayNodeStatus(110, "testUUID", groupInfos);
@@ -369,6 +372,23 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_query)
 
     auto p2pIDs6 = gatewayNodeManager->peersRouterTable()->queryP2pIDs(group3, "a2");
     BOOST_CHECK_EQUAL(p2pIDs6.size(), 3);
+
+    auto gatewayStatus = gatewayNodeManager->peersRouterTable()->gatewayInfo(status->uuid());
+
+    std::string choiceNodeID;
+    BOOST_CHECK(
+        gatewayStatus->randomChooseP2PNode(choiceNodeID, NodeType::CONSENSUS_NODE, "group1"));
+    BOOST_CHECK(p2pIDs1.contains(choiceNodeID) || p2pIDs2.contains(choiceNodeID) ||
+                p2pIDs5.contains(choiceNodeID));
+
+    BOOST_CHECK(
+        gatewayStatus->randomChooseP2PNode(choiceNodeID, NodeType::OBSERVER_NODE, "group2"));
+    BOOST_CHECK(p2pIDs1.contains(choiceNodeID) || p2pIDs2.contains(choiceNodeID) ||
+                p2pIDs5.contains(choiceNodeID));
+
+    BOOST_CHECK(gatewayStatus->randomChooseP2PNode(choiceNodeID, NodeType::FREE_NODE, "group3"));
+    BOOST_CHECK(p2pIDs1.contains(choiceNodeID) || p2pIDs2.contains(choiceNodeID) ||
+                p2pIDs5.contains(choiceNodeID));
 }
 
 

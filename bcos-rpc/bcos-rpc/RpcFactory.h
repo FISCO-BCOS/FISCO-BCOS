@@ -38,14 +38,11 @@
 
 namespace bcos
 {
-namespace boostssl
-{
-namespace ws
+namespace boostssl::ws
 {
 class WsService;
 class WsSession;
-}  // namespace ws
-}  // namespace boostssl
+}  // namespace boostssl::ws
 
 namespace rpc
 {
@@ -53,12 +50,13 @@ class RpcFactory : public std::enable_shared_from_this<RpcFactory>
 {
 public:
     using Ptr = std::shared_ptr<RpcFactory>;
-    RpcFactory(std::string const& _chainID, bcos::gateway::GatewayInterface::Ptr _gatewayInterface,
+    RpcFactory(std::string _chainID, bcos::gateway::GatewayInterface::Ptr _gatewayInterface,
         bcos::crypto::KeyFactory::Ptr _keyFactory,
         bcos::security::DataEncryptInterface::Ptr _dataEncrypt = nullptr);
-    virtual ~RpcFactory() {}
+    virtual ~RpcFactory() = default;
 
-    std::shared_ptr<boostssl::ws::WsConfig> initConfig(bcos::tool::NodeConfig::Ptr _nodeConfig);
+    std::shared_ptr<boostssl::ws::WsConfig> initConfig(
+        const bcos::tool::NodeConfig::Ptr& _nodeConfig);
     std::shared_ptr<boostssl::ws::WsService> buildWsService(
         bcos::boostssl::ws::WsConfig::Ptr _config);
 
@@ -86,9 +84,11 @@ protected:
 
 
     bcos::rpc::JsonRpcImpl_2_0::Ptr buildJsonRpc(int sendTxTimeout,
-        std::shared_ptr<boostssl::ws::WsService> _wsService, GroupManager::Ptr _groupManager);
+        const std::shared_ptr<boostssl::ws::WsService>& _wsService,
+        GroupManager::Ptr _groupManager);
     bcos::event::EventSub::Ptr buildEventSub(
-        std::shared_ptr<boostssl::ws::WsService> _wsService, GroupManager::Ptr _groupManager);
+        const std::shared_ptr<boostssl::ws::WsService>& _wsService,
+        GroupManager::Ptr _groupManager);
 
 private:
     std::string m_chainID;

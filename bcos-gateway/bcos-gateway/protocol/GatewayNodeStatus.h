@@ -22,6 +22,7 @@
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
+#include "bcos-utilities/ObjectCounter.h"
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-gateway/Common.h>
 #include <bcos-tars-protocol/protocol/GroupNodeInfoImpl.h>
@@ -31,7 +32,7 @@ namespace bcos
 {
 namespace gateway
 {
-class GatewayNodeStatus
+class GatewayNodeStatus : public bcos::ObjectCounter<GatewayNodeStatus>
 {
 public:
     using Ptr = std::shared_ptr<GatewayNodeStatus>;

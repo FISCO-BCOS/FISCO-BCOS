@@ -11,8 +11,15 @@ message BlockSyncMessage
     // for sync status
     bytes hash = 4;
     bytes genesisHash = 5;
-    
+
     // for blocks sync
     int64 size = 6;
     repeated bytes blocksData = 7;
+
+    //for time sync
+    int64 time = 8;
+    int64 archived_number = 9;
+
+    //for block sync optimize
+    int64 block_interval = 10;
 }

@@ -23,10 +23,11 @@
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
-#include <concepts>
-#include <shared_mutex>
-#include <span>
-#include <type_traits>
+#if !ONLY_CPP_SDK
+#include <bcos-utilities/ITTAPI.h>
+#endif
+#include <boost/throw_exception.hpp>
+#include <utility>
 
 namespace bcos::protocol
 {
@@ -52,72 +53,85 @@ public:
 
     using Ptr = std::shared_ptr<Transaction>;
     using ConstPtr = std::shared_ptr<const Transaction>;
-    explicit Transaction(bcos::crypto::CryptoSuite::Ptr _cryptoSuite) : m_cryptoSuite(_cryptoSuite)
-    {}
 
-    virtual ~Transaction() {}
+    Transaction() = default;
+    Transaction(const Transaction&) = delete;
+    Transaction(Transaction&&) = delete;
+    Transaction& operator=(const Transaction&) = delete;
+    Transaction& operator=(Transaction&&) = delete;
+    virtual ~Transaction() = default;
 
     virtual void decode(bytesConstRef _txData) = 0;
     virtual void encode(bcos::bytes& txData) const = 0;
-    virtual bcos::crypto::HashType hash(bool _useCache = true) const = 0;
+    virtual bcos::crypto::HashType hash() const = 0;
 
-    virtual void verify() const
+    virtual void verify(crypto::Hash& hashImpl, crypto::SignatureCrypto& signatureImpl) const
     {
+#if !ONLY_CPP_SDK
+        ittapi::Report report(ittapi::ITT_DOMAINS::instance().TRANSACTION,
+            ittapi::ITT_DOMAINS::instance().VERIFY_TRANSACTION);
+#endif
         // The tx has already been verified
         if (!sender().empty())
         {
             return;
         }
 
-        // check the hash when verify
-        auto hashResult = hash(false);
-        if (hashResult != this->hash())
-        {
-            throw bcos::Exception("Hash mismatch!");
-        }
-
+        auto hashResult = hash();
         // check the signatures
         auto signature = signatureData();
-        auto publicKey = m_cryptoSuite->signatureImpl()->recover(this->hash(), signature);
-        // recover the sender
-        forceSender(m_cryptoSuite->calculateAddress(publicKey).asBytes());
+        auto ret = signatureImpl.recoverAddress(hashImpl, hashResult, signature);
+        forceSender(ret.second);
     }
 
     virtual int32_t version() const = 0;
     virtual std::string_view chainId() const = 0;
     virtual std::string_view groupId() const = 0;
     virtual int64_t blockLimit() const = 0;
-    virtual u256 nonce() const = 0;
+    virtual const std::string& nonce() const = 0;
+    // only for test
+    virtual void setNonce(std::string) = 0;
     virtual std::string_view to() const = 0;
     virtual std::string_view abi() const = 0;
-    virtual std::string_view source() const = 0;
-    virtual void setSource(std::string const& _source) = 0;
 
-    virtual std::string_view sender() const
-    {
-        return std::string_view((char*)m_sender.data(), m_sender.size());
-    }
+    // balance
+    virtual std::string_view value() const = 0;
+    virtual std::string_view gasPrice() const = 0;
+    virtual int64_t gasLimit() const = 0;
+    virtual std::string_view maxFeePerGas() const = 0;
+    virtual std::string_view maxPriorityFeePerGas() const = 0;
 
-    virtual bytesConstRef input() const = 0;
+    // v2
+    virtual bcos::bytesConstRef extension() const = 0;
+
+    virtual std::string_view extraData() const = 0;
+    virtual void setExtraData(std::string const& _extraData) = 0;
+
+    virtual std::string_view sender() const = 0;
+
+    virtual bcos::bytesConstRef input() const = 0;
     virtual int64_t importTime() const = 0;
     virtual void setImportTime(int64_t _importTime) = 0;
     virtual TransactionType type() const
     {
-        if (to().size() > 0)
+        if (!to().empty())
         {
             return TransactionType::MessageCall;
         }
         return TransactionType::ContractCreation;
     }
-    virtual void forceSender(bytes _sender) const { m_sender = std::move(_sender); }
-    virtual bytesConstRef signatureData() const = 0;
+    virtual void forceSender(const bcos::bytes& _sender) const = 0;
+    virtual bcos::bytesConstRef signatureData() const = 0;
 
-    virtual uint32_t attribute() const = 0;
-    virtual void setAttribute(uint32_t attribute) = 0;
+    virtual int32_t attribute() const = 0;
+    virtual void setAttribute(int32_t attribute) = 0;
 
     TxSubmitCallback takeSubmitCallback() { return std::move(m_submitCallback); }
-    TxSubmitCallback submitCallback() const { return m_submitCallback; }
-    void setSubmitCallback(TxSubmitCallback _submitCallback) { m_submitCallback = _submitCallback; }
+    TxSubmitCallback const& submitCallback() const { return m_submitCallback; }
+    void setSubmitCallback(TxSubmitCallback _submitCallback)
+    {
+        m_submitCallback = std::move(_submitCallback);
+    }
     bool synced() const { return m_synced; }
     void setSynced(bool _synced) const { m_synced = _synced; }
 
@@ -126,20 +140,6 @@ public:
 
     bool invalid() const { return m_invalid; }
     void setInvalid(bool _invalid) const { m_invalid = _invalid; }
-
-    bcos::crypto::CryptoSuite::Ptr cryptoSuite() { return m_cryptoSuite; }
-
-    void appendKnownNode(bcos::crypto::NodeIDPtr _node) const
-    {
-        std::unique_lock<std::shared_mutex> l(x_knownNodeList);
-        m_knownNodeList.insert(_node);
-    }
-
-    bool isKnownBy(bcos::crypto::NodeIDPtr _node) const
-    {
-        std::shared_lock<std::shared_mutex> l(x_knownNodeList);
-        return m_knownNodeList.count(_node);
-    }
 
     void setSystemTx(bool _systemTx) const { m_systemTx = _systemTx; }
     bool systemTx() const { return m_systemTx; }
@@ -154,19 +154,12 @@ public:
     void setStoreToBackend(bool _storeToBackend) const { m_storeToBackend = _storeToBackend; }
 
 protected:
-    mutable bcos::bytes m_sender;
-    bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
-
     TxSubmitCallback m_submitCallback;
     // the tx has been synced or not
 
     // the hash of the proposal that the tx batched into
     mutable bcos::crypto::HashType m_batchHash;
 
-    // Record the list of nodes containing the transaction and provide related query interfaces.
-    mutable std::shared_mutex x_knownNodeList;
-    // Record the node where the transaction exists
-    mutable bcos::crypto::NodeIDSet m_knownNodeList;
     // the number of proposal that the tx batched into
     mutable bcos::protocol::BlockNumber m_batchId = {-1};
 

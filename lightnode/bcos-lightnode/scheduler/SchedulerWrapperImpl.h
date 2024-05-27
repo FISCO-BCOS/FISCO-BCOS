@@ -3,6 +3,7 @@
 #include <bcos-concepts/scheduler/Scheduler.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptImpl.h>
+#include <bcos-task/Task.h>
 #include <boost/throw_exception.hpp>
 #include <memory>
 
@@ -22,58 +23,62 @@ public:
 private:
     auto& scheduler() { return bcos::concepts::getRef(m_scheduler); }
 
-    void impl_call(bcos::concepts::transaction::Transaction auto const& transaction,
+    task::Task<void> impl_call(bcos::concepts::transaction::Transaction auto const& transaction,
         bcos::concepts::receipt::TransactionReceipt auto& receipt)
     {
-        auto transactionImpl = std::make_shared<bcostars::protocol::TransactionImpl>(m_cryptoSuite,
+        auto transactionImpl = std::make_shared<bcostars::protocol::TransactionImpl>(
             [&transaction]() { return const_cast<bcostars::Transaction*>(&transaction); });
 
-        // must ensure the lifetime of promise
-        auto promise = std::make_shared<std::promise<Error::Ptr>>();
-        // Note: can't call get_future after called get()
-        auto future = promise->get_future();
-        scheduler().call(
-            transactionImpl, [promise, &receipt](Error::Ptr&& error,
-                                 protocol::TransactionReceipt::Ptr&& transactionReceipt) {
-                try
-                {
-                    if (!error)
-                    {
-                        auto tarsImpl =
-                            std::dynamic_pointer_cast<bcostars::protocol::TransactionReceiptImpl>(
-                                transactionReceipt);
-
-                        receipt = tarsImpl->inner();
-                    }
-                    // Note: promise set_value can't been called multiple times, otherwise will
-                    // throw future_error exception
-                    promise->set_value(std::move(error));
-                }
-                catch (std::future_error const& e)
-                {
-                    BCOS_LOG(INFO)
-                        << LOG_DESC("impl_call: the callback has already been called for timeout")
-                        << LOG_KV("msg", boost::diagnostic_information(e));
-                }
-            });
-        if (future.wait_for(std::chrono::seconds(c_callTimeout)) == std::future_status::timeout)
+        struct Awaitable : public CO_STD::suspend_always
         {
-            auto errorMsg = "call timeout";
-            BCOS_LOG(ERROR) << LOG_DESC("SchedulerWrapperImpl") << errorMsg;
-            auto error = std::make_shared<Error>(-1, errorMsg);
-            BOOST_THROW_EXCEPTION(*error);
-        }
+            Awaitable(decltype(transactionImpl)& transactionImpl, SchedulerType& scheduler,
+                std::remove_cvref_t<decltype(receipt)>& receipt)
+              : m_transactionImpl(transactionImpl), m_scheduler(scheduler), m_receipt(receipt)
+            {}
 
-        auto error = future.get();
+            void await_suspend(CO_STD::coroutine_handle<task::Task<void>::promise_type> handle)
+            {
+                bcos::concepts::getRef(m_scheduler)
+                    .call(std::move(m_transactionImpl),
+                        [this, m_handle = std::move(handle)](Error::Ptr&& error,
+                            protocol::TransactionReceipt::Ptr&& transactionReceipt) mutable {
+                            if (!error)
+                            {
+                                auto tarsImpl = std::dynamic_pointer_cast<
+                                    bcostars::protocol::TransactionReceiptImpl>(transactionReceipt);
+
+                                m_receipt = std::move(
+                                    const_cast<bcostars::TransactionReceipt&>(tarsImpl->inner()));
+                            }
+                            else
+                            {
+                                m_error = std::move(error);
+                            }
+
+                            m_handle.resume();
+                        });
+            }
+
+            decltype(transactionImpl)& m_transactionImpl;
+            SchedulerType& m_scheduler;
+            std::remove_cvref_t<decltype(receipt)>& m_receipt;
+            Error::Ptr m_error;
+        };
+
+        Awaitable awaitable(transactionImpl, m_scheduler, receipt);
+        co_await awaitable;
+
+        auto& error = awaitable.m_error;
         if (error)
         {
             BOOST_THROW_EXCEPTION(*error);
         }
+
+        co_return;
     }
 
 
     SchedulerType m_scheduler;
-    int c_callTimeout = 10;
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
 };
 }  // namespace bcos::scheduler

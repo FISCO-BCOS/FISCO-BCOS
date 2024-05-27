@@ -21,7 +21,6 @@
 #include "bcos-framework/storage/Table.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "tbb/concurrent_vector.h"
-#include "tbb/enumerable_thread_specific.h"
 #include "tbb/parallel_for.h"
 #include "tbb/parallel_invoke.h"
 #include <boost/throw_exception.hpp>
@@ -29,9 +28,7 @@
 
 using namespace std;
 
-namespace bcos
-{
-namespace storage
+namespace bcos::storage
 {
 std::optional<Entry> Table::getRow(std::string_view _key)
 {
@@ -51,12 +48,12 @@ std::optional<Entry> Table::getRow(std::string_view _key)
     return std::get<1>(result);
 }
 
-std::vector<std::optional<Entry>> Table::getRows(
-    const std::variant<const gsl::span<std::string_view const>, const gsl::span<std::string const>>&
-        _keys)
+std::vector<std::optional<Entry>> Table::getRows(RANGES::any_view<std::string_view,
+    RANGES::category::input | RANGES::category::random_access | RANGES::category::sized>
+        keys)
 {
     std::promise<std::tuple<Error::UniquePtr, std::vector<std::optional<Entry>>>> promise;
-    asyncGetRows(_keys, [&promise](auto error, auto entries) {
+    asyncGetRows(keys, [&promise](auto error, auto entries) {
         promise.set_value(std::tuple{std::move(error), std::move(entries)});
     });
 
@@ -115,11 +112,12 @@ void Table::asyncGetRow(std::string_view _key,
 }
 
 void Table::asyncGetRows(
-    const std::variant<const gsl::span<std::string_view const>, const gsl::span<std::string const>>&
-        _keys,
+    RANGES::any_view<std::string_view,
+        RANGES::category::input | RANGES::category::random_access | RANGES::category::sized>
+        keys,
     std::function<void(Error::UniquePtr, std::vector<std::optional<Entry>>)> _callback) noexcept
 {
-    m_storage->asyncGetRows(m_tableInfo->name(), _keys,
+    m_storage->asyncGetRows(m_tableInfo->name(), std::move(keys),
         [callback = std::move(_callback)](
             Error::UniquePtr error, std::vector<std::optional<Entry>> entries) {
             callback(std::move(error), std::move(entries));
@@ -132,5 +130,4 @@ void Table::asyncSetRow(
     m_storage->asyncSetRow(m_tableInfo->name(), key, std::move(entry), callback);
 }
 
-}  // namespace storage
-}  // namespace bcos
+}  // namespace bcos::storage

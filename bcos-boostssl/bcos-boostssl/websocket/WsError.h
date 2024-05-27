@@ -19,11 +19,7 @@
  */
 #pragma once
 
-namespace bcos
-{
-namespace boostssl
-{
-namespace ws
+namespace bcos::boostssl::ws
 {
 enum WsError
 {
@@ -48,6 +44,4 @@ inline bool notRetryAgain(int _wsError)
     return (_wsError == boostssl::ws::WsError::MessageOverflow);
 }
 
-}  // namespace ws
-}  // namespace boostssl
-}  // namespace bcos
+}  // namespace bcos::boostssl::ws

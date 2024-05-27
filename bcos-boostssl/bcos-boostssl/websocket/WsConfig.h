@@ -25,7 +25,8 @@
 #include <boost/asio/ip/tcp.hpp>
 #include <cstdint>
 #include <memory>
-#include <vector>
+#include <set>
+#include <utility>
 
 #define MIN_HEART_BEAT_PERIOD_MS (10000)
 #define MIN_RECONNECT_PERIOD_MS (10000)
@@ -33,11 +34,7 @@
 #define DEFAULT_MAX_MESSAGE_SIZE (32 * 1024 * 1024)
 #define MIN_THREAD_POOL_SIZE (1)
 
-namespace bcos
-{
-namespace boostssl
-{
-namespace ws
+namespace bcos::boostssl::ws
 {
 using EndPoints = std::set<NodeIPEndpoint>;
 using EndPointsPtr = std::shared_ptr<std::set<NodeIPEndpoint>>;
@@ -98,17 +95,17 @@ public:
     void setModel(WsModel _model) { m_model = _model; }
     WsModel model() const { return m_model; }
 
-    bool asClient() const { return m_model & WsModel::Client; }
-    bool asServer() const { return m_model & WsModel::Server; }
+    bool asClient() const { return (m_model & WsModel::Client) != 0; }
+    bool asServer() const { return (m_model & WsModel::Server) != 0; }
 
-    void setListenIP(const std::string _listenIP) { m_listenIP = _listenIP; }
+    void setListenIP(std::string _listenIP) { m_listenIP = std::move(_listenIP); }
     std::string listenIP() const { return m_listenIP; }
 
     void setListenPort(uint16_t _listenPort) { m_listenPort = _listenPort; }
     uint16_t listenPort() const { return m_listenPort; }
 
     void setSmSSL(bool _isSmSSL) { m_smSSL = _isSmSSL; }
-    bool smSSL() { return m_smSSL; }
+    bool smSSL() const { return m_smSSL; }
 
     void setMaxMsgSize(uint32_t _maxMsgSize) { m_maxMsgSize = _maxMsgSize; }
     uint32_t maxMsgSize() const { return m_maxMsgSize; }
@@ -132,24 +129,22 @@ public:
 
     uint32_t threadPoolSize() const
     {
-        return m_threadPoolSize ? m_threadPoolSize : MIN_THREAD_POOL_SIZE;
+        return m_threadPoolSize != 0U ? m_threadPoolSize : MIN_THREAD_POOL_SIZE;
     }
     void setThreadPoolSize(uint32_t _threadPoolSize) { m_threadPoolSize = _threadPoolSize; }
 
     EndPointsPtr connectPeers() const { return m_connectPeers; }
-    void setConnectPeers(EndPointsPtr _connectPeers) { m_connectPeers = _connectPeers; }
+    void setConnectPeers(EndPointsPtr _connectPeers) { m_connectPeers = std::move(_connectPeers); }
     bool disableSsl() const { return m_disableSsl; }
     void setDisableSsl(bool _disableSsl) { m_disableSsl = _disableSsl; }
 
     std::shared_ptr<context::ContextConfig> contextConfig() const { return m_contextConfig; }
     void setContextConfig(std::shared_ptr<context::ContextConfig> _contextConfig)
     {
-        m_contextConfig = _contextConfig;
+        m_contextConfig = std::move(_contextConfig);
     }
 
     std::string moduleName() { return m_moduleName; }
-    void setModuleName(std::string _moduleName) { m_moduleName = _moduleName; }
+    void setModuleName(std::string _moduleName) { m_moduleName = std::move(_moduleName); }
 };
-}  // namespace ws
-}  // namespace boostssl
-}  // namespace bcos
+}  // namespace bcos::boostssl::ws

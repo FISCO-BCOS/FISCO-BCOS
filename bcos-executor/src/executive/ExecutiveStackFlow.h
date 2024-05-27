@@ -26,6 +26,7 @@
 #include "ExecutiveState.h"
 #include <tbb/concurrent_unordered_map.h>
 #include <atomic>
+#include <queue>
 #include <stack>
 
 namespace bcos
@@ -65,17 +66,24 @@ public:
 
     void stop() override
     {
+        EXECUTOR_LOG(DEBUG) << "Try to stop ExecutiveStackFlow";
+        if (!m_isRunning)
+        {
+            EXECUTOR_LOG(DEBUG) << "Executor has tried to stop";
+            return;
+        }
+
         m_isRunning = false;
         ExecutiveFlowInterface::stop();
     };
 
-private:
+protected:
     void run(std::function<void(CallParameters::UniquePtr)> onTxReturn,
         std::function<void(bcos::Error::UniquePtr)> onFinished);
 
     void runWaitingFlow(std::function<void(CallParameters::UniquePtr)> onTxReturn);
 
-    void runOriginFlow(std::function<void(CallParameters::UniquePtr)> onTxReturn);
+    virtual void runOriginFlow(std::function<void(CallParameters::UniquePtr)> onTxReturn);
 
     void runOne(ExecutiveState::Ptr executiveState,
         std::function<void(CallParameters::UniquePtr)> onTxReturn);
@@ -84,8 +92,7 @@ private:
     void asyncTo(F f)
     {
         // call super function
-        ExecutiveFlowInterface::asyncTo<ExecutiveStackFlow::Ptr, F>(
-            shared_from_this(), std::move(f));
+        ExecutiveFlowInterface::asyncTo<F>(std::move(f));
     }
 
     std::queue<ExecutiveState::Ptr> m_originFlow;

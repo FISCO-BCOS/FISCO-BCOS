@@ -19,11 +19,10 @@
  */
 
 #pragma once
-#pragma GCC diagnostic ignored "-Wunused-variable"
-#pragma GCC diagnostic ignored "-Wunused-parameter"
 
 #include <bcos-framework/executor/ParallelTransactionExecutorInterface.h>
 #include <bcos-tars-protocol/tars/ExecutorService.h>
+#include <bcos-utilities/ThreadPool.h>
 
 namespace bcostars
 {
@@ -31,7 +30,11 @@ class ExecutorServiceClient : public bcos::executor::ParallelTransactionExecutor
 {
 public:
     using Ptr = std::shared_ptr<ExecutorServiceClient>;
-    ExecutorServiceClient(ExecutorServicePrx _prx) : m_prx(_prx) {}
+    ExecutorServiceClient(ExecutorServicePrx _prx)
+      : m_prx(_prx),
+        m_callbackPool(std::make_shared<bcos::ThreadPool>(
+            "executorCallback", std::thread::hardware_concurrency()))
+    {}
     ~ExecutorServiceClient() override {}
 
     void status(
@@ -55,6 +58,11 @@ public:
         std::function<void(
             bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
             callback) override;
+
+    void preExecuteTransactions(int64_t schedulerTermId,
+        const bcos::protocol::BlockHeader::ConstPtr& blockHeader, std::string contractAddress,
+        gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
+        std::function<void(bcos::Error::UniquePtr)> callback) override;
 
     void dmcExecuteTransactions(std::string contractAddress,
         gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
@@ -97,5 +105,6 @@ public:
 
 private:
     ExecutorServicePrx m_prx;
+    bcos::ThreadPool::Ptr m_callbackPool;
 };
 }  // namespace bcostars

@@ -30,7 +30,7 @@ class AuthManagerPrecompiled : public bcos::precompiled::Precompiled
 {
 public:
     using Ptr = std::shared_ptr<AuthManagerPrecompiled>;
-    AuthManagerPrecompiled(crypto::Hash::Ptr _hashImpl);
+    AuthManagerPrecompiled(crypto::Hash::Ptr _hashImpl, bool _isWasm);
     ~AuthManagerPrecompiled() override = default;
 
     std::shared_ptr<PrecompiledExecResult> call(
@@ -73,6 +73,21 @@ private:
 
     void setDeployAuth(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         bool _isClose, PrecompiledExecResult::Ptr const& _callParameters);
+
+    void initAuth(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        PrecompiledExecResult::Ptr const& _callParameters);
+
+    inline void openDeployAuth(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        PrecompiledExecResult::Ptr const& _callParameters)
+    {
+        setDeployAuth(_executive, false, _callParameters);
+    }
+
+    inline void closeDeployAuth(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        PrecompiledExecResult::Ptr const& _callParameters)
+    {
+        setDeployAuth(_executive, true, _callParameters);
+    }
 
     std::string getContractAdmin(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         const std::string& _address, PrecompiledExecResult::Ptr const& _callParameters);

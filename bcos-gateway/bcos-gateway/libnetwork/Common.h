@@ -8,18 +8,15 @@
 
 #pragma once
 
-#include <chrono>
-#include <set>
-#include <string>
-#include <vector>
-
-#include <boost/asio/ip/tcp.hpp>
-
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-framework/gateway/GatewayTypeDef.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
 #include <bcos-utilities/Exceptions.h>
+#include <boost/asio/ip/tcp.hpp>
+#include <set>
+#include <string>
+
 namespace ba = boost::asio;
 namespace bi = boost::asio::ip;
 #define HOST_LOG(LEVEL) BCOS_LOG(LEVEL) << "[NETWORK][Host]"
@@ -30,11 +27,6 @@ namespace bcos
 {
 namespace gateway
 {
-enum MessageExtFieldFlag
-{
-    Response = 0x0001,
-};
-
 enum MessageDecodeStatus
 {
     MESSAGE_ERROR = -1,
@@ -57,6 +49,8 @@ enum DisconnectReason
     UserReason = 0x10,
     IdleWaitTimeout = 0x11,
     NegotiateFailed = 0x12,
+    InBlacklistReason = 0x13,
+    NotInWhitelistReason = 0x14,
     NoDisconnect = 0xffff
 };
 
@@ -71,8 +65,9 @@ enum P2PExceptionType
     ConnectError,
     DuplicateSession,
     NotInWhitelist,
-    BandwidthOverFlow,
-    ALL,
+    OutBWOverflow,
+    InQPSOverflow,
+    ALL
 };
 
 //
@@ -88,7 +83,7 @@ struct Options
 class NetworkException : public std::exception
 {
 public:
-    NetworkException(){};
+    NetworkException() = default;
     NetworkException(int _errorCode, const std::string& _msg)
       : m_errorCode(_errorCode), m_msg(_msg){};
 
@@ -96,7 +91,7 @@ public:
     const char* what() const noexcept override { return m_msg.c_str(); };
     bool operator!() const { return m_errorCode == 0; }
 
-    virtual Error::Ptr toError() { return std::make_shared<Error>(errorCode(), m_msg); }
+    virtual Error::Ptr toError() { return BCOS_ERROR_PTR(errorCode(), m_msg); }
 
 private:
     int m_errorCode = 0;
@@ -104,9 +99,9 @@ private:
 };
 
 /// @returns the string form of the given disconnection reason.
-inline std::string reasonOf(DisconnectReason _r)
+inline std::string reasonOf(DisconnectReason _reason)
 {
-    switch (_r)
+    switch (_reason)
     {
     case DisconnectRequested:
         return "Disconnect was requested.";
@@ -135,7 +130,7 @@ inline std::string reasonOf(DisconnectReason _r)
     case NoDisconnect:
         return "(No disconnect has happened.)";
     case IdleWaitTimeout:
-        return "(Idle connection for no network io happens during 5s time "
+        return "(Idle connection for no network io happens during 60s time "
                "intervals.)";
     default:
         return "Unknown reason.";

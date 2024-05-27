@@ -1,8 +1,5 @@
 #pragma once
-#pragma GCC diagnostic ignored "-Wunused-variable"
-#pragma GCC diagnostic ignored "-Wunused-parameter"
 
-#include "libinitializer/ProtocolInitializer.h"
 #include "libinitializer/TxPoolInitializer.h"
 #include <bcos-framework/consensus/ConsensusNode.h>
 #include <bcos-tars-protocol/ErrorConverter.h>
@@ -33,6 +30,15 @@ public:
     void initialize() override {}
     void destroy() override {}
 
+    bcostars::Error submit(const bcostars::Transaction& tx,
+        bcostars::TransactionSubmitResult& result, tars::TarsCurrentPtr current) override;
+
+    bcostars::Error broadcastTransaction(
+        const bcostars::Transaction& tx, tars::TarsCurrentPtr current) override;
+
+    bcostars::Error broadcastTransactionBuffer(
+        const vector<tars::Char>& transactionBuffer, tars::TarsCurrentPtr current) override;
+
     bcostars::Error asyncFillBlock(const vector<vector<tars::Char>>& txHashs,
         vector<bcostars::Transaction>& filled, tars::TarsCurrentPtr current) override;
 
@@ -51,9 +57,6 @@ public:
     bcostars::Error asyncSealTxs(tars::Int64 txsLimit, const vector<vector<tars::Char>>& avoidTxs,
         bcostars::Block& txsList, bcostars::Block& sysTxsList,
         tars::TarsCurrentPtr current) override;
-
-    bcostars::Error asyncSubmit(const vector<tars::Char>& tx,
-        bcostars::TransactionSubmitResult& result, tars::TarsCurrentPtr current) override;
 
     bcostars::Error asyncVerifyBlock(const vector<tars::Char>& generatedNodeID,
         const vector<tars::Char>& block, tars::Bool& result, tars::TarsCurrentPtr current) override;

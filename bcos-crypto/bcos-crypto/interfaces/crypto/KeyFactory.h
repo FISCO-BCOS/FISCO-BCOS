@@ -20,19 +20,16 @@
  */
 #pragma once
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
-namespace bcos
-{
-namespace crypto
+namespace bcos::crypto
 {
 class KeyFactory
 {
 public:
     using Ptr = std::shared_ptr<KeyFactory>;
     KeyFactory() = default;
-    virtual ~KeyFactory() {}
+    virtual ~KeyFactory() = default;
 
-    virtual KeyInterface::Ptr createKey(bytesConstRef _keyData) = 0;
-    virtual KeyInterface::Ptr createKey(bytes const& _keyData) = 0;
+    virtual std::shared_ptr<KeyInterface> createKey(bcos::bytesConstRef _keyData) = 0;
+    virtual std::shared_ptr<KeyInterface> createKey(bcos::bytes const& _keyData) = 0;
 };
-}  // namespace crypto
-}  // namespace bcos
+}  // namespace bcos::crypto

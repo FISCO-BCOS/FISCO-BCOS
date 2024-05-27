@@ -1,7 +1,7 @@
 #pragma once
 
-#include <bcos-tars-protocol/impl/TarsSerializable.h>
-
+#include "bcos-concepts/Exception.h"
+#include "bcos-concepts/Serialize.h"
 #include <bcos-concepts/ledger/Ledger.h>
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-framework/front/FrontServiceInterface.h>
@@ -9,42 +9,26 @@
 #include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-front/FrontService.h>
+#include <bcos-ledger/src/libledger/LedgerImpl.h>
 #include <bcos-lightnode/Log.h>
-#include <bcos-lightnode/ledger/LedgerImpl.h>
 #include <bcos-lightnode/scheduler/SchedulerWrapperImpl.h>
-#include <bcos-lightnode/storage/StorageImpl.h>
-#include <bcos-lightnode/transaction_pool/TransactionPoolImpl.h>
+#include <bcos-lightnode/transaction-pool/TransactionPoolImpl.h>
 #include <bcos-protocol/TransactionStatus.h>
 #include <bcos-scheduler/src/SchedulerImpl.h>
+#include <bcos-tars-protocol/impl/TarsSerializable.h>
 #include <bcos-tars-protocol/tars/LightNode.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <exception>
-#include <iterator>
 
 namespace bcos::initializer
 {
-using Keccak256Ledger =
-    bcos::ledger::LedgerImpl<bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher,
-        bcos::storage::StorageImpl<bcos::storage::StorageInterface::Ptr>>;
-using SM3Ledger = bcos::ledger::LedgerImpl<bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher,
-    bcos::storage::StorageImpl<bcos::storage::StorageInterface::Ptr>>;
-using SHA3Ledger = bcos::ledger::LedgerImpl<bcos::crypto::hasher::openssl::OpenSSL_SHA3_256_Hasher,
-    bcos::storage::StorageImpl<bcos::storage::StorageInterface::Ptr>>;
-using SHA2Ledger = bcos::ledger::LedgerImpl<bcos::crypto::hasher::openssl::OpenSSL_SHA2_256_Hasher,
-    bcos::storage::StorageImpl<bcos::storage::StorageInterface::Ptr>>;
-using AnyLedger = std::variant<Keccak256Ledger, SM3Ledger, SHA3Ledger, SHA2Ledger>;
-
 class LightNodeInitializer : public std::enable_shared_from_this<LightNodeInitializer>
 {
 public:
-    LightNodeInitializer()
-    {
-        m_lightNodePool = std::make_shared<bcos::ThreadPool>("lightNodePool", 4);
-    }
     // Note: FrontService is owned by Initializier for the entire lifetime
     void initLedgerServer(std::shared_ptr<bcos::front::FrontService> front,
-        std::shared_ptr<AnyLedger> anyLedger,
+        bcos::concepts::ledger::Ledger auto ledger,
         std::shared_ptr<bcos::transaction_pool::TransactionPoolImpl<
             std::shared_ptr<bcos::txpool::TxPoolInterface>>>
             transactionPool,
@@ -54,197 +38,192 @@ public:
     {
         auto weakFront = std::weak_ptr<bcos::front::FrontService>(front);
         auto self = std::weak_ptr<LightNodeInitializer>(shared_from_this());
-        front->registerModuleMessageDispatcher(bcos::protocol::LIGHTNODE_GETBLOCK,
-            [self, anyLedger, weakFront](
-                bcos::crypto::NodeIDPtr nodeID, const std::string& id, bytesConstRef data) {
-                auto lightNodeInit = self.lock();
-                if (!lightNodeInit)
+        front->registerModuleMessageDispatcher(bcos::protocol::LIGHTNODE_GET_BLOCK,
+            [self, ledger, weakFront](
+                bcos::crypto::NodeIDPtr nodeID, const std::string& messageID, bytesConstRef data) {
+                auto init = self.lock();
+                auto front = weakFront.lock();
+                if (!front || !init)
                 {
                     return;
                 }
-                lightNodeInit->getBlock(weakFront, anyLedger, nodeID, id, data);
+
+                bcostars::RequestBlock request;
+                init->decodeRequest<bcostars::ResponseBlock>(
+                    request, front, protocol::LIGHTNODE_GET_BLOCK, nodeID, messageID, data);
+                bcos::task::wait(init->getBlock(std::move(front), ledger, std::move(nodeID),
+                    std::string(messageID), std::move(request)));
             });
 
-        front->registerModuleMessageDispatcher(bcos::protocol::LIGHTNODE_GETTRANSACTIONS,
-            [anyLedger, front](
+        front->registerModuleMessageDispatcher(bcos::protocol::LIGHTNODE_GET_TRANSACTIONS,
+            [ledger, front](
                 bcos::crypto::NodeIDPtr nodeID, const std::string& id, bytesConstRef data) {
-                bcostars::ResponseTransactions response;
+                task::wait([](auto ledger, auto front, auto nodeID, std::string id,
+                               bytesConstRef data) -> task::Task<void> {
+                    bcostars::ResponseTransactions response;
 
-                try
-                {
-                    bcostars::RequestTransactions request;
-                    bcos::concepts::serialize::decode(data, request);
+                    try
+                    {
+                        bcostars::RequestTransactions request;
+                        bcos::concepts::serialize::decode(data, request);
 
-                    LIGHTNODE_LOG(INFO) << "Get transactions:" << request.hashes.size() << " | "
-                                        << request.withProof;
+                        LIGHTNODE_LOG(INFO) << "Get transactions:" << request.hashes.size() << " | "
+                                            << request.withProof;
 
-                    std::visit(
-                        [&request, &response](auto& ledger) {
-                            ledger.getTransactions(request.hashes, response.transactions);
-                        },
-                        *anyLedger);
-                }
-                catch (std::exception& e)
-                {
-                    response.error.errorCode = -1;
-                    response.error.errorMessage = boost::diagnostic_information(e);
-                }
+                        co_await concepts::getRef(ledger).getTransactions(
+                            request.hashes, response.transactions);
+                    }
+                    catch (std::exception& e)
+                    {
+                        response.error.errorCode = -1;
+                        response.error.errorMessage = boost::diagnostic_information(e);
+                    }
 
-                bcos::bytes responseBuffer;
-                bcos::concepts::serialize::encode(response, responseBuffer);
-                front->asyncSendResponse(id, bcos::protocol::LIGHTNODE_GETTRANSACTIONS, nodeID,
-                    bcos::ref(responseBuffer), [](Error::Ptr _error) {
-                        if (_error)
-                        {}
-                    });
+                    bcos::bytes responseBuffer;
+                    bcos::concepts::serialize::encode(response, responseBuffer);
+                    front->asyncSendResponse(id, bcos::protocol::LIGHTNODE_GET_TRANSACTIONS, nodeID,
+                        bcos::ref(responseBuffer), []([[maybe_unused]] Error::Ptr _error) {});
+                }(ledger, front, std::move(nodeID), id, data));
             });
-        front->registerModuleMessageDispatcher(bcos::protocol::LIGHTNODE_GETRECEIPTS,
-            [anyLedger, weakFront](
+        front->registerModuleMessageDispatcher(bcos::protocol::LIGHTNODE_GET_RECEIPTS,
+            [ledger, weakFront](
                 bcos::crypto::NodeIDPtr nodeID, const std::string& id, bytesConstRef data) {
-                auto sharedFront = weakFront.lock();
-                if (!sharedFront)
+                task::wait([](auto ledger, auto weakFront, std::string id, auto nodeID,
+                               bytesConstRef data) -> task::Task<void> {
+                    auto front = weakFront.lock();
+                    if (!front)
+                    {
+                        co_return;
+                    }
+
+                    bcostars::ResponseReceipts response;
+                    try
+                    {
+                        bcostars::RequestReceipts request;
+                        bcos::concepts::serialize::decode(data, request);
+
+                        co_await concepts::getRef(ledger).getTransactions(
+                            request.hashes, response.receipts);
+                    }
+                    catch (std::exception& e)
+                    {
+                        LIGHTNODE_LOG(ERROR)
+                            << "Get receipt error!" << boost::diagnostic_information(e);
+
+                        response.error.errorCode = -1;
+                        response.error.errorMessage = boost::diagnostic_information(e);
+                    }
+
+                    bcos::bytes responseBuffer;
+                    bcos::concepts::serialize::encode(response, responseBuffer);
+                    front->asyncSendResponse(id, bcos::protocol::LIGHTNODE_GET_RECEIPTS, nodeID,
+                        bcos::ref(responseBuffer), {});
+                }(ledger, weakFront, id, std::move(nodeID), data));
+            });
+        front->registerModuleMessageDispatcher(bcos::protocol::LIGHTNODE_GET_STATUS,
+            [ledger, weakFront](
+                bcos::crypto::NodeIDPtr nodeID, const std::string& messageID, bytesConstRef data) {
+                auto front = weakFront.lock();
+                if (!front)
                 {
                     return;
                 }
-                bcostars::ResponseReceipts response;
 
-                try
-                {
-                    bcostars::RequestReceipts request;
-                    bcos::concepts::serialize::decode(data, request);
+                task::wait([](decltype(ledger) ledger, std::shared_ptr<front::FrontService> front,
+                               bcos::crypto::NodeIDPtr nodeID, std::string messageID,
+                               bytesConstRef data) -> task::Task<void> {
+                    bcostars::ResponseGetStatus response;
 
-                    std::visit(
-                        [&request, &response](auto& ledger) {
-                            ledger.getTransactions(request.hashes, response.receipts);
-                        },
-                        *anyLedger);
-                }
-                catch (std::exception& e)
-                {
-                    response.error.errorCode = -1;
-                    response.error.errorMessage = boost::diagnostic_information(e);
-                }
+                    try
+                    {
+                        bcostars::RequestGetStatus request;
+                        bcos::concepts::serialize::decode(data, request);
 
-                bcos::bytes responseBuffer;
-                bcos::concepts::serialize::encode(response, responseBuffer);
-                sharedFront->asyncSendResponse(id, bcos::protocol::LIGHTNODE_GETRECEIPTS, nodeID,
-                    bcos::ref(responseBuffer), [](Error::Ptr _error) {
-                        if (_error)
-                        {}
-                    });
+                        auto status = co_await concepts::getRef(ledger).getStatus();
+                        response.total = status.total;
+                        response.failed = status.failed;
+                        response.blockNumber = status.blockNumber;
+                    }
+                    catch (std::exception& e)
+                    {
+                        response.error.errorCode = -1;
+                        response.error.errorMessage = boost::diagnostic_information(e);
+                    }
+                    bcos::bytes responseBuffer;
+                    bcos::concepts::serialize::encode(response, responseBuffer);
+                    front->asyncSendResponse(messageID, bcos::protocol::LIGHTNODE_GET_STATUS,
+                        nodeID, bcos::ref(responseBuffer),
+                        []([[maybe_unused]] const Error::Ptr& error) {});
+                }(ledger, std::move(front), std::move(nodeID), std::string(messageID), data));
             });
-        front->registerModuleMessageDispatcher(bcos::protocol::LIGHTNODE_GETSTATUS,
-            [anyLedger, weakFront](
-                bcos::crypto::NodeIDPtr nodeID, const std::string& id, bytesConstRef data) {
-                auto sharedFront = weakFront.lock();
-                if (!sharedFront)
+        front->registerModuleMessageDispatcher(
+            bcos::protocol::LIGHTNODE_GET_ABI, [ledger, weakFront](bcos::crypto::NodeIDPtr nodeID,
+                                                   const std::string& id, bytesConstRef data) {
+                auto front = weakFront.lock();
+                if (!front)
                 {
                     return;
                 }
-                bcostars::ResponseGetStatus response;
-
-                try
-                {
-                    bcostars::RequestGetStatus request;
-                    bcos::concepts::serialize::decode(data, request);
-
-                    std::visit(
-                        [&response](auto& ledger) {
-                            auto status = ledger.getStatus();
-                            response.total = status.total;
-                            response.failed = status.failed;
-                            response.blockNumber = status.blockNumber;
-                        },
-                        *anyLedger);
-                }
-                catch (std::exception& e)
-                {
-                    response.error.errorCode = -1;
-                    response.error.errorMessage = boost::diagnostic_information(e);
-                }
-
-                bcos::bytes responseBuffer;
-                bcos::concepts::serialize::encode(response, responseBuffer);
-                sharedFront->asyncSendResponse(id, bcos::protocol::LIGHTNODE_GETSTATUS, nodeID,
-                    bcos::ref(responseBuffer), [](Error::Ptr _error) {
-                        if (_error)
-                        {}
-                    });
+                task::wait([](decltype(ledger) ledger, std::shared_ptr<front::FrontService> front,
+                               bcos::crypto::NodeIDPtr nodeID, std::string id,
+                               bytesConstRef data) -> task::Task<void> {
+                    bcostars::ResponseGetABI response;
+                    try
+                    {
+                        bcostars::RequestGetABI request;
+                        bcos::concepts::serialize::decode(data, request);
+                        auto abiStr =
+                            co_await concepts::getRef(ledger).getABI(request.contractAddress);
+                        response.abiStr = abiStr;
+                        LIGHTNODE_LOG(TRACE) << "client get ABI response is: " << response.abiStr;
+                    }
+                    catch (std::exception& e)
+                    {
+                        response.error.errorCode = -1;
+                        response.error.errorMessage = boost::diagnostic_information(e);
+                    }
+                    bcos::bytes responseBuffer;
+                    bcos::concepts::serialize::encode(response, responseBuffer);
+                    front->asyncSendResponse(id, bcos::protocol::LIGHTNODE_GET_ABI, nodeID,
+                        bcos::ref(responseBuffer), []([[maybe_unused]] const Error::Ptr& error) {});
+                }(ledger, std::move(front), std::move(nodeID), std::string(id), data));
             });
-        front->registerModuleMessageDispatcher(bcos::protocol::LIGHTNODE_SENDTRANSACTION,
+        front->registerModuleMessageDispatcher(bcos::protocol::LIGHTNODE_SEND_TRANSACTION,
             [transactionPool, self, weakFront](
                 bcos::crypto::NodeIDPtr nodeID, const std::string& id, bytesConstRef data) {
+                auto front = weakFront.lock();
                 auto init = self.lock();
-                if (!init)
+                if (!front || !init)
                 {
                     return;
                 }
-                init->submitTransaction(weakFront, transactionPool, nodeID, id, data);
+                bcostars::RequestSendTransaction request;
+                init->decodeRequest<bcostars::ResponseSendTransaction>(
+                    request, front, protocol::LIGHTNODE_SEND_TRANSACTION, nodeID, id, data);
+                bcos::task::wait(init->submitTransaction(
+                    front, transactionPool, nodeID, id, std::move(request)));
             });
 
         front->registerModuleMessageDispatcher(bcos::protocol::LIGHTNODE_CALL,
             [self, scheduler, weakFront](
-                bcos::crypto::NodeIDPtr nodeID, const std::string& id, bytesConstRef data) {
+                bcos::crypto::NodeIDPtr nodeID, const std::string& id, bytesConstRef data) mutable {
+                auto front = weakFront.lock();
                 auto init = self.lock();
-                if (!init)
+                if (!front || !init)
                 {
                     return;
                 }
-                init->call(weakFront, scheduler, nodeID, id, data);
+
+                bcostars::RequestSendTransaction request;
+                init->decodeRequest<bcostars::ResponseSendTransaction>(
+                    request, front, protocol::LIGHTNODE_CALL, nodeID, id, data);
+                bcos::task::wait(init->call(front, scheduler, nodeID, id, std::move(request)));
             });
     }
 
 private:
-    void getBlock(std::weak_ptr<bcos::front::FrontService> weakFront,
-        std::shared_ptr<AnyLedger> anyLedger, bcos::crypto::NodeIDPtr nodeID, const std::string& id,
-        bytesConstRef data)
-    {
-        auto front = weakFront.lock();
-        if (!front)
-        {
-            return;
-        }
-        bcostars::ResponseBlock response;
-        try
-        {
-            bcostars::RequestBlock request;
-            bcos::concepts::serialize::decode(data, request);
-
-            LIGHTNODE_LOG(INFO) << "Get block:" << request.blockNumber << " | "
-                                << request.onlyHeader;
-
-            std::visit(
-                [&request, &response](auto& ledger) {
-                    if (request.onlyHeader)
-                    {
-                        ledger.template getBlock<bcos::concepts::ledger::HEADER>(
-                            request.blockNumber, response.block);
-                    }
-                    else
-                    {
-                        ledger.template getBlock<bcos::concepts::ledger::ALL>(
-                            request.blockNumber, response.block);
-                    }
-                },
-                *anyLedger);
-        }
-        catch (std::exception& e)
-        {
-            response.error.errorCode = -1;
-            response.error.errorMessage = boost::diagnostic_information(e);
-        }
-
-        bcos::bytes responseBuffer;
-        bcos::concepts::serialize::encode(response, responseBuffer);
-        front->asyncSendResponse(id, bcos::protocol::LIGHTNODE_GETBLOCK, nodeID,
-            bcos::ref(responseBuffer), [](Error::Ptr _error) {
-                if (_error)
-                {}
-            });
-    }
-
-    template <typename T, typename S>
-    bool decodeRequest(T& request, S& response, std::shared_ptr<bcos::front::FrontService> front,
+    template <class Response>
+    bool decodeRequest(auto& request, std::shared_ptr<bcos::front::FrontService> front,
         bcos::protocol::ModuleID moduleID, bcos::crypto::NodeIDPtr nodeID, const std::string& id,
         bytesConstRef data)
     {
@@ -256,127 +235,115 @@ private:
         }
         catch (std::exception const& e)
         {
+            Response response;
             response.error.errorCode = -1;
             response.error.errorMessage = boost::diagnostic_information(e);
             success = false;
+
+            bcos::bytes responseBuffer;
+            bcos::concepts::serialize::encode(response, responseBuffer);
+            front->asyncSendResponse(
+                std::string(id), moduleID, nodeID, bcos::ref(responseBuffer), [](Error::Ptr) {});
         }
-        bcos::bytes responseBuffer;
-        bcos::concepts::serialize::encode(response, responseBuffer);
-        front->asyncSendResponse(
-            id, moduleID, nodeID, bcos::ref(responseBuffer), [](Error::Ptr _error) {
-                if (_error)
-                {}
-            });
+
         return success;
     }
 
-    void submitTransaction(std::weak_ptr<bcos::front::FrontService> weakFront,
+    task::Task<void> getBlock(std::shared_ptr<bcos::front::FrontService> front,
+        bcos::concepts::ledger::Ledger auto ledger, bcos::crypto::NodeIDPtr nodeID,
+        std::string messageID, bcostars::RequestBlock request)
+    {
+        bcostars::ResponseBlock response;
+        try
+        {
+            LIGHTNODE_LOG(INFO) << "Get block:" << request.blockNumber << " | "
+                                << request.onlyHeader;
+
+            if (request.onlyHeader)
+            {
+                co_await concepts::getRef(ledger).template getBlock<bcos::concepts::ledger::HEADER>(
+                    request.blockNumber, response.block);
+            }
+            else
+            {
+                co_await concepts::getRef(ledger).template getBlock<bcos::concepts::ledger::ALL>(
+                    request.blockNumber, response.block);
+                LIGHTNODE_LOG(DEBUG) << "getAllBlock success:" << request.blockNumber;
+            }
+        }
+        catch (std::exception& e)
+        {
+            response.error.errorCode = -1;
+            response.error.errorMessage = boost::diagnostic_information(e);
+        }
+
+        bcos::bytes responseBuffer;
+        bcos::concepts::serialize::encode(response, responseBuffer);
+        auto blockNumber = request.blockNumber;
+        front->asyncSendResponse(messageID, bcos::protocol::LIGHTNODE_GET_BLOCK, nodeID,
+            bcos::ref(responseBuffer), [blockNumber](Error::Ptr _error) {
+                if (_error)
+                {
+                    LIGHTNODE_LOG(ERROR)
+                        << "send getblockResponse failed " << LOG_KV("blockNumber", blockNumber);
+                }
+            });
+        LIGHTNODE_LOG(DEBUG) << "asyncSendResponse: sendResponseMessage to dstNode:"
+                             << nodeID->hex() << LOG_KV("blockNUmber", blockNumber)
+                             << LOG_KV("moduleID", bcos::protocol::LIGHTNODE_GET_BLOCK)
+                             << LOG_KV("responseBuffer size", responseBuffer.size());
+    }
+
+    task::Task<void> submitTransaction(std::shared_ptr<bcos::front::FrontService> front,
         std::shared_ptr<bcos::transaction_pool::TransactionPoolImpl<
             std::shared_ptr<bcos::txpool::TxPoolInterface>>>
             transactionPool,
-        bcos::crypto::NodeIDPtr nodeID, const std::string& id, bytesConstRef data)
+        bcos::crypto::NodeIDPtr nodeID, std::string id, bcostars::RequestSendTransaction request)
     {
-        auto front = weakFront.lock();
-        if (!front)
+        bcostars::ResponseSendTransaction response;
+        try
         {
-            return;
+            LIGHTNODE_LOG(INFO) << "Request submit transaction: " << id;
+            co_await transactionPool->submitTransaction(
+                std::move(request.transaction), response.receipt);
         }
-        bcostars::ResponseSendTransaction sendTxsResponse;
-        bcostars::RequestSendTransaction sendTxsRequest;
-        auto moduleID = bcos::protocol::LIGHTNODE_SENDTRANSACTION;
-        if (!decodeRequest(sendTxsRequest, sendTxsResponse, front, moduleID, nodeID, id, data))
+        catch (std::exception& e)
         {
-            return;
+            response.error.errorCode = -1;
+            response.error.errorMessage = boost::diagnostic_information(e);
         }
-        m_lightNodePool->enqueue(
-            [response = std::move(sendTxsResponse), request = std::move(sendTxsRequest), nodeID, id,
-                transactionPool, weakFront, moduleID]() mutable {
-                auto front = weakFront.lock();
-                if (!front)
-                {
-                    return;
-                }
-                try
-                {
-                    std::string transactionHash;
-                    transactionHash.reserve(request.transaction.dataHash.size() * 2);
-                    boost::algorithm::hex_lower(request.transaction.dataHash.begin(),
-                        request.transaction.dataHash.end(), std::back_inserter(transactionHash));
-                    LIGHTNODE_LOG(INFO) << "Send transaction: " << transactionHash;
 
-                    transactionPool->submitTransaction(
-                        std::move(request.transaction), response.receipt);
-                }
-                catch (std::exception& e)
-                {
-                    response.error.errorCode = -1;
-                    response.error.errorMessage = boost::diagnostic_information(e);
-                }
 
-                bcos::bytes responseBuffer;
-                bcos::concepts::serialize::encode(response, responseBuffer);
-                front->asyncSendResponse(
-                    id, moduleID, nodeID, bcos::ref(responseBuffer), [](Error::Ptr _error) {
-                        if (_error)
-                        {}
-                    });
-            });
+        bcos::bytes responseBuffer;
+        bcos::concepts::serialize::encode(response, responseBuffer);
+        LIGHTNODE_LOG(INFO) << "Response submit transaction: " << id << " | "
+                            << responseBuffer.size();
+
+        front->asyncSendResponse(id, bcos::protocol::LIGHTNODE_SEND_TRANSACTION, nodeID,
+            bcos::ref(responseBuffer), [](const Error::Ptr&) {});
     }
 
-    void call(std::weak_ptr<bcos::front::FrontService> weakFront,
+    task::Task<void> call(std::shared_ptr<bcos::front::FrontService> front,
         std::shared_ptr<bcos::scheduler::SchedulerWrapperImpl<
             std::shared_ptr<bcos::scheduler::SchedulerInterface>>>
             scheduler,
-        bcos::crypto::NodeIDPtr nodeID, const std::string& id, bytesConstRef data)
+        bcos::crypto::NodeIDPtr nodeID, std::string id, bcostars::RequestSendTransaction request)
     {
-        auto front = weakFront.lock();
-        if (!front)
+        bcostars::ResponseSendTransaction response;
+        try
         {
-            return;
+            co_await scheduler->call(request.transaction, response.receipt);
         }
-        bcostars::ResponseSendTransaction sendTxResponse;
-        bcostars::RequestSendTransaction sendTxsRequest;
-        auto moduleID = bcos::protocol::LIGHTNODE_CALL;
-        if (!decodeRequest(sendTxsRequest, sendTxResponse, front, moduleID, nodeID, id, data))
+        catch (std::exception& e)
         {
-            return;
+            response.error.errorCode = -1;
+            response.error.errorMessage = boost::diagnostic_information(e);
         }
-        m_lightNodePool->enqueue(
-            [request = std::move(sendTxsRequest), response = std::move(sendTxResponse), weakFront,
-                scheduler, nodeID, id, moduleID]() mutable {
-                auto front = weakFront.lock();
-                if (!front)
-                {
-                    return;
-                }
-                try
-                {
-                    std::string to;
-                    to.reserve(request.transaction.data.to.size() * 2);
-                    boost::algorithm::hex_lower(request.transaction.data.to.begin(),
-                        request.transaction.data.to.end(), std::back_inserter(to));
 
-                    LIGHTNODE_LOG(INFO) << "Call to: " << to;
-
-                    scheduler->call(request.transaction, response.receipt);
-                }
-                catch (std::exception& e)
-                {
-                    response.error.errorCode = -1;
-                    response.error.errorMessage = boost::diagnostic_information(e);
-                }
-
-                bcos::bytes responseBuffer;
-                bcos::concepts::serialize::encode(response, responseBuffer);
-                front->asyncSendResponse(
-                    id, moduleID, nodeID, bcos::ref(responseBuffer), [](Error::Ptr _error) {
-                        if (_error)
-                        {}
-                    });
-            });
+        bcos::bytes responseBuffer;
+        bcos::concepts::serialize::encode(response, responseBuffer);
+        front->asyncSendResponse(id, bcos::protocol::LIGHTNODE_CALL, nodeID,
+            bcos::ref(responseBuffer), [](const Error::Ptr&) {});
     }
-
-private:
-    std::shared_ptr<bcos::ThreadPool> m_lightNodePool;
 };
 }  // namespace bcos::initializer

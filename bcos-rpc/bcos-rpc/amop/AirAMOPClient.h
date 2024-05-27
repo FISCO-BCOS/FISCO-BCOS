@@ -21,9 +21,9 @@
 #pragma once
 #include "AMOPClient.h"
 
-namespace bcos
-{
-namespace rpc
+#include <utility>
+
+namespace bcos::rpc
 {
 class AirAMOPClient : public AMOPClient
 {
@@ -33,7 +33,8 @@ public:
         std::shared_ptr<bcos::boostssl::MessageFaceFactory> _wsMessageFactory,
         std::shared_ptr<bcos::protocol::AMOPRequestFactory> _requestFactory,
         bcos::gateway::GatewayInterface::Ptr _gateway)
-      : AMOPClient(_wsService, _wsMessageFactory, _requestFactory, _gateway, "localGateway")
+      : AMOPClient(std::move(_wsService), std::move(_wsMessageFactory), std::move(_requestFactory),
+            std::move(_gateway), "localGateway")
     {}
 
     // Note: must with empty implementation to in case of start the m_gatewayStatusDetector
@@ -74,5 +75,4 @@ protected:
             });
     }
 };
-}  // namespace rpc
-}  // namespace bcos
+}  // namespace bcos::rpc

@@ -20,6 +20,8 @@
 
 #pragma once
 
+#include "PrecompiledAbi.h"
+#include "bcos-executor/src/Common.h"
 #include "bcos-framework/Common.h"
 #include "bcos-framework/protocol/CommonError.h"
 #include "bcos-framework/protocol/Exceptions.h"
@@ -33,15 +35,21 @@ namespace bcos
 namespace precompiled
 {
 #define PRECOMPILED_LOG(LEVEL) BCOS_LOG(LEVEL) << "[EXECUTOR][PRECOMPILED]"
-#define PRECOMPILED_BLK_LOG(LEVEL, BLK_NUMBER) PRECOMPILED_LOG(LEVEL) << BLOCK_NUMBER(BLK_NUMBER)
 
 using TableInfoTuple = std::tuple<std::string, std::vector<std::string>>;
+using TableInfoTupleV320 = std::tuple<uint8_t, std::string, std::vector<std::string>>;
 using ConditionTuple = std::tuple<uint8_t, std::string>;
+using ConditionTupleV320 = std::tuple<uint8_t, std::string, std::string>;
 using LimitTuple = std::tuple<uint32_t, uint32_t>;
 using UpdateFieldTuple = std::tuple<std::string, std::string>;
 using EntryTuple = std::tuple<std::string, std::vector<std::string>>;
 using BfsTuple = std::tuple<std::string, std::string, std::vector<std::string>>;
 
+struct TableInfo
+{
+    TableInfoTuple info;
+    TableInfoTupleV320 info_v320;
+};
 /// Precompiled reserved code field
 static constexpr const char* const PRECOMPILED_CODE_FIELD = "[PRECOMPILED]";
 static constexpr const int PRECOMPILED_CODE_FIELD_SIZE = 13;
@@ -50,8 +58,12 @@ static constexpr const int PRECOMPILED_CODE_FIELD_SIZE = 13;
 static constexpr size_t SYS_VALUE = 0;
 static constexpr const char* SYS_VALUE_FIELDS = "value";
 
+/// V320 Table Info Prefix
+static const std::string V320_TABLE_INFO_PREFIX = "__v320_table_info__";
+
 /// FileSystem path limit
 static const size_t FS_PATH_MAX_LENGTH = 56;
+static const size_t FS_PATH_MAX_LENGTH_330 = 128;
 static const size_t FS_PATH_MAX_LEVEL = 6;
 
 const int SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH = 64;
@@ -63,6 +75,7 @@ const int USER_TABLE_NAME_MAX_LENGTH_S = 50;
 const int USER_TABLE_KEY_VALUE_MAX_LENGTH = 255;
 const int USER_TABLE_FIELD_VALUE_MAX_LENGTH = 16 * 1024 * 1024 - 1;
 const int USER_TABLE_MAX_LIMIT_COUNT = 500;
+const int USER_TABLE_MIN_LIMIT_COUNT = 50;
 
 const int CODE_NO_AUTHORIZED = -50000;
 const int CODE_TABLE_NAME_ALREADY_EXIST = -50001;
@@ -81,13 +94,14 @@ enum PrecompiledErrorCode : int
 {
     // BFSPrecompiled -53099 ~ -53000
     CODE_ADDRESS_OR_VERSION_ERROR = -51202,
+    CODE_FILE_COUNT_ERROR = -53007,
     CODE_FILE_INVALID_TYPE = -53006,
     CODE_FILE_INVALID_PATH = -53005,
     CODE_FILE_BUILD_DIR_FAILED = -53003,
     CODE_FILE_ALREADY_EXIST = -53002,
     CODE_FILE_NOT_EXIST = -53001,
 
-    // ContractLifeCyclePrecompiled -51999 ~ -51900
+    // AccountManagerPrecompiled -51999 ~ -51900
     CODE_INVALID_REVOKE_LAST_AUTHORIZATION = -51907,
     CODE_INVALID_NON_EXIST_AUTHORIZATION = -51906,
     CODE_INVALID_NO_AUTHORIZED = -51905,
@@ -95,7 +109,7 @@ enum PrecompiledErrorCode : int
     CODE_INVALID_CONTRACT_ADDRESS = -51903,
     CODE_INVALID_CONTRACT_REPEAT_AUTHORIZATION = -51902,
     CODE_INVALID_CONTRACT_AVAILABLE = -51901,
-    CODE_INVALID_CONTRACT_FROZEN = -51900,
+    CODE_ACCOUNT_ALREADY_EXIST = -51900,
 
     // RingSigPrecompiled -51899 ~ -51800
     VERIFY_RING_SIG_FAILED = -51800,
@@ -128,10 +142,11 @@ enum PrecompiledErrorCode : int
     // SystemConfigPrecompiled -51399 ~ -51300
 
     // ConsensusPrecompiled -51199 ~ -51100
-    CODE_INVALID_NODE_ID = -51100,
-    CODE_LAST_SEALER = -51101,
-    CODE_INVALID_WEIGHT = -51102,
+    CODE_ADD_SEALER_SHOULD_IN_OBSERVER = -51104,
     CODE_NODE_NOT_EXIST = -51103,
+    CODE_INVALID_WEIGHT = -51102,
+    CODE_LAST_SEALER = -51101,
+    CODE_INVALID_NODE_ID = -51100,
 
     // AuthPrecompiledTest -51099 ~ -51000
     CODE_TABLE_AUTH_TYPE_DECODE_ERROR = -51004,
@@ -141,6 +156,7 @@ enum PrecompiledErrorCode : int
     CODE_TABLE_AGENT_ROW_NOT_EXIST = -51000,
 
     // Common error code among all precompiled contracts -50199 ~ -50100
+    CODE_SENDER_ERROR = -50106,
     CODE_TABLE_OPEN_ERROR = -50105,
     CODE_TABLE_CREATE_ERROR = -50104,
     CODE_TABLE_SET_ROW_ERROR = -50103,
@@ -152,13 +168,30 @@ enum PrecompiledErrorCode : int
     CODE_SUCCESS = 0
 };
 
-enum ContractStatus
+enum ContractStatus : uint8_t
 {
-    Available,
-    Frozen,
-    AddressNonExistent,
-    NotContractAddress,
-    Count
+    Available = 0,
+    Frozen = 1,
+    Abolish = 2,
+    AddressNonExistent = 3,
+    NotContractAddress = 4,
 };
+
+static constexpr inline ContractStatus StatusFromString(std::string_view _status) noexcept
+{
+    if (_status == executor::CONTRACT_NORMAL)
+    {
+        return ContractStatus::Available;
+    }
+    else if (_status == executor::CONTRACT_FROZEN)
+    {
+        return ContractStatus::Frozen;
+    }
+    else if (_status == executor::CONTRACT_ABOLISH)
+    {
+        return ContractStatus::Abolish;
+    }
+    return ContractStatus::Available;
+}
 }  // namespace precompiled
 }  // namespace bcos

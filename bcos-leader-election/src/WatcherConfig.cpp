@@ -30,6 +30,8 @@ void WatcherConfig::reCreateWatcher()
     // Note: set recursive to watch subdirectory change
     m_watcher = std::make_shared<etcd::Watcher>(*m_etcdClient, m_watchDir,
         boost::bind(&WatcherConfig::onWatcherKeyChanged, this, boost::placeholders::_1), true);
+    // fetchLeadersInfo when reCreateWatcher
+    fetchLeadersInfo();
 }
 
 void WatcherConfig::fetchLeadersInfo()
@@ -47,7 +49,8 @@ void WatcherConfig::fetchLeadersInfo()
     {
         updateLeaderInfo(value);
     }
-    ELECTION_LOG(INFO) << LOG_DESC("fetchLeadersInfo success") << LOG_KV("watchDir", m_watchDir);
+    ELECTION_LOG(INFO) << LOG_DESC("fetchLeadersInfo success") << LOG_KV("watchDir", m_watchDir)
+                       << LOG_KV("nodesSize", values.size());
 }
 
 void WatcherConfig::updateLeaderInfo(etcd::Value const& _value)
@@ -62,11 +65,12 @@ void WatcherConfig::updateLeaderInfo(etcd::Value const& _value)
             {
                 auto const& leaderKey = _value.key();
                 UpgradableGuard l(x_keyToLeader);
-                if (!m_keyToLeader.count(leaderKey))
+                auto it = m_keyToLeader.find(leaderKey);
+                if (it == m_keyToLeader.end())
                 {
                     return;
                 }
-                auto member = m_keyToLeader.at(leaderKey);
+                auto member = it->second;
                 UpgradeGuard ul(l);
                 m_keyToLeader.erase(leaderKey);
                 onMemberDeleted(leaderKey, member);
@@ -91,7 +95,7 @@ void WatcherConfig::updateLeaderInfo(etcd::Value const& _value)
         ELECTION_LOG(WARNING) << LOG_DESC("updateLeaderInfo exception")
                               << LOG_KV("watchDir", m_watchDir) << LOG_KV("key", _value.key())
                               << LOG_KV("value", _value.as_string())
-                              << LOG_KV("error", boost::diagnostic_information(e));
+                              << LOG_KV("message", boost::diagnostic_information(e));
     }
 }
 
@@ -122,7 +126,7 @@ void WatcherConfig::callNotificationHandlers(
         {
             ELECTION_LOG(ERROR) << LOG_DESC("callNotificationHandlers exception")
                                 << LOG_KV("key", _key) << LOG_KV("memberID", _member->memberID())
-                                << LOG_KV("error", boost::diagnostic_information(e));
+                                << LOG_KV("message", boost::diagnostic_information(e));
         }
     }
 }
@@ -141,7 +145,7 @@ void WatcherConfig::onMemberDeleted(
         {
             ELECTION_LOG(ERROR) << LOG_DESC("onMemberDeleted exception") << LOG_KV("key", _key)
                                 << LOG_KV("memberID", _member->memberID())
-                                << LOG_KV("error", boost::diagnostic_information(e));
+                                << LOG_KV("message", boost::diagnostic_information(e));
         }
     }
 }

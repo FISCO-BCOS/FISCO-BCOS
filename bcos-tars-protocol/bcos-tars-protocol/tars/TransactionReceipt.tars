@@ -6,13 +6,14 @@ module bcostars {
     };
 
     struct TransactionReceiptData {
-        1 require int version;
-        2 optional string gasUsed;
-        3 optional string contractAddress;
-        4 optional int status;
-        5 optional vector<byte> output;
+        1 require  int              version;
+        2 optional string           gasUsed;
+        3 optional string           contractAddress;
+        4 optional int              status;
+        5 optional vector<byte>     output;
         6 optional vector<LogEntry> logEntries;
-        7 optional long blockNumber;
+        7 optional long             blockNumber;
+        8 optional string           effectiveGasPrice;
     };
 
     struct TransactionReceipt {

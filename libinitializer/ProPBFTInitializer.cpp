@@ -41,9 +41,10 @@ ProPBFTInitializer::ProPBFTInitializer(bcos::protocol::NodeArchitectureType _nod
     bcos::txpool::TxPoolInterface::Ptr _txpool, std::shared_ptr<bcos::ledger::Ledger> _ledger,
     bcos::scheduler::SchedulerInterface::Ptr _scheduler,
     bcos::storage::StorageInterface::Ptr _storage,
-    std::shared_ptr<bcos::front::FrontServiceInterface> _frontService)
+    std::shared_ptr<bcos::front::FrontServiceInterface> _frontService,
+    bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance)
   : PBFTInitializer(_nodeArchType, _nodeConfig, _protocolInitializer, _txpool, _ledger, _scheduler,
-        _storage, _frontService)
+        _storage, _frontService, _nodeTimeMaintenance)
 {
     m_timer = std::make_shared<Timer>(m_timerSchedulerInterval, "node info report");
 
@@ -53,14 +54,12 @@ ProPBFTInitializer::ProPBFTInitializer(bcos::protocol::NodeArchitectureType _nod
     // init rpc client
     auto rpcServiceName = m_nodeConfig->rpcServiceName();
     m_nodeConfig->getTarsClientProxyEndpoints(bcos::protocol::RPC_NAME, endPoints);
-    // TODO: tars
     auto rpcServicePrx = bcostars::createServantProxy<bcostars::RpcServicePrx>(
         withoutTarsFramework, rpcServiceName, endPoints);
     m_rpc = std::make_shared<bcostars::RpcServiceClient>(rpcServicePrx, rpcServiceName);
 
     auto gatewayServiceName = m_nodeConfig->gatewayServiceName();
     m_nodeConfig->getTarsClientProxyEndpoints(bcos::protocol::GATEWAY_NAME, endPoints);
-    // TODO: tars
     auto gatewayServicePrx = bcostars::createServantProxy<bcostars::GatewayServicePrx>(
         withoutTarsFramework, gatewayServiceName, endPoints);
     m_gateway =
@@ -83,21 +82,21 @@ void ProPBFTInitializer::scheduledTask()
 void ProPBFTInitializer::reportNodeInfo()
 {
     // notify groupInfo to rpc
-    m_rpc->asyncNotifyGroupInfo(m_groupInfo, [](bcos::Error::Ptr&& _error) {
-        if (_error)
+    m_rpc->asyncNotifyGroupInfo(m_groupInfo, [this](bcos::Error::Ptr&& _error) {
+        if (_error && m_running)
         {
             INITIALIZER_LOG(WARNING)
-                << LOG_DESC("reportNodeInfo to rpc error") << LOG_KV("code", _error->errorCode())
-                << LOG_KV("msg", _error->errorMessage());
+                << LOG_DESC("asyncNotifyGroupInfo to rpc failed")
+                << LOG_KV("code", _error->errorCode()) << LOG_KV("msg", _error->errorMessage());
         }
     });
 
     // notify groupInfo to gateway
-    m_gateway->asyncNotifyGroupInfo(m_groupInfo, [](bcos::Error::Ptr&& _error) {
-        if (_error)
+    m_gateway->asyncNotifyGroupInfo(m_groupInfo, [this](bcos::Error::Ptr&& _error) {
+        if (_error && m_running)
         {
             INITIALIZER_LOG(WARNING)
-                << LOG_DESC("reportNodeInfo to gateway error")
+                << LOG_DESC("asyncNotifyGroupInfo to gateway failed")
                 << LOG_KV("code", _error->errorCode()) << LOG_KV("msg", _error->errorMessage());
         }
     });
@@ -110,10 +109,12 @@ void ProPBFTInitializer::start()
     {
         m_timer->start();
     }
+    m_running = true;
 }
 
 void ProPBFTInitializer::stop()
 {
+    m_running = false;
     if (m_timer)
     {
         m_timer->stop();
@@ -152,24 +153,17 @@ void ProPBFTInitializer::init()
     // Note: m_leaderElection is created after PBFTInitializer::init
     if (m_leaderElection)
     {
-        // should report the latest nodeInfo actively to rpc/gateway when the electionCluster is
-        // down
         m_leaderElection->registerOnElectionClusterException([this]() {
-            if (m_pbft->masterNode())
-            {
-                INITIALIZER_LOG(INFO)
-                    << LOG_DESC("OnElectionClusterException: reportNodeInfo to rpc/gateway")
-                    << LOG_KV("nodeName", m_nodeConfig->nodeName());
-                reportNodeInfo();
-                m_timer->start();
-            }
+            INITIALIZER_LOG(INFO) << LOG_DESC("OnElectionClusterException")
+                                  << LOG_KV("nodeName", m_nodeConfig->nodeName());
         });
-        // stop reportNodeInfo to rpc/gateway
-        m_leaderElection->registerOnElectionClusterRecover([this]() {
+        m_leaderElection->registerOnElectionClusterRecover([]() {
             INITIALIZER_LOG(INFO) << LOG_DESC(
                 "OnElectionClusterRecover: stop reportNodeInfo to rpc/gateway");
-            m_timer->stop();
         });
     }
-    reportNodeInfo();
+    else
+    {
+        reportNodeInfo();
+    }
 }

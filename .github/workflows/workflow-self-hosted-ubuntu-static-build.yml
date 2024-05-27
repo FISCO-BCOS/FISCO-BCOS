@@ -1,0 +1,66 @@
+name: Ubuntu Static Build
+on:
+  pull_request:
+    branches:
+      - release-3.*
+      - feature-3.*
+      - master
+    types: [closed]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build_ubuntu:
+    name: ubuntu static build
+    if: github.event.pull_request.merged == true
+    runs-on: self-hosted-static-ubuntu
+    strategy:
+      fail-fast: false
+    env:
+      VCPKG_ROOT: ~/cache/vcpkg
+      DEPS_ROOT: ~/cache/deps
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          clean: false
+      - name: Set up JDK 1.8
+        uses: actions/setup-java@v3
+        with:
+          distribution: "zulu"
+          java-version: 8
+          java-package: jdk
+
+      - name: apt install
+        run: |
+          sudo apt update
+          sudo apt install -y  lcov ccache wget python3-dev git curl zip unzip tar
+          sudo apt install -y --no-install-recommends \
+              clang make build-essential cmake zlib1g-dev ca-certificates \
+              libgmp-dev flex bison patch libzstd-dev ninja-build pkg-config ccache uuid-runtime automake libssl-dev
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2024-02-25
+          override: true
+
+      - name: Reuse build cache
+        run: |
+          mkdir -p ./build
+          rm -rf deps
+          ln -s ${{ env.DEPS_ROOT }} deps
+
+      - name: Remove cache if correspond dir change
+        run: ./tools/.ci/clear_build_cache.sh
+
+      - name: update vcpkg
+        run: |
+          cd ${{ env.VCPKG_ROOT }} && git fetch --all && git checkout master && git pull
+          cd -
+
+      - name: Build for linux
+        run: |
+          export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
+          cd build && cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_STATIC=On -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=ON -DWITH_TARS_SERVICES=ON .. || cat *.log
+          make -j4

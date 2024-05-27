@@ -25,43 +25,20 @@ using namespace bcos::consensus;
 using namespace bcos::protocol;
 using namespace bcos::crypto;
 
-PBFTCache::PBFTCache(PBFTConfig::Ptr _config, BlockNumber _index)
-  : m_config(_config), m_index(_index)
-{
-    // Timer is used to manage checkpoint timeout
-    m_timer = std::make_shared<PBFTTimer>(m_config->checkPointTimeoutInterval(), "pbftCacheTimer");
-}
-void PBFTCache::init()
-{
-    // register timeout handler
-    auto self = std::weak_ptr<PBFTCache>(shared_from_this());
-    m_timer->registerTimeoutHandler([self]() {
-        try
-        {
-            auto cache = self.lock();
-            if (!cache)
-            {
-                return;
-            }
-            cache->onCheckPointTimeout();
-        }
-        catch (std::exception const& e)
-        {
-            PBFT_LOG(WARNING) << LOG_DESC("onCheckPointTimeout error")
-                              << LOG_KV("errorInfo", boost::diagnostic_information(e));
-        }
-    });
-}
+PBFTCache::PBFTCache(PBFTConfig::Ptr _config, bcos::protocol::BlockNumber _index)
+  : m_config(std::move(_config)), m_index(_index)
+{}
+
 void PBFTCache::onCheckPointTimeout()
 {
     // Note: this logic is unreachable
-    if (!m_checkpointProposal)
+    if (!m_checkpointProposal ||
+        std::cmp_less(utcTime() - m_checkPointStartTime, m_config->checkPointTimeoutInterval()))
     {
-        PBFT_LOG(WARNING) << LOG_DESC("onCheckPointTimeout but the checkpoint proposal is null")
-                          << m_config->printCurrentState();
         return;
     }
-    if (m_committedIndexNotifier && m_config->timer()->running() == false)
+    m_checkPointStartTime = utcTime();
+    if (m_committedIndexNotifier && !m_config->timer()->running())
     {
         m_committedIndexNotifier(m_config->committedProposal()->index());
     }
@@ -76,7 +53,6 @@ void PBFTCache::onCheckPointTimeout()
     // only broadcast message to consensus node
     m_config->frontService()->asyncSendBroadcastMessage(
         bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, ref(*encodedData));
-    m_timer->restart();
 }
 
 bool PBFTCache::existPrePrepare(PBFTMessageInterface::Ptr _prePrepareMsg)
@@ -326,6 +302,13 @@ void PBFTCache::resetCache(ViewType _curView)
 {
     m_submitted = false;
     m_precommitted = false;
+    PBFT_LOG(INFO) << LOG_DESC("resetCache") << LOG_KV("precommit", m_precommit ? "true" : "false")
+                   << LOG_KV("prePrepare", m_prePrepare ? "true" : "false")
+                   << LOG_KV("prepareView", m_prePrepare ? m_prePrepare->view() : 0)
+                   << LOG_KV("curView", _curView)
+                   << ((m_prePrepare && m_prePrepare->consensusProposal()) ?
+                              printPBFTProposal(m_prePrepare->consensusProposal()) :
+                              "consensusProposal is null");
     if (!m_precommit && m_prePrepare && m_prePrepare->consensusProposal() &&
         m_prePrepare->view() < _curView)
     {
@@ -337,6 +320,7 @@ void PBFTCache::resetCache(ViewType _curView)
         m_config->validator()->asyncResetTxsFlag(m_prePrepare->consensusProposal()->data(), false);
         m_prePrepare = nullptr;
     }
+    resetExceptionCache(_curView);
     // clear the expired prepare cache
     resetCacheAfterViewChange(m_prepareCacheList, _curView);
     // clear the expired commit cache
@@ -346,6 +330,43 @@ void PBFTCache::resetCache(ViewType _curView)
     recalculateQuorum(m_prepareReqWeight, m_prepareCacheList);
     // recalculate m_commitReqWeight
     recalculateQuorum(m_commitReqWeight, m_commitCacheList);
+}
+
+void PBFTCache::resetExceptionCache(ViewType _curView)
+{
+    if (m_exceptionPrePrepareList.empty()) [[likely]]
+    {
+        return;
+    }
+    for (auto exceptionPrePrepare = m_exceptionPrePrepareList.begin();
+         exceptionPrePrepare != m_exceptionPrePrepareList.end();)
+    {
+        auto validPrePrepare = (m_precommit || (m_prePrepare && m_prePrepare->consensusProposal() &&
+                                                   m_prePrepare->view() >= _curView));
+        if (validPrePrepare &&
+            (m_prePrepare && m_prePrepare->hash() == (*exceptionPrePrepare)->hash()))
+        {
+            if (c_fileLogLevel == TRACE) [[unlikely]]
+            {
+                PBFT_LOG(TRACE) << LOG_DESC("resetCache : exceptionPrePrepare but finally be valid")
+                                << printPBFTProposal((*exceptionPrePrepare)->consensusProposal());
+            }
+        }
+        else
+        {
+            PBFT_LOG(INFO) << LOG_DESC("resetCache : asyncResetTxsFlag exceptionPrePrepare")
+                           << printPBFTProposal((*exceptionPrePrepare)->consensusProposal());
+            m_config->validator()->asyncResetTxsFlag(
+                (*exceptionPrePrepare)->consensusProposal()->data(), false);
+            exceptionPrePrepare = m_exceptionPrePrepareList.erase(exceptionPrePrepare);
+            if (exceptionPrePrepare == m_exceptionPrePrepareList.end())
+            {
+                m_prePrepare = nullptr;
+                break;
+            }
+        }
+        exceptionPrePrepare++;
+    }
 }
 
 void PBFTCache::setCheckPointProposal(PBFTProposalInterface::Ptr _proposal)
@@ -362,8 +383,6 @@ void PBFTCache::setCheckPointProposal(PBFTProposalInterface::Ptr _proposal)
         return;
     }
     m_checkpointProposal = _proposal;
-    // Note: the timer can only been started after setCheckPointProposal success
-    m_timer->start();
     PBFT_LOG(INFO) << LOG_DESC("setCheckPointProposal") << printPBFTProposal(m_checkpointProposal)
                    << m_config->printCurrentState();
 }

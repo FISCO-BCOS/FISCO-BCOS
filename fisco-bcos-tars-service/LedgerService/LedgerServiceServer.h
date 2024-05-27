@@ -39,7 +39,7 @@ public:
 
     bcostars::Error asyncGetBatchTxsByHashList(const vector<vector<tars::Char> >& _txsHashList,
         tars::Bool _withProof, vector<bcostars::Transaction>& _transactions,
-        map<std::string, vector<bcostars::MerkleProofItem> >& _merkleProofList,
+        map<std::string, vector<std::string> >& _merkleProofList,
         tars::TarsCurrentPtr current) override;
     bcostars::Error asyncGetBlockDataByNumber(tars::Int64 _blockNumber, tars::Int64 _blockFlag,
         bcostars::Block& _block, tars::TarsCurrentPtr current) override;
@@ -58,8 +58,8 @@ public:
         tars::TarsCurrentPtr current) override;
 
     bcostars::Error asyncGetTransactionReceiptByHash(const vector<tars::Char>& _txHash,
-        tars::Bool _withProof, bcostars::TransactionReceipt& _receipt,
-        vector<bcostars::MerkleProofItem>& _proof, tars::TarsCurrentPtr current) override;
+        tars::Bool _withProof, bcostars::TransactionReceipt& _receipt, vector<std::string>& _proof,
+        tars::TarsCurrentPtr current) override;
 
 private:
     bcos::ledger::LedgerInterface::Ptr m_ledger;

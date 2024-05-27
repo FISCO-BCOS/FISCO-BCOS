@@ -18,6 +18,7 @@
  * @date 2021-05-24
  */
 
+#include "bcos-utilities/BoostLog.h"
 #include <bcos-cpp-sdk/rpc/Common.h>
 #include <bcos-cpp-sdk/rpc/JsonRpcRequest.h>
 #include <json/json.h>
@@ -107,13 +108,13 @@ void JsonRpcRequest::fromJson(const std::string& _request)
     catch (const std::exception& e)
     {
         RPCREQ_LOG(WARNING) << LOG_BADGE("fromJson") << LOG_KV("request", _request)
-                            << LOG_KV("error", boost::diagnostic_information(e));
+                            << LOG_KV("message", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(
             JsonRpcException(JsonRpcError::ParseError, "Invalid JSON was received by the server."));
     }
 
     RPCREQ_LOG(WARNING) << LOG_BADGE("fromJson") << LOG_KV("request", _request)
-                        << LOG_KV("errorMessage", errorMessage);
+                        << LOG_KV("message", errorMessage);
 
     BOOST_THROW_EXCEPTION(JsonRpcException(
         JsonRpcError::InvalidRequest, "The JSON sent is not a valid Request object."));

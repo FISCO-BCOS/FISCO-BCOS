@@ -22,9 +22,10 @@
 #include "../../ledger/LedgerConfig.h"
 #include "../../ledger/LedgerInterface.h"
 #include "../../protocol/Block.h"
-#include "bcos-protocol/testutils/protocol/FakeBlock.h"
-#include "bcos-protocol/testutils/protocol/FakeBlockHeader.h"
+#include "FakeBlock.h"
 #include <bcos-utilities/ThreadPool.h>
+
+#include <utility>
 
 using namespace bcos;
 using namespace bcos::ledger;
@@ -42,19 +43,16 @@ public:
     FakeLedger() = default;
     FakeLedger(BlockFactory::Ptr _blockFactory, size_t _blockNumber, size_t _txsSize, size_t,
         std::vector<bytes> _sealerList)
-      : m_blockFactory(_blockFactory),
+      : m_blockFactory(std::move(_blockFactory)),
         m_ledgerConfig(std::make_shared<LedgerConfig>()),
-        m_sealerList(_sealerList)
+        m_sealerList(std::move(std::move(_sealerList)))
     {
         init(_blockNumber, _txsSize, 0);
-        m_worker = std::make_shared<ThreadPool>("worker", 1);
+        m_worker = std::make_shared<ThreadPool>("ledgerWorker", 1);
     }
     ~FakeLedger() override
     {
-        if (m_worker)
-        {
-            m_worker->stop();
-        }
+        stop();
         m_hash2Block.clear();
         std::map<HashType, BlockNumber> emptyHash2Block;
         m_hash2Block.swap(emptyHash2Block);
@@ -63,15 +61,22 @@ public:
         std::map<HashType, bytesConstPtr> emptyTxsData;
         m_txsHashToData.swap(emptyTxsData);
     }
+    void stop()
+    {
+        if (m_worker)
+        {
+            m_worker->stop();
+        }
+    }
 
     FakeLedger(
         BlockFactory::Ptr _blockFactory, size_t _blockNumber, size_t _txsSize, size_t _receiptsSize)
-      : m_blockFactory(_blockFactory), m_ledgerConfig(std::make_shared<LedgerConfig>())
+      : m_blockFactory(std::move(_blockFactory)), m_ledgerConfig(std::make_shared<LedgerConfig>())
     {
         auto sigImpl = m_blockFactory->cryptoSuite()->signatureImpl();
         m_sealerList = fakeSealerList(m_keyPairVec, sigImpl, 4);
         init(_blockNumber, _txsSize, _receiptsSize);
-        m_worker = std::make_shared<ThreadPool>("worker", 1);
+        m_worker = std::make_shared<ThreadPool>("ledgerWorker", 1);
     }
 
     void init(size_t _blockNumber, size_t _txsSize, int64_t _timestamp = utcTime())
@@ -95,8 +100,8 @@ public:
     Block::Ptr init(BlockHeader::Ptr _parentBlockHeader, bool _withHeader, BlockNumber _blockNumber,
         size_t _txsSize, int64_t _timestamp = utcTime())
     {
-        auto block = fakeAndCheckBlock(
-            m_blockFactory->cryptoSuite(), m_blockFactory, false, _txsSize, 0, false);
+        auto block = fakeAndCheckBlock(m_blockFactory->cryptoSuite(), m_blockFactory, _txsSize,
+            _txsSize, _blockNumber, true, false);
         if (!_withHeader)
         {
             return block;
@@ -117,6 +122,7 @@ public:
             rootHash, rootHash, rootHash, _blockNumber, gasUsed, _timestamp, 0, m_sealerList,
             bytes(), signatureList, false);
         auto sigImpl = m_blockFactory->cryptoSuite()->signatureImpl();
+        blockHeader->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
         signatureList = fakeSignatureList(sigImpl, m_keyPairVec, blockHeader->hash());
         blockHeader->setSignatureList(signatureList);
         block->setBlockHeader(blockHeader);
@@ -126,6 +132,7 @@ public:
     Block::Ptr populateFromHeader(BlockHeader::Ptr _blockHeader)
     {
         auto block = m_blockFactory->createBlock();
+        block->blockHeader()->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
         block->setBlockHeader(_blockHeader);
         return block;
     }
@@ -137,16 +144,16 @@ public:
     }
 
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
-        bcos::protocol::TransactionsPtr, bcos::protocol::Block::ConstPtr block,
-        std::function<void(Error::Ptr&&)> callback) override
+        bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr block,
+        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts) override
     {
         (void)storage;
         (void)block;
-        callback(nullptr);
+        callback("", nullptr);
     }
 
-    void asyncPreStoreBlockTxs(bcos::protocol::TransactionsPtr, bcos::protocol::Block::ConstPtr,
-        std::function<void(Error::UniquePtr&&)> _callback) override
+    void asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr,
+        bcos::protocol::Block::ConstPtr, std::function<void(Error::UniquePtr&&)> _callback) override
     {
         if (!_callback)
         {
@@ -156,17 +163,19 @@ public:
     }
 
     // the txpool module use this interface to store txs
-    void asyncStoreTransactions(std::shared_ptr<std::vector<bytesConstPtr>> _txToStore,
-        crypto::HashListPtr _txHashList, std::function<void(Error::Ptr)> _onTxStored) override
+    bcos::Error::Ptr storeTransactionsAndReceipts(bcos::protocol::ConstTransactionsPtr blockTxs,
+        bcos::protocol::Block::ConstPtr block) override
     {
         WriteGuard l(x_txsHashToData);
-        size_t i = 0;
-        for (auto const& hash : *_txHashList)
+        for (size_t i = 0; i < block->transactionsSize(); i++)
         {
-            auto txData = (*_txToStore)[i];
-            m_txsHashToData[hash] = txData;
+            auto tx = blockTxs ? blockTxs->at(i) : block->transaction(i);
+            auto txHash = tx->hash();
+            std::shared_ptr<bcos::bytes> txData;
+            tx->encode(*txData);
+            m_txsHashToData[txHash] = txData;
         }
-        _onTxStored(nullptr);
+        return nullptr;
     }
 
     // maybe sync module or rpc module need this interface to return header/txs/receipts
@@ -176,7 +185,7 @@ public:
         ReadGuard l(x_ledger);
         if (m_ledger.size() <= (size_t)(_number))
         {
-            _callback(std::make_unique<Error>(-1, "block not found"), nullptr);
+            _callback(BCOS_ERROR_UNIQUE_PTR(-1, "block not found"), nullptr);
             return;
         }
         auto block = m_ledger[_number];
@@ -233,13 +242,24 @@ public:
         _callback(nullptr, m_totalTxCount, 0, m_ledgerConfig->blockNumber());
     }
 
+    void asyncGetCurrentStateByKey(std::string_view const& _key,
+        std::function<void(Error::Ptr&&, std::optional<bcos::storage::Entry>&&)> _callback) override
+    {
+        _callback(nullptr, {});
+    }
+
     void asyncGetSystemConfigByKey(std::string_view const& _key,
         std::function<void(Error::Ptr, std::string, BlockNumber)> _onGetConfig) override
     {
         std::string value = "";
-        if (m_systemConfig.count(_key))
+        if (m_systemConfig.contains(_key))
         {
             value = m_systemConfig[std::string{_key}];
+        }
+        else
+        {
+            _onGetConfig(BCOS_ERROR_PTR(-1, "key not found"), "", m_ledgerConfig->blockNumber());
+            return;
         }
         _onGetConfig(nullptr, value, m_ledgerConfig->blockNumber());
     }
@@ -261,7 +281,14 @@ public:
             _onGetNodeList(nullptr, observerNodes);
             return;
         }
-        _onGetNodeList(std::make_unique<Error>(-1, "invalid Type"), nullptr);
+        if (_type == CONSENSUS_CANDIDATE_SEALER)
+        {
+            auto consensusNodes = std::make_shared<ConsensusNodeList>();
+            *consensusNodes = m_ledgerConfig->candidateSealerNodeList();
+            _onGetNodeList(nullptr, consensusNodes);
+            return;
+        }
+        _onGetNodeList(BCOS_ERROR_UNIQUE_PTR(-1, "invalid Type"), nullptr);
     }
 
     void asyncGetNonceList(BlockNumber _startNumber, int64_t _offset,
@@ -328,7 +355,7 @@ public:
         auto nonConstHeader = std::const_pointer_cast<bcos::protocol::BlockHeader>(_blockHeader);
         if (nonConstHeader->number() != m_ledgerConfig->blockNumber() + 1)
         {
-            _onCommitBlock(std::make_shared<Error>(-1, "invalid block"), nullptr);
+            _onCommitBlock(BCOS_ERROR_PTR(-1, "invalid block"), nullptr);
             return;
         }
 

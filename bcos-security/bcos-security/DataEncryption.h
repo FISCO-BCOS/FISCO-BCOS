@@ -38,12 +38,17 @@ public:
     using Ptr = std::shared_ptr<DataEncryption>;
 
 public:
-    DataEncryption(const bcos::tool::NodeConfig::Ptr nodeConfig) : m_nodeConfig(nodeConfig) {}
+    DataEncryption(const bcos::tool::NodeConfig::Ptr nodeConfig);
+    DataEncryption(const std::string& dataKey, const bool smCryptoType);
     ~DataEncryption() override {}
 
-public:
-    void init() override;
+    uint32_t compatibilityVersion() { return m_compatibilityVersion; }
+    void setCompatibilityVersion(uint32_t _compatibilityVersion)
+    {
+        m_compatibilityVersion = _compatibilityVersion;
+    }
 
+public:
     std::shared_ptr<bytes> decryptContents(const std::shared_ptr<bytes>& contents) override;
 
     // use to decrypt node.key
@@ -55,6 +60,7 @@ public:
 
 private:
     bcos::tool::NodeConfig::Ptr m_nodeConfig{nullptr};
+    uint32_t m_compatibilityVersion;
 
     std::string m_dataKey;
     bcos::crypto::SymmetricEncryption::Ptr m_symmetricEncrypt{nullptr};

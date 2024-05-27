@@ -23,7 +23,7 @@ template <HasherType hasherType>
 class OpenSSLHasher
 {
 public:
-    OpenSSLHasher() : m_mdCtx(EVP_MD_CTX_new()), m_init(false)
+    OpenSSLHasher() : m_mdCtx(EVP_MD_CTX_new())
     {
         if (!m_mdCtx) [[unlikely]]
         {
@@ -32,12 +32,13 @@ public:
     }
 
     OpenSSLHasher(const OpenSSLHasher&) = delete;
-    OpenSSLHasher(OpenSSLHasher&&) = default;
+    OpenSSLHasher(OpenSSLHasher&&) noexcept = default;
     OpenSSLHasher& operator=(const OpenSSLHasher&) = delete;
-    OpenSSLHasher& operator=(OpenSSLHasher&&) = default;
+    OpenSSLHasher& operator=(OpenSSLHasher&&) noexcept = default;
     ~OpenSSLHasher() = default;
 
     constexpr static size_t HASH_SIZE = 32;
+    constexpr static size_t hashSize() { return HASH_SIZE; }
 
     void init()
     {
@@ -95,6 +96,21 @@ public:
         }
     }
 
+    void update(std::span<std::byte const> in)
+    {
+        if (!m_init)
+        {
+            init();
+            m_init = true;
+        }
+
+        if (!EVP_DigestUpdate(m_mdCtx.get(), reinterpret_cast<unsigned char const*>(in.data()),
+                in.size())) [[unlikely]]
+        {
+            BOOST_THROW_EXCEPTION(std::runtime_error{"EVP_DigestUpdate error!"});
+        }
+    }
+
     void final(bcos::crypto::trivial::Object auto& out)
     {
         m_init = false;
@@ -102,6 +118,17 @@ public:
         auto view = bcos::crypto::trivial::toView(std::forward<decltype(out)>(out));
 
         if (!EVP_DigestFinal(m_mdCtx.get(), reinterpret_cast<unsigned char*>(view.data()), nullptr))
+            [[unlikely]]
+        {
+            BOOST_THROW_EXCEPTION(std::runtime_error{"EVP_DigestFinal error!"});
+        }
+    }
+
+    void final(std::span<std::byte> out)
+    {
+        m_init = false;
+
+        if (!EVP_DigestFinal(m_mdCtx.get(), reinterpret_cast<unsigned char*>(out.data()), nullptr))
             [[unlikely]]
         {
             BOOST_THROW_EXCEPTION(std::runtime_error{"EVP_DigestFinal error!"});
@@ -128,13 +155,19 @@ public:
         }
     }
 
+    OpenSSLHasher clone() const
+    {
+        OpenSSLHasher newHasher;
+        return newHasher;
+    }
+
     struct Deleter
     {
         void operator()(EVP_MD_CTX* p) const { EVP_MD_CTX_free(p); }
     };
 
     std::unique_ptr<EVP_MD_CTX, Deleter> m_mdCtx;
-    bool m_init;
+    bool m_init = false;
 };
 
 using OpenSSL_SHA3_256_Hasher = OpenSSLHasher<SHA3_256>;

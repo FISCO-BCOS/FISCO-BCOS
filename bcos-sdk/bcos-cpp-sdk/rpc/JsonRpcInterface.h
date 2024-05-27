@@ -79,7 +79,7 @@ public:
         const std::string& _groupID, const std::string& _nodeName, RespFunc _respFunc) = 0;
 
     virtual void getCode(const std::string& _groupID, const std::string& _nodeName,
-        const std::string _contractAddress, RespFunc _respFunc) = 0;
+        const std::string& _contractAddress, RespFunc _respFunc) = 0;
 
     virtual void getSealerList(
         const std::string& _groupID, const std::string& _nodeName, RespFunc _respFunc) = 0;

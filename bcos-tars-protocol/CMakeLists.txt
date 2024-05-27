@@ -1,8 +1,4 @@
 cmake_minimum_required(VERSION 3.10)
-set(CMAKE_OSX_DEPLOYMENT_TARGET "11.3" CACHE STRING "Minimum OS X deployment version")
-
-include(Version)
-project(bcos-tars-protocol VERSION ${VERSION})
 
 # for tars generator
 set(TARS_HEADER_DIR ${CMAKE_BINARY_DIR}/generated/bcos-tars-protocol/tars)
@@ -30,7 +26,10 @@ endif()
 set_directory_properties(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES "${OUT_TARS_H_LIST}")
 
 file(GLOB_RECURSE SRC_LIST bcos-tars-protocol/*.cpp)
-
+file(GLOB_RECURSE CLIENT_SRC bcos-tars-protocol/client/*.cpp)
+if (ONLY_CPP_SDK AND (NOT WITH_SWIG_SDK))
+    list(REMOVE_ITEM SRC_LIST ${CLIENT_SRC})
+endif ()
 find_package(tarscpp REQUIRED)
 find_package(TBB REQUIRED)
 
@@ -40,7 +39,7 @@ target_include_directories(${TARS_PROTOCOL_TARGET} PUBLIC
     $<BUILD_INTERFACE:${TARSCPP_ROOT}/include>
     $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/generated>
     $<INSTALL_INTERFACE:include/bcos-tars-protocol>)
-target_link_libraries(${TARS_PROTOCOL_TARGET} PUBLIC bcos-concepts bcos-crypto ${PROTOCOL_TARGET} ${TOOL_TARGET} tarscpp::tarsservant tarscpp::tarsutil TBB::tbb)
+target_link_libraries(${TARS_PROTOCOL_TARGET} PUBLIC bcos-concepts bcos-crypto tarscpp::tarsservant tarscpp::tarsutil TBB::tbb)
 
 if(TESTS)
     enable_testing()

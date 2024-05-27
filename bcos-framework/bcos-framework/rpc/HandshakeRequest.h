@@ -84,7 +84,7 @@ public:
         catch (std::exception const& e)
         {
             BCOS_LOG(WARNING) << LOG_DESC("HandshakeRequest decode exception")
-                              << LOG_KV("error", boost::diagnostic_information(e))
+                              << LOG_KV("message", boost::diagnostic_information(e))
                               << LOG_KV("data", dataStr);
         }
         return false;

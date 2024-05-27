@@ -23,38 +23,26 @@
 #include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-front/FrontService.h>
+#include <utility>
 
-namespace bcos
-{
-namespace front
+namespace bcos::front
 {
 class FrontServiceFactory
 {
 public:
     using Ptr = std::shared_ptr<FrontServiceFactory>;
 
-public:
     FrontService::Ptr buildFrontService(
-        const std::string& _groupID, const bcos::crypto::NodeIDPtr _nodeID);
+        const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID);
 
-public:
     void setGatewayInterface(bcos::gateway::GatewayInterface::Ptr _gatewayInterface)
     {
-        m_gatewayInterface = _gatewayInterface;
-    }
-
-    std::shared_ptr<bcos::ThreadPool> threadPool() { return m_threadPool; }
-    void setThreadPool(std::shared_ptr<bcos::ThreadPool> _threadPool)
-    {
-        m_threadPool = _threadPool;
+        m_gatewayInterface = std::move(_gatewayInterface);
     }
 
 private:
     // gatewayInterface
     bcos::gateway::GatewayInterface::Ptr m_gatewayInterface;
-    // threadpool
-    std::shared_ptr<bcos::ThreadPool> m_threadPool;
 };
 
-}  // namespace front
-}  // namespace bcos
+}  // namespace bcos::front

@@ -65,4 +65,15 @@ struct ResponseSendTransaction
     2 optional TransactionReceipt receipt;
 };
 
+struct RequestGetABI
+{
+    1 optional string contractAddress;
+};
+
+struct ResponseGetABI
+{
+    1 optional Error error;
+    2 optional string abiStr;
+};
+
 };

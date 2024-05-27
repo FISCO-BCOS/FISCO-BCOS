@@ -37,7 +37,7 @@ using namespace bcos::boostssl::context;
 
 // TODO: how to set timeout for connect to wsServer ???
 void WsConnector::connectToWsServer(const std::string& _host, uint16_t _port, bool _disableSsl,
-    std::function<void(boost::beast::error_code, const std::string& _extErrorMsg,
+    std::function<void(boost::beast::error_code, const std::string&,
         std::shared_ptr<WsStreamDelegate>, std::shared_ptr<std::string>)>
         _callback)
 {
@@ -60,14 +60,14 @@ void WsConnector::connectToWsServer(const std::string& _host, uint16_t _port, bo
     auto connector = shared_from_this();
 
     // resolve host
-    resolver->async_resolve(_host.c_str(), std::to_string(_port).c_str(),
+    resolver->async_resolve(_host, std::to_string(_port),
         [this, _host, _port, _disableSsl, endpoint, ioc, ctx, connector, builder, _callback](
             boost::beast::error_code _ec, boost::asio::ip::tcp::resolver::results_type _results) {
             if (_ec)
             {
                 WEBSOCKET_CONNECTOR(WARNING)
                     << LOG_BADGE("connectToWsServer") << LOG_DESC("async_resolve failed")
-                    << LOG_KV("error", _ec) << LOG_KV("errorMessage", _ec.message())
+                    << LOG_KV("failed", _ec) << LOG_KV("message", _ec.message())
                     << LOG_KV("endpoint", endpoint);
                 _callback(_ec, "", nullptr, nullptr);
                 connector->erasePendingConns(endpoint);
@@ -91,7 +91,7 @@ void WsConnector::connectToWsServer(const std::string& _host, uint16_t _port, bo
                     {
                         WEBSOCKET_CONNECTOR(WARNING)
                             << LOG_BADGE("connectToWsServer") << LOG_DESC("async_connect failed")
-                            << LOG_KV("error", _ec.message()) << LOG_KV("endpoint", endpoint);
+                            << LOG_KV("message", _ec.message()) << LOG_KV("endpoint", endpoint);
                         _callback(_ec, "", nullptr, nullptr);
                         connector->erasePendingConns(endpoint);
                         return;
@@ -117,7 +117,7 @@ void WsConnector::connectToWsServer(const std::string& _host, uint16_t _port, bo
                             WEBSOCKET_CONNECTOR(WARNING)
                                 << LOG_BADGE("connectToWsServer")
                                 << LOG_DESC("ssl async_handshake failed") << LOG_KV("host", _host)
-                                << LOG_KV("port", _port) << LOG_KV("error", _ec.message());
+                                << LOG_KV("port", _port) << LOG_KV("message", _ec.message());
                             _callback(_ec, " ssl handshake failed", nullptr, nullptr);
                             connector->erasePendingConns(endpoint);
                             return;
@@ -142,7 +142,7 @@ void WsConnector::connectToWsServer(const std::string& _host, uint16_t _port, bo
                                     WEBSOCKET_CONNECTOR(WARNING)
                                         << LOG_BADGE("connectToWsServer")
                                         << LOG_DESC("websocket async_handshake failed")
-                                        << LOG_KV("error", _ec.message()) << LOG_KV("host", _host)
+                                        << LOG_KV("message", _ec.message()) << LOG_KV("host", _host)
                                         << LOG_KV("port", _port);
                                     _callback(_ec, "", nullptr, nullptr);
                                     connector->erasePendingConns(endpoint);

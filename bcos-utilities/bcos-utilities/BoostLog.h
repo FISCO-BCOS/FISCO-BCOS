@@ -23,6 +23,7 @@
 
 #include <boost/log/attributes/constant.hpp>
 #include <boost/log/attributes/scoped_attribute.hpp>
+#include <boost/log/sinks/text_file_backend.hpp>
 #include <boost/log/sources/severity_channel_logger.hpp>
 #include <boost/log/trivial.hpp>
 
@@ -63,12 +64,12 @@ extern boost::log::sources::severity_channel_logger_mt<boost::log::trivial::seve
 
 enum LogLevel
 {
-    FATAL = boost::log::trivial::fatal,
-    ERROR = boost::log::trivial::error,
-    WARNING = boost::log::trivial::warning,
-    INFO = boost::log::trivial::info,
+    TRACE = boost::log::trivial::trace,
     DEBUG = boost::log::trivial::debug,
-    TRACE = boost::log::trivial::trace
+    INFO = boost::log::trivial::info,
+    WARNING = boost::log::trivial::warning,
+    ERROR = boost::log::trivial::error,
+    FATAL = boost::log::trivial::fatal,
 };
 
 extern LogLevel c_fileLogLevel;
@@ -83,4 +84,12 @@ void setStatLogLevel(LogLevel const& _level);
         bcos::FileLoggerHandler, (boost::log::trivial::severity_level)(bcos::LogLevel::level))
 // for block number log
 #define BLOCK_NUMBER(NUMBER) "[blk-" << (NUMBER) << "]"
+
+namespace log
+{
+boost::shared_ptr<boost::log::sinks::file::collector> make_collector(
+    boost::filesystem::path const& target_dir, uintmax_t max_size, uintmax_t min_free_space,
+    uintmax_t max_files, bool convert_tar_gz);
+}
+
 }  // namespace bcos

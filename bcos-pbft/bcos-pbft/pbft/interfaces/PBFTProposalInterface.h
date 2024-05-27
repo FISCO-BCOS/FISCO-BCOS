@@ -19,8 +19,8 @@
  * @date 2021-04-15
  */
 #pragma once
-#include "../../framework/ProposalInterface.h"
 #include "../utilities/Common.h"
+#include "bcos-framework/consensus/ProposalInterface.h"
 
 namespace bcos
 {

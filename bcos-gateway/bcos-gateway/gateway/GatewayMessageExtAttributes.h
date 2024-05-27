@@ -18,7 +18,6 @@ public:
     using Ptr = std::shared_ptr<GatewayMessageExtAttributes>;
     using ConstPtr = std::shared_ptr<GatewayMessageExtAttributes>;
 
-public:
     uint16_t moduleID() { return m_moduleID; }
     void setModuleID(uint16_t _moduleID) { m_moduleID = _moduleID; }
 

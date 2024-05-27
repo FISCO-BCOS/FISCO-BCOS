@@ -23,6 +23,7 @@
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/protocol/ProtocolInfo.h"
 #include "bcos-framework/protocol/ServiceDesc.h"
+#include "bcos-utilities/Ranges.h"
 #include <bcos-utilities/Common.h>
 #include <memory>
 namespace bcos
@@ -48,17 +49,18 @@ public:
         m_nodeCryptoType = (NodeCryptoType)_type;
     }
 
-    virtual ~ChainNodeInfo() {}
+    virtual ~ChainNodeInfo() = default;
 
     virtual std::string const& nodeName() const { return m_nodeName; }
     virtual NodeCryptoType const& nodeCryptoType() const { return m_nodeCryptoType; }
     virtual std::string const& serviceName(bcos::protocol::ServiceType _type) const
     {
-        if (!m_servicesInfo.count(_type))
+        auto it = m_servicesInfo.find(_type);
+        if (it == m_servicesInfo.end())
         {
             return c_emptyServiceName;
         }
-        return m_servicesInfo.at(_type);
+        return it->second;
     }
 
     virtual void setNodeName(std::string const& _nodeName) { m_nodeName = _nodeName; }
@@ -113,7 +115,19 @@ public:
     void setCompatibilityVersion(uint32_t _version) { m_compatibilityVersion = _version; }
     uint32_t compatibilityVersion() const { return m_compatibilityVersion; }
 
-protected:
+    auto const& featureKeys() const { return m_featureKeys; }
+    void setFeatureKeys(RANGES::input_range auto&& featureKeys)
+        requires std::same_as<std::decay_t<RANGES::range_value_t<decltype(featureKeys)>>,
+            std::string>
+    {
+        m_featureKeys.clear();
+        for (auto&& key : featureKeys)
+        {
+            m_featureKeys.emplace_back(std::forward<decltype(key)>(key));
+        }
+    }
+
+private:
     bool m_microService = false;
     // the node name
     std::string m_nodeName;
@@ -132,6 +146,8 @@ protected:
     // the node protocol
     bcos::protocol::ProtocolInfo::Ptr m_nodeProtocol;
 
+    std::vector<std::string> m_featureKeys;
+
     // the system version
     uint32_t m_compatibilityVersion;
 
@@ -148,7 +164,12 @@ inline std::string printNodeInfo(ChainNodeInfo::Ptr _nodeInfo)
     oss << LOG_KV("name", _nodeInfo->nodeName())
         << LOG_KV("cryptoType", std::to_string((int32_t)_nodeInfo->nodeCryptoType()))
         << LOG_KV("nodeType", _nodeInfo->nodeType());
-
+    auto const& serviceInfos = _nodeInfo->serviceInfo();
+    oss << ", serviceInfos: ";
+    for (auto const& info : serviceInfos)
+    {
+        oss << info.second << ",";
+    }
     return oss.str();
 }
 }  // namespace group

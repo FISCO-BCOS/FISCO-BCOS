@@ -1,22 +1,29 @@
 module bcostars {
     struct TransactionData {
-        1 optional int version;
-        2 optional string chainID;
-        3 optional string groupID;
-        4 optional long blockLimit;
-        5 optional string nonce;
-        6 optional string to;
-        7 optional vector<byte> input;
-        8 optional string abi;
+        1  optional int          version;
+        2  optional string       chainID;
+        3  optional string       groupID;
+        4  optional long         blockLimit;
+        5  optional string       nonce;
+        6  optional string       to;
+        7  optional vector<byte> input;
+        8  optional string       abi;
+        9  optional string       value;
+        10 optional string       gasPrice;
+        11 optional long         gasLimit;
+        12 optional string       maxFeePerGas;
+        13 optional string       maxPriorityFeePerGas;
+        14 optional vector<byte> extension;
     };
 
     struct Transaction {
         1 optional TransactionData data;
         2 optional vector<byte> dataHash;
         3 optional vector<byte> signature;
-        7 optional vector<byte> sender;
         4 optional long importTime;
         5 optional int attribute;
-        6 optional string source;
+        // 6 optional string source;
+        7 optional vector<byte> sender;
+        8 optional string extraData;
     };
 };

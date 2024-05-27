@@ -46,10 +46,14 @@ public:
     bcostars::Error executeTransaction(bcostars::ExecutionMessage const& _input,
         bcostars::ExecutionMessage& _output, tars::TarsCurrentPtr _current) override;
     bcostars::Error call(bcostars::ExecutionMessage const& _input,
-                            bcostars::ExecutionMessage& _output, tars::TarsCurrentPtr _current) override;
+        bcostars::ExecutionMessage& _output, tars::TarsCurrentPtr _current) override;
     bcostars::Error executeTransactions(std::string const& _contractAddress,
         std::vector<bcostars::ExecutionMessage> const& _inputs,
         std::vector<bcostars::ExecutionMessage>& _ouptputs, tars::TarsCurrentPtr _current) override;
+    bcostars::Error preExecuteTransactions(tars::Int64 schedulerTermId,
+        bcostars::BlockHeader const& _blockHeader, std::string const& _contractAddress,
+        std::vector<bcostars::ExecutionMessage> const& _inputs,
+        tars::TarsCurrentPtr _current) override;
     bcostars::Error dmcExecuteTransactions(std::string const& _contractAddress,
         std::vector<bcostars::ExecutionMessage> const& _inputs,
         std::vector<bcostars::ExecutionMessage>& _ouptputs, tars::TarsCurrentPtr _current) override;

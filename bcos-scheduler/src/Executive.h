@@ -18,17 +18,20 @@ struct ExecutiveState  // Executive state per tx
 
     int64_t contextID;
     std::stack<int64_t, std::list<int64_t>> callStack;
+    // std::stack<std::pair<int64_t, std::string_view>> revertStack;
+    std::stack<std::pair<int64_t, std::string>> revertStack;  // stack of <seq,
+                                                              // contractAddress>
     bcos::protocol::ExecutionMessage::UniquePtr message;
     bcos::Error::UniquePtr error;
     int64_t currentSeq = 0;
     bool enableDAG;
-    bool skip = false;
+    bool isRevertStackMessage = false;
     int64_t id;
 
     std::string toString()
     {
         std::stringstream ss;
-        ss << " " << contextID << " | " << callStack.size() << " | "
+        ss << " " << contextID << " | " << callStack.size() << " | " << revertStack.size() << " | "
            << (message ? message->toString() : "null");
         return ss.str();
     }
@@ -42,5 +45,6 @@ struct ExecutiveResult
     bcos::protocol::TransactionReceipt::Ptr receipt;
     bcos::crypto::HashType transactionHash;
     std::string source;
+    int32_t version;
 };
 }  // namespace bcos::scheduler

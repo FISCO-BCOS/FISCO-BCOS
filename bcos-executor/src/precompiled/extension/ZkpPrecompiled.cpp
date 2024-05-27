@@ -65,8 +65,8 @@ std::shared_ptr<PrecompiledExecResult> ZkpPrecompiled::call(
 {
     auto funcSelector = getParamFunc(_callParameters->input());
     auto paramData = _callParameters->params();
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    const auto& blockContext = _executive->blockContext();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
     gasPricer->setMemUsed(paramData.size());
 
@@ -113,7 +113,7 @@ std::shared_ptr<PrecompiledExecResult> ZkpPrecompiled::call(
             bcos::protocol::PrecompiledError("ZkpPrecompiled call undefined function!"));
     }
     gasPricer->updateMemUsed(_callParameters->m_execResult.size());
-    _callParameters->setGas(_callParameters->m_gas - gasPricer->calTotalGas());
+    _callParameters->setGasLeft(_callParameters->m_gasLeft - gasPricer->calTotalGas());
     return _callParameters;
 }
 
@@ -134,11 +134,17 @@ void ZkpPrecompiled::verifyEitherEqualityProof(
             _paramData, c1Point, c2Point, c3Point, equalityProof, basePoint, blindingBasePoint);
         verifyResult = m_zkpImpl->verifyEitherEqualityProof(
             c1Point, c2Point, c3Point, equalityProof, basePoint, blindingBasePoint);
+        PRECOMPILED_LOG(TRACE) << LOG_DESC("verifyEitherEqualityProof")
+                               << LOG_KV("c1", toHex(c1Point)) << LOG_KV("c2", toHex(c2Point))
+                               << LOG_KV("c3", toHex(c3Point))
+                               << LOG_KV("proof", toHex(equalityProof))
+                               << LOG_KV("basePoint", toHex(basePoint))
+                               << LOG_KV("blindingBasePoint", toHex(blindingBasePoint));
     }
     catch (std::exception const& e)
     {
         PRECOMPILED_LOG(DEBUG) << LOG_DESC("verifyEitherEqualityProof exception")
-                               << LOG_KV("error", boost::diagnostic_information(e));
+                               << LOG_KV("message", boost::diagnostic_information(e));
     }
     _callResult->setExecResult(_codec.encode(verifyResult));
     PRECOMPILED_LOG(TRACE) << LOG_DESC("verifyEitherEqualityProof: ") << verifyResult;
@@ -161,7 +167,7 @@ void ZkpPrecompiled::verifyKnowledgeProof(
     catch (std::exception const& e)
     {
         PRECOMPILED_LOG(DEBUG) << LOG_DESC("verifyKnowledgeProof exception")
-                               << LOG_KV("error", boost::diagnostic_information(e));
+                               << LOG_KV("message", boost::diagnostic_information(e));
     }
     _callResult->setExecResult(_codec.encode(verifyResult));
     PRECOMPILED_LOG(TRACE) << LOG_DESC("verifyKnowledgeProof: ") << verifyResult;
@@ -183,11 +189,17 @@ void ZkpPrecompiled::verifyFormatProof(
             _paramData, c1Point, c2Point, formatProof, c1BasePoint, c2BasePoint, blindingBasePoint);
         verifyResult = m_zkpImpl->verifyFormatProof(
             c1Point, c2Point, formatProof, c1BasePoint, c2BasePoint, blindingBasePoint);
+        PRECOMPILED_LOG(TRACE) << LOG_DESC("verifyFormatProof") << LOG_KV("c1", toHex(c1Point))
+                               << LOG_KV("c2", toHex(c2Point))
+                               << LOG_KV("proof", toHex(formatProof))
+                               << LOG_KV("c1BasePoint", toHex(c1BasePoint))
+                               << LOG_KV("c2BasePoint", toHex(c2BasePoint))
+                               << LOG_KV("blindingBasePoint", toHex(c2BasePoint));
     }
     catch (std::exception const& e)
     {
         PRECOMPILED_LOG(DEBUG) << LOG_DESC("verifyFormatProof exception")
-                               << LOG_KV("error", boost::diagnostic_information(e));
+                               << LOG_KV("message", boost::diagnostic_information(e));
     }
     _callResult->setExecResult(_codec.encode(verifyResult));
     PRECOMPILED_LOG(TRACE) << LOG_DESC("verifyFormatProof: ") << verifyResult;
@@ -213,7 +225,7 @@ void ZkpPrecompiled::verifySumProof(
     catch (std::exception const& e)
     {
         PRECOMPILED_LOG(DEBUG) << LOG_DESC("verifySumProof exception")
-                               << LOG_KV("error", boost::diagnostic_information(e));
+                               << LOG_KV("message", boost::diagnostic_information(e));
     }
     _callResult->setExecResult(_codec.encode(verifyResult));
     PRECOMPILED_LOG(TRACE) << LOG_DESC("verifySumProof: ") << verifyResult;
@@ -239,7 +251,7 @@ void ZkpPrecompiled::verifyProductProof(
     catch (std::exception const& e)
     {
         PRECOMPILED_LOG(DEBUG) << LOG_DESC("verifyProductProof exception")
-                               << LOG_KV("error", boost::diagnostic_information(e));
+                               << LOG_KV("message", boost::diagnostic_information(e));
     }
     _callResult->setExecResult(_codec.encode(verifyResult));
     PRECOMPILED_LOG(TRACE) << LOG_DESC("verifyProductProof: ") << verifyResult;
@@ -263,7 +275,7 @@ void ZkpPrecompiled::verifyEqualityProof(
     catch (std::exception const& e)
     {
         PRECOMPILED_LOG(DEBUG) << LOG_DESC("verifyEqualityProof exception")
-                               << LOG_KV("error", boost::diagnostic_information(e));
+                               << LOG_KV("message", boost::diagnostic_information(e));
     }
     _callResult->setExecResult(_codec.encode(verifyResult));
     PRECOMPILED_LOG(TRACE) << LOG_DESC("verifyEqualityProof: ") << verifyResult;
@@ -285,7 +297,7 @@ void ZkpPrecompiled::aggregateRistrettoPoint(
     {
         retCode = -1;
         PRECOMPILED_LOG(DEBUG) << LOG_DESC("aggregateRistrettoPoint exception")
-                               << LOG_KV("error", boost::diagnostic_information(e));
+                               << LOG_KV("message", boost::diagnostic_information(e));
     }
     _callResult->setExecResult(_codec.encode(retCode, result));
 }

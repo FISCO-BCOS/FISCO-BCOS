@@ -73,17 +73,30 @@ void ExecutiveStackFlow::submit(std::shared_ptr<std::vector<CallParameters::Uniq
 void ExecutiveStackFlow::asyncRun(std::function<void(CallParameters::UniquePtr)> onTxReturn,
     std::function<void(bcos::Error::UniquePtr)> onFinished)
 {
-    asyncTo([this, onTxReturn = std::move(onTxReturn), onFinished = std::move(onFinished)]() {
-        try
-        {
-            run(onTxReturn, onFinished);
-        }
-        catch (std::exception& e)
-        {
-            onFinished(BCOS_ERROR_UNIQUE_PTR(ExecuteError::EXECUTE_ERROR,
-                "ExecutiveStackFlow asyncRun exception:" + std::string(e.what())));
-        }
-    });
+    try
+    {
+        auto self = std::weak_ptr<ExecutiveStackFlow>(shared_from_this());
+        asyncTo([self, onTxReturn = std::move(onTxReturn), onFinished = std::move(onFinished)]() {
+            try
+            {
+                auto flow = self.lock();
+                if (flow)
+                {
+                    flow->run(onTxReturn, onFinished);
+                }
+            }
+            catch (std::exception& e)
+            {
+                onFinished(BCOS_ERROR_UNIQUE_PTR(ExecuteError::EXECUTE_ERROR,
+                    "ExecutiveStackFlow asyncRun exception:" + std::string(e.what())));
+            }
+        });
+    }
+    catch (std::exception const& e)
+    {
+        onFinished(BCOS_ERROR_UNIQUE_PTR(ExecuteError::EXECUTE_ERROR,
+            "ExecutiveStackFlow asyncTo exception:" + std::string(e.what())));
+    }
 }
 
 void ExecutiveStackFlow::run(std::function<void(CallParameters::UniquePtr)> onTxReturn,
@@ -117,9 +130,9 @@ void ExecutiveStackFlow::run(std::function<void(CallParameters::UniquePtr)> onTx
     }
     catch (std::exception& e)
     {
-        EXECUTIVE_LOG(ERROR) << "ExecutiveStackFlow run error: "
+        EXECUTIVE_LOG(ERROR) << "ExecutiveStackFlow run failed: "
                              << boost::diagnostic_information(e);
-        onFinished(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "ExecutiveStackFlow run error", e));
+        onFinished(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "ExecutiveStackFlow run failed", e));
     }
 }
 

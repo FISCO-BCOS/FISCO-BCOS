@@ -22,18 +22,16 @@
 #include <bcos-cpp-sdk/event/EventSubParams.h>
 #include <bcos-cpp-sdk/event/EventSubTask.h>
 
-namespace bcos
-{
-namespace cppsdk
-{
-namespace event
+#include <utility>
+
+namespace bcos::cppsdk::event
 {
 class EventSubUnsubRequest
 {
 public:
     using Ptr = std::shared_ptr<EventSubUnsubRequest>;
 
-    virtual ~EventSubUnsubRequest() {}
+    virtual ~EventSubUnsubRequest() = default;
 
 public:
     void setId(const std::string& _id) { m_id = _id; }
@@ -55,13 +53,13 @@ class EventSubSubRequest : public EventSubUnsubRequest
 public:
     using Ptr = std::shared_ptr<EventSubSubRequest>;
 
-    virtual ~EventSubSubRequest() {}
+    ~EventSubSubRequest() override = default;
 
 public:
-    void setParams(std::shared_ptr<const EventSubParams> _params) { m_params = _params; }
+    void setParams(std::shared_ptr<const EventSubParams> _params) { m_params = std::move(_params); }
     std::shared_ptr<const EventSubParams> params() const { return m_params; }
 
-    void setState(std::shared_ptr<EventSubTaskState> _state) { m_state = _state; }
+    void setState(std::shared_ptr<EventSubTaskState> _state) { m_state = std::move(_state); }
     std::shared_ptr<EventSubTaskState> state() const { return m_state; }
 
     std::string generateJson() const override;
@@ -72,6 +70,4 @@ private:
     std::shared_ptr<EventSubTaskState> m_state;
 };
 
-}  // namespace event
-}  // namespace cppsdk
-}  // namespace bcos
+}  // namespace bcos::cppsdk::event

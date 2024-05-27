@@ -52,8 +52,8 @@ public:
     Status getStatus() { return m_status; }
     CallParameters::UniquePtr go();
     void setResumeParam(CallParameters::UniquePtr pullParam);
-    int64_t getContextID() { return m_contextID; }
-    int64_t getSeq() { return m_seq; }
+    int64_t getContextID() const { return m_contextID; }
+    int64_t getSeq() const { return m_seq; }
 
     void appendKeyLocks(std::vector<std::string> keyLocks);
 

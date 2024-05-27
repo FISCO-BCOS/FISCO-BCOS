@@ -1,0 +1,131 @@
+// Apply the java-library plugin to add support for Java Library
+plugins {
+    id 'maven-publish'
+    id 'java-library'
+    id 'java'
+}
+println("Notice: current gradle version is " + gradle.gradleVersion)
+
+allprojects {
+    group = 'org.fisco-bcos'
+    version = '3.7.3'
+
+    apply plugin: 'maven-publish'
+    apply plugin: 'java'
+    apply plugin: 'java-library'
+    apply plugin: 'signing'
+
+    configurations.all {
+        resolutionStrategy.cacheChangingModulesFor 0, 'seconds'
+    }
+
+    sourceCompatibility = 1.8
+    targetCompatibility = 1.8
+
+    repositories {
+        mavenCentral()
+        maven { url "https://maven.aliyun.com/nexus/content/groups/public/" }
+        maven { url "https://oss.sonatype.org/service/local/staging/deploy/maven2" }
+        maven { url "https://oss.sonatype.org/content/repositories/snapshots" }
+    }
+}
+
+sourceSets {
+    main {
+        java {
+            srcDir "bcos_sdk_java"
+        }
+        resources {
+            srcDir "jni"
+        }
+    }
+}
+
+javadoc {
+    options.addStringOption('Xdoclint:none', '-quiet')
+    options.addStringOption('encoding', 'UTF-8')
+    options.addStringOption('charSet', 'UTF-8')
+}
+
+task sourcesJar(type: Jar) {
+    from sourceSets.main.java
+    archiveClassifier = 'sources'
+}
+
+task javadocJar(type: Jar) {
+    from javadoc
+    archiveClassifier = 'javadoc'
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            artifactId "fisco-bcos-tars-sdk"
+            groupId project.group
+            version project.version
+
+            from components.java
+            artifact sourcesJar
+            artifact javadocJar
+            pom {
+                name = 'fisco-bcos'
+                description = 'fisco-bcos java-tars sdk'
+                url = 'http://www.fisco-bcos.org'
+
+                licenses {
+                    license {
+                        name = 'The Apache License, Version 2.0'
+                        url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                    }
+                }
+                developers {
+                    developer {
+                        id = 'zhangsan'
+                        name = 'zhangsan'
+                        email = 'zhangsan@example.com'
+                    }
+                }
+                scm {
+                    connection = 'https://github.com/FISCO-BCOS/FISCO-BCOS.git'
+                    url = 'https://github.com/FISCO-BCOS/FISCO-BCOS.git'
+                }
+            }
+        }
+    }
+    repositories {
+        maven {
+            def releasesRepoURL = "https://oss.sonatype.org/service/local/staging/deploy/maven2"
+            def snapshotsRepoURL = "https://oss.sonatype.org/content/repositories/snapshots"
+            url = !version.endsWith("SNAPSHOT") ? releasesRepoURL : snapshotsRepoURL
+
+            credentials {
+                username ossrhUsername
+                password ossrhPassword
+            }
+        }
+    }
+
+    signing {
+        sign publishing.publications.mavenJava
+    }
+}
+
+jar {
+    archiveFileName = 'fisco-bcos-tars-sdk-' + project.version + '.jar'
+
+    manifest {
+        def date = new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
+        def branch = "fisco-bcos"
+        def commit = ""
+
+        attributes(["Implementation-Timestamp": date,
+                    "Git-Branch"              : branch,
+                    "Git-Commit"              : commit
+        ])
+
+        logger.info("  Commit : ")
+        logger.info("  => date: {}", date)
+        logger.info("  => branch: {}", branch)
+        logger.info("  => commit: {}", commit)
+    }
+}

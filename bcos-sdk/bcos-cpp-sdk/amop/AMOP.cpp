@@ -40,18 +40,21 @@ void AMOP::start()
     if (m_service)
     {  // start websocket service
         m_service->start();
+        AMOP_CLIENT(INFO) << LOG_BADGE("start") << LOG_DESC("start amop");
     }
     else
     {
         AMOP_CLIENT(WARNING) << LOG_BADGE("start")
                              << LOG_DESC("websocket service is not uninitialized");
     }
-
-    AMOP_CLIENT(INFO) << LOG_BADGE("start") << LOG_DESC("start amop");
 }
 void AMOP::stop()
 {
-    AMOP_CLIENT(INFO) << LOG_BADGE("stop") << LOG_DESC("stop amop");
+    if (m_service)
+    {
+        // AMOP_CLIENT(INFO) << LOG_BADGE("stop") << LOG_DESC("stop amop");
+        m_service->stop();
+    }
 }
 
 // subscribe topics
@@ -136,14 +139,12 @@ void AMOP::publish(
             auto wsMessage = std::dynamic_pointer_cast<WsMessage>(_msg);
             if (!_error && wsMessage && wsMessage->status() != 0)
             {
-                auto errorNew = std::make_shared<Error>();
-                errorNew->setErrorCode(wsMessage->status());
-                errorNew->setErrorMessage(
+                auto errorNew = BCOS_ERROR_PTR(wsMessage->status(),
                     std::string(wsMessage->payload()->begin(), wsMessage->payload()->end()));
 
-                AMOP_CLIENT(WARNING) << LOG_BADGE("publish") << LOG_DESC("publish response error")
-                                     << LOG_KV("errorCode", errorNew->errorCode())
-                                     << LOG_KV("errorMessage", errorNew->errorMessage());
+                AMOP_CLIENT(WARNING) << LOG_BADGE("publish") << LOG_DESC("publish response failed")
+                                     << LOG_KV("code", errorNew->errorCode())
+                                     << LOG_KV("message", errorNew->errorMessage());
 
                 _error = errorNew;
             }
@@ -227,7 +228,7 @@ void AMOP::onRecvAMOPRequest(std::shared_ptr<boostssl::MessageFace> _msg,
 
     if (callback)
     {
-        callback(nullptr, _session->connectedEndPoint(), seq, request->data(), _session);
+        callback(nullptr, _session->endPoint(), seq, request->data(), _session);
     }
     else
     {
@@ -275,7 +276,7 @@ void AMOP::onRecvAMOPBroadcast(std::shared_ptr<boostssl::MessageFace> _msg,
 
     if (callback)
     {
-        callback(nullptr, _session->connectedEndPoint(), seq, request->data(), _session);
+        callback(nullptr, _session->endPoint(), seq, request->data(), _session);
     }
     else
     {

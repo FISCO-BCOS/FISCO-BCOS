@@ -19,78 +19,100 @@
  * @date 2021-04-20
  */
 #pragma once
-
-#pragma GCC diagnostic ignored "-Wunused-variable"
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-
+#include "../Common.h"
+#include "../impl/TarsHashable.h"
 #include "TransactionReceiptImpl.h"
+#include "bcos-utilities/BoostLog.h"
+#include <bcos-concepts/Hash.h>
 #include <bcos-framework/protocol/TransactionReceiptFactory.h>
+#include <utility>
 
 
-namespace bcostars
-{
-namespace protocol
+namespace bcostars::protocol
 {
 class TransactionReceiptFactoryImpl : public bcos::protocol::TransactionReceiptFactory
 {
 public:
-    TransactionReceiptFactoryImpl(bcos::crypto::CryptoSuite::Ptr cryptoSuite)
-      : m_cryptoSuite(cryptoSuite)
+    TransactionReceiptFactoryImpl(const TransactionReceiptFactoryImpl&) = default;
+    TransactionReceiptFactoryImpl(TransactionReceiptFactoryImpl&&) = default;
+    TransactionReceiptFactoryImpl& operator=(const TransactionReceiptFactoryImpl&) = default;
+    TransactionReceiptFactoryImpl& operator=(TransactionReceiptFactoryImpl&&) = default;
+    TransactionReceiptFactoryImpl(const bcos::crypto::CryptoSuite::Ptr& cryptoSuite)
+      : m_hashImpl(cryptoSuite->hashImpl())
     {}
-    ~TransactionReceiptFactoryImpl() override {}
+    ~TransactionReceiptFactoryImpl() override = default;
 
-    TransactionReceiptImpl::Ptr createReceipt(bcos::bytesConstRef _receiptData) override
+    TransactionReceiptImpl::Ptr createReceipt(bcos::bytesConstRef _receiptData) const override
     {
-        auto transactionReceipt = std::make_shared<TransactionReceiptImpl>(m_cryptoSuite,
+        auto transactionReceipt = std::make_shared<TransactionReceiptImpl>(
             [m_receipt = bcostars::TransactionReceipt()]() mutable { return &m_receipt; });
 
         transactionReceipt->decode(_receiptData);
 
+        auto& inner = transactionReceipt->mutableInner();
+        if (inner.dataHash.empty())
+        {
+            // Update the hash field
+            bcos::concepts::hash::calculate(inner, m_hashImpl->hasher(), inner.dataHash);
+
+            BCOS_LOG(TRACE) << LOG_BADGE("createReceipt")
+                            << LOG_DESC("recalculate receipt dataHash");
+        }
+
         return transactionReceipt;
     }
 
-    TransactionReceiptImpl::Ptr createReceipt(bcos::bytes const& _receiptData) override
+    TransactionReceiptImpl::Ptr createReceipt(bcos::bytes const& _receiptData) const override
     {
         return createReceipt(bcos::ref(_receiptData));
     }
 
-    TransactionReceiptImpl::Ptr createReceipt(bcos::u256 const& _gasUsed,
-        const std::string_view& _contractAddress,
-        std::shared_ptr<std::vector<bcos::protocol::LogEntry>> _logEntries, int32_t _status,
-        bcos::bytes const& _output, bcos::protocol::BlockNumber _blockNumber) override
+    TransactionReceiptImpl::Ptr createReceipt(bcos::u256 const& gasUsed,
+        std::string contractAddress, const std::vector<bcos::protocol::LogEntry>& logEntries,
+        int32_t status, bcos::bytesConstRef output,
+        bcos::protocol::BlockNumber blockNumber) const override
     {
-        auto transactionReceipt = std::make_shared<TransactionReceiptImpl>(m_cryptoSuite,
+        auto transactionReceipt = std::make_shared<TransactionReceiptImpl>(
             [m_receipt = bcostars::TransactionReceipt()]() mutable { return &m_receipt; });
-        auto const& inner = transactionReceipt->innerGetter();
-        // required: version
-        inner()->data.version = 0;
-        // required: gasUsed
-        inner()->data.gasUsed = boost::lexical_cast<std::string>(_gasUsed);
-        // optional: contractAddress
-        inner()->data.contractAddress.assign(_contractAddress.begin(), _contractAddress.end());
-        // required: status
-        inner()->data.status = _status;
-        // optional: output
-        inner()->data.output.assign(_output.begin(), _output.end());
-        transactionReceipt->setLogEntries(*_logEntries);
+        auto& inner = transactionReceipt->mutableInner();
+        inner.data.version = 0;
+        // inner.data.gasUsed = boost::lexical_cast<std::string>(gasUsed);
+        inner.data.gasUsed = gasUsed.backend().str({}, {});
+        inner.data.contractAddress = std::move(contractAddress);
+        inner.data.status = status;
+        inner.data.output.assign(output.begin(), output.end());
+        transactionReceipt->setLogEntries(logEntries);
+        inner.data.blockNumber = blockNumber;
 
-        inner()->data.blockNumber = _blockNumber;
+        bcos::concepts::hash::calculate(inner, m_hashImpl->hasher(), inner.dataHash);
         return transactionReceipt;
     }
 
-    TransactionReceiptImpl::Ptr createReceipt(bcos::u256 const& _gasUsed,
-        const std::string_view& _contractAddress,
-        std::shared_ptr<std::vector<bcos::protocol::LogEntry>> _logEntries, int32_t _status,
-        bcos::bytes&& _output, bcos::protocol::BlockNumber _blockNumber) override
+    TransactionReceiptImpl::Ptr createReceipt2(bcos::u256 const& gasUsed,
+        std::string contractAddress, const std::vector<bcos::protocol::LogEntry>& logEntries,
+        int32_t status, bcos::bytesConstRef output, bcos::protocol::BlockNumber blockNumber,
+        std::string effectiveGasPrice = "1",
+        bcos::protocol::TransactionVersion version = bcos::protocol::TransactionVersion::V1_VERSION,
+        bool withHash = true) const override
     {
-        return createReceipt(
-            _gasUsed, _contractAddress, _logEntries, _status, _output, _blockNumber);
+        auto transactionReceipt = std::make_shared<TransactionReceiptImpl>(
+            [m_receipt = bcostars::TransactionReceipt()]() mutable { return &m_receipt; });
+        auto& inner = transactionReceipt->mutableInner();
+        inner.data.version = static_cast<uint32_t>(version);
+        inner.data.gasUsed = boost::lexical_cast<std::string>(gasUsed);
+        inner.data.contractAddress = std::move(contractAddress);
+        inner.data.status = status;
+        inner.data.output.assign(output.begin(), output.end());
+        transactionReceipt->setLogEntries(logEntries);
+        inner.data.blockNumber = blockNumber;
+        inner.data.effectiveGasPrice = std::move(effectiveGasPrice);
+
+        // Update the hash field
+        bcos::concepts::hash::calculate(inner, m_hashImpl->hasher(), inner.dataHash);
+        return transactionReceipt;
     }
 
-    void setCryptoSuite(bcos::crypto::CryptoSuite::Ptr cryptoSuite) { m_cryptoSuite = cryptoSuite; }
-    bcos::crypto::CryptoSuite::Ptr cryptoSuite() override { return m_cryptoSuite; }
-
-    bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
+private:
+    bcos::crypto::Hash::Ptr m_hashImpl;
 };
-}  // namespace protocol
-}  // namespace bcostars
+}  // namespace bcostars::protocol

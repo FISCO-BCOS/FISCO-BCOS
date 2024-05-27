@@ -2,6 +2,7 @@
 
 #include "Common.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
+#include "bcos-framework/protocol/Protocol.h"
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
 #include <boost/archive/basic_archive.hpp>
@@ -10,15 +11,19 @@
 #include <boost/iostreams/stream.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
-#include <compare>
 #include <cstdint>
-#include <exception>
 #include <initializer_list>
 #include <type_traits>
 #include <variant>
 
 namespace bcos::storage
 {
+
+template <class Input>
+concept EntryBufferInput =
+    std::same_as<Input, std::string_view> || std::same_as<Input, std::string> ||
+    std::same_as<Input, std::vector<char>> || std::same_as<Input, std::vector<unsigned char>>;
+
 class Entry
 {
 public:
@@ -44,16 +49,13 @@ public:
         std::shared_ptr<std::vector<unsigned char>>, std::shared_ptr<std::vector<char>>>;
 
     Entry() = default;
-
-    explicit Entry(TableInfo::ConstPtr) {}
+    explicit Entry(auto input) { set(std::move(input)); }
 
     Entry(const Entry&) = default;
     Entry(Entry&&) noexcept = default;
     bcos::storage::Entry& operator=(const Entry&) = default;
     bcos::storage::Entry& operator=(Entry&&) noexcept = default;
-    // auto operator<=>(const Entry&) const = default;
-
-    ~Entry() noexcept {}
+    ~Entry() noexcept = default;
 
     template <typename Out, typename InputArchive = boost::archive::binary_iarchive,
         int flag = ARCHIVE_FLAG>
@@ -79,22 +81,22 @@ public:
 
     template <typename In, typename OutputArchive = boost::archive::binary_oarchive,
         int flag = ARCHIVE_FLAG>
-    void setObject(const In& in)
+    void setObject(const In& input)
     {
         std::string value;
         boost::iostreams::stream<boost::iostreams::back_insert_device<std::string>> outputStream(
             value);
         OutputArchive archive(outputStream, flag);
 
-        archive << in;
+        archive << input;
         outputStream.flush();
 
         setField(0, std::move(value));
     }
 
-    std::string_view get() const { return outputValueView(m_value); }
+    std::string_view get() const& { return outputValueView(m_value); }
 
-    std::string_view getField(size_t index) const
+    std::string_view getField(size_t index) const&
     {
         if (index > 0)
         {
@@ -119,29 +121,13 @@ public:
         set(std::forward<T>(input));
     }
 
-    void set(const char* p)
+    void set(const char* pointer)
     {
-        auto view = std::string_view(p, strlen(p));
-        m_size = view.size();
-        if (view.size() <= SMALL_SIZE)
-        {
-            if (m_value.index() != 0)
-            {
-                m_value = SBOBuffer();
-            }
-
-            std::copy_n(view.data(), view.size(), std::get<0>(m_value).data());
-            m_status = MODIFIED;
-            // m_dirty = true;
-        }
-        else
-        {
-            set(std::string(view));
-        }
+        auto view = std::string_view(pointer, strlen(pointer));
+        set(view);
     }
 
-    template <typename Input>
-    void set(Input value)
+    void set(EntryBufferInput auto value)
     {
         auto view = inputValueView(value);
         m_size = view.size();
@@ -154,16 +140,34 @@ public:
 
             std::copy_n(view.data(), view.size(), std::get<0>(m_value).data());
         }
-        else if (m_size <= MEDIUM_SIZE)
-        {
-            m_value = std::move(value);
-        }
         else
         {
-            m_value = std::make_shared<Input>(std::move(value));
+            using ValueType = std::remove_cvref_t<decltype(value)>;
+            if constexpr (std::same_as<ValueType, std::string_view>)
+            {
+                set(std::string(view));
+            }
+            else
+            {
+                if (m_size <= MEDIUM_SIZE)
+                {
+                    m_value = std::move(value);
+                }
+                else
+                {
+                    m_value = std::make_shared<ValueType>(std::move(value));
+                }
+            }
         }
+
         m_status = MODIFIED;
-        // m_dirty = true;
+    }
+    template <EntryBufferInput T>
+    void set(std::shared_ptr<T> value)
+    {
+        m_size = value->size();
+        m_value = std::move(value);
+        m_status = MODIFIED;
     }
 
     template <typename T>
@@ -180,30 +184,12 @@ public:
         m_status = status;
         if (m_status == DELETED)
         {
+            m_size = 0;
             m_value = std::string();
         }
-        // m_dirty = true;
     }
 
-    bool dirty() const
-    {
-        return (m_status == MODIFIED || m_status == DELETED);
-        // return m_dirty;
-    }
-    // void setDirty(bool dirty)
-    // {
-    //     if(dirty)
-    //     {
-    //         m_status = MODIFIED;
-    //     }
-    //     else
-    //     {
-    //         m_status = NORMAL;
-    //     }
-    //     // m_dirty = dirty;
-    // }
-
-    int32_t size() const { return m_size; }
+    bool dirty() const { return (m_status == MODIFIED || m_status == DELETED); }
 
     template <typename Input>
     void importFields(std::initializer_list<Input> values)
@@ -223,42 +209,86 @@ public:
         return std::move(m_value);
     }
 
+    const char* data() const&
+    {
+        auto view = outputValueView(m_value);
+        return view.data();
+    }
+    int32_t size() const { return m_size; }
+
     bool valid() const { return m_status == Status::NORMAL; }
-    crypto::HashType hash(
-        std::string_view table, std::string_view key, const bcos::crypto::Hash::Ptr& hashImpl) const
+    crypto::HashType hash(std::string_view table, std::string_view key,
+        const bcos::crypto::Hash& hashImpl, uint32_t blockVersion) const
     {
         bcos::crypto::HashType entryHash(0);
-        if (m_status == Entry::MODIFIED)
+        if (blockVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
         {
-            auto value = get();
-            bcos::bytesConstRef ref((const bcos::byte*)value.data(), value.size());
-            entryHash = hashImpl->hash(ref);
-            if (c_fileLogLevel >= TRACE)
+            auto hasher = hashImpl.hasher();
+            hasher.update(table);
+            hasher.update(key);
+
+            switch (m_status)
             {
-                STORAGE_LOG(TRACE)
-                    << "Entry Calc hash, dirty entry: " << table << " | " << toHex(key) << " | "
-                    << toHex(value) << LOG_KV("hash", entryHash.abridged());
+            case MODIFIED:
+            {
+                auto data = get();
+                hasher.update(data);
+                hasher.final(entryHash);
+                if (c_fileLogLevel == TRACE) [[unlikely]]
+                {
+                    STORAGE_LOG(TRACE)
+                        << "Entry hash, dirty entry: " << table << " | " << toHex(key) << " | "
+                        << toHex(data) << LOG_KV("hash", entryHash.abridged());
+                }
+                break;
             }
-        }
-        else if (m_status == Entry::DELETED)
-        {
-            entryHash = bcos::crypto::HashType(0x1);
-            if (c_fileLogLevel >= TRACE)
+            case DELETED:
             {
-                STORAGE_LOG(TRACE) << "Entry Calc hash, deleted entry: " << table << " | "
-                                   << toHex(key) << LOG_KV("hash", entryHash.abridged());
+                hasher.final(entryHash);
+                if (c_fileLogLevel == TRACE) [[unlikely]]
+                {
+                    STORAGE_LOG(TRACE) << "Entry hash, deleted entry: " << table << " | "
+                                       << toHex(key) << LOG_KV("hash", entryHash.abridged());
+                }
+                break;
+            }
+            default:
+            {
+                STORAGE_LOG(DEBUG) << "Entry hash, clean entry: " << table << " | " << toHex(key)
+                                   << " | " << (int)m_status;
+                break;
+            }
             }
         }
         else
-        {
-            STORAGE_LOG(DEBUG) << "Entry Calc hash, clean entry: " << table << " | " << toHex(key)
-                               << " | " << (int)m_status;
+        {  // 3.0.0
+            if (m_status == Entry::MODIFIED)
+            {
+                auto value = get();
+                bcos::bytesConstRef ref((const bcos::byte*)value.data(), value.size());
+                entryHash = hashImpl.hash(ref);
+                if (c_fileLogLevel == TRACE) [[unlikely]]
+                {
+                    STORAGE_LOG(TRACE)
+                        << "Entry Calc hash, dirty entry: " << table << " | " << toHex(key) << " | "
+                        << toHex(value) << LOG_KV("hash", entryHash.abridged());
+                }
+            }
+            else if (m_status == Entry::DELETED)
+            {
+                entryHash = bcos::crypto::HashType(0x1);
+                if (c_fileLogLevel == TRACE) [[unlikely]]
+                {
+                    STORAGE_LOG(TRACE) << "Entry Calc hash, deleted entry: " << table << " | "
+                                       << toHex(key) << LOG_KV("hash", entryHash.abridged());
+                }
+            }
         }
         return entryHash;
     }
 
 private:
-    std::string_view outputValueView(const ValueType& value) const
+    [[nodiscard]] auto outputValueView(const ValueType& value) const& -> std::string_view
     {
         std::string_view view;
         std::visit(
@@ -271,14 +301,14 @@ private:
     }
 
     template <typename T>
-    std::string_view inputValueView(const T& value) const
+    [[nodiscard]] auto inputValueView(const T& value) const -> std::string_view
     {
         std::string_view view((const char*)value.data(), value.size());
         return view;
     }
 
     template <typename T>
-    std::string_view inputValueView(const std::shared_ptr<T>& value) const
+    [[nodiscard]] auto inputValueView(const std::shared_ptr<T>& value) const -> std::string_view
     {
         std::string_view view((const char*)value->data(), value->size());
         return view;
@@ -287,7 +317,6 @@ private:
     ValueType m_value;                // should serialization
     int32_t m_size = 0;               // no need to serialization
     Status m_status = Status::EMPTY;  // should serialization
-    // bool m_dirty = false;              // no need to serialization
 };
 
 }  // namespace bcos::storage

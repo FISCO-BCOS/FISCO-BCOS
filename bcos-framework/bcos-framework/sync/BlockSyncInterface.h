@@ -23,16 +23,14 @@
 #include "../ledger/LedgerConfig.h"
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <memory>
-namespace bcos
-{
-namespace sync
+namespace bcos::sync
 {
 class BlockSyncInterface
 {
 public:
     using Ptr = std::shared_ptr<BlockSyncInterface>;
     BlockSyncInterface() = default;
-    virtual ~BlockSyncInterface() {}
+    virtual ~BlockSyncInterface() = default;
 
     virtual void start() = 0;
     virtual void stop() = 0;
@@ -57,5 +55,4 @@ public:
     // used to optimize consensus
     virtual bool faultyNode(bcos::crypto::NodeIDPtr _nodeID) = 0;
 };
-}  // namespace sync
-}  // namespace bcos
+}  // namespace bcos::sync

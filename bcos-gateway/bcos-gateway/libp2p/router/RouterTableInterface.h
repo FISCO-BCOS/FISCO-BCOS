@@ -20,6 +20,7 @@
 #pragma once
 #include <bcos-utilities/Common.h>
 #include <memory>
+#include <set>
 namespace bcos
 {
 namespace gateway
@@ -29,7 +30,11 @@ class RouterTableEntryInterface
 public:
     using Ptr = std::shared_ptr<RouterTableEntryInterface>;
     RouterTableEntryInterface() = default;
-    virtual ~RouterTableEntryInterface() {}
+    RouterTableEntryInterface(const RouterTableEntryInterface&) = delete;
+    RouterTableEntryInterface(RouterTableEntryInterface&&) = delete;
+    RouterTableEntryInterface& operator=(RouterTableEntryInterface&&) = delete;
+    RouterTableEntryInterface& operator=(const RouterTableEntryInterface&) = delete;
+    virtual ~RouterTableEntryInterface() = default;
 
     virtual void setDstNode(std::string const& _dstNode) = 0;
     virtual void setNextHop(std::string const& _nextHop) = 0;
@@ -47,7 +52,11 @@ class RouterTableInterface
 public:
     using Ptr = std::shared_ptr<RouterTableInterface>;
     RouterTableInterface() = default;
-    virtual ~RouterTableInterface() {}
+    RouterTableInterface(const RouterTableInterface&) = delete;
+    RouterTableInterface(RouterTableInterface&&) = delete;
+    RouterTableInterface& operator=(RouterTableInterface&&) = delete;
+    RouterTableInterface& operator=(const RouterTableInterface&) = delete;
+    virtual ~RouterTableInterface() = default;
 
     virtual bool update(std::set<std::string>& _unreachableNodes, std::string const& _generatedFrom,
         RouterTableEntryInterface::Ptr _entry) = 0;
@@ -70,7 +79,11 @@ class RouterTableFactory
 public:
     using Ptr = std::shared_ptr<RouterTableFactory>;
     RouterTableFactory() = default;
-    virtual ~RouterTableFactory() {}
+    RouterTableFactory(RouterTableFactory&&) = delete;
+    RouterTableFactory(const RouterTableFactory&) = delete;
+    RouterTableFactory& operator=(const RouterTableFactory&) = delete;
+    RouterTableFactory& operator=(RouterTableFactory&&) = delete;
+    virtual ~RouterTableFactory() = default;
 
     virtual RouterTableInterface::Ptr createRouterTable() = 0;
     virtual RouterTableInterface::Ptr createRouterTable(bcos::bytesConstRef _decodedData) = 0;

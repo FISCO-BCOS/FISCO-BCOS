@@ -18,6 +18,7 @@
 
 #include "DataConvertUtility.h"
 #include <random>
+#include <regex>
 
 #include "Exceptions.h"
 
@@ -57,6 +58,17 @@ bool bcos::isHexString(string const& _string)
     return true;
 }
 
+bool bcos::isHexStringV2(string const& _string)
+{
+    // if string is null, default return true
+    if (_string.length() == 0)
+    {
+        return true;
+    }
+    std::regex pattern("0x[0-9a-fA-F]*");
+    return std::regex_match(_string, pattern);
+}
+
 std::shared_ptr<bytes> bcos::fromHexString(std::string const& _hexedString)
 {
     unsigned startIndex =
@@ -92,4 +104,32 @@ std::string bcos::toString(string32 const& _s)
     for (unsigned i = 0; i < 32 && _s[i]; ++i)
         ret.push_back(_s[i]);
     return ret;
+}
+std::string bcos::asString(bytes const& _b)
+{
+    return std::string((char const*)_b.data(), (char const*)(_b.data() + _b.size()));
+}
+std::string bcos::asString(bytesConstRef _b)
+{
+    return std::string((char const*)_b.data(), (char const*)(_b.data() + _b.size()));
+}
+bcos::bytes bcos::asBytes(std::string const& _b)
+{
+    return bytes((byte const*)_b.data(), (byte const*)(_b.data() + _b.size()));
+}
+bcos::bytes bcos::toBigEndian(u256 _val)
+{
+    bytes ret(32);
+    toBigEndian(_val, ret);
+    return ret;
+}
+bcos::bytes bcos::toBigEndian(u160 _val)
+{
+    bytes ret(20);
+    toBigEndian(_val, ret);
+    return ret;
+}
+bcos::bytes bcos::toCompactBigEndian(byte _val, unsigned _min)
+{
+    return (_min || _val) ? bytes{_val} : bytes{};
 }

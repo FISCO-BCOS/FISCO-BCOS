@@ -17,9 +17,7 @@
 #------------------------------------------------------------------------------
 
 cmake_minimum_required(VERSION 3.10)
-set(CMAKE_OSX_DEPLOYMENT_TARGET "11.3" CACHE STRING "Minimum OS X deployment version")
 
-include(Version)
 project(bcos-pbft VERSION ${VERSION})
 
 # proto generation
@@ -52,10 +50,10 @@ find_package(jsoncpp CONFIG REQUIRED)
 
 file(GLOB_RECURSE SRCS bcos-pbft/*.cpp)
 add_library(${PBFT_TARGET} ${SRCS} ${MESSAGES_SRCS})
-target_link_libraries(${PBFT_TARGET} PUBLIC ${UTILITIES_TARGET} ${TOOL_TARGET} ${PROTOCOL_TARGET} bcos-framework jsoncpp_static)
+target_link_libraries(${PBFT_TARGET} PUBLIC ${TXPOOL_TARGET} ${UTILITIES_TARGET} ${TOOL_TARGET} bcos-framework jsoncpp_static)
 
 if (TESTS)
-    # fetch bcos-test    
+    # fetch bcos-test
     enable_testing()
     set(CTEST_OUTPUT_ON_FAILURE TRUE)
     add_subdirectory(test)

@@ -30,8 +30,9 @@ public:
     }
 
     void asyncGetRows(std::string_view table,
-        const std::variant<const gsl::span<std::string_view const>,
-            const gsl::span<std::string const>>& _keys,
+        RANGES::any_view<std::string_view,
+            RANGES::category::input | RANGES::category::random_access | RANGES::category::sized>
+            keys,
         std::function<void(Error::UniquePtr, std::vector<std::optional<storage::Entry>>)>
             _callback) noexcept override
     {
@@ -56,7 +57,7 @@ public:
             return;
         }
 
-        m_storage->asyncGetRows(table, _keys, std::move(_callback));
+        m_storage->asyncGetRows(table, keys, std::move(_callback));
     }
 
     void asyncSetRow(std::string_view table, std::string_view key, storage::Entry entry,
@@ -67,9 +68,9 @@ public:
 
     void asyncPrepare(const bcos::protocol::TwoPCParams& params,
         const storage::TraverseStorageInterface& storage,
-        std::function<void(Error::Ptr, uint64_t)> callback) noexcept override
+        std::function<void(Error::Ptr, uint64_t, const std::string&)> callback) noexcept override
     {
-        callback(nullptr, 0);
+        callback(nullptr, 0, "");
     }
 
     void asyncCommit(const bcos::protocol::TwoPCParams& params,

@@ -4,10 +4,11 @@
 #pragma once
 #include "DuplicateTransactionFactory.h"
 #include "JsonRpcImpl_2_0.h"
+#include <bcos-task/Wait.h>
+#include <bcos-utilities/Overloaded.h>
+#include <exception>
 
-namespace bcos
-{
-namespace rpc
+namespace bcos::rpc
 {
 class DupTestTxJsonRpcImpl_2_0 : public JsonRpcImpl_2_0
 {
@@ -36,7 +37,7 @@ public:
         // Note: avoid call tx->sender() or tx->verify() here in case of verify the same transaction
         // more than once
         auto tx = nodeService->blockFactory()->transactionFactory()->createTransaction(
-            transactionData, false);
+            bcos::ref(transactionData), false);
 
 
         if (tx->to().empty())
@@ -77,10 +78,18 @@ public:
             [submitCallback = std::move(submitCallback), txpool](
                 bcos::protocol::Transaction::Ptr tx) {
                 // std::cout << "sendtx: " << tx->nonce() << std::endl;
-                bcos::bytes encodedData;
-                tx->encode(encodedData);
-                auto txData = std::make_shared<bytes>(std::move(encodedData));
-                txpool->asyncSubmit(txData, submitCallback);
+                task::wait([](decltype(txpool) txpool, decltype(tx) tx,
+                               decltype(submitCallback) submitCallback) -> task::Task<void> {
+                    try
+                    {
+                        auto submitResult = co_await txpool->submitTransaction(std::move(tx));
+                        submitCallback(nullptr, submitResult);
+                    }
+                    catch (bcos::Error& e)
+                    {
+                        submitCallback(std::make_shared<bcos::Error>(std::move(e)), nullptr);
+                    }
+                }(txpool, std::move(tx), std::move(submitCallback)));
             });
     }
 
@@ -88,5 +97,4 @@ public:
 };
 
 
-}  // namespace rpc
-}  // namespace bcos
+}  // namespace bcos::rpc

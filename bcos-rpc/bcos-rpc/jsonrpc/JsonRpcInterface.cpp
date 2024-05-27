@@ -37,6 +37,8 @@ void JsonRpcInterface::initMethod()
         &JsonRpcInterface::getSealerListI, this, std::placeholders::_1, std::placeholders::_2);
     m_methodToFunc["getObserverList"] = std::bind(
         &JsonRpcInterface::getObserverListI, this, std::placeholders::_1, std::placeholders::_2);
+    m_methodToFunc["getNodeListByType"] = std::bind(
+        &JsonRpcInterface::getNodeListByTypeI, this, std::placeholders::_1, std::placeholders::_2);
     m_methodToFunc["getPbftView"] = std::bind(
         &JsonRpcInterface::getPbftViewI, this, std::placeholders::_1, std::placeholders::_2);
     m_methodToFunc["getPendingTxSize"] = std::bind(
@@ -89,9 +91,9 @@ void JsonRpcInterface::onRPCRequest(std::string_view _requestBody, Sender _sende
             BOOST_THROW_EXCEPTION(JsonRpcException(
                 JsonRpcError::MethodNotFound, "The method does not exist/is not available."));
         }
-
-        it->second(request.params,
-            [_requestBody, response, _sender](Error::Ptr _error, Json::Value& _result) mutable {
+        RPC_IMPL_LOG(TRACE) << LOG_BADGE("onRPCRequest") << LOG_KV("request", _requestBody);
+        it->second(
+            request.params, [response, _sender](Error::Ptr _error, Json::Value& _result) mutable {
                 if (_error && (_error->errorCode() != bcos::protocol::CommonError::SUCCESS))
                 {
                     // error
@@ -104,7 +106,7 @@ void JsonRpcInterface::onRPCRequest(std::string_view _requestBody, Sender _sende
                 }
                 auto strResp = toStringResponse(std::move(response));
                 RPC_IMPL_LOG(TRACE)
-                    << LOG_BADGE("onRPCRequest") << LOG_KV("request", _requestBody)
+                    << LOG_BADGE("onRPCRequest")
                     << LOG_KV("response",
                            std::string_view((const char*)strResp.data(), strResp.size()));
                 _sender(std::move(strResp));
@@ -127,13 +129,14 @@ void JsonRpcInterface::onRPCRequest(std::string_view _requestBody, Sender _sende
 
     auto strResp = toStringResponse(response);
 
-    RPC_IMPL_LOG(DEBUG) << LOG_BADGE("onRPCRequest") << LOG_KV("request", _requestBody)
+    RPC_IMPL_LOG(DEBUG) << LOG_BADGE("onRPCRequest") << LOG_DESC("response with exception")
+                        << LOG_KV("request", _requestBody)
                         << LOG_KV("response",
                                std::string_view((const char*)strResp.data(), strResp.size()));
     _sender(strResp);
 }
 
-void JsonRpcInterface::parseRpcRequestJson(std::string_view _requestBody, JsonRequest& _jsonRequest)
+void bcos::rpc::parseRpcRequestJson(std::string_view _requestBody, JsonRequest& _jsonRequest)
 {
     Json::Value root;
     Json::Reader jsonReader;
@@ -200,20 +203,20 @@ void JsonRpcInterface::parseRpcRequestJson(std::string_view _requestBody, JsonRe
     catch (const std::exception& e)
     {
         RPC_IMPL_LOG(ERROR) << LOG_BADGE("parseRpcRequestJson") << LOG_KV("request", _requestBody)
-                            << LOG_KV("error", boost::diagnostic_information(e));
+                            << LOG_KV("message", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(
             JsonRpcException(JsonRpcError::ParseError, "Invalid JSON was received by the server."));
     }
 
     RPC_IMPL_LOG(ERROR) << LOG_BADGE("parseRpcRequestJson") << LOG_KV("request", _requestBody)
-                        << LOG_KV("errorMessage", errorMessage);
+                        << LOG_KV("message", errorMessage);
 
     BOOST_THROW_EXCEPTION(JsonRpcException(
         JsonRpcError::InvalidRequest, "The JSON sent is not a valid Request object."));
 }
 
 
-bcos::bytes JsonRpcInterface::toStringResponse(JsonResponse _jsonResponse)
+bcos::bytes bcos::rpc::toStringResponse(JsonResponse _jsonResponse)
 {
     auto jResp = toJsonResponse(std::move(_jsonResponse));
     std::unique_ptr<Json::StreamWriter> writer(Json::StreamWriterBuilder().newStreamWriter());
@@ -232,7 +235,6 @@ bcos::bytes JsonRpcInterface::toStringResponse(JsonResponse _jsonResponse)
         }
 
         bcos::bytes& m_buffer;
-        /* Other members */
     };
 
     bcos::bytes out;
@@ -243,7 +245,7 @@ bcos::bytes JsonRpcInterface::toStringResponse(JsonResponse _jsonResponse)
     return out;
 }
 
-Json::Value JsonRpcInterface::toJsonResponse(JsonResponse _jsonResponse)
+Json::Value bcos::rpc::toJsonResponse(JsonResponse _jsonResponse)
 {
     Json::Value jResp;
     jResp["jsonrpc"] = std::move(_jsonResponse.jsonrpc);

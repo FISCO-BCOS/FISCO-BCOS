@@ -31,8 +31,9 @@ public:
     using Ptr = std::shared_ptr<CampaignConfig>;
     CampaignConfig(bcos::protocol::MemberInterface::Ptr _self, std::string const& _etcdEndPoint,
         bcos::protocol::MemberFactoryInterface::Ptr _memberFactory, std::string const& _leaderKey,
-        std::string const& _purpose, unsigned _leaseTTL = 3)
-      : ElectionConfig(_etcdEndPoint, _memberFactory, _purpose)
+        std::string const& _purpose, unsigned _leaseTTL = 3, const std::string& _caPath = "",
+        const std::string& _certPath = "", const std::string& _keyPath = "")
+      : ElectionConfig(_etcdEndPoint, _memberFactory, _purpose, _caPath, _certPath, _keyPath)
     {
         m_leaderKey = _leaderKey;
         m_leaseTTL = _leaseTTL;
@@ -88,6 +89,7 @@ protected:
     virtual void fetchLeaderInfoFromEtcd();
     virtual void onLeaderKeyChanged(etcd::Response _response);
     bool checkAndUpdateLeaderKey(etcd::Response _response);
+    void onElectionClusterRecover() override;
     void reCreateWatcher() override
     {
         m_watcher = std::make_shared<etcd::Watcher>(*m_etcdClient, m_leaderKey,

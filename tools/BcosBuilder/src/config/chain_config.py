@@ -33,9 +33,12 @@ class TarsConfig:
 
 
 class GenesisConfig:
-    def __init__(self, config):
+    def __init__(self, config, sm_type, chain_id, group_id):
         self.config = config
         self.desc = "[[group]]"
+        self.sm_crypto = sm_type
+        self.group_id = group_id
+        self.chain_id = chain_id
         self.leader_period = utilities.get_item_value(
             self.config, "leader_period", 1, False, self.desc)
         self.block_tx_count_limit = utilities.get_item_value(
@@ -45,13 +48,18 @@ class GenesisConfig:
         self.gas_limit = utilities.get_item_value(
             self.config, "gas_limit", "3000000000", False, self.desc)
         self.compatibility_version = utilities.get_item_value(
-            self.config, "compatibility_version", "3.0.0", False, self.desc)
+            self.config, "compatibility_version", "3.1.0", False, self.desc)
         self.vm_type = utilities.get_item_value(
             self.config, "vm_type", "evm", False, self.desc)
         self.auth_check = utilities.get_item_value(
             self.config, "auth_check", False, False, self.desc)
         self.init_auth_address = utilities.get_item_value(
-            self.config, "init_auth_address", "", self.auth_check, self.desc)
+            self.config, "init_auth_address", "", True, self.desc)
+
+        if len(self.init_auth_address) == 0 and (self.compatibility_version >= "3.3.0" or self.auth_check):
+            utilities.log_error("Must config 'init_auth_address' when compatibility_version >= 3.3.0 or auth_check is "
+                                "true")
+            sys.exit(-1)
 
 
 class AgencyConfig:
@@ -83,7 +91,8 @@ class AgencyConfig:
 
 
 class ServiceInfoConfig:
-    def __init__(self, config, agency_config, service_obj_list, name, service_type, tpl_config_file, ca_cert_path, sm_ssl, binary_name):
+    def __init__(self, config, agency_config, service_obj_list, name, service_type, tpl_config_file, ca_cert_path,
+                 sm_ssl, binary_name):
         self.config = config
         self.name = name
         self.ca_cert_path = ca_cert_path
@@ -115,7 +124,8 @@ class ServiceInfoConfig:
 
 
 class NodeServiceConfig:
-    def __init__(self, app_name, base_service_name, service_name, service_obj_list, deploy_ip_list, config_file_list, need_add_ini_config):
+    def __init__(self, app_name, base_service_name, service_name, service_obj_list, deploy_ip_list, config_file_list,
+                 need_add_ini_config):
         self.app_name = app_name
         self.service_name = service_name
         self.service_obj_list = service_obj_list
@@ -123,6 +133,7 @@ class NodeServiceConfig:
         self.base_service_name = base_service_name
         # Note: in max-node mode, only contains [config.genesis, node.pem]
         #       in pro-node mode, contains [config.ini, config.genesis, node.pem]
+        #       in HSM mode, node.pem contains only public key information
         self.config_file_list = config_file_list
         # Note: in max-node mode, the ini config files prefixed with deploy ip
         self.ini_config_file = "config.ini"
@@ -130,7 +141,8 @@ class NodeServiceConfig:
 
 
 class NodeConfig:
-    def __init__(self, config, chain_id, group_id, agency_config, node_service_base_name, node_service_obj_list, sm_crypto, node_type):
+    def __init__(self, config, chain_id, group_id, agency_config, node_service_base_name, node_service_obj_list,
+                 sm_crypto, node_type):
         self.chain_id = chain_id
         self.group_id = group_id
         self.agency_config = agency_config
@@ -165,6 +177,23 @@ class NodeConfig:
         self.node_service_base_name = node_service_base_name
         self.node_service_obj_list = node_service_obj_list
         self.sm_crypto = sm_crypto
+        # parse hsm
+        self.enable_hsm = utilities.get_item_value(
+            self.config, "enable_hsm", False, False, self.desc)
+        if self.enable_hsm is True and self.sm_crypto is False:
+            utilities.log_error("must set sm_crypto as true while using HSM")
+            sys.exit(-1)
+        self.hsm_lib_path = utilities.get_item_value(
+            self.config, "hsm_lib_path", "", False, self.desc)
+        self.hsm_key_index = utilities.get_item_value(
+            self.config, "hsm_key_index", 0, False, self.desc)
+        self.hsm_password = utilities.get_item_value(
+            self.config, "hsm_password", "", False, self.desc)
+        self.hsm_public_key_file_path = utilities.get_item_value(
+            self.config, "hsm_public_key_file_path", "", False, self.desc)
+        if self.enable_hsm is True and self.hsm_public_key_file_path == "":
+            utilities.log_error("must provide hsm_public_key_file_path while using HSM")
+            sys.exit(-1)
         self.service_list = []
         self.__parse_node_service_config(node_type)
 
@@ -188,8 +217,10 @@ class NodeConfig:
             self.node_config_file_list = ["config.genesis", "node.pem"]
             deploy_ip_list = node_deploy_ip
 
-        self.node_service = NodeServiceConfig(self.agency_config.chain_id, self.node_service_base_name, self.node_service_name,
-                                              self.node_service_obj_list, deploy_ip_list, self.node_config_file_list, True)
+        self.node_service = NodeServiceConfig(self.agency_config.chain_id, self.node_service_base_name,
+                                              self.node_service_name,
+                                              self.node_service_obj_list, deploy_ip_list, self.node_config_file_list,
+                                              True)
         self.service_list.append(self.node_service)
 
     def get_service_name(self, service_base_name):
@@ -203,7 +234,8 @@ class ProNodeConfig(NodeConfig):
 
     def __init__(self, config, chain_id, group_id, agency_config, sm_crypto):
         NodeConfig.__init__(self, config, chain_id, group_id, agency_config,
-                            utilities.ServiceInfo.single_node_service, utilities.ServiceInfo.single_node_obj_name_list, sm_crypto, "pro")
+                            utilities.ServiceInfo.single_node_service, utilities.ServiceInfo.single_node_obj_name_list,
+                            sm_crypto, "pro")
 
 
 class MaxNodeConfig(NodeConfig):
@@ -212,7 +244,8 @@ class MaxNodeConfig(NodeConfig):
         the max-node config
         """
         NodeConfig.__init__(self, config, chain_id, group_id, agency_config,
-                            utilities.ServiceInfo.max_node_service, utilities.ServiceInfo.single_node_obj_name_list, sm_crypto, "max")
+                            utilities.ServiceInfo.max_node_service, utilities.ServiceInfo.single_node_obj_name_list,
+                            sm_crypto, "max")
         # load the pd_addrs
         self.pd_addrs = utilities.get_item_value(
             self.config, "pd_addrs", None, True, self.desc)
@@ -232,8 +265,10 @@ class MaxNodeConfig(NodeConfig):
         executor_service_deploy_ip = utilities.get_item_value(
             self.config, "executor_deploy_ip", None, True, self.desc)
         self.executor_config_file_list = ["config.ini", "config.genesis"]
-        self.executor_service = NodeServiceConfig(self.chain_id, utilities.ServiceInfo.executor_service, executor_service_name,
-                                                  utilities.ServiceInfo.executor_service_obj, executor_service_deploy_ip, self.executor_config_file_list, False)
+        self.executor_service = NodeServiceConfig(self.chain_id, utilities.ServiceInfo.executor_service,
+                                                  executor_service_name,
+                                                  utilities.ServiceInfo.executor_service_obj,
+                                                  executor_service_deploy_ip, self.executor_config_file_list, False)
         self.service_list.append(self.executor_service)
 
     def __load_service_name(self):
@@ -254,15 +289,10 @@ class GroupConfig:
             output_dir + "/", self.chain_id, self.group_id, "config.genesis")
         self.genesis_config_path = utilities.get_item_value(
             self.config, "genesis_config_path", default_genesis_config_path, False, self.desc)
-        # self.vm_type = utilities.get_item_value(
-        #     self.config, "vm_type", "evm", False, self.desc)
         self.sm_crypto = utilities.get_item_value(
             self.config, "sm_crypto", False, False, self.desc)
-        # self.auth_check = utilities.get_item_value(
-        #     self.config, "auth_check", False, False, self.desc)
-        # self.init_auth_address = utilities.get_item_value(
-        #     self.config, "init_auth_address", "", self.auth_check, self.desc)
-        self.genesis_config = GenesisConfig(self.config)
+        self.genesis_config = GenesisConfig(
+            self.config, self.sm_crypto, self.chain_id, self.group_id)
         self.node_list = []
 
     def append_node_list(self, node_list):
@@ -343,15 +373,23 @@ class ChainConfig:
             rpc_config_section = utilities.get_item_value(
                 agency, "rpc", None, False, "[agency.rpc]")
             if rpc_config_section is not None:
-                rpc_config = ServiceInfoConfig(rpc_config_section, agency_config, utilities.ServiceInfo.rpc_service_obj, agency_config.rpc_service_name,
-                                               utilities.ServiceInfo.rpc_service_type, utilities.ConfigInfo.rpc_config_tpl_path,  self.rpc_ca_cert_path, self.rpc_sm_ssl, utilities.ServiceInfo.rpc_service)
+                rpc_config = ServiceInfoConfig(rpc_config_section, agency_config, utilities.ServiceInfo.rpc_service_obj,
+                                               agency_config.rpc_service_name,
+                                               utilities.ServiceInfo.rpc_service_type,
+                                               utilities.ConfigInfo.rpc_config_tpl_path, self.rpc_ca_cert_path,
+                                               self.rpc_sm_ssl, utilities.ServiceInfo.rpc_service)
                 self.rpc_service_list[rpc_config.name] = rpc_config
             # parse the gateway service config
             gateway_config_section = utilities.get_item_value(
                 agency, "gateway", None, False, "[agency.gateway]")
             if gateway_config_section is not None:
-                gateway_config = ServiceInfoConfig(gateway_config_section, agency_config, utilities.ServiceInfo.gateway_service_obj, agency_config.gateway_service_name,
-                                                   utilities.ServiceInfo.gateway_service_type, utilities.ConfigInfo.gateway_config_tpl_path,  self.gateway_ca_cert_path, self.gateway_sm_ssl, utilities.ServiceInfo.gateway_service)
+                gateway_config = ServiceInfoConfig(gateway_config_section, agency_config,
+                                                   utilities.ServiceInfo.gateway_service_obj,
+                                                   agency_config.gateway_service_name,
+                                                   utilities.ServiceInfo.gateway_service_type,
+                                                   utilities.ConfigInfo.gateway_config_tpl_path,
+                                                   self.gateway_ca_cert_path, self.gateway_sm_ssl,
+                                                   utilities.ServiceInfo.gateway_service)
                 self.gateway_service_list[gateway_config.name] = gateway_config
             # parse the node config
             if should_load_node_config is True:

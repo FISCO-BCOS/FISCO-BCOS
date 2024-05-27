@@ -21,9 +21,11 @@
 #pragma once
 #include "FrontServiceInitializer.h"
 #include "PBFTInitializer.h"
-#include "ProPBFTInitializer.h"
 #include "ProtocolInitializer.h"
 #include "TxPoolInitializer.h"
+#include "tools/archive-tool/ArchiveService.h"
+#include <bcos-executor/src/executor/SwitchExecutorManager.h>
+#include <bcos-scheduler/src/SchedulerManager.h>
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <memory>
 #ifdef WITH_LIGHTNODE
@@ -70,7 +72,6 @@ public:
 
     virtual void initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc);
 
-public:
     virtual void init(bcos::protocol::NodeArchitectureType _nodeArchType,
         std::string const& _configFilePath, std::string const& _genesisFile,
         std::shared_ptr<bcos::gateway::GatewayInterface> _gateway, bool _airVersion,
@@ -95,8 +96,14 @@ private:
 #endif
     bcos::ledger::LedgerInterface::Ptr m_ledger;
     std::shared_ptr<bcos::scheduler::SchedulerInterface> m_scheduler;
+    std::weak_ptr<bcos::executor::SwitchExecutorManager> m_switchExecutorManager;
     std::string const c_consensusStorageDBName = "consensus_log";
     std::string const c_fileSeparator = "/";
+    std::shared_ptr<bcos::archive::ArchiveService> m_archiveService = nullptr;
+
+    std::function<std::shared_ptr<scheduler::SchedulerInterface>()> m_baselineSchedulerHolder;
+    std::function<void(std::function<void(protocol::BlockNumber)>)>
+        m_setBaselineSchedulerBlockNumberNotifier;
 };
 }  // namespace initializer
 }  // namespace bcos

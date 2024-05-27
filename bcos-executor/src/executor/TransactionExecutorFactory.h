@@ -20,14 +20,14 @@
  */
 #pragma once
 
+#include "ShardingTransactionExecutor.h"
 #include "TransactionExecutor.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-ledger/src/libledger/utilities/Common.h"
+#include <bcos-table/src/CacheStorageFactory.h>
+#include <bcos-table/src/StateStorageFactory.h>
 
-
-namespace bcos
-{
-namespace executor
+namespace bcos::executor
 {
 
 class TransactionExecutorFactory
@@ -39,63 +39,66 @@ public:
         txpool::TxPoolInterface::Ptr txpool, storage::MergeableStorageInterface::Ptr cachedStorage,
         storage::TransactionalStorageInterface::Ptr backendStorage,
         protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
-        bcos::crypto::Hash::Ptr hashImpl, bool isWasm, bool isAuthCheck, size_t keyPageSize,
-        std::string name = "executor-" + std::to_string(utcTime()))
+        storage::StateStorageFactory::Ptr stateStorageFactory, bcos::crypto::Hash::Ptr hashImpl,
+        bool isWasm, bool isAuthCheck, std::string name = "executor-" + std::to_string(utcTime()))
     {  // only for test
+        auto keyPageIgnoreTables = std::make_shared<std::set<std::string, std::less<>>>(
+            storage::IGNORED_ARRAY.begin(), storage::IGNORED_ARRAY.end());
         return std::make_shared<TransactionExecutor>(ledger, txpool, cachedStorage, backendStorage,
-            executionMessageFactory, hashImpl, isWasm, isAuthCheck, keyPageSize, nullptr, name);
+            executionMessageFactory, stateStorageFactory, hashImpl, isWasm, isAuthCheck,
+            std::make_shared<VMFactory>(), std::move(keyPageIgnoreTables), name);
     }
 
     TransactionExecutorFactory(bcos::ledger::LedgerInterface::Ptr ledger,
-        txpool::TxPoolInterface::Ptr txpool, storage::MergeableStorageInterface::Ptr cache,
+        txpool::TxPoolInterface::Ptr txpool, storage::CacheStorageFactory::Ptr cacheFactory,
         storage::TransactionalStorageInterface::Ptr storage,
         protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
-        bcos::crypto::Hash::Ptr hashImpl, bool isWasm, bool isAuthCheck, size_t keyPageSize,
-        std::string name)
-      : m_name(name),
-        m_keyPageSize(keyPageSize),
-        m_ledger(ledger),
-        m_txpool(txpool),
-        m_cache(cache),
-        m_storage(storage),
-        m_executionMessageFactory(executionMessageFactory),
-        m_hashImpl(hashImpl),
+        storage::StateStorageFactory::Ptr stateStorageFactory, bcos::crypto::Hash::Ptr hashImpl,
+        bool isWasm, size_t vmCacheSize, bool isAuthCheck, std::string name)
+      : m_name(std::move(name)),
+        m_ledger(std::move(ledger)),
+        m_txpool(std::move(txpool)),
+        m_cacheFactory(std::move(cacheFactory)),
+        m_stateStorageFactory(stateStorageFactory),
+        m_storage(std::move(storage)),
+        m_executionMessageFactory(std::move(executionMessageFactory)),
+        m_hashImpl(std::move(hashImpl)),
         m_isWasm(isWasm),
-        m_isAuthCheck(isAuthCheck)
-    {
-        m_keyPageIgnoreTables = std::make_shared<std::set<std::string, std::less<>>>(
-            std::initializer_list<std::set<std::string, std::less<>>::value_type>{
-                std::string(ledger::SYS_CONFIG),
-                std::string(ledger::SYS_CONSENSUS),
-                ledger::FS_ROOT,
-                ledger::FS_APPS,
-                ledger::FS_USER,
-                ledger::FS_SYS_BIN,
-                ledger::FS_USER_TABLE,
-                storage::StorageInterface::SYS_TABLES,
-            });
-    }
+        m_isAuthCheck(isAuthCheck),
+        m_vmFactory(std::make_shared<VMFactory>(vmCacheSize))
+    {}
 
     TransactionExecutor::Ptr build()
     {
-        return std::make_shared<TransactionExecutor>(m_ledger, m_txpool, m_cache, m_storage,
-            m_executionMessageFactory, m_hashImpl, m_isWasm, m_isAuthCheck, m_keyPageSize,
-            m_keyPageIgnoreTables, m_name + "-" + std::to_string(utcTime()));
+        // copy constructor
+        auto keyPageIgnoreTables = std::make_shared<std::set<std::string, std::less<>>>(
+            storage::IGNORED_ARRAY.begin(), storage::IGNORED_ARRAY.end());
+        auto executor = std::make_shared<ShardingTransactionExecutor>(m_ledger, m_txpool,
+            m_cacheFactory ? m_cacheFactory->build() : nullptr, m_storage,
+            m_executionMessageFactory, m_stateStorageFactory, m_hashImpl, m_isWasm, m_isAuthCheck,
+            m_vmFactory, std::move(keyPageIgnoreTables), m_name + "-" + std::to_string(utcTime()));
+        if (f_onNeedSwitchEvent)
+        {
+            executor->registerNeedSwitchEvent(f_onNeedSwitchEvent);
+        }
+        return executor;
     }
+
+    void registerNeedSwitchEvent(std::function<void()> event) { f_onNeedSwitchEvent = event; }
 
 private:
     std::string m_name;
-    size_t m_keyPageSize;
-    std::shared_ptr<std::set<std::string, std::less<>>> m_keyPageIgnoreTables;
     bcos::ledger::LedgerInterface::Ptr m_ledger;
     txpool::TxPoolInterface::Ptr m_txpool;
-    storage::MergeableStorageInterface::Ptr m_cache;
+    storage::CacheStorageFactory::Ptr m_cacheFactory;
+    storage::StateStorageFactory::Ptr m_stateStorageFactory;
     storage::TransactionalStorageInterface::Ptr m_storage;
     protocol::ExecutionMessageFactory::Ptr m_executionMessageFactory;
     bcos::crypto::Hash::Ptr m_hashImpl;
     bool m_isWasm;
     bool m_isAuthCheck;
+    std::function<void()> f_onNeedSwitchEvent;
+    std::shared_ptr<VMFactory> m_vmFactory;
 };
 
-}  // namespace executor
-}  // namespace bcos
+}  // namespace bcos::executor

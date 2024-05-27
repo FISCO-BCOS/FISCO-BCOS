@@ -38,9 +38,12 @@ public:
         return std::make_shared<BlockSyncMsgImpl>(_data);
     }
 
-    BlockSyncStatusInterface::Ptr createBlockSyncStatusMsg() override
+    BlockSyncStatusInterface::Ptr createBlockSyncStatusMsg(int32_t version = 0) override
     {
-        return std::make_shared<BlockSyncStatusImpl>();
+        BlockSyncStatusInterface::Ptr status =  std::make_shared<BlockSyncStatusImpl>();
+        status->setVersion(version);
+        
+        return status;
     }
 
     BlockSyncStatusInterface::Ptr createBlockSyncStatusMsg(bytesConstRef _data) override

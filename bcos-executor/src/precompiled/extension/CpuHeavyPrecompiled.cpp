@@ -36,9 +36,9 @@ contract HelloWorld {
 // set interface
 const char* const METHOD_SORT = "sort(uint256,uint256)";
 
-CpuHeavyPrecompiled::CpuHeavyPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl)
+CpuHeavyPrecompiled::CpuHeavyPrecompiled(crypto::Hash::Ptr hashImpl) : Precompiled(hashImpl)
 {
-    name2Selector[METHOD_SORT] = getFuncSelector(METHOD_SORT, _hashImpl);
+    name2Selector[METHOD_SORT] = getFuncSelector(METHOD_SORT, hashImpl);
 }
 
 
@@ -88,8 +88,8 @@ std::shared_ptr<PrecompiledExecResult> CpuHeavyPrecompiled::call(
 
     // parse function name
     // uint32_t func = getParamFunc(_param);
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    const auto& blockContext = _executive->blockContext();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
 
     u256 size, signature;
     codec.decode(_callParameters->params(), size, signature);

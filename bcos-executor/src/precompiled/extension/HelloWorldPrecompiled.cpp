@@ -43,13 +43,16 @@ const std::string HELLO_WORLD_KEY_FIELD_NAME = "hello_key";
 // value field
 const std::string HELLO_WORLD_VALUE_FIELD = "value";
 
+// define all contract methods' interface
 // get interface
 const char* const HELLO_WORLD_METHOD_GET = "get()";
 // set interface
 const char* const HELLO_WORLD_METHOD_SET = "set(string)";
 
+// register contract methods' interface in constructor
 HelloWorldPrecompiled::HelloWorldPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl)
 {
+    // name2Selector is a member of the base class Precompiled, and keeps the mapping of interface and its implementation
     name2Selector[HELLO_WORLD_METHOD_GET] = getFuncSelector(HELLO_WORLD_METHOD_GET, _hashImpl);
     name2Selector[HELLO_WORLD_METHOD_SET] = getFuncSelector(HELLO_WORLD_METHOD_SET, _hashImpl);
 }
@@ -64,8 +67,8 @@ std::shared_ptr<PrecompiledExecResult> HelloWorldPrecompiled::call(
     // parse function name
     uint32_t func = getParamFunc(_callParameters->input());
     bytesConstRef data = _callParameters->params();
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    const auto& blockContext = _executive->blockContext();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
     gasPricer->setMemUsed(_callParameters->input().size());
 
@@ -91,7 +94,8 @@ std::shared_ptr<PrecompiledExecResult> HelloWorldPrecompiled::call(
         std::string retValue = "Hello World!";
 
         auto entry = table->getRow(HELLO_WORLD_KEY_FIELD_NAME);
-        if (!entry)
+        // if entry exists then get the value from the table
+        if (entry)
         {
             gasPricer->updateMemUsed(entry->size());
             gasPricer->appendOperation(InterfaceOpcode::Select, 1);
@@ -123,6 +127,6 @@ std::shared_ptr<PrecompiledExecResult> HelloWorldPrecompiled::call(
         _callParameters->setExecResult(codec.encode(u256((int)CODE_UNKNOW_FUNCTION_CALL)));
     }
     gasPricer->updateMemUsed(_callParameters->m_execResult.size());
-    _callParameters->setGas(_callParameters->m_gas - gasPricer->calTotalGas());
+    _callParameters->setGasLeft(_callParameters->m_gasLeft - gasPricer->calTotalGas());
     return _callParameters;
 }

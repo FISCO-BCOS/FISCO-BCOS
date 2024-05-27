@@ -21,12 +21,12 @@
 
 
 #pragma once
+#include <boost/container_hash/hash.hpp>
 #include <functional>
 #include <map>
-#include <unordered_map>
 #include <set>
+#include <unordered_map>
 #include <vector>
-#include <boost/container_hash/hash.hpp>
 
 namespace bcos
 {
@@ -53,8 +53,8 @@ public:
 
     virtual void traverseDag(OnConflictHandler const& _onConflict,
         OnFirstConflictHandler const& _onFirstConflict,
-        OnEmptyConflictHandler const& _onEmptyConflict,
-        OnAllConflictHandler const& _onAllConflict) = 0;
+        OnEmptyConflictHandler const& _onEmptyConflict, OnAllConflictHandler const& _onAllConflict,
+        bool clearDepIfAllConflict = false) = 0;
 };
 
 class CriticalFields : public virtual CriticalFieldsInterface
@@ -64,7 +64,7 @@ public:
     using CriticalField = std::vector<std::vector<uint8_t>>;
     using CriticalFieldPtr = std::shared_ptr<CriticalField>;
 
-    CriticalFields(size_t _size) : m_criticals(std::vector<CriticalFieldPtr>(_size)) {}
+    CriticalFields(size_t _size) : m_criticals(std::vector<CriticalFieldPtr>(_size, nullptr)) {}
     virtual ~CriticalFields() {}
 
     size_t size() override { return m_criticals.size(); }
@@ -74,10 +74,11 @@ public:
 
     void traverseDag(OnConflictHandler const& _onConflict,
         OnFirstConflictHandler const& _onFirstConflict,
-        OnEmptyConflictHandler const& _onEmptyConflict,
-        OnAllConflictHandler const& _onAllConflict) override
+        OnEmptyConflictHandler const& _onEmptyConflict, OnAllConflictHandler const& _onAllConflict,
+        bool clearDepIfAllConflict = false) override
     {
-        auto dependencies = std::unordered_map<std::vector<uint8_t>, std::vector<size_t>, boost::hash<std::vector<uint8_t>>>();
+        auto dependencies =
+            std::unordered_map<std::vector<uint8_t>, ID, boost::hash<std::vector<uint8_t>>>();
 
         for (ID id = 0; id < m_criticals.size(); ++id)
         {
@@ -86,6 +87,10 @@ public:
             if (criticals == nullptr)
             {
                 _onAllConflict(id);
+                if (clearDepIfAllConflict)
+                {
+                    dependencies.clear();
+                }
             }
             else if (criticals->empty())
             {
@@ -97,12 +102,13 @@ public:
                 std::set<ID> pIds;
                 for (auto const& c : *criticals)
                 {
-                    auto& ids = dependencies[c];
-                    for (auto pId : ids)
+                    auto [it, success] = dependencies.try_emplace(c, id);
+                    if (!success && it->second != id)
                     {
+                        auto pId = it->second;
                         pIds.insert(pId);
+                        it->second = id;
                     }
-                    ids.push_back(id);
                 }
 
                 if (pIds.empty())
@@ -111,9 +117,12 @@ public:
                 }
                 else
                 {
-                    for (ID pId : pIds)
+                    for (ID pId : pIds)  // ignore conflict like: [a, b, a]
                     {
-                        _onConflict(pId, id);
+                        if (pId != id) [[likely]]
+                        {
+                            _onConflict(pId, id);
+                        }
                     }
                 }
             }

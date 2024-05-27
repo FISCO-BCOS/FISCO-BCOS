@@ -31,7 +31,6 @@
 #include <bcos-framework/protocol/ServiceDesc.h>
 #include <bcos-ledger/src/libledger/Ledger.h>
 #include <bcos-scheduler/src/SchedulerImpl.h>
-#include <bcos-scheduler/src/TarsRemoteExecutorManager.h>
 #include <bcos-tars-protocol/client/RpcServiceClient.h>
 #include <bcos-tars-protocol/client/TxPoolServiceClient.h>
 #include <bcos-tars-protocol/protocol/ExecutionMessageImpl.h>
@@ -53,7 +52,7 @@ void SchedulerServiceApp::initialize()
     {
         std::cout << "init SchedulerService failed, error: " << boost::diagnostic_information(e)
                   << std::endl;
-        throw e;
+        exit(-1);
     }
 }
 
@@ -75,7 +74,6 @@ void SchedulerServiceApp::createAndInitSchedulerService()
     std::vector<tars::TC_Endpoint> endPoints;
     m_nodeConfig->getTarsClientProxyEndpoints(bcos::protocol::RPC_NAME, endPoints);
 
-    // TODO: tars
     auto rpcServicePrx = bcostars::createServantProxy<bcostars::RpcServicePrx>(
         withoutTarsFramework, rpcServiceName, endPoints);
 
@@ -87,8 +85,6 @@ void SchedulerServiceApp::createAndInitSchedulerService()
                                 << LOG_KV("txpoolServiceName", txpoolServiceName);
 
     m_nodeConfig->getTarsClientProxyEndpoints(bcos::protocol::TXPOOL_NAME, endPoints);
-
-    // TODO: tars
     auto txpoolServicePrx = bcostars::createServantProxy<bcostars::TxPoolServicePrx>(
         withoutTarsFramework, txpoolServiceName, endPoints);
 
@@ -123,17 +119,24 @@ void SchedulerServiceApp::fetchConfig()
 void SchedulerServiceApp::initConfig()
 {
     boost::property_tree::ptree pt;
-    boost::property_tree::ptree genesisPt;
     boost::property_tree::read_ini(m_iniConfigPath, pt);
+
+    boost::property_tree::ptree genesisPt;
     boost::property_tree::read_ini(m_genesisConfigPath, pt);
+    // init service.without_tars_framework first for determine the log path
+    m_nodeConfig->loadWithoutTarsFrameworkConfig(pt);
+
     m_logInitializer = std::make_shared<bcos::BoostLogInitializer>();
-    m_logInitializer->setLogPath(getLogPath());
-    m_logInitializer->initLog(pt);
+    if (!m_nodeConfig->withoutTarsFramework())
+    {
+        m_logInitializer->setLogPath(getLogPath());
+    }
+    m_logInitializer->initLog(m_iniConfigPath);
 
     m_nodeConfig =
         std::make_shared<bcos::tool::NodeConfig>(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-    m_nodeConfig->loadConfig(pt);
     m_nodeConfig->loadGenesisConfig(genesisPt);
+    m_nodeConfig->loadConfig(pt);
     m_nodeConfig->loadServiceConfig(pt);
     m_nodeConfig->loadNodeServiceConfig(m_nodeConfig->nodeName(), pt, true);
     // init the protocol
@@ -145,22 +148,24 @@ void SchedulerServiceApp::initConfig()
 void SchedulerServiceApp::createScheduler()
 {
     auto blockFactory = m_protocolInitializer->blockFactory();
-    auto ledger = std::make_shared<bcos::ledger::Ledger>(
-        blockFactory, StorageInitializer::build(m_nodeConfig->pdAddrs(), getLogPath()));
+    auto ledger = std::make_shared<bcos::ledger::Ledger>(blockFactory,
+        StorageInitializer::build(m_nodeConfig->pdAddrs(), getLogPath(), m_nodeConfig->pdCaPath(),
+            m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath()));
     auto executionMessageFactory =
         std::make_shared<bcostars::protocol::ExecutionMessageFactoryImpl>();
     auto executorManager = std::make_shared<bcos::scheduler::RemoteExecutorManager>(
         m_nodeConfig->executorServiceName());
 
     m_scheduler = SchedulerInitializer::build(executorManager, ledger,
-        StorageInitializer::build(m_nodeConfig->pdAddrs(), getLogPath()), executionMessageFactory,
-        blockFactory, m_protocolInitializer->txResultFactory(),
+        StorageInitializer::build(m_nodeConfig->pdAddrs(), getLogPath(), m_nodeConfig->pdCaPath(),
+            m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath()),
+        executionMessageFactory, blockFactory, m_protocolInitializer->txResultFactory(),
         m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isAuthCheck(),
         m_nodeConfig->isWasm());
     auto scheduler = std::dynamic_pointer_cast<bcos::scheduler::SchedulerImpl>(m_scheduler);
     // handler for notify block number
     scheduler->registerBlockNumberReceiver([this](bcos::protocol::BlockNumber number) {
-        BCOS_LOG(INFO) << "Notify blocknumber: " << number;
+        BCOS_LOG(DEBUG) << "Notify blocknumber: " << number;
         // Note: the interface will notify blockNumber to all rpc nodes in pro/max mode
         m_rpc->asyncNotifyBlockNumber(
             m_nodeConfig->groupId(), m_nodeConfig->nodeName(), number, [](bcos::Error::Ptr) {});

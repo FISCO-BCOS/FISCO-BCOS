@@ -23,33 +23,32 @@
 
 #include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-utilities/Common.h>
+#include <atomic>
+#include <memory>
+#include <utility>
 
-namespace pingcap
+namespace tikv_client
 {
-namespace kv
-{
-struct Cluster;
-struct BCOSTwoPhaseCommitter;
+struct TransactionClient;
+struct Transaction;
 struct Snapshot;
-}  // namespace kv
-}  // namespace pingcap
+}  // namespace tikv_client
 
-namespace bcos
+namespace bcos::storage
 {
-namespace storage
-{
-std::shared_ptr<pingcap::kv::Cluster> newTiKVCluster(
-    const std::vector<std::string>& pdAddrs, const std::string& logPath);
+constexpr int scan_batch_size = 64;
+
+std::shared_ptr<tikv_client::TransactionClient> newTiKVClient(
+    const std::vector<std::string>& pdAddrs, const std::string& logPath,
+    const std::string& caPath = "", const std::string& certPath = "",
+    const std::string& keyPath = "", uint32_t grpcTimeout = 3);
 
 class TiKVStorage : public TransactionalStorageInterface
 {
 public:
     using Ptr = std::shared_ptr<TiKVStorage>;
-    explicit TiKVStorage(const std::shared_ptr<pingcap::kv::Cluster>& _cluster)
-      : m_cluster(_cluster)
-    {}
-
-    virtual ~TiKVStorage() {}
+    explicit TiKVStorage(
+        std::shared_ptr<tikv_client::TransactionClient> _cluster, int32_t _commitTimeout = 3000);
 
     void asyncGetPrimaryKeys(std::string_view _table,
         const std::optional<Condition const>& _condition,
@@ -60,8 +59,9 @@ public:
         std::function<void(Error::UniquePtr, std::optional<Entry>)> _callback) noexcept override;
 
     void asyncGetRows(std::string_view table,
-        const std::variant<const gsl::span<std::string_view const>,
-            const gsl::span<std::string const>>& _keys,
+        RANGES::any_view<std::string_view,
+            RANGES::category::input | RANGES::category::random_access | RANGES::category::sized>
+            keys,
         std::function<void(Error::UniquePtr, std::vector<std::optional<Entry>>)> _callback) noexcept
         override;
 
@@ -70,7 +70,7 @@ public:
 
     void asyncPrepare(const bcos::protocol::TwoPCParams& params,
         const TraverseStorageInterface& storage,
-        std::function<void(Error::Ptr, uint64_t)> callback) noexcept override;
+        std::function<void(Error::Ptr, uint64_t, const std::string&)> callback) noexcept override;
 
     void asyncCommit(const bcos::protocol::TwoPCParams& params,
         std::function<void(Error::Ptr, uint64_t)> callback) noexcept override;
@@ -78,16 +78,34 @@ public:
     void asyncRollback(const bcos::protocol::TwoPCParams& params,
         std::function<void(Error::Ptr)> callback) noexcept override;
 
-    Error::Ptr setRows(std::string_view table, std::vector<std::string> keys,
-        std::vector<std::string> values) noexcept override;
+    Error::Ptr setRows(std::string_view tableName,
+        RANGES::any_view<std::string_view,
+            RANGES::category::random_access | RANGES::category::sized>
+            keys,
+        RANGES::any_view<std::string_view,
+            RANGES::category::random_access | RANGES::category::sized>
+            values) noexcept override;
+    virtual Error::Ptr deleteRows(
+        std::string_view, const std::variant<const gsl::span<std::string_view const>,
+                              const gsl::span<std::string const>>&) noexcept override;
+
+    void setSwitchHandler(std::function<void()> _onNeedSwitchEvent)
+    {
+        f_onNeedSwitchEvent = std::move(_onNeedSwitchEvent);
+    }
 
 private:
-    int32_t m_maxRetry = 2048;  // Notice: too small number may lead to asyncPrepare failed.
-    size_t m_coroutineStackSize = 65536;  // macOS default is 128K, linux is 8K, here set 64K
-    std::shared_ptr<pingcap::kv::Cluster> m_cluster;
-    std::shared_ptr<pingcap::kv::BCOSTwoPhaseCommitter> m_committer;
+    void triggerSwitch();
+    std::shared_ptr<tikv_client::Snapshot> getSnapshot();
+
+    std::shared_ptr<tikv_client::TransactionClient> m_cluster;
+    std::shared_ptr<tikv_client::Transaction> m_committer = nullptr;
     uint64_t m_currentStartTS = 0;
+    std::atomic_uint64_t m_lastCommittedTS = 0;
+
+    std::function<void()> f_onNeedSwitchEvent;
+    int32_t m_commitTimeout = 3000;
+    std::chrono::time_point<std::chrono::system_clock> m_committerCreateTime;
     mutable RecursiveMutex x_committer;
 };
-}  // namespace storage
-}  // namespace bcos
+}  // namespace bcos::storage

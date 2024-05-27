@@ -31,9 +31,9 @@ class BlockValidator : public std::enable_shared_from_this<BlockValidator>
 public:
     using Ptr = std::shared_ptr<BlockValidator>;
     explicit BlockValidator(PBFTConfig::Ptr _config)
-      : m_config(_config), m_taskPool(std::make_shared<ThreadPool>("blockValidator", 1))
+      : m_config(std::move(_config)), m_taskPool(std::make_shared<ThreadPool>("blockValidator", 1))
     {}
-    virtual ~BlockValidator() {}
+    virtual ~BlockValidator() = default;
 
     virtual void asyncCheckBlock(
         bcos::protocol::Block::Ptr _block, std::function<void(Error::Ptr, bool)> _onVerifyFinish);

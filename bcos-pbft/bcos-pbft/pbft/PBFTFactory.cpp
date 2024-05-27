@@ -26,6 +26,7 @@
 #include "storage/LedgerStorage.h"
 #include "utilities/Common.h"
 #include <memory>
+#include <utility>
 
 using namespace bcos;
 using namespace bcos::consensus;
@@ -39,15 +40,15 @@ PBFTFactory::PBFTFactory(bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
     bcos::scheduler::SchedulerInterface::Ptr _scheduler, bcos::txpool::TxPoolInterface::Ptr _txpool,
     bcos::protocol::BlockFactory::Ptr _blockFactory,
     bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory)
-  : m_cryptoSuite(_cryptoSuite),
-    m_keyPair(_keyPair),
-    m_frontService(_frontService),
-    m_storage(_storage),
-    m_ledger(_ledger),
-    m_scheduler(_scheduler),
-    m_txpool(_txpool),
-    m_blockFactory(_blockFactory),
-    m_txResultFactory(_txResultFactory)
+  : m_cryptoSuite(std::move(_cryptoSuite)),
+    m_keyPair(std::move(_keyPair)),
+    m_frontService(std::move(_frontService)),
+    m_storage(std::move(_storage)),
+    m_ledger(std::move(_ledger)),
+    m_scheduler(std::move(_scheduler)),
+    m_txpool(std::move(_txpool)),
+    m_blockFactory(std::move(_blockFactory)),
+    m_txResultFactory(std::move(_txResultFactory))
 {}
 
 PBFTImpl::Ptr PBFTFactory::createPBFT()
@@ -67,8 +68,9 @@ PBFTImpl::Ptr PBFTFactory::createPBFT()
         std::make_shared<LedgerStorage>(m_scheduler, m_storage, m_blockFactory, pbftMessageFactory);
 
     PBFT_LOG(INFO) << LOG_DESC("create pbftConfig");
-    auto pbftConfig = std::make_shared<PBFTConfig>(m_cryptoSuite, m_keyPair, pbftMessageFactory,
-        pbftCodec, validator, m_frontService, stateMachine, pbftStorage);
+    PBFTConfig::Ptr pbftConfig =
+        std::make_shared<PBFTConfig>(m_cryptoSuite, m_keyPair, pbftMessageFactory, pbftCodec,
+            validator, m_frontService, stateMachine, pbftStorage, m_blockFactory);
 
     PBFT_LOG(INFO) << LOG_DESC("create PBFTEngine");
     auto pbftEngine = std::make_shared<PBFTEngine>(pbftConfig);

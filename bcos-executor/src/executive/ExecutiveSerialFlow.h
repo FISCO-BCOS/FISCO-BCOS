@@ -54,11 +54,20 @@ public:
 
     void stop() override
     {
+        EXECUTOR_LOG(DEBUG) << "Try to stop ExecutiveSerialFlow";
+        if (!m_isRunning)
+        {
+            EXECUTOR_LOG(DEBUG) << "Executor has tried to stop";
+            return;
+        }
+
         m_isRunning = false;
         ExecutiveFlowInterface::stop();
     };
 
-private:
+protected:
+    virtual std::shared_ptr<TransactionExecutive> buildExecutive(CallParameters::UniquePtr& input);
+
     using SerialMap = std::map<int64_t, CallParameters::UniquePtr, std::less<>>;
     using SerialMapPtr = std::shared_ptr<SerialMap>;
 
@@ -69,8 +78,7 @@ private:
     void asyncTo(F f)
     {
         // call super function
-        ExecutiveFlowInterface::asyncTo<ExecutiveSerialFlow::Ptr, F>(
-            shared_from_this(), std::move(f));
+        ExecutiveFlowInterface::asyncTo<F>(std::move(f));
     }
 
 

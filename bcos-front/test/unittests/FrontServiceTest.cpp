@@ -55,9 +55,7 @@ std::shared_ptr<FrontService> buildFrontService()
     auto gateway = std::make_shared<FakeGateway>();
     auto srcNodeID = createKey(g_srcNodeID);
 
-    auto threadPool = std::make_shared<ThreadPool>("frontServiceTest", 16);
     auto frontServiceFactory = std::make_shared<FrontServiceFactory>();
-    frontServiceFactory->setThreadPool(threadPool);
     frontServiceFactory->setGatewayInterface(gateway);
     auto frontService = frontServiceFactory->buildFrontService(g_groupID, srcNodeID);
     frontService->start();
@@ -301,7 +299,7 @@ BOOST_AUTO_TEST_CASE(testFrontService_loopTimeout)
             (void)_data;
             (void)_uuid;
             (void)_respFunc;
-            BOOST_CHECK_EQUAL(_error->errorCode(), bcos::protocol::CommonError::TIMEOUT);
+            assert(_error->errorCode() == bcos::protocol::CommonError::TIMEOUT);
             barrier.set_value();
         };
 

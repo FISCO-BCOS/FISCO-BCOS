@@ -39,6 +39,31 @@ public:
     std::string_view abi() const override { return m_abi; }
     void setABI(std::string abi) override { m_abi = std::move(abi); }
 
+    std::string_view value() const override { return m_value; }
+    void setValue(std::string value) override { m_value = std::move(value); }
+
+    std::string_view gasPrice() const override { return m_gasPrice; }
+    void setGasPrice(std::string gasPrice) override { m_gasPrice = std::move(gasPrice); }
+
+    int64_t gasLimit() const override { return m_gasLimit; }
+    void setGasLimit(int64_t gasLimit) override { m_gasLimit = gasLimit; }
+
+    std::string_view maxFeePerGas() const override { return m_maxFeePerGas; }
+    void setMaxFeePerGas(std::string maxFeePerGas) override
+    {
+        m_maxFeePerGas = std::move(maxFeePerGas);
+    }
+    std::string_view maxPriorityFeePerGas() const override { return m_maxPriorityFeePerGas; }
+    void setMaxPriorityFeePerGas(std::string maxPriorityFeePerGas) override
+    {
+        m_maxPriorityFeePerGas = std::move(maxPriorityFeePerGas);
+    }
+    std::string_view effectiveGasPrice() const override { return m_effectiveGasPrice; }
+    void setEffectiveGasPrice(std::string effectiveGasPrice) override
+    {
+        m_effectiveGasPrice = std::move(effectiveGasPrice);
+    }
+
     int32_t depth() const override { return m_depth; }
     void setDepth(int32_t depth) override { m_depth = depth; }
 
@@ -66,6 +91,9 @@ public:
 
     int32_t status() const override { return m_status; }
     void setStatus(int32_t status) override { m_status = status; }
+
+    int32_t evmStatus() const override { return m_evmStatus; }
+    void setEvmStatus(int32_t evmStatus) override { m_evmStatus = evmStatus; }
 
     std::string_view message() const override { return m_message; }
     void setMessage(std::string message) override { m_message = std::move(message); }
@@ -103,6 +131,35 @@ public:
     std::string_view keyLockAcquired() const override { return m_keyLockAcquired; }
     void setKeyLockAcquired(std::string keyLock) override { m_keyLockAcquired = keyLock; }
 
+
+    bool delegateCall() const override { return m_delegateCall; }
+    void setDelegateCall(bool delegateCall) override { m_delegateCall = delegateCall; }
+
+    std::string_view delegateCallAddress() const override { return m_delegateCallAddress; }
+    void setDelegateCallAddress(std::string delegateCallAddress) override
+    {
+        m_delegateCallAddress = std::move(delegateCallAddress);
+    }
+
+    bcos::bytesConstRef delegateCallCode() const override { return ref(m_delegateCallCode); }
+    bcos::bytes takeDelegateCallCode() override { return std::move(m_delegateCallCode); }
+    void setDelegateCallCode(bcos::bytes delegateCallCode) override
+    {
+        m_delegateCallCode = std::move(delegateCallCode);
+    }
+
+    std::string_view delegateCallSender() const override { return m_delegateCallSender; }
+    void setDelegateCallSender(std::string delegateCallSender) override
+    {
+        m_delegateCallSender = std::move(delegateCallSender);
+    }
+
+    bool hasContractTableChanged() const override { return m_hasContractTableChanged; }
+    void setHasContractTableChanged(bool hasChanged) override
+    {
+        m_hasContractTableChanged = hasChanged;
+    }
+
     bcos::crypto::HashType m_transactionHash;
     int64_t m_contextID = 0;
     int64_t m_seq = 0;
@@ -111,6 +168,13 @@ public:
     std::string m_from;
     std::string m_to;
     std::string m_abi;
+
+    std::string m_value;
+    std::string m_gasPrice;
+    int64_t m_gasLimit;
+    std::string m_maxFeePerGas;
+    std::string m_maxPriorityFeePerGas;
+    std::string m_effectiveGasPrice;
 
     int64_t m_gasAvailable = 0;
     bcos::bytes m_data;
@@ -126,11 +190,20 @@ public:
 
     int32_t m_status = 0;
     int32_t m_depth = 0;
+    int32_t m_evmStatus = 0;
     Type m_type = TXHASH;
     bool m_create = false;
     bool m_staticCall = false;
     bool m_internalCreate = false;
     bool m_internalCall = false;
+
+    // for delegateCall
+    bool m_delegateCall = false;
+    std::string m_delegateCallAddress;
+    bcos::bytes m_delegateCallCode;
+    std::string m_delegateCallSender;
+
+    bool m_hasContractTableChanged = false;
 };
 
 class NativeExecutionMessageFactory : public protocol::ExecutionMessageFactory

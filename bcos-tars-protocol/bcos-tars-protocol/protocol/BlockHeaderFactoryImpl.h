@@ -19,24 +19,26 @@
  * @date 2021-04-20
  */
 #pragma once
+#include "../impl/TarsHashable.h"
 #include "BlockHeaderImpl.h"
+#include <bcos-concepts/Hash.h>
 #include <bcos-framework/protocol/BlockHeaderFactory.h>
+#include <utility>
 
 
-namespace bcostars
-{
-namespace protocol
+namespace bcostars::protocol
 {
 class BlockHeaderFactoryImpl : public bcos::protocol::BlockHeaderFactory
 {
 public:
-    BlockHeaderFactoryImpl(bcos::crypto::CryptoSuite::Ptr cryptoSuite) : m_cryptoSuite(cryptoSuite)
+    BlockHeaderFactoryImpl(bcos::crypto::CryptoSuite::Ptr cryptoSuite)
+      : m_cryptoSuite(std::move(cryptoSuite)), m_hashImpl(m_cryptoSuite->hashImpl())
     {}
-    ~BlockHeaderFactoryImpl() override {}
+    ~BlockHeaderFactoryImpl() override = default;
     bcos::protocol::BlockHeader::Ptr createBlockHeader() override
     {
         return std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-            m_cryptoSuite, [m_header = bcostars::BlockHeader()]() mutable { return &m_header; });
+            [m_header = bcostars::BlockHeader()]() mutable { return &m_header; });
     }
     bcos::protocol::BlockHeader::Ptr createBlockHeader(bcos::bytes const& _data) override
     {
@@ -44,8 +46,19 @@ public:
     }
     bcos::protocol::BlockHeader::Ptr createBlockHeader(bcos::bytesConstRef _data) override
     {
-        auto blockHeader = createBlockHeader();
+        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
+            [m_header = bcostars::BlockHeader()]() mutable { return &m_header; });
         blockHeader->decode(_data);
+
+        auto& inner = blockHeader->mutableInner();
+        if (inner.dataHash.empty())
+        {
+            // Update the hash field
+            bcos::concepts::hash::calculate(inner, m_hashImpl->hasher(), inner.dataHash);
+
+            BCOS_LOG(TRACE) << LOG_BADGE("createBlockHeader")
+                            << LOG_DESC("recalculate blockHeader dataHash");
+        }
 
         return blockHeader;
     }
@@ -59,6 +72,6 @@ public:
 
 private:
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
+    bcos::crypto::Hash::Ptr m_hashImpl;
 };
-}  // namespace protocol
-}  // namespace bcostars
+}  // namespace bcostars::protocol

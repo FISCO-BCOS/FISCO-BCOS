@@ -22,51 +22,40 @@
 #include "../executive/BlockContext.h"
 #include "../vm/Precompiled.h"
 #include "bcos-executor/src/precompiled/common/Common.h"
-#include <bcos-framework/storage/Common.h>
+#include "common/WorkingSealerManagerImpl.h"
 #include <bcos-framework/storage/Table.h>
 #include <bcos-tool/ConsensusNode.h>
 #include <boost/core/ignore_unused.hpp>
 
-namespace bcos
-{
-namespace precompiled
+namespace bcos::precompiled
 {
 class ConsensusPrecompiled : public bcos::precompiled::Precompiled
 {
-#if 0
-contract ConsensusSystemTable
-{
-    function addSealer(string nodeID) public returns(int256);
-    function addObserver(string nodeID) public returns(int256);
-    function remove(string nodeID) public returns(int256);
-}
-#endif
 public:
     using Ptr = std::shared_ptr<ConsensusPrecompiled>;
-    ConsensusPrecompiled(crypto::Hash::Ptr _hashImpl);
-    virtual ~ConsensusPrecompiled(){};
+    explicit ConsensusPrecompiled(const crypto::Hash::Ptr& _hashImpl);
+    ~ConsensusPrecompiled() override = default;
 
     std::shared_ptr<PrecompiledExecResult> call(
         std::shared_ptr<executor::TransactionExecutive> _executive,
         PrecompiledExecResult::Ptr _callParameters) override;
 
 private:
-    int addSealer(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    [[nodiscard]] int addSealer(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         bytesConstRef& _data, const CodecWrapper& codec);
 
-    int addObserver(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    [[nodiscard]] int addObserver(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         bytesConstRef& _data, const CodecWrapper& codec);
 
-    int removeNode(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    [[nodiscard]] int removeNode(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         bytesConstRef& _data, const CodecWrapper& codec);
 
-    int setWeight(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    [[nodiscard]] int setWeight(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         bytesConstRef& _data, const CodecWrapper& codec);
 
-private:
+    void rotateWorkingSealer(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        const PrecompiledExecResult::Ptr& _callParameters, const CodecWrapper& codec);
+
     void showConsensusTable(const std::shared_ptr<executor::TransactionExecutive>& _executive);
-
-    void checkTable(executor::TransactionExecutive& executive);
 };
-}  // namespace precompiled
-}  // namespace bcos
+}  // namespace bcos::precompiled

@@ -18,8 +18,6 @@
  * @date 2021-10-17
  */
 #pragma once
-#pragma GCC diagnostic ignored "-Wunused-variable"
-#pragma GCC diagnostic ignored "-Wunused-parameter"
 
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
@@ -61,15 +59,6 @@ public:
         std::function<void(bcos::Error::Ptr&&, bcos::protocol::Session::ConstPtr&&)>) override
     {
         BCOS_LOG(ERROR) << LOG_DESC("unimplemented method status");
-    }
-
-
-    void registerExecutor(std::string, bcos::executor::ParallelTransactionExecutorInterface::Ptr,
-        std::function<void(bcos::Error::Ptr&&)>) override;
-
-    void unregisterExecutor(const std::string&, std::function<void(bcos::Error::Ptr&&)>) override
-    {
-        BCOS_LOG(ERROR) << LOG_DESC("unimplemented method unregisterExecutor");
     }
 
     void reset(std::function<void(bcos::Error::Ptr&&)>) override

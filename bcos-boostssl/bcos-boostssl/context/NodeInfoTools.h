@@ -23,11 +23,7 @@
 #include <functional>
 #include <memory>
 
-namespace bcos
-{
-namespace boostssl
-{
-namespace context
+namespace bcos::boostssl::context
 {
 static std::string m_moduleName = "DEFAULT";
 
@@ -47,6 +43,4 @@ public:
     static void setModuleName(std::string _moduleName) { m_moduleName = _moduleName; }
 };
 
-}  // namespace context
-}  // namespace boostssl
 }  // namespace bcos

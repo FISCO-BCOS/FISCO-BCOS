@@ -17,6 +17,7 @@
  *  @author xingqiangbai
  *  @date 20200921
  */
+#ifdef WITH_WASM
 #include "Metric.h"
 #include <limits>
 
@@ -246,3 +247,4 @@ InstructionTable GetInstructionTable()
 
 }  // namespace wasm
 }  // namespace bcos
+#endif

@@ -28,15 +28,12 @@
 #include "Common.h"
 #include "Entry.h"
 #include <bcos-utilities/Error.h>
-#include <boost/range.hpp>
-#include <boost/range/iterator.hpp>
-#include <map>
 #include <memory>
+#include <optional>
 #include <string>
+#include <variant>
 
-namespace bcos
-{
-namespace storage
+namespace bcos::storage
 {
 class Table;
 class StorageInterface
@@ -48,6 +45,7 @@ public:
     static TableInfo::ConstPtr getSysTableInfo(std::string_view tableName);
 
     using Ptr = std::shared_ptr<StorageInterface>;
+    using Value = storage::Entry;
 
     virtual ~StorageInterface() = default;
 
@@ -59,8 +57,9 @@ public:
         std::function<void(Error::UniquePtr, std::optional<Entry>)> _callback) = 0;
 
     virtual void asyncGetRows(std::string_view table,
-        const std::variant<const gsl::span<std::string_view const>,
-            const gsl::span<std::string const>>& _keys,
+        RANGES::any_view<std::string_view,
+            RANGES::category::input | RANGES::category::random_access | RANGES::category::sized>
+            keys,
         std::function<void(Error::UniquePtr, std::vector<std::optional<Entry>>)> _callback) = 0;
 
     virtual void asyncSetRow(std::string_view table, std::string_view key, Entry entry,
@@ -74,11 +73,37 @@ public:
 
     virtual void asyncGetTableInfo(std::string_view tableName,
         std::function<void(Error::UniquePtr, TableInfo::ConstPtr)> callback);
-    virtual Error::Ptr setRows(std::string_view, std::vector<std::string>, std::vector<std::string>)
+    virtual Error::Ptr setRows(std::string_view tableName,
+        RANGES::any_view<std::string_view,
+            RANGES::category::random_access | RANGES::category::sized>
+            keys,
+        RANGES::any_view<std::string_view,
+            RANGES::category::random_access | RANGES::category::sized>
+            values)
     {
-        throw std::invalid_argument("unimplement method");
+        throw std::invalid_argument("unimplemented method");
+        return nullptr;
+    }
+    virtual Error::Ptr deleteRows(
+        std::string_view, const std::variant<const gsl::span<std::string_view const>,
+                              const gsl::span<std::string const>>&)
+    {
+        throw std::invalid_argument("unimplemented method");
         return nullptr;
     };
+
+    virtual std::pair<bcos::Error::UniquePtr, std::optional<Entry>> getRow(
+        const std::string_view& table, const std::string_view& _key)
+    {
+        std::pair<Error::UniquePtr, std::optional<Entry>> result;
+        asyncGetRow(table, _key, [&result](Error::UniquePtr _error, std::optional<Entry> _entry) {
+            result.first = std::move(_error);
+            result.second = std::move(_entry);
+        });
+        return result;
+    };
+
+    virtual void stop() {};
 };
 
 class TraverseStorageInterface : public virtual StorageInterface
@@ -86,8 +111,6 @@ class TraverseStorageInterface : public virtual StorageInterface
 public:
     using Ptr = std::shared_ptr<TraverseStorageInterface>;
     using ConstPtr = std::shared_ptr<TraverseStorageInterface const>;
-
-    virtual ~TraverseStorageInterface() = default;
 
     virtual void parallelTraverse(bool onlyDirty,
         std::function<bool(
@@ -100,8 +123,6 @@ class MergeableStorageInterface : public virtual StorageInterface
 public:
     using Ptr = std::shared_ptr<MergeableStorageInterface>;
 
-    virtual ~MergeableStorageInterface() = default;
-
     virtual void merge(bool onlyDirty, const TraverseStorageInterface& source) = 0;
 };
 
@@ -111,11 +132,11 @@ public:
     using Ptr = std::shared_ptr<TransactionalStorageInterface>;
     using ConstPtr = std::shared_ptr<const TransactionalStorageInterface>;
 
-    virtual ~TransactionalStorageInterface() = default;
+    ~TransactionalStorageInterface() override = default;
 
     virtual void asyncPrepare(const bcos::protocol::TwoPCParams& params,
         const TraverseStorageInterface& storage,
-        std::function<void(Error::Ptr, uint64_t)> callback) = 0;
+        std::function<void(Error::Ptr, uint64_t, const std::string&)> callback) = 0;
 
     virtual void asyncCommit(const bcos::protocol::TwoPCParams& params,
         std::function<void(Error::Ptr, uint64_t)> callback) = 0;
@@ -124,5 +145,4 @@ public:
         const bcos::protocol::TwoPCParams& params, std::function<void(Error::Ptr)> callback) = 0;
 };
 
-}  // namespace storage
-}  // namespace bcos
+}  // namespace bcos::storage

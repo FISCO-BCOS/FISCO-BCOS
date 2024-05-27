@@ -7,16 +7,20 @@ on:
   release:
     types: [prereleased]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 env:
   DOCKER_REPOSITORY: fiscobcos
 
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted-docker
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Get branch name
         uses: nelonoel/branch-name@v1.0.1
       - name: Fetch tag

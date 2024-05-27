@@ -47,7 +47,7 @@ public:
         bcos::protocol::ProtocolInfo::ConstPtr _protocolInfo);
     bool removeNode(const std::string& _groupID, std::string const& _nodeID);
 
-    std::map<std::string, std::set<std::string>, std::less<>> nodeListInfo() const;
+    std::map<std::string, std::map<std::string, uint32_t>> nodeListInfo() const;
 
     bool updateGroupNodeInfos(bcos::group::GroupInfo::Ptr _groupInfo);
     bool eraseUnreachableNodes();

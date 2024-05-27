@@ -243,17 +243,6 @@ BOOST_AUTO_TEST_CASE(call)
     }
 }
 
-BOOST_AUTO_TEST_CASE(registerExecutor)
-{
-    auto executor = std::make_shared<MockParallelExecutor>("executor1");
-    auto executor2 = std::make_shared<MockParallelExecutor>("executor2");
-
-    scheduler->registerExecutor(
-        "executor1", executor, [&](Error::Ptr&& error) { BOOST_CHECK(!error); });
-    scheduler->registerExecutor(
-        "executor2", executor2, [&](Error::Ptr&& error) { BOOST_CHECK(!error); });
-}
-
 BOOST_AUTO_TEST_CASE(createContract)
 {
     // Add executor
@@ -331,8 +320,8 @@ BOOST_AUTO_TEST_CASE(dagByMessage)
     {
         bytes input;
         auto tx = transactionFactory->createTransaction(20,
-            "contract" + boost::lexical_cast<std::string>((i + 1) % 10), input, 100, 200, "chainID",
-            "groupID", 400, keyPair);
+            "contract" + boost::lexical_cast<std::string>((i + 1) % 10), input, std::to_string(100),
+200, "chainID", "groupID", 400, keyPair);
         tx->setAttribute(bcos::protocol::Transaction::Attribute::DAG);
         block->appendTransaction(tx);
     }

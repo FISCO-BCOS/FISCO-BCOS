@@ -18,6 +18,8 @@
  */
 
 #include "Hash.h"
+#include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-table/src/KeyPageStorage.h"
 #include "bcos-table/src/StateStorage.h"
@@ -31,7 +33,6 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
-#include <exception>
 #include <future>
 #include <iostream>
 #include <optional>
@@ -76,9 +77,7 @@ inline ostream& operator<<(ostream& os, const std::tuple<std::string, crypto::Ha
 }
 }  // namespace std
 
-namespace bcos
-{
-namespace test
+namespace bcos::test
 {
 struct KeyPageStorageFixture
 {
@@ -86,11 +85,11 @@ struct KeyPageStorageFixture
     {
         boost::log::core::get()->set_logging_enabled(false);
         hashImpl = make_shared<Header256Hash>();
-        auto stateStorage = make_shared<StateStorage>(nullptr);
+        auto stateStorage = make_shared<StateStorage>(nullptr, false);
         stateStorage->setEnableTraverse(true);
         memoryStorage = stateStorage;
         BOOST_REQUIRE(memoryStorage != nullptr);
-        tableFactory = make_shared<KeyPageStorage>(memoryStorage);
+        tableFactory = make_shared<KeyPageStorage>(memoryStorage, false);
         BOOST_REQUIRE(tableFactory != nullptr);
         c.limit(0, 100);
     }
@@ -115,13 +114,14 @@ struct KeyPageStorageFixture
     std::string keyField = "key";
     std::string valueField = "value";
     Condition c;
+    ledger::Features features;
 };
 BOOST_FIXTURE_TEST_SUITE(KeyPageStorageTest, KeyPageStorageFixture)
 
 BOOST_AUTO_TEST_CASE(constructor)
 {
     auto threadPool = ThreadPool("a", 1);
-    auto tf = std::make_shared<KeyPageStorage>(memoryStorage);
+    auto tf = std::make_shared<KeyPageStorage>(memoryStorage, false);
 }
 
 BOOST_AUTO_TEST_CASE(create_Table)
@@ -139,6 +139,21 @@ BOOST_AUTO_TEST_CASE(create_Table)
     BOOST_REQUIRE_THROW(tableFactory->createTable(tableName, valueField), bcos::Error);
 }
 
+
+BOOST_AUTO_TEST_CASE(count_empty_Table)
+{
+    std::string tableName("t_test1");
+    auto countRet = tableFactory->count(tableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 0);
+    auto table = tableFactory->openTable(tableName);
+
+    BOOST_REQUIRE(!table);
+    auto ret = tableFactory->createTable(tableName, valueField);
+    BOOST_REQUIRE(ret);
+    countRet = tableFactory->count(tableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 0);
+}
+
 BOOST_AUTO_TEST_CASE(rollback)
 {
     auto ret = createDefaultTable();
@@ -149,7 +164,9 @@ BOOST_AUTO_TEST_CASE(rollback)
     deleteEntry.setStatus(Entry::DELETED);
     BOOST_REQUIRE_NO_THROW(table->setRow("name", deleteEntry));
 
-    auto hash = tableFactory->hash(hashImpl);
+    auto hash = tableFactory->hash(hashImpl, features);
+    auto countRet = tableFactory->count(testTableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 0);
 
 #ifdef __APPLE__
 #undef __APPLE__
@@ -163,7 +180,10 @@ BOOST_AUTO_TEST_CASE(rollback)
     BOOST_REQUIRE_NO_THROW(entry->setField(0, "Lili"));
     BOOST_REQUIRE_NO_THROW(table->setRow("name", *entry));
 
-    hash = tableFactory->hash(hashImpl);
+    countRet = tableFactory->count(testTableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 1);
+
+    hash = tableFactory->hash(hashImpl, features);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
         crypto::HashType("c18354d205471d61000000000000000000000000000000000000000000000000").hex());
@@ -172,7 +192,7 @@ BOOST_AUTO_TEST_CASE(rollback)
     BOOST_REQUIRE(entry.has_value());
     BOOST_REQUIRE(entry->dirty() == true);
     BOOST_REQUIRE(entry->getField(0) == "Lili");
-    hash = tableFactory->hash(hashImpl);
+    hash = tableFactory->hash(hashImpl, features);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
         crypto::HashType("c18354d205471d61000000000000000000000000000000000000000000000000").hex());
@@ -183,21 +203,23 @@ BOOST_AUTO_TEST_CASE(rollback)
     entry = table->newEntry();
     entry->setField(0, "12345");
     table->setRow("id", *entry);
-    hash = tableFactory->hash(hashImpl);
+    countRet = tableFactory->count(testTableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 2);
+    hash = tableFactory->hash(hashImpl, features);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
         crypto::HashType("d26dbc9a92ed28b1000000000000000000000000000000000000000000000000").hex());
 #endif
     entry = table->getRow("id");
     BOOST_REQUIRE(entry.has_value());
-    hash = tableFactory->hash(hashImpl);
+    hash = tableFactory->hash(hashImpl, features);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
         crypto::HashType("d26dbc9a92ed28b1000000000000000000000000000000000000000000000000").hex());
 #endif
     entry = table->getRow("name");
     BOOST_REQUIRE(entry.has_value());
-    hash = tableFactory->hash(hashImpl);
+    hash = tableFactory->hash(hashImpl, features);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
         crypto::HashType("d26dbc9a92ed28b1000000000000000000000000000000000000000000000000").hex());
@@ -208,21 +230,23 @@ BOOST_AUTO_TEST_CASE(rollback)
     entry = table->newEntry();
     entry->setField(0, "500");
     table->setRow("balance", *entry);
-    hash = tableFactory->hash(hashImpl);
+    countRet = tableFactory->count(testTableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 3);
+    hash = tableFactory->hash(hashImpl, features);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
         crypto::HashType("2b7be3797d97dcf7000000000000000000000000000000000000000000000000").hex());
 #endif
     entry = table->getRow("balance");
     BOOST_REQUIRE(entry.has_value());
-    hash = tableFactory->hash(hashImpl);
+    hash = tableFactory->hash(hashImpl, features);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
         crypto::HashType("2b7be3797d97dcf7000000000000000000000000000000000000000000000000").hex());
 #endif
     entry = table->getRow("name");
     BOOST_REQUIRE(entry.has_value());
-    hash = tableFactory->hash(hashImpl);
+    hash = tableFactory->hash(hashImpl, features);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
         crypto::HashType("2b7be3797d97dcf7000000000000000000000000000000000000000000000000").hex());
@@ -232,7 +256,9 @@ BOOST_AUTO_TEST_CASE(rollback)
 
     auto deleteEntry2 = std::make_optional(table->newDeletedEntry());
     table->setRow("name", *deleteEntry2);
-    hash = tableFactory->hash(hashImpl);
+    countRet = tableFactory->count(testTableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 2);
+    hash = tableFactory->hash(hashImpl, features);
 
 // delete entry will cause hash mismatch
 #if defined(__APPLE__)
@@ -241,64 +267,70 @@ BOOST_AUTO_TEST_CASE(rollback)
 #endif
     entry = table->getRow("name");
     BOOST_REQUIRE(!entry);
-    hash = tableFactory->hash(hashImpl);
+    hash = tableFactory->hash(hashImpl, features);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
         crypto::HashType("4160d337ddd671e0000000000000000000000000000000000000000000000001").hex());
 #endif
     std::cout << "Try remove balance" << std::endl;
     tableFactory->rollback(*savePoint2);
-    hash = tableFactory->hash(hashImpl);
+    countRet = tableFactory->count(testTableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 3);
+    hash = tableFactory->hash(hashImpl, features);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
         crypto::HashType("2b7be3797d97dcf7000000000000000000000000000000000000000000000000").hex());
 #endif
     entry = table->getRow("name");
     BOOST_REQUIRE_NE(entry->status(), Entry::DELETED);
-    hash = tableFactory->hash(hashImpl);
+    hash = tableFactory->hash(hashImpl, features);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
         crypto::HashType("2b7be3797d97dcf7000000000000000000000000000000000000000000000000").hex());
 #endif
     tableFactory->rollback(*savePoint1);
-    hash = tableFactory->hash(hashImpl);
+    countRet = tableFactory->count(testTableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 2);
+    hash = tableFactory->hash(hashImpl, features);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
         crypto::HashType("d26dbc9a92ed28b1000000000000000000000000000000000000000000000000").hex());
 #endif
     entry = table->getRow("name");
     BOOST_REQUIRE(entry.has_value());
-    hash = tableFactory->hash(hashImpl);
+    hash = tableFactory->hash(hashImpl, features);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
         crypto::HashType("d26dbc9a92ed28b1000000000000000000000000000000000000000000000000").hex());
 #endif
     entry = table->getRow("balance");
     BOOST_REQUIRE(!entry);
-    hash = tableFactory->hash(hashImpl);
+    hash = tableFactory->hash(hashImpl, features);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
         crypto::HashType("d26dbc9a92ed28b1000000000000000000000000000000000000000000000000").hex());
 #endif
 
     tableFactory->rollback(*savePoint);
+    countRet = tableFactory->count(testTableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 1);
     entry = table->getRow("name");
     BOOST_REQUIRE(entry.has_value());
-    hash = tableFactory->hash(hashImpl);
+    hash = tableFactory->hash(hashImpl, features);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
         crypto::HashType("c18354d205471d61000000000000000000000000000000000000000000000000").hex());
 #endif
     entry = table->getRow("balance");
     BOOST_REQUIRE(!entry);
-    hash = tableFactory->hash(hashImpl);
+    hash = tableFactory->hash(hashImpl, features);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
         crypto::HashType("c18354d205471d61000000000000000000000000000000000000000000000000").hex());
 #endif
     entry = table->getRow("id");
     BOOST_REQUIRE(!entry);
-    hash = tableFactory->hash(hashImpl);
+    hash = tableFactory->hash(hashImpl, features);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
         crypto::HashType("c18354d205471d61000000000000000000000000000000000000000000000000").hex());
@@ -308,7 +340,9 @@ BOOST_AUTO_TEST_CASE(rollback)
     entry = table->newEntry();
     entry->setField(0, "new record");
     BOOST_REQUIRE_NO_THROW(table->setRow("id", *entry));
-    hash = tableFactory->hash(hashImpl);
+    countRet = tableFactory->count(testTableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 2);
+    hash = tableFactory->hash(hashImpl, features);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
         crypto::HashType("2c14904fc33bbbae000000000000000000000000000000000000000000000000").hex());
@@ -316,7 +350,9 @@ BOOST_AUTO_TEST_CASE(rollback)
 
     entry = table->newDeletedEntry();
     BOOST_REQUIRE_NO_THROW(table->setRow("id", *entry));
-    hash = tableFactory->hash(hashImpl);
+    countRet = tableFactory->count(testTableName);
+    BOOST_REQUIRE_EQUAL(countRet.first, 1);
+    hash = tableFactory->hash(hashImpl, features);
     // delete entry will cause hash mismatch
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
@@ -326,7 +362,7 @@ BOOST_AUTO_TEST_CASE(rollback)
 
 BOOST_AUTO_TEST_CASE(rollback2)
 {
-    auto hash0 = tableFactory->hash(hashImpl);
+    auto hash0 = tableFactory->hash(hashImpl, features);
     // auto savePoint0 = tableFactory->savepoint();
     auto savePoint0 = std::make_shared<Recoder>();
     tableFactory->setRecoder(savePoint0);
@@ -337,7 +373,7 @@ BOOST_AUTO_TEST_CASE(rollback2)
 
     auto deleteEntry = table->newDeletedEntry();
     table->setRow("name", deleteEntry);
-    auto hash = tableFactory->hash(hashImpl);
+    auto hash = tableFactory->hash(hashImpl, features);
 // delete not exist entry will cause hash mismatch
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
@@ -347,14 +383,14 @@ BOOST_AUTO_TEST_CASE(rollback2)
     // entry->setField("key", "name");
     entry->setField(0, "Lili");
     table->setRow("name", *entry);
-    hash = tableFactory->hash(hashImpl);
+    hash = tableFactory->hash(hashImpl, features);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
         crypto::HashType("c18354d205471d61000000000000000000000000000000000000000000000000").hex());
 #endif
     entry = table->getRow("name");
     BOOST_REQUIRE(entry.has_value());
-    hash = tableFactory->hash(hashImpl);
+    hash = tableFactory->hash(hashImpl, features);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
         crypto::HashType("c18354d205471d61000000000000000000000000000000000000000000000000").hex());
@@ -370,21 +406,21 @@ BOOST_AUTO_TEST_CASE(rollback2)
     // entry->setField("key", "id");
     entry->setField(0, "12345");
     table->setRow("id", *entry);
-    hash = tableFactory->hash(hashImpl);
+    hash = tableFactory->hash(hashImpl, features);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
         crypto::HashType("d26dbc9a92ed28b1000000000000000000000000000000000000000000000000").hex());
 #endif
     entry = table->getRow("id");
     BOOST_REQUIRE(entry.has_value());
-    hash = tableFactory->hash(hashImpl);
+    hash = tableFactory->hash(hashImpl, features);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
         crypto::HashType("d26dbc9a92ed28b1000000000000000000000000000000000000000000000000").hex());
 #endif
     entry = table->getRow("name");
     BOOST_REQUIRE(entry.has_value());
-    hash = tableFactory->hash(hashImpl);
+    hash = tableFactory->hash(hashImpl, features);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
         crypto::HashType("d26dbc9a92ed28b1000000000000000000000000000000000000000000000000").hex());
@@ -395,21 +431,21 @@ BOOST_AUTO_TEST_CASE(rollback2)
 
     entry = table->getRow("name");
     BOOST_REQUIRE(entry.has_value());
-    hash = tableFactory->hash(hashImpl);
+    hash = tableFactory->hash(hashImpl, features);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
         crypto::HashType("c18354d205471d61000000000000000000000000000000000000000000000000").hex());
 #endif
     entry = table->getRow("balance");
     BOOST_REQUIRE(!entry);
-    hash = tableFactory->hash(hashImpl);
+    hash = tableFactory->hash(hashImpl, features);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
         crypto::HashType("c18354d205471d61000000000000000000000000000000000000000000000000").hex());
 #endif
     entry = table->getRow("id");
     BOOST_REQUIRE(!entry);
-    hash = tableFactory->hash(hashImpl);
+    hash = tableFactory->hash(hashImpl, features);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
         crypto::HashType("c18354d205471d61000000000000000000000000000000000000000000000000").hex());
@@ -417,12 +453,12 @@ BOOST_AUTO_TEST_CASE(rollback2)
 
     // BOOST_REQUIRE(table->dirty() == true);
     tableFactory->rollback(*savePoint0);
-    hash = tableFactory->hash(hashImpl);
+    hash = tableFactory->hash(hashImpl, features);
     BOOST_REQUIRE(hash.hex() == crypto::HashType("").hex());
     entry = table->getRow("name");
     BOOST_REQUIRE(!entry);
 
-    auto hash00 = tableFactory->hash(hashImpl);
+    auto hash00 = tableFactory->hash(hashImpl, features);
     BOOST_REQUIRE(hash00 == crypto::HashType(0));
 
     BOOST_REQUIRE_EQUAL_COLLECTIONS(hash0.begin(), hash0.end(), hash00.begin(), hash00.end());
@@ -433,7 +469,7 @@ BOOST_AUTO_TEST_CASE(rollback2)
 
 BOOST_AUTO_TEST_CASE(rollback3)
 {
-    auto hash0 = tableFactory->hash(hashImpl);
+    auto hash0 = tableFactory->hash(hashImpl, features);
     // auto savePoint0 = tableFactory->savepoint();
     auto savePoint0 = std::make_shared<Recoder>();
     tableFactory->setRecoder(savePoint0);
@@ -444,7 +480,7 @@ BOOST_AUTO_TEST_CASE(rollback3)
     auto entry = table->newEntry();
     entry.set("value");
     table->setRow("name", entry);
-    auto hash = tableFactory->hash(hashImpl);
+    tableFactory->hash(hashImpl, features);
     // first rollback
     tableFactory->rollback(*savePoint0);
 
@@ -491,7 +527,7 @@ BOOST_AUTO_TEST_CASE(hash)
     BOOST_REQUIRE_NO_THROW(table->setRow("name", *entry));
     entry = table->getRow("name");
     BOOST_REQUIRE(entry.has_value());
-    auto tableFactory0 = make_shared<KeyPageStorage>(tableFactory);
+    auto tableFactory0 = make_shared<KeyPageStorage>(tableFactory, false);
 
     entry = std::make_optional(table->newEntry());
     // entry->setField("key", "id");
@@ -508,7 +544,7 @@ BOOST_AUTO_TEST_CASE(hash)
     auto entries = table->getRows(keys);
     BOOST_REQUIRE(entries.size() == 2);
 
-    auto dbHash1 = tableFactory->hash(hashImpl);
+    auto dbHash1 = tableFactory->hash(hashImpl, features);
 
     auto savePoint = std::make_shared<Recoder>();
     tableFactory->setRecoder(savePoint);
@@ -526,7 +562,7 @@ BOOST_AUTO_TEST_CASE(hash)
     BOOST_REQUIRE(!entry);
     // BOOST_REQUIRE(table->dirty() == true);
 
-    auto dbHash2 = tableFactory->hash(hashImpl);
+    auto dbHash2 = tableFactory->hash(hashImpl, features);
     BOOST_REQUIRE_EQUAL(dbHash1.hex(), dbHash2.hex());
 
     // getPrimaryKeys and getRows
@@ -580,6 +616,132 @@ BOOST_AUTO_TEST_CASE(hash)
     // tableFactory->asyncCommit([](Error::Ptr, size_t) {});
 }
 
+
+BOOST_AUTO_TEST_CASE(hash_V3_1_0)
+{
+    auto hashImpl2 = make_shared<Header256Hash>();
+    auto memoryStorage2 = make_shared<StateStorage>(nullptr, false);
+    auto tableFactory2 = make_shared<KeyPageStorage>(
+        memoryStorage2, false, 10240, (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
+    auto tableFactory1 = make_shared<KeyPageStorage>(
+        memoryStorage2, false, 10240, (uint32_t)bcos::protocol::BlockVersion::V3_0_VERSION);
+
+    for (int i = 10; i < 20; ++i)
+    {
+        BOOST_REQUIRE(tableFactory1 != nullptr);
+
+        std::string tableName = "testTable" + boost::lexical_cast<std::string>(i);
+        auto key = "testKey" + boost::lexical_cast<std::string>(i);
+        tableFactory1->createTable(tableName, "value");
+        auto table = tableFactory1->openTable(tableName);
+
+        auto entry = std::make_optional(table->newEntry());
+        entry->setField(0, "hello world!");
+        table->setRow(key, *entry);
+
+        std::promise<bool> getRow;
+        table->asyncGetRow(key, [&](auto&& error, auto&& result) {
+            BOOST_REQUIRE(!error);
+            BOOST_REQUIRE_EQUAL(result->getField(0), "hello world!");
+
+            getRow.set_value(true);
+        });
+
+        getRow.get_future().get();
+    }
+
+    for (int i = 10; i < 20; ++i)
+    {
+        BOOST_REQUIRE(tableFactory2 != nullptr);
+
+        std::string tableName = "testTable" + boost::lexical_cast<std::string>(i);
+        auto key = "testKey" + boost::lexical_cast<std::string>(i);
+        tableFactory2->createTable(tableName, "value");
+        auto table = tableFactory2->openTable(tableName);
+
+        auto entry = std::make_optional(table->newEntry());
+        entry->setField(0, "hello world!");
+        table->setRow(key, *entry);
+
+        std::promise<bool> getRow;
+        table->asyncGetRow(key, [&](auto&& error, auto&& result) {
+            BOOST_REQUIRE(!error);
+            BOOST_REQUIRE_EQUAL(result->getField(0), "hello world!");
+
+            getRow.set_value(true);
+        });
+
+        getRow.get_future().get();
+    }
+
+    auto dbHash1 = tableFactory1->hash(hashImpl, features);
+    auto dbHash2 = tableFactory2->hash(hashImpl, features);
+    BOOST_REQUIRE_NE(dbHash1.hex(), dbHash2.hex());
+}
+
+
+BOOST_AUTO_TEST_CASE(hash_different_table_same_data)
+{
+    auto hashImpl2 = std::make_shared<Keccak256>();
+    auto memoryStorage2 = make_shared<StateStorage>(nullptr, false);
+
+    auto tableFactory1 = make_shared<KeyPageStorage>(
+        memoryStorage2, false, 10240, (uint32_t)bcos::protocol::BlockVersion::V3_0_VERSION);
+    auto tableFactory2 = make_shared<KeyPageStorage>(
+        memoryStorage2, false, 10240, (uint32_t)bcos::protocol::BlockVersion::V3_0_VERSION);
+    BOOST_REQUIRE(tableFactory1 != nullptr);
+    BOOST_REQUIRE(tableFactory2 != nullptr);
+
+    auto setData1 = [&](auto&& tableFactory) {
+        std::string tableName = "testTable1";
+        auto key = "testKey1";
+        tableFactory->createTable(tableName, "value");
+        auto table = tableFactory->openTable(tableName);
+        auto entry = std::make_optional(table->newEntry());
+        entry->setField(0, "hello world!");
+        table->setRow(key, *entry);
+        tableName = "testTable2";
+        tableFactory->createTable(tableName, "value");
+        key = "testKey2";
+        table = tableFactory->openTable(tableName);
+        entry = std::make_optional(table->newEntry());
+        entry->setField(0, "hello world!");
+        table->setRow(key, *entry);
+    };
+    auto setData2 = [&](auto&& tableFactory) {
+        std::string tableName = "testTable2";
+        auto key = "testKey1";
+        tableFactory->createTable(tableName, "value");
+        auto table = tableFactory->openTable(tableName);
+        auto entry = std::make_optional(table->newEntry());
+        entry->setField(0, "hello world!");
+        table->setRow(key, *entry);
+        tableName = "testTable1";
+        tableFactory->createTable(tableName, "value");
+        key = "testKey2";
+        table = tableFactory->openTable(tableName);
+        entry = std::make_optional(table->newEntry());
+        entry->setField(0, "hello world!");
+        table->setRow(key, *entry);
+    };
+    setData1(tableFactory1);
+    setData2(tableFactory2);
+    auto dbHash1 = tableFactory1->hash(hashImpl2, features);
+    auto dbHash2 = tableFactory2->hash(hashImpl2, features);
+    BOOST_REQUIRE_EQUAL(dbHash1.hex(), dbHash2.hex());
+
+    auto tableFactory3 = make_shared<KeyPageStorage>(
+        memoryStorage2, false, 10240, (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
+    auto tableFactory4 = make_shared<KeyPageStorage>(
+        memoryStorage2, false, 10240, (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
+
+    setData1(tableFactory3);
+    setData2(tableFactory4);
+    auto dbHash3 = tableFactory3->hash(hashImpl2, features);
+    auto dbHash4 = tableFactory4->hash(hashImpl2, features);
+    BOOST_REQUIRE_NE(dbHash3.hex(), dbHash4.hex());
+}
+
 BOOST_AUTO_TEST_CASE(open_sysTables)
 {
     auto table = tableFactory->openTable(StorageInterface::SYS_TABLES);
@@ -589,8 +751,8 @@ BOOST_AUTO_TEST_CASE(open_sysTables)
 BOOST_AUTO_TEST_CASE(openAndCommit)
 {
     auto hashImpl2 = make_shared<Header256Hash>();
-    auto memoryStorage2 = make_shared<StateStorage>(nullptr);
-    auto tableFactory2 = make_shared<KeyPageStorage>(memoryStorage2);
+    auto memoryStorage2 = make_shared<StateStorage>(nullptr, false);
+    auto tableFactory2 = make_shared<KeyPageStorage>(memoryStorage2, false);
 
     for (int i = 10; i < 20; ++i)
     {
@@ -620,8 +782,8 @@ BOOST_AUTO_TEST_CASE(openAndCommit)
 BOOST_AUTO_TEST_CASE(checkInvalidKeys)
 {
     auto hashImpl2 = make_shared<Header256Hash>();
-    auto memoryStorage2 = make_shared<StateStorage>(nullptr);
-    auto tableFactory2 = make_shared<KeyPageStorage>(memoryStorage2);
+    auto memoryStorage2 = make_shared<StateStorage>(nullptr, false);
+    auto tableFactory2 = make_shared<KeyPageStorage>(memoryStorage2, false);
     BOOST_REQUIRE(tableFactory2 != nullptr);
 
     std::string tableName = "testTable";
@@ -647,7 +809,7 @@ BOOST_AUTO_TEST_CASE(checkInvalidKeys)
     auto entry = table->newDeletedEntry();
     table->setRow(key, entry);
     tableFactory2->setReadOnly(true);
-    auto tableFactory3 = make_shared<KeyPageStorage>(tableFactory2);
+    auto tableFactory3 = make_shared<KeyPageStorage>(tableFactory2, false);
     table = tableFactory3->openTable(tableName);
     key = "testKey" + boost::lexical_cast<std::string>(8);
     entry = table->newEntry();
@@ -669,12 +831,12 @@ BOOST_AUTO_TEST_CASE(chainLink)
     std::vector<KeyPageStorage::Ptr> storages;
     auto valueFields = "value1";
 
-    auto stateStorage = make_shared<StateStorage>(nullptr);
+    auto stateStorage = make_shared<StateStorage>(nullptr, false);
     StateStorageInterface::Ptr prev = stateStorage;
     for (int i = 0; i < 10; ++i)
     {
         prev->setReadOnly(true);
-        auto tableStorage = std::make_shared<KeyPageStorage>(prev);
+        auto tableStorage = std::make_shared<KeyPageStorage>(prev, false);
         for (int j = 0; j < 10; ++j)
         {
             auto tableName = "table_" + boost::lexical_cast<std::string>(i) + "_" +
@@ -829,9 +991,9 @@ BOOST_AUTO_TEST_CASE(getRows)
     std::vector<KeyPageStorage::Ptr> storages;
     auto valueFields = "value1,value2,value3";
 
-    auto stateStorage = make_shared<StateStorage>(nullptr);
-    auto prev = std::make_shared<KeyPageStorage>(stateStorage);
-    auto tableStorage = std::make_shared<KeyPageStorage>(prev);
+    auto stateStorage = make_shared<StateStorage>(nullptr, false);
+    auto prev = std::make_shared<KeyPageStorage>(stateStorage, false);
+    auto tableStorage = std::make_shared<KeyPageStorage>(prev, false);
 
     BOOST_REQUIRE(prev->createTable("t_test", valueFields));
 
@@ -991,7 +1153,7 @@ BOOST_AUTO_TEST_CASE(checkVersion)
 BOOST_AUTO_TEST_CASE(deleteAndGetRows)
 {
     KeyPageStorage::Ptr storage1 =
-        std::make_shared<KeyPageStorage>(make_shared<StateStorage>(nullptr));
+        std::make_shared<KeyPageStorage>(make_shared<StateStorage>(nullptr, false), false, false);
 
     storage1->asyncCreateTable(
         "table", "value", [](Error::UniquePtr error, std::optional<Table> table) {
@@ -1010,14 +1172,14 @@ BOOST_AUTO_TEST_CASE(deleteAndGetRows)
         "table", "key2", std::move(entry2), [](Error::UniquePtr error) { BOOST_REQUIRE(!error); });
 
     storage1->setReadOnly(true);
-    KeyPageStorage::Ptr storage2 = std::make_shared<KeyPageStorage>(storage1);
+    KeyPageStorage::Ptr storage2 = std::make_shared<KeyPageStorage>(storage1, false);
     Entry deleteEntry;
     deleteEntry.setStatus(Entry::DELETED);
     storage2->asyncSetRow("table", "key2", std::move(deleteEntry),
         [](Error::UniquePtr error) { BOOST_REQUIRE(!error); });
 
     storage2->setReadOnly(true);
-    KeyPageStorage::Ptr storage3 = std::make_shared<KeyPageStorage>(storage2);
+    KeyPageStorage::Ptr storage3 = std::make_shared<KeyPageStorage>(storage2, false);
     storage3->asyncGetPrimaryKeys(
         "table", c, [](Error::UniquePtr error, std::vector<std::string> keys) {
             BOOST_REQUIRE(!error);
@@ -1049,7 +1211,7 @@ BOOST_AUTO_TEST_CASE(readPageWithInvalidKeyAndModifyNotChangePageKey)
     tableFactory->setReadOnly(true);
 
     // read the page whose pageKey is invalid but not modify it
-    auto tableFactory0 = make_shared<KeyPageStorage>(tableFactory);
+    auto tableFactory0 = make_shared<KeyPageStorage>(tableFactory, false);
     table = tableFactory0->openTable(testTableName);
     entry = table->getRow("999");
 
@@ -1100,7 +1262,7 @@ BOOST_AUTO_TEST_CASE(readPageWithInvalidKeyAndDeleteNotChangePageKey)
     tableFactory->setReadOnly(true);
 
     // read the page whose pageKey is invalid but not modify it
-    auto tableFactory0 = make_shared<KeyPageStorage>(tableFactory);
+    auto tableFactory0 = make_shared<KeyPageStorage>(tableFactory, false);
     table = tableFactory0->openTable(testTableName);
     entry = table->getRow("88");
 
@@ -1128,7 +1290,7 @@ BOOST_AUTO_TEST_CASE(readPageWithInvalidKeyAndDeleteNotChangePageKey)
 BOOST_AUTO_TEST_CASE(deletedAndGetRow)
 {
     KeyPageStorage::Ptr storage1 =
-        std::make_shared<KeyPageStorage>(make_shared<StateStorage>(nullptr));
+        std::make_shared<KeyPageStorage>(make_shared<StateStorage>(nullptr, false), false, false);
 
     storage1->asyncCreateTable(
         "table", "value", [](Error::UniquePtr error, std::optional<Table> table) {
@@ -1142,7 +1304,7 @@ BOOST_AUTO_TEST_CASE(deletedAndGetRow)
         "table", "key1", std::move(entry1), [](Error::UniquePtr error) { BOOST_REQUIRE(!error); });
 
     storage1->setReadOnly(true);
-    KeyPageStorage::Ptr storage2 = std::make_shared<KeyPageStorage>(storage1);
+    KeyPageStorage::Ptr storage2 = std::make_shared<KeyPageStorage>(storage1, false);
     Entry deleteEntry;
     deleteEntry.setStatus(Entry::DELETED);
     storage2->asyncSetRow("table", "key1", std::move(deleteEntry),
@@ -1162,7 +1324,7 @@ BOOST_AUTO_TEST_CASE(deletedAndGetRow)
 BOOST_AUTO_TEST_CASE(deletedAndGetRows)
 {
     KeyPageStorage::Ptr storage1 =
-        std::make_shared<KeyPageStorage>(make_shared<StateStorage>(nullptr));
+        std::make_shared<KeyPageStorage>(make_shared<StateStorage>(nullptr, false), false, false);
 
     storage1->asyncCreateTable(
         "table", "value", [](Error::UniquePtr error, std::optional<Table> table) {
@@ -1176,7 +1338,7 @@ BOOST_AUTO_TEST_CASE(deletedAndGetRows)
         "table", "key1", std::move(entry1), [](Error::UniquePtr error) { BOOST_REQUIRE(!error); });
 
     storage1->setReadOnly(true);
-    KeyPageStorage::Ptr storage2 = std::make_shared<KeyPageStorage>(storage1);
+    KeyPageStorage::Ptr storage2 = std::make_shared<KeyPageStorage>(storage1, false);
     Entry deleteEntry;
     deleteEntry.setStatus(Entry::DELETED);
     storage2->asyncSetRow("table", "key1", std::move(deleteEntry),
@@ -1194,7 +1356,7 @@ BOOST_AUTO_TEST_CASE(deletedAndGetRows)
 BOOST_AUTO_TEST_CASE(rollbackAndGetRow)
 {
     KeyPageStorage::Ptr storage1 =
-        std::make_shared<KeyPageStorage>(make_shared<StateStorage>(nullptr));
+        std::make_shared<KeyPageStorage>(make_shared<StateStorage>(nullptr, false), false, false);
 
     storage1->asyncCreateTable(
         "table", "value", [](Error::UniquePtr error, std::optional<Table> table) {
@@ -1208,7 +1370,7 @@ BOOST_AUTO_TEST_CASE(rollbackAndGetRow)
         "table", "key1", std::move(entry1), [](Error::UniquePtr error) { BOOST_REQUIRE(!error); });
 
     storage1->setReadOnly(true);
-    KeyPageStorage::Ptr storage2 = std::make_shared<KeyPageStorage>(storage1);
+    KeyPageStorage::Ptr storage2 = std::make_shared<KeyPageStorage>(storage1, false);
     auto recoder = std::make_shared<Recoder>();
     storage2->setRecoder(recoder);
 
@@ -1235,7 +1397,7 @@ BOOST_AUTO_TEST_CASE(rollbackAndGetRow)
 BOOST_AUTO_TEST_CASE(rollbackAndGetRows)
 {
     KeyPageStorage::Ptr storage1 =
-        std::make_shared<KeyPageStorage>(make_shared<StateStorage>(nullptr));
+        std::make_shared<KeyPageStorage>(make_shared<StateStorage>(nullptr, false), false, false);
 
     storage1->asyncCreateTable(
         "table", "value", [](Error::UniquePtr error, std::optional<Table> table) {
@@ -1249,7 +1411,7 @@ BOOST_AUTO_TEST_CASE(rollbackAndGetRows)
         "table", "key1", std::move(entry1), [](Error::UniquePtr error) { BOOST_REQUIRE(!error); });
 
     storage1->setReadOnly(true);
-    KeyPageStorage::Ptr storage2 = std::make_shared<KeyPageStorage>(storage1);
+    KeyPageStorage::Ptr storage2 = std::make_shared<KeyPageStorage>(storage1, false);
     auto recoder = std::make_shared<Recoder>();
     storage2->setRecoder(recoder);
 
@@ -1310,10 +1472,10 @@ BOOST_AUTO_TEST_CASE(randomRWHash)
     for (size_t times = 0; times < 10; ++times)
     {
         std::vector<bcos::crypto::HashType> hashes;
-        StateStorageInterface::Ptr prev = make_shared<StateStorage>(nullptr);
+        StateStorageInterface::Ptr prev = make_shared<StateStorage>(nullptr, false);
         for (size_t i = 0; i < 10; ++i)
         {
-            KeyPageStorage::Ptr storage = std::make_shared<KeyPageStorage>(prev);
+            KeyPageStorage::Ptr storage = std::make_shared<KeyPageStorage>(prev, false);
 
             for (auto& it : rwSet)
             {
@@ -1348,7 +1510,7 @@ BOOST_AUTO_TEST_CASE(randomRWHash)
                 }
             }
 
-            hashes.push_back(storage->hash(hashImpl));
+            hashes.push_back(storage->hash(hashImpl, features));
             storage->setReadOnly(false);
             storage->setReadOnly(true);
             prev = storage;
@@ -1442,10 +1604,10 @@ BOOST_AUTO_TEST_CASE(pageMerge)
 {
     auto valueFields = "value1";
 
-    auto stateStorage = make_shared<StateStorage>(nullptr);
+    auto stateStorage = make_shared<StateStorage>(nullptr, false);
     StateStorageInterface::Ptr prev = stateStorage;
 
-    auto tableStorage = std::make_shared<KeyPageStorage>(prev, 1024);
+    auto tableStorage = std::make_shared<KeyPageStorage>(prev, false, 1024);
     for (int j = 0; j < 100; ++j)
     {
         auto tableName = "table_" + boost::lexical_cast<std::string>(j);
@@ -1518,16 +1680,13 @@ BOOST_AUTO_TEST_CASE(pageMergeRandom)
 {
     auto valueFields = "value1";
 
-    auto stateStorage = make_shared<StateStorage>(nullptr);
+    auto stateStorage = make_shared<StateStorage>(nullptr, false);
     StateStorageInterface::Ptr prev = stateStorage;
 
-    auto tableStorage = std::make_shared<KeyPageStorage>(prev, 1024);
+    auto tableStorage = std::make_shared<KeyPageStorage>(prev, false, 1024);
     auto entryCount = 100;
     auto tableCount = 100;
 
-#if defined(__APPLE__)
-#pragma omp parallel for
-#endif
     for (int j = 0; j < tableCount; ++j)
     {
         auto tableName = "table_" + boost::lexical_cast<std::string>(j);
@@ -1556,14 +1715,11 @@ BOOST_AUTO_TEST_CASE(pageMergeRandom)
             // }
         }
     }
-    auto hash = tableStorage->hash(hashImpl);
+    auto hash = tableStorage->hash(hashImpl, features);
     // BOOST_TEST(
     //     hash.hex() ==
     //     crypto::HashType("4d4a5c95180905cb000000000000000000000000000000000000000000000000").hex());
 
-#if defined(__APPLE__)
-#pragma omp parallel for
-#endif
     for (int j = 0; j < tableCount; ++j)
     {
         auto tableName = "table_" + boost::lexical_cast<std::string>(j);
@@ -1585,14 +1741,11 @@ BOOST_AUTO_TEST_CASE(pageMergeRandom)
         }
     }
 
-    hash = tableStorage->hash(hashImpl);
+    hash = tableStorage->hash(hashImpl, features);
     // BOOST_TEST(
     //     hash.hex() ==
     //     crypto::HashType("4d4a5c95180905cb000000000000000000000000000000000000000000000000").hex());
 
-#if defined(__APPLE__)
-#pragma omp parallel for
-#endif
     for (int j = 0; j < tableCount; ++j)
     {
         auto tableName = "table_" + boost::lexical_cast<std::string>(j);
@@ -1618,7 +1771,7 @@ BOOST_AUTO_TEST_CASE(pageMergeRandom)
         }
     }
 
-    hash = tableStorage->hash(hashImpl);
+    hash = tableStorage->hash(hashImpl, features);
     // BOOST_TEST(
     //     hash.hex() ==
     //     crypto::HashType("4d4a5c95180905cb000000000000000000000000000000000000000000000000").hex());
@@ -1641,10 +1794,10 @@ BOOST_AUTO_TEST_CASE(pageMergeParallelRandom)
 {
     auto valueFields = "value1";
 
-    auto stateStorage = make_shared<StateStorage>(nullptr);
+    auto stateStorage = make_shared<StateStorage>(nullptr, false);
     StateStorageInterface::Ptr prev = stateStorage;
 
-    auto tableStorage = std::make_shared<KeyPageStorage>(prev, 1024);
+    auto tableStorage = std::make_shared<KeyPageStorage>(prev, false, 1024);
     for (int j = 0; j < 100; ++j)
     {
         auto tableName = "table_" + boost::lexical_cast<std::string>(j);
@@ -1726,10 +1879,10 @@ BOOST_AUTO_TEST_CASE(parallelMix)
 {
     auto valueFields = "value1";
 
-    auto stateStorage = make_shared<StateStorage>(nullptr);
+    auto stateStorage = make_shared<StateStorage>(nullptr, false);
     StateStorageInterface::Ptr prev = stateStorage;
 
-    auto tableStorage = std::make_shared<KeyPageStorage>(prev, 1024);
+    auto tableStorage = std::make_shared<KeyPageStorage>(prev, false, 1024);
     // #pragma omp parallel for
     for (int j = 0; j < 100; ++j)
     {
@@ -1823,10 +1976,10 @@ BOOST_AUTO_TEST_CASE(pageSplit)
 {
     auto valueFields = "value1";
 
-    auto stateStorage = make_shared<StateStorage>(nullptr);
+    auto stateStorage = make_shared<StateStorage>(nullptr, false);
     StateStorageInterface::Ptr prev = stateStorage;
 
-    auto tableStorage = std::make_shared<KeyPageStorage>(prev, 1024);
+    auto tableStorage = std::make_shared<KeyPageStorage>(prev, false, 1024);
     for (int j = 0; j < 100; ++j)
     {
         auto tableName = "table_" + boost::lexical_cast<std::string>(j);
@@ -1873,10 +2026,10 @@ BOOST_AUTO_TEST_CASE(pageSplitRandom)
 {
     auto valueFields = "value1";
 
-    auto stateStorage = make_shared<StateStorage>(nullptr);
+    auto stateStorage = make_shared<StateStorage>(nullptr, false);
     StateStorageInterface::Ptr prev = stateStorage;
 
-    auto tableStorage = std::make_shared<KeyPageStorage>(prev, 256);
+    auto tableStorage = std::make_shared<KeyPageStorage>(prev, false, 256);
 #if defined(__APPLE__)
 #pragma omp parallel for
 #endif
@@ -1929,10 +2082,10 @@ BOOST_AUTO_TEST_CASE(pageSplitParallelRandom)
 {
     auto valueFields = "value1";
 
-    auto stateStorage = make_shared<StateStorage>(nullptr);
+    auto stateStorage = make_shared<StateStorage>(nullptr, false);
     StateStorageInterface::Ptr prev = stateStorage;
 
-    auto tableStorage = std::make_shared<KeyPageStorage>(prev, 256);
+    auto tableStorage = std::make_shared<KeyPageStorage>(prev, false, 256);
     for (int j = 0; j < 100; ++j)
     {
         auto tableName = "table_" + boost::lexical_cast<std::string>(j);
@@ -1985,10 +2138,10 @@ BOOST_AUTO_TEST_CASE(asyncGetPrimaryKeys)
 {  // TODO: add ut for asyncGetPrimaryKeys and condition
     auto valueFields = "value1";
 
-    auto stateStorage = make_shared<StateStorage>(nullptr);
+    auto stateStorage = make_shared<StateStorage>(nullptr, false);
     StateStorageInterface::Ptr prev = stateStorage;
 
-    auto tableStorage = std::make_shared<KeyPageStorage>(prev, 256);
+    auto tableStorage = std::make_shared<KeyPageStorage>(prev, false, 256);
     for (int j = 0; j < 100; ++j)
     {
         auto tableName = "table_" + boost::lexical_cast<std::string>(j);
@@ -1996,13 +2149,11 @@ BOOST_AUTO_TEST_CASE(asyncGetPrimaryKeys)
 
         auto table = tableStorage->openTable(tableName);
         BOOST_REQUIRE(table);
-#pragma omp parallel for
         for (int k = 0; k < 1000; ++k)
         {
             auto entry = std::make_optional(table->newEntry());
             auto key = boost::lexical_cast<std::string>(k);
             entry->setField(0, boost::lexical_cast<std::string>(k));
-#pragma omp critical
             BOOST_REQUIRE_NO_THROW(table->setRow(key, *entry));
         }
     }
@@ -2012,25 +2163,20 @@ BOOST_AUTO_TEST_CASE(asyncGetPrimaryKeys)
         auto tableName = "table_" + boost::lexical_cast<std::string>(j);
         auto table = tableStorage->openTable(tableName);
         BOOST_REQUIRE(table);
-#pragma omp parallel for
         for (int k = 0; k < 1000; ++k)
         {
             Condition c;
             c.limit(0, 200);
             auto keys = table->getPrimaryKeys(c);
 
-#pragma omp critical
             BOOST_REQUIRE(keys.size() == 200);
             c.limit(200, 300);
             keys = table->getPrimaryKeys(c);
-#pragma omp critical
             BOOST_REQUIRE(keys.size() == 300);
             c.limit(900, 200);
             keys = table->getPrimaryKeys(c);
-#pragma omp critical
             BOOST_REQUIRE(keys.size() == 100);
             c.GE("900");
-#pragma omp critical
             BOOST_REQUIRE(keys.size() == 100);
         }
     }
@@ -2099,14 +2245,14 @@ BOOST_AUTO_TEST_CASE(BigTableAdd)
     auto valueFields = "value1";
     auto cacheSize = 256 * 1024 * 1024;
     auto pageSize = 512;
-    auto stateStorage0 = make_shared<LRUStateStorage>(nullptr);
+    auto stateStorage0 = make_shared<LRUStateStorage>(nullptr, false);
     stateStorage0->setMaxCapacity(cacheSize);
     StateStorageInterface::Ptr prev0 = stateStorage0;
 
     auto tableName = "table_0";
     BOOST_REQUIRE(prev0->createTable(tableName, valueFields));
 
-    auto stateStorage1 = make_shared<LRUStateStorage>(nullptr);
+    auto stateStorage1 = make_shared<LRUStateStorage>(nullptr, false);
     stateStorage1->setMaxCapacity(cacheSize);
     StateStorageInterface::Ptr prev1 = stateStorage1;
 
@@ -2118,11 +2264,11 @@ BOOST_AUTO_TEST_CASE(BigTableAdd)
     srand(time(NULL));
     for (size_t i = 0; i < count; ++i)
     {
-        auto tableStorage0 = std::make_shared<KeyPageStorage>(prev0, pageSize);
+        auto tableStorage0 = std::make_shared<KeyPageStorage>(prev0, false, pageSize);
         auto table0 = tableStorage0->openTable(tableName);
         BOOST_REQUIRE(table0);
 
-        auto tableStorage1 = std::make_shared<KeyPageStorage>(prev1, pageSize);
+        auto tableStorage1 = std::make_shared<KeyPageStorage>(prev1, false, pageSize);
         auto table1 = tableStorage1->openTable(tableName);
         BOOST_REQUIRE(table1);
 
@@ -2143,11 +2289,11 @@ BOOST_AUTO_TEST_CASE(BigTableAdd)
             entry1->setField(0, value);
             BOOST_REQUIRE_NO_THROW(table1->setRow(key, *entry1));
         }
-        auto hash0 = tableStorage0->hash(hashImpl);
+        auto hash0 = tableStorage0->hash(hashImpl, features);
         BCOS_LOG(DEBUG) << LOG_DESC(">>>>>>>>>>>>KeyPageStorage0") << LOG_KV("i", i)
                         << LOG_KV("hash", hash0.hex());
         BOOST_REQUIRE(hash0.hex() != crypto::HashType(0).hex());
-        auto hash1 = tableStorage1->hash(hashImpl);
+        auto hash1 = tableStorage1->hash(hashImpl, features);
         BCOS_LOG(DEBUG) << LOG_DESC(">>>>>>>>>>>>KeyPageStorage1") << LOG_KV("i", i)
                         << LOG_KV("hash", hash1.hex());
         BOOST_REQUIRE(hash1.hex() != crypto::HashType(0).hex());
@@ -2158,10 +2304,10 @@ BOOST_AUTO_TEST_CASE(BigTableAdd)
         tableStorage1->setReadOnly(true);
         stateStorage0->merge(true, *tableStorage0);
         stateStorage1->merge(true, *tableStorage1);
-        hash0 = stateStorage0->hash(hashImpl);
+        hash0 = stateStorage0->hash(hashImpl, features);
         BCOS_LOG(DEBUG) << LOG_DESC(">>>>>>>>>>>>stateStorage0") << LOG_KV("i", i)
                         << LOG_KV("hash", hash0.hex());
-        hash1 = stateStorage1->hash(hashImpl);
+        hash1 = stateStorage1->hash(hashImpl, features);
         BCOS_LOG(DEBUG) << LOG_DESC(">>>>>>>>>>>>stateStorage1") << LOG_KV("i", i)
                         << LOG_KV("hash", hash1.hex());
         // BOOST_TEST(hash0.hex() == hash1.hex());
@@ -2176,14 +2322,14 @@ BOOST_AUTO_TEST_CASE(BigTableAddSerialize)
     auto valueFields = "value1";
     auto cacheSize = 256 * 1024 * 1024;
     auto pageSize = 512;
-    auto stateStorage0 = make_shared<LRUStateStorage>(nullptr);
+    auto stateStorage0 = make_shared<LRUStateStorage>(nullptr, false);
     stateStorage0->setMaxCapacity(cacheSize);
     StateStorageInterface::Ptr prev0 = stateStorage0;
 
     auto tableName = "table_0";
     BOOST_REQUIRE(prev0->createTable(tableName, valueFields));
 
-    auto stateStorage1 = make_shared<LRUStateStorage>(nullptr);
+    auto stateStorage1 = make_shared<LRUStateStorage>(nullptr, false);
     stateStorage1->setMaxCapacity(cacheSize);
     StateStorageInterface::Ptr prev1 = stateStorage1;
 
@@ -2195,11 +2341,11 @@ BOOST_AUTO_TEST_CASE(BigTableAddSerialize)
     srand(time(NULL));
     for (size_t i = 0; i < count; ++i)
     {
-        auto tableStorage0 = std::make_shared<KeyPageStorage>(prev0, pageSize);
+        auto tableStorage0 = std::make_shared<KeyPageStorage>(prev0, false, pageSize);
         auto table0 = tableStorage0->openTable(tableName);
         BOOST_REQUIRE(table0);
 
-        auto tableStorage1 = std::make_shared<KeyPageStorage>(prev1, pageSize);
+        auto tableStorage1 = std::make_shared<KeyPageStorage>(prev1, false, pageSize);
         auto table1 = tableStorage1->openTable(tableName);
         BOOST_REQUIRE(table1);
 
@@ -2217,11 +2363,11 @@ BOOST_AUTO_TEST_CASE(BigTableAddSerialize)
             entry1->setField(0, value);
             BOOST_REQUIRE_NO_THROW(table1->setRow(key, *entry1));
         }
-        auto hash0 = tableStorage0->hash(hashImpl);
+        auto hash0 = tableStorage0->hash(hashImpl, features);
         BCOS_LOG(DEBUG) << LOG_DESC(">>>>>>>>>>>>KeyPageStorage0") << LOG_KV("i", i)
                         << LOG_KV("hash", hash0.hex());
         BOOST_REQUIRE(hash0.hex() != crypto::HashType(0).hex());
-        auto hash1 = tableStorage1->hash(hashImpl);
+        auto hash1 = tableStorage1->hash(hashImpl, features);
         BCOS_LOG(DEBUG) << LOG_DESC(">>>>>>>>>>>>KeyPageStorage1") << LOG_KV("i", i)
                         << LOG_KV("hash", hash1.hex());
         BOOST_REQUIRE(hash0.hex() != crypto::HashType(0).hex());
@@ -2231,10 +2377,10 @@ BOOST_AUTO_TEST_CASE(BigTableAddSerialize)
         tableStorage1->setReadOnly(true);
         stateStorage0->merge(true, *tableStorage0);
         stateStorage1->merge(true, *tableStorage1);
-        hash0 = stateStorage0->hash(hashImpl);
+        hash0 = stateStorage0->hash(hashImpl, features);
         BCOS_LOG(DEBUG) << LOG_DESC(">>>>>>>>>>>>stateStorage0") << LOG_KV("i", i)
                         << LOG_KV("hash", hash0.hex());
-        hash1 = stateStorage1->hash(hashImpl);
+        hash1 = stateStorage1->hash(hashImpl, features);
         BCOS_LOG(DEBUG) << LOG_DESC(">>>>>>>>>>>>stateStorage1") << LOG_KV("i", i)
                         << LOG_KV("hash", hash1.hex());
         BOOST_TEST(hash0.hex() == hash1.hex());
@@ -2249,19 +2395,19 @@ BOOST_AUTO_TEST_CASE(mockCommitProcess)
     auto valueFields = "value1";
     auto cacheSize = 256 * 1024 * 1024;
     auto pageSize = 512;
-    auto stateStorage0 = make_shared<LRUStateStorage>(nullptr);
+    auto stateStorage0 = make_shared<LRUStateStorage>(nullptr, false);
     stateStorage0->setMaxCapacity(cacheSize);
     StateStorageInterface::Ptr prev0 = stateStorage0;
 
     auto tableName = "table_0";
     BOOST_REQUIRE(prev0->createTable(tableName, valueFields));
 
-    auto stateStorage1 = make_shared<LRUStateStorage>(nullptr);
+    auto stateStorage1 = make_shared<LRUStateStorage>(nullptr, false);
     stateStorage1->setMaxCapacity(cacheSize);
     StateStorageInterface::Ptr prev1 = stateStorage1;
     BOOST_REQUIRE(prev1->createTable(tableName, valueFields));
 
-    auto stateStorage2 = make_shared<LRUStateStorage>(nullptr);
+    auto stateStorage2 = make_shared<LRUStateStorage>(nullptr, false);
     stateStorage2->setMaxCapacity(cacheSize);
     StateStorageInterface::Ptr prev2 = stateStorage2;
     BOOST_REQUIRE(prev2->createTable(tableName, valueFields));
@@ -2276,15 +2422,15 @@ BOOST_AUTO_TEST_CASE(mockCommitProcess)
     std::list<KeyPageStorage::Ptr> keypages2;
     for (size_t i = 0; i < count; ++i)
     {
-        auto tableStorage0 = std::make_shared<KeyPageStorage>(prev0, pageSize);
+        auto tableStorage0 = std::make_shared<KeyPageStorage>(prev0, false, pageSize);
         auto table0 = tableStorage0->openTable(tableName);
         BOOST_REQUIRE(table0);
 
-        auto tableStorage1 = std::make_shared<KeyPageStorage>(prev1, pageSize);
+        auto tableStorage1 = std::make_shared<KeyPageStorage>(prev1, false, pageSize);
         auto table1 = tableStorage1->openTable(tableName);
         BOOST_REQUIRE(table1);
 
-        auto tableStorage2 = std::make_shared<KeyPageStorage>(prev2, pageSize);
+        auto tableStorage2 = std::make_shared<KeyPageStorage>(prev2, false, pageSize);
         auto table2 = tableStorage2->openTable(tableName);
         BOOST_REQUIRE(table2);
 
@@ -2316,15 +2462,15 @@ BOOST_AUTO_TEST_CASE(mockCommitProcess)
             BOOST_REQUIRE(entry2);
             entry2 = table2->getRow(getKey);
         }
-        auto hash0 = tableStorage0->hash(hashImpl);
+        auto hash0 = tableStorage0->hash(hashImpl, features);
         BCOS_LOG(DEBUG) << LOG_DESC(">>>>>>>>>>>>KeyPageStorage0") << LOG_KV("i", i)
                         << LOG_KV("hash", hash0.hex());
         BOOST_REQUIRE(hash0.hex() != crypto::HashType(0).hex());
-        auto hash1 = tableStorage1->hash(hashImpl);
+        auto hash1 = tableStorage1->hash(hashImpl, features);
         BCOS_LOG(DEBUG) << LOG_DESC(">>>>>>>>>>>>KeyPageStorage1") << LOG_KV("i", i)
                         << LOG_KV("hash", hash1.hex());
         BOOST_REQUIRE(hash1.hex() != crypto::HashType(0).hex());
-        auto hash2 = tableStorage2->hash(hashImpl);
+        auto hash2 = tableStorage2->hash(hashImpl, features);
         BCOS_LOG(DEBUG) << LOG_DESC(">>>>>>>>>>>>KeyPageStorage2") << LOG_KV("i", i)
                         << LOG_KV("hash", hash2.hex());
         BOOST_TEST(hash0.hex() == hash1.hex());
@@ -2364,19 +2510,19 @@ BOOST_AUTO_TEST_CASE(mockCommitProcessParallel)
     auto valueFields = "value1";
     auto cacheSize = 256 * 1024 * 1024;
     auto pageSize = 512;
-    auto stateStorage0 = make_shared<LRUStateStorage>(nullptr);
+    auto stateStorage0 = make_shared<LRUStateStorage>(nullptr, false);
     stateStorage0->setMaxCapacity(cacheSize);
     StateStorageInterface::Ptr prev0 = stateStorage0;
 
     auto tableName = "table_0";
     BOOST_REQUIRE(prev0->createTable(tableName, valueFields));
 
-    auto stateStorage1 = make_shared<LRUStateStorage>(nullptr);
+    auto stateStorage1 = make_shared<LRUStateStorage>(nullptr, false);
     stateStorage1->setMaxCapacity(cacheSize);
     StateStorageInterface::Ptr prev1 = stateStorage1;
     BOOST_REQUIRE(prev1->createTable(tableName, valueFields));
 
-    auto stateStorage2 = make_shared<LRUStateStorage>(nullptr);
+    auto stateStorage2 = make_shared<LRUStateStorage>(nullptr, false);
     stateStorage2->setMaxCapacity(cacheSize);
     StateStorageInterface::Ptr prev2 = stateStorage2;
     BOOST_REQUIRE(prev2->createTable(tableName, valueFields));
@@ -2391,15 +2537,15 @@ BOOST_AUTO_TEST_CASE(mockCommitProcessParallel)
     std::list<KeyPageStorage::Ptr> keypages2;
     for (size_t i = 0; i < count; ++i)
     {
-        auto tableStorage0 = std::make_shared<KeyPageStorage>(prev0, pageSize);
+        auto tableStorage0 = std::make_shared<KeyPageStorage>(prev0, false, pageSize);
         auto table0 = tableStorage0->openTable(tableName);
         BOOST_REQUIRE(table0);
 
-        auto tableStorage1 = std::make_shared<KeyPageStorage>(prev1, pageSize);
+        auto tableStorage1 = std::make_shared<KeyPageStorage>(prev1, false, pageSize);
         auto table1 = tableStorage1->openTable(tableName);
         BOOST_REQUIRE(table1);
 
-        auto tableStorage2 = std::make_shared<KeyPageStorage>(prev2, pageSize);
+        auto tableStorage2 = std::make_shared<KeyPageStorage>(prev2, false, pageSize);
         auto table2 = tableStorage2->openTable(tableName);
         BOOST_REQUIRE(table2);
 
@@ -2434,15 +2580,15 @@ BOOST_AUTO_TEST_CASE(mockCommitProcessParallel)
             BOOST_REQUIRE(entry2);
             entry2 = table2->getRow(getKey);
         }
-        auto hash0 = tableStorage0->hash(hashImpl);
+        auto hash0 = tableStorage0->hash(hashImpl, features);
         BCOS_LOG(DEBUG) << LOG_DESC(">>>>>>>>>>>>KeyPageStorage0") << LOG_KV("i", i)
                         << LOG_KV("hash", hash0.hex());
         BOOST_REQUIRE(hash0.hex() != crypto::HashType(0).hex());
-        auto hash1 = tableStorage1->hash(hashImpl);
+        auto hash1 = tableStorage1->hash(hashImpl, features);
         BCOS_LOG(DEBUG) << LOG_DESC(">>>>>>>>>>>>KeyPageStorage1") << LOG_KV("i", i)
                         << LOG_KV("hash", hash1.hex());
         BOOST_REQUIRE(hash1.hex() != crypto::HashType(0).hex());
-        auto hash2 = tableStorage2->hash(hashImpl);
+        auto hash2 = tableStorage2->hash(hashImpl, features);
         BCOS_LOG(DEBUG) << LOG_DESC(">>>>>>>>>>>>KeyPageStorage2") << LOG_KV("i", i)
                         << LOG_KV("hash", hash2.hex());
         BOOST_TEST(hash0.hex() == hash1.hex());
@@ -2481,10 +2627,10 @@ BOOST_AUTO_TEST_CASE(pageMergeBig)
 {
     auto valueFields = "value1";
 
-    auto stateStorage = make_shared<StateStorage>(nullptr);
+    auto stateStorage = make_shared<StateStorage>(nullptr, false);
     StateStorageInterface::Ptr prev = stateStorage;
 
-    auto tableStorage = std::make_shared<KeyPageStorage>(prev, 1024);
+    auto tableStorage = std::make_shared<KeyPageStorage>(prev, false, 1024);
     auto tableCount = 5;
     auto rowCount = 20000;
     srand(time(NULL));
@@ -2629,7 +2775,7 @@ BOOST_AUTO_TEST_CASE(insertAndDelete)
     auto valueFields = "value1";
     auto cacheSize = 256 * 1024 * 1024;
     auto pageSize = 512;
-    auto stateStorage0 = make_shared<LRUStateStorage>(nullptr);
+    auto stateStorage0 = make_shared<LRUStateStorage>(nullptr, false);
     stateStorage0->setMaxCapacity(cacheSize);
     StateStorageInterface::Ptr prev0 = stateStorage0;
 
@@ -2642,7 +2788,7 @@ BOOST_AUTO_TEST_CASE(insertAndDelete)
     srand(time(NULL));
     for (size_t i = 0; i < count; ++i)
     {
-        auto tableStorage0 = std::make_shared<KeyPageStorage>(prev0, pageSize);
+        auto tableStorage0 = std::make_shared<KeyPageStorage>(prev0, false, pageSize);
         auto table0 = tableStorage0->openTable(tableName);
         BOOST_REQUIRE(table0);
 
@@ -2692,20 +2838,262 @@ BOOST_AUTO_TEST_CASE(insertAndDelete)
                 BOOST_REQUIRE_NO_THROW(table0->setRow(key, *entry0));
             }
         }
-        auto hash0 = tableStorage0->hash(hashImpl);
+        auto hash0 = tableStorage0->hash(hashImpl, features);
         BCOS_LOG(DEBUG) << LOG_DESC(">>>>>>>>>>>>KeyPageStorage0") << LOG_KV("i", i)
                         << LOG_KV("hash", hash0.hex());
         BOOST_TEST(hash0.hex() != crypto::HashType(0).hex());
         tableStorage0->setReadOnly(true);
         stateStorage0->merge(true, *tableStorage0);
-        hash0 = stateStorage0->hash(hashImpl);
+        hash0 = stateStorage0->hash(hashImpl, features);
         BCOS_LOG(DEBUG) << LOG_DESC(">>>>>>>>>>>>stateStorage0") << LOG_KV("i", i)
                         << LOG_KV("hash", hash0.hex());
         index += keyCount;
     }
 }
 
+BOOST_AUTO_TEST_CASE(invalidPageKeyToValid)
+{
+    boost::log::core::get()->set_logging_enabled(true);
+    auto valueFields = "value1";
+
+    auto stateStorage = make_shared<StateStorage>(nullptr, false);
+    StateStorageInterface::Ptr prev = stateStorage;
+
+    auto tableStorage = std::make_shared<KeyPageStorage>(prev, false, 2048);
+    auto tableName = "table_000";
+    BOOST_REQUIRE(tableStorage->createTable(tableName, valueFields));
+
+    auto table = tableStorage->openTable(tableName);
+    BOOST_REQUIRE(table);
+
+    for (size_t k = 1000002000; k < 1000002035; ++k)
+    {
+        auto entry = std::make_optional(table->newEntry());
+        auto key = "key1234567890123456789" + boost::lexical_cast<std::string>(k);
+        entry->setField(0, key);
+        // 64B every entry
+        BOOST_REQUIRE_NO_THROW(table->setRow(key, *entry));
+    }
+    for (size_t k = 1000002235; k < 1000002264; ++k)
+    {
+        auto entry = std::make_optional(table->newEntry());
+        auto key = "key1234567890123456789" + boost::lexical_cast<std::string>(k);
+        entry->setField(0, key);
+        // 64B every entry
+        BOOST_REQUIRE_NO_THROW(table->setRow(key, *entry));
+    }
+    {
+        size_t keyVal = 1000002235;
+        auto key = "key1234567890123456789" + boost::lexical_cast<std::string>(keyVal);
+        auto entry = table->newEntry();
+        // BOOST_REQUIRE_NO_THROW(table->setRow(key, entry));
+        entry = table->newDeletedEntry();
+        BOOST_REQUIRE_NO_THROW(table->setRow(key, entry));
+    }
+    std::atomic<size_t> totalCount = 0;
+    tableStorage->parallelTraverse(false, [&](auto&& tableView, auto&& keyView, auto&& entry) {
+        ++totalCount;
+        stateStorage->asyncSetRow(tableView, keyView, entry, [](Error::UniquePtr) {});
+        return true;
+    });
+    // BOOST_REQUIRE_EQUAL(totalCount, 66);  // meta + 5page + s_table
+    auto tableStorage2 = std::make_shared<KeyPageStorage>(prev, false, 2048);
+    {
+        size_t keyVal = 1000002032;
+        auto entry = table->newEntry();
+        auto key = "key1234567890123456789" + boost::lexical_cast<std::string>(keyVal);
+        tableStorage2->asyncSetRow(
+            tableName, key, entry, [](Error::UniquePtr e) { BOOST_REQUIRE(!e); });
+    }
+    for (size_t k = 1000002242; k < 1000002249; ++k)
+    {
+        auto entry = table->newDeletedEntry();
+        auto key = "key1234567890123456789" + boost::lexical_cast<std::string>(k);
+        tableStorage2->asyncSetRow(
+            tableName, key, entry, [](Error::UniquePtr e) { BOOST_REQUIRE(!e); });
+    }
+
+    for (size_t k = 1000002235; k >= 1000002224; --k)
+    {
+        auto entry = table->newEntry();
+        auto key = "key1234567890123456789" + boost::lexical_cast<std::string>(k);
+        entry.setField(0, key);
+        tableStorage2->asyncSetRow(
+            tableName, key, entry, [](Error::UniquePtr e) { BOOST_REQUIRE(!e); });
+    }
+    size_t keyVal = 1000002235;
+    // auto entry = table->newEntry();
+    auto key = "key1234567890123456789" + boost::lexical_cast<std::string>(keyVal);
+    // tableStorage2->asyncSetRow(
+    //     tableName, key, entry, [](Error::UniquePtr e) { BOOST_REQUIRE(!e); });
+    totalCount = 0;
+    tableStorage2->parallelTraverse(false, [&](auto&& tableView, auto&& keyView, auto&& entry) {
+        ++totalCount;
+        stateStorage->asyncSetRow(tableView, keyView, entry, [](Error::UniquePtr) {});
+        return true;
+    });
+    // BOOST_REQUIRE_EQUAL(totalCount, 3);  // meta + 5page + s_table
+    auto tableStorage3 = std::make_shared<KeyPageStorage>(prev, false, 2048);
+    tableStorage3->asyncGetRow(tableName, key,
+        [](Error::UniquePtr, std::optional<Entry> e) { BOOST_REQUIRE(e.has_value()); });
+}
+
+BOOST_AUTO_TEST_CASE(DeleteTableToEmpty_InsertInvalidPageKey)
+{
+    boost::log::core::get()->set_logging_enabled(true);
+    auto valueFields = "value1";
+
+    auto stateStorage = make_shared<StateStorage>(nullptr, false);
+    StateStorageInterface::Ptr prev = stateStorage;
+
+    auto tableStorage = std::make_shared<KeyPageStorage>(prev, false, 2048);
+    auto tableName = "table_000";
+    BOOST_REQUIRE(tableStorage->createTable(tableName, valueFields));
+
+    auto table = tableStorage->openTable(tableName);
+    BOOST_REQUIRE(table);
+
+    for (size_t k = 1000002030; k < 1000002035; ++k)
+    {
+        auto entry = std::make_optional(table->newEntry());
+        auto key = "key1234567890123456789" + boost::lexical_cast<std::string>(k);
+        entry->setField(0, key);
+        // 64B every entry
+        BOOST_REQUIRE_NO_THROW(table->setRow(key, *entry));
+    }
+    std::atomic<size_t> totalCount = 0;
+    tableStorage->parallelTraverse(false, [&](auto&& tableView, auto&& keyView, auto&& entry) {
+        ++totalCount;
+        stateStorage->asyncSetRow(tableView, keyView, entry, [](Error::UniquePtr) {});
+        return true;
+    });
+    // BOOST_REQUIRE_EQUAL(totalCount, 66);  // meta + 5page + s_table
+    auto tableStorage2 = std::make_shared<KeyPageStorage>(prev, false, 2048);
+    {
+        size_t keyVal = 1000002035;
+        auto entry = table->newEntry();
+        auto key = "key1234567890123456789" + boost::lexical_cast<std::string>(keyVal);
+        entry.setField(0, key);
+        tableStorage2->asyncSetRow(
+            tableName, key, entry, [](Error::UniquePtr e) { BOOST_REQUIRE(!e); });
+    }
+    std::cout << "==================== start delete" << std::endl;
+    auto tableStorage3 = std::make_shared<KeyPageStorage>(tableStorage2, false, 2048);
+    for (size_t k = 1000002035; k >= 1000002030; --k)
+    {
+        auto entry = table->newDeletedEntry();
+        auto key = "key1234567890123456789" + boost::lexical_cast<std::string>(k);
+        // entry.setField(0, key);
+        tableStorage3->asyncSetRow(
+            tableName, key, entry, [](Error::UniquePtr e) { BOOST_REQUIRE(!e); });
+    }
+    std::cout << "==================== start insert" << std::endl;
+    auto tableStorage4 = std::make_shared<KeyPageStorage>(tableStorage3, false, 2048);
+    size_t keyVal = 1000002034;
+    auto key = "key1234567890123456789" + boost::lexical_cast<std::string>(keyVal);
+    auto entry = table->newEntry();
+    entry.setField(0, "ss");
+    tableStorage4->asyncSetRow(
+        tableName, key, entry, [](Error::UniquePtr e) { BOOST_REQUIRE(!e); });
+    keyVal = 1000002035;
+    key = "key1234567890123456789" + boost::lexical_cast<std::string>(keyVal);
+    entry = table->newEntry();
+    entry.setField(0, "ss");
+    tableStorage4->asyncSetRow(
+        tableName, key, entry, [](Error::UniquePtr e) { BOOST_REQUIRE(!e); });
+    std::atomic<size_t> valid = 0;
+    Condition c;
+    c.limit(0, 200);
+    tableStorage4->asyncGetPrimaryKeys(tableName, c,
+        [&](Error::UniquePtr error, std::vector<std::string> keys) { valid = keys.size(); });
+    BOOST_REQUIRE_EQUAL(valid, 2);
+}
+
+BOOST_AUTO_TEST_CASE(TableMeta_read_write_mutex)
+{
+    // boost::log::core::get()->set_logging_enabled(true);
+    int loop = 10000;
+    auto meta = std::make_shared<storage::KeyPageStorage::TableMeta>();
+    for (int i = 0; i < loop; ++i)
+    {
+        meta->insertPageInfoNoLock(
+            storage::KeyPageStorage::PageInfo(std::to_string(i), i % 2 == 0 ? 0 : i, i, nullptr));
+    }
+    std::shared_ptr<bcos::ThreadPool> threadPool = std::make_shared<bcos::ThreadPool>("test", 2);
+    auto promise = std::make_shared<std::promise<void>>();
+    threadPool->enqueue([&]() {
+        std::cout << "==================== parallelTraverse" << std::endl;
+        Entry entry;
+        entry.setObject(*meta);
+        std::cout << meta->size() << std::endl;
+        promise->set_value();
+    });
+    auto promise2 = std::make_shared<std::promise<void>>();
+    threadPool->enqueue([&]() {
+        std::cout << "==================== meta2" << std::endl;
+
+        storage::KeyPageStorage::TableMeta meta2(*meta);
+        bool ret =
+            (meta2.size() != (size_t)loop && meta2.size() != (size_t)loop / 2) ? false : true;
+        if (!ret)
+        {
+            std::cout << "meta size=" << meta->size() << "meta2 size=" << meta2.size() << std::endl;
+        }
+        BOOST_TEST(ret);
+        std::cout << meta2.size() << "==================== meta2" << std::endl;
+        promise2->set_value();
+    });
+    promise->get_future().get();
+    promise2->get_future().get();
+    std::cout << "==================== test end" << std::endl;
+    // boost::log::core::get()->set_logging_enabled(false);
+}
+
+
+BOOST_AUTO_TEST_CASE(bugfix_keypage_system_entry_hash)
+{
+    auto valueFields = "value1";
+    auto cacheSize = 256 * 1024 * 1024;
+    auto pageSize = 512;
+    auto stateStorage0 = make_shared<LRUStateStorage>(nullptr, false);
+    stateStorage0->setMaxCapacity(cacheSize);
+    StateStorageInterface::Ptr prev0 = stateStorage0;
+
+    auto tableName = "table_0";
+    BOOST_REQUIRE(prev0->createTable(tableName, valueFields));
+
+
+    auto getHashLambda = [&](std::shared_ptr<StateStorageInterface> storage,
+                             const ledger::Features& f) {
+        auto table0 = storage->openTable(tableName);
+        BOOST_REQUIRE(table0);
+        auto key = "1";
+        auto value = "value";
+        auto entry0 = std::make_optional(table0->newEntry());
+        entry0->setField(0, value);
+        BOOST_REQUIRE_NO_THROW(table0->setRow(key, *entry0));
+        auto entry = std::make_optional(table0->newEntry());
+        entry->setField(0, value);
+        storage->asyncSetRow(ledger::SYS_TABLES, "1", *entry, [](Error::UniquePtr) {});
+        return storage->hash(hashImpl, f);
+    };
+    auto keypage = std::make_shared<KeyPageStorage>(
+        prev0, false, pageSize, (uint32_t)protocol::BlockVersion::V3_6_1_VERSION);
+    auto state = std::make_shared<StateStorage>(prev0, false);
+    auto hash0 = getHashLambda(keypage, features);
+    auto hash1 = getHashLambda(state, features);
+    BOOST_TEST(hash0.hex() != hash1.hex());
+
+    features.set(ledger::Features::Flag::bugfix_statestorage_hash);
+    hash0 = getHashLambda(keypage, features);
+    hash1 = getHashLambda(state, features);
+    BOOST_TEST(hash0.hex() != hash1.hex());
+
+    features.set(ledger::Features::Flag::bugfix_keypage_system_entry_hash);
+    hash0 = getHashLambda(keypage, features);
+    hash1 = getHashLambda(state, features);
+    BOOST_TEST(hash0.hex() == hash1.hex());
+}
 
 BOOST_AUTO_TEST_SUITE_END()
-}  // namespace test
-}  // namespace bcos
+}  // namespace bcos::test

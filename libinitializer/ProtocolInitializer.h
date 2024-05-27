@@ -26,16 +26,14 @@
 #include <bcos-framework/security/DataEncryptInterface.h>
 #include <bcos-tool/NodeConfig.h>
 
-namespace bcos
-{
-namespace initializer
+namespace bcos::initializer
 {
 class ProtocolInitializer
 {
 public:
     using Ptr = std::shared_ptr<ProtocolInitializer>;
     ProtocolInitializer();
-    virtual ~ProtocolInitializer() {}
+    virtual ~ProtocolInitializer() = default;
 
     virtual void init(bcos::tool::NodeConfig::Ptr _nodeConfig);
     void loadKeyPair(std::string const& _privateKeyPath);
@@ -48,12 +46,17 @@ public:
     }
 
     bcos::crypto::KeyPairInterface::Ptr keyPair() const { return m_keyPair; }
+    bool enableHsm() const { return m_enableHsm; }
+    const std::string& hsmLibPath() const { return m_hsmLibPath; }
+    int keyIndex() const { return m_keyIndex; }
+    const std::string& password() const { return m_password; }
     bcos::crypto::KeyFactory::Ptr keyFactory() const { return m_keyFactory; }
     bcos::security::DataEncryptInterface::Ptr dataEncryption() const { return m_dataEncryption; }
 
 private:
     void createCryptoSuite();
     void createSMCryptoSuite();
+    void createHsmSMCryptoSuite();
 
 private:
     bcos::crypto::KeyFactory::Ptr m_keyFactory;
@@ -63,6 +66,9 @@ private:
     bcos::crypto::KeyPairInterface::Ptr m_keyPair;
     size_t c_hexedPrivateKeySize = 64;
     bcos::security::DataEncryptInterface::Ptr m_dataEncryption{nullptr};
+    bool m_enableHsm;
+    std::string m_hsmLibPath;
+    int m_keyIndex;
+    std::string m_password;
 };
-}  // namespace initializer
-}  // namespace bcos
+}  // namespace bcos::initializer

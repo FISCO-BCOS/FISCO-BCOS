@@ -68,7 +68,6 @@ int main(int argc, char** argv)
 
     std::cout << LOG_DESC(" [AMOP][Broadcast] start sdk ... ") << std::endl;
 
-    int i = 0;
     while (true)
     {
         std::cout << LOG_DESC(" broadcast message ===>>>> ") << LOG_KV("topic", topic)
@@ -76,7 +75,6 @@ int main(int argc, char** argv)
 
         sdk->amop()->broadcast(topic, bytesConstRef((byte*)msg.data(), msg.size()));
         std::this_thread::sleep_for(std::chrono::milliseconds(5000));
-        i++;
     }
 
     return EXIT_SUCCESS;

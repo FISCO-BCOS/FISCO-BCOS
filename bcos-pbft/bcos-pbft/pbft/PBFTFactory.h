@@ -26,9 +26,7 @@
 #include <bcos-framework/sync/BlockSyncInterface.h>
 #include <bcos-tool/LedgerConfigFetcher.h>
 
-namespace bcos
-{
-namespace consensus
+namespace bcos::consensus
 {
 class PBFTFactory : public std::enable_shared_from_this<PBFTFactory>
 {
@@ -43,7 +41,7 @@ public:
         bcos::txpool::TxPoolInterface::Ptr _txpool, bcos::protocol::BlockFactory::Ptr _blockFactory,
         bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory);
 
-    virtual ~PBFTFactory() {}
+    virtual ~PBFTFactory() = default;
     virtual PBFTImpl::Ptr createPBFT();
 
 protected:
@@ -57,5 +55,4 @@ protected:
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bcos::protocol::TransactionSubmitResultFactory::Ptr m_txResultFactory;
 };
-}  // namespace consensus
-}  // namespace bcos
+}  // namespace bcos::consensus

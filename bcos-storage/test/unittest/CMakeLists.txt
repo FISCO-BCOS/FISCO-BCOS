@@ -15,7 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ------------------------------------------------------------------------------
-list(APPEND SOURCES "TestRocksDBStorage.cpp" "main.cpp")
+list(APPEND SOURCES "TestRocksDBStorage.cpp" "TestRocksDBStorage2.cpp" "main.cpp")
 # cmake settings
 set(TEST_BINARY_NAME test-storage)
 
@@ -31,12 +31,15 @@ add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE . ../../src)
 
 find_package(Boost REQUIRED unit_test_framework log)
+find_package(fmt REQUIRED)
 
-target_link_libraries(${TEST_BINARY_NAME} PUBLIC ${SECURITY_TARGET} ${STORAGE_TARGET} Boost::unit_test_framework Boost::log Boost::context)
-add_test(NAME test-storage WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
+target_link_libraries(${TEST_BINARY_NAME} PUBLIC ${STORAGE_TARGET} Boost::unit_test_framework Boost::log fmt::fmt-header-only)
+include(SearchTestCases)
+config_test_cases("" "${SOURCES}" ${TEST_BINARY_NAME} "${EXCLUDE_SUITES}")
+# add_test(NAME test-storage WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
 
 # for code coverage
-if (COVERAGE)
-    include(Coverage)
-    config_coverage("storage-coverage" "'/usr*' 'boost/**'")
-endif ()
+#if (COVERAGE)
+#    include(Coverage)
+#    config_coverage("storage-coverage" "'/usr*' 'boost/**'")
+#endif ()

@@ -10,7 +10,11 @@ class MockTxPool : public txpool::TxPoolInterface
 public:
     void start() override {}
     void stop() override {}
-    void asyncSubmit(bytesPointer, bcos::protocol::TxSubmitCallback) override {}
+    task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
+        protocol::Transaction::Ptr transaction) override
+    {
+        co_return nullptr;
+    }
     void asyncSealTxs(uint64_t, bcos::txpool::TxsHashSetPtr,
         std::function<void(Error::Ptr, bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr)>)
         override
@@ -37,10 +41,11 @@ public:
     void asyncResetTxPool(std::function<void(Error::Ptr)>) override {}
 
     void asyncFillBlock(bcos::crypto::HashListPtr _txsHash,
-        std::function<void(Error::Ptr, bcos::protocol::TransactionsPtr)> _onBlockFilled) override
+        std::function<void(Error::Ptr, bcos::protocol::ConstTransactionsPtr)> _onBlockFilled)
+        override
     {
         BOOST_CHECK_GT(_txsHash->size(), 0);
-        auto transactions = std::make_shared<bcos::protocol::Transactions>();
+        auto transactions = std::make_shared<bcos::protocol::ConstTransactions>();
         for (auto& hash : *_txsHash)
         {
             auto it = hash2Transaction.find(hash);
@@ -61,6 +66,6 @@ public:
         const bcos::crypto::NodeIDSet&, std::function<void(std::shared_ptr<bcos::Error>)>) override
     {}
 
-    std::map<bcos::crypto::HashType, bcos::protocol::Transaction::Ptr> hash2Transaction;
+    std::map<bcos::crypto::HashType, bcos::protocol::Transaction::ConstPtr> hash2Transaction;
 };
 }  // namespace bcos::test

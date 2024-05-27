@@ -62,9 +62,6 @@ public:
     bcostars::Error commitBlock(bcostars::BlockHeader const& _header,
         bcostars::LedgerConfig& _config, tars::TarsCurrentPtr _current) override;
 
-    bcostars::Error registerExecutor(
-        std::string const& _name, tars::TarsCurrentPtr _current) override;
-
     bcostars::Error preExecuteBlock(
         const bcostars::Block& _block, tars::Bool _verify, tars::TarsCurrentPtr current) override;
 

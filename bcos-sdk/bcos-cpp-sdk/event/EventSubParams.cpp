@@ -19,7 +19,7 @@
  */
 
 #include <bcos-cpp-sdk/event/EventSubParams.h>
-#include <bcos-cpp-sdk/utilities/abi/ContractEventTopic.h>
+#include <bcos-cpp-sdk/utilities/abi/ContractABIEventTopic.h>
 #include <json/json.h>
 #include <exception>
 
@@ -39,7 +39,7 @@ bool EventSubParams::verifyParams()
     {
         for (const auto& topic : m_topics[i])
         {
-            if (!codec::abi::ContractEventTopic::validEventTopic(topic))
+            if (!codec::abi::ContractABIEventTopic::validEventTopic(topic))
             {
                 return false;
             }
@@ -89,7 +89,7 @@ bool EventSubParams::fromJsonString(const std::string& _jsonString)
         EVENT_PARAMS(WARNING) << LOG_BADGE("fromJsonString")
                               << LOG_DESC("invalid event sub params json object")
                               << LOG_KV("jsonString", _jsonString)
-                              << LOG_KV("error", boost::diagnostic_information(_e));
+                              << LOG_KV("message", boost::diagnostic_information(_e));
         return false;
     }
 }

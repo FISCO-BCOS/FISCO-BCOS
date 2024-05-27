@@ -43,7 +43,9 @@ static const int32_t BLOCK_LIMIT_RANGE = 500;
 
 Service::Service(bcos::group::GroupInfoCodec::Ptr _groupInfoCodec,
     bcos::group::GroupInfoFactory::Ptr _groupInfoFactory, std::string _moduleName)
-  : WsService(_moduleName), m_groupInfoCodec(_groupInfoCodec), m_groupInfoFactory(_groupInfoFactory)
+  : WsService(std::move(_moduleName)),
+    m_groupInfoCodec(std::move(_groupInfoCodec)),
+    m_groupInfoFactory(std::move(_groupInfoFactory))
 {
     m_localProtocol = g_BCOSConfig.protocolInfo(bcos::protocol::ProtocolModuleID::RpcService);
     RPC_WS_LOG(INFO) << LOG_DESC("init the local protocol")
@@ -74,7 +76,7 @@ void Service::waitForConnectionEstablish()
         // sleep for connection establish
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-        if (handshakeSucCount())
+        if (handshakeSucCount() > 0)
         {
             RPC_WS_LOG(INFO) << LOG_BADGE("waitForConnectionEstablish")
                              << LOG_DESC("wait for websocket connection handshake success")
@@ -86,16 +88,12 @@ void Service::waitForConnectionEstablish()
         {
             continue;
         }
-        else
-        {
-            stop();
-            RPC_WS_LOG(WARNING) << LOG_BADGE("waitForConnectionEstablish")
-                                << LOG_DESC("wait for websocket connection handshake timeout")
-                                << LOG_KV("timeout", waitConnectFinishTimeout());
+        stop();
+        RPC_WS_LOG(WARNING) << LOG_BADGE("waitForConnectionEstablish")
+                            << LOG_DESC("wait for websocket connection handshake timeout")
+                            << LOG_KV("timeout", waitConnectFinishTimeout());
 
-            BOOST_THROW_EXCEPTION(std::runtime_error("The websocket connection handshake timeout"));
-            return;
-        }
+        BOOST_THROW_EXCEPTION(std::runtime_error("The websocket connection handshake timeout"));
     }
 }
 
@@ -128,9 +126,9 @@ void Service::onRecvMessage(std::shared_ptr<MessageFace> _msg, std::shared_ptr<W
                                    "websocket service unable to handler message before handshake"
                                    "with the node successfully")
                             << LOG_KV("endpoint", _session ? _session->endPoint() : std::string(""))
-                            << LOG_KV("seq", seq);
+                            << LOG_KV("type", _msg->packetType()) << LOG_KV("seq", seq);
 
-        _session->drop(bcos::boostssl::ws::WsError::UserDisconnect);
+        // _session->drop(bcos::boostssl::ws::WsError::UserDisconnect);
         return;
     }
 
@@ -151,15 +149,12 @@ void Service::asyncSendMessageByGroupAndNode(const std::string& _group, const st
         auto ss = sessions();
         for (const auto& session : ss)
         {
-            if (session->isConnected())
-            {
-                endPoints.insert(session->endPoint());
-            }
+            endPoints.insert(session->endPoint());
         }
 
         if (endPoints.empty())
         {
-            auto error = std::make_shared<Error>(WsError::EndPointNotExist,
+            auto error = BCOS_ERROR_PTR(WsError::EndPointNotExist,
                 "there has no connection available, maybe all connections disconnected");
             _respFunc(error, nullptr, nullptr);
             return;
@@ -171,7 +166,7 @@ void Service::asyncSendMessageByGroupAndNode(const std::string& _group, const st
         getEndPointsByGroup(_group, endPoints);
         if (endPoints.empty())
         {
-            auto error = std::make_shared<Error>(WsError::EndPointNotExist,
+            auto error = BCOS_ERROR_PTR(WsError::EndPointNotExist,
                 "there has no connection available for the group, maybe all connections "
                 "disconnected or "
                 "the group does not exist, group: " +
@@ -186,7 +181,7 @@ void Service::asyncSendMessageByGroupAndNode(const std::string& _group, const st
         getEndPointsByGroupAndNode(_group, _node, endPoints);
         if (endPoints.empty())
         {
-            auto error = std::make_shared<Error>(WsError::EndPointNotExist,
+            auto error = BCOS_ERROR_PTR(WsError::EndPointNotExist,
                 "there has no connection available for the node of the group, maybe all "
                 "connections "
                 "disconnected or the node does not exist, group: " +
@@ -202,12 +197,12 @@ void Service::asyncSendMessageByGroupAndNode(const std::string& _group, const st
     std::default_random_engine e(seed);
     std::shuffle(vecEndPoints.begin(), vecEndPoints.end(), e);
 
-    asyncSendMessageByEndPoint(*vecEndPoints.begin(), _msg, _options, _respFunc);
+    asyncSendMessageByEndPoint(*vecEndPoints.begin(), std::move(_msg), _options, _respFunc);
 }
 // ---------------------send message end---------------------------------------------------------
 
 
-bool Service::checkHandshakeDone(std::shared_ptr<bcos::boostssl::ws::WsSession> _session)
+bool Service::checkHandshakeDone(std::shared_ptr<bcos::boostssl::ws::WsSession> const& _session)
 {
     return _session && _session->version();
 }
@@ -227,15 +222,14 @@ void Service::startHandshake(std::shared_ptr<bcos::boostssl::ws::WsSession> _ses
     auto session = _session;
     auto service = std::dynamic_pointer_cast<Service>(shared_from_this());
     _session->asyncSendMessage(message, Options(m_wsHandshakeTimeout),
-        [message, session, service](Error::Ptr _error, std::shared_ptr<MessageFace> _msg,
-            std::shared_ptr<WsSession> _session) {
+        [message, session, service](auto&& _error, auto&& _msg, auto&& _session) {
             if (_error && _error->errorCode() != 0)
             {
                 RPC_WS_LOG(WARNING)
-                    << LOG_BADGE("startHandshake") << LOG_DESC("callback response error")
+                    << LOG_BADGE("startHandshake") << LOG_DESC("callback response failed")
                     << LOG_KV("endpoint", session ? session->endPoint() : std::string(""))
-                    << LOG_KV("errorCode", _error ? _error->errorCode() : -1)
-                    << LOG_KV("errorMessage", _error ? _error->errorMessage() : std::string(""));
+                    << LOG_KV("code", _error ? _error->errorCode() : -1)
+                    << LOG_KV("message", _error ? _error->errorMessage() : std::string(""));
                 session->drop(bcos::boostssl::ws::WsError::UserDisconnect);
                 return;
             }
@@ -252,7 +246,20 @@ void Service::startHandshake(std::shared_ptr<bcos::boostssl::ws::WsSession> _ses
                                     << LOG_KV("endpoint", endPoint);
                 return;
             }
+            if (service->m_strictConnectVersion != -1) [[unlikely]]
+            {
+                if (handshakeResponse->protocolVersion() != service->m_strictConnectVersion)
+                {
+                    _session->drop(bcos::boostssl::ws::WsError::UserDisconnect);
 
+                    RPC_WS_LOG(WARNING)
+                        << LOG_BADGE("startHandshake") << LOG_DESC("invalid protocol version")
+                        << LOG_KV("endpoint", endPoint)
+                        << LOG_KV("protocolVersion", handshakeResponse->protocolVersion())
+                        << LOG_KV("strictConnectVersion", service->m_strictConnectVersion);
+                    return;
+                }
+            }
             // set protocol version
             session->setVersion(handshakeResponse->protocolVersion());
             auto groupInfoList = handshakeResponse->groupInfoList();
@@ -267,7 +274,7 @@ void Service::startHandshake(std::shared_ptr<bcos::boostssl::ws::WsSession> _ses
             }
 
             auto groupBlockNumber = handshakeResponse->groupBlockNumber();
-            for (auto entry : groupBlockNumber)
+            for (const auto& entry : groupBlockNumber)
             {
                 service->updateGroupBlockNumber(entry.first, entry.second);
             }
@@ -285,10 +292,8 @@ void Service::startHandshake(std::shared_ptr<bcos::boostssl::ws::WsSession> _ses
 }
 
 
-void Service::onNotifyGroupInfo(
-    const std::string& _groupInfoJson, std::shared_ptr<bcos::boostssl::ws::WsSession> _session)
+void Service::onNotifyGroupInfo(const std::string& _groupInfoJson, const std::string& endPoint)
 {
-    std::string endPoint = _session->endPoint();
     RPC_WS_LOG(TRACE) << LOG_BADGE("onNotifyGroupInfo") << LOG_KV("endPoint", endPoint)
                       << LOG_KV("groupInfoJson", _groupInfoJson);
 
@@ -305,14 +310,14 @@ void Service::onNotifyGroupInfo(
     }
 }
 
-void Service::onNotifyGroupInfo(std::shared_ptr<bcos::boostssl::ws::WsMessage> _msg,
-    std::shared_ptr<bcos::boostssl::ws::WsSession> _session)
+void Service::onNotifyGroupInfo(
+    std::shared_ptr<bcos::boostssl::ws::WsMessage> _msg, const std::string& endPoint)
 {
     std::string groupInfo = std::string(_msg->payload()->begin(), _msg->payload()->end());
 
     RPC_WS_LOG(INFO) << LOG_BADGE("onNotifyGroupInfo") << LOG_KV("groupInfo", groupInfo);
 
-    return onNotifyGroupInfo(groupInfo, _session);
+    return onNotifyGroupInfo(groupInfo, endPoint);
 }
 
 void Service::clearGroupInfoByEp(const std::string& _endPoint)
@@ -691,9 +696,9 @@ bool Service::getHighestBlockNumberNodes(const std::string& _group, std::set<std
         tempNodes = it->second;
     }
 
-    for (auto it = tempNodes.begin(); it != tempNodes.end(); ++it)
+    for (const auto& tempNode : tempNodes)
     {
-        auto& node = *it;
+        auto& node = tempNode;
         if (!hasEndPointOfNodeAvailable(_group, node))
         {
             RPC_WS_LOG(WARNING) << LOG_BADGE("getHighestBlockNumberNodes")
@@ -703,7 +708,7 @@ bool Service::getHighestBlockNumberNodes(const std::string& _group, std::set<std
             continue;
         }
 
-        _nodes.insert(*it);
+        _nodes.insert(tempNode);
     }
 
     RPC_WS_LOG(TRACE) << LOG_BADGE("getHighestBlockNumberNodes") << LOG_KV("group", _group)

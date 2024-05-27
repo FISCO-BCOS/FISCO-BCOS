@@ -27,9 +27,7 @@
 #define CONTEXT_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE(m_moduleName) << "[BOOSTSSL][CTX]"
 #define NODEINFO_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE(m_moduleName) << "[BOOSTSSL][NODEINFO]"
 
-namespace bcos
-{  // namespace bcos
-namespace boostssl
+namespace bcos::boostssl
 {
 inline X509* toX509(const char* _pemBuffer)
 {
@@ -50,5 +48,4 @@ inline EVP_PKEY* toEvpPkey(const char* _pemBuffer)
     return pkey;
 }
 
-}  // namespace boostssl
 }  // namespace bcos

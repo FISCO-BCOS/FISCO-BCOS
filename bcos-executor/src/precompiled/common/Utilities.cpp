@@ -55,7 +55,8 @@ void bcos::precompiled::checkNameValidate(std::string_view tableName, std::strin
                          << "\", the table name must be letters or numbers, and "
                             "only supports \""
                          << tableAllowCharString << "\" as special character set";
-                PRECOMPILED_LOG(INFO) << LOG_BADGE("checkNameValidate") << LOG_DESC(errorMsg.str());
+                PRECOMPILED_LOG(DEBUG)
+                    << LOG_BADGE("checkNameValidate") << LOG_DESC(errorMsg.str());
                 // Note: the StorageException and PrecompiledException content can't
                 // be modified at will for the information will be written to the
                 // blockchain
@@ -72,9 +73,9 @@ void bcos::precompiled::checkNameValidate(std::string_view tableName, std::strin
             errorMessage << "Invalid field \"" << fieldName
                          << "\", the size of the field must be larger than 0 and "
                             "the field can't start with \"_\"";
-            PRECOMPILED_LOG(INFO) << LOG_BADGE("checkNameValidate") << LOG_DESC(errorMessage.str())
-                                  << LOG_KV("field name", fieldName)
-                                  << LOG_KV("table name", tableName);
+            PRECOMPILED_LOG(DEBUG)
+                << LOG_BADGE("checkNameValidate") << LOG_DESC(errorMessage.str())
+                << LOG_KV("field name", fieldName) << LOG_KV("table name", tableName);
             BOOST_THROW_EXCEPTION(PrecompiledError("invalid field: " + std::string(fieldName)));
         }
         size_t iSize = fieldName.size();
@@ -89,7 +90,7 @@ void bcos::precompiled::checkNameValidate(std::string_view tableName, std::strin
                     << "\", the field name must be letters or numbers, and only supports \""
                     << allowCharString << "\" as special character set";
 
-                PRECOMPILED_LOG(INFO)
+                PRECOMPILED_LOG(DEBUG)
                     << LOG_BADGE("checkNameValidate") << LOG_DESC(errorMessage.str())
                     << LOG_KV("field name", fieldName) << LOG_KV("table name", tableName);
                 BOOST_THROW_EXCEPTION(PrecompiledError("invalid field: " + std::string(fieldName)));
@@ -104,11 +105,11 @@ void bcos::precompiled::checkNameValidate(std::string_view tableName, std::strin
     for (auto& valueField : valueFieldList)
     {
         auto ret = valueFieldSet.insert(valueField);
-        if (!ret.second)
+        if (!ret.second) [[unlikely]]
         {
-            PRECOMPILED_LOG(INFO) << LOG_BADGE("checkNameValidate") << LOG_DESC("duplicated field")
-                                  << LOG_KV("field name", valueField)
-                                  << LOG_KV("table name", tableName);
+            PRECOMPILED_LOG(DEBUG)
+                << LOG_BADGE("checkNameValidate") << LOG_DESC("duplicated field")
+                << LOG_KV("field name", valueField) << LOG_KV("table name", tableName);
             BOOST_THROW_EXCEPTION(PrecompiledError("duplicated field: " + valueField));
         }
         checkFieldNameValidate(tableName, valueField);
@@ -129,8 +130,14 @@ void bcos::precompiled::checkLengthValidate(
 }
 
 std::string bcos::precompiled::checkCreateTableParam(const std::string_view& _tableName,
-    std::string& _keyField, const std::variant<std::string, std::vector<std::string>>& _valueField)
+    std::string& _keyField, const std::variant<std::string, std::vector<std::string>>& _valueField,
+    std::optional<uint8_t> keyOrder)
 {
+    if (keyOrder && (*keyOrder != 0 && *keyOrder != 1))
+    {
+        BOOST_THROW_EXCEPTION(
+            protocol::PrecompiledError(std::to_string(int(*keyOrder)) + " KeyOrder not exist!"));
+    }
     std::vector<std::string> fieldNameList;
     if (_valueField.index() == 1)
     {
@@ -191,15 +198,16 @@ std::string bcos::precompiled::checkCreateTableParam(const std::string_view& _ta
 }
 
 uint32_t bcos::precompiled::getFuncSelector(
-    std::string const& _functionName, const crypto::Hash::Ptr& _hashImpl)
+    std::string_view functionName, const crypto::Hash::Ptr& _hashImpl)
 {
     // global function selector cache
-    if (s_name2SelectCache.count(_functionName))
+    auto it = s_name2SelectCache.find(std::string(functionName));
+    if (it != s_name2SelectCache.end())
     {
-        return s_name2SelectCache[_functionName];
+        return it->second;
     }
-    auto selector = getFuncSelectorByFunctionName(_functionName, _hashImpl);
-    s_name2SelectCache.insert(std::make_pair(_functionName, selector));
+    auto selector = getFuncSelectorByFunctionName(functionName, _hashImpl);
+    s_name2SelectCache.insert(std::make_pair(functionName, selector));
     return selector;
 }
 
@@ -211,7 +219,7 @@ void bcos::precompiled::clearName2SelectCache()
 
 uint32_t bcos::precompiled::getParamFunc(bytesConstRef _param)
 {
-    if (_param.size() < 4)
+    if (_param.size() < 4) [[unlikely]]
     {
         PRECOMPILED_LOG(INFO) << LOG_DESC(
                                      "getParamFunc param too short, not enough to call precompiled")
@@ -226,7 +234,7 @@ uint32_t bcos::precompiled::getParamFunc(bytesConstRef _param)
 }
 
 uint32_t bcos::precompiled::getFuncSelectorByFunctionName(
-    std::string const& _functionName, const crypto::Hash::Ptr& _hashImpl)
+    std::string_view _functionName, const crypto::Hash::Ptr& _hashImpl)
 {
     uint32_t func = *(uint32_t*)(_hashImpl->hash(_functionName).ref().getCroppedData(0, 4).data());
     uint32_t selector = ((func & 0x000000FF) << 24) | ((func & 0x0000FF00) << 8) |
@@ -249,77 +257,83 @@ bcos::precompiled::ContractStatus bcos::precompiled::getContractStatus(
         // this may happen when register link in contract constructor
         return ContractStatus::Available;
     }
-    auto codeHashStr = std::string(codeHashEntry->getField(0));
+    auto codeHashStr = codeHashEntry->getField(0);
     auto codeHash = HashType(codeHashStr, FixedBytes<32>::FromBinary);
 
     if (codeHash == HashType())
     {
         return ContractStatus::NotContractAddress;
     }
-
-    // FIXME: frozen in BFS
-    auto frozenEntry = table->getRow(executor::ACCOUNT_FROZEN);
-    if (frozenEntry != std::nullopt && "true" == frozenEntry->getField(0))
-    {
-        return ContractStatus::Frozen;
-    }
-    else
-    {
-        return ContractStatus::Available;
-    }
+    return ContractStatus::Available;
 }
 
-bool precompiled::checkPathValid(std::string const& _path)
+bool precompiled::checkPathValid(
+    std::string_view _path, std::variant<uint32_t, protocol::BlockVersion> version)
 {
-    if (_path.empty())
+    if (_path.empty()) [[unlikely]]
         return false;
-    if (_path.length() > FS_PATH_MAX_LENGTH)
+
+    if (versionCompareTo(version, BlockVersion::V3_3_VERSION) >= 0) [[unlikely]]
     {
-        PRECOMPILED_LOG(INFO) << LOG_BADGE("checkPathValid")
-                              << LOG_DESC("path too long, over flow FS_PATH_MAX_LENGTH")
-                              << LOG_KV("path", _path);
+        if (_path.length() > FS_PATH_MAX_LENGTH_330)
+        {
+            PRECOMPILED_LOG(DEBUG) << LOG_BADGE("checkPathValid")
+                                   << LOG_DESC("path too long, over flow FS_PATH_MAX_LENGTH_330")
+                                   << LOG_KV("limit", FS_PATH_MAX_LENGTH_330)
+                                   << LOG_KV("len", _path.length()) << LOG_KV("path", _path);
+            return false;
+        }
+    }
+    else if (_path.length() > FS_PATH_MAX_LENGTH) [[unlikely]]
+    {
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("checkPathValid")
+                               << LOG_DESC("path too long, over flow FS_PATH_MAX_LENGTH")
+                               << LOG_KV("limit", FS_PATH_MAX_LENGTH)
+                               << LOG_KV("len", _path.length()) << LOG_KV("path", _path);
         return false;
     }
     if (_path == "/")
         return true;
-    std::string absoluteDir = _path;
-    if (absoluteDir[0] == '/')
+    std::string_view absoluteDir = _path;
+    if (absoluteDir.starts_with('/'))
     {
-        absoluteDir = absoluteDir.substr(1);
+        absoluteDir.remove_prefix(1);
     }
-    if (absoluteDir.at(absoluteDir.size() - 1) == '/')
+    if (absoluteDir.ends_with('/'))
     {
-        absoluteDir = absoluteDir.substr(0, absoluteDir.size() - 1);
+        absoluteDir.remove_suffix(1);
     }
     std::vector<std::string> pathList;
+    //    constexpr std::string_view delim{"/"};
+    //    auto spliter = RANGES::split_view(absoluteDir, delim);
     boost::split(pathList, absoluteDir, boost::is_any_of("/"), boost::token_compress_on);
     if (pathList.size() > FS_PATH_MAX_LEVEL || pathList.empty())
     {
-        PRECOMPILED_LOG(INFO)
+        PRECOMPILED_LOG(DEBUG)
             << LOG_BADGE("checkPathValid")
             << LOG_DESC("resource path's level is too deep, level over FS_PATH_MAX_LEVEL")
             << LOG_KV("path", _path);
         return false;
     }
-    // TODO: adapt Chinese
     std::regex reg(R"(^[0-9a-zA-Z][^\>\<\*\?\/\=\+\(\)\$\"\']*$)");
-    auto checkFieldNameValidate = [&reg](const std::string& fieldName) -> bool {
-        if (fieldName.empty())
+    if (versionCompareTo(version, BlockVersion::V3_2_VERSION) >= 0)
+    {
+        reg = (R"(^[\w]+[\w\-#@.]*$)");
+    }
+    auto checkFieldNameValidate = [&reg](std::string fieldName) -> bool {
+        if (fieldName.empty()) [[unlikely]]
         {
             std::stringstream errorMessage;
             errorMessage << "Invalid field \"" + fieldName
                          << "\", the size of the field must be larger than 0";
-            PRECOMPILED_LOG(INFO) << LOG_DESC(errorMessage.str())
-                                  << LOG_KV("field name", fieldName);
+            PRECOMPILED_LOG(DEBUG)
+                << LOG_DESC(errorMessage.str()) << LOG_KV("field name", fieldName);
             return false;
         }
         if (!std::regex_match(fieldName, reg))
         {
-            std::stringstream errorMessage;
-            errorMessage << "Invalid field \"" << fieldName << "\", the field name must be in reg: "
-                         << R"(^[0-9a-zA-Z\u4e00-\u9fa5][^\>\<\*\?\/\=\+\(\)\$\"\']*$)";
-            PRECOMPILED_LOG(INFO) << LOG_DESC(errorMessage.str())
-                                  << LOG_KV("field name", fieldName);
+            PRECOMPILED_LOG(DEBUG)
+                << LOG_DESC("Invalid path field " + fieldName) << LOG_KV("field name", fieldName);
             return false;
         }
         return true;
@@ -334,27 +348,22 @@ std::pair<std::string, std::string> precompiled::getParentDirAndBaseName(
     // transfer /usr/local/bin => ["usr", "local", "bin"]
     if (_absolutePath == "/")
         return {"/", "/"};
-    std::vector<std::string> dirList;
+
     std::string absoluteDir = _absolutePath;
-    if (absoluteDir[0] == '/')
+
+    if (absoluteDir.ends_with('/'))
     {
-        absoluteDir = absoluteDir.substr(1);
+        absoluteDir.pop_back();
     }
-    if (absoluteDir.at(absoluteDir.size() - 1) == '/')
-    {
-        absoluteDir = absoluteDir.substr(0, absoluteDir.size() - 1);
-    }
-    boost::split(dirList, absoluteDir, boost::is_any_of("/"), boost::token_compress_on);
-    std::string baseName = dirList.at(dirList.size() - 1);
-    dirList.pop_back();
-    std::string parentDir = "/" + boost::join(dirList, "/");
-    return {parentDir, baseName};
+    size_t index = absoluteDir.find_last_of('/');
+    auto parent = absoluteDir.substr(0, index);
+    return {parent.empty() ? "/" : parent, absoluteDir.substr(index + 1)};
 }
 
 executor::CallParameters::UniquePtr precompiled::externalRequest(
     const std::shared_ptr<executor::TransactionExecutive>& _executive, const bytesConstRef& _param,
     std::string_view _origin, std::string_view _sender, std::string_view _to, bool _isStatic,
-    bool _isCreate, int64_t gasLeft, bool _isInternalCall)
+    bool _isCreate, int64_t gasLeft, bool _isInternal, std::string _abi)
 {
     auto request = std::make_unique<executor::CallParameters>(executor::CallParameters::MESSAGE);
 
@@ -366,24 +375,27 @@ executor::CallParameters::UniquePtr precompiled::externalRequest(
     request->data = _param.toBytes();
     request->create = _isCreate;
     request->staticCall = !_isCreate && _isStatic;
-    request->internalCreate = _isCreate;
-    request->internalCall = _isInternalCall;
+    request->internalCreate = _isCreate && _isInternal;
+    request->internalCall = !_isCreate && _isInternal;
     request->gas = gasLeft;
+    if (_isCreate && !_abi.empty())
+    {
+        request->abi = _abi;
+    }
     return _executive->externalCall(std::move(request));
 }
 
 s256 precompiled::externalTouchNewFile(
     const std::shared_ptr<executor::TransactionExecutive>& _executive, std::string_view _origin,
-    std::string_view _sender, std::string_view _filePath, std::string_view _fileType,
-    int64_t gasLeft)
+    std::string_view _sender, std::string_view _to, std::string_view _filePath,
+    std::string_view _fileType, int64_t gasLeft)
 {
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
-    std::string bfsAddress = blockContext->isWasm() ? BFS_NAME : BFS_ADDRESS;
+    const auto& blockContext = _executive->blockContext();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     auto codecResult =
         codec.encodeWithSig("touch(string,string)", std::string(_filePath), std::string(_fileType));
-    auto response = externalRequest(
-        _executive, ref(codecResult), _origin, _sender, bfsAddress, false, false, gasLeft);
+    auto response =
+        externalRequest(_executive, ref(codecResult), _origin, _sender, _to, false, false, gasLeft);
     int32_t result = 0;
     if (response->status == (int32_t)TransactionStatus::None)
     {
@@ -394,4 +406,43 @@ s256 precompiled::externalTouchNewFile(
         result = (int)CODE_FILE_BUILD_DIR_FAILED;
     }
     return result;
+}
+
+
+std::vector<Address> precompiled::getGovernorList(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    const PrecompiledExecResult::Ptr& _callParameters, const CodecWrapper& codec)
+{
+    const auto& blockContext = _executive->blockContext();
+    const auto& sender = _executive->contractAddress();
+    auto getCommittee = codec.encodeWithSig("_committee()");
+    auto getCommitteeResponse = externalRequest(_executive, ref(getCommittee),
+        _callParameters->m_origin, sender, AUTH_COMMITTEE_ADDRESS, _callParameters->m_staticCall,
+        false, _callParameters->m_gasLeft);
+    if (getCommitteeResponse->status != (int32_t)TransactionStatus::None) [[unlikely]]
+    {
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("Precompiled") << LOG_DESC("get committee failed")
+                               << LOG_KV("status", getCommitteeResponse->status);
+        BOOST_THROW_EXCEPTION(PrecompiledError("Get committee failed."));
+    }
+
+    Address committee;
+    codec.decode(ref(getCommitteeResponse->data), committee);
+
+    auto getInfo = codec.encodeWithSig("getCommitteeInfo()");
+    auto getInfoResponse = externalRequest(_executive, ref(getInfo), _callParameters->m_origin,
+        sender, committee.hex(), _callParameters->m_staticCall, false, _callParameters->m_gasLeft);
+
+    if (getInfoResponse->status != (int32_t)TransactionStatus::None) [[unlikely]]
+    {
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("Precompiled") << LOG_DESC("get committee info failed")
+                               << LOG_KV("committee", committee.hex());
+        BOOST_THROW_EXCEPTION(PrecompiledError("Get committee info failed."));
+    }
+    uint8_t participatesRate = 0;
+    uint8_t winRate = 0;
+    std::vector<Address> governors;
+    std::vector<uint32_t> weights;
+    codec.decode(ref(getInfoResponse->data), participatesRate, winRate, governors, weights);
+    return governors;
 }

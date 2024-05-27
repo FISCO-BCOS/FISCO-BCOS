@@ -75,6 +75,35 @@ public:
     PBFTMessageList const& prePrepareList() override { return *m_prePrepareList; }
     void setPrePrepareList(PBFTMessageList const& _preparedProposal) override;
 
+    std::string toDebugString() const override
+    {
+        std::stringstream stringstream;
+        stringstream << LOG_KV("type", m_packetType)
+                     << LOG_KV("fromNode", m_from ? m_from->shortHex() : "null")
+                     << LOG_KV("vcMsgSize", m_viewChangeList ? m_viewChangeList->size() : 0)
+                     << LOG_KV("prePreSize", m_prePrepareList ? m_prePrepareList->size() : 0);
+        if (c_fileLogLevel == TRACE) [[unlikely]]
+        {
+            if (m_prePrepareList)
+            {
+                size_t i = 0;
+                for (auto const& prePrepare : *m_prePrepareList)
+                {
+                    stringstream << "prePrepare" << i++ << printPBFTMsgInfo(prePrepare);
+                }
+            }
+            if (m_viewChangeList)
+            {
+                size_t i = 0;
+                for (auto const& viewChange : *m_viewChangeList)
+                {
+                    stringstream << "viewChange" << i++ << printPBFTMsgInfo(viewChange);
+                }
+            }
+        }
+        return stringstream.str();
+    }
+
 protected:
     void deserializeToObject() override;
 

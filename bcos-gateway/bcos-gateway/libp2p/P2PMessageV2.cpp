@@ -61,14 +61,21 @@ bool P2PMessageV2::encodeHeader(bytes& _buffer)
     return true;
 }
 
-ssize_t P2PMessageV2::decodeHeader(bytesConstRef _buffer)
+int32_t P2PMessageV2::decodeHeader(const bytesConstRef& _buffer)
 {
-    auto offset = P2PMessage::decodeHeader(_buffer);
+    int32_t offset = P2PMessage::decodeHeader(_buffer);
     if (m_version <= bcos::protocol::ProtocolVersion::V0)
     {
         return offset;
     }
-    ssize_t length = _buffer.size();
+
+    // The packet was not fully received by the network.
+    if (_buffer.size() < m_length)
+    {
+        return MessageDecodeStatus::MESSAGE_INCOMPLETE;
+    }
+
+    auto length = static_cast<int32_t>(_buffer.size());
     // decode ttl
     CHECK_OFFSET_WITH_THROW_EXCEPTION(offset + 2, length);
     m_ttl = boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)&_buffer[offset]));

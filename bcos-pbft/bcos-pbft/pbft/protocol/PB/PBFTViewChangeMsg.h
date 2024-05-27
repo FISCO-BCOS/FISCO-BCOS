@@ -21,9 +21,7 @@
 #pragma once
 #include "../..//interfaces/ViewChangeMsgInterface.h"
 #include "PBFTBaseMessage.h"
-namespace bcos
-{
-namespace consensus
+namespace bcos::consensus
 {
 class PBFTViewChangeMsg : public ViewChangeMsgInterface, public PBFTBaseMessage
 {
@@ -45,7 +43,7 @@ public:
         decode(_data);
     }
 
-    virtual ~PBFTViewChangeMsg()
+    ~PBFTViewChangeMsg() override
     {
         // return back the ownership of message to PBFTBaseMessage
         m_rawViewChange->unsafe_arena_release_message();
@@ -74,6 +72,26 @@ public:
         bcos::crypto::CryptoSuite::Ptr, bcos::crypto::KeyPairInterface::Ptr) const override;
     void decode(bytesConstRef _data) override;
 
+    std::string toDebugString() const override
+    {
+        std::stringstream stringstream;
+        stringstream << LOG_KV("type", m_packetType)
+                     << LOG_KV("fromNode", m_from ? m_from->shortHex() : "null")
+                     << LOG_KV("commitProposal",
+                            m_committedProposal ? printPBFTProposal(m_committedProposal) : "null")
+                     << LOG_KV("prePreSize",
+                            m_preparedProposalList ? m_preparedProposalList->size() : 0);
+        if (m_preparedProposalList)
+        {
+            size_t i = 0;
+            for (auto const& prePrepare : *m_preparedProposalList)
+            {
+                stringstream << "prePrepare" << i++ << printPBFTMsgInfo(prePrepare);
+            }
+        }
+        return stringstream.str();
+    }
+
 protected:
     // deserialize RawViewChangeMessage to Object
     void deserializeToObject() override;
@@ -87,5 +105,4 @@ private:
 };
 using PBFTViewChangeMsgList = std::vector<PBFTViewChangeMsg::Ptr>;
 using PBFTViewChangeMsgListPtr = std::shared_ptr<PBFTViewChangeMsg>;
-}  // namespace consensus
-}  // namespace bcos
+}  // namespace bcos::consensus

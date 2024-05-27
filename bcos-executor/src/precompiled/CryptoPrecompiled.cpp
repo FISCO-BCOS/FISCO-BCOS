@@ -64,11 +64,11 @@ std::shared_ptr<PrecompiledExecResult> CryptoPrecompiled::call(
 {
     auto funcSelector = getParamFunc(_callParameters->input());
     auto paramData = _callParameters->params();
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    const auto& blockContext = _executive->blockContext();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
     gasPricer->setMemUsed(paramData.size());
-    auto version = blockContext->blockVersion();
+    auto version = blockContext.blockVersion();
 
     if (funcSelector == name2Selector[CRYPTO_METHOD_SM3_STR])
     {
@@ -97,7 +97,7 @@ std::shared_ptr<PrecompiledExecResult> CryptoPrecompiled::call(
     }
     // curve25519VRFVerify
     else if (funcSelector == name2Selector[CRYPTO_METHOD_CURVE25519_VRF_VERIFY_STR] &&
-             (version >= (uint32_t)(bcos::protocol::Version::V3_0_VERSION)))
+             (version >= (uint32_t)(bcos::protocol::BlockVersion::V3_0_VERSION)))
     {
         curve25519VRFVerify(_executive, paramData, _callParameters);
     }
@@ -110,7 +110,7 @@ std::shared_ptr<PrecompiledExecResult> CryptoPrecompiled::call(
             bcos::protocol::PrecompiledError("CryptoPrecompiled call undefined function!"));
     }
     gasPricer->updateMemUsed(_callParameters->m_execResult.size());
-    _callParameters->setGas(_callParameters->m_gas - gasPricer->calTotalGas());
+    _callParameters->setGasLeft(_callParameters->m_gasLeft - gasPricer->calTotalGas());
     return _callParameters;
 }
 
@@ -118,8 +118,8 @@ void CryptoPrecompiled::curve25519VRFVerify(
     const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef _paramData,
     PrecompiledExecResult::Ptr _callResult)
 {
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    const auto& blockContext = _executive->blockContext();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     bool verifySuccess = false;
     u256 randomValue = 0;
     try
@@ -155,8 +155,8 @@ void CryptoPrecompiled::curve25519VRFVerify(
 void CryptoPrecompiled::sm2Verify(const std::shared_ptr<executor::TransactionExecutive>& _executive,
     bytesConstRef _paramData, PrecompiledExecResult::Ptr _callResult)
 {
-    auto blockContext = _executive->blockContext().lock();
-    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    const auto& blockContext = _executive->blockContext();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     try
     {
         string32 message;

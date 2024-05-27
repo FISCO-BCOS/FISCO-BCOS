@@ -19,14 +19,12 @@
  * @date 2021-04-09
  */
 #pragma once
+#include "bcos-framework/consensus/ProposalInterface.h"
 #include "bcos-pbft/core/proto/Consensus.pb.h"
-#include "bcos-pbft/framework/ProposalInterface.h"
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-protocol/Common.h>
 
-namespace bcos
-{
-namespace consensus
+namespace bcos::consensus
 {
 const bcos::protocol::BlockNumber InvalidBlockNumber = -1;
 class Proposal : virtual public ProposalInterface
@@ -39,7 +37,7 @@ public:
     {
         deserializeObject();
     }
-    ~Proposal() override {}
+    ~Proposal() override = default;
 
     // the index of the proposal
     bcos::protocol::BlockNumber index() const override { return m_rawProposal->index(); }
@@ -152,5 +150,4 @@ protected:
     std::shared_ptr<RawProposal> m_rawProposal;
     bcos::crypto::HashType m_hash;
 };
-}  // namespace consensus
-}  // namespace bcos
+}  // namespace bcos::consensus

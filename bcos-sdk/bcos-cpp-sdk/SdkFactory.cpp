@@ -17,11 +17,15 @@
  * @author: octopus
  * @date 2021-08-21
  */
-#include "SdkFactory.h"
+#include "rpc/JsonRpcInterface.h"
+#include "rpc/JsonRpcServiceImpl.h"
+#include "utilities/tx/TransactionBuilder.h"
+#include "utilities/tx/TransactionBuilderService.h"
 #include <bcos-boostssl/websocket/WsConnector.h>
 #include <bcos-boostssl/websocket/WsInitializer.h>
 #include <bcos-boostssl/websocket/WsMessage.h>
 #include <bcos-boostssl/websocket/WsService.h>
+#include <bcos-cpp-sdk/SdkFactory.h>
 #include <bcos-cpp-sdk/amop/AMOP.h>
 #include <bcos-cpp-sdk/amop/AMOPRequest.h>
 #include <bcos-cpp-sdk/amop/Common.h>
@@ -29,14 +33,15 @@
 #include <bcos-cpp-sdk/multigroup/JsonGroupInfoCodec.h>
 #include <bcos-cpp-sdk/rpc/Common.h>
 #include <bcos-cpp-sdk/rpc/JsonRpcImpl.h>
+#include <bcos-cpp-sdk/utilities/logger/LogInitializer.h>
 #include <bcos-cpp-sdk/ws/Service.h>
 #include <bcos-framework/multigroup/GroupInfoFactory.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-utilities/BoostLog.h>
-#include <bcos-utilities/BoostLogInitializer.h>
 #include <bcos-utilities/Common.h>
 #include <memory>
 #include <mutex>
+#include <utility>
 
 using namespace bcos;
 using namespace bcos::boostssl;
@@ -52,23 +57,20 @@ using namespace bcos::cppsdk::service;
 SdkFactory::SdkFactory()
 {
     // TODO: how to init log in cpp sdk
-    // LogInitializer::initLog();
+    LogInitializer::initLog();
 }
 
 bcos::cppsdk::Sdk::UniquePtr SdkFactory::buildSdk(
-    std::shared_ptr<bcos::boostssl::ws::WsConfig> _config)
+    std::shared_ptr<bcos::boostssl::ws::WsConfig> _config, bool _sendRequestToHighestBlockNode)
 {
-    if (!_config)
-    {
-        _config = m_config;
-    }
-
-    auto service = buildService(_config);
+    auto service = buildService(std::move(_config));
     auto amop = buildAMOP(service);
-    auto jsonRpc = buildJsonRpc(service);
+    auto jsonRpc = buildJsonRpc(service, _sendRequestToHighestBlockNode);
     auto eventSub = buildEventSub(service);
+    auto jsonRpcService = buildJsonRpcService(jsonRpc);
 
-    auto sdk = std::make_unique<bcos::cppsdk::Sdk>(service, jsonRpc, amop, eventSub);
+    auto sdk =
+        std::make_unique<bcos::cppsdk::Sdk>(service, jsonRpc, amop, eventSub, jsonRpcService);
     return sdk;
 }
 
@@ -76,7 +78,7 @@ bcos::cppsdk::Sdk::UniquePtr SdkFactory::buildSdk(const std::string& _configFile
 {
     auto config = std::make_shared<Config>();
     auto wsConfig = config->loadConfig(_configFile);
-    return buildSdk(wsConfig);
+    return buildSdk(wsConfig, config->sendRpcRequestToHighestBlockNode());
 }
 
 Service::Ptr SdkFactory::buildService(std::shared_ptr<bcos::boostssl::ws::WsConfig> _config)
@@ -85,25 +87,24 @@ Service::Ptr SdkFactory::buildService(std::shared_ptr<bcos::boostssl::ws::WsConf
     auto groupInfoFactory = std::make_shared<bcos::group::GroupInfoFactory>();
     auto service = std::make_shared<Service>(groupInfoCodec, groupInfoFactory, "SDK");
     auto initializer = std::make_shared<WsInitializer>();
-    initializer->setConfig(_config);
+    initializer->setConfig(std::move(_config));
     initializer->initWsService(service);
-    service->registerMsgHandler(bcos::protocol::MessageType::BLOCK_NOTIFY,
-        [service](
-            std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<WsSession> _session) {
+    auto weakService = std::weak_ptr<Service>(service);
+    service->registerMsgHandler(
+        bcos::protocol::MessageType::BLOCK_NOTIFY, [weakService](auto&& _msg, auto&& _session) {
             auto blkMsg = std::string(_msg->payload()->begin(), _msg->payload()->end());
-
+            auto service = weakService.lock();
             service->onRecvBlockNotifier(blkMsg);
 
             BCOS_LOG(INFO) << "[WS]" << LOG_DESC("receive block notify")
                            << LOG_KV("endpoint", _session->endPoint()) << LOG_KV("blk", blkMsg);
         });
 
-    service->registerMsgHandler(bcos::protocol::MessageType::GROUP_NOTIFY,
-        [service](
-            std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<WsSession> _session) {
+    service->registerMsgHandler(
+        bcos::protocol::MessageType::GROUP_NOTIFY, [weakService](auto&& _msg, auto&& _session) {
             std::string groupInfo = std::string(_msg->payload()->begin(), _msg->payload()->end());
-
-            service->onNotifyGroupInfo(groupInfo, _session);
+            auto service = weakService.lock();
+            service->onNotifyGroupInfo(groupInfo, _session->endPoint());
 
             BCOS_LOG(INFO) << "[WS]" << LOG_DESC("receive group info notify")
                            << LOG_KV("endpoint", _session->endPoint())
@@ -113,16 +114,21 @@ Service::Ptr SdkFactory::buildService(std::shared_ptr<bcos::boostssl::ws::WsConf
     return service;
 }
 
-bcos::cppsdk::jsonrpc::JsonRpcImpl::Ptr SdkFactory::buildJsonRpc(Service::Ptr _service)
+bcos::cppsdk::jsonrpc::JsonRpcImpl::Ptr SdkFactory::buildJsonRpc(
+    const Service::Ptr& _service, bool _sendRequestToHighestBlockNode)
 {
     auto groupInfoCodec = std::make_shared<bcos::group::JsonGroupInfoCodec>();
     auto jsonRpc = std::make_shared<JsonRpcImpl>(groupInfoCodec);
     auto factory = std::make_shared<JsonRpcRequestFactory>();
     jsonRpc->setFactory(factory);
     jsonRpc->setService(_service);
+    jsonRpc->setSendRequestToHighestBlockNode(_sendRequestToHighestBlockNode);
+
+    BCOS_LOG(INFO) << "[buildJsonRpc]" << LOG_DESC("build json rpc")
+                   << LOG_KV("sendRequestToHighestBlockNode", _sendRequestToHighestBlockNode);
 
     jsonRpc->setSender([_service](const std::string& _group, const std::string& _node,
-                           const std::string& _request, bcos::cppsdk::jsonrpc::RespFunc _respFunc) {
+                           const std::string& _request, auto&& _respFunc) {
         auto data = std::make_shared<bytes>(_request.begin(), _request.end());
         auto msg = _service->messageFactory()->buildMessage();
         msg->setSeq(_service->messageFactory()->newSeq());
@@ -130,8 +136,7 @@ bcos::cppsdk::jsonrpc::JsonRpcImpl::Ptr SdkFactory::buildJsonRpc(Service::Ptr _s
         msg->setPayload(data);
 
         _service->asyncSendMessageByGroupAndNode(_group, _node, msg, Options(),
-            [_respFunc](Error::Ptr _error, std::shared_ptr<MessageFace> _msg,
-                std::shared_ptr<WsSession> _session) {
+            [_respFunc](Error::Ptr _error, MessageFace::Ptr _msg, auto&& _session) {
                 (void)_session;
                 _respFunc(_error, _msg ? _msg->payload() : nullptr);
             });
@@ -140,7 +145,16 @@ bcos::cppsdk::jsonrpc::JsonRpcImpl::Ptr SdkFactory::buildJsonRpc(Service::Ptr _s
     return jsonRpc;
 }
 
-bcos::cppsdk::amop::AMOP::Ptr SdkFactory::buildAMOP(bcos::cppsdk::service::Service::Ptr _service)
+bcos::cppsdk::jsonrpc::JsonRpcServiceImpl::Ptr SdkFactory::buildJsonRpcService(
+    const bcos::cppsdk::jsonrpc::JsonRpcImpl::Ptr& _jsonRpc)
+{
+    auto transactionBuilder = std::make_shared<utilities::TransactionBuilder>();
+    auto jsonRpcService = std::make_shared<JsonRpcServiceImpl>(_jsonRpc, transactionBuilder);
+    return jsonRpcService;
+}
+
+bcos::cppsdk::amop::AMOP::Ptr SdkFactory::buildAMOP(
+    const bcos::cppsdk::service::Service::Ptr& _service)
 {
     auto amop = std::make_shared<bcos::cppsdk::amop::AMOP>();
 
@@ -161,7 +175,7 @@ bcos::cppsdk::amop::AMOP::Ptr SdkFactory::buildAMOP(bcos::cppsdk::service::Servi
             auto amop = amopWeakPtr.lock();
             if (amop)
             {
-                amop->onRecvAMOPRequest(_msg, _session);
+                amop->onRecvAMOPRequest(std::move(_msg), std::move(_session));
             }
         });
     _service->registerMsgHandler(bcos::cppsdk::amop::MessageType::AMOP_RESPONSE,
@@ -170,7 +184,7 @@ bcos::cppsdk::amop::AMOP::Ptr SdkFactory::buildAMOP(bcos::cppsdk::service::Servi
             auto amop = amopWeakPtr.lock();
             if (amop)
             {
-                amop->onRecvAMOPResponse(_msg, _session);
+                amop->onRecvAMOPResponse(std::move(_msg), std::move(_session));
             }
         });
     _service->registerMsgHandler(bcos::cppsdk::amop::MessageType::AMOP_BROADCAST,
@@ -179,7 +193,7 @@ bcos::cppsdk::amop::AMOP::Ptr SdkFactory::buildAMOP(bcos::cppsdk::service::Servi
             auto amop = amopWeakPtr.lock();
             if (amop)
             {
-                amop->onRecvAMOPBroadcast(_msg, _session);
+                amop->onRecvAMOPBroadcast(std::move(_msg), std::move(_session));
             }
         });
     _service->registerWsHandshakeSucHandler([amopWeakPtr](std::shared_ptr<WsSession> _session) {
@@ -187,13 +201,13 @@ bcos::cppsdk::amop::AMOP::Ptr SdkFactory::buildAMOP(bcos::cppsdk::service::Servi
         if (amop)
         {
             // service handshake successfully
-            amop->updateTopicsToRemote(_session);
+            amop->updateTopicsToRemote(std::move(_session));
         }
     });
     return amop;
 }
 
-bcos::cppsdk::event::EventSub::Ptr SdkFactory::buildEventSub(Service::Ptr _service)
+bcos::cppsdk::event::EventSub::Ptr SdkFactory::buildEventSub(const Service::Ptr& _service)
 {
     auto eventSub = std::make_shared<event::EventSub>();
     auto messageFactory = std::make_shared<WsMessageFactory>();
@@ -209,7 +223,7 @@ bcos::cppsdk::event::EventSub::Ptr SdkFactory::buildEventSub(Service::Ptr _servi
             auto eventSub = eventWeakPtr.lock();
             if (eventSub)
             {
-                eventSub->onRecvEventSubMessage(_msg, _session);
+                eventSub->onRecvEventSubMessage(std::move(_msg), std::move(_session));
             }
         });
 
@@ -217,7 +231,7 @@ bcos::cppsdk::event::EventSub::Ptr SdkFactory::buildEventSub(Service::Ptr _servi
         auto eventSub = eventWeakPtr.lock();
         if (eventSub)
         {
-            eventSub->suspendTasks(_session);
+            eventSub->suspendTasks(std::move(_session));
         }
     });
 

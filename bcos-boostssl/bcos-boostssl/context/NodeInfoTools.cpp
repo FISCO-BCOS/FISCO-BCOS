@@ -55,7 +55,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> NodeInfoTools::newV
             X509* cert = X509_STORE_CTX_get_current_cert(ctx.native_handle());
             if (!cert)
             {
-                NODEINFO_LOG(WARNING) << LOG_DESC("Get cert failed");
+                NODEINFO_LOG(INFO) << LOG_DESC("Get cert failed");
                 return preverified;
             }
 
@@ -70,7 +70,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> NodeInfoTools::newV
                 (BASIC_CONSTRAINTS*)X509_get_ext_d2i(cert, NID_basic_constraints, &crit, NULL);
             if (!basic)
             {
-                NODEINFO_LOG(WARNING) << LOG_DESC("Get ca basic failed");
+                NODEINFO_LOG(INFO) << LOG_DESC("Get ca basic failed");
                 return preverified;
             }
 
@@ -120,7 +120,7 @@ NodeInfoTools::initCert2PubHexHandler()
 
             if (!bioMem)
             {
-                errorMessage = "BIO_new error";
+                errorMessage = "BIO_new failed";
                 break;
             }
 
@@ -135,14 +135,14 @@ NodeInfoTools::initCert2PubHexHandler()
 
             if (!x509Ptr)
             {
-                errorMessage = "PEM_read_bio_X509 error";
+                errorMessage = "PEM_read_bio_X509 failed";
                 break;
             }
 
             ASN1_BIT_STRING* pubKey = X509_get0_pubkey_bitstr(x509Ptr.get());
             if (pubKey == NULL)
             {
-                errorMessage = "X509_get0_pubkey_bitstr error";
+                errorMessage = "X509_get0_pubkey_bitstr failed";
                 break;
             }
 
@@ -155,7 +155,7 @@ NodeInfoTools::initCert2PubHexHandler()
         } while (0);
 
         NODEINFO_LOG(WARNING) << LOG_DESC("initCert2PubHexHandler") << LOG_KV("cert", _cert)
-                              << LOG_KV("errorMessage", errorMessage);
+                              << LOG_KV("message", errorMessage);
         return false;
     };
 }

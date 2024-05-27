@@ -65,7 +65,7 @@ BOOST_AUTO_TEST_CASE(hashmap)
     auto now = std::chrono::system_clock::now();
     for (auto& it : keys)
     {
-        map.emplace(std::move(it), 0);
+        map.emplace(it, 0);
     }
 
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -80,7 +80,7 @@ BOOST_AUTO_TEST_CASE(unorderedmap)
     auto now = std::chrono::system_clock::now();
     for (auto& it : keys)
     {
-        map.emplace(std::move(it), 0);
+        map.emplace(it, 0);
     }
 
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(

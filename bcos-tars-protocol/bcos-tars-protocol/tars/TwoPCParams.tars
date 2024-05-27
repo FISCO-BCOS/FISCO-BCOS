@@ -2,8 +2,7 @@ module bcostars {
 struct TwoPCParams
 {
     1 require long blockNumber;
-    2 require long startTS;
-    3 optional string primaryTableName;
-    4 optional string primaryTableKey;
+    2 require long timePoint;
+    3 optional string primaryKey;
 };
 };

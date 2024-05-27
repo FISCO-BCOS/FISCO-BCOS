@@ -30,7 +30,7 @@ class BlockSyncMsgInterface
 public:
     using Ptr = std::shared_ptr<BlockSyncMsgInterface>;
     BlockSyncMsgInterface() = default;
-    virtual ~BlockSyncMsgInterface() {}
+    virtual ~BlockSyncMsgInterface() = default;
 
     virtual bytesPointer encode() const = 0;
     virtual void decode(bytesConstRef _data) = 0;
@@ -38,10 +38,14 @@ public:
     virtual bcos::protocol::BlockNumber number() const = 0;
     virtual int32_t packetType() const = 0;
     virtual int32_t version() const = 0;
+    virtual bcos::protocol::BlockNumber archivedBlockNumber() const = 0;
 
     virtual void setNumber(bcos::protocol::BlockNumber _number) = 0;
     virtual void setPacketType(int32_t packetType) = 0;
     virtual void setVersion(int32_t _version) = 0;
+    virtual void setArchivedNumber(bcos::protocol::BlockNumber _number) = 0;
+    virtual size_t blockInterval() const = 0;
+    virtual void setBlockInterval(size_t interval) = 0;
 };
 }  // namespace sync
 }  // namespace bcos

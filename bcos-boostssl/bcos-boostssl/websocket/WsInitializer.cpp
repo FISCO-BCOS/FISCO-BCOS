@@ -31,6 +31,7 @@
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/ThreadPool.h>
+#include <boost/system/detail/error_code.hpp>
 #include <cstddef>
 #include <memory>
 
@@ -56,12 +57,6 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
         sessionFactory = std::make_shared<WsSessionFactory>();
     }
 
-    auto threadPoolSize = _config->threadPoolSize() > 0 ? _config->threadPoolSize() :
-                                                          std::thread::hardware_concurrency();
-    if (!threadPoolSize)
-    {
-        threadPoolSize = 16;
-    }
     auto wsServiceWeakPtr = std::weak_ptr<WsService>(_wsService);
     auto ioServicePool = std::make_shared<IOServicePool>();
     _wsService->setIOServicePool(ioServicePool);
@@ -72,7 +67,6 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
     connector->setIOServicePool(ioServicePool);
 
     auto builder = std::make_shared<WsStreamDelegateBuilder>();
-    auto threadPool = std::make_shared<ThreadPool>("t_ws_pool", threadPoolSize);
 
     // init module_name for log
     WsTools::setModuleName(m_moduleName);
@@ -116,7 +110,6 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
             _config->listenPort(), ioServicePool->getIOService(), srvCtx, m_moduleName);
         httpServer->setIOServicePool(ioServicePool);
         httpServer->setDisableSsl(_config->disableSsl());
-        httpServer->setThreadPool(threadPool);
         httpServer->setWsUpgradeHandler(
             [wsServiceWeakPtr](std::shared_ptr<HttpStream> _httpStream, HttpRequest&& _httpRequest,
                 std::shared_ptr<std::string> _nodeId) {
@@ -138,16 +131,31 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
         auto connectPeers = _config->connectPeers();
         WEBSOCKET_INITIALIZER(INFO)
             << LOG_BADGE("initWsService") << LOG_DESC("start websocket service as client")
-            << LOG_KV("connected size", connectPeers ? connectPeers->size() : 0);
+            << LOG_KV("connected endpoints size", connectPeers ? connectPeers->size() : 0);
 
         if (connectPeers)
         {
-            for (auto& peer : *connectPeers)
+            for (const auto& peer : *connectPeers)
             {
                 if (!WsTools::validIP(peer.address()))
                 {
-                    BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
-                                              "invalid connected peer, value: " + peer.address()));
+                    boost::system::error_code err;
+
+                    // test if the address domain name
+                    boost::asio::ip::tcp::resolver::query qry(
+                        peer.address(), boost::lexical_cast<std::string>(0));
+                    resolver->resolve(qry, err);
+
+                    if (err)
+                    {
+                        BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                                  "invalid connection host, ipv4/ipv6/domain name "
+                                                  "support, current: " +
+                                                  peer.address()));
+                    }
+                    WEBSOCKET_INITIALIZER(INFO)
+                        << LOG_BADGE("initWsService") << LOG_DESC("domain name has been set")
+                        << LOG_KV("host", peer.address());
                 }
 
                 if (!WsTools::validPort(peer.port()))
@@ -173,7 +181,6 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
 
     _wsService->setConfig(_config);
     _wsService->setConnector(connector);
-    _wsService->setThreadPool(threadPool);
     _wsService->setMessageFactory(messageFactory);
     _wsService->setSessionFactory(sessionFactory);
 
@@ -181,9 +188,7 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
         << LOG_BADGE("initWsService") << LOG_DESC("initializer for websocket service")
         << LOG_KV("listenIP", _config->listenIP()) << LOG_KV("listenPort", _config->listenPort())
         << LOG_KV("disableSsl", _config->disableSsl()) << LOG_KV("server", _config->asServer())
-        << LOG_KV("client", _config->asClient())
-        << LOG_KV("threadPoolSize", _config->threadPoolSize())
-        << LOG_KV("maxMsgSize", _config->maxMsgSize())
+        << LOG_KV("client", _config->asClient()) << LOG_KV("maxMsgSize", _config->maxMsgSize())
         << LOG_KV("msgTimeOut", _config->sendMsgTimeout())
         << LOG_KV("connected peers", _config->connectPeers() ? _config->connectPeers()->size() : 0);
 }

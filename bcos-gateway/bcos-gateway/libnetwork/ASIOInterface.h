@@ -11,6 +11,7 @@
 #include <boost/asio.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/ssl.hpp>
+#include <utility>
 
 namespace ba = boost::asio;
 namespace bi = ba::ip;
@@ -51,11 +52,11 @@ public:
 
     virtual void setSrvContext(std::shared_ptr<ba::ssl::context> _srvContext)
     {
-        m_srvContext = _srvContext;
+        m_srvContext = std::move(_srvContext);
     }
     virtual void setClientContext(std::shared_ptr<ba::ssl::context> _clientContext)
     {
-        m_clientContext = _clientContext;
+        m_clientContext = std::move(_clientContext);
     }
 
     virtual std::shared_ptr<boost::asio::deadline_timer> newTimer(uint32_t timeout)
@@ -99,6 +100,31 @@ public:
 
     virtual void asyncWrite(std::shared_ptr<SocketFace> socket,
         boost::asio::mutable_buffers_1 buffers, ReadWriteHandler handler)
+    {
+        auto type = m_type;
+        auto ioService = socket->ioService();
+        ioService->post([type, socket, buffers, handler]() {
+            if (socket->isConnected())
+            {
+                switch (type)
+                {
+                case TCP_ONLY:
+                {
+                    ba::async_write(socket->ref(), buffers, handler);
+                    break;
+                }
+                case SSL:
+                {
+                    ba::async_write(socket->sslref(), buffers, handler);
+                    break;
+                }
+                }
+            }
+        });
+    }
+
+    virtual void asyncWrite(std::shared_ptr<SocketFace> socket,
+        const std::vector<boost::asio::const_buffer>& buffers, ReadWriteHandler handler)
     {
         auto type = m_type;
         auto ioService = socket->ioService();

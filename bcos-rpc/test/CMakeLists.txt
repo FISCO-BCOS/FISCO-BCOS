@@ -24,7 +24,7 @@ find_package(Boost REQUIRED unit_test_framework)
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE .)
-target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-error -Wno-unused-variable)
+target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-unused-variable)
 
-target_link_libraries(${TEST_BINARY_NAME} ${RPC_TARGET} Boost::unit_test_framework)
+target_link_libraries(${TEST_BINARY_NAME} ${RPC_TARGET} ${TOOL_TARGET} Boost::unit_test_framework)
 add_test(NAME ${TEST_BINARY_NAME} WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})

@@ -22,11 +22,7 @@
 #include <boost/asio/ssl.hpp>
 #include <boost/filesystem.hpp>
 
-namespace bcos
-{
-namespace boostssl
-{
-namespace context
+namespace bcos::boostssl::context
 {
 class ContextBuilder
 {
@@ -35,7 +31,7 @@ public:
     using ConstPtr = std::shared_ptr<const ContextBuilder>;
 
 public:
-    std::shared_ptr<std::string> readFileContent(boost::filesystem::path const& _file);
+    std::string readFileContent(boost::filesystem::path const& _file);
 
     std::string moduleName() { return m_moduleName; }
     void setModuleName(std::string _moduleName) { m_moduleName = _moduleName; }
@@ -60,6 +56,4 @@ private:
     std::string m_moduleName = "DEFAULT";
 };
 
-}  // namespace context
-}  // namespace boostssl
-}  // namespace bcos
+}  // namespace bcos::boostssl::context

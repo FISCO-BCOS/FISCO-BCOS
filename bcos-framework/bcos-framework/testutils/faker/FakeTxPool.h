@@ -41,16 +41,21 @@ public:
     ~FakeTxPool() override {}
 
     void start() override {}
-    void stop() override {}
+    void stop() override { m_worker->stop(); }
 
     // useless for PBFT, maybe needed by RPC
-    void asyncSubmit(bytesPointer, TxSubmitCallback) override {}
-    void asyncResetTxPool(std::function<void(Error::Ptr)> _callback) override 
+    task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
+        protocol::Transaction::Ptr transaction) override
+    {
+        co_return nullptr;
+    }
+    void asyncResetTxPool(std::function<void(Error::Ptr)> _callback) override
     {
         _callback(nullptr);
     }
     // useless for PBFT, needed by dispatcher to fetch block transactions
-    void asyncFillBlock(HashListPtr, std::function<void(Error::Ptr, TransactionsPtr)>) override {}
+    void asyncFillBlock(HashListPtr, std::function<void(Error::Ptr, ConstTransactionsPtr)>) override
+    {}
 
     // useless for PBFT, maybe useful for the ledger
     void asyncNotifyBlockResult(
@@ -92,7 +97,7 @@ public:
                 return;
             }
             _onVerifyFinished(
-                std::make_unique<Error>(CommonError::TransactionsMissing, "TransactionsMissing"),
+                BCOS_ERROR_UNIQUE_PTR(CommonError::TransactionsMissing, "TransactionsMissing"),
                 m_verifyResult);
         });
     }

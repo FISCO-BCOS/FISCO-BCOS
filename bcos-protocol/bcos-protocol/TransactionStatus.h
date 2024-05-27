@@ -32,7 +32,7 @@ enum class TransactionStatus : int32_t
     None = 0,
     Unknown = 1,
     OutOfGasLimit = 2,  ///< Too little gas to pay for the base transaction cost.
-    NotEnoughCash = 7,  // TODO: remove this?
+    NotEnoughCash = 7,
     BadInstruction = 10,
     BadJumpDestination = 11,
     OutOfGas = 12,    ///< Ran out of gas executing code of the transaction.
@@ -46,6 +46,8 @@ enum class TransactionStatus : int32_t
     GasOverflow = 20,
     ContractFrozen = 21,
     AccountFrozen = 22,
+    AccountAbolished = 23,
+    ContractAbolished = 24,
     WASMValidationFailure = 32,
     WASMArgumentOutOfRange = 33,
     WASMUnreachableInstruction = 34,
@@ -53,21 +55,16 @@ enum class TransactionStatus : int32_t
     NonceCheckFail = 10000,  /// txPool related errors
     BlockLimitCheckFail = 10001,
     TxPoolIsFull = 10002,
-    Malform = 10003,
+    Malformed = 10003,
     AlreadyInTxPool = 10004,
     TxAlreadyInChain = 10005,
     InvalidChainId = 10006,
     InvalidGroupId = 10007,
     InvalidSignature = 10008,
     RequestNotBelongToTheGroup = 10009,
+    TransactionPoolTimeout = 10010,
+    AlreadyInTxPoolAndAccept = 10011,
 };
-
-inline std::string toString(protocol::TransactionStatus const& _i)
-{
-    std::stringstream stream;
-    stream << "0x" << std::hex << static_cast<int>(_i);
-    return stream.str();
-}
 
 inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::TransactionStatus const& _er)
 {
@@ -127,10 +124,28 @@ inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::TransactionS
     case bcos::protocol::TransactionStatus::AccountFrozen:
         _out << "AccountFrozen";
         break;
+    case TransactionStatus::AccountAbolished:
+        _out << "AccountAbolished";
+        break;
+    case TransactionStatus::ContractAbolished:
+        _out << "ContractAbolished";
+        break;
+    case TransactionStatus::WASMValidationFailure:
+        _out << "WASMValidationFailure";
+        break;
+    case TransactionStatus::WASMArgumentOutOfRange:
+        _out << "WASMArgumentOutOfRange";
+        break;
+    case TransactionStatus::WASMUnreachableInstruction:
+        _out << "WASMUnreachableInstruction";
+        break;
+    case TransactionStatus::WASMTrap:
+        _out << "WASMTrap";
+        break;
     case bcos::protocol::TransactionStatus::TxPoolIsFull:
         _out << "TxPoolIsFull";
         break;
-    case bcos::protocol::TransactionStatus::Malform:
+    case bcos::protocol::TransactionStatus::Malformed:
         _out << "MalformTx";
         break;
     case bcos::protocol::TransactionStatus::AlreadyInTxPool:
@@ -151,11 +166,23 @@ inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::TransactionS
     case bcos::protocol::TransactionStatus::RequestNotBelongToTheGroup:
         _out << "RequestNotBelongToTheGroup";
         break;
+    case TransactionStatus::TransactionPoolTimeout:
+        _out << "TransactionPoolTimeout";
+        break;
+    case TransactionStatus::Unknown:
     default:
         _out << "Unknown";
         break;
     }
     return _out;
 }
+
+inline std::string toString(protocol::TransactionStatus const& _status)
+{
+    std::stringstream stream;
+    stream << _status;
+    return stream.str();
+}
+
 }  // namespace protocol
 }  // namespace bcos

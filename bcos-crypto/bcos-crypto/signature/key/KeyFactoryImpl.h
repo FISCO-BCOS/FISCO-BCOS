@@ -22,16 +22,14 @@
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-crypto/signature/key/KeyImpl.h>
 
-namespace bcos
-{
-namespace crypto
+namespace bcos::crypto
 {
 class KeyFactoryImpl : public KeyFactory
 {
 public:
     using Ptr = std::shared_ptr<KeyFactoryImpl>;
     KeyFactoryImpl() = default;
-    ~KeyFactoryImpl() override {}
+    ~KeyFactoryImpl() override = default;
 
     KeyInterface::Ptr createKey(bytesConstRef _keyData) override
     {
@@ -43,5 +41,4 @@ public:
         return std::make_shared<KeyImpl>(_keyData);
     }
 };
-}  // namespace crypto
-}  // namespace bcos
+}  // namespace bcos::crypto

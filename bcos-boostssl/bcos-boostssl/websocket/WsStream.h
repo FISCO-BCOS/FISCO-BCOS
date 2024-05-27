@@ -19,6 +19,7 @@
  */
 #pragma once
 
+#include "bcos-utilities/ObjectCounter.h"
 #include <bcos-boostssl/httpserver/Common.h>
 #include <bcos-boostssl/websocket/Common.h>
 #include <bcos-boostssl/websocket/WsTools.h>
@@ -41,17 +42,13 @@
 #include <memory>
 #include <utility>
 
-namespace bcos
-{
-namespace boostssl
-{
-namespace ws
+namespace bcos::boostssl::ws
 {
 using WsStreamRWHandler = std::function<void(boost::system::error_code, std::size_t)>;
 using WsStreamHandshakeHandler = std::function<void(boost::system::error_code)>;
 
 template <typename STREAM>
-class WsStream
+class WsStream : public bcos::ObjectCounter<WsStream<STREAM>>
 {
 public:
     using Ptr = std::shared_ptr<WsStream>;
@@ -59,7 +56,7 @@ public:
 
     WsStream(
         std::shared_ptr<boost::beast::websocket::stream<STREAM>> _stream, std::string _moduleName)
-      : m_stream(_stream), m_moduleName(_moduleName)
+      : m_stream(_stream), m_moduleName(std::move(_moduleName))
     {
         initDefaultOpt();
         WEBSOCKET_STREAM(INFO) << LOG_KV("[NEWOBJ][WsStream]", this);
@@ -73,8 +70,9 @@ public:
 
     void initDefaultOpt()
     {
-        /* //TODO: close compress temp
-        // default open compress option
+        /*
+        // default close compress option because the loss of network compression is relatively large
+        with boost websocket
         {
             boost::beast::websocket::permessage_deflate opt;
             opt.client_enable = true;  // for clients
@@ -101,7 +99,6 @@ public:
         }
     }
 
-public:
     //---------------  set opt params for websocket stream
     // begin-----------------------------
     void setMaxReadMsgSize(uint32_t _maxValue) { m_stream->read_message_max(_maxValue); }
@@ -117,7 +114,6 @@ public:
     std::string moduleName() { return m_moduleName; }
     void setModuleName(std::string _moduleName) { m_moduleName = _moduleName; }
 
-public:
     bool open() { return !m_closed.load() && m_stream->is_open(); }
 
     void close()
@@ -207,7 +203,7 @@ private:
 using RawWsStream = WsStream<boost::beast::tcp_stream>;
 using SslWsStream = WsStream<boost::beast::ssl_stream<boost::beast::tcp_stream>>;
 
-class WsStreamDelegate
+class WsStreamDelegate : public bcos::ObjectCounter<WsStreamDelegate>
 {
 public:
     using Ptr = std::shared_ptr<WsStreamDelegate>;
@@ -293,7 +289,7 @@ private:
     SslWsStream::Ptr m_sslStream;
 };
 
-class WsStreamDelegateBuilder
+class WsStreamDelegateBuilder : public bcos::ObjectCounter<WsStreamDelegate>
 {
 public:
     using Ptr = std::shared_ptr<WsStreamDelegateBuilder>;
@@ -339,6 +335,4 @@ public:
     }
 };
 
-}  // namespace ws
-}  // namespace boostssl
-}  // namespace bcos
+}  // namespace bcos::boostssl::ws

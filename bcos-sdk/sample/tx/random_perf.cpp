@@ -18,6 +18,7 @@
  * @date 2022-04-07
  */
 
+#include <bcos-cpp-sdk/utilities/tx/TransactionBuilder.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -49,6 +50,8 @@ int main(int argc, char** argv)
     long long i = 0;
     long long _10Per = count / 10;
 
+    auto transactionBuilder = std::make_shared<bcos::cppsdk::utilities::TransactionBuilder>();
+
     auto startPoint = std::chrono::high_resolution_clock::now();
     while (i++ < count)
     {
@@ -58,8 +61,8 @@ int main(int argc, char** argv)
         }
 
         // auto fixBytes = bcos::FixedBytes<32>().generateRandomFixedBytes();
-        // auto u256Value = transactionBuilder->genRandomUint256();
-        // (void)u256Value;
+        auto u256Value = transactionBuilder->generateRandomStr();
+        (void)u256Value;
     }
 
     auto endPoint = std::chrono::high_resolution_clock::now();

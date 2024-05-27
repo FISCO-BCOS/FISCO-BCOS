@@ -25,11 +25,12 @@
 #include <bcos-framework/gateway/GroupNodeInfo.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/ThreadPool.h>
+#include <oneapi/tbb/task_arena.h>
+#include <oneapi/tbb/task_group.h>
 #include <boost/asio.hpp>
+#include <utility>
 
-namespace bcos
-{
-namespace front
+namespace bcos::front
 {
 class FrontService : public FrontServiceInterface, public std::enable_shared_from_this<FrontService>
 {
@@ -39,12 +40,11 @@ public:
     FrontService();
     FrontService(const FrontService&) = delete;
     FrontService(FrontService&&) = delete;
-    virtual ~FrontService();
+    ~FrontService() noexcept override;
 
     FrontService& operator=(const FrontService&) = delete;
     FrontService& operator=(FrontService&&) = delete;
 
-public:
     void start() override;
     void stop() override;
 
@@ -52,7 +52,6 @@ public:
     // properly, exception will be thrown
     void checkParams();
 
-public:
     /**
      * @brief: get nodeIDs from frontservice
      * @param _onGetGroupNodeInfoFunc: response callback
@@ -119,7 +118,7 @@ public:
      * @param _receiveMsgCallback: response callback
      * @return void
      */
-    void onReceiveMessage(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID,
+    void onReceiveMessage(const std::string& _groupID, const bcos::crypto::NodeIDPtr& _nodeID,
         bytesConstRef _data, ReceiveMsgFunc _receiveMsgCallback) override;
 
     /**
@@ -155,42 +154,42 @@ public:
     void onMessageTimeout(const boost::system::error_code& _error, bcos::crypto::NodeIDPtr _nodeID,
         const std::string& _uuid);
 
-public:
     FrontMessageFactory::Ptr messageFactory() const { return m_messageFactory; }
 
     void setMessageFactory(FrontMessageFactory::Ptr _messageFactory)
     {
-        m_messageFactory = _messageFactory;
+        m_messageFactory = std::move(_messageFactory);
     }
 
     bcos::crypto::NodeIDPtr nodeID() const { return m_nodeID; }
-    void setNodeID(bcos::crypto::NodeIDPtr _nodeID) { m_nodeID = _nodeID; }
+    void setNodeID(bcos::crypto::NodeIDPtr _nodeID) { m_nodeID = std::move(_nodeID); }
     std::string groupID() const { return m_groupID; }
     void setGroupID(const std::string& _groupID) { m_groupID = _groupID; }
 
     std::shared_ptr<gateway::GatewayInterface> gatewayInterface() { return m_gatewayInterface; }
 
+    bcos::gateway::GroupNodeInfo::Ptr groupNodeInfo() const override
+    {
+        Guard guard(x_groupNodeInfo);
+        return m_groupNodeInfo;
+    }
+
     void setGatewayInterface(std::shared_ptr<gateway::GatewayInterface> _gatewayInterface)
     {
-        m_gatewayInterface = _gatewayInterface;
+        m_gatewayInterface = std::move(_gatewayInterface);
     }
 
     std::shared_ptr<boost::asio::io_service> ioService() const { return m_ioService; }
     void setIoService(std::shared_ptr<boost::asio::io_service> _ioService)
     {
-        m_ioService = _ioService;
+        m_ioService = std::move(_ioService);
     }
-
-    bcos::ThreadPool::Ptr threadPool() const { return m_threadPool; }
-    void setThreadPool(bcos::ThreadPool::Ptr _threadPool) { m_threadPool = _threadPool; }
 
     // register message _dispatcher for module
     void registerModuleMessageDispatcher(int _moduleID,
-        std::function<void(
-            bcos::crypto::NodeIDPtr _nodeID, const std::string& _id, bytesConstRef _data)>
-            _dispatcher)
+        std::function<void(bcos::crypto::NodeIDPtr, const std::string&, bytesConstRef)> _dispatcher)
     {
-        m_moduleID2MessageDispatcher[_moduleID] = _dispatcher;
+        m_moduleID2MessageDispatcher[_moduleID] = std::move(_dispatcher);
     }
 
     // only for ut
@@ -216,7 +215,13 @@ public:
         m_module2GroupNodeInfoNotifier[_moduleID] = _dispatcher;
     }
 
-public:
+    bcos::protocol::ProtocolInfo::ConstPtr getLocalProtocolInfo() const
+    {
+        auto ret = std::make_shared<bcos::protocol::ProtocolInfo>(*m_localProtocol);
+        ret->setVersion(m_localProtocolVersion);
+        return ret;
+    }
+
     struct Callback : public std::enable_shared_from_this<Callback>
     {
         using Ptr = std::shared_ptr<Callback>;
@@ -225,7 +230,7 @@ public:
         std::shared_ptr<boost::asio::deadline_timer> timeoutHandler;
     };
     // lock m_callback
-    mutable bcos::RecursiveMutex x_callback;
+    mutable bcos::Mutex x_callback;
     // uuid to callback
     std::unordered_map<std::string, Callback::Ptr> m_callback;
 
@@ -237,7 +242,7 @@ public:
         Callback::Ptr callback = nullptr;
 
         {
-            RecursiveGuard l(x_callback);
+            Guard guard(x_callback);
             auto it = m_callback.find(_uuid);
             if (it != m_callback.end())
             {
@@ -249,10 +254,10 @@ public:
         return callback;
     }
 
-    void addCallback(const std::string& _uuid, Callback::Ptr _callback)
+    void addCallback(const std::string& _uuid, Callback::Ptr callback)
     {
-        RecursiveGuard l(x_callback);
-        m_callback[_uuid] = _callback;
+        Guard guard(x_callback);
+        m_callback[_uuid] = std::move(callback);
     }
 
 protected:
@@ -264,21 +269,19 @@ protected:
     virtual void protocolNegotiate(bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo);
 
 private:
-    // thread pool
-    bcos::ThreadPool::Ptr m_threadPool;
+    tbb::task_arena m_taskArena;
+    tbb::task_group m_asyncGroup;
     // timer
     std::shared_ptr<boost::asio::io_service> m_ioService;
     /// gateway interface
     std::shared_ptr<bcos::gateway::GatewayInterface> m_gatewayInterface;
-
     FrontMessageFactory::Ptr m_messageFactory;
 
-    std::unordered_map<int, std::function<void(bcos::crypto::NodeIDPtr _nodeID,
-                                const std::string& _id, bytesConstRef _data)>>
+    std::unordered_map<int,
+        std::function<void(bcos::crypto::NodeIDPtr, const std::string&, bytesConstRef)>>
         m_moduleID2MessageDispatcher;
 
-    std::unordered_map<int, std::function<void(bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo,
-                                ReceiveMsgFunc _receiveMsgCallback)>>
+    std::unordered_map<int, std::function<void(bcos::gateway::GroupNodeInfo::Ptr, ReceiveMsgFunc)>>
         m_module2GroupNodeInfoNotifier;
 
     // service is running or not
@@ -300,6 +303,6 @@ private:
     // the local protocolInfo
     // Note: frontService is responsible for version negotiation of blockchain nodes
     bcos::protocol::ProtocolInfo::ConstPtr m_localProtocol;
+    bcos::protocol::ProtocolVersion m_localProtocolVersion = {};
 };
-}  // namespace front
-}  // namespace bcos
+}  // namespace bcos::front

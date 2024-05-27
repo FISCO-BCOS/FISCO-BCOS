@@ -22,27 +22,25 @@
 #include <bcos-utilities/FixedBytes.h>
 #include <gsl/span>
 
-namespace bcos
-{
-namespace protocol
+namespace bcos::protocol
 {
 class LogEntry
 {
 public:
     using Ptr = std::shared_ptr<LogEntry>;
     LogEntry() = default;
-    LogEntry(bytes const& _address, h256s _topics, bytes _data)
-      : m_address(_address), m_topics(std::move(_topics)), m_data(std::move(_data))
+    LogEntry(const LogEntry&) = default;
+    LogEntry(LogEntry&&) noexcept = default;
+    LogEntry& operator=(const LogEntry&) = default;
+    LogEntry& operator=(LogEntry&&) noexcept = default;
+    LogEntry(bytes address, h256s topics, bytes data)
+      : m_address(std::move(address)), m_topics(std::move(topics)), m_data(std::move(data))
     {}
+    ~LogEntry() noexcept = default;
 
-    ~LogEntry() {}
-
-    std::string_view address() const
-    {
-        return std::string_view((char*)m_address.data(), m_address.size());
-    }
-    gsl::span<const h256> topics() const { return gsl::span(m_topics.data(), m_topics.size()); }
-    bytesConstRef data() const { return ref(m_data); }
+    std::string_view address() const { return {(const char*)m_address.data(), m_address.size()}; }
+    gsl::span<const bcos::h256> topics() const { return {m_topics.data(), m_topics.size()}; }
+    bcos::bytesConstRef data() const { return ref(m_data); }
     // Define the scale decode method, which cannot be modified at will
     template <class Stream, typename = std::enable_if_t<Stream::is_decoder_stream>>
     friend Stream& operator>>(Stream& _stream, LogEntry& _logEntry)
@@ -58,12 +56,11 @@ public:
     }
 
 private:
-    bcos::bytes m_address;
-    bcos::h256s m_topics;
+    bytes m_address;
+    h256s m_topics;
     bytes m_data;
 };
 
 using LogEntries = std::vector<LogEntry>;
 using LogEntriesPtr = std::shared_ptr<std::vector<LogEntry>>;
-}  // namespace protocol
-}  // namespace bcos
+}  // namespace bcos::protocol

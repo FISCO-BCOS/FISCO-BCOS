@@ -50,6 +50,8 @@ public:
     virtual void registerOnStableCheckPointCommitFailed(
         std::function<void(bcos::Error::Ptr&&, PBFTProposalInterface::Ptr)>
             _onStableCheckPointCommitFailed) = 0;
+
+    virtual void stop() {}
 };
 }  // namespace consensus
 }  // namespace bcos

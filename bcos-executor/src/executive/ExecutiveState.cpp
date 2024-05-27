@@ -31,7 +31,7 @@ CallParameters::UniquePtr ExecutiveState::go()
     {
         m_executive =
             std::dynamic_pointer_cast<CoroutineTransactionExecutive>(m_executiveFactory->build(
-                m_input->codeAddress, m_input->contextID, m_input->seq, true));
+                m_input->codeAddress, m_input->contextID, m_input->seq, ExecutiveType::coroutine));
     }
 
     // run
@@ -39,6 +39,7 @@ CallParameters::UniquePtr ExecutiveState::go()
     switch (m_status)
     {
     case NEED_RUN:
+        EXECUTOR_LOG(DEBUG) << "DMC Execute tx start" << m_input->toString();
         output = m_executive->start(std::move(m_input));
         break;
     case PAUSED:
@@ -47,6 +48,7 @@ CallParameters::UniquePtr ExecutiveState::go()
         assert(false);
         break;
     case NEED_RESUME:
+        EXECUTOR_LOG(DEBUG) << "DMC Execute tx resume" << m_executive->getExchangeMessageStr();
         output = m_executive->resume();
         break;
     case FINISHED:
@@ -55,10 +57,12 @@ CallParameters::UniquePtr ExecutiveState::go()
     }
 
     // update status
+
     switch (output->type)
     {
     case CallParameters::MESSAGE:
     case CallParameters::KEY_LOCK:
+    case CallParameters::PRE_FINISH:
         m_status = PAUSED;
         break;
     case CallParameters::FINISHED:
@@ -67,11 +71,11 @@ CallParameters::UniquePtr ExecutiveState::go()
         break;
     }
 
-    // TODO: debug in executive
-    // Bug: Must force set contextID here to fix bug.
-    // But why output->context & output->seq here always be 0 ?????
     output->contextID = m_contextID;
     output->seq = m_seq;
+    output->hasContractTableChanged = m_executive->hasContractTableChanged();
+
+    EXECUTOR_LOG(DEBUG) << "DMC Execute tx done" << output->toString();
     return output;
 }
 

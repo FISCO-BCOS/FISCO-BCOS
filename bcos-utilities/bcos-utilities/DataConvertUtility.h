@@ -22,10 +22,10 @@
 #include "Error.h"
 #include <boost/algorithm/hex.hpp>
 #include <boost/throw_exception.hpp>
-#include <boost/utility/string_view.hpp>
 #include <algorithm>
 #include <cstring>
 #include <iterator>
+#include <set>
 #include <string>
 #include <type_traits>
 #include <unordered_set>
@@ -44,12 +44,6 @@ Out toHex(const Binary& binary, std::string_view prefix = std::string_view())
     {
         out.insert(out.end(), prefix.begin(), prefix.end());
     }
-
-    if (binary.empty())
-    {
-        return out;
-    }
-
     boost::algorithm::hex_lower(binary.begin(), binary.end(), std::back_inserter(out));
     return out;
 }
@@ -64,6 +58,11 @@ Out fromHex(const Hex& hex, std::string_view prefix = std::string_view())
 
     if ((hex.size() < prefix.size() + 2) || (hex.size() % 2 != 0))
     {
+        // can be 0x
+        if (hex == prefix)
+        {
+            return {};
+        }
         BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "Invalid input hex string size"));
     }
 
@@ -72,6 +71,12 @@ Out fromHex(const Hex& hex, std::string_view prefix = std::string_view())
 
     boost::algorithm::unhex(hex.begin() + prefix.size(), hex.end(), std::back_inserter(out));
     return out;
+}
+
+template <class Hex, class Out = bytes>
+Out fromHexWithPrefix(const Hex& hex)
+{
+    return fromHex(hex, "0x");
 }
 
 /**
@@ -151,26 +156,19 @@ std::shared_ptr<bytes> fromHexString(std::string const& _hexedString);
  * @return false : the input string is not hex string
  */
 bool isHexString(std::string const& _string);
+bool isHexStringV2(std::string const& _string);
+
 
 /// Converts byte array to a string containing the same (binary) data. Unless
 /// the byte array happens to contain ASCII data, this won't be printable.
-inline std::string asString(bytes const& _b)
-{
-    return std::string((char const*)_b.data(), (char const*)(_b.data() + _b.size()));
-}
+std::string asString(bytes const& _b);
 
 /// Converts byte array ref to a string containing the same (binary) data. Unless
 /// the byte array happens to contain ASCII data, this won't be printable.
-inline std::string asString(bytesConstRef _b)
-{
-    return std::string((char const*)_b.data(), (char const*)(_b.data() + _b.size()));
-}
+std::string asString(bytesConstRef _b);
 
 /// Converts a string to a byte array containing the string's (byte) data.
-inline bytes asBytes(std::string const& _b)
-{
-    return bytes((byte const*)_b.data(), (byte const*)(_b.data() + _b.size()));
-}
+bytes asBytes(std::string const& _b);
 
 // Big-endian to/from host endian conversion functions.
 
@@ -204,18 +202,8 @@ inline T fromBigEndian(_In const& _bytes)
     return ret;
 }
 
-inline bytes toBigEndian(u256 _val)
-{
-    bytes ret(32);
-    toBigEndian(_val, ret);
-    return ret;
-}
-inline bytes toBigEndian(u160 _val)
-{
-    bytes ret(20);
-    toBigEndian(_val, ret);
-    return ret;
-}
+bytes toBigEndian(u256 _val);
+bytes toBigEndian(u160 _val);
 
 /// Convenience function for toBigEndian.
 /// @returns a byte array just big enough to represent @a _val.
@@ -226,15 +214,13 @@ inline bytes toCompactBigEndian(T _val, unsigned _min = 0)
         "only unsigned types or bigint supported");  // bigint does not carry sign bit on shift
     unsigned i = 0;
     for (T v = _val; v; ++i, v >>= 8)
-    {}
+    {
+    }
     bytes ret((std::max)(_min, i), 0);
     toBigEndian(_val, ret);
     return ret;
 }
-inline bytes toCompactBigEndian(byte _val, unsigned _min = 0)
-{
-    return (_min || _val) ? bytes{_val} : bytes{};
-}
+inline bytes toCompactBigEndian(byte _val, unsigned _min = 0);
 
 /// Convenience function for toBigEndian.
 /// @returns a string just big enough to represent @a _val.
@@ -245,7 +231,8 @@ inline std::string toCompactBigEndianString(T _val, unsigned _min = 0)
         "only unsigned types or bigint supported");  // bigint does not carry sign bit on shift
     unsigned i = 0;
     for (T v = _val; v; ++i, v >>= 8)
-    {}
+    {
+    }
     std::string ret((std::max)(_min, i), '\0');
     toBigEndian(_val, ret);
     return ret;

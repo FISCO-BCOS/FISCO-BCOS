@@ -107,13 +107,18 @@ bytes ContractABICodec::serialise(const string32& _in)
     return ret;
 }
 
-bytes ContractABICodec::serialise(const bytes& _in)
+bytes ContractABICodec::serialise(bytesConstRef input)
 {
     bytes ret;
-    ret = h256(u256(_in.size())).asBytes();
-    ret.resize(ret.size() + (_in.size() + 31) / MAX_BYTE_LENGTH * MAX_BYTE_LENGTH);
-    bytesConstRef(&_in).populate(bytesRef(&ret).getCroppedData(32));
+    ret = h256(u256(input.size())).asBytes();
+    ret.resize(ret.size() + (input.size() + 31) / MAX_BYTE_LENGTH * MAX_BYTE_LENGTH);
+    input.populate(bytesRef(&ret).getCroppedData(32));
     return ret;
+}
+
+bytes ContractABICodec::serialise(const bytes& _in)
+{
+    return serialise(bytesConstRef(&_in));
 }
 
 // dynamic sized unicode string assumed to be UTF-8 encoded.
@@ -123,6 +128,15 @@ bytes ContractABICodec::serialise(const std::string& _in)
     ret = h256(u256(_in.size())).asBytes();
     ret.resize(ret.size() + (_in.size() + 31) / MAX_BYTE_LENGTH * MAX_BYTE_LENGTH);
     bytesConstRef(&_in).populate(bytesRef(&ret).getCroppedData(32));
+    return ret;
+}
+
+bytes ContractABICodec::serialise(std::string_view _in)
+{
+    bytes ret;
+    ret = h256(u256(_in.size())).asBytes();
+    ret.resize(ret.size() + (_in.size() + 31) / MAX_BYTE_LENGTH * MAX_BYTE_LENGTH);
+    bytesConstRef(_in.data()).populate(bytesRef(&ret).getCroppedData(32));
     return ret;
 }
 

@@ -21,6 +21,7 @@
 #pragma once
 #include "bcos-pbft/pbft/interfaces/PBFTBaseMessageInterface.h"
 #include "bcos-pbft/pbft/protocol/proto/PBFT.pb.h"
+#include "bcos-utilities/Common.h"
 #include <bcos-protocol/Common.h>
 namespace bcos
 {
@@ -31,11 +32,15 @@ class PBFTBaseMessage : virtual public PBFTBaseMessageInterface
 public:
     using Ptr = std::shared_ptr<PBFTBaseMessage>;
     PBFTBaseMessage()
-      : m_baseMessage(std::make_shared<BaseMessage>()), m_signatureData(std::make_shared<bytes>())
+      : m_baseMessage(std::make_shared<BaseMessage>()),
+        m_signatureData(std::make_shared<bytes>()),
+        m_createTime(bcos::utcTime())
     {}
 
     explicit PBFTBaseMessage(std::shared_ptr<BaseMessage> _baseMessage)
-      : m_baseMessage(_baseMessage), m_signatureData(std::make_shared<bytes>())
+      : m_baseMessage(std::move(_baseMessage)),
+        m_signatureData(std::make_shared<bytes>()),
+        m_createTime(bcos::utcTime())
     {
         PBFTBaseMessage::deserializeToObject();
     }
@@ -118,6 +123,14 @@ public:
 
     void setFrom(bcos::crypto::PublicPtr _from) override { m_from = _from; }
     bcos::crypto::PublicPtr from() const override { return m_from; }
+    uint64_t liveTimeInMilliseconds() const override { return bcos::utcTime() - m_createTime; }
+    std::string toDebugString() const override
+    {
+        std::stringstream stringstream;
+        stringstream << LOG_KV("type", m_packetType)
+                     << LOG_KV("fromNode", m_from ? m_from->shortHex() : "null");
+        return stringstream.str();
+    }
 
 protected:
     virtual void deserializeToObject()
@@ -148,6 +161,7 @@ protected:
     bytesPointer m_signatureData;
 
     bcos::crypto::PublicPtr m_from;
+    uint64_t m_createTime = 0;
 };
 }  // namespace consensus
 }  // namespace bcos

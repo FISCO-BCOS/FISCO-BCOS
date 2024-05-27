@@ -1,0 +1,62 @@
+name: Mac CI Check
+on:
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "Changelog.md"
+      - "README.md"
+    branches:
+      - release-3.*
+      - feature-3.*
+      - master
+  release:
+    types: [push]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build_mac:
+    name: mac ci check
+    runs-on: self-hosted-mac3.4
+    strategy:
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          clean: false
+      - name: Set up JDK 1.8
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: 8
+          java-package: jdk
+
+      - name: Remove cache if correspond dir change
+        run: ./tools/.ci/clear_build_cache.sh
+
+      - name: Build for mac
+        run: |
+          mkdir -p build && cd build && rm -rf  CMakeCache.txt
+          cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCOVERAGE=OFF -DVCPKG_HOST_TRIPLET=arm64-osx -DVCPKG_TARGET_TRIPLET=arm64-osx -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON .. || cat *.log
+          cmake --build . --parallel 8
+
+      - name: Test
+        run: |
+          cd build
+          CTEST_OUTPUT_ON_FAILURE=TRUE make test
+          
+      - name: prepare RPCAPI Tests
+        run: cd tools && bash .ci/rpcapi_ci_prepare.sh
+
+      - name: FISCO BCOS RpcApiTest
+        uses: matt-ball/newman-action@v1.0.4
+        with:
+          collection: https://raw.githubusercontent.com/FISCO-BCOS/FISCOBCOS-RPC-API/main/fiscobcos.rpcapi.collection.json
+
+      - name: Integration test - Air
+        run: cd tools && bash .ci/ci_check_air.sh ${{ github.base_ref }}
+
+      - name: Integration test - Pro
+        run: cd tools && bash .ci/ci_check_pro.sh ${{ github.base_ref }}

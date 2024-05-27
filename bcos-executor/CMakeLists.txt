@@ -1,7 +1,5 @@
 cmake_minimum_required(VERSION 3.14)
-set(CMAKE_OSX_DEPLOYMENT_TARGET "12.0" CACHE STRING "Minimum OS X deployment version")
 
-include(Version)
 project(bcos-executor VERSION ${VERSION})
 
 find_package(TBB CONFIG REQUIRED)
@@ -18,13 +16,13 @@ find_package(jsoncpp REQUIRED)
 
 file(GLOB_RECURSE SRCS src/*.cpp)
 add_library(${EXECUTOR_TARGET} ${SRCS})
-target_link_libraries(${EXECUTOR_TARGET} PUBLIC jsoncpp_static ${CODEC_TARGET} ${CRYPTO_TARGET} ${TABLE_TARGET} wedprcrypto::fisco-bcos bcos-protocol
-    Boost::context evmone fbwasm evmc::loader evmc::instructions wabt GroupSig)
-
-# TODO: EXTEND_LIB not support now!
-
-# add_subdirectory(test/trie-test)
-# add_subdirectory(test/flow-graph)
+if(WITH_WASM)
+    target_link_libraries(${EXECUTOR_TARGET} PUBLIC jsoncpp_static ${CODEC_TARGET} ${TOOL_TARGET} ${CRYPTO_TARGET} ${TABLE_TARGET} wedprcrypto::fisco-bcos bcos-protocol
+        Boost::context evmone fbwasm evmc::loader evmc::instructions wabt GroupSig Paillier)
+else()
+    target_link_libraries(${EXECUTOR_TARGET} PUBLIC jsoncpp_static ${CODEC_TARGET} ${TOOL_TARGET} ${CRYPTO_TARGET} ${TABLE_TARGET} wedprcrypto::fisco-bcos bcos-protocol
+        Boost::context evmone evmc::loader evmc::instructions GroupSig Paillier)
+endif()
 
 if (TOOLS)
     add_subdirectory(tools)

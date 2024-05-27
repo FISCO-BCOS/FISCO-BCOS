@@ -1,6 +1,8 @@
 #pragma once
-#include "../Block.h"
+#include "../protocol/Block.h"
 #include "../storage/Storage.h"
+#include <bcos-framework/protocol/Block.h>
+#include <bcos-task/Trait.h>
 #include <bcos-utilities/Ranges.h>
 #include <concepts>
 
@@ -9,7 +11,7 @@ namespace bcos::concepts::ledger
 
 template <class ArgType>
 concept TransactionOrReceipt = bcos::concepts::transaction::Transaction<ArgType> ||
-    bcos::concepts::receipt::TransactionReceipt<ArgType>;
+                               bcos::concepts::receipt::TransactionReceipt<ArgType>;
 
 // clang-format off
 struct DataFlagBase {};
@@ -36,45 +38,57 @@ class LedgerBase
 {
 public:
     template <DataFlag... Flags>
-    void getBlock(bcos::concepts::block::BlockNumber auto blockNumber,
+    auto getBlock(bcos::concepts::block::BlockNumber auto blockNumber,
         bcos::concepts::block::Block auto& block)
     {
-        impl().template impl_getBlock<Flags...>(blockNumber, block);
+        return impl().template impl_getBlock<Flags...>(blockNumber, block);
     }
 
     template <DataFlag... Flags>
-    void setBlock(bcos::concepts::block::Block auto block)
+    auto getBlockByNodeList(bcos::concepts::block::BlockNumber auto blockNumber,
+        bcos::concepts::block::Block auto& block, bcos::crypto::NodeIDs const& nodeList)
     {
-        impl().template impl_setBlock<Flags...>(std::move(block));
+        return impl().template impl_getBlockByNodeList<Flags...>(blockNumber, block, nodeList);
     }
 
-    void getBlockNumberByHash(
+    template <DataFlag... Flags>
+    auto setBlock(bcos::concepts::block::Block auto block)
+    {
+        return impl().template impl_setBlock<Flags...>(std::move(block));
+    }
+
+    auto getBlockNumberByHash(
         bcos::concepts::bytebuffer::ByteBuffer auto const& hash, std::integral auto& number)
     {
-        impl().impl_getBlockNumberByHash(hash, number);
+        return impl().impl_getBlockNumberByHash(hash, number);
     }
 
-    void getBlockHashByNumber(
+    auto getBlockHashByNumber(
         std::integral auto number, bcos::concepts::bytebuffer::ByteBuffer auto& hash)
     {
-        impl().impl_getBlockHashByNumber(number, hash);
+        return impl().impl_getBlockHashByNumber(number, hash);
     }
 
-    void getTransactions(RANGES::range auto const& hashes, RANGES::range auto& out) requires
-        TransactionOrReceipt<RANGES::range_value_t<std::remove_cvref_t<decltype(out)>>>
+    auto getABI(std::string contractAddress) { return impl().impl_getABI(contractAddress); }
+
+
+    auto getTransactions(RANGES::range auto const& hashes, RANGES::range auto& out)
+        requires TransactionOrReceipt<RANGES::range_value_t<std::remove_cvref_t<decltype(out)>>>
     {
-        impl().impl_getTransactions(hashes, out);
+        return impl().impl_getTransactions(hashes, out);
     }
 
-    Status getStatus() { return impl().impl_getStatus(); }
+    auto getStatus() { return impl().impl_getStatus(); }
 
-    template <bcos::crypto::hasher::Hasher Hasher>
-    void setTransactionsOrReceipts(RANGES::range auto const& inputs) requires bcos::concepts::
-        ledger::TransactionOrReceipt<RANGES::range_value_t<std::remove_cvref_t<decltype(inputs)>>>
+    auto getAllPeersStatus() { return impl().impl_getAllPeersStatus(); }
+
+    auto setTransactions(bcos::crypto::hasher::Hasher auto hasher, RANGES::range auto const& inputs)
+        requires bcos::concepts::ledger::TransactionOrReceipt<
+            RANGES::range_value_t<std::remove_cvref_t<decltype(inputs)>>>
     {
-        auto hashesRange = inputs | RANGES::views::transform([](auto const& input) {
-            decltype(input.dataHash) hash(Hasher::HASH_SIZE);
-            bcos::concepts::hash::calculate<Hasher>(input, hash);
+        auto hashesRange = inputs | RANGES::views::transform([&](auto const& input) {
+            bcos::bytes hash;
+            bcos::concepts::hash::calculate(input, hasher.clone(), hash);
             return hash;
         });
         auto buffersRange = inputs | RANGES::views::transform([](auto const& input) {
@@ -85,29 +99,33 @@ public:
 
         constexpr auto isTransaction =
             bcos::concepts::transaction::Transaction<RANGES::range_value_t<decltype(inputs)>>;
-        setTransactionOrReceiptBuffers<isTransaction>(hashesRange, std::move(buffersRange));
+        return setTransactionBuffers<isTransaction>(
+            std::move(hashesRange), std::move(buffersRange));
     }
 
     template <bool isTransaction>
-    void setTransactionOrReceiptBuffers(
-        RANGES::range auto const& hashes, RANGES::range auto buffers)
+    auto setTransactionBuffers(RANGES::range auto hashes, RANGES::range auto buffers)
     {
-        impl().template impl_setTransactionOrReceiptBuffers<isTransaction>(
-            hashes, std::move(buffers));
+        return impl().template impl_setTransactions<isTransaction>(
+            std::move(hashes), std::move(buffers));
     }
 
     template <class LedgerType, bcos::concepts::block::Block BlockType>
-    requires std::derived_from<LedgerType, LedgerBase<LedgerType>> ||
-        std::derived_from<typename LedgerType::element_type,
-            LedgerBase<typename LedgerType::element_type>>
-    void sync(LedgerType& source, bool onlyHeader)
+        requires std::derived_from<LedgerType, LedgerBase<LedgerType>> ||
+                 std::derived_from<typename LedgerType::element_type,
+                     LedgerBase<typename LedgerType::element_type>>
+    auto sync(LedgerType& source, bool onlyHeader)
     {
-        impl().template impl_sync<LedgerType, BlockType>(source, onlyHeader);
+        return impl().template impl_sync<LedgerType, BlockType>(source, onlyHeader);
     }
 
-    void setupGenesisBlock(bcos::concepts::block::Block auto block)
+    auto setupGenesisBlock(bcos::concepts::block::Block auto block)
     {
-        impl().template impl_setupGenesisBlock(std::move(block));
+        return impl().template impl_setupGenesisBlock(std::move(block));
+    }
+    auto checkGenesisBlock(bcos::concepts::block::Block auto block)
+    {
+        return impl().template impl_checkGenesisBlock(std::move(block));
     }
 
 private:
@@ -116,7 +134,11 @@ private:
 };
 
 template <class Impl>
-concept Ledger = std::derived_from<Impl, LedgerBase<Impl>> ||
+concept Ledger =
+    std::derived_from<Impl, LedgerBase<Impl>> ||
     std::derived_from<typename Impl::element_type, LedgerBase<typename Impl::element_type>>;
+
+template <class Impl>
+concept IsLedger = true;
 
 }  // namespace bcos::concepts::ledger

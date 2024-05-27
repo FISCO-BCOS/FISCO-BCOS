@@ -19,9 +19,11 @@
  * @date 2021-04-26
  */
 #pragma once
+#include "BoostLog.h"
 #include "Common.h"
 #include <boost/asio.hpp>
 #include <boost/asio/steady_timer.hpp>
+
 namespace bcos
 {
 class Timer : public std::enable_shared_from_this<Timer>
@@ -46,7 +48,7 @@ public:
                 catch (std::exception const& e)
                 {
                     BCOS_LOG(WARNING) << LOG_DESC("Exception in Worker Thread of timer")
-                                      << LOG_KV("error", boost::diagnostic_information(e));
+                                      << LOG_KV("message", boost::diagnostic_information(e));
                 }
                 m_ioService->reset();
             }

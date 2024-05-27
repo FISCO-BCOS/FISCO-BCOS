@@ -65,7 +65,7 @@ void DmcStepRecorder::recordSends(
     size_t size = message.size();
 
     uint32_t sum = 0;
-#pragma omp parallel for schedule(static, 1000) reduction(+ : sum)
+    // #pragma omp parallel for schedule(static, 1000) reduction(+ : sum)
     for (size_t id = 0; id < size; id++)
     {
         sum += getRecordSum(address, id, message[id]);
@@ -79,7 +79,7 @@ void DmcStepRecorder::recordReceives(
 {
     size_t size = message.size();
     uint32_t sum = 0;
-#pragma omp parallel for schedule(static, 1000) reduction(+ : sum)
+    // #pragma omp parallel for schedule(static, 1000) reduction(+ : sum)
     for (size_t id = 0; id < size; id++)
     {
         sum += getRecordSum(address, id, message[id]);

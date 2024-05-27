@@ -65,8 +65,8 @@ struct TableFixture
     TableFixture()
     {
         hashImpl = make_shared<Header256Hash>();
-        memoryStorage = make_shared<StateStorage>(nullptr);
-        tableFactory = make_shared<StateStorage>(memoryStorage);
+        memoryStorage = make_shared<StateStorage>(nullptr, false);
+        tableFactory = make_shared<StateStorage>(memoryStorage, false);
     }
 
     ~TableFixture() {}
@@ -81,7 +81,7 @@ BOOST_AUTO_TEST_CASE(constructor)
 {
     auto threadPool = ThreadPool("a", 1);
     auto table = std::make_shared<Table>(nullptr, nullptr);
-    auto tableFactory = std::make_shared<StateStorage>(memoryStorage);
+    auto tableFactory = std::make_shared<StateStorage>(nullptr, false);
 }
 
 BOOST_AUTO_TEST_CASE(tableInfo)
@@ -224,9 +224,9 @@ BOOST_AUTO_TEST_CASE(removeFromCache)
     deleteEntry->setStatus(Entry::DELETED);
     BOOST_CHECK_NO_THROW(table->setRow("name", *deleteEntry));
 
-    auto hashs = tableFactory->hash(hashImpl);
+    auto hashs = tableFactory->hash(hashImpl, ledger::Features());
 
-    auto tableFactory2 = std::make_shared<StateStorage>(nullptr);
+    auto tableFactory2 = std::make_shared<StateStorage>(nullptr, false);
     BOOST_CHECK(tableFactory2->createTable(tableName, valueField));
     auto table2 = tableFactory2->openTable(tableName);
     BOOST_TEST(table2);
@@ -234,7 +234,7 @@ BOOST_AUTO_TEST_CASE(removeFromCache)
     auto deleteEntry2 = std::make_optional(table2->newEntry());
     deleteEntry2->setStatus(Entry::DELETED);
     BOOST_CHECK_NO_THROW(table2->setRow("name", *deleteEntry2));
-    auto hashs2 = tableFactory2->hash(hashImpl);
+    auto hashs2 = tableFactory2->hash(hashImpl, ledger::Features());
 
     BOOST_CHECK_EQUAL_COLLECTIONS(hashs.begin(), hashs.end(), hashs2.begin(), hashs2.end());
 }

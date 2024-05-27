@@ -28,6 +28,8 @@
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
+#include <bcos-utilities/BucketMap.h>
+
 
 namespace bcos::scheduler
 {
@@ -35,7 +37,13 @@ class BlockExecutiveFactory
 {
 public:
     using Ptr = std::shared_ptr<BlockExecutiveFactory>;
-    BlockExecutiveFactory(bool isSerialExecute) : m_isSerialExecute(isSerialExecute) {}
+    using ShardCache = bcos::BucketMap<std::string, std::string>;
+
+    BlockExecutiveFactory(bool isSerialExecute, size_t keyPageSize)
+      : m_isSerialExecute(isSerialExecute),
+        m_contract2ShardCache(std::make_shared<ShardCache>(128)),
+        m_keyPageSize(keyPageSize)
+    {}
     virtual ~BlockExecutiveFactory() {}
 
     virtual std::shared_ptr<BlockExecutive> build(bcos::protocol::Block::Ptr block,
@@ -48,9 +56,12 @@ public:
         SchedulerImpl* scheduler, size_t startContextID,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
         bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
-        bcos::txpool::TxPoolInterface::Ptr _txPool, uint64_t _gasLimit, bool _syncBlock);
+        bcos::txpool::TxPoolInterface::Ptr _txPool, uint64_t _gasLimit, std::string _gasPrice,
+        bool _syncBlock);
 
 private:
     bool m_isSerialExecute;
+    std::shared_ptr<ShardCache> m_contract2ShardCache;
+    size_t m_keyPageSize;
 };
 }  // namespace bcos::scheduler

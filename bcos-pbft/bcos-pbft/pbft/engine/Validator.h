@@ -26,16 +26,16 @@
 #include <bcos-framework/protocol/TransactionSubmitResultFactory.h>
 #include <bcos-utilities/ThreadPool.h>
 
-namespace bcos
-{
-namespace consensus
+#include <utility>
+
+namespace bcos::consensus
 {
 class ValidatorInterface
 {
 public:
     using Ptr = std::shared_ptr<ValidatorInterface>;
     ValidatorInterface() = default;
-    virtual ~ValidatorInterface() {}
+    virtual ~ValidatorInterface() = default;
     virtual void verifyProposal(bcos::crypto::PublicPtr _fromNode,
         PBFTProposalInterface::Ptr _proposal,
         std::function<void(Error::Ptr, bool)> _verifyFinishedHandler) = 0;
@@ -47,6 +47,7 @@ public:
 
     virtual void notifyTransactionsResult(
         bcos::protocol::Block::Ptr _block, bcos::protocol::BlockHeader::Ptr _header) = 0;
+
     virtual void updateValidatorConfig(bcos::consensus::ConsensusNodeList const& _consensusNodeList,
         bcos::consensus::ConsensusNodeList const& _observerNodeList) = 0;
 
@@ -64,13 +65,13 @@ public:
     explicit TxsValidator(bcos::txpool::TxPoolInterface::Ptr _txPool,
         bcos::protocol::BlockFactory::Ptr _blockFactory,
         bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory)
-      : m_txPool(_txPool),
-        m_blockFactory(_blockFactory),
-        m_txResultFactory(_txResultFactory),
+      : m_txPool(std::move(_txPool)),
+        m_blockFactory(std::move(_blockFactory)),
+        m_txResultFactory(std::move(_txResultFactory)),
         m_worker(std::make_shared<ThreadPool>("validator", 2))
     {}
 
-    ~TxsValidator() override {}
+    ~TxsValidator() override = default;
 
     void stop() override { m_worker->stop(); }
 
@@ -111,6 +112,7 @@ public:
         auto blockHeader = m_blockFactory->blockHeaderFactory()->createBlockHeader();
         blockHeader->populateEmptyBlock(_index, _sealerId);
         blockHeader->setVersion(_proposalVersion);
+        blockHeader->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
         block->setBlockHeader(blockHeader);
         auto encodedData = std::make_shared<bytes>();
         block->encode(*encodedData);
@@ -185,7 +187,7 @@ protected:
         {
             WriteGuard l(x_resettingProposals);
             m_resettingProposals.erase(_hash);
-            if (m_resettingProposals.size() > 0)
+            if (!m_resettingProposals.empty())
             {
                 return;
             }
@@ -203,7 +205,7 @@ protected:
         }
         auto callback = m_verifyCompletedHook;
         m_verifyCompletedHook = nullptr;
-        auto self = std::weak_ptr<TxsValidator>(shared_from_this());
+        auto self = weak_from_this();
         m_worker->enqueue([self, callback]() {
             auto validator = self.lock();
             if (!validator)
@@ -242,5 +244,4 @@ protected:
     std::function<void()> m_verifyCompletedHook = nullptr;
     mutable RecursiveMutex x_verifyCompletedHook;
 };
-}  // namespace consensus
-}  // namespace bcos
+}  // namespace bcos::consensus

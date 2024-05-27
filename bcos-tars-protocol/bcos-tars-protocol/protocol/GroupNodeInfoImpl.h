@@ -21,7 +21,6 @@
 
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
-
 #include <bcos-framework/gateway/GroupNodeInfo.h>
 #include <bcos-framework/protocol/ProtocolInfo.h>
 #include <bcos-tars-protocol/tars/GatewayInfo.h>
@@ -53,12 +52,17 @@ public:
     {
         m_inner()->nodeIDList = std::move(_nodeIDList);
     }
+    void setNodeTypeList(std::vector<int32_t>&& _nodeTypeList) override
+    {
+        m_inner()->nodeTypeList = std::move(_nodeTypeList);
+    }
     // the groupType
     void setType(uint16_t _type) override { m_inner()->type = _type; }
 
     std::string const& groupID() const override { return m_inner()->groupID; }
     // Note: externally ensure thread safety
     std::vector<std::string> const& nodeIDList() const override { return m_inner()->nodeIDList; }
+    std::vector<int32_t> const& nodeTypeList() const override { return m_inner()->nodeTypeList; }
     int type() const override { return m_inner()->type; }
     void setNodeProtocolList(
         std::vector<bcos::protocol::ProtocolInfo::ConstPtr>&& _protocolList) override

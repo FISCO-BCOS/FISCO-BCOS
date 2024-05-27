@@ -30,12 +30,9 @@
 #include <set>
 #include <string>
 #include <type_traits>
+#include <utility>
 
-namespace bcos
-{
-namespace boostssl
-{
-namespace ws
+namespace bcos::boostssl::ws
 {
 class WsConnector : public std::enable_shared_from_this<WsConnector>
 {
@@ -43,10 +40,10 @@ public:
     using Ptr = std::shared_ptr<WsConnector>;
     using ConstPtr = std::shared_ptr<const WsConnector>;
 
-    WsConnector(std::shared_ptr<boost::asio::ip::tcp::resolver> _resolver) : m_resolver(_resolver)
+    explicit WsConnector(std::shared_ptr<boost::asio::ip::tcp::resolver> _resolver)
+      : m_resolver(std::move(_resolver))
     {}
 
-public:
     /**
      * @brief: connect to the server
      * @param _host: the remote server host, support ipv4, ipv6, domain name
@@ -60,37 +57,41 @@ public:
             std::shared_ptr<WsStreamDelegate>, std::shared_ptr<std::string>)>
             _callback);
 
-public:
     bool erasePendingConns(const std::string& _nodeIPEndpoint)
     {
-        std::lock_guard<std::mutex> l(x_pendingConns);
-        return m_pendingConns.erase(_nodeIPEndpoint);
+        std::lock_guard<std::mutex> lock(x_pendingConns);
+        return m_pendingConns.erase(_nodeIPEndpoint) != 0U;
     }
 
     bool insertPendingConns(const std::string& _nodeIPEndpoint)
     {
-        std::lock_guard<std::mutex> l(x_pendingConns);
-        auto p = m_pendingConns.insert(_nodeIPEndpoint);
-        return p.second;
+        std::lock_guard<std::mutex> lock(x_pendingConns);
+        auto result = m_pendingConns.insert(_nodeIPEndpoint);
+        return result.second;
     }
 
-public:
     void setResolver(std::shared_ptr<boost::asio::ip::tcp::resolver> _resolver)
     {
-        m_resolver = _resolver;
+        m_resolver = std::move(_resolver);
     }
     std::shared_ptr<boost::asio::ip::tcp::resolver> resolver() const { return m_resolver; }
 
-    void setIOServicePool(IOServicePool::Ptr _ioservicePool) { m_ioservicePool = _ioservicePool; }
+    void setIOServicePool(IOServicePool::Ptr _ioservicePool)
+    {
+        m_ioservicePool = std::move(_ioservicePool);
+    }
 
-    void setCtx(std::shared_ptr<boost::asio::ssl::context> _ctx) { m_ctx = _ctx; }
+    void setCtx(std::shared_ptr<boost::asio::ssl::context> _ctx) { m_ctx = std::move(_ctx); }
     std::shared_ptr<boost::asio::ssl::context> ctx() const { return m_ctx; }
 
-    void setBuilder(std::shared_ptr<WsStreamDelegateBuilder> _builder) { m_builder = _builder; }
+    void setBuilder(std::shared_ptr<WsStreamDelegateBuilder> _builder)
+    {
+        m_builder = std::move(_builder);
+    }
     std::shared_ptr<WsStreamDelegateBuilder> builder() const { return m_builder; }
 
     std::string moduleName() { return m_moduleName; }
-    void setModuleName(std::string _moduleName) { m_moduleName = _moduleName; }
+    void setModuleName(std::string _moduleName) { m_moduleName = std::move(_moduleName); }
 
 private:
     std::shared_ptr<WsStreamDelegateBuilder> m_builder;
@@ -103,6 +104,4 @@ private:
     std::string m_moduleName = "DEFAULT";
     IOServicePool::Ptr m_ioservicePool;
 };
-}  // namespace ws
-}  // namespace boostssl
-}  // namespace bcos
+}  // namespace bcos::boostssl::ws

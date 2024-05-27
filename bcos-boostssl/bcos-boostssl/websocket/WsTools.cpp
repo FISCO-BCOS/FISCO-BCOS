@@ -26,47 +26,92 @@ using namespace bcos;
 using namespace bcos::boostssl;
 using namespace bcos::boostssl::ws;
 
-bool WsTools::stringToEndPoint(const std::string& _peer, NodeIPEndpoint& _endpoint)
+bool WsTools::hostAndPort2Endpoint(const std::string& _host, NodeIPEndpoint& _endpoint)
 {
-    // ipv4: 127.0.0.1:12345 => NodeIPEndpoint
-    // ipv6: [0:1]:12345 => NodeIPEndpoint
-
     std::string ip;
     uint16_t port = 0;
-    bool valid = false;
 
-    std::vector<std::string> s;
-    boost::split(s, _peer, boost::is_any_of("]"), boost::token_compress_on);
-    if (s.size() == 2)
-    {  // ipv6
-        ip = s[0].data() + 1;
-        port = boost::lexical_cast<int>(s[1].data() + 1);
-        valid = true;
-    }
-    else if (s.size() == 1)
-    {  // ipv4
-        std::vector<std::string> v;
-        boost::split(v, _peer, boost::is_any_of(":"), boost::token_compress_on);
-        ip = v[0];
-        port = boost::lexical_cast<uint16_t>(v[1]);
-        valid = true;
-    }
-
-    valid = validIP(ip) && validPort(port);
-
-    if (!valid)
+    std::vector<std::string> result;
+    try
     {
-        WEBSOCKET_TOOL(WARNING) << LOG_DESC("peer is not valid ip:port format")
-                                << LOG_KV("peer", _peer);
+        boost::split(result, _host, boost::is_any_of("]"), boost::token_compress_on);
+        if (result.size() == 2)
+        {  // ipv6 format is [IP]:Port
+            ip = result[0].substr(1);
+            int tempPort = std::stoi(result[1].substr(1));
+            if (tempPort < 0 || tempPort > UINT16_MAX)
+            {
+                return false;
+            }
+            port = static_cast<uint16_t>(tempPort);
+        }
+        else if (result.size() == 1)
+        {  // ipv4 format is IP:Port
+            std::vector<std::string> v;
+            boost::split(v, _host, boost::is_any_of(":"), boost::token_compress_on);
+            if (v.size() < 2)
+            {
+                return false;
+            }
+            ip = v[0];
+            int tempPort = std::stoi(v[1]);
+            if (tempPort < 0 || tempPort > UINT16_MAX)
+            {
+                return false;
+            }
+            port = static_cast<uint16_t>(tempPort);
+        }
+        else
+        {
+            return false;
+        }
     }
-
-    if (valid)
+    catch (...)
     {
-        _endpoint = NodeIPEndpoint(ip, port);
+        return false;
     }
 
-    return valid;
+    if (!validPort(port))
+    {
+        return false;
+    }
+
+    boost::system::error_code ec;
+    boost::asio::ip::address ip_address;
+    // ip
+    if (isIPAddress(ip))
+    {
+        ip_address = boost::asio::ip::make_address(ip, ec);
+    }
+    // hostname
+    else if (isHostname(ip))
+    {
+        boost::asio::io_context io_context;
+        boost::asio::ip::tcp::resolver resolver(io_context);
+        boost::asio::ip::tcp::resolver::query query(boost::asio::ip::tcp::v4(), ip, "80");
+        boost::asio::ip::tcp::resolver::results_type results = resolver.resolve(query, ec);
+        if (!ec)
+        {
+            ip_address = results.begin()->endpoint().address();
+        }
+        else
+        {
+            return false;
+        }
+    }
+    else
+    {
+        return false;
+    }
+    if (ec.value() != 0)
+    {
+        return false;
+    }
+
+    _endpoint = NodeIPEndpoint{ip_address, port};
+    return true;
 }
+
 
 void WsTools::close(boost::asio::ip::tcp::socket& _socket)
 {
@@ -82,6 +127,6 @@ void WsTools::close(boost::asio::ip::tcp::socket& _socket)
     catch (std::exception const& e)
     {
         WEBSOCKET_TOOL(WARNING) << LOG_DESC("WsTools close exception")
-                                << LOG_KV("error", boost::diagnostic_information(e));
+                                << LOG_KV("message", boost::diagnostic_information(e));
     }
 }
