@@ -5,6 +5,10 @@ on:
       - "docs/**"
       - "Changelog.md"
       - "README.md"
+    branches:
+      - release-3.*
+      - feature-*
+      - master
   release:
     types: [push]
 concurrency:
