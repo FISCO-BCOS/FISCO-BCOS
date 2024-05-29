@@ -138,7 +138,7 @@ protected:
             auto [compatibilityVersionStr, _] = entry->template getObject<SystemConfigEntry>();
             auto const version = bcos::tool::toVersionNumber(compatibilityVersionStr);
             auto stateStorage = stateStorageFactory.createStateStorage(
-                m_storage, version, true, false, std::move(keyPageIgnoreTables));
+                m_storage, version, true, false, keyPageIgnoreTables);
             return stateStorage;
         }
         return std::make_shared<bcos::storage::StateStorage>(m_storage, true);
