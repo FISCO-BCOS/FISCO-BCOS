@@ -287,6 +287,8 @@ ETH_REGISTER_PRECOMPILED_PRICER(blake2_compression)
     return rounds;
 }
 
+// The precompiled contract for point evaluation, EIP-4844:
+// https://eips.ethereum.org/EIPS/eip-4844#point-evaluation-precompile
 ETH_REGISTER_PRECOMPILED(point_evaluation)(bytesConstRef _in)
 {
     static constexpr size_t versioned_hash_size = 32;
@@ -319,6 +321,10 @@ ETH_REGISTER_PRECOMPILED(point_evaluation)(bytesConstRef _in)
         return {false, {}};
     }
 
+    // Return FIELD_ELEMENTS_PER_BLOB and BLS_MODULUS as padded 32 byte big endian values
+    // return turn and Bytes(U256(FIELD_ELEMENTS_PER_BLOB).to_be_bytes32() +
+    // U256(BLS_MODULUS).to_be_bytes32()) refer to
+    // https://github.com/erigontech/silkworm/blob/85ba5171e88855a6702602d38f102aae9b896f9c/silkworm/core/execution/precompile.cpp#L502-L524
     return {true,
         *bcos::fromHexString("000000000000000000000000000000000000000000000000000000000000100073eda"
                              "753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001")};
