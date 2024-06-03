@@ -446,9 +446,10 @@ void BlockSync::onPeerBlocks(NodeIDPtr _nodeID, BlockSyncMsgInterface::Ptr _sync
 {
     auto number = _syncMsg->number();
     auto blockMsg = m_config->msgFactory()->createBlocksMsg(std::move(_syncMsg));
-    BLKSYNC_LOG(DEBUG) << LOG_BADGE("Download") << BLOCK_NUMBER(number) << LOG_BADGE("BlockSync")
-                       << LOG_DESC("Receive peer block packet")
-                       << LOG_KV("peer", _nodeID->shortHex());
+    BLKSYNC_LOG(INFO) << LOG_BADGE("Download") << BLOCK_NUMBER(number) << LOG_BADGE("BlockSync")
+                      << LOG_DESC("Receive peer block packet")
+                      << LOG_KV("peer", _nodeID->shortHex())
+                      << LOG_KV("blkSize", blockMsg->blocksSize());
     m_downloadingQueue->push(blockMsg);
     m_signalled.notify_all();
 }
