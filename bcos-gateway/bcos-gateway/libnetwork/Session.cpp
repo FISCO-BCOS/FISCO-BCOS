@@ -530,9 +530,9 @@ void Session::doRead()
             {
                 if (ec)
                 {
-                    SESSION_LOG(INFO)
-                        << LOG_DESC("doRead error") << LOG_KV("endpoint", session->nodeIPEndpoint())
-                        << LOG_KV("message", ec.message());
+                    SESSION_LOG(INFO) << LOG_DESC("doRead failed")
+                                      << LOG_KV("endpoint", session->nodeIPEndpoint())
+                                      << LOG_KV("message", ec.message());
                     session->drop(TCPError);
                     return;
                 }
