@@ -31,9 +31,9 @@
 #include <string>
 #include <utility>
 
-inline void CHECK_OFFSET(uint16_t offset, uint16_t length)
+inline void CHECK_OFFSET(std::unsigned_integral auto offset, std::unsigned_integral auto length)
 {
-    if (offset > length)
+    if (std::cmp_greater(offset, length))
     {
         throw std::out_of_range("Out of range error, offset:" + std::to_string(offset) +
                                 " ,length: " + std::to_string(length));

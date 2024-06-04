@@ -158,10 +158,11 @@ void WsSession::onWsAccept(boost::beast::error_code _ec)
 
 void WsSession::onReadPacket(boost::beast::flat_buffer& _buffer)
 {
+    uint64_t size = 0;
     try
     {
         auto* data = boost::asio::buffer_cast<byte*>(boost::beast::buffers_front(_buffer.data()));
-        auto size = boost::asio::buffer_size(m_buffer.data());
+        size = boost::asio::buffer_size(m_buffer.data());
 
         auto message = m_messageFactory->buildMessage();
         if (message->decode(bytesConstRef(data, size)) < 0)
@@ -177,12 +178,8 @@ void WsSession::onReadPacket(boost::beast::flat_buffer& _buffer)
     }
     catch (std::exception const& e)
     {
-        auto* data = boost::asio::buffer_cast<byte*>(boost::beast::buffers_front(_buffer.data()));
-        auto size = boost::asio::buffer_size(m_buffer.data());
-        bytesConstRef ref(data, size);
         WEBSOCKET_SESSION(WARNING)
-            << LOG_DESC("onReadPacket: decode message exception")
-            << LOG_KV("buffer", ref.toStringView()) << LOG_KV("bufHex", toHex(ref))
+            << LOG_DESC("onReadPacket: decode message exception") << LOG_KV("bufSize", size)
             << LOG_KV("message", boost::diagnostic_information(e));
     }
 }
