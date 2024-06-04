@@ -22,6 +22,7 @@
 #include <bcos-boostssl/websocket/WsSession.h>
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <boost/beast/websocket/rfc6455.hpp>
 #include <boost/beast/websocket/stream.hpp>
@@ -157,10 +158,11 @@ void WsSession::onWsAccept(boost::beast::error_code _ec)
 
 void WsSession::onReadPacket(boost::beast::flat_buffer& _buffer)
 {
+    uint64_t size = 0;
     try
     {
         auto* data = boost::asio::buffer_cast<byte*>(boost::beast::buffers_front(_buffer.data()));
-        auto size = boost::asio::buffer_size(m_buffer.data());
+        size = boost::asio::buffer_size(m_buffer.data());
 
         auto message = m_messageFactory->buildMessage();
         if (message->decode(bytesConstRef(data, size)) < 0)
@@ -176,8 +178,9 @@ void WsSession::onReadPacket(boost::beast::flat_buffer& _buffer)
     }
     catch (std::exception const& e)
     {
-        WEBSOCKET_SESSION(WARNING) << LOG_DESC("onReadPacket: decode message exception")
-                                   << LOG_KV("message", boost::diagnostic_information(e));
+        WEBSOCKET_SESSION(WARNING)
+            << LOG_DESC("onReadPacket: decode message exception") << LOG_KV("bufSize", size)
+            << LOG_KV("message", boost::diagnostic_information(e));
     }
 }
 

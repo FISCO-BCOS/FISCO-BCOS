@@ -53,7 +53,7 @@ bool WsMessage::encode(bytes& _buffer)
 
 int64_t WsMessage::decode(bytesConstRef _buffer)
 {
-    auto length = _buffer.size();
+    uint64_t length = _buffer.size();
     if (length < MESSAGE_MIN_LENGTH)
     {
         return -1;
@@ -64,7 +64,7 @@ int64_t WsMessage::decode(bytesConstRef _buffer)
 
     auto dataBuffer = _buffer.data();
     auto p = _buffer.data();
-    size_t offset = 0;
+    uint64_t offset = 0;
 
     // version field
     m_version = boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)p));
