@@ -58,5 +58,11 @@ public:
     virtual bool faultyNode(bcos::crypto::NodeIDPtr _nodeID) = 0;
 
     virtual bool isSyncing() const { return false; }
+
+    virtual std::optional<std::tuple<bcos::protocol::BlockNumber, bcos::protocol::BlockNumber>>
+    getSyncStatus() const
+    {
+        return std::nullopt;
+    }
 };
 }  // namespace bcos::sync

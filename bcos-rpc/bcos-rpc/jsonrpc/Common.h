@@ -144,7 +144,7 @@ inline void nodeInfoToJson(Json::Value& _response, bcos::group::ChainNodeInfo::P
     {
         supportConfig.append(config);
     }
-    _response["supportConfig"] = std::move(supportConfig);
+    _response["supportConfigs"] = std::move(supportConfig);
     _response["protocol"] = protocolResponse;
 }
 

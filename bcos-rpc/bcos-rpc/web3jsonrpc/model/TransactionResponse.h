@@ -116,12 +116,42 @@ static void combineTxResponse(Json::Value& result, bcos::protocol::Transaction::
         result["nonce"] = toQuantity(web3Tx.nonce);
         result["type"] = toQuantity(static_cast<uint8_t>(web3Tx.type));
         result["value"] = toQuantity(web3Tx.value);
+        if (web3Tx.type >= TransactionType::EIP2930)
+        {
+            result["accessList"] = Json::arrayValue;
+            result["accessList"].resize(web3Tx.accessList.size());
+            for (size_t i = 0; i < web3Tx.accessList.size(); i++)
+            {
+                auto& accessList = web3Tx.accessList[i];
+                Json::Value access = Json::objectValue;
+                access["address"] = accessList.account.hexPrefixed();
+                access["storageKeys"] = Json::arrayValue;
+                access["storageKeys"].resize(accessList.storageKeys.size());
+                for (size_t j = 0; j < accessList.storageKeys.size(); j++)
+                {
+                    Json::Value storageKey = accessList.storageKeys[j].hexPrefixed();
+                    access["storageKeys"].append(std::move(storageKey));
+                }
+                result["accessList"].append(std::move(access));
+            }
+        }
         if (web3Tx.type >= TransactionType::EIP1559)
         {
             result["maxPriorityFeePerGas"] = toQuantity(web3Tx.maxPriorityFeePerGas);
             result["maxFeePerGas"] = toQuantity(web3Tx.maxFeePerGas);
         }
         result["chainId"] = toQuantity(web3Tx.chainId.value_or(0));
+        if (web3Tx.type >= TransactionType::EIP4844)
+        {
+            result["maxFeePerBlobGas"] = web3Tx.maxFeePerBlobGas.str();
+            result["blobVersionedHashes"] = Json::arrayValue;
+            result["blobVersionedHashes"].resize(web3Tx.blobVersionedHashes.size());
+            for (size_t i = 0; i < web3Tx.blobVersionedHashes.size(); i++)
+            {
+                Json::Value hash = web3Tx.blobVersionedHashes[i].hexPrefixed();
+                result["blobVersionedHashes"].append(std::move(hash));
+            }
+        }
     }
     result["r"] = toQuantity(tx->signatureData().getCroppedData(0, 32));
     result["s"] = toQuantity(tx->signatureData().getCroppedData(32, 32));
