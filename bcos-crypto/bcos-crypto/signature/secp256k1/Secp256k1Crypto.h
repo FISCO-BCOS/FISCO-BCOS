@@ -24,6 +24,7 @@
 
 namespace bcos::crypto
 {
+constexpr uint16_t SECP256K1_SIGNATURE_R_LEN = 32;
 const int SECP256K1_SIGNATURE_LEN = 65;
 const int SECP256K1_UNCOMPRESS_PUBLICKEY_LEN = 65;
 const int SECP256K1_PUBLICKEY_LEN = 64;

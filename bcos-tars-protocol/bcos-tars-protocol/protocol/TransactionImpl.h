@@ -89,6 +89,9 @@ public:
     std::string_view extraData() const override;
     void setExtraData(std::string const& _extraData) override;
 
+    uint8_t type() const override;
+    bcos::bytesConstRef extraTransactionBytes() const override;
+
     const bcostars::Transaction& inner() const;
     bcostars::Transaction& mutableInner();
     void setInner(bcostars::Transaction inner);

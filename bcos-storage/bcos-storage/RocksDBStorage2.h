@@ -404,7 +404,7 @@ public:
 
     friend task::AwaitableValue<Iterator> tag_invoke(
         bcos::storage2::tag_t<storage2::range> /*unused*/, RocksDBStorage2& storage,
-        auto&& startKey)
+        storage2::RANGE_SEEK_TYPE /*unused*/, auto&& startKey)
     {
         auto encodedKey = storage.m_keyResolver.encode(startKey);
         ::rocksdb::Slice slice(RANGES::data(encodedKey), RANGES::size(encodedKey));
