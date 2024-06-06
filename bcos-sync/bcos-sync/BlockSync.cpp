@@ -292,6 +292,16 @@ bool BlockSync::isSyncing() const
     return (m_state == SyncState::Downloading);
 }
 
+std::optional<std::tuple<bcos::protocol::BlockNumber, bcos::protocol::BlockNumber>>
+BlockSync::getSyncStatus() const
+{
+    if (!isSyncing())
+    {
+        return std::nullopt;
+    }
+    return std::make_tuple(m_config->blockNumber(), m_config->knownHighestNumber());
+}
+
 void BlockSync::maintainDownloadingBuffer()
 {
     if (m_downloadingQueue->size() == 0)

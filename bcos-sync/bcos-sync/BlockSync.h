@@ -91,6 +91,9 @@ public:
 
     bool isSyncing() const override;
 
+    virtual std::optional<std::tuple<bcos::protocol::BlockNumber, bcos::protocol::BlockNumber>>
+    getSyncStatus() const override;
+
 protected:
     virtual void asyncNotifyBlockSyncMessage(Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,
         bytesConstRef _data, std::function<void(bytesConstRef)> _sendResponse,
