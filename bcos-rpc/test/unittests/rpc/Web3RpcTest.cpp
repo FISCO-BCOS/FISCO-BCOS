@@ -343,6 +343,7 @@ BOOST_AUTO_TEST_CASE(handleEIP1559TxTest)
                        Web3TestFixture* self, decltype(hashes) m_hashes) -> task::Task<void> {
             auto txs = co_await self->txPool->getTransactions(m_hashes);
             BOOST_CHECK(txs.size() == 1);
+            BOOST_CHECK(txs[0] != nullptr);
             BOOST_CHECK(txs[0]->hash() == m_hashes[0]);
             BOOST_CHECK(txs[0]->type() == 1);
             BOOST_CHECK(!txs[0]->extraTransactionBytes().empty());

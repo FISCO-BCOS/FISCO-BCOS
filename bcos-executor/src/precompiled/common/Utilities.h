@@ -89,6 +89,8 @@ inline std::string getDynamicPrecompiledCodeString(
 
 inline bool isDynamicPrecompiledAccountCode(const std::string_view& _code)
 {
+    // FIXME)): fix here, use bugfix
+    // return _code.starts_with(getDynamicPrecompiledCodeString(ACCOUNT_ADDRESS, ""));
     return std::string_view(getDynamicPrecompiledCodeString(ACCOUNT_ADDRESS, "")) == _code;
 }
 
