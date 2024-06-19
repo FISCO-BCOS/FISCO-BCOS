@@ -294,6 +294,7 @@ bcos::Error::UniquePtr decode(bcos::bytesRef& in, Web3Transaction& out) noexcept
     {
         return BCOS_ERROR_UNIQUE_PTR(InputTooShort, "Input too short");
     }
+    Error::UniquePtr decodeError = nullptr;
     if (auto const& firstByte = in[0]; 0 < firstByte && firstByte < BYTES_HEAD_BASE)
     {
         // EIP-2718: Transaction Type
@@ -350,51 +351,60 @@ bcos::Error::UniquePtr decode(bcos::bytesRef& in, Web3Transaction& out) noexcept
             }
         }
 
-        return decodeItems(in, out.signatureV, out.signatureR, out.signatureS);
+        decodeError = decodeItems(in, out.signatureV, out.signatureR, out.signatureS);
     }
-    // rlp([nonce, gasPrice, gasLimit, to, value, data, v, r, s])
-    auto&& [error, header] = decodeHeader(in);
-    if (error != nullptr)
+    else
     {
-        return std::move(error);
+        // rlp([nonce, gasPrice, gasLimit, to, value, data, v, r, s])
+        auto&& [error, header] = decodeHeader(in);
+        if (error != nullptr)
+        {
+            return std::move(error);
+        }
+        if (!header.isList)
+        {
+            return BCOS_ERROR_UNIQUE_PTR(UnexpectedList, "Unexpected list");
+        }
+        out.type = TransactionType::Legacy;
+        decodeError = decodeItems(in, out.nonce, out.maxPriorityFeePerGas, out.gasLimit, out.to,
+            out.value, out.data, out.signatureV, out.signatureR, out.signatureS);
+        out.maxFeePerGas = out.maxPriorityFeePerGas;
+        // TODO: EIP-155 chainId decode from encoded bytes for sign
+        auto v = out.signatureV;
+        if (v == 27 || v == 28)
+        {
+            // pre EIP-155
+            out.chainId = std::nullopt;
+            out.signatureV = v - 27;
+        }
+        else if (v == 0 || v == 1)
+        {
+            out.chainId = std::nullopt;
+            return decodeError;
+        }
+        else if (v < 35)
+        {
+            return BCOS_ERROR_UNIQUE_PTR(InvalidVInSignature, "Invalid V in signature");
+        }
+        else
+        {
+            // https://eips.ethereum.org/EIPS/eip-155
+            // Find chain_id and y_parity ∈ {0, 1} such that
+            // v = chain_id * 2 + 35 + y_parity
+            out.signatureV = (v - 35) % 2;
+            out.chainId = ((v - 35) >> 1);
+        }
     }
-    if (!header.isList)
-    {
-        return BCOS_ERROR_UNIQUE_PTR(UnexpectedList, "Unexpected list");
-    }
-    out.type = TransactionType::Legacy;
-    auto decodeError = decodeItems(in, out.nonce, out.maxPriorityFeePerGas, out.gasLimit, out.to,
-        out.value, out.data, out.signatureV, out.signatureR, out.signatureS);
-    if (out.signatureR.size() < crypto::SECP256K1_SIGNATURE_LEN / 2)
+    // rehandle signature and chainId
+    if (out.signatureR.size() < crypto::SECP256K1_SIGNATURE_R_LEN)
     {
         out.signatureR.insert(
             out.signatureR.begin(), crypto::SECP256K1_SIGNATURE_R_LEN - out.signatureR.size(), 0);
     }
-    if (out.signatureS.size() < crypto::SECP256K1_SIGNATURE_LEN / 2)
+    if (out.signatureS.size() < crypto::SECP256K1_SIGNATURE_S_LEN)
     {
         out.signatureS.insert(out.signatureS.begin(),
-            crypto::SECP256K1_SIGNATURE_R_LEN - out.signatureS.size(), bcos::byte(0));
-    }
-    // TODO: EIP-155 chainId decode from encoded bytes for sign
-    out.maxFeePerGas = out.maxPriorityFeePerGas;
-    auto v = out.signatureV;
-    if (v == 27 || v == 28)
-    {
-        // pre EIP-155
-        out.chainId = std::nullopt;
-        out.signatureV = v - 27;
-    }
-    else if (v < 35)
-    {
-        return BCOS_ERROR_UNIQUE_PTR(InvalidVInSignature, "Invalid V in signature");
-    }
-    else
-    {
-        // https://eips.ethereum.org/EIPS/eip-155
-        // Find chain_id and y_parity ∈ {0, 1} such that
-        // v = chain_id * 2 + 35 + y_parity
-        out.signatureV = (v - 35) % 2;
-        out.chainId = ((v - 35) >> 1);
+            crypto::SECP256K1_SIGNATURE_S_LEN - out.signatureS.size(), bcos::byte(0));
     }
     return decodeError;
 }
