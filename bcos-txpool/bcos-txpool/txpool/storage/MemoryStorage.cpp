@@ -412,6 +412,8 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
     m_inRateCollector.update(1, true);
     if (result == TransactionStatus::None)
     {
+        auto const txImportTime = transaction->importTime();
+        auto const txHash = transaction->hash().hex();
         if (txSubmitCallback)
         {
             transaction->setSubmitCallback(std::move(txSubmitCallback));
@@ -423,6 +425,11 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
         else
         {
             result = insertWithoutLock(std::move(transaction));
+        }
+        if (c_fileLogLevel == TRACE)
+        {
+            TXPOOL_LOG(TRACE) << LOG_DESC("submitTxTime") << LOG_KV("txHash", txHash)
+                              << LOG_KV("insertTime", utcTime() - txImportTime);
         }
     }
 
@@ -1201,6 +1208,7 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::Ptr _block)
                         << LOG_DESC("batchVerifyProposal unexpected wrong tx")
                         << LOG_KV("blkNum", header->number())
                         << LOG_KV("blkHash", header->hash().abridged())
+                        << LOG_KV("txHash", accessor->value()->hash().hexPrefixed())
                         << LOG_KV("txBatchId", accessor->value()->batchId())
                         << LOG_KV("txBatchHash", accessor->value()->batchHash().abridged());
                     // NOTE: In certain scenarios, a bug may occur here: The leader generates the
