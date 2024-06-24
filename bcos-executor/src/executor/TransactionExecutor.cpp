@@ -641,7 +641,7 @@ void TransactionExecutor::dmcCall(bcos::protocol::ExecutionMessage::UniquePtr in
         auto storage = createStateStorage(std::move(prev), true, false);
 
         // Create a temp block context
-        blockContext = createBlockContextForCall(m_lastCommittedBlockNumber + 1, h256(),
+        blockContext = createBlockContextForCall(m_lastCommittedBlockNumber, h256(),
             m_lastCommittedBlockTimestamp, m_blockVersion, std::move(storage));
 
         auto inserted = m_calledContext->emplace(
@@ -811,7 +811,7 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
             createStateStorage(std::move(prev), true, false /*call storage no need set flag*/);
 
         // Create a temp block context
-        blockContext = createBlockContextForCall(m_lastCommittedBlockNumber + 1, h256(),
+        blockContext = createBlockContextForCall(m_lastCommittedBlockNumber, h256(),
             m_lastCommittedBlockTimestamp, m_blockVersion, std::move(storage));
 
         auto inserted = m_calledContext->emplace(
