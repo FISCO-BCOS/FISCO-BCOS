@@ -207,8 +207,8 @@ public:
         const evmc_address& origin, std::string_view abi, int contextID, int64_t& seq,
         PrecompiledManager const& precompiledManager, ledger::LedgerConfig const& ledgerConfig,
         crypto::Hash const& hashImpl, auto&& waitOperator)
-      : HostContext(innerConstructor, storage, blockHeader, message, origin, abi, contextID, seq,
-            precompiledManager, ledgerConfig, hashImpl,
+      : HostContext(innerConstructor, storage, transientStorage, blockHeader, message, origin, abi,
+            contextID, seq, precompiledManager, ledgerConfig, hashImpl,
             getHostInterface<HostContext>(std::forward<decltype(waitOperator)>(waitOperator)))
     {}
 
@@ -230,7 +230,7 @@ public:
 
     task::Task<evmc_bytes32> getTransientStorage(const evmc_bytes32* key)
     {
-        auto valueEntry = co_await storage2::readOne(m_rollbackableTransientStorage,
+        auto valueEntry = co_await storage2::readOne(m_rollbackableTransientStorage.get(),
             transaction_executor::StateKeyView{
                 concepts::bytebuffer::toView(co_await ledger::account::path(m_myAccount)),
                 concepts::bytebuffer::toView(key->bytes)});
@@ -265,7 +265,7 @@ public:
                                     << LOG_KV("key", concepts::bytebuffer::toView(key->bytes));
         }
         co_await storage2::writeOne(
-            m_rollbackableTransientStorage, stateKey, std::move(valueEntry));
+            m_rollbackableTransientStorage.get(), stateKey, std::move(valueEntry));
     }
 
     task::Task<std::optional<storage::Entry>> code(const evmc_address& address)
