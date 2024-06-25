@@ -77,7 +77,8 @@ public:
     Web3Transaction& operator=(const Web3Transaction&) = delete;
     Web3Transaction& operator=(Web3Transaction&&) = default;
 
-    bcos::bytes encode() const;
+    // encode for sign, rlp(tx_payload)
+    bcos::bytes encodeForSign() const;
     // tx hash = keccak256(rlp(tx_payload,v,r,s))
     bcos::crypto::HashType txHash() const;
     // hash for sign = keccak256(rlp(tx_payload))
@@ -101,7 +102,7 @@ public:
         sign.insert(sign.end(), signatureS.begin(), signatureS.end());
         sign.push_back(signatureV);
         bcos::crypto::Keccak256 hashImpl;
-        auto encodeForSign = encode();
+        auto encodeForSign = this->encodeForSign();
         auto hash = bcos::crypto::keccak256Hash(ref(encodeForSign));
         const bcos::crypto::Secp256k1Crypto signatureImpl;
         auto [_, addr] = signatureImpl.recoverAddress(hashImpl, hash, ref(sign));
@@ -159,5 +160,6 @@ Header header(const rpc::Web3Transaction& tx) noexcept;
 void encode(bcos::bytes& out, const rpc::Web3Transaction&) noexcept;
 bcos::Error::UniquePtr decode(bcos::bytesRef& in, rpc::AccessListEntry&) noexcept;
 bcos::Error::UniquePtr decode(bcos::bytesRef& in, rpc::Web3Transaction&) noexcept;
+bcos::Error::UniquePtr decodeFromPayload(bcos::bytesRef& in, rpc::Web3Transaction&) noexcept;
 }  // namespace codec::rlp
 }  // namespace bcos

@@ -112,7 +112,7 @@ static void combineTxResponse(Json::Value& result, bcos::protocol::Transaction::
         Web3Transaction web3Tx;
         auto extraBytesRef = bcos::bytesRef(const_cast<byte*>(tx->extraTransactionBytes().data()),
             tx->extraTransactionBytes().size());
-        codec::rlp::decode(extraBytesRef, web3Tx);
+        codec::rlp::decodeFromPayload(extraBytesRef, web3Tx);
         result["nonce"] = toQuantity(web3Tx.nonce);
         result["type"] = toQuantity(static_cast<uint8_t>(web3Tx.type));
         result["value"] = toQuantity(web3Tx.value);

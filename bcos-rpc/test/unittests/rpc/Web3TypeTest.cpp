@@ -198,7 +198,7 @@ BOOST_AUTO_TEST_CASE(recoverAddress)
     auto rawTx2 = toHexStringWithPrefix(encoded);
     BOOST_CHECK_EQUAL(rawTx, rawTx2);
 
-    auto encodeForSign = tx.encode();
+    auto encodeForSign = tx.encodeForSign();
     bcos::bytes sign{};
     sign.insert(sign.end(), tx.signatureR.begin(), tx.signatureR.end());
     sign.insert(sign.end(), tx.signatureS.begin(), tx.signatureS.end());
@@ -243,7 +243,7 @@ BOOST_AUTO_TEST_CASE(EIP1559Recover)
     auto rawTx2 = toHexStringWithPrefix(encoded);
     BOOST_CHECK_EQUAL(rawTx, rawTx2);
 
-    auto encodeForSign = tx.encode();
+    auto encodeForSign = tx.encodeForSign();
     bcos::bytes sign{};
     sign.insert(sign.end(), tx.signatureR.begin(), tx.signatureR.end());
     sign.insert(sign.end(), tx.signatureS.begin(), tx.signatureS.end());
@@ -316,7 +316,7 @@ BOOST_AUTO_TEST_CASE(EIP4844Recover)
     auto rawTx2 = toHexStringWithPrefix(encoded);
     BOOST_CHECK_EQUAL(rawTx, rawTx2);
 
-    auto encodeForSign = tx.encode();
+    auto encodeForSign = tx.encodeForSign();
     bcos::bytes sign{};
     sign.insert(sign.end(), tx.signatureR.begin(), tx.signatureR.end());
     sign.insert(sign.end(), tx.signatureS.begin(), tx.signatureS.end());
