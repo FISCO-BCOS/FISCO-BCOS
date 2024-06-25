@@ -27,73 +27,83 @@ using namespace bcos::rpc;
 
 void FilterRequest::fromJson(const Json::Value& jParams, protocol::BlockNumber latest)
 {
-    // default: LatestBlockNumber
-    m_fromBlock = latest;
-    if (jParams.isMember("fromBlock") && !jParams["fromBlock"].isNull())
+    // check params
+    if (!jParams.isMember("fromBlock") || jParams["fromBlock"].isNull())
     {
-        std::tie(m_fromBlock, m_fromIsLatest) =
-            getBlockNumberByTag(latest, jParams["fromBlock"].asString());
+        FILTER_LOG(ERROR) << LOG_BADGE("fromJson") << LOG_DESC("fromBlock is null");
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParamsCode(), "fromBlock is null"));
     }
 
-    // default: LatestBlockNumber
-    m_toBlock = latest;
-    if (jParams.isMember("toBlock") && !jParams["toBlock"].isNull())
+    if (!jParams.isMember("toBlock") || jParams["toBlock"].isNull())
     {
-        std::tie(m_toBlock, m_toIsLatest) =
-            getBlockNumberByTag(latest, jParams["toBlock"].asString());
+        FILTER_LOG(ERROR) << LOG_BADGE("fromJson") << LOG_DESC("toBlock is null");
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParamsCode(), "toBlock is null"));
     }
 
-    if (jParams.isMember("address") && !jParams["address"].isNull())
+    if (!jParams.isMember("address") || jParams["address"].isNull())
     {
-        auto& jAddresses = jParams["address"];
-        if (jAddresses.isArray())
+        FILTER_LOG(ERROR) << LOG_BADGE("fromJson") << LOG_DESC("address is null");
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParamsCode(), "address is null"));
+    }
+
+    if (!jParams.isMember("topics") || jParams["topics"].isNull())
+    {
+        FILTER_LOG(ERROR) << LOG_BADGE("fromJson") << LOG_DESC("topics is null");
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParamsCode(), "topics is null"));
+    }
+
+    // prase fromBlock
+    std::tie(m_fromBlock, m_fromIsLatest) =
+        getBlockNumberByTag(latest, jParams["fromBlock"].asString());
+
+    // prase toBlock
+    std::tie(m_toBlock, m_toIsLatest) = getBlockNumberByTag(latest, jParams["toBlock"].asString());
+
+    // prase address
+    auto& jAddresses = jParams["address"];
+    if (jAddresses.isArray())
+    {
+        for (Json::Value::ArrayIndex index = 0; index < jAddresses.size(); ++index)
         {
-            for (Json::Value::ArrayIndex index = 0; index < jAddresses.size(); ++index)
+            addAddress(jAddresses[index].asString());
+        }
+    }
+    else
+    {
+        addAddress(jAddresses.asString());
+    }
+
+    // prase topics
+    auto& jTopics = jParams["topics"];
+    if (jTopics.size() > EVENT_LOG_TOPICS_MAX_INDEX)
+    {
+        FILTER_LOG(ERROR) << LOG_BADGE("fromJson") << LOG_DESC("exceed max topics")
+                          << LOG_KV("topicsSize", jTopics.size());
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParamsCode(), "exceed max topics"));
+    }
+    resizeTopic(jTopics.size());
+    for (Json::Value::ArrayIndex index = 0; index < jTopics.size(); ++index)
+    {
+        auto& jIndex = jTopics[index];
+        if (jIndex.isNull())
+        {
+            continue;
+        }
+
+        if (jIndex.isArray())
+        {  // array topics
+            for (Json::Value::ArrayIndex innerIndex = 0; innerIndex < jIndex.size(); ++innerIndex)
             {
-                addAddress(jAddresses[index].asString());
+                addTopic(index, jIndex[innerIndex].asString());
             }
         }
         else
-        {
-            addAddress(jAddresses.asString());
+        {  // single topic, string value
+            addTopic(index, jIndex.asString());
         }
     }
 
-    if (jParams.isMember("topics") && !jParams["topics"].isNull())
-    {
-        auto& jTopics = jParams["topics"];
-
-        // check number of topic
-        if (jTopics.size() > EVENT_LOG_TOPICS_MAX_INDEX)
-        {
-            FILTER_LOG(ERROR) << LOG_BADGE("fromJson") << LOG_DESC("exceed max topics")
-                              << LOG_KV("topicsSize", jTopics.size());
-            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParamsCode(), "exceed max topics"));
-        }
-        resizeTopic(jTopics.size());
-        for (Json::Value::ArrayIndex index = 0; index < jTopics.size(); ++index)
-        {
-            auto& jIndex = jTopics[index];
-            if (jIndex.isNull())
-            {
-                continue;
-            }
-
-            if (jIndex.isArray())
-            {  // array topics
-                for (Json::Value::ArrayIndex innerIndex = 0; innerIndex < jIndex.size();
-                     ++innerIndex)
-                {
-                    addTopic(index, jIndex[innerIndex].asString());
-                }
-            }
-            else
-            {  // single topic, string value
-                addTopic(index, jIndex.asString());
-            }
-        }
-    }
-
+    // prase blockhash
     if (jParams.isMember("blockhash") && !jParams["blockhash"].isNull())
     {
         m_blockHash = jParams["blockhash"].asString();
