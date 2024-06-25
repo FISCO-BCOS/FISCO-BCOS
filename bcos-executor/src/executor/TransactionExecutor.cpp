@@ -181,6 +181,9 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
         initTestPrecompiledTable(m_backendStorage);
     }
 
+    auto const header = getBlockHeaderInStorage(m_lastCommittedBlockNumber);
+    m_lastCommittedBlockTimestamp = header != nullptr ? header->timestamp() : utcTime();
+
     assert(m_precompiled != nullptr && m_precompiled->size() > 0);
     start();
 }
@@ -543,6 +546,7 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
             m_ledgerCache->setBlockNumber2Hash(
                 blockHeader->number() - 1, (*parentInfoIt).blockHash);
         }
+        m_lastCommittedBlockTimestamp = blockHeader->timestamp();
 
         EXECUTOR_NAME_LOG(DEBUG) << BLOCK_NUMBER(blockHeader->number()) << "NextBlockHeader success"
                                  << LOG_KV("number", blockHeader->number())
@@ -637,8 +641,8 @@ void TransactionExecutor::dmcCall(bcos::protocol::ExecutionMessage::UniquePtr in
         auto storage = createStateStorage(std::move(prev), true, false);
 
         // Create a temp block context
-        blockContext = createBlockContextForCall(
-            m_lastCommittedBlockNumber + 1, h256(), utcTime(), m_blockVersion, std::move(storage));
+        blockContext = createBlockContextForCall(m_lastCommittedBlockNumber, h256(),
+            m_lastCommittedBlockTimestamp, m_blockVersion, std::move(storage));
 
         auto inserted = m_calledContext->emplace(
             std::tuple{input->contextID(), input->seq()}, CallState{blockContext});
@@ -807,8 +811,8 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
             createStateStorage(std::move(prev), true, false /*call storage no need set flag*/);
 
         // Create a temp block context
-        blockContext = createBlockContextForCall(
-            m_lastCommittedBlockNumber + 1, h256(), utcTime(), m_blockVersion, std::move(storage));
+        blockContext = createBlockContextForCall(m_lastCommittedBlockNumber, h256(),
+            m_lastCommittedBlockTimestamp, m_blockVersion, std::move(storage));
 
         auto inserted = m_calledContext->emplace(
             std::tuple{input->contextID(), input->seq()}, CallState{blockContext});
@@ -2078,9 +2082,12 @@ void TransactionExecutor::getCode(
                 }
 
                 auto code = entry->getField(0);
-                if (m_blockContext->features().get(
-                        ledger::Features::Flag::bugfix_eoa_as_contract) &&
-                    bcos::precompiled::isDynamicPrecompiledAccountCode(code))
+                if ((m_blockContext->features().get(
+                         ledger::Features::Flag::bugfix_eoa_as_contract) &&
+                        bcos::precompiled::isDynamicPrecompiledAccountCode(code)) ||
+                    (m_blockContext->features().get(
+                         ledger::Features::Flag::bugfix_eoa_match_failed) &&
+                        bcos::precompiled::matchDynamicAccountCode(code)))
                 {
                     EXECUTOR_NAME_LOG(DEBUG) << "Get eoa code success, return empty code to evm";
                     callback(nullptr, bcos::bytes());

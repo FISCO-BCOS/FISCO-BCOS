@@ -87,10 +87,14 @@ inline std::string getDynamicPrecompiledCodeString(
     return boost::join(std::vector<std::string>({PRECOMPILED_CODE_FIELD, _address, _params}), ",");
 }
 
+inline bool matchDynamicAccountCode(std::string_view code)
+{
+    return code.starts_with(getDynamicPrecompiledCodeString(ACCOUNT_ADDRESS, ""));
+}
+
+// ERROR: this method match account precompiled in wrong logic, use matchDynamicAccountCode instead.
 inline bool isDynamicPrecompiledAccountCode(const std::string_view& _code)
 {
-    // FIXME)): fix here, use bugfix
-    // return _code.starts_with(getDynamicPrecompiledCodeString(ACCOUNT_ADDRESS, ""));
     return std::string_view(getDynamicPrecompiledCodeString(ACCOUNT_ADDRESS, "")) == _code;
 }
 
