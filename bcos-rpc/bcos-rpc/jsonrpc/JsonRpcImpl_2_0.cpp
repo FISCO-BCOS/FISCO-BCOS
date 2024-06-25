@@ -33,6 +33,7 @@
 #include <bcos-protocol/TransactionStatus.h>
 #include <bcos-rpc/jsonrpc/Common.h>
 #include <bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h>
+#include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/Base64.h>
 #include <json/value.h>
@@ -59,10 +60,11 @@ using namespace boost::archive::iterators;
 
 JsonRpcImpl_2_0::JsonRpcImpl_2_0(GroupManager::Ptr _groupManager,
     bcos::gateway::GatewayInterface::Ptr _gatewayInterface,
-    std::shared_ptr<boostssl::ws::WsService> _wsService)
+    std::shared_ptr<boostssl::ws::WsService> _wsService, FilterSystem::Ptr filterSystem)
   : m_groupManager(std::move(_groupManager)),
     m_gatewayInterface(std::move(_gatewayInterface)),
-    m_wsService(std::move(_wsService))
+    m_wsService(std::move(_wsService)),
+    m_filterSystem(filterSystem)
 {
     m_wsService->registerMsgHandler(bcos::protocol::MessageType::RPC_REQUEST,
         boost::bind(&JsonRpcImpl_2_0::handleRpcRequest, this, boost::placeholders::_1,
@@ -242,6 +244,23 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::Transaction const
         {
             jResp["extension"].append(ext);
         }
+    }
+    if (transaction.type() == bcos::protocol::TransactionType::Web3Transacion) [[unlikely]]
+    {
+        Web3Transaction web3Tx;
+        auto extraBytesRef =
+            bcos::bytesRef(const_cast<byte*>(transaction.extraTransactionBytes().data()),
+                transaction.extraTransactionBytes().size());
+        codec::rlp::decode(extraBytesRef, web3Tx);
+        jResp["value"] = web3Tx.value.str();
+        jResp["gasPrice"] = web3Tx.maxPriorityFeePerGas.str();
+        jResp["gasLimit"] = web3Tx.gasLimit * 100;
+        if (web3Tx.type >= TransactionType::EIP1559)
+        {
+            jResp["maxPriorityFeePerGas"] = web3Tx.maxPriorityFeePerGas.str();
+            jResp["maxFeePerGas"] = web3Tx.maxFeePerGas.str();
+        }
+        codec::rlp::decode(extraBytesRef, web3Tx);
     }
 }
 
@@ -1429,6 +1448,79 @@ void JsonRpcImpl_2_0::getGroupPeers(std::string_view _groupID, RespFunc _respFun
             rpc->getGroupPeers(jResp, std::string_view(group), _localP2pInfo, _peersInfo);
             _respFunc(_error, jResp);
         });
+}
+
+void JsonRpcImpl_2_0::newBlockFilter(std::string_view _groupID, RespFunc _respFunc)
+{
+    task::wait(
+        [](JsonRpcImpl_2_0* self, std::string_view groupID, RespFunc respFunc) -> task::Task<void> {
+            Json::Value jRes = co_await self->filterSystem().newBlockFilter(groupID);
+            respFunc(nullptr, jRes);
+        }(this, _groupID, std::move(_respFunc)));
+}
+
+void JsonRpcImpl_2_0::newPendingTransactionFilter(std::string_view _groupID, RespFunc _respFunc)
+{
+    task::wait(
+        [](JsonRpcImpl_2_0* self, std::string_view groupID, RespFunc respFunc) -> task::Task<void> {
+            Json::Value jRes = co_await self->filterSystem().newPendingTxFilter(groupID);
+            respFunc(nullptr, jRes);
+        }(this, _groupID, std::move(_respFunc)));
+}
+
+void JsonRpcImpl_2_0::newFilter(
+    std::string_view _groupID, const Json::Value& jParams, RespFunc _respFunc)
+{
+    task::wait([&jParams](JsonRpcImpl_2_0* self, std::string_view groupID,
+                   RespFunc respFunc) -> task::Task<void> {
+        Json::Value jRes;
+        auto params = self->filterSystem().requestFactory()->create();
+        params->fromJson(jParams);
+        jRes = co_await self->filterSystem().newFilter(groupID, std::move(params));
+        respFunc(nullptr, jRes);
+    }(this, _groupID, std::move(_respFunc)));
+}
+
+void JsonRpcImpl_2_0::uninstallFilter(
+    std::string_view _groupID, std::string_view filterID, RespFunc _respFunc)
+{
+    task::wait([](JsonRpcImpl_2_0* self, std::string_view groupID, u256 id,
+                   RespFunc respFunc) -> task::Task<void> {
+        Json::Value jRes = co_await self->filterSystem().uninstallFilter(groupID, id);
+        respFunc(nullptr, jRes);
+    }(this, _groupID, fromBigQuantity(filterID), std::move(_respFunc)));
+}
+
+void JsonRpcImpl_2_0::getFilterChanges(
+    std::string_view _groupID, std::string_view filterID, RespFunc _respFunc)
+{
+    task::wait([](JsonRpcImpl_2_0* self, std::string_view groupID, u256 id,
+                   RespFunc respFunc) -> task::Task<void> {
+        Json::Value jRes = co_await self->filterSystem().getFilterChanges(groupID, id);
+        respFunc(nullptr, jRes);
+    }(this, _groupID, fromBigQuantity(filterID), std::move(_respFunc)));
+}
+
+void JsonRpcImpl_2_0::getFilterLogs(
+    std::string_view _groupID, std::string_view filterID, RespFunc _respFunc)
+{
+    task::wait([](JsonRpcImpl_2_0* self, std::string_view groupID, u256 id,
+                   RespFunc respFunc) -> task::Task<void> {
+        Json::Value jRes = co_await self->filterSystem().getFilterLogs(groupID, id);
+        respFunc(nullptr, jRes);
+    }(this, _groupID, fromBigQuantity(filterID), std::move(_respFunc)));
+}
+
+void JsonRpcImpl_2_0::getLogs(
+    std::string_view _groupID, const Json::Value& jParams, RespFunc _respFunc)
+{
+    task::wait([](JsonRpcImpl_2_0* self, std::string_view groupID, const Json::Value& jParams,
+                   RespFunc respFunc) -> task::Task<void> {
+        auto params = self->filterSystem().requestFactory()->create();
+        params->fromJson(jParams);
+        Json::Value jRes = co_await self->filterSystem().getLogs(groupID, std::move(params));
+        respFunc(nullptr, jRes);
+    }(this, _groupID, jParams, std::move(_respFunc)));
 }
 
 void JsonRpcImpl_2_0::execCall(
