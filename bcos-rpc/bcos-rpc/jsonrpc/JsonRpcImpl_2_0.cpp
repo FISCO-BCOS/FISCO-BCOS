@@ -251,16 +251,19 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::Transaction const
         auto extraBytesRef =
             bcos::bytesRef(const_cast<byte*>(transaction.extraTransactionBytes().data()),
                 transaction.extraTransactionBytes().size());
-        codec::rlp::decode(extraBytesRef, web3Tx);
+        codec::rlp::decodeFromPayload(extraBytesRef, web3Tx);
         jResp["value"] = web3Tx.value.str();
-        jResp["gasPrice"] = web3Tx.maxPriorityFeePerGas.str();
-        jResp["gasLimit"] = web3Tx.gasLimit * 100;
+        jResp["gasLimit"] = web3Tx.gasLimit;
         if (web3Tx.type >= TransactionType::EIP1559)
         {
             jResp["maxPriorityFeePerGas"] = web3Tx.maxPriorityFeePerGas.str();
             jResp["maxFeePerGas"] = web3Tx.maxFeePerGas.str();
+            jResp["gasPrice"] = "0";
         }
-        codec::rlp::decode(extraBytesRef, web3Tx);
+        else
+        {
+            jResp["gasPrice"] = web3Tx.maxPriorityFeePerGas.str();
+        }
     }
 }
 

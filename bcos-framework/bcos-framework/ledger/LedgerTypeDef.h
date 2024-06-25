@@ -50,7 +50,7 @@ constexpr static std::string_view SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM = magic_enum
 constexpr static std::string_view SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM = magic_enum::enum_name(SystemConfig::feature_rpbft_epoch_block_num);
 constexpr static std::string_view SYSTEM_KEY_RPBFT_SWITCH = magic_enum::enum_name(SystemConfig::feature_rpbft);
 // system configuration for balance
-constexpr static std::string_view SYSTEM_KEY_BALANCE_PRECOMPILED_SWITCH = "feature_balance_precompiled";
+constexpr static std::string_view SYSTEM_KEY_BALANCE_PRECOMPILED_SWITCH = magic_enum::enum_name(SystemConfig::feature_balance_precompiled);
 // notify rotate key for rpbft
 constexpr static std::string_view INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE = "feature_rpbft_notify_rotate";
 // clang-format on

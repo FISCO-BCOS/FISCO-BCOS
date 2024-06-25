@@ -33,7 +33,7 @@ using codec::rlp::decode;
 using codec::rlp::encode;
 using codec::rlp::header;
 using codec::rlp::length;
-bcos::bytes Web3Transaction::encode() const
+bcos::bytes Web3Transaction::encodeForSign() const
 {
     bcos::bytes out;
     if (type == TransactionType::Legacy)
@@ -104,7 +104,7 @@ bcos::crypto::HashType Web3Transaction::txHash() const
 
 bcos::crypto::HashType Web3Transaction::hashForSign() const
 {
-    auto encodeForSign = this->encode();
+    auto encodeForSign = this->encodeForSign();
     return bcos::crypto::keccak256Hash(bcos::ref(encodeForSign));
 }
 
@@ -129,7 +129,7 @@ bcostars::Transaction Web3Transaction::takeToTarsTransaction()
     }
     tarsTx.type = static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transacion);
     auto hashForSign = this->hashForSign();
-    auto encodedForSign = this->encode();
+    auto encodedForSign = this->encodeForSign();
     // FISCO BCOS signature is r||s||v
     tarsTx.signature.reserve(crypto::SECP256K1_SIGNATURE_LEN);
     RANGES::move(this->signatureR, std::back_inserter(tarsTx.signature));
@@ -408,5 +408,88 @@ bcos::Error::UniquePtr decode(bcos::bytesRef& in, Web3Transaction& out) noexcept
     }
     return decodeError;
 }
+
+bcos::Error::UniquePtr decodeFromPayload(bcos::bytesRef& in, rpc::Web3Transaction& out) noexcept
+{
+    if (in.empty())
+    {
+        return BCOS_ERROR_UNIQUE_PTR(InputTooShort, "Input too short");
+    }
+    Error::UniquePtr decodeError = nullptr;
+    if (auto const& firstByte = in[0]; 0 < firstByte && firstByte < BYTES_HEAD_BASE)
+    {
+        // EIP-2718: Transaction Type
+        // EIP2930: 0x01 || rlp([chainId, nonce, gasPrice, gasLimit, to, value, data, accessList,
+        // signatureYParity, signatureR, signatureS])
+
+        // EIP1559: 0x02 || rlp([chain_id, nonce, max_priority_fee_per_gas, max_fee_per_gas,
+        // gas_limit, destination, amount, data, access_list, signature_y_parity, signature_r,
+        // signature_s])
+
+        // EIP4844: 0x03 || rlp([chain_id, nonce, max_priority_fee_per_gas, max_fee_per_gas,
+        // gas_limit, to, value, data, access_list, max_fee_per_blob_gas, blob_versioned_hashes,
+        // signature_y_parity, signature_r, signature_s])
+
+        out.type = static_cast<TransactionType>(firstByte);
+        in = in.getCroppedData(1);
+        auto&& [e, header] = decodeHeader(in);
+        if (e != nullptr)
+        {
+            return std::move(e);
+        }
+        if (!header.isList)
+        {
+            return BCOS_ERROR_UNIQUE_PTR(UnexpectedString, "Unexpected String");
+        }
+        uint64_t chainId = 0;
+        if (auto error = decodeItems(in, chainId, out.nonce, out.maxPriorityFeePerGas);
+            error != nullptr)
+        {
+            return error;
+        }
+        out.chainId.emplace(chainId);
+        if (out.type == TransactionType::EIP2930)
+        {
+            out.maxFeePerGas = out.maxPriorityFeePerGas;
+        }
+        else if (auto error = decode(in, out.maxFeePerGas); error != nullptr)
+        {
+            return error;
+        }
+
+        if (auto error = decodeItems(in, out.gasLimit, out.to, out.value, out.data, out.accessList);
+            error != nullptr)
+        {
+            return error;
+        }
+
+        if (out.type == TransactionType::EIP4844)
+        {
+            if (auto error = decodeItems(in, out.maxFeePerBlobGas, out.blobVersionedHashes);
+                error != nullptr)
+            {
+                return error;
+            }
+        }
+        return nullptr;
+    }
+    // rlp([nonce, gasPrice, gasLimit, to, value, data, chainId])
+    auto&& [error, header] = decodeHeader(in);
+    if (error != nullptr)
+    {
+        return std::move(error);
+    }
+    if (!header.isList)
+    {
+        return BCOS_ERROR_UNIQUE_PTR(UnexpectedList, "Unexpected list");
+    }
+    out.type = TransactionType::Legacy;
+    uint64_t chainId = 0;
+    decodeError = decodeItems(in, out.nonce, out.maxPriorityFeePerGas, out.gasLimit, out.to,
+        out.value, out.data, chainId);
+    out.chainId.emplace(chainId);
+    return decodeError;
+}
+
 }  // namespace codec::rlp
 }  // namespace bcos
