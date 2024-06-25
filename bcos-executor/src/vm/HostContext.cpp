@@ -592,7 +592,7 @@ evmc_bytes32 HostContext::getTransientStorage(const evmc_bytes32* key)
         return result;
     }
     auto entry = readAccessor->value()->getRow(m_tableName, keyView);
-    if (!entry.first)
+    if (!entry.first && entry.second.has_value())
     {
         auto field = entry.second->getField(0);
         std::uninitialized_copy_n(field.data(), sizeof(result), result.bytes);
