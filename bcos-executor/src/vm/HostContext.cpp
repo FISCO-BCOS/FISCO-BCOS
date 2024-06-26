@@ -483,9 +483,13 @@ bcos::bytes HostContext::externalCodeRequest(const std::string_view& address)
     request->staticCall = staticCall();
     auto response = m_executive->externalCall(std::move(request));
 
-    if (m_executive->blockContext().features().get(
-            ledger::Features::Flag::bugfix_eoa_as_contract) &&
-        precompiled::isDynamicPrecompiledAccountCode(fromBytes(response->data)))
+    if ((m_executive->blockContext().features().get(
+             ledger::Features::Flag::bugfix_eoa_as_contract) &&
+            precompiled::isDynamicPrecompiledAccountCode(fromBytes(response->data))) ||
+        (m_executive->blockContext().features().get(
+             ledger::Features::Flag::bugfix_eoa_match_failed) &&
+            bcos::precompiled::matchDynamicAccountCode(
+                std::string_view((char*)response->data.data(), response->data.size()))))
     {
         return bytes();
     }
@@ -588,7 +592,7 @@ evmc_bytes32 HostContext::getTransientStorage(const evmc_bytes32* key)
         return result;
     }
     auto entry = readAccessor->value()->getRow(m_tableName, keyView);
-    if (!entry.first)
+    if (!entry.first && entry.second.has_value())
     {
         auto field = entry.second->getField(0);
         std::uninitialized_copy_n(field.data(), sizeof(result), result.bytes);
