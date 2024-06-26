@@ -18,7 +18,6 @@
  *  @date 2021-02-24
  */
 #pragma once
-#include <concepts/bcos-concepts/Basic.h>
 #include <atomic>
 #include <cassert>
 #include <cstring>
@@ -106,12 +105,6 @@ public:
     std::string_view toStringView() const
     {
         return std::string_view((char const*)m_dataPointer, m_dataCount * sizeof(T));
-    }
-
-    template <bcos::concepts::StringLike String>
-    String toStringLike() const
-    {
-        return String((char const*)m_dataPointer, m_dataCount * sizeof(T));
     }
 
     bool empty() const { return (m_dataCount == 0); }

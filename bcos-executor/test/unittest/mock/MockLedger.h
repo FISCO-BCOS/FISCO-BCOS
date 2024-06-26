@@ -135,11 +135,6 @@ public:
             _onGetConfig(nullptr, std::to_string(MockLedger::TX_GAS_LIMIT), m_blockNumber);
             return;
         }
-        else if (std::string(bcos::ledger::SYSTEM_KEY_WEB3_CHAIN_ID) == std::string(_key))
-        {
-            _onGetConfig(nullptr, "20200", m_blockNumber);
-            return;
-        }
         else if (std::string(bcos::ledger::SYSTEM_KEY_AUTH_CHECK_STATUS) == std::string(_key))
         {
             if (m_storage)

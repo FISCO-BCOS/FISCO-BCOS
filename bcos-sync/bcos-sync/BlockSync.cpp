@@ -287,19 +287,9 @@ bool BlockSync::shouldSyncing()
     return true;
 }
 
-bool BlockSync::isSyncing() const
+bool BlockSync::isSyncing()
 {
     return (m_state == SyncState::Downloading);
-}
-
-std::optional<std::tuple<bcos::protocol::BlockNumber, bcos::protocol::BlockNumber>>
-BlockSync::getSyncStatus() const
-{
-    if (!isSyncing())
-    {
-        return std::nullopt;
-    }
-    return std::make_tuple(m_config->blockNumber(), m_config->knownHighestNumber());
 }
 
 void BlockSync::maintainDownloadingBuffer()
@@ -1007,15 +997,4 @@ void BlockSync::asyncGetSyncInfo(std::function<void(Error::Ptr, std::string)> _o
     Json::FastWriter fastWriter;
     std::string statusStr = fastWriter.write(syncInfo);
     _onGetSyncInfo(nullptr, statusStr);
-}
-
-std::vector<PeerStatus::Ptr> BlockSync::getPeerStatus()
-{
-    std::vector<PeerStatus::Ptr> statuses{};
-    statuses.reserve(m_syncStatus->peersSize());
-    m_syncStatus->foreachPeer([&statuses](auto&& status) {
-        statuses.emplace_back(status);
-        return true;
-    });
-    return statuses;
 }

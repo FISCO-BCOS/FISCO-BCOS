@@ -283,7 +283,6 @@ protected:
     std::list<State> m_stateStorages;
 
     bcos::protocol::BlockNumber m_lastCommittedBlockNumber = getBlockNumberInStorage();
-    std::atomic_uint64_t m_lastCommittedBlockTimestamp = utcTime();
 
     struct HashCombine
     {

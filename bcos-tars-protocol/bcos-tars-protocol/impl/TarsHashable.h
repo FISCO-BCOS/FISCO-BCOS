@@ -6,7 +6,6 @@
 #include "bcos-tars-protocol/tars/Block.h"
 #include "bcos-tars-protocol/tars/Transaction.h"
 #include "bcos-tars-protocol/tars/TransactionReceipt.h"
-#include <bcos-framework/protocol/Transaction.h>
 #include <boost/endian/conversion.hpp>
 #include <vector>
 
@@ -17,15 +16,6 @@ void tag_invoke(bcos::concepts::hash::tag_t<bcos::concepts::hash::calculate> /*u
     Transaction const& transaction, bcos::crypto::hasher::Hasher auto&& hasher,
     bcos::concepts::bytebuffer::ByteBuffer auto& out)
 {
-    if (transaction.type >= static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transacion))
-        [[unlikely]]
-    {
-        if (!transaction.extraTransactionHash.empty()) [[likely]]
-        {
-            bcos::concepts::bytebuffer::assignTo(transaction.extraTransactionHash, out);
-        }
-        return;
-    }
     if (!transaction.dataHash.empty())
     {
         bcos::concepts::bytebuffer::assignTo(transaction.dataHash, out);

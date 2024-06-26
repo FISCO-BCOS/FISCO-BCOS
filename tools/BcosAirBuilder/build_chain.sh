@@ -39,7 +39,7 @@ ca_dir=""
 prometheus_dir=""
 config_path=""
 docker_mode=
-default_version="v3.9.0"
+default_version="v3.8.0"
 compatibility_version=${default_version}
 default_mtail_version="3.0.0-rc49"
 compatibility_mtail_version=${default_mtail_version}
@@ -60,7 +60,6 @@ download_timeout=240
 make_tar=
 default_group="group0"
 default_chainid="chain0"
-default_web3_chainid="20200"
 use_ipv6=""
 # for modifying multipy ca node
 modify_node_path=""
@@ -70,11 +69,11 @@ supported_consensus=(pbft rpbft)
 
 # for pro or max default setting
 bcos_builder_package=BcosBuilder.tgz
-bcos_builder_version=v3.9.0
+bcos_builder_version=v3.8.0
 use_exist_binary="false"
 download_specific_binary_flag="false"
 download_service_binary_type="cdn"
-service_binary_version="v3.9.0"
+service_binary_version="v3.8.0"
 download_service_binary_path="binary"
 download_service_binary_path_flag="false"
 service_type="all"
@@ -1374,12 +1373,6 @@ generate_config_ini() {
     ; return input params in sendTransaction() return, default: true
     ; return_input_params=false
 
-[web3_rpc]
-    enable=false
-    listen_ip=0.0.0.0
-    listen_port=8545
-    thread_count=8
-
 [cert]
     ; directory the certificates located in
     ca_path=./conf
@@ -1588,12 +1581,6 @@ generate_sm_config_ini() {
     ; return input params in sendTransaction() return, default: true
     ; return_input_params=false
 
-[web3_rpc]
-    enable=false
-    listen_ip=0.0.0.0
-    listen_port=8545
-    thread_count=8
-
 [cert]
     ; directory the certificates located in
     ca_path=./conf
@@ -1720,9 +1707,6 @@ generate_genesis_config() {
     group_id=${default_group}
     ; the chain id, should nerver be changed
     chain_id=${default_chainid}
-
-[web3]
-    chain_id=${default_web3_chainid}
 
 [consensus]
     ; consensus algorithm now support PBFT(consensus_type=pbft), rPBFT(consensus_type=rpbft)

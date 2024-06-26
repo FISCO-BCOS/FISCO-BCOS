@@ -71,30 +71,25 @@ public:
             }
         }
 
-        // other transaction type, do not need to check hash, skip
-        if (transaction->type() ==
-            static_cast<uint8_t>(bcos::protocol::TransactionType::BCOSTransaction))
+        auto originDataHash = std::move(transaction->mutableInner().dataHash);
+        transaction->mutableInner().dataHash.clear();
+        transaction->calculateHash(*m_cryptoSuite->hashImpl());
+
+        // check if hash matching
+        if (checkHash && !originDataHash.empty() &&
+            (originDataHash != transaction->mutableInner().dataHash)) [[unlikely]]
         {
-            auto originDataHash = std::move(transaction->mutableInner().dataHash);
-            transaction->mutableInner().dataHash.clear();
-            transaction->calculateHash(*m_cryptoSuite->hashImpl());
+            bcos::crypto::HashType originHashResult(
+                (bcos::byte*)originDataHash.data(), originDataHash.size());
+            bcos::crypto::HashType hashResult(
+                (bcos::byte*)transaction->mutableInner().dataHash.data(),
+                transaction->mutableInner().dataHash.size());
 
-            // check if hash matching
-            if (checkHash && !originDataHash.empty() &&
-                (originDataHash != transaction->mutableInner().dataHash)) [[unlikely]]
-            {
-                bcos::crypto::HashType originHashResult(
-                    (bcos::byte*)originDataHash.data(), originDataHash.size());
-                bcos::crypto::HashType hashResult(
-                    (bcos::byte*)transaction->mutableInner().dataHash.data(),
-                    transaction->mutableInner().dataHash.size());
-
-                BCOS_LOG(WARNING) << LOG_DESC("the transaction hash does not match")
-                                  << LOG_KV("originHash", originHashResult.hex())
-                                  << LOG_KV("realHash", hashResult.hex());
-                BOOST_THROW_EXCEPTION(std::invalid_argument(
-                    "transaction hash mismatching, maybe transaction version not support."));
-            }
+            BCOS_LOG(WARNING) << LOG_DESC("the transaction hash does not match")
+                              << LOG_KV("originHash", originHashResult.hex())
+                              << LOG_KV("realHash", hashResult.hex());
+            BOOST_THROW_EXCEPTION(std::invalid_argument(
+                "transaction hash mismatching, maybe transaction version not support."));
         }
 
         if (checkSig)

@@ -14,7 +14,6 @@
 #include <oneapi/tbb/cache_aligned_allocator.h>
 #include <oneapi/tbb/parallel_pipeline.h>
 #include <oneapi/tbb/task_arena.h>
-#include <oneapi/tbb/task_group.h>
 #include <boost/throw_exception.hpp>
 #include <atomic>
 #include <cstddef>
@@ -27,123 +26,112 @@ namespace bcos::transaction_scheduler
 
 #define PARALLEL_SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("PARALLEL_SCHEDULER")
 
-template <class MutableStorage, class Storage>
-struct StorageTrait
-{
-    using LocalStorageView = View<MutableStorage, void, Storage>;
-    using LocalReadWriteSetStorage =
-        ReadWriteSetStorage<LocalStorageView, transaction_executor::StateKey>;
-};
-
-template <class CoroType>
-struct ExecutionContext
-{
-    ExecutionContext(int contextID, std::reference_wrapper<const protocol::Transaction> transaction,
-        std::reference_wrapper<protocol::TransactionReceipt::Ptr> receipt,
-        std::optional<CoroType> coro, typename CoroType::Iterator iterator)
-      : contextID(contextID),
-        transaction(transaction),
-        receipt(receipt),
-        coro(std::move(coro)),
-        iterator(std::move(iterator))
-    {}
-    int contextID;
-    std::reference_wrapper<const protocol::Transaction> transaction;
-    std::reference_wrapper<protocol::TransactionReceipt::Ptr> receipt;
-    std::optional<CoroType> coro;
-    typename CoroType::Iterator iterator;
-};
-
-template <class MutableStorage, class Storage, class Executor, class ContextRange>
-class ChunkStatus
-{
-private:
-    int64_t m_chunkIndex = 0;
-    std::reference_wrapper<boost::atomic_flag const> m_hasRAW;
-    ContextRange m_contextRange;
-    std::reference_wrapper<Executor> m_executor;
-    typename StorageTrait<MutableStorage, Storage>::LocalStorageView m_storageView;
-    typename StorageTrait<MutableStorage, Storage>::LocalReadWriteSetStorage m_readWriteSetStorage;
-
-public:
-    ChunkStatus(int64_t chunkIndex, boost::atomic_flag const& hasRAW, ContextRange contextRange,
-        Executor& executor, auto& storage)
-      : m_chunkIndex(chunkIndex),
-        m_hasRAW(hasRAW),
-        m_contextRange(std::move(contextRange)),
-        m_executor(executor),
-        m_storageView(storage),
-        m_readWriteSetStorage(m_storageView)
-    {
-        m_storageView.newMutable();
-    }
-
-    int64_t chunkIndex() const { return m_chunkIndex; }
-    auto count() const { return RANGES::size(m_contextRange); }
-    auto& storageView() & { return m_storageView; }
-    auto& readWriteSetStorage() & { return m_readWriteSetStorage; }
-
-    void executeStep1(
-        protocol::BlockHeader const& blockHeader, ledger::LedgerConfig const& ledgerConfig)
-    {
-        ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
-            ittapi::ITT_DOMAINS::instance().EXECUTE_CHUNK1);
-        for (auto&& [index, context] : RANGES::views::enumerate(m_contextRange))
-        {
-            if (m_hasRAW.get().test())
-            {
-                PARALLEL_SCHEDULER_LOG(DEBUG)
-                    << "Chunk: " << m_chunkIndex << " aborted in step1, executed " << index
-                    << " transactions";
-                break;
-            }
-
-            context.coro.emplace(transaction_executor::execute3Step(m_executor.get(),
-                m_readWriteSetStorage, blockHeader, context.transaction.get(), context.contextID,
-                ledgerConfig, task::tbb::syncWait));
-            context.iterator = context.coro->begin();
-            context.receipt.get() = *context.iterator;
-        }
-    }
-
-    void executeStep2()
-    {
-        ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
-            ittapi::ITT_DOMAINS::instance().EXECUTE_CHUNK2);
-        for (auto&& [index, context] : RANGES::views::enumerate(m_contextRange))
-        {
-            if (m_hasRAW.get().test())
-            {
-                PARALLEL_SCHEDULER_LOG(DEBUG)
-                    << "Chunk: " << m_chunkIndex << " aborted in step2, executed " << index
-                    << " transactions";
-                break;
-            }
-            if (!context.receipt.get() && context.iterator != context.coro->end())
-            {
-                context.receipt.get() = *(++context.iterator);
-            }
-        }
-    }
-
-    void executeStep3()
-    {
-        ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
-            ittapi::ITT_DOMAINS::instance().EXECUTE_CHUNK3);
-        for (auto& context : m_contextRange)
-        {
-            if (!context.receipt.get() && context.iterator != context.coro->end())
-            {
-                context.receipt.get() = *(++context.iterator);
-            }
-        }
-    }
-};
-
-template <class MutableStorage>
 class SchedulerParallelImpl
 {
 private:
+    template <class Storage>
+    struct StorageTrait
+    {
+        using LocalStorage = MultiLayerStorage<typename Storage::MutableStorage, void, Storage>;
+        using LocalStorageView =
+            std::invoke_result_t<decltype(&LocalStorage::fork), LocalStorage, bool>;
+        using LocalReadWriteSetStorage =
+            ReadWriteSetStorage<LocalStorageView, transaction_executor::StateKey>;
+    };
+
+    template <class Storage, class Executor, class ContextRange>
+    class ChunkStatus
+    {
+    private:
+        auto forkAndMutable(auto& storage)
+        {
+            storage.newMutable();
+            auto view = storage.fork(true);
+            return view;
+        }
+
+        int64_t m_chunkIndex = 0;
+        std::reference_wrapper<boost::atomic_flag const> m_hasRAW;
+        ContextRange m_contextRange;
+        std::reference_wrapper<Executor> m_executor;
+        typename StorageTrait<Storage>::LocalStorage m_localStorage;
+        typename StorageTrait<Storage>::LocalStorageView m_localStorageView;
+        typename StorageTrait<Storage>::LocalReadWriteSetStorage m_localReadWriteSetStorage;
+
+    public:
+        ChunkStatus(int64_t chunkIndex, boost::atomic_flag const& hasRAW, ContextRange contextRange,
+            Executor& executor, auto& storage)
+          : m_chunkIndex(chunkIndex),
+            m_hasRAW(hasRAW),
+            m_contextRange(std::move(contextRange)),
+            m_executor(executor),
+            m_localStorage(storage),
+            m_localStorageView(forkAndMutable(m_localStorage)),
+            m_localReadWriteSetStorage(m_localStorageView)
+        {}
+
+        int64_t chunkIndex() const { return m_chunkIndex; }
+        auto count() const { return RANGES::size(m_contextRange); }
+        auto& localStorage() & { return m_localStorage; }
+        auto& readWriteSetStorage() & { return m_localReadWriteSetStorage; }
+
+        void executeStep1(
+            protocol::BlockHeader const& blockHeader, ledger::LedgerConfig const& ledgerConfig)
+        {
+            ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
+                ittapi::ITT_DOMAINS::instance().EXECUTE_CHUNK1);
+            for (auto&& [index, context] : RANGES::views::enumerate(m_contextRange))
+            {
+                if (m_hasRAW.get().test())
+                {
+                    PARALLEL_SCHEDULER_LOG(DEBUG)
+                        << "Chunk: " << m_chunkIndex << " aborted in step1, executed " << index
+                        << " transactions";
+                    break;
+                }
+
+                context.coro.emplace(transaction_executor::execute3Step(m_executor.get(),
+                    m_localReadWriteSetStorage, blockHeader, context.transaction.get(),
+                    context.contextID, ledgerConfig, task::tbb::syncWait));
+                context.iterator = context.coro->begin();
+                context.receipt.get() = *context.iterator;
+            }
+        }
+
+        void executeStep2()
+        {
+            ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
+                ittapi::ITT_DOMAINS::instance().EXECUTE_CHUNK2);
+            for (auto&& [index, context] : RANGES::views::enumerate(m_contextRange))
+            {
+                if (m_hasRAW.get().test())
+                {
+                    PARALLEL_SCHEDULER_LOG(DEBUG)
+                        << "Chunk: " << m_chunkIndex << " aborted in step2, executed " << index
+                        << " transactions";
+                    break;
+                }
+                if (!context.receipt.get() && context.iterator != context.coro->end())
+                {
+                    context.receipt.get() = *(++context.iterator);
+                }
+            }
+        }
+
+        void executeStep3()
+        {
+            ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
+                ittapi::ITT_DOMAINS::instance().EXECUTE_CHUNK3);
+            for (auto& context : m_contextRange)
+            {
+                if (!context.receipt.get() && context.iterator != context.coro->end())
+                {
+                    context.receipt.get() = *(++context.iterator);
+                }
+            }
+        }
+    };
+
     constexpr static auto DEFAULT_TRANSACTION_GRAIN_SIZE = 16L;
     GC m_gc;
     size_t m_grainSize = DEFAULT_TRANSACTION_GRAIN_SIZE;
@@ -167,18 +155,18 @@ private:
         const auto count = RANGES::size(contexts);
         ReadWriteSetStorage<decltype(storage), transaction_executor::StateKey> writeSet(storage);
 
-        using Chunk = ChunkStatus<MutableStorage, std::decay_t<decltype(storage)>,
+        using Chunk = SchedulerParallelImpl::ChunkStatus<std::decay_t<decltype(storage)>,
             std::decay_t<decltype(executor)>,
             decltype(RANGES::subrange<RANGES::iterator_t<decltype(contexts)>>(contexts))>;
+        using ChunkStorage = typename std::decay_t<decltype(storage)>::MutableStorage;
 
         boost::atomic_flag hasRAW;
-        MutableStorage lastStorage;
-        auto contextChunks = RANGES::views::chunk(contexts, chunkSize);
+        ChunkStorage lastStorage;
+        const auto contextChunks = RANGES::views::chunk(contexts, chunkSize);
 
         std::atomic_size_t offset = 0;
         std::atomic_size_t chunkIndex = 0;
 
-        tbb::task_group_context context;
         // 五级流水线：分片准备、并行执行、检测RAW冲突&合并读写集、生成回执、合并storage
         // Five-stage pipeline: shard preparation, parallel execution, detection of RAW
         // conflicts & merging read/write sets, generating receipts, and merging storage
@@ -258,8 +246,8 @@ private:
 
                         return chunk;
                     }) &
-                tbb::make_filter<std::unique_ptr<Chunk>, void>(tbb::filter_mode::serial_in_order,
-                    [&](std::unique_ptr<Chunk> chunk) {
+                tbb::make_filter<std::unique_ptr<Chunk>, void>(
+                    tbb::filter_mode::serial_in_order, [&](std::unique_ptr<Chunk> chunk) {
                         if (chunk)
                         {
                             ittapi::Report report1(
@@ -273,15 +261,10 @@ private:
                                 << "Merging storage... " << chunk->chunkIndex() << " | "
                                 << chunk->count();
                             task::tbb::syncWait(storage2::merge(
-                                lastStorage, std::move(chunk->storageView().mutableStorage())));
+                                lastStorage, std::move(chunk->localStorage().mutableStorage())));
                             scheduler.m_gc.collect(std::move(chunk));
                         }
-                        else
-                        {
-                            context.cancel_group_execution();
-                        }
-                    }),
-            context);
+                    }));
 
         task::tbb::syncWait(mergeLastStorage(scheduler, storage, std::move(lastStorage)));
         scheduler.m_gc.collect(std::move(writeSet));
@@ -297,6 +280,16 @@ private:
         return 0;
     }
 
+    template <class CoroType>
+    struct ExecutionContext
+    {
+        int contextID{};
+        std::reference_wrapper<const protocol::Transaction> transaction;
+        std::reference_wrapper<protocol::TransactionReceipt::Ptr> receipt;
+        std::optional<CoroType> coro;
+        typename CoroType::Iterator iterator;
+    };
+
     friend task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
         tag_t<executeBlock> /*unused*/, SchedulerParallelImpl& scheduler, auto& storage,
         auto& executor, protocol::BlockHeader const& blockHeader,
@@ -310,20 +303,22 @@ private:
         std::vector<protocol::TransactionReceipt::Ptr> receipts(count);
 
         using Storage = std::decay_t<decltype(storage)>;
-        using CoroType =
-            std::invoke_result_t<transaction_executor::Execute3Step, decltype(executor),
-                std::add_lvalue_reference_t<
-                    typename StorageTrait<MutableStorage, Storage>::LocalReadWriteSetStorage>,
-                protocol::BlockHeader const&, protocol::Transaction const&, int,
-                ledger::LedgerConfig const&, task::tbb::SyncWait>;
+        using CoroType = std::invoke_result_t<transaction_executor::Execute3Step,
+            decltype(executor),
+            std::add_lvalue_reference_t<typename StorageTrait<Storage>::LocalReadWriteSetStorage>,
+            protocol::BlockHeader const&, protocol::Transaction const&, int,
+            ledger::LedgerConfig const&, task::tbb::SyncWait>;
         std::vector<ExecutionContext<CoroType>,
             tbb::cache_aligned_allocator<ExecutionContext<CoroType>>>
             contexts;
         contexts.reserve(RANGES::size(transactions));
         for (auto index : RANGES::views::iota(0, (int)RANGES::size(transactions)))
         {
-            contexts.emplace_back(
-                ExecutionContext<CoroType>{index, transactions[index], receipts[index], {}, {}});
+            contexts.emplace_back(ExecutionContext<CoroType>{.contextID = index,
+                .transaction = transactions[index],
+                .receipt = receipts[index],
+                .coro = {},
+                .iterator = {}});
         }
 
         constexpr static auto DEFAULT_PARALLEL_ARENA = 8;

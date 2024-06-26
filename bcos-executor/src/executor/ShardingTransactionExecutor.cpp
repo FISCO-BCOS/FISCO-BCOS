@@ -162,19 +162,17 @@ void ShardingTransactionExecutor::executeTransactions(std::string contractAddres
 BlockContext::Ptr ShardingTransactionExecutor::createTmpBlockContext(
     const protocol::BlockHeader::ConstPtr& currentHeader)
 {
-    ledger::Features features;
     bcos::storage::StateStorageInterface::Ptr stateStorage;
+
     if (m_cachedStorage)
     {
-        task::syncWait(features.readFromStorage(*m_cachedStorage, currentHeader->number()));
         stateStorage = createStateStorage(m_cachedStorage, true,
-            features.get(ledger::Features::Flag::bugfix_set_row_with_dirty_flag));
+            m_blockContext->features().get(ledger::Features::Flag::bugfix_set_row_with_dirty_flag));
     }
     else
     {
-        task::syncWait(features.readFromStorage(*m_backendStorage, currentHeader->number()));
         stateStorage = createStateStorage(m_backendStorage, true,
-            features.get(ledger::Features::Flag::bugfix_set_row_with_dirty_flag));
+            m_blockContext->features().get(ledger::Features::Flag::bugfix_set_row_with_dirty_flag));
     }
 
     return createBlockContext(currentHeader, stateStorage);

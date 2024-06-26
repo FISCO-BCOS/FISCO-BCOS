@@ -33,7 +33,6 @@ const char* const AM_METHOD_GET_ACCOUNT_STATUS = "getAccountStatus()";
 const char* const AM_METHOD_GET_ACCOUNT_BALANCE = "getAccountBalance()";
 const char* const AM_METHOD_ADD_ACCOUNT_BALANCE = "addAccountBalance(uint256)";
 const char* const AM_METHOD_SUB_ACCOUNT_BALANCE = "subAccountBalance(uint256)";
-const uint32_t AM_METHOD_RECEIVE_FALLBACK_SELECTOR = 1;
 
 
 AccountPrecompiled::AccountPrecompiled(crypto::Hash::Ptr hashImpl) : Precompiled(hashImpl)
@@ -63,18 +62,7 @@ std::shared_ptr<PrecompiledExecResult> AccountPrecompiled::call(
     auto accountTableName = dynamicParams.at(0);
     // get user call actual params
     auto originParam = ref(param);
-    uint32_t func;
-    if (originParam.size() == 0 &&
-        blockContext.features().get(
-            ledger::Features::Flag::bugfix_support_transfer_receive_fallback))
-    {
-        // Transfer to EOA operation, call receive() function
-        func = AM_METHOD_RECEIVE_FALLBACK_SELECTOR;
-    }
-    else
-    {
-        func = getParamFunc(originParam);
-    }
+    uint32_t func = getParamFunc(originParam);
     bytesConstRef data = getParamData(originParam);
     auto table = _executive->storage().openTable(accountTableName);
 
@@ -97,15 +85,6 @@ std::shared_ptr<PrecompiledExecResult> AccountPrecompiled::call(
     else if (func == name2Selector[AM_METHOD_SUB_ACCOUNT_BALANCE])
     {
         subAccountBalance(accountTableName, _executive, data, _callParameters);
-    }
-    else if (func == AM_METHOD_RECEIVE_FALLBACK_SELECTOR)
-    {
-        // Transfer to EOA operation
-        // receive() fallback logic
-        // Just return _callParameters, do noting
-        PRECOMPILED_LOG(TRACE) << LOG_BADGE("AccountPrecompiled")
-                               << LOG_DESC("call receive() function. do nothing")
-                               << LOG_KV("func", func);
     }
     else
     {

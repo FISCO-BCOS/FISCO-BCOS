@@ -59,9 +59,6 @@ public:
     std::string m_chainID;
     std::string m_groupID;
 
-    // web3 chain config
-    std::string m_web3ChainID;
-
     // consensus config
     std::string m_consensusType;
     uint64_t m_txCountLimit = 1000;

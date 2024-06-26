@@ -66,9 +66,6 @@ task::Task<protocol::BlockNumber> tag_invoke(
 task::Task<crypto::HashType> tag_invoke(ledger::tag_t<getBlockHash> /*unused*/,
     LedgerInterface& ledger, protocol::BlockNumber blockNumber);
 
-task::Task<protocol::BlockNumber> tag_invoke(
-    ledger::tag_t<getBlockNumber> /*unused*/, LedgerInterface& ledger, crypto::HashType hash);
-
 task::Task<std::optional<SystemConfigEntry>> tag_invoke(
     ledger::tag_t<getSystemConfig> /*unused*/, LedgerInterface& ledger, std::string_view key);
 
@@ -79,15 +76,4 @@ task::Task<LedgerConfig::Ptr> tag_invoke(
     ledger::tag_t<getLedgerConfig> /*unused*/, LedgerInterface& ledger);
 
 task::Task<Features> tag_invoke(ledger::tag_t<getFeatures> /*unused*/, LedgerInterface& ledger);
-
-task::Task<protocol::TransactionReceipt::ConstPtr> tag_invoke(
-    ledger::tag_t<getReceipt>, LedgerInterface& ledger, crypto::HashType const& txHash);
-
-task::Task<protocol::TransactionsConstPtr> tag_invoke(
-    ledger::tag_t<getTransactions>, LedgerInterface& ledger, crypto::HashListPtr hashes);
-
-task::Task<std::optional<bcos::storage::Entry>> tag_invoke(ledger::tag_t<getStorageAt>,
-    LedgerInterface& ledger, std::string_view address, std::string_view key,
-    bcos::protocol::BlockNumber number);
-
 }  // namespace bcos::ledger

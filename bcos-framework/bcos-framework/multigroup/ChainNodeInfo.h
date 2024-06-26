@@ -127,17 +127,6 @@ public:
         }
     }
 
-    auto const& supportConfigs() const { return m_configs; }
-    void setSupportConfigs(RANGES::input_range auto&& configs)
-        requires std::same_as<std::decay_t<RANGES::range_value_t<decltype(configs)>>, std::string>
-    {
-        m_configs.clear();
-        for (auto&& config : configs)
-        {
-            m_configs.emplace_back(std::forward<decltype(config)>(config));
-        }
-    }
-
 private:
     bool m_microService = false;
     // the node name
@@ -158,7 +147,6 @@ private:
     bcos::protocol::ProtocolInfo::Ptr m_nodeProtocol;
 
     std::vector<std::string> m_featureKeys;
-    std::vector<std::string> m_configs;
 
     // the system version
     uint32_t m_compatibilityVersion;

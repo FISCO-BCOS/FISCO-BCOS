@@ -19,7 +19,6 @@
 
 #pragma once
 #include "bcos-utilities/Common.h"
-#include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <boost/filesystem.hpp>
 #include <boost/test/unit_test.hpp>
 
@@ -27,14 +26,6 @@ namespace bcos
 {
 namespace test
 {
-inline bcos::bytes operator""_bytes(const char* s) noexcept
-{
-    return fromHexWithPrefix(std::string_view(s));
-}
-inline bcos::crypto::HashType operator""_hash(const char* s) noexcept
-{
-    return bcos::crypto::HashType(std::string_view(s), bcos::crypto::HashType::FromHex);
-}
 class TestPrompt
 {
 public:

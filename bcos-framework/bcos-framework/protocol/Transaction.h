@@ -26,33 +26,12 @@
 #if !ONLY_CPP_SDK
 #include <bcos-utilities/ITTAPI.h>
 #endif
-#include <bcos-crypto/hash/Keccak256.h>
 #include <boost/throw_exception.hpp>
 #include <utility>
 
 namespace bcos::protocol
 {
-enum class TransactionType : uint8_t
-{
-    BCOSTransaction = 0,
-    Web3Transacion = 1,
-};
-
-constexpr auto operator<=>(bcos::protocol::TransactionType const& _lhs, auto _rhs)
-    requires(std::same_as<decltype(_rhs), bcos::protocol::TransactionType> ||
-             std::unsigned_integral<decltype(_rhs)>)
-{
-    return static_cast<uint8_t>(_lhs) <=> static_cast<uint8_t>(_rhs);
-}
-
-constexpr bool operator==(bcos::protocol::TransactionType const& _lhs, auto _rhs)
-    requires(std::same_as<decltype(_rhs), bcos::protocol::TransactionType> ||
-             std::unsigned_integral<decltype(_rhs)>)
-{
-    return static_cast<uint8_t>(_lhs) == static_cast<uint8_t>(_rhs);
-}
-
-enum TransactionOp
+enum TransactionType
 {
     NullTransaction = 0,
     ContractCreation,
@@ -85,7 +64,6 @@ public:
     virtual void decode(bytesConstRef _txData) = 0;
     virtual void encode(bcos::bytes& txData) const = 0;
     virtual bcos::crypto::HashType hash() const = 0;
-    virtual bcos::bytesConstRef extraTransactionBytes() const = 0;
 
     virtual void verify(crypto::Hash& hashImpl, crypto::SignatureCrypto& signatureImpl) const
     {
@@ -98,17 +76,8 @@ public:
         {
             return;
         }
-        // based on type to switch recover sender
-        crypto::HashType hashResult;
-        if (type() == static_cast<uint8_t>(TransactionType::BCOSTransaction))
-        {
-            hashResult = hash();
-        }
-        else if (type() == static_cast<uint8_t>(TransactionType::Web3Transacion))
-        {
-            auto bytes = extraTransactionBytes();
-            hashResult = bcos::crypto::keccak256Hash(bytes);
-        }
+
+        auto hashResult = hash();
         // check the signatures
         auto signature = signatureData();
         auto ret = signatureImpl.recoverAddress(hashImpl, hashResult, signature);
@@ -143,15 +112,13 @@ public:
     virtual bcos::bytesConstRef input() const = 0;
     virtual int64_t importTime() const = 0;
     virtual void setImportTime(int64_t _importTime) = 0;
-    virtual uint8_t type() const = 0;
-
-    virtual TransactionOp txOp() const
+    virtual TransactionType type() const
     {
         if (!to().empty())
         {
-            return TransactionOp::MessageCall;
+            return TransactionType::MessageCall;
         }
-        return TransactionOp::ContractCreation;
+        return TransactionType::ContractCreation;
     }
     virtual void forceSender(const bcos::bytes& _sender) const = 0;
     virtual bcos::bytesConstRef signatureData() const = 0;

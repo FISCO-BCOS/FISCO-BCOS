@@ -18,10 +18,6 @@ concept ByteBuffer =
     std::is_standard_layout_v<RANGES::range_value_t<std::remove_cvref_t<ByteBufferType>>> &&
     (sizeof(RANGES::range_value_t<std::remove_cvref_t<ByteBufferType>>) == 1);
 
-template <class T>
-concept StringLike = std::same_as<std::remove_cvref_t<T>, std::string> ||
-                     std::same_as<std::remove_cvref_t<T>, std::string_view>;
-
 template <class Pointer>
 concept PointerLike = requires(Pointer pointer) {
     *pointer;

@@ -341,14 +341,6 @@ void PBFTCache::resetExceptionCache(ViewType _curView)
     for (auto exceptionPrePrepare = m_exceptionPrePrepareList.begin();
          exceptionPrePrepare != m_exceptionPrePrepareList.end();)
     {
-        PBFT_LOG(INFO) << LOG_DESC("resetCache: asyncResetTxsFlag exceptionPrePrepare")
-                       << LOG_KV("prePrepare", m_prePrepare ? "true" : "false")
-                       << LOG_KV("curView", _curView)
-                       << (m_precommit ? printPBFTProposal(m_precommit) : "precommit is null")
-                       << ((m_prePrepare && m_prePrepare->consensusProposal()) ?
-                                  printPBFTProposal(m_prePrepare->consensusProposal()) :
-                                  "consensusProposal is null")
-                       << printPBFTProposal((*exceptionPrePrepare)->consensusProposal());
         auto validPrePrepare = (m_precommit || (m_prePrepare && m_prePrepare->consensusProposal() &&
                                                    m_prePrepare->view() >= _curView));
         if (validPrePrepare &&
@@ -356,21 +348,13 @@ void PBFTCache::resetExceptionCache(ViewType _curView)
         {
             if (c_fileLogLevel == TRACE) [[unlikely]]
             {
-                PBFT_LOG(TRACE) << LOG_DESC("resetCache: exceptionPrePrepare but finally be valid")
-                                << printPBFTProposal((*exceptionPrePrepare)->consensusProposal());
-            }
-        }
-        else if (m_precommit && m_precommit->hash() == (*exceptionPrePrepare)->hash())
-        {
-            if (c_fileLogLevel == TRACE) [[unlikely]]
-            {
-                PBFT_LOG(TRACE) << LOG_DESC("resetCache: prepare finaly into commit")
+                PBFT_LOG(TRACE) << LOG_DESC("resetCache : exceptionPrePrepare but finally be valid")
                                 << printPBFTProposal((*exceptionPrePrepare)->consensusProposal());
             }
         }
         else
         {
-            PBFT_LOG(INFO) << LOG_DESC("resetCache: asyncResetTxsFlag exceptionPrePrepare")
+            PBFT_LOG(INFO) << LOG_DESC("resetCache : asyncResetTxsFlag exceptionPrePrepare")
                            << printPBFTProposal((*exceptionPrePrepare)->consensusProposal());
             m_config->validator()->asyncResetTxsFlag(
                 (*exceptionPrePrepare)->consensusProposal()->data(), false);

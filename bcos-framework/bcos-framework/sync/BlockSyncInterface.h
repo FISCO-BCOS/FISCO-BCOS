@@ -22,7 +22,6 @@
 #pragma once
 #include "../ledger/LedgerConfig.h"
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
-#include <bcos-sync/state/SyncPeerStatus.h>
 #include <memory>
 namespace bcos::sync
 {
@@ -43,26 +42,17 @@ public:
     // called by the frontService to dispatch message
     virtual void asyncNotifyBlockSyncMessage(Error::Ptr _error, std::string const& _uuid,
         bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data,
-        std::function<void(Error::Ptr)> _onRecv) = 0;
+        std::function<void(Error::Ptr _error)> _onRecv) = 0;
     // called by the RPC to get the sync status
     virtual void asyncGetSyncInfo(std::function<void(Error::Ptr, std::string)> _onGetSyncInfo) = 0;
 
-    virtual std::vector<PeerStatus::Ptr> getPeerStatus() = 0;
     virtual void asyncNotifyCommittedIndex(
-        bcos::protocol::BlockNumber _number, std::function<void(Error::Ptr)> _onRecv) = 0;
+        bcos::protocol::BlockNumber _number, std::function<void(Error::Ptr _error)> _onRecv) = 0;
     virtual void notifyConnectedNodes(bcos::crypto::NodeIDSet const& _connectedNodes,
         std::function<void(Error::Ptr)> _onResponse) = 0;
 
     // determine the specified node is faulty or not
     // used to optimize consensus
     virtual bool faultyNode(bcos::crypto::NodeIDPtr _nodeID) = 0;
-
-    virtual bool isSyncing() const { return false; }
-
-    virtual std::optional<std::tuple<bcos::protocol::BlockNumber, bcos::protocol::BlockNumber>>
-    getSyncStatus() const
-    {
-        return std::nullopt;
-    }
 };
 }  // namespace bcos::sync

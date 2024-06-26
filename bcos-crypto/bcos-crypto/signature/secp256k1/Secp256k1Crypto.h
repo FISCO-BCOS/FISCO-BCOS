@@ -24,12 +24,10 @@
 
 namespace bcos::crypto
 {
-constexpr uint16_t SECP256K1_SIGNATURE_R_LEN = 32;
-constexpr uint16_t SECP256K1_SIGNATURE_S_LEN = 32;
-constexpr int SECP256K1_SIGNATURE_LEN = 65;
-constexpr int SECP256K1_UNCOMPRESS_PUBLICKEY_LEN = 65;
-constexpr int SECP256K1_PUBLICKEY_LEN = 64;
-constexpr int SECP256K1_SIGNATURE_V = 64;
+const int SECP256K1_SIGNATURE_LEN = 65;
+const int SECP256K1_UNCOMPRESS_PUBLICKEY_LEN = 65;
+const int SECP256K1_PUBLICKEY_LEN = 64;
+const int SECP256K1_SIGNATURE_V = 64;
 std::shared_ptr<bytes> secp256k1Sign(const KeyPairInterface& _keyPair, const HashType& _hash);
 bool secp256k1Verify(const PublicPtr& _pubKey, const HashType& _hash, bytesConstRef _signatureData);
 std::unique_ptr<KeyPairInterface> secp256k1GenerateKeyPair();

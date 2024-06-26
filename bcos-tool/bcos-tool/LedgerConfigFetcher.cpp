@@ -21,7 +21,6 @@
 #include "LedgerConfigFetcher.h"
 #include "Exceptions.h"
 #include "VersionConverter.h"
-#include <bcos-executor/src/Common.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-utilities/Common.h>
@@ -326,21 +325,4 @@ void LedgerConfigFetcher::fetchNotifyRotateFlagInfo()
     TOOL_LOG(INFO) << LOG_DESC("fetchNotifyRotateFlagInfo success")
                    << LOG_KV("value", std::get<0>(ret));
     m_ledgerConfig->setNotifyRotateFlagInfo(boost::lexical_cast<uint64_t>(std::get<0>(ret)));
-}
-
-void LedgerConfigFetcher::fetchChainId()
-{
-    auto [chainIdStr, _] = fetchSystemConfigNoException(SYSTEM_KEY_WEB3_CHAIN_ID, {"0", 0});
-    try
-    {
-        auto chainId = boost::lexical_cast<u256>(chainIdStr);
-        TOOL_LOG(INFO) << LOG_DESC("fetchChainId success") << LOG_KV("chainId", chainIdStr);
-        m_ledgerConfig->setChainId(bcos::toEvmC(chainId));
-    }
-    catch (...)
-    {
-        TOOL_LOG(TRACE) << LOG_DESC("fetchChainId failed") << LOG_KV("chainId", chainIdStr);
-        evmc_uint256be chainId{};
-        m_ledgerConfig->setChainId(std::move(chainId));
-    }
 }

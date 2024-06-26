@@ -258,7 +258,7 @@ public:
         }
         else
         {
-            _onGetConfig(BCOS_ERROR_PTR(3008, "key not found"), "", m_ledgerConfig->blockNumber());
+            _onGetConfig(BCOS_ERROR_PTR(-1, "key not found"), "", m_ledgerConfig->blockNumber());
             return;
         }
         _onGetConfig(nullptr, value, m_ledgerConfig->blockNumber());

@@ -47,17 +47,11 @@ void TransactionImpl::encode(bcos::bytes& txData) const
 
 bcos::crypto::HashType TransactionImpl::hash() const
 {
-    if (m_inner()->dataHash.empty() && m_inner()->extraTransactionHash.empty())
+    if (m_inner()->dataHash.empty())
     {
         BOOST_THROW_EXCEPTION(EmptyTransactionHash{});
     }
 
-    if (type() == static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transacion))
-    {
-        bcos::crypto::HashType hashResult((bcos::byte*)m_inner()->extraTransactionHash.data(),
-            m_inner()->extraTransactionHash.size());
-        return hashResult;
-    }
     bcos::crypto::HashType hashResult(
         (bcos::byte*)m_inner()->dataHash.data(), m_inner()->dataHash.size());
 
@@ -180,16 +174,6 @@ void bcostars::protocol::TransactionImpl::setExtraData(std::string const& _extra
 {
     m_inner()->extraData = _extraData;
 }
-uint8_t bcostars::protocol::TransactionImpl::type() const
-{
-    return static_cast<uint8_t>(m_inner()->type);
-}
-bcos::bytesConstRef TransactionImpl::extraTransactionBytes() const
-{
-    return {reinterpret_cast<const bcos::byte*>(m_inner()->extraTransactionBytes.data()),
-        m_inner()->extraTransactionBytes.size()};
-}
-
 const bcostars::Transaction& bcostars::protocol::TransactionImpl::inner() const
 {
     return *m_inner();

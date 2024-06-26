@@ -167,7 +167,7 @@ void SyncPeerStatus::deletePeer(PublicPtr _peer)
 
 void SyncPeerStatus::foreachPeerRandom(std::function<bool(PeerStatus::Ptr)> const& _f) const
 {
-    std::vector<PeerStatus::Ptr> peersStatusList{};
+    std::vector<PeerStatus::Ptr> peersStatusList;
     {
         if (m_peersStatus.empty())
         {
@@ -176,21 +176,17 @@ void SyncPeerStatus::foreachPeerRandom(std::function<bool(PeerStatus::Ptr)> cons
         peersStatusList.reserve(m_peersStatus.size());
 
         // Get nodeid list
-        for (const auto& [_, peer] : m_peersStatus)
+        for (const auto& peer : m_peersStatus)
         {
-            peersStatusList.emplace_back(peer);
+            peersStatusList.emplace_back(peer.second);
         }
-    }
-    if (peersStatusList.empty()) [[unlikely]]
-    {
-        return;
     }
 
     // Random nodeid list
     for (size_t i = peersStatusList.size() - 1; i > 0; --i)
     {
         size_t select = rand() % (i + 1);
-        std::swap(peersStatusList[i], peersStatusList[select]);
+        swap(peersStatusList[i], peersStatusList[select]);
     }
     // access _f() according to the random list
     for (auto const& peerStatus : peersStatusList)

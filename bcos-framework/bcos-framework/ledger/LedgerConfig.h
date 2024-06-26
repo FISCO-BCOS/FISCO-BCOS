@@ -23,8 +23,6 @@
 #include "../protocol/ProtocolTypeDef.h"
 #include "Features.h"
 
-#include <evmc/evmc.hpp>
-
 namespace bcos::ledger
 {
 
@@ -158,9 +156,6 @@ public:
     Features const& features() const { return m_features; }
     void setFeatures(Features features) { m_features = features; }
 
-    std::optional<evmc_uint256be> const& chainId() const { return m_chainId; }
-    void setChainId(evmc_uint256be _chainId) { m_chainId = std::move(_chainId); }
-
 private:
     bcos::consensus::ConsensusNodeListPtr m_consensusNodeList;
     bcos::consensus::ConsensusNodeListPtr m_observerNodeList;
@@ -183,6 +178,5 @@ private:
     int64_t m_txsSize = -1;
     uint32_t m_authCheckStatus = 0;
     Features m_features;
-    std::optional<evmc_uint256be> m_chainId = {};
 };
 }  // namespace bcos::ledger

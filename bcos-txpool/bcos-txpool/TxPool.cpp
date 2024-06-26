@@ -115,12 +115,6 @@ task::Task<protocol::TransactionSubmitResult::Ptr> TxPool::submitTransaction(
     co_return co_await m_txpoolStorage->submitTransaction(std::move(transaction));
 }
 
-task::Task<protocol::TransactionSubmitResult::Ptr> TxPool::submitTransactionWithoutReceipt(
-    protocol::Transaction::Ptr transaction)
-{
-    co_return co_await m_txpoolStorage->submitTransactionWithoutReceipt(std::move(transaction));
-}
-
 task::Task<protocol::TransactionSubmitResult::Ptr> TxPool::submitTransactionWithHook(
     protocol::Transaction::Ptr transaction, std::function<void()> onTxSubmitted)
 {
@@ -562,8 +556,6 @@ void TxPool::init()
     // init syncConfig
     TXPOOL_LOG(INFO) << LOG_DESC("init sync config");
     auto txsSyncConfig = m_transactionSync->config();
-    txsSyncConfig->setConsensusNodeList(ledgerConfig->consensusNodeList());
-    txsSyncConfig->setObserverList(ledgerConfig->observerNodeList());
     m_transactionSync->config()->setMaxResponseTxsToNodesWithEmptyTxs(
         ledgerConfig->blockTxCountLimit());
     TXPOOL_LOG(INFO) << LOG_DESC("init sync config success");

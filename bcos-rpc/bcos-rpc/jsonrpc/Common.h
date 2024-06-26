@@ -25,7 +25,6 @@
 #include <exception>
 
 #define RPC_IMPL_LOG(LEVEL) BCOS_LOG(LEVEL) << "[RPC][JSONRPC]"
-#define WEB3_LOG(LEVEL) BCOS_LOG(LEVEL) << "[RPC][WEB3]"
 
 namespace bcos
 {
@@ -139,12 +138,6 @@ inline void nodeInfoToJson(Json::Value& _response, bcos::group::ChainNodeInfo::P
         featureKeys.append(key);
     }
     _response["featureKeys"] = std::move(featureKeys);
-    auto supportConfig = Json::Value(Json::arrayValue);
-    for (auto const& config : _nodeInfo->supportConfigs())
-    {
-        supportConfig.append(config);
-    }
-    _response["supportConfigs"] = std::move(supportConfig);
     _response["protocol"] = protocolResponse;
 }
 

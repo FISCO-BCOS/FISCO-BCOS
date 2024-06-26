@@ -69,7 +69,6 @@ void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforc
     }
     loadCertConfig(_pt);
     loadRpcConfig(_pt);
-    loadWeb3RpcConfig(_pt);
     loadGatewayConfig(_pt);
     loadSealerConfig(_pt);
     loadTxPoolConfig(_pt);
@@ -96,7 +95,6 @@ void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisCo
     {
         loadChainConfig(_genesisConfig, true);
     }
-    loadWeb3ChainConfig(_genesisConfig);
     loadGenesisFeatures(_genesisConfig);
 
     loadLedgerConfig(_genesisConfig);
@@ -360,15 +358,10 @@ void NodeConfig::loadRpcConfig(boost::property_tree::ptree const& _pt)
         thread_count=16
         sm_ssl=false
         disable_ssl=false
-        ; 300s
-        filter_timeout=300
-        filter_max_process_block=10
     */
     std::string listenIP = _pt.get<std::string>("rpc.listen_ip", "0.0.0.0");
     int listenPort = _pt.get<int>("rpc.listen_port", 20200);
     int threadCount = _pt.get<int>("rpc.thread_count", 8);
-    int filterTimeout = _pt.get<int>("rpc.filter_timeout", 300);
-    int maxProcessBlock = _pt.get<int>("rpc.filter_max_process_block", 10);
     bool smSsl = _pt.get<bool>("rpc.sm_ssl", false);
     bool disableSsl = _pt.get<bool>("rpc.disable_ssl", false);
     bool needRetInput = _pt.get<bool>("rpc.return_input_params", true);
@@ -378,45 +371,12 @@ void NodeConfig::loadRpcConfig(boost::property_tree::ptree const& _pt)
     m_rpcThreadPoolSize = threadCount;
     m_rpcDisableSsl = disableSsl;
     m_rpcSmSsl = smSsl;
-    m_rpcFilterTimeout = filterTimeout;
-    m_rpcMaxProcessBlock = maxProcessBlock;
     g_BCOSConfig.setNeedRetInput(needRetInput);
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadRpcConfig") << LOG_KV("listenIP", listenIP)
                          << LOG_KV("listenPort", listenPort) << LOG_KV("listenPort", listenPort)
                          << LOG_KV("smSsl", smSsl) << LOG_KV("disableSsl", disableSsl)
                          << LOG_KV("needRetInput", needRetInput);
-}
-
-void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
-{
-    /*
-    [web3_rpc]
-        enable=false
-        listen_ip=127.0.0.1
-        listen_port=8545
-        thread_count=16
-        ; 300s
-        filter_timeout=300
-        filter_max_process_block=10
-    */
-    const std::string listenIP = _pt.get<std::string>("web3_rpc.listen_ip", "127.0.0.1");
-    const int listenPort = _pt.get<int>("web3_rpc.listen_port", 8545);
-    const int threadCount = _pt.get<int>("web3_rpc.thread_count", 8);
-    const int filterTimeout = _pt.get<int>("web3_rpc.filter_timeout", 300);
-    const int maxProcessBlock = _pt.get<int>("web3_rpc.filter_max_process_block", 10);
-    const bool enableWeb3Rpc = _pt.get<bool>("web3_rpc.enable", false);
-
-    m_web3RpcListenIP = listenIP;
-    m_web3RpcListenPort = listenPort;
-    m_web3RpcThreadSize = threadCount;
-    m_enableWeb3Rpc = enableWeb3Rpc;
-    m_web3FilterTimeout = filterTimeout;
-    m_web3MaxProcessBlock = maxProcessBlock;
-
-    NodeConfig_LOG(INFO) << LOG_DESC("loadWeb3RpcConfig") << LOG_KV("enableWeb3Rpc", enableWeb3Rpc)
-                         << LOG_KV("listenIP", listenIP) << LOG_KV("listenPort", listenPort)
-                         << LOG_KV("listenPort", listenPort);
 }
 
 void NodeConfig::loadGatewayConfig(boost::property_tree::ptree const& _pt)
@@ -597,18 +557,6 @@ void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt, bool _e
                          << LOG_KV("chainId", m_genesisConfig.m_chainID)
                          << LOG_KV("groupId", m_genesisConfig.m_groupID)
                          << LOG_KV("blockLimit", m_blockLimit);
-}
-
-void NodeConfig::NodeConfig::loadWeb3ChainConfig(boost::property_tree::ptree const& _pt)
-{
-    m_genesisConfig.m_web3ChainID = _pt.get<std::string>("web3.chain_id", "0");
-    if (!isNumStr(m_genesisConfig.m_web3ChainID))
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment("The web3ChainId must be number string"));
-    }
-    NodeConfig_LOG(INFO) << LOG_DESC("loadWeb3ChainConfig")
-                         << LOG_KV("web3ChainID", m_genesisConfig.m_web3ChainID);
 }
 
 void NodeConfig::loadSecurityConfig(boost::property_tree::ptree const& _pt)
