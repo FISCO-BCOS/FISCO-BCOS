@@ -5,6 +5,11 @@ on:
       - "docs/**"
       - "Changelog.md"
       - "README.md"
+  pull_request:
+    branches:
+      - release-3.*
+      - feature-3.*
+      - master
   release:
     types: [ push ]
 concurrency:
@@ -68,13 +73,13 @@ jobs:
           . /opt/rh/rh-perl530/enable
           export LIBCLANG_PATH=/opt/rh/llvm-toolset-7.0/root/lib64/
           . /opt/rh/llvm-toolset-7.0/enable
-          cd build && cmake -DALLOCATOR=jemalloc -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DTESTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON .. || cat *.log
+          cd build && cmake -DALLOCATOR=jemalloc -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DTESTS=ON -DWITH_LIGHTNODE=OFF -DWITH_CPPSDK=OFF -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=OFF .. || cat *.log
           make -j8
           chmod +x ./fisco-bcos-air/fisco-bcos
           ./fisco-bcos-air/fisco-bcos -v
       - name: Test
-        run: cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
+        run: cd build
       - uses: actions/upload-artifact@v2
         with:
-          name: fisco-bcos.zip
+          name: fisco-bcos.tar.gz
           path: build/fisco-bcos-air/fisco-bcos

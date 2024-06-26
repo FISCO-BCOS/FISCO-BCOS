@@ -1,6 +1,9 @@
 #include "LedgerMethods.h"
 #include "bcos-tool/VersionConverter.h"
 #include "utilities/Common.h"
+
+#include <bcos-executor/src/Common.h>
+
 #include <boost/exception/diagnostic_information.hpp>
 #include <exception>
 
@@ -220,6 +223,48 @@ bcos::task::Task<bcos::crypto::HashType> bcos::ledger::tag_invoke(
     Awaitable awaitable{.m_ledger = ledger, .m_blockNumber = blockNumber, .m_result = {}};
     co_return co_await awaitable;
 }
+
+bcos::task::Task<bcos::protocol::BlockNumber> bcos::ledger::tag_invoke(
+    bcos::ledger::tag_t<bcos::ledger::getBlockNumber> /*unused*/,
+    bcos::ledger::LedgerInterface& ledger, bcos::crypto::HashType hash)
+{
+    struct Awaitable
+    {
+        bcos::ledger::LedgerInterface& m_ledger;
+        bcos::crypto::HashType m_hash;
+
+        std::variant<bcos::Error::Ptr, bcos::protocol::BlockNumber> m_result;
+
+        constexpr static bool await_ready() noexcept { return false; }
+        void await_suspend(CO_STD::coroutine_handle<> handle)
+        {
+            m_ledger.asyncGetBlockNumberByHash(
+                m_hash, [this, handle](bcos::Error::Ptr error, bcos::protocol::BlockNumber number) {
+                    if (error)
+                    {
+                        m_result.emplace<bcos::Error::Ptr>(std::move(error));
+                    }
+                    else
+                    {
+                        m_result.emplace<bcos::protocol::BlockNumber>(number);
+                    }
+                    handle.resume();
+                });
+        }
+        bcos::protocol::BlockNumber await_resume()
+        {
+            if (std::holds_alternative<bcos::Error::Ptr>(m_result))
+            {
+                BOOST_THROW_EXCEPTION(*std::get<bcos::Error::Ptr>(m_result));
+            }
+            return std::get<bcos::protocol::BlockNumber>(m_result);
+        }
+    };
+
+    Awaitable awaitable{.m_ledger = ledger, .m_hash = std::move(hash), .m_result = {}};
+    co_return co_await awaitable;
+}
+
 bcos::task::Task<std::optional<bcos::ledger::SystemConfigEntry>> bcos::ledger::tag_invoke(
     ledger::tag_t<getSystemConfig> /*unused*/, LedgerInterface& ledger, std::string_view key)
 {
@@ -394,7 +439,8 @@ bcos::task::Task<bcos::ledger::LedgerConfig::Ptr> bcos::ledger::tag_invoke(
     }
     ledgerConfig->setAuthCheckStatus(
         std::get<0>(co_await getSystemConfigOrDefault(ledger, SYSTEM_KEY_AUTH_CHECK_STATUS, 0)));
-
+    auto [chainId, _] = co_await getSystemConfigOrDefault(ledger, SYSTEM_KEY_WEB3_CHAIN_ID, "0");
+    ledgerConfig->setChainId(bcos::toEvmC(boost::lexical_cast<u256>(chainId)));
     co_return ledgerConfig;
 }
 
@@ -426,4 +472,92 @@ bcos::task::Task<bcos::ledger::Features> bcos::ledger::tag_invoke(
     }
 
     co_return features;
+}
+
+bcos::task::Task<bcos::protocol::TransactionReceipt::ConstPtr> bcos::ledger::tag_invoke(
+    ledger::tag_t<getReceipt>, LedgerInterface& ledger, crypto::HashType const& txHash)
+{
+    struct Awaitable
+    {
+        bcos::ledger::LedgerInterface& m_ledger;
+        bcos::crypto::HashType m_hash;
+
+        std::variant<bcos::Error::Ptr, bcos::protocol::TransactionReceipt::ConstPtr> m_result;
+
+        constexpr static bool await_ready() noexcept { return false; }
+        void await_suspend(CO_STD::coroutine_handle<> handle)
+        {
+            m_ledger.asyncGetTransactionReceiptByHash(m_hash, false,
+                [this, handle](bcos::Error::Ptr error,
+                    bcos::protocol::TransactionReceipt::ConstPtr receipt, MerkleProofPtr) {
+                    if (error)
+                    {
+                        m_result.emplace<bcos::Error::Ptr>(std::move(error));
+                    }
+                    else
+                    {
+                        m_result.emplace<bcos::protocol::TransactionReceipt::ConstPtr>(receipt);
+                    }
+                    handle.resume();
+                });
+        }
+        bcos::protocol::TransactionReceipt::ConstPtr await_resume()
+        {
+            if (std::holds_alternative<bcos::Error::Ptr>(m_result))
+            {
+                BOOST_THROW_EXCEPTION(*std::get<bcos::Error::Ptr>(m_result));
+            }
+            return std::get<bcos::protocol::TransactionReceipt::ConstPtr>(m_result);
+        }
+    };
+
+    Awaitable awaitable{.m_ledger = ledger, .m_hash = std::move(txHash), .m_result = {}};
+    co_return co_await awaitable;
+}
+
+bcos::task::Task<bcos::protocol::TransactionsConstPtr> bcos::ledger::tag_invoke(
+    ledger::tag_t<getTransactions>, LedgerInterface& ledger, crypto::HashListPtr hashes)
+{
+    struct Awaitable
+    {
+        bcos::ledger::LedgerInterface& m_ledger;
+        bcos::crypto::HashListPtr m_hashes;
+
+        std::variant<bcos::Error::Ptr, bcos::protocol::TransactionsConstPtr> m_result;
+
+        constexpr static bool await_ready() noexcept { return false; }
+        void await_suspend(CO_STD::coroutine_handle<> handle)
+        {
+            m_ledger.asyncGetBatchTxsByHashList(
+                std::move(m_hashes), false, [this, handle](auto&& error, auto&& txs, auto&&) {
+                    if (error)
+                    {
+                        m_result.emplace<bcos::Error::Ptr>(std::move(error));
+                    }
+                    else
+                    {
+                        m_result.emplace<bcos::protocol::TransactionsConstPtr>(txs);
+                    }
+                    handle.resume();
+                });
+        }
+        bcos::protocol::TransactionsConstPtr await_resume()
+        {
+            if (std::holds_alternative<bcos::Error::Ptr>(m_result))
+            {
+                BOOST_THROW_EXCEPTION(*std::get<bcos::Error::Ptr>(m_result));
+            }
+            return std::get<bcos::protocol::TransactionsConstPtr>(m_result);
+        }
+    };
+
+    Awaitable awaitable{.m_ledger = ledger, .m_hashes = std::move(hashes), .m_result = {}};
+    co_return co_await awaitable;
+}
+
+bcos::task::Task<std::optional<bcos::storage::Entry>> bcos::ledger::tag_invoke(
+    ledger::tag_t<getStorageAt>, LedgerInterface& ledger, std::string_view address,
+    std::string_view key, bcos::protocol::BlockNumber number)
+{
+    co_return co_await ledger.getStorageAt(address, key, number);
 }

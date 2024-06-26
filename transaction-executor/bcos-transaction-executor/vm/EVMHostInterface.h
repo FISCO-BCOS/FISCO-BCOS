@@ -23,6 +23,7 @@
 
 #include "bcos-concepts/ByteBuffer.h"
 #include "bcos-executor/src/Common.h"
+#include "bcos-framework/protocol/Exceptions.h"
 #include <evmc/evmc.h>
 #include <evmc/instructions.h>
 #include <boost/core/pointer_traits.hpp>
@@ -165,7 +166,7 @@ struct EVMHostInterface
             .block_timestamp = hostContext.timestamp(),
             .block_gas_limit = hostContext.blockGasLimit(),
             .block_prev_randao = {},
-            .chain_id = {},
+            .chain_id = hostContext.chainId(),
             .block_base_fee = {},
             .blob_base_fee = {},
             .blob_hashes = {},

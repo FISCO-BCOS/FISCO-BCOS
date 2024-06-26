@@ -23,6 +23,8 @@
 
 #include "../Common.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
+#include <bcos-framework/ledger/Ledger.h>
+#include <bcos-task/Wait.h>
 #include <bcos-tool/LedgerConfigFetcher.h>
 #include <future>
 
@@ -100,6 +102,16 @@ public:
             });
         auto txGasLimit = txGasLimitFuture.get_future().get();
         return txGasLimit;
+    }
+
+    evmc_uint256be chainId()
+    {
+        if (ledgerConfig()->chainId().has_value())
+        {
+            return ledgerConfig()->chainId().value();
+        }
+        fetchChainId();
+        return ledgerConfig()->chainId().value();
     }
 
 private:
