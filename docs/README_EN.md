@@ -12,9 +12,11 @@ In a single-chain configuration, the performance TPS can reach 100k. It fully su
 
 ## Version Information:
 
-- Stable Version (for production environment): v3.2.3, version details can be found in [FISCO-BCOS v3.2.3 Release Notes](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/tag/v3.2.3).
+- Stable Version (for production environment): v3.2.3, version details can be found
+  in [FISCO-BCOS v3.2.3 Release Notes](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/tag/v3.2.3).
 
-- Latest Version (for experiencing new features): v3.7.1, version details can be found in [FISCO-BCOS v3.7.1 Release Notes](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/tag/v3.7.1).
+- Latest Version (for experiencing new features): v3.7.1, version details can be found
+  in [FISCO-BCOS v3.7.1 Release Notes](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/tag/v3.7.1).
 
 ## System Overview
 The architecture of FISCO BCOS system consists of the basic layer, core layer, service layer, user layer, and access layer on the left-hand side, providing stable and secure blockchain underlying services. The middleware layer simplifies the process of managing the blockchain system through a visual interface. On the right-hand side, there are supporting components for development, operation, and security control, meeting the needs of different roles during the application implementation process. Meanwhile, privacy protection and cross-chain-related technology components are also provided to satisfy the application requirements in different scenarios.

@@ -40,16 +40,16 @@ using namespace std;
 BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
     LedgerCache::Ptr ledgerCache, crypto::Hash::Ptr _hashImpl,
     bcos::protocol::BlockNumber blockNumber, h256 blockHash, uint64_t timestamp,
-    uint32_t blockVersion, const VMSchedule& _schedule, bool _isWasm, bool _isAuthCheck,
+    uint32_t blockVersion, bool _isWasm, bool _isAuthCheck,
     storage::StorageInterface::Ptr backendStorage)
   : m_blockNumber(blockNumber),
     m_blockHash(blockHash),
     m_timeStamp(timestamp),
     m_blockVersion(blockVersion),
-    m_schedule(_schedule),
     m_isWasm(_isWasm),
     m_isAuthCheck(_isAuthCheck),
     m_storage(std::move(storage)),
+    m_transientStorageMap(std::make_shared<transientStorageMap>(10)),
     m_hashImpl(std::move(_hashImpl)),
     m_ledgerCache(std::move(ledgerCache)),
     m_backendStorage(std::move(backendStorage))
@@ -61,15 +61,15 @@ BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> stora
     }
 
     task::syncWait(readFromStorage(m_features, *m_storage, m_blockNumber));
+    setVMSchedule();
 }
 
 BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
     LedgerCache::Ptr ledgerCache, crypto::Hash::Ptr _hashImpl, protocol::BlockHeader const& current,
-    const VMSchedule& _schedule, bool _isWasm, bool _isAuthCheck,
-    storage::StorageInterface::Ptr backendStorage,
+    bool _isWasm, bool _isAuthCheck, storage::StorageInterface::Ptr backendStorage,
     std::shared_ptr<std::set<std::string, std::less<>>> _keyPageIgnoreTables)
   : BlockContext(std::move(storage), std::move(ledgerCache), std::move(_hashImpl), current.number(),
-        current.hash(), current.timestamp(), current.version(), _schedule, _isWasm, _isAuthCheck,
+        current.hash(), current.timestamp(), current.version(), _isWasm, _isAuthCheck,
         std::move(backendStorage))
 {
     if (current.number() > 0 && !current.parentInfo().empty())
@@ -97,6 +97,7 @@ BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> stora
             }
         }
     }
+    setVMSchedule();
 }
 
 
@@ -122,6 +123,21 @@ void BlockContext::setExecutiveFlow(
 {
     bcos::ReadGuard l(x_executiveFlows);
     m_executiveFlows.emplace(codeAddress, executiveFlow);
+}
+void BlockContext::setVMSchedule()
+{
+    if (m_features.get(ledger::Features::Flag::feature_evm_cancun))
+    {
+        m_schedule = FiscoBcosScheduleCancun;
+    }
+    else if (m_blockVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION)
+    {
+        m_schedule = FiscoBcosScheduleV320;
+    }
+    else
+    {
+        m_schedule = FiscoBcosSchedule;
+    }
 }
 
 void BlockContext::suicide(std::string_view contract2Suicide)

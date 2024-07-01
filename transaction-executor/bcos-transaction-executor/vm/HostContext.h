@@ -68,8 +68,6 @@ struct NotFoundCodeError : public bcos::Error {};
 // clang-format on
 
 evmc_bytes32 evm_hash_fn(const uint8_t* data, size_t size);
-executor::VMSchedule const& vmSchedule();
-static const auto mode = toRevision(vmSchedule());
 
 std::variant<const evmc_message*, evmc_message> getMessage(const evmc_message& inputMessage,
     protocol::BlockNumber blockNumber, int64_t contextID, int64_t seq,
@@ -77,16 +75,19 @@ std::variant<const evmc_message*, evmc_message> getMessage(const evmc_message& i
 
 struct Executable
 {
-    explicit Executable(storage::Entry code)
+    explicit Executable(storage::Entry code, evmc_revision revision)
       : m_code(std::make_optional(std::move(code))),
+        m_revision(revision),
         m_vmInstance(VMFactory::create(VMKind::evmone,
-            bytesConstRef(reinterpret_cast<const uint8_t*>(m_code->data()), m_code->size()), mode))
+            bytesConstRef(reinterpret_cast<const uint8_t*>(m_code->data()), m_code->size()),
+            m_revision))
     {}
-    explicit Executable(bytesConstRef code)
-      : m_vmInstance(VMFactory::create(VMKind::evmone, code, mode))
+    explicit Executable(bytesConstRef code, evmc_revision revision)
+      : m_vmInstance(VMFactory::create(VMKind::evmone, code, revision))
     {}
 
     std::optional<storage::Entry> m_code;
+    evmc_revision m_revision;
     VMInstance m_vmInstance;
 };
 
@@ -94,7 +95,7 @@ template <class Storage>
 using Account = ledger::account::EVMAccount<Storage>;
 
 inline task::Task<std::shared_ptr<Executable>> getExecutable(
-    auto& storage, const evmc_address& address)
+    auto& storage, const evmc_address& address, const evmc_revision& revision)
 {
     static storage2::memory_storage::MemoryStorage<evmc_address, std::shared_ptr<Executable>,
         storage2::memory_storage::Attribute(
@@ -110,18 +111,20 @@ inline task::Task<std::shared_ptr<Executable>> getExecutable(
     Account<std::decay_t<decltype(storage)>> account(storage, address);
     if (auto codeEntry = co_await ledger::account::code(account))
     {
-        auto executable = std::make_shared<Executable>(Executable(std::move(*codeEntry)));
+        auto executable =
+            std::make_shared<Executable>(Executable(std::move(*codeEntry), std::move(revision)));
         co_await storage2::writeOne(cachedExecutables, address, executable);
         co_return executable;
     }
     co_return std::shared_ptr<Executable>{};
 }
 
-template <class Storage>
+template <class Storage, class TransientStorage>
 class HostContext : public evmc_host_context
 {
 private:
     std::reference_wrapper<Storage> m_rollbackableStorage;
+    std::reference_wrapper<TransientStorage> m_rollbackableTransientStorage;
     std::reference_wrapper<const protocol::BlockHeader> m_blockHeader;
     std::reference_wrapper<const evmc_address> m_origin;
     std::string_view m_abi;
@@ -133,6 +136,7 @@ private:
     std::variant<const evmc_message*, evmc_message> m_message;
     Account<Storage> m_myAccount;
 
+    evmc_revision m_revision;
     std::vector<protocol::LogEntry> m_logs;
     std::shared_ptr<Executable> m_executable;
     const bcos::transaction_executor::Precompiled* m_preparedPrecompiled{};
@@ -162,7 +166,7 @@ private:
     {
     } innerConstructor{};
 
-    HostContext(InnerConstructor /*unused*/, Storage& storage,
+    HostContext(InnerConstructor /*unused*/, Storage& storage, TransientStorage& transientStorage,
         const protocol::BlockHeader& blockHeader, const evmc_message& message,
         const evmc_address& origin, std::string_view abi, int contextID, int64_t& seq,
         PrecompiledManager const& precompiledManager, ledger::LedgerConfig const& ledgerConfig,
@@ -174,6 +178,7 @@ private:
             .version = 0,
             .metrics = std::addressof(executor::ethMetrics)},
         m_rollbackableStorage(storage),
+        m_rollbackableTransientStorage(transientStorage),
         m_blockHeader(blockHeader),
         m_origin(origin),
         m_abi(abi),
@@ -185,15 +190,25 @@ private:
         m_message(
             getMessage(message, m_blockHeader.get().number(), m_contextID, m_seq, m_hashImpl)),
         m_myAccount(getMyAccount())
-    {}
+    {
+        if (m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_evm_cancun))
+        {
+            m_revision = EVMC_CANCUN;
+        }
+        else
+        {
+            m_revision = EVMC_PARIS;
+        }
+    }
 
 public:
-    HostContext(Storage& storage, protocol::BlockHeader const& blockHeader,
-        const evmc_message& message, const evmc_address& origin, std::string_view abi,
-        int contextID, int64_t& seq, PrecompiledManager const& precompiledManager,
-        ledger::LedgerConfig const& ledgerConfig, crypto::Hash const& hashImpl, auto&& waitOperator)
-      : HostContext(innerConstructor, storage, blockHeader, message, origin, abi, contextID, seq,
-            precompiledManager, ledgerConfig, hashImpl,
+    HostContext(Storage& storage, TransientStorage& transientStorage,
+        protocol::BlockHeader const& blockHeader, const evmc_message& message,
+        const evmc_address& origin, std::string_view abi, int contextID, int64_t& seq,
+        PrecompiledManager const& precompiledManager, ledger::LedgerConfig const& ledgerConfig,
+        crypto::Hash const& hashImpl, auto&& waitOperator)
+      : HostContext(innerConstructor, storage, transientStorage, blockHeader, message, origin, abi,
+            contextID, seq, precompiledManager, ledgerConfig, hashImpl,
             getHostInterface<HostContext>(std::forward<decltype(waitOperator)>(waitOperator)))
     {}
 
@@ -213,9 +228,50 @@ public:
         co_await ledger::account::setStorage(m_myAccount, *key, *value);
     }
 
+    task::Task<evmc_bytes32> getTransientStorage(const evmc_bytes32* key)
+    {
+        auto valueEntry = co_await storage2::readOne(m_rollbackableTransientStorage.get(),
+            transaction_executor::StateKeyView{
+                concepts::bytebuffer::toView(co_await ledger::account::path(m_myAccount)),
+                concepts::bytebuffer::toView(key->bytes)});
+        evmc_bytes32 value;
+        if (valueEntry)
+        {
+            auto field = valueEntry->get();
+            std::uninitialized_copy_n(field.data(), sizeof(value), value.bytes);
+        }
+        else
+        {
+            std::uninitialized_fill_n(value.bytes, sizeof(value), 0);
+        }
+        if (c_fileLogLevel <= LogLevel::TRACE)
+        {
+            HOST_CONTEXT_LOG(TRACE)
+                << "getTransientStorage:" << LOG_KV("key", concepts::bytebuffer::toView(key->bytes))
+                << LOG_KV("value", concepts::bytebuffer::toView(value.bytes));
+        }
+        co_return value;
+    }
+
+    task::Task<void> setTransientStorage(const evmc_bytes32* key, const evmc_bytes32* value)
+    {
+        storage::Entry valueEntry(concepts::bytebuffer::toView(value->bytes));
+        StateKey stateKey =
+            StateKey{concepts::bytebuffer::toView(co_await ledger::account::path(m_myAccount)),
+                concepts::bytebuffer::toView(key->bytes)};
+        if (c_fileLogLevel <= LogLevel::TRACE)
+        {
+            HOST_CONTEXT_LOG(TRACE) << "setTransientStorage:"
+                                    << LOG_KV("key", concepts::bytebuffer::toView(key->bytes));
+        }
+        co_await storage2::writeOne(
+            m_rollbackableTransientStorage.get(), stateKey, std::move(valueEntry));
+    }
+
     task::Task<std::optional<storage::Entry>> code(const evmc_address& address)
     {
-        if (auto executable = co_await getExecutable(m_rollbackableStorage.get(), address);
+        if (auto executable =
+                co_await getExecutable(m_rollbackableStorage.get(), address, m_revision);
             executable && executable->m_code)
         {
             co_return executable->m_code;
@@ -312,6 +368,7 @@ public:
         }
 
         auto savepoint = m_rollbackableStorage.get().current();
+        auto transientSavepoint = m_rollbackableTransientStorage.get().current();
         std::optional<EVMCResult> evmResult;
         if (m_ledgerConfig.get().authCheckStatus() != 0U)
         {
@@ -383,6 +440,7 @@ public:
         if (evmResult->status_code != EVMC_SUCCESS)
         {
             co_await m_rollbackableStorage.get().rollback(savepoint);
+            co_await m_rollbackableTransientStorage.get().rollback(transientSavepoint);
 
             if (auto hexAddress = address2FixedArray(ref.code_address);
                 bcos::precompiled::c_systemTxsAddress.find(concepts::bytebuffer::toView(
@@ -429,9 +487,9 @@ public:
                 << " recipient:" << address2HexString(message.recipient) << " gas:" << message.gas;
         }
 
-        HostContext hostcontext(innerConstructor, m_rollbackableStorage.get(), m_blockHeader,
-            message, m_origin, {}, m_contextID, m_seq, m_precompiledManager.get(), m_ledgerConfig,
-            m_hashImpl, interface);
+        HostContext hostcontext(innerConstructor, m_rollbackableStorage.get(),
+            m_rollbackableTransientStorage.get(), m_blockHeader, message, m_origin, {}, m_contextID,
+            m_seq, m_precompiledManager.get(), m_ledgerConfig, m_hashImpl, interface);
 
         co_await hostcontext.prepare();
         auto result = co_await hostcontext.execute();
@@ -450,7 +508,7 @@ private:
     void prepareCreate()
     {
         bytesConstRef createCode(message().input_data, message().input_size);
-        m_executable = std::make_shared<Executable>(createCode);
+        m_executable = std::make_shared<Executable>(createCode, m_revision);
     }
 
     task::Task<EVMCResult> executeCreate()
@@ -464,16 +522,15 @@ private:
 
         auto& ref = message();
         co_await ledger::account::create(m_myAccount);
-        auto result = m_executable->m_vmInstance.execute(
-            interface, this, mode, std::addressof(ref), message().input_data, message().input_size);
+        auto result = m_executable->m_vmInstance.execute(interface, this, m_revision,
+            std::addressof(ref), message().input_data, message().input_size);
         if (result.status_code == 0)
         {
             auto code = bytesConstRef(result.output_data, result.output_size);
             auto codeHash = m_hashImpl.get().hash(code);
             co_await ledger::account::setCode(
                 m_myAccount, code.toBytes(), std::string(m_abi), codeHash);
-
-            result.gas_left -= result.output_size * vmSchedule().createDataGas;
+            result.gas_left -= result.output_size * bcos::executor::VMSchedule().createDataGas;
             result.create_address = message().code_address;
 
             // Clear the output
@@ -507,7 +564,8 @@ private:
             }
         }
 
-        m_executable = co_await getExecutable(m_rollbackableStorage.get(), message().code_address);
+        m_executable =
+            co_await getExecutable(m_rollbackableStorage.get(), message().code_address, m_revision);
         if (m_executable && hasPrecompiledPrefix(m_executable->m_code->data()))
         {
             if (std::holds_alternative<const evmc_message*>(m_message))
@@ -573,16 +631,17 @@ private:
         {
             if (!m_executable)
             {
-                m_executable =
-                    co_await getExecutable(m_rollbackableStorage.get(), ref.code_address);
+                m_executable = co_await getExecutable(
+                    m_rollbackableStorage.get(), ref.code_address, m_revision);
             }
 
             if (!m_executable)
             {
                 BOOST_THROW_EXCEPTION(NotFoundCodeError());
             }
-            co_return m_executable->m_vmInstance.execute(interface, this, mode, std::addressof(ref),
-                (const uint8_t*)m_executable->m_code->data(), m_executable->m_code->size());
+            co_return m_executable->m_vmInstance.execute(interface, this, m_revision,
+                std::addressof(ref), (const uint8_t*)m_executable->m_code->data(),
+                m_executable->m_code->size());
         }
     }
 };
