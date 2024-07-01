@@ -67,6 +67,7 @@ modify_node_path=""
 multi_ca_path=""
 consensus_type="pbft"
 supported_consensus=(pbft rpbft)
+log_level="info"
 
 # for pro or max default setting
 bcos_builder_package=BcosBuilder.tgz
@@ -577,6 +578,7 @@ air
     -c <Config Path>                    [Required when expand node] Specify the path of the expanded node config.ini, config.genesis and p2p connection file nodes.json
     -d <CA cert path>                   [Required when expand node] When expanding the node, specify the path where the CA certificate and private key are located
     -D <docker mode>                    Default off. If set -D, build with docker
+    -E <Enable debug log>               Default off. If set -E, enable debug log
     -a <Auth account>                   [Optional] when Auth mode Specify the admin account address.
     -w <WASM mode>                      [Optional] Whether to use the wasm virtual machine engine, default is false
     -R <Serial_mode>                    [Optional] Whether to use serial execute,default is true
@@ -647,7 +649,7 @@ EOF
 }
 
 parse_params() {
-    while getopts "l:C:c:o:e:t:p:d:g:G:L:v:i:I:M:k:zwDshHmn:R:a:N:u:y:r:V:6T:" option; do
+    while getopts "l:C:c:o:e:t:p:d:g:G:L:v:i:I:M:k:zwDshHmEn:R:a:N:u:y:r:V:6T:" option; do
         case $option in
         6) use_ipv6="true" && default_listen_ip="::"
         ;;
@@ -699,6 +701,9 @@ parse_params() {
         m)
            monitor_mode="true"
            ;;
+        E)
+            log_level="debug"
+            ;;
         n)
            node_key_dir="${OPTARG}"
            dir_must_exists "${node_key_dir}"
@@ -1534,7 +1539,7 @@ generate_common_ini() {
     enable_console_output = false
     log_path=./log
     ; info debug trace
-    level=info
+    level=${log_level}
     ; MB
     max_log_file_size=1024
     ; rotate the log every hour

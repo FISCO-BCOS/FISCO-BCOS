@@ -146,8 +146,8 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl) : P
         SYSTEM_KEY_WEB3_CHAIN_ID, [](const std::string& _value, uint32_t blockVersion) -> uint64_t {
             if (blockVersion < BlockVersion::V3_9_0_VERSION)
             {
-                BOOST_THROW_EXCEPTION(
-                    PrecompiledError(fmt::format("unsupported key {}", SYSTEM_KEY_WEB3_CHAIN_ID)));
+                BOOST_THROW_EXCEPTION(bcos::tool::InvalidVersion(
+                    fmt::format("unsupported key {}", SYSTEM_KEY_WEB3_CHAIN_ID)));
             }
             uint64_t number = 0;
             try
@@ -304,6 +304,7 @@ int64_t SystemConfigPrecompiled::validate(
     }
     catch (bcos::tool::InvalidSetFeature const& e)
     {
+        ///
         PRECOMPILED_LOG(INFO) << LOG_DESC("SystemConfigPrecompiled: set feature failed")
                               << LOG_KV("info", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(PrecompiledError(*boost::get_error_info<bcos::errinfo_comment>(e)));
