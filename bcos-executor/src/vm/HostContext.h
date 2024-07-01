@@ -27,6 +27,7 @@
 #include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/storage/Table.h"
+#include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
@@ -110,6 +111,8 @@ public:
             return 3000000000;
         }
     }
+
+    evmc_uint256be chainId() const { return m_executive->blockContext().ledgerCache()->chainId(); }
 
     /// Revert any changes made (by any of the other calls).
     void log(h256s&& _topics, bytesConstRef _data);

@@ -76,9 +76,10 @@ public:
             storage.m_storage.get(), std::forward<decltype(keys)>(keys));
     }
 
-    friend auto tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/, Rollbackable& storage,
-        auto&& key) -> task::Task<task::AwaitableReturnType<std::invoke_result_t<storage2::ReadOne,
-                        Storage&, decltype(key)>>>
+    friend auto tag_invoke(
+        storage2::tag_t<storage2::readOne> /*unused*/, Rollbackable& storage, auto&& key)
+        -> task::Task<task::AwaitableReturnType<
+            std::invoke_result_t<storage2::ReadOne, Storage&, decltype(key)>>>
     {
         co_return co_await storage2::readOne(
             storage.m_storage.get(), std::forward<decltype(key)>(key));
@@ -138,7 +139,7 @@ public:
 
     friend auto tag_invoke(bcos::storage2::tag_t<storage2::range> /*unused*/, Rollbackable& storage,
         auto&&... args) -> task::Task<storage2::ReturnType<std::invoke_result_t<storage2::Range,
-                            std::add_lvalue_reference_t<Storage>, decltype(args)...>>>
+        std::add_lvalue_reference_t<Storage>, decltype(args)...>>>
     {
         co_return co_await storage2::range(
             storage.m_storage.get(), std::forward<decltype(args)>(args)...);

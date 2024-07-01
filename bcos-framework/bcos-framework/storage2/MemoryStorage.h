@@ -20,7 +20,9 @@ namespace bcos::storage2::memory_storage
 
 template <class Object>
 concept HasMemberSize = requires(Object object) {
-    { object.size() } -> std::integral;
+    {
+        object.size()
+    } -> std::integral;
 };
 
 using Empty = std::monostate;
@@ -402,21 +404,26 @@ public:
         }
     }
 
-    template <class Begin, class End>
     class Iterator
     {
     private:
-        Begin m_begin;
-        End m_end;
+        std::reference_wrapper<Buckets const> m_buckets;
+        size_t m_bucketIndex = 0;
+        RANGES::iterator_t<Container> m_begin;
+        RANGES::iterator_t<Container> m_end;
+
+        using IteratorValue =
+            std::conditional_t<withLogicalDeletion, const ValueType*, const ValueType&>;
 
     public:
-        Iterator(Begin begin, End end) : m_begin(begin), m_end(end) {}
+        Iterator(const Buckets& buckets)
+          : m_buckets(buckets),
+            m_begin((m_buckets.get()[m_bucketIndex]).container.begin()),
+            m_end((m_buckets.get()[m_bucketIndex]).container.end())
+        {}
 
         auto next()
         {
-            using IteratorValue =
-                std::conditional_t<withLogicalDeletion, const ValueType*, const ValueType&>;
-
             std::optional<std::tuple<const Key&, IteratorValue>> result;
             if (m_begin != m_end)
             {
@@ -431,18 +438,40 @@ public:
                     result.emplace(std::make_tuple(std::cref(data.key), std::cref(data.value)));
                 }
                 ++m_begin;
+                return task::AwaitableValue(std::move(result));
+            }
+
+            if (m_bucketIndex + 1 < m_buckets.get().size())
+            {
+                ++m_bucketIndex;
+                m_begin = m_buckets.get()[m_bucketIndex].container.begin();
+                m_end = m_buckets.get()[m_bucketIndex].container.end();
+                return next();
             }
             return task::AwaitableValue(std::move(result));
+        }
+
+        auto seek(auto&& key)
+            requires(!withConcurrent && withOrdered)
+        {
+            auto const& index = m_buckets.get()[m_bucketIndex].container.template get<0>();
+            m_begin = index.lower_bound(std::forward<decltype(key)>(key));
         }
     };
 
     friend auto tag_invoke(
         bcos::storage2::tag_t<storage2::range> /*unused*/, MemoryStorage const& storage)
-        requires(!withConcurrent)
     {
-        return task::AwaitableValue(Iterator<decltype(storage.m_buckets[0].container.begin()),
-            decltype(storage.m_buckets[0].container.end())>(
-            storage.m_buckets[0].container.begin(), storage.m_buckets[0].container.end()));
+        return task::AwaitableValue(Iterator(storage.m_buckets));
+    }
+
+    friend auto tag_invoke(bcos::storage2::tag_t<storage2::range> /*unused*/,
+        MemoryStorage const& storage, RANGE_SEEK_TYPE /*unused*/, auto&& key)
+        requires(!withConcurrent && withOrdered)
+    {
+        auto iterator = Iterator(storage.m_buckets);
+        iterator.seek(std::forward<decltype(key)>(key));
+        return task::AwaitableValue(std::move(iterator));
     }
 
     bool empty() const

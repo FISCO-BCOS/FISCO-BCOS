@@ -66,6 +66,23 @@ void JsonRpcInterface::initMethod()
     m_methodToFunc["getGroupNodeInfo"] = std::bind(
         &JsonRpcInterface::getGroupNodeInfoI, this, std::placeholders::_1, std::placeholders::_2);
 
+    // filter interface
+    m_methodToFunc["newBlockFilter"] = std::bind(
+        &JsonRpcInterface::newBlockFilterI, this, std::placeholders::_1, std::placeholders::_2);
+    m_methodToFunc["newPendingTransactionFilter"] =
+        std::bind(&JsonRpcInterface::newPendingTransactionFilterI, this, std::placeholders::_1,
+            std::placeholders::_2);
+    m_methodToFunc["newFilter"] = std::bind(
+        &JsonRpcInterface::newFilterI, this, std::placeholders::_1, std::placeholders::_2);
+    m_methodToFunc["uninstallFilter"] = std::bind(
+        &JsonRpcInterface::uninstallFilterI, this, std::placeholders::_1, std::placeholders::_2);
+    m_methodToFunc["getFilterChanges"] = std::bind(
+        &JsonRpcInterface::getFilterChangesI, this, std::placeholders::_1, std::placeholders::_2);
+    m_methodToFunc["getFilterLogs"] = std::bind(
+        &JsonRpcInterface::getFilterLogsI, this, std::placeholders::_1, std::placeholders::_2);
+    m_methodToFunc["getLogs"] =
+        std::bind(&JsonRpcInterface::getLogsI, this, std::placeholders::_1, std::placeholders::_2);
+
     for (const auto& method : m_methodToFunc)
     {
         RPC_IMPL_LOG(INFO) << LOG_BADGE("initMethod") << LOG_KV("method", method.first);
@@ -91,7 +108,10 @@ void JsonRpcInterface::onRPCRequest(std::string_view _requestBody, Sender _sende
             BOOST_THROW_EXCEPTION(JsonRpcException(
                 JsonRpcError::MethodNotFound, "The method does not exist/is not available."));
         }
-        RPC_IMPL_LOG(TRACE) << LOG_BADGE("onRPCRequest") << LOG_KV("request", _requestBody);
+        if (c_fileLogLevel == TRACE) [[unlikely]]
+        {
+            RPC_IMPL_LOG(TRACE) << LOG_BADGE("onRPCRequest") << LOG_KV("request", _requestBody);
+        }
         it->second(
             request.params, [response, _sender](Error::Ptr _error, Json::Value& _result) mutable {
                 if (_error && (_error->errorCode() != bcos::protocol::CommonError::SUCCESS))
@@ -105,10 +125,13 @@ void JsonRpcInterface::onRPCRequest(std::string_view _requestBody, Sender _sende
                     response.result.swap(_result);
                 }
                 auto strResp = toStringResponse(std::move(response));
-                RPC_IMPL_LOG(TRACE)
-                    << LOG_BADGE("onRPCRequest")
-                    << LOG_KV("response",
-                           std::string_view((const char*)strResp.data(), strResp.size()));
+                if (c_fileLogLevel == TRACE) [[unlikely]]
+                {
+                    RPC_IMPL_LOG(TRACE)
+                        << LOG_BADGE("onRPCRequest")
+                        << LOG_KV("response",
+                               std::string_view((const char*)strResp.data(), strResp.size()));
+                }
                 _sender(std::move(strResp));
             });
 
@@ -133,7 +156,7 @@ void JsonRpcInterface::onRPCRequest(std::string_view _requestBody, Sender _sende
                         << LOG_KV("request", _requestBody)
                         << LOG_KV("response",
                                std::string_view((const char*)strResp.data(), strResp.size()));
-    _sender(strResp);
+    _sender(std::move(strResp));
 }
 
 void bcos::rpc::parseRpcRequestJson(std::string_view _requestBody, JsonRequest& _jsonRequest)
@@ -219,7 +242,10 @@ void bcos::rpc::parseRpcRequestJson(std::string_view _requestBody, JsonRequest& 
 bcos::bytes bcos::rpc::toStringResponse(JsonResponse _jsonResponse)
 {
     auto jResp = toJsonResponse(std::move(_jsonResponse));
-    std::unique_ptr<Json::StreamWriter> writer(Json::StreamWriterBuilder().newStreamWriter());
+    auto builder = Json::StreamWriterBuilder();
+    builder["commentStyle"] = "None";
+    builder["indentation"] = "";
+    std::unique_ptr<Json::StreamWriter> writer(builder.newStreamWriter());
     class JsonSink
     {
     public:
