@@ -52,6 +52,7 @@ namespace fs = boost::filesystem;
 uint32_t PageCount = 10000;
 uint32_t BigTablePageCount = 50;
 
+
 const string SYNCED_BLOCK_NUMBER = "#extra_synce_block_number#";
 const std::vector<std::string> ForceTables = {
     SYS_HASH_2_BLOCK, SYS_BLOCK_2_NONCES, SYS_TX_HASH_2_BLOCK};
