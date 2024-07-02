@@ -75,8 +75,9 @@ BOOST_AUTO_TEST_CASE(merge)
     task::syncWait([this]() -> task::Task<void> {
         auto view = std::make_optional(multiLayerStorage.fork());
         view->newMutable();
-        auto toKey = RANGES::views::transform(
-            [](int num) { return StateKey{"test_table"sv, fmt::format("key: {}", num)}; });
+        auto toKey = RANGES::views::transform([](int num) {
+            return StateKey{"test_table"sv, fmt::format("key: {}", num)};
+        });
         auto toValue = RANGES::views::transform([](int num) {
             storage::Entry entry;
             entry.set(fmt::format("value: {}", num));
