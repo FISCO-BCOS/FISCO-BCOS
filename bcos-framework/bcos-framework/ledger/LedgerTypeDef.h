@@ -20,6 +20,7 @@
 
 #pragma once
 #include "../protocol/ProtocolTypeDef.h"
+#include "SystemConfigs.h"
 #include <bcos-utilities/Common.h>
 
 namespace bcos::ledger
@@ -34,25 +35,25 @@ constexpr static int32_t TRANSACTIONS_HASH = 0x0001;
 constexpr static int32_t TRANSACTIONS = 0x0004;
 constexpr static int32_t RECEIPTS = 0x0002;
 
+// clang-format off
 // get system config key
-constexpr static std::string_view SYSTEM_KEY_TX_GAS_LIMIT = "tx_gas_limit";
-constexpr static std::string_view SYSTEM_KEY_TX_GAS_PRICE = "tx_gas_price";
-constexpr static std::string_view SYSTEM_KEY_TX_COUNT_LIMIT = "tx_count_limit";
-constexpr static std::string_view SYSTEM_KEY_CONSENSUS_LEADER_PERIOD = "consensus_leader_period";
-constexpr static std::string_view SYSTEM_KEY_AUTH_CHECK_STATUS = "auth_check_status";
+constexpr static std::string_view SYSTEM_KEY_WEB3_CHAIN_ID = magic_enum::enum_name(SystemConfig::web3_chain_id);
+constexpr static std::string_view SYSTEM_KEY_TX_GAS_LIMIT = magic_enum::enum_name(SystemConfig::tx_gas_limit);
+constexpr static std::string_view SYSTEM_KEY_TX_GAS_PRICE = magic_enum::enum_name(SystemConfig::tx_gas_price);
+constexpr static std::string_view SYSTEM_KEY_TX_COUNT_LIMIT = magic_enum::enum_name(SystemConfig::tx_count_limit);
+constexpr static std::string_view SYSTEM_KEY_CONSENSUS_LEADER_PERIOD = magic_enum::enum_name(SystemConfig::consensus_leader_period);
+constexpr static std::string_view SYSTEM_KEY_AUTH_CHECK_STATUS = magic_enum::enum_name(SystemConfig::auth_check_status);
 // for compatibility
-constexpr static std::string_view SYSTEM_KEY_COMPATIBILITY_VERSION = "compatibility_version";
+constexpr static std::string_view SYSTEM_KEY_COMPATIBILITY_VERSION = magic_enum::enum_name(SystemConfig::compatibility_version);
 // system configuration for RPBFT
-constexpr static std::string_view SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM =
-    "feature_rpbft_epoch_sealer_num";
-constexpr static std::string_view SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM =
-    "feature_rpbft_epoch_block_num";
-constexpr static std::string_view SYSTEM_KEY_RPBFT_SWITCH = "feature_rpbft";
+constexpr static std::string_view SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM = magic_enum::enum_name(SystemConfig::feature_rpbft_epoch_sealer_num);
+constexpr static std::string_view SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM = magic_enum::enum_name(SystemConfig::feature_rpbft_epoch_block_num);
+constexpr static std::string_view SYSTEM_KEY_RPBFT_SWITCH = magic_enum::enum_name(SystemConfig::feature_rpbft);
 // system configuration for balance
-constexpr static std::string_view SYSTEM_KEY_BALANCE_PRECOMPILED_SWITCH =
-    "feature_balance_precompiled";
+constexpr static std::string_view SYSTEM_KEY_BALANCE_PRECOMPILED_SWITCH = magic_enum::enum_name(SystemConfig::feature_balance_precompiled);
 // notify rotate key for rpbft
 constexpr static std::string_view INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE = "feature_rpbft_notify_rotate";
+// clang-format on
 constexpr static std::string_view PBFT_CONSENSUS_TYPE = "pbft";
 constexpr static std::string_view RPBFT_CONSENSUS_TYPE = "rpbft";
 

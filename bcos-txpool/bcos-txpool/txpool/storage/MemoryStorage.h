@@ -64,6 +64,9 @@ public:
     task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
         protocol::Transaction::Ptr transaction) override;
 
+    task::Task<protocol::TransactionSubmitResult::Ptr> submitTransactionWithoutReceipt(
+        protocol::Transaction::Ptr transaction) override;
+
     std::vector<protocol::Transaction::ConstPtr> getTransactions(
         RANGES::any_view<bcos::h256, RANGES::category::mask | RANGES::category::sized> hashes)
         override;

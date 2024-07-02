@@ -68,7 +68,7 @@ private:
     void onExecuteFinish(
         std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback) override;
 
-    void serialPrepareExecutor() override {
+    void serialPrepareExecutor() override{
         // do nothing
     };
 

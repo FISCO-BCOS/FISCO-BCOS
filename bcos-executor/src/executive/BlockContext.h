@@ -63,8 +63,8 @@ public:
 
     uint64_t txGasLimit() const { return m_ledgerCache->fetchTxGasLimit(); }
 
-    auto getTxCriticals(
-        const protocol::Transaction::ConstPtr& _tx) -> std::shared_ptr<std::vector<std::string>>;
+    auto getTxCriticals(const protocol::Transaction::ConstPtr& _tx)
+        -> std::shared_ptr<std::vector<std::string>>;
 
     crypto::Hash::Ptr hashHandler() const { return m_hashImpl; }
     bool isWasm() const { return m_isWasm; }
@@ -79,6 +79,8 @@ public:
     void killSuicides();
 
     VMSchedule const& vmSchedule() const { return m_schedule; }
+
+    LedgerCache::Ptr const& ledgerCache() const { return m_ledgerCache; }
 
     ExecutiveFlowInterface::Ptr getExecutiveFlow(std::string codeAddress);
     void setExecutiveFlow(std::string codeAddress, ExecutiveFlowInterface::Ptr executiveFlow);

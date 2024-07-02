@@ -233,6 +233,11 @@ void PBFTEngine::onProposalApplyFailed(int64_t _errorCode, PBFTProposalInterface
         _proposal->index() >= m_config->syncingHighestNumber())
     {
         m_config->timer()->restart();
+        // restart checkPoint timer to advoid timeout
+        if (m_timer->running())
+        {
+            m_timer->restart();
+        }
         PBFT_LOG(INFO) << LOG_DESC(
                               "proposal execute failed and re-push the proposal "
                               "into the cache")
@@ -273,6 +278,11 @@ void PBFTEngine::onProposalApplySuccess(
     if (m_config->timer()->running())
     {
         m_config->timer()->restart();
+    }
+    // restart checkPoint timer to advoid timeout
+    if (m_timer->running())
+    {
+        m_timer->restart();
     }
     m_cacheProcessor->addCheckPointMsg(checkPointMsg);
     m_cacheProcessor->setCheckPointProposal(_executedProposal);

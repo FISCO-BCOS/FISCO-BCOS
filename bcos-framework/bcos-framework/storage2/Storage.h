@@ -13,6 +13,10 @@ inline constexpr struct DIRECT_TYPE
 {
 } DIRECT{};
 
+inline constexpr struct RANGE_SEEK_TYPE
+{
+} RANGE_SEEK{};
+
 template <class Invoke>
 using ReturnType = typename task::AwaitableReturnType<Invoke>;
 template <class Tag, class Storage, class... Args>
@@ -114,8 +118,8 @@ inline constexpr struct ReadOne
 
 inline constexpr struct WriteOne
 {
-    auto operator()(
-        auto&& storage, auto&& key, auto&& value, auto&&... args) const -> task::Task<void>
+    auto operator()(auto&& storage, auto&& key, auto&& value, auto&&... args) const
+        -> task::Task<void>
     {
         if constexpr (HasTag<WriteOne, decltype(storage), decltype(key), decltype(value),
                           decltype(args)...>)
