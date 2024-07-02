@@ -38,112 +38,86 @@ private:
         protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
         int contextID, ledger::LedgerConfig const& ledgerConfig, auto&& waitOperator)
     {
-        int64_t gasLimit{};
         protocol::TransactionReceipt::Ptr receipt;
-        try
+        if (c_fileLogLevel <= LogLevel::TRACE)
         {
-            if (c_fileLogLevel <= LogLevel::TRACE)
-            {
-                TRANSACTION_EXECUTOR_LOG(TRACE)
-                    << "Execute transaction: " << toHex(transaction.hash());
-            }
-
-            Rollbackable<std::decay_t<decltype(storage)>> rollbackableStorage(storage);
-            // create a transient storage
-            using MemoryStorageType =
-                bcos::storage2::memory_storage::MemoryStorage<bcos::transaction_executor::StateKey,
-                    bcos::transaction_executor::StateValue,
-                    bcos::storage2::memory_storage::Attribute(
-                        bcos::storage2::memory_storage::ORDERED |
-                        bcos::storage2::memory_storage::LOGICAL_DELETION)>;
-            MemoryStorageType transientStorage;
-            Rollbackable<MemoryStorageType> rollbackableTransientStorage(transientStorage);
-            auto gasLimit = static_cast<int64_t>(std::get<0>(ledgerConfig.gasLimit()));
-            auto evmcMessage = newEVMCMessage(transaction, gasLimit);
-
-            if (blockHeader.number() == 0 &&
-                transaction.to() == precompiled::AUTH_COMMITTEE_ADDRESS)
-            {
-                evmcMessage.kind = EVMC_CREATE;
-            }
-
-            int64_t seq = 0;
-            HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
-                hostContext(rollbackableStorage, rollbackableTransientStorage, blockHeader,
-                    evmcMessage, evmcMessage.sender, transaction.abi(), contextID, seq,
-                    executor.m_precompiledManager, ledgerConfig, *executor.m_hashImpl,
-                    std::forward<decltype(waitOperator)>(waitOperator));
-
-            waitOperator(hostContext.prepare());
-            co_yield receipt;  // 完成第一步 Complete the first step
-
-            auto evmcResult = waitOperator(hostContext.execute());
-            co_yield receipt;  // 完成第二步 Complete the second step
-
-            std::string newContractAddress;
-            if (evmcMessage.kind == EVMC_CREATE && evmcResult.status_code == EVMC_SUCCESS)
-            {
-                newContractAddress.reserve(sizeof(evmcResult.create_address) * 2);
-                boost::algorithm::hex_lower(evmcResult.create_address.bytes,
-                    evmcResult.create_address.bytes + sizeof(evmcResult.create_address.bytes),
-                    std::back_inserter(newContractAddress));
-            }
-            auto output = bcos::bytesConstRef{evmcResult.output_data, evmcResult.output_size};
-
-            if (evmcResult.status_code != 0)
-            {
-                TRANSACTION_EXECUTOR_LOG(DEBUG) << "Transaction revert: " << evmcResult.status_code;
-            }
-
-            int32_t receiptStatus =
-                evmcResult.status_code == EVMC_REVERT ?
-                    static_cast<int32_t>(protocol::TransactionStatus::RevertInstruction) :
-                    evmcResult.status_code;
-            auto const& logEntries = hostContext.logs();
-            auto transactionVersion =
-                static_cast<bcos::protocol::TransactionVersion>(transaction.version());
-            switch (transactionVersion)
-            {
-            case bcos::protocol::TransactionVersion::V0_VERSION:
-                receipt = executor.m_receiptFactory.get().createReceipt(
-                    gasLimit - evmcResult.gas_left, newContractAddress, logEntries, receiptStatus,
-                    output, blockHeader.number());
-                break;
-            case bcos::protocol::TransactionVersion::V1_VERSION:
-            case bcos::protocol::TransactionVersion::V2_VERSION:
-                receipt = executor.m_receiptFactory.get().createReceipt2(
-                    gasLimit - evmcResult.gas_left, newContractAddress, logEntries, receiptStatus,
-                    output, blockHeader.number(), "", transactionVersion);
-                break;
-            default:
-                BOOST_THROW_EXCEPTION(std::runtime_error(
-                    "Invalid receipt version: " + std::to_string(transaction.version())));
-            }
+            TRANSACTION_EXECUTOR_LOG(TRACE) << "Execute transaction: " << toHex(transaction.hash());
         }
-        catch (NotFoundCodeError& e)
-        {
-            TRANSACTION_EXECUTOR_LOG(DEBUG)
-                << "Not found code exception: " << boost::diagnostic_information(e);
 
-            receipt = executor.m_receiptFactory.get().createReceipt(
-                0, {}, {}, EVMC_REVERT, {}, blockHeader.number());
-            receipt->setMessage(boost::diagnostic_information(e));
+        Rollbackable<std::decay_t<decltype(storage)>> rollbackableStorage(storage);
+        // create a transient storage
+        using MemoryStorageType =
+            bcos::storage2::memory_storage::MemoryStorage<bcos::transaction_executor::StateKey,
+                bcos::transaction_executor::StateValue,
+                bcos::storage2::memory_storage::Attribute(
+                    bcos::storage2::memory_storage::ORDERED |
+                    bcos::storage2::memory_storage::LOGICAL_DELETION)>;
+        MemoryStorageType transientStorage;
+        Rollbackable<MemoryStorageType> rollbackableTransientStorage(transientStorage);
+        auto gasLimit = static_cast<int64_t>(std::get<0>(ledgerConfig.gasLimit()));
+        auto evmcMessage = newEVMCMessage(transaction, gasLimit);
+
+        if (blockHeader.number() == 0 && transaction.to() == precompiled::AUTH_COMMITTEE_ADDRESS)
+        {
+            evmcMessage.kind = EVMC_CREATE;
         }
-        catch (std::exception& e)
-        {
-            TRANSACTION_EXECUTOR_LOG(DEBUG)
-                << "Execute exception: " << boost::diagnostic_information(e);
 
-            receipt = executor.m_receiptFactory.get().createReceipt(
-                0, {}, {}, EVMC_INTERNAL_ERROR, {}, blockHeader.number());
-            receipt->setMessage(boost::diagnostic_information(e));
+        int64_t seq = 0;
+        HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
+            hostContext(rollbackableStorage, rollbackableTransientStorage, blockHeader, evmcMessage,
+                evmcMessage.sender, transaction.abi(), contextID, seq,
+                executor.m_precompiledManager, ledgerConfig, *executor.m_hashImpl,
+                std::forward<decltype(waitOperator)>(waitOperator));
+
+        waitOperator(hostContext.prepare());
+        co_yield receipt;  // 完成第一步 Complete the first step
+
+        auto evmcResult = waitOperator(hostContext.execute());
+        co_yield receipt;  // 完成第二步 Complete the second step
+
+        std::string newContractAddress;
+        if (evmcMessage.kind == EVMC_CREATE && evmcResult.status_code == EVMC_SUCCESS)
+        {
+            newContractAddress.reserve(sizeof(evmcResult.create_address) * 2);
+            boost::algorithm::hex_lower(evmcResult.create_address.bytes,
+                evmcResult.create_address.bytes + sizeof(evmcResult.create_address.bytes),
+                std::back_inserter(newContractAddress));
+        }
+        auto output = bcos::bytesConstRef{evmcResult.output_data, evmcResult.output_size};
+
+        if (evmcResult.status_code != 0)
+        {
+            TRANSACTION_EXECUTOR_LOG(DEBUG) << "Transaction revert: " << evmcResult.status_code;
+        }
+
+        int32_t receiptStatus =
+            evmcResult.status_code == EVMC_REVERT ?
+                static_cast<int32_t>(protocol::TransactionStatus::RevertInstruction) :
+                evmcResult.status_code;
+        auto const& logEntries = hostContext.logs();
+        auto transactionVersion =
+            static_cast<bcos::protocol::TransactionVersion>(transaction.version());
+        switch (transactionVersion)
+        {
+        case bcos::protocol::TransactionVersion::V0_VERSION:
+            receipt = executor.m_receiptFactory.get().createReceipt(gasLimit - evmcResult.gas_left,
+                newContractAddress, logEntries, receiptStatus, output, blockHeader.number());
+            break;
+        case bcos::protocol::TransactionVersion::V1_VERSION:
+        case bcos::protocol::TransactionVersion::V2_VERSION:
+            receipt = executor.m_receiptFactory.get().createReceipt2(gasLimit - evmcResult.gas_left,
+                newContractAddress, logEntries, receiptStatus, output, blockHeader.number(), "",
+                transactionVersion);
+            break;
+        default:
+            BOOST_THROW_EXCEPTION(std::runtime_error(
+                "Invalid receipt version: " + std::to_string(transaction.version())));
         }
 
         if (c_fileLogLevel <= LogLevel::TRACE)
         {
             TRANSACTION_EXECUTOR_LOG(TRACE)
-                << "Execte transaction finished"
-                << ", gasUsed: " << receipt->gasUsed()
+                << "Execte transaction finished" << ", gasUsed: " << receipt->gasUsed()
                 << ", newContractAddress: " << receipt->contractAddress()
                 << ", logEntries: " << receipt->logEntries().size()
                 << ", status: " << receipt->status() << ", output: " << toHex(receipt->output())

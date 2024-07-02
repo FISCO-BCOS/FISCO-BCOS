@@ -384,16 +384,55 @@ public:
             };
         }
 
-        if (!evmResult)
+        try
         {
-            if (ref.kind == EVMC_CREATE || ref.kind == EVMC_CREATE2)
+            if (!evmResult)
             {
-                evmResult.emplace(co_await executeCreate());
+                if (ref.kind == EVMC_CREATE || ref.kind == EVMC_CREATE2)
+                {
+                    evmResult.emplace(co_await executeCreate());
+                }
+                else
+                {
+                    evmResult.emplace(co_await executeCall());
+                }
             }
-            else
-            {
-                evmResult.emplace(co_await executeCall());
-            }
+        }
+        catch (NotFoundCodeError& e)
+        {
+            HOST_CONTEXT_LOG(DEBUG)
+                << "Not found code exception: " << boost::diagnostic_information(e);
+            bcos::codec::abi::ContractABICodec abi(m_hashImpl);
+            auto codecOutput = abi.abiIn("Error(string)", std::string("Call address error."));
+            auto errorBuffer = std::unique_ptr<uint8_t>(new uint8_t[codecOutput.size()]);
+            std::uninitialized_copy(codecOutput.begin(), codecOutput.end(), errorBuffer.get());
+
+            // Static call或delegate call时，合约不存在要返回EVMC_SUCCESS
+            // STATIC_CALL or DELEGATE_CALL, the EVMC_SUCCESS is returned when the contract does not
+            // exist
+            co_return EVMCResult{evmc_result{
+                .status_code = (ref.flags == EVMC_STATIC || ref.kind == EVMC_DELEGATECALL) ?
+                                   EVMC_SUCCESS :
+                                   (evmc_status_code)protocol::TransactionStatus::CallAddressError,
+                .gas_left = ref.gas,
+                .gas_refund = 0,
+                .output_data = errorBuffer.release(),
+                .output_size = codecOutput.size(),
+                .release = [](const struct evmc_result* result) { delete[] result->output_data; },
+                .create_address = {},
+                .padding = {}}};
+        }
+        catch (std::exception& e)
+        {
+            HOST_CONTEXT_LOG(DEBUG) << "Execute exception: " << boost::diagnostic_information(e);
+            co_return EVMCResult{evmc_result{.status_code = EVMC_INTERNAL_ERROR,
+                .gas_left = ref.gas,
+                .gas_refund = 0,
+                .output_data = nullptr,
+                .output_size = 0,
+                .release = nullptr,
+                .create_address = {},
+                .padding = {}}};
         }
 
         // 如果本次调用系统合约失败，不消耗gas
@@ -452,36 +491,15 @@ public:
             m_rollbackableTransientStorage.get(), m_blockHeader, message, m_origin, {}, m_contextID,
             m_seq, m_precompiledManager.get(), m_ledgerConfig, m_hashImpl, interface);
 
-        try
+        co_await hostcontext.prepare();
+        auto result = co_await hostcontext.execute();
+        auto& logs = hostcontext.logs();
+        if (result.status_code == EVMC_SUCCESS && !logs.empty())
         {
-            co_await hostcontext.prepare();
-            auto result = co_await hostcontext.execute();
-            auto& logs = hostcontext.logs();
-            if (result.status_code == EVMC_SUCCESS && !logs.empty())
-            {
-                m_logs.reserve(m_logs.size() + RANGES::size(logs));
-                RANGES::move(logs, std::back_inserter(m_logs));
-            }
-            co_return result;
+            m_logs.reserve(m_logs.size() + RANGES::size(logs));
+            RANGES::move(logs, std::back_inserter(m_logs));
         }
-        catch (NotFoundCodeError& e)
-        {
-            // Static call或delegate call时，合约不存在要返回EVMC_SUCCESS
-            // STATIC_CALL or DELEGATE_CALL, the EVMC_SUCCESS is returned when the contract does not
-            // exist
-            co_return EVMCResult{evmc_result{
-                .status_code =
-                    ((message.flags == EVMC_STATIC || message.kind == EVMC_DELEGATECALL) ?
-                            EVMC_SUCCESS :
-                            EVMC_REVERT),
-                .gas_left = message.gas,
-                .gas_refund = 0,
-                .output_data = nullptr,
-                .output_size = 0,
-                .release = nullptr,
-                .create_address = {},
-                .padding = {}}};
-        }
+        co_return result;
     }
 
     std::vector<protocol::LogEntry>& logs() & { return m_logs; }
