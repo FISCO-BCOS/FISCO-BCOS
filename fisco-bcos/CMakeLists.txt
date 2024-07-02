@@ -37,5 +37,6 @@ endif()
 if (TOOL)
     add_subdirectory(benchmark)
     add_subdirectory(tools)
+    add_subdirectory(datasync)
 endif()
 
