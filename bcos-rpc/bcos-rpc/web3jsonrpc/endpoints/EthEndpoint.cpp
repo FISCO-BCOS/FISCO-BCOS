@@ -50,7 +50,20 @@ task::Task<void> EthEndpoint::protocolVersion(const Json::Value&, Json::Value&)
 task::Task<void> EthEndpoint::syncing(const Json::Value&, Json::Value& response)
 {
     auto const sync = m_nodeService->sync();
-    Json::Value result = sync->isSyncing();
+    auto status = sync->getSyncStatus();
+    Json::Value result;
+    if (!status.has_value())
+    {
+        result = false;
+    }
+    else
+    {
+        result = Json::objectValue;
+        auto [currentBlock, highestBlock] = status.value();
+        result["startingBlock"] = "0x0";
+        result["currentBlock"] = toQuantity(currentBlock);
+        result["highestBlock"] = toQuantity(highestBlock);
+    }
     buildJsonContent(result, response);
     co_return;
 }

@@ -51,6 +51,7 @@ enum class SystemConfig
     feature_rpbft,
     feature_rpbft_epoch_block_num,
     feature_rpbft_epoch_sealer_num,
+    feature_balance_precompiled,
     web3_chain_id,
 };
 class SystemConfigs

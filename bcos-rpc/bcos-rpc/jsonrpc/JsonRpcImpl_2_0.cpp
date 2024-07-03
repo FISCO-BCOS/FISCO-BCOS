@@ -33,6 +33,7 @@
 #include <bcos-protocol/TransactionStatus.h>
 #include <bcos-rpc/jsonrpc/Common.h>
 #include <bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h>
+#include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/Base64.h>
 #include <json/value.h>
@@ -242,6 +243,26 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::Transaction const
         for (const auto& ext : transaction.extension())
         {
             jResp["extension"].append(ext);
+        }
+    }
+    if (transaction.type() == bcos::protocol::TransactionType::Web3Transacion) [[unlikely]]
+    {
+        Web3Transaction web3Tx;
+        auto extraBytesRef =
+            bcos::bytesRef(const_cast<byte*>(transaction.extraTransactionBytes().data()),
+                transaction.extraTransactionBytes().size());
+        codec::rlp::decodeFromPayload(extraBytesRef, web3Tx);
+        jResp["value"] = web3Tx.value.str();
+        jResp["gasLimit"] = web3Tx.gasLimit;
+        if (web3Tx.type >= TransactionType::EIP1559)
+        {
+            jResp["maxPriorityFeePerGas"] = web3Tx.maxPriorityFeePerGas.str();
+            jResp["maxFeePerGas"] = web3Tx.maxFeePerGas.str();
+            jResp["gasPrice"] = "0";
+        }
+        else
+        {
+            jResp["gasPrice"] = web3Tx.maxPriorityFeePerGas.str();
         }
     }
 }
