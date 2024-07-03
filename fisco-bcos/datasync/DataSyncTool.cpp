@@ -585,6 +585,7 @@ int main(int argc, const char* argv[])
         auto logInitializer = std::make_shared<LogInitializer>();
         logInitializer->initLog(pt);
 
+
         /// init global config. must init before DB, for compatibility
         initGlobalConfig(pt);
         auto groupConfigPath = pt.get<string>("group.group_config_path", "conf/");
