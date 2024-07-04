@@ -153,7 +153,7 @@ vector<TableInfo::Ptr> parseTableNames(TableData::Ptr data, SyncRecorder::Ptr re
 
 TableData::Ptr getBlockToNonceData(StashStorage::Ptr _reader, int64_t _blockNumber)
 {
-    cout << endl << "[" << getCurrentDateTime() << "] process " << SYS_BLOCK_2_NONCES;
+    cout << endl << "[" << getCurrentDateTime() << "]  process " << SYS_BLOCK_2_NONCES;
 
     auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>(false);
     tableFactoryFactory->setStorage(_reader);
