@@ -38,7 +38,7 @@ std::shared_ptr<bytes> HsmSM2Crypto::sign(
     const KeyPairInterface& _keyPair, const HashType& _hash, bool _signatureWithPub) const
 {
     auto& hsmKeyPair = dynamic_cast<const HsmSM2KeyPair&>(_keyPair);
-    CryptoProvider& provider = SDFCryptoProvider::GetInstance(m_hsmLibPath);
+    CryptoProvider& provider = SDFCryptoProvider::GetInstance(4, m_hsmLibPath);
 
     Key key = Key();
     if (hsmKeyPair.isInternalKey())
@@ -113,7 +113,7 @@ bool HsmSM2Crypto::verify(
     PublicPtr _pubKey, const HashType& _hash, bytesConstRef _signatureData) const
 {
     // get provider
-    CryptoProvider& provider = SDFCryptoProvider::GetInstance(m_hsmLibPath);
+    CryptoProvider& provider = SDFCryptoProvider::GetInstance(4, m_hsmLibPath);
 
     // parse input
     Key key = Key();
