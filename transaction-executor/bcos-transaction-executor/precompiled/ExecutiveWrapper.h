@@ -18,6 +18,12 @@ inline std::shared_ptr<precompiled::Precompiled> getInnerPrecompiled(auto const&
     return std::get<std::shared_ptr<precompiled::Precompiled>>(precompiled.m_precompiled);
 }
 
+struct ErrorMessage
+{
+    uint8_t* buffer{};
+    size_t size{};
+};
+
 template <class T>
 concept ExternalCaller = std::is_invocable_r_v<EVMCResult, T, const evmc_message&>;
 
@@ -118,6 +124,16 @@ public:
         callResult->status = result.status_code;
         callResult->gas = result.gas_left;
         callResult->data.assign(result.output_data, result.output_data + result.output_size);
+
+        if (result.status_code != 0)
+        {
+            if (auto* errorMessage = (ErrorMessage*)result.create_address.bytes;
+                errorMessage->buffer != nullptr && errorMessage->size > 0)
+            {
+                callResult->message.assign(
+                    errorMessage->buffer, errorMessage->buffer + errorMessage->size);
+            }
+        }
 
         return callResult;
     }

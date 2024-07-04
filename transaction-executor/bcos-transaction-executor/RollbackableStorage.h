@@ -1,8 +1,7 @@
 #pragma once
 
 #include "bcos-framework/storage2/Storage.h"
-#include "bcos-framework/transaction-executor/TransactionExecutor.h"
-#include "bcos-table/src/StateStorage.h"
+#include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Trait.h"
 #include <type_traits>
 
@@ -10,17 +9,15 @@ namespace bcos::transaction_executor
 {
 
 template <class Storage>
-concept HasReadOneDirect =
-    requires(Storage& storage) {
-        requires !std::is_void_v<task::AwaitableReturnType<decltype(storage2::readOne(
-            storage, std::declval<typename Storage::Key>(), storage2::DIRECT))>>;
-    };
+concept HasReadOneDirect = requires(Storage& storage) {
+    requires !std::is_void_v<task::AwaitableReturnType<decltype(storage2::readOne(
+        storage, std::declval<typename Storage::Key>(), storage2::DIRECT))>>;
+};
 template <class Storage>
-concept HasReadSomeDirect =
-    requires(Storage& storage) {
-        requires RANGES::range<task::AwaitableReturnType<decltype(storage2::readSome(
-            storage, std::declval<std::vector<typename Storage::Key>>(), storage2::DIRECT))>>;
-    };
+concept HasReadSomeDirect = requires(Storage& storage) {
+    requires RANGES::range<task::AwaitableReturnType<decltype(storage2::readSome(
+        storage, std::declval<std::vector<typename Storage::Key>>(), storage2::DIRECT))>>;
+};
 
 template <class Storage>
 class Rollbackable
@@ -34,16 +31,16 @@ private:
             oldValue;
     };
     std::vector<Record> m_records;
-    Storage* m_storage;
+    std::reference_wrapper<Storage> m_storage;
 
 public:
     using Savepoint = int64_t;
     using Key = typename Storage::Key;
     using Value = typename Storage::Value;
 
-    Rollbackable(Storage& storage) : m_storage(std::addressof(storage)) {}
+    Rollbackable(Storage& storage) : m_storage(storage) {}
 
-    Storage& storage() { return *m_storage; }
+    Storage& storage() { return m_storage; }
     Savepoint current() const { return static_cast<int64_t>(m_records.size()); }
 
     task::Task<void> rollback(Savepoint savepoint)
@@ -59,11 +56,11 @@ public:
             if (record.oldValue)
             {
                 co_await storage2::writeOne(
-                    *m_storage, std::move(record.key), std::move(*record.oldValue));
+                    m_storage.get(), std::move(record.key), std::move(*record.oldValue));
             }
             else
             {
-                co_await storage2::removeOne(*m_storage, record.key, storage2::DIRECT);
+                co_await storage2::removeOne(m_storage.get(), record.key, storage2::DIRECT);
             }
             m_records.pop_back();
         }
@@ -76,7 +73,7 @@ public:
             std::invoke_result_t<storage2::ReadSome, Storage&, decltype(keys)>>>
     {
         co_return co_await storage2::readSome(
-            *storage.m_storage, std::forward<decltype(keys)>(keys));
+            storage.m_storage.get(), std::forward<decltype(keys)>(keys));
     }
 
     friend auto tag_invoke(
@@ -84,7 +81,8 @@ public:
         -> task::Task<task::AwaitableReturnType<
             std::invoke_result_t<storage2::ReadOne, Storage&, decltype(key)>>>
     {
-        co_return co_await storage2::readOne(*storage.m_storage, std::forward<decltype(key)>(key));
+        co_return co_await storage2::readOne(
+            storage.m_storage.get(), std::forward<decltype(key)>(key));
     }
 
     friend auto tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/, Rollbackable& storage,
@@ -93,14 +91,15 @@ public:
             std::invoke_result_t<storage2::WriteSome, Storage&, decltype(keys), decltype(values)>>>
         requires HasReadSomeDirect<Storage>
     {
-        auto oldValues = co_await storage2::readSome(*storage.m_storage, keys, storage2::DIRECT);
+        auto oldValues =
+            co_await storage2::readSome(storage.m_storage.get(), keys, storage2::DIRECT);
         for (auto&& [key, oldValue] : RANGES::views::zip(keys, oldValues))
         {
             storage.m_records.emplace_back(Record{.key = typename Storage::Key{key},
                 .oldValue = std::forward<decltype(oldValue)>(oldValue)});
         }
 
-        co_return co_await storage2::writeSome(*storage.m_storage,
+        co_return co_await storage2::writeSome(storage.m_storage.get(),
             std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values));
     }
 
@@ -112,9 +111,10 @@ public:
     {
         auto& record = storage.m_records.emplace_back();
         record.key = key;
-        record.oldValue = co_await storage2::readOne(*storage.m_storage, key, storage2::DIRECT);
+        record.oldValue =
+            co_await storage2::readOne(storage.m_storage.get(), key, storage2::DIRECT);
         co_await storage2::writeOne(
-            *storage.m_storage, record.key, std::forward<decltype(value)>(value));
+            storage.m_storage.get(), record.key, std::forward<decltype(value)>(value));
     }
 
     friend auto tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/, Rollbackable& storage,
@@ -123,7 +123,8 @@ public:
             std::add_lvalue_reference_t<Storage>, decltype(keys)>>>
     {
         // Store values to history
-        auto oldValues = co_await storage2::readSome(*storage.m_storage, keys, storage2::DIRECT);
+        auto oldValues =
+            co_await storage2::readSome(storage.m_storage.get(), keys, storage2::DIRECT);
         for (auto&& [key, value] : RANGES::views::zip(keys, oldValues))
         {
             if (value)
@@ -133,7 +134,7 @@ public:
             }
         }
 
-        co_return co_await storage2::removeSome(*storage.m_storage, keys);
+        co_return co_await storage2::removeSome(storage.m_storage.get(), keys);
     }
 
     friend auto tag_invoke(bcos::storage2::tag_t<storage2::range> /*unused*/, Rollbackable& storage,
@@ -141,7 +142,7 @@ public:
         std::add_lvalue_reference_t<Storage>, decltype(args)...>>>
     {
         co_return co_await storage2::range(
-            *(storage.m_storage), std::forward<decltype(args)>(args)...);
+            storage.m_storage.get(), std::forward<decltype(args)>(args)...);
     }
 };
 

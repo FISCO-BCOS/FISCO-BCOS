@@ -150,7 +150,7 @@ StateStorageInterface::Ptr createKeyPageStorage(
 {
     auto keyPageIgnoreTables = getKeyPageIgnoreTables(blockVersion);
     return std::make_shared<bcos::storage::KeyPageStorage>(
-        backend, keyPageSize, blockVersion, keyPageIgnoreTables);
+        backend, false, keyPageSize, blockVersion, keyPageIgnoreTables);
 }
 
 void print(

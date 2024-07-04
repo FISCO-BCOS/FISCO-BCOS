@@ -18,10 +18,9 @@
  * @author: ancelmo
  * @date 2021-04-20
  */
+#include "TransactionReceiptImpl.h"
 #include "../impl/TarsHashable.h"
 #include "../impl/TarsSerializable.h"
-
-#include "TransactionReceiptImpl.h"
 #include <bcos-concepts/Hash.h>
 #include <bcos-concepts/Serialize.h>
 
@@ -97,6 +96,21 @@ gsl::span<const bcos::protocol::LogEntry> bcostars::protocol::TransactionReceipt
     }
 
     return {m_logEntries.data(), m_logEntries.size()};
+}
+bcos::protocol::LogEntries&& bcostars::protocol::TransactionReceiptImpl::takeLogEntries()
+{
+    if (m_logEntries.empty())
+    {
+        auto& innter = mutableInner();
+        m_logEntries.reserve(innter.data.logEntries.size());
+        for (auto& it : innter.data.logEntries)
+        {
+            auto bcosLogEntry = takeToBcosLogEntry(std::move(it));
+            m_logEntries.push_back(std::move(bcosLogEntry));
+        }
+        return std::move(m_logEntries);
+    }
+    return std::move(m_logEntries);
 }
 bcos::protocol::BlockNumber bcostars::protocol::TransactionReceiptImpl::blockNumber() const
 {

@@ -115,11 +115,11 @@ int main(int argc, const char* argv[])
 
     if (keyPageSize > 0)
     {
-        storage = std::make_shared<KeyPageStorage>(rocksDBStorage, keyPageSize);
+        storage = std::make_shared<KeyPageStorage>(rocksDBStorage, false, keyPageSize);
     }
     else
     {
-        storage = std::make_shared<StateStorage>(rocksDBStorage);
+        storage = std::make_shared<StateStorage>(nullptr, false);
     }
     std::vector<StateStorageInterface::Ptr> storages;
     // create Table
@@ -146,11 +146,11 @@ int main(int argc, const char* argv[])
         storages.push_back(storage);
         if (keyPageSize > 0)
         {
-            storage = std::make_shared<KeyPageStorage>(storage, keyPageSize);
+            storage = std::make_shared<KeyPageStorage>(storage, false, keyPageSize);
         }
         else
         {
-            storage = std::make_shared<StateStorage>(storage);
+            storage = std::make_shared<StateStorage>(nullptr, false);
         }
         table = storage->openTable(testTableName).value();
     }
@@ -206,11 +206,11 @@ int main(int argc, const char* argv[])
         std::make_shared<bcos::storage::RocksDBStorage>(std::unique_ptr<rocksdb::DB>(db), nullptr);
     if (keyPageSize > 0)
     {
-        storage = std::make_shared<KeyPageStorage>(rocksDBStorage, keyPageSize);
+        storage = std::make_shared<KeyPageStorage>(rocksDBStorage, false, keyPageSize);
     }
     else
     {
-        storage = std::make_shared<StateStorage>(rocksDBStorage);
+        storage = std::make_shared<StateStorage>(nullptr, false);
     }
     auto prepareCleanStorageEnd = std::chrono::system_clock::now();
 
@@ -277,11 +277,11 @@ int main(int argc, const char* argv[])
         std::make_shared<bcos::storage::RocksDBStorage>(std::unique_ptr<rocksdb::DB>(db), nullptr);
     if (keyPageSize > 0)
     {
-        storage = std::make_shared<KeyPageStorage>(rocksDBStorage, keyPageSize);
+        storage = std::make_shared<KeyPageStorage>(rocksDBStorage, false, keyPageSize);
     }
     else
     {
-        storage = std::make_shared<StateStorage>(rocksDBStorage);
+        storage = std::make_shared<StateStorage>(nullptr, false);
     }
     table = storage->createTable(testTableName, "value");
     if (!table)
@@ -314,11 +314,11 @@ int main(int argc, const char* argv[])
         storages.push_back(storage);
         if (keyPageSize > 0)
         {
-            storage = std::make_shared<KeyPageStorage>(storage, keyPageSize);
+            storage = std::make_shared<KeyPageStorage>(storage, false, keyPageSize);
         }
         else
         {
-            storage = std::make_shared<StateStorage>(storage);
+            storage = std::make_shared<StateStorage>(nullptr, false);
         }
         table = storage->openTable(testTableName).value();
     }

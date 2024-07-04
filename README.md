@@ -11,8 +11,8 @@ FISCO BCOS（读作/ˈfɪskl bi:ˈkɒz/） 是一个稳定、高效、安全的�
 单链配置下，性能TPS可达10万+。全面支持国密算法、国产操作系统与国产CPU架构。包含区块流水线、可拔插共识机制、全方位并行计算、区块链文件系统、权限治理框架、分布式存储等特性。
 
 ## 版本信息
-- 稳定版本（生产环境使用）：v3.2.3，版本内容可参考[《FISCO-BCOS v3.2.3版本说明》](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/tag/v3.2.3)
-- 最新版本（用户体验新特性）：v3.6.0，版本内容可参考 [《FISCO-BCOS v3.6.0版本说明》](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/tag/v3.6.0)
+- 稳定版本（生产环境使用）：v3.2.7，版本内容可参考[《FISCO-BCOS v3.2.7版本说明》](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/tag/v3.2.7)
+- 最新版本（用户体验新特性）：v3.9.0，版本内容可参考 [《FISCO-BCOS v3.9.0版本说明》](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/tag/v3.9.0)
 
 ## 系统概述
 FISCO BCOS系统架构包括基础层、核心层、服务层、用户层和接入层提供稳定、安全的区块链底层服务。中间件层通过可视化界面，简化了用户管理区块链系统的流程。右侧配套相关开发、运维、安全控制的组件，辅助应用落地过程中不同角色的需要；同时，提供隐私保护和跨链相关的技术组件，满足不同场景的应用诉求。
@@ -59,7 +59,7 @@ FISCO BCOS系统架构包括基础层、核心层、服务层、用户层和接�
 
 ## 落地应用案例
 
-以数助实，链通产业协作，FISCO BCOS已落地300+产业数字化标杆应用，场景覆盖文化版权、司法服务、政务服务、物联网、金融、智慧社区、房产建筑、社区治理、乡村振兴等领域，如：
+以数助实，链通产业协作，FISCO BCOS已落地400+产业数字化标杆应用，场景覆盖文化版权、司法服务、政务服务、物联网、金融、智慧社区、房产建筑、社区治理、乡村振兴等领域，如：
 
 - 金融业：机构间对账、供应链金融、旅游金融等。
 - 司法存证：仲裁链、电子借据、司法存证平台等。
@@ -68,18 +68,28 @@ FISCO BCOS系统架构包括基础层、核心层、服务层、用户层和接�
 - 乡村振兴：智慧农业养殖大数据云平台、数字化平台建设等。
 - 智慧政务：城市大脑、公积金区块链平台、证书电子化项目等
 
-FISCO BCOS已在领域创建了诸多标杆应用示范，涵盖16类场景的169个典型应用案例，产业应用具体信息可参考[《2022 FISCO BCOS产业白皮书》](https://mp.weixin.qq.com/s/hERIQbnkd_-uAMVRx7Q6WQ)。
+FISCO BCOS已在领域创建了诸多标杆应用示范，涵盖19类场景的252个典型应用案例，产业应用具体信息可参考[《2023 FISCO BCOS 产业应用发展报告》](https://mp.weixin.qq.com/s/hyEdSluUSG-iUZDR2PO_Ew)。
 
 
 ## 加入我们的社区
 
-**FISCO BCOS开源社区**是国内庞大且活跃的开源社区，开源以来，围绕FISCO BCOS所构建的开源社区已汇集超4000家企业及机构、9万余名个人成员共建共治共享，成功支持政务、金融、农业、公益、文娱、供应链、物联网等重点应用领域的数百个区块链应用场景落地，收集到的标杆应用超过300个，构建出庞大且活跃的开源联盟链生态圈。
+**FISCO BCOS开源社区**
+FISCO BCOS是由深圳市金融区块链发展促进会（以下简称“金链盟”）开源工作组牵头研发的金融级、国产安全可控的区块链底层平台。作为最早开源的国产联盟链底层平台之一，FISCO BCOS于2017年面向全球开源。
+
+开源六周年至今，FISCO BCOS开源社区在技术创新、应用产业以及开源生态均取得了非凡成绩。
+
+FISCO BCOS持续攻关核心关键技术，单链性能突破10万TPS。首创DMC算法大幅度提升性能、推出三种架构形态灵活适配业务需求；全链路国产化，采用国密算法与软硬件体系，支持国产OS，适配国产芯片和服务器，支持多语言多终端国密接入。拥有覆盖底层+中间件+应用组件的丰富周边组件。
+
+底层平台可用性已经广泛应用实践检验，支撑政务、金融、医疗、双碳、跨境数据通等关乎国计民生的重点领域落地超过400个标杆应用，在助力实体经济发展、促进公平与可持续等方面贡献力量。
+
+社区以开源链接多方，截止2023年12月，围绕FISCO BCOS构建的国产开源联盟链生态圈已汇聚了超过5000家机构、超10万名个人成员，以及50家认证合作伙伴、500余名核心贡献者。社区认证了63位FISCO BCOS MVP， 发展了12个专项兴趣小组SIG，此外与上百所知名院校开展人才共育合作，培育区块链产业人才超8万人次，已发展成为最大最活跃的国产开源联盟链生态圈之一。
+
 
 如您对FISCO BCOS开源技术及应用感兴趣，欢迎加入社区获得更多支持与帮助。
-- [2022年度MVP](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/community/MVP_list_new.html)
-- [2022年度贡献者](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/community/contributor_list_new.html)
-- [2022新增合作伙伴](https://mp.weixin.qq.com/s/ES8ZpkfywKELv0DZZrG6eQ)
-- [2022 FISCO BCOS产业应用白皮书](https://mp.weixin.qq.com/s/hERIQbnkd_-uAMVRx7Q6WQ)
+- [2023年度MVP](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/community/MVP_list_new.html)
+- [2023年度贡献者](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/community/contributor_list_new.html)
+- [FISCO BCOS 认证合作伙伴名单](https://mp.weixin.qq.com/s/A-gH2SJNQPDLgnhSGyuYDg)
+- [2023 FISCO BCOS产业应用发展报告](https://mp.weixin.qq.com/s/hyEdSluUSG-iUZDR2PO_Ew)
 - [社区历史文章资源](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/articles/index.html)
 
 

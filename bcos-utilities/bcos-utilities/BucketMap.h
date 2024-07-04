@@ -21,11 +21,10 @@
 
 #include "Common.h"
 #include "Ranges.h"
+#include "bcos-utilities/BoostLog.h"
 #include <tbb/concurrent_vector.h>
-#include <map>
 #include <queue>
 #include <unordered_map>
-#include <vector>
 
 namespace bcos
 {

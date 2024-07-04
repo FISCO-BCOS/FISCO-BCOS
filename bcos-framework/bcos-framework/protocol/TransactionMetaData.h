@@ -19,12 +19,8 @@
  * @date: 2021-08-20
  */
 #pragma once
-#include "Transaction.h"
-#include "TransactionSubmitResult.h"
-#include "bcos-crypto/interfaces/crypto/Hash.h"
-#include "bcos-crypto/interfaces/crypto/KeyInterface.h"
-#include "bcos-utilities/Ranges.h"
 
+#include "bcos-crypto/interfaces/crypto/CommonType.h"
 namespace bcos::protocol
 {
 class TransactionMetaData

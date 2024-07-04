@@ -89,7 +89,8 @@ class KeyPageStorage : public virtual storage::StateStorageInterface
 public:
     using Ptr = std::shared_ptr<KeyPageStorage>;
 
-    explicit KeyPageStorage(std::shared_ptr<StorageInterface> _prev, size_t _pageSize = 10240,
+    explicit KeyPageStorage(std::shared_ptr<StorageInterface> _prev, bool setRowWithDirtyFlag,
+        size_t _pageSize = 10240,
         uint32_t _blockVersion = (uint32_t)bcos::protocol::BlockVersion::V3_0_VERSION,
         std::shared_ptr<const std::set<std::string, std::less<>>> _ignoreTables = nullptr,
         bool _ignoreNotExist = false)
@@ -100,7 +101,8 @@ public:
         m_mergeSize(m_pageSize / 4),
         m_buckets(std::thread::hardware_concurrency()),
         m_ignoreTables(std::move(_ignoreTables)),
-        m_ignoreNotExist(_ignoreNotExist)
+        m_ignoreNotExist(_ignoreNotExist),
+        m_setRowWithDirtyFlag(setRowWithDirtyFlag)
     {
         if (!m_ignoreTables)
         {
@@ -1026,6 +1028,7 @@ public:
         // if startKey changed the old startKey need keep to delete old page
         std::set<std::string> m_invalidPageKeys;
         TableMeta* m_meta = nullptr;
+
         template <class Archive>
         void save(Archive& ar, const unsigned int version) const
         {
@@ -1318,6 +1321,7 @@ private:
     std::vector<Bucket> m_buckets;
     std::shared_ptr<const std::set<std::string, std::less<>>> m_ignoreTables;
     bool m_ignoreNotExist = false;
+    bool m_setRowWithDirtyFlag = false;
 };
 
 }  // namespace bcos::storage

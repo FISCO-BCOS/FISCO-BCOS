@@ -1,14 +1,12 @@
 #pragma once
 
+#include "GenesisConfig.h"
 #include "LedgerConfig.h"
 #include "LedgerTypeDef.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/protocol/Block.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
-#include "bcos-ledger/src/libledger/LedgerImpl.h"
 #include "bcos-task/Task.h"
-#include "bcos-task/Trait.h"
-#include "bcos-tool/ConsensusNode.h"
 #include <type_traits>
 
 namespace bcos::ledger
@@ -81,6 +79,15 @@ inline constexpr struct GetBlockHash
     }
 } getBlockHash{};
 
+inline constexpr struct GetBlockNumber
+{
+    task::Task<protocol::BlockNumber> operator()(auto& ledger, crypto::HashType hash) const
+    {
+        co_return co_await tag_invoke(*this, ledger, std::move(hash));
+    }
+} getBlockNumber{};
+
+using SystemConfigEntry = std::tuple<std::string, protocol::BlockNumber>;
 inline constexpr struct GetSystemConfig
 {
     task::Task<std::optional<SystemConfigEntry>> operator()(
@@ -113,6 +120,33 @@ inline constexpr struct GetFeatures
         co_return co_await tag_invoke(*this, ledger);
     }
 } getFeatures{};
+
+inline constexpr struct GetReceipt
+{
+    task::Task<protocol::TransactionReceipt::ConstPtr> operator()(
+        auto& ledger, crypto::HashType hash) const
+    {
+        co_return co_await tag_invoke(*this, ledger, hash);
+    }
+} getReceipt{};
+
+inline constexpr struct GetTransactions
+{
+    task::Task<protocol::TransactionsConstPtr> operator()(
+        auto& ledger, crypto::HashListPtr hashes) const
+    {
+        co_return co_await tag_invoke(*this, ledger, std::move(hashes));
+    }
+} getTransactions{};
+
+inline constexpr struct GetStorageAt
+{
+    task::Task<std::optional<bcos::storage::Entry>> operator()(auto& ledger,
+        std::string_view address, std::string_view key, bcos::protocol::BlockNumber number) const
+    {
+        co_return co_await tag_invoke(*this, ledger, address, key, number);
+    }
+} getStorageAt{};
 
 template <auto& Tag>
 using tag_t = std::decay_t<decltype(Tag)>;

@@ -21,16 +21,12 @@
 
 #pragma once
 
-#include "../EVMCResult.h"
-#include "HostContext.h"
 #include "bcos-concepts/ByteBuffer.h"
 #include "bcos-executor/src/Common.h"
+#include "bcos-framework/protocol/Exceptions.h"
 #include <evmc/evmc.h>
 #include <evmc/instructions.h>
 #include <boost/core/pointer_traits.hpp>
-#include <functional>
-#include <memory>
-#include <set>
 
 namespace bcos::transaction_executor
 {
@@ -155,7 +151,7 @@ struct EVMHostInterface
             .block_timestamp = hostContext.timestamp(),
             .block_gas_limit = hostContext.blockGasLimit(),
             .block_prev_randao = {},
-            .chain_id = {},
+            .chain_id = hostContext.chainId(),
             .block_base_fee = {},
         };
         return result;

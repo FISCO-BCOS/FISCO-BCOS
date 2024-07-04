@@ -20,7 +20,8 @@
  */
 
 #include "PBFTServiceClient.h"
-#include "../protocol/BlockFactoryImpl.h"
+#include "bcos-tars-protocol/Common.h"
+#include "bcos-tars-protocol/protocol/BlockImpl.h"
 using namespace bcostars;
 
 void PBFTServiceClient::asyncSubmitProposal(bool _containSysTxs, bcos::bytesConstRef _proposalData,
@@ -140,6 +141,11 @@ void BlockSyncServiceClient::asyncGetSyncInfo(
         std::function<void(bcos::Error::Ptr, std::string)> m_callback;
     };
     m_proxy->async_asyncGetSyncInfo(new Callback(_onGetSyncInfo));
+}
+
+std::vector<bcos::sync::PeerStatus::Ptr> BlockSyncServiceClient::getPeerStatus()
+{
+    return {};
 }
 
 void BlockSyncServiceClient::notifyConnectedNodes(bcos::crypto::NodeIDSet const& _connectedNodes,

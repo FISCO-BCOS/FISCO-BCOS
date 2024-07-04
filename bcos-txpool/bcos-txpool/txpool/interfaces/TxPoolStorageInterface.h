@@ -39,6 +39,8 @@ public:
 
     virtual task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
         protocol::Transaction::Ptr transaction) = 0;
+    virtual task::Task<protocol::TransactionSubmitResult::Ptr> submitTransactionWithoutReceipt(
+        protocol::Transaction::Ptr transaction) = 0;
     virtual std::vector<protocol::Transaction::ConstPtr> getTransactions(
         RANGES::any_view<bcos::h256, RANGES::category::mask | RANGES::category::sized> hashes) = 0;
 

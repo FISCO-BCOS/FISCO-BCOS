@@ -483,9 +483,13 @@ bcos::bytes HostContext::externalCodeRequest(const std::string_view& address)
     request->staticCall = staticCall();
     auto response = m_executive->externalCall(std::move(request));
 
-    if (m_executive->blockContext().features().get(
-            ledger::Features::Flag::bugfix_eoa_as_contract) &&
-        hasPrecompiledPrefix(fromBytes(response->data)))
+    if ((m_executive->blockContext().features().get(
+             ledger::Features::Flag::bugfix_eoa_as_contract) &&
+            precompiled::isDynamicPrecompiledAccountCode(fromBytes(response->data))) ||
+        (m_executive->blockContext().features().get(
+             ledger::Features::Flag::bugfix_eoa_match_failed) &&
+            bcos::precompiled::matchDynamicAccountCode(
+                std::string_view((char*)response->data.data(), response->data.size()))))
     {
         return bytes();
     }

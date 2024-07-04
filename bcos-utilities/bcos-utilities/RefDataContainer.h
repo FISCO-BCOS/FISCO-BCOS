@@ -18,6 +18,7 @@
  *  @date 2021-02-24
  */
 #pragma once
+#include <concepts/bcos-concepts/Basic.h>
 #include <atomic>
 #include <cassert>
 #include <cstring>
@@ -32,6 +33,11 @@ class RefDataContainer
 {
 public:
     RefDataContainer() = default;
+    RefDataContainer(const RefDataContainer&) = default;
+    RefDataContainer(RefDataContainer&&) noexcept = default;
+    RefDataContainer& operator=(const RefDataContainer&) = default;
+    RefDataContainer& operator=(RefDataContainer&&) noexcept = default;
+    ~RefDataContainer() noexcept = default;
     RefDataContainer(T* _data, size_t _count) : m_dataPointer(_data), m_dataCount(_count) {}
     using RequiredStringPointerType =
         std::conditional_t<std::is_const<T>::value, std::string const*, std::string*>;
@@ -39,13 +45,14 @@ public:
         std::vector<typename std::remove_const<T>::type> const*, std::vector<T>*>;
     using RequiredStringRefType =
         std::conditional_t<std::is_const<T>::value, std::string const, std::string>;
-    RefDataContainer(RequiredStringPointerType _data)
+
+    explicit RefDataContainer(RequiredStringPointerType _data)
       : m_dataPointer(reinterpret_cast<T*>(_data->data())), m_dataCount(_data->size() / sizeof(T))
     {}
-    RefDataContainer(RequiredVecType _data)
+    explicit RefDataContainer(RequiredVecType _data)
       : m_dataPointer(reinterpret_cast<T*>(_data->data())), m_dataCount(_data->size())
     {}
-    RefDataContainer(RequiredStringRefType& _data)
+    explicit RefDataContainer(RequiredStringRefType& _data)
       : m_dataPointer(reinterpret_cast<T*>(_data.data())), m_dataCount(_data.size() / sizeof(T))
     {}
 
@@ -99,6 +106,12 @@ public:
     std::string_view toStringView() const
     {
         return std::string_view((char const*)m_dataPointer, m_dataCount * sizeof(T));
+    }
+
+    template <bcos::concepts::StringLike String>
+    String toStringLike() const
+    {
+        return String((char const*)m_dataPointer, m_dataCount * sizeof(T));
     }
 
     bool empty() const { return (m_dataCount == 0); }

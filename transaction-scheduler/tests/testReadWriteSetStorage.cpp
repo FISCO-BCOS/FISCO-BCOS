@@ -6,7 +6,6 @@
 #include <fmt/format.h>
 #include <boost/test/unit_test.hpp>
 #include <optional>
-#include <type_traits>
 
 using namespace bcos;
 using namespace bcos::storage2;

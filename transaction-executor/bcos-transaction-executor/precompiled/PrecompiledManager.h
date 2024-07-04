@@ -1,7 +1,6 @@
 #pragma once
 
 #include "PrecompiledImpl.h"
-#include <utility>
 
 namespace bcos::transaction_executor
 {

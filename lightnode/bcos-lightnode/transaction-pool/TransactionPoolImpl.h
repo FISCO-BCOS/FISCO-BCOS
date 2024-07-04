@@ -12,7 +12,6 @@
 #include <bcos-utilities/FixedBytes.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
-#include <future>
 #include <memory>
 
 namespace bcos::transaction_pool

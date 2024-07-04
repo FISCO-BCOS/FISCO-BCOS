@@ -2,14 +2,7 @@
 
 #include "../protocol/BlockHeader.h"
 #include "../protocol/Transaction.h"
-#include "../protocol/TransactionReceipt.h"
-#include "../protocol/TransactionReceiptFactory.h"
-#include "../storage2/Storage.h"
-#include "StateKey.h"
-#include <bcos-concepts/ByteBuffer.h>
-#include <bcos-task/Trait.h>
-#include <compare>
-#include <tuple>
+#include "bcos-task/Task.h"
 #include <type_traits>
 #include <utility>
 

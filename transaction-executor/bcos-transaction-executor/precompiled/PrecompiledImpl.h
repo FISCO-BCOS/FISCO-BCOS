@@ -7,7 +7,6 @@
 #include "bcos-executor/src/vm/Precompiled.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-table/src/LegacyStorageWrapper.h"
-#include "bcos-table/src/StateStorage.h"
 #include "bcos-utilities/Overloaded.h"
 #include <evmc/evmc.h>
 #include <boost/exception/diagnostic_information.hpp>
@@ -15,7 +14,6 @@
 #include <exception>
 #include <memory>
 #include <type_traits>
-#include <typeinfo>
 #include <variant>
 
 #ifdef WITH_WASM
@@ -38,15 +36,18 @@ inline auto buildLegacyExecutive(auto& storage, protocol::BlockHeader const& blo
     auto storageWrapper =
         std::make_shared<storage::LegacyStateStorageWrapper<std::decay_t<decltype(storage)>>>(
             storage);
+
     auto blockContext = std::make_unique<executor::BlockContext>(storageWrapper, nullptr,
-        executor::GlobalHashImpl::g_hashImpl, blockHeader.number(), blockHeader.hash(),
-        blockHeader.timestamp(), blockHeader.version(), bcos::executor::VMSchedule{}, false,
+        executor::GlobalHashImpl::g_hashImpl, blockHeader, bcos::executor::VMSchedule{}, false,
         authCheck);
     return std::make_shared<
         ExecutiveWrapper<decltype(externalCaller), std::decay_t<decltype(precompiledManager)>>>(
         std::move(blockContext), std::move(contractAddress), contextID, seq, wasm::GasInjector{},
         std::move(externalCaller), precompiledManager);
 }
+
+ErrorMessage buildEncodeErrorMessage(std::string_view message, crypto::Hash const& hashImpl);
+ErrorMessage buildErrorMessage(std::string_view message);
 
 struct Precompiled
 {
@@ -123,7 +124,7 @@ inline constexpr struct
                     params->m_origin = address2HexString(origin);
                     params->m_input = {message.input_data, message.input_size};
                     params->m_gasLeft = message.gas;
-                    params->m_staticCall = (message.kind == EVMC_CALL);
+                    params->m_staticCall = (message.flags & EVMC_STATIC) != 0;
                     params->m_create = (message.kind == EVMC_CREATE);
 
                     try
@@ -152,29 +153,32 @@ inline constexpr struct
                     }
                     catch (protocol::PrecompiledError const& e)
                     {
-                        std::string_view errorMessage(e.what());
-                        PRECOMPILE_LOG(WARNING) << "Revert transaction: PrecompiledFailed"
-                                                << LOG_KV("address", contractAddress)
-                                                << LOG_KV("message", errorMessage);
+                        PRECOMPILE_LOG(WARNING)
+                            << "Revert transaction: PrecompiledFailed"
+                            << LOG_KV("address", contractAddress) << LOG_KV("message", e.what());
 
-                        bcos::codec::abi::ContractABICodec abi(
-                            executor::GlobalHashImpl::g_hashImpl);
-                        auto codecOutput = abi.abiIn("Error(string)", errorMessage);
-                        auto buffer = std::unique_ptr<uint8_t>(new uint8_t[codecOutput.size()]);
-                        std::uninitialized_copy_n(
-                            codecOutput.data(), codecOutput.size(), buffer.get());
+                        std::string_view error(e.what());
+                        auto encodedErrorMessage =
+                            buildEncodeErrorMessage(error, *executor::GlobalHashImpl::g_hashImpl);
+
+                        static_assert(sizeof(EVMCResult::create_address) > sizeof(ErrorMessage));
+                        auto errorMessage = buildErrorMessage(error);
+                        decltype(EVMCResult::create_address) wrapAddress{};
+                        *(ErrorMessage*)wrapAddress.bytes = errorMessage;
+
                         return EVMCResult{evmc_result{
                             .status_code =
-                                (evmc_status_code)protocol::TransactionStatus::RevertInstruction,
+                                (evmc_status_code)protocol::TransactionStatus::PrecompiledError,
                             .gas_left = message.gas,
                             .gas_refund = 0,
-                            .output_data = buffer.release(),
-                            .output_size = codecOutput.size(),
+                            .output_data = encodedErrorMessage.buffer,
+                            .output_size = encodedErrorMessage.size,
                             .release =
                                 [](const struct evmc_result* result) {
                                     delete[] result->output_data;
+                                    delete[] ((ErrorMessage*)result->create_address.bytes)->buffer;
                                 },
-                            .create_address = {},
+                            .create_address = wrapAddress,
                             .padding = {},
                         }};
                     }
@@ -184,7 +188,7 @@ inline constexpr struct
                             << "Precompiled execute error: " << boost::diagnostic_information(e);
                         return EVMCResult{evmc_result{
                             .status_code =
-                                (evmc_status_code)protocol::TransactionStatus::RevertInstruction,
+                                (evmc_status_code)protocol::TransactionStatus::PrecompiledError,
                             .gas_left = message.gas,
                             .gas_refund = 0,
                             .output_data = nullptr,

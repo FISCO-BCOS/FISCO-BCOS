@@ -1,9 +1,5 @@
 #pragma once
 
-#include "client/LedgerClientImpl.h"
-#include "client/P2PClientImpl.h"
-#include "client/SchedulerClientImpl.h"
-#include "client/TransactionPoolClientImpl.h"
 #include <bcos-cpp-sdk/multigroup/JsonGroupInfoCodec.h>
 #include <bcos-cpp-sdk/ws/HandshakeResponse.h>
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
@@ -25,9 +21,7 @@
 #include <libinitializer/ProtocolInitializer.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
-#include <exception>
 #include <memory>
-#include <thread>
 
 namespace bcos::lightnode
 {

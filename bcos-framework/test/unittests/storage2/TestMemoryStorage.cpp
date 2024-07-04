@@ -1,5 +1,6 @@
 #include "bcos-framework/storage/Entry.h"
 #include "bcos-framework/storage2/Storage.h"
+#include "transaction-executor/StateKey.h"
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-task/Wait.h>
 #include <fmt/format.h>
@@ -252,15 +253,27 @@ BOOST_AUTO_TEST_CASE(range)
         {
             BOOST_CHECK(kv);
             auto& [key, value] = *kv;
-            auto& [tableName, keyName] = key;
-            // BOOST_CHECK_EQUAL(tableName, "table");
-            // BOOST_CHECK_EQUAL(keyName, "key:" + boost::lexical_cast<std::string>(num));
-            // BOOST_CHECK_EQUAL(value->get(), "Hello world!" +
-            // boost::lexical_cast<std::string>(num));
+            const auto& [tableName, keyName] = key;
             BOOST_CHECK_LT(num, 100);
             ++num;
         }
         BOOST_CHECK_EQUAL(num, 100);
+
+        MemoryStorage<int, int,
+            bcos::storage2::memory_storage::Attribute(
+                bcos::storage2::memory_storage::LOGICAL_DELETION |
+                bcos::storage2::memory_storage::ORDERED)>
+            intStorage;
+        co_await storage2::writeSome(
+            intStorage, RANGES::iota_view<int, int>(0, 10), RANGES::repeat_view<int>(100));
+        auto start = 4;
+        auto range3 = co_await storage2::range(intStorage, storage2::RANGE_SEEK, start);
+        while (auto pair = co_await range3.next())
+        {
+            auto&& [key, value] = *pair;
+            BOOST_CHECK_EQUAL(key, start++);
+        }
+        BOOST_CHECK_EQUAL(start, 10);
     }());
 }
 
@@ -323,6 +336,52 @@ BOOST_AUTO_TEST_CASE(directDelete)
             ++count2;
         }
         BOOST_CHECK_EQUAL(count2, 9);
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(keyComp)
+{
+    transaction_executor::StateKey key1("/tables/t_testV320", "type");
+    transaction_executor::StateKeyView key2("/tables/t_testV320", "type");
+
+    BOOST_CHECK(key1 == key2);
+    BOOST_CHECK(!(key1 > key2));
+    BOOST_CHECK(!(key1 < key2));
+
+    auto hash1 = std::hash<decltype(key1)>{}(key1);
+    auto hash2 = std::hash<decltype(key2)>{}(key2);
+    BOOST_CHECK_EQUAL(hash1, hash2);
+}
+
+BOOST_AUTO_TEST_CASE(concurrentRange)
+{
+    task::syncWait([]() -> task::Task<void> {
+        constexpr static int count = 100;
+
+        MemoryStorage<std::string, storage::Entry,
+            Attribute(ORDERED | bcos::storage2::memory_storage::CONCURRENT), std::hash<std::string>>
+            storage;
+
+        co_await storage2::writeSome(storage,
+            RANGES::iota_view<int, int>(0, count) | RANGES::views::transform([](auto num) {
+                return boost::lexical_cast<std::string>(num);
+            }),
+            RANGES::iota_view<int, int>(0, count) | RANGES::views::transform([](auto num) {
+                storage::Entry entry;
+                entry.set("Hello world!" + boost::lexical_cast<std::string>(num));
+                return entry;
+            }));
+
+        auto range = co_await storage2::range(storage);
+        auto expect = count;
+        while (auto value = co_await range.next())
+        {
+            --expect;
+            auto&& [key, entry] = *value;
+            auto index = boost::lexical_cast<int>(key);
+            BOOST_CHECK_LT(index, count);
+        }
+        BOOST_CHECK_EQUAL(expect, 0);
     }());
 }
 

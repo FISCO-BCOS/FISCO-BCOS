@@ -20,8 +20,6 @@
  */
 
 #pragma once
-#pragma GCC diagnostic ignored "-Wunused-variable"
-#pragma GCC diagnostic ignored "-Wunused-parameter"
 #include "../ErrorConverter.h"
 #include <bcos-framework/consensus/ConsensusInterface.h>
 #include <bcos-framework/sealer/SealerInterface.h>
@@ -208,6 +206,8 @@ public:
     // called by the RPC to get the sync status
     void asyncGetSyncInfo(
         std::function<void(bcos::Error::Ptr, std::string)> _onGetSyncInfo) override;
+
+    std::vector<bcos::sync::PeerStatus::Ptr> getPeerStatus() override;
 
     // called by the frontService to dispatch message
     void asyncNotifyBlockSyncMessage(bcos::Error::Ptr _error, std::string const& _uuid,

@@ -21,14 +21,15 @@
 
 #pragma once
 
+#include "../consensus/ConsensusNodeInterface.h"
 #include "../protocol/Block.h"
-#include "../protocol/BlockHeader.h"
 #include "../protocol/Transaction.h"
 #include "../protocol/TransactionReceipt.h"
 #include "../storage/StorageInterface.h"
-#include "LedgerConfig.h"
 #include "LedgerTypeDef.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
+#include <bcos-task/Coroutine.h>
+#include <bcos-task/Task.h>
 #include <bcos-utilities/Error.h>
 #include <gsl/span>
 #include <map>
@@ -168,6 +169,22 @@ public:
     virtual void asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr _blockTxs,
         bcos::protocol::Block::ConstPtr block,
         std::function<void(Error::UniquePtr&&)> _callback) = 0;
+
+    /**
+     * @brief get storage value by address and key and block number in coroutine. It will access the
+     * table of address like /apps/[address] and get the value of key. NOTE: blockNumber is ignored
+     * nowadays, it will always get the latest value of key in address.
+     * @param _address the address of contract/EOA. if in EVM, it should be the address of contract,
+     * hex string; if in WASM, it should be the path name of contract.
+     * @param _key the key of storage
+     * @param _blockNumber the block number to get the storage value
+     * @return the storage value of key in address
+     */
+    virtual task::Task<std::optional<storage::Entry>> getStorageAt(
+        std::string_view _address, std::string_view _key, protocol::BlockNumber _blockNumber)
+    {
+        co_return std::nullopt;
+    }
 };
 
 }  // namespace bcos::ledger

@@ -28,7 +28,6 @@
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-framework/protocol/LogEntry.h>
 #if !ONLY_CPP_SDK
-#include "bcos-framework/executor/ParallelTransactionExecutorInterface.h"
 #include "bcos-tars-protocol/tars/GroupInfo.h"
 #include "bcos-tars-protocol/tars/LedgerConfig.h"
 #include "bcos-tars-protocol/tars/TwoPCParams.h"
@@ -429,5 +428,21 @@ inline bcos::protocol::LogEntry toBcosLogEntry(bcostars::LogEntry const& _logEnt
     }
     return bcos::protocol::LogEntry(bcos::bytes(_logEntry.address.begin(), _logEntry.address.end()),
         topics, bcos::bytes(_logEntry.data.begin(), _logEntry.data.end()));
+}
+
+inline bcos::protocol::LogEntry takeToBcosLogEntry(bcostars::LogEntry&& _logEntry)
+{
+    std::vector<bcos::h256> topics;
+    for (auto&& topicIt : _logEntry.topic)
+    {
+        bcos::h256 topic;
+        RANGES::move(topicIt.begin(), topicIt.end(), topic.mutableData().data());
+        topics.push_back(std::move(topic));
+    }
+    bcos::bytes address;
+    RANGES::move(std::move(_logEntry.address), std::back_inserter(address));
+    bcos::bytes data;
+    RANGES::move(std::move(_logEntry.data), std::back_inserter(data));
+    return {std::move(address), std::move(topics), std::move(data)};
 }
 }  // namespace bcostars

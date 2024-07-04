@@ -39,7 +39,7 @@ ca_dir=""
 prometheus_dir=""
 config_path=""
 docker_mode=
-default_version="v3.7.1"
+default_version="v3.9.0"
 compatibility_version=${default_version}
 default_mtail_version="3.0.0-rc49"
 compatibility_mtail_version=${default_mtail_version}
@@ -60,20 +60,22 @@ download_timeout=240
 make_tar=
 default_group="group0"
 default_chainid="chain0"
+default_web3_chainid="20200"
 use_ipv6=""
 # for modifying multipy ca node
 modify_node_path=""
 multi_ca_path=""
 consensus_type="pbft"
 supported_consensus=(pbft rpbft)
+log_level="info"
 
 # for pro or max default setting
 bcos_builder_package=BcosBuilder.tgz
-bcos_builder_version=v3.7.1
+bcos_builder_version=v3.9.0
 use_exist_binary="false"
 download_specific_binary_flag="false"
 download_service_binary_type="cdn"
-service_binary_version="v3.7.1"
+service_binary_version="v3.9.0"
 download_service_binary_path="binary"
 download_service_binary_path_flag="false"
 service_type="all"
@@ -576,6 +578,7 @@ air
     -c <Config Path>                    [Required when expand node] Specify the path of the expanded node config.ini, config.genesis and p2p connection file nodes.json
     -d <CA cert path>                   [Required when expand node] When expanding the node, specify the path where the CA certificate and private key are located
     -D <docker mode>                    Default off. If set -D, build with docker
+    -E <Enable debug log>               Default off. If set -E, enable debug log
     -a <Auth account>                   [Optional] when Auth mode Specify the admin account address.
     -w <WASM mode>                      [Optional] Whether to use the wasm virtual machine engine, default is false
     -R <Serial_mode>                    [Optional] Whether to use serial execute,default is true
@@ -646,7 +649,7 @@ EOF
 }
 
 parse_params() {
-    while getopts "l:C:c:o:e:t:p:d:g:G:L:v:i:I:M:k:zwDshHmn:R:a:N:u:y:r:V:6T:" option; do
+    while getopts "l:C:c:o:e:t:p:d:g:G:L:v:i:I:M:k:zwDshHmEn:R:a:N:u:y:r:V:6T:" option; do
         case $option in
         6) use_ipv6="true" && default_listen_ip="::"
         ;;
@@ -698,6 +701,9 @@ parse_params() {
         m)
            monitor_mode="true"
            ;;
+        E)
+            log_level="debug"
+            ;;
         n)
            node_key_dir="${OPTARG}"
            dir_must_exists "${node_key_dir}"
@@ -1373,6 +1379,12 @@ generate_config_ini() {
     ; return input params in sendTransaction() return, default: true
     ; return_input_params=false
 
+[web3_rpc]
+    enable=false
+    listen_ip=0.0.0.0
+    listen_port=8545
+    thread_count=8
+
 [cert]
     ; directory the certificates located in
     ca_path=./conf
@@ -1527,7 +1539,7 @@ generate_common_ini() {
     enable_console_output = false
     log_path=./log
     ; info debug trace
-    level=info
+    level=${log_level}
     ; MB
     max_log_file_size=1024
     ; rotate the log every hour
@@ -1580,6 +1592,12 @@ generate_sm_config_ini() {
     ${disable_ssl_content}
     ; return input params in sendTransaction() return, default: true
     ; return_input_params=false
+
+[web3_rpc]
+    enable=false
+    listen_ip=0.0.0.0
+    listen_port=8545
+    thread_count=8
 
 [cert]
     ; directory the certificates located in
@@ -1707,6 +1725,9 @@ generate_genesis_config() {
     group_id=${default_group}
     ; the chain id, should nerver be changed
     chain_id=${default_chainid}
+
+[web3]
+    chain_id=${default_web3_chainid}
 
 [consensus]
     ; consensus algorithm now support PBFT(consensus_type=pbft), rPBFT(consensus_type=rpbft)

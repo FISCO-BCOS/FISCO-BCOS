@@ -17,21 +17,15 @@
 
 #pragma once
 
-#include "Log.h"
 #include "RefDataContainer.h"
+#include <boost/algorithm/hex.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/multiprecision/cpp_int.hpp>
 #include <boost/thread.hpp>
-#include <atomic>
-#include <chrono>
-#include <condition_variable>
-#include <functional>
 #include <map>
 #include <mutex>
-#include <set>
 #include <string>
-#include <unordered_map>
-#include <unordered_set>
+#include <type_traits>
 #include <vector>
 
 namespace bcos
@@ -102,7 +96,7 @@ inline u256 exp10()
 template <>
 inline u256 exp10<0>()
 {
-    return u256(1);
+    return u256{1};
 }
 
 //------------ Type interprets and Convertions----------------
@@ -159,3 +153,28 @@ void pthread_setThreadName(std::string const& _n);
 std::string pthread_getThreadName();
 
 }  // namespace bcos
+
+namespace std
+{
+template <class BytesType>
+    requires std::same_as<BytesType, bcos::bytesConstRef> ||
+             (std::constructible_from<bcos::bytesConstRef, std::add_pointer_t<BytesType>> &&
+                 (!std::same_as<BytesType, std::string>) && (!std::same_as<BytesType, char>))
+inline ostream& operator<<(ostream& stream, const BytesType& bytes)
+{
+    bcos::bytesConstRef ref;
+    if constexpr (std::same_as<BytesType, bcos::bytesConstRef>)
+    {
+        ref = bytes;
+    }
+    else
+    {
+        ref = bcos::bytesConstRef{std::addressof(bytes)};
+    }
+    std::string hex;
+    hex.reserve(ref.size() * 2);
+    boost::algorithm::hex_lower(ref.begin(), ref.end(), std::back_insert_iterator(hex));
+    stream << "0x" << hex;
+    return stream;
+}
+}  // namespace std

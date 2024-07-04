@@ -249,7 +249,8 @@ protected:
 
 
     bcos::storage::StateStorageInterface::Ptr createStateStorage(
-        bcos::storage::StorageInterface::Ptr storage, bool ignoreNotExist = false);
+        bcos::storage::StorageInterface::Ptr storage, bool ignoreNotExist,
+        bool setRowWithDirtyFlag);
 
     protocol::BlockNumber getBlockNumberInStorage();
     protocol::BlockHeader::Ptr getBlockHeaderInStorage(protocol::BlockNumber number);
@@ -282,6 +283,7 @@ protected:
     std::list<State> m_stateStorages;
 
     bcos::protocol::BlockNumber m_lastCommittedBlockNumber = getBlockNumberInStorage();
+    std::atomic_uint64_t m_lastCommittedBlockTimestamp = utcTime();
 
     struct HashCombine
     {

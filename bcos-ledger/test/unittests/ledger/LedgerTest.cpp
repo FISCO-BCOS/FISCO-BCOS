@@ -93,7 +93,7 @@ class MockStorage : public virtual StateStorage
 {
 public:
     MockStorage(std::shared_ptr<StorageInterface> prev)
-      : storage::StateStorageInterface(prev), StateStorage(prev)
+      : storage::StateStorageInterface(prev), StateStorage(prev, false)
     {}
     bcos::Error::Ptr setRows(std::string_view tableName,
         RANGES::any_view<std::string_view,
@@ -133,7 +133,7 @@ public:
     inline void initStorage()
     {
         auto hashImpl = std::make_shared<Keccak256>();
-        auto memoryStorage = std::make_shared<StateStorage>(nullptr);
+        auto memoryStorage = std::make_shared<StateStorage>(nullptr, false);
         memoryStorage->setEnableTraverse(true);
         auto storage = std::make_shared<MockStorage>(memoryStorage);
         storage->setEnableTraverse(true);
@@ -146,9 +146,9 @@ public:
 
     inline void initErrorStorage()
     {
-        auto memoryStorage = std::make_shared<StateStorage>(nullptr);
+        auto memoryStorage = std::make_shared<StateStorage>(nullptr, false);
         memoryStorage->setEnableTraverse(true);
-        auto storage = std::make_shared<StateStorage>(memoryStorage);
+        auto storage = std::make_shared<StateStorage>(memoryStorage, false);
         storage->setEnableTraverse(true);
         m_storage = storage;
         BOOST_TEST(m_storage != nullptr);
@@ -1383,7 +1383,7 @@ BOOST_AUTO_TEST_CASE(genesisBlockWithAllocs)
 {
     task::syncWait([this]() -> task::Task<void> {
         auto hashImpl = std::make_shared<Keccak256>();
-        auto memoryStorage = std::make_shared<StateStorage>(nullptr);
+        auto memoryStorage = std::make_shared<StateStorage>(nullptr, false);
         auto storage = std::make_shared<MockStorage>(memoryStorage);
         auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
 
@@ -1441,7 +1441,7 @@ BOOST_AUTO_TEST_CASE(replaceBinary)
 {
     task::syncWait([this]() -> task::Task<void> {
         auto hashImpl = std::make_shared<Keccak256>();
-        auto memoryStorage = std::make_shared<StateStorage>(nullptr);
+        auto memoryStorage = std::make_shared<StateStorage>(nullptr, false);
         auto storage = std::make_shared<MockStorage>(memoryStorage);
         auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
 

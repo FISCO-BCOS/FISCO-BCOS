@@ -24,24 +24,20 @@
  * @date 2021-10-23
  */
 
-#include <bcos-tars-protocol/impl/TarsSerializable.h>
-
+#include "Initializer.h"
 #include "AuthInitializer.h"
 #include "BfsInitializer.h"
-#include "ExecutorInitializer.h"
-#include "Initializer.h"
 #include "LedgerInitializer.h"
 #include "SchedulerInitializer.h"
 #include "StorageInitializer.h"
-#include "bcos-crypto/hasher/OpenSSLHasher.h"
 #include "bcos-executor/src/executor/SwitchExecutorManager.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-scheduler/src/TarsExecutorManager.h"
 #include "bcos-storage/RocksDBStorage.h"
-#include "bcos-tool/BfsFileFactory.h"
+#include "bcos-task/Wait.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include "libinitializer/BaselineSchedulerInitializer.h"
-#include "rocksdb/statistics.h"
+#include "libinitializer/ProPBFTInitializer.h"
 #include <bcos-crypto/hasher/AnyHasher.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
@@ -60,13 +56,13 @@
 #include <bcos-table/src/KeyPageStorage.h>
 #include <bcos-table/src/StateStorageFactory.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
+#include <bcos-tars-protocol/impl/TarsSerializable.h>
 #include <bcos-tars-protocol/protocol/ExecutionMessageImpl.h>
 #include <bcos-tool/LedgerConfigFetcher.h>
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-tool/NodeTimeMaintenance.h>
 #include <util/tc_clientsocket.h>
 #include <memory>
-#include <type_traits>
 #include <vector>
 
 using namespace bcos;
@@ -210,6 +206,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // build ledger
     auto ledger =
         LedgerInitializer::build(m_protocolInitializer->blockFactory(), storage, m_nodeConfig);
+    ledger->setKeyPageSize(m_nodeConfig->keyPageSize());
     m_ledger = ledger;
 
     bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory = nullptr;

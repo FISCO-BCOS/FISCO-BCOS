@@ -21,10 +21,18 @@
 #pragma once
 
 #include "bcos-codec/abi/ContractABICodec.h"
+#include "bcos-codec/rlp/RLPDecode.h"
+#include "bcos-codec/rlp/RLPEncode.h"
 #include "bcos-codec/scale/Scale.h"
 
 namespace bcos
 {
+namespace codec::rlp
+{
+class RLPWrapper
+{
+};
+}  // namespace codec::rlp
 enum VMType
 {
     EVM,
@@ -45,15 +53,13 @@ public:
         if (m_type == VMType::EVM)
         {
             // Note: the codec is not thread-safe, so we can't share this object
-            codec::abi::ContractABICodec abi(m_hash);
+            codec::abi::ContractABICodec abi(*m_hash);
             return abi.abiIn("", _args...);
         }
-        else
-        {
-            codec::scale::ScaleEncoderStream s;
-            (s << ... << std::forward<Args>(_args));
-            return s.data();
-        }
+
+        codec::scale::ScaleEncoderStream s;
+        (s << ... << std::forward<Args>(_args));
+        return s.data();
     }
     template <typename... Args>
     bytes encodeWithSig(const std::string& _sig, Args&&... _args) const
@@ -62,7 +68,7 @@ public:
         if (m_type == VMType::EVM)
         {
             // Note: the codec is not thread-safe, so we can't share this object
-            codec::abi::ContractABICodec abi(m_hash);
+            codec::abi::ContractABICodec abi(*m_hash);
             return abi.abiIn(_sig, _args...);
         }
         else
@@ -79,7 +85,7 @@ public:
         if (m_type == VMType::EVM)
         {
             // Note: the codec is not thread-safe, so we can't share this object
-            codec::abi::ContractABICodec abi(m_hash);
+            codec::abi::ContractABICodec abi(*m_hash);
             return abi.abiIn(_sig);
         }
         else
@@ -95,7 +101,7 @@ public:
         assert(m_type != VMType::UNDEFINED);
         if (m_type == VMType::EVM)
         {
-            codec::abi::ContractABICodec abi(m_hash);
+            codec::abi::ContractABICodec abi(*m_hash);
             abi.abiOut(_data, _t...);
         }
         else if (m_type == VMType::WASM)

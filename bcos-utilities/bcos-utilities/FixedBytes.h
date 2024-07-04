@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include "BoostLog.h"
 #include "DataConvertUtility.h"
 #include "Exceptions.h"
 #include <boost/algorithm/hex.hpp>
@@ -28,7 +29,6 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
-#include <iterator>
 #include <random>
 #include <stdexcept>
 
@@ -292,7 +292,7 @@ public:
     byte* data() { return m_data.data(); }
     /// @returns a constant byte pointer to the object's data.
     byte const* data() const { return m_data.data(); }
-
+    auto& mutableData() { return m_data; }
     /// @returns begin iterator.
     auto begin() const -> typename std::array<byte, N>::const_iterator { return m_data.begin(); }
     /// @returns end iterator.

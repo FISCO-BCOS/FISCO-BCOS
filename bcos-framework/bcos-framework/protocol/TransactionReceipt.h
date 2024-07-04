@@ -18,12 +18,11 @@
  */
 #pragma once
 
+#include "LogEntry.h"
 #include "ProtocolTypeDef.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <gsl/span>
-#include <ostream>
-#include <utility>
 
 namespace bcos::protocol
 {
@@ -46,6 +45,7 @@ public:
     virtual int32_t status() const = 0;
     virtual bcos::bytesConstRef output() const = 0;
     virtual gsl::span<const LogEntry> logEntries() const = 0;
+    virtual LogEntries&& takeLogEntries() = 0;
     virtual protocol::BlockNumber blockNumber() const = 0;
     virtual std::string_view effectiveGasPrice() const = 0;
     virtual void setEffectiveGasPrice(std::string effectiveGasPrice) = 0;

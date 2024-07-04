@@ -29,8 +29,6 @@
 #include <bcos-framework/consensus/ConsensusNodeInterface.h>
 #include <bcos-framework/protocol/Block.h>
 #include <tbb/concurrent_unordered_map.h>
-#include <map>
-
 
 namespace bcos::storage
 {
@@ -52,7 +50,7 @@ constexpr static const std::array<std::string_view, 8> IGNORED_ARRAY{
     bcos::storage::StorageInterface::SYS_TABLES,
 };
 
-constexpr static const std::array<std::string_view, 8> IGNORED_ARRAY_310{bcos::ledger::SYS_CONFIG,
+constexpr static const std::array<std::string_view, 5> IGNORED_ARRAY_310{bcos::ledger::SYS_CONFIG,
     bcos::ledger::SYS_CONSENSUS, bcos::storage::StorageInterface::SYS_TABLES,
     bcos::ledger::SYS_CODE_BINARY, bcos::ledger::SYS_CONTRACT_ABI};
 
@@ -66,13 +64,14 @@ public:
 
     virtual storage::StateStorageInterface::Ptr createStateStorage(
         bcos::storage::StorageInterface::Ptr storage, uint32_t compatibilityVersion,
-        bool ignoreNotExist = false,
+        bool setRowWithDirtyFlag, bool ignoreNotExist = false,
         std::shared_ptr<std::set<std::string, std::less<>>> const& keyPageIgnoreTables = nullptr)
     {
         STORAGE_LOG(TRACE) << LOG_KV("compatibilityVersion", compatibilityVersion)
                            << LOG_KV("protocol::BlockVersion::V3_1_VERSION",
                                   (uint32_t)protocol::BlockVersion::V3_1_VERSION)
-                           << LOG_KV("keyPageSize", m_keyPageSize);
+                           << LOG_KV("keyPageSize", m_keyPageSize)
+                           << LOG_KV("setRowWithDirtyFlag", setRowWithDirtyFlag);
 
         if (m_keyPageSize > 0)
         {
@@ -95,12 +94,12 @@ public:
                                << LOG_KV("keyPageIgnoreTables size",
                                       keyPageIgnoreTables == nullptr ? 0 :
                                                                        keyPageIgnoreTables->size());
-            return std::make_shared<bcos::storage::KeyPageStorage>(
-                storage, m_keyPageSize, compatibilityVersion, keyPageIgnoreTables, ignoreNotExist);
+            return std::make_shared<bcos::storage::KeyPageStorage>(storage, setRowWithDirtyFlag,
+                m_keyPageSize, compatibilityVersion, keyPageIgnoreTables, ignoreNotExist);
         }
 
         // Pass useHashV310 flag to hash() insted of compatibilityVersion
-        return std::make_shared<bcos::storage::StateStorage>(storage);
+        return std::make_shared<bcos::storage::StateStorage>(storage, setRowWithDirtyFlag);
     }
 
 private:
