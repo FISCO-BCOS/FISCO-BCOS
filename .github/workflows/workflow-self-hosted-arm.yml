@@ -27,7 +27,7 @@ jobs:
       VCPKG_ROOT: ~/cache/vcpkg
       DEPS_ROOT: ~/cache/deps
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
           clean: false
       - name: Set up Node.js 16.x
