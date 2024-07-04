@@ -60,7 +60,7 @@ public:
                        decltype(callback) callback) -> task::Task<void> {
             try
             {
-                auto stateKeys = keys | RANGES::views::transform([&table](auto&& key) -> auto{
+                auto stateKeys = keys | RANGES::views::transform([&table](auto&& key) -> auto {
                     return transaction_executor::StateKeyView{
                         table, std::forward<decltype(key)>(key)};
                 }) | RANGES::to<std::vector>();
@@ -112,7 +112,7 @@ public:
                         keys | RANGES::views::transform([&](std::string_view key) {
                             return transaction_executor::StateKey{tableName, key};
                         }),
-                        values | RANGES::views::transform([](std::string_view value) -> auto{
+                        values | RANGES::views::transform([](std::string_view value) -> auto {
                             storage::Entry entry;
                             entry.setField(0, value);
                             return entry;
@@ -150,7 +150,7 @@ public:
     }
 
     crypto::HashType hash(
-        const bcos::crypto::Hash::Ptr& hashImpl, bool /*useHashV310*/) const override
+        const bcos::crypto::Hash::Ptr& hashImpl, const ledger::Features& features) const override
     {
         BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
     }

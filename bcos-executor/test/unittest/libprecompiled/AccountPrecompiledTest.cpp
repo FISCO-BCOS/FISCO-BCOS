@@ -51,7 +51,8 @@ public:
     {
         bytes input;
         boost::algorithm::unhex(helloBin, std::back_inserter(input));
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
         if (_address != Address())
         {
             tx->forceSender(_address.asBytes());
@@ -127,7 +128,7 @@ public:
         auto result3 = executePromise3.get_future().get();
 
 
-        BOOST_CHECK_EQUAL(result3->type(), ExecutionMessage::FINISHED);
+        BOOST_CHECK_EQUAL(result3->type(), ExecutionMessage::PRE_FINISH);
         BOOST_CHECK_EQUAL(result3->newEVMContractAddress(), newAddress);
         BOOST_CHECK_LT(result3->gasAvailable(), gas);
 
@@ -148,7 +149,8 @@ public:
     {
         nextBlock(_number, m_blockVersion);
         bytes in = codec->encodeWithSig("get()");
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         if (_address != Address())
         {
             tx->forceSender(_address.asBytes());
@@ -192,7 +194,8 @@ public:
     {
         nextBlock(_number, m_blockVersion);
         bytes in = codec->encodeWithSig("set(string)", _value);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         if (_address != Address())
         {
             tx->forceSender(_address.asBytes());
@@ -238,7 +241,8 @@ public:
     {
         nextBlock(_number, m_blockVersion);
         bytes in = codec->encodeWithSig("setAccountStatus(address,uint8)", account, status);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         auto newSender = Address(_sender);
         tx->forceSender(newSender.asBytes());
         auto hash = tx->hash();
@@ -281,7 +285,7 @@ public:
         BOOST_CHECK(result3->status() == 0);
         BOOST_CHECK(result3->to() == ACCOUNT_MGR_ADDRESS);
         BOOST_CHECK(result3->from() == AUTH_COMMITTEE_ADDRESS);
-        BOOST_CHECK(result3->type() == ExecutionMessage::FINISHED);
+        BOOST_CHECK(result3->type() == ExecutionMessage::PRE_FINISH);
 
         result3->setSeq(1000);
 
@@ -311,7 +315,7 @@ public:
 
         BOOST_CHECK(result5->status() == 0);
         BOOST_CHECK(result5->to() == ACCOUNT_MGR_ADDRESS);
-        BOOST_CHECK(result5->type() == ExecutionMessage::FINISHED);
+        BOOST_CHECK(result5->type() == ExecutionMessage::PRE_FINISH);
 
         result5->setSeq(1000);
 
@@ -455,7 +459,8 @@ public:
     {
         nextBlock(_number, m_blockVersion);
         bytes in = codec->encodeWithSig("getAccountStatus(address)", account);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         auto newSender = Address("0000000000000000000000000000000000010001");
         tx->forceSender(newSender.asBytes());
         auto hash = tx->hash();
@@ -531,7 +536,8 @@ public:
     {
         nextBlock(_number, m_blockVersion);
         bytes in = codec->encodeWithSig("getAccountStatus()");
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         auto hash = tx->hash();
         txpool->hash2Transaction[hash] = tx;
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));

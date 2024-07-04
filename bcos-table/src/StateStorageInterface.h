@@ -20,6 +20,7 @@
  */
 #pragma once
 
+#include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-framework/storage/Table.h"
 #include "tbb/enumerable_thread_specific.h"
@@ -107,7 +108,7 @@ public:
     }
 
     virtual crypto::HashType hash(
-        const bcos::crypto::Hash::Ptr& hashImpl, bool useHashV310) const = 0;
+        const bcos::crypto::Hash::Ptr& hashImpl, const ledger::Features& features) const = 0;
     virtual void setPrev(std::shared_ptr<StorageInterface> prev)
     {
         std::unique_lock<std::shared_mutex> lock(m_prevMutex);

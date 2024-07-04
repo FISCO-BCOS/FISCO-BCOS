@@ -1,4 +1,5 @@
 #include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-storage/RocksDBStorage.h"
 #include "bcos-table/src/KeyPageStorage.h"
@@ -172,10 +173,12 @@ int main(int argc, const char* argv[])
     auto onlyWriteReadEnd = std::chrono::system_clock::now();
     // commit and read
     auto hashImpl = std::make_shared<Keccak256>();
+    ledger::Features features;
+    features.set(ledger::Features::Flag::bugfix_keypage_system_entry_hash);
     for (int i = 0; i < storageChainLength && !onlyWrite; ++i)
     {
         auto s = storages[i];
-        s->hash(hashImpl, true);
+        s->hash(hashImpl, features);
         TraverseStorageInterface::Ptr t =
             std::dynamic_pointer_cast<bcos::storage::TraverseStorageInterface>(s);
         bcos::protocol::TwoPCParams p;

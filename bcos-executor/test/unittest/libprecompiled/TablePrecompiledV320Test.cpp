@@ -51,11 +51,12 @@ public:
         const std::vector<std::string>& value, const std::string& callAddress, int _errorCode = 0,
         bool errorInTableManager = false)
     {
-        nextBlock(_number, protocol::BlockVersion::V3_2_VERSION);
+        nextBlock(_number, protocol::BlockVersion::V3_6_1_VERSION);
         TableInfoTupleV320 tableInfoTuple = std::make_tuple(keyOrder, key, value);
         bytes in = codec->encodeWithSig(
             "createTable(string,(uint8,string,string[]))", tableName, tableInfoTuple);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(100), 10000, "1", "1");
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(100), 10000, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -147,9 +148,10 @@ public:
     ExecutionMessage::UniquePtr appendColumns(protocol::BlockNumber _number,
         const std::string& tableName, const std::vector<std::string>& values, int _errorCode = 0)
     {
-        nextBlock(_number, protocol::BlockVersion::V3_2_VERSION);
+        nextBlock(_number, protocol::BlockVersion::V3_6_1_VERSION);
         bytes in = codec->encodeWithSig("appendColumns(string,string[])", tableName, values);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(100), 10000, "1", "1");
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(100), 10000, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -187,7 +189,8 @@ public:
         protocol::BlockNumber _number, std::string const& _path, int _errorCode = 0)
     {
         bytes in = codec->encodeWithSig("openTable(string)", _path);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -203,7 +206,7 @@ public:
         params2->setGasAvailable(gas);
         params2->setData(std::move(in));
         params2->setType(NativeExecutionMessage::TXHASH);
-        nextBlock(_number, protocol::BlockVersion::V3_2_VERSION);
+        nextBlock(_number, protocol::BlockVersion::V3_6_1_VERSION);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->dmcExecuteTransaction(std::move(params2),
@@ -223,9 +226,10 @@ public:
 
     ExecutionMessage::UniquePtr desc(protocol::BlockNumber _number, std::string const& tableName)
     {
-        nextBlock(_number, protocol::BlockVersion::V3_2_VERSION);
+        nextBlock(_number, protocol::BlockVersion::V3_6_1_VERSION);
         bytes in = codec->encodeWithSig("descWithKeyOrder(string)", tableName);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -258,10 +262,11 @@ public:
     ExecutionMessage::UniquePtr insert(protocol::BlockNumber _number, const std::string& key,
         const std::vector<std::string>& values, const std::string& callAddress)
     {
-        nextBlock(_number, protocol::BlockVersion::V3_2_VERSION);
+        nextBlock(_number, protocol::BlockVersion::V3_6_1_VERSION);
         EntryTuple entryTuple = {key, values};
         bytes in = codec->encodeWithSig("insert((string,string[]))", entryTuple);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -313,9 +318,10 @@ public:
     ExecutionMessage::UniquePtr selectByKey(
         protocol::BlockNumber _number, const std::string& key, const std::string& callAddress)
     {
-        nextBlock(_number, protocol::BlockVersion::V3_2_VERSION);
+        nextBlock(_number, protocol::BlockVersion::V3_6_1_VERSION);
         bytes in = codec->encodeWithSig("select(string)", key);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -368,10 +374,11 @@ public:
         const std::vector<ConditionTupleV320>& keyCond, const LimitTuple& limit,
         const std::string& callAddress)
     {
-        nextBlock(_number, protocol::BlockVersion::V3_2_VERSION);
+        nextBlock(_number, protocol::BlockVersion::V3_6_1_VERSION);
         bytes in =
             codec->encodeWithSig("select((uint8,string,string)[],(uint32,uint32))", keyCond, limit);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -423,9 +430,10 @@ public:
     ExecutionMessage::UniquePtr count(protocol::BlockNumber _number,
         const std::vector<ConditionTupleV320>& keyCond, const std::string& callAddress)
     {
-        nextBlock(_number, protocol::BlockVersion::V3_2_VERSION);
+        nextBlock(_number, protocol::BlockVersion::V3_6_1_VERSION);
         bytes in = codec->encodeWithSig("count((uint8,string,string)[])", keyCond);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -478,9 +486,10 @@ public:
         const std::vector<precompiled::UpdateFieldTuple>& _updateFields,
         const std::string& callAddress, bool _isErrorInTable = false)
     {
-        nextBlock(_number, protocol::BlockVersion::V3_2_VERSION);
+        nextBlock(_number, protocol::BlockVersion::V3_6_1_VERSION);
         bytes in = codec->encodeWithSig("update(string,(string,string)[])", key, _updateFields);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -542,11 +551,12 @@ public:
         const std::vector<precompiled::UpdateFieldTuple>& _updateFields,
         const std::string& callAddress)
     {
-        nextBlock(_number, protocol::BlockVersion::V3_2_VERSION);
+        nextBlock(_number, protocol::BlockVersion::V3_6_1_VERSION);
         bytes in = codec->encodeWithSig(
             "update((uint8,string,string)[],(uint32,uint32),(string,string)[])", conditions, _limit,
             _updateFields);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -605,9 +615,10 @@ public:
     ExecutionMessage::UniquePtr removeByKey(
         protocol::BlockNumber _number, const std::string& key, const std::string& callAddress)
     {
-        nextBlock(_number, protocol::BlockVersion::V3_2_VERSION);
+        nextBlock(_number, protocol::BlockVersion::V3_6_1_VERSION);
         bytes in = codec->encodeWithSig("remove(string)", key);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -660,10 +671,11 @@ public:
         const std::vector<ConditionTupleV320>& keyCond, const LimitTuple& limit,
         const std::string& callAddress)
     {
-        nextBlock(_number, protocol::BlockVersion::V3_2_VERSION);
+        nextBlock(_number, protocol::BlockVersion::V3_6_1_VERSION);
         bytes in =
             codec->encodeWithSig("remove((uint8,string,string)[],(uint32,uint32))", keyCond, limit);
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
         txpool->hash2Transaction.emplace(hash, tx);
@@ -835,22 +847,65 @@ struct ConditionNative
 class ConditionTest
 {
 public:
-    ConditionTest(const std::string& field, 
-        std::function<void(const std::vector<ConditionTupleV320>& conds, std::vector<EntryTuple>& entries)> selectFunc) 
-        : m_field(field), m_selectFunc(selectFunc) {}
+    ConditionTest(const std::string& field,
+        std::function<void(
+            const std::vector<ConditionTupleV320>& conds, std::vector<EntryTuple>& entries)>
+            selectFunc)
+      : m_field(field), m_selectFunc(selectFunc)
+    {}
     ~ConditionTest() = default;
-    
-    void EQ(const std::string& value) { m_condition2.emplace_back((uint8_t)storage::Condition::Comparator::EQ, m_field, value); m_condition1.EQ(value); }
-    void NE(const std::string& value) { m_condition2.emplace_back((uint8_t)storage::Condition::Comparator::NE, m_field, value); m_condition1.NE(value); }
-    void GT(const std::string& value) { m_condition2.emplace_back((uint8_t)storage::Condition::Comparator::GT, m_field, value); m_condition1.GT(value); }
-    void GE(const std::string& value) { m_condition2.emplace_back((uint8_t)storage::Condition::Comparator::GE, m_field, value); m_condition1.GE(value); }
-    void LT(const std::string& value) { m_condition2.emplace_back((uint8_t)storage::Condition::Comparator::LT, m_field, value); m_condition1.LT(value); }
-    void LE(const std::string& value) { m_condition2.emplace_back((uint8_t)storage::Condition::Comparator::LE, m_field, value); m_condition1.LE(value); }
-    void startsWith(const std::string& value) { m_condition2.emplace_back((uint8_t)storage::Condition::Comparator::STARTS_WITH, m_field, value); m_condition1.startsWith(value); }
-    void endsWith(const std::string& value) { m_condition2.emplace_back((uint8_t)storage::Condition::Comparator::ENDS_WITH, m_field, value); m_condition1.endsWith(value); }
-    void contains(const std::string& value) { m_condition2.emplace_back((uint8_t)storage::Condition::Comparator::CONTAINS, m_field, value); m_condition1.contains(value); }
-    
-    static std::vector<std::string> getKeys(const std::vector<std::string>& keys, const ConditionNative& cond)
+
+    void EQ(const std::string& value)
+    {
+        m_condition2.emplace_back((uint8_t)storage::Condition::Comparator::EQ, m_field, value);
+        m_condition1.EQ(value);
+    }
+    void NE(const std::string& value)
+    {
+        m_condition2.emplace_back((uint8_t)storage::Condition::Comparator::NE, m_field, value);
+        m_condition1.NE(value);
+    }
+    void GT(const std::string& value)
+    {
+        m_condition2.emplace_back((uint8_t)storage::Condition::Comparator::GT, m_field, value);
+        m_condition1.GT(value);
+    }
+    void GE(const std::string& value)
+    {
+        m_condition2.emplace_back((uint8_t)storage::Condition::Comparator::GE, m_field, value);
+        m_condition1.GE(value);
+    }
+    void LT(const std::string& value)
+    {
+        m_condition2.emplace_back((uint8_t)storage::Condition::Comparator::LT, m_field, value);
+        m_condition1.LT(value);
+    }
+    void LE(const std::string& value)
+    {
+        m_condition2.emplace_back((uint8_t)storage::Condition::Comparator::LE, m_field, value);
+        m_condition1.LE(value);
+    }
+    void startsWith(const std::string& value)
+    {
+        m_condition2.emplace_back(
+            (uint8_t)storage::Condition::Comparator::STARTS_WITH, m_field, value);
+        m_condition1.startsWith(value);
+    }
+    void endsWith(const std::string& value)
+    {
+        m_condition2.emplace_back(
+            (uint8_t)storage::Condition::Comparator::ENDS_WITH, m_field, value);
+        m_condition1.endsWith(value);
+    }
+    void contains(const std::string& value)
+    {
+        m_condition2.emplace_back(
+            (uint8_t)storage::Condition::Comparator::CONTAINS, m_field, value);
+        m_condition1.contains(value);
+    }
+
+    static std::vector<std::string> getKeys(
+        const std::vector<std::string>& keys, const ConditionNative& cond)
     {
         std::vector<std::string> ret;
         for (auto& key : keys)
@@ -863,9 +918,10 @@ public:
         return ret;
     }
 
-    static bool checkResultEQ(const std::vector<std::string>& data1, const std::vector<EntryTuple>& data2)
+    static bool checkResultEQ(
+        const std::vector<std::string>& data1, const std::vector<EntryTuple>& data2)
     {
-        if (data1.size() !=  data2.size())
+        if (data1.size() != data2.size())
         {
             return false;
         }
@@ -895,7 +951,9 @@ private:
     std::string m_field;
     ConditionNative m_condition1;
     std::vector<ConditionTupleV320> m_condition2;
-    std::function<void(const std::vector<ConditionTupleV320>& conds, std::vector<EntryTuple>& entries)> m_selectFunc;
+    std::function<void(
+        const std::vector<ConditionTupleV320>& conds, std::vector<EntryTuple>& entries)>
+        m_selectFunc;
 };
 
 static void generateRandomVector(
@@ -3935,13 +3993,13 @@ BOOST_AUTO_TEST_CASE(mixConditionTest)
         return stream.str();
     };
 
-    auto selectFunc = [this, &number, &callAddress](
-                        const std::vector<ConditionTupleV320>& conds, std::vector<EntryTuple>& entries) {
+    auto selectFunc = [this, &number, &callAddress](const std::vector<ConditionTupleV320>& conds,
+                          std::vector<EntryTuple>& entries) {
         LimitTuple limit = {0, 500};
         auto r1 = selectByCondition(number++, conds, limit, callAddress);
         codec->decode(r1->data(), entries);
     };
-    
+
     {
         creatTable(number++, "t_test_condv320_mix1", 0, "id", {"value"}, callAddress);
     }
@@ -3955,7 +4013,7 @@ BOOST_AUTO_TEST_CASE(mixConditionTest)
         record.push_back(_fillZeros(j));
         insert(number++, record.back(), {"0"}, callAddress);
         boost::log::core::get()->set_logging_enabled(true);
-    }  
+    }
 
     // test GE
     {
@@ -4396,7 +4454,7 @@ BOOST_AUTO_TEST_CASE(mixConditionTest)
         boost::log::core::get()->set_logging_enabled(false);
         insert(number++, recordStartsWith[j], {"0"}, callAddress);
         boost::log::core::get()->set_logging_enabled(true);
-    }  
+    }
 
     // test startsWith
     {
@@ -4435,7 +4493,7 @@ BOOST_AUTO_TEST_CASE(mixConditionTest)
         boost::log::core::get()->set_logging_enabled(false);
         insert(number++, recordContainsWith[j], {"0"}, callAddress);
         boost::log::core::get()->set_logging_enabled(true);
-    }  
+    }
 
     // test contains
     {
@@ -4467,7 +4525,7 @@ BOOST_AUTO_TEST_CASE(mixConditionTest)
         boost::log::core::get()->set_logging_enabled(false);
         insert(number++, recordEndsWith[j], {"0"}, callAddress);
         boost::log::core::get()->set_logging_enabled(true);
-    }  
+    }
 
     // test ends_with
     {

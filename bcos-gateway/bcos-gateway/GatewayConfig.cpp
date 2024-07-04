@@ -533,9 +533,11 @@ void GatewayConfig::initFlowControlConfig(const boost::property_tree::ptree& _pt
     m_rateLimiterConfig.timeWindowSec = timeWindowSec;
     m_rateLimiterConfig.statInterval = statInterval;
     m_rateLimiterConfig.enableConnectDebugInfo = enableConnectDebugInfo;
+    m_rateLimiterConfig.enable = _pt.get<bool>("flow_control.enable", false);
 
     GATEWAY_CONFIG_LOG(INFO) << LOG_BADGE("initFlowControlConfig")
                              << LOG_DESC("load flow_control common config items")
+                             << LOG_KV("enable", m_rateLimiterConfig.enable)
                              << LOG_KV("flow_control.stat_reporter_interval",
                                     m_rateLimiterConfig.statInterval)
                              << LOG_KV("flow_control.enable_connect_debug_info",

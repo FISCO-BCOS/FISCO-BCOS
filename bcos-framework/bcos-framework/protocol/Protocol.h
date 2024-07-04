@@ -115,6 +115,7 @@ enum ProtocolVersion : uint32_t
 
 enum class BlockVersion : uint32_t
 {
+    V3_6_1_VERSION = 0x03060100,
     V3_6_VERSION = 0x03060000,
     V3_5_VERSION = 0x03050000,
     V3_4_VERSION = 0x03040000,
@@ -130,7 +131,7 @@ enum class BlockVersion : uint32_t
     V3_0_VERSION = 0x03000000,
     RC4_VERSION = 4,
     MIN_VERSION = RC4_VERSION,
-    MAX_VERSION = V3_6_VERSION,
+    MAX_VERSION = V3_6_1_VERSION,
 };
 
 enum class TransactionVersion : uint32_t
@@ -151,7 +152,7 @@ const std::string V3_6_VERSION_STR = "3.6.0";
 
 const std::string RC_VERSION_PREFIX = "3.0.0-rc";
 
-const BlockVersion DEFAULT_VERSION = bcos::protocol::BlockVersion::V3_6_VERSION;
+const BlockVersion DEFAULT_VERSION = bcos::protocol::BlockVersion::V3_6_1_VERSION;
 const std::string DEFAULT_VERSION_STR = V3_6_VERSION_STR;
 const uint8_t MAX_MAJOR_VERSION = std::numeric_limits<uint8_t>::max();
 const uint8_t MIN_MAJOR_VERSION = 3;

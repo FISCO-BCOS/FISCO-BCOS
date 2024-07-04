@@ -27,41 +27,6 @@
 using namespace bcos::tool;
 using namespace bcos::storage;
 
-void BfsFileFactory::buildAsync(bcos::storage::StorageInterface::Ptr const& _storage,
-    std::string_view fileName, FileType fileType, std::function<void(Error::UniquePtr&&)> _callback)
-{
-    _storage->asyncOpenTable(fileName,
-        [_callback = std::move(_callback), fileType](auto&& _error, std::optional<Table>&& _table) {
-            if (_error)
-            {
-                _callback(std::forward<decltype(_error)>(_error));
-                return;
-            }
-            if (!_table.has_value())
-            {
-                _callback(BCOS_ERROR_UNIQUE_PTR(-1, "Table not exist"));
-                return;
-            }
-            bool buildRet = false;
-            switch (fileType)
-            {
-            case DIRECTOR:
-                buildRet = buildDir(_table.value());
-                break;
-            case LINK:
-                buildRet = buildLink(_table.value(), "", "");
-                break;
-            case AUTH:
-                buildRet = buildAuth(_table.value(), "");
-                break;
-            case CONTRACT:
-                buildRet = buildContract(_table.value());
-                break;
-            }
-            _callback(buildRet ? nullptr : BCOS_ERROR_UNIQUE_PTR(-1, "Build BFS file error."));
-        });
-}
-
 std::optional<Table> BfsFileFactory::createDir(
     const bcos::storage::StorageInterface::Ptr& _storage, std::string _table)
 {
@@ -108,8 +73,8 @@ void BfsFileFactory::buildDirEntry(
     _mutableEntry.setObject<std::vector<std::string>>({type.data(), "0", "0", "", "", ""});
 }
 
-bool BfsFileFactory::buildLink(
-    Table& _table, const std::string& _address, const std::string& _abi, const std::string& name)
+bool BfsFileFactory::buildLink(Table& _table, const std::string& _address, const std::string& _abi,
+    uint32_t blockVersion, const std::string& name)
 {
     Entry tEntry;
     tEntry.importFields({std::string(FS_TYPE_LINK)});
@@ -119,7 +84,8 @@ bool BfsFileFactory::buildLink(
     linkEntry.importFields({_address});
     _table.setRow(FS_LINK_ADDRESS, std::move(linkEntry));
 
-    if (!_abi.empty())
+    // in block version 3.0, save abi in link even if it is empty
+    if (!_abi.empty() || blockVersion == (uint32_t)protocol::BlockVersion::V3_0_VERSION)
     {
         BCOS_LOG(TRACE) << LOG_BADGE("BFS") << "buildLink with abi"
                         << LOG_KV("abiSize", _abi.size());
@@ -128,7 +94,7 @@ bool BfsFileFactory::buildLink(
         _table.setRow(FS_LINK_ABI, std::move(abiEntry));
     }
 
-    if (!name.empty())
+    if (!name.empty() || blockVersion == (uint32_t)protocol::BlockVersion::V3_0_VERSION)
     {
         Entry nameEntry;
         nameEntry.importFields({name});

@@ -144,7 +144,7 @@ public:
                                               callback) const override;
 
     crypto::HashType hash(
-        const bcos::crypto::Hash::Ptr& hashImpl, bool /*useHashV310*/) const override;
+        const bcos::crypto::Hash::Ptr& hashImpl, const ledger::Features& features) const override;
 
     void rollback(const Recoder& recoder) override;
 
@@ -889,9 +889,9 @@ public:
             if (!entries.empty() && pageKey != entries.rbegin()->first)
             {
                 KeyPage_LOG(DEBUG) << LOG_DESC("import page with invalid pageKey")
-                                     << LOG_KV("pageKey", toHex(pageKey))
-                                     << LOG_KV("validPageKey", toHex(entries.rbegin()->first))
-                                     << LOG_KV("count", entries.size());
+                                   << LOG_KV("pageKey", toHex(pageKey))
+                                   << LOG_KV("validPageKey", toHex(entries.rbegin()->first))
+                                   << LOG_KV("count", entries.size());
                 m_invalidPageKeys.insert(std::string(pageKey));
             }
             if (entries.empty())
@@ -1039,7 +1039,7 @@ public:
                     continue;
                 }
                 ++count;
-                ar& i.first;
+                ar & i.first;
                 auto value = i.second.get();
                 ar&(uint32_t)value.size();
                 ar.save_binary(value.data(), value.size());
@@ -1051,15 +1051,15 @@ public:
         {
             std::ignore = version;
             uint32_t count = 0;
-            ar& count;
+            ar & count;
             m_validCount = count;
             auto iter = entries.begin();
             for (size_t i = 0; i < m_validCount; ++i)
             {
                 std::string key;
-                ar& key;
+                ar & key;
                 uint32_t len = 0;
-                ar& len;
+                ar & len;
                 m_size += len;
                 m_size += key.size();
                 auto value = std::make_shared<std::vector<uint8_t>>(len, 0);
