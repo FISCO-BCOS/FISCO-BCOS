@@ -49,7 +49,7 @@ find_package(Protobuf CONFIG REQUIRED)
 find_package(jsoncpp CONFIG REQUIRED)
 
 file(GLOB_RECURSE SRCS bcos-pbft/*.cpp)
-list(REMOVE_ITEM SRCS bcos-pbft/pbft/libloki/*.cpp)
+list(REMOVE_ITEM SRCS bcos-pbft/pbft/libloki/FuzzEngine.cpp)
 add_library(${PBFT_TARGET} ${SRCS} ${MESSAGES_SRCS})
 target_link_libraries(${PBFT_TARGET} PUBLIC ${TXPOOL_TARGET} ${UTILITIES_TARGET} ${TOOL_TARGET} bcos-framework jsoncpp_static)
 
