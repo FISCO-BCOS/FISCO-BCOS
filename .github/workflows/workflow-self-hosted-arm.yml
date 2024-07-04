@@ -28,13 +28,9 @@ jobs:
       DEPS_ROOT: ~/cache/deps
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          clean: false
-      - name: Set up Node.js 16.x
-        uses: actions/setup-node@v2
-        with:
-          node-version: "16.x"
-
+          node-version: 20
       - name: Prepare centos tools
         run: |
           sudo yum install -y epel-release centos-release-scl flex bison patch gmp-static java glibc-static glibc-devel libzstd-devel java-1.8.0-openjdk-devel.aarch64
