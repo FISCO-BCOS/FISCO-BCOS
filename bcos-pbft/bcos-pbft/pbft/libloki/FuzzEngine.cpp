@@ -1,4 +1,3 @@
-/*
 #include "FuzzEngine.h"
 
 #include <thread>
@@ -340,4 +339,3 @@ void Fuzzer::protocol_mutate(){
 
 } // fuzzer
 } // loki
-*/
