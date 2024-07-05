@@ -30,17 +30,8 @@ class Fuzzer{
 
         // current info
         bcos::consensus::ViewType cur_view;
-        // int cur_consensusBlockHeight;
-        bool leaderFailed;
-
-        // std::shared_ptr<dev::p2p::P2PInterface> network_service;
         std::shared_ptr<bcos::consensus::PBFTConfig> consensus_config;
-        int32_t protocolId;
         bcos::crypto::KeyPairInterface::Ptr keypair;
-        // bcos::consensus::IDXTYPE idx;
-
-        const bool send_package = loki::fuzzer::SEND_PACKAGE;
-        const int interval = loki::fuzzer::SEND_INTERVAL;
 
     public:
         using Ptr = std::shared_ptr<Fuzzer>;
