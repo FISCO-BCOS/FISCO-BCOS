@@ -22,8 +22,6 @@ class State{
         // 3 indicates ViewChangeReq
         int cur_state = -1;
 
-        bool is_leader;
-
         // int state_id;
     public:
         State();
