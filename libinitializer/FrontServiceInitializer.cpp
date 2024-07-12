@@ -186,6 +186,7 @@ void FrontServiceInitializer::initMsgHandlers(bcos::consensus::ConsensusInterfac
             auto transaction =
                 m_protocolInitializer->blockFactory()->transactionFactory()->createTransaction(
                     data, false);
+            transaction->forceSender({});  // must clear sender here for future verify
             task::wait(
                 [](decltype(txpool) txpool, decltype(transaction) transaction) -> task::Task<void> {
                     try
