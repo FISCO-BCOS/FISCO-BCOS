@@ -396,9 +396,16 @@ BOOST_AUTO_TEST_CASE(precompiled)
                 origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
                 bcos::task::syncWait);
         syncWait(hostContext.prepare());
-        BOOST_CHECK_THROW(result.emplace(syncWait(hostContext.execute())),
-            bcos::transaction_executor::NotFoundCodeError);
 
+        auto notFoundResult = syncWait(hostContext.execute());
+        BOOST_CHECK_EQUAL(notFoundResult.status_code,
+            (evmc_status_code)bcos::protocol::TransactionStatus::CallAddressError);
+
+        bcos::codec::abi::ContractABICodec abi(*hashImpl);
+        std::string errorMessage;
+        BOOST_REQUIRE_GT(notFoundResult.output_size, 4);
+        abi.abiOut({notFoundResult.output_data + 4, notFoundResult.output_size - 4}, errorMessage);
+        BOOST_CHECK_EQUAL(errorMessage, "Call address error.");
 
         auto& features = const_cast<bcos::ledger::Features&>(ledgerConfig.features());
         features.set(bcos::ledger::Features::Flag::feature_sharding);
