@@ -38,7 +38,10 @@ std::shared_ptr<bytes> HsmSM2Crypto::sign(
     const KeyPairInterface& _keyPair, const HashType& _hash, bool _signatureWithPub) const
 {
     auto& hsmKeyPair = dynamic_cast<const HsmSM2KeyPair&>(_keyPair);
-    CryptoProvider& provider = SDFCryptoProvider::GetInstance(4, m_hsmLibPath);
+    auto beginSignTime = utcTimeUs();
+    CryptoProvider& provider = SDFCryptoProvider::GetInstance(m_hsmLibPath);
+    CRYPTO_LOG(DEBUG) << "[HSMSignature::sign] initialize provider"
+                      << LOG_KV("initialize cost", utcTimeUs() - beginSignTime);
 
     Key key = Key();
     if (hsmKeyPair.isInternalKey())
@@ -84,6 +87,7 @@ std::shared_ptr<bytes> HsmSM2Crypto::sign(
 
     // step 3 : signature = Sign(e)
     unsigned int signLen;
+    auto signTime = utcTimeUs();
     code = provider.Sign(
         key, hsm::SM2, (const unsigned char*)hashResult, 32, signatureData->data(), &signLen);
     if (code != SDR_OK)
@@ -99,6 +103,9 @@ std::shared_ptr<bytes> HsmSM2Crypto::sign(
         signatureData->insert(signatureData->end(), hsmKeyPair.publicKey()->mutableData(),
             hsmKeyPair.publicKey()->mutableData() + hsmKeyPair.publicKey()->size());
     }
+    CRYPTO_LOG(INFO) << "[HSMSignature::sign] sign success"
+                     << LOG_KV("total cost", utcTimeUs() - beginSignTime)
+                     << LOG_KV("signCost", utcTimeUs() - signTime);
     return signatureData;
 }
 
@@ -113,8 +120,11 @@ bool HsmSM2Crypto::verify(
     PublicPtr _pubKey, const HashType& _hash, bytesConstRef _signatureData) const
 {
     // get provider
-    CryptoProvider& provider = SDFCryptoProvider::GetInstance(4, m_hsmLibPath);
-
+    auto beginVerifyTime = utcTimeUs();
+    CryptoProvider& provider = SDFCryptoProvider::GetInstance(m_hsmLibPath);
+    auto initTime = utcTimeUs() - beginVerifyTime;
+    CRYPTO_LOG(DEBUG) << "[HSMSignature::verify] initialize provider"
+                      << LOG_KV("initialize cost", initTime);
     // parse input
     Key key = Key();
     auto pubKey = std::make_shared<const std::vector<byte>>(
@@ -125,6 +135,7 @@ bool HsmSM2Crypto::verify(
     // Get Z
     bytes hashResult(HSM_SM3_DIGEST_LENGTH);
     unsigned int uiHashResultLen;
+    auto hashBeginTime = utcTimeUs();
     unsigned int code = provider.Hash(&key, hsm::SM3, _hash.data(), HSM_SM3_DIGEST_LENGTH,
         (unsigned char*)hashResult.data(), &uiHashResultLen);
     if (code != SDR_OK)
@@ -133,7 +144,10 @@ bool HsmSM2Crypto::verify(
                           << LOG_KV("error", provider.GetErrorMessage(code));
         return false;
     }
-
+    auto hashTime = utcTimeUs() - hashBeginTime;
+    CRYPTO_LOG(DEBUG) << "[HSMSignature::verify] hash success"
+                      << LOG_KV("hashCost", utcTimeUs() - hashTime);
+    auto verifyTime = utcTimeUs();
     code = provider.Verify(key, hsm::SM2, (const unsigned char*)hashResult.data(),
         HSM_SM3_DIGEST_LENGTH, _signatureData.data(), 64, &verifyResult);
     if (code != SDR_OK)
@@ -142,6 +156,13 @@ bool HsmSM2Crypto::verify(
                           << LOG_KV("error", provider.GetErrorMessage(code));
         return false;
     }
+    CRYPTO_LOG(INFO) << "[HSMSignature::verify] verify success"
+                     << LOG_KV("total cost", utcTimeUs() - beginVerifyTime)
+                     << LOG_KV("initTime Proportion", initTime / (utcTimeUs() - beginVerifyTime))
+                     << LOG_KV("hashTime Proportion", hashTime / (utcTimeUs() - beginVerifyTime))
+                     << LOG_KV("verifyCost", utcTimeUs() - verifyTime)
+                     << LOG_KV("verifyCost Proportion",
+                            (utcTimeUs() - verifyTime) / (utcTimeUs() - beginVerifyTime));
     return true;
 }
 

@@ -49,7 +49,7 @@ HsmSM2KeyPair::HsmSM2KeyPair(std::string _libPath, unsigned int _keyIndex, std::
     m_password = _password;
     m_isInternalKey = true;
 
-    SDFCryptoProvider& provider = SDFCryptoProvider::GetInstance(4, m_hsmLibPath);
+    SDFCryptoProvider& provider = SDFCryptoProvider::GetInstance(m_hsmLibPath);
 
     Key key = Key(m_keyIndex);
     unsigned int code = provider.ExportInternalPublicKey(key, AlgorithmType::SM2);
