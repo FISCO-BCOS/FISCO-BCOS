@@ -38,7 +38,8 @@ BOOST_AUTO_TEST_CASE(PointEvaluatePrecompiledTest)
         "fcdf12f7c321a421e229565952cfff4ef3517100a97da1d4fe57956fa50a442f92af03b1bf37adacc8ad4ed209"
         "b31287ea5bb94d9d06a444d6bb5aadc3ceb615b50d6606bd54bfe529f59247987cd1ab848d19de599a9052f183"
         "5fb0d0d44cf70183e19a68c9");
-    PrecompiledExecutor const& executor = PrecompiledRegistrar::executor("point_evaluation");
+    static std::string pointE("point_evaluation");
+    PrecompiledExecutor const& executor = PrecompiledRegistrar::executor(pointE);
     bytesConstRef input_ref(in.data(), in.size());
     std::pair<bool, bytes> out = executor(input_ref);
     BOOST_CHECK(out.first);
