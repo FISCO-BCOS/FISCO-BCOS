@@ -145,8 +145,7 @@ bool HsmSM2Crypto::verify(
         return false;
     }
     auto hashTime = utcTimeUs() - hashBeginTime;
-    CRYPTO_LOG(DEBUG) << "[HSMSignature::verify] hash success"
-                      << LOG_KV("hashCost", utcTimeUs() - hashTime);
+    CRYPTO_LOG(DEBUG) << "[HSMSignature::verify] hash success" << LOG_KV("hashCost", hashTime);
     auto verifyTime = utcTimeUs();
     code = provider.Verify(key, hsm::SM2, (const unsigned char*)hashResult.data(),
         HSM_SM3_DIGEST_LENGTH, _signatureData.data(), 64, &verifyResult);
@@ -156,13 +155,16 @@ bool HsmSM2Crypto::verify(
                           << LOG_KV("error", provider.GetErrorMessage(code));
         return false;
     }
-    CRYPTO_LOG(INFO) << "[HSMSignature::verify] verify success"
-                     << LOG_KV("total cost", utcTimeUs() - beginVerifyTime)
-                     << LOG_KV("initTime Proportion", initTime / (utcTimeUs() - beginVerifyTime))
-                     << LOG_KV("hashTime Proportion", hashTime / (utcTimeUs() - beginVerifyTime))
-                     << LOG_KV("verifyCost", utcTimeUs() - verifyTime)
-                     << LOG_KV("verifyCost Proportion",
-                            (utcTimeUs() - verifyTime) / (utcTimeUs() - beginVerifyTime));
+    CRYPTO_LOG(INFO)
+        << "[HSMSignature::verify] verify success"
+        << LOG_KV("total cost", utcTimeUs() - beginVerifyTime)
+        << LOG_KV("initTime Proportion",
+               static_cast<float>(initTime) / static_cast<float>(utcTimeUs() - beginVerifyTime))
+        << LOG_KV("hashTime Proportion",
+               static_cast<float>(hashTime) / static_cast<float>(utcTimeUs() - beginVerifyTime))
+        << LOG_KV("verifyCost", utcTimeUs() - verifyTime)
+        << LOG_KV("verifyCost Proportion", static_cast<float>(utcTimeUs() - verifyTime) /
+                                               static_cast<float>(utcTimeUs() - beginVerifyTime));
     return true;
 }
 
