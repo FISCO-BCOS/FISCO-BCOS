@@ -133,7 +133,7 @@ bcos::bytesPointer HsmSM4Crypto::symmetricEncryptWithInternalKey(const unsigned 
                             << LOG_KV("error", provider.GetErrorMessage(encryptCode));
         BOOST_THROW_EXCEPTION(std::runtime_error("Hsm SM4 EncryptWithInternalKey error"));
     }
-
+    CRYPTO_LOG(INFO) << "[HsmSM4Crypto::symmetricEncryptWithInternalKey] Encrypt Success";
     return encryptedData;
 }
 
@@ -169,6 +169,6 @@ bcos::bytesPointer HsmSM4Crypto::symmetricDecryptWithInternalKey(const unsigned 
     int paddingCount = (int)decryptedData->back();
     int pureDecryptedDataSize = decryptedData->size() - paddingCount;
     decryptedData->resize(pureDecryptedDataSize);
-
+    CRYPTO_LOG(INFO) << "[HsmSM4Crypto::symmetricDecryptWithInternalKey] Decrypt Success";
     return decryptedData;
 }
