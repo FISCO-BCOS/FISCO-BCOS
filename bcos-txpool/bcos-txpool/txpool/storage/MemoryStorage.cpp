@@ -468,7 +468,7 @@ TransactionStatus MemoryStorage::insertWithoutLock(Transaction::Ptr transaction)
         {
             if (transaction->submitCallback() && !accessor->value()->submitCallback())
             {
-                accessor->value()->setSubmitCallback(std::move(transaction->submitCallback()));
+                accessor->value()->setSubmitCallback(transaction->submitCallback());
                 return TransactionStatus::None;
             }
             return TransactionStatus::AlreadyInTxPool;

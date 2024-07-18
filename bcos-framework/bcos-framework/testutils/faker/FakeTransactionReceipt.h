@@ -65,7 +65,8 @@ inline void checkReceipts(Hash::Ptr hashImpl, bcos::protocol::TransactionReceipt
     // check LogEntries
     BOOST_CHECK(decodedReceipt->logEntries().size() == 2);
     BOOST_CHECK(decodedReceipt->logEntries().size() == receipt->logEntries().size());
-    auto& logEntry = (decodedReceipt->logEntries())[1];
+    auto logEntries = decodedReceipt->logEntries();
+    const auto& logEntry = logEntries[1];
     auto expectedTopic = hashImpl->hash(std::to_string(1));
     BOOST_CHECK(logEntry.topics()[0] == expectedTopic);
 
