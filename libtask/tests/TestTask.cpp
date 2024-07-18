@@ -99,7 +99,7 @@ Task<int> asyncLevel2(oneapi::tbb::task_group& taskGroup)
     {
         constexpr bool await_ready() const { return false; }
 
-        void await_suspend(CO_STD::coroutine_handle<> handle)
+        void await_suspend(std::coroutine_handle<> handle)
         {
             std::cout << "Start run async thread: " << handle.address() << std::endl;
             taskGroup.run([this, m_handle = handle]() {
@@ -169,7 +169,7 @@ struct SleepTask
     inline static oneapi::tbb::concurrent_vector<std::future<void>> futures;
 
     constexpr static bool await_ready() { return false; }
-    void await_suspend(CO_STD::coroutine_handle<> handle)
+    void await_suspend(std::coroutine_handle<> handle)
     {
         futures.emplace_back(std::async([m_handle = handle]() mutable {
             using namespace std::chrono_literals;
@@ -207,10 +207,10 @@ struct ResumableTask
     ResumableTask& operator=(ResumableTask&&) = default;
     ~ResumableTask() noexcept = default;
 
-    CO_STD::coroutine_handle<> m_handle;
+    std::coroutine_handle<> m_handle;
 
     constexpr bool static await_ready() { return false; }
-    void await_suspend(CO_STD::coroutine_handle<> handle)
+    void await_suspend(std::coroutine_handle<> handle)
     {
         std::cout << "Task suspend!" << std::endl;
         m_handle = handle;

@@ -1,16 +1,27 @@
 #pragma once
 
+#include <version>
+
+#if __cpp_lib_generator >= 202207L
+#include <generator>
+namespace bcos::task
+{
+template <typename Ref, typename Val = void, typename Alloc = void>
+using Generator = std::generator<Ref, Val, Alloc>;
+}
+#else
+static_assert(false, "C++23 is required for std::generator");
+#include <coroutine>
+#include <exception>
+#include <iterator>
+#include <type_traits>
+#include <utility>
+namespace bcos::task
+{
 // Fork from https://open-std.org/JTC1/SC22/WG21/docs/papers/2020/p2168r0.pdf
 // Can be replace with std::generator
 
-#include "Coroutine.h"
-#include <exception>
-#include <iterator>
-#include <utility>
-
-namespace bcos::task
-{
-template <typename Ref, typename Value = std::remove_cvref_t<Ref>>
+template <typename Ref, typename Value = std::remove_cvref_t<Ref>, typename Alloc = void>
 class Generator
 {
 public:
@@ -20,7 +31,7 @@ public:
         promise_type() : m_promise(this) {}
         Generator get_return_object() noexcept
         {
-            return Generator{CO_STD::coroutine_handle<promise_type>::from_promise(*this)};
+            return Generator{std::coroutine_handle<promise_type>::from_promise(*this)};
         }
 
         void unhandled_exception()
@@ -34,21 +45,20 @@ public:
 
         void return_void() noexcept {}
 
-        CO_STD::suspend_always initial_suspend() noexcept { return {}; }
+        std::suspend_always initial_suspend() noexcept { return {}; }
 
         // Transfers control back to the parent of a nested coroutine
         struct final_awaiter
         {
             bool await_ready() noexcept { return false; }
-            CO_STD::coroutine_handle<> await_suspend(
-                CO_STD::coroutine_handle<promise_type> h) noexcept
+            std::coroutine_handle<> await_suspend(std::coroutine_handle<promise_type> h) noexcept
             {
                 auto& promise = h.promise();
                 auto parent = h.promise().m_parent;
                 if (parent)
                 {
                     promise.m_promise = parent;
-                    return CO_STD::coroutine_handle<promise_type>::from_promise(*parent);
+                    return std::coroutine_handle<promise_type>::from_promise(*parent);
                 }
                 return std::noop_coroutine();
             }
@@ -57,12 +67,12 @@ public:
 
         final_awaiter final_suspend() noexcept { return {}; }
 
-        CO_STD::suspend_always yield_value(Ref&& x) noexcept
+        std::suspend_always yield_value(Ref&& x) noexcept
         {
             m_promise->m_value = std::addressof(x);
             return {};
         }
-        CO_STD::suspend_always yield_value(Ref& x) noexcept
+        std::suspend_always yield_value(Ref& x) noexcept
         {
             m_promise->m_value = std::addressof(x);
             return {};
@@ -83,7 +93,7 @@ public:
 
             // set the parent, root and exceptions pointer and
             // resume the nested coroutine
-            CO_STD::coroutine_handle<> await_suspend(
+            std::coroutine_handle<> await_suspend(
                 std::coroutine_handle<promise_type> handle) noexcept
             {
                 auto& current = handle.promise();
@@ -156,7 +166,7 @@ public:
 
     class Iterator
     {
-        using coroutine_handle = CO_STD::coroutine_handle<promise_type>;
+        using coroutine_handle = std::coroutine_handle<promise_type>;
 
     public:
         using iterator_category = std::input_iterator_tag;
@@ -165,7 +175,6 @@ public:
         using reference = Ref;
         using pointer = std::add_pointer_t<Ref>;
 
-        Iterator() noexcept = default;
         Iterator& operator=(const Iterator&) = delete;
         Iterator(const Iterator&) = delete;
         Iterator(Iterator&& o) noexcept { std::swap(coro_, o.coro_); }
@@ -226,3 +235,4 @@ private:
     std::coroutine_handle<promise_type> coro_;
 };
 }  // namespace bcos::task
+#endif
