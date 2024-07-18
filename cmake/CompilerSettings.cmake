@@ -130,7 +130,6 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
         if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 14.0)
             set(CMAKE_CXX_STANDARD 23)
             add_compile_options(-Wno-error=uninitialized)
-            add_compile_options(-flarge-source-files)
         endif()
     elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
         if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 4.0)
@@ -176,7 +175,6 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
     endif()
 elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
     add_compile_definitions(NOMINMAX)
-    #add_definitions(-DUSE_STD_RANGES)
     add_compile_options(/std:c++latest)
     add_compile_options(-bigobj)
 

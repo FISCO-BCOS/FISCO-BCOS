@@ -10,7 +10,6 @@ template <typename Ref, typename Val = void, typename Alloc = void>
 using Generator = std::generator<Ref, Val, Alloc>;
 }
 #else
-static_assert(false, "C++23 is required for std::generator");
 #include <coroutine>
 #include <exception>
 #include <iterator>
