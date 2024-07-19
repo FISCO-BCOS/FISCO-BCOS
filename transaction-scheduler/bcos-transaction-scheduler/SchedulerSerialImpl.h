@@ -38,7 +38,7 @@ private:
         struct ExecutionContext
         {
             std::optional<CoroType> coro;
-            typename CoroType::Iterator iterator;
+            std::optional<decltype(coro->begin())> iterator;
             protocol::TransactionReceipt::Ptr receipt;
         };
 
@@ -76,8 +76,8 @@ private:
                             coro.emplace(
                                 transaction_executor::execute3Step(executor, storage, blockHeader,
                                     transactions[i], i, ledgerConfig, task::tbb::syncWait));
-                            iterator = coro->begin();
-                            receipt = *iterator;
+                            iterator.emplace(coro->begin());
+                            receipt = *(*iterator);
                         }
                         return range;
                     }) &
@@ -90,7 +90,7 @@ private:
                                 auto& [coro, iterator, receipt] = contexts[i];
                                 if (!receipt)
                                 {
-                                    receipt = *(++iterator);
+                                    receipt = *(++(*iterator));
                                 }
                             }
                             return range;
@@ -104,7 +104,7 @@ private:
                                 auto& [coro, iterator, receipt] = contexts[i];
                                 if (!receipt)
                                 {
-                                    receipt = *(++iterator);
+                                    receipt = *(++(*iterator));
                                 }
                                 coro.reset();
                             }

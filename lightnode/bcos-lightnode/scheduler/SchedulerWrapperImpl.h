@@ -29,14 +29,14 @@ private:
         auto transactionImpl = std::make_shared<bcostars::protocol::TransactionImpl>(
             [&transaction]() { return const_cast<bcostars::Transaction*>(&transaction); });
 
-        struct Awaitable : public CO_STD::suspend_always
+        struct Awaitable : public std::suspend_always
         {
             Awaitable(decltype(transactionImpl)& transactionImpl, SchedulerType& scheduler,
                 std::remove_cvref_t<decltype(receipt)>& receipt)
               : m_transactionImpl(transactionImpl), m_scheduler(scheduler), m_receipt(receipt)
             {}
 
-            void await_suspend(CO_STD::coroutine_handle<task::Task<void>::promise_type> handle)
+            void await_suspend(std::coroutine_handle<task::Task<void>::promise_type> handle)
             {
                 bcos::concepts::getRef(m_scheduler)
                     .call(std::move(m_transactionImpl),

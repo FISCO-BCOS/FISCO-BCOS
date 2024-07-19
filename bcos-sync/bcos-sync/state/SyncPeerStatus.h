@@ -77,8 +77,8 @@ public:
 
 private:
     bcos::crypto::PublicPtr m_nodeId;
-    bcos::protocol::BlockNumber m_number;
-    bcos::protocol::BlockNumber m_archivedNumber;
+    bcos::protocol::BlockNumber m_number{};
+    bcos::protocol::BlockNumber m_archivedNumber{};
     bcos::crypto::HashType m_hash;
     bcos::crypto::HashType m_genesisHash;
 

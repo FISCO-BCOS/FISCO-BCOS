@@ -28,7 +28,6 @@
     "boost-container-hash",
     "boost-multiprecision",
     "boost-program-options",
-    "boost-mp11",
     "ms-gsl",
     "tbb",
     {
