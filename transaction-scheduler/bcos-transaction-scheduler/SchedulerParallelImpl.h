@@ -40,7 +40,7 @@ struct ExecutionContext
 {
     ExecutionContext(int contextID, std::reference_wrapper<const protocol::Transaction> transaction,
         std::reference_wrapper<protocol::TransactionReceipt::Ptr> receipt,
-        std::optional<CoroType> coro, typename CoroType::Iterator iterator)
+        std::optional<CoroType> coro, std::optional<decltype(coro->begin())> iterator)
       : contextID(contextID),
         transaction(transaction),
         receipt(receipt),
@@ -51,7 +51,7 @@ struct ExecutionContext
     std::reference_wrapper<const protocol::Transaction> transaction;
     std::reference_wrapper<protocol::TransactionReceipt::Ptr> receipt;
     std::optional<CoroType> coro;
-    typename CoroType::Iterator iterator;
+    std::optional<decltype(coro->begin())> iterator;
 };
 
 template <class MutableStorage, class Storage, class Executor, class ContextRange>
@@ -101,8 +101,8 @@ public:
             context.coro.emplace(transaction_executor::execute3Step(m_executor.get(),
                 m_readWriteSetStorage, blockHeader, context.transaction.get(), context.contextID,
                 ledgerConfig, task::tbb::syncWait));
-            context.iterator = context.coro->begin();
-            context.receipt.get() = *context.iterator;
+            context.iterator.emplace(context.coro->begin());
+            context.receipt.get() = *(*context.iterator);
         }
     }
 
@@ -119,9 +119,9 @@ public:
                     << " transactions";
                 break;
             }
-            if (!context.receipt.get() && context.iterator != context.coro->end())
+            if (!context.receipt.get() && *context.iterator != context.coro->end())
             {
-                context.receipt.get() = *(++context.iterator);
+                context.receipt.get() = *(++(*context.iterator));
             }
         }
     }
@@ -132,9 +132,9 @@ public:
             ittapi::ITT_DOMAINS::instance().EXECUTE_CHUNK3);
         for (auto& context : m_contextRange)
         {
-            if (!context.receipt.get() && context.iterator != context.coro->end())
+            if (!context.receipt.get() && *context.iterator != context.coro->end())
             {
-                context.receipt.get() = *(++context.iterator);
+                context.receipt.get() = *(++(*context.iterator));
             }
         }
     }

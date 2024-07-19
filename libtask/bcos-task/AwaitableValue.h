@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Coroutine.h"
+#include <coroutine>
 #include <utility>
 
 namespace bcos::task
@@ -13,7 +13,7 @@ public:
     AwaitableValue() = default;
     AwaitableValue(Value&& value) : m_value(std::forward<Value>(value)) {}
     constexpr static bool await_ready() noexcept { return true; }
-    constexpr static bool await_suspend([[maybe_unused]] CO_STD::coroutine_handle<> handle) noexcept
+    constexpr static bool await_suspend([[maybe_unused]] std::coroutine_handle<> handle) noexcept
     {
         return false;
     }
@@ -30,7 +30,7 @@ struct [[nodiscard]] AwaitableValue<void>
 {
     AwaitableValue() = default;
     static constexpr bool await_ready() noexcept { return true; }
-    static constexpr bool await_suspend([[maybe_unused]] CO_STD::coroutine_handle<> handle) noexcept
+    static constexpr bool await_suspend([[maybe_unused]] std::coroutine_handle<> handle) noexcept
     {
         return false;
     }
