@@ -22,6 +22,39 @@ struct NotExistsImmutableStorageError : public bcos::Error {};
 struct UnsupportedMethod : public bcos::Error {};
 // clang-format on
 
+template <class KeyType, class ValueType>
+task::Task<bool> fillMissingValues(
+    auto& storage, RANGES::input_range auto&& keys, RANGES::input_range auto& values)
+{
+    using StoreKeyType =
+        std::conditional_t<std::is_lvalue_reference_v<RANGES::range_value_t<decltype(keys)>>,
+            std::reference_wrapper<KeyType>, KeyType>;
+
+    std::vector<std::pair<StoreKeyType, std::reference_wrapper<std::optional<ValueType>>>>
+        missingKeyValues;
+    for (auto&& [key, value] : RANGES::views::zip(std::forward<decltype(keys)>(keys), values))
+    {
+        if (!value)
+        {
+            missingKeyValues.emplace_back(std::forward<decltype(key)>(key), std::ref(value));
+        }
+    }
+    auto gotValues = co_await storage2::readSome(storage, missingKeyValues | RANGES::views::keys);
+
+    size_t count = 0;
+    for (auto&& [from, to] :
+        RANGES::views::zip(gotValues, missingKeyValues | RANGES::views::values))
+    {
+        if (from)
+        {
+            to.get() = std::move(from);
+            ++count;
+        }
+    }
+
+    co_return count == RANGES::size(gotValues);
+}
+
 template <class MutableStorageType, class CachedStorage, class BackendStorage>
     requires((std::is_void_v<CachedStorage> || (!std::is_void_v<CachedStorage>)))
 class View
@@ -51,39 +84,6 @@ public:
       : m_backendStorage(backendStorage), m_cacheStorage(cacheStorage)
     {}
 
-    static task::Task<bool> fillMissingValues(
-        auto& storage, RANGES::input_range auto&& keys, RANGES::input_range auto& values)
-    {
-        using StoreKeyType =
-            std::conditional_t<std::is_lvalue_reference_v<RANGES::range_value_t<decltype(keys)>>,
-                std::reference_wrapper<KeyType>, KeyType>;
-
-        std::vector<std::pair<StoreKeyType, std::reference_wrapper<std::optional<ValueType>>>>
-            missingKeyValues;
-        for (auto&& [key, value] : RANGES::views::zip(std::forward<decltype(keys)>(keys), values))
-        {
-            if (!value)
-            {
-                missingKeyValues.emplace_back(std::forward<decltype(key)>(key), std::ref(value));
-            }
-        }
-        auto gotValues =
-            co_await storage2::readSome(storage, missingKeyValues | RANGES::views::keys);
-
-        size_t count = 0;
-        for (auto&& [from, to] :
-            RANGES::views::zip(gotValues, missingKeyValues | RANGES::views::values))
-        {
-            if (from)
-            {
-                to.get() = std::move(from);
-                ++count;
-            }
-        }
-
-        co_return count == RANGES::size(gotValues);
-    }
-
     friend auto tag_invoke(
         storage2::tag_t<storage2::readSome> /*unused*/, View& view, RANGES::input_range auto&& keys)
         -> task::Task<task::AwaitableReturnType<
@@ -95,7 +95,7 @@ public:
         task::AwaitableReturnType<decltype(storage2::readSome(*view.m_mutableStorage, keys))>
             values(RANGES::size(keys));
         if (view.m_mutableStorage &&
-            co_await fillMissingValues(*view.m_mutableStorage, keys, values))
+            co_await fillMissingValues<KeyType, ValueType>(*view.m_mutableStorage, keys, values))
         {
             co_return values;
         }
@@ -106,7 +106,7 @@ public:
 
         for (auto& immutableStorage : view.m_immutableStorages)
         {
-            if (co_await fillMissingValues(*immutableStorage, keys, values))
+            if (co_await fillMissingValues<KeyType, ValueType>(*immutableStorage, keys, values))
             {
                 co_return values;
             }
@@ -114,13 +114,14 @@ public:
 
         if constexpr (withCacheStorage)
         {
-            if (co_await fillMissingValues(view.m_cacheStorage.get(), keys, values))
+            if (co_await fillMissingValues<KeyType, ValueType>(
+                    view.m_cacheStorage.get(), keys, values))
             {
                 co_return values;
             }
         }
 
-        co_await fillMissingValues(view.m_backendStorage.get(), keys, values);
+        co_await fillMissingValues<KeyType, ValueType>(view.m_backendStorage.get(), keys, values);
         co_return values;
     }
 
