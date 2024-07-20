@@ -46,12 +46,6 @@ public:
 template <class Storage>
 concept IsRollbackable = std::remove_cvref_t<Storage>::isRollbackable;
 
-// template <IsRollbackable Rollbackable>
-// Storage& storage()
-// {
-//     return m_storage;
-// }
-
 template <IsRollbackable Rollbackable>
 typename Rollbackable::Savepoint current(Rollbackable const& storage)
 {
