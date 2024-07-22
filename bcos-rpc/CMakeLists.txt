@@ -29,7 +29,7 @@ file(GLOB_RECURSE SRCS bcos-rpc/*.cpp)
 find_package(tarscpp REQUIRED)
 
 add_library(${RPC_TARGET} ${SRCS} ${HEADERS})
-target_link_libraries(${RPC_TARGET} PUBLIC bcos-boostssl ${CRYPTO_TARGET} ${TARS_PROTOCOL_TARGET} jsoncpp_static ${CRYPTO_TARGET} tarscpp::tarsservant tarscpp::tarsutil)
+target_link_libraries(${RPC_TARGET} PUBLIC bcos-boostssl ${LEDGER_TARGET} ${CRYPTO_TARGET} ${TARS_PROTOCOL_TARGET} jsoncpp_static tarscpp::tarsservant tarscpp::tarsutil)
 
  if (TESTS)
     enable_testing()

@@ -35,9 +35,15 @@
 #include <bcos-framework/testutils/faker/FakeScheduler.h>
 #include <bcos-framework/testutils/faker/FakeSealer.h>
 #include <bcos-framework/testutils/faker/FakeTxPool.h>
+#include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
 #include <bcos-rpc/RpcFactory.h>
 #include <bcos-rpc/tarsRPC/RPCServer.h>
 #include <bcos-rpc/validator/CallValidator.h>
+#include <bcos-txpool/TxPoolConfig.h>
+#include <bcos-txpool/TxPoolFactory.h>
+#include <bcos-txpool/sync/TransactionSync.h>
+#include <bcos-txpool/txpool/storage/MemoryStorage.h>
+#include <bcos-txpool/txpool/validator/TxValidator.h>
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 
@@ -82,7 +88,18 @@ public:
             cryptoSuite, blockHeaderFactory, txFactory, receiptFactory);
         m_ledger = std::make_shared<FakeLedger>(m_blockFactory, 20, 10, 10);
         m_ledger->setSystemConfig(ledger::SYSTEM_KEY_TX_COUNT_LIMIT, "1000");
-        txPool = std::make_shared<FakeTxPool>();
+
+        auto nodeId = std::make_shared<KeyImpl>(
+            h256("1110000000000000000000000000000000000000000000000000000000000000").asBytes());
+        m_frontService = std::make_shared<FakeFrontService>(nodeId);
+        auto txResultFactory = std::make_shared<TransactionSubmitResultFactoryImpl>();
+
+        auto txPoolFactory = std::make_shared<TxPoolFactory>(nodeId, cryptoSuite, txResultFactory,
+            m_blockFactory, m_frontService, m_ledger, "group0", "chain0", 100000000);
+
+        txPool = txPoolFactory->createTxPool();
+        txPool->init();
+        txPool->start();
         scheduler = std::make_shared<FakeScheduler>(m_ledger, m_blockFactory);
 
         nodeService = std::make_shared<rpc::NodeService>(
@@ -109,8 +126,9 @@ public:
     std::string chainId = "test-chain";
     RpcFactory::Ptr factory;
 
+    FakeFrontService::Ptr m_frontService;
     FakeLedger::Ptr m_ledger;
-    FakeTxPool::Ptr txPool;
+    TxPool::Ptr txPool;
     FakeScheduler::Ptr scheduler;
     BlockFactory::Ptr m_blockFactory;
 
@@ -128,6 +146,11 @@ public:
         "    ; enable_rip_protocol=false\n"
         "    ; enable compression for p2p message, default: true\n"
         "    ; enable_compression=false\n"
+        "\n"
+        "[web3_rpc]\n"
+        "    enable=true\n"
+        "    listen_ip=127.0.0.1\n"
+        "    listen_port=8555\n"
         "\n"
         "[rpc]\n"
         "    listen_ip=0.0.0.0\n"

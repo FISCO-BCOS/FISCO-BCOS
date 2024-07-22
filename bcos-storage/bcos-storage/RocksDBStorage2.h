@@ -28,13 +28,9 @@ namespace bcos::storage2::rocksdb
 
 template <class ResolverType, class Item>
 concept Resolver = requires(ResolverType&& resolver) {
-                       {
-                           resolver.encode(std::declval<Item>())
-                       };
-                       {
-                           resolver.decode(std::string_view{})
-                           } -> std::convertible_to<Item>;
-                   };
+    { resolver.encode(std::declval<Item>()) };
+    { resolver.decode(std::string_view{}) } -> std::convertible_to<Item>;
+};
 
 // clang-format off
 struct RocksDBException : public bcos::Error {};
@@ -129,7 +125,7 @@ public:
 
     friend auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, RocksDBStorage2& storage,
         RANGES::input_range auto&& keys) -> task::AwaitableValue<decltype(executeReadSome(storage,
-        std::forward<decltype(keys)>(keys)))>
+                                             std::forward<decltype(keys)>(keys)))>
     {
         return {executeReadSome(storage, std::forward<decltype(keys)>(keys))};
     }
@@ -404,7 +400,7 @@ public:
 
     friend task::AwaitableValue<Iterator> tag_invoke(
         bcos::storage2::tag_t<storage2::range> /*unused*/, RocksDBStorage2& storage,
-        auto&& startKey)
+        storage2::RANGE_SEEK_TYPE /*unused*/, auto&& startKey)
     {
         auto encodedKey = storage.m_keyResolver.encode(startKey);
         ::rocksdb::Slice slice(RANGES::data(encodedKey), RANGES::size(encodedKey));

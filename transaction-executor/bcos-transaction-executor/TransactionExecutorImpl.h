@@ -132,7 +132,8 @@ private:
         if (c_fileLogLevel <= LogLevel::TRACE)
         {
             TRANSACTION_EXECUTOR_LOG(TRACE)
-                << "Execte transaction finished" << ", gasUsed: " << receipt->gasUsed()
+                << "Execte transaction finished"
+                << ", gasUsed: " << receipt->gasUsed()
                 << ", newContractAddress: " << receipt->contractAddress()
                 << ", logEntries: " << receipt->logEntries().size()
                 << ", status: " << receipt->status() << ", output: " << toHex(receipt->output())

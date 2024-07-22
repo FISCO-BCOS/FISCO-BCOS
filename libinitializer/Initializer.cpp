@@ -209,6 +209,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // build ledger
     auto ledger =
         LedgerInitializer::build(m_protocolInitializer->blockFactory(), m_storage, m_nodeConfig);
+    ledger->setKeyPageSize(m_nodeConfig->keyPageSize());
     m_ledger = ledger;
 
     bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory = nullptr;

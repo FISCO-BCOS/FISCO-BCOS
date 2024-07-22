@@ -156,8 +156,8 @@ StateStorageInterface::Ptr createKeyPageStorage(
 void print(
     std::string_view tableName, std::string_view key, std::string_view value, bool hex = false)
 {
-    cout << "[tableName=" << tableName << "]" << " [key=" << key
-         << "] [value=" << (hex ? toHex(value) : value) << "]" << endl;
+    cout << "[tableName=" << tableName << "]"
+         << " [key=" << key << "] [value=" << (hex ? toHex(value) : value) << "]" << endl;
 }
 
 void writeKV(std::ofstream& output, std::string_view key, std::string_view value, bool hex = false)

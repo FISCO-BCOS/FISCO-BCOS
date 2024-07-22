@@ -181,6 +181,9 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
         initTestPrecompiledTable(m_backendStorage);
     }
 
+    auto const header = getBlockHeaderInStorage(m_lastCommittedBlockNumber);
+    m_lastCommittedBlockTimestamp = header != nullptr ? header->timestamp() : utcTime();
+
     assert(m_precompiled != nullptr && m_precompiled->size() > 0);
     start();
 }
@@ -543,6 +546,7 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
             m_ledgerCache->setBlockNumber2Hash(
                 blockHeader->number() - 1, (*parentInfoIt).blockHash);
         }
+        m_lastCommittedBlockTimestamp = blockHeader->timestamp();
 
         EXECUTOR_NAME_LOG(DEBUG) << BLOCK_NUMBER(blockHeader->number()) << "NextBlockHeader success"
                                  << LOG_KV("number", blockHeader->number())
@@ -634,12 +638,11 @@ void TransactionExecutor::dmcCall(bcos::protocol::ExecutionMessage::UniquePtr in
         }
 
         // Create a temp storage
-        auto storage = createStateStorage(std::move(prev), true,
-            m_blockContext->features().get(ledger::Features::Flag::bugfix_set_row_with_dirty_flag));
+        auto storage = createStateStorage(std::move(prev), true, false);
 
         // Create a temp block context
-        blockContext = createBlockContextForCall(
-            m_lastCommittedBlockNumber + 1, h256(), utcTime(), m_blockVersion, std::move(storage));
+        blockContext = createBlockContextForCall(m_lastCommittedBlockNumber, h256(),
+            m_lastCommittedBlockTimestamp, m_blockVersion, std::move(storage));
 
         auto inserted = m_calledContext->emplace(
             std::tuple{input->contextID(), input->seq()}, CallState{blockContext});
@@ -804,12 +807,12 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
         }
 
         // Create a temp storage
-        auto storage = createStateStorage(std::move(prev), true,
-            m_blockContext->features().get(ledger::Features::Flag::bugfix_set_row_with_dirty_flag));
+        auto storage =
+            createStateStorage(std::move(prev), true, false /*call storage no need set flag*/);
 
         // Create a temp block context
-        blockContext = createBlockContextForCall(
-            m_lastCommittedBlockNumber + 1, h256(), utcTime(), m_blockVersion, std::move(storage));
+        blockContext = createBlockContextForCall(m_lastCommittedBlockNumber, h256(),
+            m_lastCommittedBlockTimestamp, m_blockVersion, std::move(storage));
 
         auto inserted = m_calledContext->emplace(
             std::tuple{input->contextID(), input->seq()}, CallState{blockContext});
@@ -1990,9 +1993,7 @@ void TransactionExecutor::getCode(
         std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
         if (!m_stateStorages.empty())
         {
-            stateStorage = createStateStorage(m_stateStorages.back().storage, true,
-                m_blockContext->features().get(
-                    ledger::Features::Flag::bugfix_set_row_with_dirty_flag));
+            stateStorage = createStateStorage(m_stateStorages.back().storage, true, false);
         }
     }
     // create temp state storage
@@ -2000,15 +2001,11 @@ void TransactionExecutor::getCode(
     {
         if (m_cachedStorage)
         {
-            stateStorage = createStateStorage(m_cachedStorage, true,
-                m_blockContext->features().get(
-                    ledger::Features::Flag::bugfix_set_row_with_dirty_flag));
+            stateStorage = createStateStorage(m_cachedStorage, true, false);
         }
         else
         {
-            stateStorage = createStateStorage(m_backendStorage, true,
-                m_blockContext->features().get(
-                    ledger::Features::Flag::bugfix_set_row_with_dirty_flag));
+            stateStorage = createStateStorage(m_backendStorage, true, false);
         }
     }
 
@@ -2085,9 +2082,12 @@ void TransactionExecutor::getCode(
                 }
 
                 auto code = entry->getField(0);
-                if (m_blockContext->features().get(
-                        ledger::Features::Flag::bugfix_eoa_as_contract) &&
-                    bcos::precompiled::isDynamicPrecompiledAccountCode(code))
+                if ((m_blockContext->features().get(
+                         ledger::Features::Flag::bugfix_eoa_as_contract) &&
+                        bcos::precompiled::isDynamicPrecompiledAccountCode(code)) ||
+                    (m_blockContext->features().get(
+                         ledger::Features::Flag::bugfix_eoa_match_failed) &&
+                        bcos::precompiled::matchDynamicAccountCode(code)))
                 {
                     EXECUTOR_NAME_LOG(DEBUG) << "Get eoa code success, return empty code to evm";
                     callback(nullptr, bcos::bytes());
@@ -2119,14 +2119,11 @@ void TransactionExecutor::getABI(
     }
 
     storage::StateStorageInterface::Ptr stateStorage;
-
     {
         std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
         if (!m_stateStorages.empty())
         {
-            stateStorage = createStateStorage(m_stateStorages.back().storage, true,
-                m_blockContext->features().get(
-                    ledger::Features::Flag::bugfix_set_row_with_dirty_flag));
+            stateStorage = createStateStorage(m_stateStorages.back().storage, true, false);
         }
     }
     // create temp state storage
@@ -2134,15 +2131,11 @@ void TransactionExecutor::getABI(
     {
         if (m_cachedStorage)
         {
-            stateStorage = createStateStorage(m_cachedStorage, true,
-                m_blockContext->features().get(
-                    ledger::Features::Flag::bugfix_set_row_with_dirty_flag));
+            stateStorage = createStateStorage(m_cachedStorage, true, false);
         }
         else
         {
-            stateStorage = createStateStorage(m_backendStorage, true,
-                m_blockContext->features().get(
-                    ledger::Features::Flag::bugfix_set_row_with_dirty_flag));
+            stateStorage = createStateStorage(m_backendStorage, true, false);
         }
     }
 
@@ -2730,6 +2723,7 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
                 0, addressSize - callParameters->receiveAddress.size(), '0');
         }
     }
+    // FIXME)): if input is hex without prefix, will throw exception and abort coredump
     callParameters->value = u256(input.value());
     callParameters->gasPrice = u256(input.gasPrice());
     callParameters->gasLimit = input.gasLimit();

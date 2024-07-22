@@ -13,6 +13,10 @@ inline constexpr struct DIRECT_TYPE
 {
 } DIRECT{};
 
+inline constexpr struct RANGE_SEEK_TYPE
+{
+} RANGE_SEEK{};
+
 template <class Invoke>
 using ReturnType = typename task::AwaitableReturnType<Invoke>;
 template <class Tag, class Storage, class... Args>

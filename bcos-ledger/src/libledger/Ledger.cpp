@@ -36,6 +36,7 @@
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/merkle/Merkle.h>
+#include <bcos-executor/src/Common.h>
 #include <bcos-framework/consensus/ConsensusNode.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
@@ -118,6 +119,17 @@ void Ledger::asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr _blockTx
         }
     }
     _callback(nullptr);
+}
+
+task::Task<std::optional<storage::Entry>> Ledger::getStorageAt(
+    std::string_view _address, std::string_view _key, protocol::BlockNumber _blockNumber)
+{
+    // TODO)): blockNumber is not used nowadays
+    std::ignore = _blockNumber;
+    auto const contractTableName = getContractTableName(SYS_DIRECTORY::USER_APPS, _address);
+    auto const stateStorage = getStateStorage();
+    co_return co_await bcos::storage2::readOne(
+        *stateStorage, transaction_executor::StateKeyView{contractTableName, _key});
 }
 
 void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
@@ -1995,6 +2007,14 @@ bool Ledger::buildGenesisBlock(
         Entry authCheckStatusEntry;
         authCheckStatusEntry.setObject(SystemConfigEntry{genesis.m_isAuthCheck ? "1" : "0", 0});
         sysTable->setRow(SYSTEM_KEY_AUTH_CHECK_STATUS, std::move(authCheckStatusEntry));
+    }
+
+    if (versionNumber >= BlockVersion::V3_9_0_VERSION)
+    {
+        // write web3 chain id
+        Entry chainIdEntry;
+        chainIdEntry.setObject(SystemConfigEntry{genesis.m_web3ChainID, 0});
+        sysTable->setRow(SYSTEM_KEY_WEB3_CHAIN_ID, std::move(chainIdEntry));
     }
 
     // write consensus node list
