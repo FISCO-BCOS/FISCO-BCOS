@@ -262,7 +262,8 @@ TransactionalStorageInterface::Ptr createBackendStorage(
             option.blockCacheSize = nodeConfig->blockCacheSize();
 
             storage = StorageInitializer::build(
-                nodeConfig->storagePath(), option, dataEncryption, nodeConfig->keyPageSize());
+                StorageInitializer::createRocksDB(nodeConfig->storagePath(), option),
+                dataEncryption);
         }
         else
         {

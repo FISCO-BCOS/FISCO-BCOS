@@ -138,18 +138,24 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         std::make_shared<FrontServiceInitializer>(m_nodeConfig, m_protocolInitializer, _gateway);
 
     // build the storage
-    auto storagePath = m_nodeConfig->storagePath();
+    auto stateDBPath = m_nodeConfig->enableSeparateBlockAndState() ? m_nodeConfig->stateDBPath() :
+                                                                     m_nodeConfig->storagePath();
+    auto blockDBPath = m_nodeConfig->blockDBPath();
     // build and init the pbft related modules
     auto consensusStoragePath =
         m_nodeConfig->storagePath() + c_fileSeparator + c_consensusStorageDBName;
     if (!_airVersion)
-    {
-        storagePath = tars::ServerConfig::BasePath + ".." + c_fileSeparator +
-                      m_nodeConfig->groupId() + c_fileSeparator + m_nodeConfig->storagePath();
+    {  // if the stateDBPath is absolute path, the result stateDBPath will deep
+        stateDBPath = tars::ServerConfig::BasePath + ".." + c_fileSeparator +
+                      m_nodeConfig->groupId() + c_fileSeparator + stateDBPath;
+        blockDBPath = tars::ServerConfig::BasePath + ".." + c_fileSeparator +
+                      m_nodeConfig->groupId() + c_fileSeparator + blockDBPath;
         consensusStoragePath = tars::ServerConfig::BasePath + ".." + c_fileSeparator +
                                m_nodeConfig->groupId() + c_fileSeparator + c_consensusStorageDBName;
     }
-    INITIALIZER_LOG(INFO) << LOG_DESC("initNode") << LOG_KV("storagePath", storagePath)
+    INITIALIZER_LOG(INFO) << LOG_DESC("initNode") << LOG_KV("stateDBPath", stateDBPath)
+                          << LOG_KV("enableSeparateBlockAndState",
+                                 m_nodeConfig->enableSeparateBlockAndState())
                           << LOG_KV("storageType", m_nodeConfig->storageType())
                           << LOG_KV("consensusStoragePath", consensusStoragePath);
 
@@ -166,15 +172,24 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         option.minWriteBufferNumberToMerge = m_nodeConfig->minWriteBufferNumberToMerge();
         option.blockCacheSize = m_nodeConfig->blockCacheSize();
         option.enable_blob_files = m_nodeConfig->enableRocksDBBlob();
-
         // m_protocolInitializer->dataEncryption() will return nullptr when storage_security = false
-        m_storage =
-            StorageInitializer::build(storagePath, option, m_protocolInitializer->dataEncryption(),
-                m_nodeConfig->keyPageSize(), m_nodeConfig->enableStatistics());
+        m_storage = StorageInitializer::build(
+            StorageInitializer::createRocksDB(
+                stateDBPath, option, m_nodeConfig->enableStatistics(), m_nodeConfig->keyPageSize()),
+            m_protocolInitializer->dataEncryption());
         schedulerStorage = m_storage;
-        consensusStorage = StorageInitializer::build(
-            consensusStoragePath, option, m_protocolInitializer->dataEncryption(), 0);
+        consensusStorage =
+            StorageInitializer::build(StorageInitializer::createRocksDB(consensusStoragePath,
+                                          option, m_nodeConfig->enableStatistics()),
+                m_protocolInitializer->dataEncryption());
         airExecutorStorage = m_storage;
+        if (m_nodeConfig->enableSeparateBlockAndState())
+        {
+            m_blockStorage =
+                StorageInitializer::build(StorageInitializer::createRocksDB(blockDBPath, option,
+                                              m_nodeConfig->enableStatistics()),
+                    m_protocolInitializer->dataEncryption());
+        }
     }
 #ifdef WITH_TIKV
     else if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
@@ -207,8 +222,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     }
 
     // build ledger
-    auto ledger =
-        LedgerInitializer::build(m_protocolInitializer->blockFactory(), m_storage, m_nodeConfig);
+    auto ledger = LedgerInitializer::build(
+        m_protocolInitializer->blockFactory(), m_storage, m_nodeConfig, m_blockStorage);
     ledger->setKeyPageSize(m_nodeConfig->keyPageSize());
     m_ledger = ledger;
 
@@ -401,8 +416,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     if (m_nodeConfig->enableArchive())
     {
         INITIALIZER_LOG(INFO) << LOG_BADGE("create archive service");
-        m_archiveService = std::make_shared<bcos::archive::ArchiveService>(
-            m_storage, ledger, m_nodeConfig->archiveListenIP(), m_nodeConfig->archiveListenPort());
+        m_archiveService = std::make_shared<bcos::archive::ArchiveService>(m_storage, ledger,
+            m_blockStorage, m_nodeConfig->archiveListenIP(), m_nodeConfig->archiveListenPort());
     }
 #ifdef WITH_LIGHTNODE
     bcos::storage::StorageImpl<bcos::storage::StorageInterface::Ptr> storageWrapper(m_storage);
@@ -707,7 +722,7 @@ bcos::Error::Ptr Initializer::generateSnapshot(
 
 bcos::Error::Ptr Initializer::generateSnapshotFromRocksDB(const std::string& rockDBPath,
     const std::string& snapshotPath, bool withTxAndReceipts, size_t snapshotFileSize)
-{
+{  // FIXME: if enableSeparateBlockAndState, generate state and block into different directories
     using namespace rocksdb;
 
     if (!fs::exists(rockDBPath))
@@ -858,7 +873,7 @@ bcos::Error::Ptr Initializer::importSnapshot(const std::string& snapshotPath)
 
 bcos::Error::Ptr Initializer::importSnapshotToRocksDB(
     const std::string& snapshotPath, const std::string& rockDBPath)
-{
+{  // FIXME: if enableSeparateBlockAndState, import state and block into different db
     // check snapshot file and meta file
     fs::path sstPath = snapshotPath;
     if (!fs::exists(sstPath))

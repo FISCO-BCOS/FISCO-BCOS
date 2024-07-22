@@ -46,9 +46,10 @@ public:
 
     Ledger(bcos::protocol::BlockFactory::Ptr _blockFactory,
         bcos::storage::StorageInterface::Ptr _storage, size_t _blockLimit,
-        int merkleTreeCacheSize = 100)
+        bcos::storage::StorageInterface::Ptr _blockStorage = nullptr, int merkleTreeCacheSize = 100)
       : m_blockFactory(std::move(_blockFactory)),
-        m_storage(std::move(_storage)),
+        m_stateStorage(std::move(_storage)),
+        m_blockStorage(std::move(_blockStorage)),
         m_threadPool(std::make_shared<ThreadPool>("ledgerWrite", 2)),
         m_blockLimit(_blockLimit),
         m_merkleTreeCacheSize(merkleTreeCacheSize),
@@ -131,8 +132,8 @@ protected:
             // getABI function begin in version 320
             auto keyPageIgnoreTables = std::make_shared<std::set<std::string, std::less<>>>(
                 storage::IGNORED_ARRAY_310.begin(), storage::IGNORED_ARRAY_310.end());
-            auto [error, entry] =
-                m_storage->getRow(ledger::SYS_CONFIG, ledger::SYSTEM_KEY_COMPATIBILITY_VERSION);
+            auto [error, entry] = m_stateStorage->getRow(
+                ledger::SYS_CONFIG, ledger::SYSTEM_KEY_COMPATIBILITY_VERSION);
             if (!entry || error)
             {
                 BOOST_THROW_EXCEPTION(
@@ -141,10 +142,10 @@ protected:
             auto [compatibilityVersionStr, _] = entry->template getObject<SystemConfigEntry>();
             auto const version = bcos::tool::toVersionNumber(compatibilityVersionStr);
             auto stateStorage = stateStorageFactory.createStateStorage(
-                m_storage, version, true, false, keyPageIgnoreTables);
+                m_stateStorage, version, true, false, keyPageIgnoreTables);
             return stateStorage;
         }
-        return std::make_shared<bcos::storage::StateStorage>(m_storage, true);
+        return std::make_shared<bcos::storage::StateStorage>(m_stateStorage, true);
     }
 
 private:
@@ -175,11 +176,15 @@ private:
 
     void createFileSystemTables(uint32_t blockVersion);
 
+    bcos::storage::StorageInterface::Ptr getBlockStorage()
+    {
+        return m_blockStorage ? m_blockStorage : m_stateStorage;
+    }
     std::optional<storage::Table> buildDir(const std::string_view& _absoluteDir,
         uint32_t blockVersion, std::string valueField = SYS_VALUE);
 
     // only for /sys/
-    inline std::string getSysBaseName(const std::string& _s)
+    static inline std::string getSysBaseName(const std::string& _s)
     {
         return _s.substr(_s.find_last_of('/') + 1);
     }
@@ -192,7 +197,9 @@ private:
         const bcos::ledger::LedgerConfig& _ledgerConfig, std::int64_t _epochSealerNum);
 
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
-    bcos::storage::StorageInterface::Ptr m_storage;
+    bcos::storage::StorageInterface::Ptr m_stateStorage;
+    // if m_blockStorage,txs and receipts will be stored in m_blockStorage
+    bcos::storage::StorageInterface::Ptr m_blockStorage = nullptr;
 
     mutable RecursiveMutex m_mutex;
     std::shared_ptr<bcos::ThreadPool> m_threadPool;
