@@ -110,6 +110,8 @@ private:
     std::string const c_fileSeparator = "/";
     std::shared_ptr<bcos::archive::ArchiveService> m_archiveService = nullptr;
     bcos::storage::TransactionalStorageInterface::Ptr m_storage = nullptr;
+    // if enable SeparateBlockAndState,txs and receipts will be stored in m_blockStorage
+    bcos::storage::TransactionalStorageInterface::Ptr m_blockStorage = nullptr;
 
     std::function<std::shared_ptr<scheduler::SchedulerInterface>()> m_baselineSchedulerHolder;
     std::function<void(std::function<void(protocol::BlockNumber)>)>
