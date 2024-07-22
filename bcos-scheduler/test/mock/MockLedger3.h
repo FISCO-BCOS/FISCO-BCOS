@@ -128,6 +128,10 @@ public:
         {
             _onGetConfig(nullptr, "0", commitBlockNumber);
         }
+        else if (_key == ledger::SYSTEM_KEY_WEB3_CHAIN_ID)
+        {
+            _onGetConfig(nullptr, "20200", commitBlockNumber);
+        }
         else if (RANGES::count(ledger::Features::featureKeys(), _key) > 0)
         {
             _onGetConfig(BCOS_ERROR_PTR(-1, "Not found!"), "0", commitBlockNumber);

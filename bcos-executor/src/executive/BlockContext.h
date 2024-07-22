@@ -80,6 +80,8 @@ public:
 
     VMSchedule const& vmSchedule() const { return m_schedule; }
 
+    LedgerCache::Ptr const& ledgerCache() const { return m_ledgerCache; }
+
     ExecutiveFlowInterface::Ptr getExecutiveFlow(std::string codeAddress);
     void setExecutiveFlow(std::string codeAddress, ExecutiveFlowInterface::Ptr executiveFlow);
 

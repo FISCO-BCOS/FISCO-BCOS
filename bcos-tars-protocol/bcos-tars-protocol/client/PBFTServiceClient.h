@@ -207,6 +207,8 @@ public:
     void asyncGetSyncInfo(
         std::function<void(bcos::Error::Ptr, std::string)> _onGetSyncInfo) override;
 
+    std::vector<bcos::sync::PeerStatus::Ptr> getPeerStatus() override;
+
     // called by the frontService to dispatch message
     void asyncNotifyBlockSyncMessage(bcos::Error::Ptr _error, std::string const& _uuid,
         bcos::crypto::NodeIDPtr _nodeID, bcos::bytesConstRef _data,

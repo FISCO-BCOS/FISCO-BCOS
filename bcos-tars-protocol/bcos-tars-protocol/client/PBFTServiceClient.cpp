@@ -143,6 +143,11 @@ void BlockSyncServiceClient::asyncGetSyncInfo(
     m_proxy->async_asyncGetSyncInfo(new Callback(_onGetSyncInfo));
 }
 
+std::vector<bcos::sync::PeerStatus::Ptr> BlockSyncServiceClient::getPeerStatus()
+{
+    return {};
+}
+
 void BlockSyncServiceClient::notifyConnectedNodes(bcos::crypto::NodeIDSet const& _connectedNodes,
     std::function<void(bcos::Error::Ptr)> _onRecvResponse)
 {
