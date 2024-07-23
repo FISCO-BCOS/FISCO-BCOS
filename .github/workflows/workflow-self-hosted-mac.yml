@@ -46,7 +46,7 @@ jobs:
         run: |
           cd build
           CTEST_OUTPUT_ON_FAILURE=TRUE make test
-          
+
       - name: prepare RPCAPI Tests
         run: cd tools && bash .ci/rpcapi_ci_prepare.sh
 

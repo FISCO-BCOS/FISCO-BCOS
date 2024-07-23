@@ -170,6 +170,12 @@ public:
         std::function<void(Error::UniquePtr&&)> _callback) = 0;
 
     /**
+     * @brief remove expired tx nonces
+     * @param blockNumber the current block number
+     */
+    virtual void removeExpiredNonce(protocol::BlockNumber blockNumber, bool sync) = 0;
+
+    /**
      * @brief get storage value by address and key and block number in coroutine. It will access the
      * table of address like /apps/[address] and get the value of key. NOTE: blockNumber is ignored
      * nowadays, it will always get the latest value of key in address.

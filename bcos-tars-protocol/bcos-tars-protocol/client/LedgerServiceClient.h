@@ -115,6 +115,11 @@ public:
         BCOS_LOG(ERROR) << LOG_DESC("unimplement method asyncGetNonceList");
     }
 
+    void removeExpiredNonce(bcos::protocol::BlockNumber blockNumber, bool sync) override
+    {
+        BCOS_LOG(ERROR) << LOG_DESC("unimplement method asyncGetNonceList");
+    }
+
 private:
     bcostars::LedgerServicePrx m_prx;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;

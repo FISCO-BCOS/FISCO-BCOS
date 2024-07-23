@@ -309,6 +309,7 @@ public:
         }
         _onGetList(nullptr, nonceList);
     }
+    void removeExpiredNonce(protocol::BlockNumber blockNumber, bool sync) override {}
 
     void setStatus(bool _normal) { m_statusNormal = _normal; }
     void setTotalTxCount(size_t _totalTxCount) { m_totalTxCount = _totalTxCount; }

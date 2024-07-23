@@ -71,8 +71,8 @@ public:
 
     uint64_t txGasLimit() const { return m_ledgerCache->fetchTxGasLimit(); }
 
-    auto getTxCriticals(const protocol::Transaction::ConstPtr& _tx)
-        -> std::shared_ptr<std::vector<std::string>>;
+    auto getTxCriticals(
+        const protocol::Transaction::ConstPtr& _tx) -> std::shared_ptr<std::vector<std::string>>;
 
     crypto::Hash::Ptr hashHandler() const { return m_hashImpl; }
     bool isWasm() const { return m_isWasm; }

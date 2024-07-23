@@ -43,8 +43,11 @@ class ArchiveService : public std::enable_shared_from_this<ArchiveService>
 public:
     virtual ~ArchiveService() = default;
     ArchiveService(bcos::storage::StorageInterface::Ptr _storage,
-        std::shared_ptr<bcos::ledger::Ledger> _ledger, std::string _listenIP, uint16_t _listenPort)
+        std::shared_ptr<bcos::ledger::Ledger> _ledger,
+        bcos::storage::StorageInterface::Ptr _blockStorage, std::string _listenIP,
+        uint16_t _listenPort)
       : m_storage(std::move(_storage)),
+        m_blockStorage(std::move(_blockStorage)),
         m_ledger(std::move(_ledger)),
         m_listenIP(std::move(_listenIP)),
         m_listenPort(_listenPort)
@@ -224,8 +227,9 @@ public:
                     ARCHIVE_SERVICE_LOG(INFO)
                         << LOG_BADGE("deleteArchivedData") << LOG_KV("number", blockNumber)
                         << LOG_KV("size", txHashes.size());
+                    auto blockStorage = m_blockStorage ? m_blockStorage : m_storage;
                     // delete block data: txs, receipts
-                    auto err = m_storage->deleteRows(ledger::SYS_HASH_2_TX, txHashes);
+                    auto err = blockStorage->deleteRows(ledger::SYS_HASH_2_TX, txHashes);
                     if (err)
                     {
                         ARCHIVE_SERVICE_LOG(WARNING)
@@ -234,7 +238,7 @@ public:
                         promise.set_value(error);
                         return;
                     }
-                    err = m_storage->deleteRows(ledger::SYS_HASH_2_RECEIPT, txHashes);
+                    err = blockStorage->deleteRows(ledger::SYS_HASH_2_RECEIPT, txHashes);
                     if (err)
                     {
                         ARCHIVE_SERVICE_LOG(WARNING)
@@ -323,6 +327,7 @@ public:
 
 private:
     bcos::storage::StorageInterface::Ptr m_storage;
+    bcos::storage::StorageInterface::Ptr m_blockStorage = nullptr;
     std::shared_ptr<bcos::ledger::Ledger> m_ledger;
     std::string m_listenIP;
     uint16_t m_listenPort;

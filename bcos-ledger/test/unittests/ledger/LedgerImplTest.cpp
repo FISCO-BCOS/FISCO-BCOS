@@ -61,7 +61,7 @@ struct MockMemoryStorage : bcos::concepts::storage::StorageBase<MockMemoryStorag
 {
     MockMemoryStorage(
         std::map<std::tuple<std::string, std::string>, bcos::storage::Entry, std::less<>>& data1)
-      : bcos::concepts::storage::StorageBase<MockMemoryStorage>(), data(data1){};
+      : bcos::concepts::storage::StorageBase<MockMemoryStorage>(), data(data1) {};
 
     std::optional<bcos::storage::Entry> impl_getRow(std::string_view table, std::string_view key)
     {
@@ -178,7 +178,8 @@ BOOST_FIXTURE_TEST_SUITE(LedgerImplTest, LedgerImplFixture)
 BOOST_AUTO_TEST_CASE(getBlock)
 {
     bcos::ledger::LedgerImpl<bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher, MockMemoryStorage>
-        ledger{bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher{}, storage, nullptr, nullptr};
+        ledger{
+            bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher{}, storage, nullptr, nullptr, 1000};
 
     bcostars::Block block;
     bcos::task::syncWait(
@@ -234,7 +235,7 @@ BOOST_AUTO_TEST_CASE(getBlock)
 BOOST_AUTO_TEST_CASE(setBlockAndGetInfo)
 {
     LedgerImpl<bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher, MockMemoryStorage> ledger{
-        bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher{}, storage, nullptr, nullptr};
+        bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher{}, storage, nullptr, nullptr, 1000};
 
     bcostars::Block block;
     block.blockHeader.data.blockNumber = 100;
@@ -291,7 +292,7 @@ BOOST_AUTO_TEST_CASE(setBlockAndGetInfo)
 BOOST_AUTO_TEST_CASE(notExistsBlock)
 {
     LedgerImpl<bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher, MockMemoryStorage> ledger{
-        bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher{}, storage, nullptr, nullptr};
+        bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher{}, storage, nullptr, nullptr, 1000};
 
     std::vector<std::byte> hash;
     bcos::task::syncWait(ledger.getBlockHashByNumber(50, hash));
@@ -309,12 +310,12 @@ BOOST_AUTO_TEST_CASE(ledgerSync)
     std::map<std::tuple<std::string, std::string>, bcos::storage::Entry, std::less<>> fromData;
     MockMemoryStorage fromStorage(fromData);
     LedgerImpl<Hasher, MockMemoryStorage> fromLedger{
-        Hasher{}, std::move(fromStorage), nullptr, nullptr};
+        Hasher{}, std::move(fromStorage), nullptr, nullptr, 1000};
 
     std::map<std::tuple<std::string, std::string>, bcos::storage::Entry, std::less<>> toData;
     MockMemoryStorage toStorage(toData);
     LedgerImpl<Hasher, MockMemoryStorage> toLedger{
-        Hasher{}, std::move(toStorage), nullptr, nullptr};
+        Hasher{}, std::move(toStorage), nullptr, nullptr, 1000};
 
     bcostars::Block genesisBlock;
     genesisBlock.blockHeader.data.blockNumber = 0;

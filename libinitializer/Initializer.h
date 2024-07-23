@@ -23,6 +23,7 @@
 #include "PBFTInitializer.h"
 #include "ProtocolInitializer.h"
 #include "TxPoolInitializer.h"
+#include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "tools/archive-tool/ArchiveService.h"
 #include <bcos-executor/src/executor/SwitchExecutorManager.h>
 #include <bcos-scheduler/src/SchedulerManager.h>
@@ -53,6 +54,7 @@ public:
 
     virtual void start();
     virtual void stop();
+    virtual void prune();
 
     bcos::tool::NodeConfig::Ptr nodeConfig() { return m_nodeConfig; }
     ProtocolInitializer::Ptr protocolInitializer() { return m_protocolInitializer; }
@@ -82,6 +84,13 @@ public:
 
     /// NOTE: this should be last called
     void initSysContract();
+    bcos::storage::TransactionalStorageInterface::Ptr storage() { return m_storage; }
+    bcos::Error::Ptr generateSnapshot(const std::string& snapshotPath, bool withTxAndReceipts);
+    bcos::Error::Ptr generateSnapshotFromRocksDB(const std::string& rockDBPath,
+        const std::string& snapshotPath, bool withTxAndReceipts, size_t snapshotFileSize = 256);
+    bcos::Error::Ptr importSnapshot(const std::string& snapshotPath);
+    bcos::Error::Ptr importSnapshotToRocksDB(
+        const std::string& snapshotPath, const std::string& rockDBPath);
 
 private:
     bcos::tool::NodeConfig::Ptr m_nodeConfig;
@@ -100,10 +109,15 @@ private:
     std::string const c_consensusStorageDBName = "consensus_log";
     std::string const c_fileSeparator = "/";
     std::shared_ptr<bcos::archive::ArchiveService> m_archiveService = nullptr;
+    bcos::storage::TransactionalStorageInterface::Ptr m_storage = nullptr;
+    // if enable SeparateBlockAndState,txs and receipts will be stored in m_blockStorage
+    bcos::storage::TransactionalStorageInterface::Ptr m_blockStorage = nullptr;
 
     std::function<std::shared_ptr<scheduler::SchedulerInterface>()> m_baselineSchedulerHolder;
     std::function<void(std::function<void(protocol::BlockNumber)>)>
         m_setBaselineSchedulerBlockNumberNotifier;
+
+    protocol::BlockNumber getCurrentBlockNumber();
 };
 }  // namespace initializer
 }  // namespace bcos
