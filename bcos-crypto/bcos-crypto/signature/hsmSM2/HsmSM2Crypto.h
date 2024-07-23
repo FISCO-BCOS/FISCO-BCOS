@@ -57,6 +57,5 @@ public:
 private:
     KeyPairFactory::Ptr m_keyPairFactory;
     std::string m_hsmLibPath;
-    CryptoProvider& m_provider = SDFCryptoProvider::GetInstance(4, m_hsmLibPath);
 };
 }  // namespace bcos::crypto
