@@ -180,6 +180,7 @@ createBackendStorage(std::shared_ptr<bcos::tool::NodeConfig> nodeConfig, const s
                     nodeConfig->blockDBPath(), option, nodeConfig->enableStatistics());
                 blockStorage = StorageInitializer::build(std::move(blockDB), dataEncryption);
             }
+            blockStorage = storage;
         }
         else
         {
@@ -193,6 +194,7 @@ createBackendStorage(std::shared_ptr<bcos::tool::NodeConfig> nodeConfig, const s
                 blockStorage = std::make_shared<RocksDBStorage>(
                     std::unique_ptr<rocksdb::DB>(blockRocksDB), dataEncryption);
             }
+            blockStorage = storage;
         }
     }
     else if (boost::iequals(nodeConfig->storageType(), "TiKV"))
@@ -531,7 +533,7 @@ void reimportBlocks(auto archiveStorage, TransactionalStorageInterface::Ptr loca
                         h256s topics;
                         for (const auto& k : logEntryJson["topics"])
                         {
-                            topics.push_back(h256(k.asString()));
+                            topics.emplace_back(k.asString());
                         }
                         auto address = logEntryJson["address"].asString();
                         auto addr = bytes(address.data(), address.data() + address.size());

@@ -47,7 +47,11 @@
     "wedprcrypto",
     "range-v3",
     "hsm-crypto",
-    "tarscpp"
+    "tarscpp",
+    {
+      "name": "tomlplusplus",
+      "version>=": "3.3.0"
+    }
   ],
   "features": {
     "fullnode": {

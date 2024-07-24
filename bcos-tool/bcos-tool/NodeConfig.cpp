@@ -715,6 +715,13 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
     m_pdKeyPath = _pt.get<std::string>("storage.pd_ssl_key_path", "");
     m_enableArchive = _pt.get<bool>("storage.enable_archive", false);
     m_enableSeparateBlockAndState = _pt.get<bool>("storage.enable_separate_block_state", false);
+    if (boost::iequals(m_storageType, bcos::storage::TiKV))
+    {
+        m_enableSeparateBlockAndState = false;
+        NodeConfig_LOG(INFO) << LOG_DESC("Only rocksDB support separate block and state")
+                             << LOG_KV("separateBlockAndState", m_enableSeparateBlockAndState)
+                             << LOG_KV("storageType", m_storageType);
+    }
     m_stateDBPath = m_storagePath;
     m_stateDBPath = m_storagePath + "/state";
     m_blockDBPath = m_storagePath + "/block";

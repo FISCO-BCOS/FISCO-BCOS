@@ -1359,7 +1359,6 @@ void Ledger::asyncGetBlockTransactionHashes(bcos::protocol::BlockNumber blockNum
 void Ledger::asyncBatchGetTransactions(std::shared_ptr<std::vector<std::string>> hashes,
     std::function<void(Error::Ptr&&, std::vector<protocol::Transaction::Ptr>&&)> callback)
 {
-    // FIXME: adapt the getBlockStorage()
     std::vector<std::string_view> hashesView;
     hashesView.reserve(hashes->size());
     for (auto& hash : *hashes)
