@@ -32,6 +32,7 @@
 #include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-protocol/TransactionStatus.h"
+#include "bcos-table/src/StateStorage.h"
 #include <bcos-codec/abi/ContractABICodec.h>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <functional>
@@ -65,10 +66,11 @@ public:
         m_contextID(contextID),
         m_seq(seq),
         m_gasInjector(gasInjector),
+        m_recoder(std::make_shared<storage::Recoder>()),
+        m_transientRecoder(std::make_shared<storage::Recoder>()),
         m_storageWrapperObj(m_blockContext.storage(), m_recoder),
         m_storageWrapper(&m_storageWrapperObj)
     {
-        m_recoder = std::make_shared<storage::Recoder>();
         m_hashImpl = m_blockContext.hashHandler();
         m_storageWrapperObj.setCodeCache(m_blockContext.getCodeCache());
         m_storageWrapperObj.setCodeHashCache(m_blockContext.getCodeHashCache());
@@ -91,6 +93,7 @@ public:
         assert(m_storageWrapper);
         return *m_storageWrapper;
     }
+
 
     const BlockContext& blockContext() { return m_blockContext; }
 
@@ -138,6 +141,7 @@ public:
     std::shared_ptr<precompiled::PrecompiledExecResult> execPrecompiled(
         precompiled::PrecompiledExecResult::Ptr const& _precompiledParams);
 
+    using tssMap = bcos::BucketMap<int64_t, std::shared_ptr<storage::StateStorageInterface>>;
 
     VMSchedule const& vmSchedule() const { return m_blockContext.vmSchedule(); }
 
@@ -165,6 +169,8 @@ public:
 
     std::string getContractTableName(
         const std::string_view& _address, bool isWasm = false, bool isCreate = false);
+
+    std::shared_ptr<storage::StateStorageInterface> getTransientStateStorage(int64_t contextID);
 
     std::shared_ptr<storage::Recoder> getRecoder() { return m_recoder; }
 
@@ -224,6 +230,7 @@ protected:
     const wasm::GasInjector& m_gasInjector;
 
     bcos::storage::Recoder::Ptr m_recoder;
+    bcos::storage::Recoder::Ptr m_transientRecoder;
     std::vector<TransactionExecutive::Ptr> m_childExecutives;
 
     storage::StorageWrapper m_storageWrapperObj;

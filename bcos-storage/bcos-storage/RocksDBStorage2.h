@@ -28,8 +28,12 @@ namespace bcos::storage2::rocksdb
 
 template <class ResolverType, class Item>
 concept Resolver = requires(ResolverType&& resolver) {
-    { resolver.encode(std::declval<Item>()) };
-    { resolver.decode(std::string_view{}) } -> std::convertible_to<Item>;
+    {
+        resolver.encode(std::declval<Item>())
+    };
+    {
+        resolver.decode(std::string_view{})
+    } -> std::convertible_to<Item>;
 };
 
 // clang-format off
@@ -125,7 +129,7 @@ public:
 
     friend auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, RocksDBStorage2& storage,
         RANGES::input_range auto&& keys) -> task::AwaitableValue<decltype(executeReadSome(storage,
-                                             std::forward<decltype(keys)>(keys)))>
+        std::forward<decltype(keys)>(keys)))>
     {
         return {executeReadSome(storage, std::forward<decltype(keys)>(keys))};
     }

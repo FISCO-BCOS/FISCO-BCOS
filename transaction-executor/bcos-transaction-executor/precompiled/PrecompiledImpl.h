@@ -38,8 +38,7 @@ inline auto buildLegacyExecutive(auto& storage, protocol::BlockHeader const& blo
             storage);
 
     auto blockContext = std::make_unique<executor::BlockContext>(storageWrapper, nullptr,
-        executor::GlobalHashImpl::g_hashImpl, blockHeader, bcos::executor::VMSchedule{}, false,
-        authCheck);
+        executor::GlobalHashImpl::g_hashImpl, blockHeader, false, authCheck);
     return std::make_shared<
         ExecutiveWrapper<decltype(externalCaller), std::decay_t<decltype(precompiledManager)>>>(
         std::move(blockContext), std::move(contractAddress), contextID, seq, wasm::GasInjector{},

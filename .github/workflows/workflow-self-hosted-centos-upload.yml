@@ -11,7 +11,7 @@ on:
       - feature-3.*
       - master
   release:
-    types: [push]
+    types: [ push ]
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true

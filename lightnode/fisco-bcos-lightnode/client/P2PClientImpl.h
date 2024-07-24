@@ -52,7 +52,7 @@ public:
             {}
             constexpr bool await_ready() const { return false; }
 
-            void await_suspend(CO_STD::coroutine_handle<task::Task<void>::promise_type> handle)
+            void await_suspend(std::coroutine_handle<task::Task<void>::promise_type> handle)
             {
                 LIGHTNODE_LOG(DEBUG) << "P2P client send message: " << m_moduleID << " | "
                                      << m_nodeID->hex() << " | " << m_requestBuffer.size();
@@ -112,7 +112,7 @@ public:
             {}
 
             constexpr bool await_ready() const noexcept { return false; }
-            void await_suspend(CO_STD::coroutine_handle<> handle)
+            void await_suspend(std::coroutine_handle<> handle)
             {
                 bcos::concepts::getRef(m_gateway).asyncGetPeers(
                     [this, m_handle = handle](Error::Ptr error, const gateway::GatewayInfo::Ptr&,
@@ -212,7 +212,7 @@ public:
             {}
 
             constexpr bool await_ready() const noexcept { return false; }
-            void await_suspend(CO_STD::coroutine_handle<> handle)
+            void await_suspend(std::coroutine_handle<> handle)
             {
                 bcos::concepts::getRef(m_gateway).asyncGetPeers(
                     [this, m_handle = handle](Error::Ptr error, const gateway::GatewayInfo::Ptr&,

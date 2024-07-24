@@ -1,10 +1,9 @@
 #pragma once
-#include "Coroutine.h"
 #include "bcos-concepts/Exception.h"
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
+#include <coroutine>
 #include <exception>
-#include <memory>
 #include <type_traits>
 #include <variant>
 
@@ -26,30 +25,30 @@ public:
 
     struct Continuation
     {
-        CO_STD::coroutine_handle<> handle;
+        std::coroutine_handle<> handle;
         VariantType value;
     };
 
     template <class PromiseImpl>
     struct PromiseBase
     {
-        constexpr CO_STD::suspend_always initial_suspend() noexcept { return {}; }
+        constexpr std::suspend_always initial_suspend() noexcept { return {}; }
         constexpr auto final_suspend() noexcept
         {
             struct FinalAwaitable
             {
                 constexpr bool await_ready() noexcept { return false; }
-                constexpr CO_STD::coroutine_handle<> await_suspend(
-                    CO_STD::coroutine_handle<PromiseImpl> handle) noexcept
+                constexpr std::coroutine_handle<> await_suspend(
+                    std::coroutine_handle<PromiseImpl> handle) noexcept
                 {
-                    CO_STD::coroutine_handle<> continuationHandle;
+                    std::coroutine_handle<> continuationHandle;
                     if (handle.promise().m_continuation)
                     {
                         continuationHandle = handle.promise().m_continuation->handle;
                     }
                     handle.destroy();
 
-                    return continuationHandle ? continuationHandle : CO_STD::noop_coroutine();
+                    return continuationHandle ? continuationHandle : std::noop_coroutine();
                 }
                 constexpr void await_resume() noexcept {}
             };
@@ -57,8 +56,8 @@ public:
         }
         Task get_return_object()
         {
-            auto handle = CO_STD::coroutine_handle<PromiseImpl>::from_promise(
-                *static_cast<PromiseImpl*>(this));
+            auto handle =
+                std::coroutine_handle<PromiseImpl>::from_promise(*static_cast<PromiseImpl*>(this));
             return Task(handle);
         }
         void unhandled_exception()
@@ -100,7 +99,7 @@ public:
 
         bool await_ready() const noexcept { return !m_handle || m_handle.done(); }
         template <class Promise>
-        CO_STD::coroutine_handle<> await_suspend(CO_STD::coroutine_handle<Promise> handle)
+        std::coroutine_handle<> await_suspend(std::coroutine_handle<Promise> handle)
         {
             m_continuation.handle = handle;
             m_handle.promise().m_continuation = std::addressof(m_continuation);
@@ -124,12 +123,12 @@ public:
             }
         }
 
-        CO_STD::coroutine_handle<promise_type> m_handle;
+        std::coroutine_handle<promise_type> m_handle;
         Continuation m_continuation;
     };
     Awaitable operator co_await() { return Awaitable(*static_cast<Task*>(this)); }
 
-    explicit Task(CO_STD::coroutine_handle<promise_type> handle) : m_handle(handle) {}
+    explicit Task(std::coroutine_handle<promise_type> handle) : m_handle(handle) {}
     Task(const Task&) = delete;
     Task(Task&& task) noexcept : m_handle(task.m_handle) { task.m_handle = nullptr; }
     Task& operator=(const Task&) = delete;
@@ -142,7 +141,7 @@ public:
     void start() { m_handle.resume(); }
 
 private:
-    CO_STD::coroutine_handle<promise_type> m_handle;
+    std::coroutine_handle<promise_type> m_handle;
 };
 
 }  // namespace bcos::task
