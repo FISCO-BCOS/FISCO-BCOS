@@ -63,12 +63,9 @@ public:
     constexpr static bool isView = true;
 
     constexpr static bool withCacheStorage = !std::is_void_v<CachedStorage>;
-    using KeyType = std::remove_cvref_t<typename MutableStorageType::Key>;
-    using ValueType = std::remove_cvref_t<typename MutableStorageType::Value>;
+    using Key = std::remove_cvref_t<typename MutableStorageType::Key>;
+    using Value = std::remove_cvref_t<typename MutableStorageType::Value>;
     using MutableStorage = MutableStorageType;
-
-    using Key = KeyType;
-    using Value = ValueType;
     using BackendStorage = BackendStorageType;
 
     std::shared_ptr<MutableStorageType> m_mutableStorage;
