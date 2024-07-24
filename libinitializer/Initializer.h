@@ -33,6 +33,11 @@
 #include "LightNodeInitializer.h"
 #endif
 
+namespace rocksdb
+{
+class Slice;
+}
+
 namespace bcos
 {
 namespace gateway
@@ -86,8 +91,6 @@ public:
     void initSysContract();
     bcos::storage::TransactionalStorageInterface::Ptr storage() { return m_storage; }
     bcos::Error::Ptr generateSnapshot(const std::string& snapshotPath, bool withTxAndReceipts);
-    bcos::Error::Ptr generateSnapshotFromRocksDB(const std::string& rockDBPath,
-        const std::string& snapshotPath, bool withTxAndReceipts, size_t snapshotFileSize = 256);
     bcos::Error::Ptr importSnapshot(const std::string& snapshotPath);
     bcos::Error::Ptr importSnapshotToRocksDB(
         const std::string& snapshotPath, const std::string& rockDBPath);
@@ -119,5 +122,9 @@ private:
 
     protocol::BlockNumber getCurrentBlockNumber();
 };
+
+bcos::Error::Ptr traverseRocksDB(const std::string& rockDBPath,
+    const std::function<bcos::Error::Ptr(const rocksdb::Slice& key, const rocksdb::Slice& value)>&
+        processor);
 }  // namespace initializer
 }  // namespace bcos
