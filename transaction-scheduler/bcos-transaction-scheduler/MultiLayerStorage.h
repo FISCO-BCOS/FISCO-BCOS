@@ -87,10 +87,6 @@ public:
       : m_backendStorage(backendStorage), m_cacheStorage(cacheStorage)
     {}
 
-    View(const View&) = delete;
-    View& operator=(const View&) = delete;
-    View(View&&) noexcept = default;
-    View& operator=(View&&) noexcept = default;
     ~View() noexcept = default;
 };
 
