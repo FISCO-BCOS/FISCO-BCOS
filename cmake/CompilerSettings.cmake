@@ -115,7 +115,7 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
 
         add_compile_options(-fPIC)
         add_compile_options(-Wno-error=nonnull)
-        # add_compile_options(-foptimize-sibling-calls)
+        add_compile_options(-foptimize-sibling-calls)
         add_compile_options(-Wno-stringop-overflow)
         add_compile_options(-Wno-restrict)
         add_compile_options(-Wno-error=format-truncation)
