@@ -31,6 +31,10 @@ using namespace bcos::rpc;
 std::tuple<protocol::BlockNumber, bool> bcos::rpc::getBlockNumberByTag(
     protocol::BlockNumber latest, std::string_view blockTag)
 {
+    if (blockTag.data() == nullptr || blockTag.empty())
+    {
+        return std::make_tuple(latest, true);
+    }
     if (blockTag == EarliestBlock)
     {
         return std::make_tuple(0, false);
