@@ -367,8 +367,8 @@ public:
                 << " recipient:" << address2HexString(ref.recipient) << " gas:" << ref.gas;
         }
 
-        auto savepoint = m_rollbackableStorage.get().current();
-        auto transientSavepoint = m_rollbackableTransientStorage.get().current();
+        auto savepoint = current(m_rollbackableStorage.get());
+        auto transientSavepoint = current(m_rollbackableTransientStorage.get());
         std::optional<EVMCResult> evmResult;
         if (m_ledgerConfig.get().authCheckStatus() != 0U)
         {
@@ -439,8 +439,8 @@ public:
         // If the call to system contract failed, the gasUsed is cleared to zero
         if (evmResult->status_code != EVMC_SUCCESS)
         {
-            co_await m_rollbackableStorage.get().rollback(savepoint);
-            co_await m_rollbackableTransientStorage.get().rollback(transientSavepoint);
+            co_await rollback(m_rollbackableStorage.get(), savepoint);
+            co_await rollback(m_rollbackableTransientStorage.get(), transientSavepoint);
 
             if (auto hexAddress = address2FixedArray(ref.code_address);
                 bcos::precompiled::c_systemTxsAddress.find(concepts::bytebuffer::toView(

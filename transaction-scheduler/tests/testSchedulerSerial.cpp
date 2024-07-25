@@ -79,8 +79,8 @@ BOOST_AUTO_TEST_CASE(executeBlock)
             RANGES::to<std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>>>();
 
         MockExecutor executor;
-        auto view = multiLayerStorage.fork();
-        view.newMutable();
+        auto view = fork(multiLayerStorage);
+        newMutable(view);
         ledger::LedgerConfig ledgerConfig;
         auto receipts = co_await bcos::transaction_scheduler::executeBlock(scheduler, view,
             executor, blockHeader,

@@ -75,7 +75,7 @@ public:
         m_storageView(storage),
         m_readWriteSetStorage(m_storageView)
     {
-        m_storageView.newMutable();
+        newMutable(m_storageView);
     }
 
     int64_t chunkIndex() const { return m_chunkIndex; }
@@ -229,7 +229,7 @@ private:
                             ittapi::Report report2(
                                 ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
                                 ittapi::ITT_DOMAINS::instance().DETECT_RAW);
-                            if (writeSet.hasRAWIntersection(chunk->readWriteSetStorage()))
+                            if (hasRAWIntersection(writeSet, chunk->readWriteSetStorage()))
                             {
                                 hasRAW.test_and_set();
                                 PARALLEL_SCHEDULER_LOG(DEBUG)
@@ -243,7 +243,7 @@ private:
                             << "Merging rwset... " << index << " | " << chunk->count();
                         ittapi::Report report3(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
                             ittapi::ITT_DOMAINS::instance().MERGE_RWSET);
-                        writeSet.mergeWriteSet(chunk->readWriteSetStorage());
+                        mergeWriteSet(writeSet, chunk->readWriteSetStorage());
                         return chunk;
                     }) &
                 tbb::make_filter<std::unique_ptr<Chunk>, std::unique_ptr<Chunk>>(
@@ -273,7 +273,7 @@ private:
                                 << "Merging storage... " << chunk->chunkIndex() << " | "
                                 << chunk->count();
                             task::tbb::syncWait(storage2::merge(
-                                lastStorage, std::move(chunk->storageView().mutableStorage())));
+                                lastStorage, std::move(mutableStorage(chunk->storageView()))));
                             scheduler.m_gc.collect(std::move(chunk));
                         }
                         else
