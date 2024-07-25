@@ -348,35 +348,35 @@ task::Task<void> EthEndpoint::getCode(const Json::Value& request, Json::Value& r
     struct Awaitable
     {
         bcos::scheduler::SchedulerInterface::Ptr m_scheduler;
-        std::string m_address;
+        std::string& m_address;
         std::variant<Error::Ptr, bcos::bytes> m_result{};
         constexpr static bool await_ready() noexcept { return false; }
-        void await_suspend(CO_STD::coroutine_handle<> handle) noexcept
+        void await_suspend(CO_STD::coroutine_handle<> handle)
         {
             m_scheduler->getCode(m_address, [this, handle](auto&& error, auto&& code) {
                 if (error)
                 {
-                    m_result.emplace<Error::Ptr>(std::move(error));
+                    m_result.emplace<Error::Ptr>(std::forward<decltype(error)>(error));
                 }
                 else
                 {
-                    m_result.emplace<bcos::bytes>(std::move(code));
+                    m_result.emplace<bcos::bytes>(std::forward<decltype(code)>(code));
                 }
                 handle.resume();
             });
         }
-        bcos::bytes await_resume() noexcept
+        bcos::bytes await_resume()
         {
             if (std::holds_alternative<Error::Ptr>(m_result))
             {
                 BOOST_THROW_EXCEPTION(*std::get<Error::Ptr>(m_result));
             }
-            return std::move(std::get<bcos::bytes>(m_result));
+            return std::get<bcos::bytes>(m_result);
         }
     };
     auto const code = co_await Awaitable{
         .m_scheduler = scheduler,
-        .m_address = std::move(addressStr),
+        .m_address = addressStr,
     };
     Json::Value result = toHexStringWithPrefix(code);
     buildJsonContent(result, response);
@@ -487,17 +487,17 @@ task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& resp
         WEB3_LOG(TRACE) << LOG_DESC("eth_call") << LOG_KV("call", call)
                         << LOG_KV("blockTag", blockTag) << LOG_KV("blockNumber", blockNumber);
     }
-    auto&& tx = call.takeToTransaction(m_nodeService->blockFactory()->transactionFactory());
+    auto const tx = call.takeToTransaction(m_nodeService->blockFactory()->transactionFactory());
     // TODO: ignore params blockNumber here, use it after historical data is available
-
+    std::variant<Error::Ptr, protocol::TransactionReceipt::Ptr> variantResult{};
     // MOVE it into a new file
     struct Awaitable
     {
         bcos::scheduler::SchedulerInterface& m_scheduler;
         bcos::protocol::Transaction::Ptr m_tx;
-        std::variant<Error::Ptr, protocol::TransactionReceipt::Ptr> m_result{};
+        std::variant<Error::Ptr, protocol::TransactionReceipt::Ptr>& m_result;
         constexpr static bool await_ready() noexcept { return false; }
-        void await_suspend(CO_STD::coroutine_handle<> handle) noexcept
+        void await_suspend(CO_STD::coroutine_handle<> handle)
         {
             m_scheduler.call(m_tx, [this, handle](Error::Ptr&& error, auto&& result) {
                 if (error)
@@ -511,16 +511,17 @@ task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& resp
                 handle.resume();
             });
         }
-        protocol::TransactionReceipt::Ptr await_resume() noexcept
+        protocol::TransactionReceipt::Ptr await_resume()
         {
             if (std::holds_alternative<Error::Ptr>(m_result))
             {
                 BOOST_THROW_EXCEPTION(*std::get<Error::Ptr>(m_result));
             }
-            return std::move(std::get<protocol::TransactionReceipt::Ptr>(m_result));
+            return std::get<protocol::TransactionReceipt::Ptr>(m_result);
         }
     };
-    auto const result = co_await Awaitable{.m_scheduler = *scheduler, .m_tx = std::move(tx)};
+    auto const result =
+        co_await Awaitable{.m_scheduler = *scheduler, .m_tx = tx, .m_result = variantResult};
 
     auto output = toHexStringWithPrefix(result->output());
     if (result->status() == static_cast<int32_t>(protocol::TransactionStatus::None))
