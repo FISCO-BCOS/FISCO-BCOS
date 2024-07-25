@@ -107,7 +107,6 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
 
         add_compile_options(-fstack-protector-strong)
         add_compile_options(-fstack-protector)
-        add_compile_options(-fno-omit-frame-pointer)
 
         if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 11.0)
             add_compile_options(-fcoroutines)
@@ -127,7 +126,11 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
             add_compile_options(-Wno-array-bounds)
             add_compile_options(-Wno-aggressive-loop-optimizations)
         endif()
-        # add_compile_options(-fconcepts-diagnostics-depth=10)
+
+        if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 14.0)
+            set(CMAKE_CXX_STANDARD 23)
+            add_compile_options(-Wno-error=uninitialized)
+        endif()
     elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
         if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 4.0)
             set(CMAKE_CXX_FLAGS_DEBUG "-O -g")
@@ -172,7 +175,6 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
     endif()
 elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
     add_compile_definitions(NOMINMAX)
-    #add_definitions(-DUSE_STD_RANGES)
     add_compile_options(/std:c++latest)
     add_compile_options(-bigobj)
 

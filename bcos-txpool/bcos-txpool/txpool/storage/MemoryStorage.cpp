@@ -99,7 +99,7 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
     struct Awaitable
     {
         [[maybe_unused]] constexpr bool await_ready() { return false; }
-        [[maybe_unused]] void await_suspend(CO_STD::coroutine_handle<> handle)
+        [[maybe_unused]] void await_suspend(std::coroutine_handle<> handle)
         {
             try
             {
@@ -180,7 +180,7 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
     struct Awaitable
     {
         [[maybe_unused]] constexpr bool await_ready() { return false; }
-        [[maybe_unused]] void await_suspend(CO_STD::coroutine_handle<> handle)
+        [[maybe_unused]] void await_suspend(std::coroutine_handle<> handle)
         {
             try
             {
@@ -468,7 +468,7 @@ TransactionStatus MemoryStorage::insertWithoutLock(Transaction::Ptr transaction)
         {
             if (transaction->submitCallback() && !accessor->value()->submitCallback())
             {
-                accessor->value()->setSubmitCallback(std::move(transaction->submitCallback()));
+                accessor->value()->setSubmitCallback(transaction->submitCallback());
                 return TransactionStatus::None;
             }
             return TransactionStatus::AlreadyInTxPool;

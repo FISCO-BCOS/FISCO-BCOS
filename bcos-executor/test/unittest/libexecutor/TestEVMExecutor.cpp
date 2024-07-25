@@ -26,9 +26,15 @@
 #include "bcos-framework/bcos-framework/testutils/faker/FakeBlockHeader.h"
 #include "bcos-framework/bcos-framework/testutils/faker/FakeTransaction.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
+#include "bcos-framework/ledger/Features.h"
+#include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/protocol/Transaction.h"
+#include "bcos-framework/storage/Entry.h"
+#include "bcos-table/src/StateStorage.h"
 #include "bcos-table/src/StateStorageFactory.h"
+#include "bcos-task/Task.h"
+#include "bcos-task/Wait.h"
 #include "evmc/evmc.h"
 #include "executor/TransactionExecutorFactory.h"
 #include <bcos-crypto/hash/Keccak256.h>
@@ -1806,6 +1812,768 @@ contract HelloWorld {
     executePromise3.get_future().get();
 }
 
+BOOST_AUTO_TEST_CASE(transientStorageTest)
+{
+    // test opcode tstore and tload, contracts:
+    // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/utils/StorageSlot.sol
+    std::string transientCodeBin =
+        "60806040526100337fbad128a9c9f118267291de46fed9cb24d9fbbe19a927cfee43cdc3b8e4eba17161010e60"
+        "201b60201c565b5f556100647fe51529ae218841954601d43f697e9bb24b282c1a2ddf95745a7e79ee1b4b7b7d"
+        "61011760201b60201c565b6001556100967f5d4010ae4473cd3ede543746d54ec6f990232434c2d4884f06e3cc"
+        "4ac77168e561012060201b60201c565b6002556100c87fb734117ebc01eac75f020b05b2620ab71735dfa2175a"
+        "c8e98f85bd7f529bb96f61012960201b60201c565b6003556100fa7feb7753d6e9a22bf47d9682cdc6f111b5de"
+        "fde6c206047689bad23120af3743bd61013260201b60201c565b600455348015610108575f80fd5b5061013b56"
+        "5b5f819050919050565b5f819050919050565b5f819050919050565b5f819050919050565b5f81905091905056"
+        "5b6105e3806101485f395ff3fe608060405234801561000f575f80fd5b506004361061009c575f3560e01c8063"
+        "c2b12a7311610064578063c2b12a7314610134578063d2282dc514610150578063e30081a01461016c578063f5"
+        "b53e1714610188578063f8462a0f146101a65761009c565b80631f903037146100a05780632d1be94d146100be"
+        "57806338cc4831146100dc57806368895979146100fa578063a53b1c1e14610118575b5f80fd5b6100a86101c2"
+        "565b6040516100b591906102fa565b60405180910390f35b6100c66101d3565b6040516100d3919061032d565b"
+        "60405180910390f35b6100e46101e4565b6040516100f19190610385565b60405180910390f35b6101026101f4"
+        "565b60405161010f91906103b6565b60405180910390f35b610132600480360381019061012d9190610406565b"
+        "610205565b005b61014e6004803603810190610149919061045b565b61021d565b005b61016a60048036038101"
+        "9061016591906104b0565b610235565b005b61018660048036038101906101819190610505565b61024d565b00"
+        "5b610190610264565b60405161019d919061053f565b60405180910390f35b6101c060048036038101906101bb"
+        "9190610582565b610275565b005b5f6101ce60025461028d565b905090565b5f6101df600154610297565b9050"
+        "90565b5f6101ef5f546102a1565b905090565b5f6102006003546102ab565b905090565b61021a816004546102"
+        "b590919063ffffffff16565b50565b610232816002546102bc90919063ffffffff16565b50565b61024a816003"
+        "546102c390919063ffffffff16565b50565b610261815f546102ca90919063ffffffff16565b50565b5f610270"
+        "6004546102d1565b905090565b61028a816001546102db90919063ffffffff16565b50565b5f815c9050919050"
+        "565b5f815c9050919050565b5f815c9050919050565b5f815c9050919050565b80825d5050565b80825d505056"
+        "5b80825d5050565b80825d5050565b5f815c9050919050565b80825d5050565b5f819050919050565b6102f481"
+        "6102e2565b82525050565b5f60208201905061030d5f8301846102eb565b92915050565b5f8115159050919050"
+        "565b61032781610313565b82525050565b5f6020820190506103405f83018461031e565b92915050565b5f73ff"
+        "ffffffffffffffffffffffffffffffffffffff82169050919050565b5f61036f82610346565b9050919050565b"
+        "61037f81610365565b82525050565b5f6020820190506103985f830184610376565b92915050565b5f81905091"
+        "9050565b6103b08161039e565b82525050565b5f6020820190506103c95f8301846103a7565b92915050565b5f"
+        "80fd5b5f819050919050565b6103e5816103d3565b81146103ef575f80fd5b50565b5f81359050610400816103"
+        "dc565b92915050565b5f6020828403121561041b5761041a6103cf565b5b5f610428848285016103f2565b9150"
+        "5092915050565b61043a816102e2565b8114610444575f80fd5b50565b5f8135905061045581610431565b9291"
+        "5050565b5f602082840312156104705761046f6103cf565b5b5f61047d84828501610447565b91505092915050"
+        "565b61048f8161039e565b8114610499575f80fd5b50565b5f813590506104aa81610486565b92915050565b5f"
+        "602082840312156104c5576104c46103cf565b5b5f6104d28482850161049c565b91505092915050565b6104e4"
+        "81610365565b81146104ee575f80fd5b50565b5f813590506104ff816104db565b92915050565b5f6020828403"
+        "121561051a576105196103cf565b5b5f610527848285016104f1565b91505092915050565b610539816103d356"
+        "5b82525050565b5f6020820190506105525f830184610530565b92915050565b61056181610313565b81146105"
+        "6b575f80fd5b50565b5f8135905061057c81610558565b92915050565b5f602082840312156105975761059661"
+        "03cf565b5b5f6105a48482850161056e565b9150509291505056fea2646970667358221220c24f2807e50107ea"
+        "7f1b14927e683f13801dba0387067d73ff19776123092a7d64736f6c63430008190033";
+
+    bytes input;
+    boost::algorithm::unhex(transientCodeBin, std::back_inserter(input));
+
+    auto tx =
+        fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
+    auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
+    // The contract address
+    h256 addressCreate("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e");
+    std::string address = addressCreate.hex().substr(0, 40);
+
+    auto hash = tx->hash();
+    txpool->hash2Transaction.emplace(hash, tx);
+
+    auto params = std::make_unique<NativeExecutionMessage>();
+    params->setContextID(100);
+    params->setSeq(1000);
+    params->setDepth(0);
+
+    params->setOrigin(std::string(sender));
+    params->setFrom(std::string(sender));
+
+    params->setTo(std::string(sender));
+    params->setStaticCall(false);
+    params->setGasAvailable(gas);
+    params->setData(input);
+    params->setType(NativeExecutionMessage::TXHASH);
+    params->setTransactionHash(hash);
+    params->setCreate(true);
+
+    NativeExecutionMessage paramsBak = *params;
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
+        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    blockHeader->setNumber(1);
+
+    std::vector<bcos::protocol::ParentInfo> parentInfos{
+        {{blockHeader->number() - 1, h256(blockHeader->number() - 1)}}};
+    blockHeader->setParentInfo(parentInfos);
+    ledger->setBlockNumber(blockHeader->number() - 1);
+    blockHeader->calculateHash(*cryptoSuite->hashImpl());
+    std::promise<void> nextPromise;
+    executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
+        BOOST_CHECK(!error);
+        nextPromise.set_value();
+    });
+    nextPromise.get_future().get();
+
+    // --------------------------
+    // Deploy
+    // --------------------------
+    std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
+    executor->dmcExecuteTransaction(std::move(params),
+        [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+            BOOST_CHECK(!error);
+            executePromise.set_value(std::move(result));
+        });
+    auto result = executePromise.get_future().get();
+    BOOST_CHECK(result);
+
+    // feature_evm_cancun is off
+    BOOST_CHECK_EQUAL(result->type(), NativeExecutionMessage::REVERT);
+    BOOST_CHECK_EQUAL(result->status(), 10);
+    BOOST_CHECK_EQUAL(result->evmStatus(), 5);
+}
+
+BOOST_AUTO_TEST_CASE(transientStorageTest2)
+{
+    // turn on feature_evm_cuncan swtich
+    std::shared_ptr<MockTransactionalStorage> newStorage =
+        std::make_shared<MockTransactionalStorage>(hashImpl);
+    Entry entry;
+    bcos::protocol::BlockNumber blockNumber = 0;
+    entry.setObject(
+        ledger::SystemConfigEntry{boost::lexical_cast<std::string>((int)1), blockNumber});
+    newStorage->asyncSetRow(ledger::SYS_CONFIG, "feature_evm_cancun", entry,
+        [](Error::UniquePtr error) { BOOST_CHECK_EQUAL(error.get(), nullptr); });
+    // check feature_evm_cancun whether is on
+    auto entry1 = newStorage->getRow(ledger::SYS_CONFIG, "feature_evm_cancun");
+    //    BOOST_CHECK_EQUAL(value, "1");
+    //    BOOST_CHECK_EQUAL(enableNumber, 0);
+
+    auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
+    auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(0);
+    auto lruStorage = std::make_shared<bcos::storage::LRUStateStorage>(newStorage, false);
+    auto newExecutor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, lruStorage,
+        newStorage, executionResultFactory, stateStorageFactory, hashImpl, false, false);
+
+    std::string transientCodeBin =
+        "6080604052348015600e575f80fd5b506108748061001c5f395ff3fe608060405234801561000f575f80fd5b50"
+        "60043610610029575f3560e01c8063fa3e317e1461002d575b5f80fd5b61004760048036038101906100429190"
+        "610194565b61005d565b60405161005491906101d9565b60405180910390f35b5f808260405161006c90610150"
+        "565b6100769190610201565b604051809103905ff08015801561008f573d5f803e3d5ffd5b5090505f8173ffff"
+        "ffffffffffffffffffffffffffffffffffff16636428f3dc6040518163ffffffff1660e01b8152600401602060"
+        "4051808303815f875af11580156100dd573d5f803e3d5ffd5b505050506040513d601f19601f82011682018060"
+        "405250810190610101919061022e565b9050838114610145576040517f08c379a0000000000000000000000000"
+        "00000000000000000000000000000000815260040161013c906102d9565b60405180910390fd5b600192505050"
+        "919050565b610547806102f883390190565b5f80fd5b5f819050919050565b61017381610161565b811461017d"
+        "575f80fd5b50565b5f8135905061018e8161016a565b92915050565b5f602082840312156101a9576101a86101"
+        "5d565b5b5f6101b684828501610180565b91505092915050565b5f8115159050919050565b6101d3816101bf56"
+        "5b82525050565b5f6020820190506101ec5f8301846101ca565b92915050565b6101fb81610161565b82525050"
+        "565b5f6020820190506102145f8301846101f2565b92915050565b5f815190506102288161016a565b92915050"
+        "565b5f602082840312156102435761024261015d565b5b5f6102508482850161021a565b91505092915050565b"
+        "5f82825260208201905092915050565b7f73746f72652076616c7565206e6f7420657175616c20746c6f616420"
+        "726573755f8201527f6c7400000000000000000000000000000000000000000000000000000000000060208201"
+        "5250565b5f6102c3602283610259565b91506102ce82610269565b604082019050919050565b5f602082019050"
+        "8181035f8301526102f0816102b7565b905091905056fe6080604052348015600e575f80fd5b50604051610547"
+        "3803806105478339818101604052810190602e9190607b565b603d5f5482604260201b60201c565b5060a1565b"
+        "80825d5050565b5f80fd5b5f819050919050565b605d81604d565b81146066575f80fd5b50565b5f8151905060"
+        "75816056565b92915050565b5f60208284031215608d57608c6049565b5b5f6098848285016069565b91505092"
+        "915050565b610499806100ae5f395ff3fe608060405234801561000f575f80fd5b5060043610610034575f3560"
+        "e01c80633bc5de30146100385780636428f3dc14610056575b5f80fd5b610040610074565b60405161004d9190"
+        "61015c565b60405180910390f35b61005e610084565b60405161006b919061015c565b60405180910390f35b5f"
+        "61007f5f5461012d565b905090565b5f8060405161009290610137565b604051809103905ff0801580156100ab"
+        "573d5f803e3d5ffd5b5090508073ffffffffffffffffffffffffffffffffffffffff1663c1df0f483060405182"
+        "63ffffffff1660e01b81526004016100e791906101b4565b6020604051808303815f875af1158015610103573d"
+        "5f803e3d5ffd5b505050506040513d601f19601f8201168201806040525081019061012791906101fb565b9150"
+        "5090565b5f815c9050919050565b61023d8061022783390190565b5f819050919050565b61015681610144565b"
+        "82525050565b5f60208201905061016f5f83018461014d565b92915050565b5f73ffffffffffffffffffffffff"
+        "ffffffffffffffff82169050919050565b5f61019e82610175565b9050919050565b6101ae81610194565b8252"
+        "5050565b5f6020820190506101c75f8301846101a5565b92915050565b5f80fd5b6101da81610144565b811461"
+        "01e4575f80fd5b50565b5f815190506101f5816101d1565b92915050565b5f602082840312156102105761020f"
+        "6101cd565b5b5f61021d848285016101e7565b9150509291505056fe6080604052348015600e575f80fd5b5061"
+        "02218061001c5f395ff3fe608060405234801561000f575f80fd5b5060043610610029575f3560e01c8063c1df"
+        "0f481461002d575b5f80fd5b6100476004803603810190610042919061013a565b61005d565b60405161005491"
+        "9061017d565b60405180910390f35b5f808290505f8173ffffffffffffffffffffffffffffffffffffffff1663"
+        "3bc5de306040518163ffffffff1660e01b8152600401602060405180830381865afa1580156100ac573d5f803e"
+        "3d5ffd5b505050506040513d601f19601f820116820180604052508101906100d091906101c0565b9050809250"
+        "5050919050565b5f80fd5b5f73ffffffffffffffffffffffffffffffffffffffff82169050919050565b5f6101"
+        "09826100e0565b9050919050565b610119816100ff565b8114610123575f80fd5b50565b5f8135905061013481"
+        "610110565b92915050565b5f6020828403121561014f5761014e6100dc565b5b5f61015c84828501610126565b"
+        "91505092915050565b5f819050919050565b61017781610165565b82525050565b5f6020820190506101905f83"
+        "018461016e565b92915050565b61019f81610165565b81146101a9575f80fd5b50565b5f815190506101ba8161"
+        "0196565b92915050565b5f602082840312156101d5576101d46100dc565b5b5f6101e2848285016101ac565b91"
+        "50509291505056fea2646970667358221220b74855b53bcf2b3cc2261d3f57e16507da8b24f81ff519699191e3"
+        "4ce025bc8664736f6c63430008190033a26469706673582212201eb1e02998c84b08c3db1bdb2487184ca8357f"
+        "1d2739ec65daa47ffe3e89316a64736f6c63430008190033a2646970667358221220bad0e7bec379be9bb4f446"
+        "b845050f59959e8bd9da49d83f3c9f669a63e5e51e64736f6c63430008190033";
+    bytes input;
+    boost::algorithm::unhex(transientCodeBin, std::back_inserter(input));
+
+    auto tx =
+        fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(100), 100000, "1", "1");
+    auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
+    // The contract address
+    h256 addressCreate("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e");
+    std::string address = addressCreate.hex().substr(0, 40);
+
+    auto hash = tx->hash();
+    txpool->hash2Transaction.emplace(hash, tx);
+
+
+    auto params1 = std::make_unique<NativeExecutionMessage>();
+    params1->setContextID(101);
+    params1->setSeq(1001);
+    params1->setDepth(0);
+    params1->setOrigin(std::string(sender));
+    params1->setFrom(std::string(sender));
+
+    // The contract address
+    params1->setTo(sender);
+    params1->setStaticCall(false);
+    params1->setGasAvailable(gas);
+    params1->setData(input);
+    params1->setType(NativeExecutionMessage::TXHASH);
+    params1->setTransactionHash(hash);
+    params1->setCreate(true);
+
+    NativeExecutionMessage paramsBak1 = *params1;
+
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
+        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    blockHeader->setNumber(1);
+    blockHeader->setVersion((uint32_t)bcos::protocol::BlockVersion::MAX_VERSION);
+
+    std::vector<bcos::protocol::ParentInfo> parentInfos{
+        {{blockHeader->number() - 1, h256(blockHeader->number() - 1)}}};
+    blockHeader->setParentInfo(parentInfos);
+    ledger->setBlockNumber(blockHeader->number() - 1);
+    blockHeader->calculateHash(*cryptoSuite->hashImpl());
+    std::promise<void> nextPromise;
+    newExecutor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
+        BOOST_CHECK(!error);
+        nextPromise.set_value();
+    });
+    nextPromise.get_future().get();
+
+    // --------------------------
+    // Deploy
+    // --------------------------
+    std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
+    newExecutor->executeTransaction(std::move(params1),
+        [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+            BOOST_CHECK(!error);
+            executePromise.set_value(std::move(result));
+        });
+    auto result = executePromise.get_future().get();
+    BOOST_CHECK(result);
+
+    BOOST_CHECK_EQUAL(result->type(), NativeExecutionMessage::FINISHED);
+    BOOST_CHECK_EQUAL(result->status(), 0);
+    BOOST_CHECK_EQUAL(result->evmStatus(), 0);
+}
+
+BOOST_AUTO_TEST_CASE(mcopy_opcode_test)
+{
+    // test opcode mcopy
+    /*  solidity code
+    pragma solidity 0.8.25;
+
+    contract mcopy {
+    function memoryCopy() external pure returns (bytes32 x) {
+    assembly {
+        mstore(0x20, 0x50)  // Store 0x50 at word 1 in memory
+        mcopy(0, 0x20, 0x20)  // Copies 0x50 to word 0 in memory
+        x := mload(0)    // Returns 32 bytes "0x50"
+        }
+    }
+    }*/
+    std::string mcopyCodeBin =
+        "6080604052348015600e575f80fd5b5060b980601a5f395ff3fe6080604052348015600e575f80fd5b50600436"
+        "106026575f3560e01c80632dbaeee914602a575b5f80fd5b60306044565b604051603b9190606c565b60405180"
+        "910390f35b5f60506020526020805f5e5f51905090565b5f819050919050565b6066816056565b82525050565b"
+        "5f602082019050607d5f830184605f565b9291505056fea2646970667358221220c16107fa00317d2d630d4d01"
+        "9754eb2bae42e96482d0050308e60ec21c69d7eb64736f6c63430008190033";
+
+    bytes input;
+    boost::algorithm::unhex(mcopyCodeBin, std::back_inserter(input));
+
+    auto tx =
+        fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
+    auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
+    // The contract address
+    h256 addressCreate("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e");
+    std::string address = addressCreate.hex().substr(0, 40);
+
+    auto hash = tx->hash();
+    txpool->hash2Transaction.emplace(hash, tx);
+
+    auto params = std::make_unique<NativeExecutionMessage>();
+    params->setContextID(100);
+    params->setSeq(1000);
+    params->setDepth(0);
+
+    params->setOrigin(std::string(sender));
+    params->setFrom(std::string(sender));
+
+    params->setTo(std::string(sender));
+    params->setStaticCall(false);
+    params->setGasAvailable(gas);
+    params->setData(input);
+    params->setType(NativeExecutionMessage::TXHASH);
+    params->setTransactionHash(hash);
+    params->setCreate(true);
+
+    NativeExecutionMessage paramsBak = *params;
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
+        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    blockHeader->setNumber(1);
+    std::vector<bcos::protocol::ParentInfo> parentInfos{
+        {{blockHeader->number() - 1, h256(blockHeader->number() - 1)}}};
+    blockHeader->setParentInfo(parentInfos);
+    ledger->setBlockNumber(blockHeader->number() - 1);
+    blockHeader->calculateHash(*cryptoSuite->hashImpl());
+    std::promise<void> nextPromise;
+    executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
+        BOOST_CHECK(!error);
+        nextPromise.set_value();
+    });
+    nextPromise.get_future().get();
+
+    // --------------------------
+    // Deploy on executor which feature_evm_cancun is off
+    // --------------------------
+    std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
+    executor->dmcExecuteTransaction(std::move(params),
+        [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+            BOOST_CHECK(!error);
+            executePromise.set_value(std::move(result));
+        });
+    auto result = executePromise.get_future().get();
+    BOOST_CHECK(result);
+
+    // feature_evm_cancun is off
+    BOOST_CHECK_EQUAL(result->type(), NativeExecutionMessage::REVERT);
+    BOOST_CHECK_EQUAL(result->status(), 10);
+    BOOST_CHECK_EQUAL(result->evmStatus(), 5);
+}
+
+BOOST_AUTO_TEST_CASE(mcopy_opcode_test_1)
+{
+    // turn on feature_evm_cuncan swtich
+    std::shared_ptr<MockTransactionalStorage> newStorage =
+        std::make_shared<MockTransactionalStorage>(hashImpl);
+    Entry entry;
+    bcos::protocol::BlockNumber blockNumber = 0;
+    entry.setObject(
+        ledger::SystemConfigEntry{boost::lexical_cast<std::string>((int)1), blockNumber});
+    newStorage->asyncSetRow(ledger::SYS_CONFIG, "feature_evm_cancun", entry,
+        [](Error::UniquePtr error) { BOOST_CHECK_EQUAL(error.get(), nullptr); });
+    // check feature_evm_cancun whether is on
+    auto entry1 = newStorage->getRow(ledger::SYS_CONFIG, "feature_evm_cancun");
+    //    BOOST_CHECK_EQUAL(value, "1");
+    //    BOOST_CHECK_EQUAL(enableNumber, 0);
+
+    auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
+    auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(0);
+    auto lruStorage = std::make_shared<bcos::storage::LRUStateStorage>(newStorage, false);
+    auto newExecutor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, lruStorage,
+        newStorage, executionResultFactory, stateStorageFactory, hashImpl, false, false);
+
+    std::string mcopyCodeBin =
+        "6080604052348015600e575f80fd5b5060b980601a5f395ff3fe6080604052348015600e575f80"
+        "fd5b50600436106026575f3560e01c80632dbaeee914602a575b5f80fd5b60306044565b604051603b9190606c"
+        "565b60405180"
+        "910390f35b5f60506020526020805f5e5f51905090565b5f819050919050565b6066816056565b82525050565b"
+        "5f6020820190"
+        "50607d5f830184605f565b9291505056fea2646970667358221220c16107fa00317d2d630d4d019754eb2bae42"
+        "e96482d00503"
+        "08e60ec21c69d7eb64736f6c63430008190033";
+
+    bytes input;
+    boost::algorithm::unhex(mcopyCodeBin, std::back_inserter(input));
+
+    auto tx =
+        fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
+    auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
+    // The contract address
+    h256 addressCreate("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e");
+    std::string address = addressCreate.hex().substr(0, 40);
+
+    auto hash = tx->hash();
+    txpool->hash2Transaction.emplace(hash, tx);
+
+    auto params = std::make_unique<NativeExecutionMessage>();
+    params->setContextID(100);
+    params->setSeq(1000);
+    params->setDepth(0);
+
+    params->setOrigin(std::string(sender));
+    params->setFrom(std::string(sender));
+
+    params->setTo(std::string(sender));
+    params->setStaticCall(false);
+    params->setGasAvailable(gas);
+    params->setData(input);
+    params->setType(NativeExecutionMessage::TXHASH);
+    params->setTransactionHash(hash);
+    params->setCreate(true);
+
+    NativeExecutionMessage paramsBak = *params;
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
+        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    blockHeader->setNumber(1);
+    std::vector<bcos::protocol::ParentInfo> parentInfos{
+        {{blockHeader->number() - 1, h256(blockHeader->number() - 1)}}};
+    blockHeader->setParentInfo(parentInfos);
+    ledger->setBlockNumber(blockHeader->number() - 1);
+    blockHeader->calculateHash(*cryptoSuite->hashImpl());
+    std::promise<void> nextPromise;
+    newExecutor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
+        BOOST_CHECK(!error);
+        nextPromise.set_value();
+    });
+    nextPromise.get_future().get();
+
+    // --------------------------
+    // Deploy on executor which feature_evm_cancun is off
+    // --------------------------
+    std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
+    newExecutor->dmcExecuteTransaction(std::move(params),
+        [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+            BOOST_CHECK(!error);
+            executePromise.set_value(std::move(result));
+        });
+    auto result = executePromise.get_future().get();
+    BOOST_CHECK(result);
+    BOOST_CHECK_EQUAL(result->type(), NativeExecutionMessage::FINISHED);
+    BOOST_CHECK_EQUAL(result->status(), 0);
+    BOOST_CHECK_EQUAL(result->evmStatus(), 0);
+}
+
+BOOST_AUTO_TEST_CASE(blobBaseFee_test)
+{
+    /*
+     pragma solidity 0.8.25;
+
+    contract blobBaseFee {
+    function getBlobBaseFeeYul() external view returns (uint256 blobBaseFee) {
+        assembly {
+           blobBaseFee := blobbasefee()
+       }
+    }
+
+    function getBlobBaseFeeSolidity() external view returns (uint256 blobBaseFee) {
+        blobBaseFee = block.blobbasefee;
+        }
+    }
+     */
+    // turn on feature_evm_cuncan swtich
+    std::shared_ptr<MockTransactionalStorage> newStorage =
+        std::make_shared<MockTransactionalStorage>(hashImpl);
+    Entry entry;
+    bcos::protocol::BlockNumber blockNumber = 0;
+    entry.setObject(
+        ledger::SystemConfigEntry{boost::lexical_cast<std::string>((int)1), blockNumber});
+    newStorage->asyncSetRow(ledger::SYS_CONFIG, "feature_evm_cancun", entry,
+        [](Error::UniquePtr error) { BOOST_CHECK_EQUAL(error.get(), nullptr); });
+    // check feature_evm_cancun whether is on
+    auto entry1 = newStorage->getRow(ledger::SYS_CONFIG, "feature_evm_cancun");
+    //    BOOST_CHECK_EQUAL(value, "1");
+    //    BOOST_CHECK_EQUAL(enableNumber, 0);
+
+    auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
+    auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(0);
+    auto lruStorage = std::make_shared<bcos::storage::LRUStateStorage>(newStorage, false);
+    auto newExecutor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, lruStorage,
+        newStorage, executionResultFactory, stateStorageFactory, hashImpl, false, false);
+
+    std::string blobBaseFeeCodeBin =
+        "6080604052348015600e575f80fd5b5060d980601a5f395ff3fe6080"
+        "604052348015600e575f80fd5b50600436106030575f3560e01c806348a35d4e1460345780635b85fe9814"
+        "604e575b5f80fd5b603a6068565b60405160459190608c565b60405180910390f35b6054606f565b604051"
+        "605f9190608c565b60405180910390f35b5f4a905090565b5f4a905090565b5f819050919050565b608681"
+        "6076565b82525050565b5f602082019050609d5f830184607f565b9291505056fea2646970667358221220"
+        "954cfa4357894c6c07e251b6fe89f193c6348d4425388a3cae9a77548e09789964736f6c63430008190033";
+
+    bytes input;
+    boost::algorithm::unhex(blobBaseFeeCodeBin, std::back_inserter(input));
+
+    auto tx =
+        fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
+    auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
+    // The contract address
+    h256 addressCreate("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e");
+    std::string address = addressCreate.hex().substr(0, 40);
+
+    auto hash = tx->hash();
+    txpool->hash2Transaction.emplace(hash, tx);
+
+    auto params = std::make_unique<NativeExecutionMessage>();
+    params->setContextID(100);
+    params->setSeq(1000);
+    params->setDepth(0);
+
+    params->setOrigin(std::string(sender));
+    params->setFrom(std::string(sender));
+
+    params->setTo(std::string(sender));
+    params->setStaticCall(false);
+    params->setGasAvailable(gas);
+    params->setData(input);
+    params->setType(NativeExecutionMessage::TXHASH);
+    params->setTransactionHash(hash);
+    params->setCreate(true);
+
+    NativeExecutionMessage paramsBak = *params;
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
+        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    blockHeader->setNumber(1);
+    std::vector<bcos::protocol::ParentInfo> parentInfos{
+        {{blockHeader->number() - 1, h256(blockHeader->number() - 1)}}};
+    blockHeader->setParentInfo(parentInfos);
+    ledger->setBlockNumber(blockHeader->number() - 1);
+    blockHeader->calculateHash(*cryptoSuite->hashImpl());
+    std::promise<void> nextPromise;
+    newExecutor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
+        BOOST_CHECK(!error);
+        nextPromise.set_value();
+    });
+    nextPromise.get_future().get();
+
+    // --------------------------
+    // Deploy on executor which feature_evm_cancun is off
+    // --------------------------
+    std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
+    newExecutor->dmcExecuteTransaction(std::move(params),
+        [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+            BOOST_CHECK(!error);
+            executePromise.set_value(std::move(result));
+        });
+    auto result = executePromise.get_future().get();
+    BOOST_CHECK(result);
+    BOOST_CHECK_EQUAL(result->type(), NativeExecutionMessage::FINISHED);
+    BOOST_CHECK_EQUAL(result->status(), 0);
+    BOOST_CHECK_EQUAL(result->evmStatus(), 0);
+}
+
+BOOST_AUTO_TEST_CASE(blobHash_test)
+{
+    /*
+    pragma solidity 0.8.25;
+    contract blobhash {
+        function storeBlobHash(uint256 index) external {
+            assembly {
+                sstore(0, blobhash(index))
+            }
+        }
+    }
+     */
+
+    // turn on feature_evm_cuncan swtich
+    std::shared_ptr<MockTransactionalStorage> newStorage =
+        std::make_shared<MockTransactionalStorage>(hashImpl);
+    Entry entry;
+    bcos::protocol::BlockNumber blockNumber = 0;
+    entry.setObject(
+        ledger::SystemConfigEntry{boost::lexical_cast<std::string>((int)1), blockNumber});
+    newStorage->asyncSetRow(ledger::SYS_CONFIG, "feature_evm_cancun", entry,
+        [](Error::UniquePtr error) { BOOST_CHECK_EQUAL(error.get(), nullptr); });
+    // check feature_evm_cancun whether is on
+    auto entry1 = newStorage->getRow(ledger::SYS_CONFIG, "feature_evm_cancun");
+    //    BOOST_CHECK_EQUAL(value, "1");
+    //    BOOST_CHECK_EQUAL(enableNumber, 0);
+
+    auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
+    auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(0);
+    auto lruStorage = std::make_shared<bcos::storage::LRUStateStorage>(newStorage, false);
+    auto newExecutor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, lruStorage,
+        newStorage, executionResultFactory, stateStorageFactory, hashImpl, false, false);
+
+    std::string blobHashCodeBin =
+        "6080604052348015600e575f80fd5b5060d780601a5f395ff3fe6080604052348015600e575f80fd5b50600436"
+        "106026575f3560e01c8063ae67ac9b14602a575b5f80fd5b60406004803603810190603c9190607b565b604256"
+        "5b005b80495f5550565b5f80fd5b5f819050919050565b605d81604d565b81146066575f80fd5b50565b5f8135"
+        "90506075816056565b92915050565b5f60208284031215608d57608c6049565b5b5f6098848285016069565b91"
+        "50509291505056fea2646970667358221220ad2b619fbd8e82b272adfa7e9278d31e0c2f6e109361b2206b5b03"
+        "84aee5700f64736f6c63430008190033";
+    bytes input;
+    boost::algorithm::unhex(blobHashCodeBin, std::back_inserter(input));
+
+    auto tx =
+        fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
+    auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
+    // The contract address
+    h256 addressCreate("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e");
+    std::string address = addressCreate.hex().substr(0, 40);
+
+    auto hash = tx->hash();
+    txpool->hash2Transaction.emplace(hash, tx);
+
+    auto params = std::make_unique<NativeExecutionMessage>();
+    params->setContextID(100);
+    params->setSeq(1000);
+    params->setDepth(0);
+
+    params->setOrigin(std::string(sender));
+    params->setFrom(std::string(sender));
+
+    params->setTo(std::string(sender));
+    params->setStaticCall(false);
+    params->setGasAvailable(gas);
+    params->setData(input);
+    params->setType(NativeExecutionMessage::TXHASH);
+    params->setTransactionHash(hash);
+    params->setCreate(true);
+
+    NativeExecutionMessage paramsBak = *params;
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
+        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    blockHeader->setNumber(1);
+    std::vector<bcos::protocol::ParentInfo> parentInfos{
+        {{blockHeader->number() - 1, h256(blockHeader->number() - 1)}}};
+    blockHeader->setParentInfo(parentInfos);
+    ledger->setBlockNumber(blockHeader->number() - 1);
+    blockHeader->calculateHash(*cryptoSuite->hashImpl());
+    std::promise<void> nextPromise;
+    newExecutor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
+        BOOST_CHECK(!error);
+        nextPromise.set_value();
+    });
+    nextPromise.get_future().get();
+
+    // --------------------------
+    // Deploy on executor which feature_evm_cancun is off
+    // --------------------------
+    std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
+    newExecutor->dmcExecuteTransaction(std::move(params),
+        [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+            BOOST_CHECK(!error);
+            executePromise.set_value(std::move(result));
+        });
+    auto result = executePromise.get_future().get();
+    BOOST_CHECK(result);
+    BOOST_CHECK_EQUAL(result->type(), NativeExecutionMessage::FINISHED);
+    BOOST_CHECK_EQUAL(result->status(), 0);
+    BOOST_CHECK_EQUAL(result->evmStatus(), 0);
+}
+
+BOOST_AUTO_TEST_CASE(getTransientStorageTest)
+{
+    // turn on feature_evm_cuncan swtich
+    std::shared_ptr<MockTransactionalStorage> newStorage =
+        std::make_shared<MockTransactionalStorage>(hashImpl);
+    Entry entry;
+    bcos::protocol::BlockNumber blockNumber = 0;
+    entry.setObject(
+        ledger::SystemConfigEntry{boost::lexical_cast<std::string>((int)1), blockNumber});
+    newStorage->asyncSetRow(ledger::SYS_CONFIG, "feature_evm_cancun", entry,
+        [](Error::UniquePtr error) { BOOST_CHECK_EQUAL(error.get(), nullptr); });
+    // check feature_evm_cancun whether is on
+    auto entry1 = newStorage->getRow(ledger::SYS_CONFIG, "feature_evm_cancun");
+    //    BOOST_CHECK_EQUAL(value, "1");
+    //    BOOST_CHECK_EQUAL(enableNumber, 0);
+
+    auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
+    auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(0);
+    auto lruStorage = std::make_shared<bcos::storage::LRUStateStorage>(newStorage, false);
+    auto newExecutor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, lruStorage,
+        newStorage, executionResultFactory, stateStorageFactory, hashImpl, false, false);
+
+    std::string transientCodeBin =
+        "60806040527fe3598e46f24394be411dcf68a978c22ef80d97a0ef7c630d9b8e35d241c0210060015534801560"
+        "32575f80fd5b506106a9806100405f395ff3fe608060405234801561000f575f80fd5b5060043610610055575f"
+        "3560e01c806320965255146100595780632a130724146100775780635524107714610093578063613d81e11461"
+        "00af57806374f7ca87146100b9575b5f80fd5b6100616100d7565b60405161006e91906103a4565b6040518091"
+        "0390f35b610091600480360381019061008c919061041b565b6100eb565b005b6100ad60048036038101906100"
+        "a89190610470565b61012d565b005b6100b761013a565b005b6100c1610369565b6040516100ce91906104aa56"
+        "5b60405180910390f35b5f8060015490505f815c9050809250505090565b805f806101000a81548173ffffffff"
+        "ffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff160217"
+        "90555050565b5f600154905081815d5050565b5f73ffffffffffffffffffffffffffffffffffffffff165f8054"
+        "906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffff"
+        "ffffffffff16036101c7576040517f08c379a00000000000000000000000000000000000000000000000000000"
+        "000081526004016101be9061051d565b60405180910390fd5b5f805f9054906101000a900473ffffffffffffff"
+        "ffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16604051602401604051"
+        "6020818303038152906040527fb7fd278600000000000000000000000000000000000000000000000000000000"
+        "7bffffffffffffffffffffffffffffffffffffffffffffffffffffffff19166020820180517bffffffffffffff"
+        "ffffffffffffffffffffffffffffffffffffffffff838183161783525050505060405161028f919061058d565b"
+        "5f604051808303815f865af19150503d805f81146102c8576040519150601f19603f3d011682016040523d8252"
+        "3d5f602084013e6102cd565b606091505b5050905080610311576040517f08c379a00000000000000000000000"
+        "00000000000000000000000000000000008152600401610308906105ed565b60405180910390fd5b5f61031a61"
+        "00d7565b90506103246100d7565b8114610365576040517f08c379a00000000000000000000000000000000000"
+        "0000000000000000000000815260040161035c90610655565b60405180910390fd5b5050565b5f805490610100"
+        "0a900473ffffffffffffffffffffffffffffffffffffffff1681565b5f819050919050565b61039e8161038c56"
+        "5b82525050565b5f6020820190506103b75f830184610395565b92915050565b5f80fd5b5f73ffffffffffffff"
+        "ffffffffffffffffffffffffff82169050919050565b5f6103ea826103c1565b9050919050565b6103fa816103"
+        "e0565b8114610404575f80fd5b50565b5f81359050610415816103f1565b92915050565b5f6020828403121561"
+        "04305761042f6103bd565b5b5f61043d84828501610407565b91505092915050565b61044f8161038c565b8114"
+        "610459575f80fd5b50565b5f8135905061046a81610446565b92915050565b5f60208284031215610485576104"
+        "846103bd565b5b5f6104928482850161045c565b91505092915050565b6104a4816103e0565b82525050565b5f"
+        "6020820190506104bd5f83018461049b565b92915050565b5f82825260208201905092915050565b7f4220636f"
+        "6e74726163742061646472657373206e6f74207365740000000000005f82015250565b5f610507601a836104c3"
+        "565b9150610512826104d3565b602082019050919050565b5f6020820190508181035f830152610534816104fb"
+        "565b9050919050565b5f81519050919050565b5f81905092915050565b8281835e5f83830152505050565b5f61"
+        "05678261053b565b6105718185610545565b935061058181856020860161054f565b8084019150509291505056"
+        "5b5f610598828461055d565b915081905092915050565b7f43616c6c20746f204220636f6e7472616374206661"
+        "696c6564000000000000005f82015250565b5f6105d76019836104c3565b91506105e2826105a3565b60208201"
+        "9050919050565b5f6020820190508181035f830152610604816105cb565b9050919050565b7f53746f72656420"
+        "76616c756520646f6573206e6f74206d6174636800000000005f82015250565b5f61063f601b836104c3565b91"
+        "5061064a8261060b565b602082019050919050565b5f6020820190508181035f83015261066c81610633565b90"
+        "5091905056fea264697066735822122032dafff81aab17ab191d852a4391e85e6339bf0c051c273ddc9ac41348"
+        "25fb5464736f6c63430008190033";
+    bytes input;
+    boost::algorithm::unhex(transientCodeBin, std::back_inserter(input));
+
+    auto tx =
+        fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(100), 100000, "1", "1");
+    auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
+    // The contract address
+    h256 addressCreate("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e");
+    std::string address = addressCreate.hex().substr(0, 40);
+
+    auto hash = tx->hash();
+    txpool->hash2Transaction.emplace(hash, tx);
+
+
+    auto params1 = std::make_unique<NativeExecutionMessage>();
+    params1->setContextID(101);
+    params1->setSeq(1001);
+    params1->setDepth(0);
+    params1->setOrigin(std::string(sender));
+    params1->setFrom(std::string(sender));
+
+    // The contract address
+    params1->setTo(sender);
+    params1->setStaticCall(false);
+    params1->setGasAvailable(gas);
+    params1->setData(input);
+    params1->setType(NativeExecutionMessage::TXHASH);
+    params1->setTransactionHash(hash);
+    params1->setCreate(true);
+
+    NativeExecutionMessage paramsBak1 = *params1;
+
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
+        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    blockHeader->setNumber(1);
+    blockHeader->setVersion((uint32_t)bcos::protocol::BlockVersion::MAX_VERSION);
+
+    std::vector<bcos::protocol::ParentInfo> parentInfos{
+        {{blockHeader->number() - 1, h256(blockHeader->number() - 1)}}};
+    blockHeader->setParentInfo(parentInfos);
+    ledger->setBlockNumber(blockHeader->number() - 1);
+    blockHeader->calculateHash(*cryptoSuite->hashImpl());
+    std::promise<void> nextPromise;
+    newExecutor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
+        BOOST_CHECK(!error);
+        nextPromise.set_value();
+    });
+    nextPromise.get_future().get();
+
+    // --------------------------
+    // Deploy
+    // --------------------------
+    std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
+    newExecutor->executeTransaction(std::move(params1),
+        [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+            BOOST_CHECK(!error);
+            executePromise.set_value(std::move(result));
+        });
+    auto result = executePromise.get_future().get();
+    BOOST_CHECK(result);
+
+    BOOST_CHECK_EQUAL(result->type(), NativeExecutionMessage::FINISHED);
+    BOOST_CHECK_EQUAL(result->status(), 0);
+    BOOST_CHECK_EQUAL(result->evmStatus(), 0);
+}
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test

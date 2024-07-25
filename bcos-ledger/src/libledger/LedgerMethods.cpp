@@ -22,7 +22,7 @@ bcos::task::Task<void> bcos::ledger::prewriteBlockToStorage(LedgerInterface& led
         Error::Ptr m_error;
 
         constexpr static bool await_ready() noexcept { return false; }
-        void await_suspend(CO_STD::coroutine_handle<> handle)
+        void await_suspend(std::coroutine_handle<> handle)
         {
             m_ledger.asyncPrewriteBlock(
                 m_storage, std::move(m_transactions), std::move(m_block),
@@ -81,7 +81,7 @@ bcos::task::Task<bcos::protocol::Block::Ptr> bcos::ledger::tag_invoke(
         std::variant<Error::Ptr, bcos::protocol::Block::Ptr> m_result;
 
         constexpr static bool await_ready() noexcept { return false; }
-        void await_suspend(CO_STD::coroutine_handle<> handle)
+        void await_suspend(std::coroutine_handle<> handle)
         {
             m_ledger.asyncGetBlockDataByNumber(m_blockNumber, m_blockFlag,
                 [this, handle](Error::Ptr error, bcos::protocol::Block::Ptr block) {
@@ -120,7 +120,7 @@ bcos::task::Task<bcos::ledger::TransactionCount> bcos::ledger::tag_invoke(
         std::variant<Error::Ptr, TransactionCount> m_result;
 
         constexpr static bool await_ready() noexcept { return false; }
-        void await_suspend(CO_STD::coroutine_handle<> handle)
+        void await_suspend(std::coroutine_handle<> handle)
         {
             m_ledger.asyncGetTotalTransactionCount(
                 [this, handle](Error::Ptr error, int64_t total, int64_t failed,
@@ -162,7 +162,7 @@ bcos::task::Task<bcos::protocol::BlockNumber> bcos::ledger::tag_invoke(
         std::variant<Error::Ptr, protocol::BlockNumber> m_result;
 
         constexpr static bool await_ready() noexcept { return false; }
-        void await_suspend(CO_STD::coroutine_handle<> handle)
+        void await_suspend(std::coroutine_handle<> handle)
         {
             m_ledger.asyncGetBlockNumber(
                 [this, handle](Error::Ptr error, bcos::protocol::BlockNumber blockNumber) {
@@ -202,7 +202,7 @@ bcos::task::Task<bcos::crypto::HashType> bcos::ledger::tag_invoke(
         std::variant<Error::Ptr, crypto::HashType> m_result;
 
         constexpr static bool await_ready() noexcept { return false; }
-        void await_suspend(CO_STD::coroutine_handle<> handle)
+        void await_suspend(std::coroutine_handle<> handle)
         {
             m_ledger.asyncGetBlockHashByNumber(
                 m_blockNumber, [this, handle](Error::Ptr error, crypto::HashType hash) {
@@ -243,7 +243,7 @@ bcos::task::Task<bcos::protocol::BlockNumber> bcos::ledger::tag_invoke(
         std::variant<bcos::Error::Ptr, bcos::protocol::BlockNumber> m_result;
 
         constexpr static bool await_ready() noexcept { return false; }
-        void await_suspend(CO_STD::coroutine_handle<> handle)
+        void await_suspend(std::coroutine_handle<> handle)
         {
             m_ledger.asyncGetBlockNumberByHash(
                 m_hash, [this, handle](bcos::Error::Ptr error, bcos::protocol::BlockNumber number) {
@@ -282,7 +282,7 @@ bcos::task::Task<std::optional<bcos::ledger::SystemConfigEntry>> bcos::ledger::t
         std::variant<Error::Ptr, std::optional<SystemConfigEntry>> m_result;
 
         constexpr static bool await_ready() noexcept { return false; }
-        void await_suspend(CO_STD::coroutine_handle<> handle)
+        void await_suspend(std::coroutine_handle<> handle)
         {
             m_ledger.asyncGetSystemConfigByKey(
                 m_key, [this, handle](Error::Ptr error, std::string value,
@@ -332,7 +332,7 @@ bcos::task::Task<bcos::consensus::ConsensusNodeList> bcos::ledger::tag_invoke(
         std::variant<Error::Ptr, consensus::ConsensusNodeList> m_result;
 
         constexpr static bool await_ready() noexcept { return false; }
-        void await_suspend(CO_STD::coroutine_handle<> handle)
+        void await_suspend(std::coroutine_handle<> handle)
         {
             m_ledger.asyncGetNodeListByType(
                 m_type, [this, handle](Error::Ptr error,
@@ -492,7 +492,7 @@ bcos::task::Task<bcos::protocol::TransactionReceipt::ConstPtr> bcos::ledger::tag
         std::variant<bcos::Error::Ptr, bcos::protocol::TransactionReceipt::ConstPtr> m_result;
 
         constexpr static bool await_ready() noexcept { return false; }
-        void await_suspend(CO_STD::coroutine_handle<> handle)
+        void await_suspend(std::coroutine_handle<> handle)
         {
             m_ledger.asyncGetTransactionReceiptByHash(m_hash, false,
                 [this, handle](bcos::Error::Ptr error,
@@ -533,7 +533,7 @@ bcos::task::Task<bcos::protocol::TransactionsConstPtr> bcos::ledger::tag_invoke(
         std::variant<bcos::Error::Ptr, bcos::protocol::TransactionsConstPtr> m_result;
 
         constexpr static bool await_ready() noexcept { return false; }
-        void await_suspend(CO_STD::coroutine_handle<> handle)
+        void await_suspend(std::coroutine_handle<> handle)
         {
             m_ledger.asyncGetBatchTxsByHashList(
                 std::move(m_hashes), false, [this, handle](auto&& error, auto&& txs, auto&&) {

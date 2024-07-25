@@ -20,7 +20,7 @@ inline task::Task<std::optional<Entry>> tag_invoke(storage2::tag_t<storage2::rea
         std::variant<std::monostate, std::optional<Entry>, std::exception_ptr> m_result;
 
         constexpr static bool await_ready() noexcept { return false; }
-        void await_suspend(CO_STD::coroutine_handle<> handle)
+        void await_suspend(std::coroutine_handle<> handle)
         {
             m_storage.asyncGetRow(m_table, m_key,
                 [this, handle](Error::UniquePtr error, std::optional<Entry> entry) mutable {
@@ -98,7 +98,7 @@ inline task::Task<void> tag_invoke(storage2::tag_t<storage2::writeOne> /*unused*
         std::variant<std::monostate, std::exception_ptr> m_result;
 
         constexpr static bool await_ready() noexcept { return false; }
-        void await_suspend(CO_STD::coroutine_handle<> handle)
+        void await_suspend(std::coroutine_handle<> handle)
         {
             m_storage.asyncSetRow(
                 m_table, m_key, std::move(m_entry), [this, handle](Error::UniquePtr error) mutable {

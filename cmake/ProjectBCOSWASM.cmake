@@ -72,7 +72,7 @@ ExternalProject_Add(bcos_wasm_project
         LOG_BUILD 0
         LOG_INSTALL 1
         BUILD_BYPRODUCTS <SOURCE_DIR>/target/${BCOS_WASM_BUILD_MODE}/libbcos_wasm.a <SOURCE_DIR>/FBWASM.h
-)
+        )
 
 ExternalProject_Get_Property(bcos_wasm_project SOURCE_DIR)
 set(HERA_INCLUDE_DIRS ${SOURCE_DIR}/include)

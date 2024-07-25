@@ -351,7 +351,7 @@ task::Task<void> EthEndpoint::getCode(const Json::Value& request, Json::Value& r
         std::string m_address;
         std::variant<Error::Ptr, bcos::bytes> m_result{};
         constexpr static bool await_ready() noexcept { return false; }
-        void await_suspend(CO_STD::coroutine_handle<> handle) noexcept
+        void await_suspend(std::coroutine_handle<> handle) noexcept
         {
             m_scheduler->getCode(m_address, [this, handle](auto&& error, auto&& code) {
                 if (error)
@@ -497,7 +497,7 @@ task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& resp
         bcos::protocol::Transaction::Ptr m_tx;
         std::variant<Error::Ptr, protocol::TransactionReceipt::Ptr> m_result{};
         constexpr static bool await_ready() noexcept { return false; }
-        void await_suspend(CO_STD::coroutine_handle<> handle) noexcept
+        void await_suspend(std::coroutine_handle<> handle) noexcept
         {
             m_scheduler.call(m_tx, [this, handle](Error::Ptr&& error, auto&& result) {
                 if (error)

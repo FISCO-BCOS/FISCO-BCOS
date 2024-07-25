@@ -24,11 +24,11 @@
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-crypto/signature/codec/SignatureDataWithV.h"
 #include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
+#include "kzgPrecompiled.h"
 #include "wedpr-crypto/WedprBn128.h"
 #include "wedpr-crypto/WedprCrypto.h"
 #include <bcos-utilities/Log.h>
 #include <algorithm>
-
 
 using namespace std;
 using namespace bcos;
@@ -287,6 +287,53 @@ ETH_REGISTER_PRECOMPILED_PRICER(blake2_compression)
     return rounds;
 }
 
+// The precompiled contract for point evaluation, EIP-4844:
+// https://eips.ethereum.org/EIPS/eip-4844#point-evaluation-precompile
+ETH_REGISTER_PRECOMPILED(point_evaluation)(bytesConstRef _in)
+{
+    static constexpr size_t versioned_hash_size = 32;
+    static constexpr size_t z_end_bound = 64;
+    static constexpr size_t y_end_bound = 96;
+    static constexpr size_t commitment_end_bound = 144;
+    static constexpr size_t proof_end_bound = 192;
+
+    if (_in.size() != 192)
+        return {false, {}};
+
+    auto const versioned_hash = _in.getCroppedData(0, versioned_hash_size);
+    auto const z = _in.getCroppedData(versioned_hash_size, z_end_bound - versioned_hash_size);
+    auto const y = _in.getCroppedData(z_end_bound, y_end_bound - z_end_bound);
+    auto const commitment = _in.getCroppedData(y_end_bound, commitment_end_bound - y_end_bound);
+    auto const proof =
+        _in.getCroppedData(commitment_end_bound, proof_end_bound - commitment_end_bound);
+
+    auto kzg = make_shared<bcos::executor::crypto::kzgPrecompiled>();
+
+    if (kzg->kzg2VersionedHash(commitment) != h256(versioned_hash))
+    {
+        BCOS_LOG(ERROR) << LOG_DESC("versioned_hash not equal");
+        return {false, {}};
+    }
+
+    if (!kzg->verifyKZGProof(commitment, z, y, proof))
+    {
+        BCOS_LOG(ERROR) << LOG_DESC("verifyKZGProof failed");
+        return {false, {}};
+    }
+
+    // Return FIELD_ELEMENTS_PER_BLOB and BLS_MODULUS as padded 32 byte big endian values
+    // return turn and Bytes(U256(FIELD_ELEMENTS_PER_BLOB).to_be_bytes32() +
+    // U256(BLS_MODULUS).to_be_bytes32()) refer to
+    // https://github.com/erigontech/silkworm/blob/85ba5171e88855a6702602d38f102aae9b896f9c/silkworm/core/execution/precompile.cpp#L502-L524
+    return {true,
+        *bcos::fromHexString("000000000000000000000000000000000000000000000000000000000000100073eda"
+                             "753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001")};
+}
+
+ETH_REGISTER_PRECOMPILED_PRICER(point_evaluation)(bytesConstRef _in)
+{
+    return 50000;
+}
 
 }  // namespace
 
@@ -345,6 +392,7 @@ struct blake2b_state
     size_t outlen;
     uint8_t last_node;
 };
+
 
 // clang-format off
 constexpr uint64_t blake2b_IV[8] =

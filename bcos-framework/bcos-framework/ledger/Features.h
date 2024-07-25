@@ -55,7 +55,8 @@ public:
         feature_balance,
         feature_balance_precompiled,
         feature_balance_policy1,
-        feature_paillier_add_raw
+        feature_paillier_add_raw,
+        feature_evm_cancun,
     };
 
 private:

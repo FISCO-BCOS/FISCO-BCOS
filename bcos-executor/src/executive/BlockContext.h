@@ -28,6 +28,9 @@
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/storage/EntryCache.h"
+#include "bcos-framework/storage/Table.h"
+#include "bcos-table/src/StateStorage.h"
+#include "bcos-utilities/BucketMap.h"
 #include <tbb/concurrent_unordered_map.h>
 #include <functional>
 #include <memory>
@@ -46,13 +49,13 @@ public:
     BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
         LedgerCache::Ptr ledgerCache, crypto::Hash::Ptr _hashImpl,
         bcos::protocol::BlockNumber blockNumber, h256 blockHash, uint64_t timestamp,
-        uint32_t blockVersion, const VMSchedule& _schedule, bool _isWasm, bool _isAuthCheck,
+        uint32_t blockVersion, bool _isWasm, bool _isAuthCheck,
         storage::StorageInterface::Ptr backendStorage = nullptr);
 
     BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
         LedgerCache::Ptr ledgerCache, crypto::Hash::Ptr _hashImpl,
-        protocol::BlockHeader const& current, const VMSchedule& _schedule, bool _isWasm,
-        bool _isAuthCheck, storage::StorageInterface::Ptr backendStorage = nullptr,
+        protocol::BlockHeader const& current, bool _isWasm, bool _isAuthCheck,
+        storage::StorageInterface::Ptr backendStorage = nullptr,
         std::shared_ptr<std::set<std::string, std::less<>>> = nullptr);
 
     using getTxCriticalsHandler = std::function<std::shared_ptr<std::vector<std::string>>(
@@ -60,6 +63,11 @@ public:
     virtual ~BlockContext() = default;
 
     std::shared_ptr<storage::StateStorageInterface> storage() const { return m_storage; }
+    using transientStorageMap = BucketMap<int64_t, std::shared_ptr<storage::StateStorageInterface>>;
+    std::shared_ptr<transientStorageMap> getTransientStorageMap() const
+    {
+        return m_transientStorageMap;
+    }
 
     uint64_t txGasLimit() const { return m_ledgerCache->fetchTxGasLimit(); }
 
@@ -86,6 +94,7 @@ public:
     void setExecutiveFlow(std::string codeAddress, ExecutiveFlowInterface::Ptr executiveFlow);
 
     std::shared_ptr<VMFactory> getVMFactory() const { return m_vmFactory; }
+    void setVMSchedule();
     void setVMFactory(std::shared_ptr<VMFactory> factory) { m_vmFactory = factory; }
 
     void stop()
@@ -147,6 +156,7 @@ private:
     bool m_isWasm = false;
     bool m_isAuthCheck = false;
     std::shared_ptr<storage::StateStorageInterface> m_storage;
+    transientStorageMap::Ptr m_transientStorageMap;
     crypto::Hash::Ptr m_hashImpl;
     std::function<void()> f_onNeedSwitchEvent;
     std::shared_ptr<std::set<std::string, std::less<>>> m_keyPageIgnoreTables;
