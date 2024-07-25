@@ -20,9 +20,7 @@ namespace bcos::storage2::memory_storage
 
 template <class Object>
 concept HasMemberSize = requires(Object object) {
-    {
-        object.size()
-    } -> std::integral;
+    { object.size() } -> std::integral;
 };
 
 using Empty = std::monostate;
