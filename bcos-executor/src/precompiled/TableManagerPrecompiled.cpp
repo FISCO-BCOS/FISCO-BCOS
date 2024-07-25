@@ -21,6 +21,7 @@
 #include "TableManagerPrecompiled.h"
 
 #include "bcos-executor/src/precompiled/common/Common.h"
+#include "bcos-executor/src/precompiled/common/PrecompiledAbi.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include <bcos-framework/protocol/Exceptions.h>
@@ -93,7 +94,8 @@ std::shared_ptr<PrecompiledExecResult> TableManagerPrecompiled::call(
     if (selector != selector2Func.end())
     {
         if (blockContext.isWasm() && func == name2Selector[TABLE_METHOD_OPEN])
-        {}
+        {
+        }
         auto& [minVersion, execFunc] = selector->second;
         if (versionCompareTo(blockContext.blockVersion(), minVersion) >= 0)
         {
