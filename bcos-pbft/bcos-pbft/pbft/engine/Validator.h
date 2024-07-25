@@ -25,7 +25,6 @@
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/protocol/TransactionSubmitResultFactory.h>
 #include <bcos-utilities/ThreadPool.h>
-
 #include <utility>
 
 namespace bcos::consensus

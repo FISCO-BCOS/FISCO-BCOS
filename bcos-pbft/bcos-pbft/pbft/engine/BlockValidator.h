@@ -22,9 +22,8 @@
 #include "../config/PBFTConfig.h"
 #include <bcos-framework/protocol/Block.h>
 #include <bcos-utilities/ThreadPool.h>
-namespace bcos
-{
-namespace consensus
+
+namespace bcos::consensus
 {
 class BlockValidator : public std::enable_shared_from_this<BlockValidator>
 {
@@ -54,5 +53,4 @@ private:
     PBFTConfig::Ptr m_config;
     ThreadPool::Ptr m_taskPool;
 };
-}  // namespace consensus
-}  // namespace bcos
+}  // namespace bcos::consensus

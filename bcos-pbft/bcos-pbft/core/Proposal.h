@@ -23,6 +23,7 @@
 #include "bcos-pbft/core/proto/Consensus.pb.h"
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-protocol/Common.h>
+#include <utility>
 
 namespace bcos::consensus
 {
@@ -54,7 +55,7 @@ public:
     bcos::bytesConstRef data() const override
     {
         auto const& data = m_rawProposal->data();
-        return bcos::bytesConstRef((byte const*)data.c_str(), data.size());
+        return {(byte const*)data.c_str(), data.size()};
     }
     void setData(bytes const& _data) override
     {
@@ -95,7 +96,7 @@ public:
     bytesConstRef signature() const override
     {
         auto const& signature = m_rawProposal->signature();
-        return bcos::bytesConstRef((byte const*)signature.c_str(), signature.size());
+        return {(byte const*)signature.c_str(), signature.size()};
     }
 
     void setSignature(bytes const& _data) override
@@ -103,12 +104,12 @@ public:
         m_rawProposal->set_signature(_data.data(), _data.size());
     }
 
-    bool operator==(Proposal const _proposal) const
+    bool operator==(Proposal const& _proposal) const
     {
         return _proposal.index() == index() && _proposal.hash() == hash() &&
                _proposal.data().toBytes() == data().toBytes();
     }
-    bool operator!=(Proposal const _proposal) const { return !(operator==(_proposal)); }
+    bool operator!=(Proposal const& _proposal) const { return !(operator==(_proposal)); }
 
     std::shared_ptr<RawProposal> rawProposal() { return m_rawProposal; }
 
@@ -132,7 +133,7 @@ public:
 protected:
     void setRawProposal(std::shared_ptr<RawProposal> _rawProposal)
     {
-        m_rawProposal = _rawProposal;
+        m_rawProposal = std::move(_rawProposal);
         deserializeObject();
     }
     virtual void deserializeObject()
@@ -143,7 +144,7 @@ protected:
             return;
         }
         m_hash =
-            bcos::crypto::HashType((byte const*)hashData.c_str(), bcos::crypto::HashType::SIZE);
+            bcos::crypto::HashType{(byte const*)hashData.c_str(), bcos::crypto::HashType::SIZE};
     }
 
 protected:

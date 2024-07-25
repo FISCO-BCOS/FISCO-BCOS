@@ -21,7 +21,6 @@
 #include "PBFTEngine.h"
 #include "../cache/PBFTCacheFactory.h"
 #include "../cache/PBFTCacheProcessor.h"
-#include "bcos-framework/protocol/CommonError.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
 #include <bcos-framework/dispatcher/SchedulerTypeDef.h>

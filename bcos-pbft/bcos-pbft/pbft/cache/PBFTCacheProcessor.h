@@ -21,7 +21,6 @@
 #pragma once
 #include "../cache/PBFTCache.h"
 #include "../config/PBFTConfig.h"
-#include "../interfaces/PBFTMessageFactory.h"
 #include "../interfaces/PBFTMessageInterface.h"
 #include "../interfaces/ViewChangeMsgInterface.h"
 #include "PBFTCacheFactory.h"

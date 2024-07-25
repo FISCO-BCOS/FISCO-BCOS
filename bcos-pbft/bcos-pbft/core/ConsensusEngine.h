@@ -23,14 +23,16 @@
 #include "bcos-framework/consensus/ConsensusEngineInterface.h"
 #include <bcos-utilities/Worker.h>
 
-namespace bcos
-{
-namespace consensus
+#include <utility>
+
+
+namespace bcos::consensus
 {
 class ConsensusEngine : public virtual ConsensusEngineInterface, public Worker
 {
 public:
-    ConsensusEngine(std::string _name, unsigned _idleWaitMs) : Worker(_name, _idleWaitMs) {}
+    ConsensusEngine(std::string _name, unsigned _idleWaitMs) : Worker(std::move(_name), _idleWaitMs)
+    {}
 
     ~ConsensusEngine() override { stop(); }
     void start() override
@@ -48,7 +50,7 @@ public:
 
     void stop() override
     {
-        if (m_started == false)
+        if (!m_started)
         {
             return;
         }
@@ -83,5 +85,4 @@ public:
 protected:
     std::atomic_bool m_started = {false};
 };
-}  // namespace consensus
-}  // namespace bcos
+}  // namespace bcos::consensus

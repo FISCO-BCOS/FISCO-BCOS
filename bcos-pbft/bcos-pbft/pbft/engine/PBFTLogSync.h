@@ -31,7 +31,7 @@ public:
     using Ptr = std::shared_ptr<PBFTLogSync>;
     PBFTLogSync(PBFTConfig::Ptr _config, PBFTCacheProcessor::Ptr _pbftCache);
     virtual ~PBFTLogSync() = default;
-    using SendResponseCallback = std::function<void(bytesConstRef _respData)>;
+    using SendResponseCallback = std::function<void(bytesConstRef)>;
     using HandlePrePrepareCallback = std::function<void(PBFTMessageInterface::Ptr)>;
     /**
      * @brief batch request committed proposals to the given node
