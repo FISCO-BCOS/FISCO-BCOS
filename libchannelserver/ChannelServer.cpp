@@ -124,7 +124,7 @@ void dev::channel::ChannelServer::onAccept(
     }
     else
     {
-        CHANNEL_LOG(WARNING) << LOG_DESC("Accept failed") << LOG_KV("message", error.message());
+        CHANNEL_LOG(DEBUG) << LOG_DESC("Accept failed") << LOG_KV("message", error.message());
 
         try
         {
