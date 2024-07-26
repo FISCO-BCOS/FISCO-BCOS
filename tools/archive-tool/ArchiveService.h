@@ -211,7 +211,7 @@ public:
     }
 
     Error::Ptr deleteArchivedData(int64_t startBlock, int64_t endBlock)
-    {
+    {  // delete blocks in [startBlock, endBlock)
         auto blockFlag = bcos::ledger::HEADER;
         for (int64_t blockNumber = startBlock; blockNumber < endBlock; blockNumber++)
         {

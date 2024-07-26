@@ -58,7 +58,6 @@ jobs:
 
       - name: Remove cache if correspond dir change
         run: ./tools/.ci/clear_build_cache.sh
-
       - name: update vcpkg
         run: |
           cd vcpkg && git fetch origin master
