@@ -1,6 +1,7 @@
 #include "bcos-task/Generator.h"
 #include "bcos-task/TBBWait.h"
 #include "bcos-task/Task.h"
+#include "bcos-task/Trait.h"
 #include "bcos-task/Wait.h"
 #include <oneapi/tbb/blocked_range.h>
 #include <oneapi/tbb/concurrent_vector.h>
@@ -249,6 +250,21 @@ BOOST_AUTO_TEST_CASE(tbbWait)
 
 
     group1.wait();
+}
+
+Task<int> taskWithThrow()
+{
+    throw std::runtime_error("error");
+    co_return 0;
+}
+
+BOOST_AUTO_TEST_CASE(memoryLeak)
+{
+    bcos::task::syncWait(
+        []() -> Task<void> { BOOST_CHECK_THROW(co_await taskWithThrow(), std::runtime_error); }());
+
+    bcos::task::wait(
+        []() -> Task<void> { BOOST_CHECK_THROW(co_await taskWithThrow(), std::runtime_error); }());
 }
 
 BOOST_AUTO_TEST_SUITE_END()
