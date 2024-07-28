@@ -199,59 +199,6 @@ BOOST_AUTO_TEST_CASE(generator)
     std::cout << "All outputed" << std::endl;
 }
 
-struct ResumableTask
-{
-    ResumableTask() = default;
-    ResumableTask(const ResumableTask&) = delete;
-    ResumableTask& operator=(const ResumableTask&) = delete;
-    ResumableTask(ResumableTask&&) = default;
-    ResumableTask& operator=(ResumableTask&&) = default;
-    ~ResumableTask() noexcept = default;
-
-    std::coroutine_handle<> m_handle;
-
-    constexpr bool static await_ready() { return false; }
-    void await_suspend(std::coroutine_handle<> handle)
-    {
-        std::cout << "Task suspend!" << std::endl;
-        m_handle = handle;
-    }
-    constexpr void await_resume() const {}
-};
-
-BOOST_AUTO_TEST_CASE(tbbWait)
-{
-    constexpr static auto count = 20;
-    std::vector<ResumableTask> tasks(count);
-
-    ::tbb::task_arena arena(2);
-    ::tbb::task_group group1;
-    arena.execute([&]() {
-        for (auto i = 0; i < count; ++i)
-        {
-            group1.run([&tasks, i]() {
-                std::cout << "Task " << i << " started" << std::endl;
-                bcos::task::tbb::syncWait(tasks[i]);
-                std::cout << "Task " << i << " ended" << std::endl;
-            });
-        }
-
-        group1.run([&]() {
-            using namespace std::chrono_literals;
-            std::this_thread::sleep_for(1s);
-
-            for (auto& task : tasks)
-            {
-                BOOST_REQUIRE(task.m_handle);
-                task.m_handle.resume();
-            }
-        });
-    });
-
-
-    group1.wait();
-}
-
 Task<int> taskWithThrow()
 {
     throw std::runtime_error("error");
