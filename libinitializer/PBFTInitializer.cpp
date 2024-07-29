@@ -453,7 +453,8 @@ void PBFTInitializer::createSync()
     auto blockSyncFactory = std::make_shared<BlockSyncFactory>(keyPair->publicKey(),
         m_protocolInitializer->blockFactory(), m_protocolInitializer->txResultFactory(), m_ledger,
         m_txpool, m_frontService, m_scheduler, m_pbft, m_nodeTimeMaintenance,
-        m_nodeConfig->enableSendBlockStatusByTree(), m_nodeConfig->treeWidth());
+        m_nodeConfig->enableSendBlockStatusByTree(), m_nodeConfig->treeWidth(),
+        m_nodeConfig->syncArchivedBlocks());
     m_blockSync = blockSyncFactory->createBlockSync();
     m_blockSync->setFaultyNodeBlockDelta(m_nodeConfig->pipelineSize());
     m_blockSync->setAllowFreeNodeSync(m_nodeConfig->allowFreeNodeSync());

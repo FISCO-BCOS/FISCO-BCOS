@@ -133,12 +133,15 @@ protected:
     // update SyncTreeTopology node info
     virtual void updateTreeTopologyNodeInfo();
 
-protected:
+    virtual void syncArchivedBlockBody();
+    virtual void verifyAndCommitArchivedBlock();
+
     void requestBlocks(bcos::protocol::BlockNumber _from, bcos::protocol::BlockNumber _to);
     void fetchAndSendBlock(
         bcos::crypto::PublicPtr const& _peer, bcos::protocol::BlockNumber _number);
     void printSyncInfo();
 
+protected:
     BlockSyncConfig::Ptr m_config;
     SyncPeerStatus::Ptr m_syncStatus;
     DownloadingQueue::Ptr m_downloadingQueue;
@@ -161,6 +164,9 @@ protected:
 
     std::atomic_bool m_masterNode = {false};
     bool m_allowFreeNode = false;
+
+    mutable SharedMutex x_archivedBlockQueue;
+    BlockQueue m_archivedBlockQueue;
 
     SyncTreeTopology::Ptr m_syncTreeTopology{nullptr};
 };

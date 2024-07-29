@@ -98,6 +98,13 @@ public:
         BCOS_LOG(ERROR) << LOG_DESC("unimplemented method asyncGetCurrentStateByKey");
     }
 
+    bcos::Error::Ptr setCurrentStateByKey(
+        std::string_view const& _key, bcos::storage::Entry entry) override
+    {
+        BCOS_LOG(ERROR) << LOG_DESC("unimplemented method setCurrentStateByKey");
+        return nullptr;
+    }
+
     void asyncGetSystemConfigByKey(std::string_view const& _key,
         std::function<void(bcos::Error::Ptr, std::string, bcos::protocol::BlockNumber)>
             _onGetConfig) override;

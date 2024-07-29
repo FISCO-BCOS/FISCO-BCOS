@@ -112,6 +112,8 @@ public:
     void asyncGetCurrentStateByKey(std::string_view const& _key,
         std::function<void(Error::Ptr&&, std::optional<bcos::storage::Entry>&&)> _callback)
         override;
+    Error::Ptr setCurrentStateByKey(
+        std::string_view const& _key, bcos::storage::Entry entry) override;
 
     task::Task<std::optional<storage::Entry>> getStorageAt(std::string_view _address,
         std::string_view _key, protocol::BlockNumber _blockNumber) override;
