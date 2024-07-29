@@ -38,7 +38,14 @@ std::shared_ptr<bytes> HsmSM2Crypto::sign(
     const KeyPairInterface& _keyPair, const HashType& _hash, bool _signatureWithPub) const
 {
     auto& hsmKeyPair = dynamic_cast<const HsmSM2KeyPair&>(_keyPair);
-    CryptoProvider& provider = SDFCryptoProvider::GetInstance(m_hsmLibPath);
+    auto beginSignTime = utcTimeUs();
+    CryptoProvider& provider = SDFCryptoProvider::GetInstance(4, m_hsmLibPath);
+    auto initTime = utcTimeUs() - beginSignTime;
+    if (c_fileLogLevel <= DEBUG)
+    {
+        CRYPTO_LOG(TRACE) << "[HSMSignature::sign] initialize provider"
+                          << LOG_KV("initialize cost", initTime);
+    }
 
     Key key = Key();
     if (hsmKeyPair.isInternalKey())
@@ -46,9 +53,6 @@ std::shared_ptr<bytes> HsmSM2Crypto::sign(
         auto pwdConstPtr =
             std::make_shared<bytes>(hsmKeyPair.password().begin(), hsmKeyPair.password().end());
         key = Key(hsmKeyPair.keyIndex(), pwdConstPtr);
-        CRYPTO_LOG(DEBUG) << "[HSMSignature::key] is internal key "
-                          << LOG_KV("keyIndex", key.identifier())
-                          << LOG_KV("password", hsmKeyPair.password());
     }
     else
     {
@@ -65,16 +69,29 @@ std::shared_ptr<bytes> HsmSM2Crypto::sign(
     // step 2 : e = H(M')
     // step 3 : signature = Sign(e)
     // get provider
-
+    auto step1BeginTime = utcTimeUs();
     auto pubKey =
         std::make_shared<const std::vector<byte>>((byte*)hsmKeyPair.publicKey()->constData(),
             (byte*)hsmKeyPair.publicKey()->constData() + 64);
     key.setPublicKey(pubKey);
+    auto step1Time = utcTimeUs() - step1BeginTime;
+    if (c_fileLogLevel <= DEBUG)
+    {
+        CRYPTO_LOG(TRACE) << "[HSMSignature::sign] step 1:calculate M' = Za || M success"
+                          << LOG_KV("step1Cost", step1Time);
+    }
     // step 2 : e = H(M')
     unsigned char hashResult[HSM_SM3_DIGEST_LENGTH];
     unsigned int uiHashResultLen;
+    auto step2BeginTime = utcTimeUs();
     unsigned int code = provider.Hash(&key, hsm::SM3, _hash.data(), HSM_SM3_DIGEST_LENGTH,
         (unsigned char*)hashResult, &uiHashResultLen);
+    auto step2Time = utcTimeUs() - step2BeginTime;
+    if (c_fileLogLevel <= DEBUG)
+    {
+        CRYPTO_LOG(TRACE) << "[HSMSignature::sign] step 2:calculate e = H(M') success"
+                          << LOG_KV("step2Cost", step2Time);
+    }
     if (code != SDR_OK)
     {
         CRYPTO_LOG(ERROR) << "[HSMSignature::sign] ERROR of compute H(M')"
@@ -84,6 +101,7 @@ std::shared_ptr<bytes> HsmSM2Crypto::sign(
 
     // step 3 : signature = Sign(e)
     unsigned int signLen;
+    auto step3BeginTime = utcTimeUs();
     code = provider.Sign(
         key, hsm::SM2, (const unsigned char*)hashResult, 32, signatureData->data(), &signLen);
     if (code != SDR_OK)
@@ -92,12 +110,36 @@ std::shared_ptr<bytes> HsmSM2Crypto::sign(
                           << LOG_KV("error", provider.GetErrorMessage(code));
         return nullptr;
     }
+    auto step3Time = utcTimeUs() - step3BeginTime;
+    if (c_fileLogLevel <= DEBUG)
+    {
+        CRYPTO_LOG(TRACE) << "[HSMSignature::sign] step 3:signature = Sign(e) success"
+                          << LOG_KV("step3Cost", step3Time);
+    }
 
     // append the public key
     if (_signatureWithPub)
     {
         signatureData->insert(signatureData->end(), hsmKeyPair.publicKey()->mutableData(),
             hsmKeyPair.publicKey()->mutableData() + hsmKeyPair.publicKey()->size());
+    }
+    if (c_fileLogLevel <= DEBUG)
+    {
+        CRYPTO_LOG(DEBUG)
+            << "[HSMSignature::sign] sign success"
+            << LOG_KV("total cost", utcTimeUs() - beginSignTime)
+            << LOG_KV("initTime Proportion",
+                   static_cast<float>(initTime) / static_cast<float>(utcTimeUs() - beginSignTime))
+            << LOG_KV("step1Time Proportion",
+                   static_cast<float>(step1Time) / static_cast<float>(utcTimeUs() - beginSignTime))
+            << LOG_KV("step2Time Proportion",
+                   static_cast<float>(step2Time) / static_cast<float>(utcTimeUs() - beginSignTime))
+            << LOG_KV("step3Time Proportion", static_cast<float>(utcTimeUs() - step3BeginTime) /
+                                                  static_cast<float>(utcTimeUs() - beginSignTime))
+            << LOG_KV("otherTime Proportion",
+                   static_cast<float>(
+                       utcTimeUs() - beginSignTime - initTime - step1Time - step2Time - step3Time) /
+                       static_cast<float>(utcTimeUs() - beginSignTime));
     }
     return signatureData;
 }
@@ -113,7 +155,14 @@ bool HsmSM2Crypto::verify(
     PublicPtr _pubKey, const HashType& _hash, bytesConstRef _signatureData) const
 {
     // get provider
-    CryptoProvider& provider = SDFCryptoProvider::GetInstance(m_hsmLibPath);
+    auto beginVerifyTime = utcTimeUs();
+    CryptoProvider& provider = SDFCryptoProvider::GetInstance(4, m_hsmLibPath);
+    auto initTime = utcTimeUs() - beginVerifyTime;
+    if (c_fileLogLevel <= TRACE)
+    {
+        CRYPTO_LOG(DEBUG) << "[HSMSignature::verify] initialize provider"
+                          << LOG_KV("initialize cost", initTime);
+    }
 
     // parse input
     Key key = Key();
@@ -124,6 +173,7 @@ bool HsmSM2Crypto::verify(
 
     // Get Z
     bytes hashResult(HSM_SM3_DIGEST_LENGTH);
+    auto getzBeginTime = utcTimeUs();
     unsigned int uiHashResultLen;
     unsigned int code = provider.Hash(&key, hsm::SM3, _hash.data(), HSM_SM3_DIGEST_LENGTH,
         (unsigned char*)hashResult.data(), &uiHashResultLen);
@@ -133,7 +183,13 @@ bool HsmSM2Crypto::verify(
                           << LOG_KV("error", provider.GetErrorMessage(code));
         return false;
     }
-
+    auto getzTime = utcTimeUs() - getzBeginTime;
+    if (c_fileLogLevel <= DEBUG)
+    {
+        CRYPTO_LOG(TRACE) << "[HSMSignature::verify] Get Z success"
+                          << LOG_KV("HSM cal hash Cost", getzTime);
+    }
+    auto verifyBeginTime = utcTimeUs();
     code = provider.Verify(key, hsm::SM2, (const unsigned char*)hashResult.data(),
         HSM_SM3_DIGEST_LENGTH, _signatureData.data(), 64, &verifyResult);
     if (code != SDR_OK)
@@ -141,6 +197,29 @@ bool HsmSM2Crypto::verify(
         CRYPTO_LOG(ERROR) << "[HSMSignature::verify] ERROR of Verify"
                           << LOG_KV("error", provider.GetErrorMessage(code));
         return false;
+    }
+    if (c_fileLogLevel <= DEBUG)
+    {
+        CRYPTO_LOG(TRACE) << "[HSMSignature::verify] Verify success"
+                          << LOG_KV("HSM verify Cost", utcTimeUs() - verifyBeginTime);
+    }
+    if (c_fileLogLevel <= DEBUG)
+    {
+        CRYPTO_LOG(DEBUG) << "[HSMSignature::verify] verify success"
+                          << LOG_KV("total cost", utcTimeUs() - beginVerifyTime)
+                          << LOG_KV("initTime Proportion",
+                                 static_cast<float>(initTime) /
+                                     static_cast<float>(utcTimeUs() - beginVerifyTime))
+                          << LOG_KV("getzTime Proportion",
+                                 static_cast<float>(getzTime) /
+                                     static_cast<float>(utcTimeUs() - beginVerifyTime))
+                          << LOG_KV("verifyTime Proportion",
+                                 static_cast<float>(utcTimeUs() - verifyBeginTime) /
+                                     static_cast<float>(utcTimeUs() - beginVerifyTime))
+                          << LOG_KV("otherTime Proportion",
+                                 static_cast<float>(utcTimeUs() - beginVerifyTime - initTime -
+                                                    getzTime - (utcTimeUs() - verifyBeginTime)) /
+                                     static_cast<float>(utcTimeUs() - beginVerifyTime));
     }
     return true;
 }

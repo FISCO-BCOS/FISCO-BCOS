@@ -5,15 +5,15 @@ EXECUTE_PROCESS(COMMAND uname -m COMMAND tr -d '\n' OUTPUT_VARIABLE ARCHITECTURE
 set(SDF_LIB_NAME "libsdf-crypto.a")
 
 ExternalProject_Add(libsdf
-    PREFIX ${CMAKE_SOURCE_DIR}/deps
-    GIT_REPOSITORY https://${URL_BASE}/WeBankBlockchain/hsm-crypto.git
-    GIT_TAG        de061fc70adac68e0a490905d26ed01e0cbbf5e8
-    CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
-    BUILD_IN_SOURCE true
-    LOG_CONFIGURE 1
-    LOG_BUILD 1
-    LOG_INSTALL 1
-)
+        PREFIX ${CMAKE_SOURCE_DIR}/deps
+        GIT_REPOSITORY https://${URL_BASE}/wenlinlee/hsm-crypto.git
+        GIT_TAG 04f5ffb12703f78a5de266e4834380e774b82220
+        CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
+        BUILD_IN_SOURCE true
+        LOG_CONFIGURE 1
+        LOG_BUILD 1
+        LOG_INSTALL 1
+        )
 
 ExternalProject_Get_Property(libsdf INSTALL_DIR)
 
