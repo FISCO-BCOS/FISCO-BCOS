@@ -43,7 +43,7 @@ constexpr inline struct SyncWait
             {
                 if constexpr (std::is_void_v<ReturnType>)
                 {
-                    co_await task;
+                    co_await std::forward<Task>(task);
                 }
                 else
                 {
@@ -54,7 +54,7 @@ constexpr inline struct SyncWait
                     }
                     else
                     {
-                        result.template emplace<ReturnType>(co_await task);
+                        result.template emplace<ReturnType>(co_await std::forward<Task>(task));
                     }
                 }
             }

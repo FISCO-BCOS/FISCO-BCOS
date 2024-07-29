@@ -9,6 +9,7 @@
 #include "bcos-utilities/Error.h"
 #include <boost/throw_exception.hpp>
 #include <exception>
+#include <functional>
 #include <iterator>
 #include <stdexcept>
 
@@ -19,10 +20,10 @@ template <class Storage>
 class LegacyStorageWrapper : public virtual bcos::storage::StorageInterface
 {
 private:
-    Storage* m_storage;
+    std::reference_wrapper<Storage> m_storage;
 
 public:
-    explicit LegacyStorageWrapper(Storage& m_storage) : m_storage(std::addressof(m_storage)) {}
+    explicit LegacyStorageWrapper(Storage& m_storage) : m_storage(m_storage) {}
 
     void asyncGetPrimaryKeys(std::string_view table,
         const std::optional<storage::Condition const>& condition,
@@ -35,7 +36,7 @@ public:
 
             size_t index = 0;
             auto [start, count] = condition->getLimit();
-            auto range = co_await storage2::range(*self->m_storage);
+            auto range = co_await storage2::range(self->m_storage.get());
             while (auto keyValue = co_await range.next())
             {
                 auto&& [key, value] = *keyValue;
@@ -80,7 +81,7 @@ public:
             try
             {
                 auto value = co_await storage2::readOne(
-                    *self->m_storage, transaction_executor::StateKeyView{table, key});
+                    self->m_storage.get(), transaction_executor::StateKeyView{table, key});
                 callback(nullptr, std::move(value));
             }
             catch (std::exception& e)
@@ -105,7 +106,7 @@ public:
                     return transaction_executor::StateKeyView{
                         table, std::forward<decltype(key)>(key)};
                 }) | RANGES::to<std::vector>();
-                auto values = co_await storage2::readSome(*self->m_storage, stateKeys);
+                auto values = co_await storage2::readSome(self->m_storage.get(), stateKeys);
 
                 std::vector<std::optional<storage::Entry>> vectorValues(
                     std::make_move_iterator(values.begin()), std::make_move_iterator(values.end()));
@@ -128,11 +129,11 @@ public:
                 if (entry.status() == storage::Entry::Status::DELETED)
                 {
                     co_await storage2::removeOne(
-                        *self->m_storage, transaction_executor::StateKeyView(table, key));
+                        self->m_storage.get(), transaction_executor::StateKeyView(table, key));
                 }
                 else
                 {
-                    co_await storage2::writeOne(*self->m_storage,
+                    co_await storage2::writeOne(self->m_storage,
                         transaction_executor::StateKey(table, key), std::move(entry));
                 }
                 callback(nullptr);
@@ -157,7 +158,7 @@ public:
                 decltype(values)& values) -> task::Task<Error::Ptr> {
                 try
                 {
-                    co_await storage2::writeSome(*self->m_storage,
+                    co_await storage2::writeSome(self->m_storage.get(),
                         keys | RANGES::views::transform([&](std::string_view key) {
                             return transaction_executor::StateKey{tableName, key};
                         }),
@@ -195,7 +196,10 @@ public:
 
     void rollback(const storage::Recoder& recoder) override
     {
-        BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
+        // 不要抛出异常，会导致TransactionExecutive::revert()后续的transientStateStorage->rollback无法执行
+        // Do not throw an exception that will cause Tra::Revert () to follow the Trancintztat
+        // Stolag-> Rohrbak not to be executed
+        // BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
     }
 
     crypto::HashType hash(
