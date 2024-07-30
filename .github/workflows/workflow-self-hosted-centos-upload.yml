@@ -9,6 +9,7 @@ on:
     branches:
       - release-3.*
       - feature-3.*
+      - bugfix-3.*
       - master
   release:
     types: [push]
@@ -73,7 +74,7 @@ jobs:
           . /opt/rh/rh-perl530/enable
           export LIBCLANG_PATH=/opt/rh/llvm-toolset-7.0/root/lib64/
           . /opt/rh/llvm-toolset-7.0/enable
-          cd build && cmake -DALLOCATOR=jemalloc -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DTESTS=ON -DWITH_LIGHTNODE=OFF -DWITH_CPPSDK=OFF -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=OFF .. || cat *.log
+          cd build && cmake -DALLOCATOR=defalut -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DTESTS=ON -DWITH_LIGHTNODE=OFF -DWITH_CPPSDK=OFF -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=OFF .. || cat *.log
           make -j8
           chmod +x ./fisco-bcos-air/fisco-bcos
           ./fisco-bcos-air/fisco-bcos -v
