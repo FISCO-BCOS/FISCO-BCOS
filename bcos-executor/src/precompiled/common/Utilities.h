@@ -89,13 +89,14 @@ inline std::string getDynamicPrecompiledCodeString(
 
 inline bool matchDynamicAccountCode(std::string_view code)
 {
-    return code.starts_with(getDynamicPrecompiledCodeString(ACCOUNT_ADDRESS, ""));
+    auto const prefix = getDynamicPrecompiledCodeString(ACCOUNT_ADDRESS, "");
+    return code.starts_with(prefix);
 }
 
 // ERROR: this method match account precompiled in wrong logic, use matchDynamicAccountCode instead.
 inline bool isDynamicPrecompiledAccountCode(const std::string_view& _code)
 {
-    return std::string_view(getDynamicPrecompiledCodeString(ACCOUNT_ADDRESS, "")) == _code;
+    return getDynamicPrecompiledCodeString(ACCOUNT_ADDRESS, "") == _code;
 }
 
 inline std::string trimHexPrefix(const std::string& _hex)
