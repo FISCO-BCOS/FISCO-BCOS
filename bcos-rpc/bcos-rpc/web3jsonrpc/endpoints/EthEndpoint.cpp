@@ -535,7 +535,8 @@ task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& resp
             }
         }
     };
-    Awaitable awaitable{.m_scheduler = *scheduler, .m_tx = tx, .m_response = response};
+    Awaitable awaitable{
+        .m_scheduler = *scheduler, .m_tx = tx, .m_error = {}, .m_response = response};
     co_await awaitable;
 }
 task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Value& response)
