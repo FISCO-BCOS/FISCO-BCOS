@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../protocol/BlockHeader.h"
+#include "../protocol/TransactionReceipt.h"
 #include "bcos-task/Task.h"
 #include "bcos-task/Trait.h"
 
