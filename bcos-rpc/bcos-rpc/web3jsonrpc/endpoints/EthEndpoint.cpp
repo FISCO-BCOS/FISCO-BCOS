@@ -36,6 +36,7 @@
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
+#include <variant>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -488,14 +489,12 @@ task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& resp
                         << LOG_KV("blockTag", blockTag) << LOG_KV("blockNumber", blockNumber);
     }
     auto tx = call.takeToTransaction(m_nodeService->blockFactory()->transactionFactory());
-    // TODO: ignore params blockNumber here, use it after historical data is available
-    std::variant<Error::Ptr, protocol::TransactionReceipt::Ptr> variantResult{};
-    // MOVE it into a new file
     struct Awaitable
     {
         bcos::scheduler::SchedulerInterface& m_scheduler;
         bcos::protocol::Transaction::Ptr& m_tx;
-        std::variant<Error::Ptr, protocol::TransactionReceipt::Ptr>& m_result;
+        Error::Ptr m_error;
+        Json::Value& m_response;
 
         constexpr static bool await_ready() noexcept { return false; }
         void await_suspend(std::coroutine_handle<> handle)
@@ -503,44 +502,41 @@ task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& resp
             m_scheduler.call(m_tx, [this, handle](Error::Ptr&& error, auto&& result) {
                 if (error)
                 {
-                    m_result.emplace<Error::Ptr>(std::move(error));
+                    m_error = std::move(error);
                 }
                 else
                 {
-                    m_result.emplace<protocol::TransactionReceipt::Ptr>(
-                        std::forward<decltype(result)>(result));
+                    auto output = toHexStringWithPrefix(result->output());
+                    if (result->status() == static_cast<int32_t>(protocol::TransactionStatus::None))
+                    {
+                        m_response["jsonrpc"] = "2.0";
+                        m_response["result"] = output;
+                    }
+                    else
+                    {
+                        // https://docs.infura.io/api/networks/ethereum/json-rpc-methods/eth_call#returns
+                        Json::Value jsonResult = Json::objectValue;
+                        jsonResult["code"] = result->status();
+                        jsonResult["message"] = result->message();
+                        jsonResult["data"] = output;
+                        m_response["jsonrpc"] = "2.0";
+                        m_response["error"] = std::move(jsonResult);
+                    }
                 }
+
                 handle.resume();
             });
         }
-        protocol::TransactionReceipt::Ptr await_resume()
+        void await_resume()
         {
-            if (std::holds_alternative<Error::Ptr>(m_result))
+            if (m_error)
             {
-                BOOST_THROW_EXCEPTION(*std::get<Error::Ptr>(m_result));
+                BOOST_THROW_EXCEPTION(*m_error);
             }
-            return std::get<protocol::TransactionReceipt::Ptr>(m_result);
         }
     };
-    Awaitable awaitable{.m_scheduler = *scheduler, .m_tx = tx, .m_result = variantResult};
-    auto result = co_await awaitable;
-
-    auto output = toHexStringWithPrefix(result->output());
-    if (result->status() == static_cast<int32_t>(protocol::TransactionStatus::None))
-    {
-        response["jsonrpc"] = "2.0";
-        response["result"] = output;
-    }
-    else
-    {
-        // https://docs.infura.io/api/networks/ethereum/json-rpc-methods/eth_call#returns
-        Json::Value jsonResult = Json::objectValue;
-        jsonResult["code"] = result->status();
-        jsonResult["message"] = result->message();
-        jsonResult["data"] = output;
-        response["jsonrpc"] = "2.0";
-        response["error"] = std::move(jsonResult);
-    }
+    Awaitable awaitable{.m_scheduler = *scheduler, .m_tx = tx, .m_response = response};
+    co_await awaitable;
 }
 task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Value& response)
 {
