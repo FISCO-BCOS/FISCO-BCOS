@@ -661,7 +661,7 @@ public:
         callback(nullptr);
     }
 
-    void stop() override{};
+    void stop() override {};
 
     void registerTransactionNotifier(std::function<void(bcos::protocol::BlockNumber,
             bcos::protocol::TransactionSubmitResultsPtr, std::function<void(Error::Ptr)>)>
