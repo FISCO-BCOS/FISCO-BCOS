@@ -75,35 +75,34 @@ std::variant<const evmc_message*, evmc_message> getMessage(const evmc_message& i
 
 struct Executable
 {
-    explicit Executable(storage::Entry code, evmc_revision revision)
+    Executable(storage::Entry code, evmc_revision revision)
       : m_code(std::make_optional(std::move(code))),
-        m_revision(revision),
         m_vmInstance(VMFactory::create(VMKind::evmone,
             bytesConstRef(reinterpret_cast<const uint8_t*>(m_code->data()), m_code->size()),
-            m_revision))
+            revision))
     {}
     explicit Executable(bytesConstRef code, evmc_revision revision)
       : m_vmInstance(VMFactory::create(VMKind::evmone, code, revision))
     {}
 
     std::optional<storage::Entry> m_code;
-    evmc_revision m_revision;
     VMInstance m_vmInstance;
 };
 
 template <class Storage>
 using Account = ledger::account::EVMAccount<Storage>;
 
+using CacheExecutables =
+    storage2::memory_storage::MemoryStorage<evmc_address, std::shared_ptr<Executable>,
+        storage2::memory_storage::Attribute(
+            storage2::memory_storage::LRU | storage2::memory_storage::CONCURRENT),
+        std::hash<evmc_address>>;
+CacheExecutables& getCacheExecutables();
+
 inline task::Task<std::shared_ptr<Executable>> getExecutable(
     auto& storage, const evmc_address& address, const evmc_revision& revision)
 {
-    static storage2::memory_storage::MemoryStorage<evmc_address, std::shared_ptr<Executable>,
-        storage2::memory_storage::Attribute(
-            storage2::memory_storage::LRU | storage2::memory_storage::CONCURRENT),
-        std::hash<evmc_address>>
-        cachedExecutables;
-
-    if (auto executable = co_await storage2::readOne(cachedExecutables, address))
+    if (auto executable = co_await storage2::readOne(getCacheExecutables(), address))
     {
         co_return std::move(*executable);
     }
@@ -111,9 +110,8 @@ inline task::Task<std::shared_ptr<Executable>> getExecutable(
     Account<std::decay_t<decltype(storage)>> account(storage, address);
     if (auto codeEntry = co_await ledger::account::code(account))
     {
-        auto executable =
-            std::make_shared<Executable>(Executable(std::move(*codeEntry), std::move(revision)));
-        co_await storage2::writeOne(cachedExecutables, address, executable);
+        auto executable = std::make_shared<Executable>(Executable(std::move(*codeEntry), revision));
+        co_await storage2::writeOne(getCacheExecutables(), address, executable);
         co_return executable;
     }
     co_return std::shared_ptr<Executable>{};
