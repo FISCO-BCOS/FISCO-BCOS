@@ -19,10 +19,13 @@
  * @date 2021-05-24
  */
 #include "bcos-sync/BlockSync.h"
+#include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/CommonError.h"
+#include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include <bcos-tool/LedgerConfigFetcher.h>
 #include <json/json.h>
 #include <boost/bind/bind.hpp>
+#include <string>
 
 using namespace bcos;
 using namespace bcos::sync;
@@ -226,6 +229,12 @@ void BlockSync::executeWorker()
 
             // send block-download-request to peers if this node is behind others
             tryToRequestBlocks();
+
+            if (m_config->syncArchivedBlockBody())
+            {
+                syncArchivedBlockBody();
+                verifyAndCommitArchivedBlock();
+            }
         }
         catch (std::exception const& e)
         {
@@ -455,7 +464,33 @@ void BlockSync::onPeerStatus(NodeIDPtr _nodeID, BlockSyncMsgInterface::Ptr _sync
 void BlockSync::onPeerBlocks(NodeIDPtr _nodeID, BlockSyncMsgInterface::Ptr _syncMsg)
 {
     auto number = _syncMsg->number();
+    auto archivedNumber = m_config->archiveBlockNumber();
     auto blockMsg = m_config->msgFactory()->createBlocksMsg(std::move(_syncMsg));
+    if (number < archivedNumber)
+    {
+        size_t downloadedBlockCount = 0;
+        {
+            ReadGuard lock(x_archivedBlockQueue);
+            downloadedBlockCount = m_archivedBlockQueue.size();
+        }
+        if (downloadedBlockCount >= m_config->maxDownloadingBlockQueueSize())
+        {
+            BLKSYNC_LOG(WARNING) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
+                                 << LOG_DESC("archivedBlockQueue is full")
+                                 << LOG_KV("queueSize", downloadedBlockCount);
+            return;
+        }
+        auto block = m_config->blockFactory()->createBlock(blockMsg->blockData(0), true, true);
+        BLKSYNC_LOG(DEBUG) << LOG_BADGE("Download") << BLOCK_NUMBER(number)
+                           << LOG_BADGE("BlockSync")
+                           << LOG_DESC("Receive peer block packet(archived)")
+                           << LOG_KV("peer", _nodeID->shortHex());
+        {
+            WriteGuard lock(x_archivedBlockQueue);
+            m_archivedBlockQueue.push(block);
+        }
+        return;
+    }
     BLKSYNC_LOG(DEBUG) << LOG_BADGE("Download") << BLOCK_NUMBER(number) << LOG_BADGE("BlockSync")
                        << LOG_DESC("Receive peer block packet")
                        << LOG_KV("peer", _nodeID->shortHex());
@@ -1018,4 +1053,98 @@ std::vector<PeerStatus::Ptr> BlockSync::getPeerStatus()
         return true;
     });
     return statuses;
+}
+
+void BlockSync::syncArchivedBlockBody()
+{
+    BlockNumber topBlockNumber = 0;
+    {
+        ReadGuard lock(x_archivedBlockQueue);
+        topBlockNumber = m_archivedBlockQueue.top()->blockHeader()->number();
+    }
+    auto from = topBlockNumber;
+    auto archivedBlockNumber = m_config->archiveBlockNumber();
+    // use 1/4 of the maxDownloadingBlockQueueSize to limit the memory usage
+    auto maxCount = m_config->maxDownloadingBlockQueueSize() / 4;
+    if (archivedBlockNumber - from > (BlockNumber)maxCount)
+    {
+        from = archivedBlockNumber - (BlockNumber)maxCount;
+    }
+    requestBlocks(from, archivedBlockNumber - 1);
+}
+
+void BlockSync::verifyAndCommitArchivedBlock()
+{
+    BlockNumber topBlockNumber = 0;
+    {
+        ReadGuard lock(x_archivedBlockQueue);
+        topBlockNumber = m_archivedBlockQueue.top()->blockHeader()->number();
+    }
+    auto archivedBlockNumber = m_config->archiveBlockNumber();
+    if (topBlockNumber != archivedBlockNumber - 1)
+    {
+        return;
+    }
+    // verify the tx root and receipt root
+    bcos::protocol::Block::Ptr block = nullptr;
+    {
+        WriteGuard lock(x_archivedBlockQueue);
+        block = m_archivedBlockQueue.top();
+        // m_archivedBlockQueue.pop();
+    }
+
+    std::promise<protocol::BlockHeader::Ptr> blockHeaderFuture;
+    m_config->ledger()->asyncGetBlockDataByNumber(topBlockNumber, bcos::ledger::HEADER,
+        [&blockHeaderFuture](const Error::Ptr& error, const Block::Ptr& block) {
+            if (error)
+            {
+                blockHeaderFuture.set_value(nullptr);
+            }
+            else
+            {
+                blockHeaderFuture.set_value(block->blockHeader());
+            }
+        });
+    auto localBlockHeader = blockHeaderFuture.get_future().get();
+    if (!localBlockHeader)
+    {
+        BLKSYNC_LOG(ERROR) << LOG_DESC("BlockSync get local block header failed")
+                           << LOG_KV("number", topBlockNumber)
+                           << LOG_KV("reason", "get local block header failed");
+        return;
+    }
+
+    auto transactionRoot =
+        block->calculateTransactionRoot(*m_config->blockFactory()->cryptoSuite()->hashImpl());
+    auto receiptRoot =
+        block->calculateReceiptRoot(*m_config->blockFactory()->cryptoSuite()->hashImpl());
+    if (transactionRoot != localBlockHeader->txsRoot() ||
+        receiptRoot != localBlockHeader->receiptsRoot())
+    {
+        BLKSYNC_LOG(ERROR) << LOG_DESC("BlockSync verify archived block failed")
+                           << LOG_KV("number", topBlockNumber)
+                           << LOG_KV("transactionRoot", *toHexString(transactionRoot))
+                           << LOG_KV("receiptRoot", *toHexString(receiptRoot))
+                           << LOG_KV("reason", "transactionRoot or receiptRoot not match");
+        WriteGuard lock(x_archivedBlockQueue);
+        m_archivedBlockQueue.pop();
+        return;
+    }
+    auto err = m_config->ledger()->storeTransactionsAndReceipts(nullptr, block);
+    if (err)
+    {
+        BLKSYNC_LOG(ERROR) << LOG_DESC("BlockSync commit archived block failed")
+                           << LOG_KV("number", topBlockNumber)
+                           << LOG_KV("reason", "storeTransactionsAndReceipts failed");
+        return;
+    }
+    BLKSYNC_LOG(INFO) << LOG_DESC("BlockSync commit archived block success")
+                      << LOG_KV("number", topBlockNumber);
+    // update the archived number
+    m_config->ledger()->setCurrentStateByKey(bcos::ledger::SYS_KEY_ARCHIVED_NUMBER,
+        bcos::storage::Entry(std::to_string(topBlockNumber)));
+    {
+        WriteGuard lock(x_archivedBlockQueue);
+        m_archivedBlockQueue.pop();
+    }
 }

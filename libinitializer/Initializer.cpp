@@ -1060,7 +1060,6 @@ bcos::Error::Ptr Initializer::importSnapshotToRocksDB(
         return BCOS_ERROR_PTR(-1, metaFilePath.string() + " does not exist");
     }
     auto tomlTable = toml::parse_file(metaFilePath.string());
-    std::cout << tomlTable << std::endl;
     auto snapshotWithTxAndReceipts = tomlTable["snapshot"]["withTxAndReceipts"].value<bool>();
     auto snapshotBlockNumber = tomlTable["snapshot"]["blockNumber"].value<protocol::BlockNumber>();
     auto stateSstCount = tomlTable["snapshot"]["stateSstCount"].value<size_t>();

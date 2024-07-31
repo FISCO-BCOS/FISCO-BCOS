@@ -543,6 +543,29 @@ void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber,
         return;
     }
 
+    if ((_blockFlag & TRANSACTIONS) != 0 || (_blockFlag & RECEIPTS) != 0)
+    {
+        protocol::BlockNumber archivedBlockNumber = 0;
+        std::promise<std::pair<Error::Ptr, std::optional<bcos::storage::Entry>>> statePromise;
+        asyncGetCurrentStateByKey(ledger::SYS_KEY_ARCHIVED_NUMBER,
+            [&statePromise](Error::Ptr&& err, std::optional<bcos::storage::Entry>&& entry) {
+                statePromise.set_value(std::make_pair(std::move(err), std::move(entry)));
+            });
+        auto archiveRet = statePromise.get_future().get();
+        if (!archiveRet.first && archiveRet.second.has_value())
+        {
+            archivedBlockNumber = boost::lexical_cast<int64_t>(archiveRet.second->get());
+        }
+        if (_blockNumber < archivedBlockNumber)
+        {
+            LEDGER_LOG(INFO) << "GetBlockDataByNumber, block number is larger than archived number";
+            _onGetBlock(BCOS_ERROR_PTR(LedgerError::ErrorArgument,
+                            "Wrong argument, this block's transactions and receipts are archived"),
+                nullptr);
+            return;
+        }
+    }
+
     std::list<std::function<void()>> fetchers;
     auto block = m_blockFactory->createBlock();
     auto total = std::make_shared<size_t>(0);
@@ -2334,4 +2357,12 @@ void Ledger::asyncGetCurrentStateByKey(std::string_view const& _key,
                 callback(nullptr, std::move(entry));
             });
         });
+}
+
+Error::Ptr Ledger::setCurrentStateByKey(std::string_view const& _key, bcos::storage::Entry entry)
+{
+    std::promise<Error::UniquePtr> setPromise;
+    m_stateStorage->asyncSetRow(ledger::SYS_CURRENT_STATE, _key, std::move(entry),
+        [&](Error::UniquePtr err) { setPromise.set_value(std::move(err)); });
+    return setPromise.get_future().get();
 }

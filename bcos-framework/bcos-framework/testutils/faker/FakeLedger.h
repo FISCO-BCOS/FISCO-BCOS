@@ -247,6 +247,11 @@ public:
     {
         _callback(nullptr, {});
     }
+    Error::Ptr setCurrentStateByKey(
+        std::string_view const& _key, bcos::storage::Entry entry) override
+    {
+        return nullptr;
+    }
 
     void asyncGetSystemConfigByKey(std::string_view const& _key,
         std::function<void(Error::Ptr, std::string, BlockNumber)> _onGetConfig) override
