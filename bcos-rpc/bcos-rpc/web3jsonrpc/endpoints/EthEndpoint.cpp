@@ -475,12 +475,12 @@ task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& resp
         BOOST_THROW_EXCEPTION(
             JsonRpcException(JsonRpcError::InternalError, "Scheduler not available!"));
     }
-    auto [valid, call] = decodeCallRequest(request[0u]);
+    auto [valid, call] = decodeCallRequest(request[0U]);
     if (!valid)
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid call request!"));
     }
-    auto const blockTag = toView(request[1u]);
+    auto const blockTag = toView(request[1U]);
     auto [blockNumber, _] = co_await getBlockNumberByTag(blockTag);
     if (c_fileLogLevel == TRACE)
     {
@@ -506,7 +506,8 @@ task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& resp
                 }
                 else
                 {
-                    m_result.emplace<protocol::TransactionReceipt::Ptr>(std::move(result));
+                    m_result.emplace<protocol::TransactionReceipt::Ptr>(
+                        std::forward<decltype(result)>(result));
                 }
                 handle.resume();
             });
@@ -520,14 +521,14 @@ task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& resp
             return std::get<protocol::TransactionReceipt::Ptr>(m_result);
         }
     };
-    auto const result =
-        co_await Awaitable{.m_scheduler = *scheduler, .m_tx = tx, .m_result = variantResult};
+    Awaitable awaitable{.m_scheduler = *scheduler, .m_tx = tx, .m_result = variantResult};
+    auto result = co_await awaitable;
 
     auto output = toHexStringWithPrefix(result->output());
     if (result->status() == static_cast<int32_t>(protocol::TransactionStatus::None))
     {
         response["jsonrpc"] = "2.0";
-        response["result"] = std::move(output);
+        response["result"] = output;
     }
     else
     {
@@ -535,11 +536,10 @@ task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& resp
         Json::Value jsonResult = Json::objectValue;
         jsonResult["code"] = result->status();
         jsonResult["message"] = result->message();
-        jsonResult["data"] = std::move(output);
+        jsonResult["data"] = output;
         response["jsonrpc"] = "2.0";
         response["error"] = std::move(jsonResult);
     }
-    co_return;
 }
 task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Value& response)
 {
