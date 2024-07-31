@@ -487,14 +487,14 @@ task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& resp
         WEB3_LOG(TRACE) << LOG_DESC("eth_call") << LOG_KV("call", call)
                         << LOG_KV("blockTag", blockTag) << LOG_KV("blockNumber", blockNumber);
     }
-    auto const tx = call.takeToTransaction(m_nodeService->blockFactory()->transactionFactory());
+    auto tx = call.takeToTransaction(m_nodeService->blockFactory()->transactionFactory());
     // TODO: ignore params blockNumber here, use it after historical data is available
     std::variant<Error::Ptr, protocol::TransactionReceipt::Ptr> variantResult{};
     // MOVE it into a new file
     struct Awaitable
     {
         bcos::scheduler::SchedulerInterface& m_scheduler;
-        bcos::protocol::Transaction::Ptr m_tx;
+        bcos::protocol::Transaction::Ptr& m_tx;
         std::variant<Error::Ptr, protocol::TransactionReceipt::Ptr>& m_result;
 
         constexpr static bool await_ready() noexcept { return false; }
