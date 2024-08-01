@@ -32,7 +32,7 @@ BOOST_AUTO_TEST_CASE(addRollback)
         co_await storage2::readSome(memoryStorage, view, storage2::DIRECT);
 
         std::string_view tableID = "table1";
-        auto point = rollbackableStorage.current();
+        auto point = current(rollbackableStorage);
         storage::Entry entry;
         entry.set("OK!");
         co_await storage2::writeOne(rollbackableStorage, StateKey{tableID, "Key1"sv}, entry);
@@ -52,7 +52,7 @@ BOOST_AUTO_TEST_CASE(addRollback)
             ++count;
         }
         BOOST_CHECK_EQUAL(count, 2);
-        co_await rollbackableStorage.rollback(point);
+        co_await rollback(rollbackableStorage, point);
 
         // Query again
         std::vector<StateKey> keys2{StateKey{tableID, "Key1"sv}, StateKey{"table1"sv, "Key2"sv}};
@@ -66,7 +66,7 @@ BOOST_AUTO_TEST_CASE(addRollback)
         co_await storage2::writeOne(
             rollbackableStorage, StateKey{tableID, "Key1"sv}, storage::Entry{"OK!"});
 
-        auto savepoint2 = rollbackableStorage.current();
+        auto savepoint2 = current(rollbackableStorage);
         co_await storage2::writeOne(
             rollbackableStorage, StateKey{tableID, "Key1"s}, storage::Entry{"OK3!"});
         auto value3 =
@@ -74,7 +74,7 @@ BOOST_AUTO_TEST_CASE(addRollback)
         BOOST_CHECK(value3);
         BOOST_CHECK_EQUAL(value3->get(), "OK3!");
 
-        co_await rollbackableStorage.rollback(savepoint2);
+        co_await rollback(rollbackableStorage, savepoint2);
         auto value4 =
             co_await storage2::readOne(rollbackableStorage, StateKeyView{tableID, "Key1"sv});
         BOOST_CHECK(value4);
@@ -91,7 +91,7 @@ BOOST_AUTO_TEST_CASE(removeRollback)
         Rollbackable rollbackableStorage(memoryStorage);
 
         std::string_view tableID = "table1";
-        auto point = rollbackableStorage.current();
+        auto point = current(rollbackableStorage);
         storage::Entry entry;
         entry.set("OK!");
         co_await storage2::writeOne(rollbackableStorage, StateKey{tableID, "Key1"sv}, entry);
@@ -111,7 +111,7 @@ BOOST_AUTO_TEST_CASE(removeRollback)
             BOOST_CHECK_EQUAL(key, StateKey(tableID, "Key" + std::to_string(count + 1)));
             ++count;
         }
-        co_await rollbackableStorage.rollback(point);
+        co_await rollback(rollbackableStorage, point);
 
         // Query again
         std::vector<StateKey> keys2{StateKey{tableID, "Key1"sv}, StateKey{"table1"sv, "Key2"sv}};

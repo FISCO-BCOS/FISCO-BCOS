@@ -3,7 +3,6 @@
 #include "BlockExecutive.h"
 #include "BlockExecutiveFactory.h"
 #include "ExecutorManager.h"
-#include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/executor/ParallelTransactionExecutorInterface.h>
@@ -14,7 +13,6 @@
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <tbb/concurrent_hash_map.h>
-#include <future>
 #include <list>
 
 namespace bcos::scheduler
