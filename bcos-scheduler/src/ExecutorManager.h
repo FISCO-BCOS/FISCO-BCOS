@@ -5,14 +5,9 @@
 #include <tbb/blocked_range.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <tbb/concurrent_unordered_set.h>
-#include <boost/iterator/iterator_categories.hpp>
-#include <boost/iterator/transform_iterator.hpp>
-#include <boost/range/any_range.hpp>
 #include <functional>
-#include <iterator>
 #include <memory>
 #include <queue>
-#include <shared_mutex>
 #include <string>
 #include <unordered_map>
 
@@ -179,6 +174,7 @@ public:
     {
         return m_name2Executors[name];
     }
+
 private:
     std::shared_ptr<Timer> m_timer;
 
@@ -206,8 +202,6 @@ private:
 
     std::priority_queue<ExecutorInfo::Ptr, std::vector<ExecutorInfo::Ptr>, ExecutorInfoComp>
         m_executorPriorityQueue;
-
-
 
 
     bcos::executor::ParallelTransactionExecutorInterface::Ptr const& executorView(

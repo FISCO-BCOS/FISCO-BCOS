@@ -1,7 +1,6 @@
 #include "SchedulerImpl.h"
 #include "BlockExecutive.h"
 #include "Common.h"
-#include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-ledger/src/libledger/LedgerMethods.h"
 #include "bcos-task/Wait.h"
@@ -22,7 +21,6 @@
 #include <memory>
 #include <mutex>
 #include <string_view>
-#include <variant>
 
 
 using namespace bcos::scheduler;
