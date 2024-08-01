@@ -1,9 +1,9 @@
 #pragma once
 
-#include "../protocol/Block.h"
+#include "../protocol/BlockHeader.h"
+#include "../protocol/TransactionReceipt.h"
 #include "bcos-task/Task.h"
 #include "bcos-task/Trait.h"
-#include "bcos-utilities/Ranges.h"
 
 namespace bcos::transaction_scheduler
 {
