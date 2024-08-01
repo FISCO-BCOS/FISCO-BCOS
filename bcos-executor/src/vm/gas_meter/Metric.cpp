@@ -25,6 +25,7 @@ namespace bcos
 {
 namespace wasm
 {
+using bcos::wasm::Instruction;
 InstructionTable GetInstructionTable()
 {
     auto defaultInstructionTable = InstructionTable{};

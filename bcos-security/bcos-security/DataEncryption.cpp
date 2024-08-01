@@ -97,15 +97,12 @@ std::shared_ptr<bytes> DataEncryption::decryptContents(const std::shared_ptr<byt
         if (m_compatibilityVersion >=
             static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_3_VERSION))
         {
-            random_bytes_engine rbe;
-            std::vector<unsigned char> ivData(16);
-            std::generate(std::begin(ivData), std::end(ivData), std::ref(rbe));
-
+            size_t const offsetIv = encFileBytes.size() - 16;
+            size_t const cipherDataSize = encFileBytes.size() - 16;
             decFileBytesBase64Ptr = m_symmetricEncrypt->symmetricDecrypt(
-                (const unsigned char*)encFileBytes.data(), encFileBytes.size(),
-                (const unsigned char*)m_dataKey.data(), m_dataKey.size(), ivData.data(), 16);
-            decFileBytesBase64Ptr->insert(
-                decFileBytesBase64Ptr->end(), ivData.begin(), ivData.end());
+                reinterpret_cast<const unsigned char*>(encFileBytes.data()), cipherDataSize,
+                reinterpret_cast<const unsigned char*>(m_dataKey.data()), m_dataKey.size(),
+                reinterpret_cast<const unsigned char*>(encFileBytes.data() + offsetIv), 16);
         }
         else
         {
@@ -143,15 +140,12 @@ std::shared_ptr<bytes> DataEncryption::decryptFile(const std::string& filename)
         if (m_compatibilityVersion >=
             static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_3_VERSION))
         {
-            random_bytes_engine rbe;
-            std::vector<unsigned char> ivData(16);
-            std::generate(std::begin(ivData), std::end(ivData), std::ref(rbe));
-
+            size_t const offsetIv = encFileBytes.size() - 16;
+            size_t const cipherDataSize = encFileBytes.size() - 16;
             decFileBytesBase64Ptr = m_symmetricEncrypt->symmetricDecrypt(
-                (const unsigned char*)encFileBytes.data(), encFileBytes.size(),
-                (const unsigned char*)m_dataKey.data(), m_dataKey.size(), ivData.data(), 16);
-            decFileBytesBase64Ptr->insert(
-                decFileBytesBase64Ptr->end(), ivData.begin(), ivData.end());
+                reinterpret_cast<const unsigned char*>(encFileBytes.data()), cipherDataSize,
+                reinterpret_cast<const unsigned char*>(m_dataKey.data()), m_dataKey.size(),
+                reinterpret_cast<const unsigned char*>(encFileBytes.data() + offsetIv), 16);
         }
         else
         {
