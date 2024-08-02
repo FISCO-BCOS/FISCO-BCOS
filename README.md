@@ -12,7 +12,7 @@ FISCO BCOS（读作/ˈfɪskl bi:ˈkɒz/） 是一个稳定、高效、安全的�
 
 ## 版本信息
 -
-稳定版本（生产环境使用）：v3.7.0，版本内容可参考[《FISCO-BCOS v3.7.0版本说明》](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/tag/v3.7.0)
+稳定版本（生产环境使用）：v3.7.3，版本内容可参考[《FISCO-BCOS v3.7.3版本说明》](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/tag/v3.7.3)
 -
 最新版本（用户体验新特性）：v3.10.0，版本内容可参考 [《FISCO-BCOS v3.10.0版本说明》](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/tag/v3.10.0)
 
