@@ -19,6 +19,9 @@ target_include_directories(transaction-executor PUBLIC
     $<INSTALL_INTERFACE:include/bcos-transaction-executor>)
 target_link_libraries(transaction-executor PUBLIC ${EXECUTOR_TARGET} ${STORAGE_TARGET} jsoncpp_static ${CODEC_TARGET} ${CRYPTO_TARGET} ${TABLE_TARGET} bcos-protocol
     evmone evmc::loader evmc::instructions fmt::fmt-header-only)
+set_target_properties(transaction-executor PROPERTIES
+    UNITY_BUILD "ON"
+)
 
 if (TESTS)
     enable_testing()

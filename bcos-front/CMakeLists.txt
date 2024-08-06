@@ -22,6 +22,9 @@ aux_source_directory(bcos-front SRCS)
 
 add_library(${FRONT_TARGET} ${SRCS})
 target_link_libraries(${FRONT_TARGET} PUBLIC bcos-framework ${UTILITIES_TARGET})
+set_target_properties(${FRONT_TARGET} PROPERTIES
+    UNITY_BUILD "ON"
+)
 
 if (TESTS)
     enable_testing()

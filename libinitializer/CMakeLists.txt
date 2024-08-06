@@ -31,4 +31,7 @@ if(WITH_LIGHTNODE)
     list(APPEND INIT_LIB_DEPENDS lightnodeinit bcos-concepts)
 endif()
 target_link_libraries(${INIT_LIB} PUBLIC ${INIT_LIB_DEPENDS})
+set_target_properties(${INIT_LIB} PROPERTIES
+    UNITY_BUILD "ON"
+)
 add_dependencies(${INIT_LIB} BuildInfo.h)

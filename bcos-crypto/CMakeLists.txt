@@ -15,6 +15,9 @@ find_package(HSM-CRYPTO REQUIRED)
 
 add_library(bcos-crypto STATIC ${ALL_SRCS})
 target_link_libraries(bcos-crypto PUBLIC ${LIB_LIST})
+set_target_properties(bcos-crypto PROPERTIES
+    UNITY_BUILD "ON"
+)
 
 if(NOT WIN32)
     target_compile_options(bcos-crypto PUBLIC "-Wno-ignored-attributes")

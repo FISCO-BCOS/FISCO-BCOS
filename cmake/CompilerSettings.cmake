@@ -120,6 +120,9 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
         add_compile_options(-Wno-restrict)
         add_compile_options(-Wno-error=format-truncation)
 
+        # gcc bug, refer to https://gcc.gnu.org/bugzilla/show_bug.cgi?id=105595
+        add_compile_options(-Wno-error=subobject-linkage)
+
         if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 11.0)
             add_compile_options(-Wno-stringop-overread)
             add_compile_options(-Wno-maybe-uninitialized)

@@ -30,3 +30,6 @@ find_package(Protobuf CONFIG REQUIRED)
 target_include_directories(${TXPOOL_TARGET} PUBLIC .)
 target_include_directories(${TXPOOL_TARGET} PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/bcos-txpool)
 target_link_libraries(${TXPOOL_TARGET} PUBLIC TBB::tbb protobuf::libprotobuf bcos-protocol ${UTILITIES_TARGET} ${TOOL_TARGET})
+set_target_properties(${TXPOOL_TARGET} PROPERTIES
+    UNITY_BUILD "ON"
+)
