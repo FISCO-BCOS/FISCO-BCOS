@@ -67,9 +67,8 @@ public:
         }
         m_cryptoPrecompiled = std::make_shared<CryptoPrecompiled>(m_cryptoSuite->hashImpl());
         m_ledgerCache = std::make_shared<LedgerCache>(std::make_shared<MockLedger>());
-        m_blockContext =
-            std::make_shared<BlockContext>(nullptr, m_ledgerCache, m_cryptoSuite->hashImpl(), 0,
-                h256(), utcTime(), _blockVersion, FiscoBcosSchedule, false, false);
+        m_blockContext = std::make_shared<BlockContext>(nullptr, m_ledgerCache,
+            m_cryptoSuite->hashImpl(), 0, h256(), utcTime(), _blockVersion, false, false);
         m_executive =
             std::make_shared<TransactionExecutive>(*m_blockContext, "", 100, 0, m_gasInjector);
         m_abi = std::make_shared<bcos::codec::abi::ContractABICodec>(*m_cryptoSuite->hashImpl());

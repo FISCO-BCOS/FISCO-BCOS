@@ -57,7 +57,7 @@ public:
                 m_handle.resume();
             }
 
-            CO_STD::coroutine_handle<> m_handle;
+            std::coroutine_handle<> m_handle;
             std::variant<std::monostate, bcos::Error::Ptr,
                 bcostars::protocol::TransactionSubmitResultImpl::Ptr>
                 m_submitResult;
@@ -67,7 +67,7 @@ public:
         struct Awaitable
         {
             constexpr bool await_ready() { return false; }
-            void await_suspend(CO_STD::coroutine_handle<> handle)
+            void await_suspend(std::coroutine_handle<> handle)
             {
                 m_callback->m_handle = handle;
                 m_proxy->tars_set_timeout(600000)->async_submit(m_callback,

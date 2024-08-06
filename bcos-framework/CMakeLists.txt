@@ -27,13 +27,7 @@ add_library(bcos-framework INTERFACE)
 target_include_directories(bcos-framework INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-framework>)
-
-if (PRECOMPILED_HEADER)
-    target_link_libraries(bcos-framework INTERFACE bcos-task Microsoft.GSL::GSL precompiled-headers)
-    target_precompile_headers(bcos-framework REUSE_FROM precompiled-headers)
-else()
-    target_link_libraries(bcos-framework INTERFACE bcos-task Microsoft.GSL::GSL fmt::fmt)
-endif()
+target_link_libraries(bcos-framework INTERFACE bcos-task Microsoft.GSL::GSL fmt::fmt)
 
 if (TESTS)
     enable_testing()

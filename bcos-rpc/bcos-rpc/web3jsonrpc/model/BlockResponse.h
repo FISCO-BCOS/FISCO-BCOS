@@ -48,7 +48,7 @@ namespace bcos::rpc
     result["totalDifficulty"] = "0x0";
     result["extraData"] = toHexStringWithPrefix(block->blockHeader()->extraData());
     result["size"] = "0xffff";
-    result["gasLimit"] = toQuantity(3000000000ull);
+    result["gasLimit"] = toQuantity(30000000ull);
     result["gasUsed"] = toQuantity((uint64_t)block->blockHeader()->gasUsed());
     result["timestamp"] = toQuantity(block->blockHeader()->timestamp());
     if (fullTxs)

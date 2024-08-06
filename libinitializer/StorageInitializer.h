@@ -24,6 +24,7 @@
  */
 #pragma once
 #include "bcos-storage/RocksDBStorage.h"
+#include <rocksdb/statistics.h>
 #ifdef WITH_TIKV
 #include "bcos-storage/TiKVStorage.h"
 #endif

@@ -31,7 +31,7 @@ public:
     {
         auto ledgerCache = std::make_shared<LedgerCache>(std::make_shared<MockLedger>());
         blockContext = std::make_shared<BlockContext>(
-            nullptr, ledgerCache, nullptr, 0, h256(), 0, 0, FiscoBcosSchedule, false, false);
+            nullptr, ledgerCache, nullptr, 0, h256(), 0, 0, false, false);
         auto executive =
             std::make_shared<MockTransactionExecutive>(*blockContext, "0x00", 0, 0, instruction);
         return executive;

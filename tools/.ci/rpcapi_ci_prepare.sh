@@ -35,12 +35,11 @@ wait_and_start()
 
 init()
 {
-    sm_option="${1}"
     cd ${current_path}
     echo " ==> fisco-bcos version: "
     ${fisco_bcos_path} -v
     clear_node
-    bash ${build_chain_path} -l "127.0.0.1:4" -e ${fisco_bcos_path} "${sm_option}"
+    bash ${build_chain_path} -p 30300,20200 -l "127.0.0.1:4" -e ${fisco_bcos_path}
     open_disablessl
     cd ..
     wait_and_start
@@ -79,4 +78,4 @@ open_disablessl(){
 
 
 
-init ""
+init

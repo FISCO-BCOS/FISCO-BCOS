@@ -6,11 +6,6 @@ evmc_bytes32 bcos::transaction_executor::evm_hash_fn(const uint8_t* data, size_t
     return toEvmC(executor::GlobalHashImpl::g_hashImpl->hash(bytesConstRef(data, size)));
 }
 
-bcos::executor::VMSchedule const& bcos::transaction_executor::vmSchedule()
-{
-    return executor::FiscoBcosScheduleV320;
-}
-
 std::variant<const evmc_message*, evmc_message> bcos::transaction_executor::getMessage(
     const evmc_message& inputMessage, protocol::BlockNumber blockNumber, int64_t contextID,
     int64_t seq, crypto::Hash const& hashImpl)
@@ -62,4 +57,20 @@ std::variant<const evmc_message*, evmc_message> bcos::transaction_executor::getM
     }
     }
     return message;
+}
+
+bcos::transaction_executor::CacheExecutables& bcos::transaction_executor::getCacheExecutables()
+{
+    struct CacheExecutables
+    {
+        bcos::transaction_executor::CacheExecutables m_cachedExecutables;
+
+        CacheExecutables()
+        {
+            constexpr static auto maxContracts = 100;
+            m_cachedExecutables.setMaxCapacity(sizeof(std::shared_ptr<Executable>) * maxContracts);
+        }
+    } static cachedExecutables;
+
+    return cachedExecutables.m_cachedExecutables;
 }
