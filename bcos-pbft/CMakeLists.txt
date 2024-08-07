@@ -55,7 +55,7 @@ set_source_files_properties(
     "bcos-pbft/pbft/protocol/proto/PBFT.pb.cc"
     "bcos-pbft/core/proto/Consensus.pb.cc"
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-set_target_properties(${PBFT_TARGET} PROPERTIES UNITY_BUILD "ON")
+# set_target_properties(${PBFT_TARGET} PROPERTIES UNITY_BUILD "ON")
 
 if (TESTS)
     # fetch bcos-test
