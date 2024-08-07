@@ -9,6 +9,9 @@ target_include_directories(bcos-boostssl PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-boostssl>)
 target_link_libraries(bcos-boostssl PUBLIC bcos-framework bcos-utilities OpenSSL::SSL)
+set_target_properties(bcos-boostssl PROPERTIES
+    UNITY_BUILD "ON"
+)
 
 if(TESTS)
     enable_testing()

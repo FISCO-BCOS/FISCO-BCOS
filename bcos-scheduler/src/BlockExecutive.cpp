@@ -1010,14 +1010,13 @@ void BlockExecutive::onDmcExecuteFinish(
     auto dmcChecksum = m_dmcRecorder->dumpAndClearChecksum();
     if (m_staticCall)
     {
-        DMC_LOG(TRACE) << LOG_BADGE("Stat") << "DMCExecute.6:"
-                       << "\t " << LOG_BADGE("DMCRecorder") << " DMCExecute for call finished "
-                       << LOG_KV("blockNumber", number()) << LOG_KV("checksum", dmcChecksum);
+        DMC_LOG(TRACE) << LOG_BADGE("Stat") << "DMCExecute.6:" << "\t " << LOG_BADGE("DMCRecorder")
+                       << " DMCExecute for call finished " << LOG_KV("blockNumber", number())
+                       << LOG_KV("checksum", dmcChecksum);
     }
     else
     {
-        DMC_LOG(INFO) << LOG_BADGE("Stat") << "DMCExecute.6:"
-                      << "\t " << LOG_BADGE("DMCRecorder")
+        DMC_LOG(INFO) << LOG_BADGE("Stat") << "DMCExecute.6:" << "\t " << LOG_BADGE("DMCRecorder")
                       << " DMCExecute for transaction finished " << LOG_KV("blockNumber", number())
                       << LOG_KV("checksum", dmcChecksum);
 

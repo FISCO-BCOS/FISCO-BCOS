@@ -19,6 +19,7 @@
  */
 
 #include "BfsFileFactory.h"
+#include "bcos-executor/src/Common.h"
 #include <bcos-framework/storage/Table.h>
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/serialization/vector.hpp>
@@ -107,23 +108,23 @@ bool BfsFileFactory::buildAuth(Table& _table, const std::string& _admin)
 {
     Entry adminEntry;
     adminEntry.importFields({_admin});
-    _table.setRow(ADMIN_FIELD, std::move(adminEntry));
+    _table.setRow(executor::ADMIN_FIELD, std::move(adminEntry));
 
     Entry statusEntry;
     statusEntry.importFields({"normal"});
-    _table.setRow(STATUS_FIELD, std::move(statusEntry));
+    _table.setRow(executor::STATUS_FIELD, std::move(statusEntry));
 
     Entry emptyType;
     emptyType.importFields({""});
-    _table.setRow(METHOD_AUTH_TYPE, std::move(emptyType));
+    _table.setRow(executor::METHOD_AUTH_TYPE, std::move(emptyType));
 
     Entry emptyWhite;
     emptyWhite.importFields({""});
-    _table.setRow(METHOD_AUTH_WHITE, std::move(emptyWhite));
+    _table.setRow(executor::METHOD_AUTH_WHITE, std::move(emptyWhite));
 
     Entry emptyBlack;
     emptyBlack.importFields({""});
-    _table.setRow(METHOD_AUTH_BLACK, std::move(emptyBlack));
+    _table.setRow(executor::METHOD_AUTH_BLACK, std::move(emptyBlack));
     return true;
 }
 bool BfsFileFactory::buildContract(Table& _table)
