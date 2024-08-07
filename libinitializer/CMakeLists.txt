@@ -13,6 +13,7 @@ target_link_libraries(${FRONTSERVICE_INIT_LIB} PUBLIC ${PROTOCOL_INIT_LIB} ${TOO
 
 add_library(${PBFT_INIT_LIB} PBFTInitializer.cpp ProPBFTInitializer.cpp)
 target_link_libraries(${PBFT_INIT_LIB} PUBLIC ${PROTOCOL_INIT_LIB} ${LEDGER_TARGET} ${TOOL_TARGET} ${SEALER_TARGET} ${RPBFT_TARGET} ${PBFT_TARGET} ${SYNC_TARGET} ${STORAGE_TARGET})
+set_target_properties(${PBFT_INIT_LIB} PROPERTIES UNITY_BUILD "ON")
 if(WITH_TIKV)
     target_link_libraries(${PBFT_INIT_LIB} PUBLIC ${LEADER_ELECTION_TARGET})
 endif()
@@ -31,7 +32,5 @@ if(WITH_LIGHTNODE)
     list(APPEND INIT_LIB_DEPENDS lightnodeinit bcos-concepts)
 endif()
 target_link_libraries(${INIT_LIB} PUBLIC ${INIT_LIB_DEPENDS})
-set_target_properties(${INIT_LIB} PROPERTIES
-    UNITY_BUILD "ON"
-)
+set_target_properties(${INIT_LIB} PROPERTIES UNITY_BUILD "ON")
 add_dependencies(${INIT_LIB} BuildInfo.h)

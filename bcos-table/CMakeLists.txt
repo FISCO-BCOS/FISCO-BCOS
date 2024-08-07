@@ -27,9 +27,7 @@ find_package(TBB CONFIG REQUIRED)
 
 add_library(${TABLE_TARGET} ${SRCS})
 target_link_libraries(${TABLE_TARGET} PUBLIC ${UTILITIES_TARGET} bcos-framework Boost::serialization TBB::tbb)
-set_target_properties(${TABLE_TARGET} PROPERTIES
-    UNITY_BUILD "ON"
-)
+set_target_properties(${TABLE_TARGET} PROPERTIES UNITY_BUILD "ON")
 
 if (TESTS)
     enable_testing()
