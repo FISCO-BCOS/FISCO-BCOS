@@ -15,10 +15,6 @@ using namespace bcos::transaction_executor;
 class TestTransactionExecutorImplFixture
 {
 public:
-    TestTransactionExecutorImplFixture()
-    {
-        bcos::executor::GlobalHashImpl::g_hashImpl = std::make_shared<bcos::crypto::Keccak256>();
-    }
     ledger::LedgerConfig ledgerConfig;
 };
 

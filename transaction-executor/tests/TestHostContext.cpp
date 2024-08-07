@@ -152,8 +152,6 @@ public:
     }
 };
 
-bcos::crypto::Hash::Ptr bcos::executor::GlobalHashImpl::g_hashImpl;
-
 BOOST_FIXTURE_TEST_SUITE(TestHostContext, TestHostContextFixture)
 
 BOOST_AUTO_TEST_CASE(bits)
