@@ -35,6 +35,14 @@ CallParameters::UniquePtr BillingTransactionExecutive::start(CallParameters::Uni
                              << LOG_KV("subBalance", gasUsed * gasPrice)
                              << LOG_KV("gasUsed", gasUsed) << LOG_KV("gasPrice", gasPrice)
                              << LOG_KV("balanceSpenderAddr", balanceSpenderAddr);
+        if (gasUsed * gasPrice == 0) [[unlikely]]
+        {
+            EXECUTIVE_LOG(TRACE) << LOG_BADGE("Billing")
+                                 << "sub Balance is 0, skip subAccount balance"
+                                 << LOG_KV("gasUsed", gasUsed) << LOG_KV("gasPrice", gasPrice)
+                                 << LOG_KV("balanceSpenderAddr", balanceSpenderAddr);
+            return message;
+        }
         auto subBalanceRet = callPrecompiled(std::move(callParam4AccountPre));
         /* leave this code for future use
         auto subBalanceRet = externalRequest(shared_from_this(), ref(callParam4AccountPre->data),
