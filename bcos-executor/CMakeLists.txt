@@ -15,7 +15,6 @@ find_package(Boost REQUIRED serialization program_options context)
 find_package(jsoncpp REQUIRED)
 
 file(GLOB_RECURSE SRCS src/*.cpp)
-message("All executor files is: ${SRCS}")
 add_library(${EXECUTOR_TARGET} ${SRCS})
 if(WITH_WASM)
     target_link_libraries(${EXECUTOR_TARGET} PUBLIC jsoncpp_static ${CODEC_TARGET} ${TOOL_TARGET} ${CRYPTO_TARGET} ${TABLE_TARGET} wedprcrypto::fisco-bcos bcos-protocol
@@ -29,9 +28,7 @@ set_source_files_properties(
     "src/vm/kzgPrecompiled.cpp"
     "src/vm/VMFactory.cpp"
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-set_target_properties(${EXECUTOR_TARGET} PROPERTIES
-    UNITY_BUILD "ON"
-)
+set_target_properties(${EXECUTOR_TARGET} PROPERTIES UNITY_BUILD "ON")
 
 if (TOOLS)
     add_subdirectory(tools)
