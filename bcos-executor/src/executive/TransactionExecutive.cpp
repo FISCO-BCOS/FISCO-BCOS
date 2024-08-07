@@ -231,11 +231,11 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
                              << LOG_KV("value", callParameters->value);
     }
 
-    if (m_blockContext.features().get(ledger::Features::Flag::feature_balance_policy1))
-    {
-        // policy1 disable transfer balance
-        callParameters->value = 0;
-    }
+    // if (m_blockContext.features().get(ledger::Features::Flag::feature_balance_policy1))
+    // {
+    //     // policy1 disable transfer balance
+    //     callParameters->value = 0;
+    // }
 
     if (m_blockContext.features().get(ledger::Features::Flag::feature_balance) &&
         callParameters->value > 0)
