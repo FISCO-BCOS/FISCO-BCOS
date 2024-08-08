@@ -20,6 +20,12 @@
  */
 #include "AirNodeInitializer.h"
 #include "bcos-boostssl/bcos-boostssl/websocket/WsMessage.h"
+#include "bcos-boostssl/bcos-boostssl/websocket/WsSession.h"
+#include "bcos-boostssl/bcos-boostssl/websocket/WsStream.h"
+#include "bcos-gateway/libnetwork/Session.h"
+#include "bcos-gateway/libnetwork/Socket.h"
+#include "bcos-gateway/libp2p/P2PMessageV2.h"
+#include "bcos-utilities/ratelimiter/DistributedRateLimiter.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-gateway/GatewayFactory.h>
