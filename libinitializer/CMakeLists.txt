@@ -21,8 +21,11 @@ endif()
 add_library(${TXPOOL_INIT_LIB} TxPoolInitializer.cpp)
 target_link_libraries(${TXPOOL_INIT_LIB} PUBLIC ${PROTOCOL_INIT_LIB} ${TOOL_TARGET} ${TXPOOL_TARGET})
 
-add_library(${INIT_LIB} Initializer.cpp LightNodeInitializer.h BaselineSchedulerInitializer.cpp)
-list(APPEND INIT_LIB_DEPENDS ${PROTOCOL_INIT_LIB} ${FRONTSERVICE_INIT_LIB} ${TXPOOL_INIT_LIB} ${SCHEDULER_TARGET} ${STORAGE_TARGET} ${EXECUTOR_TARGET} ${RPC_TARGET} transaction-scheduler transaction-executor bcos-boostssl)
+add_library(baseline_init BaselineSchedulerInitializer.cpp)
+target_link_libraries(baseline_init transaction-scheduler transaction-executor ${STORAGE_TARGET})
+
+add_library(${INIT_LIB} Initializer.cpp)
+list(APPEND INIT_LIB_DEPENDS baseline_init ${PROTOCOL_INIT_LIB} ${FRONTSERVICE_INIT_LIB} ${TXPOOL_INIT_LIB} ${SCHEDULER_TARGET} ${STORAGE_TARGET} ${EXECUTOR_TARGET} ${RPC_TARGET} bcos-boostssl)
 if(WITH_TIKV)
     list(APPEND INIT_LIB_DEPENDS ${LEADER_ELECTION_TARGET})
 endif()
