@@ -25,7 +25,7 @@ public:
     void initialize() override {}
     void destroy() override {}
 
-    bcos::Error asyncSendBroadcastMessage(tars::Int32 _type, const std::string& groupID,
+    bcostars::Error asyncSendBroadcastMessage(tars::Int32 _type, const std::string& groupID,
         tars::Int32 moduleID, const vector<tars::Char>& srcNodeID,
         const std::vector<tars::Char>& payload, tars::TarsCurrentPtr current) override
     {
