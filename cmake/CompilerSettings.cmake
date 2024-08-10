@@ -131,7 +131,7 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
         endif()
 
         if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 14.0)
-            set(CMAKE_CXX_STANDARD 23)
+            # set(CMAKE_CXX_STANDARD 23)
             add_compile_options(-Wno-error=uninitialized)
         endif()
         # add_compile_options(-fconcepts-diagnostics-depth=10)

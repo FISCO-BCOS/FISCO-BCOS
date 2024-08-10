@@ -17,12 +17,13 @@ using namespace bcos::storage2;
 using namespace bcos::transaction_executor;
 using namespace bcos::transaction_scheduler;
 
-struct MockExecutor
+struct MockExecutorSerial
 {
     friend task::Generator<protocol::TransactionReceipt::Ptr> tag_invoke(
-        transaction_executor::tag_t<execute3Step> /*unused*/, MockExecutor& executor, auto& storage,
-        protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
-        int contextID, ledger::LedgerConfig const& ledgerConfig, auto&& waitOperator)
+        transaction_executor::tag_t<execute3Step> /*unused*/, MockExecutorSerial& executor,
+        auto& storage, protocol::BlockHeader const& blockHeader,
+        protocol::Transaction const& transaction, int contextID,
+        ledger::LedgerConfig const& ledgerConfig, auto&& waitOperator)
     {
         co_yield std::shared_ptr<bcos::protocol::TransactionReceipt>();
         co_yield std::shared_ptr<bcos::protocol::TransactionReceipt>();
@@ -31,7 +32,7 @@ struct MockExecutor
 
     friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
         transaction_executor::tag_t<transaction_executor::executeTransaction> /*unused*/,
-        MockExecutor& executor, auto& storage, protocol::BlockHeader const& blockHeader,
+        MockExecutorSerial& executor, auto& storage, protocol::BlockHeader const& blockHeader,
         protocol::Transaction const& transaction, int contextID, ledger::LedgerConfig const&,
         auto&& waitOperator)
     {
@@ -78,7 +79,7 @@ BOOST_AUTO_TEST_CASE(executeBlock)
             }) |
             RANGES::to<std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>>>();
 
-        MockExecutor executor;
+        MockExecutorSerial executor;
         auto view = fork(multiLayerStorage);
         newMutable(view);
         ledger::LedgerConfig ledgerConfig;

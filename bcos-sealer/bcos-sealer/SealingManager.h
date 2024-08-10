@@ -20,7 +20,6 @@
 #pragma once
 #include "Common.h"
 #include "SealerConfig.h"
-#include "bcos-framework/protocol/BlockFactory.h"
 #include "bcos-framework/protocol/TransactionMetaData.h"
 #include <bcos-utilities/CallbackCollectionHandler.h>
 #include <bcos-utilities/ThreadPool.h>
@@ -152,6 +151,6 @@ private:
     std::atomic_bool m_fetchingTxs = {false};
 
     std::atomic<ssize_t> m_latestNumber = {0};
-    bcos::crypto::HashType m_latestHash = {};
+    bcos::crypto::HashType m_latestHash;
 };
 }  // namespace bcos::sealer

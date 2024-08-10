@@ -26,8 +26,6 @@
 #include "Common.h"
 #include "libinitializer/CommandHelper.h"
 #include <execinfo.h>
-#include <stdexcept>
-#include <thread>
 
 using namespace bcos::node;
 using namespace bcos::initializer;
