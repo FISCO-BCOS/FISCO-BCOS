@@ -41,6 +41,9 @@ public:
     size_t size() const override { return m_syncMessage->size(); }
     void setSize(size_t _size) override { m_syncMessage->set_size(_size); }
 
+    int32_t blockDataFlag() const override { return m_syncMessage->block_data_flag(); }
+    void setBlockDataFlag(int32_t _flag) override { m_syncMessage->set_block_data_flag(_flag); }
+
 protected:
     explicit BlockRequestImpl(std::shared_ptr<BlockSyncMessage> _syncMessage)
     {
