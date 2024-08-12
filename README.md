@@ -11,10 +11,8 @@ FISCO BCOS（读作/ˈfɪskl bi:ˈkɒz/） 是一个稳定、高效、安全的�
 单链配置下，性能TPS可达10万+。全面支持国密算法、国产操作系统与国产CPU架构。包含区块流水线、可拔插共识机制、全方位并行计算、区块链文件系统、权限治理框架、分布式存储等特性。
 
 ## 版本信息
--
-稳定版本（生产环境使用）：v3.7.3，版本内容可参考[《FISCO-BCOS v3.7.3版本说明》](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/tag/v3.7.3)
--
-最新版本（用户体验新特性）：v3.10.0，版本内容可参考 [《FISCO-BCOS v3.10.0版本说明》](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/tag/v3.10.0)
+- 稳定版本（生产环境使用）：v3.7.3，版本内容可参考[《FISCO-BCOS v3.7.3版本说明》](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/tag/v3.7.3)
+- 最新版本（用户体验新特性）：v3.10.0，版本内容可参考 [《FISCO-BCOS v3.10.0版本说明》](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/tag/v3.10.0)
 
 ## 系统概述
 FISCO BCOS系统架构包括基础层、核心层、服务层、用户层和接入层提供稳定、安全的区块链底层服务。中间件层通过可视化界面，简化了用户管理区块链系统的流程。右侧配套相关开发、运维、安全控制的组件，辅助应用落地过程中不同角色的需要；同时，提供隐私保护和跨链相关的技术组件，满足不同场景的应用诉求。
