@@ -401,6 +401,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         m_archiveService = std::make_shared<bcos::archive::ArchiveService>(
             storage, ledger, m_nodeConfig->archiveListenIP(), m_nodeConfig->archiveListenPort());
     }
+    
 #ifdef WITH_LIGHTNODE
     bcos::storage::StorageImpl<bcos::storage::StorageInterface::Ptr> storageWrapper(storage);
 

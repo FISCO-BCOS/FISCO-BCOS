@@ -12,7 +12,7 @@ using namespace bcostars;
 class GatewayServiceApp : public tars::Application
 {
 public:
-    GatewayServiceApp() {}
+    GatewayServiceApp() = default;
     ~GatewayServiceApp() override{};
 
     void destroyApp() override
@@ -51,7 +51,7 @@ protected:
         boost::property_tree::ptree pt;
         boost::property_tree::read_ini(_configPath, pt);
 
-        tool::NodeConfig nodeConfig;
+        bcos::tool::NodeConfig nodeConfig;
 
         nodeConfig.loadWithoutTarsFrameworkConfig(pt);
 

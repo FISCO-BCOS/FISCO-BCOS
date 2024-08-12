@@ -19,12 +19,13 @@ using namespace bcos::transaction_executor;
 using namespace bcos::transaction_scheduler;
 using namespace std::string_view_literals;
 
-struct MockExecutor
+struct MockExecutorParallel
 {
     friend task::Generator<protocol::TransactionReceipt::Ptr> tag_invoke(
-        transaction_executor::tag_t<execute3Step> /*unused*/, MockExecutor& executor, auto& storage,
-        protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
-        int contextID, ledger::LedgerConfig const& ledgerConfig, auto&& waitOperator)
+        transaction_executor::tag_t<execute3Step> /*unused*/, MockExecutorParallel& executor,
+        auto& storage, protocol::BlockHeader const& blockHeader,
+        protocol::Transaction const& transaction, int contextID,
+        ledger::LedgerConfig const& ledgerConfig, auto&& waitOperator)
     {
         BCOS_LOG(INFO) << "Step1";
         co_yield std::shared_ptr<bcos::protocol::TransactionReceipt>();
@@ -37,7 +38,7 @@ struct MockExecutor
     friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
         bcos::transaction_executor::tag_t<
             bcos::transaction_executor::executeTransaction> /*unused*/,
-        MockExecutor& executor, auto& storage, protocol::BlockHeader const& blockHeader,
+        MockExecutorParallel& executor, auto& storage, protocol::BlockHeader const& blockHeader,
         protocol::Transaction const& transaction, int contextID, ledger::LedgerConfig const&,
         auto&& waitOperator)
     {
@@ -73,7 +74,7 @@ BOOST_FIXTURE_TEST_SUITE(TestSchedulerParallel, TestSchedulerParallelFixture)
 BOOST_AUTO_TEST_CASE(simple)
 {
     task::syncWait([&, this]() -> task::Task<void> {
-        MockExecutor executor;
+        MockExecutorParallel executor;
         SchedulerParallelImpl<MutableStorage> scheduler;
 
         bcostars::protocol::BlockHeaderImpl blockHeader(

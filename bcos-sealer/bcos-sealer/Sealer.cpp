@@ -91,7 +91,7 @@ void Sealer::asyncNoteLatestBlockNumber(int64_t _blockNumber)
 void Sealer::asyncNoteLatestBlockHash(crypto::HashType _hash)
 {
     SEAL_LOG(INFO) << LOG_DESC("asyncNoteLatestBlockHash") << LOG_KV("_hash", _hash.abridged());
-    m_sealingManager->resetLatestHash(std::move(_hash));
+    m_sealingManager->resetLatestHash(_hash);
 }
 
 void Sealer::asyncNoteUnSealedTxsSize(
@@ -162,8 +162,8 @@ void Sealer::submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _blo
     _block->blockHeader()->setVersion(version);
     _block->blockHeader()->calculateHash(*m_hashImpl);
 
-    auto encodedData = std::make_shared<bytes>();
-    _block->encode(*encodedData);
+    bytes encodedData;
+    _block->encode(encodedData);
     SEAL_LOG(INFO) << LOG_DESC("++++++++++++++++ Generate proposal")
                    << LOG_KV("index", _block->blockHeader()->number())
                    << LOG_KV("curNum", m_sealingManager->latestNumber())
@@ -171,7 +171,7 @@ void Sealer::submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _blo
                    << LOG_KV("sysTxs", _containSysTxs)
                    << LOG_KV("txsSize", _block->transactionsHashSize())
                    << LOG_KV("version", version);
-    m_sealerConfig->consensus()->asyncSubmitProposal(_containSysTxs, ref(*encodedData),
+    m_sealerConfig->consensus()->asyncSubmitProposal(_containSysTxs, ref(encodedData),
         _block->blockHeader()->number(), _block->blockHeader()->hash(), [_block](auto&& _error) {
             if (_error == nullptr)
             {
