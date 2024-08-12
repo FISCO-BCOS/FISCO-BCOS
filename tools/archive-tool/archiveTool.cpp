@@ -174,19 +174,20 @@ createBackendStorage(std::shared_ptr<bcos::tool::NodeConfig> nodeConfig, const s
                 StorageInitializer::createRocksDB(
                     stateDBPath, option, nodeConfig->enableStatistics(), nodeConfig->keyPageSize()),
                 dataEncryption);
+            blockStorage = storage;
             if (nodeConfig->enableSeparateBlockAndState())
             {
                 auto blockDB = StorageInitializer::createRocksDB(
                     nodeConfig->blockDBPath(), option, nodeConfig->enableStatistics());
                 blockStorage = StorageInitializer::build(std::move(blockDB), dataEncryption);
             }
-            blockStorage = storage;
         }
         else
         {
             auto* rocksdb = createSecondaryRocksDB(stateDBPath, secondaryPath);
             storage = std::make_shared<RocksDBStorage>(
                 std::unique_ptr<rocksdb::DB>(rocksdb), dataEncryption);
+            blockStorage = storage;
             if (nodeConfig->enableSeparateBlockAndState())
             {
                 auto* blockRocksDB =
@@ -194,7 +195,6 @@ createBackendStorage(std::shared_ptr<bcos::tool::NodeConfig> nodeConfig, const s
                 blockStorage = std::make_shared<RocksDBStorage>(
                     std::unique_ptr<rocksdb::DB>(blockRocksDB), dataEncryption);
             }
-            blockStorage = storage;
         }
     }
     else if (boost::iequals(nodeConfig->storageType(), "TiKV"))

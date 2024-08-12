@@ -1533,7 +1533,7 @@ void Ledger::asyncBatchGetReceipts(std::shared_ptr<std::vector<std::string>> has
             {
                 if (!entry.has_value())
                 {
-                    LEDGER_LOG(DEBUG) << "Get receipt with empty entry: " << (*hashes)[i];
+                    LEDGER_LOG(DEBUG) << "Get receipt with empty entry: " << toHex((*hashes)[i]);
                     callback(BCOS_ERROR_PTR(
                                  LedgerError::GetStorageError, "Batch get transaction failed"),
                         std::vector<protocol::TransactionReceipt::Ptr>());
