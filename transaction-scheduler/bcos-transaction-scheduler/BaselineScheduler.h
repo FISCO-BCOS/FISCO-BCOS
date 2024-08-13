@@ -2,6 +2,7 @@
 
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-crypto/merkle/Merkle.h"
+#include "bcos-executor/src/Common.h"
 #include "bcos-framework/dispatcher/SchedulerInterface.h"
 #include "bcos-framework/dispatcher/SchedulerTypeDef.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
@@ -112,8 +113,8 @@ task::Task<h256> calculateStateRoot(
         h256 m_hash;
         std::reference_wrapper<decltype(hashes) const> m_hashes;
 
-        XORHash(decltype(hashes) const& hashes) : m_hashes(hashes) {};
-        XORHash(XORHash& source, tbb::split /*unused*/) : m_hashes(source.m_hashes) {};
+        XORHash(decltype(hashes) const& hashes) : m_hashes(hashes){};
+        XORHash(XORHash& source, tbb::split /*unused*/) : m_hashes(source.m_hashes){};
         void operator()(const tbb::blocked_range<size_t>& range)
         {
             for (size_t i = range.begin(); i != range.end(); ++i)
