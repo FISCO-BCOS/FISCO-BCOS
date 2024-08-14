@@ -1202,7 +1202,6 @@ void BlockSync::verifyAndCommitArchivedBlock(bcos::protocol::BlockNumber archive
         bcos::storage::Entry(std::to_string(topBlockNumber)));
     {
         WriteGuard lock(x_archivedBlockQueue);
-        m_archivedBlockQueue.pop();
         for (auto topNumber = m_archivedBlockQueue.top()->blockHeader()->number();
              topNumber >= topBlockNumber;)
         {
