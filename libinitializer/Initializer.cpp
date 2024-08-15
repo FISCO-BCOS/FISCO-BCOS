@@ -746,7 +746,13 @@ bcos::Error::Ptr Initializer::generateSnapshot(
         std::cerr << "only support RocksDB storage" << std::endl;
         return BCOS_ERROR_PTR(-1, "only support RocksDB storage");
     }
+    auto separatedBlockAndState = m_nodeConfig->enableSeparateBlockAndState();
+
     auto stateDBPath = m_nodeConfig->storagePath();
+    if (separatedBlockAndState)
+    {
+        stateDBPath = m_nodeConfig->stateDBPath();
+    }
     auto blockDBPath = m_nodeConfig->blockDBPath();
     auto snapshotRoot = snapshotPath + "/snapshot";
     fs::path stateSstPath = snapshotRoot + "/state";
@@ -782,7 +788,6 @@ bcos::Error::Ptr Initializer::generateSnapshot(
     auto validNonceEndKey = bcos::storage::toDBKey(
         bcos::ledger::SYS_BLOCK_NUMBER_2_NONCES, std::to_string(currentBlockNumber));
     const size_t MAX_SST_FILE_BYTE = 256 * 1024 * 1024;
-    auto separatedBlockAndState = m_nodeConfig->enableSeparateBlockAndState();
     rocksdb::Options options;
     options.compression = rocksdb::kZSTD;
     auto stateSstFileWriter = rocksdb::SstFileWriter(rocksdb::EnvOptions(), options);
