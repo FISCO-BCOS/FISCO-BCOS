@@ -38,10 +38,10 @@ BOOST_AUTO_TEST_CASE(readWriteSet)
         co_await storage2::readOne(secondStorage, 500);
         co_await storage2::readOne(secondStorage, 600);
 
-        BOOST_CHECK(!firstStorage.hasRAWIntersection(secondStorage));
+        BOOST_CHECK(!hasRAWIntersection(firstStorage, secondStorage));
 
         co_await storage2::readOne(secondStorage, 200);
-        BOOST_CHECK(firstStorage.hasRAWIntersection(secondStorage));
+        BOOST_CHECK(hasRAWIntersection(firstStorage, secondStorage));
 
         co_return;
     }());

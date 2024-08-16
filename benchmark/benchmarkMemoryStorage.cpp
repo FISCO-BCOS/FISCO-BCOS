@@ -50,7 +50,7 @@ void setCapacityForMRU(auto& storage)
                       MemoryStorage<Key, storage::Entry,
                           memory_storage::Attribute(CONCURRENT | LRU), std::hash<Key>>>)
     {
-        storage.setMaxCapacity(1000 * 1000 * 1000);
+        setMaxCapacity(storage, 1000 * 1000 * 1000);
     }
 }
 

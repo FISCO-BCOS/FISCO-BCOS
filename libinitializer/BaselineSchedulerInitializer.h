@@ -10,7 +10,6 @@
 
 namespace bcos::transaction_scheduler
 {
-
 class BaselineSchedulerInitializer
 {
 public:

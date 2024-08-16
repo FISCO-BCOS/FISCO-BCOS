@@ -27,6 +27,7 @@ add_library(${SECURITY_TARGET} ${SRC_LIST})
 find_package(jsoncpp REQUIRED)
 
 target_link_libraries(${SECURITY_TARGET} PUBLIC ${UTILITIES_TARGET} ${TOOL_TARGET} ${CRYPTO_TARGET} jsoncpp_static)
+set_target_properties(${SECURITY_TARGET} PROPERTIES UNITY_BUILD "ON")
 
 if(TESTS)
   enable_testing()

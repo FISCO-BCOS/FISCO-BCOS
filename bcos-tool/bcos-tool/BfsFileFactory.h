@@ -67,14 +67,6 @@ constexpr static const std::string_view FS_TYPE_LINK{"link"};
 constexpr static const std::string_view FS_LINK_ADDRESS{"link_address"};
 constexpr static const std::string_view FS_LINK_ABI{"link_abi"};
 
-/// auth
-constexpr static const std::string_view CONTRACT_SUFFIX{"_accessAuth"};
-constexpr static const std::string_view ADMIN_FIELD{"admin"};
-constexpr static const std::string_view STATUS_FIELD{"status"};
-constexpr static const std::string_view METHOD_AUTH_TYPE{"method_auth_type"};
-constexpr static const std::string_view METHOD_AUTH_WHITE{"method_auth_white"};
-constexpr static const std::string_view METHOD_AUTH_BLACK{"method_auth_black"};
-
 enum FileType : uint16_t
 {
     DIRECTOR = 0,

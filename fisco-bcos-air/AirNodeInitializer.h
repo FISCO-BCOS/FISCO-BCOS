@@ -25,7 +25,6 @@
 #include <bcos-framework/rpc/RPCInterface.h>
 #include <bcos-rpc/tarsRPC/RPCServer.h>
 #include <bcos-utilities/ObjectAllocatorMonitor.h>
-
 #include <utility>
 
 
