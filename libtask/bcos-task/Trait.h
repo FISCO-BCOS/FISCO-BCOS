@@ -7,11 +7,11 @@ namespace bcos::task
 {
 
 template <class Task>
-concept HasADLCoAwait = requires(Task task) { operator co_await(task); };
+concept HasADLCoAwait = requires(Task&& task) { operator co_await(task); };
 template <class Task>
-concept HasMemberCoAwait = requires(Task task) { task.operator co_await(); };
+concept HasMemberCoAwait = requires(Task&& task) { std::forward<Task>(task).operator co_await(); };
 template <class Awaitable>
-concept HasAwaitable = requires(Awaitable awaitable) { awaitable.await_resume(); };
+concept HasAwaitable = requires(Awaitable&& awaitable) { awaitable.await_resume(); };
 
 auto getAwaitable(auto&& task)
 {
@@ -22,7 +22,7 @@ auto getAwaitable(auto&& task)
     }
     else if constexpr (HasMemberCoAwait<TaskType>)
     {
-        return task.operator co_await();
+        return std::forward<decltype(task)>(task).operator co_await();
     }
     else if constexpr (HasAwaitable<TaskType>)
     {

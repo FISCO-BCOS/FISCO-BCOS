@@ -2054,9 +2054,12 @@ void TransactionExecutor::getCode(
         // asyncGetRow key should not be empty
         auto codeKey = codeHash.empty() ? ACCOUNT_CODE : codeHash;
         // try to get abi from SYS_CODE_BINARY first
+        ledger::Features features;
+        task::syncWait(features.readFromStorage(*stateStorage, m_lastCommittedBlockNumber));
         stateStorage->asyncGetRow(bcos::ledger::SYS_CODE_BINARY, codeKey,
             [this, contractTableName, callback = std::move(callback),
-                getCodeFromContractTable = std::move(getCodeFromContractTable)](
+                getCodeFromContractTable = std::move(getCodeFromContractTable),
+                features = std::move(features)](
                 Error::UniquePtr error, std::optional<Entry> entry) {
                 if (!m_isRunning)
                 {
@@ -2083,11 +2086,9 @@ void TransactionExecutor::getCode(
                 }
 
                 auto code = entry->getField(0);
-                if ((m_blockContext->features().get(
-                         ledger::Features::Flag::bugfix_eoa_as_contract) &&
+                if ((features.get(ledger::Features::Flag::bugfix_eoa_as_contract) &&
                         bcos::precompiled::isDynamicPrecompiledAccountCode(code)) ||
-                    (m_blockContext->features().get(
-                         ledger::Features::Flag::bugfix_eoa_match_failed) &&
+                    (features.get(ledger::Features::Flag::bugfix_eoa_match_failed) &&
                         bcos::precompiled::matchDynamicAccountCode(code)))
                 {
                     EXECUTOR_NAME_LOG(DEBUG) << "Get eoa code success, return empty code to evm";
