@@ -142,9 +142,9 @@ std::pair<bool, bcos::protocol::Block::Ptr> SealingManager::generateProposal(
 {
     if (!shouldGenerateProposal())
     {
-        return std::pair(false, nullptr);
+        return {false, nullptr};
     }
-    WriteGuard l(x_pendingTxs);
+    WriteGuard writeLock(x_pendingTxs);
     m_sealingNumber = std::max(m_sealingNumber.load(), m_latestNumber.load() + 1);
     auto block = m_config->blockFactory()->createBlock();
     auto blockHeader = m_config->blockFactory()->blockHeaderFactory()->createBlockHeader();
