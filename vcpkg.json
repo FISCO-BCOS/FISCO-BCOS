@@ -12,7 +12,14 @@
       "name": "vcpkg-cmake-config",
       "host": true
     },
-    "python3",
+    {
+      "name": "vcpkg-tool-ninja",
+      "host": true
+    },
+    {
+      "name": "python3",
+      "host": true
+    },
     "tomlplusplus",
     "magic-enum",
     "boost-log",
