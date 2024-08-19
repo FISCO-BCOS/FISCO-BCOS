@@ -12,6 +12,7 @@
       "name": "vcpkg-cmake-config",
       "host": true
     },
+    "python3",
     "tomlplusplus",
     "magic-enum",
     "boost-log",
