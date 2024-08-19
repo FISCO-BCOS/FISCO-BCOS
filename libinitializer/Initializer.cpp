@@ -64,11 +64,11 @@
 #include <bcos-tool/NodeTimeMaintenance.h>
 #include <rocksdb/slice.h>
 #include <rocksdb/sst_file_reader.h>
+#include <toml++/toml.h>
 #include <util/tc_clientsocket.h>
 #include <boost/filesystem.hpp>
 #include <cstddef>
 #include <memory>
-#include <toml++/toml.hpp>
 #include <vector>
 
 using namespace bcos;
@@ -423,7 +423,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         m_archiveService = std::make_shared<bcos::archive::ArchiveService>(m_storage, ledger,
             m_blockStorage, m_nodeConfig->archiveListenIP(), m_nodeConfig->archiveListenPort());
     }
-    
+
 #ifdef WITH_LIGHTNODE
     bcos::storage::StorageImpl<bcos::storage::StorageInterface::Ptr> storageWrapper(m_storage);
 

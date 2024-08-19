@@ -48,7 +48,7 @@ jobs:
           sudo apt install -y  lcov ccache wget python3-dev python3-pip git curl zip unzip tar
           sudo apt install -y --no-install-recommends \
               clang make build-essential cmake libssl-dev zlib1g-dev ca-certificates \
-              libgmp-dev flex bison patch libzstd-dev ninja-build pkg-config ccache uuid-runtime automake
+              libgmp-dev flex bison patch libzstd-dev ninja-build pkg-config ccache uuid-runtime automake autoconf autoconf-archive
 
       - uses: actions-rs/toolchain@v1
         with:
