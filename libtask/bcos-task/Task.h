@@ -100,7 +100,7 @@ public:
     struct Awaitable
     {
         explicit Awaitable(std::coroutine_handle<promise_type> handle)
-          : m_handle(std::move(handle)){};
+          : m_handle(std::move(handle)) {};
         Awaitable(const Awaitable&) = delete;
         Awaitable(Awaitable&&) noexcept = default;
         Awaitable& operator=(const Awaitable&) = delete;

@@ -32,7 +32,7 @@ BlockSyncFactory::BlockSyncFactory(bcos::crypto::PublicPtr _nodeId,
     bcos::scheduler::SchedulerInterface::Ptr _scheduler,
     bcos::consensus::ConsensusInterface::Ptr _consensus,
     bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance, bool _enableSendBlockStatusByTree,
-    std::uint32_t _syncTreeWidth)
+    std::uint32_t _syncTreeWidth, bool _syncArchivedBlockBody)
   : m_nodeId(std::move(_nodeId)),
     m_blockFactory(std::move(_blockFactory)),
     m_txResultFactory(std::move(_txResultFactory)),
@@ -43,7 +43,8 @@ BlockSyncFactory::BlockSyncFactory(bcos::crypto::PublicPtr _nodeId,
     m_consensus(std::move(_consensus)),
     m_nodeTimeMaintenance(std::move(_nodeTimeMaintenance)),
     m_enableSendBlockStatusByTree(_enableSendBlockStatusByTree),
-    m_syncTreeWidth(_syncTreeWidth)
+    m_syncTreeWidth(_syncTreeWidth),
+    m_syncArchivedBlockBody(_syncArchivedBlockBody)
 {}
 
 BlockSync::Ptr BlockSyncFactory::createBlockSync()
@@ -51,6 +52,7 @@ BlockSync::Ptr BlockSyncFactory::createBlockSync()
     auto msgFactory = std::make_shared<BlockSyncMsgFactoryImpl>();
     auto syncConfig = std::make_shared<BlockSyncConfig>(m_nodeId, m_ledger, m_txpool,
         m_blockFactory, m_txResultFactory, m_frontService, m_scheduler, m_consensus, msgFactory,
-        m_nodeTimeMaintenance, m_enableSendBlockStatusByTree, m_syncTreeWidth);
+        m_nodeTimeMaintenance, m_enableSendBlockStatusByTree, m_syncTreeWidth,
+        m_syncArchivedBlockBody);
     return std::make_shared<BlockSync>(syncConfig);
 }

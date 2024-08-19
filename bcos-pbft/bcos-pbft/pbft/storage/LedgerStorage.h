@@ -95,7 +95,6 @@ protected:
         bcos::protocol::BlockHeader::Ptr _blockHeader,
         bcos::ledger::LedgerConfig::Ptr _ledgerConfig);
 
-protected:
     bcos::scheduler::SchedulerInterface::Ptr m_scheduler;
     std::shared_ptr<bcos::storage::KVStorageHelper> m_storage;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;

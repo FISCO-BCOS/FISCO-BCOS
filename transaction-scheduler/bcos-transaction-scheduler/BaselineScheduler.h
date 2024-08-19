@@ -605,7 +605,6 @@ public:
                     view, *blockHeader, *transaction, 0, emptyLedgerConfig, task::syncWait);
             }
 
-
             callback(nullptr, std::move(receipt));
         }(this, std::move(transaction), std::move(callback)));
     }

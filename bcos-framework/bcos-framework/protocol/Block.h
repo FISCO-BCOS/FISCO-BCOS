@@ -113,6 +113,10 @@ public:
             }) |
             RANGES::to<NonceList>());
     }
+    bool operator<(const Block& block) const
+    {
+        return blockHeaderConst()->number() < block.blockHeaderConst()->number();
+    }
 };
 using Blocks = std::vector<Block::Ptr>;
 using BlocksPtr = std::shared_ptr<Blocks>;

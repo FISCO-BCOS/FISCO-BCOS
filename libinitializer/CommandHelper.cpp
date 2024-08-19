@@ -81,7 +81,12 @@ bcos::initializer::Params bcos::initializer::initAirNodeCommandLine(
         boost::program_options::value<std::string>()->default_value("./config.ini"),
         "config file path, eg. config.ini")("genesis,g",
         boost::program_options::value<std::string>()->default_value("./config.genesis"),
-        "genesis config file path, eg. genesis.ini");
+        "genesis config file path, eg. genesis.ini")("prune,p", "prune the node data")("snapshot,s",
+        boost::program_options::value<bool>(),
+        "generate snapshot with or without txs and receipts, if true generate snapshot with txs "
+        "and receipts")(
+        "output,o", boost::program_options::value<std::string>(), "snapshot output directory")(
+        "import,i", boost::program_options::value<std::string>(), "import snapshot from directory");
 
     if (_autoSendTx)
     {
@@ -148,5 +153,42 @@ bcos::initializer::Params bcos::initializer::initAirNodeCommandLine(
             txSpeed = vm["txSpeed"].as<float>();
         }
     }
-    return bcos::initializer::Params{configPath, genesisFilePath, txSpeed};
+    auto op = Params::operation::None;
+    if (vm.count("prune"))
+    {
+        op = (op | Params::operation::Prune);
+    }
+    std::string snapshotPath("./");
+    if (vm.count("snapshot"))
+    {
+        auto snapshot = vm["snapshot"].as<bool>();
+        if (snapshot)
+        {
+            op = (op | Params::operation::Snapshot);
+        }
+        else
+        {
+            op = (op | Params::operation::SnapshotWithoutTxAndReceipt);
+        }
+        if (vm.count("output"))
+        {
+            snapshotPath = vm["output"].as<std::string>();
+        }
+        else
+        {
+            std::cout << "snapshot output directory is not set, use current directory as default";
+        }
+    }
+    if (vm.count("import"))
+    {
+        if (op != Params::operation::None)
+        {
+            std::cout << "import snapshot can not be used with other operations";
+            exit(0);
+        }
+        op = Params::operation::ImportSnapshot;
+        snapshotPath = vm["import"].as<std::string>();
+    }
+
+    return bcos::initializer::Params{configPath, genesisFilePath, snapshotPath, txSpeed, op};
 }
