@@ -12,14 +12,6 @@
       "name": "vcpkg-cmake-config",
       "host": true
     },
-    {
-      "name": "vcpkg-tool-ninja",
-      "host": true
-    },
-    {
-      "name": "python3",
-      "host": true
-    },
     "tomlplusplus",
     "magic-enum",
     "boost-log",
@@ -153,6 +145,15 @@
       "description": "mimalloc dependencies",
       "dependencies": [
         "mimalloc"
+      ]
+    },
+    "vcpkg-python": {
+      "description": "use vcpkg python",
+      "dependencies": [
+        {
+          "name": "python3",
+          "host": true
+        }
       ]
     }
   },
