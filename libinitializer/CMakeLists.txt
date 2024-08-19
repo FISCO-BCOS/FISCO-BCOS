@@ -1,5 +1,7 @@
 find_package(Boost REQUIRED program_options)
 find_package(jsoncpp CONFIG REQUIRED)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(tomlplusplus REQUIRED IMPORTED_TARGET tomlplusplus)
 
 add_library(${COMMAND_HELPER_LIB} CommandHelper.cpp)
 target_link_libraries(${COMMAND_HELPER_LIB} PUBLIC bcos-framework Boost::program_options)
@@ -20,19 +22,12 @@ endif()
 
 add_library(${TXPOOL_INIT_LIB} TxPoolInitializer.cpp)
 target_link_libraries(${TXPOOL_INIT_LIB} PUBLIC ${PROTOCOL_INIT_LIB} ${TOOL_TARGET} ${TXPOOL_TARGET})
-include(FetchContent)
-FetchContent_Declare(
-    tomlplusplus
-    GIT_REPOSITORY https://github.com/marzer/tomlplusplus.git
-    GIT_TAG        v3.4.0
-)
-FetchContent_MakeAvailable(tomlplusplus)
 
 add_library(baseline_init BaselineSchedulerInitializer.cpp)
 target_link_libraries(baseline_init transaction-scheduler transaction-executor ${STORAGE_TARGET})
 
 add_library(${INIT_LIB} Initializer.cpp)
-list(APPEND INIT_LIB_DEPENDS ${PROTOCOL_INIT_LIB} baseline_init ${FRONTSERVICE_INIT_LIB} ${TXPOOL_INIT_LIB} ${SCHEDULER_TARGET} ${STORAGE_TARGET} ${EXECUTOR_TARGET} ${RPC_TARGET} bcos-boostssl tomlplusplus::tomlplusplus)
+list(APPEND INIT_LIB_DEPENDS ${PROTOCOL_INIT_LIB} baseline_init ${FRONTSERVICE_INIT_LIB} ${TXPOOL_INIT_LIB} ${SCHEDULER_TARGET} ${STORAGE_TARGET} ${EXECUTOR_TARGET} ${RPC_TARGET} bcos-boostssl PkgConfig::tomlplusplus)
 if(WITH_TIKV)
     list(APPEND INIT_LIB_DEPENDS ${LEADER_ELECTION_TARGET})
 endif()
