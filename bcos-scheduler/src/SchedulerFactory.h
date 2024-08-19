@@ -1,8 +1,6 @@
 #pragma once
 #include <utility>
-
 #include "SchedulerImpl.h"
-
 
 namespace bcos::scheduler
 {

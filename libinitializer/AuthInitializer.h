@@ -28,9 +28,6 @@
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/Common.h>
 
-using namespace bcos;
-using namespace bcos::tool;
-using namespace bcos::initializer;
 namespace bcos::initializer
 {
 // clang-format off
@@ -43,7 +40,7 @@ class AuthInitializer
 public:
     static void init(protocol::BlockNumber _number,
         const std::shared_ptr<ProtocolInitializer>& _protocol,
-        const std::shared_ptr<NodeConfig>& _nodeConfig, const protocol::Block::Ptr& block)
+        const std::shared_ptr<tool::NodeConfig>& _nodeConfig, const protocol::Block::Ptr& block)
     {
         // hex bin code to bytes
         bytes code;

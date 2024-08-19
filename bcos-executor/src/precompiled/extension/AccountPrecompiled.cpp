@@ -28,8 +28,8 @@ using namespace bcos::executor;
 using namespace bcos::storage;
 using namespace bcos::protocol;
 
-const char* const AM_METHOD_SET_ACCOUNT_STATUS = "setAccountStatus(uint8)";
-const char* const AM_METHOD_GET_ACCOUNT_STATUS = "getAccountStatus()";
+const char* const ACCOUNT_METHOD_SET_ACCOUNT_STATUS = "setAccountStatus(uint8)";
+const char* const ACCOUNT_METHOD_GET_ACCOUNT_STATUS = "getAccountStatus()";
 const char* const AM_METHOD_GET_ACCOUNT_BALANCE = "getAccountBalance()";
 const char* const AM_METHOD_ADD_ACCOUNT_BALANCE = "addAccountBalance(uint256)";
 const char* const AM_METHOD_SUB_ACCOUNT_BALANCE = "subAccountBalance(uint256)";
@@ -38,10 +38,10 @@ const uint32_t AM_METHOD_RECEIVE_FALLBACK_SELECTOR = 1;
 
 AccountPrecompiled::AccountPrecompiled(crypto::Hash::Ptr hashImpl) : Precompiled(hashImpl)
 {
-    name2Selector[AM_METHOD_SET_ACCOUNT_STATUS] =
-        getFuncSelector(AM_METHOD_SET_ACCOUNT_STATUS, hashImpl);
-    name2Selector[AM_METHOD_GET_ACCOUNT_STATUS] =
-        getFuncSelector(AM_METHOD_GET_ACCOUNT_STATUS, hashImpl);
+    name2Selector[ACCOUNT_METHOD_SET_ACCOUNT_STATUS] =
+        getFuncSelector(ACCOUNT_METHOD_SET_ACCOUNT_STATUS, hashImpl);
+    name2Selector[ACCOUNT_METHOD_GET_ACCOUNT_STATUS] =
+        getFuncSelector(ACCOUNT_METHOD_GET_ACCOUNT_STATUS, hashImpl);
     name2Selector[AM_METHOD_GET_ACCOUNT_BALANCE] =
         getFuncSelector(AM_METHOD_GET_ACCOUNT_BALANCE, hashImpl);
     name2Selector[AM_METHOD_ADD_ACCOUNT_BALANCE] =
@@ -78,11 +78,11 @@ std::shared_ptr<PrecompiledExecResult> AccountPrecompiled::call(
     bytesConstRef data = getParamData(originParam);
     auto table = _executive->storage().openTable(accountTableName);
 
-    if (func == name2Selector[AM_METHOD_SET_ACCOUNT_STATUS])
+    if (func == name2Selector[ACCOUNT_METHOD_SET_ACCOUNT_STATUS])
     {
         setAccountStatus(accountTableName, _executive, data, _callParameters);
     }
-    else if (func == name2Selector[AM_METHOD_GET_ACCOUNT_STATUS])
+    else if (func == name2Selector[ACCOUNT_METHOD_GET_ACCOUNT_STATUS])
     {
         getAccountStatus(accountTableName, _executive, _callParameters);
     }

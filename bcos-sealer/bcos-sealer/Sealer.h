@@ -22,7 +22,6 @@
 #include "SealingManager.h"
 #include "bcos-framework/sealer/SealerInterface.h"
 #include <bcos-utilities/Worker.h>
-
 #include <utility>
 
 namespace bcos::sealer
@@ -67,8 +66,8 @@ public:
     uint16_t hookWhenSealBlock([[maybe_unused]] bcos::protocol::Block::Ptr _block) override;
 
     // only for test
-    SealerConfig::Ptr const sealerConfig() const { return m_sealerConfig; }
-    SealingManager::Ptr const sealingManager() const { return m_sealingManager; }
+    SealerConfig::Ptr sealerConfig() const { return m_sealerConfig; }
+    SealingManager::Ptr sealingManager() const { return m_sealingManager; }
 
 protected:
     void executeWorker() override;

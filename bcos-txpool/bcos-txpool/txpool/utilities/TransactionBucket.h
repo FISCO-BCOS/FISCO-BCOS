@@ -1,15 +1,14 @@
 #include "bcos-crypto/interfaces/crypto/CommonType.h"
 #include "bcos-framework/protocol/Transaction.h"
+#include "bcos-framework/txpool/TxPoolTypeDef.h"
 #include "bcos-utilities/BucketMap.h"
-#include "bcos-utilities/FixedBytes.h"
 #include "boost/multi_index/hashed_index.hpp"
-#include "boost/multi_index/mem_fun.hpp"
 #include "boost/multi_index/member.hpp"
 #include "boost/multi_index/ordered_index.hpp"
 #include "boost/multi_index_container.hpp"
 
-using namespace bcos;
-
+namespace bcos
+{
 class MultiIndexTxContainer
 {
 public:
@@ -199,3 +198,4 @@ public:
         return m_values.forEach<AccessorType>(handler, accessor);
     }
 };
+}  // namespace bcos

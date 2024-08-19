@@ -20,10 +20,9 @@
  */
 
 #pragma once
-#include "../executor/ParallelTransactionExecutorInterface.h"
 #include "../ledger/LedgerConfig.h"
 #include "../protocol/Block.h"
-#include "../protocol/ProtocolTypeDef.h"
+#include "SchedulerTypeDef.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-utilities/Error.h>
 #include <functional>
@@ -68,6 +67,6 @@ public:
     virtual void preExecuteBlock(bcos::protocol::Block::Ptr block, bool verify,
         std::function<void(Error::Ptr&&)> callback) = 0;
 
-    virtual void stop(){};
+    virtual void stop() {};
 };
 }  // namespace bcos::scheduler

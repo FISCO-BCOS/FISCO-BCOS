@@ -25,6 +25,8 @@ target_include_directories(${STORAGE_TARGET} PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-storage>)
 target_link_libraries(${STORAGE_TARGET} PUBLIC ${LIB_LIST})
+set_target_properties(${STORAGE_TARGET} PROPERTIES UNITY_BUILD "ON")
+
 if (APPLE)
   target_link_libraries(${STORAGE_TARGET} PUBLIC "-framework SystemConfiguration")
 endif()
