@@ -39,7 +39,7 @@ jobs:
           node-version: "16.x"
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11' 
+          python-version: '3.10' 
       - name: yum install
         run: |
           sudo yum install -y -q epel-release centos-release-scl flex bison patch gmp-static  glibc-static glibc-devel libzstd-devel autoconf autoconf-archive
