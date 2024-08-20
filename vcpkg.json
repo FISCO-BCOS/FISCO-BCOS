@@ -150,10 +150,7 @@
     "vcpkg-python": {
       "description": "use vcpkg python",
       "dependencies": [
-        {
-          "name": "python3",
-          "host": true
-        }
+        "python3"
       ]
     }
   },
