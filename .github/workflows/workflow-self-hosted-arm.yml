@@ -44,11 +44,8 @@ jobs:
         run: |
           cd /tmp/
           sudo yum install wget openssl-devel libffi-devel bzip2-devel -y
-          wget https://www.python.org/ftp/python/3.11.1/Python-3.11.1.tgz
-          tar xvf Python-3.11.1.tgz
-          cd Python-3.11.1
-          ./configure --enable-optimizations
-          sudo make altinstall
+          wget -c https://www.python.org/ftp/python/3.11.1/Python-3.11.1.tgz
+          [ -e Python-3.11.1 ] || { tar xvf Python-3.11.1.tgz; cd Python-3.11.1; ./configure --enable-optimizations; sudo make altinstall; }
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2024-02-25
