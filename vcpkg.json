@@ -12,6 +12,7 @@
       "name": "vcpkg-cmake-config",
       "host": true
     },
+    "tomlplusplus",
     "magic-enum",
     "boost-log",
     "boost-beast",
@@ -144,19 +145,6 @@
       "description": "mimalloc dependencies",
       "dependencies": [
         "mimalloc"
-      ]
-    },
-    "tomlplusplus-with-python": {
-      "description": "tomlplusplus with python",
-      "dependencies": [
-        "python3",
-        "tomlplusplus"
-      ]
-    },
-    "tomlplusplus-without-python": {
-      "description": "tomlplusplus without python",
-      "dependencies": [
-        "tomlplusplus"
       ]
     }
   },

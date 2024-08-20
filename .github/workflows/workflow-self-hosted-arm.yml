@@ -36,7 +36,9 @@ jobs:
         uses: actions/setup-node@v2
         with:
           node-version: "16.x"
-
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11' 
       - name: Prepare centos tools
         run: |
           sudo yum install -y epel-release centos-release-scl flex bison patch gmp-static java glibc-static glibc-devel libzstd-devel java-1.8.0-openjdk-devel.aarch64
@@ -73,7 +75,7 @@ jobs:
           export LIBCLANG_PATH=/opt/rh/llvm-toolset-7.0/root/lib64/
           . /opt/rh/llvm-toolset-7.0/enable
           mkdir -p build && cd build
-          cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_VCPKG_PYTHON=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON .. || cat *.log
+          cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON .. || cat *.log
           make -j8
       - name: Test
         run: cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
