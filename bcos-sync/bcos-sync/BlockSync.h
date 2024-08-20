@@ -19,6 +19,7 @@
  * @date 2021-05-24
  */
 #pragma once
+#include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-sync/BlockSyncConfig.h"
 #include "bcos-sync/state/DownloadingQueue.h"
 #include "bcos-sync/state/SyncPeerStatus.h"
@@ -133,12 +134,16 @@ protected:
     // update SyncTreeTopology node info
     virtual void updateTreeTopologyNodeInfo();
 
-protected:
-    void requestBlocks(bcos::protocol::BlockNumber _from, bcos::protocol::BlockNumber _to);
-    void fetchAndSendBlock(
-        bcos::crypto::PublicPtr const& _peer, bcos::protocol::BlockNumber _number);
+    virtual void syncArchivedBlockBody(bcos::protocol::BlockNumber archivedBlockNumber);
+    virtual void verifyAndCommitArchivedBlock(bcos::protocol::BlockNumber archivedBlockNumber);
+
+    void requestBlocks(
+        bcos::protocol::BlockNumber _from, bcos::protocol::BlockNumber _to, int32_t blockDataFlag);
+    void fetchAndSendBlock(bcos::crypto::PublicPtr const& _peer,
+        bcos::protocol::BlockNumber _number, int32_t _blockDataFlag);
     void printSyncInfo();
 
+protected:
     BlockSyncConfig::Ptr m_config;
     SyncPeerStatus::Ptr m_syncStatus;
     DownloadingQueue::Ptr m_downloadingQueue;
@@ -161,6 +166,22 @@ protected:
 
     std::atomic_bool m_masterNode = {false};
     bool m_allowFreeNode = false;
+
+    mutable SharedMutex x_archivedBlockQueue;
+
+private:
+    struct BlockLess
+    {
+        bool operator()(bcos::protocol::Block::Ptr const& _first,
+            bcos::protocol::Block::Ptr const& _second) const
+        {
+            return _first->blockHeader()->number() < _second->blockHeader()->number();
+        }
+    };
+    std::priority_queue<bcos::protocol::Block::Ptr, bcos::protocol::Blocks, BlockLess>
+        m_archivedBlockQueue;  // top block is the max number block
+    std::chrono::system_clock::time_point m_lastArchivedRequestTime =
+        std::chrono::system_clock::now();
 
     SyncTreeTopology::Ptr m_syncTreeTopology{nullptr};
 };

@@ -136,6 +136,11 @@ public:
     virtual void asyncGetCurrentStateByKey(std::string_view const& _key,
         std::function<void(Error::Ptr&&, std::optional<bcos::storage::Entry>&&)> _callback) = 0;
 
+    virtual Error::Ptr setCurrentStateByKey(
+        std::string_view const& _key, bcos::storage::Entry entry)
+    {
+        return nullptr;
+    }
     /**
      * @brief async get system config by table key
      * @param _key the key of row, you can checkout all key in LedgerTypeDef.h
@@ -168,6 +173,12 @@ public:
     virtual void asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr _blockTxs,
         bcos::protocol::Block::ConstPtr block,
         std::function<void(Error::UniquePtr&&)> _callback) = 0;
+
+    /**
+     * @brief remove expired tx nonces
+     * @param blockNumber the current block number
+     */
+    virtual void removeExpiredNonce(protocol::BlockNumber blockNumber, bool sync) = 0;
 
     /**
      * @brief get storage value by address and key and block number in coroutine. It will access the

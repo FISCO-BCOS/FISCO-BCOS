@@ -6,7 +6,8 @@ on:
       - feature-3.*
       - master
     types: [closed]
-
+env:
+  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
 

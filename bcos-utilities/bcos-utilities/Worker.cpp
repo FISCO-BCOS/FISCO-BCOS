@@ -123,7 +123,9 @@ void Worker::terminate()
     if (m_workerThread)
     {
         if (m_workerState.exchange(WorkerState::Killing) == WorkerState::Killing)
+        {
             return;  // Somebody else is doing this
+        }
         l.unlock();
         m_workerStateNotifier.notify_all();
         m_workerThread->join();

@@ -22,4 +22,5 @@ message BlockSyncMessage
 
     //for block sync optimize
     int64 block_interval = 10;
+    int32 block_data_flag = 11;
 }

@@ -40,7 +40,7 @@ public:
         bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
         bcos::txpool::TxPoolInterface::Ptr _txPool)
       : BlockExecutive(block, scheduler, startContextID, transactionSubmitResultFactory, staticCall,
-            _blockFactory, _txPool){};
+            _blockFactory, _txPool) {};
 
     SerialBlockExecutive(bcos::protocol::Block::Ptr block, SchedulerImpl* scheduler,
         size_t startContextID,
@@ -51,7 +51,7 @@ public:
       : BlockExecutive(block, scheduler, startContextID, transactionSubmitResultFactory, staticCall,
             _blockFactory, _txPool, _gasLimit, _gasPrice, _syncBlock)
     {}
-    virtual ~SerialBlockExecutive(){};
+    virtual ~SerialBlockExecutive() {};
 
 
     void prepare() override;
@@ -68,7 +68,7 @@ private:
     void onExecuteFinish(
         std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback) override;
 
-    void serialPrepareExecutor() override{
+    void serialPrepareExecutor() override {
         // do nothing
     };
 

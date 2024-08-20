@@ -247,6 +247,11 @@ public:
     {
         _callback(nullptr, {});
     }
+    Error::Ptr setCurrentStateByKey(
+        std::string_view const& _key, bcos::storage::Entry entry) override
+    {
+        return nullptr;
+    }
 
     void asyncGetSystemConfigByKey(std::string_view const& _key,
         std::function<void(Error::Ptr, std::string, BlockNumber)> _onGetConfig) override
@@ -309,6 +314,7 @@ public:
         }
         _onGetList(nullptr, nonceList);
     }
+    void removeExpiredNonce(protocol::BlockNumber blockNumber, bool sync) override {}
 
     void setStatus(bool _normal) { m_statusNormal = _normal; }
     void setTotalTxCount(size_t _totalTxCount) { m_totalTxCount = _totalTxCount; }
