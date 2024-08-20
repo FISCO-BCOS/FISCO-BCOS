@@ -40,7 +40,7 @@ jobs:
       - name: Prepare centos tools
         run: |
           sudo yum install -y epel-release centos-release-scl flex bison patch gmp-static java glibc-static glibc-devel libzstd-devel java-1.8.0-openjdk-devel.aarch64
-          sudo yum install -y devtoolset-10 llvm-toolset-7.0 rh-perl530-perl zlib-devel ccache lcov python-devel python3-devel python3-pip automake autoconf autoconf-archive ninja-build
+          sudo yum install -y devtoolset-10 llvm-toolset-7.0 rh-perl530-perl zlib-devel ccache lcov python-devel python3-devel python3-pip automake autoconf autoconf-archive
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2024-02-25
@@ -63,6 +63,7 @@ jobs:
       - name: update vcpkg
         run: |
           cd vcpkg && git fetch origin master
+          perl -pi -e 's/AMD64/AMD64\|aarch64/' scripts/cmake/vcpkg_find_acquire_program\(NINJA\).cmake
           cd -
 
       - name: Build for linux
