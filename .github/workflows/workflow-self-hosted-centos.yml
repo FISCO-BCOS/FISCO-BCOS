@@ -37,16 +37,21 @@ jobs:
         uses: actions/setup-node@v2
         with:
           node-version: "16.x"
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.10' 
       - name: yum install
         run: |
           sudo yum install -y -q epel-release centos-release-scl flex bison patch gmp-static  glibc-static glibc-devel libzstd-devel autoconf autoconf-archive
           sudo yum install -y -q devtoolset-11 llvm-toolset-7.0 rh-perl530-perl cmake3 zlib-devel ccache python-devel python3-devel python3-pip automake openssl
           sudo yum reinstall -y -q https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
           sudo yum install -y -q git
-
+      - name: Install python 3.11
+        run: |
+          cd /tmp/
+          sudo yum install wget openssl-devel libffi-devel bzip2-devel -y
+          sudo wget https://www.python.org/ftp/python/3.11.1/Python-3.11.1.tgz
+          sudo tar xvf Python-3.11.1.tgz
+          cd Python-3.11.1
+          ./configure --enable-optimizations
+          sudo make altinstall
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2024-02-25
