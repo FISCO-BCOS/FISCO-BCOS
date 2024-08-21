@@ -49,8 +49,8 @@ struct RocksDBOption
 class StorageInitializer
 {
 public:
-    static auto createRocksDB(
-        const std::string& _path, RocksDBOption& rocksDBOption, bool _enableDBStatistics = false)
+    static auto createRocksDB(const std::string& _path, RocksDBOption& rocksDBOption,
+        bool _enableDBStatistics = false, [[maybe_unused]] size_t keyPageSize = 0)
     {
         boost::filesystem::create_directories(_path);
         rocksdb::DB* db = nullptr;
@@ -112,18 +112,17 @@ public:
             throw std::runtime_error("open rocksDB failed, msg:" + status.ToString());
         }
         return std::unique_ptr<rocksdb::DB, std::function<void(rocksdb::DB*)>>(
-            db, [](rocksdb::DB* db) {
-                CancelAllBackgroundWork(db, true);
-                db->Close();
-                delete db;
+            db, [](rocksdb::DB* rocksDB) {
+                CancelAllBackgroundWork(rocksDB, true);
+                rocksDB->Close();
+                delete rocksDB;
             });
     }
-    static bcos::storage::TransactionalStorageInterface::Ptr build(const std::string& _storagePath,
-        RocksDBOption& rocksDBOption, const bcos::security::DataEncryptInterface::Ptr& _dataEncrypt,
-        [[maybe_unused]] size_t keyPageSize = 0, bool _enableDBStatistics = false)
+    static bcos::storage::TransactionalStorageInterface::Ptr build(
+        auto&& rocksDB, const bcos::security::DataEncryptInterface::Ptr& _dataEncrypt)
     {
-        auto unique_db = createRocksDB(_storagePath, rocksDBOption, _enableDBStatistics);
-        return std::make_shared<bcos::storage::RocksDBStorage>(std::move(unique_db), _dataEncrypt);
+        return std::make_shared<bcos::storage::RocksDBStorage>(
+            std::forward<decltype(rocksDB)>(rocksDB), _dataEncrypt);
     }
 
 #ifdef WITH_TIKV

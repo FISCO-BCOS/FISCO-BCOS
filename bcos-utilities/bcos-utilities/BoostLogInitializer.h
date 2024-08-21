@@ -154,5 +154,6 @@ private:
     bool m_autoFlush = true;
     bool m_enableLog = true;
     std::atomic_bool m_running = {false};
+    std::vector<int> m_rotateTimePoint = {0, 0, 0};
 };
 }  // namespace bcos

@@ -28,6 +28,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -35,6 +36,10 @@
 
 namespace bcos::storage
 {
+
+const std::string ROCKSDB = "rocksDB";
+const std::string TiKV = "TiKV";
+
 enum StorageError
 {
     UnknownError = -60000,

@@ -19,13 +19,15 @@
  * @date 2021-05-24
  */
 #include "DownloadRequestQueue.h"
+#include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-sync/utilities/Common.h"
 
 using namespace bcos;
 using namespace bcos::sync;
 using namespace bcos::protocol;
 
-void DownloadRequestQueue::push(BlockNumber _fromNumber, size_t _size, size_t _interval)
+void DownloadRequestQueue::push(
+    BlockNumber _fromNumber, size_t _size, size_t _interval, int32_t _dataFlag)
 {
     UpgradableGuard lock(x_reqQueue);
     // Note: the requester must have retry logic
@@ -39,7 +41,7 @@ void DownloadRequestQueue::push(BlockNumber _fromNumber, size_t _size, size_t _i
         return;
     }
     UpgradeGuard ulock(lock);
-    m_reqQueue.push(std::make_shared<DownloadRequest>(_fromNumber, _size, _interval));
+    m_reqQueue.push(std::make_shared<DownloadRequest>(_fromNumber, _size, _interval, _dataFlag));
     BLKSYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("Request")
                        << LOG_DESC("Push request in reqQueue req") << LOG_KV("from", _fromNumber)
                        << LOG_KV("size", _size) << LOG_KV("interval", _interval)
@@ -61,6 +63,7 @@ DownloadRequest::UniquePtr DownloadRequestQueue::topAndPop()
     size_t size = m_reqQueue.top()->size();
     size_t interval = m_reqQueue.top()->interval();
     BlockNumber toNumber = m_reqQueue.top()->toNumber();
+    int32_t dataFlag = m_reqQueue.top()->blockDataFlag();
     UpgradeGuard ulock(lock);
     while (!m_reqQueue.empty() &&
            std::cmp_greater_equal(toNumber + interval, m_reqQueue.top()->fromNumber()) &&
@@ -118,20 +121,21 @@ DownloadRequest::UniquePtr DownloadRequestQueue::topAndPop()
     {
         BLKSYNC_LOG(TRACE) << LOG_BADGE("Download") << LOG_BADGE("Request")
                            << LOG_DESC("Pop reqQueue top req") << LOG_KV("from", fromNumber)
-                           << LOG_KV("size", size) << LOG_KV("interval", interval);
+                           << LOG_KV("size", size) << LOG_KV("interval", interval)
+                           << LOG_KV("dataFlag", dataFlag);
     }
-    return std::make_unique<DownloadRequest>(fromNumber, size, interval);
+    return std::make_unique<DownloadRequest>(fromNumber, size, interval, dataFlag);
 }
 
-std::set<protocol::BlockNumber, std::less<>> DownloadRequestQueue::mergeAndPop()
+std::set<DownloadRequestQueue::BlockRequest> DownloadRequestQueue::mergeAndPop()
 {
     UpgradableGuard lock(x_reqQueue);
     if (m_reqQueue.empty())
     {
-        return {{}, 0};
+        return {};
     }
     UpgradeGuard ulock(lock);
-    std::set<BlockNumber, std::less<>> fetchSet{};
+    std::set<DownloadRequestQueue::BlockRequest> fetchSet{};
 
     while (!m_reqQueue.empty())
     {
@@ -139,7 +143,9 @@ std::set<protocol::BlockNumber, std::less<>> DownloadRequestQueue::mergeAndPop()
         auto interval = (topReq->interval() == 0 ? 1 : topReq->interval());
         for (BlockNumber i = topReq->fromNumber(); i <= topReq->toNumber(); i += interval)
         {
-            fetchSet.insert(i);
+            fetchSet.insert({i, topReq->blockDataFlag() > 0 ?
+                                    topReq->blockDataFlag() :
+                                    (bcos::ledger::HEADER | bcos::ledger::TRANSACTIONS)});
         }
         m_reqQueue.pop();
     }

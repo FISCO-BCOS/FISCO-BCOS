@@ -177,6 +177,7 @@ public:
         bcos::protocol::Block::ConstPtr block,
         std::function<void(Error::UniquePtr&&)> _callback) override
     {}
+    void removeExpiredNonce(protocol::BlockNumber blockNumber, bool sync) override {}
 
     void commitSuccess(bool _success)
     {

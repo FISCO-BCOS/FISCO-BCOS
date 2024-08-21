@@ -54,6 +54,9 @@ inline task::Task<void> tag_invoke(ledger::tag_t<prewriteBlock> /*unused*/, Ledg
 task::Task<void> tag_invoke(ledger::tag_t<storeTransactionsAndReceipts>, LedgerInterface& ledger,
     bcos::protocol::ConstTransactionsPtr blockTxs, bcos::protocol::Block::ConstPtr block);
 
+task::Task<void> tag_invoke(ledger::tag_t<removeExpiredNonce>, LedgerInterface& ledger,
+    protocol::BlockNumber expiredNumber);
+
 task::Task<protocol::Block::Ptr> tag_invoke(ledger::tag_t<getBlockData> /*unused*/,
     LedgerInterface& ledger, protocol::BlockNumber blockNumber, int32_t blockFlag);
 

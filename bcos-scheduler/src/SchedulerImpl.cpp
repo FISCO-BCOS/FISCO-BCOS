@@ -663,9 +663,9 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                     self->m_ledgerConfig = ledgerConfig;
                     commitLock->unlock();  // just unlock here
 
-
-                    // Note: blockNumber = 0, means system deploy, and tx is not existed in txpool.
-                    // So it should not exec tx notifier
+                    self->m_ledger->removeExpiredNonce(blockNumber, false);
+                    // Note: blockNumber = 0, means system deploy, and tx is not existed in
+                    // txpool. So it should not exec tx notifier
                     if (self->m_txNotifier && blockNumber != 0)
                     {
                         SCHEDULER_LOG(DEBUG) << "Start notify block result: " << blockNumber;

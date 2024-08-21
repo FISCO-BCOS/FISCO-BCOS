@@ -714,6 +714,19 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
     m_pdCertPath = _pt.get<std::string>("storage.pd_ssl_cert_path", "");
     m_pdKeyPath = _pt.get<std::string>("storage.pd_ssl_key_path", "");
     m_enableArchive = _pt.get<bool>("storage.enable_archive", false);
+    m_syncArchivedBlocks = _pt.get<bool>("storage.sync_archived_blocks", false);
+    m_enableSeparateBlockAndState = _pt.get<bool>("storage.enable_separate_block_state", false);
+    if (boost::iequals(m_storageType, bcos::storage::TiKV))
+    {
+        m_enableSeparateBlockAndState = false;
+        NodeConfig_LOG(INFO) << LOG_DESC("Only rocksDB support separate block and state")
+                             << LOG_KV("separateBlockAndState", m_enableSeparateBlockAndState)
+                             << LOG_KV("storageType", m_storageType);
+    }
+    m_stateDBPath = m_storagePath;
+    m_stateDBPath = m_storagePath + "/state";
+    m_blockDBPath = m_storagePath + "/block";
+
     if (m_enableArchive)
     {
         m_archiveListenIP = _pt.get<std::string>("storage.archive_ip");
@@ -734,6 +747,7 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("KeyPage", m_keyPageSize) << LOG_KV("storageType", m_storageType)
                          << LOG_KV("pdAddrs", pd_addrs) << LOG_KV("pdCaPath", m_pdCaPath)
                          << LOG_KV("enableArchive", m_enableArchive)
+                         << LOG_KV("enableSeparateBlockAndState", m_enableSeparateBlockAndState)
                          << LOG_KV("archiveListenIP", m_archiveListenIP)
                          << LOG_KV("archiveListenPort", m_archiveListenPort)
                          << LOG_KV("enable_rocksdb_blob", m_enableRocksDBBlob)
