@@ -24,6 +24,9 @@
 
 namespace bcos::consensus
 {
+
+constexpr static uint64_t defaultWeight = 100;
+
 class ConsensusNodeInterface
 {
 public:
@@ -33,8 +36,7 @@ public:
 
     // the nodeID of the consensus node
     [[nodiscard]] virtual bcos::crypto::PublicPtr nodeID() const = 0;
-
-    [[nodiscard]] virtual uint64_t weight() const { return 100; }
+    [[nodiscard]] virtual uint64_t weight() const { return defaultWeight; }
 };
 using ConsensusNodeList = std::vector<ConsensusNodeInterface::Ptr>;
 using ConsensusNodeListPtr = std::shared_ptr<ConsensusNodeList>;
