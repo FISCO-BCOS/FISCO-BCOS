@@ -19,8 +19,9 @@
  */
 
 #pragma once
-#include "bcos-framework/consensus/ConsensusInterface.h"
-#include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/consensus/ConsensusNodeInterface.h"
+#include "bcos-framework/consensus/ConsensusTypeDef.h"
+#include "bcos-framework/ledger/LedgerConfig.h"
 
 namespace bcos::consensus
 {
@@ -29,13 +30,10 @@ class RPBFTConfigTools
 {
 public:
     using Ptr = std::shared_ptr<RPBFTConfigTools>;
-
-    RPBFTConfigTools() : m_candidateNodeList({}), m_consensusNodeList({}) {}
+    RPBFTConfigTools() = default;
 
     void resetConfig(const bcos::ledger::LedgerConfig::Ptr& _ledgerConfig);
-
     void updateWorkingSealerNodeList(const bcos::ledger::LedgerConfig::Ptr& _ledgerConfig);
-
     void updateShouldRotateSealers(const bcos::ledger::LedgerConfig::Ptr& _ledgerConfig);
 
     void updateEpochBlockNum(const bcos::ledger::LedgerConfig::Ptr& _ledgerConfig);

@@ -20,7 +20,6 @@
 
 #pragma once
 
-#include "bcos-pbft/pbft/config/PBFTConfig.h"
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/storage/KVStorageHelper.h>
 #include <bcos-framework/sync/BlockSyncInterface.h>
