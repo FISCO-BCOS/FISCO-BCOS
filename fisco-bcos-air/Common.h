@@ -32,8 +32,8 @@ public:
     static void exit() { exitHandler(0); }
     static void exitHandler(int signal)
     {
-        std::cout << "[" << bcos::getCurrentDateTime() << "] " << "exit because receive signal "
-                  << signal << std::endl;
+        std::cout << "[" << bcos::getCurrentDateTime() << "] "
+                  << "exit because receive signal " << signal << std::endl;
         ExitHandler::c_shouldExit.store(true);
         ExitHandler::c_shouldExit.notify_all();
     }
