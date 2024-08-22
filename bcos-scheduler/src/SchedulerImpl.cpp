@@ -2,7 +2,7 @@
 #include "BlockExecutive.h"
 #include "Common.h"
 #include "bcos-framework/ledger/Ledger.h"
-#include "bcos-ledger/src/libledger/LedgerMethods.h"
+#include "bcos-framework/ledger/LedgerMethods.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Common.h"
 #include <bcos-framework/executor/ExecuteError.h>

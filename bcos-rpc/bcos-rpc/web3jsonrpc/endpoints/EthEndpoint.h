@@ -20,14 +20,12 @@
 
 #pragma once
 #include <bcos-framework/ledger/Ledger.h>
-#include <bcos-ledger/src/libledger/LedgerMethods.h>
 #include <bcos-rpc/groupmgr/GroupManager.h>
 #include <bcos-rpc/jsonrpc/JsonRpcInterface.h>
 #include <bcos-rpc/web3jsonrpc/Web3FilterSystem.h>
 #include <json/json.h>
 #include <tbb/concurrent_hash_map.h>
 #include <boost/core/ignore_unused.hpp>
-#include <unordered_map>
 
 namespace bcos::rpc
 {

@@ -1,6 +1,6 @@
 #pragma once
+#include "bcos-framework/ledger/LedgerMethods.h"
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
-#include <bcos-ledger/src/libledger/LedgerMethods.h>
 #include <bcos-rpc/filter/Filter.h>
 #include <bcos-rpc/filter/LogMatcher.h>
 #include <bcos-rpc/groupmgr/GroupManager.h>
@@ -11,12 +11,10 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Timer.h>
 #include <boost/functional/hash.hpp>
-#include <atomic>
 #include <functional>
 #include <memory>
 #include <string>
 #include <string_view>
-#include <vector>
 
 namespace bcos::rpc::filter
 {
@@ -63,11 +61,10 @@ public:
     using Ptr = std::shared_ptr<FilterSystem>;
     using ConstPtr = std::shared_ptr<const FilterSystem>;
 
-    FilterSystem(GroupManager::Ptr groupManager, const std::string& groupId,
+    FilterSystem(GroupManager::Ptr groupManager, std::string groupId,
         FilterRequestFactory::Ptr factory, int filterTimeout, int maxBlockProcessPerReq);
     virtual ~FilterSystem() { m_cleanUpTimer->stop(); }
 
-public:
     // jsonrpc
     task::Task<std::string> newBlockFilter(std::string_view groupId);
     task::Task<std::string> newPendingTxFilter(std::string_view groupId);
