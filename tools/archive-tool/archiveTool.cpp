@@ -28,6 +28,7 @@
 #include "bcos-tars-protocol/bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-utilities/BoostLogInitializer.h"
 #include "boost/filesystem.hpp"
+#include "libinitializer/LedgerInitializer.h"
 #include "libinitializer/ProtocolInitializer.h"
 #include "libinitializer/StorageInitializer.h"
 #include "rocksdb/db.h"
@@ -143,11 +144,17 @@ DB* createSecondaryRocksDB(const std::string& path, const std::string& secondary
     return db_secondary;
 }
 
-TransactionalStorageInterface::Ptr createBackendStorage(
-    std::shared_ptr<bcos::tool::NodeConfig> nodeConfig, const std::string& logPath, bool write,
-    const std::string& secondaryPath)
+std::pair<TransactionalStorageInterface::Ptr, TransactionalStorageInterface::Ptr>
+createBackendStorage(std::shared_ptr<bcos::tool::NodeConfig> nodeConfig, const std::string& logPath,
+    bool write, const std::string& secondaryPath)
 {
     bcos::storage::TransactionalStorageInterface::Ptr storage = nullptr;
+    bcos::storage::TransactionalStorageInterface::Ptr blockStorage = nullptr;
+    std::string stateDBPath = nodeConfig->storagePath();
+    if (nodeConfig->enableSeparateBlockAndState())
+    {
+        stateDBPath = nodeConfig->stateDBPath();
+    }
     if (boost::iequals(nodeConfig->storageType(), "RocksDB"))
     {
         bcos::security::DataEncryptInterface::Ptr dataEncryption = nullptr;
@@ -164,13 +171,30 @@ TransactionalStorageInterface::Ptr createBackendStorage(
             option.minWriteBufferNumberToMerge = nodeConfig->minWriteBufferNumberToMerge();
             option.blockCacheSize = nodeConfig->blockCacheSize();
             storage = StorageInitializer::build(
-                nodeConfig->storagePath(), option, dataEncryption, nodeConfig->keyPageSize());
+                StorageInitializer::createRocksDB(
+                    stateDBPath, option, nodeConfig->enableStatistics(), nodeConfig->keyPageSize()),
+                dataEncryption);
+            blockStorage = storage;
+            if (nodeConfig->enableSeparateBlockAndState())
+            {
+                auto blockDB = StorageInitializer::createRocksDB(
+                    nodeConfig->blockDBPath(), option, nodeConfig->enableStatistics());
+                blockStorage = StorageInitializer::build(std::move(blockDB), dataEncryption);
+            }
         }
         else
         {
-            auto* rocksdb = createSecondaryRocksDB(nodeConfig->storagePath(), secondaryPath);
+            auto* rocksdb = createSecondaryRocksDB(stateDBPath, secondaryPath);
             storage = std::make_shared<RocksDBStorage>(
                 std::unique_ptr<rocksdb::DB>(rocksdb), dataEncryption);
+            blockStorage = storage;
+            if (nodeConfig->enableSeparateBlockAndState())
+            {
+                auto* blockRocksDB =
+                    createSecondaryRocksDB(nodeConfig->blockDBPath(), secondaryPath);
+                blockStorage = std::make_shared<RocksDBStorage>(
+                    std::unique_ptr<rocksdb::DB>(blockRocksDB), dataEncryption);
+            }
         }
     }
     else if (boost::iequals(nodeConfig->storageType(), "TiKV"))
@@ -184,7 +208,7 @@ TransactionalStorageInterface::Ptr createBackendStorage(
     {
         throw std::runtime_error("storage type not support");
     }
-    return storage;
+    return {storage, blockStorage};
 }
 
 void deleteArchivedBlocksInNode(const std::string& endpoint, int64_t startBlock, int64_t endBlock)
@@ -338,18 +362,30 @@ void archiveBlocks(auto archiveStorage, auto ledger,
 }
 
 void reimportBlocks(auto archiveStorage, TransactionalStorageInterface::Ptr localStorage,
-    const std::shared_ptr<bcos::tool::NodeConfig>& nodeConfig, int64_t startBlockNumber,
+    const std::shared_ptr<bcos::tool::NodeConfig>& nodeConfig,
+    TransactionalStorageInterface::Ptr localBlockStorage, int64_t startBlockNumber,
     int64_t endBlockNumber)
 {
     // create factory
     auto protocolInitializer = std::make_shared<ProtocolInitializer>();
     protocolInitializer->init(nodeConfig);
-    auto ledger =
-        std::make_shared<bcos::ledger::Ledger>(protocolInitializer->blockFactory(), localStorage);
+    auto ledger = std::make_shared<bcos::ledger::Ledger>(protocolInitializer->blockFactory(),
+        localStorage, nodeConfig->blockLimit(), localBlockStorage);
     auto blockFactory = protocolInitializer->blockFactory();
     auto transactionFactory = blockFactory->transactionFactory();
     auto receiptFactory = blockFactory->receiptFactory();
-
+    if (!nodeConfig->enableSendBlockStatusByTree())
+    {
+        localBlockStorage = localStorage;
+    }
+    else
+    {
+        if (!localBlockStorage)
+        {
+            std::cerr << "localBlockStorage is null" << std::endl;
+            exit(1);
+        }
+    }
     // get transaction list of block
     // tbb::parallel_for(tbb::blocked_range<size_t>(startBlockNumber, endBlockNumber),
     //     [&](const tbb::blocked_range<size_t>& range) {
@@ -428,7 +464,7 @@ void reimportBlocks(auto archiveStorage, TransactionalStorageInterface::Ptr loca
             });
 
         // write transactions to local storage
-        localStorage->setRows(ledger::SYS_HASH_2_TX, txHashes, txsView);
+        localBlockStorage->setRows(ledger::SYS_HASH_2_TX, txHashes, txsView);
 
         // get receipts from archive database
         std::promise<std::vector<std::optional<Entry>>> promiseReceipts;
@@ -497,7 +533,7 @@ void reimportBlocks(auto archiveStorage, TransactionalStorageInterface::Ptr loca
                         h256s topics;
                         for (const auto& k : logEntryJson["topics"])
                         {
-                            topics.push_back(h256(k.asString()));
+                            topics.emplace_back(k.asString());
                         }
                         auto address = logEntryJson["address"].asString();
                         auto addr = bytes(address.data(), address.data() + address.size());
@@ -511,7 +547,7 @@ void reimportBlocks(auto archiveStorage, TransactionalStorageInterface::Ptr loca
                 }
             });
         // write receipt to local storage
-        localStorage->setRows(ledger::SYS_HASH_2_RECEIPT, txHashes, receiptsView);
+        localBlockStorage->setRows(ledger::SYS_HASH_2_RECEIPT, txHashes, receiptsView);
         std::cout << "\r"
                   << "reimport block " << blockNumber << " size: " << txHashes.size() << std::flush;
     }
@@ -637,12 +673,13 @@ int main(int argc, const char* argv[])
     }
 
     // create ledger to get block data
-    auto localStorage =
+    auto [localStorage, localBlockStorage] =
         createBackendStorage(nodeConfig, logInitializer->logPath(), !isArchive, secondaryPath);
     auto protocolInitializer = std::make_shared<ProtocolInitializer>();
     protocolInitializer->init(nodeConfig);
-    auto ledger =
-        std::make_shared<bcos::ledger::Ledger>(protocolInitializer->blockFactory(), localStorage);
+
+    auto ledger = LedgerInitializer::build(
+        protocolInitializer->blockFactory(), localStorage, nodeConfig, localBlockStorage);
     std::promise<int64_t> promise;
     ledger->asyncGetBlockNumber(
         [&promise](const Error::Ptr& error, bcos::protocol::BlockNumber number) {
@@ -692,8 +729,9 @@ int main(int argc, const char* argv[])
         option.writeBufferSize = nodeConfig->writeBufferSize();
         option.minWriteBufferNumberToMerge = nodeConfig->minWriteBufferNumberToMerge();
         option.blockCacheSize = nodeConfig->blockCacheSize();
-        archiveStorage =
-            StorageInitializer::build(archivePath, option, nullptr, nodeConfig->keyPageSize());
+        archiveStorage = StorageInitializer::build(
+            StorageInitializer::createRocksDB(archivePath, option, nodeConfig->enableStatistics()),
+            nullptr);
     }
     else if (boost::iequals(archiveType, "TiKV"))
     {  // create archive TiKV storage
@@ -714,7 +752,8 @@ int main(int argc, const char* argv[])
     }
     else
     {  // reimport
-        reimportBlocks(archiveStorage, localStorage, nodeConfig, startBlockNumber, endBlockNumber);
+        reimportBlocks(archiveStorage, localStorage, nodeConfig, localBlockStorage,
+            startBlockNumber, endBlockNumber);
     }
     if (fs::exists(secondaryPath))
     {

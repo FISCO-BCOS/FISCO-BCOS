@@ -45,10 +45,13 @@ public:
         boost::compute::detail::lru_cache<int64_t, std::shared_ptr<std::vector<h256>>>;
 
     Ledger(bcos::protocol::BlockFactory::Ptr _blockFactory,
-        bcos::storage::StorageInterface::Ptr _storage, int merkleTreeCacheSize = 100)
+        bcos::storage::StorageInterface::Ptr _storage, size_t _blockLimit,
+        bcos::storage::StorageInterface::Ptr _blockStorage = nullptr, int merkleTreeCacheSize = 100)
       : m_blockFactory(std::move(_blockFactory)),
-        m_storage(std::move(_storage)),
-        m_threadPool(std::make_shared<ThreadPool>("WriteReceipts", 1)),
+        m_stateStorage(std::move(_storage)),
+        m_blockStorage(std::move(_blockStorage)),
+        m_threadPool(std::make_shared<ThreadPool>("ledgerWrite", 2)),
+        m_blockLimit(_blockLimit),
         m_merkleTreeCacheSize(merkleTreeCacheSize),
         m_txProofMerkleCache(m_merkleTreeCacheSize),
         m_receiptProofMerkleCache(m_merkleTreeCacheSize)
@@ -101,6 +104,7 @@ public:
         std::function<void(
             Error::Ptr, std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>>)>
             _onGetList) override;
+    void removeExpiredNonce(protocol::BlockNumber blockNumber, bool sync = false) override;
 
     void asyncGetNodeListByType(const std::string_view& _type,
         std::function<void(Error::Ptr, consensus::ConsensusNodeListPtr)> _onGetConfig) override;
@@ -108,6 +112,8 @@ public:
     void asyncGetCurrentStateByKey(std::string_view const& _key,
         std::function<void(Error::Ptr&&, std::optional<bcos::storage::Entry>&&)> _callback)
         override;
+    Error::Ptr setCurrentStateByKey(
+        std::string_view const& _key, bcos::storage::Entry entry) override;
 
     task::Task<std::optional<storage::Entry>> getStorageAt(std::string_view _address,
         std::string_view _key, protocol::BlockNumber _blockNumber) override;
@@ -128,8 +134,8 @@ protected:
             // getABI function begin in version 320
             auto keyPageIgnoreTables = std::make_shared<std::set<std::string, std::less<>>>(
                 storage::IGNORED_ARRAY_310.begin(), storage::IGNORED_ARRAY_310.end());
-            auto [error, entry] =
-                m_storage->getRow(ledger::SYS_CONFIG, ledger::SYSTEM_KEY_COMPATIBILITY_VERSION);
+            auto [error, entry] = m_stateStorage->getRow(
+                ledger::SYS_CONFIG, ledger::SYSTEM_KEY_COMPATIBILITY_VERSION);
             if (!entry || error)
             {
                 BOOST_THROW_EXCEPTION(
@@ -138,10 +144,10 @@ protected:
             auto [compatibilityVersionStr, _] = entry->template getObject<SystemConfigEntry>();
             auto const version = bcos::tool::toVersionNumber(compatibilityVersionStr);
             auto stateStorage = stateStorageFactory.createStateStorage(
-                m_storage, version, true, false, keyPageIgnoreTables);
+                m_stateStorage, version, true, false, keyPageIgnoreTables);
             return stateStorage;
         }
-        return std::make_shared<bcos::storage::StateStorage>(m_storage, true);
+        return std::make_shared<bcos::storage::StateStorage>(m_stateStorage, true);
     }
 
 private:
@@ -172,11 +178,15 @@ private:
 
     void createFileSystemTables(uint32_t blockVersion);
 
+    bcos::storage::StorageInterface::Ptr getBlockStorage()
+    {
+        return m_blockStorage ? m_blockStorage : m_stateStorage;
+    }
     std::optional<storage::Table> buildDir(const std::string_view& _absoluteDir,
         uint32_t blockVersion, std::string valueField = SYS_VALUE);
 
     // only for /sys/
-    inline std::string getSysBaseName(const std::string& _s)
+    static inline std::string getSysBaseName(const std::string& _s)
     {
         return _s.substr(_s.find_last_of('/') + 1);
     }
@@ -189,10 +199,13 @@ private:
         const bcos::ledger::LedgerConfig& _ledgerConfig, std::int64_t _epochSealerNum);
 
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
-    bcos::storage::StorageInterface::Ptr m_storage;
+    bcos::storage::StorageInterface::Ptr m_stateStorage;
+    // if m_blockStorage,txs and receipts will be stored in m_blockStorage
+    bcos::storage::StorageInterface::Ptr m_blockStorage = nullptr;
 
     mutable RecursiveMutex m_mutex;
     std::shared_ptr<bcos::ThreadPool> m_threadPool;
+    size_t m_blockLimit;
 
     // Maintain merkle trees of 100 blocks
     int m_merkleTreeCacheSize;

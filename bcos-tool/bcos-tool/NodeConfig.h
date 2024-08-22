@@ -125,6 +125,8 @@ public:
     size_t pipelineSize() const { return m_pipelineSize; }
 
     std::string const& storagePath() const { return m_storagePath; }
+    std::string const& stateDBPath() const { return m_stateDBPath; }
+    std::string const& blockDBPath() const { return m_blockDBPath; }
     std::string const& storageType() const { return m_storageType; }
     size_t keyPageSize() const { return m_keyPageSize; }
     int maxWriteBufferNumber() const { return m_maxWriteBufferNumber; }
@@ -141,6 +143,8 @@ public:
     std::string const& storageDBName() const { return m_storageDBName; }
     std::string const& stateDBName() const { return m_stateDBName; }
     bool enableArchive() const { return m_enableArchive; }
+    bool syncArchivedBlocks() const { return m_syncArchivedBlocks; }
+    bool enableSeparateBlockAndState() const { return m_enableSeparateBlockAndState; }
     std::string const& archiveListenIP() const { return m_archiveListenIP; }
     uint16_t archiveListenPort() const { return m_archiveListenPort; }
 
@@ -398,6 +402,10 @@ private:
     bool m_enableRocksDBBlob = false;
 
     bool m_enableArchive = false;
+    bool m_syncArchivedBlocks = false;
+    bool m_enableSeparateBlockAndState = false;
+    std::string m_stateDBPath;
+    std::string m_blockDBPath;
     std::string m_archiveListenIP;
     uint16_t m_archiveListenPort = 0;
 

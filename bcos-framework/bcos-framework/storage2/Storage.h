@@ -118,8 +118,8 @@ inline constexpr struct ReadOne
 
 inline constexpr struct WriteOne
 {
-    auto operator()(auto&& storage, auto&& key, auto&& value, auto&&... args) const
-        -> task::Task<void>
+    auto operator()(
+        auto&& storage, auto&& key, auto&& value, auto&&... args) const -> task::Task<void>
     {
         if constexpr (HasTag<WriteOne, decltype(storage), decltype(key), decltype(value),
                           decltype(args)...>)

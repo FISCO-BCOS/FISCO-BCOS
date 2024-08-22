@@ -13,7 +13,7 @@ class GatewayServiceApp : public tars::Application
 {
 public:
     GatewayServiceApp() = default;
-    ~GatewayServiceApp() override{};
+    ~GatewayServiceApp() override {};
 
     void destroyApp() override
     {

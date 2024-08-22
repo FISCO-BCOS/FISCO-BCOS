@@ -606,7 +606,6 @@ public:
                     view, *blockHeader, *transaction, 0, emptyLedgerConfig, task::syncWait);
             }
 
-
             callback(nullptr, std::move(receipt));
         }(this, std::move(transaction), std::move(callback)));
     }
@@ -662,7 +661,7 @@ public:
         callback(nullptr);
     }
 
-    void stop() override{};
+    void stop() override {};
 
     void registerTransactionNotifier(std::function<void(bcos::protocol::BlockNumber,
             bcos::protocol::TransactionSubmitResultsPtr, std::function<void(Error::Ptr)>)>
