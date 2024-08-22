@@ -2,6 +2,7 @@
 
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-crypto/merkle/Merkle.h"
+#include "bcos-executor/src/Common.h"
 #include "bcos-framework/dispatcher/SchedulerInterface.h"
 #include "bcos-framework/dispatcher/SchedulerTypeDef.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
