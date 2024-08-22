@@ -21,7 +21,9 @@
 #include "PBFTEngine.h"
 #include "../cache/PBFTCacheFactory.h"
 #include "../cache/PBFTCacheProcessor.h"
+#include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/protocol/CommonError.h"
+#include "bcos-task/Wait.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
 #include <bcos-framework/dispatcher/SchedulerTypeDef.h>
@@ -1773,8 +1775,8 @@ void PBFTEngine::clearExceptionProposalState(bcos::protocol::BlockNumber _number
 void PBFTEngine::fetchAndUpdateLedgerConfig()
 {
     PBFT_LOG(INFO) << LOG_DESC("fetchAndUpdateLedgerConfig");
-    m_ledgerFetcher->fetchAll();
-    auto ledgerConfig = m_ledgerFetcher->ledgerConfig();
+    task::syncWait(ledger::getLedgerConfig(*m_ledger, *m_ledgerConfig));
+    auto& ledgerConfig = m_ledgerConfig;
     PBFT_LOG(INFO) << LOG_DESC("fetchAndUpdateLedgerConfig success")
                    << LOG_KV("blockNumber", ledgerConfig->blockNumber())
                    << LOG_KV("hash", ledgerConfig->hash().abridged())
