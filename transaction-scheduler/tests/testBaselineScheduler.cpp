@@ -70,10 +70,11 @@ inline task::AwaitableValue<void> tag_invoke(ledger::tag_t<bcos::ledger::prewrit
     return {};
 }
 
-inline task::AwaitableValue<ledger::LedgerConfig::Ptr> tag_invoke(
-    ledger::tag_t<bcos::ledger::getLedgerConfig> /*unused*/, MockLedger& ledger)
+inline task::AwaitableValue<void> tag_invoke(
+    ledger::tag_t<bcos::ledger::getLedgerConfig> /*unused*/, MockLedger& ledger,
+    ledger::LedgerConfig& ledgerConfig)
 {
-    return {std::make_shared<ledger::LedgerConfig>()};
+    return {};
 }
 
 task::AwaitableValue<void> tag_invoke(ledger::tag_t<ledger::storeTransactionsAndReceipts>,

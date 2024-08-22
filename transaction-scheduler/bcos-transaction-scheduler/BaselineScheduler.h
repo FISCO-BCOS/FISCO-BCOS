@@ -112,8 +112,8 @@ task::Task<h256> calculateStateRoot(
         h256 m_hash;
         std::reference_wrapper<decltype(hashes) const> m_hashes;
 
-        XORHash(decltype(hashes) const& hashes) : m_hashes(hashes) {};
-        XORHash(XORHash& source, tbb::split /*unused*/) : m_hashes(source.m_hashes) {};
+        XORHash(decltype(hashes) const& hashes) : m_hashes(hashes){};
+        XORHash(XORHash& source, tbb::split /*unused*/) : m_hashes(source.m_hashes){};
         void operator()(const tbb::blocked_range<size_t>& range)
         {
             for (size_t i = range.begin(); i != range.end(); ++i)
@@ -461,7 +461,8 @@ private:
             co_await ledger::storeTransactionsAndReceipts(
                 scheduler.m_ledger.get(), result.m_transactions, result.m_block);
 
-            auto ledgerConfig = co_await ledger::getLedgerConfig(scheduler.m_ledger.get());
+            auto ledgerConfig = std::make_shared<ledger::LedgerConfig>();
+            co_await ledger::getLedgerConfig(scheduler.m_ledger.get(), *ledgerConfig);
             ledgerConfig->setHash(header->hash());
             {
                 std::unique_lock ledgerConfigLock(scheduler.m_ledgerConfigMutex);
@@ -539,8 +540,10 @@ public:
         m_txpool(txPool),
         m_transactionSubmitResultFactory(transactionSubmitResultFactory),
         m_hashImpl(hashImpl),
-        m_ledgerConfig(task::syncWait(ledger::getLedgerConfig(m_ledger)))
-    {}
+        m_ledgerConfig(std::make_shared<ledger::LedgerConfig>())
+    {
+        task::syncWait(ledger::getLedgerConfig(m_ledger, *m_ledgerConfig));
+    }
     BaselineScheduler(const BaselineScheduler&) = delete;
     BaselineScheduler(BaselineScheduler&&) noexcept = default;
     BaselineScheduler& operator=(const BaselineScheduler&) = delete;

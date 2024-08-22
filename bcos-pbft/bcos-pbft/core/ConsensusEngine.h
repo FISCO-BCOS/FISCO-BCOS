@@ -23,9 +23,8 @@
 #include "bcos-framework/consensus/ConsensusEngineInterface.h"
 #include <bcos-utilities/Worker.h>
 
-namespace bcos
-{
-namespace consensus
+
+namespace bcos::consensus
 {
 class ConsensusEngine : public virtual ConsensusEngineInterface, public Worker
 {
@@ -48,7 +47,7 @@ public:
 
     void stop() override
     {
-        if (m_started == false)
+        if (!m_started)
         {
             return;
         }
@@ -83,5 +82,4 @@ public:
 protected:
     std::atomic_bool m_started = {false};
 };
-}  // namespace consensus
-}  // namespace bcos
+}  // namespace bcos::consensus

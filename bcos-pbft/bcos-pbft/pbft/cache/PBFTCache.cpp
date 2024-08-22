@@ -83,9 +83,9 @@ void PBFTCache::addCache(CollectionCacheType& _cachedReq, QuorumRecoderType& _we
     {
         return;
     }
-    if (!_weightInfo.count(proposalHash))
+    if (auto it = _weightInfo.find(proposalHash); it != _weightInfo.end())
     {
-        _weightInfo[proposalHash] = 0;
+        it->second = 0;
     }
     _weightInfo[proposalHash] += nodeInfo->weight();
     _cachedReq[proposalHash][generatedFrom] = _pbftCache;
@@ -210,16 +210,7 @@ bool PBFTCache::conflictWithPrecommitReq(PBFTMessageInterface::Ptr _prePrepareMs
 bool PBFTCache::checkAndPreCommit()
 {
     // already precommitted
-    if (m_precommitted)
-    {
-        return false;
-    }
-    if (!m_prePrepare)
-    {
-        return false;
-    }
-    // avoid to intoPrecommit when in timeout state
-    if (m_config->timeout())
+    if (m_precommitted || !m_prePrepare || m_config->timeout())
     {
         return false;
     }

@@ -1363,7 +1363,8 @@ BOOST_AUTO_TEST_CASE(getLedgerConfig)
         co_await storage2::writeOne(
             *m_storage, KeyType{SYS_CONFIG, SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM}, value);
 
-        auto ledgerConfig = co_await ledger::getLedgerConfig(*m_ledger);
+        auto ledgerConfig = std::make_shared<LedgerConfig>();
+        co_await ledger::getLedgerConfig(*m_ledger, *ledgerConfig);
         BOOST_CHECK_EQUAL(ledgerConfig->blockTxCountLimit(), 12);
         BOOST_CHECK_EQUAL(ledgerConfig->leaderSwitchPeriod(), 100);
         BOOST_CHECK_EQUAL(std::get<0>(ledgerConfig->gasLimit()), 200);

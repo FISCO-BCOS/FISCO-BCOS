@@ -78,7 +78,8 @@ SchedulerImpl::SchedulerImpl(ExecutorManager::Ptr executorManager,
 
     if (!m_ledgerConfig)
     {
-        m_ledgerConfig = task::syncWait(ledger::getLedgerConfig(*m_ledger));
+        m_ledgerConfig = std::make_shared<bcos::ledger::LedgerConfig>();
+        task::syncWait(ledger::getLedgerConfig(*m_ledger, *m_ledgerConfig));
     }
 }
 
@@ -623,7 +624,8 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                            decltype(callback) callback) -> task::Task<void> {
                 try
                 {
-                    auto ledgerConfig = co_await ledger::getLedgerConfig(*self->m_ledger);
+                    auto ledgerConfig = std::make_shared<ledger::LedgerConfig>();
+                    co_await ledger::getLedgerConfig(*self->m_ledger, *ledgerConfig);
 
                     if (!self->m_isRunning)
                     {

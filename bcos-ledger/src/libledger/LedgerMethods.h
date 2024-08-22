@@ -78,8 +78,8 @@ task::Task<std::optional<SystemConfigEntry>> tag_invoke(
 task::Task<consensus::ConsensusNodeList> tag_invoke(
     ledger::tag_t<getNodeList> /*unused*/, LedgerInterface& ledger, std::string_view type);
 
-task::Task<LedgerConfig::Ptr> tag_invoke(
-    ledger::tag_t<getLedgerConfig> /*unused*/, LedgerInterface& ledger);
+task::Task<void> tag_invoke(
+    ledger::tag_t<getLedgerConfig> /*unused*/, LedgerInterface& ledger, LedgerConfig& ledgerConfig);
 
 task::Task<Features> tag_invoke(ledger::tag_t<getFeatures> /*unused*/, LedgerInterface& ledger);
 

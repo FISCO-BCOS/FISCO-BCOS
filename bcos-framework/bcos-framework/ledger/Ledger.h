@@ -91,7 +91,7 @@ inline constexpr struct GetBlockNumber
 {
     task::Task<protocol::BlockNumber> operator()(auto& ledger, crypto::HashType hash) const
     {
-        co_return co_await tag_invoke(*this, ledger, std::move(hash));
+        co_return co_await tag_invoke(*this, ledger, hash);
     }
 } getBlockNumber{};
 
@@ -115,9 +115,9 @@ inline constexpr struct GetNodeList
 
 inline constexpr struct GetLedgerConfig
 {
-    task::Task<LedgerConfig::Ptr> operator()(auto& ledger) const
+    task::Task<void> operator()(auto& ledger, auto& ledgerConfig) const
     {
-        co_return co_await tag_invoke(*this, ledger);
+        co_await tag_invoke(*this, ledger, ledgerConfig);
     }
 } getLedgerConfig{};
 
