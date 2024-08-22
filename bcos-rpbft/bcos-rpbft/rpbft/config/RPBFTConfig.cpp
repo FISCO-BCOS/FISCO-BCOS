@@ -21,9 +21,6 @@
 
 #include "RPBFTConfig.h"
 
-#include "../utilities/Common.h"
-#include <bcos-crypto/KeyCompareTools.h>
-
 using namespace bcos;
 using namespace bcos::consensus;
 

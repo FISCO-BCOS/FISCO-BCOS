@@ -19,6 +19,7 @@
  */
 
 #include "VRFBasedSealer.h"
+#include "Common.h"
 #include "bcos-pbft/core/ConsensusConfig.h"
 #include "bcos-txpool/txpool/storage/MemoryStorage.h"
 #include <bcos-codec/wrapper/CodecWrapper.h>

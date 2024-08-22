@@ -7,6 +7,8 @@ on:
       - master
     types: [closed]
 
+env:
+  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -43,7 +45,6 @@ jobs:
 
       - name: Remove cache if correspond dir change
         run: ./tools/.ci/clear_build_cache.sh
-
       - name: update vcpkg
         run: |
           cd ${{ env.VCPKG_ROOT }} && git fetch --all && git checkout master && git pull

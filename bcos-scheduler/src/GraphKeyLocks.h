@@ -2,16 +2,8 @@
 
 #include "Common.h"
 #include <boost/graph/adjacency_list.hpp>
-#include <boost/graph/depth_first_search.hpp>
-#include <boost/graph/edge_list.hpp>
-#include <boost/graph/graph_selectors.hpp>
-#include <boost/graph/properties.hpp>
-#include <boost/graph/visitors.hpp>
-#include <any>
-#include <forward_list>
 #include <functional>
 #include <gsl/span>
-#include <set>
 #include <string_view>
 #include <variant>
 

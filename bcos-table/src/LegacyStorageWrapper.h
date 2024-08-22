@@ -133,7 +133,7 @@ public:
                 }
                 else
                 {
-                    co_await storage2::writeOne(self->m_storage,
+                    co_await storage2::writeOne(self->m_storage.get(),
                         transaction_executor::StateKey(table, key), std::move(entry));
                 }
                 callback(nullptr);

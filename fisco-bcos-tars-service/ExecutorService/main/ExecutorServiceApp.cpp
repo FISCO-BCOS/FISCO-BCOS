@@ -150,7 +150,8 @@ void ExecutorServiceApp::createAndInitExecutor()
         std::make_shared<bcos::storage::StateStorageFactory>(m_nodeConfig->keyPageSize());
 
     auto blockFactory = m_protocolInitializer->blockFactory();
-    auto ledger = std::make_shared<bcos::ledger::Ledger>(blockFactory, storage);
+    auto ledger = std::make_shared<bcos::ledger::Ledger>(
+        blockFactory, storage, m_nodeConfig->blockLimit(), nullptr);
 
     auto executorFactory = std::make_shared<bcos::executor::TransactionExecutorFactory>(ledger,
         m_txpool, cacheFactory, storage, executionMessageFactory, stateStorageFactory,

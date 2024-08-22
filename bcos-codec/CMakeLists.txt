@@ -33,6 +33,7 @@ target_include_directories(${CODEC_TARGET} PUBLIC
     $<INSTALL_INTERFACE:include/bcos-codec>
 )
 target_link_libraries(${CODEC_TARGET} PUBLIC bcos-crypto Microsoft.GSL::GSL)
+set_target_properties(${CODEC_TARGET} PROPERTIES UNITY_BUILD "ON")
 
 if (TESTS)
     enable_testing()

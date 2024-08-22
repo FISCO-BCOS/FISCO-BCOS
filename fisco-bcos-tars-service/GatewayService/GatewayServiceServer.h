@@ -10,9 +10,6 @@
 #include <chrono>
 #include <mutex>
 
-using namespace bcos;
-using namespace bcos::group;
-
 namespace bcostars
 {
 struct GatewayServiceParam
@@ -30,7 +27,7 @@ public:
 
     bcostars::Error asyncSendBroadcastMessage(tars::Int32 _type, const std::string& groupID,
         tars::Int32 moduleID, const vector<tars::Char>& srcNodeID,
-        const vector<tars::Char>& payload, tars::TarsCurrentPtr current) override
+        const std::vector<tars::Char>& payload, tars::TarsCurrentPtr current) override
     {
         current->setResponse(false);
         auto bcosNodeID = m_gatewayInitializer->keyFactory()->createKey(

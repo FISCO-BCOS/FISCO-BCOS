@@ -15,10 +15,6 @@ using namespace bcos::transaction_executor;
 class TestTransactionExecutorImplFixture
 {
 public:
-    TestTransactionExecutorImplFixture()
-    {
-        bcos::executor::GlobalHashImpl::g_hashImpl = std::make_shared<bcos::crypto::Keccak256>();
-    }
     ledger::LedgerConfig ledgerConfig;
 };
 
@@ -33,8 +29,9 @@ BOOST_AUTO_TEST_CASE(execute)
             bcos::executor::GlobalHashImpl::g_hashImpl, nullptr, nullptr);
         bcostars::protocol::TransactionReceiptFactoryImpl receiptFactory(cryptoSuite);
 
+        PrecompiledManager precompiledManager(bcos::executor::GlobalHashImpl::g_hashImpl);
         bcos::transaction_executor::TransactionExecutorImpl executor(
-            receiptFactory, bcos::executor::GlobalHashImpl::g_hashImpl);
+            receiptFactory, bcos::executor::GlobalHashImpl::g_hashImpl, precompiledManager);
         bcostars::protocol::BlockHeaderImpl blockHeader(
             [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
         blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
@@ -82,8 +79,9 @@ BOOST_AUTO_TEST_CASE(transientStorageTest)
             bcos::executor::GlobalHashImpl::g_hashImpl, nullptr, nullptr);
         bcostars::protocol::TransactionReceiptFactoryImpl receiptFactory(cryptoSuite);
 
+        PrecompiledManager precompiledManager(bcos::executor::GlobalHashImpl::g_hashImpl);
         bcos::transaction_executor::TransactionExecutorImpl executor(
-            receiptFactory, bcos::executor::GlobalHashImpl::g_hashImpl);
+            receiptFactory, bcos::executor::GlobalHashImpl::g_hashImpl, precompiledManager);
         bcostars::protocol::BlockHeaderImpl blockHeader(
             [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
         blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_7_0_VERSION);
@@ -129,8 +127,9 @@ BOOST_AUTO_TEST_CASE(transientStorageContractTest)
             bcos::executor::GlobalHashImpl::g_hashImpl, nullptr, nullptr);
         bcostars::protocol::TransactionReceiptFactoryImpl receiptFactory(cryptoSuite);
 
+        PrecompiledManager precompiledManager(bcos::executor::GlobalHashImpl::g_hashImpl);
         bcos::transaction_executor::TransactionExecutorImpl executor(
-            receiptFactory, bcos::executor::GlobalHashImpl::g_hashImpl);
+            receiptFactory, bcos::executor::GlobalHashImpl::g_hashImpl, precompiledManager);
         bcostars::protocol::BlockHeaderImpl blockHeader(
             [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
         blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);

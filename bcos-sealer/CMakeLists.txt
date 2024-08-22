@@ -27,6 +27,7 @@ add_library(${SEALER_TARGET} ${SRC_LIST})
 find_package(tarscpp REQUIRED)
 
 target_link_libraries(${SEALER_TARGET} PUBLIC ${TOOL_TARGET} ${UTILITIES_TARGET} bcos-framework ${TXPOOL_TARGET} ${TARS_PROTOCOL_TARGET})
+set_target_properties(${SEALER_TARGET} PROPERTIES UNITY_BUILD "ON")
 
 if(TESTS)
   enable_testing()

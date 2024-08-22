@@ -20,19 +20,10 @@
 
 #pragma once
 
-#include "PrecompiledAbi.h"
 #include "bcos-executor/src/Common.h"
-#include "bcos-framework/Common.h"
-#include "bcos-framework/protocol/CommonError.h"
-#include "bcos-framework/protocol/Exceptions.h"
-#include "bcos-framework/storage/Common.h"
-#include "bcos-framework/storage/Entry.h"
-#include <memory>
 #include <string>
 
-namespace bcos
-{
-namespace precompiled
+namespace bcos::precompiled
 {
 #define PRECOMPILED_LOG(LEVEL) BCOS_LOG(LEVEL) << "[EXECUTOR][PRECOMPILED]"
 
@@ -193,5 +184,4 @@ static constexpr inline ContractStatus StatusFromString(std::string_view _status
     }
     return ContractStatus::Available;
 }
-}  // namespace precompiled
-}  // namespace bcos
+}  // namespace bcos::precompiled

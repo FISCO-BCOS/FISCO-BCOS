@@ -8,6 +8,7 @@
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-task/Wait.h"
 #include "bcos-transaction-executor/TransactionExecutorImpl.h"
+#include "bcos-transaction-executor/precompiled/PrecompiledManager.h"
 #include "bcos-transaction-scheduler/MultiLayerStorage.h"
 #include "bcos-transaction-scheduler/SchedulerParallelImpl.h"
 #include "bcos-transaction-scheduler/SchedulerSerialImpl.h"
@@ -31,6 +32,25 @@ using ReceiptFactory = bcostars::protocol::TransactionReceiptFactoryImpl;
 template <bool parallel>
 struct Fixture
 {
+    bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
+    std::shared_ptr<bcostars::protocol::BlockHeaderFactoryImpl> m_blockHeaderFactory;
+    std::shared_ptr<bcostars::protocol::TransactionFactoryImpl> m_transactionFactory;
+    std::shared_ptr<bcostars::protocol::TransactionReceiptFactoryImpl> m_receiptFactory;
+    std::shared_ptr<bcostars::protocol::BlockFactoryImpl> m_blockFactory;
+
+    BackendStorage m_backendStorage;
+    MultiLayerStorageType m_multiLayerStorage;
+    bcos::bytes m_helloworldBytecodeBinary;
+
+    PrecompiledManager m_precompiledManager;
+    TransactionExecutorImpl m_executor;
+    std::variant<std::monostate, SchedulerSerialImpl, SchedulerParallelImpl<MutableStorage>>
+        m_scheduler;
+
+    std::string m_contractAddress;
+    std::vector<Address> m_addresses;
+    std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>> m_transactions;
+
     Fixture()
       : m_cryptoSuite(std::make_shared<bcos::crypto::CryptoSuite>(
             std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr)),
@@ -43,7 +63,8 @@ struct Fixture
         m_blockFactory(std::make_shared<bcostars::protocol::BlockFactoryImpl>(
             m_cryptoSuite, m_blockHeaderFactory, m_transactionFactory, m_receiptFactory)),
         m_multiLayerStorage(m_backendStorage),
-        m_executor(*m_receiptFactory, m_cryptoSuite->hashImpl())
+        m_precompiledManager(m_cryptoSuite->hashImpl()),
+        m_executor(*m_receiptFactory, m_cryptoSuite->hashImpl(), m_precompiledManager)
     {
         boost::log::core::get()->set_logging_enabled(false);
 
@@ -91,8 +112,8 @@ struct Fixture
                             RANGES::single_view(std::addressof(createTransaction)) |
                             RANGES::views::transform([](auto* ptr) -> auto const& { return *ptr; });
 
-                        auto view = m_multiLayerStorage.fork();
-                        view.newMutable();
+                        auto view = fork(m_multiLayerStorage);
+                        newMutable(view);
                         ledger::LedgerConfig ledgerConfig;
                         auto receipts =
                             co_await transaction_scheduler::executeBlock(scheduler, view,
@@ -103,8 +124,8 @@ struct Fixture
                                 receipts[0]->status(), receipts[0]->message());
                             co_return;
                         }
-                        m_multiLayerStorage.pushView(std::move(view));
-                        co_await m_multiLayerStorage.mergeBackStorage();
+                        pushView(m_multiLayerStorage, std::move(view));
+                        co_await mergeBackStorage(m_multiLayerStorage);
 
                         m_contractAddress = receipts[0]->contractAddress();
                     }());
@@ -233,8 +254,8 @@ struct Fixture
                         RANGES::to<
                             std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>>>();
 
-                    auto view = m_multiLayerStorage.fork();
-                    view.newMutable();
+                    auto view = fork(m_multiLayerStorage);
+                    newMutable(view);
                     ledger::LedgerConfig ledgerConfig;
                     auto receipts = co_await transaction_scheduler::executeBlock(scheduler, view,
                         m_executor, blockHeader,
@@ -264,24 +285,6 @@ struct Fixture
             },
             m_scheduler);
     }
-
-    bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
-    std::shared_ptr<bcostars::protocol::BlockHeaderFactoryImpl> m_blockHeaderFactory;
-    std::shared_ptr<bcostars::protocol::TransactionFactoryImpl> m_transactionFactory;
-    std::shared_ptr<bcostars::protocol::TransactionReceiptFactoryImpl> m_receiptFactory;
-    std::shared_ptr<bcostars::protocol::BlockFactoryImpl> m_blockFactory;
-
-    BackendStorage m_backendStorage;
-    MultiLayerStorageType m_multiLayerStorage;
-    bcos::bytes m_helloworldBytecodeBinary;
-
-    TransactionExecutorImpl m_executor;
-    std::variant<std::monostate, SchedulerSerialImpl, SchedulerParallelImpl<MutableStorage>>
-        m_scheduler;
-
-    std::string m_contractAddress;
-    std::vector<Address> m_addresses;
-    std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>> m_transactions;
 };
 
 template <bool parallel = false>
@@ -304,8 +307,8 @@ static void issue(benchmark::State& state)
             else
             {
                 task::syncWait([&](benchmark::State& state) -> task::Task<void> {
-                    auto view = fixture.m_multiLayerStorage.fork();
-                    view.newMutable();
+                    auto view = fork(fixture.m_multiLayerStorage);
+                    newMutable(view);
                     for (auto const& it : state)
                     {
                         bcostars::protocol::BlockHeaderImpl blockHeader(
@@ -327,7 +330,7 @@ static void issue(benchmark::State& state)
                                 ledgerConfig);
                     }
 
-                    fixture.m_multiLayerStorage.pushView(std::move(view));
+                    pushView(fixture.m_multiLayerStorage, std::move(view));
                     auto balances = co_await fixture.balances();
                     for (auto& balance : balances)
                     {
@@ -338,7 +341,7 @@ static void issue(benchmark::State& state)
                                     balance.template convert_to<std::string>())));
                         }
                     }
-                    co_await fixture.m_multiLayerStorage.mergeBackStorage();
+                    co_await mergeBackStorage(fixture.m_multiLayerStorage);
                 }(state));
             }
         },
@@ -373,8 +376,8 @@ static void transfer(benchmark::State& state)
                     blockHeader.setNumber(0);
                     blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
 
-                    auto view = fixture.m_multiLayerStorage.fork();
-                    view.newMutable();
+                    auto view = fork(fixture.m_multiLayerStorage);
+                    newMutable(view);
                     ledger::LedgerConfig ledgerConfig;
                     [[maybe_unused]] auto receipts = co_await transaction_scheduler::executeBlock(
                         scheduler, view, fixture.m_executor, blockHeader,
@@ -410,7 +413,7 @@ static void transfer(benchmark::State& state)
                     }
 
                     // Check
-                    fixture.m_multiLayerStorage.pushView(std::move(view));
+                    pushView(fixture.m_multiLayerStorage, std::move(view));
                     auto balances = co_await fixture.balances();
                     for (auto&& range : balances | RANGES::views::chunk(2))
                     {
@@ -431,7 +434,7 @@ static void transfer(benchmark::State& state)
                                     to.template convert_to<std::string>())));
                         }
                     }
-                    co_await fixture.m_multiLayerStorage.mergeBackStorage();
+                    co_await mergeBackStorage(fixture.m_multiLayerStorage);
                 }(state));
             }
         },
@@ -457,8 +460,8 @@ static void conflictTransfer(benchmark::State& state)
             else
             {
                 int i = 0;
-                auto view = fixture.m_multiLayerStorage.fork();
-                view.newMutable();
+                auto view = fork(fixture.m_multiLayerStorage);
+                newMutable(view);
 
                 task::syncWait([&](benchmark::State& state) -> task::Task<void> {
                     // First issue
@@ -503,7 +506,7 @@ static void conflictTransfer(benchmark::State& state)
                     }
 
                     // Check
-                    fixture.m_multiLayerStorage.pushView(std::move(view));
+                    pushView(fixture.m_multiLayerStorage, std::move(view));
                     auto balances = co_await fixture.balances();
                     for (auto&& [balance, index] :
                         RANGES::views::zip(balances, RANGES::views::iota(0LU)))
@@ -536,7 +539,7 @@ static void conflictTransfer(benchmark::State& state)
                             }
                         }
                     }
-                    co_await fixture.m_multiLayerStorage.mergeBackStorage();
+                    co_await mergeBackStorage(fixture.m_multiLayerStorage);
                 }(state));
             }
         },

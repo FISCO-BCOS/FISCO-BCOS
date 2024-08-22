@@ -1,3 +1,19 @@
+/*
+ *  Copyright (C) 2021 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ */
+
 #pragma once
 #include "bcos-concepts/Exception.h"
 #include <boost/exception/diagnostic_information.hpp>
@@ -17,9 +33,8 @@ struct NoReturnValue : public bcos::error::Exception
 template <class Promise>
 struct FinalAwaitable
 {
-    static constexpr bool await_ready() noexcept { return false; }
-    static constexpr std::coroutine_handle<> await_suspend(
-        std::coroutine_handle<Promise> handle) noexcept
+    constexpr bool await_ready() noexcept { return false; }
+    constexpr std::coroutine_handle<> await_suspend(std::coroutine_handle<Promise> handle) noexcept
     {
         std::coroutine_handle<> continuationHandle;
         if (handle.promise().m_continuation)
@@ -43,8 +58,8 @@ struct Continuation
 template <class Task, class PromiseImpl>
 struct PromiseBase
 {
-    static constexpr std::suspend_always initial_suspend() noexcept { return {}; }
-    static constexpr auto final_suspend() noexcept { return FinalAwaitable<PromiseImpl>{}; }
+    constexpr std::suspend_always initial_suspend() noexcept { return {}; }
+    constexpr auto final_suspend() noexcept { return FinalAwaitable<PromiseImpl>{}; }
     Task get_return_object()
     {
         auto handle =
@@ -69,7 +84,7 @@ struct PromiseBase
 template <class Task>
 struct PromiseVoid : public PromiseBase<Task, PromiseVoid<Task>>
 {
-    static constexpr void return_void() noexcept {}
+    constexpr void return_void() noexcept {}
 };
 
 template <class Task>

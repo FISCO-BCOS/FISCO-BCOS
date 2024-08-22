@@ -43,8 +43,8 @@ public:
         bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
         bcos::protocol::BlockFactory::Ptr blockFactory, bcos::txpool::TxPoolInterface::Ptr txPool,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
-        crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, bool isSerialExecute,
-        int64_t schedulerSeq)
+        crypto::Hash::Ptr hashImpl, size_t blockLimit, bool isAuthCheck, bool isWasm,
+        bool isSerialExecute, int64_t schedulerSeq)
     {
         bcos::scheduler::SchedulerFactory factory(std::move(executorManager), std::move(_ledger),
             std::move(storage), std::move(executionMessageFactory), std::move(blockFactory),

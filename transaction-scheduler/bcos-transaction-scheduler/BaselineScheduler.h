@@ -2,6 +2,7 @@
 
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-crypto/merkle/Merkle.h"
+#include "bcos-executor/src/Common.h"
 #include "bcos-framework/dispatcher/SchedulerInterface.h"
 #include "bcos-framework/dispatcher/SchedulerTypeDef.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
@@ -310,8 +311,8 @@ private:
             }
 
             auto now = current();
-            auto view = scheduler.m_multiLayerStorage.get().fork();
-            view.newMutable();
+            auto view = fork(scheduler.m_multiLayerStorage.get());
+            newMutable(view);
             auto transactions = co_await getTransactions(scheduler.m_txpool.get(), *block);
 
             ledger::LedgerConfig::Ptr ledgerConfig;
@@ -329,7 +330,7 @@ private:
             auto executedBlockHeader =
                 scheduler.m_blockHeaderFactory.get().populateBlockHeader(blockHeader);
             bool sysBlock = false;
-            finishExecute(view.mutableStorage(), receipts, *executedBlockHeader, *block,
+            finishExecute(mutableStorage(view), receipts, *executedBlockHeader, *block,
                 transactions, sysBlock, scheduler.m_hashImpl.get());
 
             if (verify && (executedBlockHeader->hash() != blockHeader->hash()))
@@ -359,7 +360,7 @@ private:
                     nullptr, false);
             }
 
-            scheduler.m_multiLayerStorage.get().pushView(std::move(view));
+            pushView(scheduler.m_multiLayerStorage.get(), std::move(view));
             scheduler.m_lastExecutedBlockNumber = blockHeader->number();
 
             std::unique_lock resultsLock(scheduler.m_resultsMutex);
@@ -448,7 +449,7 @@ private:
             resultsLock.unlock();
 
             result.m_block->setBlockHeader(header);
-            auto lastStorage = scheduler.m_multiLayerStorage.get().backStorage();
+            auto lastStorage = backStorage(scheduler.m_multiLayerStorage.get());
             if (result.m_block->blockHeaderConst()->number() != 0)
             {
                 ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
@@ -457,7 +458,7 @@ private:
                 co_await ledger::prewriteBlock(scheduler.m_ledger.get(), result.m_transactions,
                     result.m_block, false, *lastStorage);
             }
-            auto mergedStorage = co_await scheduler.m_multiLayerStorage.get().mergeBackStorage();
+            auto mergedStorage = co_await mergeBackStorage(scheduler.m_multiLayerStorage.get());
             co_await ledger::storeTransactionsAndReceipts(
                 scheduler.m_ledger.get(), result.m_transactions, result.m_block);
 
@@ -578,8 +579,8 @@ public:
     {
         task::wait([](decltype(this) self, protocol::Transaction::Ptr transaction,
                        decltype(callback) callback) -> task::Task<void> {
-            auto view = self->m_multiLayerStorage.get().fork();
-            view.newMutable();
+            auto view = fork(self->m_multiLayerStorage.get());
+            newMutable(view);
             auto blockHeader = self->m_blockHeaderFactory.get().createBlockHeader();
             ledger::LedgerConfig::Ptr ledgerConfig;
             {
@@ -605,7 +606,6 @@ public:
                     view, *blockHeader, *transaction, 0, emptyLedgerConfig, task::syncWait);
             }
 
-
             callback(nullptr, std::move(receipt));
         }(this, std::move(transaction), std::move(callback)));
     }
@@ -620,7 +620,7 @@ public:
     {
         task::wait([](decltype(this) self, std::string_view contract,
                        decltype(callback) callback) -> task::Task<void> {
-            auto view = self->m_multiLayerStorage.get().fork();
+            auto view = fork(self->m_multiLayerStorage.get());
             auto contractAddress = unhexAddress(contract);
             ledger::account::EVMAccount account(view, contractAddress);
             auto code = co_await ledger::account::code(account);
@@ -640,7 +640,7 @@ public:
     {
         task::wait([](decltype(this) self, std::string_view contract,
                        decltype(callback) callback) -> task::Task<void> {
-            auto view = self->m_multiLayerStorage.get().fork();
+            auto view = fork(self->m_multiLayerStorage.get());
             auto contractAddress = unhexAddress(contract);
             ledger::account::EVMAccount account(view, contractAddress);
             auto abi = co_await ledger::account::abi(account);
@@ -661,7 +661,7 @@ public:
         callback(nullptr);
     }
 
-    void stop() override{};
+    void stop() override {};
 
     void registerTransactionNotifier(std::function<void(bcos::protocol::BlockNumber,
             bcos::protocol::TransactionSubmitResultsPtr, std::function<void(Error::Ptr)>)>

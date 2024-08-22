@@ -254,16 +254,15 @@ public:
     task::Task<void> setTransientStorage(const evmc_bytes32* key, const evmc_bytes32* value)
     {
         storage::Entry valueEntry(concepts::bytebuffer::toView(value->bytes));
-        StateKey stateKey =
-            StateKey{concepts::bytebuffer::toView(co_await ledger::account::path(m_myAccount)),
-                concepts::bytebuffer::toView(key->bytes)};
+        StateKey stateKey{concepts::bytebuffer::toView(co_await ledger::account::path(m_myAccount)),
+            concepts::bytebuffer::toView(key->bytes)};
         if (c_fileLogLevel <= LogLevel::TRACE)
         {
             HOST_CONTEXT_LOG(TRACE) << "setTransientStorage:"
                                     << LOG_KV("key", concepts::bytebuffer::toView(key->bytes));
         }
         co_await storage2::writeOne(
-            m_rollbackableTransientStorage.get(), stateKey, std::move(valueEntry));
+            m_rollbackableTransientStorage.get(), std::move(stateKey), std::move(valueEntry));
     }
 
     task::Task<std::optional<storage::Entry>> code(const evmc_address& address)
@@ -365,8 +364,8 @@ public:
                 << " recipient:" << address2HexString(ref.recipient) << " gas:" << ref.gas;
         }
 
-        auto savepoint = m_rollbackableStorage.get().current();
-        auto transientSavepoint = m_rollbackableTransientStorage.get().current();
+        auto savepoint = current(m_rollbackableStorage.get());
+        auto transientSavepoint = current(m_rollbackableTransientStorage.get());
         std::optional<EVMCResult> evmResult;
         if (m_ledgerConfig.get().authCheckStatus() != 0U)
         {
@@ -437,8 +436,8 @@ public:
         // If the call to system contract failed, the gasUsed is cleared to zero
         if (evmResult->status_code != EVMC_SUCCESS)
         {
-            co_await m_rollbackableStorage.get().rollback(savepoint);
-            co_await m_rollbackableTransientStorage.get().rollback(transientSavepoint);
+            co_await rollback(m_rollbackableStorage.get(), savepoint);
+            co_await rollback(m_rollbackableTransientStorage.get(), transientSavepoint);
 
             if (auto hexAddress = address2FixedArray(ref.code_address);
                 bcos::precompiled::c_systemTxsAddress.find(concepts::bytebuffer::toView(

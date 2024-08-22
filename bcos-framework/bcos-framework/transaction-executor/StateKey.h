@@ -47,7 +47,7 @@ public:
     StateKey& operator=(StateKey&&) noexcept = default;
     ~StateKey() noexcept = default;
 
-    friend bool operator==(const StateKey& lhs, const StateKey& rhs) = default;
+    friend auto operator<=>(const StateKey& lhs, const StateKey& rhs) noexcept = default;
     friend ::std::ostream& operator<<(
         ::std::ostream& stream, const bcos::transaction_executor::StateKey& stateKey)
     {
@@ -77,18 +77,7 @@ public:
     {}
     ~StateKeyView() noexcept = default;
 
-    friend std::strong_ordering operator<=>(
-        const StateKeyView& lhs, const StateKeyView& rhs) noexcept
-    {
-        auto cmp = lhs.m_table <=> rhs.m_table;
-        if (std::is_eq(cmp))
-        {
-            cmp = lhs.m_key <=> rhs.m_key;
-        }
-        return cmp;
-    }
-
-    friend bool operator==(const StateKeyView& lhs, const StateKeyView& rhs) noexcept = default;
+    friend auto operator<=>(const StateKeyView& lhs, const StateKeyView& rhs) noexcept = default;
     friend ::std::ostream& operator<<(::std::ostream& stream, const StateKeyView& stateKeyView)
     {
         stream << stateKeyView.m_table << ":" << stateKeyView.m_key;
@@ -110,36 +99,16 @@ public:
 
 inline StateKey::StateKey(StateKeyView const& view) : StateKey(view.m_table, view.m_key) {}
 
-template <class RHS>
-inline bool operator==(const bcos::transaction_executor::StateKey& lhs, const RHS& rhs) noexcept
-    requires std::same_as<std::decay_t<RHS>, bcos::transaction_executor::StateKey> ||
-             std::same_as<std::decay_t<RHS>, bcos::transaction_executor::StateKeyView>
+inline std::strong_ordering operator<=>(
+    const StateKey& lhs, const bcos::transaction_executor::StateKeyView& rhs) noexcept
 {
     auto lhsView = bcos::transaction_executor::StateKeyView(lhs);
-    if constexpr (std::same_as<RHS, bcos::transaction_executor::StateKey>)
-    {
-        return std::is_eq(lhsView <=> bcos::transaction_executor::StateKeyView(rhs));
-    }
-    else
-    {
-        return std::is_eq(lhsView <=> rhs);
-    }
+    return lhsView <=> rhs;
 }
-
-template <class RHS>
-inline std::strong_ordering operator<=>(const StateKey& lhs, const RHS& rhs) noexcept
-    requires std::same_as<std::decay_t<RHS>, bcos::transaction_executor::StateKey> ||
-             std::same_as<std::decay_t<RHS>, bcos::transaction_executor::StateKeyView>
+inline bool operator==(const bcos::transaction_executor::StateKey& lhs,
+    const bcos::transaction_executor::StateKeyView& rhs) noexcept
 {
-    auto lhsView = bcos::transaction_executor::StateKeyView(lhs);
-    if constexpr (std::same_as<RHS, bcos::transaction_executor::StateKey>)
-    {
-        return lhsView <=> bcos::transaction_executor::StateKeyView(rhs);
-    }
-    else
-    {
-        return lhsView <=> rhs;
-    }
+    return std::is_eq(lhs <=> rhs);
 }
 
 }  // namespace bcos::transaction_executor
@@ -147,12 +116,7 @@ inline std::strong_ordering operator<=>(const StateKey& lhs, const RHS& rhs) noe
 template <>
 struct std::less<bcos::transaction_executor::StateKey>
 {
-    auto operator()(auto const& lhs, auto const& rhs) const noexcept -> bool
-    {
-        bcos::transaction_executor::StateKeyView lhsView(lhs);
-        bcos::transaction_executor::StateKeyView rhsView(rhs);
-        return lhsView < rhsView;
-    }
+    auto operator()(auto const& lhs, auto const& rhs) const noexcept -> bool { return lhs < rhs; }
 };
 
 template <>
@@ -189,10 +153,5 @@ struct boost::hash<bcos::transaction_executor::StateKey>
 template <>
 struct std::equal_to<bcos::transaction_executor::StateKey>
 {
-    bool operator()(auto const& lhs, auto const& rhs) const noexcept
-    {
-        bcos::transaction_executor::StateKeyView lhsView(lhs);
-        bcos::transaction_executor::StateKeyView rhsView(rhs);
-        return lhsView == rhsView;
-    }
+    bool operator()(auto const& lhs, auto const& rhs) const noexcept { return lhs == rhs; }
 };

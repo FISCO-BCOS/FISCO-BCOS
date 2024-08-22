@@ -19,7 +19,6 @@
  * @date 2021-05-18
  */
 #pragma once
-#include "ConsensusNode.h"
 #include "ProposalInterface.h"
 namespace bcos::consensus
 {

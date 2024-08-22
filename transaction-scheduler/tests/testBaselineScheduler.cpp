@@ -22,12 +22,12 @@ using namespace bcos::storage2;
 using namespace bcos::transaction_executor;
 using namespace bcos::transaction_scheduler;
 
-struct MockExecutor
+struct MockExecutorBaseline
 {
     friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
         bcos::transaction_executor::tag_t<
             bcos::transaction_executor::executeTransaction> /*unused*/,
-        MockExecutor& executor, auto& storage, protocol::BlockHeader const& blockHeader,
+        MockExecutorBaseline& executor, auto& storage, protocol::BlockHeader const& blockHeader,
         protocol::Transaction const& transaction, int contextID, ledger::LedgerConfig const&,
         auto&& waitOperator)
     {
@@ -173,8 +173,8 @@ public:
     MockLedger mockLedger;
     MockTxPool mockTxPool;
     MultiLayerStorage<MutableStorage, void, BackendStorage> multiLayerStorage;
-    MockExecutor mockExecutor;
-    BaselineScheduler<decltype(multiLayerStorage), MockExecutor, MockScheduler, MockLedger>
+    MockExecutorBaseline mockExecutor;
+    BaselineScheduler<decltype(multiLayerStorage), MockExecutorBaseline, MockScheduler, MockLedger>
         baselineScheduler;
 };
 

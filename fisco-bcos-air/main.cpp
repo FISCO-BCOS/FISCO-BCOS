@@ -26,8 +26,6 @@
 #include "Common.h"
 #include "libinitializer/CommandHelper.h"
 #include <execinfo.h>
-#include <stdexcept>
-#include <thread>
 
 using namespace bcos::node;
 using namespace bcos::initializer;
@@ -57,6 +55,52 @@ int main(int argc, const char* argv[])
     {
         auto param = bcos::initializer::initAirNodeCommandLine(argc, argv, false);
         initializer->init(param.configFilePath, param.genesisFilePath);
+        if (param.op != bcos::initializer::Params::operation::None)
+        {
+            if (param.hasOp(bcos::initializer::Params::operation::Prune))
+            {
+                std::cout << "[" << bcos::getCurrentDateTime() << "] ";
+                std::cout << "prune the node data..." << std::endl;
+                initializer->nodeInitializer()->prune();
+                std::cout << "[" << bcos::getCurrentDateTime() << "] ";
+                std::cout << "prune the node data success." << std::endl;
+            }
+            if (param.hasOp(bcos::initializer::Params::operation::Snapshot) ||
+                param.hasOp(bcos::initializer::Params::operation::SnapshotWithoutTxAndReceipt))
+            {
+                bool withTxAndReceipt = param.hasOp(bcos::initializer::Params::operation::Snapshot);
+                std::cout << "[" << bcos::getCurrentDateTime() << "] ";
+                std::cout << "generating snapshot to " << param.snapshotPath << " ..." << std::endl;
+                auto error = initializer->nodeInitializer()->generateSnapshot(
+                    param.snapshotPath, withTxAndReceipt);
+                if (error)
+                {
+                    std::cout << "[" << bcos::getCurrentDateTime() << "] ";
+                    std::cout << "generate snapshot failed, error:" << error->errorMessage()
+                              << std::endl;
+                    return -1;
+                }
+                std::cout << "[" << bcos::getCurrentDateTime() << "] ";
+                std::cout << "generate snapshot success." << std::endl;
+            }
+            if (param.hasOp(bcos::initializer::Params::operation::ImportSnapshot))
+            {
+                std::cout << "[" << bcos::getCurrentDateTime() << "] ";
+                std::cout << "importing snapshot from " << param.snapshotPath << " ..."
+                          << std::endl;
+                auto error = initializer->nodeInitializer()->importSnapshot(param.snapshotPath);
+                if (error)
+                {
+                    std::cout << "[" << bcos::getCurrentDateTime() << "] ";
+                    std::cout << "import snapshot failed, error:" << error->errorMessage()
+                              << std::endl;
+                    return -1;
+                }
+                std::cout << "[" << bcos::getCurrentDateTime() << "] ";
+                std::cout << "import snapshot success." << std::endl;
+            }
+            return 0;
+        }
         bcos::initializer::showNodeVersionMetric();
 
         bcos::initializer::printVersion();
