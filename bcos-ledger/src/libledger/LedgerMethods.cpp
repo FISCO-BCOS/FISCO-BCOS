@@ -564,3 +564,52 @@ bcos::task::Task<std::optional<bcos::storage::Entry>> bcos::ledger::tag_invoke(
 {
     co_return co_await ledger.getStorageAt(address, key, number);
 }
+
+bcos::task::Task<
+    std::shared_ptr<std::map<bcos::protocol::BlockNumber, bcos::protocol::NonceListPtr>>>
+bcos::ledger::tag_invoke(ledger::tag_t<getNonceList> /*unused*/, LedgerInterface& ledger,
+    bcos::protocol::BlockNumber startNumber, int64_t offset)
+{
+    struct Awaitable
+    {
+        bcos::ledger::LedgerInterface& m_ledger;
+        bcos::protocol::BlockNumber m_startNumber;
+        int64_t m_offset;
+
+        std::variant<bcos::Error::Ptr,
+            std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>>>
+            m_result;
+
+        constexpr static bool await_ready() noexcept { return false; }
+        void await_suspend(std::coroutine_handle<> handle)
+        {
+            m_ledger.asyncGetNonceList(m_offset, m_offset,
+                [this, handle](auto&& error,
+                    std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>>
+                        nonceList) {
+                    if (error)
+                    {
+                        m_result.emplace<bcos::Error::Ptr>(std::forward<decltype(error)>(error));
+                    }
+                    else
+                    {
+                        m_result.emplace<decltype(nonceList)>(std::move(nonceList));
+                    }
+                    handle.resume();
+                });
+        }
+        std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>> await_resume()
+        {
+            if (std::holds_alternative<bcos::Error::Ptr>(m_result))
+            {
+                BOOST_THROW_EXCEPTION(*std::get<bcos::Error::Ptr>(m_result));
+            }
+            return std::get<
+                std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>>>(m_result);
+        }
+    };
+
+    Awaitable awaitable{
+        .m_ledger = ledger, .m_startNumber = startNumber, .m_offset = offset, .m_result = {}};
+    co_return co_await awaitable;
+}

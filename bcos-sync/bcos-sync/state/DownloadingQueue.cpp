@@ -19,9 +19,11 @@
  * @date 2021-05-24
  */
 #include "DownloadingQueue.h"
+#include "bcos-framework/ledger/Ledger.h"
+#include "bcos-framework/ledger/LedgerMethods.h"
 #include "bcos-sync/utilities/Common.h"
+#include "bcos-task/Wait.h"
 #include <bcos-framework/dispatcher/SchedulerTypeDef.h>
-#include <future>
 
 using namespace std;
 using namespace bcos;
@@ -746,17 +748,10 @@ void DownloadingQueue::fetchAndUpdateLedgerConfig()
     try
     {
         BLKSYNC_LOG(INFO) << LOG_DESC("fetchAndUpdateLedgerConfig");
-        m_ledgerFetcher->fetchBlockNumberAndHash();
-        m_ledgerFetcher->fetchCompatibilityVersion();
-        m_ledgerFetcher->fetchFeatures();
-        m_ledgerFetcher->fetchConsensusNodeList();
         // Note: must fetchObserverNode here to notify the latest sealerList and observerList to
         // txpool
-        m_ledgerFetcher->fetchObserverNodeList();
-        m_ledgerFetcher->fetchCandidateSealerList();
-        m_ledgerFetcher->fetchBlockTxCountLimit();
-        m_ledgerFetcher->fetchConsensusLeaderPeriod();
-        auto ledgerConfig = m_ledgerFetcher->ledgerConfig();
+        auto ledgerConfig = std::make_shared<ledger::LedgerConfig>();
+        task::syncWait(ledger::getLedgerConfig(*m_config->ledger(), *ledgerConfig));
         BLKSYNC_LOG(INFO) << LOG_DESC("fetchAndUpdateLedgerConfig success")
                           << LOG_KV("blockNumber", ledgerConfig->blockNumber())
                           << LOG_KV("hash", ledgerConfig->hash().abridged())

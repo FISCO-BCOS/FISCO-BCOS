@@ -93,4 +93,8 @@ task::Task<std::optional<bcos::storage::Entry>> tag_invoke(ledger::tag_t<getStor
     LedgerInterface& ledger, std::string_view address, std::string_view key,
     bcos::protocol::BlockNumber number);
 
+task::Task<std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>>> tag_invoke(
+    ledger::tag_t<getNonceList> /*unused*/, LedgerInterface& ledger,
+    bcos::protocol::BlockNumber startNumber, int64_t offset);
+
 }  // namespace bcos::ledger

@@ -24,7 +24,6 @@
 #include <bcos-framework/storage/KVStorageHelper.h>
 #include <bcos-framework/sync/BlockSyncInterface.h>
 #include <bcos-pbft/pbft/PBFTFactory.h>
-#include <bcos-tool/LedgerConfigFetcher.h>
 
 #include <utility>
 

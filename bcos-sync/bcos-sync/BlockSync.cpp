@@ -19,6 +19,10 @@
  * @date 2021-05-24
  */
 #include "bcos-sync/BlockSync.h"
+#include "bcos-framework/ledger/GenesisConfig.h"
+#include "bcos-framework/ledger/Ledger.h"
+#include "bcos-framework/ledger/LedgerConfig.h"
+#include "bcos-framework/ledger/LedgerMethods.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/CommonError.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
@@ -76,23 +80,20 @@ void BlockSync::start()
 
 void BlockSync::init()
 {
-    auto fetcher = std::make_shared<LedgerConfigFetcher>(m_config->ledger());
     BLKSYNC_LOG(INFO) << LOG_DESC("start fetch the ledger config for block sync module");
-    fetcher->fetchBlockNumberAndHash();
-    fetcher->fetchCompatibilityVersion();
-    fetcher->fetchFeatures();
-    fetcher->fetchConsensusNodeList();
-    fetcher->fetchObserverNodeList();
-    fetcher->fetchCandidateSealerList();
-    fetcher->fetchGenesisHash();
+
     // set the syncConfig
-    auto genesisHash = fetcher->genesisHash();
+    auto genesisHash = task::syncWait(ledger::getBlockHash(*m_config->ledger(), 0));
+
+    auto ledgerConfig = std::make_shared<ledger::LedgerConfig>();
+    task::syncWait(ledger::getLedgerConfig(*m_config->ledger(), *ledgerConfig));
+
     BLKSYNC_LOG(INFO) << LOG_DESC("fetch the ledger config for block sync module success")
-                      << LOG_KV("number", fetcher->ledgerConfig()->blockNumber())
-                      << LOG_KV("latestHash", fetcher->ledgerConfig()->hash().abridged())
+                      << LOG_KV("number", ledgerConfig->blockNumber())
+                      << LOG_KV("latestHash", ledgerConfig->hash().abridged())
                       << LOG_KV("genesisHash", genesisHash);
     m_config->setGenesisHash(genesisHash);
-    m_config->resetConfig(fetcher->ledgerConfig());
+    m_config->resetConfig(ledgerConfig);
     if (m_config->enableSendBlockStatusByTree())
     {
         updateTreeTopologyNodeInfo();

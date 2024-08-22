@@ -24,7 +24,6 @@
 #include "bcos-txpool/txpool/validator/TxValidator.h"
 #include "txpool/storage/MemoryStorage.h"
 #include "txpool/validator/TxPoolNonceChecker.h"
-#include <bcos-tool/LedgerConfigFetcher.h>
 
 using namespace bcos;
 using namespace bcos::txpool;

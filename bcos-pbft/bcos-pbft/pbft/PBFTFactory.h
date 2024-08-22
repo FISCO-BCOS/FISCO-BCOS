@@ -24,7 +24,6 @@
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/storage/KVStorageHelper.h>
 #include <bcos-framework/sync/BlockSyncInterface.h>
-#include <bcos-tool/LedgerConfigFetcher.h>
 
 namespace bcos::consensus
 {

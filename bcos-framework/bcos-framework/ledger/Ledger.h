@@ -156,6 +156,15 @@ inline constexpr struct GetStorageAt
     }
 } getStorageAt{};
 
+inline constexpr struct GetNonceList
+{
+    task::Task<std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>>> operator()(
+        auto& ledger, bcos::protocol::BlockNumber startNumber, int64_t offset) const
+    {
+        co_return co_await tag_invoke(*this, ledger, startNumber, offset);
+    }
+} getNonceList{};
+
 template <auto& Tag>
 using tag_t = std::decay_t<decltype(Tag)>;
 }  // namespace bcos::ledger
