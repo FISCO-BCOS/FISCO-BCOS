@@ -8,6 +8,7 @@
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-task/Wait.h"
 #include "bcos-transaction-executor/TransactionExecutorImpl.h"
+#include "bcos-transaction-executor/precompiled/PrecompiledManager.h"
 #include "bcos-transaction-scheduler/MultiLayerStorage.h"
 #include "bcos-transaction-scheduler/SchedulerParallelImpl.h"
 #include "bcos-transaction-scheduler/SchedulerSerialImpl.h"
@@ -31,6 +32,25 @@ using ReceiptFactory = bcostars::protocol::TransactionReceiptFactoryImpl;
 template <bool parallel>
 struct Fixture
 {
+    bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
+    std::shared_ptr<bcostars::protocol::BlockHeaderFactoryImpl> m_blockHeaderFactory;
+    std::shared_ptr<bcostars::protocol::TransactionFactoryImpl> m_transactionFactory;
+    std::shared_ptr<bcostars::protocol::TransactionReceiptFactoryImpl> m_receiptFactory;
+    std::shared_ptr<bcostars::protocol::BlockFactoryImpl> m_blockFactory;
+
+    BackendStorage m_backendStorage;
+    MultiLayerStorageType m_multiLayerStorage;
+    bcos::bytes m_helloworldBytecodeBinary;
+
+    PrecompiledManager m_precompiledManager;
+    TransactionExecutorImpl m_executor;
+    std::variant<std::monostate, SchedulerSerialImpl, SchedulerParallelImpl<MutableStorage>>
+        m_scheduler;
+
+    std::string m_contractAddress;
+    std::vector<Address> m_addresses;
+    std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>> m_transactions;
+
     Fixture()
       : m_cryptoSuite(std::make_shared<bcos::crypto::CryptoSuite>(
             std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr)),
@@ -43,7 +63,8 @@ struct Fixture
         m_blockFactory(std::make_shared<bcostars::protocol::BlockFactoryImpl>(
             m_cryptoSuite, m_blockHeaderFactory, m_transactionFactory, m_receiptFactory)),
         m_multiLayerStorage(m_backendStorage),
-        m_executor(*m_receiptFactory, m_cryptoSuite->hashImpl())
+        m_precompiledManager(m_cryptoSuite->hashImpl()),
+        m_executor(*m_receiptFactory, m_cryptoSuite->hashImpl(), m_precompiledManager)
     {
         boost::log::core::get()->set_logging_enabled(false);
 
@@ -264,24 +285,6 @@ struct Fixture
             },
             m_scheduler);
     }
-
-    bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
-    std::shared_ptr<bcostars::protocol::BlockHeaderFactoryImpl> m_blockHeaderFactory;
-    std::shared_ptr<bcostars::protocol::TransactionFactoryImpl> m_transactionFactory;
-    std::shared_ptr<bcostars::protocol::TransactionReceiptFactoryImpl> m_receiptFactory;
-    std::shared_ptr<bcostars::protocol::BlockFactoryImpl> m_blockFactory;
-
-    BackendStorage m_backendStorage;
-    MultiLayerStorageType m_multiLayerStorage;
-    bcos::bytes m_helloworldBytecodeBinary;
-
-    TransactionExecutorImpl m_executor;
-    std::variant<std::monostate, SchedulerSerialImpl, SchedulerParallelImpl<MutableStorage>>
-        m_scheduler;
-
-    std::string m_contractAddress;
-    std::vector<Address> m_addresses;
-    std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>> m_transactions;
 };
 
 template <bool parallel = false>

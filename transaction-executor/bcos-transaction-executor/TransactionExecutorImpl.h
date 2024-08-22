@@ -12,6 +12,7 @@
 #include <evmc/evmc.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/exception/diagnostic_information.hpp>
+#include <functional>
 #include <gsl/util>
 #include <iterator>
 #include <type_traits>
@@ -20,18 +21,18 @@ namespace bcos::transaction_executor
 {
 #define TRANSACTION_EXECUTOR_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("TRANSACTION_EXECUTOR")
 
+evmc_message newEVMCMessage(protocol::Transaction const& transaction, int64_t gasLimit);
+
 class TransactionExecutorImpl
 {
 public:
-    TransactionExecutorImpl(
-        protocol::TransactionReceiptFactory const& receiptFactory, crypto::Hash::Ptr hashImpl);
+    TransactionExecutorImpl(protocol::TransactionReceiptFactory const& receiptFactory,
+        crypto::Hash::Ptr hashImpl, PrecompiledManager& precompiledManager);
 
 private:
     std::reference_wrapper<protocol::TransactionReceiptFactory const> m_receiptFactory;
     crypto::Hash::Ptr m_hashImpl;
-    PrecompiledManager m_precompiledManager;
-
-    static evmc_message newEVMCMessage(protocol::Transaction const& transaction, int64_t gasLimit);
+    std::reference_wrapper<PrecompiledManager> m_precompiledManager;
 
     friend task::Generator<protocol::TransactionReceipt::Ptr> tag_invoke(
         tag_t<execute3Step> /*unused*/, TransactionExecutorImpl& executor, auto& storage,
