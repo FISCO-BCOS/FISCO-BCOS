@@ -88,8 +88,8 @@ bcos::transaction_scheduler::BaselineSchedulerInitializer::build(::rocksdb::DB& 
                 storage2::rocksdb::StateValueResolver{}),
             m_multiLayerStorage(m_rocksDBStorage, m_cacheStorage),
             m_precompiledManager(blockFactory.cryptoSuite()->hashImpl()),
-            m_transactionExecutor(
-                *blockFactory.receiptFactory(), blockFactory.cryptoSuite()->hashImpl())
+            m_transactionExecutor(*blockFactory.receiptFactory(),
+                blockFactory.cryptoSuite()->hashImpl(), m_precompiledManager)
         {}
     };
     auto data = std::make_shared<Data>(rocksDB, *blockFactory);
