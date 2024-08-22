@@ -435,6 +435,9 @@ bcos::Error::Ptr Ledger::storeTransactionsAndReceipts(
     {
         return BCOS_ERROR_PTR(LedgerError::ErrorArgument, "empty block");
     }
+    auto blockNumber = block->blockHeaderConst()->number();
+    LEDGER_LOG(INFO) << LOG_DESC("storeTransactionsAndReceipts")
+                     << LOG_KV("blockNumber", blockNumber);
     auto start = utcTime();
     bcos::Error::Ptr error = nullptr;
     auto txSize = std::max(block->transactionsSize(), block->transactionsMetaDataSize());
@@ -467,7 +470,6 @@ bcos::Error::Ptr Ledger::storeTransactionsAndReceipts(
     keys.reserve(txSize);
     std::vector<std::string_view> values;
     values.reserve(txSize);
-    auto blockNumber = block->blockHeaderConst()->number();
 
     RecursiveGuard guard(m_mutex);
     size_t unstoredTxs = 0;
