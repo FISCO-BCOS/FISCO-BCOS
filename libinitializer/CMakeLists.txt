@@ -23,8 +23,8 @@ target_link_libraries(${TXPOOL_INIT_LIB} PUBLIC ${PROTOCOL_INIT_LIB} ${TOOL_TARG
 include(FetchContent)
 FetchContent_Declare(
     tomlplusplus
-    GIT_REPOSITORY https://github.com/marzer/tomlplusplus.git
-    GIT_TAG        v3.4.0
+    URL       https://github.com/marzer/tomlplusplus/archive/refs/tags/v3.4.0.tar.gz
+    URL_HASH  MD5=c1f32ced14311fe949b9ce7cc3f7a867
 )
 FetchContent_MakeAvailable(tomlplusplus)
 
