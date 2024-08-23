@@ -1086,6 +1086,13 @@ bcos::Error::Ptr ingestIntoRocksDB(
         std::cerr << "Error while adding file, " << status.ToString() << std::endl;
         return BCOS_ERROR_PTR(-1, "Error while adding file, " + status.ToString());
     }
+    // compaction
+    status = rocksDB.CompactRange(rocksdb::CompactRangeOptions(), nullptr, nullptr);
+    if (!status.ok())
+    {
+        std::cerr << "compaction failed, " << status.ToString() << std::endl;
+        return BCOS_ERROR_PTR(-1, "compaction failed, " + status.ToString());
+    }
     return nullptr;
 }
 
