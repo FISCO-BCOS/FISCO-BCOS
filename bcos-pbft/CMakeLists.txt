@@ -50,12 +50,12 @@ find_package(jsoncpp CONFIG REQUIRED)
 
 file(GLOB_RECURSE SRCS bcos-pbft/*.cpp)
 add_library(${PBFT_TARGET} ${SRCS} ${MESSAGES_SRCS})
-target_link_libraries(${PBFT_TARGET} PUBLIC ${RPBFT_TARGET} ${TXPOOL_TARGET} ${UTILITIES_TARGET} ${TOOL_TARGET} bcos-framework jsoncpp_static)
-set_source_files_properties(
-    "bcos-pbft/pbft/protocol/proto/PBFT.pb.cc"
-    "bcos-pbft/core/proto/Consensus.pb.cc"
-    PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-set_target_properties(${PBFT_TARGET} PROPERTIES UNITY_BUILD "ON")
+target_link_libraries(${PBFT_TARGET} PUBLIC ${TXPOOL_TARGET} ${UTILITIES_TARGET} ${TOOL_TARGET} bcos-framework jsoncpp_static)
+# set_source_files_properties(
+#     "bcos-pbft/pbft/protocol/proto/PBFT.pb.cc"
+#     "bcos-pbft/core/proto/Consensus.pb.cc"
+#     PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+# set_target_properties(${PBFT_TARGET} PROPERTIES UNITY_BUILD "ON")
 
 if (TESTS)
     # fetch bcos-test
