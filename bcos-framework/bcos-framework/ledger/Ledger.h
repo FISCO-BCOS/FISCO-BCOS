@@ -119,6 +119,12 @@ inline constexpr struct GetLedgerConfig
     {
         co_await tag_invoke(*this, ledger, ledgerConfig);
     }
+    task::Task<LedgerConfig::Ptr> operator()(auto& ledger) const
+    {
+        auto ledgerConfig = std::make_shared<LedgerConfig>();
+        co_await tag_invoke(*this, ledger, *ledgerConfig);
+        co_return ledgerConfig;
+    }
 } getLedgerConfig{};
 
 inline constexpr struct GetFeatures

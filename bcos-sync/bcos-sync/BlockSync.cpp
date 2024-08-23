@@ -85,9 +85,7 @@ void BlockSync::init()
     // set the syncConfig
     auto genesisHash = task::syncWait(ledger::getBlockHash(*m_config->ledger(), 0));
 
-    auto ledgerConfig = std::make_shared<ledger::LedgerConfig>();
-    task::syncWait(ledger::getLedgerConfig(*m_config->ledger(), *ledgerConfig));
-
+    auto ledgerConfig = task::syncWait(ledger::getLedgerConfig(*m_config->ledger()));
     BLKSYNC_LOG(INFO) << LOG_DESC("fetch the ledger config for block sync module success")
                       << LOG_KV("number", ledgerConfig->blockNumber())
                       << LOG_KV("latestHash", ledgerConfig->hash().abridged())

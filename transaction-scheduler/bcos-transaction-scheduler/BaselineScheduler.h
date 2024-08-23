@@ -462,8 +462,7 @@ private:
             co_await ledger::storeTransactionsAndReceipts(
                 scheduler.m_ledger.get(), result.m_transactions, result.m_block);
 
-            auto ledgerConfig = std::make_shared<ledger::LedgerConfig>();
-            co_await ledger::getLedgerConfig(scheduler.m_ledger.get(), *ledgerConfig);
+            auto ledgerConfig = co_await ledger::getLedgerConfig(scheduler.m_ledger.get());
             ledgerConfig->setHash(header->hash());
             {
                 std::unique_lock ledgerConfigLock(scheduler.m_ledgerConfigMutex);
@@ -541,10 +540,8 @@ public:
         m_txpool(txPool),
         m_transactionSubmitResultFactory(transactionSubmitResultFactory),
         m_hashImpl(hashImpl),
-        m_ledgerConfig(std::make_shared<ledger::LedgerConfig>())
-    {
-        task::syncWait(ledger::getLedgerConfig(m_ledger, *m_ledgerConfig));
-    }
+        m_ledgerConfig(task::syncWait(ledger::getLedgerConfig(m_ledger)))
+    {}
     BaselineScheduler(const BaselineScheduler&) = delete;
     BaselineScheduler(BaselineScheduler&&) noexcept = default;
     BaselineScheduler& operator=(const BaselineScheduler&) = delete;

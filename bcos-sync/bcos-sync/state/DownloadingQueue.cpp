@@ -750,8 +750,7 @@ void DownloadingQueue::fetchAndUpdateLedgerConfig()
         BLKSYNC_LOG(INFO) << LOG_DESC("fetchAndUpdateLedgerConfig");
         // Note: must fetchObserverNode here to notify the latest sealerList and observerList to
         // txpool
-        auto ledgerConfig = std::make_shared<ledger::LedgerConfig>();
-        task::syncWait(ledger::getLedgerConfig(*m_config->ledger(), *ledgerConfig));
+        auto ledgerConfig = task::syncWait(ledger::getLedgerConfig(*m_config->ledger()));
         BLKSYNC_LOG(INFO) << LOG_DESC("fetchAndUpdateLedgerConfig success")
                           << LOG_KV("blockNumber", ledgerConfig->blockNumber())
                           << LOG_KV("hash", ledgerConfig->hash().abridged())

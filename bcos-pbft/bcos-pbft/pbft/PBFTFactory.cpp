@@ -77,5 +77,6 @@ PBFTImpl::Ptr PBFTFactory::createPBFT()
 
     PBFT_LOG(INFO) << LOG_DESC("create PBFT");
     auto pbft = std::make_shared<PBFTImpl>(pbftEngine);
+    pbft->setLedger(m_ledger);
     return pbft;
 }

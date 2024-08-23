@@ -530,10 +530,7 @@ void TxPool::init()
 {
     initSendResponseHandler();
     TXPOOL_LOG(INFO) << LOG_DESC("fetch LedgerConfig information");
-
-    auto ledgerConfig = std::make_shared<ledger::LedgerConfig>();
-    task::syncWait(ledger::getLedgerConfig(*m_config->ledger(), *ledgerConfig));
-
+    auto ledgerConfig = task::syncWait(ledger::getLedgerConfig(*m_config->ledger()));
     TXPOOL_LOG(INFO) << LOG_DESC("fetch LedgerConfig success");
 
     auto blockLimit = m_config->blockLimit();

@@ -99,14 +99,8 @@ public:
     void recoverState();
 
     void fetchAndUpdateLedgerConfig();
-    bool shouldRotateSealers(protocol::BlockNumber _number) const
-    {
-        if (m_config->rpbftConfigTools() == nullptr)
-        {
-            return false;
-        }
-        return m_config->rpbftConfigTools()->shouldRotateSealers(_number);
-    }
+    bool shouldRotateSealers(protocol::BlockNumber _number) const;
+    void setLedger(ledger::LedgerInterface::Ptr ledger);
 
 protected:
     virtual void initSendResponseHandler();

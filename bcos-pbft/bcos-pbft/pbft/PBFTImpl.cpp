@@ -188,3 +188,8 @@ void PBFTImpl::enableAsMasterNode(bool _isMasterNode)
     // only reset m_masterNode to true when init success
     m_masterNode.store(_isMasterNode);
 }
+
+void bcos::consensus::PBFTImpl::setLedger(ledger::LedgerInterface::Ptr ledger)
+{
+    m_pbftEngine->setLedger(std::move(ledger));
+}

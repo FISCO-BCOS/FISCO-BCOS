@@ -45,7 +45,8 @@ PBFTEngine::PBFTEngine(PBFTConfig::Ptr _config)
   : ConsensusEngine("pbft", 0),
     m_config(_config),
     m_worker(std::make_shared<ThreadPool>("pbftWorker", 4)),
-    m_msgQueue(std::make_shared<PBFTMsgQueue>())
+    m_msgQueue(std::make_shared<PBFTMsgQueue>()),
+    m_ledgerConfig(std::make_shared<LedgerConfig>())
 {
     auto cacheFactory = std::make_shared<PBFTCacheFactory>();
     m_cacheProcessor = std::make_shared<PBFTCacheProcessor>(cacheFactory, _config);
@@ -1796,4 +1797,16 @@ void PBFTEngine::switchToRPBFT(const LedgerConfig::Ptr& _ledgerConfig)
     {
         this->m_config->setRPBFTConfigTools(std::make_shared<RPBFTConfigTools>());
     }
+}
+bool bcos::consensus::PBFTEngine::shouldRotateSealers(protocol::BlockNumber _number) const
+{
+    if (m_config->rpbftConfigTools() == nullptr)
+    {
+        return false;
+    }
+    return m_config->rpbftConfigTools()->shouldRotateSealers(_number);
+}
+void bcos::consensus::PBFTEngine::setLedger(ledger::LedgerInterface::Ptr ledger)
+{
+    m_ledger = std::move(ledger);
 }

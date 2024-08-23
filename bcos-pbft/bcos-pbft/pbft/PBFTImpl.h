@@ -159,6 +159,8 @@ public:
         return m_pbftEngine->shouldRotateSealers(_number);
     }
 
+    void setLedger(ledger::LedgerInterface::Ptr ledger);
+
 protected:
     PBFTEngine::Ptr m_pbftEngine;
     BlockValidator::Ptr m_blockValidator;
