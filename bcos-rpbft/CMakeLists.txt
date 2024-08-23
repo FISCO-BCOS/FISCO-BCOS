@@ -25,7 +25,7 @@ add_library(${RPBFT_TARGET} ${SRCS})
 include_directories(${CMAKE_BINARY_DIR}/bcos-pbft/)
 target_link_libraries(${RPBFT_TARGET} PUBLIC bcos-framework)
 set_target_properties(${RPBFT_TARGET} PROPERTIES UNITY_BUILD "ON")
-add_dependencies(${RPBFT_TARGET} ${PBFT_TARGET})
+# add_dependencies(${RPBFT_TARGET} ${PBFT_TARGET})
 
 if (TESTS)
     # fetch bcos-test
