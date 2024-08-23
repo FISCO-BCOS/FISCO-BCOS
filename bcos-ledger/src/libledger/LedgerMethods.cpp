@@ -583,7 +583,7 @@ bcos::ledger::tag_invoke(ledger::tag_t<getNonceList> /*unused*/, LedgerInterface
         constexpr static bool await_ready() noexcept { return false; }
         void await_suspend(std::coroutine_handle<> handle)
         {
-            m_ledger.asyncGetNonceList(m_offset, m_offset,
+            m_ledger.asyncGetNonceList(m_startNumber, m_offset,
                 [this, handle](auto&& error,
                     std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>>
                         nonceList) {

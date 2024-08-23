@@ -55,6 +55,7 @@
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/lexical_cast.hpp>
+#include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <memory>
 
@@ -1473,6 +1474,48 @@ BOOST_AUTO_TEST_CASE(replaceBinary)
         auto result = co_await storage2::readOne(*storage,
             transaction_executor::StateKeyView(ledger::SYS_CONFIG, "bugfix_statestorage_hash"));
         BOOST_REQUIRE(result);
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(nonceList)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        auto hashImpl = std::make_shared<Keccak256>();
+        auto memoryStorage = std::make_shared<StateStorage>(nullptr, false);
+        auto storage = std::make_shared<MockStorage>(memoryStorage);
+        auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+
+        auto nonceList = std::vector<std::string>{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
+        auto block = m_blockFactory->createBlock();
+        block->setNonceList(nonceList);
+
+        co_await storage2::writeOne(*storage,
+            transaction_executor::StateKey(SYS_TABLES, SYS_BLOCK_NUMBER_2_NONCES),
+            storage::Entry{std::string_view{"value"}});
+
+        bytes buffer;
+        block->encode(buffer);
+        Entry nonceEntry{buffer};
+        co_await storage2::writeOne(
+            *storage, transaction_executor::StateKey(SYS_BLOCK_NUMBER_2_NONCES, "1"), nonceEntry);
+
+        auto gotNonceList = co_await ledger::getNonceList(*ledger, 1, 1);
+        BOOST_REQUIRE(gotNonceList);
+        BOOST_CHECK_EQUAL(gotNonceList->size(), 1);
+        auto list = gotNonceList->at(1);
+        BOOST_CHECK_EQUAL_COLLECTIONS(
+            list->begin(), list->end(), nonceList.begin(), nonceList.end());
+
+        auto gotNonceList2 = co_await ledger::getNonceList(*ledger, 1, 100);
+        BOOST_REQUIRE(gotNonceList2);
+        BOOST_CHECK_EQUAL(gotNonceList2->size(), 1);
+        auto list2 = gotNonceList2->at(1);
+        BOOST_CHECK_EQUAL_COLLECTIONS(
+            list2->begin(), list2->end(), nonceList.begin(), nonceList.end());
+
+        auto gotNonceList3 = co_await ledger::getNonceList(*ledger, 2, 1);
+        BOOST_REQUIRE(gotNonceList3);
+        BOOST_CHECK_EQUAL(gotNonceList3->size(), 0);
     }());
 }
 
