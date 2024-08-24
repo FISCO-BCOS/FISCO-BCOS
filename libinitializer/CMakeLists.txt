@@ -20,19 +20,12 @@ endif()
 
 add_library(${TXPOOL_INIT_LIB} TxPoolInitializer.cpp)
 target_link_libraries(${TXPOOL_INIT_LIB} PUBLIC ${PROTOCOL_INIT_LIB} ${TOOL_TARGET} ${TXPOOL_TARGET})
-include(FetchContent)
-FetchContent_Declare(
-    tomlplusplus
-    URL       https://github.com/marzer/tomlplusplus/archive/refs/tags/v3.4.0.tar.gz
-    URL_HASH  MD5=c1f32ced14311fe949b9ce7cc3f7a867
-)
-FetchContent_MakeAvailable(tomlplusplus)
 
 add_library(baseline_init BaselineSchedulerInitializer.cpp)
 target_link_libraries(baseline_init transaction-scheduler transaction-executor ${STORAGE_TARGET})
 
 add_library(${INIT_LIB} Initializer.cpp)
-list(APPEND INIT_LIB_DEPENDS ${PROTOCOL_INIT_LIB} baseline_init ${FRONTSERVICE_INIT_LIB} ${TXPOOL_INIT_LIB} ${SCHEDULER_TARGET} ${STORAGE_TARGET} ${EXECUTOR_TARGET} ${RPC_TARGET} bcos-boostssl tomlplusplus::tomlplusplus)
+list(APPEND INIT_LIB_DEPENDS ${PROTOCOL_INIT_LIB} baseline_init ${FRONTSERVICE_INIT_LIB} ${TXPOOL_INIT_LIB} ${SCHEDULER_TARGET} ${STORAGE_TARGET} ${EXECUTOR_TARGET} ${RPC_TARGET} bcos-boostssl tomlplusplus)
 if(WITH_TIKV)
     list(APPEND INIT_LIB_DEPENDS ${LEADER_ELECTION_TARGET})
 endif()
@@ -42,5 +35,6 @@ if(WITH_LIGHTNODE)
     list(APPEND INIT_LIB_DEPENDS lightnodeinit bcos-concepts)
 endif()
 target_link_libraries(${INIT_LIB} PUBLIC ${INIT_LIB_DEPENDS})
+
 set_target_properties(${INIT_LIB} PROPERTIES UNITY_BUILD "ON")
 add_dependencies(${INIT_LIB} BuildInfo.h)
