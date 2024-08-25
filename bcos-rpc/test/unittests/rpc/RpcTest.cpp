@@ -43,7 +43,7 @@ using namespace bcos::rpc;
 using namespace bcos::crypto;
 namespace bcos::test
 {
-BOOST_FIXTURE_TEST_SUITE(testValidator, RPCFixture)
+BOOST_FIXTURE_TEST_SUITE(testRPC, RPCFixture)
 BOOST_AUTO_TEST_CASE(buildTest)
 {
     auto rpc = factory->buildRpc("gateway", "rpc", nullptr);
