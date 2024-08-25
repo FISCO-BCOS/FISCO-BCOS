@@ -38,15 +38,6 @@ using namespace bcos::ledger;
 using namespace bcos::crypto;
 using namespace bcos::codec;
 
-#ifndef WITH_WASM
-namespace bcos::wasm
-{
-class GasInjector
-{
-};
-}  // namespace bcos::wasm
-#endif
-
 namespace bcos::test
 {
 class CryptoPrecompiledFixture : public PrecompiledFixture

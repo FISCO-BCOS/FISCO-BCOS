@@ -19,6 +19,7 @@
  */
 
 #pragma once
+#include "bcos-crypto/interfaces/crypto/CommonType.h"
 #include "executive/BlockContext.h"
 #include "executive/TransactionExecutive.h"
 #include "executor/TransactionExecutorFactory.h"

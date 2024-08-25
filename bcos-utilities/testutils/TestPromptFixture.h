@@ -23,9 +23,8 @@
 #include <boost/filesystem.hpp>
 #include <boost/test/unit_test.hpp>
 
-namespace bcos
-{
-namespace test
+
+namespace bcos::test
 {
 inline bcos::bytes operator""_bytes(const char* s) noexcept
 {
@@ -98,5 +97,4 @@ public:
     // release test-suite fixture
     ~TestPromptFixture() { TestPrompt::get().finishTest(); }
 };
-}  // namespace test
-}  // namespace bcos
+}  // namespace bcos::test

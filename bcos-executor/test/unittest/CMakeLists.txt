@@ -15,9 +15,10 @@ include(SearchTestCases)
 
 target_link_libraries(${TEST_BINARY_NAME} ${EXECUTOR_TARGET} ${LEDGER_TARGET} ${CRYPTO_TARGET} ${TARS_PROTOCOL_TARGET} bcos-framework Boost::serialization Boost::unit_test_framework)
 target_compile_options(${TEST_BINARY_NAME} PRIVATE -fno-var-tracking -Wno-unused-parameter)
+set_source_files_properties("main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
 #add_test(NAME test-executor WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND $<TARGET_FILE:${TEST_BINARY_NAME}>)
 config_test_cases("" "${SOURCES}" ${TEST_BINARY_NAME} "")
-
 
 # for code coverage
 #if (COVERAGE)

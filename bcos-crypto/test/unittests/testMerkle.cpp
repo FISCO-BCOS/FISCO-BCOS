@@ -10,8 +10,6 @@
 #include <boost/iostreams/stream.hpp>
 #include <boost/test/unit_test.hpp>
 #include <boost/throw_exception.hpp>
-#include <chrono>
-#include <future>
 #include <iterator>
 #include <ostream>
 #include <random>

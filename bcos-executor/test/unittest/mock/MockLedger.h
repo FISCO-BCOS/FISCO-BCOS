@@ -10,6 +10,15 @@
 #include <future>
 #include <sstream>
 
+#ifndef WITH_WASM
+namespace bcos::wasm
+{
+class GasInjector
+{
+};
+}  // namespace bcos::wasm
+#endif
+
 namespace bcos::test
 {
 class MockLedger : public bcos::ledger::LedgerInterface
