@@ -134,7 +134,8 @@ void Initializer::initConfig(std::string const& _configFilePath, std::string con
     }
 }
 
-RocksDBOption getRocksDBOption(const tool::NodeConfig::Ptr& nodeConfig)
+RocksDBOption getRocksDBOption(
+    const tool::NodeConfig::Ptr& nodeConfig, bool optimizeLevelStyleCompaction = false)
 {
     RocksDBOption option;
     option.maxWriteBufferNumber = nodeConfig->maxWriteBufferNumber();
@@ -142,6 +143,7 @@ RocksDBOption getRocksDBOption(const tool::NodeConfig::Ptr& nodeConfig)
     option.writeBufferSize = nodeConfig->writeBufferSize();
     option.minWriteBufferNumberToMerge = nodeConfig->minWriteBufferNumberToMerge();
     option.blockCacheSize = nodeConfig->blockCacheSize();
+    option.optimizeLevelStyleCompaction = optimizeLevelStyleCompaction;
     option.enable_blob_files = nodeConfig->enableRocksDBBlob();
     return option;
 }
@@ -823,7 +825,7 @@ bcos::Error::Ptr Initializer::generateSnapshot(const std::string& snapshotPath,
         bcos::ledger::SYS_BLOCK_NUMBER_2_NONCES, std::to_string(blockLimit + 1));
     auto validNonceEndKey = bcos::storage::toDBKey(
         bcos::ledger::SYS_BLOCK_NUMBER_2_NONCES, std::to_string(currentBlockNumber));
-    const size_t MAX_SST_FILE_BYTE = 256 * 1024 * 1024;
+    const size_t MAX_SST_FILE_BYTE = 128 << 20;  // 128MB
     rocksdb::Options options;
     options.compression = rocksdb::kZSTD;
     auto stateSstFileWriter = rocksdb::SstFileWriter(rocksdb::EnvOptions(), options);
@@ -1076,7 +1078,6 @@ bcos::Error::Ptr ingestIntoRocksDB(
         }
     }
     std::cout << "check sst files success, ingest sst files" << std::endl;
-
     rocksdb::IngestExternalFileOptions info;
     info.move_files = moveFiles;
     // Ingest SST files into the DB
@@ -1163,7 +1164,7 @@ bcos::Error::Ptr Initializer::importSnapshotToRocksDB(
     {
         moveSSTFiles = false;
     }
-    auto rocksdbOption = getRocksDBOption(nodeConfig);
+    auto rocksdbOption = getRocksDBOption(nodeConfig, true);
     auto rocksDB = StorageInitializer::createRocksDB(
         stateDBPath, rocksdbOption, nodeConfig->enableStatistics(), nodeConfig->keyPageSize());
     ingestIntoRocksDB(*rocksDB, sstFiles, moveSSTFiles);

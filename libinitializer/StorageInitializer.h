@@ -43,6 +43,7 @@ struct RocksDBOption
     size_t writeBufferSize = 64 << 20;  // 64MB
     int minWriteBufferNumberToMerge = 1;
     size_t blockCacheSize = 128 << 20;  // 128MB
+    bool optimizeLevelStyleCompaction = false;
     bool enable_blob_files = false;
 };
 
@@ -55,10 +56,13 @@ public:
         boost::filesystem::create_directories(_path);
         rocksdb::DB* db = nullptr;
         rocksdb::Options options;
-        // Note: This option will increase much memory
-        // options.IncreaseParallelism(std::thread::hardware_concurrency());
-        // Note: This option will increase much memory
-        // options.OptimizeLevelStyleCompaction();
+        if (rocksDBOption.optimizeLevelStyleCompaction)
+        {
+            // Note: This option will increase much memory
+            options.IncreaseParallelism();
+            // Note: This option will increase much memory
+            options.OptimizeLevelStyleCompaction();
+        }
 
         // create the DB if it's not already present
         options.create_if_missing = true;
@@ -80,6 +84,8 @@ public:
             rocksDBOption.minWriteBufferNumberToMerge;  // default is 1
         options.enable_pipelined_write = true;
         // options.min_blob_size = 1024;
+        options.max_bytes_for_level_base = 512 << 20;  // 512MB
+        options.target_file_size_base = 128 << 20;     // 128MB
 
         if (_enableDBStatistics)
         {
@@ -96,7 +102,6 @@ public:
         // table_options.cache_index_and_filter_blocks = true; // this will increase memory and
         // lower performance
         options.table_factory.reset(rocksdb::NewBlockBasedTableFactory(table_options));
-
         if (boost::filesystem::space(_path).available < 1 << 30)
         {
             BCOS_LOG(INFO) << "available disk space is less than 1GB";
