@@ -14,7 +14,6 @@
 #include <boost/iostreams/stream.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/serialization/vector.hpp>
-#include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <future>
 #include <optional>
@@ -28,7 +27,7 @@ using namespace std;
 //     return os;
 // }
 
-namespace bcos::test
+namespace bcos::test::rocksdb_test
 {
 class Header256Hash : public bcos::crypto::Hash
 {
@@ -693,4 +692,4 @@ BOOST_AUTO_TEST_CASE(commitAndCheck)
 }
 BOOST_AUTO_TEST_SUITE_END()
 
-}  // namespace bcos::test
+}  // namespace bcos::test::rocksdb_test

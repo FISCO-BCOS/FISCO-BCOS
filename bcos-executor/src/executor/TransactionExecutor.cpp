@@ -150,8 +150,8 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
     m_vmFactory(std::move(vmFactory))
 {
     assert(m_backendStorage);
-    m_ledgerCache->fetchCompatibilityVersion();
-    m_ledgerCache->fetchBlockNumberAndHash();
+
+    m_ledgerCache->updateLedgerConfig();
     GlobalHashImpl::g_hashImpl = m_hashImpl;
     m_abiCache = make_shared<ClockCache<bcos::bytes, FunctionAbi>>(32);
 #ifdef WITH_WASM
@@ -159,14 +159,13 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
 #endif
 
     m_threadPool = std::make_shared<bcos::ThreadPool>(name, std::thread::hardware_concurrency());
-    setBlockVersion(m_ledgerCache->ledgerConfig()->compatibilityVersion());
-    if (m_ledgerCache->ledgerConfig()->compatibilityVersion() >= BlockVersion::V3_3_VERSION)
+    setBlockVersion(m_ledgerCache->ledgerConfig().compatibilityVersion());
+    if (m_ledgerCache->ledgerConfig().compatibilityVersion() >= BlockVersion::V3_3_VERSION)
     {
-        m_ledgerCache->fetchAuthCheckStatus();
-        if (m_ledgerCache->ledgerConfig()->authCheckStatus() != UINT32_MAX)
+        if (m_ledgerCache->ledgerConfig().authCheckStatus() != UINT32_MAX)
         {
             // cannot get auth check status, use config value
-            m_isAuthCheck = !m_isWasm && m_ledgerCache->ledgerConfig()->authCheckStatus() != 0;
+            m_isAuthCheck = !m_isWasm && m_ledgerCache->ledgerConfig().authCheckStatus() != 0;
         }
     }
     if (m_isWasm)
@@ -311,7 +310,7 @@ void TransactionExecutor::initEvmEnvironment()
     set<string> builtIn = {CRYPTO_ADDRESS, GROUP_SIG_ADDRESS, RING_SIG_ADDRESS, CAST_ADDRESS};
     m_staticPrecompiled = std::make_shared<set<string>>(builtIn);
     if (m_blockVersion <=> BlockVersion::V3_1_VERSION == 0 &&
-        m_ledgerCache->ledgerConfig()->blockNumber() > 0)
+        m_ledgerCache->ledgerConfig().blockNumber() > 0)
     {
         // Only 3.1 goes here, here is a bug, ignore init test precompiled
     }
@@ -374,7 +373,7 @@ void TransactionExecutor::initWasmEnvironment()
     m_staticPrecompiled = std::make_shared<set<string>>(builtIn);
 
     if (m_blockVersion <=> BlockVersion::V3_1_VERSION == 0 &&
-        m_ledgerCache->ledgerConfig()->blockNumber() > 0)
+        m_ledgerCache->ledgerConfig().blockNumber() > 0)
     {
         // Only 3.1 goes here, here is a bug, ignore init test precompiled
     }
@@ -1885,16 +1884,15 @@ void TransactionExecutor::commit(
         EXECUTOR_NAME_LOG(DEBUG) << BLOCK_NUMBER(blockNumber) << "Commit success";
 
         m_lastCommittedBlockNumber = blockNumber;
-        m_ledgerCache->fetchCompatibilityVersion();
-        auto version = m_ledgerCache->ledgerConfig()->compatibilityVersion();
+        m_ledgerCache->updateLedgerConfig();
+        auto version = m_ledgerCache->ledgerConfig().compatibilityVersion();
         setBlockVersion(version);
         if (version >= BlockVersion::V3_3_VERSION)
         {
-            m_ledgerCache->fetchAuthCheckStatus();
-            if (m_ledgerCache->ledgerConfig()->authCheckStatus() != UINT32_MAX)
+            if (m_ledgerCache->ledgerConfig().authCheckStatus() != UINT32_MAX)
             {
                 // cannot get auth check status, not update value
-                m_isAuthCheck = !m_isWasm && m_ledgerCache->ledgerConfig()->authCheckStatus() != 0;
+                m_isAuthCheck = !m_isWasm && m_ledgerCache->ledgerConfig().authCheckStatus() != 0;
             }
         }
         removeCommittedState();

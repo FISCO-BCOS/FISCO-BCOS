@@ -27,4 +27,6 @@ target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR})
 find_package(Boost REQUIRED unit_test_framework)
 
 target_link_libraries(${TEST_BINARY_NAME} ${PBFT_TARGET} ${RPBFT_TARGET} ${TOOL_TARGET} ${LEDGER_TARGET} ${TABLE_TARGET} bcos-crypto ${TARS_PROTOCOL_TARGET} protobuf::libprotobuf Boost::unit_test_framework)
+set_source_files_properties("unittests/main/main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
 add_test(NAME test-pbft WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})

@@ -28,4 +28,6 @@ find_package(jsoncpp REQUIRED)
 
 target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-unused-variable)
 target_link_libraries(${TEST_BINARY_NAME} PRIVATE ${TARS_PROTOCOL_TARGET} ${CRYPTO_TARGET} Boost::unit_test_framework jsoncpp_static)
+set_source_files_properties("main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
 add_test(NAME test-tars-protocol WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})

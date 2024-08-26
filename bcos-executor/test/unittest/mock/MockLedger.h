@@ -10,6 +10,15 @@
 #include <future>
 #include <sstream>
 
+#ifndef WITH_WASM
+namespace bcos::wasm
+{
+class GasInjector
+{
+};
+}  // namespace bcos::wasm
+#endif
+
 namespace bcos::test
 {
 class MockLedger : public bcos::ledger::LedgerInterface
@@ -157,15 +166,14 @@ public:
             return;
         }
 
-
-        BOOST_CHECK(false);  // Need implementations
+        _onGetConfig(nullptr, "0", 0);
     };
 
 
     void asyncGetNodeListByType(std::string_view const& _type,
         std::function<void(Error::Ptr, consensus::ConsensusNodeListPtr)> _onGetConfig) override
     {
-        BOOST_CHECK(false);  // Need implementations
+        _onGetConfig(nullptr, std::make_shared<consensus::ConsensusNodeList>());
     };
 
     void asyncGetNonceList(protocol::BlockNumber _startNumber, int64_t _offset,

@@ -27,5 +27,7 @@ target_include_directories(${TEST_BINARY_NAME} PRIVATE .)
 target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-unused-variable)
 
 target_link_libraries(${TEST_BINARY_NAME} ${TXPOOL_TARGET} ${LEDGER_TARGET} ${RPC_TARGET} ${TOOL_TARGET} Boost::unit_test_framework)
+set_source_files_properties("unittests/main/main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
 #add_test(NAME ${TEST_BINARY_NAME} WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
 config_test_cases("" "${SOURCES}" ${TEST_BINARY_NAME} "")

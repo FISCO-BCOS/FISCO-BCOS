@@ -26,7 +26,6 @@
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/CommonError.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
-#include <bcos-tool/LedgerConfigFetcher.h>
 #include <json/json.h>
 #include <boost/bind/bind.hpp>
 #include <string>

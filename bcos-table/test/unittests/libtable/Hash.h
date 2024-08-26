@@ -17,9 +17,39 @@
  * @file Header256Hash.h
  */
 
+#pragma once
+#include "bcos-framework/storage/Entry.h"
+#include "bcos-framework/storage/Table.h"
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <functional>
+
+namespace std
+{
+inline ostream& operator<<(ostream& os, const std::optional<bcos::storage::Entry>& entry)
+{
+    os << entry.has_value();
+    return os;
+}
+
+inline ostream& operator<<(ostream& os, const std::optional<bcos::storage::Table>& table)
+{
+    os << table.has_value();
+    return os;
+}
+
+inline ostream& operator<<(ostream& os, const std::unique_ptr<bcos::Error>& error)
+{
+    os << error->what();
+    return os;
+}
+
+inline ostream& operator<<(ostream& os, const std::tuple<std::string, bcos::crypto::HashType>& pair)
+{
+    os << std::get<0>(pair) << " " << std::get<1>(pair).hex();
+    return os;
+}
+}  // namespace std
 
 namespace bcos
 {

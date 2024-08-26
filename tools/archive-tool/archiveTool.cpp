@@ -22,7 +22,6 @@
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-ledger/src/libledger/Ledger.h"
-#include "bcos-ledger/src/libledger/utilities/Common.h"
 #include "bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h"
 #include "bcos-storage/bcos-storage/TiKVStorage.h"
 #include "bcos-tars-protocol/bcos-tars-protocol/protocol/TransactionImpl.h"
@@ -350,8 +349,7 @@ void archiveBlocks(auto archiveStorage, auto ledger,
                        [](const std::string& str) { return std::string_view{str}; }),
             receiptValues | RANGES::views::transform(
                                 [](const std::string& str) { return std::string_view{str}; }));
-        std::cout << "\r"
-                  << "write block " << i << " size: " << size << std::flush;
+        std::cout << "\r" << "write block " << i << " size: " << size << std::flush;
     }
     std::cout << std::endl
               << "write to archive database, block range [" << startBlockNumber << ","
@@ -548,8 +546,8 @@ void reimportBlocks(auto archiveStorage, TransactionalStorageInterface::Ptr loca
             });
         // write receipt to local storage
         localBlockStorage->setRows(ledger::SYS_HASH_2_RECEIPT, txHashes, receiptsView);
-        std::cout << "\r"
-                  << "reimport block " << blockNumber << " size: " << txHashes.size() << std::flush;
+        std::cout << "\r" << "reimport block " << blockNumber << " size: " << txHashes.size()
+                  << std::flush;
     }
     // });
     std::cout << std::endl

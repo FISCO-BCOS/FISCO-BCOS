@@ -18,8 +18,8 @@ public:
     Type type() const override { return m_type; }
     void setType(Type type) override { m_type = type; }
 
-    crypto::HashType transactionHash() const override { return m_transactionHash; }
-    void setTransactionHash(crypto::HashType hash) override { m_transactionHash = hash; }
+    bcos::crypto::HashType transactionHash() const override { return m_transactionHash; }
+    void setTransactionHash(bcos::crypto::HashType hash) override { m_transactionHash = hash; }
 
     int64_t contextID() const override { return m_contextID; }
     void setContextID(int64_t contextID) override { m_contextID = contextID; }

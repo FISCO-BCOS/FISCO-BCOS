@@ -22,6 +22,7 @@
 #include "../protocol/ProtocolTypeDef.h"
 #include "SystemConfigs.h"
 #include <bcos-utilities/Common.h>
+#include <oneapi/tbb/concurrent_unordered_map.h>
 
 namespace bcos::ledger
 {
@@ -122,5 +123,29 @@ struct CurrentState
     bcos::protocol::BlockNumber archivedNumber;
     int64_t totalTransactionCount;
     int64_t totalFailedTransactionCount;
+};
+
+// parent=>children
+using Parent2ChildListMap = std::map<std::string, std::vector<std::string>>;
+// child=>parent
+using Child2ParentMap = tbb::concurrent_unordered_map<std::string, std::string>;
+
+constexpr static const char* const SYS_VALUE = "value";
+constexpr static const char* const SYS_CONFIG_ENABLE_BLOCK_NUMBER = "enable_number";
+constexpr static const char* const SYS_VALUE_AND_ENABLE_BLOCK_NUMBER = "value,enable_number";
+
+enum LedgerError : int32_t
+{
+    SUCCESS = 0,
+    OpenTableFailed = 3001,
+    CallbackError = 3002,
+    ErrorArgument = 3003,
+    DecodeError = 3004,
+    ErrorCommitBlock = 3005,
+    CollectAsyncCallbackError = 3006,
+    LedgerLockError = 3007,
+    GetStorageError = 3008,
+    EmptyEntry = 3009,
+    UnknownError = 3010,
 };
 }  // namespace bcos::ledger

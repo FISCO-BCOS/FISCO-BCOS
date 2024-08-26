@@ -35,27 +35,6 @@ using namespace bcos;
 using namespace bcos::storage;
 using namespace bcos::crypto;
 
-namespace std
-{
-inline ostream& operator<<(ostream& os, const tuple<string, crypto::HashType>& item)
-{
-    os << get<0>(item) << " " << get<1>(item);
-    return os;
-}
-
-inline ostream& operator<<(ostream& os, const std::optional<Table>& table)
-{
-    os << table.has_value();
-    return os;
-}
-
-inline ostream& operator<<(ostream& os, const std::unique_ptr<Error>& error)
-{
-    os << error->what();
-    return os;
-}
-}  // namespace std
-
 namespace bcos
 {
 namespace test
