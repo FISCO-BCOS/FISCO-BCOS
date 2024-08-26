@@ -226,8 +226,7 @@ public:
 
         PBFT_LOG(INFO) << LOG_DESC("create PBFT");
         auto fakedPBFT = std::make_shared<FakePBFTImpl>(pbftEngine);
-        auto ledgerFetcher = std::make_shared<bcos::tool::LedgerConfigFetcher>(m_ledger);
-        fakedPBFT->setLedgerFetcher(ledgerFetcher);
+        fakedPBFT->setLedger(m_ledger);
         pbftConfig->setTimeoutState(false);
         pbftConfig->timer()->stop();
         return fakedPBFT;

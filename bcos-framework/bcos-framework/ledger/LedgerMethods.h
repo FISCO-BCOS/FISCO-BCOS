@@ -78,8 +78,8 @@ task::Task<std::optional<SystemConfigEntry>> tag_invoke(
 task::Task<consensus::ConsensusNodeList> tag_invoke(
     ledger::tag_t<getNodeList> /*unused*/, LedgerInterface& ledger, std::string_view type);
 
-task::Task<LedgerConfig::Ptr> tag_invoke(
-    ledger::tag_t<getLedgerConfig> /*unused*/, LedgerInterface& ledger);
+task::Task<void> tag_invoke(
+    ledger::tag_t<getLedgerConfig> /*unused*/, LedgerInterface& ledger, LedgerConfig& ledgerConfig);
 
 task::Task<Features> tag_invoke(ledger::tag_t<getFeatures> /*unused*/, LedgerInterface& ledger);
 
@@ -92,5 +92,9 @@ task::Task<protocol::TransactionsConstPtr> tag_invoke(
 task::Task<std::optional<bcos::storage::Entry>> tag_invoke(ledger::tag_t<getStorageAt>,
     LedgerInterface& ledger, std::string_view address, std::string_view key,
     bcos::protocol::BlockNumber number);
+
+task::Task<std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>>> tag_invoke(
+    ledger::tag_t<getNonceList> /*unused*/, LedgerInterface& ledger,
+    bcos::protocol::BlockNumber startNumber, int64_t offset);
 
 }  // namespace bcos::ledger

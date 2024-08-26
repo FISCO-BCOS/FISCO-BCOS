@@ -91,7 +91,7 @@ inline constexpr struct GetBlockNumber
 {
     task::Task<protocol::BlockNumber> operator()(auto& ledger, crypto::HashType hash) const
     {
-        co_return co_await tag_invoke(*this, ledger, std::move(hash));
+        co_return co_await tag_invoke(*this, ledger, hash);
     }
 } getBlockNumber{};
 
@@ -115,9 +115,15 @@ inline constexpr struct GetNodeList
 
 inline constexpr struct GetLedgerConfig
 {
+    task::Task<void> operator()(auto& ledger, auto& ledgerConfig) const
+    {
+        co_await tag_invoke(*this, ledger, ledgerConfig);
+    }
     task::Task<LedgerConfig::Ptr> operator()(auto& ledger) const
     {
-        co_return co_await tag_invoke(*this, ledger);
+        auto ledgerConfig = std::make_shared<LedgerConfig>();
+        co_await tag_invoke(*this, ledger, *ledgerConfig);
+        co_return ledgerConfig;
     }
 } getLedgerConfig{};
 
@@ -155,6 +161,15 @@ inline constexpr struct GetStorageAt
         co_return co_await tag_invoke(*this, ledger, address, key, number);
     }
 } getStorageAt{};
+
+inline constexpr struct GetNonceList
+{
+    task::Task<std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>>> operator()(
+        auto& ledger, bcos::protocol::BlockNumber startNumber, int64_t offset) const
+    {
+        co_return co_await tag_invoke(*this, ledger, startNumber, offset);
+    }
+} getNonceList{};
 
 template <auto& Tag>
 using tag_t = std::decay_t<decltype(Tag)>;

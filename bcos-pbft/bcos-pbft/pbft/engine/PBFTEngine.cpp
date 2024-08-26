@@ -21,7 +21,9 @@
 #include "PBFTEngine.h"
 #include "../cache/PBFTCacheFactory.h"
 #include "../cache/PBFTCacheProcessor.h"
-#include "bcos-framework/protocol/CommonError.h"
+#include "bcos-framework/ledger/Ledger.h"
+#include "bcos-framework/ledger/LedgerMethods.h"
+#include "bcos-task/Wait.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
 #include <bcos-framework/dispatcher/SchedulerTypeDef.h>
@@ -31,6 +33,7 @@
 #include <bcos-utilities/ThreadPool.h>
 #include <boost/bind/bind.hpp>
 #include <utility>
+
 using namespace bcos;
 using namespace bcos::consensus;
 using namespace bcos::ledger;
@@ -42,7 +45,8 @@ PBFTEngine::PBFTEngine(PBFTConfig::Ptr _config)
   : ConsensusEngine("pbft", 0),
     m_config(_config),
     m_worker(std::make_shared<ThreadPool>("pbftWorker", 4)),
-    m_msgQueue(std::make_shared<PBFTMsgQueue>())
+    m_msgQueue(std::make_shared<PBFTMsgQueue>()),
+    m_ledgerConfig(std::make_shared<LedgerConfig>())
 {
     auto cacheFactory = std::make_shared<PBFTCacheFactory>();
     m_cacheProcessor = std::make_shared<PBFTCacheProcessor>(cacheFactory, _config);
@@ -1773,8 +1777,8 @@ void PBFTEngine::clearExceptionProposalState(bcos::protocol::BlockNumber _number
 void PBFTEngine::fetchAndUpdateLedgerConfig()
 {
     PBFT_LOG(INFO) << LOG_DESC("fetchAndUpdateLedgerConfig");
-    m_ledgerFetcher->fetchAll();
-    auto ledgerConfig = m_ledgerFetcher->ledgerConfig();
+    task::syncWait(ledger::getLedgerConfig(*m_ledger, *m_ledgerConfig));
+    auto& ledgerConfig = m_ledgerConfig;
     PBFT_LOG(INFO) << LOG_DESC("fetchAndUpdateLedgerConfig success")
                    << LOG_KV("blockNumber", ledgerConfig->blockNumber())
                    << LOG_KV("hash", ledgerConfig->hash().abridged())
@@ -1793,4 +1797,16 @@ void PBFTEngine::switchToRPBFT(const LedgerConfig::Ptr& _ledgerConfig)
     {
         this->m_config->setRPBFTConfigTools(std::make_shared<RPBFTConfigTools>());
     }
+}
+bool bcos::consensus::PBFTEngine::shouldRotateSealers(protocol::BlockNumber _number) const
+{
+    if (m_config->rpbftConfigTools() == nullptr)
+    {
+        return false;
+    }
+    return m_config->rpbftConfigTools()->shouldRotateSealers(_number);
+}
+void bcos::consensus::PBFTEngine::setLedger(ledger::LedgerInterface::Ptr ledger)
+{
+    m_ledger = std::move(ledger);
 }

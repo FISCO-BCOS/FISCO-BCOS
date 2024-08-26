@@ -20,18 +20,18 @@
  */
 #pragma once
 #include "ConsensusNodeInterface.h"
-namespace bcos
-{
-namespace consensus
+#include <utility>
+
+namespace bcos::consensus
 {
 class ConsensusNode : public ConsensusNodeInterface
 {
 public:
     using Ptr = std::shared_ptr<ConsensusNode>;
-    explicit ConsensusNode(bcos::crypto::PublicPtr _nodeID) : m_nodeID(_nodeID) {}
+    explicit ConsensusNode(bcos::crypto::PublicPtr _nodeID) : m_nodeID(std::move(_nodeID)) {}
 
     ConsensusNode(bcos::crypto::PublicPtr _nodeID, uint64_t _weight)
-      : m_nodeID(_nodeID), m_weight(_weight)
+      : m_nodeID(std::move(_nodeID)), m_weight(_weight)
     {}
 
     ~ConsensusNode() override {}
@@ -43,5 +43,4 @@ private:
     bcos::crypto::PublicPtr m_nodeID;
     uint64_t m_weight = 100;
 };
-}  // namespace consensus
-}  // namespace bcos
+}  // namespace bcos::consensus

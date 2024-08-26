@@ -21,7 +21,6 @@ cmake_minimum_required(VERSION 3.10)
 project(bcos-sealer VERSION ${VERSION})
 
 aux_source_directory(./bcos-sealer SRC_LIST)
-include_directories(./bcos-sealer)
 add_library(${SEALER_TARGET} ${SRC_LIST})
 
 find_package(tarscpp REQUIRED)

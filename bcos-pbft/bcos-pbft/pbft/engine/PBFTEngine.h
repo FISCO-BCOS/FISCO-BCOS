@@ -20,9 +20,9 @@
  */
 #pragma once
 #include "PBFTLogSync.h"
+#include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-pbft/core/ConsensusEngine.h"
 #include "bcos-rpbft/rpbft/config/RPBFTConfigTools.h"
-#include <bcos-tool/LedgerConfigFetcher.h>
 #include <bcos-utilities/ConcurrentQueue.h>
 #include <bcos-utilities/Error.h>
 #include <bcos-utilities/Timer.h>
@@ -99,18 +99,8 @@ public:
     void recoverState();
 
     void fetchAndUpdateLedgerConfig();
-    void setLedgerFetcher(bcos::tool::LedgerConfigFetcher::Ptr _ledgerFetcher)
-    {
-        m_ledgerFetcher = std::move(_ledgerFetcher);
-    }
-    bool shouldRotateSealers(protocol::BlockNumber _number) const
-    {
-        if (m_config->rpbftConfigTools() == nullptr)
-        {
-            return false;
-        }
-        return m_config->rpbftConfigTools()->shouldRotateSealers(_number);
-    }
+    bool shouldRotateSealers(protocol::BlockNumber _number) const;
+    void setLedger(ledger::LedgerInterface::Ptr ledger);
 
 protected:
     virtual void initSendResponseHandler();
@@ -247,10 +237,12 @@ protected:
     const std::set<PacketType> c_consensusPacket = {PrePreparePacket, PreparePacket, CommitPacket};
 
     std::atomic_bool m_stopped = {false};
-    bcos::tool::LedgerConfigFetcher::Ptr m_ledgerFetcher;
 
     // the timer used to resend checkPointProposal
     std::shared_ptr<bcos::Timer> m_timer;
+
+    ledger::LedgerInterface::Ptr m_ledger;
+    ledger::LedgerConfig::Ptr m_ledgerConfig;
 };
 }  // namespace consensus
 }  // namespace bcos
