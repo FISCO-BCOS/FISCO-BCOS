@@ -44,6 +44,7 @@
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/executor/NativeExecutionMessage.h>
+#include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/algorithm/string.hpp>
@@ -95,12 +96,14 @@ struct TransactionExecutorFixture
             fromHexString("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e")
                 ->data(),
             32);
+        // address: "11ac3ca85a307ae2aff614e83949ab691ba019c5"
         memcpy(keyPair->publicKey()->mutableData(),
             fromHexString(
                 "ccd8de502ac45462767e649b462b5f4ca7eadd69c7e1f1b410bdf754359be29b1b88ffd79744"
                 "03f56e250af52b25682014554f7b3297d6152401e85d426a06ae")
                 ->data(),
             64);
+        eoa = keyPair->address(hashImpl).hex();
 
         codec = std::make_unique<bcos::CodecWrapper>(hashImpl, false);
     }
@@ -112,6 +115,7 @@ struct TransactionExecutorFixture
     std::shared_ptr<MockTransactionalStorage> backend;
     std::shared_ptr<MockLedger> ledger;
     std::shared_ptr<Keccak256> hashImpl;
+    std::string eoa;
 
     KeyPairInterface::Ptr keyPair;
     int64_t gas = 3000000;
@@ -368,6 +372,10 @@ BOOST_AUTO_TEST_CASE(externalCall)
     // Solidity source code from test_external_call.sol, using remix
     // 0.6.10+commit.00c0fcaf
 
+    ledger::SystemConfigEntry se = {"1", 0};
+    storage::Entry entry;
+    entry.setObject(se);
+    backend->setRow(ledger::SYS_CONFIG, "feature_evm_address", entry);
     std::string ABin =
         "608060405234801561001057600080fd5b5061037f806100206000396000f3fe60806040523480156100105760"
         "0080fd5b506004361061002b5760003560e01c80635b975a7314610030575b600080fd5b61005c600480360360"
@@ -712,6 +720,17 @@ BOOST_AUTO_TEST_CASE(externalCall)
 
     auto expectResult2 = codec->encode(s256(1000));
     BOOST_CHECK(callResult2->data().toBytes() == expectResult);
+
+    std::string tableName;
+    tableName.append(ledger::SYS_DIRECTORY::USER_APPS);
+    tableName.append(address);
+
+    {
+        auto [e, nonceEntry] = backend->getRow(tableName, ledger::ACCOUNT_TABLE_FIELDS::NONCE);
+        BOOST_CHECK(!e);
+        BOOST_CHECK(nonceEntry);
+        BOOST_CHECK_EQUAL(nonceEntry->get(), "1");
+    }
 }
 
 BOOST_AUTO_TEST_CASE(performance)
