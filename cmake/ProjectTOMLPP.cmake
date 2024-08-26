@@ -3,8 +3,8 @@ include(ExternalProject)
 ExternalProject_Add(tomlplusplus_project
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NO_PROGRESS 1
-    URL https://${URL_BASE}/marzer/tomlplusplus/archive/refs/tags/v3.4.0.tar.gz
-    URL_HASH MD5=c1f32ced14311fe949b9ce7cc3f7a867
+    GIT_REPOSITORY https://github.com/marzer/tomlplusplus.git
+    GIT_TAG 30172438cee64926dc41fdd9c11fb3ba5b2ba9de
     CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
 )
 
