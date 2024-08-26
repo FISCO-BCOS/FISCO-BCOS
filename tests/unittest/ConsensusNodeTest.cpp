@@ -47,7 +47,7 @@ BOOST_AUTO_TEST_CASE(testConsensusNode)
     auto consensusNode3 = std::make_shared<ConsensusNode>(nodeId3, weight);
 
     // test set
-    std::set<ConsensusNodeInterface::Ptr, ConsensusNodeComparator> consensusNodeList;
+    std::set<ConsensusNodeInterface::Ptr> consensusNodeList;
     consensusNodeList.insert(consensusNode1);
     BOOST_CHECK(consensusNodeList.count(consensusNode1));
     BOOST_CHECK(consensusNodeList.size() == 1);

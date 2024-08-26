@@ -200,7 +200,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
     auto logInitializer = std::make_shared<bcos::BoostLogInitializer>();
     logInitializer->initLog(configFile);
 
-    g_BCOSConfig.setCodec(std::make_shared<bcostars::protocol::ProtocolInfoCodecImpl>());
+    protocol::g_BCOSConfig.setCodec(std::make_shared<bcostars::protocol::ProtocolInfoCodecImpl>());
 
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
     auto nodeConfig = std::make_shared<bcos::tool::NodeConfig>(keyFactory);

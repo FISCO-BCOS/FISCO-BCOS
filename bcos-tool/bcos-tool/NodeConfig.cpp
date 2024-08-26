@@ -26,7 +26,6 @@
 #include "bcos-framework/protocol/ServiceDesc.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
-#include "bcos-utilities/FileUtility.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <bcos-framework/ledger/GenesisConfig.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
@@ -42,8 +41,9 @@
 #include <boost/algorithm/string/trim.hpp>
 #include <boost/throw_exception.hpp>
 #include <thread>
+#include <utility>
 
-#define MAX_BLOCK_LIMIT 5000
+constexpr static auto MAX_BLOCK_LIMIT = 5000;
 
 using namespace bcos;
 using namespace bcos::crypto;
@@ -53,7 +53,7 @@ using namespace bcos::ledger;
 using namespace bcos::protocol;
 
 NodeConfig::NodeConfig(KeyFactory::Ptr _keyFactory)
-  : m_keyFactory(_keyFactory), m_ledgerConfig(std::make_shared<LedgerConfig>())
+  : m_keyFactory(std::move(_keyFactory)), m_ledgerConfig(std::make_shared<LedgerConfig>())
 {}
 
 void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforceMemberID,
@@ -947,15 +947,15 @@ ConsensusNodeListPtr NodeConfig::parseConsensusNodeList(boost::property_tree::pt
             BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                       "Please set weight for " + nodeId + " to positive!"));
         }
-        auto consensusNode = std::make_shared<ConsensusNode>(
-            m_keyFactory->createKey(*fromHexString(nodeId)), weight);
+        auto consensusNode =
+            std::make_shared<ConsensusNode>(m_keyFactory->createKey(fromHex(nodeId)), weight);
         NodeConfig_LOG(INFO) << LOG_BADGE("parseConsensusNodeList")
                              << LOG_KV("sectionName", _sectionName) << LOG_KV("nodeId", nodeId)
                              << LOG_KV("weight", weight);
         nodeList->push_back(consensusNode);
     }
     // only sort nodeList after rc3 version
-    std::sort(nodeList->begin(), nodeList->end(), bcos::consensus::ConsensusNodeComparator());
+    std::sort(nodeList->begin(), nodeList->end());
     NodeConfig_LOG(INFO) << LOG_BADGE("parseConsensusNodeList")
                          << LOG_KV("totalNodesSize", nodeList->size());
     return nodeList;

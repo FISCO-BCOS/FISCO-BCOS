@@ -60,6 +60,7 @@
 #include <future>
 #include <iterator>
 #include <memory>
+#include <range/v3/view/take.hpp>
 #include <utility>
 
 using namespace bcos;
@@ -2127,10 +2128,10 @@ bool Ledger::buildGenesisBlock(
         for (auto& node : consensusNodeList)
         {
             auto iter = std::find_if(
-                workingSealerList->begin(), workingSealerList->end(), [&node](auto&& workingNode) {
+                workingSealerList.begin(), workingSealerList.end(), [&node](auto&& workingNode) {
                     return workingNode->nodeID()->hex() == node.nodeID;
                 });
-            if (iter == workingSealerList->end())
+            if (iter == workingSealerList.end())
             {
                 node.type = CONSENSUS_CANDIDATE_SEALER;
             }
@@ -2195,11 +2196,11 @@ bool Ledger::buildGenesisBlock(
     return true;
 }
 
-bcos::consensus::ConsensusNodeListPtr Ledger::selectWorkingSealer(
+bcos::consensus::ConsensusNodeList Ledger::selectWorkingSealer(
     const bcos::ledger::LedgerConfig& _ledgerConfig, std::int64_t _epochSealerNum)
 {
     auto sealerList = _ledgerConfig.consensusNodeList();
-    std::sort(sealerList.begin(), sealerList.end(), bcos::consensus::ConsensusNodeComparator());
+    std::sort(sealerList.begin(), sealerList.end());
 
     std::int64_t sealersSize = sealerList.size();
     std::int64_t selectedNum = std::min(_epochSealerNum, sealersSize);
@@ -2223,13 +2224,13 @@ bcos::consensus::ConsensusNodeListPtr Ledger::selectWorkingSealer(
         }
     }
 
-    auto workingSealerList = std::make_shared<bcos::consensus::ConsensusNodeList>();
-    for (std::int64_t i = 0; i < selectedNum; ++i)
+    bcos::consensus::ConsensusNodeList workingSealerList =
+        RANGES::views::take(sealerList, selectedNum) | RANGES::to<std::vector>();
+    for (auto& node : workingSealerList)
     {
         LEDGER_LOG(INFO) << LOG_DESC("selectWorkingSealer")
-                         << LOG_KV("nodeID", sealerList[i]->nodeID()->hex())
-                         << LOG_KV("weight", sealerList[i]->weight());
-        workingSealerList->emplace_back(sealerList[i]);
+                         << LOG_KV("nodeID", node->nodeID()->hex())
+                         << LOG_KV("weight", node->weight());
     }
     return workingSealerList;
 }

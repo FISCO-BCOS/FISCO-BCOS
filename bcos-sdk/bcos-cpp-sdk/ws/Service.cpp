@@ -47,7 +47,8 @@ Service::Service(bcos::group::GroupInfoCodec::Ptr _groupInfoCodec,
     m_groupInfoCodec(std::move(_groupInfoCodec)),
     m_groupInfoFactory(std::move(_groupInfoFactory))
 {
-    m_localProtocol = g_BCOSConfig.protocolInfo(bcos::protocol::ProtocolModuleID::RpcService);
+    m_localProtocol =
+        protocol::g_BCOSConfig.protocolInfo(bcos::protocol::ProtocolModuleID::RpcService);
     RPC_WS_LOG(INFO) << LOG_DESC("init the local protocol")
                      << LOG_KV("minVersion", m_localProtocol->minVersion())
                      << LOG_KV("maxVersion", m_localProtocol->maxVersion())

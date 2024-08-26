@@ -21,6 +21,7 @@
 #pragma once
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-framework/Common.h>
+#include <compare>
 
 namespace bcos::consensus
 {
@@ -32,28 +33,36 @@ class ConsensusNodeInterface
 public:
     using Ptr = std::shared_ptr<ConsensusNodeInterface>;
     ConsensusNodeInterface() = default;
+    ConsensusNodeInterface(const ConsensusNodeInterface&) = default;
+    ConsensusNodeInterface(ConsensusNodeInterface&&) = default;
+    ConsensusNodeInterface& operator=(const ConsensusNodeInterface&) = default;
+    ConsensusNodeInterface& operator=(ConsensusNodeInterface&&) = default;
     virtual ~ConsensusNodeInterface() = default;
 
     // the nodeID of the consensus node
     [[nodiscard]] virtual bcos::crypto::PublicPtr nodeID() const = 0;
     [[nodiscard]] virtual uint64_t weight() const { return defaultWeight; }
 };
+
+inline std::strong_ordering operator<=>(
+    ConsensusNodeInterface const& lhs, ConsensusNodeInterface const& rhs)
+{
+    auto cmp = lhs.nodeID()->data() <=> rhs.nodeID()->data();
+    if (std::is_eq(cmp))
+    {
+        cmp = lhs.weight() <=> rhs.weight();
+    }
+    return cmp;
+}
+inline std::strong_ordering operator<=>(
+    ConsensusNodeInterface::Ptr const& lhs, ConsensusNodeInterface::Ptr const& rhs)
+{
+    return *lhs <=> *rhs;
+}
+
 using ConsensusNodeList = std::vector<ConsensusNodeInterface::Ptr>;
 using ConsensusNodeListPtr = std::shared_ptr<ConsensusNodeList>;
-
-struct ConsensusNodeComparator
-{
-    bool operator()(
-        const ConsensusNodeInterface::Ptr& _left, const ConsensusNodeInterface::Ptr& _right) const
-    {
-        if (_left->nodeID()->data() == _right->nodeID()->data())
-        {
-            return _left->weight() < _right->weight();
-        }
-        return (_left->nodeID()->data() < _right->nodeID()->data());
-    }
-};
-using ConsensusNodeSet = std::set<ConsensusNodeInterface::Ptr, ConsensusNodeComparator>;
+using ConsensusNodeSet = std::set<ConsensusNodeInterface::Ptr>;
 using ConsensusNodeSetPtr = std::shared_ptr<ConsensusNodeSet>;
 inline std::string decsConsensusNodeList(ConsensusNodeList const& _nodeList)
 {

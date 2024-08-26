@@ -28,14 +28,17 @@ class ConsensusNode : public ConsensusNodeInterface
 {
 public:
     using Ptr = std::shared_ptr<ConsensusNode>;
+    ConsensusNode(const ConsensusNode&) = default;
+    ConsensusNode(ConsensusNode&&) = default;
+    ConsensusNode& operator=(const ConsensusNode&) = default;
+    ConsensusNode& operator=(ConsensusNode&&) = default;
     explicit ConsensusNode(bcos::crypto::PublicPtr _nodeID) : m_nodeID(std::move(_nodeID)) {}
 
     ConsensusNode(bcos::crypto::PublicPtr _nodeID, uint64_t _weight)
       : m_nodeID(std::move(_nodeID)), m_weight(_weight)
     {}
 
-    ~ConsensusNode() override {}
-
+    ~ConsensusNode() override = default;
     bcos::crypto::PublicPtr nodeID() const override { return m_nodeID; }
     uint64_t weight() const override { return m_weight; }
 

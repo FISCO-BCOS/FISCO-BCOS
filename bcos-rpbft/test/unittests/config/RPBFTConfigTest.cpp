@@ -82,21 +82,21 @@ public:
 
         for (size_t i = 0; i < consensusNodeNum; ++i)
         {
-            ledgerConfig->mutableConsensusList()->push_back(
+            ledgerConfig->mutableConsensusList().push_back(
                 std::make_shared<consensus::ConsensusNode>(
                     m_cryptoSuite->signatureImpl()->generateKeyPair()->publicKey(), 1));
         }
 
         for (size_t i = 0; i < observerNodeNum; ++i)
         {
-            ledgerConfig->mutableObserverList()->push_back(
+            ledgerConfig->mutableObserverList().push_back(
                 std::make_shared<consensus::ConsensusNode>(
                     m_cryptoSuite->signatureImpl()->generateKeyPair()->publicKey(), 0));
         }
 
         for (size_t i = 0; i < candidateSealerNodeNum; ++i)
         {
-            ledgerConfig->mutableCandidateSealerNodeList()->push_back(
+            ledgerConfig->mutableCandidateSealerNodeList().push_back(
                 std::make_shared<consensus::ConsensusNode>(
                     m_cryptoSuite->signatureImpl()->generateKeyPair()->publicKey(), 1));
         }
@@ -143,11 +143,11 @@ BOOST_AUTO_TEST_CASE(testRPBFTConfig)
     // rotate tx
     for (auto i : {0, 1})
     {
-        ledgerConfig->mutableCandidateSealerNodeList()->push_back(
+        ledgerConfig->mutableCandidateSealerNodeList().push_back(
             ledgerConfig->consensusNodeList()[i]);
     }
-    ledgerConfig->mutableConsensusList()->erase(ledgerConfig->mutableConsensusList()->begin(),
-        ledgerConfig->mutableConsensusList()->begin() + 1);
+    ledgerConfig->mutableConsensusList().erase(ledgerConfig->mutableConsensusList().begin(),
+        ledgerConfig->mutableConsensusList().begin() + 1);
     // the next block should not rotate
     ledgerConfig->setBlockNumber(numer++);
     m_rpbftConfig->resetConfig(ledgerConfig);
@@ -183,7 +183,7 @@ BOOST_AUTO_TEST_CASE(testRPBFTConfig)
     ledgerConfig->setNotifyRotateFlagInfo(0);
     ledgerConfig->setEpochSealerNum({3, 0});
     ledgerConfig->setBlockNumber(numer++);
-    ledgerConfig->mutableCandidateSealerNodeList()->pop_back();
+    ledgerConfig->mutableCandidateSealerNodeList().pop_back();
     m_rpbftConfig->resetConfig(ledgerConfig);
     BOOST_CHECK(m_rpbftConfig->shouldRotateSealers(numer));
 }

@@ -19,16 +19,13 @@
  * @date 2021-09-08
  */
 #pragma once
-#include "GroupTypeDef.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/protocol/ProtocolInfo.h"
 #include "bcos-framework/protocol/ServiceDesc.h"
-#include "bcos-utilities/Ranges.h"
 #include <bcos-utilities/Common.h>
 #include <memory>
-namespace bcos
-{
-namespace group
+
+namespace bcos::group
 {
 enum NodeCryptoType : uint32_t
 {
@@ -184,5 +181,4 @@ inline std::string printNodeInfo(ChainNodeInfo::Ptr _nodeInfo)
     }
     return oss.str();
 }
-}  // namespace group
-}  // namespace bcos
+}  // namespace bcos::group

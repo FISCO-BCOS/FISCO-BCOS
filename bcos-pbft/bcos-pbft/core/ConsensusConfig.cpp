@@ -82,7 +82,7 @@ bool ConsensusConfig::isNodeExist(
 
 void ConsensusConfig::setObserverNodeList(ConsensusNodeList& _observerNodeList)
 {
-    std::sort(_observerNodeList.begin(), _observerNodeList.end(), ConsensusNodeComparator());
+    std::sort(_observerNodeList.begin(), _observerNodeList.end());
     // update the observer list
     {
         UpgradableGuard lock(x_observerNodeList);
@@ -107,7 +107,7 @@ void ConsensusConfig::setConsensusNodeList(ConsensusNodeList& _consensusNodeList
                               << errinfo_comment("Must contain at least one consensus node"));
     }
 
-    std::sort(_consensusNodeList.begin(), _consensusNodeList.end(), ConsensusNodeComparator());
+    std::sort(_consensusNodeList.begin(), _consensusNodeList.end());
     // update the consensus list
     {
         UpgradableGuard lock(x_consensusNodeList);

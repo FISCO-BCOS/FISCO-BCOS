@@ -76,7 +76,6 @@ void ProPBFTInitializer::scheduledTask()
     // not enable failover, report nodeInfo to rpc/gw periodly
     reportNodeInfo();
     m_timer->restart();
-    return;
 }
 
 void ProPBFTInitializer::reportNodeInfo()

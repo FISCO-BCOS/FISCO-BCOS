@@ -19,7 +19,6 @@
  * @date 2021-06-10
  */
 #pragma once
-#include "Common.h"
 #include "bcos-framework/rpc/RPCInterface.h"
 #include "libinitializer/ProtocolInitializer.h"
 #include <bcos-framework/consensus/ConsensusInterface.h>
@@ -34,8 +33,8 @@
 #include <bcos-framework/sync/BlockSyncInterface.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-ledger/src/libledger/Ledger.h>
-#include <fisco-bcos-tars-service/Common/TarsUtils.h>
 #include <bcos-tool/NodeTimeMaintenance.h>
+#include <fisco-bcos-tars-service/Common/TarsUtils.h>
 
 namespace bcos
 {
@@ -58,12 +57,16 @@ class PBFTInitializer : public std::enable_shared_from_this<PBFTInitializer>
 {
 public:
     using Ptr = std::shared_ptr<PBFTInitializer>;
+    PBFTInitializer(const PBFTInitializer&) = default;
+    PBFTInitializer(PBFTInitializer&&) = delete;
+    PBFTInitializer& operator=(const PBFTInitializer&) = default;
+    PBFTInitializer& operator=(PBFTInitializer&&) = delete;
     PBFTInitializer(bcos::protocol::NodeArchitectureType _nodeArchType,
         bcos::tool::NodeConfig::Ptr _nodeConfig, ProtocolInitializer::Ptr _protocolInitializer,
         bcos::txpool::TxPoolInterface::Ptr _txpool, std::shared_ptr<bcos::ledger::Ledger> _ledger,
         bcos::scheduler::SchedulerInterface::Ptr _scheduler,
         bcos::storage::StorageInterface::Ptr _storage,
-        bcos::front::FrontServiceInterface::Ptr _frontService, 
+        bcos::front::FrontServiceInterface::Ptr _frontService,
         bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance);
 
     virtual ~PBFTInitializer() { stop(); }
@@ -96,13 +99,12 @@ protected:
     virtual void createPBFT();
     virtual void createSync();
     virtual void registerHandlers();
-    std::string generateGenesisConfig(bcos::tool::NodeConfig::Ptr _nodeConfig);
+    static std::string generateGenesisConfig(bcos::tool::NodeConfig::Ptr _nodeConfig);
     std::string generateIniConfig(bcos::tool::NodeConfig::Ptr _nodeConfig);
 
     void syncGroupNodeInfo();
     virtual void initConsensusFailOver(bcos::crypto::KeyInterface::Ptr _nodeID);
 
-protected:
     bcos::protocol::NodeArchitectureType m_nodeArchType;
     bcos::tool::NodeConfig::Ptr m_nodeConfig;
     ProtocolInitializer::Ptr m_protocolInitializer;
