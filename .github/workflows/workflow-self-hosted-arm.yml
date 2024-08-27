@@ -13,6 +13,8 @@ on:
   release:
     types: [push]
 
+env:
+  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -58,7 +60,6 @@ jobs:
 
       - name: Remove cache if correspond dir change
         run: ./tools/.ci/clear_build_cache.sh
-
       - name: update vcpkg
         run: |
           cd vcpkg && git fetch origin master
@@ -71,7 +72,7 @@ jobs:
           export LIBCLANG_PATH=/opt/rh/llvm-toolset-7.0/root/lib64/
           . /opt/rh/llvm-toolset-7.0/enable
           mkdir -p build && cd build
-          cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON .. || cat *.log
+          cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=ON -DLINKER=gold -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON .. || cat *.log
           make -j8
       - name: Test
         run: cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
