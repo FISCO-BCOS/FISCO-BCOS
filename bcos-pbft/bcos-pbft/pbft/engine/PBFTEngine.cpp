@@ -229,8 +229,8 @@ void PBFTEngine::onProposalApplyFailed(int64_t _errorCode, PBFTProposalInterface
         fetchAndUpdateLedgerConfig();
     }
     // re-push the proposal into the queue
-    if (_proposal->index() >= m_config->committedProposal()->index() ||
-        _proposal->index() >= m_config->syncingHighestNumber())
+    if (_proposal->index() > m_config->committedProposal()->index() ||
+        _proposal->index() > m_config->syncingHighestNumber())
     {
         m_config->timer()->restart();
         // restart checkPoint timer to advoid timeout
