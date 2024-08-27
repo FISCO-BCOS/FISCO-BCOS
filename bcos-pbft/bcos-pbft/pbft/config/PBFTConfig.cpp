@@ -408,7 +408,7 @@ void PBFTConfig::updateQuorum()
     ReadGuard lock(x_consensusNodeList);
     for (const auto& consensusNode : *m_consensusNodeList)
     {
-        m_totalQuorum += consensusNode->weight();
+        m_totalQuorum += consensusNode->voteWeight();
     }
     // get m_maxFaultyQuorum
     m_maxFaultyQuorum = (m_totalQuorum - 1) / 3;

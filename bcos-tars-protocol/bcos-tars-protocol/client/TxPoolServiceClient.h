@@ -448,7 +448,8 @@ public:
 
             auto nodeID = it->nodeID()->data();
             node.nodeID.assign(nodeID.begin(), nodeID.end());
-            node.weight = it->weight();
+            node.voteWeight = it->voteWeight();
+            node.termWeight = it->termWeight();
             tarsConsensusNodeList.emplace_back(node);
         }
 
@@ -485,7 +486,8 @@ public:
             bcostars::ConsensusNode node;
             auto nodeID = it->nodeID()->data();
             node.nodeID.assign(nodeID.begin(), nodeID.end());
-            node.weight = it->weight();
+            node.voteWeight = it->voteWeight();
+            node.termWeight = it->termWeight();
             tarsConsensusNodeList.emplace_back(node);
         }
 

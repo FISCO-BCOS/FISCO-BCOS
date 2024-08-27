@@ -26,7 +26,8 @@
 namespace bcos::consensus
 {
 
-constexpr static uint64_t defaultWeight = 100;
+constexpr static uint64_t defaultVoteWeight = 100;
+constexpr static uint64_t defaultTermWeight = 1;
 
 class ConsensusNodeInterface
 {
@@ -40,8 +41,9 @@ public:
     virtual ~ConsensusNodeInterface() = default;
 
     // the nodeID of the consensus node
-    [[nodiscard]] virtual bcos::crypto::PublicPtr nodeID() const = 0;
-    [[nodiscard]] virtual uint64_t weight() const { return defaultWeight; }
+    virtual bcos::crypto::PublicPtr nodeID() const = 0;
+    virtual uint64_t voteWeight() const { return defaultVoteWeight; }
+    virtual uint64_t termWeight() const { return defaultTermWeight; }
 };
 
 inline std::strong_ordering operator<=>(
@@ -50,7 +52,7 @@ inline std::strong_ordering operator<=>(
     auto cmp = lhs.nodeID()->data() <=> rhs.nodeID()->data();
     if (std::is_eq(cmp))
     {
-        cmp = lhs.weight() <=> rhs.weight();
+        cmp = lhs.voteWeight() <=> rhs.voteWeight();
     }
     return cmp;
 }
@@ -69,7 +71,7 @@ inline std::string decsConsensusNodeList(ConsensusNodeList const& _nodeList)
     std::ostringstream stringstream;
     for (const auto& node : _nodeList)
     {
-        stringstream << LOG_KV(node->nodeID()->shortHex(), std::to_string(node->weight()));
+        stringstream << LOG_KV(node->nodeID()->shortHex(), std::to_string(node->voteWeight()));
     }
     return stringstream.str();
 }

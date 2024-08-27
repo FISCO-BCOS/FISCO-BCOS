@@ -97,7 +97,7 @@ std::string PBFTInitializer::generateGenesisConfig(bcos::tool::NodeConfig::Ptr _
     {
         Json::Value sealer;
         sealer["nodeID"] = node->nodeID()->hex();
-        sealer["weight"] = node->weight();
+        sealer["weight"] = node->voteWeight();
         sealerList.append(sealer);
     }
     genesisConfig["sealerList"] = sealerList;

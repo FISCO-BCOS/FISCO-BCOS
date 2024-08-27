@@ -1392,7 +1392,7 @@ bool PBFTEngine::isValidNewViewMsg(std::shared_ptr<NewViewMsgInterface> _newView
         {
             continue;
         }
-        weight += nodeInfo->weight();
+        weight += nodeInfo->voteWeight();
     }
     // TODO: need to ensure the accuracy of local weight parameters
     if (weight < m_config->minRequiredQuorum())

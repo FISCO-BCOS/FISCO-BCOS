@@ -84,21 +84,21 @@ public:
         {
             ledgerConfig->mutableConsensusList().push_back(
                 std::make_shared<consensus::ConsensusNode>(
-                    m_cryptoSuite->signatureImpl()->generateKeyPair()->publicKey(), 1));
+                    m_cryptoSuite->signatureImpl()->generateKeyPair()->publicKey(), 1, 0));
         }
 
         for (size_t i = 0; i < observerNodeNum; ++i)
         {
             ledgerConfig->mutableObserverList().push_back(
                 std::make_shared<consensus::ConsensusNode>(
-                    m_cryptoSuite->signatureImpl()->generateKeyPair()->publicKey(), 0));
+                    m_cryptoSuite->signatureImpl()->generateKeyPair()->publicKey(), 0, 0));
         }
 
         for (size_t i = 0; i < candidateSealerNodeNum; ++i)
         {
             ledgerConfig->mutableCandidateSealerNodeList().push_back(
                 std::make_shared<consensus::ConsensusNode>(
-                    m_cryptoSuite->signatureImpl()->generateKeyPair()->publicKey(), 1));
+                    m_cryptoSuite->signatureImpl()->generateKeyPair()->publicKey(), 1, 0));
         }
         return ledgerConfig;
     }

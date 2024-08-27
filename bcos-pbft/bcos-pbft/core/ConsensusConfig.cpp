@@ -59,7 +59,7 @@ bool ConsensusConfig::compareConsensusNode(
     {
         const auto& compareNode = _right[i];
         if (node->nodeID()->data() != compareNode->nodeID()->data() ||
-            node->weight() != compareNode->weight())
+            node->voteWeight() != compareNode->voteWeight())
         {
             return false;
         }
@@ -75,7 +75,7 @@ bool ConsensusConfig::isNodeExist(
     auto iter = std::find_if(_nodeList.begin(), _nodeList.end(),
         [_node](const ConsensusNodeInterface::Ptr& _consensusNode) {
             return _node->nodeID()->data() == _consensusNode->nodeID()->data() &&
-                   _node->weight() == _consensusNode->weight();
+                   _node->voteWeight() == _consensusNode->voteWeight();
         });
     return !(_nodeList.end() == iter);
 }

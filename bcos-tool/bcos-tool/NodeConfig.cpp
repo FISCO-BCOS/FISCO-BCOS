@@ -935,23 +935,30 @@ ConsensusNodeListPtr NodeConfig::parseConsensusNodeList(boost::property_tree::pt
         }
         std::string nodeId = nodeInfo[0];
         boost::to_lower(nodeId);
-        int64_t weight = 1;
-        if (nodeInfo.size() == 2)
+        int64_t voteWeight = 1;
+        int64_t termWeight = 1;
+        if (nodeInfo.size() > 1)
         {
-            auto& weightInfoStr = nodeInfo[1];
-            boost::trim(weightInfoStr);
-            weight = boost::lexical_cast<int64_t>(weightInfoStr);
+            auto& voteWeightInfoStr = nodeInfo[1];
+            boost::trim(voteWeightInfoStr);
+            voteWeight = boost::lexical_cast<int64_t>(voteWeightInfoStr);
         }
-        if (weight <= 0)
+        if (nodeInfo.size() > 2)
+        {
+            auto& termWeightInfoStr = nodeInfo[2];
+            boost::trim(termWeightInfoStr);
+            termWeight = boost::lexical_cast<int64_t>(termWeightInfoStr);
+        }
+        if (voteWeight <= 0 || termWeight < 0)
         {
             BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                       "Please set weight for " + nodeId + " to positive!"));
         }
-        auto consensusNode =
-            std::make_shared<ConsensusNode>(m_keyFactory->createKey(fromHex(nodeId)), weight);
+        auto consensusNode = std::make_shared<ConsensusNode>(
+            m_keyFactory->createKey(fromHex(nodeId)), voteWeight, termWeight);
         NodeConfig_LOG(INFO) << LOG_BADGE("parseConsensusNodeList")
                              << LOG_KV("sectionName", _sectionName) << LOG_KV("nodeId", nodeId)
-                             << LOG_KV("weight", weight);
+                             << LOG_KV("weight", voteWeight);
         nodeList->push_back(consensusNode);
     }
     // only sort nodeList after rc3 version
@@ -1144,8 +1151,8 @@ std::string bcos::tool::generateGenesisData(
         for (const auto& node : ledgerConfig.consensusNodeList())
         {
             ss << "node." + boost::lexical_cast<std::string>(j) + ":" +
-                      *toHexString(node->nodeID()->data()) + "," + std::to_string(node->weight()) +
-                      "\n";
+                      *toHexString(node->nodeID()->data()) + "," +
+                      std::to_string(node->voteWeight()) + "\n";
             ++j;
         }
         std::string genesisdata = ss.str();
@@ -1166,7 +1173,7 @@ std::string bcos::tool::generateGenesisData(
        << executorStream.str();
     for (const auto& node : ledgerConfig.consensusNodeList())
     {
-        ss << *toHexString(node->nodeID()->data()) << "," << node->weight() << ";";
+        ss << *toHexString(node->nodeID()->data()) << "," << node->voteWeight() << ";";
     }
     auto genesisdata = ss.str();
     NodeConfig_LOG(INFO) << LOG_BADGE("generateGenesisData") << LOG_KV("genesisData", genesisdata);

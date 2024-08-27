@@ -1252,7 +1252,7 @@ void Ledger::asyncGetNodeListByType(const std::string_view& _type,
                                 fromHex(it.nodeID));
                         // Note: use try-catch to handle the exception case
                         nodes->emplace_back(std::make_shared<consensus::ConsensusNode>(
-                            nodeID, it.weight.convert_to<uint64_t>()));
+                            nodeID, it.voteWeight.convert_to<uint64_t>(), it.termWeight));
                     }
                 }
 
@@ -2116,8 +2116,8 @@ bool Ledger::buildGenesisBlock(
 
     for (const auto& node : ledgerConfig.consensusNodeList())
     {
-        consensusNodeList.emplace_back(
-            node->nodeID()->hex(), node->weight(), std::string{CONSENSUS_SEALER}, "0");
+        consensusNodeList.emplace_back(node->nodeID()->hex(), node->voteWeight(),
+            std::string{CONSENSUS_SEALER}, "0", node->termWeight());
     }
 
     // update some node type to CONSENSUS_CANDIDATE_SEALER
@@ -2140,8 +2140,8 @@ bool Ledger::buildGenesisBlock(
 
     for (const auto& node : ledgerConfig.observerNodeList())
     {
-        consensusNodeList.emplace_back(
-            node->nodeID()->hex(), node->weight(), std::string{CONSENSUS_OBSERVER}, "0");
+        consensusNodeList.emplace_back(node->nodeID()->hex(), node->voteWeight(),
+            std::string{CONSENSUS_OBSERVER}, "0", node->termWeight());
     }
 
     Entry consensusNodeListEntry;
@@ -2230,7 +2230,8 @@ bcos::consensus::ConsensusNodeList Ledger::selectWorkingSealer(
     {
         LEDGER_LOG(INFO) << LOG_DESC("selectWorkingSealer")
                          << LOG_KV("nodeID", node->nodeID()->hex())
-                         << LOG_KV("weight", node->weight());
+                         << LOG_KV("voteWeight", node->voteWeight())
+                         << LOG_KV("termWeight", node->termWeight());
     }
     return workingSealerList;
 }

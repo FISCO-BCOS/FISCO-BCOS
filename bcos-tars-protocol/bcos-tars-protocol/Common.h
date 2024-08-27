@@ -237,8 +237,8 @@ inline bcos::consensus::ConsensusNodeListPtr toConsensusNodeList(
     {
         auto nodeID = _keyFactory->createKey(
             bcos::bytesConstRef((bcos::byte*)node.nodeID.data(), node.nodeID.size()));
-        consensusNodeList->push_back(
-            std::make_shared<bcos::consensus::ConsensusNode>(nodeID, node.weight));
+        consensusNodeList->push_back(std::make_shared<bcos::consensus::ConsensusNode>(
+            nodeID, node.voteWeight, node.termWeight));
     }
     return consensusNodeList;
 }
@@ -278,7 +278,8 @@ inline vector<bcostars::ConsensusNode> toTarsConsensusNodeList(
     {
         bcostars::ConsensusNode consensusNode;
         consensusNode.nodeID.assign(node->nodeID()->data().begin(), node->nodeID()->data().end());
-        consensusNode.weight = node->weight();
+        consensusNode.voteWeight = node->voteWeight();
+        consensusNode.termWeight = node->termWeight();
         tarsConsensusNodeList.emplace_back(consensusNode);
     }
     return tarsConsensusNodeList;
