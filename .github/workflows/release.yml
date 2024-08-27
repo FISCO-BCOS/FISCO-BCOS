@@ -11,6 +11,8 @@ on:
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
+env:
+  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
 jobs:
   compile_macOS_release:
@@ -22,6 +24,11 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 5
+      - name: cache vcpkg
+        uses: actions/cache@v3
+        with:
+          path: /Users/runner/work/FISCO-BCOS/FISCO-BCOS/vcpkg
+
       - name: install rust language
         uses: actions-rs/toolchain@v1
         with:
