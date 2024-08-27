@@ -200,7 +200,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
     auto logInitializer = std::make_shared<bcos::BoostLogInitializer>();
     logInitializer->initLog(configFile);
 
-    protocol::g_BCOSConfig.setCodec(std::make_shared<bcostars::protocol::ProtocolInfoCodecImpl>());
+    bcos::protocol::g_BCOSConfig.setCodec(
+        std::make_shared<bcostars::protocol::ProtocolInfoCodecImpl>());
 
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
     auto nodeConfig = std::make_shared<bcos::tool::NodeConfig>(keyFactory);
@@ -219,8 +220,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
     {
         bcos::gateway::GatewayFactory gatewayFactory(nodeConfig->chainId(), "local", nullptr);
         gateway = gatewayFactory.buildGateway(configFile, true, nullptr, "localGateway");
-        auto protocolInfo =
-            g_BCOSConfig.protocolInfo(bcos::protocol::ProtocolModuleID::GatewayService);
+        auto protocolInfo = bcos::protocol::g_BCOSConfig.protocolInfo(
+            bcos::protocol::ProtocolModuleID::GatewayService);
         gateway->gatewayNodeManager()->registerNode(nodeConfig->groupId(),
             protocolInitializer.keyPair()->publicKey(), bcos::protocol::NodeType::LIGHT_NODE, front,
             protocolInfo);
