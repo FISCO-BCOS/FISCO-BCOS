@@ -28,6 +28,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: /Users/runner/work/FISCO-BCOS/FISCO-BCOS/vcpkg
+          key: ${{ runner.os }}
 
       - name: install rust language
         uses: actions-rs/toolchain@v1
