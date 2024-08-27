@@ -39,7 +39,7 @@ ca_dir=""
 prometheus_dir=""
 config_path=""
 docker_mode=
-default_version="v3.10.0"
+default_version="v3.11.0"
 compatibility_version=${default_version}
 default_mtail_version="3.0.0-rc49"
 compatibility_mtail_version=${default_mtail_version}
@@ -71,11 +71,11 @@ log_level="info"
 
 # for pro or max default setting
 bcos_builder_package=BcosBuilder.tgz
-bcos_builder_version=v3.10.0
+bcos_builder_version=v3.11.0
 use_exist_binary="false"
 download_specific_binary_flag="false"
 download_service_binary_type="cdn"
-service_binary_version="v3.10.0"
+service_binary_version="v3.11.0"
 download_service_binary_path="binary"
 download_service_binary_path_flag="false"
 service_type="all"
@@ -1436,6 +1436,7 @@ generate_common_ini() {
     data_path=data
     enable_cache=true
     ; The granularity of the storage page, in bytes, must not be less than 4096 Bytes, the default is 10240 Bytes (10KB)
+    ; if modify key_page_size value to 0, should clear the data directory
     key_page_size=${key_page_size}
     pd_ssl_ca_path=
     pd_ssl_cert_path=
@@ -1443,6 +1444,9 @@ generate_common_ini() {
     enable_archive=false
     archive_ip=127.0.0.1
     archive_port=
+    ; if modify enable_separate_block_state, should clear the data directory
+    ;enable_separate_block_state=false
+    ;sync_archived_blocks=false
 
 [txpool]
     ; size of the txpool, default is 15000

@@ -1,7 +1,6 @@
 #include "SchedulerImpl.h"
 #include "BlockExecutive.h"
 #include "Common.h"
-#include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-ledger/src/libledger/LedgerMethods.h"
 #include "bcos-task/Wait.h"
@@ -22,7 +21,6 @@
 #include <memory>
 #include <mutex>
 #include <string_view>
-#include <variant>
 
 
 using namespace bcos::scheduler;
@@ -665,9 +663,9 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                     self->m_ledgerConfig = ledgerConfig;
                     commitLock->unlock();  // just unlock here
 
-
-                    // Note: blockNumber = 0, means system deploy, and tx is not existed in txpool.
-                    // So it should not exec tx notifier
+                    self->m_ledger->removeExpiredNonce(blockNumber, false);
+                    // Note: blockNumber = 0, means system deploy, and tx is not existed in
+                    // txpool. So it should not exec tx notifier
                     if (self->m_txNotifier && blockNumber != 0)
                     {
                         SCHEDULER_LOG(DEBUG) << "Start notify block result: " << blockNumber;

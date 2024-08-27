@@ -19,9 +19,33 @@
  * @date: 2021-04-9
  */
 #pragma once
+#include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
+
 namespace bcos
 {
+
+namespace protocol
+{
+struct Session
+{
+    using Ptr = std::shared_ptr<Session>;
+    using ConstPtr = std::shared_ptr<const Session>;
+
+    enum Status
+    {
+        STARTED = 0,
+        DIRTY,
+        COMMITTED,
+        ROLLBACKED
+    };
+
+    long sessionID;
+    Status status;
+    bcos::protocol::BlockNumber beginNumber;  // [
+    bcos::protocol::BlockNumber endNumber;    // )
+};
+}  // namespace protocol
 namespace scheduler
 {
 enum SchedulerError
@@ -48,5 +72,5 @@ enum SchedulerError
     InvalidTransactionVersion,
     BuildBlockError,
 };
-}  // namespace scheduler
+}
 }  // namespace bcos

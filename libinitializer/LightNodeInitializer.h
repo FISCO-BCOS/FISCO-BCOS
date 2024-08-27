@@ -1,6 +1,5 @@
 #pragma once
 
-#include "bcos-concepts/Exception.h"
 #include "bcos-concepts/Serialize.h"
 #include <bcos-concepts/ledger/Ledger.h>
 #include <bcos-crypto/hasher/OpenSSLHasher.h>

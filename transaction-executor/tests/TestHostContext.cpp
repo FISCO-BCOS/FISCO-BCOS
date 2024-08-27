@@ -152,8 +152,6 @@ public:
     }
 };
 
-bcos::crypto::Hash::Ptr bcos::executor::GlobalHashImpl::g_hashImpl;
-
 BOOST_FIXTURE_TEST_SUITE(TestHostContext, TestHostContextFixture)
 
 BOOST_AUTO_TEST_CASE(bits)
@@ -325,7 +323,7 @@ BOOST_AUTO_TEST_CASE(precompiled)
             std::make_shared<bcostars::protocol::BlockHeaderFactoryImpl>(cryptoSuite),
             std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite),
             std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(cryptoSuite)),
-        storageWrapper);
+        storageWrapper, 1000);
     bcos::ledger::GenesisConfig genesis;
     genesis.m_txGasLimit = 100000;
     genesis.m_compatibilityVersion = bcos::tool::toVersionNumber("3.6.0");

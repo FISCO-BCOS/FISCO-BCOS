@@ -17,9 +17,8 @@ struct NoReturnValue : public bcos::error::Exception
 template <class Promise>
 struct FinalAwaitable
 {
-    static constexpr bool await_ready() noexcept { return false; }
-    static constexpr std::coroutine_handle<> await_suspend(
-        std::coroutine_handle<Promise> handle) noexcept
+    constexpr bool await_ready() noexcept { return false; }
+    constexpr std::coroutine_handle<> await_suspend(std::coroutine_handle<Promise> handle) noexcept
     {
         std::coroutine_handle<> continuationHandle;
         if (handle.promise().m_continuation)
@@ -43,8 +42,8 @@ struct Continuation
 template <class Task, class PromiseImpl>
 struct PromiseBase
 {
-    static constexpr std::suspend_always initial_suspend() noexcept { return {}; }
-    static constexpr auto final_suspend() noexcept { return FinalAwaitable<PromiseImpl>{}; }
+    constexpr std::suspend_always initial_suspend() noexcept { return {}; }
+    constexpr auto final_suspend() noexcept { return FinalAwaitable<PromiseImpl>{}; }
     Task get_return_object()
     {
         auto handle =
@@ -69,7 +68,7 @@ struct PromiseBase
 template <class Task>
 struct PromiseVoid : public PromiseBase<Task, PromiseVoid<Task>>
 {
-    static constexpr void return_void() noexcept {}
+    constexpr void return_void() noexcept {}
 };
 
 template <class Task>
@@ -101,7 +100,7 @@ public:
     struct Awaitable
     {
         explicit Awaitable(std::coroutine_handle<promise_type> handle)
-          : m_handle(std::move(handle)){};
+          : m_handle(std::move(handle)) {};
         Awaitable(const Awaitable&) = delete;
         Awaitable(Awaitable&&) noexcept = default;
         Awaitable& operator=(const Awaitable&) = delete;

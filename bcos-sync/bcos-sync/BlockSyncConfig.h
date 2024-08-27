@@ -45,7 +45,8 @@ public:
         bcos::scheduler::SchedulerInterface::Ptr _scheduler,
         bcos::consensus::ConsensusInterface::Ptr _consensus, BlockSyncMsgFactory::Ptr _msgFactory,
         bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance,
-        bool _enableSendBlockStatusByTree = false, std::uint32_t _syncTreeWidth = 3)
+        bool _enableSendBlockStatusByTree = false, std::uint32_t _syncTreeWidth = 3,
+        bool _syncArchivedBlockBody = false)
       : SyncConfig(std::move(_nodeId)),
         m_ledger(std::move(_ledger)),
         m_txpool(std::move(_txpool)),
@@ -57,7 +58,8 @@ public:
         m_msgFactory(std::move(_msgFactory)),
         m_nodeTimeMaintenance(std::move(_nodeTimeMaintenance)),
         m_enableSendBlockStatusByTree(_enableSendBlockStatusByTree),
-        m_syncTreeWidth(_syncTreeWidth)
+        m_syncTreeWidth(_syncTreeWidth),
+        m_syncArchivedBlockBody(_syncArchivedBlockBody)
     {}
     ~BlockSyncConfig() override = default;
 
@@ -140,6 +142,7 @@ public:
     }
 
     bool masterNode() const { return m_masterNode; }
+    bool syncArchivedBlockBody() const { return m_syncArchivedBlockBody; }
 
     bcos::protocol::BlockNumber archiveBlockNumber() const;
 
@@ -205,5 +208,7 @@ private:
 
     bool m_enableSendBlockStatusByTree = false;
     std::uint32_t m_syncTreeWidth;
+
+    bool m_syncArchivedBlockBody = false;
 };
 }  // namespace bcos::sync

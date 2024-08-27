@@ -25,9 +25,10 @@
 #include "AirNodeInitializer.h"
 #include "Common.h"
 #include "libinitializer/CommandHelper.h"
+#include <bcos-crypto/signature/key/KeyFactoryImpl.h>
+#include <bcos-tool/NodeConfig.h>
+#include <bcos-utilities/BoostLogInitializer.h>
 #include <execinfo.h>
-#include <stdexcept>
-#include <thread>
 
 using namespace bcos::node;
 using namespace bcos::initializer;
@@ -56,6 +57,64 @@ int main(int argc, const char* argv[])
     try
     {
         auto param = bcos::initializer::initAirNodeCommandLine(argc, argv, false);
+        if (param.op != bcos::initializer::Params::operation::None)
+        {
+            if (param.hasOp(bcos::initializer::Params::operation::Prune))
+            {
+                initializer->init(param.configFilePath, param.genesisFilePath);
+                std::cout << "[" << bcos::getCurrentDateTime() << "] ";
+                std::cout << "prune the node data..." << std::endl;
+                initializer->nodeInitializer()->prune();
+                std::cout << "[" << bcos::getCurrentDateTime() << "] ";
+                std::cout << "prune the node data success." << std::endl;
+                return 0;
+            }
+            auto logInitializer = std::make_shared<bcos::BoostLogInitializer>();
+            logInitializer->initLog(param.configFilePath);
+            auto nodeConfig = std::make_shared<bcos::tool::NodeConfig>(
+                std::make_shared<bcos::crypto::KeyFactoryImpl>());
+            nodeConfig->loadGenesisConfig(param.genesisFilePath);
+            nodeConfig->loadConfig(param.configFilePath);
+            auto nodeInitializer = std::make_shared<bcos::initializer::Initializer>();
+            nodeInitializer->initConfig(param.configFilePath, param.genesisFilePath, "", true);
+            if (param.hasOp(bcos::initializer::Params::operation::Snapshot) ||
+                param.hasOp(bcos::initializer::Params::operation::SnapshotWithoutTxAndReceipt))
+            {
+                bool withTxAndReceipt = param.hasOp(bcos::initializer::Params::operation::Snapshot);
+                std::cout << "[" << bcos::getCurrentDateTime() << "] ";
+                std::cout << "generating snapshot to " << param.snapshotPath << " ..." << std::endl;
+                auto error = nodeInitializer->generateSnapshot(
+                    param.snapshotPath, withTxAndReceipt, nodeConfig);
+                if (error)
+                {
+                    std::cout << "[" << bcos::getCurrentDateTime() << "] ";
+                    std::cout << "generate snapshot failed, error:" << error->errorMessage()
+                              << std::endl;
+                    return -1;
+                }
+                std::cout << "[" << bcos::getCurrentDateTime() << "] ";
+                std::cout << "generate snapshot success." << std::endl;
+                return 0;
+            }
+            if (param.hasOp(bcos::initializer::Params::operation::ImportSnapshot))
+            {
+                // initializer->init(param.configFilePath, param.genesisFilePath);
+                std::cout << "[" << bcos::getCurrentDateTime() << "] ";
+                std::cout << "importing snapshot from " << param.snapshotPath << " ..."
+                          << std::endl;
+                auto error = nodeInitializer->importSnapshot(param.snapshotPath, nodeConfig);
+                if (error)
+                {
+                    std::cout << "[" << bcos::getCurrentDateTime() << "] ";
+                    std::cout << "import snapshot failed, error:" << error->errorMessage()
+                              << std::endl;
+                    return -1;
+                }
+                std::cout << "[" << bcos::getCurrentDateTime() << "] ";
+                std::cout << "import snapshot success." << std::endl;
+            }
+            return 0;
+        }
         initializer->init(param.configFilePath, param.genesisFilePath);
         bcos::initializer::showNodeVersionMetric();
 

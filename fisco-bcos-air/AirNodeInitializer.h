@@ -25,7 +25,6 @@
 #include <bcos-framework/rpc/RPCInterface.h>
 #include <bcos-rpc/tarsRPC/RPCServer.h>
 #include <bcos-utilities/ObjectAllocatorMonitor.h>
-
 #include <utility>
 
 
@@ -44,6 +43,7 @@ public:
     virtual void init(std::string const& _configFilePath, std::string const& _genesisFile);
     virtual void start();
     virtual void stop();
+    virtual bcos::initializer::Initializer::Ptr nodeInitializer() { return m_nodeInitializer; }
 
 protected:
     virtual void initAirNode(std::string const& _configFilePath, std::string const& _genesisFile,
