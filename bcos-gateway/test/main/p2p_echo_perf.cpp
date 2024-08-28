@@ -20,11 +20,11 @@
 #include "bcos-gateway/libnetwork/Common.h"
 #include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libp2p/P2PMessage.h"
-#include "bcos-utilities/ratelimiter/TimeWindowRateLimiter.h"
 #include "bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h"
 #include "bcos-utilities/BoostLogInitializer.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/CompositeBuffer.h"
+#include "bcos-utilities/ratelimiter/TimeWindowRateLimiter.h"
 #include <bcos-gateway/GatewayFactory.h>
 #include <bcos-utilities/RateCollector.h>
 #include <chrono>
@@ -66,7 +66,8 @@ int main(int argc, const char** argv)
     constexpr static uint16_t packageType = 111;
     try
     {
-        g_BCOSConfig.setCodec(std::make_shared<bcostars::protocol::ProtocolInfoCodecImpl>());
+        bcos::protocol::g_BCOSConfig.setCodec(
+            std::make_shared<bcostars::protocol::ProtocolInfoCodecImpl>());
         auto logInitializer = std::make_shared<BoostLogInitializer>();
         logInitializer->initLog(configPath);
 

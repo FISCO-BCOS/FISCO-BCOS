@@ -41,7 +41,8 @@ using namespace bcostars;
 void GatewayInitializer::init(std::string const& _configPath)
 {
     GATEWAYSERVICE_LOG(INFO) << LOG_DESC("initGlobalConfig");
-    g_BCOSConfig.setCodec(std::make_shared<bcostars::protocol::ProtocolInfoCodecImpl>());
+    bcos::protocol::g_BCOSConfig.setCodec(
+        std::make_shared<bcostars::protocol::ProtocolInfoCodecImpl>());
 
     GATEWAYSERVICE_LOG(INFO) << LOG_DESC("initGateWayConfig") << LOG_KV("configPath", _configPath);
 
