@@ -43,8 +43,7 @@ constexpr const char* const CSS_METHOD_SET_WEIGHT = "setWeight(string,uint256)";
 constexpr const char* const CSS_METHOD_SET_TERM_WEIGHT = "setWeight(string,uint256)";
 const auto NODE_LENGTH = 128U;
 
-ConsensusPrecompiled::ConsensusPrecompiled(crypto::Hash::Ptr _hashImpl)
-  : Precompiled(std::move(_hashImpl))
+ConsensusPrecompiled::ConsensusPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl)
 {
     name2Selector[CSS_METHOD_ADD_SEALER] = getFuncSelector(CSS_METHOD_ADD_SEALER, _hashImpl);
     name2Selector[CSS_METHOD_ADD_SEALER2] = getFuncSelector(CSS_METHOD_ADD_SEALER2, _hashImpl);
