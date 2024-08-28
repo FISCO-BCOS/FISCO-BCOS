@@ -19,6 +19,7 @@
  * @date 2021-04-09
  */
 #pragma once
+#include "bcos-utilities/ThreeWay4Apple.h"
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-framework/Common.h>
 #include <compare>
