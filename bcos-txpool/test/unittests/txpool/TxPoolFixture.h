@@ -412,7 +412,7 @@ inline void checkTxSubmit(TxPoolInterface::Ptr _txpool, TxPoolStorageInterface::
             std::this_thread::sleep_for(std::chrono::milliseconds(2));
         }
     }
-    BOOST_CHECK(_storage->size() == expectedTxSize);
+    BOOST_CHECK_EQUAL(_storage->size(), expectedTxSize);
 }
 }  // namespace test
 }  // namespace bcos

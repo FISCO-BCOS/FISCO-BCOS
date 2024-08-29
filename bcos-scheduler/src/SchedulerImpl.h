@@ -218,9 +218,7 @@ private:
     bcos::txpool::TxPoolInterface::Ptr m_txPool;
     bcos::protocol::TransactionSubmitResultFactory::Ptr m_transactionSubmitResultFactory;
     bcos::crypto::Hash::Ptr m_hashImpl;
-    bool m_isAuthCheck = false;
     bool m_isWasm = false;
-    bool m_isSerialExecute = false;
 
     std::function<void(protocol::BlockNumber blockNumber)> m_blockNumberReceiver;
     std::function<void(bcos::protocol::BlockNumber, bcos::protocol::TransactionSubmitResultsPtr,
