@@ -57,6 +57,8 @@ public:
         feature_balance_policy1,
         feature_paillier_add_raw,
         feature_evm_cancun,
+        feature_evm_address,
+        feature_ethereum_compatible,  // will enbale all bugfixes, all features about evm
     };
 
 private:

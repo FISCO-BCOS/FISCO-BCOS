@@ -148,4 +148,8 @@ enum LedgerError : int32_t
     EmptyEntry = 3009,
     UnknownError = 3010,
 };
+struct StorageState{
+    std::string nonce;
+    std::string balance;
+};
 }  // namespace bcos::ledger

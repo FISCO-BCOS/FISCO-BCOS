@@ -145,7 +145,8 @@ public:
 
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr block,
-        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts) override
+        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
+        std::optional<bcos::ledger::Features> features) override
     {
         (void)storage;
         (void)block;
