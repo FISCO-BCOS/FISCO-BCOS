@@ -328,7 +328,7 @@ public:
 
     void appendConsensusNode(PublicPtr _nodeId)
     {
-        auto node = std::make_shared<ConsensusNode>(_nodeId, 1);
+        auto node = std::make_shared<ConsensusNode>(_nodeId, 1, 0);
         appendConsensusNode(node);
     }
 

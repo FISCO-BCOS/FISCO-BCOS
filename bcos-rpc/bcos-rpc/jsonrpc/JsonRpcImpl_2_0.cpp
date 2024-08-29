@@ -969,7 +969,7 @@ void JsonRpcImpl_2_0::getSealerList(
                     {
                         Json::Value node;
                         node["nodeID"] = consensusNodePtr->nodeID()->hex();
-                        node["weight"] = consensusNodePtr->weight();
+                        node["weight"] = consensusNodePtr->voteWeight();
                         jResp.append(node);
                     }
                 }
@@ -1043,7 +1043,7 @@ void JsonRpcImpl_2_0::getNodeListByType(std::string_view _groupID, std::string_v
                     {
                         Json::Value node;
                         node["nodeID"] = consensusNodePtr->nodeID()->hex();
-                        node["weight"] = consensusNodePtr->weight();
+                        node["weight"] = consensusNodePtr->voteWeight();
                         jResp.append(node);
                     }
                 }

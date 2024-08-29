@@ -49,7 +49,7 @@ public:
         m_staticPrecompiled(std::move(staticPrecompiled)),
         m_blockContext(blockContext),
         m_gasInjector(gasInjector),
-        m_isTiKVStorage(boost::iequals("tikv", g_BCOSConfig.storageType()))
+        m_isTiKVStorage(boost::iequals("tikv", protocol::g_BCOSConfig.storageType()))
     {
         if (m_isTiKVStorage)
         {

@@ -49,8 +49,7 @@ void RPBFTConfigTools::updateWorkingSealerNodeList(
         workingSealerNodeList.emplace_back((m_candidateNodeList)[0]);
     }
 
-    std::sort(
-        workingSealerNodeList.begin(), workingSealerNodeList.end(), ConsensusNodeComparator());
+    std::sort(workingSealerNodeList.begin(), workingSealerNodeList.end());
     // update the consensus list
     // if consensus node list have not been changed
     if (consensus::ConsensusConfig::compareConsensusNode(

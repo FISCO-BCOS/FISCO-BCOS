@@ -151,7 +151,7 @@ void Sealer::submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _blo
     for (auto const& consensusNode : consensusNodeInfo)
     {
         sealerList.push_back(consensusNode->nodeID()->data());
-        weightList.push_back(consensusNode->weight());
+        weightList.push_back(consensusNode->voteWeight());
     }
     _block->blockHeader()->setSealerList(std::move(sealerList));
     _block->blockHeader()->setConsensusWeights(std::move(weightList));

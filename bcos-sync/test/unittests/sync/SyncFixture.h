@@ -139,16 +139,16 @@ public:
     void appendObserver(NodeIDPtr _nodeId)
     {
         auto node = std::make_shared<ConsensusNode>(_nodeId);
-        m_ledger->ledgerConfig()->mutableObserverList()->emplace_back(node);
+        m_ledger->ledgerConfig()->mutableObserverList().emplace_back(node);
         m_sync->config()->setObserverList(m_ledger->ledgerConfig()->observerNodeList());
     }
 
     void setConsensus(std::vector<NodeIDPtr> _nodeIdList)
     {
-        m_ledger->ledgerConfig()->mutableConsensusList()->clear();
+        m_ledger->ledgerConfig()->mutableConsensusList().clear();
         for (auto const& node : _nodeIdList)
         {
-            m_ledger->ledgerConfig()->mutableConsensusList()->emplace_back(
+            m_ledger->ledgerConfig()->mutableConsensusList().emplace_back(
                 std::make_shared<ConsensusNode>(node));
         }
         m_sync->config()->setConsensusNodeList(m_ledger->ledgerConfig()->consensusNodeList());
@@ -170,10 +170,10 @@ public:
 
     void setObservers(std::vector<NodeIDPtr> _nodeIdList)
     {
-        m_ledger->ledgerConfig()->mutableObserverList()->clear();
+        m_ledger->ledgerConfig()->mutableObserverList().clear();
         for (auto const& node : _nodeIdList)
         {
-            m_ledger->ledgerConfig()->mutableObserverList()->emplace_back(
+            m_ledger->ledgerConfig()->mutableObserverList().emplace_back(
                 std::make_shared<ConsensusNode>(node));
         }
         m_sync->config()->setObserverList(m_ledger->ledgerConfig()->observerNodeList());

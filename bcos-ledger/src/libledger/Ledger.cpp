@@ -61,6 +61,7 @@
 #include <future>
 #include <iterator>
 #include <memory>
+#include <range/v3/view/take.hpp>
 #include <utility>
 
 using namespace bcos;
@@ -1345,7 +1346,7 @@ void Ledger::asyncGetNodeListByType(const std::string_view& _type,
                                 fromHex(it.nodeID));
                         // Note: use try-catch to handle the exception case
                         nodes->emplace_back(std::make_shared<consensus::ConsensusNode>(
-                            nodeID, it.weight.convert_to<uint64_t>()));
+                            nodeID, it.voteWeight.convert_to<uint64_t>(), it.termWeight));
                     }
                 }
 
@@ -2209,8 +2210,8 @@ bool Ledger::buildGenesisBlock(
 
     for (const auto& node : ledgerConfig.consensusNodeList())
     {
-        consensusNodeList.emplace_back(
-            node->nodeID()->hex(), node->weight(), std::string{CONSENSUS_SEALER}, "0");
+        consensusNodeList.emplace_back(node->nodeID()->hex(), node->voteWeight(),
+            std::string{CONSENSUS_SEALER}, "0", node->termWeight());
     }
 
     // update some node type to CONSENSUS_CANDIDATE_SEALER
@@ -2221,10 +2222,10 @@ bool Ledger::buildGenesisBlock(
         for (auto& node : consensusNodeList)
         {
             auto iter = std::find_if(
-                workingSealerList->begin(), workingSealerList->end(), [&node](auto&& workingNode) {
+                workingSealerList.begin(), workingSealerList.end(), [&node](auto&& workingNode) {
                     return workingNode->nodeID()->hex() == node.nodeID;
                 });
-            if (iter == workingSealerList->end())
+            if (iter == workingSealerList.end())
             {
                 node.type = CONSENSUS_CANDIDATE_SEALER;
             }
@@ -2233,8 +2234,8 @@ bool Ledger::buildGenesisBlock(
 
     for (const auto& node : ledgerConfig.observerNodeList())
     {
-        consensusNodeList.emplace_back(
-            node->nodeID()->hex(), node->weight(), std::string{CONSENSUS_OBSERVER}, "0");
+        consensusNodeList.emplace_back(node->nodeID()->hex(), node->voteWeight(),
+            std::string{CONSENSUS_OBSERVER}, "0", node->termWeight());
     }
 
     Entry consensusNodeListEntry;
@@ -2289,11 +2290,11 @@ bool Ledger::buildGenesisBlock(
     return true;
 }
 
-bcos::consensus::ConsensusNodeListPtr Ledger::selectWorkingSealer(
+bcos::consensus::ConsensusNodeList Ledger::selectWorkingSealer(
     const bcos::ledger::LedgerConfig& _ledgerConfig, std::int64_t _epochSealerNum)
 {
     auto sealerList = _ledgerConfig.consensusNodeList();
-    std::sort(sealerList.begin(), sealerList.end(), bcos::consensus::ConsensusNodeComparator());
+    std::sort(sealerList.begin(), sealerList.end());
 
     std::int64_t sealersSize = sealerList.size();
     std::int64_t selectedNum = std::min(_epochSealerNum, sealersSize);
@@ -2317,13 +2318,14 @@ bcos::consensus::ConsensusNodeListPtr Ledger::selectWorkingSealer(
         }
     }
 
-    auto workingSealerList = std::make_shared<bcos::consensus::ConsensusNodeList>();
-    for (std::int64_t i = 0; i < selectedNum; ++i)
+    bcos::consensus::ConsensusNodeList workingSealerList =
+        RANGES::views::take(sealerList, selectedNum) | RANGES::to<std::vector>();
+    for (auto& node : workingSealerList)
     {
         LEDGER_LOG(INFO) << LOG_DESC("selectWorkingSealer")
-                         << LOG_KV("nodeID", sealerList[i]->nodeID()->hex())
-                         << LOG_KV("weight", sealerList[i]->weight());
-        workingSealerList->emplace_back(sealerList[i]);
+                         << LOG_KV("nodeID", node->nodeID()->hex())
+                         << LOG_KV("voteWeight", node->voteWeight())
+                         << LOG_KV("termWeight", node->termWeight());
     }
     return workingSealerList;
 }

@@ -171,11 +171,11 @@ public:
         for (int i = 0; i < 4; ++i)
         {
             auto node = std::make_shared<consensus::ConsensusNode>(
-                signImpl->generateKeyPair()->publicKey(), 10 + i);
+                signImpl->generateKeyPair()->publicKey(), 10 + i, 0);
             consensusNodeList.emplace_back(node);
         }
         auto observer_node = std::make_shared<consensus::ConsensusNode>(
-            signImpl->generateKeyPair()->publicKey(), -1);
+            signImpl->generateKeyPair()->publicKey(), -1, 0);
         observerNodeList.emplace_back(observer_node);
 
         m_param->setConsensusNodeList(consensusNodeList);
@@ -741,7 +741,7 @@ BOOST_AUTO_TEST_CASE(testNodeListByType)
 
             auto list = decodeConsensusList(entry->getField(0));
             list.emplace_back(
-                bcos::crypto::HashType("56789").hex(), 100, std::string{CONSENSUS_SEALER}, "5");
+                bcos::crypto::HashType("56789").hex(), 100, std::string{CONSENSUS_SEALER}, "5", 0);
 
             entry->setField(0, encodeConsensusList(list));
             m_storage->asyncSetRow(

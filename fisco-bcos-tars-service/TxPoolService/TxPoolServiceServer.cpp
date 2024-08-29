@@ -246,7 +246,7 @@ bcostars::Error TxPoolServiceServer::notifyConsensusNodeList(
         auto node = std::make_shared<bcos::consensus::ConsensusNode>(
             m_txpoolInitializer->cryptoSuite()->keyFactory()->createKey(
                 bcos::bytesConstRef((const bcos::byte*)it.nodeID.data(), it.nodeID.size())),
-            it.weight);
+            it.voteWeight, it.termWeight);
         bcosNodeList.emplace_back(node);
     }
 
@@ -269,7 +269,7 @@ bcostars::Error TxPoolServiceServer::notifyObserverNodeList(
         auto node = std::make_shared<bcos::consensus::ConsensusNode>(
             m_txpoolInitializer->cryptoSuite()->keyFactory()->createKey(
                 bcos::bytesConstRef((const bcos::byte*)it.nodeID.data(), it.nodeID.size())),
-            it.weight);
+            it.voteWeight, it.termWeight);
         bcosObserverNodeList.emplace_back(node);
     }
 

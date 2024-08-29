@@ -524,7 +524,7 @@ void PBFTCacheProcessor::addViewChangeReq(ViewChangeMsgInterface::Ptr _viewChang
     }
     m_viewChangeCache[reqView][fromIdx] = _viewChange;
     m_viewChangeWeight.try_emplace(reqView, 0);
-    m_viewChangeWeight[reqView] += nodeInfo->weight();
+    m_viewChangeWeight[reqView] += nodeInfo->voteWeight();
     auto committedIndex = _viewChange->committedProposal()->index();
     if (!m_maxCommittedIndex.contains(reqView) || m_maxCommittedIndex[reqView] < committedIndex)
     {
@@ -726,7 +726,7 @@ ViewType PBFTCacheProcessor::tryToTriggerFastViewChange()
                 {
                     continue;
                 }
-                greaterViewWeight += nodeInfo->weight();
+                greaterViewWeight += nodeInfo->voteWeight();
             }
             // must ensure at least (f+1) nodes at the same view can trigger fast-viewchange
             if (greaterViewWeight >= (m_config->maxFaultyQuorum() + 1))
@@ -812,7 +812,7 @@ bool PBFTCacheProcessor::checkPrecommitWeight(PBFTMessageInterface::Ptr _precomm
         {
             return false;
         }
-        weight += nodeInfo->weight();
+        weight += nodeInfo->voteWeight();
     }
     // check the quorum
     return (weight >= m_config->minRequiredQuorum());
@@ -944,7 +944,7 @@ void PBFTCacheProcessor::reCalculateViewChangeWeight()
             {
                 continue;
             }
-            m_viewChangeWeight[view] += nodeInfo->weight();
+            m_viewChangeWeight[view] += nodeInfo->voteWeight();
             auto viewChangeReq = cache.second;
             auto committedIndex = viewChangeReq->committedProposal()->index();
             if (!m_maxCommittedIndex.contains(view) || m_maxCommittedIndex[view] < committedIndex)
@@ -1117,7 +1117,7 @@ void PBFTCacheProcessor::addRecoverReqCache(PBFTMessageInterface::Ptr _recoverRe
     {
         m_recoverCacheWeight[view] = 0;
     }
-    m_recoverCacheWeight[view] += nodeInfo->weight();
+    m_recoverCacheWeight[view] += nodeInfo->voteWeight();
     PBFT_LOG(INFO) << LOG_DESC("addRecoverReqCache") << LOG_KV("weight", m_recoverCacheWeight[view])
                    << printPBFTMsgInfo(_recoverResponse) << m_config->printCurrentState();
 }

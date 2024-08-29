@@ -36,15 +36,17 @@ using namespace bcos::precompiled;
 using namespace bcos::ledger;
 
 constexpr const char* const CSS_METHOD_ADD_SEALER = "addSealer(string,uint256)";
+constexpr const char* const CSS_METHOD_ADD_SEALER2 = "addSealer(string,uint256,uint256)";
 constexpr const char* const CSS_METHOD_ADD_SER = "addObserver(string)";
 constexpr const char* const CSS_METHOD_REMOVE = "remove(string)";
 constexpr const char* const CSS_METHOD_SET_WEIGHT = "setWeight(string,uint256)";
+constexpr const char* const CSS_METHOD_SET_TERM_WEIGHT = "setWeight(string,uint256)";
 const auto NODE_LENGTH = 128U;
 
-ConsensusPrecompiled::ConsensusPrecompiled(const crypto::Hash::Ptr& _hashImpl)
-  : Precompiled(_hashImpl)
+ConsensusPrecompiled::ConsensusPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl)
 {
     name2Selector[CSS_METHOD_ADD_SEALER] = getFuncSelector(CSS_METHOD_ADD_SEALER, _hashImpl);
+    name2Selector[CSS_METHOD_ADD_SEALER2] = getFuncSelector(CSS_METHOD_ADD_SEALER2, _hashImpl);
     name2Selector[CSS_METHOD_ADD_SER] = getFuncSelector(CSS_METHOD_ADD_SER, _hashImpl);
     name2Selector[CSS_METHOD_REMOVE] = getFuncSelector(CSS_METHOD_REMOVE, _hashImpl);
     name2Selector[CSS_METHOD_SET_WEIGHT] = getFuncSelector(CSS_METHOD_SET_WEIGHT, _hashImpl);
@@ -83,6 +85,11 @@ std::shared_ptr<PrecompiledExecResult> ConsensusPrecompiled::call(
         // addSealer(string, uint256)
         result = addSealer(_executive, data, codec);
     }
+    else if (func == name2Selector[CSS_METHOD_ADD_SEALER2])
+    {
+        // addSealer(string, uint256, uint256)
+        result = addSealer2(_executive, data, codec);
+    }
     else if (func == name2Selector[CSS_METHOD_ADD_SER])
     {
         // addObserver(string)
@@ -115,16 +122,11 @@ std::shared_ptr<PrecompiledExecResult> ConsensusPrecompiled::call(
     return _callParameters;
 }
 
-int ConsensusPrecompiled::addSealer(
-    const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& _data,
-    const CodecWrapper& codec)
+static int innerAddSealer(bool isConsensus,
+    const std::shared_ptr<executor::TransactionExecutive>& _executive, std::string nodeID,
+    u256 voteWeight, uint64_t termWeight)
 {
-    // addSealer(string, uint256)
-    std::string nodeID;
-    u256 weight;
     const auto& blockContext = _executive->blockContext();
-    codec.decode(_data, nodeID, weight);
-    // Uniform lowercase nodeID
     boost::to_lower(nodeID);
 
     PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number())
@@ -138,14 +140,6 @@ int ConsensusPrecompiled::addSealer(
                                << LOG_DESC("nodeID length mistake") << LOG_KV("nodeID", nodeID);
         return CODE_INVALID_NODE_ID;
     }
-    if (weight == 0)
-    {
-        // u256 weight be then 0
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("weight is 0")
-                               << LOG_KV("nodeID", nodeID);
-        return CODE_INVALID_WEIGHT;
-    }
-
     auto& storage = _executive->storage();
 
     ConsensusNodeList consensusList;
@@ -161,40 +155,101 @@ int ConsensusPrecompiled::addSealer(
 
     auto node = std::find_if(consensusList.begin(), consensusList.end(),
         [&nodeID](const ConsensusNode& node) { return node.nodeID == nodeID; });
-    if (node != consensusList.end())
+    if (isConsensus)
     {
-        // exist
-        node->weight = weight;
-        if (blockContext.features().get(Features::Flag::feature_rpbft))
+        if (voteWeight == 0)
         {
-            node->type = ledger::CONSENSUS_CANDIDATE_SEALER;
+            // u256 weight be then 0
+            PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("weight is 0")
+                                   << LOG_KV("nodeID", nodeID);
+            return CODE_INVALID_WEIGHT;
+        }
+        if (node != consensusList.end())
+        {
+            // exist
+            node->voteWeight = voteWeight;
+            if (blockContext.features().get(Features::Flag::feature_rpbft))
+            {
+                node->type = ledger::CONSENSUS_CANDIDATE_SEALER;
+            }
+            else
+            {
+                node->type = ledger::CONSENSUS_SEALER;
+            }
         }
         else
         {
-            node->type = ledger::CONSENSUS_SEALER;
+            // no exist
+            if (blockContext.blockVersion() >= (uint32_t)protocol::BlockVersion::V3_1_VERSION)
+            {
+                // version >= 3.1.0, only allow adding sealer in observer list
+                return CODE_ADD_SEALER_SHOULD_IN_OBSERVER;
+            }
+            consensusList.emplace_back(nodeID, voteWeight, std::string{ledger::CONSENSUS_SEALER},
+                boost::lexical_cast<std::string>(blockContext.number() + 1), termWeight);
         }
         node->enableNumber = boost::lexical_cast<std::string>(blockContext.number() + 1);
     }
     else
     {
-        // no exist
-        if (blockContext.blockVersion() >= (uint32_t)protocol::BlockVersion::V3_1_VERSION)
+        if (node != consensusList.end())
         {
-            // version >= 3.1.0, only allow adding sealer in observer list
-            return CODE_ADD_SEALER_SHOULD_IN_OBSERVER;
+            // find it in consensus list
+            auto sealerCount = std::count_if(consensusList.begin(), consensusList.end(),
+                [](auto&& node) { return node.type == ledger::CONSENSUS_SEALER; });
+            if (sealerCount == 1)
+            {
+                PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
+                                       << LOG_DESC("addObserver failed, because last sealer");
+                return CODE_LAST_SEALER;
+            }
+            node->voteWeight = 0;
+            node->type = ledger::CONSENSUS_OBSERVER;
+            node->enableNumber = boost::lexical_cast<std::string>(blockContext.number() + 1);
         }
-        consensusList.emplace_back(nodeID, weight, std::string{ledger::CONSENSUS_SEALER},
-            boost::lexical_cast<std::string>(blockContext.number() + 1));
+        else
+        {
+            consensusList.emplace_back(nodeID, 0, std::string{ledger::CONSENSUS_OBSERVER},
+                boost::lexical_cast<std::string>(blockContext.number() + 1), 0);
+        }
     }
 
     entry->setObject(consensusList);
-
     storage.setRow(SYS_CONSENSUS, "key", std::move(*entry));
 
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
-                           << LOG_DESC("addSealer successfully insert") << LOG_KV("nodeID", nodeID)
-                           << LOG_KV("weight", weight);
+                           << LOG_DESC("addSealer successfully insert")
+                           << LOG_KV("isConsensus", isConsensus) << LOG_KV("nodeID", nodeID)
+                           << LOG_KV("weight", voteWeight);
     return 0;
+}
+
+int ConsensusPrecompiled::addSealer(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& _data,
+    const CodecWrapper& codec)
+{
+    // addSealer(string, uint256)
+    std::string nodeID;
+    u256 voteWeight;
+    const auto& blockContext = _executive->blockContext();
+    codec.decode(_data, nodeID, voteWeight);
+
+    return innerAddSealer(true, _executive, std::move(nodeID), voteWeight, 0);
+}
+
+int ConsensusPrecompiled::addSealer2(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& _data,
+    const CodecWrapper& codec)
+{
+    // addSealer(string, uint256, uint256)
+    std::string nodeID;
+    u256 voteWeight;
+    u256 termWeight;
+    const auto& blockContext = _executive->blockContext();
+    codec.decode(_data, nodeID, voteWeight, termWeight);
+
+    return innerAddSealer(
+        true, _executive, std::move(nodeID), voteWeight, termWeight.convert_to<uint64_t>());
 }
 
 int ConsensusPrecompiled::addObserver(
@@ -203,64 +258,8 @@ int ConsensusPrecompiled::addObserver(
 {
     // addObserver(string)
     std::string nodeID;
-    const auto& blockContext = _executive->blockContext();
     codec.decode(_data, nodeID);
-    // Uniform lowercase nodeID
-    boost::to_lower(nodeID);
-    PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number())
-                          << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("addObserver")
-                          << LOG_KV("nodeID", nodeID);
-
-    if (nodeID.size() != NODE_LENGTH ||
-        std::count_if(nodeID.begin(), nodeID.end(),
-            [](unsigned char c) { return std::isxdigit(c); }) != NODE_LENGTH)
-    {
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
-                               << LOG_DESC("nodeID length mistake") << LOG_KV("nodeID", nodeID);
-        return CODE_INVALID_NODE_ID;
-    }
-
-    auto& storage = _executive->storage();
-
-    auto entry = storage.getRow(SYS_CONSENSUS, "key");
-
-    ConsensusNodeList consensusList;
-    if (entry)
-    {
-        consensusList = entry->getObject<ConsensusNodeList>();
-    }
-    else
-    {
-        entry.emplace(Entry());
-    }
-    auto node = std::find_if(consensusList.begin(), consensusList.end(),
-        [&nodeID](const ConsensusNode& node) { return node.nodeID == nodeID; });
-    if (node != consensusList.end())
-    {
-        // find it in consensus list
-        auto sealerCount = std::count_if(consensusList.begin(), consensusList.end(),
-            [](auto&& node) { return node.type == ledger::CONSENSUS_SEALER; });
-        if (sealerCount == 1)
-        {
-            PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
-                                   << LOG_DESC("addObserver failed, because last sealer");
-            return CODE_LAST_SEALER;
-        }
-        node->weight = 0;
-        node->type = ledger::CONSENSUS_OBSERVER;
-        node->enableNumber = boost::lexical_cast<std::string>(blockContext.number() + 1);
-    }
-    else
-    {
-        consensusList.emplace_back(nodeID, 0, std::string{ledger::CONSENSUS_OBSERVER},
-            boost::lexical_cast<std::string>(blockContext.number() + 1));
-    }
-
-    entry->setObject(consensusList);
-
-    storage.setRow(SYS_CONSENSUS, "key", std::move(*entry));
-
-    return 0;
+    return innerAddSealer(false, _executive, std::move(nodeID), 0, 0);
 }
 
 int ConsensusPrecompiled::removeNode(
@@ -367,7 +366,7 @@ int ConsensusPrecompiled::setWeight(
         {
             BOOST_THROW_EXCEPTION(protocol::PrecompiledError("Cannot set weight to observer."));
         }
-        node->weight = weight;
+        node->voteWeight = weight;
         node->enableNumber = boost::lexical_cast<std::string>(blockContext.number() + 1);
     }
     else
@@ -444,10 +443,10 @@ void ConsensusPrecompiled::showConsensusTable(
     consensusTable << "ConsensusPrecompiled show table:\n";
     for (auto& node : consensusList)
     {
-        auto& [nodeID, weight, type, enableNumber] = node;
+        auto& [nodeID, voteWeight, type, enableNumber, termWeight] = node;
 
         consensusTable << "ConsensusPrecompiled: " << nodeID << "," << type << "," << enableNumber
-                       << "," << weight << "\n";
+                       << "," << voteWeight << "\n";
     }
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("showConsensusTable")
                            << LOG_KV("consensusTable", consensusTable.str());

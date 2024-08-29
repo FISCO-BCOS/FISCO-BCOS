@@ -260,8 +260,8 @@ public:
     }
     void appendObserver(NodeIDPtr _nodeId)
     {
-        auto consensusNode = std::make_shared<ConsensusNode>(_nodeId, 0);
-        m_ledger->ledgerConfig()->mutableObserverList()->emplace_back(consensusNode);
+        auto consensusNode = std::make_shared<ConsensusNode>(_nodeId, 0, 0);
+        m_ledger->ledgerConfig()->mutableObserverList().emplace_back(consensusNode);
         m_txpool->notifyObserverNodeList(m_ledger->ledgerConfig()->observerNodeList(), nullptr);
         for (const auto& item : m_fakeGateWay->m_nodeId2TxPool)
         {

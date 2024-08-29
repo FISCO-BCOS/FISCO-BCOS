@@ -202,7 +202,7 @@ private:
     needStoreUnsavedTxs(
         bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr _block);
 
-    bcos::consensus::ConsensusNodeListPtr selectWorkingSealer(
+    bcos::consensus::ConsensusNodeList selectWorkingSealer(
         const bcos::ledger::LedgerConfig& _ledgerConfig, std::int64_t _epochSealerNum);
 
     bcos::protocol::BlockFactory::Ptr m_blockFactory;

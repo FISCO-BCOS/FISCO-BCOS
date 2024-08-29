@@ -19,14 +19,13 @@
  * @date 2021-06-10
  */
 #include "PBFTInitializer.h"
+#include "Common.h"
 #include <bcos-framework/election/FailOverTypeDef.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-framework/storage/KVStorageHelper.h>
-
 #ifdef WITH_TIKV
 #include <bcos-leader-election/src/LeaderElectionFactory.h>
 #endif
-
 #include <bcos-pbft/pbft/PBFTFactory.h>
 #include <bcos-rpbft/bcos-rpbft/rpbft/utilities/RPBFTFactory.h>
 #include <bcos-scheduler/src/SchedulerManager.h>
@@ -98,7 +97,7 @@ std::string PBFTInitializer::generateGenesisConfig(bcos::tool::NodeConfig::Ptr _
     {
         Json::Value sealer;
         sealer["nodeID"] = node->nodeID()->hex();
-        sealer["weight"] = node->weight();
+        sealer["weight"] = node->voteWeight();
         sealerList.append(sealer);
     }
     genesisConfig["sealerList"] = sealerList;
@@ -106,6 +105,7 @@ std::string PBFTInitializer::generateGenesisConfig(bcos::tool::NodeConfig::Ptr _
     std::string genesisConfigStr = fastWriter.write(genesisConfig);
     return genesisConfigStr;
 }
+
 std::string PBFTInitializer::generateIniConfig(bcos::tool::NodeConfig::Ptr _nodeConfig)
 {
     Json::Value iniConfig;
