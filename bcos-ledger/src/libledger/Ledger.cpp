@@ -38,6 +38,7 @@
 #include <bcos-executor/src/Common.h>
 #include <bcos-framework/consensus/ConsensusNode.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
+#include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
@@ -134,8 +135,8 @@ task::Task<std::optional<storage::Entry>> Ledger::getStorageAt(
 
 void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
-    std::function<void(std::string, Error::Ptr&&)> callback,
-    bool writeTxsAndReceipts)  // Unused flag writeTxsAndReceipts
+    std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
+    std::optional<bcos::ledger::Features> features)
 {
     if (!block)
     {
@@ -225,12 +226,35 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     // number 2 nonce
     auto nonceBlock = m_blockFactory->createBlock();
     protocol::NonceList nonceList;
+    std::unordered_map<std::string, uint64_t> web3NonceMap{};
+    std::unordered_map<std::string, uint64_t> bcosNonceMap{};
+    auto fillNonceMap = [&features, &web3NonceMap, &bcosNonceMap](auto&& tx) {
+        if (features.has_value() && features->get(Features::Flag::feature_evm_address))
+        {
+            auto const sender = Address(tx->sender(), Address::FromBinary).hex();
+            if (tx->type() == protocol::TransactionType::Web3Transacion)
+            {
+                // TODO: check nonce is hex
+                if (auto const nonce = std::stoull(tx->nonce(), nullptr, 16);
+                    web3NonceMap[sender] < nonce)
+                {
+                    web3NonceMap[sender] = nonce;
+                }
+            }
+            else if (tx->type() == protocol::TransactionType::BCOSTransaction)
+            {
+                bcosNonceMap[sender] = bcosNonceMap[sender] + 1;
+            }
+        }
+    };
+
     // get nonce from _blockTxs
     if (_blockTxs)
     {
         for (auto const& tx : *_blockTxs)
         {
             nonceList.emplace_back(tx->nonce());
+            fillNonceMap(tx);
         }
     }
     // get nonce from block txs
@@ -240,7 +264,16 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         {
             auto const& tx = block->transaction(i);
             nonceList.emplace_back(tx->nonce());
+            fillNonceMap(tx);
         }
+    }
+
+    if (!web3NonceMap.empty() || !bcosNonceMap.empty()) [[likely]]
+    {
+        task::wait([&](decltype(storage) storage, decltype(web3NonceMap) wnonce,
+                       decltype(bcosNonceMap) bnonce) -> task::Task<void> {
+            co_await batchInsertEoaNonce(std::move(storage), std::move(wnonce), std::move(bnonce));
+        }(storage, std::move(web3NonceMap), std::move(bcosNonceMap)));
     }
     nonceBlock->setNonceList(nonceList);
     bytes nonceBuffer;
@@ -388,6 +421,67 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
                              << LOG_KV("totalTxs", totalTxsCount) << LOG_KV("failedTxs", failedTxs)
                              << LOG_KV("incTxs", totalCount) << LOG_KV("incFailedTxs", failedCount);
         });
+}
+
+task::Task<void> Ledger::batchInsertEoaNonce(bcos::storage::StorageInterface::Ptr storage,
+    std::unordered_map<std::string, uint64_t> eoa2Nonce,
+    std::unordered_map<std::string, uint64_t> fbEoa2Nonce)
+{
+    for (auto&& [sender, nonce] : fbEoa2Nonce)
+    {
+        if (eoa2Nonce.contains(sender))
+        {
+            eoa2Nonce[sender] += nonce;
+            continue;
+        }
+        // write in storage
+        ledger::account::EVMAccount eoa(*storage, sender);
+        if (!co_await ledger::account::isExist(eoa))
+        {
+            co_await ledger::account::create(eoa);
+        }
+        if (auto nonceInStorage = co_await ledger::account::nonce(eoa))
+        {
+            auto const newNonce = nonce + std::stoull(nonceInStorage.value());
+            co_await ledger::account::setNonce(eoa, std::to_string(newNonce));
+        }
+        else
+        {
+            co_await ledger::account::setNonce(eoa, "1");
+        }
+    }
+
+    co_await bcos::storage2::writeSome(*storage,
+        RANGES::views::keys(eoa2Nonce) | RANGES::views::transform([](auto&& sender) {
+            auto table = getContractTableName(SYS_DIRECTORY::USER_APPS, sender);
+            return transaction_executor::StateKey(table, "nonce");
+        }),
+        RANGES::views::values(eoa2Nonce) | RANGES::views::transform([](auto&& nonce) {
+            Entry entry;
+            entry.set(std::to_string(nonce));
+            return entry;
+        }));
+}
+
+task::Task<std::optional<ledger::StorageState>> Ledger::getStorageState(
+    std::string_view _address, protocol::BlockNumber _blockNumber)
+{
+    ledger::StorageState state;
+    auto const nonceEntry =
+        co_await getStorageAt(_address, ACCOUNT_TABLE_FIELDS::NONCE, _blockNumber);
+    if (!nonceEntry.has_value())
+    {
+        co_return std::nullopt;
+    }
+    state.nonce = std::stoull(std::string(nonceEntry->get()));
+    auto const balanceEntry =
+        co_await getStorageAt(_address, ACCOUNT_TABLE_FIELDS::BALANCE, _blockNumber);
+    if (!balanceEntry.has_value())
+    {
+        co_return std::nullopt;
+    }
+    state.balance = std::stoull(std::string(balanceEntry->get()));
+    co_return state;
 }
 
 std::tuple<bool, bcos::crypto::HashListPtr, std::shared_ptr<std::vector<bytesConstPtr>>>

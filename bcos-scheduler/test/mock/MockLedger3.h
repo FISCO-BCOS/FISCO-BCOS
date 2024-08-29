@@ -29,7 +29,8 @@ public:
     using Ptr = std::shared_ptr<MockLedger3>;
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
-        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts) override
+        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
+        std::optional<bcos::ledger::Features> features) override
     {
         auto blockNumber = block->blockHeaderConst()->number();
         if (blockNumber == 1024)

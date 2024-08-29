@@ -5,6 +5,14 @@
 namespace bcos::ledger::account
 {
 
+inline constexpr struct IsExist
+{
+    task::Task<bool> operator()(auto& account, auto&&... args) const
+    {
+        co_return co_await tag_invoke(*this, account, std::forward<decltype(args)>(args)...);
+    }
+} isExist{};
+
 inline constexpr struct Create
 {
     auto operator()(auto& account, auto&&... args) const
@@ -81,6 +89,23 @@ inline constexpr struct SetBalance
             std::forward<decltype(args)>(args)...);
     }
 } setBalance{};
+
+inline constexpr struct Nonce
+{
+    auto operator()(auto& account, auto&&... args) const -> task::Task<std::optional<std::string>>
+    {
+        co_return co_await tag_invoke(*this, account, std::forward<decltype(args)>(args)...);
+    }
+} nonce{};
+
+inline constexpr struct SetNonce
+{
+    task::Task<void> operator()(auto& account, auto&& nonce, auto&&... args) const
+    {
+        co_await tag_invoke(*this, account, std::forward<decltype(nonce)>(nonce),
+            std::forward<decltype(args)>(args)...);
+    }
+} setNonce{};
 
 inline constexpr struct Storage
 {

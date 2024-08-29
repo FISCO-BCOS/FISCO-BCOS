@@ -19,6 +19,12 @@ private:
     std::reference_wrapper<Storage> m_storage;
     std::string m_tableName;
 
+    friend task::Task<bool> tag_invoke(tag_t<isExist> /*unused*/, EVMAccount& account)
+    {
+        co_return co_await storage2::existsOne(account.m_storage.get(),
+            transaction_executor::StateKeyView(SYS_TABLES, account.m_tableName));
+    }
+
     friend task::Task<void> tag_invoke(tag_t<create> /*unused*/, EVMAccount& account)
     {
         co_await storage2::writeOne(account.m_storage.get(),
@@ -146,6 +152,28 @@ private:
             std::move(balanceEntry));
     }
 
+    friend task::Task<std::optional<std::string>> tag_invoke(
+        tag_t<nonce> /*unused*/, EVMAccount& account)
+    {
+        if (auto entry = co_await storage2::readOne(
+                account.m_storage.get(), transaction_executor::StateKeyView{
+                                             account.m_tableName, ACCOUNT_TABLE_FIELDS::NONCE}))
+        {
+            auto view = entry->get();
+            co_return std::string(view);
+        }
+        co_return std::nullopt;
+    }
+
+    friend task::Task<void> tag_invoke(
+        tag_t<setNonce> /*unused*/, EVMAccount& account, std::string nonce)
+    {
+        storage::Entry nonceEntry(std::move(nonce));
+        co_await storage2::writeOne(account.m_storage.get(),
+            transaction_executor::StateKey{account.m_tableName, ACCOUNT_TABLE_FIELDS::NONCE},
+            std::move(nonceEntry));
+    }
+
     friend task::Task<evmc_bytes32> tag_invoke(
         tag_t<storage> /*unused*/, EVMAccount& account, const evmc_bytes32& key)
     {
@@ -201,6 +229,24 @@ public:
             m_tableName.append(ledger::SYS_DIRECTORY::USER_APPS);
         }
         m_tableName.append(std::string_view(table.data(), table.size()));
+    }
+
+    /**
+     * @brief Construct a new EVMAccount object
+     * @param storage storage instance
+     * @param address address of the account, hex string, should not contain 0x prefix
+     */
+    EVMAccount(Storage& storage, bcos::concepts::StringLike auto address) : m_storage(storage)
+    {
+        if (bcos::precompiled::c_systemTxsAddress.contains(address))
+        {
+            m_tableName.append(ledger::SYS_DIRECTORY::SYS_APPS);
+        }
+        else
+        {
+            m_tableName.append(ledger::SYS_DIRECTORY::USER_APPS);
+        }
+        m_tableName.append(address);
     }
     ~EVMAccount() noexcept = default;
 };

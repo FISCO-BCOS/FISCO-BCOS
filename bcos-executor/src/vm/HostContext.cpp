@@ -30,6 +30,7 @@
 #include "bcos-table/src/StateStorage.h"
 #include "evmc/evmc.hpp"
 #include <bcos-framework/executor/ExecutionMessage.h>
+#include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-utilities/Common.h>
 #include <evmc/evmc.h>
@@ -241,6 +242,24 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
         {
             request->staticCall = true;
         }
+    }
+
+    if (request->create && features().get(ledger::Features::Flag::feature_evm_address)) [[unlikely]]
+    {
+        // account must exist
+        ledger::account::EVMAccount account(
+            *m_executive->storage().getRawStorage(), request->senderAddress);
+        task::wait([](decltype(account) account) -> task::Task<void> {
+            if (auto const nonceString = co_await ledger::account::nonce(account))
+            {
+                auto const nonce = std::stoull(nonceString.value());
+                co_await ledger::account::setNonce(account, std::to_string(nonce + 1));
+            }
+            else
+            {
+                co_await ledger::account::setNonce(account, "1");
+            }
+        }(std::move(account)));
     }
 
     auto response = m_executive->externalCall(std::move(request));

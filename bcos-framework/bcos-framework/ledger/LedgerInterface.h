@@ -26,6 +26,7 @@
 #include "../protocol/Transaction.h"
 #include "../protocol/TransactionReceipt.h"
 #include "../storage/StorageInterface.h"
+#include "Features.h"
 #include "LedgerTypeDef.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-task/Task.h>
@@ -50,7 +51,8 @@ public:
      */
     virtual void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
-        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts) = 0;
+        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
+        std::optional<bcos::ledger::Features> features) = 0;
 
     /**
      * @brief async store txs in block when tx pool verify
@@ -192,6 +194,20 @@ public:
      */
     virtual task::Task<std::optional<storage::Entry>> getStorageAt(
         std::string_view _address, std::string_view _key, protocol::BlockNumber _blockNumber)
+    {
+        co_return std::nullopt;
+    }
+
+
+    virtual task::Task<void> batchInsertEoaNonce(bcos::storage::StorageInterface::Ptr storage,
+        std::unordered_map<std::string, uint64_t> eoa2Nonce,
+        std::unordered_map<std::string, uint64_t> fbEoa2Nonce)
+    {
+        co_return;
+    }
+
+    virtual task::Task<std::optional<ledger::StorageState>> getStorageState(
+        std::string_view _address, protocol::BlockNumber _blockNumber)
     {
         co_return std::nullopt;
     }

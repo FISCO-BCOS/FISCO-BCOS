@@ -63,8 +63,8 @@ public:
         std::function<void(Error::UniquePtr&&)> _callback) override;
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
-        std::function<void(std::string, Error::Ptr&&)> callback,
-        bool writeTxsAndReceipts = true) override;
+        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts = true,
+        std::optional<bcos::ledger::Features> features = std::nullopt) override;
 
     bcos::Error::Ptr storeTransactionsAndReceipts(bcos::protocol::ConstTransactionsPtr blockTxs,
         bcos::protocol::Block::ConstPtr block) override;
@@ -190,6 +190,14 @@ private:
         return _s.substr(_s.find_last_of('/') + 1);
     }
 
+    task::Task<void> batchInsertEoaNonce(bcos::storage::StorageInterface::Ptr storage,
+        std::unordered_map<std::string, uint64_t> eoa2Nonce,
+        std::unordered_map<std::string, uint64_t> fbEoa2Nonce) override;
+
+    task::Task<std::optional<ledger::StorageState>> getStorageState(
+        std::string_view _address, protocol::BlockNumber _blockNumber) override;
+
+private:
     std::tuple<bool, bcos::crypto::HashListPtr, std::shared_ptr<std::vector<bytesConstPtr>>>
     needStoreUnsavedTxs(
         bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr _block);

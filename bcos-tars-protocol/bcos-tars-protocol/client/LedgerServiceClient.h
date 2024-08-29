@@ -46,7 +46,8 @@ public:
     // TODO: implement this
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr,
         bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr,
-        std::function<void(std::string, bcos::Error::Ptr&&)>, bool) override
+        std::function<void(std::string, bcos::Error::Ptr&&)>, bool,
+        std::optional<bcos::ledger::Features>) override
     {
         BCOS_LOG(ERROR) << LOG_DESC("unimplemented method asyncPrewriteBlock");
     }
