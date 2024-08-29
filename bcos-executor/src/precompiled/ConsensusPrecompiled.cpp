@@ -87,6 +87,7 @@ std::shared_ptr<PrecompiledExecResult> ConsensusPrecompiled::call(
     }
     else if (func == name2Selector[CSS_METHOD_ADD_SEALER2])
     {
+        // addSealer(string, uint256, uint256)
         result = addSealer2(_executive, data, codec);
     }
     else if (func == name2Selector[CSS_METHOD_ADD_SER])
@@ -139,14 +140,6 @@ static int innerAddSealer(bool isConsensus,
                                << LOG_DESC("nodeID length mistake") << LOG_KV("nodeID", nodeID);
         return CODE_INVALID_NODE_ID;
     }
-    if (voteWeight == 0)
-    {
-        // u256 weight be then 0
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("weight is 0")
-                               << LOG_KV("nodeID", nodeID);
-        return CODE_INVALID_WEIGHT;
-    }
-
     auto& storage = _executive->storage();
 
     ConsensusNodeList consensusList;
@@ -164,6 +157,13 @@ static int innerAddSealer(bool isConsensus,
         [&nodeID](const ConsensusNode& node) { return node.nodeID == nodeID; });
     if (isConsensus)
     {
+        if (voteWeight == 0)
+        {
+            // u256 weight be then 0
+            PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("weight is 0")
+                                   << LOG_KV("nodeID", nodeID);
+            return CODE_INVALID_WEIGHT;
+        }
         if (node != consensusList.end())
         {
             // exist

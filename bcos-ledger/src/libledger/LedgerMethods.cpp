@@ -4,7 +4,6 @@
 #include <bcos-executor/src/Common.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <exception>
-#include <magic_enum.hpp>
 
 bcos::task::Task<void> bcos::ledger::prewriteBlockToStorage(LedgerInterface& ledger,
     bcos::protocol::ConstTransactionsPtr transactions, bcos::protocol::Block::ConstPtr block,

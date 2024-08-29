@@ -34,7 +34,6 @@
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-ledger/src/libledger/Ledger.h>
 #include <bcos-tool/NodeTimeMaintenance.h>
-#include <fisco-bcos-tars-service/Common/TarsUtils.h>
 
 namespace bcos
 {

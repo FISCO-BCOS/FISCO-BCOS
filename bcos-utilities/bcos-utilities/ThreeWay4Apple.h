@@ -13,7 +13,7 @@ inline strong_ordering operator<=>(const bcos::bytes& lhs, const bcos::bytes& rh
 {
     string_view lhsView(reinterpret_cast<const char*>(lhs.data()), lhs.size());
     string_view rhsView(reinterpret_cast<const char*>(rhs.data()), rhs.size());
-    return (lhsView.compare(rhsView)) <=> 0;
+    return lhsView <=> rhsView;
 }
 }  // namespace std
 #endif
