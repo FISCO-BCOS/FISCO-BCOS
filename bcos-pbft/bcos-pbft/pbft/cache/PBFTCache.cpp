@@ -84,7 +84,7 @@ void PBFTCache::addCache(CollectionCacheType& _cachedReq, QuorumRecoderType& _we
         return;
     }
     auto [it, _] = _weightInfo.try_emplace(proposalHash, 0);
-    it->second += nodeInfo->weight();
+    it->second += nodeInfo->voteWeight();
     _cachedReq[proposalHash][generatedFrom] = _pbftCache;
 }
 

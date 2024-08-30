@@ -152,7 +152,7 @@ inline int64_t getSize(auto const& object)
 }
 
 template <IsMemoryStorage MemoryStorage>
-void updateMRUAndCheck(MemoryStorage& storage, typename MemoryStorage::Bucket& bucket,
+void updateLRUAndCheck(MemoryStorage& storage, typename MemoryStorage::Bucket& bucket,
     typename MemoryStorage::Container::template nth_index<0>::type::iterator entryIt)
     requires MemoryStorage::withLRU
 {
@@ -193,7 +193,7 @@ auto tag_invoke(bcos::storage2::tag_t<readSome> /*unused*/, MemoryStorage& stora
             if constexpr (std::decay_t<decltype(storage)>::withLRU)
             {
                 lock.upgrade_to_writer();
-                updateMRUAndCheck(storage, bucket, it);
+                updateLRUAndCheck(storage, bucket, it);
             }
         }
         else
@@ -220,7 +220,7 @@ task::AwaitableValue<std::optional<typename MemoryStorage::Value>> tag_invoke(
         if constexpr (std::decay_t<decltype(storage)>::withLRU)
         {
             lock.upgrade_to_writer();
-            updateMRUAndCheck(storage, bucket, it);
+            updateLRUAndCheck(storage, bucket, it);
         }
 
         result.value() = it->value;
@@ -278,7 +278,7 @@ task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unu
         if constexpr (std::decay_t<decltype(storage)>::withLRU)
         {
             bucket.capacity += updatedCapacity;
-            updateMRUAndCheck(storage, bucket, it);
+            updateLRUAndCheck(storage, bucket, it);
         }
     }
 

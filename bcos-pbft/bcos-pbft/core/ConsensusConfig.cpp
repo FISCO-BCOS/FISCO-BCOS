@@ -59,7 +59,7 @@ bool ConsensusConfig::compareConsensusNode(
     {
         const auto& compareNode = _right[i];
         if (node->nodeID()->data() != compareNode->nodeID()->data() ||
-            node->weight() != compareNode->weight())
+            node->voteWeight() != compareNode->voteWeight())
         {
             return false;
         }
@@ -75,14 +75,14 @@ bool ConsensusConfig::isNodeExist(
     auto iter = std::find_if(_nodeList.begin(), _nodeList.end(),
         [_node](const ConsensusNodeInterface::Ptr& _consensusNode) {
             return _node->nodeID()->data() == _consensusNode->nodeID()->data() &&
-                   _node->weight() == _consensusNode->weight();
+                   _node->voteWeight() == _consensusNode->voteWeight();
         });
     return !(_nodeList.end() == iter);
 }
 
 void ConsensusConfig::setObserverNodeList(ConsensusNodeList& _observerNodeList)
 {
-    std::sort(_observerNodeList.begin(), _observerNodeList.end(), ConsensusNodeComparator());
+    std::sort(_observerNodeList.begin(), _observerNodeList.end());
     // update the observer list
     {
         UpgradableGuard lock(x_observerNodeList);
@@ -107,7 +107,7 @@ void ConsensusConfig::setConsensusNodeList(ConsensusNodeList& _consensusNodeList
                               << errinfo_comment("Must contain at least one consensus node"));
     }
 
-    std::sort(_consensusNodeList.begin(), _consensusNodeList.end(), ConsensusNodeComparator());
+    std::sort(_consensusNodeList.begin(), _consensusNodeList.end());
     // update the consensus list
     {
         UpgradableGuard lock(x_consensusNodeList);

@@ -116,17 +116,17 @@ bool BlockValidator::checkSealerListAndWeightList(Block::Ptr _block)
                             << LOG_KV("blkSealer", consNodePtr->nodeID()->shortHex())
                             << LOG_KV("chainSealer", *toHexString(blockSealer))
                             << LOG_KV("number", blockHeader->number())
-                            << LOG_KV("weight", consNodePtr->weight())
+                            << LOG_KV("weight", consNodePtr->voteWeight())
                             << m_config->printCurrentState();
             return false;
         }
         // check weight
         auto blockWeight = blockWeightList[i];
-        if (consNodePtr->weight() != blockWeight)
+        if (consNodePtr->voteWeight() != blockWeight)
         {
             PBFT_LOG(ERROR) << LOG_DESC("checkBlock for sync module: inconsistent weight")
                             << LOG_KV("blkWeight", blockWeight)
-                            << LOG_KV("chainWeight", consNodePtr->weight())
+                            << LOG_KV("chainWeight", consNodePtr->voteWeight())
                             << LOG_KV("number", blockHeader->number())
                             << LOG_KV("blkSealer", consNodePtr->nodeID()->shortHex())
                             << LOG_KV("chainSealer", *toHexString(blockSealer))
@@ -168,7 +168,7 @@ bool BlockValidator::checkSignatureList(Block::Ptr _block)
                             << LOG_KV("number", blockHeader->number());
             return false;
         }
-        signatureWeight += nodeInfo->weight();
+        signatureWeight += nodeInfo->voteWeight();
     }
     if (signatureWeight < (size_t)m_config->minRequiredQuorum())
     {

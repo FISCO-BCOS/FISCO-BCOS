@@ -184,15 +184,16 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
         {
             try
             {
+                auto const txHash = m_transaction->hash();
+                auto const from = std::string(m_transaction->sender());
+                auto const to = std::string(m_transaction->to());
                 auto result = m_self->verifyAndSubmitTransaction(
                     std::move(m_transaction), nullptr, true, true);
 
                 if (result != TransactionStatus::None)
                 {
-                    TXPOOL_LOG(DEBUG)
-                        << "Submit transaction failed! "
-                        << LOG_KV("TxHash", m_transaction ? m_transaction->hash().hex() : "")
-                        << LOG_KV("result", result);
+                    TXPOOL_LOG(DEBUG) << "Submit transaction failed! "
+                                      << LOG_KV("TxHash", txHash.hex()) << LOG_KV("result", result);
                     m_submitResult.emplace<Error::Ptr>(
                         BCOS_ERROR_PTR((int32_t)result, bcos::protocol::toString(result)));
                 }
@@ -200,6 +201,9 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
                 {
                     auto res = std::make_shared<TransactionSubmitResultImpl>();
                     res->setStatus(static_cast<uint32_t>(result));
+                    res->setTxHash(txHash);
+                    res->setSender(from);
+                    res->setTo(std::string(to));
                     m_submitResult.emplace<TransactionSubmitResult::Ptr>(std::move(res));
                 }
                 handle.resume();

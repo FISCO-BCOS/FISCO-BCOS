@@ -19,19 +19,11 @@
  */
 
 #pragma once
-#include "../ledger/LedgerTypeDef.h"
-#include "../protocol/Protocol.h"
-#include "../storage/Entry.h"
-#include "../storage/LegacyStorageMethods.h"
-#include "../storage2/Storage.h"
-#include "../transaction-executor/StateKey.h"
-#include "bcos-task/Task.h"
-#include "bcos-tool/Exceptions.h"
+#include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/Ranges.h"
 #include <boost/throw_exception.hpp>
-#include <array>
-#include <bitset>
 #include <magic_enum.hpp>
+#include <utility>
 
 namespace bcos::ledger
 {
@@ -75,8 +67,11 @@ public:
         return get(fromString(config));
     }
 
-    void set(SystemConfig config, std::string value) { m_sysConfigs[config] = value; }
-    void set(std::string_view config, std::string value) { set(fromString(config), value); }
+    void set(SystemConfig config, std::string value) { m_sysConfigs[config] = std::move(value); }
+    void set(std::string_view config, std::string value)
+    {
+        set(fromString(config), std::move(value));
+    }
 
     auto systemConfigs() const
     {
@@ -97,7 +92,7 @@ public:
     }
 
 private:
-    std::unordered_map<SystemConfig, std::optional<std::string>> m_sysConfigs{};
+    std::unordered_map<SystemConfig, std::optional<std::string>> m_sysConfigs;
 };
 
 }  // namespace bcos::ledger

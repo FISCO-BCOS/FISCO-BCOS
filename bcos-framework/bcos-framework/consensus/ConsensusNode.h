@@ -28,19 +28,23 @@ class ConsensusNode : public ConsensusNodeInterface
 {
 public:
     using Ptr = std::shared_ptr<ConsensusNode>;
+    ConsensusNode(const ConsensusNode&) = default;
+    ConsensusNode(ConsensusNode&&) = default;
+    ConsensusNode& operator=(const ConsensusNode&) = default;
+    ConsensusNode& operator=(ConsensusNode&&) = default;
     explicit ConsensusNode(bcos::crypto::PublicPtr _nodeID) : m_nodeID(std::move(_nodeID)) {}
 
-    ConsensusNode(bcos::crypto::PublicPtr _nodeID, uint64_t _weight)
-      : m_nodeID(std::move(_nodeID)), m_weight(_weight)
+    ConsensusNode(bcos::crypto::PublicPtr nodeID, uint64_t voteWeight, uint64_t termWeight)
+      : m_nodeID(std::move(nodeID)), m_voteWeight(voteWeight), m_termWeight(termWeight)
     {}
 
-    ~ConsensusNode() override {}
-
+    ~ConsensusNode() override = default;
     bcos::crypto::PublicPtr nodeID() const override { return m_nodeID; }
-    uint64_t weight() const override { return m_weight; }
+    uint64_t voteWeight() const override { return m_voteWeight; }
+    uint64_t termWeight() const override { return m_termWeight; }
 
-private:
     bcos::crypto::PublicPtr m_nodeID;
-    uint64_t m_weight = 100;
+    uint64_t m_voteWeight = defaultVoteWeight;
+    uint64_t m_termWeight = defaultTermWeight;
 };
 }  // namespace bcos::consensus

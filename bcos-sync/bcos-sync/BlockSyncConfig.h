@@ -30,7 +30,6 @@
 #include <bcos-framework/sync/SyncConfig.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-tool/NodeTimeMaintenance.h>
-#include <bcos-utilities/CallbackCollectionHandler.h>
 
 namespace bcos::sync
 {

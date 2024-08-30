@@ -618,14 +618,14 @@ void txPoolInitAndSubmitWeb3TransactionTest(CryptoSuite::Ptr _cryptoSuite, bool 
         blockData[ledger->blockNumber() - blockLimit + 1]->transaction(0)->nonce();
     auto tx = fakeWeb3Tx(_cryptoSuite, duplicatedNonce, eoaKey);
     // bcos nonce not effect web3 nonce
-    checkTxSubmit(txpool, txpoolStorage, tx, tx->hash(), (uint32_t)TransactionStatus::None,
-        importedTxNum, false, true, true);
+    checkWebTxSubmit(
+        txpool, txpoolStorage, tx, tx->hash(), (uint32_t)TransactionStatus::None, importedTxNum);
 
     duplicatedNonce = "123456";
     tx = fakeWeb3Tx(_cryptoSuite, duplicatedNonce, eoaKey);
     faker->ledger()->initEoaContext(
         eoaKey->address(_cryptoSuite->hashImpl()).hex(), duplicatedNonce);
-    checkTxSubmit(txpool, txpoolStorage, tx, tx->hash(),
+    checkWebTxSubmit(txpool, txpoolStorage, tx, tx->hash(),
         (uint32_t)TransactionStatus::NonceCheckFail, importedTxNum);
 
 
@@ -634,16 +634,16 @@ void txPoolInitAndSubmitWeb3TransactionTest(CryptoSuite::Ptr _cryptoSuite, bool 
     tx = fakeWeb3Tx(_cryptoSuite, fakeNonce, keyPair);
     txpool->txpoolConfig()->txValidator()->web3NonceChecker()->insert(
         std::string(tx->sender()), fakeNonce);
-    checkTxSubmit(txpool, txpoolStorage, tx, tx->hash(),
+    checkWebTxSubmit(txpool, txpoolStorage, tx, tx->hash(),
         (uint32_t)TransactionStatus::NonceCheckFail, importedTxNum);
 
     // case7: submit success
     importedTxNum++;
     tx = fakeWeb3Tx(_cryptoSuite, duplicatedNonce + "1", eoaKey);
-    checkTxSubmit(txpool, txpoolStorage, tx, tx->hash(), (uint32_t)TransactionStatus::None,
-        importedTxNum, false, true, true);
+    checkWebTxSubmit(
+        txpool, txpoolStorage, tx, tx->hash(), (uint32_t)TransactionStatus::None, importedTxNum);
     // case8: submit duplicated tx
-    checkTxSubmit(txpool, txpoolStorage, tx, tx->hash(),
+    checkWebTxSubmit(txpool, txpoolStorage, tx, tx->hash(),
         (uint32_t)TransactionStatus::AlreadyInTxPool, importedTxNum);
 
     // batch import transactions
@@ -665,10 +665,9 @@ void txPoolInitAndSubmitWeb3TransactionTest(CryptoSuite::Ptr _cryptoSuite, bool 
     for (size_t i = 0; i < transactions.size(); i++)
     {
         auto tmpTx = transactions[i];
-        checkTxSubmit(txpool, txpoolStorage, tmpTx, tmpTx->hash(),
-            (uint32_t)TransactionStatus::None, 0, false, true, true);
+        checkWebTxSubmit(txpool, txpoolStorage, tmpTx, tmpTx->hash(),
+            (uint32_t)TransactionStatus::None, ++importedTxNum);
     }
-    importedTxNum += transactions.size();
     auto startT = utcTime();
     while ((txpoolStorage->size() < importedTxNum) && (utcTime() - startT <= 10000))
     {
@@ -681,8 +680,8 @@ void txPoolInitAndSubmitWeb3TransactionTest(CryptoSuite::Ptr _cryptoSuite, bool 
 
     // case9: the txpool is full
     txpoolConfig->setPoolLimit(importedTxNum);
-    checkTxSubmit(txpool, txpoolStorage, tx, tx->hash(), (uint32_t)TransactionStatus::TxPoolIsFull,
-        importedTxNum);
+    checkWebTxSubmit(txpool, txpoolStorage, tx, tx->hash(),
+        (uint32_t)TransactionStatus::TxPoolIsFull, importedTxNum);
 
     // case10: malformed transaction
     bcos::bytes encodedData;
@@ -695,7 +694,7 @@ void txPoolInitAndSubmitWeb3TransactionTest(CryptoSuite::Ptr _cryptoSuite, bool 
     }
     try
     {
-        auto _result = bcos::task::syncWait(txpool->submitTransaction(tx));
+        auto _result = bcos::task::syncWait(txpool->submitTransactionWithoutReceipt(tx));
     }
     catch (bcos::Error& e)
     {
