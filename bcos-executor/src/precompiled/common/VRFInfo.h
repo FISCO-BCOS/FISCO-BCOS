@@ -40,7 +40,7 @@ public:
 
     virtual ~VRFInfo() = default;
     virtual bool verifyProof();
-    bcos::crypto::HashType getHashFromProof();
+    virtual bcos::crypto::HashType getHashFromProof();
     virtual bool isValidVRFPublicKey();
 
     bcos::bytes const& vrfProof() const { return m_vrfProof; }

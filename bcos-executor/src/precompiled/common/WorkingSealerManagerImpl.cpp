@@ -366,8 +366,7 @@ static WorkingSealer pickNodeByWeight(
         [](const NodeWeightRange& range, uint64_t index) { return range.offset < index; });
     assert(nodeIt != nodeWeightRanges.end());
     auto weight =
-        nodeIt->offset -
-        ((nodeWeightRanges.begin() == nodeIt) ? 0LU : nodeIt->offset - (nodeIt - 1)->offset);
+        nodeIt->offset - ((nodeWeightRanges.begin() == nodeIt) ? 0LU : (nodeIt - 1)->offset);
     totalWeight -= weight;
     for (auto it = nodeIt; it != nodeWeightRanges.end(); ++it)
     {

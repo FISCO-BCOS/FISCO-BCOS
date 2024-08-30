@@ -1,4 +1,5 @@
 #include "bcos-crypto/interfaces/crypto/Hash.h"
+#include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
@@ -41,6 +42,7 @@ public:
       : VRFInfo(std::move(vrfProof), std::move(vrfPk), std::move(vrfInput))
     {}
     bool verifyProof() override { return true; }
+    bcos::crypto::HashType getHashFromProof() override { return 75; }
     bool isValidVRFPublicKey() override { return true; }
 };
 
@@ -50,6 +52,7 @@ BOOST_AUTO_TEST_CASE(testRotate)
 
     task::syncWait([this]() -> task::Task<void> {
         precompiled::WorkingSealerManagerImpl workingSealerManager(true);
+        workingSealerManager.m_configuredEpochSealersSize = 2;
 
         std::string node1(64, '1');
         std::string node2(64, '2');
@@ -105,6 +108,14 @@ BOOST_AUTO_TEST_CASE(testRotate)
         auto gotNodeList = gotNodeListEntry->getObject<ledger::ConsensusNodeList>();
 
         BOOST_CHECK_EQUAL(gotNodeList.size(), 4);
+        BOOST_CHECK_EQUAL(gotNodeList[0].nodeID, node1);
+        BOOST_CHECK_EQUAL(gotNodeList[0].type, ledger::CONSENSUS_CANDIDATE_SEALER);
+        BOOST_CHECK_EQUAL(gotNodeList[1].nodeID, node2);
+        BOOST_CHECK_EQUAL(gotNodeList[1].type, ledger::CONSENSUS_SEALER);  // 75 % 100 = 75
+        BOOST_CHECK_EQUAL(gotNodeList[2].nodeID, node3);
+        BOOST_CHECK_EQUAL(gotNodeList[2].type, ledger::CONSENSUS_SEALER);  // 75 % 80 = 75
+        BOOST_CHECK_EQUAL(gotNodeList[3].nodeID, node4);
+        BOOST_CHECK_EQUAL(gotNodeList[3].type, ledger::CONSENSUS_CANDIDATE_SEALER);
     }());
 }
 
