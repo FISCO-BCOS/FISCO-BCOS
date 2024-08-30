@@ -936,7 +936,7 @@ ConsensusNodeListPtr NodeConfig::parseConsensusNodeList(boost::property_tree::pt
         std::string nodeId = nodeInfo[0];
         boost::to_lower(nodeId);
         int64_t voteWeight = 1;
-        int64_t termWeight = 1;
+        int64_t termWeight = 0;
         if (nodeInfo.size() > 1)
         {
             auto& voteWeightInfoStr = nodeInfo[1];

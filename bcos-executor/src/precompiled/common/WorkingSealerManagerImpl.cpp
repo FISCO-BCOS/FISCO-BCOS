@@ -20,6 +20,8 @@
 
 #include "WorkingSealerManagerImpl.h"
 #include <bcos-framework/ledger/LedgerTypeDef.h>
+#include <algorithm>
+#include <range/v3/iterator/operations.hpp>
 
 using namespace bcos;
 using namespace bcos::precompiled;
@@ -27,6 +29,10 @@ using namespace bcos::executor;
 using namespace bcos::crypto;
 using namespace bcos::protocol;
 using namespace bcos::ledger;
+
+bcos::precompiled::WorkingSealerManagerImpl::WorkingSealerManagerImpl(bool withWeight)
+  : m_withWeight(withWeight)
+{}
 
 void WorkingSealerManagerImpl::createVRFInfo(bytes _vrfProof, bytes _vrfPublicKey, bytes _vrfInput)
 {
@@ -84,9 +90,9 @@ void WorkingSealerManagerImpl::rotateWorkingSealer(
         auto workingSealersToRemove =
             selectNodesFromList(m_consensusSealer, removedWorkingSealerNum);
         std::stringstream nodesStr;
-        for (const auto& node : (*workingSealersToRemove))
+        for (const auto& node : workingSealersToRemove)
         {
-            nodesStr << node << ", ";
+            nodesStr << node.nodeID << ", ";
         }
         PRECOMPILED_LOG(INFO) << LOG_DESC("rotateWorkingSealer: rotate workingSealers into sealers")
                               << LOG_KV("rotatedCount", removedWorkingSealerNum)
@@ -96,7 +102,7 @@ void WorkingSealerManagerImpl::rotateWorkingSealer(
 
         // update the node type from workingSealer to sealer
         updateNodeListType(
-            std::move(workingSealersToRemove), std::string(CONSENSUS_CANDIDATE_SEALER), _executive);
+            workingSealersToRemove, std::string(CONSENSUS_CANDIDATE_SEALER), _executive);
     }
 
     if (insertedWorkingSealerNum > 0)
@@ -105,17 +111,16 @@ void WorkingSealerManagerImpl::rotateWorkingSealer(
         auto workingSealersToInsert =
             selectNodesFromList(m_candidateSealer, insertedWorkingSealerNum);
         std::stringstream nodesStr;
-        for (const auto& node : (*workingSealersToInsert))
+        for (const auto& node : workingSealersToInsert)
         {
-            nodesStr << node << ", ";
+            nodesStr << node.nodeID << ", ";
         }
         PRECOMPILED_LOG(INFO) << LOG_DESC("rotateWorkingSealer: rotate sealers into workingSealers")
                               << LOG_KV("rotatedCount", insertedWorkingSealerNum)
                               << LOG_KV("insertNodes", nodesStr.str());
         // Note: Since m_pendingSealerList will not be used afterward,
         //       after updating the node type, it is not updated
-        updateNodeListType(
-            std::move(workingSealersToInsert), std::string(CONSENSUS_SEALER), _executive);
+        updateNodeListType(workingSealersToInsert, std::string(CONSENSUS_SEALER), _executive);
     }
 
     commitConsensusNodeListToStorage(_executive);
@@ -129,9 +134,10 @@ void WorkingSealerManagerImpl::checkVRFInfos(HashType const& parentHash, std::st
     // check origin: the origin must be among the workingSealerList
     if (!m_consensusSealer.empty()) [[likely]]
     {
-        if (!std::any_of(m_consensusSealer.begin(), m_consensusSealer.end(),
-                [&origin](auto const& node) { return covertPublicToHexAddress(node) == origin; }))
-            [[unlikely]]
+        if (!std::any_of(
+                m_consensusSealer.begin(), m_consensusSealer.end(), [&origin](auto const& node) {
+                    return covertPublicToHexAddress(node.nodeID) == origin;
+                })) [[unlikely]]
         {
             PRECOMPILED_LOG(WARNING)
                 << LOG_DESC("Permission denied, must be among the working sealer list!")
@@ -142,9 +148,10 @@ void WorkingSealerManagerImpl::checkVRFInfos(HashType const& parentHash, std::st
     }
     else
     {
-        if (!std::any_of(m_candidateSealer.begin(), m_candidateSealer.end(),
-                [&origin](auto const& node) { return covertPublicToHexAddress(node) == origin; }))
-            [[unlikely]]
+        if (!std::any_of(
+                m_candidateSealer.begin(), m_candidateSealer.end(), [&origin](auto const& node) {
+                    return covertPublicToHexAddress(node.nodeID) == origin;
+                })) [[unlikely]]
         {
             PRECOMPILED_LOG(WARNING)
                 << LOG_DESC("Permission denied, must be among the candidate sealer list!")
@@ -274,13 +281,14 @@ bool WorkingSealerManagerImpl::getConsensusNodeListFromStorage(
             }
             continue;
         }
+
         if (node.type == ledger::CONSENSUS_SEALER)
         {
-            m_consensusSealer.push_back(node.nodeID);
+            m_consensusSealer.emplace_back(node.nodeID, node.termWeight);
         }
-        if (node.type == ledger::CONSENSUS_CANDIDATE_SEALER)
+        else if (node.type == ledger::CONSENSUS_CANDIDATE_SEALER)
         {
-            m_candidateSealer.push_back(node.nodeID);
+            m_candidateSealer.emplace_back(node.nodeID, node.termWeight);
         }
     }
     m_consensusNodes.swap(consensusNodeList);
@@ -347,17 +355,73 @@ std::tuple<uint32_t, uint32_t> WorkingSealerManagerImpl::calNodeRotatingInfo()
     return {insertedWorkingSealerNum, removedWorkingSealerNum};
 }
 
-std::unique_ptr<std::vector<std::string>> WorkingSealerManagerImpl::selectNodesFromList(
-    std::vector<std::string>& _nodeList, uint32_t _selectNum)
+struct NodeWeightRange
 {
-    auto selectedNodeList = std::make_unique<std::vector<std::string>>();
+    const WorkingSealer* sealer;
+    uint64_t offset;
+};
+
+static WorkingSealer pickNodeByWeight(
+    std::vector<NodeWeightRange>& nodeWeightRanges, size_t& totalWeight, const u256& seed)
+{
+    auto index = (seed % totalWeight).convert_to<size_t>();
+    auto nodeIt = std::lower_bound(nodeWeightRanges.begin(), nodeWeightRanges.end(), index,
+        [](const NodeWeightRange& range, uint64_t index) { return index < range.offset; });
+    assert(nodeIt != nodeWeightRanges.end());
+    auto weight =
+        nodeIt->offset -
+        ((nodeWeightRanges.begin() == nodeIt) ? 0LU : nodeIt->offset - (nodeIt - 1)->offset);
+    totalWeight -= weight;
+    for (auto it = nodeIt; it != nodeWeightRanges.end(); ++it)
+    {
+        it->offset -= weight;
+    }
+
+    const auto* sealer = nodeIt->sealer;
+    nodeWeightRanges.erase(nodeIt);
+
+    return *sealer;
+}
+
+static std::vector<WorkingSealer> getNodeListByWeight(
+    const std::vector<WorkingSealer>& nodeList, const u256& seed, size_t count)
+{
+    std::vector<NodeWeightRange> nodeWeightRanges;
+    nodeWeightRanges.reserve(RANGES::size(nodeList));
+
+    size_t totalWeight = 0;
+    for (const auto& node : nodeList)
+    {
+        totalWeight += node.termWeight;
+        nodeWeightRanges.push_back({std::addressof(node), totalWeight});
+    }
+
+    std::vector<WorkingSealer> selectedNodeList;
+    selectedNodeList.reserve(count);
+    for ([[maybe_unused]] auto i : RANGES::views::iota(0LU, count))
+    {
+        selectedNodeList.emplace_back(pickNodeByWeight(nodeWeightRanges, totalWeight, seed));
+    }
+
+    return selectedNodeList;
+}
+
+std::vector<WorkingSealer> WorkingSealerManagerImpl::selectNodesFromList(
+    std::vector<WorkingSealer>& _nodeList, uint32_t _selectNum)
+{
+    std::vector<WorkingSealer> selectedNodeList;
     if (_nodeList.empty()) [[unlikely]]
     {
         return selectedNodeList;
     }
-    std::sort(_nodeList.begin(), _nodeList.end());
-
+    std::sort(_nodeList.begin(), _nodeList.end(),
+        [](auto const& lhs, auto const& rhs) { return lhs.nodeID < rhs.nodeID; });
     auto proofHashValue = u256(m_vrfInfo->getHashFromProof());
+
+    if (m_withWeight)
+    {
+        return getNodeListByWeight(_nodeList, proofHashValue, _selectNum);
+    }
 
     // shuffle _nodeList
     for (auto i = _nodeList.size() - 1; i > 0; i--)
@@ -368,29 +432,42 @@ std::unique_ptr<std::vector<std::string>> WorkingSealerManagerImpl::selectNodesF
         proofHashValue = u256(GlobalHashImpl::g_hashImpl->hash(std::to_string(selectedIdx)));
     }
     // get the selected node list from the shuffled _nodeList
-    selectedNodeList->reserve(_selectNum);
+    selectedNodeList.reserve(_selectNum);
     for (uint32_t i = 0; i < _selectNum; ++i)
     {
-        selectedNodeList->push_back(_nodeList[i]);
+        selectedNodeList.push_back(_nodeList[i]);
     }
     return selectedNodeList;
 }
 
-void WorkingSealerManagerImpl::updateNodeListType(
-    std::unique_ptr<std::vector<std::string>> _nodeList, std::string const& _type,
-    const executor::TransactionExecutive::Ptr& executive)
+void WorkingSealerManagerImpl::updateNodeListType(const std::vector<WorkingSealer>& _nodeList,
+    std::string const& _type, const executor::TransactionExecutive::Ptr& executive)
 {
     auto const& blockContext = executive->blockContext();
 
-    m_consensusChangeFlag = !_nodeList->empty();
-    for (const auto& node : (*_nodeList))
+    m_consensusChangeFlag = !_nodeList.empty();
+    for (const auto& node : _nodeList)
     {
         auto it = std::find_if(m_consensusNodes.begin(), m_consensusNodes.end(),
-            [&node](const ConsensusNode& consensusNode) { return consensusNode.nodeID == node; });
+            [&node](const ConsensusNode& consensusNode) {
+                return consensusNode.nodeID == node.nodeID;
+            });
         if (it != m_consensusNodes.end()) [[likely]]
         {
             it->type = _type;
             it->enableNumber = boost::lexical_cast<std::string>(blockContext.number() + 1);
         }
     }
+}
+
+void bcos::precompiled::WorkingSealerManagerImpl::commitConsensusNodeListToStorage(
+    const executor::TransactionExecutive::Ptr& _executive)
+{
+    if (!m_consensusChangeFlag)
+    {
+        return;
+    }
+    storage::Entry newConsensus;
+    newConsensus.setObject(m_consensusNodes);
+    _executive->storage().setRow(ledger::SYS_CONSENSUS, "key", std::move(newConsensus));
 }

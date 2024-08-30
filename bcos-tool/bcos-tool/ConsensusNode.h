@@ -39,10 +39,10 @@ struct ConsensusNode
         archive & type;
         archive & enableNumber;
 
-        // if (version > 0)
-        // {
-        //     archive & termWeight;
-        // }
+        if (version > 0)
+        {
+            archive & termWeight;
+        }
     }
 };
 
@@ -76,4 +76,4 @@ inline std::string encodeConsensusList(const ConsensusNodeList& consensusList)
 
 }  // namespace bcos::ledger
 
-// BOOST_CLASS_VERSION(bcos::ledger::ConsensusNode, 1)
+BOOST_CLASS_VERSION(bcos::ledger::ConsensusNode, 1)
