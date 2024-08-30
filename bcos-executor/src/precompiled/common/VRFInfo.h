@@ -19,27 +19,29 @@
  */
 
 #pragma once
-#include "bcos-executor/src/executive/BlockContext.h"
-#include "bcos-executor/src/precompiled/common/Common.h"
-#include "bcos-executor/src/vm/Precompiled.h"
-#include <bcos-framework/storage/Table.h>
 
+#include "bcos-crypto/interfaces/crypto/CommonType.h"
+#include "bcos-utilities/Common.h"
 namespace bcos::precompiled
 {
 class VRFInfo
 {
 public:
     using Ptr = std::shared_ptr<VRFInfo>;
+    VRFInfo(const VRFInfo&) = default;
+    VRFInfo(VRFInfo&&) = default;
+    VRFInfo& operator=(const VRFInfo&) = default;
+    VRFInfo& operator=(VRFInfo&&) = default;
     VRFInfo(bcos::bytes _vrfProof, bcos::bytes _vrfPk, bcos::bytes _vrfInput)
       : m_vrfProof(std::move(_vrfProof)),
         m_vrfPublicKey(std::move(_vrfPk)),
         m_vrfInput(std::move(_vrfInput))
     {}
 
-    ~VRFInfo() = default;
-    bool verifyProof();
+    virtual ~VRFInfo() = default;
+    virtual bool verifyProof();
     bcos::crypto::HashType getHashFromProof();
-    bool isValidVRFPublicKey();
+    virtual bool isValidVRFPublicKey();
 
     bcos::bytes const& vrfProof() const { return m_vrfProof; }
     bcos::bytes const& vrfPublicKey() const { return m_vrfPublicKey; }

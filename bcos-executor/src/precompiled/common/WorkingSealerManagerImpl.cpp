@@ -21,7 +21,6 @@
 #include "WorkingSealerManagerImpl.h"
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <algorithm>
-#include <range/v3/iterator/operations.hpp>
 
 using namespace bcos;
 using namespace bcos::precompiled;
@@ -187,8 +186,6 @@ void WorkingSealerManagerImpl::checkVRFInfos(HashType const& parentHash, std::st
 bool WorkingSealerManagerImpl::shouldRotate(const executor::TransactionExecutive::Ptr& _executive)
 {
     auto const& blockContext = _executive->blockContext();
-    auto entry = _executive->storage().getRow(
-        ledger::SYS_CONSENSUS, ledger::INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE);
     m_notifyNextLeaderRotateSet = false;
     m_notifyNextLeaderRotateSet = getNotifyRotateFlag(_executive);
     if (m_notifyNextLeaderRotateSet)
@@ -366,7 +363,7 @@ static WorkingSealer pickNodeByWeight(
 {
     auto index = (seed % totalWeight).convert_to<size_t>();
     auto nodeIt = std::lower_bound(nodeWeightRanges.begin(), nodeWeightRanges.end(), index,
-        [](const NodeWeightRange& range, uint64_t index) { return index < range.offset; });
+        [](const NodeWeightRange& range, uint64_t index) { return range.offset < index; });
     assert(nodeIt != nodeWeightRanges.end());
     auto weight =
         nodeIt->offset -

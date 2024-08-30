@@ -49,7 +49,7 @@ public:
     void rotateWorkingSealer(const executor::TransactionExecutive::Ptr& _executive,
         const PrecompiledExecResult::Ptr& _callParameters);
 
-private:
+    // private:
     void checkVRFInfos(crypto::HashType const& parentHash, std::string const& origin);
     bool shouldRotate(const executor::TransactionExecutive::Ptr& _executive);
     bool getConsensusNodeListFromStorage(const executor::TransactionExecutive::Ptr& _executive);
