@@ -67,9 +67,7 @@ SchedulerImpl::SchedulerImpl(ExecutorManager::Ptr executorManager,
     m_txPool(txPool),
     m_transactionSubmitResultFactory(std::move(transactionSubmitResultFactory)),
     m_hashImpl(std::move(hashImpl)),
-    m_isAuthCheck(isAuthCheck),
     m_isWasm(isWasm),
-    m_isSerialExecute(isSerialExecute),
     m_schedulerTermId(schedulerTermId),
     m_preExeWorker("preExeScheduler", 2),  // assume that preExe is no slower than exe speed/2
     m_exeWorker("exeScheduler", 1)

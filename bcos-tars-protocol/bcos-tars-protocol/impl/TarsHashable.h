@@ -1,4 +1,7 @@
 #pragma once
+#ifdef _WIN32
+#include <tup/Tars.h>
+#endif
 #include "bcos-concepts/ByteBuffer.h"
 #include "bcos-concepts/Hash.h"
 #include "bcos-crypto/hasher/Hasher.h"
