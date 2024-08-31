@@ -412,7 +412,44 @@ inline void checkTxSubmit(TxPoolInterface::Ptr _txpool, TxPoolStorageInterface::
             std::this_thread::sleep_for(std::chrono::milliseconds(2));
         }
     }
-    BOOST_CHECK(_storage->size() == expectedTxSize);
+    BOOST_CHECK_EQUAL(_storage->size(), expectedTxSize);
+}
+
+inline void checkWebTxSubmit(TxPoolInterface::Ptr _txpool, TxPoolStorageInterface::Ptr _storage,
+    Transaction::Ptr _tx, HashType const& _expectedTxHash, uint32_t _expectedStatus,
+    size_t expectedTxSize)
+{
+    auto promise = std::make_unique<std::promise<void>>();
+    auto future = promise->get_future();
+
+    bcos::task::wait([](decltype(_txpool) txpool, decltype(_tx) transaction,
+                         decltype(promise) promise, HashType _expectedTxHash,
+                         uint32_t _expectedStatus) -> bcos::task::Task<void> {
+        try
+        {
+            auto submitResult =
+                co_await txpool->submitTransactionWithoutReceipt(std::move(transaction));
+            if (submitResult->txHash() != _expectedTxHash)
+            {
+                // do something
+                std::cout << "Mismatch!" << std::endl;
+            }
+            BOOST_CHECK_EQUAL(submitResult->txHash(), _expectedTxHash);
+            std::cout << "##### _expectedStatus: " << std::to_string(_expectedStatus) << std::endl;
+            std::cout << "##### receiptStatus:" << std::to_string(submitResult->status())
+                      << std::endl;
+        }
+        catch (std::exception& e)
+        {
+            std::cout << "Submit transaction exception! " << boost::diagnostic_information(e);
+        }
+
+        promise->set_value();
+    }(_txpool, _tx, std::move(promise), _expectedTxHash, _expectedStatus));
+
+    future.get();
+
+    BOOST_CHECK_EQUAL(_storage->size(), expectedTxSize);
 }
 }  // namespace test
 }  // namespace bcos
