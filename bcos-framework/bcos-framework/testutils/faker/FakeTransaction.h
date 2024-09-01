@@ -149,6 +149,34 @@ inline Transaction::Ptr fakeTransaction(CryptoSuite::Ptr _cryptoSuite, const std
     return fakeTransaction(_cryptoSuite, keyPair, std::string_view((char*)_to.data(), _to.size()),
         input, nonce, blockLimit, chainId, groupId);
 }
+
+inline Transaction::Ptr fakeWeb3Tx(CryptoSuite::Ptr _cryptoSuite, std::string nonce,
+    crypto::KeyPairInterface::UniquePtr const& key)
+{
+    bcostars::Transaction transaction;
+
+    transaction.data.to = key->address(_cryptoSuite->hashImpl()).hex();
+    std::string inputStr = "testTransaction";
+    transaction.data.input.assign(inputStr.begin(), inputStr.end());
+    transaction.data.nonce = std::move(nonce);
+    transaction.type = static_cast<tars::Char>(TransactionType::Web3Transacion);
+    std::mt19937 random(std::random_device{}());
+    std::string extraData = "extraData" + std::to_string(random());
+    auto hash = _cryptoSuite->hash(extraData);
+    transaction.extraTransactionBytes.assign(extraData.begin(), extraData.end());
+    transaction.extraTransactionHash.assign(hash.begin(), hash.end());
+    auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
+        [m_transaction = std::move(transaction)]() mutable { return &m_transaction; });
+    // set signature
+    tx->calculateHash(*_cryptoSuite->hashImpl());
+
+    auto signData = _cryptoSuite->signatureImpl()->sign(*key, tx->hash(), true);
+    tx->setSignatureData(*signData);
+    tx->forceSender(key->address(_cryptoSuite->hashImpl()).asBytes());
+    tx->calculateHash(*_cryptoSuite->hashImpl());
+    return tx;
+}
+
 inline TransactionsPtr fakeTransactions(int _size)
 {
     auto hashImpl = std::make_shared<Keccak256>();

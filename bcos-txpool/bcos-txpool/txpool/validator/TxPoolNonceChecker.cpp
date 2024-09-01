@@ -30,19 +30,13 @@ bool TxPoolNonceChecker::exists(NonceType const& _nonce)
     return m_nonces.contains(_nonce);
 }
 
-TransactionStatus TxPoolNonceChecker::checkNonce(Transaction::ConstPtr _tx, bool _shouldUpdate)
+TransactionStatus TxPoolNonceChecker::checkNonce(Transaction::ConstPtr _tx)
 {
     auto nonce = _tx->nonce();
 
     if (m_nonces.contains(nonce))
     {
         return TransactionStatus::NonceCheckFail;
-    }
-
-    if (_shouldUpdate)
-    {
-        NonceSet::WriteAccessor::Ptr accessor;
-        m_nonces.insert(accessor, std::move(nonce));
     }
     return TransactionStatus::None;
 }
