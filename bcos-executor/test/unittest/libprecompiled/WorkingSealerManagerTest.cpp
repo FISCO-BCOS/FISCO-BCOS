@@ -25,16 +25,6 @@ struct WorkingSealerManagerFixture
 
 BOOST_FIXTURE_TEST_SUITE(WorkingSealerManagerTest, WorkingSealerManagerFixture)
 
-class MockBlockExecutive : public executor::TransactionExecutive
-{
-public:
-    MockBlockExecutive(executor::BlockContext& blockContext, std::string contractAddress,
-        int64_t contextID, int64_t seq, const wasm::GasInjector& gasInjector)
-      : executor::TransactionExecutive(
-            blockContext, std::move(contractAddress), contextID, seq, gasInjector)
-    {}
-};
-
 class MockVRFInfo : public precompiled::VRFInfo
 {
 public:
@@ -95,8 +85,8 @@ BOOST_AUTO_TEST_CASE(testRotate)
 
         auto blockContext = std::make_unique<executor::BlockContext>(storageWrapper, nullptr,
             executor::GlobalHashImpl::g_hashImpl, *blockHeader, false, false);
-        auto mockExecutive =
-            std::make_shared<MockBlockExecutive>(*blockContext, "0x0", 0, 0, wasm::GasInjector{});
+        auto mockExecutive = std::make_shared<executor::TransactionExecutive>(
+            *blockContext, "0x0", 0, 0, wasm::GasInjector{});
         auto execResult = std::make_shared<precompiled::PrecompiledExecResult>();
         execResult->m_origin = precompiled::covertPublicToHexAddress(node1);
 

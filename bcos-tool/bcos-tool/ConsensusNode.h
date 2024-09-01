@@ -24,7 +24,6 @@ struct ConsensusNode
         termWeight(_termWeight)
     {}
 
-    friend class boost::serialization::access;
     std::string nodeID;
     u256 voteWeight;
     std::string type;
@@ -47,7 +46,6 @@ struct ConsensusNode
 };
 
 using ConsensusNodeList = std::vector<ConsensusNode>;
-
 inline ConsensusNodeList decodeConsensusList(const std::string_view& value)
 {
     boost::iostreams::stream<boost::iostreams::array_source> inputStream(

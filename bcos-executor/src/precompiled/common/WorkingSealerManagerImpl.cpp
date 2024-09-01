@@ -281,11 +281,11 @@ bool WorkingSealerManagerImpl::getConsensusNodeListFromStorage(
 
         if (node.type == ledger::CONSENSUS_SEALER)
         {
-            m_consensusSealer.emplace_back(node.nodeID, node.termWeight);
+            m_consensusSealer.emplace_back(WorkingSealer{node.nodeID, node.termWeight});
         }
         else if (node.type == ledger::CONSENSUS_CANDIDATE_SEALER)
         {
-            m_candidateSealer.emplace_back(node.nodeID, node.termWeight);
+            m_candidateSealer.emplace_back(WorkingSealer{node.nodeID, node.termWeight});
         }
     }
     m_consensusNodes.swap(consensusNodeList);
