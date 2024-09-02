@@ -18,9 +18,8 @@
  * @date 2021-06-22
  */
 
+#include "bcos-tool/ConsensusNode.h"
 #include "libprecompiled/PreCompiledFixture.h"
-#include "precompiled/ConsensusPrecompiled.h"
-#include "precompiled/SystemConfigPrecompiled.h"
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 
 using namespace bcos;

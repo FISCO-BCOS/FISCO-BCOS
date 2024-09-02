@@ -1,5 +1,4 @@
 #include "bcos-framework/ledger/Features.h"
-#include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "protocol/Protocol.h"
 #include <boost/test/unit_test.hpp>
 
@@ -160,6 +159,7 @@ BOOST_AUTO_TEST_CASE(feature)
         "feature_calculate_gasPrice",
         "feature_evm_address",
         "feature_ethereum_compatible",
+        "feature_rpbft_term_weight",
     };
     // clang-format on
     for (size_t i = 0; i < keys.size(); ++i)

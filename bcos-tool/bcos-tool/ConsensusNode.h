@@ -24,7 +24,6 @@ struct ConsensusNode
         termWeight(_termWeight)
     {}
 
-    friend class boost::serialization::access;
     std::string nodeID;
     u256 voteWeight;
     std::string type;
@@ -39,15 +38,14 @@ struct ConsensusNode
         archive & type;
         archive & enableNumber;
 
-        // if (version > 0)
-        // {
-        //     archive & termWeight;
-        // }
+        if (version > 0)
+        {
+            archive & termWeight;
+        }
     }
 };
 
 using ConsensusNodeList = std::vector<ConsensusNode>;
-
 inline ConsensusNodeList decodeConsensusList(const std::string_view& value)
 {
     boost::iostreams::stream<boost::iostreams::array_source> inputStream(
@@ -76,4 +74,4 @@ inline std::string encodeConsensusList(const ConsensusNodeList& consensusList)
 
 }  // namespace bcos::ledger
 
-// BOOST_CLASS_VERSION(bcos::ledger::ConsensusNode, 1)
+BOOST_CLASS_VERSION(bcos::ledger::ConsensusNode, 1)

@@ -21,11 +21,6 @@
 #pragma once
 #include "../executive/BlockContext.h"
 #include "../vm/Precompiled.h"
-#include "bcos-executor/src/precompiled/common/Common.h"
-#include "common/WorkingSealerManagerImpl.h"
-#include <bcos-framework/storage/Table.h>
-#include <bcos-tool/ConsensusNode.h>
-#include <boost/core/ignore_unused.hpp>
 
 namespace bcos::precompiled
 {
@@ -33,6 +28,11 @@ class ConsensusPrecompiled : public bcos::precompiled::Precompiled
 {
 public:
     using Ptr = std::shared_ptr<ConsensusPrecompiled>;
+    ConsensusPrecompiled(const ConsensusPrecompiled&) = default;
+    ConsensusPrecompiled(ConsensusPrecompiled&&) = default;
+    ConsensusPrecompiled& operator=(const ConsensusPrecompiled&) = default;
+    ConsensusPrecompiled& operator=(ConsensusPrecompiled&&) = default;
+
     explicit ConsensusPrecompiled(crypto::Hash::Ptr _hashImpl);
     ~ConsensusPrecompiled() override = default;
 
@@ -59,7 +59,7 @@ private:
 
     [[nodiscard]] static int setWeight(
         const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& _data,
-        const CodecWrapper& codec);
+        const CodecWrapper& codec, bool setTermWeight);
 
     static void rotateWorkingSealer(
         const std::shared_ptr<executor::TransactionExecutive>& _executive,

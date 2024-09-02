@@ -19,8 +19,10 @@
  */
 
 #include "ConsensusPrecompiled.h"
-#include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
-#include "bcos-executor/src/precompiled/common/Utilities.h"
+#include "bcos-tool/ConsensusNode.h"
+#include "common/PrecompiledResult.h"
+#include "common/Utilities.h"
+#include "common/WorkingSealerManagerImpl.h"
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-framework/protocol/Protocol.h>
@@ -40,7 +42,7 @@ constexpr const char* const CSS_METHOD_ADD_SEALER2 = "addSealer(string,uint256,u
 constexpr const char* const CSS_METHOD_ADD_SER = "addObserver(string)";
 constexpr const char* const CSS_METHOD_REMOVE = "remove(string)";
 constexpr const char* const CSS_METHOD_SET_WEIGHT = "setWeight(string,uint256)";
-constexpr const char* const CSS_METHOD_SET_TERM_WEIGHT = "setWeight(string,uint256)";
+constexpr const char* const CSS_METHOD_SET_TERM_WEIGHT = "setTermWeight(string,uint256)";
 const auto NODE_LENGTH = 128U;
 
 ConsensusPrecompiled::ConsensusPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl)
@@ -50,6 +52,8 @@ ConsensusPrecompiled::ConsensusPrecompiled(crypto::Hash::Ptr _hashImpl) : Precom
     name2Selector[CSS_METHOD_ADD_SER] = getFuncSelector(CSS_METHOD_ADD_SER, _hashImpl);
     name2Selector[CSS_METHOD_REMOVE] = getFuncSelector(CSS_METHOD_REMOVE, _hashImpl);
     name2Selector[CSS_METHOD_SET_WEIGHT] = getFuncSelector(CSS_METHOD_SET_WEIGHT, _hashImpl);
+    name2Selector[CSS_METHOD_SET_TERM_WEIGHT] =
+        getFuncSelector(CSS_METHOD_SET_TERM_WEIGHT, _hashImpl);
     name2Selector[WSM_METHOD_ROTATE_STR] = getFuncSelector(WSM_METHOD_ROTATE_STR, _hashImpl);
 }
 
@@ -103,7 +107,12 @@ std::shared_ptr<PrecompiledExecResult> ConsensusPrecompiled::call(
     else if (func == name2Selector[CSS_METHOD_SET_WEIGHT])
     {
         // setWeight(string,uint256)
-        result = setWeight(_executive, data, codec);
+        result = setWeight(_executive, data, codec, false);
+    }
+    else if (func == name2Selector[CSS_METHOD_SET_TERM_WEIGHT])
+    {
+        // setTermWeight(string,uint256)
+        result = setWeight(_executive, data, codec, true);
     }
     else if (blockContext.features().get(Features::Flag::feature_rpbft) &&
              func == name2Selector[WSM_METHOD_ROTATE_STR])
@@ -122,7 +131,7 @@ std::shared_ptr<PrecompiledExecResult> ConsensusPrecompiled::call(
     return _callParameters;
 }
 
-static int innerAddSealer(bool isConsensus,
+static int addSealerImpl(bool isConsensus,
     const std::shared_ptr<executor::TransactionExecutive>& _executive, std::string nodeID,
     u256 voteWeight, uint64_t termWeight)
 {
@@ -168,14 +177,9 @@ static int innerAddSealer(bool isConsensus,
         {
             // exist
             node->voteWeight = voteWeight;
-            if (blockContext.features().get(Features::Flag::feature_rpbft))
-            {
-                node->type = ledger::CONSENSUS_CANDIDATE_SEALER;
-            }
-            else
-            {
-                node->type = ledger::CONSENSUS_SEALER;
-            }
+            node->type = blockContext.features().get(Features::Flag::feature_rpbft) ?
+                             ledger::CONSENSUS_CANDIDATE_SEALER :
+                             ledger::CONSENSUS_SEALER;
         }
         else
         {
@@ -204,6 +208,7 @@ static int innerAddSealer(bool isConsensus,
                 return CODE_LAST_SEALER;
             }
             node->voteWeight = 0;
+            node->termWeight = 0;
             node->type = ledger::CONSENSUS_OBSERVER;
             node->enableNumber = boost::lexical_cast<std::string>(blockContext.number() + 1);
         }
@@ -234,7 +239,7 @@ int ConsensusPrecompiled::addSealer(
     const auto& blockContext = _executive->blockContext();
     codec.decode(_data, nodeID, voteWeight);
 
-    return innerAddSealer(true, _executive, std::move(nodeID), voteWeight, 0);
+    return addSealerImpl(true, _executive, std::move(nodeID), voteWeight, 0);
 }
 
 int ConsensusPrecompiled::addSealer2(
@@ -248,7 +253,7 @@ int ConsensusPrecompiled::addSealer2(
     const auto& blockContext = _executive->blockContext();
     codec.decode(_data, nodeID, voteWeight, termWeight);
 
-    return innerAddSealer(
+    return addSealerImpl(
         true, _executive, std::move(nodeID), voteWeight, termWeight.convert_to<uint64_t>());
 }
 
@@ -259,7 +264,7 @@ int ConsensusPrecompiled::addObserver(
     // addObserver(string)
     std::string nodeID;
     codec.decode(_data, nodeID);
-    return innerAddSealer(false, _executive, std::move(nodeID), 0, 0);
+    return addSealerImpl(false, _executive, std::move(nodeID), 0, 0);
 }
 
 int ConsensusPrecompiled::removeNode(
@@ -314,7 +319,6 @@ int ConsensusPrecompiled::removeNode(
     }
 
     entry->setObject(consensusList);
-
     storage.setRow(SYS_CONSENSUS, "key", std::move(*entry));
 
     return 0;
@@ -322,7 +326,7 @@ int ConsensusPrecompiled::removeNode(
 
 int ConsensusPrecompiled::setWeight(
     const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& _data,
-    const CodecWrapper& codec)
+    const CodecWrapper& codec, bool setTermWeight)
 {
     // setWeight(string,uint256)
     std::string nodeID;
@@ -339,7 +343,7 @@ int ConsensusPrecompiled::setWeight(
                                << LOG_DESC("nodeID length mistake") << LOG_KV("nodeID", nodeID);
         return CODE_INVALID_NODE_ID;
     }
-    if (weight == 0)
+    if (!setTermWeight && weight == 0)
     {
         // u256 weight must greater then 0
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("weight is 0")
@@ -355,7 +359,6 @@ int ConsensusPrecompiled::setWeight(
     if (entry)
     {
         auto value = entry->getField(0);
-
         consensusList = decodeConsensusList(value);
     }
     auto node = std::find_if(consensusList.begin(), consensusList.end(),
@@ -366,7 +369,14 @@ int ConsensusPrecompiled::setWeight(
         {
             BOOST_THROW_EXCEPTION(protocol::PrecompiledError("Cannot set weight to observer."));
         }
-        node->voteWeight = weight;
+        if (setTermWeight)
+        {
+            node->termWeight = weight.convert_to<uint64_t>();
+        }
+        else
+        {
+            node->voteWeight = weight;
+        }
         node->enableNumber = boost::lexical_cast<std::string>(blockContext.number() + 1);
     }
     else
@@ -375,7 +385,6 @@ int ConsensusPrecompiled::setWeight(
     }
 
     entry->setObject(consensusList);
-
     storage.setRow(SYS_CONSENSUS, "key", std::move(*entry));
 
     return 0;
@@ -393,7 +402,8 @@ void ConsensusPrecompiled::rotateWorkingSealer(
     codec.decode(_callParameters->params(), vrfPublicKey, vrfInput, vrfProof);
     try
     {
-        WorkingSealerManagerImpl sealerManger;
+        WorkingSealerManagerImpl sealerManger(
+            _executive->blockContext().features().get(Features::Flag::feature_rpbft_term_weight));
         sealerManger.createVRFInfo(
             std::move(vrfProof), std::move(vrfPublicKey), std::move(vrfInput));
         sealerManger.rotateWorkingSealer(_executive, _callParameters);

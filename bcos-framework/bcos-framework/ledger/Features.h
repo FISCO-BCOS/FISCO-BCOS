@@ -59,7 +59,8 @@ public:
         feature_evm_cancun,
         feature_calculate_gasPrice,
         feature_evm_address,
-        feature_ethereum_compatible,  // will enable all bugfixes, all features about evm
+        feature_ethereum_compatible,  // will enbale all bugfixes, all features about evm
+        feature_rpbft_term_weight,
     };
 
 private:
