@@ -39,7 +39,7 @@ namespace bcos::rpc
     }
     result["nonce"] = "0x0000000000000000";
     // result["sha3Uncles"] = "0x";
-    // result["logsBloom"] = "0x";
+    result["logsBloom"] = "0x";
     result["transactionsRoot"] = block->blockHeader()->txsRoot().hexPrefixed();
     result["stateRoot"] = block->blockHeader()->stateRoot().hexPrefixed();
     result["receiptsRoot"] = block->blockHeader()->receiptsRoot().hexPrefixed();
@@ -50,7 +50,7 @@ namespace bcos::rpc
     result["size"] = "0xffff";
     result["gasLimit"] = toQuantity(30000000ull);
     result["gasUsed"] = toQuantity((uint64_t)block->blockHeader()->gasUsed());
-    result["timestamp"] = toQuantity(block->blockHeader()->timestamp());
+    result["timestamp"] = toQuantity(block->blockHeader()->timestamp() / 1000);  // to seconds
     if (fullTxs)
     {
         Json::Value txList = Json::arrayValue;

@@ -46,6 +46,7 @@
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include <bcos-framework/executor/ExecuteError.h>
+#include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-tool/BfsFileFactory.h>
 #include <bcos-utilities/Common.h>
 #include <boost/algorithm/hex.hpp>
@@ -105,13 +106,22 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
     {
         if (input->createSalt)
         {
-            newAddress = bcos::newEVMAddress(m_hashImpl, input->senderAddress,
+            newAddress = bcos::newCreate2EVMAddress(m_hashImpl, input->senderAddress,
                 bytesConstRef(input->data.data(), input->data.size()), *(input->createSalt));
         }
         else
         {
-            newAddress =
-                bcos::newEVMAddress(m_hashImpl, m_blockContext.number(), m_contextID, newSeq);
+            // contract create contract
+            if (m_blockContext.features().get(ledger::Features::Flag::feature_evm_address))
+            {
+                auto senderBytes = fromHex(input->senderAddress);
+                newAddress = bcos::newLegacyEVMAddress(ref(senderBytes), input->nonce);
+            }
+            else
+            {
+                newAddress =
+                    bcos::newEVMAddress(m_hashImpl, m_blockContext.number(), m_contextID, newSeq);
+            }
         }
 
         input->receiveAddress = newAddress;
@@ -275,6 +285,32 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
             callParameters->evmStatus = EVMC_SUCCESS;
             // only transfer, not call contract
             return callParameters;
+        }
+    }
+
+    if (!callParameters->staticCall &&
+        m_blockContext.features().get(ledger::Features::Flag::feature_evm_address)) [[unlikely]]
+    {
+        // 如果是EOA发起交易，那么必须要更新nonce;
+        // 如果是合约调用合约，那么只有在create场景下才更新nonce。
+        // If it is an EOA initiating a transaction, the nonce must be updated; if it is a contract
+        // calling a contract, the nonce is updated only in the creation scenario.
+        if ((callParameters->origin == callParameters->senderAddress) ||
+            (callParameters->create && !callParameters->internalCreate))
+        {
+            // TODO)): set nonce here will be better
+            ledger::account::EVMAccount address(
+                *m_blockContext.storage(), callParameters->senderAddress);
+            task::wait([](decltype(address) addr, u256 callNonce) -> task::Task<void> {
+                if (!co_await ledger::account::isExist(addr))
+                {
+                    co_await ledger::account::create(addr);
+                }
+                auto const nonceInStorage = co_await ledger::account::nonce(addr);
+                auto const baseNonce = u256(nonceInStorage.value_or("0"));
+                auto const newNonce = std::max(callNonce, baseNonce) + 1;
+                co_await ledger::account::setNonce(addr, newNonce.convert_to<std::string>());
+            }(std::move(address), callParameters->nonce));
         }
     }
 

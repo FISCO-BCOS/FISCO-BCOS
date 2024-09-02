@@ -42,6 +42,7 @@ struct CallParameters
     bcos::bytes data;  // common field, transaction data, binary format
     std::string abi;   // common field, contract abi, json format
 
+    u256 nonce = 0;  // for create
     // balance
     u256 value = 0;
     u256 gasPrice = 0;

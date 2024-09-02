@@ -299,21 +299,22 @@ public:
                 [&](std::string, Error::Ptr&&) { prewritePromise.set_value(true); }, true,
                 features);
             prewritePromise.get_future().get();
-
-            for (size_t j = 0; j < txSize; ++j)
-            {
-                auto sender = block->transaction(0)->sender();
-                auto eoa = Address(sender, Address::FromBinary).hex();
-
-                task::syncWait(
-                    [](decltype(m_ledger) ledger, decltype(eoa) eoa) -> task::Task<void> {
-                        auto entry = co_await ledger->getStorageAt(
-                            eoa, ledger::ACCOUNT_TABLE_FIELDS::NONCE, 0);
-                        BOOST_CHECK(entry);
-                        auto nonce = std::stoull(std::string(entry->get()));
-                        BOOST_CHECK(nonce > 0);
-                    }(m_ledger, eoa));
-            }
+            // update nonce logic move to executor
+            //            for (size_t j = 0; j < txSize; ++j)
+            //            {
+            //                auto sender = block->transaction(0)->sender();
+            //                auto eoa = Address(sender, Address::FromBinary).hex();
+            //
+            //                task::syncWait(
+            //                    [](decltype(m_ledger) ledger, decltype(eoa) eoa) ->
+            //                    task::Task<void> {
+            //                        auto entry = co_await ledger->getStorageAt(
+            //                            eoa, ledger::ACCOUNT_TABLE_FIELDS::NONCE, 0);
+            //                        BOOST_CHECK(entry);
+            //                        auto nonce = std::stoull(std::string(entry->get()));
+            //                        BOOST_CHECK(nonce > 0);
+            //                    }(m_ledger, eoa));
+            //            }
         }
     }
 
