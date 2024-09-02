@@ -123,6 +123,8 @@ ConfigResult initOriginConfig(const string& _dataPath)
 
     std::shared_ptr<boost::asio::ssl::context> sslContext =
         std::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::tlsv12);
+    SSL_CTX_set_cipher_list(sslContext->native_handle(), "ALL:!ECDHE-ECDSA-DES-CBC3-SHA");
+
 
     std::shared_ptr<EC_KEY> ecdh(
         EC_KEY_new_by_curve_name(NID_secp256k1), [](EC_KEY* p) { EC_KEY_free(p); });
@@ -218,6 +220,8 @@ ConfigResult initChannelCertConfig(const string& _dataPath)
 
     std::shared_ptr<boost::asio::ssl::context> sslContext =
         std::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::tlsv12);
+    SSL_CTX_set_cipher_list(sslContext->native_handle(), "ALL:!ECDHE-ECDSA-DES-CBC3-SHA");
+
 
     sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_none);
 
@@ -365,6 +369,7 @@ ConfigResult initNormalConfig(const boost::property_tree::ptree& pt)
     {
         std::shared_ptr<boost::asio::ssl::context> sslContext =
             std::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::tlsv12);
+        SSL_CTX_set_cipher_list(sslContext->native_handle(), "ALL:!ECDHE-ECDSA-DES-CBC3-SHA");
 
         std::shared_ptr<EC_KEY> ecdh(
             EC_KEY_new_by_curve_name(NID_secp256k1), [](EC_KEY* p) { EC_KEY_free(p); });
@@ -549,6 +554,7 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
 
     std::shared_ptr<boost::asio::ssl::context> sslContext =
         std::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::tlsv12);
+    SSL_CTX_set_cipher_list(sslContext->native_handle(), "ALL:!ECDHE-ECDSA-DES-CBC3-SHA");
 
     INITIALIZER_LOG(INFO) << LOG_BADGE("SecureInitializerGM") << LOG_DESC("get pub of node")
                           << LOG_KV("nodeID", keyPair.pub().hex());
