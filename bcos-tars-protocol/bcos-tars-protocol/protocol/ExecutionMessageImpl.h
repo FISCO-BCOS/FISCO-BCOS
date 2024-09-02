@@ -248,6 +248,11 @@ public:
         m_inner()->hasContractTableChanged = hasChanged;
     }
 
+    // TODO)): should implement web3 nonce logic in max?
+    std::string_view nonceView() const override { throw std::runtime_error("not implemented"); }
+    void setNonce(std::string nonce) override { throw std::runtime_error("not implemented"); }
+    std::string nonce() const override { throw std::runtime_error("not implemented"); }
+
     bcostars::ExecutionMessage inner() const { return *(m_inner()); }
 
 protected:

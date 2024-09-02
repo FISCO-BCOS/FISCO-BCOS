@@ -57,8 +57,9 @@ public:
         feature_balance_policy1,
         feature_paillier_add_raw,
         feature_evm_cancun,
+        feature_calculate_gasPrice,
         feature_evm_address,
-        feature_ethereum_compatible,  // will enbale all bugfixes, all features about evm
+        feature_ethereum_compatible,  // will enable all bugfixes, all features about evm
     };
 
 private:
@@ -122,7 +123,28 @@ public:
 
         validate(flag);
         m_flags[*index] = true;
+        turnOnMainSwitch(flag);
     }
+
+    void turnOnMainSwitch(Flag flag)
+    {
+        const auto mainSwitchDependence = std::unordered_map<Flag, std::set<Flag>>(
+            {{Flag::feature_ethereum_compatible, {
+                                                     Flag::feature_balance,
+                                                     Flag::feature_balance_precompiled,
+                                                     Flag::feature_calculate_gasPrice,
+                                                     Flag::feature_evm_address,
+                                                     Flag::feature_evm_cancun,
+                                                 }}});
+        if (mainSwitchDependence.contains(flag))
+        {
+            for (const auto& dependence : mainSwitchDependence.at(flag))
+            {
+                set(dependence);
+            }
+        }
+    }
+
     void set(std::string_view flag) { set(string2Flag(flag)); }
 
     void setToShardingDefault(protocol::BlockVersion version)

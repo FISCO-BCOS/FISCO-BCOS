@@ -249,16 +249,10 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
         // account must exist
         ledger::account::EVMAccount account(
             *m_executive->storage().getRawStorage(), request->senderAddress);
-        task::wait([](decltype(account) account) -> task::Task<void> {
-            if (auto const nonceString = co_await ledger::account::nonce(account))
-            {
-                auto const nonce = std::stoull(nonceString.value());
-                co_await ledger::account::setNonce(account, std::to_string(nonce + 1));
-            }
-            else
-            {
-                co_await ledger::account::setNonce(account, "1");
-            }
+        request->nonce = task::syncWait([](decltype(account) contract) -> task::Task<u256> {
+            auto const nonceString = co_await ledger::account::nonce(contract);
+            auto const nonce = u256(nonceString.value_or("0"));
+            co_return nonce;
         }(std::move(account)));
     }
 

@@ -228,33 +228,12 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     protocol::NonceList nonceList;
     std::unordered_map<std::string, uint64_t> web3NonceMap{};
     std::unordered_map<std::string, uint64_t> bcosNonceMap{};
-    auto fillNonceMap = [&features, &web3NonceMap, &bcosNonceMap](auto&& tx) {
-        if (features.has_value() && features->get(Features::Flag::feature_evm_address))
-        {
-            auto const sender = Address(tx->sender(), Address::FromBinary).hex();
-            if (tx->type() == protocol::TransactionType::Web3Transacion)
-            {
-                // TODO: check nonce is hex
-                if (auto const nonce = std::stoull(tx->nonce(), nullptr, 16);
-                    web3NonceMap[sender] < nonce)
-                {
-                    web3NonceMap[sender] = nonce;
-                }
-            }
-            else if (tx->type() == protocol::TransactionType::BCOSTransaction)
-            {
-                bcosNonceMap[sender] = bcosNonceMap[sender] + 1;
-            }
-        }
-    };
-
     // get nonce from _blockTxs
     if (_blockTxs)
     {
         for (auto const& tx : *_blockTxs)
         {
             nonceList.emplace_back(tx->nonce());
-            fillNonceMap(tx);
         }
     }
     // get nonce from block txs
@@ -264,17 +243,9 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         {
             auto const& tx = block->transaction(i);
             nonceList.emplace_back(tx->nonce());
-            fillNonceMap(tx);
         }
     }
 
-    if (!web3NonceMap.empty() || !bcosNonceMap.empty()) [[likely]]
-    {
-        task::wait([&](decltype(storage) storage, decltype(web3NonceMap) wnonce,
-                       decltype(bcosNonceMap) bnonce) -> task::Task<void> {
-            co_await batchInsertEoaNonce(std::move(storage), std::move(wnonce), std::move(bnonce));
-        }(storage, std::move(web3NonceMap), std::move(bcosNonceMap)));
-    }
     nonceBlock->setNonceList(nonceList);
     bytes nonceBuffer;
     nonceBlock->encode(nonceBuffer);
@@ -440,15 +411,9 @@ task::Task<void> Ledger::batchInsertEoaNonce(bcos::storage::StorageInterface::Pt
         {
             co_await ledger::account::create(eoa);
         }
-        if (auto nonceInStorage = co_await ledger::account::nonce(eoa))
-        {
-            auto const newNonce = nonce + std::stoull(nonceInStorage.value());
-            co_await ledger::account::setNonce(eoa, std::to_string(newNonce));
-        }
-        else
-        {
-            co_await ledger::account::setNonce(eoa, "1");
-        }
+        auto nonceInStorage = co_await ledger::account::nonce(eoa);
+        auto const newNonce = nonce + std::stoull(nonceInStorage.value_or("0"));
+        co_await ledger::account::setNonce(eoa, std::to_string(newNonce));
     }
 
     co_await bcos::storage2::writeSome(*storage,
@@ -458,7 +423,7 @@ task::Task<void> Ledger::batchInsertEoaNonce(bcos::storage::StorageInterface::Pt
         }),
         RANGES::views::values(eoa2Nonce) | RANGES::views::transform([](auto&& nonce) {
             Entry entry;
-            entry.set(std::to_string(nonce));
+            entry.set(std::to_string(nonce + 1));
             return entry;
         }));
 }

@@ -252,20 +252,20 @@ task::Task<void> EthEndpoint::getTransactionCount(const Json::Value& request, Js
     {
         nonce = std::stoull(std::string(entry.value().get()));
     }
-    else
-    {
-        WEB3_LOG(TRACE) << LOG_DESC("get address nonce failed, return random value by defualt")
-                        << LOG_KV("address", address);
-        static thread_local std::mt19937 generator(std::random_device{}());
-        std::uniform_int_distribution<int> dis(0, 255);
-        std::array<bcos::byte, 8> randomFixedBytes;
-        for (auto& element : randomFixedBytes)
-        {
-            element = dis(generator);
-        }
-        const auto* firstNum = (uint32_t*)randomFixedBytes.data();
-        nonce = *firstNum;
-    }
+    // else
+    // {
+    //     WEB3_LOG(TRACE) << LOG_DESC("get address nonce failed, return random value by defualt")
+    //                     << LOG_KV("address", address);
+    //     static thread_local std::mt19937 generator(std::random_device{}());
+    //     std::uniform_int_distribution<int> dis(0, 255);
+    //     std::array<bcos::byte, 8> randomFixedBytes;
+    //     for (auto& element : randomFixedBytes)
+    //     {
+    //         element = dis(generator);
+    //     }
+    //     const auto* firstNum = (uint32_t*)randomFixedBytes.data();
+    //     nonce = *firstNum;
+    // }
     Json::Value result = toQuantity(nonce);
     buildJsonContent(result, response);
     co_return;

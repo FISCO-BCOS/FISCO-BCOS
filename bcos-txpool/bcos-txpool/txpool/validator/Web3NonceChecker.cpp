@@ -31,9 +31,16 @@ task::Task<TransactionStatus> Web3NonceChecker::checkWeb3Nonce(Transaction::Cons
     auto sender = std::string(_tx->sender());
     auto nonce = u256(_tx->nonce());
 
+    // Note:
+    // 在以太坊中，nonce是从0开始的，也代表着该地址发交易次数。例如：在存储中存储的是5，那么web3工具从rpc
+    // api获取的transactionCount就是5，那么新的交易将从5开始发。
+    // Note: In Ethereum, the nonce starts from 0, which also represents the number of transactions
+    // sent by the address. For example: if 5 is stored in the storage, then the transactionCount
+    // obtained from the rpc api by the web3 tool is 5, then the new transaction will be sent
+    // from 5.
     if (auto const nonceInMem = co_await bcos::storage2::readOne(m_nonces, sender))
     {
-        if (u256(nonceInMem.value()) >= nonce)
+        if (u256(nonceInMem.value()) > nonce)
         {
             co_return TransactionStatus::NonceCheckFail;
         }
@@ -53,7 +60,7 @@ task::Task<TransactionStatus> Web3NonceChecker::checkWeb3Nonce(Transaction::Cons
         auto const nonceInLedger = boost::lexical_cast<u256>(storageState.value().nonce);
         // update memory first
         co_await storage2::writeOne(m_nonces, sender, storageState.value().nonce);
-        if (nonceInLedger >= nonce)
+        if (nonceInLedger > nonce)
         {
             co_return TransactionStatus::NonceCheckFail;
         }
