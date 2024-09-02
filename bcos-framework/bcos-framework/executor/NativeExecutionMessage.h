@@ -64,6 +64,10 @@ public:
         m_effectiveGasPrice = std::move(effectiveGasPrice);
     }
 
+    std::string_view nonceView() const override { return m_nonce; }
+    void setNonce(std::string nonce) override { m_nonce = std::move(nonce); }
+    std::string nonce() const override { return m_nonce; }
+
     int32_t depth() const override { return m_depth; }
     void setDepth(int32_t depth) override { m_depth = depth; }
 
@@ -187,6 +191,7 @@ public:
 
     std::vector<std::string> m_keyLocks;
     std::string m_keyLockAcquired;
+    std::string m_nonce;
 
     int32_t m_status = 0;
     int32_t m_depth = 0;

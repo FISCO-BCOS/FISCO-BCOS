@@ -133,6 +133,7 @@ bcos::protocol::ExecutionMessage::UniquePtr BlockExecutive::buildMessage(
         if (tx->to().empty())
         {
             message->setCreate(true);
+            message->setNonce(std::string(tx->nonce()));
         }
         else
         {

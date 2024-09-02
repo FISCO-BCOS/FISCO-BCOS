@@ -164,6 +164,13 @@ public:
     virtual void setEffectiveGasPrice(std::string effectiveGasPrice) = 0;
 
     // -----------------------------------------------
+    // tx nonce
+    // -----------------------------------------------
+    virtual std::string_view nonceView() const = 0;
+    virtual void setNonce(std::string nonce) = 0;
+    virtual std::string nonce() const = 0;
+
+    // -----------------------------------------------
     // Request / Response common fields
     // -----------------------------------------------
     virtual int64_t gasAvailable() const = 0;

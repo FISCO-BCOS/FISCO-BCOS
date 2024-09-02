@@ -172,14 +172,27 @@ void SerialBlockExecutive::serialExecute(
             if (tx->createSalt())
             {
                 // TODO: Add sender in this process(consider compat with ethereum)
-                tx->setTo(bcos::newEVMAddress(
+                tx->setTo(bcos::newCreate2EVMAddress(
                     m_scheduler->getHashImpl(), tx->from(), tx->data(), *(tx->createSalt())));
             }
             else
             {
-                // TODO: Add sender in this process(consider compat with ethereum)
-                tx->setTo(bcos::newEVMAddress(m_scheduler->getHashImpl(),
-                    m_block->blockHeaderConst()->number(), tx->contextID(), newSeq));
+                std::string address;
+                if (m_scheduler->ledgerConfig().features().get(
+                        ledger::Features::Flag::feature_evm_address))
+                {
+                    // EOA create contract
+                    auto const sender = tx->origin();
+                    Address senderAddress(sender, Address::FromHex);
+                    address = bcos::newLegacyEVMAddress(senderAddress.ref(), tx->nonce());
+                }
+                else
+                {
+                    address = bcos::newEVMAddress(m_scheduler->getHashImpl(),
+                        m_block->blockHeaderConst()->number(), tx->contextID(), newSeq);
+                }
+
+                tx->setTo(std::move(address));
             }
         }
 

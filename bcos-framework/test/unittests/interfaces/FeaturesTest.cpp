@@ -157,6 +157,7 @@ BOOST_AUTO_TEST_CASE(feature)
         "feature_balance_policy1",
         "feature_paillier_add_raw",
         "feature_evm_cancun",
+        "feature_calculate_gasPrice",
         "feature_evm_address",
         "feature_ethereum_compatible",
     };

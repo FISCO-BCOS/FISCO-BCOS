@@ -30,6 +30,10 @@ void Web3JsonRpcImpl::onRPCRequest(std::string_view _requestBody, Sender _sender
     Json::Value response;
     try
     {
+        if (c_fileLogLevel == TRACE) [[unlikely]]
+        {
+            WEB3_LOG(TRACE) << LOG_BADGE("onRPCRequest") << LOG_KV("request", _requestBody);
+        }
         if (auto const& [valid, msg] = parseRequestAndValidate(_requestBody, request); !valid)
         {
             BOOST_THROW_EXCEPTION(JsonRpcException(InvalidRequest, msg));
@@ -99,9 +103,19 @@ void Web3JsonRpcImpl::onRPCRequest(std::string_view _requestBody, Sender _sender
 std::tuple<bool, std::string> Web3JsonRpcImpl::parseRequestAndValidate(
     std::string_view request, Json::Value& root)
 {
-    if (Json::Reader jsonReader; !jsonReader.parse(request.begin(), request.end(), root))
+    Json::Value temp;
+    if (Json::Reader jsonReader; !jsonReader.parse(request.begin(), request.end(), temp))
     {
         return {false, "Parse json failed"};
+    }
+    if (temp.isArray())
+    {
+        // adapt to the jsonrpc standard blockscout
+        root = std::move(temp[0]);
+    }
+    else
+    {
+        root = std::move(temp);
     }
     if (auto result{JsonValidator::validate(root)}; !std::get<bool>(result))
     {
