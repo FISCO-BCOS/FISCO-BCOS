@@ -51,7 +51,7 @@ public:
     bcos::protocol::TransactionStatus checkTxpoolNonce(
         bcos::protocol::Transaction::ConstPtr _tx) override;
     bcos::protocol::TransactionStatus checkWeb3Nonce(
-        bcos::protocol::Transaction::ConstPtr _tx) override;
+        bcos::protocol::Transaction::ConstPtr _tx, bool onlyCheckLedgerNonce = false) override;
 
     Web3NonceChecker::Ptr web3NonceChecker() override { return m_web3NonceChecker; }
 

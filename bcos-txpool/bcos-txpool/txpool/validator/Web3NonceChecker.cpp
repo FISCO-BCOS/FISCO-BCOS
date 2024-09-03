@@ -20,12 +20,14 @@
 
 #include "Web3NonceChecker.h"
 #include <bcos-framework/storage2/Storage.h>
+#include <utilities/Common.h>
 
 using namespace bcos;
 using namespace bcos::txpool;
 using namespace bcos::protocol;
 
-task::Task<TransactionStatus> Web3NonceChecker::checkWeb3Nonce(Transaction::ConstPtr _tx)
+task::Task<TransactionStatus> Web3NonceChecker::checkWeb3Nonce(
+    Transaction::ConstPtr _tx, bool onlyCheckLedgerNonce)
 {
     // sender is bytes view
     auto sender = std::string(_tx->sender());
@@ -38,47 +40,94 @@ task::Task<TransactionStatus> Web3NonceChecker::checkWeb3Nonce(Transaction::Cons
     // sent by the address. For example: if 5 is stored in the storage, then the transactionCount
     // obtained from the rpc api by the web3 tool is 5, then the new transaction will be sent
     // from 5.
-    if (auto const nonceInMem = co_await bcos::storage2::readOne(m_nonces, sender))
+    if (!onlyCheckLedgerNonce)
     {
-        if (u256(nonceInMem.value()) > nonce)
+        if (auto const nonceInMem = co_await bcos::storage2::readOne(m_memoryNonces, sender))
+        {
+            if (auto nonceInMemValue = nonceInMem.value();
+                nonce <= nonceInMemValue ||
+                nonce > nonceInMemValue + DEFAULT_WEB3_NONCE_CHECK_LIMIT)
+            {
+                co_return TransactionStatus::NonceCheckFail;
+            }
+            else
+            {
+                // update memory if nonce bigger than memory's
+                co_await storage2::writeOne(m_memoryNonces, sender, nonce);
+                co_return TransactionStatus::None;
+            }
+        }
+    }
+    if (auto const nonceInLedger = co_await bcos::storage2::readOne(m_ledgerStateNonces, sender))
+    {
+        if (auto nonceInLedgerValue = nonceInLedger.value();
+            nonce < nonceInLedgerValue ||
+            nonce > nonceInLedgerValue + DEFAULT_WEB3_NONCE_CHECK_LIMIT)
         {
             co_return TransactionStatus::NonceCheckFail;
         }
-        // else
-        // {
-        //     // update memory if nonce bigger than memory's
-        //     co_await storage2::writeOne(m_nonces, sender, nonce);
-        //     co_return TransactionStatus::None;
-        // }
+        else
+        {
+            // update memory if nonce bigger than memory's
+            co_await storage2::writeOne(m_memoryNonces, sender, nonce);
+            co_return TransactionStatus::None;
+        }
     }
-    // not in memory, check from ledger
+    // not in ledger memory, check from storage
     // TODO)): block number not use nowadays
     auto const senderHex = toHex(sender);
     auto const storageState = co_await m_ledger->getStorageState(senderHex, 0);
     if (storageState.has_value())
     {
-        auto const nonceInLedger = boost::lexical_cast<u256>(storageState.value().nonce);
+        auto const nonceInStorage = u256(storageState.value().nonce);
         // update memory first
-        co_await storage2::writeOne(m_nonces, sender, storageState.value().nonce);
-        if (nonceInLedger > nonce)
+        co_await storage2::writeOne(m_ledgerStateNonces, sender, nonceInStorage);
+        if (nonce < nonceInStorage || nonce > nonceInStorage + DEFAULT_WEB3_NONCE_CHECK_LIMIT)
         {
             co_return TransactionStatus::NonceCheckFail;
         }
     }
+    co_await storage2::writeOne(m_memoryNonces, sender, nonce);
     // TODO)): check balance？
-    // 在这里仍然不更新内存，因为这个nonce可能是未来的nonce。会在未来交易落盘时再更新。
-    // Still not update memory here, because this nonce may be the nonce in the future. Will update
-    // when the transaction is written to the disk in the future.
     co_return TransactionStatus::None;
 }
+
+void Web3NonceChecker::batchRemoveMemoryNonce(std::unordered_map<std::string, u256> _nonceMap)
+{
+    for (auto const& [sender, nonce] : _nonceMap)
+    {
+        auto const nonceInMem = task::syncWait(storage2::readOne(m_memoryNonces, sender));
+        if (nonceInMem.has_value())
+        {
+            // 假设交易池里有0xabcd的3笔交易，nonce分别是5，7，9。那么此时memory记录的nonce为9。
+            // 1. 如果nonce为9的交易先被打包进区块，那么交易池中nonce为5和7的交易就会被移除。ledger
+            // state nonce将会更新到9，此时按照ledger state nonce为准。
+            // 2. 如果nonce为7的交易先被打包进区块，那么交易池中nonce为5的交易就会被移除。ledger
+            // state nonce将会更新到7, 此时仍然以memory nonce为准。
+            // Suppose there are 3 transactions with nonce 5, 7, 9 in the transaction pool with
+            // 0xabcd. At this time, the nonce recorded in memory is 9.
+            // 1. If the transaction with nonce 9 is packaged into a block first, the transactions
+            // with nonce 5 and 7 in the transaction pool will be removed. The ledger state nonce
+            // will be updated to 9, and the ledger state nonce will be followed at this time.
+            // 2. If the transaction with nonce 7 is packaged into a block first, the transaction
+            // with nonce 5 in the transaction pool will be removed. The ledger state nonce will be
+            // updated to 7, and the memory nonce will still be followed at this time.
+            if (u256(nonceInMem.value()) > nonce)
+            {
+                task::wait(storage2::removeOne(m_memoryNonces, sender));
+            }
+        }
+    }
+}
+
 
 void Web3NonceChecker::batchInsert(
     RANGES::input_range auto&& senders, RANGES::input_range auto&& nonces)
 {
-    task::wait(storage2::writeSome(m_nonces, senders, nonces));
+    task::wait(storage2::writeSome(m_ledgerStateNonces, senders, nonces));
 }
 
-void Web3NonceChecker::insert(std::string sender, std::string nonce)
+void Web3NonceChecker::insert(std::string sender, u256 nonce)
 {
-    task::wait(storage2::writeOne(m_nonces, sender, nonce));
+    task::wait(storage2::writeOne(m_ledgerStateNonces, sender, nonce));
 }

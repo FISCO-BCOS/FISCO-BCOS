@@ -68,7 +68,7 @@ bcos::protocol::TransactionStatus TxValidator::checkTransaction(
 {
     if (_tx->type() == static_cast<uint8_t>(TransactionType::Web3Transacion)) [[unlikely]]
     {
-        auto const status = checkWeb3Nonce(_tx);
+        auto const status = checkWeb3Nonce(_tx, onlyCheckLedgerNonce);
         if (status != TransactionStatus::None)
         {
             return status;
@@ -113,11 +113,11 @@ TransactionStatus TxValidator::checkTxpoolNonce(bcos::protocol::Transaction::Con
 }
 
 bcos::protocol::TransactionStatus TxValidator::checkWeb3Nonce(
-    bcos::protocol::Transaction::ConstPtr _tx)
+    bcos::protocol::Transaction::ConstPtr _tx, bool onlyCheckLedgerNonce)
 {
     if (_tx->type() != static_cast<uint8_t>(TransactionType::Web3Transacion)) [[likely]]
     {
         return TransactionStatus::None;
     }
-    return task::syncWait(m_web3NonceChecker->checkWeb3Nonce(std::move(_tx)));
+    return task::syncWait(m_web3NonceChecker->checkWeb3Nonce(std::move(_tx), onlyCheckLedgerNonce));
 }
