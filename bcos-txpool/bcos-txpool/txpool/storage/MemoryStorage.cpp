@@ -670,7 +670,7 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
     // update the ledger nonce
 
     auto nonceListPtr = std::make_shared<NonceList>();
-    std::unordered_map<std::string, std::string> web3NonceMap;
+    std::unordered_map<std::string, u256> web3NonceMap;
     for (auto&& [_, txPair] : results)
     {
         auto const& [tx, txResult] = txPair;
@@ -678,7 +678,7 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
         {
             if (tx->type() == TransactionType::Web3Transacion) [[unlikely]]
             {
-                web3NonceMap[std::string(tx->sender())] = tx->nonce();
+                web3NonceMap[std::string(tx->sender())] = u256(tx->nonce());
             }
             else
             {
@@ -940,10 +940,22 @@ void MemoryStorage::removeInvalidTxs(bool lock)
             txs2Remove.emplace(txHash, std::move(tx));
         });
 
-        auto invalidNonceList =
-            txs2Remove | RANGES::views::values |
-            RANGES::views::transform([](auto const& tx2Remove) { return tx2Remove->nonce(); });
-        m_config->txPoolNonceChecker()->batchRemove(invalidNonceList | RANGES::to_vector);
+        bcos::protocol::NonceList invalidNonceList = {};
+        std::unordered_map<std::string, u256> web3NonceMap;
+        for (auto const& [_, tx] : txs2Remove)
+        {
+            if (tx->type() == TransactionType::BCOSTransaction) [[likely]]
+            {
+                invalidNonceList.emplace_back(tx->nonce());
+            }
+            else if (tx->type() == TransactionType::Web3Transacion) [[unlikely]]
+            {
+                web3NonceMap[std::string(tx->sender())] = u256(tx->nonce());
+            }
+        }
+        m_config->txPoolNonceChecker()->batchRemove(invalidNonceList);
+        m_config->txValidator()->web3NonceChecker()->batchRemoveMemoryNonce(
+            std::move(web3NonceMap));
 
         /*
         m_txsTable.batchRemove(txs2Remove | RANGES::views::keys,

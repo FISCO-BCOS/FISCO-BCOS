@@ -594,7 +594,6 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
 void txPoolInitAndSubmitWeb3TransactionTest(CryptoSuite::Ptr _cryptoSuite, bool multiTx = false)
 {
     auto signatureImpl = _cryptoSuite->signatureImpl();
-    auto hashImpl = _cryptoSuite->hashImpl();
     auto keyPair = signatureImpl->generateKeyPair();
     std::string groupId = "group_test_for_txpool";
     std::string chainId = "chain_test_for_txpool";
@@ -621,31 +620,39 @@ void txPoolInitAndSubmitWeb3TransactionTest(CryptoSuite::Ptr _cryptoSuite, bool 
     checkWebTxSubmit(
         txpool, txpoolStorage, tx, tx->hash(), (uint32_t)TransactionStatus::None, importedTxNum);
 
-    duplicatedNonce = "123456";
-    tx = fakeWeb3Tx(_cryptoSuite, duplicatedNonce, eoaKey);
+    u256 fakeNonce = u256(duplicatedNonce);
     faker->ledger()->initEoaContext(
-        eoaKey->address(_cryptoSuite->hashImpl()).hex(), duplicatedNonce);
-    checkWebTxSubmit(txpool, txpoolStorage, tx, tx->hash(),
+        eoaKey->address(_cryptoSuite->hashImpl()).hex(), fakeNonce.convert_to<std::string>());
+    // ledger update to fakeNonce, tx do not clean
+    std::this_thread::sleep_for(std::chrono::milliseconds(TXPOOL_CLEANUP_TIME));
+    BOOST_CHECK_EQUAL(txpoolStorage->size(), importedTxNum);
+
+    // new nonce, submit success
+    ++fakeNonce;
+    tx = fakeWeb3Tx(_cryptoSuite, fakeNonce.convert_to<std::string>(), eoaKey);
+    importedTxNum++;
+    checkWebTxSubmit(
+        txpool, txpoolStorage, tx, tx->hash(), (uint32_t)TransactionStatus::None, importedTxNum);
+    // duplicated tx, submit failed
+    auto duplicate_tx = fakeWeb3Tx(_cryptoSuite, fakeNonce.convert_to<std::string>(), eoaKey);
+    checkWebTxSubmit(txpool, txpoolStorage, duplicate_tx, duplicate_tx->hash(),
         (uint32_t)TransactionStatus::NonceCheckFail, importedTxNum);
 
-
-    // case: nonce store in memory
-    std::string fakeNonce = "123457";
-    tx = fakeWeb3Tx(_cryptoSuite, fakeNonce, keyPair);
-    txpool->txpoolConfig()->txValidator()->web3NonceChecker()->insert(
-        std::string(tx->sender()), fakeNonce);
-    checkWebTxSubmit(txpool, txpoolStorage, tx, tx->hash(),
-        (uint32_t)TransactionStatus::NonceCheckFail, importedTxNum);
-
+    ++fakeNonce;
     // case7: submit success
     importedTxNum++;
-    tx = fakeWeb3Tx(_cryptoSuite, duplicatedNonce + "1", eoaKey);
+    tx = fakeWeb3Tx(_cryptoSuite, fakeNonce.convert_to<std::string>(), eoaKey);
     checkWebTxSubmit(
         txpool, txpoolStorage, tx, tx->hash(), (uint32_t)TransactionStatus::None, importedTxNum);
     // case8: submit duplicated tx
     checkWebTxSubmit(txpool, txpoolStorage, tx, tx->hash(),
         (uint32_t)TransactionStatus::AlreadyInTxPool, importedTxNum);
 
+    // too big nonce
+    tx = fakeWeb3Tx(_cryptoSuite,
+        (fakeNonce + DEFAULT_WEB3_NONCE_CHECK_LIMIT + 1).convert_to<std::string>(), eoaKey);
+    checkWebTxSubmit(txpool, txpoolStorage, tx, tx->hash(),
+        (uint32_t)TransactionStatus::NonceCheckFail, importedTxNum);
     // batch import transactions
 
     Transactions transactions;
@@ -656,9 +663,10 @@ void txPoolInitAndSubmitWeb3TransactionTest(CryptoSuite::Ptr _cryptoSuite, bool 
         transactions.push_back(tmpTx);
     }
 
+    ++fakeNonce;
     for (auto i = 0; i < 40; i++)
     {
-        auto tmpTx = fakeWeb3Tx(_cryptoSuite, duplicatedNonce + "1" + std::to_string(i), eoaKey);
+        auto tmpTx = fakeWeb3Tx(_cryptoSuite, (fakeNonce + i).convert_to<std::string>(), eoaKey);
         transactions.push_back(tmpTx);
     }
 
@@ -694,7 +702,7 @@ void txPoolInitAndSubmitWeb3TransactionTest(CryptoSuite::Ptr _cryptoSuite, bool 
     }
     try
     {
-        auto _result = bcos::task::syncWait(txpool->submitTransactionWithoutReceipt(tx));
+        bcos::task::syncWait(txpool->submitTransactionWithoutReceipt(tx));
     }
     catch (bcos::Error& e)
     {
@@ -708,8 +716,8 @@ void txPoolInitAndSubmitWeb3TransactionTest(CryptoSuite::Ptr _cryptoSuite, bool 
     testAsyncFillBlock(faker, txpool, txpoolStorage, _cryptoSuite);
     std::cout << "#### testAsyncSealTxs" << std::endl;
     testAsyncSealTxs(faker, txpool, txpoolStorage, blockLimit, _cryptoSuite, [&]() {
-        faker->ledger()->initEoaContext(
-            eoaKey->address(_cryptoSuite->hashImpl()).hex(), "9999999999999999");
+        txpool->txpoolConfig()->txValidator()->web3NonceChecker()->insert(
+            std::string(tx->sender()), u256("0xffffffffffffffffffffffffff"));
     });
     // clear all the txs before exit
     txpool->txpoolStorage()->clear();
@@ -737,8 +745,7 @@ BOOST_AUTO_TEST_CASE(testWeb3Tx)
     auto hashImpl = std::make_shared<Keccak256>();
     auto signatureImpl = std::make_shared<Secp256k1Crypto>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
-    // FIXME)): fix memory txpool anti-duplication
-    // txPoolInitAndSubmitWeb3TransactionTest(cryptoSuite);
+    txPoolInitAndSubmitWeb3TransactionTest(cryptoSuite);
 }
 
 BOOST_AUTO_TEST_CASE(fillWithSubmit)

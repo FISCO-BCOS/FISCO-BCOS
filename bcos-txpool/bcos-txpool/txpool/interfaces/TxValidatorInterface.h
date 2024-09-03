@@ -41,7 +41,7 @@ public:
     virtual bcos::protocol::TransactionStatus checkTxpoolNonce(
         bcos::protocol::Transaction::ConstPtr _tx) = 0;
     virtual bcos::protocol::TransactionStatus checkWeb3Nonce(
-        bcos::protocol::Transaction::ConstPtr _tx) = 0;
+        bcos::protocol::Transaction::ConstPtr _tx, bool onlyCheckLedgerNonce = false) = 0;
     virtual LedgerNonceChecker::Ptr ledgerNonceChecker() = 0;
     virtual Web3NonceChecker::Ptr web3NonceChecker() = 0;
     virtual void setLedgerNonceChecker(LedgerNonceChecker::Ptr _ledgerNonceChecker) = 0;
