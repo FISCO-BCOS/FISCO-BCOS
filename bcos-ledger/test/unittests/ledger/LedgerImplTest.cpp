@@ -1,4 +1,4 @@
-#include "bcos-ledger/src/libledger/LedgerImpl.h"
+#include "bcos-ledger/LedgerImpl.h"
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-concepts/Serialize.h>
 #include <bcos-concepts/ledger/Ledger.h>
@@ -61,7 +61,7 @@ struct MockMemoryStorage : bcos::concepts::storage::StorageBase<MockMemoryStorag
 {
     MockMemoryStorage(
         std::map<std::tuple<std::string, std::string>, bcos::storage::Entry, std::less<>>& data1)
-      : bcos::concepts::storage::StorageBase<MockMemoryStorage>(), data(data1) {};
+      : bcos::concepts::storage::StorageBase<MockMemoryStorage>(), data(data1){};
 
     std::optional<bcos::storage::Entry> impl_getRow(std::string_view table, std::string_view key)
     {

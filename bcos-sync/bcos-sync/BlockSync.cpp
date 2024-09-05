@@ -22,10 +22,10 @@
 #include "bcos-framework/ledger/GenesisConfig.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
-#include "bcos-framework/ledger/LedgerMethods.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/CommonError.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
+#include "bcos-ledger/LedgerMethods.h"
 #include <json/json.h>
 #include <boost/bind/bind.hpp>
 #include <string>

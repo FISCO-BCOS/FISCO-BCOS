@@ -21,20 +21,20 @@
  * @date 2021-09-07
  */
 
-#include "bcos-ledger/src/libledger/Ledger.h"
+#include "bcos-ledger/Ledger.h"
 #include "../../mock/MockKeyFactor.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include "bcos-crypto/merkle/Merkle.h"
 #include "bcos-framework/ledger/GenesisConfig.h"
 #include "bcos-framework/ledger/Ledger.h"
-#include "bcos-framework/ledger/LedgerMethods.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
+#include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Wait.h"
 #include "bcos-tool/BfsFileFactory.h"
 #include "bcos-tool/ConsensusNode.h"

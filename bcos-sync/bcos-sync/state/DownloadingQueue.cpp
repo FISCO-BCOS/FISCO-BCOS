@@ -20,7 +20,7 @@
  */
 #include "DownloadingQueue.h"
 #include "bcos-framework/ledger/Ledger.h"
-#include "bcos-framework/ledger/LedgerMethods.h"
+#include "bcos-ledger/LedgerMethods.h"
 #include "bcos-sync/utilities/Common.h"
 #include "bcos-task/Wait.h"
 #include <bcos-framework/dispatcher/SchedulerTypeDef.h>

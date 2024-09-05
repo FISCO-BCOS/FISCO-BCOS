@@ -28,7 +28,7 @@
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/protocol/ServiceDesc.h>
-#include <bcos-ledger/src/libledger/Ledger.h>
+#include <bcos-ledger/Ledger.h>
 #include <bcos-table/src/StateStorageFactory.h>
 #include <bcos-tars-protocol/client/SchedulerServiceClient.h>
 #include <bcos-tars-protocol/client/TxPoolServiceClient.h>

@@ -35,12 +35,6 @@ if (TESTS)
     add_subdirectory(test)
 endif()
 
-# for code coverage
-#if (COVERAGE)
-#    include(Coverage)
-#    config_coverage("framework-cov" "'/usr*' '${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts*' '${CMAKE_CURRENT_SOURCE_DIR}/test/bcos-test*'")
-#endif ()
-
 include(GNUInstallDirs)
 install(TARGETS bcos-framework EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
 install(DIRECTORY "bcos-framework" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}" FILES_MATCHING PATTERN "*.h")
