@@ -29,7 +29,7 @@
 #include "libinitializer/StorageInitializer.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/protocol/ServiceDesc.h>
-#include <bcos-ledger/src/libledger/Ledger.h>
+#include <bcos-ledger/Ledger.h>
 #include <bcos-scheduler/src/SchedulerImpl.h>
 #include <bcos-tars-protocol/client/RpcServiceClient.h>
 #include <bcos-tars-protocol/client/TxPoolServiceClient.h>

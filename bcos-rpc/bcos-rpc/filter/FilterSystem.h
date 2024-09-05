@@ -1,5 +1,5 @@
 #pragma once
-#include "bcos-framework/ledger/LedgerMethods.h"
+#include "bcos-ledger/LedgerMethods.h"
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-rpc/filter/Filter.h>
 #include <bcos-rpc/filter/LogMatcher.h>

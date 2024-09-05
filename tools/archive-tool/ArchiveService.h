@@ -23,7 +23,7 @@
 #include "bcos-boostssl/httpserver/HttpStream.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
-#include "bcos-ledger/src/libledger/Ledger.h"
+#include "bcos-ledger/Ledger.h"
 #include "bcos-rpc/jsonrpc/Common.h"
 #include "bcos-rpc/jsonrpc/JsonRpcInterface.h"
 #include <bcos-framework/storage/StorageInterface.h>

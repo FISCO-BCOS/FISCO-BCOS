@@ -20,8 +20,8 @@
  */
 #include "TxPool.h"
 #include "bcos-framework/ledger/Ledger.h"
-#include "bcos-framework/ledger/LedgerMethods.h"
 #include "bcos-front/FrontService.h"
+#include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Error.h"
 #include "txpool/validator/LedgerNonceChecker.h"

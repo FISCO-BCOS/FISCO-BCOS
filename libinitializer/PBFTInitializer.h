@@ -32,7 +32,7 @@
 #include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-framework/sync/BlockSyncInterface.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
-#include <bcos-ledger/src/libledger/Ledger.h>
+#include <bcos-ledger/Ledger.h>
 #include <bcos-tool/NodeTimeMaintenance.h>
 
 namespace bcos

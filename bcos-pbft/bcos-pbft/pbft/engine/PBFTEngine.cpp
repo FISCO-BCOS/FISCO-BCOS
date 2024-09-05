@@ -22,7 +22,7 @@
 #include "../cache/PBFTCacheFactory.h"
 #include "../cache/PBFTCacheProcessor.h"
 #include "bcos-framework/ledger/Ledger.h"
-#include "bcos-framework/ledger/LedgerMethods.h"
+#include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"

@@ -1,4 +1,4 @@
-#include "bcos-framework/ledger/LedgerMethods.h"
+#include "LedgerMethods.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-tool/VersionConverter.h"
 #include <bcos-executor/src/Common.h>
