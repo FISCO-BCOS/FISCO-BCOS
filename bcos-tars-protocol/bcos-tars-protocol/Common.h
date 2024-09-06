@@ -20,6 +20,7 @@
 
 #pragma once
 // if windows, manual include tup/Tars.h first
+#include "bcos-framework/consensus/ConsensusNodeInterface.h"
 #ifdef _WIN32
 #include <tup/Tars.h>
 #endif
@@ -229,8 +230,8 @@ inline bcostars::GroupInfo toTarsGroupInfo(bcos::group::GroupInfo::Ptr _groupInf
 }
 
 inline bcos::consensus::ConsensusNodeListPtr toConsensusNodeList(
-    bcos::crypto::KeyFactory::Ptr _keyFactory,
-    vector<bcostars::ConsensusNode> const& _tarsConsensusNodeList)
+    bcos::crypto::KeyFactory::Ptr _keyFactory, bcos::consensus::ConsensusNodeInterface::Type type,
+    const vector<bcostars::ConsensusNode>& _tarsConsensusNodeList)
 {
     auto consensusNodeList = std::make_shared<bcos::consensus::ConsensusNodeList>();
     for (auto const& node : _tarsConsensusNodeList)
@@ -238,7 +239,7 @@ inline bcos::consensus::ConsensusNodeListPtr toConsensusNodeList(
         auto nodeID = _keyFactory->createKey(
             bcos::bytesConstRef((bcos::byte*)node.nodeID.data(), node.nodeID.size()));
         consensusNodeList->push_back(std::make_shared<bcos::consensus::ConsensusNode>(
-            nodeID, node.voteWeight, node.termWeight));
+            nodeID, type, node.voteWeight, node.termWeight));
     }
     return consensusNodeList;
 }
@@ -247,10 +248,14 @@ inline bcos::ledger::LedgerConfig::Ptr toLedgerConfig(
     bcostars::LedgerConfig const& _ledgerConfig, bcos::crypto::KeyFactory::Ptr _keyFactory)
 {
     auto ledgerConfig = std::make_shared<bcos::ledger::LedgerConfig>();
-    auto consensusNodeList = toConsensusNodeList(_keyFactory, _ledgerConfig.consensusNodeList);
+    auto consensusNodeList = toConsensusNodeList(_keyFactory,
+        bcos::consensus::ConsensusNodeInterface::Type::consensus_sealer,
+        _ledgerConfig.consensusNodeList);
     ledgerConfig->setConsensusNodeList(*consensusNodeList);
 
-    auto observerNodeList = toConsensusNodeList(_keyFactory, _ledgerConfig.observerNodeList);
+    auto observerNodeList = toConsensusNodeList(_keyFactory,
+        bcos::consensus::ConsensusNodeInterface::Type::consensus_observer,
+        _ledgerConfig.observerNodeList);
     ledgerConfig->setObserverNodeList(*observerNodeList);
 
     auto hash = bcos::crypto::HashType();

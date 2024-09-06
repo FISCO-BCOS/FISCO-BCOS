@@ -3,11 +3,14 @@
 #include "GenesisConfig.h"
 #include "LedgerConfig.h"
 #include "LedgerTypeDef.h"
+#include "bcos-crypto/interfaces/crypto/KeyFactory.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/protocol/Block.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-task/Task.h"
 #include <type_traits>
+
+#define LEDGER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("LEDGER")
 
 namespace bcos::ledger
 {
@@ -71,11 +74,19 @@ inline constexpr struct GetTransactionCount
     }
 } getTransactionCount{};
 
+inline constexpr struct FromStorage
+{
+} fromStorage{};
+
 inline constexpr struct GetCurrentBlockNumber
 {
     task::Task<protocol::BlockNumber> operator()(auto& ledger) const
     {
         co_return co_await tag_invoke(*this, ledger);
+    }
+    task::Task<protocol::BlockNumber> operator()(auto& storage, FromStorage fromStorage) const
+    {
+        co_return co_await tag_invoke(*this, storage, fromStorage);
     }
 } getCurrentBlockNumber{};
 
@@ -110,6 +121,11 @@ inline constexpr struct GetNodeList
     task::Task<consensus::ConsensusNodeList> operator()(auto& ledger, std::string_view type) const
     {
         co_return co_await tag_invoke(*this, ledger, type);
+    }
+
+    task::Task<consensus::ConsensusNodeList> operator()(auto& storage) const
+    {
+        co_return co_await tag_invoke(*this, storage);
     }
 } getNodeList{};
 

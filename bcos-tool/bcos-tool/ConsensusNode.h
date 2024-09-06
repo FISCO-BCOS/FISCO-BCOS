@@ -15,20 +15,17 @@ namespace bcos::ledger
 struct ConsensusNode
 {
     ConsensusNode() = default;
-    ConsensusNode(std::string _nodeID, u256 _weight, std::string _type, std::string _enableNumber,
-        uint64_t _termWeight)
+    ConsensusNode(std::string _nodeID, u256 _weight, std::string _type, std::string _enableNumber)
       : nodeID(std::move(_nodeID)),
         voteWeight(std::move(_weight)),
         type(std::move(_type)),
-        enableNumber(std::move(_enableNumber)),
-        termWeight(_termWeight)
+        enableNumber(std::move(_enableNumber))
     {}
 
     std::string nodeID;
     u256 voteWeight;
     std::string type;
     std::string enableNumber;
-    uint64_t termWeight = 0;
 
     template <typename Archive>
     void serialize(Archive& archive, unsigned int version)
@@ -37,15 +34,10 @@ struct ConsensusNode
         archive & voteWeight;
         archive & type;
         archive & enableNumber;
-
-        if (version > 0)
-        {
-            archive & termWeight;
-        }
     }
 };
 
-using ConsensusNodeList = std::vector<ConsensusNode>;
+using ConsensusNodeList = std::vector<ledger::ConsensusNode>;
 inline ConsensusNodeList decodeConsensusList(const std::string_view& value)
 {
     boost::iostreams::stream<boost::iostreams::array_source> inputStream(
@@ -53,13 +45,13 @@ inline ConsensusNodeList decodeConsensusList(const std::string_view& value)
     boost::archive::binary_iarchive archive(inputStream,
         boost::archive::no_header | boost::archive::no_codecvt | boost::archive::no_tracking);
 
-    ConsensusNodeList consensusList;
+    bcos::ledger::ConsensusNodeList consensusList;
     archive >> consensusList;
 
     return consensusList;
 }
 
-inline std::string encodeConsensusList(const ConsensusNodeList& consensusList)
+inline std::string encodeConsensusList(const bcos::ledger::ConsensusNodeList& consensusList)
 {
     std::string value;
     boost::iostreams::stream<boost::iostreams::back_insert_device<std::string>> outputStream(value);
@@ -73,5 +65,3 @@ inline std::string encodeConsensusList(const ConsensusNodeList& consensusList)
 }
 
 }  // namespace bcos::ledger
-
-BOOST_CLASS_VERSION(bcos::ledger::ConsensusNode, 1)

@@ -20,6 +20,7 @@
  */
 #pragma once
 #include "ConsensusNodeInterface.h"
+#include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include <utility>
 
 namespace bcos::consensus
@@ -34,17 +35,25 @@ public:
     ConsensusNode& operator=(ConsensusNode&&) = default;
     explicit ConsensusNode(bcos::crypto::PublicPtr _nodeID) : m_nodeID(std::move(_nodeID)) {}
 
-    ConsensusNode(bcos::crypto::PublicPtr nodeID, uint64_t voteWeight, uint64_t termWeight)
-      : m_nodeID(std::move(nodeID)), m_voteWeight(voteWeight), m_termWeight(termWeight)
+    ConsensusNode(
+        bcos::crypto::PublicPtr nodeID, Type type, uint64_t voteWeight, uint64_t termWeight)
+      : m_nodeID(std::move(nodeID)),
+        m_type(type),
+        m_voteWeight(voteWeight),
+        m_termWeight(termWeight)
     {}
 
     ~ConsensusNode() override = default;
     bcos::crypto::PublicPtr nodeID() const override { return m_nodeID; }
+    Type type() const override { return m_type; }
     uint64_t voteWeight() const override { return m_voteWeight; }
     uint64_t termWeight() const override { return m_termWeight; }
+    protocol::BlockNumber enableNumber() const override { return m_blockNumber; }
 
     bcos::crypto::PublicPtr m_nodeID;
+    Type m_type{};
     uint64_t m_voteWeight = defaultVoteWeight;
     uint64_t m_termWeight = defaultTermWeight;
+    protocol::BlockNumber m_blockNumber = 0;
 };
 }  // namespace bcos::consensus

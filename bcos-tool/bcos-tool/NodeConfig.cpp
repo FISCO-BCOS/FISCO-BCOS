@@ -22,6 +22,7 @@
 #include "VersionConverter.h"
 #include "bcos-framework/bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/consensus/ConsensusNode.h"
+#include "bcos-framework/consensus/ConsensusNodeInterface.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/ServiceDesc.h"
 #include "bcos-utilities/BoostLog.h"
@@ -954,8 +955,9 @@ ConsensusNodeListPtr NodeConfig::parseConsensusNodeList(boost::property_tree::pt
             BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                       "Please set weight for " + nodeId + " to positive!"));
         }
-        auto consensusNode = std::make_shared<ConsensusNode>(
-            m_keyFactory->createKey(fromHex(nodeId)), voteWeight, termWeight);
+        auto consensusNode =
+            std::make_shared<ConsensusNode>(m_keyFactory->createKey(fromHex(nodeId)),
+                consensus::ConsensusNodeInterface::Type::consensus_sealer, voteWeight, termWeight);
         NodeConfig_LOG(INFO) << LOG_BADGE("parseConsensusNodeList")
                              << LOG_KV("sectionName", _sectionName) << LOG_KV("nodeId", nodeId)
                              << LOG_KV("weight", voteWeight);

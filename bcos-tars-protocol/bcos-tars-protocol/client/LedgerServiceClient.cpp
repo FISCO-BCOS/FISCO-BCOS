@@ -23,6 +23,8 @@
 #include "../protocol/BlockImpl.h"
 #include "../protocol/TransactionImpl.h"
 #include "../protocol/TransactionReceiptImpl.h"
+#include "bcos-framework/consensus/ConsensusNodeInterface.h"
+#include <magic_enum.hpp>
 
 using namespace bcostars;
 
@@ -310,20 +312,22 @@ void LedgerServiceClient::asyncGetSystemConfigByKey(std::string_view const& _key
 void LedgerServiceClient::asyncGetNodeListByType(std::string_view const& _type,
     std::function<void(bcos::Error::Ptr, bcos::consensus::ConsensusNodeListPtr)> _onGetConfig)
 {
+    auto type = magic_enum::enum_cast<bcos::consensus::ConsensusNodeInterface::Type>(_type);
     class Callback : public LedgerServicePrxCallback
     {
     public:
         Callback(
-            std::function<void(bcos::Error::Ptr, bcos::consensus::ConsensusNodeListPtr)> _callback,
-            bcos::crypto::KeyFactory::Ptr _keyFactory)
-          : m_callback(_callback), m_keyFactory(_keyFactory)
+            std::function<void(bcos::Error::Ptr, bcos::consensus::ConsensusNodeListPtr)> m_callback,
+            bcos::crypto::KeyFactory::Ptr m_keyFactory,
+            bcos::consensus::ConsensusNodeInterface::Type m_type)
+          : m_callback(std::move(m_callback)), m_keyFactory(std::move(m_keyFactory)), m_type(m_type)
         {}
-        virtual void callback_asyncGetNodeListByType(
-            const bcostars::Error& ret, const vector<bcostars::ConsensusNode>& _nodeList)
+        void callback_asyncGetNodeListByType(
+            const bcostars::Error& ret, const vector<bcostars::ConsensusNode>& _nodeList) override
         {
-            m_callback(toBcosError(ret), toConsensusNodeList(m_keyFactory, _nodeList));
+            m_callback(toBcosError(ret), toConsensusNodeList(m_keyFactory, m_type, _nodeList));
         }
-        virtual void callback_asyncGetNodeListByType_exception(tars::Int32 ret)
+        void callback_asyncGetNodeListByType_exception(tars::Int32 ret) override
         {
             m_callback(toBcosError(ret), nullptr);
         }
@@ -331,7 +335,8 @@ void LedgerServiceClient::asyncGetNodeListByType(std::string_view const& _type,
     private:
         std::function<void(bcos::Error::Ptr, bcos::consensus::ConsensusNodeListPtr)> m_callback;
         bcos::crypto::KeyFactory::Ptr m_keyFactory;
+        bcos::consensus::ConsensusNodeInterface::Type m_type;
     };
     m_prx->async_asyncGetNodeListByType(
-        new Callback(_onGetConfig, m_keyFactory), std::string{_type});
+        new Callback{std::move(_onGetConfig), m_keyFactory, *type}, std::string{_type});
 }

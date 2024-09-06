@@ -37,14 +37,17 @@ BOOST_AUTO_TEST_CASE(testConsensusNode)
     std::string node1 = "123";
     uint64_t weight = 1;
     auto nodeId = std::make_shared<KeyImpl>(bytes(node1.begin(), node1.end()));
-    auto consensusNode1 = std::make_shared<ConsensusNode>(nodeId, weight, 0);
+    auto consensusNode1 = std::make_shared<ConsensusNode>(
+        nodeId, ConsensusNodeInterface::Type::consensus_sealer, weight, 0);
 
     std::string node2 = "1234";
     auto nodeId2 = std::make_shared<KeyImpl>(bytes(node2.begin(), node2.end()));
-    auto consensusNode2 = std::make_shared<ConsensusNode>(nodeId2, weight, 0);
+    auto consensusNode2 = std::make_shared<ConsensusNode>(
+        nodeId2, ConsensusNodeInterface::Type::consensus_sealer, weight, 0);
 
     auto nodeId3 = std::make_shared<KeyImpl>(bytes(node1.begin(), node1.end()));
-    auto consensusNode3 = std::make_shared<ConsensusNode>(nodeId3, weight, 0);
+    auto consensusNode3 = std::make_shared<ConsensusNode>(
+        nodeId3, ConsensusNodeInterface::Type::consensus_sealer, weight, 0);
 
     // test set
     std::set<ConsensusNodeInterface::Ptr> consensusNodeList;
