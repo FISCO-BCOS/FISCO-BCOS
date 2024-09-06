@@ -100,6 +100,10 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl) : P
             defaultCmp(SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM, _value, RPBFT_EPOCH_SEALER_NUM_MIN,
                 version, BlockVersion::V3_5_VERSION);
         }));
+    m_sysValueCmp.insert(
+        std::make_pair(ENABLE_BALANCE_TRANSFER, [defaultCmp](int64_t _value, uint32_t version) {
+            defaultCmp(ENABLE_BALANCE_TRANSFER, _value, 0, version, BlockVersion::V3_10_2_VERSION);
+        }));
     // for compatibility
     // Note: the compatibility_version is not compatibility
     m_sysValueCmp.insert(
