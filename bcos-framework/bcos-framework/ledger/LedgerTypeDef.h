@@ -19,7 +19,7 @@
  */
 
 #pragma once
-#include "../consensus/ConsensusNodeInterface.h"
+#include "../consensus/ConsensusNode.h"
 #include "../protocol/ProtocolTypeDef.h"
 #include "SystemConfigs.h"
 #include <bcos-utilities/Common.h>
@@ -68,11 +68,11 @@ const unsigned RPBFT_EPOCH_SEALER_NUM_MIN = 1;
 const unsigned RPBFT_EPOCH_BLOCK_NUM_MIN = 1;
 // get consensus node list type
 constexpr static std::string_view CONSENSUS_SEALER =
-    magic_enum::enum_name(consensus::ConsensusNodeInterface::Type::consensus_sealer);
+    magic_enum::enum_name(consensus::Type::consensus_sealer);
 constexpr static std::string_view CONSENSUS_OBSERVER =
-    magic_enum::enum_name(consensus::ConsensusNodeInterface::Type::consensus_observer);
+    magic_enum::enum_name(consensus::Type::consensus_observer);
 constexpr static std::string_view CONSENSUS_CANDIDATE_SEALER =
-    magic_enum::enum_name(consensus::ConsensusNodeInterface::Type::consensus_candidate_sealer);
+    magic_enum::enum_name(consensus::Type::consensus_candidate_sealer);
 
 // get current state key
 constexpr static std::string_view SYS_KEY_CURRENT_NUMBER = "current_number";

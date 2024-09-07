@@ -22,7 +22,6 @@
 #include "VersionConverter.h"
 #include "bcos-framework/bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/consensus/ConsensusNode.h"
-#include "bcos-framework/consensus/ConsensusNodeInterface.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/ServiceDesc.h"
 #include "bcos-utilities/BoostLog.h"
@@ -876,11 +875,11 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
     m_genesisConfig.m_compatibilityVersion = toVersionNumber(compatibilityVersion);
     // sealerList
     auto consensusNodeList = parseConsensusNodeList(_genesisConfig, "consensus", "node.");
-    if (!consensusNodeList || consensusNodeList->empty())
+    if (consensusNodeList.empty())
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment("Must set sealerList!"));
     }
-    m_ledgerConfig->setConsensusNodeList(*consensusNodeList);
+    m_ledgerConfig->setConsensusNodeList(consensusNodeList);
 
     // rpbft
     if (m_genesisConfig.m_consensusType == RPBFT_CONSENSUS_TYPE)
@@ -909,16 +908,16 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
                (bcos::protocol::BlockVersion)m_genesisConfig.m_compatibilityVersion);
 }
 
-ConsensusNodeListPtr NodeConfig::parseConsensusNodeList(boost::property_tree::ptree const& _pt,
+ConsensusNodeList NodeConfig::parseConsensusNodeList(boost::property_tree::ptree const& _pt,
     std::string const& _sectionName, std::string const& _subSectionName)
 {
     if (!_pt.get_child_optional(_sectionName))
     {
         NodeConfig_LOG(DEBUG) << LOG_DESC("parseConsensusNodeList return for empty config")
                               << LOG_KV("sectionName", _sectionName);
-        return nullptr;
+        return {};
     }
-    auto nodeList = std::make_shared<ConsensusNodeList>();
+    ConsensusNodeList nodeList;
     for (auto const& it : _pt.get_child(_sectionName))
     {
         if (it.first.find(_subSectionName) != 0)
@@ -955,18 +954,18 @@ ConsensusNodeListPtr NodeConfig::parseConsensusNodeList(boost::property_tree::pt
             BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                       "Please set weight for " + nodeId + " to positive!"));
         }
-        auto consensusNode =
-            std::make_shared<ConsensusNode>(m_keyFactory->createKey(fromHex(nodeId)),
-                consensus::ConsensusNodeInterface::Type::consensus_sealer, voteWeight, termWeight);
+        ConsensusNode consensusNode{m_keyFactory->createKey(fromHex(nodeId)),
+            consensus::Type::consensus_sealer, static_cast<uint64_t>(voteWeight),
+            static_cast<uint64_t>(termWeight), 0};
         NodeConfig_LOG(INFO) << LOG_BADGE("parseConsensusNodeList")
                              << LOG_KV("sectionName", _sectionName) << LOG_KV("nodeId", nodeId)
                              << LOG_KV("weight", voteWeight);
-        nodeList->push_back(consensusNode);
+        nodeList.push_back(consensusNode);
     }
     // only sort nodeList after rc3 version
-    std::sort(nodeList->begin(), nodeList->end());
+    std::sort(nodeList.begin(), nodeList.end());
     NodeConfig_LOG(INFO) << LOG_BADGE("parseConsensusNodeList")
-                         << LOG_KV("totalNodesSize", nodeList->size());
+                         << LOG_KV("totalNodesSize", nodeList.size());
     return nodeList;
 }
 
@@ -1153,8 +1152,8 @@ std::string bcos::tool::generateGenesisData(
         for (const auto& node : ledgerConfig.consensusNodeList())
         {
             ss << "node." + boost::lexical_cast<std::string>(j) + ":" +
-                      *toHexString(node->nodeID()->data()) + "," +
-                      std::to_string(node->voteWeight()) + "\n";
+                      *toHexString(node.nodeID->data()) + "," + std::to_string(node.voteWeight) +
+                      "\n";
             ++j;
         }
         std::string genesisdata = ss.str();
@@ -1175,7 +1174,7 @@ std::string bcos::tool::generateGenesisData(
        << executorStream.str();
     for (const auto& node : ledgerConfig.consensusNodeList())
     {
-        ss << *toHexString(node->nodeID()->data()) << "," << node->voteWeight() << ";";
+        ss << *toHexString(node.nodeID->data()) << "," << node.voteWeight << ";";
     }
     auto genesisdata = ss.str();
     NodeConfig_LOG(INFO) << LOG_BADGE("generateGenesisData") << LOG_KV("genesisData", genesisdata);

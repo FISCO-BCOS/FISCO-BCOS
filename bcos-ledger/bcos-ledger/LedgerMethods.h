@@ -3,7 +3,6 @@
 #include "bcos-concepts/Serialize.h"
 #include "bcos-crypto/signature/key/KeyImpl.h"
 #include "bcos-framework/consensus/ConsensusNode.h"
-#include "bcos-framework/consensus/ConsensusNodeInterface.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
@@ -18,6 +17,7 @@
 #include "generated/bcos-tars-protocol/tars/LedgerConfig.h"
 #include <boost/throw_exception.hpp>
 #include <concepts>
+#include <range/v3/view/transform.hpp>
 #include <type_traits>
 
 #define LEDGER2_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("LEDGER2")
@@ -163,18 +163,55 @@ task::Task<consensus::ConsensusNodeList> tag_invoke(
             termWeight = tarsConsensusNode.termWeight;
         }
 
-        auto type = magic_enum::enum_cast<consensus::ConsensusNodeInterface::Type>(node.type);
+        auto type = magic_enum::enum_cast<consensus::Type>(node.type);
         if (!type)
         {
             LEDGER_LOG(ERROR) << "GetNodeListByType failed, invalid node type"
                               << LOG_KV("type", node.type);
             continue;
         }
-        nodes.emplace_back(std::make_unique<consensus::ConsensusNode>(
-            nodeID, *type, node.voteWeight.template convert_to<uint64_t>(), termWeight));
+        nodes.emplace_back(
+            consensus::ConsensusNode{nodeID, *type, node.voteWeight.template convert_to<uint64_t>(),
+                termWeight, boost::lexical_cast<protocol::BlockNumber>(node.enableNumber)});
     }
 
     LEDGER_LOG(DEBUG) << "GetNodeListByType success" << LOG_KV("nodes size", nodes.size());
     co_return nodes;
+}
+
+task::Task<consensus::ConsensusNodeList> tag_invoke(ledger::tag_t<setNodeList> /*unused*/,
+    auto& storage, const consensus::ConsensusNodeList& nodeList)
+{
+    LEDGER_LOG(DEBUG) << "SetNodeList request";
+    auto ledgerNodeList = RANGES::views::transform(nodeList, [&](auto const& node) {
+        ledger::ConsensusNode ledgerNode;
+        ledgerNode.nodeID = node.nodeID.hex();
+        ledgerNode.type = magic_enum::enum_name(node.type);
+        ledgerNode.voteWeight = node.voteWeight;
+        ledgerNode.enableNumber = node.blockNumber;
+        return ledgerNode;
+    });
+    auto nodeListEntry = encodeConsensusList(ledgerNodeList);
+    co_await storage2::writeOne(storage, transaction_executor::StateKeyView{SYS_CONSENSUS, "key"},
+        storage::Entry(std::move(nodeListEntry)));
+
+    auto tarsNodeList = RANGES::views::filter(nodeList, [](auto const& node) {
+        return node.termWeight() > 0;
+    }) | RANGES::views::transform([](auto const& node) {
+        bcostars::ConsensusNode tarsConsensusNode;
+        tarsConsensusNode.nodeID.assign(node.nodeID->constData(), node.nodeID()->size());
+        tarsConsensusNode.type = magic_enum::enum_name(node.type);
+        tarsConsensusNode.voteWeight = node.voteWeight;
+        tarsConsensusNode.termWeight = node.termWeight;
+        return tarsConsensusNode;
+    });
+    co_await storage2::writeSome(storage,
+        RANGES::views::transform(tarsNodeList,
+            [](auto const& node) {
+                return transaction_executor::StateKeyView{SYS_CONSENSUS, node.nodeID};
+            }),
+        RANGES::views::transform(tarsNodeList,
+            [](auto const& node) { return storage::Entry(concepts::serialize::encode(node)); }));
+    LEDGER_LOG(DEBUG) << "SetNodeList success" << LOG_KV("nodeList size", nodeList.size());
 }
 }  // namespace bcos::ledger

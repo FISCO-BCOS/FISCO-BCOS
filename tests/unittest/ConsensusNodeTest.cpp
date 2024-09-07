@@ -19,7 +19,6 @@
 #include "bcos-framework/consensus/ConsensusNode.h"
 #include "bcos-crypto/bcos-crypto/signature/key/KeyImpl.h"
 #include "bcos-crypto/bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
-#include "bcos-framework/consensus/ConsensusNodeInterface.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/test/unit_test.hpp>
@@ -37,20 +36,17 @@ BOOST_AUTO_TEST_CASE(testConsensusNode)
     std::string node1 = "123";
     uint64_t weight = 1;
     auto nodeId = std::make_shared<KeyImpl>(bytes(node1.begin(), node1.end()));
-    auto consensusNode1 = std::make_shared<ConsensusNode>(
-        nodeId, ConsensusNodeInterface::Type::consensus_sealer, weight, 0);
+    auto consensusNode1 = ConsensusNode(nodeId, Type::consensus_sealer, weight, 0, 0);
 
     std::string node2 = "1234";
     auto nodeId2 = std::make_shared<KeyImpl>(bytes(node2.begin(), node2.end()));
-    auto consensusNode2 = std::make_shared<ConsensusNode>(
-        nodeId2, ConsensusNodeInterface::Type::consensus_sealer, weight, 0);
+    auto consensusNode2 = ConsensusNode(nodeId2, Type::consensus_sealer, weight, 0, 0);
 
     auto nodeId3 = std::make_shared<KeyImpl>(bytes(node1.begin(), node1.end()));
-    auto consensusNode3 = std::make_shared<ConsensusNode>(
-        nodeId3, ConsensusNodeInterface::Type::consensus_sealer, weight, 0);
+    auto consensusNode3 = ConsensusNode(nodeId3, Type::consensus_sealer, weight, 0, 0);
 
     // test set
-    std::set<ConsensusNodeInterface::Ptr> consensusNodeList;
+    std::set<ConsensusNode> consensusNodeList;
     consensusNodeList.insert(consensusNode1);
     BOOST_CHECK(consensusNodeList.count(consensusNode1));
     BOOST_CHECK(consensusNodeList.size() == 1);
@@ -64,17 +60,17 @@ BOOST_AUTO_TEST_CASE(testConsensusNode)
     BOOST_CHECK(consensusNodeList.size() == 2);
 
     // check map
-    std::map<NodeIDPtr, ConsensusNodeInterface::Ptr, KeyCompare> nodeId2ConsensusNode;
-    nodeId2ConsensusNode.insert(std::make_pair(consensusNode1->nodeID(), consensusNode1));
-    BOOST_CHECK(nodeId2ConsensusNode.count(consensusNode1->nodeID()));
-    BOOST_CHECK(!nodeId2ConsensusNode.count(consensusNode2->nodeID()));
+    std::map<NodeIDPtr, ConsensusNode, KeyCompare> nodeId2ConsensusNode;
+    nodeId2ConsensusNode.insert(std::make_pair(consensusNode1.nodeID, consensusNode1));
+    BOOST_CHECK(nodeId2ConsensusNode.count(consensusNode1.nodeID));
+    BOOST_CHECK(!nodeId2ConsensusNode.count(consensusNode2.nodeID));
     BOOST_CHECK(nodeId2ConsensusNode.size() == 1);
 
-    nodeId2ConsensusNode.insert(std::make_pair(consensusNode2->nodeID(), consensusNode2));
-    BOOST_CHECK(nodeId2ConsensusNode.count(consensusNode2->nodeID()));
-    BOOST_CHECK(nodeId2ConsensusNode.count(consensusNode3->nodeID()));
+    nodeId2ConsensusNode.insert(std::make_pair(consensusNode2.nodeID, consensusNode2));
+    BOOST_CHECK(nodeId2ConsensusNode.count(consensusNode2.nodeID));
+    BOOST_CHECK(nodeId2ConsensusNode.count(consensusNode3.nodeID));
     BOOST_CHECK(nodeId2ConsensusNode.size() == 2);
-    nodeId2ConsensusNode.insert(std::make_pair(consensusNode3->nodeID(), consensusNode3));
+    nodeId2ConsensusNode.insert(std::make_pair(consensusNode3.nodeID, consensusNode3));
     BOOST_CHECK(nodeId2ConsensusNode.size() == 2);
 
     // test NodeIDSet

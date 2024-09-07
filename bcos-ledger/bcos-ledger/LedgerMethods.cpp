@@ -335,7 +335,7 @@ bcos::task::Task<bcos::consensus::ConsensusNodeList> bcos::ledger::tag_invoke(
         {
             m_ledger.asyncGetNodeListByType(
                 m_type, [this, handle](Error::Ptr error,
-                            const consensus::ConsensusNodeListPtr& consensusNodeList) {
+                            const consensus::ConsensusNodeList& consensusNodeList) {
                     if (error)
                     {
                         m_result.emplace<Error::Ptr>(std::move(error));
@@ -343,7 +343,7 @@ bcos::task::Task<bcos::consensus::ConsensusNodeList> bcos::ledger::tag_invoke(
                     else
                     {
                         m_result.emplace<consensus::ConsensusNodeList>(
-                            std::move(*consensusNodeList));
+                            std::move(consensusNodeList));
                     }
                     handle.resume();
                 });

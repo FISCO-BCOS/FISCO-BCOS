@@ -70,10 +70,10 @@ bool ConsensusConfig::compareConsensusNode(
 
 
 bool ConsensusConfig::isNodeExist(
-    ConsensusNodeInterface::Ptr const& _node, ConsensusNodeList const& _nodeList)
+    ConsensusNode::Ptr const& _node, ConsensusNodeList const& _nodeList)
 {
     auto iter = std::find_if(_nodeList.begin(), _nodeList.end(),
-        [_node](const ConsensusNodeInterface::Ptr& _consensusNode) {
+        [_node](const ConsensusNode::Ptr& _consensusNode) {
             return _node->nodeID()->data() == _consensusNode->nodeID()->data() &&
                    _node->voteWeight() == _consensusNode->voteWeight();
         });
@@ -159,7 +159,7 @@ IndexType ConsensusConfig::getNodeIndexByNodeID(bcos::crypto::PublicPtr _nodeID)
     return nodeIndex;
 }
 
-ConsensusNodeInterface::Ptr ConsensusConfig::getConsensusNodeByIndex(IndexType _nodeIndex)
+ConsensusNode::Ptr ConsensusConfig::getConsensusNodeByIndex(IndexType _nodeIndex)
 {
     ReadGuard lock(x_consensusNodeList);
     if (_nodeIndex < m_consensusNodeList->size())

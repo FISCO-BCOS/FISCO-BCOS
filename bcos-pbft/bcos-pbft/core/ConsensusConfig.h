@@ -95,7 +95,7 @@ public:
 
     virtual void updateQuorum() = 0;
     IndexType getNodeIndexByNodeID(bcos::crypto::PublicPtr _nodeID);
-    ConsensusNodeInterface::Ptr getConsensusNodeByIndex(IndexType _nodeIndex);
+    ConsensusNode::Ptr getConsensusNodeByIndex(IndexType _nodeIndex);
     bcos::crypto::KeyPairInterface::Ptr keyPair() { return m_keyPair; }
 
     virtual void setBlockTxCountLimit(uint64_t _blockTxCountLimit)
@@ -136,7 +136,7 @@ public:
 
 protected:
     static bool isNodeExist(
-        ConsensusNodeInterface::Ptr const& _node, ConsensusNodeList const& _nodeList);
+        ConsensusNode::Ptr const& _node, ConsensusNodeList const& _nodeList);
 
 protected:
     bcos::crypto::KeyPairInterface::Ptr m_keyPair;

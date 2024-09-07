@@ -837,7 +837,7 @@ bool PBFTEngine::checkProposalSignature(
 }
 
 bool PBFTEngine::checkRotateTransactionValid(PBFTMessageInterface::Ptr const& _proposal,
-    ConsensusNodeInterface::Ptr const& _leaderInfo, bool needCheckSign)
+    ConsensusNode::Ptr const& _leaderInfo, bool needCheckSign)
 {
     if (m_config->consensusType() == ConsensusType::PBFT_TYPE &&
         m_config->rpbftConfigTools() == nullptr) [[likely]]

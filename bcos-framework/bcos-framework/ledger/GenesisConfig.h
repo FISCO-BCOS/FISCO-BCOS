@@ -22,7 +22,7 @@
 
 #include "Features.h"
 #include "LedgerConfig.h"
-#include "bcos-framework/consensus/ConsensusNodeInterface.h"
+#include "bcos-framework/consensus/ConsensusNode.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-tool/VersionConverter.h"
 #include <sstream>

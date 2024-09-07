@@ -19,7 +19,6 @@
  * @date 2021-06-10
  */
 #pragma once
-#include "bcos-framework/consensus/ConsensusNodeInterface.h"
 #include "bcos-framework/ledger/GenesisConfig.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
@@ -338,7 +337,7 @@ private:
         }
     }
 
-    bcos::consensus::ConsensusNodeListPtr parseConsensusNodeList(
+    bcos::consensus::ConsensusNodeList parseConsensusNodeList(
         boost::property_tree::ptree const& _pt, std::string const& _sectionName,
         std::string const& _subSectionName);
 

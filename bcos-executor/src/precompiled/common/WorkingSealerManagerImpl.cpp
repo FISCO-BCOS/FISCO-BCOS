@@ -19,7 +19,7 @@
  */
 
 #include "WorkingSealerManagerImpl.h"
-#include "bcos-framework/consensus/ConsensusNodeInterface.h"
+#include "bcos-framework/consensus/ConsensusNode.h"
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <algorithm>
 
@@ -271,10 +271,10 @@ bool WorkingSealerManagerImpl::getConsensusNodeListFromStorage(
                 {
                     switch (node->type())
                     {
-                    case consensus::ConsensusNodeInterface::Type::consensus_sealer:
+                    case consensus::ConsensusNode::Type::consensus_sealer:
                         isConsensusNodeListChanged = true;
                         break;
-                    case consensus::ConsensusNodeInterface::Type::consensus_candidate_sealer:
+                    case consensus::ConsensusNode::Type::consensus_candidate_sealer:
                         isCandidateSealerChanged = true;
                         break;
                     default:
@@ -286,11 +286,11 @@ bool WorkingSealerManagerImpl::getConsensusNodeListFromStorage(
         }
         switch (node->type())
         {
-        case consensus::ConsensusNodeInterface::Type::consensus_sealer:
+        case consensus::ConsensusNode::Type::consensus_sealer:
             m_consensusSealer.emplace_back(
                 WorkingSealer{node->nodeID()->hex(), node->termWeight()});
             break;
-        case consensus::ConsensusNodeInterface::Type::consensus_candidate_sealer:
+        case consensus::ConsensusNode::Type::consensus_candidate_sealer:
             m_candidateSealer.emplace_back(WorkingSealer{node->nodeID->hex(), node->termWeight()});
             break;
         default:

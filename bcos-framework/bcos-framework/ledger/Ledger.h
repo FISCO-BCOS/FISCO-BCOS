@@ -3,12 +3,10 @@
 #include "GenesisConfig.h"
 #include "LedgerConfig.h"
 #include "LedgerTypeDef.h"
-#include "bcos-crypto/interfaces/crypto/KeyFactory.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/protocol/Block.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-task/Task.h"
-#include <type_traits>
 
 #define LEDGER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("LEDGER")
 
@@ -128,6 +126,14 @@ inline constexpr struct GetNodeList
         co_return co_await tag_invoke(*this, storage);
     }
 } getNodeList{};
+
+inline constexpr struct SetNodeList
+{
+    task::Task<void> operator()(auto& storage, RANGES::input_range auto&& nodeList) const
+    {
+        co_await tag_invoke(*this, storage, std::forward<decltype(nodeList)>(nodeList));
+    }
+} setNodeList{};
 
 inline constexpr struct GetLedgerConfig
 {

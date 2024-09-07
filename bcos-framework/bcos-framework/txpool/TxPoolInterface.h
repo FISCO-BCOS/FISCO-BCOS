@@ -18,7 +18,7 @@
  * @date: 2021-04-07
  */
 #pragma once
-#include "../consensus/ConsensusNodeInterface.h"
+#include "../consensus/ConsensusNode.h"
 #include "../protocol/Block.h"
 #include "../protocol/Transaction.h"
 #include "../protocol/TransactionSubmitResult.h"

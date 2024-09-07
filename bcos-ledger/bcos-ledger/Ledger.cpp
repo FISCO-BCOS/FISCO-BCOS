@@ -1274,7 +1274,7 @@ void Ledger::removeExpiredNonce(protocol::BlockNumber blockNumber, bool sync)
 }
 
 void Ledger::asyncGetNodeListByType(const std::string_view& _type,
-    std::function<void(Error::Ptr, consensus::ConsensusNodeListPtr)> _onGetConfig)
+    std::function<void(Error::Ptr, consensus::ConsensusNodeList)> _onGetConfig)
 {
     task::wait([](decltype(*this)& self, std::string type,
                    decltype(_onGetConfig) callback) -> task::Task<void> {
@@ -1282,14 +1282,14 @@ void Ledger::asyncGetNodeListByType(const std::string_view& _type,
         {
             auto nodeList = co_await ledger::getNodeList(*self.m_stateStorage);
             RANGES::remove_if(nodeList,
-                [&](auto const& node) { return magic_enum::enum_name(node->type()) != type; });
-            callback(nullptr, std::make_shared<consensus::ConsensusNodeList>(std::move(nodeList)));
+                [&](auto const& node) { return magic_enum::enum_name(node.type) != type; });
+            callback(nullptr, std::move(nodeList));
         }
         catch (std::exception& e)
         {
             callback(BCOS_ERROR_WITH_PREV_PTR(
                          LedgerError::GetStorageError, "Error while getNodeListByType", e),
-                nullptr);
+                {});
         }
     }(*this, std::string(_type), std::move(_onGetConfig)));
 }
@@ -2148,7 +2148,7 @@ bool Ledger::buildGenesisBlock(
     for (const auto& node : ledgerConfig.consensusNodeList())
     {
         consensusNodeList.emplace_back(
-            node->nodeID()->hex(), node->voteWeight(), std::string{CONSENSUS_SEALER}, "0");
+            node.nodeID->hex(), node.voteWeight, std::string{CONSENSUS_SEALER}, "0");
     }
 
     // TODO: setNodeList
@@ -2160,10 +2160,8 @@ bool Ledger::buildGenesisBlock(
         auto workingSealerList = selectWorkingSealer(ledgerConfig, genesis.m_epochSealerNum);
         for (auto& node : consensusNodeList)
         {
-            auto iter = std::find_if(
-                workingSealerList.begin(), workingSealerList.end(), [&node](auto&& workingNode) {
-                    return workingNode->nodeID()->hex() == node.nodeID;
-                });
+            auto iter = std::find_if(workingSealerList.begin(), workingSealerList.end(),
+                [&node](auto&& workingNode) { return workingNode.nodeID->hex() == node.nodeID; });
             if (iter == workingSealerList.end())
             {
                 node.type = CONSENSUS_CANDIDATE_SEALER;
@@ -2174,7 +2172,7 @@ bool Ledger::buildGenesisBlock(
     for (const auto& node : ledgerConfig.observerNodeList())
     {
         consensusNodeList.emplace_back(
-            node->nodeID()->hex(), node->voteWeight(), std::string{CONSENSUS_OBSERVER}, "0");
+            node.nodeID->hex(), node.voteWeight, std::string{CONSENSUS_OBSERVER}, "0");
     }
 
     Entry consensusNodeListEntry;
@@ -2252,7 +2250,7 @@ bcos::consensus::ConsensusNodeList Ledger::selectWorkingSealer(
         {
             auto hashImpl = m_blockFactory->cryptoSuite()->hashImpl();
             std::int64_t selectedNode =
-                (std::int64_t)((u256)(hashImpl->hash(sealerList[i]->nodeID()->data())) % (i + 1));
+                (std::int64_t)((u256)(hashImpl->hash(sealerList[i].nodeID->data())) % (i + 1));
             std::swap(sealerList[i], sealerList[selectedNode]);
         }
     }
@@ -2261,10 +2259,9 @@ bcos::consensus::ConsensusNodeList Ledger::selectWorkingSealer(
         RANGES::views::take(sealerList, selectedNum) | RANGES::to<std::vector>();
     for (auto& node : workingSealerList)
     {
-        LEDGER_LOG(INFO) << LOG_DESC("selectWorkingSealer")
-                         << LOG_KV("nodeID", node->nodeID()->hex())
-                         << LOG_KV("voteWeight", node->voteWeight())
-                         << LOG_KV("termWeight", node->termWeight());
+        LEDGER_LOG(INFO) << LOG_DESC("selectWorkingSealer") << LOG_KV("nodeID", node.nodeID->hex())
+                         << LOG_KV("voteWeight", node.voteWeight)
+                         << LOG_KV("termWeight", node.termWeight);
     }
     return workingSealerList;
 }

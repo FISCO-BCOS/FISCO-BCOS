@@ -162,7 +162,7 @@ protected:
 
     // Note: this only be called after block on-chain successfully
     virtual bcos::protocol::NodeType determineNodeType();
-    bool existNode(bcos::consensus::ConsensusNodeListPtr const& _nodeList, SharedMutex& _lock,
+    bool existNode(bcos::consensus::ConsensusNodeList const& _nodeList, SharedMutex& _lock,
         bcos::crypto::NodeIDPtr _nodeID);
 
 private:

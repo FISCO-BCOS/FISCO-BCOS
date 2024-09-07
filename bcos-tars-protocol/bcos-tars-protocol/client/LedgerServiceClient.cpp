@@ -23,7 +23,6 @@
 #include "../protocol/BlockImpl.h"
 #include "../protocol/TransactionImpl.h"
 #include "../protocol/TransactionReceiptImpl.h"
-#include "bcos-framework/consensus/ConsensusNodeInterface.h"
 #include <magic_enum.hpp>
 
 using namespace bcostars;
@@ -310,16 +309,15 @@ void LedgerServiceClient::asyncGetSystemConfigByKey(std::string_view const& _key
 }
 
 void LedgerServiceClient::asyncGetNodeListByType(std::string_view const& _type,
-    std::function<void(bcos::Error::Ptr, bcos::consensus::ConsensusNodeListPtr)> _onGetConfig)
+    std::function<void(bcos::Error::Ptr, bcos::consensus::ConsensusNodeList)> _onGetConfig)
 {
-    auto type = magic_enum::enum_cast<bcos::consensus::ConsensusNodeInterface::Type>(_type);
+    auto type = magic_enum::enum_cast<bcos::consensus::Type>(_type);
     class Callback : public LedgerServicePrxCallback
     {
     public:
         Callback(
-            std::function<void(bcos::Error::Ptr, bcos::consensus::ConsensusNodeListPtr)> m_callback,
-            bcos::crypto::KeyFactory::Ptr m_keyFactory,
-            bcos::consensus::ConsensusNodeInterface::Type m_type)
+            std::function<void(bcos::Error::Ptr, bcos::consensus::ConsensusNodeList)> m_callback,
+            bcos::crypto::KeyFactory::Ptr m_keyFactory, bcos::consensus::Type m_type)
           : m_callback(std::move(m_callback)), m_keyFactory(std::move(m_keyFactory)), m_type(m_type)
         {}
         void callback_asyncGetNodeListByType(
@@ -329,13 +327,13 @@ void LedgerServiceClient::asyncGetNodeListByType(std::string_view const& _type,
         }
         void callback_asyncGetNodeListByType_exception(tars::Int32 ret) override
         {
-            m_callback(toBcosError(ret), nullptr);
+            m_callback(toBcosError(ret), {});
         }
 
     private:
-        std::function<void(bcos::Error::Ptr, bcos::consensus::ConsensusNodeListPtr)> m_callback;
+        std::function<void(bcos::Error::Ptr, bcos::consensus::ConsensusNodeList)> m_callback;
         bcos::crypto::KeyFactory::Ptr m_keyFactory;
-        bcos::consensus::ConsensusNodeInterface::Type m_type;
+        bcos::consensus::Type m_type;
     };
     m_prx->async_asyncGetNodeListByType(
         new Callback{std::move(_onGetConfig), m_keyFactory, *type}, std::string{_type});

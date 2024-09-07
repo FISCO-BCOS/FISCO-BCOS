@@ -19,7 +19,7 @@
  * @date 2021-05-06
  */
 #pragma once
-#include "../consensus/ConsensusNodeInterface.h"
+#include "../consensus/ConsensusNode.h"
 #include "../protocol/ProtocolTypeDef.h"
 #include "Features.h"
 #include <evmc/evmc.hpp>
