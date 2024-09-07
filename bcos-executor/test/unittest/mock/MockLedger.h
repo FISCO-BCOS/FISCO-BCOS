@@ -172,9 +172,9 @@ public:
 
 
     void asyncGetNodeListByType(std::string_view const& _type,
-        std::function<void(Error::Ptr, consensus::ConsensusNodeListPtr)> _onGetConfig) override
+        std::function<void(Error::Ptr, consensus::ConsensusNodeList)> _onGetConfig) override
     {
-        _onGetConfig(nullptr, std::make_shared<consensus::ConsensusNodeList>());
+        _onGetConfig(nullptr, consensus::ConsensusNodeList());
     };
 
     void asyncGetNonceList(protocol::BlockNumber _startNumber, int64_t _offset,

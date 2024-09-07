@@ -170,12 +170,12 @@ public:
         consensus::ConsensusNodeList observerNodeList;
         for (int i = 0; i < 4; ++i)
         {
-            auto node = std::make_shared<consensus::ConsensusNode>(
-                signImpl->generateKeyPair()->publicKey(), 10 + i, 0);
+            auto node = consensus::ConsensusNode(signImpl->generateKeyPair()->publicKey(),
+                consensus::Type::consensus_sealer, 10 + i, 0, 0);
             consensusNodeList.emplace_back(node);
         }
-        auto observer_node = std::make_shared<consensus::ConsensusNode>(
-            signImpl->generateKeyPair()->publicKey(), -1, 0);
+        auto observer_node = consensus::ConsensusNode(signImpl->generateKeyPair()->publicKey(),
+            consensus::Type::consensus_observer, -1, 0, 0);
         observerNodeList.emplace_back(observer_node);
 
         m_param->setConsensusNodeList(consensusNodeList);
@@ -424,10 +424,10 @@ BOOST_AUTO_TEST_CASE(testFixtureLedger)
     std::promise<bool> p6;
     auto f6 = p6.get_future();
     m_ledger->asyncGetNodeListByType(
-        CONSENSUS_OBSERVER, [&](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodeList) {
+        CONSENSUS_OBSERVER, [&](Error::Ptr _error, consensus::ConsensusNodeList _nodeList) {
             BOOST_CHECK(_error == nullptr);
-            BOOST_CHECK_EQUAL(_nodeList->at(0)->nodeID()->hex(),
-                m_param->observerNodeList().at(0)->nodeID()->hex());
+            BOOST_CHECK_EQUAL(
+                _nodeList.at(0).nodeID->hex(), m_param->observerNodeList().at(0).nodeID->hex());
             p6.set_value(true);
         });
     BOOST_CHECK_EQUAL(f1.get(), true);
@@ -496,10 +496,10 @@ BOOST_AUTO_TEST_CASE(test_3_0_FixtureLedger)
     std::promise<bool> p6;
     auto f6 = p6.get_future();
     m_ledger->asyncGetNodeListByType(
-        CONSENSUS_OBSERVER, [&](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodeList) {
+        CONSENSUS_OBSERVER, [&](Error::Ptr _error, consensus::ConsensusNodeList _nodeList) {
             BOOST_CHECK(_error == nullptr);
-            BOOST_CHECK_EQUAL(_nodeList->at(0)->nodeID()->hex(),
-                m_param->observerNodeList().at(0)->nodeID()->hex());
+            BOOST_CHECK_EQUAL(
+                _nodeList.at(0).nodeID->hex(), m_param->observerNodeList().at(0).nodeID->hex());
             p6.set_value(true);
         });
 
@@ -691,9 +691,9 @@ BOOST_AUTO_TEST_CASE(getNodeListByType)
     auto f1 = p1.get_future();
     // error type get empty node list
     m_ledger->asyncGetNodeListByType(
-        "test", [&](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodeList) {
+        "test", [&](Error::Ptr _error, consensus::ConsensusNodeList _nodeList) {
             BOOST_CHECK(_error == nullptr);
-            BOOST_CHECK_EQUAL(_nodeList->size(), 0);
+            BOOST_CHECK_EQUAL(_nodeList.size(), 0);
             p1.set_value(true);
         });
     BOOST_CHECK_EQUAL(f1.get(), true);
@@ -701,10 +701,10 @@ BOOST_AUTO_TEST_CASE(getNodeListByType)
     std::promise<bool> p2;
     auto f2 = p2.get_future();
     m_ledger->asyncGetNodeListByType(
-        CONSENSUS_SEALER, [&](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodeList) {
+        CONSENSUS_SEALER, [&](Error::Ptr _error, consensus::ConsensusNodeList _nodeList) {
             BOOST_CHECK(_error == nullptr);
-            BOOST_CHECK(_nodeList != nullptr);
-            BOOST_CHECK(_nodeList->size() == 0);
+            BOOST_CHECK(!_nodeList.empty());
+            BOOST_CHECK(_nodeList.size() == 0);
             p2.set_value(true);
         });
     BOOST_CHECK_EQUAL(f2.get(), true);
@@ -712,10 +712,10 @@ BOOST_AUTO_TEST_CASE(getNodeListByType)
     std::promise<bool> p3;
     auto f3 = p3.get_future();
     m_ledger->asyncGetNodeListByType(
-        CONSENSUS_OBSERVER, [&](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodeList) {
+        CONSENSUS_OBSERVER, [&](Error::Ptr _error, consensus::ConsensusNodeList _nodeList) {
             BOOST_CHECK(_error == nullptr);
-            BOOST_CHECK(_nodeList != nullptr);
-            BOOST_CHECK(_nodeList->size() == 0);
+            BOOST_CHECK(!_nodeList.empty());
+            BOOST_CHECK(_nodeList.size() == 0);
             p3.set_value(true);
         });
     BOOST_CHECK_EQUAL(f3.get(), true);
@@ -727,38 +727,25 @@ BOOST_AUTO_TEST_CASE(testNodeListByType)
     std::promise<bool> p1;
     auto f1 = p1.get_future();
     m_ledger->asyncGetNodeListByType(
-        CONSENSUS_SEALER, [&](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodeList) {
+        CONSENSUS_SEALER, [&](Error::Ptr _error, consensus::ConsensusNodeList const& _nodeList) {
             BOOST_CHECK(_error == nullptr);
-            BOOST_CHECK_EQUAL(_nodeList->size(), 4);
+            BOOST_CHECK_EQUAL(_nodeList.size(), 4);
             p1.set_value(true);
         });
     BOOST_CHECK_EQUAL(f1.get(), true);
 
     std::promise<bool> setSealer1;
-    m_storage->asyncGetRow(
-        SYS_CONSENSUS, "key", [&](Error::UniquePtr error, std::optional<Entry> entry) {
-            BOOST_CHECK(!error);
-            BOOST_CHECK(entry);
-
-            auto list = decodeConsensusList(entry->getField(0));
-            list.emplace_back(
-                bcos::crypto::HashType("56789").hex(), 100, std::string{CONSENSUS_SEALER}, "5", 0);
-
-            entry->setField(0, encodeConsensusList(list));
-            m_storage->asyncSetRow(
-                SYS_CONSENSUS, "key", std::move(*entry), [&](Error::UniquePtr error) {
-                    BOOST_CHECK(!error);
-                    setSealer1.set_value(true);
-                });
-        });
-    setSealer1.get_future().get();
+    auto nodeList = task::syncWait(ledger::getNodeList(*m_storage));
+    nodeList.emplace_back(std::make_shared<KeyImpl>(bcos::crypto::HashType("56789").asBytes()),
+        consensus::Type::consensus_sealer, 100, 0, 5);
+    task::syncWait(ledger::setNodeList(*m_storage, nodeList));
 
     std::promise<bool> p2;
     auto f2 = p2.get_future();
     m_ledger->asyncGetNodeListByType(
-        CONSENSUS_SEALER, [&](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodeList) {
+        CONSENSUS_SEALER, [&](Error::Ptr _error, consensus::ConsensusNodeList _nodeList) {
             BOOST_CHECK(_error == nullptr);
-            BOOST_CHECK_EQUAL(_nodeList->size(), 4);
+            BOOST_CHECK_EQUAL(_nodeList.size(), 4);
             p2.set_value(true);
         });
     BOOST_CHECK_EQUAL(f2.get(), true);
@@ -769,9 +756,9 @@ BOOST_AUTO_TEST_CASE(testNodeListByType)
     std::promise<bool> p3;
     auto f3 = p3.get_future();
     m_ledger->asyncGetNodeListByType(
-        CONSENSUS_SEALER, [&](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodeList) {
+        CONSENSUS_SEALER, [&](Error::Ptr _error, consensus::ConsensusNodeList _nodeList) {
             BOOST_CHECK(_error == nullptr);
-            BOOST_CHECK_EQUAL(_nodeList->size(), 5);
+            BOOST_CHECK_EQUAL(_nodeList.size(), 5);
             p3.set_value(true);
         });
     BOOST_CHECK_EQUAL(f3.get(), true);

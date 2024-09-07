@@ -138,7 +138,7 @@ public:
 
     void appendObserver(NodeIDPtr _nodeId)
     {
-        auto node = std::make_shared<ConsensusNode>(_nodeId);
+        auto node = ConsensusNode(_nodeId, consensus::Type::consensus_observer, 0, 0, 0);
         m_ledger->ledgerConfig()->mutableObserverList().emplace_back(node);
         m_sync->config()->setObserverList(m_ledger->ledgerConfig()->observerNodeList());
     }
@@ -149,17 +149,17 @@ public:
         for (auto const& node : _nodeIdList)
         {
             m_ledger->ledgerConfig()->mutableConsensusList().emplace_back(
-                std::make_shared<ConsensusNode>(node));
+                ConsensusNode(node, consensus::Type::consensus_sealer, 1, 0, 0));
         }
         m_sync->config()->setConsensusNodeList(m_ledger->ledgerConfig()->consensusNodeList());
         bcos::crypto::NodeIDSet nodeIdSet;
         for (const auto& node : m_ledger->ledgerConfig()->consensusNodeList())
         {
-            nodeIdSet.insert(node->nodeID());
+            nodeIdSet.insert(node.nodeID);
         }
         for (const auto& node : m_ledger->ledgerConfig()->observerNodeList())
         {
-            nodeIdSet.insert(node->nodeID());
+            nodeIdSet.insert(node.nodeID);
         }
         m_sync->config()->setConnectedNodeList(nodeIdSet);
         m_frontService->setNodeIDList(m_sync->config()->connectedNodeList());
@@ -174,17 +174,17 @@ public:
         for (auto const& node : _nodeIdList)
         {
             m_ledger->ledgerConfig()->mutableObserverList().emplace_back(
-                std::make_shared<ConsensusNode>(node));
+                ConsensusNode(node, consensus::Type::consensus_observer, 0, 0, 0));
         }
         m_sync->config()->setObserverList(m_ledger->ledgerConfig()->observerNodeList());
         bcos::crypto::NodeIDSet nodeIdSet;
         for (const auto& node : m_ledger->ledgerConfig()->consensusNodeList())
         {
-            nodeIdSet.insert(node->nodeID());
+            nodeIdSet.insert(node.nodeID);
         }
         for (const auto& node : m_ledger->ledgerConfig()->observerNodeList())
         {
-            nodeIdSet.insert(node->nodeID());
+            nodeIdSet.insert(node.nodeID);
         }
         m_sync->config()->setConnectedNodeList(nodeIdSet);
         m_frontService->setNodeIDList(m_sync->config()->connectedNodeList());

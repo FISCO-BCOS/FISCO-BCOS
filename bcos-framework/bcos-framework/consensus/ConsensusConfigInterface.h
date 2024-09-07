@@ -48,7 +48,7 @@ public:
     // the min valid quorum before agree on a round of consensus
     virtual uint64_t minRequiredQuorum() const = 0;
 
-    virtual void setConsensusNodeList(ConsensusNodeList& _sealerList) = 0;
+    virtual void setConsensusNodeList(ConsensusNodeList _sealerList) = 0;
     virtual void setConsensusTimeout(uint64_t _consensusTimeout) = 0;
 
     virtual void setCommittedProposal(ProposalInterface::Ptr _committedProposal) = 0;

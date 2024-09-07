@@ -126,13 +126,13 @@ task::Task<protocol::BlockNumber> tag_invoke(
         LEDGER_LOG(TRACE) << "GetBlockNumber success" << LOG_KV("blockNumber", blockNumber);
         co_return blockNumber;
     }
+    co_return -1;
 }
 
 task::Task<consensus::ConsensusNodeList> tag_invoke(
-    ledger::tag_t<getNodeList> /*unused*/, auto& storage)
+    ledger::tag_t<getNodeList> /*unused*/, auto& storage, protocol::BlockNumber enableNumber)
 {
-    LEDGER_LOG(DEBUG) << "GetNodeList request";
-    auto blockNumber = co_await ledger::getCurrentBlockNumber(storage, fromStorage);
+    LEDGER_LOG(DEBUG) << "GetNodeList from" << LOG_KV("blockNumber", enableNumber);
     auto nodeListEntry = co_await storage2::readOne(
         storage, transaction_executor::StateKeyView{SYS_CONSENSUS, "key"});
     if (!nodeListEntry)
@@ -140,12 +140,11 @@ task::Task<consensus::ConsensusNodeList> tag_invoke(
         co_return consensus::ConsensusNodeList{};
     }
 
-    LEDGER_LOG(DEBUG) << "Get nodeList from" << LOG_KV("blockNumber", blockNumber);
     auto ledgerConsensusNodeList = decodeConsensusList(nodeListEntry->getField(0));
     consensus::ConsensusNodeList nodes;
     nodes.reserve(ledgerConsensusNodeList.size());
 
-    auto effectNumber = blockNumber + 1;
+    auto effectNumber = enableNumber + 1;
     for (auto&& node : RANGES::views::filter(ledgerConsensusNodeList, [&](auto const& node) {
              return boost::lexical_cast<bcos::protocol::BlockNumber>(node.enableNumber) <=
                     effectNumber;
@@ -179,39 +178,46 @@ task::Task<consensus::ConsensusNodeList> tag_invoke(
     co_return nodes;
 }
 
-task::Task<consensus::ConsensusNodeList> tag_invoke(ledger::tag_t<setNodeList> /*unused*/,
-    auto& storage, const consensus::ConsensusNodeList& nodeList)
+task::Task<void> tag_invoke(ledger::tag_t<setNodeList> /*unused*/, auto& storage,
+    const consensus::ConsensusNodeList& nodeList)
 {
     LEDGER_LOG(DEBUG) << "SetNodeList request";
     auto ledgerNodeList = RANGES::views::transform(nodeList, [&](auto const& node) {
-        ledger::ConsensusNode ledgerNode;
-        ledgerNode.nodeID = node.nodeID.hex();
-        ledgerNode.type = magic_enum::enum_name(node.type);
-        ledgerNode.voteWeight = node.voteWeight;
-        ledgerNode.enableNumber = node.blockNumber;
+        ledger::ConsensusNode ledgerNode{.nodeID = node.nodeID->hex(),
+            .voteWeight = node.voteWeight,
+            .type = std::string(magic_enum::enum_name(node.type)),
+            .enableNumber = boost::lexical_cast<std::string>(node.enableNumber)};
         return ledgerNode;
-    });
+    }) | RANGES::to<std::vector>();
     auto nodeListEntry = encodeConsensusList(ledgerNodeList);
-    co_await storage2::writeOne(storage, transaction_executor::StateKeyView{SYS_CONSENSUS, "key"},
+    co_await storage2::writeOne(storage, transaction_executor::StateKey{SYS_CONSENSUS, "key"},
         storage::Entry(std::move(nodeListEntry)));
 
     auto tarsNodeList = RANGES::views::filter(nodeList, [](auto const& node) {
-        return node.termWeight() > 0;
+        return node.termWeight > 0;
     }) | RANGES::views::transform([](auto const& node) {
         bcostars::ConsensusNode tarsConsensusNode;
-        tarsConsensusNode.nodeID.assign(node.nodeID->constData(), node.nodeID()->size());
-        tarsConsensusNode.type = magic_enum::enum_name(node.type);
+        tarsConsensusNode.nodeID.assign(
+            node.nodeID->constData(), node.nodeID->constData() + node.nodeID->size());
+        tarsConsensusNode.type = static_cast<int>(node.type);
         tarsConsensusNode.voteWeight = node.voteWeight;
         tarsConsensusNode.termWeight = node.termWeight;
         return tarsConsensusNode;
-    });
-    co_await storage2::writeSome(storage,
-        RANGES::views::transform(tarsNodeList,
-            [](auto const& node) {
-                return transaction_executor::StateKeyView{SYS_CONSENSUS, node.nodeID};
-            }),
-        RANGES::views::transform(tarsNodeList,
-            [](auto const& node) { return storage::Entry(concepts::serialize::encode(node)); }));
+    }) | RANGES::to<std::vector>();
+    if (!tarsNodeList.empty())
+    {
+        co_await storage2::writeSome(storage,
+            RANGES::views::transform(tarsNodeList,
+                [](auto const& node) {
+                    return transaction_executor::StateKey{
+                        SYS_CONSENSUS, std::string_view(node.nodeID.data(), node.nodeID.size())};
+                }),
+            RANGES::views::transform(tarsNodeList, [](auto const& node) {
+                bytes data;
+                concepts::serialize::encode(node, data);
+                return storage::Entry(std::move(data));
+            }));
+    }
     LEDGER_LOG(DEBUG) << "SetNodeList success" << LOG_KV("nodeList size", nodeList.size());
 }
 }  // namespace bcos::ledger

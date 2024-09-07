@@ -98,19 +98,19 @@ public:
     }
 
     void asyncGetNodeListByType(std::string_view const& _type,
-        std::function<void(Error::Ptr, consensus::ConsensusNodeListPtr)> _onGetConfig) override
+        std::function<void(Error::Ptr, consensus::ConsensusNodeList)> _onGetConfig) override
     {
         if (_type == ledger::CONSENSUS_SEALER)
         {
-            _onGetConfig(nullptr, std::make_shared<consensus::ConsensusNodeList>(1));
+            _onGetConfig(nullptr, consensus::ConsensusNodeList(1));
         }
         else if (_type == ledger::CONSENSUS_OBSERVER)
         {
-            _onGetConfig(nullptr, std::make_shared<consensus::ConsensusNodeList>(2));
+            _onGetConfig(nullptr, consensus::ConsensusNodeList(2));
         }
         else if (_type == ledger::CONSENSUS_CANDIDATE_SEALER)
         {
-            _onGetConfig(nullptr, std::make_shared<consensus::ConsensusNodeList>(1));
+            _onGetConfig(nullptr, consensus::ConsensusNodeList(1));
         }
         else
         {

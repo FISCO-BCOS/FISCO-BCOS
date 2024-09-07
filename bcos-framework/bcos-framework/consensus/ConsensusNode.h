@@ -24,10 +24,11 @@
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-framework/Common.h>
 #include <compare>
+#include <magic_enum.hpp>
+#include <ostream>
 
 namespace bcos::consensus
 {
-
 constexpr static uint64_t defaultVoteWeight = 100;
 constexpr static uint64_t defaultTermWeight = 1;
 
@@ -37,6 +38,11 @@ enum class Type
     consensus_observer,
     consensus_candidate_sealer
 };
+inline std::ostream& operator<<(std::ostream& stream, Type const& type)
+{
+    stream << magic_enum::enum_name(type);
+    return stream;
+}
 
 struct ConsensusNode
 {
@@ -68,8 +74,8 @@ inline std::strong_ordering operator<=>(ConsensusNode const& lhs, ConsensusNode 
     return lhs.enableNumber <=> rhs.enableNumber;
 }
 
-using ConsensusNodeList = std::vector<ConsensusNode>;
-using ConsensusNodeSet = std::set<ConsensusNode>;
+using ConsensusNodeList = std::vector<consensus::ConsensusNode>;
+using ConsensusNodeSet = std::set<consensus::ConsensusNode>;
 inline std::string decsConsensusNodeList(ConsensusNodeList const& _nodeList)
 {
     std::ostringstream stringstream;

@@ -6,6 +6,7 @@
 #include <boost/archive/text_oarchive.hpp>
 #include <boost/iostreams/device/back_inserter.hpp>
 #include <boost/iostreams/stream.hpp>
+#include <boost/serialization/vector.hpp>
 #include <boost/serialization/version.hpp>
 #include <string>
 #include <vector>
@@ -14,21 +15,13 @@ namespace bcos::ledger
 {
 struct ConsensusNode
 {
-    ConsensusNode() = default;
-    ConsensusNode(std::string _nodeID, u256 _weight, std::string _type, std::string _enableNumber)
-      : nodeID(std::move(_nodeID)),
-        voteWeight(std::move(_weight)),
-        type(std::move(_type)),
-        enableNumber(std::move(_enableNumber))
-    {}
-
     std::string nodeID;
     u256 voteWeight;
     std::string type;
     std::string enableNumber;
 
     template <typename Archive>
-    void serialize(Archive& archive, unsigned int version)
+    void serialize(Archive& archive, [[maybe_unused]] unsigned int version)
     {
         archive & nodeID;
         archive & voteWeight;

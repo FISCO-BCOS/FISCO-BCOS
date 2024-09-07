@@ -1,4 +1,5 @@
 #include "bcos-crypto/interfaces/crypto/Hash.h"
+#include "bcos-crypto/signature/key/KeyImpl.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
@@ -9,6 +10,7 @@
 #include "precompiled/common/WorkingSealerManagerImpl.h"
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
+#include <range/v3/algorithm/is_sorted.hpp>
 
 namespace bcos::test
 {
@@ -64,15 +66,16 @@ BOOST_AUTO_TEST_CASE(testRotate)
             notifyRotateEntry);
 
         // Node list
-        ledger::ConsensusNodeList nodeList;
-        nodeList.emplace_back(node1, 1, std::string(ledger::CONSENSUS_CANDIDATE_SEALER), "0"s, 70);
-        nodeList.emplace_back(node2, 1, std::string(ledger::CONSENSUS_CANDIDATE_SEALER), "0"s, 20);
-        nodeList.emplace_back(node3, 1, std::string(ledger::CONSENSUS_CANDIDATE_SEALER), "0"s, 7);
-        nodeList.emplace_back(node4, 1, std::string(ledger::CONSENSUS_CANDIDATE_SEALER), "0"s, 3);
-        storage::Entry consensusNodeListEntry;
-        consensusNodeListEntry.setObject(nodeList);
-        co_await storage2::writeOne(storage,
-            transaction_executor::StateKey{ledger::SYS_CONSENSUS, "key"}, consensusNodeListEntry);
+        consensus::ConsensusNodeList nodeList;
+        nodeList.emplace_back(std::make_shared<crypto::KeyImpl>(fromHex(node1)),
+            consensus::Type::consensus_candidate_sealer, 0, 70, 0);
+        nodeList.emplace_back(std::make_shared<crypto::KeyImpl>(fromHex(node2)),
+            consensus::Type::consensus_candidate_sealer, 0, 20, 0);
+        nodeList.emplace_back(std::make_shared<crypto::KeyImpl>(fromHex(node3)),
+            consensus::Type::consensus_candidate_sealer, 0, 7, 0);
+        nodeList.emplace_back(std::make_shared<crypto::KeyImpl>(fromHex(node4)),
+            consensus::Type::consensus_candidate_sealer, 0, 3, 0);
+        co_await ledger::setNodeList(storage, nodeList);
 
         auto storageWrapper =
             std::make_shared<storage::LegacyStateStorageWrapper<std::decay_t<decltype(storage)>>>(
@@ -92,20 +95,16 @@ BOOST_AUTO_TEST_CASE(testRotate)
 
         BOOST_CHECK_NO_THROW(workingSealerManager.rotateWorkingSealer(mockExecutive, execResult));
 
-        auto gotNodeListEntry = co_await storage2::readOne(
-            storage, transaction_executor::StateKeyView{ledger::SYS_CONSENSUS, "key"});
-        BOOST_REQUIRE(gotNodeListEntry);
-        auto gotNodeList = gotNodeListEntry->getObject<ledger::ConsensusNodeList>();
-
-        BOOST_CHECK_EQUAL(gotNodeList.size(), 4);
-        BOOST_CHECK_EQUAL(gotNodeList[0].nodeID, node1);
-        BOOST_CHECK_EQUAL(gotNodeList[0].type, ledger::CONSENSUS_CANDIDATE_SEALER);
-        BOOST_CHECK_EQUAL(gotNodeList[1].nodeID, node2);
-        BOOST_CHECK_EQUAL(gotNodeList[1].type, ledger::CONSENSUS_SEALER);  // 75 % 100 = 75
-        BOOST_CHECK_EQUAL(gotNodeList[2].nodeID, node3);
-        BOOST_CHECK_EQUAL(gotNodeList[2].type, ledger::CONSENSUS_SEALER);  // 75 % 80 = 75
-        BOOST_CHECK_EQUAL(gotNodeList[3].nodeID, node4);
-        BOOST_CHECK_EQUAL(gotNodeList[3].type, ledger::CONSENSUS_CANDIDATE_SEALER);
+        auto gotNodeList = co_await ledger::getNodeList(storage, 0);
+        BOOST_REQUIRE_EQUAL(gotNodeList.size(), 4);
+        BOOST_CHECK_EQUAL(gotNodeList[0].nodeID->hex(), node1);
+        BOOST_CHECK_EQUAL(gotNodeList[0].type, consensus::Type::consensus_candidate_sealer);
+        BOOST_CHECK_EQUAL(gotNodeList[1].nodeID->hex(), node2);
+        BOOST_CHECK_EQUAL(gotNodeList[1].type, consensus::Type::consensus_sealer);  // 75 % 100 = 75
+        BOOST_CHECK_EQUAL(gotNodeList[2].nodeID->hex(), node3);
+        BOOST_CHECK_EQUAL(gotNodeList[2].type, consensus::Type::consensus_sealer);  // 75 % 80 = 75
+        BOOST_CHECK_EQUAL(gotNodeList[3].nodeID->hex(), node4);
+        BOOST_CHECK_EQUAL(gotNodeList[3].type, consensus::Type::consensus_candidate_sealer);
     }());
 }
 

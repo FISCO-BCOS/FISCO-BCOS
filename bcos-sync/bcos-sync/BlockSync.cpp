@@ -1004,11 +1004,11 @@ void BlockSync::updateTreeTopologyNodeInfo()
 
     // extract NodeIDs
     RANGES::for_each(m_config->consensusNodeList(), [&consensusNodeIDs, &allNodeIDs](auto& node) {
-        consensusNodeIDs.emplace_back(node->nodeID());
-        allNodeIDs.emplace_back(node->nodeID());
+        consensusNodeIDs.emplace_back(node.nodeID);
+        allNodeIDs.emplace_back(node.nodeID);
     });
     RANGES::for_each(m_config->observerNodeList(),
-        [&allNodeIDs](auto& node) { allNodeIDs.emplace_back(node->nodeID()); });
+        [&allNodeIDs](auto& node) { allNodeIDs.emplace_back(node.nodeID); });
 
     RANGES::sort(consensusNodeIDs.begin(), consensusNodeIDs.end(),
         [](auto& a, auto& b) { return a->data() < b->data(); });
