@@ -230,10 +230,17 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
                                                            ledger::Features::Flag::feature_balance))
                              << LOG_KV("value", callParameters->value);
     }
+    // policy1 disable transfer balance
+    bool disableTransfer =
+        m_blockContext.features().get(ledger::Features::Flag::feature_balance_policy1);
 
-    if (m_blockContext.features().get(ledger::Features::Flag::feature_balance_policy1))
+    if (auto const& balanceTransfer =
+            m_blockContext.configs().get(ledger::SystemConfig::balance_transfer))
     {
-        // policy1 disable transfer balance
+        disableTransfer = (balanceTransfer.value() == "0");
+    }
+    if (disableTransfer)
+    {
         callParameters->value = 0;
     }
 
