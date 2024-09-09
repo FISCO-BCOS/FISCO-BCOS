@@ -99,7 +99,7 @@ class CommandInfo:
     network_add_vxlan = "add-vxlan"
     download_binary = "download_binary"
     download_type = ["cdn", "git"]
-    default_binary_version = "v3.10.0"
+    default_binary_version = "v3.10.2"
     command_list = [gen_config, upload, deploy,
                     upgrade, undeploy, expand, start, stop]
     service_command_list_str = ', '.join(command_list)
