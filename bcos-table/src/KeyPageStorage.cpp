@@ -847,8 +847,8 @@ auto KeyPageStorage::setEntryToPage(std::string table, std::string key, Entry en
     {
         // table is delete to empty, insert a new key
         // which is an old pageKey then will read the wrong page
-        KeyPage_LOG(INFO) << LOG_DESC("empty table") << LOG_KV("table", table)
-                          << LOG_KV("key", toHex(key));
+        KeyPage_LOG(DEBUG) << LOG_DESC("empty table") << LOG_KV("table", table)
+                           << LOG_KV("key", toHex(key));
         auto newData = std::make_shared<Data>();
         newData->table = table;
         newData->key = key;
