@@ -95,7 +95,7 @@ BOOST_AUTO_TEST_CASE(testRotate)
 
         BOOST_CHECK_NO_THROW(workingSealerManager.rotateWorkingSealer(mockExecutive, execResult));
 
-        auto gotNodeList = co_await ledger::getNodeList(storage, 0);
+        auto gotNodeList = co_await ledger::getNodeList(storage);
         BOOST_REQUIRE_EQUAL(gotNodeList.size(), 4);
         BOOST_CHECK_EQUAL(gotNodeList[0].nodeID->hex(), node1);
         BOOST_CHECK_EQUAL(gotNodeList[0].type, consensus::Type::consensus_candidate_sealer);

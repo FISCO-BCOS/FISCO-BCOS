@@ -212,7 +212,6 @@ static int addSealerImpl(bool isConsensus,
     }
 
     task::syncWait(ledger::setNodeList(*storage.getRawStorage(), consensusList));
-
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
                            << LOG_DESC("addSealer successfully insert")
                            << LOG_KV("isConsensus", isConsensus) << LOG_KV("nodeID", nodeID)

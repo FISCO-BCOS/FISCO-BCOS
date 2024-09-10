@@ -703,8 +703,7 @@ BOOST_AUTO_TEST_CASE(getNodeListByType)
     m_ledger->asyncGetNodeListByType(
         CONSENSUS_SEALER, [&](Error::Ptr _error, consensus::ConsensusNodeList _nodeList) {
             BOOST_CHECK(_error == nullptr);
-            BOOST_CHECK(!_nodeList.empty());
-            BOOST_CHECK(_nodeList.size() == 0);
+            BOOST_CHECK(_nodeList.empty());
             p2.set_value(true);
         });
     BOOST_CHECK_EQUAL(f2.get(), true);
@@ -714,8 +713,7 @@ BOOST_AUTO_TEST_CASE(getNodeListByType)
     m_ledger->asyncGetNodeListByType(
         CONSENSUS_OBSERVER, [&](Error::Ptr _error, consensus::ConsensusNodeList _nodeList) {
             BOOST_CHECK(_error == nullptr);
-            BOOST_CHECK(!_nodeList.empty());
-            BOOST_CHECK(_nodeList.size() == 0);
+            BOOST_CHECK(_nodeList.empty());
             p3.set_value(true);
         });
     BOOST_CHECK_EQUAL(f3.get(), true);

@@ -68,7 +68,7 @@ public:
     uint64_t m_leaderSwitchPeriod = 1;
 
     // version config
-    uint32_t m_compatibilityVersion;
+    uint32_t m_compatibilityVersion = static_cast<uint32_t>(protocol::BlockVersion::MAX_VERSION);
 
     // tx config
     uint64_t m_txGasLimit = 3000000000;

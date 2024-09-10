@@ -121,16 +121,9 @@ inline constexpr struct GetNodeList
         co_return co_await tag_invoke(*this, ledger, type);
     }
 
-    task::Task<consensus::ConsensusNodeList> operator()(
-        auto& storage, protocol::BlockNumber enableNumber) const
-    {
-        co_return co_await tag_invoke(*this, storage, enableNumber);
-    }
-
     task::Task<consensus::ConsensusNodeList> operator()(auto& storage) const
     {
-        co_return co_await tag_invoke(
-            *this, storage, co_await getCurrentBlockNumber(storage, fromStorage));
+        co_return co_await tag_invoke(*this, storage);
     }
 } getNodeList{};
 

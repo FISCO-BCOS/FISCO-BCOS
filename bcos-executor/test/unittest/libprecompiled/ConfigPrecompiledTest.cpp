@@ -725,10 +725,10 @@ BOOST_AUTO_TEST_CASE(rotateValidTest)
     std::tie(vrfPublicKey, vrfProof) = generateVRFProof(keyPair, blockHash);
     result = rotate(blockNumber++, vrfPublicKey, blockHash.asBytes(), vrfProof,
         covertPublicToHexAddress(keyPair->publicKey()));
-    BOOST_CHECK(result->status() == 0);
+    BOOST_CHECK_EQUAL(result->status(), 0);
 
     nodeList = getNodeList();
-    BOOST_CHECK(nodeList.size() == 4);
+    BOOST_CHECK_EQUAL(nodeList.size(), 4);
     // only one node is working sealer
     uint16_t workingSealerCount = 0;
     uint16_t candidateSealerCount = 0;
@@ -743,8 +743,8 @@ BOOST_AUTO_TEST_CASE(rotateValidTest)
             candidateSealerCount++;
         }
     }
-    BOOST_CHECK(workingSealerCount == 1);
-    BOOST_CHECK(candidateSealerCount == 3);
+    BOOST_CHECK_EQUAL(workingSealerCount, 1);
+    BOOST_CHECK_EQUAL(candidateSealerCount, 3);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

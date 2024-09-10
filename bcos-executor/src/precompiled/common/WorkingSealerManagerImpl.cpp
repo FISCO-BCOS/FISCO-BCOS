@@ -257,8 +257,8 @@ bool WorkingSealerManagerImpl::shouldRotate(const executor::TransactionExecutive
 bool WorkingSealerManagerImpl::getConsensusNodeListFromStorage(
     const executor::TransactionExecutive::Ptr& _executive)
 {
-    auto nodeList = task::syncWait(ledger::getNodeList(*_executive->storage().getRawStorage()));
     auto const& blockContext = _executive->blockContext();
+    auto nodeList = task::syncWait(ledger::getNodeList(*_executive->storage().getRawStorage()));
     bool isConsensusNodeListChanged = false;
     bool isCandidateSealerChanged = false;
 

@@ -64,6 +64,7 @@
 #include <future>
 #include <iterator>
 #include <memory>
+#include <range/v3/algorithm/remove_if.hpp>
 #include <range/v3/view/take.hpp>
 #include <utility>
 
@@ -1276,14 +1277,25 @@ void Ledger::removeExpiredNonce(protocol::BlockNumber blockNumber, bool sync)
 void Ledger::asyncGetNodeListByType(const std::string_view& _type,
     std::function<void(Error::Ptr, consensus::ConsensusNodeList)> _onGetConfig)
 {
-    task::wait([](decltype(*this)& self, std::string type,
+    auto eType = magic_enum::enum_cast<consensus::Type>(_type);
+    if (!eType)
+    {
+        _onGetConfig(nullptr, {});
+        return;
+    }
+
+    task::wait([](decltype(*this)& self, consensus::Type type,
                    decltype(_onGetConfig) callback) -> task::Task<void> {
         try
         {
+            auto blockNumber =
+                co_await ledger::getCurrentBlockNumber(*self.m_stateStorage, fromStorage);
+            auto effectNumber = blockNumber + 1;
             auto nodeList = co_await ledger::getNodeList(*self.m_stateStorage);
-            RANGES::remove_if(nodeList,
-                [&](auto const& node) { return magic_enum::enum_name(node.type) != type; });
-            callback(nullptr, std::move(nodeList));
+            auto filterNodeList = RANGES::views::filter(nodeList, [&](auto const& node) {
+                return node.type == type && node.enableNumber <= effectNumber;
+            }) | RANGES::to<std::vector>();
+            callback(nullptr, std::move(filterNodeList));
         }
         catch (std::exception& e)
         {
@@ -1291,7 +1303,7 @@ void Ledger::asyncGetNodeListByType(const std::string_view& _type,
                          LedgerError::GetStorageError, "Error while getNodeListByType", e),
                 {});
         }
-    }(*this, std::string(_type), std::move(_onGetConfig)));
+    }(*this, *eType, std::move(_onGetConfig)));
 }
 
 Error::Ptr Ledger::checkTableValid(Error::UniquePtr&& error,
