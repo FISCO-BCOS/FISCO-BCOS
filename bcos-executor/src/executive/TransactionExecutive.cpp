@@ -1387,7 +1387,7 @@ void TransactionExecutive::setPrecompiled(std::shared_ptr<PrecompiledMap> _preco
 
 void TransactionExecutive::revert()
 {
-    EXECUTOR_BLK_LOG(INFO, m_blockContext.number())
+    EXECUTOR_BLK_LOG(DEBUG, m_blockContext.number())
         << "Revert transaction" << LOG_KV("contextID", m_contextID) << LOG_KV("seq", m_seq);
 
     if (m_blockContext.features().get(ledger::Features::Flag::bugfix_revert))
