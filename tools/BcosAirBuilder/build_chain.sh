@@ -39,7 +39,7 @@ ca_dir=""
 prometheus_dir=""
 config_path=""
 docker_mode=
-default_version="v3.10.0"
+default_version="v3.10.2"
 compatibility_version=${default_version}
 default_mtail_version="3.0.0-rc49"
 compatibility_mtail_version=${default_mtail_version}
@@ -71,11 +71,11 @@ log_level="info"
 
 # for pro or max default setting
 bcos_builder_package=BcosBuilder.tgz
-bcos_builder_version=v3.10.0
+bcos_builder_version=v3.10.2
 use_exist_binary="false"
 download_specific_binary_flag="false"
 download_service_binary_type="cdn"
-service_binary_version="v3.10.0"
+service_binary_version="v3.10.2"
 download_service_binary_path="binary"
 download_service_binary_path_flag="false"
 service_type="all"
