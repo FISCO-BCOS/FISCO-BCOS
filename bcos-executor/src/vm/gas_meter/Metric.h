@@ -20,6 +20,7 @@
 #pragma once
 #include <array>
 #include <string>
+#include <cstdint>
 
 // #define WASM_FLOAT_ENABLE
 namespace bcos
