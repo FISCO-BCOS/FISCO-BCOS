@@ -342,40 +342,30 @@ int ConsensusPrecompiled::setWeight(
     }
 
     auto& storage = _executive->storage();
-
-    auto entry = storage.getRow(SYS_CONSENSUS, "key");
-
-    ConsensusNodeList consensusList;
-    if (entry)
-    {
-        auto value = entry->getField(0);
-        consensusList = decodeConsensusList(value);
-    }
+    auto consensusList = task::syncWait(ledger::getNodeList(*storage.getRawStorage()));
     auto node = std::find_if(consensusList.begin(), consensusList.end(),
-        [&nodeID](const ConsensusNode& node) { return node.nodeID == nodeID; });
+        [&](const consensus::ConsensusNode& node) { return node.nodeID->hex() == nodeID; });
     if (node != consensusList.end())
     {
-        if (node->type == ledger::CONSENSUS_OBSERVER)
+        if (node->type == consensus::Type::consensus_observer)
         {
             BOOST_THROW_EXCEPTION(protocol::PrecompiledError("Cannot set weight to observer."));
         }
-        // if (setTermWeight)
-        // {
-        //     node->termWeight = weight.convert_to<uint64_t>();
-        // }
-        // else
-        // {
-        node->voteWeight = weight;
-        // }
-        node->enableNumber = boost::lexical_cast<std::string>(blockContext.number() + 1);
+        if (setTermWeight)
+        {
+            node->termWeight = weight.convert_to<uint64_t>();
+        }
+        else
+        {
+            node->voteWeight = weight.convert_to<uint64_t>();
+        }
+        node->enableNumber = blockContext.number() + 1;
     }
     else
     {
         return CODE_NODE_NOT_EXIST;  // Not found
     }
-
-    entry->setObject(consensusList);
-    storage.setRow(SYS_CONSENSUS, "key", std::move(*entry));
+    task::syncWait(ledger::setNodeList(*storage.getRawStorage(), consensusList));
 
     return 0;
 }
