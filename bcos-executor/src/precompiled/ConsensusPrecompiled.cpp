@@ -19,7 +19,6 @@
  */
 
 #include "ConsensusPrecompiled.h"
-#include "bcos-tool/ConsensusNode.h"
 #include "common/PrecompiledResult.h"
 #include "common/Utilities.h"
 #include "common/WorkingSealerManagerImpl.h"

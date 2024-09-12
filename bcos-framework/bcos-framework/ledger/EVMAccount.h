@@ -216,7 +216,6 @@ public:
     EVMAccount& operator=(EVMAccount&&) noexcept = default;
     EVMAccount(Storage& storage, const evmc_address& address) : m_storage(storage)
     {
-#if 0
         std::array<char, sizeof(address.bytes) * 2> table;  // NOLINT
         boost::algorithm::hex_lower(concepts::bytebuffer::toView(address.bytes), table.data());
         if (auto view = std::string_view(table.data(), table.size());
@@ -231,20 +230,6 @@ public:
             m_tableName.append(ledger::SYS_DIRECTORY::USER_APPS);
         }
         m_tableName.append(std::string_view(table.data(), table.size()));
-#endif
-        std::array<char, sizeof(address.bytes) * 2> table;  // NOLINT
-        if (auto view = std::string_view(table.data(), table.size());
-            bcos::precompiled::c_systemTxsAddress.contains(view))
-        {
-            m_tableName.reserve(ledger::SYS_DIRECTORY::SYS_APPS.size() + sizeof(address.bytes));
-            m_tableName.append(ledger::SYS_DIRECTORY::SYS_APPS);
-        }
-        else
-        {
-            m_tableName.reserve(ledger::SYS_DIRECTORY::USER_APPS.size() + sizeof(address.bytes));
-            m_tableName.append(ledger::SYS_DIRECTORY::USER_APPS);
-        }
-        m_tableName.append(std::string_view((const char*)address.bytes, sizeof(address.bytes)));
     }
 
     /**

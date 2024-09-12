@@ -20,7 +20,7 @@ cmake_minimum_required(VERSION 3.10)
 
 find_package(Boost REQUIRED serialization)
 
-add_library(${LEDGER_TARGET} bcos-ledger/Ledger.cpp bcos-ledger/LedgerMethods.cpp)
+add_library(${LEDGER_TARGET} bcos-ledger/Ledger.cpp bcos-ledger/LedgerMethods.cpp bcos-ledger/ConsensusNode.cpp)
 target_include_directories(${LEDGER_TARGET} PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-ledger>)
