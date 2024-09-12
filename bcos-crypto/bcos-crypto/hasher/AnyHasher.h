@@ -57,7 +57,7 @@ public:
     AnyHasher(Hasher hasher)
       : m_anyHasher(std::make_shared<AnyHasherImpl<Hasher>>(std::move(hasher)))
     {}
-    AnyHasher(std::unique_ptr<AnyHasherInterface> anyHasher) : m_anyHasher(std::move(anyHasher)) {}
+    AnyHasher(std::unique_ptr<AnyHasherInterface> anyHasher);
     AnyHasher(AnyHasher&&) = default;
     AnyHasher& operator=(AnyHasher&&) noexcept = default;
     AnyHasher(const AnyHasher&) = default;
@@ -70,7 +70,7 @@ public:
         m_anyHasher->update(view);
     }
 
-    void update(std::span<std::byte const> input) { m_anyHasher->update(input); }
+    void update(std::span<std::byte const> input);
 
     void final(concepts::bytebuffer::ByteBuffer auto& output)
     {
@@ -79,10 +79,10 @@ public:
             std::span<std::byte>((std::byte*)RANGES::data(output), RANGES::size(output)));
     }
 
-    void final(std::span<std::byte> output) { m_anyHasher->final(output); }
+    void final(std::span<std::byte> output);
 
-    AnyHasher clone() const { return {m_anyHasher->clone()}; }
-    size_t hashSize() const { return m_anyHasher->hashSize(); }
+    AnyHasher clone() const;
+    size_t hashSize() const;
 };
 
 static_assert(Hasher<AnyHasher>, "Not a valid Hasher!");

@@ -23,7 +23,6 @@
 #include "../../vm/Precompiled.h"
 #include "VRFInfo.h"
 #include <bcos-framework/storage/Table.h>
-#include <bcos-tool/ConsensusNode.h>
 
 namespace bcos::precompiled
 {

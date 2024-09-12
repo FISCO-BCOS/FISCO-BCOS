@@ -187,7 +187,8 @@ private:
         }
         else
         {
-            std::uninitialized_fill_n(value.bytes, sizeof(value), 0);
+            auto view = std::span(value.bytes);
+            std::uninitialized_fill(view.begin(), view.end(), 0);
         }
         co_return value;
     }
@@ -215,7 +216,7 @@ public:
     EVMAccount& operator=(EVMAccount&&) noexcept = default;
     EVMAccount(Storage& storage, const evmc_address& address) : m_storage(storage)
     {
-        std::array<char, sizeof(address.bytes) * 2> table;
+        std::array<char, sizeof(address.bytes) * 2> table;  // NOLINT
         boost::algorithm::hex_lower(concepts::bytebuffer::toView(address.bytes), table.data());
         if (auto view = std::string_view(table.data(), table.size());
             bcos::precompiled::c_systemTxsAddress.contains(view))

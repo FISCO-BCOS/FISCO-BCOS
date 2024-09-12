@@ -37,7 +37,6 @@
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Wait.h"
 #include "bcos-tool/BfsFileFactory.h"
-#include "bcos-tool/ConsensusNode.h"
 #include "bcos-tool/NodeConfig.h"
 #include "bcos-tool/VersionConverter.h"
 #include <bcos-codec/scale/Scale.h>

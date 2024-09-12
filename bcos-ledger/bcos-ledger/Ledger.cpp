@@ -48,7 +48,6 @@
 #include <bcos-framework/storage/Table.h>
 #include <bcos-task/Wait.h>
 #include <bcos-tool/BfsFileFactory.h>
-#include <bcos-tool/ConsensusNode.h>
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <evmc/evmc.h>
@@ -58,8 +57,10 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/lexical_cast/bad_lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
+#include <algorithm>
 #include <array>
 #include <cstddef>
+#include <cstdlib>
 #include <exception>
 #include <future>
 #include <iterator>
@@ -1397,8 +1398,8 @@ void Ledger::asyncGetBlockTransactionHashes(bcos::protocol::BlockNumber blockNum
 
             table->asyncGetRow(boost::lexical_cast<std::string>(blockNumber),
                 [this, blockNumber, callback](auto&& error, std::optional<Entry>&& entry) {
-                    auto validError = checkEntryValid(
-                        std::move(error), entry, boost::lexical_cast<std::string>(blockNumber));
+                    auto validError = checkEntryValid(std::forward<decltype(error)>(error), entry,
+                        boost::lexical_cast<std::string>(blockNumber));
                     if (validError)
                     {
                         callback(std::move(validError), std::vector<std::string>());
@@ -2137,69 +2138,36 @@ bool Ledger::buildGenesisBlock(
     }
 
     // write consensus node list
-    std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> consensusTablePromise;
-    m_stateStorage->asyncOpenTable(SYS_CONSENSUS, [&consensusTablePromise](
-                                                      auto&& error, std::optional<Table>&& table) {
-        consensusTablePromise.set_value({std::forward<decltype(error)>(error), std::move(table)});
-    });
-
-    auto [consensusError, consensusTable] = consensusTablePromise.get_future().get();
-    if (consensusError)
-    {
-        BOOST_THROW_EXCEPTION(*consensusError);
-    }
-
-    if (!consensusTable)
-    {
-        BOOST_THROW_EXCEPTION(
-            BCOS_ERROR(LedgerError::OpenTableFailed, "Open SYS_CONSENSUS failed!"));
-    }
-
-    ConsensusNodeList consensusNodeList;
-
-    for (const auto& node : ledgerConfig.consensusNodeList())
-    {
-        consensusNodeList.emplace_back(
-            node.nodeID->hex(), node.voteWeight, std::string{CONSENSUS_SEALER}, "0");
-    }
-
-    // TODO: setNodeList
-
     // update some node type to CONSENSUS_CANDIDATE_SEALER
     if (versionNumber >= (uint32_t)protocol::BlockVersion::V3_5_VERSION &&
         RPBFT_CONSENSUS_TYPE == genesis.m_consensusType)
     {
         auto workingSealerList = selectWorkingSealer(ledgerConfig, genesis.m_epochSealerNum);
-        for (auto& node : consensusNodeList)
-        {
-            auto iter = std::find_if(workingSealerList.begin(), workingSealerList.end(),
-                [&node](auto&& workingNode) { return workingNode.nodeID->hex() == node.nodeID; });
-            if (iter == workingSealerList.end())
-            {
-                node.type = CONSENSUS_CANDIDATE_SEALER;
-            }
-        }
+        std::sort(workingSealerList.begin(), workingSealerList.end(),
+            [](auto const& lhs, auto const& rhs) {
+                return lhs.nodeID->data() < rhs.nodeID->data();
+            });
+        task::syncWait(ledger::setNodeList(*m_stateStorage,
+            RANGES::views::concat(
+                ledgerConfig.consensusNodeList() | RANGES::views::transform([&](auto node) {
+                    if (auto it = std::lower_bound(workingSealerList.begin(),
+                            workingSealerList.end(), node.nodeID,
+                            [](auto const& lhs, auto const& rhs) {
+                                return lhs.nodeID->data() < rhs->data();
+                            });
+                        it == workingSealerList.end() || it->nodeID->data() != node.nodeID->data())
+                    {
+                        node.type = consensus::Type::consensus_candidate_sealer;
+                    }
+                    return node;
+                }),
+                ledgerConfig.observerNodeList())));
     }
-
-    for (const auto& node : ledgerConfig.observerNodeList())
+    else
     {
-        consensusNodeList.emplace_back(
-            node.nodeID->hex(), node.voteWeight, std::string{CONSENSUS_OBSERVER}, "0");
-    }
-
-    Entry consensusNodeListEntry;
-    consensusNodeListEntry.importFields({encodeConsensusList(consensusNodeList)});
-
-    std::promise<Error::UniquePtr> setConsensusNodeListPromise;
-    consensusTable->asyncSetRow("key", std::move(consensusNodeListEntry),
-        [&setConsensusNodeListPromise](
-            Error::UniquePtr&& error) { setConsensusNodeListPromise.set_value(std::move(error)); });
-
-    auto setConsensusNodeListError = setConsensusNodeListPromise.get_future().get();
-    if (setConsensusNodeListError)
-    {
-        BOOST_THROW_EXCEPTION(BCOS_ERROR_WITH_PREV(
-            LedgerError::CallbackError, "Write genesis consensus node list failed!", *error));
+        task::syncWait(ledger::setNodeList(
+            *m_stateStorage, RANGES::views::concat(ledgerConfig.consensusNodeList(),
+                                 ledgerConfig.observerNodeList())));
     }
 
     // write current state

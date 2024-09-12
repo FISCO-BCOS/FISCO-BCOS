@@ -1,5 +1,4 @@
-#pragma once
-#include <bcos-utilities/Common.h>
+#include "ConsensusNode.h"
 #include <boost/archive/basic_archive.hpp>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
@@ -8,30 +7,8 @@
 #include <boost/iostreams/stream.hpp>
 #include <boost/serialization/vector.hpp>
 #include <boost/serialization/version.hpp>
-#include <string>
-#include <vector>
 
-namespace bcos::ledger
-{
-struct ConsensusNode
-{
-    std::string nodeID;
-    u256 voteWeight;
-    std::string type;
-    std::string enableNumber;
-
-    template <typename Archive>
-    void serialize(Archive& archive, [[maybe_unused]] unsigned int version)
-    {
-        archive & nodeID;
-        archive & voteWeight;
-        archive & type;
-        archive & enableNumber;
-    }
-};
-
-using ConsensusNodeList = std::vector<ledger::ConsensusNode>;
-inline ConsensusNodeList decodeConsensusList(const std::string_view& value)
+bcos::ledger::ConsensusNodeList bcos::ledger::decodeConsensusList(const std::string_view& value)
 {
     boost::iostreams::stream<boost::iostreams::array_source> inputStream(
         value.data(), value.size());
@@ -43,8 +20,7 @@ inline ConsensusNodeList decodeConsensusList(const std::string_view& value)
 
     return consensusList;
 }
-
-inline std::string encodeConsensusList(const bcos::ledger::ConsensusNodeList& consensusList)
+std::string bcos::ledger::encodeConsensusList(const bcos::ledger::ConsensusNodeList& consensusList)
 {
     std::string value;
     boost::iostreams::stream<boost::iostreams::back_insert_device<std::string>> outputStream(value);
@@ -56,5 +32,3 @@ inline std::string encodeConsensusList(const bcos::ledger::ConsensusNodeList& co
 
     return value;
 }
-
-}  // namespace bcos::ledger

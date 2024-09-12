@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ConsensusNode.h"
 #include "bcos-concepts/Serialize.h"
 #include "bcos-crypto/signature/key/KeyImpl.h"
 #include "bcos-framework/consensus/ConsensusNode.h"
@@ -13,7 +14,6 @@
 #include "bcos-table/src/LegacyStorageWrapper.h"
 #include "bcos-tars-protocol/impl/TarsSerializable.h"
 #include "bcos-task/AwaitableValue.h"
-#include "bcos-tool/ConsensusNode.h"
 #include "bcos-utilities/Exceptions.h"
 #include "generated/bcos-tars-protocol/tars/LedgerConfig.h"
 #include <boost/throw_exception.hpp>
@@ -181,8 +181,8 @@ task::Task<consensus::ConsensusNodeList> tag_invoke(
     co_return nodes;
 }
 
-task::Task<void> tag_invoke(ledger::tag_t<setNodeList> /*unused*/, auto& storage,
-    const consensus::ConsensusNodeList& nodeList)
+task::Task<void> tag_invoke(
+    ledger::tag_t<setNodeList> /*unused*/, auto& storage, RANGES::input_range auto&& nodeList)
 {
     LEDGER_LOG(DEBUG) << "SetNodeList request";
     auto ledgerNodeList = RANGES::views::transform(nodeList, [&](auto const& node) {

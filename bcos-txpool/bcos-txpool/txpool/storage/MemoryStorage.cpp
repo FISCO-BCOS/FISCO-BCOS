@@ -275,10 +275,8 @@ TransactionStatus MemoryStorage::txpoolStorageCheck(
             accessor->value()->setSubmitCallback(std::move(txSubmitCallback));
             return TransactionStatus::AlreadyInTxPoolAndAccept;
         }
-        else
-        {
-            return TransactionStatus::AlreadyInTxPool;
-        }
+
+        return TransactionStatus::AlreadyInTxPool;
     }
     return TransactionStatus::None;
 }
