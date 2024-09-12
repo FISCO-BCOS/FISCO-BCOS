@@ -253,13 +253,13 @@ bool PBFTConfig::tryTriggerFastViewChange(IndexType _leaderIndex)
         return false;
     }
     // Note: must register m_faultyDiscriminator before start the PBFTEngine
-    if (!m_faultyDiscriminator(leaderNodeInfo->nodeID()))
+    if (!m_faultyDiscriminator(leaderNodeInfo->nodeID))
     {
         return false;
     }
     PBFT_LOG(INFO) << LOG_DESC("tryTriggerFastViewChange for the faulty leader")
                    << LOG_KV("leaderIndex", _leaderIndex)
-                   << LOG_KV("leader", leaderNodeInfo->nodeID()->shortHex()) << printCurrentState();
+                   << LOG_KV("leader", leaderNodeInfo->nodeID->shortHex()) << printCurrentState();
     m_fastViewChangeHandler();
     // check the newLeader connection
     auto newLeader = leaderIndexInNewViewPeriod(m_toView);
@@ -406,9 +406,9 @@ void PBFTConfig::updateQuorum()
 {
     m_totalQuorum.store(0);
     ReadGuard lock(x_consensusNodeList);
-    for (const auto& consensusNode : *m_consensusNodeList)
+    for (const auto& consensusNode : m_consensusNodeList)
     {
-        m_totalQuorum += consensusNode->voteWeight();
+        m_totalQuorum += consensusNode.voteWeight;
     }
     // get m_maxFaultyQuorum
     m_maxFaultyQuorum = (m_totalQuorum - 1) / 3;

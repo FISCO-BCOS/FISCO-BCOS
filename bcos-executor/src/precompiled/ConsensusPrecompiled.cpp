@@ -133,7 +133,7 @@ std::shared_ptr<PrecompiledExecResult> ConsensusPrecompiled::call(
 
 static int addSealerImpl(bool isConsensus,
     const std::shared_ptr<executor::TransactionExecutive>& _executive, std::string nodeID,
-    u256 voteWeight, uint64_t termWeight)
+    uint64_t voteWeight, uint64_t termWeight)
 {
     const auto& blockContext = _executive->blockContext();
     boost::to_lower(nodeID);
@@ -151,19 +151,11 @@ static int addSealerImpl(bool isConsensus,
     }
     auto& storage = _executive->storage();
 
-    ConsensusNodeList consensusList;
-    auto entry = storage.getRow(SYS_CONSENSUS, "key");
-    if (entry)
-    {
-        consensusList = entry->getObject<ConsensusNodeList>();
-    }
-    else
-    {
-        entry.emplace(Entry());
-    }
-
+    auto consensusList = task::syncWait(ledger::getNodeList(*storage.getRawStorage()));
     auto node = std::find_if(consensusList.begin(), consensusList.end(),
-        [&nodeID](const ConsensusNode& node) { return node.nodeID == nodeID; });
+        [&nodeID](const consensus::ConsensusNode& node) { return node.nodeID->hex() == nodeID; });
+    auto nodeIDBin = fromHex(nodeID);
+    auto nodeIDPtr = std::make_shared<crypto::KeyImpl>(nodeIDBin);
     if (isConsensus)
     {
         if (voteWeight == 0)
@@ -178,8 +170,8 @@ static int addSealerImpl(bool isConsensus,
             // exist
             node->voteWeight = voteWeight;
             node->type = blockContext.features().get(Features::Flag::feature_rpbft) ?
-                             ledger::CONSENSUS_CANDIDATE_SEALER :
-                             ledger::CONSENSUS_SEALER;
+                             consensus::Type::consensus_candidate_sealer :
+                             consensus::Type::consensus_sealer;
         }
         else
         {
@@ -189,10 +181,10 @@ static int addSealerImpl(bool isConsensus,
                 // version >= 3.1.0, only allow adding sealer in observer list
                 return CODE_ADD_SEALER_SHOULD_IN_OBSERVER;
             }
-            consensusList.emplace_back(nodeID, voteWeight, std::string{ledger::CONSENSUS_SEALER},
-                boost::lexical_cast<std::string>(blockContext.number() + 1), termWeight);
+            consensusList.emplace_back(nodeIDPtr, consensus::Type::consensus_sealer, voteWeight, 0,
+                blockContext.number() + 1);
         }
-        node->enableNumber = boost::lexical_cast<std::string>(blockContext.number() + 1);
+        node->enableNumber = blockContext.number() + 1;
     }
     else
     {
@@ -200,7 +192,7 @@ static int addSealerImpl(bool isConsensus,
         {
             // find it in consensus list
             auto sealerCount = std::count_if(consensusList.begin(), consensusList.end(),
-                [](auto&& node) { return node.type == ledger::CONSENSUS_SEALER; });
+                [](auto&& node) { return node.type == consensus::Type::consensus_sealer; });
             if (sealerCount == 1)
             {
                 PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
@@ -209,19 +201,17 @@ static int addSealerImpl(bool isConsensus,
             }
             node->voteWeight = 0;
             node->termWeight = 0;
-            node->type = ledger::CONSENSUS_OBSERVER;
-            node->enableNumber = boost::lexical_cast<std::string>(blockContext.number() + 1);
+            node->type = consensus::Type::consensus_observer;
+            node->enableNumber = blockContext.number() + 1;
         }
         else
         {
-            consensusList.emplace_back(nodeID, 0, std::string{ledger::CONSENSUS_OBSERVER},
-                boost::lexical_cast<std::string>(blockContext.number() + 1), 0);
+            consensusList.emplace_back(
+                nodeIDPtr, consensus::Type::consensus_observer, 0, 0, blockContext.number() + 1);
         }
     }
 
-    entry->setObject(consensusList);
-    storage.setRow(SYS_CONSENSUS, "key", std::move(*entry));
-
+    task::syncWait(ledger::setNodeList(*storage.getRawStorage(), consensusList));
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
                            << LOG_DESC("addSealer successfully insert")
                            << LOG_KV("isConsensus", isConsensus) << LOG_KV("nodeID", nodeID)
@@ -239,7 +229,7 @@ int ConsensusPrecompiled::addSealer(
     const auto& blockContext = _executive->blockContext();
     codec.decode(_data, nodeID, voteWeight);
 
-    return addSealerImpl(true, _executive, std::move(nodeID), voteWeight, 0);
+    return addSealerImpl(true, _executive, std::move(nodeID), voteWeight.convert_to<uint64_t>(), 0);
 }
 
 int ConsensusPrecompiled::addSealer2(
@@ -253,8 +243,8 @@ int ConsensusPrecompiled::addSealer2(
     const auto& blockContext = _executive->blockContext();
     codec.decode(_data, nodeID, voteWeight, termWeight);
 
-    return addSealerImpl(
-        true, _executive, std::move(nodeID), voteWeight, termWeight.convert_to<uint64_t>());
+    return addSealerImpl(true, _executive, std::move(nodeID), voteWeight.convert_to<uint64_t>(),
+        termWeight.convert_to<uint64_t>());
 }
 
 int ConsensusPrecompiled::addObserver(
@@ -352,20 +342,12 @@ int ConsensusPrecompiled::setWeight(
     }
 
     auto& storage = _executive->storage();
-
-    auto entry = storage.getRow(SYS_CONSENSUS, "key");
-
-    ConsensusNodeList consensusList;
-    if (entry)
-    {
-        auto value = entry->getField(0);
-        consensusList = decodeConsensusList(value);
-    }
+    auto consensusList = task::syncWait(ledger::getNodeList(*storage.getRawStorage()));
     auto node = std::find_if(consensusList.begin(), consensusList.end(),
-        [&nodeID](const ConsensusNode& node) { return node.nodeID == nodeID; });
+        [&](const consensus::ConsensusNode& node) { return node.nodeID->hex() == nodeID; });
     if (node != consensusList.end())
     {
-        if (node->type == ledger::CONSENSUS_OBSERVER)
+        if (node->type == consensus::Type::consensus_observer)
         {
             BOOST_THROW_EXCEPTION(protocol::PrecompiledError("Cannot set weight to observer."));
         }
@@ -375,17 +357,15 @@ int ConsensusPrecompiled::setWeight(
         }
         else
         {
-            node->voteWeight = weight;
+            node->voteWeight = weight.convert_to<uint64_t>();
         }
-        node->enableNumber = boost::lexical_cast<std::string>(blockContext.number() + 1);
+        node->enableNumber = blockContext.number() + 1;
     }
     else
     {
         return CODE_NODE_NOT_EXIST;  // Not found
     }
-
-    entry->setObject(consensusList);
-    storage.setRow(SYS_CONSENSUS, "key", std::move(*entry));
+    task::syncWait(ledger::setNodeList(*storage.getRawStorage(), consensusList));
 
     return 0;
 }
@@ -437,26 +417,16 @@ void ConsensusPrecompiled::showConsensusTable(
         return;
     }
     auto& storage = _executive->storage();
-    // SYS_CONSENSUS must exist
-    auto entry = storage.getRow(SYS_CONSENSUS, "key");
-
-    if (!entry)
-    {
-        PRECOMPILED_LOG(TRACE) << LOG_BADGE("ConsensusPrecompiled")
-                               << LOG_DESC("showConsensusTable") << " No consensus";
-        return;
-    }
-
-    auto consensusList = entry->getObject<ConsensusNodeList>();
+    auto consensusList = task::syncWait(ledger::getNodeList(*storage.getRawStorage()));
 
     std::stringstream consensusTable;
     consensusTable << "ConsensusPrecompiled show table:\n";
     for (auto& node : consensusList)
     {
-        auto& [nodeID, voteWeight, type, enableNumber, termWeight] = node;
+        auto& [nodeID, type, voteWeight, termWeight, enableNumber] = node;
 
-        consensusTable << "ConsensusPrecompiled: " << nodeID << "," << type << "," << enableNumber
-                       << "," << voteWeight << "\n";
+        consensusTable << "ConsensusPrecompiled: " << nodeID << "," << magic_enum::enum_name(type)
+                       << "," << enableNumber << "," << voteWeight << "\n";
     }
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("showConsensusTable")
                            << LOG_KV("consensusTable", consensusTable.str());

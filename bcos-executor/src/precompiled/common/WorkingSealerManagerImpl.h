@@ -61,10 +61,10 @@ public:
     // calculate the number of working sealers that need to be added and removed
     std::tuple<uint32_t, uint32_t> calNodeRotatingInfo();
     std::vector<WorkingSealer> selectNodesFromList(
-        std::vector<WorkingSealer>& _nodeList, uint32_t _selectNum);
+        std::vector<WorkingSealer>& _nodeList, uint32_t _selectNum, bool remove);
 
     // update node list type in m_consensusNodes
-    void updateNodeListType(const std::vector<WorkingSealer>& _nodeList, std::string const& _type,
+    void updateNodeListType(const std::vector<WorkingSealer>& _nodeList, consensus::Type _type,
         const executor::TransactionExecutive::Ptr& executive);
     void commitConsensusNodeListToStorage(const executor::TransactionExecutive::Ptr& _executive);
 
@@ -72,7 +72,7 @@ public:
     std::vector<WorkingSealer> m_candidateSealer;
     std::vector<WorkingSealer> m_consensusSealer;
     bool m_consensusChangeFlag = false;
-    ledger::ConsensusNodeList m_consensusNodes;
+    consensus::ConsensusNodeList m_consensusNodes;
     bool m_notifyNextLeaderRotateSet = false;
     uint32_t m_configuredEpochSealersSize = 4;
     bool m_withWeight{};

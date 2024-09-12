@@ -20,6 +20,7 @@
 
 #pragma once
 // if windows, manual include tup/Tars.h first
+#include "bcos-framework/consensus/ConsensusNode.h"
 #ifdef _WIN32
 #include <tup/Tars.h>
 #endif
@@ -32,7 +33,6 @@
 #include "bcos-tars-protocol/tars/LedgerConfig.h"
 #include "bcos-tars-protocol/tars/TwoPCParams.h"
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
-#include <bcos-framework/consensus/ConsensusNode.h>
 #include <bcos-framework/gateway/GatewayTypeDef.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/multigroup/ChainNodeInfoFactory.h>
@@ -228,17 +228,17 @@ inline bcostars::GroupInfo toTarsGroupInfo(bcos::group::GroupInfo::Ptr _groupInf
     return tarsGroupInfo;
 }
 
-inline bcos::consensus::ConsensusNodeListPtr toConsensusNodeList(
-    bcos::crypto::KeyFactory::Ptr _keyFactory,
-    vector<bcostars::ConsensusNode> const& _tarsConsensusNodeList)
+inline bcos::consensus::ConsensusNodeList toConsensusNodeList(
+    bcos::crypto::KeyFactory::Ptr _keyFactory, bcos::consensus::Type type,
+    const vector<bcostars::ConsensusNode>& _tarsConsensusNodeList)
 {
-    auto consensusNodeList = std::make_shared<bcos::consensus::ConsensusNodeList>();
+    bcos::consensus::ConsensusNodeList consensusNodeList;
     for (auto const& node : _tarsConsensusNodeList)
     {
         auto nodeID = _keyFactory->createKey(
             bcos::bytesConstRef((bcos::byte*)node.nodeID.data(), node.nodeID.size()));
-        consensusNodeList->push_back(std::make_shared<bcos::consensus::ConsensusNode>(
-            nodeID, node.voteWeight, node.termWeight));
+        consensusNodeList.push_back(bcos::consensus::ConsensusNode(
+            nodeID, type, node.voteWeight, node.termWeight, node.enableNumber));
     }
     return consensusNodeList;
 }
@@ -247,11 +247,13 @@ inline bcos::ledger::LedgerConfig::Ptr toLedgerConfig(
     bcostars::LedgerConfig const& _ledgerConfig, bcos::crypto::KeyFactory::Ptr _keyFactory)
 {
     auto ledgerConfig = std::make_shared<bcos::ledger::LedgerConfig>();
-    auto consensusNodeList = toConsensusNodeList(_keyFactory, _ledgerConfig.consensusNodeList);
-    ledgerConfig->setConsensusNodeList(*consensusNodeList);
+    auto consensusNodeList = toConsensusNodeList(
+        _keyFactory, bcos::consensus::Type::consensus_sealer, _ledgerConfig.consensusNodeList);
+    ledgerConfig->setConsensusNodeList(consensusNodeList);
 
-    auto observerNodeList = toConsensusNodeList(_keyFactory, _ledgerConfig.observerNodeList);
-    ledgerConfig->setObserverNodeList(*observerNodeList);
+    auto observerNodeList = toConsensusNodeList(
+        _keyFactory, bcos::consensus::Type::consensus_observer, _ledgerConfig.observerNodeList);
+    ledgerConfig->setObserverNodeList(observerNodeList);
 
     auto hash = bcos::crypto::HashType();
     if (_ledgerConfig.hash.size() >= bcos::crypto::HashType::SIZE)
@@ -277,9 +279,9 @@ inline vector<bcostars::ConsensusNode> toTarsConsensusNodeList(
     for (auto node : _nodeList)
     {
         bcostars::ConsensusNode consensusNode;
-        consensusNode.nodeID.assign(node->nodeID()->data().begin(), node->nodeID()->data().end());
-        consensusNode.voteWeight = node->voteWeight();
-        consensusNode.termWeight = node->termWeight();
+        consensusNode.nodeID.assign(node.nodeID->data().begin(), node.nodeID->data().end());
+        consensusNode.voteWeight = node.voteWeight;
+        consensusNode.termWeight = node.termWeight;
         tarsConsensusNodeList.emplace_back(consensusNode);
     }
     return tarsConsensusNodeList;

@@ -19,8 +19,8 @@
  * @date 2021-05-25
  */
 #pragma once
+#include "bcos-framework/consensus/ConsensusNode.h"
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
-#include <bcos-framework/consensus/ConsensusNodeInterface.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-utilities/Log.h>
 namespace bcos::sync
@@ -31,8 +31,6 @@ public:
     using Ptr = std::shared_ptr<SyncConfig>;
     explicit SyncConfig(bcos::crypto::NodeIDPtr _nodeId)
       : m_nodeId(std::move(_nodeId)),
-        m_consensusNodeList(std::make_shared<bcos::consensus::ConsensusNodeList>()),
-        m_observerNodeList(std::make_shared<bcos::consensus::ConsensusNodeList>()),
         m_nodeList(std::make_shared<bcos::crypto::NodeIDSet>()),
         m_connectedNodeList(std::make_shared<bcos::crypto::NodeIDSet>())
     {}
@@ -43,37 +41,26 @@ public:
     virtual bcos::consensus::ConsensusNodeList consensusNodeList()
     {
         ReadGuard lock(x_consensusNodeList);
-        return *m_consensusNodeList;
+        return m_consensusNodeList;
     }
     // Note: only when the consensusNodeList or observerNodeList changed will call this interface
     // for perf consideration
-    virtual void setConsensusNodeList(bcos::consensus::ConsensusNodeList const& _consensusNodeList)
+    virtual void setConsensusNodeList(bcos::consensus::ConsensusNodeList _consensusNodeList)
     {
         {
             WriteGuard lock(x_consensusNodeList);
-            *m_consensusNodeList = _consensusNodeList;
+            m_consensusNodeList = std::move(_consensusNodeList);
         }
         updateNodeList();
     }
 
     // Note: only when the consensusNodeList or observerNodeList changed will call this interface
     // for perf consideration
-    virtual void setConsensusNodeList(bcos::consensus::ConsensusNodeList&& _consensusNodeList)
-    {
-        {
-            WriteGuard lock(x_consensusNodeList);
-            *m_consensusNodeList = std::move(_consensusNodeList);
-        }
-        updateNodeList();
-    }
-
-    // Note: only when the consensusNodeList or observerNodeList changed will call this interface
-    // for perf consideration
-    virtual void setObserverList(bcos::consensus::ConsensusNodeList const& _observerNodeList)
+    virtual void setObserverList(bcos::consensus::ConsensusNodeList _observerNodeList)
     {
         {
             WriteGuard lock(x_observerNodeList);
-            *m_observerNodeList = _observerNodeList;
+            m_observerNodeList = std::move(_observerNodeList);
         }
         updateNodeList();
     }
@@ -81,7 +68,7 @@ public:
     virtual bcos::consensus::ConsensusNodeList observerNodeList()
     {
         ReadGuard lock(x_observerNodeList);
-        return *m_observerNodeList;
+        return m_observerNodeList;
     }
 
     // Note: copy here to remove multithreading issues
@@ -142,9 +129,10 @@ public:
     {
         ReadGuard nlock(x_nodeList);
         ReadGuard clock(x_connectedNodeList);
-        auto nodeList =  *m_nodeList | RANGES::views::filter([this](bcos::crypto::NodeIDPtr _nodeId) {
-            return m_connectedNodeList->contains(_nodeId);
-        });
+        auto nodeList =
+            *m_nodeList | RANGES::views::filter([this](bcos::crypto::NodeIDPtr _nodeId) {
+                return m_connectedNodeList->contains(_nodeId);
+            });
         return std::make_shared<bcos::crypto::NodeIDSet>(nodeList.begin(), nodeList.end());
     }
 
@@ -167,17 +155,17 @@ private:
         m_nodeList->clear();
         for (const auto& node : nodeList)
         {
-            m_nodeList->insert(node->nodeID());
+            m_nodeList->insert(node.nodeID);
         }
     }
 
 protected:
     bcos::crypto::NodeIDPtr m_nodeId;
 
-    bcos::consensus::ConsensusNodeListPtr m_consensusNodeList;
+    bcos::consensus::ConsensusNodeList m_consensusNodeList;
     mutable SharedMutex x_consensusNodeList;
 
-    bcos::consensus::ConsensusNodeListPtr m_observerNodeList;
+    bcos::consensus::ConsensusNodeList m_observerNodeList;
     SharedMutex x_observerNodeList;
 
     bcos::crypto::NodeIDSetPtr m_nodeList;

@@ -22,8 +22,10 @@
  */
 
 #include "Ledger.h"
+#include "LedgerMethods.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
+#include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-tool/NodeConfig.h"
@@ -58,9 +60,11 @@
 #include <boost/throw_exception.hpp>
 #include <array>
 #include <cstddef>
+#include <exception>
 #include <future>
 #include <iterator>
 #include <memory>
+#include <range/v3/algorithm/remove_if.hpp>
 #include <range/v3/view/take.hpp>
 #include <utility>
 
@@ -1271,55 +1275,35 @@ void Ledger::removeExpiredNonce(protocol::BlockNumber blockNumber, bool sync)
 }
 
 void Ledger::asyncGetNodeListByType(const std::string_view& _type,
-    std::function<void(Error::Ptr, consensus::ConsensusNodeListPtr)> _onGetConfig)
+    std::function<void(Error::Ptr, consensus::ConsensusNodeList)> _onGetConfig)
 {
-    LEDGER_LOG(DEBUG) << "GetNodeListByType request" << LOG_KV("type", _type);
+    auto eType = magic_enum::enum_cast<consensus::Type>(_type);
+    if (!eType)
+    {
+        _onGetConfig(nullptr, {});
+        return;
+    }
 
-    asyncGetBlockNumber([this, type = _type, callback = std::move(_onGetConfig)](
-                            Error::Ptr&& error, bcos::protocol::BlockNumber blockNumber) mutable {
-        if (error)
+    task::wait([](decltype(*this)& self, consensus::Type type,
+                   decltype(_onGetConfig) callback) -> task::Task<void> {
+        try
         {
-            LEDGER_LOG(DEBUG) << "GetNodeListByType" << boost::diagnostic_information(*error);
-            callback(BCOS_ERROR_WITH_PREV_PTR(
-                         LedgerError::GetStorageError, "GetNodeListByType failed", *error),
-                nullptr);
-            return;
+            auto blockNumber =
+                co_await ledger::getCurrentBlockNumber(*self.m_stateStorage, fromStorage);
+            auto effectNumber = blockNumber + 1;
+            auto nodeList = co_await ledger::getNodeList(*self.m_stateStorage);
+            auto filterNodeList = RANGES::views::filter(nodeList, [&](auto const& node) {
+                return node.type == type && node.enableNumber <= effectNumber;
+            }) | RANGES::to<std::vector>();
+            callback(nullptr, std::move(filterNodeList));
         }
-
-        LEDGER_LOG(DEBUG) << "Get nodeList from" << LOG_KV("blockNumber", blockNumber);
-
-        m_stateStorage->asyncGetRow(SYS_CONSENSUS, "key",
-            [callback = std::move(callback), type = type, this, blockNumber](
-                Error::UniquePtr error, std::optional<Entry> entry) {
-                if (error || !entry)
-                {
-                    callback(std::move(error), nullptr);
-                    return;
-                }
-
-                auto nodeList = decodeConsensusList(entry->getField(0));
-                auto nodes = std::make_shared<consensus::ConsensusNodeList>();
-
-                auto effectNumber = blockNumber + 1;
-                for (auto& it : nodeList)
-                {
-                    if (it.type == type && boost::lexical_cast<bcos::protocol::BlockNumber>(
-                                               it.enableNumber) <= effectNumber)
-                    {
-                        crypto::NodeIDPtr nodeID =
-                            m_blockFactory->cryptoSuite()->keyFactory()->createKey(
-                                fromHex(it.nodeID));
-                        // Note: use try-catch to handle the exception case
-                        nodes->emplace_back(std::make_shared<consensus::ConsensusNode>(
-                            nodeID, it.voteWeight.convert_to<uint64_t>(), it.termWeight));
-                    }
-                }
-
-                LEDGER_LOG(DEBUG) << "GetNodeListByType success" << LOG_KV("type", type)
-                                  << LOG_KV("nodes size", nodes->size());
-                callback(nullptr, std::move(nodes));
-            });
-    });
+        catch (std::exception& e)
+        {
+            callback(BCOS_ERROR_WITH_PREV_PTR(
+                         LedgerError::GetStorageError, "Error while getNodeListByType", e),
+                {});
+        }
+    }(*this, *eType, std::move(_onGetConfig)));
 }
 
 Error::Ptr Ledger::checkTableValid(Error::UniquePtr&& error,
@@ -2175,9 +2159,11 @@ bool Ledger::buildGenesisBlock(
 
     for (const auto& node : ledgerConfig.consensusNodeList())
     {
-        consensusNodeList.emplace_back(node->nodeID()->hex(), node->voteWeight(),
-            std::string{CONSENSUS_SEALER}, "0", node->termWeight());
+        consensusNodeList.emplace_back(
+            node.nodeID->hex(), node.voteWeight, std::string{CONSENSUS_SEALER}, "0");
     }
+
+    // TODO: setNodeList
 
     // update some node type to CONSENSUS_CANDIDATE_SEALER
     if (versionNumber >= (uint32_t)protocol::BlockVersion::V3_5_VERSION &&
@@ -2186,10 +2172,8 @@ bool Ledger::buildGenesisBlock(
         auto workingSealerList = selectWorkingSealer(ledgerConfig, genesis.m_epochSealerNum);
         for (auto& node : consensusNodeList)
         {
-            auto iter = std::find_if(
-                workingSealerList.begin(), workingSealerList.end(), [&node](auto&& workingNode) {
-                    return workingNode->nodeID()->hex() == node.nodeID;
-                });
+            auto iter = std::find_if(workingSealerList.begin(), workingSealerList.end(),
+                [&node](auto&& workingNode) { return workingNode.nodeID->hex() == node.nodeID; });
             if (iter == workingSealerList.end())
             {
                 node.type = CONSENSUS_CANDIDATE_SEALER;
@@ -2199,8 +2183,8 @@ bool Ledger::buildGenesisBlock(
 
     for (const auto& node : ledgerConfig.observerNodeList())
     {
-        consensusNodeList.emplace_back(node->nodeID()->hex(), node->voteWeight(),
-            std::string{CONSENSUS_OBSERVER}, "0", node->termWeight());
+        consensusNodeList.emplace_back(
+            node.nodeID->hex(), node.voteWeight, std::string{CONSENSUS_OBSERVER}, "0");
     }
 
     Entry consensusNodeListEntry;
@@ -2278,7 +2262,7 @@ bcos::consensus::ConsensusNodeList Ledger::selectWorkingSealer(
         {
             auto hashImpl = m_blockFactory->cryptoSuite()->hashImpl();
             std::int64_t selectedNode =
-                (std::int64_t)((u256)(hashImpl->hash(sealerList[i]->nodeID()->data())) % (i + 1));
+                (std::int64_t)((u256)(hashImpl->hash(sealerList[i].nodeID->data())) % (i + 1));
             std::swap(sealerList[i], sealerList[selectedNode]);
         }
     }
@@ -2287,10 +2271,9 @@ bcos::consensus::ConsensusNodeList Ledger::selectWorkingSealer(
         RANGES::views::take(sealerList, selectedNum) | RANGES::to<std::vector>();
     for (auto& node : workingSealerList)
     {
-        LEDGER_LOG(INFO) << LOG_DESC("selectWorkingSealer")
-                         << LOG_KV("nodeID", node->nodeID()->hex())
-                         << LOG_KV("voteWeight", node->voteWeight())
-                         << LOG_KV("termWeight", node->termWeight());
+        LEDGER_LOG(INFO) << LOG_DESC("selectWorkingSealer") << LOG_KV("nodeID", node.nodeID->hex())
+                         << LOG_KV("voteWeight", node.voteWeight)
+                         << LOG_KV("termWeight", node.termWeight);
     }
     return workingSealerList;
 }

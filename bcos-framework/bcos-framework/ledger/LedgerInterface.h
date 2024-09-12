@@ -21,7 +21,6 @@
 
 #pragma once
 
-#include "../consensus/ConsensusNodeInterface.h"
 #include "../protocol/Block.h"
 #include "../protocol/Transaction.h"
 #include "../protocol/TransactionReceipt.h"
@@ -157,7 +156,7 @@ public:
      * @param _onGetConfig
      */
     virtual void asyncGetNodeListByType(std::string_view const& _type,
-        std::function<void(Error::Ptr, consensus::ConsensusNodeListPtr)> _onGetConfig) = 0;
+        std::function<void(Error::Ptr, consensus::ConsensusNodeList)> _onGetConfig) = 0;
 
     /**
      * @brief async get a batch of nonce lists in blocks

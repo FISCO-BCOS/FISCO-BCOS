@@ -339,7 +339,7 @@ public:
         m_waitSealUntil = std::max(m_waitSealUntil.load(), _waitSealUntil);
     }
 
-    void setConsensusNodeList(ConsensusNodeList& _consensusNodeList) override
+    void setConsensusNodeList(ConsensusNodeList _consensusNodeList) override
     {
         ConsensusConfig::setConsensusNodeList(_consensusNodeList);
         if (!m_consensusNodeListUpdated)

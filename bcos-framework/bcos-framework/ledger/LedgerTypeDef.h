@@ -19,10 +19,12 @@
  */
 
 #pragma once
+#include "../consensus/ConsensusNode.h"
 #include "../protocol/ProtocolTypeDef.h"
 #include "SystemConfigs.h"
 #include <bcos-utilities/Common.h>
 #include <oneapi/tbb/concurrent_unordered_map.h>
+#include <magic_enum.hpp>
 
 namespace bcos::ledger
 {
@@ -65,9 +67,12 @@ const unsigned TX_GAS_LIMIT_MIN = 100000;
 const unsigned RPBFT_EPOCH_SEALER_NUM_MIN = 1;
 const unsigned RPBFT_EPOCH_BLOCK_NUM_MIN = 1;
 // get consensus node list type
-constexpr static std::string_view CONSENSUS_SEALER = "consensus_sealer";
-constexpr static std::string_view CONSENSUS_OBSERVER = "consensus_observer";
-constexpr static std::string_view CONSENSUS_CANDIDATE_SEALER = "consensus_candidate_sealer";
+constexpr static std::string_view CONSENSUS_SEALER =
+    magic_enum::enum_name(consensus::Type::consensus_sealer);
+constexpr static std::string_view CONSENSUS_OBSERVER =
+    magic_enum::enum_name(consensus::Type::consensus_observer);
+constexpr static std::string_view CONSENSUS_CANDIDATE_SEALER =
+    magic_enum::enum_name(consensus::Type::consensus_candidate_sealer);
 
 // get current state key
 constexpr static std::string_view SYS_KEY_CURRENT_NUMBER = "current_number";
@@ -148,7 +153,8 @@ enum LedgerError : int32_t
     EmptyEntry = 3009,
     UnknownError = 3010,
 };
-struct StorageState{
+struct StorageState
+{
     std::string nonce;
     std::string balance;
 };

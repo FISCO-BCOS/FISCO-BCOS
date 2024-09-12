@@ -203,7 +203,7 @@ protected:
                 {
                     continue;
                 }
-                _quorum[hash] += nodeInfo->voteWeight();
+                _quorum[hash] += nodeInfo->voteWeight;
             }
         }
     }

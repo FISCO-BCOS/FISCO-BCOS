@@ -106,7 +106,7 @@ public:
     void removeExpiredNonce(protocol::BlockNumber blockNumber, bool sync = false) override;
 
     void asyncGetNodeListByType(const std::string_view& _type,
-        std::function<void(Error::Ptr, consensus::ConsensusNodeListPtr)> _onGetConfig) override;
+        std::function<void(Error::Ptr, consensus::ConsensusNodeList)> _onGetConfig) override;
 
     void asyncGetCurrentStateByKey(std::string_view const& _key,
         std::function<void(Error::Ptr&&, std::optional<bcos::storage::Entry>&&)> _callback)

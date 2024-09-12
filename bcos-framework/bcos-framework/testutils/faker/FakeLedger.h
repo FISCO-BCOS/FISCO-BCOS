@@ -271,30 +271,27 @@ public:
     }
 
     void asyncGetNodeListByType(std::string_view const& _type,
-        std::function<void(Error::Ptr, ConsensusNodeListPtr)> _onGetNodeList) override
+        std::function<void(Error::Ptr, ConsensusNodeList)> _onGetNodeList) override
     {
         if (_type == CONSENSUS_SEALER)
         {
-            auto consensusNodes = std::make_shared<ConsensusNodeList>();
-            *consensusNodes = m_ledgerConfig->consensusNodeList();
+            auto consensusNodes = m_ledgerConfig->consensusNodeList();
             _onGetNodeList(nullptr, consensusNodes);
             return;
         }
         if (_type == CONSENSUS_OBSERVER)
         {
-            auto observerNodes = std::make_shared<ConsensusNodeList>();
-            *observerNodes = m_ledgerConfig->observerNodeList();
+            auto observerNodes = m_ledgerConfig->observerNodeList();
             _onGetNodeList(nullptr, observerNodes);
             return;
         }
         if (_type == CONSENSUS_CANDIDATE_SEALER)
         {
-            auto consensusNodes = std::make_shared<ConsensusNodeList>();
-            *consensusNodes = m_ledgerConfig->candidateSealerNodeList();
+            auto consensusNodes = m_ledgerConfig->candidateSealerNodeList();
             _onGetNodeList(nullptr, consensusNodes);
             return;
         }
-        _onGetNodeList(BCOS_ERROR_UNIQUE_PTR(-1, "invalid Type"), nullptr);
+        _onGetNodeList(BCOS_ERROR_UNIQUE_PTR(-1, "invalid Type"), {});
     }
 
     void asyncGetNonceList(BlockNumber _startNumber, int64_t _offset,
@@ -334,13 +331,13 @@ public:
         m_systemConfig[std::string{_key}] = _value;
     }
 
-    void setConsensusNodeList(ConsensusNodeListPtr _consensusNodes)
+    void setConsensusNodeList(ConsensusNodeList _consensusNodes)
     {
-        m_ledgerConfig->setConsensusNodeList(*_consensusNodes);
+        m_ledgerConfig->setConsensusNodeList(_consensusNodes);
     }
-    void setObserverNodeList(ConsensusNodeListPtr _observerNodes)
+    void setObserverNodeList(ConsensusNodeList _observerNodes)
     {
-        m_ledgerConfig->setObserverNodeList(*_observerNodes);
+        m_ledgerConfig->setObserverNodeList(_observerNodes);
     }
 
     LedgerConfig::Ptr ledgerConfig() { return m_ledgerConfig; }
