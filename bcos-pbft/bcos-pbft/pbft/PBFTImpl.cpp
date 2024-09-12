@@ -148,8 +148,8 @@ void PBFTImpl::asyncGetConsensusStatus(
     for (auto const& node : nodeList)
     {
         Json::Value info;
-        info["nodeID"] = *toHexString(node->nodeID()->data());
-        info["weight"] = (Json::UInt64)node->voteWeight();
+        info["nodeID"] = *toHexString(node.nodeID->data());
+        info["weight"] = (Json::UInt64)node.voteWeight;
         info["index"] = (Json::Int64)(i);
         consensusNodeInfo.append(info);
         i++;

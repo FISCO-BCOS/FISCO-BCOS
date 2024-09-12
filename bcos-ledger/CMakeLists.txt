@@ -24,7 +24,7 @@ add_library(${LEDGER_TARGET} bcos-ledger/Ledger.cpp bcos-ledger/LedgerMethods.cp
 target_include_directories(${LEDGER_TARGET} PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-ledger>)
-target_link_libraries(${LEDGER_TARGET} PUBLIC ${TOOL_TARGET} ${CODEC_TARGET} ${TABLE_TARGET} bcos-concepts Boost::serialization)
+target_link_libraries(${LEDGER_TARGET} PUBLIC ${TOOL_TARGET} ${TARS_PROTOCOL_TARGET} ${CODEC_TARGET} ${TABLE_TARGET} bcos-concepts Boost::serialization)
 set_target_properties(${LEDGER_TARGET} PROPERTIES UNITY_BUILD "ON")
 
 # test related

@@ -248,7 +248,7 @@ public:
     TransactionSync::Ptr sync() { return m_sync; }
     void appendSealer(NodeIDPtr _nodeId)
     {
-        auto consensusNode = std::make_shared<ConsensusNode>(_nodeId);
+        auto consensusNode = ConsensusNode(_nodeId, consensus::Type::consensus_sealer, 1, 0, 0);
         m_ledger->ledgerConfig()->mutableConsensusNodeList().emplace_back(consensusNode);
         m_txpool->notifyConsensusNodeList(m_ledger->ledgerConfig()->consensusNodeList(), nullptr);
         for (const auto& item : m_fakeGateWay->m_nodeId2TxPool)
@@ -260,7 +260,7 @@ public:
     }
     void appendObserver(NodeIDPtr _nodeId)
     {
-        auto consensusNode = std::make_shared<ConsensusNode>(_nodeId, 0, 0);
+        auto consensusNode = ConsensusNode(_nodeId, consensus::Type::consensus_observer, 0, 0, 0);
         m_ledger->ledgerConfig()->mutableObserverList().emplace_back(consensusNode);
         m_txpool->notifyObserverNodeList(m_ledger->ledgerConfig()->observerNodeList(), nullptr);
         for (const auto& item : m_fakeGateWay->m_nodeId2TxPool)
@@ -300,11 +300,11 @@ private:
         NodeIDSet nodeIdSet;
         for (const auto& node : m_ledger->ledgerConfig()->consensusNodeList())
         {
-            nodeIdSet.insert(node->nodeID());
+            nodeIdSet.insert(node.nodeID);
         }
         for (const auto& node : m_ledger->ledgerConfig()->observerNodeList())
         {
-            nodeIdSet.insert(node->nodeID());
+            nodeIdSet.insert(node.nodeID);
         }
         m_txpool->transactionSync()->config()->setConnectedNodeList(nodeIdSet);
         m_txpool->transactionSync()->config()->notifyConnectedNodes(nodeIdSet, nullptr);

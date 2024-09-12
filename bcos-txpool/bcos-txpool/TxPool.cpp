@@ -398,7 +398,7 @@ void TxPool::notifyConsensusNodeList(
         nodeIds.reserve(_consensusNodeList.size());
         for (const auto& node : _consensusNodeList)
         {
-            nodeIds.push_back(node->nodeID());
+            nodeIds.push_back(node.nodeID);
         }
         m_treeRouter->updateConsensusNodeInfo(nodeIds);
     }

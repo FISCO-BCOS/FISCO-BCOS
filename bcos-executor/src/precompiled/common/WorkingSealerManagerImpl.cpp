@@ -19,6 +19,7 @@
  */
 
 #include "WorkingSealerManagerImpl.h"
+#include "bcos-framework/consensus/ConsensusNode.h"
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <algorithm>
 
@@ -87,7 +88,7 @@ void WorkingSealerManagerImpl::rotateWorkingSealer(
         // select working sealers to be removed
 
         auto workingSealersToRemove =
-            selectNodesFromList(m_consensusSealer, removedWorkingSealerNum);
+            selectNodesFromList(m_consensusSealer, removedWorkingSealerNum, false);
         std::stringstream nodesStr;
         for (const auto& node : workingSealersToRemove)
         {
@@ -101,14 +102,14 @@ void WorkingSealerManagerImpl::rotateWorkingSealer(
 
         // update the node type from workingSealer to sealer
         updateNodeListType(
-            workingSealersToRemove, std::string(CONSENSUS_CANDIDATE_SEALER), _executive);
+            workingSealersToRemove, consensus::Type::consensus_candidate_sealer, _executive);
     }
 
     if (insertedWorkingSealerNum > 0)
     {
         // select working sealers to be inserted
         auto workingSealersToInsert =
-            selectNodesFromList(m_candidateSealer, insertedWorkingSealerNum);
+            selectNodesFromList(m_candidateSealer, insertedWorkingSealerNum, true);
         std::stringstream nodesStr;
         for (const auto& node : workingSealersToInsert)
         {
@@ -119,7 +120,7 @@ void WorkingSealerManagerImpl::rotateWorkingSealer(
                               << LOG_KV("insertNodes", nodesStr.str());
         // Note: Since m_pendingSealerList will not be used afterward,
         //       after updating the node type, it is not updated
-        updateNodeListType(workingSealersToInsert, std::string(CONSENSUS_SEALER), _executive);
+        updateNodeListType(workingSealersToInsert, consensus::Type::consensus_sealer, _executive);
     }
 
     commitConsensusNodeListToStorage(_executive);
@@ -257,38 +258,45 @@ bool WorkingSealerManagerImpl::getConsensusNodeListFromStorage(
     const executor::TransactionExecutive::Ptr& _executive)
 {
     auto const& blockContext = _executive->blockContext();
-    auto entry = _executive->storage().getRow(ledger::SYS_CONSENSUS, "key");
-    assert(entry.has_value());
-    auto consensusNodeList = entry->getObject<ledger::ConsensusNodeList>();
+    auto nodeList = task::syncWait(ledger::getNodeList(*_executive->storage().getRawStorage()));
     bool isConsensusNodeListChanged = false;
     bool isCandidateSealerChanged = false;
-    for (const auto& node : consensusNodeList)
+
+    for (const auto& node : nodeList)
     {
-        auto enableNumber = boost::lexical_cast<BlockNumber>(node.enableNumber);
-        if (enableNumber > blockContext.number()) [[unlikely]]
+        if (node.enableNumber > blockContext.number()) [[unlikely]]
         {
-            if (enableNumber == blockContext.number() + 1 && node.type == ledger::CONSENSUS_SEALER)
+            if (node.enableNumber == blockContext.number() + 1)
             {
-                isConsensusNodeListChanged = true;
-            }
-            if (enableNumber == blockContext.number() + 1 &&
-                node.type == ledger::CONSENSUS_CANDIDATE_SEALER)
-            {
-                isCandidateSealerChanged = true;
+                {
+                    switch (node.type)
+                    {
+                    case consensus::Type::consensus_sealer:
+                        isConsensusNodeListChanged = true;
+                        break;
+                    case consensus::Type::consensus_candidate_sealer:
+                        isCandidateSealerChanged = true;
+                        break;
+                    default:
+                        break;
+                    }
+                }
             }
             continue;
         }
-
-        if (node.type == ledger::CONSENSUS_SEALER)
+        switch (node.type)
         {
-            m_consensusSealer.emplace_back(WorkingSealer{node.nodeID, node.termWeight});
-        }
-        else if (node.type == ledger::CONSENSUS_CANDIDATE_SEALER)
-        {
-            m_candidateSealer.emplace_back(WorkingSealer{node.nodeID, node.termWeight});
+        case consensus::Type::consensus_sealer:
+            m_consensusSealer.emplace_back(WorkingSealer{node.nodeID->hex(), node.termWeight});
+            break;
+        case consensus::Type::consensus_candidate_sealer:
+            m_candidateSealer.emplace_back(WorkingSealer{node.nodeID->hex(), node.termWeight});
+            break;
+        default:
+            break;
         }
     }
-    m_consensusNodes.swap(consensusNodeList);
+    m_consensusNodes.swap(nodeList);
     return !isConsensusNodeListChanged && !isCandidateSealerChanged;
 }
 
@@ -307,8 +315,7 @@ bool WorkingSealerManagerImpl::getNotifyRotateFlag(
     const executor::TransactionExecutive::Ptr& executive)
 {
     auto const& blockContext = executive->blockContext();
-    auto entry = executive->storage().getRow(SYS_CONFIG, INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE);
-    if (entry) [[likely]]
+    if (auto entry = executive->storage().getRow(SYS_CONFIG, INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE))
     {
         auto config = entry->getObject<ledger::SystemConfigEntry>();
         if (!std::get<0>(config).empty() && blockContext.number() >= std::get<1>(config))
@@ -368,11 +375,10 @@ static WorkingSealer pickNodeByWeight(
     auto weight =
         nodeIt->offset - ((nodeWeightRanges.begin() == nodeIt) ? 0LU : (nodeIt - 1)->offset);
     totalWeight -= weight;
-    for (auto it = nodeIt; it != nodeWeightRanges.end(); ++it)
+    for (auto& it : RANGES::subrange(nodeIt + 1, nodeWeightRanges.end()))
     {
-        it->offset -= weight;
+        it.offset -= weight;
     }
-
     const auto* sealer = nodeIt->sealer;
     nodeWeightRanges.erase(nodeIt);
 
@@ -403,7 +409,7 @@ static std::vector<WorkingSealer> getNodeListByWeight(
 }
 
 std::vector<WorkingSealer> WorkingSealerManagerImpl::selectNodesFromList(
-    std::vector<WorkingSealer>& _nodeList, uint32_t _selectNum)
+    std::vector<WorkingSealer>& _nodeList, uint32_t _selectNum, bool remove)
 {
     std::vector<WorkingSealer> selectedNodeList;
     if (_nodeList.empty()) [[unlikely]]
@@ -414,7 +420,7 @@ std::vector<WorkingSealer> WorkingSealerManagerImpl::selectNodesFromList(
         [](auto const& lhs, auto const& rhs) { return lhs.nodeID < rhs.nodeID; });
     auto proofHashValue = u256(m_vrfInfo->getHashFromProof());
 
-    if (m_withWeight)
+    if (!remove && m_withWeight)
     {
         return getNodeListByWeight(_nodeList, proofHashValue, _selectNum);
     }
@@ -437,7 +443,7 @@ std::vector<WorkingSealer> WorkingSealerManagerImpl::selectNodesFromList(
 }
 
 void WorkingSealerManagerImpl::updateNodeListType(const std::vector<WorkingSealer>& _nodeList,
-    std::string const& _type, const executor::TransactionExecutive::Ptr& executive)
+    consensus::Type _type, const executor::TransactionExecutive::Ptr& executive)
 {
     auto const& blockContext = executive->blockContext();
 
@@ -445,13 +451,13 @@ void WorkingSealerManagerImpl::updateNodeListType(const std::vector<WorkingSeale
     for (const auto& node : _nodeList)
     {
         auto it = std::find_if(m_consensusNodes.begin(), m_consensusNodes.end(),
-            [&node](const ConsensusNode& consensusNode) {
-                return consensusNode.nodeID == node.nodeID;
+            [&node](const consensus::ConsensusNode& consensusNode) {
+                return consensusNode.nodeID->hex() == node.nodeID;
             });
         if (it != m_consensusNodes.end()) [[likely]]
         {
             it->type = _type;
-            it->enableNumber = boost::lexical_cast<std::string>(blockContext.number() + 1);
+            it->enableNumber = blockContext.number() + 1;
         }
     }
 }
@@ -459,11 +465,9 @@ void WorkingSealerManagerImpl::updateNodeListType(const std::vector<WorkingSeale
 void bcos::precompiled::WorkingSealerManagerImpl::commitConsensusNodeListToStorage(
     const executor::TransactionExecutive::Ptr& _executive)
 {
-    if (!m_consensusChangeFlag)
+    if (m_consensusChangeFlag)
     {
-        return;
+        task::syncWait(
+            ledger::setNodeList(*_executive->storage().getRawStorage(), m_consensusNodes));
     }
-    storage::Entry newConsensus;
-    newConsensus.setObject(m_consensusNodes);
-    _executive->storage().setRow(ledger::SYS_CONSENSUS, "key", std::move(newConsensus));
 }

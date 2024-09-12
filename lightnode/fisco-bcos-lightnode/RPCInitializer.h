@@ -79,8 +79,8 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
             for (auto const& node : consensusNodeList)
             {
                 Json::Value sealer;
-                sealer["nodeID"] = node->nodeID()->hex();
-                sealer["weight"] = node->voteWeight();
+                sealer["nodeID"] = node.nodeID->hex();
+                sealer["weight"] = node.voteWeight;
                 sealerList.append(sealer);
             }
             genesisConfig["sealerList"] = sealerList;

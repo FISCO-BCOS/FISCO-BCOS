@@ -2,8 +2,10 @@ module bcostars
 {
     struct ConsensusNode {
         1 optional vector<byte> nodeID;
+        4 optional int type;
         2 optional long voteWeight;
         3 optional long termWeight;
+        5 optional long enableNumber;
     };
     struct LedgerConfig
     {

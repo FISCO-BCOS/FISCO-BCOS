@@ -19,7 +19,7 @@
  */
 
 #pragma once
-#include "bcos-framework/consensus/ConsensusNodeInterface.h"
+#include "bcos-framework/consensus/ConsensusNode.h"
 #include "bcos-framework/consensus/ConsensusTypeDef.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 

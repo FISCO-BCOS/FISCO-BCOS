@@ -26,7 +26,6 @@
 #include "bcos-table/src/KeyPageStorage.h"
 #include "bcos-table/src/StateStorage.h"
 #include "bcos-tool/BfsFileFactory.h"
-#include <bcos-framework/consensus/ConsensusNodeInterface.h>
 #include <bcos-framework/protocol/Block.h>
 #include <tbb/concurrent_unordered_map.h>
 

@@ -4,6 +4,7 @@
 #include <bcos-executor/src/Common.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <exception>
+#include <functional>
 
 bcos::task::Task<void> bcos::ledger::prewriteBlockToStorage(LedgerInterface& ledger,
     bcos::protocol::ConstTransactionsPtr transactions, bcos::protocol::Block::ConstPtr block,
@@ -11,7 +12,7 @@ bcos::task::Task<void> bcos::ledger::prewriteBlockToStorage(LedgerInterface& led
 {
     struct Awaitable
     {
-        LedgerInterface& m_ledger;
+        std::reference_wrapper<LedgerInterface> m_ledger;
         decltype(transactions) m_transactions;
         decltype(block) m_block;
         bool m_withTransactionsAndReceipts{};
@@ -22,7 +23,7 @@ bcos::task::Task<void> bcos::ledger::prewriteBlockToStorage(LedgerInterface& led
         constexpr static bool await_ready() noexcept { return false; }
         void await_suspend(std::coroutine_handle<> handle)
         {
-            m_ledger.asyncPrewriteBlock(
+            m_ledger.get().asyncPrewriteBlock(
                 m_storage, std::move(m_transactions), std::move(m_block),
                 [this, handle](std::string, Error::Ptr error) {
                     if (error)
@@ -72,7 +73,7 @@ bcos::task::Task<bcos::protocol::Block::Ptr> bcos::ledger::tag_invoke(
 {
     struct Awaitable
     {
-        LedgerInterface& m_ledger;
+        std::reference_wrapper<LedgerInterface> m_ledger;
         protocol::BlockNumber m_blockNumber;
         int32_t m_blockFlag;
 
@@ -81,7 +82,7 @@ bcos::task::Task<bcos::protocol::Block::Ptr> bcos::ledger::tag_invoke(
         constexpr static bool await_ready() noexcept { return false; }
         void await_suspend(std::coroutine_handle<> handle)
         {
-            m_ledger.asyncGetBlockDataByNumber(m_blockNumber, m_blockFlag,
+            m_ledger.get().asyncGetBlockDataByNumber(m_blockNumber, m_blockFlag,
                 [this, handle](Error::Ptr error, bcos::protocol::Block::Ptr block) {
                     if (error)
                     {
@@ -114,13 +115,13 @@ bcos::task::Task<bcos::ledger::TransactionCount> bcos::ledger::tag_invoke(
 {
     struct Awaitable
     {
-        LedgerInterface& m_ledger;
+        std::reference_wrapper<LedgerInterface> m_ledger;
         std::variant<Error::Ptr, TransactionCount> m_result;
 
         constexpr static bool await_ready() noexcept { return false; }
         void await_suspend(std::coroutine_handle<> handle)
         {
-            m_ledger.asyncGetTotalTransactionCount(
+            m_ledger.get().asyncGetTotalTransactionCount(
                 [this, handle](Error::Ptr error, int64_t total, int64_t failed,
                     bcos::protocol::BlockNumber blockNumber) {
                     if (error)
@@ -156,13 +157,13 @@ bcos::task::Task<bcos::protocol::BlockNumber> bcos::ledger::tag_invoke(
 {
     struct Awaitable
     {
-        LedgerInterface& m_ledger;
+        std::reference_wrapper<LedgerInterface> m_ledger;
         std::variant<Error::Ptr, protocol::BlockNumber> m_result;
 
         constexpr static bool await_ready() noexcept { return false; }
         void await_suspend(std::coroutine_handle<> handle)
         {
-            m_ledger.asyncGetBlockNumber(
+            m_ledger.get().asyncGetBlockNumber(
                 [this, handle](Error::Ptr error, bcos::protocol::BlockNumber blockNumber) {
                     if (error)
                     {
@@ -334,7 +335,7 @@ bcos::task::Task<bcos::consensus::ConsensusNodeList> bcos::ledger::tag_invoke(
         {
             m_ledger.asyncGetNodeListByType(
                 m_type, [this, handle](Error::Ptr error,
-                            const consensus::ConsensusNodeListPtr& consensusNodeList) {
+                            const consensus::ConsensusNodeList& consensusNodeList) {
                     if (error)
                     {
                         m_result.emplace<Error::Ptr>(std::move(error));
@@ -342,7 +343,7 @@ bcos::task::Task<bcos::consensus::ConsensusNodeList> bcos::ledger::tag_invoke(
                     else
                     {
                         m_result.emplace<consensus::ConsensusNodeList>(
-                            std::move(*consensusNodeList));
+                            std::move(consensusNodeList));
                     }
                     handle.resume();
                 });
