@@ -169,7 +169,11 @@ const std::string RC_VERSION_PREFIX = "3.0.0-rc";
 const std::string V3_9_VERSION_STR = toString(BlockVersion::V3_9_0_VERSION);
 
 constexpr static BlockVersion DEFAULT_VERSION = bcos::protocol::BlockVersion::V3_12_0_VERSION;
+#if __cpp_lib_constexpr_string >= 201907L
 constexpr static std::string DEFAULT_VERSION_STR = toString(DEFAULT_VERSION);
+#else
+const std::string DEFAULT_VERSION_STR = toString(DEFAULT_VERSION);
+#endif
 constexpr static uint8_t MAX_MAJOR_VERSION = std::numeric_limits<uint8_t>::max();
 constexpr static uint8_t MIN_MAJOR_VERSION = 3;
 
