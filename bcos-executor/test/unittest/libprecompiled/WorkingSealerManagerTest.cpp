@@ -67,14 +67,18 @@ BOOST_AUTO_TEST_CASE(testRotate)
 
         // Node list
         consensus::ConsensusNodeList nodeList;
-        nodeList.emplace_back(std::make_shared<crypto::KeyImpl>(fromHex(node1)),
-            consensus::Type::consensus_candidate_sealer, 0, 70, 0);
-        nodeList.emplace_back(std::make_shared<crypto::KeyImpl>(fromHex(node2)),
-            consensus::Type::consensus_candidate_sealer, 0, 20, 0);
-        nodeList.emplace_back(std::make_shared<crypto::KeyImpl>(fromHex(node3)),
-            consensus::Type::consensus_candidate_sealer, 0, 7, 0);
-        nodeList.emplace_back(std::make_shared<crypto::KeyImpl>(fromHex(node4)),
-            consensus::Type::consensus_candidate_sealer, 0, 3, 0);
+        nodeList.emplace_back(
+            consensus::ConsensusNode{std::make_shared<crypto::KeyImpl>(fromHex(node1)),
+                consensus::Type::consensus_candidate_sealer, 0, 70, 0});
+        nodeList.emplace_back(
+            consensus::ConsensusNode{std::make_shared<crypto::KeyImpl>(fromHex(node2)),
+                consensus::Type::consensus_candidate_sealer, 0, 20, 0});
+        nodeList.emplace_back(
+            consensus::ConsensusNode{std::make_shared<crypto::KeyImpl>(fromHex(node3)),
+                consensus::Type::consensus_candidate_sealer, 0, 7, 0});
+        nodeList.emplace_back(
+            consensus::ConsensusNode{std::make_shared<crypto::KeyImpl>(fromHex(node4)),
+                consensus::Type::consensus_candidate_sealer, 0, 3, 0});
         co_await ledger::setNodeList(storage, nodeList);
 
         auto storageWrapper =

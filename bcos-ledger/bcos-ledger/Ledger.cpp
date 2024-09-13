@@ -443,14 +443,14 @@ task::Task<std::optional<ledger::StorageState>> Ledger::getStorageState(
     {
         co_return std::nullopt;
     }
-    state.nonce = std::stoull(std::string(nonceEntry->get()));
+    state.nonce = std::string(nonceEntry->get());
     auto const balanceEntry =
         co_await getStorageAt(_address, ACCOUNT_TABLE_FIELDS::BALANCE, _blockNumber);
     if (!balanceEntry.has_value())
     {
         co_return std::nullopt;
     }
-    state.balance = std::stoull(std::string(balanceEntry->get()));
+    state.balance = std::string(balanceEntry->get());
     co_return state;
 }
 

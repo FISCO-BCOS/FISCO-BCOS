@@ -104,6 +104,20 @@ u256 s2u(s256 _u)
     else
         return u256(c_end + _u);
 }
+
+u256 hex2u(std::string_view _hexStr)
+{
+    if (_hexStr.empty())
+    {
+        return u256{0};
+    }
+    if (_hexStr.starts_with("0x") || _hexStr.starts_with("0X"))
+    {
+        return u256(_hexStr);
+    }
+    return u256("0x" + std::string(_hexStr));
+}
+
 bool isalNumStr(std::string const& _stringData)
 {
     for (auto ch : _stringData)

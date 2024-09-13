@@ -76,7 +76,7 @@ public:
         factory =
             std::make_shared<bcos::rpc::RpcFactory>(chainId, gateway, cryptoSuite->keyFactory());
         nodeConfig = std::make_shared<bcos::tool::NodeConfig>();
-        
+
         nodeConfig->loadConfigFromString(configini);
         factory->setNodeConfig(nodeConfig);
 

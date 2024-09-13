@@ -328,7 +328,7 @@ public:
 
     void appendConsensusNode(PublicPtr _nodeId)
     {
-        auto node = ConsensusNode(_nodeId, consensus::Type::consensus_sealer, 1, 0, 0);
+        auto node = ConsensusNode{_nodeId, consensus::Type::consensus_sealer, 1, 0, 0};
         appendConsensusNode(node);
     }
 

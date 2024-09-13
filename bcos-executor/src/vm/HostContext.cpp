@@ -251,6 +251,7 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
             *m_executive->storage().getRawStorage(), request->senderAddress);
         request->nonce = task::syncWait([](decltype(account) contract) -> task::Task<u256> {
             auto const nonceString = co_await ledger::account::nonce(contract);
+            // uint in storage
             auto const nonce = u256(nonceString.value_or("0"));
             co_return nonce;
         }(std::move(account)));
@@ -702,6 +703,11 @@ uint32_t HostContext::blockVersion() const
 
 uint64_t HostContext::timestamp() const
 {
+    if (m_executive->blockContext().features().get(ledger::Features::Flag::feature_evm_timestamp))
+    {
+        // millisecond to second
+        return m_executive->blockContext().timestamp() / 1000;
+    }
     return m_executive->blockContext().timestamp();
 }
 
