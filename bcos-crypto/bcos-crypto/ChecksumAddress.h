@@ -132,7 +132,7 @@ inline std::string newLegacyEVMAddress(bytesConstRef sender, u256 nonce) noexcep
 
 inline std::string newLegacyEVMAddress(bytesConstRef sender, std::string const& nonce) noexcept
 {
-    const auto uNonce = u256(nonce);
+    const auto uNonce = hex2u(nonce);
     return newLegacyEVMAddress(sender, uNonce);
 }
 

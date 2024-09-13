@@ -58,8 +58,9 @@ public:
         feature_paillier_add_raw,
         feature_evm_cancun,
         feature_calculate_gasPrice,
+        feature_evm_timestamp,
         feature_evm_address,
-        feature_ethereum_compatible,  // will enbale all bugfixes, all features about evm
+        feature_ethereum_compatible,  // will enable all bugfixes, all features about evm
         feature_rpbft_term_weight,
     };
 
@@ -75,6 +76,11 @@ public:
             BOOST_THROW_EXCEPTION(NoSuchFeatureError{});
         }
         return *value;
+    }
+
+    static bool contains(std::string_view flag)
+    {
+        return magic_enum::enum_cast<Flag>(flag).has_value();
     }
 
     void validate(std::string_view flag) const
@@ -114,6 +120,35 @@ public:
     }
     bool get(std::string_view flag) const { return get(string2Flag(flag)); }
 
+    // DO NOT use now, there is some action after set feature in systemPrecompiled
+    static auto getFeatureDependencies(Flag flag)
+    {
+        /// NOTE：请不要在此处添加旧版本feature依赖！否则会出现数据不一致!
+        /// Do NOT add old version feature dependencies here! Otherwise, data inconsistency will
+        /// occur!
+        const auto mainSwitchDependence = std::unordered_map<Flag, std::set<Flag>>(
+            {{Flag::feature_ethereum_compatible, {
+                                                     Flag::feature_balance,
+                                                     Flag::feature_balance_precompiled,
+                                                     Flag::feature_calculate_gasPrice,
+                                                     Flag::feature_evm_timestamp,
+                                                     Flag::feature_evm_address,
+                                                     Flag::feature_evm_cancun,
+                                                 }}});
+        if (mainSwitchDependence.contains(flag))
+        {
+            return mainSwitchDependence.at(flag);
+        }
+        return std::set<Flag>();
+    }
+    void enableDependencyFeatures(Flag flag)
+    {
+        for (const auto& dependence : getFeatureDependencies(flag))
+        {
+            set(dependence);
+        }
+    }
+
     void set(Flag flag)
     {
         auto index = magic_enum::enum_index(flag);
@@ -124,26 +159,7 @@ public:
 
         validate(flag);
         m_flags[*index] = true;
-        turnOnMainSwitch(flag);
-    }
-
-    void turnOnMainSwitch(Flag flag)
-    {
-        const auto mainSwitchDependence = std::unordered_map<Flag, std::set<Flag>>(
-            {{Flag::feature_ethereum_compatible, {
-                                                     Flag::feature_balance,
-                                                     Flag::feature_balance_precompiled,
-                                                     Flag::feature_calculate_gasPrice,
-                                                     Flag::feature_evm_address,
-                                                     Flag::feature_evm_cancun,
-                                                 }}});
-        if (mainSwitchDependence.contains(flag))
-        {
-            for (const auto& dependence : mainSwitchDependence.at(flag))
-            {
-                set(dependence);
-            }
-        }
+        // enableDependencyFeatures(flag);
     }
 
     void set(std::string_view flag) { set(string2Flag(flag)); }

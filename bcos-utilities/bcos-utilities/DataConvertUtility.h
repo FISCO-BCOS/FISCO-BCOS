@@ -134,7 +134,7 @@ inline uint64_t fromQuantity(std::string const& quantity)
 
 inline u256 fromBigQuantity(std::string_view quantity)
 {
-    return u256(quantity);
+    return hex2u(quantity);
 }
 
 /**

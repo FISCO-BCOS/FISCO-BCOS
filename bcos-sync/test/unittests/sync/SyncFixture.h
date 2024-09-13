@@ -138,7 +138,7 @@ public:
 
     void appendObserver(NodeIDPtr _nodeId)
     {
-        auto node = ConsensusNode(_nodeId, consensus::Type::consensus_observer, 0, 0, 0);
+        auto node = ConsensusNode{_nodeId, consensus::Type::consensus_observer, 0, 0, 0};
         m_ledger->ledgerConfig()->mutableObserverList().emplace_back(node);
         m_sync->config()->setObserverList(m_ledger->ledgerConfig()->observerNodeList());
     }
@@ -149,7 +149,7 @@ public:
         for (auto const& node : _nodeIdList)
         {
             m_ledger->ledgerConfig()->mutableConsensusList().emplace_back(
-                ConsensusNode(node, consensus::Type::consensus_sealer, 1, 0, 0));
+                ConsensusNode{node, consensus::Type::consensus_sealer, 1, 0, 0});
         }
         m_sync->config()->setConsensusNodeList(m_ledger->ledgerConfig()->consensusNodeList());
         bcos::crypto::NodeIDSet nodeIdSet;
@@ -174,7 +174,7 @@ public:
         for (auto const& node : _nodeIdList)
         {
             m_ledger->ledgerConfig()->mutableObserverList().emplace_back(
-                ConsensusNode(node, consensus::Type::consensus_observer, 0, 0, 0));
+                ConsensusNode{node, consensus::Type::consensus_observer, 0, 0, 0});
         }
         m_sync->config()->setObserverList(m_ledger->ledgerConfig()->observerNodeList());
         bcos::crypto::NodeIDSet nodeIdSet;
