@@ -20,7 +20,7 @@
 
 #pragma once
 // if windows, manual include tup/Tars.h first
-#include "bcos-framework/consensus/ConsensusNode.h"
+#include <bcos-framework/consensus/ConsensusNode.h>
 #ifdef _WIN32
 #include <tup/Tars.h>
 #endif
@@ -237,8 +237,11 @@ inline bcos::consensus::ConsensusNodeList toConsensusNodeList(
     {
         auto nodeID = _keyFactory->createKey(
             bcos::bytesConstRef((bcos::byte*)node.nodeID.data(), node.nodeID.size()));
-        consensusNodeList.push_back(bcos::consensus::ConsensusNode(
-            nodeID, type, node.voteWeight, node.termWeight, node.enableNumber));
+        consensusNodeList.push_back(bcos::consensus::ConsensusNode{.nodeID = nodeID,
+            .type = type,
+            .voteWeight = static_cast<uint64_t>(node.voteWeight),
+            .termWeight = static_cast<uint64_t>(node.termWeight),
+            .enableNumber = node.enableNumber});
     }
     return consensusNodeList;
 }

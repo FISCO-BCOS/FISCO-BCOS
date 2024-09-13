@@ -307,8 +307,9 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
                     co_await ledger::account::create(addr);
                 }
                 auto const nonceInStorage = co_await ledger::account::nonce(addr);
-                auto const baseNonce = u256(nonceInStorage.value_or("0"));
-                auto const newNonce = std::max(callNonce, baseNonce) + 1;
+                // FIXME)) : only web3 tx use this
+                auto const storageNonce = u256(nonceInStorage.value_or("0"));
+                auto const newNonce = std::max(callNonce, storageNonce) + 1;
                 co_await ledger::account::setNonce(addr, newNonce.convert_to<std::string>());
             }(std::move(address), callParameters->nonce));
         }

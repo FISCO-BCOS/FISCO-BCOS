@@ -375,7 +375,7 @@ static WorkingSealer pickNodeByWeight(
     auto weight =
         nodeIt->offset - ((nodeWeightRanges.begin() == nodeIt) ? 0LU : (nodeIt - 1)->offset);
     totalWeight -= weight;
-    for (auto& it : RANGES::subrange(nodeIt + 1, nodeWeightRanges.end()))
+    for (auto& it : RANGES::subrange<decltype(nodeIt)>(nodeIt + 1, nodeWeightRanges.end()))
     {
         it.offset -= weight;
     }

@@ -82,23 +82,23 @@ public:
 
         for (size_t i = 0; i < consensusNodeNum; ++i)
         {
-            ledgerConfig->mutableConsensusList().push_back(consensus::ConsensusNode(
+            ledgerConfig->mutableConsensusList().push_back(consensus::ConsensusNode{
                 m_cryptoSuite->signatureImpl()->generateKeyPair()->publicKey(),
-                consensus::Type::consensus_sealer, 1, 0, 0));
+                consensus::Type::consensus_sealer, 1, 0, 0});
         }
 
         for (size_t i = 0; i < observerNodeNum; ++i)
         {
-            ledgerConfig->mutableObserverList().push_back(consensus::ConsensusNode(
+            ledgerConfig->mutableObserverList().push_back(consensus::ConsensusNode{
                 m_cryptoSuite->signatureImpl()->generateKeyPair()->publicKey(),
-                consensus::Type::consensus_observer, 0, 0, 0));
+                consensus::Type::consensus_observer, 0, 0, 0});
         }
 
         for (size_t i = 0; i < candidateSealerNodeNum; ++i)
         {
-            ledgerConfig->mutableCandidateSealerNodeList().push_back(consensus::ConsensusNode(
+            ledgerConfig->mutableCandidateSealerNodeList().push_back(consensus::ConsensusNode{
                 m_cryptoSuite->signatureImpl()->generateKeyPair()->publicKey(),
-                consensus::Type::consensus_candidate_sealer, 1, 0, 0));
+                consensus::Type::consensus_candidate_sealer, 1, 0, 0});
         }
         return ledgerConfig;
     }

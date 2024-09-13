@@ -167,14 +167,14 @@ public:
         auto signImpl = std::make_shared<Secp256k1Crypto>();
         consensus::ConsensusNodeList consensusNodeList;
         consensus::ConsensusNodeList observerNodeList;
-        for (int i = 0; i < 4; ++i)
+        for (size_t i = 0; i < 4; ++i)
         {
-            auto node = consensus::ConsensusNode(signImpl->generateKeyPair()->publicKey(),
-                consensus::Type::consensus_sealer, 10 + i, 0, 0);
+            auto node = consensus::ConsensusNode{signImpl->generateKeyPair()->publicKey(),
+                consensus::Type::consensus_sealer, 10 + i, 0, 0};
             consensusNodeList.emplace_back(node);
         }
-        auto observer_node = consensus::ConsensusNode(signImpl->generateKeyPair()->publicKey(),
-            consensus::Type::consensus_observer, -1, 0, 0);
+        auto observer_node = consensus::ConsensusNode{signImpl->generateKeyPair()->publicKey(),
+            consensus::Type::consensus_observer, uint64_t(-1), 0, 0};
         observerNodeList.emplace_back(observer_node);
 
         m_param->setConsensusNodeList(consensusNodeList);
@@ -733,8 +733,9 @@ BOOST_AUTO_TEST_CASE(testNodeListByType)
 
     std::promise<bool> setSealer1;
     auto nodeList = task::syncWait(ledger::getNodeList(*m_storage));
-    nodeList.emplace_back(std::make_shared<KeyImpl>(bcos::crypto::HashType("56789").asBytes()),
-        consensus::Type::consensus_sealer, 100, 0, 5);
+    nodeList.emplace_back(consensus::ConsensusNode{
+        std::make_shared<KeyImpl>(bcos::crypto::HashType("56789").asBytes()),
+        consensus::Type::consensus_sealer, 100, 0, 5});
     task::syncWait(ledger::setNodeList(*m_storage, nodeList));
 
     std::promise<bool> p2;

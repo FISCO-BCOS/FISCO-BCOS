@@ -180,8 +180,8 @@ static int addSealerImpl(bool isConsensus,
                 // version >= 3.1.0, only allow adding sealer in observer list
                 return CODE_ADD_SEALER_SHOULD_IN_OBSERVER;
             }
-            consensusList.emplace_back(nodeIDPtr, consensus::Type::consensus_sealer, voteWeight, 0,
-                blockContext.number() + 1);
+            consensusList.emplace_back(consensus::ConsensusNode{nodeIDPtr,
+                consensus::Type::consensus_sealer, voteWeight, 0, blockContext.number() + 1});
         }
         node->enableNumber = blockContext.number() + 1;
     }
@@ -205,8 +205,8 @@ static int addSealerImpl(bool isConsensus,
         }
         else
         {
-            consensusList.emplace_back(
-                nodeIDPtr, consensus::Type::consensus_observer, 0, 0, blockContext.number() + 1);
+            consensusList.emplace_back(consensus::ConsensusNode{
+                nodeIDPtr, consensus::Type::consensus_observer, 0, 0, blockContext.number() + 1});
         }
     }
 

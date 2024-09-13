@@ -2629,6 +2629,12 @@ void TransactionExecutor::removeCommittedState()
     m_ledgerCache->clearCacheByNumber(number);
 }
 
+/**
+ * call when scheduler ExecutionMessage::MESSAGE
+ * @param input scheduler input
+ * @param staticCall whether static call
+ * @return callParameters
+ */
 std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     bcos::protocol::ExecutionMessage& input, bool staticCall)
 {
@@ -2734,6 +2740,12 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     return callParameters;
 }
 
+/**
+ * call when scheduler ExecutionMessage::TXHASH
+ * @param input scheduler input
+ * @param tx transaction
+ * @return callParameters
+ */
 std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     bcos::protocol::ExecutionMessage& input, const bcos::protocol::Transaction& tx)
 {
@@ -2764,7 +2776,8 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->gasLimit = input.gasLimit();
     callParameters->maxFeePerGas = u256(input.maxFeePerGas());
     callParameters->maxPriorityFeePerGas = u256(input.maxPriorityFeePerGas());
-    callParameters->nonce = u256(input.nonce());
+    // TODO: depends on whether web3 tx?
+    callParameters->nonce = hex2u(input.nonce());
 
     if (!m_isWasm && !callParameters->create)
     {
