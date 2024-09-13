@@ -111,9 +111,9 @@ enum ProtocolVersion : uint32_t
 // be compatible with the same major.minor version, the patch version should always be compatible,
 // the last byte is reserved, so 3.1.0 is 0x03010000 and is compatible with 3.1.1 which is
 // 0x03010100
-
 enum class BlockVersion : uint32_t
 {
+    V3_12_0_VERSION = 0x030c0000,
     V3_11_0_VERSION = 0x030b0000,
     V3_10_0_VERSION = 0x030a0000,
     V3_9_0_VERSION = 0x03090000,
@@ -138,7 +138,7 @@ enum class BlockVersion : uint32_t
     V3_0_VERSION = 0x03000000,
     RC4_VERSION = 4,
     MIN_VERSION = RC4_VERSION,
-    MAX_VERSION = V3_11_0_VERSION,
+    MAX_VERSION = V3_12_0_VERSION,
 };
 
 enum class TransactionVersion : uint32_t
@@ -146,17 +146,28 @@ enum class TransactionVersion : uint32_t
     V0_VERSION = 0x00000000,
     V1_VERSION = 0x00000001,
     V2_VERSION = 0x00000002,
-
 };
+
+constexpr std::string toString(BlockVersion version)
+{
+    auto versionNumber = static_cast<uint32_t>(version);
+    auto num1 = (versionNumber >> 24) & (0xff);
+    auto num2 = (versionNumber >> 16) & (0xff);
+    auto num3 = (versionNumber >> 8) & (0xff);
+
+    std::array<char, 256> versionStr;
+    auto* endIt = fmt::format_to(versionStr.begin(), FMT_COMPILE("{}.{}.{}"), num1, num2, num3);
+    return {versionStr.begin(), endIt};
+}
 
 const std::string RC4_VERSION_STR = "3.0.0-rc4";
 const std::string RC_VERSION_PREFIX = "3.0.0-rc";
-const std::string V3_9_VERSION_STR = "3.9.0";
+const std::string V3_9_VERSION_STR = toString(BlockVersion::V3_9_0_VERSION);
 
-const BlockVersion DEFAULT_VERSION = bcos::protocol::BlockVersion::V3_11_0_VERSION;
-const std::string DEFAULT_VERSION_STR = V3_9_VERSION_STR;
-const uint8_t MAX_MAJOR_VERSION = std::numeric_limits<uint8_t>::max();
-const uint8_t MIN_MAJOR_VERSION = 3;
+constexpr static BlockVersion DEFAULT_VERSION = bcos::protocol::BlockVersion::V3_12_0_VERSION;
+constexpr static std::string DEFAULT_VERSION_STR = toString(DEFAULT_VERSION);
+constexpr static uint8_t MAX_MAJOR_VERSION = std::numeric_limits<uint8_t>::max();
+constexpr static uint8_t MIN_MAJOR_VERSION = 3;
 
 [[nodiscard]] inline int versionCompareTo(
     std::variant<uint32_t, BlockVersion> const& _v1, BlockVersion const& _v2)
@@ -186,13 +197,7 @@ inline std::ostream& operator<<(std::ostream& out, bcos::protocol::BlockVersion 
         out << RC4_VERSION_STR;
         return out;
     }
-
-    auto versionNumber = static_cast<uint32_t>(version);
-    auto num1 = (versionNumber >> 24) & (0xff);
-    auto num2 = (versionNumber >> 16) & (0xff);
-    auto num3 = (versionNumber >> 8) & (0xff);
-
-    out << fmt::format(FMT_COMPILE("{}.{}.{}"), num1, num2, num3);
+    out << toString(version);
     return out;
 }
 
