@@ -148,7 +148,11 @@ enum class TransactionVersion : uint32_t
     V2_VERSION = 0x00000002,
 };
 
+#if __cpp_lib_constexpr_string >= 201907L
 constexpr std::string toString(BlockVersion version)
+#else
+std::string toString(BlockVersion version)
+#endif
 {
     auto versionNumber = static_cast<uint32_t>(version);
     auto num1 = (versionNumber >> 24) & (0xff);
