@@ -94,6 +94,11 @@ inline constexpr struct GetBlockHash
     {
         co_return co_await tag_invoke(*this, ledger, blockNumber);
     }
+    task::Task<std::optional<crypto::HashType>> operator()(
+        auto& storage, protocol::BlockNumber blockNumber, FromStorage fromStorage) const
+    {
+        co_return co_await tag_invoke(*this, storage, blockNumber, fromStorage);
+    }
 } getBlockHash{};
 
 inline constexpr struct GetBlockNumber

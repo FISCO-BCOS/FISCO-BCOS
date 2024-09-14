@@ -1853,21 +1853,9 @@ bool Ledger::buildGenesisBlock(
                           << LOG_KV("gasLimitMin", TX_GAS_LIMIT_MIN);
         return false;
     }
-
-    std::promise<std::tuple<Error::Ptr, bcos::crypto::HashType>> getBlockPromise;
-    asyncGetBlockHashByNumber(0, [&](Error::Ptr error, bcos::crypto::HashType hash) {
-        getBlockPromise.set_value({std::move(error), hash});
-    });
-
-    auto getBlockResult = getBlockPromise.get_future().get();
-    if (std::get<0>(getBlockResult) &&
-        std::get<0>(getBlockResult)->errorCode() != LedgerError::GetStorageError)
-    {
-        BOOST_THROW_EXCEPTION(*(std::get<0>(getBlockResult)));
-    }
-
+    auto genesisBlockHash = task::syncWait(ledger::getBlockHash(*m_stateStorage, 0, fromStorage));
     auto genesisData = generateGenesisData(genesis, ledgerConfig);
-    if (std::get<1>(getBlockResult))
+    if (genesisBlockHash)
     {
         // genesis block exists, quit
         LEDGER_LOG(INFO) << LOG_DESC("[#buildGenesisBlock] success, block exists");
