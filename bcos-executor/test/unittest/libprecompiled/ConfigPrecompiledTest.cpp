@@ -18,8 +18,12 @@
  * @date 2021-06-22
  */
 
+#include "bcos-crypto/signature/key/KeyImpl.h"
+#include "bcos-framework/ledger/Ledger.h"
+#include "bcos-ledger/LedgerMethods.h"
 #include "libprecompiled/PreCompiledFixture.h"
 #include <bcos-utilities/testutils/TestPromptFixture.h>
+#include <range/v3/algorithm/any_of.hpp>
 
 using namespace bcos;
 using namespace bcos::precompiled;
@@ -34,8 +38,6 @@ public:
     ConfigPrecompiledFixture()
     {
         codec = std::make_shared<CodecWrapper>(hashImpl, false);
-        auto keyPageIgnoreTables = std::make_shared<std::set<std::string, std::less<>>>(
-            IGNORED_ARRAY_310.begin(), IGNORED_ARRAY_310.end());
         setIsWasm(false, false, true, DEFAULT_VERSION);
         std::stringstream nodeFactory;
         nodeFactory << std::setfill('1') << std::setw(128) << 1;
@@ -641,6 +643,18 @@ BOOST_AUTO_TEST_CASE(consensus_test)
     // set weigh to not exist node2
     {
         callFunc(number++, "setWeight(string,uint256)", node2, 123, CODE_NODE_NOT_EXIST);
+    }
+
+    // set term weight to node1
+    {
+        callFunc(number++, "setTermWeight(string,uint256)", node1, 2022, 0);
+        auto nodeList = task::syncWait(ledger::getNodeList(*storage));
+
+        auto nodeID = KeyImpl(fromHex(node1));
+
+        BOOST_CHECK(::ranges::any_of(nodeList, [&](const consensus::ConsensusNode& node) {
+            return node.nodeID->data() == nodeID.data() && node.termWeight == 2022;
+        }));
     }
 
     // add node3 to sealer
