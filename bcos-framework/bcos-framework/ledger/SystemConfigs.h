@@ -19,6 +19,14 @@
  */
 
 #pragma once
+#include "../protocol/Protocol.h"
+#include "../storage/Entry.h"
+#include "../storage/LegacyStorageMethods.h"
+#include "../storage2/Storage.h"
+#include "../transaction-executor/StateKey.h"
+#include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-task/Task.h"
+#include "bcos-tool/Exceptions.h"
 #include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/Ranges.h"
 #include <boost/throw_exception.hpp>
@@ -45,6 +53,7 @@ enum class SystemConfig
     feature_rpbft_epoch_sealer_num,
     feature_balance_precompiled,
     web3_chain_id,
+    balance_transfer,
 };
 class SystemConfigs
 {
@@ -61,7 +70,17 @@ public:
         return *value;
     }
 
-    std::optional<std::string> get(SystemConfig config) const { return m_sysConfigs.at(config); }
+    std::optional<std::string> get(SystemConfig config) const
+    {
+        if (const auto it = m_sysConfigs.find(config); it != m_sysConfigs.end())
+        {
+            return it->second;
+        }
+        else
+        {
+            return std::nullopt;
+        }
+    }
     std::optional<std::string> get(std::string_view config) const
     {
         return get(fromString(config));

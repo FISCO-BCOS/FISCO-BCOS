@@ -491,6 +491,23 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
         simpleSetFunc(number++, 110, std::string{ledger::SYSTEM_KEY_TX_GAS_PRICE},
             std::string("error"), bcos::protocol::TransactionStatus::PrecompiledError);
     }
+
+    // balance_transfer
+    {
+        simpleSetFunc(
+            number++, 111, std::string{ledger::ENABLE_BALANCE_TRANSFER}, std::string("1"));
+        auto value = getValueByKey(number++, std::string{ledger::ENABLE_BALANCE_TRANSFER});
+        BOOST_CHECK_EQUAL(value, "1");
+
+        simpleSetFunc(
+            number++, 111, std::string{ledger::ENABLE_BALANCE_TRANSFER}, std::string("0"));
+
+        value = getValueByKey(number++, std::string{ledger::ENABLE_BALANCE_TRANSFER});
+        BOOST_CHECK_EQUAL(value, "0");
+
+        simpleSetFunc(number++, 111, std::string{ledger::ENABLE_BALANCE_TRANSFER},
+            std::string("error"), bcos::protocol::TransactionStatus::PrecompiledError);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(consensus_test)

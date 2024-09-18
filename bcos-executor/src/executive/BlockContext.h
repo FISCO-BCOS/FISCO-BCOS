@@ -71,8 +71,8 @@ public:
 
     uint64_t txGasLimit() const { return m_ledgerCache->fetchTxGasLimit(); }
 
-    auto getTxCriticals(
-        const protocol::Transaction::ConstPtr& _tx) -> std::shared_ptr<std::vector<std::string>>;
+    auto getTxCriticals(const protocol::Transaction::ConstPtr& _tx)
+        -> std::shared_ptr<std::vector<std::string>>;
 
     crypto::Hash::Ptr hashHandler() const { return m_hashImpl; }
     bool isWasm() const { return m_isWasm; }
@@ -138,6 +138,7 @@ public:
     auto keyPageIgnoreTables() const { return m_keyPageIgnoreTables; }
 
     const ledger::Features& features() const;
+    const ledger::SystemConfigs& configs() const;
     storage::EntryCachePtr getCodeCache() const { return m_codeCache; }
     storage::EntryCachePtr getCodeHashCache() const { return m_codeHashCache; }
     auto backendStorage() const { return m_backendStorage; }
@@ -169,6 +170,7 @@ private:
     storage::EntryCachePtr m_codeHashCache = std::make_shared<storage::EntryCache>();
     bcos::storage::StorageInterface::Ptr m_backendStorage;
     ledger::Features m_features;
+    ledger::SystemConfigs m_configs;
 };
 
 }  // namespace bcos::executor
