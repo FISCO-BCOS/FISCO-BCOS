@@ -65,8 +65,6 @@
 #include <future>
 #include <iterator>
 #include <memory>
-#include <range/v3/algorithm/remove_if.hpp>
-#include <range/v3/view/take.hpp>
 #include <utility>
 
 using namespace bcos;
@@ -1818,6 +1816,11 @@ static task::Task<void> setAllocs(
             co_await account::setCode(account, std::move(binaryCode), std::string{}, codeHash);
         }
 
+        if (!alloc.nonce.empty())
+        {
+            co_await account::setNonce(account, std::move(alloc.nonce));
+        }
+
         if (alloc.balance > 0)
         {
             co_await account::setBalance(account, alloc.balance);
@@ -1946,7 +1949,7 @@ bool Ledger::buildGenesisBlock(
                                   ", high than support maxVersion"));
     }
     // clang-format off
-    std::vector<std::string_view> tables {
+    constexpr static auto tables = std::to_array<std::string_view>({
         SYS_CONFIG, SYS_VALUE_AND_ENABLE_BLOCK_NUMBER,
         SYS_CONSENSUS, SYS_VALUE,
         SYS_CURRENT_STATE, SYS_VALUE,
@@ -1957,28 +1960,23 @@ bool Ledger::buildGenesisBlock(
         SYS_NUMBER_2_TXS, SYS_VALUE,
         SYS_HASH_2_RECEIPT, SYS_VALUE,
         SYS_BLOCK_NUMBER_2_NONCES, SYS_VALUE,
-    };
-
+    });
+    constexpr static auto moreTables = std::to_array<std::string_view>(
+            {SYS_CODE_BINARY, SYS_VALUE, SYS_CONTRACT_ABI, SYS_VALUE});
+    // clang-format on
+    RANGES::any_view<std::string_view, RANGES::category::mask | RANGES::category::sized> tablesView(
+        tables);
     if (versionNumber >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
     {
-        std::vector<std::string_view> moreTables{
-            SYS_CODE_BINARY, SYS_VALUE,
-            SYS_CONTRACT_ABI, SYS_VALUE
-        };
-
-        for (auto v : moreTables)
-        {
-            tables.push_back(v);
-        }
+        tablesView = RANGES::views::concat(tablesView, moreTables);
     }
-    // clang-format on
 
-    size_t total = tables.size();
-
-    for (size_t i = 0; i < total; i += 2)
+    for (auto&& pair : tablesView | RANGES::views::chunk(2))
     {
+        auto tableName = pair[0];
+        auto tableField = pair[1];
         std::promise<std::tuple<Error::UniquePtr>> createTablePromise;
-        m_stateStorage->asyncCreateTable(std::string(tables[i]), std::string(tables[i + 1]),
+        m_stateStorage->asyncCreateTable(std::string(tableName), std::string(tableField),
             [&createTablePromise](auto&& error, std::optional<Table>&&) {
                 createTablePromise.set_value({std::forward<decltype(error)>(error)});
             });

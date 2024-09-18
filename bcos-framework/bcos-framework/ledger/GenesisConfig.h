@@ -45,6 +45,7 @@ struct Alloc
 
     std::string address;
     u256 balance;
+    std::string nonce;
     std::string code;
     std::vector<State> storage;
 };
