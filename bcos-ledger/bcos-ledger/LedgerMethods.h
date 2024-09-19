@@ -123,7 +123,7 @@ task::Task<std::optional<crypto::HashType>> tag_invoke(ledger::tag_t<getBlockHas
     }
     auto blockNumberString = boost::lexical_cast<std::string>(blockNumber);
     if (auto entry = co_await storage2::readOne(
-            storage, transaction_executor::StateKeyView{SYS_CURRENT_STATE, blockNumberString}))
+            storage, transaction_executor::StateKeyView{SYS_NUMBER_2_HASH, blockNumberString}))
     {
         auto hashStr = entry->getField(0);
         bcos::crypto::HashType hash(hashStr, bcos::crypto::HashType::FromBinary);
