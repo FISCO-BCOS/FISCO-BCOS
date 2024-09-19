@@ -61,6 +61,7 @@ BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> stora
     }
 
     task::syncWait(readFromStorage(m_features, *m_storage, m_blockNumber));
+    task::syncWait(readFromStorage(m_configs, *m_storage, m_blockNumber));
     setVMSchedule();
 }
 
@@ -188,4 +189,9 @@ void BlockContext::killSuicides()
 const bcos::ledger::Features& bcos::executor::BlockContext::features() const
 {
     return m_features;
+}
+
+const bcos::ledger::SystemConfigs& BlockContext::configs() const
+{
+    return m_configs;
 }

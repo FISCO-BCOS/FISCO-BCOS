@@ -56,6 +56,7 @@ constexpr static std::string_view SYSTEM_KEY_RPBFT_SWITCH = magic_enum::enum_nam
 constexpr static std::string_view SYSTEM_KEY_BALANCE_PRECOMPILED_SWITCH = magic_enum::enum_name(SystemConfig::feature_balance_precompiled);
 // notify rotate key for rpbft
 constexpr static std::string_view INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE = "feature_rpbft_notify_rotate";
+constexpr static std::string_view ENABLE_BALANCE_TRANSFER = magic_enum::enum_name(SystemConfig::balance_transfer);
 // clang-format on
 constexpr static std::string_view PBFT_CONSENSUS_TYPE = "pbft";
 constexpr static std::string_view RPBFT_CONSENSUS_TYPE = "rpbft";
@@ -158,4 +159,23 @@ struct StorageState
     std::string nonce;
     std::string balance;
 };
+inline task::Task<void> readFromStorage(SystemConfigs& configs, auto&& storage, long blockNumber)
+{
+    decltype(auto) keys = bcos::ledger::SystemConfigs::supportConfigs();
+    auto entries = co_await storage2::readSome(std::forward<decltype(storage)>(storage),
+        keys | RANGES::views::transform([](std::string_view key) {
+            return transaction_executor::StateKeyView(ledger::SYS_CONFIG, key);
+        }));
+    for (auto&& [key, entry] : RANGES::views::zip(keys, entries))
+    {
+        if (entry)
+        {
+            auto [value, enableNumber] = entry->template getObject<ledger::SystemConfigEntry>();
+            if (blockNumber >= enableNumber)
+            {
+                configs.set(key, value);
+            }
+        }
+    }
+}
 }  // namespace bcos::ledger
