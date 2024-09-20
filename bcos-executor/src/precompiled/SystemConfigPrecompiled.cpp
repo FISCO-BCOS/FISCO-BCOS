@@ -281,6 +281,7 @@ int64_t SystemConfigPrecompiled::validate(
 
         if (setFeature)
         {
+            //// DO NOT add checking feature dependcies logic in other class! just check in here.
             _executive->blockContext().features().validate(key);
         }
 

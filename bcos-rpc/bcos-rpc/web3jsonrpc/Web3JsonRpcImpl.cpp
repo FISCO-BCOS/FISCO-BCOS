@@ -46,26 +46,11 @@ void Web3JsonRpcImpl::onRPCRequest(std::string_view _requestBody, Sender _sender
             task::wait([](Web3JsonRpcImpl* self, EndpointsMapping::Handler _handler,
                            Json::Value _request, Sender sender) -> task::Task<void> {
                 Json::Value resp;
-                try
-                {
-                    // FIXME)): throw exception here will core dump
-                    Json::Value const& params = _request["params"];
+                // FIXME)): throw exception here will core dump
+                Json::Value const& params = _request["params"];
 
-                    co_await (self->m_endpoints.*_handler)(params, resp);
-                    resp["id"] = _request["id"];
-                }
-                catch (const JsonRpcException& e)
-                {
-                    buildJsonError(_request, e.code(), e.msg(), resp);
-                }
-                catch (bcos::Error const& e)
-                {
-                    buildJsonError(_request, InternalError, e.errorMessage(), resp);
-                }
-                catch (const std::exception& e)
-                {
-                    buildJsonError(_request, InternalError, boost::diagnostic_information(e), resp);
-                }
+                co_await (self->m_endpoints.*_handler)(params, resp);
+                resp["id"] = _request["id"];
                 auto&& respBytes = toBytesResponse(resp);
                 if (c_fileLogLevel == TRACE) [[unlikely]]
                 {
@@ -85,9 +70,15 @@ void Web3JsonRpcImpl::onRPCRequest(std::string_view _requestBody, Sender _sender
     {
         buildJsonError(request, e.code(), e.msg(), response);
     }
+    catch (bcos::Error const& e)
+    {
+        buildJsonError(request, InternalError, e.errorMessage(), response);
+    }
     catch (...)
     {
-        buildJsonError(request, InternalError, "Internal error", response);
+        std::stringstream msg;
+        msg << "Internal error: " << boost::current_exception_diagnostic_information();
+        buildJsonError(request, InternalError, msg.str(), response);
     }
     auto&& resp = toBytesResponse(response);
     WEB3_LOG(DEBUG) << LOG_BADGE("onRPCRequest") << LOG_DESC("response with exception")

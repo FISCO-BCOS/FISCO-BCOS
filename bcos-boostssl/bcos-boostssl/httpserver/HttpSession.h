@@ -121,11 +121,12 @@ public:
 
             handleRequest(m_parser->release());
         }
-        catch (std::exception const& e)
+        catch (...)
         {
             HTTP_SESSION(WARNING) << LOG_DESC("onRead exception")
                                   << LOG_KV("bytesSize", bytes_transferred)
-                                  << LOG_KV("failed", boost::diagnostic_information(e));
+                                  << LOG_KV("failed",
+                                         boost::current_exception_diagnostic_information());
         }
 
         if (!m_queue->isFull())

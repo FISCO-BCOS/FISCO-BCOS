@@ -117,8 +117,6 @@ public:
         {
             BOOST_THROW_EXCEPTION(NoSuchFeatureError{});
         }
-
-        validate(flag);
         m_flags[*index] = true;
     }
     void set(std::string_view flag) { set(string2Flag(flag)); }
