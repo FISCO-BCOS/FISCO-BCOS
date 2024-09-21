@@ -11,13 +11,16 @@
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/storage/StorageInterface.h"
+#include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-table/src/LegacyStorageWrapper.h"
 #include "bcos-tars-protocol/impl/TarsSerializable.h"
 #include "bcos-task/AwaitableValue.h"
 #include "bcos-utilities/Exceptions.h"
 #include "generated/bcos-tars-protocol/tars/LedgerConfig.h"
+#include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <concepts>
+#include <optional>
 #include <type_traits>
 
 #define LEDGER2_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("LEDGER2")
@@ -78,9 +81,6 @@ task::Task<TransactionCount> tag_invoke(
 task::Task<protocol::BlockNumber> tag_invoke(
     ledger::tag_t<getCurrentBlockNumber> /*unused*/, LedgerInterface& ledger);
 
-task::Task<crypto::HashType> tag_invoke(ledger::tag_t<getBlockHash> /*unused*/,
-    LedgerInterface& ledger, protocol::BlockNumber blockNumber);
-
 task::Task<protocol::BlockNumber> tag_invoke(
     ledger::tag_t<getBlockNumber> /*unused*/, LedgerInterface& ledger, crypto::HashType hash);
 
@@ -108,6 +108,30 @@ task::Task<std::optional<bcos::storage::Entry>> tag_invoke(ledger::tag_t<getStor
 task::Task<std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>>> tag_invoke(
     ledger::tag_t<getNonceList> /*unused*/, LedgerInterface& ledger,
     bcos::protocol::BlockNumber startNumber, int64_t offset);
+
+bcos::task::Task<bcos::crypto::HashType> tag_invoke(ledger::tag_t<getBlockHash> /*unused*/,
+    LedgerInterface& ledger, protocol::BlockNumber blockNumber);
+
+task::Task<std::optional<crypto::HashType>> tag_invoke(ledger::tag_t<getBlockHash> /*unused*/,
+    auto& storage, protocol::BlockNumber blockNumber, FromStorage /*unused*/)
+{
+    LEDGER_LOG(TRACE) << "GetBlockHashByNumber request" << LOG_KV("blockNumber", blockNumber);
+    if (blockNumber < 0)
+    {
+        BOOST_THROW_EXCEPTION(
+            BCOS_ERROR(LedgerError::ErrorArgument, "GetBlockHashByNumber error, wrong argument"));
+    }
+    auto blockNumberString = boost::lexical_cast<std::string>(blockNumber);
+    if (auto entry = co_await storage2::readOne(
+            storage, transaction_executor::StateKeyView{SYS_NUMBER_2_HASH, blockNumberString}))
+    {
+        auto hashStr = entry->getField(0);
+        bcos::crypto::HashType hash(hashStr, bcos::crypto::HashType::FromBinary);
+
+        co_return std::make_optional(hash);
+    }
+    co_return std::nullopt;
+}
 
 task::Task<protocol::BlockNumber> tag_invoke(
     ledger::tag_t<getCurrentBlockNumber> /*unused*/, auto& storage, FromStorage /*unused*/)
