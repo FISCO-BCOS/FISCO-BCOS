@@ -25,7 +25,7 @@ target_include_directories(${TEST_BINARY_NAME} PRIVATE . ../bcos-sealer)
 find_package(Boost REQUIRED unit_test_framework log)
 find_package(fmt REQUIRED)
 
-target_link_libraries(${TEST_BINARY_NAME} PUBLIC ${SEALER_TARGET} ${PBFT_TARGET} ${RPBFT_TARGET} ${LEDGER_TARGET} ${TARS_PROTOCOL_TARGET} Boost::unit_test_framework Boost::log fmt::fmt-header-only)
+target_link_libraries(${TEST_BINARY_NAME} PUBLIC ${SEALER_TARGET} ${PBFT_TARGET} ${RPBFT_TARGET} ${LEDGER_TARGET} ${TARS_PROTOCOL_TARGET} Boost::unit_test_framework Boost::log fmt::fmt)
 include(SearchTestCases)
 config_test_cases("" "${SOURCES}" ${TEST_BINARY_NAME} "${EXCLUDE_SUITES}")
 

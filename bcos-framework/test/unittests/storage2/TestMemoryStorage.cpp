@@ -3,7 +3,6 @@
 #include "transaction-executor/StateKey.h"
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-task/Wait.h>
-#include <fmt/format.h>
 #include <boost/test/unit_test.hpp>
 #include <functional>
 
