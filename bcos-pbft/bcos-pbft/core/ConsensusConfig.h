@@ -137,7 +137,7 @@ protected:
 
 protected:
     bcos::crypto::KeyPairInterface::Ptr m_keyPair;
-    std::atomic<IndexType> m_nodeIndex = {0};
+    std::atomic<IndexType> m_nodeIndex = 0;
     std::atomic<IndexType> m_consensusNodeNum = {0};
 
     ConsensusNodeList m_consensusNodeList;

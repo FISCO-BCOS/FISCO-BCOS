@@ -38,7 +38,7 @@ struct StorageTrait
 template <class CoroType>
 struct ExecutionContext
 {
-    ExecutionContext(int contextID, std::reference_wrapper<const protocol::Transaction> transaction,
+    ExecutionContext(int contextID, const protocol::Transaction& transaction,
         std::reference_wrapper<protocol::TransactionReceipt::Ptr> receipt,
         std::optional<CoroType> coro, std::optional<decltype(coro->begin())> iterator)
       : contextID(contextID),
@@ -308,11 +308,10 @@ task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
     protocol::BlockHeader const& blockHeader, RANGES::random_access_range auto const& transactions,
     ledger::LedgerConfig const& ledgerConfig)
 {
-    auto count = RANGES::size(transactions);
-
+    auto transactionCount = RANGES::size(transactions);
     ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
         ittapi::ITT_DOMAINS::instance().PARALLEL_EXECUTE);
-    std::vector<protocol::TransactionReceipt::Ptr> receipts(count);
+    std::vector<protocol::TransactionReceipt::Ptr> receipts(transactionCount);
 
     using Storage = std::decay_t<decltype(storage)>;
     using CoroType = std::invoke_result_t<transaction_executor::Execute3Step, decltype(executor),
@@ -324,7 +323,7 @@ task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
         tbb::cache_aligned_allocator<ExecutionContext<CoroType>>>
         contexts;
     contexts.reserve(RANGES::size(transactions));
-    for (auto index : RANGES::views::iota(0, (int)RANGES::size(transactions)))
+    for (auto index : RANGES::views::iota(0, (int)transactionCount))
     {
         contexts.emplace_back(
             ExecutionContext<CoroType>{index, transactions[index], receipts[index], {}, {}});
