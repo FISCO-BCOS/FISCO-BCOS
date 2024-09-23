@@ -1410,6 +1410,7 @@ BOOST_AUTO_TEST_CASE(genesisBlockWithAllocs)
                                  RANGES::views::transform([&](int index) {
                                      Alloc alloc{.address = fmt::format("{:0>40}", index),
                                          .balance = bcos::u256(index * 10),
+                                         .nonce = {},
                                          .code = hexCode,
                                          .storage = {}};
 

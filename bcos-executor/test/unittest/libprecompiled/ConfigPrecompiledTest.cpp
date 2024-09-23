@@ -660,6 +660,18 @@ BOOST_AUTO_TEST_CASE(consensus_test)
         callFunc(number++, "setWeight(string,uint256)", node2, 123, CODE_NODE_NOT_EXIST);
     }
 
+    // set term weight to node1
+    {
+        callFunc(number++, "setTermWeight(string,uint256)", node1, 2022, 0);
+        auto nodeList = task::syncWait(ledger::getNodeList(*storage));
+
+        auto nodeID = KeyImpl(fromHex(node1));
+
+        BOOST_CHECK(::ranges::any_of(nodeList, [&](const consensus::ConsensusNode& node) {
+            return node.nodeID->data() == nodeID.data() && node.termWeight == 2022;
+        }));
+    }
+
     // add node3 to sealer
     {
         callFunc(

@@ -208,9 +208,8 @@ bool WorkingSealerManagerImpl::shouldRotate(const executor::TransactionExecutive
             return true;
         }
     }
-    auto epochEntry =
-        _executive->storage().getRow(ledger::SYS_CONFIG, ledger::SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM);
-    if (epochEntry) [[likely]]
+    if (auto epochEntry = _executive->storage().getRow(
+            ledger::SYS_CONFIG, ledger::SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM))
     {
         auto epochInfo = epochEntry->getObject<ledger::SystemConfigEntry>();
         PRECOMPILED_LOG(DEBUG) << LOG_DESC("shouldRotate: get epoch_sealer_num")
@@ -222,6 +221,7 @@ bool WorkingSealerManagerImpl::shouldRotate(const executor::TransactionExecutive
             return true;
         }
     }
+
     uint32_t sealerNum = m_consensusSealer.size() + m_candidateSealer.size();
     auto maxWorkingSealerNum = std::min(m_configuredEpochSealersSize, sealerNum);
     if (m_consensusSealer.size() < maxWorkingSealerNum)
