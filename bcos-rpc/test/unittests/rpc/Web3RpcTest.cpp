@@ -130,16 +130,6 @@ BOOST_AUTO_TEST_CASE(handleInvalidTest)
 
 BOOST_AUTO_TEST_CASE(handleValidTest)
 {
-    // method eth_syncing
-    // {
-    //     const auto request =
-    //         R"({"jsonrpc":"2.0","id":1132123, "method":"eth_syncing","params":[]})";
-    //     auto response = onRPCRequestWrapper(request);
-    //     validRespCheck(response);
-    //     BOOST_CHECK(response["id"].asInt64() == 1132123);
-    //     BOOST_CHECK(response["result"].asBool() == false);
-    // }
-
     // method eth_chainId
     {
         const auto request = R"({"jsonrpc":"2.0","id":123, "method":"eth_chainId","params":[]})";
@@ -221,6 +211,28 @@ BOOST_AUTO_TEST_CASE(handleValidTest)
         BOOST_CHECK(response["id"].asString() == "e4df2b99-f80b-4e23-91c7-b9471b46af26");
         auto const blkNum = toQuantity(m_ledger->blockNumber());
         BOOST_CHECK(response["result"].asString() == blkNum);
+    }
+
+    // method eth_blockNumber
+    {
+        // clang-format off
+        std::string rawTx = "0xf902ee83031ae9850256506a88831b40d094d56e4eab23cb81f43168f9f45211eb027b9ac7cc80b90284b143044b00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000650000000000000000000000004d73adb72bc3dd368966edd0f0b2148401a178e200000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000661d084300000000000000000000000000000000000000000000000000000000000001600000000000000000000000000000000000000000000000000000000000000084704316e5000000000000000000000000000000000000000000000000000000000000006e740e551c6ee78d757128b8e476b390f891c54e96538e1bb4469a62105220215a0000000000000000000000000000000000000000000000000000000000000014740e551c6ee78d757128b8e476b390f891c54e96538e1bb4469a62105220215a000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000082ce44cffc92754f8825e1c60cadc5f54a504b769ee616e9f28a9797c2a4b84d11542a1aa4a06a6aa60ee062a36c4fb467145b8914959e42323a13068e2475bff41c67af8dd96034675776cb78036711c1f320b82085df5ee005ffca77959f29a0a07a226241787f06b57483d509e0befd84e5ac84d960e881c7b0853ee1d7c63dff1b00000000000000000000000000000000000000000000000000000000000026a04932608e9743aaa76626f082cedb5da11ff8a1ebe6b5a62a372c81393b5912aea012f36de80608ba3b0f72f3e8f299379ce2802e64b1cbb55275ad9aaa81190b44";
+        // clang-format on
+        const auto request =
+            R"({"id":"e4df2b99-f80b-4e23-123231","jsonrpc":"2.0","method":"eth_estimateGas","params":[")" +
+            rawTx + R"("]})";
+        auto response = onRPCRequestWrapper(request);
+        validRespCheck(response);
+        BOOST_CHECK(response["id"].asString() == "e4df2b99-f80b-4e23-123231");
+        // before set config, return lowest gas limit
+        BOOST_CHECK_EQUAL(response["result"].asString(), toQuantity(LowestGasUsed));
+
+        // after set config, return config
+        auto txGasLimit = 3000000U;
+        m_ledger->setSystemConfig(ledger::SYSTEM_KEY_TX_GAS_LIMIT, std::to_string(txGasLimit));
+        response = onRPCRequestWrapper(request);
+        validRespCheck(response);
+        BOOST_CHECK_EQUAL(response["result"].asString(), toQuantity(txGasLimit));
     }
 }
 
