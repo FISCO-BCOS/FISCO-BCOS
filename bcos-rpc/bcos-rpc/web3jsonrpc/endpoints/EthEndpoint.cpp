@@ -551,8 +551,16 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
         WEB3_LOG(TRACE) << LOG_DESC("eth_estimateGas") << LOG_KV("tx", printJson(tx))
                         << LOG_KV("blockTag", blockTag) << LOG_KV("blockNumber", blockNumber);
     }
-    // FIXME)): fake now
-    Json::Value result = "0x1";
+
+    u256 estimateGas = LowestGasUsed;
+    auto const ledger = m_nodeService->ledger();
+    if (auto const config =
+            co_await ledger::getSystemConfig(*ledger, ledger::SYSTEM_KEY_TX_GAS_LIMIT))
+    {
+        auto [gasLimit, _] = config.value();
+        estimateGas = u256(gasLimit);
+    }
+    Json::Value result = toQuantity(estimateGas);
     buildJsonContent(result, response);
     co_return;
 }
