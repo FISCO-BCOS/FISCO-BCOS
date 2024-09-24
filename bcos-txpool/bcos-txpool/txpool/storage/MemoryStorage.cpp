@@ -701,8 +701,8 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
     auto updateLedgerNonceT = utcTime() - startT;
 
     startT = utcTime();
-    task::wait(
-        m_config->txValidator()->web3NonceChecker()->updateNonceCache(std::move(web3NonceMap)));
+    task::syncWait(m_config->txValidator()->web3NonceChecker()->updateNonceCache(
+        RANGES::views::keys(web3NonceMap), RANGES::views::values(web3NonceMap)));
     auto updateWeb3NonceT = utcTime() - startT;
 
     startT = utcTime();
@@ -948,22 +948,22 @@ void MemoryStorage::removeInvalidTxs(bool lock)
         });
 
         bcos::protocol::NonceList invalidNonceList = {};
-        std::vector<std::pair<std::string, std::string>> web3NonceList;
         for (auto const& [_, tx] : txs2Remove)
         {
             if (tx->type() == TransactionType::BCOSTransaction) [[likely]]
             {
                 invalidNonceList.emplace_back(tx->nonce());
             }
-            else if (tx->type() == TransactionType::Web3Transaction) [[unlikely]]
-            {
-                auto sender = std::string(tx->sender());
-                web3NonceList.emplace_back(sender, tx->nonce());
-            }
         }
+        auto web3Txs =
+            RANGES::views::values(txs2Remove) | RANGES::views::filter([](auto const& _tx) {
+                return _tx->type() == TransactionType::Web3Transaction;
+            });
         m_config->txPoolNonceChecker()->batchRemove(invalidNonceList);
-        task::wait(m_config->txValidator()->web3NonceChecker()->batchRemoveMemoryNonce(
-            std::move(web3NonceList)));
+        task::syncWait(m_config->txValidator()->web3NonceChecker()->batchRemoveMemoryNonce(
+            web3Txs | RANGES::views::transform(
+                          [](auto const& _tx) { return std::string(_tx->sender()); }),
+            web3Txs | RANGES::views::transform([](auto const& _tx) { return _tx->nonce(); })));
 
         /*
         m_txsTable.batchRemove(txs2Remove | RANGES::views::keys,

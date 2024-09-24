@@ -100,7 +100,7 @@ task::Task<TransactionStatus> Web3NonceChecker::checkWeb3Nonce(
 }
 
 task::Task<void> Web3NonceChecker::batchRemoveMemoryNonce(
-    std::vector<std::pair<std::string, std::string>> _nonceList)
+    RANGES::input_range auto&& senders, RANGES::input_range auto&& nonces)
 {
     // 假设交易池里有0xabcd的3笔交易，nonce分别是5，7，9。如果nonce为7的交易先被打包进区块，ledge
     // state nonce将会更新到7，那么交易池中memory nonce中小等于ledger
@@ -109,22 +109,22 @@ task::Task<void> Web3NonceChecker::batchRemoveMemoryNonce(
     // 9 in the transaction pool sent by 0xabcd. If the transaction with nonce 7 is packaged
     // into a block first, the ledge state nonce will be updated to 7, then the transactions
     // with nonce 5 and 7 in the memory nonce of the transaction pool will be removed.
-    if (c_fileLogLevel == TRACE)
+    std::stringstream ss;
+    for (auto&& [sender, nonce] : RANGES::views::zip(senders, nonces))
     {
-        std::stringstream ss;
-        for (auto&& [sender, nonce] : _nonceList)
+        if (c_fileLogLevel == TRACE)
         {
             ss << sender << ":" << nonce << ", ";
         }
-        TXPOOL_LOG(TRACE) << LOG_DESC("Web3Nonce: rm mem nonce cache for invalid txs.") << ss.str();
+        co_await storage2::removeOne(m_memoryNonces, std::make_pair(sender, nonce));
     }
-    co_return co_await storage2::removeSome(m_memoryNonces, std::move(_nonceList));
+    TXPOOL_LOG(DEBUG) << LOG_DESC("Web3Nonce: rm mem nonce cache for invalid txs.") << ss.str();
 }
 
 task::Task<void> Web3NonceChecker::updateNonceCache(
-    std::unordered_map<std::string, std::set<u256>> map)
+    RANGES::input_range auto&& senders, RANGES::input_range auto&& noncesSet)
 {
-    for (auto&& [sender, nonceSet] : map)
+    for (auto&& [sender, nonceSet] : RANGES::views::zip(senders, noncesSet))
     {
         if (nonceSet.empty()) [[unlikely]]
         {
@@ -135,6 +135,11 @@ task::Task<void> Web3NonceChecker::updateNonceCache(
                                   << LOG_KV("sender", sender) << LOG_KV("nonce", maxNonce);
             }
             co_await storage2::writeOne(m_ledgerStateNonces, sender, maxNonce);
+            if (auto maxMemNonce = co_await storage2::readOne(m_maxNonces, sender);
+                maxMemNonce.has_value() && maxNonce >= maxMemNonce.value())
+            {
+                co_await storage2::removeOne(m_maxNonces, sender);
+            }
         }
         for (auto&& nonce : nonceSet)
         {
@@ -156,6 +161,11 @@ task::Task<void> Web3NonceChecker::insertMemoryNonce(std::string sender, std::st
                           << LOG_KV("nonce", nonce);
     }
     co_await storage2::writeOne(m_memoryNonces, std::make_pair(sender, nonce), std::monostate{});
+    const auto maxMemNonce = co_await storage2::readOne(m_maxNonces, sender);
+    if (auto const uNonce = u256(nonce); uNonce > maxMemNonce.value_or(0))
+    {
+        co_await storage2::writeOne(m_maxNonces, sender, uNonce);
+    }
     co_return;
 }
 

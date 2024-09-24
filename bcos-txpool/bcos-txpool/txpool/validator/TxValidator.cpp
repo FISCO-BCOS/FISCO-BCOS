@@ -60,7 +60,7 @@ TransactionStatus TxValidator::verify(bcos::protocol::Transaction::ConstPtr _tx)
         _tx->setSystemTx(true);
     }
     m_txPoolNonceChecker->insert(_tx->nonce());
-    task::wait(m_web3NonceChecker->insertMemoryNonce(std::string(_tx->sender()), _tx->nonce()));
+    task::syncWait(m_web3NonceChecker->insertMemoryNonce(std::string(_tx->sender()), _tx->nonce()));
     return TransactionStatus::None;
 }
 

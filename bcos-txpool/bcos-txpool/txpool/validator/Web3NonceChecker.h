@@ -24,6 +24,7 @@
 
 namespace bcos::txpool
 {
+constexpr uint16_t DefaultBucketSize = 256;
 struct pair_hash
 {
     template <class T1, class T2>
@@ -40,7 +41,10 @@ class Web3NonceChecker
 public:
     using Ptr = std::shared_ptr<Web3NonceChecker>;
     explicit Web3NonceChecker(bcos::ledger::LedgerInterface::Ptr ledger)
-      : m_ledgerStateNonces(256), m_ledger(std::move(ledger))
+      : m_ledgerStateNonces(DefaultBucketSize),
+        m_memoryNonces(DefaultBucketSize),
+        m_maxNonces(DefaultBucketSize),
+        m_ledger(std::move(ledger))
     {}
     ~Web3NonceChecker() = default;
     Web3NonceChecker(const Web3NonceChecker&) = delete;
@@ -61,17 +65,22 @@ public:
     /**
      * batch insert sender and nonce into ledger state nonce and memory nonce, call when block is
      * committed
-     * @param map the sender and nonce to update in ledger state nonce and memory nonce
+     * @param senders sender string list
+     * @param noncesSet nonce u256 set
      */
-    task::Task<void> updateNonceCache(std::unordered_map<std::string, std::set<u256>> map);
+    task::Task<void> updateNonceCache(
+        RANGES::input_range auto&& senders, RANGES::input_range auto&& noncesSet);
 
     /**
      * batch remove sender and nonce from memory nonce, call when tx is invalid
-     * @param map the sender and nonce to be removed
+     * @param senders sender string list
+     * @param nonces nonce string list
      */
-    task::Task<void> batchRemoveMemoryNonce(std::vector<std::pair<std::string, std::string>>);
+    task::Task<void> batchRemoveMemoryNonce(
+        RANGES::input_range auto&& senders, RANGES::input_range auto&& nonces);
 
     task::Task<void> insertMemoryNonce(std::string sender, std::string nonce);
+
 
     // for test, inset nonce into ledgerStateNonces
     void insert(std::string sender, u256 nonce);
@@ -95,6 +104,14 @@ private:
             storage2::memory_storage::LRU | storage2::memory_storage::CONCURRENT),
         pair_hash>
         m_memoryNonces;
+
+    // sender address, nonce
+    // only store max nonce of memory nonce.
+    bcos::storage2::memory_storage::MemoryStorage<std::string, u256,
+        static_cast<storage2::memory_storage::Attribute>(
+            storage2::memory_storage::LRU | storage2::memory_storage::CONCURRENT),
+        std::hash<std::string>>
+        m_maxNonces;
     bcos::ledger::LedgerInterface::Ptr m_ledger;
 };
 }  // namespace bcos::txpool
