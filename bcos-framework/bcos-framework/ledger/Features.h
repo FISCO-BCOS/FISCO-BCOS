@@ -157,7 +157,6 @@ public:
             BOOST_THROW_EXCEPTION(NoSuchFeatureError{});
         }
 
-        validate(flag);
         m_flags[*index] = true;
         // enableDependencyFeatures(flag);
     }

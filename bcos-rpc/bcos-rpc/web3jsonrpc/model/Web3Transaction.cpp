@@ -127,7 +127,7 @@ bcostars::Transaction Web3Transaction::takeToTarsTransaction()
     {
         tarsTx.data.gasPrice = "0x" + this->maxPriorityFeePerGas.str(0, std::ios_base::hex);
     }
-    tarsTx.type = static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transacion);
+    tarsTx.type = static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
     auto hashForSign = this->hashForSign();
     auto encodedForSign = this->encodeForSign();
     // FISCO BCOS signature is r||s||v

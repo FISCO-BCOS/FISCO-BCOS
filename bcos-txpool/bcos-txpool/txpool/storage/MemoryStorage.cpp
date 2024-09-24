@@ -104,7 +104,7 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
             try
             {
                 auto result = m_self->verifyAndSubmitTransaction(
-                    std::move(m_transaction),
+                    m_transaction,
                     [this, m_handle = handle](Error::Ptr error,
                         bcos::protocol::TransactionSubmitResult::Ptr result) mutable {
                         if (error)
@@ -668,15 +668,24 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
     // update the ledger nonce
 
     auto nonceListPtr = std::make_shared<NonceList>();
-    std::unordered_map<std::string, u256> web3NonceMap;
+    std::unordered_map<std::string, std::set<u256>> web3NonceMap{};
     for (auto&& [_, txPair] : results)
     {
         auto const& [tx, txResult] = txPair;
         if (tx)
         {
-            if (tx->type() == TransactionType::Web3Transacion) [[unlikely]]
+            if (tx->type() == TransactionType::Web3Transaction) [[unlikely]]
             {
-                web3NonceMap[std::string(tx->sender())] = u256(tx->nonce());
+                auto sender = std::string(tx->sender());
+                auto nonce = hex2u(tx->nonce());
+                if (auto it = web3NonceMap.find(sender); it != web3NonceMap.end())
+                {
+                    it->second.insert(nonce);
+                }
+                else
+                {
+                    web3NonceMap.insert({sender, {nonce}});
+                }
             }
             else
             {
@@ -692,8 +701,8 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
     auto updateLedgerNonceT = utcTime() - startT;
 
     startT = utcTime();
-    m_config->txValidator()->web3NonceChecker()->batchInsert(
-        RANGES::views::keys(web3NonceMap), RANGES::views::values(web3NonceMap));
+    task::wait(
+        m_config->txValidator()->web3NonceChecker()->updateNonceCache(std::move(web3NonceMap)));
     auto updateWeb3NonceT = utcTime() - startT;
 
     startT = utcTime();
@@ -718,7 +727,7 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
                      << LOG_KV("batchId", batchId) << LOG_KV("timecost", (utcTime() - recordT))
                      << LOG_KV("lockT", lockT) << LOG_KV("removeT", removeT)
                      << LOG_KV("updateLedgerNonceT", updateLedgerNonceT)
-                     << LOG_KV("updateWeb3NonceT", updateLedgerNonceT)
+                     << LOG_KV("updateWeb3NonceT", updateWeb3NonceT)
                      << LOG_KV("updateTxPoolNonceT", updateTxPoolNonceT);
 }
 
@@ -939,21 +948,22 @@ void MemoryStorage::removeInvalidTxs(bool lock)
         });
 
         bcos::protocol::NonceList invalidNonceList = {};
-        std::unordered_map<std::string, u256> web3NonceMap;
+        std::vector<std::pair<std::string, std::string>> web3NonceList;
         for (auto const& [_, tx] : txs2Remove)
         {
             if (tx->type() == TransactionType::BCOSTransaction) [[likely]]
             {
                 invalidNonceList.emplace_back(tx->nonce());
             }
-            else if (tx->type() == TransactionType::Web3Transacion) [[unlikely]]
+            else if (tx->type() == TransactionType::Web3Transaction) [[unlikely]]
             {
-                web3NonceMap[std::string(tx->sender())] = u256(tx->nonce());
+                auto sender = std::string(tx->sender());
+                web3NonceList.emplace_back(sender, tx->nonce());
             }
         }
         m_config->txPoolNonceChecker()->batchRemove(invalidNonceList);
-        m_config->txValidator()->web3NonceChecker()->batchRemoveMemoryNonce(
-            std::move(web3NonceMap));
+        task::wait(m_config->txValidator()->web3NonceChecker()->batchRemoveMemoryNonce(
+            std::move(web3NonceList)));
 
         /*
         m_txsTable.batchRemove(txs2Remove | RANGES::views::keys,

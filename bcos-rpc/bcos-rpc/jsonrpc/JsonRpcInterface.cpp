@@ -149,6 +149,13 @@ void JsonRpcInterface::onRPCRequest(std::string_view _requestBody, Sender _sende
         response.error.code = JsonRpcError::InvalidRequest;
         response.error.message = std::string(e.what());
     }
+    catch (...)
+    {
+        RPC_IMPL_LOG(DEBUG) << LOG_BADGE("onRPCRequest")
+                            << LOG_DESC("response with unknown exception");
+        response.error.code = JsonRpcError::InternalError;
+        response.error.message = boost::current_exception_diagnostic_information();
+    }
 
     auto strResp = toStringResponse(response);
 

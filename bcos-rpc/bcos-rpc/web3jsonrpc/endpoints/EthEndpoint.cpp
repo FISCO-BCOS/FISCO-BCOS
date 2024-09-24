@@ -43,7 +43,7 @@ using namespace bcos::rpc;
 
 task::Task<void> EthEndpoint::protocolVersion(const Json::Value&, Json::Value&)
 {
-    // TODO: impl this
+    // TODO: impl this, this returns eth p2p protocol version
     BOOST_THROW_EXCEPTION(
         JsonRpcException(MethodNotFound, "This API has not been implemented yet!"));
     co_return;
@@ -68,10 +68,12 @@ task::Task<void> EthEndpoint::syncing(const Json::Value&, Json::Value& response)
     buildJsonContent(result, response);
     co_return;
 }
-task::Task<void> EthEndpoint::coinbase(const Json::Value&, Json::Value&)
+task::Task<void> EthEndpoint::coinbase(const Json::Value&, Json::Value& response)
 {
-    BOOST_THROW_EXCEPTION(
-        JsonRpcException(MethodNotFound, "This API has not been implemented yet!"));
+    auto const nodeId = m_nodeService->consensus()->consensusConfig()->nodeID();
+    auto const address = right160(crypto::keccak256Hash(ref(nodeId->data())));
+    Json::Value result = address.hexPrefixed();
+    buildJsonContent(result, response);
     co_return;
 }
 task::Task<void> EthEndpoint::chainId(const Json::Value&, Json::Value& response)
@@ -114,6 +116,7 @@ task::Task<void> EthEndpoint::gasPrice(const Json::Value&, Json::Value& response
 {
     // result: gasPrice(QTY)
     auto const ledger = m_nodeService->ledger();
+    // TODO)): gas price can wrap in a class
     auto config = co_await ledger::getSystemConfig(*ledger, ledger::SYSTEM_KEY_TX_GAS_PRICE);
     Json::Value result;
     if (config.has_value())
@@ -245,12 +248,12 @@ task::Task<void> EthEndpoint::getTransactionCount(const Json::Value& request, Js
                         << LOG_KV("blockTag", blockTag) << LOG_KV("blockNumber", blockNumber);
     }
     auto const ledger = m_nodeService->ledger();
-    uint64_t nonce = 0;
+    u256 nonce = 0;
     if (auto const entry = co_await ledger::getStorageAt(
             *ledger, addressStr, bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE, /*blockNumber*/ 0);
         entry.has_value())
     {
-        nonce = std::stoull(std::string(entry.value().get()));
+        nonce = u256(entry.value().get());
     }
     // else
     // {
@@ -715,7 +718,7 @@ task::Task<void> EthEndpoint::getTransactionReceipt(
                 JsonRpcException(InvalidParams, "Invalid transaction hash: " + hash.hexPrefixed()));
         }
         auto block = co_await ledger::getBlockData(*ledger, receipt->blockNumber(),
-            bcos::ledger::HEADER | bcos::ledger::TRANSACTIONS_HASH);
+            bcos::ledger::HEADER | bcos::ledger::TRANSACTIONS_HASH | bcos::ledger::RECEIPTS);
         combineReceiptResponse(result, std::move(receipt), txs->at(0), std::move(block));
     }
     catch (...)

@@ -254,6 +254,9 @@ public:
     void setNonce(std::string nonce) override { throw std::runtime_error("not implemented"); }
     std::string nonce() const override { throw std::runtime_error("not implemented"); }
 
+    uint8_t txType() const override { throw std::runtime_error("not implemented"); }
+    void setTxType(uint8_t txType) override { throw std::runtime_error("not implemented"); }
+
     bcostars::ExecutionMessage inner() const { return *(m_inner()); }
 
 protected:
