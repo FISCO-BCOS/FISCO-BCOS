@@ -44,14 +44,14 @@ BOOST_AUTO_TEST_CASE(testRotate)
 
     task::syncWait([this]() -> task::Task<void> {
         precompiled::WorkingSealerManagerImpl workingSealerManager(true);
-        workingSealerManager.m_configuredEpochSealersSize = 2;
+        workingSealerManager.setConfiguredEpochSealersSize(2);
 
         std::string node1(64, '1');
         std::string node2(64, '2');
         std::string node3(64, '3');
         std::string node4(64, '4');
-        workingSealerManager.m_vrfInfo = std::make_shared<MockVRFInfo>(
-            bcos::bytes{}, bcos::bytes{node1.begin(), node1.end()}, bcos::bytes{});
+        workingSealerManager.createVRFInfo(std::make_unique<MockVRFInfo>(
+            bcos::bytes{}, bcos::bytes{node1.begin(), node1.end()}, bcos::bytes{}));
 
         storage2::memory_storage::MemoryStorage<transaction_executor::StateKey, storage::Entry>
             storage;
@@ -97,7 +97,8 @@ BOOST_AUTO_TEST_CASE(testRotate)
         auto execResult = std::make_shared<precompiled::PrecompiledExecResult>();
         execResult->m_origin = precompiled::covertPublicToHexAddress(node1);
 
-        BOOST_CHECK_NO_THROW(workingSealerManager.rotateWorkingSealer(mockExecutive, execResult));
+        BOOST_CHECK_NO_THROW(
+            co_await workingSealerManager.rotateWorkingSealer(mockExecutive, execResult));
 
         auto gotNodeList = co_await ledger::getNodeList(storage);
         BOOST_REQUIRE_EQUAL(gotNodeList.size(), 4);

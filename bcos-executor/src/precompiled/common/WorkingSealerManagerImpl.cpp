@@ -21,6 +21,7 @@
 #include "WorkingSealerManagerImpl.h"
 #include "bcos-framework/consensus/ConsensusNode.h"
 #include <bcos-framework/ledger/LedgerTypeDef.h>
+#include <fmt/format.h>
 #include <algorithm>
 
 using namespace bcos;
@@ -36,23 +37,27 @@ bcos::precompiled::WorkingSealerManagerImpl::WorkingSealerManagerImpl(bool withW
 
 void WorkingSealerManagerImpl::createVRFInfo(bytes _vrfProof, bytes _vrfPublicKey, bytes _vrfInput)
 {
-    m_vrfInfo = std::make_shared<VRFInfo>(
+    m_vrfInfo = std::make_unique<VRFInfo>(
         std::move(_vrfProof), std::move(_vrfPublicKey), std::move(_vrfInput));
 }
+void bcos::precompiled::WorkingSealerManagerImpl::createVRFInfo(std::unique_ptr<VRFInfo> vrfInfo)
+{
+    m_vrfInfo = std::move(vrfInfo);
+}
 
-void WorkingSealerManagerImpl::rotateWorkingSealer(
+task::Task<void> WorkingSealerManagerImpl::rotateWorkingSealer(
     const std::shared_ptr<executor::TransactionExecutive>& _executive,
     const PrecompiledExecResult::Ptr& _callParameters)
 {
-    if (!getConsensusNodeListFromStorage(_executive))
+    if (!co_await getConsensusNodeListFromStorage(_executive))
     {
         PRECOMPILED_LOG(INFO)
             << "getConsensusNodeListFromStorage detected already rotated, skip this tx.";
-        return;
+        co_return;
     }
     if (!shouldRotate(_executive))
     {
-        return;
+        co_return;
     }
     auto parentHash = _executive->blockContext().parentHash();
     try
@@ -71,32 +76,39 @@ void WorkingSealerManagerImpl::rotateWorkingSealer(
     {
         setNotifyRotateFlag(_executive, 0);
     }
-    uint32_t sealersNum = m_consensusSealer.size() + m_candidateSealer.size();
-    if (sealersNum <= 1 ||
+
+    if (uint32_t sealersNum = m_consensusSealer.size() + m_candidateSealer.size();
+        sealersNum <= 1 ||
         (m_configuredEpochSealersSize == sealersNum && m_candidateSealer.empty()))
     {
         PRECOMPILED_LOG(DEBUG)
             << LOG_DESC("No need to rotateWorkingSealer for all the sealers are working sealers")
             << LOG_KV("consensusSealerNum", m_consensusSealer.size())
             << LOG_KV("candidateSealerNum", m_candidateSealer.size());
-        return;
+        co_return;
     }
+
+    if (m_withWeight)
+    {
+        rotateWorkingSealerByWeight(_executive);
+        co_return;
+    }
+
     // calculate the number of working sealers need to be removed and inserted
     auto [insertedWorkingSealerNum, removedWorkingSealerNum] = calNodeRotatingInfo();
     if (removedWorkingSealerNum > 0)
     {
         // select working sealers to be removed
-
         auto workingSealersToRemove =
-            selectNodesFromList(m_consensusSealer, removedWorkingSealerNum, false);
-        std::stringstream nodesStr;
-        for (const auto& node : workingSealersToRemove)
-        {
-            nodesStr << node.nodeID << ", ";
-        }
-        PRECOMPILED_LOG(INFO) << LOG_DESC("rotateWorkingSealer: rotate workingSealers into sealers")
-                              << LOG_KV("rotatedCount", removedWorkingSealerNum)
-                              << LOG_KV("rmNodes", nodesStr.str());
+            selectNodesFromList(m_consensusSealer, removedWorkingSealerNum);
+
+        PRECOMPILED_LOG(INFO)
+            << LOG_DESC("rotateWorkingSealer: rotate workingSealers into sealers")
+            << LOG_KV("rotatedCount", removedWorkingSealerNum)
+            << LOG_KV("rmNodes", fmt::format(FMT_COMPILE("{}"),
+                                     fmt::join(::ranges::views::transform(workingSealersToRemove,
+                                                   [](auto& node) { return node.nodeID; }),
+                                         ",")));
         // Note: Since m_workingSealerList will not be used afterward,
         //       after updating the node type, it is not updated
 
@@ -109,15 +121,15 @@ void WorkingSealerManagerImpl::rotateWorkingSealer(
     {
         // select working sealers to be inserted
         auto workingSealersToInsert =
-            selectNodesFromList(m_candidateSealer, insertedWorkingSealerNum, true);
-        std::stringstream nodesStr;
-        for (const auto& node : workingSealersToInsert)
-        {
-            nodesStr << node.nodeID << ", ";
-        }
+            selectNodesFromList(m_candidateSealer, insertedWorkingSealerNum);
         PRECOMPILED_LOG(INFO) << LOG_DESC("rotateWorkingSealer: rotate sealers into workingSealers")
                               << LOG_KV("rotatedCount", insertedWorkingSealerNum)
-                              << LOG_KV("insertNodes", nodesStr.str());
+                              << LOG_KV("insertNodes",
+                                     fmt::format(FMT_COMPILE("{}"),
+                                         fmt::join(
+                                             ::ranges::views::transform(workingSealersToInsert,
+                                                 [](auto& node) { return node.nodeID; }),
+                                             ",")));
         // Note: Since m_pendingSealerList will not be used afterward,
         //       after updating the node type, it is not updated
         updateNodeListType(workingSealersToInsert, consensus::Type::consensus_sealer, _executive);
@@ -187,17 +199,15 @@ void WorkingSealerManagerImpl::checkVRFInfos(HashType const& parentHash, std::st
 bool WorkingSealerManagerImpl::shouldRotate(const executor::TransactionExecutive::Ptr& _executive)
 {
     auto const& blockContext = _executive->blockContext();
-    m_notifyNextLeaderRotateSet = false;
-    m_notifyNextLeaderRotateSet = getNotifyRotateFlag(_executive);
-    if (m_notifyNextLeaderRotateSet)
+    if (m_notifyNextLeaderRotateSet = getNotifyRotateFlag(_executive); m_notifyNextLeaderRotateSet)
     {
         return true;
     }
+
     // NOTE: if dynamic switch to rpbft, next block should rotate working sealers
     // cannot get feature from BlockContext, because of determining enable number
-    auto featureSwitch =
-        _executive->storage().getRow(ledger::SYS_CONFIG, ledger::SYSTEM_KEY_RPBFT_SWITCH);
-    if (featureSwitch)
+    if (auto featureSwitch =
+            _executive->storage().getRow(ledger::SYS_CONFIG, ledger::SYSTEM_KEY_RPBFT_SWITCH))
     {
         auto featureInfo = featureSwitch->getObject<ledger::SystemConfigEntry>();
         if (std::get<1>(featureInfo) == blockContext.number())
@@ -223,14 +233,14 @@ bool WorkingSealerManagerImpl::shouldRotate(const executor::TransactionExecutive
     }
 
     uint32_t sealerNum = m_consensusSealer.size() + m_candidateSealer.size();
-    auto maxWorkingSealerNum = std::min(m_configuredEpochSealersSize, sealerNum);
-    if (m_consensusSealer.size() < maxWorkingSealerNum)
+    if (auto maxWorkingSealerNum = std::min(m_configuredEpochSealersSize, sealerNum);
+        m_consensusSealer.size() < maxWorkingSealerNum)
     {
         return true;
     }
+
     auto epochBlockInfo =
         _executive->storage().getRow(ledger::SYS_CONFIG, ledger::SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM);
-
     if (!epochBlockInfo) [[unlikely]]
     {
         PRECOMPILED_LOG(WARNING)
@@ -254,11 +264,11 @@ bool WorkingSealerManagerImpl::shouldRotate(const executor::TransactionExecutive
     return false;
 }
 
-bool WorkingSealerManagerImpl::getConsensusNodeListFromStorage(
+task::Task<bool> WorkingSealerManagerImpl::getConsensusNodeListFromStorage(
     const executor::TransactionExecutive::Ptr& _executive)
 {
     auto const& blockContext = _executive->blockContext();
-    auto nodeList = task::syncWait(ledger::getNodeList(*_executive->storage().getRawStorage()));
+    auto nodeList = co_await ledger::getNodeList(*_executive->storage().getRawStorage());
     bool isConsensusNodeListChanged = false;
     bool isCandidateSealerChanged = false;
 
@@ -297,7 +307,7 @@ bool WorkingSealerManagerImpl::getConsensusNodeListFromStorage(
         }
     }
     m_consensusNodes.swap(nodeList);
-    return !isConsensusNodeListChanged && !isCandidateSealerChanged;
+    co_return !isConsensusNodeListChanged && !isCandidateSealerChanged;
 }
 
 void WorkingSealerManagerImpl::setNotifyRotateFlag(
@@ -326,7 +336,7 @@ bool WorkingSealerManagerImpl::getNotifyRotateFlag(
     return false;
 }
 
-std::tuple<uint32_t, uint32_t> WorkingSealerManagerImpl::calNodeRotatingInfo()
+std::tuple<uint32_t, uint32_t> WorkingSealerManagerImpl::calNodeRotatingInfo() const
 {
     uint32_t sealersNum = m_consensusSealer.size() + m_candidateSealer.size();
     // get rPBFT epoch_sealer_num
@@ -386,7 +396,8 @@ static WorkingSealer pickNodeByWeight(
 }
 
 static std::vector<WorkingSealer> getNodeListByWeight(
-    const std::vector<WorkingSealer>& nodeList, const u256& seed, size_t count)
+    ::ranges::input_range auto const& nodeList, const u256& seed, size_t count)
+    requires std::same_as<std::decay_t<::ranges::range_value_t<decltype(nodeList)>>, WorkingSealer>
 {
     std::vector<NodeWeightRange> nodeWeightRanges;
     nodeWeightRanges.reserve(RANGES::size(nodeList));
@@ -398,18 +409,13 @@ static std::vector<WorkingSealer> getNodeListByWeight(
         nodeWeightRanges.push_back({std::addressof(node), totalWeight});
     }
 
-    std::vector<WorkingSealer> selectedNodeList;
-    selectedNodeList.reserve(count);
-    for ([[maybe_unused]] auto i : RANGES::views::iota(0LU, count))
-    {
-        selectedNodeList.emplace_back(pickNodeByWeight(nodeWeightRanges, totalWeight, seed));
-    }
-
-    return selectedNodeList;
+    return ::ranges::views::transform(::ranges::views::iota(0LU, count), [&](auto) {
+        return pickNodeByWeight(nodeWeightRanges, totalWeight, seed);
+    }) | ::ranges::to<std::vector>();
 }
 
 std::vector<WorkingSealer> WorkingSealerManagerImpl::selectNodesFromList(
-    std::vector<WorkingSealer>& _nodeList, uint32_t _selectNum, bool remove)
+    std::vector<WorkingSealer>& _nodeList, uint32_t _selectNum)
 {
     std::vector<WorkingSealer> selectedNodeList;
     if (_nodeList.empty()) [[unlikely]]
@@ -419,11 +425,6 @@ std::vector<WorkingSealer> WorkingSealerManagerImpl::selectNodesFromList(
     std::sort(_nodeList.begin(), _nodeList.end(),
         [](auto const& lhs, auto const& rhs) { return lhs.nodeID < rhs.nodeID; });
     auto proofHashValue = u256(m_vrfInfo->getHashFromProof());
-
-    if (!remove && m_withWeight)
-    {
-        return getNodeListByWeight(_nodeList, proofHashValue, _selectNum);
-    }
 
     // shuffle _nodeList
     for (auto i = _nodeList.size() - 1; i > 0; i--)
@@ -470,4 +471,53 @@ void bcos::precompiled::WorkingSealerManagerImpl::commitConsensusNodeListToStora
         task::syncWait(
             ledger::setNodeList(*_executive->storage().getRawStorage(), m_consensusNodes));
     }
+}
+
+void bcos::precompiled::WorkingSealerManagerImpl::setConfiguredEpochSealersSize(uint32_t _size)
+{
+    m_configuredEpochSealersSize = _size;
+}
+
+void bcos::precompiled::WorkingSealerManagerImpl::rotateWorkingSealerByWeight(
+    const executor::TransactionExecutive::Ptr& executive)
+{
+    auto candidateSealers = ::ranges::views::concat(m_candidateSealer, m_consensusSealer);
+    auto proofHashValue = u256(m_vrfInfo->getHashFromProof());
+    auto workingSealers =
+        getNodeListByWeight(candidateSealers, proofHashValue, m_configuredEpochSealersSize);
+    std::sort(workingSealers.begin(), workingSealers.end());
+
+    PRECOMPILED_LOG(INFO) << fmt::format(
+        FMT_COMPILE("rotateWorkingSealer: rotate workingSealers into sealers by "
+                    "weight, rotatedCount: {}, insertNodes: {}"),
+        workingSealers.size(),
+        fmt::join(
+            ::ranges::views::transform(workingSealers, [](auto& node) { return node.nodeID; }),
+            ","));
+    for (auto& node : m_consensusNodes)
+    {
+        auto nodeIDHex = node.nodeID->hex();
+        if (auto it = std::lower_bound(workingSealers.begin(), workingSealers.end(), nodeIDHex,
+                [](const WorkingSealer& lhs, const std::string& rhs) { return lhs.nodeID < rhs; });
+            it != workingSealers.end() && it->nodeID == nodeIDHex)
+        {
+            if (node.type != consensus::Type::consensus_sealer)
+            {
+                node.type = consensus::Type::consensus_sealer;
+                node.enableNumber = executive->blockContext().number() + 1;
+                m_consensusChangeFlag = true;
+            }
+        }
+        else if (node.type != consensus::Type::consensus_candidate_sealer)
+        {
+            node.type = consensus::Type::consensus_candidate_sealer;
+            node.enableNumber = executive->blockContext().number() + 1;
+            m_consensusChangeFlag = true;
+        }
+    }
+
+    commitConsensusNodeListToStorage(executive);
+    PRECOMPILED_LOG(DEBUG) << LOG_DESC("rotateWorkingSealer by weight succ")
+                           << LOG_KV("consensusChangeFlag", m_consensusChangeFlag)
+                           << LOG_KV("insertedWorkingSealers", workingSealers.size());
 }
