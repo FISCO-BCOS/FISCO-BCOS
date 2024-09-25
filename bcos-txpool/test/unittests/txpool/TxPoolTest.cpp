@@ -387,7 +387,7 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
         std::dynamic_pointer_cast<TxValidator>(_faker->txpool()->txpoolConfig()->txValidator());
     auto ledgerNonceChecker = validator->ledgerNonceChecker();
     for (auto tx : *notifiedTxs | RANGES::views::filter([](auto const& tx) {
-             return tx->type() != static_cast<uint8_t>(TransactionType::Web3Transacion);
+             return tx->type() != static_cast<uint8_t>(TransactionType::Web3Transaction);
          }))
     {
         BOOST_CHECK(txPoolNonceChecker->checkNonce(tx) == TransactionStatus::None);

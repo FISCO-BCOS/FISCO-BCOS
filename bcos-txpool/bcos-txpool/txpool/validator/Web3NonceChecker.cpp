@@ -19,8 +19,9 @@
  */
 
 #include "Web3NonceChecker.h"
+#include "../utilities/Common.h"
 #include <bcos-framework/storage2/Storage.h>
-#include <utilities/Common.h>
+#include <bcos-protocol/TransactionStatus.h>
 
 using namespace bcos;
 using namespace bcos::txpool;
@@ -31,6 +32,7 @@ task::Task<TransactionStatus> Web3NonceChecker::checkWeb3Nonce(
 {
     // sender is bytes view
     auto sender = std::string(_tx->sender());
+    auto const senderHex = toHex(sender);
     auto nonce = u256(_tx->nonce());
 
     // Note:
@@ -42,20 +44,18 @@ task::Task<TransactionStatus> Web3NonceChecker::checkWeb3Nonce(
     // from 5.
     if (!onlyCheckLedgerNonce)
     {
-        if (auto const nonceInMem = co_await bcos::storage2::readOne(m_memoryNonces, sender))
+        // memory nonce check nonce existence in memory first, if not exist, then check from storage
+        if (co_await bcos::storage2::existsOne(
+                m_memoryNonces, std::make_pair(sender, _tx->nonce())))
         {
-            if (auto nonceInMemValue = nonceInMem.value();
-                nonce <= nonceInMemValue ||
-                nonce > nonceInMemValue + DEFAULT_WEB3_NONCE_CHECK_LIMIT)
+            if (c_fileLogLevel == TRACE) [[unlikely]]
             {
-                co_return TransactionStatus::NonceCheckFail;
+                TXPOOL_LOG(TRACE) << LOG_DESC("Web3Nonce: nonce mem check fail")
+                                  << LOG_KV("sender", senderHex) << LOG_KV("nonce", nonce)
+                                  << LOG_KV("memSize",
+                                         bcos::storage2::memory_storage::getSize(m_memoryNonces));
             }
-            else
-            {
-                // update memory if nonce bigger than memory's
-                co_await storage2::writeOne(m_memoryNonces, sender, nonce);
-                co_return TransactionStatus::None;
-            }
+            co_return TransactionStatus::NonceCheckFail;
         }
     }
     if (auto const nonceInLedger = co_await bcos::storage2::readOne(m_ledgerStateNonces, sender))
@@ -64,67 +64,109 @@ task::Task<TransactionStatus> Web3NonceChecker::checkWeb3Nonce(
             nonce < nonceInLedgerValue ||
             nonce > nonceInLedgerValue + DEFAULT_WEB3_NONCE_CHECK_LIMIT)
         {
+            if (c_fileLogLevel == TRACE) [[unlikely]]
+            {
+                TXPOOL_LOG(TRACE) << LOG_DESC("Web3Nonce: nonce ledger check fail")
+                                  << LOG_KV("sender", senderHex) << LOG_KV("nonce", nonce)
+                                  << LOG_KV("nonceInLedger", nonceInLedgerValue)
+                                  << LOG_KV("ledgerSize", bcos::storage2::memory_storage::getSize(
+                                                              m_ledgerStateNonces));
+            }
             co_return TransactionStatus::NonceCheckFail;
-        }
-        else
-        {
-            // update memory if nonce bigger than memory's
-            co_await storage2::writeOne(m_memoryNonces, sender, nonce);
-            co_return TransactionStatus::None;
         }
     }
     // not in ledger memory, check from storage
     // TODO)): block number not use nowadays
-    auto const senderHex = toHex(sender);
     auto const storageState = co_await m_ledger->getStorageState(senderHex, 0);
     if (storageState.has_value())
     {
+        // nonce in storage is uint string
         auto const nonceInStorage = u256(storageState.value().nonce);
         // update memory first
         co_await storage2::writeOne(m_ledgerStateNonces, sender, nonceInStorage);
         if (nonce < nonceInStorage || nonce > nonceInStorage + DEFAULT_WEB3_NONCE_CHECK_LIMIT)
         {
+            if (c_fileLogLevel == TRACE) [[unlikely]]
+            {
+                TXPOOL_LOG(TRACE) << LOG_DESC("Web3Nonce: nonce storage check fail")
+                                  << LOG_KV("sender", senderHex) << LOG_KV("nonce", nonce)
+                                  << LOG_KV("nonceInStorage", nonceInStorage);
+            }
             co_return TransactionStatus::NonceCheckFail;
         }
     }
-    co_await storage2::writeOne(m_memoryNonces, sender, nonce);
     // TODO)): check balance？
     co_return TransactionStatus::None;
 }
 
-void Web3NonceChecker::batchRemoveMemoryNonce(std::unordered_map<std::string, u256> _nonceMap)
+task::Task<void> Web3NonceChecker::batchRemoveMemoryNonce(
+    RANGES::input_range auto&& senders, RANGES::input_range auto&& nonces)
 {
-    for (auto const& [sender, nonce] : _nonceMap)
+    // 假设交易池里有0xabcd的3笔交易，nonce分别是5，7，9。如果nonce为7的交易先被打包进区块，ledge
+    // state nonce将会更新到7，那么交易池中memory nonce中小等于ledger
+    // nonce的5和7的交易就会被移除。
+    // Suppose there are 3 transactions with nonce 5, 7,
+    // 9 in the transaction pool sent by 0xabcd. If the transaction with nonce 7 is packaged
+    // into a block first, the ledge state nonce will be updated to 7, then the transactions
+    // with nonce 5 and 7 in the memory nonce of the transaction pool will be removed.
+    std::stringstream ss;
+    for (auto&& [sender, nonce] : RANGES::views::zip(senders, nonces))
     {
-        auto const nonceInMem = task::syncWait(storage2::readOne(m_memoryNonces, sender));
-        if (nonceInMem.has_value())
+        if (c_fileLogLevel == TRACE)
         {
-            // 假设交易池里有0xabcd的3笔交易，nonce分别是5，7，9。那么此时memory记录的nonce为9。
-            // 1. 如果nonce为9的交易先被打包进区块，那么交易池中nonce为5和7的交易就会被移除。ledger
-            // state nonce将会更新到9，此时按照ledger state nonce为准。
-            // 2. 如果nonce为7的交易先被打包进区块，那么交易池中nonce为5的交易就会被移除。ledger
-            // state nonce将会更新到7, 此时仍然以memory nonce为准。
-            // Suppose there are 3 transactions with nonce 5, 7, 9 in the transaction pool with
-            // 0xabcd. At this time, the nonce recorded in memory is 9.
-            // 1. If the transaction with nonce 9 is packaged into a block first, the transactions
-            // with nonce 5 and 7 in the transaction pool will be removed. The ledger state nonce
-            // will be updated to 9, and the ledger state nonce will be followed at this time.
-            // 2. If the transaction with nonce 7 is packaged into a block first, the transaction
-            // with nonce 5 in the transaction pool will be removed. The ledger state nonce will be
-            // updated to 7, and the memory nonce will still be followed at this time.
-            if (u256(nonceInMem.value()) > nonce)
+            ss << sender << ":" << nonce << ", ";
+        }
+        co_await storage2::removeOne(m_memoryNonces, std::make_pair(sender, nonce));
+    }
+    TXPOOL_LOG(DEBUG) << LOG_DESC("Web3Nonce: rm mem nonce cache for invalid txs.") << ss.str();
+}
+
+task::Task<void> Web3NonceChecker::updateNonceCache(
+    RANGES::input_range auto&& senders, RANGES::input_range auto&& noncesSet)
+{
+    for (auto&& [sender, nonceSet] : RANGES::views::zip(senders, noncesSet))
+    {
+        if (nonceSet.empty()) [[unlikely]]
+        {
+            auto maxNonce = *nonceSet.rbegin();
+            if (c_fileLogLevel == TRACE)
             {
-                task::wait(storage2::removeOne(m_memoryNonces, sender));
+                TXPOOL_LOG(TRACE) << LOG_DESC("Web3Nonce: update ledger nonce cache")
+                                  << LOG_KV("sender", sender) << LOG_KV("nonce", maxNonce);
             }
+            co_await storage2::writeOne(m_ledgerStateNonces, sender, maxNonce);
+            if (auto maxMemNonce = co_await storage2::readOne(m_maxNonces, sender);
+                maxMemNonce.has_value() && maxNonce >= maxMemNonce.value())
+            {
+                co_await storage2::removeOne(m_maxNonces, sender);
+            }
+        }
+        for (auto&& nonce : nonceSet)
+        {
+            if (c_fileLogLevel == TRACE)
+            {
+                TXPOOL_LOG(TRACE) << LOG_DESC("Web3Nonce: rm mem nonce cache")
+                                  << LOG_KV("sender", toHex(sender)) << LOG_KV("nonce", nonce);
+            }
+            co_await storage2::removeOne(m_memoryNonces, std::make_pair(sender, toQuantity(nonce)));
         }
     }
 }
 
-
-void Web3NonceChecker::batchInsert(
-    RANGES::input_range auto&& senders, RANGES::input_range auto&& nonces)
+task::Task<void> Web3NonceChecker::insertMemoryNonce(std::string sender, std::string nonce)
 {
-    task::wait(storage2::writeSome(m_ledgerStateNonces, senders, nonces));
+    if (c_fileLogLevel == TRACE) [[unlikely]]
+    {
+        TXPOOL_LOG(TRACE) << LOG_DESC("write memory nonces") << LOG_KV("sender", sender)
+                          << LOG_KV("nonce", nonce);
+    }
+    co_await storage2::writeOne(m_memoryNonces, std::make_pair(sender, nonce), std::monostate{});
+    const auto maxMemNonce = co_await storage2::readOne(m_maxNonces, sender);
+    if (auto const uNonce = u256(nonce); uNonce > maxMemNonce.value_or(0))
+    {
+        co_await storage2::writeOne(m_maxNonces, sender, uNonce);
+    }
+    co_return;
 }
 
 void Web3NonceChecker::insert(std::string sender, u256 nonce)

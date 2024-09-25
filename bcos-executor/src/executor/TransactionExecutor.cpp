@@ -2700,6 +2700,8 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->message = input.message();
     callParameters->data = input.takeData();
     callParameters->gas = input.gasAvailable();
+    callParameters->nonce = hex2u(input.nonce());
+    callParameters->transactionType = input.txType();
     callParameters->staticCall = staticCall;
     callParameters->newEVMContractAddress = input.newEVMContractAddress();
     callParameters->keyLocks = input.takeKeyLocks();
@@ -2776,8 +2778,8 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->gasLimit = input.gasLimit();
     callParameters->maxFeePerGas = u256(input.maxFeePerGas());
     callParameters->maxPriorityFeePerGas = u256(input.maxPriorityFeePerGas());
-    // TODO: depends on whether web3 tx?
     callParameters->nonce = hex2u(input.nonce());
+    callParameters->transactionType = input.txType();
 
     if (!m_isWasm && !callParameters->create)
     {

@@ -66,9 +66,10 @@ void Web3JsonRpcImpl::onRPCRequest(std::string_view _requestBody, Sender _sender
                 {
                     buildJsonError(_request, InternalError, e.errorMessage(), resp);
                 }
-                catch (const std::exception& e)
+                catch (...)
                 {
-                    buildJsonError(_request, InternalError, boost::diagnostic_information(e), resp);
+                    buildJsonError(_request, InternalError,
+                        boost::current_exception_diagnostic_information(), resp);
                 }
                 auto&& respBytes = toBytesResponse(resp);
                 if (c_fileLogLevel == TRACE) [[unlikely]]
@@ -89,9 +90,15 @@ void Web3JsonRpcImpl::onRPCRequest(std::string_view _requestBody, Sender _sender
     {
         buildJsonError(request, e.code(), e.msg(), response);
     }
+    catch (bcos::Error const& e)
+    {
+        buildJsonError(request, InternalError, e.errorMessage(), response);
+    }
     catch (...)
     {
-        buildJsonError(request, InternalError, "Internal error", response);
+        std::stringstream msg;
+        msg << "Internal error: " << boost::current_exception_diagnostic_information();
+        buildJsonError(request, InternalError, msg.str(), response);
     }
     auto&& resp = toBytesResponse(response);
     WEB3_LOG(DEBUG) << LOG_BADGE("onRPCRequest") << LOG_DESC("response with exception")

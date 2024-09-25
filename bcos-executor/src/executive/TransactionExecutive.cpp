@@ -302,7 +302,8 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
         // 如果是合约调用合约，那么只有在create场景下才更新nonce。
         // If it is an EOA initiating a transaction, the nonce must be updated; if it is a contract
         // calling a contract, the nonce is updated only in the creation scenario.
-        if ((callParameters->origin == callParameters->senderAddress) ||
+        if ((callParameters->origin == callParameters->senderAddress &&
+                callParameters->transactionType != 0) ||
             (callParameters->create && !callParameters->internalCreate))
         {
             // TODO)): set nonce here will be better
@@ -318,6 +319,11 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
                 auto const storageNonce = u256(nonceInStorage.value_or("0"));
                 auto const newNonce = std::max(callNonce, storageNonce) + 1;
                 co_await ledger::account::setNonce(addr, newNonce.convert_to<std::string>());
+                if (c_fileLogLevel == TRACE)
+                {
+                    EXECUTIVE_LOG(TRACE) << "Web3Nonce: update address nonce to storage"
+                                         << LOG_KV("address", addr) << LOG_KV("nonce", newNonce);
+                }
             }(std::move(address), callParameters->nonce));
         }
     }

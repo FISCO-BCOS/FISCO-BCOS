@@ -45,12 +45,14 @@ std::tuple<bool, CallRequest> rpc::decodeCallRequest(Json::Value const& _root) n
     {
         return {false, _request};
     }
-    if (!_root.isMember("data"))
+    if (!_root.isMember("data") && !_root.isMember("input"))
     {
         return {false, _request};
     }
+    auto const& data = _root.isMember("data") ? _root["data"] : _root["input"];
+
     _request.to = _root.isMember("to") ? _root["to"].asString() : "";
-    _request.data = bcos::fromHexWithPrefix(_root["data"].asString());
+    _request.data = bcos::fromHexWithPrefix(data.asString());
     if (_root.isMember("from"))
     {
         _request.from = _root["from"].asString();

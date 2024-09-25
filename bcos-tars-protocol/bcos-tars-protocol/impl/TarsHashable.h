@@ -20,7 +20,7 @@ void tag_invoke(bcos::concepts::hash::tag_t<bcos::concepts::hash::calculate> /*u
     Transaction const& transaction, bcos::crypto::hasher::Hasher auto&& hasher,
     bcos::concepts::bytebuffer::ByteBuffer auto& out)
 {
-    if (transaction.type >= static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transacion))
+    if (transaction.type >= static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
         [[unlikely]]
     {
         if (!transaction.extraTransactionHash.empty()) [[likely]]

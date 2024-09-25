@@ -250,6 +250,12 @@ public:
         m_tableName.append(address);
     }
     ~EVMAccount() noexcept = default;
+    auto address() const { return this->m_tableName; }
 };
-
+template <class Storage>
+inline std::ostream& operator<<(std::ostream& stream, EVMAccount<Storage> const& account)
+{
+    stream << account.address();
+    return stream;
+}
 }  // namespace bcos::ledger::account
