@@ -68,6 +68,9 @@ public:
     void setNonce(std::string nonce) override { m_nonce = std::move(nonce); }
     std::string nonce() const override { return m_nonce; }
 
+    uint8_t txType() const override { return m_transactionType; }
+    void setTxType(uint8_t txType) override { m_transactionType = txType; }
+
     int32_t depth() const override { return m_depth; }
     void setDepth(int32_t depth) override { m_depth = depth; }
 
@@ -192,6 +195,7 @@ public:
     std::vector<std::string> m_keyLocks;
     std::string m_keyLockAcquired;
     std::string m_nonce;
+    uint8_t m_transactionType = static_cast<uint8_t>(protocol::TransactionType::BCOSTransaction);
 
     int32_t m_status = 0;
     int32_t m_depth = 0;

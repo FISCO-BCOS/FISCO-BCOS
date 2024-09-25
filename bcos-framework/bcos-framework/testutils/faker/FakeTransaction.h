@@ -159,7 +159,7 @@ inline Transaction::Ptr fakeWeb3Tx(CryptoSuite::Ptr _cryptoSuite, std::string no
     std::string inputStr = "testTransaction";
     transaction.data.input.assign(inputStr.begin(), inputStr.end());
     transaction.data.nonce = std::move(nonce);
-    transaction.type = static_cast<tars::Char>(TransactionType::Web3Transacion);
+    transaction.type = static_cast<tars::Char>(TransactionType::Web3Transaction);
     std::mt19937 random(std::random_device{}());
     std::string extraData = "extraData" + std::to_string(random());
     auto hash = _cryptoSuite->hash(extraData);

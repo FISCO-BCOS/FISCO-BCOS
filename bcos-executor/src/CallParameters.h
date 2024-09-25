@@ -43,6 +43,7 @@ struct CallParameters
     std::string abi;   // common field, contract abi, json format
 
     u256 nonce = 0;  // for create
+    uint8_t transactionType = 0;
     // balance
     u256 value = 0;
     u256 gasPrice = 0;
@@ -117,6 +118,13 @@ struct CallParameters
            << "origin:" << origin << "|"
            << "gas:" << gas << "|"
            << "value:" << value << "|"
+            << "gasPrice:" << gasPrice << "|"
+            << "effectiveGasPrice:" << effectiveGasPrice << "|"
+            << "gasLimit:" << gasLimit << "|"
+            << "maxFeePerGas:" << maxFeePerGas << "|"
+            << "maxPriorityFeePerGas:" << maxPriorityFeePerGas << "|"
+              << "nonce:" << nonce << "|"
+              << "transactionType:" << std::to_string(transactionType) << "|"
            << "dataSize:" << data.size() << "|"
            << "abiSize:" << abi.size() << "|"
            << "acquireKeyLock:" << acquireKeyLock << "|"

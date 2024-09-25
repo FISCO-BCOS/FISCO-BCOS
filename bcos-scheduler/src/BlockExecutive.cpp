@@ -108,7 +108,7 @@ bcos::protocol::ExecutionMessage::UniquePtr BlockExecutive::buildMessage(
     message->setTransactionHash(tx->hash());
     message->setOrigin(toHex(tx->sender()));
     message->setFrom(std::string(message->origin()));
-
+    message->setTxType(tx->type());
     if (!m_isSysBlock)
     {
         auto toAddress = tx->to();

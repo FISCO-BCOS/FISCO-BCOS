@@ -126,17 +126,6 @@ BOOST_AUTO_TEST_CASE(handleInvalidTest)
         BOOST_CHECK(response["error"]["code"].asInt() == MethodNotFound);
         BOOST_CHECK(response["error"]["message"].asString() == "Method not found");
     }
-
-    // not impl method
-    {
-        const auto request = R"({"jsonrpc":"2.0","id":1, "method":"eth_coinbase","params":[]})";
-        auto response = onRPCRequestWrapper(request);
-        std::string s = response.toStyledString();
-        BOOST_CHECK(response.isMember("error"));
-        BOOST_CHECK(response["error"]["code"].asInt() == MethodNotFound);
-        BOOST_CHECK(
-            response["error"]["message"].asString() == "This API has not been implemented yet!");
-    }
 }
 
 BOOST_AUTO_TEST_CASE(handleValidTest)

@@ -245,7 +245,7 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::Transaction const
             jResp["extension"].append(ext);
         }
     }
-    if (transaction.type() == bcos::protocol::TransactionType::Web3Transacion) [[unlikely]]
+    if (transaction.type() == bcos::protocol::TransactionType::Web3Transaction) [[unlikely]]
     {
         Web3Transaction web3Tx;
         auto extraBytesRef =

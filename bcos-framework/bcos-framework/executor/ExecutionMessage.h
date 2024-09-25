@@ -170,6 +170,9 @@ public:
     virtual void setNonce(std::string nonce) = 0;
     virtual std::string nonce() const = 0;
 
+    virtual uint8_t txType() const = 0;
+    virtual void setTxType(uint8_t txType) = 0;
+
     // -----------------------------------------------
     // Request / Response common fields
     // -----------------------------------------------
