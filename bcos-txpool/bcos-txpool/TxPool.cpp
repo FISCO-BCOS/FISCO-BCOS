@@ -691,6 +691,12 @@ void bcos::txpool::TxPool::tryToSyncTxsFromPeers()
 {
     m_transactionSync->onEmptyTxs();
 }
+
+task::Task<std::optional<u256>> bcos::txpool::TxPool::getWeb3PendingNonce(std::string_view address)
+{
+    co_return co_await m_config->txValidator()->web3NonceChecker()->getPendingNonce(address);
+}
+
 void bcos::txpool::TxPool::asyncGetPendingTransactionSize(
     std::function<void(Error::Ptr, uint64_t)> _onGetTxsSize)
 {

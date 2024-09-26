@@ -247,6 +247,21 @@ task::Task<void> EthEndpoint::getTransactionCount(const Json::Value& request, Js
         WEB3_LOG(TRACE) << "eth_getTransactionCount" << LOG_KV("address", address)
                         << LOG_KV("blockTag", blockTag) << LOG_KV("blockNumber", blockNumber);
     }
+    if (blockTag == PendingBlock)
+    {
+        // try to fetch in txpool first
+        auto const txpool = m_nodeService->txpool();
+        if (auto const nonce = co_await txpool->getWeb3PendingNonce(address))
+        {
+            WEB3_LOG(TRACE) << "eth_getTransactionCount pending tx from txpool"
+                            << LOG_KV("address", address) << LOG_KV("blockTag", blockTag)
+                            << LOG_KV("nonce", nonce.value() + 1);
+            Json::Value result = toQuantity(nonce.value() + 1);
+            buildJsonContent(result, response);
+            co_return;
+        }
+    }
+
     auto const ledger = m_nodeService->ledger();
     u256 nonce = 0;
     if (auto const entry = co_await ledger::getStorageAt(
@@ -255,20 +270,6 @@ task::Task<void> EthEndpoint::getTransactionCount(const Json::Value& request, Js
     {
         nonce = u256(entry.value().get());
     }
-    // else
-    // {
-    //     WEB3_LOG(TRACE) << LOG_DESC("get address nonce failed, return random value by defualt")
-    //                     << LOG_KV("address", address);
-    //     static thread_local std::mt19937 generator(std::random_device{}());
-    //     std::uniform_int_distribution<int> dis(0, 255);
-    //     std::array<bcos::byte, 8> randomFixedBytes;
-    //     for (auto& element : randomFixedBytes)
-    //     {
-    //         element = dis(generator);
-    //     }
-    //     const auto* firstNum = (uint32_t*)randomFixedBytes.data();
-    //     nonce = *firstNum;
-    // }
     Json::Value result = toQuantity(nonce);
     buildJsonContent(result, response);
     co_return;

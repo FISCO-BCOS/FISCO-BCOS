@@ -81,6 +81,7 @@ public:
 
     task::Task<void> insertMemoryNonce(std::string sender, std::string nonce);
 
+    task::Task<std::optional<u256>> getPendingNonce(std::string_view sender);
 
     // for test, inset nonce into ledgerStateNonces
     void insert(std::string sender, u256 nonce);
@@ -105,7 +106,7 @@ private:
         pair_hash>
         m_memoryNonces;
 
-    // sender address, nonce
+    // sender address(bytes string), nonce
     // only store max nonce of memory nonce.
     bcos::storage2::memory_storage::MemoryStorage<std::string, u256,
         static_cast<storage2::memory_storage::Attribute>(

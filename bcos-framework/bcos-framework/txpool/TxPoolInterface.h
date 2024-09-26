@@ -88,6 +88,11 @@ public:
         BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
     }
 
+    virtual task::Task<std::optional<u256>> getWeb3PendingNonce(std::string_view address)
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
+    }
+
     /**
      * @brief fetch transactions from the txpool
      *
