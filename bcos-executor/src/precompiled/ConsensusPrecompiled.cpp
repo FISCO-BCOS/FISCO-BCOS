@@ -385,7 +385,7 @@ void ConsensusPrecompiled::rotateWorkingSealer(
             _executive->blockContext().features().get(Features::Flag::feature_rpbft_term_weight));
         sealerManger.createVRFInfo(
             std::move(vrfProof), std::move(vrfPublicKey), std::move(vrfInput));
-        sealerManger.rotateWorkingSealer(_executive, _callParameters);
+        task::syncWait(sealerManger.rotateWorkingSealer(_executive, _callParameters));
     }
     catch (protocol::PrecompiledError const& _e)
     {

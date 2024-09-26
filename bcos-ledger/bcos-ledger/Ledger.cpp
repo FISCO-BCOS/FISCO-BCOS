@@ -40,7 +40,6 @@
 #include <bcos-executor/src/Common.h>
 #include <bcos-framework/consensus/ConsensusNode.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
-#include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-framework/protocol/GlobalConfig.h>

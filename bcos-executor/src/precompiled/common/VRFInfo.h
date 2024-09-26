@@ -27,7 +27,6 @@ namespace bcos::precompiled
 class VRFInfo
 {
 public:
-    using Ptr = std::shared_ptr<VRFInfo>;
     VRFInfo(const VRFInfo&) = default;
     VRFInfo(VRFInfo&&) = default;
     VRFInfo& operator=(const VRFInfo&) = default;
