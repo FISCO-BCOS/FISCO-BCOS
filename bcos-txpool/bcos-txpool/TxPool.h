@@ -126,6 +126,8 @@ public:
 
     void tryToSyncTxsFromPeers() override;
 
+    virtual task::Task<std::optional<u256>> getWeb3PendingNonce(std::string_view address) override;
+
     // for UT
     void setTxPoolStorage(TxPoolStorageInterface::Ptr _txpoolStorage);
 
