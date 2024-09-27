@@ -30,12 +30,15 @@ BOOST_FIXTURE_TEST_SUITE(WorkingSealerManagerTest, WorkingSealerManagerFixture)
 class MockVRFInfo : public precompiled::VRFInfo
 {
 public:
-    MockVRFInfo(bcos::bytes vrfProof, bcos::bytes vrfPk, bcos::bytes vrfInput)
-      : VRFInfo(std::move(vrfProof), std::move(vrfPk), std::move(vrfInput))
+    MockVRFInfo(
+        bcos::bytes vrfProof, bcos::bytes vrfPk, bcos::bytes vrfInput, bcos::crypto::HashType hash)
+      : VRFInfo(std::move(vrfProof), std::move(vrfPk), std::move(vrfInput)), m_hash(hash)
     {}
     bool verifyProof() override { return true; }
-    bcos::crypto::HashType getHashFromProof() override { return 75; }
+    bcos::crypto::HashType getHashFromProof() override { return m_hash; }
     bool isValidVRFPublicKey() override { return true; }
+
+    bcos::crypto::HashType m_hash;
 };
 
 BOOST_AUTO_TEST_CASE(testRotate)
@@ -51,7 +54,9 @@ BOOST_AUTO_TEST_CASE(testRotate)
         std::string node3(64, '3');
         std::string node4(64, '4');
         workingSealerManager.createVRFInfo(std::make_unique<MockVRFInfo>(
-            bcos::bytes{}, bcos::bytes{node1.begin(), node1.end()}, bcos::bytes{}));
+            bcos::bytes{}, bcos::bytes{node1.begin(), node1.end()}, bcos::bytes{}, 75));
+        // 75 % 100 = 75 -- select node2
+        // 75 % 80 = 75 -- select node3
 
         storage2::memory_storage::MemoryStorage<transaction_executor::StateKey, storage::Entry>
             storage;
@@ -110,6 +115,31 @@ BOOST_AUTO_TEST_CASE(testRotate)
         BOOST_CHECK_EQUAL(gotNodeList[2].type, consensus::Type::consensus_sealer);  // 75 % 80 = 75
         BOOST_CHECK_EQUAL(gotNodeList[3].nodeID->hex(), node4);
         BOOST_CHECK_EQUAL(gotNodeList[3].type, consensus::Type::consensus_candidate_sealer);
+
+        // Test 0 termWeight
+        std::string node5(64, '5');
+        nodeList.emplace_back(
+            consensus::ConsensusNode{std::make_shared<crypto::KeyImpl>(fromHex(node5)),
+                consensus::Type::consensus_candidate_sealer, 0, 0, 0});
+        co_await ledger::setNodeList(storage, nodeList);
+
+        workingSealerManager.setConfiguredEpochSealersSize(1);
+        workingSealerManager.createVRFInfo(std::make_unique<MockVRFInfo>(
+            bcos::bytes{}, bcos::bytes{node1.begin(), node1.end()}, bcos::bytes{}, 99));
+        // 99 % 100 = 99 -- select node4 or node5?
+
+        BOOST_CHECK_NO_THROW(
+            co_await workingSealerManager.rotateWorkingSealer(mockExecutive, execResult));
+        gotNodeList = co_await ledger::getNodeList(storage);
+
+        BOOST_REQUIRE_EQUAL(gotNodeList.size(), 5);
+        BOOST_CHECK_EQUAL(gotNodeList[0].type, consensus::Type::consensus_candidate_sealer);
+        BOOST_CHECK_EQUAL(gotNodeList[1].type, consensus::Type::consensus_candidate_sealer);
+        BOOST_CHECK_EQUAL(gotNodeList[2].type, consensus::Type::consensus_candidate_sealer);
+        BOOST_CHECK_EQUAL(gotNodeList[3].nodeID->hex(), node4);
+        BOOST_CHECK_EQUAL(gotNodeList[3].type, consensus::Type::consensus_sealer);
+        BOOST_CHECK_EQUAL(gotNodeList[4].nodeID->hex(), node5);
+        BOOST_CHECK_EQUAL(gotNodeList[4].type, consensus::Type::consensus_candidate_sealer);
     }());
 }
 
