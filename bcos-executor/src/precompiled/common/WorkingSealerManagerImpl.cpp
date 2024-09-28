@@ -23,6 +23,7 @@
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <fmt/format.h>
 #include <algorithm>
+#include <range/v3/numeric/accumulate.hpp>
 
 using namespace bcos;
 using namespace bcos::precompiled;
@@ -88,8 +89,11 @@ task::Task<void> WorkingSealerManagerImpl::rotateWorkingSealer(
         co_return;
     }
 
-    if (m_withWeight)
+    if (m_withWeight && ::ranges::accumulate(::ranges::views::transform(m_consensusNodes,
+                                                 [](auto& node) { return node.termWeight; }),
+                            0) > 0)
     {
+        PRECOMPILED_LOG(INFO) << "Enable weight rotate";
         rotateWorkingSealerByWeight(_executive);
         co_return;
     }
@@ -375,7 +379,7 @@ struct NodeWeightRange
     uint64_t offset;
 };
 
-static WorkingSealer pickNodeByWeight(
+static const WorkingSealer& pickNodeByWeight(
     std::vector<NodeWeightRange>& nodeWeightRanges, size_t& totalWeight, const u256& seed)
 {
     auto index = (seed % totalWeight).convert_to<size_t>();
@@ -395,7 +399,7 @@ static WorkingSealer pickNodeByWeight(
     return *sealer;
 }
 
-static std::vector<WorkingSealer> getNodeListByWeight(
+static std::vector<std::reference_wrapper<const WorkingSealer>> getNodeListByWeight(
     ::ranges::input_range auto const& nodeList, const u256& seed, size_t count)
     requires std::same_as<std::decay_t<::ranges::range_value_t<decltype(nodeList)>>, WorkingSealer>
 {
@@ -410,7 +414,7 @@ static std::vector<WorkingSealer> getNodeListByWeight(
     }
 
     return ::ranges::views::transform(::ranges::views::iota(0LU, count), [&](auto) {
-        return pickNodeByWeight(nodeWeightRanges, totalWeight, seed);
+        return std::ref(pickNodeByWeight(nodeWeightRanges, totalWeight, seed));
     }) | ::ranges::to<std::vector>();
 }
 
@@ -491,15 +495,15 @@ void bcos::precompiled::WorkingSealerManagerImpl::rotateWorkingSealerByWeight(
         FMT_COMPILE("rotateWorkingSealer: rotate workingSealers into sealers by "
                     "weight, rotatedCount: {}, insertNodes: {}"),
         workingSealers.size(),
-        fmt::join(
-            ::ranges::views::transform(workingSealers, [](auto& node) { return node.nodeID; }),
+        fmt::join(::ranges::views::transform(
+                      workingSealers, [](const WorkingSealer& node) { return node.nodeID; }),
             ","));
     for (auto& node : m_consensusNodes)
     {
         auto nodeIDHex = node.nodeID->hex();
         if (auto it = std::lower_bound(workingSealers.begin(), workingSealers.end(), nodeIDHex,
                 [](const WorkingSealer& lhs, const std::string& rhs) { return lhs.nodeID < rhs; });
-            it != workingSealers.end() && it->nodeID == nodeIDHex)
+            it != workingSealers.end() && it->get().nodeID == nodeIDHex)
         {
             if (node.type != consensus::Type::consensus_sealer)
             {

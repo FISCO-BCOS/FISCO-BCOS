@@ -959,7 +959,8 @@ ConsensusNodeList NodeConfig::parseConsensusNodeList(boost::property_tree::ptree
             static_cast<uint64_t>(termWeight), 0};
         NodeConfig_LOG(INFO) << LOG_BADGE("parseConsensusNodeList")
                              << LOG_KV("sectionName", _sectionName) << LOG_KV("nodeId", nodeId)
-                             << LOG_KV("weight", voteWeight);
+                             << LOG_KV("voteWeight", voteWeight)
+                             << LOG_KV("termWeight", termWeight);
         nodeList.push_back(consensusNode);
     }
     // only sort nodeList after rc3 version
