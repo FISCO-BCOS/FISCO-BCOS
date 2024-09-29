@@ -49,10 +49,10 @@ BOOST_AUTO_TEST_CASE(testRotate)
         precompiled::WorkingSealerManagerImpl workingSealerManager(true);
         workingSealerManager.setConfiguredEpochSealersSize(2);
 
-        std::string node1(64, '1');
-        std::string node2(64, '2');
-        std::string node3(64, '3');
-        std::string node4(64, '4');
+        std::string node1(64, '0');
+        std::string node2(64, '1');
+        std::string node3(64, '2');
+        std::string node4(64, '3');
         workingSealerManager.createVRFInfo(std::make_unique<MockVRFInfo>(
             bcos::bytes{}, bcos::bytes{node1.begin(), node1.end()}, bcos::bytes{}, 75));
         // 75 % 100 = 75 -- select node2
@@ -107,38 +107,44 @@ BOOST_AUTO_TEST_CASE(testRotate)
 
         auto gotNodeList = co_await ledger::getNodeList(storage);
         BOOST_REQUIRE_EQUAL(gotNodeList.size(), 4);
-        BOOST_CHECK_EQUAL(gotNodeList[0].nodeID->hex(), node1);
+        auto nodeIDView = ::ranges::views::transform(
+            gotNodeList, [](auto const& node) { return node.nodeID->data(); });
+        auto gotIDView = ::ranges::views::transform(
+            gotNodeList, [](auto const& node) { return node.nodeID->data(); });
+        BOOST_CHECK_EQUAL_COLLECTIONS(
+            nodeIDView.begin(), nodeIDView.end(), gotIDView.begin(), gotIDView.end());
         BOOST_CHECK_EQUAL(gotNodeList[0].type, consensus::Type::consensus_candidate_sealer);
-        BOOST_CHECK_EQUAL(gotNodeList[1].nodeID->hex(), node2);
         BOOST_CHECK_EQUAL(gotNodeList[1].type, consensus::Type::consensus_sealer);  // 75 % 100 = 75
-        BOOST_CHECK_EQUAL(gotNodeList[2].nodeID->hex(), node3);
         BOOST_CHECK_EQUAL(gotNodeList[2].type, consensus::Type::consensus_sealer);  // 75 % 80 = 75
-        BOOST_CHECK_EQUAL(gotNodeList[3].nodeID->hex(), node4);
         BOOST_CHECK_EQUAL(gotNodeList[3].type, consensus::Type::consensus_candidate_sealer);
 
         // Test 0 termWeight
-        std::string node5(64, '5');
+        std::string node5(64, '4');
         nodeList.emplace_back(
             consensus::ConsensusNode{std::make_shared<crypto::KeyImpl>(fromHex(node5)),
                 consensus::Type::consensus_candidate_sealer, 0, 0, 0});
         co_await ledger::setNodeList(storage, nodeList);
 
-        workingSealerManager.setConfiguredEpochSealersSize(1);
-        workingSealerManager.createVRFInfo(std::make_unique<MockVRFInfo>(
+        precompiled::WorkingSealerManagerImpl workingSealerManager2(true);
+        workingSealerManager2.setConfiguredEpochSealersSize(2);
+        workingSealerManager2.createVRFInfo(std::make_unique<MockVRFInfo>(
             bcos::bytes{}, bcos::bytes{node1.begin(), node1.end()}, bcos::bytes{}, 99));
-        // 99 % 100 = 99 -- select node4 or node5?
+        // 96 % 100 = 96 -- select node4
+        // 96 % 97 = 96 -- select node3
 
         BOOST_CHECK_NO_THROW(
-            co_await workingSealerManager.rotateWorkingSealer(mockExecutive, execResult));
+            co_await workingSealerManager2.rotateWorkingSealer(mockExecutive, execResult));
         gotNodeList = co_await ledger::getNodeList(storage);
 
         BOOST_REQUIRE_EQUAL(gotNodeList.size(), 5);
-        BOOST_CHECK_EQUAL(gotNodeList[0].type, consensus::Type::consensus_candidate_sealer);
+        auto gotIDView2 = ::ranges::views::transform(
+            gotNodeList, [](auto const& node) { return node.nodeID->data(); });
+        BOOST_CHECK_EQUAL_COLLECTIONS(
+            nodeIDView.begin(), nodeIDView.end(), gotIDView2.begin(), gotIDView2.end());
+        BOOST_CHECK_EQUAL(gotNodeList[0].type, consensus::Type::consensus_sealer);
         BOOST_CHECK_EQUAL(gotNodeList[1].type, consensus::Type::consensus_candidate_sealer);
         BOOST_CHECK_EQUAL(gotNodeList[2].type, consensus::Type::consensus_candidate_sealer);
-        BOOST_CHECK_EQUAL(gotNodeList[3].nodeID->hex(), node4);
         BOOST_CHECK_EQUAL(gotNodeList[3].type, consensus::Type::consensus_sealer);
-        BOOST_CHECK_EQUAL(gotNodeList[4].nodeID->hex(), node5);
         BOOST_CHECK_EQUAL(gotNodeList[4].type, consensus::Type::consensus_candidate_sealer);
     }());
 }

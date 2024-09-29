@@ -51,28 +51,28 @@ struct ConsensusNode
     uint64_t voteWeight;
     uint64_t termWeight;
     protocol::BlockNumber enableNumber;
-};
 
-inline std::strong_ordering operator<=>(ConsensusNode const& lhs, ConsensusNode const& rhs)
-{
-    if (auto cmp = lhs.nodeID->data() <=> rhs.nodeID->data(); !std::is_eq(cmp))
+    friend std::strong_ordering operator<=>(ConsensusNode const& lhs, ConsensusNode const& rhs)
     {
-        return cmp;
+        if (auto cmp = lhs.nodeID->data() <=> rhs.nodeID->data(); !std::is_eq(cmp))
+        {
+            return cmp;
+        }
+        if (auto cmp = lhs.type <=> rhs.type; !std::is_eq(cmp))
+        {
+            return cmp;
+        }
+        if (auto cmp = lhs.voteWeight <=> rhs.voteWeight; !std::is_eq(cmp))
+        {
+            return cmp;
+        }
+        if (auto cmp = lhs.termWeight <=> rhs.termWeight; !std::is_eq(cmp))
+        {
+            return cmp;
+        }
+        return lhs.enableNumber <=> rhs.enableNumber;
     }
-    if (auto cmp = lhs.type <=> rhs.type; !std::is_eq(cmp))
-    {
-        return cmp;
-    }
-    if (auto cmp = lhs.voteWeight <=> rhs.voteWeight; !std::is_eq(cmp))
-    {
-        return cmp;
-    }
-    if (auto cmp = lhs.termWeight <=> rhs.termWeight; !std::is_eq(cmp))
-    {
-        return cmp;
-    }
-    return lhs.enableNumber <=> rhs.enableNumber;
-}
+};
 
 using ConsensusNodeList = std::vector<consensus::ConsensusNode>;
 using ConsensusNodeSet = std::set<consensus::ConsensusNode>;

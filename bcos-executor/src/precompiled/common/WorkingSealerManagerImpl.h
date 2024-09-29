@@ -24,17 +24,10 @@
 #include "VRFInfo.h"
 #include "bcos-framework/consensus/ConsensusNode.h"
 #include <bcos-framework/storage/Table.h>
+#include <functional>
 
 namespace bcos::precompiled
 {
-
-struct WorkingSealer
-{
-    std::string nodeID;
-    uint64_t termWeight;
-
-    friend auto operator<=>(const WorkingSealer& lhs, const WorkingSealer& rhs) noexcept = default;
-};
 
 class WorkingSealerManagerImpl
 {
@@ -43,7 +36,6 @@ public:
     WorkingSealerManagerImpl(WorkingSealerManagerImpl&&) noexcept = default;
     WorkingSealerManagerImpl& operator=(const WorkingSealerManagerImpl&) = delete;
     WorkingSealerManagerImpl& operator=(WorkingSealerManagerImpl&&) noexcept = default;
-    using Ptr = std::shared_ptr<WorkingSealerManagerImpl>;
     WorkingSealerManagerImpl(bool withWeight);
     ~WorkingSealerManagerImpl() = default;
 
@@ -66,20 +58,22 @@ private:
 
     // calculate the number of working sealers that need to be added and removed
     std::tuple<uint32_t, uint32_t> calNodeRotatingInfo() const;
-    std::vector<WorkingSealer> selectNodesFromList(
-        std::vector<WorkingSealer>& _nodeList, uint32_t _selectNum);
+    std::vector<std::reference_wrapper<const consensus::ConsensusNode>> selectNodesFromList(
+        std::vector<std::reference_wrapper<const consensus::ConsensusNode>>& _nodeList,
+        uint32_t _selectNum);
 
     // update node list type in m_consensusNodes
-    void updateNodeListType(const std::vector<WorkingSealer>& _nodeList, consensus::Type _type,
-        const executor::TransactionExecutive::Ptr& executive);
+    void updateNodeListType(
+        const std::vector<std::reference_wrapper<const consensus::ConsensusNode>>& _nodeList,
+        consensus::Type _type, const executor::TransactionExecutive::Ptr& executive);
     void commitConsensusNodeListToStorage(const executor::TransactionExecutive::Ptr& _executive);
 
     // Weight rotate
     void rotateWorkingSealerByWeight(const executor::TransactionExecutive::Ptr& _executive);
 
     std::unique_ptr<VRFInfo> m_vrfInfo;
-    std::vector<WorkingSealer> m_candidateSealer;
-    std::vector<WorkingSealer> m_consensusSealer;
+    std::vector<std::reference_wrapper<const consensus::ConsensusNode>> m_candidateSealer;
+    std::vector<std::reference_wrapper<const consensus::ConsensusNode>> m_consensusSealer;
     bool m_consensusChangeFlag = false;
     consensus::ConsensusNodeList m_consensusNodes;
     bool m_notifyNextLeaderRotateSet = false;

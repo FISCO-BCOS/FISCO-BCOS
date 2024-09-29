@@ -111,7 +111,9 @@ task::Task<void> WorkingSealerManagerImpl::rotateWorkingSealer(
             << LOG_KV("rotatedCount", removedWorkingSealerNum)
             << LOG_KV("rmNodes", fmt::format(FMT_COMPILE("{}"),
                                      fmt::join(::ranges::views::transform(workingSealersToRemove,
-                                                   [](auto& node) { return node.nodeID; }),
+                                                   [](const consensus::ConsensusNode& node) {
+                                                       return node.nodeID->hex();
+                                                   }),
                                          ",")));
         // Note: Since m_workingSealerList will not be used afterward,
         //       after updating the node type, it is not updated
@@ -132,7 +134,9 @@ task::Task<void> WorkingSealerManagerImpl::rotateWorkingSealer(
                                      fmt::format(FMT_COMPILE("{}"),
                                          fmt::join(
                                              ::ranges::views::transform(workingSealersToInsert,
-                                                 [](auto& node) { return node.nodeID; }),
+                                                 [](const consensus::ConsensusNode& node) {
+                                                     return node.nodeID->hex();
+                                                 }),
                                              ",")));
         // Note: Since m_pendingSealerList will not be used afterward,
         //       after updating the node type, it is not updated
@@ -150,8 +154,8 @@ void WorkingSealerManagerImpl::checkVRFInfos(HashType const& parentHash, std::st
     // check origin: the origin must be among the workingSealerList
     if (!m_consensusSealer.empty()) [[likely]]
     {
-        if (!std::any_of(
-                m_consensusSealer.begin(), m_consensusSealer.end(), [&origin](auto const& node) {
+        if (!std::any_of(m_consensusSealer.begin(), m_consensusSealer.end(),
+                [&origin](const consensus::ConsensusNode& node) {
                     return covertPublicToHexAddress(node.nodeID) == origin;
                 })) [[unlikely]]
         {
@@ -164,8 +168,8 @@ void WorkingSealerManagerImpl::checkVRFInfos(HashType const& parentHash, std::st
     }
     else
     {
-        if (!std::any_of(
-                m_candidateSealer.begin(), m_candidateSealer.end(), [&origin](auto const& node) {
+        if (!std::any_of(m_candidateSealer.begin(), m_candidateSealer.end(),
+                [&origin](const consensus::ConsensusNode& node) {
                     return covertPublicToHexAddress(node.nodeID) == origin;
                 })) [[unlikely]]
         {
@@ -301,10 +305,10 @@ task::Task<bool> WorkingSealerManagerImpl::getConsensusNodeListFromStorage(
         switch (node.type)
         {
         case consensus::Type::consensus_sealer:
-            m_consensusSealer.emplace_back(WorkingSealer{node.nodeID->hex(), node.termWeight});
+            m_consensusSealer.emplace_back(node);
             break;
         case consensus::Type::consensus_candidate_sealer:
-            m_candidateSealer.emplace_back(WorkingSealer{node.nodeID->hex(), node.termWeight});
+            m_candidateSealer.emplace_back(node);
             break;
         default:
             break;
@@ -375,11 +379,11 @@ std::tuple<uint32_t, uint32_t> WorkingSealerManagerImpl::calNodeRotatingInfo() c
 
 struct NodeWeightRange
 {
-    const WorkingSealer* sealer;
+    std::reference_wrapper<const consensus::ConsensusNode> sealer;
     uint64_t offset;
 };
 
-static const WorkingSealer& pickNodeByWeight(
+static const consensus::ConsensusNode& pickNodeByWeight(
     std::vector<NodeWeightRange>& nodeWeightRanges, size_t& totalWeight, const u256& seed)
 {
     auto index = (seed % totalWeight).convert_to<size_t>();
@@ -393,41 +397,47 @@ static const WorkingSealer& pickNodeByWeight(
     {
         it.offset -= weight;
     }
-    const auto* sealer = nodeIt->sealer;
+    const auto* sealer = std::addressof(nodeIt->sealer.get());
     nodeWeightRanges.erase(nodeIt);
 
     return *sealer;
 }
 
-static std::vector<std::reference_wrapper<const WorkingSealer>> getNodeListByWeight(
+static std::vector<std::reference_wrapper<const consensus::ConsensusNode>> getNodeListByWeight(
     ::ranges::input_range auto const& nodeList, const u256& seed, size_t count)
-    requires std::same_as<std::decay_t<::ranges::range_value_t<decltype(nodeList)>>, WorkingSealer>
+    requires std::same_as<std::decay_t<::ranges::range_value_t<decltype(nodeList)>>,
+        std::reference_wrapper<const consensus::ConsensusNode>>
 {
     std::vector<NodeWeightRange> nodeWeightRanges;
     nodeWeightRanges.reserve(RANGES::size(nodeList));
 
     size_t totalWeight = 0;
-    for (const auto& node : nodeList)
+    for (const consensus::ConsensusNode& node : nodeList)
     {
         totalWeight += node.termWeight;
-        nodeWeightRanges.push_back({std::addressof(node), totalWeight});
+        nodeWeightRanges.push_back({node, totalWeight});
     }
 
-    return ::ranges::views::transform(::ranges::views::iota(0LU, count), [&](auto) {
-        return std::ref(pickNodeByWeight(nodeWeightRanges, totalWeight, seed));
-    }) | ::ranges::to<std::vector>();
+    std::vector<std::reference_wrapper<const consensus::ConsensusNode>> result;
+    result.reserve(count);
+    for ([[maybe_unused]] auto i : ::ranges::views::iota(0LU, count))
+    {
+        result.emplace_back(pickNodeByWeight(nodeWeightRanges, totalWeight, seed));
+    }
+    return result;
 }
 
-std::vector<WorkingSealer> WorkingSealerManagerImpl::selectNodesFromList(
-    std::vector<WorkingSealer>& _nodeList, uint32_t _selectNum)
+std::vector<std::reference_wrapper<const consensus::ConsensusNode>>
+WorkingSealerManagerImpl::selectNodesFromList(
+    std::vector<std::reference_wrapper<const consensus::ConsensusNode>>& _nodeList,
+    uint32_t _selectNum)
 {
-    std::vector<WorkingSealer> selectedNodeList;
+    std::vector<std::reference_wrapper<const consensus::ConsensusNode>> selectedNodeList;
     if (_nodeList.empty()) [[unlikely]]
     {
         return selectedNodeList;
     }
-    std::sort(_nodeList.begin(), _nodeList.end(),
-        [](auto const& lhs, auto const& rhs) { return lhs.nodeID < rhs.nodeID; });
+    std::sort(_nodeList.begin(), _nodeList.end());
     auto proofHashValue = u256(m_vrfInfo->getHashFromProof());
 
     // shuffle _nodeList
@@ -447,17 +457,18 @@ std::vector<WorkingSealer> WorkingSealerManagerImpl::selectNodesFromList(
     return selectedNodeList;
 }
 
-void WorkingSealerManagerImpl::updateNodeListType(const std::vector<WorkingSealer>& _nodeList,
+void WorkingSealerManagerImpl::updateNodeListType(
+    const std::vector<std::reference_wrapper<const consensus::ConsensusNode>>& _nodeList,
     consensus::Type _type, const executor::TransactionExecutive::Ptr& executive)
 {
     auto const& blockContext = executive->blockContext();
 
     m_consensusChangeFlag = !_nodeList.empty();
-    for (const auto& node : _nodeList)
+    for (const consensus::ConsensusNode& node : _nodeList)
     {
         auto it = std::find_if(m_consensusNodes.begin(), m_consensusNodes.end(),
             [&node](const consensus::ConsensusNode& consensusNode) {
-                return consensusNode.nodeID->hex() == node.nodeID;
+                return consensusNode.nodeID->data() == node.nodeID->data();
             });
         if (it != m_consensusNodes.end()) [[likely]]
         {
@@ -495,15 +506,16 @@ void bcos::precompiled::WorkingSealerManagerImpl::rotateWorkingSealerByWeight(
         FMT_COMPILE("rotateWorkingSealer: rotate workingSealers into sealers by "
                     "weight, rotatedCount: {}, insertNodes: {}"),
         workingSealers.size(),
-        fmt::join(::ranges::views::transform(
-                      workingSealers, [](const WorkingSealer& node) { return node.nodeID; }),
+        fmt::join(::ranges::views::transform(workingSealers,
+                      [](const consensus::ConsensusNode& node) { return node.nodeID->hex(); }),
             ","));
     for (auto& node : m_consensusNodes)
     {
-        auto nodeIDHex = node.nodeID->hex();
-        if (auto it = std::lower_bound(workingSealers.begin(), workingSealers.end(), nodeIDHex,
-                [](const WorkingSealer& lhs, const std::string& rhs) { return lhs.nodeID < rhs; });
-            it != workingSealers.end() && it->get().nodeID == nodeIDHex)
+        if (auto it = std::lower_bound(workingSealers.begin(), workingSealers.end(), node.nodeID,
+                [](const consensus::ConsensusNode& lhs, const auto& rhs) {
+                    return lhs.nodeID->data() < rhs->data();
+                });
+            it != workingSealers.end() && it->get().nodeID->data() == node.nodeID->data())
         {
             if (node.type != consensus::Type::consensus_sealer)
             {
