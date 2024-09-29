@@ -397,10 +397,10 @@ static const consensus::ConsensusNode& pickNodeByWeight(
     {
         it.offset -= weight;
     }
-    const auto* sealer = std::addressof(nodeIt->sealer.get());
+    auto sealer = nodeIt->sealer;
     nodeWeightRanges.erase(nodeIt);
 
-    return *sealer;
+    return sealer.get();
 }
 
 static std::vector<std::reference_wrapper<const consensus::ConsensusNode>> getNodeListByWeight(
