@@ -17,7 +17,7 @@ FISCO BCOS（读作/ˈfɪskl bi:ˈkɒz/） 是一个稳定、高效、安全的�
 ## 系统概述
 FISCO BCOS系统架构包括基础层、核心层、服务层、用户层和接入层提供稳定、安全的区块链底层服务。中间件层通过可视化界面，简化了用户管理区块链系统的流程。右侧配套相关开发、运维、安全控制的组件，辅助应用落地过程中不同角色的需要；同时，提供隐私保护和跨链相关的技术组件，满足不同场景的应用诉求。
 
-![](https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/document/latest/zh_CN/_images/Technical-Architecture.png)
+![](https://fisco-bcos-doc.readthedocs.io/zh-cn/latest/_images/fisco_bcos_system_architecture.png)
 
 ### 关键特性
 
