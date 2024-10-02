@@ -47,7 +47,7 @@ public:
         m_precompiledManager(precompiledManager)
     {}
 
-    std::shared_ptr<precompiled::Precompiled> getPrecompiled(const std::string& _address,
+    std::shared_ptr<precompiled::Precompiled> getPrecompiled(std::string_view _address,
         uint32_t version, bool isAuth, const ledger::Features& features) const override
     {
         auto addressBytes = fromHex(_address);

@@ -143,13 +143,17 @@ public:
 template <class MutableStorageType>
 class SchedulerParallelImpl
 {
+    constexpr static auto DEFAULT_GRAIN_SIZE = 16UL;
+    constexpr static auto DEFAULT_MAX_CONCURRENCY = 8UL;
+
 public:
     constexpr static bool isSchedulerParallelImpl = true;
     using MutableStorage = MutableStorageType;
 
-    constexpr static auto DEFAULT_TRANSACTION_GRAIN_SIZE = 16L;
+
     GC m_gc;
-    size_t m_grainSize = DEFAULT_TRANSACTION_GRAIN_SIZE;
+    size_t m_grainSize = DEFAULT_GRAIN_SIZE;
+    size_t m_maxConcurrency = DEFAULT_MAX_CONCURRENCY;
 };
 
 template <class Scheduler>
@@ -329,15 +333,14 @@ task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
             ExecutionContext<CoroType>{index, transactions[index], receipts[index], {}, {}});
     }
 
-    constexpr static auto DEFAULT_PARALLEL_ARENA = 8;
-    static tbb::task_arena arena(DEFAULT_PARALLEL_ARENA);
+    tbb::task_arena arena(scheduler.m_maxConcurrency);
     arena.execute([&]() {
         auto retryCount = executeSinglePass(scheduler, storage, executor, blockHeader, ledgerConfig,
             contexts, scheduler.m_grainSize);
-
         PARALLEL_SCHEDULER_LOG(INFO) << "Parallel execute block retry count: " << retryCount;
-        scheduler.m_gc.collect(std::move(contexts));
     });
+
+    scheduler.m_gc.collect(std::move(contexts));
 
     co_return receipts;
 }

@@ -284,7 +284,7 @@ void BFSPrecompiled::makeDirImpl(const std::string& _absolutePath,
         return;
     }
 
-    const auto* bfsAddress = getThisAddress(blockContext.isWasm());
+    const auto bfsAddress = getThisAddress(blockContext.isWasm());
 
     auto response = externalTouchNewFile(_executive, _callParameters->m_origin, bfsAddress,
         getThisAddress(blockContext.isWasm()), _absolutePath, FS_TYPE_DIR,

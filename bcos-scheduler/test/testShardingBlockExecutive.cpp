@@ -529,7 +529,7 @@ BOOST_AUTO_TEST_CASE(executeWithSystemError)
     block->blockHeader()->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
 
     auto tx = blockFactory->transactionFactory()->createTransaction(
-        0, "0xaabbccdd", {}, std::to_string(1), 500, "chainId", "groupId", utcTime());
+        0, "0xaabbccdd"s, {}, std::to_string(1), 500, "chainId", "groupId", utcTime());
     block->appendTransaction(std::move(tx));
 
     // Add Executor

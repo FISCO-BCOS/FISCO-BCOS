@@ -407,7 +407,7 @@ public:
         params1->setSeq(1000);
         params1->setDepth(0);
         params1->setFrom(sender);
-        params1->setTo(precompiled::AUTH_MANAGER_ADDRESS);
+        params1->setTo(std::string(precompiled::AUTH_MANAGER_ADDRESS));
         params1->setOrigin(sender);
         params1->setStaticCall(false);
         params1->setGasAvailable(gas);
@@ -451,7 +451,7 @@ public:
         params1->setSeq(1000);
         params1->setDepth(0);
         params1->setFrom(sender);
-        params1->setTo(precompiled::AUTH_MANAGER_ADDRESS);
+        params1->setTo(std::string(precompiled::AUTH_MANAGER_ADDRESS));
         params1->setOrigin(sender);
         params1->setStaticCall(false);
         params1->setGasAvailable(gas);
@@ -495,7 +495,7 @@ public:
         params1->setSeq(1000);
         params1->setDepth(0);
         params1->setFrom(sender);
-        params1->setTo(precompiled::AUTH_MANAGER_ADDRESS);
+        params1->setTo(std::string(precompiled::AUTH_MANAGER_ADDRESS));
         params1->setOrigin(sender);
         params1->setStaticCall(false);
         params1->setGasAvailable(gas);
@@ -538,7 +538,7 @@ public:
         params1->setSeq(1000);
         params1->setDepth(0);
         params1->setFrom(sender);
-        params1->setTo(precompiled::AUTH_MANAGER_ADDRESS);
+        params1->setTo(std::string(precompiled::AUTH_MANAGER_ADDRESS));
         params1->setOrigin(sender);
         params1->setStaticCall(false);
         params1->setGasAvailable(gas);
@@ -583,7 +583,7 @@ public:
         params1->setSeq(1000);
         params1->setDepth(0);
         params1->setFrom(sender);
-        params1->setTo(precompiled::AUTH_MANAGER_ADDRESS);
+        params1->setTo(std::string(precompiled::AUTH_MANAGER_ADDRESS));
         params1->setOrigin(sender);
         params1->setStaticCall(false);
         params1->setGasAvailable(gas);
@@ -629,7 +629,7 @@ public:
         params1->setSeq(1000);
         params1->setDepth(0);
         params1->setFrom(sender);
-        params1->setTo(precompiled::AUTH_MANAGER_ADDRESS);
+        params1->setTo(std::string(precompiled::AUTH_MANAGER_ADDRESS));
         params1->setOrigin(sender);
         params1->setStaticCall(false);
         params1->setGasAvailable(gas);
@@ -670,7 +670,7 @@ public:
         params1->setSeq(1000);
         params1->setDepth(0);
         params1->setFrom(sender);
-        params1->setTo(precompiled::AUTH_MANAGER_ADDRESS);
+        params1->setTo(std::string(precompiled::AUTH_MANAGER_ADDRESS));
         params1->setOrigin(sender);
         params1->setStaticCall(false);
         params1->setGasAvailable(gas);
@@ -710,7 +710,7 @@ public:
         params1->setSeq(1000);
         params1->setDepth(0);
         params1->setFrom(sender);
-        params1->setTo(precompiled::AUTH_MANAGER_ADDRESS);
+        params1->setTo(std::string(precompiled::AUTH_MANAGER_ADDRESS));
         params1->setOrigin(sender);
         params1->setStaticCall(false);
         params1->setGasAvailable(gas);
@@ -753,7 +753,7 @@ public:
         params1->setSeq(1000);
         params1->setDepth(0);
         params1->setFrom(sender);
-        params1->setTo(precompiled::AUTH_MANAGER_ADDRESS);
+        params1->setTo(std::string(precompiled::AUTH_MANAGER_ADDRESS));
         params1->setOrigin(sender);
         params1->setStaticCall(false);
         params1->setGasAvailable(gas);
@@ -798,7 +798,7 @@ public:
         params2->setSeq(1000);
         params2->setDepth(0);
         params2->setFrom(sender);
-        params2->setTo(precompiled::AUTH_MANAGER_ADDRESS);
+        params2->setTo(std::string(precompiled::AUTH_MANAGER_ADDRESS));
         params2->setOrigin(sender);
         params2->setStaticCall(false);
         params2->setGasAvailable(gas);
@@ -841,7 +841,7 @@ public:
         params2->setSeq(1000);
         params2->setDepth(0);
         params2->setFrom(sender);
-        params2->setTo(precompiled::AUTH_MANAGER_ADDRESS);
+        params2->setTo(std::string(precompiled::AUTH_MANAGER_ADDRESS));
         params2->setOrigin(sender);
         params2->setStaticCall(false);
         params2->setGasAvailable(gas);
@@ -884,7 +884,7 @@ public:
         params2->setSeq(1000);
         params2->setDepth(0);
         params2->setFrom(sender);
-        params2->setTo(precompiled::AUTH_MANAGER_ADDRESS);
+        params2->setTo(std::string(precompiled::AUTH_MANAGER_ADDRESS));
         params2->setOrigin(sender);
         params2->setStaticCall(false);
         params2->setGasAvailable(gas);
@@ -927,7 +927,7 @@ public:
         params2->setSeq(1000);
         params2->setDepth(0);
         params2->setFrom(sender);
-        params2->setTo(precompiled::AUTH_MANAGER_ADDRESS);
+        params2->setTo(std::string(precompiled::AUTH_MANAGER_ADDRESS));
         params2->setOrigin(sender);
         params2->setStaticCall(false);
         params2->setGasAvailable(gas);
@@ -970,7 +970,7 @@ public:
         params2->setSeq(1000);
         params2->setDepth(0);
         params2->setFrom(sender);
-        params2->setTo(precompiled::AUTH_MANAGER_ADDRESS);
+        params2->setTo(std::string(precompiled::AUTH_MANAGER_ADDRESS));
         params2->setOrigin(sender);
         params2->setStaticCall(false);
         params2->setGasAvailable(gas);
@@ -1011,7 +1011,7 @@ public:
         params2->setSeq(1000);
         params2->setDepth(0);
         params2->setFrom(sender);
-        params2->setTo(precompiled::AUTH_MANAGER_ADDRESS);
+        params2->setTo(std::string(precompiled::AUTH_MANAGER_ADDRESS));
         params2->setOrigin(sender);
         params2->setStaticCall(false);
         params2->setGasAvailable(gas);
@@ -1551,7 +1551,7 @@ BOOST_AUTO_TEST_CASE(testDeployCommitteeManagerAndCall)
         params2->setSeq(1000);
         params2->setDepth(0);
         params2->setFrom(sender);
-        params2->setTo(precompiled::AUTH_COMMITTEE_ADDRESS);
+        params2->setTo(std::string(precompiled::AUTH_MANAGER_ADDRESS));
         params2->setOrigin(sender);
         params2->setStaticCall(false);
         params2->setGasAvailable(gas);
@@ -1809,7 +1809,7 @@ BOOST_AUTO_TEST_CASE(testInitAuth)
         params2->setSeq(1000);
         params2->setDepth(0);
         params2->setFrom(sender);
-        params2->setTo(precompiled::AUTH_COMMITTEE_ADDRESS);
+        params2->setTo(std::string(precompiled::AUTH_MANAGER_ADDRESS));
         params2->setOrigin(sender);
         params2->setStaticCall(false);
         params2->setGasAvailable(gas);

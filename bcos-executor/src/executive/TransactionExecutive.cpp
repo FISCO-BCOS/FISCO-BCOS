@@ -1391,14 +1391,15 @@ bool TransactionExecutive::isPrecompiled(const std::string& address) const
                m_blockContext.features()) != nullptr;
 }
 
-std::shared_ptr<Precompiled> TransactionExecutive::getPrecompiled(const std::string& address) const
+std::shared_ptr<Precompiled> TransactionExecutive::getPrecompiled(
+    const std::string_view address) const
 {
     return m_precompiled->at(address, m_blockContext.blockVersion(), m_blockContext.isAuthCheck(),
         m_blockContext.features());
 }
 
 std::shared_ptr<precompiled::Precompiled> bcos::executor::TransactionExecutive::getPrecompiled(
-    const std::string& address, uint32_t version, bool isAuth,
+    const std::string_view address, uint32_t version, bool isAuth,
     const ledger::Features& features) const
 {
     return m_precompiled->at(address, version, isAuth, features);
@@ -1747,7 +1748,7 @@ bool TransactionExecutive::buildBfsPath(std::string_view _absoluteDir, std::stri
     /// you should create locally, after external call successfully
     EXECUTIVE_LOG(TRACE) << LOG_DESC("build BFS metadata") << LOG_KV("absoluteDir", _absoluteDir)
                          << LOG_KV("type", _type);
-    const auto* to = m_blockContext.isWasm() ? BFS_NAME : BFS_ADDRESS;
+    const auto to = m_blockContext.isWasm() ? BFS_NAME : BFS_ADDRESS;
     auto response = externalTouchNewFile(
         shared_from_this(), _origin, _sender, to, _absoluteDir, _type, gasLeft);
     return response == (int)precompiled::CODE_SUCCESS;
@@ -1882,8 +1883,8 @@ bool TransactionExecutive::checkExecAuth(const CallParameters::UniquePtr& callPa
     {
         return true;
     }
-    const auto* authMgrAddress = m_blockContext.isWasm() ? precompiled::AUTH_MANAGER_NAME :
-                                                           precompiled::AUTH_MANAGER_ADDRESS;
+    const auto authMgrAddress = m_blockContext.isWasm() ? precompiled::AUTH_MANAGER_NAME :
+                                                          precompiled::AUTH_MANAGER_ADDRESS;
     auto contractAuthPrecompiled = dynamic_pointer_cast<precompiled::ContractAuthMgrPrecompiled>(
         getPrecompiled(AUTH_CONTRACT_MGR_ADDRESS, m_blockContext.blockVersion(),
             m_blockContext.isAuthCheck(), m_blockContext.features()));

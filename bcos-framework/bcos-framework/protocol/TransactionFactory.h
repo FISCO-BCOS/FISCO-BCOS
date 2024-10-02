@@ -43,6 +43,7 @@ public:
         std::string _groupId, int64_t _importTime, std::string _abi = "", std::string _value = "",
         std::string _gasPrice = "", int64_t _gasLimit = 0, std::string _maxFeePerGas = "",
         std::string maxPriorityFeePerGas = "") = 0;
+
     virtual Transaction::Ptr createTransaction(int32_t _version, std::string _to,
         bytes const& _input, std::string const& _nonce, int64_t _blockLimit, std::string _chainId,
         std::string _groupId, int64_t _importTime, const bcos::crypto::KeyPairInterface& keyPair,

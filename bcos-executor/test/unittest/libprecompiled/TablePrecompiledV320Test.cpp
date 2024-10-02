@@ -66,7 +66,7 @@ public:
         params2->setSeq(1000);
         params2->setDepth(0);
         params2->setFrom(sender);
-        params2->setTo(isWasm ? TABLE_MANAGER_NAME : TABLE_MANAGER_ADDRESS);
+        params2->setTo(std::string(isWasm ? TABLE_MANAGER_NAME : TABLE_MANAGER_ADDRESS));
         params2->setOrigin(sender);
         params2->setStaticCall(false);
         params2->setGasAvailable(gas);
@@ -161,7 +161,7 @@ public:
         params2->setSeq(1000);
         params2->setDepth(0);
         params2->setFrom(sender);
-        params2->setTo(isWasm ? TABLE_MANAGER_NAME : TABLE_MANAGER_ADDRESS);
+        params2->setTo(std::string(isWasm ? TABLE_MANAGER_NAME : TABLE_MANAGER_ADDRESS));
         params2->setOrigin(sender);
         params2->setStaticCall(false);
         params2->setGasAvailable(gas);
@@ -200,7 +200,7 @@ public:
         params2->setSeq(1000);
         params2->setDepth(0);
         params2->setFrom(sender);
-        params2->setTo(isWasm ? TABLE_MANAGER_NAME : TABLE_MANAGER_ADDRESS);
+        params2->setTo(std::string(isWasm ? TABLE_MANAGER_NAME : TABLE_MANAGER_ADDRESS));
         params2->setOrigin(sender);
         params2->setStaticCall(false);
         params2->setGasAvailable(gas);
@@ -239,7 +239,7 @@ public:
         params2->setSeq(1000);
         params2->setDepth(0);
         params2->setFrom(sender);
-        params2->setTo(isWasm ? TABLE_MANAGER_NAME : TABLE_MANAGER_ADDRESS);
+        params2->setTo(std::string(isWasm ? TABLE_MANAGER_NAME : TABLE_MANAGER_ADDRESS));
         params2->setOrigin(sender);
         params2->setStaticCall(false);
         params2->setGasAvailable(gas);

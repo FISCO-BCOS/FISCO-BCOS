@@ -64,7 +64,7 @@ public:
                                  codec::toString32(h256(0)));
 
         auto tx = _protocol->blockFactory()->transactionFactory()->createTransaction(0,
-            precompiled::AUTH_COMMITTEE_ADDRESS, input, u256(_number).str(), 500,
+            std::string(precompiled::AUTH_COMMITTEE_ADDRESS), input, u256(_number).str(), 500,
             _nodeConfig->chainId(), _nodeConfig->groupId(), utcTime());
         tx->forceSender(authAdmin.asBytes());
         block->appendTransaction(tx);

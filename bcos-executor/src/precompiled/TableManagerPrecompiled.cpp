@@ -192,9 +192,9 @@ void TableManagerPrecompiled::createKVTable(
         _callParameters->setExecResult(codec.encode(int32_t(CODE_TABLE_NAME_ALREADY_EXIST)));
         return;
     }
-    std::string tableManagerAddress =
-        blockContext.isWasm() ? TABLE_MANAGER_NAME : TABLE_MANAGER_ADDRESS;
-    std::string kvTableAddress = blockContext.isWasm() ? KV_TABLE_NAME : KV_TABLE_ADDRESS;
+    std::string tableManagerAddress(
+        blockContext.isWasm() ? TABLE_MANAGER_NAME : TABLE_MANAGER_ADDRESS);
+    std::string kvTableAddress(blockContext.isWasm() ? KV_TABLE_NAME : KV_TABLE_ADDRESS);
     std::string codeString = getDynamicPrecompiledCodeString(kvTableAddress, newTableName);
 
     auto input = codec.encode(newTableName, codeString);
@@ -416,9 +416,9 @@ void TableManagerPrecompiled::externalCreateTable(
         _callParameters->setExecResult(codec.encode(int32_t(CODE_TABLE_NAME_ALREADY_EXIST)));
         return;
     }
-    std::string tableManagerAddress =
-        blockContext.isWasm() ? TABLE_MANAGER_NAME : TABLE_MANAGER_ADDRESS;
-    std::string tableAddress = blockContext.isWasm() ? TABLE_NAME : TABLE_ADDRESS;
+    std::string tableManagerAddress(
+        blockContext.isWasm() ? TABLE_MANAGER_NAME : TABLE_MANAGER_ADDRESS);
+    std::string tableAddress(blockContext.isWasm() ? TABLE_NAME : TABLE_ADDRESS);
 
     std::string codeString = getDynamicPrecompiledCodeString(tableAddress, newTableName);
     auto input = codec.encode(newTableName, codeString);

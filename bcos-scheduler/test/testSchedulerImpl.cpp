@@ -566,8 +566,8 @@ BOOST_AUTO_TEST_CASE(testDeploySysContract)
     block->blockHeader()->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
 
     auto tx = blockFactory->transactionFactory()->createTransaction(0,
-        precompiled::AUTH_COMMITTEE_ADDRESS, {}, std::to_string(1), 500, "chainId", "groupId",
-        utcTime());
+        std::string(precompiled::AUTH_COMMITTEE_ADDRESS), {}, std::to_string(1), 500, "chainId",
+        "groupId", utcTime());
     block->appendTransaction(std::move(tx));
 
     std::promise<bcos::protocol::BlockHeader::Ptr> executedHeader;
@@ -594,8 +594,8 @@ BOOST_AUTO_TEST_CASE(testCallSysContract)
     executorManager->addExecutor("executor1", executor1);
 
     auto tx = blockFactory->transactionFactory()->createTransaction(0,
-        precompiled::AUTH_COMMITTEE_ADDRESS, {}, std::to_string(1), 500, "chainId", "groupId",
-        utcTime());
+        std::string(precompiled::AUTH_COMMITTEE_ADDRESS), {}, std::to_string(1), 500, "chainId",
+        "groupId", utcTime());
 
     bcos::protocol::TransactionReceipt::Ptr receipt;
 

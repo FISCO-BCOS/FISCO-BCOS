@@ -551,10 +551,9 @@ constexpr static bool SERIAL = false;
 constexpr static bool PARALLEL = true;
 
 BENCHMARK(issue<SERIAL>)->Arg(1000)->Arg(10000)->Arg(100000);
-BENCHMARK(issue<PARALLEL>)->Arg(1000)->Arg(10000)->Arg(100000);
-
 BENCHMARK(transfer<SERIAL>)->Arg(1000)->Arg(10000)->Arg(100000);
-BENCHMARK(transfer<PARALLEL>)->Arg(1000)->Arg(10000)->Arg(100000);
-
 BENCHMARK(conflictTransfer<SERIAL>)->Arg(1000)->Arg(10000)->Arg(100000);
+
+BENCHMARK(issue<PARALLEL>)->Arg(1000)->Arg(10000)->Arg(100000);
+BENCHMARK(transfer<PARALLEL>)->Arg(1000)->Arg(10000)->Arg(100000);
 BENCHMARK(conflictTransfer<PARALLEL>)->Arg(1000)->Arg(10000)->Arg(100000);
