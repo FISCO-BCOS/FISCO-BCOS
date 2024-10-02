@@ -195,7 +195,8 @@ void finishExecute(auto& storage, RANGES::range auto const& receipts,
         },
         [&]() {
             sysBlock = RANGES::any_of(transactions, [](auto const& transaction) {
-                return bcos::precompiled::c_systemTxsAddress.contains(transaction->to());
+                return precompiled::contains(
+                    bcos::precompiled::c_systemTxsAddress, transaction->to());
             });
         });
     newBlockHeader.setGasUsed(gasUsed);

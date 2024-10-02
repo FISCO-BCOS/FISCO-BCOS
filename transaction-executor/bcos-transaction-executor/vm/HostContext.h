@@ -440,8 +440,8 @@ public:
             co_await rollback(m_rollbackableTransientStorage.get(), transientSavepoint);
 
             if (auto hexAddress = address2FixedArray(ref.code_address);
-                bcos::precompiled::c_systemTxsAddress.find(concepts::bytebuffer::toView(
-                    hexAddress)) != bcos::precompiled::c_systemTxsAddress.end())
+                precompiled::contains(bcos::precompiled::c_systemTxsAddress,
+                    concepts::bytebuffer::toView(hexAddress)))
             {
                 evmResult->gas_left = message().gas;
                 HOST_CONTEXT_LOG(TRACE) << "System contract call failed, clear gasUsed, gas_left: "
@@ -453,9 +453,9 @@ public:
         // If the sender or recipient of this call is a system contract, gas is not consumed
         auto senderAddress = address2FixedArray(ref.sender);
         auto recipientAddress = address2FixedArray(ref.recipient);
-        if (bcos::precompiled::c_systemTxsAddress.contains(
+        if (precompiled::contains(bcos::precompiled::c_systemTxsAddress,
                 concepts::bytebuffer::toView(senderAddress)) ||
-            bcos::precompiled::c_systemTxsAddress.contains(
+            precompiled::contains(bcos::precompiled::c_systemTxsAddress,
                 concepts::bytebuffer::toView(recipientAddress)))
         {
             evmResult->gas_left = ref.gas;

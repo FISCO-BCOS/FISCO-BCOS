@@ -22,7 +22,6 @@
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include <bcos-utilities/Common.h>
 #include <charconv>
-#include <sstream>
 
 namespace bcos
 {
@@ -133,13 +132,28 @@ constexpr static const std::array<std::pair<std::string_view,std::string_view>, 
 };
 // clang-format on
 
-const std::set<std::string_view, std::less<>> c_systemTxsAddress = {
-    bcos::precompiled::SYS_CONFIG_ADDRESS, bcos::precompiled::CONSENSUS_ADDRESS,
-    bcos::precompiled::WORKING_SEALER_MGR_ADDRESS, bcos::precompiled::SYS_CONFIG_NAME,
-    bcos::precompiled::CONSENSUS_TABLE_NAME, bcos::precompiled::AUTH_COMMITTEE_ADDRESS,
-    bcos::precompiled::AUTH_MANAGER_ADDRESS, bcos::precompiled::ACCOUNT_ADDRESS,
-    bcos::precompiled::ACCOUNT_MGR_ADDRESS, bcos::precompiled::ACCOUNT_MANAGER_NAME,
-    bcos::precompiled::SHARDING_PRECOMPILED_ADDRESS};
+constexpr static auto getSystemTxsAddress()
+{
+    auto systemTxsAddress = std::to_array<std::string_view>({bcos::precompiled::SYS_CONFIG_ADDRESS,
+        bcos::precompiled::CONSENSUS_ADDRESS, bcos::precompiled::WORKING_SEALER_MGR_ADDRESS,
+        bcos::precompiled::SYS_CONFIG_NAME, bcos::precompiled::CONSENSUS_TABLE_NAME,
+        bcos::precompiled::AUTH_COMMITTEE_ADDRESS, bcos::precompiled::AUTH_MANAGER_ADDRESS,
+        bcos::precompiled::ACCOUNT_ADDRESS, bcos::precompiled::ACCOUNT_MGR_ADDRESS,
+        bcos::precompiled::ACCOUNT_MANAGER_NAME, bcos::precompiled::SHARDING_PRECOMPILED_ADDRESS});
+    std::sort(systemTxsAddress.begin(), systemTxsAddress.end());
+    return systemTxsAddress;
+}
+constexpr static struct Contains
+{
+    template <class Arg>
+    bool operator()(::ranges::range auto const& args, const Arg& arg) const
+        requires std::same_as<std::decay_t<::ranges::range_value_t<decltype(args)>>,
+            std::decay_t<Arg>>
+    {
+        return ::ranges::binary_search(args, arg);
+    }
+} contains;
+constexpr static auto c_systemTxsAddress = getSystemTxsAddress();
 
 /// for testing
 // CpuHeavy test: 0x5200 ~ (0x5200 + 128)

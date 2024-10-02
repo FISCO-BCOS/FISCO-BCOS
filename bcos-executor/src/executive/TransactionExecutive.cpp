@@ -30,6 +30,7 @@
 #include "../vm/Precompiled.h"
 #include "../vm/VMFactory.h"
 #include "../vm/VMInstance.h"
+#include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-table/src/ContractShardUtils.h"
 
@@ -46,7 +47,6 @@
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include <bcos-framework/executor/ExecuteError.h>
-#include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-tool/BfsFileFactory.h>
 #include <bcos-utilities/Common.h>
 #include <boost/algorithm/hex.hpp>
@@ -621,8 +621,7 @@ CallParameters::UniquePtr TransactionExecutive::callPrecompiled(
     // NotEnoughCashError
     catch (protocol::NotEnoughCashError const& e)
     {
-        EXECUTIVE_LOG(INFO) << "Revert transaction: "
-                            << "NotEnoughCashError"
+        EXECUTIVE_LOG(INFO) << "Revert transaction: " << "NotEnoughCashError"
                             << LOG_KV("address", precompiledCallParams->m_precompiledAddress)
                             << LOG_KV("message", e.what());
         writeErrInfoToOutput(e.what(), *callParameters);
@@ -634,8 +633,7 @@ CallParameters::UniquePtr TransactionExecutive::callPrecompiled(
     }
     catch (protocol::PrecompiledError const& e)
     {
-        EXECUTIVE_LOG(INFO) << "Revert transaction: "
-                            << "PrecompiledFailed"
+        EXECUTIVE_LOG(INFO) << "Revert transaction: " << "PrecompiledFailed"
                             << LOG_KV("address", precompiledCallParams->m_precompiledAddress)
                             << LOG_KV("message", e.what());
         // Note: considering the scenario where the contract calls the contract, the error message
@@ -1929,7 +1927,7 @@ int32_t TransactionExecutive::checkContractAvailable(
 {
     // precompiled always available
     if (isPrecompiled(callParameters->receiveAddress) ||
-        c_systemTxsAddress.contains(callParameters->receiveAddress))
+        contains(c_systemTxsAddress, std::string_view(callParameters->receiveAddress)))
     {
         return 0;
     }
