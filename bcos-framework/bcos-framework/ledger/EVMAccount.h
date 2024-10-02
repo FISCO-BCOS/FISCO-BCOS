@@ -216,24 +216,6 @@ public:
     EVMAccount& operator=(EVMAccount&&) noexcept = default;
     EVMAccount(Storage& storage, const evmc_address& address) : m_storage(storage)
     {
-        if constexpr (compress)
-        {
-            std::array<char, sizeof(address.bytes) * 2> table;  // NOLINT
-            boost::algorithm::hex_lower(concepts::bytebuffer::toView(address.bytes), table.data());
-            if (auto view = std::string_view(table.data(), table.size());
-                precompiled::contains(bcos::precompiled::c_systemTxsAddress, view))
-            {
-                m_tableName.reserve(ledger::SYS_DIRECTORY::SYS_APPS.size() + table.size());
-                m_tableName.append(ledger::SYS_DIRECTORY::SYS_APPS);
-            }
-            else
-            {
-                m_tableName.reserve(ledger::SYS_DIRECTORY::USER_APPS.size() + table.size());
-                m_tableName.append(ledger::SYS_DIRECTORY::USER_APPS);
-            }
-            m_tableName.append(std::string_view(table.data(), table.size()));
-        }
-
         std::array<char, sizeof(address.bytes) * 2> table;  // NOLINT
         boost::algorithm::hex_lower(concepts::bytebuffer::toView(address.bytes), table.data());
         if (auto view = std::string_view(table.data(), table.size());
