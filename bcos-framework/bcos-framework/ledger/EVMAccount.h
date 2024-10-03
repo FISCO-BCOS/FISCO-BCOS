@@ -11,7 +11,7 @@
 namespace bcos::ledger::account
 {
 
-template <class Storage, bool compress = false>
+template <class Storage>
 class EVMAccount
 {
     // All interface Need block version >= 3.1
@@ -252,16 +252,6 @@ public:
     ~EVMAccount() noexcept = default;
 
     std::string_view address() const { return this->m_tableName; }
-};
-
-template <class Storage>
-class LegacyEVMAccount : public EVMAccount<Storage>
-{
-};
-
-template <class Storage>
-class BinaryEVMAccount : public EVMAccount<Storage>
-{
 };
 
 template <class Storage>
