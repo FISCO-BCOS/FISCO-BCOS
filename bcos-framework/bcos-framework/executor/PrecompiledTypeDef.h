@@ -40,6 +40,12 @@ inline bool isPrecompiledAddressRange(std::string_view _address)
     return result.ec == std::errc() && address < PRECOMPILED_ADDRESS_UPPER_BOUND;
 }
 
+constexpr auto toSortedList(auto input)
+{
+    std::sort(input.begin(), input.end());
+    return input;
+}
+
 namespace precompiled
 {
 /// precompiled contract path for wasm
@@ -61,16 +67,16 @@ constexpr static std::string_view CAST_NAME = "/sys/cast_tools";
 constexpr static std::string_view SHARDING_PRECOMPILED_NAME = "/sys/sharding";
 constexpr static std::string_view BALANCE_PRECOMPILED_NAME = "/sys/balance";
 constexpr static uint8_t BFS_SYS_SUBS_COUNT = 15;
-constexpr static std::array<std::string_view, BFS_SYS_SUBS_COUNT> BFS_SYS_SUBS = {SYS_CONFIG_NAME,
-    TABLE_NAME, TABLE_MANAGER_NAME, CONSENSUS_TABLE_NAME, AUTH_MANAGER_NAME, KV_TABLE_NAME,
-    CRYPTO_NAME, DAG_TRANSFER_NAME, BFS_NAME, GROUP_SIG_NAME, RING_SIG_NAME, DISCRETE_ZKP_NAME,
-    ACCOUNT_MANAGER_NAME, CAST_NAME, SHARDING_PRECOMPILED_NAME};
+constexpr static auto BFS_SYS_SUBS = std::to_array<std::string_view>(
+    {SYS_CONFIG_NAME, TABLE_NAME, TABLE_MANAGER_NAME, CONSENSUS_TABLE_NAME, AUTH_MANAGER_NAME,
+        KV_TABLE_NAME, CRYPTO_NAME, DAG_TRANSFER_NAME, BFS_NAME, GROUP_SIG_NAME, RING_SIG_NAME,
+        DISCRETE_ZKP_NAME, ACCOUNT_MANAGER_NAME, CAST_NAME, SHARDING_PRECOMPILED_NAME});
 
 /// only for init v3.0.0 /sys/ in ledger, should never change it
-constexpr static const std::array<std::string_view, 13> BFS_SYS_SUBS_V30 = {SYS_CONFIG_NAME,
-    TABLE_NAME, TABLE_MANAGER_NAME, CONSENSUS_TABLE_NAME, AUTH_MANAGER_NAME, KV_TABLE_NAME,
-    CRYPTO_NAME, DAG_TRANSFER_NAME, BFS_NAME, GROUP_SIG_NAME, RING_SIG_NAME, DISCRETE_ZKP_NAME,
-    ACCOUNT_MANAGER_NAME};
+constexpr static auto BFS_SYS_SUBS_V30 =
+    std::to_array<std::string_view>({SYS_CONFIG_NAME, TABLE_NAME, TABLE_MANAGER_NAME,
+        CONSENSUS_TABLE_NAME, AUTH_MANAGER_NAME, KV_TABLE_NAME, CRYPTO_NAME, DAG_TRANSFER_NAME,
+        BFS_NAME, GROUP_SIG_NAME, RING_SIG_NAME, DISCRETE_ZKP_NAME, ACCOUNT_MANAGER_NAME});
 
 /// precompiled contract for solidity
 /// precompiled address should range in [0x1000, 0x20000)
@@ -112,8 +118,7 @@ constexpr static std::string_view ACCOUNT_ADDRESS = "000000000000000000000000000
 
 // clang-format off
 /// name to address, only for create sys table
-constexpr static const std::array<std::pair<std::string_view,std::string_view>, BFS_SYS_SUBS_COUNT>
-    SYS_NAME_ADDRESS_MAP ={
+constexpr static auto SYS_NAME_ADDRESS_MAP = std::to_array<std::pair<std::string_view,std::string_view>>({
     std::pair{SYS_CONFIG_NAME, SYS_CONFIG_ADDRESS},
     {TABLE_NAME, TABLE_ADDRESS},
     {TABLE_MANAGER_NAME, TABLE_MANAGER_ADDRESS},
@@ -129,31 +134,27 @@ constexpr static const std::array<std::pair<std::string_view,std::string_view>, 
     {ACCOUNT_MANAGER_NAME, ACCOUNT_MGR_ADDRESS},
     {CAST_NAME, CAST_ADDRESS},
     {SHARDING_PRECOMPILED_NAME, SHARDING_PRECOMPILED_ADDRESS}
-};
+});
 // clang-format on
 
-constexpr static auto getSystemTxsAddress()
-{
-    auto systemTxsAddress = std::to_array<std::string_view>({bcos::precompiled::SYS_CONFIG_ADDRESS,
+constexpr static auto c_systemTxsAddress =
+    toSortedList(std::to_array<std::string_view>({bcos::precompiled::SYS_CONFIG_ADDRESS,
         bcos::precompiled::CONSENSUS_ADDRESS, bcos::precompiled::WORKING_SEALER_MGR_ADDRESS,
         bcos::precompiled::SYS_CONFIG_NAME, bcos::precompiled::CONSENSUS_TABLE_NAME,
         bcos::precompiled::AUTH_COMMITTEE_ADDRESS, bcos::precompiled::AUTH_MANAGER_ADDRESS,
         bcos::precompiled::ACCOUNT_ADDRESS, bcos::precompiled::ACCOUNT_MGR_ADDRESS,
-        bcos::precompiled::ACCOUNT_MANAGER_NAME, bcos::precompiled::SHARDING_PRECOMPILED_ADDRESS});
-    std::sort(systemTxsAddress.begin(), systemTxsAddress.end());
-    return systemTxsAddress;
-}
+        bcos::precompiled::ACCOUNT_MANAGER_NAME, bcos::precompiled::SHARDING_PRECOMPILED_ADDRESS}));
+
 constexpr static struct Contains
 {
     template <class Arg>
-    bool operator()(::ranges::range auto const& args, const Arg& arg) const
+    bool operator()(::ranges::input_range auto const& args, const Arg& arg) const
         requires std::same_as<std::decay_t<::ranges::range_value_t<decltype(args)>>,
             std::decay_t<Arg>>
     {
         return ::ranges::binary_search(args, arg);
     }
 } contains;
-constexpr static auto c_systemTxsAddress = getSystemTxsAddress();
 
 /// for testing
 // CpuHeavy test: 0x5200 ~ (0x5200 + 128)
