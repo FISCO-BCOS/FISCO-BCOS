@@ -307,8 +307,9 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
             (callParameters->create && !callParameters->internalCreate))
         {
             // TODO)): set nonce here will be better
-            ledger::account::EVMAccount address(
-                *m_blockContext.storage(), callParameters->senderAddress);
+            ledger::account::EVMAccount address(*m_blockContext.storage(),
+                callParameters->senderAddress,
+                m_blockContext.features().get(ledger::Features::Flag::feature_binary_address));
             task::wait([](decltype(address) addr, u256 callNonce) -> task::Task<void> {
                 if (!co_await ledger::account::isExist(addr))
                 {

@@ -161,6 +161,7 @@ BOOST_AUTO_TEST_CASE(feature)
         "feature_evm_address",
         "feature_ethereum_compatible",
         "feature_rpbft_term_weight",
+        "feature_binary_address",
     };
     // clang-format on
     for (size_t i = 0; i < keys.size(); ++i)

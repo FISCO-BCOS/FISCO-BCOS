@@ -106,8 +106,8 @@ public:
         }
         else if (type() == static_cast<uint8_t>(TransactionType::Web3Transaction))
         {
-            auto bytes = extraTransactionBytes();
-            hashResult = bcos::crypto::keccak256Hash(bytes);
+            auto bytesRef = extraTransactionBytes();
+            hashResult = bcos::crypto::keccak256Hash(bytesRef);
         }
         // check the signatures
         auto signature = signatureData();

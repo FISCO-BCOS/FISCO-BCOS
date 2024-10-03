@@ -62,6 +62,7 @@ public:
         feature_evm_address,
         feature_ethereum_compatible,  // will enable all bugfixes, all features about evm
         feature_rpbft_term_weight,
+        feature_binary_address,
     };
 
 private:

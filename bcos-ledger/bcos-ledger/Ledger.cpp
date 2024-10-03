@@ -400,6 +400,8 @@ task::Task<void> Ledger::batchInsertEoaNonce(bcos::storage::StorageInterface::Pt
     std::unordered_map<std::string, uint64_t> eoa2Nonce,
     std::unordered_map<std::string, uint64_t> fbEoa2Nonce)
 {
+    auto features = co_await ledger::getFeatures(*this);
+
     for (auto&& [sender, nonce] : fbEoa2Nonce)
     {
         if (eoa2Nonce.contains(sender))
@@ -408,7 +410,8 @@ task::Task<void> Ledger::batchInsertEoaNonce(bcos::storage::StorageInterface::Pt
             continue;
         }
         // write in storage
-        ledger::account::EVMAccount eoa(*storage, sender);
+        ledger::account::EVMAccount eoa(
+            *storage, sender, features.get(Features::Flag::feature_binary_address));
         if (!co_await ledger::account::isExist(eoa))
         {
             co_await ledger::account::create(eoa);
@@ -1797,12 +1800,16 @@ static task::Task<void> setGenesisFeatures(RANGES::input_range auto const& featu
 static task::Task<void> setAllocs(
     RANGES::input_range auto const& allocs, auto& storage, const crypto::Hash& hashImpl)
 {
+    Features features;
+    co_await ledger::readFromStorage(features, storage, 0);
+
     for (auto&& alloc : allocs)
     {
         evmc_address address;
         boost::algorithm::unhex(alloc.address, address.bytes);
 
-        account::EVMAccount account(storage, address);
+        account::EVMAccount account(
+            storage, address, features.get(Features::Flag::feature_binary_address));
         co_await account::create(account);
 
         if (!alloc.code.empty())

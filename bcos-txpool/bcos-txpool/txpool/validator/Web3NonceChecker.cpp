@@ -20,6 +20,7 @@
 
 #include "Web3NonceChecker.h"
 #include "../utilities/Common.h"
+#include "bcos-crypto/ChecksumAddress.h"
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-protocol/TransactionStatus.h>
 

@@ -7,6 +7,7 @@
 #include "bcos-framework/dispatcher/SchedulerTypeDef.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/ledger/EVMAccount.h"
+#include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/protocol/Block.h"
@@ -623,7 +624,9 @@ public:
                        decltype(callback) callback) -> task::Task<void> {
             auto view = fork(self->m_multiLayerStorage.get());
             auto contractAddress = unhexAddress(contract);
-            ledger::account::EVMAccount account(view, contractAddress);
+            ledger::account::EVMAccount account(view, contractAddress,
+                self->m_ledgerConfig->features().get(
+                    ledger::Features::Flag::feature_binary_address));
             auto code = co_await ledger::account::code(account);
 
             if (!code)
@@ -643,7 +646,9 @@ public:
                        decltype(callback) callback) -> task::Task<void> {
             auto view = fork(self->m_multiLayerStorage.get());
             auto contractAddress = unhexAddress(contract);
-            ledger::account::EVMAccount account(view, contractAddress);
+            ledger::account::EVMAccount account(view, contractAddress,
+                self->m_ledgerConfig->features().get(
+                    ledger::Features::Flag::feature_binary_address));
             auto abi = co_await ledger::account::abi(account);
 
             if (!abi)
