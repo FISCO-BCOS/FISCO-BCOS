@@ -157,7 +157,7 @@ private:
     auto getMyAccount()
     {
         return Account<std::decay_t<Storage>>(m_rollbackableStorage.get(), message().recipient,
-            m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_binary_address));
+            m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
     }
 
     inline constexpr static struct InnerConstructor
@@ -269,7 +269,7 @@ public:
         if (auto executable =
                 co_await getExecutable(m_rollbackableStorage.get(), address, m_revision,
                     m_ledgerConfig.get().features().get(
-                        ledger::Features::Flag::feature_binary_address));
+                        ledger::Features::Flag::feature_raw_address));
             executable && executable->m_code)
         {
             co_return executable->m_code;
@@ -294,7 +294,7 @@ public:
     task::Task<h256> codeHashAt(const evmc_address& address)
     {
         Account<Storage> account(m_rollbackableStorage.get(), address,
-            m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_binary_address));
+            m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
         co_return co_await ledger::account::codeHash(account);
     }
 
@@ -565,7 +565,7 @@ private:
 
         m_executable = co_await getExecutable(m_rollbackableStorage.get(), message().code_address,
             m_revision,
-            m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_binary_address));
+            m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
         if (m_executable && hasPrecompiledPrefix(m_executable->m_code->data()))
         {
             if (std::holds_alternative<const evmc_message*>(m_message))
@@ -634,7 +634,7 @@ private:
                 m_executable = co_await getExecutable(m_rollbackableStorage.get(), ref.code_address,
                     m_revision,
                     m_ledgerConfig.get().features().get(
-                        ledger::Features::Flag::feature_binary_address));
+                        ledger::Features::Flag::feature_raw_address));
             }
 
             if (!m_executable)

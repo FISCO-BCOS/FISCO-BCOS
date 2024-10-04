@@ -626,7 +626,7 @@ public:
             auto contractAddress = unhexAddress(contract);
             ledger::account::EVMAccount account(view, contractAddress,
                 self->m_ledgerConfig->features().get(
-                    ledger::Features::Flag::feature_binary_address));
+                    ledger::Features::Flag::feature_raw_address));
             auto code = co_await ledger::account::code(account);
 
             if (!code)
@@ -648,7 +648,7 @@ public:
             auto contractAddress = unhexAddress(contract);
             ledger::account::EVMAccount account(view, contractAddress,
                 self->m_ledgerConfig->features().get(
-                    ledger::Features::Flag::feature_binary_address));
+                    ledger::Features::Flag::feature_raw_address));
             auto abi = co_await ledger::account::abi(account);
 
             if (!abi)

@@ -411,7 +411,7 @@ task::Task<void> Ledger::batchInsertEoaNonce(bcos::storage::StorageInterface::Pt
         }
         // write in storage
         ledger::account::EVMAccount eoa(
-            *storage, sender, features.get(Features::Flag::feature_binary_address));
+            *storage, sender, features.get(Features::Flag::feature_raw_address));
         if (!co_await ledger::account::isExist(eoa))
         {
             co_await ledger::account::create(eoa);
@@ -1809,7 +1809,7 @@ static task::Task<void> setAllocs(
         boost::algorithm::unhex(alloc.address, address.bytes);
 
         account::EVMAccount account(
-            storage, address, features.get(Features::Flag::feature_binary_address));
+            storage, address, features.get(Features::Flag::feature_raw_address));
         co_await account::create(account);
 
         if (!alloc.code.empty())
