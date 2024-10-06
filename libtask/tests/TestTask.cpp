@@ -255,6 +255,17 @@ bcos::task::Task<void> selfAlloc(
     co_return;
 }
 
+Generator<int> generatorWithAlloc(
+    std::allocator_arg_t /*unused*/, std::pmr::polymorphic_allocator<> /*unused*/, int total)
+{
+    std::array<char, 1024> buf{};
+
+    for (auto i = 0; i < total; ++i)
+    {
+        co_yield i;
+    }
+}
+
 BOOST_AUTO_TEST_CASE(allocator)
 {
     std::pmr::set_default_resource(std::pmr::null_memory_resource());
@@ -292,6 +303,16 @@ BOOST_AUTO_TEST_CASE(allocator)
             std::array<char, 1024> buf{};
             co_return;
         }(std::allocator_arg, allocator, 100));
+    BOOST_CHECK_EQUAL(pool.allocate, 1);
+    BOOST_CHECK_EQUAL(pool.deallocate, 1);
+
+    pool.reset();
+    int count = 0;
+    for (auto i : generatorWithAlloc(std::allocator_arg, allocator, 100))
+    {
+        BOOST_CHECK_EQUAL(i, count++);
+    }
+    BOOST_CHECK_EQUAL(count, 100);
     BOOST_CHECK_EQUAL(pool.allocate, 1);
     BOOST_CHECK_EQUAL(pool.deallocate, 1);
 }
