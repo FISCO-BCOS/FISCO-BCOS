@@ -33,7 +33,7 @@ using Generator = std::generator<Ref, Val, Alloc>;
 #include <utility>
 namespace bcos::task
 {
-// Fork from https://open-std.org/JTC1/SC22/WG21/docs/papers/2020/p2168r0.pdf
+// From https://open-std.org/JTC1/SC22/WG21/docs/papers/2020/p2168r0.pdf
 // Can be replace with std::generator
 
 template <typename Ref, typename Value = std::remove_cvref_t<Ref>, typename Alloc = void>

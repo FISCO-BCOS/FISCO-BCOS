@@ -16,6 +16,7 @@
 #include <chrono>
 #include <future>
 #include <iostream>
+#include <memory_resource>
 #include <stdexcept>
 #include <thread>
 
@@ -212,6 +213,87 @@ BOOST_AUTO_TEST_CASE(memoryLeak)
 
     bcos::task::wait(
         []() -> Task<void> { BOOST_CHECK_THROW(co_await taskWithThrow(), std::runtime_error); }());
+}
+
+struct MyMemoryResource : public std::pmr::monotonic_buffer_resource
+{
+    MyMemoryResource(void* buffer, size_t bufferSize)
+      : std::pmr::monotonic_buffer_resource(buffer, bufferSize, std::pmr::get_default_resource())
+    {}
+
+    void* do_allocate(size_t bytes, size_t alignment) override
+    {
+        ++allocate;
+        return std::pmr::monotonic_buffer_resource::do_allocate(bytes, alignment);
+    }
+
+    void do_deallocate(void* p, size_t bytes, size_t alignment) override
+    {
+        ++deallocate;
+        return std::pmr::monotonic_buffer_resource::do_deallocate(p, bytes, alignment);
+    }
+
+    bool do_is_equal(const memory_resource& other) const noexcept override
+    {
+        return std::pmr::monotonic_buffer_resource::do_is_equal(other);
+    }
+
+    void reset()
+    {
+        allocate = 0;
+        deallocate = 0;
+    }
+
+    int allocate = 0;
+    int deallocate = 0;
+};
+
+bcos::task::Task<void> selfAlloc(
+    std::allocator_arg_t /*unused*/, std::pmr::polymorphic_allocator<> /*unused*/, int /*unused*/)
+{
+    std::array<char, 1024> buf{};
+    co_return;
+}
+
+BOOST_AUTO_TEST_CASE(allocator)
+{
+    std::pmr::set_default_resource(std::pmr::null_memory_resource());
+    std::array<char, 10240> mockStack;
+
+    MyMemoryResource pool(mockStack.data(), mockStack.size());
+    std::pmr::polymorphic_allocator<> allocator(std::addressof(pool));
+
+    auto awaitable = selfAlloc(std::allocator_arg, allocator, 100);
+    awaitable.start();
+    BOOST_CHECK_EQUAL(pool.allocate, 1);
+    BOOST_CHECK_EQUAL(pool.deallocate, 1);
+
+    pool.reset();
+    bcos::task::syncWait(
+        std::allocator_arg, allocator, selfAlloc(std::allocator_arg, allocator, 100));
+    BOOST_CHECK_EQUAL(pool.allocate, 2);
+    BOOST_CHECK_EQUAL(pool.deallocate, 2);
+
+    // 基于lambda的协程无法使用allocator，暂时未找到原因
+    // Coroutines based on lambda cannot use allocators, the reason has not been found yet.
+    pool.reset();
+    auto lambda = [](std::allocator_arg_t, std::pmr::polymorphic_allocator<>, int) -> Task<void> {
+        std::array<char, 1024> buf{};
+        co_return;
+    };
+    auto awaitable2 = lambda(std::allocator_arg, allocator, 100);
+    awaitable2.start();
+    BOOST_CHECK_EQUAL(pool.allocate, 0);
+    BOOST_CHECK_EQUAL(pool.deallocate, 0);
+
+    pool.reset();
+    bcos::task::syncWait(std::allocator_arg, allocator,
+        [](std::allocator_arg_t, std::pmr::polymorphic_allocator<>, int) -> Task<void> {
+            std::array<char, 1024> buf{};
+            co_return;
+        }(std::allocator_arg, allocator, 100));
+    BOOST_CHECK_EQUAL(pool.allocate, 1);
+    BOOST_CHECK_EQUAL(pool.deallocate, 1);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
