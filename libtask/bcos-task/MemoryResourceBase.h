@@ -6,33 +6,29 @@
 
 namespace bcos::task
 {
+
+// 如果把allocator指针放在内存区的头部，使用bcos::u256时会出现异常，原因暂未弄清，因此放在内存区的尾部
+// If the allocator pointer is placed at the beginning of the memory area, an exception will occur
+// when using bcos::u256, and the reason has not been determined yet. Therefore, it is placed at the
+// end of the memory area.
 struct MemoryResourceBase
 {
+    static std::pmr::memory_resource*& getAllocator(void* ptr, size_t size);
+
     static void* operator new(size_t size, std::allocator_arg_t /*unused*/, const auto& allocator,
         const auto&... /*unused*/)
     {
         auto* memoryResource = allocator.resource();
-        auto* resources = static_cast<std::pmr::memory_resource**>(memoryResource->allocate(
-            size + sizeof(std::pmr::memory_resource*), alignof(std::pmr::memory_resource*)));
+        auto* resources = memoryResource->allocate(
+            size + sizeof(std::pmr::memory_resource*), alignof(std::pmr::memory_resource*));
         assert(resources);
 
-        *resources = allocator.resource();
-        return resources + 1;
+        getAllocator(resources, size) = memoryResource;
+        return resources;
     }
 
-    static void* operator new(size_t size)
-    {
-        return operator new(size, std::allocator_arg, std::pmr::polymorphic_allocator<>{});
-    }
+    static void* operator new(size_t size);
 
-    static void operator delete(void* ptr, size_t size) noexcept
-    {
-        auto* resources = static_cast<std::pmr::memory_resource**>(ptr) - 1;
-        assert(resources[0]);
-
-        (*resources)
-            ->deallocate(resources, size + sizeof(std::pmr::memory_resource*),
-                alignof(std::pmr::memory_resource*));
-    }
+    static void operator delete(void* ptr, size_t size) noexcept;
 };
 }  // namespace bcos::task
