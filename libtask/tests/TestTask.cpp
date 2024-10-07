@@ -12,7 +12,6 @@
 #include <oneapi/tbb/task_arena.h>
 #include <oneapi/tbb/task_group.h>
 #include <boost/multiprecision/fwd.hpp>
-#include <boost/multiprecision/gmp.hpp>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <boost/throw_exception.hpp>
@@ -321,7 +320,9 @@ BOOST_AUTO_TEST_CASE(allocator)
 
 Task<bcos::u256> testU256()
 {
-    boost::multiprecision::number<boost::multiprecision::gmp_int> num1;
+    boost::multiprecision::number<boost::multiprecision::cpp_int_backend<256, 256,
+        boost::multiprecision::unsigned_magnitude, boost::multiprecision::checked, void>>
+        num1{1};
     boost::multiprecision::number<boost::multiprecision::cpp_int_backend<256, 256,
         boost::multiprecision::unsigned_magnitude, boost::multiprecision::checked, void>>
         num2{1};
