@@ -15,13 +15,13 @@
  */
 
 #pragma once
+#include "MemoryResourceBase.h"
 #include "bcos-concepts/Exception.h"
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
 #include <coroutine>
 #include <exception>
 #include <memory>
-#include <memory_resource>
 #include <type_traits>
 #include <variant>
 
@@ -60,7 +60,7 @@ struct Continuation
 };
 
 template <class Task, class PromiseImpl>
-struct PromiseBase
+struct PromiseBase : public MemoryResourceBase
 {
     constexpr std::suspend_always initial_suspend() noexcept { return {}; }
     constexpr auto final_suspend() noexcept { return FinalAwaitable<PromiseImpl>{}; }
@@ -82,36 +82,6 @@ struct PromiseBase
         m_continuation->value.template emplace<std::exception_ptr>(std::current_exception());
     }
 
-    void* operator new(size_t size)
-    {
-        auto* resource = static_cast<std::pmr::memory_resource**>(
-            std::malloc(size + sizeof(std::pmr::memory_resource*)));
-        resource[0] = nullptr;
-        return std::addressof(resource[1]);
-    }
-
-    static void* operator new(size_t size, std::allocator_arg_t /*unused*/, const auto& allocator,
-        const auto&... /*unused*/)
-    {
-        auto* memoryResource = allocator.resource();
-        auto* resource = static_cast<std::pmr::memory_resource**>(
-            memoryResource->allocate(size + sizeof(std::pmr::memory_resource*)));
-        resource[0] = allocator.resource();
-        return std::addressof(resource[1]);
-    }
-
-    void operator delete(void* ptr, size_t size) noexcept
-    {
-        auto* resource = static_cast<std::pmr::memory_resource**>(ptr) - 1;
-        if (resource[0] != nullptr)
-        {
-            resource[0]->deallocate(resource, size + sizeof(std::pmr::memory_resource*));
-        }
-        else
-        {
-            std::free(resource);  // NOLINT
-        }
-    }
     Continuation<typename Task::VariantType>* m_continuation{};
 };
 

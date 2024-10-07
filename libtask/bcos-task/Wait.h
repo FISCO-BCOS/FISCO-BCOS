@@ -74,7 +74,6 @@ static task::Task<void> waitTask(std::allocator_arg_t /*unused*/, const auto& al
     }
 }
 
-
 constexpr inline struct SyncWait
 {
     template <class Task>
@@ -125,7 +124,7 @@ constexpr inline struct SyncWait
     auto operator()(Task&& task) const -> AwaitableReturnType<std::remove_cvref_t<Task>>
         requires IsAwaitable<Task>
     {
-        return operator()(
+        return operator()<Task>(
             std::allocator_arg, std::pmr::polymorphic_allocator<>{}, std::forward<Task>(task));
     }
 } syncWait{};

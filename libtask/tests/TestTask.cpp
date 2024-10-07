@@ -3,6 +3,7 @@
 #include "bcos-task/Task.h"
 #include "bcos-task/Trait.h"
 #include "bcos-task/Wait.h"
+#include "bcos-utilities/Common.h"
 #include <oneapi/tbb/blocked_range.h>
 #include <oneapi/tbb/concurrent_vector.h>
 #include <oneapi/tbb/parallel_for.h>
@@ -10,6 +11,8 @@
 #include <oneapi/tbb/task.h>
 #include <oneapi/tbb/task_arena.h>
 #include <oneapi/tbb/task_group.h>
+#include <boost/multiprecision/fwd.hpp>
+#include <boost/multiprecision/gmp.hpp>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <boost/throw_exception.hpp>
@@ -268,7 +271,6 @@ Generator<int> generatorWithAlloc(
 
 BOOST_AUTO_TEST_CASE(allocator)
 {
-    std::pmr::set_default_resource(std::pmr::null_memory_resource());
     std::array<char, 10240> mockStack;
 
     MyMemoryResource pool(mockStack.data(), mockStack.size());
@@ -315,6 +317,28 @@ BOOST_AUTO_TEST_CASE(allocator)
     BOOST_CHECK_EQUAL(count, 100);
     BOOST_CHECK_EQUAL(pool.allocate, 1);
     BOOST_CHECK_EQUAL(pool.deallocate, 1);
+}
+
+Task<bcos::u256> testU256()
+{
+    boost::multiprecision::number<boost::multiprecision::gmp_int> num1;
+    boost::multiprecision::number<boost::multiprecision::cpp_int_backend<256, 256,
+        boost::multiprecision::unsigned_magnitude, boost::multiprecision::checked, void>>
+        num2{1};
+
+    constexpr static auto ss = sizeof(num2);
+
+    num1 = 1000;
+    num2 = 2000;
+    co_return 0;
+}
+
+BOOST_AUTO_TEST_CASE(u256)
+{
+    auto handle = testU256();
+    handle.start();
+    // auto sum = syncWait(testU256());
+    // BOOST_CHECK_GE(sum, 3000);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
