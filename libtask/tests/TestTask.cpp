@@ -251,14 +251,14 @@ struct MyMemoryResource : public std::pmr::monotonic_buffer_resource
 };
 
 bcos::task::Task<void> selfAlloc(
-    std::allocator_arg_t /*unused*/, std::pmr::polymorphic_allocator<> /*unused*/, int /*unused*/)
+    int /*unused*/, std::allocator_arg_t /*unused*/, std::pmr::polymorphic_allocator<> /*unused*/)
 {
     std::array<char, 1024> buf{};
     co_return;
 }
 
 Generator<int> generatorWithAlloc(
-    std::allocator_arg_t /*unused*/, std::pmr::polymorphic_allocator<> /*unused*/, int total)
+    int total, std::allocator_arg_t /*unused*/, std::pmr::polymorphic_allocator<> /*unused*/)
 {
     std::array<char, 1024> buf{};
 
@@ -275,41 +275,40 @@ BOOST_AUTO_TEST_CASE(allocator)
     MyMemoryResource pool(mockStack.data(), mockStack.size());
     std::pmr::polymorphic_allocator<> allocator(std::addressof(pool));
 
-    auto awaitable = selfAlloc(std::allocator_arg, allocator, 100);
+    auto awaitable = selfAlloc(100, std::allocator_arg, allocator);
     awaitable.start();
     BOOST_CHECK_EQUAL(pool.allocate, 1);
     BOOST_CHECK_EQUAL(pool.deallocate, 1);
 
     pool.reset();
     bcos::task::syncWait(
-        std::allocator_arg, allocator, selfAlloc(std::allocator_arg, allocator, 100));
+        selfAlloc(100, std::allocator_arg, allocator), std::allocator_arg, allocator);
     BOOST_CHECK_EQUAL(pool.allocate, 2);
     BOOST_CHECK_EQUAL(pool.deallocate, 2);
 
-    // 基于lambda的协程无法使用allocator，暂时未找到原因
-    // Coroutines based on lambda cannot use allocators, the reason has not been found yet.
     pool.reset();
-    auto lambda = [](std::allocator_arg_t, std::pmr::polymorphic_allocator<>, int) -> Task<void> {
+    auto lambda = [](int, std::allocator_arg_t, std::pmr::polymorphic_allocator<>) -> Task<void> {
         std::array<char, 1024> buf{};
         co_return;
     };
-    auto awaitable2 = lambda(std::allocator_arg, allocator, 100);
+    auto awaitable2 = lambda(100, std::allocator_arg, allocator);
     awaitable2.start();
-    BOOST_CHECK_EQUAL(pool.allocate, 0);
-    BOOST_CHECK_EQUAL(pool.deallocate, 0);
-
-    pool.reset();
-    bcos::task::syncWait(std::allocator_arg, allocator,
-        [](std::allocator_arg_t, std::pmr::polymorphic_allocator<>, int) -> Task<void> {
-            std::array<char, 1024> buf{};
-            co_return;
-        }(std::allocator_arg, allocator, 100));
     BOOST_CHECK_EQUAL(pool.allocate, 1);
     BOOST_CHECK_EQUAL(pool.deallocate, 1);
 
     pool.reset();
+    bcos::task::syncWait(
+        [](int, std::allocator_arg_t, std::pmr::polymorphic_allocator<>) -> Task<void> {
+            std::array<char, 1024> buf{};
+            co_return;
+        }(100, std::allocator_arg, allocator),
+        std::allocator_arg, allocator);
+    BOOST_CHECK_EQUAL(pool.allocate, 2);
+    BOOST_CHECK_EQUAL(pool.deallocate, 2);
+
+    pool.reset();
     int count = 0;
-    for (auto i : generatorWithAlloc(std::allocator_arg, allocator, 100))
+    for (auto i : generatorWithAlloc(100, std::allocator_arg, allocator))
     {
         BOOST_CHECK_EQUAL(i, count++);
     }

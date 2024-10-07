@@ -37,8 +37,8 @@ constexpr inline struct Wait
 } wait{};
 
 template <class Task, class Result, class ReturnType>
-static task::Task<void> waitTask(std::allocator_arg_t /*unused*/, const auto& allocator,
-    Task&& task, Result& result, boost::atomic_flag& finished, boost::atomic_flag& waitFlag)
+static task::Task<void> waitTask(Task&& task, Result& result, boost::atomic_flag& finished,
+    boost::atomic_flag& waitFlag, auto&&... args)
 {
     try
     {
@@ -77,8 +77,8 @@ static task::Task<void> waitTask(std::allocator_arg_t /*unused*/, const auto& al
 constexpr inline struct SyncWait
 {
     template <class Task>
-    auto operator()(std::allocator_arg_t allocatorArg, const auto& allocator,
-        Task&& task) const -> AwaitableReturnType<std::remove_cvref_t<Task>>
+    auto operator()(
+        Task&& task, auto&&... args) const -> AwaitableReturnType<std::remove_cvref_t<Task>>
         requires IsAwaitable<Task>
     {
         using ReturnType = AwaitableReturnType<std::remove_cvref_t<Task>>;
@@ -91,8 +91,8 @@ constexpr inline struct SyncWait
         boost::atomic_flag finished;
         boost::atomic_flag waitFlag;
 
-        auto handle = waitTask<Task, decltype(result), ReturnType>(
-            allocatorArg, allocator, std::forward<Task>(task), result, finished, waitFlag);
+        auto handle = waitTask<Task, decltype(result), ReturnType>(std::forward<Task>(task), result,
+            finished, waitFlag, std::forward<decltype(args)>(args)...);
         handle.start();
 
         if (!finished.test_and_set())
@@ -118,14 +118,6 @@ constexpr inline struct SyncWait
                 return std::move(std::get<ReturnTypeWrap>(result));
             }
         }
-    }
-
-    template <class Task>
-    auto operator()(Task&& task) const -> AwaitableReturnType<std::remove_cvref_t<Task>>
-        requires IsAwaitable<Task>
-    {
-        return operator()<Task>(
-            std::allocator_arg, std::pmr::polymorphic_allocator<>{}, std::forward<Task>(task));
     }
 } syncWait{};
 
