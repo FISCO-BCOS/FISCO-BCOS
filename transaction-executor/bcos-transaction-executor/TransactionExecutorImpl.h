@@ -37,7 +37,8 @@ private:
     friend task::Generator<protocol::TransactionReceipt::Ptr> tag_invoke(
         tag_t<execute3Step> /*unused*/, TransactionExecutorImpl& executor, auto& storage,
         protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
-        int contextID, ledger::LedgerConfig const& ledgerConfig, auto&& waitOperator)
+        int contextID, ledger::LedgerConfig const& ledgerConfig, auto&& waitOperator,
+        auto&&... /*unused*/)
     {
         protocol::TransactionReceipt::Ptr receipt;
         if (c_fileLogLevel <= LogLevel::TRACE)

@@ -20,6 +20,7 @@
 #include <cstddef>
 #include <functional>
 #include <memory>
+#include <memory_resource>
 #include <type_traits>
 
 namespace bcos::transaction_scheduler
@@ -58,6 +59,10 @@ template <class MutableStorage, class Storage, class Executor, class ContextRang
 class ChunkStatus
 {
 private:
+    std::array<std::byte, 4096> m_stack;  // NOLINT
+    std::pmr::monotonic_buffer_resource m_memoryResource;
+    std::pmr::polymorphic_allocator<> m_allocator;
+
     int64_t m_chunkIndex = 0;
     std::reference_wrapper<boost::atomic_flag const> m_hasRAW;
     ContextRange m_contextRange;
@@ -68,12 +73,15 @@ private:
 public:
     ChunkStatus(int64_t chunkIndex, boost::atomic_flag const& hasRAW, ContextRange contextRange,
         Executor& executor, auto& storage)
-      : m_chunkIndex(chunkIndex),
+      : m_memoryResource(m_stack.data(), m_stack.size(), std::pmr::get_default_resource()),
+        m_allocator(std::addressof(m_memoryResource)),
+        m_chunkIndex(chunkIndex),
         m_hasRAW(hasRAW),
         m_contextRange(std::move(contextRange)),
         m_executor(executor),
         m_storageView(storage),
         m_readWriteSetStorage(m_storageView)
+
     {
         newMutable(m_storageView);
     }
@@ -100,7 +108,7 @@ public:
 
             context.coro.emplace(transaction_executor::execute3Step(m_executor.get(),
                 m_readWriteSetStorage, blockHeader, context.transaction.get(), context.contextID,
-                ledgerConfig, task::tbb::syncWait));
+                ledgerConfig, task::tbb::syncWait, std::allocator_arg, m_allocator));
             context.iterator.emplace(context.coro->begin());
             context.receipt.get() = *(*context.iterator);
         }
