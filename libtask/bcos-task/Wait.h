@@ -36,44 +36,6 @@ constexpr inline struct Wait
     }
 } wait{};
 
-template <class Task, class Result, class ReturnType>
-static task::Task<void> waitTask(Task&& task, Result& result, boost::atomic_flag& finished,
-    boost::atomic_flag& waitFlag, auto&&... args)
-{
-    try
-    {
-        if constexpr (std::is_void_v<ReturnType>)
-        {
-            co_await std::forward<Task>(task);
-        }
-        else
-        {
-            if constexpr (std::is_reference_v<ReturnType>)
-            {
-                decltype(auto) ref = co_await task;
-                result = std::addressof(ref);
-            }
-            else
-            {
-                result.template emplace<ReturnType>(co_await std::forward<Task>(task));
-            }
-        }
-    }
-    catch (...)
-    {
-        result.template emplace<std::exception_ptr>(std::current_exception());
-    }
-
-    if (finished.test_and_set())
-    {
-        // 此处返回true说明外部首先设置了finished，那么需要通知外部已经执行完成了
-        // If true is returned here, the external finish is set first, and the external
-        // execution needs to be notified
-        waitFlag.test_and_set();
-        waitFlag.notify_one();
-    }
-}
-
 constexpr inline struct SyncWait
 {
     template <class Task>
@@ -91,8 +53,43 @@ constexpr inline struct SyncWait
         boost::atomic_flag finished;
         boost::atomic_flag waitFlag;
 
-        auto handle = waitTask<Task, decltype(result), ReturnType>(std::forward<Task>(task), result,
-            finished, waitFlag, std::forward<decltype(args)>(args)...);
+        auto handle = [](Task&& task, decltype(result)& result, boost::atomic_flag& finished,
+                          boost::atomic_flag& waitFlag,
+                          auto&&... args) -> task::Task<void> {
+            try
+            {
+                if constexpr (std::is_void_v<ReturnType>)
+                {
+                    co_await std::forward<Task>(task);
+                }
+                else
+                {
+                    if constexpr (std::is_reference_v<ReturnType>)
+                    {
+                        decltype(auto) ref = co_await task;
+                        result = std::addressof(ref);
+                    }
+                    else
+                    {
+                        result.template emplace<ReturnType>(co_await std::forward<Task>(task));
+                    }
+                }
+            }
+            catch (...)
+            {
+                result.template emplace<std::exception_ptr>(std::current_exception());
+            }
+
+            if (finished.test_and_set())
+            {
+                // 此处返回true说明外部首先设置了finished，那么需要通知外部已经执行完成了
+                // If true is returned here, the external finish is set first, and the external
+                // execution needs to be notified
+                waitFlag.test_and_set();
+                waitFlag.notify_one();
+            }
+        }(std::forward<Task>(task), result, finished, waitFlag,
+                                              std::forward<decltype(args)>(args)...);
         handle.start();
 
         if (!finished.test_and_set())

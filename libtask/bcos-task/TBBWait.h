@@ -38,7 +38,8 @@ transactions in the following functions
 constexpr inline struct SyncWait
 {
     template <class Task>
-    auto operator()(Task&& task) const -> AwaitableReturnType<std::remove_cvref_t<Task>>
+    auto operator()(
+        Task&& task, auto&&... args) const -> AwaitableReturnType<std::remove_cvref_t<Task>>
         requires IsAwaitable<Task>
     {
         using ReturnType = AwaitableReturnType<std::remove_cvref_t<Task>>;
@@ -52,9 +53,9 @@ constexpr inline struct SyncWait
         boost::atomic_flag finished{};
         boost::atomic<oneapi::tbb::task::suspend_point> suspendPoint{};
 
-        auto waitTask =
-            [](Task&& task, decltype(result)& result, boost::atomic_flag& finished,
-                boost::atomic<oneapi::tbb::task::suspend_point>& suspendPoint) -> task::Task<void> {
+        auto waitTask = [](Task&& task, decltype(result)& result, boost::atomic_flag& finished,
+                            boost::atomic<oneapi::tbb::task::suspend_point>& suspendPoint,
+                            auto&&... args) -> task::Task<void> {
             try
             {
                 if constexpr (std::is_void_v<ReturnType>)
@@ -87,7 +88,8 @@ constexpr inline struct SyncWait
                 suspendPoint.wait({});
                 oneapi::tbb::task::resume(suspendPoint.load());
             }
-        }(std::forward<Task>(task), result, finished, suspendPoint);
+        }(std::forward<Task>(task), result, finished, suspendPoint,
+                                                std::forward<decltype(args)>(args)...);
         waitTask.start();
 
         if (!finished.test_and_set())
