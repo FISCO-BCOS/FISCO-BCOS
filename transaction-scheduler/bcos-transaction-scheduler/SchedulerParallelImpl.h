@@ -140,6 +140,9 @@ public:
     }
 };
 
+constexpr static auto DEFAULT_GRAIN_SIZE = 16UL;
+constexpr static auto DEFAULT_MAX_CONCURRENCY = 8UL;
+
 template <class MutableStorageType>
 class SchedulerParallelImpl
 {

@@ -53,7 +53,6 @@
 #include <intx/intx.hpp>
 #include <iterator>
 #include <memory>
-#include <set>
 #include <stdexcept>
 #include <string_view>
 #include <variant>
@@ -100,14 +99,14 @@ using CacheExecutables =
 CacheExecutables& getCacheExecutables();
 
 inline task::Task<std::shared_ptr<Executable>> getExecutable(
-    auto& storage, const evmc_address& address, const evmc_revision& revision)
+    auto& storage, const evmc_address& address, const evmc_revision& revision, bool binaryAddress)
 {
     if (auto executable = co_await storage2::readOne(getCacheExecutables(), address))
     {
         co_return std::move(*executable);
     }
 
-    Account<std::decay_t<decltype(storage)>> account(storage, address);
+    Account<std::decay_t<decltype(storage)>> account(storage, address, binaryAddress);
     if (auto codeEntry = co_await ledger::account::code(account))
     {
         auto executable = std::make_shared<Executable>(Executable(std::move(*codeEntry), revision));
@@ -157,7 +156,8 @@ private:
 
     auto getMyAccount()
     {
-        return Account<std::decay_t<Storage>>(m_rollbackableStorage.get(), message().recipient);
+        return Account<std::decay_t<Storage>>(m_rollbackableStorage.get(), message().recipient,
+            m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
     }
 
     inline constexpr static struct InnerConstructor
@@ -228,12 +228,11 @@ public:
 
     task::Task<evmc_bytes32> getTransientStorage(const evmc_bytes32* key)
     {
-        auto valueEntry = co_await storage2::readOne(m_rollbackableTransientStorage.get(),
-            transaction_executor::StateKeyView{
-                concepts::bytebuffer::toView(co_await ledger::account::path(m_myAccount)),
-                concepts::bytebuffer::toView(key->bytes)});
         evmc_bytes32 value;
-        if (valueEntry)
+        if (auto valueEntry = co_await storage2::readOne(m_rollbackableTransientStorage.get(),
+                transaction_executor::StateKeyView{
+                    concepts::bytebuffer::toView(co_await ledger::account::path(m_myAccount)),
+                    concepts::bytebuffer::toView(key->bytes)}))
         {
             auto field = valueEntry->get();
             std::uninitialized_copy_n(field.data(), sizeof(value), value.bytes);
@@ -268,7 +267,9 @@ public:
     task::Task<std::optional<storage::Entry>> code(const evmc_address& address)
     {
         if (auto executable =
-                co_await getExecutable(m_rollbackableStorage.get(), address, m_revision);
+                co_await getExecutable(m_rollbackableStorage.get(), address, m_revision,
+                    m_ledgerConfig.get().features().get(
+                        ledger::Features::Flag::feature_raw_address));
             executable && executable->m_code)
         {
             co_return executable->m_code;
@@ -292,7 +293,8 @@ public:
 
     task::Task<h256> codeHashAt(const evmc_address& address)
     {
-        Account<Storage> account(m_rollbackableStorage.get(), address);
+        Account<Storage> account(m_rollbackableStorage.get(), address,
+            m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
         co_return co_await ledger::account::codeHash(account);
     }
 
@@ -561,8 +563,9 @@ private:
             }
         }
 
-        m_executable =
-            co_await getExecutable(m_rollbackableStorage.get(), message().code_address, m_revision);
+        m_executable = co_await getExecutable(m_rollbackableStorage.get(), message().code_address,
+            m_revision,
+            m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
         if (m_executable && hasPrecompiledPrefix(m_executable->m_code->data()))
         {
             if (std::holds_alternative<const evmc_message*>(m_message))
@@ -628,8 +631,10 @@ private:
         {
             if (!m_executable)
             {
-                m_executable = co_await getExecutable(
-                    m_rollbackableStorage.get(), ref.code_address, m_revision);
+                m_executable = co_await getExecutable(m_rollbackableStorage.get(), ref.code_address,
+                    m_revision,
+                    m_ledgerConfig.get().features().get(
+                        ledger::Features::Flag::feature_raw_address));
             }
 
             if (!m_executable)
