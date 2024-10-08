@@ -146,6 +146,9 @@ constexpr static auto DEFAULT_MAX_CONCURRENCY = 8UL;
 template <class MutableStorageType>
 class SchedulerParallelImpl
 {
+    constexpr static auto DEFAULT_GRAIN_SIZE = 16UL;
+    constexpr static auto DEFAULT_MAX_CONCURRENCY = 8UL;
+
 public:
     constexpr static bool isSchedulerParallelImpl = true;
     using MutableStorage = MutableStorageType;
@@ -338,8 +341,9 @@ task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
         auto retryCount = executeSinglePass(scheduler, storage, executor, blockHeader, ledgerConfig,
             contexts, scheduler.m_grainSize);
         PARALLEL_SCHEDULER_LOG(INFO) << "Parallel execute block retry count: " << retryCount;
-        scheduler.m_gc.collect(std::move(contexts));
     });
+
+    scheduler.m_gc.collect(std::move(contexts));
 
     co_return receipts;
 }
