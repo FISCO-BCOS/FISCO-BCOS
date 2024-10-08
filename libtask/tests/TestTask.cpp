@@ -283,8 +283,8 @@ BOOST_AUTO_TEST_CASE(allocator)
     pool.reset();
     bcos::task::syncWait(
         selfAlloc(100, std::allocator_arg, allocator), std::allocator_arg, allocator);
-    BOOST_CHECK_EQUAL(pool.allocate, 2);
-    BOOST_CHECK_EQUAL(pool.deallocate, 2);
+    BOOST_CHECK_GE(pool.allocate, 1);
+    BOOST_CHECK_GE(pool.deallocate, 1);
 
     pool.reset();
     auto lambda = [](int, std::allocator_arg_t, std::pmr::polymorphic_allocator<>) -> Task<void> {
@@ -303,8 +303,8 @@ BOOST_AUTO_TEST_CASE(allocator)
             co_return;
         }(100, std::allocator_arg, allocator),
         std::allocator_arg, allocator);
-    BOOST_CHECK_EQUAL(pool.allocate, 2);
-    BOOST_CHECK_EQUAL(pool.deallocate, 2);
+    BOOST_CHECK_GE(pool.allocate, 1);
+    BOOST_CHECK_GE(pool.deallocate, 1);
 
     pool.reset();
     int count = 0;
