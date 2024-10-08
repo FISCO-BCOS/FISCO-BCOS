@@ -381,10 +381,10 @@ void SystemConfigPrecompiled::upgradeChain(
         // rebuild Bfs
         auto input = codec.encodeWithSig(
             "rebuildBfs(uint256,uint256)", blockContext.blockVersion(), toVersion);
-        std::string sender =
-            blockContext.isWasm() ? precompiled::SYS_CONFIG_NAME : precompiled::SYS_CONFIG_ADDRESS;
-        std::string toAddress =
-            blockContext.isWasm() ? precompiled::BFS_NAME : precompiled::BFS_ADDRESS;
+        std::string sender(
+            blockContext.isWasm() ? precompiled::SYS_CONFIG_NAME : precompiled::SYS_CONFIG_ADDRESS);
+        std::string toAddress(
+            blockContext.isWasm() ? precompiled::BFS_NAME : precompiled::BFS_ADDRESS);
         auto response = externalRequest(_executive, ref(input), _callParameters->m_origin, sender,
             toAddress, false, false, _callParameters->m_gasLeft);
 

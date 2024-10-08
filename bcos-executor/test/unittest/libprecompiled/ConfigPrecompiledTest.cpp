@@ -78,7 +78,7 @@ public:
         params1->setSeq(1000);
         params1->setDepth(0);
         params1->setFrom(sender);
-        params1->setTo(precompiled::CONSENSUS_ADDRESS);
+        params1->setTo(std::string(precompiled::CONSENSUS_ADDRESS));
         params1->setOrigin(sender);
         params1->setStaticCall(false);
         params1->setGasAvailable(gas);
@@ -123,7 +123,7 @@ public:
         params1->setSeq(1000);
         params1->setDepth(0);
         params1->setFrom(sender);
-        params1->setTo(precompiled::CONSENSUS_ADDRESS);
+        params1->setTo(std::string(precompiled::CONSENSUS_ADDRESS));
         params1->setOrigin(sender);
         params1->setStaticCall(false);
         params1->setGasAvailable(gas);
@@ -168,7 +168,7 @@ public:
         params1->setSeq(1000);
         params1->setDepth(0);
         params1->setFrom(sender);
-        params1->setTo(precompiled::CONSENSUS_ADDRESS);
+        params1->setTo(std::string(precompiled::CONSENSUS_ADDRESS));
         params1->setOrigin(sender);
         params1->setStaticCall(false);
         params1->setGasAvailable(gas);
@@ -213,7 +213,7 @@ public:
         params1->setSeq(1000);
         params1->setDepth(0);
         params1->setFrom(sender);
-        params1->setTo(precompiled::SYS_CONFIG_ADDRESS);
+        params1->setTo(std::string(precompiled::SYS_CONFIG_ADDRESS));
         params1->setOrigin(sender);
         params1->setStaticCall(false);
         params1->setGasAvailable(gas);
@@ -253,7 +253,7 @@ public:
         params1->setSeq(1000);
         params1->setDepth(0);
         params1->setFrom(sender);
-        params1->setTo(precompiled::SYS_CONFIG_ADDRESS);
+        params1->setTo(std::string(precompiled::SYS_CONFIG_ADDRESS));
         params1->setOrigin(sender);
         params1->setStaticCall(false);
         params1->setGasAvailable(gas);
@@ -352,7 +352,7 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
         params2->setSeq(1000);
         params2->setDepth(0);
         params2->setFrom(sender);
-        params2->setTo(precompiled::SYS_CONFIG_ADDRESS);
+        params2->setTo(std::string(precompiled::SYS_CONFIG_ADDRESS));
         params2->setOrigin(sender);
         params2->setStaticCall(false);
         params2->setGasAvailable(gas);
@@ -393,7 +393,7 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
         params2->setSeq(1000);
         params2->setDepth(0);
         params2->setFrom(sender);
-        params2->setTo(precompiled::SYS_CONFIG_ADDRESS);
+        params2->setTo(std::string(precompiled::SYS_CONFIG_ADDRESS));
         params2->setOrigin(sender);
         params2->setStaticCall(false);
         params2->setGasAvailable(gas);
@@ -444,7 +444,7 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
         params2->setSeq(1000);
         params2->setDepth(0);
         params2->setFrom(sender);
-        params2->setTo(precompiled::SYS_CONFIG_ADDRESS);
+        params2->setTo(std::string(precompiled::SYS_CONFIG_ADDRESS));
         params2->setOrigin(sender);
         params2->setStaticCall(false);
         params2->setGasAvailable(gas);
@@ -548,7 +548,7 @@ BOOST_AUTO_TEST_CASE(consensus_test)
         params2->setSeq(1000);
         params2->setDepth(0);
         params2->setFrom(sender);
-        params2->setTo(precompiled::CONSENSUS_ADDRESS);
+        params2->setTo(std::string(precompiled::CONSENSUS_ADDRESS));
         params2->setOrigin(sender);
         params2->setStaticCall(false);
         params2->setGasAvailable(gas);

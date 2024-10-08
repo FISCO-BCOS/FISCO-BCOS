@@ -295,8 +295,8 @@ void TablePrecompiled::desc(precompiled::TableInfo& _tableInfo, const std::strin
 
     auto input = withKeyOrder ? codec.encodeWithSig("descWithKeyOrder(string)", tableName) :
                                 codec.encodeWithSig("desc(string)", tableName);
-    std::string tableManagerAddress =
-        blockContext.isWasm() ? TABLE_MANAGER_NAME : TABLE_MANAGER_ADDRESS;
+    std::string tableManagerAddress(
+        blockContext.isWasm() ? TABLE_MANAGER_NAME : TABLE_MANAGER_ADDRESS);
 
     // external call to get desc
     auto response = externalRequest(_executive, ref(input), _callParameters->m_origin,

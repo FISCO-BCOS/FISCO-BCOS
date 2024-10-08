@@ -24,8 +24,6 @@
 #include "../precompiled/common/Utilities.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledGas.h"
-#include "bcos-framework/storage/Table.h"
-#include "bcos-table/src/StateStorage.h"
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>
@@ -162,8 +160,7 @@ public:
 protected:
     std::map<std::string, uint32_t, std::less<>> name2Selector;
     [[no_unique_address]] std::unordered_map<uint32_t,
-        std::pair<protocol::BlockVersion, PrecompiledParams>>
-        selector2Func;
+        std::pair<protocol::BlockVersion, PrecompiledParams>> selector2Func;
     crypto::Hash::Ptr m_hashImpl;
 
     void registerFunc(uint32_t _selector, PrecompiledParams _func,
@@ -311,7 +308,7 @@ public:
     PrecompiledMap& operator=(PrecompiledMap&&) = default;
     ~PrecompiledMap() = default;
 
-    auto insert(std::string const& _key, precompiled::Precompiled::Ptr _precompiled,
+    auto insert(std::string_view _key, precompiled::Precompiled::Ptr _precompiled,
         protocol::BlockVersion minVersion = protocol::BlockVersion::RC4_VERSION,
         bool needAuth = false)
     {
@@ -324,15 +321,15 @@ public:
             }
             return version >= minVersion && flag;
         };
-        return m_map.insert({_key, {std::move(_precompiled), std::move(func)}});
+        return m_map.insert({std::string(_key), {std::move(_precompiled), std::move(func)}});
     }
 
-    auto insert(std::string const& _key, precompiled::Precompiled::Ptr _precompiled,
+    auto insert(std::string_view _key, precompiled::Precompiled::Ptr _precompiled,
         std::function<bool(uint32_t, bool, ledger::Features const& features)> func)
     {
-        return m_map.insert({_key, {std::move(_precompiled), std::move(func)}});
+        return m_map.insert({std::string(_key), {std::move(_precompiled), std::move(func)}});
     }
-    precompiled::Precompiled::Ptr at(std::string const&, uint32_t version, bool isAuth,
+    precompiled::Precompiled::Ptr at(std::string_view, uint32_t version, bool isAuth,
         ledger::Features const& features) const noexcept;
     bool contains(std::string const& key, uint32_t version, bool isAuth,
         ledger::Features const& features) const noexcept;

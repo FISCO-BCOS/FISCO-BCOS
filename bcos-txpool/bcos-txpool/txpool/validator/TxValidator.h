@@ -64,7 +64,7 @@ public:
 protected:
     virtual inline bool isSystemTransaction(bcos::protocol::Transaction::ConstPtr const& _tx)
     {
-        return bcos::precompiled::c_systemTxsAddress.contains(_tx->to());
+        return precompiled::contains(bcos::precompiled::c_systemTxsAddress, _tx->to());
     }
 
 private:

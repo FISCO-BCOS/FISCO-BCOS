@@ -307,7 +307,8 @@ void TransactionExecutor::initEvmEnvironment()
     m_precompiled->insert(ACCOUNT_ADDRESS, std::make_shared<AccountPrecompiled>(m_hashImpl),
         BlockVersion::V3_1_VERSION);
 
-    set<string> builtIn = {CRYPTO_ADDRESS, GROUP_SIG_ADDRESS, RING_SIG_ADDRESS, CAST_ADDRESS};
+    set<string> builtIn = {std::string(CRYPTO_ADDRESS), std::string(GROUP_SIG_ADDRESS),
+        std::string(RING_SIG_ADDRESS), std::string(CAST_ADDRESS)};
     m_staticPrecompiled = std::make_shared<set<string>>(builtIn);
     if (m_blockVersion <=> BlockVersion::V3_1_VERSION == 0 &&
         m_ledgerCache->ledgerConfig().blockNumber() > 0)
@@ -369,7 +370,8 @@ void TransactionExecutor::initWasmEnvironment()
     m_precompiled->insert(ACCOUNT_ADDRESS, std::make_shared<AccountPrecompiled>(m_hashImpl),
         BlockVersion::V3_1_VERSION);
 
-    set<string> builtIn = {CRYPTO_ADDRESS, GROUP_SIG_ADDRESS, RING_SIG_ADDRESS, CAST_ADDRESS};
+    set<string> builtIn = {std::string(CRYPTO_ADDRESS), std::string(GROUP_SIG_ADDRESS),
+        std::string(RING_SIG_ADDRESS), std::string(CAST_ADDRESS)};
     m_staticPrecompiled = std::make_shared<set<string>>(builtIn);
 
     if (m_blockVersion <=> BlockVersion::V3_1_VERSION == 0 &&

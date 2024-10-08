@@ -30,6 +30,7 @@
 #include "../vm/Precompiled.h"
 #include "../vm/VMFactory.h"
 #include "../vm/VMInstance.h"
+#include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-table/src/ContractShardUtils.h"
 
@@ -46,7 +47,6 @@
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include <bcos-framework/executor/ExecuteError.h>
-#include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-tool/BfsFileFactory.h>
 #include <bcos-utilities/Common.h>
 #include <boost/algorithm/hex.hpp>
@@ -621,8 +621,7 @@ CallParameters::UniquePtr TransactionExecutive::callPrecompiled(
     // NotEnoughCashError
     catch (protocol::NotEnoughCashError const& e)
     {
-        EXECUTIVE_LOG(INFO) << "Revert transaction: "
-                            << "NotEnoughCashError"
+        EXECUTIVE_LOG(INFO) << "Revert transaction: " << "NotEnoughCashError"
                             << LOG_KV("address", precompiledCallParams->m_precompiledAddress)
                             << LOG_KV("message", e.what());
         writeErrInfoToOutput(e.what(), *callParameters);
@@ -634,8 +633,7 @@ CallParameters::UniquePtr TransactionExecutive::callPrecompiled(
     }
     catch (protocol::PrecompiledError const& e)
     {
-        EXECUTIVE_LOG(INFO) << "Revert transaction: "
-                            << "PrecompiledFailed"
+        EXECUTIVE_LOG(INFO) << "Revert transaction: " << "PrecompiledFailed"
                             << LOG_KV("address", precompiledCallParams->m_precompiledAddress)
                             << LOG_KV("message", e.what());
         // Note: considering the scenario where the contract calls the contract, the error message
@@ -1393,14 +1391,15 @@ bool TransactionExecutive::isPrecompiled(const std::string& address) const
                m_blockContext.features()) != nullptr;
 }
 
-std::shared_ptr<Precompiled> TransactionExecutive::getPrecompiled(const std::string& address) const
+std::shared_ptr<Precompiled> TransactionExecutive::getPrecompiled(
+    const std::string_view address) const
 {
     return m_precompiled->at(address, m_blockContext.blockVersion(), m_blockContext.isAuthCheck(),
         m_blockContext.features());
 }
 
 std::shared_ptr<precompiled::Precompiled> bcos::executor::TransactionExecutive::getPrecompiled(
-    const std::string& address, uint32_t version, bool isAuth,
+    const std::string_view address, uint32_t version, bool isAuth,
     const ledger::Features& features) const
 {
     return m_precompiled->at(address, version, isAuth, features);
@@ -1749,7 +1748,7 @@ bool TransactionExecutive::buildBfsPath(std::string_view _absoluteDir, std::stri
     /// you should create locally, after external call successfully
     EXECUTIVE_LOG(TRACE) << LOG_DESC("build BFS metadata") << LOG_KV("absoluteDir", _absoluteDir)
                          << LOG_KV("type", _type);
-    const auto* to = m_blockContext.isWasm() ? BFS_NAME : BFS_ADDRESS;
+    const auto to = m_blockContext.isWasm() ? BFS_NAME : BFS_ADDRESS;
     auto response = externalTouchNewFile(
         shared_from_this(), _origin, _sender, to, _absoluteDir, _type, gasLeft);
     return response == (int)precompiled::CODE_SUCCESS;
@@ -1884,8 +1883,8 @@ bool TransactionExecutive::checkExecAuth(const CallParameters::UniquePtr& callPa
     {
         return true;
     }
-    const auto* authMgrAddress = m_blockContext.isWasm() ? precompiled::AUTH_MANAGER_NAME :
-                                                           precompiled::AUTH_MANAGER_ADDRESS;
+    const auto authMgrAddress = m_blockContext.isWasm() ? precompiled::AUTH_MANAGER_NAME :
+                                                          precompiled::AUTH_MANAGER_ADDRESS;
     auto contractAuthPrecompiled = dynamic_pointer_cast<precompiled::ContractAuthMgrPrecompiled>(
         getPrecompiled(AUTH_CONTRACT_MGR_ADDRESS, m_blockContext.blockVersion(),
             m_blockContext.isAuthCheck(), m_blockContext.features()));
@@ -1929,7 +1928,7 @@ int32_t TransactionExecutive::checkContractAvailable(
 {
     // precompiled always available
     if (isPrecompiled(callParameters->receiveAddress) ||
-        c_systemTxsAddress.contains(callParameters->receiveAddress))
+        contains(c_systemTxsAddress, std::string_view(callParameters->receiveAddress)))
     {
         return 0;
     }
