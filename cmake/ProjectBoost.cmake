@@ -54,7 +54,6 @@ ExternalProject_Add(boost
     DOWNLOAD_NO_PROGRESS 1
     URL https://boostorg.jfrog.io/artifactory/main/release/1.85.0/source/boost_1_85_0.tar.bz2
         https://jaist.dl.sourceforge.net/project/boost/boost/1.85.0/boost_1_85_0.tar.bz2
-        https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/FISCO-BCOS/deps/boost_1_85_0.tar.bz2
     URL_HASH SHA256=7009fe1faa1697476bdc7027703a2badb84e849b7b0baad5086b087b971f8617
     BUILD_IN_SOURCE 1
     CONFIGURE_COMMAND ${BOOST_BOOTSTRAP_COMMAND}

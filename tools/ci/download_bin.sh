@@ -1,7 +1,7 @@
 #!/bin/bash
 
 project=FISCO-BCOS/FISCO-BCOS
-cdn_link_header="https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS"
+cdn_link_header="https://github.com/FISCO-BCOS"
 download_branch=
 output_dir=bin/
 download_mini=
