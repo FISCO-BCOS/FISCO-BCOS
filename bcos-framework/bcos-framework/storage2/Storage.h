@@ -1,8 +1,10 @@
 #pragma once
 #include "bcos-task/Task.h"
 #include "bcos-task/Trait.h"
-#include "bcos-utilities/Ranges.h"
 #include <optional>
+#include <range/v3/range.hpp>
+#include <range/v3/view/single.hpp>
+#include <range/v3/view/transform.hpp>
 #include <type_traits>
 
 // tag_invoke storage interface
@@ -26,11 +28,11 @@ concept HasTag = requires(Tag tag, Storage storage, Args&&... args) {
 
 inline constexpr struct ReadSome
 {
-    auto operator()(auto&& storage, RANGES::input_range auto&& keys, auto&&... args) const
+    auto operator()(auto&& storage, ::ranges::input_range auto&& keys, auto&&... args) const
         -> task::Task<
             ReturnType<decltype(tag_invoke(*this, std::forward<decltype(storage)>(storage),
                 std::forward<decltype(keys)>(keys), std::forward<decltype(args)>(args)...))>>
-        requires RANGES::range<ReturnType<decltype(tag_invoke(*this, storage,
+        requires ::ranges::range<ReturnType<decltype(tag_invoke(*this, storage,
             std::forward<decltype(keys)>(keys), std::forward<decltype(args)>(args)...))>>
     {
         co_return co_await tag_invoke(*this, std::forward<decltype(storage)>(storage),
@@ -40,8 +42,8 @@ inline constexpr struct ReadSome
 
 inline constexpr struct WriteSome
 {
-    auto operator()(auto&& storage, RANGES::input_range auto&& keys,
-        RANGES::input_range auto&& values, auto&&... args) const
+    auto operator()(auto&& storage, ::ranges::input_range auto&& keys,
+        ::ranges::input_range auto&& values, auto&&... args) const
         -> task::Task<ReturnType<decltype(tag_invoke(*this,
             std::forward<decltype(storage)>(storage), std::forward<decltype(keys)>(keys),
             std::forward<decltype(values)>(values), std::forward<decltype(args)>(args)...))>>
@@ -54,7 +56,7 @@ inline constexpr struct WriteSome
 
 inline constexpr struct RemoveSome
 {
-    auto operator()(auto&& storage, RANGES::input_range auto&& keys, auto&&... args) const
+    auto operator()(auto&& storage, ::ranges::input_range auto&& keys, auto&&... args) const
         -> task::Task<
             ReturnType<decltype(tag_invoke(*this, std::forward<decltype(storage)>(storage),
                 std::forward<decltype(keys)>(keys), std::forward<decltype(args)>(args)...))>>
@@ -86,12 +88,12 @@ auto toSingleView(auto&& item)
 {
     if constexpr (std::is_lvalue_reference_v<decltype(item)>)
     {
-        return RANGES::views::single(std::ref(item)) |
-               RANGES::views::transform([](auto&& ref) -> auto& { return ref.get(); });
+        return ::ranges::views::single(std::ref(item)) |
+               ::ranges::views::transform([](auto&& ref) -> auto& { return ref.get(); });
     }
     else
     {
-        return RANGES::views::single(std::forward<decltype(item)>(item));
+        return ::ranges::views::single(std::forward<decltype(item)>(item));
     }
 }
 }  // namespace detail

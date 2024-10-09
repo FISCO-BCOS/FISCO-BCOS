@@ -15,13 +15,17 @@
  */
 
 #pragma once
+#include "MemoryResourceBase.h"
 #include "bcos-concepts/Exception.h"
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
 #include <coroutine>
 #include <exception>
+#include <memory>
 #include <type_traits>
 #include <variant>
+
+#pragma GCC diagnostic ignored "-Wmismatched-new-delete"
 
 namespace bcos::task
 {
@@ -56,7 +60,7 @@ struct Continuation
 };
 
 template <class Task, class PromiseImpl>
-struct PromiseBase
+struct PromiseBase : public MemoryResourceBase
 {
     constexpr std::suspend_always initial_suspend() noexcept { return {}; }
     constexpr auto final_suspend() noexcept { return FinalAwaitable<PromiseImpl>{}; }

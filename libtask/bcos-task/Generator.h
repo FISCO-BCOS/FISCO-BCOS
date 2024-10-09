@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include "MemoryResourceBase.h"
 #include <version>
 
 #if __cpp_lib_generator >= 202207L
@@ -33,14 +34,14 @@ using Generator = std::generator<Ref, Val, Alloc>;
 #include <utility>
 namespace bcos::task
 {
-// Fork from https://open-std.org/JTC1/SC22/WG21/docs/papers/2020/p2168r0.pdf
+// From https://open-std.org/JTC1/SC22/WG21/docs/papers/2020/p2168r0.pdf
 // Can be replace with std::generator
 
 template <typename Ref, typename Value = std::remove_cvref_t<Ref>, typename Alloc = void>
 class Generator
 {
 public:
-    class promise_type
+    class promise_type : public MemoryResourceBase
     {
     public:
         promise_type() : m_promise(this) {}

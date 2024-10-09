@@ -74,6 +74,7 @@ public:
         m_executor(executor),
         m_storageView(storage),
         m_readWriteSetStorage(m_storageView)
+
     {
         newMutable(m_storageView);
     }

@@ -20,6 +20,7 @@
 #include <boost/atomic/atomic_flag.hpp>
 #include <exception>
 #include <memory>
+#include <memory_resource>
 #include <type_traits>
 #include <variant>
 
@@ -38,7 +39,8 @@ constexpr inline struct Wait
 constexpr inline struct SyncWait
 {
     template <class Task>
-    auto operator()(Task&& task) const -> AwaitableReturnType<std::remove_cvref_t<Task>>
+    auto operator()(
+        Task&& task, auto&&... args) const -> AwaitableReturnType<std::remove_cvref_t<Task>>
         requires IsAwaitable<Task>
     {
         using ReturnType = AwaitableReturnType<std::remove_cvref_t<Task>>;
@@ -51,8 +53,9 @@ constexpr inline struct SyncWait
         boost::atomic_flag finished;
         boost::atomic_flag waitFlag;
 
-        auto waitTask = [](Task&& task, decltype(result)& result, boost::atomic_flag& finished,
-                            boost::atomic_flag& waitFlag) -> task::Task<void> {
+        auto handle = [](Task&& task, decltype(result)& result, boost::atomic_flag& finished,
+                          boost::atomic_flag& waitFlag,
+                          auto&&... args) -> task::Task<void> {
             try
             {
                 if constexpr (std::is_void_v<ReturnType>)
@@ -85,8 +88,9 @@ constexpr inline struct SyncWait
                 waitFlag.test_and_set();
                 waitFlag.notify_one();
             }
-        }(std::forward<Task>(task), result, finished, waitFlag);
-        waitTask.start();
+        }(std::forward<Task>(task), result, finished, waitFlag,
+                                              std::forward<decltype(args)>(args)...);
+        handle.start();
 
         if (!finished.test_and_set())
         {

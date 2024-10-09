@@ -82,34 +82,6 @@ public:
 
     auto getAllPeersStatus() { return impl().impl_getAllPeersStatus(); }
 
-    auto setTransactions(bcos::crypto::hasher::Hasher auto hasher, RANGES::range auto const& inputs)
-        requires bcos::concepts::ledger::TransactionOrReceipt<
-            RANGES::range_value_t<std::remove_cvref_t<decltype(inputs)>>>
-    {
-        auto hashesRange = inputs | RANGES::views::transform([&](auto const& input) {
-            bcos::bytes hash;
-            bcos::concepts::hash::calculate(input, hasher.clone(), hash);
-            return hash;
-        });
-        auto buffersRange = inputs | RANGES::views::transform([](auto const& input) {
-            std::vector<bcos::byte> buffer;
-            bcos::concepts::serialize::encode(input, buffer);
-            return buffer;
-        });
-
-        constexpr auto isTransaction =
-            bcos::concepts::transaction::Transaction<RANGES::range_value_t<decltype(inputs)>>;
-        return setTransactionBuffers<isTransaction>(
-            std::move(hashesRange), std::move(buffersRange));
-    }
-
-    template <bool isTransaction>
-    auto setTransactionBuffers(RANGES::range auto hashes, RANGES::range auto buffers)
-    {
-        return impl().template impl_setTransactions<isTransaction>(
-            std::move(hashes), std::move(buffers));
-    }
-
     template <class LedgerType, bcos::concepts::block::Block BlockType>
         requires std::derived_from<LedgerType, LedgerBase<LedgerType>> ||
                  std::derived_from<typename LedgerType::element_type,
