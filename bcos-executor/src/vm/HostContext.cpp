@@ -26,9 +26,6 @@
 #include "bcos-codec/wrapper/CodecWrapper.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/bcos-framework/ledger/LedgerTypeDef.h"
-#include "bcos-framework/storage/Table.h"
-#include "bcos-table/src/StateStorage.h"
-#include "evmc/evmc.hpp"
 #include <bcos-framework/executor/ExecutionMessage.h>
 #include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/protocol/Protocol.h>
@@ -39,12 +36,9 @@
 #include <boost/algorithm/string/split.hpp>
 #include <boost/thread.hpp>
 #include <boost/throw_exception.hpp>
-#include <algorithm>
 #include <exception>
 #include <iterator>
-#include <limits>
 #include <memory>
-#include <sstream>
 #include <utility>
 #include <vector>
 

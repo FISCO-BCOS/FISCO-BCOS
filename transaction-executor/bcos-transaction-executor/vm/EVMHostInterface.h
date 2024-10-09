@@ -27,6 +27,8 @@
 #include <evmc/evmc.h>
 #include <evmc/instructions.h>
 #include <boost/core/pointer_traits.hpp>
+#include <memory>
+#include <memory_resource>
 
 namespace bcos::transaction_executor
 {
@@ -201,8 +203,14 @@ struct EVMHostInterface
 template <class HostContextType>
 const evmc_host_interface* getHostInterface(auto&& waitOperator)
 {
-    constexpr static std::decay_t<decltype(waitOperator)> localWaitOperator{};
-    using HostContextImpl = EVMHostInterface<HostContextType, localWaitOperator>;
+    using HostContextImpl = EVMHostInterface<HostContextType, [](auto&& task) {
+        constexpr static std::decay_t<decltype(waitOperator)> localWaitOperator{};
+        std::array<std::byte, 4096> stack;
+        std::pmr::monotonic_buffer_resource resource(
+            stack.data(), stack.size(), std::pmr::get_default_resource());
+        std::pmr::polymorphic_allocator<std::byte> allocator{&resource};
+        return localWaitOperator(std::forward<decltype(task)>(task), std::allocator_arg, allocator);
+    }>;
     static evmc_host_interface const fnTable = {
         HostContextImpl::accountExists,
         HostContextImpl::getStorage,
