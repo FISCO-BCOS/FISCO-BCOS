@@ -325,7 +325,8 @@ int ConsensusPrecompiled::setWeight(
     // Uniform lowercase nodeID
     boost::to_lower(nodeID);
     PRECOMPILED_LOG(INFO) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("setWeight")
-                          << LOG_KV("nodeID", nodeID) << LOG_KV("weight", weight);
+                          << LOG_KV("nodeID", nodeID) << LOG_KV("weight", weight)
+                          << LOG_KV("setTermWeight", setTermWeight);
     if (nodeID.size() != NODE_LENGTH)
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")

@@ -52,7 +52,8 @@ struct ConsensusNode
     uint64_t termWeight;
     protocol::BlockNumber enableNumber;
 
-    friend std::strong_ordering operator<=>(ConsensusNode const& lhs, ConsensusNode const& rhs)
+    friend std::strong_ordering operator<=>(
+        ConsensusNode const& lhs, ConsensusNode const& rhs) noexcept
     {
         if (auto cmp = lhs.nodeID->data() <=> rhs.nodeID->data(); !std::is_eq(cmp))
         {
@@ -71,6 +72,10 @@ struct ConsensusNode
             return cmp;
         }
         return lhs.enableNumber <=> rhs.enableNumber;
+    }
+    friend bool operator==(ConsensusNode const& lhs, ConsensusNode const& rhs) noexcept
+    {
+        return std::is_eq(lhs <=> rhs);
     }
 };
 
