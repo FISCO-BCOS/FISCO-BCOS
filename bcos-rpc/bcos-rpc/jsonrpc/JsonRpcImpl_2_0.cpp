@@ -959,7 +959,7 @@ void JsonRpcImpl_2_0::getSealerList(
     checkService(ledger, "ledger");
     ledger->asyncGetNodeListByType(bcos::ledger::CONSENSUS_SEALER,
         [m_respFunc = std::move(_respFunc)](
-            Error::Ptr _error, consensus::ConsensusNodeList const& _consensusNodeListPtr) {
+            const Error::Ptr& _error, consensus::ConsensusNodeList const& _consensusNodeListPtr) {
             Json::Value jResp = Json::Value(Json::arrayValue);
             if (!_error || (_error->errorCode() == bcos::protocol::CommonError::SUCCESS))
             {
@@ -968,6 +968,7 @@ void JsonRpcImpl_2_0::getSealerList(
                     Json::Value node;
                     node["nodeID"] = consensusNodePtr.nodeID->hex();
                     node["weight"] = consensusNodePtr.voteWeight;
+                    node["termWeight"] = consensusNodePtr.termWeight;
                     jResp.append(node);
                 }
             }
@@ -1036,6 +1037,7 @@ void JsonRpcImpl_2_0::getNodeListByType(std::string_view _groupID, std::string_v
                     Json::Value node;
                     node["nodeID"] = consensusNodePtr.nodeID->hex();
                     node["weight"] = consensusNodePtr.voteWeight;
+                    node["termWeight"] = consensusNodePtr.termWeight;
                     jResp.append(node);
                 }
             }
