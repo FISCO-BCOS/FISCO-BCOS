@@ -123,13 +123,6 @@ task::Task<protocol::TransactionSubmitResult::Ptr> TxPool::submitTransactionWith
     co_return co_await m_txpoolStorage->submitTransactionWithoutReceipt(std::move(transaction));
 }
 
-task::Task<protocol::TransactionSubmitResult::Ptr> TxPool::submitTransactionWithHook(
-    protocol::Transaction::Ptr transaction, std::function<void()> onTxSubmitted)
-{
-    co_return co_await m_txpoolStorage->submitTransactionWithHook(
-        std::move(transaction), std::move(onTxSubmitted));
-}
-
 void TxPool::broadcastTransaction(const protocol::Transaction& transaction)
 {
     bcos::bytes buffer;
@@ -203,23 +196,6 @@ task::Task<std::vector<protocol::Transaction::ConstPtr>> TxPool::getTransactions
     RANGES::any_view<bcos::h256, RANGES::category::mask | RANGES::category::sized> hashes)
 {
     co_return m_txpoolStorage->getTransactions(std::move(hashes));
-}
-
-bool TxPool::checkExistsInGroup(TxSubmitCallback _txSubmitCallback)
-{
-    auto syncConfig = m_transactionSync->config();
-    if (!_txSubmitCallback || syncConfig->existsInGroup())
-    {
-        return true;
-    }
-    auto txResult = m_config->txResultFactory()->createTxSubmitResult();
-    txResult->setTxHash(HashType());
-    txResult->setStatus((uint32_t)TransactionStatus::RequestNotBelongToTheGroup);
-
-    auto errorMsg = "Do not send transactions to nodes that are not in the group";
-    _txSubmitCallback(BCOS_ERROR_PTR((int32_t)txResult->status(), errorMsg), txResult);
-    TXPOOL_LOG(WARNING) << LOG_DESC(errorMsg);
-    return false;
 }
 
 void TxPool::asyncSealTxs(uint64_t _txsLimit, TxsHashSetPtr _avoidTxs,
