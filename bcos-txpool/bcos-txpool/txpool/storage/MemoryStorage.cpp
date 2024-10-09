@@ -19,8 +19,8 @@
  * @date 2021-05-07
  */
 #include "bcos-txpool/txpool/storage/MemoryStorage.h"
+#include "bcos-task/Wait.h"
 #include "bcos-utilities/Common.h"
-
 #include <bcos-protocol/TransactionSubmitResultImpl.h>
 #include <oneapi/tbb/blocked_range.h>
 #include <oneapi/tbb/parallel_for_each.h>
@@ -29,8 +29,6 @@
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
 #include <memory>
-#include <thread>
-#include <tuple>
 #include <variant>
 
 #define CPU_CORES std::thread::hardware_concurrency()
@@ -89,12 +87,6 @@ void MemoryStorage::stop()
 task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransaction(
     protocol::Transaction::Ptr transaction)
 {
-    co_return co_await submitTransactionWithHook(transaction, nullptr);
-}
-
-task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransactionWithHook(
-    protocol::Transaction::Ptr transaction, std::function<void()> onTxSubmitted)
-{
     transaction->setImportTime(utcTime());
     struct Awaitable
     {
@@ -122,12 +114,6 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
                         }
                     },
                     true, true);
-
-                // already in txpool but not sealed in block now
-                if (result == TransactionStatus::None && m_onTxSubmitted != nullptr)
-                {
-                    m_onTxSubmitted();
-                }
 
                 if (result != TransactionStatus::None)
                 {
@@ -160,14 +146,12 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
         }
 
         protocol::Transaction::Ptr m_transaction;
-        std::function<void()> m_onTxSubmitted;
         std::shared_ptr<MemoryStorage> m_self;
         std::variant<std::monostate, bcos::protocol::TransactionSubmitResult::Ptr, Error::Ptr>
             m_submitResult;
     };
 
     Awaitable awaitable{.m_transaction = std::move(transaction),
-        .m_onTxSubmitted = onTxSubmitted,
         .m_self = shared_from_this(),
         .m_submitResult = {}};
     co_return co_await awaitable;
