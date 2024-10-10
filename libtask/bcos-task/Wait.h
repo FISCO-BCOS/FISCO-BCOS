@@ -20,7 +20,6 @@
 #include <boost/atomic/atomic_flag.hpp>
 #include <exception>
 #include <memory>
-#include <memory_resource>
 #include <type_traits>
 #include <variant>
 
