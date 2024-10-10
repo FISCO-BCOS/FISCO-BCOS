@@ -25,7 +25,7 @@ struct MockExecutorParallel
         transaction_executor::tag_t<execute3Step> /*unused*/, MockExecutorParallel& executor,
         auto& storage, protocol::BlockHeader const& blockHeader,
         protocol::Transaction const& transaction, int contextID,
-        ledger::LedgerConfig const& ledgerConfig, auto&& waitOperator)
+        ledger::LedgerConfig const& ledgerConfig, auto&& waitOperator, auto&&... /*unused*/)
     {
         BCOS_LOG(INFO) << "Step1";
         co_yield std::shared_ptr<bcos::protocol::TransactionReceipt>();
@@ -40,7 +40,7 @@ struct MockExecutorParallel
             bcos::transaction_executor::executeTransaction> /*unused*/,
         MockExecutorParallel& executor, auto& storage, protocol::BlockHeader const& blockHeader,
         protocol::Transaction const& transaction, int contextID, ledger::LedgerConfig const&,
-        auto&& waitOperator)
+        auto&& waitOperator, auto&&...)
     {
         co_return std::shared_ptr<bcos::protocol::TransactionReceipt>();
     }
@@ -107,7 +107,7 @@ struct MockConflictExecutor
         transaction_executor::tag_t<execute3Step> /*unused*/, MockConflictExecutor& executor,
         auto& storage, protocol::BlockHeader const& blockHeader,
         protocol::Transaction const& transaction, int contextID,
-        ledger::LedgerConfig const& ledgerConfig, auto&& waitOperator)
+        ledger::LedgerConfig const& ledgerConfig, auto&& waitOperator, auto&&... /*unused*/)
     {
         auto input = transaction.input();
         auto inputNum =

@@ -20,6 +20,7 @@
 #include <cstddef>
 #include <functional>
 #include <memory>
+#include <memory_resource>
 #include <type_traits>
 
 namespace bcos::transaction_scheduler
@@ -54,7 +55,7 @@ struct ExecutionContext
     std::optional<decltype(coro->begin())> iterator;
 };
 
-template <class MutableStorage, class Storage, class Executor, class ContextRange>
+template <class MutableStorage, class Storage, class Executor, class ContextRange, class Allocator>
 class ChunkStatus
 {
 private:
@@ -64,16 +65,18 @@ private:
     std::reference_wrapper<Executor> m_executor;
     typename StorageTrait<MutableStorage, Storage>::LocalStorageView m_storageView;
     typename StorageTrait<MutableStorage, Storage>::LocalReadWriteSetStorage m_readWriteSetStorage;
+    std::reference_wrapper<Allocator> m_allocator;
 
 public:
     ChunkStatus(int64_t chunkIndex, boost::atomic_flag const& hasRAW, ContextRange contextRange,
-        Executor& executor, auto& storage)
+        Executor& executor, auto& storage, Allocator& allocator)
       : m_chunkIndex(chunkIndex),
         m_hasRAW(hasRAW),
         m_contextRange(std::move(contextRange)),
         m_executor(executor),
         m_storageView(storage),
-        m_readWriteSetStorage(m_storageView)
+        m_readWriteSetStorage(m_storageView),
+        m_allocator(allocator)
 
     {
         newMutable(m_storageView);
@@ -101,7 +104,7 @@ public:
 
             context.coro.emplace(transaction_executor::execute3Step(m_executor.get(),
                 m_readWriteSetStorage, blockHeader, context.transaction.get(), context.contextID,
-                ledgerConfig, task::tbb::syncWait));
+                ledgerConfig, task::tbb::syncWait, std::allocator_arg, m_allocator.get()));
             context.iterator.emplace(context.coro->begin());
             context.receipt.get() = *(*context.iterator);
         }
@@ -184,9 +187,13 @@ size_t executeSinglePass(SchedulerParallelImpl& scheduler, auto& storage, auto& 
     const auto count = RANGES::size(contexts);
     ReadWriteSetStorage<decltype(storage), transaction_executor::StateKey> writeSet(storage);
 
+    static std::pmr::synchronized_pool_resource generatorMemoryResource;
+    static std::pmr::polymorphic_allocator<> allocator(std::addressof(generatorMemoryResource));
+
     using Chunk = ChunkStatus<typename SchedulerParallelImpl::MutableStorage,
         std::decay_t<decltype(storage)>, std::decay_t<decltype(executor)>,
-        decltype(RANGES::subrange<RANGES::iterator_t<decltype(contexts)>>(contexts))>;
+        decltype(RANGES::subrange<RANGES::iterator_t<decltype(contexts)>>(contexts)),
+        decltype(allocator)>;
 
     boost::atomic_flag hasRAW;
     typename SchedulerParallelImpl::MutableStorage lastStorage;
@@ -212,7 +219,7 @@ size_t executeSinglePass(SchedulerParallelImpl& scheduler, auto& storage, auto& 
                     ittapi::ITT_DOMAINS::instance().STAGE_1);
                 PARALLEL_SCHEDULER_LOG(DEBUG) << "Chunk: " << chunkIndex;
                 auto chunk = std::make_unique<Chunk>(
-                    chunkIndex, hasRAW, contextChunks[chunkIndex], executor, storage);
+                    chunkIndex, hasRAW, contextChunks[chunkIndex], executor, storage, allocator);
                 ++chunkIndex;
                 return chunk;
             }) &
