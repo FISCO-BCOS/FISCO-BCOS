@@ -37,7 +37,7 @@ private:
     friend task::Generator<protocol::TransactionReceipt::Ptr> tag_invoke(
         tag_t<execute3Step> /*unused*/, TransactionExecutorImpl& executor, auto& storage,
         protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
-        int contextID, ledger::LedgerConfig const& ledgerConfig, auto&& waitOperator,
+        int contextID, ledger::LedgerConfig const& ledgerConfig, auto&& syncWait,
         auto&&... /*unused*/)
     {
         protocol::TransactionReceipt::Ptr receipt;
@@ -48,14 +48,14 @@ private:
 
         Rollbackable<std::decay_t<decltype(storage)>> rollbackableStorage(storage);
         // create a transient storage
-        using MemoryStorageType =
+        using TransientStorageType =
             bcos::storage2::memory_storage::MemoryStorage<bcos::transaction_executor::StateKey,
                 bcos::transaction_executor::StateValue,
                 bcos::storage2::memory_storage::Attribute(
                     bcos::storage2::memory_storage::ORDERED |
                     bcos::storage2::memory_storage::LOGICAL_DELETION)>;
-        MemoryStorageType transientStorage;
-        Rollbackable<MemoryStorageType> rollbackableTransientStorage(transientStorage);
+        TransientStorageType transientStorage;
+        Rollbackable<TransientStorageType> rollbackableTransientStorage(transientStorage);
         auto gasLimit = static_cast<int64_t>(std::get<0>(ledgerConfig.gasLimit()));
         auto evmcMessage = newEVMCMessage(transaction, gasLimit);
 
@@ -69,12 +69,12 @@ private:
             hostContext(rollbackableStorage, rollbackableTransientStorage, blockHeader, evmcMessage,
                 evmcMessage.sender, transaction.abi(), contextID, seq,
                 executor.m_precompiledManager, ledgerConfig, *executor.m_hashImpl,
-                std::forward<decltype(waitOperator)>(waitOperator));
+                std::forward<decltype(syncWait)>(syncWait));
 
-        waitOperator(hostContext.prepare());
+        syncWait(hostContext.prepare());
         co_yield receipt;  // 完成第一步 Complete the first step
 
-        auto evmcResult = waitOperator(hostContext.execute());
+        auto evmcResult = syncWait(hostContext.execute());
         co_yield receipt;  // 完成第二步 Complete the second step
 
         std::string newContractAddress;
@@ -133,10 +133,10 @@ private:
     friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
         tag_t<executeTransaction> /*unused*/, TransactionExecutorImpl& executor, auto& storage,
         protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
-        int contextID, ledger::LedgerConfig const& ledgerConfig, auto&& waitOperator)
+        int contextID, ledger::LedgerConfig const& ledgerConfig, auto&& syncWait)
     {
         for (auto receipt : execute3Step(executor, storage, blockHeader, transaction, contextID,
-                 ledgerConfig, std::forward<decltype(waitOperator)>(waitOperator)))
+                 ledgerConfig, std::forward<decltype(syncWait)>(syncWait)))
         {
             if (receipt)
             {

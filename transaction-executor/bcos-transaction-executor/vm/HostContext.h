@@ -216,17 +216,17 @@ public:
     HostContext(HostContext&&) = delete;
     HostContext& operator=(HostContext&&) = delete;
 
-    task::Task<evmc_bytes32> get(const evmc_bytes32* key)
+    task::Task<evmc_bytes32> get(const evmc_bytes32* key, auto&&... /*unused*/)
     {
         co_return co_await ledger::account::storage(m_myAccount, *key);
     }
 
-    task::Task<void> set(const evmc_bytes32* key, const evmc_bytes32* value)
+    task::Task<void> set(const evmc_bytes32* key, const evmc_bytes32* value, auto&&... /*unused*/)
     {
         co_await ledger::account::setStorage(m_myAccount, *key, *value);
     }
 
-    task::Task<evmc_bytes32> getTransientStorage(const evmc_bytes32* key)
+    task::Task<evmc_bytes32> getTransientStorage(const evmc_bytes32* key, auto&&... /*unused*/)
     {
         evmc_bytes32 value;
         if (auto valueEntry = co_await storage2::readOne(m_rollbackableTransientStorage.get(),
@@ -250,7 +250,8 @@ public:
         co_return value;
     }
 
-    task::Task<void> setTransientStorage(const evmc_bytes32* key, const evmc_bytes32* value)
+    task::Task<void> setTransientStorage(
+        const evmc_bytes32* key, const evmc_bytes32* value, auto&&... /*unused*/)
     {
         storage::Entry valueEntry(concepts::bytebuffer::toView(value->bytes));
         StateKey stateKey{concepts::bytebuffer::toView(co_await ledger::account::path(m_myAccount)),
@@ -264,12 +265,12 @@ public:
             m_rollbackableTransientStorage.get(), std::move(stateKey), std::move(valueEntry));
     }
 
-    task::Task<std::optional<storage::Entry>> code(const evmc_address& address)
+    task::Task<std::optional<storage::Entry>> code(
+        const evmc_address& address, auto&&... /*unused*/)
     {
-        if (auto executable =
-                co_await getExecutable(m_rollbackableStorage.get(), address, m_revision,
-                    m_ledgerConfig.get().features().get(
-                        ledger::Features::Flag::feature_raw_address));
+        if (auto executable = co_await getExecutable(m_rollbackableStorage.get(), address,
+                m_revision,
+                m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
             executable && executable->m_code)
         {
             co_return executable->m_code;
@@ -277,7 +278,7 @@ public:
         co_return std::optional<storage::Entry>{};
     }
 
-    task::Task<size_t> codeSizeAt(const evmc_address& address)
+    task::Task<size_t> codeSizeAt(const evmc_address& address, auto&&... /*unused*/)
     {
         if (auto const* precompiled = m_precompiledManager.get().getPrecompiled(address))
         {
@@ -291,21 +292,21 @@ public:
         co_return 0;
     }
 
-    task::Task<h256> codeHashAt(const evmc_address& address)
+    task::Task<h256> codeHashAt(const evmc_address& address, auto&&... /*unused*/)
     {
         Account<Storage> account(m_rollbackableStorage.get(), address,
             m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
         co_return co_await ledger::account::codeHash(account);
     }
 
-    task::Task<bool> exists([[maybe_unused]] const evmc_address& address)
+    task::Task<bool> exists([[maybe_unused]] const evmc_address& address, auto&&... /*unused*/)
     {
         // TODO: impl the full suport for solidity
         co_return true;
     }
 
     /// Hash of a block if within the last 256 blocks, or h256() otherwise.
-    task::Task<h256> blockHash(int64_t number) const
+    task::Task<h256> blockHash(int64_t number, auto&&... /*unused*/) const
     {
         if (number >= blockNumber() || number < 0)
         {
@@ -475,7 +476,7 @@ public:
         co_return std::move(*evmResult);
     }
 
-    task::Task<EVMCResult> externalCall(const evmc_message& message)
+    task::Task<EVMCResult> externalCall(const evmc_message& message, auto&&... /*unused*/)
     {
         ++m_seq;
         if (c_fileLogLevel <= LogLevel::TRACE) [[unlikely]]
@@ -563,9 +564,9 @@ private:
             }
         }
 
-        m_executable = co_await getExecutable(m_rollbackableStorage.get(), message().code_address,
-            m_revision,
-            m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
+        m_executable =
+            co_await getExecutable(m_rollbackableStorage.get(), message().code_address, m_revision,
+                m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
         if (m_executable && hasPrecompiledPrefix(m_executable->m_code->data()))
         {
             if (std::holds_alternative<const evmc_message*>(m_message))

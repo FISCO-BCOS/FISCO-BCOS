@@ -37,33 +37,55 @@ static_assert(alignof(Address) == alignof(evmc_address), "Address types alignmen
 static_assert(sizeof(h256) == sizeof(evmc_bytes32), "Hash types size mismatch");
 static_assert(alignof(h256) == alignof(evmc_bytes32), "Hash types alignment mismatch");
 
-template <class HostContextType, auto waitOperator>
+constexpr static auto SMALL_STACK = 4096;
+
+template <int stackSize>
+struct StackAllocator
+{
+    StackAllocator()  // NOLINT
+      : m_resource(m_stack.data(), m_stack.size(), std::pmr::get_default_resource()),
+        m_allocator(std::addressof(m_resource))
+    {}
+    std::array<std::byte, stackSize> m_stack;
+    std::pmr::monotonic_buffer_resource m_resource;
+    std::pmr::polymorphic_allocator<> m_allocator;
+
+    std::pmr::polymorphic_allocator<>& getAllocator() { return m_allocator; }
+};
+
+template <class HostContextType, auto syncWait>
 struct EVMHostInterface
 {
     static bool accountExists(evmc_host_context* context, const evmc_address* addr) noexcept
     {
+        StackAllocator<SMALL_STACK> stackAllocator;
         auto& hostContext = static_cast<HostContextType&>(*context);
-        return waitOperator(hostContext.exists(*addr));
+        return syncWait(
+            hostContext.exists(*addr, std::allocator_arg, stackAllocator.getAllocator()));
     }
 
     static evmc_bytes32 getStorage(evmc_host_context* context,
         [[maybe_unused]] const evmc_address* addr, const evmc_bytes32* key) noexcept
     {
+        StackAllocator<SMALL_STACK> stackAllocator;
         auto& hostContext = static_cast<HostContextType&>(*context);
-        return waitOperator(hostContext.get(key));
+        return syncWait(hostContext.get(key, std::allocator_arg, stackAllocator.getAllocator()));
     }
 
     static evmc_bytes32 getTransientStorage(evmc_host_context* context,
         [[maybe_unused]] const evmc_address* addr, const evmc_bytes32* key) noexcept
     {
+        StackAllocator<SMALL_STACK> stackAllocator;
         auto& hostContext = static_cast<HostContextType&>(*context);
-        return waitOperator(hostContext.getTransientStorage(key));
+        return syncWait(hostContext.getTransientStorage(
+            key, std::allocator_arg, stackAllocator.getAllocator()));
     }
 
     static evmc_storage_status setStorage(evmc_host_context* context,
         [[maybe_unused]] const evmc_address* addr, const evmc_bytes32* key,
         const evmc_bytes32* value) noexcept
     {
+        StackAllocator<SMALL_STACK> stackAllocator;
         assert(!concepts::bytebuffer::equalTo(addr->bytes, executor::EMPTY_EVM_ADDRESS.bytes));
         auto& hostContext = static_cast<HostContextType&>(*context);
 
@@ -72,7 +94,7 @@ struct EVMHostInterface
         {
             status = EVMC_STORAGE_DELETED;
         }
-        waitOperator(hostContext.set(key, value));
+        syncWait(hostContext.set(key, value, std::allocator_arg, stackAllocator.getAllocator()));
         return status;
     }
 
@@ -80,8 +102,10 @@ struct EVMHostInterface
         [[maybe_unused]] const evmc_address* addr, const evmc_bytes32* key,
         const evmc_bytes32* value) noexcept
     {
+        StackAllocator<SMALL_STACK> stackAllocator;
         auto& hostContext = static_cast<HostContextType&>(*context);
-        waitOperator(hostContext.setTransientStorage(key, value));
+        syncWait(hostContext.setTransientStorage(
+            key, value, std::allocator_arg, stackAllocator.getAllocator()));
     }
 
     static evmc_bytes32 getBalance([[maybe_unused]] evmc_host_context* context,
@@ -93,21 +117,27 @@ struct EVMHostInterface
 
     static size_t getCodeSize(evmc_host_context* context, const evmc_address* addr) noexcept
     {
+        StackAllocator<SMALL_STACK> stackAllocator;
         auto& hostContext = static_cast<HostContextType&>(*context);
-        return waitOperator(hostContext.codeSizeAt(*addr));
+        return syncWait(
+            hostContext.codeSizeAt(*addr, std::allocator_arg, stackAllocator.getAllocator()));
     }
 
     static evmc_bytes32 getCodeHash(evmc_host_context* context, const evmc_address* addr) noexcept
     {
+        StackAllocator<SMALL_STACK> stackAllocator;
         auto& hostContext = static_cast<HostContextType&>(*context);
-        return toEvmC(waitOperator(hostContext.codeHashAt(*addr)));
+        return toEvmC(syncWait(
+            hostContext.codeHashAt(*addr, std::allocator_arg, stackAllocator.getAllocator())));
     }
 
     static size_t copyCode(evmc_host_context* context, const evmc_address* address,
         size_t codeOffset, uint8_t* bufferData, size_t bufferSize) noexcept
     {
+        StackAllocator<SMALL_STACK> stackAllocator;
         auto& hostContext = static_cast<HostContextType&>(*context);
-        auto codeEntry = waitOperator(hostContext.code(*address));
+        auto codeEntry =
+            syncWait(hostContext.code(*address, std::allocator_arg, stackAllocator.getAllocator()));
 
         // Handle "big offset" edge case.
         if (!codeEntry || codeOffset >= (size_t)codeEntry->size())
@@ -179,8 +209,10 @@ struct EVMHostInterface
 
     static evmc_bytes32 getBlockHash(evmc_host_context* context, int64_t number) noexcept
     {
+        StackAllocator<SMALL_STACK> stackAllocator;
         auto& hostContext = static_cast<HostContextType&>(*context);
-        return toEvmC(waitOperator(hostContext.blockHash(number)));
+        return toEvmC(syncWait(
+            hostContext.blockHash(number, std::allocator_arg, stackAllocator.getAllocator())));
     }
 
     static evmc_result call(evmc_host_context* context, const evmc_message* message) noexcept
@@ -192,8 +224,10 @@ struct EVMHostInterface
             BOOST_THROW_EXCEPTION(protocol::GasOverflow());
         }
 
+        StackAllocator<SMALL_STACK> stackAllocator;
         auto& hostContext = static_cast<HostContextType&>(*context);
-        auto result = waitOperator(hostContext.externalCall(*message));
+        auto result = syncWait(
+            hostContext.externalCall(*message, std::allocator_arg, stackAllocator.getAllocator()));
         evmc_result evmcResult = result;
         result.release = nullptr;
         return evmcResult;
@@ -201,15 +235,13 @@ struct EVMHostInterface
 };
 
 template <class HostContextType>
-const evmc_host_interface* getHostInterface(auto&& waitOperator)
+const evmc_host_interface* getHostInterface(auto&& syncWait)
 {
     using HostContextImpl = EVMHostInterface<HostContextType, [](auto&& task) {
-        constexpr static std::decay_t<decltype(waitOperator)> localWaitOperator{};
-        std::array<std::byte, 4096> stack;
-        std::pmr::monotonic_buffer_resource resource(
-            stack.data(), stack.size(), std::pmr::get_default_resource());
-        std::pmr::polymorphic_allocator<std::byte> allocator{&resource};
-        return localWaitOperator(std::forward<decltype(task)>(task), std::allocator_arg, allocator);
+        constexpr static std::decay_t<decltype(syncWait)> localWaitOperator{};
+        StackAllocator<SMALL_STACK> stackAllocator;
+        return localWaitOperator(
+            std::forward<decltype(task)>(task), std::allocator_arg, stackAllocator.getAllocator());
     }>;
     static evmc_host_interface const fnTable = {
         HostContextImpl::accountExists,
