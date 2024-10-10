@@ -2,6 +2,7 @@
 
 #include "../TrivialObject.h"
 #include "Hasher.h"
+#include <openssl/crypto.h>
 #include <openssl/evp.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
@@ -10,6 +11,8 @@
 
 namespace bcos::crypto::hasher::openssl
 {
+void initMallocFunction();
+
 enum HasherType
 {
     SM3,
