@@ -55,7 +55,7 @@ constexpr inline struct SyncWait
 
         auto waitTask = [](Task&& task, decltype(result)& result, boost::atomic_flag& finished,
                             boost::atomic<oneapi::tbb::task::suspend_point>& suspendPoint,
-                            auto&&... args) -> task::Task<void> {
+                            auto&&...) -> task::Task<void> {
             try
             {
                 if constexpr (std::is_void_v<ReturnType>)
@@ -89,7 +89,7 @@ constexpr inline struct SyncWait
                 oneapi::tbb::task::resume(suspendPoint.load());
             }
         }(std::forward<Task>(task), result, finished, suspendPoint,
-                                                std::forward<decltype(args)>(args)...);
+                                           std::forward<decltype(args)>(args)...);
         waitTask.start();
 
         if (!finished.test_and_set())
