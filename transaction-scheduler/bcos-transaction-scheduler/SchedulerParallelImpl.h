@@ -39,15 +39,17 @@ struct StorageTrait
 template <class CoroType>
 struct ExecutionContext
 {
-    ExecutionContext(int contextID, const protocol::Transaction& transaction,
-        std::reference_wrapper<protocol::TransactionReceipt::Ptr> receipt,
-        std::optional<CoroType> coro, std::optional<decltype(coro->begin())> iterator)
-      : contextID(contextID),
+    ExecutionContext(int contextID, const protocol::Transaction& transaction,  // NOLINT
+        protocol::TransactionReceipt::Ptr& receipt)
+      : m_resource(
+            std::make_unique<std::pmr::monotonic_buffer_resource>(m_stack.data(), m_stack.size())),
+        contextID(contextID),
         transaction(transaction),
-        receipt(receipt),
-        coro(std::move(coro)),
-        iterator(std::move(iterator))
+        receipt(receipt)
     {}
+
+    std::array<std::byte, 2048> m_stack;  // Stack usage at lease 1.16KB
+    std::unique_ptr<std::pmr::monotonic_buffer_resource> m_resource;
     int contextID;
     std::reference_wrapper<const protocol::Transaction> transaction;
     std::reference_wrapper<protocol::TransactionReceipt::Ptr> receipt;
@@ -55,7 +57,7 @@ struct ExecutionContext
     std::optional<decltype(coro->begin())> iterator;
 };
 
-template <class MutableStorage, class Storage, class Executor, class ContextRange, class Allocator>
+template <class MutableStorage, class Storage, class Executor, class ContextRange>
 class ChunkStatus
 {
 private:
@@ -65,19 +67,16 @@ private:
     std::reference_wrapper<Executor> m_executor;
     typename StorageTrait<MutableStorage, Storage>::LocalStorageView m_storageView;
     typename StorageTrait<MutableStorage, Storage>::LocalReadWriteSetStorage m_readWriteSetStorage;
-    std::reference_wrapper<Allocator> m_allocator;
 
 public:
     ChunkStatus(int64_t chunkIndex, boost::atomic_flag const& hasRAW, ContextRange contextRange,
-        Executor& executor, auto& storage, Allocator& allocator)
+        Executor& executor, auto& storage)
       : m_chunkIndex(chunkIndex),
         m_hasRAW(hasRAW),
         m_contextRange(std::move(contextRange)),
         m_executor(executor),
         m_storageView(storage),
-        m_readWriteSetStorage(m_storageView),
-        m_allocator(allocator)
-
+        m_readWriteSetStorage(m_storageView)
     {
         newMutable(m_storageView);
     }
@@ -104,7 +103,8 @@ public:
 
             context.coro.emplace(transaction_executor::execute3Step(m_executor.get(),
                 m_readWriteSetStorage, blockHeader, context.transaction.get(), context.contextID,
-                ledgerConfig, task::tbb::syncWait, std::allocator_arg, m_allocator.get()));
+                ledgerConfig, task::tbb::syncWait, std::allocator_arg,
+                std::pmr::polymorphic_allocator<>{context.m_resource.get()}));
             context.iterator.emplace(context.coro->begin());
             context.receipt.get() = *(*context.iterator);
         }
@@ -187,13 +187,9 @@ size_t executeSinglePass(SchedulerParallelImpl& scheduler, auto& storage, auto& 
     const auto count = RANGES::size(contexts);
     ReadWriteSetStorage<decltype(storage), transaction_executor::StateKey> writeSet(storage);
 
-    static std::pmr::synchronized_pool_resource generatorMemoryResource;
-    static std::pmr::polymorphic_allocator<> allocator(std::addressof(generatorMemoryResource));
-
     using Chunk = ChunkStatus<typename SchedulerParallelImpl::MutableStorage,
         std::decay_t<decltype(storage)>, std::decay_t<decltype(executor)>,
-        decltype(RANGES::subrange<RANGES::iterator_t<decltype(contexts)>>(contexts)),
-        decltype(allocator)>;
+        decltype(RANGES::subrange<RANGES::iterator_t<decltype(contexts)>>(contexts))>;
 
     boost::atomic_flag hasRAW;
     typename SchedulerParallelImpl::MutableStorage lastStorage;
@@ -219,7 +215,7 @@ size_t executeSinglePass(SchedulerParallelImpl& scheduler, auto& storage, auto& 
                     ittapi::ITT_DOMAINS::instance().STAGE_1);
                 PARALLEL_SCHEDULER_LOG(DEBUG) << "Chunk: " << chunkIndex;
                 auto chunk = std::make_unique<Chunk>(
-                    chunkIndex, hasRAW, contextChunks[chunkIndex], executor, storage, allocator);
+                    chunkIndex, hasRAW, contextChunks[chunkIndex], executor, storage);
                 ++chunkIndex;
                 return chunk;
             }) &
@@ -320,7 +316,8 @@ size_t executeSinglePass(SchedulerParallelImpl& scheduler, auto& storage, auto& 
 template <IsSchedulerParallelImpl SchedulerParallelImpl>
 task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
     tag_t<executeBlock> /*unused*/, SchedulerParallelImpl& scheduler, auto& storage, auto& executor,
-    protocol::BlockHeader const& blockHeader, RANGES::random_access_range auto const& transactions,
+    protocol::BlockHeader const& blockHeader,
+    ::ranges::random_access_range auto const& transactions,
     ledger::LedgerConfig const& ledgerConfig)
 {
     auto transactionCount = RANGES::size(transactions);
@@ -340,8 +337,7 @@ task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
     contexts.reserve(RANGES::size(transactions));
     for (auto index : RANGES::views::iota(0, (int)transactionCount))
     {
-        contexts.emplace_back(
-            ExecutionContext<CoroType>{index, transactions[index], receipts[index], {}, {}});
+        contexts.emplace_back(index, transactions[index], receipts[index]);
     }
 
     tbb::task_arena arena(scheduler.m_maxConcurrency);
@@ -352,7 +348,6 @@ task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
     });
 
     scheduler.m_gc.collect(std::move(contexts));
-
     co_return receipts;
 }
 

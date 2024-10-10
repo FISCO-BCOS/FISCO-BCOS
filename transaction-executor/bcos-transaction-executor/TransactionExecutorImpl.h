@@ -68,8 +68,7 @@ private:
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
             hostContext(rollbackableStorage, rollbackableTransientStorage, blockHeader, evmcMessage,
                 evmcMessage.sender, transaction.abi(), contextID, seq,
-                executor.m_precompiledManager, ledgerConfig, *executor.m_hashImpl,
-                std::forward<decltype(syncWait)>(syncWait));
+                executor.m_precompiledManager, ledgerConfig, *executor.m_hashImpl, syncWait);
 
         syncWait(hostContext.prepare());
         co_yield receipt;  // 完成第一步 Complete the first step
