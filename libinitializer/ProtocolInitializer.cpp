@@ -19,6 +19,7 @@
  * @date 2021-06-10
  */
 #include "libinitializer/ProtocolInitializer.h"
+#include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "libinitializer/Common.h"
 #include <bcos-crypto/encrypt/AESCrypto.h>
 #include <bcos-crypto/encrypt/HsmSM4Crypto.h>
@@ -71,8 +72,9 @@ void ProtocolInitializer::init(NodeConfig::Ptr _nodeConfig)
         createCryptoSuite();
     }
     INITIALIZER_LOG(INFO) << LOG_DESC("init crypto suite success");
+    bcos::crypto::hasher::openssl::initMallocFunction();
 
-    if (true == _nodeConfig->storageSecurityEnable())
+    if (_nodeConfig->storageSecurityEnable())
     {
         // Notice: the reason we don't use HSM for storage security is that the encrypt function in
         // HSM only support data length from 0 to 65536 byte
@@ -155,7 +157,8 @@ void ProtocolInitializer::loadKeyPair(std::string const& _privateKeyPath)
         }
         INITIALIZER_LOG(INFO) << LOG_DESC("loadKeyPair from privateKey")
                               << LOG_KV("privateKeySize", privateKeyData->size())
-                              << LOG_KV("enableStorageSecurity", m_dataEncryption ? true : false);
+                              << LOG_KV(
+                                     "enableStorageSecurity", static_cast<bool>(m_dataEncryption));
         auto privateKey = m_keyFactory->createKey(*privateKeyData);
         m_keyPair = m_cryptoSuite->signatureImpl()->createKeyPair(privateKey);
         INITIALIZER_LOG(INFO) << METRIC << LOG_DESC("loadKeyPair from privateKeyPath")
