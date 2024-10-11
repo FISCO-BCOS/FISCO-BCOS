@@ -47,28 +47,6 @@ NodeIDs ConsensusConfig::consensusNodeIDList(bool _excludeSelf) const
     return nodeIDList;
 }
 
-bool ConsensusConfig::compareConsensusNode(
-    ConsensusNodeList const& _left, ConsensusNodeList const& _right)
-{
-    if (_left.size() != _right.size())
-    {
-        return false;
-    }
-    size_t i = 0;
-    for (auto const& node : _left)
-    {
-        const auto& compareNode = _right[i];
-        if (node.nodeID->data() != compareNode.nodeID->data() ||
-            node.voteWeight != compareNode.voteWeight)
-        {
-            return false;
-        }
-        i++;
-    }
-    return true;
-}
-
-
 bool ConsensusConfig::isNodeExist(ConsensusNode const& _node, ConsensusNodeList const& _nodeList)
 {
     auto iter = std::find_if(
@@ -86,7 +64,7 @@ void ConsensusConfig::setObserverNodeList(ConsensusNodeList _observerNodeList)
     {
         UpgradableGuard lock(x_observerNodeList);
         // consensus node list have not been changed
-        if (compareConsensusNode(_observerNodeList, m_observerNodeList))
+        if (_observerNodeList == m_observerNodeList)
         {
             m_observerNodeListUpdated = false;
             return;
@@ -111,7 +89,7 @@ void ConsensusConfig::setConsensusNodeList(ConsensusNodeList _consensusNodeList)
     {
         UpgradableGuard lock(x_consensusNodeList);
         // consensus node list have not been changed
-        if (compareConsensusNode(_consensusNodeList, m_consensusNodeList))
+        if (_consensusNodeList == m_consensusNodeList)
         {
             m_consensusNodeListUpdated = false;
             return;

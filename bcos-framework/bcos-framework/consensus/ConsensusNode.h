@@ -52,12 +52,17 @@ struct ConsensusNode
     uint64_t termWeight;
     protocol::BlockNumber enableNumber;
 
-    friend std::strong_ordering operator<=>(ConsensusNode const& lhs, ConsensusNode const& rhs)
+    friend std::strong_ordering operator<=>(
+        ConsensusNode const& lhs, ConsensusNode const& rhs) noexcept
     {
         return std::make_tuple(lhs.nodeID->data(), std::ref(lhs.type), std::ref(lhs.voteWeight),
                    std::ref(lhs.termWeight), std::ref(lhs.enableNumber)) <=>
                std::make_tuple(rhs.nodeID->data(), std::ref(rhs.type), std::ref(rhs.voteWeight),
                    std::ref(rhs.termWeight), std::ref(rhs.enableNumber));
+    }
+    friend bool operator==(ConsensusNode const& lhs, ConsensusNode const& rhs) noexcept
+    {
+        return std::is_eq(lhs <=> rhs);
     }
 };
 
