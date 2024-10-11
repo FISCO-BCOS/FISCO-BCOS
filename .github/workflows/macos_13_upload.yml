@@ -1,0 +1,37 @@
+name: macos x86 release Actions
+on:
+  push:
+    tags-ignore:
+      - v1.*
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "Changelog.md"
+      - "README.md"
+  release:
+    types: [published, created, edited]
+
+jobs:
+  compile_macOS_release:
+    name: macos x86 release Actions
+    runs-on: macos-13
+    # if: startsWith(github.ref,'v2')
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: FISCO-BCOS/FISCO-BCOS
+          ref: master-2.0
+          fetch-depth: 5
+      - name: install macOS dependencies
+        if: runner.os == 'macOS'
+        run: brew install openssl
+      - name: configure
+        run: cmake .
+      - name: compile
+        run: make -j2
+      - name: prepare artifact
+        run: cd bin/ && strip fisco-bcos && tar -zcf fisco-bcos-macOS-x86.tar.gz fisco-bcos
+      - uses: actions/upload-artifact@v2
+        with:
+          name: fisco-bcos-macOS-x86.tar.gz
+          path: bin/fisco-bcos-macOS-x86.tar.gz
