@@ -1829,10 +1829,25 @@ check_and_install_tassl(){
     fi
     local tassl_package_name="tassl-1.1.1b-${tassl_mid_name}-${tassl_post_fix}"
     local tassl_tgz_name="${tassl_package_name}.tar.gz"
-    local tassl_link_prefix="${cdn_link_header}/FISCO-BCOS/tools/tassl-1.1.1b/${tassl_tgz_name}"
-    LOG_INFO "Downloading tassl binary from ${tassl_link_prefix}..."
-    wget --no-check-certificate  "${tassl_link_prefix}"
+    # local tassl_link_prefix="${cdn_link_header}/FISCO-BCOS/tools/tassl-1.1.1b/${tassl_tgz_name}"
+    local Download_Link="${cdn_link_header}/FISCO-BCOS/tools/tassl-1.1.1b/${tassl_tgz_name}"
+    local github_link="https://github.com/FISCO-BCOS/TASSL/releases/download/V_1.4/${tassl_tgz_name}"
+    # the binary can obtained from the cos
+    if [ $(curl -IL -o /dev/null -s -w %{http_code} "${Download_Link}") == 200 ];then
+        # try cdn_link
+        echo "=============="
+        echo "Downloading tassl binary from ${Download_Link}"
+        curl -#LO "${Download_Link}"
+    else
+        echo "Downloading tassl binary from ${github_link}"
+        curl -#LO "${github_link}"
+    fi
+    # wget --no-check-certificate  "${tassl_link_prefix}"
     tar zxvf ${tassl_tgz_name} && rm ${tassl_tgz_name}
+    if [[ -n "${macOS}" ]];then
+        xattr -d com.apple.quarantine ${tassl_package_name}
+        # xattr -d com.apple.macl ${tassl_package_name}
+    fi
     chmod u+x ${tassl_package_name}
     mkdir -p "${HOME}"/.fisco
     mv ${tassl_package_name} "${HOME}"/.fisco/tassl-1.1.1b
@@ -2317,13 +2332,22 @@ generate_auth_account()
   if ${sm_mode}; then
     account_script="get_gm_account.sh"
   fi
-
-  if [ ! -f ${account_script} ]; then
-        local get_account_link="${cdn_link_header}/FISCO-BCOS/tools/${account_script}"
-        LOG_INFO "Downloading ${account_script} from ${get_account_link}..."
-        curl -#LO "${get_account_link}"
+  if [ ! -f "${HOME}/.fisco/${account_script}" ];then
+        local Download_Link="${cdn_link_header}/FISCO-BCOS/tools/${account_script}"
+        local github_link="https://github.com/FISCO-BCOS/console/raw/master/tools/${account_script}"
+        # the binary can obtained from the cos
+        if [ $(curl -IL -o /dev/null -s -w %{http_code} "${Download_Link}") == 200 ];then
+            # try cdn_link
+            LOG_INFO "Downloading ${account_script} from ${Download_Link}..."
+            curl -#LO "${Download_Link}"
+        else
+            LOG_INFO "Downloading ${account_script} from ${github_link}..."
+            curl -#LO "${github_link}"
+        fi
+        chmod u+x ${account_script}
+        mv ${account_script} "${HOME}/.fisco/"
   fi
-  auth_admin_account=$(bash ${account_script} | grep Address | sed -r "s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]//g" | awk '{print $5}')
+  auth_admin_account=$(bash ${HOME}/.fisco/${account_script} | grep Address | sed -r "s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]//g" | awk '{print $5}')
   LOG_INFO "Admin account: ${auth_admin_account}"
   if [[ ${chain_version} == "air" ]];then
       mv accounts* "${ca_dir}"
@@ -2331,7 +2355,7 @@ generate_auth_account()
       mv accounts* "${BcosBuilder_path}/${chain_version}"
   fi
   if [ "$?" -ne "0" ]; then
-      LOG_INFO "Admin account generate failed, please check ${account_script}."
+      LOG_INFO "Admin account generate failed, please check ${HOME}/.fisco/${account_script}."
       exit 1
   fi
 }
