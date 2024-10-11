@@ -269,7 +269,7 @@ check_env() {
 check_and_install_tassl(){
 if [ -n "${guomi_mode}" ]; then
     if [ ! -f "${TASSL_CMD}" ];then
-        local tassl_link_perfix="${cdn_link_header}/FISCO-BCOS/tools/tassl-1.0.2"
+        local tassl_link_perfix="https://github.com/FISCO-BCOS/TASSL/releases/download/v1.0.2/"
         LOG_INFO "Downloading tassl binary from ${tassl_link_perfix}..."
         if [[ -n "${macOS}" ]];then
             curl --insecure -#LO "${tassl_link_perfix}/tassl_mac.tar.gz"
