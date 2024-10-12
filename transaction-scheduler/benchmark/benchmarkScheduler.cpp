@@ -572,5 +572,20 @@ BENCHMARK(transfer<SERIAL>)->Arg(1000)->Arg(10000)->Arg(100000);
 BENCHMARK(conflictTransfer<SERIAL>)->Arg(1000)->Arg(10000)->Arg(100000);
 
 BENCHMARK(issue<PARALLEL>)->Arg(1000)->Arg(10000)->Arg(100000);
-BENCHMARK(transfer<PARALLEL>)->Arg(1000)->Arg(10000)->Arg(100000);
+
+BENCHMARK(transfer<PARALLEL>)->Args({1000, 16, 4})->Args({10000, 16, 4});
+BENCHMARK(transfer<PARALLEL>)->Args({1000, 16, 6})->Args({10000, 16, 6});
+BENCHMARK(transfer<PARALLEL>)->Args({1000, 16, 8})->Args({10000, 16, 8});
+BENCHMARK(transfer<PARALLEL>)->Args({1000, 16, 16})->Args({10000, 16, 16});
+
+BENCHMARK(transfer<PARALLEL>)->Args({1000, 64, 4})->Args({10000, 64, 4});
+BENCHMARK(transfer<PARALLEL>)->Args({1000, 64, 6})->Args({10000, 64, 6});
+BENCHMARK(transfer<PARALLEL>)->Args({1000, 64, 8})->Args({10000, 64, 8});
+BENCHMARK(transfer<PARALLEL>)->Args({1000, 64, 16})->Args({10000, 64, 16});
+
+BENCHMARK(transfer<PARALLEL>)->Args({1000, 256, 4})->Args({10000, 256, 4});
+BENCHMARK(transfer<PARALLEL>)->Args({1000, 256, 6})->Args({10000, 256, 6});
+BENCHMARK(transfer<PARALLEL>)->Args({1000, 256, 8})->Args({10000, 256, 8});
+BENCHMARK(transfer<PARALLEL>)->Args({1000, 256, 16})->Args({10000, 256, 16});
+
 BENCHMARK(conflictTransfer<PARALLEL>)->Arg(1000)->Arg(10000)->Arg(100000);
