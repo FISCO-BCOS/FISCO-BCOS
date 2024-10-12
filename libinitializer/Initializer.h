@@ -24,6 +24,7 @@
 #include "ProtocolInitializer.h"
 #include "TxPoolInitializer.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
+#include "bcos-tool/NodeConfig.h"
 #include "tools/archive-tool/ArchiveService.h"
 #include <bcos-executor/src/executor/SwitchExecutorManager.h>
 #include <bcos-scheduler/src/SchedulerManager.h>
@@ -90,10 +91,16 @@ public:
     /// NOTE: this should be last called
     void initSysContract();
     bcos::storage::TransactionalStorageInterface::Ptr storage() { return m_storage; }
-    bcos::Error::Ptr generateSnapshot(const std::string& snapshotPath, bool withTxAndReceipts);
-    bcos::Error::Ptr importSnapshot(const std::string& snapshotPath);
+    bcos::Error::Ptr generateSnapshot(const std::string& snapshotPath, bool withTxAndReceipts,
+        const tool::NodeConfig::Ptr& nodeConfig);
+    bcos::Error::Ptr importSnapshot(
+        const std::string& snapshotPath, const tool::NodeConfig::Ptr& nodeConfig);
     bcos::Error::Ptr importSnapshotToRocksDB(
-        const std::string& snapshotPath, const std::string& rockDBPath);
+        const std::string& snapshotPath, const tool::NodeConfig::Ptr& nodeConfig);
+
+    std::string getStateDBPath(bool _airVersion) const;
+    std::string getBlockDBPath(bool _airVersion) const;
+    std::string getConsensusStorageDBPath(bool _airVersion) const;
 
 private:
     bcos::tool::NodeConfig::Ptr m_nodeConfig;
@@ -120,7 +127,8 @@ private:
     std::function<void(std::function<void(protocol::BlockNumber)>)>
         m_setBaselineSchedulerBlockNumberNotifier;
 
-    protocol::BlockNumber getCurrentBlockNumber();
+    protocol::BlockNumber getCurrentBlockNumber(
+        bcos::storage::TransactionalStorageInterface::Ptr storage = nullptr);
 };
 
 bcos::Error::Ptr traverseRocksDB(const std::string& rockDBPath,

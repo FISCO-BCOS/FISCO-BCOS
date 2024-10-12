@@ -139,7 +139,8 @@ static int addSealerImpl(bool isConsensus,
 
     PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number())
                           << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("addSealer")
-                          << LOG_KV("nodeID", nodeID);
+                          << LOG_KV("nodeID", nodeID) << LOG_KV("voteWeight", voteWeight)
+                          << LOG_KV("termWeight", termWeight) << LOG_KV("isConsensus", isConsensus);
     if (nodeID.size() != NODE_LENGTH ||
         std::count_if(nodeID.begin(), nodeID.end(),
             [](unsigned char _ch) { return std::isxdigit(_ch); }) != NODE_LENGTH)
@@ -168,6 +169,7 @@ static int addSealerImpl(bool isConsensus,
         {
             // exist
             node->voteWeight = voteWeight;
+            node->termWeight = termWeight;
             node->type = blockContext.features().get(Features::Flag::feature_rpbft) ?
                              consensus::Type::consensus_candidate_sealer :
                              consensus::Type::consensus_sealer;
