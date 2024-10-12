@@ -269,7 +269,7 @@ public:
     struct BaselineSchedulerConfig
     {
         bool parallel = false;
-        int chunkSize = 0;
+        int grainSize = 0;
         int maxThread = 0;
     };
     BaselineSchedulerConfig const& baselineSchedulerConfig() const

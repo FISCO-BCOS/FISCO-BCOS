@@ -15,6 +15,7 @@
 #include "transaction-executor/tests/TestBytecode.h"
 #include <benchmark/benchmark.h>
 #include <boost/throw_exception.hpp>
+#include <variant>
 
 using namespace bcos;
 using namespace bcos::storage2::memory_storage;
@@ -358,6 +359,21 @@ static void transfer(benchmark::State& state)
     auto count = state.range(0) * 2;
     fixture.prepareAddresses(count);
     fixture.prepareIssue(count);
+
+    if (std::holds_alternative<SchedulerParallelImpl<MutableStorage>>(fixture.m_scheduler))
+    {
+        auto grainSize = state.range(1);
+        auto maxParallel = state.range(2);
+        auto& scheduler = std::get<SchedulerParallelImpl<MutableStorage>>(fixture.m_scheduler);
+        if (grainSize > 0)
+        {
+            scheduler.m_grainSize = grainSize;
+        }
+        if (maxParallel > 0)
+        {
+            scheduler.m_maxConcurrency = maxParallel;
+        }
+    }
 
     std::visit(
         [&](auto& scheduler) {

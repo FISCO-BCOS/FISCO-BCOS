@@ -36,6 +36,7 @@ struct StorageTrait
         ReadWriteSetStorage<LocalStorageView, transaction_executor::StateKey>;
 };
 
+constexpr static auto EXECUTOR_STACK = 2048;
 template <class CoroType>
 struct ExecutionContext
 {
@@ -48,7 +49,7 @@ struct ExecutionContext
         receipt(receipt)
     {}
 
-    std::array<std::byte, 2048> m_stack;  // Stack usage at lease 1.16KB
+    std::array<std::byte, EXECUTOR_STACK> m_stack;  // Stack usage at lease 1.16KB
     std::unique_ptr<std::pmr::monotonic_buffer_resource> m_resource;
     int contextID;
     std::reference_wrapper<const protocol::Transaction> transaction;
@@ -340,7 +341,8 @@ task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
         contexts.emplace_back(index, transactions[index], receipts[index]);
     }
 
-    tbb::task_arena arena(scheduler.m_maxConcurrency);
+    tbb::task_arena arena(
+        tbb::task_arena::constraints{}.set_max_concurrency(scheduler.m_maxConcurrency));
     arena.execute([&]() {
         auto retryCount = executeSinglePass(scheduler, storage, executor, blockHeader, ledgerConfig,
             contexts, scheduler.m_grainSize);
