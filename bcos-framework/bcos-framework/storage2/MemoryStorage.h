@@ -2,7 +2,7 @@
 
 #include "Storage.h"
 #include "bcos-task/AwaitableValue.h"
-#include "bcos-utilities/NullLock.h"
+#include <oneapi/tbb/null_rw_mutex.h>
 #include <oneapi/tbb/spin_rw_mutex.h>
 #include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/identity.hpp>
@@ -12,6 +12,7 @@
 #include <boost/multi_index/sequenced_index.hpp>
 #include <boost/multi_index_container.hpp>
 #include <boost/throw_exception.hpp>
+#include <range/v3/view/zip.hpp>
 #include <type_traits>
 #include <utility>
 
@@ -51,10 +52,9 @@ public:
     static_assert(!withConcurrent || !std::is_void_v<BucketHasherType>);
 
     constexpr static unsigned DEFAULT_CAPACITY = 32 * 1024 * 1024;  // For mru
-    using Mutex = tbb::spin_rw_mutex;
-    using Lock = std::conditional_t<withConcurrent, typename tbb::spin_rw_mutex::scoped_lock,
-        utilities::NullLock>;
-    using BucketMutex = std::conditional_t<withConcurrent, Mutex, Empty>;
+    using Mutex =
+        std::conditional_t<withConcurrent, typename tbb::spin_rw_mutex, tbb::null_rw_mutex>;
+    using Lock = typename Mutex::scoped_lock;
     using DataValue = std::conditional_t<withLogicalDeletion, std::optional<ValueType>, ValueType>;
 
     struct Data
@@ -73,7 +73,7 @@ public:
     struct Bucket
     {
         Container container;
-        [[no_unique_address]] BucketMutex mutex;  // For concurrent
+        [[no_unique_address]] Mutex mutex;  // For concurrent
         [[no_unique_address]] std::conditional_t<withLRU, int64_t, Empty> capacity = {};  // LRU
     };
     using Buckets = std::conditional_t<withConcurrent, std::vector<Bucket>, std::array<Bucket, 1>>;
@@ -170,13 +170,13 @@ void updateLRUAndCheck(MemoryStorage& storage, typename MemoryStorage::Bucket& b
 
 template <IsMemoryStorage MemoryStorage>
 auto tag_invoke(bcos::storage2::tag_t<readSome> /*unused*/, MemoryStorage& storage,
-    RANGES::input_range auto&& keys)
+    ::ranges::input_range auto&& keys)
     -> task::AwaitableValue<std::vector<std::optional<typename MemoryStorage::Value>>>
 {
     task::AwaitableValue<std::vector<std::optional<typename MemoryStorage::Value>>> result;
-    if constexpr (RANGES::sized_range<decltype(keys)>)
+    if constexpr (::ranges::sized_range<decltype(keys)>)
     {
-        result.value().reserve(RANGES::size(keys));
+        result.value().reserve(::ranges::size(keys));
     }
 
     for (auto&& key : keys)
@@ -217,22 +217,24 @@ task::AwaitableValue<std::optional<typename MemoryStorage::Value>> tag_invoke(
     auto it = index.find(key);
     if (it != index.end())
     {
+        result.value() = it->value;
+        lock.release();
         if constexpr (std::decay_t<decltype(storage)>::withLRU)
         {
-            lock.upgrade_to_writer();
-            updateLRUAndCheck(storage, bucket, it);
+            if (typename MemoryStorage::Lock LRULock; LRULock.try_acquire(bucket.mutex, true))
+            {
+                updateLRUAndCheck(storage, bucket, it);
+            }
         }
-
-        result.value() = it->value;
     }
     return result;
 }
 
 template <IsMemoryStorage MemoryStorage>
 task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/,
-    MemoryStorage& storage, RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
+    MemoryStorage& storage, ::ranges::input_range auto&& keys, ::ranges::input_range auto&& values)
 {
-    for (auto&& [key, value] : RANGES::views::zip(keys, values))
+    for (auto&& [key, value] : ::ranges::views::zip(keys, values))
     {
         auto& bucket = getBucket(storage, key);
         typename MemoryStorage::Lock lock(bucket.mutex, true);
@@ -287,7 +289,7 @@ task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unu
 
 template <IsMemoryStorage MemoryStorage>
 task::AwaitableValue<void> removeSome(
-    MemoryStorage& storage, RANGES::input_range auto&& keys, bool direct)
+    MemoryStorage& storage, ::ranges::input_range auto&& keys, bool direct)
 {
     for (auto&& key : keys)
     {
@@ -355,14 +357,14 @@ task::AwaitableValue<void> removeSome(
 
 template <IsMemoryStorage MemoryStorage>
 task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/,
-    MemoryStorage& storage, RANGES::input_range auto&& keys)
+    MemoryStorage& storage, ::ranges::input_range auto&& keys)
 {
     return removeSome(storage, std::forward<decltype(keys)>(keys), false);
 }
 
 template <IsMemoryStorage MemoryStorage>
 task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/,
-    MemoryStorage& storage, RANGES::input_range auto&& keys, DIRECT_TYPE /*unused*/)
+    MemoryStorage& storage, ::ranges::input_range auto&& keys, DIRECT_TYPE /*unused*/)
 {
     return removeSome(storage, std::forward<decltype(keys)>(keys), true);
 }
@@ -373,7 +375,7 @@ task::AwaitableValue<void> tag_invoke(
     requires(!std::is_const_v<decltype(fromStorage)>)
 {
     for (auto&& [bucket, fromBucket] :
-        RANGES::views::zip(toStorage.m_buckets, fromStorage.m_buckets))
+        ::ranges::views::zip(toStorage.m_buckets, fromStorage.m_buckets))
     {
         typename MemoryStorage::Lock toLock(bucket.mutex, true);
         typename MemoryStorage::Lock fromLock(fromBucket.mutex, true);
@@ -432,8 +434,8 @@ class Iterator
 private:
     std::reference_wrapper<typename MemoryStorage::Buckets const> m_buckets;
     size_t m_bucketIndex = 0;
-    RANGES::iterator_t<typename MemoryStorage::Container> m_begin;
-    RANGES::iterator_t<typename MemoryStorage::Container> m_end;
+    ::ranges::iterator_t<typename MemoryStorage::Container> m_begin;
+    ::ranges::iterator_t<typename MemoryStorage::Container> m_end;
 
     using IteratorValue = std::conditional_t<MemoryStorage::withLogicalDeletion,
         const typename MemoryStorage::Value*, const typename MemoryStorage::Value&>;
