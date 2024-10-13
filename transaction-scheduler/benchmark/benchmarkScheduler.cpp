@@ -601,4 +601,18 @@ BENCHMARK(transfer<PARALLEL>)
     ->Args({10000, 256, 8})
     ->Args({10000, 256, 16});
 
+BENCHMARK(transfer<PARALLEL>)
+    ->Args({100000, 16, 4})
+    ->Args({100000, 16, 6})
+    ->Args({100000, 16, 8})
+    ->Args({100000, 16, 16})
+    ->Args({100000, 64, 4})
+    ->Args({100000, 64, 6})
+    ->Args({100000, 64, 8})
+    ->Args({100000, 64, 16})
+    ->Args({100000, 256, 4})
+    ->Args({100000, 256, 6})
+    ->Args({100000, 256, 8})
+    ->Args({100000, 256, 16});
+
 BENCHMARK(conflictTransfer<PARALLEL>)->Arg(1000)->Arg(10000)->Arg(100000);
