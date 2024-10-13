@@ -15,6 +15,7 @@
 #include <oneapi/tbb/parallel_pipeline.h>
 #include <oneapi/tbb/task_arena.h>
 #include <oneapi/tbb/task_group.h>
+#include <boost/pool/object_pool.hpp>
 #include <boost/throw_exception.hpp>
 #include <atomic>
 #include <cstddef>
@@ -42,8 +43,16 @@ struct ExecutionContext
 {
     ExecutionContext(int contextID, const protocol::Transaction& transaction,  // NOLINT
         protocol::TransactionReceipt::Ptr& receipt)
-      : contextID(contextID), transaction(transaction), receipt(receipt)
+      : m_resource(m_stack.data(), m_stack.size()),
+        m_allocator(std::addressof(m_resource)),
+        contextID(contextID),
+        transaction(transaction),
+        receipt(receipt)
     {}
+
+    std::array<std::byte, EXECUTOR_STACK> m_stack;
+    std::pmr::monotonic_buffer_resource m_resource;
+    std::pmr::polymorphic_allocator<> m_allocator;
 
     int contextID;
     std::reference_wrapper<const protocol::Transaction> transaction;
@@ -96,13 +105,11 @@ public:
                 break;
             }
 
-            static std::pmr::synchronized_pool_resource m_contextPoolResource;
-            context.coro.emplace(transaction_executor::execute3Step(m_executor.get(),
-                m_readWriteSetStorage, blockHeader, context.transaction.get(), context.contextID,
-                ledgerConfig, task::tbb::syncWait, std::allocator_arg,
-                std::pmr::polymorphic_allocator<>{std::addressof(m_contextPoolResource)}));
-            context.iterator.emplace(context.coro->begin());
-            context.receipt.get() = *(*context.iterator);
+            context->coro.emplace(transaction_executor::execute3Step(m_executor.get(),
+                m_readWriteSetStorage, blockHeader, context->transaction.get(), context->contextID,
+                ledgerConfig, task::tbb::syncWait, std::allocator_arg, context->m_allocator));
+            context->iterator.emplace(context->coro->begin());
+            context->receipt.get() = *(*context->iterator);
         }
     }
 
@@ -119,9 +126,9 @@ public:
                     << " transactions";
                 break;
             }
-            if (!context.receipt.get() && *context.iterator != context.coro->end())
+            if (!context->receipt.get() && *context->iterator != context->coro->end())
             {
-                context.receipt.get() = *(++(*context.iterator));
+                context->receipt.get() = *(++(*context->iterator));
             }
         }
     }
@@ -132,9 +139,9 @@ public:
             ittapi::ITT_DOMAINS::instance().EXECUTE_CHUNK3);
         for (auto& context : m_contextRange)
         {
-            if (!context.receipt.get() && *context.iterator != context.coro->end())
+            if (!context->receipt.get() && *context->iterator != context->coro->end())
             {
-                context.receipt.get() = *(++(*context.iterator));
+                context->receipt.get() = *(++(*context->iterator));
             }
         }
     }
@@ -156,6 +163,9 @@ public:
     GC m_gc;
     size_t m_grainSize = DEFAULT_GRAIN_SIZE;
     size_t m_maxConcurrency = DEFAULT_MAX_CONCURRENCY;
+
+    std::pmr::unsynchronized_pool_resource m_contextPoolResource;
+    std::mutex m_contextPoolMutex;
 };
 
 template <class Scheduler>
@@ -326,13 +336,18 @@ task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
             typename SchedulerParallelImpl::MutableStorage, Storage>::LocalReadWriteSetStorage>,
         protocol::BlockHeader const&, protocol::Transaction const&, int,
         ledger::LedgerConfig const&, task::tbb::SyncWait>;
-    std::vector<ExecutionContext<CoroType>,
-        tbb::cache_aligned_allocator<ExecutionContext<CoroType>>>
-        contexts;
+
+    std::vector<std::shared_ptr<ExecutionContext<CoroType>>> contexts;
     contexts.reserve(RANGES::size(transactions));
-    for (auto index : RANGES::views::iota(0, (int)transactionCount))
     {
-        contexts.emplace_back(index, transactions[index], receipts[index]);
+        std::unique_lock lock(scheduler.m_contextPoolMutex);
+        std::pmr::polymorphic_allocator<ExecutionContext<CoroType>> contextAllocator{
+            std::addressof(scheduler.m_contextPoolResource)};
+        for (auto index : RANGES::views::iota(0, (int)transactionCount))
+        {
+            contexts.emplace_back(std::allocate_shared<ExecutionContext<CoroType>>(
+                contextAllocator, index, transactions[index], receipts[index]));
+        }
     }
 
     tbb::task_arena arena(
@@ -340,8 +355,9 @@ task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
     arena.execute([&]() {
         auto retryCount = executeSinglePass(scheduler, storage, executor, blockHeader, ledgerConfig,
             contexts, scheduler.m_grainSize);
+        std::unique_lock lock(scheduler.m_contextPoolMutex);
+        contexts.clear();
         PARALLEL_SCHEDULER_LOG(INFO) << "Parallel execute block retry count: " << retryCount;
-        scheduler.m_gc.collect(std::move(contexts));
     });
 
     co_return receipts;
