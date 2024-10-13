@@ -42,15 +42,9 @@ struct ExecutionContext
 {
     ExecutionContext(int contextID, const protocol::Transaction& transaction,  // NOLINT
         protocol::TransactionReceipt::Ptr& receipt)
-      : m_resource(
-            std::make_unique<std::pmr::monotonic_buffer_resource>(m_stack.data(), m_stack.size())),
-        contextID(contextID),
-        transaction(transaction),
-        receipt(receipt)
+      : contextID(contextID), transaction(transaction), receipt(receipt)
     {}
 
-    std::array<std::byte, EXECUTOR_STACK> m_stack;  // Stack usage at lease 1.16KB
-    std::unique_ptr<std::pmr::monotonic_buffer_resource> m_resource;
     int contextID;
     std::reference_wrapper<const protocol::Transaction> transaction;
     std::reference_wrapper<protocol::TransactionReceipt::Ptr> receipt;
@@ -102,10 +96,11 @@ public:
                 break;
             }
 
+            static std::pmr::synchronized_pool_resource m_contextPoolResource;
             context.coro.emplace(transaction_executor::execute3Step(m_executor.get(),
                 m_readWriteSetStorage, blockHeader, context.transaction.get(), context.contextID,
                 ledgerConfig, task::tbb::syncWait, std::allocator_arg,
-                std::pmr::polymorphic_allocator<>{context.m_resource.get()}));
+                std::pmr::polymorphic_allocator<>{std::addressof(m_contextPoolResource)}));
             context.iterator.emplace(context.coro->begin());
             context.receipt.get() = *(*context.iterator);
         }
@@ -157,7 +152,6 @@ class SchedulerParallelImpl
 public:
     constexpr static bool isSchedulerParallelImpl = true;
     using MutableStorage = MutableStorageType;
-
 
     GC m_gc;
     size_t m_grainSize = DEFAULT_GRAIN_SIZE;
