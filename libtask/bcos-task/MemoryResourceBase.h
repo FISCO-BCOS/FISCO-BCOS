@@ -43,7 +43,6 @@ struct MemoryResourceBase
     }
 
     static void* operator new(size_t size);
-
     static void operator delete(void* ptr, size_t size) noexcept;
 };
 }  // namespace bcos::task

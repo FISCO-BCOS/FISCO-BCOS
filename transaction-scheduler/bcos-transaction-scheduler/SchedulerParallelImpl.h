@@ -184,7 +184,7 @@ task::Task<void> mergeLastStorage(
 template <IsSchedulerParallelImpl SchedulerParallelImpl>
 size_t executeSinglePass(SchedulerParallelImpl& scheduler, auto& storage, auto& executor,
     protocol::BlockHeader const& blockHeader, ledger::LedgerConfig const& ledgerConfig,
-    RANGES::random_access_range auto& contexts, size_t chunkSize)
+    ::ranges::random_access_range auto& contexts, size_t chunkSize)
 {
     ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
         ittapi::ITT_DOMAINS::instance().SINGLE_PASS);

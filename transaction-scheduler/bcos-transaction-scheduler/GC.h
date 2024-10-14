@@ -21,6 +21,5 @@ public:
         m_releaseGroup->run([resources = std::make_tuple(
                                  std::forward<decltype(resources)>(resources)...)]() noexcept {});
     }
-    void collectFunc(auto&& func) { m_releaseGroup->run(std::forward<decltype(func)>(func)); }
 };
 }  // namespace bcos::transaction_scheduler

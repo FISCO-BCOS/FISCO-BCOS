@@ -51,7 +51,7 @@ void putSet(ReadWriteSetStorage& storage, bool write, auto const& key)
 
 template <IsReadWriteSetStorage ReadWriteSetStorage>
 auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, ReadWriteSetStorage& storage,
-    RANGES::input_range auto&& keys)
+    ::ranges::input_range auto&& keys)
     -> task::Task<task::AwaitableReturnType<std::invoke_result_t<storage2::ReadSome,
         typename ReadWriteSetStorage::BackendStorage&, decltype(keys)>>>
 {
@@ -65,7 +65,7 @@ auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, ReadWriteSetStor
 
 template <IsReadWriteSetStorage ReadWriteSetStorage>
 auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, ReadWriteSetStorage& storage,
-    RANGES::input_range auto&& keys, storage2::DIRECT_TYPE direct)
+    ::ranges::input_range auto&& keys, storage2::DIRECT_TYPE direct)
     -> task::Task<task::AwaitableReturnType<std::invoke_result_t<storage2::ReadSome,
         typename ReadWriteSetStorage::BackendStorage&, decltype(keys)>>>
 {
@@ -94,7 +94,7 @@ auto tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/, ReadWriteSetStora
 
 template <IsReadWriteSetStorage ReadWriteSetStorage>
 auto tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/, ReadWriteSetStorage& storage,
-    RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
+    ::ranges::input_range auto&& keys, ::ranges::input_range auto&& values)
     -> task::Task<task::AwaitableReturnType<std::invoke_result_t<storage2::WriteSome,
         typename ReadWriteSetStorage::BackendStorage&, decltype(keys), decltype(values)>>>
 {
@@ -108,7 +108,7 @@ auto tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/, ReadWriteSetSto
 
 template <IsReadWriteSetStorage ReadWriteSetStorage>
 auto tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/, ReadWriteSetStorage& storage,
-    RANGES::input_range auto const& keys, auto&&... args)
+    ::ranges::input_range auto const& keys, auto&&... args)
     -> task::Task<task::AwaitableReturnType<std::invoke_result_t<storage2::RemoveSome,
         std::add_lvalue_reference_t<typename ReadWriteSetStorage::BackendStorage>, decltype(keys),
         decltype(args)...>>>
@@ -163,7 +163,7 @@ bool hasRAWIntersection(ReadWriteSetStorage const& lhs, const auto& rhs)
     auto const& lhsSet = readWriteSet(lhs);
     auto const& rhsSet = readWriteSet(rhs);
 
-    if (RANGES::empty(lhsSet) || RANGES::empty(rhsSet))
+    if (::ranges::empty(lhsSet) || ::ranges::empty(rhsSet))
     {
         return false;
     }
