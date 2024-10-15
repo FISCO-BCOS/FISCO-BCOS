@@ -35,6 +35,11 @@ class BinaryController:
         self.last_percent = 0
         self.download_prefix = "https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/"
         self.mtail_download_url = "https://github.com/google/mtail/releases/download/v3.0.0-rc49/%s" % self.mtail_binary_name
+        if self.use_cdn is True:
+            self.download_prefix = "%s/FISCO-BCOS/releases/" % (
+                self.cdn_link_header)
+            self.mtail_download_url = "%s/FISCO-BCOS/tools/mtail/%s" % (
+                self.cdn_link_header, self.mtail_binary_name)
 
     def download_all_binary(self):
         utilities.print_badge(
