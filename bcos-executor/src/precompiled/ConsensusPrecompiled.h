@@ -39,33 +39,5 @@ public:
     std::shared_ptr<PrecompiledExecResult> call(
         std::shared_ptr<executor::TransactionExecutive> _executive,
         PrecompiledExecResult::Ptr _callParameters) override;
-
-private:
-    [[nodiscard]] static int addSealer(
-        const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& _data,
-        const CodecWrapper& codec);
-
-    [[nodiscard]] static int addSealer2(
-        const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& _data,
-        const CodecWrapper& codec);
-
-    [[nodiscard]] static int addObserver(
-        const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& _data,
-        const CodecWrapper& codec);
-
-    [[nodiscard]] static int removeNode(
-        const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& _data,
-        const CodecWrapper& codec);
-
-    [[nodiscard]] static int setWeight(
-        const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& _data,
-        const CodecWrapper& codec, bool setTermWeight);
-
-    static void rotateWorkingSealer(
-        const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        const PrecompiledExecResult::Ptr& _callParameters, const CodecWrapper& codec);
-
-    static void showConsensusTable(
-        const std::shared_ptr<executor::TransactionExecutive>& _executive);
 };
 }  // namespace bcos::precompiled
