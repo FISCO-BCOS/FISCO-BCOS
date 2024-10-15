@@ -15,9 +15,8 @@ ExternalProject_Add(gperftools
     PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/deps/
     DOWNLOAD_NAME gperftools-2.10.tar.gz
     DOWNLOAD_NO_PROGRESS 1
-    URL https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/FISCO-BCOS/deps/gperftools-2.10.tar.gz
+    URL https://github.com/gperftools/gperftools/releases/download/gperftools-2.10/gperftools-2.10.tar.gz
     # URL https://github.com/gperftools/gperftools/releases/download/gperftools-2.10/gperftools-2.10.tar.gz
-       # https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/FISCO-BCOS/deps/gperftools-2.7.tar.gz
        # https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/gperftools-2.7.tar.gz
     URL_HASH SHA256=83e3bfdd28b8bcf53222c3798d4d395d52dadbbae59e8730c4a6d31a9c3732d8
     BUILD_IN_SOURCE 1

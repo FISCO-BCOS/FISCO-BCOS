@@ -56,78 +56,26 @@ ConsensusPrecompiled::ConsensusPrecompiled(crypto::Hash::Ptr _hashImpl) : Precom
     name2Selector[WSM_METHOD_ROTATE_STR] = getFuncSelector(WSM_METHOD_ROTATE_STR, _hashImpl);
 }
 
-std::shared_ptr<PrecompiledExecResult> ConsensusPrecompiled::call(
-    std::shared_ptr<executor::TransactionExecutive> _executive,
-    PrecompiledExecResult::Ptr _callParameters)
+// TODO: 临时妥协方案，后续需要改进auth contract，让这个接口支持治理
+// TODO: Temporary compromise solution, subsequent improvements to the auth contract are needed to
+// enable this interface to support governance.
+static bool checkAuthByGovernors(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    PrecompiledExecResult::Ptr const& _callParameters, const CodecWrapper& codec)
 {
-    // parse function name
-    uint32_t func = getParamFunc(_callParameters->input());
-    bytesConstRef data = _callParameters->params();
-
-    showConsensusTable(_executive);
-
-    const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
-
-    if (blockContext.isAuthCheck() && !checkSenderFromAuth(_callParameters->m_sender))
+    auto& origin = _callParameters->m_origin;
+    auto governors = getGovernorList(_executive, _callParameters, codec);
+    PRECOMPILED_LOG(TRACE) << BLOCK_NUMBER(_executive->blockContext().number())
+                           << LOG_BADGE("BalancePrecompiled") << LOG_DESC("checkOriginAuth")
+                           << LOG_KV("governors size", governors.size())
+                           << LOG_KV("origin address", origin);
+    if (RANGES::find(governors, Address(origin)) == governors.end())
     {
-        if (!blockContext.features().get(Features::Flag::feature_rpbft) ||
-            func != name2Selector[WSM_METHOD_ROTATE_STR])
-        {
-            PRECOMPILED_LOG(DEBUG)
-                << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("sender is not from sys")
-                << LOG_KV("sender", _callParameters->m_sender);
-            _callParameters->setExecResult(codec.encode(int32_t(CODE_NO_AUTHORIZED)));
-            return _callParameters;
-        }
+        PRECOMPILED_LOG(TRACE)
+            << BLOCK_NUMBER(_executive->blockContext().number()) << LOG_BADGE("BalancePrecompiled")
+            << LOG_DESC("checkOriginAuth, failed to register, only governor can set term weight");
+        return false;
     }
-
-    int result = 0;
-    if (func == name2Selector[CSS_METHOD_ADD_SEALER])
-    {
-        // addSealer(string, uint256)
-        result = addSealer(_executive, data, codec);
-    }
-    else if (func == name2Selector[CSS_METHOD_ADD_SEALER2])
-    {
-        // addSealer(string, uint256, uint256)
-        result = addSealer2(_executive, data, codec);
-    }
-    else if (func == name2Selector[CSS_METHOD_ADD_SER])
-    {
-        // addObserver(string)
-        result = addObserver(_executive, data, codec);
-    }
-    else if (func == name2Selector[CSS_METHOD_REMOVE])
-    {
-        // remove(string)
-        result = removeNode(_executive, data, codec);
-    }
-    else if (func == name2Selector[CSS_METHOD_SET_WEIGHT])
-    {
-        // setWeight(string,uint256)
-        result = setWeight(_executive, data, codec, false);
-    }
-    else if (func == name2Selector[CSS_METHOD_SET_TERM_WEIGHT])
-    {
-        // setTermWeight(string,uint256)
-        result = setWeight(_executive, data, codec, true);
-    }
-    else if (blockContext.features().get(Features::Flag::feature_rpbft) &&
-             func == name2Selector[WSM_METHOD_ROTATE_STR])
-    {
-        rotateWorkingSealer(_executive, _callParameters, codec);
-    }
-    else [[unlikely]]
-    {
-        PRECOMPILED_LOG(INFO) << LOG_BADGE("ConsensusPrecompiled")
-                              << LOG_DESC("call undefined function") << LOG_KV("func", func);
-        BOOST_THROW_EXCEPTION(
-            bcos::protocol::PrecompiledError("ConsensusPrecompiled call undefined function!"));
-    }
-
-    _callParameters->setExecResult(codec.encode(int32_t(result)));
-    return _callParameters;
+    return true;
 }
 
 static int addSealerImpl(bool isConsensus,
@@ -139,7 +87,8 @@ static int addSealerImpl(bool isConsensus,
 
     PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number())
                           << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("addSealer")
-                          << LOG_KV("nodeID", nodeID);
+                          << LOG_KV("nodeID", nodeID) << LOG_KV("voteWeight", voteWeight)
+                          << LOG_KV("termWeight", termWeight) << LOG_KV("isConsensus", isConsensus);
     if (nodeID.size() != NODE_LENGTH ||
         std::count_if(nodeID.begin(), nodeID.end(),
             [](unsigned char _ch) { return std::isxdigit(_ch); }) != NODE_LENGTH)
@@ -168,6 +117,7 @@ static int addSealerImpl(bool isConsensus,
         {
             // exist
             node->voteWeight = voteWeight;
+            node->termWeight = termWeight;
             node->type = blockContext.features().get(Features::Flag::feature_rpbft) ?
                              consensus::Type::consensus_candidate_sealer :
                              consensus::Type::consensus_sealer;
@@ -218,9 +168,8 @@ static int addSealerImpl(bool isConsensus,
     return 0;
 }
 
-int ConsensusPrecompiled::addSealer(
-    const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& _data,
-    const CodecWrapper& codec)
+static int addSealer(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    bytesConstRef& _data, const CodecWrapper& codec)
 {
     // addSealer(string, uint256)
     std::string nodeID;
@@ -231,9 +180,8 @@ int ConsensusPrecompiled::addSealer(
     return addSealerImpl(true, _executive, std::move(nodeID), voteWeight.convert_to<uint64_t>(), 0);
 }
 
-int ConsensusPrecompiled::addSealer2(
-    const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& _data,
-    const CodecWrapper& codec)
+static int addSealer2(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    bytesConstRef& _data, const CodecWrapper& codec)
 {
     // addSealer(string, uint256, uint256)
     std::string nodeID;
@@ -246,9 +194,8 @@ int ConsensusPrecompiled::addSealer2(
         termWeight.convert_to<uint64_t>());
 }
 
-int ConsensusPrecompiled::addObserver(
-    const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& _data,
-    const CodecWrapper& codec)
+static int addObserver(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    bytesConstRef& _data, const CodecWrapper& codec)
 {
     // addObserver(string)
     std::string nodeID;
@@ -256,9 +203,8 @@ int ConsensusPrecompiled::addObserver(
     return addSealerImpl(false, _executive, std::move(nodeID), 0, 0);
 }
 
-int ConsensusPrecompiled::removeNode(
-    const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& _data,
-    const CodecWrapper& codec)
+static int removeNode(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    bytesConstRef& _data, const CodecWrapper& codec)
 {
     // remove(string)
     std::string nodeID;
@@ -313,9 +259,8 @@ int ConsensusPrecompiled::removeNode(
     return 0;
 }
 
-int ConsensusPrecompiled::setWeight(
-    const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& _data,
-    const CodecWrapper& codec, bool setTermWeight)
+static int setWeight(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    bytesConstRef& _data, const CodecWrapper& codec, bool setTermWeight)
 {
     // setWeight(string,uint256)
     std::string nodeID;
@@ -370,8 +315,7 @@ int ConsensusPrecompiled::setWeight(
     return 0;
 }
 
-void ConsensusPrecompiled::rotateWorkingSealer(
-    const std::shared_ptr<executor::TransactionExecutive>& _executive,
+static void rotateWorkingSealer(const std::shared_ptr<executor::TransactionExecutive>& _executive,
     const PrecompiledExecResult::Ptr& _callParameters, const CodecWrapper& codec)
 {
     auto const& blockContext = _executive->blockContext();
@@ -409,8 +353,7 @@ void ConsensusPrecompiled::rotateWorkingSealer(
     }
 }
 
-void ConsensusPrecompiled::showConsensusTable(
-    const std::shared_ptr<executor::TransactionExecutive>& _executive)
+static void showConsensusTable(const std::shared_ptr<executor::TransactionExecutive>& _executive)
 {
     if (c_fileLogLevel < bcos::LogLevel::TRACE)
     {
@@ -430,4 +373,84 @@ void ConsensusPrecompiled::showConsensusTable(
     }
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("showConsensusTable")
                            << LOG_KV("consensusTable", consensusTable.str());
+}
+
+std::shared_ptr<PrecompiledExecResult> ConsensusPrecompiled::call(
+    std::shared_ptr<executor::TransactionExecutive> _executive,
+    PrecompiledExecResult::Ptr _callParameters)
+{
+    // parse function name
+    uint32_t func = getParamFunc(_callParameters->input());
+    bytesConstRef data = _callParameters->params();
+
+    showConsensusTable(_executive);
+
+    const auto& blockContext = _executive->blockContext();
+    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+
+    if (blockContext.isAuthCheck() && !checkSenderFromAuth(_callParameters->m_sender) &&
+        (!blockContext.features().get(Features::Flag::feature_rpbft) ||
+            func != name2Selector[WSM_METHOD_ROTATE_STR]))
+    {
+        if (func == name2Selector[CSS_METHOD_SET_TERM_WEIGHT] &&
+            checkAuthByGovernors(_executive, _callParameters, codec))
+        {
+            // TODO: 临时使用checkAuthByGovernors放行CSS_METHOD_SET_TERM_WEIGHT
+            // TODO: Temporarily use checkAuthByGovernors to allow CSS_METHOD_SET_TERM_WEIGHT
+        }
+        else
+        {
+            PRECOMPILED_LOG(DEBUG)
+                << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("sender is not from sys")
+                << LOG_KV("sender", _callParameters->m_sender);
+            _callParameters->setExecResult(codec.encode(int32_t(CODE_NO_AUTHORIZED)));
+            return _callParameters;
+        }
+    }
+    int result = 0;
+    if (func == name2Selector[CSS_METHOD_ADD_SEALER])
+    {
+        // addSealer(string, uint256)
+        result = addSealer(_executive, data, codec);
+    }
+    else if (func == name2Selector[CSS_METHOD_ADD_SEALER2])
+    {
+        // addSealer(string, uint256, uint256)
+        result = addSealer2(_executive, data, codec);
+    }
+    else if (func == name2Selector[CSS_METHOD_ADD_SER])
+    {
+        // addObserver(string)
+        result = addObserver(_executive, data, codec);
+    }
+    else if (func == name2Selector[CSS_METHOD_REMOVE])
+    {
+        // remove(string)
+        result = removeNode(_executive, data, codec);
+    }
+    else if (func == name2Selector[CSS_METHOD_SET_WEIGHT])
+    {
+        // setWeight(string,uint256)
+        result = setWeight(_executive, data, codec, false);
+    }
+    else if (func == name2Selector[CSS_METHOD_SET_TERM_WEIGHT])
+    {
+        // setTermWeight(string,uint256)
+        result = setWeight(_executive, data, codec, true);
+    }
+    else if (blockContext.features().get(Features::Flag::feature_rpbft) &&
+             func == name2Selector[WSM_METHOD_ROTATE_STR])
+    {
+        rotateWorkingSealer(_executive, _callParameters, codec);
+    }
+    else [[unlikely]]
+    {
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("ConsensusPrecompiled")
+                              << LOG_DESC("call undefined function") << LOG_KV("func", func);
+        BOOST_THROW_EXCEPTION(
+            bcos::protocol::PrecompiledError("ConsensusPrecompiled call undefined function!"));
+    }
+
+    _callParameters->setExecResult(codec.encode(int32_t(result)));
+    return _callParameters;
 }

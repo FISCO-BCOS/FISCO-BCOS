@@ -280,7 +280,7 @@ task::Task<bool> WorkingSealerManagerImpl::getConsensusNodeListFromStorage(
     bool isConsensusNodeListChanged = false;
     bool isCandidateSealerChanged = false;
 
-    for (const auto& node : nodeList)
+    for (auto& node : nodeList)
     {
         if (node.enableNumber > blockContext.number()) [[unlikely]]
         {
@@ -379,11 +379,11 @@ std::tuple<uint32_t, uint32_t> WorkingSealerManagerImpl::calNodeRotatingInfo() c
 
 struct NodeWeightRange
 {
-    std::reference_wrapper<const consensus::ConsensusNode> sealer;
+    std::reference_wrapper<consensus::ConsensusNode> sealer;
     uint64_t offset;
 };
 
-static const consensus::ConsensusNode& pickNodeByWeight(
+static consensus::ConsensusNode& pickNodeByWeight(
     std::vector<NodeWeightRange>& nodeWeightRanges, size_t& totalWeight, const u256& seed)
 {
     auto index = (seed % totalWeight).convert_to<size_t>();
@@ -403,22 +403,22 @@ static const consensus::ConsensusNode& pickNodeByWeight(
     return sealer.get();
 }
 
-static std::vector<std::reference_wrapper<const consensus::ConsensusNode>> getNodeListByWeight(
+static std::vector<std::reference_wrapper<consensus::ConsensusNode>> getNodeListByWeight(
     ::ranges::input_range auto const& nodeList, const u256& seed, size_t count)
     requires std::same_as<std::decay_t<::ranges::range_value_t<decltype(nodeList)>>,
-        std::reference_wrapper<const consensus::ConsensusNode>>
+        std::reference_wrapper<consensus::ConsensusNode>>
 {
     std::vector<NodeWeightRange> nodeWeightRanges;
     nodeWeightRanges.reserve(RANGES::size(nodeList));
 
     size_t totalWeight = 0;
-    for (const consensus::ConsensusNode& node : nodeList)
+    for (consensus::ConsensusNode& node : nodeList)
     {
         totalWeight += node.termWeight;
         nodeWeightRanges.push_back({node, totalWeight});
     }
 
-    std::vector<std::reference_wrapper<const consensus::ConsensusNode>> result;
+    std::vector<std::reference_wrapper<consensus::ConsensusNode>> result;
     result.reserve(count);
     for ([[maybe_unused]] auto i : ::ranges::views::iota(0LU, count))
     {
@@ -427,12 +427,11 @@ static std::vector<std::reference_wrapper<const consensus::ConsensusNode>> getNo
     return result;
 }
 
-std::vector<std::reference_wrapper<const consensus::ConsensusNode>>
+std::vector<std::reference_wrapper<consensus::ConsensusNode>>
 WorkingSealerManagerImpl::selectNodesFromList(
-    std::vector<std::reference_wrapper<const consensus::ConsensusNode>>& _nodeList,
-    uint32_t _selectNum)
+    std::vector<std::reference_wrapper<consensus::ConsensusNode>>& _nodeList, uint32_t _selectNum)
 {
-    std::vector<std::reference_wrapper<const consensus::ConsensusNode>> selectedNodeList;
+    std::vector<std::reference_wrapper<consensus::ConsensusNode>> selectedNodeList;
     if (_nodeList.empty()) [[unlikely]]
     {
         return selectedNodeList;
@@ -458,7 +457,7 @@ WorkingSealerManagerImpl::selectNodesFromList(
 }
 
 void WorkingSealerManagerImpl::updateNodeListType(
-    const std::vector<std::reference_wrapper<const consensus::ConsensusNode>>& _nodeList,
+    const std::vector<std::reference_wrapper<consensus::ConsensusNode>>& _nodeList,
     consensus::Type _type, const executor::TransactionExecutive::Ptr& executive)
 {
     auto const& blockContext = executive->blockContext();
@@ -509,7 +508,7 @@ void bcos::precompiled::WorkingSealerManagerImpl::rotateWorkingSealerByWeight(
         fmt::join(::ranges::views::transform(workingSealers,
                       [](const consensus::ConsensusNode& node) { return node.nodeID->hex(); }),
             ","));
-    for (auto& node : m_consensusNodes)
+    for (consensus::ConsensusNode& node : candidateSealers)
     {
         if (auto it = std::lower_bound(workingSealers.begin(), workingSealers.end(), node.nodeID,
                 [](const consensus::ConsensusNode& lhs, const auto& rhs) {

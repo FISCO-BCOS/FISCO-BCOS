@@ -58,13 +58,13 @@ private:
 
     // calculate the number of working sealers that need to be added and removed
     std::tuple<uint32_t, uint32_t> calNodeRotatingInfo() const;
-    std::vector<std::reference_wrapper<const consensus::ConsensusNode>> selectNodesFromList(
-        std::vector<std::reference_wrapper<const consensus::ConsensusNode>>& _nodeList,
+    std::vector<std::reference_wrapper<consensus::ConsensusNode>> selectNodesFromList(
+        std::vector<std::reference_wrapper<consensus::ConsensusNode>>& _nodeList,
         uint32_t _selectNum);
 
     // update node list type in m_consensusNodes
     void updateNodeListType(
-        const std::vector<std::reference_wrapper<const consensus::ConsensusNode>>& _nodeList,
+        const std::vector<std::reference_wrapper<consensus::ConsensusNode>>& _nodeList,
         consensus::Type _type, const executor::TransactionExecutive::Ptr& executive);
     void commitConsensusNodeListToStorage(const executor::TransactionExecutive::Ptr& _executive);
 
@@ -72,8 +72,8 @@ private:
     void rotateWorkingSealerByWeight(const executor::TransactionExecutive::Ptr& _executive);
 
     std::unique_ptr<VRFInfo> m_vrfInfo;
-    std::vector<std::reference_wrapper<const consensus::ConsensusNode>> m_candidateSealer;
-    std::vector<std::reference_wrapper<const consensus::ConsensusNode>> m_consensusSealer;
+    std::vector<std::reference_wrapper<consensus::ConsensusNode>> m_candidateSealer;
+    std::vector<std::reference_wrapper<consensus::ConsensusNode>> m_consensusSealer;
     bool m_consensusChangeFlag = false;
     consensus::ConsensusNodeList m_consensusNodes;
     bool m_notifyNextLeaderRotateSet = false;

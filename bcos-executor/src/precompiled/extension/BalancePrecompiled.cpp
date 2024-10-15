@@ -19,9 +19,7 @@
  */
 
 #include "BalancePrecompiled.h"
-#include "AccountManagerPrecompiled.h"
 #include "bcos-framework/bcos-framework/storage/Table.h"
-#include "libinitializer/AuthInitializer.h"
 #include <bcos-tool/BfsFileFactory.h>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
@@ -152,7 +150,6 @@ void BalancePrecompiled::createAccount(
                               << LOG_KV("status", response->status);
         BOOST_THROW_EXCEPTION(PrecompiledError("Create account error."));
     }
-    return;
 }
 
 
@@ -470,30 +467,28 @@ void BalancePrecompiled::registerCaller(
         _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
         return;
     }
-    else
+
+    // check table size whether exceed the limit
+    auto keyCondition = std::make_optional<storage::Condition>();
+    keyCondition->limit(0, USER_TABLE_MAX_LIMIT_COUNT);
+    auto tableKeyList = table->getPrimaryKeys(*keyCondition);
+    if (tableKeyList.size() >= USER_TABLE_MAX_LIMIT_COUNT)
     {
-        // check table size whether exceed the limit
-        auto keyCondition = std::make_optional<storage::Condition>();
-        keyCondition->limit(0, USER_TABLE_MAX_LIMIT_COUNT);
-        auto tableKeyList = table->getPrimaryKeys(*keyCondition);
-        if (tableKeyList.size() >= USER_TABLE_MAX_LIMIT_COUNT)
-        {
-            PRECOMPILED_LOG(TRACE)
-                << BLOCK_NUMBER(blockContext.number()) << LOG_BADGE("registerCaller")
-                << LOG_DESC("failed to register, caller table size exceed limit")
-                << LOG_KV("caller", accountStr) << LOG_KV("tableKeyList size", tableKeyList.size());
-            BOOST_THROW_EXCEPTION(protocol::PrecompiledError("caller table size exceed limit"));
-        }
-        auto callerEntry = table->getRow(accountStr);
-        if (callerEntry)
-        {
-            BOOST_THROW_EXCEPTION(protocol::PrecompiledError("caller already exist"));
-        }
-        Entry CallerEntry;
-        CallerEntry.importFields({"1"});
-        _executive->storage().setRow(SYS_BALANCE_CALLER, accountStr, std::move(CallerEntry));
-        _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
+        PRECOMPILED_LOG(TRACE) << BLOCK_NUMBER(blockContext.number()) << LOG_BADGE("registerCaller")
+                               << LOG_DESC("failed to register, caller table size exceed limit")
+                               << LOG_KV("caller", accountStr)
+                               << LOG_KV("tableKeyList size", tableKeyList.size());
+        BOOST_THROW_EXCEPTION(protocol::PrecompiledError("caller table size exceed limit"));
     }
+    auto callerEntry = table->getRow(accountStr);
+    if (callerEntry)
+    {
+        BOOST_THROW_EXCEPTION(protocol::PrecompiledError("caller already exist"));
+    }
+    Entry CallerEntry;
+    CallerEntry.importFields({"1"});
+    _executive->storage().setRow(SYS_BALANCE_CALLER, accountStr, std::move(CallerEntry));
+    _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
     PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number()) << LOG_BADGE("BalancePrecompiled")
                           << LOG_DESC("registerCaller") << LOG_KV("account", accountStr);
 }
