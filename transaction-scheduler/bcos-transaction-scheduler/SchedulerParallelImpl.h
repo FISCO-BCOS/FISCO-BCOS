@@ -107,8 +107,6 @@ public:
                     << " transactions";
                 break;
             }
-            context.init(index, *context.transaction, *context.receipt);
-
             context.coro.emplace(transaction_executor::execute3Step(m_executor.get(),
                 m_readWriteSetStorage, blockHeader, *context.transaction, context.contextID,
                 ledgerConfig, task::tbb::syncWait, std::allocator_arg, context.m_allocator));
@@ -350,6 +348,11 @@ task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
         ledger::LedgerConfig const&, task::tbb::SyncWait>;
 
     std::vector<ExecutionContext<CoroType>> contexts(transactionCount);
+    for (auto&& [index, context] : RANGES::views::enumerate(contexts))
+    {
+        context.init(index, transactions[index], receipts[index]);
+    }
+
     tbb::task_arena arena(
         tbb::task_arena::constraints{}.set_max_concurrency(scheduler.m_maxConcurrency));
     arena.execute([&]() {
