@@ -60,7 +60,8 @@ struct EVMHostInterface
         StackAllocator<SMALL_STACK> stackAllocator;
         auto& hostContext = static_cast<HostContextType&>(*context);
         return syncWait(
-            hostContext.exists(*addr, std::allocator_arg, stackAllocator.getAllocator()));
+            hostContext.exists(*addr, std::allocator_arg, stackAllocator.getAllocator()),
+            std::allocator_arg, stackAllocator.getAllocator());
     }
 
     static evmc_bytes32 getStorage(evmc_host_context* context,
@@ -68,7 +69,8 @@ struct EVMHostInterface
     {
         StackAllocator<SMALL_STACK> stackAllocator;
         auto& hostContext = static_cast<HostContextType&>(*context);
-        return syncWait(hostContext.get(key, std::allocator_arg, stackAllocator.getAllocator()));
+        return syncWait(hostContext.get(key, std::allocator_arg, stackAllocator.getAllocator()),
+            std::allocator_arg, stackAllocator.getAllocator());
     }
 
     static evmc_bytes32 getTransientStorage(evmc_host_context* context,
@@ -76,8 +78,9 @@ struct EVMHostInterface
     {
         StackAllocator<SMALL_STACK> stackAllocator;
         auto& hostContext = static_cast<HostContextType&>(*context);
-        return syncWait(hostContext.getTransientStorage(
-            key, std::allocator_arg, stackAllocator.getAllocator()));
+        return syncWait(
+            hostContext.getTransientStorage(key, std::allocator_arg, stackAllocator.getAllocator()),
+            std::allocator_arg, stackAllocator.getAllocator());
     }
 
     static evmc_storage_status setStorage(evmc_host_context* context,
@@ -93,7 +96,8 @@ struct EVMHostInterface
         {
             status = EVMC_STORAGE_DELETED;
         }
-        syncWait(hostContext.set(key, value, std::allocator_arg, stackAllocator.getAllocator()));
+        syncWait(hostContext.set(key, value, std::allocator_arg, stackAllocator.getAllocator()),
+            std::allocator_arg, stackAllocator.getAllocator());
         return status;
     }
 
@@ -104,7 +108,8 @@ struct EVMHostInterface
         StackAllocator<SMALL_STACK> stackAllocator;
         auto& hostContext = static_cast<HostContextType&>(*context);
         syncWait(hostContext.setTransientStorage(
-            key, value, std::allocator_arg, stackAllocator.getAllocator()));
+                     key, value, std::allocator_arg, stackAllocator.getAllocator()),
+            std::allocator_arg, stackAllocator.getAllocator());
     }
 
     static evmc_bytes32 getBalance([[maybe_unused]] evmc_host_context* context,
@@ -119,7 +124,8 @@ struct EVMHostInterface
         StackAllocator<SMALL_STACK> stackAllocator;
         auto& hostContext = static_cast<HostContextType&>(*context);
         return syncWait(
-            hostContext.codeSizeAt(*addr, std::allocator_arg, stackAllocator.getAllocator()));
+            hostContext.codeSizeAt(*addr, std::allocator_arg, stackAllocator.getAllocator()),
+            std::allocator_arg, stackAllocator.getAllocator());
     }
 
     static evmc_bytes32 getCodeHash(evmc_host_context* context, const evmc_address* addr) noexcept
@@ -127,7 +133,8 @@ struct EVMHostInterface
         StackAllocator<SMALL_STACK> stackAllocator;
         auto& hostContext = static_cast<HostContextType&>(*context);
         return toEvmC(syncWait(
-            hostContext.codeHashAt(*addr, std::allocator_arg, stackAllocator.getAllocator())));
+            hostContext.codeHashAt(*addr, std::allocator_arg, stackAllocator.getAllocator()),
+            std::allocator_arg, stackAllocator.getAllocator()));
     }
 
     static size_t copyCode(evmc_host_context* context, const evmc_address* address,
@@ -136,7 +143,8 @@ struct EVMHostInterface
         StackAllocator<SMALL_STACK> stackAllocator;
         auto& hostContext = static_cast<HostContextType&>(*context);
         auto codeEntry =
-            syncWait(hostContext.code(*address, std::allocator_arg, stackAllocator.getAllocator()));
+            syncWait(hostContext.code(*address, std::allocator_arg, stackAllocator.getAllocator()),
+                std::allocator_arg, stackAllocator.getAllocator());
 
         // Handle "big offset" edge case.
         if (!codeEntry || codeOffset >= (size_t)codeEntry->size())
@@ -211,7 +219,8 @@ struct EVMHostInterface
         StackAllocator<SMALL_STACK> stackAllocator;
         auto& hostContext = static_cast<HostContextType&>(*context);
         return toEvmC(syncWait(
-            hostContext.blockHash(number, std::allocator_arg, stackAllocator.getAllocator())));
+            hostContext.blockHash(number, std::allocator_arg, stackAllocator.getAllocator()),
+            std::allocator_arg, stackAllocator.getAllocator()));
     }
 
     static evmc_result call(evmc_host_context* context, const evmc_message* message) noexcept
@@ -226,7 +235,8 @@ struct EVMHostInterface
         StackAllocator<SMALL_STACK> stackAllocator;
         auto& hostContext = static_cast<HostContextType&>(*context);
         auto result = syncWait(
-            hostContext.externalCall(*message, std::allocator_arg, stackAllocator.getAllocator()));
+            hostContext.externalCall(*message, std::allocator_arg, stackAllocator.getAllocator()),
+            std::allocator_arg, stackAllocator.getAllocator());
         evmc_result evmcResult = result;
         result.release = nullptr;
         return evmcResult;
@@ -236,12 +246,8 @@ struct EVMHostInterface
 template <class HostContextType>
 const evmc_host_interface* getHostInterface(auto&& syncWait)
 {
-    using HostContextImpl = EVMHostInterface<HostContextType, [](auto&& task) {
-        constexpr static std::decay_t<decltype(syncWait)> localWaitOperator{};
-        StackAllocator<SMALL_STACK> stackAllocator;
-        return localWaitOperator(
-            std::forward<decltype(task)>(task), std::allocator_arg, stackAllocator.getAllocator());
-    }>;
+    constexpr static std::decay_t<decltype(syncWait)> localWaitOperator{};
+    using HostContextImpl = EVMHostInterface<HostContextType, localWaitOperator>;
     static evmc_host_interface const fnTable = {
         HostContextImpl::accountExists,
         HostContextImpl::getStorage,

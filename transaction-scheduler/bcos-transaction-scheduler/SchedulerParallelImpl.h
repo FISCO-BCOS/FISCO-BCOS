@@ -166,9 +166,6 @@ public:
     GC m_gc;
     size_t m_grainSize = DEFAULT_GRAIN_SIZE;
     size_t m_maxConcurrency = DEFAULT_MAX_CONCURRENCY;
-
-    std::pmr::unsynchronized_pool_resource m_contextPoolResource;
-    std::mutex m_contextPoolMutex;
 };
 
 template <class Scheduler>
