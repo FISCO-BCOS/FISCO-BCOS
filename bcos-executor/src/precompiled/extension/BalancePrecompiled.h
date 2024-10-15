@@ -19,8 +19,6 @@
  */
 #pragma once
 #include "../../vm/Precompiled.h"
-#include "bcos-executor/src/precompiled/common/Common.h"
-#include "bcos-executor/src/precompiled/common/Utilities.h"
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 
 namespace bcos::precompiled
@@ -68,8 +66,5 @@ private:
 
     void checkOriginAuth(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         PrecompiledExecResult::Ptr const& _callParameters, const CodecWrapper& codec);
-
-private:
-    mutable std::map<std::string, u256> m_fakeBalancePrecompiled;
 };
 }  // namespace bcos::precompiled
