@@ -15,13 +15,11 @@
 #include <oneapi/tbb/parallel_pipeline.h>
 #include <oneapi/tbb/task_arena.h>
 #include <oneapi/tbb/task_group.h>
-#include <boost/pool/object_pool.hpp>
 #include <boost/throw_exception.hpp>
 #include <atomic>
 #include <cstddef>
 #include <functional>
 #include <memory>
-#include <memory_resource>
 #include <range/v3/view/enumerate.hpp>
 #include <type_traits>
 
