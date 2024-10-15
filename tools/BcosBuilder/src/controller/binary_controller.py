@@ -21,7 +21,7 @@ class BinaryController:
         else:
             self.binary_postfix = "-linux-x86_64.tgz"
         self.mtail_binary_name = "mtail_3.0.0-rc49_Linux_x86_64.tar.gz"
-        self.cdn_link_header = "https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS"
+        self.cdn_link_header = "https://github.com/FISCO-BCOS"
         if node_type == "pro":
             self.binary_list = ["BcosRpcService",
                                 "BcosGatewayService", "BcosNodeService"]

@@ -67,6 +67,7 @@
 #include <boost/filesystem.hpp>
 #include <cstddef>
 #include <memory>
+#include <string>
 #include <toml++/toml.hpp>
 #include <vector>
 
@@ -132,6 +133,20 @@ void Initializer::initConfig(std::string const& _configFilePath, std::string con
     }
 }
 
+RocksDBOption getRocksDBOption(
+    const tool::NodeConfig::Ptr& nodeConfig, bool optimizeLevelStyleCompaction = false)
+{
+    RocksDBOption option;
+    option.maxWriteBufferNumber = nodeConfig->maxWriteBufferNumber();
+    option.maxBackgroundJobs = nodeConfig->maxBackgroundJobs();
+    option.writeBufferSize = nodeConfig->writeBufferSize();
+    option.minWriteBufferNumberToMerge = nodeConfig->minWriteBufferNumberToMerge();
+    option.blockCacheSize = nodeConfig->blockCacheSize();
+    option.optimizeLevelStyleCompaction = optimizeLevelStyleCompaction;
+    option.enable_blob_files = nodeConfig->enableRocksDBBlob();
+    return option;
+}
+
 void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     std::string const& _configFilePath, std::string const& _genesisFile,
     bcos::gateway::GatewayInterface::Ptr _gateway, bool _airVersion, const std::string& _logPath)
@@ -141,21 +156,10 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         std::make_shared<FrontServiceInitializer>(m_nodeConfig, m_protocolInitializer, _gateway);
 
     // build the storage
-    auto stateDBPath = m_nodeConfig->enableSeparateBlockAndState() ? m_nodeConfig->stateDBPath() :
-                                                                     m_nodeConfig->storagePath();
-    auto blockDBPath = m_nodeConfig->blockDBPath();
+    auto stateDBPath = getStateDBPath(_airVersion);
+    auto blockDBPath = getBlockDBPath(_airVersion);
     // build and init the pbft related modules
-    auto consensusStoragePath =
-        m_nodeConfig->storagePath() + c_fileSeparator + c_consensusStorageDBName;
-    if (!_airVersion)
-    {  // if the stateDBPath is absolute path, the result stateDBPath will deep
-        stateDBPath = tars::ServerConfig::BasePath + ".." + c_fileSeparator +
-                      m_nodeConfig->groupId() + c_fileSeparator + stateDBPath;
-        blockDBPath = tars::ServerConfig::BasePath + ".." + c_fileSeparator +
-                      m_nodeConfig->groupId() + c_fileSeparator + blockDBPath;
-        consensusStoragePath = tars::ServerConfig::BasePath + ".." + c_fileSeparator +
-                               m_nodeConfig->groupId() + c_fileSeparator + c_consensusStorageDBName;
-    }
+    auto consensusStoragePath = getConsensusStorageDBPath(_airVersion);
     INITIALIZER_LOG(INFO) << LOG_DESC("initNode") << LOG_KV("stateDBPath", stateDBPath)
                           << LOG_KV("enableSeparateBlockAndState",
                                  m_nodeConfig->enableSeparateBlockAndState())
@@ -168,13 +172,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
     if (boost::iequals(m_nodeConfig->storageType(), "RocksDB"))
     {
-        RocksDBOption option;
-        option.maxWriteBufferNumber = m_nodeConfig->maxWriteBufferNumber();
-        option.maxBackgroundJobs = m_nodeConfig->maxBackgroundJobs();
-        option.writeBufferSize = m_nodeConfig->writeBufferSize();
-        option.minWriteBufferNumberToMerge = m_nodeConfig->minWriteBufferNumberToMerge();
-        option.blockCacheSize = m_nodeConfig->blockCacheSize();
-        option.enable_blob_files = m_nodeConfig->enableRocksDBBlob();
+        RocksDBOption option = getRocksDBOption(m_nodeConfig);
+
         // m_protocolInitializer->dataEncryption() will return nullptr when storage_security = false
         m_storage = StorageInitializer::build(
             StorageInitializer::createRocksDB(
@@ -633,11 +632,13 @@ void Initializer::stop()
 }
 
 
-protocol::BlockNumber Initializer::getCurrentBlockNumber()
+protocol::BlockNumber Initializer::getCurrentBlockNumber(
+    bcos::storage::TransactionalStorageInterface::Ptr _storage)
 {
+    auto storage = _storage ? _storage : m_storage;
     std::promise<protocol::BlockNumber> blockNumberFuture;
-    m_ledger->asyncGetBlockNumber(
-        [&blockNumberFuture](Error::Ptr error, protocol::BlockNumber number) {
+    storage->asyncGetRow(ledger::SYS_CURRENT_STATE, ledger::SYS_KEY_CURRENT_NUMBER,
+        [&blockNumberFuture](Error::Ptr error, std::optional<bcos::storage::Entry>&& entry) {
             if (error)
             {
                 INITIALIZER_LOG(ERROR)
@@ -646,10 +647,38 @@ protocol::BlockNumber Initializer::getCurrentBlockNumber()
             }
             else
             {
-                blockNumberFuture.set_value(number);
+                try
+                {
+                    auto blockNumber =
+                        boost::lexical_cast<bcos::protocol::BlockNumber>(entry->getField(0));
+                    blockNumberFuture.set_value(blockNumber);
+                }
+                catch (boost::bad_lexical_cast& e)
+                {
+                    // Ignore the exception
+                    LEDGER_LOG(INFO)
+                        << "Cast blockNumber failed, may be empty, set to default value 0"
+                        << LOG_KV("blockNumber str", entry->getField(0));
+                    blockNumberFuture.set_value(0);
+                }
             }
         });
     return blockNumberFuture.get_future().get();
+    // std::promise<protocol::BlockNumber> blockNumberFuture;
+    // m_ledger->asyncGetBlockNumber(
+    //     [&blockNumberFuture](Error::Ptr error, protocol::BlockNumber number) {
+    //         if (error)
+    //         {
+    //             INITIALIZER_LOG(ERROR)
+    //                 << LOG_DESC("get block number failed") << LOG_DESC(error->errorMessage());
+    //             blockNumberFuture.set_value(0);
+    //         }
+    //         else
+    //         {
+    //             blockNumberFuture.set_value(number);
+    //         }
+    //     });
+    // return blockNumberFuture.get_future().get();
 }
 
 void Initializer::prune()
@@ -738,22 +767,22 @@ bcos::Error::Ptr checkOrCreateDir(const fs::path& dir)
     return nullptr;
 }
 
-bcos::Error::Ptr Initializer::generateSnapshot(
-    const std::string& snapshotPath, bool withTxAndReceipts)
+bcos::Error::Ptr Initializer::generateSnapshot(const std::string& snapshotPath,
+    bool withTxAndReceipts, const tool::NodeConfig::Ptr& nodeConfig)
 {
-    if (!boost::iequals(m_nodeConfig->storageType(), "RocksDB"))
+    if (!boost::iequals(nodeConfig->storageType(), "RocksDB"))
     {  // TODO: support TiKV
         std::cerr << "only support RocksDB storage" << std::endl;
         return BCOS_ERROR_PTR(-1, "only support RocksDB storage");
     }
-    auto separatedBlockAndState = m_nodeConfig->enableSeparateBlockAndState();
+    auto separatedBlockAndState = nodeConfig->enableSeparateBlockAndState();
 
-    auto stateDBPath = m_nodeConfig->storagePath();
+    auto stateDBPath = nodeConfig->storagePath();
     if (separatedBlockAndState)
     {
-        stateDBPath = m_nodeConfig->stateDBPath();
+        stateDBPath = nodeConfig->stateDBPath();
     }
-    auto blockDBPath = m_nodeConfig->blockDBPath();
+    auto blockDBPath = nodeConfig->blockDBPath();
     auto snapshotRoot = snapshotPath + "/snapshot";
     fs::path stateSstPath = snapshotRoot + "/state";
     fs::path blockSstPath = snapshotRoot + "/block";
@@ -775,11 +804,19 @@ bcos::Error::Ptr Initializer::generateSnapshot(
         return BCOS_ERROR_PTR(-1, "Failed to open meta file");
     }
     metaFile << "snapshot.withTxAndReceipts = " << withTxAndReceipts << std::endl;
-    metaFile << "snapshot.separatedBlockAndState = " << m_nodeConfig->enableSeparateBlockAndState()
+    metaFile << "snapshot.separatedBlockAndState = " << nodeConfig->enableSeparateBlockAndState()
              << std::endl;
 
-    auto blockLimit = (protocol::BlockNumber)m_nodeConfig->blockLimit();
-    bcos::protocol::BlockNumber currentBlockNumber = getCurrentBlockNumber();
+    auto db = createReadOnlyRocksDB(stateDBPath);
+    if (!db)
+    {
+        return BCOS_ERROR_PTR(-1, "open rocksDB failed");
+    }
+    auto stateStorage =
+        StorageInitializer::build(std::move(db), m_protocolInitializer->dataEncryption());
+    auto blockLimit = (protocol::BlockNumber)nodeConfig->blockLimit();
+    bcos::protocol::BlockNumber currentBlockNumber = getCurrentBlockNumber(stateStorage);
+    stateStorage.reset();
     metaFile << "snapshot.blockNumber = " << currentBlockNumber << std::endl;
     std::cout << "current block number: " << currentBlockNumber << std::endl;
     auto nonceStartNumber = currentBlockNumber > blockLimit ? currentBlockNumber - blockLimit : 0;
@@ -787,7 +824,7 @@ bcos::Error::Ptr Initializer::generateSnapshot(
         bcos::ledger::SYS_BLOCK_NUMBER_2_NONCES, std::to_string(blockLimit + 1));
     auto validNonceEndKey = bcos::storage::toDBKey(
         bcos::ledger::SYS_BLOCK_NUMBER_2_NONCES, std::to_string(currentBlockNumber));
-    const size_t MAX_SST_FILE_BYTE = 256 * 1024 * 1024;
+    const size_t MAX_SST_FILE_BYTE = 128 << 20;  // 128MB
     rocksdb::Options options;
     options.compression = rocksdb::kZSTD;
     auto stateSstFileWriter = rocksdb::SstFileWriter(rocksdb::EnvOptions(), options);
@@ -960,6 +997,10 @@ bcos::Error::Ptr Initializer::generateSnapshot(
             return error;
         }
     }
+    if (!withTxAndReceipts)
+    {  // delete the block sst path
+        fs::remove_all(blockSstPath);
+    }
     metaFile << "snapshot.blockSstCount = " << blockSstIndex << std::endl;
     metaFile.close();
     std::cout << "generate snapshot success, the snapshot is in " << snapshotRoot << std::endl;
@@ -999,17 +1040,19 @@ bcos::Error::Ptr bcos::initializer::traverseRocksDB(const std::string& rockDBPat
     return nullptr;
 }
 
-bcos::Error::Ptr Initializer::importSnapshot(const std::string& snapshotPath)
+bcos::Error::Ptr Initializer::importSnapshot(
+    const std::string& snapshotPath, const tool::NodeConfig::Ptr& nodeConfig)
 {
-    if (!boost::iequals(m_nodeConfig->storageType(), "RocksDB"))
+    if (!boost::iequals(nodeConfig->storageType(), "RocksDB"))
     {  // TODO: support TiKV
         std::cerr << "only support RocksDB storage" << std::endl;
         return BCOS_ERROR_PTR(-1, "only support RocksDB storage");
     }
-    return importSnapshotToRocksDB(snapshotPath, m_nodeConfig->storagePath());
+    return importSnapshotToRocksDB(snapshotPath, nodeConfig);
 }
 
-bcos::Error::Ptr ingestIntoRocksDB(rocksdb::DB& rocksDB, const std::vector<std::string>& sstFiles)
+bcos::Error::Ptr ingestIntoRocksDB(
+    rocksdb::DB& rocksDB, const std::vector<std::string>& sstFiles, bool moveFiles)
 {
     rocksdb::Options options;
     options.compression = rocksdb::kZSTD;
@@ -1034,9 +1077,8 @@ bcos::Error::Ptr ingestIntoRocksDB(rocksdb::DB& rocksDB, const std::vector<std::
         }
     }
     std::cout << "check sst files success, ingest sst files" << std::endl;
-
     rocksdb::IngestExternalFileOptions info;
-    info.move_files = true;
+    info.move_files = moveFiles;
     // Ingest SST files into the DB
     rocksdb::Status status = rocksDB.IngestExternalFile(sstFiles, info);
     if (!status.ok())
@@ -1044,11 +1086,18 @@ bcos::Error::Ptr ingestIntoRocksDB(rocksdb::DB& rocksDB, const std::vector<std::
         std::cerr << "Error while adding file, " << status.ToString() << std::endl;
         return BCOS_ERROR_PTR(-1, "Error while adding file, " + status.ToString());
     }
+    // compaction
+    status = rocksDB.CompactRange(rocksdb::CompactRangeOptions(), nullptr, nullptr);
+    if (!status.ok())
+    {
+        std::cerr << "compaction failed, " << status.ToString() << std::endl;
+        return BCOS_ERROR_PTR(-1, "compaction failed, " + status.ToString());
+    }
     return nullptr;
 }
 
 bcos::Error::Ptr Initializer::importSnapshotToRocksDB(
-    const std::string& snapshotPath, const std::string& rockDBPath)
+    const std::string& snapshotPath, const tool::NodeConfig::Ptr& nodeConfig)
 {
     // check snapshot file and meta file
     fs::path sstPath = snapshotPath + "/state";
@@ -1076,6 +1125,13 @@ bcos::Error::Ptr Initializer::importSnapshotToRocksDB(
     }
 
     // import state
+    // check the destination db is empty
+    auto stateDBPath = getStateDBPath(true);
+    if (fs::exists(stateDBPath) && !fs::is_empty(stateDBPath))
+    {
+        std::cerr << "db path " << stateDBPath << " is not empty" << std::endl;
+        return BCOS_ERROR_PTR(-1, stateDBPath + " is not empty");
+    }
     size_t sstIndex = 0;
     if (stateSstCount.has_value())
     {
@@ -1097,20 +1153,21 @@ bcos::Error::Ptr Initializer::importSnapshotToRocksDB(
         }
         sstFiles.emplace_back(sstFileName.string());
     }
-
-    auto stateStorage = std::dynamic_pointer_cast<storage::RocksDBStorage>(m_storage);
-    if (stateStorage)
+    bool moveSSTFiles = true;
+    std::cout << "the snapshot will be ingested into " << stateDBPath
+              << ", if yes the snapshot will be moved, if no the snapshot will be copy(yes/no)"
+              << std::endl;
+    std::string input;
+    std::cin >> input;
+    if (boost::iequals(input, "no"))
     {
-        auto& rocksDB = stateStorage->rocksDB();
-        ingestIntoRocksDB(rocksDB, sstFiles);
+        moveSSTFiles = false;
     }
-    else
-    {  // TODO: support import into TiKV
-        std::cerr << "storage is not RocksDBStorage" << std::endl;
-        return BCOS_ERROR_PTR(-1, "storage is not RocksDBStorage");
-    }
-    auto currentBlockNumber = getCurrentBlockNumber();
-    std::cout << "The block number of this node: " << currentBlockNumber << std::endl;
+    auto rocksdbOption = getRocksDBOption(nodeConfig, true);
+    auto rocksDB = StorageInitializer::createRocksDB(
+        stateDBPath, rocksdbOption, nodeConfig->enableStatistics(), nodeConfig->keyPageSize());
+    ingestIntoRocksDB(*rocksDB, sstFiles, moveSSTFiles);
+    bcos::storage::TransactionalStorageInterface::Ptr stateStorage = nullptr;
     // import tx and receipt
     if (snapshotWithTxAndReceipts.has_value() && snapshotWithTxAndReceipts.value())
     {  // snapshot has tx and receipt
@@ -1140,34 +1197,42 @@ bcos::Error::Ptr Initializer::importSnapshotToRocksDB(
             }
             blockSstFiles.emplace_back(sstFileName.string());
         }
-        if (m_nodeConfig->enableSeparateBlockAndState())
+        if (nodeConfig->enableSeparateBlockAndState())
         {
-            auto blockStorage = std::dynamic_pointer_cast<storage::RocksDBStorage>(m_blockStorage);
-            if (blockStorage)
+            auto blockDBPath = getBlockDBPath(true);
+            auto blockRocksDB = StorageInitializer::createRocksDB(
+                blockDBPath, rocksdbOption, nodeConfig->enableStatistics());
+            if (blockRocksDB)
             {
-                auto& rocksDB = blockStorage->rocksDB();
-                ingestIntoRocksDB(rocksDB, blockSstFiles);
+                ingestIntoRocksDB(*blockRocksDB, blockSstFiles, moveSSTFiles);
             }
             else
             {
-                std::cerr << "blockStorage is not RocksDBStorage" << std::endl;
-                return BCOS_ERROR_PTR(-1, "blockStorage is not RocksDBStorage");
+                std::cerr << "create blockStorage failed" << std::endl;
+                return BCOS_ERROR_PTR(-1, "create blockStorage failed");
             }
         }
         else
         {  // import block into state db
-            auto& rocksDB = stateStorage->rocksDB();
-            ingestIntoRocksDB(rocksDB, blockSstFiles);
+            ingestIntoRocksDB(*rocksDB, blockSstFiles, moveSSTFiles);
         }
+        stateStorage =
+            StorageInitializer::build(std::move(rocksDB), m_protocolInitializer->dataEncryption());
+        auto currentBlockNumber = getCurrentBlockNumber(stateStorage);
+        std::cout << "The block number of this node: " << currentBlockNumber << std::endl;
         return nullptr;
     }
-
+    stateStorage =
+        StorageInitializer::build(std::move(rocksDB), m_protocolInitializer->dataEncryption());
+    auto currentBlockNumber = getCurrentBlockNumber(stateStorage);
+    std::cout << "The block number of this node: " << currentBlockNumber << std::endl;
     {  // snapshot without tx and receipt
         storage::Entry archivedNumber;
         // the archived number is the first block has full tx and receipt
         archivedNumber.importFields({std::to_string(currentBlockNumber + 1)});
         std::promise<Error::UniquePtr> setPromise;
-        m_storage->asyncSetRow(ledger::SYS_CURRENT_STATE, ledger::SYS_KEY_ARCHIVED_NUMBER,
+
+        stateStorage->asyncSetRow(ledger::SYS_CURRENT_STATE, ledger::SYS_KEY_ARCHIVED_NUMBER,
             archivedNumber, [&](Error::UniquePtr err) { setPromise.set_value(std::move(err)); });
         auto setError = setPromise.get_future().get();
         if (setError)
@@ -1181,4 +1246,43 @@ bcos::Error::Ptr Initializer::importSnapshotToRocksDB(
                   << std::endl;
     }
     return nullptr;
+}
+
+std::string Initializer::getStateDBPath(bool _airVersion) const
+{
+    std::string stateDBPath = m_nodeConfig->enableSeparateBlockAndState() ?
+                                  m_nodeConfig->stateDBPath() :
+                                  m_nodeConfig->storagePath();
+    if (_airVersion)
+    {
+        return stateDBPath;
+    }
+    // if the stateDBPath is absolute path, the result stateDBPath will deep
+    return tars::ServerConfig::BasePath + ".." + c_fileSeparator + m_nodeConfig->groupId() +
+           c_fileSeparator + stateDBPath;
+}
+
+std::string Initializer::getBlockDBPath(bool _airVersion) const
+{
+    std::string blockDBPath = m_nodeConfig->blockDBPath();
+    if (_airVersion)
+    {
+        return blockDBPath;
+    }
+    // if the stateDBPath is absolute path, the result stateDBPath will deep
+    return tars::ServerConfig::BasePath + ".." + c_fileSeparator + m_nodeConfig->groupId() +
+           c_fileSeparator + blockDBPath;
+}
+
+std::string Initializer::getConsensusStorageDBPath(bool _airVersion) const
+{
+    std::string consensusStorageDBPath =
+        m_nodeConfig->storagePath() + c_fileSeparator + c_consensusStorageDBName;
+    if (_airVersion)
+    {
+        return consensusStorageDBPath;
+    }
+    // if the stateDBPath is absolute path, the result stateDBPath will deep
+    return tars::ServerConfig::BasePath + ".." + c_fileSeparator + m_nodeConfig->groupId() +
+           c_fileSeparator + c_consensusStorageDBName;
 }

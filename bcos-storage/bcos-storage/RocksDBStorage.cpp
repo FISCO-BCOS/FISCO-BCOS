@@ -425,6 +425,8 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
 void RocksDBStorage::asyncCommit(
     const TwoPCParams& params, std::function<void(Error::Ptr, uint64_t)> callback)
 {
+    STORAGE_ROCKSDB_LOG(DEBUG) << LOG_DESC("asyncCommit") << LOG_KV("blockNumber", params.number)
+                               << LOG_KV("startTS", params.timestamp);
     __itt_task_begin(ittapi::ITT_DOMAINS::instance().ITT_DOMAIN_STORAGE, __itt_null, __itt_null,
         const_cast<__itt_string_handle*>(ITT_STRING_STORAGE_COMMIT));
 
@@ -472,10 +474,11 @@ void RocksDBStorage::asyncCommit(
         m_db->GetProperty("rocksdb.cur-size-all-mem-tables", &current);
         STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("RocksDB statistics")
                                   << LOG_KV("blockNumber", params.number)
-                                //   << LOG_KV(
-                                //          "block_cache_usage", tableOptions->block_cache->GetUsage())
-                                //   << LOG_KV("block_cache_pinned_usage",
-                                //          tableOptions->block_cache->GetPinnedUsage())
+                                  //   << LOG_KV(
+                                  //          "block_cache_usage",
+                                  //          tableOptions->block_cache->GetUsage())
+                                  //   << LOG_KV("block_cache_pinned_usage",
+                                  //          tableOptions->block_cache->GetPinnedUsage())
                                   << LOG_KV("estimate-table-readers-mem", out)
                                   << LOG_KV("cur-size-all-mem-tables", current);
     }
