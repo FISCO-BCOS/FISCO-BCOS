@@ -72,7 +72,6 @@ void ProtocolInitializer::init(NodeConfig::Ptr _nodeConfig)
         createCryptoSuite();
     }
     INITIALIZER_LOG(INFO) << LOG_DESC("init crypto suite success");
-    bcos::crypto::hasher::openssl::initMallocFunction();
 
     if (_nodeConfig->storageSecurityEnable())
     {

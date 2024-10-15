@@ -11,8 +11,6 @@
 
 namespace bcos::crypto::hasher::openssl
 {
-void initMallocFunction();
-
 enum HasherType
 {
     SM3,

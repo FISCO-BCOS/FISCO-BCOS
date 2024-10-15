@@ -70,7 +70,6 @@ struct Fixture
         m_executor(*m_receiptFactory, m_cryptoSuite->hashImpl(), m_precompiledManager)
     {
         boost::log::core::get()->set_logging_enabled(false);
-        bcos::crypto::hasher::openssl::initMallocFunction();
 
         bcos::executor::GlobalHashImpl::g_hashImpl = std::make_shared<bcos::crypto::Keccak256>();
         boost::algorithm::unhex(helloworldBytecode, std::back_inserter(m_helloworldBytecodeBinary));
