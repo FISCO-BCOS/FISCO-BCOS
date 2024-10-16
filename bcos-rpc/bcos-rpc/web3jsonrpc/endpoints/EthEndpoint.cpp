@@ -201,7 +201,7 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
     {
         positionStr.insert(0, "0");
     }
-    const auto posistionBytes = FixedBytes<32>(positionStr, FixedBytes<32>::FromHex);
+    const auto positionBytes = FixedBytes<32>(positionStr, FixedBytes<32>::FromHex);
     // TODO)): blockNumber is ignored nowadays
     auto const blockTag = toView(request[2u]);
     auto [blockNumber, _] = co_await getBlockNumberByTag(blockTag);
@@ -214,7 +214,7 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
     auto const ledger = m_nodeService->ledger();
     Json::Value result;
     if (auto const entry = co_await ledger::getStorageAt(
-            *ledger, addressStr, posistionBytes.toRawString(), /*blockNumber*/ 0);
+            *ledger, addressStr, positionBytes.toRawString(), /*blockNumber*/ 0);
         entry.has_value())
     {
         auto const value = entry.value().get();
