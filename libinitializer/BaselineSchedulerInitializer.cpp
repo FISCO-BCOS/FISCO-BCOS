@@ -121,12 +121,15 @@ bcos::transaction_scheduler::BaselineSchedulerInitializer::build(::rocksdb::DB& 
     };
 
     INITIALIZER_LOG(INFO) << "Initialize baseline scheduler, parallel: " << config.parallel
-                          << ", chunkSize: " << config.chunkSize
+                          << ", grainSize: " << config.grainSize
                           << ", maxThread: " << config.maxThread;
 
     if (config.parallel)
     {
-        return buildBaselineHolder(std::make_shared<SchedulerParallelImpl<MutableStorage>>());
+        auto scheduler = std::make_shared<SchedulerParallelImpl<MutableStorage>>();
+        scheduler->m_grainSize = config.grainSize;
+        scheduler->m_maxConcurrency = config.maxThread;
+        return buildBaselineHolder(std::move(scheduler));
     }
     return buildBaselineHolder(std::make_shared<SchedulerSerialImpl>());
 }

@@ -26,6 +26,7 @@
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
+#include <memory_resource>
 
 using namespace bcostars;
 using namespace bcostars::protocol;
@@ -42,29 +43,35 @@ void BlockImpl::encode(bcos::bytes& _encodeData) const
 
 bcos::protocol::BlockHeader::Ptr BlockImpl::blockHeader()
 {
-    bcos::ReadGuard l(x_blockHeader);
+    bcos::ReadGuard lock(x_blockHeader);
     return std::make_shared<bcostars::protocol::BlockHeaderImpl>(
         [inner = this->m_inner]() mutable { return &inner->blockHeader; });
 }
 
 bcos::protocol::BlockHeader::ConstPtr BlockImpl::blockHeaderConst() const
 {
-    // bcos::ReadGuard l(x_blockHeader);
     return std::make_shared<const bcostars::protocol::BlockHeaderImpl>(
         [inner = this->m_inner]() { return &inner->blockHeader; });
 }
 
 bcos::protocol::Transaction::ConstPtr BlockImpl::transaction(uint64_t _index) const
 {
-    return std::make_shared<const bcostars::protocol::TransactionImpl>(
-        [inner = m_inner, _index]() { return &(inner->transactions[_index]); });
+    static std::pmr::synchronized_pool_resource transactionPool;
+    static std::pmr::polymorphic_allocator<const bcostars::protocol::TransactionImpl> alloc(
+        &transactionPool);
+
+    return std::allocate_shared<const bcostars::protocol::TransactionImpl>(
+        alloc, [inner = m_inner, _index]() { return &(inner->transactions[_index]); });
 }
 
-// TODO: return struct instead of pointer
 bcos::protocol::TransactionReceipt::ConstPtr BlockImpl::receipt(uint64_t _index) const
 {
-    return std::make_shared<const bcostars::protocol::TransactionReceiptImpl>(
-        [inner = m_inner, _index]() { return &(inner->receipts[_index]); });
+    static std::pmr::synchronized_pool_resource receiptPool;
+    static std::pmr::polymorphic_allocator<const bcostars::protocol::TransactionReceiptImpl> alloc(
+        &receiptPool);
+
+    return std::allocate_shared<const bcostars::protocol::TransactionReceiptImpl>(
+        alloc, [inner = m_inner, _index]() { return &(inner->receipts[_index]); });
 }
 
 void BlockImpl::setBlockHeader(bcos::protocol::BlockHeader::Ptr _blockHeader)
@@ -108,7 +115,6 @@ RANGES::any_view<std::string> BlockImpl::nonceList() const
     return m_inner->nonceList;
 }
 
-// TODO: return struct instead of pointer
 bcos::protocol::TransactionMetaData::ConstPtr BlockImpl::transactionMetaData(uint64_t _index) const
 {
     if (_index >= transactionsMetaDataSize())
@@ -116,8 +122,12 @@ bcos::protocol::TransactionMetaData::ConstPtr BlockImpl::transactionMetaData(uin
         return nullptr;
     }
 
-    auto txMetaData = std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(
-        [inner = m_inner, _index]() { return &inner->transactionsMetaData[_index]; });
+    static std::pmr::synchronized_pool_resource metaDataPool;
+    static std::pmr::polymorphic_allocator<const bcostars::protocol::TransactionMetaDataImpl> alloc(
+        &metaDataPool);
+
+    auto txMetaData = std::allocate_shared<const bcostars::protocol::TransactionMetaDataImpl>(
+        alloc, [inner = m_inner, _index]() { return &inner->transactionsMetaData[_index]; });
 
     return txMetaData;
 }

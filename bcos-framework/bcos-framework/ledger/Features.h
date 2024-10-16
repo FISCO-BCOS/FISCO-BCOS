@@ -8,7 +8,6 @@
 #include "bcos-concepts/Exception.h"
 #include "bcos-task/Task.h"
 #include "bcos-tool/Exceptions.h"
-#include "bcos-utilities/Ranges.h"
 #include <boost/throw_exception.hpp>
 #include <array>
 #include <bitset>

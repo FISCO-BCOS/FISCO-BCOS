@@ -36,8 +36,22 @@ namespace bcostars::protocol
 class BlockHeaderImpl : public bcos::protocol::BlockHeader
 {
 public:
-    BlockHeaderImpl(std::function<bcostars::BlockHeader*()> inner) : m_inner(std::move(inner)) {}
-    ~BlockHeaderImpl() override = default;
+    explicit BlockHeaderImpl(std::function<bcostars::BlockHeader*()> inner)
+      : m_inner(std::move(inner))
+    {}
+    explicit BlockHeaderImpl()
+      : m_inner([m_blockHeader = bcostars::BlockHeader()]() mutable {
+            return std::addressof(m_blockHeader);
+        })
+    {}
+    BlockHeaderImpl(const BlockHeaderImpl&) = delete;
+    BlockHeaderImpl(BlockHeaderImpl&&) noexcept = delete;
+    BlockHeaderImpl& operator=(const BlockHeaderImpl&) = delete;
+    BlockHeaderImpl& operator=(BlockHeaderImpl&&) noexcept = delete;
+    explicit BlockHeaderImpl(bcostars::BlockHeader& blockHeader)
+      : m_inner([m_blockHeader = std::addressof(blockHeader)]() { return m_blockHeader; })
+    {}
+    ~BlockHeaderImpl() noexcept override = default;
 
     void decode(bcos::bytesConstRef _data) override;
     void encode(bcos::bytes& _encodeData) const override;

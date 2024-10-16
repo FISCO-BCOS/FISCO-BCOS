@@ -16,9 +16,9 @@ void* bcos::task::MemoryResourceBase::operator new(size_t size)
 
 void bcos::task::MemoryResourceBase::operator delete(void* ptr, size_t size) noexcept
 {
-    auto* allocator = getAllocator(ptr, size);
-    assert(allocator);
-
-    allocator->deallocate(
-        ptr, size + sizeof(std::pmr::memory_resource*), alignof(std::pmr::memory_resource*));
+    if (auto* allocator = getAllocator(ptr, size))
+    {
+        allocator->deallocate(
+            ptr, size + sizeof(std::pmr::memory_resource*), alignof(std::pmr::memory_resource*));
+    }
 }

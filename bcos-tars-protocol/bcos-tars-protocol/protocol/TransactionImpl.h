@@ -41,6 +41,11 @@ public:
     explicit TransactionImpl(std::function<bcostars::Transaction*()> inner)
       : m_inner(std::move(inner))
     {}
+    TransactionImpl()
+      : m_inner([m_transaction = bcostars::Transaction()]() mutable {
+            return std::addressof(m_transaction);
+        })
+    {}
     ~TransactionImpl() override = default;
     TransactionImpl& operator=(const TransactionImpl& _tx) = delete;
     TransactionImpl(const TransactionImpl& _tx) = delete;

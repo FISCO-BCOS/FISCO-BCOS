@@ -1378,6 +1378,7 @@ generate_config_ini() {
     ${disable_ssl_content}
     ; return input params in sendTransaction() return, default: true
     ; return_input_params=false
+    ; tars_rpc_port=20021
 
 [web3_rpc]
     enable=false
