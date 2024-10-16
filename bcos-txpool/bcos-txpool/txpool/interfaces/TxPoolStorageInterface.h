@@ -44,9 +44,6 @@ public:
     virtual std::vector<protocol::Transaction::ConstPtr> getTransactions(
         RANGES::any_view<bcos::h256, RANGES::category::mask | RANGES::category::sized> hashes) = 0;
 
-    virtual task::Task<protocol::TransactionSubmitResult::Ptr> submitTransactionWithHook(
-        protocol::Transaction::Ptr transaction, std::function<void()> afterInsertHook) = 0;
-
     virtual bcos::protocol::TransactionStatus insert(bcos::protocol::Transaction::Ptr _tx) = 0;
     [[deprecated(
         "do not use raw insert tx pool without check, use "

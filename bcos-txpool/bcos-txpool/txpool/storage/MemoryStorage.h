@@ -73,11 +73,6 @@ public:
         override;
     // ============================
 
-    // disassemble submitTransaction
-    task::Task<protocol::TransactionSubmitResult::Ptr> submitTransactionWithHook(
-        protocol::Transaction::Ptr transaction,
-        std::function<void()> afterInsertHook = nullptr) override;
-
     bcos::protocol::TransactionStatus insert(bcos::protocol::Transaction::Ptr transaction) override;
 
     [[deprecated(
