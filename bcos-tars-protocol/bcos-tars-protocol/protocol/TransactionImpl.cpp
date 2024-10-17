@@ -69,7 +69,7 @@ void bcostars::protocol::TransactionImpl::calculateHash(const bcos::crypto::Hash
     bcos::concepts::hash::calculate(*m_inner(), hashImpl.hasher(), m_inner()->dataHash);
 }
 
-const std::string& TransactionImpl::nonce() const
+std::string_view TransactionImpl::nonce() const
 {
     return m_inner()->data.nonce;
 }

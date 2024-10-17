@@ -24,6 +24,7 @@
 #include "bcos-utilities/BoostLog.h"
 #include <tbb/concurrent_vector.h>
 #include <queue>
+#include <type_traits>
 #include <unordered_map>
 
 namespace bcos
@@ -33,7 +34,20 @@ class EmptyType
 {
 };
 
-template <class KeyType, class ValueType, class MapType = std::unordered_map<KeyType, ValueType>>
+struct StringHash
+{
+    using hash_type = std::hash<std::string_view>;
+    using is_transparent = void;
+
+    std::size_t operator()(const char* str) const { return hash_type{}(str); }
+    std::size_t operator()(std::string_view str) const { return hash_type{}(str); }
+    std::size_t operator()(std::string const& str) const { return hash_type{}(str); }
+};
+
+template <class KeyType, class ValueType,
+    class MapType = std::conditional_t<std::is_same_v<KeyType, std::string>,
+        std::unordered_map<std::string, ValueType, StringHash, std::equal_to<>>,
+        std::unordered_map<KeyType, ValueType>>>
 class Bucket : public std::enable_shared_from_this<Bucket<KeyType, ValueType, MapType>>
 {
 public:
@@ -211,6 +225,11 @@ public:
         ReadGuard guard(m_mutex);
         return m_values.contains(key);
     }
+    bool contains(const auto& key)
+    {
+        ReadGuard guard(m_mutex);
+        return m_values.contains(key);
+    }
 
     // return true if need continue
     template <class AccessorType>  // handler return isContinue
@@ -361,6 +380,12 @@ public:
     bool empty() const { return size() == 0; }
 
     bool contains(const KeyType& key)
+    {
+        auto idx = getBucketIndex(key);
+        auto bucket = m_buckets[idx];
+        return bucket->contains(key);
+    }
+    bool contains(const auto& key)
     {
         auto idx = getBucketIndex(key);
         auto bucket = m_buckets[idx];
@@ -624,12 +649,17 @@ public:
     }
 
 protected:
-    size_t getBucketIndex(const std::pair<const KeyType&, const ValueType&>& kv)
+    size_t getBucketIndex(const std::pair<KeyType, ValueType>& kv)
     {
         return getBucketIndex(kv.first);
     }
 
     size_t getBucketIndex(const KeyType& key)
+    {
+        auto hash = BucketHasher{}(key);
+        return hash % m_buckets.size();
+    }
+    size_t getBucketIndex(auto const& key)
     {
         auto hash = BucketHasher{}(key);
         return hash % m_buckets.size();

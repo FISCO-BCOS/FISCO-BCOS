@@ -19,7 +19,6 @@
  * @date 2021-05-10
  */
 #include "TxPoolNonceChecker.h"
-#include <variant>
 
 using namespace bcos;
 using namespace bcos::protocol;

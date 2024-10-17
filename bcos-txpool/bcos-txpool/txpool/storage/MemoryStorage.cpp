@@ -20,7 +20,6 @@
  */
 #include "bcos-txpool/txpool/storage/MemoryStorage.h"
 #include "bcos-utilities/Common.h"
-
 #include <bcos-protocol/TransactionSubmitResultImpl.h>
 #include <oneapi/tbb/blocked_range.h>
 #include <oneapi/tbb/parallel_for_each.h>
@@ -30,7 +29,6 @@
 #include <boost/throw_exception.hpp>
 #include <memory>
 #include <thread>
-#include <tuple>
 #include <variant>
 
 #define CPU_CORES std::thread::hardware_concurrency()
@@ -990,11 +988,11 @@ void MemoryStorage::removeInvalidTxs(bool lock)
 
         for (const auto& [txHash, tx] : txs2Notify)
         {
-            auto const& nonce = tx->nonce();
+            auto nonce = tx->nonce();
             auto txResult = m_config->txResultFactory()->createTxSubmitResult();
             txResult->setTxHash(txHash);
             txResult->setStatus(static_cast<uint32_t>(TransactionStatus::TransactionPoolTimeout));
-            txResult->setNonce(nonce);
+            txResult->setNonce(std::string(nonce));
             notifyTxResult(*tx, std::move(txResult));
         }
         notifyUnsealedTxsSize();

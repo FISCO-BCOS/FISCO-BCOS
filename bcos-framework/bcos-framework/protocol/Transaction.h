@@ -80,7 +80,7 @@ public:
     Transaction(Transaction&&) = delete;
     Transaction& operator=(const Transaction&) = delete;
     Transaction& operator=(Transaction&&) = delete;
-    virtual ~Transaction() = default;
+    virtual ~Transaction() noexcept = default;
 
     virtual void decode(bytesConstRef _txData) = 0;
     virtual void encode(bcos::bytes& txData) const = 0;
@@ -119,7 +119,7 @@ public:
     virtual std::string_view chainId() const = 0;
     virtual std::string_view groupId() const = 0;
     virtual int64_t blockLimit() const = 0;
-    virtual const std::string& nonce() const = 0;
+    virtual std::string_view nonce() const = 0;
     // only for test
     virtual void setNonce(std::string) = 0;
     virtual std::string_view to() const = 0;
@@ -186,7 +186,7 @@ public:
     bool storeToBackend() const { return m_storeToBackend; }
     void setStoreToBackend(bool _storeToBackend) const { m_storeToBackend = _storeToBackend; }
 
-protected:
+private:
     TxSubmitCallback m_submitCallback;
     // the tx has been synced or not
 

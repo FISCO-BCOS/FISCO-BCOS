@@ -44,8 +44,7 @@ public:
 protected:
     void remove(bcos::protocol::NonceType const& _nonce) override;
 
-    using NonceSet =
-        bcos::BucketSet<bcos::protocol::NonceType, std::hash<bcos::protocol::NonceType>>;
+    using NonceSet = bcos::BucketSet<bcos::protocol::NonceType, StringHash>;
     NonceSet m_nonces;
     // tbb::concurrent_hash_map<bcos::protocol::NonceType, std::monostate> m_nonces;
 };
