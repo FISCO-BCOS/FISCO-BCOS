@@ -152,10 +152,10 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl) : P
                 BOOST_THROW_EXCEPTION(bcos::tool::InvalidVersion(
                     fmt::format("unsupported key {}", SYSTEM_KEY_WEB3_CHAIN_ID)));
             }
-            uint64_t number = 0;
+            u256 number = 0;
             try
             {
-                number = std::stoull(_value);
+                number = boost::lexical_cast<u256>(_value);
             }
             catch (...)
             {

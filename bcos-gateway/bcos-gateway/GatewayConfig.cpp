@@ -299,7 +299,7 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
 
     m_enableCompress = _pt.get<bool>("p2p.enable_compression", true);
 
-    constexpr static uint32_t defaultAllowMaxMsgSize = 32 * 1024 * 1024;
+    constexpr static uint32_t defaultAllowMaxMsgSize = MAX_MESSAGE_LENGTH;
     m_allowMaxMsgSize = _pt.get<uint32_t>("p2p.allow_max_msg_size", defaultAllowMaxMsgSize);
 
     uint32_t defaultRecvBufferSize = 2 * m_allowMaxMsgSize;
