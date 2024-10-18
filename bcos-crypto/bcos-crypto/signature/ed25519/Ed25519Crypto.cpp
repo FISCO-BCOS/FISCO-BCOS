@@ -73,11 +73,7 @@ bool bcos::crypto::ed25519Verify(
 
     auto signatureWithoutPub = bytesConstRef(_signatureData.data(), ED25519_SIGNATURE_LEN);
     CInputBuffer signatureData{(const char*)signatureWithoutPub.data(), signatureWithoutPub.size()};
-    if (wedpr_ed25519_verify(&publicKey, &msgHash, &signatureData) != WEDPR_SUCCESS)
-    {
-        return false;
-    }
-    return true;
+    return wedpr_ed25519_verify(&publicKey, &msgHash, &signatureData) == WEDPR_SUCCESS;
 }
 
 PublicPtr bcos::crypto::ed25519Recover(const HashType& _messageHash, bytesConstRef _signatureData)

@@ -52,7 +52,7 @@ bcostars::Error FrontServiceServer::asyncSendMessageByNodeID(tars::Int32 moduleI
                 bcos::bytesConstRef _data, const std::string& _id,
                 bcos::front::ResponseFunc _respFunc) {
                 boost::ignore_unused(_respFunc);
-                auto encodedNodeID = *_nodeID->encode();
+                auto encodedNodeID = _nodeID->encode();
                 async_response_asyncSendMessageByNodeID(current, toTarsError(_error),
                     std::vector<char>(encodedNodeID.begin(), encodedNodeID.end()),
                     std::vector<char>(_data.begin(), _data.end()), _id);
