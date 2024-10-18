@@ -31,14 +31,25 @@ public:
     using Ptr = std::shared_ptr<KeyInterface>;
     using UniquePtr = std::unique_ptr<KeyInterface>;
     KeyInterface() = default;
-    virtual ~KeyInterface() = default;
+    KeyInterface(const KeyInterface&) = default;
+    KeyInterface(KeyInterface&&) noexcept = default;
+    KeyInterface& operator=(const KeyInterface&) = default;
+    KeyInterface& operator=(KeyInterface&&) noexcept = default;
+
+    friend std::strong_ordering operator<=>(
+        const KeyInterface& lhs, const KeyInterface& rhs) noexcept
+    {
+        return lhs.data() <=> rhs.data();
+    }
+
+    virtual ~KeyInterface() noexcept = default;
     virtual const bytes& data() const = 0;
     virtual size_t size() const = 0;
     virtual char* mutableData() = 0;
     virtual const char* constData() const = 0;
-    virtual std::shared_ptr<bytes> encode() const = 0;
+    virtual bytes encode() const = 0;
     virtual void decode(bytesConstRef _data) = 0;
-    virtual void decode(bytes&& _data) = 0;
+    virtual void decode(bytes _data) = 0;
 
     virtual std::string shortHex() = 0;
     virtual std::string hex() = 0;
@@ -58,23 +69,20 @@ public:
     bool operator()(KeyInterface::Ptr const& _first, KeyInterface::Ptr const& _second) const
     {
         // increase order
-        return _first->data() < _second->data();
+        return *_first < *_second;
     }
 };
 
 struct KeyHasher
 {
-    size_t hash(KeyInterface::Ptr const& _key) const
+    static size_t hash(KeyInterface::Ptr const& _key)
     {
-        size_t seed = hashString({_key->constData(), _key->size()});
-        return seed;
+        return std::hash<std::string_view>{}({_key->constData(), _key->size()});
     }
-
-    bool equal(const KeyInterface::Ptr& lhs, const KeyInterface::Ptr& rhs) const
+    static bool equal(const KeyInterface::Ptr& lhs, const KeyInterface::Ptr& rhs)
     {
         return lhs->data() == rhs->data();
     }
-    std::hash<std::string_view> hashString;
 };
 using NodeIDSet = std::set<bcos::crypto::NodeIDPtr, KeyCompare>;
 using NodeIDSetPtr = std::shared_ptr<NodeIDSet>;
