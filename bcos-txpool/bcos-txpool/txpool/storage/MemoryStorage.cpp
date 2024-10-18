@@ -1076,8 +1076,7 @@ bool MemoryStorage::batchMarkTxsWithoutLock(
             {
                 ++notFound;
                 TXPOOL_LOG(TRACE) << LOG_DESC("batchMarkTxs: missing transaction")
-                                  << LOG_KV("tx", txHash.abridged())
-                                  << LOG_KV("sealFlag", _sealFlag);
+                                  << LOG_KV("tx", txHash.hex()) << LOG_KV("sealFlag", _sealFlag);
                 continue;
             }
             tx = accessor->value();
