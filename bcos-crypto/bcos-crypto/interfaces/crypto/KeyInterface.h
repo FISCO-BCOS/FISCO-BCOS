@@ -36,8 +36,7 @@ public:
     KeyInterface& operator=(const KeyInterface&) = default;
     KeyInterface& operator=(KeyInterface&&) noexcept = default;
 
-    friend std::strong_ordering operator<=>(
-        const KeyInterface& lhs, const KeyInterface& rhs) noexcept
+    friend std::strong_ordering operator<=>(const KeyInterface& lhs, const KeyInterface& rhs)
     {
         return lhs.data() <=> rhs.data();
     }
