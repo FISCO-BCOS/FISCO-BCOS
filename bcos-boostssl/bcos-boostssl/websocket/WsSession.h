@@ -34,6 +34,7 @@
 #include <boost/beast/websocket.hpp>
 #include <boost/thread/thread.hpp>
 #include <atomic>
+#include <memory>
 #include <mutex>
 #include <queue>
 #include <shared_mutex>
@@ -123,9 +124,6 @@ public:
         m_wsStreamDelegate = std::move(_wsStreamDelegate);
     }
 
-    boost::beast::flat_buffer& buffer() { return m_buffer; }
-    void setBuffer(boost::beast::flat_buffer _buffer) { m_buffer = std::move(_buffer); }
-
     int32_t sendMsgTimeout() const { return m_sendMsgTimeout; }
     void setSendMsgTimeout(int32_t _sendMsgTimeout) { m_sendMsgTimeout = _sendMsgTimeout; }
 
@@ -176,7 +174,7 @@ public:
     virtual void send(std::shared_ptr<bcos::bytes> _buffer);
 
     // async read
-    virtual void onReadPacket(boost::beast::flat_buffer& _buffer);
+    virtual void onReadPacket();
     void onWritePacket();
 
     struct Message : public bcos::ObjectCounter<Message>
@@ -195,7 +193,7 @@ protected:
     std::string m_moduleName;
 
     // buffer used to read message
-    boost::beast::flat_buffer m_buffer;
+    std::shared_ptr<boost::beast::flat_buffer> m_buffer;
 
     std::string m_endPoint;
     std::string m_nodeId;

@@ -45,6 +45,9 @@ WsSession::WsSession(tbb::task_group& taskGroup, std::string _moduleName)
   : m_taskGroup(taskGroup), m_moduleName(std::move(_moduleName))
 {
     WEBSOCKET_SESSION(INFO) << LOG_KV("[NEWOBJ][WSSESSION]", this);
+
+    m_buffer = std::make_shared<boost::beast::flat_buffer>();
+
 }
 void WsSession::drop(uint32_t _reason)
 {
@@ -156,13 +159,13 @@ void WsSession::onWsAccept(boost::beast::error_code _ec)
                             << LOG_KV("endPoint", endPoint()) << LOG_KV("session", this);
 }
 
-void WsSession::onReadPacket(boost::beast::flat_buffer& _buffer)
+void WsSession::onReadPacket()
 {
     uint64_t size = 0;
     try
     {
-        auto* data = boost::asio::buffer_cast<byte*>(boost::beast::buffers_front(_buffer.data()));
-        size = boost::asio::buffer_size(m_buffer.data());
+        auto* data = boost::asio::buffer_cast<byte*>(boost::beast::buffers_front(m_buffer->data()));
+        size = boost::asio::buffer_size(m_buffer->data());
 
         auto message = m_messageFactory->buildMessage();
         if (message->decode(bytesConstRef(data, size)) < 0)
@@ -173,7 +176,7 @@ void WsSession::onReadPacket(boost::beast::flat_buffer& _buffer)
             return drop(WsError::PacketError);
         }
 
-        m_buffer.consume(_buffer.size());
+        m_buffer->consume(m_buffer->size());
         onMessage(message);
     }
     catch (std::exception const& e)
@@ -221,8 +224,9 @@ void WsSession::asyncRead()
     }
     try
     {
+        auto buffer = m_buffer;
         auto self = std::weak_ptr<WsSession>(shared_from_this());
-        m_wsStreamDelegate->asyncRead(m_buffer, [self](boost::beast::error_code _ec, std::size_t) {
+        m_wsStreamDelegate->asyncRead(*m_buffer, [self, buffer](boost::beast::error_code _ec, std::size_t) {
             auto session = self.lock();
             if (!session)
             {
@@ -239,7 +243,7 @@ void WsSession::asyncRead()
                 return session->drop(WsError::ReadError);
             }
 
-            session->onReadPacket(session->buffer());
+            session->onReadPacket();
             session->asyncRead();
         });
     }

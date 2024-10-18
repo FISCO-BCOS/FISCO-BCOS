@@ -122,12 +122,37 @@ public:
         bool falseValue = false;
         if (m_closed.compare_exchange_strong(falseValue, trueValue))
         {
+            // websocket stream
+            boost::beast::error_code ec;
+            m_stream->close(boost::beast::websocket::close_code::normal, ec);
+
+            // ssl stream
+            shutdown(m_stream->next_layer());
+
+            // tcp stream
+            tcpStream().cancel();
+            tcpStream().close();
+
+            // socket
             auto& ss = boost::beast::get_lowest_layer(*m_stream);
             ws::WsTools::close(ss.socket());
+        
             WEBSOCKET_STREAM(INFO)
                 << LOG_DESC("the real action to close the stream") << LOG_KV("this", this);
         }
         return;
+    }
+
+    void shutdown(boost::beast::tcp_stream &tcpStream) 
+    {
+        // do nothing
+    }
+
+    void shutdown(boost::beast::ssl_stream<boost::beast::tcp_stream> &sslStream) 
+    {
+        // websocket stream
+        boost::beast::error_code ec;
+        sslStream.shutdown(ec);
     }
 
     boost::beast::tcp_stream& tcpStream() { return boost::beast::get_lowest_layer(*m_stream); }

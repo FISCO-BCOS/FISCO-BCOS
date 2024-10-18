@@ -44,6 +44,8 @@ public:
     explicit HttpSession(std::string _moduleName) : m_moduleName(std::move(_moduleName))
     {
         HTTP_SESSION(DEBUG) << LOG_KV("[NEWOBJ][HTTPSESSION]", this);
+
+        m_buffer = std::make_shared<boost::beast::flat_buffer>();
     }
 
     virtual ~HttpSession()
@@ -65,9 +67,10 @@ public:
         // set limit to http request size, 100m
         m_parser->body_limit(PARSER_BODY_LIMITATION);
 
+        auto buffer = m_buffer;
         auto session = shared_from_this();
-        m_httpStream->asyncRead(m_buffer, m_parser,
-            [session](boost::system::error_code _ec, std::size_t bytes_transferred) {
+        m_httpStream->asyncRead(*m_buffer, m_parser,
+            [session, buffer](boost::system::error_code _ec, std::size_t bytes_transferred) {
                 session->onRead(_ec, bytes_transferred);
             });
     }
@@ -272,7 +275,9 @@ public:
 
 private:
     HttpStream::Ptr m_httpStream;
-    boost::beast::flat_buffer m_buffer;
+    
+    std::shared_ptr<boost::beast::flat_buffer> m_buffer;
+
     std::shared_ptr<Queue> m_queue;
     HttpReqHandler m_httpReqHandler;
     WsUpgradeHandler m_wsUpgradeHandler;
