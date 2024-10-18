@@ -36,7 +36,7 @@ enum Attribute : int
 };
 
 template <class KeyType, class ValueType = Empty, Attribute attribute = Attribute::NONE,
-    class BucketHasherType = void>
+    class BucketHasherType = void, class HasherType = BucketHasherType>
 class MemoryStorage
 {
 public:
@@ -49,6 +49,8 @@ public:
 
     constexpr static unsigned BUCKETS_COUNT = 64;  // Magic number 64
     constexpr unsigned getBucketSize() { return withConcurrent ? BUCKETS_COUNT : 1; }
+
+    static_assert(!withOrdered || !std::is_void_v<HasherType>);
     static_assert(!withConcurrent || !std::is_void_v<BucketHasherType>);
 
     constexpr static unsigned DEFAULT_CAPACITY = 32 * 1024 * 1024;  // For mru
