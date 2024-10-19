@@ -110,7 +110,7 @@ void workAsClient(std::string serverIp, uint16_t serverPort, bool disableSsl, ui
         config->setContextConfig(contextConfig);
     }
 
-    auto wsService = std::make_shared<ws::WsService>("boostssl-th-perf-client");
+    auto wsService = std::make_shared<ws::WsService>();
     auto wsInitializer = std::make_shared<WsInitializer>();
 
     wsInitializer->setConfig(config);
@@ -214,7 +214,7 @@ void workAsServer(std::string listenIp, uint16_t listenPort, bool disableSsl, ui
         config->setContextConfig(contextConfig);
     }
 
-    auto wsService = std::make_shared<ws::WsService>("boostssl-th-perf-server");
+    auto wsService = std::make_shared<ws::WsService>();
     auto wsInitializer = std::make_shared<WsInitializer>();
 
     wsInitializer->setConfig(config);

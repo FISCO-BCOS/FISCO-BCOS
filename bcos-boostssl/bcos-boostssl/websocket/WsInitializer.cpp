@@ -68,6 +68,10 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
 
     auto builder = std::make_shared<WsStreamDelegateBuilder>();
 
+    // set the threadPool
+    auto threadPool = std::make_shared<bcos::ThreadPool>("ws-pool", _config->threadPoolSize());
+    _wsService->setThreadPool(threadPool);
+
     std::shared_ptr<boost::asio::ssl::context> srvCtx = nullptr;
     std::shared_ptr<boost::asio::ssl::context> clientCtx = nullptr;
     if (!_config->disableSsl())

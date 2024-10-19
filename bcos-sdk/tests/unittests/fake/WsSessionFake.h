@@ -32,8 +32,8 @@ namespace test
 class WsSessionFake : public bcos::boostssl::ws::WsSession
 {
 public:
-    WsSessionFake(tbb::task_group& taskGroup)
-      : bcos::boostssl::ws::WsSession(taskGroup)
+    WsSessionFake(std::shared_ptr<bcos::ThreadPool> threadPool)
+      : bcos::boostssl::ws::WsSession(threadPool)
     {
         WEBSOCKET_SESSION(INFO) << LOG_KV("[NEWOBJ][WSSESSION]", this);
     }
