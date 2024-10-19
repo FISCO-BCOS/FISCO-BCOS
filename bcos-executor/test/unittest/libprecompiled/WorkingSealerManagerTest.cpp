@@ -58,7 +58,8 @@ BOOST_AUTO_TEST_CASE(testRotate)
         // 75 % 100 = 75 -- select node2
         // 75 % 80 = 75 -- select node3
 
-        storage2::memory_storage::MemoryStorage<transaction_executor::StateKey, storage::Entry>
+        storage2::memory_storage::MemoryStorage<transaction_executor::StateKey, storage::Entry,
+            storage2::memory_storage::Attribute::ORDERED>
             storage;
 
         // Should rotate

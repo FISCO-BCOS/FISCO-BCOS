@@ -36,7 +36,7 @@ enum Attribute : int
 };
 
 template <class KeyType, class ValueType = Empty, Attribute attribute = Attribute::NONE,
-    class BucketHasherType = void, class HasherType = BucketHasherType>
+    class HasherType = void, class BucketHasherType = HasherType>
 class MemoryStorage
 {
 public:
@@ -50,7 +50,7 @@ public:
     constexpr static unsigned BUCKETS_COUNT = 64;  // Magic number 64
     constexpr unsigned getBucketSize() { return withConcurrent ? BUCKETS_COUNT : 1; }
 
-    static_assert(!withOrdered || !std::is_void_v<HasherType>);
+    static_assert(withOrdered || !std::is_void_v<HasherType>);
     static_assert(!withConcurrent || !std::is_void_v<BucketHasherType>);
 
     constexpr static unsigned DEFAULT_CAPACITY = 32 * 1024 * 1024;  // For mru
@@ -66,8 +66,10 @@ public:
     };
 
     using IndexType = std::conditional_t<withOrdered,
-        boost::multi_index::ordered_unique<boost::multi_index::member<Data, KeyType, &Data::key>>,
-        boost::multi_index::hashed_unique<boost::multi_index::member<Data, KeyType, &Data::key>>>;
+        boost::multi_index::ordered_unique<boost::multi_index::member<Data, KeyType, &Data::key>,
+            std::less<>>,
+        boost::multi_index::hashed_unique<boost::multi_index::member<Data, KeyType, &Data::key>,
+            HasherType, std::equal_to<>>>;
     using Container = std::conditional_t<withLRU,
         boost::multi_index_container<Data,
             boost::multi_index::indexed_by<IndexType, boost::multi_index::sequenced<>>>,
