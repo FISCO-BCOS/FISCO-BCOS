@@ -60,7 +60,7 @@ class WsService : public std::enable_shared_from_this<WsService>
 {
 public:
     using Ptr = std::shared_ptr<WsService>;
-    explicit WsService(std::string _moduleName = "DEFAULT");
+    explicit WsService();
     virtual ~WsService();
 
     virtual void start();
@@ -119,9 +119,6 @@ public:
     }
     int32_t waitConnectFinishTimeout() const { return m_waitConnectFinishTimeout; }
     void setWaitConnectFinishTimeout(int32_t _timeout) { m_waitConnectFinishTimeout = _timeout; }
-
-    std::string moduleName() const noexcept { return m_moduleName; }
-    void setModuleName(std::string _moduleName) { m_moduleName = std::move(_moduleName); }
 
     void setIOServicePool(IOServicePool::Ptr _ioservicePool)
     {
@@ -197,7 +194,6 @@ private:
     tbb::task_group m_taskGroup;
 
     int32_t m_waitConnectFinishTimeout = 30000;
-    std::string m_moduleName;
 
     // MessageFaceFactory
     std::shared_ptr<MessageFaceFactory> m_messageFactory;

@@ -33,10 +33,9 @@ public:
     using Ptr = std::shared_ptr<HttpServer>;
 
 public:
-    HttpServer(std::string _listenIP, uint16_t _listenPort, std::string _moduleName)
+    HttpServer(std::string _listenIP, uint16_t _listenPort)
       : m_listenIP(std::move(_listenIP)),
-        m_listenPort(_listenPort),
-        m_moduleName(std::move(_moduleName))
+        m_listenPort(_listenPort)
     {}
 
     ~HttpServer() { stop(); }
@@ -86,8 +85,6 @@ public:
     bool disableSsl() const { return m_disableSsl; }
     void setDisableSsl(bool _disableSsl) { m_disableSsl = _disableSsl; }
 
-    std::string moduleName() { return m_moduleName; }
-
     void setIOServicePool(bcos::IOServicePool::Ptr _ioservicePool)
     {
         m_ioservicePool = std::move(_ioservicePool);
@@ -97,7 +94,6 @@ private:
     std::string m_listenIP;
     uint16_t m_listenPort;
     bool m_disableSsl = false;
-    std::string m_moduleName;
 
     HttpReqHandler m_httpReqHandler;
     WsUpgradeHandler m_wsUpgradeHandler;
@@ -126,7 +122,7 @@ public:
      */
     HttpServer::Ptr buildHttpServer(const std::string& _listenIP, uint16_t _listenPort,
         std::shared_ptr<boost::asio::io_context> _ioc,
-        std::shared_ptr<boost::asio::ssl::context> _ctx, std::string _moduleName);
+        std::shared_ptr<boost::asio::ssl::context> _ctx);
 };
 
 }  // namespace bcos::boostssl::http

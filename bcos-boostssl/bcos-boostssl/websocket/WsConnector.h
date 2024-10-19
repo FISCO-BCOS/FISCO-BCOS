@@ -90,9 +90,6 @@ public:
     }
     std::shared_ptr<WsStreamDelegateBuilder> builder() const { return m_builder; }
 
-    std::string moduleName() { return m_moduleName; }
-    void setModuleName(std::string _moduleName) { m_moduleName = std::move(_moduleName); }
-
 private:
     std::shared_ptr<WsStreamDelegateBuilder> m_builder;
     std::shared_ptr<boost::asio::ip::tcp::resolver> m_resolver;
@@ -100,8 +97,7 @@ private:
 
     mutable std::mutex x_pendingConns;
     std::set<std::string> m_pendingConns;
-
-    std::string m_moduleName = "DEFAULT";
+    
     IOServicePool::Ptr m_ioservicePool;
 };
 }  // namespace bcos::boostssl::ws

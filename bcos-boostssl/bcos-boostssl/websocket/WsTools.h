@@ -32,7 +32,6 @@
 
 namespace bcos::boostssl::ws
 {
-static std::string m_moduleName = "DEFAULT";
 class WsTools
 {
 public:
@@ -77,8 +76,5 @@ public:
     static bool hostAndPort2Endpoint(const std::string& _host, NodeIPEndpoint& _endpoint);
 
     static void close(boost::asio::ip::tcp::socket& skt);
-
-    static std::string moduleName() { return m_moduleName; }
-    static void setModuleName(std::string _moduleName) { m_moduleName = std::move(_moduleName); }
 };
 }  // namespace bcos::boostssl::ws

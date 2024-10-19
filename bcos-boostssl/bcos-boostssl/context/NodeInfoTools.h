@@ -25,8 +25,6 @@
 
 namespace bcos::boostssl::context
 {
-static std::string m_moduleName = "DEFAULT";
-
 class NodeInfoTools
 {
 public:
@@ -38,9 +36,6 @@ public:
 
     static std::function<bool(bool, boost::asio::ssl::verify_context&)> newVerifyCallback(
         std::shared_ptr<std::string> nodeIDOut);
-
-    static std::string moduleName() { return m_moduleName; }
-    static void setModuleName(std::string _moduleName) { m_moduleName = _moduleName; }
 };
 
 }  // namespace bcos

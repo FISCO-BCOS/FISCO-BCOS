@@ -42,8 +42,8 @@ using namespace bcos;
 static const int32_t BLOCK_LIMIT_RANGE = 500;
 
 Service::Service(bcos::group::GroupInfoCodec::Ptr _groupInfoCodec,
-    bcos::group::GroupInfoFactory::Ptr _groupInfoFactory, std::string _moduleName)
-  : WsService(std::move(_moduleName)),
+    bcos::group::GroupInfoFactory::Ptr _groupInfoFactory) 
+    : WsService(),
     m_groupInfoCodec(std::move(_groupInfoCodec)),
     m_groupInfoFactory(std::move(_groupInfoFactory))
 {

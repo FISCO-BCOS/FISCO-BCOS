@@ -55,8 +55,8 @@ public:
     using ConstPtr = std::shared_ptr<const WsStream>;
 
     WsStream(
-        std::shared_ptr<boost::beast::websocket::stream<STREAM>> _stream, std::string _moduleName)
-      : m_stream(_stream), m_moduleName(std::move(_moduleName))
+        std::shared_ptr<boost::beast::websocket::stream<STREAM>> _stream)
+      : m_stream(_stream)
     {
         initDefaultOpt();
         WEBSOCKET_STREAM(INFO) << LOG_KV("[NEWOBJ][WsStream]", this);
@@ -110,10 +110,6 @@ public:
     }
     //---------------  set opt params for websocket stream  end
     //-------------------------------
-
-    std::string moduleName() { return m_moduleName; }
-    void setModuleName(std::string _moduleName) { m_moduleName = _moduleName; }
-
     bool open() { return !m_closed.load() && m_stream->is_open(); }
 
     void close()
@@ -122,12 +118,37 @@ public:
         bool falseValue = false;
         if (m_closed.compare_exchange_strong(falseValue, trueValue))
         {
+            // websocket stream
+            boost::beast::error_code ec;
+            m_stream->close(boost::beast::websocket::close_code::normal, ec);
+
+            // ssl stream
+            shutdown(m_stream->next_layer());
+
+            // tcp stream
+            tcpStream().cancel();
+            tcpStream().close();
+
+            // socket
             auto& ss = boost::beast::get_lowest_layer(*m_stream);
             ws::WsTools::close(ss.socket());
+        
             WEBSOCKET_STREAM(INFO)
                 << LOG_DESC("the real action to close the stream") << LOG_KV("this", this);
         }
         return;
+    }
+
+    void shutdown(boost::beast::tcp_stream &tcpStream) 
+    {
+        // do nothing
+    }
+
+    void shutdown(boost::beast::ssl_stream<boost::beast::tcp_stream> &sslStream) 
+    {
+        // websocket stream
+        boost::beast::error_code ec;
+        sslStream.shutdown(ec);
     }
 
     boost::beast::tcp_stream& tcpStream() { return boost::beast::get_lowest_layer(*m_stream); }
@@ -197,7 +218,6 @@ public:
 private:
     std::atomic<bool> m_closed{false};
     std::shared_ptr<boost::beast::websocket::stream<STREAM>> m_stream;
-    std::string m_moduleName = "DEFAULT";
 };
 
 using RawWsStream = WsStream<boost::beast::tcp_stream>;
@@ -297,19 +317,18 @@ public:
 
 public:
     WsStreamDelegate::Ptr build(
-        std::shared_ptr<boost::beast::tcp_stream> _tcpStream, std::string _moduleName)
+        std::shared_ptr<boost::beast::tcp_stream> _tcpStream)
     {
         _tcpStream->socket().set_option(boost::asio::ip::tcp::no_delay(true));
         auto wsStream = std::make_shared<boost::beast::websocket::stream<boost::beast::tcp_stream>>(
             std::move(*_tcpStream));
         auto rawWsStream = std::make_shared<bcos::boostssl::ws::WsStream<boost::beast::tcp_stream>>(
-            wsStream, _moduleName);
+            wsStream);
         return std::make_shared<WsStreamDelegate>(rawWsStream);
     }
 
     WsStreamDelegate::Ptr build(
-        std::shared_ptr<boost::beast::ssl_stream<boost::beast::tcp_stream>> _sslStream,
-        std::string _moduleName)
+        std::shared_ptr<boost::beast::ssl_stream<boost::beast::tcp_stream>> _sslStream)
     {
         _sslStream->next_layer().socket().set_option(boost::asio::ip::tcp::no_delay(true));
         auto wsStream = std::make_shared<
@@ -317,21 +336,21 @@ public:
             std::move(*_sslStream));
         auto sslWsStream = std::make_shared<
             bcos::boostssl::ws::WsStream<boost::beast::ssl_stream<boost::beast::tcp_stream>>>(
-            wsStream, _moduleName);
+            wsStream);
         return std::make_shared<WsStreamDelegate>(sslWsStream);
     }
 
     WsStreamDelegate::Ptr build(bool _disableSsl, std::shared_ptr<boost::asio::ssl::context> _ctx,
-        std::shared_ptr<boost::beast::tcp_stream> _tcpStream, std::string _moduleName)
+        std::shared_ptr<boost::beast::tcp_stream> _tcpStream)
     {
         if (_disableSsl)
         {
-            return build(_tcpStream, _moduleName);
+            return build(_tcpStream);
         }
 
         auto sslStream = std::make_shared<boost::beast::ssl_stream<boost::beast::tcp_stream>>(
             std::move(*_tcpStream), *_ctx);
-        return build(sslStream, _moduleName);
+        return build(sslStream);
     }
 };
 

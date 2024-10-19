@@ -87,28 +87,29 @@ public:
             return;
         }
         m_running = false;
+
+// stop the work
+        for (auto& work : m_works)
+        {
+            work.reset();
+        }
+
         // stop the io service
         for (auto& ioService : m_ioServices)
         {
             ioService->stop();
         }
-        // stop the work
-        for (auto& work : m_works)
-        {
-            work.reset();
-        }
+        
         // stop the thread
         for (auto& thread : m_threads)
         {
-            if (thread.get_id() != std::this_thread::get_id())
+            if (thread.joinable())
             {
                 thread.join();
             }
-            else
-            {
-                thread.detach();
-            }
         }
+        
+        m_threads.clear();
     }
 
 private:
