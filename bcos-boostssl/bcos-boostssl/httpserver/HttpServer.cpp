@@ -139,7 +139,7 @@ void HttpServer::onAccept(boost::beast::error_code ec, boost::asio::ip::tcp::soc
     if (!useSsl)
     {  // non ssl , start http session
         auto httpStream = m_httpStreamFactory->buildHttpStream(
-            std::make_shared<boost::beast::tcp_stream>(std::move(socket)), m_moduleName);
+            std::make_shared<boost::beast::tcp_stream>(std::move(socket)));
         buildHttpSession(httpStream, nullptr)->run();
 
         return doAccept();
@@ -169,7 +169,7 @@ void HttpServer::onAccept(boost::beast::error_code ec, boost::asio::ip::tcp::soc
             auto server = self.lock();
             if (server)
             {
-                auto httpStream = server->httpStreamFactory()->buildHttpStream(ss, m_moduleName);
+                auto httpStream = server->httpStreamFactory()->buildHttpStream(ss);
                 server->buildHttpSession(httpStream, nodeId)->run();
             }
         });
@@ -181,7 +181,7 @@ void HttpServer::onAccept(boost::beast::error_code ec, boost::asio::ip::tcp::soc
 HttpSession::Ptr HttpServer::buildHttpSession(
     HttpStream::Ptr _httpStream, std::shared_ptr<std::string> _nodeId)
 {
-    auto session = std::make_shared<HttpSession>(_httpStream->moduleName());
+    auto session = std::make_shared<HttpSession>();
 
     auto queue = std::make_shared<Queue>();
     auto self = std::weak_ptr<HttpSession>(session);
@@ -227,10 +227,10 @@ HttpSession::Ptr HttpServer::buildHttpSession(
  */
 HttpServer::Ptr HttpServerFactory::buildHttpServer(const std::string& _listenIP,
     uint16_t _listenPort, std::shared_ptr<boost::asio::io_context> _ioc,
-    std::shared_ptr<boost::asio::ssl::context> _ctx, std::string _moduleName)
+    std::shared_ptr<boost::asio::ssl::context> _ctx)
 {
     // create httpserver and launch a listening port
-    auto server = std::make_shared<HttpServer>(_listenIP, _listenPort, std::move(_moduleName));
+    auto server = std::make_shared<HttpServer>(_listenIP, _listenPort);
     auto acceptor = std::make_shared<boost::asio::ip::tcp::acceptor>((*_ioc));
     auto httpStreamFactory = std::make_shared<HttpStreamFactory>();
     server->setCtx(std::move(_ctx));

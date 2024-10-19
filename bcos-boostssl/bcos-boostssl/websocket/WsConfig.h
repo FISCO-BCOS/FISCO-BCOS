@@ -89,8 +89,6 @@ private:
     // the max message to be send or read
     uint32_t m_maxMsgSize{DEFAULT_MAX_MESSAGE_SIZE};
 
-    std::string m_moduleName = "DEFAULT";
-
 public:
     void setModel(WsModel _model) { m_model = _model; }
     WsModel model() const { return m_model; }
@@ -143,8 +141,5 @@ public:
     {
         m_contextConfig = std::move(_contextConfig);
     }
-
-    std::string moduleName() { return m_moduleName; }
-    void setModuleName(std::string _moduleName) { m_moduleName = std::move(_moduleName); }
 };
 }  // namespace bcos::boostssl::ws

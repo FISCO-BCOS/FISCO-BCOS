@@ -41,8 +41,8 @@ using namespace bcos::boostssl;
 using namespace bcos::boostssl::ws;
 using namespace bcos::boostssl::http;
 
-WsSession::WsSession(tbb::task_group& taskGroup, std::string _moduleName)
-  : m_taskGroup(taskGroup), m_moduleName(std::move(_moduleName))
+WsSession::WsSession(tbb::task_group& taskGroup)
+  : m_taskGroup(taskGroup)
 {
     WEBSOCKET_SESSION(INFO) << LOG_KV("[NEWOBJ][WSSESSION]", this);
 
@@ -302,7 +302,7 @@ void WsSession::asyncWrite(std::shared_ptr<bcos::bytes> _buffer)
                 }
                 if (_ec)
                 {
-                    BCOS_LOG(WARNING) << LOG_BADGE(session->moduleName()) << LOG_BADGE("Session")
+                    BCOS_LOG(WARNING) << LOG_BADGE("Session")
                                       << LOG_BADGE("asyncWrite") << LOG_KV("message", _ec.message())
                                       << LOG_KV("endpoint", session->endPoint());
                     return session->drop(WsError::WriteError);

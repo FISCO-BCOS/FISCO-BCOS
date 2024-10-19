@@ -53,7 +53,7 @@ public:
     using Ptrs = std::vector<std::shared_ptr<WsSession>>;
 
 public:
-    explicit WsSession(tbb::task_group& taskGroup, std::string _moduleName = "DEFAULT");
+    explicit WsSession(tbb::task_group& taskGroup);
 
     virtual ~WsSession() noexcept
     {
@@ -145,9 +145,6 @@ public:
     std::string nodeId() { return m_nodeId; }
     void setNodeId(std::string _nodeId) { m_nodeId = std::move(_nodeId); }
 
-    std::string moduleName() { return m_moduleName; }
-    void setModuleName(std::string _moduleName) { m_moduleName = std::move(_moduleName); }
-
     bool needCheckRspPacket() const { return m_needCheckRspPacket; }
     void setNeedCheckRspPacket(bool _needCheckRespPacket)
     {
@@ -190,7 +187,6 @@ protected:
     std::atomic_bool m_isDrop = false;
     // websocket protocol version
     std::atomic<uint16_t> m_version = 0;
-    std::string m_moduleName;
 
     // buffer used to read message
     std::shared_ptr<boost::beast::flat_buffer> m_buffer;
@@ -235,9 +231,9 @@ public:
     virtual ~WsSessionFactory() = default;
 
 public:
-    virtual WsSession::Ptr createSession(tbb::task_group& taskGroup, std::string _moduleName)
+    virtual WsSession::Ptr createSession(tbb::task_group& taskGroup)
     {
-        auto session = std::make_shared<WsSession>(taskGroup, _moduleName);
+        auto session = std::make_shared<WsSession>(taskGroup);
         return session;
     }
 };

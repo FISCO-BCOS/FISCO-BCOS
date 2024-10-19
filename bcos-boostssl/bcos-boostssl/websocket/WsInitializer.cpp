@@ -44,7 +44,7 @@ using namespace bcos::boostssl::http;
 void WsInitializer::initWsService(WsService::Ptr _wsService)
 {
     std::shared_ptr<WsConfig> _config = m_config;
-    std::string m_moduleName = _config->moduleName();
+
     auto messageFactory = m_messageFactory;
     if (!messageFactory)
     {
@@ -68,20 +68,11 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
 
     auto builder = std::make_shared<WsStreamDelegateBuilder>();
 
-    // init module_name for log
-    WsTools::setModuleName(m_moduleName);
-    NodeInfoTools::setModuleName(m_moduleName);
-    connector->setModuleName(m_moduleName);
-
     std::shared_ptr<boost::asio::ssl::context> srvCtx = nullptr;
     std::shared_ptr<boost::asio::ssl::context> clientCtx = nullptr;
     if (!_config->disableSsl())
     {
         auto contextBuilder = std::make_shared<ContextBuilder>();
-
-        // init module_name for log
-        contextBuilder->setModuleName(m_moduleName);
-        _config->contextConfig()->setModuleName(m_moduleName);
 
         srvCtx = contextBuilder->buildSslContext(true, *_config->contextConfig());
         clientCtx = contextBuilder->buildSslContext(false, *_config->contextConfig());
@@ -107,7 +98,8 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
 
         auto httpServerFactory = std::make_shared<HttpServerFactory>();
         auto httpServer = httpServerFactory->buildHttpServer(_config->listenIP(),
-            _config->listenPort(), ioServicePool->getIOService(), srvCtx, m_moduleName);
+            _config->listenPort(), ioServicePool->getIOService(), srvCtx);
+
         httpServer->setIOServicePool(ioServicePool);
         httpServer->setDisableSsl(_config->disableSsl());
         httpServer->setWsUpgradeHandler(

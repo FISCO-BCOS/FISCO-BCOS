@@ -41,7 +41,7 @@ public:
     using Ptr = std::shared_ptr<HttpSession>;
 
 public:
-    explicit HttpSession(std::string _moduleName) : m_moduleName(std::move(_moduleName))
+    explicit HttpSession()
     {
         HTTP_SESSION(DEBUG) << LOG_KV("[NEWOBJ][HTTPSESSION]", this);
 
@@ -202,7 +202,7 @@ public:
                     boost::beast::http::status::ok, version, std::move(_content));
                 // put the response into the queue and waiting to be send
                 session->queue()->enqueue(resp);
-                BCOS_LOG(TRACE) << LOG_BADGE(session->m_moduleName) << LOG_BADGE("handleRequest")
+                BCOS_LOG(TRACE) << LOG_BADGE("handleRequest")
                                 << LOG_DESC("response")
                                 << LOG_KV("body", std::string_view((const char*)resp->body().data(),
                                                       resp->body().size()))
@@ -269,9 +269,6 @@ public:
     std::shared_ptr<std::string> nodeId() { return m_nodeId; }
     void setNodeId(std::shared_ptr<std::string> _nodeId) { m_nodeId = std::move(_nodeId); }
 
-    std::string moduleName() { return m_moduleName; }
-    void setModuleName(std::string _moduleName) { m_moduleName = std::move(_moduleName); }
-
 
 private:
     HttpStream::Ptr m_httpStream;
@@ -286,8 +283,6 @@ private:
     boost::optional<boost::beast::http::request_parser<boost::beast::http::string_body>> m_parser;
 
     std::shared_ptr<std::string> m_nodeId;
-
-    std::string m_moduleName = "DEFAULT";
 };
 
 }  // namespace bcos::boostssl::http

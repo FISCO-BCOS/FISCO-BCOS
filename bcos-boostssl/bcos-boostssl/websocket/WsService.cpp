@@ -45,7 +45,7 @@ using namespace std::chrono_literals;
 using namespace bcos::boostssl;
 using namespace bcos::boostssl::ws;
 
-WsService::WsService(std::string _moduleName) : m_moduleName(std::move(_moduleName))
+WsService::WsService()
 {
     WEBSOCKET_SERVICE(INFO) << LOG_KV("[NEWOBJ][WsService]", this);
 }
@@ -390,7 +390,7 @@ std::shared_ptr<WsSession> WsService::newSession(
     _wsStreamDelegate->setMaxReadMsgSize(m_config->maxMsgSize());
 
     std::string endPoint = _wsStreamDelegate->remoteEndpoint();
-    auto session = m_sessionFactory->createSession(m_taskGroup, m_moduleName);
+    auto session = m_sessionFactory->createSession(m_taskGroup);
 
     session->setWsStreamDelegate(std::move(_wsStreamDelegate));
     session->setIoc(m_ioservicePool->getIOService());
@@ -650,15 +650,14 @@ void WsService::asyncSendMessage(const WsSessions& _ss, std::shared_ptr<boostssl
 
             auto self = shared_from_this();
             std::string endPoint = session->endPoint();
-            auto moduleName = session->moduleName();
             // Note: should not pass session to the lamda operator[], this will lead to memory leak
             session->asyncSendMessage(msg, options,
-                [self, endPoint, moduleName, callback = respFunc](
+                [self, endPoint, callback = respFunc](
                     auto&& _error, auto&& _msg, auto&& _session) {
                     if (_error && _error->errorCode() != 0)
                     {
                         BOOST_SSL_LOG(WARNING)
-                            << LOG_BADGE(moduleName) << LOG_BADGE("asyncSendMessage")
+                            << LOG_BADGE("asyncSendMessage")
                             << LOG_DESC("callback failed") << LOG_KV("endpoint", endPoint)
                             << LOG_KV("code", _error->errorCode())
                             << LOG_KV("message", _error->errorMessage());
