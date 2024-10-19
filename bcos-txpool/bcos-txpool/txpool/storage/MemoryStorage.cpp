@@ -428,6 +428,7 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
         if (c_fileLogLevel == TRACE)
         {
             TXPOOL_LOG(TRACE) << LOG_DESC("submitTxTime") << LOG_KV("txHash", txHash)
+                              << LOG_KV("result", result)
                               << LOG_KV("insertTime", utcTime() - txImportTime);
         }
     }
@@ -573,6 +574,11 @@ void MemoryStorage::notifyTxResult(
     auto txHash = transaction.hash();
     txSubmitResult->setSender(std::string(transaction.sender()));
     txSubmitResult->setTo(std::string(transaction.to()));
+    if (c_fileLogLevel == TRACE) [[unlikely]]
+    {
+        TXPOOL_LOG(TRACE) << LOG_DESC("notifyTxResult") << LOG_KV("tx", txHash.abridged())
+                          << LOG_KV("txSubmitResult", txSubmitResult->toString());
+    }
     try
     {
         txSubmitCallback(nullptr, std::move(txSubmitResult));
@@ -631,6 +637,11 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
         txHashes, [&](bool success, const crypto::HashType& key, Transaction::Ptr const& tx) {
             if (!success)
             {
+                if (c_fileLogLevel == TRACE) [[unlikely]]
+                {
+                    TXPOOL_LOG(TRACE)
+                        << LOG_DESC("Remove tx, but transaction not found! ") << LOG_KV("key", key);
+                }
                 return;
             }
             onTxRemoved(tx, false);

@@ -51,6 +51,22 @@ public:
 
     virtual std::string const& to() const = 0;
     virtual void setTo(std::string const& _to) = 0;
+
+    // NOTE: only use for trace log
+    std::string toString() const
+    {
+        std::stringstream ss;
+        ss << "TransactionSubmitResult{"
+           << "status=" << status() << ", "
+           << "txHash=" << txHash() << ", "
+           << "blockHash=" << blockHash() << ", "
+           << "transactionIndex=" << transactionIndex() << ", "
+           << "nonce=" << nonce() << ", "
+           << "transactionReceipt=" << transactionReceipt()->toString() << ", "
+           << "sender=" << toHex(sender()) << ", "
+           << "to=" << to() << "}";
+        return ss.str();
+    }
 };
 
 using TransactionSubmitResults = std::vector<TransactionSubmitResult::Ptr>;

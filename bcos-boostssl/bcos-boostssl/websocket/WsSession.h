@@ -19,6 +19,7 @@
  */
 #pragma once
 #include "bcos-boostssl/interfaces/MessageFace.h"
+#include "bcos-boostssl/websocket/WsError.h"
 #include "bcos-utilities/ObjectCounter.h"
 #include <bcos-boostssl/httpserver/Common.h>
 #include <bcos-boostssl/websocket/Common.h>
@@ -59,7 +60,7 @@ public:
         WEBSOCKET_SESSION(INFO) << LOG_KV("[DELOBJ][WSSESSION]", this);
     }
 
-    void drop(uint32_t _reason);
+    void drop(boostssl::ws::WsError _reason);
 
 public:
     // start WsSession as client

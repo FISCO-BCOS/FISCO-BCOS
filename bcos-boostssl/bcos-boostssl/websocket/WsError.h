@@ -19,6 +19,7 @@
  */
 #pragma once
 
+#include <string>
 namespace bcos::boostssl::ws
 {
 enum WsError
@@ -42,6 +43,43 @@ enum WsError
 inline bool notRetryAgain(int _wsError)
 {
     return (_wsError == boostssl::ws::WsError::MessageOverflow);
+}
+
+inline std::string wsErrorToString(WsError _wsError)
+{
+    switch (_wsError)
+    {
+    case boostssl::ws::WsError::AcceptError:
+        return "AcceptError";
+    case boostssl::ws::WsError::ReadError:
+        return "ReadError";
+    case boostssl::ws::WsError::WriteError:
+        return "WriteError";
+    case boostssl::ws::WsError::PingError:
+        return "PingError";
+    case boostssl::ws::WsError::PongError:
+        return "PongError";
+    case boostssl::ws::WsError::PacketError:
+        return "PacketError";
+    case boostssl::ws::WsError::SessionDisconnect:
+        return "SessionDisconnect";
+    case boostssl::ws::WsError::UserDisconnect:
+        return "UserDisconnect";
+    case boostssl::ws::WsError::TimeOut:
+        return "TimeOut";
+    case boostssl::ws::WsError::NoActiveCons:
+        return "NoActiveCons";
+    case boostssl::ws::WsError::EndPointNotExist:
+        return "EndPointNotExist";
+    case boostssl::ws::WsError::MessageOverflow:
+        return "MessageOverflow";
+    case boostssl::ws::WsError::UndefinedException:
+        return "UndefinedException";
+    case boostssl::ws::WsError::MessageEncodeError:
+        return "MessageEncodeError";
+    default:
+        return "Unknown";
+    }
 }
 
 }  // namespace bcos::boostssl::ws

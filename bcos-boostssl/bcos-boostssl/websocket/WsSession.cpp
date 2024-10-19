@@ -45,7 +45,7 @@ WsSession::WsSession(tbb::task_group& taskGroup, std::string _moduleName)
 {
     WEBSOCKET_SESSION(INFO) << LOG_KV("[NEWOBJ][WSSESSION]", this);
 }
-void WsSession::drop(uint32_t _reason)
+void WsSession::drop(WsError _reason)
 {
     if (m_isDrop)
     {
@@ -57,18 +57,16 @@ void WsSession::drop(uint32_t _reason)
 
     m_isDrop = true;
 
-    WEBSOCKET_SESSION(INFO) << LOG_BADGE("drop") << LOG_KV("reason", _reason)
-                            << LOG_KV("endpoint", m_endPoint) << LOG_KV("session", this);
+    WEBSOCKET_SESSION(INFO) << LOG_BADGE("drop") << LOG_KV("reason", wsErrorToString(_reason))
+                            << LOG_KV("endpoint", m_endPoint)
+                            << LOG_KV("cb size", m_callbacks.size()) << LOG_KV("session", this);
 
     auto self = std::weak_ptr<WsSession>(shared_from_this());
     // call callbacks
     {
-        auto error =
-            BCOS_ERROR_PTR(WsError::SessionDisconnect, "the session has been disconnected");
+        auto error = BCOS_ERROR_PTR(WsError::SessionDisconnect,
+            "Drop, the session has been disconnected, reason: " + wsErrorToString(_reason));
 
-        WEBSOCKET_SESSION(INFO) << LOG_BADGE("drop") << LOG_KV("reason", _reason)
-                                << LOG_KV("endpoint", m_endPoint)
-                                << LOG_KV("cb size", m_callbacks.size()) << LOG_KV("session", this);
         Guard lockGuard(x_callback);
 
         for (auto& cbEntry : m_callbacks)
@@ -470,7 +468,7 @@ void WsSession::onRespTimeout(const boost::system::error_code& _error, const std
 
     WEBSOCKET_SESSION(WARNING) << LOG_BADGE("onRespTimeout") << LOG_KV("seq", _seq);
 
-    auto error = BCOS_ERROR_PTR(WsError::TimeOut, "waiting for message response timed out");
+    auto error = BCOS_ERROR_PTR(WsError::TimeOut, "Waiting for message response time out.");
     m_taskGroup.run([callback = std::move(callback), error = std::move(error)]() {
         callback->respCallBack(error, nullptr, nullptr);
     });
