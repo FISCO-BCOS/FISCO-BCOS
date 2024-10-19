@@ -80,7 +80,7 @@ int main(int argc, char** argv)
         config->setContextConfig(contextConfig);
     }
 
-    auto wsService = std::make_shared<ws::WsService>("TEST");
+    auto wsService = std::make_shared<ws::WsService>();
     auto wsInitializer = std::make_shared<WsInitializer>();
 
     wsInitializer->setConfig(config);

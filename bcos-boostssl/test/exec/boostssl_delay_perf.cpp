@@ -104,7 +104,7 @@ void workAsClient(
         config->setContextConfig(contextConfig);
     }
 
-    auto wsService = std::make_shared<ws::WsService>("boostssl-delay-perf-client");
+    auto wsService = std::make_shared<ws::WsService>();
     auto wsInitializer = std::make_shared<WsInitializer>();
 
     wsInitializer->setConfig(config);
@@ -186,7 +186,7 @@ void workAsServer(std::string listenIp, uint16_t listenPort, bool disableSsl)
         config->setContextConfig(contextConfig);
     }
 
-    auto wsService = std::make_shared<ws::WsService>("boostssl-delay-perf-server");
+    auto wsService = std::make_shared<ws::WsService>();
     auto wsInitializer = std::make_shared<WsInitializer>();
 
     wsInitializer->setConfig(config);

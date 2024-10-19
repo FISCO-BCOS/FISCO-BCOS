@@ -32,7 +32,6 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/ThreadPool.h>
-#include <oneapi/tbb/task_group.h>
 #include <boost/asio/deadline_timer.hpp>
 #include <boost/asio/dispatch.hpp>
 #include <boost/asio/strand.hpp>
@@ -189,9 +188,12 @@ public:
         return m_reconnectedPeers;
     }
 
+    void setThreadPool(std::shared_ptr<bcos::ThreadPool> threadPool)
+    {
+        m_threadPool = std::move(threadPool);
+    }
 private:
     bool m_running{false};
-    tbb::task_group m_taskGroup;
 
     int32_t m_waitConnectFinishTimeout = 30000;
 

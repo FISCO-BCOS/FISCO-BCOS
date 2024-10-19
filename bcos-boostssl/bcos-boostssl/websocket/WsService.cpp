@@ -53,7 +53,6 @@ WsService::WsService()
 WsService::~WsService()
 {
     stop();
-    m_taskGroup.wait();
     WEBSOCKET_SERVICE(INFO) << LOG_KV("[DELOBJ][WsService]", this);
 }
 
@@ -141,9 +140,10 @@ void WsService::stop()
     {
         m_ioservicePool->stop();
     }
-    m_taskGroup.cancel();
-    m_taskGroup.wait();
-
+    if(m_threadPool)
+    {
+        m_threadPool->stop();
+    }
     if (m_statTimer)
     {
         m_statTimer->stop();
@@ -390,7 +390,7 @@ std::shared_ptr<WsSession> WsService::newSession(
     _wsStreamDelegate->setMaxReadMsgSize(m_config->maxMsgSize());
 
     std::string endPoint = _wsStreamDelegate->remoteEndpoint();
-    auto session = m_sessionFactory->createSession(m_taskGroup);
+    auto session = m_sessionFactory->createSession(m_threadPool);
 
     session->setWsStreamDelegate(std::move(_wsStreamDelegate));
     session->setIoc(m_ioservicePool->getIOService());
