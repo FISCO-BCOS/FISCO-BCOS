@@ -154,7 +154,7 @@ void HttpServer::onAccept(boost::beast::error_code ec, boost::asio::ip::tcp::soc
     ss->set_verify_callback(NodeInfoTools::newVerifyCallback(nodeId));
 
     ss->async_handshake(boost::asio::ssl::stream_base::server,
-        [this, ss, localEndpoint, remoteEndpoint, nodeId, self](boost::beast::error_code _ec) {
+        [ss, localEndpoint, remoteEndpoint, nodeId, self](boost::beast::error_code _ec) {
             if (_ec)
             {
                 HTTP_SERVER(INFO) << LOG_BADGE("async_handshake")
