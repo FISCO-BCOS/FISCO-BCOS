@@ -51,7 +51,7 @@ public:
     {
         m_ioServicePool = std::make_shared<IOServicePool>();
         m_httpServer = std::make_shared<bcos::boostssl::http::HttpServer>(
-            m_listenIP, m_listenPort, ARCHIVE_MODULE_NAME);
+            m_listenIP, m_listenPort);
         auto acceptor =
             std::make_shared<boost::asio::ip::tcp::acceptor>((*m_ioServicePool->getIOService()));
         auto httpStreamFactory = std::make_shared<bcos::boostssl::http::HttpStreamFactory>();
