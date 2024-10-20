@@ -197,7 +197,6 @@ private:
     task::Task<std::optional<ledger::StorageState>> getStorageState(
         std::string_view _address, protocol::BlockNumber _blockNumber) override;
 
-private:
     std::tuple<bool, bcos::crypto::HashListPtr, std::shared_ptr<std::vector<bytesConstPtr>>>
     needStoreUnsavedTxs(
         bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr _block);
