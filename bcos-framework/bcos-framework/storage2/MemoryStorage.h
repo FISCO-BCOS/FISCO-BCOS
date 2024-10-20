@@ -193,11 +193,13 @@ auto tag_invoke(bcos::storage2::tag_t<readSome> /*unused*/, MemoryStorage& stora
         if (it != index.end())
         {
             result.value().emplace_back(it->value);
-
+            lock.release();
             if constexpr (std::decay_t<decltype(storage)>::withLRU)
             {
-                lock.upgrade_to_writer();
-                updateLRUAndCheck(storage, bucket, it);
+                if (typename MemoryStorage::Lock LRULock; LRULock.try_acquire(bucket.mutex, true))
+                {
+                    updateLRUAndCheck(storage, bucket, it);
+                }
             }
         }
         else

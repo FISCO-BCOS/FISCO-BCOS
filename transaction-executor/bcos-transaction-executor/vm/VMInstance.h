@@ -24,11 +24,8 @@
 #pragma once
 #include "../EVMCResult.h"
 #include <bcos-utilities/Common.h>
-#include <bcos-utilities/Overloaded.h>
 #include <evmc/evmc.h>
 #include <evmone/evmone.h>
-#include <evmone/advanced_analysis.hpp>
-#include <evmone/advanced_execution.hpp>
 #include <evmone/baseline.hpp>
 #include <evmone/vm.hpp>
 
@@ -68,13 +65,6 @@ struct std::equal_to<evmc_address>
 {
     bool operator()(const evmc_address& lhs, const evmc_address& rhs) const noexcept;
 };
-
-template <>
-struct boost::hash<evmc_address>
-{
-    size_t operator()(const evmc_address& address) const noexcept;
-};
-
 template <>
 struct std::hash<evmc_address>
 {
