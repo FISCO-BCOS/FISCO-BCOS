@@ -53,7 +53,7 @@ uint16_t VRFBasedSealer::generateTransactionForRotating(bcos::protocol::Block::P
     try
     {
         auto blockNumber = _block->blockHeader()->number();
-        if (_sealingManager->latestNumber() < blockNumber - 1)
+        if (!blockNumberInput && _sealingManager->latestNumber() < blockNumber - 1)
         {
             SEAL_LOG(INFO) << LOG_DESC(
                                   "generateTransactionForRotating: interrupt pipeline for waiting "
