@@ -1274,7 +1274,7 @@ void Ledger::removeExpiredNonce(protocol::BlockNumber blockNumber, bool sync)
     }
 }
 
-void Ledger::asyncGetNodeListByType(const std::string_view& _type,
+void Ledger::asyncGetNodeListByType(std::string_view const& _type,
     std::function<void(Error::Ptr, consensus::ConsensusNodeList)> _onGetConfig)
 {
     auto eType = magic_enum::enum_cast<consensus::Type>(_type);
@@ -1292,17 +1292,11 @@ void Ledger::asyncGetNodeListByType(const std::string_view& _type,
                 co_await ledger::getCurrentBlockNumber(*self.m_stateStorage, fromStorage);
             auto effectNumber = blockNumber + 1;
             auto nodeList = co_await ledger::getNodeList(*self.m_stateStorage);
-            if (type)
-            {
-                auto filterNodeList = RANGES::views::filter(nodeList, [&](auto const& node) {
-                    return node.type == *type && node.enableNumber <= effectNumber;
-                }) | RANGES::to<std::vector>();
-                callback(nullptr, std::move(filterNodeList));
-            }
-            else
-            {
-                callback(nullptr, std::move(nodeList));
-            }
+
+            auto filterNodeList = RANGES::views::filter(nodeList, [&](auto const& node) {
+                return (!type || node.type == *type) && node.enableNumber <= effectNumber;
+            }) | RANGES::to<std::vector>();
+            callback(nullptr, std::move(filterNodeList));
         }
         catch (std::exception& e)
         {

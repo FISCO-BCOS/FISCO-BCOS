@@ -161,6 +161,10 @@ public:
         {
             _onGetConfig(nullptr, consensus::ConsensusNodeList(2));
         }
+        else if (_type.empty())
+        {
+            _onGetConfig(nullptr, consensus::ConsensusNodeList(3));
+        }
         else
         {
             BOOST_FAIL("Unknown query type");
