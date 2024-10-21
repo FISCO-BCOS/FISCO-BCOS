@@ -255,6 +255,12 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
       uuid =
       ; ssl or sm ssl
       sm_ssl=true
+      ;SSL_VERIFY_NONE                 0x00
+      ;SSL_VERIFY_PEER                 0x01
+      ;SSL_VERIFY_FAIL_IF_NO_PEER_CERT 0x02
+      ;SSL_VERIFY_CLIENT_ONCE          0x04
+      ;SSL_VERIFY_POST_HANDSHAKE       0x08
+      ssl_verify_mode=3; 0x01 | 0x02
       ;
       enable_rip_protocol=false
       listen_ip=0.0.0.0
@@ -278,6 +284,10 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
                                   "initP2PConfig: invalid uuid! Must be non-empty!"));
     }
     bool smSSL = _pt.get<bool>("p2p.sm_ssl", false);
+    auto defaultSslMode =
+        boost::asio::ssl::context_base::verify_peer | boost::asio::ssl::verify_fail_if_no_peer_cert;
+    m_ssl_server_mode = _pt.get<int>("p2p.ssl_server_verify_mode", defaultSslMode);
+    m_ssl_client_mode = _pt.get<int>("p2p.ssl_client_verify_mode", defaultSslMode);
     std::string listenIP = _pt.get<std::string>("p2p.listen_ip", "0.0.0.0");
     int listenPort = _pt.get<int>("p2p.listen_port", 30300);
     if (!isValidPort(listenPort))
