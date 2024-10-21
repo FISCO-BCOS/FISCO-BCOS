@@ -147,6 +147,7 @@ BOOST_AUTO_TEST_CASE(feature)
         "bugfix_staticcall_noaddr_return",
         "bugfix_support_transfer_receive_fallback",
         "bugfix_set_row_with_dirty_flag",
+        "bugfix_rpbft_vrf_blocknumber_input",
         "feature_dmc2serial",
         "feature_sharding",
         "feature_rpbft",
@@ -392,6 +393,25 @@ BOOST_AUTO_TEST_CASE(genesis)
     for (auto feature : expect4)
     {
         BOOST_CHECK(features4.get(feature));
+    }
+
+    // 3.12.0
+    Features features3_12;
+    features3_12.setGenesisFeatures(bcos::protocol::BlockVersion::V3_12_0_VERSION);
+    auto expect3_12 = std::to_array<std::string_view>({"bugfix_revert", "bugfix_statestorage_hash",
+        "bugfix_evm_create2_delegatecall_staticcall_codecopy", "bugfix_event_log_order",
+        "bugfix_call_noaddr_return", "bugfix_precompiled_codehash", "bugfix_dmc_revert",
+        "bugfix_keypage_system_entry_hash", "bugfix_internal_create_redundant_storage",
+        "bugfix_internal_create_permission_denied", "bugfix_sharding_call_in_child_executive",
+        "bugfix_empty_abi_reset", "bugfix_eip55_addr", "bugfix_eoa_as_contract",
+        "bugfix_eoa_match_failed", "bugfix_evm_exception_gas_used", "bugfix_dmc_deploy_gas_used",
+        "bugfix_staticcall_noaddr_return", "bugfix_support_transfer_receive_fallback",
+        "bugfix_set_row_with_dirty_flag", "bugfix_rpbft_vrf_blocknumber_input"});
+
+    BOOST_CHECK_EQUAL(validFlags(features3_12).size(), expect3_12.size());
+    for (auto feature : expect3_12)
+    {
+        BOOST_CHECK(features3_12.get(feature));
     }
 }
 

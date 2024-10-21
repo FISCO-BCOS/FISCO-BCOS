@@ -52,6 +52,7 @@ void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
     setBlockTxCountLimit(_ledgerConfig->blockTxCountLimit());
     // set ConsensusNodeList
 
+    m_features = _ledgerConfig->features();
     bcos::consensus::ConsensusNodeList consensusList;
     bcos::consensus::ConsensusNodeList observerList;
     consensusList = _ledgerConfig->consensusNodeList();
@@ -60,6 +61,7 @@ void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
     setObserverNodeList(observerList);
     // set leader_period
     setLeaderSwitchPeriod(_ledgerConfig->leaderSwitchPeriod());
+    setFeatures(_ledgerConfig->features());
     // reset the timer
     freshTimer();
 
