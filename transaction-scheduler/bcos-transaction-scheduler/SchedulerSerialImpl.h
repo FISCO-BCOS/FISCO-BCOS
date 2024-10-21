@@ -22,7 +22,6 @@ class SchedulerSerialImpl
 {
 public:
     constexpr static auto MIN_TRANSACTION_GRAIN_SIZE = 16;
-    GC m_gc;
 };
 
 task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
@@ -115,7 +114,7 @@ task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
     RANGES::move(RANGES::views::transform(
                      contexts, [](ExecutionContext& context) -> auto& { return context.receipt; }),
         RANGES::back_inserter(receipts));
-    scheduler.m_gc.collect(std::move(contexts));
+    GC::collect(std::move(contexts));
     co_return receipts;
 }
 }  // namespace bcos::transaction_scheduler

@@ -160,7 +160,6 @@ public:
     constexpr static bool isSchedulerParallelImpl = true;
     using MutableStorage = MutableStorageType;
 
-    GC m_gc;
     size_t m_grainSize = DEFAULT_GRAIN_SIZE;
     size_t m_maxConcurrency = DEFAULT_MAX_CONCURRENCY;
 };
@@ -252,7 +251,7 @@ size_t executeSinglePass(SchedulerParallelImpl& scheduler, auto& storage, auto& 
                         ittapi::ITT_DOMAINS::instance().STAGE_4);
                     if (hasRAW.test())
                     {
-                        scheduler.m_gc.collect(std::move(chunk));
+                        GC::collect(std::move(chunk));
                         return {};
                     }
 
@@ -265,7 +264,7 @@ size_t executeSinglePass(SchedulerParallelImpl& scheduler, auto& storage, auto& 
                         {
                             hasRAW.test_and_set();
                             PARALLEL_SCHEDULER_LOG(DEBUG) << "Detected RAW Intersection:" << index;
-                            scheduler.m_gc.collect(std::move(chunk));
+                            GC::collect(std::move(chunk));
                             return {};
                         }
                     }
@@ -303,7 +302,7 @@ size_t executeSinglePass(SchedulerParallelImpl& scheduler, auto& storage, auto& 
                             << chunk->count();
                         task::tbb::syncWait(storage2::merge(
                             lastStorage, std::move(mutableStorage(chunk->storageView()))));
-                        scheduler.m_gc.collect(std::move(chunk));
+                        GC::collect(std::move(chunk));
                     }
                     else
                     {
@@ -313,7 +312,7 @@ size_t executeSinglePass(SchedulerParallelImpl& scheduler, auto& storage, auto& 
         context);
 
     task::tbb::syncWait(mergeLastStorage(scheduler, storage, std::move(lastStorage)));
-    scheduler.m_gc.collect(std::move(writeSet));
+    GC::collect(std::move(writeSet));
     if (offset < count)
     {
         PARALLEL_SCHEDULER_LOG(DEBUG)
@@ -356,7 +355,7 @@ task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
     arena.execute([&]() {
         auto retryCount = executeSinglePass(scheduler, storage, executor, blockHeader, ledgerConfig,
             contexts, scheduler.m_grainSize);
-        scheduler.m_gc.collect(std::move(contexts));
+        GC::collect(std::move(contexts));
         PARALLEL_SCHEDULER_LOG(INFO) << "Parallel execute block retry count: " << retryCount;
     });
 

@@ -6,6 +6,7 @@
 #include <fmt/format.h>
 #include <boost/test/unit_test.hpp>
 #include <functional>
+#include <string>
 
 using namespace bcos;
 using namespace bcos::storage2::memory_storage;
@@ -316,7 +317,8 @@ BOOST_AUTO_TEST_CASE(merge)
 BOOST_AUTO_TEST_CASE(directDelete)
 {
     task::syncWait([]() -> task::Task<void> {
-        MemoryStorage<int, int, bcos::storage2::memory_storage::LOGICAL_DELETION> storage;
+        MemoryStorage<int, int, bcos::storage2::memory_storage::LOGICAL_DELETION, std::hash<int>>
+            storage;
         co_await storage2::writeSome(
             storage, RANGES::iota_view<int, int>(0, 10), RANGES::repeat_view<int>(100));
 
@@ -351,6 +353,38 @@ BOOST_AUTO_TEST_CASE(keyComp)
     auto hash1 = std::hash<decltype(key1)>{}(key1);
     auto hash2 = std::hash<decltype(key2)>{}(key2);
     BOOST_CHECK_EQUAL(hash1, hash2);
+}
+
+BOOST_AUTO_TEST_CASE(HeterogeneousLookup)
+{
+    using namespace std::string_literals;
+    using namespace std::string_view_literals;
+
+    task::syncWait([]() -> task::Task<void> {
+        struct StringHasher
+        {
+            size_t operator()(const std::string& str) const noexcept
+            {
+                return std::hash<std::string>{}(str);
+            }
+            size_t operator()(std::string_view str) const noexcept
+            {
+                return std::hash<std::string_view>{}(str);
+            }
+        };
+
+        MemoryStorage<std::string, int, Attribute(ORDERED)> storage1;
+        co_await storage2::writeOne(storage1, "key1"s, 1);
+        auto value1 = co_await storage2::readOne(storage1, "key1"sv);
+        BOOST_REQUIRE(value1);
+        BOOST_CHECK_EQUAL(*value1, 1);
+
+        MemoryStorage<std::string, int, Attribute(NONE), StringHasher> storage2;
+        co_await storage2::writeOne(storage2, "key1"s, 2);
+        auto value2 = co_await storage2::readOne(storage2, "key1"sv);
+        BOOST_REQUIRE(value2);
+        BOOST_CHECK_EQUAL(*value2, 2);
+    }());
 }
 
 BOOST_AUTO_TEST_CASE(concurrentRange)
