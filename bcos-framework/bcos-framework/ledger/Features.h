@@ -48,6 +48,7 @@ public:
         bugfix_staticcall_noaddr_return,
         bugfix_support_transfer_receive_fallback,
         bugfix_set_row_with_dirty_flag,
+        bugfix_rpbft_vrf_blocknumber_input,
         feature_dmc2serial,
         feature_sharding,
         feature_rpbft,
@@ -235,6 +236,7 @@ public:
                     Flag::bugfix_support_transfer_receive_fallback,
                     Flag::bugfix_eoa_match_failed,
                 }},
+            {protocol::BlockVersion::V3_12_0_VERSION, {Flag::bugfix_rpbft_vrf_blocknumber_input}},
         });
         for (const auto& upgradeFeatures : upgradeRoadmap)
         {

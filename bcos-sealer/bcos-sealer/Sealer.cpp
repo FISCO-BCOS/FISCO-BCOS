@@ -20,6 +20,7 @@
 #include "Sealer.h"
 #include "Common.h"
 #include "VRFBasedSealer.h"
+#include "bcos-framework/ledger/Features.h"
 #include <bcos-framework/protocol/GlobalConfig.h>
 
 #include <utility>
@@ -198,6 +199,8 @@ uint16_t Sealer::hookWhenSealBlock(bcos::protocol::Block::Ptr _block)
     {
         return SealBlockResult::SUCCESS;
     }
-    return VRFBasedSealer::generateTransactionForRotating(
-        _block, m_sealerConfig, m_sealingManager, m_hashImpl);
+    return VRFBasedSealer::generateTransactionForRotating(_block, m_sealerConfig, m_sealingManager,
+        m_hashImpl,
+        m_sealerConfig->consensus()->consensusConfig()->features().get(
+            ledger::Features::Flag::bugfix_rpbft_vrf_blocknumber_input));
 }

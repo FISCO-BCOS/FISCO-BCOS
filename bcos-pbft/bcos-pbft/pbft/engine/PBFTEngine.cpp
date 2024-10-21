@@ -1501,7 +1501,7 @@ void PBFTEngine::reHandlePrePrepareProposals(NewViewMsgInterface::Ptr _newViewRe
 
 void PBFTEngine::finalizeConsensus(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
 {
-    RecursiveGuard l(m_mutex);
+    RecursiveGuard lock(m_mutex);
     // try to switch rpbft
     switchToRPBFT(_ledgerConfig);
     // resetConfig after submit the block to ledger

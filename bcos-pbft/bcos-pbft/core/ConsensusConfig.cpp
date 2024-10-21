@@ -145,3 +145,11 @@ ConsensusNode* ConsensusConfig::getConsensusNodeByIndex(IndexType _nodeIndex)
     }
     return {};
 }
+bcos::ledger::Features bcos::consensus::ConsensusConfig::features() const
+{
+    return m_features;
+}
+void bcos::consensus::ConsensusConfig::setFeatures(ledger::Features features)
+{
+    m_features = features;
+}

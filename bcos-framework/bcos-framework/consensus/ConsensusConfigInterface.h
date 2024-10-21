@@ -19,6 +19,7 @@
  * @date 2021-04-09
  */
 #pragma once
+#include "../ledger/Features.h"
 #include "ConsensusNode.h"
 #include "ConsensusTypeDef.h"
 #include "ProposalInterface.h"
@@ -53,5 +54,8 @@ public:
 
     virtual void setCommittedProposal(ProposalInterface::Ptr _committedProposal) = 0;
     virtual ProposalInterface::ConstPtr committedProposal() = 0;
+
+    virtual ledger::Features features() const = 0;
+    virtual void setFeatures(ledger::Features features) = 0;
 };
 }  // namespace bcos::consensus

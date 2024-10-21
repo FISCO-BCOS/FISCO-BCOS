@@ -47,7 +47,8 @@ public:
         const PrecompiledExecResult::Ptr& _callParameters);
 
 private:
-    void checkVRFInfos(crypto::HashType const& parentHash, std::string const& origin);
+    void checkVRFInfos(crypto::HashType const& parentHash, std::string const& origin,
+        bool blockNumberInput, protocol::BlockNumber blockNumber);
     bool shouldRotate(const executor::TransactionExecutive::Ptr& _executive);
     task::Task<bool> getConsensusNodeListFromStorage(
         const executor::TransactionExecutive::Ptr& _executive);

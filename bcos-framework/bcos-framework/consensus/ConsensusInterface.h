@@ -59,8 +59,7 @@ public:
     // called by frontService to dispatch message
     virtual void asyncNotifyConsensusMessage(bcos::Error::Ptr _error, std::string const& _id,
         bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data,
-        std::function<void(Error::Ptr _error)> _onRecv) = 0;
-
+        std::function<void(Error::Ptr)> _onRecv) = 0;
 
     // for the sync module to notify the syncing number
     virtual void notifyHighestSyncingNumber(bcos::protocol::BlockNumber _number) = 0;
@@ -70,7 +69,7 @@ public:
 
     // get the consensusNodeList
     // Note: if separate sealer with the PBFT module, should implement with notify
-    virtual ConsensusNodeList consensusNodeList() const { return ConsensusNodeList(); }
+    virtual ConsensusNodeList consensusNodeList() const { return {}; }
     virtual uint64_t nodeIndex() const { return 0; }
     virtual consensus::ConsensusConfigInterface::ConstPtr consensusConfig() const
     {

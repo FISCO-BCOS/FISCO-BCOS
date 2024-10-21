@@ -496,6 +496,6 @@ protected:
     std::function<void()> m_txsStatusSyncHandler;
 
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
-    [[no_unique_address]] RPBFTConfigTools::Ptr m_rpbftConfigTools = nullptr;
+    RPBFTConfigTools::Ptr m_rpbftConfigTools = nullptr;
 };
 }  // namespace bcos::consensus
