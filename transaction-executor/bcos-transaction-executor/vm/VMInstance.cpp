@@ -32,10 +32,18 @@ bcos::transaction_executor::EVMCResult bcos::transaction_executor::VMInstance::e
 
 void bcos::transaction_executor::VMInstance::enableDebugOutput() {}
 
+std::strong_ordering operator<=>(const evmc_address& lhs, const evmc_address& rhs) noexcept
+{
+    return std::memcmp(lhs.bytes, rhs.bytes, sizeof(evmc_address)) <=> 0;
+}
+bool operator==(const evmc_address& lhs, const evmc_address& rhs) noexcept
+{
+    return std::is_eq(lhs <=> rhs);
+}
 bool std::equal_to<evmc_address>::operator()(
     const evmc_address& lhs, const evmc_address& rhs) const noexcept
 {
-    return std::memcmp(lhs.bytes, rhs.bytes, sizeof(lhs.bytes)) == 0;
+    return lhs == rhs;
 }
 size_t std::hash<evmc_address>::operator()(const evmc_address& address) const noexcept
 {

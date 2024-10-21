@@ -26,6 +26,7 @@
 #include <bcos-utilities/Common.h>
 #include <evmc/evmc.h>
 #include <evmone/evmone.h>
+#include <compare>
 #include <evmone/baseline.hpp>
 #include <evmone/vm.hpp>
 
@@ -60,6 +61,8 @@ public:
 
 }  // namespace bcos::transaction_executor
 
+std::strong_ordering operator<=>(const evmc_address& lhs, const evmc_address& rhs) noexcept;
+bool operator==(const evmc_address& lhs, const evmc_address& rhs) noexcept;
 template <>
 struct std::equal_to<evmc_address>
 {
