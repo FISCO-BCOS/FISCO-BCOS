@@ -114,7 +114,12 @@ public:
         }
         else if (_type.empty())
         {
-            _onGetConfig(nullptr, consensus::ConsensusNodeList(3));
+            consensus::ConsensusNodeList nodeList(4);
+            nodeList[0].type = consensus::Type::consensus_sealer;
+            nodeList[1].type = consensus::Type::consensus_observer;
+            nodeList[2].type = consensus::Type::consensus_observer;
+            nodeList[3].type = consensus::Type::consensus_candidate_sealer;
+            _onGetConfig(nullptr, nodeList);
         }
         else
         {
