@@ -373,13 +373,13 @@ BOOST_AUTO_TEST_CASE(HeterogeneousLookup)
             }
         };
 
-        MemoryStorage<std::string, int, Attribute(ORDERED)> storage1;
+        MemoryStorage<std::string, int, ORDERED> storage1;
         co_await storage2::writeOne(storage1, "key1"s, 1);
         auto value1 = co_await storage2::readOne(storage1, "key1"sv);
         BOOST_REQUIRE(value1);
         BOOST_CHECK_EQUAL(*value1, 1);
 
-        MemoryStorage<std::string, int, Attribute(NONE), StringHasher> storage2;
+        MemoryStorage<std::string, int, UNORDERED, StringHasher> storage2;
         co_await storage2::writeOne(storage2, "key1"s, 2);
         auto value2 = co_await storage2::readOne(storage2, "key1"sv);
         BOOST_REQUIRE(value2);

@@ -26,7 +26,7 @@ using namespace bcos::transaction_executor;
 
 constexpr static s256 singleIssue = 1000000;
 constexpr static s256 singleTransfer = 1;
-constexpr static std::string_view transferMethod = "transfer(address,address,int256)";
+constexpr static std::string_view transferMethod{"transfer(address,address,int256)"};
 
 using MutableStorage = MemoryStorage<StateKey, StateValue, Attribute(ORDERED | LOGICAL_DELETION)>;
 using BackendStorage = MemoryStorage<StateKey, StateValue, Attribute(ORDERED | LRU)>;
@@ -209,7 +209,8 @@ struct Fixture
             auto& fromAddress = m_addresses[rng() % count];
             auto& toAddress = m_addresses[rng() % count];
 
-            auto input = abiCodec.abiIn(transferMethod, fromAddress, toAddress, singleTransfer);
+            auto input =
+                abiCodec.abiIn(std::string(transferMethod), fromAddress, toAddress, singleTransfer);
             inner.data.input.assign(input.begin(), input.end());
             transaction->calculateHash(*m_cryptoSuite->hashImpl());
             return transaction;
