@@ -60,7 +60,7 @@ std::variant<MemoryStorage<Key, storage::Entry, memory_storage::Attribute(ORDERE
         std::hash<Key>>,
     MemoryStorage<Key, storage::Entry, memory_storage::Attribute(ORDERED | CONCURRENT | LRU),
         std::hash<Key>>,
-    MemoryStorage<Key, storage::Entry>,
+    MemoryStorage<Key, storage::Entry, Attribute::NONE, std::hash<Key>>,
     MemoryStorage<Key, storage::Entry, memory_storage::Attribute(CONCURRENT), std::hash<Key>>,
     MemoryStorage<Key, storage::Entry, memory_storage::Attribute(CONCURRENT | LRU), std::hash<Key>>>
     allStorage;
@@ -225,7 +225,9 @@ BENCHMARK(read<MemoryStorage<Key, storage::Entry,
     ->Arg(1000000)
     ->Threads(1)
     ->Threads(8);
-BENCHMARK(read<MemoryStorage<Key, storage::Entry>>)->Arg(100000)->Arg(1000000);
+BENCHMARK(read<MemoryStorage<Key, storage::Entry, memory_storage::Attribute::NONE, std::hash<Key>>>)
+    ->Arg(100000)
+    ->Arg(1000000);
 BENCHMARK(
     read<MemoryStorage<Key, storage::Entry, memory_storage::Attribute(CONCURRENT), std::hash<Key>>>)
     ->Arg(100000)
@@ -238,7 +240,8 @@ BENCHMARK(write<MemoryStorage<Key, storage::Entry, memory_storage::Attribute(ORD
               std::hash<Key>>>)
     ->Threads(1)
     ->Threads(8);
-BENCHMARK(write<MemoryStorage<Key, storage::Entry>>);
+BENCHMARK(
+    write<MemoryStorage<Key, storage::Entry, memory_storage::Attribute::NONE, std::hash<Key>>>);
 BENCHMARK(
     write<
         MemoryStorage<Key, storage::Entry, memory_storage::Attribute(CONCURRENT), std::hash<Key>>>)
