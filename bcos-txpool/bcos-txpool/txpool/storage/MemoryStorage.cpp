@@ -19,6 +19,7 @@
  * @date 2021-05-07
  */
 #include "bcos-txpool/txpool/storage/MemoryStorage.h"
+#include "bcos-task/Wait.h"
 #include "bcos-utilities/Common.h"
 #include <bcos-protocol/TransactionSubmitResultImpl.h>
 #include <oneapi/tbb/blocked_range.h>
@@ -28,11 +29,10 @@
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
 #include <memory>
-#include <thread>
 #include <variant>
 
-#define CPU_CORES std::thread::hardware_concurrency()
-#define BUCKET_SIZE 4 * CPU_CORES
+const static auto CPU_CORES = std::thread::hardware_concurrency();
+const static auto BUCKET_SIZE = 4 * CPU_CORES;
 
 using namespace bcos;
 using namespace bcos::txpool;
@@ -45,12 +45,12 @@ MemoryStorage::MemoryStorage(
     m_txsTable(BUCKET_SIZE),
     m_invalidTxs(BUCKET_SIZE),
     m_missedTxs(CPU_CORES),
+    m_blockNumberUpdatedTime(utcTime()),
     m_txsExpirationTime(_txsExpirationTime),
     m_inRateCollector("tx_pool_in", 1000),
     m_sealRateCollector("tx_pool_seal", 1000),
     m_removeRateCollector("tx_pool_rm", 1000)
 {
-    m_blockNumberUpdatedTime = utcTime();
     // Trigger a transaction cleanup operation every 3s
     m_cleanUpTimer = std::make_shared<Timer>(TXPOOL_CLEANUP_TIME, "txpoolTimer");
     m_cleanUpTimer->registerTimeoutHandler([this] { cleanUpExpiredTransactions(); });
@@ -959,8 +959,7 @@ void MemoryStorage::removeInvalidTxs(bool lock)
             });
         m_config->txPoolNonceChecker()->batchRemove(invalidNonceList);
         task::syncWait(m_config->txValidator()->web3NonceChecker()->batchRemoveMemoryNonce(
-            web3Txs | RANGES::views::transform(
-                          [](auto const& _tx) { return std::string(_tx->sender()); }),
+            web3Txs | RANGES::views::transform([](auto const& _tx) { return _tx->sender(); }),
             web3Txs | RANGES::views::transform([](auto const& _tx) { return _tx->nonce(); })));
 
         /*
