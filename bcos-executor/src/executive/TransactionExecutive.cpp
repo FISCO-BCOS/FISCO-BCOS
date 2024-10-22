@@ -247,7 +247,7 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
     if (auto const& balanceTransfer =
             m_blockContext.configs().get(ledger::SystemConfig::balance_transfer))
     {
-        disableTransfer = (balanceTransfer.value() == "0");
+        disableTransfer = (balanceTransfer->first == "0");
     }
     if (disableTransfer)
     {
