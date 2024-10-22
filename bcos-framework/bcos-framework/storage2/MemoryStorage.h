@@ -28,15 +28,16 @@ using Empty = std::monostate;
 
 enum Attribute : int
 {
-    NONE = 0,
+    UNORDERED = 0,
     ORDERED = 1,
     CONCURRENT = 1 << 1,
     LRU = 1 << 2,
     LOGICAL_DELETION = 1 << 3
 };
 
-template <class KeyType, class ValueType = Empty, Attribute attribute = Attribute::NONE,
-    class HasherType = void, class BucketHasherType = HasherType>
+template <class KeyType, class ValueType = Empty, int attribute = Attribute::UNORDERED,
+    class HasherType = std::hash<KeyType>, class Equal = std::equal_to<>,
+    class BucketHasherType = HasherType>
 class MemoryStorage
 {
 public:
@@ -69,7 +70,7 @@ public:
         boost::multi_index::ordered_unique<boost::multi_index::member<Data, KeyType, &Data::key>,
             std::less<>>,
         boost::multi_index::hashed_unique<boost::multi_index::member<Data, KeyType, &Data::key>,
-            HasherType, std::equal_to<>>>;
+            HasherType, Equal>>;
     using Container = std::conditional_t<withLRU,
         boost::multi_index_container<Data,
             boost::multi_index::indexed_by<IndexType, boost::multi_index::sequenced<>>>,
@@ -89,7 +90,7 @@ public:
     using Value = ValueType;
     using BucketHasher = BucketHasherType;
 
-    explicit MemoryStorage(unsigned buckets = BUCKETS_COUNT)
+    MemoryStorage(unsigned buckets = BUCKETS_COUNT, int64_t capacity = DEFAULT_CAPACITY)
     {
         if constexpr (withConcurrent)
         {
@@ -97,39 +98,37 @@ public:
         }
         if constexpr (withLRU)
         {
-            m_maxCapacity = DEFAULT_CAPACITY;
+            m_maxCapacity = capacity;
         }
     }
-    MemoryStorage(const MemoryStorage&) = delete;
+    MemoryStorage(const MemoryStorage&) = default;
     MemoryStorage(MemoryStorage&&) noexcept = default;
-    MemoryStorage& operator=(const MemoryStorage&) = delete;
+    MemoryStorage& operator=(const MemoryStorage&) = default;
     MemoryStorage& operator=(MemoryStorage&&) noexcept = default;
     ~MemoryStorage() noexcept = default;
+
+    friend void setMaxCapacity(MemoryStorage& storage, int64_t capacity)
+        requires withLRU
+    {
+        storage.m_maxCapacity = capacity;
+    }
+
+    friend size_t getBucketIndex(MemoryStorage const& storage, auto const& key)
+    {
+        if constexpr (!withConcurrent)
+        {
+            return 0;
+        }
+        else
+        {
+            auto hash = typename MemoryStorage::BucketHasher{}(key);
+            return hash % storage.m_buckets.size();
+        }
+    }
 };
 
 template <class Storage>
 concept IsMemoryStorage = std::remove_cvref_t<Storage>::isMemoryStorage;
-
-template <IsMemoryStorage MemoryStorage>
-void setMaxCapacity(MemoryStorage& storage, int64_t capacity)
-    requires MemoryStorage::withLRU
-{
-    storage.m_maxCapacity = capacity;
-}
-
-template <IsMemoryStorage MemoryStorage>
-size_t getBucketIndex(MemoryStorage const& storage, auto const& key)
-{
-    if constexpr (!MemoryStorage::withConcurrent)
-    {
-        return 0;
-    }
-    else
-    {
-        auto hash = typename MemoryStorage::BucketHasher{}(key);
-        return hash % storage.m_buckets.size();
-    }
-}
 
 template <IsMemoryStorage MemoryStorage>
 typename MemoryStorage::Bucket& getBucket(MemoryStorage& storage, auto const& key) noexcept
