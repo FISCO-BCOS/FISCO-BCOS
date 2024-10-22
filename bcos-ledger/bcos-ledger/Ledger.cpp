@@ -1277,17 +1277,17 @@ void Ledger::removeExpiredNonce(protocol::BlockNumber blockNumber, bool sync)
     }
 }
 
-void Ledger::asyncGetNodeListByType(const std::string_view& _type,
+void Ledger::asyncGetNodeListByType(std::string_view const& _type,
     std::function<void(Error::Ptr, consensus::ConsensusNodeList)> _onGetConfig)
 {
     auto eType = magic_enum::enum_cast<consensus::Type>(_type);
-    if (!eType)
+    if (!eType && !_type.empty())
     {
         _onGetConfig(nullptr, {});
         return;
     }
 
-    task::wait([](decltype(*this)& self, consensus::Type type,
+    task::wait([](decltype(*this)& self, std::optional<consensus::Type> type,
                    decltype(_onGetConfig) callback) -> task::Task<void> {
         try
         {
@@ -1295,8 +1295,9 @@ void Ledger::asyncGetNodeListByType(const std::string_view& _type,
                 co_await ledger::getCurrentBlockNumber(*self.m_stateStorage, fromStorage);
             auto effectNumber = blockNumber + 1;
             auto nodeList = co_await ledger::getNodeList(*self.m_stateStorage);
+
             auto filterNodeList = RANGES::views::filter(nodeList, [&](auto const& node) {
-                return node.type == type && node.enableNumber <= effectNumber;
+                return (!type || node.type == *type) && node.enableNumber <= effectNumber;
             }) | RANGES::to<std::vector>();
             callback(nullptr, std::move(filterNodeList));
         }
@@ -1306,7 +1307,7 @@ void Ledger::asyncGetNodeListByType(const std::string_view& _type,
                          LedgerError::GetStorageError, "Error while getNodeListByType", e),
                 {});
         }
-    }(*this, *eType, std::move(_onGetConfig)));
+    }(*this, eType, std::move(_onGetConfig)));
 }
 
 Error::Ptr Ledger::checkTableValid(Error::UniquePtr&& error,
