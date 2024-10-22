@@ -55,7 +55,23 @@ public:
     virtual std::string const& message() const = 0;
     virtual void setMessage(std::string message) = 0;
 
-    virtual std::string toString() const { return {}; }
+    // NOTE: only use for trace log
+    virtual std::string toString() const
+    {
+        std::stringstream ss;
+        ss << "TransactionReceipt{"
+           << "hash=" << hash() << ", "
+           << "version=" << version() << ", "
+           << "gasUsed=" << gasUsed() << ", "
+           << "contractAddress=" << contractAddress() << ", "
+           << "status=" << status() << ", "
+           << "output=" << toHex(output()) << ", "
+           << "logEntries=" << logEntries().size() << ", "
+           << "blockNumber=" << blockNumber() << ", "
+           << "effectiveGasPrice=" << effectiveGasPrice() << ", "
+           << "message=" << message() << "}";
+        return ss.str();
+    }
 };
 using Receipts = std::vector<TransactionReceipt::Ptr>;
 using ReceiptsPtr = std::shared_ptr<Receipts>;

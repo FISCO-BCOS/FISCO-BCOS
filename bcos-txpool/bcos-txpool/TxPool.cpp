@@ -246,9 +246,7 @@ void TxPool::asyncSealTxs(uint64_t _txsLimit, TxsHashSetPtr _avoidTxs,
 void TxPool::asyncNotifyBlockResult(BlockNumber _blockNumber, TransactionSubmitResultsPtr txsResult,
     std::function<void(Error::Ptr)> _onNotifyFinished)
 {
-    m_worker->enqueue([this, txsResult = std::move(txsResult), _blockNumber]() {
-        m_txpoolStorage->batchRemove(_blockNumber, *txsResult);
-    });
+    m_txpoolStorage->batchRemove(_blockNumber, *txsResult);
 
     if (_onNotifyFinished)
     {
