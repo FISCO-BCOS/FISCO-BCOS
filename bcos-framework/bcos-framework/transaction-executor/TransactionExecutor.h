@@ -9,6 +9,8 @@
 namespace bcos::transaction_executor
 {
 
+constexpr static auto EXECUTOR_STACK = 1300;
+
 inline constexpr struct ExecuteTransaction
 {
     /**

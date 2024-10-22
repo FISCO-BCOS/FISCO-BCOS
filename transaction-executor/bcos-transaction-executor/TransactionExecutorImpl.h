@@ -84,7 +84,7 @@ private:
                 evmcResult.create_address.bytes + sizeof(evmcResult.create_address.bytes),
                 std::back_inserter(newContractAddress));
         }
-        auto output = bcos::bytesConstRef{evmcResult.output_data, evmcResult.output_size};
+        bcos::bytesConstRef output{evmcResult.output_data, evmcResult.output_size};
 
         if (evmcResult.status_code != 0)
         {
