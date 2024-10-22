@@ -16,6 +16,7 @@
 #include "transaction-executor/tests/TestBytecode.h"
 #include <benchmark/benchmark.h>
 #include <boost/throw_exception.hpp>
+#include <random>
 #include <variant>
 
 using namespace bcos;
@@ -25,6 +26,7 @@ using namespace bcos::transaction_executor;
 
 constexpr static s256 singleIssue = 1000000;
 constexpr static s256 singleTransfer = 1;
+constexpr static std::string_view transferMethod = "transfer(address,address,int256)";
 
 using MutableStorage = MemoryStorage<StateKey, StateValue, Attribute(ORDERED | LOGICAL_DELETION)>;
 using BackendStorage = MemoryStorage<StateKey, StateValue, Attribute(ORDERED | LRU)>;
@@ -197,23 +199,21 @@ struct Fixture
     void prepareRandomTransfer()
     {
         bcos::codec::abi::ContractABICodec abiCodec(*bcos::executor::GlobalHashImpl::g_hashImpl);
-        m_transactions =
-            m_addresses | RANGES::views::chunk(2) |
-            RANGES::views::transform([this, &abiCodec](auto&& range) {
-                auto transaction = std::make_unique<bcostars::protocol::TransactionImpl>(
-                    [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
-                auto& inner = transaction->mutableInner();
-                inner.data.to = m_contractAddress;
-                auto& fromAddress = range[0];
-                auto& toAddress = range[1];
+        auto count = m_addresses.size();
+        std::mt19937_64 rng(std::random_device{}());
+        m_transactions = ::ranges::views::transform(::ranges::views::iota(0LU, count), [&, this](
+                                                                                           auto) {
+            auto transaction = std::make_unique<bcostars::protocol::TransactionImpl>();
+            auto& inner = transaction->mutableInner();
+            inner.data.to = m_contractAddress;
+            auto& fromAddress = m_addresses[rng() % count];
+            auto& toAddress = m_addresses[rng() % count];
 
-                auto input = abiCodec.abiIn(
-                    "transfer(address,address,int256)", fromAddress, toAddress, singleTransfer);
-                inner.data.input.assign(input.begin(), input.end());
-                transaction->calculateHash(*m_cryptoSuite->hashImpl());
-                return transaction;
-            }) |
-            RANGES::to<decltype(m_transactions)>();
+            auto input = abiCodec.abiIn(transferMethod, fromAddress, toAddress, singleTransfer);
+            inner.data.input.assign(input.begin(), input.end());
+            transaction->calculateHash(*m_cryptoSuite->hashImpl());
+            return transaction;
+        }) | RANGES::to<decltype(m_transactions)>();
     }
 
     void prepareConflictTransfer()
@@ -416,6 +416,19 @@ static void noConflicitTransfer(benchmark::State& state)
 }
 
 template <bool parallel>
+static void randomTransfer(benchmark::State& state)
+{
+    Fixture<parallel> fixture;
+    fixture.deployContract();
+
+    auto count = state.range(0);
+    fixture.prepareAddresses(count);
+    fixture.prepareIssue(count);
+
+    initParallelScheduler(state, fixture);
+}
+
+template <bool parallel>
 static void conflictTransfer(benchmark::State& state)
 {
     Fixture<parallel> fixture;
@@ -426,21 +439,6 @@ static void conflictTransfer(benchmark::State& state)
     fixture.prepareIssue(count);
 
     initParallelScheduler(state, fixture);
-    if (std::holds_alternative<SchedulerParallelImpl<MutableStorage>>(fixture.m_scheduler))
-    {
-        auto grainSize = state.range(1);
-        auto maxParallel = state.range(2);
-        auto& scheduler = std::get<SchedulerParallelImpl<MutableStorage>>(fixture.m_scheduler);
-        if (grainSize > 0)
-        {
-            scheduler.m_grainSize = grainSize;
-        }
-        if (maxParallel > 0)
-        {
-            scheduler.m_maxConcurrency = maxParallel;
-        }
-    }
-
     std::visit(
         [&](auto& scheduler) {
             if constexpr (std::is_same_v<std::remove_cvref_t<decltype(scheduler)>, std::monostate>)
