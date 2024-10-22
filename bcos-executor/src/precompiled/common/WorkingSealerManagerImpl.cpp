@@ -425,13 +425,18 @@ static std::vector<std::reference_wrapper<consensus::ConsensusNode>> getNodeList
     size_t totalWeight = 0;
     for (consensus::ConsensusNode& node : nodeList)
     {
+        if (node.termWeight == 0)
+        {
+            continue;
+        }
         totalWeight += node.termWeight;
-        nodeWeightRanges.push_back({node, totalWeight});
+        nodeWeightRanges.emplace_back(node, totalWeight);
     }
 
     std::vector<std::reference_wrapper<consensus::ConsensusNode>> result;
     result.reserve(count);
-    for ([[maybe_unused]] auto i : ::ranges::views::iota(0LU, count))
+    for ([[maybe_unused]] auto i :
+        ::ranges::views::iota(0LU, std::min(count, nodeWeightRanges.size())))
     {
         result.emplace_back(pickNodeByWeight(nodeWeightRanges, totalWeight, seed));
     }
