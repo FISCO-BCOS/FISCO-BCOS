@@ -93,6 +93,11 @@ public:
         BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
     }
 
+    virtual bool existsInGroup(bcos::crypto::NodeIDPtr _nodeId)
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
+    }
+
     /**
      * @brief fetch transactions from the txpool
      *

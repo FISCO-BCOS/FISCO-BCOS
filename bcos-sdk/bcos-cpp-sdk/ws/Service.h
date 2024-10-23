@@ -44,7 +44,7 @@ public:
     using Ptr = std::shared_ptr<Service>;
     using ConstPtr = std::shared_ptr<const Service>;
     Service(bcos::group::GroupInfoCodec::Ptr _groupInfoCodec,
-        bcos::group::GroupInfoFactory::Ptr _groupInfoFactory, std::string _moduleName);
+        bcos::group::GroupInfoFactory::Ptr _groupInfoFactory);
 
     // ---------------------overide begin------------------------------------
 

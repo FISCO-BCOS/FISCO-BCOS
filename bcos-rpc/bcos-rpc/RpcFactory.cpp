@@ -347,7 +347,6 @@ bcos::boostssl::ws::WsService::Ptr RpcFactory::buildWsService(
 
     initializer->setConfig(std::move(_config));
     initializer->initWsService(wsService);
-    wsService->setModuleName("RPC");
 
     return wsService;
 }

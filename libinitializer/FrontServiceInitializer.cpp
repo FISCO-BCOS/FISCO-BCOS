@@ -183,9 +183,26 @@ void FrontServiceInitializer::initMsgHandlers(bcos::consensus::ConsensusInterfac
     m_front->registerModuleMessageDispatcher(protocol::SYNC_PUSH_TRANSACTION,
         [this, txpool = _txpool](bcos::crypto::NodeIDPtr const& nodeID,
             const std::string& messageID, bytesConstRef data) {
+            if (!txpool->existsInGroup(nodeID)) [[unlikely]]
+            {
+                if (c_fileLogLevel == TRACE) [[unlikely]]
+                {
+                    TXPOOL_LOG(TRACE)
+                        << "Receive transaction for push from p2p, but the node is not in the group"
+                        << LOG_KV("nodeID", nodeID->shortHex()) << LOG_KV("messageID", messageID);
+                }
+                return;
+            }
             auto transaction =
                 m_protocolInitializer->blockFactory()->transactionFactory()->createTransaction(
                     data, false);
+            if (c_fileLogLevel == TRACE) [[unlikely]]
+            {
+                TXPOOL_LOG(TRACE) << "Receive push transaction"
+                                  << LOG_KV("nodeID", nodeID->shortHex())
+                                  << LOG_KV("tx", transaction ? transaction->hash().hex() : "")
+                                  << LOG_KV("messageID", messageID);
+            }
             task::wait(
                 [](decltype(txpool) txpool, decltype(transaction) transaction) -> task::Task<void> {
                     try
@@ -211,7 +228,18 @@ void FrontServiceInitializer::initMsgHandlers(bcos::consensus::ConsensusInterfac
             {
                 TXPOOL_LOG(TRACE) << "Receive tree push transaction"
                                   << LOG_KV("nodeID", nodeID->shortHex())
+                                  << LOG_KV("tx", transaction ? transaction->hash().hex() : "")
                                   << LOG_KV("messageID", messageID);
+            }
+            if (!txpool->existsInGroup(nodeID))
+            {
+                if (c_fileLogLevel == TRACE) [[unlikely]]
+                {
+                    TXPOOL_LOG(TRACE)
+                        << "Receive transaction for push from p2p, but the node is not in the group"
+                        << LOG_KV("nodeID", nodeID->shortHex()) << LOG_KV("messageID", messageID);
+                }
+                return;
             }
             task::wait([](decltype(txpool) txpool, decltype(transaction) transaction,
                            decltype(data) data, decltype(nodeID) nodeID) -> task::Task<void> {

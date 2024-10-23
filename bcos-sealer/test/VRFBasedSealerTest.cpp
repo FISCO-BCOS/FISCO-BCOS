@@ -83,20 +83,28 @@ BOOST_AUTO_TEST_CASE(testVRFSealer)
     auto consensus = std::make_shared<FakeConsensus>();
     sealer->init(consensus);
     auto result = sealer::VRFBasedSealer::generateTransactionForRotating(
-        block, sealer->sealerConfig(), sealer->sealingManager(), hashImpl);
+        block, sealer->sealerConfig(), sealer->sealingManager(), hashImpl, false);
     BOOST_CHECK(result == sealer::Sealer::SealBlockResult::WAIT_FOR_LATEST_BLOCK);
     sealer->sealingManager()->resetLatestNumber(8);
 
     result = sealer::VRFBasedSealer::generateTransactionForRotating(
-        block, sealer->sealerConfig(), sealer->sealingManager(), hashImpl);
+        block, sealer->sealerConfig(), sealer->sealingManager(), hashImpl, false);
     BOOST_CHECK(result == sealer::Sealer::SealBlockResult::WAIT_FOR_LATEST_BLOCK);
 
     sealer->sealingManager()->resetLatestNumber(9);
     result = sealer::VRFBasedSealer::generateTransactionForRotating(
-        block, sealer->sealerConfig(), sealer->sealingManager(), hashImpl);
+        block, sealer->sealerConfig(), sealer->sealingManager(), hashImpl, false);
     BOOST_CHECK(result == sealer::Sealer::SealBlockResult::SUCCESS);
     BOOST_CHECK(block->transactionsMetaDataSize() == 1);
     BOOST_CHECK(block->transactionMetaData(0)->to() == precompiled::CONSENSUS_ADDRESS);
+
+    auto block2 = fakeAndCheckBlock(cryptoSuite, blockFactory, 0, 0, 10, true, false);
+    sealer->sealingManager()->resetLatestNumber(0);
+    result = sealer::VRFBasedSealer::generateTransactionForRotating(
+        block2, sealer->sealerConfig(), sealer->sealingManager(), hashImpl, true);
+    BOOST_CHECK(result == sealer::Sealer::SealBlockResult::SUCCESS);
+    BOOST_CHECK(block2->transactionsMetaDataSize() == 1);
+    BOOST_CHECK(block2->transactionMetaData(0)->to() == precompiled::CONSENSUS_ADDRESS);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

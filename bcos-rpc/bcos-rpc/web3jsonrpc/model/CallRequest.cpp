@@ -31,8 +31,10 @@ bcos::protocol::Transaction::Ptr CallRequest::takeToTransaction(
         maxFeePerGas.value_or(""), maxPriorityFeePerGas.value_or(""));
     if (from.has_value())
     {
-        auto sender = fromHexWithPrefix(from.value());
-        tx->forceSender(std::move(sender));
+        if (auto const sender = safeFromHexWithPrefix(from.value()))
+        {
+            tx->forceSender(sender.value());
+        }
     }
     return tx;
 }
@@ -51,8 +53,14 @@ std::tuple<bool, CallRequest> rpc::decodeCallRequest(Json::Value const& _root) n
     }
     auto const& data = _root.isMember("data") ? _root["data"] : _root["input"];
 
+    auto const dataBytes = bcos::safeFromHexWithPrefix(data.asString());
+    if (!dataBytes.has_value())
+    {
+        return {false, _request};
+    }
+    _request.data = dataBytes.value();
     _request.to = _root.isMember("to") ? _root["to"].asString() : "";
-    _request.data = bcos::fromHexWithPrefix(data.asString());
+
     if (_root.isMember("from"))
     {
         _request.from = _root["from"].asString();

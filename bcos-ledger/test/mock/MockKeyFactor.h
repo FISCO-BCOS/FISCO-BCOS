@@ -25,9 +25,7 @@
 using namespace bcos;
 using namespace bcos::crypto;
 
-namespace bcos
-{
-namespace test
+namespace bcos::test
 {
 DERIVE_BCOS_EXCEPTION(InvalidKey);
 class MockKey : public bcos::crypto::KeyInterface
@@ -58,10 +56,10 @@ public:
     size_t size() const override { return m_keyData->size(); }
     char* mutableData() override { return (char*)m_keyData->data(); }
     const char* constData() const override { return (const char*)m_keyData->data(); }
-    std::shared_ptr<bytes> encode() const override { return m_keyData; }
+    bytes encode() const override { return *m_keyData; }
     void decode(bytesConstRef _data) override { *m_keyData = _data.toBytes(); }
 
-    void decode(bytes&& _data) override { *m_keyData = std::move(_data); }
+    void decode(bytes _data) override { *m_keyData = std::move(_data); }
 
     std::string shortHex() override
     {
@@ -98,5 +96,4 @@ public:
     }
 };
 
-}  // namespace test
-}  // namespace bcos
+}  // namespace bcos::test
