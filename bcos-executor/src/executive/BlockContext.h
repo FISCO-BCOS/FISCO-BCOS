@@ -139,6 +139,8 @@ public:
 
     const ledger::Features& features() const;
     const ledger::SystemConfigs& configs() const;
+    void setFeatures(ledger::Features features) { m_features = std::move(features); }
+    void setConfigs(ledger::SystemConfigs configs) { m_configs = std::move(configs); }
     storage::EntryCachePtr getCodeCache() const { return m_codeCache; }
     storage::EntryCachePtr getCodeHashCache() const { return m_codeHashCache; }
     auto backendStorage() const { return m_backendStorage; }
