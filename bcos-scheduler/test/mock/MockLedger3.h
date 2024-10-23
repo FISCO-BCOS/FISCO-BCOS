@@ -1,5 +1,6 @@
 #pragma once
 
+#include "bcos-framework/consensus/ConsensusNode.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
@@ -160,6 +161,16 @@ public:
         else if (_type == ledger::CONSENSUS_CANDIDATE_SEALER)
         {
             _onGetConfig(nullptr, consensus::ConsensusNodeList(2));
+        }
+        else if (_type.empty())
+        {
+            consensus::ConsensusNodeList nodeList(5);
+            nodeList[0].type = consensus::Type::consensus_sealer;
+            nodeList[1].type = consensus::Type::consensus_observer;
+            nodeList[2].type = consensus::Type::consensus_observer;
+            nodeList[3].type = consensus::Type::consensus_candidate_sealer;
+            nodeList[4].type = consensus::Type::consensus_candidate_sealer;
+            _onGetConfig(nullptr, nodeList);
         }
         else
         {

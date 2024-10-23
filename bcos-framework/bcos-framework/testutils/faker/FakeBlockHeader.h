@@ -189,7 +189,7 @@ inline std::vector<bytes> fakeSealerList(
     {
         KeyPairInterface::Ptr keyPair = _signImpl->generateKeyPair();
         _keyPairVec.emplace_back(keyPair);
-        sealerList.emplace_back(*(keyPair->publicKey()->encode()));
+        sealerList.emplace_back(keyPair->publicKey()->encode());
     }
     return sealerList;
 }

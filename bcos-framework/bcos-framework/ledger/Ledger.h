@@ -43,9 +43,9 @@ inline constexpr struct StoreTransactionsAndReceipts
 
 inline constexpr struct RemoveExpiredNonce
 {
-    task::Task<void> operator()(auto& ledger, protocol::BlockNumber expiredNumber) const
+    void operator()(auto& ledger, protocol::BlockNumber expiredNumber) const
     {
-        co_await tag_invoke(*this, ledger, expiredNumber);
+        tag_invoke(*this, ledger, expiredNumber);
     }
 } removeExpiredNonce{};
 

@@ -105,7 +105,7 @@ public:
             _onGetList) override;
     void removeExpiredNonce(protocol::BlockNumber blockNumber, bool sync = false) override;
 
-    void asyncGetNodeListByType(const std::string_view& _type,
+    void asyncGetNodeListByType(std::string_view const& _type,
         std::function<void(Error::Ptr, consensus::ConsensusNodeList)> _onGetConfig) override;
 
     void asyncGetCurrentStateByKey(std::string_view const& _key,
@@ -197,7 +197,6 @@ private:
     task::Task<std::optional<ledger::StorageState>> getStorageState(
         std::string_view _address, protocol::BlockNumber _blockNumber) override;
 
-private:
     std::tuple<bool, bcos::crypto::HashListPtr, std::shared_ptr<std::vector<bytesConstPtr>>>
     needStoreUnsavedTxs(
         bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr _block);

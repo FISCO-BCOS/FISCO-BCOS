@@ -132,10 +132,12 @@ public:
     static bool compareConsensusNode(
         ConsensusNodeList const& _left, ConsensusNodeList const& _right);
 
+    ledger::Features features() const override;
+    void setFeatures(ledger::Features features) override;
+
 protected:
     static bool isNodeExist(ConsensusNode const& _node, ConsensusNodeList const& _nodeList);
 
-protected:
     bcos::crypto::KeyPairInterface::Ptr m_keyPair;
     std::atomic<IndexType> m_nodeIndex = 0;
     std::atomic<IndexType> m_consensusNodeNum = {0};
@@ -163,5 +165,6 @@ protected:
     std::atomic<bcos::protocol::BlockNumber> m_progressedIndex = {0};
     bcos::protocol::BlockNumber m_syncingHighestNumber = {0};
     std::function<void(uint32_t _version)> m_versionNotification;
+    ledger::Features m_features;
 };
 }  // namespace bcos::consensus

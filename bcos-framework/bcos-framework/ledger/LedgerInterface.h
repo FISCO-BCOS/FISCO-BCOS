@@ -125,9 +125,8 @@ public:
      * @brief async get total transaction count and latest block number
      * @param _callback callback totalTxCount, totalFailedTxCount, and latest block number
      */
-    virtual void asyncGetTotalTransactionCount(std::function<void(Error::Ptr, int64_t _totalTxCount,
-            int64_t _failedTxCount, protocol::BlockNumber _latestBlockNumber)>
-            _callback) = 0;
+    virtual void asyncGetTotalTransactionCount(
+        std::function<void(Error::Ptr, int64_t, int64_t, protocol::BlockNumber)> _callback) = 0;
 
     /**
      * @brief async get current_state table to get total transaction count, archived block number
@@ -196,7 +195,6 @@ public:
     {
         co_return std::nullopt;
     }
-
 
     virtual task::Task<void> batchInsertEoaNonce(bcos::storage::StorageInterface::Ptr storage,
         std::unordered_map<std::string, uint64_t> eoa2Nonce,

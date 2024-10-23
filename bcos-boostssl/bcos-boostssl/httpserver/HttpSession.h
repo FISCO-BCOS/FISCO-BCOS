@@ -41,9 +41,11 @@ public:
     using Ptr = std::shared_ptr<HttpSession>;
 
 public:
-    explicit HttpSession(std::string _moduleName) : m_moduleName(std::move(_moduleName))
+    explicit HttpSession()
     {
         HTTP_SESSION(DEBUG) << LOG_KV("[NEWOBJ][HTTPSESSION]", this);
+
+        m_buffer = std::make_shared<boost::beast::flat_buffer>();
     }
 
     virtual ~HttpSession()
@@ -65,9 +67,10 @@ public:
         // set limit to http request size, 100m
         m_parser->body_limit(PARSER_BODY_LIMITATION);
 
+        auto buffer = m_buffer;
         auto session = shared_from_this();
-        m_httpStream->asyncRead(m_buffer, m_parser,
-            [session](boost::system::error_code _ec, std::size_t bytes_transferred) {
+        m_httpStream->asyncRead(*m_buffer, m_parser,
+            [session, buffer](boost::system::error_code _ec, std::size_t bytes_transferred) {
                 session->onRead(_ec, bytes_transferred);
             });
     }
@@ -200,8 +203,7 @@ public:
                     boost::beast::http::status::ok, version, std::move(_content));
                 // put the response into the queue and waiting to be send
                 session->queue()->enqueue(resp);
-                BCOS_LOG(TRACE) << LOG_BADGE(session->m_moduleName) << LOG_BADGE("handleRequest")
-                                << LOG_DESC("response")
+                BCOS_LOG(TRACE) << LOG_BADGE("handleRequest") << LOG_DESC("response")
                                 << LOG_KV("body", std::string_view((const char*)resp->body().data(),
                                                       resp->body().size()))
                                 << LOG_KV("keep_alive", resp->keep_alive())
@@ -267,13 +269,12 @@ public:
     std::shared_ptr<std::string> nodeId() { return m_nodeId; }
     void setNodeId(std::shared_ptr<std::string> _nodeId) { m_nodeId = std::move(_nodeId); }
 
-    std::string moduleName() { return m_moduleName; }
-    void setModuleName(std::string _moduleName) { m_moduleName = std::move(_moduleName); }
-
 
 private:
     HttpStream::Ptr m_httpStream;
-    boost::beast::flat_buffer m_buffer;
+
+    std::shared_ptr<boost::beast::flat_buffer> m_buffer;
+
     std::shared_ptr<Queue> m_queue;
     HttpReqHandler m_httpReqHandler;
     WsUpgradeHandler m_wsUpgradeHandler;
@@ -282,8 +283,6 @@ private:
     boost::optional<boost::beast::http::request_parser<boost::beast::http::string_body>> m_parser;
 
     std::shared_ptr<std::string> m_nodeId;
-
-    std::string m_moduleName = "DEFAULT";
 };
 
 }  // namespace bcos::boostssl::http
