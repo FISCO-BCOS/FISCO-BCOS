@@ -2365,3 +2365,33 @@ Error::Ptr Ledger::setCurrentStateByKey(std::string_view const& _key, bcos::stor
         [&](Error::UniquePtr err) { setPromise.set_value(std::move(err)); });
     return setPromise.get_future().get();
 }
+
+task::Task<bcos::ledger::SystemConfigs> Ledger::fetchAllSystemConfigs(
+    protocol::BlockNumber _blockNumber)
+{
+    auto allConfigKeys = ledger::SystemConfigs::supportConfigs();
+    auto entries = co_await storage2::readSome(
+        *m_stateStorage, allConfigKeys | RANGES::views::transform([](auto&& key) {
+            return transaction_executor::StateKeyView(SYS_CONFIG, key);
+        }));
+    bcos::ledger::SystemConfigs configs;
+    for (auto&& [key, entry] : RANGES::views::zip(allConfigKeys, entries))
+    {
+        if (entry)
+        {
+            auto [value, enableNumber] = entry->getObject<SystemConfigEntry>();
+            if (enableNumber <= _blockNumber)
+            {
+                configs.set(key, value, enableNumber);
+            }
+        }
+    }
+    co_return configs;
+}
+
+task::Task<bcos::ledger::Features> Ledger::fetchAllFeatures(protocol::BlockNumber _blockNumber)
+{
+    bcos::ledger::Features features;
+    co_await features.readFromStorage(*m_stateStorage, _blockNumber);
+    co_return features;
+}

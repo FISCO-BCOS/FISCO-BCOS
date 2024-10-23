@@ -147,6 +147,23 @@ public:
         }
     }
 
+    task::Task<bcos::ledger::SystemConfigs> fetchAllSystemConfigs(
+        protocol::BlockNumber _blockNumber) override
+    {
+        ledger::SystemConfigs systemConfig;
+        systemConfig.set(ledger::SYSTEM_KEY_TX_COUNT_LIMIT, "100", commitBlockNumber);
+        systemConfig.set(ledger::SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, "300", commitBlockNumber);
+        systemConfig.set(ledger::SYSTEM_KEY_TX_GAS_LIMIT, "300000000", commitBlockNumber);
+        systemConfig.set(ledger::SYSTEM_KEY_TX_GAS_PRICE, "0x1", commitBlockNumber);
+        systemConfig.set(ledger::SYSTEM_KEY_COMPATIBILITY_VERSION, bcos::protocol::RC4_VERSION_STR,
+            commitBlockNumber);
+        systemConfig.set(ledger::SYSTEM_KEY_RPBFT_SWITCH, "1", commitBlockNumber);
+        systemConfig.set(ledger::SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM, "4", commitBlockNumber);
+        systemConfig.set(ledger::SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM, "1000", commitBlockNumber);
+        systemConfig.set(ledger::SYSTEM_KEY_WEB3_CHAIN_ID, "20200", commitBlockNumber);
+        co_return systemConfig;  // Return the populated SystemConfigs object
+    }
+
     void asyncGetNodeListByType(std::string_view const& _type,
         std::function<void(Error::Ptr, consensus::ConsensusNodeList)> _onGetConfig) override
     {

@@ -58,6 +58,7 @@ enum class SystemConfig
 class SystemConfigs
 {
 public:
+    using ConfigPair = std::pair<std::string, protocol::BlockNumber>;
     SystemConfigs() { m_sysConfigs.reserve(magic_enum::enum_count<SystemConfig>()); }
 
     static SystemConfig fromString(std::string_view str)
@@ -70,7 +71,7 @@ public:
         return *value;
     }
 
-    std::optional<std::string> get(SystemConfig config) const
+    std::optional<ConfigPair> get(SystemConfig config) const
     {
         if (const auto it = m_sysConfigs.find(config); it != m_sysConfigs.end())
         {
@@ -81,15 +82,21 @@ public:
             return std::nullopt;
         }
     }
-    std::optional<std::string> get(std::string_view config) const
+
+    ConfigPair getOrDefault(SystemConfig config, std::string defaultValue) const
     {
-        return get(fromString(config));
+        return get(config).value_or(ConfigPair{std::move(defaultValue), 0});
     }
 
-    void set(SystemConfig config, std::string value) { m_sysConfigs[config] = std::move(value); }
-    void set(std::string_view config, std::string value)
+    std::optional<ConfigPair> get(std::string_view config) const { return get(fromString(config)); }
+
+    void set(SystemConfig config, std::string value, protocol::BlockNumber number)
     {
-        set(fromString(config), std::move(value));
+        m_sysConfigs[config] = {std::move(value), number};
+    }
+    void set(std::string_view config, std::string value, protocol::BlockNumber number)
+    {
+        set(fromString(config), std::move(value), number);
     }
 
     auto systemConfigs() const
@@ -101,6 +108,7 @@ public:
                });
     }
 
+    // return all config names
     static auto supportConfigs()
     {
         return RANGES::views::iota(0LU, magic_enum::enum_count<SystemConfig>()) |
@@ -111,7 +119,7 @@ public:
     }
 
 private:
-    std::unordered_map<SystemConfig, std::optional<std::string>> m_sysConfigs;
+    std::unordered_map<SystemConfig, std::optional<ConfigPair>> m_sysConfigs;
 };
 
 }  // namespace bcos::ledger
