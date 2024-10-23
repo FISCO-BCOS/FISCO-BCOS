@@ -20,8 +20,11 @@
 
 #include "WorkingSealerManagerImpl.h"
 #include "bcos-framework/consensus/ConsensusNode.h"
+#include "bcos-framework/ledger/Features.h"
+#include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <fmt/format.h>
+#include <boost/endian/conversion.hpp>
 #include <algorithm>
 #include <range/v3/numeric/accumulate.hpp>
 
@@ -63,7 +66,10 @@ task::Task<void> WorkingSealerManagerImpl::rotateWorkingSealer(
     auto parentHash = _executive->blockContext().parentHash();
     try
     {
-        checkVRFInfos(parentHash, _callParameters->m_origin);
+        checkVRFInfos(parentHash, _callParameters->m_origin,
+            _executive->blockContext().features().get(
+                ledger::Features::Flag::bugfix_rpbft_vrf_blocknumber_input),
+            _executive->blockContext().number());
     }
     catch (protocol::PrecompiledError const& e)
     {
@@ -149,7 +155,8 @@ task::Task<void> WorkingSealerManagerImpl::rotateWorkingSealer(
                            << LOG_KV("removedWorkingSealers", removedWorkingSealerNum);
 }
 
-void WorkingSealerManagerImpl::checkVRFInfos(HashType const& parentHash, std::string const& origin)
+void WorkingSealerManagerImpl::checkVRFInfos(HashType const& parentHash, std::string const& origin,
+    bool blockNumberInput, protocol::BlockNumber blockNumber)
 {
     // check origin: the origin must be among the workingSealerList
     if (!m_consensusSealer.empty()) [[likely]]
@@ -180,11 +187,15 @@ void WorkingSealerManagerImpl::checkVRFInfos(HashType const& parentHash, std::st
                 bcos::protocol::PrecompiledError("ConsensusPrecompiled call undefined function!"));
         }
     }
-    if (HashType(m_vrfInfo->vrfInput()) != parentHash)
+    if ((blockNumberInput &&
+            boost::endian::big_to_native(*(protocol::BlockNumber*)m_vrfInfo->vrfInput().data()) !=
+                blockNumber) ||
+        (!blockNumberInput && HashType(m_vrfInfo->vrfInput()) != parentHash))
     {
         PRECOMPILED_LOG(WARNING)
             << LOG_DESC("checkVRFInfos: Invalid VRFInput, must be the parent block hash")
-            << LOG_KV("parentHash", parentHash.abridged())
+            << LOG_KV("blockNumberInput", blockNumberInput)
+            << LOG_KV("parentHash", parentHash.abridged()) << LOG_KV("blockNumber", blockNumber)
             << LOG_KV("vrfInput", toHex(m_vrfInfo->vrfInput())) << LOG_KV("origin", origin);
         BOOST_THROW_EXCEPTION(PrecompiledError("Invalid VRFInput, must be the parentHash!"));
     }
@@ -414,13 +425,18 @@ static std::vector<std::reference_wrapper<consensus::ConsensusNode>> getNodeList
     size_t totalWeight = 0;
     for (consensus::ConsensusNode& node : nodeList)
     {
+        if (node.termWeight == 0)
+        {
+            continue;
+        }
         totalWeight += node.termWeight;
-        nodeWeightRanges.push_back({node, totalWeight});
+        nodeWeightRanges.emplace_back(node, totalWeight);
     }
 
     std::vector<std::reference_wrapper<consensus::ConsensusNode>> result;
     result.reserve(count);
-    for ([[maybe_unused]] auto i : ::ranges::views::iota(0LU, count))
+    for ([[maybe_unused]] auto i :
+        ::ranges::views::iota(0LU, std::min(count, nodeWeightRanges.size())))
     {
         result.emplace_back(pickNodeByWeight(nodeWeightRanges, totalWeight, seed));
     }

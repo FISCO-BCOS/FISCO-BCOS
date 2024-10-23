@@ -19,6 +19,7 @@
  */
 #pragma once
 
+#include <magic_enum.hpp>
 namespace bcos::boostssl::ws
 {
 enum WsError
@@ -42,6 +43,11 @@ enum WsError
 inline bool notRetryAgain(int _wsError)
 {
     return (_wsError == boostssl::ws::WsError::MessageOverflow);
+}
+
+inline std::string wsErrorToString(WsError _wsError)
+{
+    return std::string(magic_enum::enum_name(_wsError));
 }
 
 }  // namespace bcos::boostssl::ws

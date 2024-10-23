@@ -51,6 +51,13 @@ public:
     virtual void asyncResetSealing(std::function<void(Error::Ptr)> _onRecvResponse) = 0;
 
     virtual uint16_t hookWhenSealBlock(bcos::protocol::Block::Ptr) = 0;
+
+    virtual void asyncNotifyBlockResult(bcos::protocol::BlockNumber _blockNumber,
+        bcos::protocol::TransactionSubmitResultsPtr _txsResult)
+    {
+        // default implementation
+        throw std::runtime_error("Unimplemented!");
+    }
 };
 }  // namespace sealer
 }  // namespace bcos

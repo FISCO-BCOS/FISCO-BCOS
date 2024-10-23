@@ -60,6 +60,7 @@ void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
     setObserverNodeList(observerList);
     // set leader_period
     setLeaderSwitchPeriod(_ledgerConfig->leaderSwitchPeriod());
+    setFeatures(_ledgerConfig->features());
     // reset the timer
     freshTimer();
 

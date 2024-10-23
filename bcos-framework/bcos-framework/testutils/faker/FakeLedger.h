@@ -291,6 +291,15 @@ public:
             _onGetNodeList(nullptr, consensusNodes);
             return;
         }
+        if (_type.empty())
+        {
+            auto allNodes =
+                ::ranges::views::concat(m_ledgerConfig->consensusNodeList(),
+                    m_ledgerConfig->observerNodeList(), m_ledgerConfig->candidateSealerNodeList()) |
+                ::ranges::to<std::vector>();
+            _onGetNodeList(nullptr, allNodes);
+            return;
+        }
         _onGetNodeList(BCOS_ERROR_UNIQUE_PTR(-1, "invalid Type"), {});
     }
 

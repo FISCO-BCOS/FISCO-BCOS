@@ -426,6 +426,7 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
         if (c_fileLogLevel == TRACE)
         {
             TXPOOL_LOG(TRACE) << LOG_DESC("submitTxTime") << LOG_KV("txHash", txHash)
+                              << LOG_KV("result", result)
                               << LOG_KV("insertTime", utcTime() - txImportTime);
         }
     }
@@ -571,6 +572,11 @@ void MemoryStorage::notifyTxResult(
     auto txHash = transaction.hash();
     txSubmitResult->setSender(std::string(transaction.sender()));
     txSubmitResult->setTo(std::string(transaction.to()));
+    if (c_fileLogLevel == TRACE) [[unlikely]]
+    {
+        TXPOOL_LOG(TRACE) << LOG_DESC("notifyTxResult")
+                          << LOG_KV("txSubmitResult", txSubmitResult->toString());
+    }
     try
     {
         txSubmitCallback(nullptr, std::move(txSubmitResult));
@@ -1073,8 +1079,7 @@ bool MemoryStorage::batchMarkTxsWithoutLock(
             {
                 ++notFound;
                 TXPOOL_LOG(TRACE) << LOG_DESC("batchMarkTxs: missing transaction")
-                                  << LOG_KV("tx", txHash.abridged())
-                                  << LOG_KV("sealFlag", _sealFlag);
+                                  << LOG_KV("tx", txHash.hex()) << LOG_KV("sealFlag", _sealFlag);
                 continue;
             }
             tx = accessor->value();

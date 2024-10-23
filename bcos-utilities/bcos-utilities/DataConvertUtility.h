@@ -122,6 +122,27 @@ Out fromHex(const Hex& hex, std::string_view prefix = std::string_view())
 }
 
 template <class Hex, class Out = bytes>
+std::optional<Out> safeFromHex(const Hex& hex, std::string_view prefix = std::string_view())
+{
+    try
+    {
+        auto out = fromHex(hex, prefix);
+        return std::make_optional(out);
+    }
+    catch (...)
+    {
+        return std::nullopt;
+    }
+}
+
+template <class Hex, class Out = bytes>
+std::optional<Out> safeFromHexWithPrefix(const Hex& hex)
+{
+    return safeFromHex(hex, "0x");
+}
+
+
+template <class Hex, class Out = bytes>
 Out fromHexWithPrefix(const Hex& hex)
 {
     return fromHex(hex, "0x");

@@ -208,6 +208,15 @@ std::pair<bool, bcos::protocol::Block::Ptr> SealingManager::generateProposal(
     // Note: When the last block(N) sealed by this node contains system transactions,
     //       if other nodes do not wait until block(N) is committed and directly seal block(N+1),
     //       will cause system exceptions.
+    if (c_fileLogLevel == TRACE)
+    {
+        SEAL_LOG(TRACE) << LOG_DESC("generateProposal")
+                        << LOG_KV("txsSize", block->transactionsMetaDataSize())
+                        << LOG_KV("sysTxsSize", systemTxsSize)
+                        << LOG_KV("containSysTxs", containSysTxs)
+                        << LOG_KV("pendingSize", m_pendingTxs.size())
+                        << LOG_KV("pendingSysSize", m_pendingSysTxs.size());
+    }
     return {containSysTxs, block};
 }
 
@@ -313,6 +322,8 @@ void SealingManager::fetchTransactions()
                 SEAL_LOG(DEBUG) << LOG_DESC("fetchTransactions finish")
                                 << LOG_KV("txsSize", _txsHashList->transactionsMetaDataSize())
                                 << LOG_KV("sysTxsSize", _sysTxsList->transactionsMetaDataSize())
+                                << LOG_KV("pendingSize", sealingMgr->m_pendingTxs.size())
+                                << LOG_KV("pendingSysSize", sealingMgr->m_pendingSysTxs.size())
                                 << LOG_KV("startSealingNumber", startSealingNumber)
                                 << LOG_KV("endSealingNumber", endSealingNumber)
                                 << LOG_KV("sealingNumber", sealingMgr->m_sealingNumber)

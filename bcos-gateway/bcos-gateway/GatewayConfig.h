@@ -303,7 +303,7 @@ public:
 
 private:
     // The maximum size of message that is allowed to send or receive
-    uint32_t m_allowMaxMsgSize = 32 * 1024 * 1024;
+    uint32_t m_allowMaxMsgSize = MAX_MESSAGE_LENGTH;
     // p2p session read buffer size, default: 128k
     uint32_t m_sessionRecvBufferSize{128 * 1024};
     uint32_t m_maxReadDataSize = 40 * 1024;
@@ -348,4 +348,4 @@ private:
     bool m_readonly = false;
 };
 
-}  // namespace bcos
+}  // namespace bcos::gateway
