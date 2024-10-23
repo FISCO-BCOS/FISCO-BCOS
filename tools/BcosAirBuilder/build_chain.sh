@@ -1342,9 +1342,9 @@ generate_config_ini() {
     local rpc_listen_port="${5}"
     local disable_ssl="${6}"
 
-    local disable_ssl_content=";disable_ssl=true"
+    local enable_ssl_content="enable_ssl=true"
     if [[ "${disable_ssl}" == "true" ]]; then
-        disable_ssl_content="disable_ssl=true"
+        enable_ssl_content="enable_ssl=false"
     fi
 
     cat <<EOF >"${output}"
@@ -1374,8 +1374,8 @@ generate_config_ini() {
     thread_count=4
     ; ssl or sm ssl
     sm_ssl=false
-    ; ssl connection switch, if disable the ssl connection, default: false
-    ${disable_ssl_content}
+    ; ssl connection switch, if you wan to disable the ssl connection, turn it to false, default: true
+    ${enable_ssl_content}
     ; return input params in sendTransaction() return, default: true
     ; return_input_params=false
 
@@ -1560,9 +1560,9 @@ generate_sm_config_ini() {
     local rpc_listen_port="${5}"
     local disable_ssl="${6}"
 
-    local disable_ssl_content=";disable_ssl=true"
+    local enable_ssl_content="enable_ssl=true"
     if [[ "${disable_ssl}" == "true" ]]; then
-        disable_ssl_content="disable_ssl=true"
+        enable_ssl_content="enable_ssl=false"
     fi
 
     cat <<EOF >"${output}"
@@ -1592,8 +1592,8 @@ generate_sm_config_ini() {
     thread_count=4
     ; ssl or sm ssl
     sm_ssl=true
-    ;ssl connection switch, if disable the ssl connection, default: false
-    ${disable_ssl_content}
+    ; ssl connection switch, if you wan to disable the ssl connection, turn it to false, default: true
+    ${enable_ssl_content}
     ; return input params in sendTransaction() return, default: true
     ; return_input_params=false
 
