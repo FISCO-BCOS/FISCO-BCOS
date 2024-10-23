@@ -19,19 +19,24 @@
  */
 
 #pragma once
+#include "bcos-protocol/TransactionStatus.h"
 #include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 
 namespace bcos::txpool
 {
 constexpr uint16_t DefaultBucketSize = 256;
-struct pair_hash
+struct PairHash
 {
-    template <class T1, class T2>
-    std::size_t operator()(const std::pair<T1, T2>& p) const
-    {
-        return std::hash<T1>()(p.first);
-    }
+    std::size_t operator()(const std::pair<std::string, std::string>& pair) const;
+    std::size_t operator()(const std::pair<std::string_view, std::string_view>& pair) const;
+};
+struct PairEqual
+{
+    bool operator()(const std::pair<std::string, std::string>& lhs,
+        const std::pair<std::string, std::string>& rhs) const;
+    bool operator()(const std::pair<std::string, std::string>& lhs,
+        const std::pair<std::string_view, std::string_view>& rhs) const;
 };
 /**
  * Implementation for web3 nonce-checker
@@ -91,27 +96,21 @@ private:
     // ledger state nonce cache the nonce of the sender in storage, every tx send by the sender,
     // should bigger than the nonce in ledger state
     bcos::storage2::memory_storage::MemoryStorage<std::string, u256,
-        static_cast<storage2::memory_storage::Attribute>(
-            storage2::memory_storage::LRU | storage2::memory_storage::CONCURRENT),
-        std::hash<std::string>>
+        storage2::memory_storage::LRU | storage2::memory_storage::CONCURRENT>
         m_ledgerStateNonces;
 
     // <sender address (bytes string), nonce>
     // memory nonce cache the nonce of the sender in memory
     // every tx send by the sender, should bigger than the nonce in ledger state and not in memory
     bcos::storage2::memory_storage::MemoryStorage<std::pair<std::string, std::string>,
-        std::monostate,
-        static_cast<storage2::memory_storage::Attribute>(
-            storage2::memory_storage::LRU | storage2::memory_storage::CONCURRENT),
-        pair_hash>
+        std::monostate, storage2::memory_storage::LRU | storage2::memory_storage::CONCURRENT,
+        PairHash, PairEqual>
         m_memoryNonces;
 
     // sender address(bytes string), nonce
     // only store max nonce of memory nonce.
     bcos::storage2::memory_storage::MemoryStorage<std::string, u256,
-        static_cast<storage2::memory_storage::Attribute>(
-            storage2::memory_storage::LRU | storage2::memory_storage::CONCURRENT),
-        std::hash<std::string>>
+        storage2::memory_storage::LRU | storage2::memory_storage::CONCURRENT>
         m_maxNonces;
     bcos::ledger::LedgerInterface::Ptr m_ledger;
 };
