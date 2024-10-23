@@ -79,7 +79,6 @@ void Config::loadCommon(
 {
     /*
     [common]
-        ; if disable ssl connection, default: false
         ; disable_ssl = true
         enable_ssl=true
         ; thread pool size for network msg sending receiving handing

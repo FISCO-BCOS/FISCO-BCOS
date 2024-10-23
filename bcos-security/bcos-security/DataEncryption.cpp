@@ -94,22 +94,23 @@ std::shared_ptr<bytes> DataEncryption::decryptContents(const std::shared_ptr<byt
         BCOS_LOG(DEBUG) << LOG_BADGE("DECFILE") << LOG_DESC("Decrypt file contents")
                         << LOG_KV("string", encContextsStr) << LOG_KV("bytes", toHex(encFileBytes));
 
-        if (m_compatibilityVersion >=
-            static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_3_VERSION))
-        {
-            size_t const offsetIv = encFileBytes.size() - 16;
-            size_t const cipherDataSize = encFileBytes.size() - 16;
-            decFileBytesBase64Ptr = m_symmetricEncrypt->symmetricDecrypt(
-                reinterpret_cast<const unsigned char*>(encFileBytes.data()), cipherDataSize,
-                reinterpret_cast<const unsigned char*>(m_dataKey.data()), m_dataKey.size(),
-                reinterpret_cast<const unsigned char*>(encFileBytes.data() + offsetIv), 16);
-        }
-        else
-        {
-            decFileBytesBase64Ptr =
-                m_symmetricEncrypt->symmetricDecrypt((const unsigned char*)encFileBytes.data(),
-                    encFileBytes.size(), (const unsigned char*)m_dataKey.data(), m_dataKey.size());
-        }
+        // TODO: key manager should fit this logic
+        // if (m_compatibilityVersion >=
+        //     static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_3_VERSION))
+        //{
+        //     size_t const offsetIv = encFileBytes.size() - 16;
+        //     size_t const cipherDataSize = encFileBytes.size() - 16;
+        //     decFileBytesBase64Ptr = m_symmetricEncrypt->symmetricDecrypt(
+        //         reinterpret_cast<const unsigned char*>(encFileBytes.data()), cipherDataSize,
+        //         reinterpret_cast<const unsigned char*>(m_dataKey.data()), m_dataKey.size(),
+        //         reinterpret_cast<const unsigned char*>(encFileBytes.data() + offsetIv), 16);
+        // }
+        // else
+        //{
+        decFileBytesBase64Ptr =
+            m_symmetricEncrypt->symmetricDecrypt((const unsigned char*)encFileBytes.data(),
+                encFileBytes.size(), (const unsigned char*)m_dataKey.data(), m_dataKey.size());
+        //}
 
         BCOS_LOG(DEBUG) << "[ENCFILE] DecryptedFile Base64 key: "
                         << asString(*decFileBytesBase64Ptr) << endl;
@@ -137,22 +138,23 @@ std::shared_ptr<bytes> DataEncryption::decryptFile(const std::string& filename)
                         << LOG_KV("string", encContextsStr) << LOG_KV("bytes", toHex(encFileBytes));
 
         bytesPointer decFileBytesBase64Ptr = nullptr;
-        if (m_compatibilityVersion >=
-            static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_3_VERSION))
-        {
-            size_t const offsetIv = encFileBytes.size() - 16;
-            size_t const cipherDataSize = encFileBytes.size() - 16;
-            decFileBytesBase64Ptr = m_symmetricEncrypt->symmetricDecrypt(
-                reinterpret_cast<const unsigned char*>(encFileBytes.data()), cipherDataSize,
-                reinterpret_cast<const unsigned char*>(m_dataKey.data()), m_dataKey.size(),
-                reinterpret_cast<const unsigned char*>(encFileBytes.data() + offsetIv), 16);
-        }
-        else
-        {
-            decFileBytesBase64Ptr =
-                m_symmetricEncrypt->symmetricDecrypt((const unsigned char*)encFileBytes.data(),
-                    encFileBytes.size(), (const unsigned char*)m_dataKey.data(), m_dataKey.size());
-        }
+        // TODO: key manager should fit this logic
+        // if (m_compatibilityVersion >=
+        //     static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_3_VERSION))
+        // {
+        //     size_t const offsetIv = encFileBytes.size() - 16;
+        //     size_t const cipherDataSize = encFileBytes.size() - 16;
+        //     decFileBytesBase64Ptr = m_symmetricEncrypt->symmetricDecrypt(
+        //         reinterpret_cast<const unsigned char*>(encFileBytes.data()), cipherDataSize,
+        //         reinterpret_cast<const unsigned char*>(m_dataKey.data()), m_dataKey.size(),
+        //         reinterpret_cast<const unsigned char*>(encFileBytes.data() + offsetIv), 16);
+        // }
+        // else
+        // {
+        decFileBytesBase64Ptr =
+            m_symmetricEncrypt->symmetricDecrypt((const unsigned char*)encFileBytes.data(),
+                encFileBytes.size(), (const unsigned char*)m_dataKey.data(), m_dataKey.size());
+        //}
         BCOS_LOG(DEBUG) << "[ENCFILE] EncryptedFile Base64 key: "
                         << asString(*decFileBytesBase64Ptr) << endl;
         decFileBytes = base64DecodeBytes(asString(*decFileBytesBase64Ptr));
