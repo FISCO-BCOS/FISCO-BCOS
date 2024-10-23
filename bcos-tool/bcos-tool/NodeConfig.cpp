@@ -371,6 +371,11 @@ void NodeConfig::loadRpcConfig(boost::property_tree::ptree const& _pt)
     int maxProcessBlock = _pt.get<int>("rpc.filter_max_process_block", 10);
     bool smSsl = _pt.get<bool>("rpc.sm_ssl", false);
     bool disableSsl = _pt.get<bool>("rpc.disable_ssl", false);
+    // enable ssl cover disable ssl
+    if (auto enableSsl = _pt.get_optional<bool>("rpc.enable_ssl"))
+    {
+        disableSsl = !enableSsl.value();
+    }
     bool needRetInput = _pt.get<bool>("rpc.return_input_params", true);
 
     m_rpcListenIP = listenIP;
