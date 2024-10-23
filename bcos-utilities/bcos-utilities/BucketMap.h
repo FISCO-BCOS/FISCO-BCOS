@@ -23,6 +23,7 @@
 #include "Ranges.h"
 #include "bcos-utilities/BoostLog.h"
 #include <tbb/concurrent_vector.h>
+#include <concepts>
 #include <queue>
 #include <type_traits>
 #include <unordered_map>
@@ -36,12 +37,13 @@ class EmptyType
 
 struct StringHash
 {
-    using hash_type = std::hash<std::string_view>;
     using is_transparent = void;
 
-    std::size_t operator()(const char* str) const { return hash_type{}(str); }
-    std::size_t operator()(std::string_view str) const { return hash_type{}(str); }
-    std::size_t operator()(std::string const& str) const { return hash_type{}(str); }
+    template <std::convertible_to<std::string_view> T>
+    std::size_t operator()(T&& str) const
+    {
+        return std::hash<std::decay_t<T>>{}(str);
+    }
 };
 
 template <class KeyType, class ValueType,
