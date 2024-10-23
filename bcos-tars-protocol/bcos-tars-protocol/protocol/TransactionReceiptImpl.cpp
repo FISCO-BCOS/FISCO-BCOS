@@ -166,9 +166,3 @@ void bcostars::protocol::TransactionReceiptImpl::setMessage(std::string message)
 {
     m_inner()->message = std::move(message);
 }
-std::string bcostars::protocol::TransactionReceiptImpl::toString() const
-{
-    std::stringstream ss;
-    m_inner()->display(ss);
-    return ss.str();
-}
