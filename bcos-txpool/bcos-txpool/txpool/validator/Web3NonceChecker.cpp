@@ -47,7 +47,7 @@ task::Task<TransactionStatus> Web3NonceChecker::checkWeb3Nonce(
     {
         // memory nonce check nonce existence in memory first, if not exist, then check from storage
         if (co_await bcos::storage2::existsOne(
-                m_memoryNonces, std::make_pair(sender, std::string(_tx->nonce()))))
+                m_memoryNonces, std::make_pair(_tx->sender(), _tx->nonce())))
         {
             if (c_fileLogLevel == TRACE) [[unlikely]]
             {
