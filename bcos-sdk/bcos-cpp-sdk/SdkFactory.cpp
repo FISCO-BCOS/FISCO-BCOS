@@ -85,7 +85,7 @@ Service::Ptr SdkFactory::buildService(std::shared_ptr<bcos::boostssl::ws::WsConf
 {
     auto groupInfoCodec = std::make_shared<bcos::group::JsonGroupInfoCodec>();
     auto groupInfoFactory = std::make_shared<bcos::group::GroupInfoFactory>();
-    auto service = std::make_shared<Service>(groupInfoCodec, groupInfoFactory, "SDK");
+    auto service = std::make_shared<Service>(groupInfoCodec, groupInfoFactory);
     auto initializer = std::make_shared<WsInitializer>();
     initializer->setConfig(std::move(_config));
     initializer->initWsService(service);

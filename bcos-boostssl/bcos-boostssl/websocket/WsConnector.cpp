@@ -61,7 +61,7 @@ void WsConnector::connectToWsServer(const std::string& _host, uint16_t _port, bo
 
     // resolve host
     resolver->async_resolve(_host, std::to_string(_port),
-        [this, _host, _port, _disableSsl, endpoint, ioc, ctx, connector, builder, _callback](
+        [_host, _port, _disableSsl, endpoint, ioc, ctx, connector, builder, _callback](
             boost::beast::error_code _ec, boost::asio::ip::tcp::resolver::results_type _results) {
             if (_ec)
             {
@@ -84,7 +84,7 @@ void WsConnector::connectToWsServer(const std::string& _host, uint16_t _port, bo
 
             // async connect
             rawStream->async_connect(_results,
-                [this, _host, _port, _disableSsl, endpoint, ctx, connector, builder, rawStream,
+                [_host, _port, _disableSsl, endpoint, ctx, connector, builder, rawStream,
                     _callback](boost::beast::error_code _ec,
                     boost::asio::ip::tcp::resolver::results_type::endpoint_type _ep) mutable {
                     if (_ec)
@@ -101,16 +101,15 @@ void WsConnector::connectToWsServer(const std::string& _host, uint16_t _port, bo
                         << LOG_BADGE("connectToWsServer") << LOG_DESC("async_connect success")
                         << LOG_KV("endpoint", endpoint);
 
-                    auto wsStreamDelegate =
-                        builder->build(_disableSsl, ctx, rawStream, m_moduleName);
+                    auto wsStreamDelegate = builder->build(_disableSsl, ctx, rawStream);
 
                     std::shared_ptr<std::string> nodeId = std::make_shared<std::string>();
                     wsStreamDelegate->setVerifyCallback(
                         _disableSsl, NodeInfoTools::newVerifyCallback(nodeId));
 
                     // start ssl handshake
-                    wsStreamDelegate->asyncHandshake([this, wsStreamDelegate, connector, _host,
-                                                         _port, endpoint, _ep, _callback,
+                    wsStreamDelegate->asyncHandshake([wsStreamDelegate, connector, _host, _port,
+                                                         endpoint, _ep, _callback,
                                                          nodeId](boost::beast::error_code _ec) {
                         if (_ec)
                         {
@@ -135,7 +134,7 @@ void WsConnector::connectToWsServer(const std::string& _host, uint16_t _port, bo
 
                         // websocket async handshake
                         wsStreamDelegate->asyncWsHandshake(tmpHost, "/",
-                            [this, connector, _host, _port, endpoint, _callback, wsStreamDelegate,
+                            [connector, _host, _port, endpoint, _callback, wsStreamDelegate,
                                 nodeId](boost::beast::error_code _ec) mutable {
                                 if (_ec)
                                 {

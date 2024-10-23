@@ -124,8 +124,6 @@ public:
 
     /// length(4) + version(2) + packetType(2) + seq(4) + ext(2)
     constexpr static size_t MESSAGE_HEADER_LENGTH = 14;
-    constexpr static size_t MAX_MESSAGE_LENGTH =
-        100 * 1024 * 1024;  ///< The maximum length of data is 100M.
 
     /// For RSA public key, the prefix length is 18 in hex, used for print log graciously
     constexpr static size_t RSA_PUBLIC_KEY_PREFIX = 18;

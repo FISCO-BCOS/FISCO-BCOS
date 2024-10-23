@@ -128,6 +128,11 @@ public:
 
     virtual task::Task<std::optional<u256>> getWeb3PendingNonce(std::string_view address) override;
 
+    bool existsInGroup(bcos::crypto::NodeIDPtr _nodeId) override
+    {
+        return m_transactionSync->config()->existsInGroup(_nodeId);
+    }
+
     // for UT
     void setTxPoolStorage(TxPoolStorageInterface::Ptr _txpoolStorage);
 
