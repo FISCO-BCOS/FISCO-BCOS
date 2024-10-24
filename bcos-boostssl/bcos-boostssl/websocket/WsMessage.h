@@ -31,7 +31,7 @@
 #include <string>
 #include <utility>
 
-inline void CHECK_OFFSET(uint16_t offset, uint16_t length)
+inline void CHECK_OFFSET(uint64_t offset, uint64_t length)
 {
     if (offset > length)
     {

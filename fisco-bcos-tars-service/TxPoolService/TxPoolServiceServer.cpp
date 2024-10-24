@@ -1,5 +1,6 @@
 #include "TxPoolServiceServer.h"
 #include "../Common/TarsUtils.h"
+#include "bcos-framework/consensus/ConsensusNode.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include <bcos-task/Wait.h>
 using namespace bcostars;
@@ -104,7 +105,7 @@ bcostars::Error TxPoolServiceServer::asyncFillBlock(const vector<vector<tars::Ch
             async_response_asyncFillBlock(current, toTarsError(error), txList);
         });
 
-    return bcostars::Error();
+    return {};
 }
 
 
@@ -125,7 +126,7 @@ bcostars::Error TxPoolServiceServer::asyncMarkTxs(const vector<vector<tars::Char
         hashList, sealedFlag, _batchId, batchHash, [current](bcos::Error::Ptr error) {
             async_response_asyncMarkTxs(current, toTarsError(error));
         });
-    return bcostars::Error();
+    return {};
 }
 
 bcostars::Error TxPoolServiceServer::asyncNotifyBlockResult(tars::Int64 blockNumber,
@@ -146,7 +147,7 @@ bcostars::Error TxPoolServiceServer::asyncNotifyBlockResult(tars::Int64 blockNum
         blockNumber, bcosResultList, [current](bcos::Error::Ptr error) {
             async_response_asyncNotifyBlockResult(current, toTarsError(error));
         });
-    return bcostars::Error();
+    return {};
 }
 
 bcostars::Error TxPoolServiceServer::asyncNotifyTxsSyncMessage(const bcostars::Error& error,
@@ -164,7 +165,7 @@ bcostars::Error TxPoolServiceServer::asyncNotifyTxsSyncMessage(const bcostars::E
             async_response_asyncNotifyTxsSyncMessage(current, toTarsError(error));
         });
 
-    return bcostars::Error();
+    return {};
 }
 
 bcostars::Error TxPoolServiceServer::asyncSealTxs(tars::Int64 txsLimit,
@@ -196,7 +197,7 @@ bcostars::Error TxPoolServiceServer::asyncSealTxs(tars::Int64 txsLimit,
                 std::dynamic_pointer_cast<bcostars::protocol::BlockImpl>(_sysTxsList)->inner());
         });
 
-    return bcostars::Error();
+    return {};
 }
 
 bcostars::Error TxPoolServiceServer::asyncVerifyBlock(const vector<tars::Char>& generatedNodeID,
@@ -212,7 +213,7 @@ bcostars::Error TxPoolServiceServer::asyncVerifyBlock(const vector<tars::Char>& 
             async_response_asyncVerifyBlock(current, toTarsError(error), result);
         });
 
-    return bcostars::Error();
+    return {};
 }
 
 bcostars::Error TxPoolServiceServer::notifyConnectedNodes(
@@ -232,7 +233,7 @@ bcostars::Error TxPoolServiceServer::notifyConnectedNodes(
             async_response_notifyConnectedNodes(current, toTarsError(error));
         });
 
-    return bcostars::Error();
+    return {};
 }
 
 bcostars::Error TxPoolServiceServer::notifyConsensusNodeList(
@@ -243,11 +244,10 @@ bcostars::Error TxPoolServiceServer::notifyConsensusNodeList(
     bcos::consensus::ConsensusNodeList bcosNodeList;
     for (auto const& it : consensusNodeList)
     {
-        auto node = std::make_shared<bcos::consensus::ConsensusNode>(
+        bcosNodeList.emplace_back(
             m_txpoolInitializer->cryptoSuite()->keyFactory()->createKey(
                 bcos::bytesConstRef((const bcos::byte*)it.nodeID.data(), it.nodeID.size())),
-            it.weight);
-        bcosNodeList.emplace_back(node);
+            bcos::consensus::Type::consensus_sealer, it.voteWeight, it.termWeight);
     }
 
     m_txpoolInitializer->txpool()->notifyConsensusNodeList(
@@ -255,7 +255,7 @@ bcostars::Error TxPoolServiceServer::notifyConsensusNodeList(
             async_response_notifyConsensusNodeList(current, toTarsError(error));
         });
 
-    return bcostars::Error();
+    return {};
 }
 
 bcostars::Error TxPoolServiceServer::notifyObserverNodeList(
@@ -266,11 +266,10 @@ bcostars::Error TxPoolServiceServer::notifyObserverNodeList(
     bcos::consensus::ConsensusNodeList bcosObserverNodeList;
     for (auto const& it : observerNodeList)
     {
-        auto node = std::make_shared<bcos::consensus::ConsensusNode>(
+        bcosObserverNodeList.emplace_back(
             m_txpoolInitializer->cryptoSuite()->keyFactory()->createKey(
                 bcos::bytesConstRef((const bcos::byte*)it.nodeID.data(), it.nodeID.size())),
-            it.weight);
-        bcosObserverNodeList.emplace_back(node);
+            bcos::consensus::Type::consensus_observer, it.voteWeight, it.termWeight);
     }
 
     m_txpoolInitializer->txpool()->notifyObserverNodeList(
@@ -278,7 +277,7 @@ bcostars::Error TxPoolServiceServer::notifyObserverNodeList(
             async_response_notifyObserverNodeList(current, toTarsError(error));
         });
 
-    return bcostars::Error();
+    return {};
 }
 
 bcostars::Error TxPoolServiceServer::asyncGetPendingTransactionSize(
@@ -289,7 +288,7 @@ bcostars::Error TxPoolServiceServer::asyncGetPendingTransactionSize(
         [_current](bcos::Error::Ptr _error, uint64_t _txsSize) {
             async_response_asyncGetPendingTransactionSize(_current, toTarsError(_error), _txsSize);
         });
-    return bcostars::Error();
+    return {};
 }
 
 bcostars::Error TxPoolServiceServer::asyncResetTxPool(tars::TarsCurrentPtr _current)
@@ -298,5 +297,5 @@ bcostars::Error TxPoolServiceServer::asyncResetTxPool(tars::TarsCurrentPtr _curr
     m_txpoolInitializer->txpool()->asyncResetTxPool([_current](bcos::Error::Ptr _error) {
         async_response_asyncResetTxPool(_current, toTarsError(_error));
     });
-    return bcostars::Error();
+    return {};
 }

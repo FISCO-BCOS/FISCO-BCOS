@@ -127,7 +127,7 @@ bcostars::Transaction Web3Transaction::takeToTarsTransaction()
     {
         tarsTx.data.gasPrice = "0x" + this->maxPriorityFeePerGas.str(0, std::ios_base::hex);
     }
-    tarsTx.type = static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transacion);
+    tarsTx.type = static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
     auto hashForSign = this->hashForSign();
     auto encodedForSign = this->encodeForSign();
     // FISCO BCOS signature is r||s||v
@@ -144,7 +144,7 @@ bcostars::Transaction Web3Transaction::takeToTarsTransaction()
     auto signRef = bcos::bytesConstRef(
         reinterpret_cast<const bcos::byte*>(tarsTx.signature.data()), tarsTx.signature.size());
     auto [_, sender] = signatureImpl.recoverAddress(hashImpl, hashForSign, signRef);
-    tarsTx.data.nonce = toHexStringWithPrefix(sender) + toQuantity(this->nonce);
+    tarsTx.data.nonce = toQuantity(this->nonce);
     tarsTx.data.chainID = std::to_string(this->chainId.value_or(0));
     tarsTx.dataHash.reserve(crypto::HashType::SIZE);
     RANGES::move(hashForSign, std::back_inserter(tarsTx.dataHash));

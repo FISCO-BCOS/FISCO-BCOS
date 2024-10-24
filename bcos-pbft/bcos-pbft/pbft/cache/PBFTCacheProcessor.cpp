@@ -517,17 +517,14 @@ void PBFTCacheProcessor::addViewChangeReq(ViewChangeMsgInterface::Ptr _viewChang
         return;
     }
 
-    auto nodeInfo = m_config->getConsensusNodeByIndex(fromIdx);
+    auto* nodeInfo = m_config->getConsensusNodeByIndex(fromIdx);
     if (!nodeInfo)
     {
         return;
     }
     m_viewChangeCache[reqView][fromIdx] = _viewChange;
-    if (!m_viewChangeWeight.contains(reqView))
-    {
-        m_viewChangeWeight[reqView] = 0;
-    }
-    m_viewChangeWeight[reqView] += nodeInfo->weight();
+    m_viewChangeWeight.try_emplace(reqView, 0);
+    m_viewChangeWeight[reqView] += nodeInfo->voteWeight;
     auto committedIndex = _viewChange->committedProposal()->index();
     if (!m_maxCommittedIndex.contains(reqView) || m_maxCommittedIndex[reqView] < committedIndex)
     {
@@ -724,12 +721,12 @@ ViewType PBFTCacheProcessor::tryToTriggerFastViewChange()
             for (auto const& cache : viewChangeCache)
             {
                 auto fromIdx = cache.first;
-                auto nodeInfo = m_config->getConsensusNodeByIndex(fromIdx);
+                auto* nodeInfo = m_config->getConsensusNodeByIndex(fromIdx);
                 if (!nodeInfo)
                 {
                     continue;
                 }
-                greaterViewWeight += nodeInfo->weight();
+                greaterViewWeight += nodeInfo->voteWeight;
             }
             // must ensure at least (f+1) nodes at the same view can trigger fast-viewchange
             if (greaterViewWeight >= (m_config->maxFaultyQuorum() + 1))
@@ -803,19 +800,19 @@ bool PBFTCacheProcessor::checkPrecommitWeight(PBFTMessageInterface::Ptr _precomm
     {
         auto proof = precommitProposal->signatureProof(i);
         // check the proof
-        auto nodeInfo = m_config->getConsensusNodeByIndex(proof.first);
+        auto* nodeInfo = m_config->getConsensusNodeByIndex(proof.first);
         if (!nodeInfo)
         {
             return false;
         }
         // verify the signature
         auto ret = m_config->cryptoSuite()->signatureImpl()->verify(
-            nodeInfo->nodeID(), precommitProposal->hash(), proof.second);
+            nodeInfo->nodeID, precommitProposal->hash(), proof.second);
         if (!ret)
         {
             return false;
         }
-        weight += nodeInfo->weight();
+        weight += nodeInfo->voteWeight;
     }
     // check the quorum
     return (weight >= m_config->minRequiredQuorum());
@@ -824,7 +821,7 @@ bool PBFTCacheProcessor::checkPrecommitWeight(PBFTMessageInterface::Ptr _precomm
 ViewChangeMsgInterface::Ptr PBFTCacheProcessor::fetchPrecommitData(
     BlockNumber _index, bcos::crypto::HashType const& _hash)
 {
-    if (!m_caches.count(_index))
+    if (!m_caches.contains(_index))
     {
         return nullptr;
     }
@@ -942,15 +939,15 @@ void PBFTCacheProcessor::reCalculateViewChangeWeight()
         for (auto const& cache : viewChangeCache)
         {
             auto generatedFrom = cache.second->generatedFrom();
-            auto nodeInfo = m_config->getConsensusNodeByIndex(generatedFrom);
+            auto* nodeInfo = m_config->getConsensusNodeByIndex(generatedFrom);
             if (!nodeInfo)
             {
                 continue;
             }
-            m_viewChangeWeight[view] += nodeInfo->weight();
+            m_viewChangeWeight[view] += nodeInfo->voteWeight;
             auto viewChangeReq = cache.second;
             auto committedIndex = viewChangeReq->committedProposal()->index();
-            if (!m_maxCommittedIndex.count(view) || m_maxCommittedIndex[view] < committedIndex)
+            if (!m_maxCommittedIndex.contains(view) || m_maxCommittedIndex[view] < committedIndex)
             {
                 m_maxCommittedIndex[view] = committedIndex;
             }
@@ -958,7 +955,8 @@ void PBFTCacheProcessor::reCalculateViewChangeWeight()
             for (const auto& precommit : viewChangeReq->preparedProposals())
             {
                 auto precommitIndex = precommit->index();
-                if (!m_maxPrecommitIndex.count(view) || m_maxPrecommitIndex[view] < precommitIndex)
+                if (!m_maxPrecommitIndex.contains(view) ||
+                    m_maxPrecommitIndex[view] < precommitIndex)
                 {
                     m_maxPrecommitIndex[view] = precommitIndex;
                 }
@@ -1104,22 +1102,22 @@ void PBFTCacheProcessor::addRecoverReqCache(PBFTMessageInterface::Ptr _recoverRe
 {
     auto fromIdx = _recoverResponse->generatedFrom();
     auto view = _recoverResponse->view();
-    if (m_recoverReqCache.count(view) && m_recoverReqCache[view].count(fromIdx))
+    if (m_recoverReqCache.contains(view) && m_recoverReqCache[view].contains(fromIdx))
     {
         return;
     }
     m_recoverReqCache[view][fromIdx] = _recoverResponse;
     // update the weight
-    auto nodeInfo = m_config->getConsensusNodeByIndex(fromIdx);
+    auto* nodeInfo = m_config->getConsensusNodeByIndex(fromIdx);
     if (!nodeInfo)
     {
         return;
     }
-    if (!m_recoverCacheWeight.count(view))
+    if (!m_recoverCacheWeight.contains(view))
     {
         m_recoverCacheWeight[view] = 0;
     }
-    m_recoverCacheWeight[view] += nodeInfo->weight();
+    m_recoverCacheWeight[view] += nodeInfo->voteWeight;
     PBFT_LOG(INFO) << LOG_DESC("addRecoverReqCache") << LOG_KV("weight", m_recoverCacheWeight[view])
                    << printPBFTMsgInfo(_recoverResponse) << m_config->printCurrentState();
 }

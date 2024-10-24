@@ -20,6 +20,9 @@
 
 #pragma once
 
+#include <bcos-codec/bcos-codec/rlp/RLPDecode.h>
+#include <bcos-codec/bcos-codec/rlp/RLPEncode.h>
+#include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <fmt/format.h>
@@ -86,7 +89,6 @@ inline void toAddress(std::string& _hexAddress)
     // toChecksumAddress must be used before rpc return
 }
 
-
 inline std::string toChecksumAddressFromBytes(
     const std::string_view& _AddressBytes, crypto::Hash::Ptr _hashImpl)
 {
@@ -95,6 +97,7 @@ inline std::string toChecksumAddressFromBytes(
     return hexAddress;
 }
 
+// address based on blockNumber, contextID, seq
 inline std::string newEVMAddress(
     bcos::crypto::Hash::Ptr _hashImpl, int64_t blockNumber, int64_t contextID, int64_t seq)
 {
@@ -112,8 +115,30 @@ inline std::string newEVMAddress(
 }
 
 
-inline std::string newEVMAddress(bcos::crypto::Hash::Ptr _hashImpl, const std::string_view& _sender,
-    bytesConstRef _init, u256 const& _salt)
+// keccak256(rlp.encode([normalize_address(sender), nonce]))[12:]
+inline std::string newLegacyEVMAddress(bytesConstRef sender, u256 nonce) noexcept
+{
+    codec::rlp::Header header{true, 1 + sender.size()};
+    header.payloadLength += codec::rlp::length(nonce);
+    bcos::bytes rlp;
+    codec::rlp::encodeHeader(rlp, header);
+    codec::rlp::encode(rlp, sender);
+    codec::rlp::encode(rlp, nonce);
+    auto hash = bcos::crypto::keccak256Hash(ref(rlp));
+    std::string out;
+    boost::algorithm::hex_lower(hash.begin() + 12, hash.end(), std::back_inserter(out));
+    return out;
+}
+
+inline std::string newLegacyEVMAddress(bytesConstRef sender, std::string const& nonce) noexcept
+{
+    const auto uNonce = hex2u(nonce);
+    return newLegacyEVMAddress(sender, uNonce);
+}
+
+// EIP-1014
+inline std::string newCreate2EVMAddress(bcos::crypto::Hash::Ptr _hashImpl,
+    const std::string_view& _sender, bytesConstRef _init, u256 const& _salt)
 {
     auto hash = _hashImpl->hash(
         bytes{0xff} + (_sender.starts_with("0x") ? fromHexWithPrefix(_sender) : fromHex(_sender)) +

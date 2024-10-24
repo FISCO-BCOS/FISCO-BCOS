@@ -2,7 +2,7 @@
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
-#include "bcos-ledger/src/libledger/LedgerMethods.h"
+#include "bcos-ledger/LedgerMethods.h"
 #include "bcos-storage/RocksDBStorage2.h"
 #include "bcos-storage/StateKVResolver.h"
 #include "bcos-transaction-executor/TransactionExecutorImpl.h"
@@ -88,8 +88,8 @@ bcos::transaction_scheduler::BaselineSchedulerInitializer::build(::rocksdb::DB& 
                 storage2::rocksdb::StateValueResolver{}),
             m_multiLayerStorage(m_rocksDBStorage, m_cacheStorage),
             m_precompiledManager(blockFactory.cryptoSuite()->hashImpl()),
-            m_transactionExecutor(
-                *blockFactory.receiptFactory(), blockFactory.cryptoSuite()->hashImpl())
+            m_transactionExecutor(*blockFactory.receiptFactory(),
+                blockFactory.cryptoSuite()->hashImpl(), m_precompiledManager)
         {}
     };
     auto data = std::make_shared<Data>(rocksDB, *blockFactory);

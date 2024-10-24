@@ -20,6 +20,7 @@
 #include "Sealer.h"
 #include "Common.h"
 #include "VRFBasedSealer.h"
+#include "bcos-framework/ledger/Features.h"
 #include <bcos-framework/protocol/GlobalConfig.h>
 
 #include <utility>
@@ -141,7 +142,7 @@ void Sealer::submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _blo
         SEAL_LOG(INFO) << LOG_DESC("submitProposal return for the block has already been committed")
                        << LOG_KV("proposalIndex", _block->blockHeader()->number())
                        << LOG_KV("currentNumber", m_sealingManager->latestNumber());
-        m_sealingManager->notifyResetProposal(_block);
+        m_sealingManager->notifyResetProposal(*_block);
         return;
     }
     // supplement the header info: set sealerList and weightList
@@ -150,8 +151,8 @@ void Sealer::submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _blo
     auto consensusNodeInfo = m_sealerConfig->consensus()->consensusNodeList();
     for (auto const& consensusNode : consensusNodeInfo)
     {
-        sealerList.push_back(consensusNode->nodeID()->data());
-        weightList.push_back(consensusNode->weight());
+        sealerList.push_back(consensusNode.nodeID->data());
+        weightList.push_back(consensusNode.voteWeight);
     }
     _block->blockHeader()->setSealerList(std::move(sealerList));
     _block->blockHeader()->setConsensusWeights(std::move(weightList));
@@ -198,6 +199,8 @@ uint16_t Sealer::hookWhenSealBlock(bcos::protocol::Block::Ptr _block)
     {
         return SealBlockResult::SUCCESS;
     }
-    return VRFBasedSealer::generateTransactionForRotating(
-        _block, m_sealerConfig, m_sealingManager, m_hashImpl);
+    return VRFBasedSealer::generateTransactionForRotating(_block, m_sealerConfig, m_sealingManager,
+        m_hashImpl,
+        m_sealerConfig->consensus()->consensusConfig()->features().get(
+            ledger::Features::Flag::bugfix_rpbft_vrf_blocknumber_input));
 }

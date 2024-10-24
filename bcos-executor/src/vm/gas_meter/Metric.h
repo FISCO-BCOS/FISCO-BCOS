@@ -19,6 +19,7 @@
  */
 #pragma once
 #include <array>
+#include <cstdint>
 #include <string>
 
 // #define WASM_FLOAT_ENABLE

@@ -50,7 +50,7 @@ include_directories(${PROTO_OUTPUT_PATH})
 
 file(GLOB_RECURSE SRCS bcos-sync/*.cpp)
 add_library(${SYNC_TARGET} ${SRCS} ${SYNC_SRCS})
-target_link_libraries(${SYNC_TARGET} PUBLIC ${STORAGE_TARGET} bcos-framework ${UTILITIES_TARGET} ${CODEC_TARGET} ${TOOL_TARGET} jsoncpp_static)
+target_link_libraries(${SYNC_TARGET} PUBLIC ${LEDGER_TARGET} ${STORAGE_TARGET} bcos-framework ${UTILITIES_TARGET} ${CODEC_TARGET} ${TOOL_TARGET} jsoncpp_static)
 set_target_properties(${SYNC_TARGET} PROPERTIES UNITY_BUILD "ON")
 
 if (TESTS)

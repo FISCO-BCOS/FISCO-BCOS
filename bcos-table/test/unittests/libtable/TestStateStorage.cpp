@@ -42,34 +42,6 @@ using namespace bcos::crypto;
 #if defined(__APPLE__)
 #undef __APPLE__
 #endif
-
-namespace std
-{
-inline ostream& operator<<(ostream& os, const std::optional<Entry>& entry)
-{
-    os << entry.has_value();
-    return os;
-}
-
-inline ostream& operator<<(ostream& os, const std::optional<Table>& table)
-{
-    os << table.has_value();
-    return os;
-}
-
-inline ostream& operator<<(ostream& os, const std::unique_ptr<Error>& error)
-{
-    os << error->what();
-    return os;
-}
-
-inline ostream& operator<<(ostream& os, const std::tuple<std::string, crypto::HashType>& pair)
-{
-    os << std::get<0>(pair) << " " << std::get<1>(pair).hex();
-    return os;
-}
-}  // namespace std
-
 namespace bcos
 {
 namespace test

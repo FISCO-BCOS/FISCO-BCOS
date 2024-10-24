@@ -181,7 +181,7 @@ public:
     std::optional<storage::Table> openTable(std::string_view tableName)
     {
         auto it = m_tableCache.find(std::string(tableName));
-        if ( it != m_tableCache.end())
+        if (it != m_tableCache.end())
         {
             return it->second;
         }
@@ -219,6 +219,8 @@ public:
 
     void setCodeCache(EntryCachePtr cache) { m_codeCache = cache; }
     void setCodeHashCache(EntryCachePtr cache) { m_codeHashCache = cache; }
+
+    auto getRawStorage() { return m_storage; }
 
 private:
     storage::StateStorageInterface::Ptr m_storage;

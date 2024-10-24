@@ -148,8 +148,9 @@ void PBFTImpl::asyncGetConsensusStatus(
     for (auto const& node : nodeList)
     {
         Json::Value info;
-        info["nodeID"] = *toHexString(node->nodeID()->data());
-        info["weight"] = (Json::UInt64)node->weight();
+        info["nodeID"] = *toHexString(node.nodeID->data());
+        info["weight"] = (Json::UInt64)node.voteWeight;
+        info["termWeight"] = (Json::UInt64)node.termWeight;
         info["index"] = (Json::Int64)(i);
         consensusNodeInfo.append(info);
         i++;
@@ -187,4 +188,9 @@ void PBFTImpl::enableAsMasterNode(bool _isMasterNode)
     m_pbftEngine->restart();
     // only reset m_masterNode to true when init success
     m_masterNode.store(_isMasterNode);
+}
+
+void bcos::consensus::PBFTImpl::setLedger(ledger::LedgerInterface::Ptr ledger)
+{
+    m_pbftEngine->setLedger(std::move(ledger));
 }

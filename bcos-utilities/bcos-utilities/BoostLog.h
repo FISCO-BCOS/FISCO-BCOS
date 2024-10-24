@@ -64,16 +64,22 @@ extern boost::log::sources::severity_channel_logger_mt<boost::log::trivial::seve
 
 enum LogLevel
 {
-    TRACE = boost::log::trivial::trace,
-    DEBUG = boost::log::trivial::debug,
-    INFO = boost::log::trivial::info,
-    WARNING = boost::log::trivial::warning,
-    ERROR = boost::log::trivial::error,
-    FATAL = boost::log::trivial::fatal,
+    TRACE = boost::log::trivial::severity_level::trace,
+    DEBUG = boost::log::trivial::severity_level::debug,
+    INFO = boost::log::trivial::severity_level::info,
+    WARNING = boost::log::trivial::severity_level::warning,
+    ERROR = boost::log::trivial::severity_level::error,
+    FATAL = boost::log::trivial::severity_level::fatal,
 };
 
 extern LogLevel c_fileLogLevel;
 extern LogLevel c_statLogLevel;
+
+constexpr auto operator<=>(LogLevel const& _lhs, auto const& _rhs)
+    requires(std::same_as<decltype(_rhs), LogLevel> || std::integral<decltype(_rhs)>)
+{
+    return static_cast<int>(_lhs) <=> static_cast<int>(_rhs);
+}
 
 void setFileLogLevel(LogLevel const& _level);
 void setStatLogLevel(LogLevel const& _level);

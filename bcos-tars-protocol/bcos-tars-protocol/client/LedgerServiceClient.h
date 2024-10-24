@@ -19,9 +19,6 @@
  */
 #pragma once
 
-#pragma GCC diagnostic ignored "-Wunused-variable"
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-
 #include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-tars-protocol/tars/LedgerService.h>
@@ -46,7 +43,8 @@ public:
     // TODO: implement this
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr,
         bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr,
-        std::function<void(std::string, bcos::Error::Ptr&&)>, bool) override
+        std::function<void(std::string, bcos::Error::Ptr&&)>, bool,
+        std::optional<bcos::ledger::Features>) override
     {
         BCOS_LOG(ERROR) << LOG_DESC("unimplemented method asyncPrewriteBlock");
     }
@@ -110,7 +108,7 @@ public:
             _onGetConfig) override;
 
     void asyncGetNodeListByType(std::string_view const& _type,
-        std::function<void(bcos::Error::Ptr, bcos::consensus::ConsensusNodeListPtr)> _onGetConfig)
+        std::function<void(bcos::Error::Ptr, bcos::consensus::ConsensusNodeList)> _onGetConfig)
         override;
 
     // TODO: implement this

@@ -13,35 +13,81 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief the information of the consensus node with weight
+ * @brief the information of the consensus node
  * @file ConsensusNode.h
  * @author: yujiechen
- * @date 2021-04-12
+ * @date 2021-04-09
  */
 #pragma once
-#include "ConsensusNodeInterface.h"
-namespace bcos
+#include "bcos-framework/protocol/ProtocolTypeDef.h"
+#include "bcos-utilities/ThreeWay4Apple.h"
+#include <bcos-crypto/interfaces/crypto/KeyInterface.h>
+#include <bcos-framework/Common.h>
+#include <compare>
+#include <magic_enum.hpp>
+#include <ostream>
+
+namespace bcos::consensus
 {
-namespace consensus
+constexpr static uint64_t defaultVoteWeight = 100;
+constexpr static uint64_t defaultTermWeight = 1;
+
+enum class Type
 {
-class ConsensusNode : public ConsensusNodeInterface
-{
-public:
-    using Ptr = std::shared_ptr<ConsensusNode>;
-    explicit ConsensusNode(bcos::crypto::PublicPtr _nodeID) : m_nodeID(_nodeID) {}
-
-    ConsensusNode(bcos::crypto::PublicPtr _nodeID, uint64_t _weight)
-      : m_nodeID(_nodeID), m_weight(_weight)
-    {}
-
-    ~ConsensusNode() override {}
-
-    bcos::crypto::PublicPtr nodeID() const override { return m_nodeID; }
-    uint64_t weight() const override { return m_weight; }
-
-private:
-    bcos::crypto::PublicPtr m_nodeID;
-    uint64_t m_weight = 100;
+    consensus_sealer,
+    consensus_observer,
+    consensus_candidate_sealer
 };
-}  // namespace consensus
-}  // namespace bcos
+inline std::ostream& operator<<(std::ostream& stream, Type const& type)
+{
+    stream << magic_enum::enum_name(type);
+    return stream;
+}
+
+struct ConsensusNode
+{
+    bcos::crypto::PublicPtr nodeID;
+    Type type;
+    uint64_t voteWeight;
+    uint64_t termWeight;
+    protocol::BlockNumber enableNumber;
+
+    friend std::strong_ordering operator<=>(
+        ConsensusNode const& lhs, ConsensusNode const& rhs) noexcept
+    {
+        if (auto cmp = lhs.nodeID->data() <=> rhs.nodeID->data(); !std::is_eq(cmp))
+        {
+            return cmp;
+        }
+        if (auto cmp = lhs.type <=> rhs.type; !std::is_eq(cmp))
+        {
+            return cmp;
+        }
+        if (auto cmp = lhs.voteWeight <=> rhs.voteWeight; !std::is_eq(cmp))
+        {
+            return cmp;
+        }
+        if (auto cmp = lhs.termWeight <=> rhs.termWeight; !std::is_eq(cmp))
+        {
+            return cmp;
+        }
+        return lhs.enableNumber <=> rhs.enableNumber;
+    }
+    friend bool operator==(ConsensusNode const& lhs, ConsensusNode const& rhs) noexcept
+    {
+        return std::is_eq(lhs <=> rhs);
+    }
+};
+
+using ConsensusNodeList = std::vector<consensus::ConsensusNode>;
+using ConsensusNodeSet = std::set<consensus::ConsensusNode>;
+inline std::string decsConsensusNodeList(ConsensusNodeList const& _nodeList)
+{
+    std::ostringstream stringstream;
+    for (const auto& node : _nodeList)
+    {
+        stringstream << LOG_KV(node.nodeID->shortHex(), std::to_string(node.voteWeight));
+    }
+    return stringstream.str();
+}
+}  // namespace bcos::consensus

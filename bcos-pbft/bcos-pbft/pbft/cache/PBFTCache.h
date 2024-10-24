@@ -125,9 +125,9 @@ public:
 
     uint64_t getCollectedCheckPointWeight(bcos::crypto::HashType const& _hash)
     {
-        if (m_checkpointCacheWeight.count(_hash))
+        if (auto it = m_checkpointCacheWeight.find(_hash); it != m_checkpointCacheWeight.end())
         {
-            return m_checkpointCacheWeight[_hash];
+            return it->second;
         }
         return 0;
     }
@@ -203,7 +203,7 @@ protected:
                 {
                     continue;
                 }
-                _quorum[hash] += nodeInfo->weight();
+                _quorum[hash] += nodeInfo->voteWeight;
             }
         }
     }

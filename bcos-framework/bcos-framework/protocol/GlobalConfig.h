@@ -25,9 +25,7 @@
 #include <map>
 #include <memory>
 
-namespace bcos
-{
-namespace protocol
+namespace bcos::protocol
 {
 class GlobalConfig
 {
@@ -105,6 +103,6 @@ private:
     bool m_isWasm = false;
     mutable std::mutex x_signalMutex;
 };
-}  // namespace protocol
-}  // namespace bcos
-#define g_BCOSConfig bcos::protocol::GlobalConfig::instance()
+
+static auto& g_BCOSConfig = bcos::protocol::GlobalConfig::instance();
+}  // namespace bcos::protocol

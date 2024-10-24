@@ -1,5 +1,4 @@
 #include "bcos-framework/ledger/Features.h"
-#include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "protocol/Protocol.h"
 #include <boost/test/unit_test.hpp>
 
@@ -148,6 +147,7 @@ BOOST_AUTO_TEST_CASE(feature)
         "bugfix_staticcall_noaddr_return",
         "bugfix_support_transfer_receive_fallback",
         "bugfix_set_row_with_dirty_flag",
+        "bugfix_rpbft_vrf_blocknumber_input",
         "feature_dmc2serial",
         "feature_sharding",
         "feature_rpbft",
@@ -156,7 +156,10 @@ BOOST_AUTO_TEST_CASE(feature)
         "feature_balance_precompiled",
         "feature_balance_policy1",
         "feature_paillier_add_raw",
-        "feature_evm_cancun"
+        "feature_evm_cancun",
+        "feature_evm_timestamp",
+        "feature_evm_address",
+        "feature_rpbft_term_weight",
     };
     // clang-format on
     for (size_t i = 0; i < keys.size(); ++i)
@@ -389,6 +392,38 @@ BOOST_AUTO_TEST_CASE(genesis)
     {
         BOOST_CHECK(features4.get(feature));
     }
+
+    // 3.12.0
+    Features features3_12;
+    features3_12.setGenesisFeatures(bcos::protocol::BlockVersion::V3_12_0_VERSION);
+    auto expect3_12 = std::to_array<std::string_view>({"bugfix_revert", "bugfix_statestorage_hash",
+        "bugfix_evm_create2_delegatecall_staticcall_codecopy", "bugfix_event_log_order",
+        "bugfix_call_noaddr_return", "bugfix_precompiled_codehash", "bugfix_dmc_revert",
+        "bugfix_keypage_system_entry_hash", "bugfix_internal_create_redundant_storage",
+        "bugfix_internal_create_permission_denied", "bugfix_sharding_call_in_child_executive",
+        "bugfix_empty_abi_reset", "bugfix_eip55_addr", "bugfix_eoa_as_contract",
+        "bugfix_eoa_match_failed", "bugfix_evm_exception_gas_used", "bugfix_dmc_deploy_gas_used",
+        "bugfix_staticcall_noaddr_return", "bugfix_support_transfer_receive_fallback",
+        "bugfix_set_row_with_dirty_flag", "bugfix_rpbft_vrf_blocknumber_input"});
+
+    BOOST_CHECK_EQUAL(validFlags(features3_12).size(), expect3_12.size());
+    for (auto feature : expect3_12)
+    {
+        BOOST_CHECK(features3_12.get(feature));
+    }
 }
+
+
+BOOST_AUTO_TEST_CASE(testDependenciesFeatures)
+{
+    Features features;
+    // features.set(ledger::Features::Flag::feature_ethereum_compatible);
+    // BOOST_CHECK(features.get(ledger::Features::Flag::feature_balance));
+    // BOOST_CHECK(features.get(ledger::Features::Flag::feature_balance_precompiled));
+    // BOOST_CHECK(features.get(ledger::Features::Flag::feature_calculate_gasPrice));
+    // BOOST_CHECK(features.get(ledger::Features::Flag::feature_evm_address));
+    // BOOST_CHECK(features.get(ledger::Features::Flag::feature_evm_cancun));
+}
+
 
 BOOST_AUTO_TEST_SUITE_END()

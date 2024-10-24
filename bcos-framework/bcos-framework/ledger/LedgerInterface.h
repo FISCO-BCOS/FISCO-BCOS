@@ -21,12 +21,13 @@
 
 #pragma once
 
-#include "../consensus/ConsensusNodeInterface.h"
 #include "../protocol/Block.h"
 #include "../protocol/Transaction.h"
 #include "../protocol/TransactionReceipt.h"
 #include "../storage/StorageInterface.h"
+#include "Features.h"
 #include "LedgerTypeDef.h"
+#include "SystemConfigs.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-task/Task.h>
 #include <bcos-utilities/Error.h>
@@ -50,7 +51,8 @@ public:
      */
     virtual void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
-        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts) = 0;
+        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
+        std::optional<bcos::ledger::Features> features) = 0;
 
     /**
      * @brief async store txs in block when tx pool verify
@@ -124,9 +126,8 @@ public:
      * @brief async get total transaction count and latest block number
      * @param _callback callback totalTxCount, totalFailedTxCount, and latest block number
      */
-    virtual void asyncGetTotalTransactionCount(std::function<void(Error::Ptr, int64_t _totalTxCount,
-            int64_t _failedTxCount, protocol::BlockNumber _latestBlockNumber)>
-            _callback) = 0;
+    virtual void asyncGetTotalTransactionCount(
+        std::function<void(Error::Ptr, int64_t, int64_t, protocol::BlockNumber)> _callback) = 0;
 
     /**
      * @brief async get current_state table to get total transaction count, archived block number
@@ -155,7 +156,7 @@ public:
      * @param _onGetConfig
      */
     virtual void asyncGetNodeListByType(std::string_view const& _type,
-        std::function<void(Error::Ptr, consensus::ConsensusNodeListPtr)> _onGetConfig) = 0;
+        std::function<void(Error::Ptr, consensus::ConsensusNodeList)> _onGetConfig) = 0;
 
     /**
      * @brief async get a batch of nonce lists in blocks
@@ -194,6 +195,30 @@ public:
         std::string_view _address, std::string_view _key, protocol::BlockNumber _blockNumber)
     {
         co_return std::nullopt;
+    }
+
+    virtual task::Task<void> batchInsertEoaNonce(bcos::storage::StorageInterface::Ptr storage,
+        std::unordered_map<std::string, uint64_t> eoa2Nonce,
+        std::unordered_map<std::string, uint64_t> fbEoa2Nonce)
+    {
+        co_return;
+    }
+
+    virtual task::Task<std::optional<ledger::StorageState>> getStorageState(
+        std::string_view _address, protocol::BlockNumber _blockNumber)
+    {
+        co_return std::nullopt;
+    }
+
+    virtual task::Task<bcos::ledger::SystemConfigs> fetchAllSystemConfigs(
+        protocol::BlockNumber _blockNumber)
+    {
+        co_return bcos::ledger::SystemConfigs{};  // Return an empty SystemConfigs object
+    }
+
+    virtual task::Task<bcos::ledger::Features> fetchAllFeatures(protocol::BlockNumber _blockNumber)
+    {
+        co_return bcos::ledger::Features{};  // Return an empty SystemConfigs object
     }
 };
 

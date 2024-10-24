@@ -41,15 +41,7 @@ TransactionStatus TxValidator::verify(bcos::protocol::Transaction::ConstPtr _tx)
     {
         return TransactionStatus::InvalidChainId;
     }
-    // compare with nonces cached in memory, only check nonce in txpool
-    auto status = checkTxpoolNonce(_tx);
-    if (status != TransactionStatus::None)
-    {
-        return status;
-    }
-    // check ledger nonce and block limit
-    status = checkLedgerNonceAndBlockLimit(_tx);
-    if (status != TransactionStatus::None)
+    if (const auto status = checkTransaction(_tx); status != TransactionStatus::None)
     {
         return status;
     }
@@ -68,8 +60,41 @@ TransactionStatus TxValidator::verify(bcos::protocol::Transaction::ConstPtr _tx)
         _tx->setSystemTx(true);
     }
     m_txPoolNonceChecker->insert(_tx->nonce());
+    if (_tx->type() == static_cast<uint8_t>(TransactionType::Web3Transaction))
+    {
+        task::syncWait(
+            m_web3NonceChecker->insertMemoryNonce(std::string(_tx->sender()), _tx->nonce()));
+    }
     return TransactionStatus::None;
 }
+
+bcos::protocol::TransactionStatus TxValidator::checkTransaction(
+    bcos::protocol::Transaction::ConstPtr _tx, bool onlyCheckLedgerNonce)
+{
+    if (_tx->type() == static_cast<uint8_t>(TransactionType::Web3Transaction)) [[unlikely]]
+    {
+        auto const status = checkWeb3Nonce(_tx, onlyCheckLedgerNonce);
+        if (status != TransactionStatus::None)
+        {
+            return status;
+        }
+        return TransactionStatus::None;
+    }
+    // compare with nonces cached in memory, only check nonce in txpool
+    auto status = TransactionStatus::None;
+    if (!onlyCheckLedgerNonce)
+    {
+        status = checkTxpoolNonce(_tx);
+        if (status != TransactionStatus::None)
+        {
+            return status;
+        }
+    }
+    // check ledger nonce and block limit
+    status = checkLedgerNonceAndBlockLimit(_tx);
+    return status;
+}
+
 
 TransactionStatus TxValidator::checkLedgerNonceAndBlockLimit(
     bcos::protocol::Transaction::ConstPtr _tx)
@@ -89,5 +114,15 @@ TransactionStatus TxValidator::checkLedgerNonceAndBlockLimit(
 
 TransactionStatus TxValidator::checkTxpoolNonce(bcos::protocol::Transaction::ConstPtr _tx)
 {
-    return m_txPoolNonceChecker->checkNonce(_tx, false);
+    return m_txPoolNonceChecker->checkNonce(_tx);
+}
+
+bcos::protocol::TransactionStatus TxValidator::checkWeb3Nonce(
+    bcos::protocol::Transaction::ConstPtr _tx, bool onlyCheckLedgerNonce)
+{
+    if (_tx->type() != static_cast<uint8_t>(TransactionType::Web3Transaction)) [[likely]]
+    {
+        return TransactionStatus::None;
+    }
+    return task::syncWait(m_web3NonceChecker->checkWeb3Nonce(std::move(_tx), onlyCheckLedgerNonce));
 }

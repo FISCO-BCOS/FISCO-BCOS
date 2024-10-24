@@ -13,7 +13,8 @@ class MockLedger : public bcos::ledger::LedgerInterface
 public:
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
-        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts) override
+        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
+        std::optional<bcos::ledger::Features>) override
     {
         BOOST_CHECK_EQUAL(block->blockHeaderConst()->number(), 100);
         callback("", nullptr);
@@ -97,19 +98,28 @@ public:
     }
 
     void asyncGetNodeListByType(std::string_view const& _type,
-        std::function<void(Error::Ptr, consensus::ConsensusNodeListPtr)> _onGetConfig) override
+        std::function<void(Error::Ptr, consensus::ConsensusNodeList)> _onGetConfig) override
     {
         if (_type == ledger::CONSENSUS_SEALER)
         {
-            _onGetConfig(nullptr, std::make_shared<consensus::ConsensusNodeList>(1));
+            _onGetConfig(nullptr, consensus::ConsensusNodeList(1));
         }
         else if (_type == ledger::CONSENSUS_OBSERVER)
         {
-            _onGetConfig(nullptr, std::make_shared<consensus::ConsensusNodeList>(2));
+            _onGetConfig(nullptr, consensus::ConsensusNodeList(2));
         }
         else if (_type == ledger::CONSENSUS_CANDIDATE_SEALER)
         {
-            _onGetConfig(nullptr, std::make_shared<consensus::ConsensusNodeList>(1));
+            _onGetConfig(nullptr, consensus::ConsensusNodeList(1));
+        }
+        else if (_type.empty())
+        {
+            consensus::ConsensusNodeList nodeList(4);
+            nodeList[0].type = consensus::Type::consensus_sealer;
+            nodeList[1].type = consensus::Type::consensus_observer;
+            nodeList[2].type = consensus::Type::consensus_observer;
+            nodeList[3].type = consensus::Type::consensus_candidate_sealer;
+            _onGetConfig(nullptr, nodeList);
         }
         else
         {

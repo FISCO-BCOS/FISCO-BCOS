@@ -23,9 +23,9 @@
 #include "ShardingTransactionExecutor.h"
 #include "TransactionExecutor.h"
 #include "bcos-framework/storage/StorageInterface.h"
-#include "bcos-ledger/src/libledger/utilities/Common.h"
 #include <bcos-table/src/CacheStorageFactory.h>
 #include <bcos-table/src/StateStorageFactory.h>
+#include <utility>
 
 namespace bcos::executor
 {
@@ -59,7 +59,7 @@ public:
         m_ledger(std::move(ledger)),
         m_txpool(std::move(txpool)),
         m_cacheFactory(std::move(cacheFactory)),
-        m_stateStorageFactory(stateStorageFactory),
+        m_stateStorageFactory(std::move(stateStorageFactory)),
         m_storage(std::move(storage)),
         m_executionMessageFactory(std::move(executionMessageFactory)),
         m_hashImpl(std::move(hashImpl)),

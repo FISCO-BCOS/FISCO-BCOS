@@ -73,7 +73,7 @@ open_disablessl(){
   if [ "$(uname)" == "Darwin" ];then
       sed_cmd="sed -i .bkp"
   fi
-  ${sed_cmd}  's/;disable_ssl=true/disable_ssl=true/g' config.ini
+  ${sed_cmd}  's/enable_ssl=true/enable_ssl=false/g' config.ini
 }
 
 

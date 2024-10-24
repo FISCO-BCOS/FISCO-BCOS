@@ -21,7 +21,7 @@
  * @date 2021-09-07
  */
 
-#include "bcos-ledger/src/libledger/Ledger.h"
+#include "bcos-ledger/Ledger.h"
 #include "../../mock/MockKeyFactor.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
@@ -34,11 +34,9 @@
 #include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
-#include "bcos-ledger/src/libledger/LedgerMethods.h"
-#include "bcos-ledger/src/libledger/utilities/Common.h"
+#include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Wait.h"
 #include "bcos-tool/BfsFileFactory.h"
-#include "bcos-tool/ConsensusNode.h"
 #include "bcos-tool/NodeConfig.h"
 #include "bcos-tool/VersionConverter.h"
 #include <bcos-codec/scale/Scale.h>
@@ -47,6 +45,7 @@
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/consensus/ConsensusNode.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
+#include <bcos-framework/storage/LegacyStorageMethods.h>
 #include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-framework/storage/Table.h>
 #include <bcos-framework/testutils/faker/FakeBlock.h>
@@ -55,6 +54,7 @@
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/lexical_cast.hpp>
+#include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <memory>
 
@@ -167,14 +167,14 @@ public:
         auto signImpl = std::make_shared<Secp256k1Crypto>();
         consensus::ConsensusNodeList consensusNodeList;
         consensus::ConsensusNodeList observerNodeList;
-        for (int i = 0; i < 4; ++i)
+        for (size_t i = 0; i < 4; ++i)
         {
-            auto node = std::make_shared<consensus::ConsensusNode>(
-                signImpl->generateKeyPair()->publicKey(), 10 + i);
+            auto node = consensus::ConsensusNode{signImpl->generateKeyPair()->publicKey(),
+                consensus::Type::consensus_sealer, 10 + i, 0, 0};
             consensusNodeList.emplace_back(node);
         }
-        auto observer_node = std::make_shared<consensus::ConsensusNode>(
-            signImpl->generateKeyPair()->publicKey(), -1);
+        auto observer_node = consensus::ConsensusNode{signImpl->generateKeyPair()->publicKey(),
+            consensus::Type::consensus_observer, uint64_t(-1), 0, 0};
         observerNodeList.emplace_back(observer_node);
 
         m_param->setConsensusNodeList(consensusNodeList);
@@ -290,11 +290,30 @@ public:
             auto& block = m_fakeBlocks->at(i);
 
             // write other meta data
+            Features features;
+            features.set(Features::Flag::feature_evm_address);
             std::promise<bool> prewritePromise;
-            m_ledger->asyncPrewriteBlock(m_storage, nullptr, block,
-                [&](std::string, Error::Ptr&&) { prewritePromise.set_value(true); });
-
+            m_ledger->asyncPrewriteBlock(
+                m_storage, nullptr, block,
+                [&](std::string, Error::Ptr&&) { prewritePromise.set_value(true); }, true,
+                features);
             prewritePromise.get_future().get();
+            // update nonce logic move to executor
+            //            for (size_t j = 0; j < txSize; ++j)
+            //            {
+            //                auto sender = block->transaction(0)->sender();
+            //                auto eoa = Address(sender, Address::FromBinary).hex();
+            //
+            //                task::syncWait(
+            //                    [](decltype(m_ledger) ledger, decltype(eoa) eoa) ->
+            //                    task::Task<void> {
+            //                        auto entry = co_await ledger->getStorageAt(
+            //                            eoa, ledger::ACCOUNT_TABLE_FIELDS::NONCE, 0);
+            //                        BOOST_CHECK(entry);
+            //                        auto nonce = std::stoull(std::string(entry->get()));
+            //                        BOOST_CHECK(nonce > 0);
+            //                    }(m_ledger, eoa));
+            //            }
         }
     }
 
@@ -404,10 +423,10 @@ BOOST_AUTO_TEST_CASE(testFixtureLedger)
     std::promise<bool> p6;
     auto f6 = p6.get_future();
     m_ledger->asyncGetNodeListByType(
-        CONSENSUS_OBSERVER, [&](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodeList) {
+        CONSENSUS_OBSERVER, [&](Error::Ptr _error, consensus::ConsensusNodeList _nodeList) {
             BOOST_CHECK(_error == nullptr);
-            BOOST_CHECK_EQUAL(_nodeList->at(0)->nodeID()->hex(),
-                m_param->observerNodeList().at(0)->nodeID()->hex());
+            BOOST_CHECK_EQUAL(
+                _nodeList.at(0).nodeID->hex(), m_param->observerNodeList().at(0).nodeID->hex());
             p6.set_value(true);
         });
     BOOST_CHECK_EQUAL(f1.get(), true);
@@ -476,10 +495,10 @@ BOOST_AUTO_TEST_CASE(test_3_0_FixtureLedger)
     std::promise<bool> p6;
     auto f6 = p6.get_future();
     m_ledger->asyncGetNodeListByType(
-        CONSENSUS_OBSERVER, [&](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodeList) {
+        CONSENSUS_OBSERVER, [&](Error::Ptr _error, consensus::ConsensusNodeList _nodeList) {
             BOOST_CHECK(_error == nullptr);
-            BOOST_CHECK_EQUAL(_nodeList->at(0)->nodeID()->hex(),
-                m_param->observerNodeList().at(0)->nodeID()->hex());
+            BOOST_CHECK_EQUAL(
+                _nodeList.at(0).nodeID->hex(), m_param->observerNodeList().at(0).nodeID->hex());
             p6.set_value(true);
         });
 
@@ -671,9 +690,9 @@ BOOST_AUTO_TEST_CASE(getNodeListByType)
     auto f1 = p1.get_future();
     // error type get empty node list
     m_ledger->asyncGetNodeListByType(
-        "test", [&](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodeList) {
+        "test", [&](Error::Ptr _error, consensus::ConsensusNodeList _nodeList) {
             BOOST_CHECK(_error == nullptr);
-            BOOST_CHECK_EQUAL(_nodeList->size(), 0);
+            BOOST_CHECK_EQUAL(_nodeList.size(), 0);
             p1.set_value(true);
         });
     BOOST_CHECK_EQUAL(f1.get(), true);
@@ -681,10 +700,9 @@ BOOST_AUTO_TEST_CASE(getNodeListByType)
     std::promise<bool> p2;
     auto f2 = p2.get_future();
     m_ledger->asyncGetNodeListByType(
-        CONSENSUS_SEALER, [&](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodeList) {
+        CONSENSUS_SEALER, [&](Error::Ptr _error, consensus::ConsensusNodeList _nodeList) {
             BOOST_CHECK(_error == nullptr);
-            BOOST_CHECK(_nodeList != nullptr);
-            BOOST_CHECK(_nodeList->size() == 0);
+            BOOST_CHECK(_nodeList.empty());
             p2.set_value(true);
         });
     BOOST_CHECK_EQUAL(f2.get(), true);
@@ -692,10 +710,9 @@ BOOST_AUTO_TEST_CASE(getNodeListByType)
     std::promise<bool> p3;
     auto f3 = p3.get_future();
     m_ledger->asyncGetNodeListByType(
-        CONSENSUS_OBSERVER, [&](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodeList) {
+        CONSENSUS_OBSERVER, [&](Error::Ptr _error, consensus::ConsensusNodeList _nodeList) {
             BOOST_CHECK(_error == nullptr);
-            BOOST_CHECK(_nodeList != nullptr);
-            BOOST_CHECK(_nodeList->size() == 0);
+            BOOST_CHECK(_nodeList.empty());
             p3.set_value(true);
         });
     BOOST_CHECK_EQUAL(f3.get(), true);
@@ -707,38 +724,26 @@ BOOST_AUTO_TEST_CASE(testNodeListByType)
     std::promise<bool> p1;
     auto f1 = p1.get_future();
     m_ledger->asyncGetNodeListByType(
-        CONSENSUS_SEALER, [&](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodeList) {
+        CONSENSUS_SEALER, [&](Error::Ptr _error, consensus::ConsensusNodeList const& _nodeList) {
             BOOST_CHECK(_error == nullptr);
-            BOOST_CHECK_EQUAL(_nodeList->size(), 4);
+            BOOST_CHECK_EQUAL(_nodeList.size(), 4);
             p1.set_value(true);
         });
     BOOST_CHECK_EQUAL(f1.get(), true);
 
     std::promise<bool> setSealer1;
-    m_storage->asyncGetRow(
-        SYS_CONSENSUS, "key", [&](Error::UniquePtr error, std::optional<Entry> entry) {
-            BOOST_CHECK(!error);
-            BOOST_CHECK(entry);
-
-            auto list = decodeConsensusList(entry->getField(0));
-            list.emplace_back(
-                bcos::crypto::HashType("56789").hex(), 100, std::string{CONSENSUS_SEALER}, "5");
-
-            entry->setField(0, encodeConsensusList(list));
-            m_storage->asyncSetRow(
-                SYS_CONSENSUS, "key", std::move(*entry), [&](Error::UniquePtr error) {
-                    BOOST_CHECK(!error);
-                    setSealer1.set_value(true);
-                });
-        });
-    setSealer1.get_future().get();
+    auto nodeList = task::syncWait(ledger::getNodeList(*m_storage));
+    nodeList.emplace_back(consensus::ConsensusNode{
+        std::make_shared<KeyImpl>(bcos::crypto::HashType("56789").asBytes()),
+        consensus::Type::consensus_sealer, 100, 0, 5});
+    task::syncWait(ledger::setNodeList(*m_storage, nodeList));
 
     std::promise<bool> p2;
     auto f2 = p2.get_future();
     m_ledger->asyncGetNodeListByType(
-        CONSENSUS_SEALER, [&](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodeList) {
+        CONSENSUS_SEALER, [&](Error::Ptr _error, consensus::ConsensusNodeList _nodeList) {
             BOOST_CHECK(_error == nullptr);
-            BOOST_CHECK_EQUAL(_nodeList->size(), 4);
+            BOOST_CHECK_EQUAL(_nodeList.size(), 4);
             p2.set_value(true);
         });
     BOOST_CHECK_EQUAL(f2.get(), true);
@@ -749,9 +754,9 @@ BOOST_AUTO_TEST_CASE(testNodeListByType)
     std::promise<bool> p3;
     auto f3 = p3.get_future();
     m_ledger->asyncGetNodeListByType(
-        CONSENSUS_SEALER, [&](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodeList) {
+        CONSENSUS_SEALER, [&](Error::Ptr _error, consensus::ConsensusNodeList _nodeList) {
             BOOST_CHECK(_error == nullptr);
-            BOOST_CHECK_EQUAL(_nodeList->size(), 5);
+            BOOST_CHECK_EQUAL(_nodeList.size(), 5);
             p3.set_value(true);
         });
     BOOST_CHECK_EQUAL(f3.get(), true);
@@ -1363,7 +1368,8 @@ BOOST_AUTO_TEST_CASE(getLedgerConfig)
         co_await storage2::writeOne(
             *m_storage, KeyType{SYS_CONFIG, SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM}, value);
 
-        auto ledgerConfig = co_await ledger::getLedgerConfig(*m_ledger);
+        auto ledgerConfig = std::make_shared<LedgerConfig>();
+        co_await ledger::getLedgerConfig(*m_ledger, *ledgerConfig);
         BOOST_CHECK_EQUAL(ledgerConfig->blockTxCountLimit(), 12);
         BOOST_CHECK_EQUAL(ledgerConfig->leaderSwitchPeriod(), 100);
         BOOST_CHECK_EQUAL(std::get<0>(ledgerConfig->gasLimit()), 200);
@@ -1404,6 +1410,7 @@ BOOST_AUTO_TEST_CASE(genesisBlockWithAllocs)
                                  RANGES::views::transform([&](int index) {
                                      Alloc alloc{.address = fmt::format("{:0>40}", index),
                                          .balance = bcos::u256(index * 10),
+                                         .nonce = {},
                                          .code = hexCode,
                                          .storage = {}};
 
@@ -1472,6 +1479,48 @@ BOOST_AUTO_TEST_CASE(replaceBinary)
         auto result = co_await storage2::readOne(*storage,
             transaction_executor::StateKeyView(ledger::SYS_CONFIG, "bugfix_statestorage_hash"));
         BOOST_REQUIRE(result);
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(nonceList)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        auto hashImpl = std::make_shared<Keccak256>();
+        auto memoryStorage = std::make_shared<StateStorage>(nullptr, false);
+        auto storage = std::make_shared<MockStorage>(memoryStorage);
+        auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+
+        auto nonceList = std::vector<std::string>{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
+        auto block = m_blockFactory->createBlock();
+        block->setNonceList(nonceList);
+
+        co_await storage2::writeOne(*storage,
+            transaction_executor::StateKey(SYS_TABLES, SYS_BLOCK_NUMBER_2_NONCES),
+            storage::Entry{std::string_view{"value"}});
+
+        bytes buffer;
+        block->encode(buffer);
+        Entry nonceEntry{buffer};
+        co_await storage2::writeOne(
+            *storage, transaction_executor::StateKey(SYS_BLOCK_NUMBER_2_NONCES, "1"), nonceEntry);
+
+        auto gotNonceList = co_await ledger::getNonceList(*ledger, 1, 1);
+        BOOST_REQUIRE(gotNonceList);
+        BOOST_CHECK_EQUAL(gotNonceList->size(), 1);
+        auto list = gotNonceList->at(1);
+        BOOST_CHECK_EQUAL_COLLECTIONS(
+            list->begin(), list->end(), nonceList.begin(), nonceList.end());
+
+        auto gotNonceList2 = co_await ledger::getNonceList(*ledger, 1, 100);
+        BOOST_REQUIRE(gotNonceList2);
+        BOOST_CHECK_EQUAL(gotNonceList2->size(), 1);
+        auto list2 = gotNonceList2->at(1);
+        BOOST_CHECK_EQUAL_COLLECTIONS(
+            list2->begin(), list2->end(), nonceList.begin(), nonceList.end());
+
+        auto gotNonceList3 = co_await ledger::getNonceList(*ledger, 2, 1);
+        BOOST_REQUIRE(gotNonceList3);
+        BOOST_CHECK_EQUAL(gotNonceList3->size(), 0);
     }());
 }
 

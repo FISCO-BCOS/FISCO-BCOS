@@ -45,6 +45,7 @@ public:
 
     // generate and seal the workingSealerManagerPrecompiled transaction into _txOffset
     static uint16_t generateTransactionForRotating(bcos::protocol::Block::Ptr& _block,
-        SealerConfig::Ptr const&, SealingManager::ConstPtr const&, crypto::Hash::Ptr const&);
+        SealerConfig::Ptr const&, SealingManager::ConstPtr const&, crypto::Hash::Ptr const&,
+        bool blockNumberInput);
 };
 }  // namespace bcos::sealer

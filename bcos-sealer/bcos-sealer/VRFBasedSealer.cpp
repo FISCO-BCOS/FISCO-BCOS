@@ -19,6 +19,8 @@
  */
 
 #include "VRFBasedSealer.h"
+#include "Common.h"
+#include "bcos-framework/ledger/Features.h"
 #include "bcos-pbft/core/ConsensusConfig.h"
 #include "bcos-txpool/txpool/storage/MemoryStorage.h"
 #include <bcos-codec/wrapper/CodecWrapper.h>
@@ -26,6 +28,7 @@
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-txpool/TxPool.h>
 #include <wedpr-crypto/WedprCrypto.h>
+#include <boost/endian/conversion.hpp>
 
 namespace bcos::sealer
 {
@@ -39,26 +42,27 @@ uint16_t VRFBasedSealer::hookWhenSealBlock(bcos::protocol::Block::Ptr _block)
     {
         return SealBlockResult::SUCCESS;
     }
-    return generateTransactionForRotating(_block, m_sealerConfig, m_sealingManager, m_hashImpl);
+    return generateTransactionForRotating(_block, m_sealerConfig, m_sealingManager, m_hashImpl,
+        consensusConfig.features().get(ledger::Features::Flag::bugfix_rpbft_vrf_blocknumber_input));
 }
 
 uint16_t VRFBasedSealer::generateTransactionForRotating(bcos::protocol::Block::Ptr& _block,
     SealerConfig::Ptr const& _sealerConfig, SealingManager::ConstPtr const& _sealingManager,
-    crypto::Hash::Ptr const& _hashImpl)
+    crypto::Hash::Ptr const& _hashImpl, bool blockNumberInput)
 {
     try
     {
         auto blockNumber = _block->blockHeader()->number();
-        if (_sealingManager->latestNumber() < blockNumber - 1)
+        if (!blockNumberInput && _sealingManager->latestNumber() < blockNumber - 1)
         {
             SEAL_LOG(INFO) << LOG_DESC(
                                   "generateTransactionForRotating: interrupt pipeline for waiting "
                                   "latest block commit")
                            << LOG_KV("latestNumber", _sealingManager->latestNumber())
-                           << LOG_KV("sealingNumber", blockNumber);
+                           << LOG_KV("sealingNumber", blockNumber)
+                           << LOG_KV("blockNumberInput", blockNumberInput);
             return SealBlockResult::WAIT_FOR_LATEST_BLOCK;
         }
-        auto blockHash = _sealingManager->latestHash();
         auto keyPair = _sealerConfig->keyPair();
         CInputBuffer privateKey{reinterpret_cast<const char*>(keyPair->secretKey()->data().data()),
             keyPair->secretKey()->size()};
@@ -69,7 +73,14 @@ uint16_t VRFBasedSealer::generateTransactionForRotating(bcos::protocol::Block::P
         // elliptic curve, do think twice here.
         auto pubkeyDerive = wedpr_curve25519_vrf_derive_public_key(&privateKey, &publicKey);
 
-        CInputBuffer inputMsg{reinterpret_cast<const char*>(blockHash.data()), blockHash.size()};
+        auto blockHash = _sealingManager->latestHash();
+        auto blockNumberBigEndian = boost::endian::native_to_big(blockNumber);
+        CInputBuffer inputMsg = {
+            .data = blockNumberInput ?
+                        reinterpret_cast<const char*>(std::addressof(blockNumberBigEndian)) :
+                        reinterpret_cast<const char*>(blockHash.data()),
+            .len = blockNumberInput ? sizeof(blockNumberBigEndian) :
+                                      static_cast<size_t>(blockHash.size())};
         bcos::bytes vrfProof;
         vrfProof.resize(curve25519VRFProofSize);
         COutputBuffer proof{(char*)vrfProof.data(), curve25519VRFProofSize};
@@ -86,7 +97,12 @@ uint16_t VRFBasedSealer::generateTransactionForRotating(bcos::protocol::Block::P
 
         auto random = std::random_device{};
         bcos::CodecWrapper codec(_hashImpl, g_BCOSConfig.isWasm());
-        auto input = codec.encodeWithSig(interface, vrfPublicKey, blockHash.asBytes(), vrfProof);
+        auto input = codec.encodeWithSig(interface, vrfPublicKey,
+            blockNumberInput ? bytes((const byte*)std::addressof(blockNumberBigEndian),
+                                   (const byte*)std::addressof(blockNumberBigEndian) +
+                                       sizeof(blockNumberBigEndian)) :
+                               blockHash.asBytes(),
+            vrfProof);
 
         auto tx = _sealerConfig->blockFactory()->transactionFactory()->createTransaction(0,
             g_BCOSConfig.isWasm() ? precompiled::CONSENSUS_TABLE_NAME :

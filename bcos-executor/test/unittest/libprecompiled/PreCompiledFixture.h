@@ -19,6 +19,8 @@
  */
 
 #pragma once
+#include "bcos-crypto/interfaces/crypto/CommonType.h"
+#include "bcos-framework/ledger/Features.h"
 #include "executive/BlockContext.h"
 #include "executive/TransactionExecutive.h"
 #include "executor/TransactionExecutorFactory.h"
@@ -292,24 +294,7 @@ public:
         blockHeader->setNumber(blockNumber);
         Features features;
         features.setUpgradeFeatures(BlockVersion::V3_0_VERSION, version);
-        std::vector<std::string> keys;
-        std::vector<std::string> values;
-        for (auto [_, name, value] : features.flags())
-        {
-            if (value)
-            {
-                storage::Entry entry;
-                entry.setObject(
-                    SystemConfigEntry{boost::lexical_cast<std::string>((int)value), blockNumber});
-                keys.push_back(std::string(name));
-                values.push_back(std::string(entry.get()));
-            }
-        }
-
-        if (!keys.empty())
-        {
-            storage->setRows(SYS_CONFIG, keys, values);
-        }
+        task::syncWait(ledger::writeToStorage(features, *storage, blockNumber));
 
         bcos::protocol::ParentInfo p{
             .blockNumber = blockNumber - 1, .blockHash = h256(blockNumber - 1)};

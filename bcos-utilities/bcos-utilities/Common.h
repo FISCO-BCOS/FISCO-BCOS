@@ -106,6 +106,8 @@ s256 u2s(u256 _u);
 /// @returns the two's complement signed representation of the signed number _u.
 u256 s2u(s256 _u);
 
+u256 hex2u(std::string_view _hexStr);
+
 bool isalNumStr(std::string const& _stringData);
 
 inline bool isNumStr(std::string const& _stringData)

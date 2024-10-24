@@ -19,55 +19,66 @@
  */
 
 #pragma once
+#include "../../executive/BlockContext.h"
+#include "../../vm/Precompiled.h"
 #include "VRFInfo.h"
-#include "bcos-executor/src/executive/BlockContext.h"
-#include "bcos-executor/src/precompiled/common/Common.h"
-#include "bcos-executor/src/vm/Precompiled.h"
+#include "bcos-framework/consensus/ConsensusNode.h"
 #include <bcos-framework/storage/Table.h>
-#include <bcos-tool/ConsensusNode.h>
+#include <functional>
 
 namespace bcos::precompiled
 {
+
 class WorkingSealerManagerImpl
 {
 public:
-    using Ptr = std::shared_ptr<WorkingSealerManagerImpl>;
+    WorkingSealerManagerImpl(const WorkingSealerManagerImpl&) = delete;
+    WorkingSealerManagerImpl(WorkingSealerManagerImpl&&) noexcept = default;
+    WorkingSealerManagerImpl& operator=(const WorkingSealerManagerImpl&) = delete;
+    WorkingSealerManagerImpl& operator=(WorkingSealerManagerImpl&&) noexcept = default;
+    WorkingSealerManagerImpl(bool withWeight);
     ~WorkingSealerManagerImpl() = default;
 
     void createVRFInfo(bytes _vrfProof, bytes _vrfPublicKey, bytes _vrfInput);
-    void rotateWorkingSealer(const executor::TransactionExecutive::Ptr& _executive,
+    void createVRFInfo(std::unique_ptr<VRFInfo> vrfInfo);
+    void setConfiguredEpochSealersSize(uint32_t _size);
+
+    task::Task<void> rotateWorkingSealer(const executor::TransactionExecutive::Ptr& _executive,
         const PrecompiledExecResult::Ptr& _callParameters);
 
 private:
-    void checkVRFInfos(crypto::HashType const& parentHash, std::string const& origin);
+    void checkVRFInfos(crypto::HashType const& parentHash, std::string const& origin,
+        bool blockNumberInput, protocol::BlockNumber blockNumber);
     bool shouldRotate(const executor::TransactionExecutive::Ptr& _executive);
-    bool getConsensusNodeListFromStorage(const executor::TransactionExecutive::Ptr& _executive);
-    void setNotifyRotateFlag(const executor::TransactionExecutive::Ptr& executive, unsigned flag);
-    bool getNotifyRotateFlag(const executor::TransactionExecutive::Ptr& executive);
-    // calculate the number of working sealers that need to be added and removed
-    std::tuple<uint32_t, uint32_t> calNodeRotatingInfo();
-    std::unique_ptr<std::vector<std::string>> selectNodesFromList(
-        std::vector<std::string>& _nodeList, uint32_t _selectNum);
-    // update node list type in m_consensusNodes
-    void updateNodeListType(std::unique_ptr<std::vector<std::string>> _nodeList,
-        std::string const& _type, const executor::TransactionExecutive::Ptr& executive);
-    void commitConsensusNodeListToStorage(const executor::TransactionExecutive::Ptr& _executive)
-    {
-        if (!m_consensusChangeFlag)
-        {
-            return;
-        }
-        storage::Entry newConsensus;
-        newConsensus.setObject(m_consensusNodes);
-        _executive->storage().setRow(ledger::SYS_CONSENSUS, "key", std::move(newConsensus));
-    }
+    task::Task<bool> getConsensusNodeListFromStorage(
+        const executor::TransactionExecutive::Ptr& _executive);
 
-    VRFInfo::Ptr m_vrfInfo;
-    std::vector<std::string> m_candidateSealer = {};
-    std::vector<std::string> m_consensusSealer = {};
+    static void setNotifyRotateFlag(
+        const executor::TransactionExecutive::Ptr& executive, unsigned flag);
+    static bool getNotifyRotateFlag(const executor::TransactionExecutive::Ptr& executive);
+
+    // calculate the number of working sealers that need to be added and removed
+    std::tuple<uint32_t, uint32_t> calNodeRotatingInfo() const;
+    std::vector<std::reference_wrapper<consensus::ConsensusNode>> selectNodesFromList(
+        std::vector<std::reference_wrapper<consensus::ConsensusNode>>& _nodeList,
+        uint32_t _selectNum);
+
+    // update node list type in m_consensusNodes
+    void updateNodeListType(
+        const std::vector<std::reference_wrapper<consensus::ConsensusNode>>& _nodeList,
+        consensus::Type _type, const executor::TransactionExecutive::Ptr& executive);
+    void commitConsensusNodeListToStorage(const executor::TransactionExecutive::Ptr& _executive);
+
+    // Weight rotate
+    void rotateWorkingSealerByWeight(const executor::TransactionExecutive::Ptr& _executive);
+
+    std::unique_ptr<VRFInfo> m_vrfInfo;
+    std::vector<std::reference_wrapper<consensus::ConsensusNode>> m_candidateSealer;
+    std::vector<std::reference_wrapper<consensus::ConsensusNode>> m_consensusSealer;
     bool m_consensusChangeFlag = false;
-    ledger::ConsensusNodeList m_consensusNodes = {};
+    consensus::ConsensusNodeList m_consensusNodes;
     bool m_notifyNextLeaderRotateSet = false;
     uint32_t m_configuredEpochSealersSize = 4;
+    bool m_withWeight = false;
 };
 }  // namespace bcos::precompiled

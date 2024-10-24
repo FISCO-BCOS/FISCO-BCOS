@@ -56,8 +56,7 @@ PBFTImpl::Ptr RPBFTFactory::createRPBFT()
     auto pbftEngine = std::make_shared<PBFTEngine>(rpbftConfig);
 
     PBFT_LOG(INFO) << LOG_DESC("create rPBFT");
-    auto ledgerFetcher = std::make_shared<bcos::tool::LedgerConfigFetcher>(m_ledger);
     auto pbft = std::make_shared<PBFTImpl>(pbftEngine);
-    pbft->setLedgerFetcher(ledgerFetcher);
+    pbft->setLedger(m_ledger);
     return pbft;
 }

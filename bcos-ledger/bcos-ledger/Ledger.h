@@ -24,7 +24,6 @@
 #include "bcos-framework/protocol/BlockFactory.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/storage/StorageInterface.h"
-#include "utilities/Common.h"
 #include <bcos-framework/ledger/SystemConfigs.h>
 #include <bcos-table/src/StateStorageFactory.h>
 #include <bcos-tool/NodeConfig.h>
@@ -64,8 +63,8 @@ public:
         std::function<void(Error::UniquePtr&&)> _callback) override;
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
-        std::function<void(std::string, Error::Ptr&&)> callback,
-        bool writeTxsAndReceipts = true) override;
+        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts = true,
+        std::optional<bcos::ledger::Features> features = std::nullopt) override;
 
     bcos::Error::Ptr storeTransactionsAndReceipts(bcos::protocol::ConstTransactionsPtr blockTxs,
         bcos::protocol::Block::ConstPtr block) override;
@@ -106,8 +105,8 @@ public:
             _onGetList) override;
     void removeExpiredNonce(protocol::BlockNumber blockNumber, bool sync = false) override;
 
-    void asyncGetNodeListByType(const std::string_view& _type,
-        std::function<void(Error::Ptr, consensus::ConsensusNodeListPtr)> _onGetConfig) override;
+    void asyncGetNodeListByType(std::string_view const& _type,
+        std::function<void(Error::Ptr, consensus::ConsensusNodeList)> _onGetConfig) override;
 
     void asyncGetCurrentStateByKey(std::string_view const& _key,
         std::function<void(Error::Ptr&&, std::optional<bcos::storage::Entry>&&)> _callback)
@@ -123,6 +122,11 @@ public:
     void asyncGetBlockTransactionHashes(bcos::protocol::BlockNumber blockNumber,
         std::function<void(Error::Ptr&&, std::vector<std::string>&&)> callback);
     void setKeyPageSize(size_t keyPageSize) { m_keyPageSize = keyPageSize; }
+
+    task::Task<bcos::ledger::SystemConfigs> fetchAllSystemConfigs(
+        protocol::BlockNumber number = INT64_MAX) override;
+
+    task::Task<bcos::ledger::Features> fetchAllFeatures(protocol::BlockNumber) override;
 
 protected:
     storage::StateStorageInterface::Ptr getStateStorage()
@@ -191,11 +195,18 @@ private:
         return _s.substr(_s.find_last_of('/') + 1);
     }
 
+    task::Task<void> batchInsertEoaNonce(bcos::storage::StorageInterface::Ptr storage,
+        std::unordered_map<std::string, uint64_t> eoa2Nonce,
+        std::unordered_map<std::string, uint64_t> fbEoa2Nonce) override;
+
+    task::Task<std::optional<ledger::StorageState>> getStorageState(
+        std::string_view _address, protocol::BlockNumber _blockNumber) override;
+
     std::tuple<bool, bcos::crypto::HashListPtr, std::shared_ptr<std::vector<bytesConstPtr>>>
     needStoreUnsavedTxs(
         bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr _block);
 
-    bcos::consensus::ConsensusNodeListPtr selectWorkingSealer(
+    bcos::consensus::ConsensusNodeList selectWorkingSealer(
         const bcos::ledger::LedgerConfig& _ledgerConfig, std::int64_t _epochSealerNum);
 
     bcos::protocol::BlockFactory::Ptr m_blockFactory;

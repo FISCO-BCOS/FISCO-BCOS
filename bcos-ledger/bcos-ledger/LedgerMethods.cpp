@@ -1,11 +1,10 @@
 #include "LedgerMethods.h"
+#include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-tool/VersionConverter.h"
-#include "utilities/Common.h"
-
 #include <bcos-executor/src/Common.h>
-
 #include <boost/exception/diagnostic_information.hpp>
 #include <exception>
+#include <functional>
 
 bcos::task::Task<void> bcos::ledger::prewriteBlockToStorage(LedgerInterface& ledger,
     bcos::protocol::ConstTransactionsPtr transactions, bcos::protocol::Block::ConstPtr block,
@@ -13,7 +12,7 @@ bcos::task::Task<void> bcos::ledger::prewriteBlockToStorage(LedgerInterface& led
 {
     struct Awaitable
     {
-        LedgerInterface& m_ledger;
+        std::reference_wrapper<LedgerInterface> m_ledger;
         decltype(transactions) m_transactions;
         decltype(block) m_block;
         bool m_withTransactionsAndReceipts{};
@@ -24,7 +23,7 @@ bcos::task::Task<void> bcos::ledger::prewriteBlockToStorage(LedgerInterface& led
         constexpr static bool await_ready() noexcept { return false; }
         void await_suspend(std::coroutine_handle<> handle)
         {
-            m_ledger.asyncPrewriteBlock(
+            m_ledger.get().asyncPrewriteBlock(
                 m_storage, std::move(m_transactions), std::move(m_block),
                 [this, handle](std::string, Error::Ptr error) {
                     if (error)
@@ -33,7 +32,7 @@ bcos::task::Task<void> bcos::ledger::prewriteBlockToStorage(LedgerInterface& led
                     }
                     handle.resume();
                 },
-                m_withTransactionsAndReceipts);
+                m_withTransactionsAndReceipts, std::nullopt);
         }
         void await_resume()
         {
@@ -61,11 +60,10 @@ bcos::task::Task<void> bcos::ledger::tag_invoke(
     co_return;
 }
 
-bcos::task::Task<void> bcos::ledger::tag_invoke(ledger::tag_t<removeExpiredNonce> /*unused*/,
-    LedgerInterface& ledger, protocol::BlockNumber blockNumber)
+void bcos::ledger::tag_invoke(ledger::tag_t<removeExpiredNonce> /*unused*/, LedgerInterface& ledger,
+    protocol::BlockNumber expiredNumber)
 {
-    ledger.removeExpiredNonce(blockNumber, false);
-    co_return;
+    ledger.removeExpiredNonce(expiredNumber, false);
 }
 
 bcos::task::Task<bcos::protocol::Block::Ptr> bcos::ledger::tag_invoke(
@@ -74,7 +72,7 @@ bcos::task::Task<bcos::protocol::Block::Ptr> bcos::ledger::tag_invoke(
 {
     struct Awaitable
     {
-        LedgerInterface& m_ledger;
+        std::reference_wrapper<LedgerInterface> m_ledger;
         protocol::BlockNumber m_blockNumber;
         int32_t m_blockFlag;
 
@@ -83,7 +81,7 @@ bcos::task::Task<bcos::protocol::Block::Ptr> bcos::ledger::tag_invoke(
         constexpr static bool await_ready() noexcept { return false; }
         void await_suspend(std::coroutine_handle<> handle)
         {
-            m_ledger.asyncGetBlockDataByNumber(m_blockNumber, m_blockFlag,
+            m_ledger.get().asyncGetBlockDataByNumber(m_blockNumber, m_blockFlag,
                 [this, handle](Error::Ptr error, bcos::protocol::Block::Ptr block) {
                     if (error)
                     {
@@ -116,13 +114,13 @@ bcos::task::Task<bcos::ledger::TransactionCount> bcos::ledger::tag_invoke(
 {
     struct Awaitable
     {
-        LedgerInterface& m_ledger;
+        std::reference_wrapper<LedgerInterface> m_ledger;
         std::variant<Error::Ptr, TransactionCount> m_result;
 
         constexpr static bool await_ready() noexcept { return false; }
         void await_suspend(std::coroutine_handle<> handle)
         {
-            m_ledger.asyncGetTotalTransactionCount(
+            m_ledger.get().asyncGetTotalTransactionCount(
                 [this, handle](Error::Ptr error, int64_t total, int64_t failed,
                     bcos::protocol::BlockNumber blockNumber) {
                     if (error)
@@ -158,13 +156,13 @@ bcos::task::Task<bcos::protocol::BlockNumber> bcos::ledger::tag_invoke(
 {
     struct Awaitable
     {
-        LedgerInterface& m_ledger;
+        std::reference_wrapper<LedgerInterface> m_ledger;
         std::variant<Error::Ptr, protocol::BlockNumber> m_result;
 
         constexpr static bool await_ready() noexcept { return false; }
         void await_suspend(std::coroutine_handle<> handle)
         {
-            m_ledger.asyncGetBlockNumber(
+            m_ledger.get().asyncGetBlockNumber(
                 [this, handle](Error::Ptr error, bcos::protocol::BlockNumber blockNumber) {
                     if (error)
                     {
@@ -268,7 +266,7 @@ bcos::task::Task<bcos::protocol::BlockNumber> bcos::ledger::tag_invoke(
         }
     };
 
-    Awaitable awaitable{.m_ledger = ledger, .m_hash = std::move(hash), .m_result = {}};
+    Awaitable awaitable{.m_ledger = ledger, .m_hash = hash, .m_result = {}};
     co_return co_await awaitable;
 }
 
@@ -334,9 +332,8 @@ bcos::task::Task<bcos::consensus::ConsensusNodeList> bcos::ledger::tag_invoke(
         constexpr static bool await_ready() noexcept { return false; }
         void await_suspend(std::coroutine_handle<> handle)
         {
-            m_ledger.asyncGetNodeListByType(
-                m_type, [this, handle](Error::Ptr error,
-                            const consensus::ConsensusNodeListPtr& consensusNodeList) {
+            m_ledger.asyncGetNodeListByType(m_type,
+                [this, handle](Error::Ptr error, consensus::ConsensusNodeList consensusNodeList) {
                     if (error)
                     {
                         m_result.emplace<Error::Ptr>(std::move(error));
@@ -344,7 +341,7 @@ bcos::task::Task<bcos::consensus::ConsensusNodeList> bcos::ledger::tag_invoke(
                     else
                     {
                         m_result.emplace<consensus::ConsensusNodeList>(
-                            std::move(*consensusNodeList));
+                            std::move(consensusNodeList));
                     }
                     handle.resume();
                 });
@@ -398,57 +395,74 @@ static bcos::task::Task<std::tuple<int64_t, bcos::protocol::BlockNumber>> getSys
     co_return std::make_tuple(boost::lexical_cast<int64_t>(value), blockNumber);
 }
 
-bcos::task::Task<bcos::ledger::LedgerConfig::Ptr> bcos::ledger::tag_invoke(
-    ledger::tag_t<getLedgerConfig> /*unused*/, LedgerInterface& ledger)
+bcos::task::Task<void> bcos::ledger::tag_invoke(
+    ledger::tag_t<getLedgerConfig> /*unused*/, LedgerInterface& ledger, LedgerConfig& ledgerConfig)
 {
-    auto ledgerConfig = std::make_shared<ledger::LedgerConfig>();
-    ledgerConfig->setConsensusNodeList(co_await getNodeList(ledger, ledger::CONSENSUS_SEALER));
-    ledgerConfig->setObserverNodeList(co_await getNodeList(ledger, ledger::CONSENSUS_OBSERVER));
-    if (auto txLimitConfig = co_await getSystemConfig(ledger, SYSTEM_KEY_TX_COUNT_LIMIT))
-    {
-        ledgerConfig->setBlockTxCountLimit(
-            boost::lexical_cast<uint64_t>(std::get<0>(*txLimitConfig)));
-    }
-    if (auto ledgerSwitchPeriodConfig =
-            co_await getSystemConfig(ledger, SYSTEM_KEY_CONSENSUS_LEADER_PERIOD))
-    {
-        ledgerConfig->setLeaderSwitchPeriod(
-            boost::lexical_cast<uint64_t>(std::get<0>(*ledgerSwitchPeriodConfig)));
-    }
-    ledgerConfig->setGasLimit(
-        co_await getSystemConfigOrDefault(ledger, SYSTEM_KEY_TX_GAS_LIMIT, 0));
-    if (auto versionConfig = co_await getSystemConfig(ledger, SYSTEM_KEY_COMPATIBILITY_VERSION))
-    {
-        ledgerConfig->setCompatibilityVersion(tool::toVersionNumber(std::get<0>(*versionConfig)));
-    }
-    ledgerConfig->setGasPrice(
-        co_await getSystemConfigOrDefault(ledger, SYSTEM_KEY_TX_GAS_PRICE, "0x0"));
+    auto nodeList = co_await getNodeList(ledger, {});
+    ledgerConfig.setConsensusNodeList(::ranges::views::filter(nodeList, [](auto& node) {
+        return node.type == consensus::Type::consensus_sealer;
+    }) | ::ranges::to<std::vector>());
+    ledgerConfig.setObserverNodeList(::ranges::views::filter(nodeList, [](auto& node) {
+        return node.type == consensus::Type::consensus_observer;
+    }) | ::ranges::to<std::vector>());
 
     auto blockNumber = co_await getCurrentBlockNumber(ledger);
-    ledgerConfig->setBlockNumber(blockNumber);
-    ledgerConfig->setHash(co_await getBlockHash(ledger, blockNumber));
-    ledgerConfig->setFeatures(co_await getFeatures(ledger));
+
+    auto sysConfig = co_await ledger.fetchAllSystemConfigs(blockNumber + 1);
+
+    if (auto txLimitConfig = sysConfig.get(ledger::SystemConfig::tx_count_limit))
+    {
+        ledgerConfig.setBlockTxCountLimit(
+            boost::lexical_cast<uint64_t>(txLimitConfig.value().first));
+    }
+    if (auto ledgerSwitchPeriodConfig =
+            sysConfig.get(ledger::SystemConfig::consensus_leader_period))
+    {
+        ledgerConfig.setLeaderSwitchPeriod(
+            boost::lexical_cast<uint64_t>(ledgerSwitchPeriodConfig.value().first));
+    }
+    auto txGasLimit = sysConfig.getOrDefault(ledger::SystemConfig::tx_gas_limit, "0");
+    ledgerConfig.setGasLimit({boost::lexical_cast<uint64_t>(txGasLimit.first), txGasLimit.second});
+
+    if (auto versionConfig = sysConfig.get(ledger::SystemConfig::compatibility_version))
+    {
+        ledgerConfig.setCompatibilityVersion(tool::toVersionNumber(versionConfig.value().first));
+    }
+    auto gasPrice = sysConfig.getOrDefault(ledger::SystemConfig::tx_gas_price, "0x0");
+    ledgerConfig.setGasPrice(std::make_tuple(gasPrice.first, gasPrice.second));
+
+    ledgerConfig.setBlockNumber(blockNumber);
+    ledgerConfig.setHash(co_await getBlockHash(ledger, blockNumber));
+    ledgerConfig.setFeatures(co_await getFeatures(ledger));
 
     auto enableRPBFT =
-        (std::get<0>(co_await getSystemConfigOrDefault(ledger, SYSTEM_KEY_RPBFT_SWITCH, 0)) == 1);
-    ledgerConfig->setConsensusType(
+        (sysConfig.getOrDefault(ledger::SystemConfig::feature_rpbft, "0").first == "1");
+    ledgerConfig.setConsensusType(
         std::string(enableRPBFT ? ledger::RPBFT_CONSENSUS_TYPE : ledger::PBFT_CONSENSUS_TYPE));
     if (enableRPBFT)
     {
-        ledgerConfig->setCandidateSealerNodeList(
-            co_await getNodeList(ledger, ledger::CONSENSUS_CANDIDATE_SEALER));
-        ledgerConfig->setEpochSealerNum(co_await getSystemConfigOrDefault(
-            ledger, SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM, DEFAULT_EPOCH_SEALER_NUM));
-        ledgerConfig->setEpochBlockNum(co_await getSystemConfigOrDefault(
-            ledger, SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM, DEFAULT_EPOCH_BLOCK_NUM));
-        ledgerConfig->setNotifyRotateFlagInfo(std::get<0>(co_await getSystemConfigOrDefault(
+        ledgerConfig.setCandidateSealerNodeList(::ranges::views::filter(nodeList, [](auto& node) {
+            return node.type == consensus::Type::consensus_candidate_sealer;
+        }) | ::ranges::to<std::vector>());
+
+        auto epochSealer =
+            sysConfig.getOrDefault(ledger::SystemConfig::feature_rpbft_epoch_sealer_num,
+                std::to_string(DEFAULT_EPOCH_SEALER_NUM));
+        ledgerConfig.setEpochSealerNum(
+            {boost::lexical_cast<uint64_t>(epochSealer.first), epochSealer.second});
+
+        auto epochBlock =
+            sysConfig.getOrDefault(ledger::SystemConfig::feature_rpbft_epoch_block_num,
+                std::to_string(DEFAULT_EPOCH_BLOCK_NUM));
+        ledgerConfig.setEpochBlockNum(
+            {boost::lexical_cast<uint64_t>(epochBlock.first), epochBlock.second});
+        ledgerConfig.setNotifyRotateFlagInfo(std::get<0>(co_await getSystemConfigOrDefault(
             ledger, INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE, DEFAULT_INTERNAL_NOTIFY_FLAG)));
     }
-    ledgerConfig->setAuthCheckStatus(
-        std::get<0>(co_await getSystemConfigOrDefault(ledger, SYSTEM_KEY_AUTH_CHECK_STATUS, 0)));
-    auto [chainId, _] = co_await getSystemConfigOrDefault(ledger, SYSTEM_KEY_WEB3_CHAIN_ID, "0");
-    ledgerConfig->setChainId(bcos::toEvmC(boost::lexical_cast<u256>(chainId)));
-    co_return ledgerConfig;
+    auto auth = sysConfig.getOrDefault(ledger::SystemConfig::auth_check_status, "0");
+    ledgerConfig.setAuthCheckStatus(boost::lexical_cast<uint32_t>(auth.first));
+    auto [chainId, _] = sysConfig.getOrDefault(ledger::SystemConfig::web3_chain_id, "0");
+    ledgerConfig.setChainId(bcos::toEvmC(boost::lexical_cast<u256>(chainId)));
 }
 
 bcos::task::Task<bcos::ledger::Features> bcos::ledger::tag_invoke(
@@ -456,33 +470,21 @@ bcos::task::Task<bcos::ledger::Features> bcos::ledger::tag_invoke(
 {
     auto blockNumber = co_await getCurrentBlockNumber(ledger);
     Features features;
-    for (auto key : bcos::ledger::Features::featureKeys())
+    try
     {
-        try
-        {
-            auto value = co_await getSystemConfig(ledger, key);
-            if (!value)
-            {
-                LEDGER2_LOG(DEBUG) << "Not found system config: " << key;
-                continue;
-            }
-
-            if (blockNumber + 1 >= std::get<1>(*value))
-            {
-                features.set(key);
-            }
-        }
-        catch (std::exception& e)
-        {
-            LEDGER2_LOG(DEBUG) << "Not found system config: " << key;
-        }
+        features = co_await ledger.fetchAllFeatures(blockNumber + 1);
+    }
+    catch (...)
+    {
+        LEDGER2_LOG(DEBUG) << LOG_DESC("fetch features failed")
+                           << LOG_KV("msg", boost::current_exception_diagnostic_information());
     }
 
     co_return features;
 }
 
 bcos::task::Task<bcos::protocol::TransactionReceipt::ConstPtr> bcos::ledger::tag_invoke(
-    ledger::tag_t<getReceipt>, LedgerInterface& ledger, crypto::HashType const& txHash)
+    ledger::tag_t<getReceipt> /*unused*/, LedgerInterface& ledger, crypto::HashType const& txHash)
 {
     struct Awaitable
     {
@@ -496,7 +498,7 @@ bcos::task::Task<bcos::protocol::TransactionReceipt::ConstPtr> bcos::ledger::tag
         {
             m_ledger.asyncGetTransactionReceiptByHash(m_hash, false,
                 [this, handle](bcos::Error::Ptr error,
-                    bcos::protocol::TransactionReceipt::ConstPtr receipt, MerkleProofPtr) {
+                    const bcos::protocol::TransactionReceipt::ConstPtr& receipt, MerkleProofPtr) {
                     if (error)
                     {
                         m_result.emplace<bcos::Error::Ptr>(std::move(error));
@@ -518,12 +520,12 @@ bcos::task::Task<bcos::protocol::TransactionReceipt::ConstPtr> bcos::ledger::tag
         }
     };
 
-    Awaitable awaitable{.m_ledger = ledger, .m_hash = std::move(txHash), .m_result = {}};
+    Awaitable awaitable{.m_ledger = ledger, .m_hash = txHash, .m_result = {}};
     co_return co_await awaitable;
 }
 
 bcos::task::Task<bcos::protocol::TransactionsConstPtr> bcos::ledger::tag_invoke(
-    ledger::tag_t<getTransactions>, LedgerInterface& ledger, crypto::HashListPtr hashes)
+    ledger::tag_t<getTransactions> /*unused*/, LedgerInterface& ledger, crypto::HashListPtr hashes)
 {
     struct Awaitable
     {
@@ -539,7 +541,7 @@ bcos::task::Task<bcos::protocol::TransactionsConstPtr> bcos::ledger::tag_invoke(
                 std::move(m_hashes), false, [this, handle](auto&& error, auto&& txs, auto&&) {
                     if (error)
                     {
-                        m_result.emplace<bcos::Error::Ptr>(std::move(error));
+                        m_result.emplace<bcos::Error::Ptr>(std::forward<decltype(error)>(error));
                     }
                     else
                     {
@@ -563,8 +565,57 @@ bcos::task::Task<bcos::protocol::TransactionsConstPtr> bcos::ledger::tag_invoke(
 }
 
 bcos::task::Task<std::optional<bcos::storage::Entry>> bcos::ledger::tag_invoke(
-    ledger::tag_t<getStorageAt>, LedgerInterface& ledger, std::string_view address,
+    ledger::tag_t<getStorageAt> /*unused*/, LedgerInterface& ledger, std::string_view address,
     std::string_view key, bcos::protocol::BlockNumber number)
 {
     co_return co_await ledger.getStorageAt(address, key, number);
+}
+
+bcos::task::Task<
+    std::shared_ptr<std::map<bcos::protocol::BlockNumber, bcos::protocol::NonceListPtr>>>
+bcos::ledger::tag_invoke(ledger::tag_t<getNonceList> /*unused*/, LedgerInterface& ledger,
+    bcos::protocol::BlockNumber startNumber, int64_t offset)
+{
+    struct Awaitable
+    {
+        bcos::ledger::LedgerInterface& m_ledger;
+        bcos::protocol::BlockNumber m_startNumber;
+        int64_t m_offset;
+
+        std::variant<bcos::Error::Ptr,
+            std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>>>
+            m_result;
+
+        constexpr static bool await_ready() noexcept { return false; }
+        void await_suspend(std::coroutine_handle<> handle)
+        {
+            m_ledger.asyncGetNonceList(m_startNumber, m_offset,
+                [this, handle](auto&& error,
+                    std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>>
+                        nonceList) {
+                    if (error)
+                    {
+                        m_result.emplace<bcos::Error::Ptr>(std::forward<decltype(error)>(error));
+                    }
+                    else
+                    {
+                        m_result.emplace<decltype(nonceList)>(std::move(nonceList));
+                    }
+                    handle.resume();
+                });
+        }
+        std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>> await_resume()
+        {
+            if (std::holds_alternative<bcos::Error::Ptr>(m_result))
+            {
+                BOOST_THROW_EXCEPTION(*std::get<bcos::Error::Ptr>(m_result));
+            }
+            return std::get<
+                std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>>>(m_result);
+        }
+    };
+
+    Awaitable awaitable{
+        .m_ledger = ledger, .m_startNumber = startNumber, .m_offset = offset, .m_result = {}};
+    co_return co_await awaitable;
 }

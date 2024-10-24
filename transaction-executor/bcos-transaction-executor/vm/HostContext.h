@@ -254,16 +254,15 @@ public:
     task::Task<void> setTransientStorage(const evmc_bytes32* key, const evmc_bytes32* value)
     {
         storage::Entry valueEntry(concepts::bytebuffer::toView(value->bytes));
-        StateKey stateKey =
-            StateKey{concepts::bytebuffer::toView(co_await ledger::account::path(m_myAccount)),
-                concepts::bytebuffer::toView(key->bytes)};
+        StateKey stateKey{concepts::bytebuffer::toView(co_await ledger::account::path(m_myAccount)),
+            concepts::bytebuffer::toView(key->bytes)};
         if (c_fileLogLevel <= LogLevel::TRACE)
         {
             HOST_CONTEXT_LOG(TRACE) << "setTransientStorage:"
                                     << LOG_KV("key", concepts::bytebuffer::toView(key->bytes));
         }
         co_await storage2::writeOne(
-            m_rollbackableTransientStorage.get(), stateKey, std::move(valueEntry));
+            m_rollbackableTransientStorage.get(), std::move(stateKey), std::move(valueEntry));
     }
 
     task::Task<std::optional<storage::Entry>> code(const evmc_address& address)

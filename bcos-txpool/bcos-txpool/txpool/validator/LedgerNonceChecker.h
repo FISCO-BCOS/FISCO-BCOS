@@ -41,7 +41,7 @@ public:
         }
     }
     bcos::protocol::TransactionStatus checkNonce(
-        bcos::protocol::Transaction::ConstPtr _tx, bool _shouldUpdate = false) override;
+        bcos::protocol::Transaction::ConstPtr _tx) override;
 
     void batchInsert(bcos::protocol::BlockNumber _batchId,
         bcos::protocol::NonceListPtr const& _nonceList) override;

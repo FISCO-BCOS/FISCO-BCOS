@@ -22,9 +22,9 @@
 #include "bcos-txpool/sync/TransactionSync.h"
 #include "bcos-txpool/sync/protocol/PB/TxsSyncMsgFactoryImpl.h"
 #include "bcos-txpool/txpool/validator/TxValidator.h"
+#include "bcos-txpool/txpool/validator/Web3NonceChecker.h"
 #include "txpool/storage/MemoryStorage.h"
 #include "txpool/validator/TxPoolNonceChecker.h"
-#include <bcos-tool/LedgerConfigFetcher.h>
 
 using namespace bcos;
 using namespace bcos::txpool;
@@ -55,8 +55,9 @@ TxPool::Ptr TxPoolFactory::createTxPool(
 {
     TXPOOL_LOG(INFO) << LOG_DESC("create transaction validator");
     auto txpoolNonceChecker = std::make_shared<TxPoolNonceChecker>();
-    auto validator =
-        std::make_shared<TxValidator>(txpoolNonceChecker, m_cryptoSuite, m_groupId, m_chainId);
+    auto web3NonceChecker = std::make_shared<Web3NonceChecker>(m_ledger);
+    auto validator = std::make_shared<TxValidator>(
+        txpoolNonceChecker, std::move(web3NonceChecker), m_cryptoSuite, m_groupId, m_chainId);
 
     TXPOOL_LOG(INFO) << LOG_DESC("create transaction config");
     auto txpoolConfig = std::make_shared<TxPoolConfig>(validator, m_txResultFactory, m_blockFactory,

@@ -48,6 +48,7 @@ namespace bcos::rpc
     size_t transactionIndex = 0;
     crypto::HashType blockHash;
     uint64_t blockNumber = 0;
+    u256 cumulativeGasUsed = 0;
     if (block)
     {
         blockHash = block->blockHeader()->hash();
@@ -57,6 +58,10 @@ namespace bcos::rpc
             if (block->transactionHash(transactionIndex) == tx->hash())
             {
                 break;
+            }
+            if (transactionIndex <= block->receiptsSize())
+            {
+                cumulativeGasUsed += block->receipt(transactionIndex)->gasUsed();
             }
         }
     }
@@ -77,10 +82,10 @@ namespace bcos::rpc
         toChecksumAddress(to, bcos::crypto::keccak256Hash(bcos::bytesConstRef(to)).hex());
         result["to"] = "0x" + std::move(to);
     }
-    result["cumulativeGasUsed"] = "0x0";
+    result["cumulativeGasUsed"] = toQuantity(cumulativeGasUsed);
     result["effectiveGasPrice"] =
         receipt->effectiveGasPrice().empty() ? "0x0" : std::string(receipt->effectiveGasPrice());
-    result["gasUsed"] = toQuantity((uint64_t)receipt->gasUsed());
+    result["gasUsed"] = toQuantity(receipt->gasUsed());
     if (receipt->contractAddress().empty())
     {
         result["contractAddress"] = Json::nullValue;
