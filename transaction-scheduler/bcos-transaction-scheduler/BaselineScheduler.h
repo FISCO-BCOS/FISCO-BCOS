@@ -493,7 +493,7 @@ private:
                         submitResult->setTxHash(transaction->hash());
                         submitResult->setBlockHash(blockHash);
                         submitResult->setTransactionIndex(static_cast<int64_t>(index));
-                        submitResult->setNonce(transaction->nonce());
+                        submitResult->setNonce(std::string(transaction->nonce()));
                         submitResult->setTransactionReceipt(receipt);
                         submitResult->setSender(std::string(transaction->sender()));
                         submitResult->setTo(std::string(transaction->to()));
@@ -625,8 +625,7 @@ public:
             auto view = fork(self->m_multiLayerStorage.get());
             auto contractAddress = unhexAddress(contract);
             ledger::account::EVMAccount account(view, contractAddress,
-                self->m_ledgerConfig->features().get(
-                    ledger::Features::Flag::feature_raw_address));
+                self->m_ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address));
             auto code = co_await ledger::account::code(account);
 
             if (!code)
@@ -647,8 +646,7 @@ public:
             auto view = fork(self->m_multiLayerStorage.get());
             auto contractAddress = unhexAddress(contract);
             ledger::account::EVMAccount account(view, contractAddress,
-                self->m_ledgerConfig->features().get(
-                    ledger::Features::Flag::feature_raw_address));
+                self->m_ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address));
             auto abi = co_await ledger::account::abi(account);
 
             if (!abi)

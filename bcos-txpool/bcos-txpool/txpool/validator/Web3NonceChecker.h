@@ -22,21 +22,29 @@
 #include "bcos-protocol/TransactionStatus.h"
 #include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
+#include <concepts>
 
 namespace bcos::txpool
 {
 constexpr uint16_t DefaultBucketSize = 256;
+
 struct PairHash
+
 {
-    std::size_t operator()(const std::pair<std::string, std::string>& pair) const;
-    std::size_t operator()(const std::pair<std::string_view, std::string_view>& pair) const;
+    template <std::convertible_to<std::string_view> StringView>
+    std::size_t operator()(const std::pair<StringView, StringView>& pair) const
+    {
+        return std::hash<StringView>()(pair.first);
+    }
 };
 struct PairEqual
 {
-    bool operator()(const std::pair<std::string, std::string>& lhs,
-        const std::pair<std::string, std::string>& rhs) const;
-    bool operator()(const std::pair<std::string, std::string>& lhs,
-        const std::pair<std::string_view, std::string_view>& rhs) const;
+    template <std::convertible_to<std::string_view> Lhs, std::convertible_to<std::string_view> Rhs>
+    bool operator()(const std::pair<Lhs, Lhs>& lhs, const std::pair<Rhs, Rhs>& rhs) const
+    {
+        return std::string_view{lhs.first} == std::string_view{rhs.first} &&
+               std::string_view{lhs.second} == std::string_view{rhs.second};
+    }
 };
 /**
  * Implementation for web3 nonce-checker

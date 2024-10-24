@@ -99,7 +99,7 @@ static void combineTxResponse(Json::Value& result, bcos::protocol::Transaction::
     if (tx->type() == bcos::protocol::TransactionType::BCOSTransaction) [[unlikely]]
     {
         result["type"] = toQuantity(UINT32_MAX);
-        result["nonce"] = tx->nonce();
+        result["nonce"] = std::string(tx->nonce());
         result["value"] = std::string(tx->value().empty() ? "0x0" : tx->value());
         result["maxPriorityFeePerGas"] =
             std::string(tx->maxPriorityFeePerGas().empty() ? "0x0" : tx->maxPriorityFeePerGas());

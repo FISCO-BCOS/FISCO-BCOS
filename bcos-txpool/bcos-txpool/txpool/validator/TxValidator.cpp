@@ -59,11 +59,11 @@ TransactionStatus TxValidator::verify(bcos::protocol::Transaction::ConstPtr _tx)
     {
         _tx->setSystemTx(true);
     }
-    m_txPoolNonceChecker->insert(_tx->nonce());
+    m_txPoolNonceChecker->insert(std::string(_tx->nonce()));
     if (_tx->type() == static_cast<uint8_t>(TransactionType::Web3Transaction))
     {
-        task::syncWait(
-            m_web3NonceChecker->insertMemoryNonce(std::string(_tx->sender()), _tx->nonce()));
+        task::syncWait(m_web3NonceChecker->insertMemoryNonce(
+            std::string(_tx->sender()), std::string(_tx->nonce())));
     }
     return TransactionStatus::None;
 }
