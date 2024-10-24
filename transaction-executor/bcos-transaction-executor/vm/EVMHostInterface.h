@@ -116,6 +116,8 @@ struct EVMHostInterface
         [[maybe_unused]] const evmc_address* addr) noexcept
     {
         // always return 0
+        auto& hostContext = static_cast<HostContextType&>(*context);
+
         return toEvmC(h256(0));
     }
 
@@ -163,7 +165,6 @@ struct EVMHostInterface
         [[maybe_unused]] const evmc_address* beneficiary) noexcept
     {
         auto& hostContext = static_cast<HostContextType&>(*context);
-
         hostContext.suicide();  // FISCO BCOS has no _beneficiary
         return false;
     }
@@ -223,7 +224,7 @@ struct EVMHostInterface
             std::allocator_arg, stackAllocator.getAllocator()));
     }
 
-    static evmc_result call(evmc_host_context* context, const evmc_message* message) noexcept
+    static evmc_result call(evmc_host_context* context, const evmc_message* message)
     {
         if (message->gas < 0)
         {

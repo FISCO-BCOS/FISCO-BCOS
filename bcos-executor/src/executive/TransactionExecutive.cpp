@@ -472,13 +472,9 @@ CallParameters::UniquePtr TransactionExecutive::transferBalance(
         callParameters->evmStatus = EVMC_OUT_OF_GAS;
         return callParameters;
     }
-    else
-    {
-        callParameters->gas -= requireGas;
-    }
+    callParameters->gas -= requireGas;
 
     auto gas = callParameters->gas;
-
 
     EXECUTIVE_LOG(TRACE) << LOG_BADGE("Execute") << "now to transferBalance"
                          << LOG_KV("origin", origin) << LOG_KV("subAccount", subAccount)

@@ -246,7 +246,7 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
         request->nonce = task::syncWait([](decltype(account) contract) -> task::Task<u256> {
             auto const nonceString = co_await ledger::account::nonce(contract);
             // uint in storage
-            auto const nonce = u256(nonceString.value_or("0"));
+            auto nonce = u256(nonceString.value_or("0"));
             co_return nonce;
         }(std::move(account)));
     }

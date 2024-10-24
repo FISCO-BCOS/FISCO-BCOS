@@ -1,7 +1,10 @@
 #pragma once
 
 #include "RollbackableStorage.h"
+#include "bcos-framework/ledger/Account.h"
+#include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/protocol/BlockHeader.h"
+#include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-protocol/TransactionStatus.h"
@@ -13,7 +16,6 @@
 #include <boost/algorithm/hex.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <functional>
-#include <gsl/util>
 #include <iterator>
 #include <type_traits>
 
@@ -70,10 +72,10 @@ private:
                 evmcMessage.sender, transaction.abi(), contextID, seq,
                 executor.m_precompiledManager, ledgerConfig, *executor.m_hashImpl, syncWait);
 
-        syncWait(hostContext.prepare());
+        syncWait(prepare(hostContext));
         co_yield receipt;  // 完成第一步 Complete the first step
 
-        auto evmcResult = syncWait(hostContext.execute());
+        auto evmcResult = syncWait(execute(hostContext));
         co_yield receipt;  // 完成第二步 Complete the second step
 
         std::string newContractAddress;
@@ -84,11 +86,31 @@ private:
                 evmcResult.create_address.bytes + sizeof(evmcResult.create_address.bytes),
                 std::back_inserter(newContractAddress));
         }
-        auto output = bcos::bytesConstRef{evmcResult.output_data, evmcResult.output_size};
+        bcos::bytesConstRef output{evmcResult.output_data, evmcResult.output_size};
 
         if (evmcResult.status_code != 0)
         {
             TRANSACTION_EXECUTOR_LOG(DEBUG) << "Transaction revert: " << evmcResult.status_code;
+        }
+
+        auto gasUsed = gasLimit - evmcResult.gas_left;
+        if (ledgerConfig.features().get(ledger::Features::Flag::feature_balance))
+        {
+            auto gasPrice = u256{std::get<0>(ledgerConfig.gasPrice())};
+            auto balanceUsed = gasUsed * gasPrice;
+            auto senderAccount = getAccount(hostContext, evmcMessage.sender);
+            auto senderBalance = syncWait(ledger::account::balance(senderAccount));
+
+            if (senderBalance < balanceUsed)
+            {
+                TRANSACTION_EXECUTOR_LOG(ERROR) << "Insufficient balance: " << senderBalance
+                                                << ", balanceUsed: " << balanceUsed;
+                evmcResult.status_code = EVMC_INSUFFICIENT_BALANCE;
+            }
+            else
+            {
+                syncWait(ledger::account::setBalance(senderAccount, senderBalance - balanceUsed));
+            }
         }
 
         int32_t receiptStatus =
@@ -101,14 +123,15 @@ private:
         switch (transactionVersion)
         {
         case bcos::protocol::TransactionVersion::V0_VERSION:
-            receipt = executor.m_receiptFactory.get().createReceipt(gasLimit - evmcResult.gas_left,
-                newContractAddress, logEntries, receiptStatus, output, blockHeader.number());
+            receipt = executor.m_receiptFactory.get().createReceipt(gasUsed,
+                std::move(newContractAddress), logEntries, receiptStatus, output,
+                blockHeader.number());
             break;
         case bcos::protocol::TransactionVersion::V1_VERSION:
         case bcos::protocol::TransactionVersion::V2_VERSION:
-            receipt = executor.m_receiptFactory.get().createReceipt2(gasLimit - evmcResult.gas_left,
-                newContractAddress, logEntries, receiptStatus, output, blockHeader.number(), "",
-                transactionVersion);
+            receipt = executor.m_receiptFactory.get().createReceipt2(gasUsed,
+                std::move(newContractAddress), logEntries, receiptStatus, output,
+                blockHeader.number(), "", transactionVersion);
             break;
         default:
             BOOST_THROW_EXCEPTION(std::runtime_error(
@@ -142,7 +165,7 @@ private:
                 co_return receipt;
             }
         }
-        co_return protocol::TransactionReceipt::Ptr{};
+        co_return {};
     }
 };
 
