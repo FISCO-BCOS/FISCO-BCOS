@@ -152,7 +152,7 @@ BOOST_AUTO_TEST_CASE(transientStorageContractTest)
 
 struct TestMemoryResource : public std::pmr::memory_resource
 {
-    size_t m_size = std::numeric_limits<size_t>::max();
+    size_t m_size = 100000000;
     int m_count = 0;
 
     void* do_allocate(std::size_t bytes, std::size_t alignment) override
@@ -170,39 +170,35 @@ struct TestMemoryResource : public std::pmr::memory_resource
 
 BOOST_AUTO_TEST_CASE(testExecuteStackSize)
 {
-    task::syncWait([this]() -> task::Task<void> {
-        bcostars::protocol::BlockHeaderImpl blockHeader(
-            [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
-        blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
-        blockHeader.calculateHash(*cryptoSuite->hashImpl());
+    bcostars::protocol::BlockHeaderImpl blockHeader(
+        [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+    blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
+    blockHeader.calculateHash(*cryptoSuite->hashImpl());
 
-        bcos::bytes helloworldBytecodeBinary;
-        boost::algorithm::unhex(helloworldBytecode, std::back_inserter(helloworldBytecodeBinary));
-        // First deploy
-        auto transaction =
-            transactionFactory.createTransaction(0, "", helloworldBytecodeBinary, {}, 0, "", "", 0);
+    bcos::bytes helloworldBytecodeBinary;
+    boost::algorithm::unhex(helloworldBytecode, std::back_inserter(helloworldBytecodeBinary));
+    // First deploy
+    auto transaction =
+        transactionFactory.createTransaction(0, "", helloworldBytecodeBinary, {}, 0, "", "", 0);
 
-        TestMemoryResource memoryResource;
-        auto generator = bcos::transaction_executor::execute3Step(executor, storage, blockHeader,
-            *transaction, 0, ledgerConfig, task::syncWait, std::allocator_arg,
-            std::pmr::polymorphic_allocator<>(std::addressof(memoryResource)));
-        protocol::TransactionReceipt::Ptr receipt;
-        for (auto currentReceipt : generator)
+    TestMemoryResource memoryResource;
+    auto generator = bcos::transaction_executor::execute3Step(executor, storage, blockHeader,
+        *transaction, 0, ledgerConfig, task::syncWait, std::allocator_arg,
+        std::pmr::polymorphic_allocator<>(std::addressof(memoryResource)));
+    protocol::TransactionReceipt::Ptr receipt;
+    for (auto currentReceipt : generator)
+    {
+        BOOST_CHECK_LT(memoryResource.m_size, transaction_executor::EXECUTOR_STACK);
+        if (currentReceipt)
         {
-            BOOST_CHECK_LT(memoryResource.m_size, transaction_executor::EXECUTOR_STACK);
-            if (currentReceipt)
-            {
-                receipt = currentReceipt;
-            }
+            receipt = currentReceipt;
         }
+    }
 
-        BOOST_CHECK_EQUAL(memoryResource.m_count, 1);
-        BOOST_CHECK(receipt);
-        BOOST_CHECK_EQUAL(receipt->status(), 0);
-        BOOST_CHECK_EQUAL(receipt->contractAddress(), "e0e794ca86d198042b64285c5ce667aee747509b");
-
-        co_return;
-    }());
+    BOOST_CHECK_EQUAL(memoryResource.m_count, 1);
+    BOOST_CHECK(receipt);
+    BOOST_CHECK_EQUAL(receipt->status(), 0);
+    BOOST_CHECK_EQUAL(receipt->contractAddress(), "e0e794ca86d198042b64285c5ce667aee747509b");
 }
 
 BOOST_AUTO_TEST_SUITE_END()
