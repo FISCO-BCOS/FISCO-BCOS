@@ -59,13 +59,6 @@ public:
         BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
     }
 
-    virtual task::Task<protocol::TransactionSubmitResult::Ptr> submitTransactionWithHook(
-        [[maybe_unused]] protocol::Transaction::Ptr transaction,
-        [[maybe_unused]] std::function<void()> afterInsertHook)
-    {
-        BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
-    }
-
     virtual void broadcastTransaction([[maybe_unused]] const protocol::Transaction& transaction)
     {
         BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));

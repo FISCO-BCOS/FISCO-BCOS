@@ -25,15 +25,15 @@ struct ExecuteBlock
      * @return A task that returns the awaitable return type of the tag_invoke function.
      */
     auto operator()(auto& scheduler, auto& storage, auto& executor,
-        protocol::BlockHeader const& blockHeader, RANGES::input_range auto const& transactions,
+        protocol::BlockHeader const& blockHeader, ::ranges::input_range auto const& transactions,
         auto&&... args) const
         -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(*this, scheduler, storage,
             executor, blockHeader, transactions, std::forward<decltype(args)>(args)...))>>
-        requires RANGES::range<task::AwaitableReturnType<decltype(tag_invoke(*this, scheduler,
+        requires ::ranges::range<task::AwaitableReturnType<decltype(tag_invoke(*this, scheduler,
                      storage, executor, blockHeader, transactions,
                      std::forward<decltype(args)>(args)...))>> &&
                  std::convertible_to<
-                     RANGES::range_value_t<task::AwaitableReturnType<decltype(tag_invoke(*this,
+                     ::ranges::range_value_t<task::AwaitableReturnType<decltype(tag_invoke(*this,
                          scheduler, storage, executor, blockHeader, transactions,
                          std::forward<decltype(args)>(args)...))>>,
                      std::shared_ptr<protocol::TransactionReceipt>>

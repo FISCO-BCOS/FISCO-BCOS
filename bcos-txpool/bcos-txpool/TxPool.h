@@ -20,7 +20,6 @@
  */
 #pragma once
 #include "TxPoolConfig.h"
-#include "bcos-framework/front/FrontServiceInterface.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/TransactionFactory.h"
@@ -29,7 +28,7 @@
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-tool/TreeTopology.h>
 #include <bcos-utilities/ThreadPool.h>
-#include <thread>
+
 namespace bcos::txpool
 {
 class TxPool : public TxPoolInterface, public std::enable_shared_from_this<TxPool>
@@ -49,9 +48,6 @@ public:
 
     task::Task<protocol::TransactionSubmitResult::Ptr> submitTransactionWithoutReceipt(
         protocol::Transaction::Ptr transaction) override;
-
-    task::Task<protocol::TransactionSubmitResult::Ptr> submitTransactionWithHook(
-        protocol::Transaction::Ptr transaction, std::function<void()> onTxSubmitted) override;
 
     void broadcastTransaction(const protocol::Transaction& transaction) override;
     void broadcastTransactionBuffer(const bytesConstRef& _data) override;
@@ -126,7 +122,7 @@ public:
 
     void tryToSyncTxsFromPeers() override;
 
-    virtual task::Task<std::optional<u256>> getWeb3PendingNonce(std::string_view address) override;
+    task::Task<std::optional<u256>> getWeb3PendingNonce(std::string_view address) override;
 
     bool existsInGroup(bcos::crypto::NodeIDPtr _nodeId) override
     {
@@ -150,7 +146,6 @@ public:
     void setCheckBlockLimit(bool _checkBlockLimit) { m_checkBlockLimit = _checkBlockLimit; }
 
 protected:
-    virtual bool checkExistsInGroup(bcos::protocol::TxSubmitCallback _txSubmitCallback);
     virtual void getTxsFromLocalLedger(bcos::crypto::HashListPtr _txsHash,
         bcos::crypto::HashListPtr _missedTxs,
         std::function<void(Error::Ptr, bcos::protocol::ConstTransactionsPtr)> _onBlockFilled);
