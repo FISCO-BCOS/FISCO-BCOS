@@ -248,4 +248,5 @@ task::Task<void> tag_invoke(
     }
     LEDGER_LOG(DEBUG) << "SetNodeList success" << LOG_KV("nodeList size", nodeList.size());
 }
+
 }  // namespace bcos::ledger
