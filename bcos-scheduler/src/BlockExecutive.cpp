@@ -663,7 +663,7 @@ void BlockExecutive::asyncNotify(
         if (m_syncBlock)
         {
             auto tx = m_block->transaction(index);
-            submitResult->setNonce(tx->nonce());
+            submitResult->setNonce(std::string(tx->nonce()));
         }
         index++;
         results->emplace_back(submitResult);

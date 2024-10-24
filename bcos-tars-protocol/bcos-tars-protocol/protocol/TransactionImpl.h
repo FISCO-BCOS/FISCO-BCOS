@@ -66,7 +66,7 @@ public:
     std::string_view chainId() const override;
     std::string_view groupId() const override;
     int64_t blockLimit() const override;
-    const std::string& nonce() const override;
+    std::string_view nonce() const override;
     // only for test
     void setNonce(std::string nonce) override;
     std::string_view to() const override;

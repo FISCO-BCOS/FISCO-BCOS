@@ -47,7 +47,7 @@ task::Task<TransactionStatus> Web3NonceChecker::checkWeb3Nonce(
     {
         // memory nonce check nonce existence in memory first, if not exist, then check from storage
         if (co_await bcos::storage2::existsOne(
-                m_memoryNonces, std::make_pair(sender, _tx->nonce())))
+                m_memoryNonces, std::make_pair(_tx->sender(), _tx->nonce())))
         {
             if (c_fileLogLevel == TRACE) [[unlikely]]
             {
@@ -191,25 +191,4 @@ task::Task<std::optional<u256>> Web3NonceChecker::getPendingNonce(std::string_vi
 void Web3NonceChecker::insert(std::string sender, u256 nonce)
 {
     task::syncWait(storage2::writeOne(m_ledgerStateNonces, sender, nonce));
-}
-
-std::size_t bcos::txpool::PairHash::operator()(
-    const std::pair<std::string, std::string>& pair) const
-{
-    return std::hash<std::string>()(pair.first);
-}
-std::size_t bcos::txpool::PairHash::operator()(
-    const std::pair<std::string_view, std::string_view>& pair) const
-{
-    return std::hash<std::string_view>()(pair.first);
-}
-bool bcos::txpool::PairEqual::operator()(const std::pair<std::string, std::string>& lhs,
-    const std::pair<std::string, std::string>& rhs) const
-{
-    return lhs.first == rhs.first && lhs.second == rhs.second;
-}
-bool bcos::txpool::PairEqual::operator()(const std::pair<std::string, std::string>& lhs,
-    const std::pair<std::string_view, std::string_view>& rhs) const
-{
-    return lhs.first == rhs.first && lhs.second == rhs.second;
 }
