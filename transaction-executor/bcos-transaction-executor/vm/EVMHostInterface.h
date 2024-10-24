@@ -117,7 +117,7 @@ struct EVMHostInterface
     {
         // always return 0
         auto& hostContext = static_cast<HostContextType&>(*context);
-        
+
         return toEvmC(h256(0));
     }
 
@@ -235,9 +235,12 @@ struct EVMHostInterface
 
         StackAllocator<SMALL_STACK> stackAllocator;
         auto& hostContext = static_cast<HostContextType&>(*context);
-        return syncWait(
+        auto result = syncWait(
             hostContext.externalCall(*message, std::allocator_arg, stackAllocator.getAllocator()),
             std::allocator_arg, stackAllocator.getAllocator());
+        evmc_result evmcResult = result;
+        result.release = nullptr;
+        return evmcResult;
     }
 };
 

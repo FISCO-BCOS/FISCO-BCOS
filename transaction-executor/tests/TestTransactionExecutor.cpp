@@ -24,12 +24,12 @@ public:
     ledger::LedgerConfig ledgerConfig;
     std::shared_ptr<bcos::crypto::CryptoSuite> cryptoSuite =
         std::make_shared<bcos::crypto::CryptoSuite>(
-            bcos::executor::GlobalHashImpl::g_hashImpl, nullptr, nullptr);
+            std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr);
     bcostars::protocol::TransactionFactoryImpl transactionFactory{cryptoSuite};
     bcostars::protocol::TransactionReceiptFactoryImpl receiptFactory{cryptoSuite};
-    PrecompiledManager precompiledManager{bcos::executor::GlobalHashImpl::g_hashImpl};
+    PrecompiledManager precompiledManager{cryptoSuite->hashImpl()};
     bcos::transaction_executor::TransactionExecutorImpl executor{
-        receiptFactory, bcos::executor::GlobalHashImpl::g_hashImpl, precompiledManager};
+        receiptFactory, cryptoSuite->hashImpl(), precompiledManager};
 };
 
 BOOST_FIXTURE_TEST_SUITE(TransactionExecutorImpl, TestTransactionExecutorImplFixture)
@@ -40,7 +40,7 @@ BOOST_AUTO_TEST_CASE(execute)
         bcostars::protocol::BlockHeaderImpl blockHeader(
             [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
         blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
-        blockHeader.calculateHash(*bcos::executor::GlobalHashImpl::g_hashImpl);
+        blockHeader.calculateHash(*cryptoSuite->hashImpl());
 
         bcos::bytes helloworldBytecodeBinary;
         boost::algorithm::unhex(helloworldBytecode, std::back_inserter(helloworldBytecodeBinary));
@@ -53,7 +53,7 @@ BOOST_AUTO_TEST_CASE(execute)
         BOOST_CHECK_EQUAL(receipt->contractAddress(), "e0e794ca86d198042b64285c5ce667aee747509b");
 
         // Set the value
-        bcos::codec::abi::ContractABICodec abiCodec(*bcos::executor::GlobalHashImpl::g_hashImpl);
+        bcos::codec::abi::ContractABICodec abiCodec(*cryptoSuite->hashImpl());
         auto input = abiCodec.abiIn("setInt(int256)", bcos::s256(10099));
         auto transaction2 = transactionFactory.createTransaction(
             0, std::string(receipt->contractAddress()), input, {}, 0, "", "", 0);
@@ -79,7 +79,7 @@ BOOST_AUTO_TEST_CASE(transientStorageTest)
         bcostars::protocol::BlockHeaderImpl blockHeader(
             [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
         blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_7_0_VERSION);
-        blockHeader.calculateHash(*bcos::executor::GlobalHashImpl::g_hashImpl);
+        blockHeader.calculateHash(*cryptoSuite->hashImpl());
 
         // turn on evm_cancun feature
         ledger::Features features;
@@ -97,7 +97,7 @@ BOOST_AUTO_TEST_CASE(transientStorageTest)
         BOOST_CHECK_EQUAL(receipt->status(), 0);
 
         // test read and write transient storage
-        bcos::codec::abi::ContractABICodec abiCodec(*bcos::executor::GlobalHashImpl::g_hashImpl);
+        bcos::codec::abi::ContractABICodec abiCodec(*cryptoSuite->hashImpl());
         auto input = abiCodec.abiIn("storeIntTest(int256)", bcos::s256(10000));
         auto transaction2 = transactionFactory.createTransaction(
             0, std::string(receipt->contractAddress()), input, {}, 0, "", "", 0);
@@ -113,16 +113,13 @@ BOOST_AUTO_TEST_CASE(transientStorageTest)
 BOOST_AUTO_TEST_CASE(transientStorageContractTest)
 {
     task::syncWait([this]() mutable -> task::Task<void> {
-        auto cryptoSuite = std::make_shared<bcos::crypto::CryptoSuite>(
-            bcos::executor::GlobalHashImpl::g_hashImpl, nullptr, nullptr);
-
-        PrecompiledManager precompiledManager(bcos::executor::GlobalHashImpl::g_hashImpl);
+        PrecompiledManager precompiledManager(cryptoSuite->hashImpl());
         bcos::transaction_executor::TransactionExecutorImpl executor(
-            receiptFactory, bcos::executor::GlobalHashImpl::g_hashImpl, precompiledManager);
+            receiptFactory, cryptoSuite->hashImpl(), precompiledManager);
         bcostars::protocol::BlockHeaderImpl blockHeader(
             [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
         blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
-        blockHeader.calculateHash(*bcos::executor::GlobalHashImpl::g_hashImpl);
+        blockHeader.calculateHash(*cryptoSuite->hashImpl());
 
         // turn on evm_cancun feature
         ledger::Features features;
@@ -140,7 +137,7 @@ BOOST_AUTO_TEST_CASE(transientStorageContractTest)
         BOOST_CHECK_EQUAL(receipt->status(), 0);
 
         // test read and write transient storage
-        bcos::codec::abi::ContractABICodec abiCodec(*bcos::executor::GlobalHashImpl::g_hashImpl);
+        bcos::codec::abi::ContractABICodec abiCodec(*cryptoSuite->hashImpl());
         auto input = abiCodec.abiIn("checkAndVerifyIntValue(int256)", bcos::h256(12345));
         auto transaction2 = transactionFactory.createTransaction(
             0, std::string(receipt->contractAddress()), input, {}, 0, "", "", 0);
@@ -177,7 +174,7 @@ BOOST_AUTO_TEST_CASE(testExecuteStackSize)
         bcostars::protocol::BlockHeaderImpl blockHeader(
             [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
         blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
-        blockHeader.calculateHash(*bcos::executor::GlobalHashImpl::g_hashImpl);
+        blockHeader.calculateHash(*cryptoSuite->hashImpl());
 
         bcos::bytes helloworldBytecodeBinary;
         boost::algorithm::unhex(helloworldBytecode, std::back_inserter(helloworldBytecodeBinary));
