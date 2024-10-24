@@ -660,7 +660,7 @@ void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber,
                 return;
             }
 
-            _onGetBlock(nullptr, std::move(block));
+            _onGetBlock(nullptr, block);
         }
     };
 
@@ -668,7 +668,7 @@ void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber,
     {
         ++(*total);
 
-        fetchers.push_back([this, _blockNumber, block, finally]() {
+        fetchers.emplace_back([this, _blockNumber, block, finally]() {
             asyncGetBlockHeader(
                 block, _blockNumber, [finally](Error::Ptr&& error) { finally(std::move(error)); });
         });
@@ -684,7 +684,7 @@ void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber,
     if (((_blockFlag & TRANSACTIONS) != 0) || ((_blockFlag & RECEIPTS) != 0) ||
         (_blockFlag & TRANSACTIONS_HASH) != 0)
     {
-        fetchers.push_back([this, block, _blockNumber, finally, _blockFlag]() {
+        fetchers.emplace_back([this, block, _blockNumber, finally, _blockFlag]() {
             asyncGetBlockTransactionHashes(_blockNumber, [this, _blockFlag, block, finally](
                                                              Error::Ptr&& error,
                                                              std::vector<std::string>&& hashes) {
@@ -1855,58 +1855,59 @@ static task::Task<void> importGenesisState(
 bool Ledger::buildGenesisBlock(
     GenesisConfig const& genesis, ledger::LedgerConfig const& ledgerConfig)
 {
-    LEDGER_LOG(INFO) << LOG_DESC("[#buildGenesisBlock]");
-    if (genesis.m_txGasLimit < TX_GAS_LIMIT_MIN)
-    {
-        LEDGER_LOG(FATAL) << LOG_BADGE("buildGenesisBlock")
-                          << LOG_DESC("gas limit too low, return false")
-                          << LOG_KV("gasLimit", genesis.m_txGasLimit)
-                          << LOG_KV("gasLimitMin", TX_GAS_LIMIT_MIN);
-        return false;
-    }
-    auto genesisBlockHash = task::syncWait(ledger::getBlockHash(*m_stateStorage, 0, fromStorage));
-    auto genesisData = generateGenesisData(genesis, ledgerConfig);
-    if (genesisBlockHash)
-    {
-        // genesis block exists, quit
-        LEDGER_LOG(INFO) << LOG_DESC("[#buildGenesisBlock] success, block exists");
-        std::promise<protocol::BlockHeader::Ptr> blockHeaderFuture;
-        // get genesisBlockHeader
-        asyncGetBlockDataByNumber(
-            0, HEADER, [&blockHeaderFuture](Error::Ptr error, Block::Ptr block) {
-                if (error)
-                {
-                    LEDGER_LOG(INFO) << "Get genesisBlockHeader from storage failed";
-                    blockHeaderFuture.set_value(nullptr);
-                }
-                else
-                {
-                    blockHeaderFuture.set_value(block->blockHeader());
-                }
-            });
-        bcos::protocol::BlockHeader::Ptr m_genesisBlockHeader =
-            blockHeaderFuture.get_future().get();
-        auto existsGenesisData = m_genesisBlockHeader->extraData().toStringView();
-
-        // check genesisData whether inconsistent with initialGenesisData
-        if (existsGenesisData == genesisData)
+    return task::syncWait([&]() -> task::Task<bool> {
+        LEDGER_LOG(INFO) << LOG_DESC("[#buildGenesisBlock]");
+        if (genesis.m_txGasLimit < TX_GAS_LIMIT_MIN)
         {
-            auto version = genesis.m_compatibilityVersion;
-            if (version > (uint32_t)protocol::BlockVersion::MAX_VERSION ||
-                version < (uint32_t)protocol::BlockVersion::MIN_VERSION)
-            {
-                BOOST_THROW_EXCEPTION(
-                    tool::InvalidVersion() << errinfo_comment(
-                        "Current genesis compatibilityVersion is " +
-                        tool::fromVersionNumber(
-                            static_cast<protocol::BlockVersion>(genesis.m_compatibilityVersion)) +
-                        ", No support this version"));
-            }
+            LEDGER_LOG(FATAL) << LOG_BADGE("buildGenesisBlock")
+                              << LOG_DESC("gas limit too low, return false")
+                              << LOG_KV("gasLimit", genesis.m_txGasLimit)
+                              << LOG_KV("gasLimitMin", TX_GAS_LIMIT_MIN);
+            co_return false;
+        }
+        auto genesisBlockHash =
+            task::syncWait(ledger::getBlockHash(*m_stateStorage, 0, fromStorage));
+        auto genesisData = generateGenesisData(genesis, ledgerConfig);
+        if (genesisBlockHash)
+        {
+            // genesis block exists, quit
+            LEDGER_LOG(INFO) << LOG_DESC("[#buildGenesisBlock] success, block exists");
+            std::promise<protocol::BlockHeader::Ptr> blockHeaderFuture;
+            // get genesisBlockHeader
+            asyncGetBlockDataByNumber(
+                0, HEADER, [&blockHeaderFuture](Error::Ptr error, Block::Ptr block) {
+                    if (error)
+                    {
+                        LEDGER_LOG(INFO) << "Get genesisBlockHeader from storage failed";
+                        blockHeaderFuture.set_value(nullptr);
+                    }
+                    else
+                    {
+                        blockHeaderFuture.set_value(block->blockHeader());
+                    }
+                });
+            bcos::protocol::BlockHeader::Ptr m_genesisBlockHeader =
+                blockHeaderFuture.get_future().get();
+            auto existsGenesisData = m_genesisBlockHeader->extraData().toStringView();
 
-            // 已有的链，仅替换了二进制，还没有执行升级版本交易
-            // The existing chain, which only replaces the binary, has not yet executed the upgraded
-            // version of the transaction
-            task::syncWait([&]() -> task::Task<void> {
+            // check genesisData whether inconsistent with initialGenesisData
+            if (existsGenesisData == genesisData)
+            {
+                auto version = genesis.m_compatibilityVersion;
+                if (version > (uint32_t)protocol::BlockVersion::MAX_VERSION ||
+                    version < (uint32_t)protocol::BlockVersion::MIN_VERSION)
+                {
+                    BOOST_THROW_EXCEPTION(
+                        tool::InvalidVersion() << errinfo_comment(
+                            "Current genesis compatibilityVersion is " +
+                            tool::fromVersionNumber(static_cast<protocol::BlockVersion>(
+                                genesis.m_compatibilityVersion)) +
+                            ", No support this version"));
+                }
+
+                // 已有的链，仅替换了二进制，还没有执行升级版本交易
+                // The existing chain, which only replaces the binary, has not yet executed the
+                // upgraded version of the transaction
                 auto versionEntry = co_await storage2::readOne(
                     *m_stateStorage, transaction_executor::StateKeyView(
                                          SYS_CONFIG, SYSTEM_KEY_COMPATIBILITY_VERSION));
@@ -1918,45 +1919,44 @@ bool Ledger::buildGenesisBlock(
                     auto storageVersion = tool::toVersionNumber(versionStr);
 
                     // 设置sharding default，相关的bugfix也要设置上，否则会不一致
-                    // Set sharding default, and related bugfixes should also be set, otherwise it
-                    // will be inconsistent
+                    // Set sharding default, and related bugfixes should also be set, otherwise
+                    // it will be inconsistent
                     Features shardingFeature;
                     shardingFeature.setToShardingDefault((protocol::BlockVersion)storageVersion);
                     shardingFeature.setGenesisFeatures((protocol::BlockVersion)storageVersion);
                     co_await shardingFeature.writeToStorage(
                         *m_stateStorage, boost::lexical_cast<long>(blockNumberEntry->get()));
                 }
-            }());
 
-            return true;
+                co_return true;
+            }
+            // GetBlockDataByNumber success but not consistent with initialGenesisData
+            if (m_genesisBlockHeader)
+            {
+                std::cout << "The Genesis Data is inconsistent with the initial Genesis Data. "
+                          << std::endl
+                          << LOG_KV("existsGenesisData", existsGenesisData) << std::endl
+                          << LOG_KV("genesisData", genesisData) << std::endl;
+                BOOST_THROW_EXCEPTION(
+                    bcos::tool::InvalidConfig() << errinfo_comment(
+                        "The Genesis Data is inconsistent with the initial Genesis Data"));
+            }
+            else
+            {
+                LEDGER_LOG(INFO) << "failed, initialGenesisDate is null";
+            }
         }
-        // GetBlockDataByNumber success but not consistent with initialGenesisData
-        if (m_genesisBlockHeader)
-        {
-            std::cout << "The Genesis Data is inconsistent with the initial Genesis Data. "
-                      << std::endl
-                      << LOG_KV("existsGenesisData", existsGenesisData) << std::endl
-                      << LOG_KV("genesisData", genesisData) << std::endl;
-            BOOST_THROW_EXCEPTION(
-                bcos::tool::InvalidConfig() << errinfo_comment(
-                    "The Genesis Data is inconsistent with the initial Genesis Data"));
-        }
-        else
-        {
-            LEDGER_LOG(INFO) << "failed, initialGenesisDate is null";
-        }
-    }
 
-    auto versionNumber = genesis.m_compatibilityVersion;
-    if (versionNumber > (uint32_t)protocol::BlockVersion::MAX_VERSION)
-    {
-        BOOST_THROW_EXCEPTION(bcos::tool::InvalidVersion() << errinfo_comment(
-                                  "The genesis compatibilityVersion is " +
-                                  tool::fromVersionNumber(static_cast<protocol::BlockVersion>(
-                                      genesis.m_compatibilityVersion)) +
-                                  ", high than support maxVersion"));
-    }
-    // clang-format off
+        auto versionNumber = genesis.m_compatibilityVersion;
+        if (versionNumber > (uint32_t)protocol::BlockVersion::MAX_VERSION)
+        {
+            BOOST_THROW_EXCEPTION(bcos::tool::InvalidVersion() << errinfo_comment(
+                                      "The genesis compatibilityVersion is " +
+                                      tool::fromVersionNumber(static_cast<protocol::BlockVersion>(
+                                          genesis.m_compatibilityVersion)) +
+                                      ", high than support maxVersion"));
+        }
+        // clang-format off
     constexpr static auto tables = std::to_array<std::string_view>({
         SYS_CONFIG, SYS_VALUE_AND_ENABLE_BLOCK_NUMBER,
         SYS_CONSENSUS, SYS_VALUE,
@@ -1971,234 +1971,235 @@ bool Ledger::buildGenesisBlock(
     });
     constexpr static auto moreTables = std::to_array<std::string_view>(
             {SYS_CODE_BINARY, SYS_VALUE, SYS_CONTRACT_ABI, SYS_VALUE});
-    // clang-format on
-    RANGES::any_view<std::string_view, RANGES::category::mask | RANGES::category::sized> tablesView(
-        tables);
-    if (versionNumber >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
-    {
-        tablesView = RANGES::views::concat(tablesView, moreTables);
-    }
-
-    for (auto&& pair : tablesView | RANGES::views::chunk(2))
-    {
-        auto tableName = pair[0];
-        auto tableField = pair[1];
-        std::promise<std::tuple<Error::UniquePtr>> createTablePromise;
-        m_stateStorage->asyncCreateTable(std::string(tableName), std::string(tableField),
-            [&createTablePromise](auto&& error, std::optional<Table>&&) {
-                createTablePromise.set_value({std::forward<decltype(error)>(error)});
-            });
-        auto createTableResult = createTablePromise.get_future().get();
-        if (std::get<0>(createTableResult))
+        // clang-format on
+        RANGES::any_view<std::string_view, RANGES::category::mask | RANGES::category::sized>
+            tablesView(tables);
+        if (versionNumber >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
         {
-            BOOST_THROW_EXCEPTION(*(std::get<0>(createTableResult)));
+            tablesView = RANGES::views::concat(tablesView, moreTables);
         }
-    }
 
-    createFileSystemTables(genesis.m_compatibilityVersion);
-    auto txLimit = genesis.m_txCountLimit;
-    LEDGER_LOG(INFO) << LOG_DESC("Commit the genesis block") << LOG_KV("txLimit", txLimit)
-                     << LOG_KV("leaderSwitchPeriod", genesis.m_leaderSwitchPeriod)
-                     << LOG_KV("blockTxCountLimit", genesis.m_txCountLimit)
-                     << LOG_KV("compatibilityVersion", genesis.m_compatibilityVersion)
-                     << LOG_KV("minSupportedVersion", g_BCOSConfig.minSupportedVersion())
-                     << LOG_KV("maxSupportedVersion", g_BCOSConfig.maxSupportedVersion())
-                     << LOG_KV("isAuthCheck", genesis.m_isAuthCheck);
+        for (auto&& pair : tablesView | RANGES::views::chunk(2))
+        {
+            auto tableName = pair[0];
+            auto tableField = pair[1];
+            std::promise<std::tuple<Error::UniquePtr>> createTablePromise;
+            m_stateStorage->asyncCreateTable(std::string(tableName), std::string(tableField),
+                [&createTablePromise](auto&& error, std::optional<Table>&&) {
+                    createTablePromise.set_value({std::forward<decltype(error)>(error)});
+                });
+            auto createTableResult = createTablePromise.get_future().get();
+            if (std::get<0>(createTableResult))
+            {
+                BOOST_THROW_EXCEPTION(*(std::get<0>(createTableResult)));
+            }
+        }
 
-    // build a block
-    auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
-    header->setNumber(0);
-    if (versionNumber >= protocol::BlockVersion::V3_1_VERSION)
-    {
-        header->setVersion(static_cast<uint32_t>(versionNumber));
-    }
-    header->setExtraData(bcos::bytes(genesisData.begin(), genesisData.end()));
-    header->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
+        createFileSystemTables(genesis.m_compatibilityVersion);
+        auto txLimit = genesis.m_txCountLimit;
+        LEDGER_LOG(INFO) << LOG_DESC("Commit the genesis block") << LOG_KV("txLimit", txLimit)
+                         << LOG_KV("leaderSwitchPeriod", genesis.m_leaderSwitchPeriod)
+                         << LOG_KV("blockTxCountLimit", genesis.m_txCountLimit)
+                         << LOG_KV("compatibilityVersion", genesis.m_compatibilityVersion)
+                         << LOG_KV("minSupportedVersion", g_BCOSConfig.minSupportedVersion())
+                         << LOG_KV("maxSupportedVersion", g_BCOSConfig.maxSupportedVersion())
+                         << LOG_KV("isAuthCheck", genesis.m_isAuthCheck);
 
-    auto block = m_blockFactory->createBlock();
-    block->setBlockHeader(header);
+        // build a block
+        auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+        header->setNumber(0);
+        if (versionNumber >= protocol::BlockVersion::V3_1_VERSION)
+        {
+            header->setVersion(static_cast<uint32_t>(versionNumber));
+        }
+        header->setExtraData(bcos::bytes(genesisData.begin(), genesisData.end()));
+        header->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
 
-    std::promise<Error::Ptr> genesisBlockPromise;
-    asyncPrewriteBlock(
-        m_stateStorage, nullptr, block, [&genesisBlockPromise](std::string, Error::Ptr&& error) {
-            genesisBlockPromise.set_value(std::move(error));
-        });
+        auto block = m_blockFactory->createBlock();
+        block->setBlockHeader(header);
 
-    auto error = genesisBlockPromise.get_future().get();
-    if (error)
-    {
-        BOOST_THROW_EXCEPTION(*error);
-    }
-
-    // write sys config
-    std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> sysTablePromise;
-    m_stateStorage->asyncOpenTable(
-        SYS_CONFIG, [&sysTablePromise](auto&& error, std::optional<Table>&& table) {
-            sysTablePromise.set_value({std::move(error), std::move(table)});
-        });
-
-    auto [tableError, sysTable] = sysTablePromise.get_future().get();
-    if (tableError)
-    {
-        BOOST_THROW_EXCEPTION(*tableError);
-    }
-
-    if (!sysTable)
-    {
-        BOOST_THROW_EXCEPTION(BCOS_ERROR(LedgerError::OpenTableFailed, "Open SYS_CONFIG failed!"));
-    }
-
-    // Write default features
-    Features features;
-    features.setGenesisFeatures(protocol::BlockVersion(versionNumber));
-
-    // tx count limit
-    Entry txLimitEntry;
-    txLimitEntry.setObject(
-        SystemConfigEntry{boost::lexical_cast<std::string>(genesis.m_txCountLimit), 0});
-    sysTable->setRow(SYSTEM_KEY_TX_COUNT_LIMIT, std::move(txLimitEntry));
-
-    // tx gas limit
-    Entry gasLimitEntry;
-    gasLimitEntry.setObject(
-        SystemConfigEntry{boost::lexical_cast<std::string>(genesis.m_txGasLimit), 0});
-    sysTable->setRow(SYSTEM_KEY_TX_GAS_LIMIT, std::move(gasLimitEntry));
-
-    // tx gas price
-    if (versionCompareTo(versionNumber, BlockVersion::V3_6_VERSION) >= 0)
-    {
-        Entry gasPriceEntry;
-        gasPriceEntry.setObject(SystemConfigEntry("0x0", 0));
-        sysTable->setRow(SYSTEM_KEY_TX_GAS_PRICE, std::move(gasPriceEntry));
-    }
-
-    if (RPBFT_CONSENSUS_TYPE == genesis.m_consensusType &&
-        versionNumber >= (uint32_t)protocol::BlockVersion::V3_5_VERSION)
-    {
-        // rpbft config
-        features.set(ledger::Features::Flag::feature_rpbft);
-
-        Entry epochSealerNumEntry;
-        epochSealerNumEntry.setObject(
-            SystemConfigEntry{boost::lexical_cast<std::string>(genesis.m_epochSealerNum), 0});
-        sysTable->setRow(SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM, std::move(epochSealerNumEntry));
-
-        Entry epochBlockNumEntry;
-        epochBlockNumEntry.setObject(
-            SystemConfigEntry{boost::lexical_cast<std::string>(genesis.m_epochBlockNum), 0});
-        sysTable->setRow(SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM, std::move(epochBlockNumEntry));
-
-        Entry notifyRotateEntry;
-        notifyRotateEntry.setObject(SystemConfigEntry("0", 0));
-        sysTable->setRow(INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE, std::move(notifyRotateEntry));
-    }
-
-    task::syncWait([&]() -> task::Task<void> {
-        co_await setGenesisFeatures(genesis.m_features, features, *m_stateStorage);
-        co_await setAllocs(
-            genesis.m_allocs, *m_stateStorage, *m_blockFactory->cryptoSuite()->hashImpl());
-    }());
-
-    // consensus leader period
-    Entry leaderPeriodEntry;
-    leaderPeriodEntry.setObject(
-        SystemConfigEntry{boost::lexical_cast<std::string>(genesis.m_leaderSwitchPeriod), 0});
-    sysTable->setRow(SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, std::move(leaderPeriodEntry));
-
-    LEDGER_LOG(INFO) << LOG_DESC("init the compatibilityVersion")
-                     << LOG_KV("versionNumber", versionNumber);
-    // write compatibility version
-    Entry compatibilityVersionEntry;
-    compatibilityVersionEntry.setObject(
-        SystemConfigEntry{tool::fromVersionNumber(
-                              static_cast<protocol::BlockVersion>(genesis.m_compatibilityVersion)),
-            0});
-    sysTable->setRow(SYSTEM_KEY_COMPATIBILITY_VERSION, std::move(compatibilityVersionEntry));
-
-    if (versionCompareTo(versionNumber, BlockVersion::V3_3_VERSION) >= 0)
-    {
-        // write auth check status
-        Entry authCheckStatusEntry;
-        authCheckStatusEntry.setObject(SystemConfigEntry{genesis.m_isAuthCheck ? "1" : "0", 0});
-        sysTable->setRow(SYSTEM_KEY_AUTH_CHECK_STATUS, std::move(authCheckStatusEntry));
-    }
-
-    if (versionNumber >= BlockVersion::V3_9_0_VERSION)
-    {
-        // write web3 chain id
-        Entry chainIdEntry;
-        chainIdEntry.setObject(SystemConfigEntry{genesis.m_web3ChainID, 0});
-        sysTable->setRow(SYSTEM_KEY_WEB3_CHAIN_ID, std::move(chainIdEntry));
-    }
-
-    // write consensus node list
-    // update some node type to CONSENSUS_CANDIDATE_SEALER
-    if (versionNumber >= (uint32_t)protocol::BlockVersion::V3_5_VERSION &&
-        RPBFT_CONSENSUS_TYPE == genesis.m_consensusType)
-    {
-        auto workingSealerList = selectWorkingSealer(ledgerConfig, genesis.m_epochSealerNum);
-        std::sort(workingSealerList.begin(), workingSealerList.end(),
-            [](auto const& lhs, auto const& rhs) {
-                return lhs.nodeID->data() < rhs.nodeID->data();
+        std::promise<Error::Ptr> genesisBlockPromise;
+        asyncPrewriteBlock(m_stateStorage, nullptr, block,
+            [&genesisBlockPromise](std::string, Error::Ptr&& error) {
+                genesisBlockPromise.set_value(std::move(error));
             });
-        task::syncWait(ledger::setNodeList(*m_stateStorage,
-            RANGES::views::concat(
-                ledgerConfig.consensusNodeList() | RANGES::views::transform([&](auto node) {
-                    if (auto it = std::lower_bound(workingSealerList.begin(),
-                            workingSealerList.end(), node.nodeID,
-                            [](auto const& lhs, auto const& rhs) {
-                                return lhs.nodeID->data() < rhs->data();
-                            });
-                        it == workingSealerList.end() || it->nodeID->data() != node.nodeID->data())
-                    {
-                        node.type = consensus::Type::consensus_candidate_sealer;
-                    }
-                    return node;
-                }),
-                ledgerConfig.observerNodeList())));
-    }
-    else
-    {
-        task::syncWait(ledger::setNodeList(
-            *m_stateStorage, RANGES::views::concat(ledgerConfig.consensusNodeList(),
-                                 ledgerConfig.observerNodeList())));
-    }
 
-    // write current state
-    std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> stateTablePromise;
-    m_stateStorage->asyncOpenTable(
-        SYS_CURRENT_STATE, [&stateTablePromise](auto&& error, std::optional<Table>&& table) {
+        auto error = genesisBlockPromise.get_future().get();
+        if (error)
+        {
+            BOOST_THROW_EXCEPTION(*error);
+        }
+
+        // write sys config
+        std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> sysTablePromise;
+        m_stateStorage->asyncOpenTable(
+            SYS_CONFIG, [&sysTablePromise](auto&& error, std::optional<Table>&& table) {
+                sysTablePromise.set_value({std::forward<decltype(error)>(error), std::move(table)});
+            });
+
+        auto [tableError, sysTable] = sysTablePromise.get_future().get();
+        if (tableError)
+        {
+            BOOST_THROW_EXCEPTION(*tableError);
+        }
+
+        if (!sysTable)
+        {
+            BOOST_THROW_EXCEPTION(
+                BCOS_ERROR(LedgerError::OpenTableFailed, "Open SYS_CONFIG failed!"));
+        }
+
+        // Write default features
+        Features features;
+        features.setGenesisFeatures(protocol::BlockVersion(versionNumber));
+
+        // tx count limit
+        Entry txLimitEntry;
+        txLimitEntry.setObject(
+            SystemConfigEntry{boost::lexical_cast<std::string>(genesis.m_txCountLimit), 0});
+        sysTable->setRow(SYSTEM_KEY_TX_COUNT_LIMIT, std::move(txLimitEntry));
+
+        // tx gas limit
+        Entry gasLimitEntry;
+        gasLimitEntry.setObject(
+            SystemConfigEntry{boost::lexical_cast<std::string>(genesis.m_txGasLimit), 0});
+        sysTable->setRow(SYSTEM_KEY_TX_GAS_LIMIT, std::move(gasLimitEntry));
+
+        // tx gas price
+        if (versionCompareTo(versionNumber, BlockVersion::V3_6_VERSION) >= 0)
+        {
+            Entry gasPriceEntry;
+            gasPriceEntry.setObject(SystemConfigEntry("0x0", 0));
+            sysTable->setRow(SYSTEM_KEY_TX_GAS_PRICE, std::move(gasPriceEntry));
+        }
+
+        if (RPBFT_CONSENSUS_TYPE == genesis.m_consensusType &&
+            versionNumber >= (uint32_t)protocol::BlockVersion::V3_5_VERSION)
+        {
+            // rpbft config
+            features.set(ledger::Features::Flag::feature_rpbft);
+
+            Entry epochSealerNumEntry;
+            epochSealerNumEntry.setObject(
+                SystemConfigEntry{boost::lexical_cast<std::string>(genesis.m_epochSealerNum), 0});
+            sysTable->setRow(SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM, std::move(epochSealerNumEntry));
+
+            Entry epochBlockNumEntry;
+            epochBlockNumEntry.setObject(
+                SystemConfigEntry{boost::lexical_cast<std::string>(genesis.m_epochBlockNum), 0});
+            sysTable->setRow(SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM, std::move(epochBlockNumEntry));
+
+            Entry notifyRotateEntry;
+            notifyRotateEntry.setObject(SystemConfigEntry("0", 0));
+            sysTable->setRow(INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE, std::move(notifyRotateEntry));
+        }
+
+        co_await setGenesisFeatures(genesis.m_features, features, *m_stateStorage);
+        co_await importGenesisState(
+            genesis.m_allocs, *m_stateStorage, *m_blockFactory->cryptoSuite()->hashImpl());
+
+        // consensus leader period
+        Entry leaderPeriodEntry;
+        leaderPeriodEntry.setObject(
+            SystemConfigEntry{boost::lexical_cast<std::string>(genesis.m_leaderSwitchPeriod), 0});
+        sysTable->setRow(SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, std::move(leaderPeriodEntry));
+
+        LEDGER_LOG(INFO) << LOG_DESC("init the compatibilityVersion")
+                         << LOG_KV("versionNumber", versionNumber);
+        // write compatibility version
+        Entry compatibilityVersionEntry;
+        compatibilityVersionEntry.setObject(
+            SystemConfigEntry{tool::fromVersionNumber(static_cast<protocol::BlockVersion>(
+                                  genesis.m_compatibilityVersion)),
+                0});
+        sysTable->setRow(SYSTEM_KEY_COMPATIBILITY_VERSION, std::move(compatibilityVersionEntry));
+
+        if (versionCompareTo(versionNumber, BlockVersion::V3_3_VERSION) >= 0)
+        {
+            // write auth check status
+            Entry authCheckStatusEntry;
+            authCheckStatusEntry.setObject(SystemConfigEntry{genesis.m_isAuthCheck ? "1" : "0", 0});
+            sysTable->setRow(SYSTEM_KEY_AUTH_CHECK_STATUS, std::move(authCheckStatusEntry));
+        }
+
+        if (versionNumber >= BlockVersion::V3_9_0_VERSION)
+        {
+            // write web3 chain id
+            Entry chainIdEntry;
+            chainIdEntry.setObject(SystemConfigEntry{genesis.m_web3ChainID, 0});
+            sysTable->setRow(SYSTEM_KEY_WEB3_CHAIN_ID, std::move(chainIdEntry));
+        }
+
+        // write consensus node list
+        // update some node type to CONSENSUS_CANDIDATE_SEALER
+        if (versionNumber >= (uint32_t)protocol::BlockVersion::V3_5_VERSION &&
+            RPBFT_CONSENSUS_TYPE == genesis.m_consensusType)
+        {
+            auto workingSealerList = selectWorkingSealer(ledgerConfig, genesis.m_epochSealerNum);
+            std::sort(workingSealerList.begin(), workingSealerList.end(),
+                [](auto const& lhs, auto const& rhs) {
+                    return lhs.nodeID->data() < rhs.nodeID->data();
+                });
+            co_await ledger::setNodeList(*m_stateStorage,
+                RANGES::views::concat(
+                    ledgerConfig.consensusNodeList() | RANGES::views::transform([&](auto node) {
+                        if (auto it = std::lower_bound(workingSealerList.begin(),
+                                workingSealerList.end(), node.nodeID,
+                                [](auto const& lhs, auto const& rhs) {
+                                    return lhs.nodeID->data() < rhs->data();
+                                });
+                            it == workingSealerList.end() ||
+                            it->nodeID->data() != node.nodeID->data())
+                        {
+                            node.type = consensus::Type::consensus_candidate_sealer;
+                        }
+                        return node;
+                    }),
+                    ledgerConfig.observerNodeList()));
+        }
+        else
+        {
+            co_await ledger::setNodeList(
+                *m_stateStorage, RANGES::views::concat(ledgerConfig.consensusNodeList(),
+                                     ledgerConfig.observerNodeList()));
+        }
+
+        // write current state
+        std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> stateTablePromise;
+        m_stateStorage->asyncOpenTable(SYS_CURRENT_STATE, [&stateTablePromise](auto&& error,
+                                                              std::optional<Table>&& table) {
             stateTablePromise.set_value({std::forward<decltype(error)>(error), std::move(table)});
         });
 
-    auto [stateError, stateTable] = stateTablePromise.get_future().get();
-    if (stateError)
-    {
-        BOOST_THROW_EXCEPTION(*stateError);
-    }
+        auto [stateError, stateTable] = stateTablePromise.get_future().get();
+        if (stateError)
+        {
+            BOOST_THROW_EXCEPTION(*stateError);
+        }
 
-    if (!stateTable)
-    {
-        BOOST_THROW_EXCEPTION(
-            BCOS_ERROR(LedgerError::OpenTableFailed, "Open SYS_CURRENT_STATE failed!"));
-    }
+        if (!stateTable)
+        {
+            BOOST_THROW_EXCEPTION(
+                BCOS_ERROR(LedgerError::OpenTableFailed, "Open SYS_CURRENT_STATE failed!"));
+        }
 
-    Entry currentNumber;
-    currentNumber.importFields({"0"});
-    stateTable->setRow(SYS_KEY_CURRENT_NUMBER, std::move(currentNumber));
+        Entry currentNumber;
+        currentNumber.importFields({"0"});
+        stateTable->setRow(SYS_KEY_CURRENT_NUMBER, std::move(currentNumber));
 
-    Entry txNumber;
-    txNumber.importFields({"0"});
-    stateTable->setRow(SYS_KEY_TOTAL_TRANSACTION_COUNT, std::move(txNumber));
+        Entry txNumber;
+        txNumber.importFields({"0"});
+        stateTable->setRow(SYS_KEY_TOTAL_TRANSACTION_COUNT, std::move(txNumber));
 
-    Entry txFailedNumber;
-    txFailedNumber.importFields({"0"});
-    stateTable->setRow(SYS_KEY_TOTAL_FAILED_TRANSACTION, std::move(txFailedNumber));
+        Entry txFailedNumber;
+        txFailedNumber.importFields({"0"});
+        stateTable->setRow(SYS_KEY_TOTAL_FAILED_TRANSACTION, std::move(txFailedNumber));
 
-    Entry archivedNumber;
-    archivedNumber.importFields({"0"});
-    stateTable->setRow(SYS_KEY_ARCHIVED_NUMBER, std::move(archivedNumber));
-    return true;
+        Entry archivedNumber;
+        archivedNumber.importFields({"0"});
+        stateTable->setRow(SYS_KEY_ARCHIVED_NUMBER, std::move(archivedNumber));
+        co_return true;
+    }());
 }
 
 bcos::consensus::ConsensusNodeList Ledger::selectWorkingSealer(
