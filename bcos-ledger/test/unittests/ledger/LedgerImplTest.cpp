@@ -1,4 +1,4 @@
-#include "bcos-ledger/src/libledger/LedgerImpl.h"
+#include "bcos-ledger/LedgerImpl.h"
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-concepts/Serialize.h>
 #include <bcos-concepts/ledger/Ledger.h>
@@ -182,8 +182,7 @@ BOOST_AUTO_TEST_CASE(getBlock)
             bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher{}, storage, nullptr, nullptr, 1000};
 
     bcostars::Block block;
-    bcos::task::syncWait(
-        ledger
+    bcos::task::syncWait(ledger
             .getBlock<bcos::concepts::ledger::HEADER, bcos::concepts::ledger::TRANSACTIONS_METADATA,
                 bcos::concepts::ledger::TRANSACTIONS, bcos::concepts::ledger::RECEIPTS>(
                 10086, block));

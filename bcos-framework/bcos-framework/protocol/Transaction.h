@@ -35,7 +35,7 @@ namespace bcos::protocol
 enum class TransactionType : uint8_t
 {
     BCOSTransaction = 0,
-    Web3Transacion = 1,
+    Web3Transaction = 1,
 };
 
 constexpr auto operator<=>(bcos::protocol::TransactionType const& _lhs, auto _rhs)
@@ -104,7 +104,7 @@ public:
         {
             hashResult = hash();
         }
-        else if (type() == static_cast<uint8_t>(TransactionType::Web3Transacion))
+        else if (type() == static_cast<uint8_t>(TransactionType::Web3Transaction))
         {
             auto bytes = extraTransactionBytes();
             hashResult = bcos::crypto::keccak256Hash(bytes);

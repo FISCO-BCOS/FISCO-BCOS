@@ -46,6 +46,7 @@
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include <bcos-framework/executor/ExecuteError.h>
+#include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-tool/BfsFileFactory.h>
 #include <bcos-utilities/Common.h>
 #include <boost/algorithm/hex.hpp>
@@ -105,13 +106,22 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
     {
         if (input->createSalt)
         {
-            newAddress = bcos::newEVMAddress(m_hashImpl, input->senderAddress,
+            newAddress = bcos::newCreate2EVMAddress(m_hashImpl, input->senderAddress,
                 bytesConstRef(input->data.data(), input->data.size()), *(input->createSalt));
         }
         else
         {
-            newAddress =
-                bcos::newEVMAddress(m_hashImpl, m_blockContext.number(), m_contextID, newSeq);
+            // contract create contract
+            if (m_blockContext.features().get(ledger::Features::Flag::feature_evm_address))
+            {
+                auto senderBytes = fromHex(input->senderAddress);
+                newAddress = bcos::newLegacyEVMAddress(ref(senderBytes), input->nonce);
+            }
+            else
+            {
+                newAddress =
+                    bcos::newEVMAddress(m_hashImpl, m_blockContext.number(), m_contextID, newSeq);
+            }
         }
 
         input->receiveAddress = newAddress;
@@ -230,12 +240,19 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
                                                            ledger::Features::Flag::feature_balance))
                              << LOG_KV("value", callParameters->value);
     }
+    // policy1 disable transfer balance
+    bool disableTransfer =
+        m_blockContext.features().get(ledger::Features::Flag::feature_balance_policy1);
 
-    // if (m_blockContext.features().get(ledger::Features::Flag::feature_balance_policy1))
-    // {
-    //     // policy1 disable transfer balance
-    //     callParameters->value = 0;
-    // }
+    if (auto const& balanceTransfer =
+            m_blockContext.configs().get(ledger::SystemConfig::balance_transfer))
+    {
+        disableTransfer = (balanceTransfer->first == "0");
+    }
+    if (disableTransfer)
+    {
+        callParameters->value = 0;
+    }
 
     if (m_blockContext.features().get(ledger::Features::Flag::feature_balance) &&
         callParameters->value > 0)
@@ -275,6 +292,39 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
             callParameters->evmStatus = EVMC_SUCCESS;
             // only transfer, not call contract
             return callParameters;
+        }
+    }
+
+    if (!callParameters->staticCall &&
+        m_blockContext.features().get(ledger::Features::Flag::feature_evm_address)) [[unlikely]]
+    {
+        // 如果是EOA发起交易，那么必须要更新nonce;
+        // 如果是合约调用合约，那么只有在create场景下才更新nonce。
+        // If it is an EOA initiating a transaction, the nonce must be updated; if it is a contract
+        // calling a contract, the nonce is updated only in the creation scenario.
+        if ((callParameters->origin == callParameters->senderAddress &&
+                callParameters->transactionType != 0) ||
+            (callParameters->create && !callParameters->internalCreate))
+        {
+            // TODO)): set nonce here will be better
+            ledger::account::EVMAccount address(
+                *m_blockContext.storage(), callParameters->senderAddress);
+            task::wait([](decltype(address) addr, u256 callNonce) -> task::Task<void> {
+                if (!co_await ledger::account::isExist(addr))
+                {
+                    co_await ledger::account::create(addr);
+                }
+                auto const nonceInStorage = co_await ledger::account::nonce(addr);
+                // FIXME)) : only web3 tx use this
+                auto const storageNonce = u256(nonceInStorage.value_or("0"));
+                auto const newNonce = std::max(callNonce, storageNonce) + 1;
+                co_await ledger::account::setNonce(addr, newNonce.convert_to<std::string>());
+                if (c_fileLogLevel == TRACE)
+                {
+                    EXECUTIVE_LOG(TRACE) << "Web3Nonce: update address nonce to storage"
+                                         << LOG_KV("address", addr) << LOG_KV("nonce", newNonce);
+                }
+            }(std::move(address), callParameters->nonce));
         }
     }
 
@@ -1380,7 +1430,7 @@ void TransactionExecutive::setPrecompiled(std::shared_ptr<PrecompiledMap> _preco
 
 void TransactionExecutive::revert()
 {
-    EXECUTOR_BLK_LOG(INFO, m_blockContext.number())
+    EXECUTOR_BLK_LOG(DEBUG, m_blockContext.number())
         << "Revert transaction" << LOG_KV("contextID", m_contextID) << LOG_KV("seq", m_seq);
 
     if (m_blockContext.features().get(ledger::Features::Flag::bugfix_revert))

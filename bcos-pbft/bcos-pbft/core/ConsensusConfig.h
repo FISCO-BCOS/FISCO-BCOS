@@ -33,9 +33,7 @@ public:
     using Ptr = std::shared_ptr<ConsensusConfig>;
     using ConstPtr = std::shared_ptr<const ConsensusConfig>;
     explicit ConsensusConfig(bcos::crypto::KeyPairInterface::Ptr _keyPair)
-      : m_keyPair(std::move(_keyPair)),
-        m_consensusNodeList(std::make_shared<ConsensusNodeList>()),
-        m_observerNodeList(std::make_shared<ConsensusNodeList>())
+      : m_keyPair(std::move(_keyPair))
     {}
     virtual ~ConsensusConfig() {}
 
@@ -55,7 +53,7 @@ public:
 
     uint64_t consensusTimeout() const override { return m_consensusTimeout; }
 
-    void setConsensusNodeList(ConsensusNodeList& _consensusNodeList) override;
+    void setConsensusNodeList(ConsensusNodeList _consensusNodeList) override;
 
     void setConsensusTimeout(uint64_t _consensusTimeout) override
     {
@@ -95,7 +93,7 @@ public:
 
     virtual void updateQuorum() = 0;
     IndexType getNodeIndexByNodeID(bcos::crypto::PublicPtr _nodeID);
-    ConsensusNodeInterface::Ptr getConsensusNodeByIndex(IndexType _nodeIndex);
+    ConsensusNode* getConsensusNodeByIndex(IndexType _nodeIndex);
     bcos::crypto::KeyPairInterface::Ptr keyPair() { return m_keyPair; }
 
     virtual void setBlockTxCountLimit(uint64_t _blockTxCountLimit)
@@ -111,7 +109,7 @@ public:
 
     IndexType consensusNodesNum() const { return m_consensusNodeNum.load(); }
 
-    void setObserverNodeList(ConsensusNodeList& _observerNodeList);
+    void setObserverNodeList(ConsensusNodeList _observerNodeList);
 
     bool asMasterNode() const { return m_asMasterNode.load(); }
     virtual void enableAsMasterNode(bool _isMasterNode)
@@ -134,18 +132,19 @@ public:
     static bool compareConsensusNode(
         ConsensusNodeList const& _left, ConsensusNodeList const& _right);
 
-protected:
-    static bool isNodeExist(
-        ConsensusNodeInterface::Ptr const& _node, ConsensusNodeList const& _nodeList);
+    ledger::Features features() const override;
+    void setFeatures(ledger::Features features) override;
 
 protected:
+    static bool isNodeExist(ConsensusNode const& _node, ConsensusNodeList const& _nodeList);
+
     bcos::crypto::KeyPairInterface::Ptr m_keyPair;
-    std::atomic<IndexType> m_nodeIndex = {0};
+    std::atomic<IndexType> m_nodeIndex = 0;
     std::atomic<IndexType> m_consensusNodeNum = {0};
 
-    ConsensusNodeListPtr m_consensusNodeList;
+    ConsensusNodeList m_consensusNodeList;
     mutable bcos::SharedMutex x_consensusNodeList;
-    ConsensusNodeListPtr m_observerNodeList;
+    ConsensusNodeList m_observerNodeList;
     mutable bcos::SharedMutex x_observerNodeList;
 
     std::atomic_bool m_consensusNodeListUpdated = {false};
@@ -166,5 +165,6 @@ protected:
     std::atomic<bcos::protocol::BlockNumber> m_progressedIndex = {0};
     bcos::protocol::BlockNumber m_syncingHighestNumber = {0};
     std::function<void(uint32_t _version)> m_versionNotification;
+    ledger::Features m_features;
 };
 }  // namespace bcos::consensus

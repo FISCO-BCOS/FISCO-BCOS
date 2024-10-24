@@ -19,19 +19,19 @@
  */
 
 #pragma once
-#include "../ledger/LedgerTypeDef.h"
 #include "../protocol/Protocol.h"
 #include "../storage/Entry.h"
 #include "../storage/LegacyStorageMethods.h"
 #include "../storage2/Storage.h"
 #include "../transaction-executor/StateKey.h"
+#include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-task/Task.h"
 #include "bcos-tool/Exceptions.h"
+#include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/Ranges.h"
 #include <boost/throw_exception.hpp>
-#include <array>
-#include <bitset>
 #include <magic_enum.hpp>
+#include <utility>
 
 namespace bcos::ledger
 {
@@ -53,10 +53,12 @@ enum class SystemConfig
     feature_rpbft_epoch_sealer_num,
     feature_balance_precompiled,
     web3_chain_id,
+    balance_transfer,
 };
 class SystemConfigs
 {
 public:
+    using ConfigPair = std::pair<std::string, protocol::BlockNumber>;
     SystemConfigs() { m_sysConfigs.reserve(magic_enum::enum_count<SystemConfig>()); }
 
     static SystemConfig fromString(std::string_view str)
@@ -69,14 +71,33 @@ public:
         return *value;
     }
 
-    std::optional<std::string> get(SystemConfig config) const { return m_sysConfigs.at(config); }
-    std::optional<std::string> get(std::string_view config) const
+    std::optional<ConfigPair> get(SystemConfig config) const
     {
-        return get(fromString(config));
+        if (const auto it = m_sysConfigs.find(config); it != m_sysConfigs.end())
+        {
+            return it->second;
+        }
+        else
+        {
+            return std::nullopt;
+        }
     }
 
-    void set(SystemConfig config, std::string value) { m_sysConfigs[config] = value; }
-    void set(std::string_view config, std::string value) { set(fromString(config), value); }
+    ConfigPair getOrDefault(SystemConfig config, std::string defaultValue) const
+    {
+        return get(config).value_or(ConfigPair{std::move(defaultValue), 0});
+    }
+
+    std::optional<ConfigPair> get(std::string_view config) const { return get(fromString(config)); }
+
+    void set(SystemConfig config, std::string value, protocol::BlockNumber number)
+    {
+        m_sysConfigs[config] = {std::move(value), number};
+    }
+    void set(std::string_view config, std::string value, protocol::BlockNumber number)
+    {
+        set(fromString(config), std::move(value), number);
+    }
 
     auto systemConfigs() const
     {
@@ -87,6 +108,7 @@ public:
                });
     }
 
+    // return all config names
     static auto supportConfigs()
     {
         return RANGES::views::iota(0LU, magic_enum::enum_count<SystemConfig>()) |
@@ -97,7 +119,7 @@ public:
     }
 
 private:
-    std::unordered_map<SystemConfig, std::optional<std::string>> m_sysConfigs{};
+    std::unordered_map<SystemConfig, std::optional<ConfigPair>> m_sysConfigs;
 };
 
 }  // namespace bcos::ledger

@@ -9,7 +9,7 @@
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/GenesisConfig.h"
 #include "bcos-framework/protocol/Protocol.h"
-#include "bcos-ledger/src/libledger/Ledger.h"
+#include "bcos-ledger/Ledger.h"
 #include "bcos-table/src/LegacyStorageWrapper.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"

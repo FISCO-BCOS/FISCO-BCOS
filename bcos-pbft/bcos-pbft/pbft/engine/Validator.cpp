@@ -24,6 +24,35 @@ using namespace bcos::consensus;
 using namespace bcos::crypto;
 using namespace bcos::protocol;
 
+void bcos::consensus::TxsValidator::stop()
+{
+    m_worker->stop();
+}
+
+void bcos::consensus::TxsValidator::init()
+{
+    PBFT_LOG(INFO) << LOG_DESC("asyncResetTxPool when startup");
+    asyncResetTxPool();
+}
+
+void bcos::consensus::TxsValidator::asyncResetTxPool()
+{
+    m_txPool->asyncResetTxPool([](Error::Ptr _error) {
+        if (_error)
+        {
+            PBFT_LOG(WARNING) << LOG_DESC("asyncResetTxPool failed")
+                              << LOG_KV("code", _error->errorCode())
+                              << LOG_KV("msg", _error->errorMessage());
+        }
+    });
+}
+
+ssize_t bcos::consensus::TxsValidator::resettingProposalSize() const
+{
+    ReadGuard l(x_resettingProposals);
+    return m_resettingProposals.size();
+}
+
 void TxsValidator::verifyProposal(bcos::crypto::PublicPtr _fromNode,
     PBFTProposalInterface::Ptr _proposal,
     std::function<void(Error::Ptr, bool)> _verifyFinishedHandler)
@@ -131,4 +160,133 @@ void TxsValidator::asyncResetTxsFlag(
                 validator->insertResettingProposal(blockHeader->hash());
             }
         });
+}
+
+void bcos::consensus::TxsValidator::notifyTransactionsResult(
+    bcos::protocol::Block::Ptr _block, bcos::protocol::BlockHeader::Ptr _header)
+{
+    auto results = std::make_shared<bcos::protocol::TransactionSubmitResults>();
+    for (size_t i = 0; i < _block->transactionsHashSize(); i++)
+    {
+        auto txHash = _block->transactionHash(i);
+        auto txResult = m_txResultFactory->createTxSubmitResult();
+        txResult->setBlockHash(_header->hash());
+        txResult->setTxHash(txHash);
+        results->emplace_back(std::move(txResult));
+    }
+    m_txPool->asyncNotifyBlockResult(
+        _header->number(), results, [_block, _header](Error::Ptr _error) {
+            if (_error == nullptr)
+            {
+                PBFT_LOG(INFO) << LOG_DESC("notify block result success")
+                               << LOG_KV("number", _header->number())
+                               << LOG_KV("hash", _header->hash().abridged())
+                               << LOG_KV("txsSize", _block->transactionsHashSize());
+                return;
+            }
+            PBFT_LOG(INFO) << LOG_DESC("notify block result failed")
+                           << LOG_KV("code", _error->errorCode())
+                           << LOG_KV("msg", _error->errorMessage());
+        });
+}
+
+bcos::consensus::PBFTProposalInterface::Ptr bcos::consensus::TxsValidator::generateEmptyProposal(
+    uint32_t _proposalVersion, PBFTMessageFactory::Ptr _factory, int64_t _index, int64_t _sealerId)
+{
+    auto proposal = _factory->createPBFTProposal();
+    proposal->setIndex(_index);
+    auto block = m_blockFactory->createBlock();
+    auto blockHeader = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+    blockHeader->populateEmptyBlock(_index, _sealerId);
+    blockHeader->setVersion(_proposalVersion);
+    blockHeader->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
+    block->setBlockHeader(blockHeader);
+    auto encodedData = std::make_shared<bytes>();
+    block->encode(*encodedData);
+    proposal->setHash(blockHeader->hash());
+    proposal->setData(std::move(*encodedData));
+    return proposal;
+}
+
+void bcos::consensus::TxsValidator::updateValidatorConfig(
+    bcos::consensus::ConsensusNodeList const& _consensusNodeList,
+    bcos::consensus::ConsensusNodeList const& _observerNodeList)
+{
+    m_txPool->notifyConsensusNodeList(_consensusNodeList, [](Error::Ptr _error) {
+        if (_error == nullptr)
+        {
+            PBFT_LOG(DEBUG) << LOG_DESC("notify to update consensusNodeList config success");
+            return;
+        }
+        PBFT_LOG(WARNING) << LOG_DESC("notify to update consensusNodeList config failed")
+                          << LOG_KV("code", _error->errorCode())
+                          << LOG_KV("msg", _error->errorMessage());
+    });
+
+    m_txPool->notifyObserverNodeList(_observerNodeList, [](Error::Ptr _error) {
+        if (_error == nullptr)
+        {
+            PBFT_LOG(DEBUG) << LOG_DESC("notify to update observerNodeList config success");
+            return;
+        }
+        PBFT_LOG(WARNING) << LOG_DESC("notify to update observerNodeList config failed")
+                          << LOG_KV("code", _error->errorCode())
+                          << LOG_KV("msg", _error->errorMessage());
+    });
+}
+
+void bcos::consensus::TxsValidator::setVerifyCompletedHook(std::function<void()> _hook)
+{
+    RecursiveGuard l(x_verifyCompletedHook);
+    m_verifyCompletedHook = _hook;
+}
+
+void bcos::consensus::TxsValidator::eraseResettingProposal(bcos::crypto::HashType const& _hash)
+{
+    {
+        WriteGuard l(x_resettingProposals);
+        m_resettingProposals.erase(_hash);
+        if (!m_resettingProposals.empty())
+        {
+            return;
+        }
+    }
+    // When all consensusing proposals are notified, call verifyCompletedHook
+    triggerVerifyCompletedHook();
+}
+
+void bcos::consensus::TxsValidator::triggerVerifyCompletedHook()
+{
+    RecursiveGuard l(x_verifyCompletedHook);
+    if (!m_verifyCompletedHook)
+    {
+        return;
+    }
+    auto callback = m_verifyCompletedHook;
+    m_verifyCompletedHook = nullptr;
+    auto self = weak_from_this();
+    m_worker->enqueue([self, callback]() {
+        auto validator = self.lock();
+        if (!validator)
+        {
+            return;
+        }
+        if (!callback)
+        {
+            return;
+        }
+        callback();
+    });
+}
+
+bool bcos::consensus::TxsValidator::insertResettingProposal(bcos::crypto::HashType const& _hash)
+{
+    UpgradableGuard l(x_resettingProposals);
+    if (m_resettingProposals.count(_hash))
+    {
+        return false;
+    }
+    UpgradeGuard ul(l);
+    m_resettingProposals.insert(_hash);
+    return true;
 }

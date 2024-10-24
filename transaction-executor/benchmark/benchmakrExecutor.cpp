@@ -23,11 +23,24 @@ static_assert(HasReadOneDirect<MutableStorage>);
 
 struct Fixture
 {
+    bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
+    MutableStorage m_backendStorage;
+    ReceiptFactory m_receiptFactory;
+    PrecompiledManager m_precompiledManager;
+    bcos::transaction_executor::TransactionExecutorImpl m_executor;
+    bcos::bytes m_helloworldBytecodeBinary;
+
+    bcostars::BlockHeader tarsBlockHeader;
+    bcostars::protocol::BlockHeaderImpl blockHeader;
+    ledger::LedgerConfig ledgerConfig;
+
     Fixture()
       : m_cryptoSuite(std::make_shared<bcos::crypto::CryptoSuite>(
             std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr)),
         m_receiptFactory(m_cryptoSuite),
-        m_executor(m_receiptFactory, std::make_shared<bcos::crypto::Keccak256>()),
+        m_precompiledManager(std::make_shared<bcos::crypto::Keccak256>()),
+        m_executor(
+            m_receiptFactory, std::make_shared<bcos::crypto::Keccak256>(), m_precompiledManager),
         blockHeader([inner = std::addressof(tarsBlockHeader)]() mutable { return inner; })
     {
         boost::log::core::get()->set_logging_enabled(false);
@@ -51,16 +64,6 @@ struct Fixture
 
         return contractAddress;
     }
-
-    bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
-    MutableStorage m_backendStorage;
-    ReceiptFactory m_receiptFactory;
-    bcos::transaction_executor::TransactionExecutorImpl m_executor;
-    bcos::bytes m_helloworldBytecodeBinary;
-
-    bcostars::BlockHeader tarsBlockHeader;
-    bcostars::protocol::BlockHeaderImpl blockHeader;
-    ledger::LedgerConfig ledgerConfig;
 };
 
 static void create(benchmark::State& state)

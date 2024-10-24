@@ -226,8 +226,7 @@ public:
 
         PBFT_LOG(INFO) << LOG_DESC("create PBFT");
         auto fakedPBFT = std::make_shared<FakePBFTImpl>(pbftEngine);
-        auto ledgerFetcher = std::make_shared<bcos::tool::LedgerConfigFetcher>(m_ledger);
-        fakedPBFT->setLedgerFetcher(ledgerFetcher);
+        fakedPBFT->setLedger(m_ledger);
         pbftConfig->setTimeoutState(false);
         pbftConfig->timer()->stop();
         return fakedPBFT;
@@ -314,14 +313,14 @@ public:
         }
     }
 
-    void appendConsensusNode(ConsensusNode::Ptr _node)
+    void appendConsensusNode(ConsensusNode _node)
     {
         m_ledger->ledgerConfig()->mutableConsensusNodeList().push_back(_node);
         pbftConfig()->setConsensusNodeList(m_ledger->ledgerConfig()->mutableConsensusNodeList());
         bcos::crypto::NodeIDSet connectedNodeList;
         for (auto const& node : m_ledger->ledgerConfig()->mutableConsensusNodeList())
         {
-            connectedNodeList.insert(node->nodeID());
+            connectedNodeList.insert(node.nodeID);
         }
         pbftConfig()->setConnectedNodeList(connectedNodeList);
         m_frontService->setNodeIDList(connectedNodeList);
@@ -329,7 +328,7 @@ public:
 
     void appendConsensusNode(PublicPtr _nodeId)
     {
-        auto node = std::make_shared<ConsensusNode>(_nodeId, 1);
+        auto node = ConsensusNode{_nodeId, consensus::Type::consensus_sealer, 1, 0, 0};
         appendConsensusNode(node);
     }
 

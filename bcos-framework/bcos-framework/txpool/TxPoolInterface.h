@@ -18,7 +18,7 @@
  * @date: 2021-04-07
  */
 #pragma once
-#include "../consensus/ConsensusNodeInterface.h"
+#include "../consensus/ConsensusNode.h"
 #include "../protocol/Block.h"
 #include "../protocol/Transaction.h"
 #include "../protocol/TransactionSubmitResult.h"
@@ -84,6 +84,16 @@ public:
 
     virtual task::Task<std::vector<protocol::Transaction::ConstPtr>> getTransactions(
         RANGES::any_view<bcos::h256, RANGES::category::mask | RANGES::category::sized> hashes)
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
+    }
+
+    virtual task::Task<std::optional<u256>> getWeb3PendingNonce(std::string_view address)
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
+    }
+
+    virtual bool existsInGroup(bcos::crypto::NodeIDPtr _nodeId)
     {
         BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
     }

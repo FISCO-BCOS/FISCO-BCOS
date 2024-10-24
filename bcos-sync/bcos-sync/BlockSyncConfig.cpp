@@ -170,13 +170,13 @@ bcos::protocol::NodeType BlockSyncConfig::determineNodeType()
     return bcos::protocol::NodeType::FREE_NODE;
 }
 
-bool BlockSyncConfig::existNode(bcos::consensus::ConsensusNodeListPtr const& _nodeList,
+bool BlockSyncConfig::existNode(bcos::consensus::ConsensusNodeList const& _nodeList,
     SharedMutex& _lock, bcos::crypto::NodeIDPtr _nodeID)
 {
     ReadGuard lock(_lock);
-    for (auto const& it : *_nodeList)
+    for (auto const& it : _nodeList)
     {
-        if (it->nodeID()->data() == _nodeID->data())
+        if (it.nodeID->data() == _nodeID->data())
         {
             return true;
         }

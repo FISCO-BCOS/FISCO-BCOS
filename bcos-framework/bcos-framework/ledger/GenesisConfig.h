@@ -22,7 +22,7 @@
 
 #include "Features.h"
 #include "LedgerConfig.h"
-#include "bcos-framework/consensus/ConsensusNodeInterface.h"
+#include "bcos-framework/consensus/ConsensusNode.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-tool/VersionConverter.h"
 #include <sstream>
@@ -45,6 +45,7 @@ struct Alloc
 
     std::string address;
     u256 balance;
+    std::string nonce;
     std::string code;
     std::vector<State> storage;
 };
@@ -68,7 +69,7 @@ public:
     uint64_t m_leaderSwitchPeriod = 1;
 
     // version config
-    uint32_t m_compatibilityVersion;
+    uint32_t m_compatibilityVersion = static_cast<uint32_t>(protocol::BlockVersion::MAX_VERSION);
 
     // tx config
     uint64_t m_txGasLimit = 3000000000;

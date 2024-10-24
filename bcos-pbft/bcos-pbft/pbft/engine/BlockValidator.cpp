@@ -110,25 +110,25 @@ bool BlockValidator::checkSealerListAndWeightList(Block::Ptr _block)
     for (auto const& blockSealer : blockSealerList)
     {
         auto consNodePtr = consensusNodeList[i];
-        if (consNodePtr->nodeID()->data() != blockSealer)
+        if (consNodePtr.nodeID->data() != blockSealer)
         {
             PBFT_LOG(ERROR) << LOG_DESC("checkBlock for sync module: inconsistent sealerList")
-                            << LOG_KV("blkSealer", consNodePtr->nodeID()->shortHex())
+                            << LOG_KV("blkSealer", consNodePtr.nodeID->shortHex())
                             << LOG_KV("chainSealer", *toHexString(blockSealer))
                             << LOG_KV("number", blockHeader->number())
-                            << LOG_KV("weight", consNodePtr->weight())
+                            << LOG_KV("weight", consNodePtr.voteWeight)
                             << m_config->printCurrentState();
             return false;
         }
         // check weight
         auto blockWeight = blockWeightList[i];
-        if (consNodePtr->weight() != blockWeight)
+        if (consNodePtr.voteWeight != blockWeight)
         {
             PBFT_LOG(ERROR) << LOG_DESC("checkBlock for sync module: inconsistent weight")
                             << LOG_KV("blkWeight", blockWeight)
-                            << LOG_KV("chainWeight", consNodePtr->weight())
+                            << LOG_KV("chainWeight", consNodePtr.voteWeight)
                             << LOG_KV("number", blockHeader->number())
-                            << LOG_KV("blkSealer", consNodePtr->nodeID()->shortHex())
+                            << LOG_KV("blkSealer", consNodePtr.nodeID->shortHex())
                             << LOG_KV("chainSealer", *toHexString(blockSealer))
                             << m_config->printCurrentState();
             return false;
@@ -149,7 +149,7 @@ bool BlockValidator::checkSignatureList(Block::Ptr _block)
     for (auto const& sign : signatureList)
     {
         auto nodeIndex = sign.index;
-        auto nodeInfo = m_config->getConsensusNodeByIndex(nodeIndex);
+        auto* nodeInfo = m_config->getConsensusNodeByIndex(nodeIndex);
         auto signatureData = ref(sign.signature);
         if (signatureData.data() == nullptr)
         {
@@ -160,7 +160,7 @@ bool BlockValidator::checkSignatureList(Block::Ptr _block)
                             << LOG_KV("hash", blockHeader->hash().abridged());
         }
         if (!nodeInfo || !m_config->cryptoSuite()->signatureImpl()->verify(
-                             nodeInfo->nodeID(), blockHeader->hash(), signatureData))
+                             nodeInfo->nodeID, blockHeader->hash(), signatureData))
         {
             PBFT_LOG(ERROR) << LOG_DESC("checkBlock for sync module: checkSign failed")
                             << LOG_KV("sealerIdx", nodeIndex)
@@ -168,7 +168,7 @@ bool BlockValidator::checkSignatureList(Block::Ptr _block)
                             << LOG_KV("number", blockHeader->number());
             return false;
         }
-        signatureWeight += nodeInfo->weight();
+        signatureWeight += nodeInfo->voteWeight;
     }
     if (signatureWeight < (size_t)m_config->minRequiredQuorum())
     {

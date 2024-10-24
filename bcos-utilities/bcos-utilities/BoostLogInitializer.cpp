@@ -43,7 +43,7 @@ struct BoostLogLevelResetHandler
 {
     static void handle(int sig)
     {
-        std::unique_lock<std::mutex> lock(g_BCOSConfig.signalMutex());
+        std::unique_lock<std::mutex> lock(protocol::g_BCOSConfig.signalMutex());
         BCOS_LOG(INFO) << LOG_BADGE("BoostLogInitializer::Signal")
                        << LOG_DESC("receive SIGUSE2 sig");
 

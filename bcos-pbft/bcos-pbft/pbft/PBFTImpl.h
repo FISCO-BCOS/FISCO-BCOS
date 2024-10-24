@@ -60,10 +60,6 @@ public:
     void notifyHighestSyncingNumber(bcos::protocol::BlockNumber _blockNumber) override;
     void asyncNoteUnSealedTxsSize(
         uint64_t _unsealedTxsSize, std::function<void(Error::Ptr)> _onRecvResponse) override;
-    void setLedgerFetcher(bcos::tool::LedgerConfigFetcher::Ptr _ledgerFetcher)
-    {
-        m_pbftEngine->setLedgerFetcher(_ledgerFetcher);
-    }
     PBFTEngine::Ptr pbftEngine() { return m_pbftEngine; }
 
     virtual void init();
@@ -77,7 +73,8 @@ public:
     }
 
     // notify the sealer the latest blockNumber
-    void registerStateNotifier(std::function<void(bcos::protocol::BlockNumber, crypto::HashType const&)> _stateNotifier)
+    void registerStateNotifier(
+        std::function<void(bcos::protocol::BlockNumber, crypto::HashType const&)> _stateNotifier)
     {
         m_pbftEngine->pbftConfig()->registerStateNotifier(std::move(_stateNotifier));
     }
@@ -161,6 +158,8 @@ public:
     {
         return m_pbftEngine->shouldRotateSealers(_number);
     }
+
+    void setLedger(ledger::LedgerInterface::Ptr ledger);
 
 protected:
     PBFTEngine::Ptr m_pbftEngine;

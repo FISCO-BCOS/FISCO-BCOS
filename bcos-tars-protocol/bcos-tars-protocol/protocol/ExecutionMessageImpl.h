@@ -24,6 +24,7 @@
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
+#include <bcos-tars-protocol/Common.h>
 // if windows, manual include tup/Tars.h first
 #ifdef _WIN32
 #include <tup/Tars.h>
@@ -247,6 +248,14 @@ public:
     {
         m_inner()->hasContractTableChanged = hasChanged;
     }
+
+    // TODO)): should implement web3 nonce logic in max?
+    std::string_view nonceView() const override { throw std::runtime_error("not implemented"); }
+    void setNonce(std::string nonce) override { throw std::runtime_error("not implemented"); }
+    std::string nonce() const override { throw std::runtime_error("not implemented"); }
+
+    uint8_t txType() const override { throw std::runtime_error("not implemented"); }
+    void setTxType(uint8_t txType) override { throw std::runtime_error("not implemented"); }
 
     bcostars::ExecutionMessage inner() const { return *(m_inner()); }
 

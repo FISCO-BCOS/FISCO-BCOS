@@ -10,6 +10,15 @@
 #include <future>
 #include <sstream>
 
+#ifndef WITH_WASM
+namespace bcos::wasm
+{
+class GasInjector
+{
+};
+}  // namespace bcos::wasm
+#endif
+
 namespace bcos::test
 {
 class MockLedger : public bcos::ledger::LedgerInterface
@@ -26,7 +35,8 @@ public:
 
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
-        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts) override
+        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
+        std::optional<bcos::ledger::Features> features) override
     {
         BOOST_CHECK(false);  // Need implementations
     };
@@ -157,15 +167,14 @@ public:
             return;
         }
 
-
-        BOOST_CHECK(false);  // Need implementations
+        _onGetConfig(nullptr, "0", 0);
     };
 
 
     void asyncGetNodeListByType(std::string_view const& _type,
-        std::function<void(Error::Ptr, consensus::ConsensusNodeListPtr)> _onGetConfig) override
+        std::function<void(Error::Ptr, consensus::ConsensusNodeList)> _onGetConfig) override
     {
-        BOOST_CHECK(false);  // Need implementations
+        _onGetConfig(nullptr, consensus::ConsensusNodeList());
     };
 
     void asyncGetNonceList(protocol::BlockNumber _startNumber, int64_t _offset,

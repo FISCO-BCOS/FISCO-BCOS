@@ -104,7 +104,7 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
             try
             {
                 auto result = m_self->verifyAndSubmitTransaction(
-                    std::move(m_transaction),
+                    m_transaction,
                     [this, m_handle = handle](Error::Ptr error,
                         bcos::protocol::TransactionSubmitResult::Ptr result) mutable {
                         if (error)
@@ -184,15 +184,16 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
         {
             try
             {
+                auto const txHash = m_transaction->hash();
+                auto const from = std::string(m_transaction->sender());
+                auto const to = std::string(m_transaction->to());
                 auto result = m_self->verifyAndSubmitTransaction(
                     std::move(m_transaction), nullptr, true, true);
 
                 if (result != TransactionStatus::None)
                 {
-                    TXPOOL_LOG(DEBUG)
-                        << "Submit transaction failed! "
-                        << LOG_KV("TxHash", m_transaction ? m_transaction->hash().hex() : "")
-                        << LOG_KV("result", result);
+                    TXPOOL_LOG(DEBUG) << "Submit transaction failed! "
+                                      << LOG_KV("TxHash", txHash.hex()) << LOG_KV("result", result);
                     m_submitResult.emplace<Error::Ptr>(
                         BCOS_ERROR_PTR((int32_t)result, bcos::protocol::toString(result)));
                 }
@@ -200,6 +201,9 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
                 {
                     auto res = std::make_shared<TransactionSubmitResultImpl>();
                     res->setStatus(static_cast<uint32_t>(result));
+                    res->setTxHash(txHash);
+                    res->setSender(from);
+                    res->setTo(std::string(to));
                     m_submitResult.emplace<TransactionSubmitResult::Ptr>(std::move(res));
                 }
                 handle.resume();
@@ -271,10 +275,8 @@ TransactionStatus MemoryStorage::txpoolStorageCheck(
             accessor->value()->setSubmitCallback(std::move(txSubmitCallback));
             return TransactionStatus::AlreadyInTxPoolAndAccept;
         }
-        else
-        {
-            return TransactionStatus::AlreadyInTxPool;
-        }
+
+        return TransactionStatus::AlreadyInTxPool;
     }
     return TransactionStatus::None;
 }
@@ -287,11 +289,8 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
     {
         // check txpool nonce
         // check ledger tx
-        auto result = m_config->txValidator()->checkTxpoolNonce(_tx);
-        if (result == TransactionStatus::None)
-        {
-            result = m_config->txValidator()->checkLedgerNonceAndBlockLimit(_tx);
-        }
+        // check web3 tx
+        auto result = m_config->txValidator()->checkTransaction(_tx);
         Transaction::ConstPtr tx = nullptr;
         {
             TxsMap::ReadAccessor::Ptr accessor;
@@ -429,6 +428,7 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
         if (c_fileLogLevel == TRACE)
         {
             TXPOOL_LOG(TRACE) << LOG_DESC("submitTxTime") << LOG_KV("txHash", txHash)
+                              << LOG_KV("result", result)
                               << LOG_KV("insertTime", utcTime() - txImportTime);
         }
     }
@@ -574,6 +574,11 @@ void MemoryStorage::notifyTxResult(
     auto txHash = transaction.hash();
     txSubmitResult->setSender(std::string(transaction.sender()));
     txSubmitResult->setTo(std::string(transaction.to()));
+    if (c_fileLogLevel == TRACE) [[unlikely]]
+    {
+        TXPOOL_LOG(TRACE) << LOG_DESC("notifyTxResult")
+                          << LOG_KV("txSubmitResult", txSubmitResult->toString());
+    }
     try
     {
         txSubmitCallback(nullptr, std::move(txSubmitResult));
@@ -618,7 +623,6 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
     uint64_t lockT = 0;
     m_blockNumberUpdatedTime = recordT;
     size_t succCount = 0;
-    NonceList nonceList;
 
     auto range =
         txsResult | RANGES::views::transform([](TransactionSubmitResult::Ptr const& _txResult) {
@@ -669,19 +673,43 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
     notifyUnsealedTxsSize();
     // update the ledger nonce
 
-    auto nonceListRange = results | RANGES::views::filter([](auto const& _result) {
-        const auto& tx = _result.second.first;
-        const auto& txResult = _result.second.second;
-        return tx == nullptr ? !txResult->nonce().empty() : true;
-    }) | RANGES::views::transform([](auto const& _result) {
-        const auto& tx = _result.second.first;
-        const auto& txResult = _result.second.second;
-        return tx != nullptr ? tx->nonce() : txResult->nonce();
-    });
-
-    auto nonceListPtr = std::make_shared<NonceList>(nonceListRange.begin(), nonceListRange.end());
+    auto nonceListPtr = std::make_shared<NonceList>();
+    std::unordered_map<std::string, std::set<u256>> web3NonceMap{};
+    for (auto&& [_, txPair] : results)
+    {
+        auto const& [tx, txResult] = txPair;
+        if (tx)
+        {
+            if (tx->type() == TransactionType::Web3Transaction) [[unlikely]]
+            {
+                auto sender = std::string(tx->sender());
+                auto nonce = hex2u(tx->nonce());
+                if (auto it = web3NonceMap.find(sender); it != web3NonceMap.end())
+                {
+                    it->second.insert(nonce);
+                }
+                else
+                {
+                    web3NonceMap.insert({sender, {nonce}});
+                }
+            }
+            else
+            {
+                nonceListPtr->emplace_back(tx->nonce());
+            }
+        }
+        else if (!txResult->nonce().empty())
+        {
+            nonceListPtr->emplace_back(txResult->nonce());
+        }
+    }
     m_config->txValidator()->ledgerNonceChecker()->batchInsert(batchId, nonceListPtr);
     auto updateLedgerNonceT = utcTime() - startT;
+
+    startT = utcTime();
+    task::syncWait(m_config->txValidator()->web3NonceChecker()->updateNonceCache(
+        RANGES::views::keys(web3NonceMap), RANGES::views::values(web3NonceMap)));
+    auto updateWeb3NonceT = utcTime() - startT;
 
     startT = utcTime();
     // update the txpool nonce
@@ -705,6 +733,7 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
                      << LOG_KV("batchId", batchId) << LOG_KV("timecost", (utcTime() - recordT))
                      << LOG_KV("lockT", lockT) << LOG_KV("removeT", removeT)
                      << LOG_KV("updateLedgerNonceT", updateLedgerNonceT)
+                     << LOG_KV("updateWeb3NonceT", updateWeb3NonceT)
                      << LOG_KV("updateTxPoolNonceT", updateTxPoolNonceT);
 }
 
@@ -808,7 +837,7 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
         // txPool, the txs with duplicated nonce here are already-committed, but have not been
         // dropped
         // check txpool txs, no need to check txpool nonce
-        auto result = m_config->txValidator()->checkLedgerNonceAndBlockLimit(tx);
+        auto result = m_config->txValidator()->checkTransaction(tx, true);
         if (result == TransactionStatus::NonceCheckFail)
         {
             // in case of the same tx notified more than once
@@ -924,10 +953,23 @@ void MemoryStorage::removeInvalidTxs(bool lock)
             txs2Remove.emplace(txHash, std::move(tx));
         });
 
-        auto invalidNonceList =
-            txs2Remove | RANGES::views::values |
-            RANGES::views::transform([](auto const& tx2Remove) { return tx2Remove->nonce(); });
-        m_config->txPoolNonceChecker()->batchRemove(invalidNonceList | RANGES::to_vector);
+        bcos::protocol::NonceList invalidNonceList = {};
+        for (auto const& [_, tx] : txs2Remove)
+        {
+            if (tx->type() == TransactionType::BCOSTransaction) [[likely]]
+            {
+                invalidNonceList.emplace_back(tx->nonce());
+            }
+        }
+        auto web3Txs =
+            RANGES::views::values(txs2Remove) | RANGES::views::filter([](auto const& _tx) {
+                return _tx->type() == TransactionType::Web3Transaction;
+            });
+        m_config->txPoolNonceChecker()->batchRemove(invalidNonceList);
+        task::syncWait(m_config->txValidator()->web3NonceChecker()->batchRemoveMemoryNonce(
+            web3Txs | RANGES::views::transform(
+                          [](auto const& _tx) { return std::string(_tx->sender()); }),
+            web3Txs | RANGES::views::transform([](auto const& _tx) { return _tx->nonce(); })));
 
         /*
         m_txsTable.batchRemove(txs2Remove | RANGES::views::keys,
@@ -1040,8 +1082,7 @@ bool MemoryStorage::batchMarkTxsWithoutLock(
             {
                 ++notFound;
                 TXPOOL_LOG(TRACE) << LOG_DESC("batchMarkTxs: missing transaction")
-                                  << LOG_KV("tx", txHash.abridged())
-                                  << LOG_KV("sealFlag", _sealFlag);
+                                  << LOG_KV("tx", txHash.hex()) << LOG_KV("sealFlag", _sealFlag);
                 continue;
             }
             tx = accessor->value();
@@ -1265,7 +1306,7 @@ HashListPtr MemoryStorage::getTxsHash(int _limit)
                 return true;
             }
             // check txpool txs, no need to check txpool nonce
-            auto result = m_config->txValidator()->checkLedgerNonceAndBlockLimit(tx);
+            auto result = m_config->txValidator()->checkTransaction(tx, true);
             if (result != TransactionStatus::None)
             {
                 TxsMap::WriteAccessor::Ptr writeAccessor;
@@ -1346,7 +1387,8 @@ void MemoryStorage::cleanUpExpiredTransactions()
             }
         }
         // check txpool txs, no need to check txpool nonce
-        auto result = m_config->txValidator()->checkLedgerNonceAndBlockLimit(tx);
+        auto validator = m_config->txValidator();
+        auto result = validator->checkTransaction(tx, true);
         // blockLimit expired
         if (result != TransactionStatus::None)
         {

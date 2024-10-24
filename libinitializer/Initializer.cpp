@@ -59,7 +59,6 @@
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 #include <bcos-tars-protocol/impl/TarsSerializable.h>
 #include <bcos-tars-protocol/protocol/ExecutionMessageImpl.h>
-#include <bcos-tool/LedgerConfigFetcher.h>
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-tool/NodeTimeMaintenance.h>
 #include <rocksdb/slice.h>

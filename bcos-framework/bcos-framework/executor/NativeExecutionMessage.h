@@ -18,8 +18,8 @@ public:
     Type type() const override { return m_type; }
     void setType(Type type) override { m_type = type; }
 
-    crypto::HashType transactionHash() const override { return m_transactionHash; }
-    void setTransactionHash(crypto::HashType hash) override { m_transactionHash = hash; }
+    bcos::crypto::HashType transactionHash() const override { return m_transactionHash; }
+    void setTransactionHash(bcos::crypto::HashType hash) override { m_transactionHash = hash; }
 
     int64_t contextID() const override { return m_contextID; }
     void setContextID(int64_t contextID) override { m_contextID = contextID; }
@@ -63,6 +63,13 @@ public:
     {
         m_effectiveGasPrice = std::move(effectiveGasPrice);
     }
+
+    std::string_view nonceView() const override { return m_nonce; }
+    void setNonce(std::string nonce) override { m_nonce = std::move(nonce); }
+    std::string nonce() const override { return m_nonce; }
+
+    uint8_t txType() const override { return m_transactionType; }
+    void setTxType(uint8_t txType) override { m_transactionType = txType; }
 
     int32_t depth() const override { return m_depth; }
     void setDepth(int32_t depth) override { m_depth = depth; }
@@ -187,6 +194,8 @@ public:
 
     std::vector<std::string> m_keyLocks;
     std::string m_keyLockAcquired;
+    std::string m_nonce;
+    uint8_t m_transactionType = static_cast<uint8_t>(protocol::TransactionType::BCOSTransaction);
 
     int32_t m_status = 0;
     int32_t m_depth = 0;

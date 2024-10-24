@@ -31,6 +31,7 @@ namespace bcos
 {
 namespace gateway
 {
+constexpr uint64_t MAX_MESSAGE_LENGTH = 32 * 1024 * 1024;  ///< The maximum length of data is 100M.
 enum GroupType : uint16_t
 {
     // group with at-least one consensus node

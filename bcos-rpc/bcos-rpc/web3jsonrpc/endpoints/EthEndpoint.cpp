@@ -43,7 +43,7 @@ using namespace bcos::rpc;
 
 task::Task<void> EthEndpoint::protocolVersion(const Json::Value&, Json::Value&)
 {
-    // TODO: impl this
+    // TODO: impl this, this returns eth p2p protocol version
     BOOST_THROW_EXCEPTION(
         JsonRpcException(MethodNotFound, "This API has not been implemented yet!"));
     co_return;
@@ -68,10 +68,12 @@ task::Task<void> EthEndpoint::syncing(const Json::Value&, Json::Value& response)
     buildJsonContent(result, response);
     co_return;
 }
-task::Task<void> EthEndpoint::coinbase(const Json::Value&, Json::Value&)
+task::Task<void> EthEndpoint::coinbase(const Json::Value&, Json::Value& response)
 {
-    BOOST_THROW_EXCEPTION(
-        JsonRpcException(MethodNotFound, "This API has not been implemented yet!"));
+    auto const nodeId = m_nodeService->consensus()->consensusConfig()->nodeID();
+    auto const address = right160(crypto::keccak256Hash(ref(nodeId->data())));
+    Json::Value result = address.hexPrefixed();
+    buildJsonContent(result, response);
     co_return;
 }
 task::Task<void> EthEndpoint::chainId(const Json::Value&, Json::Value& response)
@@ -114,6 +116,7 @@ task::Task<void> EthEndpoint::gasPrice(const Json::Value&, Json::Value& response
 {
     // result: gasPrice(QTY)
     auto const ledger = m_nodeService->ledger();
+    // TODO)): gas price can wrap in a class
     auto config = co_await ledger::getSystemConfig(*ledger, ledger::SYSTEM_KEY_TX_GAS_PRICE);
     Json::Value result;
     if (config.has_value())
@@ -198,7 +201,7 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
     {
         positionStr.insert(0, "0");
     }
-    const auto posistionBytes = FixedBytes<32>(positionStr, FixedBytes<32>::FromHex);
+    const auto positionBytes = FixedBytes<32>(positionStr, FixedBytes<32>::FromHex);
     // TODO)): blockNumber is ignored nowadays
     auto const blockTag = toView(request[2u]);
     auto [blockNumber, _] = co_await getBlockNumberByTag(blockTag);
@@ -211,7 +214,7 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
     auto const ledger = m_nodeService->ledger();
     Json::Value result;
     if (auto const entry = co_await ledger::getStorageAt(
-            *ledger, addressStr, posistionBytes.toRawString(), /*blockNumber*/ 0);
+            *ledger, addressStr, positionBytes.toRawString(), /*blockNumber*/ 0);
         entry.has_value())
     {
         auto const value = entry.value().get();
@@ -244,27 +247,28 @@ task::Task<void> EthEndpoint::getTransactionCount(const Json::Value& request, Js
         WEB3_LOG(TRACE) << "eth_getTransactionCount" << LOG_KV("address", address)
                         << LOG_KV("blockTag", blockTag) << LOG_KV("blockNumber", blockNumber);
     }
+    if (blockTag == PendingBlock)
+    {
+        // try to fetch in txpool first
+        auto const txpool = m_nodeService->txpool();
+        if (auto const nonce = co_await txpool->getWeb3PendingNonce(address))
+        {
+            WEB3_LOG(TRACE) << "eth_getTransactionCount pending tx from txpool"
+                            << LOG_KV("address", address) << LOG_KV("blockTag", blockTag)
+                            << LOG_KV("nonce", nonce.value() + 1);
+            Json::Value result = toQuantity(nonce.value() + 1);
+            buildJsonContent(result, response);
+            co_return;
+        }
+    }
+
     auto const ledger = m_nodeService->ledger();
-    uint64_t nonce = 0;
+    u256 nonce = 0;
     if (auto const entry = co_await ledger::getStorageAt(
             *ledger, addressStr, bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE, /*blockNumber*/ 0);
         entry.has_value())
     {
-        nonce = std::stoull(std::string(entry.value().get()));
-    }
-    else
-    {
-        WEB3_LOG(TRACE) << LOG_DESC("get address nonce failed, return random value by defualt")
-                        << LOG_KV("address", address);
-        static thread_local std::mt19937 generator(std::random_device{}());
-        std::uniform_int_distribution<int> dis(0, 255);
-        std::array<bcos::byte, 8> randomFixedBytes;
-        for (auto& element : randomFixedBytes)
-        {
-            element = dis(generator);
-        }
-        const auto* firstNum = (uint32_t*)randomFixedBytes.data();
-        nonce = *firstNum;
+        nonce = u256(entry.value().get());
     }
     Json::Value result = toQuantity(nonce);
     buildJsonContent(result, response);
@@ -551,8 +555,16 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
         WEB3_LOG(TRACE) << LOG_DESC("eth_estimateGas") << LOG_KV("tx", printJson(tx))
                         << LOG_KV("blockTag", blockTag) << LOG_KV("blockNumber", blockNumber);
     }
-    // FIXME)): fake now
-    Json::Value result = "0x1";
+
+    u256 estimateGas = LowestGasUsed;
+    auto const ledger = m_nodeService->ledger();
+    if (auto const config =
+            co_await ledger::getSystemConfig(*ledger, ledger::SYSTEM_KEY_TX_GAS_LIMIT))
+    {
+        auto [gasLimit, _] = config.value();
+        estimateGas = u256(gasLimit);
+    }
+    Json::Value result = toQuantity(estimateGas);
     buildJsonContent(result, response);
     co_return;
 }
@@ -715,7 +727,7 @@ task::Task<void> EthEndpoint::getTransactionReceipt(
                 JsonRpcException(InvalidParams, "Invalid transaction hash: " + hash.hexPrefixed()));
         }
         auto block = co_await ledger::getBlockData(*ledger, receipt->blockNumber(),
-            bcos::ledger::HEADER | bcos::ledger::TRANSACTIONS_HASH);
+            bcos::ledger::HEADER | bcos::ledger::TRANSACTIONS_HASH | bcos::ledger::RECEIPTS);
         combineReceiptResponse(result, std::move(receipt), txs->at(0), std::move(block));
     }
     catch (...)

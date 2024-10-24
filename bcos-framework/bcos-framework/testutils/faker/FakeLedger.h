@@ -145,7 +145,8 @@ public:
 
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr block,
-        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts) override
+        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
+        std::optional<bcos::ledger::Features> features) override
     {
         (void)storage;
         (void)block;
@@ -269,31 +270,48 @@ public:
         _onGetConfig(nullptr, value, m_ledgerConfig->blockNumber());
     }
 
+    task::Task<bcos::ledger::SystemConfigs> fetchAllSystemConfigs(
+        protocol::BlockNumber _blockNumber) override
+    {
+        ledger::SystemConfigs configs;
+        for (auto const& [key, value] : m_systemConfig)
+        {
+            configs.set(key, value, 0);
+        }
+        co_return configs;
+    }
+
     void asyncGetNodeListByType(std::string_view const& _type,
-        std::function<void(Error::Ptr, ConsensusNodeListPtr)> _onGetNodeList) override
+        std::function<void(Error::Ptr, ConsensusNodeList)> _onGetNodeList) override
     {
         if (_type == CONSENSUS_SEALER)
         {
-            auto consensusNodes = std::make_shared<ConsensusNodeList>();
-            *consensusNodes = m_ledgerConfig->consensusNodeList();
+            auto consensusNodes = m_ledgerConfig->consensusNodeList();
             _onGetNodeList(nullptr, consensusNodes);
             return;
         }
         if (_type == CONSENSUS_OBSERVER)
         {
-            auto observerNodes = std::make_shared<ConsensusNodeList>();
-            *observerNodes = m_ledgerConfig->observerNodeList();
+            auto observerNodes = m_ledgerConfig->observerNodeList();
             _onGetNodeList(nullptr, observerNodes);
             return;
         }
         if (_type == CONSENSUS_CANDIDATE_SEALER)
         {
-            auto consensusNodes = std::make_shared<ConsensusNodeList>();
-            *consensusNodes = m_ledgerConfig->candidateSealerNodeList();
+            auto consensusNodes = m_ledgerConfig->candidateSealerNodeList();
             _onGetNodeList(nullptr, consensusNodes);
             return;
         }
-        _onGetNodeList(BCOS_ERROR_UNIQUE_PTR(-1, "invalid Type"), nullptr);
+        if (_type.empty())
+        {
+            auto allNodes =
+                ::ranges::views::concat(m_ledgerConfig->consensusNodeList(),
+                    m_ledgerConfig->observerNodeList(), m_ledgerConfig->candidateSealerNodeList()) |
+                ::ranges::to<std::vector>();
+            _onGetNodeList(nullptr, allNodes);
+            return;
+        }
+        _onGetNodeList(BCOS_ERROR_UNIQUE_PTR(-1, "invalid Type"), {});
     }
 
     void asyncGetNonceList(BlockNumber _startNumber, int64_t _offset,
@@ -316,6 +334,16 @@ public:
     }
     void removeExpiredNonce(protocol::BlockNumber blockNumber, bool sync) override {}
 
+    task::Task<std::optional<ledger::StorageState>> getStorageState(
+        std::string_view _address, protocol::BlockNumber) override
+    {
+        if (eoaInLedger == _address)
+        {
+            ledger::StorageState state{.nonce = eoaInLedgerNonce, .balance = ""};
+            co_return state;
+        }
+        co_return std::nullopt;
+    }
     void setStatus(bool _normal) { m_statusNormal = _normal; }
     void setTotalTxCount(size_t _totalTxCount) { m_totalTxCount = _totalTxCount; }
     void setSystemConfig(std::string_view _key, std::string const& _value)
@@ -323,13 +351,13 @@ public:
         m_systemConfig[std::string{_key}] = _value;
     }
 
-    void setConsensusNodeList(ConsensusNodeListPtr _consensusNodes)
+    void setConsensusNodeList(ConsensusNodeList _consensusNodes)
     {
-        m_ledgerConfig->setConsensusNodeList(*_consensusNodes);
+        m_ledgerConfig->setConsensusNodeList(_consensusNodes);
     }
-    void setObserverNodeList(ConsensusNodeListPtr _observerNodes)
+    void setObserverNodeList(ConsensusNodeList _observerNodes)
     {
-        m_ledgerConfig->setObserverNodeList(*_observerNodes);
+        m_ledgerConfig->setObserverNodeList(_observerNodes);
     }
 
     LedgerConfig::Ptr ledgerConfig() { return m_ledgerConfig; }
@@ -380,6 +408,12 @@ public:
         });
     }
 
+    void initEoaContext(std::string eoaInLedger, std::string nonce)
+    {
+        this->eoaInLedger = std::move(eoaInLedger);
+        eoaInLedgerNonce = std::move(nonce);
+    }
+
 private:
     BlockFactory::Ptr m_blockFactory;
     std::vector<KeyPairInterface::Ptr> m_keyPairVec;
@@ -398,6 +432,8 @@ private:
     std::map<std::string, std::string, std::less<>> m_systemConfig;
     std::vector<bytes> m_sealerList;
     std::shared_ptr<ThreadPool> m_worker = nullptr;
+    std::string eoaInLedger;
+    std::string eoaInLedgerNonce;
 };
 }  // namespace test
 }  // namespace bcos

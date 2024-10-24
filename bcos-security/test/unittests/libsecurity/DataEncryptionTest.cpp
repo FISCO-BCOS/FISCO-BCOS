@@ -24,7 +24,7 @@ namespace test
 
     BOOST_AUTO_TEST_CASE(testDataEncryption_sm)
     {
-        DataEncryption dataEncryption("bcos_data_key", false);
+        DataEncryption dataEncryption("bcos_data_key", true);
         dataEncryption.setCompatibilityVersion(static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_3_VERSION));
 
         std::string originData = "hello world";

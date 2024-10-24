@@ -30,6 +30,10 @@ void Web3JsonRpcImpl::onRPCRequest(std::string_view _requestBody, Sender _sender
     Json::Value response;
     try
     {
+        if (c_fileLogLevel == TRACE) [[unlikely]]
+        {
+            WEB3_LOG(TRACE) << LOG_BADGE("onRPCRequest") << LOG_KV("request", _requestBody);
+        }
         if (auto const& [valid, msg] = parseRequestAndValidate(_requestBody, request); !valid)
         {
             BOOST_THROW_EXCEPTION(JsonRpcException(InvalidRequest, msg));
@@ -62,9 +66,10 @@ void Web3JsonRpcImpl::onRPCRequest(std::string_view _requestBody, Sender _sender
                 {
                     buildJsonError(_request, InternalError, e.errorMessage(), resp);
                 }
-                catch (const std::exception& e)
+                catch (...)
                 {
-                    buildJsonError(_request, InternalError, boost::diagnostic_information(e), resp);
+                    buildJsonError(_request, InternalError,
+                        boost::current_exception_diagnostic_information(), resp);
                 }
                 auto&& respBytes = toBytesResponse(resp);
                 if (c_fileLogLevel == TRACE) [[unlikely]]
@@ -85,9 +90,15 @@ void Web3JsonRpcImpl::onRPCRequest(std::string_view _requestBody, Sender _sender
     {
         buildJsonError(request, e.code(), e.msg(), response);
     }
+    catch (bcos::Error const& e)
+    {
+        buildJsonError(request, InternalError, e.errorMessage(), response);
+    }
     catch (...)
     {
-        buildJsonError(request, InternalError, "Internal error", response);
+        std::stringstream msg;
+        msg << "Internal error: " << boost::current_exception_diagnostic_information();
+        buildJsonError(request, InternalError, msg.str(), response);
     }
     auto&& resp = toBytesResponse(response);
     WEB3_LOG(DEBUG) << LOG_BADGE("onRPCRequest") << LOG_DESC("response with exception")
@@ -99,9 +110,19 @@ void Web3JsonRpcImpl::onRPCRequest(std::string_view _requestBody, Sender _sender
 std::tuple<bool, std::string> Web3JsonRpcImpl::parseRequestAndValidate(
     std::string_view request, Json::Value& root)
 {
-    if (Json::Reader jsonReader; !jsonReader.parse(request.begin(), request.end(), root))
+    Json::Value temp;
+    if (Json::Reader jsonReader; !jsonReader.parse(request.begin(), request.end(), temp))
     {
         return {false, "Parse json failed"};
+    }
+    if (temp.isArray())
+    {
+        // adapt to the jsonrpc standard blockscout
+        root = std::move(temp[0]);
+    }
+    else
+    {
+        root = std::move(temp);
     }
     if (auto result{JsonValidator::validate(root)}; !std::get<bool>(result))
     {

@@ -19,42 +19,43 @@
  * @date 2021-05-06
  */
 #pragma once
-#include "../consensus/ConsensusNodeInterface.h"
+#include "../consensus/ConsensusNode.h"
 #include "../protocol/ProtocolTypeDef.h"
 #include "Features.h"
-
 #include <evmc/evmc.hpp>
+#include <utility>
 
 namespace bcos::ledger
 {
 
-constexpr std::uint64_t DEFAULT_EPOCH_SEALER_NUM{4};
-constexpr std::uint64_t DEFAULT_EPOCH_BLOCK_NUM{1000};
-constexpr std::uint64_t DEFAULT_INTERNAL_NOTIFY_FLAG{0};
+constexpr static uint64_t DEFAULT_GAS_LIMIT = 3000000000;
+constexpr static std::uint64_t DEFAULT_EPOCH_SEALER_NUM = 4;
+constexpr static std::uint64_t DEFAULT_EPOCH_BLOCK_NUM = 1000;
+constexpr static std::uint64_t DEFAULT_INTERNAL_NOTIFY_FLAG = 0;
 
 class LedgerConfig
 {
 public:
     using Ptr = std::shared_ptr<LedgerConfig>;
-    LedgerConfig()
-      : m_consensusNodeList(std::make_shared<bcos::consensus::ConsensusNodeList>()),
-        m_observerNodeList(std::make_shared<bcos::consensus::ConsensusNodeList>()),
-        m_candidateSealerNodeList(std::make_shared<bcos::consensus::ConsensusNodeList>())
-    {}
+    LedgerConfig() = default;
+    LedgerConfig(const LedgerConfig&) = default;
+    LedgerConfig(LedgerConfig&&) = default;
+    LedgerConfig& operator=(const LedgerConfig&) = default;
+    LedgerConfig& operator=(LedgerConfig&&) = default;
     virtual ~LedgerConfig() = default;
 
-    virtual void setConsensusNodeList(bcos::consensus::ConsensusNodeList const& _consensusNodeList)
+    virtual void setConsensusNodeList(bcos::consensus::ConsensusNodeList _consensusNodeList)
     {
-        *m_consensusNodeList = _consensusNodeList;
+        m_consensusNodeList = std::move(_consensusNodeList);
     }
-    virtual void setObserverNodeList(bcos::consensus::ConsensusNodeList const& _observerNodeList)
+    virtual void setObserverNodeList(bcos::consensus::ConsensusNodeList _observerNodeList)
     {
-        *m_observerNodeList = _observerNodeList;
+        m_observerNodeList = std::move(_observerNodeList);
     }
     virtual void setCandidateSealerNodeList(
-        bcos::consensus::ConsensusNodeList const& candidateSealerNodeList)
+        bcos::consensus::ConsensusNodeList candidateSealerNodeList)
     {
-        *m_candidateSealerNodeList = candidateSealerNodeList;
+        m_candidateSealerNodeList = std::move(candidateSealerNodeList);
     }
     virtual void setHash(bcos::crypto::HashType const& _hash) { m_hash = _hash; }
     virtual void setBlockNumber(bcos::protocol::BlockNumber _blockNumber)
@@ -68,21 +69,21 @@ public:
 
     virtual bcos::consensus::ConsensusNodeList const& consensusNodeList() const
     {
-        return *m_consensusNodeList;
+        return m_consensusNodeList;
     }
 
     virtual bcos::consensus::ConsensusNodeList& mutableConsensusNodeList()
     {
-        return *m_consensusNodeList;
+        return m_consensusNodeList;
     }
 
     virtual bcos::consensus::ConsensusNodeList const& observerNodeList() const
     {
-        return *m_observerNodeList;
+        return m_observerNodeList;
     }
     virtual bcos::consensus::ConsensusNodeList const& candidateSealerNodeList() const
     {
-        return *m_candidateSealerNodeList;
+        return m_candidateSealerNodeList;
     }
     bcos::crypto::HashType const& hash() const { return m_hash; }
     bcos::protocol::BlockNumber blockNumber() const { return m_blockNumber; }
@@ -92,9 +93,9 @@ public:
 
     uint64_t blockTxCountLimit() const { return m_blockTxCountLimit; }
 
-    bcos::consensus::ConsensusNodeListPtr mutableConsensusList() { return m_consensusNodeList; }
-    bcos::consensus::ConsensusNodeListPtr mutableObserverList() { return m_observerNodeList; }
-    bcos::consensus::ConsensusNodeListPtr mutableCandidateSealerNodeList()
+    bcos::consensus::ConsensusNodeList& mutableConsensusList() { return m_consensusNodeList; }
+    bcos::consensus::ConsensusNodeList& mutableObserverList() { return m_observerNodeList; }
+    bcos::consensus::ConsensusNodeList& mutableCandidateSealerNodeList()
     {
         return m_candidateSealerNodeList;
     }
@@ -159,21 +160,21 @@ public:
     void setFeatures(Features features) { m_features = features; }
 
     std::optional<evmc_uint256be> const& chainId() const { return m_chainId; }
-    void setChainId(evmc_uint256be _chainId) { m_chainId = std::move(_chainId); }
+    void setChainId(evmc_uint256be _chainId) { m_chainId = _chainId; }
 
 private:
-    bcos::consensus::ConsensusNodeListPtr m_consensusNodeList;
-    bcos::consensus::ConsensusNodeListPtr m_observerNodeList;
-    bcos::consensus::ConsensusNodeListPtr m_candidateSealerNodeList;
+    bcos::consensus::ConsensusNodeList m_consensusNodeList;
+    bcos::consensus::ConsensusNodeList m_observerNodeList;
+    bcos::consensus::ConsensusNodeList m_candidateSealerNodeList;
     bcos::crypto::HashType m_hash;
     bcos::protocol::BlockNumber m_blockNumber = 0;
     std::string m_consensusType;
     uint64_t m_blockTxCountLimit = 0;
     uint64_t m_leaderSwitchPeriod = 1;
-    std::tuple<uint64_t, protocol::BlockNumber> m_gasLimit = {3000000000, 0};
+    std::tuple<uint64_t, protocol::BlockNumber> m_gasLimit = {DEFAULT_GAS_LIMIT, 0};
     std::tuple<std::string, protocol::BlockNumber> m_gasPrice = {"0x0", 0};
-    std::tuple<uint64_t, protocol::BlockNumber> m_epochSealerNum = {4, 0};
-    std::tuple<uint64_t, protocol::BlockNumber> m_epochBlockNum = {1000, 0};
+    std::tuple<uint64_t, protocol::BlockNumber> m_epochSealerNum = {DEFAULT_EPOCH_SEALER_NUM, 0};
+    std::tuple<uint64_t, protocol::BlockNumber> m_epochBlockNum = {DEFAULT_EPOCH_BLOCK_NUM, 0};
     uint64_t m_notifyRotateFlagInfo{0};
     // the compatibilityVersion
     // the system version, can only be upgraded manually
@@ -183,6 +184,6 @@ private:
     int64_t m_txsSize = -1;
     uint32_t m_authCheckStatus = 0;
     Features m_features;
-    std::optional<evmc_uint256be> m_chainId = {};
+    std::optional<evmc_uint256be> m_chainId;
 };
 }  // namespace bcos::ledger

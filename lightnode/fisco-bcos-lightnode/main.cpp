@@ -29,7 +29,7 @@
 #include "client/TransactionPoolClientImpl.h"
 #include "libinitializer/CommandHelper.h"
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
-#include <bcos-ledger/src/libledger/Ledger.h>
+#include <bcos-ledger/Ledger.h>
 #include <bcos-storage/StorageWrapperImpl.h>
 #include <bcos-tars-protocol/impl/TarsHashable.h>
 #include <bcos-tars-protocol/tars/Block.h>
@@ -82,8 +82,7 @@ static auto startSyncerThread(bcos::concepts::ledger::Ledger auto fromLedger,
             {
                 auto& ledger = bcos::concepts::getRef(toLedger);
 
-                auto syncedBlock = bcos::task::syncWait(
-                    ledger
+                auto syncedBlock = bcos::task::syncWait(ledger
                         .template sync<std::remove_cvref_t<decltype(fromLedger)>, bcostars::Block>(
                             fromLedger, true));
                 auto currentStatus = bcos::task::syncWait(ledger.getStatus());
@@ -200,7 +199,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
     auto logInitializer = std::make_shared<bcos::BoostLogInitializer>();
     logInitializer->initLog(configFile);
 
-    g_BCOSConfig.setCodec(std::make_shared<bcostars::protocol::ProtocolInfoCodecImpl>());
+    bcos::protocol::g_BCOSConfig.setCodec(
+        std::make_shared<bcostars::protocol::ProtocolInfoCodecImpl>());
 
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
     auto nodeConfig = std::make_shared<bcos::tool::NodeConfig>(keyFactory);
@@ -219,8 +219,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
     {
         bcos::gateway::GatewayFactory gatewayFactory(nodeConfig->chainId(), "local", nullptr);
         gateway = gatewayFactory.buildGateway(configFile, true, nullptr, "localGateway");
-        auto protocolInfo =
-            g_BCOSConfig.protocolInfo(bcos::protocol::ProtocolModuleID::GatewayService);
+        auto protocolInfo = bcos::protocol::g_BCOSConfig.protocolInfo(
+            bcos::protocol::ProtocolModuleID::GatewayService);
         gateway->gatewayNodeManager()->registerNode(nodeConfig->groupId(),
             protocolInitializer.keyPair()->publicKey(), bcos::protocol::NodeType::LIGHT_NODE, front,
             protocolInfo);

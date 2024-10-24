@@ -31,15 +31,6 @@ using namespace bcos::precompiled;
 using namespace bcos::executor;
 using namespace bcos::storage;
 
-#ifndef WITH_WASM
-namespace bcos::wasm
-{
-class GasInjector
-{
-};
-}  // namespace bcos::wasm
-#endif
-
 namespace bcos::test
 {
 struct GroupSigPrecompiledFixture

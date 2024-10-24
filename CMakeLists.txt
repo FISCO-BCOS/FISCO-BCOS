@@ -6,7 +6,7 @@ endif()
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 
-set(VERSION "3.11.0")
+set(VERSION "3.12.0")
 set(VERSION_SUFFIX "")
 include(Options)
 configure_project()
@@ -62,6 +62,7 @@ if(FULLNODE)
     include(ProjectGroupSig)
     include(ProjectPaillier)
     include(ProjectBLST)
+    include(ProjectTOMLPP)
 
     add_subdirectory(bcos-sealer)
     add_subdirectory(bcos-security)

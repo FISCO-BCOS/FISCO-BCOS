@@ -1,10 +1,11 @@
 #include <bcos-framework/Common.h>
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
-#include <bcos-ledger/src/libledger/LedgerMethods.h>
 #include <bcos-rpc/filter/FilterSystem.h>
 #include <bcos-rpc/jsonrpc/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
+
+#include <utility>
 
 #define CPU_CORES std::thread::hardware_concurrency()
 
@@ -12,14 +13,14 @@ using namespace bcos;
 using namespace bcos::rpc;
 using namespace bcos::rpc::filter;
 
-FilterSystem::FilterSystem(GroupManager::Ptr groupManager, const std::string& groupId,
+FilterSystem::FilterSystem(GroupManager::Ptr groupManager, std::string groupId,
     FilterRequestFactory::Ptr factory, int filterTimeout, int maxBlockProcessPerReq)
   : m_filterTimeout(filterTimeout * 1000),
     m_maxBlockProcessPerReq(maxBlockProcessPerReq),
-    m_groupManager(groupManager),
-    m_group(groupId),
+    m_groupManager(std::move(groupManager)),
+    m_group(std::move(groupId)),
     m_matcher(std::make_shared<LogMatcher>()),
-    m_factory(factory),
+    m_factory(std::move(factory)),
     m_filters(CPU_CORES)
 {
     // Trigger a filter cleanup operation every 3s

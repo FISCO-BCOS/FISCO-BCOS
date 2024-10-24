@@ -23,6 +23,7 @@
 #include "bcos-gateway/libnetwork/Socket.h"
 #include "bcos-gateway/libp2p/P2PMessageV2.h"
 #include "bcos-utilities/ratelimiter/DistributedRateLimiter.h"
+#include "libinitializer/Common.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-gateway/GatewayFactory.h>
@@ -42,7 +43,8 @@ using namespace bcos::tool;
 
 void AirNodeInitializer::init(std::string const& _configFilePath, std::string const& _genesisFile)
 {
-    g_BCOSConfig.setCodec(std::make_shared<bcostars::protocol::ProtocolInfoCodecImpl>());
+    bcos::protocol::g_BCOSConfig.setCodec(
+        std::make_shared<bcostars::protocol::ProtocolInfoCodecImpl>());
 
     boost::property_tree::ptree ptree;
     boost::property_tree::read_ini(_configFilePath, ptree);

@@ -33,4 +33,5 @@ static constexpr const uint64_t MAX_TRAVERSE_TXS_COUNT = 10000;
 static constexpr const size_t MAX_RETRY_NOTIFY_TIME = 3;
 static constexpr const size_t DEFAULT_POOL_LIMIT = 15000;
 static constexpr const int64_t DEFAULT_BLOCK_LIMIT = 600;
+static constexpr const uint64_t DEFAULT_WEB3_NONCE_CHECK_LIMIT = DEFAULT_BLOCK_LIMIT * 1000;
 }  // namespace bcos::txpool

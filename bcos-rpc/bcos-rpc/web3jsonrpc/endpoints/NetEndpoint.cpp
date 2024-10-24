@@ -20,8 +20,8 @@
 
 #include "NetEndpoint.h"
 
+#include "bcos-ledger/LedgerMethods.h"
 #include <bcos-framework/ledger/Ledger.h>
-#include <bcos-ledger/src/libledger/LedgerMethods.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 
 using namespace bcos;

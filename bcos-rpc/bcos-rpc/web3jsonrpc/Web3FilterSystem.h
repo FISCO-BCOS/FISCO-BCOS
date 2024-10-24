@@ -18,7 +18,7 @@ public:
             filterTimeout, maxBlockProcessPerReq)
     {}
 
-    virtual int32_t InvalidParamsCode() override { return Web3JsonRpcError::Web3DefautError; }
+    virtual int32_t InvalidParamsCode() override { return Web3JsonRpcError::Web3DefaultError; }
 };
 
 }  // namespace rpc

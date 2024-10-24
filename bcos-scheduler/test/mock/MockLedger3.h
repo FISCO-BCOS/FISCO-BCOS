@@ -1,5 +1,6 @@
 #pragma once
 
+#include "bcos-framework/consensus/ConsensusNode.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
@@ -9,7 +10,6 @@
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-framework/storage/StorageInterface.h"
-#include "bcos-ledger/src/libledger/utilities/Common.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-utilities/Error.h>
 #include <boost/test/unit_test.hpp>
@@ -30,7 +30,8 @@ public:
     using Ptr = std::shared_ptr<MockLedger3>;
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
-        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts) override
+        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
+        std::optional<bcos::ledger::Features> features) override
     {
         auto blockNumber = block->blockHeaderConst()->number();
         if (blockNumber == 1024)
@@ -146,20 +147,47 @@ public:
         }
     }
 
+    task::Task<bcos::ledger::SystemConfigs> fetchAllSystemConfigs(
+        protocol::BlockNumber _blockNumber) override
+    {
+        ledger::SystemConfigs systemConfig;
+        systemConfig.set(ledger::SYSTEM_KEY_TX_COUNT_LIMIT, "100", commitBlockNumber);
+        systemConfig.set(ledger::SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, "300", commitBlockNumber);
+        systemConfig.set(ledger::SYSTEM_KEY_TX_GAS_LIMIT, "300000000", commitBlockNumber);
+        systemConfig.set(ledger::SYSTEM_KEY_TX_GAS_PRICE, "0x1", commitBlockNumber);
+        systemConfig.set(ledger::SYSTEM_KEY_COMPATIBILITY_VERSION, bcos::protocol::RC4_VERSION_STR,
+            commitBlockNumber);
+        systemConfig.set(ledger::SYSTEM_KEY_RPBFT_SWITCH, "1", commitBlockNumber);
+        systemConfig.set(ledger::SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM, "4", commitBlockNumber);
+        systemConfig.set(ledger::SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM, "1000", commitBlockNumber);
+        systemConfig.set(ledger::SYSTEM_KEY_WEB3_CHAIN_ID, "20200", commitBlockNumber);
+        co_return systemConfig;  // Return the populated SystemConfigs object
+    }
+
     void asyncGetNodeListByType(std::string_view const& _type,
-        std::function<void(Error::Ptr, consensus::ConsensusNodeListPtr)> _onGetConfig) override
+        std::function<void(Error::Ptr, consensus::ConsensusNodeList)> _onGetConfig) override
     {
         if (_type == ledger::CONSENSUS_SEALER)
         {
-            _onGetConfig(nullptr, std::make_shared<consensus::ConsensusNodeList>(1));
+            _onGetConfig(nullptr, consensus::ConsensusNodeList(1));
         }
         else if (_type == ledger::CONSENSUS_OBSERVER)
         {
-            _onGetConfig(nullptr, std::make_shared<consensus::ConsensusNodeList>(2));
+            _onGetConfig(nullptr, consensus::ConsensusNodeList(2));
         }
         else if (_type == ledger::CONSENSUS_CANDIDATE_SEALER)
         {
-            _onGetConfig(nullptr, std::make_shared<consensus::ConsensusNodeList>(2));
+            _onGetConfig(nullptr, consensus::ConsensusNodeList(2));
+        }
+        else if (_type.empty())
+        {
+            consensus::ConsensusNodeList nodeList(5);
+            nodeList[0].type = consensus::Type::consensus_sealer;
+            nodeList[1].type = consensus::Type::consensus_observer;
+            nodeList[2].type = consensus::Type::consensus_observer;
+            nodeList[3].type = consensus::Type::consensus_candidate_sealer;
+            nodeList[4].type = consensus::Type::consensus_candidate_sealer;
+            _onGetConfig(nullptr, nodeList);
         }
         else
         {

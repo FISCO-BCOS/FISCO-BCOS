@@ -22,7 +22,6 @@
 #include "bcos-sync/BlockSyncConfig.h"
 #include "bcos-sync/interfaces/BlocksMsgInterface.h"
 #include <bcos-framework/protocol/Block.h>
-#include <bcos-tool/LedgerConfigFetcher.h>
 #include <queue>
 namespace bcos::sync
 {
@@ -47,9 +46,7 @@ public:
     using Ptr = std::shared_ptr<DownloadingQueue>;
     explicit DownloadingQueue(BlockSyncConfig::Ptr _config)
       : m_config(std::move(_config)), m_blockBuffer(std::make_shared<BlocksMessageQueue>())
-    {
-        m_ledgerFetcher = std::make_shared<bcos::tool::LedgerConfigFetcher>(m_config->ledger());
-    }
+    {}
     virtual ~DownloadingQueue() = default;
 
     virtual void push(BlocksMsgInterface::Ptr _blocksData);
@@ -131,7 +128,5 @@ private:
 
     std::function<void(bcos::ledger::LedgerConfig::Ptr)> m_newBlockHandler;
     std::function<void(bool)> m_applyFinishedHandler;
-
-    std::shared_ptr<bcos::tool::LedgerConfigFetcher> m_ledgerFetcher;
 };
 }  // namespace bcos::sync

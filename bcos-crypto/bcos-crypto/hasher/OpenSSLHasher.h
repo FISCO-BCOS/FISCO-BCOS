@@ -7,7 +7,6 @@
 #include <boost/throw_exception.hpp>
 #include <span>
 #include <stdexcept>
-#include <type_traits>
 
 namespace bcos::crypto::hasher::openssl
 {
@@ -161,12 +160,8 @@ public:
         return newHasher;
     }
 
-    struct Deleter
-    {
-        void operator()(EVP_MD_CTX* p) const { EVP_MD_CTX_free(p); }
-    };
-
-    std::unique_ptr<EVP_MD_CTX, Deleter> m_mdCtx;
+    std::unique_ptr<EVP_MD_CTX, decltype([](EVP_MD_CTX* context) { EVP_MD_CTX_free(context); })>
+        m_mdCtx;
     bool m_init = false;
 };
 

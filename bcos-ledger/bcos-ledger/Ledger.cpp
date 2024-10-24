@@ -22,14 +22,15 @@
  */
 
 #include "Ledger.h"
+#include "LedgerMethods.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
+#include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-tool/NodeConfig.h"
 #include "bcos-tool/VersionConverter.h"
 #include "bcos-utilities/Common.h"
-#include "utilities/Common.h"
 #include <bcos-codec/scale/Scale.h>
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/ByteBuffer.h>
@@ -46,7 +47,6 @@
 #include <bcos-framework/storage/Table.h>
 #include <bcos-task/Wait.h>
 #include <bcos-tool/BfsFileFactory.h>
-#include <bcos-tool/ConsensusNode.h>
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <evmc/evmc.h>
@@ -56,8 +56,11 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/lexical_cast/bad_lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
+#include <algorithm>
 #include <array>
 #include <cstddef>
+#include <cstdlib>
+#include <exception>
 #include <future>
 #include <iterator>
 #include <memory>
@@ -134,8 +137,8 @@ task::Task<std::optional<storage::Entry>> Ledger::getStorageAt(
 
 void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
-    std::function<void(std::string, Error::Ptr&&)> callback,
-    bool writeTxsAndReceipts)  // Unused flag writeTxsAndReceipts
+    std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
+    std::optional<bcos::ledger::Features> features)
 {
     if (!block)
     {
@@ -225,6 +228,8 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     // number 2 nonce
     auto nonceBlock = m_blockFactory->createBlock();
     protocol::NonceList nonceList;
+    std::unordered_map<std::string, uint64_t> web3NonceMap{};
+    std::unordered_map<std::string, uint64_t> bcosNonceMap{};
     // get nonce from _blockTxs
     if (_blockTxs)
     {
@@ -242,6 +247,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
             nonceList.emplace_back(tx->nonce());
         }
     }
+
     nonceBlock->setNonceList(nonceList);
     bytes nonceBuffer;
     nonceBlock->encode(nonceBuffer);
@@ -388,6 +394,61 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
                              << LOG_KV("totalTxs", totalTxsCount) << LOG_KV("failedTxs", failedTxs)
                              << LOG_KV("incTxs", totalCount) << LOG_KV("incFailedTxs", failedCount);
         });
+}
+
+task::Task<void> Ledger::batchInsertEoaNonce(bcos::storage::StorageInterface::Ptr storage,
+    std::unordered_map<std::string, uint64_t> eoa2Nonce,
+    std::unordered_map<std::string, uint64_t> fbEoa2Nonce)
+{
+    for (auto&& [sender, nonce] : fbEoa2Nonce)
+    {
+        if (eoa2Nonce.contains(sender))
+        {
+            eoa2Nonce[sender] += nonce;
+            continue;
+        }
+        // write in storage
+        ledger::account::EVMAccount eoa(*storage, sender);
+        if (!co_await ledger::account::isExist(eoa))
+        {
+            co_await ledger::account::create(eoa);
+        }
+        auto nonceInStorage = co_await ledger::account::nonce(eoa);
+        auto const newNonce = nonce + std::stoull(nonceInStorage.value_or("0"));
+        co_await ledger::account::setNonce(eoa, std::to_string(newNonce));
+    }
+
+    co_await bcos::storage2::writeSome(*storage,
+        RANGES::views::keys(eoa2Nonce) | RANGES::views::transform([](auto&& sender) {
+            auto table = getContractTableName(SYS_DIRECTORY::USER_APPS, sender);
+            return transaction_executor::StateKey(table, "nonce");
+        }),
+        RANGES::views::values(eoa2Nonce) | RANGES::views::transform([](auto&& nonce) {
+            Entry entry;
+            entry.set(std::to_string(nonce + 1));
+            return entry;
+        }));
+}
+
+task::Task<std::optional<ledger::StorageState>> Ledger::getStorageState(
+    std::string_view _address, protocol::BlockNumber _blockNumber)
+{
+    ledger::StorageState state;
+    auto const nonceEntry =
+        co_await getStorageAt(_address, ACCOUNT_TABLE_FIELDS::NONCE, _blockNumber);
+    if (!nonceEntry.has_value())
+    {
+        co_return std::nullopt;
+    }
+    state.nonce = std::string(nonceEntry->get());
+    auto const balanceEntry =
+        co_await getStorageAt(_address, ACCOUNT_TABLE_FIELDS::BALANCE, _blockNumber);
+    if (!balanceEntry.has_value())
+    {
+        co_return std::nullopt;
+    }
+    state.balance = std::string(balanceEntry->get());
+    co_return state;
 }
 
 std::tuple<bool, bcos::crypto::HashListPtr, std::shared_ptr<std::vector<bytesConstPtr>>>
@@ -1213,56 +1274,37 @@ void Ledger::removeExpiredNonce(protocol::BlockNumber blockNumber, bool sync)
     }
 }
 
-void Ledger::asyncGetNodeListByType(const std::string_view& _type,
-    std::function<void(Error::Ptr, consensus::ConsensusNodeListPtr)> _onGetConfig)
+void Ledger::asyncGetNodeListByType(std::string_view const& _type,
+    std::function<void(Error::Ptr, consensus::ConsensusNodeList)> _onGetConfig)
 {
-    LEDGER_LOG(DEBUG) << "GetNodeListByType request" << LOG_KV("type", _type);
+    auto eType = magic_enum::enum_cast<consensus::Type>(_type);
+    if (!eType && !_type.empty())
+    {
+        _onGetConfig(nullptr, {});
+        return;
+    }
 
-    asyncGetBlockNumber([this, type = _type, callback = std::move(_onGetConfig)](
-                            Error::Ptr&& error, bcos::protocol::BlockNumber blockNumber) mutable {
-        if (error)
+    task::wait([](decltype(*this)& self, std::optional<consensus::Type> type,
+                   decltype(_onGetConfig) callback) -> task::Task<void> {
+        try
         {
-            LEDGER_LOG(DEBUG) << "GetNodeListByType" << boost::diagnostic_information(*error);
-            callback(BCOS_ERROR_WITH_PREV_PTR(
-                         LedgerError::GetStorageError, "GetNodeListByType failed", *error),
-                nullptr);
-            return;
+            auto blockNumber =
+                co_await ledger::getCurrentBlockNumber(*self.m_stateStorage, fromStorage);
+            auto effectNumber = blockNumber + 1;
+            auto nodeList = co_await ledger::getNodeList(*self.m_stateStorage);
+
+            auto filterNodeList = RANGES::views::filter(nodeList, [&](auto const& node) {
+                return (!type || node.type == *type) && node.enableNumber <= effectNumber;
+            }) | RANGES::to<std::vector>();
+            callback(nullptr, std::move(filterNodeList));
         }
-
-        LEDGER_LOG(DEBUG) << "Get nodeList from" << LOG_KV("blockNumber", blockNumber);
-
-        m_stateStorage->asyncGetRow(SYS_CONSENSUS, "key",
-            [callback = std::move(callback), type = type, this, blockNumber](
-                Error::UniquePtr error, std::optional<Entry> entry) {
-                if (error || !entry)
-                {
-                    callback(std::move(error), nullptr);
-                    return;
-                }
-
-                auto nodeList = decodeConsensusList(entry->getField(0));
-                auto nodes = std::make_shared<consensus::ConsensusNodeList>();
-
-                auto effectNumber = blockNumber + 1;
-                for (auto& it : nodeList)
-                {
-                    if (it.type == type && boost::lexical_cast<bcos::protocol::BlockNumber>(
-                                               it.enableNumber) <= effectNumber)
-                    {
-                        crypto::NodeIDPtr nodeID =
-                            m_blockFactory->cryptoSuite()->keyFactory()->createKey(
-                                fromHex(it.nodeID));
-                        // Note: use try-catch to handle the exception case
-                        nodes->emplace_back(std::make_shared<consensus::ConsensusNode>(
-                            nodeID, it.weight.convert_to<uint64_t>()));
-                    }
-                }
-
-                LEDGER_LOG(DEBUG) << "GetNodeListByType success" << LOG_KV("type", type)
-                                  << LOG_KV("nodes size", nodes->size());
-                callback(nullptr, std::move(nodes));
-            });
-    });
+        catch (std::exception& e)
+        {
+            callback(BCOS_ERROR_WITH_PREV_PTR(
+                         LedgerError::GetStorageError, "Error while getNodeListByType", e),
+                {});
+        }
+    }(*this, eType, std::move(_onGetConfig)));
 }
 
 Error::Ptr Ledger::checkTableValid(Error::UniquePtr&& error,
@@ -1356,8 +1398,8 @@ void Ledger::asyncGetBlockTransactionHashes(bcos::protocol::BlockNumber blockNum
 
             table->asyncGetRow(boost::lexical_cast<std::string>(blockNumber),
                 [this, blockNumber, callback](auto&& error, std::optional<Entry>&& entry) {
-                    auto validError = checkEntryValid(
-                        std::move(error), entry, boost::lexical_cast<std::string>(blockNumber));
+                    auto validError = checkEntryValid(std::forward<decltype(error)>(error), entry,
+                        boost::lexical_cast<std::string>(blockNumber));
                     if (validError)
                     {
                         callback(std::move(validError), std::vector<std::string>());
@@ -1776,6 +1818,11 @@ static task::Task<void> setAllocs(
             co_await account::setCode(account, std::move(binaryCode), std::string{}, codeHash);
         }
 
+        if (!alloc.nonce.empty())
+        {
+            co_await account::setNonce(account, std::move(alloc.nonce));
+        }
+
         if (alloc.balance > 0)
         {
             co_await account::setBalance(account, alloc.balance);
@@ -1811,21 +1858,9 @@ bool Ledger::buildGenesisBlock(
                           << LOG_KV("gasLimitMin", TX_GAS_LIMIT_MIN);
         return false;
     }
-
-    std::promise<std::tuple<Error::Ptr, bcos::crypto::HashType>> getBlockPromise;
-    asyncGetBlockHashByNumber(0, [&](Error::Ptr error, bcos::crypto::HashType hash) {
-        getBlockPromise.set_value({std::move(error), hash});
-    });
-
-    auto getBlockResult = getBlockPromise.get_future().get();
-    if (std::get<0>(getBlockResult) &&
-        std::get<0>(getBlockResult)->errorCode() != LedgerError::GetStorageError)
-    {
-        BOOST_THROW_EXCEPTION(*(std::get<0>(getBlockResult)));
-    }
-
+    auto genesisBlockHash = task::syncWait(ledger::getBlockHash(*m_stateStorage, 0, fromStorage));
     auto genesisData = generateGenesisData(genesis, ledgerConfig);
-    if (std::get<1>(getBlockResult))
+    if (genesisBlockHash)
     {
         // genesis block exists, quit
         LEDGER_LOG(INFO) << LOG_DESC("[#buildGenesisBlock] success, block exists");
@@ -1916,7 +1951,7 @@ bool Ledger::buildGenesisBlock(
                                   ", high than support maxVersion"));
     }
     // clang-format off
-    std::vector<std::string_view> tables {
+    constexpr static auto tables = std::to_array<std::string_view>({
         SYS_CONFIG, SYS_VALUE_AND_ENABLE_BLOCK_NUMBER,
         SYS_CONSENSUS, SYS_VALUE,
         SYS_CURRENT_STATE, SYS_VALUE,
@@ -1927,28 +1962,23 @@ bool Ledger::buildGenesisBlock(
         SYS_NUMBER_2_TXS, SYS_VALUE,
         SYS_HASH_2_RECEIPT, SYS_VALUE,
         SYS_BLOCK_NUMBER_2_NONCES, SYS_VALUE,
-    };
-
+    });
+    constexpr static auto moreTables = std::to_array<std::string_view>(
+            {SYS_CODE_BINARY, SYS_VALUE, SYS_CONTRACT_ABI, SYS_VALUE});
+    // clang-format on
+    RANGES::any_view<std::string_view, RANGES::category::mask | RANGES::category::sized> tablesView(
+        tables);
     if (versionNumber >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
     {
-        std::vector<std::string_view> moreTables{
-            SYS_CODE_BINARY, SYS_VALUE,
-            SYS_CONTRACT_ABI, SYS_VALUE
-        };
-
-        for (auto v : moreTables)
-        {
-            tables.push_back(v);
-        }
+        tablesView = RANGES::views::concat(tablesView, moreTables);
     }
-    // clang-format on
 
-    size_t total = tables.size();
-
-    for (size_t i = 0; i < total; i += 2)
+    for (auto&& pair : tablesView | RANGES::views::chunk(2))
     {
+        auto tableName = pair[0];
+        auto tableField = pair[1];
         std::promise<std::tuple<Error::UniquePtr>> createTablePromise;
-        m_stateStorage->asyncCreateTable(std::string(tables[i]), std::string(tables[i + 1]),
+        m_stateStorage->asyncCreateTable(std::string(tableName), std::string(tableField),
             [&createTablePromise](auto&& error, std::optional<Table>&&) {
                 createTablePromise.set_value({std::forward<decltype(error)>(error)});
             });
@@ -2096,69 +2126,36 @@ bool Ledger::buildGenesisBlock(
     }
 
     // write consensus node list
-    std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> consensusTablePromise;
-    m_stateStorage->asyncOpenTable(SYS_CONSENSUS, [&consensusTablePromise](
-                                                      auto&& error, std::optional<Table>&& table) {
-        consensusTablePromise.set_value({std::forward<decltype(error)>(error), std::move(table)});
-    });
-
-    auto [consensusError, consensusTable] = consensusTablePromise.get_future().get();
-    if (consensusError)
-    {
-        BOOST_THROW_EXCEPTION(*consensusError);
-    }
-
-    if (!consensusTable)
-    {
-        BOOST_THROW_EXCEPTION(
-            BCOS_ERROR(LedgerError::OpenTableFailed, "Open SYS_CONSENSUS failed!"));
-    }
-
-    ConsensusNodeList consensusNodeList;
-
-    for (const auto& node : ledgerConfig.consensusNodeList())
-    {
-        consensusNodeList.emplace_back(
-            node->nodeID()->hex(), node->weight(), std::string{CONSENSUS_SEALER}, "0");
-    }
-
     // update some node type to CONSENSUS_CANDIDATE_SEALER
     if (versionNumber >= (uint32_t)protocol::BlockVersion::V3_5_VERSION &&
         RPBFT_CONSENSUS_TYPE == genesis.m_consensusType)
     {
         auto workingSealerList = selectWorkingSealer(ledgerConfig, genesis.m_epochSealerNum);
-        for (auto& node : consensusNodeList)
-        {
-            auto iter = std::find_if(
-                workingSealerList->begin(), workingSealerList->end(), [&node](auto&& workingNode) {
-                    return workingNode->nodeID()->hex() == node.nodeID;
-                });
-            if (iter == workingSealerList->end())
-            {
-                node.type = CONSENSUS_CANDIDATE_SEALER;
-            }
-        }
+        std::sort(workingSealerList.begin(), workingSealerList.end(),
+            [](auto const& lhs, auto const& rhs) {
+                return lhs.nodeID->data() < rhs.nodeID->data();
+            });
+        task::syncWait(ledger::setNodeList(*m_stateStorage,
+            RANGES::views::concat(
+                ledgerConfig.consensusNodeList() | RANGES::views::transform([&](auto node) {
+                    if (auto it = std::lower_bound(workingSealerList.begin(),
+                            workingSealerList.end(), node.nodeID,
+                            [](auto const& lhs, auto const& rhs) {
+                                return lhs.nodeID->data() < rhs->data();
+                            });
+                        it == workingSealerList.end() || it->nodeID->data() != node.nodeID->data())
+                    {
+                        node.type = consensus::Type::consensus_candidate_sealer;
+                    }
+                    return node;
+                }),
+                ledgerConfig.observerNodeList())));
     }
-
-    for (const auto& node : ledgerConfig.observerNodeList())
+    else
     {
-        consensusNodeList.emplace_back(
-            node->nodeID()->hex(), node->weight(), std::string{CONSENSUS_OBSERVER}, "0");
-    }
-
-    Entry consensusNodeListEntry;
-    consensusNodeListEntry.importFields({encodeConsensusList(consensusNodeList)});
-
-    std::promise<Error::UniquePtr> setConsensusNodeListPromise;
-    consensusTable->asyncSetRow("key", std::move(consensusNodeListEntry),
-        [&setConsensusNodeListPromise](
-            Error::UniquePtr&& error) { setConsensusNodeListPromise.set_value(std::move(error)); });
-
-    auto setConsensusNodeListError = setConsensusNodeListPromise.get_future().get();
-    if (setConsensusNodeListError)
-    {
-        BOOST_THROW_EXCEPTION(BCOS_ERROR_WITH_PREV(
-            LedgerError::CallbackError, "Write genesis consensus node list failed!", *error));
+        task::syncWait(ledger::setNodeList(
+            *m_stateStorage, RANGES::views::concat(ledgerConfig.consensusNodeList(),
+                                 ledgerConfig.observerNodeList())));
     }
 
     // write current state
@@ -2198,11 +2195,11 @@ bool Ledger::buildGenesisBlock(
     return true;
 }
 
-bcos::consensus::ConsensusNodeListPtr Ledger::selectWorkingSealer(
+bcos::consensus::ConsensusNodeList Ledger::selectWorkingSealer(
     const bcos::ledger::LedgerConfig& _ledgerConfig, std::int64_t _epochSealerNum)
 {
     auto sealerList = _ledgerConfig.consensusNodeList();
-    std::sort(sealerList.begin(), sealerList.end(), bcos::consensus::ConsensusNodeComparator());
+    std::sort(sealerList.begin(), sealerList.end());
 
     std::int64_t sealersSize = sealerList.size();
     std::int64_t selectedNum = std::min(_epochSealerNum, sealersSize);
@@ -2221,18 +2218,18 @@ bcos::consensus::ConsensusNodeListPtr Ledger::selectWorkingSealer(
         {
             auto hashImpl = m_blockFactory->cryptoSuite()->hashImpl();
             std::int64_t selectedNode =
-                (std::int64_t)((u256)(hashImpl->hash(sealerList[i]->nodeID()->data())) % (i + 1));
+                (std::int64_t)((u256)(hashImpl->hash(sealerList[i].nodeID->data())) % (i + 1));
             std::swap(sealerList[i], sealerList[selectedNode]);
         }
     }
 
-    auto workingSealerList = std::make_shared<bcos::consensus::ConsensusNodeList>();
-    for (std::int64_t i = 0; i < selectedNum; ++i)
+    bcos::consensus::ConsensusNodeList workingSealerList =
+        RANGES::views::take(sealerList, selectedNum) | RANGES::to<std::vector>();
+    for (auto& node : workingSealerList)
     {
-        LEDGER_LOG(INFO) << LOG_DESC("selectWorkingSealer")
-                         << LOG_KV("nodeID", sealerList[i]->nodeID()->hex())
-                         << LOG_KV("weight", sealerList[i]->weight());
-        workingSealerList->emplace_back(sealerList[i]);
+        LEDGER_LOG(INFO) << LOG_DESC("selectWorkingSealer") << LOG_KV("nodeID", node.nodeID->hex())
+                         << LOG_KV("voteWeight", node.voteWeight)
+                         << LOG_KV("termWeight", node.termWeight);
     }
     return workingSealerList;
 }
@@ -2367,4 +2364,34 @@ Error::Ptr Ledger::setCurrentStateByKey(std::string_view const& _key, bcos::stor
     m_stateStorage->asyncSetRow(ledger::SYS_CURRENT_STATE, _key, std::move(entry),
         [&](Error::UniquePtr err) { setPromise.set_value(std::move(err)); });
     return setPromise.get_future().get();
+}
+
+task::Task<bcos::ledger::SystemConfigs> Ledger::fetchAllSystemConfigs(
+    protocol::BlockNumber _blockNumber)
+{
+    auto allConfigKeys = ledger::SystemConfigs::supportConfigs();
+    auto entries = co_await storage2::readSome(
+        *m_stateStorage, allConfigKeys | RANGES::views::transform([](auto&& key) {
+            return transaction_executor::StateKeyView(SYS_CONFIG, key);
+        }));
+    bcos::ledger::SystemConfigs configs;
+    for (auto&& [key, entry] : RANGES::views::zip(allConfigKeys, entries))
+    {
+        if (entry)
+        {
+            auto [value, enableNumber] = entry->getObject<SystemConfigEntry>();
+            if (enableNumber <= _blockNumber)
+            {
+                configs.set(key, value, enableNumber);
+            }
+        }
+    }
+    co_return configs;
+}
+
+task::Task<bcos::ledger::Features> Ledger::fetchAllFeatures(protocol::BlockNumber _blockNumber)
+{
+    bcos::ledger::Features features;
+    co_await features.readFromStorage(*m_stateStorage, _blockNumber);
+    co_return features;
 }

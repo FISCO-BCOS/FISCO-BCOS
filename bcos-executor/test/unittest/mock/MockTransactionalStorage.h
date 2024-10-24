@@ -50,6 +50,14 @@ public:
         m_inner->asyncSetRow(table, key, std::move(entry), std::move(callback));
     }
 
+    void setRow(std::string_view table, std::string_view key, storage::Entry entry) noexcept
+    {
+        std::promise<Error::UniquePtr> promise;
+        m_inner->asyncSetRow(table, key, std::move(entry),
+            [&](auto&& error) { promise.set_value(std::move(error)); });
+        promise.get_future().get();
+    }
+
     void asyncOpenTable(std::string_view tableName,
         std::function<void(Error::UniquePtr, std::optional<storage::Table>)> callback) noexcept
         override

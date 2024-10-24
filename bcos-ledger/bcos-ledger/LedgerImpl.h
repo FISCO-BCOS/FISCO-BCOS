@@ -363,7 +363,7 @@ private:
         }
         // sync block
         for (auto blockNumber = status.blockNumber + 1; blockNumber <= syncBlockNumber;
-             ++blockNumber)
+            ++blockNumber)
         {
             LEDGER_LOG(INFO) << "Syncing block from remote: " << blockNumber << " | "
                              << syncBlockNumber << " | " << onlyHeader;
@@ -757,8 +757,8 @@ private:
     bcos::storage::StorageInterface::Ptr m_backupStorage;
     Storage m_storage;
     crypto::merkle::Merkle<Hasher> m_merkle;  // Use the default width 2
-    uint32_t m_compatibilityVersion;
-    size_t m_keyPageSize;
+    uint32_t m_compatibilityVersion = 0;
+    size_t m_keyPageSize = 0;
 };
 
 }  // namespace bcos::ledger

@@ -150,8 +150,8 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
     m_vmFactory(std::move(vmFactory))
 {
     assert(m_backendStorage);
-    m_ledgerCache->fetchCompatibilityVersion();
-    m_ledgerCache->fetchBlockNumberAndHash();
+
+    m_ledgerCache->updateLedgerConfig();
     GlobalHashImpl::g_hashImpl = m_hashImpl;
     m_abiCache = make_shared<ClockCache<bcos::bytes, FunctionAbi>>(32);
 #ifdef WITH_WASM
@@ -159,14 +159,13 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
 #endif
 
     m_threadPool = std::make_shared<bcos::ThreadPool>(name, std::thread::hardware_concurrency());
-    setBlockVersion(m_ledgerCache->ledgerConfig()->compatibilityVersion());
-    if (m_ledgerCache->ledgerConfig()->compatibilityVersion() >= BlockVersion::V3_3_VERSION)
+    setBlockVersion(m_ledgerCache->ledgerConfig().compatibilityVersion());
+    if (m_ledgerCache->ledgerConfig().compatibilityVersion() >= BlockVersion::V3_3_VERSION)
     {
-        m_ledgerCache->fetchAuthCheckStatus();
-        if (m_ledgerCache->ledgerConfig()->authCheckStatus() != UINT32_MAX)
+        if (m_ledgerCache->ledgerConfig().authCheckStatus() != UINT32_MAX)
         {
             // cannot get auth check status, use config value
-            m_isAuthCheck = !m_isWasm && m_ledgerCache->ledgerConfig()->authCheckStatus() != 0;
+            m_isAuthCheck = !m_isWasm && m_ledgerCache->ledgerConfig().authCheckStatus() != 0;
         }
     }
     if (m_isWasm)
@@ -311,7 +310,7 @@ void TransactionExecutor::initEvmEnvironment()
     set<string> builtIn = {CRYPTO_ADDRESS, GROUP_SIG_ADDRESS, RING_SIG_ADDRESS, CAST_ADDRESS};
     m_staticPrecompiled = std::make_shared<set<string>>(builtIn);
     if (m_blockVersion <=> BlockVersion::V3_1_VERSION == 0 &&
-        m_ledgerCache->ledgerConfig()->blockNumber() > 0)
+        m_ledgerCache->ledgerConfig().blockNumber() > 0)
     {
         // Only 3.1 goes here, here is a bug, ignore init test precompiled
     }
@@ -374,7 +373,7 @@ void TransactionExecutor::initWasmEnvironment()
     m_staticPrecompiled = std::make_shared<set<string>>(builtIn);
 
     if (m_blockVersion <=> BlockVersion::V3_1_VERSION == 0 &&
-        m_ledgerCache->ledgerConfig()->blockNumber() > 0)
+        m_ledgerCache->ledgerConfig().blockNumber() > 0)
     {
         // Only 3.1 goes here, here is a bug, ignore init test precompiled
     }
@@ -423,6 +422,12 @@ std::shared_ptr<BlockContext> TransactionExecutor::createBlockContextForCall(
 {
     BlockContext::Ptr context = make_shared<BlockContext>(storage, m_ledgerCache, m_hashImpl,
         blockNumber, blockHash, timestamp, blockVersion, m_isWasm, m_isAuthCheck);
+    ledger::Features features;
+    task::syncWait(features.readFromStorage(*storage, blockNumber + 1));
+    context->setFeatures(std::move(features));
+    ledger::SystemConfigs config;
+    task::syncWait(readFromStorage(config, *storage, blockNumber + 1));
+    context->setConfigs(std::move(config));
     context->setVMFactory(m_vmFactory);
     return context;
 }
@@ -1885,16 +1890,15 @@ void TransactionExecutor::commit(
         EXECUTOR_NAME_LOG(DEBUG) << BLOCK_NUMBER(blockNumber) << "Commit success";
 
         m_lastCommittedBlockNumber = blockNumber;
-        m_ledgerCache->fetchCompatibilityVersion();
-        auto version = m_ledgerCache->ledgerConfig()->compatibilityVersion();
+        m_ledgerCache->updateLedgerConfig();
+        auto version = m_ledgerCache->ledgerConfig().compatibilityVersion();
         setBlockVersion(version);
         if (version >= BlockVersion::V3_3_VERSION)
         {
-            m_ledgerCache->fetchAuthCheckStatus();
-            if (m_ledgerCache->ledgerConfig()->authCheckStatus() != UINT32_MAX)
+            if (m_ledgerCache->ledgerConfig().authCheckStatus() != UINT32_MAX)
             {
                 // cannot get auth check status, not update value
-                m_isAuthCheck = !m_isWasm && m_ledgerCache->ledgerConfig()->authCheckStatus() != 0;
+                m_isAuthCheck = !m_isWasm && m_ledgerCache->ledgerConfig().authCheckStatus() != 0;
             }
         }
         removeCommittedState();
@@ -2631,6 +2635,12 @@ void TransactionExecutor::removeCommittedState()
     m_ledgerCache->clearCacheByNumber(number);
 }
 
+/**
+ * call when scheduler ExecutionMessage::MESSAGE
+ * @param input scheduler input
+ * @param staticCall whether static call
+ * @return callParameters
+ */
 std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     bcos::protocol::ExecutionMessage& input, bool staticCall)
 {
@@ -2696,6 +2706,8 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->message = input.message();
     callParameters->data = input.takeData();
     callParameters->gas = input.gasAvailable();
+    callParameters->nonce = hex2u(input.nonce());
+    callParameters->transactionType = input.txType();
     callParameters->staticCall = staticCall;
     callParameters->newEVMContractAddress = input.newEVMContractAddress();
     callParameters->keyLocks = input.takeKeyLocks();
@@ -2736,6 +2748,12 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     return callParameters;
 }
 
+/**
+ * call when scheduler ExecutionMessage::TXHASH
+ * @param input scheduler input
+ * @param tx transaction
+ * @return callParameters
+ */
 std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     bcos::protocol::ExecutionMessage& input, const bcos::protocol::Transaction& tx)
 {
@@ -2766,7 +2784,8 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->gasLimit = input.gasLimit();
     callParameters->maxFeePerGas = u256(input.maxFeePerGas());
     callParameters->maxPriorityFeePerGas = u256(input.maxPriorityFeePerGas());
-
+    callParameters->nonce = hex2u(input.nonce());
+    callParameters->transactionType = input.txType();
 
     if (!m_isWasm && !callParameters->create)
     {

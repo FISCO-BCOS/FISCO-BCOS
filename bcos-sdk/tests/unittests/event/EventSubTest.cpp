@@ -172,8 +172,7 @@ BOOST_AUTO_TEST_CASE(test_EventSub_unsubscribeEvent)
     tbb::task_group taskGroup;
     {
         // task is running
-        auto session = std::make_shared<bcos::cppsdk::test::WsSessionFake>(
-            taskGroup, "test_EventSub_unsubscribeEvent");
+        auto session = std::make_shared<bcos::cppsdk::test::WsSessionFake>(taskGroup);
         task->setSession(session);
 
         std::string resp = "{}";
@@ -189,8 +188,7 @@ BOOST_AUTO_TEST_CASE(test_EventSub_unsubscribeEvent)
 
     {
         // task is running
-        auto session = std::make_shared<bcos::cppsdk::test::WsSessionFake>(
-            taskGroup, "test_EventSub_unsubscribeEvent");
+        auto session = std::make_shared<bcos::cppsdk::test::WsSessionFake>(taskGroup);
 
         task->setSession(session);
 

@@ -1,5 +1,7 @@
 #pragma once
-
+#ifdef _WIN32
+#include <tup/Tars.h>
+#endif
 #include "../groupmgr/NodeService.h"
 #include <bcos-tars-protocol/tars/RPC.h>
 #include <tbb/concurrent_hash_map.h>
