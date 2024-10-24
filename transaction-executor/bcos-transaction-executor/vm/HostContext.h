@@ -48,6 +48,7 @@
 #include <evmc/instructions.h>
 #include <evmone/evmone.h>
 #include <boost/algorithm/hex.hpp>
+#include <boost/exception/diagnostic_information.hpp>
 #include <boost/multiprecision/cpp_int/import_export.hpp>
 #include <boost/throw_exception.hpp>
 #include <functional>
@@ -114,7 +115,7 @@ inline task::Task<std::shared_ptr<Executable>> getExecutable(
         co_await storage2::writeOne(getCacheExecutables(), address, executable);
         co_return executable;
     }
-    co_return std::shared_ptr<Executable>{};
+    co_return {};
 }
 
 template <class Storage, class TransientStorage>
@@ -155,12 +156,6 @@ private:
             m_message);
     }
 
-    auto getAccount(const evmc_address& address)
-    {
-        return Account<std::decay_t<Storage>>(m_rollbackableStorage.get(), address,
-            m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
-    }
-
     task::Task<void> transferBalance(const evmc_message& message)
     {
         auto value = fromEvmC(message.value);
@@ -169,7 +164,7 @@ private:
             co_return;
         }
 
-        auto senderAccount = getAccount(message.sender);
+        auto senderAccount = getAccount(*this, message.sender);
         auto fromBalance = co_await ledger::account::balance(senderAccount);
 
         if (fromBalance < value)
@@ -212,17 +207,11 @@ private:
         m_hashImpl(hashImpl),
         m_message(
             getMessage(message, m_blockHeader.get().number(), m_contextID, m_seq, m_hashImpl)),
-        m_recipientAccount(getAccount(this->message().recipient))
-    {
-        if (m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_evm_cancun))
-        {
-            m_revision = EVMC_CANCUN;
-        }
-        else
-        {
-            m_revision = EVMC_PARIS;
-        }
-    }
+        m_recipientAccount(getAccount(*this, this->message().recipient)),
+        m_revision(m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_evm_cancun) ?
+                       EVMC_CANCUN :
+                       EVMC_PARIS)
+    {}
 
 public:
     HostContext(Storage& storage, TransientStorage& transientStorage,
@@ -240,6 +229,13 @@ public:
     HostContext& operator=(HostContext const&) = delete;
     HostContext(HostContext&&) = delete;
     HostContext& operator=(HostContext&&) = delete;
+
+    friend auto getAccount(HostContext& hostContext, const evmc_address& address)
+    {
+        return Account<std::decay_t<Storage>>(hostContext.m_rollbackableStorage.get(), address,
+            hostContext.m_ledgerConfig.get().features().get(
+                ledger::Features::Flag::feature_raw_address));
+    }
 
     task::Task<evmc_bytes32> get(const evmc_bytes32* key, auto&&... /*unused*/)
     {
@@ -302,7 +298,7 @@ public:
         {
             co_return executable->m_code;
         }
-        co_return std::optional<storage::Entry>{};
+        co_return {};
     }
 
     task::Task<size_t> codeSizeAt(const evmc_address& address, auto&&... /*unused*/)
@@ -337,11 +333,11 @@ public:
     {
         if (number >= blockNumber() || number < 0)
         {
-            co_return h256{};
+            co_return {};
         }
 
         BOOST_THROW_EXCEPTION(std::runtime_error("Unsupported method!"));
-        co_return h256{};
+        co_return {};
     }
     int64_t blockNumber() const { return m_blockHeader.get().number(); }
     uint32_t blockVersion() const { return m_blockHeader.get().version(); }
@@ -366,45 +362,47 @@ public:
         // suicide(m_myContractTable); // TODO: add suicide
     }
 
-    task::Task<void> prepare()
+    friend task::Task<void> prepare(HostContext& hostContext)
     {
-        auto const& ref = message();
+        auto const& ref = hostContext.message();
         assert(!concepts::bytebuffer::equalTo(
-            message().code_address.bytes, executor::EMPTY_EVM_ADDRESS.bytes));
-        assert(!concepts::bytebuffer::equalTo(
-            message().recipient.bytes, executor::EMPTY_EVM_ADDRESS.bytes));
-        if (message().kind == EVMC_CREATE || message().kind == EVMC_CREATE2)
+            ref.code_address.bytes, executor::EMPTY_EVM_ADDRESS.bytes));
+        assert(
+            !concepts::bytebuffer::equalTo(ref.recipient.bytes, executor::EMPTY_EVM_ADDRESS.bytes));
+        if (ref.kind == EVMC_CREATE || ref.kind == EVMC_CREATE2)
         {
-            prepareCreate();
+            hostContext.prepareCreate();
         }
         else
         {
-            co_await prepareCall();
+            co_await hostContext.prepareCall();
         }
     }
 
-    task::Task<EVMCResult> execute()
+    friend task::Task<EVMCResult> execute(HostContext& hostContext)
     {
-        auto const& ref = message();
+        auto const& ref = hostContext.message();
         if (c_fileLogLevel <= LogLevel::TRACE)
         {
             HOST_CONTEXT_LOG(TRACE)
-                << "HostContext execute, kind: " << ref.kind << " seq:" << m_seq.get()
+                << "HostContext execute, kind: " << ref.kind << " seq:" << hostContext.m_seq.get()
                 << " sender:" << address2HexString(ref.sender)
                 << " recipient:" << address2HexString(ref.recipient) << " gas:" << ref.gas;
         }
 
-        auto savepoint = current(m_rollbackableStorage.get());
-        auto transientSavepoint = current(m_rollbackableTransientStorage.get());
+        auto savepoint = current(hostContext.m_rollbackableStorage.get());
+        auto transientSavepoint = current(hostContext.m_rollbackableTransientStorage.get());
         std::optional<EVMCResult> evmResult;
-        if (m_ledgerConfig.get().authCheckStatus() != 0U)
+        if (hostContext.m_ledgerConfig.get().authCheckStatus() != 0U)
         {
-            HOST_CONTEXT_LOG(DEBUG) << "Checking auth..." << m_ledgerConfig.get().authCheckStatus()
-                                    << " gas: " << ref.gas;
+            HOST_CONTEXT_LOG(DEBUG)
+                << "Checking auth..." << hostContext.m_ledgerConfig.get().authCheckStatus()
+                << " gas: " << ref.gas;
 
-            if (auto result = checkAuth(m_rollbackableStorage.get(), m_blockHeader, ref, m_origin,
-                    buildLegacyExternalCaller(), m_precompiledManager.get(), m_contextID, m_seq,
-                    m_hashImpl))
+            if (auto result = checkAuth(hostContext.m_rollbackableStorage.get(),
+                    hostContext.m_blockHeader, ref, hostContext.m_origin,
+                    hostContext.buildLegacyExternalCaller(), hostContext.m_precompiledManager.get(),
+                    hostContext.m_contextID, hostContext.m_seq, hostContext.m_hashImpl))
             {
                 HOST_CONTEXT_LOG(DEBUG) << "Auth check failed";
                 evmResult = std::move(result);
@@ -417,19 +415,32 @@ public:
             {
                 if (ref.kind == EVMC_CREATE || ref.kind == EVMC_CREATE2)
                 {
-                    evmResult.emplace(co_await executeCreate());
+                    evmResult.emplace(co_await hostContext.executeCreate());
                 }
                 else
                 {
-                    evmResult.emplace(co_await executeCall());
+                    evmResult.emplace(co_await hostContext.executeCall());
                 }
             }
+        }
+        catch (protocol::NotEnoughCashError& e)
+        {
+            HOST_CONTEXT_LOG(DEBUG)
+                << "NotEnoughCash exception: " << boost::diagnostic_information(e);
+            co_return EVMCResult{evmc_result{.status_code = EVMC_INSUFFICIENT_BALANCE,
+                .gas_left = ref.gas,
+                .gas_refund = 0,
+                .output_data = nullptr,
+                .output_size = 0,
+                .release = nullptr,
+                .create_address = {},
+                .padding = {}}};
         }
         catch (NotFoundCodeError& e)
         {
             HOST_CONTEXT_LOG(DEBUG)
                 << "Not found code exception: " << boost::diagnostic_information(e);
-            bcos::codec::abi::ContractABICodec abi(m_hashImpl);
+            bcos::codec::abi::ContractABICodec abi(hostContext.m_hashImpl);
             auto codecOutput = abi.abiIn("Error(string)", std::string("Call address error."));
             auto errorBuffer = std::unique_ptr<uint8_t>(new uint8_t[codecOutput.size()]);
             std::uninitialized_copy(codecOutput.begin(), codecOutput.end(), errorBuffer.get());
@@ -466,24 +477,25 @@ public:
         // If the call to system contract failed, the gasUsed is cleared to zero
         if (evmResult->status_code != EVMC_SUCCESS)
         {
-            co_await rollback(m_rollbackableStorage.get(), savepoint);
-            co_await rollback(m_rollbackableTransientStorage.get(), transientSavepoint);
+            co_await rollback(hostContext.m_rollbackableStorage.get(), savepoint);
+            co_await rollback(hostContext.m_rollbackableTransientStorage.get(), transientSavepoint);
 
             if (auto hexAddress = address2FixedArray(ref.code_address);
                 precompiled::contains(bcos::precompiled::c_systemTxsAddress,
                     concepts::bytebuffer::toView(hexAddress)))
             {
-                evmResult->gas_left = message().gas;
+                evmResult->gas_left = hostContext.message().gas;
                 HOST_CONTEXT_LOG(TRACE) << "System contract call failed, clear gasUsed, gas_left: "
                                         << evmResult->gas_left;
             }
         }
-        else if (m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_balance))
+        else if (hostContext.m_ledgerConfig.get().features().get(
+                     ledger::Features::Flag::feature_balance))
         {
-            if (!m_ledgerConfig.get().features().get(
+            if (!hostContext.m_ledgerConfig.get().features().get(
                     ledger::Features::Flag::feature_balance_policy1))
             {
-                co_await transferBalance(ref);
+                co_await hostContext.transferBalance(ref);
             }
         }
 
@@ -501,9 +513,6 @@ public:
                 << "System contract sender call, clear gasUsed, gas_left: " << evmResult->gas_left;
         }
 
-        // if ()
-        //     u256 gasPrice = m_ledgerConfig.get().gasPrice();
-
         if (c_fileLogLevel <= LogLevel::TRACE) [[unlikely]]
         {
             HOST_CONTEXT_LOG(TRACE)
@@ -513,6 +522,8 @@ public:
         }
         co_return std::move(*evmResult);
     }
+
+    // task::Task<void> settled() {}
 
     task::Task<EVMCResult> externalCall(const evmc_message& message, auto&&... /*unused*/)
     {
@@ -529,8 +540,8 @@ public:
             m_rollbackableTransientStorage.get(), m_blockHeader, message, m_origin, {}, m_contextID,
             m_seq, m_precompiledManager.get(), m_ledgerConfig, m_hashImpl, interface);
 
-        co_await hostcontext.prepare();
-        auto result = co_await hostcontext.execute();
+        co_await prepare(hostcontext);
+        auto result = co_await execute(hostcontext);
         auto& logs = hostcontext.logs();
         if (result.status_code == EVMC_SUCCESS && !logs.empty())
         {
@@ -643,12 +654,9 @@ private:
                     << LOG_KV("code", code);
             }
 
-            if (auto const* precompiled =
-                    m_precompiledManager.get().getPrecompiled(message.recipient))
-            {
-                m_preparedPrecompiled = precompiled;
-            }
-            else
+            if (m_preparedPrecompiled =
+                    m_precompiledManager.get().getPrecompiled(message.recipient);
+                m_preparedPrecompiled == nullptr)
             {
                 BOOST_THROW_EXCEPTION(NotFoundCodeError());
             }
@@ -670,16 +678,16 @@ private:
         {
             if (!m_executable)
             {
-                m_executable = co_await getExecutable(m_rollbackableStorage.get(), ref.code_address,
-                    m_revision,
-                    m_ledgerConfig.get().features().get(
-                        ledger::Features::Flag::feature_raw_address));
+                if (m_executable = co_await getExecutable(m_rollbackableStorage.get(),
+                        ref.code_address, m_revision,
+                        m_ledgerConfig.get().features().get(
+                            ledger::Features::Flag::feature_raw_address));
+                    !m_executable)
+                {
+                    BOOST_THROW_EXCEPTION(NotFoundCodeError());
+                }
             }
 
-            if (!m_executable)
-            {
-                BOOST_THROW_EXCEPTION(NotFoundCodeError());
-            }
             co_return m_executable->m_vmInstance.execute(interface, this, m_revision,
                 std::addressof(ref), (const uint8_t*)m_executable->m_code->data(),
                 m_executable->m_code->size());
