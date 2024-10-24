@@ -1800,44 +1800,44 @@ static task::Task<void> setGenesisFeatures(RANGES::input_range auto const& featu
     co_await writeToStorage(features, storage, 0);
 }
 
-static task::Task<void> setAllocs(
+static task::Task<void> importGenesisState(
     RANGES::input_range auto const& allocs, auto& storage, const crypto::Hash& hashImpl)
 {
     Features features;
     co_await ledger::readFromStorage(features, storage, 0);
 
-    for (auto&& alloc : allocs)
+    for (auto&& importAccount : allocs)
     {
         evmc_address address;
-        boost::algorithm::unhex(alloc.address, address.bytes);
+        boost::algorithm::unhex(importAccount.address, address.bytes);
 
         account::EVMAccount account(
             storage, address, features.get(Features::Flag::feature_raw_address));
         co_await account::create(account);
 
-        if (!alloc.code.empty())
+        if (!importAccount.code.empty())
         {
             bcos::bytes binaryCode;
-            binaryCode.reserve(alloc.code.size() / 2);
-            boost::algorithm::unhex(alloc.code, std::back_inserter(binaryCode));
+            binaryCode.reserve(importAccount.code.size() / 2);
+            boost::algorithm::unhex(importAccount.code, std::back_inserter(binaryCode));
 
             auto codeHash = hashImpl.hash(binaryCode);
             co_await account::setCode(account, std::move(binaryCode), std::string{}, codeHash);
         }
 
-        if (!alloc.nonce.empty())
+        if (!importAccount.nonce.empty())
         {
-            co_await account::setNonce(account, std::move(alloc.nonce));
+            co_await account::setNonce(account, std::move(importAccount.nonce));
         }
 
-        if (alloc.balance > 0)
+        if (importAccount.balance > 0)
         {
-            co_await account::setBalance(account, alloc.balance);
+            co_await account::setBalance(account, importAccount.balance);
         }
 
-        if (!alloc.storage.empty())
+        if (!importAccount.storage.empty())
         {
-            for (auto const& [key, value] : alloc.storage)
+            for (auto const& [key, value] : importAccount.storage)
             {
                 evmc_bytes32 evmKey;
                 boost::algorithm::unhex(key, evmKey.bytes);
@@ -1848,7 +1848,6 @@ static task::Task<void> setAllocs(
             }
         }
     }
-    co_return;
 }
 
 // sync method, to be split
