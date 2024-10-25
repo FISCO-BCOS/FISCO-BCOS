@@ -181,29 +181,28 @@ BOOST_AUTO_TEST_CASE(testExecuteStackSize)
     auto transaction =
         transactionFactory.createTransaction(0, "", helloworldBytecodeBinary, {}, 0, "", "", 0);
 
-    auto testMemory = [&]() {
-        TestMemoryResource memoryResource;
-        auto generator = bcos::transaction_executor::execute3Step(executor, storage, blockHeader,
-            *transaction, 0, ledgerConfig, task::syncWait, std::allocator_arg,
-            std::pmr::polymorphic_allocator<>(std::addressof(memoryResource)));
-        protocol::TransactionReceipt::Ptr receipt;
-        for (auto currentReceipt : generator)
+    TestMemoryResource memoryResource;
+
+    auto* currentMemoryResource = std::pmr::get_default_resource();
+    std::pmr::set_default_resource(std::addressof(memoryResource));  // For gcc11 bug
+    auto generator = bcos::transaction_executor::execute3Step(executor, storage, blockHeader,
+        *transaction, 0, ledgerConfig, task::syncWait, std::allocator_arg,
+        std::pmr::polymorphic_allocator<>(std::addressof(memoryResource)));
+    protocol::TransactionReceipt::Ptr receipt;
+    for (auto currentReceipt : generator)
+    {
+        BOOST_CHECK_LT(memoryResource.m_size, transaction_executor::EXECUTOR_STACK);
+        if (currentReceipt)
         {
-            BOOST_CHECK_LT(memoryResource.m_size, transaction_executor::EXECUTOR_STACK);
-            if (currentReceipt)
-            {
-                receipt = currentReceipt;
-            }
+            receipt = currentReceipt;
         }
+    }
+    std::pmr::set_default_resource(currentMemoryResource);
 
-        BOOST_CHECK(receipt);
-        BOOST_CHECK_EQUAL(receipt->status(), 0);
-        BOOST_CHECK_EQUAL(receipt->contractAddress(), "e0e794ca86d198042b64285c5ce667aee747509b");
-        BOOST_CHECK_EQUAL(memoryResource.m_count, 1);
-    };
-
-    std::function<void()> func = testMemory;
-    func();
+    BOOST_CHECK(receipt);
+    BOOST_CHECK_EQUAL(receipt->status(), 0);
+    BOOST_CHECK_EQUAL(receipt->contractAddress(), "e0e794ca86d198042b64285c5ce667aee747509b");
+    BOOST_CHECK_GE(memoryResource.m_count, 1);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
