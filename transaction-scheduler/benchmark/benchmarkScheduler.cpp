@@ -17,6 +17,7 @@
 #include <benchmark/benchmark.h>
 #include <boost/throw_exception.hpp>
 #include <random>
+#include <range/v3/view/indirect.hpp>
 #include <variant>
 
 using namespace bcos;
@@ -54,6 +55,12 @@ struct Fixture
     std::string m_contractAddress;
     std::vector<Address> m_addresses;
     std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>> m_transactions;
+    struct Transfer
+    {
+        size_t from;
+        size_t to;
+    };
+    std::vector<Transfer> m_transfers;
     ledger::LedgerConfig m_ledgerConfig;
 
     Fixture()
@@ -201,20 +208,26 @@ struct Fixture
         bcos::codec::abi::ContractABICodec abiCodec(*bcos::executor::GlobalHashImpl::g_hashImpl);
         auto count = m_addresses.size();
         std::mt19937_64 rng(std::random_device{}());
-        m_transactions = ::ranges::views::transform(::ranges::views::iota(0LU, count), [&, this](
-                                                                                           auto) {
-            auto transaction = std::make_unique<bcostars::protocol::TransactionImpl>();
-            auto& inner = transaction->mutableInner();
-            inner.data.to = m_contractAddress;
-            auto& fromAddress = m_addresses[rng() % count];
-            auto& toAddress = m_addresses[rng() % count];
+        m_transfers.resize(count);
+        m_transactions =
+            ::ranges::views::transform(::ranges::views::iota(0LU, count),
+                [&, this](size_t index) {
+                    auto transaction = std::make_unique<bcostars::protocol::TransactionImpl>();
+                    auto& inner = transaction->mutableInner();
+                    inner.data.to = m_contractAddress;
+                    auto& transfer = m_transfers[index];
+                    transfer.from = rng() % count;
+                    transfer.to = rng() % count;
+                    auto& fromAddress = m_addresses[transfer.from];
+                    auto& toAddress = m_addresses[transfer.to];
 
-            auto input =
-                abiCodec.abiIn(std::string(transferMethod), fromAddress, toAddress, singleTransfer);
-            inner.data.input.assign(input.begin(), input.end());
-            transaction->calculateHash(*m_cryptoSuite->hashImpl());
-            return transaction;
-        }) | RANGES::to<decltype(m_transactions)>();
+                    auto input = abiCodec.abiIn(
+                        std::string(transferMethod), fromAddress, toAddress, singleTransfer);
+                    inner.data.input.assign(input.begin(), input.end());
+                    transaction->calculateHash(*m_cryptoSuite->hashImpl());
+                    return transaction;
+                }) |
+            RANGES::to<decltype(m_transactions)>();
     }
 
     void prepareConflictTransfer()
@@ -266,28 +279,25 @@ struct Fixture
                     blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::MAX_VERSION);
 
                     auto checkTransactions =
-                        m_addresses | RANGES::views::transform([&](const auto& address) {
-                            auto transaction =
-                                std::make_unique<bcostars::protocol::TransactionImpl>();
-                            auto& inner = transaction->mutableInner();
-                            inner.data.to = m_contractAddress;
+                        ::ranges::views::transform(m_addresses,
+                            [&](const auto& address) {
+                                auto transaction =
+                                    std::make_unique<bcostars::protocol::TransactionImpl>();
+                                auto& inner = transaction->mutableInner();
+                                inner.data.to = m_contractAddress;
 
-                            auto input = abiCodec.abiIn("balance(address)", address);
-                            inner.data.input.assign(input.begin(), input.end());
-                            transaction->calculateHash(*m_cryptoSuite->hashImpl());
-                            return transaction;
-                        }) |
+                                auto input = abiCodec.abiIn("balance(address)", address);
+                                inner.data.input.assign(input.begin(), input.end());
+                                transaction->calculateHash(*m_cryptoSuite->hashImpl());
+                                return transaction;
+                            }) |
                         RANGES::to<
                             std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>>>();
 
                     auto view = fork(m_multiLayerStorage);
                     newMutable(view);
                     auto receipts = co_await transaction_scheduler::executeBlock(scheduler, view,
-                        m_executor, blockHeader,
-                        checkTransactions |
-                            RANGES::views::transform(
-                                [](const std::unique_ptr<bcostars::protocol::TransactionImpl>&
-                                        transaction) -> auto& { return *transaction; }),
+                        m_executor, blockHeader, ::ranges::views::indirect(checkTransactions),
                         m_ledgerConfig);
 
                     auto balances = receipts |
@@ -361,11 +371,7 @@ static void noConflicitTransfer(benchmark::State& state)
 
                     [[maybe_unused]] auto receipts = co_await transaction_scheduler::executeBlock(
                         scheduler, view, fixture.m_executor, blockHeader,
-                        fixture.m_transactions |
-                            RANGES::views::transform(
-                                [](const std::unique_ptr<bcostars::protocol::TransactionImpl>&
-                                        transaction) -> auto& { return *transaction; }),
-                        fixture.m_ledgerConfig);
+                        ::ranges::view::indirect(fixture.m_transactions), fixture.m_ledgerConfig);
                     fixture.m_transactions.clear();
 
                     fixture.prepareNoConflicitTransfer();
@@ -379,11 +385,7 @@ static void noConflicitTransfer(benchmark::State& state)
                         [[maybe_unused]] auto receipts =
                             co_await transaction_scheduler::executeBlock(scheduler, view,
                                 fixture.m_executor, blockHeader,
-                                fixture.m_transactions |
-                                    RANGES::views::transform(
-                                        [](const std::unique_ptr<
-                                            bcostars::protocol::TransactionImpl>& transaction)
-                                            -> auto& { return *transaction; }),
+                                ::ranges::views::indirect(fixture.m_transactions),
                                 fixture.m_ledgerConfig);
                     }
 
@@ -427,6 +429,68 @@ static void randomTransfer(benchmark::State& state)
     fixture.prepareIssue(count);
 
     initParallelScheduler(state, fixture);
+    std::visit(
+        [&](auto& scheduler) {
+            if constexpr (std::is_same_v<std::remove_cvref_t<decltype(scheduler)>, std::monostate>)
+            {
+                BOOST_THROW_EXCEPTION(std::runtime_error("invalid scheduler"));
+            }
+            else
+            {
+                int i = 0;
+                task::syncWait([&](benchmark::State& state) -> task::Task<void> {
+                    // First issue
+                    bcostars::protocol::BlockHeaderImpl blockHeader;
+                    blockHeader.setNumber(0);
+                    blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::MAX_VERSION);
+
+                    auto view = fork(fixture.m_multiLayerStorage);
+                    newMutable(view);
+
+                    [[maybe_unused]] auto receipts = co_await transaction_scheduler::executeBlock(
+                        scheduler, view, fixture.m_executor, blockHeader,
+                        ::ranges::views::indirect(fixture.m_transactions), fixture.m_ledgerConfig);
+                    fixture.m_transactions.clear();
+
+                    fixture.prepareRandomTransfer();
+                    // Start transfer
+                    for (auto const& it : state)
+                    {
+                        bcostars::protocol::BlockHeaderImpl blockHeader;
+                        blockHeader.setNumber((i++) + 1);
+                        blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::MAX_VERSION);
+
+                        [[maybe_unused]] auto receipts =
+                            co_await transaction_scheduler::executeBlock(scheduler, view,
+                                fixture.m_executor, blockHeader,
+                                ::ranges::views::indirect(fixture.m_transactions),
+                                fixture.m_ledgerConfig);
+                    }
+
+                    // Check
+                    pushView(fixture.m_multiLayerStorage, std::move(view));
+                    auto balances = co_await fixture.balances();
+
+                    std::vector<s256> expectbalances(count, singleIssue);
+                    for (auto& transfer : fixture.m_transfers)
+                    {
+                        expectbalances[transfer.from] -= singleTransfer * i;
+                        expectbalances[transfer.to] += singleTransfer * i;
+                    }
+                    for (auto&& [expect, got] : ::ranges::views::zip(expectbalances, balances))
+                    {
+                        if (expect != got)
+                        {
+                            BOOST_THROW_EXCEPTION(std::runtime_error(
+                                fmt::format("From balance not equal to expected! {} {}",
+                                    expect.str(), got.str())));
+                        }
+                    }
+                    co_await mergeBackStorage(fixture.m_multiLayerStorage);
+                }(state));
+            }
+        },
+        fixture.m_scheduler);
 }
 
 template <bool parallel>
@@ -575,8 +639,47 @@ BENCHMARK(noConflicitTransfer<PARALLEL>)
     ->Args({100000, 256, 8})
     ->Args({100000, 256, 16});
 
-BENCHMARK(conflictTransfer<SERIAL>)->Arg(1000)->Arg(10000)->Arg(100000);
-BENCHMARK(conflictTransfer<PARALLEL>)
+BENCHMARK(noConflicitTransfer<SERIAL>)->Arg(1000)->Arg(10000)->Arg(100000);
+BENCHMARK(noConflicitTransfer<PARALLEL>)
+    ->Args({1000, 16, 4})
+    ->Args({1000, 16, 6})
+    ->Args({1000, 16, 8})
+    ->Args({1000, 16, 16})
+    ->Args({1000, 64, 4})
+    ->Args({1000, 64, 6})
+    ->Args({1000, 64, 8})
+    ->Args({1000, 64, 16})
+    ->Args({1000, 256, 4})
+    ->Args({1000, 256, 6})
+    ->Args({1000, 256, 8})
+    ->Args({1000, 256, 16})
+    ->Args({10000, 16, 4})
+    ->Args({10000, 16, 6})
+    ->Args({10000, 16, 8})
+    ->Args({10000, 16, 16})
+    ->Args({10000, 64, 4})
+    ->Args({10000, 64, 6})
+    ->Args({10000, 64, 8})
+    ->Args({10000, 64, 16})
+    ->Args({10000, 256, 4})
+    ->Args({10000, 256, 6})
+    ->Args({10000, 256, 8})
+    ->Args({10000, 256, 16})
+    ->Args({100000, 16, 4})
+    ->Args({100000, 16, 6})
+    ->Args({100000, 16, 8})
+    ->Args({100000, 16, 16})
+    ->Args({100000, 64, 4})
+    ->Args({100000, 64, 6})
+    ->Args({100000, 64, 8})
+    ->Args({100000, 64, 16})
+    ->Args({100000, 256, 4})
+    ->Args({100000, 256, 6})
+    ->Args({100000, 256, 8})
+    ->Args({100000, 256, 16});
+
+BENCHMARK(randomTransfer<SERIAL>)->Arg(1000)->Arg(10000)->Arg(100000);
+BENCHMARK(randomTransfer<PARALLEL>)
     ->Args({1000, 16, 4})
     ->Args({1000, 16, 6})
     ->Args({1000, 16, 8})
