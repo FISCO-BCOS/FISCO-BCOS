@@ -254,7 +254,7 @@ void GatewayFactory::initSSLContextPubHexHandlerWithoutExtInfo()
 }
 
 std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
-    bool _server, const GatewayConfig::CertConfig& _certConfig)
+    bool _server, uint8_t sslMode, const GatewayConfig::CertConfig& _certConfig)
 {
     std::ignore = _server;
     std::shared_ptr<boost::asio::ssl::context> sslContext =
@@ -328,14 +328,13 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
         sslContext->add_verify_path(caPath);
     }
 
-    sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer |
-                                boost::asio::ssl::verify_fail_if_no_peer_cert);
+    sslContext->set_verify_mode(sslMode);
 
     return sslContext;
 }
 
 std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
-    bool _server, const GatewayConfig::SMCertConfig& _smCertConfig)
+    bool _server, uint8_t sslMode, const GatewayConfig::SMCertConfig& _smCertConfig)
 {
     SSL_CTX* ctx = NULL;
     if (_server)
@@ -444,8 +443,7 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
         sslContext->add_verify_path(caPath);
     }
 
-    sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer |
-                                boost::asio::ssl::verify_fail_if_no_peer_cert);
+    sslContext->set_verify_mode(sslMode);
 
     return sslContext;
 }
@@ -584,12 +582,14 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     }
 
     std::shared_ptr<ba::ssl::context> srvCtx =
-        (_config->smSSL() ? buildSSLContext(true, _config->smCertConfig()) :
-                            buildSSLContext(true, _config->certConfig()));
+        (_config->smSSL() ?
+                buildSSLContext(true, _config->sslServerMode(), _config->smCertConfig()) :
+                buildSSLContext(true, _config->sslServerMode(), _config->certConfig()));
 
     std::shared_ptr<ba::ssl::context> clientCtx =
-        (_config->smSSL() ? buildSSLContext(false, _config->smCertConfig()) :
-                            buildSSLContext(false, _config->certConfig()));
+        (_config->smSSL() ?
+                buildSSLContext(false, _config->sslClientMode(), _config->smCertConfig()) :
+                buildSSLContext(false, _config->sslClientMode(), _config->certConfig()));
 
     // init ASIOInterface
     auto asioInterface = std::make_shared<ASIOInterface>();
