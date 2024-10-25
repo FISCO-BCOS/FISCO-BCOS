@@ -10,6 +10,7 @@
 #include <bcos-gateway/Common.h>
 #include <bcos-gateway/libnetwork/Common.h>
 #include <boost/algorithm/string.hpp>
+#include <boost/asio/ssl/context.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <array>
@@ -212,6 +213,8 @@ public:
     uint16_t listenPort() const { return m_listenPort; }
     uint32_t threadPoolSize() const { return m_threadPoolSize; }
     bool smSSL() const { return m_smSSL; }
+    auto sslClientMode() const { return m_ssl_client_mode; }
+    auto sslServerMode() const { return m_ssl_server_mode; }
 
     CertConfig certConfig() const { return m_certConfig; }
     SMCertConfig smCertConfig() const { return m_smCertConfig; }
@@ -313,6 +316,10 @@ private:
     std::string m_uuid;
     // if SM SSL connection or not
     bool m_smSSL;
+    uint8_t m_ssl_server_mode =
+        boost::asio::ssl::context_base::verify_peer | boost::asio::ssl::verify_fail_if_no_peer_cert;
+    uint8_t m_ssl_client_mode =
+        boost::asio::ssl::context_base::verify_peer | boost::asio::ssl::verify_fail_if_no_peer_cert;
     // p2p network listen IP
     std::string m_listenIP;
     // p2p network listen Port
