@@ -181,24 +181,29 @@ BOOST_AUTO_TEST_CASE(testExecuteStackSize)
     auto transaction =
         transactionFactory.createTransaction(0, "", helloworldBytecodeBinary, {}, 0, "", "", 0);
 
-    TestMemoryResource memoryResource;
-    auto generator = bcos::transaction_executor::execute3Step(executor, storage, blockHeader,
-        *transaction, 0, ledgerConfig, task::syncWait, std::allocator_arg,
-        std::pmr::polymorphic_allocator<>(std::addressof(memoryResource)));
-    protocol::TransactionReceipt::Ptr receipt;
-    for (auto currentReceipt : generator)
-    {
-        BOOST_CHECK_LT(memoryResource.m_size, transaction_executor::EXECUTOR_STACK);
-        if (currentReceipt)
+    auto testMemory = [&]() {
+        TestMemoryResource memoryResource;
+        auto generator = bcos::transaction_executor::execute3Step(executor, storage, blockHeader,
+            *transaction, 0, ledgerConfig, task::syncWait, std::allocator_arg,
+            std::pmr::polymorphic_allocator<>(std::addressof(memoryResource)));
+        protocol::TransactionReceipt::Ptr receipt;
+        for (auto currentReceipt : generator)
         {
-            receipt = currentReceipt;
+            BOOST_CHECK_LT(memoryResource.m_size, transaction_executor::EXECUTOR_STACK);
+            if (currentReceipt)
+            {
+                receipt = currentReceipt;
+            }
         }
-    }
 
-    BOOST_CHECK_EQUAL(memoryResource.m_count, 1);
-    BOOST_CHECK(receipt);
-    BOOST_CHECK_EQUAL(receipt->status(), 0);
-    BOOST_CHECK_EQUAL(receipt->contractAddress(), "e0e794ca86d198042b64285c5ce667aee747509b");
+        BOOST_CHECK(receipt);
+        BOOST_CHECK_EQUAL(receipt->status(), 0);
+        BOOST_CHECK_EQUAL(receipt->contractAddress(), "e0e794ca86d198042b64285c5ce667aee747509b");
+        BOOST_CHECK_EQUAL(memoryResource.m_count, 1);
+    };
+
+    std::function<void()> func = testMemory;
+    func();
 }
 
 BOOST_AUTO_TEST_SUITE_END()
