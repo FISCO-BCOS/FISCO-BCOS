@@ -66,7 +66,7 @@ public:
     friend class StateKey;
 
     StateKeyView(StateKeyView&&) noexcept = default;
-    StateKeyView& operator=(const StateKeyView&) = default;
+    StateKeyView& operator=(const StateKeyView&) noexcept = default;
     StateKeyView& operator=(StateKeyView&&) noexcept = default;
     StateKeyView(const StateKeyView& stateKeyView) noexcept = default;
     explicit StateKeyView(const StateKey& stateKey) noexcept

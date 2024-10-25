@@ -36,7 +36,7 @@ struct StorageTrait
         ReadWriteSetStorage<LocalStorageView, transaction_executor::StateKey>;
 };
 
-constexpr static auto EXECUTOR_STACK = 2048;
+constexpr static auto EXECUTOR_STACK = 1400;
 template <class CoroType>
 struct ExecutionContext
 {
