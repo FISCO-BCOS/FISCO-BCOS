@@ -324,10 +324,7 @@ private:
             }
             auto receipts = co_await transaction_scheduler::executeBlock(
                 scheduler.m_schedulerImpl.get(), view, scheduler.m_executor.get(), *blockHeader,
-                transactions | RANGES::views::transform(
-                                   [](protocol::Transaction::ConstPtr const& transactionPtr)
-                                       -> protocol::Transaction const& { return *transactionPtr; }),
-                *ledgerConfig);
+                ::ranges::views::indirect(transactions), *ledgerConfig);
 
             auto executedBlockHeader =
                 scheduler.m_blockHeaderFactory.get().populateBlockHeader(blockHeader);
