@@ -95,9 +95,9 @@ int64_t bcostars::protocol::TransactionImpl::blockLimit() const
 {
     return m_inner()->data.blockLimit;
 }
-void bcostars::protocol::TransactionImpl::setNonce(std::string _n)
+void bcostars::protocol::TransactionImpl::setNonce(std::string nonce)
 {
-    m_inner()->data.nonce = std::move(_n);
+    m_inner()->data.nonce = std::move(nonce);
 }
 std::string_view bcostars::protocol::TransactionImpl::to() const
 {
@@ -170,15 +170,11 @@ int32_t bcostars::protocol::TransactionImpl::attribute() const
 }
 void bcostars::protocol::TransactionImpl::setAttribute(int32_t attribute)
 {
-    m_inner()->attribute = attribute;
+    m_inner()->attribute |= attribute;
 }
 std::string_view bcostars::protocol::TransactionImpl::extraData() const
 {
     return m_inner()->extraData;
-}
-void bcostars::protocol::TransactionImpl::setExtraData(std::string const& _extraData)
-{
-    m_inner()->extraData = _extraData;
 }
 uint8_t bcostars::protocol::TransactionImpl::type() const
 {

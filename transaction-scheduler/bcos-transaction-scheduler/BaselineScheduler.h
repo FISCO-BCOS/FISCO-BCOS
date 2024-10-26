@@ -97,7 +97,7 @@ task::Task<h256> calculateStateRoot(
         hashGroup.run([keyValue = std::move(keyValue), &hashes, &deletedEntry, &hashImpl]() {
             auto [key, entry] = *keyValue;
             transaction_executor::StateKeyView view(key);
-            auto [tableName, keyName] = view.getTableAndKey();
+            auto [tableName, keyName] = view.get();
             if (!entry)
             {
                 entry = std::addressof(deletedEntry);

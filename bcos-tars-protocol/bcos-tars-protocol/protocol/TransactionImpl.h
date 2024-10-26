@@ -92,7 +92,6 @@ public:
     void setAttribute(int32_t attribute) override;
 
     std::string_view extraData() const override;
-    void setExtraData(std::string const& _extraData) override;
 
     uint8_t type() const override;
     bcos::bytesConstRef extraTransactionBytes() const override;
