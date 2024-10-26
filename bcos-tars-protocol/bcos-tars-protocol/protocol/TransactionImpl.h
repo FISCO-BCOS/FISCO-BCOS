@@ -22,6 +22,8 @@
 #pragma once
 
 // if windows, manual include tup/Tars.h first
+
+#include "bcos-utilities/FixedBytes.h"
 #ifdef _WIN32
 #include <tup/Tars.h>
 #endif
@@ -95,6 +97,7 @@ public:
 
     uint8_t type() const override;
     bcos::bytesConstRef extraTransactionBytes() const override;
+    std::vector<bcos::h256> conflictKeys() const override;
 
     const bcostars::Transaction& inner() const;
     bcostars::Transaction& mutableInner();

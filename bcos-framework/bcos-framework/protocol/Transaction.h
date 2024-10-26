@@ -23,6 +23,7 @@
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
+#include <range/v3/view/any_view.hpp>
 #if !ONLY_CPP_SDK
 #include <bcos-utilities/ITTAPI.h>
 #endif
@@ -157,6 +158,8 @@ public:
 
     virtual int32_t attribute() const = 0;
     virtual void setAttribute(int32_t attribute) = 0;
+
+    virtual std::vector<h256> conflictKeys() const = 0;
 
     TxSubmitCallback takeSubmitCallback() { return std::move(m_submitCallback); }
     TxSubmitCallback const& submitCallback() const { return m_submitCallback; }

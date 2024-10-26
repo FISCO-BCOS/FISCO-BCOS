@@ -30,4 +30,9 @@ module bcostars {
         10 optional vector<byte>    extraTransactionBytes;
         11 optional vector<byte>    extraTransactionHash; // hash(rlp(10|3))
     };
+
+    struct ConflictKeys
+    {
+        1 optional vector<vector<byte>> keys;
+    };
 };
