@@ -24,6 +24,7 @@
 // if windows, manual include tup/Tars.h first
 
 #include "bcos-utilities/FixedBytes.h"
+#include <range/v3/view/any_view.hpp>
 #ifdef _WIN32
 #include <tup/Tars.h>
 #endif
@@ -97,7 +98,8 @@ public:
 
     uint8_t type() const override;
     bcos::bytesConstRef extraTransactionBytes() const override;
-    std::vector<bcos::h256> conflictKeys() const override;
+    ::ranges::any_view<bcos::h256, ::ranges::category::input | ::ranges::category::sized>
+    conflictKeys() const override;
 
     const bcostars::Transaction& inner() const;
     bcostars::Transaction& mutableInner();

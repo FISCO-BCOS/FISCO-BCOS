@@ -28,6 +28,7 @@
 #include <boost/endian/conversion.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
+#include <range/v3/view/any_view.hpp>
 
 using namespace bcostars;
 using namespace bcostars::protocol;
@@ -199,20 +200,11 @@ void bcostars::protocol::TransactionImpl::setInner(bcostars::Transaction inner)
 {
     *m_inner() = std::move(inner);
 }
-std::vector<bcos::h256> bcostars::protocol::TransactionImpl::conflictKeys() const
+::ranges::any_view<bcos::h256, ::ranges::category::input | ::ranges::category::sized>
+bcostars::protocol::TransactionImpl::conflictKeys() const
 {
-    try
-    {
-        const auto* inner = m_inner();
-        ConflictKeys conflictKeys;
-        bcos::concepts::serialize::decode(inner->extraData, conflictKeys);
-        return ::ranges::views::transform(conflictKeys.keys, [](const auto& input) {
-            return bcos::h256{reinterpret_cast<const bcos::byte*>(input.data()), input.size()};
-        }) | ::ranges::to<std::vector>();
-    }
-    catch (std::exception& e)
-    {
-        BCOS_LOG(ERROR) << "Decode conflict keys error!" << boost::diagnostic_information(e);
-    }
-    return {};
+    const auto* inner = m_inner();
+    return ::ranges::views::transform(inner->conflictKeys, [](const auto& input) {
+        return bcos::h256{reinterpret_cast<const bcos::byte*>(input.data()), input.size()};
+    });
 }
