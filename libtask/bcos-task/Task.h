@@ -72,14 +72,15 @@ struct PromiseBase : public MemoryResourceBase
     }
     void unhandled_exception()
     {
+        auto exception = std::current_exception();
         if (!m_continuation)
         {
             auto handle =
                 std::coroutine_handle<PromiseImpl>::from_promise(*static_cast<PromiseImpl*>(this));
             handle.destroy();
-            std::rethrow_exception(std::current_exception());
+            std::rethrow_exception(exception);
         }
-        m_continuation->value.template emplace<std::exception_ptr>(std::current_exception());
+        m_continuation->value.template emplace<std::exception_ptr>(exception);
     }
 
     Continuation<typename Task::VariantType>* m_continuation{};
@@ -94,12 +95,12 @@ struct PromiseVoid : public PromiseBase<Task, PromiseVoid<Task>>
 template <class Task>
 struct PromiseValue : public PromiseBase<Task, PromiseValue<Task>>
 {
-    void return_value(auto&& value)
+    void return_value(Task::Value value)
     {
         if (PromiseBase<Task, PromiseValue<Task>>::m_continuation)
         {
             PromiseBase<Task, PromiseValue<Task>>::m_continuation->value
-                .template emplace<typename Task::Value>(std::forward<decltype(value)>(value));
+                .template emplace<typename Task::Value>(std::move(value));
         }
     }
 };
