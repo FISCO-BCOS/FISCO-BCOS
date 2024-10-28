@@ -23,20 +23,35 @@
 
 #include "../Common.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
+#include "bcos-ledger/LedgerMethods.h"
 #include <bcos-framework/ledger/Ledger.h>
 #include <bcos-task/Wait.h>
-#include <bcos-tool/LedgerConfigFetcher.h>
 #include <future>
+#include <optional>
 
 namespace bcos::executor
 {
-class LedgerCache : public bcos::tool::LedgerConfigFetcher
+class LedgerCache
 {
+private:
+    ledger::LedgerInterface::Ptr m_ledger;
+    ledger::LedgerConfig::Ptr m_ledgerConfig;
+    std::optional<evmc_uint256be> m_chainID;
+
+    std::map<int64_t, h256, std::less<>> m_blockNumber2Hash;
+    mutable bcos::SharedMutex x_blockNumber2Hash;
+
 public:
     using Ptr = std::shared_ptr<LedgerCache>;
-    LedgerCache(bcos::ledger::LedgerInterface::Ptr ledger) : bcos::tool::LedgerConfigFetcher(ledger)
+    LedgerCache(bcos::ledger::LedgerInterface::Ptr ledger)
+      : m_ledger(std::move(ledger)), m_ledgerConfig(std::make_shared<ledger::LedgerConfig>())
     {}
-    virtual ~LedgerCache() = default;
+
+    const ledger::LedgerConfig& ledgerConfig() const { return *m_ledgerConfig; }
+    void updateLedgerConfig()
+    {
+        task::syncWait(ledger::getLedgerConfig(*m_ledger, *m_ledgerConfig));
+    }
 
     void setBlockNumber2Hash(int64_t blockNumber, h256 blockHash)
     {
@@ -52,7 +67,7 @@ public:
             [blockNumber](const auto& item) { return item.first < blockNumber; });
     }
 
-    bcos::crypto::HashType fetchBlockHash(bcos::protocol::BlockNumber _blockNumber) override
+    bcos::crypto::HashType fetchBlockHash(bcos::protocol::BlockNumber _blockNumber)
     {
         EXECUTOR_LOG(TRACE) << LOG_BADGE("LedgerCache") << "fetchBlockHash start"
                             << LOG_KV("blockNumber", _blockNumber);
@@ -68,7 +83,7 @@ public:
             }
         }
 
-        auto hash = bcos::tool::LedgerConfigFetcher::fetchBlockHash(_blockNumber);
+        auto hash = task::syncWait(ledger::getBlockHash(*m_ledger, _blockNumber));
         EXECUTOR_LOG(TRACE) << LOG_BADGE("LedgerCache")
                             << "fetchBlockHash return by fetching from ledger"
                             << LOG_KV("blockNumber", _blockNumber)
@@ -106,16 +121,21 @@ public:
 
     evmc_uint256be chainId()
     {
-        if (ledgerConfig()->chainId().has_value())
+        if (m_chainID)
         {
-            return ledgerConfig()->chainId().value();
+            return *m_chainID;
         }
-        fetchChainId();
-        return ledgerConfig()->chainId().value();
-    }
 
-private:
-    std::map<int64_t, h256, std::less<>> m_blockNumber2Hash;
-    mutable bcos::SharedMutex x_blockNumber2Hash;
+        if (auto value = task::syncWait(
+                ledger::getSystemConfig(*m_ledger, ledger::SYSTEM_KEY_WEB3_CHAIN_ID)))
+        {
+            auto numChainID = boost::lexical_cast<u256>(std::get<0>(*value));
+            m_chainID.emplace(bcos::toEvmC(numChainID));
+            EXECUTOR_LOG(INFO) << LOG_DESC("fetchChainId success") << LOG_KV("chainId", numChainID);
+            return *m_chainID;
+        }
+
+        return {};
+    }
 };
 }  // namespace bcos::executor

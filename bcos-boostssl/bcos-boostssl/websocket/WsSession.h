@@ -19,6 +19,7 @@
  */
 #pragma once
 #include "bcos-boostssl/interfaces/MessageFace.h"
+#include "bcos-boostssl/websocket/WsError.h"
 #include "bcos-utilities/ObjectCounter.h"
 #include <bcos-boostssl/httpserver/Common.h>
 #include <bcos-boostssl/websocket/Common.h>
@@ -34,6 +35,7 @@
 #include <boost/beast/websocket.hpp>
 #include <boost/thread/thread.hpp>
 #include <atomic>
+#include <memory>
 #include <mutex>
 #include <queue>
 #include <shared_mutex>
@@ -52,14 +54,14 @@ public:
     using Ptrs = std::vector<std::shared_ptr<WsSession>>;
 
 public:
-    explicit WsSession(tbb::task_group& taskGroup, std::string _moduleName = "DEFAULT");
+    explicit WsSession(tbb::task_group& taskGroup);
 
     virtual ~WsSession() noexcept
     {
         WEBSOCKET_SESSION(INFO) << LOG_KV("[DELOBJ][WSSESSION]", this);
     }
 
-    void drop(uint32_t _reason);
+    void drop(boostssl::ws::WsError _reason);
 
 public:
     // start WsSession as client
@@ -123,9 +125,6 @@ public:
         m_wsStreamDelegate = std::move(_wsStreamDelegate);
     }
 
-    boost::beast::flat_buffer& buffer() { return m_buffer; }
-    void setBuffer(boost::beast::flat_buffer _buffer) { m_buffer = std::move(_buffer); }
-
     int32_t sendMsgTimeout() const { return m_sendMsgTimeout; }
     void setSendMsgTimeout(int32_t _sendMsgTimeout) { m_sendMsgTimeout = _sendMsgTimeout; }
 
@@ -146,9 +145,6 @@ public:
 
     std::string nodeId() { return m_nodeId; }
     void setNodeId(std::string _nodeId) { m_nodeId = std::move(_nodeId); }
-
-    std::string moduleName() { return m_moduleName; }
-    void setModuleName(std::string _moduleName) { m_moduleName = std::move(_moduleName); }
 
     bool needCheckRspPacket() const { return m_needCheckRspPacket; }
     void setNeedCheckRspPacket(bool _needCheckRespPacket)
@@ -176,7 +172,7 @@ public:
     virtual void send(std::shared_ptr<bcos::bytes> _buffer);
 
     // async read
-    virtual void onReadPacket(boost::beast::flat_buffer& _buffer);
+    virtual void onReadPacket();
     void onWritePacket();
 
     struct Message : public bcos::ObjectCounter<Message>
@@ -192,10 +188,9 @@ protected:
     std::atomic_bool m_isDrop = false;
     // websocket protocol version
     std::atomic<uint16_t> m_version = 0;
-    std::string m_moduleName;
 
     // buffer used to read message
-    boost::beast::flat_buffer m_buffer;
+    std::shared_ptr<boost::beast::flat_buffer> m_buffer;
 
     std::string m_endPoint;
     std::string m_nodeId;
@@ -237,9 +232,9 @@ public:
     virtual ~WsSessionFactory() = default;
 
 public:
-    virtual WsSession::Ptr createSession(tbb::task_group& taskGroup, std::string _moduleName)
+    virtual WsSession::Ptr createSession(tbb::task_group& taskGroup)
     {
-        auto session = std::make_shared<WsSession>(taskGroup, _moduleName);
+        auto session = std::make_shared<WsSession>(taskGroup);
         return session;
     }
 };

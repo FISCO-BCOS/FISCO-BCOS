@@ -42,12 +42,13 @@ using namespace bcos;
 static const int32_t BLOCK_LIMIT_RANGE = 500;
 
 Service::Service(bcos::group::GroupInfoCodec::Ptr _groupInfoCodec,
-    bcos::group::GroupInfoFactory::Ptr _groupInfoFactory, std::string _moduleName)
-  : WsService(std::move(_moduleName)),
+    bcos::group::GroupInfoFactory::Ptr _groupInfoFactory)
+  : WsService(),
     m_groupInfoCodec(std::move(_groupInfoCodec)),
     m_groupInfoFactory(std::move(_groupInfoFactory))
 {
-    m_localProtocol = g_BCOSConfig.protocolInfo(bcos::protocol::ProtocolModuleID::RpcService);
+    m_localProtocol =
+        protocol::g_BCOSConfig.protocolInfo(bcos::protocol::ProtocolModuleID::RpcService);
     RPC_WS_LOG(INFO) << LOG_DESC("init the local protocol")
                      << LOG_KV("minVersion", m_localProtocol->minVersion())
                      << LOG_KV("maxVersion", m_localProtocol->maxVersion())

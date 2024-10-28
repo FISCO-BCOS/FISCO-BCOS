@@ -20,9 +20,8 @@
  */
 #pragma once
 #include "../protocol/ProtocolTypeDef.h"
-namespace bcos
-{
-namespace consensus
+
+namespace bcos::consensus
 {
 class ProposalInterface
 {
@@ -68,5 +67,4 @@ public:
 };
 using ProposalList = std::vector<ProposalInterface::Ptr>;
 using ProposalListPtr = std::shared_ptr<ProposalList>;
-}  // namespace consensus
-}  // namespace bcos
+}  // namespace bcos::consensus

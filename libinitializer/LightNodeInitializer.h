@@ -8,7 +8,7 @@
 #include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-front/FrontService.h>
-#include <bcos-ledger/src/libledger/LedgerImpl.h>
+#include <bcos-ledger/LedgerImpl.h>
 #include <bcos-lightnode/Log.h>
 #include <bcos-lightnode/scheduler/SchedulerWrapperImpl.h>
 #include <bcos-lightnode/transaction-pool/TransactionPoolImpl.h>

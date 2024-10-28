@@ -203,7 +203,10 @@ public:
         {
             return false;
         }
-        return m_committedProposal->index() < _index;
+        // Note: If the consensus and blockSync are executing the same block at the same time,
+        // the blockSync is executed first, and the consensus is still executing, the cache
+        // should be cleared.
+        return m_committedProposal->index() <= _index;
     }
 
     virtual void setTimeoutState(bool _timeoutState) { m_timeoutState.store(_timeoutState); }
@@ -336,7 +339,7 @@ public:
         m_waitSealUntil = std::max(m_waitSealUntil.load(), _waitSealUntil);
     }
 
-    void setConsensusNodeList(ConsensusNodeList& _consensusNodeList) override
+    void setConsensusNodeList(ConsensusNodeList _consensusNodeList) override
     {
         ConsensusConfig::setConsensusNodeList(_consensusNodeList);
         if (!m_consensusNodeListUpdated)
@@ -493,6 +496,6 @@ protected:
     std::function<void()> m_txsStatusSyncHandler;
 
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
-    [[no_unique_address]] RPBFTConfigTools::Ptr m_rpbftConfigTools = nullptr;
+    RPBFTConfigTools::Ptr m_rpbftConfigTools = nullptr;
 };
 }  // namespace bcos::consensus

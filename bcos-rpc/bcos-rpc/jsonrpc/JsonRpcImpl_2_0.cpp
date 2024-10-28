@@ -245,7 +245,7 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::Transaction const
             jResp["extension"].append(ext);
         }
     }
-    if (transaction.type() == bcos::protocol::TransactionType::Web3Transacion) [[unlikely]]
+    if (transaction.type() == bcos::protocol::TransactionType::Web3Transaction) [[unlikely]]
     {
         Web3Transaction web3Tx;
         auto extraBytesRef =
@@ -522,7 +522,7 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
             jResp["to"] = submitResult->to();
             jResp["from"] = toHexStringWithPrefix(submitResult->sender());
 
-            if (g_BCOSConfig.needRetInput())
+            if (protocol::g_BCOSConfig.needRetInput())
             {
                 jResp["input"] = toHexStringWithPrefix(transaction->input());
                 jResp["extraData"] = extraData;
@@ -957,21 +957,19 @@ void JsonRpcImpl_2_0::getSealerList(
     auto nodeService = getNodeService(_groupID, _nodeName, "getSealerList");
     auto ledger = nodeService->ledger();
     checkService(ledger, "ledger");
-    ledger->asyncGetNodeListByType(
-        bcos::ledger::CONSENSUS_SEALER, [m_respFunc = std::move(_respFunc)](Error::Ptr _error,
-                                            consensus::ConsensusNodeListPtr _consensusNodeListPtr) {
+    ledger->asyncGetNodeListByType(bcos::ledger::CONSENSUS_SEALER,
+        [m_respFunc = std::move(_respFunc)](
+            const Error::Ptr& _error, consensus::ConsensusNodeList const& _consensusNodeListPtr) {
             Json::Value jResp = Json::Value(Json::arrayValue);
             if (!_error || (_error->errorCode() == bcos::protocol::CommonError::SUCCESS))
             {
-                if (_consensusNodeListPtr)
+                for (const auto& consensusNodePtr : _consensusNodeListPtr)
                 {
-                    for (const auto& consensusNodePtr : *_consensusNodeListPtr)
-                    {
-                        Json::Value node;
-                        node["nodeID"] = consensusNodePtr->nodeID()->hex();
-                        node["weight"] = consensusNodePtr->weight();
-                        jResp.append(node);
-                    }
+                    Json::Value node;
+                    node["nodeID"] = consensusNodePtr.nodeID->hex();
+                    node["weight"] = consensusNodePtr.voteWeight;
+                    node["termWeight"] = consensusNodePtr.termWeight;
+                    jResp.append(node);
                 }
             }
             else
@@ -995,18 +993,15 @@ void JsonRpcImpl_2_0::getObserverList(
     auto nodeService = getNodeService(_groupID, _nodeName, "getObserverList");
     auto ledger = nodeService->ledger();
     checkService(ledger, "ledger");
-    ledger->asyncGetNodeListByType(bcos::ledger::CONSENSUS_OBSERVER,
-        [m_respFunc = std::move(_respFunc)](
-            Error::Ptr _error, consensus::ConsensusNodeListPtr _consensusNodeListPtr) {
+    ledger->asyncGetNodeListByType(
+        bcos::ledger::CONSENSUS_OBSERVER, [m_respFunc = std::move(_respFunc)](Error::Ptr _error,
+                                              consensus::ConsensusNodeList _consensusNodeListPtr) {
             Json::Value jResp = Json::Value(Json::arrayValue);
             if (!_error || (_error->errorCode() == bcos::protocol::CommonError::SUCCESS))
             {
-                if (_consensusNodeListPtr)
+                for (const auto& consensusNodePtr : _consensusNodeListPtr)
                 {
-                    for (const auto& consensusNodePtr : *_consensusNodeListPtr)
-                    {
-                        jResp.append(consensusNodePtr->nodeID()->hex());
-                    }
+                    jResp.append(consensusNodePtr.nodeID->hex());
                 }
             }
             else
@@ -1033,19 +1028,17 @@ void JsonRpcImpl_2_0::getNodeListByType(std::string_view _groupID, std::string_v
     checkService(ledger, "ledger");
     ledger->asyncGetNodeListByType(
         _nodeType, [m_respFunc = std::move(_respFunc)](
-                       Error::Ptr _error, consensus::ConsensusNodeListPtr _consensusNodeListPtr) {
+                       Error::Ptr _error, consensus::ConsensusNodeList _consensusNodeListPtr) {
             Json::Value jResp = Json::Value(Json::arrayValue);
             if (!_error || (_error->errorCode() == bcos::protocol::CommonError::SUCCESS))
             {
-                if (_consensusNodeListPtr)
+                for (const auto& consensusNodePtr : _consensusNodeListPtr)
                 {
-                    for (const auto& consensusNodePtr : *_consensusNodeListPtr)
-                    {
-                        Json::Value node;
-                        node["nodeID"] = consensusNodePtr->nodeID()->hex();
-                        node["weight"] = consensusNodePtr->weight();
-                        jResp.append(node);
-                    }
+                    Json::Value node;
+                    node["nodeID"] = consensusNodePtr.nodeID->hex();
+                    node["weight"] = consensusNodePtr.voteWeight;
+                    node["termWeight"] = consensusNodePtr.termWeight;
+                    jResp.append(node);
                 }
             }
             else

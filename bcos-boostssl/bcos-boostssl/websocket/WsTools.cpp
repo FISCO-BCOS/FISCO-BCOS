@@ -118,6 +118,7 @@ void WsTools::close(boost::asio::ip::tcp::socket& _socket)
     try
     {
         boost::beast::error_code ec;
+        _socket.cancel(ec);
         _socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
         if (_socket.is_open())
         {

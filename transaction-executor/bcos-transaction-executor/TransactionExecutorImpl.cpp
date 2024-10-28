@@ -1,13 +1,14 @@
 #include "TransactionExecutorImpl.h"
 
 bcos::transaction_executor::TransactionExecutorImpl::TransactionExecutorImpl(
-    protocol::TransactionReceiptFactory const& receiptFactory, crypto::Hash::Ptr hashImpl)
+    protocol::TransactionReceiptFactory const& receiptFactory, crypto::Hash::Ptr hashImpl,
+    PrecompiledManager& precompiledManager)
   : m_receiptFactory(receiptFactory),
     m_hashImpl(std::move(hashImpl)),
-    m_precompiledManager(m_hashImpl)
+    m_precompiledManager(precompiledManager)
 {}
 
-evmc_message bcos::transaction_executor::TransactionExecutorImpl::newEVMCMessage(
+evmc_message bcos::transaction_executor::newEVMCMessage(
     protocol::Transaction const& transaction, int64_t gasLimit)
 {
     auto toAddress = unhexAddress(transaction.to());

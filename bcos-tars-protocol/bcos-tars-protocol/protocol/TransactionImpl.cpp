@@ -52,7 +52,7 @@ bcos::crypto::HashType TransactionImpl::hash() const
         BOOST_THROW_EXCEPTION(EmptyTransactionHash{});
     }
 
-    if (type() == static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transacion))
+    if (type() == static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
     {
         bcos::crypto::HashType hashResult((bcos::byte*)m_inner()->extraTransactionHash.data(),
             m_inner()->extraTransactionHash.size());

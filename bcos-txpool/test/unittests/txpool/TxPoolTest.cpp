@@ -186,7 +186,8 @@ void testAsyncFillBlock(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
 }
 
 void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
-    TxPoolStorageInterface::Ptr _txpoolStorage, int64_t _blockLimit, CryptoSuite::Ptr _cryptoSuite)
+    TxPoolStorageInterface::Ptr _txpoolStorage, int64_t _blockLimit, CryptoSuite::Ptr _cryptoSuite,
+    std::function<void()> cleanWeb3Func = nullptr)
 {
     // asyncSealTxs
     auto originTxsSize = _txpoolStorage->size();
@@ -271,8 +272,8 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
             100000, nullptr, [&](Error::Ptr _error, Block::Ptr _txsMetaDataList, Block::Ptr) {
                 BOOST_CHECK(_error == nullptr);
                 auto size = _txsMetaDataList->transactionsMetaDataSize();
-                BOOST_CHECK(_txsMetaDataList->transactionsMetaDataSize() == 0);
-                BOOST_CHECK(_txsMetaDataList->transactionsHashSize() == 0);
+                BOOST_CHECK_EQUAL(size, 0);
+                BOOST_CHECK_EQUAL(_txsMetaDataList->transactionsHashSize(), 0);
                 promise.set_value();
             });
         promise.get_future().get();
@@ -385,7 +386,9 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     auto validator =
         std::dynamic_pointer_cast<TxValidator>(_faker->txpool()->txpoolConfig()->txValidator());
     auto ledgerNonceChecker = validator->ledgerNonceChecker();
-    for (auto tx : *notifiedTxs)
+    for (auto tx : *notifiedTxs | RANGES::views::filter([](auto const& tx) {
+             return tx->type() != static_cast<uint8_t>(TransactionType::Web3Transaction);
+         }))
     {
         BOOST_CHECK(txPoolNonceChecker->checkNonce(tx) == TransactionStatus::None);
         BOOST_CHECK(ledgerNonceChecker->checkNonce(tx) == TransactionStatus::NonceCheckFail);
@@ -399,22 +402,23 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     }
 
     // case: the other left txs expired for invalid blockLimit
-    finish = false;
     std::cout << "######### asyncSealTxs with invalid blocklimit" << std::endl;
     std::cout << "##### origin txsSize:" << _txpoolStorage->size() << std::endl;
 
+    if (cleanWeb3Func)
+    {
+        cleanWeb3Func();
+    }
     _txpool->asyncResetTxPool(nullptr);
+    std::promise<void> promise;
     _txpool->asyncSealTxs(
         100000, nullptr, [&](Error::Ptr _error, Block::Ptr _txsMetaDataList, Block::Ptr) {
             BOOST_CHECK(_error == nullptr);
-            BOOST_CHECK(_txsMetaDataList->transactionsMetaDataSize() == 0);
-            BOOST_CHECK(_txsMetaDataList->transactionsHashSize() == 0);
-            finish = true;
+            BOOST_CHECK_EQUAL(_txsMetaDataList->transactionsMetaDataSize(), 0);
+            BOOST_CHECK_EQUAL(_txsMetaDataList->transactionsHashSize(), 0);
+            promise.set_value();
         });
-    while (!finish || (_txpoolStorage->size() > 0))
-    {
-        std::this_thread::sleep_for(std::chrono::milliseconds(2));
-    }
+    promise.get_future().get();
     BOOST_CHECK(_txpoolStorage->size() == 0);
 }
 
@@ -587,6 +591,139 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
     std::cout << "#### txPoolInitAndSubmitTransactionTest finish" << std::endl;
 }
 
+void txPoolInitAndSubmitWeb3TransactionTest(CryptoSuite::Ptr _cryptoSuite, bool multiTx = false)
+{
+    auto signatureImpl = _cryptoSuite->signatureImpl();
+    auto keyPair = signatureImpl->generateKeyPair();
+    std::string groupId = "group_test_for_txpool";
+    std::string chainId = "chain_test_for_txpool";
+    int64_t blockLimit = 10;
+    auto fakeGateWay = std::make_shared<FakeGateWay>();
+    auto faker = std::make_shared<TxPoolFixture>(keyPair->publicKey(), _cryptoSuite, groupId,
+        chainId, blockLimit, fakeGateWay, false, false);
+    faker->init();
+
+    auto txpoolConfig = faker->txpool()->txpoolConfig();
+    auto txpool = faker->txpool();
+    auto txpoolStorage = txpool->txpoolStorage();
+    auto ledger = faker->ledger();
+
+    auto const eoaKey = _cryptoSuite->signatureImpl()->generateKeyPair();
+    // case3: transaction with invalid nonce(conflict with the ledger nonce)
+    auto const& blockData = ledger->ledgerData();
+    size_t importedTxNum = 1;
+
+    auto duplicatedNonce =
+        blockData[ledger->blockNumber() - blockLimit + 1]->transaction(0)->nonce();
+    auto tx = fakeWeb3Tx(_cryptoSuite, duplicatedNonce, eoaKey);
+    // bcos nonce not effect web3 nonce
+    checkWebTxSubmit(
+        txpool, txpoolStorage, tx, tx->hash(), (uint32_t)TransactionStatus::None, importedTxNum);
+
+    u256 fakeNonce = u256(duplicatedNonce);
+    faker->ledger()->initEoaContext(
+        eoaKey->address(_cryptoSuite->hashImpl()).hex(), fakeNonce.convert_to<std::string>());
+    // ledger update to fakeNonce, tx do not clean
+    std::this_thread::sleep_for(std::chrono::milliseconds(TXPOOL_CLEANUP_TIME));
+    BOOST_CHECK_EQUAL(txpoolStorage->size(), importedTxNum);
+
+    // new nonce, submit success
+    ++fakeNonce;
+    tx = fakeWeb3Tx(_cryptoSuite, fakeNonce.convert_to<std::string>(), eoaKey);
+    importedTxNum++;
+    checkWebTxSubmit(
+        txpool, txpoolStorage, tx, tx->hash(), (uint32_t)TransactionStatus::None, importedTxNum);
+    // duplicated tx, submit failed
+    auto duplicate_tx = fakeWeb3Tx(_cryptoSuite, fakeNonce.convert_to<std::string>(), eoaKey);
+    checkWebTxSubmit(txpool, txpoolStorage, duplicate_tx, duplicate_tx->hash(),
+        (uint32_t)TransactionStatus::NonceCheckFail, importedTxNum);
+
+    ++fakeNonce;
+    // case7: submit success
+    importedTxNum++;
+    tx = fakeWeb3Tx(_cryptoSuite, fakeNonce.convert_to<std::string>(), eoaKey);
+    checkWebTxSubmit(
+        txpool, txpoolStorage, tx, tx->hash(), (uint32_t)TransactionStatus::None, importedTxNum);
+    // case8: submit duplicated tx
+    checkWebTxSubmit(txpool, txpoolStorage, tx, tx->hash(),
+        (uint32_t)TransactionStatus::AlreadyInTxPool, importedTxNum);
+
+    // too big nonce
+    tx = fakeWeb3Tx(_cryptoSuite,
+        (fakeNonce + DEFAULT_WEB3_NONCE_CHECK_LIMIT + 1).convert_to<std::string>(), eoaKey);
+    checkWebTxSubmit(txpool, txpoolStorage, tx, tx->hash(),
+        (uint32_t)TransactionStatus::NonceCheckFail, importedTxNum);
+    // batch import transactions
+
+    Transactions transactions;
+    for (auto i = 0; i < 40; i++)
+    {
+        auto tmpTx = fakeTransaction(_cryptoSuite, std::to_string(utcTime() + 1000 + i),
+            ledger->blockNumber() + blockLimit - 4, faker->chainId(), faker->groupId());
+        transactions.push_back(tmpTx);
+    }
+
+    ++fakeNonce;
+    for (auto i = 0; i < 40; i++)
+    {
+        auto tmpTx = fakeWeb3Tx(_cryptoSuite, (fakeNonce + i).convert_to<std::string>(), eoaKey);
+        transactions.push_back(tmpTx);
+    }
+
+    for (size_t i = 0; i < transactions.size(); i++)
+    {
+        auto tmpTx = transactions[i];
+        checkWebTxSubmit(txpool, txpoolStorage, tmpTx, tmpTx->hash(),
+            (uint32_t)TransactionStatus::None, ++importedTxNum);
+    }
+    auto startT = utcTime();
+    while ((txpoolStorage->size() < importedTxNum) && (utcTime() - startT <= 10000))
+    {
+        std::cout << "#### txpoolStorage->size:" << txpoolStorage->size() << std::endl;
+        std::cout << "#### importedTxNum:" << importedTxNum << std::endl;
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    std::cout << "#### txpoolStorage size:" << txpoolStorage->size() << std::endl;
+    std::cout << "#### importedTxNum:" << importedTxNum << std::endl;
+
+    // case9: the txpool is full
+    txpoolConfig->setPoolLimit(importedTxNum);
+    checkWebTxSubmit(txpool, txpoolStorage, tx, tx->hash(),
+        (uint32_t)TransactionStatus::TxPoolIsFull, importedTxNum);
+
+    // case10: malformed transaction
+    bcos::bytes encodedData;
+    tx->encode(encodedData);
+    auto txData = std::make_shared<bytes>(encodedData.begin(), encodedData.end());
+    // fake invalid txData
+    for (size_t i = 0; i < txData->size(); i++)
+    {
+        (*txData)[i] += 100;
+    }
+    try
+    {
+        bcos::task::syncWait(txpool->submitTransactionWithoutReceipt(tx));
+    }
+    catch (bcos::Error& e)
+    {
+        // TODO: Put TransactionStatus::Malformed into bcos::Error
+        // BOOST_CHECK(e.errorCode() == _result->status());
+        std::cout << "#### error info:" << e.errorMessage() << std::endl;
+        // BOOST_CHECK(_result->txHash() == HashType());
+        // BOOST_CHECK(_result->status() == (uint32_t)(TransactionStatus::Malform));
+    }
+    std::cout << "#### testAsyncFillBlock" << std::endl;
+    testAsyncFillBlock(faker, txpool, txpoolStorage, _cryptoSuite);
+    std::cout << "#### testAsyncSealTxs" << std::endl;
+    testAsyncSealTxs(faker, txpool, txpoolStorage, blockLimit, _cryptoSuite, [&]() {
+        txpool->txpoolConfig()->txValidator()->web3NonceChecker()->insert(
+            std::string(tx->sender()), u256("0xffffffffffffffffffffffffff"));
+    });
+    // clear all the txs before exit
+    txpool->txpoolStorage()->clear();
+    std::cout << "#### txPoolInitAndSubmitTransactionTest finish" << std::endl;
+}
+
 BOOST_AUTO_TEST_CASE(testTxPoolInitAndSubmitTransaction)
 {
     auto hashImpl = std::make_shared<Keccak256>();
@@ -601,6 +738,14 @@ BOOST_AUTO_TEST_CASE(testSMTxPoolInitAndSubmitTransaction)
     auto signatureImpl = std::make_shared<SM2Crypto>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
     txPoolInitAndSubmitTransactionTest(true, cryptoSuite);
+}
+
+BOOST_AUTO_TEST_CASE(testWeb3Tx)
+{
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
+    auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
+    txPoolInitAndSubmitWeb3TransactionTest(cryptoSuite);
 }
 
 BOOST_AUTO_TEST_CASE(fillWithSubmit)

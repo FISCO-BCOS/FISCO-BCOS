@@ -19,9 +19,12 @@
  */
 
 #pragma once
+#include "../consensus/ConsensusNode.h"
 #include "../protocol/ProtocolTypeDef.h"
 #include "SystemConfigs.h"
 #include <bcos-utilities/Common.h>
+#include <oneapi/tbb/concurrent_unordered_map.h>
+#include <magic_enum.hpp>
 
 namespace bcos::ledger
 {
@@ -53,6 +56,7 @@ constexpr static std::string_view SYSTEM_KEY_RPBFT_SWITCH = magic_enum::enum_nam
 constexpr static std::string_view SYSTEM_KEY_BALANCE_PRECOMPILED_SWITCH = magic_enum::enum_name(SystemConfig::feature_balance_precompiled);
 // notify rotate key for rpbft
 constexpr static std::string_view INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE = "feature_rpbft_notify_rotate";
+constexpr static std::string_view ENABLE_BALANCE_TRANSFER = magic_enum::enum_name(SystemConfig::balance_transfer);
 // clang-format on
 constexpr static std::string_view PBFT_CONSENSUS_TYPE = "pbft";
 constexpr static std::string_view RPBFT_CONSENSUS_TYPE = "rpbft";
@@ -64,9 +68,12 @@ const unsigned TX_GAS_LIMIT_MIN = 100000;
 const unsigned RPBFT_EPOCH_SEALER_NUM_MIN = 1;
 const unsigned RPBFT_EPOCH_BLOCK_NUM_MIN = 1;
 // get consensus node list type
-constexpr static std::string_view CONSENSUS_SEALER = "consensus_sealer";
-constexpr static std::string_view CONSENSUS_OBSERVER = "consensus_observer";
-constexpr static std::string_view CONSENSUS_CANDIDATE_SEALER = "consensus_candidate_sealer";
+constexpr static std::string_view CONSENSUS_SEALER =
+    magic_enum::enum_name(consensus::Type::consensus_sealer);
+constexpr static std::string_view CONSENSUS_OBSERVER =
+    magic_enum::enum_name(consensus::Type::consensus_observer);
+constexpr static std::string_view CONSENSUS_CANDIDATE_SEALER =
+    magic_enum::enum_name(consensus::Type::consensus_candidate_sealer);
 
 // get current state key
 constexpr static std::string_view SYS_KEY_CURRENT_NUMBER = "current_number";
@@ -123,4 +130,53 @@ struct CurrentState
     int64_t totalTransactionCount;
     int64_t totalFailedTransactionCount;
 };
+
+// parent=>children
+using Parent2ChildListMap = std::map<std::string, std::vector<std::string>>;
+// child=>parent
+using Child2ParentMap = tbb::concurrent_unordered_map<std::string, std::string>;
+
+constexpr static const char* const SYS_VALUE = "value";
+constexpr static const char* const SYS_CONFIG_ENABLE_BLOCK_NUMBER = "enable_number";
+constexpr static const char* const SYS_VALUE_AND_ENABLE_BLOCK_NUMBER = "value,enable_number";
+
+enum LedgerError : int32_t
+{
+    SUCCESS = 0,
+    OpenTableFailed = 3001,
+    CallbackError = 3002,
+    ErrorArgument = 3003,
+    DecodeError = 3004,
+    ErrorCommitBlock = 3005,
+    CollectAsyncCallbackError = 3006,
+    LedgerLockError = 3007,
+    GetStorageError = 3008,
+    EmptyEntry = 3009,
+    UnknownError = 3010,
+};
+struct StorageState
+{
+    std::string nonce;
+    std::string balance;
+};
+inline task::Task<void> readFromStorage(
+    SystemConfigs& configs, auto&& storage, protocol::BlockNumber blockNumber = INT64_MAX)
+{
+    decltype(auto) keys = bcos::ledger::SystemConfigs::supportConfigs();
+    auto entries = co_await storage2::readSome(std::forward<decltype(storage)>(storage),
+        keys | RANGES::views::transform([](std::string_view key) {
+            return transaction_executor::StateKeyView(ledger::SYS_CONFIG, key);
+        }));
+    for (auto&& [key, entry] : RANGES::views::zip(keys, entries))
+    {
+        if (entry)
+        {
+            auto [value, enableNumber] = entry->template getObject<ledger::SystemConfigEntry>();
+            if (blockNumber >= enableNumber)
+            {
+                configs.set(key, value, enableNumber);
+            }
+        }
+    }
+}
 }  // namespace bcos::ledger

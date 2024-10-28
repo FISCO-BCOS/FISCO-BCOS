@@ -19,11 +19,8 @@
  * @date 2021-06-10
  */
 #pragma once
-#include "Exceptions.h"
-#include "bcos-framework/consensus/ConsensusNodeInterface.h"
 #include "bcos-framework/ledger/GenesisConfig.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
-#include "bcos-tool/VersionConverter.h"
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/Common.h>
 #include <bcos-framework/protocol/Protocol.h>
@@ -31,7 +28,6 @@
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <cstddef>
-#include <optional>
 #include <unordered_map>
 
 #define NodeConfig_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("NodeConfig")
@@ -49,6 +45,10 @@ public:
     using Ptr = std::shared_ptr<NodeConfig>;
     NodeConfig() : m_ledgerConfig(std::make_shared<bcos::ledger::LedgerConfig>()) {}
 
+    NodeConfig(const NodeConfig&) = default;
+    NodeConfig(NodeConfig&&) = default;
+    NodeConfig& operator=(const NodeConfig&) = default;
+    NodeConfig& operator=(NodeConfig&&) = default;
     explicit NodeConfig(bcos::crypto::KeyFactory::Ptr _keyFactory);
     virtual ~NodeConfig() = default;
 
@@ -337,7 +337,7 @@ private:
         }
     }
 
-    bcos::consensus::ConsensusNodeListPtr parseConsensusNodeList(
+    bcos::consensus::ConsensusNodeList parseConsensusNodeList(
         boost::property_tree::ptree const& _pt, std::string const& _sectionName,
         std::string const& _subSectionName);
 
@@ -348,28 +348,28 @@ private:
 
     bcos::crypto::KeyFactory::Ptr m_keyFactory;
     // txpool related configuration
-    size_t m_txpoolLimit;
-    size_t m_notifyWorkerNum;
-    size_t m_verifierWorkerNum;
-    int64_t m_txsExpirationTime;
+    size_t m_txpoolLimit{};
+    size_t m_notifyWorkerNum{};
+    size_t m_verifierWorkerNum{};
+    int64_t m_txsExpirationTime{};
     bool m_checkBlockLimit = true;
     // TODO: the block sync module need some configurations?
 
     // chain configuration
-    size_t m_blockLimit;
+    size_t m_blockLimit{};
 
     // sealer configuration
     size_t m_minSealTime = 0;
     bool m_allowFreeNode = false;
-    size_t m_checkPointTimeoutInterval;
+    size_t m_checkPointTimeoutInterval{};
     size_t m_pipelineSize = 50;
 
     // for security
     std::string m_privateKeyPath;
-    bool m_enableHsm;
+    bool m_enableHsm{};
     std::string m_hsmLibPath;
-    int m_keyIndex;
-    int m_encKeyIndex;
+    int m_keyIndex{};
+    int m_encKeyIndex{};
     std::string m_password;
 
     // for security kms
@@ -377,9 +377,9 @@ private:
     std::string m_kmsUrl;
 
     // storage security configuration
-    bool m_storageSecurityEnable;
+    bool m_storageSecurityEnable{};
     std::string m_storageSecurityKeyCenterIp;
-    unsigned short m_storageSecurityKeyCenterPort;
+    unsigned short m_storageSecurityKeyCenterPort{};
     std::string m_storageSecurityCipherDataKey;
 
     // ledger configuration
@@ -439,25 +439,25 @@ private:
 
     // config for rpc
     std::string m_rpcListenIP;
-    uint16_t m_rpcListenPort;
-    uint32_t m_rpcThreadPoolSize;
-    uint32_t m_rpcFilterTimeout;
-    uint32_t m_rpcMaxProcessBlock;
-    bool m_rpcSmSsl;
+    uint16_t m_rpcListenPort{};
+    uint32_t m_rpcThreadPoolSize{};
+    uint32_t m_rpcFilterTimeout{};
+    uint32_t m_rpcMaxProcessBlock{};
+    bool m_rpcSmSsl{};
     bool m_rpcDisableSsl = false;
 
     // config fro web3 rpc
     bool m_enableWeb3Rpc = false;
     std::string m_web3RpcListenIP;
-    uint16_t m_web3RpcListenPort;
-    uint32_t m_web3RpcThreadSize;
-    uint32_t m_web3FilterTimeout;
-    uint32_t m_web3MaxProcessBlock;
+    uint16_t m_web3RpcListenPort{};
+    uint32_t m_web3RpcThreadSize{};
+    uint32_t m_web3FilterTimeout{};
+    uint32_t m_web3MaxProcessBlock{};
 
     // config for gateway
     std::string m_p2pListenIP;
-    uint16_t m_p2pListenPort;
-    bool m_p2pSmSsl;
+    uint16_t m_p2pListenPort{};
+    bool m_p2pSmSsl{};
     std::string m_p2pNodeDir;
     std::string m_p2pNodeFileName;
 

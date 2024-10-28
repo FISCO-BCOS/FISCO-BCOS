@@ -7,7 +7,8 @@
 #include "bcos-framework/protocol/Block.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-task/Task.h"
-#include <type_traits>
+
+#define LEDGER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("LEDGER")
 
 namespace bcos::ledger
 {
@@ -42,9 +43,9 @@ inline constexpr struct StoreTransactionsAndReceipts
 
 inline constexpr struct RemoveExpiredNonce
 {
-    task::Task<void> operator()(auto& ledger, protocol::BlockNumber expiredNumber) const
+    void operator()(auto& ledger, protocol::BlockNumber expiredNumber) const
     {
-        co_await tag_invoke(*this, ledger, expiredNumber);
+        tag_invoke(*this, ledger, expiredNumber);
     }
 } removeExpiredNonce{};
 
@@ -71,11 +72,19 @@ inline constexpr struct GetTransactionCount
     }
 } getTransactionCount{};
 
+inline constexpr struct FromStorage
+{
+} fromStorage{};
+
 inline constexpr struct GetCurrentBlockNumber
 {
     task::Task<protocol::BlockNumber> operator()(auto& ledger) const
     {
         co_return co_await tag_invoke(*this, ledger);
+    }
+    task::Task<protocol::BlockNumber> operator()(auto& storage, FromStorage fromStorage) const
+    {
+        co_return co_await tag_invoke(*this, storage, fromStorage);
     }
 } getCurrentBlockNumber{};
 
@@ -85,13 +94,18 @@ inline constexpr struct GetBlockHash
     {
         co_return co_await tag_invoke(*this, ledger, blockNumber);
     }
+    task::Task<std::optional<crypto::HashType>> operator()(
+        auto& storage, protocol::BlockNumber blockNumber, FromStorage fromStorage) const
+    {
+        co_return co_await tag_invoke(*this, storage, blockNumber, fromStorage);
+    }
 } getBlockHash{};
 
 inline constexpr struct GetBlockNumber
 {
     task::Task<protocol::BlockNumber> operator()(auto& ledger, crypto::HashType hash) const
     {
-        co_return co_await tag_invoke(*this, ledger, std::move(hash));
+        co_return co_await tag_invoke(*this, ledger, hash);
     }
 } getBlockNumber{};
 
@@ -111,13 +125,34 @@ inline constexpr struct GetNodeList
     {
         co_return co_await tag_invoke(*this, ledger, type);
     }
+
+    task::Task<consensus::ConsensusNodeList> operator()(auto& storage) const
+    {
+        co_return co_await tag_invoke(*this, storage);
+    }
 } getNodeList{};
+
+inline constexpr struct SetNodeList
+{
+    task::Task<void> operator()(
+        auto& storage, RANGES::input_range auto&& nodeList, auto&&... args) const
+    {
+        co_await tag_invoke(*this, storage, std::forward<decltype(nodeList)>(nodeList),
+            std::forward<decltype(args)>(args)...);
+    }
+} setNodeList{};
 
 inline constexpr struct GetLedgerConfig
 {
+    task::Task<void> operator()(auto& ledger, auto& ledgerConfig) const
+    {
+        co_await tag_invoke(*this, ledger, ledgerConfig);
+    }
     task::Task<LedgerConfig::Ptr> operator()(auto& ledger) const
     {
-        co_return co_await tag_invoke(*this, ledger);
+        auto ledgerConfig = std::make_shared<LedgerConfig>();
+        co_await tag_invoke(*this, ledger, *ledgerConfig);
+        co_return ledgerConfig;
     }
 } getLedgerConfig{};
 
@@ -155,6 +190,15 @@ inline constexpr struct GetStorageAt
         co_return co_await tag_invoke(*this, ledger, address, key, number);
     }
 } getStorageAt{};
+
+inline constexpr struct GetNonceList
+{
+    task::Task<std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>>> operator()(
+        auto& ledger, bcos::protocol::BlockNumber startNumber, int64_t offset) const
+    {
+        co_return co_await tag_invoke(*this, ledger, startNumber, offset);
+    }
+} getNonceList{};
 
 template <auto& Tag>
 using tag_t = std::decay_t<decltype(Tag)>;

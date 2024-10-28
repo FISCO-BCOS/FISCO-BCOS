@@ -30,6 +30,7 @@
 #include "bcos-table/src/StateStorage.h"
 #include "evmc/evmc.hpp"
 #include <bcos-framework/executor/ExecutionMessage.h>
+#include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-utilities/Common.h>
 #include <evmc/evmc.h>
@@ -241,6 +242,19 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
         {
             request->staticCall = true;
         }
+    }
+
+    if (request->create && features().get(ledger::Features::Flag::feature_evm_address)) [[unlikely]]
+    {
+        // account must exist
+        ledger::account::EVMAccount account(
+            *m_executive->storage().getRawStorage(), request->senderAddress);
+        request->nonce = task::syncWait([](decltype(account) contract) -> task::Task<u256> {
+            auto const nonceString = co_await ledger::account::nonce(contract);
+            // uint in storage
+            auto const nonce = u256(nonceString.value_or("0"));
+            co_return nonce;
+        }(std::move(account)));
     }
 
     auto response = m_executive->externalCall(std::move(request));
@@ -689,6 +703,11 @@ uint32_t HostContext::blockVersion() const
 
 uint64_t HostContext::timestamp() const
 {
+    if (m_executive->blockContext().features().get(ledger::Features::Flag::feature_evm_timestamp))
+    {
+        // millisecond to second
+        return m_executive->blockContext().timestamp() / 1000;
+    }
     return m_executive->blockContext().timestamp();
 }
 

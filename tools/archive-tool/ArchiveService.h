@@ -23,7 +23,7 @@
 #include "bcos-boostssl/httpserver/HttpStream.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
-#include "bcos-ledger/src/libledger/Ledger.h"
+#include "bcos-ledger/Ledger.h"
 #include "bcos-rpc/jsonrpc/Common.h"
 #include "bcos-rpc/jsonrpc/JsonRpcInterface.h"
 #include <bcos-framework/storage/StorageInterface.h>
@@ -53,8 +53,7 @@ public:
         m_listenPort(_listenPort)
     {
         m_ioServicePool = std::make_shared<IOServicePool>();
-        m_httpServer = std::make_shared<bcos::boostssl::http::HttpServer>(
-            m_listenIP, m_listenPort, ARCHIVE_MODULE_NAME);
+        m_httpServer = std::make_shared<bcos::boostssl::http::HttpServer>(m_listenIP, m_listenPort);
         auto acceptor =
             std::make_shared<boost::asio::ip::tcp::acceptor>((*m_ioServicePool->getIOService()));
         auto httpStreamFactory = std::make_shared<bcos::boostssl::http::HttpStreamFactory>();

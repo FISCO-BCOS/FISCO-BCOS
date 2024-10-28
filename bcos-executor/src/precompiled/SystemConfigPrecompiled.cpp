@@ -27,7 +27,6 @@
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-framework/protocol/Protocol.h>
-#include <bcos-ledger/src/libledger/utilities/Common.h>
 #include <bcos-tool/VersionConverter.h>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
@@ -100,6 +99,10 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl) : P
             defaultCmp(SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM, _value, RPBFT_EPOCH_SEALER_NUM_MIN,
                 version, BlockVersion::V3_5_VERSION);
         }));
+    m_sysValueCmp.insert(
+        std::make_pair(ENABLE_BALANCE_TRANSFER, [defaultCmp](int64_t _value, uint32_t version) {
+            defaultCmp(ENABLE_BALANCE_TRANSFER, _value, 0, version, BlockVersion::V3_10_2_VERSION);
+        }));
     // for compatibility
     // Note: the compatibility_version is not compatibility
     m_sysValueCmp.insert(
@@ -149,10 +152,10 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl) : P
                 BOOST_THROW_EXCEPTION(bcos::tool::InvalidVersion(
                     fmt::format("unsupported key {}", SYSTEM_KEY_WEB3_CHAIN_ID)));
             }
-            uint64_t number = 0;
+            u256 number = 0;
             try
             {
-                number = std::stoull(_value);
+                number = boost::lexical_cast<u256>(_value);
             }
             catch (...)
             {

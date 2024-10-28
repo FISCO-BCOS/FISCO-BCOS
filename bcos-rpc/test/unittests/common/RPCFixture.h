@@ -76,6 +76,7 @@ public:
         factory =
             std::make_shared<bcos::rpc::RpcFactory>(chainId, gateway, cryptoSuite->keyFactory());
         nodeConfig = std::make_shared<bcos::tool::NodeConfig>();
+
         nodeConfig->loadConfigFromString(configini);
         factory->setNodeConfig(nodeConfig);
 
@@ -158,8 +159,7 @@ public:
         "    thread_count=4\n"
         "    ; ssl or sm ssl\n"
         "    sm_ssl=false\n"
-        "    ; ssl connection switch, if disable the ssl connection, default: false\n"
-        "    disable_ssl=true\n"
+        "    enable_ssl=false\n"
         "    ; return input params in sendTransaction() return, default: true\n"
         "    ; return_input_params=false\n"
         "\n"
@@ -193,8 +193,7 @@ std::string wrongConfigini = "[p2p]\n"
     "    thread_count=4\n"
     "    ; ssl or sm ssl\n"
     "    sm_ssl=false\n"
-    "    ; ssl connection switch, if disable the ssl connection, default: false\n"
-    "    disable_ssl=true\n"
+    "    enable_ssl=false\n"
     "    ; return input params in sendTransaction() return, default: true\n"
     "    ; return_input_params=false\n"
     "\n"

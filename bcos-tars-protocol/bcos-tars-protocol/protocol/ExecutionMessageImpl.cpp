@@ -19,7 +19,6 @@
  * @date 2022-05-09
  */
 #include "ExecutionMessageImpl.h"
-#include "../Common.h"
 using namespace bcostars;
 using namespace bcostars::protocol;
 

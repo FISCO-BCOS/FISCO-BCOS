@@ -23,7 +23,7 @@
 #include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/storage/StorageInterface.h>
-#include <bcos-ledger/src/libledger/LedgerImpl.h>
+#include <bcos-ledger/LedgerImpl.h>
 #include <bcos-storage/StorageWrapperImpl.h>
 #include <bcos-tool/NodeConfig.h>
 

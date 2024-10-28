@@ -27,7 +27,7 @@ public:
 
     MultiIndexTxContainer() = default;
     MultiIndexTxContainer(const MultiIndexTxContainer&) = default;
-    MultiIndexTxContainer(MultiIndexTxContainer&&) = default;
+    MultiIndexTxContainer(MultiIndexTxContainer&&) noexcept = default;
     MultiIndexTxContainer& operator=(const MultiIndexTxContainer&) = default;
     MultiIndexTxContainer& operator=(MultiIndexTxContainer&&) noexcept = default;
 

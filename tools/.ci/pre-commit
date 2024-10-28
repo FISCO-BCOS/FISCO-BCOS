@@ -54,7 +54,7 @@ function check_codeFormat()
 #Redirect output to stderr.
     exec 1>&2
     sum=0
-    for file in $(git diff-index --name-status HEAD^ -- | grep -v D | grep -E '\.[ch](pp)?$' | awk '{print $2}');
+    for file in $(git diff-index --name-status HEAD -- | grep -v D | grep -E '\.[ch](pp)?$' | awk '{print $2}');
     do
       clang-format -style=file -i $file --dry-run --Werror
       sum=$(expr ${sum} + $?)

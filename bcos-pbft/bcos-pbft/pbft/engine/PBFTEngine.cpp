@@ -21,7 +21,9 @@
 #include "PBFTEngine.h"
 #include "../cache/PBFTCacheFactory.h"
 #include "../cache/PBFTCacheProcessor.h"
-#include "bcos-framework/protocol/CommonError.h"
+#include "bcos-framework/ledger/Ledger.h"
+#include "bcos-ledger/LedgerMethods.h"
+#include "bcos-task/Wait.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
 #include <bcos-framework/dispatcher/SchedulerTypeDef.h>
@@ -31,6 +33,7 @@
 #include <bcos-utilities/ThreadPool.h>
 #include <boost/bind/bind.hpp>
 #include <utility>
+
 using namespace bcos;
 using namespace bcos::consensus;
 using namespace bcos::ledger;
@@ -42,7 +45,8 @@ PBFTEngine::PBFTEngine(PBFTConfig::Ptr _config)
   : ConsensusEngine("pbft", 0),
     m_config(_config),
     m_worker(std::make_shared<ThreadPool>("pbftWorker", 4)),
-    m_msgQueue(std::make_shared<PBFTMsgQueue>())
+    m_msgQueue(std::make_shared<PBFTMsgQueue>()),
+    m_ledgerConfig(std::make_shared<LedgerConfig>())
 {
     auto cacheFactory = std::make_shared<PBFTCacheFactory>();
     m_cacheProcessor = std::make_shared<PBFTCacheProcessor>(cacheFactory, _config);
@@ -229,8 +233,8 @@ void PBFTEngine::onProposalApplyFailed(int64_t _errorCode, PBFTProposalInterface
         fetchAndUpdateLedgerConfig();
     }
     // re-push the proposal into the queue
-    if (_proposal->index() >= m_config->committedProposal()->index() ||
-        _proposal->index() >= m_config->syncingHighestNumber())
+    if (_proposal->index() > m_config->committedProposal()->index() ||
+        _proposal->index() > m_config->syncingHighestNumber())
     {
         m_config->timer()->restart();
         // restart checkPoint timer to advoid timeout
@@ -794,14 +798,14 @@ CheckResult PBFTEngine::checkPrePrepareMsg(std::shared_ptr<PBFTMessageInterface>
 CheckResult PBFTEngine::checkSignature(PBFTBaseMessageInterface::Ptr _req)
 {
     // check the signature
-    auto nodeInfo = m_config->getConsensusNodeByIndex(_req->generatedFrom());
+    auto* nodeInfo = m_config->getConsensusNodeByIndex(_req->generatedFrom());
     if (!nodeInfo)
     {
         PBFT_LOG(WARNING) << LOG_DESC("checkSignature failed for the node is not a consensus node")
                           << printPBFTMsgInfo(_req);
         return CheckResult::INVALID;
     }
-    auto publicKey = nodeInfo->nodeID();
+    auto publicKey = nodeInfo->nodeID;
     if (!_req->verifySignature(m_config->cryptoSuite(), publicKey))
     {
         PBFT_LOG(WARNING) << LOG_DESC("checkSignature failed for invalid signature")
@@ -829,11 +833,11 @@ bool PBFTEngine::checkProposalSignature(
     }
 
     return m_config->cryptoSuite()->signatureImpl()->verify(
-        nodeInfo->nodeID(), _proposal->hash(), _proposal->signature());
+        nodeInfo->nodeID, _proposal->hash(), _proposal->signature());
 }
 
 bool PBFTEngine::checkRotateTransactionValid(PBFTMessageInterface::Ptr const& _proposal,
-    ConsensusNodeInterface::Ptr const& _leaderInfo, bool needCheckSign)
+    ConsensusNode const& _leaderInfo, bool needCheckSign)
 {
     if (m_config->consensusType() == ConsensusType::PBFT_TYPE &&
         m_config->rpbftConfigTools() == nullptr) [[likely]]
@@ -876,7 +880,7 @@ bool PBFTEngine::checkRotateTransactionValid(PBFTMessageInterface::Ptr const& _p
     }
 
     // FIXME: should not use source
-    auto leaderAddress = right160(m_config->cryptoSuite()->hash(_leaderInfo->nodeID()));
+    auto leaderAddress = right160(m_config->cryptoSuite()->hash(_leaderInfo.nodeID));
     if (rotatingTx->source() == leaderAddress.hex())
     {
         return true;
@@ -886,7 +890,7 @@ bool PBFTEngine::checkRotateTransactionValid(PBFTMessageInterface::Ptr const& _p
                       << LOG_KV("reqIndex", _proposal->index())
                       << LOG_KV("reqHash", _proposal->hash().abridged())
                       << LOG_KV("fromIdx", _proposal->generatedFrom())
-                      << LOG_KV("leader", _leaderInfo->nodeID()->hex())
+                      << LOG_KV("leader", _leaderInfo.nodeID->hex())
                       << LOG_KV("leaderAddress", leaderAddress.hex())
                       << LOG_KV("sender", rotatingTx->source());
     return false;
@@ -979,12 +983,12 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
     }
     // verify the proposal
     auto self = weak_from_this();
-    auto leaderNodeInfo = m_config->getConsensusNodeByIndex(_prePrepareMsg->generatedFrom());
+    auto* leaderNodeInfo = m_config->getConsensusNodeByIndex(_prePrepareMsg->generatedFrom());
     if (!leaderNodeInfo)
     {
         return false;
     }
-    m_config->validator()->verifyProposal(leaderNodeInfo->nodeID(),
+    m_config->validator()->verifyProposal(leaderNodeInfo->nodeID,
         _prePrepareMsg->consensusProposal(),
         [self, _prePrepareMsg, _generatedFromNewView, leaderNodeInfo, _needCheckSignature](
             auto&& _error, bool _verifyResult) {
@@ -1019,7 +1023,7 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
                     return;
                 }
                 auto rotateResult = pbftEngine->checkRotateTransactionValid(
-                    _prePrepareMsg, leaderNodeInfo, _needCheckSignature);
+                    _prePrepareMsg, *leaderNodeInfo, _needCheckSignature);
                 // verify failed
                 if (!_verifyResult || !rotateResult)
                 {
@@ -1383,12 +1387,12 @@ bool PBFTEngine::isValidNewViewMsg(std::shared_ptr<NewViewMsgInterface> _newView
                               << printPBFTMsgInfo(viewChangeReq);
             return false;
         }
-        auto nodeInfo = m_config->getConsensusNodeByIndex(viewChangeReq->generatedFrom());
+        auto* nodeInfo = m_config->getConsensusNodeByIndex(viewChangeReq->generatedFrom());
         if (!nodeInfo)
         {
             continue;
         }
-        weight += nodeInfo->weight();
+        weight += nodeInfo->voteWeight;
     }
     // TODO: need to ensure the accuracy of local weight parameters
     if (weight < m_config->minRequiredQuorum())
@@ -1463,9 +1467,9 @@ void PBFTEngine::reHandlePrePrepareProposals(NewViewMsgInterface::Ptr _newViewRe
             continue;
         }
         // miss the cache, request to from node
-        auto from = m_config->getConsensusNodeByIndex(prePrepare->generatedFrom());
+        auto* from = m_config->getConsensusNodeByIndex(prePrepare->generatedFrom());
         m_logSync->requestPrecommitData(
-            from->nodeID(), prePrepare, [self](PBFTMessageInterface::Ptr _prePrepare) {
+            from->nodeID, prePrepare, [self](PBFTMessageInterface::Ptr _prePrepare) {
                 auto engine = self.lock();
                 if (!engine)
                 {
@@ -1497,7 +1501,7 @@ void PBFTEngine::reHandlePrePrepareProposals(NewViewMsgInterface::Ptr _newViewRe
 
 void PBFTEngine::finalizeConsensus(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
 {
-    RecursiveGuard l(m_mutex);
+    RecursiveGuard lock(m_mutex);
     // try to switch rpbft
     switchToRPBFT(_ledgerConfig);
     // resetConfig after submit the block to ledger
@@ -1773,8 +1777,8 @@ void PBFTEngine::clearExceptionProposalState(bcos::protocol::BlockNumber _number
 void PBFTEngine::fetchAndUpdateLedgerConfig()
 {
     PBFT_LOG(INFO) << LOG_DESC("fetchAndUpdateLedgerConfig");
-    m_ledgerFetcher->fetchAll();
-    auto ledgerConfig = m_ledgerFetcher->ledgerConfig();
+    task::syncWait(ledger::getLedgerConfig(*m_ledger, *m_ledgerConfig));
+    auto& ledgerConfig = m_ledgerConfig;
     PBFT_LOG(INFO) << LOG_DESC("fetchAndUpdateLedgerConfig success")
                    << LOG_KV("blockNumber", ledgerConfig->blockNumber())
                    << LOG_KV("hash", ledgerConfig->hash().abridged())
@@ -1793,4 +1797,16 @@ void PBFTEngine::switchToRPBFT(const LedgerConfig::Ptr& _ledgerConfig)
     {
         this->m_config->setRPBFTConfigTools(std::make_shared<RPBFTConfigTools>());
     }
+}
+bool bcos::consensus::PBFTEngine::shouldRotateSealers(protocol::BlockNumber _number) const
+{
+    if (m_config->rpbftConfigTools() == nullptr)
+    {
+        return false;
+    }
+    return m_config->rpbftConfigTools()->shouldRotateSealers(_number);
+}
+void bcos::consensus::PBFTEngine::setLedger(ledger::LedgerInterface::Ptr ledger)
+{
+    m_ledger = std::move(ledger);
 }

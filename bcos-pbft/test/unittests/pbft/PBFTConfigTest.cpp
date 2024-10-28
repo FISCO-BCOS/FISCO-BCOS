@@ -91,8 +91,7 @@ BOOST_AUTO_TEST_CASE(testPBFTInit)
 
     faker->init();
     BOOST_CHECK(pbftConfig->nodeIndex() == 0);
-    BOOST_CHECK(
-        pbftConfig->getConsensusNodeByIndex(0)->nodeID()->data() == faker->nodeID()->data());
+    BOOST_CHECK(pbftConfig->getConsensusNodeByIndex(0)->nodeID->data() == faker->nodeID()->data());
 
     // check nodeIndex
     size_t consensusNodesSize = 9;
@@ -103,7 +102,7 @@ BOOST_AUTO_TEST_CASE(testPBFTInit)
         faker->init();
         auto nodeIndex = pbftConfig->nodeIndex();
         auto node = pbftConfig->getConsensusNodeByIndex(nodeIndex);
-        BOOST_CHECK(node->nodeID()->data() == faker->nodeID()->data());
+        BOOST_CHECK(node->nodeID->data() == faker->nodeID()->data());
     }
     BOOST_CHECK(pbftConfig->consensusNodeList().size() == (consensusNodesSize + 1));
     BOOST_CHECK(pbftConfig->nodeID()->data() == faker->nodeID()->data());
@@ -112,7 +111,7 @@ BOOST_AUTO_TEST_CASE(testPBFTInit)
     BOOST_CHECK(pbftConfig->isConsensusNode());
     pbftConfig->setConsensusTimeout(consensusTimeout);
     BOOST_CHECK(pbftConfig->consensusTimeout() == consensusTimeout);
-    BOOST_CHECK(pbftConfig->blockTxCountLimit() == txCountLimit);
+    BOOST_CHECK_EQUAL(pbftConfig->blockTxCountLimit(), txCountLimit);
     // Note: should update this check if consensusNodesSize has been changed
     BOOST_CHECK(pbftConfig->minRequiredQuorum() == 7);
     BOOST_CHECK(pbftConfig->committedProposal()->index() == faker->ledger()->blockNumber());

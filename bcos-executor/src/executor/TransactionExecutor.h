@@ -42,7 +42,6 @@
 #include "tbb/concurrent_unordered_map.h"
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-executor/src/executive/LedgerCache.h>
-#include <bcos-tool/LedgerConfigFetcher.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <tbb/concurrent_hash_map.h>
 #include <boost/function.hpp>

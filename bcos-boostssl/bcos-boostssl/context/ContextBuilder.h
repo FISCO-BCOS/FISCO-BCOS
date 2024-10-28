@@ -33,9 +33,6 @@ public:
 public:
     std::string readFileContent(boost::filesystem::path const& _file);
 
-    std::string moduleName() { return m_moduleName; }
-    void setModuleName(std::string _moduleName) { m_moduleName = _moduleName; }
-
 public:
     std::shared_ptr<boost::asio::ssl::context> buildSslContext(
         bool _server, const std::string& _configPath);
@@ -51,9 +48,6 @@ private:
         const ContextConfig::CertConfig& _certConfig);
     std::shared_ptr<boost::asio::ssl::context> buildSslContextByCertContent(
         bool _server, const ContextConfig::SMCertConfig& _smCertConfig);
-
-private:
-    std::string m_moduleName = "DEFAULT";
 };
 
 }  // namespace bcos::boostssl::context

@@ -21,11 +21,6 @@
 #pragma once
 #include "../executive/BlockContext.h"
 #include "../vm/Precompiled.h"
-#include "bcos-executor/src/precompiled/common/Common.h"
-#include "common/WorkingSealerManagerImpl.h"
-#include <bcos-framework/storage/Table.h>
-#include <bcos-tool/ConsensusNode.h>
-#include <boost/core/ignore_unused.hpp>
 
 namespace bcos::precompiled
 {
@@ -33,29 +28,16 @@ class ConsensusPrecompiled : public bcos::precompiled::Precompiled
 {
 public:
     using Ptr = std::shared_ptr<ConsensusPrecompiled>;
-    explicit ConsensusPrecompiled(const crypto::Hash::Ptr& _hashImpl);
+    ConsensusPrecompiled(const ConsensusPrecompiled&) = default;
+    ConsensusPrecompiled(ConsensusPrecompiled&&) = default;
+    ConsensusPrecompiled& operator=(const ConsensusPrecompiled&) = default;
+    ConsensusPrecompiled& operator=(ConsensusPrecompiled&&) = default;
+
+    explicit ConsensusPrecompiled(crypto::Hash::Ptr _hashImpl);
     ~ConsensusPrecompiled() override = default;
 
     std::shared_ptr<PrecompiledExecResult> call(
         std::shared_ptr<executor::TransactionExecutive> _executive,
         PrecompiledExecResult::Ptr _callParameters) override;
-
-private:
-    [[nodiscard]] int addSealer(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        bytesConstRef& _data, const CodecWrapper& codec);
-
-    [[nodiscard]] int addObserver(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        bytesConstRef& _data, const CodecWrapper& codec);
-
-    [[nodiscard]] int removeNode(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        bytesConstRef& _data, const CodecWrapper& codec);
-
-    [[nodiscard]] int setWeight(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        bytesConstRef& _data, const CodecWrapper& codec);
-
-    void rotateWorkingSealer(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        const PrecompiledExecResult::Ptr& _callParameters, const CodecWrapper& codec);
-
-    void showConsensusTable(const std::shared_ptr<executor::TransactionExecutive>& _executive);
 };
 }  // namespace bcos::precompiled

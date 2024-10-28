@@ -26,8 +26,9 @@
 namespace bcos::rpc
 {
 constexpr const uint64_t LowestGasPrice{21000};
+constexpr const uint64_t LowestGasUsed{21000};
 enum Web3JsonRpcError : int32_t
 {
-    Web3DefautError = -32000,
+    Web3DefaultError = -32000,
 };
 }  // namespace bcos::rpc

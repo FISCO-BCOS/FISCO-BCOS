@@ -77,6 +77,39 @@ BOOST_AUTO_TEST_CASE(testLegacyTransactionDecode)
     BOOST_CHECK_EQUAL(rawTx, rawTx2);
 }
 
+BOOST_AUTO_TEST_CASE(testConstructTx)
+{
+    Web3Transaction testTx;
+    testTx.value = 1000000000000000000;
+    testTx.type = rpc::TransactionType::Legacy;
+    testTx.data = {};
+    testTx.to = Address("0x1e58529dAA467406645d0f4B63dec96CA0b87d70");
+    testTx.nonce = 19;
+    testTx.gasLimit = 210000;
+    testTx.maxFeePerGas = 20000000000;
+    testTx.maxPriorityFeePerGas = 20000000000;
+    testTx.chainId = 31337;
+
+    auto signData = testTx.encodeForSign();
+    std::string priv = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
+    auto key = std::make_shared<KeyImpl>(fromHex(priv));
+    auto newHash = crypto::keccak256Hash(ref(signData));
+    auto signatureImpl = bcos::crypto::Secp256k1Crypto();
+    auto keyPair = std::make_unique<Secp256k1KeyPair>(key);
+
+    auto signature = signatureImpl.sign(*keyPair, newHash, false);
+    auto [_, addr] = signatureImpl.recoverAddress(*hashImpl, newHash, ref(*signature));
+    auto newAddr = toHex(addr);
+    BOOST_CHECK_EQUAL(newAddr, Address("C96aAa54E2d44c299564da76e1cD3184A2386B8D").hex());
+    testTx.signatureR = {signature->begin(), signature->begin() + 32};
+    testTx.signatureS = {signature->begin() + 32, signature->begin() + 64};
+    testTx.signatureV = signature->back();
+    bcos::bytes toData;
+    bcos::codec::rlp::encode(toData, testTx);
+    auto const newTx = toHexStringWithPrefix(toData);
+    BOOST_CHECK(!newTx.empty());
+}
+
 BOOST_AUTO_TEST_CASE(testEIP2930Transaction)
 {
     // clang-format off

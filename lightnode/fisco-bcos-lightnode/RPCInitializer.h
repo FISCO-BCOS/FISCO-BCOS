@@ -9,7 +9,7 @@
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-front/FrontServiceFactory.h>
 #include <bcos-gateway/GatewayFactory.h>
-#include <bcos-ledger/src/libledger/LedgerImpl.h>
+#include <bcos-ledger/LedgerImpl.h>
 #include <bcos-lightnode/rpc/LightNodeRPC.h>
 #include <bcos-rpc/Common.h>
 #include <bcos-rpc/RpcFactory.h>
@@ -79,8 +79,8 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
             for (auto const& node : consensusNodeList)
             {
                 Json::Value sealer;
-                sealer["nodeID"] = node->nodeID()->hex();
-                sealer["weight"] = node->weight();
+                sealer["nodeID"] = node.nodeID->hex();
+                sealer["weight"] = node.voteWeight;
                 sealerList.append(sealer);
             }
             genesisConfig["sealerList"] = sealerList;

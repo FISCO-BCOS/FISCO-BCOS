@@ -19,12 +19,14 @@
  * @date 2021-05-10
  */
 #include "TxPool.h"
+#include "bcos-framework/ledger/Ledger.h"
 #include "bcos-front/FrontService.h"
+#include "bcos-ledger/LedgerMethods.h"
+#include "bcos-task/Wait.h"
 #include "bcos-utilities/Error.h"
 #include "txpool/validator/LedgerNonceChecker.h"
 #include "txpool/validator/TxValidator.h"
 #include <bcos-framework/protocol/CommonError.h>
-#include <bcos-tool/LedgerConfigFetcher.h>
 #include <bcos-utilities/ITTAPI.h>
 #include <oneapi/tbb/parallel_for.h>
 #include <boost/exception/diagnostic_information.hpp>
@@ -244,9 +246,7 @@ void TxPool::asyncSealTxs(uint64_t _txsLimit, TxsHashSetPtr _avoidTxs,
 void TxPool::asyncNotifyBlockResult(BlockNumber _blockNumber, TransactionSubmitResultsPtr txsResult,
     std::function<void(Error::Ptr)> _onNotifyFinished)
 {
-    m_worker->enqueue([this, txsResult = std::move(txsResult), _blockNumber]() {
-        m_txpoolStorage->batchRemove(_blockNumber, *txsResult);
-    });
+    m_txpoolStorage->batchRemove(_blockNumber, *txsResult);
 
     if (_onNotifyFinished)
     {
@@ -396,7 +396,7 @@ void TxPool::notifyConsensusNodeList(
         nodeIds.reserve(_consensusNodeList.size());
         for (const auto& node : _consensusNodeList)
         {
-            nodeIds.push_back(node->nodeID());
+            nodeIds.push_back(node.nodeID);
         }
         m_treeRouter->updateConsensusNodeInfo(nodeIds);
     }
@@ -527,17 +527,16 @@ void TxPool::asyncResetTxPool(std::function<void(Error::Ptr)> _onRecvResponse)
 void TxPool::init()
 {
     initSendResponseHandler();
-    auto ledgerConfigFetcher = std::make_shared<LedgerConfigFetcher>(m_config->ledger());
     TXPOOL_LOG(INFO) << LOG_DESC("fetch LedgerConfig information");
-    ledgerConfigFetcher->fetchBlockNumberAndHash();
-    ledgerConfigFetcher->fetchBlockTxCountLimit();
+    auto ledgerConfig = task::syncWait(ledger::getLedgerConfig(*m_config->ledger()));
     TXPOOL_LOG(INFO) << LOG_DESC("fetch LedgerConfig success");
 
     auto blockLimit = m_config->blockLimit();
-    auto ledgerConfig = ledgerConfigFetcher->ledgerConfig();
     auto startNumber =
         (ledgerConfig->blockNumber() > blockLimit ? (ledgerConfig->blockNumber() - blockLimit + 1) :
                                                     0);
+
+    std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>> nonceList;
     if (startNumber >= 0)
     {
         auto toNumber = ledgerConfig->blockNumber();
@@ -545,15 +544,16 @@ void TxPool::init()
         TXPOOL_LOG(INFO) << LOG_DESC("fetch history nonces information")
                          << LOG_KV("startNumber", startNumber)
                          << LOG_KV("fetchedSize", fetchedSize);
-        ledgerConfigFetcher->fetchNonceList(startNumber, fetchedSize);
+        nonceList =
+            task::syncWait(ledger::getNonceList(*m_config->ledger(), startNumber, fetchedSize));
     }
     TXPOOL_LOG(INFO) << LOG_DESC("fetch history nonces success");
 
     // create LedgerNonceChecker and set it into the validator
     TXPOOL_LOG(INFO) << LOG_DESC("init txs validator")
                      << LOG_KV("checkBlockLimit", m_checkBlockLimit);
-    auto ledgerNonceChecker = std::make_shared<LedgerNonceChecker>(ledgerConfigFetcher->nonceList(),
-        ledgerConfig->blockNumber(), blockLimit, m_checkBlockLimit);
+    auto ledgerNonceChecker = std::make_shared<LedgerNonceChecker>(
+        nonceList, ledgerConfig->blockNumber(), blockLimit, m_checkBlockLimit);
 
     auto validator = std::dynamic_pointer_cast<TxValidator>(m_config->txValidator());
     validator->setLedgerNonceChecker(ledgerNonceChecker);
@@ -611,10 +611,9 @@ void TxPool::storeVerifiedBlock(bcos::protocol::Block::Ptr _block)
     auto blockHeader = _block->blockHeader();
 
     // return if block has been committed
-    auto ledgerConfigFetcher = std::make_shared<LedgerConfigFetcher>(m_config->ledger());
     TXPOOL_LOG(INFO) << LOG_DESC("storeVerifiedBlock fetch block number from LedgerConfig");
-    ledgerConfigFetcher->fetchBlockNumber();
-    auto committedBlockNumber = ledgerConfigFetcher->ledgerConfig()->blockNumber();
+    auto blockNumber = task::syncWait(ledger::getCurrentBlockNumber(*m_config->ledger()));
+    auto committedBlockNumber = blockNumber;
     if (blockHeader->number() <= committedBlockNumber)
     {
         TXPOOL_LOG(INFO) << LOG_DESC("storeVerifiedBlock, block already committed")
@@ -690,6 +689,12 @@ void bcos::txpool::TxPool::tryToSyncTxsFromPeers()
 {
     m_transactionSync->onEmptyTxs();
 }
+
+task::Task<std::optional<u256>> bcos::txpool::TxPool::getWeb3PendingNonce(std::string_view address)
+{
+    co_return co_await m_config->txValidator()->web3NonceChecker()->getPendingNonce(address);
+}
+
 void bcos::txpool::TxPool::asyncGetPendingTransactionSize(
     std::function<void(Error::Ptr, uint64_t)> _onGetTxsSize)
 {
