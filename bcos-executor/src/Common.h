@@ -194,7 +194,7 @@ static const VMSchedule FiscoBcosScheduleCancun = [] {
     return schedule;
 }();
 
-static const int64_t BALANCE_TRANSFER_GAS = 21000;
+constexpr static int64_t BALANCE_TRANSFER_GAS = 21000;
 
 constexpr evmc_gas_metrics ethMetrics{32000, 20000, 5000, 200, 9000, 2300, 25000};
 

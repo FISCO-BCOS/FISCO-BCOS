@@ -36,7 +36,6 @@ struct StorageTrait
         ReadWriteSetStorage<LocalStorageView, transaction_executor::StateKey>;
 };
 
-constexpr static auto EXECUTOR_STACK = 1400;
 template <class CoroType>
 struct ExecutionContext
 {
@@ -51,7 +50,7 @@ struct ExecutionContext
         this->receipt = std::addressof(receipt);
     }
 
-    std::array<std::byte, EXECUTOR_STACK> m_stack;
+    std::array<std::byte, transaction_executor::EXECUTOR_STACK> m_stack;
     std::pmr::monotonic_buffer_resource m_resource;
     std::pmr::polymorphic_allocator<> m_allocator;
 
