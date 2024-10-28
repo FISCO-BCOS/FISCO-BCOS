@@ -46,7 +46,6 @@ macro(configure_project)
     default_option(BUILD_STATIC OFF)
 
     default_option(NATIVE OFF)
-    default_option(USE_LD_GOLD OFF)
     if(NOT LINKER)
         set(LINKER "default")
     endif()
@@ -110,13 +109,8 @@ macro(configure_project)
         add_compile_definitions(WITH_SM2_OPTIMIZE)
     endif()
 
-
     if(NOT ALLOCATOR)
-        if(APPLE)
-            set(ALLOCATOR "defalut")
-        else()
-            set(ALLOCATOR "jemalloc")
-        endif()
+        set(ALLOCATOR "defalut")
     endif()
 
     if(ALLOCATOR STREQUAL "tcmalloc")
