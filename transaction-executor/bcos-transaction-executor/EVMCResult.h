@@ -20,43 +20,17 @@
 
 #pragma once
 #include <evmc/instructions.h>
-#include <type_traits>
 
 namespace bcos::transaction_executor
 {
 class EVMCResult : public evmc_result
 {
 public:
-    explicit EVMCResult(evmc_result const& result) : evmc_result(result) {}
+    explicit EVMCResult(evmc_result&& from);
     EVMCResult(const EVMCResult&) = delete;
-    EVMCResult(EVMCResult&& from) noexcept : evmc_result(from)
-    {
-        from.release = nullptr;
-        from.output_data = nullptr;
-        from.output_size = 0;
-    }
+    EVMCResult(EVMCResult&& from) noexcept;
     EVMCResult& operator=(const EVMCResult&) = delete;
-    EVMCResult& operator=(EVMCResult&& from) noexcept
-    {
-        evmc_result::operator=(from);
-        from.release = nullptr;
-        from.output_data = nullptr;
-        from.output_size = 0;
-        return *this;
-    }
-
-    ~EVMCResult() noexcept
-    {
-        if (release != nullptr)
-        {
-            release(static_cast<evmc_result*>(this));
-            release = nullptr;
-            output_data = nullptr;
-            output_size = 0;
-        }
-    }
+    EVMCResult& operator=(EVMCResult&& from) noexcept;
+    ~EVMCResult() noexcept;
 };
-
-template <auto& Tag>
-using tag_t = std::decay_t<decltype(Tag)>;
 }  // namespace bcos::transaction_executor

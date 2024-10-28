@@ -15,7 +15,7 @@ concept HasReadOneDirect = requires(Storage& storage) {
 };
 template <class Storage>
 concept HasReadSomeDirect = requires(Storage& storage) {
-    requires RANGES::range<task::AwaitableReturnType<decltype(storage2::readSome(
+    requires ::ranges::range<task::AwaitableReturnType<decltype(storage2::readSome(
         storage, std::declval<std::vector<typename Storage::Key>>(), storage2::DIRECT))>>;
 };
 
