@@ -44,6 +44,10 @@
       "version>=": "2022-12-13#1",
       "features": []
     },
+    {
+      "name": "aws-sdk-cpp",
+      "features": ["kms"]
+    },
     "wedprcrypto",
     "range-v3",
     "hsm-crypto",

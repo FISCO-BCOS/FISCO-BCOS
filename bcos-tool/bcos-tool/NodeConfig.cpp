@@ -625,9 +625,15 @@ void NodeConfig::loadSecurityConfig(boost::property_tree::ptree const& _pt)
                              << LOG_KV("lib_path", m_hsmLibPath) << LOG_KV("key_index", m_keyIndex)
                              << LOG_KV("password", m_password);
     }
+    m_enableKms = _pt.get<bool>("security.enable_kms", false);
+    if (m_enableKms)
+    {
+        m_kmsUrl = _pt.get<bool>("security.kms_url", false);
+    }
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadSecurityConfig") << LOG_KV("enable_hsm", m_enableHsm)
-                         << LOG_KV("privateKeyPath", m_privateKeyPath);
+                         << LOG_KV("privateKeyPath", m_privateKeyPath)
+                         << LOG_KV("enable_kms", m_enableKms);
 }
 
 void NodeConfig::loadSealerConfig(boost::property_tree::ptree const& _pt)

@@ -372,6 +372,10 @@ private:
     int m_encKeyIndex;
     std::string m_password;
 
+    // for security kms
+    bool m_enableKms;
+    std::string m_kmsUrl;
+
     // storage security configuration
     bool m_storageSecurityEnable;
     std::string m_storageSecurityKeyCenterIp;
