@@ -16,6 +16,11 @@ module bcostars {
         14 optional vector<byte> extension;
     };
 
+    struct ConflictField {
+        1 optional vector<byte> field;
+        2 optional bool write;
+    };
+
     struct Transaction
     {
         1  optional TransactionData data;
@@ -30,6 +35,6 @@ module bcostars {
         10 optional vector<byte>    extraTransactionBytes;
         11 optional vector<byte>    extraTransactionHash; // hash(rlp(10|3))
 
-        12 optional vector<vector<byte>> conflictKeys;
+        12 optional vector<ConflictField> conflictFields;
     };
 };

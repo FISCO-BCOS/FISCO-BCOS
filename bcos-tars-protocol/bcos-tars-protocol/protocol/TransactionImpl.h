@@ -28,12 +28,12 @@
 #ifdef _WIN32
 #include <tup/Tars.h>
 #endif
+#include "bcos-crypto/hasher/Hasher.h"
+#include "bcos-crypto/interfaces/crypto/CommonType.h"
+#include "bcos-framework/protocol/Transaction.h"
 #include "bcos-tars-protocol/tars/Transaction.h"
-#include <bcos-crypto/hasher/Hasher.h>
-#include <bcos-crypto/interfaces/crypto/CommonType.h>
-#include <bcos-framework/protocol/Transaction.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/DataConvertUtility.h>
+#include "bcos-utilities/Common.h"
+#include "bcos-utilities/DataConvertUtility.h"
 
 namespace bcostars::protocol
 {
@@ -99,7 +99,7 @@ public:
     uint8_t type() const override;
     bcos::bytesConstRef extraTransactionBytes() const override;
     ::ranges::any_view<bcos::h256, ::ranges::category::input | ::ranges::category::sized>
-    conflictKeys() const override;
+    conflictFields() const override;
 
     const bcostars::Transaction& inner() const;
     bcostars::Transaction& mutableInner();

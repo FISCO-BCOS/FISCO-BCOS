@@ -201,10 +201,11 @@ void bcostars::protocol::TransactionImpl::setInner(bcostars::Transaction inner)
     *m_inner() = std::move(inner);
 }
 ::ranges::any_view<bcos::h256, ::ranges::category::input | ::ranges::category::sized>
-bcostars::protocol::TransactionImpl::conflictKeys() const
+bcostars::protocol::TransactionImpl::conflictFields() const
 {
     const auto* inner = m_inner();
-    return ::ranges::views::transform(inner->conflictKeys, [](const auto& input) {
-        return bcos::h256{reinterpret_cast<const bcos::byte*>(input.data()), input.size()};
+    return ::ranges::views::transform(inner->conflictFields, [](const auto& field) {
+        return bcos::h256{
+            reinterpret_cast<const bcos::byte*>(field.field.data()), field.field.size()};
     });
 }
