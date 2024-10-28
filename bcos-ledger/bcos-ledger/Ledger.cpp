@@ -2031,9 +2031,10 @@ bool Ledger::buildGenesisBlock(
             sysTable->setRow(INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE, std::move(notifyRotateEntry));
         }
 
-        co_await setGenesisFeatures(genesis.m_features, features, *m_stateStorage);
-        co_await importGenesisState(
-            genesis.m_allocs, *m_stateStorage, *m_blockFactory->cryptoSuite()->hashImpl());
+        co_await setGenesisFeatures(genesis.m_features, features);
+        co_await writeToStorage(features, *m_stateStorage, 0);
+        co_await importGenesisState(genesis.m_allocs, features, *m_stateStorage,
+            *m_blockFactory->cryptoSuite()->hashImpl());
 
         // consensus leader period
         Entry leaderPeriodEntry;

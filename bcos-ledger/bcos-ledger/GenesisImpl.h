@@ -12,7 +12,7 @@ namespace bcos::ledger
 {
 
 task::Task<void> setGenesisFeatures(
-    ::ranges::input_range auto const& featureSets, ledger::Features features, auto& storage)
+    ::ranges::input_range auto const& featureSets, Features& features)
     requires std::same_as<FeatureSet, std::decay_t<::ranges::range_value_t<decltype(featureSets)>>>
 {
     for (auto&& featureSet : featureSets)
@@ -22,22 +22,20 @@ task::Task<void> setGenesisFeatures(
             features.set(featureSet.flag);
         }
     }
-    co_await writeToStorage(features, storage, 0);
+
+    co_return;
 }
 
-task::Task<void> importGenesisState(
-    ::ranges::input_range auto const& allocs, auto& storage, const crypto::Hash& hashImpl)
+task::Task<void> importGenesisState(::ranges::input_range auto const& allocs,
+    const Features& features, auto& stateStorage, const crypto::Hash& hashImpl)
 {
-    Features features;
-    co_await ledger::readFromStorage(features, storage, 0);
-
     for (auto&& importAccount : allocs)
     {
         evmc_address address;
         boost::algorithm::unhex(importAccount.address, address.bytes);
 
         account::EVMAccount account(
-            storage, address, features.get(Features::Flag::feature_raw_address));
+            stateStorage, address, features.get(Features::Flag::feature_raw_address));
         co_await account::create(account);
 
         if (!importAccount.code.empty())
@@ -75,16 +73,15 @@ task::Task<void> importGenesisState(
     }
 }
 
-task::Task<std::vector<Alloc>> exportGenesisState(auto& storage)
+task::Task<std::vector<Alloc>> exportGenesisState(auto& stateStorage, const Features& features)
 {
     // 只导出合约账户的状态数据，忽略其它数据
     // Only export the state data of contract accounts, ignoring other data.
-    auto iterator = co_await storage2::range(storage);
+    auto iterator = co_await storage2::range(stateStorage);
     while (co_await iterator.next())
     {
         transaction_executor::StateKey key = iterator.key();
-
-            auto value = iterator.value();
+        auto value = iterator.value();
     }
 }
 

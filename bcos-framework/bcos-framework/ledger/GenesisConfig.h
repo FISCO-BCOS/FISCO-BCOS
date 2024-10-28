@@ -41,12 +41,12 @@ struct FeatureSet
 
 struct Alloc
 {
-    using State = std::pair<std::string, std::string>;
+    using State = std::pair<std::string, std::string>;  // Hex format
 
-    std::string address;
+    std::string address;  // Hex format
     u256 balance;
     std::string nonce;
-    std::string code;
+    std::string code;  // Hex format
     std::vector<State> storage;
 };
 
