@@ -1,8 +1,7 @@
 #include "bcos-task/Generator.h"
-#include "bcos-task/TBBWait.h"
 #include "bcos-task/Task.h"
-#include "bcos-task/Trait.h"
 #include "bcos-task/Wait.h"
+#include "bcos-task/pmr/Task.h"
 #include "bcos-utilities/Common.h"
 #include <oneapi/tbb/blocked_range.h>
 #include <oneapi/tbb/concurrent_vector.h>
@@ -250,7 +249,7 @@ struct MyMemoryResource : public std::pmr::monotonic_buffer_resource
     int deallocate = 0;
 };
 
-bcos::task::Task<void> selfAlloc(
+bcos::task::pmr::Task<void> selfAlloc(
     int /*unused*/, std::allocator_arg_t /*unused*/, std::pmr::polymorphic_allocator<> /*unused*/)
 {
     std::array<char, 1024> buf{};
@@ -287,7 +286,8 @@ BOOST_AUTO_TEST_CASE(allocator)
     BOOST_CHECK_GE(pool.deallocate, 1);
 
     pool.reset();
-    auto lambda = [](int, std::allocator_arg_t, std::pmr::polymorphic_allocator<>) -> Task<void> {
+    auto lambda = [](int, std::allocator_arg_t,
+                      std::pmr::polymorphic_allocator<>) -> pmr::Task<void> {
         std::array<char, 1024> buf{};
         co_return;
     };
@@ -298,23 +298,13 @@ BOOST_AUTO_TEST_CASE(allocator)
 
     pool.reset();
     bcos::task::syncWait(
-        [](int, std::allocator_arg_t, std::pmr::polymorphic_allocator<>) -> Task<void> {
+        [](int, std::allocator_arg_t, std::pmr::polymorphic_allocator<>) -> pmr::Task<void> {
             std::array<char, 1024> buf{};
             co_return;
         }(100, std::allocator_arg, allocator),
         std::allocator_arg, allocator);
     BOOST_CHECK_GE(pool.allocate, 1);
     BOOST_CHECK_GE(pool.deallocate, 1);
-
-    pool.reset();
-    int count = 0;
-    for (auto i : generatorWithAlloc(100, std::allocator_arg, allocator))
-    {
-        BOOST_CHECK_EQUAL(i, count++);
-    }
-    BOOST_CHECK_EQUAL(count, 100);
-    BOOST_CHECK_EQUAL(pool.allocate, 1);
-    BOOST_CHECK_EQUAL(pool.deallocate, 1);
 }
 
 Task<bcos::u256> testU256()

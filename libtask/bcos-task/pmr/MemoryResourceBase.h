@@ -5,7 +5,9 @@
 #include <cstddef>
 #include <memory_resource>
 
-namespace bcos::task
+#pragma GCC diagnostic ignored "-Wmismatched-new-delete"
+
+namespace bcos::task::pmr
 {
 
 template <typename... Args>
@@ -45,4 +47,4 @@ struct MemoryResourceBase
     static void* operator new(size_t size);
     static void operator delete(void* ptr, size_t size) noexcept;
 };
-}  // namespace bcos::task
+}  // namespace bcos::task::pmr

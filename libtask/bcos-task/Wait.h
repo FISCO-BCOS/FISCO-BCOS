@@ -28,8 +28,8 @@ namespace bcos::task
 
 constexpr inline struct Wait
 {
-    void operator()(auto&& task) const
-        requires std::is_rvalue_reference_v<decltype(task)>
+    template <IsAwaitable Task>
+    void operator()(Task&& task) const
     {
         std::forward<decltype(task)>(task).start();
     }
@@ -37,10 +37,9 @@ constexpr inline struct Wait
 
 constexpr inline struct SyncWait
 {
-    template <class Task>
+    template <IsAwaitable Task>
     auto operator()(
         Task&& task, auto&&... args) const -> AwaitableReturnType<std::remove_cvref_t<Task>>
-        requires IsAwaitable<Task>
     {
         using ReturnType = AwaitableReturnType<std::remove_cvref_t<Task>>;
         using ReturnTypeWrap = std::conditional_t<std::is_reference_v<ReturnType>,
