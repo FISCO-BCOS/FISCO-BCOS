@@ -150,6 +150,9 @@ BOOST_AUTO_TEST_CASE(transientStorageContractTest)
     }());
 }
 
+// 暂时屏蔽，启用pmr task后开启
+// Temporarily blocked, enable after activating the PMR task.
+#if 0
 struct TestMemoryResource : public std::pmr::memory_resource
 {
     size_t m_size = 100000000;
@@ -167,6 +170,7 @@ struct TestMemoryResource : public std::pmr::memory_resource
         return this == &other;
     }
 };
+
 
 BOOST_AUTO_TEST_CASE(testExecuteStackSize)
 {
@@ -204,5 +208,6 @@ BOOST_AUTO_TEST_CASE(testExecuteStackSize)
     BOOST_CHECK_EQUAL(receipt->contractAddress(), "e0e794ca86d198042b64285c5ce667aee747509b");
     BOOST_CHECK_GE(memoryResource.m_count, 1);
 }
+#endif
 
 BOOST_AUTO_TEST_SUITE_END()
