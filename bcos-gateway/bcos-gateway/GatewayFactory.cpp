@@ -246,7 +246,8 @@ void GatewayFactory::initSSLContextPubHexHandlerWithoutExtInfo()
             return false;
         }
 
-        GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("[NEW]SSLContext pubHex: " + _pubHex);
+        GATEWAY_FACTORY_LOG(INFO) << LOG_DESC(
+            "[NEW]initSSLContextPubHexHandlerWithoutExtInfo SSLContext pubHex: " + _pubHex);
         return true;
     };
 
@@ -581,15 +582,21 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
                                   "GatewayFactory::init unable parse myself pub id"));
     }
 
+    // 暂时不用config的ssl mode，因为如果server端不验证client的证书，将不会向client请求证书。
+    // 对于server来说拿不到client的pubHex，该公钥将用于维护与session的映射关系。
+    // Temporarily do not use the ssl mode of the config, because if the server does not verify the
+    // client's certificate, it will not request the certificate from the client, and for the
+    // server, it will not be able to obtain the client's pubHex, which will be used to maintain the
+    // mapping relationship with the session.
+    auto defaultSslMode =
+        boost::asio::ssl::context_base::verify_peer | boost::asio::ssl::verify_fail_if_no_peer_cert;
     std::shared_ptr<ba::ssl::context> srvCtx =
-        (_config->smSSL() ?
-                buildSSLContext(true, _config->sslServerMode(), _config->smCertConfig()) :
-                buildSSLContext(true, _config->sslServerMode(), _config->certConfig()));
+        (_config->smSSL() ? buildSSLContext(true, defaultSslMode, _config->smCertConfig()) :
+                            buildSSLContext(true, defaultSslMode, _config->certConfig()));
 
     std::shared_ptr<ba::ssl::context> clientCtx =
-        (_config->smSSL() ?
-                buildSSLContext(false, _config->sslClientMode(), _config->smCertConfig()) :
-                buildSSLContext(false, _config->sslClientMode(), _config->certConfig()));
+        (_config->smSSL() ? buildSSLContext(false, defaultSslMode, _config->smCertConfig()) :
+                            buildSSLContext(false, defaultSslMode, _config->certConfig()));
 
     // init ASIOInterface
     auto asioInterface = std::make_shared<ASIOInterface>();
@@ -625,6 +632,22 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     host->setPeerBlacklist(peerBlacklist);
     host->setPeerWhitelist(peerWhitelist);
     host->setSessionCallbackManager(sessionCallbackManager);
+    host->setVerifyFailedHook(
+        [clientMode = _config->sslClientMode(), serverMode = _config->sslServerMode()](
+            ba::ssl::stream_base::handshake_type type) -> bool {
+            switch (type)
+            {
+            case ba::ssl::stream_base::server:
+            {
+                return !(serverMode & boost::asio::ssl::context_base::verify_peer);
+            }
+            case boost::asio::ssl::stream_base::client:
+            {
+                return !(clientMode & boost::asio::ssl::context_base::verify_peer);
+            }
+            }
+            return false;
+        });
 
     // init Service
     bool enableRIPProtocol = _config->enableRIPProtocol();
