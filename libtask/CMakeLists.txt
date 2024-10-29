@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.17)
 
-add_library(bcos-task bcos-task/MemoryResourceBase.cpp)
+add_library(bcos-task bcos-task/pmr/MemoryResourceBase.cpp)
 target_include_directories(bcos-task PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-task>)
