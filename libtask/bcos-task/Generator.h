@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include "MemoryResourceBase.h"
 #include <version>
 
 #if __cpp_lib_generator >= 202207L
@@ -41,7 +40,7 @@ template <typename Ref, typename Value = std::remove_cvref_t<Ref>, typename Allo
 class Generator
 {
 public:
-    class promise_type : public MemoryResourceBase
+    class promise_type
     {
     public:
         promise_type() : m_promise(this) {}

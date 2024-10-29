@@ -15,7 +15,6 @@
  */
 
 #pragma once
-#include "MemoryResourceBase.h"
 #include "bcos-concepts/Exception.h"
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
@@ -24,8 +23,6 @@
 #include <memory>
 #include <type_traits>
 #include <variant>
-
-#pragma GCC diagnostic ignored "-Wmismatched-new-delete"
 
 namespace bcos::task
 {
@@ -52,23 +49,23 @@ struct FinalAwaitable
     constexpr void await_resume() noexcept {}
 };
 
-template <class VariantType>
+template <class VariantValue>
 struct Continuation
 {
     std::coroutine_handle<> handle;
-    VariantType value;
+    VariantValue value;
 };
 
-template <class Task, class PromiseImpl>
-struct PromiseBase : public MemoryResourceBase
+template <class TaskType, class PromiseImpl>
+struct PromiseBase
 {
     constexpr std::suspend_always initial_suspend() noexcept { return {}; }
     constexpr auto final_suspend() noexcept { return FinalAwaitable<PromiseImpl>{}; }
-    Task get_return_object()
+    TaskType get_return_object()
     {
         auto handle =
             std::coroutine_handle<PromiseImpl>::from_promise(*static_cast<PromiseImpl*>(this));
-        return Task{handle};
+        return TaskType{handle};
     }
     void unhandled_exception()
     {
@@ -83,26 +80,67 @@ struct PromiseBase : public MemoryResourceBase
         m_continuation->value.template emplace<std::exception_ptr>(exception);
     }
 
-    Continuation<typename Task::VariantType>* m_continuation{};
+    Continuation<typename TaskType::VariantValue>* m_continuation = nullptr;
 };
 
-template <class Task>
-struct PromiseVoid : public PromiseBase<Task, PromiseVoid<Task>>
+template <class TaskType>
+struct PromiseVoid : public PromiseBase<TaskType, PromiseVoid<TaskType>>
 {
     constexpr void return_void() noexcept {}
 };
 
-template <class Task>
-struct PromiseValue : public PromiseBase<Task, PromiseValue<Task>>
+template <class TaskType>
+struct PromiseValue : public PromiseBase<TaskType, PromiseValue<TaskType>>
 {
-    void return_value(Task::Value value)
+    void return_value(TaskType::Value value)
     {
-        if (PromiseBase<Task, PromiseValue<Task>>::m_continuation)
+        if (PromiseBase<TaskType, PromiseValue<TaskType>>::m_continuation)
         {
-            PromiseBase<Task, PromiseValue<Task>>::m_continuation->value
-                .template emplace<typename Task::Value>(std::move(value));
+            PromiseBase<TaskType, PromiseValue<TaskType>>::m_continuation->value
+                .template emplace<typename TaskType::Value>(std::move(value));
         }
     }
+};
+
+template <class TaskType>
+struct Awaitable
+{
+    explicit Awaitable(std::coroutine_handle<typename TaskType::promise_type> handle)
+      : m_handle(std::move(handle)){};
+    Awaitable(const Awaitable&) = delete;
+    Awaitable(Awaitable&&) noexcept = default;
+    Awaitable& operator=(const Awaitable&) = delete;
+    Awaitable& operator=(Awaitable&&) noexcept = default;
+    ~Awaitable() noexcept = default;
+
+    bool await_ready() const noexcept { return !m_handle || m_handle.done(); }
+    template <class Promise>
+    std::coroutine_handle<> await_suspend(std::coroutine_handle<Promise> handle)
+    {
+        m_continuation.handle = handle;
+        m_handle.promise().m_continuation = std::addressof(m_continuation);
+        return m_handle;
+    }
+    TaskType::Value await_resume()
+    {
+        if (std::holds_alternative<std::exception_ptr>(m_continuation.value))
+        {
+            std::rethrow_exception(std::get<std::exception_ptr>(m_continuation.value));
+        }
+
+        if constexpr (!std::is_void_v<typename TaskType::Value>)
+        {
+            if (!std::holds_alternative<typename TaskType::Value>(m_continuation.value))
+            {
+                BOOST_THROW_EXCEPTION(NoReturnValue{});
+            }
+
+            return std::move(std::get<typename TaskType::Value>(m_continuation.value));
+        }
+    }
+
+    std::coroutine_handle<typename TaskType::promise_type> m_handle;
+    Continuation<typename TaskType::VariantValue> m_continuation;
 };
 
 template <class ValueType>
@@ -110,54 +148,15 @@ template <class ValueType>
 class [[nodiscard]] Task
 {
 public:
-    using Value = ValueType;
-    using VariantType = std::conditional_t<std::is_void_v<ValueType>,
+    using VariantValue = std::conditional_t<std::is_void_v<ValueType>,
         std::variant<std::monostate, std::exception_ptr>,
         std::variant<std::monostate, ValueType, std::exception_ptr>>;
 
+    using Value = ValueType;
     using promise_type =
-        std::conditional_t<std::is_same_v<Value, void>, PromiseVoid<Task>, PromiseValue<Task>>;
+        std::conditional_t<std::is_same_v<ValueType, void>, PromiseVoid<Task>, PromiseValue<Task>>;
 
-    struct Awaitable
-    {
-        explicit Awaitable(std::coroutine_handle<promise_type> handle)
-          : m_handle(std::move(handle)){};
-        Awaitable(const Awaitable&) = delete;
-        Awaitable(Awaitable&&) noexcept = default;
-        Awaitable& operator=(const Awaitable&) = delete;
-        Awaitable& operator=(Awaitable&&) noexcept = default;
-        ~Awaitable() noexcept = default;
-
-        bool await_ready() const noexcept { return !m_handle || m_handle.done(); }
-        template <class Promise>
-        std::coroutine_handle<> await_suspend(std::coroutine_handle<Promise> handle)
-        {
-            m_continuation.handle = handle;
-            m_handle.promise().m_continuation = std::addressof(m_continuation);
-            return m_handle;
-        }
-        ValueType await_resume()
-        {
-            if (std::holds_alternative<std::exception_ptr>(m_continuation.value))
-            {
-                std::rethrow_exception(std::get<std::exception_ptr>(m_continuation.value));
-            }
-
-            if constexpr (!std::is_void_v<ValueType>)
-            {
-                if (!std::holds_alternative<Value>(m_continuation.value))
-                {
-                    BOOST_THROW_EXCEPTION(NoReturnValue{});
-                }
-
-                return std::move(std::get<Value>(m_continuation.value));
-            }
-        }
-
-        std::coroutine_handle<promise_type> m_handle;
-        Continuation<VariantType> m_continuation;
-    };
-    Awaitable operator co_await() const&& { return Awaitable(m_handle); }
+    Awaitable<Task> operator co_await() && { return Awaitable<Task>(m_handle); }
 
     explicit Task(std::coroutine_handle<promise_type> handle) : m_handle(handle) {}
     Task(const Task&) = delete;

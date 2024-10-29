@@ -15,25 +15,16 @@
  */
 
 #pragma once
+#include "../Trait.h"
 #include "Task.h"
-#include "Trait.h"
 #include <boost/atomic/atomic_flag.hpp>
 #include <exception>
 #include <memory>
 #include <type_traits>
 #include <variant>
 
-namespace bcos::task
+namespace bcos::task::pmr
 {
-
-constexpr inline struct Wait
-{
-    template <IsAwaitable Task>
-    void operator()(Task&& task) const
-    {
-        std::forward<decltype(task)>(task).start();
-    }
-} wait{};
 
 constexpr inline struct SyncWait
 {
@@ -116,4 +107,4 @@ constexpr inline struct SyncWait
     }
 } syncWait{};
 
-}  // namespace bcos::task
+}  // namespace bcos::task::pmr
