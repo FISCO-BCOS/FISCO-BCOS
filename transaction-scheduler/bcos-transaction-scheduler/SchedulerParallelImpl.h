@@ -294,7 +294,7 @@ size_t executeSinglePass(SchedulerParallelImpl& scheduler, auto& storage, auto& 
                     if (chunk)
                     {
                         ittapi::Report report1(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
-                            ittapi::ITT_DOMAINS::instance().STAGE_6);
+                            ittapi::ITT_DOMAINS::instance().STAGE_7);
                         offset += (size_t)chunk->count();
                         ittapi::Report report2(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
                             ittapi::ITT_DOMAINS::instance().MERGE_CHUNK);
