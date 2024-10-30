@@ -44,13 +44,13 @@ struct ExecutionContext
     protocol::TransactionReceipt::Ptr* receipt;
 };
 
-template <class MutableStorage, class Storage, class Executor, class ContextRange>
+template <class MutableStorage, class Storage, class Executor, class Contexts>
 class ChunkStatus
 {
 private:
     int64_t m_chunkIndex = 0;
     std::reference_wrapper<boost::atomic_flag const> m_hasRAW;
-    ContextRange m_contexts;
+    Contexts m_contexts;
     std::reference_wrapper<Executor> m_executor;
     typename StorageTrait<MutableStorage, Storage>::LocalStorageView m_storageView;
     typename StorageTrait<MutableStorage, Storage>::LocalReadWriteSetStorage m_readWriteSetStorage;
@@ -63,15 +63,14 @@ private:
     std::vector<ExecuteContext> m_executeContexts;
 
 public:
-    ChunkStatus(int64_t chunkIndex, boost::atomic_flag const& hasRAW, ContextRange contextRange,
+    ChunkStatus(int64_t chunkIndex, boost::atomic_flag const& hasRAW, Contexts contextRange,
         Executor& executor, auto& storage)
       : m_chunkIndex(chunkIndex),
         m_hasRAW(hasRAW),
         m_contexts(std::move(contextRange)),
         m_executor(executor),
         m_storageView(storage),
-        m_readWriteSetStorage(m_storageView),
-        m_executeContexts(RANGES::size(m_contexts))
+        m_readWriteSetStorage(m_storageView)
     {
         newMutable(m_storageView);
     }
@@ -86,11 +85,12 @@ public:
     {
         ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
             ittapi::ITT_DOMAINS::instance().EXECUTE_CHUNK3);
-        for (auto&& [context, executeContext] : ::ranges::views::zip(m_contexts, m_executeContexts))
+        m_executeContexts.reserve(RANGES::size(m_contexts));
+        for (auto& context : m_contexts)
         {
-            executeContext = co_await transaction_executor::createExecuteContext(m_executor.get(),
-                m_readWriteSetStorage, blockHeader, *context.transaction, context.contextID,
-                ledgerConfig);
+            m_executeContexts.emplace_back(co_await transaction_executor::createExecuteContext(
+                m_executor.get(), m_readWriteSetStorage, blockHeader, *context.transaction,
+                context.contextID, ledgerConfig));
         }
     }
 

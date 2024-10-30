@@ -39,7 +39,6 @@ public:
     struct ExecuteContext
     {
         std::reference_wrapper<TransactionExecutorImpl> m_executor;
-        std::reference_wrapper<Storage> m_storage;
         std::reference_wrapper<protocol::BlockHeader const> m_blockHeader;
         std::reference_wrapper<protocol::Transaction const> m_transaction;
         int m_contextID;
@@ -59,12 +58,10 @@ public:
             m_hostContext;
         std::optional<EVMCResult> m_evmcResult;
 
-        ExecuteContext() = default;
         ExecuteContext(TransactionExecutorImpl& executor, Storage& storage,
             protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
             int contextID, ledger::LedgerConfig const& ledgerConfig)
           : m_executor(executor),
-            m_storage(storage),
             m_blockHeader(blockHeader),
             m_transaction(transaction),
             m_contextID(contextID),
