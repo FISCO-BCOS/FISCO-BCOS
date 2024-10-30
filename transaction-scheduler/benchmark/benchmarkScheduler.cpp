@@ -17,6 +17,7 @@
 #include <benchmark/benchmark.h>
 #include <boost/throw_exception.hpp>
 #include <random>
+#include <range/v3/view/indirect.hpp>
 #include <variant>
 
 using namespace bcos;
@@ -283,11 +284,7 @@ struct Fixture
                     auto view = fork(m_multiLayerStorage);
                     newMutable(view);
                     auto receipts = co_await transaction_scheduler::executeBlock(scheduler, view,
-                        m_executor, blockHeader,
-                        checkTransactions |
-                            RANGES::views::transform(
-                                [](const std::unique_ptr<bcostars::protocol::TransactionImpl>&
-                                        transaction) -> auto& { return *transaction; }),
+                        m_executor, blockHeader, ::ranges::views::indirect(checkTransactions),
                         m_ledgerConfig);
 
                     auto balances = receipts |
@@ -361,11 +358,7 @@ static void noConflicitTransfer(benchmark::State& state)
 
                     [[maybe_unused]] auto receipts = co_await transaction_scheduler::executeBlock(
                         scheduler, view, fixture.m_executor, blockHeader,
-                        fixture.m_transactions |
-                            RANGES::views::transform(
-                                [](const std::unique_ptr<bcostars::protocol::TransactionImpl>&
-                                        transaction) -> auto& { return *transaction; }),
-                        fixture.m_ledgerConfig);
+                        ::ranges::views::indirect(fixture.m_transactions), fixture.m_ledgerConfig);
                     fixture.m_transactions.clear();
 
                     fixture.prepareNoConflicitTransfer();
@@ -379,11 +372,7 @@ static void noConflicitTransfer(benchmark::State& state)
                         [[maybe_unused]] auto receipts =
                             co_await transaction_scheduler::executeBlock(scheduler, view,
                                 fixture.m_executor, blockHeader,
-                                fixture.m_transactions |
-                                    RANGES::views::transform(
-                                        [](const std::unique_ptr<
-                                            bcostars::protocol::TransactionImpl>& transaction)
-                                            -> auto& { return *transaction; }),
+                                ::ranges::views::indirect(fixture.m_transactions),
                                 fixture.m_ledgerConfig);
                     }
 
@@ -463,11 +452,7 @@ static void conflictTransfer(benchmark::State& state)
 
                     [[maybe_unused]] auto receipts = co_await transaction_scheduler::executeBlock(
                         scheduler, view, fixture.m_executor, blockHeader,
-                        fixture.m_transactions |
-                            RANGES::views::transform(
-                                [](const std::unique_ptr<bcostars::protocol::TransactionImpl>&
-                                        transaction) -> auto& { return *transaction; }),
-                        fixture.m_ledgerConfig);
+                        ::ranges::views::indirect(fixture.m_transactions), fixture.m_ledgerConfig);
 
                     fixture.m_transactions.clear();
                     fixture.prepareConflictTransfer();

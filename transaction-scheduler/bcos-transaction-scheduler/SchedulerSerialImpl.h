@@ -2,6 +2,7 @@
 
 #include "GC.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
+#include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
@@ -36,7 +37,7 @@ task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
     using ExecutionContext =
         task::AwaitableReturnType<std::invoke_result_t<transaction_executor::CreateExecuteContext,
             decltype(executor), decltype(storage), protocol::BlockHeader const&,
-            ::ranges::range_value_t<decltype(transactions)>, int32_t, ledger::LedgerConfig const&>>;
+            protocol::Transaction const&, int, ledger::LedgerConfig const&>>;
     std::vector<ExecutionContext, tbb::cache_aligned_allocator<ExecutionContext>> contexts;
     contexts.reserve(count);
 

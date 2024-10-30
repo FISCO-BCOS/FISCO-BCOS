@@ -47,9 +47,7 @@ public:
 
         Rollbackable<Storage> m_rollbackableStorage;
         bcos::storage2::memory_storage::MemoryStorage<bcos::transaction_executor::StateKey,
-            bcos::transaction_executor::StateValue,
-            bcos::storage2::memory_storage::ORDERED |
-                bcos::storage2::memory_storage::LOGICAL_DELETION>
+            bcos::transaction_executor::StateValue, bcos::storage2::memory_storage::ORDERED>
             m_transientStorage;
         Rollbackable<decltype(m_transientStorage)> m_rollbackableTransientStorage;
 
@@ -59,10 +57,9 @@ public:
         hostcontext::HostContext<decltype(m_rollbackableStorage),
             decltype(m_rollbackableTransientStorage)>
             m_hostContext;
-
         std::optional<EVMCResult> m_evmcResult;
 
-        ExecuteContext(TransactionExecutorImpl& executor, auto& storage,
+        ExecuteContext(TransactionExecutorImpl& executor, Storage& storage,
             protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
             int contextID, ledger::LedgerConfig const& ledgerConfig)
           : m_executor(executor),
@@ -91,8 +88,9 @@ public:
         TransactionExecutorImpl& executor, auto& storage, protocol::BlockHeader const& blockHeader,
         protocol::Transaction const& transaction, int contextID,
         ledger::LedgerConfig const& ledgerConfig)
+        -> task::Task<ExecuteContext<std::decay_t<decltype(storage)>>>
     {
-        return ExecuteContext<decltype(storage)>(
+        co_return ExecuteContext(
             executor, storage, blockHeader, transaction, contextID, ledgerConfig);
     }
 
@@ -144,7 +142,7 @@ public:
             auto gasPrice = u256{std::get<0>(executeContext.m_ledgerConfig.get().gasPrice())};
             auto balanceUsed = gasUsed * gasPrice;
             auto senderAccount = getAccount(executeContext.m_hostContext, evmcMessage.sender);
-            auto senderBalance = syncWait(ledger::account::balance(senderAccount));
+            auto senderBalance = co_await ledger::account::balance(senderAccount);
 
             if (senderBalance < balanceUsed)
             {
@@ -154,7 +152,7 @@ public:
             }
             else
             {
-                syncWait(ledger::account::setBalance(senderAccount, senderBalance - balanceUsed));
+                co_await ledger::account::setBalance(senderAccount, senderBalance - balanceUsed);
             }
         }
 

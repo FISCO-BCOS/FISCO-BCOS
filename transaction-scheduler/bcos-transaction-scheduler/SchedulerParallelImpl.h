@@ -40,7 +40,6 @@ struct StorageTrait
 template <class ContextType>
 struct ExecutionContext
 {
-    int contextID;
     protocol::TransactionReceipt::Ptr* receipt;
     ContextType executeContext;
 };
@@ -95,7 +94,7 @@ public:
     {
         ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
             ittapi::ITT_DOMAINS::instance().EXECUTE_CHUNK2);
-        for (auto&& [index, context] : RANGES::views::enumerate(m_contextRange))
+        for (auto&& [index, context] : ::ranges::views::enumerate(m_contextRange))
         {
             if (m_hasRAW.get().test())
             {
@@ -309,16 +308,15 @@ task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
     using ExecuteContext =
         task::AwaitableReturnType<std::invoke_result_t<transaction_executor::CreateExecuteContext,
             decltype(executor), decltype(storage), protocol::BlockHeader const&,
-            ::ranges::range_value_t<decltype(transactions)>, int32_t, ledger::LedgerConfig const&>>;
+            protocol::Transaction const&, int, ledger::LedgerConfig const&>>;
 
     std::vector<ExecutionContext<ExecuteContext>> contexts;
     contexts.reserve(transactionCount);
-    for (auto&& [index, transaction, receipt] :
-        ::ranges::views::zip(ranges::views::iota(0), transactions, receipts))
+    for (auto index : ranges::views::iota(0LU, transactionCount))
     {
-        contexts.emplace_back(index, std::addressof(receipt),
+        contexts.emplace_back(std::addressof(receipts[index]),
             co_await transaction_executor::createExecuteContext(
-                executor, storage, blockHeader, transaction, index, ledgerConfig));
+                executor, storage, blockHeader, transactions[index], index, ledgerConfig));
     }
 
     tbb::task_arena arena(
