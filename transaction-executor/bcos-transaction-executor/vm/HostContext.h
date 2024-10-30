@@ -59,7 +59,7 @@
 #include <string_view>
 #include <variant>
 
-namespace bcos::transaction_executor
+namespace bcos::transaction_executor::hostcontext
 {
 
 #define HOST_CONTEXT_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("HOST_CONTEXT")
@@ -695,4 +695,4 @@ private:
     }
 };
 
-}  // namespace bcos::transaction_executor
+}  // namespace bcos::transaction_executor::hostcontext
