@@ -59,6 +59,7 @@ public:
             m_hostContext;
         std::optional<EVMCResult> m_evmcResult;
 
+        ExecuteContext() = default;
         ExecuteContext(TransactionExecutorImpl& executor, Storage& storage,
             protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
             int contextID, ledger::LedgerConfig const& ledgerConfig)

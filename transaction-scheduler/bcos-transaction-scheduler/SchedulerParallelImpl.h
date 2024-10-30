@@ -37,11 +37,11 @@ struct StorageTrait
         ReadWriteSetStorage<LocalStorageView, transaction_executor::StateKey>;
 };
 
-template <class ContextType>
 struct ExecutionContext
 {
+    int32_t contextID;
+    protocol::Transaction* transaction;
     protocol::TransactionReceipt::Ptr* receipt;
-    ContextType executeContext;
 };
 
 template <class MutableStorage, class Storage, class Executor, class ContextRange>
@@ -50,34 +50,55 @@ class ChunkStatus
 private:
     int64_t m_chunkIndex = 0;
     std::reference_wrapper<boost::atomic_flag const> m_hasRAW;
-    ContextRange m_contextRange;
+    ContextRange m_contexts;
     std::reference_wrapper<Executor> m_executor;
     typename StorageTrait<MutableStorage, Storage>::LocalStorageView m_storageView;
     typename StorageTrait<MutableStorage, Storage>::LocalReadWriteSetStorage m_readWriteSetStorage;
+
+    using ExecuteContext = task::AwaitableReturnType<std::invoke_result_t<
+        transaction_executor::CreateExecuteContext, std::add_lvalue_reference_t<Executor>,
+        std::add_lvalue_reference_t<decltype(m_readWriteSetStorage)>, protocol::BlockHeader const&,
+        protocol::Transaction const&, int, ledger::LedgerConfig const&>>;
+
+    std::vector<ExecuteContext> m_executeContexts;
 
 public:
     ChunkStatus(int64_t chunkIndex, boost::atomic_flag const& hasRAW, ContextRange contextRange,
         Executor& executor, auto& storage)
       : m_chunkIndex(chunkIndex),
         m_hasRAW(hasRAW),
-        m_contextRange(std::move(contextRange)),
+        m_contexts(std::move(contextRange)),
         m_executor(executor),
         m_storageView(storage),
-        m_readWriteSetStorage(m_storageView)
+        m_readWriteSetStorage(m_storageView),
+        m_executeContexts(RANGES::size(m_contexts))
     {
         newMutable(m_storageView);
     }
 
     int64_t chunkIndex() const { return m_chunkIndex; }
-    auto count() const { return RANGES::size(m_contextRange); }
+    auto count() const { return RANGES::size(m_contexts); }
     auto& storageView() & { return m_storageView; }
     auto& readWriteSetStorage() & { return m_readWriteSetStorage; }
 
-    task::Task<void> executeStep1()
+    task::Task<void> executeStep1(
+        const protocol::BlockHeader& blockHeader, const ledger::LedgerConfig& ledgerConfig)
+    {
+        ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
+            ittapi::ITT_DOMAINS::instance().EXECUTE_CHUNK3);
+        for (auto&& [context, executeContext] : ::ranges::views::zip(m_contexts, m_executeContexts))
+        {
+            executeContext = co_await transaction_executor::createExecuteContext(m_executor.get(),
+                m_readWriteSetStorage, blockHeader, *context.transaction, context.contextID,
+                ledgerConfig);
+        }
+    }
+
+    task::Task<void> executeStep2()
     {
         ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
             ittapi::ITT_DOMAINS::instance().EXECUTE_CHUNK1);
-        for (auto&& [index, context] : RANGES::views::enumerate(m_contextRange))
+        for (auto&& [index, context] : RANGES::views::enumerate(m_executeContexts))
         {
             if (m_hasRAW.get().test())
             {
@@ -86,15 +107,15 @@ public:
                     << " transactions";
                 break;
             }
-            co_await transaction_executor::executeStep.operator()<0>(context.executeContext);
+            co_await transaction_executor::executeStep.operator()<0>(context);
         }
     }
 
-    task::Task<void> executeStep2()
+    task::Task<void> executeStep3()
     {
         ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
             ittapi::ITT_DOMAINS::instance().EXECUTE_CHUNK2);
-        for (auto&& [index, context] : ::ranges::views::enumerate(m_contextRange))
+        for (auto&& [index, context] : ::ranges::views::enumerate(m_executeContexts))
         {
             if (m_hasRAW.get().test())
             {
@@ -103,18 +124,18 @@ public:
                     << " transactions";
                 break;
             }
-            co_await transaction_executor::executeStep.operator()<1>(context.executeContext);
+            co_await transaction_executor::executeStep.operator()<1>(context);
         }
     }
 
-    task::Task<void> executeStep3()
+    task::Task<void> executeStep4()
     {
         ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
             ittapi::ITT_DOMAINS::instance().EXECUTE_CHUNK3);
-        for (auto& context : m_contextRange)
+        for (auto&& [context, executeContext] : ::ranges::views::zip(m_contexts, m_executeContexts))
         {
             *context.receipt =
-                co_await transaction_executor::executeStep.operator()<2>(context.executeContext);
+                co_await transaction_executor::executeStep.operator()<2>(executeContext);
         }
     }
 };
@@ -195,7 +216,7 @@ size_t executeSinglePass(SchedulerParallelImpl& scheduler, auto& storage, auto& 
                         ittapi::ITT_DOMAINS::instance().STAGE_2);
                     if (chunk && !hasRAW.test())
                     {
-                        task::tbb::syncWait(chunk->executeStep1());
+                        task::tbb::syncWait(chunk->executeStep1(blockHeader, ledgerConfig));
                     }
 
                     return chunk;
@@ -213,10 +234,22 @@ size_t executeSinglePass(SchedulerParallelImpl& scheduler, auto& storage, auto& 
                     return chunk;
                 }) &
             tbb::make_filter<std::unique_ptr<Chunk>, std::unique_ptr<Chunk>>(
+                tbb::filter_mode::parallel,
+                [&](std::unique_ptr<Chunk> chunk) -> std::unique_ptr<Chunk> {
+                    ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
+                        ittapi::ITT_DOMAINS::instance().STAGE_4);
+                    if (chunk && !hasRAW.test())
+                    {
+                        task::tbb::syncWait(chunk->executeStep3());
+                    }
+
+                    return chunk;
+                }) &
+            tbb::make_filter<std::unique_ptr<Chunk>, std::unique_ptr<Chunk>>(
                 tbb::filter_mode::serial_in_order,
                 [&](std::unique_ptr<Chunk> chunk) -> std::unique_ptr<Chunk> {
                     ittapi::Report report1(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
-                        ittapi::ITT_DOMAINS::instance().STAGE_4);
+                        ittapi::ITT_DOMAINS::instance().STAGE_5);
                     if (hasRAW.test())
                     {
                         GC::collect(std::move(chunk));
@@ -248,10 +281,10 @@ size_t executeSinglePass(SchedulerParallelImpl& scheduler, auto& storage, auto& 
                 tbb::filter_mode::parallel,
                 [&](std::unique_ptr<Chunk> chunk) -> std::unique_ptr<Chunk> {
                     ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
-                        ittapi::ITT_DOMAINS::instance().STAGE_5);
+                        ittapi::ITT_DOMAINS::instance().STAGE_6);
                     if (chunk)
                     {
-                        task::tbb::syncWait(chunk->executeStep3());
+                        task::tbb::syncWait(chunk->executeStep4());
                     }
 
                     return chunk;
@@ -305,18 +338,12 @@ task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
         ittapi::ITT_DOMAINS::instance().PARALLEL_EXECUTE);
     std::vector<protocol::TransactionReceipt::Ptr> receipts(transactionCount);
 
-    using ExecuteContext =
-        task::AwaitableReturnType<std::invoke_result_t<transaction_executor::CreateExecuteContext,
-            decltype(executor), decltype(storage), protocol::BlockHeader const&,
-            protocol::Transaction const&, int, ledger::LedgerConfig const&>>;
-
-    std::vector<ExecutionContext<ExecuteContext>> contexts;
+    std::vector<ExecutionContext> contexts;
     contexts.reserve(transactionCount);
     for (auto index : ranges::views::iota(0LU, transactionCount))
     {
-        contexts.emplace_back(std::addressof(receipts[index]),
-            co_await transaction_executor::createExecuteContext(
-                executor, storage, blockHeader, transactions[index], index, ledgerConfig));
+        contexts.emplace_back(
+            index, std::addressof(transactions[index]), std::addressof(receipts[index]));
     }
 
     tbb::task_arena arena(
