@@ -40,7 +40,7 @@ struct StorageTrait
 struct ExecutionContext
 {
     int32_t contextID;
-    protocol::Transaction* transaction;
+    const protocol::Transaction* transaction;
     protocol::TransactionReceipt::Ptr* receipt;
 };
 
@@ -98,7 +98,7 @@ public:
     {
         ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
             ittapi::ITT_DOMAINS::instance().EXECUTE_CHUNK1);
-        for (auto&& [index, context] : RANGES::views::enumerate(m_executeContexts))
+        for (auto&& [index, executeContext] : RANGES::views::enumerate(m_executeContexts))
         {
             if (m_hasRAW.get().test())
             {
@@ -107,7 +107,7 @@ public:
                     << " transactions";
                 break;
             }
-            co_await transaction_executor::executeStep.operator()<0>(context);
+            co_await transaction_executor::executeStep.operator()<0>(executeContext);
         }
     }
 
@@ -115,7 +115,7 @@ public:
     {
         ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
             ittapi::ITT_DOMAINS::instance().EXECUTE_CHUNK2);
-        for (auto&& [index, context] : ::ranges::views::enumerate(m_executeContexts))
+        for (auto&& [index, executeContext] : ::ranges::views::enumerate(m_executeContexts))
         {
             if (m_hasRAW.get().test())
             {
@@ -124,7 +124,7 @@ public:
                     << " transactions";
                 break;
             }
-            co_await transaction_executor::executeStep.operator()<1>(context);
+            co_await transaction_executor::executeStep.operator()<1>(executeContext);
         }
     }
 
@@ -189,8 +189,8 @@ size_t executeSinglePass(SchedulerParallelImpl& scheduler, auto& storage, auto& 
     std::atomic_size_t chunkIndex = 0;
 
     tbb::task_group_context context;
-    // 五级流水线：分片准备、并行执行、检测RAW冲突&合并读写集、生成回执、合并storage
-    // Five-stage pipeline: shard preparation, parallel execution, detection of RAW
+    // 七级流水线：生成分片、准备执行、第一段执行、第二段执行、检测RAW冲突&合并读写集、结束执行、合并storage
+    // Seven-stage pipeline: shard preparation, parallel execution, detection of RAW
     // conflicts & merging read/write sets, generating receipts, and merging storage
     tbb::parallel_pipeline(tbb::this_task_arena::max_concurrency(),
         tbb::make_filter<void, std::unique_ptr<Chunk>>(tbb::filter_mode::serial_in_order,
