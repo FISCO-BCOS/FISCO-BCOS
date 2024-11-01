@@ -111,14 +111,6 @@ public:
         m_sslContextPubHandlerWithoutExtInfo = std::move(_sslContextPubHandlerWithoutExtInfo);
     }
 
-    void setVerifyFailedHook(
-        std::function<bool(ba::ssl::stream_base::handshake_type)> _verifyFailedHook)
-    {
-        m_verifyFailedHook = std::move(_verifyFailedHook);
-    }
-
-    auto verifyFailedHook() const { return m_verifyFailedHook; }
-
     virtual void setSessionCallbackManager(
         SessionCallbackManagerInterface::Ptr sessionCallbackManager)
     {
@@ -147,6 +139,14 @@ public:
         m_asyncGroup.template run(std::move(f));
     }
 
+    void setSslVerifyMode(uint8_t _serverMode, uint8_t _clientMode)
+    {
+        m_sslServerMode = _serverMode;
+        m_sslClientMode = _clientMode;
+        HOST_LOG(INFO) << LOG_DESC("setSslVerifyMode") << LOG_KV("serverMode", (int)m_sslServerMode)
+                       << LOG_KV("clientMode", (int)m_sslClientMode);
+    }
+
 protected:
     /// obtain the common name from the subject:
     /// the subject format is: /CN=xx/O=xxx/OU=xxx/ commonly
@@ -158,7 +158,7 @@ protected:
     /// maily to get node id and verify whether the certificate has been expired
     /// @return: node id of the connected peer
     std::function<bool(bool, boost::asio::ssl::verify_context&)> newVerifyCallback(
-        std::shared_ptr<std::string> nodeIDOut, ba::ssl::stream_base::handshake_type);
+        std::shared_ptr<std::string> nodeIDOut);
 
     /// obtain nodeInfo from given vector
     void obtainNodeInfo(P2PInfo& info, std::string const& node_info);
@@ -213,6 +213,8 @@ protected:
 
     std::string m_listenHost;
     uint16_t m_listenPort = 0;
+    uint8_t m_sslServerMode = 3;
+    uint8_t m_sslClientMode = 3;
 
     std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>
         m_connectionHandler;
@@ -220,7 +222,6 @@ protected:
     // get the hex public key of the peer from the the SSL connection
     std::function<bool(X509* x509, std::string& pubHex)> m_sslContextPubHandler;
     std::function<bool(X509* x509, std::string& pubHex)> m_sslContextPubHandlerWithoutExtInfo;
-    std::function<bool(ba::ssl::stream_base::handshake_type)> m_verifyFailedHook;
 
     bool m_run = false;
 

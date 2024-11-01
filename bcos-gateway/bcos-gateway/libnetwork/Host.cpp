@@ -78,8 +78,7 @@ void Host::startAccept(boost::system::error_code boost_error)
                 HOST_LOG(INFO) << LOG_DESC("P2P Recv Connect, From=") << endpoint;
                 /// register ssl callback to get the NodeID of peers
                 std::shared_ptr<std::string> endpointPublicKey = std::make_shared<std::string>();
-                m_asioInterface->setVerifyCallback(
-                    socket, newVerifyCallback(endpointPublicKey, ba::ssl::stream_base::server));
+                m_asioInterface->setVerifyCallback(socket, newVerifyCallback(endpointPublicKey));
                 m_asioInterface->asyncHandshake(socket, ba::ssl::stream_base::server,
                     boost::bind(&Host::handshakeServer, shared_from_this(), ba::placeholders::error,
                         endpointPublicKey, socket));
@@ -102,10 +101,10 @@ void Host::startAccept(boost::system::error_code boost_error)
  * for demand of fisco-bcos-browser
  */
 std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCallback(
-    std::shared_ptr<std::string> nodeIDOut, ba::ssl::stream_base::handshake_type type)
+    std::shared_ptr<std::string> nodeIDOut)
 {
     auto host = std::weak_ptr<Host>(shared_from_this());
-    return [host, nodeIDOut, type](bool preverified, boost::asio::ssl::verify_context& ctx) {
+    return [host, nodeIDOut](bool preverified, boost::asio::ssl::verify_context& ctx) {
         auto hostPtr = host.lock();
         if (!hostPtr)
         {
@@ -115,12 +114,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
         try
         {
             /// return early when the certificate is invalid
-            auto doubleCheckSslMode = preverified;
-            if (!doubleCheckSslMode && hostPtr->verifyFailedHook() != nullptr)
-            {
-                doubleCheckSslMode = hostPtr->verifyFailedHook()(type);
-            }
-            if (!doubleCheckSslMode)
+            if (!preverified)
             {
                 HOST_LOG(DEBUG) << LOG_DESC("ssl handshake certificate verify failed")
                                 << LOG_KV("preverified", preverified);
@@ -131,14 +125,14 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             if (!cert)
             {
                 HOST_LOG(ERROR) << LOG_DESC("Get cert failed");
-                return doubleCheckSslMode;
+                return preverified;
             }
 
             // For compatibility, p2p communication between nodes still uses the old public key
             // analysis method
             if (!hostPtr->sslContextPubHandler()(cert, *nodeIDOut))
             {
-                return doubleCheckSslMode;
+                return preverified;
             }
 
             int crit = 0;
@@ -147,7 +141,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             if (!basic)
             {
                 HOST_LOG(INFO) << LOG_DESC("Get ca basic failed");
-                return doubleCheckSslMode;
+                return preverified;
             }
 
             /// ignore ca
@@ -156,7 +150,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
                 // ca or agency certificate
                 HOST_LOG(TRACE) << LOG_DESC("Ignore CA certificate");
                 BASIC_CONSTRAINTS_free(basic);
-                return doubleCheckSslMode;
+                return preverified;
             }
 
             BASIC_CONSTRAINTS_free(basic);
@@ -165,7 +159,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             std::string nodeIDOutWithoutExtInfo;
             if (!hostPtr->sslContextPubHandlerWithoutExtInfo()(cert, nodeIDOutWithoutExtInfo))
             {
-                return doubleCheckSslMode;
+                return preverified;
             }
             nodeIDOutWithoutExtInfo = boost::to_upper_copy(nodeIDOutWithoutExtInfo);
 
@@ -202,7 +196,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             OPENSSL_free((void*)certName);
             OPENSSL_free((void*)issuerName);
 
-            return doubleCheckSslMode;
+            return preverified;
         }
         catch (std::exception& e)
         {
@@ -341,20 +335,31 @@ void Host::handshakeServer(const boost::system::error_code& error,
         socket->close();
         return;
     }
-    if (endpointPublicKey->empty())
+    std::string nodeInfo = *endpointPublicKey;
+    if (nodeInfo.empty())
     {
-        HOST_LOG(INFO) << LOG_DESC("handshakeServer get p2pID failed")
-                       << LOG_KV("remote endpoint", socket->remoteEndpoint());
-        socket->close();
-        return;
+        if ((m_sslServerMode & ba::ssl::verify_none) == 0)
+        {
+            auto randomId = h512::generateRandomFixedBytes();
+            nodeInfo = randomId.hex();
+            HOST_LOG(INFO) << LOG_DESC("handshakeServer get p2pID failed because of verify_none")
+                           << LOG_KV("remote endpoint", socket->remoteEndpoint())
+                           << LOG_KV("randId", nodeInfo);
+        }
+        else
+        {
+            HOST_LOG(INFO) << LOG_DESC("handshakeServer get p2pID failed")
+                           << LOG_KV("remote endpoint", socket->remoteEndpoint());
+            socket->close();
+            return;
+        }
     }
     if (m_run)
     {
         /// node info splitted with #
         /// format: {nodeId}{#}{agencyName}{#}{nodeName}
-        std::string node_info(*endpointPublicKey);
         P2PInfo info;
-        obtainNodeInfo(info, node_info);
+        obtainNodeInfo(info, nodeInfo);
         HOST_LOG(INFO) << LOG_DESC("handshakeServer succ")
                        << LOG_KV("remote endpoint", socket->remoteEndpoint())
                        << LOG_KV("nodeid", info.p2pID);
@@ -495,8 +500,7 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
             insertPendingConns(_nodeIPEndpoint);
             /// get the public key of the server during handshake
             std::shared_ptr<std::string> endpointPublicKey = std::make_shared<std::string>();
-            m_asioInterface->setVerifyCallback(
-                socket, newVerifyCallback(endpointPublicKey, ba::ssl::stream_base::client));
+            m_asioInterface->setVerifyCallback(socket, newVerifyCallback(endpointPublicKey));
             /// call handshakeClient after handshake succeed
             m_asioInterface->asyncHandshake(socket, ba::ssl::stream_base::client,
                 [self = shared_from_this(), socket,
@@ -536,19 +540,30 @@ void Host::handshakeClient(const boost::system::error_code& error,
         }
         return;
     }
-    if (endpointPublicKey->empty())
+    std::string nodeInfo = *endpointPublicKey;
+    if (nodeInfo.empty())
     {
-        HOST_LOG(WARNING) << LOG_DESC("handshakeClient get p2pID failed")
-                          << LOG_KV("local endpoint", socket->localEndpoint());
-        socket->close();
-        return;
+        if ((m_sslClientMode & ba::ssl::verify_none) == 0)
+        {
+            auto randomId = h512::generateRandomFixedBytes();
+            nodeInfo = randomId.hex();
+            HOST_LOG(INFO) << LOG_DESC("handshakeClient get p2pID failed because of verify_none")
+                           << LOG_KV("remote endpoint", socket->remoteEndpoint())
+                           << LOG_KV("randId", nodeInfo);
+        }
+        else
+        {
+            HOST_LOG(WARNING) << LOG_DESC("handshakeClient get p2pID failed")
+                              << LOG_KV("local endpoint", socket->localEndpoint());
+            socket->close();
+            return;
+        }
     }
 
     if (m_run)
     {
-        std::string node_info(*endpointPublicKey);
         P2PInfo info;
-        obtainNodeInfo(info, node_info);
+        obtainNodeInfo(info, nodeInfo);
         HOST_LOG(INFO) << LOG_DESC("handshakeClient succ")
                        << LOG_KV("local endpoint", socket->localEndpoint());
         startPeerSession(info, socket, callback);
