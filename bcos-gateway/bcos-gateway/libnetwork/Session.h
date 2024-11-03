@@ -20,9 +20,8 @@
 #include <memory>
 #include <utility>
 
-namespace bcos
-{
-namespace gateway
+
+namespace bcos::gateway
 {
 class Host;
 class SocketFace;
@@ -354,5 +353,4 @@ private:
     bool m_enableCompress = true;
 };
 
-}  // namespace gateway
-}  // namespace bcos
+}  // namespace bcos::gateway

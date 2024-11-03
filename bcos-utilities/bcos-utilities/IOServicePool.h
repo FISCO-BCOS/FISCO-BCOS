@@ -18,6 +18,7 @@
  */
 
 #pragma once
+#include "bcos-utilities/Common.h"
 #include <boost/asio.hpp>
 #include <memory>
 namespace bcos
@@ -61,7 +62,7 @@ public:
         for (const auto& ioService : m_ioServices)
         {
             // https://github.com/chriskohlhoff/asio/issues/932#issuecomment-968103444
-            m_threads.emplace_back([ioService, running = &m_running]() {
+            m_threads.emplace_back([ioService, running = std::ref(m_running)]() {
                 if (!running)
                 {
                     return;

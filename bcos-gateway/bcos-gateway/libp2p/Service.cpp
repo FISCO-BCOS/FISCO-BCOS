@@ -149,7 +149,7 @@ void Service::heartBeat()
     }
 
     auto self = std::weak_ptr<Service>(shared_from_this());
-    m_timer = m_host->asioInterface()->newTimer(CHECK_INTERVAL);
+    m_timer.emplace(m_host->asioInterface()->newTimer(CHECK_INTERVAL));
     m_timer->async_wait([self](const boost::system::error_code& error) {
         if (error)
         {

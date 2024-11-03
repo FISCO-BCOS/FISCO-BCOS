@@ -71,8 +71,8 @@ public:
         handler(boost::system::error_code(), bytesTransferred);
     }
 
-    void asyncReadSome(std::shared_ptr<SocketFace> socket, boost::asio::mutable_buffers_1 buffers,
-        ReadWriteHandler handler) override
+    void asyncReadSome(const std::shared_ptr<SocketFace>& socket,
+        boost::asio::mutable_buffers_1 buffers, ReadWriteHandler handler) override
     {
         m_threadPool->enqueue([this, socket, buffers, handler]() {
             if (m_recvPackets.empty())
