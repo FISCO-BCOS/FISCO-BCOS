@@ -40,8 +40,12 @@ class BlockImpl : public bcos::protocol::Block, public std::enable_shared_from_t
 {
 public:
     BlockImpl() : m_inner(std::make_shared<bcostars::Block>()) {}
+    BlockImpl(const BlockImpl&) = delete;
+    BlockImpl(BlockImpl&&) = delete;
+    BlockImpl& operator=(const BlockImpl&) = delete;
+    BlockImpl& operator=(BlockImpl&&) = delete;
     BlockImpl(bcostars::Block _block) : BlockImpl() { *m_inner = std::move(_block); }
-    ~BlockImpl() override = default;
+    ~BlockImpl() noexcept override = default;
 
     void decode(bcos::bytesConstRef _data, bool _calculateHash, bool _checkSig) override;
     void encode(bcos::bytes& _encodeData) const override;

@@ -346,8 +346,7 @@ task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
             index, std::addressof(transactions[index]), std::addressof(receipts[index]));
     }
 
-    tbb::task_arena arena(
-        tbb::task_arena::constraints{}.set_max_concurrency(scheduler.m_maxConcurrency));
+    tbb::task_arena arena(scheduler.m_maxConcurrency, 1, tbb::task_arena::priority::high);
     arena.execute([&]() {
         auto retryCount = executeSinglePass(scheduler, storage, executor, blockHeader, ledgerConfig,
             contexts, scheduler.m_grainSize);

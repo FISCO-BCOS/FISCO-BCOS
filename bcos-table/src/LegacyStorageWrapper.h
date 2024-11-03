@@ -50,7 +50,7 @@ public:
                 }
 
                 transaction_executor::StateKeyView stateKeyView(key);
-                auto [entryTable, entryKey] = stateKeyView.getTableAndKey();
+                auto [entryTable, entryKey] = stateKeyView.get();
                 if (entryTable == table && (!condition || condition->isValid(entryKey)))
                 {
                     if (start != 0 || count != 0)

@@ -26,7 +26,9 @@
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
+#include <boost/throw_exception.hpp>
 #include <memory_resource>
+#include <stdexcept>
 
 using namespace bcostars;
 using namespace bcostars::protocol;
@@ -103,11 +105,7 @@ void BlockImpl::appendReceipt(bcos::protocol::TransactionReceipt::Ptr _receipt)
 
 void BlockImpl::setNonceList(RANGES::any_view<std::string> nonces)
 {
-    m_inner->nonceList.clear();
-    for (auto it : nonces)
-    {
-        m_inner->nonceList.emplace_back(boost::lexical_cast<std::string>(it));
-    }
+    m_inner->nonceList = ::ranges::to<std::vector>(nonces);
 }
 
 RANGES::any_view<std::string> BlockImpl::nonceList() const
@@ -119,7 +117,7 @@ bcos::protocol::TransactionMetaData::ConstPtr BlockImpl::transactionMetaData(uin
 {
     if (_index >= transactionsMetaDataSize())
     {
-        return nullptr;
+        BOOST_THROW_EXCEPTION(std::out_of_range("transactionMetaData index out of range"));
     }
 
     static std::pmr::synchronized_pool_resource metaDataPool;
@@ -136,7 +134,7 @@ TransactionMetaDataImpl BlockImpl::transactionMetaDataImpl(uint64_t _index) cons
 {
     if (_index >= transactionsMetaDataSize())
     {
-        return bcostars::protocol::TransactionMetaDataImpl([] { return nullptr; });
+        BOOST_THROW_EXCEPTION(std::out_of_range("transactionMetaDataImpl index out of range"));
     }
 
     return bcostars::protocol::TransactionMetaDataImpl(

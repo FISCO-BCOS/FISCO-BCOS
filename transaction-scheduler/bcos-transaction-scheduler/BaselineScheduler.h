@@ -97,7 +97,7 @@ task::Task<h256> calculateStateRoot(
         hashGroup.run([keyValue = std::move(keyValue), &hashes, &deletedEntry, &hashImpl]() {
             auto [key, entry] = *keyValue;
             transaction_executor::StateKeyView view(key);
-            auto [tableName, keyName] = view.getTableAndKey();
+            auto [tableName, keyName] = view.get();
             if (!entry)
             {
                 entry = std::addressof(deletedEntry);
@@ -324,10 +324,7 @@ private:
             }
             auto receipts = co_await transaction_scheduler::executeBlock(
                 scheduler.m_schedulerImpl.get(), view, scheduler.m_executor.get(), *blockHeader,
-                transactions | RANGES::views::transform(
-                                   [](protocol::Transaction::ConstPtr const& transactionPtr)
-                                       -> protocol::Transaction const& { return *transactionPtr; }),
-                *ledgerConfig);
+                ::ranges::views::indirect(transactions), *ledgerConfig);
 
             auto executedBlockHeader =
                 scheduler.m_blockHeaderFactory.get().populateBlockHeader(blockHeader);

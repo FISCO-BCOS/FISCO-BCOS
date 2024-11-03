@@ -42,6 +42,17 @@ enum Attribute : int
     LOGICAL_DELETION = 1 << 3
 };
 
+inline int64_t getSize(auto const& object)
+{
+    using ObjectType = std::remove_cvref_t<decltype(object)>;
+    if constexpr (HasMemberSize<ObjectType>)
+    {
+        return object.size();
+    }
+    // Treat any no-size() object as trivial, TODO: fix it
+    return sizeof(ObjectType);
+}
+
 template <class KeyType, class ValueType = Empty, int attribute = Attribute::UNORDERED,
     class HasherType = std::hash<KeyType>, class Equal = std::equal_to<>,
     class BucketHasherType = HasherType>
@@ -149,17 +160,6 @@ public:
 
 template <class Storage>
 concept IsMemoryStorage = std::remove_cvref_t<Storage>::isMemoryStorage;
-
-inline int64_t getSize(auto const& object)
-{
-    using ObjectType = std::remove_cvref_t<decltype(object)>;
-    if constexpr (HasMemberSize<ObjectType>)
-    {
-        return object.size();
-    }
-    // Treat any no-size() object as trivial, TODO: fix it
-    return sizeof(ObjectType);
-}
 
 template <IsMemoryStorage MemoryStorage>
 void updateLRUAndCheck(MemoryStorage& storage, typename MemoryStorage::Bucket& bucket,
