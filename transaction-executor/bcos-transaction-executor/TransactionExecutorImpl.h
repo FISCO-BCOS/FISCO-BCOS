@@ -201,7 +201,7 @@ public:
         protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
         int contextID, ledger::LedgerConfig const& ledgerConfig, auto&& syncWait)
     {
-        ExecuteContext<std::decay_t<decltype(storage)>> executeContext(
+        auto executeContext = co_await createExecuteContext(
             executor, storage, blockHeader, transaction, contextID, ledgerConfig);
 
         co_await transaction_executor::executeStep.operator()<0>(executeContext);
