@@ -86,16 +86,17 @@ public:
         TransactionExecutorImpl& executor, auto& storage, protocol::BlockHeader const& blockHeader,
         protocol::Transaction const& transaction, int contextID,
         ledger::LedgerConfig const& ledgerConfig)
-        -> task::Task<ExecuteContext<std::decay_t<decltype(storage)>>>
+        -> task::Task<std::unique_ptr<ExecuteContext<std::decay_t<decltype(storage)>>>>
     {
-        co_return ExecuteContext(
+        co_return std::make_unique<ExecuteContext<std::decay_t<decltype(storage)>>>(
             executor, storage, blockHeader, transaction, contextID, ledgerConfig);
     }
 
     template <int step>
     friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
-        tag_t<executeStep> /*unused*/, auto& executeContext)
+        tag_t<executeStep> /*unused*/, auto& context)
     {
+        auto& executeContext = *context;
         if constexpr (step == 0)
         {
             co_await prepare(executeContext.m_hostContext);
