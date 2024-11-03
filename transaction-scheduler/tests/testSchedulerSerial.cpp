@@ -23,7 +23,7 @@ struct MockExecutorSerial
         transaction_executor::tag_t<execute3Step> /*unused*/, MockExecutorSerial& executor,
         auto& storage, protocol::BlockHeader const& blockHeader,
         protocol::Transaction const& transaction, int contextID,
-        ledger::LedgerConfig const& ledgerConfig, auto&& waitOperator)
+        ledger::LedgerConfig const& ledgerConfig, auto&& waitOperator, auto&&...)
     {
         co_yield std::shared_ptr<bcos::protocol::TransactionReceipt>();
         co_yield std::shared_ptr<bcos::protocol::TransactionReceipt>();

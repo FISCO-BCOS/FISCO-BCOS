@@ -20,7 +20,7 @@
  */
 #pragma once
 #include "ChainNodeInfoFactory.h"
-#include "GroupTypeDef.h"
+#include <range/v3/view/transform.hpp>
 namespace bcos::group
 {
 class GroupInfo
@@ -112,8 +112,8 @@ public:
     auto nodeInfoList() const
     {
         return m_nodeInfos |
-               RANGES::views::transform([lock = std::make_shared<ReadGuard>(x_nodeInfos)](
-                                            auto const& pair) -> auto& { return pair; });
+               ::ranges::views::transform([lock = std::make_shared<ReadGuard>(x_nodeInfos)](
+                                              auto const& pair) -> auto& { return pair; });
     }
 
     bcos::group::ChainNodeInfoFactory::Ptr chainNodeInfoFactory() const

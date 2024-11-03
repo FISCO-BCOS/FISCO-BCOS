@@ -35,6 +35,17 @@ enum Attribute : int
     LOGICAL_DELETION = 1 << 3
 };
 
+inline int64_t getSize(auto const& object)
+{
+    using ObjectType = std::remove_cvref_t<decltype(object)>;
+    if constexpr (HasMemberSize<ObjectType>)
+    {
+        return object.size();
+    }
+    // Treat any no-size() object as trivial, TODO: fix it
+    return sizeof(ObjectType);
+}
+
 template <class KeyType, class ValueType = Empty, int attribute = Attribute::UNORDERED,
     class HasherType = std::hash<KeyType>, class Equal = std::equal_to<>,
     class BucketHasherType = HasherType>
@@ -125,51 +136,38 @@ public:
             return hash % storage.m_buckets.size();
         }
     }
+
+    friend Bucket& getBucket(MemoryStorage& storage, auto const& key) noexcept
+    {
+        if constexpr (!MemoryStorage::withConcurrent)
+        {
+            return storage.m_buckets[0];
+        }
+        auto index = getBucketIndex(storage, key);
+
+        auto& bucket = storage.m_buckets[index];
+        return bucket;
+    }
+
+    friend void updateLRUAndCheck(MemoryStorage& storage, Bucket& bucket,
+        Container::template nth_index<0>::type::iterator entryIt)
+        requires withLRU
+    {
+        auto& index = bucket.container.template get<1>();
+        auto seqIt = index.iterator_to(*entryIt);
+        index.relocate(index.end(), seqIt);
+
+        while (bucket.capacity > storage.m_maxCapacity && !bucket.container.empty())
+        {
+            auto const& item = index.front();
+            bucket.capacity -= (getSize(item.key) + getSize(item.value));
+            index.pop_front();
+        }
+    }
 };
 
 template <class Storage>
 concept IsMemoryStorage = std::remove_cvref_t<Storage>::isMemoryStorage;
-
-template <IsMemoryStorage MemoryStorage>
-typename MemoryStorage::Bucket& getBucket(MemoryStorage& storage, auto const& key) noexcept
-{
-    if constexpr (!MemoryStorage::withConcurrent)
-    {
-        return storage.m_buckets[0];
-    }
-    auto index = getBucketIndex(storage, key);
-
-    auto& bucket = storage.m_buckets[index];
-    return bucket;
-}
-
-inline int64_t getSize(auto const& object)
-{
-    using ObjectType = std::remove_cvref_t<decltype(object)>;
-    if constexpr (HasMemberSize<ObjectType>)
-    {
-        return object.size();
-    }
-    // Treat any no-size() object as trivial, TODO: fix it
-    return sizeof(ObjectType);
-}
-
-template <IsMemoryStorage MemoryStorage>
-void updateLRUAndCheck(MemoryStorage& storage, typename MemoryStorage::Bucket& bucket,
-    typename MemoryStorage::Container::template nth_index<0>::type::iterator entryIt)
-    requires MemoryStorage::withLRU
-{
-    auto& index = bucket.container.template get<1>();
-    auto seqIt = index.iterator_to(*entryIt);
-    index.relocate(index.end(), seqIt);
-
-    while (bucket.capacity > storage.m_maxCapacity && !bucket.container.empty())
-    {
-        auto const& item = index.front();
-        bucket.capacity -= (getSize(item.key) + getSize(item.value));
-        index.pop_front();
-    }
-}
 
 template <IsMemoryStorage MemoryStorage>
 auto tag_invoke(bcos::storage2::tag_t<readSome> /*unused*/, MemoryStorage& storage,
