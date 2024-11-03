@@ -22,15 +22,18 @@
 #pragma once
 
 // if windows, manual include tup/Tars.h first
+
+#include "bcos-utilities/FixedBytes.h"
+#include <range/v3/view/any_view.hpp>
 #ifdef _WIN32
 #include <tup/Tars.h>
 #endif
+#include "bcos-crypto/hasher/Hasher.h"
+#include "bcos-crypto/interfaces/crypto/CommonType.h"
+#include "bcos-framework/protocol/Transaction.h"
 #include "bcos-tars-protocol/tars/Transaction.h"
-#include <bcos-crypto/hasher/Hasher.h>
-#include <bcos-crypto/interfaces/crypto/CommonType.h>
-#include <bcos-framework/protocol/Transaction.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/DataConvertUtility.h>
+#include "bcos-utilities/Common.h"
+#include "bcos-utilities/DataConvertUtility.h"
 
 namespace bcostars::protocol
 {
@@ -92,10 +95,11 @@ public:
     void setAttribute(int32_t attribute) override;
 
     std::string_view extraData() const override;
-    void setExtraData(std::string const& _extraData) override;
 
     uint8_t type() const override;
     bcos::bytesConstRef extraTransactionBytes() const override;
+    ::ranges::any_view<bcos::h256, ::ranges::category::input | ::ranges::category::sized>
+    conflictFields() const override;
 
     const bcostars::Transaction& inner() const;
     bcostars::Transaction& mutableInner();

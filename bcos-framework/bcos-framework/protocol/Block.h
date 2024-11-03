@@ -43,10 +43,10 @@ public:
     using ConstPtr = std::shared_ptr<Block const>;
     Block() = default;
     Block(const Block&) = default;
-    Block(Block&&) = default;
+    Block(Block&&) noexcept = default;
     Block& operator=(const Block&) = default;
-    Block& operator=(Block&&) = default;
-    virtual ~Block() = default;
+    Block& operator=(Block&&) noexcept = default;
+    virtual ~Block() noexcept = default;
 
     virtual void decode(bytesConstRef _data, bool _calculateHash, bool _checkSig) = 0;
     virtual void encode(bytes& _encodeData) const = 0;
@@ -112,10 +112,6 @@ public:
                 return transaction->nonce();
             }) |
             RANGES::to<NonceList>());
-    }
-    bool operator<(const Block& block) const
-    {
-        return blockHeaderConst()->number() < block.blockHeaderConst()->number();
     }
 };
 using Blocks = std::vector<Block::Ptr>;

@@ -7,6 +7,9 @@
 #include <oneapi/tbb/parallel_invoke.h>
 #include <boost/throw_exception.hpp>
 #include <functional>
+#include <range/v3/view/filter.hpp>
+#include <range/v3/view/map.hpp>
+#include <range/v3/view/zip.hpp>
 #include <type_traits>
 #include <variant>
 
@@ -24,26 +27,26 @@ struct UnsupportedMethod : public bcos::Error {};
 
 template <class KeyType, class ValueType>
 task::Task<bool> fillMissingValues(
-    auto& storage, RANGES::input_range auto&& keys, RANGES::input_range auto& values)
+    auto& storage, ::ranges::input_range auto&& keys, ::ranges::input_range auto& values)
 {
     using StoreKeyType =
-        std::conditional_t<std::is_lvalue_reference_v<RANGES::range_value_t<decltype(keys)>>,
+        std::conditional_t<std::is_lvalue_reference_v<::ranges::range_value_t<decltype(keys)>>,
             std::reference_wrapper<KeyType>, KeyType>;
 
     std::vector<std::pair<StoreKeyType, std::reference_wrapper<std::optional<ValueType>>>>
         missingKeyValues;
-    for (auto&& [key, value] : RANGES::views::zip(std::forward<decltype(keys)>(keys), values))
+    for (auto&& [key, value] : ::ranges::views::zip(std::forward<decltype(keys)>(keys), values))
     {
         if (!value)
         {
             missingKeyValues.emplace_back(std::forward<decltype(key)>(key), std::ref(value));
         }
     }
-    auto gotValues = co_await storage2::readSome(storage, missingKeyValues | RANGES::views::keys);
+    auto gotValues = co_await storage2::readSome(storage, missingKeyValues | ::ranges::views::keys);
 
     size_t count = 0;
     for (auto&& [from, to] :
-        RANGES::views::zip(gotValues, missingKeyValues | RANGES::views::values))
+        ::ranges::views::zip(gotValues, missingKeyValues | ::ranges::views::values))
     {
         if (from)
         {
@@ -52,7 +55,7 @@ task::Task<bool> fillMissingValues(
         }
     }
 
-    co_return count == RANGES::size(gotValues);
+    co_return count == ::ranges::size(gotValues);
 }
 
 template <class MutableStorageType, class CachedStorage, class BackendStorageType>
@@ -109,15 +112,15 @@ typename View::MutableStorage& mutableStorage(View& storage)
 
 template <IsView View>
 auto tag_invoke(
-    storage2::tag_t<storage2::readSome> /*unused*/, View& view, RANGES::input_range auto&& keys)
+    storage2::tag_t<storage2::readSome> /*unused*/, View& view, ::ranges::input_range auto&& keys)
     -> task::Task<task::AwaitableReturnType<
         std::invoke_result_t<storage2::ReadSome, typename View::MutableStorage&, decltype(keys)>>>
-    requires RANGES::sized_range<decltype(keys)> &&
-             RANGES::sized_range<task::AwaitableReturnType<std::invoke_result_t<storage2::ReadSome,
-                 typename View::MutableStorage&, decltype(keys)>>>
+    requires ::ranges::sized_range<decltype(keys)> &&
+             ::ranges::sized_range<task::AwaitableReturnType<std::invoke_result_t<
+                 storage2::ReadSome, typename View::MutableStorage&, decltype(keys)>>>
 {
     task::AwaitableReturnType<decltype(storage2::readSome(*view.m_mutableStorage, keys))> values(
-        RANGES::size(keys));
+        ::ranges::size(keys));
     if (view.m_mutableStorage &&
         co_await fillMissingValues<typename View::Key, typename View::Value>(
             *view.m_mutableStorage, keys, values))
@@ -126,7 +129,7 @@ auto tag_invoke(
     }
     else
     {
-        values.resize(RANGES::size(keys));
+        values.resize(::ranges::size(keys));
     }
 
     for (auto& immutableStorage : view.m_immutableStorages)
@@ -154,7 +157,7 @@ auto tag_invoke(
 
 template <IsView View>
 auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, View& view,
-    RANGES::input_range auto&& keys, storage2::DIRECT_TYPE /*unused*/)
+    ::ranges::input_range auto&& keys, storage2::DIRECT_TYPE /*unused*/)
     -> task::Task<task::AwaitableReturnType<
         std::invoke_result_t<storage2::ReadSome, typename View::MutableStorage&, decltype(keys)>>>
 {
@@ -241,7 +244,7 @@ auto tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/, View& view, auto&
 
 template <IsView View>
 task::Task<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/, View& view,
-    RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
+    ::ranges::input_range auto&& keys, ::ranges::input_range auto&& values)
 {
     co_await storage2::writeSome(mutableStorage(view), std::forward<decltype(keys)>(keys),
         std::forward<decltype(values)>(values));
@@ -265,7 +268,7 @@ task::Task<void> tag_invoke(
 
 template <IsView View>
 task::Task<void> tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/, View& view,
-    RANGES::input_range auto&& keys, auto&&... args)
+    ::ranges::input_range auto&& keys, auto&&... args)
 {
     co_await storage2::removeSome(mutableStorage(view), std::forward<decltype(keys)>(keys),
         std::forward<decltype(args)>(args)...);
@@ -341,10 +344,10 @@ public:
         // 基于合并排序，找到所有迭代器的最小值，推进迭代器并返回值
         // Based on merge sort, find the minimum value of all iterators, advance the
         // iterator and return its value
-        auto iterators = m_iterators | RANGES::views::filter([](auto const& rangeValue) {
+        auto iterators = m_iterators | ::ranges::views::filter([](auto const& rangeValue) {
             return std::get<1>(rangeValue).has_value();
         });
-        if (RANGES::empty(iterators))
+        if (::ranges::empty(iterators))
         {
             co_return std::nullopt;
         }
@@ -377,7 +380,7 @@ public:
         RangeValue result = std::get<1>(*minIterators[0]);
         co_await forwardIterators(
             minIterators |
-            RANGES::views::transform([](auto* iterator) -> auto& { return *iterator; }));
+            ::ranges::views::transform([](auto* iterator) -> auto& { return *iterator; }));
         co_return result;
     };
 };

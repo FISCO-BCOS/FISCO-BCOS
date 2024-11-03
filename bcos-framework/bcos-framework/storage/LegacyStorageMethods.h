@@ -45,7 +45,7 @@ inline task::Task<std::optional<Entry>> tag_invoke(storage2::tag_t<storage2::rea
         }
     };
 
-    auto [table, key] = stateKey.getTableAndKey();
+    auto [table, key] = stateKey.get();
     Awaitable awaitable{.m_storage = storage, .m_table = table, .m_key = key, .m_result = {}};
     co_return co_await awaitable;
 }
@@ -119,7 +119,7 @@ inline task::Task<void> tag_invoke(storage2::tag_t<storage2::writeOne> /*unused*
     };
 
     auto view = transaction_executor::StateKeyView(stateKey);
-    auto [table, key] = view.getTableAndKey();
+    auto [table, key] = view.get();
     Awaitable awaitable{.m_storage = storage,
         .m_table = table,
         .m_key = key,

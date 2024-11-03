@@ -11,6 +11,7 @@
 #include <oneapi/tbb/partitioner.h>
 #include <oneapi/tbb/task_arena.h>
 #include <tbb/task_arena.h>
+#include <memory>
 #include <type_traits>
 
 namespace bcos::transaction_scheduler
@@ -35,8 +36,16 @@ task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
     using CoroType = std::invoke_result_t<transaction_executor::Execute3Step, decltype(executor),
         decltype(storage), protocol::BlockHeader const&, protocol::Transaction const&, int,
         ledger::LedgerConfig const&, task::tbb::SyncWait>;
+
+    constexpr static auto EXECUTOR_STACK = 1400;
     struct ExecutionContext
     {
+        ExecutionContext()  // NOLINT
+          : m_resource(m_stack.data(), m_stack.size()), m_allocator(std::addressof(m_resource)){};
+        std::array<std::byte, EXECUTOR_STACK> m_stack;
+        std::pmr::monotonic_buffer_resource m_resource;
+        std::pmr::polymorphic_allocator<> m_allocator;
+
         std::optional<CoroType> coro;
         std::optional<decltype(coro->begin())> iterator;
         protocol::TransactionReceipt::Ptr receipt;
@@ -55,7 +64,7 @@ task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
 
     // 三级流水线，2个线程
     // Three-stage pipeline, with 2 threads
-    static tbb::task_arena arena(2);
+    static tbb::task_arena arena(2, 1, tbb::task_arena::priority::high);
     arena.execute([&]() {
         tbb::parallel_pipeline(tbb::this_task_arena::max_concurrency(),
             tbb::make_filter<void, ChunkRange>(tbb::filter_mode::serial_in_order,
@@ -71,11 +80,12 @@ task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
                     auto range = chunks[chunkIndex++];
                     for (auto i : range)
                     {
-                        auto& [coro, iterator, receipt] = contexts[i];
-                        coro.emplace(transaction_executor::execute3Step(executor, storage,
-                            blockHeader, transactions[i], i, ledgerConfig, task::tbb::syncWait));
-                        iterator.emplace(coro->begin());
-                        receipt = *(*iterator);
+                        auto& context = contexts[i];
+                        context.coro.emplace(transaction_executor::execute3Step(executor, storage,
+                            blockHeader, transactions[i], i, ledgerConfig, task::tbb::syncWait,
+                            std::allocator_arg, context.m_allocator));
+                        context.iterator.emplace(context.coro->begin());
+                        context.receipt = *(*context.iterator);
                     }
                     return range;
                 }) &
@@ -85,10 +95,10 @@ task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
                             ittapi::ITT_DOMAINS::instance().STAGE_2);
                         for (auto i : range)
                         {
-                            auto& [coro, iterator, receipt] = contexts[i];
-                            if (!receipt)
+                            auto& context = contexts[i];
+                            if (!context.receipt)
                             {
-                                receipt = *(++(*iterator));
+                                context.receipt = *(++(*context.iterator));
                             }
                         }
                         return range;
@@ -99,12 +109,11 @@ task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
                             ittapi::ITT_DOMAINS::instance().STAGE_3);
                         for (auto i : range)
                         {
-                            auto& [coro, iterator, receipt] = contexts[i];
-                            if (!receipt)
+                            auto& context = contexts[i];
+                            if (!context.receipt)
                             {
-                                receipt = *(++(*iterator));
+                                context.receipt = *(++(*context.iterator));
                             }
-                            coro.reset();
                         }
                     }));
     });

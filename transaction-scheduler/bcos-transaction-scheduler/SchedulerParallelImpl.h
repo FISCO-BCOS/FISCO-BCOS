@@ -152,9 +152,6 @@ constexpr static auto DEFAULT_MAX_CONCURRENCY = 8UL;
 template <class MutableStorageType>
 class SchedulerParallelImpl
 {
-    constexpr static auto DEFAULT_GRAIN_SIZE = 16UL;
-    constexpr static auto DEFAULT_MAX_CONCURRENCY = 8UL;
-
 public:
     constexpr static bool isSchedulerParallelImpl = true;
     using MutableStorage = MutableStorageType;
@@ -349,8 +346,7 @@ task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
         context.init(index, transactions[index], receipts[index]);
     }
 
-    tbb::task_arena arena(
-        tbb::task_arena::constraints{}.set_max_concurrency(scheduler.m_maxConcurrency));
+    tbb::task_arena arena(scheduler.m_maxConcurrency, 1, tbb::task_arena::priority::high);
     arena.execute([&]() {
         auto retryCount = executeSinglePass(scheduler, storage, executor, blockHeader, ledgerConfig,
             contexts, scheduler.m_grainSize);
