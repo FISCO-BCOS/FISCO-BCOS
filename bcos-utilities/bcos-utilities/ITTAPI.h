@@ -38,15 +38,14 @@ struct Report
     ~Report() noexcept { release(); }
     void release() noexcept
     {
-        if (!m_released)
+        if (m_domain != nullptr)
         {
             __itt_task_end(m_domain);
-            m_released = true;
+            m_domain = nullptr;
         }
     }
 
     const __itt_domain* m_domain;
-    bool m_released = false;
 };
 
 // baseline scheduler
@@ -60,25 +59,29 @@ struct ITT_DOMAINS
 
     ITT_DOMAINS() = default;
 
-    const __itt_domain* const ITT_DOMAIN_STORAGE = __itt_domain_create("storage");
-    const __itt_domain* const ITT_DOMAIN_CONSENSUS = __itt_domain_create("consensus");
-    const __itt_domain* const ITT_DOMAIN_SCHEDULER = __itt_domain_create("scheduler");
-    const __itt_domain* const ITT_DOMAIN_EXECUTOR = __itt_domain_create("executor");
+    const __itt_domain* ITT_DOMAIN_STORAGE = __itt_domain_create("storage");
+    const __itt_domain* ITT_DOMAIN_CONSENSUS = __itt_domain_create("consensus");
+    const __itt_domain* ITT_DOMAIN_SCHEDULER = __itt_domain_create("scheduler");
+    const __itt_domain* ITT_DOMAIN_EXECUTOR = __itt_domain_create("executor");
 
-    const __itt_domain* const BASELINE_SCHEDULER = __itt_domain_create("baselineScheduler");
+    const __itt_domain* STORAGE2 = __itt_domain_create("storage2");
+    __itt_string_handle* MERGE_BACKEND = __itt_string_handle_create("mergeBackend");
+    __itt_string_handle* MERGE_CACHE = __itt_string_handle_create("mergeCache");
+
+    const __itt_domain* BASELINE_SCHEDULER = __itt_domain_create("baselineScheduler");
     __itt_string_handle* GET_TRANSACTIONS = __itt_string_handle_create("getTransactions");
     __itt_string_handle* EXECUTE_BLOCK = __itt_string_handle_create("executeBlock");
     __itt_string_handle* FINISH_EXECUTE = __itt_string_handle_create("finishExecute");
     __itt_string_handle* COMMIT_BLOCK = __itt_string_handle_create("commitBlock");
     __itt_string_handle* NOTIFY_RESULTS = __itt_string_handle_create("notifyResults");
 
-    const __itt_domain* const BASE_SCHEDULER = __itt_domain_create("baseScheduler");
+    const __itt_domain* BASE_SCHEDULER = __itt_domain_create("baseScheduler");
     __itt_string_handle* SET_BLOCK = __itt_string_handle_create("setBlock");
     __itt_string_handle* MERGE_STATE = __itt_string_handle_create("mergeState");
     __itt_string_handle* STORE_TRANSACTION_RECEIPTS =
         __itt_string_handle_create("storeTransactionsAndReceipts");
 
-    const __itt_domain* const SERIAL_SCHEDULER = __itt_domain_create("serialScheduler");
+    const __itt_domain* SERIAL_SCHEDULER = __itt_domain_create("serialScheduler");
     __itt_string_handle* SERIAL_EXECUTE = __itt_string_handle_create("serialExecute");
     __itt_string_handle* STAGE_1 = __itt_string_handle_create("stage1");
     __itt_string_handle* STAGE_2 = __itt_string_handle_create("stage2");
@@ -88,7 +91,7 @@ struct ITT_DOMAINS
     __itt_string_handle* STAGE_6 = __itt_string_handle_create("stage6");
     __itt_string_handle* STAGE_7 = __itt_string_handle_create("stage7");
 
-    const __itt_domain* const PARALLEL_SCHEDULER = __itt_domain_create("parallelScheduler");
+    const __itt_domain* PARALLEL_SCHEDULER = __itt_domain_create("parallelScheduler");
     __itt_string_handle* PARALLEL_EXECUTE = __itt_string_handle_create("parallelExecute");
     __itt_string_handle* SINGLE_PASS = __itt_string_handle_create("singlePass");
     __itt_string_handle* DETECT_RAW = __itt_string_handle_create("detectRAW");
@@ -100,10 +103,10 @@ struct ITT_DOMAINS
     __itt_string_handle* MERGE_CHUNK = __itt_string_handle_create("mergeChunk");
     __itt_string_handle* MERGE_LAST_CHUNK = __itt_string_handle_create("mergeLastChunk");
 
-    const __itt_domain* const TRANSACTION_POOL = __itt_domain_create("transactionPool");
+    const __itt_domain* TRANSACTION_POOL = __itt_domain_create("transactionPool");
     __itt_string_handle* SUBMIT_TRANSACTION = __itt_string_handle_create("submitTransaction");
 
-    const __itt_domain* const TRANSACTION = __itt_domain_create("transaction");
+    const __itt_domain* TRANSACTION = __itt_domain_create("transaction");
     __itt_string_handle* VERIFY_TRANSACTION = __itt_string_handle_create("verifyTransaction");
 };
 }  // namespace bcos::ittapi
