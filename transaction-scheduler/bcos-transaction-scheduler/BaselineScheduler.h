@@ -449,17 +449,28 @@ private:
 
             result.m_block->setBlockHeader(header);
             auto lastStorage = backStorage(scheduler.m_multiLayerStorage.get());
-            if (result.m_block->blockHeaderConst()->number() != 0)
-            {
-                ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
-                    ittapi::ITT_DOMAINS::instance().SET_BLOCK);
 
-                co_await ledger::prewriteBlock(scheduler.m_ledger.get(), result.m_transactions,
-                    result.m_block, false, *lastStorage);
-            }
-            auto mergedStorage = co_await mergeBackStorage(scheduler.m_multiLayerStorage.get());
-            co_await ledger::storeTransactionsAndReceipts(
-                scheduler.m_ledger.get(), result.m_transactions, result.m_block);
+            tbb::parallel_invoke(
+                [&]() {
+                    if (result.m_block->blockHeaderConst()->number() != 0)
+                    {
+                        ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
+                            ittapi::ITT_DOMAINS::instance().SET_BLOCK);
+                        task::tbb::syncWait(ledger::prewriteBlock(scheduler.m_ledger.get(),
+                            result.m_transactions, result.m_block, false, *lastStorage));
+                    }
+                },
+                [&]() {
+                    ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
+                        ittapi::ITT_DOMAINS::instance().MERGE_STATE);
+                    task::tbb::syncWait(mergeBackStorage(scheduler.m_multiLayerStorage.get()));
+                },
+                [&]() {
+                    ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
+                        ittapi::ITT_DOMAINS::instance().STORE_TRANSACTION_RECEIPTS);
+                    task::tbb::syncWait(ledger::storeTransactionsAndReceipts(
+                        scheduler.m_ledger.get(), result.m_transactions, result.m_block));
+                });
 
             auto ledgerConfig = co_await ledger::getLedgerConfig(scheduler.m_ledger.get());
             ledgerConfig->setHash(header->hash());

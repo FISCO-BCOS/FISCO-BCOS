@@ -75,6 +75,8 @@ struct ITT_DOMAINS
     const __itt_domain* const BASE_SCHEDULER = __itt_domain_create("baseScheduler");
     __itt_string_handle* SET_BLOCK = __itt_string_handle_create("setBlock");
     __itt_string_handle* MERGE_STATE = __itt_string_handle_create("mergeState");
+    __itt_string_handle* STORE_TRANSACTION_RECEIPTS =
+        __itt_string_handle_create("storeTransactionsAndReceipts");
 
     const __itt_domain* const SERIAL_SCHEDULER = __itt_domain_create("serialScheduler");
     __itt_string_handle* SERIAL_EXECUTE = __itt_string_handle_create("serialExecute");

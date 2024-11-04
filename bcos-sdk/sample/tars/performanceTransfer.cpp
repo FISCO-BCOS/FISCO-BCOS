@@ -106,7 +106,7 @@ std::vector<std::atomic_long> query(bcos::sdk::RPCClient& rpcClient,
 
 int issue(bcos::sdk::RPCClient& rpcClient, std::shared_ptr<bcos::crypto::CryptoSuite> cryptoSuite,
     std::shared_ptr<bcos::crypto::KeyPairInterface> keyPair, std::string contractAddress,
-    int userCount, [[maybe_unused]] int qps, std::vector<std::atomic_long>& balances)
+    int userCount, int qps, std::vector<std::atomic_long>& balances)
 {
     bcostars::protocol::TransactionFactoryImpl transactionFactory(cryptoSuite);
     boost::latch latch(userCount);
