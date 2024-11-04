@@ -21,7 +21,7 @@
 #include <string>
 #include <thread>
 
-std::atomic_long blockNumber = 0;
+std::atomic_long g_blockNumber = 0;
 constexpr static long blockLimit = 900;
 constexpr static int64_t initialValue = 1000000000;
 const static std::string DAG_TRANSFER_ADDRESS = "000000000000000000000000000000000000100c";
@@ -68,7 +68,7 @@ std::vector<std::atomic_long> query(bcos::sdk::RPCClient& rpcClient,
                 input = abiCodec.abiIn("balance(address)", bcos::Address(it));
             }
             auto transaction = transactionFactory.createTransaction(0, contractAddress, input,
-                rpcClient.generateNonce(), blockNumber + blockLimit, "chain0", "group0", 0);
+                rpcClient.generateNonce(), g_blockNumber + blockLimit, "chain0", "group0", 0);
 
             handles[it].emplace(rpcClient);
             auto& call = *(handles[it]);
@@ -131,7 +131,7 @@ int issue(bcos::sdk::RPCClient& rpcClient, std::shared_ptr<bcos::crypto::CryptoS
                     "issue(address,int256)", bcos::Address(it), bcos::s256(initialValue));
             }
             auto transaction = transactionFactory.createTransaction(0, contractAddress, input,
-                rpcClient.generateNonce(), blockNumber + blockLimit, "chain0", "group0", 0,
+                rpcClient.generateNonce(), g_blockNumber + blockLimit, "chain0", "group0", 0,
                 *keyPair);
             transaction->setAttribute(bcos::protocol::Transaction::Attribute::EVM_ABI_CODEC |
                                       bcos::protocol::Transaction::Attribute::DAG);
@@ -190,7 +190,7 @@ void perfQuery(bcos::sdk::RPCClient& rpcClient,
                 input = abiCodec.abiIn("balance(address)", bcos::Address(userIndex));
             }
             auto transaction = transactionFactory.createTransaction(0, contractAddress, input,
-                rpcClient.generateNonce(), blockNumber + blockLimit, "chain0", "group0", 0);
+                rpcClient.generateNonce(), g_blockNumber + blockLimit, "chain0", "group0", 0);
 
             handles[it].emplace(rpcClient);
             auto& call = *(handles[it]);
@@ -234,7 +234,7 @@ void loopFetchBlockNumber(std::stop_token& token, bcos::sdk::RPCClient& rpcClien
     {
         try
         {
-            blockNumber = bcos::sdk::BlockNumber(rpcClient).send().get();
+            g_blockNumber = bcos::sdk::BlockNumber(rpcClient).send().get();
         }
         catch (std::exception& e)
         {
@@ -299,7 +299,7 @@ int main(int argc, char* argv[])
     {
         bcos::bytes deployBin = bcos::sample::getContractBin();
         auto deployTransaction = transactionFactory.createTransaction(0, "", deployBin,
-            rpcClient.generateNonce(), blockNumber + blockLimit, "chain0", "group0", 0, *keyPair,
+            rpcClient.generateNonce(), g_blockNumber + blockLimit, "chain0", "group0", 0, *keyPair,
             std::string{bcos::sample::getContractABI()});
         auto receipt = bcos::sdk::SendTransaction(rpcClient).send(*deployTransaction).get();
 
