@@ -29,7 +29,7 @@ public:
     struct Record
     {
         StateKey key;
-        task::AwaitableReturnType<std::invoke_result_t<decltype(storage2::readOne), Storage&,
+        task::AwaitableReturnType<std::invoke_result_t<storage2::ReadOne, Storage&,
             typename Storage::Key, storage2::DIRECT_TYPE>>
             oldValue;
     };

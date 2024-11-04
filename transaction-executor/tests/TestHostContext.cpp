@@ -32,6 +32,7 @@
 using namespace bcos::task;
 using namespace bcos::storage2;
 using namespace bcos::transaction_executor;
+using namespace bcos::transaction_executor::hostcontext;
 
 class TestHostContextFixture
 {

@@ -40,7 +40,7 @@ struct MockScheduler
         transaction_scheduler::tag_t<transaction_scheduler::executeBlock> /*unused*/,
         MockScheduler& /*unused*/, auto& storage, auto& executor,
         protocol::BlockHeader const& blockHeader, RANGES::input_range auto const& transactions,
-        ledger::LedgerConfig const&)
+        ledger::LedgerConfig const& /*unused*/)
     {
         auto receipts =
             RANGES::iota_view<size_t, size_t>(0, RANGES::size(transactions)) |

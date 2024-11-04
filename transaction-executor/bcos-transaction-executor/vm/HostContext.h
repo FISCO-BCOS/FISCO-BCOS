@@ -59,7 +59,7 @@
 #include <string_view>
 #include <variant>
 
-namespace bcos::transaction_executor
+namespace bcos::transaction_executor::hostcontext
 {
 
 #define HOST_CONTEXT_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("HOST_CONTEXT")
@@ -225,10 +225,10 @@ public:
     {}
 
     ~HostContext() noexcept = default;
-    HostContext(HostContext const&) = delete;
-    HostContext& operator=(HostContext const&) = delete;
-    HostContext(HostContext&&) = delete;
-    HostContext& operator=(HostContext&&) = delete;
+    HostContext(HostContext const&) = default;
+    HostContext& operator=(HostContext const&) = default;
+    HostContext(HostContext&&) noexcept = default;
+    HostContext& operator=(HostContext&&) noexcept = default;
 
     friend auto getAccount(HostContext& hostContext, const evmc_address& address)
     {
@@ -695,4 +695,4 @@ private:
     }
 };
 
-}  // namespace bcos::transaction_executor
+}  // namespace bcos::transaction_executor::hostcontext
