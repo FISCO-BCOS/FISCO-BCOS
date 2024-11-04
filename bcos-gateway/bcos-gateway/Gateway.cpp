@@ -196,14 +196,14 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, int _moduleI
 
     message->setPacketType(GatewayMessageType::PeerToPeerMessage);
     message->setSeq(m_p2pInterface->messageFactory()->newSeq());
-    message->setPayload(std::make_shared<bytes>(_payload.begin(), _payload.end()));
+    message->setPayload({_payload.begin(), _payload.end()});
     message->setExtAttributes(msgExtAttr);
 
     auto options = message->options();
-    options->setGroupID(_groupID);
-    options->setModuleID(_moduleID);
-    options->setSrcNodeID(std::make_shared<bytes>(_srcNodeID->encode()));
-    options->dstNodeIDs().push_back(std::make_shared<bytes>(_dstNodeID->encode()));
+    options.setGroupID(_groupID);
+    options.setModuleID(_moduleID);
+    options.setSrcNodeID(std::make_shared<bytes>(_srcNodeID->encode()));
+    options.mutableDstNodeIDs().push_back(std::make_shared<bytes>(_dstNodeID->encode()));
 
     auto retry = std::make_shared<Retry>(std::move(_srcNodeID), std::move(_dstNodeID),
         std::move(message), m_p2pInterface, std::move(_errorRespFunc), _moduleID);
@@ -258,12 +258,12 @@ void Gateway::asyncSendBroadcastMessage(uint16_t _type, const std::string& _grou
     message->setPacketType(GatewayMessageType::BroadcastMessage);
     message->setExt(_type);
     message->setSeq(m_p2pInterface->messageFactory()->newSeq());
-    message->setPayload(std::make_shared<bytes>(_payload.begin(), _payload.end()));
+    message->setPayload({_payload.begin(), _payload.end()});
 
     auto options = message->options();
-    options->setGroupID(_groupID);
-    options->setSrcNodeID(std::make_shared<bytes>(_srcNodeID->encode()));
-    options->setModuleID(_moduleID);
+    options.setGroupID(_groupID);
+    options.setSrcNodeID(std::make_shared<bytes>(_srcNodeID->encode()));
+    options.setModuleID(_moduleID);
 
     auto msgExtAttr = std::make_shared<GatewayMessageExtAttributes>();
     msgExtAttr->setGroupID(_groupID);
@@ -374,11 +374,11 @@ void Gateway::onReceiveP2PMessage(
 
     auto options = _msg->options();
     auto msgPayload = _msg->payload();
-    auto payload = bytesConstRef(msgPayload->data(), msgPayload->size());
+    auto payload = bytesConstRef(msgPayload.data(), msgPayload.size());
     // groupID
-    auto groupID = options->groupID();
+    auto groupID = options.groupID();
     // moduleID
-    auto moduleID = options->moduleID();
+    auto moduleID = options.moduleID();
 
 
     // Notice: moduleID not set the previous version, try to decode from front message
@@ -419,8 +419,8 @@ void Gateway::onReceiveP2PMessage(
         }
     }
 
-    auto srcNodeID = options->srcNodeID();
-    const auto& dstNodeIDs = options->dstNodeIDs();
+    auto srcNodeID = options.srcNodeID();
+    const auto& dstNodeIDs = options.dstNodeIDs();
     auto srcNodeIDPtr = m_gatewayNodeManager->keyFactory()->createKey(*srcNodeID);
     auto dstNodeIDPtr = m_gatewayNodeManager->keyFactory()->createKey(*dstNodeIDs[0]);
     auto gateway = std::weak_ptr<Gateway>(shared_from_this());
@@ -463,16 +463,16 @@ void Gateway::onReceiveBroadcastMessage(
     auto payload = _msg->payload();
 
     // groupID
-    auto groupID = options->groupID();
+    auto groupID = options.groupID();
     // moduleID
-    uint16_t moduleID = options->moduleID();
+    uint16_t moduleID = options.moduleID();
 
 
     // Notice: moduleID not set the previous version, try to decode from front message
     if (moduleID == 0)
     {
         moduleID =
-            front::FrontMessage::tryDecodeModuleID(bytesConstRef(payload->data(), payload->size()));
+            front::FrontMessage::tryDecodeModuleID(bytesConstRef(payload.data(), payload.size()));
     }
 
     if (moduleID == 0)
@@ -480,7 +480,7 @@ void Gateway::onReceiveBroadcastMessage(
         GATEWAY_LOG(TRACE) << LOG_BADGE("onReceiveBroadcastMessage")
                            << LOG_DESC("front message module id not found")
                            << LOG_KV("groupID", groupID) << LOG_KV("moduleID", moduleID)
-                           << LOG_KV("seq", _msg->seq()) << LOG_KV("payload size", payload->size());
+                           << LOG_KV("seq", _msg->seq()) << LOG_KV("payload size", payload.size());
     }
 
     // Readonly filter
@@ -509,11 +509,11 @@ void Gateway::onReceiveBroadcastMessage(
     }
 
     auto srcNodeIDPtr =
-        m_gatewayNodeManager->keyFactory()->createKey(*(_msg->options()->srcNodeID()));
+        m_gatewayNodeManager->keyFactory()->createKey(*(_msg->options().srcNodeID()));
 
     auto type = _msg->ext();
     m_gatewayNodeManager->localRouterTable()->asyncBroadcastMsg(type, groupID, moduleID,
-        srcNodeIDPtr, bytesConstRef(_msg->payload()->data(), _msg->payload()->size()));
+        srcNodeIDPtr, bytesConstRef(_msg->payload().data(), _msg->payload().size()));
 }
 
 void bcos::gateway::Gateway::enableReadOnlyMode()

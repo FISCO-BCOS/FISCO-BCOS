@@ -271,7 +271,7 @@ public:
         bcos::group::GroupInfo::Ptr _groupInfo, std::function<void(Error::Ptr&&)> function) override
     {}
     void asyncSendMessageByTopic(const std::string& _topic, bcos::bytesConstRef _data,
-        std::function<void(bcos::Error::Ptr&&, int16_t, bytesPointer)> _respFunc) override
+        std::function<void(bcos::Error::Ptr&&, int16_t, bytesConstRef)> _respFunc) override
     {}
     void asyncSendBroadcastMessageByTopic(
         const std::string& _topic, bcos::bytesConstRef _data) override

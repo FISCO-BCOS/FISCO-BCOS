@@ -119,9 +119,10 @@ void Service::heartBeat()
         }
         SERVICE_LOG(DEBUG) << LOG_DESC("heartBeat try to reconnect")
                            << LOG_KV("endpoint", it.first);
-        m_host->asyncConnect(
-            it.first, std::bind(&Service::onConnect, shared_from_this(), std::placeholders::_1,
-                          std::placeholders::_2, std::placeholders::_3));
+        m_host->asyncConnect(it.first,
+            [service = shared_from_this()](auto error, const P2PInfo& p2pInfo, auto session) {
+                service->onConnect(std::move(error), p2pInfo, std::move(session));
+            });
     }
 
     std::unordered_map<P2pID, P2PSession::Ptr> sessions;
@@ -319,7 +320,7 @@ void Service::sendRespMessageBySession(
 
     respMessage->setSeq(_p2pMessage->seq());
     respMessage->setRespPacket();
-    respMessage->setPayload(std::make_shared<bytes>(_payload.begin(), _payload.end()));
+    respMessage->setPayload({_payload.begin(), _payload.end()});
 
     sendMessageToSession(_p2pSession, respMessage);
     SERVICE_LOG(TRACE) << "sendRespMessageBySession" << LOG_KV("seq", _p2pMessage->seq())
@@ -610,7 +611,7 @@ std::shared_ptr<P2PMessage> Service::newP2PMessage(uint16_t _type, bytesConstRef
 
     message->setPacketType(_type);
     message->setSeq(messageFactory()->newSeq());
-    message->setPayload(std::make_shared<bytes>(_payload.begin(), _payload.end()));
+    message->setPayload({_payload.begin(), _payload.end()});
     return message;
 }
 
@@ -623,7 +624,7 @@ void Service::asyncSendMessageByP2PNodeID(uint16_t _type, P2pID _dstNodeID, byte
         {
             auto errorMsg =
                 "send message to " + _dstNodeID + " failed for no connection established";
-            _callback(BCOS_ERROR_PTR(-1, errorMsg), 0, nullptr);
+            _callback(BCOS_ERROR_PTR(-1, errorMsg), 0, {});
         }
         return;
     }
@@ -647,8 +648,8 @@ void Service::asyncSendMessageByP2PNodeID(uint16_t _type, P2pID _dstNodeID, byte
                                   << LOG_KV("type", packetType) << LOG_KV("dst", _dstNodeID);
                 if (_callback)
                 {
-                    _callback(
-                        _e.toError(), packetType, _p2pMessage ? _p2pMessage->payload() : nullptr);
+                    _callback(_e.toError(), packetType,
+                        _p2pMessage ? _p2pMessage->payload() : bytesConstRef{});
                 }
                 return;
             }
@@ -679,15 +680,15 @@ void Service::asyncSendMessageByP2PNodeIDs(
 // send the protocolInfo
 void Service::asyncSendProtocol(P2PSession::Ptr _session)
 {
-    auto payload = std::make_shared<bytes>();
-    m_codec->encode(m_localProtocol, *payload);
+    auto payload = bytes();
+    m_codec->encode(m_localProtocol, payload);
     auto message = std::static_pointer_cast<P2PMessage>(messageFactory()->buildMessage());
     message->setPacketType(GatewayMessageType::Handshake);
     auto seq = messageFactory()->newSeq();
     message->setSeq(seq);
     message->setPayload(payload);
 
-    SERVICE_LOG(INFO) << LOG_DESC("asyncSendProtocol") << LOG_KV("payload", payload->size())
+    SERVICE_LOG(INFO) << LOG_DESC("asyncSendProtocol") << LOG_KV("payload", payload.size())
                       << LOG_KV("seq", seq);
     sendMessageToSession(_session, message, Options(), nullptr);
 }
@@ -720,7 +721,7 @@ void Service::onReceiveProtocol(
     try
     {
         auto payload = _message->payload();
-        auto protocolInfo = m_codec->decode(bytesConstRef(payload->data(), payload->size()));
+        auto protocolInfo = m_codec->decode(bytesConstRef(payload.data(), payload.size()));
         // negotiated version
         if (protocolInfo->minVersion() > m_localProtocol->maxVersion() ||
             protocolInfo->maxVersion() < m_localProtocol->minVersion())

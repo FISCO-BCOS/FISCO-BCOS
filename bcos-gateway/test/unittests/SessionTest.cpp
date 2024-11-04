@@ -139,7 +139,7 @@ public:
             }
         }
 
-        m_payload->assign(_buffer.begin(), _buffer.begin() + length);
+        m_payload.assign(_buffer.begin(), _buffer.begin() + length);
         return length;
     }
 };

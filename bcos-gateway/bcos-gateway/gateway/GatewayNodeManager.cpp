@@ -105,8 +105,8 @@ void GatewayNodeManager::onReceiveStatusSeq(
                                   << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what());
         return;
     }
-    auto statusSeq = boost::asio::detail::socket_ops::network_to_host_long(
-        *((uint32_t*)_msg->payload()->data()));
+    auto statusSeq =
+        boost::asio::detail::socket_ops::network_to_host_long(*((uint32_t*)_msg->payload().data()));
     auto const& from = (_msg->srcP2PNodeID().size() > 0) ? _msg->srcP2PNodeID() : _session->p2pID();
     auto statusSeqChanged = statusChanged(from, statusSeq);
     if (!statusSeqChanged)
@@ -141,7 +141,7 @@ void GatewayNodeManager::onReceiveNodeStatus(
         return;
     }
     auto gatewayNodeStatus = m_gatewayNodeStatusFactory->createGatewayNodeStatus();
-    gatewayNodeStatus->decode(bytesConstRef(_msg->payload()->data(), _msg->payload()->size()));
+    gatewayNodeStatus->decode(bytesConstRef(_msg->payload().data(), _msg->payload().size()));
     auto const& from = (!_msg->srcP2PNodeID().empty()) ? _msg->srcP2PNodeID() : _session->p2pID();
 
     NODE_MANAGER_LOG(INFO) << LOG_DESC("onReceiveNodeStatus") << LOG_KV("from", from)
@@ -279,7 +279,7 @@ void GatewayNodeManager::broadcastStatusSeq()
     message->setPacketType(GatewayMessageType::SyncNodeSeq);
     auto seq = statusSeq();
     auto statusSeq = boost::asio::detail::socket_ops::host_to_network_long(seq);
-    auto payload = std::make_shared<bytes>((byte*)&statusSeq, (byte*)&statusSeq + 4);
+    auto payload = bytes((byte*)&statusSeq, (byte*)&statusSeq + 4);
     message->setPayload(payload);
     NODE_MANAGER_LOG(TRACE) << LOG_DESC("broadcastStatusSeq") << LOG_KV("seq", seq);
     m_p2pInterface->asyncBroadcastMessage(message, Options());
