@@ -199,11 +199,12 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, int _moduleI
     message->setPayload({_payload.begin(), _payload.end()});
     message->setExtAttributes(msgExtAttr);
 
-    auto options = message->options();
+    P2PMessageOptions options;
     options.setGroupID(_groupID);
     options.setModuleID(_moduleID);
     options.setSrcNodeID(std::make_shared<bytes>(_srcNodeID->encode()));
     options.mutableDstNodeIDs().push_back(std::make_shared<bytes>(_dstNodeID->encode()));
+    message->setOptions(std::move(options));
 
     auto retry = std::make_shared<Retry>(std::move(_srcNodeID), std::move(_dstNodeID),
         std::move(message), m_p2pInterface, std::move(_errorRespFunc), _moduleID);
@@ -260,10 +261,11 @@ void Gateway::asyncSendBroadcastMessage(uint16_t _type, const std::string& _grou
     message->setSeq(m_p2pInterface->messageFactory()->newSeq());
     message->setPayload({_payload.begin(), _payload.end()});
 
-    auto options = message->options();
+    P2PMessageOptions options;
     options.setGroupID(_groupID);
     options.setSrcNodeID(std::make_shared<bytes>(_srcNodeID->encode()));
     options.setModuleID(_moduleID);
+    message->setOptions(std::move(options));
 
     auto msgExtAttr = std::make_shared<GatewayMessageExtAttributes>();
     msgExtAttr->setGroupID(_groupID);
@@ -372,7 +374,7 @@ void Gateway::onReceiveP2PMessage(
         return;
     }
 
-    auto options = _msg->options();
+    const auto& options = _msg->options();
     auto msgPayload = _msg->payload();
     auto payload = bytesConstRef(msgPayload.data(), msgPayload.size());
     // groupID
@@ -459,7 +461,7 @@ void Gateway::onReceiveBroadcastMessage(
         return;
     }
 
-    auto options = _msg->options();
+    const auto& options = _msg->options();
     auto payload = _msg->payload();
 
     // groupID
