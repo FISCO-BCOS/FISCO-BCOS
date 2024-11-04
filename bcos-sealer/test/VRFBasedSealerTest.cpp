@@ -58,7 +58,7 @@ struct TestSealerFixture
         ledger->ledgerConfig()->setBlockTxCountLimit(1000);
         txpool::TxPoolFactory factory(keyPair->publicKey(), cryptoSuite,
             std::make_shared<protocol::TransactionSubmitResultFactoryImpl>(), blockFactory, nullptr,
-            ledger, "", "", 1000);
+            ledger, "", "", 1000, bcos::txpool::DEFAULT_POOL_LIMIT, true);
         txpool = factory.createTxPool();
         txpool->init();
     }

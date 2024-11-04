@@ -285,7 +285,7 @@ public:
     };
     TarsRPCConfig const& tarsRPCConfig() const { return m_tarsRPCConfig; }
 
-    bool checkTransactionSig() const;
+    bool checkTransactionSignature() const;
     bool checkParallelConflict() const;
 
     ledger::GenesisConfig const& genesisConfig() const;
@@ -493,7 +493,7 @@ private:
     int64_t checkAndGetValue(const boost::property_tree::ptree& _pt, const std::string& _key);
 
     // experimental
-    bool m_checkTransactionSig = true;
+    bool m_checkTransactionSignature = true;
     bool m_checkParallelConflict = true;
 };
 

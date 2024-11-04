@@ -128,7 +128,7 @@ bcos::crypto::NodeIDPtr SyncTreeTopology::getNodeIDByIndex(std::int32_t _nodeInd
 
 // select the child nodes by tree
 bcos::crypto::NodeIDSetPtr SyncTreeTopology::recursiveSelectChildNodes(
-    std::int32_t _parentIndex, bcos::crypto::NodeIDSetPtr const& _peers, std::int32_t _startIndex)
+    std::int32_t _parentIndex, bcos::crypto::NodeIDSet const& _peers, std::int32_t _startIndex)
 {
     // if the node doesn't locate in the group
     if (!locatedInGroup())
@@ -140,8 +140,7 @@ bcos::crypto::NodeIDSetPtr SyncTreeTopology::recursiveSelectChildNodes(
 
 // select the parent nodes by tree
 bcos::crypto::NodeIDSetPtr SyncTreeTopology::selectParentNodes(
-    bcos::crypto::NodeIDSetPtr const& _peers, std::int32_t _nodeIndex, std::int32_t _startIndex,
-    bool)
+    bcos::crypto::NodeIDSet const& _peers, std::int32_t _nodeIndex, std::int32_t _startIndex, bool)
 {
     // if the node doesn't locate in the group
     if (!locatedInGroup())
@@ -154,7 +153,7 @@ bcos::crypto::NodeIDSetPtr SyncTreeTopology::selectParentNodes(
         auto selectedNodeSet = std::make_shared<bcos::crypto::NodeIDSet>();
         for (auto const& [idx, consNode] : *m_consensusNodes | RANGES::views::enumerate)
         {
-            if (_peers->contains(consNode) && static_cast<std::uint64_t>(m_consIndex) != idx)
+            if (_peers.contains(consNode) && static_cast<std::uint64_t>(m_consIndex) != idx)
             {
                 selectedNodeSet->insert(consNode);
             }
@@ -166,7 +165,7 @@ bcos::crypto::NodeIDSetPtr SyncTreeTopology::selectParentNodes(
 }
 
 bcos::crypto::NodeIDSetPtr SyncTreeTopology::selectNodesForBlockSync(
-    bcos::crypto::NodeIDSetPtr const& _peers)
+    bcos::crypto::NodeIDSet const& _peers)
 {
     Guard lock(m_mutex);
     auto selectedNodeSet = std::make_shared<bcos::crypto::NodeIDSet>();
