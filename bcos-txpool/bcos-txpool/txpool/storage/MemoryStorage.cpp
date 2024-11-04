@@ -405,7 +405,11 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
     }
 
     // verify the transaction
-    result = m_config->txValidator()->verify(transaction);
+    if (m_config->checkTransactionSignature())
+    {
+        result = m_config->txValidator()->verify(transaction);
+    }
+
     m_inRateCollector.update(1, true);
     if (result == TransactionStatus::None)
     {

@@ -422,7 +422,7 @@ bool TransactionSync::importDownloadedTxs(TransactionsPtr _txs, Block::Ptr _veri
             const tbb::blocked_range<size_t>& _range) {
             for (size_t i = _range.begin(); i < _range.end(); i++)
             {
-                auto tx = (*_txs)[i];
+                auto& tx = (*_txs)[i];
                 if (!tx)
                 {
                     continue;
@@ -436,18 +436,21 @@ bool TransactionSync::importDownloadedTxs(TransactionsPtr _txs, Block::Ptr _veri
                 {
                     continue;
                 }
-                try
+                if (m_checkTransactionSignature)
                 {
-                    // verify failed, it will throw exception
-                    tx->verify(*m_hashImpl, *m_signatureImpl);
-                }
-                catch (std::exception const& e)
-                {
-                    tx->setInvalid(true);
-                    SYNC_LOG(WARNING) << LOG_DESC("verify sender for tx failed")
-                                      << LOG_KV("reason", boost::diagnostic_information(e))
-                                      << LOG_KV("hash", tx->hash().abridged());
-                    verifySuccess = false;
+                    try
+                    {
+                        // verify failed, it will throw exception
+                        tx->verify(*m_hashImpl, *m_signatureImpl);
+                    }
+                    catch (std::exception const& e)
+                    {
+                        tx->setInvalid(true);
+                        SYNC_LOG(WARNING) << LOG_DESC("verify sender for tx failed")
+                                          << LOG_KV("reason", boost::diagnostic_information(e))
+                                          << LOG_KV("hash", tx->hash().abridged());
+                        verifySuccess = false;
+                    }
                 }
             }
         });
