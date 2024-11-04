@@ -13,7 +13,8 @@ using namespace bcos;
 using namespace bcos::gateway;
 using namespace std;
 
-void ASIOInterface::asyncResolveConnect(std::shared_ptr<SocketFace> socket, Handler_Type handler)
+void ASIOInterface::asyncResolveConnect(
+    const std::shared_ptr<SocketFace>& socket, Handler_Type handler)
 {
     auto protocol = socket->nodeIPEndpoint().isIPv6() ? bi::tcp::tcp::v6() : bi::tcp::tcp::v4();
     m_resolver->async_resolve(protocol, socket->nodeIPEndpoint().address(),
