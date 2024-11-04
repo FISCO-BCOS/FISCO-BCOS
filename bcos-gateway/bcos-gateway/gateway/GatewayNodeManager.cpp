@@ -279,8 +279,7 @@ void GatewayNodeManager::broadcastStatusSeq()
     message->setPacketType(GatewayMessageType::SyncNodeSeq);
     auto seq = statusSeq();
     auto statusSeq = boost::asio::detail::socket_ops::host_to_network_long(seq);
-    auto payload = bytes((byte*)&statusSeq, (byte*)&statusSeq + 4);
-    message->setPayload(payload);
+    message->setPayload({(byte*)&statusSeq, (byte*)&statusSeq + 4});
     NODE_MANAGER_LOG(TRACE) << LOG_DESC("broadcastStatusSeq") << LOG_KV("seq", seq);
     m_p2pInterface->asyncBroadcastMessage(message, Options());
 }
