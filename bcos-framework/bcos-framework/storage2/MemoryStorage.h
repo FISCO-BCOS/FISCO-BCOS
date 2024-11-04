@@ -19,6 +19,13 @@
 namespace bcos::storage2::memory_storage
 {
 
+struct NullLock
+{
+    NullLock(auto&&... /*unused*/) {}
+    constexpr bool try_acquire(auto&&... /*unused*/) { return true; }
+    constexpr void release() {}
+};
+
 template <class Object>
 concept HasMemberSize = requires(Object object) {
     { object.size() } -> std::integral;
@@ -58,17 +65,17 @@ public:
     constexpr static bool withConcurrent = (attribute & Attribute::CONCURRENT) != 0;
     constexpr static bool withLRU = (attribute & Attribute::LRU) != 0;
     constexpr static bool withLogicalDeletion = (attribute & Attribute::LOGICAL_DELETION) != 0;
-
-    constexpr static unsigned BUCKETS_COUNT = 64;  // Magic number 64
-    constexpr unsigned getBucketSize() { return withConcurrent ? BUCKETS_COUNT : 1; }
+    constexpr unsigned getBucketSize()
+    {
+        return withConcurrent ? std::thread::hardware_concurrency() * 2 : 1;
+    }
 
     static_assert(withOrdered || !std::is_void_v<HasherType>);
     static_assert(!withConcurrent || !std::is_void_v<BucketHasherType>);
 
     constexpr static unsigned DEFAULT_CAPACITY = 32 * 1024 * 1024;  // For mru
-    using Mutex =
-        std::conditional_t<withConcurrent, typename tbb::spin_rw_mutex, tbb::null_rw_mutex>;
-    using Lock = typename Mutex::scoped_lock;
+    using Mutex = std::conditional_t<withConcurrent, tbb::spin_rw_mutex, Empty>;
+    using Lock = std::conditional_t<withConcurrent, tbb::spin_rw_mutex::scoped_lock, NullLock>;
     using DataValue = std::conditional_t<withLogicalDeletion, std::optional<ValueType>, ValueType>;
 
     struct Data
@@ -101,11 +108,11 @@ public:
     using Value = ValueType;
     using BucketHasher = BucketHasherType;
 
-    MemoryStorage(unsigned buckets = BUCKETS_COUNT, int64_t capacity = DEFAULT_CAPACITY)
+    MemoryStorage(unsigned buckets = 0, int64_t capacity = DEFAULT_CAPACITY)
     {
         if constexpr (withConcurrent)
         {
-            m_buckets = decltype(m_buckets)(std::min(buckets, getBucketSize()));
+            m_buckets = decltype(m_buckets)(buckets == 0 ? getBucketSize() : buckets);
         }
         if constexpr (withLRU)
         {
@@ -139,35 +146,37 @@ public:
 
     friend Bucket& getBucket(MemoryStorage& storage, auto const& key) noexcept
     {
-        if constexpr (!MemoryStorage::withConcurrent)
+        if constexpr (!withConcurrent)
         {
             return storage.m_buckets[0];
         }
-        auto index = getBucketIndex(storage, key);
-
-        auto& bucket = storage.m_buckets[index];
-        return bucket;
-    }
-
-    friend void updateLRUAndCheck(MemoryStorage& storage, Bucket& bucket,
-        Container::template nth_index<0>::type::iterator entryIt)
-        requires withLRU
-    {
-        auto& index = bucket.container.template get<1>();
-        auto seqIt = index.iterator_to(*entryIt);
-        index.relocate(index.end(), seqIt);
-
-        while (bucket.capacity > storage.m_maxCapacity && !bucket.container.empty())
+        else
         {
-            auto const& item = index.front();
-            bucket.capacity -= (getSize(item.key) + getSize(item.value));
-            index.pop_front();
+            auto index = getBucketIndex(storage, key);
+            return storage.m_buckets[index];
         }
     }
 };
 
 template <class Storage>
 concept IsMemoryStorage = std::remove_cvref_t<Storage>::isMemoryStorage;
+
+template <IsMemoryStorage MemoryStorage>
+void updateLRUAndCheck(MemoryStorage& storage, typename MemoryStorage::Bucket& bucket,
+    typename MemoryStorage::Container::template nth_index<0>::type::iterator entryIt)
+    requires MemoryStorage::withLRU
+{
+    auto& index = bucket.container.template get<1>();
+    auto seqIt = index.iterator_to(*entryIt);
+    index.relocate(index.end(), seqIt);
+
+    while (bucket.capacity > storage.m_maxCapacity && !bucket.container.empty())
+    {
+        auto const& item = index.front();
+        bucket.capacity -= (getSize(item.key) + getSize(item.value));
+        index.pop_front();
+    }
+}
 
 template <IsMemoryStorage MemoryStorage>
 auto tag_invoke(bcos::storage2::tag_t<readSome> /*unused*/, MemoryStorage& storage,

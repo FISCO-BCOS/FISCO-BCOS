@@ -121,7 +121,8 @@ struct Fixture
                             (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
                         blockHeader->calculateHash(*m_cryptoSuite->hashImpl());
 
-                        auto transactions = ::ranges::single_view(std::ref(createTransaction));
+                        auto transactions =
+                            ::ranges::single_view(&createTransaction) | ::ranges::views::indirect;
 
                         auto view = fork(m_multiLayerStorage);
                         newMutable(view);
