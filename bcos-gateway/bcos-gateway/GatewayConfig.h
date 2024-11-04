@@ -25,20 +25,20 @@ public:
     // cert for ssl connection
     struct CertConfig
     {
-        std::string caCert;
-        std::string nodeKey;
-        std::string nodeCert;
+        std::optional<std::string> caCert;
+        std::optional<std::string> nodeKey;
+        std::optional<std::string> nodeCert;
         std::string multiCaPath;
     };
 
     // cert for sm ssl connection
     struct SMCertConfig
     {
-        std::string caCert;
-        std::string nodeCert;
-        std::string nodeKey;
-        std::string enNodeCert;
-        std::string enNodeKey;
+        std::optional<std::string> caCert;
+        std::optional<std::string> nodeCert;
+        std::optional<std::string> nodeKey;
+        std::optional<std::string> enNodeCert;
+        std::optional<std::string> enNodeKey;
         std::string multiCaPath;
     };
 
@@ -205,7 +205,9 @@ public:
     // loads peer whitelist config
     void initPeerWhitelistConfig(const boost::property_tree::ptree& _pt);
     // check if file exist, exception will be throw if the file not exist
-    void checkFileExist(const std::string& _path);
+    template <typename R>
+    R checkFileExist(const std::string& _path);
+
     // load p2p connected peers
     void loadP2pConnectedNodes();
 
