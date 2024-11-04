@@ -49,10 +49,10 @@ public:
         std::int64_t offset = m_startIndex - 1;
         if (m_consIndex > 0)
         {
-            return SyncTreeTopology::recursiveSelectChildNodes(0, peers, offset);
+            return SyncTreeTopology::recursiveSelectChildNodes(0, *peers, offset);
         }
         std::int64_t nodeIndex = parentIndex + 1 - m_startIndex;
-        return SyncTreeTopology::recursiveSelectChildNodes(nodeIndex, peers, offset);
+        return SyncTreeTopology::recursiveSelectChildNodes(nodeIndex, *peers, offset);
     }
     // select the parent nodes by tree
     bcos::crypto::NodeIDSetPtr selectParentNodesWrapper(
@@ -60,7 +60,7 @@ public:
     {
         std::int64_t offset = m_startIndex - 1;
         std::int64_t nodeIndex = _nodeIndex + 1 - m_startIndex;
-        return SyncTreeTopology::selectParentNodes(peers, nodeIndex, offset, false);
+        return SyncTreeTopology::selectParentNodes(*peers, nodeIndex, offset, false);
     }
     virtual std::int64_t nodeNum() { return m_nodeNum; }
 

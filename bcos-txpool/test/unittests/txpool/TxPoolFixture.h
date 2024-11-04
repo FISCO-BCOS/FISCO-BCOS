@@ -59,7 +59,9 @@ namespace test
 class FakeTransactionSync1 : public TransactionSync
 {
 public:
-    explicit FakeTransactionSync1(TransactionSyncConfig::Ptr _config) : TransactionSync(_config) {}
+    explicit FakeTransactionSync1(TransactionSyncConfig::Ptr _config)
+      : TransactionSync(_config, true)
+    {}
     ~FakeTransactionSync1() override = default;
 };
 
@@ -126,9 +128,9 @@ public:
             gInfo->appendProtocol(protocol);
             m_frontService->setGroupInfo(gInfo);
         }
-        auto txPoolFactory =
-            std::make_shared<TxPoolFactory>(m_nodeId, _cryptoSuite, m_txResultFactory,
-                m_blockFactory, m_frontService, m_ledger, m_groupId, m_chainId, m_blockLimit);
+        auto txPoolFactory = std::make_shared<TxPoolFactory>(m_nodeId, _cryptoSuite,
+            m_txResultFactory, m_blockFactory, m_frontService, m_ledger, m_groupId, m_chainId,
+            m_blockLimit, bcos::txpool::DEFAULT_POOL_LIMIT, true);
         m_txpool = txPoolFactory->createTxPool();
 
         m_sync = std::dynamic_pointer_cast<TransactionSync>(m_txpool->transactionSync());
@@ -183,9 +185,9 @@ public:
                 auto gInfo = std::make_shared<FakeGroupInfo>();
                 gInfo->appendProtocol(protocol);
                 frontService->setGroupInfo(gInfo);
-                auto txPoolFactoryTemp =
-                    std::make_shared<TxPoolFactory>(nodeId, _cryptoSuite, m_txResultFactory,
-                        m_blockFactory, frontService, m_ledger, m_groupId, m_chainId, m_blockLimit);
+                auto txPoolFactoryTemp = std::make_shared<TxPoolFactory>(nodeId, _cryptoSuite,
+                    m_txResultFactory, m_blockFactory, frontService, m_ledger, m_groupId, m_chainId,
+                    m_blockLimit, bcos::txpool::DEFAULT_POOL_LIMIT, true);
                 txpool = txPoolFactoryTemp->createTxPool();
             }
             else

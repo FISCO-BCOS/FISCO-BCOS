@@ -51,18 +51,18 @@ public:
 
     // select the nodes by tree topology
     [[nodiscard]] virtual bcos::crypto::NodeIDSetPtr selectNodes(
-        bcos::crypto::NodeIDSetPtr const& _peers, std::int32_t _consIndex = 0,
+        bcos::crypto::NodeIDSet const& _peers, std::int32_t _consIndex = 0,
         bool _isTheStartNode = false, bcos::crypto::NodeIDPtr fromNode = nullptr);
 
     [[nodiscard]] virtual bcos::crypto::NodeIDSetPtr selectNodesByNodeID(
-        bcos::crypto::NodeIDSetPtr const& _peers, bcos::crypto::NodeIDPtr const& _nodeID,
+        bcos::crypto::NodeIDSet const& _peers, bcos::crypto::NodeIDPtr const& _nodeID,
         bool _isTheStartNode);
 
     [[nodiscard]] virtual bcos::crypto::NodeIDSetPtr selectParent(
-        bcos::crypto::NodeIDSetPtr const& _peers, std::int32_t _consIndex, bool _selectAll);
+        bcos::crypto::NodeIDSet const& _peers, std::int32_t _consIndex, bool _selectAll);
 
     [[nodiscard]] virtual bcos::crypto::NodeIDSetPtr selectParentByNodeID(
-        bcos::crypto::NodeIDSetPtr const& _peers, bcos::crypto::NodeIDPtr const& _nodeID);
+        bcos::crypto::NodeIDSet const& _peers, bcos::crypto::NodeIDPtr const& _nodeID);
 
     virtual inline std::int32_t consIndex() const
     {
@@ -79,12 +79,12 @@ protected:
 
     // select the child nodes by tree
     [[nodiscard]] virtual bcos::crypto::NodeIDSetPtr recursiveSelectChildNodes(
-        std::int32_t _treeIndex, bcos::crypto::NodeIDSetPtr const& _peers, std::int32_t _consIndex);
+        std::int32_t _treeIndex, bcos::crypto::NodeIDSet const& _peers, std::int32_t _consIndex);
     // select the parent nodes by tree
     // _selectAll is true:
     // select all the parent(include the grandparent) for the given node
     [[nodiscard]] virtual bcos::crypto::NodeIDSetPtr selectParentNodes(
-        bcos::crypto::NodeIDSetPtr const& _peers, std::int32_t _nodeIndex, std::int32_t _startIndex,
+        bcos::crypto::NodeIDSet const& _peers, std::int32_t _nodeIndex, std::int32_t _startIndex,
         bool _selectAll);
 
     // starting from this node, calculate the index of other nodes in a ring

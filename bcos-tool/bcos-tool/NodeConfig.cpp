@@ -801,8 +801,13 @@ void NodeConfig::loadOthersConfig(boost::property_tree::ptree const& _pt)
     m_tarsRPCConfig.port = _pt.get<int>("rpc.tars_rpc_port", 0);
     m_tarsRPCConfig.threadCount = _pt.get<int>("rpc.tars_rpc_thread_count", 8);
 
+    m_checkTransactionSignature = _pt.get<bool>("experimental.check_transaction_signature", true);
+    m_checkParallelConflict = _pt.get<bool>("experimental.check_parallel_conflict", true);
+
     NodeConfig_LOG(INFO) << LOG_DESC("loadOthersConfig") << LOG_KV("sendTxTimeout", m_sendTxTimeout)
-                         << LOG_KV("vmCacheSize", m_vmCacheSize);
+                         << LOG_KV("vmCacheSize", m_vmCacheSize)
+                         << LOG_KV("checkTransactionSignature", m_checkTransactionSignature)
+                         << LOG_KV("checkParallelConflict", m_checkParallelConflict);
 }
 
 void NodeConfig::loadConsensusConfig(boost::property_tree::ptree const& _pt)
@@ -1185,4 +1190,12 @@ std::string bcos::tool::generateGenesisData(
 bcos::ledger::GenesisConfig const& bcos::tool::NodeConfig::genesisConfig() const
 {
     return m_genesisConfig;
+}
+bool bcos::tool::NodeConfig::checkTransactionSignature() const
+{
+    return m_checkTransactionSignature;
+}
+bool bcos::tool::NodeConfig::checkParallelConflict() const
+{
+    return m_checkParallelConflict;
 }
