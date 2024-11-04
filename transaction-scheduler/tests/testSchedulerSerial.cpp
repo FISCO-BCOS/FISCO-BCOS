@@ -5,7 +5,6 @@
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
-#include "bcos-task/Generator.h"
 #include "bcos-transaction-scheduler/MultiLayerStorage.h"
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-task/Wait.h>
@@ -19,15 +18,24 @@ using namespace bcos::transaction_scheduler;
 
 struct MockExecutorSerial
 {
-    friend task::Generator<protocol::TransactionReceipt::Ptr> tag_invoke(
-        transaction_executor::tag_t<execute3Step> /*unused*/, MockExecutorSerial& executor,
-        auto& storage, protocol::BlockHeader const& blockHeader,
-        protocol::Transaction const& transaction, int contextID,
-        ledger::LedgerConfig const& ledgerConfig, auto&& waitOperator, auto&&...)
+    struct Context
     {
-        co_yield std::shared_ptr<bcos::protocol::TransactionReceipt>();
-        co_yield std::shared_ptr<bcos::protocol::TransactionReceipt>();
-        co_yield std::shared_ptr<bcos::protocol::TransactionReceipt>();
+    };
+
+    friend task::Task<Context> tag_invoke(
+        transaction_executor::tag_t<createExecuteContext> /*unused*/, MockExecutorSerial& executor,
+        auto& storage, protocol::BlockHeader const& blockHeader,
+        protocol::Transaction const& transaction, int32_t contextID,
+        ledger::LedgerConfig const& ledgerConfig)
+    {
+        co_return {};
+    }
+
+    template <int step>
+    friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
+        transaction_executor::tag_t<executeStep> /*unused*/, Context& executeContext)
+    {
+        co_return {};
     }
 
     friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
@@ -36,7 +44,7 @@ struct MockExecutorSerial
         protocol::Transaction const& transaction, int contextID, ledger::LedgerConfig const&,
         auto&& waitOperator)
     {
-        co_return std::shared_ptr<bcos::protocol::TransactionReceipt>();
+        co_return {};
     }
 };
 

@@ -1,12 +1,12 @@
 #include "HostContext.h"
 #include <fmt/format.h>
 
-evmc_bytes32 bcos::transaction_executor::evm_hash_fn(const uint8_t* data, size_t size)
+evmc_bytes32 bcos::transaction_executor::hostcontext::evm_hash_fn(const uint8_t* data, size_t size)
 {
     return toEvmC(executor::GlobalHashImpl::g_hashImpl->hash(bytesConstRef(data, size)));
 }
 
-std::variant<const evmc_message*, evmc_message> bcos::transaction_executor::getMessage(
+std::variant<const evmc_message*, evmc_message> bcos::transaction_executor::hostcontext::getMessage(
     const evmc_message& inputMessage, protocol::BlockNumber blockNumber, int64_t contextID,
     int64_t seq, crypto::Hash const& hashImpl)
 {
@@ -59,11 +59,12 @@ std::variant<const evmc_message*, evmc_message> bcos::transaction_executor::getM
     return message;
 }
 
-bcos::transaction_executor::CacheExecutables& bcos::transaction_executor::getCacheExecutables()
+bcos::transaction_executor::hostcontext::CacheExecutables&
+bcos::transaction_executor::hostcontext::getCacheExecutables()
 {
     struct CacheExecutables
     {
-        bcos::transaction_executor::CacheExecutables m_cachedExecutables;
+        bcos::transaction_executor::hostcontext::CacheExecutables m_cachedExecutables;
 
         CacheExecutables()
         {

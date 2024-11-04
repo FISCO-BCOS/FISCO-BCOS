@@ -94,8 +94,7 @@ static void call_setInt(benchmark::State& state)
     Fixture fixture;
     std::string contractAddress = fixture.deployContract();
 
-    bcostars::protocol::TransactionImpl transaction(
-        [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
+    bcostars::protocol::TransactionImpl transaction;
 
     bcos::codec::abi::ContractABICodec abiCodec(*bcos::executor::GlobalHashImpl::g_hashImpl);
 
@@ -121,8 +120,7 @@ static void call_setString(benchmark::State& state)
     Fixture fixture;
     std::string contractAddress = fixture.deployContract();
 
-    bcostars::protocol::TransactionImpl transaction(
-        [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
+    bcostars::protocol::TransactionImpl transaction;
 
     bcos::codec::abi::ContractABICodec abiCodec(*bcos::executor::GlobalHashImpl::g_hashImpl);
 
