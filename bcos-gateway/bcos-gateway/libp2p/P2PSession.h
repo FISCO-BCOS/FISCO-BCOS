@@ -68,7 +68,7 @@ private:
     /// gateway p2p info
     std::shared_ptr<P2PInfo> m_p2pInfo;
     std::weak_ptr<Service> m_service;
-    std::shared_ptr<boost::asio::deadline_timer> m_timer;
+    std::optional<boost::asio::deadline_timer> m_timer;
     bool m_run = false;
     const static uint32_t HEARTBEAT_INTERVEL = 5000;
 

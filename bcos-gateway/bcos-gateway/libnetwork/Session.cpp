@@ -135,28 +135,26 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
         handler->callback = callback;
         if (options.timeout > 0)
         {
-            std::shared_ptr<boost::asio::deadline_timer> timeoutHandler =
-                server->asioInterface()->newTimer(options.timeout);
-
+            handler->timeoutHandler.emplace(server->asioInterface()->newTimer(options.timeout));
             auto session = std::weak_ptr<Session>(shared_from_this());
             auto seq = message->seq();
-            timeoutHandler->async_wait([session, seq](const boost::system::error_code& _error) {
-                try
-                {
-                    auto s = session.lock();
-                    if (!s)
+            handler->timeoutHandler->async_wait(
+                [session, seq](const boost::system::error_code& _error) {
+                    try
                     {
-                        return;
+                        auto s = session.lock();
+                        if (!s)
+                        {
+                            return;
+                        }
+                        s->onTimeout(_error, seq);
                     }
-                    s->onTimeout(_error, seq);
-                }
-                catch (std::exception const& e)
-                {
-                    SESSION_LOG(WARNING) << LOG_DESC("async_wait exception")
-                                         << LOG_KV("message", boost::diagnostic_information(e));
-                }
-            });
-            handler->timeoutHandler = timeoutHandler;
+                    catch (std::exception const& e)
+                    {
+                        SESSION_LOG(WARNING) << LOG_DESC("async_wait exception")
+                                             << LOG_KV("message", boost::diagnostic_information(e));
+                    }
+                });
             handler->startTime = utcSteadyTime();
         }
 
@@ -260,21 +258,9 @@ std::size_t Session::tryPopSomeEncodedMsgs(std::vector<EncodedMessage::Ptr>& enc
     encodedMsgs.clear();
     encodedMsgs.reserve(_maxSendMsgCount);
 
-    do
+    while (!m_writeQueue.empty() && encodedMsgs.size() < _maxSendMsgCount)
     {
-        // Notice: lock m_writeQueue in the caller
-        if (m_writeQueue.empty())
-        {
-            break;
-        }
-
-        // msg count will overflow
-        if (encodedMsgs.size() >= _maxSendMsgCount)
-        {
-            break;
-        }
-
-        EncodedMessage::Ptr encodedMsg = m_writeQueue.front();
+        EncodedMessage::Ptr& encodedMsg = m_writeQueue.front();
         totalDataSize += encodedMsg->dataSize();
 
         // data size will overflow
@@ -295,7 +281,7 @@ std::size_t Session::tryPopSomeEncodedMsgs(std::vector<EncodedMessage::Ptr>& enc
 
         encodedMsgs.push_back(std::move(encodedMsg));
         m_writeQueue.pop_front();
-    } while (true);
+    }
 
     return totalDataSize;
 }
