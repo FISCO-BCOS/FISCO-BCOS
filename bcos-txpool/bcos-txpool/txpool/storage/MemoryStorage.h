@@ -101,7 +101,7 @@ public:
 
     bool exist(bcos::crypto::HashType const& _txHash) override
     {
-        TxsMap::ReadAccessor::Ptr accessor;
+        TxsMap::ReadAccessor accessor;
         return m_txsTable.find<TxsMap::ReadAccessor>(accessor, _txHash);
     }
     size_t size() const override { return m_txsTable.size(); }

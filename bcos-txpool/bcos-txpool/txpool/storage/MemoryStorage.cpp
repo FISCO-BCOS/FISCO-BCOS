@@ -248,11 +248,11 @@ std::vector<protocol::Transaction::ConstPtr> MemoryStorage::getTransactions(
             for (auto i = subrange.begin(); i != subrange.end(); ++i)
             {
                 auto const& hash = hashes[i];
-                TxsMap::ReadAccessor::Ptr accessor;
+                TxsMap::ReadAccessor accessor;
                 auto exists = m_txsTable.find<TxsMap::ReadAccessor>(accessor, hash);
                 if (exists)
                 {
-                    transactions[i] = accessor->value();
+                    transactions[i] = accessor.value();
                 }
             }
         });
@@ -264,13 +264,13 @@ TransactionStatus MemoryStorage::txpoolStorageCheck(
     const Transaction& transaction, protocol::TxSubmitCallback& txSubmitCallback)
 {
     auto txHash = transaction.hash();
-    TxsMap::ReadAccessor::Ptr accessor;
+    TxsMap::ReadAccessor accessor;
     auto has = m_txsTable.find<TxsMap::ReadAccessor>(accessor, txHash);
     if (has)
     {
-        if (txSubmitCallback && !accessor->value()->submitCallback())
+        if (txSubmitCallback && !accessor.value()->submitCallback())
         {
-            accessor->value()->setSubmitCallback(std::move(txSubmitCallback));
+            accessor.value()->setSubmitCallback(std::move(txSubmitCallback));
             return TransactionStatus::AlreadyInTxPoolAndAccept;
         }
 
@@ -291,11 +291,11 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
         auto result = m_config->txValidator()->checkTransaction(_tx);
         Transaction::ConstPtr tx = nullptr;
         {
-            TxsMap::ReadAccessor::Ptr accessor;
+            TxsMap::ReadAccessor accessor;
             auto has = m_txsTable.find<TxsMap::ReadAccessor>(accessor, txHash);
             if (has)
             {
-                tx = accessor->value();
+                tx = accessor.value();
             }
         }
         if (result == TransactionStatus::NonceCheckFail) [[unlikely]]
@@ -352,10 +352,10 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
         _tx->setSealed(txHasSeal);
         Transaction::Ptr tx;
         {
-            TxsMap::ReadAccessor::Ptr accessor;
+            TxsMap::ReadAccessor accessor;
             auto has = m_txsTable.find<TxsMap::ReadAccessor>(accessor, _tx->hash());
             assert(has);  // assume must has
-            tx = accessor->value();
+            tx = accessor.value();
         }
         TXPOOL_LOG(WARNING) << LOG_DESC("insertWithoutLock failed for already has the tx")
                             << LOG_KV("hash", tx->hash().abridged())
@@ -464,13 +464,13 @@ TransactionStatus MemoryStorage::insert(Transaction::Ptr transaction)
 TransactionStatus MemoryStorage::insertWithoutLock(Transaction::Ptr transaction)
 {
     {
-        TxsMap::WriteAccessor::Ptr accessor;
+        TxsMap::WriteAccessor accessor;
         auto inserted = m_txsTable.insert(accessor, {transaction->hash(), transaction});
         if (!inserted)
         {
-            if (transaction->submitCallback() && !accessor->value()->submitCallback())
+            if (transaction->submitCallback() && !accessor.value()->submitCallback())
             {
-                accessor->value()->setSubmitCallback(transaction->submitCallback());
+                accessor.value()->setSubmitCallback(transaction->submitCallback());
                 return TransactionStatus::None;
             }
             return TransactionStatus::AlreadyInTxPool;
@@ -604,8 +604,8 @@ void MemoryStorage::printPendingTxs()
     }
     TXPOOL_LOG(DEBUG) << LOG_DESC("printPendingTxs for some txs unhandled")
                       << LOG_KV("pendingSize", m_txsTable.size());
-    m_txsTable.forEach<TxsMap::ReadAccessor>([](const TxsMap::ReadAccessor::Ptr& accessor) {
-        auto tx = accessor->value();
+    m_txsTable.forEach<TxsMap::ReadAccessor>([](TxsMap::ReadAccessor& accessor) {
+        auto tx = accessor.value();
         if (!tx)
         {
             return true;
@@ -746,14 +746,14 @@ ConstTransactionsPtr MemoryStorage::fetchTxs(HashList& _missedTxs, HashList cons
 
     for (auto const& hash : _txs)
     {
-        TxsMap::ReadAccessor::Ptr accessor;
+        TxsMap::ReadAccessor accessor;
         auto has = m_txsTable.find<TxsMap::ReadAccessor>(accessor, hash);
         if (!has)
         {
             _missedTxs.emplace_back(hash);
             continue;
         }
-        auto& tx = accessor->value();
+        auto& tx = accessor.value();
         fetchedTxs->emplace_back(tx);
     }
     if (c_fileLogLevel <= TRACE) [[unlikely]]
@@ -773,8 +773,8 @@ ConstTransactionsPtr MemoryStorage::fetchNewTxs(size_t _txsLimit)
     fetchedTxs->reserve(_txsLimit);
 
 
-    m_txsTable.forEach<TxsMap::ReadAccessor>([&](TxsMap::ReadAccessor::Ptr accessor) {
-        const auto& tx = accessor->value();
+    m_txsTable.forEach<TxsMap::ReadAccessor>([&](TxsMap::ReadAccessor& accessor) {
+        const auto& tx = accessor.value();
         // Note: When inserting data into tbb::concurrent_unordered_map while traversing, it.second
         // will occasionally be a null pointer.
         if (!tx || tx->synced())
@@ -803,7 +803,7 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
     size_t traverseCount = 0;
     size_t sealed = 0;
 
-    auto handleTx = [&](Transaction::Ptr tx) {
+    auto handleTx = [&](const Transaction::Ptr& tx) {
         traverseCount++;
         // Note: When inserting data into tbb::concurrent_unordered_map while traversing,
         // it.second will occasionally be a null pointer.
@@ -824,7 +824,7 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
         {
             // add to m_invalidTxs to be deleted
             {
-                TxsMap::WriteAccessor::Ptr accessor;
+                TxsMap::WriteAccessor accessor;
                 m_invalidTxs.insert(accessor, {txHash, tx});
             }
             return false;
@@ -846,14 +846,14 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
             auto transaction = std::const_pointer_cast<Transaction>(tx);
             transaction->takeSubmitCallback();
             // add to m_invalidTxs to be deleted
-            TxsMap::WriteAccessor::Ptr accessor;
+            TxsMap::WriteAccessor accessor;
             m_invalidTxs.insert(accessor, {txHash, tx});
             return false;
         }
         // blockLimit expired
         if (result == TransactionStatus::BlockLimitCheckFail)
         {
-            TxsMap::WriteAccessor::Ptr accessor;
+            TxsMap::WriteAccessor accessor;
             m_invalidTxs.insert(accessor, {txHash, tx});
             return false;
         }
@@ -897,8 +897,8 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
     if (_avoidDuplicate)
     {
         m_txsTable.forEach<TxsMap::ReadAccessor>(
-            m_knownLatestSealedTxHash, [&](TxsMap::ReadAccessor::Ptr accessor) {
-                const auto& tx = accessor->value();
+            m_knownLatestSealedTxHash, [&](TxsMap::ReadAccessor& accessor) {
+                const auto& tx = accessor.value();
                 handleTx(tx);
                 return (_txsList->transactionsMetaDataSize() +
                            _sysTxsList->transactionsMetaDataSize()) < _txsLimit;
@@ -906,8 +906,8 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
     }
     else
     {
-        m_txsTable.forEach<TxsMap::ReadAccessor>([&](TxsMap::ReadAccessor::Ptr accessor) {
-            const auto& tx = accessor->value();
+        m_txsTable.forEach<TxsMap::ReadAccessor>([&](TxsMap::ReadAccessor& accessor) {
+            const auto& tx = accessor.value();
             handleTx(tx);
             return (_txsList->transactionsMetaDataSize() +
                        _sysTxsList->transactionsMetaDataSize()) < _txsLimit;
@@ -1027,7 +1027,7 @@ HashListPtr MemoryStorage::filterUnknownTxs(HashList const& _txsHashList, NodeID
 {
     auto missList = std::make_shared<HashList>();
     m_txsTable.batchFind<TxsMap::ReadAccessor>(
-        _txsHashList, [&missList](auto const& txHash, TxsMap::ReadAccessor::Ptr accessor) {
+        _txsHashList, [&missList](auto const& txHash, TxsMap::ReadAccessor* accessor) {
             if (!accessor)
             {
                 missList->push_back(txHash);
@@ -1044,13 +1044,13 @@ HashListPtr MemoryStorage::filterUnknownTxs(HashList const& _txsHashList, NodeID
         });
 
     auto unknownTxsList = std::make_shared<HashList>();
-    m_missedTxs.batchInsert(*missList, [&unknownTxsList](bool success, const HashType& hash,
-                                           HashSet::WriteAccessor::Ptr accessor) {
-        if (success)
-        {
-            unknownTxsList->push_back(hash);
-        }
-    });
+    m_missedTxs.batchInsert(*missList,
+        [&unknownTxsList](bool success, const HashType& hash, HashSet::WriteAccessor accessor) {
+            if (success)
+            {
+                unknownTxsList->push_back(hash);
+            }
+        });
 
     if (m_missedTxs.size() >= m_config->poolLimit())
     {
@@ -1077,7 +1077,7 @@ bool MemoryStorage::batchMarkTxsWithoutLock(
     {
         Transaction::Ptr tx;
         {  // TODO: use batchFind
-            TxsMap::ReadAccessor::Ptr accessor;
+            TxsMap::ReadAccessor accessor;
             auto has = m_txsTable.find<TxsMap::ReadAccessor>(accessor, txHash);
             if (!has)
             {
@@ -1086,7 +1086,7 @@ bool MemoryStorage::batchMarkTxsWithoutLock(
                                   << LOG_KV("tx", txHash.hex()) << LOG_KV("sealFlag", _sealFlag);
                 continue;
             }
-            tx = accessor->value();
+            tx = accessor.value();
         }
         if (!tx)
         {
@@ -1137,8 +1137,8 @@ bool MemoryStorage::batchMarkTxsWithoutLock(
 
 void MemoryStorage::batchMarkAllTxs(bool _sealFlag)
 {
-    m_txsTable.forEach<TxsMap::ReadAccessor>([&](TxsMap::ReadAccessor::Ptr accessor) {
-        auto tx = accessor->value();
+    m_txsTable.forEach<TxsMap::ReadAccessor>([&](TxsMap::ReadAccessor& accessor) {
+        auto tx = accessor.value();
         if (!tx)
         {
             return true;
@@ -1235,7 +1235,7 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::Ptr _block)
 
     m_txsTable.batchFind<TxsMap::ReadAccessor>(
         txHashes, [&missedTxs, &findErrorTxInBlock, _block](
-                      const auto& txHash, TxsMap::ReadAccessor::Ptr accessor) {
+                      const auto& txHash, TxsMap::ReadAccessor* accessor) {
             if (!accessor)
             {
                 missedTxs->emplace_back(txHash);
@@ -1287,7 +1287,7 @@ bool MemoryStorage::batchVerifyProposal(std::shared_ptr<HashList> _txsHashList)
 {
     bool has = false;
     m_txsTable.batchFind<TxsMap::ReadAccessor>(
-        *_txsHashList, [&has](auto const& txHash, TxsMap::ReadAccessor::Ptr accessor) {
+        *_txsHashList, [&has](auto const& txHash, TxsMap::ReadAccessor* accessor) {
             has = (accessor != nullptr);
             return has;  // break if has is false
         });
@@ -1300,8 +1300,8 @@ HashListPtr MemoryStorage::getTxsHash(int _limit)
     auto txsHash = std::make_shared<HashList>();
 
     m_txsTable.forEach<TxsMap::ReadAccessor>(
-        [this, &txsHash, &_limit](TxsMap::ReadAccessor::Ptr accessor) {
-            auto tx = accessor->value();
+        [this, &txsHash, &_limit](TxsMap::ReadAccessor& accessor) {
+            auto tx = accessor.value();
             if (!tx)
             {
                 return true;
@@ -1310,7 +1310,7 @@ HashListPtr MemoryStorage::getTxsHash(int _limit)
             auto result = m_config->txValidator()->checkTransaction(tx, true);
             if (result != TransactionStatus::None)
             {
-                TxsMap::WriteAccessor::Ptr writeAccessor;
+                TxsMap::WriteAccessor writeAccessor;
                 m_invalidTxs.insert(writeAccessor, {tx->hash(), tx});
                 return true;
             }
@@ -1318,7 +1318,7 @@ HashListPtr MemoryStorage::getTxsHash(int _limit)
             {
                 return false;
             }
-            txsHash->emplace_back(accessor->key());
+            txsHash->emplace_back(accessor.key());
             return true;
         });
     removeInvalidTxs(true);
@@ -1349,14 +1349,14 @@ void MemoryStorage::cleanUpExpiredTransactions()
     uint64_t currentTime = utcTime();
 
     m_txsTable.forEach<TxsMap::ReadAccessor>([&traversedTxsNum, &sealedTxs, this, &currentTime,
-                                                 &erasedTxs](TxsMap::ReadAccessor::Ptr accessor) {
+                                                 &erasedTxs](TxsMap::ReadAccessor& accessor) {
         traversedTxsNum++;
         if (traversedTxsNum > MAX_TRAVERSE_TXS_COUNT)
         {
             return false;
         }
 
-        auto tx = accessor->value();
+        auto tx = accessor.value();
         if (tx->sealed() &&
             (tx->batchId() >= m_blockNumber || tx->batchId() == -1))  // -1 means seal by my self
 
@@ -1368,7 +1368,7 @@ void MemoryStorage::cleanUpExpiredTransactions()
         // the txs expired or not
         if (currentTime > (tx->importTime() + m_txsExpirationTime))
         {
-            TxsMap::WriteAccessor::Ptr accessor1;
+            TxsMap::WriteAccessor accessor1;
             if (m_invalidTxs.insert(accessor1, {tx->hash(), tx}))
             {
                 erasedTxs++;
@@ -1393,7 +1393,7 @@ void MemoryStorage::cleanUpExpiredTransactions()
         // blockLimit expired
         if (result != TransactionStatus::None)
         {
-            TxsMap::WriteAccessor::Ptr writeAccessor;
+            TxsMap::WriteAccessor writeAccessor;
             if (m_invalidTxs.insert(writeAccessor, {tx->hash(), tx}))
             {
                 erasedTxs++;

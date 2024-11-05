@@ -296,11 +296,11 @@ std::string ShardingBlockExecutive::getContractShard(const std::string& contract
     }
 
     std::string shardName;
-    ShardCache::WriteAccessor::Ptr accessor;
+    ShardCache::WriteAccessor accessor;
     bool has = m_contract2ShardCache->find<ShardCache::WriteAccessor>(accessor, contractAddress);
     if (has)
     {
-        shardName = accessor->value();
+        shardName = accessor.value();
     }
     else
     {
