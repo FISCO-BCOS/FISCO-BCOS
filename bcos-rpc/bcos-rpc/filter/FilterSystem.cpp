@@ -36,7 +36,7 @@ uint64_t FilterSystem::insertFilter(Filter::Ptr filter)
     while (true)
     {
         id = generator();
-        FilterMap::WriteAccessor::Ptr accessor;
+        FilterMap::WriteAccessor accessor;
         if (m_filters.insert(accessor, {KeyType(filter->group(), id), filter}))
         {
             break;
@@ -59,11 +59,11 @@ void FilterSystem::cleanUpExpiredFilters()
     std::vector<KeyType> expiredFilters;
     m_filters.forEach<FilterMap::ReadAccessor>(
         [&traversedFiltersNum, &expiredFilters, this, &currentTime](
-            FilterMap::ReadAccessor::Ptr accessor) {
-            const auto& filter = accessor->value();
+            FilterMap::ReadAccessor& accessor) {
+            const auto& filter = accessor.value();
             if (currentTime > (filter->lastAccessTime() + m_filterTimeout))
             {
-                expiredFilters.emplace_back(KeyType(filter->group(), filter->id()));
+                expiredFilters.emplace_back(filter->group(), filter->id());
             }
             if (++traversedFiltersNum > MAX_TRAVERSE_FILTERS_COUNT)
             {

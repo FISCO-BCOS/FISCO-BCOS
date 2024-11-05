@@ -144,12 +144,12 @@ protected:
 
     Filter::Ptr getFilterByID(std::string_view groupId, u256 id)
     {
-        FilterMap::ReadAccessor::Ptr accessor;
+        FilterMap::ReadAccessor accessor;
         if (!m_filters.find<FilterMap::ReadAccessor>(accessor, filter::KeyType(groupId, id)))
         {
             return nullptr;
         }
-        return accessor->value();
+        return accessor.value();
     }
     static int64_t getLatestBlockNumber(bcos::ledger::LedgerInterface& _ledger)
     {
@@ -160,7 +160,6 @@ protected:
         return latest;
     }
 
-protected:
     using FilterMap = BucketMap<filter::KeyType, Filter::Ptr, std::hash<filter::KeyType>>;
 
     uint64_t m_filterTimeout = FILTER_DEFAULT_EXPIRATION_TIME;

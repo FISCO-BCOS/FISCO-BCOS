@@ -42,7 +42,7 @@ TransactionStatus TxPoolNonceChecker::checkNonce(Transaction::ConstPtr _tx)
 
 void TxPoolNonceChecker::insert(NonceType const& _nonce)
 {
-    NonceSet::WriteAccessor::Ptr accessor;
+    NonceSet::WriteAccessor accessor;
     m_nonces.insert(accessor, _nonce);
 }
 

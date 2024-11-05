@@ -1994,17 +1994,17 @@ std::shared_ptr<storage::StateStorageInterface> TransactionExecutive::getTransie
     bcos::storage::StateStorageInterface::Ptr transientStorage;
     bool has;
     {
-        tssMap::ReadAccessor::Ptr readAccessor;
+        tssMap::ReadAccessor readAccessor;
         has = transientStorageMap->find<tssMap::ReadAccessor>(readAccessor, contextID);
         if (has)
         {
-            transientStorage = readAccessor->value();
+            transientStorage = readAccessor.value();
         }
     }
     if (!has)
     {
         {
-            tssMap::WriteAccessor::Ptr writeAccessor;
+            tssMap::WriteAccessor writeAccessor;
             auto hasWrite =
                 transientStorageMap->find<tssMap::WriteAccessor>(writeAccessor, contextID);
 
@@ -2015,7 +2015,7 @@ std::shared_ptr<storage::StateStorageInterface> TransactionExecutive::getTransie
             }
             else
             {
-                transientStorage = writeAccessor->value();
+                transientStorage = writeAccessor.value();
             }
         }
     }

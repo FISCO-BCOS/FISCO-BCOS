@@ -169,7 +169,6 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
 
     auto blockNumberStr = boost::lexical_cast<std::string>(header->number());
 
-
     size_t TOTAL_CALLBACK = 8;
     if (writeTxsAndReceipts)
     {  // 9 storage callbacks and write hash=>tx
@@ -875,8 +874,8 @@ void Ledger::asyncGetBlockNumberByHash(const crypto::HashType& _blockHash,
             {
                 LEDGER_LOG(INFO) << "GetBlockNumberByHash failed "
                                  << boost::diagnostic_information(e);
-                callback(BCOS_ERROR_WITH_PREV_PTR(LedgerError::GetStorageError,
-                             "GetBlockNumberByHash failed ", std::move(e)),
+                callback(BCOS_ERROR_WITH_PREV_PTR(
+                             LedgerError::GetStorageError, "GetBlockNumberByHash failed ", e),
                     -1);
             }
         });
@@ -1024,8 +1023,9 @@ void Ledger::asyncGetTotalTransactionCount(
     static std::string_view keys[] = {
         SYS_KEY_TOTAL_TRANSACTION_COUNT, SYS_KEY_TOTAL_FAILED_TRANSACTION, SYS_KEY_CURRENT_NUMBER};
 
-    m_stateStorage->asyncOpenTable(SYS_CURRENT_STATE,
-        [this, callback = std::move(_callback)](auto&& error, std::optional<Table>&& table) {
+    m_stateStorage->asyncOpenTable(
+        SYS_CURRENT_STATE, [this, callback = std::move(_callback)](
+                               auto&& error, std::optional<Table>&& table) mutable {
             auto tableError =
                 checkTableValid(std::forward<decltype(error)>(error), table, SYS_CURRENT_STATE);
             if (tableError)
