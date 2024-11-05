@@ -11,7 +11,7 @@ bcostars::Error GatewayServiceServer::asyncNotifyGroupInfo(
         bcosGroupInfo, [current](bcos::Error::Ptr&& _error) {
             async_response_asyncNotifyGroupInfo(current, toTarsError(_error));
         });
-    return bcostars::Error();
+    return {};
 }
 
 bcostars::Error GatewayServiceServer::asyncSendMessageByTopic(const std::string& _topic,
@@ -21,15 +21,15 @@ bcostars::Error GatewayServiceServer::asyncSendMessageByTopic(const std::string&
     current->setResponse(false);
     m_gatewayInitializer->gateway()->asyncSendMessageByTopic(_topic,
         bcos::bytesConstRef((const bcos::byte*)_data.data(), _data.size()),
-        [current](bcos::Error::Ptr&& _error, int16_t _type, bcos::bytesPointer _responseData) {
+        [current](bcos::Error::Ptr&& _error, int16_t _type, bcos::bytesConstRef _responseData) {
             vector<tars::Char> response;
             if (_responseData)
             {
-                response.assign(_responseData->begin(), _responseData->end());
+                response.assign(_responseData.begin(), _responseData.end());
             }
             async_response_asyncSendMessageByTopic(current, toTarsError(_error), _type, response);
         });
-    return bcostars::Error();
+    return {};
 }
 
 bcostars::Error GatewayServiceServer::asyncSubscribeTopic(
@@ -40,7 +40,7 @@ bcostars::Error GatewayServiceServer::asyncSubscribeTopic(
         _clientID, _topicInfo, [current](bcos::Error::Ptr&& _error) {
             async_response_asyncSubscribeTopic(current, toTarsError(_error));
         });
-    return bcostars::Error();
+    return {};
 }
 bcostars::Error GatewayServiceServer::asyncSendBroadcastMessageByTopic(
     const std::string& _topic, const vector<tars::Char>& _data, tars::TarsCurrentPtr current)
@@ -50,7 +50,7 @@ bcostars::Error GatewayServiceServer::asyncSendBroadcastMessageByTopic(
         _topic, bcos::bytesConstRef((const bcos::byte*)_data.data(), _data.size()));
     async_response_asyncSendBroadcastMessageByTopic(
         current, toTarsError<bcos::Error::Ptr>(nullptr));
-    return bcostars::Error();
+    return {};
 }
 
 bcostars::Error GatewayServiceServer::asyncRemoveTopic(const std::string& _clientID,
@@ -61,5 +61,5 @@ bcostars::Error GatewayServiceServer::asyncRemoveTopic(const std::string& _clien
         _clientID, _topicList, [current](bcos::Error::Ptr&& _error) {
             async_response_asyncRemoveTopic(current, toTarsError(_error));
         });
-    return bcostars::Error();
+    return {};
 }

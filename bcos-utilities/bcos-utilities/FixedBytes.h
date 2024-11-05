@@ -427,7 +427,6 @@ private:
         }
     }
 
-private:
     std::array<byte, N> m_data;  ///< The binary data.
 };
 
@@ -606,8 +605,8 @@ public:
 template <>
 inline bool FixedBytes<32>::operator==(FixedBytes<32> const& _other) const
 {
-    const uint64_t* hash1 = (const uint64_t*)data();
-    const uint64_t* hash2 = (const uint64_t*)_other.data();
+    const auto* hash1 = (const uint64_t*)data();
+    const auto* hash2 = (const uint64_t*)_other.data();
     return (hash1[0] == hash2[0]) && (hash1[1] == hash2[1]) && (hash1[2] == hash2[2]) &&
            (hash1[3] == hash2[3]);
 }
@@ -616,7 +615,7 @@ inline bool FixedBytes<32>::operator==(FixedBytes<32> const& _other) const
 template <>
 inline size_t FixedBytes<32>::hash::operator()(FixedBytes<32> const& value) const
 {
-    uint64_t const* data = reinterpret_cast<uint64_t const*>(value.data());
+    auto const* data = reinterpret_cast<uint64_t const*>(value.data());
     return boost::hash_range(data, data + 4);
 }
 

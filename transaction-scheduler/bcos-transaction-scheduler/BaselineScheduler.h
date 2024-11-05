@@ -453,13 +453,22 @@ private:
             {
                 ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
                     ittapi::ITT_DOMAINS::instance().SET_BLOCK);
-
-                co_await ledger::prewriteBlock(scheduler.m_ledger.get(), result.m_transactions,
-                    result.m_block, false, *lastStorage);
+                task::tbb::syncWait(ledger::prewriteBlock(scheduler.m_ledger.get(),
+                    result.m_transactions, result.m_block, false, *lastStorage));
             }
-            auto mergedStorage = co_await mergeBackStorage(scheduler.m_multiLayerStorage.get());
-            co_await ledger::storeTransactionsAndReceipts(
-                scheduler.m_ledger.get(), result.m_transactions, result.m_block);
+
+            tbb::parallel_invoke(
+                [&]() {
+                    ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
+                        ittapi::ITT_DOMAINS::instance().MERGE_STATE);
+                    task::tbb::syncWait(mergeBackStorage(scheduler.m_multiLayerStorage.get()));
+                },
+                [&]() {
+                    ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
+                        ittapi::ITT_DOMAINS::instance().STORE_TRANSACTION_RECEIPTS);
+                    task::tbb::syncWait(ledger::storeTransactionsAndReceipts(
+                        scheduler.m_ledger.get(), result.m_transactions, result.m_block));
+                });
 
             auto ledgerConfig = co_await ledger::getLedgerConfig(scheduler.m_ledger.get());
             ledgerConfig->setHash(header->hash());

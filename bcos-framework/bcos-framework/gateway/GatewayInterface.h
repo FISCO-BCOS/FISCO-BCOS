@@ -120,7 +120,7 @@ public:
 
     /// for AMOP
     virtual void asyncSendMessageByTopic(const std::string& _topic, bcos::bytesConstRef _data,
-        std::function<void(bcos::Error::Ptr&&, int16_t, bytesPointer)> _respFunc) = 0;
+        std::function<void(bcos::Error::Ptr&&, int16_t, bytesConstRef)> _respFunc) = 0;
     virtual void asyncSendBroadcastMessageByTopic(
         const std::string& _topic, bcos::bytesConstRef _data) = 0;
 

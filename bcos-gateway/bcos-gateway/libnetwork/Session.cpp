@@ -326,7 +326,8 @@ void Session::write()
 
                 toMultiBuffers(m_writeConstBuffer, encodedMsgs);
                 server->asioInterface()->asyncWrite(m_socket, m_writeConstBuffer,
-                    [self, encodedMsgs](const boost::system::error_code _error, std::size_t _size) {
+                    [self, encodedMsgs = std::move(encodedMsgs)](
+                        const boost::system::error_code _error, std::size_t _size) {
                         auto session = self.lock();
                         if (!session)
                         {

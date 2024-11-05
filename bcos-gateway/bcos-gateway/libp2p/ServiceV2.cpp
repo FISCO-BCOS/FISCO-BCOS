@@ -80,7 +80,7 @@ void ServiceV2::onReceivePeersRouterTable(
                               << LOG_KV("code", _error.errorCode()) << LOG_KV("msg", _error.what());
         return;
     }
-    auto routerTable = m_routerTableFactory->createRouterTable(ref(*(_message->payload())));
+    auto routerTable = m_routerTableFactory->createRouterTable(_message->payload());
 
     SERVICE2_LOG(INFO) << LOG_BADGE("onReceivePeersRouterTable")
                        << LOG_KV("peer", _session->p2pID())
@@ -153,8 +153,7 @@ void ServiceV2::broadcastRouterSeq()
     message->setPacketType(GatewayMessageType::RouterTableSyncSeq);
     auto seq = m_statusSeq.load();
     auto statusSeq = boost::asio::detail::socket_ops::host_to_network_long(seq);
-    auto payload = std::make_shared<bytes>((byte*)&statusSeq, (byte*)&statusSeq + 4);
-    message->setPayload(payload);
+    message->setPayload({(byte*)&statusSeq, (byte*)&statusSeq + 4});
     // the router table should only exchange between neighbor
     asyncBroadcastMessageWithoutForward(message, Options());
 }
@@ -170,7 +169,7 @@ void ServiceV2::onReceiveRouterSeq(
         return;
     }
     auto statusSeq = boost::asio::detail::socket_ops::network_to_host_long(
-        *((uint32_t*)_message->payload()->data()));
+        *((uint32_t*)_message->payload().data()));
     if (!tryToUpdateSeq(_session->p2pID(), statusSeq))
     {
         return;
@@ -309,7 +308,7 @@ void ServiceV2::onMessage(NetworkException _error, SessionFace::Ptr _session, Me
                                 << LOG_KV("type", p2pMsg->packetType())
                                 << LOG_KV("rsp", p2pMsg->isRespPacket())
                                 << LOG_KV("ttl", p2pMsg->ttl())
-                                << LOG_KV("payLoadSize", p2pMsg->payload()->size());
+                                << LOG_KV("payLoadSize", p2pMsg->payload().size());
         }
         Service::onMessage(_error, _session, _message, _p2pSessionWeakPtr);
         return;
@@ -324,7 +323,7 @@ void ServiceV2::onMessage(NetworkException _error, SessionFace::Ptr _session, Me
                               << LOG_KV("dst", p2pMsg->dstP2PNodeID())
                               << LOG_KV("type", p2pMsg->packetType())
                               << LOG_KV("rsp", p2pMsg->isRespPacket())
-                              << LOG_KV("payLoadSize", p2pMsg->payload()->size())
+                              << LOG_KV("payLoadSize", p2pMsg->payload().size())
                               << LOG_KV("ttl", ttl);
         return;
     }
@@ -339,7 +338,7 @@ void ServiceV2::onMessage(NetworkException _error, SessionFace::Ptr _session, Me
                             << LOG_KV("dst", p2pMsg->dstP2PNodeIDView())
                             << LOG_KV("type", p2pMsg->packetType()) << LOG_KV("seq", p2pMsg->seq())
                             << LOG_KV("rsp", p2pMsg->isRespPacket()) << LOG_KV("ttl", p2pMsg->ttl())
-                            << LOG_KV("payLoadSize", p2pMsg->payload()->size());
+                            << LOG_KV("payLoadSize", p2pMsg->payload().size());
     }
     asyncSendMessageByNodeIDWithMsgForward(p2pMsg, nullptr);
 }
@@ -401,7 +400,7 @@ void ServiceV2::sendRespMessageBySession(
     respMessage->setSeq(requestMsg->seq());
     respMessage->setRespPacket();
     // TODO: reduce memory copy
-    respMessage->setPayload(std::make_shared<bytes>(_payload.begin(), _payload.end()));
+    respMessage->setPayload({_payload.begin(), _payload.end()});
 
     // asyncSendMessageByNodeID(respMessage->dstP2PNodeID(), respMessage, nullptr);
 

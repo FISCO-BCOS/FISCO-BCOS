@@ -229,7 +229,7 @@ protected:
     virtual void checkNetworkStatus();
 
 private:
-    void send(EncodedMessage::Ptr& _encoder);
+    void send(EncodedMessage::Ptr& _encodedMsg);
 
     void doRead();
 
@@ -272,7 +272,7 @@ private:
 
     MessageFactory::Ptr m_messageFactory;
 
-    std::list<EncodedMessage::Ptr> m_writeQueue;
+    std::deque<EncodedMessage::Ptr> m_writeQueue;
     std::atomic_bool m_writing = {false};
     bcos::Mutex x_writeQueue;
 

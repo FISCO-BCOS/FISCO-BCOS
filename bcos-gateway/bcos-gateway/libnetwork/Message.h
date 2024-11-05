@@ -26,9 +26,8 @@
 #include <boost/asio/buffer.hpp>
 #include <set>
 
-namespace bcos
-{
-namespace gateway
+
+namespace bcos::gateway
 {
 
 class MessageExtAttributes
@@ -50,13 +49,13 @@ struct EncodedMessage : public bcos::ObjectCounter<EncodedMessage>
     using Ptr = std::shared_ptr<EncodedMessage>;
     bcos::bytes header;
     // CompositeBuffer::Ptr payload;
-    std::shared_ptr<bcos::bytes> payload;
+    bcos::bytes payload;
     //
     bool compress = true;
 
     inline std::size_t dataSize() const { return headerSize() + payloadSize(); }
     inline std::size_t headerSize() const { return header.size(); }
-    inline std::size_t payloadSize() const { return payload ? payload->size() : 0; }
+    inline std::size_t payloadSize() const { return payload.size(); }
 };
 
 /**
@@ -81,7 +80,7 @@ inline void toMultiBuffers(
     }
 
     _bufs.emplace_back(
-        boost::asio::buffer(_encodedMessage->payload->data(), _encodedMessage->payload->size()));
+        boost::asio::buffer(_encodedMessage->payload.data(), _encodedMessage->payload.size()));
 
     // auto& buffers = _encodedMessage->payload->buffers();
     // std::for_each(buffers.begin(), buffers.end(), [&_bufs](const bcos::bytes& _buffer) {
@@ -155,7 +154,6 @@ public:
     virtual ~MessageFactory() = default;
     virtual Message::Ptr buildMessage() = 0;
 
-public:
     virtual uint32_t newSeq()
     {
         uint32_t seq = ++m_seq;
@@ -166,5 +164,4 @@ private:
     std::atomic<uint32_t> m_seq = {1};
 };
 
-}  // namespace gateway
-}  // namespace bcos
+}  // namespace bcos::gateway

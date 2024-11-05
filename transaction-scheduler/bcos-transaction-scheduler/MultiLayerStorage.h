@@ -3,6 +3,7 @@
 #include "bcos-task/TBBWait.h"
 #include "bcos-task/Trait.h"
 #include "bcos-utilities/Error.h"
+#include "bcos-utilities/ITTAPI.h"
 #include "bcos-utilities/RecursiveLambda.h"
 #include <oneapi/tbb/parallel_invoke.h>
 #include <boost/throw_exception.hpp>
@@ -95,65 +96,64 @@ public:
     View(View&&) noexcept = default;
     View& operator=(View&&) noexcept = default;
     ~View() noexcept = default;
+
+    friend MutableStorage& mutableStorage(View& storage)
+    {
+        if (!storage.m_mutableStorage)
+        {
+            BOOST_THROW_EXCEPTION(NotExistsMutableStorageError{});
+        }
+        return *storage.m_mutableStorage;
+    }
+
+    friend auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, View& view,
+        ::ranges::input_range auto&& keys)
+        -> task::Task<task::AwaitableReturnType<
+            std::invoke_result_t<storage2::ReadSome, MutableStorage&, decltype(keys)>>>
+        requires ::ranges::sized_range<decltype(keys)> &&
+                 ::ranges::sized_range<task::AwaitableReturnType<
+                     std::invoke_result_t<storage2::ReadSome, MutableStorage&, decltype(keys)>>>
+    {
+        task::AwaitableReturnType<decltype(storage2::readSome(*view.m_mutableStorage, keys))>
+            values(::ranges::size(keys));
+        if (view.m_mutableStorage &&
+            co_await fillMissingValues<typename View::Key, typename View::Value>(
+                *view.m_mutableStorage, keys, values))
+        {
+            co_return values;
+        }
+        else
+        {
+            values.resize(::ranges::size(keys));
+        }
+
+        for (auto& immutableStorage : view.m_immutableStorages)
+        {
+            if (co_await fillMissingValues<typename View::Key, typename View::Value>(
+                    *immutableStorage, keys, values))
+            {
+                co_return values;
+            }
+        }
+
+        if constexpr (withCacheStorage)
+        {
+            if (co_await fillMissingValues<typename View::Key, typename View::Value>(
+                    view.m_cacheStorage.get(), keys, values))
+            {
+                co_return values;
+            }
+        }
+
+        co_await fillMissingValues<typename View::Key, typename View::Value>(
+            view.m_backendStorage.get(), keys, values);
+        co_return values;
+    }
 };
 
 template <class Storage>
 concept IsView = std::remove_cvref_t<Storage>::isView;
 
-template <IsView View>
-typename View::MutableStorage& mutableStorage(View& storage)
-{
-    if (!storage.m_mutableStorage)
-    {
-        BOOST_THROW_EXCEPTION(NotExistsMutableStorageError{});
-    }
-    return *storage.m_mutableStorage;
-}
-
-template <IsView View>
-auto tag_invoke(
-    storage2::tag_t<storage2::readSome> /*unused*/, View& view, ::ranges::input_range auto&& keys)
-    -> task::Task<task::AwaitableReturnType<
-        std::invoke_result_t<storage2::ReadSome, typename View::MutableStorage&, decltype(keys)>>>
-    requires ::ranges::sized_range<decltype(keys)> &&
-             ::ranges::sized_range<task::AwaitableReturnType<std::invoke_result_t<
-                 storage2::ReadSome, typename View::MutableStorage&, decltype(keys)>>>
-{
-    task::AwaitableReturnType<decltype(storage2::readSome(*view.m_mutableStorage, keys))> values(
-        ::ranges::size(keys));
-    if (view.m_mutableStorage &&
-        co_await fillMissingValues<typename View::Key, typename View::Value>(
-            *view.m_mutableStorage, keys, values))
-    {
-        co_return values;
-    }
-    else
-    {
-        values.resize(::ranges::size(keys));
-    }
-
-    for (auto& immutableStorage : view.m_immutableStorages)
-    {
-        if (co_await fillMissingValues<typename View::Key, typename View::Value>(
-                *immutableStorage, keys, values))
-        {
-            co_return values;
-        }
-    }
-
-    if constexpr (View::withCacheStorage)
-    {
-        if (co_await fillMissingValues<typename View::Key, typename View::Value>(
-                view.m_cacheStorage.get(), keys, values))
-        {
-            co_return values;
-        }
-    }
-
-    co_await fillMissingValues<typename View::Key, typename View::Value>(
-        view.m_backendStorage.get(), keys, values);
-    co_return values;
-}
 
 template <IsView View>
 auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, View& view,
@@ -514,14 +514,20 @@ task::Task<std::shared_ptr<typename MultiLayerStorage::MutableStorage>> mergeBac
     {
         tbb::parallel_invoke(
             [&]() {
+                ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
+                    ittapi::ITT_DOMAINS::instance().MERGE_BACKEND);
                 task::tbb::syncWait(storage2::merge(storage.m_backendStorage.get(), backStorage));
             },
             [&]() {
+                ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
+                    ittapi::ITT_DOMAINS::instance().MERGE_CACHE);
                 task::tbb::syncWait(storage2::merge(storage.m_cacheStorage.get(), backStorage));
             });
     }
     else
     {
+        ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
+            ittapi::ITT_DOMAINS::instance().MERGE_BACKEND);
         co_await storage2::merge(storage.m_backendStorage.get(), backStorage);
     }
 
