@@ -21,7 +21,6 @@
 
 #include "Common.h"
 #include "bcos-utilities/BoostLog.h"
-#include <tbb/concurrent_vector.h>
 #include <concepts>
 #include <queue>
 #include <range/v3/view/chunk_by.hpp>
@@ -67,21 +66,12 @@ public:
     {
     public:
         WriteAccessor() = default;
-        void init(Bucket::Ptr bucket) { m_bucket = std::move(bucket); }
-        void init(Bucket::Ptr bucket, WriteGuard guard)
-        {
-            m_bucket = std::move(bucket);
-            m_writeGuard.emplace(std::move(guard));
-        }
-
+        void init(WriteGuard guard) { m_writeGuard.emplace(std::move(guard)); }
         void setValue(typename MapType::iterator it) { m_it = it; };
-
-        const KeyType& key() { return m_it->first; }
+        const KeyType& key() const { return m_it->first; }
         ValueType& value() { return m_it->second; }
-        bool empty() const { return m_bucket == nullptr; }
 
     private:
-        typename Bucket::Ptr m_bucket;
         typename MapType::iterator m_it;
         std::optional<WriteGuard> m_writeGuard;
     };
@@ -90,21 +80,12 @@ public:
     {
     public:
         ReadAccessor() = default;
-        void init(Bucket::Ptr bucket) { m_bucket = std::move(bucket); }
-        void init(Bucket::Ptr bucket, ReadGuard guard)
-        {
-            m_bucket = std::move(bucket);
-            m_readGuard.emplace(std::move(guard));
-        }
-
+        void init(ReadGuard guard) { m_readGuard.emplace(std::move(guard)); }
         void setValue(typename MapType::iterator it) { m_it = it; };
-
-        const KeyType& key() { return m_it->first; }
+        const KeyType& key() const { return m_it->first; }
         const ValueType& value() { return m_it->second; }
-        bool empty() const { return m_bucket == nullptr; }
 
     private:
-        typename Bucket::Ptr m_bucket;
         typename MapType::iterator m_it;
         std::optional<ReadGuard> m_readGuard;
     };
@@ -115,7 +96,7 @@ public:
         WriteGuard guard = wait ? WriteGuard(m_mutex) : WriteGuard(m_mutex, boost::try_to_lock);
         if (guard.owns_lock())
         {
-            accessor.init(this->shared_from_this(), std::move(guard));  // acquire lock here
+            accessor.init(std::move(guard));  // acquire lock here
             return true;
         }
 
@@ -128,19 +109,17 @@ public:
         ReadGuard guard = wait ? ReadGuard(m_mutex) : ReadGuard(m_mutex, boost::try_to_lock);
         if (guard.owns_lock())
         {
-            accessor.init(this->shared_from_this(), std::move(guard));  // acquire lock here
+            accessor.init(std::move(guard));  // acquire lock here
             return true;
         }
 
         return false;
     }
 
-
     // return true if found
     template <class AccessorType>
     bool find(AccessorType& accessor, const KeyType& key)
     {
-        accessor.init(this->shared_from_this());  // acquire lock here
         auto it = m_values.find(key);
         if (it == m_values.end())
         {
@@ -154,7 +133,6 @@ public:
     // return true if insert happen
     bool insert(WriteAccessor& accessor, const std::pair<KeyType, ValueType>& kv)
     {
-        accessor.init(this->shared_from_this());  // acquire lock here
         auto [it, inserted] = m_values.try_emplace(kv.first, kv.second);
         accessor.setValue(it);
         return inserted;
@@ -180,8 +158,6 @@ public:
     // return true if remove success
     std::pair<bool, ValueType> remove(WriteAccessor& accessor, const KeyType& key)
     {
-        accessor.init(this->shared_from_this());  // acquire lock here
-
         auto it = m_values.find(key);
         if (it == m_values.end())
         {
@@ -209,8 +185,6 @@ public:
     template <class AccessorType>  // handler return isContinue
     bool forEach(std::function<bool(AccessorType&)> handler, AccessorType& accessor)
     {
-        accessor.init(this->shared_from_this());  // acquire lock here
-
         for (auto it = m_values.begin(); it != m_values.end(); it++)
         {
             accessor.setValue(it);
@@ -225,8 +199,6 @@ public:
     void clear(WriteAccessor& accessor,
         std::function<void(bool, const KeyType&, WriteAccessor)> onRemove = nullptr)
     {
-        accessor.init(this->shared_from_this());  // acquire lock here
-
         for (auto it = m_values.begin(); it != m_values.end(); it++)
         {
             if (onRemove)
@@ -256,19 +228,20 @@ public:
 
     BucketMap(size_t bucketSize)
     {
+        m_buckets.reserve(bucketSize);
         for (size_t i = 0; i < bucketSize; i++)
         {
-            m_buckets.push_back(std::make_shared<BucketType>());
+            m_buckets.emplace_back(std::make_shared<BucketType>());
         }
     }
 
-    virtual ~BucketMap(){};
+    ~BucketMap() = default;
     // return true if found
     template <class AccessorType>
     bool find(AccessorType& accessor, const KeyType& key)
     {
         auto idx = getBucketIndex(key);
-        auto bucket = m_buckets[idx];
+        auto& bucket = m_buckets[idx];
         return bucket->template find<AccessorType>(accessor, key);
     }
 
@@ -368,9 +341,8 @@ public:
             std::queue<std::pair<size_t, typename BucketType::Ptr>> bucket2Remove;
             for (size_t i = 0; i < m_buckets.size(); i++)
             {
-                auto& bucket = m_buckets[i];
+                bucket2Remove.emplace(i, std::move(m_buckets[i]));
                 m_buckets[i] = std::make_shared<BucketType>();
-                bucket2Remove.emplace(i, std::move(bucket));
             }
 
             while (!bucket2Remove.empty())
@@ -560,7 +532,7 @@ public:
         {
             AccessorType accessor;
             size_t idx = getBucketIndex(batch.front());
-            auto bucket = m_buckets[idx];
+            auto& bucket = m_buckets[idx];
             bool acquired = bucket->acquireAccessor(accessor, false);
 
             if (acquired) [[likely]]
@@ -625,7 +597,7 @@ protected:
         return hash % m_buckets.size();
     }
 
-    tbb::concurrent_vector<typename BucketType::Ptr> m_buckets;
+    std::vector<typename BucketType::Ptr> m_buckets;
 };
 
 template <class KeyType, class BucketHasher = std::hash<KeyType>>
@@ -633,7 +605,7 @@ class BucketSet : public BucketMap<KeyType, EmptyType, BucketHasher>
 {
 public:
     BucketSet(size_t bucketSize) : BucketMap<KeyType, EmptyType, BucketHasher>(bucketSize){};
-    ~BucketSet() override = default;
+    ~BucketSet() = default;
 
     using WriteAccessor = typename BucketMap<KeyType, EmptyType, BucketHasher>::WriteAccessor;
     using ReadAccessor = typename BucketMap<KeyType, EmptyType, BucketHasher>::ReadAccessor;
