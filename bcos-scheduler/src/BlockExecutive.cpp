@@ -7,6 +7,7 @@
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/protocol/Transaction.h"
+#include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-table/src/StateStorage.h"
 #include "bcos-tars-protocol/protocol/BlockImpl.h"
 #include "bcos-task/Wait.h"

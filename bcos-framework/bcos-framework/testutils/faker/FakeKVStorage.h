@@ -19,12 +19,8 @@
  * @date 2021-09-07
  */
 #pragma once
-#include "../../protocol/CommonError.h"
-#include "../../storage/StorageInterface.h"
 #include "../../storage/KVStorageHelper.h"
 #include <bcos-utilities/Error.h>
-#include <atomic>
-#include <memory>
 
 using namespace bcos;
 using namespace bcos::storage;
