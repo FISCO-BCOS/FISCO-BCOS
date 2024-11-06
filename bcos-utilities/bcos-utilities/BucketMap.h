@@ -617,21 +617,21 @@ public:
     }
 
     void batchInsert(const auto& keys,
-        std::function<void(bool, const KeyType&, typename BucketSet::WriteAccessor)> onInsert)
+        std::function<void(bool, const KeyType&, typename BucketSet::WriteAccessor*)> onInsert)
     {
         BucketSet::template forEach<typename BucketSet::WriteAccessor>(
             keys, [onInsert = std::move(onInsert)](const KeyType& key,
                       typename Bucket<KeyType, EmptyType>::Ptr bucket,
                       typename BucketSet::WriteAccessor& accessor) {
                 bool success = bucket->insert(accessor, {key, EmptyType()});
-                onInsert(success, key, success ? std::move(accessor) : BucketSet::WriteAccessor{});
+                onInsert(success, key, success ? std::addressof(accessor) : nullptr);
                 return true;
             });
     }
 
     void batchInsert(const auto& keys)
     {
-        batchInsert(keys, [](bool, const KeyType&, typename BucketSet::WriteAccessor) {});
+        batchInsert(keys, [](bool, const KeyType&, typename BucketSet::WriteAccessor*) {});
     }
 };
 

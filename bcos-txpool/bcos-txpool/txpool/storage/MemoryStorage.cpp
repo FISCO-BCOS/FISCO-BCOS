@@ -1025,27 +1025,19 @@ void MemoryStorage::clear()
 
 HashListPtr MemoryStorage::filterUnknownTxs(HashList const& _txsHashList, NodeIDPtr _peer)
 {
-    auto missList = std::make_shared<HashList>();
+    HashList missList;
     m_txsTable.batchFind<TxsMap::ReadAccessor>(
-        _txsHashList, [&missList](auto const& txHash, TxsMap::ReadAccessor* accessor) {
+        _txsHashList, [&](auto const& txHash, TxsMap::ReadAccessor* accessor) {
             if (!accessor)
             {
-                missList->push_back(txHash);
-            }
-            else
-            {
-                const auto& tx = accessor->value();
-                if (!tx)
-                {
-                    return true;
-                }
+                missList.push_back(txHash);
             }
             return true;
         });
 
     auto unknownTxsList = std::make_shared<HashList>();
-    m_missedTxs.batchInsert(*missList,
-        [&unknownTxsList](bool success, const HashType& hash, HashSet::WriteAccessor accessor) {
+    m_missedTxs.batchInsert(missList,
+        [&unknownTxsList](bool success, const HashType& hash, HashSet::WriteAccessor* accessor) {
             if (success)
             {
                 unknownTxsList->push_back(hash);
