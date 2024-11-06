@@ -28,26 +28,18 @@ concept IsBufferPointer = requires(BufferType buffer) {
     { buffer->size() } -> std::integral;
 };
 
-struct EntryInterface
+struct EmptyEntry
 {
-    EntryInterface() = default;
-    EntryInterface(const EntryInterface&) = default;
-    EntryInterface(EntryInterface&&) noexcept = default;
-    EntryInterface& operator=(const EntryInterface&) = default;
-    EntryInterface& operator=(EntryInterface&&) noexcept = default;
-    virtual ~EntryInterface() noexcept = default;
-    virtual const char* data() const = 0;
-    virtual size_t size() const = 0;
-    virtual void copy(void* target) const = 0;
-    virtual void move(void* target) = 0;
-};
-
-struct EmptyEntryImpl : public EntryInterface
-{
-    const char* data() const override { return nullptr; }
-    size_t size() const override { return 0; }
-    void copy(void* target) const override { new (target) EmptyEntryImpl{}; }
-    void move(void* target) override { new (target) EmptyEntryImpl{}; }
+    EmptyEntry() = default;
+    EmptyEntry(const EmptyEntry&) = default;
+    EmptyEntry(EmptyEntry&&) noexcept = default;
+    EmptyEntry& operator=(const EmptyEntry&) = default;
+    EmptyEntry& operator=(EmptyEntry&&) noexcept = default;
+    virtual ~EmptyEntry() noexcept = default;
+    virtual const char* data() const { return nullptr; }
+    virtual size_t size() const { return 0; }
+    virtual void copy(void* target) const { new (target) EmptyEntry{}; }
+    virtual void move(void* target) { new (target) EmptyEntry{}; }
 };
 
 constexpr static size_t IMPL_SIZE = 32;
@@ -56,7 +48,7 @@ constexpr static int32_t ARCHIVE_FLAG =
 
 template <class Buffer>
     requires((IsBuffer<Buffer> || IsBufferPointer<Buffer>) && (sizeof(Buffer) <= IMPL_SIZE))
-struct EntryImpl : public EntryInterface
+struct EntryImpl : public EmptyEntry
 {
     Buffer m_buffer;
 
@@ -108,31 +100,28 @@ public:
     };
 
 private:
-    std::array<char, IMPL_SIZE + sizeof(EntryInterface)> m_impl;
+    std::array<char, IMPL_SIZE + sizeof(EmptyEntry)> m_impl;
     Status m_status = Status::EMPTY;  // should serialization
 
-    const EntryInterface* impl() const
-    {
-        return reinterpret_cast<const EntryInterface*>(m_impl.data());
-    }
-    EntryInterface* mutableImpl() { return reinterpret_cast<EntryInterface*>(m_impl.data()); }
-    void reset() noexcept { reinterpret_cast<EntryInterface*>(m_impl.data())->~EntryInterface(); }
+    const EmptyEntry* impl() const { return reinterpret_cast<const EmptyEntry*>(m_impl.data()); }
+    EmptyEntry* mutableImpl() { return reinterpret_cast<EmptyEntry*>(m_impl.data()); }
+    void reset() noexcept { reinterpret_cast<EmptyEntry*>(m_impl.data())->~EmptyEntry(); }
 
 public:
-    Entry() { new (m_impl.data()) EmptyEntryImpl{}; }
+    Entry() { new (m_impl.data()) EmptyEntry{}; }
     template <class Buffer>
-    explicit Entry(Buffer buffer)
+    explicit Entry(Buffer buffer) : m_status(MODIFIED)
     {
         EntryImpl<Buffer>::init(m_impl.data(), std::move(buffer));
     }
     template <class Buffer>
-    explicit Entry(auto&&... args)
+    explicit Entry(auto&&... args) : m_status(MODIFIED)
     {
         EntryImpl<Buffer>::init(
             m_impl.data(), std::in_place, std::forward<decltype(args)>(args)...);
     }
     explicit Entry(const char* str) : Entry(std::string_view(str)) {}
-    explicit Entry(std::string_view view)
+    explicit Entry(std::string_view view) : m_status(MODIFIED)
     {
         EntryImpl<std::string>::init(m_impl.data(), std::in_place, view);
     }
@@ -274,7 +263,7 @@ public:
         if (m_status == DELETED)
         {
             reset();
-            new (m_impl.data()) EmptyEntryImpl{};
+            new (m_impl.data()) EmptyEntry{};
         }
     }
     bool dirty() const { return (m_status == MODIFIED || m_status == DELETED); }
