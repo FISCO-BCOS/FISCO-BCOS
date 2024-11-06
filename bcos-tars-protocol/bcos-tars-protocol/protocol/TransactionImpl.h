@@ -28,12 +28,10 @@
 #ifdef _WIN32
 #include <tup/Tars.h>
 #endif
-#include "bcos-crypto/hasher/Hasher.h"
 #include "bcos-crypto/interfaces/crypto/CommonType.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-tars-protocol/tars/Transaction.h"
 #include "bcos-utilities/Common.h"
-#include "bcos-utilities/DataConvertUtility.h"
 
 namespace bcostars::protocol
 {

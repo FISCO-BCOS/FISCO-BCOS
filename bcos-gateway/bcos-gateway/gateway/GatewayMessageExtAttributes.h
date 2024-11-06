@@ -7,9 +7,8 @@
 
 #include <bcos-gateway/libnetwork/Message.h>
 
-namespace bcos
-{
-namespace gateway
+
+namespace bcos::gateway
 {
 
 class GatewayMessageExtAttributes : public MessageExtAttributes
@@ -29,5 +28,4 @@ private:
     std::string m_groupID;
 };
 
-}  // namespace gateway
-}  // namespace bcos
+}  // namespace bcos::gateway
