@@ -20,11 +20,8 @@
 
 #pragma once
 
-#include "bcos-boostssl/websocket/WsError.h"
-#include "bcos-utilities/CompositeBuffer.h"
 #include <bcos-utilities/Common.h>
 #include <boost/asio/buffer.hpp>
-#include <set>
 
 
 namespace bcos::gateway
@@ -44,13 +41,11 @@ public:
     virtual ~MessageExtAttributes() = default;
 };
 
-struct EncodedMessage : public bcos::ObjectCounter<EncodedMessage>
+struct EncodedMessage
 {
     using Ptr = std::shared_ptr<EncodedMessage>;
     bcos::bytes header;
-    // CompositeBuffer::Ptr payload;
     bcos::bytes payload;
-    //
     bool compress = true;
 
     inline std::size_t dataSize() const { return headerSize() + payloadSize(); }

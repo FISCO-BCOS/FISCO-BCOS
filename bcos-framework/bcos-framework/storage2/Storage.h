@@ -13,11 +13,11 @@ namespace bcos::storage2
 
 inline constexpr struct DIRECT_TYPE
 {
-} DIRECT{};
+} DIRECT;
 
 inline constexpr struct RANGE_SEEK_TYPE
 {
-} RANGE_SEEK{};
+} RANGE_SEEK;
 
 template <class Invoke>
 using ReturnType = typename task::AwaitableReturnType<Invoke>;
@@ -38,7 +38,7 @@ inline constexpr struct ReadSome
         co_return co_await tag_invoke(*this, std::forward<decltype(storage)>(storage),
             std::forward<decltype(keys)>(keys), std::forward<decltype(args)>(args)...);
     }
-} readSome{};
+} readSome;
 
 inline constexpr struct WriteSome
 {
@@ -52,7 +52,7 @@ inline constexpr struct WriteSome
             std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values),
             std::forward<decltype(args)>(args)...);
     }
-} writeSome{};
+} writeSome;
 
 inline constexpr struct RemoveSome
 {
@@ -64,7 +64,7 @@ inline constexpr struct RemoveSome
         co_await tag_invoke(*this, std::forward<decltype(storage)>(storage),
             std::forward<decltype(keys)>(keys), std::forward<decltype(args)>(args)...);
     }
-} removeSome{};
+} removeSome;
 
 template <class IteratorType>
 concept Iterator =
@@ -80,7 +80,16 @@ inline constexpr struct Range
         co_return co_await tag_invoke(
             *this, std::forward<decltype(storage)>(storage), std::forward<decltype(args)>(args)...);
     }
-} range{};
+} range;
+
+inline constexpr struct RandomAccessRange
+{
+    auto operator()(auto&& storage, auto&&... args) const
+    {
+        return tag_invoke(
+            *this, std::forward<decltype(storage)>(storage), std::forward<decltype(args)>(args)...);
+    }
+} randomAccessRange;
 
 namespace detail
 {
@@ -116,7 +125,7 @@ inline constexpr struct ReadOne
             co_return std::move(values[0]);
         }
     }
-} readOne{};
+} readOne;
 
 inline constexpr struct WriteOne
 {
@@ -138,7 +147,7 @@ inline constexpr struct WriteOne
                 std::forward<decltype(args)>(args)...);
         }
     }
-} writeOne{};
+} writeOne;
 
 inline constexpr struct RemoveOne
 {
@@ -156,7 +165,7 @@ inline constexpr struct RemoveOne
                 std::forward<decltype(args)>(args)...);
         }
     }
-} removeOne{};
+} removeOne;
 
 inline constexpr struct ExistsOne
 {
@@ -174,7 +183,7 @@ inline constexpr struct ExistsOne
             co_return result.has_value();
         }
     }
-} existsOne{};
+} existsOne;
 
 inline constexpr struct Merge
 {
@@ -183,7 +192,7 @@ inline constexpr struct Merge
         co_await tag_invoke(*this, toStorage, std::forward<decltype(fromStorage)>(fromStorage),
             std::forward<decltype(args)>(args)...);
     }
-} merge{};
+} merge;
 
 template <auto& Tag>
 using tag_t = std::decay_t<decltype(Tag)>;
