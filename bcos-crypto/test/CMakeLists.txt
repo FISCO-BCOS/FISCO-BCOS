@@ -19,6 +19,7 @@ file(GLOB_RECURSE SOURCES "*.cpp" "*.h" "*.sol")
 
 # cmake settings
 set(TEST_BINARY_NAME test-bcos-crypto)
+include(SearchTestCases)
 
 find_package(Boost REQUIRED COMPONENTS unit_test_framework)
 find_package(ZLIB REQUIRED)
@@ -28,4 +29,5 @@ target_include_directories(${TEST_BINARY_NAME} PRIVATE ..)
 target_link_libraries(${TEST_BINARY_NAME} Boost::unit_test_framework bcos-utilities bcos-crypto ZLIB::ZLIB)
 set_source_files_properties("unittests/main.cpp" "unittests/testMerkle.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
-add_test(NAME test-crypto WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
+# add_test(NAME test-crypto WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
+config_test_cases("" ${SOURCES} ${TEST_BINARY_NAME} "")

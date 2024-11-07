@@ -17,6 +17,7 @@
 # ------------------------------------------------------------------------------
 file(GLOB_RECURSE SOURCES "unittests/*.cpp" "unittests/*.h" "unittests/*.sol")
 file(GLOB_RECURSE DEMO_SOURCES "demo/*.cpp" "demo/*.h" "demo/*.sol")
+include(SearchTestCases)
 
 # cmake settings
 set(TEST_BINARY_NAME test-bcos-txpool)
