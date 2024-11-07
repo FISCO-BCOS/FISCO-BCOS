@@ -22,6 +22,7 @@
 #include "bcos-framework/consensus/ConsensusNode.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
+#include "bcos-framework/storage/LegacyStorageMethods.h"
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <fmt/format.h>
 #include <boost/endian/conversion.hpp>

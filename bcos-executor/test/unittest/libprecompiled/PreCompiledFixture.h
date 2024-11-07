@@ -21,6 +21,7 @@
 #pragma once
 #include "bcos-crypto/interfaces/crypto/CommonType.h"
 #include "bcos-framework/ledger/Features.h"
+#include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "executive/BlockContext.h"
 #include "executive/TransactionExecutive.h"
 #include "executor/TransactionExecutorFactory.h"

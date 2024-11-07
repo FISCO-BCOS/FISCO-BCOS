@@ -2,7 +2,6 @@
 #include "../ledger/LedgerTypeDef.h"
 #include "../protocol/Protocol.h"
 #include "../storage/Entry.h"
-#include "../storage/LegacyStorageMethods.h"
 #include "../storage2/Storage.h"
 #include "../transaction-executor/StateKey.h"
 #include "bcos-concepts/Exception.h"

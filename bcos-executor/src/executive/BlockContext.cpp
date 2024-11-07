@@ -22,6 +22,7 @@
 #include "BlockContext.h"
 #include "../vm/Precompiled.h"
 #include "TransactionExecutive.h"
+#include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-framework/storage/Table.h"
 #include "bcos-task/Wait.h"

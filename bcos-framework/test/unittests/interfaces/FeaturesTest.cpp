@@ -420,7 +420,7 @@ BOOST_AUTO_TEST_CASE(genesis)
 BOOST_AUTO_TEST_CASE(testDependenciesFeatures)
 {
     Features features;
-    features.set(ledger::Features::Flag::feature_ethereum_compatible);
+    features.set(Features::Flag::feature_ethereum_compatible);
     // BOOST_CHECK(features.get(ledger::Features::Flag::feature_balance));
     // BOOST_CHECK(features.get(ledger::Features::Flag::feature_balance_precompiled));
     // BOOST_CHECK(features.get(ledger::Features::Flag::feature_calculate_gasPrice));

@@ -24,6 +24,9 @@ concept EntryBufferInput =
     std::same_as<Input, std::string_view> || std::same_as<Input, std::string> ||
     std::same_as<Input, std::vector<char>> || std::same_as<Input, std::vector<unsigned char>>;
 
+constexpr static int32_t ARCHIVE_FLAG =
+    boost::archive::no_header | boost::archive::no_codecvt | boost::archive::no_tracking;
+
 class Entry
 {
 public:
@@ -38,9 +41,6 @@ public:
     constexpr static int32_t SMALL_SIZE = 32;
     constexpr static int32_t MEDIUM_SIZE = 64;
     constexpr static int32_t LARGE_SIZE = INT32_MAX;
-
-    constexpr static int32_t ARCHIVE_FLAG =
-        boost::archive::no_header | boost::archive::no_codecvt | boost::archive::no_tracking;
 
     using SBOBuffer = std::array<char, SMALL_SIZE>;
 

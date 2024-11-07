@@ -148,11 +148,11 @@ BOOST_AUTO_TEST_CASE(testViewChangeWithPrecommitProposals)
     for (size_t i = 0; i < fakerMap.size(); i++)
     {
         auto faker = fakerMap[i];
-        BOOST_CHECK(faker->pbftConfig()->view() > 0);
-        BOOST_CHECK(faker->pbftConfig()->toView() == (faker->pbftConfig()->view()));
-        BOOST_CHECK(faker->pbftConfig()->timer()->changeCycle() == 0);
-        BOOST_CHECK(faker->pbftEngine()->isTimeout() == false);
-        BOOST_CHECK(faker->ledger()->blockNumber() == futureBlockIndex);
+        BOOST_CHECK_GT(faker->pbftConfig()->view(), 0);
+        BOOST_CHECK_EQUAL(faker->pbftConfig()->toView(), (faker->pbftConfig()->view()));
+        BOOST_CHECK_EQUAL(faker->pbftConfig()->timer()->changeCycle(), 0);
+        BOOST_CHECK(!faker->pbftEngine()->isTimeout());
+        BOOST_CHECK_EQUAL(faker->ledger()->blockNumber(), futureBlockIndex);
     }
 }
 BOOST_AUTO_TEST_SUITE_END()

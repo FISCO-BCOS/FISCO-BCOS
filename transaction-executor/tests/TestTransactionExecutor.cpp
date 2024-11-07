@@ -170,10 +170,11 @@ struct TestMemoryResource : public std::pmr::memory_resource
         return this == &other;
     }
 };
-
+#endif
 
 BOOST_AUTO_TEST_CASE(testExecuteStackSize)
 {
+#if 0
     bcostars::protocol::BlockHeaderImpl blockHeader(
         [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
     blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
@@ -207,7 +208,8 @@ BOOST_AUTO_TEST_CASE(testExecuteStackSize)
     BOOST_CHECK_EQUAL(receipt->status(), 0);
     BOOST_CHECK_EQUAL(receipt->contractAddress(), "e0e794ca86d198042b64285c5ce667aee747509b");
     BOOST_CHECK_GE(memoryResource.m_count, 1);
-}
 #endif
+}
+
 
 BOOST_AUTO_TEST_SUITE_END()

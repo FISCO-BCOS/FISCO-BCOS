@@ -79,9 +79,6 @@ struct hash<std::pair<std::string, std::string>>
 
 namespace bcos::storage
 {
-constexpr static int32_t ARCHIVE_FLAG =
-    boost::archive::no_header | boost::archive::no_codecvt | boost::archive::no_tracking;
-
 const char* const TABLE_META_KEY = "";
 const size_t MIN_PAGE_SIZE = 2048;
 class KeyPageStorage : public virtual storage::StateStorageInterface
