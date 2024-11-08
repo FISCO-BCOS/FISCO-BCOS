@@ -1,13 +1,44 @@
-#include "AwsKmsWrapper.h"
-#include "KmsProvider.h"
+#include "bcos-security/bcos-security/kms/AwsKmsWrapper.h"
+#include "bcos-security/bcos-security/kms/KmsProvider.h"
 #include <aws/core/Aws.h>
 #include <iostream>
 #include <string>
+#include <fstream>
 
+using namespace bcos;
+using namespace bcos::security;
 void printUsage(const char* programName)
 {
     std::cerr << "Usage: " << programName
               << " <kms_type> <access_key> <secret_key> <region> <key_id> <inputFilePath> <outputFilePath>" << std::endl;
+}
+
+int saveFile(const std::string& filePath, const std::shared_ptr<bytes>& content)
+{
+    std::ofstream outFile(filePath, std::ios::out | std::ios::trunc | std::ios::binary);
+    if (!outFile.is_open())
+    {
+        std::cerr << "Cannot open file for writing: " << filePath << std::endl;
+        return 1;
+    }
+
+    try
+    {
+        outFile.write(reinterpret_cast<const char*>(content->data()), content->size());
+        if (outFile.fail())
+        {
+            std::cerr << "Failed to write content to file" << std::endl;
+            return 1;
+        }
+        outFile.close();
+    }
+    catch (const std::exception& e)
+    {
+        outFile.close();
+        std::cerr << "Error writing file: " << filePath << "\n" << e.what() << std::endl;
+        return 1;
+    }
+    return 0;
 }
 
 int main(int argc, char* argv[])
@@ -17,7 +48,6 @@ int main(int argc, char* argv[])
         printUsage(argv[0]);
         return 1;
     }
-    // AWS凭证信息
 
     const std::string kmsType = argv[1];
     const std::string accessKey = argv[2];
@@ -27,15 +57,15 @@ int main(int argc, char* argv[])
     const std::string inputFilePath = argv[6];
     const std::string outputFilePath = argv[7];
 
-    auto provider = CloudKMSProviderHelper::stringToProvider(kmsType);
+    auto provider = CloudKMSProviderHelper::FromString(kmsType);
 
-    if (!provider.first)
+    if (provider == CloudKMSProvider::UNKNOWN)
     {
         std::cerr << "Invalid KMS provider: " << kmsType << std::endl;
         return 1;
     }
 
-    if (provider.second == CloudKMSProvider::AWS)
+    if (provider == CloudKMSProvider::AWS)
     {
         // initialize the AWS SDK
         Aws::SDKOptions options;
@@ -48,43 +78,53 @@ int main(int argc, char* argv[])
 
                 // encrypt data
                 auto encryptResult = kmsWrapper.encrypt(keyId, inputFilePath);
-                if (!encryptResult.first)
+                if (encryptResult == nullptr)
                 {
                     std::cerr << "Encryption failed!" << std::endl;
                     return 1;
                 }
 
-                std::cout << "Encrypted data : " << kmsWrapper.toHex(encryptResult.second)
+                std::cout << "Encrypted data : " << encryptResult->size()
                           << " bytes" << std::endl;
-                saveFile(outputFilePath, kmsWrapper.toHex(encryptResult.second));
-
-                std::cout << "Encrypted data size: " << encryptResult.second.size() << " bytes"
-                          << std::endl;
+                saveFile(outputFilePath, encryptResult);
 
                 // decrypt data
-                auto decryptResult = kmsWrapper.decrypt(encryptResult.second);
-                if (!decryptResult.first)
+                auto decryptResult = kmsWrapper.decrypt(encryptResult);
+                if (decryptResult == nullptr)
                 {
                     std::cerr << "Decryption failed!" << std::endl;
                     return 1;
                 }
 
-                std::cout << "Decrypted text: " << decryptResult.second << std::endl;
+                std::cout << "Decrypted text: " << decryptResult->size() << std::endl;
 
-                // read encrypted data from file
-                std::string cipherFile = readFile(outputFilePath);
-                std::vector<unsigned char> cipherData = kmsWrapper.fromHex(cipherFile);
-                std::cout << "test hex " << kmsWrapper.toHex(cipherData) << std::endl;
-                std::cout << "cipherData size " << cipherData.size() << std::endl;
+                // text bytes to string
+                std::string decryptResultStr(decryptResult->begin(), decryptResult->end());
+                std::cout << "Decrypted text: " << decryptResultStr << std::endl;
 
-                auto decryptFileResult = kmsWrapper.decrypt(cipherData);
-                if (!decryptFileResult.first)
-                {
-                    std::cerr << "Decryption failed!" << std::endl;
-                    return 1;
-                }
+                // // read encrypted data from file
+                // std::string cipherFile = readFile(outputFilePath);
+                // std::vector<unsigned char> cipherData = kmsWrapper.fromHex(cipherFile);
+                // std::cout << "test hex " << kmsWrapper.toHex(cipherData) << std::endl;
+                // std::cout << "cipherData size " << cipherData.size() << std::endl;
 
-                std::cout << "Decrypted text from file: " << decryptFileResult.second << std::endl;
+                // auto decryptFileResult = kmsWrapper.decrypt(cipherData);
+                // if (!decryptFileResult.first)
+                // {
+                //     std::cerr << "Decryption failed!" << std::endl;
+                //     return 1;
+                // }
+
+                // std::cout << "Decrypted text from file: " << decryptFileResult.second << std::endl;
+
+                // auto decryptRawResult = kmsWrapper.decryptRaw(std::make_shared<bytes>(cipherData));
+                // if (decryptRawResult == nullptr)
+                // {
+                //     std::cerr << "Decryption failed!" << std::endl;
+                //     return 1;
+                // }
+                // std::string decryptRawResultStr(decryptRawResult->begin(), decryptRawResult->end());
+                // std::cout << "Decrypted text from raw data: " << decryptRawResultStr << std::endl;
 
             }
             catch (const std::exception& e)
@@ -102,23 +142,4 @@ int main(int argc, char* argv[])
         std::cerr << "Unsupported KMS provider: " << kmsType << std::endl;
         return 1;
     }
-
-
-    // std::string accessKey;
-    // std::string secretKey;
-    // std::string region;
-    // std::string keyId;
-
-    // // 从用户输入获取凭证信息
-    // std::cout << "Enter AWS Access Key: ";
-    // std::getline(std::cin, accessKey);
-
-    // std::cout << "Enter AWS Secret Key: ";
-    // std::getline(std::cin, secretKey);
-
-    // std::cout << "Enter AWS Region (e.g., us-west-2): ";
-    // std::getline(std::cin, region);
-
-    // std::cout << "Enter KMS Key ID: ";
-    // std::getline(std::cin, keyId);
 }

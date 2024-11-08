@@ -1,20 +1,20 @@
 # file(GLOB SRC_LIST "*.cpp")
 
-# AWS SDK需要的包
+# aws sdk
+# find_package(${SECURITY_TARGET} REQUIRED)
 find_package(AWSSDK REQUIRED COMPONENTS kms)
+add_executable(kms_tool KmsTool.cpp)
+target_link_libraries(kms_tool PUBLIC ${SECURITY_TARGET})
+# target_link_libraries(kms_tool
+#     PUBLIC
+#     AWSSDK
+# )
+
 find_package(ZLIB REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(CURL REQUIRED)
 
-# 添加源文件
-add_executable(kms_tool
-    KmsTool.cpp
-    Utils.cpp
-    KmsWrapper.h
-    AwsKmsWrapper.cpp
-)
-
-# 链接AWS SDK库
+# link libraries
 target_link_libraries(kms_tool PRIVATE
     ${AWSSDK_LINK_LIBRARIES}
     ZLIB::ZLIB
@@ -23,7 +23,7 @@ target_link_libraries(kms_tool PRIVATE
     CURL::libcurl
 )
 
-# 添加头文件搜索路径
+# add include directories
 target_include_directories(kms_tool PRIVATE
     ${AWSSDK_INCLUDE_DIRS}
 )

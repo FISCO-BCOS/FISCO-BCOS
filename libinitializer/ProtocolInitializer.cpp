@@ -29,7 +29,9 @@
 #include <bcos-crypto/signature/hsmSM2/HsmSM2Crypto.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
-#include <bcos-security/bcos-security/DataEncryption.h>
+#include <bcos-security/bcos-security/BcosKmsDataEncryption.h>
+// #include <bcos-security/bcos-security/kms/KmsInterface.h>
+// #include <bcos-security/bcos-security/BcosKmsKeyEncryption.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
@@ -49,15 +51,17 @@ ProtocolInitializer::ProtocolInitializer()
 void ProtocolInitializer::init(NodeConfig::Ptr _nodeConfig)
 {
     m_enableHsm = _nodeConfig->enableHsm();
+    m_keyEncryptionType = _nodeConfig->keyEncryptionType();
+
     // TODO: ed25519
     if (_nodeConfig->smCryptoType())
     {
-        if (m_enableHsm)
+        if (m_enableHsm || m_keyEncryptionType == KeyEncryptionType::HSM)
         {
             m_hsmLibPath = _nodeConfig->hsmLibPath();
             m_keyIndex = _nodeConfig->keyIndex();
             m_password = _nodeConfig->password();
-            createHsmSMCryptoSuite();
+            // createHsmSMCryptoSuite();
             INITIALIZER_LOG(INFO) << LOG_DESC("begin init hsm sm crypto suite");
         }
         else
@@ -72,7 +76,9 @@ void ProtocolInitializer::init(NodeConfig::Ptr _nodeConfig)
     }
     INITIALIZER_LOG(INFO) << LOG_DESC("init crypto suite success");
 
-    if (true == _nodeConfig->storageSecurityEnable())
+    if ((true == _nodeConfig->storageSecurityEnable() &&
+            m_keyEncryptionType == KeyEncryptionType::DEFAULT) ||
+        m_keyEncryptionType == KeyEncryptionType::BKMS)
     {
         // Notice: the reason we don't use HSM for storage security is that the encrypt function in
         // HSM only support data length from 0 to 65536 byte
@@ -86,12 +92,23 @@ void ProtocolInitializer::init(NodeConfig::Ptr _nodeConfig)
         // }
         // else
         // {
-        m_dataEncryption = std::make_shared<DataEncryption>(_nodeConfig);
+        // m_keyEncryption = std::make_shared<BcosKmsKeyEncryption>(_nodeConfig);
         // }
 
         INITIALIZER_LOG(INFO) << LOG_DESC(
             "storage_security.enable = true, init data encryption success");
     }
+    // if (m_keyEncryptionType == KeyEncryptionType::KMS)
+    // {
+    //     m_keyEncryption = std::make_shared<KmsInterface>(_nodeConfig);
+    // }
+
+    if(_nodeConfig->storageSecurityEnable())
+    {
+        INITIALIZER_LOG(INFO) << LOG_DESC("storage security enable");
+        m_dataEncryption = std::make_shared<BcosKmsDataEncryption>(_nodeConfig);
+    }
+
 
     // create the block factory
     // TODO: pb/tars option
@@ -124,38 +141,38 @@ void ProtocolInitializer::createSMCryptoSuite()
     m_cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, encryptImpl);
 }
 
-void ProtocolInitializer::createHsmSMCryptoSuite()
-{
-    auto hashImpl = std::make_shared<SM3>();
-    auto signatureImpl = std::make_shared<HsmSM2Crypto>(m_hsmLibPath);
-    auto encryptImpl = std::make_shared<HsmSM4Crypto>(m_hsmLibPath);
-    m_cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, encryptImpl);
-}
+// void ProtocolInitializer::createHsmSMCryptoSuite()
+// {
+//     auto hashImpl = std::make_shared<SM3>();
+//     auto signatureImpl = std::make_shared<HsmSM2Crypto>(m_hsmLibPath);
+//     auto encryptImpl = std::make_shared<HsmSM4Crypto>(m_hsmLibPath);
+//     m_cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, encryptImpl);
+// }
 
 void ProtocolInitializer::loadKeyPair(std::string const& _privateKeyPath)
 {
-    if (m_enableHsm)
+    if (m_enableHsm || m_keyEncryptionType == KeyEncryptionType::HSM)
     {
         // Create key pair according to the key index which inside HSM(Hardware Secure Machine)
-        m_keyPair = dynamic_pointer_cast<bcos::crypto::HsmSM2Crypto>(m_cryptoSuite->signatureImpl())
-                        ->createKeyPair(m_keyIndex, m_password);
+        // m_keyPair = dynamic_pointer_cast<bcos::crypto::HsmSM2Crypto>(m_cryptoSuite->signatureImpl())
+        //                 ->createKeyPair(m_keyIndex, m_password);
         INITIALIZER_LOG(INFO) << METRIC << LOG_DESC("loadKeyPair from HSM")
                               << LOG_KV("lib_path", m_hsmLibPath) << LOG_KV("keyIndex", m_keyIndex)
                               << LOG_KV("HSM password", m_password);
     }
     else
     {
-        auto privateKeyData =
-            loadPrivateKey(_privateKeyPath, c_hexedPrivateKeySize, m_dataEncryption);
+        auto privateKeyData = loadPrivateKey(
+            _privateKeyPath, c_hexedPrivateKeySize, m_keyEncryption);
         if (!privateKeyData)
         {
-            INITIALIZER_LOG(INFO) << LOG_DESC("loadKeyPair failed")
-                                  << LOG_KV("privateKeyPath", _privateKeyPath);
+            INITIALIZER_LOG(ERROR)
+                << LOG_DESC("loadKeyPair failed") << LOG_KV("privateKeyPath", _privateKeyPath);
             throw std::runtime_error("loadKeyPair failed, keyPair path: " + _privateKeyPath);
         }
         INITIALIZER_LOG(INFO) << LOG_DESC("loadKeyPair from privateKey")
                               << LOG_KV("privateKeySize", privateKeyData->size())
-                              << LOG_KV("enableStorageSecurity", m_dataEncryption ? true : false);
+                              << LOG_KV("keyEncryptionType", GetKeyEncryptionTypeString(m_keyEncryptionType));
         auto privateKey = m_keyFactory->createKey(*privateKeyData);
         m_keyPair = m_cryptoSuite->signatureImpl()->createKeyPair(privateKey);
         INITIALIZER_LOG(INFO) << METRIC << LOG_DESC("loadKeyPair from privateKeyPath")

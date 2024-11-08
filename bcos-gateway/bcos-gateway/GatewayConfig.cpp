@@ -8,7 +8,7 @@
 #include "bcos-utilities/Common.h"
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-gateway/GatewayConfig.h>
-#include <bcos-security/bcos-security/KeyCenter.h>
+#include <bcos-security/bcos-security/BcosKms.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FileUtility.h>
 #include <bcos-utilities/FixedBytes.h>
