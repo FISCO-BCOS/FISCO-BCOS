@@ -43,7 +43,7 @@ inline std::shared_ptr<bytes> loadPrivateKey(std::string const& _keyPath,
         auto keyContent = content;
         if (_certEncryptionHandler)
         {
-            keyContent = _certEncryptionHandler->decryptContents(keyContent);
+            keyContent = _certEncryptionHandler->decryptContents(content);
         }
 
         // key center
