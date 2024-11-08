@@ -24,7 +24,6 @@
 #include "bcos-txpool/TxPoolConfig.h"
 #include "bcos-txpool/txpool/utilities/Common.h"
 #include "txpool/interfaces/TxPoolStorageInterface.h"
-#include <bcos-txpool/txpool/utilities/TransactionBucket.h>
 #include <bcos-utilities/BucketMap.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <bcos-utilities/RateCollector.h>
