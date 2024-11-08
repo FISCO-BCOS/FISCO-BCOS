@@ -42,7 +42,7 @@ inline std::string GetKeyEncryptionTypeString(KeyEncryptionType type)
 inline KeyEncryptionType GetKeyEncryptionTypeFromString(const std::string& typeStr)
 {
    auto result = magic_enum::enum_cast<KeyEncryptionType>(typeStr);
-   if (result)
+   if (!result)
    {
        return KeyEncryptionType::DEFAULT;
    }

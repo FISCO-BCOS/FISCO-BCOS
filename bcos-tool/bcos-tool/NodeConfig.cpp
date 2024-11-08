@@ -621,7 +621,7 @@ void NodeConfig::loadSecurityConfig(boost::property_tree::ptree const& _pt)
     m_privateKeyPath = _pt.get<std::string>("security.private_key_path", "node.pem");
     m_enableHsm = _pt.get<bool>("security.enable_hsm", false);
     m_keyEncryptionType = GetKeyEncryptionTypeFromString(
-        _pt.get<std::string>("security.key_encryption_type", "default"));
+        _pt.get<std::string>("security.key_encryption_type", "DEFAULT"));
     m_KeyEncryptionUrl = _pt.get<std::string>("security.key_encryption_url", "");
     if (m_enableHsm || m_keyEncryptionType == KeyEncryptionType::HSM)
     {
