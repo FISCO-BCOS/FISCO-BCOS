@@ -110,12 +110,12 @@ bcos::rpc::RpcFactory::Ptr RpcInitializer::initRpcFactory(bcos::tool::NodeConfig
         gatewayPrx, gatewayServiceName, protocolInitializer->keyFactory());
 
     bcos::security::KeyEncryptInterface::Ptr keyEncryptionPtr = nullptr;
-    if (_nodeConfig->keyEncryptionType() == KeyEncryptionType::HSM ||
-        _nodeConfig->keyEncryptionType() == KeyEncryptionType::BKMS ||
-        _nodeConfig->keyEncryptionType() == KeyEncryptionType::DEFAULT)
-    {
-        keyEncryptionPtr = protocolInitializer->keyEncryption();
-    }
+    // if (_nodeConfig->keyEncryptionType() == KeyEncryptionType::HSM ||
+    //     _nodeConfig->keyEncryptionType() == KeyEncryptionType::BKMS ||
+    //     _nodeConfig->keyEncryptionType() == KeyEncryptionType::DEFAULT)
+    // {
+    //     keyEncryptionPtr = protocolInitializer->keyEncryption();
+    // }
 
     auto factory = std::make_shared<bcos::rpc::RpcFactory>(
         _nodeConfig->chainId(), gateway, protocolInitializer->keyFactory(), keyEncryptionPtr);

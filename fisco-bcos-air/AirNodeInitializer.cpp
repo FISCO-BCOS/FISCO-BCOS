@@ -67,12 +67,12 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     // DataEncryption will be inited in ProtocolInitializer when storage_security.enable = true,
     // otherwise keyEncryption() will return nullptr
     bcos::security::KeyEncryptInterface::Ptr keyEncryptionPtr = nullptr;
-    if (nodeConfig->keyEncryptionType() == KeyEncryptionType::HSM ||
-        nodeConfig->keyEncryptionType() == KeyEncryptionType::BKMS ||
-        nodeConfig->keyEncryptionType() == KeyEncryptionType::DEFAULT)
-    {
-        keyEncryptionPtr = m_nodeInitializer->protocolInitializer()->keyEncryption();
-    }
+    // if (nodeConfig->keyEncryptionType() == KeyEncryptionType::HSM ||
+    //     nodeConfig->keyEncryptionType() == KeyEncryptionType::BKMS ||
+    //     nodeConfig->keyEncryptionType() == KeyEncryptionType::DEFAULT)
+    // {
+    //     keyEncryptionPtr = m_nodeInitializer->protocolInitializer()->keyEncryption();
+    // }
     GatewayFactory gatewayFactory(nodeConfig->chainId(), "localRpc", keyEncryptionPtr);
     auto gateway = gatewayFactory.buildGateway(_configFilePath, true, nullptr, "localGateway");
     m_gateway = gateway;
