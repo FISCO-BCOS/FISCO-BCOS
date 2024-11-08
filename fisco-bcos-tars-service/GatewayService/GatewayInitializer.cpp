@@ -73,12 +73,12 @@ void GatewayInitializer::init(std::string const& _configPath)
     protocolInitializer->init(nodeConfig);
 
     bcos::security::KeyEncryptInterface::Ptr keyEncryptionPtr = nullptr;
-    // if (nodeConfig->keyEncryptionType() == KeyEncryptionType::HSM ||
-    //     nodeConfig->keyEncryptionType() == KeyEncryptionType::BKMS ||
-    //     nodeConfig->keyEncryptionType() == KeyEncryptionType::DEFAULT)
-    // {
-    //     keyEncryptionPtr = protocolInitializer->keyEncryption();
-    // }
+    if (nodeConfig->keyEncryptionType() == KeyEncryptionType::HSM ||
+        nodeConfig->keyEncryptionType() == KeyEncryptionType::BKMS ||
+        nodeConfig->keyEncryptionType() == KeyEncryptionType::DEFAULT)
+    {
+        keyEncryptionPtr = protocolInitializer->keyEncryption();
+    }
 
     bcos::gateway::GatewayFactory factory(
         nodeConfig->chainId(), nodeConfig->rpcServiceName(), keyEncryptionPtr);
