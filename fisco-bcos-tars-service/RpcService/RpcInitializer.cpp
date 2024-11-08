@@ -109,16 +109,16 @@ bcos::rpc::RpcFactory::Ptr RpcInitializer::initRpcFactory(bcos::tool::NodeConfig
     auto gateway = std::make_shared<GatewayServiceClient>(
         gatewayPrx, gatewayServiceName, protocolInitializer->keyFactory());
 
-    bcos::security::KeyEncryptInterface::Ptr keyEncryptionPtr = nullptr;
-    if (_nodeConfig->keyEncryptionType() == KeyEncryptionType::HSM ||
-        _nodeConfig->keyEncryptionType() == KeyEncryptionType::BKMS ||
-        _nodeConfig->keyEncryptionType() == KeyEncryptionType::DEFAULT)
-    {
-        keyEncryptionPtr = protocolInitializer->keyEncryption();
-    }
+    // bcos::security::KeyEncryptInterface::Ptr keyEncryptionPtr = nullptr;
+    // if (_nodeConfig->keyEncryptionType() == KeyEncryptionType::HSM ||
+    //     _nodeConfig->keyEncryptionType() == KeyEncryptionType::BKMS ||
+    //     _nodeConfig->keyEncryptionType() == KeyEncryptionType::DEFAULT)
+    // {
+    //     keyEncryptionPtr = protocolInitializer->keyEncryption();
+    // }
 
     auto factory = std::make_shared<bcos::rpc::RpcFactory>(
-        _nodeConfig->chainId(), gateway, protocolInitializer->keyFactory(), keyEncryptionPtr);
+        _nodeConfig->chainId(), gateway, protocolInitializer->keyFactory(), protocolInitializer->dataEncryption());
     factory->setNodeConfig(_nodeConfig);
     RPCSERVICE_LOG(INFO) << LOG_DESC("create rpc factory success")
                          << LOG_KV("withoutTarsFramework", withoutTarsFramework)
