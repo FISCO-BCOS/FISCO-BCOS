@@ -153,27 +153,27 @@ public:
             RANGES::category::random_access | RANGES::category::sized>
             values) override
     {
-        return task::syncWait(
-            [](decltype(this) self, decltype(tableName) tableName, decltype(keys)& keys,
-                decltype(values)& values) -> task::Task<Error::Ptr> {
-                try
-                {
-                    co_await storage2::writeSome(self->m_storage.get(),
-                        keys | RANGES::views::transform([&](std::string_view key) {
-                            return transaction_executor::StateKey{tableName, key};
-                        }),
+        return task::syncWait([](decltype(this) self, decltype(tableName) tableName,
+                                  decltype(keys)& keys,
+                                  decltype(values)& values) -> task::Task<Error::Ptr> {
+            try
+            {
+                co_await storage2::writeSome(self->m_storage.get(),
+                    ::ranges::views::zip(keys | RANGES::views::transform([&](std::string_view key) {
+                        return transaction_executor::StateKey{tableName, key};
+                    }),
                         values | RANGES::views::transform([](std::string_view value) -> auto {
                             storage::Entry entry;
                             entry.setField(0, value);
                             return entry;
-                        }));
-                    co_return nullptr;
-                }
-                catch (std::exception& e)
-                {
-                    co_return BCOS_ERROR_WITH_PREV_PTR(-1, "setRows error!", e);
-                }
-            }(this, tableName, keys, values));
+                        })));
+                co_return nullptr;
+            }
+            catch (std::exception& e)
+            {
+                co_return BCOS_ERROR_WITH_PREV_PTR(-1, "setRows error!", e);
+            }
+        }(this, tableName, keys, values));
     };
 };
 

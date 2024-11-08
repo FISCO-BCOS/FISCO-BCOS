@@ -421,15 +421,13 @@ task::Task<void> Ledger::batchInsertEoaNonce(bcos::storage::StorageInterface::Pt
         co_await ledger::account::setNonce(eoa, std::to_string(newNonce));
     }
 
-    co_await bcos::storage2::writeSome(*storage,
-        RANGES::views::keys(eoa2Nonce) | RANGES::views::transform([](auto&& sender) {
-            auto table = getContractTableName(SYS_DIRECTORY::USER_APPS, sender);
-            return transaction_executor::StateKey(table, "nonce");
-        }),
-        RANGES::views::values(eoa2Nonce) | RANGES::views::transform([](auto&& nonce) {
-            Entry entry;
-            entry.set(std::to_string(nonce + 1));
-            return entry;
+    co_await bcos::storage2::writeSome(
+        *storage, ::ranges::views::transform(eoa2Nonce, [&](auto& item) {
+            auto&& [sender, nonce] = item;
+            return std::make_tuple(
+                transaction_executor::StateKey(
+                    getContractTableName(SYS_DIRECTORY::USER_APPS, sender), "nonce"),
+                storage::Entry(std::to_string(nonce + 1)));
         }));
 }
 

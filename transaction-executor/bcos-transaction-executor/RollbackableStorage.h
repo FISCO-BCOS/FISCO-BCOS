@@ -3,6 +3,7 @@
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Trait.h"
+#include <range/v3/view/map.hpp>
 #include <type_traits>
 
 namespace bcos::transaction_executor
@@ -41,41 +42,40 @@ public:
     using Value = typename Storage::Value;
 
     Rollbackable(Storage& storage) : m_storage(storage) {}
+
+    friend Savepoint current(Rollbackable const& storage)
+    {
+        return static_cast<int64_t>(storage.m_records.size());
+    }
+
+    friend task::Task<void> rollback(Rollbackable& storage, Savepoint savepoint)
+    {
+        if (storage.m_records.empty())
+        {
+            co_return;
+        }
+        for (auto index = static_cast<int64_t>(storage.m_records.size()); index > savepoint;
+             --index)
+        {
+            assert(index > 0);
+            auto& record = storage.m_records[index - 1];
+            if (record.oldValue)
+            {
+                co_await storage2::writeOne(
+                    storage.m_storage.get(), std::move(record.key), std::move(*record.oldValue));
+            }
+            else
+            {
+                co_await storage2::removeOne(storage.m_storage.get(), record.key, storage2::DIRECT);
+            }
+            storage.m_records.pop_back();
+        }
+        co_return;
+    }
 };
 
 template <class Storage>
 concept IsRollbackable = std::remove_cvref_t<Storage>::isRollbackable;
-
-template <IsRollbackable Rollbackable>
-typename Rollbackable::Savepoint current(Rollbackable const& storage)
-{
-    return static_cast<int64_t>(storage.m_records.size());
-}
-
-template <IsRollbackable Rollbackable>
-task::Task<void> rollback(Rollbackable& storage, typename Rollbackable::Savepoint savepoint)
-{
-    if (storage.m_records.empty())
-    {
-        co_return;
-    }
-    for (auto index = static_cast<int64_t>(storage.m_records.size()); index > savepoint; --index)
-    {
-        assert(index > 0);
-        auto& record = storage.m_records[index - 1];
-        if (record.oldValue)
-        {
-            co_await storage2::writeOne(
-                storage.m_storage.get(), std::move(record.key), std::move(*record.oldValue));
-        }
-        else
-        {
-            co_await storage2::removeOne(storage.m_storage.get(), record.key, storage2::DIRECT);
-        }
-        storage.m_records.pop_back();
-    }
-    co_return;
-}
 
 template <IsRollbackable Rollbackable>
 auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, Rollbackable& storage,
@@ -97,11 +97,12 @@ auto tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/, Rollbackable& sto
 
 template <IsRollbackable Rollbackable>
 auto tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/, Rollbackable& storage,
-    RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
+    RANGES::input_range auto&& keyValues)
     -> task::Task<task::AwaitableReturnType<std::invoke_result_t<storage2::WriteSome,
-        typename Rollbackable::BackendStorage&, decltype(keys), decltype(values)>>>
+        typename Rollbackable::BackendStorage&, decltype(keyValues)>>>
     requires HasReadSomeDirect<typename Rollbackable::BackendStorage>
 {
+    auto keys = ::ranges::views::keys(keyValues) | ::ranges::to<std::vector>;
     auto oldValues = co_await storage2::readSome(storage.m_storage.get(), keys, storage2::DIRECT);
     for (auto&& [key, oldValue] : RANGES::views::zip(keys, oldValues))
     {
@@ -110,8 +111,8 @@ auto tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/, Rollbackable& s
                 .oldValue = std::forward<decltype(oldValue)>(oldValue)});
     }
 
-    co_return co_await storage2::writeSome(storage.m_storage.get(),
-        std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values));
+    co_return co_await storage2::writeSome(
+        storage.m_storage.get(), std::forward<decltype(keyValues)>(keyValues));
 }
 
 template <IsRollbackable Rollbackable>

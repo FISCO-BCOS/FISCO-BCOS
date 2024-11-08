@@ -34,7 +34,7 @@ struct Fixture
                 return entry;
             });
 
-            co_await storage2::writeSome(view, allKeys, allValues);
+            co_await storage2::writeSome(view, ::ranges::views::zip(allKeys, allValues));
             pushView(multiLayerStorage, std::move(view));
         }(count));
 

@@ -3,8 +3,10 @@
 #include "bcos-task/Trait.h"
 #include <optional>
 #include <range/v3/range.hpp>
+#include <range/v3/view/indirect.hpp>
 #include <range/v3/view/single.hpp>
 #include <range/v3/view/transform.hpp>
+#include <range/v3/view/zip.hpp>
 #include <type_traits>
 
 // tag_invoke storage interface
@@ -42,15 +44,14 @@ inline constexpr struct ReadSome
 
 inline constexpr struct WriteSome
 {
-    auto operator()(auto&& storage, ::ranges::input_range auto&& keys,
-        ::ranges::input_range auto&& values, auto&&... args) const
+    auto operator()(auto&& storage, ::ranges::input_range auto&& keyValues, auto&&... args) const
         -> task::Task<ReturnType<decltype(tag_invoke(*this,
-            std::forward<decltype(storage)>(storage), std::forward<decltype(keys)>(keys),
-            std::forward<decltype(values)>(values), std::forward<decltype(args)>(args)...))>>
+            std::forward<decltype(storage)>(storage), std::forward<decltype(keyValues)>(keyValues),
+            std::forward<decltype(args)>(args)...))>>
+        requires(std::tuple_size_v<::ranges::range_value_t<decltype(keyValues)>> >= 2)
     {
         co_await tag_invoke(*this, std::forward<decltype(storage)>(storage),
-            std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values),
-            std::forward<decltype(args)>(args)...);
+            std::forward<decltype(keyValues)>(keyValues), std::forward<decltype(args)>(args)...);
     }
 } writeSome;
 
@@ -97,8 +98,7 @@ auto toSingleView(auto&& item)
 {
     if constexpr (std::is_lvalue_reference_v<decltype(item)>)
     {
-        return ::ranges::views::single(std::ref(item)) |
-               ::ranges::views::transform([](auto&& ref) -> auto& { return ref.get(); });
+        return ::ranges::views::single(std::addressof(item)) | ::ranges::views::indirect;
     }
     else
     {
@@ -142,8 +142,8 @@ inline constexpr struct WriteOne
         else
         {
             co_await writeSome(std::forward<decltype(storage)>(storage),
-                detail::toSingleView(std::forward<decltype(key)>(key)),
-                detail::toSingleView(std::forward<decltype(value)>(value)),
+                ::ranges::views::single(std::make_tuple(
+                    std::forward<decltype(key)>(key), std::forward<decltype(value)>(value))),
                 std::forward<decltype(args)>(args)...);
         }
     }

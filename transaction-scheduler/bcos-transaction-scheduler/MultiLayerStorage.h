@@ -154,7 +154,6 @@ public:
 template <class Storage>
 concept IsView = std::remove_cvref_t<Storage>::isView;
 
-
 template <IsView View>
 auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, View& view,
     ::ranges::input_range auto&& keys, storage2::DIRECT_TYPE /*unused*/)
@@ -244,10 +243,10 @@ auto tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/, View& view, auto&
 
 template <IsView View>
 task::Task<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/, View& view,
-    ::ranges::input_range auto&& keys, ::ranges::input_range auto&& values)
+    ::ranges::input_range auto&& keyValues)
 {
-    co_await storage2::writeSome(mutableStorage(view), std::forward<decltype(keys)>(keys),
-        std::forward<decltype(values)>(values));
+    co_await storage2::writeSome(
+        mutableStorage(view), std::forward<decltype(keyValues)>(keyValues));
 }
 
 template <IsView View>

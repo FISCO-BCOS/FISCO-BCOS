@@ -36,21 +36,6 @@
 namespace bcos::txpool
 {
 
-class HashCompare
-{
-public:
-    size_t hash(const bcos::crypto::HashType& x) const
-    {
-        uint64_t const* data = reinterpret_cast<uint64_t const*>(x.data());
-        return boost::hash_range(data, data + 4);
-    }
-    // True if strings are equal
-    bool equal(const bcos::crypto::HashType& x, const bcos::crypto::HashType& y) const
-    {
-        return x == y;
-    }
-};
-
 class MemoryStorage : public TxPoolStorageInterface,
                       public std::enable_shared_from_this<MemoryStorage>
 {

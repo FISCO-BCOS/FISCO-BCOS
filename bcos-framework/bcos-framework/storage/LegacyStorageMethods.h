@@ -72,13 +72,9 @@ inline task::Task<std::vector<std::optional<Entry>>> tag_invoke(
 }
 
 inline task::Task<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/,
-    StorageInterface& storage, RANGES::input_range auto&& keys, RANGES::input_range auto&& values)
-    requires std::is_same_v<RANGES::range_value_t<decltype(keys)>,
-                 transaction_executor::StateKey> &&
-             std::is_same_v<RANGES::range_value_t<decltype(values)>, Entry>
+    StorageInterface& storage, RANGES::input_range auto&& keyValues)
 {
-    for (auto&& [key, value] : RANGES::views::zip(
-             std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values)))
+    for (auto&& [key, value] : keyValues)
     {
         co_await storage2::writeOne(
             storage, std::forward<decltype(key)>(key), std::forward<decltype(value)>(value));
