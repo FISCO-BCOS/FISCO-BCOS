@@ -126,7 +126,7 @@ public:
 
     void tryToSyncTxsFromPeers() override;
 
-    virtual task::Task<std::optional<u256>> getWeb3PendingNonce(std::string_view address) override;
+    task::Task<std::optional<u256>> getWeb3PendingNonce(std::string_view address) override;
 
     bool existsInGroup(bcos::crypto::NodeIDPtr _nodeId) override
     {
