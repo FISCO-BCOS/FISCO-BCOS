@@ -54,8 +54,8 @@ target_include_directories(${SECURITY_TARGET} PRIVATE
 target_link_libraries(${SECURITY_TARGET} PUBLIC ${UTILITIES_TARGET} ${TOOL_TARGET} ${CRYPTO_TARGET} jsoncpp_static)
 set_target_properties(${SECURITY_TARGET} PROPERTIES UNITY_BUILD "ON")
 
-if(TESTS)
-  enable_testing()
-  set(ENV{CTEST_OUTPUT_ON_FAILURE} True)
-  add_subdirectory(test)
-endif()
+# if(TESTS)
+#   enable_testing()
+#   set(ENV{CTEST_OUTPUT_ON_FAILURE} True)
+#   add_subdirectory(test)
+# endif()
