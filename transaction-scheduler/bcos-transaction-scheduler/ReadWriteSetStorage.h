@@ -9,8 +9,7 @@ namespace bcos::transaction_scheduler
 template <class StorageType, class KeyType>
 class ReadWriteSetStorage
 {
-public:
-    constexpr static bool isReadWriteSetStorage = true;
+private:
     std::reference_wrapper<std::remove_reference_t<StorageType>> m_storage;
     struct ReadWriteFlag
     {
@@ -36,7 +35,6 @@ public:
             it->second.read |= (!write);
         }
     }
-
     friend void putSet(ReadWriteSetStorage& storage, bool write, auto const& key)
     {
         auto hash = std::hash<Key>{}(key);
