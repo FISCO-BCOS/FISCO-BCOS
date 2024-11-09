@@ -69,14 +69,14 @@ public:
         WriteAccessor() = default;
         void setLock(WriteGuard guard)
         {
-            if (!m_writeGuard)
+            if (!m_writeGuard || !m_writeGuard->owns_lock())
             {
                 m_writeGuard.emplace(std::move(guard));
             }
         }
         void emplaceLock(auto&&... args)
         {
-            if (!m_writeGuard)
+            if (!m_writeGuard || !m_writeGuard->owns_lock())
             {
                 m_writeGuard.emplace(std::forward<decltype(args)>(args)...);
             }
