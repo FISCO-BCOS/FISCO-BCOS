@@ -17,7 +17,7 @@ namespace bcos::storage
 {
 
 template <class Storage>
-class LegacyStorageWrapper : public bcos::storage::StorageInterface
+class LegacyStorageWrapper : public virtual bcos::storage::StorageInterface
 {
 private:
     std::reference_wrapper<Storage> m_storage;

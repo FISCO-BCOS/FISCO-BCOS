@@ -11,19 +11,21 @@ class ReadWriteSetStorage
 {
 private:
     std::reference_wrapper<std::remove_reference_t<StorageType>> m_storage;
+
+public:
+    using Key = KeyType;
+    using Value = typename task::AwaitableReturnType<std::invoke_result_t<storage2::ReadOne,
+        std::add_lvalue_reference_t<StorageType>, KeyType>>::value_type;
+    ReadWriteSetStorage(StorageType& storage) : m_storage(std::ref(storage)) {}
+
+private:
     struct ReadWriteFlag
     {
         bool read = false;
         bool write = false;
     };
     std::unordered_map<size_t, ReadWriteFlag> m_readWriteSet;
-
-    using Key = KeyType;
-    using Value = typename task::AwaitableReturnType<decltype(storage2::readOne(
-        m_storage.get(), std::declval<KeyType>()))>::value_type;
     using Storage = StorageType;
-
-    ReadWriteSetStorage(StorageType& storage) : m_storage(std::ref(storage)) {}
 
     friend void putSet(ReadWriteSetStorage& storage, bool write, size_t hash)
     {

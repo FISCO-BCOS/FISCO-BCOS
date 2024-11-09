@@ -22,11 +22,14 @@ concept HasReadSomeDirect = requires(Storage& storage) {
 template <class Storage>
 class Rollbackable
 {
-private:
+public:
     using Key = typename Storage::Key;
     using Value = typename Storage::Value;
     using Savepoint = int64_t;
 
+    Rollbackable(Storage& storage) : m_storage(storage) {}
+
+private:
     struct Record
     {
         Key key;
@@ -36,8 +39,6 @@ private:
     };
     std::vector<Record> m_records;
     std::reference_wrapper<Storage> m_storage;
-
-    Rollbackable(Storage& storage) : m_storage(storage) {}
 
     task::Task<void> storeOldValues(auto&& keys, bool withEmpty)
     {
