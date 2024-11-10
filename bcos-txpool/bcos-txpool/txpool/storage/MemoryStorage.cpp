@@ -636,7 +636,7 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
         ::ranges::views::transform(txsResult,
             [](TransactionSubmitResult::Ptr const& _txResult) { return _txResult->txHash(); }) |
         ::ranges::to<std::vector>;
-    auto removedTxs = m_txsTable.batchRemove(txHashes);
+    auto removedTxs = m_txsTable.batchRemove<decltype(txHashes), true>(txHashes);
     for (auto&& [i, txHash, tx] :
         ::ranges::views::zip(::ranges::views::iota(0), txHashes, removedTxs))
     {
@@ -644,10 +644,10 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
         {
             continue;
         }
-        onTxRemoved(*tx, false);
+        onTxRemoved(tx, false);
 
         ++succCount;
-        results[i].first = std::move(*tx);
+        results[i].first = std::move(tx);
         m_removeRateCollector.update(1, true);
     }
 
@@ -754,7 +754,7 @@ ConstTransactionsPtr MemoryStorage::fetchTxs(HashList& _missedTxs, HashList cons
             _missedTxs.emplace_back(hash);
             continue;
         }
-        auto& tx = accessor.value();
+        const auto& tx = accessor.value();
         fetchedTxs->emplace_back(tx);
     }
     if (c_fileLogLevel <= TRACE) [[unlikely]]

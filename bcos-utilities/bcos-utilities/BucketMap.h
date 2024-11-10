@@ -318,52 +318,69 @@ public:
         batchInsert(kvs, [](bool, const KeyType&, WriteAccessor) {});
     }
 
-    template <class Keys>
+    template <class Keys, bool returnRemoved>
         requires ::ranges::random_access_range<Keys> && ::ranges::sized_range<Keys>
-    auto batchRemove(const Keys& keys)
+    auto batchRemove(
+        const Keys& keys) -> std::conditional_t<returnRemoved, std::vector<ValueType>, void>
     {
         auto count = ::ranges::size(keys);
         auto sortedKeys =
             ::ranges::views::enumerate(keys) | ::ranges::views::transform([&](const auto& tuple) {
                 auto&& [index, key] = tuple;
-                return std::make_tuple(std::addressof(key), index, getBucketIndex(key));
+                if constexpr (returnRemoved)
+                {
+                    return std::make_tuple(std::addressof(key), getBucketIndex(key), index);
+                }
+                else
+                {
+                    return std::make_tuple(std::addressof(key), getBucketIndex(key));
+                }
             }) |
             ::ranges::to<std::vector>();
-
         tbb::parallel_sort(sortedKeys.begin(), sortedKeys.end(),
-            [](const auto& lhs, const auto& rhs) { return std::get<2>(lhs) < std::get<2>(rhs); });
+            [](const auto& lhs, const auto& rhs) { return std::get<1>(lhs) < std::get<1>(rhs); });
 
-        auto chunks = ::ranges::views::chunk_by(sortedKeys, [](const auto& lhs, const auto& rhs) {
-            return std::get<2>(lhs) == std::get<2>(rhs);
-        }) | ::ranges::to<std::vector>();
+        std::conditional_t<returnRemoved, std::vector<ValueType>, EmptyType> values;
+        if constexpr (returnRemoved)
+        {
+            values.resize(count);
+        }
 
-        std::vector<std::optional<ValueType>,
-            tbb::cache_aligned_allocator<std::optional<ValueType>>>
-            values(count);
+        auto chunks = ::ranges::views::chunk_by(sortedKeys,
+            [](const auto& lhs, const auto& rhs) { return std::get<1>(lhs) == std::get<1>(rhs); });
+        for (auto chunk : chunks)
+        {
+            auto bucketIndex = std::get<1>(chunk.front());
+            auto& bucket = m_buckets[bucketIndex];
 
-        tbb::parallel_for(tbb::blocked_range(0UL, chunks.size()), [&](const auto& range) {
-            for (auto i = range.begin(); i != range.end(); ++i)
+            WriteAccessor accessor;
+            bucket->acquireAccessor(accessor, true);
+
+            auto& datas = bucket->m_values;
+            if constexpr (returnRemoved)
             {
-                auto& chunk = chunks[i];
-                auto bucketIndex = std::get<2>(chunk.front());
-                auto& bucket = m_buckets[bucketIndex];
-
-                WriteAccessor accessor;
-                bucket->acquireAccessor(accessor, true);
-
-                auto& datas = bucket->m_values;
-                for (auto&& [key, index, _] : chunk)
+                for (auto&& [key, _, index] : chunk)
                 {
                     if (auto it = datas.find(*key); it != datas.end())
                     {
-                        values[index].emplace(std::move(it->second));
+                        values[index] = std::move(it->second);
                         datas.erase(it);
                     }
                 }
             }
-        });
+            else
+            {
+                for (auto&& [key, _] : chunk)
+                {
+                    datas.erase(*key);
+                }
+            }
+        }
 
-        return values;
+        if constexpr (returnRemoved)
+        {
+            return values;
+        }
     }
 
     bool insert(WriteAccessor& accessor, std::pair<KeyType, ValueType> kv)
