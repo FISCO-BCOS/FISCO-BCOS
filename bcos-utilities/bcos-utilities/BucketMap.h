@@ -21,10 +21,18 @@
 
 #include "Common.h"
 #include "bcos-utilities/BoostLog.h"
+#include <oneapi/tbb/blocked_range.h>
+#include <oneapi/tbb/cache_aligned_allocator.h>
+#include <oneapi/tbb/parallel_for.h>
+#include <oneapi/tbb/parallel_sort.h>
 #include <concepts>
 #include <queue>
+#include <range/v3/range/concepts.hpp>
+#include <range/v3/view/addressof.hpp>
 #include <range/v3/view/chunk_by.hpp>
+#include <range/v3/view/enumerate.hpp>
 #include <range/v3/view/iota.hpp>
+#include <range/v3/view/repeat.hpp>
 #include <range/v3/view/transform.hpp>
 #include <type_traits>
 #include <unordered_map>
@@ -248,7 +256,6 @@ public:
 
     SharedMutex& getMutex() { return m_mutex; }
 
-private:
     MapType m_values;
     mutable SharedMutex m_mutex;
 };
@@ -311,20 +318,56 @@ public:
         batchInsert(kvs, [](bool, const KeyType&, WriteAccessor) {});
     }
 
-    void batchRemove(
-        const auto& keys, std::function<void(bool, const KeyType&, const ValueType&)> onRemove)
+    template <class Keys>
+        requires ::ranges::random_access_range<Keys> && ::ranges::sized_range<Keys>
+    auto batchRemove(const Keys& keys)
     {
-        forEach<WriteAccessor>(keys, [onRemove = std::move(onRemove)](const KeyType& key,
-                                         typename BucketType::Ptr bucket, WriteAccessor& accessor) {
-            auto [success, value] = bucket->remove(accessor, key);
-            onRemove(success, key, value);
-            return true;
+        auto count = ::ranges::size(keys);
+        auto sortedKeys = ::ranges::views::zip(::ranges::views::addressof(keys),
+                              ::ranges::views::iota(0), ::ranges::views::repeat(0)) |
+                          ::ranges::to<std::vector>();
+        tbb::parallel_for(tbb::blocked_range(0UL, count), [&](const auto& range) {
+            for (auto i = range.begin(); i != range.end(); ++i)
+            {
+                auto& [hash, _, bucketIndex] = sortedKeys[i];
+                bucketIndex = getBucketIndex(*hash);
+            }
         });
-    }
+        tbb::parallel_sort(sortedKeys.begin(), sortedKeys.end(),
+            [](const auto& lhs, const auto& rhs) { return std::get<2>(lhs) < std::get<2>(rhs); });
 
-    void batchRemove(const auto& keys)
-    {
-        batchRemove(keys, [](bool, const KeyType&, const ValueType&) {});
+        auto chunks = ::ranges::views::chunk_by(sortedKeys, [](const auto& lhs, const auto& rhs) {
+            return std::get<2>(lhs) == std::get<2>(rhs);
+        }) | ::ranges::to<std::vector>();
+
+        std::vector<std::optional<ValueType>,
+            tbb::cache_aligned_allocator<std::optional<ValueType>>>
+            values(count);
+
+        tbb::parallel_for(tbb::blocked_range(0UL, chunks.size()), [&](const auto& range) {
+            for (auto i = range.begin(); i != range.end(); ++i)
+            {
+                auto& chunk = chunks[i];
+                auto bucketIndex = std::get<2>(chunk.front());
+                auto& bucket = m_buckets[bucketIndex];
+
+                WriteAccessor accessor;
+                bucket->acquireAccessor(accessor, true);
+
+                auto datas = bucket->m_values;
+                for (auto&& [address, index, _] : chunk)
+                {
+                    auto it = datas.find(*address);
+                    if (it != datas.end())
+                    {
+                        values[index].emplace(std::move(it->second));
+                    }
+                    datas.erase(it);
+                }
+            }
+        });
+
+        return values;
     }
 
     bool insert(WriteAccessor& accessor, std::pair<KeyType, ValueType> kv)
@@ -577,9 +620,9 @@ public:
     }
 
 protected:
-    size_t getBucketIndex(const std::pair<KeyType, ValueType>& kv)
+    size_t getBucketIndex(const std::pair<KeyType, ValueType>& keyValue)
     {
-        return getBucketIndex(kv.first);
+        return getBucketIndex(keyValue.first);
     }
 
     size_t getBucketIndex(const KeyType& key)
