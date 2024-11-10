@@ -45,16 +45,18 @@ public:
 
 std::vector<std::atomic_long> query(bcos::sdk::RPCClient& rpcClient,
     std::shared_ptr<bcos::crypto::CryptoSuite> cryptoSuite, std::string contractAddress,
-    int userCount)
+    int userCount, int qps)
 {
     bcostars::protocol::TransactionFactoryImpl transactionFactory(cryptoSuite);
     boost::latch latch(userCount);
     std::vector<std::optional<bcos::sdk::Call>> handles(userCount);
 
+    bcos::ratelimiter::TimeWindowRateLimiter limiter(qps);
     bcos::sample::Collector collector(userCount, "Query");
     tbb::parallel_for(tbb::blocked_range(0LU, (size_t)userCount), [&](const auto& range) {
         for (auto it = range.begin(); it != range.end(); ++it)
         {
+            limiter.acquire(1);
             bcos::codec::abi::ContractABICodec abiCodec(*cryptoSuite->hashImpl());
             bcos::bytes input;
             if (contractAddress == DAG_TRANSFER_ADDRESS)
@@ -303,11 +305,12 @@ int main(int argc, char* argv[])
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
     std::cout << "Contract address is:" << contractAddress << std::endl;
-    auto balances = query(rpcClient, cryptoSuite, std::string(contractAddress), userCount);
+    auto balances = query(rpcClient, cryptoSuite, std::string(contractAddress), userCount, qps);
     issue(rpcClient, cryptoSuite, keyPair, std::string(contractAddress), userCount, qps, balances);
     transfer(rpcClient, cryptoSuite, std::string(contractAddress), keyPair, userCount,
         transactionCount, qps, balances);
-    auto resultBalances = query(rpcClient, cryptoSuite, std::string(contractAddress), userCount);
+    auto resultBalances =
+        query(rpcClient, cryptoSuite, std::string(contractAddress), userCount, qps);
 
     // Compare the result
     for (int i = 0; i < userCount; ++i)
