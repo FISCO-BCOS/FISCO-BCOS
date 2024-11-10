@@ -65,6 +65,7 @@ struct ITT_DOMAINS
     const __itt_domain* ITT_DOMAIN_EXECUTOR = __itt_domain_create("executor");
 
     const __itt_domain* TXPOOL = __itt_domain_create("txpool");
+    __itt_string_handle* SUBMIT_TX = __itt_string_handle_create("submitTx");
     __itt_string_handle* BATCH_FETCH_TXS = __itt_string_handle_create("batchFetchTxs");
     __itt_string_handle* BATCH_REMOVE_TXS = __itt_string_handle_create("batchRemoveTxs");
 
@@ -106,9 +107,6 @@ struct ITT_DOMAINS
     __itt_string_handle* MERGE_RWSET = __itt_string_handle_create("mergeRWSet");
     __itt_string_handle* MERGE_CHUNK = __itt_string_handle_create("mergeChunk");
     __itt_string_handle* MERGE_LAST_CHUNK = __itt_string_handle_create("mergeLastChunk");
-
-    const __itt_domain* TRANSACTION_POOL = __itt_domain_create("transactionPool");
-    __itt_string_handle* SUBMIT_TRANSACTION = __itt_string_handle_create("submitTransaction");
 
     const __itt_domain* TRANSACTION = __itt_domain_create("transaction");
     __itt_string_handle* VERIFY_TRANSACTION = __itt_string_handle_create("verifyTransaction");

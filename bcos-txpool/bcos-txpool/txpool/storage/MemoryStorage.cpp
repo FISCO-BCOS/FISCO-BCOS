@@ -95,6 +95,9 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
 task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransactionWithHook(
     protocol::Transaction::Ptr transaction, std::function<void()> onTxSubmitted)
 {
+    ittapi::Report report(
+        ittapi::ITT_DOMAINS::instance().TXPOOL, ittapi::ITT_DOMAINS::instance().SUBMIT_TX);
+
     transaction->setImportTime(utcTime());
     struct Awaitable
     {
