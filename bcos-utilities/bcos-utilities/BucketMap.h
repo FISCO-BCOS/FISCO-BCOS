@@ -323,16 +323,13 @@ public:
     auto batchRemove(const Keys& keys)
     {
         auto count = ::ranges::size(keys);
-        auto sortedKeys = ::ranges::views::zip(::ranges::views::addressof(keys),
-                              ::ranges::views::iota(0), ::ranges::views::repeat(0)) |
-                          ::ranges::to<std::vector>();
-        tbb::parallel_for(tbb::blocked_range(0UL, count), [&](const auto& range) {
-            for (auto i = range.begin(); i != range.end(); ++i)
-            {
-                auto& [hash, _, bucketIndex] = sortedKeys[i];
-                bucketIndex = getBucketIndex(*hash);
-            }
-        });
+        auto sortedKeys =
+            ::ranges::views::enumerate(keys) | ::ranges::views::transform([&](const auto& tuple) {
+                auto&& [index, key] = tuple;
+                return std::make_tuple(std::addressof(key), index, getBucketIndex(key));
+            }) |
+            ::ranges::to<std::vector>();
+
         tbb::parallel_sort(sortedKeys.begin(), sortedKeys.end(),
             [](const auto& lhs, const auto& rhs) { return std::get<2>(lhs) < std::get<2>(rhs); });
 
@@ -354,15 +351,14 @@ public:
                 WriteAccessor accessor;
                 bucket->acquireAccessor(accessor, true);
 
-                auto datas = bucket->m_values;
-                for (auto&& [address, index, _] : chunk)
+                auto& datas = bucket->m_values;
+                for (auto&& [key, index, _] : chunk)
                 {
-                    auto it = datas.find(*address);
-                    if (it != datas.end())
+                    if (auto it = datas.find(*key); it != datas.end())
                     {
                         values[index].emplace(std::move(it->second));
+                        datas.erase(it);
                     }
-                    datas.erase(it);
                 }
             }
         });
