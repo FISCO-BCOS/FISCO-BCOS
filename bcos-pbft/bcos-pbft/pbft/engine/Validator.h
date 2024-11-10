@@ -44,8 +44,8 @@ public:
     virtual PBFTProposalInterface::Ptr generateEmptyProposal(uint32_t _proposalVersion,
         PBFTMessageFactory::Ptr _factory, int64_t _index, int64_t _sealerId) = 0;
 
-    virtual void notifyTransactionsResult(
-        bcos::protocol::Block::Ptr _block, bcos::protocol::BlockHeader::Ptr _header) = 0;
+    // virtual void notifyTransactionsResult(
+    //     bcos::protocol::Block::Ptr _block, bcos::protocol::BlockHeader::Ptr _header) = 0;
 
     virtual void updateValidatorConfig(bcos::consensus::ConsensusNodeList const& _consensusNodeList,
         bcos::consensus::ConsensusNodeList const& _observerNodeList) = 0;
@@ -86,8 +86,8 @@ public:
     PBFTProposalInterface::Ptr generateEmptyProposal(uint32_t _proposalVersion,
         PBFTMessageFactory::Ptr _factory, int64_t _index, int64_t _sealerId) override;
 
-    void notifyTransactionsResult(
-        bcos::protocol::Block::Ptr _block, bcos::protocol::BlockHeader::Ptr _header) override;
+    // void notifyTransactionsResult(
+    //     bcos::protocol::Block::Ptr _block, bcos::protocol::BlockHeader::Ptr _header) override;
 
     void updateValidatorConfig(bcos::consensus::ConsensusNodeList const& _consensusNodeList,
         bcos::consensus::ConsensusNodeList const& _observerNodeList) override;

@@ -64,8 +64,9 @@ struct ITT_DOMAINS
     const __itt_domain* ITT_DOMAIN_SCHEDULER = __itt_domain_create("scheduler");
     const __itt_domain* ITT_DOMAIN_EXECUTOR = __itt_domain_create("executor");
 
-    const __itt_domain* SEALER = __itt_domain_create("sealer");
-    
+    const __itt_domain* TXPOOL = __itt_domain_create("txpool");
+    __itt_string_handle* BATCH_FETCH_TXS = __itt_string_handle_create("batchFetchTxs");
+    __itt_string_handle* BATCH_REMOVE_TXS = __itt_string_handle_create("batchRemoveTxs");
 
     const __itt_domain* STORAGE2 = __itt_domain_create("storage2");
     __itt_string_handle* MERGE_BACKEND = __itt_string_handle_create("mergeBackend");
