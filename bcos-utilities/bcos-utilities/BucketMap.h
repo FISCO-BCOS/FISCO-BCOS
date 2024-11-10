@@ -21,10 +21,6 @@
 
 #include "Common.h"
 #include "bcos-utilities/BoostLog.h"
-#include <oneapi/tbb/blocked_range.h>
-#include <oneapi/tbb/cache_aligned_allocator.h>
-#include <oneapi/tbb/parallel_for.h>
-#include <oneapi/tbb/parallel_sort.h>
 #include <concepts>
 #include <queue>
 #include <range/v3/range/concepts.hpp>
@@ -327,6 +323,7 @@ public:
         auto sortedKeys =
             ::ranges::views::enumerate(keys) | ::ranges::views::transform([&](const auto& tuple) {
                 auto&& [index, key] = tuple;
+                static_assert(std::is_lvalue_reference_v<decltype(key)>);
                 if constexpr (returnRemoved)
                 {
                     return std::make_tuple(std::addressof(key), getBucketIndex(key), index);
@@ -337,7 +334,7 @@ public:
                 }
             }) |
             ::ranges::to<std::vector>();
-        tbb::parallel_sort(sortedKeys.begin(), sortedKeys.end(),
+        std::sort(sortedKeys.begin(), sortedKeys.end(),
             [](const auto& lhs, const auto& rhs) { return std::get<1>(lhs) < std::get<1>(rhs); });
 
         std::conditional_t<returnRemoved, std::vector<ValueType>, EmptyType> values;
