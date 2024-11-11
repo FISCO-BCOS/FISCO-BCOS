@@ -35,8 +35,14 @@ AWSKMSWrapper::AWSKMSWrapper(const std::string& region, const std::string& acces
   : m_keyId(keyId)
 {
     // create credentials
+    Aws::Auth::AWSCredentials credentials(accessKey.c_str(), secretKey.c_str());
 
-    AWSKMSWrapper(region, accessKey, secretKey);
+    // configure client
+    Aws::Client::ClientConfiguration config;
+    config.region = region;
+
+    // use credentials and config to create client
+    m_kmsClient = std::make_shared<Aws::KMS::KMSClient>(credentials, config);
 }
 AWSKMSWrapper::AWSKMSWrapper(
     const std::string& region, const std::string& accessKey, const std::string& secretKey)
@@ -78,6 +84,11 @@ std::shared_ptr<bytes> AWSKMSWrapper::encryptContents(const std::shared_ptr<byte
 std::shared_ptr<bytes> AWSKMSWrapper::encryptFile(const std::string& inputFilePath)
 {
     auto plaintext = readContents(inputFilePath);
+    if (plaintext == nullptr)
+    {
+        std::cerr << "Failed to read file: " << inputFilePath << std::endl;
+        return nullptr;
+    }
     return encryptContents(plaintext);
 }
 
