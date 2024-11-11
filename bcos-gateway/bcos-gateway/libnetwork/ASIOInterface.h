@@ -96,55 +96,25 @@ public:
     virtual void asyncResolveConnect(
         const std::shared_ptr<SocketFace>& socket, Handler_Type handler);
 
-    virtual void asyncWrite(std::shared_ptr<SocketFace> socket,
-        boost::asio::mutable_buffers_1 buffers, ReadWriteHandler handler)
+    void asyncWrite(SocketFace& socket, const auto& buffers, auto handler)
     {
         auto type = m_type;
-        auto ioService = socket->ioService();
-        ioService->post(
-            [type, socket = std::move(socket), buffers, handler = std::move(handler)]() mutable {
-                if (socket->isConnected())
-                {
-                    switch (type)
-                    {
-                    case TCP_ONLY:
-                    {
-                        ba::async_write(socket->ref(), buffers, std::move(handler));
-                        break;
-                    }
-                    case SSL:
-                    {
-                        ba::async_write(socket->sslref(), buffers, std::move(handler));
-                        break;
-                    }
-                    }
-                }
-            });
-    }
-
-    void asyncWrite(std::shared_ptr<SocketFace> socket, auto buffers, auto handler)
-    {
-        auto type = m_type;
-        auto ioService = socket->ioService();
-        ioService->post([type, socket = std::move(socket), buffers = std::move(buffers),
-                            handler = std::move(handler)]() mutable {
-            if (socket->isConnected())
+        if (socket.isConnected())
+        {
+            switch (type)
             {
-                switch (type)
-                {
-                case TCP_ONLY:
-                {
-                    ba::async_write(socket->ref(), buffers, std::move(handler));
-                    break;
-                }
-                case SSL:
-                {
-                    ba::async_write(socket->sslref(), buffers, std::move(handler));
-                    break;
-                }
-                }
+            case TCP_ONLY:
+            {
+                ba::async_write(socket.ref(), buffers, std::move(handler));
+                break;
             }
-        });
+            case SSL:
+            {
+                ba::async_write(socket.sslref(), buffers, std::move(handler));
+                break;
+            }
+            }
+        }
     }
 
     virtual void asyncRead(const std::shared_ptr<SocketFace>& socket,

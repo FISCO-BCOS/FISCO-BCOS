@@ -280,8 +280,8 @@ void Session::write()
             return;
         }
 
-        std::vector<EncodedMessage::Ptr> encodedMsgs;
-        if (!tryPopSomeEncodedMsgs(encodedMsgs, m_maxSendDataSize, m_maxSendMsgCountS))
+        m_encodedMsgs.clear();
+        if (!tryPopSomeEncodedMsgs(m_encodedMsgs, m_maxSendDataSize, m_maxSendMsgCountS))
         {
             writing = true;
             if (!m_writing.compare_exchange_strong(writing, false))
@@ -294,9 +294,9 @@ void Session::write()
 
         // asio::buffer reference buffer, so buffer need alive before
         // asio::buffer be used
-        auto buffers = ::ranges::views::iota(0LU, encodedMsgs.size() * 2) |
+        auto buffers = ::ranges::views::iota(0LU, m_encodedMsgs.size() * 2) |
                        ::ranges::views::transform(
-                           [it = encodedMsgs.begin()](auto index) -> boost::asio::const_buffer {
+                           [it = m_encodedMsgs.begin()](auto index) -> boost::asio::const_buffer {
                                auto& encodedMsgs = *(it + index / 2);
                                if (index % 2 == 0)
                                {
@@ -304,9 +304,8 @@ void Session::write()
                                }
                                return {encodedMsgs->payload.data(), encodedMsgs->payload.size()};
                            });
-        server->asioInterface()->asyncWrite(m_socket, buffers,
-            [self = std::weak_ptr<Session>(shared_from_this()), encodedMsgs =
-                                                                    std::move(encodedMsgs)](
+        server->asioInterface()->asyncWrite(*m_socket, buffers,
+            [self = std::weak_ptr<Session>(shared_from_this())](
                 const boost::system::error_code _error, std::size_t _size) {
                 auto session = self.lock();
                 if (!session)
