@@ -74,10 +74,10 @@ int main(int argc, char* argv[])
             try
             {
                 // create an AWS KMS wrapper
-                AWSKMSWrapper kmsWrapper(region, accessKey, secretKey);
+                AWSKMSWrapper kmsWrapper(region, accessKey, secretKey, keyId);
 
                 // encrypt data
-                auto encryptResult = kmsWrapper.encrypt(keyId, inputFilePath);
+                auto encryptResult = kmsWrapper.encryptFile(inputFilePath);
                 if (encryptResult == nullptr)
                 {
                     std::cerr << "Encryption failed!" << std::endl;
@@ -89,7 +89,7 @@ int main(int argc, char* argv[])
                 saveFile(outputFilePath, encryptResult);
 
                 // decrypt data
-                auto decryptResult = kmsWrapper.decrypt(encryptResult);
+                auto decryptResult = kmsWrapper.decryptContents(encryptResult);
                 if (decryptResult == nullptr)
                 {
                     std::cerr << "Decryption failed!" << std::endl;

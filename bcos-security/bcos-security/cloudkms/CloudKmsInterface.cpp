@@ -20,9 +20,9 @@
  * @author: HaoXuan40404
  * @date 2024-11-07
  */
+#include "CloudKmsInterface.h"
 #include "../Common.h"
 #include "AwsKmsWrapper.h"
-#include "CloudKmsInterface.h"
 #include "CloudKmsProvider.h"
 #include "bcos-utilities/FileUtility.h"
 #include <aws/core/Aws.h>
@@ -77,7 +77,7 @@ std::shared_ptr<bytes> CloudKmsInterface::decryptContents(const std::shared_ptr<
             {
                 // create an AWS KMS wrapper
                 AWSKMSWrapper kmsWrapper(_region, _accessKey, _secretKey);
-                decryptResult = kmsWrapper.decrypt(contents);
+                decryptResult = kmsWrapper.decryptContents(contents);
                 if (decryptResult == nullptr)
                 {
                     BCOS_LOG(ERROR)
@@ -134,14 +134,16 @@ bool CloudKmsInterface::splitKmsUrl(const std::string& _kmsUrl, std::vector<std:
 
 std::shared_ptr<bytes> CloudKmsInterface::encryptContents(const std::shared_ptr<bytes>& contents)
 {
-    // TODO: implement the encryptContents
-    BOOST_THROW_EXCEPTION(NotImplementedError());
+    // Not support
+    BCOS_LOG(ERROR) << LOG_BADGE("KmsInterface::encryptContents failed");
+    BOOST_THROW_EXCEPTION(EncryptFailed());
 }
 
 std::shared_ptr<bytes> CloudKmsInterface::encryptFile(const std::string& filename)
 {
-    // TODO: implement the encryptFile
-    BOOST_THROW_EXCEPTION(NotImplementedError());
+    // Not support
+    BCOS_LOG(ERROR) << LOG_BADGE("KmsInterface::encryptFile failed");
+    BOOST_THROW_EXCEPTION(EncryptFailed());
 }
 
 }  // namespace bcos::security

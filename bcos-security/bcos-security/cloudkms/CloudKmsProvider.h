@@ -21,8 +21,6 @@
  * @date 2024-11-07
  */
 #pragma once
-#include <algorithm>
-#include <array>
 #include <magic_enum.hpp>
 #include <string>
 namespace bcos::security
@@ -30,12 +28,6 @@ namespace bcos::security
 enum class CloudKmsProvider
 {
     AWS,      // Amazon Web Services KMS
-    AZURE,    // Microsoft Azure Key Vault
-    HUAWEI,   // Huawei Cloud KMS
-    ALIYUN,   // Alibaba Cloud KMS
-    TENCENT,  // Tencent Cloud KMS
-    GCP,      // Google Cloud KMS
-    BAIDU,    // Baidu Cloud KMS
     UNKNOWN   // Unknown KMS provider
 };
 

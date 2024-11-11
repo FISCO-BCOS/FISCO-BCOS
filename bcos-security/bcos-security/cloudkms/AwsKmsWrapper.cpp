@@ -21,6 +21,7 @@
  * @date 2024-11-07
  */
 #include "AwsKmsWrapper.h"
+#include "Common.h"
 #include "bcos-utilities/FileUtility.h"
 #include <aws/core/auth/AWSCredentials.h>
 #include <aws/core/utils/Array.h>
@@ -28,6 +29,15 @@
 #include <aws/kms/model/EncryptRequest.h>
 namespace bcos::security
 {
+
+AWSKMSWrapper::AWSKMSWrapper(const std::string& region, const std::string& accessKey,
+    const std::string& secretKey, const std::string& keyId)
+  : m_keyId(keyId)
+{
+    // create credentials
+
+    AWSKMSWrapper(region, accessKey, secretKey);
+}
 AWSKMSWrapper::AWSKMSWrapper(
     const std::string& region, const std::string& accessKey, const std::string& secretKey)
 {
@@ -42,15 +52,14 @@ AWSKMSWrapper::AWSKMSWrapper(
     m_kmsClient = std::make_shared<Aws::KMS::KMSClient>(credentials, config);
 }
 
-std::shared_ptr<bytes> AWSKMSWrapper::encrypt(
-    const std::string& keyId, const std::string& inputFilePath)
+
+std::shared_ptr<bytes> AWSKMSWrapper::encryptContents(const std::shared_ptr<bytes>& contents)
 {
-    auto plaintext = readContentsToString(inputFilePath);
     Aws::KMS::Model::EncryptRequest request;
-    request.SetKeyId(keyId);
+    request.SetKeyId(m_keyId);
 
     Aws::Utils::ByteBuffer plaintextBlob(
-        reinterpret_cast<const unsigned char*>(plaintext->c_str()), plaintext->size());
+        reinterpret_cast<const unsigned char*>(contents->data()), contents->size());
     request.SetPlaintext(plaintextBlob);
 
     auto outcome = m_kmsClient->Encrypt(request);
@@ -66,8 +75,13 @@ std::shared_ptr<bytes> AWSKMSWrapper::encrypt(
     return ciphertext;
 }
 
+std::shared_ptr<bytes> AWSKMSWrapper::encryptFile(const std::string& inputFilePath)
+{
+    auto plaintext = readContents(inputFilePath);
+    return encryptContents(plaintext);
+}
 
-std::shared_ptr<bytes> AWSKMSWrapper::decrypt(const std::shared_ptr<bytes>& ciphertext)
+std::shared_ptr<bytes> AWSKMSWrapper::decryptContents(const std::shared_ptr<bytes>& ciphertext)
 {
     Aws::KMS::Model::DecryptRequest request;
 
@@ -86,5 +100,16 @@ std::shared_ptr<bytes> AWSKMSWrapper::decrypt(const std::shared_ptr<bytes>& ciph
         resultBlob.GetUnderlyingData(), resultBlob.GetUnderlyingData() + resultBlob.GetLength());
 
     return plaintext;
+}
+
+std::shared_ptr<bytes> AWSKMSWrapper::decryptFile(const std::string& filename)
+{
+    std::shared_ptr<bytes> contents = readContents(filename);
+    if (contents == nullptr)
+    {
+        std::cerr << "Failed to read file: " << filename << std::endl;
+        return nullptr;
+    }
+    return decryptContents(contents);
 }
 }  // namespace bcos::security
