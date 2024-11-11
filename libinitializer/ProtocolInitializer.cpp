@@ -61,7 +61,7 @@ void ProtocolInitializer::init(NodeConfig::Ptr _nodeConfig)
             m_hsmLibPath = _nodeConfig->hsmLibPath();
             m_keyIndex = _nodeConfig->keyIndex();
             m_password = _nodeConfig->password();
-            // createHsmSMCryptoSuite();
+            createHsmSMCryptoSuite();
             INITIALIZER_LOG(INFO) << LOG_DESC("begin init hsm sm crypto suite");
         }
         else
@@ -145,22 +145,21 @@ void ProtocolInitializer::createSMCryptoSuite()
     m_cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, encryptImpl);
 }
 
-// void ProtocolInitializer::createHsmSMCryptoSuite()
-// {
-//     auto hashImpl = std::make_shared<SM3>();
-//     auto signatureImpl = std::make_shared<HsmSM2Crypto>(m_hsmLibPath);
-//     auto encryptImpl = std::make_shared<HsmSM4Crypto>(m_hsmLibPath);
-//     m_cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, encryptImpl);
-// }
+void ProtocolInitializer::createHsmSMCryptoSuite()
+{
+    auto hashImpl = std::make_shared<SM3>();
+    auto signatureImpl = std::make_shared<HsmSM2Crypto>(m_hsmLibPath);
+    auto encryptImpl = std::make_shared<HsmSM4Crypto>(m_hsmLibPath);
+    m_cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, encryptImpl);
+}
 
 void ProtocolInitializer::loadKeyPair(std::string const& _privateKeyPath)
 {
     if (m_enableHsm || m_keyEncryptionType == KeyEncryptionType::HSM)
     {
         // Create key pair according to the key index which inside HSM(Hardware Secure Machine)
-        // m_keyPair =
-        // dynamic_pointer_cast<bcos::crypto::HsmSM2Crypto>(m_cryptoSuite->signatureImpl())
-        //                 ->createKeyPair(m_keyIndex, m_password);
+        m_keyPair = dynamic_pointer_cast<bcos::crypto::HsmSM2Crypto>(m_cryptoSuite->signatureImpl())
+                        ->createKeyPair(m_keyIndex, m_password);
         INITIALIZER_LOG(INFO) << METRIC << LOG_DESC("loadKeyPair from HSM")
                               << LOG_KV("lib_path", m_hsmLibPath) << LOG_KV("keyIndex", m_keyIndex)
                               << LOG_KV("HSM password", m_password);

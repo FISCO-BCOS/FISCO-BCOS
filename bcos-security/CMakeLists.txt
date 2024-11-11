@@ -21,10 +21,7 @@ cmake_minimum_required(VERSION 3.10)
 project(bcos-security VERSION ${VERSION})
 
 aux_source_directory(./bcos-security SRC_LIST)
-aux_source_directory(./bcos-security/kms KMS_SRC_LIST)
-aux_source_directory(./bcos-security/kct SRC_LIST)
-aux_source_directory(./bcos-security/hsm SRC_LIST)
-# include_directories(./bcos-security ./bcos-security/kms)
+# aux_source_directory(./bcos-security/kms KMS_SRC_LIST)
 add_library(${SECURITY_TARGET} ${SRC_LIST} ${KMS_SRC_LIST})
 
 find_package(jsoncpp REQUIRED)
@@ -35,10 +32,10 @@ find_package(CURL REQUIRED)
 
 target_link_libraries(${SECURITY_TARGET} PRIVATE
     ${AWSSDK_LINK_LIBRARIES}
-    ZLIB::ZLIB
-    OpenSSL::SSL
-    OpenSSL::Crypto
-    CURL::libcurl
+    # ZLIB::ZLIB
+    # OpenSSL::SSL
+    # OpenSSL::Crypto
+    # CURL::libcurl
 )
 
 target_include_directories(${SECURITY_TARGET}

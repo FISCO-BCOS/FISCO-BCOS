@@ -114,6 +114,11 @@ public:
     size_t blockLimit() const { return m_blockLimit; }
 
     std::string const& privateKeyPath() const { return m_privateKeyPath; }
+    bool const& enableHsm() const { return m_enableHsm; }
+    std::string const& hsmLibPath() const { return m_hsmLibPath; }
+    int const& keyIndex() const { return m_keyIndex; }
+    int const& encKeyIndex() const { return m_encKeyIndex; }
+    std::string const& password() const { return m_password; }
 
     size_t minSealTime() const { return m_minSealTime; }
     bool allowFreeNodeSync() const { return m_allowFreeNode; }
@@ -243,9 +248,6 @@ public:
     std::string const& failOverClusterUrl() const { return m_failOverClusterUrl; }
 
     bool storageSecurityEnable() const { return m_storageSecurityEnable; }
-    // std::string storageSecurityKeyCenterIp() const { return m_storageSecurityKeyCenterIp; }
-    // unsigned short storageSecurityKeyCenterPort() const { return m_storageSecurityKeyCenterPort;
-    // }
     std::string storageSecuirtyKeyCenterUrl() const { return m_storageSecurityUrl; }
     std::string storageSecurityCipherDataKey() const { return m_storageSecurityCipherDataKey; }
 
@@ -253,12 +255,6 @@ public:
     std::string kmsType() const { return m_kmsType; }
     std::string kctKeySecurityCipherDataKey() const { return m_kctKeySecurityCipherDataKey; }
     std::string keyEncryptionUrl() const { return m_KeyEncryptionUrl; }
-
-    bool const& enableHsm() const { return m_enableHsm; }
-    std::string const& hsmLibPath() const { return m_hsmLibPath; }
-    int const& keyIndex() const { return m_keyIndex; }
-    int const& encKeyIndex() const { return m_encKeyIndex; }
-    std::string const& password() const { return m_password; }
 
     bool enableSendBlockStatusByTree() const { return m_enableSendBlockStatusByTree; }
     bool enableSendTxByTree() const { return m_enableSendTxByTree; }
