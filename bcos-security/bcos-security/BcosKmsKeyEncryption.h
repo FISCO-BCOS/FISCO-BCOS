@@ -53,6 +53,10 @@ public:
     }
 
 public:
+    std::shared_ptr<bytes> encryptContents(const std::shared_ptr<bytes>& contents) override;
+
+    std::shared_ptr<bytes> encryptFile(const std::string& filename) override;
+
     std::shared_ptr<bytes> decryptContents(const std::shared_ptr<bytes>& contents) override;
 
     // use to decrypt node.key
