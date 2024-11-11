@@ -110,10 +110,10 @@ void TransactionSync::onReceiveTxsRequest(TxsSyncMsgInterface::Ptr _txsRequest,
     // Note: here assume that all the transaction should be hit in the txpool
     if (!missedTxs.empty())
     {
-        SYNC_LOG(DEBUG) << LOG_DESC("onReceiveTxsRequest: transaction missing")
-                        << LOG_KV("missedTxsSize", missedTxs.size())
-                        << LOG_KV("peer", _peer ? _peer->shortHex() : "unknown")
-                        << LOG_KV("nodeId", m_config->nodeID()->shortHex());
+        SYNC_LOG(INFO) << LOG_DESC("onReceiveTxsRequest: transaction missing")
+                       << LOG_KV("missedTxsSize", missedTxs.size())
+                       << LOG_KV("peer", _peer ? _peer->shortHex() : "unknown")
+                       << LOG_KV("nodeId", m_config->nodeID()->shortHex());
     }
     // response the txs
     auto block = m_config->blockFactory()->createBlock();

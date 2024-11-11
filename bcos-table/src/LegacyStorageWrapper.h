@@ -102,15 +102,12 @@ public:
                        decltype(callback) callback) -> task::Task<void> {
             try
             {
-                auto stateKeys = keys | RANGES::views::transform([&table](auto&& key) -> auto {
+                auto stateKeys = RANGES::views::transform(keys, [&table](auto&& key) -> auto {
                     return transaction_executor::StateKeyView{
                         table, std::forward<decltype(key)>(key)};
-                }) | RANGES::to<std::vector>();
+                });
                 auto values = co_await storage2::readSome(self->m_storage.get(), stateKeys);
-
-                std::vector<std::optional<storage::Entry>> vectorValues(
-                    std::make_move_iterator(values.begin()), std::make_move_iterator(values.end()));
-                callback(nullptr, std::move(vectorValues));
+                callback(nullptr, std::move(values));
             }
             catch (std::exception& e)
             {
@@ -153,27 +150,26 @@ public:
             RANGES::category::random_access | RANGES::category::sized>
             values) override
     {
-        return task::syncWait(
-            [](decltype(this) self, decltype(tableName) tableName, decltype(keys)& keys,
-                decltype(values)& values) -> task::Task<Error::Ptr> {
-                try
-                {
-                    co_await storage2::writeSome(self->m_storage.get(),
-                        keys | RANGES::views::transform([&](std::string_view key) {
-                            return transaction_executor::StateKey{tableName, key};
-                        }),
-                        values | RANGES::views::transform([](std::string_view value) -> auto {
-                            storage::Entry entry;
-                            entry.setField(0, value);
-                            return entry;
-                        }));
-                    co_return nullptr;
-                }
-                catch (std::exception& e)
-                {
-                    co_return BCOS_ERROR_WITH_PREV_PTR(-1, "setRows error!", e);
-                }
-            }(this, tableName, keys, values));
+        return task::syncWait([](decltype(this) self, decltype(tableName) tableName,
+                                  decltype(keys) keys,
+                                  decltype(values) values) -> task::Task<Error::Ptr> {
+            try
+            {
+                co_await storage2::writeSome(self->m_storage.get(),
+                    ::ranges::views::zip(keys, values) | RANGES::views::transform([&](auto tuple) {
+                        auto& [key, value] = tuple;
+                        storage::Entry entry;
+                        entry.setField(0, value);
+                        return std::make_pair(
+                            transaction_executor::StateKey{tableName, key}, std::move(entry));
+                    }));
+                co_return nullptr;
+            }
+            catch (std::exception& e)
+            {
+                co_return BCOS_ERROR_WITH_PREV_PTR(-1, "setRows error!", e);
+            }
+        }(this, tableName, std::move(keys), std::move(values)));
     };
 };
 

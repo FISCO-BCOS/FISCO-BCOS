@@ -61,12 +61,26 @@ public:
     Bucket(Bucket&&) = default;
     Bucket& operator=(const Bucket&) = default;
     Bucket& operator=(Bucket&&) noexcept = default;
+    ~Bucket() noexcept = default;
 
     class WriteAccessor
     {
     public:
         WriteAccessor() = default;
-        void init(WriteGuard guard) { m_writeGuard.emplace(std::move(guard)); }
+        void setLock(WriteGuard guard)
+        {
+            if (!m_writeGuard)
+            {
+                m_writeGuard.emplace(std::move(guard));
+            }
+        }
+        void emplaceLock(auto&&... args)
+        {
+            if (!m_writeGuard)
+            {
+                m_writeGuard.emplace(std::forward<decltype(args)>(args)...);
+            }
+        }
         void setValue(typename MapType::iterator it) { m_it = it; };
         const KeyType& key() const { return m_it->first; }
         ValueType& value() { return m_it->second; }
@@ -80,7 +94,20 @@ public:
     {
     public:
         ReadAccessor() = default;
-        void init(ReadGuard guard) { m_readGuard.emplace(std::move(guard)); }
+        void setLock(ReadGuard guard)
+        {
+            if (!m_readGuard)
+            {
+                m_readGuard.emplace(std::move(guard));
+            }
+        }
+        void emplaceLock(auto&&... args)
+        {
+            if (!m_readGuard)
+            {
+                m_readGuard.emplace(std::forward<decltype(args)>(args)...);
+            }
+        }
         void setValue(typename MapType::iterator it) { m_it = it; };
         const KeyType& key() const { return m_it->first; }
         const ValueType& value() { return m_it->second; }
@@ -96,7 +123,7 @@ public:
         WriteGuard guard = wait ? WriteGuard(m_mutex) : WriteGuard(m_mutex, boost::try_to_lock);
         if (guard.owns_lock())
         {
-            accessor.init(std::move(guard));  // acquire lock here
+            accessor.setLock(std::move(guard));  // acquire lock here
             return true;
         }
 
@@ -109,7 +136,7 @@ public:
         ReadGuard guard = wait ? ReadGuard(m_mutex) : ReadGuard(m_mutex, boost::try_to_lock);
         if (guard.owns_lock())
         {
-            accessor.init(std::move(guard));  // acquire lock here
+            accessor.setLock(std::move(guard));  // acquire lock here
             return true;
         }
 
@@ -120,6 +147,8 @@ public:
     template <class AccessorType>
     bool find(AccessorType& accessor, const KeyType& key)
     {
+        accessor.emplaceLock(m_mutex);
+
         auto it = m_values.find(key);
         if (it == m_values.end())
         {
@@ -131,9 +160,11 @@ public:
     }
 
     // return true if insert happen
-    bool insert(WriteAccessor& accessor, const std::pair<KeyType, ValueType>& kv)
+    bool insert(WriteAccessor& accessor, const std::pair<KeyType, ValueType>& keyValue)
     {
-        auto [it, inserted] = m_values.try_emplace(kv.first, kv.second);
+        accessor.emplaceLock(m_mutex);
+
+        auto [it, inserted] = m_values.try_emplace(keyValue.first, keyValue.second);
         accessor.setValue(it);
         return inserted;
     }
@@ -158,6 +189,8 @@ public:
     // return true if remove success
     std::pair<bool, ValueType> remove(WriteAccessor& accessor, const KeyType& key)
     {
+        accessor.emplaceLock(m_mutex);
+
         auto it = m_values.find(key);
         if (it == m_values.end())
         {
@@ -185,6 +218,7 @@ public:
     template <class AccessorType>  // handler return isContinue
     bool forEach(std::function<bool(AccessorType&)> handler, AccessorType& accessor)
     {
+        accessor.emplaceLock(m_mutex);
         for (auto it = m_values.begin(); it != m_values.end(); it++)
         {
             accessor.setValue(it);
@@ -199,6 +233,8 @@ public:
     void clear(WriteAccessor& accessor,
         std::function<void(bool, const KeyType&, WriteAccessor)> onRemove = nullptr)
     {
+        accessor.emplaceLock(m_mutex);
+
         for (auto it = m_values.begin(); it != m_values.end(); it++)
         {
             if (onRemove)
@@ -226,6 +262,10 @@ public:
     using WriteAccessor = typename BucketType::WriteAccessor;
     using ReadAccessor = typename BucketType::ReadAccessor;
 
+    BucketMap(const BucketMap&) = default;
+    BucketMap(BucketMap&&) noexcept = default;
+    BucketMap& operator=(const BucketMap&) = default;
+    BucketMap& operator=(BucketMap&&) noexcept = default;
     BucketMap(size_t bucketSize)
     {
         m_buckets.reserve(bucketSize);
@@ -234,8 +274,8 @@ public:
             m_buckets.emplace_back(std::make_shared<BucketType>());
         }
     }
+    ~BucketMap() noexcept = default;
 
-    ~BucketMap() = default;
     // return true if found
     template <class AccessorType>
     bool find(AccessorType& accessor, const KeyType& key)
@@ -384,50 +424,6 @@ public:
         forEachByStartIndex<AccessorType>(startIdx, std::move(handler));
     }
 
-#if 0
-        template <class AccessorType>  // handler return isContinue
-        void forEach(const KeyType& startAfter, uint64_t eachBucketTimeLimit, size_t totalTxLimit,
-            std::function<bool(typename AccessorType::Ptr accessor)> handler)
-        {
-            size_t startIdx = (getBucketIndex(startAfter) + 1) % m_buckets.size();
-            size_t bucketsSize = m_buckets.size();
-
-            auto indexes =
-                RANGES::iota_view<size_t, size_t>{startIdx, startIdx + bucketsSize} |
-                RANGES::views::transform([bucketsSize](size_t i) { return i % bucketsSize; });
-
-            forEachBucket<AccessorType>(
-                indexes, [eachBucketTimeLimit, &totalTxLimit, handler =
-                std::move(handler)](size_t,
-                             typename BucketType::Ptr bucket, typename AccessorType::Ptr accessor)
-                             {
-                    auto bucketStartTime = utcTime();
-
-                    return bucket->template forEach<AccessorType>(
-                        [&bucketStartTime, eachBucketTimeLimit, &totalTxLimit, handler =
-                        std::move(handler)](
-                            typename AccessorType::Ptr accessor) {
-                            if (utcTime() - bucketStartTime >= eachBucketTimeLimit)
-                            {
-                                BCOS_LOG(DEBUG) << LOG_KV("bucketStayTime:", utcTime() -
-                                bucketStartTime)
-                                                << LOG_KV("eachBucketTxsLimit:",
-                                                eachBucketTimeLimit)
-                                                << LOG_KV("totalTxLimit:", totalTxLimit);
-                                return true;
-                            }
-                            if (totalTxLimit <= 0)
-                            {
-                                return false;
-                            }
-                            totalTxLimit--;
-                            return handler(accessor);
-                        },
-                        accessor);
-                });
-        }
-#endif
-
     template <class AccessorType>  // handler return isContinue
     void forEach(const KeyType& startAfter, size_t eachBucketLimit,
         std::function<std::pair<bool, bool>(AccessorType& accessor)> handler)
@@ -441,12 +437,12 @@ public:
 
         forEachBucket<AccessorType>(
             indexes, [eachBucketLimit, handler = std::move(handler)](
-                         size_t, typename BucketType::Ptr bucket, AccessorType accessor) {
+                         size_t, typename BucketType::Ptr bucket, AccessorType& accessor) {
                 size_t count = 0;
                 bool needBucketContinue = true;
                 bucket->template forEach<AccessorType>(
                     [&count, &needBucketContinue, eachBucketLimit, handler = std::move(handler)](
-                        AccessorType accessor) {
+                        AccessorType& accessor) {
                         auto [needContinue, isValid] = handler(accessor);
                         needBucketContinue = needContinue;
                         if (isValid)
@@ -604,8 +600,13 @@ template <class KeyType, class BucketHasher = std::hash<KeyType>>
 class BucketSet : public BucketMap<KeyType, EmptyType, BucketHasher>
 {
 public:
+    BucketSet(const BucketSet&) = default;
+    BucketSet(BucketSet&&) noexcept = default;
+    BucketSet& operator=(const BucketSet&) = default;
+    BucketSet& operator=(BucketSet&&) noexcept = default;
+    ~BucketSet() noexcept = default;
+
     BucketSet(size_t bucketSize) : BucketMap<KeyType, EmptyType, BucketHasher>(bucketSize){};
-    ~BucketSet() = default;
 
     using WriteAccessor = typename BucketMap<KeyType, EmptyType, BucketHasher>::WriteAccessor;
     using ReadAccessor = typename BucketMap<KeyType, EmptyType, BucketHasher>::ReadAccessor;

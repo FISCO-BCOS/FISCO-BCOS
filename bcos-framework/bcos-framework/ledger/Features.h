@@ -348,15 +348,13 @@ inline task::Task<void> writeToStorage(Features const& features, auto&& storage,
     decltype(auto) flags =
         features.flags() | RANGES::views::filter([](auto&& tuple) { return std::get<2>(tuple); });
     co_await storage2::writeSome(std::forward<decltype(storage)>(storage),
-        RANGES::views::transform(flags,
-            [](auto&& tuple) {
-                return transaction_executor::StateKey(ledger::SYS_CONFIG, std::get<1>(tuple));
-            }),
-        RANGES::views::transform(flags, [&](auto&& tuple) {
+        ::ranges::views::transform(flags, [&](auto&& tuple) {
             storage::Entry entry;
             entry.setObject(SystemConfigEntry{
                 boost::lexical_cast<std::string>((int)std::get<2>(tuple)), blockNumber});
-            return entry;
+            return std::make_tuple(
+                transaction_executor::StateKey(ledger::SYS_CONFIG, std::get<1>(tuple)),
+                std::move(entry));
         }));
 }
 

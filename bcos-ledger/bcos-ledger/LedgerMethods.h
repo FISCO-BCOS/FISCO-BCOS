@@ -234,16 +234,14 @@ task::Task<void> tag_invoke(
     }) | RANGES::to<std::vector>();
     if (!tarsNodeList.empty())
     {
-        co_await storage2::writeSome(storage,
-            RANGES::views::transform(tarsNodeList,
-                [](auto const& node) {
-                    return transaction_executor::StateKey{
-                        SYS_CONSENSUS, std::string_view(node.nodeID.data(), node.nodeID.size())};
-                }),
-            RANGES::views::transform(tarsNodeList, [](auto const& node) {
+        co_await storage2::writeSome(
+            storage, RANGES::views::transform(tarsNodeList, [](auto const& node) {
                 bytes data;
                 concepts::serialize::encode(node, data);
-                return storage::Entry(std::move(data));
+                return std::make_tuple(
+                    transaction_executor::StateKey{
+                        SYS_CONSENSUS, std::string_view(node.nodeID.data(), node.nodeID.size())},
+                    storage::Entry(std::move(data)));
             }));
     }
     LEDGER_LOG(DEBUG) << "SetNodeList success" << LOG_KV("nodeList size", nodeList.size());

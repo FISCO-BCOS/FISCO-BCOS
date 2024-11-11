@@ -25,6 +25,7 @@
 #include "bcos-task/Wait.h"
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
+#include <tuple>
 
 struct LegacyStorageTestFixture
 {
@@ -40,11 +41,11 @@ BOOST_FIXTURE_TEST_SUITE(LegacyStorageTest, LegacyStorageTestFixture)
 BOOST_AUTO_TEST_CASE(getPrimaryKeys)
 {
     bcos::task::syncWait([this]() -> bcos::task::Task<void> {
-        co_await bcos::storage2::writeSome(storage,
-            RANGES::views::iota(0, 10) | RANGES::views::transform([](int i) {
-                return bcos::transaction_executor::StateKey("t_test", std::to_string(i));
-            }),
-            RANGES::views::repeat(bcos::storage::Entry("t_test")));
+        co_await bcos::storage2::writeSome(
+            storage, RANGES::views::iota(0, 10) | RANGES::views::transform([](int i) {
+                auto key = bcos::transaction_executor::StateKey("t_test", std::to_string(i));
+                return std::make_tuple(key, bcos::storage::Entry("t_test"));
+            }));
 
         bcos::storage::LegacyStorageWrapper legacyStorage(storage);
 

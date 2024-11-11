@@ -27,7 +27,10 @@ class [[nodiscard]] AwaitableValue
 {
 public:
     AwaitableValue() = default;
-    AwaitableValue(Value&& value) : m_value(std::forward<Value>(value)) {}
+    AwaitableValue(Value value) : m_value(std::move(value)) {}
+    AwaitableValue(std::in_place_t /*unused*/, auto&&... args)
+      : m_value(std::forward<decltype(args)>(args)...)
+    {}
     constexpr static bool await_ready() noexcept { return true; }
     constexpr static bool await_suspend([[maybe_unused]] std::coroutine_handle<> handle) noexcept
     {

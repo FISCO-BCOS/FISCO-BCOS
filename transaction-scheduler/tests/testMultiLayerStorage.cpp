@@ -84,8 +84,9 @@ BOOST_AUTO_TEST_CASE(merge)
             return entry;
         });
 
-        co_await storage2::writeSome(*view, RANGES::iota_view<int, int>(0, 100) | toKey,
-            RANGES::iota_view<int, int>(0, 100) | toValue);
+        co_await storage2::writeSome(
+            *view, ::ranges::views::zip(RANGES::iota_view<int, int>(0, 100) | toKey,
+                       RANGES::iota_view<int, int>(0, 100) | toValue));
 
         BOOST_CHECK_THROW(
             co_await mergeBackStorage(multiLayerStorage), NotExistsImmutableStorageError);
@@ -135,20 +136,22 @@ BOOST_AUTO_TEST_CASE(rangeMulti)
 
     task::syncWait([]() -> task::Task<void> {
         BackendStorage backendStorage;
-        co_await storage2::writeSome(
-            backendStorage, RANGES::views::iota(0, 4), RANGES::views::repeat(0));
+        co_await storage2::writeSome(backendStorage,
+            ::ranges::views::zip(RANGES::views::iota(0, 4), RANGES::views::repeat(0)));
 
         MultiLayerStorage<MutableStorage, void, BackendStorage> myMultiLayerStorage(backendStorage);
 
         auto view1 = fork(myMultiLayerStorage);
         newMutable(view1);
-        co_await storage2::writeSome(view1, RANGES::views::iota(2, 6), RANGES::views::repeat(1));
+        co_await storage2::writeSome(
+            view1, ::ranges::views::zip(RANGES::views::iota(2, 6), RANGES::views::repeat(1)));
         co_await storage2::removeOne(view1, 2);
         pushView(myMultiLayerStorage, std::move(view1));
 
         auto view2 = fork(myMultiLayerStorage);
         newMutable(view2);
-        co_await storage2::writeSome(view2, RANGES::views::iota(4, 8), RANGES::views::repeat(2));
+        co_await storage2::writeSome(
+            view2, ::ranges::views::zip(RANGES::views::iota(4, 8), RANGES::views::repeat(2)));
 
         auto resultList = co_await storage2::readSome(view2, RANGES::views::iota(0, 8));
         auto vecList = resultList | RANGES::views::transform([](auto input) { return *input; }) |

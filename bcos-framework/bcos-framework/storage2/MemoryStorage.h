@@ -273,7 +273,7 @@ public:
 
     friend task::AwaitableValue<std::optional<Value>> tag_invoke(
         storage2::tag_t<storage2::readOne> /*unused*/, MemoryStorage& storage, auto&& key,
-        auto&&... args)
+        auto&&... /*unused*/)
     {
         task::AwaitableValue<std::optional<Value>> result;
         auto& bucket = getBucket(storage, key);
@@ -315,10 +315,9 @@ public:
     }
 
     friend task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/,
-        MemoryStorage& storage, ::ranges::input_range auto&& keys,
-        ::ranges::input_range auto&& values)
+        MemoryStorage& storage, ::ranges::input_range auto&& keyValues)
     {
-        for (auto&& [key, value] : ::ranges::views::zip(keys, values))
+        for (auto&& [key, value] : keyValues)
         {
             auto& bucket = getBucket(storage, key);
             Lock lock(bucket.mutex, true);
