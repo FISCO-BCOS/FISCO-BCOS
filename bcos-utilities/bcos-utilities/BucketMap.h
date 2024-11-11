@@ -23,6 +23,7 @@
 #include "bcos-utilities/BoostLog.h"
 #include <concepts>
 #include <queue>
+#include <range/v3/iterator/operations.hpp>
 #include <range/v3/range/concepts.hpp>
 #include <range/v3/view/addressof.hpp>
 #include <range/v3/view/chunk_by.hpp>
@@ -320,56 +321,49 @@ public:
         const Keys& keys) -> std::conditional_t<returnRemoved, std::vector<ValueType>, void>
     {
         auto count = ::ranges::size(keys);
-        auto sortedKeys =
-            ::ranges::views::enumerate(keys) | ::ranges::views::transform([&](const auto& tuple) {
-                auto&& [index, key] = tuple;
-                static_assert(std::is_lvalue_reference_v<decltype(key)>);
-                if constexpr (returnRemoved)
-                {
-                    return std::make_tuple(std::addressof(key), getBucketIndex(key), index);
-                }
-                else
-                {
-                    return std::make_tuple(std::addressof(key), getBucketIndex(key));
-                }
-            }) |
-            ::ranges::to<std::vector>();
-        std::sort(sortedKeys.begin(), sortedKeys.end(),
-            [](const auto& lhs, const auto& rhs) { return std::get<1>(lhs) < std::get<1>(rhs); });
-
         std::conditional_t<returnRemoved, std::vector<ValueType>, EmptyType> values;
         if constexpr (returnRemoved)
         {
             values.resize(count);
         }
 
-        auto chunks = ::ranges::views::chunk_by(sortedKeys,
-            [](const auto& lhs, const auto& rhs) { return std::get<1>(lhs) == std::get<1>(rhs); });
+        std::vector<int> bucketIndexes(count, -1);
+        bucketIndexes[0] = getBucketIndex(keys[0]);
+        auto chunks =
+            ::ranges::views::iota(0LU, count) | ::ranges::views::chunk_by([&](auto lhs, auto rhs) {
+                auto& lhsIndex = bucketIndexes[lhs];
+                auto& rhsIndex = bucketIndexes[rhs];
+                assert(lhsIndex != -1);
+                if (rhsIndex == -1)
+                {
+                    rhsIndex = getBucketIndex(keys[rhs]);
+                }
+                return lhsIndex == rhsIndex;
+            });
         for (auto chunk : chunks)
         {
-            auto bucketIndex = std::get<1>(chunk.front());
+            auto bucketIndex = bucketIndexes[chunk.front()];
             auto& bucket = m_buckets[bucketIndex];
 
             WriteAccessor accessor;
             bucket->acquireAccessor(accessor, true);
 
             auto& datas = bucket->m_values;
-            if constexpr (returnRemoved)
+
+            for (auto index : chunk)
             {
-                for (auto&& [key, _, index] : chunk)
+                auto& key = keys[index];
+                if constexpr (returnRemoved)
                 {
-                    if (auto it = datas.find(*key); it != datas.end())
+                    if (auto it = datas.find(key); it != datas.end())
                     {
                         values[index] = std::move(it->second);
                         datas.erase(it);
                     }
                 }
-            }
-            else
-            {
-                for (auto&& [key, _] : chunk)
+                else
                 {
-                    datas.erase(*key);
+                    datas.erase(key);
                 }
             }
         }
@@ -473,7 +467,7 @@ public:
     template <class AccessorType>  // handler return isContinue
     void forEach(const KeyType& startAfter, std::function<bool(AccessorType&)> handler)
     {
-        size_t startIdx = (getBucketIndex(startAfter) + 1) % m_buckets.size();
+        auto startIdx = (getBucketIndex(startAfter) + 1) % m_buckets.size();
         forEachByStartIndex<AccessorType>(startIdx, std::move(handler));
     }
 
@@ -630,17 +624,17 @@ public:
     }
 
 protected:
-    size_t getBucketIndex(const std::pair<KeyType, ValueType>& keyValue)
+    int getBucketIndex(const std::pair<KeyType, ValueType>& keyValue)
     {
         return getBucketIndex(keyValue.first);
     }
 
-    size_t getBucketIndex(const KeyType& key)
+    int getBucketIndex(const KeyType& key)
     {
         auto hash = BucketHasher{}(key);
         return hash % m_buckets.size();
     }
-    size_t getBucketIndex(auto const& key)
+    int getBucketIndex(auto const& key)
     {
         auto hash = BucketHasher{}(key);
         return hash % m_buckets.size();
