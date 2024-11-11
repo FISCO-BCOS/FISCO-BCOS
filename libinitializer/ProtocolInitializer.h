@@ -54,6 +54,7 @@ public:
     bcos::crypto::KeyFactory::Ptr keyFactory() const { return m_keyFactory; }
     bcos::security::KeyEncryptInterface::Ptr keyEncryption() const { return m_keyEncryption; }
     bcos::security::StorageEncryptInterface::Ptr dataEncryption() const { return m_dataEncryption; }
+    bcos::security::KeyEncryptInterface::Ptr getKeyEncryptionByType(KeyEncryptionType _type);
 
 private:
     void createCryptoSuite();

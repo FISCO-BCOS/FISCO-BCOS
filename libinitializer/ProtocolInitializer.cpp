@@ -83,7 +83,8 @@ void ProtocolInitializer::init(NodeConfig::Ptr _nodeConfig)
     //         m_keyEncryptionType == KeyEncryptionType::DEFAULT) ||
     //     m_keyEncryptionType == KeyEncryptionType::BKMS)
     // {
-    //     // Notice: the reason we don't use HSM for storage security is that the encrypt function in
+    //     // Notice: the reason we don't use HSM for storage security is that the encrypt function
+    //     in
     //     // HSM only support data length from 0 to 65536 byte
 
     //     // // storage security with HSM
@@ -106,7 +107,7 @@ void ProtocolInitializer::init(NodeConfig::Ptr _nodeConfig)
     //     m_keyEncryption = std::make_shared<KmsInterface>(_nodeConfig);
     // }
 
-    if(_nodeConfig->storageSecurityEnable())
+    if (_nodeConfig->storageSecurityEnable())
     {
         INITIALIZER_LOG(INFO) << LOG_DESC("storage security enable");
         m_dataEncryption = std::make_shared<BcosKmsDataEncryption>(_nodeConfig);
@@ -157,7 +158,8 @@ void ProtocolInitializer::loadKeyPair(std::string const& _privateKeyPath)
     if (m_enableHsm || m_keyEncryptionType == KeyEncryptionType::HSM)
     {
         // Create key pair according to the key index which inside HSM(Hardware Secure Machine)
-        // m_keyPair = dynamic_pointer_cast<bcos::crypto::HsmSM2Crypto>(m_cryptoSuite->signatureImpl())
+        // m_keyPair =
+        // dynamic_pointer_cast<bcos::crypto::HsmSM2Crypto>(m_cryptoSuite->signatureImpl())
         //                 ->createKeyPair(m_keyIndex, m_password);
         INITIALIZER_LOG(INFO) << METRIC << LOG_DESC("loadKeyPair from HSM")
                               << LOG_KV("lib_path", m_hsmLibPath) << LOG_KV("keyIndex", m_keyIndex)
@@ -165,8 +167,8 @@ void ProtocolInitializer::loadKeyPair(std::string const& _privateKeyPath)
     }
     else
     {
-        auto privateKeyData = loadPrivateKey(
-            _privateKeyPath, c_hexedPrivateKeySize, m_keyEncryption);
+        auto privateKeyData =
+            loadPrivateKey(_privateKeyPath, c_hexedPrivateKeySize, m_keyEncryption);
         if (!privateKeyData)
         {
             INITIALIZER_LOG(ERROR)
@@ -175,7 +177,8 @@ void ProtocolInitializer::loadKeyPair(std::string const& _privateKeyPath)
         }
         INITIALIZER_LOG(INFO) << LOG_DESC("loadKeyPair from privateKey")
                               << LOG_KV("privateKeySize", privateKeyData->size())
-                              << LOG_KV("keyEncryptionType", GetKeyEncryptionTypeString(m_keyEncryptionType));
+                              << LOG_KV("keyEncryptionType",
+                                     GetKeyEncryptionTypeString(m_keyEncryptionType));
         auto privateKey = m_keyFactory->createKey(*privateKeyData);
         m_keyPair = m_cryptoSuite->signatureImpl()->createKeyPair(privateKey);
         INITIALIZER_LOG(INFO) << METRIC << LOG_DESC("loadKeyPair from privateKeyPath")
@@ -184,4 +187,16 @@ void ProtocolInitializer::loadKeyPair(std::string const& _privateKeyPath)
 
     INITIALIZER_LOG(INFO) << METRIC << LOG_DESC("loadKeyPair success")
                           << LOG_KV("publicKey", m_keyPair->publicKey()->hex());
+}
+
+bcos::security::KeyEncryptInterface::Ptr ProtocolInitializer::getKeyEncryptionByType(
+    KeyEncryptionType _type)
+{
+    bcos::security::KeyEncryptInterface::Ptr keyEncryptionPtr = nullptr;
+    if (_type == KeyEncryptionType::HSM || _type == KeyEncryptionType::BCOSKMS ||
+        _type == KeyEncryptionType::DEFAULT)
+    {
+        keyEncryptionPtr = m_keyEncryption;
+    }
+    return keyEncryptionPtr;
 }

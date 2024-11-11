@@ -19,16 +19,15 @@
  * @date: 2024-11-07
  */
 #pragma once
-#include <stdexcept>
-#include <string>
 #include <magic_enum.hpp>
+#include <string>
 
 enum class KeyEncryptionType
 {
     DISABLED,
     DEFAULT,
-    BKMS,
-    KMS,
+    BCOSKMS,
+    CLOUDKMS,
     HSM
 };
 
@@ -41,10 +40,10 @@ inline std::string GetKeyEncryptionTypeString(KeyEncryptionType type)
 // get the enum from the string
 inline KeyEncryptionType GetKeyEncryptionTypeFromString(const std::string& typeStr)
 {
-   auto result = magic_enum::enum_cast<KeyEncryptionType>(typeStr);
-   if (!result)
-   {
-       return KeyEncryptionType::DEFAULT;
-   }
-   return result.value();
+    auto result = magic_enum::enum_cast<KeyEncryptionType>(typeStr);
+    if (!result)
+    {
+        return KeyEncryptionType::DEFAULT;
+    }
+    return result.value();
 }
