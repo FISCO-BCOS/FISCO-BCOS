@@ -56,7 +56,7 @@ std::vector<std::atomic_long> query(bcos::sdk::RPCClient& rpcClient,
     tbb::parallel_for(tbb::blocked_range(0LU, (size_t)userCount), [&](const auto& range) {
         for (auto it = range.begin(); it != range.end(); ++it)
         {
-            limiter.acquire(1);
+            // limiter.acquire(1);
             bcos::codec::abi::ContractABICodec abiCodec(*cryptoSuite->hashImpl());
             bcos::bytes input;
             if (contractAddress == DAG_TRANSFER_ADDRESS)

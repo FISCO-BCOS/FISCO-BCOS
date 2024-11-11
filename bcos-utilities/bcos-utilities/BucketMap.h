@@ -21,6 +21,7 @@
 
 #include "Common.h"
 #include "bcos-utilities/BoostLog.h"
+#include <oneapi/tbb/parallel_sort.h>
 #include <concepts>
 #include <queue>
 #include <range/v3/iterator/operations.hpp>
@@ -321,52 +322,63 @@ public:
         const Keys& keys) -> std::conditional_t<returnRemoved, std::vector<ValueType>, void>
     {
         auto count = ::ranges::size(keys);
+        auto sortedKeys =
+            ::ranges::views::enumerate(keys) | ::ranges::views::transform([&](const auto& tuple) {
+                auto&& [index, key] = tuple;
+                static_assert(std::is_lvalue_reference_v<decltype(key)>);
+                if constexpr (returnRemoved)
+                {
+                    return std::make_tuple(std::addressof(key), getBucketIndex(key), index);
+                }
+                else
+                {
+                    return std::make_tuple(std::addressof(key), getBucketIndex(key));
+                }
+            }) |
+            ::ranges::to<std::vector>();
+        tbb::parallel_sort(sortedKeys.begin(), sortedKeys.end(),
+            [](const auto& lhs, const auto& rhs) { return std::get<1>(lhs) < std::get<1>(rhs); });
+
         std::conditional_t<returnRemoved, std::vector<ValueType>, EmptyType> values;
         if constexpr (returnRemoved)
         {
             values.resize(count);
         }
 
-        std::vector<int> bucketIndexes(count, -1);
-        bucketIndexes[0] = getBucketIndex(keys[0]);
-        auto chunks =
-            ::ranges::views::iota(0LU, count) | ::ranges::views::chunk_by([&](auto lhs, auto rhs) {
-                auto& lhsIndex = bucketIndexes[lhs];
-                auto& rhsIndex = bucketIndexes[rhs];
-                assert(lhsIndex != -1);
-                if (rhsIndex == -1)
-                {
-                    rhsIndex = getBucketIndex(keys[rhs]);
-                }
-                return lhsIndex == rhsIndex;
-            });
-        for (auto chunk : chunks)
-        {
-            auto bucketIndex = bucketIndexes[chunk.front()];
-            auto& bucket = m_buckets[bucketIndex];
-
-            WriteAccessor accessor;
-            bucket->acquireAccessor(accessor, true);
-
-            auto& datas = bucket->m_values;
-
-            for (auto index : chunk)
+        auto chunks = ::ranges::views::chunk_by(sortedKeys, [](const auto& lhs, const auto& rhs) {
+            return std::get<1>(lhs) == std::get<1>(rhs);
+        }) | ::ranges::to<std::vector>();
+        tbb::parallel_for(tbb::blocked_range(0LU, chunks.size()), [&](auto const& range) {
+            for (auto i = range.begin(); i != range.end(); ++i)
             {
-                auto& key = keys[index];
+                auto& chunk = chunks[i];
+                auto bucketIndex = std::get<1>(chunk.front());
+                auto& bucket = m_buckets[bucketIndex];
+
+                WriteAccessor accessor;
+                bucket->acquireAccessor(accessor, true);
+
+                auto& datas = bucket->m_values;
                 if constexpr (returnRemoved)
                 {
-                    if (auto it = datas.find(key); it != datas.end())
+                    for (auto&& [key, _, index] : chunk)
                     {
-                        values[index] = std::move(it->second);
-                        datas.erase(it);
+                        if (auto it = datas.find(*key); it != datas.end())
+                        {
+                            values[index] = std::move(it->second);
+                            datas.erase(it);
+                        }
                     }
                 }
                 else
                 {
-                    datas.erase(key);
+                    for (auto&& [key, _] : chunk)
+                    {
+                        datas.erase(*key);
+                    }
                 }
             }
-        }
+        });
 
         if constexpr (returnRemoved)
         {
