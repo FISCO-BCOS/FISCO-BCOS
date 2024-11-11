@@ -34,6 +34,10 @@ public:
     virtual ~KeyEncryptInterface() = default;
 
 public:
+    // use to encrypt node.key
+    virtual std::shared_ptr<bytes> encryptContents(const std::shared_ptr<bytes>& contents) = 0;
+    virtual std::shared_ptr<bytes> encryptFile(const std::string& filename) = 0;
+
     // use to decrypt node.key
     virtual std::shared_ptr<bytes> decryptContents(const std::shared_ptr<bytes>& contents) = 0;
     virtual std::shared_ptr<bytes> decryptFile(const std::string& filename) = 0;

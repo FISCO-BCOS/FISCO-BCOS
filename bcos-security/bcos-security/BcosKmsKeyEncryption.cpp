@@ -187,4 +187,16 @@ std::shared_ptr<bytes> BcosKmsKeyEncryption::decryptFile(const std::string& file
     return decFileBytes;
 }
 
+std::shared_ptr<bytes> BcosKmsKeyEncryption::encryptContents(const std::shared_ptr<bytes>& content)
+{
+    BCOS_LOG(ERROR) << LOG_DESC("[BcosKmsKeyEncryption] encryptContents error");
+    BOOST_THROW_EXCEPTION(NotImplementedError());
+}
+
+std::shared_ptr<bytes> BcosKmsKeyEncryption::encryptFile(const std::string& filename)
+{
+    BCOS_LOG(ERROR) << LOG_DESC("[BcosKmsKeyEncryption] encryptFile error");
+    BOOST_THROW_EXCEPTION(NotImplementedError());
+}
+
 }  // namespace bcos::security
