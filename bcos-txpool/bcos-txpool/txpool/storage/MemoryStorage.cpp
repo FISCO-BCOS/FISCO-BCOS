@@ -98,7 +98,7 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
     transaction->setImportTime(utcTime());
     struct Awaitable
     {
-        [[maybe_unused]] constexpr bool await_ready() { return false; }
+        [[maybe_unused]] static constexpr bool await_ready() { return false; }
         [[maybe_unused]] void await_suspend(std::coroutine_handle<> handle)
         {
             try
@@ -179,7 +179,7 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
     transaction->setImportTime(utcTime());
     struct Awaitable
     {
-        [[maybe_unused]] constexpr bool await_ready() { return false; }
+        [[maybe_unused]] static constexpr bool await_ready() { return false; }
         [[maybe_unused]] void await_suspend(std::coroutine_handle<> handle)
         {
             try
