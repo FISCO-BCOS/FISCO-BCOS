@@ -23,27 +23,19 @@
 #include <bcos-utilities/Common.h>
 #include <memory>
 
-namespace bcos
+namespace bcos::security
 {
-namespace security
-{
-class DataEncryptInterface
+class StorageEncryptInterface
 {
 public:
-    using Ptr = std::shared_ptr<DataEncryptInterface>;
-    DataEncryptInterface() = default;
-    virtual ~DataEncryptInterface() = default;
+    using Ptr = std::shared_ptr<StorageEncryptInterface>;
+    StorageEncryptInterface() = default;
+    virtual ~StorageEncryptInterface() = default;
 
 public:
-    // use to decrypt node.key
-    virtual std::shared_ptr<bytes> decryptContents(const std::shared_ptr<bytes>& contents) = 0;
-    virtual std::shared_ptr<bytes> decryptFile(const std::string& filename) = 0;
-
     // use to encrypt/decrypt in rocksdb
     virtual std::string encrypt(const std::string& data) = 0;
     virtual std::string decrypt(const std::string& data) = 0;
 };
 
-}  // namespace security
-
-}  // namespace bcos
+}  // namespace bcos::security

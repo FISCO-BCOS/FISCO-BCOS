@@ -21,6 +21,7 @@
 #pragma once
 #include "bcos-framework/ledger/GenesisConfig.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
+#include "bcos-framework/security/KeyEncryptionType.h"
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/Common.h>
 #include <bcos-framework/protocol/Protocol.h>
@@ -247,9 +248,13 @@ public:
     std::string const& failOverClusterUrl() const { return m_failOverClusterUrl; }
 
     bool storageSecurityEnable() const { return m_storageSecurityEnable; }
-    std::string storageSecurityKeyCenterIp() const { return m_storageSecurityKeyCenterIp; }
-    unsigned short storageSecurityKeyCenterPort() const { return m_storageSecurityKeyCenterPort; }
+    std::string storageSecuirtyKeyCenterUrl() const { return m_storageSecurityUrl; }
     std::string storageSecurityCipherDataKey() const { return m_storageSecurityCipherDataKey; }
+
+    KeyEncryptionType keyEncryptionType() const { return m_keyEncryptionType; }
+    std::string kmsType() const { return m_kmsType; }
+    std::string kctKeySecurityCipherDataKey() const { return m_kctKeySecurityCipherDataKey; }
+    std::string keyEncryptionUrl() const { return m_KeyEncryptionUrl; }
 
     bool enableSendBlockStatusByTree() const { return m_enableSendBlockStatusByTree; }
     bool enableSendTxByTree() const { return m_enableSendTxByTree; }
@@ -286,6 +291,8 @@ public:
     TarsRPCConfig const& tarsRPCConfig() const { return m_tarsRPCConfig; }
 
     ledger::GenesisConfig const& genesisConfig() const;
+
+    bool isValidPort(int port);
 
 protected:
     virtual void loadChainConfig(boost::property_tree::ptree const& _pt, bool _enforceGroupId);
@@ -344,7 +351,6 @@ private:
     virtual int64_t checkAndGetValue(boost::property_tree::ptree const& _pt,
         std::string const& _value, std::string const& _defaultValue);
 
-    bool isValidPort(int port);
 
     bcos::crypto::KeyFactory::Ptr m_keyFactory;
     // txpool related configuration
@@ -366,16 +372,26 @@ private:
 
     // for security
     std::string m_privateKeyPath;
+    // Duplicated: option remove to key_encryption_type
     bool m_enableHsm{};
     std::string m_hsmLibPath;
     int m_keyIndex{};
     int m_encKeyIndex{};
     std::string m_password;
 
+    // for security kms kct hsm configuration
+    KeyEncryptionType m_keyEncryptionType;
+    // key url
+    std::string m_KeyEncryptionUrl;
+    // kms type, 0: AWS, 1: Aliyun...
+    std::string m_kmsType;
+    // kct data key
+    std::string m_kctKeySecurityCipherDataKey;
+
     // storage security configuration
     bool m_storageSecurityEnable{};
-    std::string m_storageSecurityKeyCenterIp;
-    unsigned short m_storageSecurityKeyCenterPort{};
+    std::string m_storageSecurityUrl;
+    // unsigned short m_storageSecurityKeyCenterPort{};
     std::string m_storageSecurityCipherDataKey;
 
     // ledger configuration

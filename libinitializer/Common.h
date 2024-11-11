@@ -20,7 +20,7 @@
  */
 #pragma once
 #include <bcos-framework/Common.h>
-#include <bcos-framework/security/DataEncryptInterface.h>
+#include <bcos-framework/security/KeyEncryptInterface.h>
 #include <bcos-tool/Exceptions.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Exceptions.h>
@@ -34,7 +34,7 @@
 namespace bcos::initializer
 {
 inline std::shared_ptr<bytes> loadPrivateKey(std::string const& _keyPath,
-    unsigned _hexedPrivateKeySize, bcos::security::DataEncryptInterface::Ptr _certEncryptionHandler)
+    unsigned _hexedPrivateKeySize, bcos::security::KeyEncryptInterface::Ptr _certEncryptionHandler)
 {
     std::shared_ptr<EC_KEY> ecKey;
     try
@@ -45,10 +45,14 @@ inline std::shared_ptr<bytes> loadPrivateKey(std::string const& _keyPath,
         {
             keyContent = _certEncryptionHandler->decryptContents(content);
         }
+
+        // key center
+
         if (keyContent->empty())
         {
             return nullptr;
         }
+        // kms type
 
         INITIALIZER_LOG(INFO) << LOG_BADGE("SecureInitializer") << LOG_DESC("loading privateKey");
         std::shared_ptr<BIO> bioMem(BIO_new(BIO_s_mem()), [&](BIO* p) { BIO_free(p); });

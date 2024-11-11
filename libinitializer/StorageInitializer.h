@@ -30,8 +30,9 @@
 #endif
 #include "rocksdb/convenience.h"
 #include "rocksdb/filter_policy.h"
-#include <bcos-framework/security/DataEncryptInterface.h>
+#include <bcos-framework/security/StorageEncryptInterface.h>
 #include <bcos-framework/storage/StorageInterface.h>
+#include <boost/filesystem.hpp>
 
 namespace bcos::initializer
 {
@@ -124,7 +125,7 @@ public:
             });
     }
     static bcos::storage::TransactionalStorageInterface::Ptr build(
-        auto&& rocksDB, const bcos::security::DataEncryptInterface::Ptr& _dataEncrypt)
+        auto&& rocksDB, const bcos::security::StorageEncryptInterface::Ptr& _dataEncrypt)
     {
         return std::make_shared<bcos::storage::RocksDBStorage>(
             std::forward<decltype(rocksDB)>(rocksDB), _dataEncrypt);

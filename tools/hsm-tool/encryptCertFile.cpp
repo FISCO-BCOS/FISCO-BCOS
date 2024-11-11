@@ -20,7 +20,7 @@
 
 #include "boost/filesystem.hpp"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-security/bcos-security/HsmDataEncryption.h>
+#include <bcos-security/bcos-security/HsmKeyEncryption.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/program_options.hpp>
@@ -82,7 +82,7 @@ int main(int argc, const char* argv[])
     nodeConfig->loadConfig(configPath);
     std::cout << "loadConfig success. hsmLibPath: " << nodeConfig->hsmLibPath()
               << ", encKeyIndex: " << nodeConfig->encKeyIndex() << std::endl;
-    auto dataEncryption = std::make_shared<bcos::security::HsmDataEncryption>(nodeConfig);
+    auto dataEncryption = std::make_shared<bcos::security::HsmKeyEncryption>(nodeConfig);
 
     // copy cert file
     ifstream certFile(certFilePath);
