@@ -1,5 +1,5 @@
-#include "bcos-security/bcos-security/kms/AwsKmsWrapper.h"
-#include "bcos-security/bcos-security/kms/KmsProvider.h"
+#include "bcos-security/bcos-security/cloudkms/AwsKmsWrapper.h"
+#include "bcos-security/bcos-security/cloudkms/CloudKmsProvider.h"
 #include <aws/core/Aws.h>
 #include <iostream>
 #include <string>
@@ -57,15 +57,15 @@ int main(int argc, char* argv[])
     const std::string inputFilePath = argv[6];
     const std::string outputFilePath = argv[7];
 
-    auto provider = CloudKMSProviderHelper::FromString(kmsType);
+    auto provider = CloudKmsProviderHelper::FromString(kmsType);
 
-    if (provider == CloudKMSProvider::UNKNOWN)
+    if (provider == CloudKmsProvider::UNKNOWN)
     {
         std::cerr << "Invalid KMS provider: " << kmsType << std::endl;
         return 1;
     }
 
-    if (provider == CloudKMSProvider::AWS)
+    if (provider == CloudKmsProvider::AWS)
     {
         // initialize the AWS SDK
         Aws::SDKOptions options;

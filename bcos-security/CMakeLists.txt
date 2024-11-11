@@ -21,7 +21,7 @@ cmake_minimum_required(VERSION 3.10)
 project(bcos-security VERSION ${VERSION})
 
 aux_source_directory(./bcos-security SRC_LIST)
-# aux_source_directory(./bcos-security/kms KMS_SRC_LIST)
+aux_source_directory(./bcos-security/cloudkms KMS_SRC_LIST)
 add_library(${SECURITY_TARGET} ${SRC_LIST} ${KMS_SRC_LIST})
 
 find_package(jsoncpp REQUIRED)
@@ -41,7 +41,7 @@ target_link_libraries(${SECURITY_TARGET} PRIVATE
 target_include_directories(${SECURITY_TARGET}
     PRIVATE
         ./bcos-security
-        ./bcos-security/kms
+        ./bcos-security/cloudkms
 )
 # add include directories
 target_include_directories(${SECURITY_TARGET} PRIVATE
