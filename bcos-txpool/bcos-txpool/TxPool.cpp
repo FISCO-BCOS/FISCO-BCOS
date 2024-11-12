@@ -485,7 +485,7 @@ void TxPool::asyncMarkTxs(HashListPtr _txsHash, bool _sealedFlag,
     bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
     std::function<void(Error::Ptr)> _onRecvResponse)
 {
-    bool allMarked;
+    bool allMarked = false;
     {
         bcos::ReadGuard guard(x_markTxsMutex);
         allMarked = m_txpoolStorage->batchMarkTxs(*_txsHash, _batchId, _batchHash, _sealedFlag);
