@@ -73,6 +73,7 @@ void TransactionSync::onRecvSyncMessage(
         }
         if (txsSyncMsg->type() == TxsSyncPacketType::TxsStatusPacket)
         {
+            SYNC_LOG(INFO) << LOG_DESC("TxsSyncPacketType::TxsStatusPacket request");
             auto self = weak_from_this();
             m_txsRequester->enqueue([self, _nodeID, txsSyncMsg]() {
                 try
@@ -504,11 +505,11 @@ void TransactionSync::onPeerTxsStatus(NodeIDPtr _fromNode, TxsSyncMsgInterface::
 
 void TransactionSync::responseTxsStatus(NodeIDPtr _fromNode)
 {
+    SYNC_LOG(INFO) << LOG_DESC("onPeerTxsStatus: request");
     if (m_config->txpoolStorage()->size() == 0)
     {
         return;
     }
-    SYNC_LOG(INFO) << LOG_DESC("onPeerTxsStatus: request");
 
     // TODO: get tx directly, not get txHash and request tx indirectly
     auto txsHash =
