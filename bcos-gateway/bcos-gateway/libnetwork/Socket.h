@@ -77,7 +77,7 @@ public:
         m_nodeIPEndpoint = _nodeIPEndpoint;
     }
 
-    std::shared_ptr<ba::io_context> ioService() override { return m_ioService; }
+    ba::io_context& ioService() override { return *m_ioService; }
 
 protected:
     NodeIPEndpoint m_nodeIPEndpoint;

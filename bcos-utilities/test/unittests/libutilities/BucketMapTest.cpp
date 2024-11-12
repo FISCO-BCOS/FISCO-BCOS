@@ -302,9 +302,10 @@ BOOST_AUTO_TEST_CASE(parallelTest2)
 
     tbb::parallel_for(
         tbb::blocked_range<int>(0, total), [&bucketMap](const tbb::blocked_range<int>& range) {
-            auto ks = RANGES::iota_view<int, int>(range.begin(), range.end());
+            auto ks = RANGES::iota_view<int, int>(range.begin(), range.end()) |
+                      ::ranges::to<std::vector>();
 
-            bucketMap.batchRemove(ks, [](bool, const int& key, const int& value) {});
+            bucketMap.batchRemove<decltype(ks), false>(ks);
         });
     BOOST_CHECK_EQUAL(0, bucketMap.size());
 

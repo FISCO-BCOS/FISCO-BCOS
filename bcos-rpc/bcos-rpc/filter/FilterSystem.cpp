@@ -71,7 +71,7 @@ void FilterSystem::cleanUpExpiredFilters()
             }
             return true;
         });
-    m_filters.batchRemove(expiredFilters);
+    m_filters.batchRemove<decltype(expiredFilters), false>(expiredFilters);
     FILTER_LOG(INFO) << LOG_DESC("cleanUpExpiredFilters") << LOG_KV("filters", m_filters.size())
                      << LOG_KV("erasedFilters", expiredFilters.size())
                      << LOG_KV("traversedFiltersNum", traversedFiltersNum);

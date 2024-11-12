@@ -422,35 +422,24 @@ void TxPool::getTxsFromLocalLedger(HashListPtr _txsHash, HashListPtr _missedTxs,
     std::function<void(Error::Ptr, ConstTransactionsPtr)> _onBlockFilled)
 {
     // fetch from the local ledger
-    auto self = weak_from_this();
-    m_worker->enqueue([self, _txsHash, _missedTxs, _onBlockFilled]() {
-        auto txpool = self.lock();
-        if (!txpool)
-        {
-            _onBlockFilled(
-                BCOS_ERROR_PTR(CommonError::TransactionsMissing, "TransactionsMissing"), nullptr);
-            return;
-        }
-        auto sync = txpool->m_transactionSync;
-        sync->requestMissedTxs(nullptr, _missedTxs, nullptr,
-            [txpool, _txsHash, _onBlockFilled](Error::Ptr _error, bool _verifyResult) {
-                if (_error || !_verifyResult)
-                {
-                    TXPOOL_LOG(WARNING)
-                        << LOG_DESC("getTxsFromLocalLedger failed")
-                        << LOG_KV("code", _error ? _error->errorCode() : 0)
-                        << LOG_KV("msg", _error ? _error->errorMessage() : "fetchSucc")
-                        << LOG_KV("verifyResult", _verifyResult);
-                    _onBlockFilled(
-                        BCOS_ERROR_PTR(CommonError::TransactionsMissing, "TransactionsMissing"),
-                        nullptr);
-                    return;
-                }
-                TXPOOL_LOG(INFO) << LOG_DESC(
-                    "asyncFillBlock miss and try to get the transaction from the ledger success");
-                txpool->fillBlock(_txsHash, _onBlockFilled, false);
-            });
-    });
+    m_transactionSync->requestMissedTxs(nullptr, std::move(_missedTxs), nullptr,
+        [this, _txsHash = std::move(_txsHash), _onBlockFilled = std::move(_onBlockFilled)](
+            const Error::Ptr& _error, bool _verifyResult) {
+            if (_error || !_verifyResult)
+            {
+                TXPOOL_LOG(WARNING) << LOG_DESC("getTxsFromLocalLedger failed")
+                                    << LOG_KV("code", _error ? _error->errorCode() : 0)
+                                    << LOG_KV("msg", _error ? _error->errorMessage() : "fetchSucc")
+                                    << LOG_KV("verifyResult", _verifyResult);
+                _onBlockFilled(
+                    BCOS_ERROR_PTR(CommonError::TransactionsMissing, "TransactionsMissing"),
+                    nullptr);
+                return;
+            }
+            TXPOOL_LOG(INFO) << LOG_DESC(
+                "asyncFillBlock miss and try to get the transaction from the ledger success");
+            fillBlock(_txsHash, _onBlockFilled, false);
+        });
 }
 
 // Note: the transaction must be all hit in local txpool
@@ -463,6 +452,9 @@ void TxPool::asyncFillBlock(
 void TxPool::fillBlock(HashListPtr _txsHash,
     std::function<void(Error::Ptr, ConstTransactionsPtr)> _onBlockFilled, bool _fetchFromLedger)
 {
+    ittapi::Report report(
+        ittapi::ITT_DOMAINS::instance().TXPOOL, ittapi::ITT_DOMAINS::instance().FILL_BLOCK);
+
     HashListPtr missedTxs = std::make_shared<HashList>();
     auto txs = m_txpoolStorage->fetchTxs(*missedTxs, *_txsHash);
     if (!missedTxs->empty())
@@ -483,6 +475,8 @@ void TxPool::fillBlock(HashListPtr _txsHash,
         }
         return;
     }
+    report.release();
+
     _onBlockFilled(nullptr, txs);
 }
 
@@ -491,7 +485,7 @@ void TxPool::asyncMarkTxs(HashListPtr _txsHash, bool _sealedFlag,
     bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
     std::function<void(Error::Ptr)> _onRecvResponse)
 {
-    bool allMarked;
+    bool allMarked = false;
     {
         bcos::ReadGuard guard(x_markTxsMutex);
         allMarked = m_txpoolStorage->batchMarkTxs(*_txsHash, _batchId, _batchHash, _sealedFlag);

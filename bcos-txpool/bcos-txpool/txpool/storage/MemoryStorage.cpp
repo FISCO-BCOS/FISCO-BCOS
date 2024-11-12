@@ -21,6 +21,7 @@
 #include "bcos-txpool/txpool/storage/MemoryStorage.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Common.h"
+#include "bcos-utilities/ITTAPI.h"
 #include <bcos-protocol/TransactionSubmitResultImpl.h>
 #include <oneapi/tbb/blocked_range.h>
 #include <oneapi/tbb/parallel_for_each.h>
@@ -29,6 +30,7 @@
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
 #include <memory>
+#include <range/v3/view/transform.hpp>
 #include <variant>
 
 const static auto CPU_CORES = std::thread::hardware_concurrency();
@@ -96,7 +98,7 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
     transaction->setImportTime(utcTime());
     struct Awaitable
     {
-        [[maybe_unused]] constexpr bool await_ready() { return false; }
+        [[maybe_unused]] static constexpr bool await_ready() { return false; }
         [[maybe_unused]] void await_suspend(std::coroutine_handle<> handle)
         {
             try
@@ -177,7 +179,7 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
     transaction->setImportTime(utcTime());
     struct Awaitable
     {
-        [[maybe_unused]] constexpr bool await_ready() { return false; }
+        [[maybe_unused]] static constexpr bool await_ready() { return false; }
         [[maybe_unused]] void await_suspend(std::coroutine_handle<> handle)
         {
             try
@@ -618,35 +620,42 @@ void MemoryStorage::printPendingTxs()
     });
     TXPOOL_LOG(DEBUG) << LOG_DESC("printPendingTxs for some txs unhandled finish");
 }
+
 void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults const& txsResult)
 {
+    ittapi::Report report(
+        ittapi::ITT_DOMAINS::instance().TXPOOL, ittapi::ITT_DOMAINS::instance().BATCH_REMOVE_TXS);
+
     auto startT = utcTime();
     auto recordT = startT;
     uint64_t lockT = 0;
     m_blockNumberUpdatedTime = recordT;
     size_t succCount = 0;
 
-    auto range =
-        txsResult | RANGES::views::transform([](TransactionSubmitResult::Ptr const& _txResult) {
-            return std::make_pair(_txResult->txHash(), std::make_pair(nullptr, _txResult));
-        });
-    std::unordered_map<crypto::HashType, std::pair<Transaction::Ptr, TransactionSubmitResult::Ptr>>
-        results(range.begin(), range.end());
+    auto txHashes =
+        ::ranges::views::transform(txsResult,
+            [](TransactionSubmitResult::Ptr const& _txResult) { return _txResult->txHash(); }) |
+        ::ranges::to<std::vector>;
+    auto removedTxs = m_txsTable.batchRemove<decltype(txHashes), true>(txHashes);
 
+    auto results = ::ranges::views::transform(txsResult,
+                       [](TransactionSubmitResult::Ptr const& _txResult) {
+                           return std::make_pair(Transaction::Ptr{}, std::addressof(_txResult));
+                       }) |
+                   ::ranges::to<std::vector>;
+    for (auto&& [i, txHash, tx] :
+        ::ranges::views::zip(::ranges::views::iota(0), txHashes, removedTxs))
+    {
+        if (!tx)
+        {
+            continue;
+        }
+        onTxRemoved(tx, false);
 
-    auto txHashes = range | RANGES::views::keys;
-    m_txsTable.batchRemove(
-        txHashes, [&](bool success, const crypto::HashType& key, Transaction::Ptr const& tx) {
-            if (!success)
-            {
-                return;
-            }
-            onTxRemoved(tx, false);
-
-            ++succCount;
-            results[key].first = std::move(tx);
-            m_removeRateCollector.update(1, true);
-        });
+        ++succCount;
+        results[i].first = std::move(tx);
+        m_removeRateCollector.update(1, true);
+    }
 
     if (batchId > m_blockNumber)
     {
@@ -677,9 +686,8 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
 
     auto nonceListPtr = std::make_shared<NonceList>();
     std::unordered_map<std::string, std::set<u256>> web3NonceMap{};
-    for (auto&& [_, txPair] : results)
+    for (auto&& [tx, txResult] : results)
     {
-        auto const& [tx, txResult] = txPair;
         if (tx)
         {
             if (tx->type() == TransactionType::Web3Transaction) [[unlikely]]
@@ -700,9 +708,9 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
                 nonceListPtr->emplace_back(tx->nonce());
             }
         }
-        else if (!txResult->nonce().empty())
+        else if (!(*txResult)->nonce().empty())
         {
-            nonceListPtr->emplace_back(txResult->nonce());
+            nonceListPtr->emplace_back((*txResult)->nonce());
         }
     }
     m_config->txValidator()->ledgerNonceChecker()->batchInsert(batchId, nonceListPtr);
@@ -718,17 +726,16 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
     m_config->txPoolNonceChecker()->batchRemove(*nonceListPtr);
     auto updateTxPoolNonceT = utcTime() - startT;
 
-    auto txs2Notify = results | RANGES::views::filter([](auto const& _result) {
-        const auto& tx = _result.second.first;
-        return tx != nullptr;
-    }) | RANGES::views::values;
-
-    tbb::parallel_for_each(txs2Notify.begin(), txs2Notify.end(),
-        [&](auto& _result) { notifyTxResult(*_result.first, std::move(_result.second)); });
-    // for (auto& [tx, txResult] : txs2Notify)
-    // {
-    //     notifyTxResult(*tx, std::move(txResult));
-    // }
+    tbb::parallel_for(tbb::blocked_range(0UL, results.size()), [&](const auto& range) {
+        for (auto i = range.begin(); i != range.end(); ++i)
+        {
+            auto& [tx, txResult] = results[i];
+            if (tx)
+            {
+                notifyTxResult(*tx, std::move(*txResult));
+            }
+        }
+    });
 
     TXPOOL_LOG(INFO) << METRIC << LOG_DESC("batchRemove txs success")
                      << LOG_KV("expectedSize", txsResult.size()) << LOG_KV("succCount", succCount)
@@ -741,6 +748,9 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
 
 ConstTransactionsPtr MemoryStorage::fetchTxs(HashList& _missedTxs, HashList const& _txs)
 {
+    ittapi::Report report(
+        ittapi::ITT_DOMAINS::instance().TXPOOL, ittapi::ITT_DOMAINS::instance().BATCH_FETCH_TXS);
+
     auto fetchedTxs = std::make_shared<ConstTransactions>();
     _missedTxs.clear();
 
@@ -753,7 +763,7 @@ ConstTransactionsPtr MemoryStorage::fetchTxs(HashList& _missedTxs, HashList cons
             _missedTxs.emplace_back(hash);
             continue;
         }
-        auto& tx = accessor.value();
+        const auto& tx = accessor.value();
         fetchedTxs->emplace_back(tx);
     }
     if (c_fileLogLevel <= TRACE) [[unlikely]]

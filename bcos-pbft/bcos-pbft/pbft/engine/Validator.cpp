@@ -162,34 +162,6 @@ void TxsValidator::asyncResetTxsFlag(
         });
 }
 
-void bcos::consensus::TxsValidator::notifyTransactionsResult(
-    bcos::protocol::Block::Ptr _block, bcos::protocol::BlockHeader::Ptr _header)
-{
-    auto results = std::make_shared<bcos::protocol::TransactionSubmitResults>();
-    for (size_t i = 0; i < _block->transactionsHashSize(); i++)
-    {
-        auto txHash = _block->transactionHash(i);
-        auto txResult = m_txResultFactory->createTxSubmitResult();
-        txResult->setBlockHash(_header->hash());
-        txResult->setTxHash(txHash);
-        results->emplace_back(std::move(txResult));
-    }
-    m_txPool->asyncNotifyBlockResult(
-        _header->number(), results, [_block, _header](Error::Ptr _error) {
-            if (_error == nullptr)
-            {
-                PBFT_LOG(INFO) << LOG_DESC("notify block result success")
-                               << LOG_KV("number", _header->number())
-                               << LOG_KV("hash", _header->hash().abridged())
-                               << LOG_KV("txsSize", _block->transactionsHashSize());
-                return;
-            }
-            PBFT_LOG(INFO) << LOG_DESC("notify block result failed")
-                           << LOG_KV("code", _error->errorCode())
-                           << LOG_KV("msg", _error->errorMessage());
-        });
-}
-
 bcos::consensus::PBFTProposalInterface::Ptr bcos::consensus::TxsValidator::generateEmptyProposal(
     uint32_t _proposalVersion, PBFTMessageFactory::Ptr _factory, int64_t _index, int64_t _sealerId)
 {

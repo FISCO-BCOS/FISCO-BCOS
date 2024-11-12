@@ -70,7 +70,7 @@ void LedgerNonceChecker::batchInsert(BlockNumber _batchId, NonceListPtr const& _
     {
         m_blockNumber.store(_batchId);
     }
-    ssize_t batchToBeRemoved = (_batchId > m_blockLimit) ? (_batchId - m_blockLimit) : -1;
+    ssize_t batchToBeRemoved = _batchId - m_blockLimit;
     // insert the latest nonces
     TxPoolNonceChecker::batchInsert(_batchId, _nonceList);
 
@@ -82,19 +82,20 @@ void LedgerNonceChecker::batchInsert(BlockNumber _batchId, NonceListPtr const& _
                                 << LOG_KV("nonceSize", _nonceList->size());
     }
     // the genesis has no nonceList
-    if (batchToBeRemoved == -1)
+    if (batchToBeRemoved <= 0)
     {
         return;
     }
     // remove the expired nonces
-    if (!m_blockNonceCache.contains(batchToBeRemoved))
+    auto it = m_blockNonceCache.find(batchToBeRemoved);
+    if (it == m_blockNonceCache.end())
     {
         NONCECHECKER_LOG(WARNING) << LOG_DESC("batchInsert: miss cache when remove expired cache")
                                   << LOG_KV("batchToBeRemoved", batchToBeRemoved);
         return;
     }
-    auto nonceList = m_blockNonceCache[batchToBeRemoved];
-    m_blockNonceCache.erase(batchToBeRemoved);
+    auto nonceList = std::move(it->second);
+    m_blockNonceCache.erase(it);
     batchRemove(*nonceList);
     NONCECHECKER_LOG(DEBUG) << LOG_DESC("batchInsert: remove expired nonce")
                             << LOG_KV("batchToBeRemoved", batchToBeRemoved)

@@ -16,10 +16,12 @@
 #include <bcos-gateway/libnetwork/Session.h>
 #include <bcos-gateway/libnetwork/SessionFace.h>  // for Respon...
 #include <bcos-gateway/libnetwork/SocketFace.h>   // for Socket...
+#include <boost/asio/buffer.hpp>
 #include <chrono>
 #include <cstddef>
 #include <fstream>
 #include <iterator>
+#include <range/v3/view/transform.hpp>
 #include <utility>
 
 using namespace bcos;
@@ -178,8 +180,7 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
 
 std::size_t Session::writeQueueSize()
 {
-    Guard lockGuard(x_writeQueue);
-    return m_writeQueue.size();
+    return static_cast<std::size_t>(!m_writeQueue.empty());
 }
 
 void Session::send(EncodedMessage::Ptr& _encodedMsg)
@@ -194,11 +195,7 @@ void Session::send(EncodedMessage::Ptr& _encodedMsg)
         return;
     }
 
-    {
-        Guard lockGuard(x_writeQueue);
-        m_writeQueue.push_back(std::move(_encodedMsg));
-    }
-
+    m_writeQueue.push(std::move(_encodedMsg));
     write();
 }
 
@@ -220,12 +217,8 @@ void Session::onWrite(boost::system::error_code ec, std::size_t /*unused*/)
             drop(TCPError);
             return;
         }
-        if (m_writing)
-        {
-            m_writeConstBuffer.clear();
-            m_writing = false;
-        }
-        else
+        bool writing = true;
+        if (!m_writing.compare_exchange_strong(writing, false))
         {
             SESSION_LOG(ERROR) << LOG_DESC("onWrite wrong state") << LOG_KV("m_writing", m_writing);
         }
@@ -241,49 +234,20 @@ void Session::onWrite(boost::system::error_code ec, std::size_t /*unused*/)
     }
 }
 
-/**
- * @brief The packets that can be sent are obtained based on the configured policy
- *
- * @param encodedMsgs
- * @param _maxSendDataSize
- * @param _maxSendMsgCount
- * @return std::size_t
- */
-std::size_t Session::tryPopSomeEncodedMsgs(std::vector<EncodedMessage::Ptr>& encodedMsgs,
-    uint32_t _maxSendDataSize, uint32_t _maxSendMsgCount)  // NOLINT
+bool Session::tryPopSomeEncodedMsgs(std::vector<EncodedMessage::Ptr>& encodedMsgs,
+    size_t _maxSendDataSize, size_t _maxSendMsgCount)  // NOLINT
 {
     // Desc: Try to send multi packets one time to improve the efficiency of sending
     // data
-    uint64_t totalDataSize = 0;
-    encodedMsgs.clear();
-    encodedMsgs.reserve(_maxSendMsgCount);
-
-    while (!m_writeQueue.empty() && encodedMsgs.size() < _maxSendMsgCount)
+    size_t totalDataSize = 0;
+    EncodedMessage::Ptr encodedMsg;
+    while (totalDataSize < _maxSendDataSize && m_writeQueue.try_pop(encodedMsg))
     {
-        EncodedMessage::Ptr& encodedMsg = m_writeQueue.front();
         totalDataSize += encodedMsg->dataSize();
-
-        // data size will overflow
-        if (totalDataSize > _maxSendDataSize)
-        {
-            // At least one msg pkg
-            if (encodedMsgs.empty())
-            {
-                encodedMsgs.push_back(std::move(encodedMsg));
-                m_writeQueue.pop_front();
-            }
-            else
-            {
-                totalDataSize -= encodedMsg->dataSize();
-            }
-            break;
-        }
-
-        encodedMsgs.push_back(std::move(encodedMsg));
-        m_writeQueue.pop_front();
+        encodedMsgs.emplace_back(std::move(encodedMsg));
     }
 
-    return totalDataSize;
+    return totalDataSize > 0;
 }
 
 void Session::write()
@@ -294,62 +258,63 @@ void Session::write()
     {
         return;
     }
+    if (!server->haveNetwork())
+    {
+        SESSION_LOG(WARNING) << "Host has gone";
+        drop(TCPError);
+        return;
+    }
+    if (!m_socket->isConnected())
+    {
+        SESSION_LOG(WARNING) << "Error sending ssl socket is close!"
+                             << LOG_KV("endpoint", nodeIPEndpoint());
+        drop(TCPError);
+        return;
+    }
 
     try
     {
+        bool writing = false;
+        if (!m_writing.compare_exchange_strong(writing, true))
+        {
+            return;
+        }
+
         std::vector<EncodedMessage::Ptr> encodedMsgs;
-        Guard lockGuard(x_writeQueue);
-        if (m_writing)
+        if (!tryPopSomeEncodedMsgs(encodedMsgs, m_maxSendDataSize, m_maxSendMsgCountS))
         {
-            return;
-        }
-        m_writing = true;
-
-        if (m_writeQueue.empty())
-        {
-            m_writing = false;
-            return;
-        }
-
-        m_writeConstBuffer.clear();
-        // Try to send multi packets one time to improve the efficiency of sending
-        // data
-        tryPopSomeEncodedMsgs(encodedMsgs, m_maxSendDataSize, m_maxSendMsgCountS);
-
-        if (server && server->haveNetwork())
-        {
-            if (m_socket->isConnected())
+            writing = true;
+            if (!m_writing.compare_exchange_strong(writing, false))
             {
-                // asio::buffer reference buffer, so buffer need alive before
-                // asio::buffer be used
-                auto self = std::weak_ptr<Session>(shared_from_this());
-
-                toMultiBuffers(m_writeConstBuffer, encodedMsgs);
-                server->asioInterface()->asyncWrite(m_socket, m_writeConstBuffer,
-                    [self, encodedMsgs = std::move(encodedMsgs)](
-                        const boost::system::error_code _error, std::size_t _size) {
-                        auto session = self.lock();
-                        if (!session)
-                        {
-                            return;
-                        }
-                        session->onWrite(_error, _size);
-                    });
+                SESSION_LOG(ERROR)
+                    << LOG_DESC("onWrite wrong state") << LOG_KV("m_writing", m_writing);
             }
-            else
-            {
-                SESSION_LOG(WARNING)
-                    << "Error sending ssl socket is close!" << LOG_KV("endpoint", nodeIPEndpoint());
-                drop(TCPError);
-                return;
-            }
-        }
-        else
-        {
-            SESSION_LOG(WARNING) << "Host has gone";
-            drop(TCPError);
             return;
         }
+
+        // asio::buffer reference buffer, so buffer need alive before
+        // asio::buffer be used
+        auto buffers = ::ranges::views::iota(0LU, encodedMsgs.size() * 2) |
+                       ::ranges::views::transform(
+                           [it = encodedMsgs.begin()](auto index) -> boost::asio::const_buffer {
+                               auto& encodedMsgs = *(it + index / 2);
+                               if (index % 2 == 0)
+                               {
+                                   return {encodedMsgs->header.data(), encodedMsgs->header.size()};
+                               }
+                               return {encodedMsgs->payload.data(), encodedMsgs->payload.size()};
+                           });
+        server->asioInterface()->asyncWrite(m_socket, buffers,
+            [self = std::weak_ptr<Session>(shared_from_this()), encodedMsgs =
+                                                                    std::move(encodedMsgs)](
+                const boost::system::error_code _error, std::size_t _size) {
+                auto session = self.lock();
+                if (!session)
+                {
+                    return;
+                }
+                session->onWrite(_error, _size);
+            });
     }
     catch (std::exception& e)
     {
@@ -419,7 +384,7 @@ void Session::drop(DisconnectReason _reason)
                 socket->close();
             }
             auto shutdown_timer = std::make_shared<boost::asio::deadline_timer>(
-                *(socket->ioService()), boost::posix_time::milliseconds(m_shutDownTimeThres));
+                socket->ioService(), boost::posix_time::milliseconds(m_shutDownTimeThres));
             /// async wait for shutdown
             shutdown_timer->async_wait([socket](const boost::system::error_code& error) {
                 /// drop operation has been aborted

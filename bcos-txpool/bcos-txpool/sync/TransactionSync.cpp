@@ -508,6 +508,7 @@ void TransactionSync::responseTxsStatus(NodeIDPtr _fromNode)
     {
         return;
     }
+
     // TODO: get tx directly, not get txHash and request tx indirectly
     auto txsHash =
         m_config->txpoolStorage()->getTxsHash(m_config->getMaxResponseTxsToNodesWithEmptyTxs());
