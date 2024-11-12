@@ -304,7 +304,7 @@ void Session::write()
                                }
                                return {encodedMsgs->payload.data(), encodedMsgs->payload.size()};
                            });
-        server->asioInterface()->asyncWrite(*m_socket, buffers,
+        server->asioInterface()->asyncWrite(m_socket, buffers,
             [self = std::weak_ptr<Session>(shared_from_this()), encodedMsgs =
                                                                     std::move(encodedMsgs)](
                 const boost::system::error_code _error, std::size_t _size) {
@@ -384,7 +384,7 @@ void Session::drop(DisconnectReason _reason)
                 socket->close();
             }
             auto shutdown_timer = std::make_shared<boost::asio::deadline_timer>(
-                *(socket->ioService()), boost::posix_time::milliseconds(m_shutDownTimeThres));
+                socket->ioService(), boost::posix_time::milliseconds(m_shutDownTimeThres));
             /// async wait for shutdown
             shutdown_timer->async_wait([socket](const boost::system::error_code& error) {
                 /// drop operation has been aborted

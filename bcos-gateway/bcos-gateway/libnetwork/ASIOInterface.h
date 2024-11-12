@@ -96,24 +96,28 @@ public:
     virtual void asyncResolveConnect(
         const std::shared_ptr<SocketFace>& socket, Handler_Type handler);
 
-    void asyncWrite(SocketFace& socket, const auto& buffers, auto handler)
+    void asyncWrite(const std::shared_ptr<SocketFace>& socket, const auto& buffers, auto handler)
     {
         auto type = m_type;
-        if (socket.isConnected())
+        if (socket->isConnected())
         {
-            switch (type)
-            {
-            case TCP_ONLY:
-            {
-                ba::async_write(socket.ref(), buffers, std::move(handler));
-                break;
-            }
-            case SSL:
-            {
-                ba::async_write(socket.sslref(), buffers, std::move(handler));
-                break;
-            }
-            }
+            auto& ioService = socket->ioService();
+            ioService.post(
+                [type, socket = socket, buffers, handler = std::move(handler)]() mutable {
+                    switch (type)
+                    {
+                    case TCP_ONLY:
+                    {
+                        ba::async_write(socket->ref(), buffers, std::move(handler));
+                        break;
+                    }
+                    case SSL:
+                    {
+                        ba::async_write(socket->sslref(), buffers, std::move(handler));
+                        break;
+                    }
+                    }
+                });
         }
     }
 
