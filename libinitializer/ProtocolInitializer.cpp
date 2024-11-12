@@ -30,8 +30,8 @@
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-security/bcos-security/BcosKmsDataEncryption.h>
-// #include <bcos-security/bcos-security/cloudkms/CloudKmsInterface.h>
-// #include <bcos-security/bcos-security/BcosKmsKeyEncryption.h>
+#include <bcos-security/bcos-security/cloudkms/CloudKmsInterface.h>
+#include <bcos-security/bcos-security/BcosKmsKeyEncryption.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
@@ -79,33 +79,32 @@ void ProtocolInitializer::init(NodeConfig::Ptr _nodeConfig)
     m_keyEncryption = nullptr;
 
 
-    // if ((true == _nodeConfig->storageSecurityEnable() &&
-    //         m_keyEncryptionType == KeyEncryptionType::DEFAULT) ||
-    //     m_keyEncryptionType == KeyEncryptionType::BKMS)
-    // {
-    //     // Notice: the reason we don't use HSM for storage security is that the encrypt function
-    //     in
-    //     // HSM only support data length from 0 to 65536 byte
+    if ((true == _nodeConfig->storageSecurityEnable() &&
+            m_keyEncryptionType == KeyEncryptionType::DEFAULT) ||
+        m_keyEncryptionType == KeyEncryptionType::BCOSKMS)
+    {
+        // Notice: the reason we don't use HSM for storage security is that the encrypt function in
+        // HSM only support data length from 0 to 65536 byte
 
-    //     // // storage security with HSM
-    //     // if (_nodeConfig->enableHsm())
-    //     // {
-    //     //     INITIALIZER_LOG(DEBUG)
-    //     //         << LOG_DESC("storage_security.enable = true, storage security with HSM");
-    //     //     m_dataEncryption = std::make_shared<HsmDataEncryption>(_nodeConfig);
-    //     // }
-    //     // else
-    //     // {
-    //     m_keyEncryption = std::make_shared<BcosKmsKeyEncryption>(_nodeConfig);
-    //     // }
+        // // storage security with HSM
+        // if (_nodeConfig->enableHsm())
+        // {
+        //     INITIALIZER_LOG(DEBUG)
+        //         << LOG_DESC("storage_security.enable = true, storage security with HSM");
+        //     m_dataEncryption = std::make_shared<HsmDataEncryption>(_nodeConfig);
+        // }
+        // else
+        // {
+        m_keyEncryption = std::make_shared<BcosKmsKeyEncryption>(_nodeConfig);
+        // }
 
-    //     INITIALIZER_LOG(INFO) << LOG_DESC(
-    //         "storage_security.enable = true, init data encryption success");
-    // }
-    // if (m_keyEncryptionType == KeyEncryptionType::KMS)
-    // {
-    //     m_keyEncryption = std::make_shared<KmsInterface>(_nodeConfig);
-    // }
+        INITIALIZER_LOG(INFO) << LOG_DESC(
+            "storage_security.enable = true, init data encryption success");
+    }
+    if (m_keyEncryptionType == KeyEncryptionType::CLOUDKMS)
+    {
+        m_keyEncryption = std::make_shared<CloudKmsInterface>(_nodeConfig);
+    }
 
     if (_nodeConfig->storageSecurityEnable())
     {

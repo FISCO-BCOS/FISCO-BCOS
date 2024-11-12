@@ -633,39 +633,40 @@ void NodeConfig::loadSecurityConfig(boost::property_tree::ptree const& _pt)
                              << LOG_KV("lib_path", m_hsmLibPath) << LOG_KV("key_index", m_keyIndex)
                              << LOG_KV("password", m_password);
     }
-    // if (m_keyEncryptionType == KeyEncryptionType::KMS)
-    // {
-    //     m_kmsType = _pt.get<std::string>("security.kms_type", "");
-    // }
-    // if (m_keyEncryptionType == KeyEncryptionType::BKMS)
-    // {
-    //     m_kctKeySecurityCipherDataKey =
-    //         _pt.get<std::string>("security.kct_key_security_cipher_data_key", "");
-    // }
-    // if (m_keyEncryptionType == KeyEncryptionType::DEFAULT)
-    // {
-    //     m_storageSecurityEnable = _pt.get<bool>("storage_security.enable", false);
-    //     if (m_storageSecurityEnable)
-    //     {
-    //         if (!m_KeyEncryptionUrl.empty())
-    //         {
-    //             BOOST_THROW_EXCEPTION(
-    //                 InvalidConfig() << errinfo_comment("Please privider encrypt type!"));
-    //         }
-    //         m_kctKeySecurityCipherDataKey =
-    //             _pt.get<std::string>("storage_security.cipher_data_key", "");
-    //         std::string m_KeyEncryptionUrl =
-    //             _pt.get<std::string>("storage_security.key_center_url", "");
-    //         if (m_kctKeySecurityCipherDataKey.empty())
-    //         {
-    //             BOOST_THROW_EXCEPTION(
-    //                 InvalidConfig() << errinfo_comment("Please provide cipher_data_key!"));
-    //         }
-    //     }
-    // }
+    if (m_keyEncryptionType == KeyEncryptionType::CLOUDKMS)
+    {
+        m_cloudKmsType = _pt.get<std::string>("security.cloud_kms_type", "");
+    }
+    if (m_keyEncryptionType == KeyEncryptionType::BCOSKMS)
+    {
+        m_bcosKmsKeySecurityCipherDataKey = _pt.get<std::string>("security.cipher_data_key", "");
+    }
+    if (m_keyEncryptionType == KeyEncryptionType::DEFAULT)
+    {
+        m_storageSecurityEnable = _pt.get<bool>("storage_security.enable", false);
+        if (m_storageSecurityEnable)
+        {
+            if (!m_KeyEncryptionUrl.empty())
+            {
+                BOOST_THROW_EXCEPTION(
+                    InvalidConfig() << errinfo_comment("Please privider encrypt type!"));
+            }
+            m_bcosKmsKeySecurityCipherDataKey =
+                _pt.get<std::string>("storage_security.cipher_data_key", "");
+            std::string m_KeyEncryptionUrl =
+                _pt.get<std::string>("storage_security.key_center_url", "");
+            if (m_bcosKmsKeySecurityCipherDataKey.empty())
+            {
+                BOOST_THROW_EXCEPTION(
+                    InvalidConfig() << errinfo_comment("Please provide cipher_data_key!"));
+            }
+        }
+    }
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadSecurityConfig") << LOG_KV("enable_hsm", m_enableHsm)
-                         << LOG_KV("privateKeyPath", m_privateKeyPath);
+                         << LOG_KV("privateKeyPath", m_privateKeyPath)
+                         << LOG_KV("keyEncryptionType",
+                                GetKeyEncryptionTypeString(m_keyEncryptionType));
 }
 
 void NodeConfig::loadSealerConfig(boost::property_tree::ptree const& _pt)

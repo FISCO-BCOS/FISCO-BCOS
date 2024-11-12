@@ -24,8 +24,6 @@
 #include <aws/kms/KMSClient.h>
 #include <bcos-framework/security/KeyEncryptInterface.h>
 #include <string>
-#include <utility>
-#include <vector>
 
 namespace bcos::security
 {
@@ -43,6 +41,8 @@ public:
 
     std::shared_ptr<bytes> decryptContents(const std::shared_ptr<bytes>& contents) override;
     std::shared_ptr<bytes> decryptFile(const std::string& filename) override;
+
+    void setKmsClient(const std::shared_ptr<Aws::KMS::KMSClient>& kmsClient) { m_kmsClient = kmsClient; }
 
 private:
     std::shared_ptr<Aws::KMS::KMSClient> m_kmsClient;

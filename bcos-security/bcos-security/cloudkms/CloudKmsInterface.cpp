@@ -33,7 +33,7 @@ namespace bcos::security
 {
 CloudKmsInterface::CloudKmsInterface(const bcos::tool::NodeConfig::Ptr nodeConfig)
 {
-    m_kmsType = nodeConfig->kmsType();
+    m_kmsType = nodeConfig->cloudKmsType();
     m_kmsUrl = nodeConfig->keyEncryptionUrl();
 }
 
