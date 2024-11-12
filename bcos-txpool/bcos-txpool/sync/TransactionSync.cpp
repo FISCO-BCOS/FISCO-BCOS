@@ -508,6 +508,8 @@ void TransactionSync::responseTxsStatus(NodeIDPtr _fromNode)
     {
         return;
     }
+    SYNC_LOG(INFO) << LOG_DESC("onPeerTxsStatus: request");
+
     // TODO: get tx directly, not get txHash and request tx indirectly
     auto txsHash =
         m_config->txpoolStorage()->getTxsHash(m_config->getMaxResponseTxsToNodesWithEmptyTxs());
@@ -516,9 +518,9 @@ void TransactionSync::responseTxsStatus(NodeIDPtr _fromNode)
     auto packetData = txsStatus->encode();
     m_config->frontService()->asyncSendMessageByNodeID(
         ModuleID::TxsSync, _fromNode, ref(*packetData), 0, nullptr);
-    SYNC_LOG(DEBUG) << LOG_DESC("onPeerTxsStatus: receive empty txsStatus and responseTxsStatus")
-                    << LOG_KV("to", _fromNode->shortHex()) << LOG_KV("txsSize", txsHash->size())
-                    << LOG_KV("packetSize", packetData->size());
+    SYNC_LOG(INFO) << LOG_DESC("onPeerTxsStatus: receive empty txsStatus and responseTxsStatus")
+                   << LOG_KV("to", _fromNode->shortHex()) << LOG_KV("txsSize", txsHash->size())
+                   << LOG_KV("packetSize", packetData->size());
 }
 
 void TransactionSync::onEmptyTxs()
@@ -527,7 +529,7 @@ void TransactionSync::onEmptyTxs()
     {
         return;
     }
-    SYNC_LOG(DEBUG) << LOG_DESC("onEmptyTxs: broadcast txs status to all consensus node list");
+    SYNC_LOG(INFO) << LOG_DESC("onEmptyTxs: broadcast txs status to all consensus node list");
     auto txsStatus =
         m_config->msgFactory()->createTxsSyncMsg(TxsSyncPacketType::TxsStatusPacket, HashList());
     auto packetData = txsStatus->encode();
