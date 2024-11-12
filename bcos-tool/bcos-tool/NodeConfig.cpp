@@ -646,14 +646,9 @@ void NodeConfig::loadSecurityConfig(boost::property_tree::ptree const& _pt)
         m_storageSecurityEnable = _pt.get<bool>("storage_security.enable", false);
         if (m_storageSecurityEnable)
         {
-            if (!m_KeyEncryptionUrl.empty())
-            {
-                BOOST_THROW_EXCEPTION(
-                    InvalidConfig() << errinfo_comment("Please privider encrypt type!"));
-            }
             m_bcosKmsKeySecurityCipherDataKey =
                 _pt.get<std::string>("storage_security.cipher_data_key", "");
-            std::string m_KeyEncryptionUrl =
+            m_KeyEncryptionUrl =
                 _pt.get<std::string>("storage_security.key_center_url", "");
             if (m_bcosKmsKeySecurityCipherDataKey.empty())
             {
@@ -689,7 +684,7 @@ void NodeConfig::loadStorageSecurityConfig(boost::property_tree::ptree const& _p
         return;
     }
 
-    std::string m_storageSecurityUrl = _pt.get<std::string>("storage_security.key_center_url", "");
+    m_storageSecurityUrl = _pt.get<std::string>("storage_security.key_center_url", "");
 
     m_storageSecurityCipherDataKey = _pt.get<std::string>("storage_security.cipher_data_key", "");
     if (m_storageSecurityCipherDataKey.empty())
