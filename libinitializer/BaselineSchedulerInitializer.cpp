@@ -55,8 +55,7 @@ using MutableStorage =
 using CacheStorage =
     bcos::storage2::memory_storage::MemoryStorage<bcos::transaction_executor::StateKey,
         bcos::transaction_executor::StateValue,
-        bcos::storage2::memory_storage::ORDERED | bcos::storage2::memory_storage::CONCURRENT |
-            bcos::storage2::memory_storage::LRU>;
+        bcos::storage2::memory_storage::CONCURRENT | bcos::storage2::memory_storage::LRU>;
 
 std::tuple<std::function<std::shared_ptr<bcos::scheduler::SchedulerInterface>()>,
     std::function<void(std::function<void(bcos::protocol::BlockNumber)>)>>

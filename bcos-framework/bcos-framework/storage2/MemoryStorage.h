@@ -5,6 +5,7 @@
 #include "bcos-task/TBBWait.h"
 #include <oneapi/tbb/null_rw_mutex.h>
 #include <oneapi/tbb/parallel_for.h>
+#include <oneapi/tbb/parallel_sort.h>
 #include <oneapi/tbb/spin_rw_mutex.h>
 #include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/identity.hpp>
@@ -14,6 +15,7 @@
 #include <boost/multi_index/sequenced_index.hpp>
 #include <boost/multi_index_container.hpp>
 #include <boost/throw_exception.hpp>
+#include <range/v3/view/transform.hpp>
 #include <range/v3/view/zip.hpp>
 #include <type_traits>
 #include <utility>
@@ -57,6 +59,10 @@ inline int64_t getSize(auto const& object)
 
 template <class Storage>
 concept IsMemoryStorage = std::remove_cvref_t<Storage>::isMemoryStorage;
+
+constexpr inline struct DeleteItem
+{
+} deleteItem{};
 
 template <IsMemoryStorage MemoryStorage>
 class Iterator
@@ -314,87 +320,35 @@ public:
         });
     }
 
-    friend task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/,
-        MemoryStorage& storage, ::ranges::input_range auto&& keyValues)
+    static void writeOne(
+        MemoryStorage& storage, Bucket& bucket, auto&& key, auto&& value, bool direct)
     {
-        for (auto&& [key, value] : keyValues)
+        auto const& index = bucket.container.template get<0>();
+        std::conditional_t<withLRU, int64_t, Empty> updatedCapacity{};
+        constexpr static auto deleteOP = std::is_same_v<std::decay_t<decltype(value)>, DeleteItem>;
+        if constexpr (withLRU)
         {
-            auto& bucket = getBucket(storage, key);
-            Lock lock(bucket.mutex, true);
-            auto const& index = bucket.container.template get<0>();
-
-            std::conditional_t<withLRU, int64_t, Empty> updatedCapacity;
-            if constexpr (withLRU)
-            {
-                updatedCapacity = getSize(key) + getSize(value);
-            }
-
-            typename Container::iterator it;
-            if constexpr (std::decay_t<decltype(storage)>::withOrdered)
-            {
-                it = index.lower_bound(key);
-            }
-            else
-            {
-                it = index.find(key);
-            }
-            if (it != index.end() && std::equal_to<typename MemoryStorage::Key>{}(it->key, key))
-            {
-                if constexpr (std::decay_t<decltype(storage)>::withLRU)
-                {
-                    auto& existsValue = it->value;
-                    updatedCapacity -= (getSize(key) + getSize(existsValue));
-                }
-
-                bucket.container.modify(it, [newValue = std::forward<decltype(value)>(value)](
-                                                typename MemoryStorage::Data& data) mutable {
-                    data.value = std::forward<decltype(newValue)>(newValue);
-                });
-            }
-            else
-            {
-                it = bucket.container.emplace_hint(
-                    it, typename MemoryStorage::Data{
-                            .key = typename MemoryStorage::Key(std::forward<decltype(key)>(key)),
-                            .value = std::forward<decltype(value)>(value)});
-            }
-
-            if constexpr (std::decay_t<decltype(storage)>::withLRU)
-            {
-                bucket.capacity += updatedCapacity;
-                updateLRUAndCheck(storage, bucket, it);
-            }
+            updatedCapacity = getSize(key) + getSize(value);
         }
 
-        return {};
-    }
-
-    task::AwaitableValue<void> removeSome(::ranges::input_range auto&& keys, bool direct)
-    {
-        for (auto&& key : keys)
+        auto it = index.find(key);
+        if (it != index.end())
         {
-            auto& bucket = getBucket(*this, key);
-            Lock lock(bucket.mutex, true);
-            auto const& index = bucket.container.template get<0>();
-
-            auto it = index.find(key);
-            if (it != index.end())
+            auto& existsValue = it->value;
+            if constexpr (deleteOP && withLogicalDeletion)
             {
-                auto& existsValue = it->value;
-                if constexpr (withLogicalDeletion)
+                if (!existsValue)
                 {
-                    if (!existsValue)
-                    {
-                        // Already deleted
-                        return {};
-                    }
+                    // Already deleted
+                    return;
                 }
-
-                if constexpr (withLRU)
-                {
-                    bucket.capacity -= (getSize(key) + getSize(existsValue));
-                }
-
+            }
+            if constexpr (withLRU)
+            {
+                updatedCapacity -= (getSize(key) + getSize(existsValue));
+            }
+            if constexpr (deleteOP)
+            {
                 if constexpr (withLogicalDeletion)
                 {
                     if (!direct)
@@ -413,6 +367,14 @@ public:
             }
             else
             {
+                bucket.container.modify(it,
+                    [&](Data& data) mutable { data.value = std::forward<decltype(value)>(value); });
+            }
+        }
+        else
+        {
+            if constexpr (deleteOP)
+            {
                 if constexpr (withLogicalDeletion)
                 {
                     if constexpr (std::is_same_v<std::decay_t<decltype(key)>, Key>)
@@ -427,6 +389,42 @@ public:
                     }
                 }
             }
+            else
+            {
+                it = bucket.container.emplace_hint(
+                    it, typename MemoryStorage::Data{.key = Key(std::forward<decltype(key)>(key)),
+                            .value = std::forward<decltype(value)>(value)});
+            }
+        }
+
+        if constexpr (!deleteOP && withLRU)
+        {
+            bucket.capacity += updatedCapacity;
+            updateLRUAndCheck(storage, bucket, it);
+        }
+    }
+
+    friend task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/,
+        MemoryStorage& storage, ::ranges::input_range auto&& keyValues)
+    {
+        for (auto&& [key, value] : keyValues)
+        {
+            auto& bucket = getBucket(storage, key);
+            Lock lock(bucket.mutex, true);
+            writeOne(storage, bucket, std::forward<decltype(key)>(key),
+                std::forward<decltype(value)>(value), false);
+        }
+
+        return {};
+    }
+
+    task::AwaitableValue<void> removeSome(::ranges::input_range auto&& keys, bool direct)
+    {
+        for (auto&& key : keys)
+        {
+            auto& bucket = getBucket(*this, key);
+            Lock lock(bucket.mutex, true);
+            writeOne(*this, bucket, std::forward<decltype(key)>(key), deleteItem, direct);
         }
 
         return {};
@@ -493,36 +491,56 @@ public:
 };
 
 template <IsMemoryStorage ToStorage, IsMemoryStorage FromStorage>
+    requires HasTag<RandomAccessRange, FromStorage&> && ToStorage::withConcurrent
+void parallelMerge(ToStorage& toStorage, FromStorage&& fromStorage)
+{
+    auto fromRange = storage2::randomAccessRange(fromStorage);
+    auto sortedList = ::ranges::views::transform(fromRange, [&](const auto& keyValue) {
+        return std::make_pair(
+            std::addressof(keyValue), getBucketIndex(toStorage, std::get<0>(keyValue)));
+    }) | ::ranges::to<std::vector>();
+    tbb::parallel_sort(sortedList,
+        [](auto const& left, auto const& right) { return std::get<1>(left) < std::get<1>(right); });
+    tbb::parallel_for(tbb::blocked_range<size_t>(0U, sortedList.size()), [&](auto const& range) {
+        for (auto i = range.begin(); i < range.end(); ++i)
+        {
+            auto& bucket = toStorage.m_buckets[sortedList[i].second];
+        }
+    });
+
+    tbb::parallel_for(
+        tbb::blocked_range<size_t>(0U, ::ranges::size(fromRange)), [&](auto const& range) {
+            for (auto i = range.begin(); i < range.end(); ++i)
+            {
+                auto&& [key, value] = fromRange[i];
+                task::tbb::syncWait([&]() -> task::Task<void> {
+                    if constexpr (std::is_pointer_v<decltype(value)>)
+                    {
+                        if (value)
+                        {
+                            co_await storage2::writeOne(toStorage, key, *value);
+                        }
+                        else
+                        {
+                            co_await storage2::removeOne(toStorage, key);
+                        }
+                    }
+                    else
+                    {
+                        co_await storage2::writeOne(toStorage, key, value);
+                    }
+                }());
+            }
+        });
+}
+
+template <IsMemoryStorage ToStorage, IsMemoryStorage FromStorage>
 task::Task<void> tag_invoke(
     storage2::tag_t<merge> /*unused*/, ToStorage& toStorage, FromStorage&& fromStorage)
 {
     if constexpr (HasTag<RandomAccessRange, FromStorage&> && ToStorage::withConcurrent)
     {
-        auto fromRange = storage2::randomAccessRange(fromStorage);
-        tbb::parallel_for(
-            tbb::blocked_range<size_t>(0U, ::ranges::size(fromRange)), [&](auto const& range) {
-                for (auto i = range.begin(); i < range.end(); ++i)
-                {
-                    auto&& [key, value] = fromRange[i];
-                    task::tbb::syncWait([&]() -> task::Task<void> {
-                        if constexpr (std::is_pointer_v<decltype(value)>)
-                        {
-                            if (value)
-                            {
-                                co_await storage2::writeOne(toStorage, key, *value);
-                            }
-                            else
-                            {
-                                co_await storage2::removeOne(toStorage, key);
-                            }
-                        }
-                        else
-                        {
-                            co_await storage2::writeOne(toStorage, key, value);
-                        }
-                    }());
-                }
-            });
+        co_await parallelMerge(toStorage, std::forward<FromStorage>(fromStorage));
     }
     else
     {
