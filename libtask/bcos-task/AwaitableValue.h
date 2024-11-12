@@ -16,7 +16,9 @@
 
 #pragma once
 
+#include <concepts>
 #include <coroutine>
+#include <string>
 #include <utility>
 
 namespace bcos::task
@@ -26,7 +28,9 @@ template <class Value>
 class [[nodiscard]] AwaitableValue
 {
 public:
-    AwaitableValue() = default;
+    AwaitableValue()
+        requires std::default_initializable<Value>
+    = default;
     AwaitableValue(Value value) : m_value(std::move(value)) {}
     AwaitableValue(std::in_place_t /*unused*/, auto&&... args)
       : m_value(std::forward<decltype(args)>(args)...)
@@ -39,7 +43,6 @@ public:
     constexpr Value await_resume() noexcept { return std::move(m_value); }
     const Value& value() const& noexcept { return m_value; }
     Value& value() & noexcept { return m_value; }
-    Value toValue() && noexcept { return std::move(m_value); }
 
 private:
     Value m_value;
