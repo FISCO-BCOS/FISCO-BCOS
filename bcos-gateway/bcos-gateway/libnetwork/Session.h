@@ -272,8 +272,7 @@ private:
     MessageFactory::Ptr m_messageFactory;
 
     tbb::concurrent_queue<EncodedMessage::Ptr> m_writeQueue;
-    std::atomic_bool m_writing = {false};
-    std::vector<EncodedMessage::Ptr> m_encodedMsgs;
+    std::atomic_bool m_writing = false;
 
     mutable bcos::Mutex x_info;
 
