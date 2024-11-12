@@ -45,8 +45,5 @@ protected:
     std::string m_kmsType;
     std::string m_kmsUrl;
 
-private:
-    // for kms
-    static bool splitKmsUrl(const std::string& _kmsUrl, std::vector<std::string>& result);
 };
 }  // namespace bcos::security

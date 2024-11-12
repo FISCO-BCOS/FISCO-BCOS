@@ -29,14 +29,14 @@
 
 namespace bcos::security
 {
-class AWSKMSWrapper : public KeyEncryptInterface
+class AwsKmsWrapper : public KeyEncryptInterface
 {
 public:
-    explicit AWSKMSWrapper(
+    explicit AwsKmsWrapper(
         const std::string& region, const std::string& accessKey, const std::string& secretKey);
-    explicit AWSKMSWrapper(
+    explicit AwsKmsWrapper(
         const std::string& region, const std::string& accessKey, const std::string& secretKey, const std::string& keyId);
-    ~AWSKMSWrapper() = default;
+    ~AwsKmsWrapper() = default;
 
     std::shared_ptr<bytes> encryptContents(const std::shared_ptr<bytes>& contents) override;
     std::shared_ptr<bytes> encryptFile(const std::string& filename) override;

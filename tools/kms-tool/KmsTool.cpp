@@ -74,7 +74,7 @@ int main(int argc, char* argv[])
             try
             {
                 // create an AWS KMS wrapper
-                AWSKMSWrapper kmsWrapper(region, accessKey, secretKey, keyId);
+                AwsKmsWrapper kmsWrapper(region, accessKey, secretKey, keyId);
 
                 // encrypt data
                 auto encryptResult = kmsWrapper.encryptFile(inputFilePath);

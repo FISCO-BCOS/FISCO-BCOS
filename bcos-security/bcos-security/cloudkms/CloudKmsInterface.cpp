@@ -21,6 +21,7 @@
  * @date 2024-11-07
  */
 #include "CloudKmsInterface.h"
+#include "utils.h"
 #include "../Common.h"
 #include "AwsKmsWrapper.h"
 #include "CloudKmsProvider.h"
@@ -56,18 +57,15 @@ std::shared_ptr<bytes> CloudKmsInterface::decryptContents(const std::shared_ptr<
     {
         // initialize the AWS SDK
         std::vector<std::string> awsKmsUrlParts;
-        std::string _region;
-        std::string _accessKey;
-        std::string _secretKey;
         if (!splitKmsUrl(m_kmsUrl, awsKmsUrlParts))
         {
             BCOS_LOG(ERROR) << LOG_BADGE("KmsInterface::decrypt")
                             << LOG_KV("Invalid KMS url:", m_kmsUrl);
             BOOST_THROW_EXCEPTION(KmsTypeError());
         }
-        _region = awsKmsUrlParts[0];
-        _accessKey = awsKmsUrlParts[1];
-        _secretKey = awsKmsUrlParts[2];
+        std::string region = awsKmsUrlParts[0];
+        std::string accessKey = awsKmsUrlParts[1];
+        std::string secretKey = awsKmsUrlParts[2];
 
         std::shared_ptr<bytes> decryptResult = nullptr;
         Aws::SDKOptions options;
@@ -76,7 +74,7 @@ std::shared_ptr<bytes> CloudKmsInterface::decryptContents(const std::shared_ptr<
             try
             {
                 // create an AWS KMS wrapper
-                AWSKMSWrapper kmsWrapper(_region, _accessKey, _secretKey);
+                AwsKmsWrapper kmsWrapper(region, accessKey, secretKey);
                 decryptResult = kmsWrapper.decryptContents(contents);
                 if (decryptResult == nullptr)
                 {
@@ -116,20 +114,6 @@ std::shared_ptr<bytes> CloudKmsInterface::decryptFile(const std::string& filenam
         BOOST_THROW_EXCEPTION(DecryptFailed());
     }
     return decryptContents(contents);
-}
-
-bool CloudKmsInterface::splitKmsUrl(const std::string& _kmsUrl, std::vector<std::string>& result)
-{
-    std::stringstream ss(_kmsUrl);
-    std::string item;
-    result.clear();
-
-    // for kms
-    while (std::getline(ss, item, ':'))
-    {
-        result.push_back(item);
-    }
-    return true;
 }
 
 std::shared_ptr<bytes> CloudKmsInterface::encryptContents(const std::shared_ptr<bytes>& contents)

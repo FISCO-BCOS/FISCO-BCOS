@@ -30,7 +30,7 @@
 namespace bcos::security
 {
 
-AWSKMSWrapper::AWSKMSWrapper(const std::string& region, const std::string& accessKey,
+AwsKmsWrapper::AwsKmsWrapper(const std::string& region, const std::string& accessKey,
     const std::string& secretKey, const std::string& keyId)
   : m_keyId(keyId)
 {
@@ -44,7 +44,7 @@ AWSKMSWrapper::AWSKMSWrapper(const std::string& region, const std::string& acces
     // use credentials and config to create client
     m_kmsClient = std::make_shared<Aws::KMS::KMSClient>(credentials, config);
 }
-AWSKMSWrapper::AWSKMSWrapper(
+AwsKmsWrapper::AwsKmsWrapper(
     const std::string& region, const std::string& accessKey, const std::string& secretKey)
 {
     // create credentials
@@ -59,7 +59,7 @@ AWSKMSWrapper::AWSKMSWrapper(
 }
 
 
-std::shared_ptr<bytes> AWSKMSWrapper::encryptContents(const std::shared_ptr<bytes>& contents)
+std::shared_ptr<bytes> AwsKmsWrapper::encryptContents(const std::shared_ptr<bytes>& contents)
 {
     Aws::KMS::Model::EncryptRequest request;
     request.SetKeyId(m_keyId);
@@ -81,7 +81,7 @@ std::shared_ptr<bytes> AWSKMSWrapper::encryptContents(const std::shared_ptr<byte
     return ciphertext;
 }
 
-std::shared_ptr<bytes> AWSKMSWrapper::encryptFile(const std::string& inputFilePath)
+std::shared_ptr<bytes> AwsKmsWrapper::encryptFile(const std::string& inputFilePath)
 {
     auto plaintext = readContents(inputFilePath);
     if (plaintext == nullptr)
@@ -92,7 +92,7 @@ std::shared_ptr<bytes> AWSKMSWrapper::encryptFile(const std::string& inputFilePa
     return encryptContents(plaintext);
 }
 
-std::shared_ptr<bytes> AWSKMSWrapper::decryptContents(const std::shared_ptr<bytes>& ciphertext)
+std::shared_ptr<bytes> AwsKmsWrapper::decryptContents(const std::shared_ptr<bytes>& ciphertext)
 {
     Aws::KMS::Model::DecryptRequest request;
 
@@ -113,7 +113,7 @@ std::shared_ptr<bytes> AWSKMSWrapper::decryptContents(const std::shared_ptr<byte
     return plaintext;
 }
 
-std::shared_ptr<bytes> AWSKMSWrapper::decryptFile(const std::string& filename)
+std::shared_ptr<bytes> AwsKmsWrapper::decryptFile(const std::string& filename)
 {
     std::shared_ptr<bytes> contents = readContents(filename);
     if (contents == nullptr)
