@@ -173,10 +173,10 @@ bcos::consensus::PBFTProposalInterface::Ptr bcos::consensus::TxsValidator::gener
     blockHeader->setVersion(_proposalVersion);
     blockHeader->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
     block->setBlockHeader(blockHeader);
-    auto encodedData = std::make_shared<bytes>();
-    block->encode(*encodedData);
+    bytes encodedData;
+    block->encode(encodedData);
     proposal->setHash(blockHeader->hash());
-    proposal->setData(std::move(*encodedData));
+    proposal->setData(std::move(encodedData));
     return proposal;
 }
 

@@ -22,7 +22,6 @@
 #include "bcos-gateway/libratelimit/RateLimiterManager.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-utilities/ratelimiter/DistributedRateLimiter.h"
-#include "bcos-gateway/libratelimit/RateLimiterFactory.h"
 #include "bcos-utilities/ratelimiter/TimeWindowRateLimiter.h"
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-gateway/GatewayFactory.h>
@@ -522,8 +521,9 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManager_configIPv4)
                 std::string endpoint = "192.108.0.3";
 
                 const std::string& inKey = endpoint + "_" + std::to_string(packageType);
-                auto rateLimiter = std::dynamic_pointer_cast<bcos::ratelimiter::TimeWindowRateLimiter>(
-                    rateLimiterManager->getInRateLimiter(endpoint, packageType));
+                auto rateLimiter =
+                    std::dynamic_pointer_cast<bcos::ratelimiter::TimeWindowRateLimiter>(
+                        rateLimiterManager->getInRateLimiter(endpoint, packageType));
                 BOOST_CHECK_EQUAL(rateLimiter->maxPermitsSize(),
                     timeWindowSec * rateLimiterConfig.p2pBasicMsgQPS);
                 BOOST_CHECK_EQUAL(rateLimiter->maxPermitsSize(), timeWindowSec * 123);
@@ -534,8 +534,9 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManager_configIPv4)
                 std::string group = "group0";
 
                 const std::string& inKey = group + "_" + std::to_string(module);
-                auto rateLimiter = std::dynamic_pointer_cast<bcos::ratelimiter::DistributedRateLimiter>(
-                    rateLimiterManager->getInRateLimiter(endpoint, packageType, true));
+                auto rateLimiter =
+                    std::dynamic_pointer_cast<bcos::ratelimiter::DistributedRateLimiter>(
+                        rateLimiterManager->getInRateLimiter(endpoint, packageType, true));
                 BOOST_CHECK(rateLimiter == nullptr);
             }
 
@@ -546,8 +547,9 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManager_configIPv4)
                 BOOST_CHECK(rateLimiterConfig.moduleMsg2QPS.at(module));
 
                 const std::string& inKey = group + "_" + std::to_string(module);
-                auto rateLimiter = std::dynamic_pointer_cast<bcos::ratelimiter::DistributedRateLimiter>(
-                    rateLimiterManager->getInRateLimiter(group, module, true));
+                auto rateLimiter =
+                    std::dynamic_pointer_cast<bcos::ratelimiter::DistributedRateLimiter>(
+                        rateLimiterManager->getInRateLimiter(group, module, true));
                 BOOST_CHECK_EQUAL(rateLimiter->maxPermitsSize(), timeWindowSec * 456);
             }
         }

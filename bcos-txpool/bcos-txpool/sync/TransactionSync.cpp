@@ -122,7 +122,7 @@ void TransactionSync::onReceiveTxsRequest(TxsSyncMsgInterface::Ptr _txsRequest,
         auto tx = std::const_pointer_cast<Transaction>(constTx);
         block->appendTransaction(tx);
     }
-    bytes txsData = {};
+    bytes txsData;
     block->encode(txsData);
     auto txsResponse = m_config->msgFactory()->createTxsSyncMsg(
         TxsSyncPacketType::TxsResponsePacket, std::move(txsData));
@@ -243,8 +243,6 @@ void TransactionSync::requestMissedTxsFromPeer(PublicPtr _generatedNodeID, HashL
         _onVerifyFinished(nullptr, true);
         return;
     }
-
-
     auto protocolID = _verifiedProposal ? ModuleID::ConsTxsSync : ModuleID::TxsSync;
 
     auto txsRequest =
