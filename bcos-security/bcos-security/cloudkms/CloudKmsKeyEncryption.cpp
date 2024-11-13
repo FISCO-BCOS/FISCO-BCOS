@@ -20,7 +20,7 @@
  * @author: HaoXuan40404
  * @date 2024-11-07
  */
-#include "CloudKmsInterface.h"
+#include "CloudKmsKeyEncryption.h"
 #include "../Common.h"
 #include "AwsKmsWrapper.h"
 #include "bcos-framework/security/CloudKmsType.h"
@@ -31,13 +31,13 @@
 
 namespace bcos::security
 {
-CloudKmsInterface::CloudKmsInterface(const bcos::tool::NodeConfig::Ptr nodeConfig)
+CloudKmsKeyEncryption::CloudKmsKeyEncryption(const bcos::tool::NodeConfig::Ptr nodeConfig)
 {
     m_kmsType = nodeConfig->cloudKmsType();
     m_kmsUrl = nodeConfig->keyEncryptionUrl();
 }
 
-std::shared_ptr<bytes> CloudKmsInterface::decryptContents(const std::shared_ptr<bytes>& contents)
+std::shared_ptr<bytes> CloudKmsKeyEncryption::decryptContents(const std::shared_ptr<bytes>& contents)
 {
     BCOS_LOG(INFO) << LOG_BADGE("KmsInterface::decryptContents")
                    << LOG_KV("decrypt type", cloudKmsTypeToString(m_kmsType));
@@ -102,7 +102,7 @@ std::shared_ptr<bytes> CloudKmsInterface::decryptContents(const std::shared_ptr<
     BOOST_THROW_EXCEPTION(KmsTypeError());
 }
 
-std::shared_ptr<bytes> CloudKmsInterface::decryptFile(const std::string& filename)
+std::shared_ptr<bytes> CloudKmsKeyEncryption::decryptFile(const std::string& filename)
 {
     std::shared_ptr<bytes> contents = readContents(filename);
     if (contents == nullptr)
@@ -114,14 +114,14 @@ std::shared_ptr<bytes> CloudKmsInterface::decryptFile(const std::string& filenam
     return decryptContents(contents);
 }
 
-std::shared_ptr<bytes> CloudKmsInterface::encryptContents(const std::shared_ptr<bytes>& contents)
+std::shared_ptr<bytes> CloudKmsKeyEncryption::encryptContents(const std::shared_ptr<bytes>& contents)
 {
     // Not support
     BCOS_LOG(ERROR) << LOG_BADGE("KmsInterface::encryptContents failed");
     BOOST_THROW_EXCEPTION(EncryptFailed());
 }
 
-std::shared_ptr<bytes> CloudKmsInterface::encryptFile(const std::string& filename)
+std::shared_ptr<bytes> CloudKmsKeyEncryption::encryptFile(const std::string& filename)
 {
     // Not support
     BCOS_LOG(ERROR) << LOG_BADGE("KmsInterface::encryptFile failed");

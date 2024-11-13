@@ -16,7 +16,7 @@
  */
 /**
  * @brief : KMS Interface
- * @file CloudKmsInterface.h
+ * @file CloudKmsKeyEncryption.h
  * @author: HaoXuan40404
  * @date 2024-11-07
  */
@@ -29,12 +29,12 @@ using namespace std;
 // only for nodes, client will shutdown after decrypt
 namespace bcos::security
 {
-class CloudKmsInterface : public KeyEncryptInterface
+class CloudKmsKeyEncryption : public KeyEncryptInterface
 {
 public:
-    using Ptr = std::shared_ptr<CloudKmsInterface>;
+    using Ptr = std::shared_ptr<CloudKmsKeyEncryption>;
     // KmsInterface()= default;
-    CloudKmsInterface(const bcos::tool::NodeConfig::Ptr nodeConfig);
+    CloudKmsKeyEncryption(const bcos::tool::NodeConfig::Ptr nodeConfig);
 
     std::shared_ptr<bytes> encryptContents(const std::shared_ptr<bytes>& contents) override;
     std::shared_ptr<bytes> encryptFile(const std::string& filename) override;

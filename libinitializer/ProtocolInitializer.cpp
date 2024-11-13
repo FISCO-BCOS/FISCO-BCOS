@@ -30,7 +30,7 @@
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-security/bcos-security/BcosKmsDataEncryption.h>
-#include <bcos-security/bcos-security/cloudkms/CloudKmsInterface.h>
+#include <bcos-security/bcos-security/cloudkms/CloudKmsKeyEncryption.h>
 #include <bcos-security/bcos-security/BcosKmsKeyEncryption.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
@@ -103,7 +103,7 @@ void ProtocolInitializer::init(NodeConfig::Ptr _nodeConfig)
     }
     if (m_keyEncryptionType == KeyEncryptionType::CLOUDKMS)
     {
-        m_keyEncryption = std::make_shared<CloudKmsInterface>(_nodeConfig);
+        m_keyEncryption = std::make_shared<CloudKmsKeyEncryption>(_nodeConfig);
     }
 
     if (_nodeConfig->storageSecurityEnable())
