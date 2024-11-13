@@ -32,10 +32,6 @@ find_package(CURL REQUIRED)
 
 target_link_libraries(${SECURITY_TARGET} PRIVATE
     ${AWSSDK_LINK_LIBRARIES}
-    # ZLIB::ZLIB
-    # OpenSSL::SSL
-    # OpenSSL::Crypto
-    # CURL::libcurl
 )
 
 target_include_directories(${SECURITY_TARGET}
@@ -51,8 +47,8 @@ target_include_directories(${SECURITY_TARGET} PRIVATE
 target_link_libraries(${SECURITY_TARGET} PUBLIC ${UTILITIES_TARGET} ${TOOL_TARGET} ${CRYPTO_TARGET} jsoncpp_static)
 set_target_properties(${SECURITY_TARGET} PROPERTIES UNITY_BUILD "ON")
 
-# if(TESTS)
-#   enable_testing()
-#   set(ENV{CTEST_OUTPUT_ON_FAILURE} True)
-#   add_subdirectory(test)
-# endif()
+if(TESTS)
+  enable_testing()
+  set(ENV{CTEST_OUTPUT_ON_FAILURE} True)
+  add_subdirectory(test)
+endif()

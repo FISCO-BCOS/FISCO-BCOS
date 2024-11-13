@@ -22,6 +22,7 @@
 #include "bcos-framework/ledger/GenesisConfig.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/security/KeyEncryptionType.h"
+#include "bcos-framework/security/CloudKmsType.h"
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/Common.h>
 #include <bcos-framework/protocol/Protocol.h>
@@ -251,9 +252,9 @@ public:
     std::string storageSecuirtyKeyCenterUrl() const { return m_storageSecurityUrl; }
     std::string storageSecurityCipherDataKey() const { return m_storageSecurityCipherDataKey; }
 
-    KeyEncryptionType keyEncryptionType() const { return m_keyEncryptionType; }
-    std::string kmsType() const { return m_kmsType; }
-    std::string kctKeySecurityCipherDataKey() const { return m_kctKeySecurityCipherDataKey; }
+    security::KeyEncryptionType keyEncryptionType() const { return m_keyEncryptionType; }
+    security::CloudKmsType cloudKmsType() const { return m_cloudKmsType; }
+    std::string bcosKmsKeySecurityCipherDataKey() const { return m_bcosKmsKeySecurityCipherDataKey; }
     std::string keyEncryptionUrl() const { return m_KeyEncryptionUrl; }
 
     bool enableSendBlockStatusByTree() const { return m_enableSendBlockStatusByTree; }
@@ -379,14 +380,14 @@ private:
     int m_encKeyIndex{};
     std::string m_password;
 
-    // for security kms kct hsm configuration
-    KeyEncryptionType m_keyEncryptionType;
+    // for security cloudkms bcoskms hsm configuration
+    security::KeyEncryptionType m_keyEncryptionType;
     // key url
     std::string m_KeyEncryptionUrl;
-    // kms type, 0: AWS, 1: Aliyun...
-    std::string m_kmsType;
-    // kct data key
-    std::string m_kctKeySecurityCipherDataKey;
+    // cloude kms type, 0: AWS, 1: Aliyun...
+    security::CloudKmsType m_cloudKmsType;
+    // bcos kms data key
+    std::string m_bcosKmsKeySecurityCipherDataKey;
 
     // storage security configuration
     bool m_storageSecurityEnable{};

@@ -67,13 +67,13 @@ BcosKmsKeyEncryption::BcosKmsKeyEncryption(const bcos::tool::NodeConfig::Ptr nod
                 "initGlobalConfig storage_security failed! Invalid key_manange_port!"));
     }
 
-    std::string cipherDataKey = m_nodeConfig->kctKeySecurityCipherDataKey();
+    std::string cipherDataKey = m_nodeConfig->bcosKmsKeySecurityCipherDataKey();
 
     BcosKms keyClient;
     keyClient.setIpPort(keyCenterIp, keyCenterPort);
     m_dataKey = asString(keyClient.getDataKey(cipherDataKey, m_nodeConfig->smCryptoType()));
 
-    BCOS_LOG(INFO) << LOG_BADGE("DataEncryption::init") << LOG_KV("key_center_ip:", keyCenterIp)
+    BCOS_LOG(INFO) << LOG_BADGE("BcosKmsKeyEncryption::init") << LOG_KV("key_center_ip:", keyCenterIp)
                    << LOG_KV("key_center_port:", keyCenterPort);
 
     if (!m_nodeConfig->smCryptoType())
