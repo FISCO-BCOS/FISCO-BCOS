@@ -95,19 +95,9 @@ void Sealer::asyncNoteLatestBlockHash(crypto::HashType _hash)
     m_sealingManager->resetLatestHash(_hash);
 }
 
-void Sealer::asyncNoteUnSealedTxsSize(
-    uint64_t _unsealedTxsSize, std::function<void(Error::Ptr)> _onRecvResponse)
-{
-    m_sealingManager->setUnsealedTxsSize(_unsealedTxsSize);
-    if (_onRecvResponse)
-    {
-        _onRecvResponse(nullptr);
-    }
-}
-
 void Sealer::executeWorker()
 {
-    if (!m_sealingManager->shouldGenerateProposal() && !m_sealingManager->shouldFetchTransaction())
+    if (!m_sealingManager->shouldGenerateProposal())
     {
         ///< 10 milliseconds to next loop
         boost::unique_lock<boost::mutex> l(x_signalled);
@@ -124,10 +114,7 @@ void Sealer::executeWorker()
         submitProposal(ret.first, proposal);
     }
     // try to fetch transactions
-    if (m_sealingManager->shouldFetchTransaction())
-    {
-        m_sealingManager->fetchTransactions();
-    }
+    m_sealingManager->fetchTransactions();
 }
 
 void Sealer::submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _block)

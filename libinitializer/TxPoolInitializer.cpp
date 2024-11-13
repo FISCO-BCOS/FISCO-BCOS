@@ -57,21 +57,8 @@ TxPoolInitializer::TxPoolInitializer(bcos::tool::NodeConfig::Ptr _nodeConfig,
     }
 }
 
-void TxPoolInitializer::init(bcos::sealer::SealerInterface::Ptr _sealer)
+void TxPoolInitializer::init()
 {
-    m_txpool->registerUnsealedTxsNotifier(
-        [_sealer](size_t _unsealedTxsSize, std::function<void(Error::Ptr)> _onRecv) {
-            try
-            {
-                _sealer->asyncNoteUnSealedTxsSize(_unsealedTxsSize, _onRecv);
-            }
-            catch (std::exception const& e)
-            {
-                INITIALIZER_LOG(WARNING)
-                    << LOG_DESC("call UnsealedTxsNotifier to the sealer exception")
-                    << LOG_KV("message", boost::diagnostic_information(e));
-            }
-        });
     m_txpool->init();
 }
 

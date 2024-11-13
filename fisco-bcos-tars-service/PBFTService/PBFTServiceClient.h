@@ -37,14 +37,6 @@ public:
     {}
     ~PBFTServiceCommonCallback() override {}
 
-    void callback_asyncNoteUnSealedTxsSize(const bcostars::Error& ret) override
-    {
-        m_callback(toBcosError(ret));
-    }
-    void callback_asyncNoteUnSealedTxsSize_exception(tars::Int32 ret) override
-    {
-        m_callback(toBcosError(ret));
-    }
     void callback_asyncNotifyConsensusMessage(const bcostars::Error& ret) override
     {
         m_callback(toBcosError(ret));
@@ -101,10 +93,6 @@ public:
         std::function<void(bcos::Error::Ptr _error)> _onRecv) override;
     void asyncGetPBFTView(
         std::function<void(bcos::Error::Ptr, bcos::consensus::ViewType)> _onGetView) override;
-
-    // the txpool notify the unsealed txsSize to the sealer module
-    void asyncNoteUnSealedTxsSize(
-        size_t _unsealedTxsSize, std::function<void(bcos::Error::Ptr)> _onRecvResponse) override;
 
     // the sealer submit proposal to the consensus module
     // Note: if the sealer module integrates with the PBFT module, no need to implement this

@@ -43,11 +43,9 @@ public:
     void stop();
 
     bool shouldGenerateProposal();
-    bool shouldFetchTransaction();
 
     std::pair<bool, bcos::protocol::Block::Ptr> generateProposal(
         std::function<uint16_t(bcos::protocol::Block::Ptr)>);
-    virtual void setUnsealedTxsSize(size_t _unsealedTxsSize);
 
     // the consensus module notify the sealer to reset sealing when viewchange
     virtual void resetSealing();
@@ -90,7 +88,6 @@ private:
 
     // the invalid sealingNumber is -1
     std::atomic<ssize_t> m_sealingNumber = {-1};
-    std::atomic<size_t> m_unsealedTxsSize = {0};
 
     std::atomic<ssize_t> m_startSealingNumber = {0};
     std::atomic<ssize_t> m_endSealingNumber = {0};

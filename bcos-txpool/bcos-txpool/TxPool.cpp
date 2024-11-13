@@ -699,11 +699,7 @@ void bcos::txpool::TxPool::asyncGetPendingTransactionSize(
     auto pendingTxsSize = m_txpoolStorage->size();
     _onGetTxsSize(nullptr, pendingTxsSize);
 }
-void bcos::txpool::TxPool::registerUnsealedTxsNotifier(
-    std::function<void(size_t, std::function<void(Error::Ptr)>)> _unsealedTxsNotifier)
-{
-    m_txpoolStorage->registerUnsealedTxsNotifier(std::move(_unsealedTxsNotifier));
-}
+
 void bcos::txpool::TxPool::setTransactionSync(
     bcos::sync::TransactionSyncInterface::Ptr _transactionSync)
 {

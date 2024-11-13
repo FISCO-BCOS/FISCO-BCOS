@@ -29,7 +29,6 @@
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-tool/TreeTopology.h>
 #include <bcos-utilities/ThreadPool.h>
-#include <thread>
 namespace bcos::txpool
 {
 class TxPool : public TxPoolInterface, public std::enable_shared_from_this<TxPool>
@@ -115,9 +114,6 @@ public:
     void setTransactionSync(bcos::sync::TransactionSyncInterface::Ptr _transactionSync);
 
     virtual void init();
-    virtual void registerUnsealedTxsNotifier(
-        std::function<void(size_t, std::function<void(Error::Ptr)>)> _unsealedTxsNotifier);
-
     void asyncGetPendingTransactionSize(
         std::function<void(Error::Ptr, uint64_t)> _onGetTxsSize) override;
 

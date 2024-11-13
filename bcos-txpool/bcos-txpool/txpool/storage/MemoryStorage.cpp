@@ -478,9 +478,6 @@ TransactionStatus MemoryStorage::insertWithoutLock(Transaction::Ptr transaction)
             return TransactionStatus::AlreadyInTxPool;
         }
     }
-    m_onReady();
-
-    notifyUnsealedTxsSize();
     return TransactionStatus::None;
 }
 
@@ -503,10 +500,6 @@ void MemoryStorage::onTxRemoved(const Transaction::Ptr& _tx, bool needNotifyUnse
     if (_tx && _tx->sealed())
     {
         --m_sealedTxsSize;
-    }
-    if (needNotifyUnsealedTxsSize)
-    {
-        notifyUnsealedTxsSize();
     }
 #if FISCO_DEBUG
     // TODO: remove this, now just for bug tracing
@@ -600,10 +593,6 @@ void MemoryStorage::printPendingTxs()
     {
         return;
     }
-    if (unSealedTxsSize() > 0 || m_txsTable.size() == 0)
-    {
-        return;
-    }
     TXPOOL_LOG(DEBUG) << LOG_DESC("printPendingTxs for some txs unhandled")
                       << LOG_KV("pendingSize", m_txsTable.size());
     m_txsTable.forEach<TxsMap::ReadAccessor>([](TxsMap::ReadAccessor& accessor) {
@@ -681,7 +670,6 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
     auto removeT = utcTime() - startT;
 
     startT = utcTime();
-    notifyUnsealedTxsSize();
     // update the ledger nonce
 
     auto nonceListPtr = std::make_shared<NonceList>();
@@ -924,7 +912,6 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
         });
     }
     auto invalidTxsSize = m_invalidTxs.size();
-    notifyUnsealedTxsSize();
     removeInvalidTxs(true);
 
     auto fetchTxsT = utcTime() - startT;
@@ -1014,7 +1001,6 @@ void MemoryStorage::removeInvalidTxs(bool lock)
             txResult->setNonce(std::string(nonce));
             notifyTxResult(*tx, std::move(txResult));
         }
-        notifyUnsealedTxsSize();
 
         TXPOOL_LOG(DEBUG) << LOG_DESC("removeInvalidTxs") << LOG_KV("size", txCnt);
     }
@@ -1030,7 +1016,6 @@ void MemoryStorage::clear()
     m_txsTable.clear();
     m_invalidTxs.clear();
     m_missedTxs.clear();
-    notifyUnsealedTxsSize();
 }
 
 HashListPtr MemoryStorage::filterUnknownTxs(HashList const& _txsHashList, NodeIDPtr _peer)
@@ -1133,7 +1118,6 @@ bool MemoryStorage::batchMarkTxsWithoutLock(
                      << LOG_KV("reSealed", reSealed) << LOG_KV("succ", successCount)
                      << LOG_KV("time", utcTime() - recordT)
                      << LOG_KV("markT", (utcTime() - startT));
-    notifyUnsealedTxsSize();
     return notFound == 0;  // return true if all txs have been marked
 }
 
@@ -1162,57 +1146,6 @@ void MemoryStorage::batchMarkAllTxs(bool _sealFlag)
     {
         m_sealedTxsSize = 0;
     }
-    notifyUnsealedTxsSize();
-}
-
-size_t MemoryStorage::unSealedTxsSize()
-{
-    return unSealedTxsSizeWithoutLock();
-}
-
-size_t MemoryStorage::unSealedTxsSizeWithoutLock()
-{
-    auto txsSize = m_txsTable.size();
-    TXPOOL_LOG(TRACE) << LOG_DESC("unSealedTxsSize") << LOG_KV("txsSize", txsSize)
-                      << LOG_KV("sealedTxsSize", m_sealedTxsSize);
-
-    if (txsSize < m_sealedTxsSize)
-    {
-        m_sealedTxsSize = txsSize;
-        return 0;
-    }
-    return (txsSize - m_sealedTxsSize);
-}
-
-void MemoryStorage::notifyUnsealedTxsSize(size_t _retryTime)
-{
-    // Note: must set the notifier
-    if (!m_unsealedTxsNotifier)
-    {
-        return;
-    }
-
-    auto unsealedTxsSize = unSealedTxsSizeWithoutLock();
-    auto self = weak_from_this();
-    m_unsealedTxsNotifier(unsealedTxsSize, [_retryTime, self](Error::Ptr _error) {
-        if (_error == nullptr)
-        {
-            return;
-        }
-        TXPOOL_LOG(WARNING) << LOG_DESC("notifyUnsealedTxsSize failed")
-                            << LOG_KV("code", _error->errorCode())
-                            << LOG_KV("msg", _error->errorMessage());
-        auto memoryStorage = self.lock();
-        if (!memoryStorage)
-        {
-            return;
-        }
-        if (_retryTime >= MAX_RETRY_NOTIFY_TIME)
-        {
-            return;
-        }
-        memoryStorage->notifyUnsealedTxsSize((_retryTime + 1));
-    });
 }
 
 std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::Ptr _block)
@@ -1441,7 +1374,6 @@ void MemoryStorage::batchImportTxs(TransactionsPtr _txs)
         }
         successCount++;
     }
-    notifyUnsealedTxsSize();
     TXPOOL_LOG(DEBUG) << LOG_DESC("batchImportTxs success") << LOG_KV("importTxs", successCount)
                       << LOG_KV("totalTxs", _txs->size()) << LOG_KV("pendingTxs", m_txsTable.size())
                       << LOG_KV("timecost", (utcTime() - recordT));
@@ -1476,7 +1408,6 @@ bool MemoryStorage::batchVerifyAndSubmitTransaction(
             return false;
         }
     }
-    notifyUnsealedTxsSize();
     TXPOOL_LOG(DEBUG) << LOG_DESC("batchVerifyAndSubmitTransaction success")
                       << LOG_KV("totalTxs", _txs->size()) << LOG_KV("lockT", lockT)
                       << LOG_KV("submitT", (utcTime() - recordT));
