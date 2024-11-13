@@ -66,8 +66,7 @@ public:
         bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory)
       : m_txPool(std::move(_txPool)),
         m_blockFactory(std::move(_blockFactory)),
-        m_txResultFactory(std::move(_txResultFactory)),
-        m_worker(std::make_shared<ThreadPool>("validator", 2))
+        m_txResultFactory(std::move(_txResultFactory))
     {}
 
     ~TxsValidator() override = default;
@@ -103,7 +102,6 @@ protected:
     bcos::txpool::TxPoolInterface::Ptr m_txPool;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bcos::protocol::TransactionSubmitResultFactory::Ptr m_txResultFactory;
-    ThreadPool::Ptr m_worker;
     std::set<bcos::crypto::HashType> m_resettingProposals;
     mutable SharedMutex x_resettingProposals;
 

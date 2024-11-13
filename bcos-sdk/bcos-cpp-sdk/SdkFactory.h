@@ -26,7 +26,6 @@
 #include <bcos-cpp-sdk/event/EventSub.h>
 #include <bcos-cpp-sdk/rpc/JsonRpcImpl.h>
 #include <bcos-cpp-sdk/ws/Service.h>
-#include <bcos-utilities/ThreadPool.h>
 #include <utility>
 
 namespace bcos::cppsdk

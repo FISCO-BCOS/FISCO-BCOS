@@ -173,7 +173,6 @@ private:
     std::function<void(std::string const&, int, bcos::crypto::NodeIDPtr, bytesConstRef)>
         m_sendResponseHandler;
 
-    ThreadPool::Ptr m_worker;
     ThreadPool::Ptr m_verifier;
     ThreadPool::Ptr m_sealer;
     ThreadPool::Ptr m_txsPreStore;

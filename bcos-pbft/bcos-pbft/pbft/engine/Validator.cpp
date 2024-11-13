@@ -24,10 +24,7 @@ using namespace bcos::consensus;
 using namespace bcos::crypto;
 using namespace bcos::protocol;
 
-void bcos::consensus::TxsValidator::stop()
-{
-    m_worker->stop();
-}
+void bcos::consensus::TxsValidator::stop() {}
 
 void bcos::consensus::TxsValidator::init()
 {
@@ -84,37 +81,26 @@ void TxsValidator::asyncResetTxsFlag(bytesConstRef _data, bool _flag, bool _empt
             return;
         }
     }
-    auto self = std::weak_ptr<TxsValidator>(shared_from_this());
-    m_worker->enqueue([self, blockHeader, block, _flag, _emptyTxBatchHash]() {
-        try
+    try
+    {
+        auto txsHash = std::make_shared<HashList>();
+        for (size_t i = 0; i < block->transactionsHashSize(); i++)
         {
-            auto validator = self.lock();
-            if (!validator)
-            {
-                return;
-            }
-
-            auto txsHash = std::make_shared<HashList>();
-            for (size_t i = 0; i < block->transactionsHashSize(); i++)
-            {
-                txsHash->emplace_back(block->transactionHash(i));
-            }
-            if (txsHash->empty())
-            {
-                return;
-            }
-            PBFT_LOG(INFO) << LOG_DESC("asyncResetTxsFlag")
-                           << LOG_KV("index", blockHeader->number())
-                           << LOG_KV("hash", blockHeader->hash().abridged())
-                           << LOG_KV("flag", _flag);
-            validator->asyncResetTxsFlag(block, txsHash, _flag, _emptyTxBatchHash);
+            txsHash->emplace_back(block->transactionHash(i));
         }
-        catch (std::exception const& e)
+        if (txsHash->empty())
         {
-            PBFT_LOG(WARNING) << LOG_DESC("asyncResetTxsFlag exception")
-                              << LOG_KV("message", boost::diagnostic_information(e));
+            return;
         }
-    });
+        PBFT_LOG(INFO) << LOG_DESC("asyncResetTxsFlag") << LOG_KV("index", blockHeader->number())
+                       << LOG_KV("hash", blockHeader->hash().abridged()) << LOG_KV("flag", _flag);
+        asyncResetTxsFlag(block, txsHash, _flag, _emptyTxBatchHash);
+    }
+    catch (std::exception const& e)
+    {
+        PBFT_LOG(WARNING) << LOG_DESC("asyncResetTxsFlag exception")
+                          << LOG_KV("message", boost::diagnostic_information(e));
+    }
 }
 
 void TxsValidator::asyncResetTxsFlag(
@@ -237,24 +223,16 @@ void bcos::consensus::TxsValidator::triggerVerifyCompletedHook()
     auto callback = m_verifyCompletedHook;
     m_verifyCompletedHook = nullptr;
     auto self = weak_from_this();
-    m_worker->enqueue([self, callback]() {
-        auto validator = self.lock();
-        if (!validator)
-        {
-            return;
-        }
-        if (!callback)
-        {
-            return;
-        }
+    if (callback)
+    {
         callback();
-    });
+    }
 }
 
 bool bcos::consensus::TxsValidator::insertResettingProposal(bcos::crypto::HashType const& _hash)
 {
     UpgradableGuard l(x_resettingProposals);
-    if (m_resettingProposals.count(_hash))
+    if (m_resettingProposals.contains(_hash))
     {
         return false;
     }

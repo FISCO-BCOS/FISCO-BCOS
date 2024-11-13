@@ -117,7 +117,7 @@ private:
     std::vector<std::shared_ptr<IOService>> m_ioServices;
     std::vector<WorkPtr> m_works;
     std::vector<std::thread> m_threads;
-    size_t m_nextIOService;
+    std::atomic_size_t m_nextIOService = 0;
     bool m_running = false;
 };
 }  // namespace bcos
