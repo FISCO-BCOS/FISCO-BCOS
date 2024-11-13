@@ -62,7 +62,7 @@ bool SealingManager::shouldGenerateProposal()
     }
     // check the txs size
     auto txsSize = pendingTxsSize();
-    return txsSize >= m_maxTxsPerBlock || reachMinSealTimeCondition();
+    return (txsSize >= m_maxTxsPerBlock) || reachMinSealTimeCondition();
 }
 
 void SealingManager::clearPendingTxs()

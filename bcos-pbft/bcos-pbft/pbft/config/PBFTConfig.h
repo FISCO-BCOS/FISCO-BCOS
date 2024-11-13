@@ -258,27 +258,11 @@ public:
         setToView(_view);
         setTimeoutState(false);
     }
-    virtual void setUnSealedTxsSize(size_t _unsealedTxsSize)
-    {
-        m_unsealedTxsSize = _unsealedTxsSize;
-        if (m_unsealedTxsSize > 0 && !m_timer->running())
-        {
-            m_timer->start();
-        }
-    }
 
     virtual void freshTimer()
     {
-        if (m_unsealedTxsSize > 0)
-        {
-            m_timer->restart();
-            m_pullTxsTimer->stop();
-        }
-        else
-        {
-            m_timer->stop();
-            m_pullTxsTimer->restart();
-        }
+        m_timer->stop();
+        m_pullTxsTimer->restart();
     }
 
     void registerSealProposalNotifier(
@@ -477,7 +461,6 @@ protected:
     std::atomic_bool m_startRecovered = {false};
     bcos::ledger::ConsensusType m_type = bcos::ledger::ConsensusType::PBFT_TYPE;
 
-    std::atomic<size_t> m_unsealedTxsSize = {0};
     // notify the sealer to reseal new block until m_waitResealUntil stable committed
     std::atomic<bcos::protocol::BlockNumber> m_waitResealUntil = {0};
     // notify the sealer to seal new block until m_waitSealUntil committed

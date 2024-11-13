@@ -97,12 +97,6 @@ void Sealer::asyncNoteLatestBlockHash(crypto::HashType _hash)
 
 void Sealer::executeWorker()
 {
-    if (!m_sealingManager->shouldGenerateProposal())
-    {
-        ///< 10 milliseconds to next loop
-        boost::unique_lock<boost::mutex> l(x_signalled);
-        m_signalled.wait_for(l, boost::chrono::milliseconds(1));
-    }
     // try to generateProposal
     if (m_sealingManager->shouldGenerateProposal())
     {
@@ -112,6 +106,12 @@ void Sealer::executeWorker()
             });
         auto proposal = ret.second;
         submitProposal(ret.first, proposal);
+    }
+    else
+    {
+        ///< 10 milliseconds to next loop
+        boost::unique_lock<boost::mutex> l(x_signalled);
+        m_signalled.wait_for(l, boost::chrono::milliseconds(100));
     }
     // try to fetch transactions
     m_sealingManager->fetchTransactions();

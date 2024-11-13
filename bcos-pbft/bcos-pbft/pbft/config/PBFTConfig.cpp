@@ -463,7 +463,6 @@ std::string PBFTConfig::printCurrentState()
                  << LOG_KV("view", view()) << LOG_KV("toView", toView())
                  << LOG_KV("changeCycle", m_timer->changeCycle())
                  << LOG_KV("expectedCheckPoint", m_expectedCheckPoint) << LOG_KV("Idx", nodeIndex())
-                 << LOG_KV("unsealedTxs", m_unsealedTxsSize.load())
                  << LOG_KV("sealUntil", m_waitSealUntil)
                  << LOG_KV("waitResealUntil", m_waitResealUntil)
                  << LOG_KV("consensusTimeout", m_consensusTimeout.load())
@@ -477,9 +476,8 @@ std::string PBFTConfig::printCurrentState()
 
 void PBFTConfig::tryToSyncTxs()
 {
-    // should not try to request txs to peer when unsealedTxs > 0
     // only the leader need tryToSyncTxs
-    if (m_unsealedTxsSize > 0 || m_timer->running() || getLeader() != nodeIndex())
+    if (m_timer->running() || getLeader() != nodeIndex())
     {
         return;
     }
