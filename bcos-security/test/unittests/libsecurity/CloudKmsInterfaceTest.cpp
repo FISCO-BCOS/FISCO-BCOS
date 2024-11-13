@@ -3,6 +3,7 @@
  * @file AwsKmsWrapperTest.cpp
  */
 
+#include <aws/core/VersionConfig.h>
 #include <aws/core/Aws.h>
 #include <aws/core/auth/AWSCredentialsProvider.h>
 #include <aws/core/utils/base64/Base64.h>
@@ -11,7 +12,6 @@
 #include <aws/kms/model/EncryptRequest.h>
 #include <bcos-security/cloudkms/AwsKmsWrapper.h>
 #include <boost/test/unit_test.hpp>
-// #include <aws/core/VersionConfig.h>
 
 using namespace bcos::security;
 
