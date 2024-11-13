@@ -54,7 +54,7 @@ public:
     bcos::crypto::KeyFactory::Ptr keyFactory() const { return m_keyFactory; }
     bcos::security::KeyEncryptInterface::Ptr keyEncryption() const { return m_keyEncryption; }
     bcos::security::StorageEncryptInterface::Ptr dataEncryption() const { return m_dataEncryption; }
-    bcos::security::KeyEncryptInterface::Ptr getKeyEncryptionByType(KeyEncryptionType _type);
+    bcos::security::KeyEncryptInterface::Ptr getKeyEncryptionByType(bcos::security::KeyEncryptionType _type);
 
 private:
     void createCryptoSuite();
@@ -68,7 +68,7 @@ private:
     bcos::protocol::TransactionSubmitResultFactory::Ptr m_txResultFactory;
     bcos::crypto::KeyPairInterface::Ptr m_keyPair;
     size_t c_hexedPrivateKeySize = 64;
-    KeyEncryptionType m_keyEncryptionType;
+    bcos::security::KeyEncryptionType m_keyEncryptionType;
     bool m_enableHsm;
     bcos::security::KeyEncryptInterface::Ptr m_keyEncryption{nullptr};
     bcos::security::StorageEncryptInterface::Ptr m_dataEncryption{nullptr};

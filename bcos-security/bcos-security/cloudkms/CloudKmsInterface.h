@@ -21,6 +21,7 @@
  * @date 2024-11-07
  */
 #pragma once
+#include <bcos-framework/security/CloudKmsType.h>
 #include <bcos-framework/security/KeyEncryptInterface.h>
 #include <string>
 
@@ -42,8 +43,7 @@ public:
     std::shared_ptr<bytes> decryptFile(const std::string& filename) override;
 
 protected:
-    std::string m_kmsType;
+    CloudKmsType m_kmsType;
     std::string m_kmsUrl;
-
 };
 }  // namespace bcos::security

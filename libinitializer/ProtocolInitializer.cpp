@@ -176,7 +176,7 @@ void ProtocolInitializer::loadKeyPair(std::string const& _privateKeyPath)
         INITIALIZER_LOG(INFO) << LOG_DESC("loadKeyPair from privateKey")
                               << LOG_KV("privateKeySize", privateKeyData->size())
                               << LOG_KV("keyEncryptionType",
-                                     GetKeyEncryptionTypeString(m_keyEncryptionType));
+                                     keyEncryptionTypeToString(m_keyEncryptionType));
         auto privateKey = m_keyFactory->createKey(*privateKeyData);
         m_keyPair = m_cryptoSuite->signatureImpl()->createKeyPair(privateKey);
         INITIALIZER_LOG(INFO) << METRIC << LOG_DESC("loadKeyPair from privateKeyPath")

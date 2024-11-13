@@ -22,6 +22,8 @@
 #include <magic_enum.hpp>
 #include <string>
 
+namespace bcos::security
+{
 enum class KeyEncryptionType
 {
     DISABLED,
@@ -32,13 +34,13 @@ enum class KeyEncryptionType
 };
 
 // get the string of the enum
-inline std::string GetKeyEncryptionTypeString(KeyEncryptionType type)
+inline static std::string keyEncryptionTypeToString(KeyEncryptionType type)
 {
     return std::string(magic_enum::enum_name(type));
 }
 
 // get the enum from the string
-inline KeyEncryptionType GetKeyEncryptionTypeFromString(const std::string& typeStr)
+inline static KeyEncryptionType keyEncryptionTypeFromString(const std::string& typeStr)
 {
     auto result = magic_enum::enum_cast<KeyEncryptionType>(typeStr);
     if (!result)
@@ -47,3 +49,4 @@ inline KeyEncryptionType GetKeyEncryptionTypeFromString(const std::string& typeS
     }
     return result.value();
 }
+}  // namespace bcos::security

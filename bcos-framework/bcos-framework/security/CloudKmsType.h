@@ -16,7 +16,7 @@
  */
 /**
  * @brief : Kms Provider
- * @file CloudKmsProvider.h
+ * @file CloudKmsType.h
  * @author: HaoXuan40404
  * @date 2024-11-07
  */
@@ -25,30 +25,27 @@
 #include <string>
 namespace bcos::security
 {
-enum class CloudKmsProvider
+enum class CloudKmsType
 {
-    AWS,      // Amazon Web Services KMS
-    UNKNOWN   // Unknown KMS provider
+    AWS,     // Amazon Web Services KMS
+    UNKNOWN  // Unknown KMS provider
 };
 
-class CloudKmsProviderHelper
+
+// convert the provider name to the corresponding enum value
+inline static std::string cloudKmsTypeToString(CloudKmsType provider)
 {
-public:
-    // convert the provider name to the corresponding enum value
-    inline static std::string ToString(CloudKmsProvider provider)
-    {
-        return std::string(magic_enum::enum_name(provider));
-    };
+    return std::string(magic_enum::enum_name(provider));
+};
 
 
-    inline static CloudKmsProvider FromString(const std::string& kmsTypeStr)
+inline static CloudKmsType cloudKmsTypeFromString(const std::string& kmsTypeStr)
+{
+    auto result = magic_enum::enum_cast<CloudKmsType>(kmsTypeStr);
+    if (!result)
     {
-        auto result = magic_enum::enum_cast<CloudKmsProvider>(kmsTypeStr);
-        if (!result)
-        {
-            return CloudKmsProvider::UNKNOWN;
-        }
-        return result.value();
+        return CloudKmsType::UNKNOWN;
     }
-};
+    return result.value();
+}
 }  // namespace bcos::security

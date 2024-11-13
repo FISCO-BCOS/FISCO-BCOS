@@ -21,11 +21,11 @@
  * @date 2024-11-07
  */
 #include "CloudKmsInterface.h"
-#include "utils.h"
 #include "../Common.h"
 #include "AwsKmsWrapper.h"
-#include "CloudKmsProvider.h"
+#include "bcos-framework/security/CloudKmsType.h"
 #include "bcos-utilities/FileUtility.h"
+#include "utils.h"
 #include <aws/core/Aws.h>
 #include <bcos-utilities/Log.h>
 
@@ -40,20 +40,18 @@ CloudKmsInterface::CloudKmsInterface(const bcos::tool::NodeConfig::Ptr nodeConfi
 std::shared_ptr<bytes> CloudKmsInterface::decryptContents(const std::shared_ptr<bytes>& contents)
 {
     BCOS_LOG(INFO) << LOG_BADGE("KmsInterface::decryptContents")
-                   << LOG_KV("decrypt type", m_kmsType);
+                   << LOG_KV("decrypt type", cloudKmsTypeToString(m_kmsType));
     // m_kmsUrl cotaims secret key
 
-    auto provider = CloudKmsProviderHelper::FromString(m_kmsType);
+    auto provider = m_kmsType;
     BCOS_LOG(DEBUG) << LOG_BADGE("KmsInterface::decrypt") << LOG_KV("decrypt url", m_kmsUrl);
-    if (provider == CloudKmsProvider::UNKNOWN)
+    if (provider == CloudKmsType::UNKNOWN)
     {
-        BCOS_LOG(ERROR) << LOG_BADGE("KmsInterface::decrypt")
-                        << LOG_KV("Invalid KMS provider:", m_kmsType)
-                        << LOG_KV("KMS url:", m_kmsUrl);
+        BCOS_LOG(ERROR) << LOG_BADGE("KmsInterface::decrypt") << LOG_KV("KMS url:", m_kmsUrl);
         BOOST_THROW_EXCEPTION(KmsTypeError());
     }
 
-    if (provider == CloudKmsProvider::AWS)
+    if (provider == CloudKmsType::AWS)
     {
         // initialize the AWS SDK
         std::vector<std::string> awsKmsUrlParts;
@@ -100,7 +98,7 @@ std::shared_ptr<bytes> CloudKmsInterface::decryptContents(const std::shared_ptr<
     }
 
     BCOS_LOG(ERROR) << LOG_BADGE("KmsInterface::decrypt")
-                    << LOG_KV("Unsupported KMS provider:", m_kmsType);
+                    << LOG_KV("Unsupported KMS provider:", cloudKmsTypeToString(m_kmsType));
     BOOST_THROW_EXCEPTION(KmsTypeError());
 }
 

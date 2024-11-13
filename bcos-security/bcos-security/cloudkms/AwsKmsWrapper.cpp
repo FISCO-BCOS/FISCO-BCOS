@@ -21,7 +21,6 @@
  * @date 2024-11-07
  */
 #include "AwsKmsWrapper.h"
-#include "Common.h"
 #include "bcos-utilities/FileUtility.h"
 #include <aws/core/auth/AWSCredentials.h>
 #include <aws/core/utils/Array.h>

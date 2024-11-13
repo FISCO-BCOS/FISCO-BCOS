@@ -4,6 +4,7 @@
  */
 
 #include <aws/core/VersionConfig.h>
+
 #include <aws/core/Aws.h>
 #include <aws/core/auth/AWSCredentialsProvider.h>
 #include <aws/core/utils/base64/Base64.h>

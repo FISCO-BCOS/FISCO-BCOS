@@ -24,6 +24,8 @@
 #include "bcos-framework/consensus/ConsensusNode.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/ServiceDesc.h"
+#include "bcos-framework/security/CloudKmsType.h"
+#include "bcos-framework/security/KeyEncryptionType.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
@@ -620,10 +622,10 @@ void NodeConfig::loadSecurityConfig(boost::property_tree::ptree const& _pt)
 {
     m_privateKeyPath = _pt.get<std::string>("security.private_key_path", "node.pem");
     m_enableHsm = _pt.get<bool>("security.enable_hsm", false);
-    m_keyEncryptionType = GetKeyEncryptionTypeFromString(
+    m_keyEncryptionType = security::keyEncryptionTypeFromString(
         _pt.get<std::string>("security.key_encryption_type", "DEFAULT"));
     m_KeyEncryptionUrl = _pt.get<std::string>("security.key_encryption_url", "");
-    if (m_enableHsm || m_keyEncryptionType == KeyEncryptionType::HSM)
+    if (m_enableHsm || m_keyEncryptionType == security::KeyEncryptionType::HSM)
     {
         m_hsmLibPath =
             _pt.get<std::string>("security.hsm_lib_path", "/usr/local/lib/libgmt0018.so");
@@ -633,15 +635,15 @@ void NodeConfig::loadSecurityConfig(boost::property_tree::ptree const& _pt)
                              << LOG_KV("lib_path", m_hsmLibPath) << LOG_KV("key_index", m_keyIndex)
                              << LOG_KV("password", m_password);
     }
-    if (m_keyEncryptionType == KeyEncryptionType::CLOUDKMS)
+    if (m_keyEncryptionType == security::KeyEncryptionType::CLOUDKMS)
     {
-        m_cloudKmsType = _pt.get<std::string>("security.cloud_kms_type", "");
+        m_cloudKmsType = security::cloudKmsTypeFromString(_pt.get<std::string>("security.cloud_kms_type", ""));
     }
-    if (m_keyEncryptionType == KeyEncryptionType::BCOSKMS)
+    if (m_keyEncryptionType == security::KeyEncryptionType::BCOSKMS)
     {
         m_bcosKmsKeySecurityCipherDataKey = _pt.get<std::string>("security.cipher_data_key", "");
     }
-    if (m_keyEncryptionType == KeyEncryptionType::DEFAULT)
+    if (m_keyEncryptionType == security::KeyEncryptionType::DEFAULT)
     {
         m_storageSecurityEnable = _pt.get<bool>("storage_security.enable", false);
         if (m_storageSecurityEnable)
@@ -661,7 +663,7 @@ void NodeConfig::loadSecurityConfig(boost::property_tree::ptree const& _pt)
     NodeConfig_LOG(INFO) << LOG_DESC("loadSecurityConfig") << LOG_KV("enable_hsm", m_enableHsm)
                          << LOG_KV("privateKeyPath", m_privateKeyPath)
                          << LOG_KV("keyEncryptionType",
-                                GetKeyEncryptionTypeString(m_keyEncryptionType));
+                                security::keyEncryptionTypeToString(m_keyEncryptionType));
 }
 
 void NodeConfig::loadSealerConfig(boost::property_tree::ptree const& _pt)
