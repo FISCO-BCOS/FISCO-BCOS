@@ -25,23 +25,21 @@
 using namespace bcos;
 
 bcos::Timer::Timer(
-    std::shared_ptr<boost::asio::io_service> ioService, uint64_t timeout, std::string threadName)
+    std::shared_ptr<boost::asio::io_service> ioService, int64_t timeout, std::string threadName)
   : m_timeout(timeout),
+    m_working(true),
     m_ioService(std::move(ioService)),
     m_timer(*m_ioService),
     m_threadName(std::move(threadName)),
     m_borrowedIoService(true)
 {}
 
-bcos::Timer::Timer(uint64_t _timeout, std::string _threadName)
+bcos::Timer::Timer(int64_t _timeout, std::string _threadName)
   : m_timeout(_timeout),
     m_working(true),
     m_ioService(std::make_shared<boost::asio::io_service>()),
     m_timer(*m_ioService),
-    m_work(*m_ioService),
-    m_threadName(std::move(_threadName))
-{
-    m_worker = std::make_unique<std::thread>([&]() {
+    m_worker(std::make_unique<std::thread>([&]() {
         bcos::pthread_setThreadName(m_threadName);
         while (m_working)
         {
@@ -56,8 +54,10 @@ bcos::Timer::Timer(uint64_t _timeout, std::string _threadName)
             }
             m_ioService->reset();
         }
-    });
-}
+    })),
+    m_work(*m_ioService),
+    m_threadName(std::move(_threadName))
+{}
 
 void Timer::start()
 {
@@ -78,65 +78,61 @@ void Timer::start()
 
 void Timer::startTimer()
 {
-    bool running = false;
-    if (!m_running.compare_exchange_strong(running, true))
+    if (bool running = false; !m_running.compare_exchange_strong(running, true))
     {
         return;
     }
     m_timer.expires_from_now(std::chrono::milliseconds(adjustTimeout()));
     // calls the timeout handler
-    m_timer.async_wait(
-        [timer = std::weak_ptr<Timer>(shared_from_this())](const boost::system::error_code& error) {
-            // the timer has been cancelled
-            if (error == boost::asio::error::operation_aborted)
+    m_timer.async_wait([timerWeak = std::weak_ptr<Timer>(shared_from_this())](
+                           const boost::system::error_code& error) {
+        // the timer has been cancelled
+        if (error == boost::asio::error::operation_aborted)
+        {
+            return;
+        }
+        if (error)
+        {
+            BCOS_LOG(WARNING) << LOG_DESC("Timer async_wait error") << LOG_KV("message", error);
+            return;
+        }
+        try
+        {
+            if (auto timer = timerWeak.lock())
             {
-                return;
+                timer->run();
             }
-            if (error)
-            {
-                BCOS_LOG(WARNING) << LOG_DESC("Timer async_wait error") << LOG_KV("message", error);
-                return;
-            }
-            try
-            {
-                auto t = timer.lock();
-                if (!t)
-                {
-                    return;
-                }
-                t->run();
-            }
-            catch (std::exception const& e)
-            {
-                BCOS_LOG(WARNING) << LOG_DESC("calls timeout handler failed")
-                                  << LOG_KV("message", boost::diagnostic_information(e));
-            }
-        });
+        }
+        catch (std::exception const& e)
+        {
+            BCOS_LOG(WARNING) << LOG_DESC("calls timeout handler failed")
+                              << LOG_KV("message", boost::diagnostic_information(e));
+        }
+    });
 }
 
 // stop the timer
 void Timer::stop()
 {
-    bool working = true;
-    if (!m_working.compare_exchange_strong(working, false))
+    if (!m_working)
     {
         return;
     }
-    bool running = true;
-    if (!m_running.compare_exchange_strong(running, false))
+
+    if (bool running = true; m_running.compare_exchange_strong(running, false))
     {
-        return;
+        // cancel the timer
+        m_timer.cancel();
     }
-    // cancel the timer
-    m_timer.cancel();
 }
 
 void Timer::destroy()
 {
-    if (!m_working || !m_worker)
+    if (!m_working)
     {
         return;
     }
+    m_working = false;
     stop();
     if (!m_borrowedIoService)
     {
@@ -158,14 +154,10 @@ bcos::Timer::~Timer() noexcept
 }
 void bcos::Timer::restart()
 {
-    if (!m_working)
-    {
-        return;
-    }
     stop();
     start();
 }
-void bcos::Timer::reset(uint64_t _timeout)
+void bcos::Timer::reset(int64_t _timeout)
 {
     m_timeout = _timeout;
     restart();

@@ -46,7 +46,7 @@ public:
     void resetChangeCycle() { updateChangeCycle(0); }
     uint64_t changeCycle() const { return m_changeCycle; }
 
-    void reset(uint64_t _timeout) override
+    void reset(int64_t _timeout) override
     {
         m_timeout = _timeout;
         updateAdjustedTimeout();

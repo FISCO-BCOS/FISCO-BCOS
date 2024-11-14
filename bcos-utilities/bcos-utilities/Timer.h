@@ -22,16 +22,15 @@
 #include <boost/asio.hpp>
 #include <boost/asio/io_service.hpp>
 #include <boost/asio/steady_timer.hpp>
-#include <utility>
 
 namespace bcos
 {
 class Timer : public std::enable_shared_from_this<Timer>
 {
 public:
-    Timer(std::shared_ptr<boost::asio::io_service> ioService, uint64_t timeout,
+    Timer(std::shared_ptr<boost::asio::io_service> ioService, int64_t timeout,
         std::string threadName);
-    Timer(uint64_t _timeout, std::string _threadName);
+    Timer(int64_t _timeout, std::string _threadName);
 
     virtual ~Timer() noexcept;
 
@@ -40,7 +39,7 @@ public:
     virtual void stop();
     virtual void restart();
 
-    virtual void reset(uint64_t _timeout);
+    virtual void reset(int64_t _timeout);
 
     virtual bool running();
     virtual int64_t timeout();
@@ -54,7 +53,7 @@ protected:
     virtual void run();
     // adjust the timeout
     virtual uint64_t adjustTimeout();
-    std::atomic<uint64_t> m_timeout = 0;
+    std::atomic_int64_t m_timeout = 0;
 
     std::atomic_bool m_running = false;
     std::atomic_bool m_working = false;

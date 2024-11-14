@@ -198,7 +198,7 @@ public:
     virtual void reNotifySealer(bcos::protocol::BlockNumber _index);
     virtual bool shouldResetConfig(bcos::protocol::BlockNumber _index)
     {
-        ReadGuard l(x_committedProposal);
+        ReadGuard lock(x_committedProposal);
         if (!m_committedProposal)
         {
             return false;
@@ -356,20 +356,20 @@ public:
 
     virtual void setConnectedNodeList(bcos::crypto::NodeIDSet&& _connectedNodeList)
     {
-        WriteGuard l(x_connectedNodeList);
+        WriteGuard lock(x_connectedNodeList);
         *m_connectedNodeList = std::move(_connectedNodeList);
         PBFT_LOG(INFO) << LOG_DESC("setConnectedNodeList")
                        << LOG_KV("size", m_connectedNodeList->size());
     }
     virtual void setConnectedNodeList(bcos::crypto::NodeIDSet const& _connectedNodeList)
     {
-        WriteGuard l(x_connectedNodeList);
+        WriteGuard lock(x_connectedNodeList);
         *m_connectedNodeList = _connectedNodeList;
     }
 
     virtual bcos::crypto::NodeIDSet connectedNodeList()
     {
-        ReadGuard l(x_connectedNodeList);
+        ReadGuard lock(x_connectedNodeList);
         return *m_connectedNodeList;
     }
 
@@ -407,8 +407,6 @@ protected:
 
     void tryToSyncTxs();
 
-
-protected:
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
     // Factory for creating PBFT message package
     std::shared_ptr<PBFTMessageFactory> m_pbftMessageFactory;

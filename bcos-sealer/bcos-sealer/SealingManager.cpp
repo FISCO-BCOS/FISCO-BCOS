@@ -245,15 +245,14 @@ int64_t SealingManager::txsSizeExpectedToFetch()
 void SealingManager::fetchTransactions()
 {
     // fetching transactions currently
-    bool fetchingTxs = false;
-    if (!m_fetchingTxs.compare_exchange_strong(fetchingTxs, true))
+    if (bool fetchingTxs = false; !m_fetchingTxs.compare_exchange_strong(fetchingTxs, true))
     {
         return;
     }
     // no need to sealing
     if (m_sealingNumber < m_startSealingNumber || m_sealingNumber > m_endSealingNumber)
     {
-        m_fetchingTxs = true;
+        m_fetchingTxs = false;
         return;
     }
 

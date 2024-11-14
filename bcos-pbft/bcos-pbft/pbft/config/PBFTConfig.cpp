@@ -24,6 +24,7 @@ using namespace bcos;
 using namespace bcos::consensus;
 using namespace bcos::protocol;
 using namespace bcos::ledger;
+using namespace std::chrono_literals;
 
 void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
 {
@@ -159,20 +160,21 @@ void PBFTConfig::notifyResetSealing(std::function<void()> _callback)
     // only notify the non-leader to reset sealing
     PBFT_LOG(INFO) << LOG_DESC("notifyResetSealing") << printCurrentState();
     auto committedIndex = m_committedProposal->index();
-    m_sealerResetNotifier([this, _callback, committedIndex](Error::Ptr _error) {
-        if (_error)
-        {
-            PBFT_LOG(INFO) << LOG_DESC("notifyResetSealing failed")
-                           << LOG_KV("code", _error->errorCode())
-                           << LOG_KV("msg", _error->errorMessage()) << printCurrentState();
-            return;
-        }
-        if (_callback && m_waitResealUntil <= committedIndex)
-        {
-            _callback();
-        }
-        PBFT_LOG(INFO) << LOG_DESC("notifyResetSealing success") << printCurrentState();
-    });
+    m_sealerResetNotifier(
+        [this, _callback = std::move(_callback), committedIndex](Error::Ptr _error) {
+            if (_error)
+            {
+                PBFT_LOG(INFO) << LOG_DESC("notifyResetSealing failed")
+                               << LOG_KV("code", _error->errorCode())
+                               << LOG_KV("msg", _error->errorMessage()) << printCurrentState();
+                return;
+            }
+            if (_callback && m_waitResealUntil <= committedIndex)
+            {
+                _callback();
+            }
+            PBFT_LOG(INFO) << LOG_DESC("notifyResetSealing success") << printCurrentState();
+        });
     // reset the sealEndIndex and the sealStartIndex
     m_sealEndIndex = (sealStartIndex() - 1);
     m_sealStartIndex = (sealStartIndex() - 1);
@@ -248,7 +250,7 @@ bool PBFTConfig::tryTriggerFastViewChange(IndexType _leaderIndex)
     {
         return false;
     }
-    auto leaderNodeInfo = getConsensusNodeByIndex(_leaderIndex);
+    auto* leaderNodeInfo = getConsensusNodeByIndex(_leaderIndex);
     if (!leaderNodeInfo)
     {
         return false;
@@ -385,7 +387,7 @@ void PBFTConfig::asyncNotifySealProposal(
                     return;
                 }
                 // retry after 1 seconds
-                std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+                std::this_thread::sleep_for(1s);
                 // retry when send failed
                 pbftConfig->asyncNotifySealProposal(
                     _proposalIndex, _proposalEndIndex, _maxTxsToSeal, _retryTime + 1);
