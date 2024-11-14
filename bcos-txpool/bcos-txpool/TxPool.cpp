@@ -48,7 +48,6 @@ bcos::txpool::TxPool::TxPool(TxPoolConfig::Ptr config, TxPoolStorageInterface::P
     m_transactionFactory(m_config->blockFactory()->transactionFactory()),
     m_ledger(m_config->ledger())
 {
-    m_worker = std::make_shared<ThreadPool>("submitter", verifierWorkerNum);
     m_verifier = std::make_shared<ThreadPool>("verifier", 2);
     m_sealer = std::make_shared<ThreadPool>("txsSeal", 1);
     // worker to pre-store-txs
@@ -80,10 +79,6 @@ void TxPool::stop()
     {
         TXPOOL_LOG(INFO) << LOG_DESC("The txpool has already been stopped!");
         return;
-    }
-    if (m_worker)
-    {
-        m_worker->stop();
     }
     if (m_sealer)
     {

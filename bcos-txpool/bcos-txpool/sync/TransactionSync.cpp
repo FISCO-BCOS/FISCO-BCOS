@@ -52,45 +52,29 @@ void TransactionSync::onRecvSyncMessage(
         // receive txs request, and response the transactions
         if (txsSyncMsg->type() == TxsSyncPacketType::TxsRequestPacket)
         {
-            auto self = weak_from_this();
-            m_worker->enqueue([self, txsSyncMsg, _sendResponse, _nodeID]() {
-                try
-                {
-                    auto transactionSync = self.lock();
-                    if (!transactionSync)
-                    {
-                        return;
-                    }
-                    transactionSync->onReceiveTxsRequest(txsSyncMsg, _sendResponse, _nodeID);
-                }
-                catch (std::exception const& e)
-                {
-                    SYNC_LOG(WARNING) << LOG_DESC("onRecvSyncMessage: send txs response exception")
-                                      << LOG_KV("message", boost::diagnostic_information(e))
-                                      << LOG_KV("peer", _nodeID->shortHex());
-                }
-            });
+            try
+            {
+                onReceiveTxsRequest(txsSyncMsg, _sendResponse, _nodeID);
+            }
+            catch (std::exception const& e)
+            {
+                SYNC_LOG(WARNING) << LOG_DESC("onRecvSyncMessage: send txs response exception")
+                                  << LOG_KV("message", boost::diagnostic_information(e))
+                                  << LOG_KV("peer", _nodeID->shortHex());
+            }
         }
         if (txsSyncMsg->type() == TxsSyncPacketType::TxsStatusPacket)
         {
-            auto self = weak_from_this();
-            m_txsRequester->enqueue([self, _nodeID, txsSyncMsg]() {
-                try
-                {
-                    auto transactionSync = self.lock();
-                    if (!transactionSync)
-                    {
-                        return;
-                    }
-                    transactionSync->onPeerTxsStatus(_nodeID, txsSyncMsg);
-                }
-                catch (std::exception const& e)
-                {
-                    SYNC_LOG(WARNING) << LOG_DESC("onRecvSyncMessage:  onPeerTxsStatus exception")
-                                      << LOG_KV("message", boost::diagnostic_information(e))
-                                      << LOG_KV("peer", _nodeID->shortHex());
-                }
-            });
+            try
+            {
+                onPeerTxsStatus(_nodeID, txsSyncMsg);
+            }
+            catch (std::exception const& e)
+            {
+                SYNC_LOG(WARNING) << LOG_DESC("onRecvSyncMessage:  onPeerTxsStatus exception")
+                                  << LOG_KV("message", boost::diagnostic_information(e))
+                                  << LOG_KV("peer", _nodeID->shortHex());
+            }
         }
     }
     catch (std::exception const& e)
@@ -122,7 +106,7 @@ void TransactionSync::onReceiveTxsRequest(TxsSyncMsgInterface::Ptr _txsRequest,
         auto tx = std::const_pointer_cast<Transaction>(constTx);
         block->appendTransaction(tx);
     }
-    bytes txsData = {};
+    bytes txsData;
     block->encode(txsData);
     auto txsResponse = m_config->msgFactory()->createTxsSyncMsg(
         TxsSyncPacketType::TxsResponsePacket, std::move(txsData));
@@ -243,8 +227,6 @@ void TransactionSync::requestMissedTxsFromPeer(PublicPtr _generatedNodeID, HashL
         _onVerifyFinished(nullptr, true);
         return;
     }
-
-
     auto protocolID = _verifiedProposal ? ModuleID::ConsTxsSync : ModuleID::TxsSync;
 
     auto txsRequest =
@@ -540,14 +522,6 @@ void TransactionSync::onEmptyTxs()
 void TransactionSync::stop()
 {
     SYNC_LOG(INFO) << LOG_DESC("stop TransactionSync");
-    if (m_worker)
-    {
-        m_worker->stop();
-    }
-    if (m_txsRequester)
-    {
-        m_txsRequester->stop();
-    }
     if (m_config && m_config->frontService())
     {
         m_config->frontService()->stop();

@@ -126,26 +126,24 @@ public:
     // return true if the lock has acquired
     bool acquireAccessor(WriteAccessor& accessor, bool wait)
     {
-        WriteGuard guard = wait ? WriteGuard(m_mutex) : WriteGuard(m_mutex, boost::try_to_lock);
-        if (guard.owns_lock())
+        if (WriteGuard guard = wait ? WriteGuard(m_mutex) : WriteGuard(m_mutex, boost::try_to_lock);
+            guard.owns_lock())
         {
             accessor.setLock(std::move(guard));  // acquire lock here
             return true;
         }
-
         return false;
     }
 
     // return true if the lock has acquired
     bool acquireAccessor(ReadAccessor& accessor, bool wait)
     {
-        ReadGuard guard = wait ? ReadGuard(m_mutex) : ReadGuard(m_mutex, boost::try_to_lock);
-        if (guard.owns_lock())
+        if (ReadGuard guard = wait ? ReadGuard(m_mutex) : ReadGuard(m_mutex, boost::try_to_lock);
+            guard.owns_lock())
         {
             accessor.setLock(std::move(guard));  // acquire lock here
             return true;
         }
-
         return false;
     }
 

@@ -86,23 +86,15 @@ void SealingManager::clearPendingTxs()
         unHandledTxs->emplace_back(txMetaData->hash());
     }
     auto self = weak_from_this();
-    m_worker->enqueue([self, unHandledTxs]() {
-        try
-        {
-            auto sealerMgr = self.lock();
-            if (!sealerMgr)
-            {
-                return;
-            }
-            sealerMgr->notifyResetTxsFlag(unHandledTxs, false);
-        }
-        catch (std::exception const& e)
-        {
-            SEAL_LOG(WARNING) << LOG_DESC(
-                                     "clearPendingTxs: return back the unhandled txs exception")
-                              << LOG_KV("message", boost::diagnostic_information(e));
-        }
-    });
+    try
+    {
+        notifyResetTxsFlag(unHandledTxs, false);
+    }
+    catch (std::exception const& e)
+    {
+        SEAL_LOG(WARNING) << LOG_DESC("clearPendingTxs: return back the unhandled txs exception")
+                          << LOG_KV("message", boost::diagnostic_information(e));
+    }
     UpgradeGuard ul(l);
     m_pendingTxs.clear();
     m_pendingSysTxs.clear();
@@ -346,7 +338,7 @@ void SealingManager::fetchTransactions()
 }
 
 bcos::sealer::SealingManager::SealingManager(SealerConfig::Ptr _config)
-  : m_config(std::move(_config)), m_worker(std::make_shared<ThreadPool>("sealerWorker", 1))
+  : m_config(std::move(_config))
 {}
 
 bcos::sealer::SealingManager::~SealingManager()
@@ -354,13 +346,7 @@ bcos::sealer::SealingManager::~SealingManager()
     stop();
 }
 
-void bcos::sealer::SealingManager::stop()
-{
-    if (m_worker)
-    {
-        m_worker->stop();
-    }
-}
+void bcos::sealer::SealingManager::stop() {}
 
 void bcos::sealer::SealingManager::resetSealingInfo(
     ssize_t _startSealingNumber, ssize_t _endSealingNumber, size_t _maxTxsPerBlock)

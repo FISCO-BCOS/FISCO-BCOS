@@ -44,7 +44,6 @@ using namespace bcos::protocol;
 PBFTEngine::PBFTEngine(PBFTConfig::Ptr _config)
   : ConsensusEngine("pbft", 0),
     m_config(_config),
-    m_worker(std::make_shared<ThreadPool>("pbftWorker", 4)),
     m_msgQueue(std::make_shared<PBFTMsgQueue>()),
     m_ledgerConfig(std::make_shared<LedgerConfig>())
 {
@@ -170,10 +169,6 @@ void PBFTEngine::stop()
     }
     m_stopped.store(true);
     ConsensusEngine::stop();
-    if (m_worker)
-    {
-        m_worker->stop();
-    }
     if (m_logSync)
     {
         m_logSync->stop();
@@ -316,29 +311,21 @@ void PBFTEngine::onProposalApplySuccess(
 void PBFTEngine::onProposalApplied(int64_t _errorCode, PBFTProposalInterface::Ptr _proposal,
     PBFTProposalInterface::Ptr _executedProposal)
 {
-    auto self = weak_from_this();
-    m_worker->enqueue([self, _errorCode, _proposal, _executedProposal]() {
-        try
+    try
+    {
+        if (_errorCode != 0)
         {
-            auto engine = self.lock();
-            if (!engine)
-            {
-                return;
-            }
-            if (_errorCode != 0)
-            {
-                engine->onProposalApplyFailed(_errorCode, _proposal);
-                return;
-            }
-            engine->onProposalApplySuccess(_proposal, _executedProposal);
+            onProposalApplyFailed(_errorCode, _proposal);
+            return;
         }
-        catch (std::exception const& e)
-        {
-            PBFT_LOG(WARNING) << LOG_DESC("onProposalApplied exception")
-                              << printPBFTProposal(_executedProposal)
-                              << LOG_KV("message", boost::diagnostic_information(e));
-        }
-    });
+        onProposalApplySuccess(_proposal, _executedProposal);
+    }
+    catch (std::exception const& e)
+    {
+        PBFT_LOG(WARNING) << LOG_DESC("onProposalApplied exception")
+                          << printPBFTProposal(_executedProposal)
+                          << LOG_KV("message", boost::diagnostic_information(e));
+    }
 }
 
 void PBFTEngine::asyncSubmitProposal(bool _containSysTxs, bytesConstRef _proposalData,
@@ -526,45 +513,29 @@ void PBFTEngine::onReceivePBFTMessage(Error::Ptr _error, NodeIDPtr _fromNode, by
         // the committed proposal request message
         if (pbftMsg->packetType() == PacketType::CommittedProposalRequest)
         {
-            auto self = weak_from_this();
-            m_worker->enqueue([self, pbftMsg, _sendResponseCallback]() {
-                try
-                {
-                    auto pbftEngine = self.lock();
-                    if (!pbftEngine)
-                    {
-                        return;
-                    }
-                    pbftEngine->onReceiveCommittedProposalRequest(pbftMsg, _sendResponseCallback);
-                }
-                catch (std::exception const& e)
-                {
-                    PBFT_LOG(WARNING) << LOG_DESC("onReceiveCommittedProposalRequest exception")
-                                      << LOG_KV("message", boost::diagnostic_information(e));
-                }
-            });
+            try
+            {
+                onReceiveCommittedProposalRequest(pbftMsg, _sendResponseCallback);
+            }
+            catch (std::exception const& e)
+            {
+                PBFT_LOG(WARNING) << LOG_DESC("onReceiveCommittedProposalRequest exception")
+                                  << LOG_KV("message", boost::diagnostic_information(e));
+            }
             return;
         }
         // the precommitted proposals request message
         if (pbftMsg->packetType() == PacketType::PreparedProposalRequest)
         {
-            auto self = weak_from_this();
-            m_worker->enqueue([self, pbftMsg, _sendResponseCallback]() {
-                try
-                {
-                    auto pbftEngine = self.lock();
-                    if (!pbftEngine)
-                    {
-                        return;
-                    }
-                    pbftEngine->onReceivePrecommitRequest(pbftMsg, _sendResponseCallback);
-                }
-                catch (std::exception const& e)
-                {
-                    PBFT_LOG(WARNING) << LOG_DESC("onReceivePrecommitRequest exception")
-                                      << LOG_KV("message", boost::diagnostic_information(e));
-                }
-            });
+            try
+            {
+                onReceivePrecommitRequest(pbftMsg, _sendResponseCallback);
+            }
+            catch (std::exception const& e)
+            {
+                PBFT_LOG(WARNING) << LOG_DESC("onReceivePrecommitRequest exception")
+                                  << LOG_KV("message", boost::diagnostic_information(e));
+            }
             return;
         }
         m_msgQueue->push(pbftMsg);

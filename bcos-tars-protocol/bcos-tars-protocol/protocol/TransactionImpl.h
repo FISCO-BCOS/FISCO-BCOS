@@ -23,8 +23,6 @@
 
 // if windows, manual include tup/Tars.h first
 
-#include "bcos-utilities/FixedBytes.h"
-#include <range/v3/view/any_view.hpp>
 #ifdef _WIN32
 #include <tup/Tars.h>
 #endif
