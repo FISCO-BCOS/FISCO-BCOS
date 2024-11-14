@@ -261,8 +261,7 @@ void SealingManager::fetchTransactions()
     // no need to sealing
     if (m_sealingNumber < m_startSealingNumber || m_sealingNumber > m_endSealingNumber)
     {
-        fetchingTxs = true;
-        m_fetchingTxs.compare_exchange_strong(fetchingTxs, false);
+        m_fetchingTxs = true;
         return;
     }
 

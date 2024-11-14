@@ -261,7 +261,7 @@ public:
 
     virtual void freshTimer()
     {
-        m_timer->stop();
+        m_timer->restart();
         m_pullTxsTimer->restart();
     }
 

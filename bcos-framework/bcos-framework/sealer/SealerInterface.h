@@ -19,12 +19,12 @@
  * @date 2021-05-14
  */
 #pragma once
+#include "bcos-crypto/interfaces/crypto/CommonType.h"
 #include <bcos-utilities/Error.h>
 #include <functional>
 
-namespace bcos
-{
-namespace sealer
+
+namespace bcos::sealer
 {
 class SealerInterface
 {
@@ -56,5 +56,4 @@ public:
         throw std::runtime_error("Unimplemented!");
     }
 };
-}  // namespace sealer
-}  // namespace bcos
+}  // namespace bcos::sealer
