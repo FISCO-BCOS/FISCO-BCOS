@@ -50,7 +50,6 @@ public:
 
     const bcostars::TransactionMetaData& inner() const;
     bcostars::TransactionMetaData& mutableInner();
-    bcostars::TransactionMetaData takeInner();
     void setInner(bcostars::TransactionMetaData inner);
 
 private:

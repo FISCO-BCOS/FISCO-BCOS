@@ -36,8 +36,6 @@ public:
     using Ptr = std::shared_ptr<TransactionSync>;
     explicit TransactionSync(TransactionSyncConfig::Ptr config, bool checkTransactionSignature)
       : TransactionSyncInterface(std::move(config)),
-        m_worker(std::make_shared<ThreadPool>("txsSyncWorker", 4)),
-        m_txsRequester(std::make_shared<ThreadPool>("txsRequester", 4)),
         m_checkTransactionSignature(checkTransactionSignature)
     {
         m_hashImpl = m_config->blockFactory()->cryptoSuite()->hashImpl();
@@ -91,9 +89,6 @@ protected:
         bcos::protocol::Block::Ptr _verifiedProposal = nullptr);
 
 private:
-    ThreadPool::Ptr m_worker;
-    ThreadPool::Ptr m_txsRequester;
-
     bcos::crypto::Hash::Ptr m_hashImpl;
     bcos::crypto::SignatureCrypto::Ptr m_signatureImpl;
 

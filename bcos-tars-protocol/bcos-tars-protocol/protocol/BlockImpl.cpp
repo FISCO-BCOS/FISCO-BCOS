@@ -35,25 +35,26 @@ using namespace bcostars::protocol;
 
 void BlockImpl::decode(bcos::bytesConstRef _data, bool, bool)
 {
-    bcos::concepts::serialize::decode(_data, *m_inner);
+    bcos::concepts::serialize::decode(_data, m_inner);
 }
 
 void BlockImpl::encode(bcos::bytes& _encodeData) const
 {
-    bcos::concepts::serialize::encode(*m_inner, _encodeData);
+    bcos::concepts::serialize::encode(m_inner, _encodeData);
 }
 
 bcos::protocol::BlockHeader::Ptr BlockImpl::blockHeader()
 {
-    bcos::ReadGuard lock(x_blockHeader);
     return std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [inner = this->m_inner]() mutable { return &inner->blockHeader; });
+        [self = shared_from_this()]() mutable {
+            return std::addressof(self->m_inner.blockHeader);
+        });
 }
 
 bcos::protocol::BlockHeader::ConstPtr BlockImpl::blockHeaderConst() const
 {
     return std::make_shared<const bcostars::protocol::BlockHeaderImpl>(
-        [inner = this->m_inner]() { return &inner->blockHeader; });
+        [self = shared_from_this()]() { return std::addressof(self->m_inner.blockHeader); });
 }
 
 bcos::protocol::Transaction::ConstPtr BlockImpl::transaction(uint64_t _index) const
@@ -62,8 +63,8 @@ bcos::protocol::Transaction::ConstPtr BlockImpl::transaction(uint64_t _index) co
     static std::pmr::polymorphic_allocator<const bcostars::protocol::TransactionImpl> alloc(
         &transactionPool);
 
-    return std::allocate_shared<const bcostars::protocol::TransactionImpl>(
-        alloc, [inner = m_inner, _index]() { return &(inner->transactions[_index]); });
+    return std::allocate_shared<const bcostars::protocol::TransactionImpl>(alloc,
+        [self = shared_from_this(), _index]() { return &(self->m_inner.transactions[_index]); });
 }
 
 bcos::protocol::TransactionReceipt::ConstPtr BlockImpl::receipt(uint64_t _index) const
@@ -73,44 +74,43 @@ bcos::protocol::TransactionReceipt::ConstPtr BlockImpl::receipt(uint64_t _index)
         &receiptPool);
 
     return std::allocate_shared<const bcostars::protocol::TransactionReceiptImpl>(
-        alloc, [inner = m_inner, _index]() { return &(inner->receipts[_index]); });
+        alloc, [self = shared_from_this(), _index]() { return &(self->m_inner.receipts[_index]); });
 }
 
 void BlockImpl::setBlockHeader(bcos::protocol::BlockHeader::Ptr _blockHeader)
 {
     if (_blockHeader)
     {
-        bcos::WriteGuard l(x_blockHeader);
-        m_inner->blockHeader =
+        m_inner.blockHeader =
             std::dynamic_pointer_cast<bcostars::protocol::BlockHeaderImpl>(_blockHeader)->inner();
     }
 }
 
 void BlockImpl::setReceipt(uint64_t _index, bcos::protocol::TransactionReceipt::Ptr _receipt)
 {
-    if (_index >= m_inner->receipts.size())
+    if (_index >= m_inner.receipts.size())
     {
-        m_inner->receipts.resize(m_inner->transactions.size());
+        m_inner.receipts.resize(m_inner.transactions.size());
     }
     auto innerReceipt =
         std::dynamic_pointer_cast<bcostars::protocol::TransactionReceiptImpl>(_receipt)->inner();
-    m_inner->receipts[_index] = innerReceipt;
+    m_inner.receipts[_index] = innerReceipt;
 }
 
 void BlockImpl::appendReceipt(bcos::protocol::TransactionReceipt::Ptr _receipt)
 {
-    m_inner->receipts.emplace_back(
+    m_inner.receipts.emplace_back(
         std::dynamic_pointer_cast<bcostars::protocol::TransactionReceiptImpl>(_receipt)->inner());
 }
 
 void BlockImpl::setNonceList(RANGES::any_view<std::string> nonces)
 {
-    m_inner->nonceList = ::ranges::to<std::vector>(nonces);
+    m_inner.nonceList = ::ranges::to<std::vector>(nonces);
 }
 
 RANGES::any_view<std::string> BlockImpl::nonceList() const
 {
-    return m_inner->nonceList;
+    return m_inner.nonceList;
 }
 
 bcos::protocol::TransactionMetaData::ConstPtr BlockImpl::transactionMetaData(uint64_t _index) const
@@ -120,12 +120,10 @@ bcos::protocol::TransactionMetaData::ConstPtr BlockImpl::transactionMetaData(uin
         BOOST_THROW_EXCEPTION(std::out_of_range("transactionMetaData index out of range"));
     }
 
-    static std::pmr::synchronized_pool_resource metaDataPool;
-    static std::pmr::polymorphic_allocator<const bcostars::protocol::TransactionMetaDataImpl> alloc(
-        &metaDataPool);
-
-    auto txMetaData = std::allocate_shared<const bcostars::protocol::TransactionMetaDataImpl>(
-        alloc, [inner = m_inner, _index]() { return &inner->transactionsMetaData[_index]; });
+    auto txMetaData = std::make_shared<const bcostars::protocol::TransactionMetaDataImpl>(
+        [self = shared_from_this(), _index]() {
+            return &self->m_inner.transactionsMetaData[_index];
+        });
 
     return txMetaData;
 }
@@ -138,12 +136,14 @@ TransactionMetaDataImpl BlockImpl::transactionMetaDataImpl(uint64_t _index) cons
     }
 
     return bcostars::protocol::TransactionMetaDataImpl(
-        [inner = m_inner, _index]() { return &inner->transactionsMetaData[_index]; });
+        [self = shared_from_this(), _index]() mutable {
+            return std::addressof(self->m_inner.transactionsMetaData[_index]);
+        });
 }
 
 bcos::crypto::HashType bcostars::protocol::BlockImpl::transactionHash(uint64_t _index) const
 {
-    const auto& hashBytes = m_inner->transactionsMetaData[_index].hash;
+    const auto& hashBytes = m_inner.transactionsMetaData[_index].hash;
     return bcos::crypto::HashType{
         bcos::bytesConstRef((const bcos::byte*)hashBytes.data(), hashBytes.size())};
 }
@@ -152,47 +152,48 @@ void BlockImpl::appendTransactionMetaData(bcos::protocol::TransactionMetaData::P
 {
     auto txMetaDataImpl =
         std::dynamic_pointer_cast<bcostars::protocol::TransactionMetaDataImpl>(_txMetaData);
-    m_inner->transactionsMetaData.emplace_back(txMetaDataImpl->inner());
+    m_inner.transactionsMetaData.emplace_back(txMetaDataImpl->inner());
 }
 
 uint64_t BlockImpl::transactionsMetaDataSize() const
 {
-    return m_inner->transactionsMetaData.size();
+    return m_inner.transactionsMetaData.size();
 }
 bcos::protocol::BlockType bcostars::protocol::BlockImpl::blockType() const
 {
-    return (bcos::protocol::BlockType)m_inner->type;
+    return (bcos::protocol::BlockType)m_inner.type;
 }
 void bcostars::protocol::BlockImpl::setBlockType(bcos::protocol::BlockType _blockType)
 {
-    m_inner->type = (int32_t)_blockType;
+    m_inner.type = (int32_t)_blockType;
 }
 void bcostars::protocol::BlockImpl::setTransaction(
     uint64_t _index, bcos::protocol::Transaction::Ptr _transaction)
 {
-    m_inner->transactions[_index] =
+    m_inner.transactions[_index] =
         std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(_transaction)->inner();
 }
 void bcostars::protocol::BlockImpl::appendTransaction(bcos::protocol::Transaction::Ptr _transaction)
 {
-    m_inner->transactions.emplace_back(
+    m_inner.transactions.emplace_back(
         std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(_transaction)->inner());
 }
 uint64_t bcostars::protocol::BlockImpl::transactionsSize() const
 {
-    return m_inner->transactions.size();
+    return m_inner.transactions.size();
 }
+
 uint64_t bcostars::protocol::BlockImpl::receiptsSize() const
 {
-    return m_inner->receipts.size();
+    return m_inner.receipts.size();
 }
 const bcostars::Block& bcostars::protocol::BlockImpl::inner() const
 {
-    return *m_inner;
+    return m_inner;
 }
 void bcostars::protocol::BlockImpl::setInner(bcostars::Block inner)
 {
-    *m_inner = std::move(inner);
+    m_inner = std::move(inner);
 }
 bcos::crypto::HashType bcostars::protocol::BlockImpl::calculateTransactionRoot(
     const bcos::crypto::Hash& hashImpl) const
@@ -208,24 +209,24 @@ bcos::crypto::HashType bcostars::protocol::BlockImpl::calculateTransactionRoot(
     if (transactionsSize() > 0)
     {
         auto hashesRange =
-            m_inner->transactions |
+            m_inner.transactions |
             RANGES::views::transform([&](const bcostars::Transaction& transaction) {
                 bcos::bytes hash;
                 bcos::concepts::hash::calculate(transaction, hashImpl.hasher(), hash);
                 return hash;
             });
-        merkle.generateMerkle(hashesRange, m_inner->transactionsMerkle);
+        merkle.generateMerkle(hashesRange, m_inner.transactionsMerkle);
     }
     else if (transactionsMetaDataSize() > 0)
     {
         auto hashesRange =
-            m_inner->transactionsMetaData |
+            m_inner.transactionsMetaData |
             RANGES::views::transform([](const bcostars::TransactionMetaData& transactionMetaData) {
                 return transactionMetaData.hash;
             });
-        merkle.generateMerkle(hashesRange, m_inner->transactionsMerkle);
+        merkle.generateMerkle(hashesRange, m_inner.transactionsMerkle);
     }
-    bcos::concepts::bytebuffer::assignTo(*RANGES::rbegin(m_inner->transactionsMerkle), txsRoot);
+    bcos::concepts::bytebuffer::assignTo(*RANGES::rbegin(m_inner.transactionsMerkle), txsRoot);
 
     return txsRoot;
 }
@@ -238,15 +239,48 @@ bcos::crypto::HashType bcostars::protocol::BlockImpl::calculateReceiptRoot(
     {
         return receiptsRoot;
     }
-    auto hashesRange = m_inner->receipts |
+    auto hashesRange = m_inner.receipts |
                        RANGES::views::transform([&](const bcostars::TransactionReceipt& receipt) {
                            bcos::bytes hash;
                            bcos::concepts::hash::calculate(receipt, hashImpl.hasher(), hash);
                            return hash;
                        });
     bcos::crypto::merkle::Merkle merkle(hashImpl.hasher());
-    merkle.generateMerkle(hashesRange, m_inner->receiptsMerkle);
-    bcos::concepts::bytebuffer::assignTo(*RANGES::rbegin(m_inner->receiptsMerkle), receiptsRoot);
+    merkle.generateMerkle(hashesRange, m_inner.receiptsMerkle);
+    bcos::concepts::bytebuffer::assignTo(*RANGES::rbegin(m_inner.receiptsMerkle), receiptsRoot);
 
     return receiptsRoot;
+}
+
+bcos::protocol::ViewResult<bcos::crypto::HashType>
+bcostars::protocol::BlockImpl::transactionHashes() const
+{
+    return ::ranges::views::transform(m_inner.transactionsMetaData, [](auto& txMetaData) {
+        return bcos::crypto::HashType{
+            bcos::bytesConstRef((const bcos::byte*)txMetaData.hash.data(), txMetaData.hash.size())};
+    });
+}
+bcos::protocol::ViewResult<std::unique_ptr<bcos::protocol::TransactionMetaData>>
+bcostars::protocol::BlockImpl::transactionMetaDatas() const
+{
+    return ::ranges::views::transform(m_inner.transactionsMetaData, [](auto& inner) {
+        return std::make_unique<bcostars::protocol::TransactionMetaDataImpl>(
+            [&]() mutable { return &inner; });
+    });
+}
+bcos::protocol::ViewResult<std::unique_ptr<bcos::protocol::Transaction>>
+bcostars::protocol::BlockImpl::transactions() const
+{
+    return ::ranges::views::transform(m_inner.transactions, [](auto& inner) {
+        return std::make_unique<bcostars::protocol::TransactionImpl>(
+            [&]() mutable { return &inner; });
+    });
+}
+bcos::protocol::ViewResult<std::unique_ptr<bcos::protocol::TransactionReceipt>>
+bcostars::protocol::BlockImpl::receipts() const
+{
+    return ::ranges::views::transform(m_inner.receipts, [](auto& receipt) {
+        return std::make_unique<TransactionReceiptImpl>(
+            [&]() mutable { return std::addressof(receipt); });
+    });
 }

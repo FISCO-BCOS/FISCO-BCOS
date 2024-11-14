@@ -218,7 +218,6 @@ protected:
     // mainly maintains the node information, consensus configuration information
     // such as consensus node list, consensus weight, etc.
     std::shared_ptr<PBFTConfig> m_config;
-    ThreadPool::Ptr m_worker;
 
     // PBFT message cache queue
     PBFTMsgQueuePtr m_msgQueue;

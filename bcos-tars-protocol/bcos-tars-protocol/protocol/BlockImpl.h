@@ -39,19 +39,19 @@ namespace bcostars::protocol
 class BlockImpl : public bcos::protocol::Block, public std::enable_shared_from_this<BlockImpl>
 {
 public:
-    BlockImpl() : m_inner(std::make_shared<bcostars::Block>()) {}
+    BlockImpl() = default;
     BlockImpl(const BlockImpl&) = delete;
     BlockImpl(BlockImpl&&) = delete;
     BlockImpl& operator=(const BlockImpl&) = delete;
     BlockImpl& operator=(BlockImpl&&) = delete;
-    BlockImpl(bcostars::Block _block) : BlockImpl() { *m_inner = std::move(_block); }
+    explicit BlockImpl(bcostars::Block _block) : BlockImpl() { m_inner = std::move(_block); }
     ~BlockImpl() noexcept override = default;
 
     void decode(bcos::bytesConstRef _data, bool _calculateHash, bool _checkSig) override;
     void encode(bcos::bytes& _encodeData) const override;
 
-    int32_t version() const override { return m_inner->blockHeader.data.version; }
-    void setVersion(int32_t _version) override { m_inner->blockHeader.data.version = _version; }
+    int32_t version() const override { return m_inner.blockHeader.data.version; }
+    void setVersion(int32_t _version) override { m_inner.blockHeader.data.version = _version; }
 
     bcos::protocol::BlockType blockType() const override;
     // FIXME: this will cause the same blockHeader calculate hash multiple times
@@ -97,8 +97,15 @@ public:
 
     bcos::crypto::HashType calculateReceiptRoot(const bcos::crypto::Hash& hashImpl) const override;
 
+    bcos::protocol::ViewResult<bcos::crypto::HashType> transactionHashes() const override;
+    bcos::protocol::ViewResult<std::unique_ptr<bcos::protocol::TransactionMetaData>>
+    transactionMetaDatas() const override;
+    bcos::protocol::ViewResult<std::unique_ptr<bcos::protocol::Transaction>> transactions()
+        const override;
+    bcos::protocol::ViewResult<std::unique_ptr<bcos::protocol::TransactionReceipt>> receipts()
+        const override;
+
 private:
-    std::shared_ptr<bcostars::Block> m_inner;
-    mutable bcos::SharedMutex x_blockHeader;
+    mutable bcostars::Block m_inner;
 };
 }  // namespace bcostars::protocol
