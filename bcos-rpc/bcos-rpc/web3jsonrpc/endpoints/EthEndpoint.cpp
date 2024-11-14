@@ -127,7 +127,7 @@ task::Task<void> EthEndpoint::gasPrice(const Json::Value&, Json::Value& response
     }
     else
     {
-        result = "0x5208";  // 21000
+        result = "0x0";
     }
     buildJsonContent(result, response);
     co_return;
