@@ -19,97 +19,54 @@
  * @date 2021-04-26
  */
 #pragma once
-#include "BoostLog.h"
-#include "Common.h"
 #include <boost/asio.hpp>
+#include <boost/asio/io_service.hpp>
 #include <boost/asio/steady_timer.hpp>
+#include <utility>
 
 namespace bcos
 {
 class Timer : public std::enable_shared_from_this<Timer>
 {
 public:
-    explicit Timer(uint64_t _timeout, std::string const& _threadName = "timer")
-      : m_timeout(_timeout),
-        m_ioService(std::make_shared<boost::asio::io_service>()),
-        m_timer(std::make_shared<boost::asio::steady_timer>(*m_ioService)),
-        m_work(*m_ioService),
-        m_threadName(_threadName)
-    {
-        m_working = true;
-        m_worker.reset(new std::thread([&]() {
-            bcos::pthread_setThreadName(m_threadName);
-            while (m_working)
-            {
-                try
-                {
-                    m_ioService->run();
-                }
-                catch (std::exception const& e)
-                {
-                    BCOS_LOG(WARNING) << LOG_DESC("Exception in Worker Thread of timer")
-                                      << LOG_KV("message", boost::diagnostic_information(e));
-                }
-                m_ioService->reset();
-            }
-        }));
-    }
+    Timer(std::shared_ptr<boost::asio::io_service> ioService, uint64_t timeout,
+        std::string threadName);
+    Timer(uint64_t _timeout, std::string _threadName);
 
-    virtual ~Timer() { destroy(); }
+    virtual ~Timer() noexcept;
 
     virtual void destroy();
     virtual void start();
     virtual void stop();
-    virtual void restart()
-    {
-        if (!m_working)
-        {
-            return;
-        }
-        stop();
-        start();
-    }
+    virtual void restart();
 
-    virtual void reset(uint64_t _timeout)
-    {
-        m_timeout = _timeout;
-        restart();
-    }
+    virtual void reset(uint64_t _timeout);
 
-    virtual bool running() { return m_running; }
-    virtual int64_t timeout() { return m_timeout; }
+    virtual bool running();
+    virtual int64_t timeout();
 
-    virtual void registerTimeoutHandler(std::function<void()> _timeoutHandler)
-    {
-        m_timeoutHandler = _timeoutHandler;
-    }
+    virtual void registerTimeoutHandler(std::function<void()> _timeoutHandler);
 
 protected:
     virtual void startTimer();
 
     // invoked everytime when it reaches the timeout
-    virtual void run()
-    {
-        if (m_timeoutHandler)
-        {
-            m_timeoutHandler();
-        }
-    }
+    virtual void run();
     // adjust the timeout
-    virtual uint64_t adjustTimeout() { return m_timeout; }
-    std::atomic<uint64_t> m_timeout = {0};
+    virtual uint64_t adjustTimeout();
+    std::atomic<uint64_t> m_timeout = 0;
 
-    std::atomic_bool m_running = {false};
-    std::atomic_bool m_working = {false};
+    std::atomic_bool m_running = false;
+    std::atomic_bool m_working = false;
 
     std::shared_ptr<boost::asio::io_service> m_ioService;
-    std::shared_ptr<boost::asio::steady_timer> m_timer;
+    boost::asio::steady_timer m_timer;
     std::unique_ptr<std::thread> m_worker;
 
     std::function<void()> m_timeoutHandler;
     // m_work ensures that io_service's run() function will not exit while work is underway
-    boost::asio::io_service::work m_work;
-
+    std::optional<boost::asio::io_service::work> m_work;
     std::string m_threadName;
+    bool m_borrowedIoService = false;
 };
 }  // namespace bcos

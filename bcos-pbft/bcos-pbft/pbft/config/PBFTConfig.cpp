@@ -134,7 +134,7 @@ void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
     if (m_syncingState)
     {
         m_syncingState = false;
-        m_timer->start();
+        m_pbftTimer->start();
     }
     // try to notify the sealer module to seal proposals
     if (!m_timeoutState)
@@ -461,7 +461,7 @@ std::string PBFTConfig::printCurrentState()
                  << LOG_KV("consNum", progressedIndex())
                  << LOG_KV("committedHash", committedProposal()->hash().abridged())
                  << LOG_KV("view", view()) << LOG_KV("toView", toView())
-                 << LOG_KV("changeCycle", m_timer->changeCycle())
+                 << LOG_KV("changeCycle", m_pbftTimer->changeCycle())
                  << LOG_KV("expectedCheckPoint", m_expectedCheckPoint) << LOG_KV("Idx", nodeIndex())
                  << LOG_KV("sealUntil", m_waitSealUntil)
                  << LOG_KV("waitResealUntil", m_waitResealUntil)
@@ -477,7 +477,7 @@ std::string PBFTConfig::printCurrentState()
 void PBFTConfig::tryToSyncTxs()
 {
     // only the leader need tryToSyncTxs
-    if (m_timer->running() || getLeader() != nodeIndex())
+    if (m_pbftTimer->running() || getLeader() != nodeIndex())
     {
         return;
     }

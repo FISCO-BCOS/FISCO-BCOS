@@ -72,9 +72,9 @@ protected:
     uint64_t adjustTimeout() override { return m_adjustedTimeout; }
 
 private:
-    std::atomic<uint64_t> m_adjustedTimeout = {0};
-    std::atomic<uint64_t> m_changeCycle = {0};
-    double const m_base = 1.5;
+    std::atomic<uint64_t> m_adjustedTimeout = 0;
+    std::atomic<uint64_t> m_changeCycle = 0;
+    constexpr static double m_base = 1.5;
     uint64_t c_maxChangeCycle = 10;
 };
 }  // namespace bcos::consensus

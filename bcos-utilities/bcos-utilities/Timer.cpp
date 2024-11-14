@@ -19,11 +19,45 @@
  * @date 2021-04-26
  */
 #include "Timer.h"
+#include "BoostLog.h"
 #include "Common.h"
-#include "Log.h"
-#include <iostream>
 
 using namespace bcos;
+
+bcos::Timer::Timer(
+    std::shared_ptr<boost::asio::io_service> ioService, uint64_t timeout, std::string threadName)
+  : m_timeout(timeout),
+    m_ioService(std::move(ioService)),
+    m_timer(*m_ioService),
+    m_threadName(std::move(threadName)),
+    m_borrowedIoService(true)
+{}
+
+bcos::Timer::Timer(uint64_t _timeout, std::string _threadName)
+  : m_timeout(_timeout),
+    m_working(true),
+    m_ioService(std::make_shared<boost::asio::io_service>()),
+    m_timer(*m_ioService),
+    m_work(*m_ioService),
+    m_threadName(std::move(_threadName))
+{
+    m_worker = std::make_unique<std::thread>([&]() {
+        bcos::pthread_setThreadName(m_threadName);
+        while (m_working)
+        {
+            try
+            {
+                m_ioService->run();
+            }
+            catch (std::exception const& e)
+            {
+                BCOS_LOG(WARNING) << LOG_DESC("Exception in Worker Thread of timer")
+                                  << LOG_KV("message", boost::diagnostic_information(e));
+            }
+            m_ioService->reset();
+        }
+    });
+}
 
 void Timer::start()
 {
@@ -44,56 +78,57 @@ void Timer::start()
 
 void Timer::startTimer()
 {
-    if (m_running || !m_timer)
+    bool running = false;
+    if (!m_running.compare_exchange_strong(running, true))
     {
         return;
     }
-    m_timer->expires_from_now(std::chrono::milliseconds(adjustTimeout()));
-    auto timer = std::weak_ptr<Timer>(shared_from_this());
+    m_timer.expires_from_now(std::chrono::milliseconds(adjustTimeout()));
     // calls the timeout handler
-    m_timer->async_wait([timer](const boost::system::error_code& error) {
-        // the timer has been cancelled
-        if (error == boost::asio::error::operation_aborted)
-        {
-            return;
-        }
-        if (error)
-        {
-            BCOS_LOG(WARNING) << LOG_DESC("Timer async_wait error") << LOG_KV("message", error);
-            return;
-        }
-        try
-        {
-            auto t = timer.lock();
-            if (!t)
+    m_timer.async_wait(
+        [timer = std::weak_ptr<Timer>(shared_from_this())](const boost::system::error_code& error) {
+            // the timer has been cancelled
+            if (error == boost::asio::error::operation_aborted)
             {
                 return;
             }
-            t->run();
-        }
-        catch (std::exception const& e)
-        {
-            BCOS_LOG(WARNING) << LOG_DESC("calls timeout handler failed")
-                              << LOG_KV("message", boost::diagnostic_information(e));
-        }
-    });
-    m_running = true;
+            if (error)
+            {
+                BCOS_LOG(WARNING) << LOG_DESC("Timer async_wait error") << LOG_KV("message", error);
+                return;
+            }
+            try
+            {
+                auto t = timer.lock();
+                if (!t)
+                {
+                    return;
+                }
+                t->run();
+            }
+            catch (std::exception const& e)
+            {
+                BCOS_LOG(WARNING) << LOG_DESC("calls timeout handler failed")
+                                  << LOG_KV("message", boost::diagnostic_information(e));
+            }
+        });
 }
 
 // stop the timer
 void Timer::stop()
 {
-    if (!m_working || !m_timer)
+    bool working = true;
+    if (!m_working.compare_exchange_strong(working, false))
     {
         return;
     }
-    if (!m_running)
+    bool running = true;
+    if (!m_running.compare_exchange_strong(running, false))
     {
         return;
     }
-    m_running = false;
     // cancel the timer
-    m_timer->cancel();
+    m_timer.cancel();
 }
 
 void Timer::destroy()
@@ -102,16 +137,59 @@ void Timer::destroy()
     {
         return;
     }
-    m_working = false;
     stop();
-    m_ioService->stop();
-    if (m_worker->get_id() != std::this_thread::get_id())
+    if (!m_borrowedIoService)
     {
-        m_worker->join();
-        m_worker.reset();
+        m_ioService->stop();
+        if (m_worker->get_id() != std::this_thread::get_id())
+        {
+            m_worker->join();
+            m_worker.reset();
+        }
+        else
+        {
+            m_worker->detach();
+        }
     }
-    else
+}
+bcos::Timer::~Timer() noexcept
+{
+    destroy();
+}
+void bcos::Timer::restart()
+{
+    if (!m_working)
     {
-        m_worker->detach();
+        return;
     }
+    stop();
+    start();
+}
+void bcos::Timer::reset(uint64_t _timeout)
+{
+    m_timeout = _timeout;
+    restart();
+}
+bool bcos::Timer::running()
+{
+    return m_running;
+}
+int64_t bcos::Timer::timeout()
+{
+    return m_timeout;
+}
+void bcos::Timer::registerTimeoutHandler(std::function<void()> _timeoutHandler)
+{
+    m_timeoutHandler = std::move(_timeoutHandler);
+}
+void bcos::Timer::run()
+{
+    if (m_timeoutHandler)
+    {
+        m_timeoutHandler();
+    }
+}
+uint64_t bcos::Timer::adjustTimeout()
+{
+    return m_timeout;
 }

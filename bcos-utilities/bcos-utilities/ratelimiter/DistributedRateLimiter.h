@@ -22,9 +22,9 @@
 
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Timer.h"
-#include <bcos-utilities/ratelimiter/RateLimiterInterface.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/ObjectCounter.h>
+#include <bcos-utilities/ratelimiter/RateLimiterInterface.h>
 #include <sw/redis++/redis++.h>
 #include <mutex>
 
@@ -61,13 +61,13 @@ public:
     {
         if (m_enableLocalCache)
         {
-            m_clearCacheTimer = std::make_shared<Timer>(toMillisecond(_intervalSec));
+            m_clearCacheTimer = std::make_shared<Timer>(toMillisecond(_intervalSec), "clearRate");
             m_clearCacheTimer->registerTimeoutHandler([this]() { refreshLocalCache(); });
             m_clearCacheTimer->start();
         }
 
         // TODO: add switch
-        m_statTimer = std::make_shared<Timer>(60000);
+        m_statTimer = std::make_shared<Timer>(60000, "rate");
         m_statTimer->registerTimeoutHandler([this]() { stat(); });
         m_statTimer->start();
     }
