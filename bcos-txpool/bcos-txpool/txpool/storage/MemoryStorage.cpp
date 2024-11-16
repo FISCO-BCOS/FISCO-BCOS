@@ -379,8 +379,6 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
 TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
     Transaction::Ptr transaction, TxSubmitCallback txSubmitCallback, bool checkPoolLimit, bool lock)
 {
-    size_t txsSize = m_txsTable.size();
-
     auto result = txpoolStorageCheck(*transaction, txSubmitCallback);
     if (result == TransactionStatus::AlreadyInTxPoolAndAccept) [[unlikely]]
     {
@@ -395,16 +393,16 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
     }
 
     // start stat the tps when receive first new tx from the sdk
-    if (m_tpsStatstartTime == 0 && txsSize == 0)
+    if (m_tpsStatstartTime == 0)
     {
         m_tpsStatstartTime = utcTime();
     }
     // Note: In order to ensure that transactions can reach all nodes, transactions from P2P are not
     // restricted
-    if (checkPoolLimit && txsSize >= m_config->poolLimit())
-    {
-        return TransactionStatus::TxPoolIsFull;
-    }
+    // if (checkPoolLimit && txsSize >= m_config->poolLimit())
+    // {
+    //     return TransactionStatus::TxPoolIsFull;
+    // }
 
     // verify the transaction
     if (m_config->checkTransactionSignature())
