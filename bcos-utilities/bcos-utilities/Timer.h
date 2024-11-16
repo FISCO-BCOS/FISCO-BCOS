@@ -60,13 +60,13 @@ protected:
     std::atomic_bool m_working = false;
 
     std::shared_ptr<boost::asio::io_service> m_ioService;
+    std::optional<boost::asio::io_service::work> m_work;
     boost::asio::steady_timer m_timer;
+    std::string m_threadName;
     std::unique_ptr<std::thread> m_worker;
 
     std::function<void()> m_timeoutHandler;
     // m_work ensures that io_service's run() function will not exit while work is underway
-    std::optional<boost::asio::io_service::work> m_work;
-    std::string m_threadName;
     bool m_borrowedIoService = false;
 };
 }  // namespace bcos

@@ -67,7 +67,7 @@ bool SealingManager::shouldGenerateProposal()
 
 void SealingManager::clearPendingTxs()
 {
-    UpgradableGuard l(x_pendingTxs);
+    UpgradableGuard lock(x_pendingTxs);
     auto pendingTxsSize = m_pendingTxs.size() + m_pendingSysTxs.size();
     if (pendingTxsSize == 0)
     {
@@ -95,7 +95,7 @@ void SealingManager::clearPendingTxs()
         SEAL_LOG(WARNING) << LOG_DESC("clearPendingTxs: return back the unhandled txs exception")
                           << LOG_KV("message", boost::diagnostic_information(e));
     }
-    UpgradeGuard ul(l);
+    UpgradeGuard ul(lock);
     m_pendingTxs.clear();
     m_pendingSysTxs.clear();
 }
@@ -245,14 +245,14 @@ int64_t SealingManager::txsSizeExpectedToFetch()
 void SealingManager::fetchTransactions()
 {
     // fetching transactions currently
-    if (bool fetchingTxs = false; !m_fetchingTxs.compare_exchange_strong(fetchingTxs, true))
+    auto lock = std::unique_lock{m_fetchingTxsMutex, std::try_to_lock};
+    if (!lock.owns_lock())
     {
         return;
     }
     // no need to sealing
     if (m_sealingNumber < m_startSealingNumber || m_sealingNumber > m_endSealingNumber)
     {
-        m_fetchingTxs = false;
         return;
     }
 
@@ -265,15 +265,14 @@ void SealingManager::fetchTransactions()
     ssize_t startSealingNumber = m_startSealingNumber;
     ssize_t endSealingNumber = m_endSealingNumber;
     m_config->txpool()->asyncSealTxs(txsToFetch, nullptr,
-        [self = weak_from_this(), startSealingNumber, endSealingNumber](
+        [self = weak_from_this(), startSealingNumber, endSealingNumber,
+            lock = std::make_shared<decltype(lock)>(std::move(lock))](
             Error::Ptr _error, Block::Ptr _txsHashList, Block::Ptr _sysTxsList) {
             try
             {
-                bool fetchingTxs = true;
                 auto sealingMgr = self.lock();
                 if (!sealingMgr)
                 {
-                    assert(sealingMgr->m_fetchingTxs.compare_exchange_strong(fetchingTxs, false));
                     return;
                 }
 
@@ -281,7 +280,6 @@ void SealingManager::fetchTransactions()
                     _sysTxsList->transactionsHashSize() == 0)
                 {
                     SEAL_LOG(INFO) << LOG_DESC("Got no transactions from txpool");
-                    assert(sealingMgr->m_fetchingTxs.compare_exchange_strong(fetchingTxs, false));
                     return;
                 }
                 if (_error != nullptr)
@@ -289,7 +287,6 @@ void SealingManager::fetchTransactions()
                     SEAL_LOG(WARNING) << LOG_DESC("fetchTransactions exception")
                                       << LOG_KV("returnCode", _error->errorCode())
                                       << LOG_KV("returnMsg", _error->errorMessage());
-                    assert(sealingMgr->m_fetchingTxs.compare_exchange_strong(fetchingTxs, false));
                     return;
                 }
                 bool abort = true;
@@ -310,7 +307,6 @@ void SealingManager::fetchTransactions()
                     sealingMgr->notifyResetProposal(*_sysTxsList);
                 }
 
-                assert(sealingMgr->m_fetchingTxs.compare_exchange_strong(fetchingTxs, false));
                 sealingMgr->m_onReady();
                 SEAL_LOG(DEBUG) << LOG_DESC("fetchTransactions finish")
                                 << LOG_KV("txsSize", _txsHashList->transactionsMetaDataSize())

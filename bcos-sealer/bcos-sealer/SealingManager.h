@@ -97,8 +97,7 @@ private:
     std::atomic<int64_t> m_waitUntil = {0};
 
     bcos::CallbackCollectionHandler<> m_onReady;
-
-    std::atomic_bool m_fetchingTxs = {false};
+    std::mutex m_fetchingTxsMutex;
 
     std::atomic<ssize_t> m_latestNumber = {0};
     bcos::crypto::HashType m_latestHash;

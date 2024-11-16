@@ -38,7 +38,9 @@ bcos::Timer::Timer(int64_t _timeout, std::string _threadName)
   : m_timeout(_timeout),
     m_working(true),
     m_ioService(std::make_shared<boost::asio::io_service>()),
+    m_work(*m_ioService),
     m_timer(*m_ioService),
+    m_threadName(std::move(_threadName)),
     m_worker(std::make_unique<std::thread>([&]() {
         bcos::pthread_setThreadName(m_threadName);
         while (m_working)
@@ -54,9 +56,7 @@ bcos::Timer::Timer(int64_t _timeout, std::string _threadName)
             }
             m_ioService->reset();
         }
-    })),
-    m_work(*m_ioService),
-    m_threadName(std::move(_threadName))
+    }))
 {}
 
 void Timer::start()
