@@ -80,6 +80,7 @@ public:
 
     // FIXME: deprecated, after using txpool::broadcastTransaction
     bcos::protocol::ConstTransactionsPtr fetchNewTxs(size_t _txsLimit) override;
+
     void batchFetchTxs(bcos::protocol::Block::Ptr _txsList, bcos::protocol::Block::Ptr _sysTxsList,
         size_t _txsLimit, TxsHashSetPtr _avoidTxs, bool _avoidDuplicate = true) override;
 

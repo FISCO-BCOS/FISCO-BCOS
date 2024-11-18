@@ -737,7 +737,7 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
 ConstTransactionsPtr MemoryStorage::fetchTxs(HashList& _missedTxs, HashList const& _txs)
 {
     ittapi::Report report(
-        ittapi::ITT_DOMAINS::instance().TXPOOL, ittapi::ITT_DOMAINS::instance().BATCH_FETCH_TXS);
+        ittapi::ITT_DOMAINS::instance().TXPOOL, ittapi::ITT_DOMAINS::instance().FETCH_TXS);
 
     auto fetchedTxs = std::make_shared<ConstTransactions>();
     _missedTxs.clear();
@@ -790,6 +790,8 @@ ConstTransactionsPtr MemoryStorage::fetchNewTxs(size_t _txsLimit)
 void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, size_t _txsLimit,
     TxsHashSetPtr _avoidTxs, bool _avoidDuplicate)
 {
+    ittapi::Report report(
+        ittapi::ITT_DOMAINS::instance().TXPOOL, ittapi::ITT_DOMAINS::instance().BATCH_FETCH_TXS);
     TXPOOL_LOG(INFO) << LOG_DESC("begin batchFetchTxs") << LOG_KV("pendingTxs", m_txsTable.size())
                      << LOG_KV("limit", _txsLimit);
     auto blockFactory = m_config->blockFactory();
