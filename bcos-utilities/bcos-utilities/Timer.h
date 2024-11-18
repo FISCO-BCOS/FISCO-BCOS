@@ -35,19 +35,20 @@ public:
 
     virtual ~Timer() noexcept;
 
-    virtual void destroy();
-    virtual void start();
-    virtual void stop();
-    virtual void restart();
+    void destroy();
+    void start();
+    void stop();
+    void restart();
 
     virtual void reset(int64_t _timeout);
 
     virtual bool running();
-    virtual int64_t timeout();
+    int64_t timeout();
+    void setTimeout(int64_t timeout);
 
     virtual void registerTimeoutHandler(std::function<void()> _timeoutHandler);
 
-protected:
+private:
     virtual void startTimer();
 
     // invoked everytime when it reaches the timeout

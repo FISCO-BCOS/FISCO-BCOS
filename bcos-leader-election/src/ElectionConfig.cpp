@@ -19,6 +19,7 @@
  * @date 2022-04-26
  */
 #include "ElectionConfig.h"
+#include "bcos-utilities/BoostLog.h"
 
 using namespace bcos;
 using namespace bcos::election;
@@ -30,7 +31,7 @@ void ElectionConfig::start()
     {
         return;
     }
-    m_watcherTimer = std::make_shared<Timer>(5000);
+    m_watcherTimer = std::make_shared<Timer>(5000, "watchTimer");
     auto self = std::weak_ptr<ElectionConfig>(shared_from_this());
     m_watcherTimer->registerTimeoutHandler([self]() {
         auto config = self.lock();

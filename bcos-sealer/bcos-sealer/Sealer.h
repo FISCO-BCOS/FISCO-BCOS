@@ -73,7 +73,6 @@ protected:
 
     virtual void submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _proposal);
 
-protected:
     SealerConfig::Ptr m_sealerConfig;
     SealingManager::Ptr m_sealingManager;
     std::atomic_bool m_running = {false};

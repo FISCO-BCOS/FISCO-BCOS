@@ -185,3 +185,7 @@ uint64_t bcos::Timer::adjustTimeout()
 {
     return m_timeout;
 }
+void bcos::Timer::setTimeout(int64_t timeout)
+{
+    m_timeout = timeout;
+}
