@@ -379,6 +379,8 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
 TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
     Transaction::Ptr transaction, TxSubmitCallback txSubmitCallback, bool checkPoolLimit, bool lock)
 {
+    ittapi::Report report(
+        ittapi::ITT_DOMAINS::instance().TXPOOL, ittapi::ITT_DOMAINS::instance().SUBMIT_TX);
     auto result = txpoolStorageCheck(*transaction, txSubmitCallback);
     if (result == TransactionStatus::AlreadyInTxPoolAndAccept) [[unlikely]]
     {

@@ -57,12 +57,13 @@ struct ITT_DOMAINS
         return ittDomains;
     }
 
-    ITT_DOMAINS() = default;
-
     const __itt_domain* ITT_DOMAIN_STORAGE = __itt_domain_create("storage");
     const __itt_domain* ITT_DOMAIN_CONSENSUS = __itt_domain_create("consensus");
     const __itt_domain* ITT_DOMAIN_SCHEDULER = __itt_domain_create("scheduler");
     const __itt_domain* ITT_DOMAIN_EXECUTOR = __itt_domain_create("executor");
+
+    const __itt_domain* SEALER = __itt_domain_create("sealer");
+    __itt_string_handle* SUBMIT_PROPOSAL = __itt_string_handle_create("submitProposal");
 
     const __itt_domain* TXPOOL = __itt_domain_create("txpool");
     __itt_string_handle* SUBMIT_TX = __itt_string_handle_create("submitTx");

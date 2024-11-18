@@ -119,6 +119,8 @@ void Sealer::executeWorker()
 
 void Sealer::submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _block)
 {
+    ittapi::Report report(
+        ittapi::ITT_DOMAINS::instance().SEALER, ittapi::ITT_DOMAINS::instance().SUBMIT_PROPOSAL);
     // Note: the block maybe empty
     if (!_block)
     {

@@ -20,7 +20,6 @@
  */
 #pragma once
 #include "TxPoolConfig.h"
-#include "bcos-framework/front/FrontServiceInterface.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/TransactionFactory.h"
