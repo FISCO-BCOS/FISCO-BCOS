@@ -34,7 +34,7 @@ namespace test
 class FakeTimer : public Timer
 {
 public:
-    explicit FakeTimer(uint64_t _timeout) : Timer(_timeout) {}
+    explicit FakeTimer(uint64_t _timeout) : Timer(_timeout, "fake") {}
     ~FakeTimer() override {}
     void setTriggerTimeout(bool _triggerTimeout) { m_triggerTimeout = _triggerTimeout; }
     bool triggerTimeout() { return m_triggerTimeout; }

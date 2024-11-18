@@ -22,15 +22,15 @@
 
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Timer.h"
-#include <bcos-utilities/ratelimiter/RateLimiterInterface.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/ObjectCounter.h>
+#include <bcos-utilities/ratelimiter/RateLimiterInterface.h>
 #include <sw/redis++/redis++.h>
 #include <mutex>
+#include <utility>
 
-namespace bcos
-{
-namespace ratelimiter
+
+namespace bcos::ratelimiter
 {
 
 class DistributedRateLimiter : public RateLimiterInterface,
@@ -45,13 +45,11 @@ public:
     const static std::string LUA_SCRIPT;
     const static int32_t DEFAULT_LOCAL_CACHE_PERCENT = 15;
 
-public:
-    DistributedRateLimiter(std::shared_ptr<sw::redis::Redis>& _redis,
-        const std::string& _rateLimiterKey, int64_t _maxPermitsSize,
-        bool _allowExceedMaxPermitSize = false, int32_t _intervalSec = 1,
+    DistributedRateLimiter(std::shared_ptr<sw::redis::Redis>& _redis, std::string _rateLimiterKey,
+        int64_t _maxPermitsSize, bool _allowExceedMaxPermitSize = false, int32_t _intervalSec = 1,
         bool _enableLocalCache = true, int32_t _localCachePercent = DEFAULT_LOCAL_CACHE_PERCENT)
       : m_redis(_redis),
-        m_rateLimiterKey(_rateLimiterKey),
+        m_rateLimiterKey(std::move(_rateLimiterKey)),
         m_maxPermitsSize(_maxPermitsSize),
         m_allowExceedMaxPermitSize(_allowExceedMaxPermitSize),
         m_intervalSec(_intervalSec),
@@ -61,13 +59,13 @@ public:
     {
         if (m_enableLocalCache)
         {
-            m_clearCacheTimer = std::make_shared<Timer>(toMillisecond(_intervalSec));
+            m_clearCacheTimer = std::make_shared<Timer>(toMillisecond(_intervalSec), "clearTimer");
             m_clearCacheTimer->registerTimeoutHandler([this]() { refreshLocalCache(); });
             m_clearCacheTimer->start();
         }
 
         // TODO: add switch
-        m_statTimer = std::make_shared<Timer>(60000);
+        m_statTimer = std::make_shared<Timer>(60000, "statTimer");
         m_statTimer->registerTimeoutHandler([this]() { stat(); });
         m_statTimer->start();
     }
@@ -237,5 +235,4 @@ private:
     std::shared_ptr<bcos::Timer> m_statTimer = nullptr;
 };
 
-}  // namespace ratelimiter
-}  // namespace bcos
+}  // namespace bcos::ratelimiter
