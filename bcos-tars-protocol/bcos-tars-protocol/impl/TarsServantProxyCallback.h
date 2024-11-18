@@ -143,7 +143,7 @@ public:
         if (m_keepAlive > 0)
         {
             // for heartbeat
-            m_heartbeat = std::make_shared<bcos::Timer>(m_keepAlive);
+            m_heartbeat = std::make_shared<bcos::Timer>(m_keepAlive, "heartTimer");
             m_heartbeat->registerTimeoutHandler([this]() {
                 heartbeat();
                 m_heartbeat->restart();
