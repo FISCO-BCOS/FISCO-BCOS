@@ -111,7 +111,7 @@ void Sealer::executeWorker()
     {
         ///< 10 milliseconds to next loop
         boost::unique_lock<boost::mutex> l(x_signalled);
-        m_signalled.wait_for(l, boost::chrono::milliseconds(100));
+        m_signalled.wait_for(l, boost::chrono::milliseconds(1));
     }
     // try to fetch transactions
     m_sealingManager->fetchTransactions();
