@@ -57,10 +57,6 @@ public:
     bcostars::Error asyncGetSyncInfo(
         std::string& _syncInfo, tars::TarsCurrentPtr _current) override;
 
-    // Note: since the sealer is integrated with the PBFT, this interfaces is useless now
-    bcostars::Error asyncNoteUnSealedTxsSize(
-        tars::Int64 _unsealedTxsSize, tars::TarsCurrentPtr _current) override;
-
     bcostars::Error asyncNotifyConsensusMessage(std::string const& _uuid,
         const vector<tars::Char>& _nodeId, const vector<tars::Char>& _data,
         tars::TarsCurrentPtr _current) override;

@@ -80,6 +80,7 @@ public:
 
     // FIXME: deprecated, after using txpool::broadcastTransaction
     bcos::protocol::ConstTransactionsPtr fetchNewTxs(size_t _txsLimit) override;
+
     void batchFetchTxs(bcos::protocol::Block::Ptr _txsList, bcos::protocol::Block::Ptr _sysTxsList,
         size_t _txsLimit, TxsHashSetPtr _avoidTxs, bool _avoidDuplicate = true) override;
 
@@ -97,8 +98,6 @@ public:
 
     bcos::crypto::HashListPtr getTxsHash(int _limit) override;
     void batchMarkAllTxs(bool _sealFlag) override;
-
-    size_t unSealedTxsSize() override;
 
     void stop() override;
     void start() override;
@@ -126,7 +125,6 @@ protected:
         bcos::protocol::Transaction::Ptr transaction);
     bcos::protocol::TransactionStatus enforceSubmitTransaction(
         bcos::protocol::Transaction::Ptr _tx);
-    size_t unSealedTxsSizeWithoutLock();
     bcos::protocol::TransactionStatus txpoolStorageCheck(
         const bcos::protocol::Transaction& transaction,
         protocol::TxSubmitCallback& txSubmitCallback);
@@ -146,8 +144,6 @@ protected:
         bcos::protocol::TransactionSubmitResult::Ptr txSubmitResult);
 
     virtual void removeInvalidTxs(bool lock);
-
-    virtual void notifyUnsealedTxsSize(size_t _retryTime = 0);
     virtual void cleanUpExpiredTransactions();
 
     // return true if all txs have been marked
@@ -155,7 +151,7 @@ protected:
         bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
         bool _sealFlag);
 
-    virtual void printPendingTxs() override;
+    void printPendingTxs() override;
 
     TxPoolConfig::Ptr m_config;
 

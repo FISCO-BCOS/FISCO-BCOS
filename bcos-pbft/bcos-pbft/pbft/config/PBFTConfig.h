@@ -57,7 +57,7 @@ public:
         m_connectedNodeList(std::make_shared<bcos::crypto::NodeIDSet>()),
         m_blockFactory(std::move(_blockFactory))
     {
-        m_timer = std::make_shared<PBFTTimer>(consensusTimeout(), "pbftTimer");
+        m_pbftTimer = std::make_shared<PBFTTimer>(consensusTimeout(), "pbftTimer");
         // Note: the pullTxsTimeout must be smaller than consensusTimeout to fetch txs before
         // viewchange when there has no-synced txs pullTxsTimeout is larger than 3000ms
         auto pullTxsTimeout = 2000;
@@ -75,9 +75,9 @@ public:
             m_validator->stop();
         }
         // destroy the timer
-        if (m_timer)
+        if (m_pbftTimer)
         {
-            m_timer->destroy();
+            m_pbftTimer->destroy();
         }
         if (m_pullTxsTimer)
         {
@@ -142,12 +142,12 @@ public:
     int64_t lowWaterMark() { return m_lowWaterMark; }
     void setLowWaterMark(bcos::protocol::BlockNumber _index) { m_lowWaterMark = _index; }
 
-    PBFTTimer::Ptr timer() { return m_timer; }
+    PBFTTimer::Ptr timer() { return m_pbftTimer; }
 
     void setConsensusTimeout(uint64_t _consensusTimeout) override
     {
         ConsensusConfig::setConsensusTimeout(_consensusTimeout);
-        m_timer->reset(_consensusTimeout);
+        m_pbftTimer->reset(_consensusTimeout);
     }
 
     void setCommittedProposal(ProposalInterface::Ptr _committedProposal) override
@@ -188,7 +188,7 @@ public:
     void resetToView()
     {
         m_toView.store(m_view);
-        m_timer->resetChangeCycle();
+        m_pbftTimer->resetChangeCycle();
         setTimeoutState(false);
     }
 
@@ -198,7 +198,7 @@ public:
     virtual void reNotifySealer(bcos::protocol::BlockNumber _index);
     virtual bool shouldResetConfig(bcos::protocol::BlockNumber _index)
     {
-        ReadGuard l(x_committedProposal);
+        ReadGuard lock(x_committedProposal);
         if (!m_committedProposal)
         {
             return false;
@@ -258,27 +258,11 @@ public:
         setToView(_view);
         setTimeoutState(false);
     }
-    virtual void setUnSealedTxsSize(size_t _unsealedTxsSize)
-    {
-        m_unsealedTxsSize = _unsealedTxsSize;
-        if (m_unsealedTxsSize > 0 && !m_timer->running())
-        {
-            m_timer->start();
-        }
-    }
 
     virtual void freshTimer()
     {
-        if (m_unsealedTxsSize > 0)
-        {
-            m_timer->restart();
-            m_pullTxsTimer->stop();
-        }
-        else
-        {
-            m_timer->stop();
-            m_pullTxsTimer->restart();
-        }
+        m_pbftTimer->restart();
+        m_pullTxsTimer->restart();
     }
 
     void registerSealProposalNotifier(
@@ -372,20 +356,20 @@ public:
 
     virtual void setConnectedNodeList(bcos::crypto::NodeIDSet&& _connectedNodeList)
     {
-        WriteGuard l(x_connectedNodeList);
+        WriteGuard lock(x_connectedNodeList);
         *m_connectedNodeList = std::move(_connectedNodeList);
         PBFT_LOG(INFO) << LOG_DESC("setConnectedNodeList")
                        << LOG_KV("size", m_connectedNodeList->size());
     }
     virtual void setConnectedNodeList(bcos::crypto::NodeIDSet const& _connectedNodeList)
     {
-        WriteGuard l(x_connectedNodeList);
+        WriteGuard lock(x_connectedNodeList);
         *m_connectedNodeList = _connectedNodeList;
     }
 
     virtual bcos::crypto::NodeIDSet connectedNodeList()
     {
-        ReadGuard l(x_connectedNodeList);
+        ReadGuard lock(x_connectedNodeList);
         return *m_connectedNodeList;
     }
 
@@ -423,8 +407,6 @@ protected:
 
     void tryToSyncTxs();
 
-
-protected:
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
     // Factory for creating PBFT message package
     std::shared_ptr<PBFTMessageFactory> m_pbftMessageFactory;
@@ -437,7 +419,7 @@ protected:
     StateMachineInterface::Ptr m_stateMachine;
     PBFTStorage::Ptr m_storage;
     // Timer, for pbft consensus
-    PBFTTimer::Ptr m_timer;
+    PBFTTimer::Ptr m_pbftTimer;
     // only for pull txs
     //  trigger start: when m_timer.stop() && unsealTxs.size()==0
     //  trigger stop: m_timer.start()
@@ -477,7 +459,6 @@ protected:
     std::atomic_bool m_startRecovered = {false};
     bcos::ledger::ConsensusType m_type = bcos::ledger::ConsensusType::PBFT_TYPE;
 
-    std::atomic<size_t> m_unsealedTxsSize = {0};
     // notify the sealer to reseal new block until m_waitResealUntil stable committed
     std::atomic<bcos::protocol::BlockNumber> m_waitResealUntil = {0};
     // notify the sealer to seal new block until m_waitSealUntil committed

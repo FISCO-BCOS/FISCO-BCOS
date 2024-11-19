@@ -52,8 +52,6 @@ public:
     void asyncNotifySealProposal(uint64_t _proposalStartIndex, uint64_t _proposalEndIndex,
         uint64_t _maxTxsPerBlock, std::function<void(Error::Ptr)> _onRecvResponse) override;
     // hook for txpool, invoke when txpool storage size changed
-    void asyncNoteUnSealedTxsSize(
-        uint64_t _unsealedTxsSize, std::function<void(Error::Ptr)> _onRecvResponse) override;
 
     // for sys block
     void asyncNoteLatestBlockNumber(int64_t _blockNumber) override;
@@ -75,7 +73,6 @@ protected:
 
     virtual void submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _proposal);
 
-protected:
     SealerConfig::Ptr m_sealerConfig;
     SealingManager::Ptr m_sealingManager;
     std::atomic_bool m_running = {false};

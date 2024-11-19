@@ -57,7 +57,7 @@ class PBFTEngine : public ConsensusEngine, public std::enable_shared_from_this<P
 {
 public:
     using Ptr = std::shared_ptr<PBFTEngine>;
-    using SendResponseCallback = std::function<void(bytesConstRef _respData)>;
+    using SendResponseCallback = std::function<void(bytesConstRef)>;
     explicit PBFTEngine(std::shared_ptr<PBFTConfig> _config);
     ~PBFTEngine() override { stop(); }
 

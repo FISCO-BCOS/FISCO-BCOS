@@ -27,14 +27,13 @@
 
 using namespace bcos;
 using namespace bcos::consensus;
-namespace bcos
-{
-namespace test
+
+namespace bcos::test
 {
 class FakeTimer : public Timer
 {
 public:
-    explicit FakeTimer(uint64_t _timeout) : Timer(_timeout, "fake") {}
+    explicit FakeTimer(uint64_t _timeout) : Timer(_timeout, "fakeTimer") {}
     ~FakeTimer() override {}
     void setTriggerTimeout(bool _triggerTimeout) { m_triggerTimeout = _triggerTimeout; }
     bool triggerTimeout() { return m_triggerTimeout; }
@@ -113,5 +112,4 @@ BOOST_AUTO_TEST_CASE(testPBFTTimer)
 }
 
 BOOST_AUTO_TEST_SUITE_END()
-}  // namespace test
-}  // namespace bcos
+}  // namespace bcos::test

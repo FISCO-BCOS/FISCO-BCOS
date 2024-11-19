@@ -51,18 +51,6 @@ Error PBFTServiceServer::asyncGetPBFTView(tars::Int64& _view, tars::TarsCurrentP
     return bcostars::Error();
 }
 
-
-Error PBFTServiceServer::asyncNoteUnSealedTxsSize(
-    tars::Int64 _unsealedTxsSize, tars::TarsCurrentPtr _current)
-{
-    _current->setResponse(false);
-    m_pbftInitializer->sealer()->asyncNoteUnSealedTxsSize(
-        _unsealedTxsSize, [_current](bcos::Error::Ptr _error) {
-            async_response_asyncNoteUnSealedTxsSize(_current, toTarsError(_error));
-        });
-    return bcostars::Error();
-}
-
 Error PBFTServiceServer::asyncNotifyConsensusMessage(std::string const& _uuid,
     const vector<tars::Char>& _nodeId, const vector<tars::Char>& _data,
     tars::TarsCurrentPtr _current)

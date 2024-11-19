@@ -19,12 +19,12 @@
  * @date 2021-05-14
  */
 #pragma once
+#include "bcos-crypto/interfaces/crypto/CommonType.h"
 #include <bcos-utilities/Error.h>
 #include <functional>
 
-namespace bcos
-{
-namespace sealer
+
+namespace bcos::sealer
 {
 class SealerInterface
 {
@@ -39,9 +39,6 @@ public:
     // interface for the transaction module to notify the sealer seal new proposal
     virtual void asyncNotifySealProposal(uint64_t _proposalIndex, uint64_t _proposalEndIndex,
         uint64_t _maxTxsToSeal, std::function<void(Error::Ptr)> onRecvResponse) = 0;
-    // interface to notify the unsealed transactions size to the consensus module
-    virtual void asyncNoteUnSealedTxsSize(
-        uint64_t _unsealedTxsSize, std::function<void(Error::Ptr)> _onRecvResponse) = 0;
 
     // interface for the consensus module to notify the latest block number
     virtual void asyncNoteLatestBlockNumber(int64_t _blockNumber) = 0;
@@ -59,5 +56,4 @@ public:
         throw std::runtime_error("Unimplemented!");
     }
 };
-}  // namespace sealer
-}  // namespace bcos
+}  // namespace bcos::sealer

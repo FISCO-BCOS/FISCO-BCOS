@@ -25,7 +25,6 @@
 #include <bcos-protocol/TransactionStatus.h>
 #include <bcos-task/Task.h>
 #include <bcos-utilities/CallbackCollectionHandler.h>
-
 #include <utility>
 
 namespace bcos::txpool
@@ -86,26 +85,11 @@ public:
     virtual size_t size() const = 0;
     virtual void clear() = 0;
 
-    // Register a handler that will be called once there is a new transaction imported
-    template <class T>
-    bcos::Handler<> onReady(T const& _t)
-    {
-        return m_onReady.add(_t);
-    }
-
     // return true if all txs have been marked
     virtual bool batchMarkTxs(bcos::crypto::HashList const& _txsHashList,
         bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
         bool _sealFlag) = 0;
     virtual void batchMarkAllTxs(bool _sealFlag) = 0;
-
-    virtual size_t unSealedTxsSize() = 0;
-
-    virtual void registerUnsealedTxsNotifier(
-        std::function<void(size_t, std::function<void(Error::Ptr)>)> _unsealedTxsNotifier)
-    {
-        m_unsealedTxsNotifier = std::move(_unsealedTxsNotifier);
-    }
 
     virtual void stop() = 0;
     virtual void start() = 0;
@@ -123,9 +107,6 @@ public:
     }
 
 protected:
-    bcos::CallbackCollectionHandler<> m_onReady;
-    // notify the sealer the latest unsealed txs
-    std::function<void(size_t, std::function<void(Error::Ptr)>)> m_unsealedTxsNotifier;
     // Determine to periodically clean up expired transactions or not
     std::function<bool()> m_txsCleanUpSwitch;
 };

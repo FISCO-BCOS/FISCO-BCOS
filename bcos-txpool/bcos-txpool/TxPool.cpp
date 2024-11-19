@@ -20,7 +20,6 @@
  */
 #include "TxPool.h"
 #include "bcos-framework/ledger/Ledger.h"
-#include "bcos-front/FrontService.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Error.h"
@@ -694,11 +693,7 @@ void bcos::txpool::TxPool::asyncGetPendingTransactionSize(
     auto pendingTxsSize = m_txpoolStorage->size();
     _onGetTxsSize(nullptr, pendingTxsSize);
 }
-void bcos::txpool::TxPool::registerUnsealedTxsNotifier(
-    std::function<void(size_t, std::function<void(Error::Ptr)>)> _unsealedTxsNotifier)
-{
-    m_txpoolStorage->registerUnsealedTxsNotifier(std::move(_unsealedTxsNotifier));
-}
+
 void bcos::txpool::TxPool::setTransactionSync(
     bcos::sync::TransactionSyncInterface::Ptr _transactionSync)
 {
