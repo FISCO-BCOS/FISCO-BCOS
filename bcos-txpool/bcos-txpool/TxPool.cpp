@@ -48,7 +48,6 @@ bcos::txpool::TxPool::TxPool(TxPoolConfig::Ptr config, TxPoolStorageInterface::P
     m_ledger(m_config->ledger())
 {
     m_verifier = std::make_shared<ThreadPool>("verifier", 2);
-    m_sealer = std::make_shared<ThreadPool>("txsSeal", 1);
     // worker to pre-store-txs
     m_txsPreStore = std::make_shared<ThreadPool>("txsPreStore", 1);
     TXPOOL_LOG(INFO) << LOG_DESC("create TxPool") << LOG_KV("submitterNum", verifierWorkerNum);
@@ -78,10 +77,6 @@ void TxPool::stop()
     {
         TXPOOL_LOG(INFO) << LOG_DESC("The txpool has already been stopped!");
         return;
-    }
-    if (m_sealer)
-    {
-        m_sealer->stop();
     }
     if (m_txsPreStore)
     {
@@ -219,22 +214,13 @@ bool TxPool::checkExistsInGroup(TxSubmitCallback _txSubmitCallback)
 void TxPool::asyncSealTxs(uint64_t _txsLimit, TxsHashSetPtr _avoidTxs,
     std::function<void(Error::Ptr, Block::Ptr, Block::Ptr)> _sealCallback)
 {
-    // Note: not block seal new block here
-    auto self = weak_from_this();
-    m_sealer->enqueue([self, this, _txsLimit, _avoidTxs, _sealCallback]() {
-        auto txpool = self.lock();
-        if (!txpool)
-        {
-            return;
-        }
-        auto fetchedTxs = txpool->m_config->blockFactory()->createBlock();
-        auto sysTxs = txpool->m_config->blockFactory()->createBlock();
-        {
-            bcos::WriteGuard guard(x_markTxsMutex);
-            txpool->m_txpoolStorage->batchFetchTxs(fetchedTxs, sysTxs, _txsLimit, _avoidTxs, true);
-        }
-        _sealCallback(nullptr, fetchedTxs, sysTxs);
-    });
+    auto fetchedTxs = m_config->blockFactory()->createBlock();
+    auto sysTxs = m_config->blockFactory()->createBlock();
+    {
+        bcos::WriteGuard guard(x_markTxsMutex);
+        m_txpoolStorage->batchFetchTxs(fetchedTxs, sysTxs, _txsLimit, _avoidTxs, true);
+    }
+    _sealCallback(nullptr, fetchedTxs, sysTxs);
 }
 
 void TxPool::asyncNotifyBlockResult(BlockNumber _blockNumber, TransactionSubmitResultsPtr txsResult,
