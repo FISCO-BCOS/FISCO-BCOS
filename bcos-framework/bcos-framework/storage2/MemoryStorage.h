@@ -2,7 +2,6 @@
 
 #include "Storage.h"
 #include "bcos-task/AwaitableValue.h"
-#include "bcos-task/TBBWait.h"
 #include <oneapi/tbb/null_rw_mutex.h>
 #include <oneapi/tbb/parallel_for.h>
 #include <oneapi/tbb/parallel_sort.h>
@@ -246,7 +245,8 @@ private:
         return result;
     }
 
-    friend auto tag_invoke(storage2::tag_t<randomAccessRange> /*unused*/, MemoryStorage& storage)
+    friend auto tag_invoke(
+        storage2::tag_t<randomAccessRange> /*unused*/, MemoryStorage const& storage)
         requires(!withConcurrent)
     {
         using IteratorValue = std::conditional_t<withLogicalDeletion, const Value*, const Value&>;
@@ -496,8 +496,9 @@ private:
     }
 
     template <class FromStorage>
-        requires HasTag<RandomAccessRange, FromStorage&> && withConcurrent
-    friend void parallelMerge(MemoryStorage& toStorage, FromStorage&& fromStorage)
+        requires HasNormalTag<RandomAccessRange, FromStorage> && withConcurrent
+    friend task::AwaitableValue<void> tag_invoke(
+        storage2::tag_t<merge> /*unused*/, MemoryStorage& toStorage, FromStorage&& fromStorage)
     {
         auto fromRange = storage2::randomAccessRange(fromStorage);
         auto sortedList = ::ranges::views::transform(fromRange, [&](const auto& keyValue) {
@@ -521,10 +522,17 @@ private:
 
                 for (auto& [keyValue, _] : chunk)
                 {
-                    auto& [key, value] = keyValue;
-                    if constexpr (withLogicalDeletion)
+                    auto&& [key, value] = *keyValue;
+                    if constexpr (std::decay_t<FromStorage>::withLogicalDeletion)
                     {
-                        writeOneImpl(toStorage, bucket, key, value ? *value : deleteItem, true);
+                        if (value)
+                        {
+                            writeOneImpl(toStorage, bucket, key, *value, true);
+                        }
+                        else
+                        {
+                            writeOneImpl(toStorage, bucket, key, deleteItem, true);
+                        }
                     }
                     else
                     {
@@ -533,39 +541,7 @@ private:
                 }
             }
         });
-    }
-
-    template <class FromStorage>
-    friend task::Task<void> tag_invoke(
-        storage2::tag_t<merge> /*unused*/, MemoryStorage& toStorage, FromStorage&& fromStorage)
-    {
-        if constexpr (HasTag<RandomAccessRange, FromStorage&> && withConcurrent)
-        {
-            co_await parallelMerge(toStorage, std::forward<FromStorage>(fromStorage));
-        }
-        else
-        {
-            auto iterator = co_await storage2::range(fromStorage);
-            while (auto item = co_await iterator.next())
-            {
-                auto&& [key, value] = *item;
-                if constexpr (std::is_pointer_v<decltype(value)>)
-                {
-                    if (value)
-                    {
-                        co_await storage2::writeOne(toStorage, key, *value);
-                    }
-                    else
-                    {
-                        co_await storage2::removeOne(toStorage, key);
-                    }
-                }
-                else
-                {
-                    co_await storage2::writeOne(toStorage, key, value);
-                }
-            }
-        }
+        return {};
     }
 };
 

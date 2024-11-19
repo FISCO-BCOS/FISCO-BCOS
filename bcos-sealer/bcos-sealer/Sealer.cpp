@@ -104,8 +104,7 @@ void Sealer::executeWorker()
             [this](bcos::protocol::Block::Ptr _block) -> uint16_t {
                 return hookWhenSealBlock(std::move(_block));
             });
-        auto proposal = ret.second;
-        submitProposal(ret.first, proposal);
+        submitProposal(ret.first, ret.second);
     }
     else
     {

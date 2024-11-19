@@ -288,7 +288,7 @@ BOOST_AUTO_TEST_CASE(merge)
             storage2, ::ranges::views::zip(
                           RANGES::iota_view<int, int>(9, 19), RANGES::repeat_view<int>(200)));
 
-        co_await storage2::merge(storage1, storage2);
+        co_await storage2::merge(storage1, std::move(storage2));
         auto values = co_await storage2::range(storage1);
 
         int i = 0;

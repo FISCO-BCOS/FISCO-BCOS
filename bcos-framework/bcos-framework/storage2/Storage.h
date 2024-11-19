@@ -27,6 +27,10 @@ template <class Tag, class Storage, class... Args>
 concept HasTag = requires(Tag tag, Storage storage, Args&&... args) {
     requires task::IsAwaitable<decltype(tag_invoke(tag, storage, std::forward<Args>(args)...))>;
 };
+template <class Tag, class Storage, class... Args>
+concept HasNormalTag = requires(Tag tag, Storage storage, Args&&... args) {
+    requires std::is_object_v<decltype(tag_invoke(tag, storage, std::forward<Args>(args)...))>;
+};
 
 inline constexpr struct ReadSome
 {
