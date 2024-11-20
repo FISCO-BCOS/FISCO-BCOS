@@ -279,7 +279,6 @@ void SealingManager::fetchTransactions()
                 if (_txsHashList->transactionsHashSize() == 0 &&
                     _sysTxsList->transactionsHashSize() == 0)
                 {
-                    SEAL_LOG(INFO) << LOG_DESC("Got no transactions from txpool");
                     return;
                 }
                 if (_error != nullptr)
@@ -335,13 +334,6 @@ void SealingManager::fetchTransactions()
 bcos::sealer::SealingManager::SealingManager(SealerConfig::Ptr _config)
   : m_config(std::move(_config))
 {}
-
-bcos::sealer::SealingManager::~SealingManager()
-{
-    stop();
-}
-
-void bcos::sealer::SealingManager::stop() {}
 
 void bcos::sealer::SealingManager::resetSealingInfo(
     ssize_t _startSealingNumber, ssize_t _endSealingNumber, size_t _maxTxsPerBlock)

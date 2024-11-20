@@ -97,23 +97,28 @@ void Sealer::asyncNoteLatestBlockHash(crypto::HashType _hash)
 
 void Sealer::executeWorker()
 {
-    // try to generateProposal
-    if (m_sealingManager->shouldGenerateProposal())
+    while (m_running)
     {
-        auto ret = m_sealingManager->generateProposal(
-            [this](bcos::protocol::Block::Ptr _block) -> uint16_t {
-                return hookWhenSealBlock(std::move(_block));
-            });
-        submitProposal(ret.first, ret.second);
+        // try to fetch transactions
+        m_sealingManager->fetchTransactions();
+
+        // try to generateProposal
+        if (m_sealingManager->shouldGenerateProposal())
+        {
+            auto ret = m_sealingManager->generateProposal(
+                [this](bcos::protocol::Block::Ptr _block) -> uint16_t {
+                    return hookWhenSealBlock(std::move(_block));
+                });
+            submitProposal(ret.first, ret.second);
+
+            // TODO: pullTxsTimer's work
+        }
+        else
+        {
+            boost::unique_lock<boost::mutex> lock(x_signalled);
+            m_signalled.wait_for(lock, boost::chrono::milliseconds(1));
+        }
     }
-    else
-    {
-        ///< 10 milliseconds to next loop
-        boost::unique_lock<boost::mutex> l(x_signalled);
-        m_signalled.wait_for(l, boost::chrono::milliseconds(1));
-    }
-    // try to fetch transactions
-    m_sealingManager->fetchTransactions();
 }
 
 void Sealer::submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _block)

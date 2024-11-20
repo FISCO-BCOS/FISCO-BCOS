@@ -951,7 +951,7 @@ void MemoryStorage::removeInvalidTxs(bool lock)
             }
 
             txCnt++;
-            txs2Remove.emplace(txHash, std::move(tx));
+            txs2Remove.emplace(txHash, tx);
         });
 
         bcos::protocol::NonceList invalidNonceList = {};

@@ -288,6 +288,10 @@ public:
         return bucket->template find<AccessorType>(accessor, key);
     }
 
+    void batchFind(::ranges::input_range auto& keys, std::vector<ValueType>& out) {
+        
+    }
+
     // handler: accessor is nullptr if not found, handler return false to break to find
     template <class AccessorType>
     void batchFind(const auto& keys, std::function<bool(const KeyType&, AccessorType*)> handler)

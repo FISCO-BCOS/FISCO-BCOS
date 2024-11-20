@@ -66,6 +66,7 @@ struct ITT_DOMAINS
     __itt_string_handle* SUBMIT_PROPOSAL = __itt_string_handle_create("submitProposal");
 
     const __itt_domain* TXPOOL = __itt_domain_create("txpool");
+    __itt_string_handle* BROADCAST_TX = __itt_string_handle_create("broadcastTx");
     __itt_string_handle* SUBMIT_TX = __itt_string_handle_create("submitTx");
     __itt_string_handle* BATCH_FETCH_TXS = __itt_string_handle_create("batchFetchTxs");
     __itt_string_handle* FETCH_TXS = __itt_string_handle_create("fetchTxs");

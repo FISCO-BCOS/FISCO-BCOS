@@ -121,6 +121,8 @@ task::Task<protocol::TransactionSubmitResult::Ptr> TxPool::submitTransactionWith
 
 void TxPool::broadcastTransaction(const protocol::Transaction& transaction)
 {
+    ittapi::Report report(
+        ittapi::ITT_DOMAINS::instance().TXPOOL, ittapi::ITT_DOMAINS::instance().BROADCAST_TX);
     bcos::bytes buffer;
     transaction.encode(buffer);
 
