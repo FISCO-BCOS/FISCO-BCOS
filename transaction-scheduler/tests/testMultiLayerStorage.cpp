@@ -80,7 +80,6 @@ BOOST_AUTO_TEST_CASE(merge)
         auto toValue = RANGES::views::transform([](int num) {
             storage::Entry entry;
             entry.set(fmt::format("value: {}", num));
-
             return entry;
         });
 
