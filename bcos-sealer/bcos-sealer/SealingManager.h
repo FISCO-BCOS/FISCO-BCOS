@@ -40,8 +40,6 @@ public:
     SealingManager& operator=(SealingManager&&) = delete;
 
     virtual ~SealingManager() noexcept = default;
-    void stop();
-
     bool shouldGenerateProposal();
 
     std::pair<bool, bcos::protocol::Block::Ptr> generateProposal(

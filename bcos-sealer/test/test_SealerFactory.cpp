@@ -102,7 +102,6 @@ BOOST_AUTO_TEST_CASE(constructor)
     vrfSealer->stop();
     auto sealingManager = std::make_shared<bcos::sealer::SealingManager>(sealerConfig);
     BOOST_TEST(sealingManager != nullptr);
-    sealingManager->stop();
     consensus->stop();
 }
 
