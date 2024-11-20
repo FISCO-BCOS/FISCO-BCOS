@@ -29,6 +29,8 @@ namespace bcos::sealer
 {
 constexpr static const uint16_t curve25519PublicKeySize = 32;
 constexpr static const uint16_t curve25519VRFProofSize = 96;
+constexpr static const uint16_t secp256k1PublicKeySize = 33;
+constexpr static const uint16_t secp256k1VRFProofSize = 97;
 class VRFBasedSealer : public bcos::sealer::Sealer
 {
 public:
@@ -42,6 +44,8 @@ public:
     VRFBasedSealer& operator=(VRFBasedSealer&&) = delete;
 
     uint16_t hookWhenSealBlock(bcos::protocol::Block::Ptr _block) override;
+
+    static uint8_t getVrfCurveType(SealerConfig::Ptr const& _sealerConfig);
 
     // generate and seal the workingSealerManagerPrecompiled transaction into _txOffset
     static uint16_t generateTransactionForRotating(bcos::protocol::Block::Ptr& _block,

@@ -21,6 +21,7 @@
 #include "WorkingSealerManagerImpl.h"
 #include "bcos-framework/consensus/ConsensusNode.h"
 #include "bcos-framework/ledger/Features.h"
+#include "bcos-framework/ledger/VrfCurveType.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <fmt/format.h>
@@ -39,10 +40,11 @@ bcos::precompiled::WorkingSealerManagerImpl::WorkingSealerManagerImpl(bool withW
   : m_withWeight(withWeight)
 {}
 
-void WorkingSealerManagerImpl::createVRFInfo(bytes _vrfProof, bytes _vrfPublicKey, bytes _vrfInput)
+void WorkingSealerManagerImpl::createVRFInfo(
+    bytes _vrfProof, bytes _vrfPublicKey, bytes _vrfInput, uint8_t vrfCurveType)
 {
     m_vrfInfo = std::make_unique<VRFInfo>(
-        std::move(_vrfProof), std::move(_vrfPublicKey), std::move(_vrfInput));
+        std::move(_vrfProof), std::move(_vrfPublicKey), std::move(_vrfInput), vrfCurveType);
 }
 void bcos::precompiled::WorkingSealerManagerImpl::createVRFInfo(std::unique_ptr<VRFInfo> vrfInfo)
 {
@@ -155,6 +157,32 @@ task::Task<void> WorkingSealerManagerImpl::rotateWorkingSealer(
                            << LOG_KV("removedWorkingSealers", removedWorkingSealerNum);
 }
 
+bool WorkingSealerManagerImpl::checkSealerPublicKey(const std::string& publicKey,
+    const std::vector<std::reference_wrapper<consensus::ConsensusNode>>& nodeLists)
+{
+    // The publicKey we get is a compressed public key, while nodeLists is an uncompressed
+    // public key, so we need to combine the two for comparison. We choose to discard the first
+    // 2 characters of publicKey, and then get the first 64 characters of nodeID->hex() for
+    // comparison.
+    std::string comparePublicKey = publicKey.substr(2);
+
+    for (auto& node : nodeLists)
+    {
+        std::string compareNodeId = node.get().nodeID->hex().substr(0, 64);
+        if (comparePublicKey == compareNodeId)
+        {
+            PRECOMPILED_LOG(INFO) << LOG_DESC("checkSealerPublicKey: publicKey matched")
+                                  << LOG_KV("publicKey", publicKey)
+                                  << LOG_KV("nodeID", node.get().nodeID->hex());
+            return true;
+        }
+    }
+    PRECOMPILED_LOG(WARNING) << LOG_DESC(
+                                    "Permission denied, must be among the working sealer list!")
+                             << LOG_KV("publicKey", publicKey);
+    return false;
+}
+
 void WorkingSealerManagerImpl::checkVRFInfos(HashType const& parentHash, std::string const& origin,
     bool blockNumberInput, protocol::BlockNumber blockNumber)
 {
@@ -195,6 +223,7 @@ void WorkingSealerManagerImpl::checkVRFInfos(HashType const& parentHash, std::st
         PRECOMPILED_LOG(WARNING)
             << LOG_DESC("checkVRFInfos: Invalid VRFInput, must be the parent block hash")
             << LOG_KV("blockNumberInput", blockNumberInput)
+            << LOG_KV("vrfCurvType", +m_vrfInfo->vrfCurveType())
             << LOG_KV("parentHash", parentHash.abridged()) << LOG_KV("blockNumber", blockNumber)
             << LOG_KV("vrfInput", toHex(m_vrfInfo->vrfInput())) << LOG_KV("origin", origin);
         BOOST_THROW_EXCEPTION(PrecompiledError("Invalid VRFInput, must be the parentHash!"));
@@ -206,6 +235,18 @@ void WorkingSealerManagerImpl::checkVRFInfos(HashType const& parentHash, std::st
                                  << LOG_KV("publicKey", toHex(m_vrfInfo->vrfPublicKey()));
         BOOST_THROW_EXCEPTION(PrecompiledError("Invalid VRF Public Key!"));
     }
+    // check vrf public key from sealer leader
+    if (m_vrfInfo->vrfCurveType() == static_cast<uint8_t>(ledger::VrfCurveType::SECKP256K1))
+    {
+        // method1: check vrf public key from sealer leader list
+        std::string vrfPublicKeyHex = toHex(m_vrfInfo->vrfPublicKey());
+        if (!checkSealerPublicKey(vrfPublicKeyHex, m_consensusSealer)) [[unlikely]]
+        {
+            PRECOMPILED_LOG(WARNING) << LOG_DESC("checkVRFInfos: Invalid leader VRF public key")
+                                     << LOG_KV("vrf publicKey", vrfPublicKeyHex);
+            BOOST_THROW_EXCEPTION(PrecompiledError("VRF public key permission check failed!"));
+        }
+    }
     // verify vrf proof
     if (!m_vrfInfo->verifyProof())
     {
@@ -213,6 +254,8 @@ void WorkingSealerManagerImpl::checkVRFInfos(HashType const& parentHash, std::st
                                  << LOG_KV("origin", origin);
         BOOST_THROW_EXCEPTION(PrecompiledError("Verify VRF proof failed!"));
     }
+    PRECOMPILED_LOG(INFO) << LOG_DESC("checkVRFInfos: VRF proof verify succ")
+                          << LOG_KV("origin", origin);
 }
 
 bool WorkingSealerManagerImpl::shouldRotate(const executor::TransactionExecutive::Ptr& _executive)
