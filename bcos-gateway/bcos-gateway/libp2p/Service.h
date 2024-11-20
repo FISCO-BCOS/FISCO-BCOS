@@ -8,7 +8,6 @@
  */
 
 #pragma once
-#include "bcos-utilities/ObjectCounter.h"
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/gateway/GatewayTypeDef.h>
 #include <bcos-framework/protocol/GlobalConfig.h>

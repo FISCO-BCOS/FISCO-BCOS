@@ -48,10 +48,7 @@ MemoryStorage::MemoryStorage(
     m_invalidTxs(BUCKET_SIZE),
     m_missedTxs(CPU_CORES),
     m_blockNumberUpdatedTime(utcTime()),
-    m_txsExpirationTime(_txsExpirationTime),
-    m_inRateCollector("tx_pool_in", 1000),
-    m_sealRateCollector("tx_pool_seal", 1000),
-    m_removeRateCollector("tx_pool_rm", 1000)
+    m_txsExpirationTime(_txsExpirationTime)
 {
     // Trigger a transaction cleanup operation every 3s
     m_cleanUpTimer = std::make_shared<Timer>(TXPOOL_CLEANUP_TIME, "txpoolTimer");
@@ -68,10 +65,6 @@ void MemoryStorage::start()
     {
         m_cleanUpTimer->start();
     }
-
-    m_inRateCollector.start();
-    m_sealRateCollector.start();
-    m_removeRateCollector.start();
 }
 
 void MemoryStorage::stop()
@@ -81,9 +74,6 @@ void MemoryStorage::stop()
         m_cleanUpTimer->stop();
         m_cleanUpTimer->destroy();
     }
-    m_inRateCollector.stop();
-    m_sealRateCollector.stop();
-    m_removeRateCollector.stop();
 }
 
 task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransaction(
@@ -167,7 +157,7 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
     };
 
     Awaitable awaitable{.m_transaction = std::move(transaction),
-        .m_onTxSubmitted = onTxSubmitted,
+        .m_onTxSubmitted = std::move(onTxSubmitted),
         .m_self = shared_from_this(),
         .m_submitResult = {}};
     co_return co_await awaitable;
@@ -412,7 +402,6 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
         result = m_config->txValidator()->verify(transaction);
     }
 
-    m_inRateCollector.update(1, true);
     if (result == TransactionStatus::None)
     {
         auto const txImportTime = transaction->importTime();
@@ -643,7 +632,6 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
 
         ++succCount;
         results[i].first = std::move(tx);
-        m_removeRateCollector.update(1, true);
     }
 
     if (batchId > m_blockNumber)
@@ -889,7 +877,6 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
         tx->setBatchId(-1);
         tx->setBatchHash(HashType());
         m_knownLatestSealedTxHash = txHash;
-        m_sealRateCollector.update(1, true);
         return true;
     };
 

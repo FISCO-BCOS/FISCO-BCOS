@@ -26,7 +26,6 @@
 #include "txpool/interfaces/TxPoolStorageInterface.h"
 #include <bcos-utilities/BucketMap.h>
 #include <bcos-utilities/FixedBytes.h>
-#include <bcos-utilities/RateCollector.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <bcos-utilities/Timer.h>
 #include <tbb/concurrent_hash_map.h>
@@ -175,11 +174,6 @@ protected:
     // for tps stat
     std::atomic_uint64_t m_tpsStatstartTime = {0};
     std::atomic_uint64_t m_onChainTxsCount = {0};
-
-    RateCollector m_inRateCollector;
-    RateCollector m_sealRateCollector;
-    RateCollector m_removeRateCollector;
-
     bcos::crypto::HashType m_knownLatestSealedTxHash;
 };
 }  // namespace bcos::txpool

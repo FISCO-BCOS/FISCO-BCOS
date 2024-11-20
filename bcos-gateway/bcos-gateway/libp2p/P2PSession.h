@@ -12,15 +12,13 @@
 #include <bcos-gateway/libp2p/P2PMessage.h>
 #include <memory>
 
-namespace bcos
-{
-namespace gateway
+
+namespace bcos::gateway
 {
 class P2PMessage;
 class Service;
 
-class P2PSession : public std::enable_shared_from_this<P2PSession>,
-                   public bcos::ObjectCounter<P2PSession>
+class P2PSession : public std::enable_shared_from_this<P2PSession>
 {
 public:
     using Ptr = std::shared_ptr<P2PSession>;
@@ -76,5 +74,4 @@ private:
     mutable bcos::SharedMutex x_protocolInfo;
 };
 
-}  // namespace gateway
-}  // namespace bcos
+}  // namespace bcos::gateway
