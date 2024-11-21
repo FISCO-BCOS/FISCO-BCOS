@@ -82,16 +82,11 @@ public:
 
         final_awaiter final_suspend() noexcept { return {}; }
 
-        std::suspend_always yield_value(Ref&& x) noexcept
+        std::suspend_always yield_value(auto&& value) noexcept
         {
-            m_promise->m_value = std::addressof(x);
+            m_promise->m_value = std::addressof(value);
             return {};
         }
-        // std::suspend_always yield_value(Ref& x) noexcept
-        // {
-        //     m_promise->m_value = std::addressof(x);
-        //     return {};
-        // }
 
         struct yield_sequence_awaiter
         {
