@@ -54,25 +54,25 @@ BOOST_AUTO_TEST_CASE(serialTest)
 
     std::cout << std::endl;
     // for each read
-    bucketMap.forEach<ReadAccessor>([](ReadAccessor& accessor) {
+    for (auto& accessor : bucketMap.range<ReadAccessor>())
+    {
         std::cout << accessor.key() << ":" << accessor.value() << std::endl;
         BOOST_CHECK_EQUAL(accessor.key(), accessor.value());
-        return true;
-    });
+    }
 
     // for each write
-    bucketMap.forEach<WriteAccessor>([](WriteAccessor& accessor) {
+    for (auto& accessor : bucketMap.range<WriteAccessor>())
+    {
         accessor.value()++;
-        return true;
-    });
+    }
 
     std::cout << std::endl;
     // for each read
-    bucketMap.forEach<ReadAccessor>([](ReadAccessor& accessor) {
+    for (auto& accessor : bucketMap.range<ReadAccessor>())
+    {
         std::cout << accessor.key() << ":" << accessor.value() << std::endl;
         BOOST_CHECK_EQUAL(accessor.key() + 1, accessor.value());
-        return true;
-    });
+    }
     BOOST_CHECK_EQUAL(100, bucketMap.size());
 
     // remove & find
@@ -112,11 +112,11 @@ BOOST_AUTO_TEST_CASE(serialTest)
     // for each size check
     {
         size_t cnt = 0;
-        bucketMap.forEach<ReadAccessor>([&cnt](ReadAccessor& accessor) {
+        for (auto& accessor : bucketMap.range<ReadAccessor>())
+        {
             std::cout << accessor.key() << ":" << accessor.value() << std::endl;
             cnt++;
-            return true;
-        });
+        }
         BOOST_CHECK_EQUAL(90, bucketMap.size());
     }
 
@@ -200,31 +200,31 @@ BOOST_AUTO_TEST_CASE(parallelTest)
                 {
                 case 0:
                 {
-                    bucketMap.forEach<ReadAccessor>([](ReadAccessor& accessor) {
+                    for (auto& accessor : bucketMap.range<ReadAccessor>())
+                    {
                         std::cout << accessor.key() << ":" << accessor.value() << std::endl;
-                        return true;
-                    });
+                    }
                     break;
                 }
                 case 1:
                 {
-                    bucketMap.forEach<WriteAccessor>([](WriteAccessor& accessor) {
+                    for (auto& accessor : bucketMap.range<WriteAccessor>())
+                    {
                         accessor.value()++;
-                        return true;
-                    });
+                    }
                     break;
                 }
                 case 2:
                 {
                     // concurrent read and write
-                    bucketMap.forEach<ReadAccessor>([](ReadAccessor& accessor) {
+                    for (auto& accessor : bucketMap.range<ReadAccessor>())
+                    {
                         std::cout << accessor.key() << ":" << accessor.value() << std::endl;
-                        return true;
-                    });
-                    bucketMap.forEach<WriteAccessor>([](WriteAccessor& accessor) {
+                    }
+                    for (auto& accessor : bucketMap.range<WriteAccessor>())
+                    {
                         accessor.value()++;
-                        return true;
-                    });
+                    }
                     break;
                 }
                 case 3:

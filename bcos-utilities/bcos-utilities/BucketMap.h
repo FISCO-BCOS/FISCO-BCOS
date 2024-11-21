@@ -500,52 +500,10 @@ public:
     }
 
     template <class AccessorType>  // handler return isContinue
-    void forEach(std::function<bool(AccessorType&)> handler)
-    {
-        forEachByStartIndex<AccessorType>(std::rand() % m_buckets.size(), std::move(handler));
-    }
-
-    template <class AccessorType>  // handler return isContinue
     void forEach(const KeyType& startAfter, std::function<bool(AccessorType&)> handler)
     {
         auto startIdx = (getBucketIndex(startAfter) + 1) % m_buckets.size();
         forEachByStartIndex<AccessorType>(startIdx, std::move(handler));
-    }
-
-    template <class AccessorType>  // handler return isContinue
-    void forEach(const KeyType& startAfter, size_t eachBucketLimit,
-        std::function<std::pair<bool, bool>(AccessorType& accessor)> handler)
-    {
-        size_t startIdx = (getBucketIndex(startAfter) + 1) % m_buckets.size();
-        size_t bucketsSize = m_buckets.size();
-
-        auto indexes =
-            ::ranges::views::iota(startIdx, startIdx + bucketsSize) |
-            ::ranges::views::transform([bucketsSize](size_t i) { return i % bucketsSize; });
-
-        forEachBucket<AccessorType>(
-            indexes, [eachBucketLimit, handler = std::move(handler)](
-                         size_t, typename BucketType::Ptr bucket, AccessorType& accessor) {
-                size_t count = 0;
-                bool needBucketContinue = true;
-                bucket->template forEach<AccessorType>(
-                    [&count, &needBucketContinue, eachBucketLimit, handler = std::move(handler)](
-                        AccessorType& accessor) {
-                        auto [needContinue, isValid] = handler(accessor);
-                        needBucketContinue = needContinue;
-                        if (isValid)
-                        {
-                            count++;
-                        }
-                        if (count >= eachBucketLimit)
-                        {
-                            return false;
-                        }
-                        return needContinue;
-                    },
-                    accessor);
-                return needBucketContinue;
-            });
     }
 
     template <class AccessorType>  // handler return isContinue
