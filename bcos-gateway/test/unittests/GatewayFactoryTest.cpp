@@ -65,12 +65,14 @@ BOOST_AUTO_TEST_CASE(test_buildSSLContext)
         config->initConfig(configIni);
 
         {
-            auto context = factory->buildSSLContext(true, config->smCertConfig());
+            auto context =
+                factory->buildSSLContext(true, config->sslServerMode(), config->smCertConfig());
             BOOST_CHECK(context);
         }
 
         {
-            auto context = factory->buildSSLContext(false, config->smCertConfig());
+            auto context =
+                factory->buildSSLContext(false, config->sslClientMode(), config->smCertConfig());
             BOOST_CHECK(context);
         }
     }
@@ -82,12 +84,14 @@ BOOST_AUTO_TEST_CASE(test_buildSSLContext)
         config->initConfig(configIni);
 
         {
-            auto context = factory->buildSSLContext(true, config->certConfig());
+            auto context =
+                factory->buildSSLContext(true, config->sslServerMode(), config->certConfig());
             BOOST_CHECK(context);
         }
 
         {
-            auto context = factory->buildSSLContext(false, config->certConfig());
+            auto context =
+                factory->buildSSLContext(false, config->sslClientMode(), config->certConfig());
             BOOST_CHECK(context);
         }
     }

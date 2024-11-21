@@ -93,6 +93,8 @@ public:
 
     bcos::crypto::HashType calculateReceiptRoot(const bcos::crypto::Hash& hashImpl) const override;
 
+    size_t size() const override;
+
 private:
     std::shared_ptr<bcostars::Block> m_inner;
     mutable bcos::SharedMutex x_blockHeader;

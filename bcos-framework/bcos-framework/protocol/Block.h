@@ -117,6 +117,7 @@ public:
     {
         return blockHeaderConst()->number() < block.blockHeaderConst()->number();
     }
+    virtual size_t size() const = 0;
 };
 using Blocks = std::vector<Block::Ptr>;
 using BlocksPtr = std::shared_ptr<Blocks>;
