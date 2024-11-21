@@ -38,10 +38,8 @@ namespace bcos::sealer
 uint8_t VRFBasedSealer::getVrfCurveType(SealerConfig::Ptr const& _sealerConfig)
 {
     uint8_t vrfCurveType = 0;
-    const auto& consensusConfig = dynamic_cast<consensus::ConsensusConfig const&>(
-        *_sealerConfig->consensus()->consensusConfig());
-
-    if (consensusConfig.features().get(ledger::Features::Flag::feature_rpbft_vrf_type_secp256k1))
+    if (_sealerConfig->consensus()->consensusConfig()->features().get(
+            ledger::Features::Flag::feature_rpbft_vrf_type_secp256k1))
     {
         vrfCurveType = static_cast<uint8_t>(ledger::VrfCurveType::SECKP256K1);
     }
