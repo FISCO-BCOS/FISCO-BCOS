@@ -325,7 +325,7 @@ public:
             }
         }
 
-        if constexpr (withLRU)
+        if constexpr (!deleteOP && withLRU)
         {
             bucket.capacity += updatedCapacity;
             updateLRUAndCheck(storage, bucket, it);
