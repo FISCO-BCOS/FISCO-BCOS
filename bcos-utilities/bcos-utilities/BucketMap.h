@@ -23,7 +23,6 @@
 #include "bcos-task/Generator.h"
 #include "bcos-utilities/BoostLog.h"
 #include <oneapi/tbb/parallel_sort.h>
-#include <rocksdb/statistics.h>
 #include <concepts>
 #include <queue>
 #include <range/v3/iterator/operations.hpp>
