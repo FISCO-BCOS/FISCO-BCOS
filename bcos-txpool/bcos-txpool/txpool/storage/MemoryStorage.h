@@ -80,7 +80,7 @@ public:
     // FIXME: deprecated, after using txpool::broadcastTransaction
     bcos::protocol::ConstTransactionsPtr fetchNewTxs(size_t _txsLimit) override;
 
-    void batchFetchTxs(bcos::protocol::Block::Ptr _txsList, bcos::protocol::Block::Ptr _sysTxsList,
+    bool batchFetchTxs(bcos::protocol::Block::Ptr _txsList, bcos::protocol::Block::Ptr _sysTxsList,
         size_t _txsLimit, TxsHashSetPtr _avoidTxs, bool _avoidDuplicate = true) override;
 
     bool exist(bcos::crypto::HashType const& _txHash) override
@@ -169,7 +169,7 @@ protected:
     // the txs expiration time, default is 10 minutes
     uint64_t m_txsExpirationTime = TX_DEFAULT_EXPIRATION_TIME;
     // timer to clear up the expired txs in-period
-    std::shared_ptr<Timer> m_cleanUpTimer;
+    Timer m_cleanUpTimer;
 
     // for tps stat
     std::atomic_uint64_t m_tpsStatstartTime = {0};

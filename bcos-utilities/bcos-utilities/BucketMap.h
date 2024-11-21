@@ -20,8 +20,10 @@
 #pragma once
 
 #include "Common.h"
+#include "bcos-task/Generator.h"
 #include "bcos-utilities/BoostLog.h"
 #include <oneapi/tbb/parallel_sort.h>
+#include <rocksdb/statistics.h>
 #include <concepts>
 #include <queue>
 #include <range/v3/iterator/operations.hpp>
@@ -114,12 +116,12 @@ public:
                 m_readGuard.emplace(std::forward<decltype(args)>(args)...);
             }
         }
-        void setValue(typename MapType::iterator it) { m_it = it; };
+        void setValue(typename MapType::const_iterator it) { m_it = it; };
         const KeyType& key() const { return m_it->first; }
         const ValueType& value() { return m_it->second; }
 
     private:
-        typename MapType::iterator m_it;
+        typename MapType::const_iterator m_it;
         std::optional<ReadGuard> m_readGuard;
     };
 
@@ -211,7 +213,11 @@ public:
         return {true, std::move(value)};
     }
 
-    size_t size() { return m_values.size(); }
+    size_t size()
+    {
+        ReadGuard guard(m_mutex);
+        return m_values.size();
+    }
     bool contains(const auto& key)
     {
         ReadGuard guard(m_mutex);
@@ -286,10 +292,6 @@ public:
         auto idx = getBucketIndex(key);
         auto& bucket = m_buckets[idx];
         return bucket->template find<AccessorType>(accessor, key);
-    }
-
-    void batchFind(::ranges::input_range auto& keys, std::vector<ValueType>& out) {
-        
     }
 
     // handler: accessor is nullptr if not found, handler return false to break to find
@@ -470,6 +472,32 @@ public:
                 }
             }
         }
+    }
+
+    template <class AccessorType>
+    task::Generator<AccessorType&> range(size_t startIndex) const
+    {
+        for (auto& bucket : ::ranges::views::iota(startIndex, startIndex + m_buckets.size()) |
+                                ::ranges::views::transform([&](auto index) -> auto& {
+                                    return m_buckets[index % m_buckets.size()];
+                                }))
+        {
+            AccessorType accessor;
+            bucket->acquireAccessor(accessor, true);
+
+            for (auto it = bucket->m_values.begin(); it != bucket->m_values.end(); ++it)
+            {
+                accessor.setValue(it);
+                co_yield accessor;
+            }
+        }
+    }
+
+    template <class AccessorType>
+    task::Generator<AccessorType&> range()
+    {
+        auto startIndex = std::rand() % m_buckets.size();
+        return range<AccessorType>(startIndex);
     }
 
     template <class AccessorType>  // handler return isContinue
