@@ -4,7 +4,6 @@
 #include "bcos-task/AwaitableValue.h"
 #include <oneapi/tbb/null_rw_mutex.h>
 #include <oneapi/tbb/parallel_for.h>
-#include <oneapi/tbb/parallel_sort.h>
 #include <oneapi/tbb/spin_rw_mutex.h>
 #include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/identity.hpp>

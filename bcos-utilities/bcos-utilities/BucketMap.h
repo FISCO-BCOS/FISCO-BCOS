@@ -22,7 +22,7 @@
 #include "Common.h"
 #include "bcos-task/Generator.h"
 #include "bcos-utilities/BoostLog.h"
-#include <oneapi/tbb/parallel_sort.h>
+#include <oneapi/tbb/parallel_for.h>
 #include <concepts>
 #include <queue>
 #include <range/v3/iterator/operations.hpp>
@@ -339,7 +339,7 @@ public:
                 }
             }) |
             ::ranges::to<std::vector>();
-        tbb::parallel_sort(sortedKeys.begin(), sortedKeys.end(),
+        std::sort(sortedKeys.begin(), sortedKeys.end(),
             [](const auto& lhs, const auto& rhs) { return std::get<1>(lhs) < std::get<1>(rhs); });
 
         std::conditional_t<returnRemoved, std::vector<ValueType>, EmptyType> values;
