@@ -212,11 +212,7 @@ public:
         return {true, std::move(value)};
     }
 
-    size_t size()
-    {
-        ReadGuard guard(m_mutex);
-        return m_values.size();
-    }
+    size_t size() { return m_values.size(); }
     bool contains(const auto& key)
     {
         ReadGuard guard(m_mutex);
