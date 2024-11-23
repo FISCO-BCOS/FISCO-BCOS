@@ -274,7 +274,7 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
         // check txpool nonce
         // check ledger tx
         // check web3 tx
-        auto result = m_config->txValidator()->checkTransaction(_tx);
+        auto result = m_config->txValidator()->checkTransaction(*_tx);
         Transaction::ConstPtr tx = nullptr;
         {
             TxsMap::ReadAccessor accessor;
@@ -393,7 +393,7 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
     // verify the transaction
     if (m_config->checkTransactionSignature())
     {
-        result = m_config->txValidator()->verify(transaction);
+        result = m_config->txValidator()->verify(*transaction);
     }
 
     if (result == TransactionStatus::None)
@@ -783,8 +783,8 @@ bool MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
 
     ittapi::Report report(
         ittapi::ITT_DOMAINS::instance().TXPOOL, ittapi::ITT_DOMAINS::instance().BATCH_FETCH_TXS);
-    // TXPOOL_LOG(INFO) << LOG_DESC("begin batchFetchTxs") << LOG_KV("pendingTxs", txsSize)
-    //                  << LOG_KV("limit", _txsLimit);
+    TXPOOL_LOG(INFO) << LOG_DESC("begin batchFetchTxs") << LOG_KV("pendingTxs", txsSize)
+                     << LOG_KV("limit", _txsLimit);
     auto blockFactory = m_config->blockFactory();
     auto recordT = utcTime();
     auto startT = utcTime();
@@ -830,7 +830,7 @@ bool MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
         // txPool, the txs with duplicated nonce here are already-committed, but have not been
         // dropped
         // check txpool txs, no need to check txpool nonce
-        auto result = m_config->txValidator()->checkTransaction(tx, true);
+        auto result = m_config->txValidator()->checkTransaction(*tx, true);
         if (result == TransactionStatus::NonceCheckFail)
         {
             // in case of the same tx notified more than once
@@ -1239,7 +1239,7 @@ HashListPtr MemoryStorage::getTxsHash(int _limit)
             continue;
         }
         // check txpool txs, no need to check txpool nonce
-        auto result = m_config->txValidator()->checkTransaction(tx, true);
+        auto result = m_config->txValidator()->checkTransaction(*tx, true);
         if (result != TransactionStatus::None)
         {
             TxsMap::WriteAccessor writeAccessor;
@@ -1320,7 +1320,7 @@ void MemoryStorage::cleanUpExpiredTransactions()
         }
         // check txpool txs, no need to check txpool nonce
         auto validator = m_config->txValidator();
-        auto result = validator->checkTransaction(tx, true);
+        auto result = validator->checkTransaction(*tx, true);
         // blockLimit expired
         if (result != TransactionStatus::None)
         {

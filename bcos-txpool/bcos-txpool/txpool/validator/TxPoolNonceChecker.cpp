@@ -29,9 +29,9 @@ bool TxPoolNonceChecker::exists(NonceType const& _nonce)
     return m_nonces.contains(_nonce);
 }
 
-TransactionStatus TxPoolNonceChecker::checkNonce(Transaction::ConstPtr _tx)
+TransactionStatus TxPoolNonceChecker::checkNonce(const bcos::protocol::Transaction& _tx)
 {
-    auto nonce = _tx->nonce();
+    auto nonce = _tx.nonce();
 
     if (m_nonces.contains(nonce))
     {

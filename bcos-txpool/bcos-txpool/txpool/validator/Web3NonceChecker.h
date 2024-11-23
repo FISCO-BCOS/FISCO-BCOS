@@ -73,7 +73,7 @@ public:
      * @return TransactionStatus: the status of the transaction
      */
     task::Task<bcos::protocol::TransactionStatus> checkWeb3Nonce(
-        bcos::protocol::Transaction::ConstPtr _tx, bool onlyCheckLedgerNonce = false);
+        const bcos::protocol::Transaction& _tx, bool onlyCheckLedgerNonce = false);
 
     /**
      * batch insert sender and nonce into ledger state nonce and memory nonce, call when block is
