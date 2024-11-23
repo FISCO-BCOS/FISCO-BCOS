@@ -38,7 +38,7 @@ void SealingManager::resetSealing()
 void SealingManager::appendTransactions(
     TxsMetaDataQueue& _txsQueue, bcos::protocol::Block const& _fetchedTxs)
 {
-    WriteGuard l(x_pendingTxs);
+    WriteGuard lock(x_pendingTxs);
     // append the system transactions
     for (size_t i = 0; i < _fetchedTxs.transactionsMetaDataSize(); i++)
     {
@@ -76,16 +76,10 @@ void SealingManager::clearPendingTxs()
     // return the txs back to the txpool
     SEAL_LOG(INFO) << LOG_DESC("clearPendingTxs: return back the unhandled transactions")
                    << LOG_KV("size", pendingTxsSize);
-    HashListPtr unHandledTxs = std::make_shared<HashList>();
-    for (const auto& txMetaData : m_pendingTxs)
-    {
-        unHandledTxs->emplace_back(txMetaData->hash());
-    }
-    for (const auto& txMetaData : m_pendingSysTxs)
-    {
-        unHandledTxs->emplace_back(txMetaData->hash());
-    }
-    auto self = weak_from_this();
+    HashListPtr unHandledTxs = std::make_shared<HashList>(
+        ::ranges::views::concat(m_pendingTxs, m_pendingSysTxs) |
+        ::ranges::views::transform([](auto& transaction) { return transaction->hash(); }) |
+        ::ranges::to<std::vector>);
     try
     {
         notifyResetTxsFlag(unHandledTxs, false);
