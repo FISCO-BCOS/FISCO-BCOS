@@ -335,20 +335,31 @@ void Host::handshakeServer(const boost::system::error_code& error,
         socket->close();
         return;
     }
-    if (endpointPublicKey->empty())
+    std::string nodeInfo = *endpointPublicKey;
+    if (nodeInfo.empty())
     {
-        HOST_LOG(INFO) << LOG_DESC("handshakeServer get p2pID failed")
-                       << LOG_KV("remote endpoint", socket->remoteEndpoint());
-        socket->close();
-        return;
+        if ((m_sslServerMode & ba::ssl::verify_none) == 0)
+        {
+            auto randomId = h512::generateRandomFixedBytes();
+            nodeInfo = randomId.hex();
+            HOST_LOG(INFO) << LOG_DESC("handshakeServer get p2pID failed because of verify_none")
+                           << LOG_KV("remote endpoint", socket->remoteEndpoint())
+                           << LOG_KV("randId", nodeInfo);
+        }
+        else
+        {
+            HOST_LOG(INFO) << LOG_DESC("handshakeServer get p2pID failed")
+                           << LOG_KV("remote endpoint", socket->remoteEndpoint());
+            socket->close();
+            return;
+        }
     }
     if (m_run)
     {
         /// node info splitted with #
         /// format: {nodeId}{#}{agencyName}{#}{nodeName}
-        std::string node_info(*endpointPublicKey);
         P2PInfo info;
-        obtainNodeInfo(info, node_info);
+        obtainNodeInfo(info, nodeInfo);
         HOST_LOG(INFO) << LOG_DESC("handshakeServer succ")
                        << LOG_KV("remote endpoint", socket->remoteEndpoint())
                        << LOG_KV("nodeid", info.p2pID);
@@ -529,19 +540,30 @@ void Host::handshakeClient(const boost::system::error_code& error,
         }
         return;
     }
-    if (endpointPublicKey->empty())
+    std::string nodeInfo = *endpointPublicKey;
+    if (nodeInfo.empty())
     {
-        HOST_LOG(WARNING) << LOG_DESC("handshakeClient get p2pID failed")
-                          << LOG_KV("local endpoint", socket->localEndpoint());
-        socket->close();
-        return;
+        if ((m_sslClientMode & ba::ssl::verify_none) == 0)
+        {
+            auto randomId = h512::generateRandomFixedBytes();
+            nodeInfo = randomId.hex();
+            HOST_LOG(INFO) << LOG_DESC("handshakeClient get p2pID failed because of verify_none")
+                           << LOG_KV("remote endpoint", socket->remoteEndpoint())
+                           << LOG_KV("randId", nodeInfo);
+        }
+        else
+        {
+            HOST_LOG(WARNING) << LOG_DESC("handshakeClient get p2pID failed")
+                              << LOG_KV("local endpoint", socket->localEndpoint());
+            socket->close();
+            return;
+        }
     }
 
     if (m_run)
     {
-        std::string node_info(*endpointPublicKey);
         P2PInfo info;
-        obtainNodeInfo(info, node_info);
+        obtainNodeInfo(info, nodeInfo);
         HOST_LOG(INFO) << LOG_DESC("handshakeClient succ")
                        << LOG_KV("local endpoint", socket->localEndpoint());
         startPeerSession(info, socket, callback);

@@ -93,7 +93,7 @@ public:
     bcostars::BlockHeader& mutableInner();
     void setInner(const bcostars::BlockHeader& blockHeader);
     void setInner(bcostars::BlockHeader&& blockHeader);
-
+    size_t size() const override;
 
 private:
     // Note: When the field in the header used to calculate the hash changes, the dataHash needs to
