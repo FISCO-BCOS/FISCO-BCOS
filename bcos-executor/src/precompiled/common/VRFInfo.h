@@ -21,7 +21,9 @@
 #pragma once
 
 #include "bcos-crypto/interfaces/crypto/CommonType.h"
+#include "bcos-framework/sealer/VrfCurveType.h"
 #include "bcos-utilities/Common.h"
+#include <cstdint>
 namespace bcos::precompiled
 {
 class VRFInfo
@@ -31,10 +33,11 @@ public:
     VRFInfo(VRFInfo&&) = default;
     VRFInfo& operator=(const VRFInfo&) = default;
     VRFInfo& operator=(VRFInfo&&) = default;
-    VRFInfo(bcos::bytes _vrfProof, bcos::bytes _vrfPk, bcos::bytes _vrfInput)
+    VRFInfo(bcos::bytes _vrfProof, bcos::bytes _vrfPk, bcos::bytes _vrfInput, bcos::sealer::VrfCurveType vrfCurveType = bcos::sealer::VrfCurveType::CURVE25519)
       : m_vrfProof(std::move(_vrfProof)),
         m_vrfPublicKey(std::move(_vrfPk)),
-        m_vrfInput(std::move(_vrfInput))
+        m_vrfInput(std::move(_vrfInput)),
+        m_vrfCurveType(vrfCurveType)
     {}
 
     virtual ~VRFInfo() = default;
@@ -45,10 +48,12 @@ public:
     bcos::bytes const& vrfProof() const { return m_vrfProof; }
     bcos::bytes const& vrfPublicKey() const { return m_vrfPublicKey; }
     bcos::bytes const& vrfInput() const { return m_vrfInput; }
+    bcos::sealer::VrfCurveType vrfCurveType() const { return m_vrfCurveType; }
 
 private:
     bcos::bytes m_vrfProof;
     bcos::bytes m_vrfPublicKey;
     bcos::bytes m_vrfInput;
+    bcos::sealer::VrfCurveType m_vrfCurveType = bcos::sealer::VrfCurveType::CURVE25519;
 };
 }  // namespace bcos::precompiled
