@@ -63,10 +63,10 @@ public:
 
     // build ssl context
     std::shared_ptr<boost::asio::ssl::context> buildSSLContext(
-        bool _server, const GatewayConfig::CertConfig& _certConfig);
+        bool _server, uint8_t sslMode, const GatewayConfig::CertConfig& _certConfig);
     // build sm ssl context
     std::shared_ptr<boost::asio::ssl::context> buildSSLContext(
-        bool _server, const GatewayConfig::SMCertConfig& _smCertConfig);
+        bool _server, uint8_t sslMode, const GatewayConfig::SMCertConfig& _smCertConfig);
 
     //
     std::shared_ptr<ratelimiter::RateLimiterManager> buildRateLimiterManager(

@@ -63,7 +63,10 @@ public:
     virtual ~WsStream()
     {
         WEBSOCKET_STREAM(INFO) << LOG_KV("[DELOBJ][WsStream]", this);
-        close();
+        if (open())
+        {
+            close();
+        }
     }
 
     void initDefaultOpt()
@@ -134,7 +137,6 @@ public:
             WEBSOCKET_STREAM(INFO)
                 << LOG_DESC("the real action to close the stream") << LOG_KV("this", this);
         }
-        return;
     }
 
     void shutdown(boost::beast::tcp_stream& tcpStream)

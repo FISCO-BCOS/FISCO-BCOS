@@ -255,6 +255,12 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
       uuid =
       ; ssl or sm ssl
       sm_ssl=true
+      ;SSL_VERIFY_NONE                 0x00
+      ;SSL_VERIFY_PEER                 0x01
+      ;SSL_VERIFY_FAIL_IF_NO_PEER_CERT 0x02
+      ;SSL_VERIFY_CLIENT_ONCE          0x04
+      ;SSL_VERIFY_POST_HANDSHAKE       0x08
+      ssl_verify_mode=3; 0x01 | 0x02
       ;
       enable_rip_protocol=false
       listen_ip=0.0.0.0
@@ -278,6 +284,10 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
                                   "initP2PConfig: invalid uuid! Must be non-empty!"));
     }
     bool smSSL = _pt.get<bool>("p2p.sm_ssl", false);
+    auto defaultSslMode =
+        boost::asio::ssl::context_base::verify_peer | boost::asio::ssl::verify_fail_if_no_peer_cert;
+    m_ssl_server_mode = _pt.get<int>("p2p.ssl_server_verify_mode", defaultSslMode);
+    m_ssl_client_mode = _pt.get<int>("p2p.ssl_client_verify_mode", defaultSslMode);
     std::string listenIP = _pt.get<std::string>("p2p.listen_ip", "0.0.0.0");
     int listenPort = _pt.get<int>("p2p.listen_port", 30300);
     if (!isValidPort(listenPort))
@@ -398,21 +408,25 @@ void GatewayConfig::initCertConfig(const boost::property_tree::ptree& _pt)
                              << LOG_KV("node_key", nodeKeyFile)
                              << LOG_KV("mul_ca_path", multiCaPath);
 
-    checkFileExist(caCertFile);
-    checkFileExist(nodeCertFile);
-    checkFileExist(nodeKeyFile);
+    checkFileExist<bool>(caCertFile);
 
     CertConfig certConfig;
-    certConfig.caCert = caCertFile;
-    certConfig.nodeCert = nodeCertFile;
-    certConfig.nodeKey = nodeKeyFile;
+    certConfig.caCert =
+        checkFileExist<bool>(caCertFile) ? std::make_optional(caCertFile) : std::nullopt;
+    certConfig.nodeCert =
+        checkFileExist<bool>(nodeCertFile) ? std::make_optional(nodeCertFile) : std::nullopt;
+    certConfig.nodeKey =
+        checkFileExist<bool>(nodeKeyFile) ? std::make_optional(nodeKeyFile) : std::nullopt;
     certConfig.multiCaPath = multiCaPath;
 
     m_certConfig = certConfig;
 
-    GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("initCertConfig") << LOG_KV("ca", certConfig.caCert)
-                             << LOG_KV("node_cert", certConfig.nodeCert)
-                             << LOG_KV("node_key", certConfig.nodeKey)
+    GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("initCertConfig")
+                             << LOG_KV("ca", certConfig.caCert ? certConfig.caCert.value() : "null")
+                             << LOG_KV("node_cert",
+                                    certConfig.nodeCert ? certConfig.nodeCert.value() : "null")
+                             << LOG_KV("node_key",
+                                    certConfig.nodeKey ? certConfig.nodeKey.value() : "null")
                              << LOG_KV("mul_ca_path", certConfig.multiCaPath);
 }
 
@@ -452,29 +466,31 @@ void GatewayConfig::initSMCertConfig(const boost::property_tree::ptree& _pt)
     std::string multiCaPath =
         m_certPath + "/" + _pt.get<std::string>("cert.multi_ca_path", "multiCaPath");
 
-    checkFileExist(smCaCertFile);
-    checkFileExist(smNodeCertFile);
-    checkFileExist(smNodeKeyFile);
-    checkFileExist(smEnNodeCertFile);
-    checkFileExist(smEnNodeKeyFile);
-
     SMCertConfig smCertConfig;
-    smCertConfig.caCert = smCaCertFile;
-    smCertConfig.nodeCert = smNodeCertFile;
-    smCertConfig.nodeKey = smNodeKeyFile;
-    smCertConfig.enNodeCert = smEnNodeCertFile;
-    smCertConfig.enNodeKey = smEnNodeKeyFile;
+    smCertConfig.caCert =
+        checkFileExist<bool>(smCaCertFile) ? std::make_optional(smCaCertFile) : std::nullopt;
+    smCertConfig.nodeCert =
+        checkFileExist<bool>(smNodeCertFile) ? std::make_optional(smNodeCertFile) : std::nullopt;
+    smCertConfig.nodeKey =
+        checkFileExist<bool>(smNodeKeyFile) ? std::make_optional(smNodeKeyFile) : std::nullopt;
+    smCertConfig.enNodeCert = checkFileExist<bool>(smEnNodeCertFile) ?
+                                  std::make_optional(smEnNodeCertFile) :
+                                  std::nullopt;
+    smCertConfig.enNodeKey =
+        checkFileExist<bool>(smEnNodeKeyFile) ? std::make_optional(smEnNodeKeyFile) : std::nullopt;
     smCertConfig.multiCaPath = multiCaPath;
 
     m_smCertConfig = smCertConfig;
 
-    GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("initSMCertConfig") << LOG_KV("ca_path", m_certPath)
-                             << LOG_KV("sm_ca_cert", smCertConfig.caCert)
-                             << LOG_KV("sm_node_cert", smCertConfig.nodeCert)
-                             << LOG_KV("sm_node_key", smCertConfig.nodeKey)
-                             << LOG_KV("sm_ennode_cert", smCertConfig.enNodeCert)
-                             << LOG_KV("sm_ennode_key", smCertConfig.enNodeKey)
-                             << LOG_KV("multi_ca_path", smCertConfig.multiCaPath);
+    GATEWAY_CONFIG_LOG(INFO)
+        << LOG_DESC("initSMCertConfig") << LOG_KV("ca_path", m_certPath)
+        << LOG_KV("sm_ca_cert", smCertConfig.caCert ? smCertConfig.caCert.value() : "null")
+        << LOG_KV("sm_node_cert", smCertConfig.nodeCert ? smCertConfig.nodeCert.value() : "null")
+        << LOG_KV("sm_node_key", smCertConfig.nodeKey ? smCertConfig.nodeKey.value() : "null")
+        << LOG_KV(
+               "sm_ennode_cert", smCertConfig.enNodeCert ? smCertConfig.enNodeCert.value() : "null")
+        << LOG_KV("sm_ennode_key", smCertConfig.enNodeKey ? smCertConfig.enNodeKey.value() : "null")
+        << LOG_KV("multi_ca_path", smCertConfig.multiCaPath);
 }
 
 inline void mustNoLessThan(const std::string& _configName, int32_t _value, int32_t _min)
@@ -1084,15 +1100,22 @@ void GatewayConfig::initPeerWhitelistConfig(const boost::property_tree::ptree& _
     m_certWhitelist.swap(certWhitelist);
 }
 
-void GatewayConfig::checkFileExist(const std::string& _path)
+template <class R>
+R GatewayConfig::checkFileExist(const std::string& _path)
 {
     auto fileContent = readContentsToString(boost::filesystem::path(_path));
-    if (!fileContent || fileContent->empty())
+
+    bool fileExist = fileContent && !fileContent->empty();
+    if constexpr (std::same_as<R, void>)
     {
         BOOST_THROW_EXCEPTION(
             InvalidParameter() << errinfo_comment("checkFileExist: unable to load file content "
                                                   " maybe file not exist, path: " +
                                                   _path));
+    }
+    else if constexpr (std::same_as<R, bool>)
+    {
+        return fileExist;
     }
 }
 

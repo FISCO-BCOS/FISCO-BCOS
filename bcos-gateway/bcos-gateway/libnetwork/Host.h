@@ -15,7 +15,8 @@
 #include <oneapi/tbb/task_group.h>
 #include <openssl/x509.h>
 #include <boost/asio/deadline_timer.hpp>  // for deadline_timer
-#include <boost/system/error_code.hpp>    // for error_code
+#include <boost/asio/ssl/stream_base.hpp>
+#include <boost/system/error_code.hpp>  // for error_code
 #include <memory>
 #include <set>      // for set
 #include <string>   // for string
@@ -52,7 +53,7 @@ public:
         std::shared_ptr<SessionFactory> _sessionFactory, MessageFactory::Ptr _messageFactory)
       : m_asioInterface(std::move(_asioInterface)),
         m_sessionFactory(std::move(_sessionFactory)),
-        m_messageFactory(std::move(_messageFactory)){};
+        m_messageFactory(std::move(_messageFactory)) {};
     virtual ~Host() { stop(); };
 
     using Ptr = std::shared_ptr<Host>;
@@ -138,6 +139,14 @@ public:
         m_asyncGroup.template run(std::move(f));
     }
 
+    void setSslVerifyMode(uint8_t _serverMode, uint8_t _clientMode)
+    {
+        m_sslServerMode = _serverMode;
+        m_sslClientMode = _clientMode;
+        HOST_LOG(INFO) << LOG_DESC("setSslVerifyMode") << LOG_KV("serverMode", (int)m_sslServerMode)
+                       << LOG_KV("clientMode", (int)m_sslClientMode);
+    }
+
 protected:
     /// obtain the common name from the subject:
     /// the subject format is: /CN=xx/O=xxx/OU=xxx/ commonly
@@ -204,6 +213,8 @@ protected:
 
     std::string m_listenHost;
     uint16_t m_listenPort = 0;
+    uint8_t m_sslServerMode = 3;
+    uint8_t m_sslClientMode = 3;
 
     std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>
         m_connectionHandler;
