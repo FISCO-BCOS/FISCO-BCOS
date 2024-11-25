@@ -22,6 +22,7 @@
 #include "Sealer.h"
 #include "SealerConfig.h"
 #include "SealingManager.h"
+#include "bcos-framework/sealer/VrfCurveType.h"
 #include <bcos-utilities/Worker.h>
 #include <utility>
 
@@ -45,7 +46,7 @@ public:
 
     uint16_t hookWhenSealBlock(bcos::protocol::Block::Ptr _block) override;
 
-    static uint8_t getVrfCurveType(SealerConfig::Ptr const& _sealerConfig);
+    static sealer::VrfCurveType getVrfCurveType(SealerConfig::Ptr const& _sealerConfig);
 
     // generate and seal the workingSealerManagerPrecompiled transaction into _txOffset
     static uint16_t generateTransactionForRotating(bcos::protocol::Block::Ptr& _block,

@@ -23,6 +23,7 @@
 #include "../../vm/Precompiled.h"
 #include "VRFInfo.h"
 #include "bcos-framework/consensus/ConsensusNode.h"
+#include "bcos-framework/sealer/VrfCurveType.h"
 #include <bcos-framework/storage/Table.h>
 #include <cstdint>
 #include <functional>
@@ -40,7 +41,7 @@ public:
     WorkingSealerManagerImpl(bool withWeight);
     ~WorkingSealerManagerImpl() = default;
 
-    void createVRFInfo(bytes _vrfProof, bytes _vrfPublicKey, bytes _vrfInput, uint8_t vrfCurveType = 0);
+    void createVRFInfo(bytes _vrfProof, bytes _vrfPublicKey, bytes _vrfInput, sealer::VrfCurveType vrfCurveType = sealer::VrfCurveType::CURVE25519);
     void createVRFInfo(std::unique_ptr<VRFInfo> vrfInfo);
     void setConfiguredEpochSealersSize(uint32_t _size);
 

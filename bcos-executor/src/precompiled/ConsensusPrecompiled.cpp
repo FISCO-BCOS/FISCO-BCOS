@@ -19,7 +19,7 @@
  */
 
 #include "ConsensusPrecompiled.h"
-#include "bcos-framework/ledger/VrfCurveType.h"
+#include "bcos-framework/sealer/VrfCurveType.h"
 #include "common/PrecompiledResult.h"
 #include "common/Utilities.h"
 #include "common/WorkingSealerManagerImpl.h"
@@ -318,14 +318,14 @@ static int setWeight(const std::shared_ptr<executor::TransactionExecutive>& _exe
     return 0;
 }
 
-uint8_t getVrfCurveType(const std::shared_ptr<executor::TransactionExecutive>& _executive)
+sealer::VrfCurveType getVrfCurveType(const std::shared_ptr<executor::TransactionExecutive>& _executive)
 {
-    uint8_t vrfCurveType = 0;
+    sealer::VrfCurveType vrfCurveType = sealer::VrfCurveType::CURVE25519;
 
     if (_executive->blockContext().features().get(
             ledger::Features::Flag::feature_rpbft_vrf_type_secp256k1))
     {
-        vrfCurveType = static_cast<uint8_t>(ledger::VrfCurveType::SECKP256K1);
+        vrfCurveType = sealer::VrfCurveType::SECKP256K1;
     }
     return vrfCurveType;
 }
@@ -341,7 +341,7 @@ static void rotateWorkingSealer(const std::shared_ptr<executor::TransactionExecu
     codec.decode(_callParameters->params(), vrfPublicKey, vrfInput, vrfProof);
     try
     {
-        uint8_t vrfCurveType = getVrfCurveType(_executive);
+        sealer::VrfCurveType vrfCurveType = getVrfCurveType(_executive);
         WorkingSealerManagerImpl sealerManger(
             _executive->blockContext().features().get(Features::Flag::feature_rpbft_term_weight));
         sealerManger.createVRFInfo(

@@ -21,12 +21,13 @@
 #include "WorkingSealerManagerImpl.h"
 #include "bcos-framework/consensus/ConsensusNode.h"
 #include "bcos-framework/ledger/Features.h"
-#include "bcos-framework/ledger/VrfCurveType.h"
+#include "bcos-framework/sealer/VrfCurveType.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <fmt/format.h>
 #include <boost/endian/conversion.hpp>
 #include <algorithm>
+#include <cstdint>
 #include <range/v3/numeric/accumulate.hpp>
 
 using namespace bcos;
@@ -41,7 +42,7 @@ bcos::precompiled::WorkingSealerManagerImpl::WorkingSealerManagerImpl(bool withW
 {}
 
 void WorkingSealerManagerImpl::createVRFInfo(
-    bytes _vrfProof, bytes _vrfPublicKey, bytes _vrfInput, uint8_t vrfCurveType)
+    bytes _vrfProof, bytes _vrfPublicKey, bytes _vrfInput, sealer::VrfCurveType vrfCurveType)
 {
     m_vrfInfo = std::make_unique<VRFInfo>(
         std::move(_vrfProof), std::move(_vrfPublicKey), std::move(_vrfInput), vrfCurveType);
@@ -223,7 +224,7 @@ void WorkingSealerManagerImpl::checkVRFInfos(HashType const& parentHash, std::st
         PRECOMPILED_LOG(WARNING)
             << LOG_DESC("checkVRFInfos: Invalid VRFInput, must be the parent block hash")
             << LOG_KV("blockNumberInput", blockNumberInput)
-            << LOG_KV("vrfCurvType", +m_vrfInfo->vrfCurveType())
+            << LOG_KV("vrfCurvType", +static_cast<uint8_t>(m_vrfInfo->vrfCurveType()))
             << LOG_KV("parentHash", parentHash.abridged()) << LOG_KV("blockNumber", blockNumber)
             << LOG_KV("vrfInput", toHex(m_vrfInfo->vrfInput())) << LOG_KV("origin", origin);
         BOOST_THROW_EXCEPTION(PrecompiledError("Invalid VRFInput, must be the parentHash!"));
@@ -236,7 +237,7 @@ void WorkingSealerManagerImpl::checkVRFInfos(HashType const& parentHash, std::st
         BOOST_THROW_EXCEPTION(PrecompiledError("Invalid VRF Public Key!"));
     }
     // check vrf public key from sealer leader
-    if (m_vrfInfo->vrfCurveType() == static_cast<uint8_t>(ledger::VrfCurveType::SECKP256K1))
+    if (m_vrfInfo->vrfCurveType() == sealer::VrfCurveType::SECKP256K1)
     {
         // method1: check vrf public key from sealer leader list
         std::string vrfPublicKeyHex = toHex(m_vrfInfo->vrfPublicKey());

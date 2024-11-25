@@ -2,7 +2,7 @@
 
 #include <magic_enum.hpp>
 
-namespace bcos::ledger
+namespace bcos::sealer
 {
 enum class VrfCurveType : uint8_t
 {

@@ -21,7 +21,7 @@
 #include "VRFBasedSealer.h"
 #include "Common.h"
 #include "bcos-framework/ledger/Features.h"
-#include "bcos-framework/ledger/VrfCurveType.h"
+#include "bcos-framework/sealer/VrfCurveType.h"
 #include "bcos-pbft/core/ConsensusConfig.h"
 #include "bcos-txpool/txpool/storage/MemoryStorage.h"
 #include <bcos-codec/wrapper/CodecWrapper.h>
@@ -35,13 +35,13 @@
 namespace bcos::sealer
 {
 
-uint8_t VRFBasedSealer::getVrfCurveType(SealerConfig::Ptr const& _sealerConfig)
+sealer::VrfCurveType VRFBasedSealer::getVrfCurveType(SealerConfig::Ptr const& _sealerConfig)
 {
-    uint8_t vrfCurveType = 0;
+    sealer::VrfCurveType vrfCurveType = sealer::VrfCurveType::CURVE25519;
     if (_sealerConfig->consensus()->consensusConfig()->features().get(
             ledger::Features::Flag::feature_rpbft_vrf_type_secp256k1))
     {
-        vrfCurveType = static_cast<uint8_t>(ledger::VrfCurveType::SECKP256K1);
+        vrfCurveType = sealer::VrfCurveType::SECKP256K1;
     }
     return vrfCurveType;
 }
@@ -81,7 +81,7 @@ uint16_t VRFBasedSealer::generateTransactionForRotating(bcos::protocol::Block::P
             keyPair->secretKey()->size()};
         bytes vrfPublicKey;
         bcos::bytes vrfProof;
-        uint8_t vrfCurveType = getVrfCurveType(_sealerConfig);
+        sealer::VrfCurveType vrfCurveType = getVrfCurveType(_sealerConfig);
         int8_t vrfProve = 0;
         int8_t pubkeyDerive = 0;
         auto blockHash = _sealingManager->latestHash();
@@ -92,7 +92,7 @@ uint16_t VRFBasedSealer::generateTransactionForRotating(bcos::protocol::Block::P
                         reinterpret_cast<const char*>(blockHash.data()),
             .len = blockNumberInput ? sizeof(blockNumberBigEndian) :
                                       static_cast<size_t>(blockHash.size())};
-        if (vrfCurveType == static_cast<uint8_t>(ledger::VrfCurveType::CURVE25519))
+        if (vrfCurveType == sealer::VrfCurveType::CURVE25519)
         {
             vrfPublicKey.resize(curve25519PublicKeySize);
             COutputBuffer publicKey{(char*)vrfPublicKey.data(), vrfPublicKey.size()};
@@ -104,7 +104,7 @@ uint16_t VRFBasedSealer::generateTransactionForRotating(bcos::protocol::Block::P
             COutputBuffer proof{(char*)vrfProof.data(), curve25519VRFProofSize};
             auto vrfProve = wedpr_curve25519_vrf_prove_utf8(&privateKey, &inputMsg, &proof);
         }
-        else if (vrfCurveType == static_cast<uint8_t>(ledger::VrfCurveType::SECKP256K1))
+        else if (vrfCurveType == sealer::VrfCurveType::SECKP256K1)
         {
             vrfPublicKey.resize(secp256k1PublicKeySize);
             COutputBuffer publicKey{(char*)vrfPublicKey.data(), vrfPublicKey.size()};
