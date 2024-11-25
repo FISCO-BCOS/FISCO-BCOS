@@ -19,8 +19,8 @@
  * @date 2021-04-01
  */
 #pragma once
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/FixedBytes.h>
-#include <bcos-utilities/Log.h>
 
 #define CRYPTO_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("CRYPTO")
 namespace bcos::crypto
