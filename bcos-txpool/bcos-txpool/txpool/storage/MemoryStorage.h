@@ -161,8 +161,6 @@ protected:
     using HashSet = BucketSet<bcos::crypto::HashType, std::hash<bcos::crypto::HashType>>;
     HashSet m_missedTxs;
 
-    std::atomic<size_t> m_sealedTxsSize = {0};
-
     std::atomic<bcos::protocol::BlockNumber> m_blockNumber = {0};
     uint64_t m_blockNumberUpdatedTime;
 

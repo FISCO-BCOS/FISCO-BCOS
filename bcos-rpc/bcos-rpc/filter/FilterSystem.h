@@ -125,7 +125,7 @@ public:
 protected:
     bool uninstallFilterImpl(std::string_view groupId, u256 filterID)
     {
-        return m_filters.remove(filter::KeyType(groupId, filterID)) != nullptr;
+        return m_filters.remove(filter::KeyType(groupId, filterID));
     }
     task::Task<Json::Value> getFilterChangeImpl(std::string_view groupId, u256 filterID);
     task::Task<Json::Value> getBlockChangeImpl(std::string_view groupId, Filter::Ptr filter);

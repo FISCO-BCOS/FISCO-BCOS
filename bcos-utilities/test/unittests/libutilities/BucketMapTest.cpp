@@ -111,23 +111,19 @@ BOOST_AUTO_TEST_CASE(serialTest)
     std::cout << std::endl;
     // for each size check
     {
-        size_t cnt = 0;
         for (auto& accessor : bucketMap.range<ReadAccessor>())
         {
             std::cout << accessor.key() << ":" << accessor.value() << std::endl;
-            cnt++;
         }
         BOOST_CHECK_EQUAL(90, bucketMap.size());
     }
 
     // for each begin with certain startId
     {
-        size_t cnt = 0;
-        bucketMap.forEach<ReadAccessor>(666, [&cnt](ReadAccessor& accessor) {
+        for (auto& accessor : bucketMap.rangeByKey<ReadAccessor>(666))
+        {
             std::cout << accessor.key() << ":" << accessor.value() << std::endl;
-            cnt++;
-            return true;
-        });
+        }
         BOOST_CHECK_EQUAL(90, bucketMap.size());
     }
 
@@ -157,26 +153,24 @@ BOOST_AUTO_TEST_CASE(batchFindTest)
     }
     BOOST_CHECK_EQUAL(100, bucketMap.size());
 
-    size_t cnt = 0;
-    bucketMap.batchFind<WriteAccessor>(keys, [&cnt](const int& key, WriteAccessor* accessor) {
-        BOOST_CHECK(accessor);
-        BOOST_CHECK_EQUAL(key, accessor->key());
-        std::cout << accessor->key() << ":" << accessor->value() << std::endl;
-        accessor->value()++;
-        cnt++;
-        return true;
-    });
+    std::atomic_size_t cnt = 0;
+    bucketMap.traverse<WriteAccessor, true>(
+        keys, [&](WriteAccessor& accessor, auto index, auto& bucket) {
+            BOOST_REQUIRE(bucket.find(accessor, keys[index]));
+            accessor.value()++;
+            cnt++;
+            std::cout << accessor.key() << ":" << accessor.value() << std::endl;
+        });
     BOOST_CHECK_EQUAL(cnt, 100);
 
     cnt = 0;
-    bucketMap.batchFind<ReadAccessor>(keys, [&cnt](const int& key, ReadAccessor* accessor) {
-        BOOST_CHECK(accessor);
-        BOOST_CHECK_EQUAL(key, accessor->key());
-        BOOST_CHECK_EQUAL(accessor->value(), accessor->key() + 1);
-        std::cout << accessor->key() << ":" << accessor->value() << std::endl;
-        cnt++;
-        return true;
-    });
+    bucketMap.traverse<ReadAccessor, true>(
+        keys, [&](ReadAccessor& accessor, auto index, auto& bucket) {
+            BOOST_REQUIRE(bucket.find(accessor, keys[index]));
+            BOOST_CHECK_EQUAL(accessor.value(), accessor.key() + 1);
+            cnt++;
+            std::cout << accessor.key() << ":" << accessor.value() << std::endl;
+        });
     BOOST_CHECK_EQUAL(cnt, 100);
 }
 
@@ -273,30 +267,36 @@ BOOST_AUTO_TEST_CASE(parallelTest2)
     tbb::parallel_for(
         tbb::blocked_range<int>(0, total), [&bucketMap](const tbb::blocked_range<int>& range) {
             auto kvs = RANGES::iota_view<int, int>(range.begin(), range.end()) |
-                       RANGES::views::transform([](int i) { return std::make_pair(i, i); });
+                       RANGES::views::transform([](int i) { return std::make_pair(i, i); }) |
+                       ::ranges::to<std::vector>();
 
-            bucketMap.batchInsert(kvs, [](bool, const int& key, WriteAccessor accessor) {});
+            bucketMap.batchInsert(kvs);
         });
     BOOST_CHECK_EQUAL(total, bucketMap.size());
 
     tbb::parallel_for(
         tbb::blocked_range<int>(0, total), [&bucketMap](const tbb::blocked_range<int>& range) {
-            auto ks = RANGES::iota_view<int, int>(range.begin(), range.end());
+            auto ks = RANGES::iota_view<int, int>(range.begin(), range.end()) |
+                      ::ranges::to<std::vector>();
 
-            bucketMap.batchFind<WriteAccessor>(ks, [](const int& key, WriteAccessor* accessor) {
-                accessor->value()++;
-                return true;
-            });
+            bucketMap.traverse<WriteAccessor, true>(
+                ks, [&](WriteAccessor& accessor, auto index, auto& bucket) {
+                    BOOST_REQUIRE(bucket.find(accessor, ks[index]));
+                    accessor.value()++;
+                });
         });
 
     tbb::parallel_for(
         tbb::blocked_range<int>(0, total), [&bucketMap](const tbb::blocked_range<int>& range) {
-            auto ks = RANGES::iota_view<int, int>(range.begin(), range.end());
+            auto ks = RANGES::iota_view<int, int>(range.begin(), range.end()) |
+                      ::ranges::to<std::vector>();
 
-            bucketMap.batchFind<ReadAccessor>(ks, [](const int& key, ReadAccessor* accessor) {
-                // BOOST_CHECK_EQUAL(accessor->value(), accessor->key() + 1);
-                return true;
-            });
+            auto values = bucketMap.batchFind<ReadAccessor>(ks);
+            for (auto&& [key, value] : ::ranges::views::zip(ks, values))
+            {
+                BOOST_CHECK(value);
+                BOOST_CHECK_EQUAL(*value, key + 1);
+            }
         });
     std::cout << bucketMap.size() << std::endl;
 
