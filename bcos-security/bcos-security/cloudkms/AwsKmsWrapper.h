@@ -33,14 +33,14 @@ public:
     explicit AwsKmsWrapper(
         const std::string& region, const std::string& accessKey, const std::string& secretKey);
     explicit AwsKmsWrapper(
-        const std::string& region, const std::string& accessKey, const std::string& secretKey, const std::string& keyId);
+        const std::string& region, const std::string& accessKey, const std::string& secretKey, std::string keyId);
     ~AwsKmsWrapper() = default;
 
     std::shared_ptr<bytes> encryptContents(const std::shared_ptr<bytes>& contents) override;
-    std::shared_ptr<bytes> encryptFile(const std::string& filename) override;
+    std::shared_ptr<bytes> encryptFile(const std::string& inputFilePath) override;
 
-    std::shared_ptr<bytes> decryptContents(const std::shared_ptr<bytes>& contents) override;
-    std::shared_ptr<bytes> decryptFile(const std::string& filename) override;
+    std::shared_ptr<bytes> decryptContents(const std::shared_ptr<bytes>& ciphertext) override;
+    std::shared_ptr<bytes> decryptFile(const std::string& inputFilePath) override;
 
     void setKmsClient(const std::shared_ptr<Aws::KMS::KMSClient>& kmsClient) { m_kmsClient = kmsClient; }
 

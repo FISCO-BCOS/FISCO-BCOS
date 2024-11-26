@@ -16,7 +16,7 @@
 /**
  * @brief : Encrypt type enum
  * @author: HaoXuan40404
- * @date: 2024-11-07
+ * @date: 2024-11-26
  */
 #pragma once
 #include <magic_enum.hpp>
@@ -24,32 +24,30 @@
 
 namespace bcos::security
 {
-enum class KeyEncryptionType
+enum class StorageEncryptionType
 {
     LEGACY,
     BCOSKMS,
-    CLOUDKMS,
-    HSM,
     UNKOWN
 };
 
 // get the string of the enum
-inline static std::string keyEncryptionTypeToString(KeyEncryptionType type)
+inline static std::string storageEncryptionTypeToString(StorageEncryptionType type)
 {
     return std::string(magic_enum::enum_name(type));
 }
 
 // get the enum from the string
-inline static KeyEncryptionType keyEncryptionTypeFromString(const std::string& typeStr)
+inline static StorageEncryptionType storageEncryptionTypeFromString(const std::string& typeStr)
 {
     if(typeStr.empty()) 
     {
-        return KeyEncryptionType::LEGACY;
+        return StorageEncryptionType::LEGACY;
     }
-    auto result = magic_enum::enum_cast<KeyEncryptionType>(typeStr, magic_enum::case_insensitive);
+    auto result = magic_enum::enum_cast<StorageEncryptionType>(typeStr, magic_enum::case_insensitive);
     if (!result)
     {
-        return KeyEncryptionType::UNKOWN;
+        return StorageEncryptionType::UNKOWN;
     }
     return result.value();
 }

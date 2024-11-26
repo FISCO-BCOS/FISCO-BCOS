@@ -32,12 +32,11 @@
 namespace bcos::security
 {
 CloudKmsKeyEncryption::CloudKmsKeyEncryption(const bcos::tool::NodeConfig::Ptr nodeConfig)
-{
-    m_kmsType = nodeConfig->cloudKmsType();
-    m_kmsUrl = nodeConfig->keyEncryptionUrl();
-}
+  : m_kmsType(nodeConfig->cloudKmsType()), m_kmsUrl(nodeConfig->keyEncryptionUrl())
+{}
 
-std::shared_ptr<bytes> CloudKmsKeyEncryption::decryptContents(const std::shared_ptr<bytes>& contents)
+std::shared_ptr<bytes> CloudKmsKeyEncryption::decryptContents(
+    const std::shared_ptr<bytes>& contents)
 {
     BCOS_LOG(INFO) << LOG_BADGE("KmsInterface::decryptContents")
                    << LOG_KV("decrypt type", cloudKmsTypeToString(m_kmsType));
@@ -65,36 +64,39 @@ std::shared_ptr<bytes> CloudKmsKeyEncryption::decryptContents(const std::shared_
         std::string accessKey = awsKmsUrlParts[1];
         std::string secretKey = awsKmsUrlParts[2];
 
-        std::shared_ptr<bytes> decryptResult = nullptr;
-        Aws::SDKOptions options;
-        Aws::InitAPI(options);
+        try
         {
-            try
+            // Do not comment here, otherwise the AWS client will be instantiated repeatedly
+            struct AwsSdkLifecycleManager
             {
-                // create an AWS KMS wrapper
-                AwsKmsWrapper kmsWrapper(region, accessKey, secretKey);
-                decryptResult = kmsWrapper.decryptContents(contents);
-                if (decryptResult == nullptr)
-                {
-                    BCOS_LOG(ERROR)
-                        << LOG_BADGE("KmsInterface::decrypt") << LOG_DESC("Decryption failed!");
-                    BOOST_THROW_EXCEPTION(DecryptFailed());
-                }
-                BCOS_LOG(INFO) << LOG_BADGE("KmsInterface::decrypt")
-                               << LOG_KV("decrypt result size", decryptResult->size());
-                // return decryptResult
-            }
-            catch (const std::exception& e)
+                Aws::SDKOptions options;
+                AwsSdkLifecycleManager() { Aws::InitAPI(options); }
+                ~AwsSdkLifecycleManager() { Aws::ShutdownAPI(options); }
+                AwsSdkLifecycleManager(const AwsSdkLifecycleManager&) = delete;
+                AwsSdkLifecycleManager& operator=(const AwsSdkLifecycleManager&) = delete;
+                AwsSdkLifecycleManager(AwsSdkLifecycleManager&&) = delete;
+                AwsSdkLifecycleManager& operator=(AwsSdkLifecycleManager&&) = delete;
+            } sdkLifecycleManager;
+            // create an AWS KMS wrapper
+            AwsKmsWrapper kmsWrapper(region, accessKey, secretKey);
+            std::shared_ptr<bytes> decryptResult = kmsWrapper.decryptContents(contents);
+            if (decryptResult == nullptr)
             {
-                BCOS_LOG(ERROR) << LOG_BADGE("KmsInterface::decrypt") << LOG_KV("Error:", e.what());
+                BCOS_LOG(ERROR) << LOG_BADGE("KmsInterface::decrypt")
+                                << LOG_DESC("Decryption failed!");
                 BOOST_THROW_EXCEPTION(DecryptFailed());
             }
+            BCOS_LOG(INFO) << LOG_BADGE("KmsInterface::decrypt")
+                           << LOG_KV("decrypt result size", decryptResult->size());
+            BCOS_LOG(INFO) << LOG_BADGE("KmsInterface::decrypt success, shutdown AWS SDK success")
+                           << LOG_KV("decrypt size", decryptResult->size());
+            return decryptResult;
         }
-        // clean up the AWS SDK
-        Aws::ShutdownAPI(options);
-        BCOS_LOG(INFO) << LOG_BADGE("KmsInterface::decrypt success, shutdown AWS SDK success")
-                       << LOG_KV("decrypt size", decryptResult->size());
-        return decryptResult;
+        catch (const std::exception& e)
+        {
+            BCOS_LOG(ERROR) << LOG_BADGE("KmsInterface::decrypt") << LOG_KV("Error:", e.what());
+            BOOST_THROW_EXCEPTION(DecryptFailed());
+        }
     }
 
     BCOS_LOG(ERROR) << LOG_BADGE("KmsInterface::decrypt")
@@ -114,7 +116,8 @@ std::shared_ptr<bytes> CloudKmsKeyEncryption::decryptFile(const std::string& fil
     return decryptContents(contents);
 }
 
-std::shared_ptr<bytes> CloudKmsKeyEncryption::encryptContents(const std::shared_ptr<bytes>& contents)
+std::shared_ptr<bytes> CloudKmsKeyEncryption::encryptContents(
+    const std::shared_ptr<bytes>& contents)
 {
     // Not support
     BCOS_LOG(ERROR) << LOG_BADGE("KmsInterface::encryptContents failed");
