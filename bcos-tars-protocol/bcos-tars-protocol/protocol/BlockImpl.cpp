@@ -27,7 +27,6 @@
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
 #include <boost/throw_exception.hpp>
-#include <memory_resource>
 #include <stdexcept>
 
 using namespace bcostars;
@@ -59,22 +58,14 @@ bcos::protocol::BlockHeader::ConstPtr BlockImpl::blockHeaderConst() const
 
 bcos::protocol::Transaction::ConstPtr BlockImpl::transaction(uint64_t _index) const
 {
-    static std::pmr::synchronized_pool_resource transactionPool;
-    static std::pmr::polymorphic_allocator<const bcostars::protocol::TransactionImpl> alloc(
-        &transactionPool);
-
-    return std::allocate_shared<const bcostars::protocol::TransactionImpl>(alloc,
+    return std::make_shared<const bcostars::protocol::TransactionImpl>(
         [self = shared_from_this(), _index]() { return &(self->m_inner.transactions[_index]); });
 }
 
 bcos::protocol::TransactionReceipt::ConstPtr BlockImpl::receipt(uint64_t _index) const
 {
-    static std::pmr::synchronized_pool_resource receiptPool;
-    static std::pmr::polymorphic_allocator<const bcostars::protocol::TransactionReceiptImpl> alloc(
-        &receiptPool);
-
-    return std::allocate_shared<const bcostars::protocol::TransactionReceiptImpl>(
-        alloc, [self = shared_from_this(), _index]() { return &(self->m_inner.receipts[_index]); });
+    return std::make_shared<const bcostars::protocol::TransactionReceiptImpl>(
+        [self = shared_from_this(), _index]() { return &(self->m_inner.receipts[_index]); });
 }
 
 void BlockImpl::setBlockHeader(bcos::protocol::BlockHeader::Ptr _blockHeader)
