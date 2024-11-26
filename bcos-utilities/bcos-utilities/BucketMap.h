@@ -85,14 +85,20 @@ public:
             }
             return m_writeGuard->owns_lock();
         }
-        void setIterator(typename MapType::iterator iterator) { m_iterator = iterator; };
+        void setIterator(typename MapType::iterator iterator, Bucket* bucket)
+        {
+            m_iterator = iterator;
+            m_bucket = bucket;
+        }
         auto iterator() const { return m_iterator; }
+        Bucket* bucket() const { return m_bucket; }
 
         const KeyType& key() const { return m_iterator->first; }
         ValueType& value() { return m_iterator->second; }
 
     private:
         typename MapType::iterator m_iterator;
+        Bucket* m_bucket;
         std::optional<WriteGuard> m_writeGuard;
     };
 
@@ -108,14 +114,20 @@ public:
             }
             return m_readGuard->owns_lock();
         }
-        void setIterator(typename MapType::const_iterator iterator) { m_iterator = iterator; };
+        void setIterator(typename MapType::const_iterator iterator, const Bucket* bucket)
+        {
+            m_iterator = iterator;
+            m_bucket = bucket;
+        }
         auto iterator() const { return m_iterator; }
+        const Bucket* bucket() const { return m_bucket; }
 
         const KeyType& key() const { return m_iterator->first; }
         const ValueType& value() { return m_iterator->second; }
 
     private:
         typename MapType::const_iterator m_iterator;
+        const Bucket* m_bucket;
         std::optional<ReadGuard> m_readGuard;
     };
 
@@ -140,7 +152,7 @@ public:
             return false;
         }
 
-        accessor.setIterator(it);
+        accessor.setIterator(it, this);
         return true;
     }
 
@@ -150,11 +162,10 @@ public:
         accessor.emplaceLock(m_mutex);
 
         auto [it, inserted] = m_values.try_emplace(keyValue.first, keyValue.second);
-        accessor.setIterator(it);
+        accessor.setIterator(it, this);
         return inserted;
     }
 
-    // return true if remove success
     void remove(WriteAccessor& accessor)
     {
         auto it = accessor.iterator();
@@ -338,18 +349,7 @@ public:
         return bucket->insert(accessor, std::move(kv));
     }
 
-    bool remove(const KeyType& key)
-    {
-        auto idx = getBucketIndex(key);
-        auto& bucket = m_buckets[idx];
-        WriteAccessor accessor;
-        if (!bucket->find(accessor, key))
-        {
-            return false;
-        }
-        bucket->remove(accessor);
-        return true;
-    }
+    void remove(WriteAccessor& accessor) { accessor.bucket()->remove(accessor); }
 
     size_t size() const
     {
@@ -405,7 +405,7 @@ public:
 
             for (auto it = bucket->m_values.begin(); it != bucket->m_values.end(); ++it)
             {
-                accessor.setIterator(it);
+                accessor.setIterator(it, bucket.get());
                 co_yield accessor;
             }
         }

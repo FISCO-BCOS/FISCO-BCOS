@@ -50,10 +50,10 @@ MemoryStorage::MemoryStorage(
     m_missedTxs(CPU_CORES),
     m_blockNumberUpdatedTime(utcTime()),
     m_txsExpirationTime(_txsExpirationTime),
-    m_cleanUpTimer(TXPOOL_CLEANUP_TIME, "txpoolTimer")
+    m_cleanUpTimer(std::make_shared<Timer>(TXPOOL_CLEANUP_TIME, "txpoolTimer"))
 {
     // Trigger a transaction cleanup operation every 3s
-    m_cleanUpTimer.registerTimeoutHandler([this] { cleanUpExpiredTransactions(); });
+    m_cleanUpTimer->registerTimeoutHandler([this] { cleanUpExpiredTransactions(); });
     TXPOOL_LOG(INFO) << LOG_DESC("init MemoryStorage of txpool")
                      << LOG_KV("txNotifierWorkerNum", _notifyWorkerNum)
                      << LOG_KV("txsExpirationTime", m_txsExpirationTime)
@@ -62,13 +62,13 @@ MemoryStorage::MemoryStorage(
 
 void MemoryStorage::start()
 {
-    m_cleanUpTimer.start();
+    m_cleanUpTimer->start();
 }
 
 void MemoryStorage::stop()
 {
-    m_cleanUpTimer.stop();
-    m_cleanUpTimer.destroy();
+    m_cleanUpTimer->stop();
+    m_cleanUpTimer->destroy();
 }
 
 task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransaction(
@@ -467,18 +467,23 @@ void MemoryStorage::batchInsert(Transactions const& _txs)
 
     for (const auto& tx : _txs)
     {
-        m_missedTxs.remove(tx->hash());
+        decltype(m_missedTxs)::WriteAccessor accessor;
+        if (m_missedTxs.find(accessor, tx->hash()))
+        {
+            m_missedTxs.remove(accessor);
+        }
     }
 }
 
 
 Transaction::Ptr MemoryStorage::removeWithoutNotifyUnseal(HashType const& _txHash)
 {
-    decltype(m_txsTable)::ReadAccessor accessor;
+    decltype(m_txsTable)::WriteAccessor accessor;
     if (m_txsTable.find(accessor, _txHash))
     {
-        m_txsTable.remove(_txHash);
-        return accessor.value();
+        auto tx = std::move(accessor.value());
+        m_txsTable.remove(accessor);
+        return tx;
     }
     return {};
 }
@@ -949,8 +954,12 @@ void MemoryStorage::removeInvalidTxs(bool lock)
             */
         for (const auto& tx2Remove : txs2Remove | RANGES::views::keys)
         {
-            auto tx = m_txsTable.remove(tx2Remove);
-            if (!tx)
+            decltype(m_txsTable)::WriteAccessor accessor;
+            if (m_txsTable.find(accessor, tx2Remove))
+            {
+                m_txsTable.remove(accessor);
+            }
+            else
             {
                 txs2Remove[tx2Remove] = nullptr;
             }
@@ -998,7 +1007,7 @@ HashListPtr MemoryStorage::filterUnknownTxs(HashList const& _txsHashList, NodeID
     auto results = m_missedTxs.batchInsert<true>(missList);
     for (auto [index, result] : ::ranges::views::enumerate(results))
     {
-        if (result)
+        if (result != 0)
         {
             unknownTxsList->push_back(missList[index]);
         }
@@ -1202,7 +1211,7 @@ HashListPtr MemoryStorage::getTxsHash(int _limit)
 
 void MemoryStorage::cleanUpExpiredTransactions()
 {
-    m_cleanUpTimer.restart();
+    m_cleanUpTimer->restart();
 
     // Note: In order to minimize the impact of cleanUp on performance,
     // the normal consensus node does not clear expired txs in m_clearUpTimer, but clears

@@ -167,7 +167,7 @@ protected:
     // the txs expiration time, default is 10 minutes
     uint64_t m_txsExpirationTime = TX_DEFAULT_EXPIRATION_TIME;
     // timer to clear up the expired txs in-period
-    Timer m_cleanUpTimer;
+    std::shared_ptr<Timer> m_cleanUpTimer;
 
     // for tps stat
     std::atomic_uint64_t m_tpsStatstartTime = {0};

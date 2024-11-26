@@ -53,7 +53,11 @@ void TxPoolNonceChecker::batchInsert(BlockNumber /*_batchId*/, NonceListPtr cons
 
 void TxPoolNonceChecker::remove(NonceType const& _nonce)
 {
-    m_nonces.remove(_nonce);
+    NonceSet::WriteAccessor accessor;
+    if (m_nonces.find(accessor, _nonce))
+    {
+        m_nonces.remove(accessor);
+    }
 }
 
 void TxPoolNonceChecker::batchRemove(NonceList const& _nonceList)
