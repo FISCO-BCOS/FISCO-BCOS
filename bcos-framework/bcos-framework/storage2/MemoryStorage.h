@@ -2,10 +2,8 @@
 
 #include "Storage.h"
 #include "bcos-task/AwaitableValue.h"
-#include "bcos-task/TBBWait.h"
 #include <oneapi/tbb/null_rw_mutex.h>
 #include <oneapi/tbb/parallel_for.h>
-#include <oneapi/tbb/parallel_sort.h>
 #include <oneapi/tbb/spin_rw_mutex.h>
 #include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/identity.hpp>
@@ -96,7 +94,6 @@ public:
     MemoryStorage& operator=(MemoryStorage&&) noexcept = default;
     ~MemoryStorage() noexcept = default;
 
-private:
     constexpr unsigned getBucketSize()
     {
         return withConcurrent ? std::thread::hardware_concurrency() * 2 : 1;
@@ -246,24 +243,6 @@ private:
         return result;
     }
 
-    friend auto tag_invoke(storage2::tag_t<randomAccessRange> /*unused*/, MemoryStorage& storage)
-        requires(!withConcurrent)
-    {
-        using IteratorValue = std::conditional_t<withLogicalDeletion, const Value*, const Value&>;
-        using ResultType = std::tuple<Key const&, IteratorValue>;
-
-        return storage.m_buckets[0].container | ::ranges::views::transform([](auto&& data) {
-            if constexpr (withLogicalDeletion)
-            {
-                return ResultType{data.key, data.value ? std::addressof(*(data.value)) : nullptr};
-            }
-            else
-            {
-                return ResultType{data.key, data.value};
-            }
-        });
-    }
-
     friend void writeOneImpl(
         MemoryStorage& storage, Bucket& bucket, auto&& key, auto&& value, bool direct)
     {
@@ -279,29 +258,25 @@ private:
         if (it != index.end())
         {
             auto& existsValue = it->value;
-            if constexpr (deleteOP && withLogicalDeletion)
-            {
-                if (!existsValue)
-                {
-                    // Already deleted
-                    return;
-                }
-            }
-            if constexpr (withLRU)
-            {
-                updatedCapacity -= (getSize(key) + getSize(existsValue));
-            }
             if constexpr (deleteOP)
             {
+                if constexpr (withLRU)
+                {
+                    updatedCapacity = -updatedCapacity;
+                }
                 if constexpr (withLogicalDeletion)
                 {
-                    if (!direct)
+                    if (existsValue)
                     {
-                        bucket.container.modify(it, [](Data& data) mutable { data.value.reset(); });
-                    }
-                    else
-                    {
-                        bucket.container.erase(it);
+                        if (!direct)
+                        {
+                            bucket.container.modify(
+                                it, [](Data& data) mutable { data.value.reset(); });
+                        }
+                        else
+                        {
+                            bucket.container.erase(it);
+                        }
                     }
                 }
                 else
@@ -311,6 +286,10 @@ private:
             }
             else
             {
+                if constexpr (withLRU)
+                {
+                    updatedCapacity -= (getSize(key) + getSize(existsValue));
+                }
                 bucket.container.modify(it,
                     [&](Data& data) mutable { data.value = std::forward<decltype(value)>(value); });
             }
@@ -319,17 +298,21 @@ private:
         {
             if constexpr (deleteOP)
             {
+                if constexpr (withLRU)
+                {
+                    updatedCapacity = 0;
+                }
                 if constexpr (withLogicalDeletion)
                 {
                     if constexpr (std::is_same_v<std::decay_t<decltype(key)>, Key>)
                     {
                         it = bucket.container.emplace_hint(
-                            it, typename MemoryStorage::Data{.key = key, .value = {}});
+                            it, Data{.key = std::forward<decltype(key)>(key), .value = {}});
                     }
                     else
                     {
                         it = bucket.container.emplace_hint(
-                            it, Data{.key = typename MemoryStorage::Key{key}, .value = {}});
+                            it, Data{.key = Key{std::forward<decltype(key)>(key)}, .value = {}});
                     }
                 }
             }
@@ -496,15 +479,19 @@ private:
     }
 
     template <class FromStorage>
-        requires HasTag<RandomAccessRange, FromStorage&> && withConcurrent
-    friend void parallelMerge(MemoryStorage& toStorage, FromStorage&& fromStorage)
+        requires withConcurrent
+    friend task::Task<void> tag_invoke(
+        storage2::tag_t<merge> /*unused*/, MemoryStorage& toStorage, FromStorage&& fromStorage)
     {
-        auto fromRange = storage2::randomAccessRange(fromStorage);
-        auto sortedList = ::ranges::views::transform(fromRange, [&](const auto& keyValue) {
-            return std::make_pair(
-                std::addressof(keyValue), getBucketIndex(toStorage, std::get<0>(keyValue)));
-        }) | ::ranges::to<std::vector>();
-        tbb::parallel_sort(sortedList, [](auto const& left, auto const& right) {
+        auto& bucket = fromStorage.m_buckets[0];
+        auto& index = bucket.container.template get<0>();
+        auto sortedList = ::ranges::views::transform(index,
+                              [&](typename std::decay_t<FromStorage>::Data const& data) {
+                                  return std::make_tuple(
+                                      std::addressof(data), getBucketIndex(toStorage, data.key));
+                              }) |
+                          ::ranges::to<std::vector>();
+        std::sort(sortedList.begin(), sortedList.end(), [](auto const& left, auto const& right) {
             return std::get<1>(left) < std::get<1>(right);
         });
         auto chunks = ::ranges::views::chunk_by(sortedList, [](auto const& left,
@@ -515,57 +502,32 @@ private:
             for (auto i = range.begin(); i < range.end(); ++i)
             {
                 auto& chunk = chunks[i];
-                auto index = chunk.front().second;
+                auto index = std::get<1>(chunk.front());
                 auto& bucket = toStorage.m_buckets[index];
                 Lock lock(bucket.mutex, true);
 
-                for (auto& [keyValue, _] : chunk)
+                for (auto& [data, _] : chunk)
                 {
-                    auto& [key, value] = keyValue;
-                    if constexpr (withLogicalDeletion)
+                    auto&& [key, value] = *data;
+                    if constexpr (std::decay_t<FromStorage>::withLogicalDeletion)
                     {
-                        writeOneImpl(toStorage, bucket, key, value ? *value : deleteItem, true);
+                        if (value)
+                        {
+                            writeOneImpl(toStorage, bucket, key, *value, true);
+                        }
+                        else
+                        {
+                            writeOneImpl(toStorage, bucket, key, deleteItem, true);
+                        }
                     }
                     else
                     {
-                        writeOneImpl(toStorage, bucket, key, value, false);
+                        writeOneImpl(toStorage, bucket, *key, *value, false);
                     }
                 }
             }
         });
-    }
-
-    template <class FromStorage>
-    friend task::Task<void> tag_invoke(
-        storage2::tag_t<merge> /*unused*/, MemoryStorage& toStorage, FromStorage&& fromStorage)
-    {
-        if constexpr (HasTag<RandomAccessRange, FromStorage&> && withConcurrent)
-        {
-            co_await parallelMerge(toStorage, std::forward<FromStorage>(fromStorage));
-        }
-        else
-        {
-            auto iterator = co_await storage2::range(fromStorage);
-            while (auto item = co_await iterator.next())
-            {
-                auto&& [key, value] = *item;
-                if constexpr (std::is_pointer_v<decltype(value)>)
-                {
-                    if (value)
-                    {
-                        co_await storage2::writeOne(toStorage, key, *value);
-                    }
-                    else
-                    {
-                        co_await storage2::removeOne(toStorage, key);
-                    }
-                }
-                else
-                {
-                    co_await storage2::writeOne(toStorage, key, value);
-                }
-            }
-        }
+        co_return;
     }
 };
 
