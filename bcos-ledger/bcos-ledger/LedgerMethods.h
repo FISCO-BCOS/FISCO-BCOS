@@ -205,8 +205,8 @@ task::Task<consensus::ConsensusNodeList> tag_invoke(
     co_return nodes;
 }
 
-task::Task<void> tag_invoke(
-    ledger::tag_t<setNodeList> /*unused*/, auto& storage, RANGES::input_range auto&& nodeList)
+task::Task<void> tag_invoke(ledger::tag_t<setNodeList> /*unused*/, auto& storage,
+    RANGES::input_range auto&& nodeList, bool forceSet = false)
 {
     LEDGER_LOG(DEBUG) << "SetNodeList request";
     auto ledgerNodeList = RANGES::views::transform(nodeList, [&](auto const& node) {
@@ -220,8 +220,8 @@ task::Task<void> tag_invoke(
     co_await storage2::writeOne(storage, transaction_executor::StateKey{SYS_CONSENSUS, "key"},
         storage::Entry(std::move(nodeListEntry)));
 
-    auto tarsNodeList = RANGES::views::filter(nodeList, [](auto const& node) {
-        return node.termWeight > 0;
+    auto tarsNodeList = RANGES::views::filter(nodeList, [&](auto const& node) {
+        return forceSet || node.termWeight > 0;
     }) | RANGES::views::transform([](auto const& node) {
         bcostars::ConsensusNode tarsConsensusNode;
         tarsConsensusNode.nodeID.assign(

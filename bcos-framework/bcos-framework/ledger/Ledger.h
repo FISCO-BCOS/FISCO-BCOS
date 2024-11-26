@@ -135,9 +135,11 @@ inline constexpr struct GetNodeList
 
 inline constexpr struct SetNodeList
 {
-    task::Task<void> operator()(auto& storage, RANGES::input_range auto&& nodeList) const
+    task::Task<void> operator()(
+        auto& storage, RANGES::input_range auto&& nodeList, auto&&... args) const
     {
-        co_await tag_invoke(*this, storage, std::forward<decltype(nodeList)>(nodeList));
+        co_await tag_invoke(*this, storage, std::forward<decltype(nodeList)>(nodeList),
+            std::forward<decltype(args)>(args)...);
     }
 } setNodeList{};
 

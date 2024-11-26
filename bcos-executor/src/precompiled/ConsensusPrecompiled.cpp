@@ -290,6 +290,7 @@ static int setWeight(const std::shared_ptr<executor::TransactionExecutive>& _exe
     auto consensusList = task::syncWait(ledger::getNodeList(*storage.getRawStorage()));
     auto node = std::find_if(consensusList.begin(), consensusList.end(),
         [&](const consensus::ConsensusNode& node) { return node.nodeID->hex() == nodeID; });
+    bool forceSet = false;
     if (node != consensusList.end())
     {
         if (node->type == consensus::Type::consensus_observer)
@@ -298,6 +299,7 @@ static int setWeight(const std::shared_ptr<executor::TransactionExecutive>& _exe
         }
         if (setTermWeight)
         {
+            forceSet = true;
             node->termWeight = weight.convert_to<uint64_t>();
         }
         else
@@ -310,7 +312,7 @@ static int setWeight(const std::shared_ptr<executor::TransactionExecutive>& _exe
     {
         return CODE_NODE_NOT_EXIST;  // Not found
     }
-    task::syncWait(ledger::setNodeList(*storage.getRawStorage(), consensusList));
+    task::syncWait(ledger::setNodeList(*storage.getRawStorage(), consensusList, forceSet));
 
     return 0;
 }

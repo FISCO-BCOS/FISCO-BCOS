@@ -144,5 +144,7 @@ public:
 
     virtual void setSignatureList(gsl::span<const Signature> const& _signatureList) = 0;
     virtual void setSignatureList(SignatureList&& _signatureList) = 0;
+
+    virtual size_t size() const = 0;
 };
 }  // namespace bcos::protocol

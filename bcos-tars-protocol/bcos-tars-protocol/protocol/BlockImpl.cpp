@@ -275,3 +275,17 @@ bcostars::protocol::BlockImpl::receipts() const
             [&]() mutable { return std::addressof(receipt); });
     });
 }
+size_t bcostars::protocol::BlockImpl::size() const
+{
+    size_t size = 0;
+    size += blockHeaderConst()->size();
+    for (uint64_t i = 0; i < transactionsSize(); ++i)
+    {
+        size += transaction(i)->size();
+    }
+    for (uint64_t i = 0; i < receiptsSize(); ++i)
+    {
+        size += receipt(i)->size();
+    }
+    return size;
+}

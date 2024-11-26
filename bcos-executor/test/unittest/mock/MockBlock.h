@@ -52,6 +52,7 @@ public:
     uint64_t receiptsSize() const override { return 0; }
     void setNonceList(RANGES::any_view<protocol::NonceType> nonces) override {}
     RANGES::any_view<protocol::NonceType> nonceList() const override { return m_nodelist; }
+    size_t size() const override { return 0; }
 
     protocol::ViewResult<crypto::HashType> transactionHashes() const override { return {}; }
     protocol::ViewResult<std::unique_ptr<protocol::TransactionMetaData>> transactionMetaDatas()

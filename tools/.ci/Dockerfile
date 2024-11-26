@@ -6,7 +6,7 @@ WORKDIR /
 ARG SOURCE_BRANCH
 ENV DEBIAN_FRONTEND=noninteractive \
     SOURCE=${SOURCE_BRANCH:-master}
-RUN apt-get -q update && apt-get install -qy --no-install-recommends \
+RUN apt-get -q update && apt-get install -qy --no-install-recommends python3 \
     curl git clang make build-essential cmake libssl-dev zlib1g-dev ca-certificates \
     libgmp-dev flex bison patch libzstd-dev unzip ninja-build pkg-config curl zip tar ccache uuid-runtime automake autoconf \
     && ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \

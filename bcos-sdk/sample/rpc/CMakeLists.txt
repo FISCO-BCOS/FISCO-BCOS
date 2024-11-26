@@ -8,3 +8,6 @@ if (NOT WIN32)
    target_compile_options(blocknotifier PRIVATE -Wno-unused-variable)
 endif()
 target_link_libraries(blocknotifier PUBLIC ${BCOS_CPP_SDK_TARGET} bcos-boostssl bcos-utilities jsoncpp_static OpenSSL::SSL OpenSSL::Crypto)
+
+add_executable(rpc_test rpc_test.cpp)
+target_link_libraries(rpc_test PUBLIC ${BCOS_CPP_SDK_TARGET})

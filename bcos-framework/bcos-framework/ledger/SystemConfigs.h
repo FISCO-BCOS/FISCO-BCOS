@@ -19,12 +19,12 @@
  */
 
 #pragma once
+#include "../protocol/ProtocolTypeDef.h"
 #include "bcos-concepts/Exception.h"
 #include <boost/throw_exception.hpp>
 #include <magic_enum.hpp>
 #include <range/v3/view/iota.hpp>
 #include <range/v3/view/transform.hpp>
-#include <utility>
 
 namespace bcos::ledger
 {
@@ -50,6 +50,9 @@ enum class SystemConfig
 };
 struct SystemConfigs
 {
+public:
+    using ConfigPair = std::pair<std::string, protocol::BlockNumber>;
+
     static SystemConfig fromString(std::string_view str)
     {
         auto const value = magic_enum::enum_cast<SystemConfig>(str);
@@ -60,7 +63,7 @@ struct SystemConfigs
         return *value;
     }
 
-    std::optional<std::string> get(SystemConfig config) const
+    std::optional<ConfigPair> get(SystemConfig config) const
     {
         if (magic_enum::enum_contains(config))
         {
@@ -68,21 +71,21 @@ struct SystemConfigs
         }
         return {};
     }
-    std::optional<std::string> get(std::string_view config) const
+
+    ConfigPair getOrDefault(SystemConfig config, std::string defaultValue) const
     {
-        return get(fromString(config));
+        return get(config).value_or(ConfigPair{std::move(defaultValue), 0});
     }
 
-    void set(SystemConfig config, std::string value)
+    std::optional<ConfigPair> get(std::string_view config) const { return get(fromString(config)); }
+
+    void set(SystemConfig config, std::string value, protocol::BlockNumber number)
     {
-        if (magic_enum::enum_contains(config))
-        {
-            m_sysConfigs.at(static_cast<int>(config)) = std::move(value);
-        }
+        m_sysConfigs[static_cast<int>(config)] = {std::move(value), number};
     }
-    void set(std::string_view config, std::string value)
+    void set(std::string_view config, std::string value, protocol::BlockNumber number)
     {
-        set(fromString(config), std::move(value));
+        set(fromString(config), std::move(value), number);
     }
 
     auto systemConfigs() const
@@ -95,6 +98,7 @@ struct SystemConfigs
                });
     }
 
+    // return all config names
     static auto supportConfigs()
     {
         return ::ranges::views::iota(0LU, magic_enum::enum_count<SystemConfig>()) |
@@ -105,7 +109,7 @@ struct SystemConfigs
     }
 
 private:
-    std::array<std::optional<std::string>, magic_enum::enum_count<SystemConfig>()> m_sysConfigs;
+    std::array<std::optional<ConfigPair>, magic_enum::enum_count<SystemConfig>()> m_sysConfigs;
 };
 
 }  // namespace bcos::ledger

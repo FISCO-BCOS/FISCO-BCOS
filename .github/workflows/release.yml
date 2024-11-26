@@ -15,7 +15,7 @@ concurrency:
 jobs:
   compile_macOS_release:
     name: upload standard binary of macOS
-    runs-on: macos-13
+    runs-on: macos-15-large
     # runs-on: self-hosted-mac
     # if: startsWith(github.ref,'v2')
     steps:
@@ -118,7 +118,13 @@ jobs:
     env:
       VCPKG_ROOT: ~/cache/vcpkg
       DEPS_ROOT: ~/cache/deps
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+      ACTIONS_RUNNER_FORCED_INTERNAL_NODE_VERSION: node16
+      ACTIONS_RUNNER_FORCE_ACTIONS_NODE_VERSION: node16
     steps:
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '16.x'
       - uses: actions/checkout@v3
         with:
           clean: false
@@ -227,7 +233,13 @@ jobs:
     env:
       VCPKG_ROOT: ~/cache/vcpkg
       DEPS_ROOT: ~/cache/deps
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+      ACTIONS_RUNNER_FORCED_INTERNAL_NODE_VERSION: node16
+      ACTIONS_RUNNER_FORCE_ACTIONS_NODE_VERSION: node16
     steps:
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '16.x'
       - uses: actions/checkout@v3
         with:
           clean: false

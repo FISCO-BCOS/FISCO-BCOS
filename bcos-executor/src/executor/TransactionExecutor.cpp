@@ -424,6 +424,12 @@ std::shared_ptr<BlockContext> TransactionExecutor::createBlockContextForCall(
 {
     BlockContext::Ptr context = make_shared<BlockContext>(storage, m_ledgerCache, m_hashImpl,
         blockNumber, blockHash, timestamp, blockVersion, m_isWasm, m_isAuthCheck);
+    ledger::Features features;
+    task::syncWait(features.readFromStorage(*storage, blockNumber + 1));
+    context->setFeatures(std::move(features));
+    ledger::SystemConfigs config;
+    task::syncWait(readFromStorage(config, *storage, blockNumber + 1));
+    context->setConfigs(std::move(config));
     context->setVMFactory(m_vmFactory);
     return context;
 }

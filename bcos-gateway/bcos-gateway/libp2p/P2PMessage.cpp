@@ -364,7 +364,7 @@ int32_t P2PMessage::decode(const bytesConstRef& _buffer)
     }
 
     uint32_t length = _buffer.size();
-    CHECK_OFFSET_WITH_THROW_EXCEPTION(m_length, length);
+    CHECK_OFFSET_WITH_THROW_EXCEPTION(offset, m_length);
     auto data = _buffer.getCroppedData(offset, m_length - offset);
     // raw data cropped from buffer, maybe be compressed or not
 

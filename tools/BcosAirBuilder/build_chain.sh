@@ -39,7 +39,7 @@ ca_dir=""
 prometheus_dir=""
 config_path=""
 docker_mode=
-default_version="v3.12.0"
+default_version="v3.12.1"
 compatibility_version=${default_version}
 default_mtail_version="3.0.0-rc49"
 compatibility_mtail_version=${default_mtail_version}
@@ -71,11 +71,11 @@ log_level="info"
 
 # for pro or max default setting
 bcos_builder_package=BcosBuilder.tgz
-bcos_builder_version=v3.12.0
+bcos_builder_version=v3.12.1
 use_exist_binary="false"
 download_specific_binary_flag="false"
 download_service_binary_type="cdn"
-service_binary_version="v3.12.0"
+service_binary_version="v3.12.1"
 download_service_binary_path="binary"
 download_service_binary_path_flag="false"
 service_type="all"
@@ -1342,9 +1342,9 @@ generate_config_ini() {
     local rpc_listen_port="${5}"
     local disable_ssl="${6}"
 
-    local disable_ssl_content=";disable_ssl=true"
+    local enable_ssl_content="enable_ssl=true"
     if [[ "${disable_ssl}" == "true" ]]; then
-        disable_ssl_content="disable_ssl=true"
+        enable_ssl_content="enable_ssl=false"
     fi
 
     cat <<EOF >"${output}"
@@ -1374,8 +1374,8 @@ generate_config_ini() {
     thread_count=4
     ; ssl or sm ssl
     sm_ssl=false
-    ; ssl connection switch, if disable the ssl connection, default: false
-    ${disable_ssl_content}
+    ; ssl connection switch, if you wan to disable the ssl connection, turn it to false, default: true
+    ${enable_ssl_content}
     ; return input params in sendTransaction() return, default: true
     ; return_input_params=false
     ; tars_rpc_port=20021
@@ -1561,9 +1561,9 @@ generate_sm_config_ini() {
     local rpc_listen_port="${5}"
     local disable_ssl="${6}"
 
-    local disable_ssl_content=";disable_ssl=true"
+    local enable_ssl_content="enable_ssl=true"
     if [[ "${disable_ssl}" == "true" ]]; then
-        disable_ssl_content="disable_ssl=true"
+        enable_ssl_content="enable_ssl=false"
     fi
 
     cat <<EOF >"${output}"
@@ -1593,8 +1593,8 @@ generate_sm_config_ini() {
     thread_count=4
     ; ssl or sm ssl
     sm_ssl=true
-    ;ssl connection switch, if disable the ssl connection, default: false
-    ${disable_ssl_content}
+    ; ssl connection switch, if you wan to disable the ssl connection, turn it to false, default: true
+    ${enable_ssl_content}
     ; return input params in sendTransaction() return, default: true
     ; return_input_params=false
 
@@ -1661,8 +1661,13 @@ generate_config() {
     local rpc_listen_ip="${5}"
     local rpc_listen_port="${6}"
     local disable_ssl="${7}"
+    local skip_generate_auth_account="${8}"
 
-    check_auth_account
+    if [[ -n "${skip_generate_auth_account}" ]]; then
+        LOG_INFO "Skip generate auth account..."
+    else
+        check_auth_account
+    fi
     if [ "${sm_mode}" == "false" ]; then
         generate_config_ini "${node_config_path}" "${p2p_listen_ip}" "${p2p_listen_port}" "${rpc_listen_ip}" "${rpc_listen_port}" "${disable_ssl}"
     else
@@ -2250,7 +2255,7 @@ generate_template_package()
 
     local connected_nodes="[#P2P_CONNECTED_NODES]"
     # generate config for node
-    generate_config "${sm_mode}" "${node_dir}/config.ini" "${p2p_listen_ip}" "${p2p_listen_port}" "${rpc_listen_ip}" "${rpc_listen_port}" "true"
+    generate_config "${sm_mode}" "${node_dir}/config.ini" "${p2p_listen_ip}" "${p2p_listen_port}" "${rpc_listen_ip}" "${rpc_listen_port}" "true" "true"
     generate_p2p_connected_conf "${node_dir}/${p2p_connected_conf_name}" "${connected_nodes}" "true"
 
     LOG_INFO "Building template intstall package"
@@ -2798,6 +2803,20 @@ main() {
             echo "      bash build_chain.sh -C generate-template-package -e ./fisco-bcos -o ./nodes -G ./config.genesis -s"
             echo "      bash build_chain.sh -C generate-template-package -e ./fisco-bcos -o ./nodes -n nodeids -s -R"
         fi
+    elif [[ "${command}" == "generate_cert" ]]; then
+      mkdir -p "${output_dir}"
+      if "${sm_mode}" ; then
+          generate_sm_sm2_param "${output_dir}/${sm2_params}"
+      else
+          generate_cert_conf "${output_dir}/cert.cnf"
+      fi
+      generate_node_account "${sm_mode}" "${output_dir}" "1"
+      if [[ -n "${ca_dir}" ]]; then
+        generate_node_cert "${sm_mode}" "${ca_dir}" "${output_dir}"
+      else
+        generate_chain_cert "${sm_mode}" "${output_dir}/ca"
+        generate_node_cert "${sm_mode}" "${output_dir}/ca" "${output_dir}"
+      fi
     elif [[ "${command}" == "modify" ]]; then
         modify_multiple_ca_node
     else
