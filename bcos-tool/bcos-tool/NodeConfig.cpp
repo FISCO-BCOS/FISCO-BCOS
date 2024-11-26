@@ -24,6 +24,8 @@
 #include "bcos-framework/consensus/ConsensusNode.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/ServiceDesc.h"
+#include "bcos-framework/security/CloudKmsType.h"
+#include "bcos-framework/security/KeyEncryptionType.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
@@ -620,7 +622,10 @@ void NodeConfig::loadSecurityConfig(boost::property_tree::ptree const& _pt)
 {
     m_privateKeyPath = _pt.get<std::string>("security.private_key_path", "node.pem");
     m_enableHsm = _pt.get<bool>("security.enable_hsm", false);
-    if (m_enableHsm)
+    m_keyEncryptionType = security::keyEncryptionTypeFromString(
+        _pt.get<std::string>("security.key_encryption_type", "DEFAULT"));
+    m_KeyEncryptionUrl = _pt.get<std::string>("security.key_encryption_url", "");
+    if (m_enableHsm || m_keyEncryptionType == security::KeyEncryptionType::HSM)
     {
         m_hsmLibPath =
             _pt.get<std::string>("security.hsm_lib_path", "/usr/local/lib/libgmt0018.so");
@@ -630,9 +635,35 @@ void NodeConfig::loadSecurityConfig(boost::property_tree::ptree const& _pt)
                              << LOG_KV("lib_path", m_hsmLibPath) << LOG_KV("key_index", m_keyIndex)
                              << LOG_KV("password", m_password);
     }
+    if (m_keyEncryptionType == security::KeyEncryptionType::CLOUDKMS)
+    {
+        m_cloudKmsType = security::cloudKmsTypeFromString(_pt.get<std::string>("security.cloud_kms_type", ""));
+    }
+    if (m_keyEncryptionType == security::KeyEncryptionType::BCOSKMS)
+    {
+        m_bcosKmsKeySecurityCipherDataKey = _pt.get<std::string>("security.cipher_data_key", "");
+    }
+    if (m_keyEncryptionType == security::KeyEncryptionType::DEFAULT)
+    {
+        m_storageSecurityEnable = _pt.get<bool>("storage_security.enable", false);
+        if (m_storageSecurityEnable)
+        {
+            m_bcosKmsKeySecurityCipherDataKey =
+                _pt.get<std::string>("storage_security.cipher_data_key", "");
+            m_KeyEncryptionUrl =
+                _pt.get<std::string>("storage_security.key_center_url", "");
+            if (m_bcosKmsKeySecurityCipherDataKey.empty())
+            {
+                BOOST_THROW_EXCEPTION(
+                    InvalidConfig() << errinfo_comment("Please provide cipher_data_key!"));
+            }
+        }
+    }
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadSecurityConfig") << LOG_KV("enable_hsm", m_enableHsm)
-                         << LOG_KV("privateKeyPath", m_privateKeyPath);
+                         << LOG_KV("privateKeyPath", m_privateKeyPath)
+                         << LOG_KV("keyEncryptionType",
+                                security::keyEncryptionTypeToString(m_keyEncryptionType));
 }
 
 void NodeConfig::loadSealerConfig(boost::property_tree::ptree const& _pt)
@@ -655,27 +686,7 @@ void NodeConfig::loadStorageSecurityConfig(boost::property_tree::ptree const& _p
         return;
     }
 
-    std::string storageSecurityKeyCenterUrl =
-        _pt.get<std::string>("storage_security.key_center_url", "");
-
-    std::vector<std::string> values;
-    boost::split(
-        values, storageSecurityKeyCenterUrl, boost::is_any_of(":"), boost::token_compress_on);
-    if (2 != values.size())
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidParameter() << errinfo_comment(
-                "initGlobalConfig storage_security failed! Invalid key_center_url!"));
-    }
-
-    m_storageSecurityKeyCenterIp = values[0];
-    m_storageSecurityKeyCenterPort = boost::lexical_cast<unsigned short>(values[1]);
-    if (!isValidPort(m_storageSecurityKeyCenterPort))
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "initGlobalConfig storage_security failed! Invalid key_manange_port!"));
-    }
+    m_storageSecurityUrl = _pt.get<std::string>("storage_security.key_center_url", "");
 
     m_storageSecurityCipherDataKey = _pt.get<std::string>("storage_security.cipher_data_key", "");
     if (m_storageSecurityCipherDataKey.empty())
@@ -684,7 +695,7 @@ void NodeConfig::loadStorageSecurityConfig(boost::property_tree::ptree const& _p
             InvalidConfig() << errinfo_comment("Please provide cipher_data_key!"));
     }
     NodeConfig_LOG(INFO) << LOG_DESC("loadStorageSecurityConfig")
-                         << LOG_KV("keyCenterUrl", storageSecurityKeyCenterUrl);
+                         << LOG_KV("keyCenterUrl", m_storageSecurityUrl);
 }
 
 void NodeConfig::loadSyncConfig(const boost::property_tree::ptree& _pt)

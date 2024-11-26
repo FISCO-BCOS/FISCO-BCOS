@@ -17,6 +17,7 @@
 #include <boost/test/unit_test.hpp>
 #include <future>
 #include <optional>
+#include <boost/filesystem.hpp>
 
 using namespace bcos::storage;
 using namespace std;

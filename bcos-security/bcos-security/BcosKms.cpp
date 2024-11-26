@@ -15,12 +15,12 @@
  *
  */
 /**
- * @brief : keycenter for disk encrytion
+ * @brief : BcosKms for disk encrytion
  * @author: jimmyshi
  * @date: 2018-12-03
  */
 
-#include "KeyCenter.h"
+#include "BcosKms.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-utilities/DataConvertUtility.h>
@@ -39,16 +39,16 @@ namespace http = beast::http;    // from <boost/beast/http.hpp>
 namespace net = boost::asio;     // from <boost/asio.hpp>
 using tcp = net::ip::tcp;        // from <boost/asio/ip/tcp.hpp>
 
-KeyCenterHttpClient::KeyCenterHttpClient(const string& _ip, int _port)
-  : KeyCenterHttpClientInterface(), m_ip(_ip), m_port(_port), m_ioc(), m_socket(m_ioc)
+BcosKmsHttpClient::BcosKmsHttpClient(const string& _ip, int _port)
+  : BcosKmsHttpClientInterface(), m_ip(_ip), m_port(_port), m_ioc(), m_socket(m_ioc)
 {}
 
-KeyCenterHttpClient::~KeyCenterHttpClient()
+BcosKmsHttpClient::~BcosKmsHttpClient()
 {
     close();
 }
 
-void KeyCenterHttpClient::connect()
+void BcosKmsHttpClient::connect()
 {
     WriteGuard l(x_clinetSocket);
     try
@@ -71,7 +71,7 @@ void KeyCenterHttpClient::connect()
     }
 }
 
-void KeyCenterHttpClient::close()
+void BcosKmsHttpClient::close()
 {
     WriteGuard l(x_clinetSocket);
     if (!m_socket.is_open())
@@ -87,7 +87,7 @@ void KeyCenterHttpClient::close()
     }
 }
 
-Json::Value KeyCenterHttpClient::callMethod(const string& _method, Json::Value _params)
+Json::Value BcosKmsHttpClient::callMethod(const string& _method, Json::Value _params)
 {
     if (!m_socket.is_open())
         connect();  // Jump out immediately if has connected
@@ -162,7 +162,7 @@ Json::Value KeyCenterHttpClient::callMethod(const string& _method, Json::Value _
     return res;
 }
 
-const bytes KeyCenter::getDataKey(const std::string& _cipherDataKey, const bool isSMCrypto)
+const bytes BcosKms::getDataKey(const std::string& _cipherDataKey, const bool isSMCrypto)
 {
     if (_cipherDataKey.empty())
     {
@@ -179,10 +179,10 @@ const bytes KeyCenter::getDataKey(const std::string& _cipherDataKey, const bool 
     try
     {
         // Create
-        KeyCenterHttpClientInterface::Ptr kcclient;
+        BcosKmsHttpClientInterface::Ptr kcclient;
         if (m_kcclient == nullptr)
         {
-            kcclient = make_shared<KeyCenterHttpClient>(m_ip, m_port);
+            kcclient = make_shared<BcosKmsHttpClient>(m_ip, m_port);
         }
         else
         {
@@ -225,7 +225,7 @@ const bytes KeyCenter::getDataKey(const std::string& _cipherDataKey, const bool 
     return m_lastRcvDataKey;
 }
 
-void KeyCenter::setIpPort(const std::string& _ip, int _port)
+void BcosKms::setIpPort(const std::string& _ip, int _port)
 {
     m_ip = _ip;
     m_port = _port;
@@ -233,7 +233,7 @@ void KeyCenter::setIpPort(const std::string& _ip, int _port)
     KC_LOG(DEBUG) << LOG_DESC("Set instance url") << LOG_KV("IP", m_ip) << LOG_KV("port", m_port);
 }
 
-bytes KeyCenter::uniformDataKey(const bytes& _readableDataKey, const bool isSMCrypto)
+bytes BcosKms::uniformDataKey(const bytes& _readableDataKey, const bool isSMCrypto)
 {
     if (true == isSMCrypto)
     {

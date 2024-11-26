@@ -1,5 +1,5 @@
 #include <boost/test/unit_test.hpp>
-#include <bcos-security/DataEncryption.h>
+#include <bcos-security/BcosKmsDataEncryption.h>
 #include <bcos-security/HsmDataEncryption.h>
 #include <bcos-tool/NodeConfig.h>
 
@@ -12,7 +12,7 @@ namespace test
 {
     BOOST_AUTO_TEST_CASE(testDataEncryption_normal)
     {
-        DataEncryption dataEncryption("bcos_data_key", false);
+        BcosKmsDataEncryption dataEncryption("bcos_data_key", false);
         dataEncryption.setCompatibilityVersion(static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_3_VERSION));
 
         std::string originData = "hello world";
@@ -24,7 +24,7 @@ namespace test
 
     BOOST_AUTO_TEST_CASE(testDataEncryption_sm)
     {
-        DataEncryption dataEncryption("bcos_data_key", true);
+        BcosKmsDataEncryption dataEncryption("bcos_data_key", true);
         dataEncryption.setCompatibilityVersion(static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_3_VERSION));
 
         std::string originData = "hello world";

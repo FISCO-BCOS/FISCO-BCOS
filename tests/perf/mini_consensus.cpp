@@ -118,7 +118,7 @@ void initAndStart(std::string const& _configFilePath, std::string const& _genesi
     nodeInitializer->initConfig(_configFilePath, _genesisFile, "", true);
 
     GatewayFactory gatewayFactory(nodeConfig->chainId(), "localRpc",
-        nodeInitializer->protocolInitializer()->dataEncryption());
+        nodeInitializer->protocolInitializer()->keyEncryption());
     auto gateway = gatewayFactory.buildGateway(_configFilePath, true, nullptr, "localGateway");
 
     auto frontServiceInitializer = std::make_shared<FrontServiceInitializer>(

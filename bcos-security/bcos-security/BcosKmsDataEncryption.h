@@ -23,24 +23,22 @@
 #pragma once
 #include "Common.h"
 #include <bcos-crypto/interfaces/crypto/SymmetricEncryption.h>
-#include <bcos-framework/security/DataEncryptInterface.h>
+#include <bcos-framework/security/StorageEncryptInterface.h>
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/FileUtility.h>
 #include <memory>
 
-namespace bcos
+namespace bcos::security
 {
-namespace security
-{
-class DataEncryption : public DataEncryptInterface
+class BcosKmsDataEncryption : public StorageEncryptInterface
 {
 public:
-    using Ptr = std::shared_ptr<DataEncryption>;
+    using Ptr = std::shared_ptr<BcosKmsDataEncryption>;
 
 public:
-    DataEncryption(const bcos::tool::NodeConfig::Ptr nodeConfig);
-    DataEncryption(const std::string& dataKey, const bool smCryptoType);
-    ~DataEncryption() override {}
+    BcosKmsDataEncryption(const bcos::tool::NodeConfig::Ptr nodeConfig);
+    BcosKmsDataEncryption(const std::string& dataKey, const bool smCryptoType);
+    ~BcosKmsDataEncryption() override {}
 
     uint32_t compatibilityVersion() { return m_compatibilityVersion; }
     void setCompatibilityVersion(uint32_t _compatibilityVersion)
@@ -49,11 +47,6 @@ public:
     }
 
 public:
-    std::shared_ptr<bytes> decryptContents(const std::shared_ptr<bytes>& contents) override;
-
-    // use to decrypt node.key
-    std::shared_ptr<bytes> decryptFile(const std::string& filename) override;
-
     // use to encrypt/decrypt in rocksdb
     std::string encrypt(const std::string& data) override;
     std::string decrypt(const std::string& data) override;
@@ -66,6 +59,4 @@ private:
     bcos::crypto::SymmetricEncryption::Ptr m_symmetricEncrypt{nullptr};
 };
 
-}  // namespace security
-
-}  // namespace bcos
+}  // namespace bcos::security

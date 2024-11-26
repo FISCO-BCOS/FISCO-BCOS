@@ -20,7 +20,7 @@
  * @date: 2023-02-17
  */
 
-#include "HsmDataEncryption.h"
+#include "HsmKeyEncryption.h"
 #include <bcos-crypto/encrypt/HsmSM4Crypto.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FileUtility.h>
@@ -35,7 +35,7 @@ namespace bcos
 {
 namespace security
 {
-HsmDataEncryption::HsmDataEncryption(const bcos::tool::NodeConfig::Ptr nodeConfig)
+HsmKeyEncryption::HsmKeyEncryption(const bcos::tool::NodeConfig::Ptr nodeConfig)
 {
     m_nodeConfig = nodeConfig;
     m_hsmLibPath = m_nodeConfig->hsmLibPath();
@@ -43,7 +43,7 @@ HsmDataEncryption::HsmDataEncryption(const bcos::tool::NodeConfig::Ptr nodeConfi
     m_symmetricEncrypt = std::make_shared<HsmSM4Crypto>(m_hsmLibPath);
 }
 
-std::string HsmDataEncryption::encrypt(uint8_t* data, size_t size)
+std::shared_ptr<bytes> HsmKeyEncryption::encryptContents(const std::shared_ptr<bytes>& contents)
 {
     random_bytes_engine rbe;
     std::vector<unsigned char> ivData(SM4_IV_DATA_SIZE);
@@ -52,24 +52,23 @@ std::string HsmDataEncryption::encrypt(uint8_t* data, size_t size)
     auto originIvData = ivData;
 
     bytesPointer encData = m_symmetricEncrypt->symmetricEncryptWithInternalKey(
-        reinterpret_cast<const unsigned char*>(data), size, m_encKeyIndex, ivData.data(),
-        SM4_IV_DATA_SIZE);
+        reinterpret_cast<const unsigned char*>(contents->data()), contents->size(), m_encKeyIndex,
+        ivData.data(), SM4_IV_DATA_SIZE);
     // append iv data to end of encData
-    std::string value((char*)encData->data(), encData->size());
-    value.insert(value.end(), originIvData.begin(), originIvData.end());
-
-    return value;
+    encData->insert(encData->end(), originIvData.begin(), originIvData.end());
+    return encData;
 }
 
-std::string HsmDataEncryption::decrypt(uint8_t* data, size_t size)
+std::shared_ptr<bytes> HsmKeyEncryption::decryptContents(const std::shared_ptr<bytes>& contents)
 {
-    size_t cipherDataSize = size - SM4_IV_DATA_SIZE;
+    size_t cipherDataSize = contents->size() - SM4_IV_DATA_SIZE;
     bytesPointer decData = m_symmetricEncrypt->symmetricDecryptWithInternalKey(
-        data, cipherDataSize, m_encKeyIndex, data + cipherDataSize, SM4_IV_DATA_SIZE);
-    std::string value((char*)decData->data(), decData->size());
-
-    return value;
+        reinterpret_cast<const unsigned char*>(contents->data()), cipherDataSize, m_encKeyIndex,
+        reinterpret_cast<const unsigned char*>(contents->data() + cipherDataSize),
+        SM4_IV_DATA_SIZE);
+    return decData;
 }
+
 
 }  // namespace security
 }  // namespace bcos

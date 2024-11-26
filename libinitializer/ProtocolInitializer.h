@@ -23,7 +23,8 @@
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/protocol/TransactionSubmitResultFactory.h>
-#include <bcos-framework/security/DataEncryptInterface.h>
+#include <bcos-framework/security/StorageEncryptInterface.h>
+#include <bcos-framework/security/KeyEncryptInterface.h>
 #include <bcos-tool/NodeConfig.h>
 
 namespace bcos::initializer
@@ -51,7 +52,9 @@ public:
     int keyIndex() const { return m_keyIndex; }
     const std::string& password() const { return m_password; }
     bcos::crypto::KeyFactory::Ptr keyFactory() const { return m_keyFactory; }
-    bcos::security::DataEncryptInterface::Ptr dataEncryption() const { return m_dataEncryption; }
+    bcos::security::KeyEncryptInterface::Ptr keyEncryption() const { return m_keyEncryption; }
+    bcos::security::StorageEncryptInterface::Ptr dataEncryption() const { return m_dataEncryption; }
+    bcos::security::KeyEncryptInterface::Ptr getKeyEncryptionByType(bcos::security::KeyEncryptionType _type);
 
 private:
     void createCryptoSuite();
@@ -65,8 +68,10 @@ private:
     bcos::protocol::TransactionSubmitResultFactory::Ptr m_txResultFactory;
     bcos::crypto::KeyPairInterface::Ptr m_keyPair;
     size_t c_hexedPrivateKeySize = 64;
-    bcos::security::DataEncryptInterface::Ptr m_dataEncryption{nullptr};
+    bcos::security::KeyEncryptionType m_keyEncryptionType;
     bool m_enableHsm;
+    bcos::security::KeyEncryptInterface::Ptr m_keyEncryption{nullptr};
+    bcos::security::StorageEncryptInterface::Ptr m_dataEncryption{nullptr};
     std::string m_hsmLibPath;
     int m_keyIndex;
     std::string m_password;
