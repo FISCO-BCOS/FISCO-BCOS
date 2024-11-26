@@ -467,8 +467,7 @@ void MemoryStorage::batchInsert(Transactions const& _txs)
 
     for (const auto& tx : _txs)
     {
-        decltype(m_missedTxs)::WriteAccessor accessor;
-        if (m_missedTxs.find(accessor, tx->hash()))
+        if (decltype(m_missedTxs)::WriteAccessor accessor; m_missedTxs.find(accessor, tx->hash()))
         {
             m_missedTxs.remove(accessor);
         }
@@ -478,8 +477,7 @@ void MemoryStorage::batchInsert(Transactions const& _txs)
 
 Transaction::Ptr MemoryStorage::removeWithoutNotifyUnseal(HashType const& _txHash)
 {
-    decltype(m_txsTable)::WriteAccessor accessor;
-    if (m_txsTable.find(accessor, _txHash))
+    if (decltype(m_txsTable)::WriteAccessor accessor; m_txsTable.find(accessor, _txHash))
     {
         auto tx = std::move(accessor.value());
         m_txsTable.remove(accessor);
@@ -954,8 +952,7 @@ void MemoryStorage::removeInvalidTxs(bool lock)
             */
         for (const auto& tx2Remove : txs2Remove | RANGES::views::keys)
         {
-            decltype(m_txsTable)::WriteAccessor accessor;
-            if (m_txsTable.find(accessor, tx2Remove))
+            if (decltype(m_txsTable)::WriteAccessor accessor; m_txsTable.find(accessor, tx2Remove))
             {
                 m_txsTable.remove(accessor);
             }

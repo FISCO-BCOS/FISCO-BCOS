@@ -15,6 +15,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace bcos::rpc::filter
 {
@@ -125,7 +126,13 @@ public:
 protected:
     bool uninstallFilterImpl(std::string_view groupId, u256 filterID)
     {
-        return m_filters.remove(filter::KeyType(groupId, filterID));
+        if (decltype(m_filters)::WriteAccessor accessor;
+            m_filters.find(accessor, filter::KeyType(groupId, std::move(filterID))))
+        {
+            m_filters.remove(accessor);
+            return true;
+        }
+        return false;
     }
     task::Task<Json::Value> getFilterChangeImpl(std::string_view groupId, u256 filterID);
     task::Task<Json::Value> getBlockChangeImpl(std::string_view groupId, Filter::Ptr filter);
@@ -137,7 +144,6 @@ protected:
     task::Task<Json::Value> getLogsInternal(
         bcos::ledger::LedgerInterface& ledger, FilterRequest::Ptr params);
 
-protected:
     virtual int32_t InvalidParamsCode() = 0;
     uint64_t insertFilter(Filter::Ptr filter);
     void cleanUpExpiredFilters();

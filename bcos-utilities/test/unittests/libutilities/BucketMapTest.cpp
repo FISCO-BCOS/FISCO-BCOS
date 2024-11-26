@@ -93,7 +93,11 @@ BOOST_AUTO_TEST_CASE(serialTest)
         }
 
         // remove
-        bucketMap.remove(i);
+        if (WriteAccessor accessor; bucketMap.find<WriteAccessor>(accessor, i))
+        {
+            bucketMap.remove(accessor);
+        }
+
 
         {  // find again
             ReadAccessor accessor;
@@ -234,7 +238,11 @@ BOOST_AUTO_TEST_CASE(parallelTest)
                 }
                 case 5:
                 {
-                    bucketMap.remove(magic);
+                    if (WriteAccessor accessor; bucketMap.find<WriteAccessor>(accessor, magic))
+                    {
+                        bucketMap.remove(accessor);
+                    }
+
                     break;
                 }
                 case 6:
