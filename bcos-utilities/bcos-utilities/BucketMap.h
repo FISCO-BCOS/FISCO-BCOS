@@ -427,16 +427,6 @@ public:
     }
 
 protected:
-    int getBucketIndex(const std::pair<KeyType, ValueType>& keyValue)
-    {
-        return getBucketIndex(keyValue.first);
-    }
-
-    int getBucketIndex(const KeyType& key)
-    {
-        auto hash = BucketHasher{}(key);
-        return hash % m_buckets.size();
-    }
     int getBucketIndex(auto const& key)
     {
         auto hash = BucketHasher{}(key);
