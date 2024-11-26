@@ -44,12 +44,22 @@ namespace bcos::rpc
     result["transactionsRoot"] = block->blockHeader()->txsRoot().hexPrefixed();
     result["stateRoot"] = block->blockHeader()->stateRoot().hexPrefixed();
     result["receiptsRoot"] = block->blockHeader()->receiptsRoot().hexPrefixed();
-    result["miner"] = Address().hexPrefixed();
+    if (std::cmp_greater(block->blockHeader()->sealerList().size(), block->blockHeader()->sealer()))
+    {
+        auto pk = block->blockHeader()->sealerList()[block->blockHeader()->sealer()];
+        auto hash = crypto::keccak256Hash(bcos::ref(pk));
+        Address address = right160(hash);
+        auto addrString = address.hex();
+        auto addrHash = crypto::keccak256Hash(address.ref()).hex();
+        toChecksumAddress(addrString, addrHash);
+        result["miner"] = "0x" + addrString;
+    }
     result["difficulty"] = "0x0";
     result["totalDifficulty"] = "0x0";
     result["extraData"] = toHexStringWithPrefix(block->blockHeader()->extraData());
-    result["size"] = "0xffff";
-    result["gasLimit"] = toQuantity(30000000ull);
+    result["size"] = toQuantity(block->size());
+    // TODO: change it wen block gas limit apply
+    result["gasLimit"] = toQuantity(30000000ULL);
     result["gasUsed"] = toQuantity((uint64_t)block->blockHeader()->gasUsed());
     result["timestamp"] = toQuantity(block->blockHeader()->timestamp() / 1000);  // to seconds
     if (fullTxs)

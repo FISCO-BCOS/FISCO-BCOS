@@ -1,4 +1,4 @@
-name: macOS-13 CI check
+name: macOS-15 CI check
 on:
   push:
     paths-ignore:
@@ -19,7 +19,7 @@ concurrency:
 jobs:
   compile_macOS_release:
     name: macOS
-    runs-on: macos-13
+    runs-on: macos-15
 
     steps:
       - uses: actions/checkout@v3
