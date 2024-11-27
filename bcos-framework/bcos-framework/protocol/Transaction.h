@@ -199,15 +199,15 @@ private:
     // the number of proposal that the tx batched into
     mutable bcos::protocol::BlockNumber m_batchId = {-1};
 
-    mutable bool m_synced = {false};
+    mutable std::atomic_bool m_synced = {false};
     // the tx has been sealed by the leader of not
-    mutable bool m_sealed = {false};
+    mutable std::atomic_bool m_sealed = {false};
     // the tx is invalid for verify failed
-    mutable bool m_invalid = {false};
+    mutable std::atomic_bool m_invalid = {false};
     // the transaction is the system transaction or not
-    mutable bool m_systemTx = {false};
+    mutable std::atomic_bool m_systemTx = {false};
     // the transaction has been stored to the storage or not
-    mutable bool m_storeToBackend = {false};
+    mutable std::atomic_bool m_storeToBackend = {false};
 };
 
 using Transactions = std::vector<Transaction::Ptr>;
