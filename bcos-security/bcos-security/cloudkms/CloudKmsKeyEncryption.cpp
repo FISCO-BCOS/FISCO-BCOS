@@ -39,16 +39,11 @@ std::shared_ptr<bytes> CloudKmsKeyEncryption::decryptContents(
     const std::shared_ptr<bytes>& contents)
 {
     BCOS_LOG(INFO) << LOG_BADGE("KmsInterface::decryptContents")
-                   << LOG_KV("decrypt type", cloudKmsTypeToString(m_kmsType));
+                   << LOG_KV("decrypt type", std::string(magic_enum::enum_name(m_kmsType)));
     // m_kmsUrl cotaims secret key
 
     auto provider = m_kmsType;
     BCOS_LOG(DEBUG) << LOG_BADGE("KmsInterface::decrypt") << LOG_KV("decrypt url", m_kmsUrl);
-    if (provider == CloudKmsType::UNKNOWN)
-    {
-        BCOS_LOG(ERROR) << LOG_BADGE("KmsInterface::decrypt") << LOG_KV("KMS url:", m_kmsUrl);
-        BOOST_THROW_EXCEPTION(KmsTypeError());
-    }
 
     if (provider == CloudKmsType::AWS)
     {
@@ -100,7 +95,7 @@ std::shared_ptr<bytes> CloudKmsKeyEncryption::decryptContents(
     }
 
     BCOS_LOG(ERROR) << LOG_BADGE("KmsInterface::decrypt")
-                    << LOG_KV("Unsupported KMS provider:", cloudKmsTypeToString(m_kmsType));
+                    << LOG_KV("Unsupported KMS provider:", std::string(magic_enum::enum_name(m_kmsType)));
     BOOST_THROW_EXCEPTION(KmsTypeError());
 }
 

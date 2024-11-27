@@ -98,7 +98,7 @@ void ProtocolInitializer::init(NodeConfig::Ptr _nodeConfig)
     {
         INITIALIZER_LOG(ERROR) << LOG_DESC("keyEncryptionType not support")
                                << LOG_KV("keyEncryptionType",
-                                      keyEncryptionTypeToString(m_keyEncryptionType));
+                                      std::string(magic_enum::enum_name((m_keyEncryptionType))));
         throw std::runtime_error("keyEncryptionType not support");
     }
     if (_nodeConfig->storageSecurityEnable())
@@ -176,7 +176,7 @@ void ProtocolInitializer::loadKeyPair(std::string const& _privateKeyPath)
         INITIALIZER_LOG(INFO) << LOG_DESC("loadKeyPair from privateKey")
                               << LOG_KV("privateKeySize", privateKeyData->size())
                               << LOG_KV("keyEncryptionType",
-                                     keyEncryptionTypeToString(m_keyEncryptionType));
+                                     std::string(magic_enum::enum_name((m_keyEncryptionType))));
         auto privateKey = m_keyFactory->createKey(*privateKeyData);
         m_keyPair = m_cryptoSuite->signatureImpl()->createKeyPair(privateKey);
         INITIALIZER_LOG(INFO) << METRIC << LOG_DESC("loadKeyPair from privateKeyPath")
@@ -198,7 +198,7 @@ bcos::security::KeyEncryptInterface::Ptr ProtocolInitializer::getKeyEncryptionBy
     else
     {
         INITIALIZER_LOG(INFO) << LOG_DESC("skiped, keyEncryptionType not support")
-                              << LOG_KV("keyEncryptionType", keyEncryptionTypeToString(_type));
+                              << LOG_KV("keyEncryptionType", std::string(magic_enum::enum_name((_type))));
     }
     return keyEncryptionPtr;
 }

@@ -20,7 +20,6 @@
  */
 #pragma once
 #include <magic_enum.hpp>
-#include <string>
 
 namespace bcos::security
 {
@@ -29,28 +28,7 @@ enum class KeyEncryptionType
     LEGACY,
     BCOSKMS,
     CLOUDKMS,
-    HSM,
-    UNKOWN
+    HSM
 };
 
-// get the string of the enum
-inline static std::string keyEncryptionTypeToString(KeyEncryptionType type)
-{
-    return std::string(magic_enum::enum_name(type));
-}
-
-// get the enum from the string
-inline static KeyEncryptionType keyEncryptionTypeFromString(const std::string& typeStr)
-{
-    if(typeStr.empty()) 
-    {
-        return KeyEncryptionType::LEGACY;
-    }
-    auto result = magic_enum::enum_cast<KeyEncryptionType>(typeStr, magic_enum::case_insensitive);
-    if (!result)
-    {
-        return KeyEncryptionType::UNKOWN;
-    }
-    return result.value();
-}
 }  // namespace bcos::security

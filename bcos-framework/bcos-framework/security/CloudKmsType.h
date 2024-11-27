@@ -22,30 +22,11 @@
  */
 #pragma once
 #include <magic_enum.hpp>
-#include <string>
 namespace bcos::security
 {
 enum class CloudKmsType
 {
-    AWS,     // Amazon Web Services KMS
-    UNKNOWN  // Unknown KMS provider
+    AWS,  // Amazon Web Services KMS
 };
 
-
-// convert the provider name to the corresponding enum value
-inline static std::string cloudKmsTypeToString(CloudKmsType provider)
-{
-    return std::string(magic_enum::enum_name(provider));
-};
-
-
-inline static CloudKmsType cloudKmsTypeFromString(const std::string& kmsTypeStr)
-{
-    auto result = magic_enum::enum_cast<CloudKmsType>(kmsTypeStr);
-    if (!result)
-    {
-        return CloudKmsType::UNKNOWN;
-    }
-    return result.value();
-}
 }  // namespace bcos::security

@@ -7,8 +7,7 @@ namespace bcos::sealer
 enum class VrfCurveType : uint8_t
 {
     CURVE25519 = 0,
-    SECKP256K1 = 1,
-    UNKNOWN = 9
+    SECKP256K1 = 1
 };
 
 }

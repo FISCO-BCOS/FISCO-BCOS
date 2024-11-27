@@ -622,8 +622,17 @@ void NodeConfig::NodeConfig::loadWeb3ChainConfig(boost::property_tree::ptree con
 void NodeConfig::loadSecurityConfig(boost::property_tree::ptree const& _pt)
 {
     m_privateKeyPath = _pt.get<std::string>("security.private_key_path", "node.pem");
-    m_keyEncryptionType =
-        security::keyEncryptionTypeFromString(_pt.get<std::string>("security.kms_type", "LEGACY"));
+    std::string keyEncryptionTypeStr = _pt.get<std::string>("security.kms_type", "LEGACY");
+    auto keyEncryptionTypeOption = magic_enum::enum_cast<security::KeyEncryptionType>(keyEncryptionTypeStr, magic_enum::case_insensitive);
+    if (!keyEncryptionTypeOption.has_value())
+    {
+        NodeConfig_LOG(ERROR) << LOG_DESC("loadSecurityConfig")
+                              << LOG_KV("privateKeyPath", m_privateKeyPath)
+                              << LOG_KV("keyEncryptionType", keyEncryptionTypeStr);
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment("Please set kms_type to LEGACY!"));
+    }
+    m_keyEncryptionType = keyEncryptionTypeOption.value();
+
     m_KeyEncryptionUrl = _pt.get<std::string>("security.kms_connection_str", "");
 
     // Deprecated: This method will be removed in future versions.
@@ -655,7 +664,7 @@ void NodeConfig::loadSecurityConfig(boost::property_tree::ptree const& _pt)
             NodeConfig_LOG(INFO) << LOG_DESC("loadSecurityConfig LEGACY")
                                  << LOG_KV("privateKeyPath", m_privateKeyPath)
                                  << LOG_KV("keyEncryptionType",
-                                        security::keyEncryptionTypeToString(m_keyEncryptionType))
+                                        std::string(magic_enum::enum_name((m_keyEncryptionType))))
                                  << LOG_KV("m_KeyEncryptionUrl", m_KeyEncryptionUrl);
         }
         if (enableHsm)
@@ -663,7 +672,7 @@ void NodeConfig::loadSecurityConfig(boost::property_tree::ptree const& _pt)
             NodeConfig_LOG(INFO) << LOG_DESC("loadSecurityConfig LEGACY")
                                  << LOG_KV("privateKeyPath", m_privateKeyPath)
                                  << LOG_KV("keyEncryptionType",
-                                        security::keyEncryptionTypeToString(m_keyEncryptionType));
+                                        std::string(magic_enum::enum_name((m_keyEncryptionType))));
             m_keyEncryptionType = security::KeyEncryptionType::HSM;
         }
     }
@@ -681,23 +690,25 @@ void NodeConfig::loadSecurityConfig(boost::property_tree::ptree const& _pt)
     }
     else if (m_keyEncryptionType == security::KeyEncryptionType::CLOUDKMS)  // cloud kms
     {
-        m_cloudKmsType =
-            security::cloudKmsTypeFromString(_pt.get<std::string>("security.cloud_kms_type", ""));
-        if (m_cloudKmsType == security::CloudKmsType::UNKNOWN)
+        std::string cloudKmsTypeStr = _pt.get<std::string>("security.cloud_kms_type", "");
+        auto cloudKmsTypeStrOption = magic_enum::enum_cast<security::CloudKmsType>(
+            cloudKmsTypeStr, magic_enum::case_insensitive);
+        if (!cloudKmsTypeStrOption.has_value())
         {
             NodeConfig_LOG(ERROR) << LOG_DESC("loadSecurityConfig")
                                   << LOG_KV("privateKeyPath", m_privateKeyPath)
                                   << LOG_KV("keyEncryptionType",
-                                         security::keyEncryptionTypeToString(m_keyEncryptionType));
+                                         std::string(magic_enum::enum_name((m_keyEncryptionType))));
             BOOST_THROW_EXCEPTION(
-                InvalidConfig() << errinfo_comment("Please set cloud_kms_type to AWS!"));
+                InvalidConfig() << errinfo_comment("Please set cloud_kms_type with AWS!"));
         }
+        m_cloudKmsType = cloudKmsTypeStrOption.value();
         NodeConfig_LOG(INFO) << LOG_DESC("loadSecurityConfig")
                              << LOG_KV("privateKeyPath", m_privateKeyPath)
                              << LOG_KV("keyEncryptionType",
-                                    security::keyEncryptionTypeToString(m_keyEncryptionType))
+                                    std::string(magic_enum::enum_name((m_keyEncryptionType))))
                              << LOG_KV(
-                                    "cloudKmsType", security::cloudKmsTypeToString(m_cloudKmsType));
+                                    "cloudKmsType", std::string(magic_enum::enum_name(m_cloudKmsType)));
     }
     else if (m_keyEncryptionType == security::KeyEncryptionType::BCOSKMS)  // bcos kms
     {
@@ -713,7 +724,7 @@ void NodeConfig::loadSecurityConfig(boost::property_tree::ptree const& _pt)
             NodeConfig_LOG(ERROR) << LOG_DESC("loadSecurityConfig")
                                   << LOG_KV("privateKeyPath", m_privateKeyPath)
                                   << LOG_KV("keyEncryptionType",
-                                         security::keyEncryptionTypeToString(m_keyEncryptionType));
+                                         std::string(magic_enum::enum_name((m_keyEncryptionType))));
             BOOST_THROW_EXCEPTION(
                 InvalidConfig() << errinfo_comment("Please provide cipher_data_key!"));
         }
@@ -723,14 +734,14 @@ void NodeConfig::loadSecurityConfig(boost::property_tree::ptree const& _pt)
         NodeConfig_LOG(INFO) << LOG_DESC("loadSecurityConfig")
                              << LOG_KV("privateKeyPath", m_privateKeyPath)
                              << LOG_KV("keyEncryptionType",
-                                    security::keyEncryptionTypeToString(m_keyEncryptionType));
+                                    std::string(magic_enum::enum_name((m_keyEncryptionType))));
     }
     else
     {
         NodeConfig_LOG(ERROR) << LOG_DESC("loadSecurityConfig")
                               << LOG_KV("privateKeyPath", m_privateKeyPath)
                               << LOG_KV("keyEncryptionType",
-                                     security::keyEncryptionTypeToString(m_keyEncryptionType));
+                                     std::string(magic_enum::enum_name((m_keyEncryptionType))));
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                   "Please set kms_type to DEFAULT or HSM or CLOUDKMS or BCOSKMS!"));
     }
@@ -739,7 +750,7 @@ void NodeConfig::loadSecurityConfig(boost::property_tree::ptree const& _pt)
     NodeConfig_LOG(INFO) << LOG_DESC("loadSecurityConfig")
                          << LOG_KV("privateKeyPath", m_privateKeyPath)
                          << LOG_KV("keyEncryptionType",
-                                security::keyEncryptionTypeToString(m_keyEncryptionType));
+                                std::string(magic_enum::enum_name((m_keyEncryptionType))));
 }
 
 void NodeConfig::loadSealerConfig(boost::property_tree::ptree const& _pt)
@@ -762,8 +773,18 @@ void NodeConfig::loadStorageSecurityConfig(boost::property_tree::ptree const& _p
         return;
     }
     // TODO: deprecated, remove in the future
-    m_storageEncryptionType = security::storageEncryptionTypeFromString(
-        _pt.get<std::string>("storage_security.kms_type", "LEGACY"));
+    std::string storageEncryptionTypeStr =
+        _pt.get<std::string>("storage_security.kms_type", "LEGACY");
+    auto storageEncryptionTypeOption = magic_enum::enum_cast<security::StorageEncryptionType>(
+        storageEncryptionTypeStr, magic_enum::case_insensitive);
+    if (!storageEncryptionTypeOption.has_value())
+    {
+        NodeConfig_LOG(ERROR) << LOG_DESC("loadStorageSecurityConfig")
+                              << LOG_KV("storageEncryptionType", storageEncryptionTypeStr);
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment("Please set kms_type to LEGACY or BCOSKMS!"));
+    }
+    m_storageEncryptionType = storageEncryptionTypeOption.value();
     m_storageSecurityUrl = _pt.get<std::string>("storage_security.kms_connection_str", "");
 
     // Deprecated: This method will be removed in future versions.
@@ -785,8 +806,7 @@ void NodeConfig::loadStorageSecurityConfig(boost::property_tree::ptree const& _p
         m_storageSecurityUrl = key_center_url;
         NodeConfig_LOG(INFO) << LOG_DESC("loadStorageSecurityConfig BCOSKMS")
                              << LOG_KV("storageEncryptionType",
-                                    security::storageEncryptionTypeToString(
-                                        security::StorageEncryptionType::LEGACY))
+                                    ("security::StorageEncryptionType::LEGACY"))
                              << LOG_KV("m_storageSecurityUrl", m_storageSecurityUrl);
     }
     /* TODO: Remove in version future around here */

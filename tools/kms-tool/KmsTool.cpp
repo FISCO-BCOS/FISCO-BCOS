@@ -61,13 +61,14 @@ int main(int argc, char* argv[])
     const std::string inputFilePath = argv[6];
     const std::string outputFilePath = argv[7];
 
-    auto provider = cloudKmsTypeFromString(kmsType);
-
-    if (provider == CloudKmsType::UNKNOWN)
+    auto prividerOption =
+        magic_enum::enum_cast<CloudKmsType>(kmsType, magic_enum::case_insensitive);
+    if (!prividerOption.has_value())
     {
         std::cerr << "Invalid KMS provider: " << kmsType << "\n";
         return 1;
     }
+    auto provider = prividerOption.value();
 
     if (provider == CloudKmsType::AWS)
     {

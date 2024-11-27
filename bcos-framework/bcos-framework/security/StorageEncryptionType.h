@@ -20,35 +20,14 @@
  */
 #pragma once
 #include <magic_enum.hpp>
-#include <string>
 
 namespace bcos::security
 {
 enum class StorageEncryptionType
 {
     LEGACY,
-    BCOSKMS,
-    UNKOWN
+    BCOSKMS
 };
 
-// get the string of the enum
-inline static std::string storageEncryptionTypeToString(StorageEncryptionType type)
-{
-    return std::string(magic_enum::enum_name(type));
-}
 
-// get the enum from the string
-inline static StorageEncryptionType storageEncryptionTypeFromString(const std::string& typeStr)
-{
-    if(typeStr.empty()) 
-    {
-        return StorageEncryptionType::LEGACY;
-    }
-    auto result = magic_enum::enum_cast<StorageEncryptionType>(typeStr, magic_enum::case_insensitive);
-    if (!result)
-    {
-        return StorageEncryptionType::UNKOWN;
-    }
-    return result.value();
-}
 }  // namespace bcos::security
