@@ -30,8 +30,7 @@ class TxPoolNonceChecker : public NonceCheckerInterface
 {
 public:
     TxPoolNonceChecker() : m_nonces(256){};
-    bcos::protocol::TransactionStatus checkNonce(
-        bcos::protocol::Transaction::ConstPtr _tx) override;
+    bcos::protocol::TransactionStatus checkNonce(const bcos::protocol::Transaction& _tx) override;
     void batchInsert(bcos::protocol::BlockNumber _batchId,
         bcos::protocol::NonceListPtr const& _nonceList) override;
     void batchRemove(bcos::protocol::NonceList const& _nonceList) override;

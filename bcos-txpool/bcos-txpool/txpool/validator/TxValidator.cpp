@@ -19,25 +19,26 @@
  * @date 2021-05-11
  */
 #include "TxValidator.h"
+#include "bcos-task/Wait.h"
 
 using namespace bcos;
 using namespace bcos::protocol;
 using namespace bcos::txpool;
 
-TransactionStatus TxValidator::verify(bcos::protocol::Transaction::ConstPtr _tx)
+TransactionStatus TxValidator::verify(const bcos::protocol::Transaction& _tx)
 {
-    if (_tx->invalid()) [[unlikely]]
+    if (_tx.invalid()) [[unlikely]]
     {
         return TransactionStatus::InvalidSignature;
     }
     // check groupId and chainId
-    if (_tx->groupId() != m_groupId &&
-        _tx->type() == static_cast<uint8_t>(TransactionType::BCOSTransaction)) [[unlikely]]
+    if (_tx.groupId() != m_groupId &&
+        _tx.type() == static_cast<uint8_t>(TransactionType::BCOSTransaction)) [[unlikely]]
     {
         return TransactionStatus::InvalidGroupId;
     }
-    if (_tx->chainId() != m_chainId &&
-        _tx->type() == static_cast<uint8_t>(TransactionType::BCOSTransaction)) [[unlikely]]
+    if (_tx.chainId() != m_chainId &&
+        _tx.type() == static_cast<uint8_t>(TransactionType::BCOSTransaction)) [[unlikely]]
     {
         return TransactionStatus::InvalidChainId;
     }
@@ -48,7 +49,7 @@ TransactionStatus TxValidator::verify(bcos::protocol::Transaction::ConstPtr _tx)
     // check signature
     try
     {
-        _tx->verify(*m_cryptoSuite->hashImpl(), *m_cryptoSuite->signatureImpl());
+        _tx.verify(*m_cryptoSuite->hashImpl(), *m_cryptoSuite->signatureImpl());
     }
     catch (...)
     {
@@ -57,21 +58,21 @@ TransactionStatus TxValidator::verify(bcos::protocol::Transaction::ConstPtr _tx)
 
     if (isSystemTransaction(_tx))
     {
-        _tx->setSystemTx(true);
+        _tx.setSystemTx(true);
     }
-    m_txPoolNonceChecker->insert(std::string(_tx->nonce()));
-    if (_tx->type() == static_cast<uint8_t>(TransactionType::Web3Transaction))
+    m_txPoolNonceChecker->insert(std::string(_tx.nonce()));
+    if (_tx.type() == static_cast<uint8_t>(TransactionType::Web3Transaction))
     {
         task::syncWait(m_web3NonceChecker->insertMemoryNonce(
-            std::string(_tx->sender()), std::string(_tx->nonce())));
+            std::string(_tx.sender()), std::string(_tx.nonce())));
     }
     return TransactionStatus::None;
 }
 
 bcos::protocol::TransactionStatus TxValidator::checkTransaction(
-    bcos::protocol::Transaction::ConstPtr _tx, bool onlyCheckLedgerNonce)
+    const bcos::protocol::Transaction& _tx, bool onlyCheckLedgerNonce)
 {
-    if (_tx->type() == static_cast<uint8_t>(TransactionType::Web3Transaction)) [[unlikely]]
+    if (_tx.type() == static_cast<uint8_t>(TransactionType::Web3Transaction)) [[unlikely]]
     {
         auto const status = checkWeb3Nonce(_tx, onlyCheckLedgerNonce);
         if (status != TransactionStatus::None)
@@ -96,8 +97,7 @@ bcos::protocol::TransactionStatus TxValidator::checkTransaction(
 }
 
 
-TransactionStatus TxValidator::checkLedgerNonceAndBlockLimit(
-    bcos::protocol::Transaction::ConstPtr _tx)
+TransactionStatus TxValidator::checkLedgerNonceAndBlockLimit(const bcos::protocol::Transaction& _tx)
 {
     // compare with nonces stored on-chain, and check block limit inside
     auto status = m_ledgerNonceChecker->checkNonce(_tx);
@@ -107,22 +107,22 @@ TransactionStatus TxValidator::checkLedgerNonceAndBlockLimit(
     }
     if (isSystemTransaction(_tx))
     {
-        _tx->setSystemTx(true);
+        _tx.setSystemTx(true);
     }
     return TransactionStatus::None;
 }
 
-TransactionStatus TxValidator::checkTxpoolNonce(bcos::protocol::Transaction::ConstPtr _tx)
+TransactionStatus TxValidator::checkTxpoolNonce(const bcos::protocol::Transaction& _tx)
 {
     return m_txPoolNonceChecker->checkNonce(_tx);
 }
 
 bcos::protocol::TransactionStatus TxValidator::checkWeb3Nonce(
-    bcos::protocol::Transaction::ConstPtr _tx, bool onlyCheckLedgerNonce)
+    const bcos::protocol::Transaction& _tx, bool onlyCheckLedgerNonce)
 {
-    if (_tx->type() != static_cast<uint8_t>(TransactionType::Web3Transaction)) [[likely]]
+    if (_tx.type() != static_cast<uint8_t>(TransactionType::Web3Transaction)) [[likely]]
     {
         return TransactionStatus::None;
     }
-    return task::syncWait(m_web3NonceChecker->checkWeb3Nonce(std::move(_tx), onlyCheckLedgerNonce));
+    return task::syncWait(m_web3NonceChecker->checkWeb3Nonce(_tx, onlyCheckLedgerNonce));
 }

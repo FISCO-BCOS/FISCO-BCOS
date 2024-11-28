@@ -136,7 +136,7 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
             add_compile_options(-Wno-error=uninitialized)
             add_compile_options(-Wno-error=tsan)
         endif()
-        # add_compile_options(-fconcepts-diagnostics-depth=10)
+        add_compile_options(-fconcepts-diagnostics-depth=10)
     elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
         if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 4.0)
             set(CMAKE_CXX_FLAGS_DEBUG "-O -g")

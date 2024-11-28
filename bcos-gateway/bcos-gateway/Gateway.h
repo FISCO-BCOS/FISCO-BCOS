@@ -38,7 +38,7 @@
 
 namespace bcos::gateway
 {
-class Retry : public std::enable_shared_from_this<Retry>, public ObjectCounter<Retry>
+class Retry : public std::enable_shared_from_this<Retry>
 {
 public:
     Retry(crypto::NodeIDPtr _srcNodeID, crypto::NodeIDPtr _dstNodeID,

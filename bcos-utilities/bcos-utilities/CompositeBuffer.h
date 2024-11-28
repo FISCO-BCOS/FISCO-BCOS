@@ -19,7 +19,6 @@
  */
 #pragma once
 
-#include "bcos-utilities/ObjectCounter.h"
 #include <bcos-utilities/Common.h>
 #include <algorithm>
 #include <memory>
@@ -29,7 +28,7 @@
 namespace bcos
 {
 
-class CompositeBuffer : bcos::ObjectCounter<CompositeBuffer>
+class CompositeBuffer
 {
 public:
     using Ptr = std::shared_ptr<CompositeBuffer>;

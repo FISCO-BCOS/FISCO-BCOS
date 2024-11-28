@@ -9,19 +9,15 @@
 #include "bcos-utilities/BoostLog.h"
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/SocketFace.h>
-#include <bcos-utilities/ObjectCounter.h>
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
 #include <boost/beast.hpp>
 #include <boost/filesystem.hpp>
 
-namespace bcos
+
+namespace bcos::gateway
 {
-namespace gateway
-{
-class Socket : public SocketFace,
-               public std::enable_shared_from_this<Socket>,
-               public bcos::ObjectCounter<Socket>
+class Socket : public SocketFace, public std::enable_shared_from_this<Socket>
 {
 public:
     Socket(std::shared_ptr<ba::io_context> _ioService, ba::ssl::context& _sslContext,
@@ -85,5 +81,4 @@ protected:
     std::shared_ptr<ba::ssl::stream<bi::tcp::socket>> m_sslSocket;
 };
 
-}  // namespace gateway
-}  // namespace bcos
+}  // namespace bcos::gateway

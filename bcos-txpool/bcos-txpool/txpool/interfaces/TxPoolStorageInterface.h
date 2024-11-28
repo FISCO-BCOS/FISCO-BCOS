@@ -73,7 +73,7 @@ public:
      * @return List of new transactions
      */
     virtual bcos::protocol::ConstTransactionsPtr fetchNewTxs(size_t _txsLimit) = 0;
-    virtual void batchFetchTxs(bcos::protocol::Block::Ptr _txsList,
+    virtual bool batchFetchTxs(bcos::protocol::Block::Ptr _txsList,
         bcos::protocol::Block::Ptr _sysTxsList, size_t _txsLimit, TxsHashSetPtr _avoidTxs,
         bool _avoidDuplicate = true) = 0;
 

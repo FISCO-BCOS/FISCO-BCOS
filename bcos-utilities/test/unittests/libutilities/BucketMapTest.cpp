@@ -54,25 +54,25 @@ BOOST_AUTO_TEST_CASE(serialTest)
 
     std::cout << std::endl;
     // for each read
-    bucketMap.forEach<ReadAccessor>([](ReadAccessor& accessor) {
+    for (auto& accessor : bucketMap.range<ReadAccessor>())
+    {
         std::cout << accessor.key() << ":" << accessor.value() << std::endl;
         BOOST_CHECK_EQUAL(accessor.key(), accessor.value());
-        return true;
-    });
+    }
 
     // for each write
-    bucketMap.forEach<WriteAccessor>([](WriteAccessor& accessor) {
+    for (auto& accessor : bucketMap.range<WriteAccessor>())
+    {
         accessor.value()++;
-        return true;
-    });
+    }
 
     std::cout << std::endl;
     // for each read
-    bucketMap.forEach<ReadAccessor>([](ReadAccessor& accessor) {
+    for (auto& accessor : bucketMap.range<ReadAccessor>())
+    {
         std::cout << accessor.key() << ":" << accessor.value() << std::endl;
         BOOST_CHECK_EQUAL(accessor.key() + 1, accessor.value());
-        return true;
-    });
+    }
     BOOST_CHECK_EQUAL(100, bucketMap.size());
 
     // remove & find
@@ -93,7 +93,11 @@ BOOST_AUTO_TEST_CASE(serialTest)
         }
 
         // remove
-        bucketMap.remove(i);
+        if (WriteAccessor accessor; bucketMap.find<WriteAccessor>(accessor, i))
+        {
+            bucketMap.remove(accessor);
+        }
+
 
         {  // find again
             ReadAccessor accessor;
@@ -111,23 +115,19 @@ BOOST_AUTO_TEST_CASE(serialTest)
     std::cout << std::endl;
     // for each size check
     {
-        size_t cnt = 0;
-        bucketMap.forEach<ReadAccessor>([&cnt](ReadAccessor& accessor) {
+        for (auto& accessor : bucketMap.range<ReadAccessor>())
+        {
             std::cout << accessor.key() << ":" << accessor.value() << std::endl;
-            cnt++;
-            return true;
-        });
+        }
         BOOST_CHECK_EQUAL(90, bucketMap.size());
     }
 
     // for each begin with certain startId
     {
-        size_t cnt = 0;
-        bucketMap.forEach<ReadAccessor>(666, [&cnt](ReadAccessor& accessor) {
+        for (auto& accessor : bucketMap.rangeByKey<ReadAccessor>(666))
+        {
             std::cout << accessor.key() << ":" << accessor.value() << std::endl;
-            cnt++;
-            return true;
-        });
+        }
         BOOST_CHECK_EQUAL(90, bucketMap.size());
     }
 
@@ -157,26 +157,24 @@ BOOST_AUTO_TEST_CASE(batchFindTest)
     }
     BOOST_CHECK_EQUAL(100, bucketMap.size());
 
-    size_t cnt = 0;
-    bucketMap.batchFind<WriteAccessor>(keys, [&cnt](const int& key, WriteAccessor* accessor) {
-        BOOST_CHECK(accessor);
-        BOOST_CHECK_EQUAL(key, accessor->key());
-        std::cout << accessor->key() << ":" << accessor->value() << std::endl;
-        accessor->value()++;
-        cnt++;
-        return true;
-    });
+    std::atomic_size_t cnt = 0;
+    bucketMap.traverse<WriteAccessor, true>(
+        keys, [&](WriteAccessor& accessor, auto index, auto& bucket) {
+            if (bucket.find(accessor, keys[index]))
+            {
+                accessor.value()++;
+                cnt++;
+                std::cout << accessor.key() << ":" << accessor.value() << std::endl;
+            }
+        });
     BOOST_CHECK_EQUAL(cnt, 100);
 
     cnt = 0;
-    bucketMap.batchFind<ReadAccessor>(keys, [&cnt](const int& key, ReadAccessor* accessor) {
-        BOOST_CHECK(accessor);
-        BOOST_CHECK_EQUAL(key, accessor->key());
-        BOOST_CHECK_EQUAL(accessor->value(), accessor->key() + 1);
-        std::cout << accessor->key() << ":" << accessor->value() << std::endl;
+    for (auto& accessor : bucketMap.range<ReadAccessor>())
+    {
+        BOOST_CHECK_EQUAL(accessor.key() + 1, accessor.value());
         cnt++;
-        return true;
-    });
+    }
     BOOST_CHECK_EQUAL(cnt, 100);
 }
 
@@ -200,31 +198,31 @@ BOOST_AUTO_TEST_CASE(parallelTest)
                 {
                 case 0:
                 {
-                    bucketMap.forEach<ReadAccessor>([](ReadAccessor& accessor) {
+                    for (auto& accessor : bucketMap.range<ReadAccessor>())
+                    {
                         std::cout << accessor.key() << ":" << accessor.value() << std::endl;
-                        return true;
-                    });
+                    }
                     break;
                 }
                 case 1:
                 {
-                    bucketMap.forEach<WriteAccessor>([](WriteAccessor& accessor) {
+                    for (auto& accessor : bucketMap.range<WriteAccessor>())
+                    {
                         accessor.value()++;
-                        return true;
-                    });
+                    }
                     break;
                 }
                 case 2:
                 {
                     // concurrent read and write
-                    bucketMap.forEach<ReadAccessor>([](ReadAccessor& accessor) {
+                    for (auto& accessor : bucketMap.range<ReadAccessor>())
+                    {
                         std::cout << accessor.key() << ":" << accessor.value() << std::endl;
-                        return true;
-                    });
-                    bucketMap.forEach<WriteAccessor>([](WriteAccessor& accessor) {
+                    }
+                    for (auto& accessor : bucketMap.range<WriteAccessor>())
+                    {
                         accessor.value()++;
-                        return true;
-                    });
+                    }
                     break;
                 }
                 case 3:
@@ -240,7 +238,11 @@ BOOST_AUTO_TEST_CASE(parallelTest)
                 }
                 case 5:
                 {
-                    bucketMap.remove(magic);
+                    if (WriteAccessor accessor; bucketMap.find<WriteAccessor>(accessor, magic))
+                    {
+                        bucketMap.remove(accessor);
+                    }
+
                     break;
                 }
                 case 6:
@@ -273,31 +275,31 @@ BOOST_AUTO_TEST_CASE(parallelTest2)
     tbb::parallel_for(
         tbb::blocked_range<int>(0, total), [&bucketMap](const tbb::blocked_range<int>& range) {
             auto kvs = RANGES::iota_view<int, int>(range.begin(), range.end()) |
-                       RANGES::views::transform([](int i) { return std::make_pair(i, i); });
+                       RANGES::views::transform([](int i) { return std::make_pair(i, i); }) |
+                       ::ranges::to<std::vector>();
 
-            bucketMap.batchInsert(kvs, [](bool, const int& key, WriteAccessor accessor) {});
+            bucketMap.batchInsert(kvs);
         });
     BOOST_CHECK_EQUAL(total, bucketMap.size());
 
     tbb::parallel_for(
         tbb::blocked_range<int>(0, total), [&bucketMap](const tbb::blocked_range<int>& range) {
-            auto ks = RANGES::iota_view<int, int>(range.begin(), range.end());
+            auto ks = RANGES::iota_view<int, int>(range.begin(), range.end()) |
+                      ::ranges::to<std::vector>();
 
-            bucketMap.batchFind<WriteAccessor>(ks, [](const int& key, WriteAccessor* accessor) {
-                accessor->value()++;
-                return true;
-            });
+            bucketMap.traverse<WriteAccessor, true>(
+                ks, [&](WriteAccessor& accessor, auto index, auto& bucket) {
+                    if (bucket.find(accessor, ks[index]))
+                    {
+                        accessor.value()++;
+                    }
+                });
         });
 
-    tbb::parallel_for(
-        tbb::blocked_range<int>(0, total), [&bucketMap](const tbb::blocked_range<int>& range) {
-            auto ks = RANGES::iota_view<int, int>(range.begin(), range.end());
-
-            bucketMap.batchFind<ReadAccessor>(ks, [](const int& key, ReadAccessor* accessor) {
-                // BOOST_CHECK_EQUAL(accessor->value(), accessor->key() + 1);
-                return true;
-            });
-        });
+    for (auto& accessor : bucketMap.range<ReadAccessor>())
+    {
+        BOOST_CHECK_EQUAL(accessor.value(), accessor.key() + 1);
+    }
     std::cout << bucketMap.size() << std::endl;
 
     tbb::parallel_for(

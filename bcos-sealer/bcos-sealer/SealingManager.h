@@ -39,9 +39,7 @@ public:
     SealingManager& operator=(const SealingManager&) = delete;
     SealingManager& operator=(SealingManager&&) = delete;
 
-    virtual ~SealingManager();
-    void stop();
-
+    virtual ~SealingManager() noexcept = default;
     bool shouldGenerateProposal();
 
     std::pair<bool, bcos::protocol::Block::Ptr> generateProposal(
@@ -82,10 +80,7 @@ private:
     TxsMetaDataQueue m_pendingSysTxs;
     SharedMutex x_pendingTxs;
 
-    ThreadPool::Ptr m_worker;
-
     std::atomic<uint64_t> m_lastSealTime = {0};
-
     // the invalid sealingNumber is -1
     std::atomic<ssize_t> m_sealingNumber = {-1};
 

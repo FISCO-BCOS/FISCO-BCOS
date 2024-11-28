@@ -26,7 +26,6 @@
 #include "txpool/interfaces/TxPoolStorageInterface.h"
 #include <bcos-utilities/BucketMap.h>
 #include <bcos-utilities/FixedBytes.h>
-#include <bcos-utilities/RateCollector.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <bcos-utilities/Timer.h>
 #include <tbb/concurrent_hash_map.h>
@@ -81,7 +80,7 @@ public:
     // FIXME: deprecated, after using txpool::broadcastTransaction
     bcos::protocol::ConstTransactionsPtr fetchNewTxs(size_t _txsLimit) override;
 
-    void batchFetchTxs(bcos::protocol::Block::Ptr _txsList, bcos::protocol::Block::Ptr _sysTxsList,
+    bool batchFetchTxs(bcos::protocol::Block::Ptr _txsList, bcos::protocol::Block::Ptr _sysTxsList,
         size_t _txsLimit, TxsHashSetPtr _avoidTxs, bool _avoidDuplicate = true) override;
 
     bool exist(bcos::crypto::HashType const& _txHash) override
@@ -162,8 +161,6 @@ protected:
     using HashSet = BucketSet<bcos::crypto::HashType, std::hash<bcos::crypto::HashType>>;
     HashSet m_missedTxs;
 
-    std::atomic<size_t> m_sealedTxsSize = {0};
-
     std::atomic<bcos::protocol::BlockNumber> m_blockNumber = {0};
     uint64_t m_blockNumberUpdatedTime;
 
@@ -175,11 +172,6 @@ protected:
     // for tps stat
     std::atomic_uint64_t m_tpsStatstartTime = {0};
     std::atomic_uint64_t m_onChainTxsCount = {0};
-
-    RateCollector m_inRateCollector;
-    RateCollector m_sealRateCollector;
-    RateCollector m_removeRateCollector;
-
     bcos::crypto::HashType m_knownLatestSealedTxHash;
 };
 }  // namespace bcos::txpool

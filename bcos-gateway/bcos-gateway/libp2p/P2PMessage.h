@@ -20,7 +20,6 @@
 
 #pragma once
 
-#include "bcos-utilities/ObjectCounter.h"
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/Message.h>
@@ -116,7 +115,7 @@ protected:
 ///       dst nodeIDs       : bytes
 ///       moduleID          : 2 bytes
 ///   payload           :X bytes
-class P2PMessage : public Message, public bcos::ObjectCounter<P2PMessage>
+class P2PMessage : public Message
 {
 public:
     using Ptr = std::shared_ptr<P2PMessage>;
@@ -243,7 +242,7 @@ protected:
     MessageExtAttributes::Ptr m_extAttr = nullptr;  ///< message additional attributes
 };
 
-class P2PMessageFactory : public MessageFactory, public bcos::ObjectCounter<P2PMessageFactory>
+class P2PMessageFactory : public MessageFactory
 {
 public:
     using Ptr = std::shared_ptr<P2PMessageFactory>;

@@ -33,7 +33,7 @@ void LedgerNonceChecker::initNonceCache(
     }
 }
 
-TransactionStatus LedgerNonceChecker::checkNonce(Transaction::ConstPtr _tx)
+TransactionStatus LedgerNonceChecker::checkNonce(const bcos::protocol::Transaction& _tx)
 {
     // check nonce
     auto status = TxPoolNonceChecker::checkNonce(_tx);
@@ -41,23 +41,23 @@ TransactionStatus LedgerNonceChecker::checkNonce(Transaction::ConstPtr _tx)
     {
         return status;
     }
-    if (m_checkBlockLimit && _tx->type() == static_cast<uint8_t>(TransactionType::BCOSTransaction))
+    if (m_checkBlockLimit && _tx.type() == static_cast<uint8_t>(TransactionType::BCOSTransaction))
     {  // check blockLimit
         return checkBlockLimit(_tx);
     }
     return TransactionStatus::None;
 }
 
-TransactionStatus LedgerNonceChecker::checkBlockLimit(bcos::protocol::Transaction::ConstPtr _tx)
+TransactionStatus LedgerNonceChecker::checkBlockLimit(const bcos::protocol::Transaction& _tx)
 {
     auto blockNumber = m_blockNumber.load();
-    if (blockNumber >= _tx->blockLimit() || (blockNumber + m_blockLimit) < _tx->blockLimit())
+    if (blockNumber >= _tx.blockLimit() || (blockNumber + m_blockLimit) < _tx.blockLimit())
     {
         NONCECHECKER_LOG(DEBUG) << LOG_DESC("InvalidBlockLimit")
-                                << LOG_KV("blkLimit", _tx->blockLimit())
+                                << LOG_KV("blkLimit", _tx.blockLimit())
                                 << LOG_KV("blockLimit", m_blockLimit)
                                 << LOG_KV("curBlk", m_blockNumber)
-                                << LOG_KV("tx", _tx->hash().abridged());
+                                << LOG_KV("tx", _tx.hash().abridged());
         return TransactionStatus::BlockLimitCheckFail;
     }
     return TransactionStatus::None;
