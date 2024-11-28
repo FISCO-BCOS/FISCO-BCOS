@@ -1075,7 +1075,10 @@ bool MemoryStorage::batchMarkTxsWithoutLock(
                 }
             }
         });
-    m_knownLatestSealedTxHash = _txsHashList[knownLatestSealedTxIndex];
+    if (knownLatestSealedTxIndex > 0)
+    {
+        m_knownLatestSealedTxHash = _txsHashList[knownLatestSealedTxIndex];
+    }
 
     TXPOOL_LOG(INFO) << LOG_DESC("batchMarkTxs") << LOG_KV("txsSize", _txsHashList.size())
                      << LOG_KV("batchId", _batchId) << LOG_KV("hash", _batchHash.abridged())

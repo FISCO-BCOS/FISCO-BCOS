@@ -557,31 +557,40 @@ void PBFTEngine::clearAllCache()
 void PBFTEngine::executeWorker()
 {
     // the node is not the consensusNode
-    if (!m_config->isConsensusNode() || isSyncingHigher())
-    {
-        waitSignal();
-        return;
-    }
+    // if (!m_config->isConsensusNode() || isSyncingHigher())
+    // {
+    //     waitSignal();
+    //     return;
+    // }
     // handle the PBFT message(here will wait when the msgQueue is empty)
     std::shared_ptr<PBFTBaseMessageInterface> pbftMsg;
     m_msgQueue.pop(pbftMsg);
+
+    if (!m_config->isConsensusNode() || isSyncingHigher())
+    {
+        // Ignore the message
+        return;
+    }
+
     if (pbftMsg)
     {
         auto packetType = pbftMsg->packetType();
-        // can't handle the future consensus messages when handling the system
-        // proposal
+// can't handle the future consensus messages when handling the system
+// proposal
+#if 0
         if ((c_consensusPacket.contains(packetType)) && !m_config->canHandleNewProposal(pbftMsg))
         {
-#if 0
+
             PBFT_LOG(TRACE) << LOG_DESC(
                                    "receive consensus packet, re-push it to the msgQueue for "
                                    "canHandleNewProposal")
                             << LOG_KV("index", pbftMsg->index()) << LOG_KV("type", packetType)
                             << m_config->printCurrentState();
-#endif
+
             m_msgQueue.push(pbftMsg);
             return;
         }
+#endif
         handleMsg(pbftMsg);
     }
 }
@@ -772,8 +781,8 @@ bool PBFTEngine::checkProposalSignature(
     {
         return false;
     }
-    auto nodeInfo = m_config->getConsensusNodeByIndex(_generatedFrom);
-    if (!nodeInfo)
+    auto* nodeInfo = m_config->getConsensusNodeByIndex(_generatedFrom);
+    if (nodeInfo == nullptr)
     {
         PBFT_LOG(WARNING) << LOG_DESC(
                                  "checkProposalSignature failed for the node "
