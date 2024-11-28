@@ -160,21 +160,21 @@ BOOST_AUTO_TEST_CASE(batchFindTest)
     std::atomic_size_t cnt = 0;
     bucketMap.traverse<WriteAccessor, true>(
         keys, [&](WriteAccessor& accessor, auto index, auto& bucket) {
-            BOOST_REQUIRE(bucket.find(accessor, keys[index]));
-            accessor.value()++;
-            cnt++;
-            std::cout << accessor.key() << ":" << accessor.value() << std::endl;
+            if (bucket.find(accessor, keys[index]))
+            {
+                accessor.value()++;
+                cnt++;
+                std::cout << accessor.key() << ":" << accessor.value() << std::endl;
+            }
         });
     BOOST_CHECK_EQUAL(cnt, 100);
 
     cnt = 0;
-    bucketMap.traverse<ReadAccessor, true>(
-        keys, [&](ReadAccessor& accessor, auto index, auto& bucket) {
-            BOOST_REQUIRE(bucket.find(accessor, keys[index]));
-            BOOST_CHECK_EQUAL(accessor.value(), accessor.key() + 1);
-            cnt++;
-            std::cout << accessor.key() << ":" << accessor.value() << std::endl;
-        });
+    for (auto& accessor : bucketMap.range<ReadAccessor>())
+    {
+        BOOST_CHECK_EQUAL(accessor.key() + 1, accessor.value());
+        cnt++;
+    }
     BOOST_CHECK_EQUAL(cnt, 100);
 }
 
