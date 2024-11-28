@@ -598,6 +598,10 @@ void PBFTEngine::executeWorker()
         }
         handleMsg(pbftMsg);
     }
+    else
+    {
+        waitSignal();
+    }
 }
 
 void PBFTEngine::handleMsg(std::shared_ptr<PBFTBaseMessageInterface> _msg)
