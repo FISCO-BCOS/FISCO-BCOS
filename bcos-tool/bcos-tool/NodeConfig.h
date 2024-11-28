@@ -21,8 +21,9 @@
 #pragma once
 #include "bcos-framework/ledger/GenesisConfig.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
-#include "bcos-framework/security/KeyEncryptionType.h"
 #include "bcos-framework/security/CloudKmsType.h"
+#include "bcos-framework/security/KeyEncryptionType.h"
+#include "bcos-framework/security/StorageEncryptionType.h"
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/Common.h>
 #include <bcos-framework/protocol/Protocol.h>
@@ -115,7 +116,6 @@ public:
     size_t blockLimit() const { return m_blockLimit; }
 
     std::string const& privateKeyPath() const { return m_privateKeyPath; }
-    bool const& enableHsm() const { return m_enableHsm; }
     std::string const& hsmLibPath() const { return m_hsmLibPath; }
     int const& keyIndex() const { return m_keyIndex; }
     int const& encKeyIndex() const { return m_encKeyIndex; }
@@ -253,8 +253,15 @@ public:
     std::string storageSecurityCipherDataKey() const { return m_storageSecurityCipherDataKey; }
 
     security::KeyEncryptionType keyEncryptionType() const { return m_keyEncryptionType; }
+    security::StorageEncryptionType storageEncryptionType() const
+    {
+        return m_storageEncryptionType;
+    }
     security::CloudKmsType cloudKmsType() const { return m_cloudKmsType; }
-    std::string bcosKmsKeySecurityCipherDataKey() const { return m_bcosKmsKeySecurityCipherDataKey; }
+    std::string bcosKmsKeySecurityCipherDataKey() const
+    {
+        return m_bcosKmsKeySecurityCipherDataKey;
+    }
     std::string keyEncryptionUrl() const { return m_KeyEncryptionUrl; }
 
     bool enableSendBlockStatusByTree() const { return m_enableSendBlockStatusByTree; }
@@ -373,8 +380,7 @@ private:
 
     // for security
     std::string m_privateKeyPath;
-    // Duplicated: option remove to key_encryption_type
-    bool m_enableHsm{};
+
     std::string m_hsmLibPath;
     int m_keyIndex{};
     int m_encKeyIndex{};
@@ -382,6 +388,7 @@ private:
 
     // for security cloudkms bcoskms hsm configuration
     security::KeyEncryptionType m_keyEncryptionType;
+    security::StorageEncryptionType m_storageEncryptionType;
     // key url
     std::string m_KeyEncryptionUrl;
     // cloude kms type, 0: AWS, 1: Aliyun...

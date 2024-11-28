@@ -14,32 +14,20 @@
  *  limitations under the License.
  */
 /**
- * @brief : Encrypt key file
+ * @brief : Encrypt type enum
  * @author: HaoXuan40404
- * @date: 2024-11-07
+ * @date: 2024-11-26
  */
-
 #pragma once
-#include <bcos-utilities/Common.h>
-#include <memory>
+#include <magic_enum.hpp>
 
 namespace bcos::security
 {
-class KeyEncryptInterface
+enum class StorageEncryptionType
 {
-public:
-    using Ptr = std::shared_ptr<KeyEncryptInterface>;
-    KeyEncryptInterface() = default;
-
-    virtual ~KeyEncryptInterface() = default;
-
-    // use to encrypt node.key
-    virtual std::shared_ptr<bytes> encryptContents(const std::shared_ptr<bytes>& contents) = 0;
-    virtual std::shared_ptr<bytes> encryptFile(const std::string& filename) = 0;
-
-    // use to decrypt node.key
-    virtual std::shared_ptr<bytes> decryptContents(const std::shared_ptr<bytes>& contents) = 0;
-    virtual std::shared_ptr<bytes> decryptFile(const std::string& filename) = 0;
+    LEGACY,
+    BCOSKMS
 };
+
 
 }  // namespace bcos::security

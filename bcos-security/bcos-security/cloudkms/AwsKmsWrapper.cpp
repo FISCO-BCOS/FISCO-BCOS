@@ -30,11 +30,11 @@ namespace bcos::security
 {
 
 AwsKmsWrapper::AwsKmsWrapper(const std::string& region, const std::string& accessKey,
-    const std::string& secretKey, const std::string& keyId)
-  : m_keyId(keyId)
+    const std::string& secretKey, std::string keyId)
+  : m_keyId(std::move(keyId))
 {
     // create credentials
-    Aws::Auth::AWSCredentials credentials(accessKey.c_str(), secretKey.c_str());
+    Aws::Auth::AWSCredentials credentials(accessKey, secretKey);
 
     // configure client
     Aws::Client::ClientConfiguration config;
@@ -47,7 +47,7 @@ AwsKmsWrapper::AwsKmsWrapper(
     const std::string& region, const std::string& accessKey, const std::string& secretKey)
 {
     // create credentials
-    Aws::Auth::AWSCredentials credentials(accessKey.c_str(), secretKey.c_str());
+    Aws::Auth::AWSCredentials credentials(accessKey, secretKey);
 
     // configure client
     Aws::Client::ClientConfiguration config;
@@ -64,13 +64,13 @@ std::shared_ptr<bytes> AwsKmsWrapper::encryptContents(const std::shared_ptr<byte
     request.SetKeyId(m_keyId);
 
     Aws::Utils::ByteBuffer plaintextBlob(
-        reinterpret_cast<const unsigned char*>(contents->data()), contents->size());
+        contents->data(), contents->size());
     request.SetPlaintext(plaintextBlob);
 
     auto outcome = m_kmsClient->Encrypt(request);
     if (!outcome.IsSuccess())
     {
-        std::cerr << "Encryption error: " << outcome.GetError().GetMessage() << std::endl;
+        std::cerr << "Encryption error: " << outcome.GetError().GetMessage() << "\n";
         return nullptr;
     }
 
@@ -85,7 +85,7 @@ std::shared_ptr<bytes> AwsKmsWrapper::encryptFile(const std::string& inputFilePa
     auto plaintext = readContents(inputFilePath);
     if (plaintext == nullptr)
     {
-        std::cerr << "Failed to read file: " << inputFilePath << std::endl;
+        std::cerr << "Failed to read file: " << inputFilePath << "\n";
         return nullptr;
     }
     return encryptContents(plaintext);
@@ -101,7 +101,7 @@ std::shared_ptr<bytes> AwsKmsWrapper::decryptContents(const std::shared_ptr<byte
     auto outcome = m_kmsClient->Decrypt(request);
     if (!outcome.IsSuccess())
     {
-        std::cerr << "Decryption error: " << outcome.GetError().GetMessage() << std::endl;
+        std::cerr << "Decryption error: " << outcome.GetError().GetMessage() << "\n";
         return std::make_shared<bytes>();
     }
 
@@ -112,12 +112,12 @@ std::shared_ptr<bytes> AwsKmsWrapper::decryptContents(const std::shared_ptr<byte
     return plaintext;
 }
 
-std::shared_ptr<bytes> AwsKmsWrapper::decryptFile(const std::string& filename)
+std::shared_ptr<bytes> AwsKmsWrapper::decryptFile(const std::string& inputFilePath)
 {
-    std::shared_ptr<bytes> contents = readContents(filename);
+    std::shared_ptr<bytes> contents = readContents(inputFilePath);
     if (contents == nullptr)
     {
-        std::cerr << "Failed to read file: " << filename << std::endl;
+        std::cerr << "Failed to read file: " << inputFilePath << "\n";
         return nullptr;
     }
     return decryptContents(contents);

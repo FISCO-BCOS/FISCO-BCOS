@@ -1,5 +1,6 @@
 #include "bcos-framework/security/CloudKmsType.h"
 #include "bcos-security/bcos-security/cloudkms/AwsKmsWrapper.h"
+#include "bcos-utilities/FileUtility.h"
 #include <aws/core/Aws.h>
 #include <fstream>
 #include <iostream>
@@ -12,7 +13,7 @@ void printUsage(const char* programName)
     std::cerr << "Usage: " << programName
               << " <kms_type> <access_key> <secret_key> <region> <key_id> <inputFilePath> "
                  "<outputFilePath>"
-              << std::endl;
+              << "\n";
 }
 
 int saveFile(const std::string& filePath, const std::shared_ptr<bytes>& content)
@@ -20,7 +21,7 @@ int saveFile(const std::string& filePath, const std::shared_ptr<bytes>& content)
     std::ofstream outFile(filePath, std::ios::out | std::ios::trunc | std::ios::binary);
     if (!outFile.is_open())
     {
-        std::cerr << "Cannot open file for writing: " << filePath << std::endl;
+        std::cerr << "Cannot open file for writing: " << filePath << "\n";
         return 1;
     }
 
@@ -29,7 +30,8 @@ int saveFile(const std::string& filePath, const std::shared_ptr<bytes>& content)
         outFile.write(reinterpret_cast<const char*>(content->data()), content->size());
         if (outFile.fail())
         {
-            std::cerr << "Failed to write content to file" << std::endl;
+            std::cerr << "Failed to write content to file"
+                      << "\n";
             return 1;
         }
         outFile.close();
@@ -37,7 +39,7 @@ int saveFile(const std::string& filePath, const std::shared_ptr<bytes>& content)
     catch (const std::exception& e)
     {
         outFile.close();
-        std::cerr << "Error writing file: " << filePath << "\n" << e.what() << std::endl;
+        std::cerr << "Error writing file: " << filePath << "\n" << e.what() << "\n";
         return 1;
     }
     return 0;
@@ -59,90 +61,80 @@ int main(int argc, char* argv[])
     const std::string inputFilePath = argv[6];
     const std::string outputFilePath = argv[7];
 
-    auto provider = cloudKmsTypeFromString(kmsType);
-
-    if (provider == CloudKmsType::UNKNOWN)
+    auto prividerOption =
+        magic_enum::enum_cast<CloudKmsType>(kmsType, magic_enum::case_insensitive);
+    if (!prividerOption.has_value())
     {
-        std::cerr << "Invalid KMS provider: " << kmsType << std::endl;
+        std::cerr << "Invalid KMS provider: " << kmsType << "\n";
         return 1;
     }
+    auto provider = prividerOption.value();
 
     if (provider == CloudKmsType::AWS)
     {
         // initialize the AWS SDK
-        Aws::SDKOptions options;
-        Aws::InitAPI(options);
+        try
         {
-            try
+            struct AwsSdkLifecycleManager
             {
-                // create an AWS KMS wrapper
-                AwsKmsWrapper kmsWrapper(region, accessKey, secretKey, keyId);
+                Aws::SDKOptions options;
+                AwsSdkLifecycleManager() { Aws::InitAPI(options); }
+                ~AwsSdkLifecycleManager() { Aws::ShutdownAPI(options); }
+                AwsSdkLifecycleManager(const AwsSdkLifecycleManager&) = delete;
+                AwsSdkLifecycleManager& operator=(const AwsSdkLifecycleManager&) = delete;
+                AwsSdkLifecycleManager(AwsSdkLifecycleManager&&) = delete;
+                AwsSdkLifecycleManager& operator=(AwsSdkLifecycleManager&&) = delete;
+            } sdkLifecycleManager;
+            // create an AWS KMS wrapper
+            AwsKmsWrapper kmsWrapper(region, accessKey, secretKey, keyId);
 
-                // encrypt data
-                auto encryptResult = kmsWrapper.encryptFile(inputFilePath);
-                if (encryptResult == nullptr)
-                {
-                    std::cerr << "Encryption failed!" << std::endl;
-                    return 1;
-                }
-
-                std::cout << "Encrypted data : " << encryptResult->size() << " bytes" << std::endl;
-                saveFile(outputFilePath, encryptResult);
-
-                // decrypt data
-                auto decryptResult = kmsWrapper.decryptContents(encryptResult);
-                if (decryptResult == nullptr)
-                {
-                    std::cerr << "Decryption failed!" << std::endl;
-                    return 1;
-                }
-
-                std::cout << "Decrypted text: " << decryptResult->size() << std::endl;
-
-                // text bytes to string
-                std::string decryptResultStr(decryptResult->begin(), decryptResult->end());
-                std::cout << "Decrypted text: " << decryptResultStr << std::endl;
-
-                // // read encrypted data from file
-                // std::string cipherFile = readFile(outputFilePath);
-                // std::vector<unsigned char> cipherData = kmsWrapper.fromHex(cipherFile);
-                // std::cout << "test hex " << kmsWrapper.toHex(cipherData) << std::endl;
-                // std::cout << "cipherData size " << cipherData.size() << std::endl;
-
-                // auto decryptFileResult = kmsWrapper.decrypt(cipherData);
-                // if (!decryptFileResult.first)
-                // {
-                //     std::cerr << "Decryption failed!" << std::endl;
-                //     return 1;
-                // }
-
-                // std::cout << "Decrypted text from file: " << decryptFileResult.second <<
-                // std::endl;
-
-                // auto decryptRawResult =
-                // kmsWrapper.decryptRaw(std::make_shared<bytes>(cipherData)); if (decryptRawResult
-                // == nullptr)
-                // {
-                //     std::cerr << "Decryption failed!" << std::endl;
-                //     return 1;
-                // }
-                // std::string decryptRawResultStr(decryptRawResult->begin(),
-                // decryptRawResult->end()); std::cout << "Decrypted text from raw data: " <<
-                // decryptRawResultStr << std::endl;
-            }
-            catch (const std::exception& e)
+            // encrypt data
+            auto plaintext = readContents(inputFilePath);
+            auto encryptResult = kmsWrapper.encryptContents(plaintext);
+            if (encryptResult == nullptr)
             {
-                std::cerr << "Error: " << e.what() << std::endl;
+                std::cerr << "Encryption failed!"
+                          << "\n";
                 return 1;
             }
+
+            std::cout << "Encrypted data : " << encryptResult->size() << " bytes"
+                      << "\n";
+            saveFile(outputFilePath, encryptResult);
+
+            // decrypt data
+            auto decryptResult = kmsWrapper.decryptContents(encryptResult);
+            if (decryptResult == nullptr)
+            {
+                std::cerr << "Decryption failed!"
+                          << "\n";
+                return 1;
+            }
+
+            std::cout << "Decrypted text: " << decryptResult->size() << "\n";
+
+            // text bytes to string
+            std::string decryptResultStr(decryptResult->begin(), decryptResult->end());
+            std::string expectedStr(plaintext->begin(), plaintext->end());
+            std::cout << "Decrypted text: " << decryptResultStr << "\n";
+            std::cout << "expectedStr text: " << expectedStr << "\n";
+            if (decryptResultStr != expectedStr)
+            {
+                std::cerr << "Error:Decrypted data is not the same as the original data!"
+                          << "\n";
+                return 1;
+            }
+            std::cout << "Decrypted data is the same as the original data"
+                      << "\n";
         }
-        // clean up the AWS SDK
-        Aws::ShutdownAPI(options);
+        catch (const std::exception& e)
+        {
+            std::cerr << "Error: " << e.what() << "\n";
+            return 1;
+        }
         return 0;
     }
-    else
-    {
-        std::cerr << "Unsupported KMS provider: " << kmsType << std::endl;
-        return 1;
-    }
+
+    std::cerr << "Unsupported KMS provider: " << kmsType << "\n";
+    return 1;
 }

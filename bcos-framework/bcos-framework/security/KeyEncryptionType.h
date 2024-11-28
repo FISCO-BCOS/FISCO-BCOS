@@ -20,33 +20,15 @@
  */
 #pragma once
 #include <magic_enum.hpp>
-#include <string>
 
 namespace bcos::security
 {
 enum class KeyEncryptionType
 {
-    DISABLED,
-    DEFAULT,
+    LEGACY,
     BCOSKMS,
     CLOUDKMS,
     HSM
 };
 
-// get the string of the enum
-inline static std::string keyEncryptionTypeToString(KeyEncryptionType type)
-{
-    return std::string(magic_enum::enum_name(type));
-}
-
-// get the enum from the string
-inline static KeyEncryptionType keyEncryptionTypeFromString(const std::string& typeStr)
-{
-    auto result = magic_enum::enum_cast<KeyEncryptionType>(typeStr);
-    if (!result)
-    {
-        return KeyEncryptionType::DEFAULT;
-    }
-    return result.value();
-}
 }  // namespace bcos::security
