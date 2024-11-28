@@ -557,40 +557,45 @@ void PBFTEngine::clearAllCache()
 void PBFTEngine::executeWorker()
 {
     // the node is not the consensusNode
-    // if (!m_config->isConsensusNode() || isSyncingHigher())
-    // {
-    //     waitSignal();
-    //     return;
-    // }
-    // handle the PBFT message(here will wait when the msgQueue is empty)
-    std::shared_ptr<PBFTBaseMessageInterface> pbftMsg;
-    m_msgQueue.pop(pbftMsg);
-
-    if (!m_config->isConsensusNode() || isSyncingHigher())
+    if (!m_config->isConsensusNode())
     {
-        // Ignore the message
+        waitSignal();
         return;
     }
-
-    if (pbftMsg)
+    // when the node is syncing, not handle the PBFT message
+    if (isSyncingHigher())
     {
+        waitSignal();
+        return;
+    }
+    // handle the PBFT message(here will wait when the msgQueue is empty)
+    std::shared_ptr<PBFTBaseMessageInterface> messageResult;
+    m_msgQueue.try_pop(messageResult);
+    auto empty = m_msgQueue.empty();
+    if (messageResult)
+    {
+        const auto& pbftMsg = messageResult;
         auto packetType = pbftMsg->packetType();
-// can't handle the future consensus messages when handling the system
-// proposal
-#if 0
+        // can't handle the future consensus messages when handling the system
+        // proposal
         if ((c_consensusPacket.contains(packetType)) && !m_config->canHandleNewProposal(pbftMsg))
         {
-
+#if 0
             PBFT_LOG(TRACE) << LOG_DESC(
                                    "receive consensus packet, re-push it to the msgQueue for "
                                    "canHandleNewProposal")
                             << LOG_KV("index", pbftMsg->index()) << LOG_KV("type", packetType)
                             << m_config->printCurrentState();
-
+#endif
             m_msgQueue.push(pbftMsg);
+            if (empty)
+            {
+                // only one pbft msg, and cannot handle proposal
+                // re-push msg to queue and wait for signal try to re-handle
+                waitSignal();
+            }
             return;
         }
-#endif
         handleMsg(pbftMsg);
     }
 }

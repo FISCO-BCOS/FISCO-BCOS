@@ -216,7 +216,7 @@ protected:
     std::shared_ptr<PBFTConfig> m_config;
 
     // PBFT message cache queue
-    tbb::concurrent_bounded_queue<std::shared_ptr<PBFTBaseMessageInterface>> m_msgQueue;
+    tbb::concurrent_queue<std::shared_ptr<PBFTBaseMessageInterface>> m_msgQueue;
     std::shared_ptr<PBFTCacheProcessor> m_cacheProcessor;
     // for log syncing
     PBFTLogSync::Ptr m_logSync;
