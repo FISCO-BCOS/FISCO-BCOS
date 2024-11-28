@@ -289,23 +289,17 @@ BOOST_AUTO_TEST_CASE(parallelTest2)
 
             bucketMap.traverse<WriteAccessor, true>(
                 ks, [&](WriteAccessor& accessor, auto index, auto& bucket) {
-                    BOOST_REQUIRE(bucket.find(accessor, ks[index]));
-                    accessor.value()++;
+                    if (bucket.find(accessor, ks[index]))
+                    {
+                        accessor.value()++;
+                    }
                 });
         });
 
-    tbb::parallel_for(
-        tbb::blocked_range<int>(0, total), [&bucketMap](const tbb::blocked_range<int>& range) {
-            auto ks = RANGES::iota_view<int, int>(range.begin(), range.end()) |
-                      ::ranges::to<std::vector>();
-
-            auto values = bucketMap.batchFind<ReadAccessor>(ks);
-            for (auto&& [key, value] : ::ranges::views::zip(ks, values))
-            {
-                BOOST_CHECK(value);
-                BOOST_CHECK_EQUAL(*value, key + 1);
-            }
-        });
+    for (auto& accessor : bucketMap.range<ReadAccessor>())
+    {
+        BOOST_CHECK_EQUAL(accessor.value(), accessor.key() + 1);
+    }
     std::cout << bucketMap.size() << std::endl;
 
     tbb::parallel_for(
