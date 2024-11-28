@@ -47,7 +47,11 @@ inline bool notRetryAgain(int _wsError)
 
 inline std::string wsErrorToString(WsError _wsError)
 {
+#ifdef WIN32
+    return std::to_string(_wsError);
+#else
     return std::string(magic_enum::enum_name(_wsError));
+#endif
 }
 
 }  // namespace bcos::boostssl::ws

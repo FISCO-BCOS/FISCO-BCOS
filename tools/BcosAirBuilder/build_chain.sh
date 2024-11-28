@@ -624,14 +624,14 @@ modify node e.g
     bash $0 -C modify -N ./node0 -u ./ca/ca.crt
     bash $0 -C modify -N ./node0 -u ./ca/ca.crt -s
 deploy pro service e.g
-    bash $0 -p 30300,20200 -l 172.31.184.227:2,172.30.93.111:2 -C deploy -V pro -o generate -t all
-    bash $0 -p 30300,20200 -l 172.31.184.227:2,172.30.93.111:2 -C deploy -V pro -o generate -t all -s
-    bash $0 -p 30300,20200 -l 172.31.184.227:2,172.30.93.111:2 -C deploy -V pro -o generate -e ./binary
-    bash $0 -p 30300,20200,40400 -l 172.31.184.227:2,172.30.93.111:2 -C deploy -V pro -o generate -y cdn -v ${service_binary_version} -r ./binaryPath
+    bash $0 -p 30300,20200 -l [IP1]:2,[IP2]:2 -C deploy -V pro -o generate -t all
+    bash $0 -p 30300,20200 -l [IP1]:2,[IP2]:2 -C deploy -V pro -o generate -t all -s
+    bash $0 -p 30300,20200 -l [IP1]:2,[IP2]:2 -C deploy -V pro -o generate -e ./binary
+    bash $0 -p 30300,20200,40400 -l [IP1]:2,[IP2]:2 -C deploy -V pro -o generate -y cdn -v ${service_binary_version} -r ./binaryPath
 deploy max service e.g
-    bash $0 -p 30300,20200,40400,2379 -l 172.31.184.227:1,172.30.93.111:1,172.31.184.54:1,172.31.185.59:1 -C deploy -V max -o generate -t all
-    bash $0 -p 30300,20200,40400,2379 -l 172.31.184.227:1,172.30.93.111:1,172.31.184.54:1,172.31.185.59:1 -C deploy -V max -o generate -t all -e ./binary -s
-    bash $0 -p 30300,20200,40400,2379 -l 172.31.184.227:1,172.30.93.111:1,172.31.184.54:1,172.31.185.59:1 -C deploy -V max -o generate -y cdn -v ${service_binary_version} -r ./binaryPath
+    bash $0 -p 30300,20200,40400,2379 -l [IP1]:1,[IP2]:1,[IP3]:1,[IP4]:1 -C deploy -V max -o generate -t all
+    bash $0 -p 30300,20200,40400,2379 -l [IP1]:1,[IP2]:1,[IP3]:1,[IP4]:1 -C deploy -V max -o generate -t all -e ./binary -s
+    bash $0 -p 30300,20200,40400,2379 -l [IP1]:1,[IP2]:1,[IP3]:1,[IP4]:1 -C deploy -V max -o generate -y cdn -v ${service_binary_version} -r ./binaryPath
     bash $0 -c config.toml -C deploy -V max -o generate -t all
 expand pro node e.g
     bash $0 -C expand_node -V pro -o expand_node -c ./config.toml
