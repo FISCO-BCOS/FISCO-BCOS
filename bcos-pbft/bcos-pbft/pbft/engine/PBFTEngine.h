@@ -22,10 +22,9 @@
 #include "PBFTLogSync.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-pbft/core/ConsensusEngine.h"
-#include "bcos-rpbft/rpbft/config/RPBFTConfigTools.h"
-#include <bcos-utilities/ConcurrentQueue.h>
 #include <bcos-utilities/Error.h>
 #include <bcos-utilities/Timer.h>
+#include <oneapi/tbb/concurrent_queue.h>
 #include <utility>
 
 namespace bcos
@@ -43,9 +42,6 @@ class NewViewMsgInterface;
 class PBFTConfig;
 class PBFTCacheProcessor;
 class PBFTProposalInterface;
-
-using PBFTMsgQueue = ConcurrentQueue<std::shared_ptr<PBFTBaseMessageInterface>>;
-using PBFTMsgQueuePtr = std::shared_ptr<PBFTMsgQueue>;
 
 enum CheckResult
 {
@@ -209,7 +205,7 @@ private:
     void waitSignal()
     {
         boost::unique_lock<boost::mutex> lock(x_signalled);
-        m_signalled.wait_for(lock, boost::chrono::milliseconds(5));
+        m_signalled.wait_for(lock, boost::chrono::milliseconds(1));
     }
     void switchToRPBFT(const ledger::LedgerConfig::Ptr& _ledgerConfig);
 
@@ -220,7 +216,7 @@ protected:
     std::shared_ptr<PBFTConfig> m_config;
 
     // PBFT message cache queue
-    PBFTMsgQueuePtr m_msgQueue;
+    tbb::concurrent_bounded_queue<std::shared_ptr<PBFTBaseMessageInterface>> m_msgQueue;
     std::shared_ptr<PBFTCacheProcessor> m_cacheProcessor;
     // for log syncing
     PBFTLogSync::Ptr m_logSync;

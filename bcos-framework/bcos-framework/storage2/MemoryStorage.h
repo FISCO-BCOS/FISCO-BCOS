@@ -2,9 +2,8 @@
 
 #include "Storage.h"
 #include "bcos-task/AwaitableValue.h"
-#include <oneapi/tbb/null_rw_mutex.h>
 #include <oneapi/tbb/parallel_for.h>
-#include <oneapi/tbb/spin_rw_mutex.h>
+#include <oneapi/tbb/rw_mutex.h>
 #include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/identity.hpp>
 #include <boost/multi_index/key.hpp>
@@ -103,8 +102,8 @@ public:
     static_assert(!withConcurrent || !std::is_void_v<BucketHasherType>);
 
     constexpr static unsigned DEFAULT_CAPACITY = 32 * 1024 * 1024;  // For mru
-    using Mutex = std::conditional_t<withConcurrent, tbb::spin_rw_mutex, Empty>;
-    using Lock = std::conditional_t<withConcurrent, tbb::spin_rw_mutex::scoped_lock, NullLock>;
+    using Mutex = std::conditional_t<withConcurrent, tbb::rw_mutex, Empty>;
+    using Lock = std::conditional_t<withConcurrent, tbb::rw_mutex::scoped_lock, NullLock>;
     using DataValue = std::conditional_t<withLogicalDeletion, std::optional<ValueType>, ValueType>;
 
     struct Data

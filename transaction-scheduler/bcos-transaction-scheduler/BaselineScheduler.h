@@ -195,7 +195,7 @@ void finishExecute(auto& storage, RANGES::range auto const& receipts,
                 task::tbb::syncWait(calculateReceiptRoot(receipts, block, hashImpl));
         },
         [&]() {
-            sysBlock = RANGES::any_of(transactions, [](auto const& transaction) {
+            sysBlock = ::ranges::any_of(transactions, [](auto const& transaction) {
                 return precompiled::contains(
                     bcos::precompiled::c_systemTxsAddress, transaction->to());
             });

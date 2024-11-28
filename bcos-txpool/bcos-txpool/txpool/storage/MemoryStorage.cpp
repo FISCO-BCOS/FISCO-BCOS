@@ -228,23 +228,17 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
 std::vector<protocol::Transaction::ConstPtr> MemoryStorage::getTransactions(
     RANGES::any_view<bcos::h256, RANGES::category::mask | RANGES::category::sized> hashes)
 {
-    std::vector<protocol::Transaction::ConstPtr> transactions(RANGES::size(hashes));
-
-    tbb::parallel_for(tbb::blocked_range(0LU, (size_t)RANGES::size(hashes)),
-        [this, &hashes, &transactions](const auto& subrange) {
-            for (auto i = subrange.begin(); i != subrange.end(); ++i)
-            {
-                auto const& hash = hashes[i];
-                TxsMap::ReadAccessor accessor;
-                auto exists = m_txsTable.find<TxsMap::ReadAccessor>(accessor, hash);
-                if (exists)
-                {
-                    transactions[i] = accessor.value();
-                }
-            }
-        });
-
-    return transactions;
+    auto hashesVector = ::ranges::to<std::vector>(hashes);
+    auto values = m_txsTable.batchFind<decltype(m_txsTable)::ReadAccessor>(hashesVector);
+    return values |
+           ::ranges::views::transform([](auto const& value) -> protocol::Transaction::ConstPtr {
+               if (value)
+               {
+                   return protocol::Transaction::ConstPtr(std::move(*value));
+               }
+               return {};
+           }) |
+           ::ranges::to<std::vector>();
 }
 
 TransactionStatus MemoryStorage::txpoolStorageCheck(
@@ -853,7 +847,6 @@ bool MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
         return true;
     };
 
-
     if (_avoidDuplicate)
     {
         for (auto& accessor :
@@ -1028,53 +1021,62 @@ bool MemoryStorage::batchMarkTxsWithoutLock(
 {
     auto recordT = utcTime();
     auto startT = utcTime();
-    ssize_t successCount = 0;
-    ssize_t notFound = 0;
-    ssize_t reSealed = 0;
-    for (auto const& txHash : _txsHashList)
-    {
-        Transaction::Ptr tx;
-        {  // TODO: use batchFind
-            TxsMap::ReadAccessor accessor;
-            auto has = m_txsTable.find<TxsMap::ReadAccessor>(accessor, txHash);
-            if (!has)
+    std::atomic_size_t successCount = 0;
+    std::atomic_size_t notFound = 0;
+    std::atomic_size_t reSealed = 0;
+    std::atomic_int64_t knownLatestSealedTxIndex = -1;
+
+    m_txsTable.traverse<TxsMap::ReadAccessor, true>(
+        _txsHashList, [&](TxsMap::ReadAccessor& accessor, const auto& range, auto& bucket) {
+            size_t localNotFound = 0;
+            size_t localReSealed = 0;
+            size_t localSuccess = 0;
+            int64_t localKnownLatestSealedTxIndex = -1;
+            for (auto index : range)
             {
-                ++notFound;
-                TXPOOL_LOG(TRACE) << LOG_DESC("batchMarkTxs: missing transaction")
-                                  << LOG_KV("tx", txHash.hex()) << LOG_KV("sealFlag", _sealFlag);
-                continue;
+                if (!bucket.find(accessor, _txsHashList[index]))
+                {
+                    ++localNotFound;
+                    continue;
+                }
+
+                const auto& transaction = accessor.value();
+                if ((transaction->batchId() != _batchId ||
+                        transaction->batchHash() != _batchHash) &&
+                    transaction->sealed() && !_sealFlag)
+                {
+                    ++localReSealed;
+                    continue;
+                }
+                transaction->setSealed(_sealFlag);
+                ++localSuccess;
+                // set the block information for the transaction
+                if (_sealFlag)
+                {
+                    transaction->setBatchId(_batchId);
+                    transaction->setBatchHash(_batchHash);
+                    if (static_cast<int64_t>(index) > localKnownLatestSealedTxIndex)
+                    {
+                        localKnownLatestSealedTxIndex = index;
+                    }
+                }
             }
-            tx = accessor.value();
-        }
-        if (!tx)
-        {
-            continue;
-        }
-        // the tx has already been re-sealed, can not enforce unseal
-        // if tx batch id is -1 or batchHash is empty, it means node-self generate proposal verify
-        // failed, so in this case should unsealed the txs.
-        if ((tx->batchId() != _batchId || tx->batchHash() != _batchHash) && tx->sealed() &&
-            !_sealFlag)
-        {
-            ++reSealed;
-            continue;
-        }
-        tx->setSealed(_sealFlag);
-        successCount += 1;
-        // set the block information for the transaction
-        if (_sealFlag)
-        {
-            tx->setBatchId(_batchId);
-            tx->setBatchHash(_batchHash);
-            m_knownLatestSealedTxHash = txHash;
-        }
-#if FISCO_DEBUG
-        // TODO: remove this, now just for bug tracing
-        TXPOOL_LOG(DEBUG) << LOG_DESC("mark ") << tx->hash().abridged() << ":" << _sealFlag
-                          << LOG_KV("index", tx->batchId())
-                          << LOG_KV("hash", tx->batchHash().abridged()) << LOG_KV("txPointer", tx);
-#endif
-    }
+
+            successCount += localSuccess;
+            notFound += localNotFound;
+            reSealed += localReSealed;
+            if (localKnownLatestSealedTxIndex > 0)
+            {
+                auto current = knownLatestSealedTxIndex.load();
+                while (localKnownLatestSealedTxIndex > current &&
+                       !knownLatestSealedTxIndex.compare_exchange_strong(
+                           current, localKnownLatestSealedTxIndex))
+                {
+                }
+            }
+        });
+    m_knownLatestSealedTxHash = _txsHashList[knownLatestSealedTxIndex];
+
     TXPOOL_LOG(INFO) << LOG_DESC("batchMarkTxs") << LOG_KV("txsSize", _txsHashList.size())
                      << LOG_KV("batchId", _batchId) << LOG_KV("hash", _batchHash.abridged())
                      << LOG_KV("sealFlag", _sealFlag) << LOG_KV("notFound", notFound)
