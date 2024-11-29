@@ -17,14 +17,14 @@
  */
 /**
  * @brief : HSM Data Encryption
- * @author: lucasli,asherli
- * @date: 2024-11-07
+ * @author: lucasli
+ * @date: 2022-02-17
  */
 
 #pragma once
 #include "Common.h"
 #include <bcos-crypto/encrypt/HsmSM4Crypto.h>
-#include <bcos-framework/security/StorageEncryptInterface.h>
+#include <bcos-framework/security/KeyEncryptInterface.h>
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/FileUtility.h>
 #include <memory>
@@ -33,24 +33,27 @@ namespace bcos
 {
 namespace security
 {
-class HsmDataEncryption : public StorageEncryptInterface
+class HsmKeyEncryption : public KeyEncryptInterface
 {
 public:
-    using Ptr = std::shared_ptr<HsmDataEncryption>;
-    HsmDataEncryption(const bcos::tool::NodeConfig::Ptr nodeConfig);
-    ~HsmDataEncryption() override {}
+    using Ptr = std::shared_ptr<HsmKeyEncryption>;
+    HsmKeyEncryption(const bcos::tool::NodeConfig::Ptr nodeConfig);
+    ~HsmKeyEncryption() override {}
 
-    // use to encrypt/decrypt in rocksdb
-    std::string encrypt(const std::string& data) override
+    // use to encrypt/decrypt node.key
+    std::shared_ptr<bytes> encryptFile(const std::string& filename) override
     {
-        return encrypt((unsigned char*)(data.data()), data.size());
+        std::shared_ptr<bytes> fileContents = readContents(boost::filesystem::path(filename));
+        return encryptContents(fileContents);
     }
-    std::string decrypt(const std::string& data) override
+    std::shared_ptr<bytes> decryptFile(const std::string& filename) override
     {
-        return decrypt((unsigned char*)(data.data()), data.size());
+        std::shared_ptr<bytes> fileContents = readContents(boost::filesystem::path(filename));
+        return decryptContents(fileContents);
     }
-    std::string encrypt(uint8_t* data, size_t size);
-    std::string decrypt(uint8_t* data, size_t size);
+    std::shared_ptr<bytes> encryptContents(const std::shared_ptr<bytes>& contents) override;
+    std::shared_ptr<bytes> decryptContents(const std::shared_ptr<bytes>& contents) override;
+
 
 private:
     int m_encKeyIndex;

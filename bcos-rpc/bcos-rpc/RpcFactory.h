@@ -31,7 +31,7 @@
 #include <bcos-framework/consensus/ConsensusInterface.h>
 #include <bcos-framework/election/LeaderEntryPointInterface.h>
 #include <bcos-framework/gateway/GatewayInterface.h>
-#include <bcos-framework/security/DataEncryptInterface.h>
+#include <bcos-framework/security/KeyEncryptInterface.h>
 #include <bcos-rpc/Common.h>
 #include <bcos-rpc/Rpc.h>
 #include <bcos-rpc/event/EventSub.h>
@@ -54,7 +54,7 @@ public:
     using Ptr = std::shared_ptr<RpcFactory>;
     RpcFactory(std::string _chainID, bcos::gateway::GatewayInterface::Ptr _gatewayInterface,
         bcos::crypto::KeyFactory::Ptr _keyFactory,
-        bcos::security::DataEncryptInterface::Ptr _dataEncrypt = nullptr);
+        bcos::security::KeyEncryptInterface::Ptr _dataEncrypt = nullptr);
     virtual ~RpcFactory() = default;
 
     std::shared_ptr<boostssl::ws::WsConfig> initConfig(
@@ -102,7 +102,7 @@ private:
     bcos::gateway::GatewayInterface::Ptr m_gateway;
     std::shared_ptr<bcos::crypto::KeyFactory> m_keyFactory;
     bcos::tool::NodeConfig::Ptr m_nodeConfig;
-    bcos::security::DataEncryptInterface::Ptr m_dataEncrypt;
+    bcos::security::KeyEncryptInterface::Ptr m_dataEncrypt;
 };
 }  // namespace rpc
 }  // namespace bcos

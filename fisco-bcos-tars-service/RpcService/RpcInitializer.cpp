@@ -110,7 +110,8 @@ bcos::rpc::RpcFactory::Ptr RpcInitializer::initRpcFactory(bcos::tool::NodeConfig
         gatewayPrx, gatewayServiceName, protocolInitializer->keyFactory());
 
     auto factory = std::make_shared<bcos::rpc::RpcFactory>(_nodeConfig->chainId(), gateway,
-        protocolInitializer->keyFactory(), protocolInitializer->dataEncryption());
+        protocolInitializer->keyFactory(),
+        protocolInitializer->getKeyEncryptionByType(_nodeConfig->keyEncryptionType()));
     factory->setNodeConfig(_nodeConfig);
     RPCSERVICE_LOG(INFO) << LOG_DESC("create rpc factory success")
                          << LOG_KV("withoutTarsFramework", withoutTarsFramework)

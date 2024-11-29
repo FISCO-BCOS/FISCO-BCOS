@@ -65,9 +65,10 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
 
     // create gateway
     // DataEncryption will be inited in ProtocolInitializer when storage_security.enable = true,
-    // otherwise dataEncryption() will return nullptr
+    // otherwise keyEncryption() will return nullptr
     GatewayFactory gatewayFactory(nodeConfig->chainId(), "localRpc",
-        m_nodeInitializer->protocolInitializer()->dataEncryption());
+        m_nodeInitializer->protocolInitializer()->getKeyEncryptionByType(
+            nodeConfig->keyEncryptionType()));
     auto gateway = gatewayFactory.buildGateway(_configFilePath, true, nullptr, "localGateway");
     m_gateway = gateway;
 
@@ -84,7 +85,8 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
 
     // create rpc
     RpcFactory rpcFactory(nodeConfig->chainId(), m_gateway, keyFactory,
-        m_nodeInitializer->protocolInitializer()->dataEncryption());
+        m_nodeInitializer->protocolInitializer()->getKeyEncryptionByType(
+            nodeConfig->keyEncryptionType()));
     rpcFactory.setNodeConfig(nodeConfig);
     m_rpc = rpcFactory.buildLocalRpc(groupInfo, nodeService);
     if (gateway->amop())

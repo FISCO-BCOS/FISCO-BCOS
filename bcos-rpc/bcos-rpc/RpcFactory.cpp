@@ -28,7 +28,7 @@
 #include <bcos-boostssl/websocket/WsService.h>
 #include <bcos-framework/Common.h>
 #include <bcos-framework/protocol/AMOPRequest.h>
-#include <bcos-framework/security/DataEncryptInterface.h>
+#include <bcos-framework/security/KeyEncryptInterface.h>
 #include <bcos-rpc/RpcFactory.h>
 #include <bcos-rpc/event/EventSubMatcher.h>
 #include <bcos-rpc/jsonrpc/JsonRpcFilterSystem.h>
@@ -57,7 +57,7 @@ using namespace bcos::protocol;
 using namespace bcos::security;
 
 RpcFactory::RpcFactory(std::string _chainID, GatewayInterface::Ptr _gatewayInterface,
-    KeyFactory::Ptr _keyFactory, bcos::security::DataEncryptInterface::Ptr _dataEncrypt)
+    KeyFactory::Ptr _keyFactory, bcos::security::KeyEncryptInterface::Ptr _dataEncrypt)
   : m_chainID(std::move(_chainID)),
     m_gateway(std::move(_gatewayInterface)),
     m_keyFactory(std::move(_keyFactory)),
