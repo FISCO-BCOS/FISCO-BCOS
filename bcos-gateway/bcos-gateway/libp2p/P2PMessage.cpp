@@ -63,20 +63,23 @@ bool P2PMessageOptions::encode(bytes& _buffer)
     // groupID length
     uint16_t groupIDLength =
         boost::asio::detail::socket_ops::host_to_network_short((uint16_t)m_groupID.size());
-    _buffer.insert(_buffer.end(), (byte*)&groupIDLength, (byte*)&groupIDLength + 2);
+    _buffer.insert(
+        _buffer.end(), (byte*)&groupIDLength, (byte*)&groupIDLength + sizeof(groupIDLength));
     // groupID
     _buffer.insert(_buffer.end(), m_groupID.begin(), m_groupID.end());
 
     // nodeID length
     uint16_t nodeIDLength =
         boost::asio::detail::socket_ops::host_to_network_short((uint16_t)m_srcNodeID->size());
-    _buffer.insert(_buffer.end(), (byte*)&nodeIDLength, (byte*)&nodeIDLength + 2);
+    _buffer.insert(
+        _buffer.end(), (byte*)&nodeIDLength, (byte*)&nodeIDLength + sizeof(nodeIDLength));
     // srcNodeID
     _buffer.insert(_buffer.end(), m_srcNodeID->begin(), m_srcNodeID->end());
 
     // dstNodeID count
-    uint8_t dstNodeIDCount = (uint8_t)m_dstNodeIDs.size();
-    _buffer.insert(_buffer.end(), (byte*)&dstNodeIDCount, (byte*)&dstNodeIDCount + 1);
+    auto dstNodeIDCount = static_cast<uint8_t>(m_dstNodeIDs.size());
+    _buffer.insert(
+        _buffer.end(), (byte*)&dstNodeIDCount, (byte*)&dstNodeIDCount + sizeof(dstNodeIDCount));
 
     // dstNodeIDs
     for (const auto& nodeID : m_dstNodeIDs)
@@ -86,7 +89,7 @@ bool P2PMessageOptions::encode(bytes& _buffer)
 
     // moduleID
     uint16_t moduleID = boost::asio::detail::socket_ops::host_to_network_short(m_moduleID);
-    _buffer.insert(_buffer.end(), (byte*)&moduleID, (byte*)&moduleID + 2);
+    _buffer.insert(_buffer.end(), (byte*)&moduleID, (byte*)&moduleID + sizeof(moduleID));
 
     return true;
 }

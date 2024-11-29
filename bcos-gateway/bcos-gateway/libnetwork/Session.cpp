@@ -21,6 +21,7 @@
 #include <cstddef>
 #include <fstream>
 #include <iterator>
+#include <mutex>
 #include <range/v3/view/transform.hpp>
 #include <utility>
 
@@ -163,9 +164,9 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
         m_sessionCallbackManager->addCallback(message->seq(), handler);
     }
 
-    EncodedMessage::Ptr encodedMessage = std::make_shared<EncodedMessage>();
-    encodedMessage->compress = m_enableCompress;
-    message->encode(*encodedMessage);
+    EncodedMessage encodedMessage;
+    encodedMessage.compress = m_enableCompress;
+    message->encode(encodedMessage);
 
     if (c_fileLogLevel <= LogLevel::TRACE)
     {
@@ -183,7 +184,7 @@ std::size_t Session::writeQueueSize()
     return static_cast<std::size_t>(!m_writeQueue.empty());
 }
 
-void Session::send(EncodedMessage::Ptr& _encodedMsg)
+void Session::send(EncodedMessage encodedMsg)
 {
     if (!active())
     {
@@ -195,7 +196,7 @@ void Session::send(EncodedMessage::Ptr& _encodedMsg)
         return;
     }
 
-    m_writeQueue.push(std::move(_encodedMsg));
+    m_writeQueue.push(std::move(encodedMsg));
     write();
 }
 
@@ -217,12 +218,6 @@ void Session::onWrite(boost::system::error_code ec, std::size_t /*unused*/)
             drop(TCPError);
             return;
         }
-        bool writing = true;
-        if (!m_writing.compare_exchange_strong(writing, false))
-        {
-            SESSION_LOG(ERROR) << LOG_DESC("onWrite wrong state") << LOG_KV("m_writing", m_writing);
-        }
-
         write();
     }
     catch (std::exception& e)
@@ -234,16 +229,16 @@ void Session::onWrite(boost::system::error_code ec, std::size_t /*unused*/)
     }
 }
 
-bool Session::tryPopSomeEncodedMsgs(std::vector<EncodedMessage::Ptr>& encodedMsgs,
+bool Session::tryPopSomeEncodedMsgs(std::vector<EncodedMessage>& encodedMsgs,
     size_t _maxSendDataSize, size_t _maxSendMsgCount)  // NOLINT
 {
     // Desc: Try to send multi packets one time to improve the efficiency of sending
     // data
     size_t totalDataSize = 0;
-    EncodedMessage::Ptr encodedMsg;
+    EncodedMessage encodedMsg;
     while (totalDataSize < _maxSendDataSize && m_writeQueue.try_pop(encodedMsg))
     {
-        totalDataSize += encodedMsg->dataSize();
+        totalDataSize += encodedMsg.dataSize();
         encodedMsgs.emplace_back(std::move(encodedMsg));
     }
 
@@ -279,16 +274,12 @@ void Session::write()
         {
             return;
         }
+        std::unique_ptr<std::atomic_bool, decltype([](std::atomic_bool* p) { *p = false; })> defer(
+            std::addressof(m_writing));
 
-        std::vector<EncodedMessage::Ptr> encodedMsgs;
+        std::vector<EncodedMessage> encodedMsgs;
         if (!tryPopSomeEncodedMsgs(encodedMsgs, m_maxSendDataSize, m_maxSendMsgCountS))
         {
-            writing = true;
-            if (!m_writing.compare_exchange_strong(writing, false))
-            {
-                SESSION_LOG(ERROR)
-                    << LOG_DESC("onWrite wrong state") << LOG_KV("m_writing", m_writing);
-            }
             return;
         }
 
@@ -300,20 +291,20 @@ void Session::write()
                                auto& encodedMsgs = *(it + index / 2);
                                if (index % 2 == 0)
                                {
-                                   return {encodedMsgs->header.data(), encodedMsgs->header.size()};
+                                   return {encodedMsgs.header.data(), encodedMsgs.header.size()};
                                }
-                               return {encodedMsgs->payload.data(), encodedMsgs->payload.size()};
+                               return {encodedMsgs.payload.data(), encodedMsgs.payload.size()};
                            });
+        defer.release();  // NOLINT
         server->asioInterface()->asyncWrite(m_socket, buffers,
             [self = std::weak_ptr<Session>(shared_from_this()), encodedMsgs =
                                                                     std::move(encodedMsgs)](
-                const boost::system::error_code _error, std::size_t _size) {
-                auto session = self.lock();
-                if (!session)
+                const boost::system::error_code _error, std::size_t _size) mutable {
+                if (auto session = self.lock())
                 {
-                    return;
+                    session->m_writing = false;
+                    session->onWrite(_error, _size);
                 }
-                session->onWrite(_error, _size);
             });
     }
     catch (std::exception& e)

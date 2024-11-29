@@ -43,7 +43,6 @@ public:
 
 struct EncodedMessage
 {
-    using Ptr = std::shared_ptr<EncodedMessage>;
     bcos::bytes header;
     bcos::bytes payload;
     bool compress = true;
