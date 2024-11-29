@@ -209,3 +209,23 @@ bcostars::protocol::TransactionImpl::conflictFields() const
             reinterpret_cast<const bcos::byte*>(field.field.data()), field.field.size()};
     });
 }
+
+size_t bcostars::protocol::TransactionImpl::size() const
+{
+    size_t size = 0;
+    size += m_inner()->data.nonce.size();
+    size += m_inner()->data.to.size();
+    size += m_inner()->data.input.size();
+    size += m_inner()->data.abi.size();
+    size += m_inner()->data.value.size();
+    size += m_inner()->data.gasPrice.size();
+    size += m_inner()->data.maxFeePerGas.size();
+    size += m_inner()->data.maxPriorityFeePerGas.size();
+    size += m_inner()->data.extension.size();
+    size += m_inner()->signature.size();
+    size += m_inner()->sender.size();
+    size += m_inner()->extraData.size();
+    size += m_inner()->extraTransactionBytes.size();
+    size += m_inner()->extraTransactionHash.size();
+    return size;
+}

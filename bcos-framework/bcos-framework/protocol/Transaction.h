@@ -189,6 +189,8 @@ public:
     bool storeToBackend() const { return m_storeToBackend; }
     void setStoreToBackend(bool _storeToBackend) const { m_storeToBackend = _storeToBackend; }
 
+    virtual size_t size() const { return 0; }
+
 private:
     TxSubmitCallback m_submitCallback;
     // the tx has been synced or not

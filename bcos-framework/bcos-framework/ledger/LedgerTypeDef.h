@@ -162,7 +162,8 @@ struct StorageState
     std::string nonce;
     std::string balance;
 };
-inline task::Task<void> readFromStorage(SystemConfigs& configs, auto&& storage, long blockNumber)
+inline task::Task<void> readFromStorage(
+    SystemConfigs& configs, auto&& storage, protocol::BlockNumber blockNumber = INT64_MAX)
 {
     decltype(auto) keys = bcos::ledger::SystemConfigs::supportConfigs();
     auto entries = co_await storage2::readSome(std::forward<decltype(storage)>(storage),
@@ -176,7 +177,7 @@ inline task::Task<void> readFromStorage(SystemConfigs& configs, auto&& storage, 
             auto [value, enableNumber] = entry->template getObject<ledger::SystemConfigEntry>();
             if (blockNumber >= enableNumber)
             {
-                configs.set(key, value);
+                configs.set(key, value, enableNumber);
             }
         }
     }

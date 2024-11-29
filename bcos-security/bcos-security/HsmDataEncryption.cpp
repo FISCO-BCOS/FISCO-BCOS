@@ -43,32 +43,6 @@ HsmDataEncryption::HsmDataEncryption(const bcos::tool::NodeConfig::Ptr nodeConfi
     m_symmetricEncrypt = std::make_shared<HsmSM4Crypto>(m_hsmLibPath);
 }
 
-std::shared_ptr<bytes> HsmDataEncryption::encryptContents(const std::shared_ptr<bytes>& contents)
-{
-    random_bytes_engine rbe;
-    std::vector<unsigned char> ivData(SM4_IV_DATA_SIZE);
-    std::generate(std::begin(ivData), std::end(ivData), std::ref(rbe));
-    // iv data would be changed after hsm encrypt, so keep it
-    auto originIvData = ivData;
-
-    bytesPointer encData = m_symmetricEncrypt->symmetricEncryptWithInternalKey(
-        reinterpret_cast<const unsigned char*>(contents->data()), contents->size(), m_encKeyIndex,
-        ivData.data(), SM4_IV_DATA_SIZE);
-    // append iv data to end of encData
-    encData->insert(encData->end(), originIvData.begin(), originIvData.end());
-    return encData;
-}
-
-std::shared_ptr<bytes> HsmDataEncryption::decryptContents(const std::shared_ptr<bytes>& contents)
-{
-    size_t cipherDataSize = contents->size() - SM4_IV_DATA_SIZE;
-    bytesPointer decData = m_symmetricEncrypt->symmetricDecryptWithInternalKey(
-        reinterpret_cast<const unsigned char*>(contents->data()), cipherDataSize, m_encKeyIndex,
-        reinterpret_cast<const unsigned char*>(contents->data() + cipherDataSize),
-        SM4_IV_DATA_SIZE);
-    return decData;
-}
-
 std::string HsmDataEncryption::encrypt(uint8_t* data, size_t size)
 {
     random_bytes_engine rbe;

@@ -104,6 +104,7 @@ public:
         const override;
     bcos::protocol::ViewResult<std::unique_ptr<bcos::protocol::TransactionReceipt>> receipts()
         const override;
+    size_t size() const override;
 
 private:
     mutable bcostars::Block m_inner;

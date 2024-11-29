@@ -503,7 +503,6 @@ void Session::doRead()
                         else if (result == 0)
                         {
                             auto length = message->lengthDirect();
-                            assert(length <= session->allowMaxMsgSize());
                             if (length > session->allowMaxMsgSize())
                             {
                                 SESSION_LOG(ERROR)

@@ -10,6 +10,7 @@
 #include <bcos-gateway/Common.h>
 #include <bcos-gateway/libnetwork/Common.h>
 #include <boost/algorithm/string.hpp>
+#include <boost/asio/ssl/context.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <array>
@@ -24,20 +25,20 @@ public:
     // cert for ssl connection
     struct CertConfig
     {
-        std::string caCert;
-        std::string nodeKey;
-        std::string nodeCert;
+        std::optional<std::string> caCert;
+        std::optional<std::string> nodeKey;
+        std::optional<std::string> nodeCert;
         std::string multiCaPath;
     };
 
     // cert for sm ssl connection
     struct SMCertConfig
     {
-        std::string caCert;
-        std::string nodeCert;
-        std::string nodeKey;
-        std::string enNodeCert;
-        std::string enNodeKey;
+        std::optional<std::string> caCert;
+        std::optional<std::string> nodeCert;
+        std::optional<std::string> nodeKey;
+        std::optional<std::string> enNodeCert;
+        std::optional<std::string> enNodeKey;
         std::string multiCaPath;
     };
 
@@ -204,7 +205,9 @@ public:
     // loads peer whitelist config
     void initPeerWhitelistConfig(const boost::property_tree::ptree& _pt);
     // check if file exist, exception will be throw if the file not exist
-    void checkFileExist(const std::string& _path);
+    template <typename R>
+    R checkFileExist(const std::string& _path);
+
     // load p2p connected peers
     void loadP2pConnectedNodes();
 
@@ -212,6 +215,8 @@ public:
     uint16_t listenPort() const { return m_listenPort; }
     uint32_t threadPoolSize() const { return m_threadPoolSize; }
     bool smSSL() const { return m_smSSL; }
+    auto sslClientMode() const { return m_ssl_client_mode; }
+    auto sslServerMode() const { return m_ssl_server_mode; }
 
     CertConfig certConfig() const { return m_certConfig; }
     SMCertConfig smCertConfig() const { return m_smCertConfig; }
@@ -313,6 +318,10 @@ private:
     std::string m_uuid;
     // if SM SSL connection or not
     bool m_smSSL;
+    uint8_t m_ssl_server_mode =
+        boost::asio::ssl::context_base::verify_peer | boost::asio::ssl::verify_fail_if_no_peer_cert;
+    uint8_t m_ssl_client_mode =
+        boost::asio::ssl::context_base::verify_peer | boost::asio::ssl::verify_fail_if_no_peer_cert;
     // p2p network listen IP
     std::string m_listenIP;
     // p2p network listen Port

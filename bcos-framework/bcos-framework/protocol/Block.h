@@ -115,6 +115,11 @@ public:
     virtual ViewResult<std::unique_ptr<TransactionMetaData>> transactionMetaDatas() const = 0;
     virtual ViewResult<std::unique_ptr<Transaction>> transactions() const = 0;
     virtual ViewResult<std::unique_ptr<TransactionReceipt>> receipts() const = 0;
+    bool operator<(const Block& block) const
+    {
+        return blockHeaderConst()->number() < block.blockHeaderConst()->number();
+    }
+    virtual size_t size() const = 0;
 };
 using Blocks = std::vector<Block::Ptr>;
 using BlocksPtr = std::shared_ptr<Blocks>;

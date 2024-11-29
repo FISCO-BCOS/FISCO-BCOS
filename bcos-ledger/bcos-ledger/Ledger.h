@@ -123,6 +123,11 @@ public:
         std::function<void(Error::Ptr&&, std::vector<std::string>&&)> callback);
     void setKeyPageSize(size_t keyPageSize) { m_keyPageSize = keyPageSize; }
 
+    task::Task<bcos::ledger::SystemConfigs> fetchAllSystemConfigs(
+        protocol::BlockNumber number = INT64_MAX) override;
+
+    task::Task<bcos::ledger::Features> fetchAllFeatures(protocol::BlockNumber) override;
+
 protected:
     storage::StateStorageInterface::Ptr getStateStorage()
     {

@@ -123,11 +123,11 @@ task::Task<void> EthEndpoint::gasPrice(const Json::Value&, Json::Value& response
     {
         auto [gasPrice, _] = config.value();
         auto const value = std::stoull(gasPrice, nullptr, 16);
-        result = toQuantity(value < LowestGasPrice ? LowestGasPrice : value);
+        result = toQuantity(value);
     }
     else
     {
-        result = "0x5208";  // 21000
+        result = "0x0";
     }
     buildJsonContent(result, response);
     co_return;

@@ -56,12 +56,11 @@ public:
         feature_balance_policy1,
         feature_paillier_add_raw,
         feature_evm_cancun,
-        feature_calculate_gasPrice,
         feature_evm_timestamp,
         feature_evm_address,
-        feature_ethereum_compatible,  // will enable all bugfixes, all features about evm
         feature_rpbft_term_weight,
         feature_raw_address,
+        feature_rpbft_vrf_type_secp256k1,
     };
 
 private:
@@ -126,19 +125,19 @@ public:
         /// NOTE：请不要在此处添加旧版本feature依赖！否则会出现数据不一致!
         /// Do NOT add old version feature dependencies here! Otherwise, data inconsistency will
         /// occur!
-        const auto mainSwitchDependence = std::unordered_map<Flag, std::set<Flag>>(
-            {{Flag::feature_ethereum_compatible, {
-                                                     Flag::feature_balance,
-                                                     Flag::feature_balance_precompiled,
-                                                     Flag::feature_calculate_gasPrice,
-                                                     Flag::feature_evm_timestamp,
-                                                     Flag::feature_evm_address,
-                                                     Flag::feature_evm_cancun,
-                                                 }}});
-        if (mainSwitchDependence.contains(flag))
-        {
-            return mainSwitchDependence.at(flag);
-        }
+        // const auto mainSwitchDependence = std::unordered_map<Flag, std::set<Flag>>(
+        //     {{Flag::feature_ethereum_compatible, {
+        //                                              Flag::feature_balance,
+        //                                              Flag::feature_balance_precompiled,
+        //                                              Flag::feature_calculate_gasPrice,
+        //                                              Flag::feature_evm_timestamp,
+        //                                              Flag::feature_evm_address,
+        //                                              Flag::feature_evm_cancun,
+        //                                          }}});
+        // if (mainSwitchDependence.contains(flag))
+        // {
+        //     return mainSwitchDependence.at(flag);
+        // }
         return std::set<Flag>();
     }
     void enableDependencyFeatures(Flag flag)
