@@ -60,9 +60,6 @@ public:
         m_pbftTimer = std::make_shared<PBFTTimer>(consensusTimeout(), "pbftTimer");
         // Note: the pullTxsTimeout must be smaller than consensusTimeout to fetch txs before
         // viewchange when there has no-synced txs pullTxsTimeout is larger than 3000ms
-        auto pullTxsTimeout = 2000;
-        m_pullTxsTimer = std::make_shared<PBFTTimer>(pullTxsTimeout, "pullTxsTimer");
-        m_pullTxsTimer->registerTimeoutHandler([this] { tryToSyncTxs(); });
     }
 
     ~PBFTConfig() override = default;
@@ -78,10 +75,6 @@ public:
         if (m_pbftTimer)
         {
             m_pbftTimer->destroy();
-        }
-        if (m_pullTxsTimer)
-        {
-            m_pullTxsTimer->destroy();
         }
         if (m_stateMachine)
         {
@@ -259,11 +252,7 @@ public:
         setTimeoutState(false);
     }
 
-    virtual void freshTimer()
-    {
-        m_pbftTimer->restart();
-        m_pullTxsTimer->restart();
-    }
+    virtual void freshTimer() { m_pbftTimer->restart(); }
 
     void registerSealProposalNotifier(
         std::function<void(size_t, size_t, size_t, std::function<void(Error::Ptr)>)>
@@ -420,10 +409,6 @@ protected:
     PBFTStorage::Ptr m_storage;
     // Timer, for pbft consensus
     PBFTTimer::Ptr m_pbftTimer;
-    // only for pull txs
-    //  trigger start: when m_timer.stop() && unsealTxs.size()==0
-    //  trigger stop: m_timer.start()
-    PBFTTimer::Ptr m_pullTxsTimer;
     // notify the sealer seal Proposal
     std::function<void(size_t, size_t, size_t, std::function<void(Error::Ptr)>)>
         m_sealProposalNotifier;

@@ -387,8 +387,8 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
              return tx->type() != static_cast<uint8_t>(TransactionType::Web3Transaction);
          }))
     {
-        BOOST_CHECK(txPoolNonceChecker->checkNonce(tx) == TransactionStatus::None);
-        BOOST_CHECK(ledgerNonceChecker->checkNonce(tx) == TransactionStatus::NonceCheckFail);
+        BOOST_CHECK(txPoolNonceChecker->checkNonce(*tx) == TransactionStatus::None);
+        BOOST_CHECK(ledgerNonceChecker->checkNonce(*tx) == TransactionStatus::NonceCheckFail);
     }
     // check the nonce of ledger->blockNumber() hash been removed from ledgerNonceChecker
     auto const& blockData = _faker->ledger()->ledgerData();

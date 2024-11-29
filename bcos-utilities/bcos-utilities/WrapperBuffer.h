@@ -19,18 +19,15 @@
  */
 #pragma once
 
-#include "bcos-utilities/ObjectCounter.h"
 #include "bcos-utilities/RefDataContainer.h"
 #include <bcos-utilities/Common.h>
-#include <algorithm>
 #include <memory>
 #include <utility>
-#include <vector>
 
 namespace bcos
 {
 
-class WrapperBuffer : bcos::ObjectCounter<WrapperBuffer>
+class WrapperBuffer
 {
 public:
     using Ptr = std::shared_ptr<WrapperBuffer>;

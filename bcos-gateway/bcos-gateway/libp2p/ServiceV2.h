@@ -19,7 +19,6 @@
  */
 #pragma once
 #include "Service.h"
-#include "bcos-utilities/ObjectCounter.h"
 #include "router/RouterTableInterface.h"
 namespace bcos
 {

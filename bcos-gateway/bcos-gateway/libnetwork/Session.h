@@ -27,7 +27,7 @@ namespace bcos::gateway
 class Host;
 class SocketFace;
 
-class SessionRecvBuffer : public bcos::ObjectCounter<SessionRecvBuffer>
+class SessionRecvBuffer
 {
 public:
     SessionRecvBuffer(size_t _bufferSize) : m_recvBufferSize(_bufferSize)

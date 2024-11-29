@@ -169,7 +169,6 @@ private:
         m_sendResponseHandler;
 
     ThreadPool::Ptr m_verifier;
-    ThreadPool::Ptr m_sealer;
     ThreadPool::Ptr m_txsPreStore;
     tool::TreeTopology::Ptr m_treeRouter = nullptr;
     std::atomic_bool m_running = {false};
