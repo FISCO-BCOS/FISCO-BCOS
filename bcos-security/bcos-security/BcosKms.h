@@ -14,7 +14,7 @@
  *  limitations under the License.
  */
 /**
- * @brief : keycenter for disk encrytion
+ * @brief : BcosKms for disk encrytion
  * @author: jimmyshi
  * @date: 2018-12-03
  */
@@ -42,23 +42,23 @@ namespace security
     BCOS_LOG(_OBV) << "[g:null]" \
                    << "[p:null][KeyManager]"
 
-class KeyCenterHttpClientInterface
+class BcosKmsHttpClientInterface
 {
 public:
-    using Ptr = std::shared_ptr<KeyCenterHttpClientInterface>;
-    virtual ~KeyCenterHttpClientInterface(){};
+    using Ptr = std::shared_ptr<BcosKmsHttpClientInterface>;
+    virtual ~BcosKmsHttpClientInterface(){};
     virtual void connect() = 0;
     virtual void close() = 0;
     virtual Json::Value callMethod(const std::string& _method, Json::Value _params) = 0;
 };
 
-class KeyCenterHttpClient : public KeyCenterHttpClientInterface
+class BcosKmsHttpClient : public BcosKmsHttpClientInterface
 {
 public:
-    using Ptr = std::shared_ptr<KeyCenterHttpClient>;
+    using Ptr = std::shared_ptr<BcosKmsHttpClient>;
 
-    KeyCenterHttpClient(const std::string& _ip, int _port);
-    ~KeyCenterHttpClient();
+    BcosKmsHttpClient(const std::string& _ip, int _port);
+    ~BcosKmsHttpClient();
     void connect() override;
     void close() override;
     Json::Value callMethod(const std::string& _method, Json::Value _params) override;
@@ -71,17 +71,17 @@ private:
     mutable SharedMutex x_clinetSocket;
 };
 
-class KeyCenter
+class BcosKms
 {
 public:
-    using Ptr = std::shared_ptr<KeyCenter>;
+    using Ptr = std::shared_ptr<BcosKms>;
 
-    KeyCenter(){};
-    virtual ~KeyCenter(){};
+    BcosKms(){};
+    virtual ~BcosKms(){};
     virtual const bytes getDataKey(const std::string& _cipherDataKey, const bool isSMCrypto);
     void setIpPort(const std::string& _ip, int _port);
     const std::string url() { return m_ip + ":" + std::to_string(m_port); }
-    void setKcClient(KeyCenterHttpClientInterface::Ptr _kcclient) { m_kcclient = _kcclient; };
+    void setKcClient(BcosKmsHttpClientInterface::Ptr _kcclient) { m_kcclient = _kcclient; };
     bytes uniformDataKey(const bytes& _readableDataKey, const bool isSMCrypto);
 
     void clearCache()
@@ -95,7 +95,7 @@ private:
     int m_port;
     std::string m_url;
 
-    KeyCenterHttpClientInterface::Ptr m_kcclient = nullptr;
+    BcosKmsHttpClientInterface::Ptr m_kcclient = nullptr;
 
     // Query cache
     std::string m_lastQueryCipherDataKey;

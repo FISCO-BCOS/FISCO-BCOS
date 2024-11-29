@@ -270,6 +270,17 @@ public:
         _onGetConfig(nullptr, value, m_ledgerConfig->blockNumber());
     }
 
+    task::Task<bcos::ledger::SystemConfigs> fetchAllSystemConfigs(
+        protocol::BlockNumber _blockNumber) override
+    {
+        ledger::SystemConfigs configs;
+        for (auto const& [key, value] : m_systemConfig)
+        {
+            configs.set(key, value, 0);
+        }
+        co_return configs;
+    }
+
     void asyncGetNodeListByType(std::string_view const& _type,
         std::function<void(Error::Ptr, ConsensusNodeList)> _onGetNodeList) override
     {

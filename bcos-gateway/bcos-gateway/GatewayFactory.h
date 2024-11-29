@@ -9,7 +9,7 @@
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/election/LeaderEntryPointInterface.h>
 #include <bcos-framework/front/FrontServiceInterface.h>
-#include <bcos-framework/security/DataEncryptInterface.h>
+#include <bcos-framework/security/KeyEncryptInterface.h>
 #include <bcos-gateway/Gateway.h>
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-gateway/libamop/AMOPImpl.h>
@@ -24,7 +24,7 @@ class GatewayFactory
 public:
     using Ptr = std::shared_ptr<GatewayFactory>;
     GatewayFactory(std::string const& _chainID, std::string const& _rpcServiceName,
-        bcos::security::DataEncryptInterface::Ptr _dataEncrypt = nullptr)
+        bcos::security::KeyEncryptInterface::Ptr _dataEncrypt = nullptr)
       : m_chainID(_chainID), m_rpcServiceName(_rpcServiceName), m_dataEncrypt(_dataEncrypt)
     {
         // For compatibility, p2p communication between nodes still uses the old public key analysis
@@ -63,10 +63,10 @@ public:
 
     // build ssl context
     std::shared_ptr<boost::asio::ssl::context> buildSSLContext(
-        bool _server, const GatewayConfig::CertConfig& _certConfig);
+        bool _server, uint8_t sslMode, const GatewayConfig::CertConfig& _certConfig);
     // build sm ssl context
     std::shared_ptr<boost::asio::ssl::context> buildSSLContext(
-        bool _server, const GatewayConfig::SMCertConfig& _smCertConfig);
+        bool _server, uint8_t sslMode, const GatewayConfig::SMCertConfig& _smCertConfig);
 
     //
     std::shared_ptr<ratelimiter::RateLimiterManager> buildRateLimiterManager(
@@ -140,6 +140,6 @@ private:
     std::string m_chainID;
     std::string m_rpcServiceName;
 
-    bcos::security::DataEncryptInterface::Ptr m_dataEncrypt{nullptr};
+    bcos::security::KeyEncryptInterface::Ptr m_dataEncrypt{nullptr};
 };
 }  // namespace bcos::gateway

@@ -1,6 +1,6 @@
 {
   "name": "fiscobcos",
-  "version-string": "3.12.0",
+  "version-string": "3.12.1",
   "homepage": "https://github.com/FISCO-BCOS/FISCO-BCOS",
   "description": "FISCO BCOS",
   "dependencies": [
@@ -44,6 +44,10 @@
       "name": "secp256k1",
       "version>=": "2022-12-13#1",
       "features": []
+    },
+    {
+      "name": "aws-sdk-cpp",
+      "features": ["kms"]
     },
     "wedprcrypto",
     "range-v3",
@@ -276,7 +280,7 @@
     },
     {
       "name": "wedprcrypto",
-      "version": "1.3.1#1"
+      "version": "1.3.2"
     }
   ]
 }

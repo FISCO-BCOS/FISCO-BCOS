@@ -24,7 +24,7 @@
 #pragma once
 
 #include <bcos-framework/storage/StorageInterface.h>
-#include <bcos-security/DataEncryption.h>
+#include <bcos-framework/security/StorageEncryptInterface.h>
 #include <rocksdb/db.h>
 #include <tbb/parallel_for.h>
 
@@ -40,7 +40,7 @@ class RocksDBStorage : public TransactionalStorageInterface
 public:
     using Ptr = std::shared_ptr<RocksDBStorage>;
     explicit RocksDBStorage(std::unique_ptr<rocksdb::DB, std::function<void(rocksdb::DB*)>>&& db,
-        const bcos::security::DataEncryptInterface::Ptr dataEncryption);
+        const bcos::security::StorageEncryptInterface::Ptr dataEncryption);
 
     ~RocksDBStorage() {}
 
@@ -94,7 +94,7 @@ private:
     std::unique_ptr<rocksdb::DB, std::function<void(rocksdb::DB*)>> m_db;
 
     // Security Storage
-    bcos::security::DataEncryptInterface::Ptr m_dataEncryption{nullptr};
+    bcos::security::StorageEncryptInterface::Ptr m_dataEncryption{nullptr};
     bool enableRocksDBMemoryStatistics = false;
 };
 }  // namespace bcos::storage

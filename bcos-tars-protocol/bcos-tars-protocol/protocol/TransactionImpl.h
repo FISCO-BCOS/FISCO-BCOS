@@ -101,6 +101,8 @@ public:
     bcostars::Transaction& mutableInner();
     void setInner(bcostars::Transaction inner);
 
+    size_t size() const override;
+
 private:
     std::function<bcostars::Transaction*()> m_inner;
 };

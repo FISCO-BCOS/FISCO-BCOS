@@ -113,6 +113,7 @@ public:
     {
         std::stringstream stringstream{};
         stringstream << " chainId: " << this->chainId.value_or(0)
+                     << " hash:" << this->txHash().hex()
                      << " type: " << static_cast<uint16_t>(this->type) << " to: " << this->to
                      << " data: " << toHex(this->data) << " value: " << this->value
                      << " nonce: " << this->nonce << " gasLimit: " << this->gasLimit
@@ -120,7 +121,7 @@ public:
                      << " maxFeePerGas: " << this->maxFeePerGas
                      << " maxFeePerBlobGas: " << this->maxFeePerBlobGas
                      << " blobVersionedHashes: " << this->blobVersionedHashes
-                     << " signatureR: " << toHex(this->signatureR)
+                     << " sender: " << this->sender() << " signatureR: " << toHex(this->signatureR)
                      << " signatureS: " << toHex(this->signatureS)
                      << " signatureV: " << this->signatureV;
         return stringstream.str();

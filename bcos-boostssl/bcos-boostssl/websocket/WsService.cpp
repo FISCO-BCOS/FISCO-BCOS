@@ -135,6 +135,13 @@ void WsService::stop()
         return;
     }
     m_running = false;
+    //    {
+    //        auto ss = sessions();
+    //        for (auto const& session : ss)
+    //        {
+    //            session->drop(WsError::SessionDisconnect);
+    //        }
+    //    }
 
     // stop ioc thread
     if (m_ioservicePool)
