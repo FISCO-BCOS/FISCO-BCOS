@@ -42,10 +42,7 @@ using namespace bcos::crypto;
 using namespace bcos::protocol;
 
 PBFTEngine::PBFTEngine(PBFTConfig::Ptr _config)
-  : ConsensusEngine("pbft", 0),
-    m_config(_config),
-    m_msgQueue(std::make_shared<PBFTMsgQueue>()),
-    m_ledgerConfig(std::make_shared<LedgerConfig>())
+  : ConsensusEngine("pbft", 0), m_config(_config), m_ledgerConfig(std::make_shared<LedgerConfig>())
 {
     auto cacheFactory = std::make_shared<PBFTCacheFactory>();
     m_cacheProcessor = std::make_shared<PBFTCacheProcessor>(cacheFactory, _config);
@@ -538,7 +535,7 @@ void PBFTEngine::onReceivePBFTMessage(Error::Ptr _error, NodeIDPtr _fromNode, by
             }
             return;
         }
-        m_msgQueue->push(pbftMsg);
+        m_msgQueue.push(pbftMsg);
         m_signalled.notify_all();
     }
     catch (std::exception const& _e)
@@ -572,11 +569,12 @@ void PBFTEngine::executeWorker()
         return;
     }
     // handle the PBFT message(here will wait when the msgQueue is empty)
-    auto messageResult = m_msgQueue->tryPop(c_PopWaitSeconds);
-    auto empty = m_msgQueue->empty();
-    if (messageResult.first)
+    std::shared_ptr<PBFTBaseMessageInterface> messageResult;
+    m_msgQueue.try_pop(messageResult);
+    auto empty = m_msgQueue.empty();
+    if (messageResult)
     {
-        auto pbftMsg = messageResult.second;
+        const auto& pbftMsg = messageResult;
         auto packetType = pbftMsg->packetType();
         // can't handle the future consensus messages when handling the system
         // proposal
@@ -589,7 +587,7 @@ void PBFTEngine::executeWorker()
                             << LOG_KV("index", pbftMsg->index()) << LOG_KV("type", packetType)
                             << m_config->printCurrentState();
 #endif
-            m_msgQueue->push(pbftMsg);
+            m_msgQueue.push(pbftMsg);
             if (empty)
             {
                 // only one pbft msg, and cannot handle proposal
@@ -600,7 +598,6 @@ void PBFTEngine::executeWorker()
         }
         handleMsg(pbftMsg);
     }
-    // wait for PBFTMsg
     else
     {
         waitSignal();
@@ -793,8 +790,8 @@ bool PBFTEngine::checkProposalSignature(
     {
         return false;
     }
-    auto nodeInfo = m_config->getConsensusNodeByIndex(_generatedFrom);
-    if (!nodeInfo)
+    auto* nodeInfo = m_config->getConsensusNodeByIndex(_generatedFrom);
+    if (nodeInfo == nullptr)
     {
         PBFT_LOG(WARNING) << LOG_DESC(
                                  "checkProposalSignature failed for the node "
@@ -877,6 +874,8 @@ bool PBFTEngine::isSyncingHigher()
 bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
     bool _needVerifyProposal, bool _generatedFromNewView, bool _needCheckSignature)
 {
+    ittapi::Report report(
+        ittapi::ITT_DOMAINS::instance().PBFT, ittapi::ITT_DOMAINS::instance().PRE_PREPARE_MSG);
     if (isSyncingHigher())
     {
         PBFT_LOG(INFO) << LOG_DESC(
@@ -1072,6 +1071,8 @@ CheckResult PBFTEngine::checkPBFTMsg(PBFTMessageInterface::Ptr const& _prepareMs
 
 bool PBFTEngine::handlePrepareMsg(PBFTMessageInterface::Ptr const& _prepareMsg)
 {
+    ittapi::Report report(
+        ittapi::ITT_DOMAINS::instance().PBFT, ittapi::ITT_DOMAINS::instance().PREPARE_MSG);
     PBFT_LOG(TRACE) << LOG_DESC("handlePrepareMsg") << printPBFTMsgInfo(_prepareMsg)
                     << m_config->printCurrentState();
     auto result = checkPBFTMsg(_prepareMsg);
@@ -1090,6 +1091,8 @@ bool PBFTEngine::handlePrepareMsg(PBFTMessageInterface::Ptr const& _prepareMsg)
 
 bool PBFTEngine::handleCommitMsg(PBFTMessageInterface::Ptr const& _commitMsg)
 {
+    ittapi::Report report(
+        ittapi::ITT_DOMAINS::instance().PBFT, ittapi::ITT_DOMAINS::instance().COMMIT_MSG);
     PBFT_LOG(TRACE) << LOG_DESC("handleCommitMsg") << printPBFTMsgInfo(_commitMsg)
                     << m_config->printCurrentState();
     auto result = checkPBFTMsg(_commitMsg);

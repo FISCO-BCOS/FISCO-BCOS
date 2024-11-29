@@ -146,10 +146,12 @@ public:
         PBFTEngine::onReceivePBFTMessage(_error, _nodeID, _data, _sendResponse);
     }
 
+    auto& msgQueue() { return m_msgQueue; }
+
     // PBFT main processing function
     void executeWorker() override
     {
-        while (!msgQueue()->empty())
+        while (!msgQueue().empty())
         {
             PBFTEngine::executeWorker();
         }
@@ -171,8 +173,6 @@ public:
         return PBFTEngine::handlePrePrepareMsg(
             _prePrepareMsg, _needVerifyProposal, _generatedFromNewView, _needCheckSignature);
     }
-
-    PBFTMsgQueuePtr msgQueue() { return m_msgQueue; }
 };
 
 class FakePBFTImpl : public PBFTImpl

@@ -271,7 +271,9 @@ void Service::onDisconnect(NetworkException e, P2PSession::Ptr p2pSession)
         callDeleteSessionHandlers(p2pSession);
 
         if (e.errorCode() == P2PExceptionType::DuplicateSession)
+        {
             return;
+        }
         SERVICE_LOG(INFO) << LOG_DESC("onDisconnect") << LOG_KV("code", e.errorCode())
                           << LOG_KV("what", boost::diagnostic_information(e));
         RecursiveGuard l(x_nodes);
@@ -563,7 +565,7 @@ void Service::asyncBroadcastMessage(P2PMessage::Ptr message, Options options)
 
         for (auto& session : sessions)
         {
-            asyncSendMessageByNodeID(session.first, message, nullptr, options);
+            asyncSendMessageByNodeID(session.first, message, {}, options);
         }
     }
     catch (std::exception& e)

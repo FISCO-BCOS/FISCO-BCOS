@@ -223,14 +223,14 @@ public:
      * @param _maxSendMsgCount
      * @return bool
      */
-    bool tryPopSomeEncodedMsgs(std::vector<EncodedMessage::Ptr>& encodedMsgs,
-        size_t _maxSendDataSize, size_t _maxSendMsgCount);
+    bool tryPopSomeEncodedMsgs(
+        std::vector<EncodedMessage>& encodedMsgs, size_t _maxSendDataSize, size_t _maxSendMsgCount);
 
 protected:
     virtual void checkNetworkStatus();
 
 private:
-    void send(EncodedMessage::Ptr& _encodedMsg);
+    void send(EncodedMessage encodedMsg);
 
     void doRead();
 
@@ -271,7 +271,7 @@ private:
 
     MessageFactory::Ptr m_messageFactory;
 
-    tbb::concurrent_queue<EncodedMessage::Ptr> m_writeQueue;
+    tbb::concurrent_queue<EncodedMessage> m_writeQueue;
     std::atomic_bool m_writing = false;
 
     mutable bcos::Mutex x_info;

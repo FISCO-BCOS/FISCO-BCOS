@@ -395,7 +395,6 @@ void ServiceV2::sendRespMessageBySession(
     auto respMessage = std::dynamic_pointer_cast<P2PMessageV2>(messageFactory()->buildMessage());
     auto requestMsg = std::dynamic_pointer_cast<P2PMessageV2>(_p2pMessage);
     respMessage->setDstP2PNodeID(requestMsg->srcP2PNodeID());
-    // respMessage->setSrcP2PNodeID(requestMsg->dstP2PNodeID());
     respMessage->setSrcP2PNodeID(m_nodeID);
     respMessage->setSeq(requestMsg->seq());
     respMessage->setRespPacket();

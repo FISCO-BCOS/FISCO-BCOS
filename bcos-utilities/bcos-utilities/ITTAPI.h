@@ -65,6 +65,11 @@ struct ITT_DOMAINS
     const __itt_domain* SEALER = __itt_domain_create("sealer");
     __itt_string_handle* SUBMIT_PROPOSAL = __itt_string_handle_create("submitProposal");
 
+    const __itt_domain* PBFT = __itt_domain_create("pbft");
+    __itt_string_handle* PRE_PREPARE_MSG = __itt_string_handle_create("prePrepareMsg");
+    __itt_string_handle* PREPARE_MSG = __itt_string_handle_create("prepareMsg");
+    __itt_string_handle* COMMIT_MSG = __itt_string_handle_create("commitMsg");
+
     const __itt_domain* TXPOOL = __itt_domain_create("txpool");
     __itt_string_handle* BROADCAST_TX = __itt_string_handle_create("broadcastTx");
     __itt_string_handle* SUBMIT_TX = __itt_string_handle_create("submitTx");

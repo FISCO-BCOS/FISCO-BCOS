@@ -159,12 +159,15 @@ BOOST_AUTO_TEST_CASE(batchFindTest)
 
     std::atomic_size_t cnt = 0;
     bucketMap.traverse<WriteAccessor, true>(
-        keys, [&](WriteAccessor& accessor, auto index, auto& bucket) {
-            if (bucket.find(accessor, keys[index]))
+        keys, [&](WriteAccessor& accessor, const auto& range, auto& bucket) {
+            for (auto index : range)
             {
-                accessor.value()++;
-                cnt++;
-                std::cout << accessor.key() << ":" << accessor.value() << std::endl;
+                if (bucket.find(accessor, keys[index]))
+                {
+                    accessor.value()++;
+                    cnt++;
+                    std::cout << accessor.key() << ":" << accessor.value() << std::endl;
+                }
             }
         });
     BOOST_CHECK_EQUAL(cnt, 100);
@@ -288,10 +291,13 @@ BOOST_AUTO_TEST_CASE(parallelTest2)
                       ::ranges::to<std::vector>();
 
             bucketMap.traverse<WriteAccessor, true>(
-                ks, [&](WriteAccessor& accessor, auto index, auto& bucket) {
-                    if (bucket.find(accessor, ks[index]))
+                ks, [&](WriteAccessor& accessor, const auto& range, auto& bucket) {
+                    for (auto index : range)
                     {
-                        accessor.value()++;
+                        if (bucket.find(accessor, ks[index]))
+                        {
+                            accessor.value()++;
+                        }
                     }
                 });
         });

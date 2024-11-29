@@ -22,7 +22,6 @@
 #include "bcos-txpool/txpool/interfaces/NonceCheckerInterface.h"
 #include <bcos-utilities/BucketMap.h>
 #include <tbb/concurrent_hash_map.h>
-#include <variant>
 
 namespace bcos::txpool
 {
