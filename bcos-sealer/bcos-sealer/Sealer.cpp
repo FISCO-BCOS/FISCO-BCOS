@@ -23,6 +23,7 @@
 #include "bcos-framework/ledger/Features.h"
 #include <bcos-framework/protocol/GlobalConfig.h>
 
+#include <range/v3/view/transform.hpp>
 #include <utility>
 
 using namespace bcos;
@@ -135,16 +136,14 @@ void Sealer::submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _blo
         return;
     }
     // supplement the header info: set sealerList and weightList
-    std::vector<bytes> sealerList;
-    std::vector<uint64_t> weightList;
     auto consensusNodeInfo = m_sealerConfig->consensus()->consensusNodeList();
-    for (auto const& consensusNode : consensusNodeInfo)
-    {
-        sealerList.push_back(consensusNode.nodeID->data());
-        weightList.push_back(consensusNode.voteWeight);
-    }
-    _block->blockHeader()->setSealerList(std::move(sealerList));
-    _block->blockHeader()->setConsensusWeights(std::move(weightList));
+    _block->blockHeader()->setSealerList(::ranges::views::transform(consensusNodeInfo,
+                                             [](auto const& node) { return node.nodeID->data(); }) |
+                                         ::ranges::to<std::vector>());
+    _block->blockHeader()->setConsensusWeights(
+        ::ranges::views::transform(
+            consensusNodeInfo, [](auto const& node) { return node.voteWeight; }) |
+        ::ranges::to<std::vector>());
     _block->blockHeader()->setSealer(m_sealerConfig->consensus()->nodeIndex());
     // set the version
     auto version = std::min(m_sealerConfig->consensus()->compatibilityVersion(),
@@ -161,7 +160,7 @@ void Sealer::submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _blo
                    << LOG_KV("sysTxs", _containSysTxs)
                    << LOG_KV("txsSize", _block->transactionsHashSize())
                    << LOG_KV("version", version);
-    m_sealerConfig->consensus()->asyncSubmitProposal(_containSysTxs, ref(encodedData),
+    m_sealerConfig->consensus()->asyncSubmitProposal(_containSysTxs, bcos::ref(encodedData),
         _block->blockHeader()->number(), _block->blockHeader()->hash(), [_block](auto&& _error) {
             if (_error == nullptr)
             {

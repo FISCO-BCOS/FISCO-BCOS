@@ -43,7 +43,7 @@ public:
     virtual void start() = 0;
     virtual void stop() = 0;
 
-    virtual void asyncSubmitProposal(bool _containSysTxs, bytesConstRef _proposalData,
+    virtual void asyncSubmitProposal(bool _containSysTxs, const protocol::Block& proposal,
         bcos::protocol::BlockNumber _proposalIndex, bcos::crypto::HashType const& _proposalHash,
         std::function<void(Error::Ptr)> _onProposalSubmitted) = 0;
 

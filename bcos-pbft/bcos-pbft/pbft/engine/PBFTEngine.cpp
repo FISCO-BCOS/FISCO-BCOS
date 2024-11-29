@@ -325,7 +325,7 @@ void PBFTEngine::onProposalApplied(int64_t _errorCode, PBFTProposalInterface::Pt
     }
 }
 
-void PBFTEngine::asyncSubmitProposal(bool _containSysTxs, bytesConstRef _proposalData,
+void PBFTEngine::asyncSubmitProposal(bool _containSysTxs, const protocol::Block& proposal,
     BlockNumber _proposalIndex, HashType const& _proposalHash,
     std::function<void(Error::Ptr)> _onProposalSubmitted)
 {
@@ -333,16 +333,12 @@ void PBFTEngine::asyncSubmitProposal(bool _containSysTxs, bytesConstRef _proposa
     {
         _onProposalSubmitted(nullptr);
     }
-    onRecvProposal(_containSysTxs, _proposalData, _proposalIndex, _proposalHash);
+    onRecvProposal(_containSysTxs, proposal, _proposalIndex, _proposalHash);
 }
 
-void PBFTEngine::onRecvProposal(bool _containSysTxs, bytesConstRef _proposalData,
+void PBFTEngine::onRecvProposal(bool _containSysTxs, const protocol::Block& proposal,
     BlockNumber _proposalIndex, HashType const& _proposalHash)
 {
-    if (_proposalData.empty())
-    {
-        return;
-    }
     if (!m_config->isConsensusNode())
     {
         return;
@@ -357,7 +353,7 @@ void PBFTEngine::onRecvProposal(bool _containSysTxs, bytesConstRef _proposalData
                           << m_config->printCurrentState()
                           << LOG_KV("syncingHighestNumber", m_config->syncingHighestNumber());
         m_config->notifyResetSealing(consProposalIndex);
-        m_config->validator()->asyncResetTxsFlag(_proposalData, false, true);
+        m_config->validator()->asyncResetTxsFlag(proposal, false, true);
         return;
     }
     if (_proposalIndex <= m_config->committedProposal()->index() ||
@@ -381,7 +377,7 @@ void PBFTEngine::onRecvProposal(bool _containSysTxs, bytesConstRef _proposalData
                           << LOG_KV("hash", _proposalHash.abridged())
                           << m_config->printCurrentState();
         m_config->notifyResetSealing(consProposalIndex);
-        m_config->validator()->asyncResetTxsFlag(_proposalData, false, true);
+        m_config->validator()->asyncResetTxsFlag(proposal, false, true);
         return;
     }
     PBFT_LOG(INFO) << LOG_DESC("asyncSubmitProposal") << LOG_KV("index", _proposalIndex)

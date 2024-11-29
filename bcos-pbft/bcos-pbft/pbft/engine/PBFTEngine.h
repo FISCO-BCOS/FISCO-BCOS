@@ -60,7 +60,7 @@ public:
     void start() override;
     void stop() override;
 
-    virtual void asyncSubmitProposal(bool _containSysTxs, bytesConstRef _proposalData,
+    virtual void asyncSubmitProposal(bool _containSysTxs, const protocol::Block& proposal,
         bcos::protocol::BlockNumber _proposalIndex, bcos::crypto::HashType const& _proposalHash,
         std::function<void(Error::Ptr)> _onProposalSubmitted);
 
@@ -104,7 +104,7 @@ protected:
     virtual void onReceivePBFTMessage(bcos::Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,
         bytesConstRef _data, SendResponseCallback _sendResponse);
 
-    virtual void onRecvProposal(bool _containSysTxs, bytesConstRef _proposalData,
+    virtual void onRecvProposal(bool _containSysTxs, const protocol::Block& proposal,
         bcos::protocol::BlockNumber _proposalIndex, bcos::crypto::HashType const& _proposalHash);
 
     // PBFT main processing function
