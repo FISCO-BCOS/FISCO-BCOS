@@ -97,7 +97,7 @@ protected:
     virtual bool insertResettingProposal(bcos::crypto::HashType const& _hash);
 
     virtual void asyncResetTxsFlag(const protocol::Block& _block,
-        bcos::crypto::HashListPtr _txsHashList, bool _flag, bool _emptyTxBatchHash);
+        bcos::crypto::HashList _txsHashList, bool _flag, bool _emptyTxBatchHash);
 
     bcos::txpool::TxPoolInterface::Ptr m_txPool;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;

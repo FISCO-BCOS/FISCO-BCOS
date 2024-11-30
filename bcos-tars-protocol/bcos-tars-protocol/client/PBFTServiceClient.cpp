@@ -24,13 +24,15 @@
 #include "bcos-tars-protocol/protocol/BlockImpl.h"
 using namespace bcostars;
 
-void PBFTServiceClient::asyncSubmitProposal(bool _containSysTxs, bcos::bytesConstRef _proposalData,
-    bcos::protocol::BlockNumber _proposalIndex, bcos::crypto::HashType const& _proposalHash,
+void PBFTServiceClient::asyncSubmitProposal(bool _containSysTxs,
+    const bcos::protocol::Block& proposal, bcos::protocol::BlockNumber _proposalIndex,
+    bcos::crypto::HashType const& _proposalHash,
     std::function<void(bcos::Error::Ptr)> _onProposalSubmitted)
 {
+    const auto& tarsBlock = dynamic_cast<const bcostars::protocol::BlockImpl&>(proposal);
     m_proxy->async_asyncSubmitProposal(new PBFTServiceCommonCallback(_onProposalSubmitted),
-        _containSysTxs, std::vector<char>(_proposalData.begin(), _proposalData.end()),
-        _proposalIndex, std::vector<char>(_proposalHash.begin(), _proposalHash.end()));
+        _containSysTxs, tarsBlock.inner(), _proposalIndex,
+        std::vector<char>(_proposalHash.begin(), _proposalHash.end()));
 }
 
 void PBFTServiceClient::asyncGetPBFTView(

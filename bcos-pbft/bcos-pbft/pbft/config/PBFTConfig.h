@@ -381,7 +381,7 @@ public:
     void setConsensusType(ledger::ConsensusType _type) { m_type = _type; }
     ledger::ConsensusType consensusType() const noexcept { return m_type; }
 
-    bcos::protocol::BlockFactory::Ptr blockFactory() const noexcept { return m_blockFactory; }
+    bcos::protocol::BlockFactory& blockFactory() const noexcept { return *m_blockFactory; }
 
     void setRPBFTConfigTools(RPBFTConfigTools::Ptr _config)
     {

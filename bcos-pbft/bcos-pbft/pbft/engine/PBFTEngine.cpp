@@ -384,7 +384,11 @@ void PBFTEngine::onRecvProposal(bool _containSysTxs, const protocol::Block& prop
                    << LOG_KV("hash", _proposalHash.abridged()) << m_config->printCurrentState();
     // generate the pre-prepare packet
     auto pbftProposal = m_config->pbftMessageFactory()->createPBFTProposal();
-    pbftProposal->setData(_proposalData);
+
+    bytes blockData;
+    proposal.encode(blockData);
+
+    pbftProposal->setData(blockData);
     pbftProposal->setIndex(_proposalIndex);
     pbftProposal->setHash(_proposalHash);
     pbftProposal->setSealerId(m_config->nodeIndex());
@@ -427,18 +431,19 @@ void PBFTEngine::onRecvProposal(bool _containSysTxs, const protocol::Block& prop
     {
         PBFT_LOG(INFO) << LOG_DESC("handlePrePrepareMsg failed") << printPBFTProposal(pbftMessage)
                        << LOG_KV("costT(ms)", utcSteadyTime() - beginHandleT);
-        resetSealedTxs(pbftMessage);
+        resetSealedTxs(pbftMessage, proposal);
     }
 }
 
-void PBFTEngine::resetSealedTxs(std::shared_ptr<PBFTMessageInterface> const& _prePrepareMsg)
+void PBFTEngine::resetSealedTxs(
+    std::shared_ptr<PBFTMessageInterface> const& _prePrepareMsg, const protocol::Block& block)
 {
     if (_prePrepareMsg->generatedFrom() != m_config->nodeIndex()) [[unlikely]]
     {
         return;
     }
     m_config->notifyResetSealing();
-    m_config->validator()->asyncResetTxsFlag(_prePrepareMsg->consensusProposal()->data(), false);
+    m_config->validator()->asyncResetTxsFlag(block, false);
 }
 
 // receive the new block notification from the sync module
@@ -816,7 +821,7 @@ bool PBFTEngine::checkRotateTransactionValid(PBFTMessageInterface::Ptr const& _p
         return true;
     }
 
-    auto block = m_config->blockFactory()->createBlock(_proposal->consensusProposal()->data());
+    auto block = m_config->blockFactory().createBlock(_proposal->consensusProposal()->data());
 
     PBFT_LOG(INFO) << LOG_DESC("checkRotateTransactionValid")
                    << LOG_KV("reqIndex", _proposal->index())
@@ -930,13 +935,15 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
             }
         }
     }
+    auto block = m_config->blockFactory().createBlock(
+        _prePrepareMsg->consensusProposal()->data(), false, false);
     // add the prePrepareReq to the cache
     if (!_needVerifyProposal)
     {
         // Note: must reset the txs to be sealed no matter verify success or failed
         // because some nodes may verify failed for timeout, while other nodes may
         // verify success
-        m_config->validator()->asyncResetTxsFlag(_prePrepareMsg->consensusProposal()->data(), true);
+        m_config->validator()->asyncResetTxsFlag(*block, true);
         // add the pre-prepare packet into the cache
         m_cacheProcessor->addPrePrepareCache(_prePrepareMsg);
         m_config->timer()->restart();
@@ -950,14 +957,14 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
     // verify the proposal
     auto self = weak_from_this();
     auto* leaderNodeInfo = m_config->getConsensusNodeByIndex(_prePrepareMsg->generatedFrom());
-    if (!leaderNodeInfo)
+    if (leaderNodeInfo == nullptr)
     {
         return false;
     }
     m_config->validator()->verifyProposal(leaderNodeInfo->nodeID,
         _prePrepareMsg->consensusProposal(),
-        [self, _prePrepareMsg, _generatedFromNewView, leaderNodeInfo, _needCheckSignature](
-            auto&& _error, bool _verifyResult) {
+        [self, _prePrepareMsg, _generatedFromNewView, leaderNodeInfo, _needCheckSignature,
+            block = std::move(block)](auto&& _error, bool _verifyResult) {
             try
             {
                 auto pbftEngine = self.lock();
@@ -973,8 +980,7 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
                 // Note: must reset the txs to be sealed no matter verify success or
                 // failed because some nodes may verify failed for timeout,  while
                 // other nodes may verify success
-                pbftEngine->m_config->validator()->asyncResetTxsFlag(
-                    _prePrepareMsg->consensusProposal()->data(), true);
+                pbftEngine->m_config->validator()->asyncResetTxsFlag(*block, true);
 
                 // verify exceptioned
                 if (_error != nullptr)

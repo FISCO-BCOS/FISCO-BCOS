@@ -83,12 +83,12 @@ void TxsValidator::asyncResetTxsFlag(
     }
     try
     {
-        auto txsHash = std::make_shared<HashList>();
+        HashList txsHash;
         for (size_t i = 0; i < proposal.transactionsHashSize(); i++)
         {
-            txsHash->emplace_back(proposal.transactionHash(i));
+            txsHash.emplace_back(proposal.transactionHash(i));
         }
-        if (txsHash->empty())
+        if (txsHash.empty())
         {
             return;
         }
@@ -104,7 +104,7 @@ void TxsValidator::asyncResetTxsFlag(
 }
 
 void TxsValidator::asyncResetTxsFlag(
-    const protocol::Block& _block, HashListPtr _txsHashList, bool _flag, bool _emptyTxBatchHash)
+    const protocol::Block& _block, HashList _txsHashList, bool _flag, bool _emptyTxBatchHash)
 {
     auto blockHeader = _block.blockHeaderConst();
     auto proposalNumber = blockHeader->number();

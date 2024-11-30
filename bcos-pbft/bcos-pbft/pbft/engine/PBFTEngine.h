@@ -118,7 +118,8 @@ protected:
         bool _needVerifyProposal, bool _generatedFromNewView = false,
         bool _needCheckSignature = true);
     // When handlePrePrepareMsg return false, then reset sealed txs
-    virtual void resetSealedTxs(std::shared_ptr<PBFTMessageInterface> const& _prePrepareMsg);
+    virtual void resetSealedTxs(
+        std::shared_ptr<PBFTMessageInterface> const& _prePrepareMsg, const protocol::Block& block);
 
     // To check pre-prepare msg valid
     virtual CheckResult checkPrePrepareMsg(std::shared_ptr<PBFTMessageInterface> _prePrepareMsg);
