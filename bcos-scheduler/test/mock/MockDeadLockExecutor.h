@@ -6,6 +6,7 @@ namespace bcos::test
 {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
+
 class MockDeadLockParallelExecutor : public MockParallelExecutor
 {
 public:
@@ -65,13 +66,13 @@ public:
             if (input->to() == "contract1")
             {
                 input->setFrom("contract1");
-                input->setTo("contract2");
+                input->setTo("contract2"s);
                 input->setKeyLocks({"key1"});
             }
             else
             {
                 input->setFrom("contract2");
-                input->setTo("contract1");
+                input->setTo("contract1"s);
                 input->setKeyLocks({"key2"});
             }
         }

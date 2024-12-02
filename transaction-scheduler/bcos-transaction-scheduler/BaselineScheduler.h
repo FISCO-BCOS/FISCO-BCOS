@@ -7,6 +7,7 @@
 #include "bcos-framework/dispatcher/SchedulerTypeDef.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/ledger/EVMAccount.h"
+#include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/protocol/Block.h"
@@ -96,7 +97,7 @@ task::Task<h256> calculateStateRoot(
         hashGroup.run([keyValue = std::move(keyValue), &hashes, &deletedEntry, &hashImpl]() {
             auto [key, entry] = *keyValue;
             transaction_executor::StateKeyView view(key);
-            auto [tableName, keyName] = view.getTableAndKey();
+            auto [tableName, keyName] = view.get();
             if (!entry)
             {
                 entry = std::addressof(deletedEntry);
@@ -194,8 +195,9 @@ void finishExecute(auto& storage, RANGES::range auto const& receipts,
                 task::tbb::syncWait(calculateReceiptRoot(receipts, block, hashImpl));
         },
         [&]() {
-            sysBlock = RANGES::any_of(transactions, [](auto const& transaction) {
-                return bcos::precompiled::c_systemTxsAddress.contains(transaction->to());
+            sysBlock = ::ranges::any_of(transactions, [](auto const& transaction) {
+                return precompiled::contains(
+                    bcos::precompiled::c_systemTxsAddress, transaction->to());
             });
         });
     newBlockHeader.setGasUsed(gasUsed);
@@ -322,10 +324,7 @@ private:
             }
             auto receipts = co_await transaction_scheduler::executeBlock(
                 scheduler.m_schedulerImpl.get(), view, scheduler.m_executor.get(), *blockHeader,
-                transactions | RANGES::views::transform(
-                                   [](protocol::Transaction::ConstPtr const& transactionPtr)
-                                       -> protocol::Transaction const& { return *transactionPtr; }),
-                *ledgerConfig);
+                ::ranges::views::indirect(transactions), *ledgerConfig);
 
             auto executedBlockHeader =
                 scheduler.m_blockHeaderFactory.get().populateBlockHeader(blockHeader);
@@ -454,13 +453,22 @@ private:
             {
                 ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
                     ittapi::ITT_DOMAINS::instance().SET_BLOCK);
-
-                co_await ledger::prewriteBlock(scheduler.m_ledger.get(), result.m_transactions,
-                    result.m_block, false, *lastStorage);
+                task::tbb::syncWait(ledger::prewriteBlock(scheduler.m_ledger.get(),
+                    result.m_transactions, result.m_block, false, *lastStorage));
             }
-            auto mergedStorage = co_await mergeBackStorage(scheduler.m_multiLayerStorage.get());
-            co_await ledger::storeTransactionsAndReceipts(
-                scheduler.m_ledger.get(), result.m_transactions, result.m_block);
+
+            tbb::parallel_invoke(
+                [&]() {
+                    ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
+                        ittapi::ITT_DOMAINS::instance().MERGE_STATE);
+                    task::tbb::syncWait(mergeBackStorage(scheduler.m_multiLayerStorage.get()));
+                },
+                [&]() {
+                    ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
+                        ittapi::ITT_DOMAINS::instance().STORE_TRANSACTION_RECEIPTS);
+                    task::tbb::syncWait(ledger::storeTransactionsAndReceipts(
+                        scheduler.m_ledger.get(), result.m_transactions, result.m_block));
+                });
 
             auto ledgerConfig = co_await ledger::getLedgerConfig(scheduler.m_ledger.get());
             ledgerConfig->setHash(header->hash());
@@ -491,7 +499,7 @@ private:
                         submitResult->setTxHash(transaction->hash());
                         submitResult->setBlockHash(blockHash);
                         submitResult->setTransactionIndex(static_cast<int64_t>(index));
-                        submitResult->setNonce(transaction->nonce());
+                        submitResult->setNonce(std::string(transaction->nonce()));
                         submitResult->setTransactionReceipt(receipt);
                         submitResult->setSender(std::string(transaction->sender()));
                         submitResult->setTo(std::string(transaction->to()));
@@ -622,7 +630,8 @@ public:
                        decltype(callback) callback) -> task::Task<void> {
             auto view = fork(self->m_multiLayerStorage.get());
             auto contractAddress = unhexAddress(contract);
-            ledger::account::EVMAccount account(view, contractAddress);
+            ledger::account::EVMAccount account(view, contractAddress,
+                self->m_ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address));
             auto code = co_await ledger::account::code(account);
 
             if (!code)
@@ -642,7 +651,8 @@ public:
                        decltype(callback) callback) -> task::Task<void> {
             auto view = fork(self->m_multiLayerStorage.get());
             auto contractAddress = unhexAddress(contract);
-            ledger::account::EVMAccount account(view, contractAddress);
+            ledger::account::EVMAccount account(view, contractAddress,
+                self->m_ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address));
             auto abi = co_await ledger::account::abi(account);
 
             if (!abi)

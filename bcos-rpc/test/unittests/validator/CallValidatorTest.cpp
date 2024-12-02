@@ -62,8 +62,8 @@ BOOST_AUTO_TEST_CASE(verifyTest)
     CallValidator callValidator;
     bcos::bytes input{};
     // precompiled::SYS_CONFIG_ADDRESS string_view to address
-    input.insert(
-        input.end(), precompiled::SYS_CONFIG_ADDRESS, precompiled::SYS_CONFIG_ADDRESS + 40);
+    input.insert(input.end(), precompiled::SYS_CONFIG_ADDRESS.data(),
+        precompiled::SYS_CONFIG_ADDRESS.data() + 40);
     std::string data = "bcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd";
     input += bcos::fromHex(data);
 
@@ -103,8 +103,8 @@ BOOST_AUTO_TEST_CASE(smVerifyTest)
     CallValidator callValidator;
     bcos::bytes input{};
     // precompiled::SYS_CONFIG_ADDRESS string_view to address
-    input.insert(
-        input.end(), precompiled::SYS_CONFIG_ADDRESS, precompiled::SYS_CONFIG_ADDRESS + 40);
+    input.insert(input.end(), precompiled::SYS_CONFIG_ADDRESS.data(),
+        precompiled::SYS_CONFIG_ADDRESS.data() + 40);
     std::string data = "bcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd";
     input += bcos::fromHex(data);
 
@@ -147,8 +147,8 @@ BOOST_AUTO_TEST_CASE(wasmTest)
     bcos::bytes input{};
     // precompiled::SYS_CONFIG_ADDRESS string_view to address
     std::string_view name(precompiled::SYS_CONFIG_NAME);
-    input.insert(
-        input.end(), precompiled::SYS_CONFIG_NAME, precompiled::SYS_CONFIG_NAME + name.size());
+    input.insert(input.end(), precompiled::SYS_CONFIG_NAME.data(),
+        precompiled::SYS_CONFIG_NAME.data() + name.size());
     std::string data = "bcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd";
     input += bcos::fromHex(data);
 
@@ -189,8 +189,8 @@ BOOST_AUTO_TEST_CASE(wasmSmTest)
     bcos::bytes input{};
     // precompiled::SYS_CONFIG_ADDRESS string_view to address
     std::string_view name(precompiled::SYS_CONFIG_NAME);
-    input.insert(
-        input.end(), precompiled::SYS_CONFIG_NAME, precompiled::SYS_CONFIG_NAME + name.size());
+    input.insert(input.end(), precompiled::SYS_CONFIG_NAME.data(),
+        precompiled::SYS_CONFIG_NAME.data() + name.size());
     std::string data = "bcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd";
     input += bcos::fromHex(data);
 

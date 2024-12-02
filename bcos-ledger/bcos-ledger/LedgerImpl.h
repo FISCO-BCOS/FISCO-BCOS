@@ -312,32 +312,6 @@ private:
         co_return allPeersStatus;
     }
 
-    template <bool isTransaction>
-    task::Task<void> impl_setTransactions(RANGES::range auto hashes, RANGES::range auto buffers)
-    {
-        auto count = RANGES::size(buffers);
-        if (count != RANGES::size(hashes))
-        {
-            BOOST_THROW_EXCEPTION(
-                MismatchTransactionCount{} << bcos::error::ErrorMessage{"No match count"});
-        }
-        constexpr auto tableName = isTransaction ? SYS_HASH_2_TX : SYS_HASH_2_RECEIPT;
-
-        LEDGER_LOG(INFO) << "setTransactionBuffers: " << tableName << " " << RANGES::size(hashes);
-
-        for (auto i = 0U; i < count; ++i)
-        {
-            bcos::storage::Entry entry;
-            entry.importFields({std::move(buffers[i])});
-
-            auto const& hash = hashes[i];
-            storage().setRow(tableName,
-                std::string_view((const char*)hash.data(), RANGES::size(hash)), std::move(entry));
-        }
-
-        co_return;
-    }
-
     template <bcos::concepts::ledger::Ledger LedgerType, bcos::concepts::block::Block BlockType>
     task::Task<size_t> impl_sync(LedgerType& source, bool onlyHeader)
     {
@@ -613,97 +587,6 @@ private:
         co_return;
     }
 
-    template <std::same_as<concepts::ledger::TRANSACTIONS>>
-    task::Task<void> setBlockData(
-        std::string_view blockNumberKey, bcos::concepts::block::Block auto& block)
-    {
-        LEDGER_LOG(DEBUG) << "setBlockData transactions: " << blockNumberKey;
-
-        if (std::empty(block.transactionsMetaData))
-        {
-            LEDGER_LOG(INFO) << "setBlockData not found transaction meta data!";
-            co_return;
-        }
-
-        std::vector<std::vector<bcos::byte>> transactionBuffers(block.transactions.size());
-        tbb::parallel_for(tbb::blocked_range<size_t>(0, block.transactions.size()),
-            [&block, &transactionBuffers](const tbb::blocked_range<size_t>& range) {
-                for (auto i = range.begin(); i < range.end(); ++i)
-                {
-                    auto& transaction = block.transactions[i];
-                    bcos::concepts::serialize::encode(transaction, transactionBuffers[i]);
-                }
-            });
-
-        auto hashView = block.transactionsMetaData |
-                        RANGES::views::transform([](auto& metaData) { return metaData.hash; });
-        co_await impl_setTransactions<false>(hashView, std::move(transactionBuffers));
-    }
-
-    template <std::same_as<concepts::ledger::RECEIPTS>>
-    task::Task<void> setBlockData(
-        std::string_view blockNumberKey, bcos::concepts::block::Block auto& block)
-    {
-        LEDGER_LOG(DEBUG) << "setBlockData receipts: " << blockNumberKey;
-
-        if (std::empty(block.transactionsMetaData))
-        {
-            LEDGER_LOG(INFO) << "setBlockData not found transaction meta data!";
-            co_return;
-        }
-
-        std::atomic_size_t totalTransactionCount = 0;
-        std::atomic_size_t failedTransactionCount = 0;
-        std::vector<std::vector<bcos::byte>> receiptBuffers(block.receipts.size());
-        tbb::parallel_for(tbb::blocked_range<size_t>(0, block.receipts.size()),
-            [&block, &totalTransactionCount, &failedTransactionCount, &receiptBuffers](
-                const tbb::blocked_range<size_t>& range) {
-                for (auto i = range.begin(); i < range.end(); ++i)
-                {
-                    auto& receipt = block.receipts[i];
-                    if (receipt.data.status != 0)
-                    {
-                        ++failedTransactionCount;
-                    }
-                    ++totalTransactionCount;
-
-                    bcos::concepts::serialize::encode(receipt, receiptBuffers[i]);
-                }
-            });
-
-        auto hashView = block.transactionsMetaData |
-                        RANGES::views::transform([](auto& metaData) { return metaData.hash; });
-        co_await impl_setTransactions<false>(hashView, std::move(receiptBuffers));
-
-        LEDGER_LOG(DEBUG) << LOG_DESC("Calculate tx counts in block")
-                          << LOG_KV("number", blockNumberKey)
-                          << LOG_KV("totalCount", totalTransactionCount)
-                          << LOG_KV("failedCount", failedTransactionCount);
-
-        auto transactionCount = co_await impl_getStatus();
-        transactionCount.total += totalTransactionCount;
-        transactionCount.failed += failedTransactionCount;
-
-        bcos::storage::Entry totalEntry;
-        totalEntry.importFields({boost::lexical_cast<std::string>(transactionCount.total)});
-        storage().setRow(SYS_CURRENT_STATE, SYS_KEY_TOTAL_TRANSACTION_COUNT, std::move(totalEntry));
-
-        if (transactionCount.failed > 0)
-        {
-            bcos::storage::Entry failedEntry;
-            failedEntry.importFields({boost::lexical_cast<std::string>(transactionCount.failed)});
-            storage().setRow(
-                SYS_CURRENT_STATE, SYS_KEY_TOTAL_FAILED_TRANSACTION, std::move(failedEntry));
-        }
-
-        LEDGER_LOG(INFO) << LOG_DESC("setBlock")
-                         << LOG_KV("number", block.blockHeader.data.blockNumber)
-                         << LOG_KV("totalTxs", transactionCount.total)
-                         << LOG_KV("failedTxs", transactionCount.failed)
-                         << LOG_KV("incTxs", totalTransactionCount)
-                         << LOG_KV("incFailedTxs", failedTransactionCount);
-    }
-
     template <std::same_as<concepts::ledger::ALL>>
     task::Task<void> setBlockData(
         std::string_view blockNumberKey, bcos::concepts::block::Block auto& block)
@@ -712,8 +595,6 @@ private:
 
         co_await setBlockData<concepts::ledger::HEADER>(blockNumberKey, block);
         co_await setBlockData<concepts::ledger::TRANSACTIONS_METADATA>(blockNumberKey, block);
-        co_await setBlockData<concepts::ledger::TRANSACTIONS>(blockNumberKey, block);
-        co_await setBlockData<concepts::ledger::RECEIPTS>(blockNumberKey, block);
         co_await setBlockData<concepts::ledger::NONCES>(blockNumberKey, block);
     }
 

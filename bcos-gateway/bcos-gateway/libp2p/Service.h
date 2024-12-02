@@ -8,7 +8,6 @@
  */
 
 #pragma once
-#include "bcos-utilities/ObjectCounter.h"
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/gateway/GatewayTypeDef.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
@@ -236,7 +235,7 @@ private:
     std::shared_ptr<MessageFactory> m_messageFactory;
 
     P2pID m_nodeID;
-    std::shared_ptr<boost::asio::deadline_timer> m_timer;
+    std::optional<boost::asio::deadline_timer> m_timer;
     bool m_run = false;
 
     std::array<MessageHandler, bcos::gateway::GatewayMessageType::All> m_msgHandlers{};

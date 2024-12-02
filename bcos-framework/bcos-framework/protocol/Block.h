@@ -23,6 +23,8 @@
 #include "Transaction.h"
 #include "TransactionMetaData.h"
 #include "TransactionReceipt.h"
+#include "bcos-crypto/interfaces/crypto/CommonType.h"
+#include <range/v3/view/any_view.hpp>
 
 namespace bcos::protocol
 {
@@ -36,6 +38,9 @@ enum BlockType : int32_t
     WithTransactionsHash = 2,
 };
 
+template <class T>
+using ViewResult = ::ranges::any_view<T, ::ranges::category::mask | ::ranges::category::sized>;
+
 class Block
 {
 public:
@@ -43,10 +48,10 @@ public:
     using ConstPtr = std::shared_ptr<Block const>;
     Block() = default;
     Block(const Block&) = default;
-    Block(Block&&) = default;
+    Block(Block&&) noexcept = default;
     Block& operator=(const Block&) = default;
-    Block& operator=(Block&&) = default;
-    virtual ~Block() = default;
+    Block& operator=(Block&&) noexcept = default;
+    virtual ~Block() noexcept = default;
 
     virtual void decode(bytesConstRef _data, bool _calculateHash, bool _checkSig) = 0;
     virtual void encode(bytes& _encodeData) const = 0;
@@ -67,15 +72,7 @@ public:
     // get transaction metaData
     virtual TransactionMetaData::ConstPtr transactionMetaData(uint64_t _index) const = 0;
     // get transaction hash
-    virtual bcos::crypto::HashType transactionHash(uint64_t _index) const
-    {
-        auto txMetaData = transactionMetaData(_index);
-        if (txMetaData)
-        {
-            return txMetaData->hash();
-        }
-        return {};
-    }
+    virtual bcos::crypto::HashType transactionHash(uint64_t _index) const = 0;
 
     virtual void setBlockType(BlockType _blockType) = 0;
     // setBlockHeader sets blockHeader
@@ -113,6 +110,11 @@ public:
             }) |
             RANGES::to<NonceList>());
     }
+
+    virtual ViewResult<crypto::HashType> transactionHashes() const = 0;
+    virtual ViewResult<std::unique_ptr<TransactionMetaData>> transactionMetaDatas() const = 0;
+    virtual ViewResult<std::unique_ptr<Transaction>> transactions() const = 0;
+    virtual ViewResult<std::unique_ptr<TransactionReceipt>> receipts() const = 0;
     bool operator<(const Block& block) const
     {
         return blockHeaderConst()->number() < block.blockHeaderConst()->number();

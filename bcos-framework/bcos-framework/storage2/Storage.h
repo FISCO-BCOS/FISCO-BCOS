@@ -1,8 +1,12 @@
 #pragma once
 #include "bcos-task/Task.h"
 #include "bcos-task/Trait.h"
-#include "bcos-utilities/Ranges.h"
 #include <optional>
+#include <range/v3/range.hpp>
+#include <range/v3/view/indirect.hpp>
+#include <range/v3/view/single.hpp>
+#include <range/v3/view/transform.hpp>
+#include <range/v3/view/zip.hpp>
 #include <type_traits>
 
 // tag_invoke storage interface
@@ -11,11 +15,11 @@ namespace bcos::storage2
 
 inline constexpr struct DIRECT_TYPE
 {
-} DIRECT{};
+} DIRECT;
 
 inline constexpr struct RANGE_SEEK_TYPE
 {
-} RANGE_SEEK{};
+} RANGE_SEEK;
 
 template <class Invoke>
 using ReturnType = typename task::AwaitableReturnType<Invoke>;
@@ -26,35 +30,34 @@ concept HasTag = requires(Tag tag, Storage storage, Args&&... args) {
 
 inline constexpr struct ReadSome
 {
-    auto operator()(auto&& storage, RANGES::input_range auto&& keys, auto&&... args) const
+    auto operator()(auto&& storage, ::ranges::input_range auto&& keys, auto&&... args) const
         -> task::Task<
             ReturnType<decltype(tag_invoke(*this, std::forward<decltype(storage)>(storage),
                 std::forward<decltype(keys)>(keys), std::forward<decltype(args)>(args)...))>>
-        requires RANGES::range<ReturnType<decltype(tag_invoke(*this, storage,
+        requires ::ranges::range<ReturnType<decltype(tag_invoke(*this, storage,
             std::forward<decltype(keys)>(keys), std::forward<decltype(args)>(args)...))>>
     {
         co_return co_await tag_invoke(*this, std::forward<decltype(storage)>(storage),
             std::forward<decltype(keys)>(keys), std::forward<decltype(args)>(args)...);
     }
-} readSome{};
+} readSome;
 
 inline constexpr struct WriteSome
 {
-    auto operator()(auto&& storage, RANGES::input_range auto&& keys,
-        RANGES::input_range auto&& values, auto&&... args) const
+    auto operator()(auto&& storage, ::ranges::input_range auto&& keyValues, auto&&... args) const
         -> task::Task<ReturnType<decltype(tag_invoke(*this,
-            std::forward<decltype(storage)>(storage), std::forward<decltype(keys)>(keys),
-            std::forward<decltype(values)>(values), std::forward<decltype(args)>(args)...))>>
+            std::forward<decltype(storage)>(storage), std::forward<decltype(keyValues)>(keyValues),
+            std::forward<decltype(args)>(args)...))>>
+        requires(std::tuple_size_v<::ranges::range_value_t<decltype(keyValues)>> >= 2)
     {
         co_await tag_invoke(*this, std::forward<decltype(storage)>(storage),
-            std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values),
-            std::forward<decltype(args)>(args)...);
+            std::forward<decltype(keyValues)>(keyValues), std::forward<decltype(args)>(args)...);
     }
-} writeSome{};
+} writeSome;
 
 inline constexpr struct RemoveSome
 {
-    auto operator()(auto&& storage, RANGES::input_range auto&& keys, auto&&... args) const
+    auto operator()(auto&& storage, ::ranges::input_range auto&& keys, auto&&... args) const
         -> task::Task<
             ReturnType<decltype(tag_invoke(*this, std::forward<decltype(storage)>(storage),
                 std::forward<decltype(keys)>(keys), std::forward<decltype(args)>(args)...))>>
@@ -62,7 +65,7 @@ inline constexpr struct RemoveSome
         co_await tag_invoke(*this, std::forward<decltype(storage)>(storage),
             std::forward<decltype(keys)>(keys), std::forward<decltype(args)>(args)...);
     }
-} removeSome{};
+} removeSome;
 
 template <class IteratorType>
 concept Iterator =
@@ -78,7 +81,16 @@ inline constexpr struct Range
         co_return co_await tag_invoke(
             *this, std::forward<decltype(storage)>(storage), std::forward<decltype(args)>(args)...);
     }
-} range{};
+} range;
+
+inline constexpr struct RandomAccessRange
+{
+    auto operator()(auto&& storage, auto&&... args) const
+    {
+        return tag_invoke(
+            *this, std::forward<decltype(storage)>(storage), std::forward<decltype(args)>(args)...);
+    }
+} randomAccessRange;
 
 namespace detail
 {
@@ -86,12 +98,11 @@ auto toSingleView(auto&& item)
 {
     if constexpr (std::is_lvalue_reference_v<decltype(item)>)
     {
-        return RANGES::views::single(std::ref(item)) |
-               RANGES::views::transform([](auto&& ref) -> auto& { return ref.get(); });
+        return ::ranges::views::single(std::addressof(item)) | ::ranges::views::indirect;
     }
     else
     {
-        return RANGES::views::single(std::forward<decltype(item)>(item));
+        return ::ranges::views::single(std::forward<decltype(item)>(item));
     }
 }
 }  // namespace detail
@@ -114,7 +125,7 @@ inline constexpr struct ReadOne
             co_return std::move(values[0]);
         }
     }
-} readOne{};
+} readOne;
 
 inline constexpr struct WriteOne
 {
@@ -131,12 +142,12 @@ inline constexpr struct WriteOne
         else
         {
             co_await writeSome(std::forward<decltype(storage)>(storage),
-                detail::toSingleView(std::forward<decltype(key)>(key)),
-                detail::toSingleView(std::forward<decltype(value)>(value)),
+                ::ranges::views::single(std::make_tuple(
+                    std::forward<decltype(key)>(key), std::forward<decltype(value)>(value))),
                 std::forward<decltype(args)>(args)...);
         }
     }
-} writeOne{};
+} writeOne;
 
 inline constexpr struct RemoveOne
 {
@@ -154,7 +165,7 @@ inline constexpr struct RemoveOne
                 std::forward<decltype(args)>(args)...);
         }
     }
-} removeOne{};
+} removeOne;
 
 inline constexpr struct ExistsOne
 {
@@ -172,7 +183,7 @@ inline constexpr struct ExistsOne
             co_return result.has_value();
         }
     }
-} existsOne{};
+} existsOne;
 
 inline constexpr struct Merge
 {
@@ -181,7 +192,7 @@ inline constexpr struct Merge
         co_await tag_invoke(*this, toStorage, std::forward<decltype(fromStorage)>(fromStorage),
             std::forward<decltype(args)>(args)...);
     }
-} merge{};
+} merge;
 
 template <auto& Tag>
 using tag_t = std::decay_t<decltype(Tag)>;

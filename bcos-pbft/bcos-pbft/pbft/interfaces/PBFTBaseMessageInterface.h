@@ -24,7 +24,6 @@
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/interfaces/crypto/KeyPairInterface.h>
 #include <bcos-framework/consensus/ConsensusTypeDef.h>
-#include <stdint.h>
 #include <memory>
 namespace bcos::consensus
 {

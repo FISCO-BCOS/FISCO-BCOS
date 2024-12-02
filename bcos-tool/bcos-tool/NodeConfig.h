@@ -282,7 +282,7 @@ public:
     struct BaselineSchedulerConfig
     {
         bool parallel = false;
-        int chunkSize = 0;
+        int grainSize = 0;
         int maxThread = 0;
     };
     BaselineSchedulerConfig const& baselineSchedulerConfig() const
@@ -297,6 +297,9 @@ public:
         uint32_t threadCount = 0;
     };
     TarsRPCConfig const& tarsRPCConfig() const { return m_tarsRPCConfig; }
+
+    bool checkTransactionSignature() const;
+    bool checkParallelConflict() const;
 
     ledger::GenesisConfig const& genesisConfig() const;
 
@@ -512,6 +515,10 @@ private:
     // others config
     int m_sendTxTimeout = -1;
     int64_t checkAndGetValue(const boost::property_tree::ptree& _pt, const std::string& _key);
+
+    // experimental
+    bool m_checkTransactionSignature = true;
+    bool m_checkParallelConflict = true;
 };
 
 std::string generateGenesisData(

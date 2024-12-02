@@ -136,8 +136,8 @@ uint16_t VRFBasedSealer::generateTransactionForRotating(bcos::protocol::Block::P
             vrfProof);
 
         auto tx = _sealerConfig->blockFactory()->transactionFactory()->createTransaction(0,
-            g_BCOSConfig.isWasm() ? precompiled::CONSENSUS_TABLE_NAME :
-                                    precompiled::CONSENSUS_ADDRESS,
+            std::string(g_BCOSConfig.isWasm() ? precompiled::CONSENSUS_TABLE_NAME :
+                                                precompiled::CONSENSUS_ADDRESS),
             input, std::to_string(utcSteadyTimeUs() * random()),
             _sealingManager->latestNumber() + txpool::DEFAULT_BLOCK_LIMIT, _sealerConfig->chainId(),
             _sealerConfig->groupId(), utcTime(), keyPair);

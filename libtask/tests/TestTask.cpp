@@ -1,8 +1,8 @@
 #include "bcos-task/Generator.h"
-#include "bcos-task/TBBWait.h"
 #include "bcos-task/Task.h"
-#include "bcos-task/Trait.h"
 #include "bcos-task/Wait.h"
+#include "bcos-task/pmr/Task.h"
+#include "bcos-utilities/Common.h"
 #include <oneapi/tbb/blocked_range.h>
 #include <oneapi/tbb/concurrent_vector.h>
 #include <oneapi/tbb/parallel_for.h>
@@ -10,12 +10,14 @@
 #include <oneapi/tbb/task.h>
 #include <oneapi/tbb/task_arena.h>
 #include <oneapi/tbb/task_group.h>
+#include <boost/multiprecision/fwd.hpp>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <boost/throw_exception.hpp>
 #include <chrono>
 #include <future>
 #include <iostream>
+#include <memory_resource>
 #include <stdexcept>
 #include <thread>
 
@@ -212,6 +214,121 @@ BOOST_AUTO_TEST_CASE(memoryLeak)
 
     bcos::task::wait(
         []() -> Task<void> { BOOST_CHECK_THROW(co_await taskWithThrow(), std::runtime_error); }());
+}
+
+struct MyMemoryResource : public std::pmr::monotonic_buffer_resource
+{
+    MyMemoryResource(void* buffer, size_t bufferSize)
+      : std::pmr::monotonic_buffer_resource(buffer, bufferSize, std::pmr::get_default_resource())
+    {}
+
+    void* do_allocate(size_t bytes, size_t alignment) override
+    {
+        ++allocate;
+        return std::pmr::monotonic_buffer_resource::do_allocate(bytes, alignment);
+    }
+
+    void do_deallocate(void* p, size_t bytes, size_t alignment) override
+    {
+        ++deallocate;
+        return std::pmr::monotonic_buffer_resource::do_deallocate(p, bytes, alignment);
+    }
+
+    bool do_is_equal(const memory_resource& other) const noexcept override
+    {
+        return std::pmr::monotonic_buffer_resource::do_is_equal(other);
+    }
+
+    void reset()
+    {
+        allocate = 0;
+        deallocate = 0;
+    }
+
+    int allocate = 0;
+    int deallocate = 0;
+};
+
+bcos::task::pmr::Task<void> selfAlloc(
+    int /*unused*/, std::allocator_arg_t /*unused*/, std::pmr::polymorphic_allocator<> /*unused*/)
+{
+    std::array<char, 1024> buf{};
+    co_return;
+}
+
+Generator<int> generatorWithAlloc(
+    int total, std::allocator_arg_t /*unused*/, std::pmr::polymorphic_allocator<> /*unused*/)
+{
+    std::array<char, 1024> buf{};
+
+    for (auto i = 0; i < total; ++i)
+    {
+        co_yield i;
+    }
+}
+
+BOOST_AUTO_TEST_CASE(allocator)
+{
+    std::array<char, 10240> mockStack;
+
+    MyMemoryResource pool(mockStack.data(), mockStack.size());
+    std::pmr::polymorphic_allocator<> allocator(std::addressof(pool));
+
+    auto awaitable = selfAlloc(100, std::allocator_arg, allocator);
+    awaitable.start();
+    BOOST_CHECK_EQUAL(pool.allocate, 1);
+    BOOST_CHECK_EQUAL(pool.deallocate, 1);
+
+    pool.reset();
+    bcos::task::syncWait(
+        selfAlloc(100, std::allocator_arg, allocator), std::allocator_arg, allocator);
+    BOOST_CHECK_GE(pool.allocate, 1);
+    BOOST_CHECK_GE(pool.deallocate, 1);
+
+    pool.reset();
+    auto lambda = [](int, std::allocator_arg_t,
+                      std::pmr::polymorphic_allocator<>) -> pmr::Task<void> {
+        std::array<char, 1024> buf{};
+        co_return;
+    };
+    auto awaitable2 = lambda(100, std::allocator_arg, allocator);
+    awaitable2.start();
+    BOOST_CHECK_EQUAL(pool.allocate, 1);
+    BOOST_CHECK_EQUAL(pool.deallocate, 1);
+
+    pool.reset();
+    bcos::task::syncWait(
+        [](int, std::allocator_arg_t, std::pmr::polymorphic_allocator<>) -> pmr::Task<void> {
+            std::array<char, 1024> buf{};
+            co_return;
+        }(100, std::allocator_arg, allocator),
+        std::allocator_arg, allocator);
+    BOOST_CHECK_GE(pool.allocate, 1);
+    BOOST_CHECK_GE(pool.deallocate, 1);
+}
+
+Task<bcos::u256> testU256()
+{
+    boost::multiprecision::number<boost::multiprecision::cpp_int_backend<256, 256,
+        boost::multiprecision::unsigned_magnitude, boost::multiprecision::checked, void>>
+        num1{1};
+    boost::multiprecision::number<boost::multiprecision::cpp_int_backend<256, 256,
+        boost::multiprecision::unsigned_magnitude, boost::multiprecision::checked, void>>
+        num2{1};
+
+    constexpr static auto ss = sizeof(num2);
+
+    num1 = 1000;
+    num2 = 2000;
+    co_return 0;
+}
+
+BOOST_AUTO_TEST_CASE(u256)
+{
+    auto handle = testU256();
+    handle.start();
+    // auto sum = syncWait(testU256());
+    // BOOST_CHECK_GE(sum, 3000);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -307,7 +307,8 @@ void TransactionExecutor::initEvmEnvironment()
     m_precompiled->insert(ACCOUNT_ADDRESS, std::make_shared<AccountPrecompiled>(m_hashImpl),
         BlockVersion::V3_1_VERSION);
 
-    set<string> builtIn = {CRYPTO_ADDRESS, GROUP_SIG_ADDRESS, RING_SIG_ADDRESS, CAST_ADDRESS};
+    set<string> builtIn = {std::string(CRYPTO_ADDRESS), std::string(GROUP_SIG_ADDRESS),
+        std::string(RING_SIG_ADDRESS), std::string(CAST_ADDRESS)};
     m_staticPrecompiled = std::make_shared<set<string>>(builtIn);
     if (m_blockVersion <=> BlockVersion::V3_1_VERSION == 0 &&
         m_ledgerCache->ledgerConfig().blockNumber() > 0)
@@ -369,7 +370,8 @@ void TransactionExecutor::initWasmEnvironment()
     m_precompiled->insert(ACCOUNT_ADDRESS, std::make_shared<AccountPrecompiled>(m_hashImpl),
         BlockVersion::V3_1_VERSION);
 
-    set<string> builtIn = {CRYPTO_ADDRESS, GROUP_SIG_ADDRESS, RING_SIG_ADDRESS, CAST_ADDRESS};
+    set<string> builtIn = {std::string(CRYPTO_ADDRESS), std::string(GROUP_SIG_ADDRESS),
+        std::string(RING_SIG_ADDRESS), std::string(CAST_ADDRESS)};
     m_staticPrecompiled = std::make_shared<set<string>>(builtIn);
 
     if (m_blockVersion <=> BlockVersion::V3_1_VERSION == 0 &&
@@ -1621,6 +1623,7 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                                 // get abi json
                                 // new logic
                                 std::string_view abiStr;
+                                storage::Entry tmpEntry;
                                 if (m_blockContext->blockVersion() >=
                                     uint32_t(bcos::protocol::BlockVersion::V3_1_VERSION))
                                 {
@@ -1658,13 +1661,15 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                                             continue;
                                         }
                                     }
-                                    abiStr = abiEntry->getField(0);
+                                    tmpEntry = std::move(*abiEntry);
+                                    abiStr = tmpEntry.getField(0);
                                 }
                                 else
                                 {
                                     // old logic
                                     auto entry = table->getRow(ACCOUNT_ABI);
-                                    abiStr = entry->getField(0);
+                                    tmpEntry = std::move(*entry);
+                                    abiStr = tmpEntry.getField(0);
                                 }
                                 bool isSmCrypto =
                                     m_hashImpl->getHashImplType() == crypto::HashImplType::Sm3Hash;

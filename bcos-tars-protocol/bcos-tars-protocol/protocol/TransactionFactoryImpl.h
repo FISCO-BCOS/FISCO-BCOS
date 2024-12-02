@@ -23,7 +23,6 @@
 #include "TransactionImpl.h"
 #include <bcos-concepts/Hash.h>
 #include <bcos-framework/protocol/TransactionFactory.h>
-#include <fstream>
 #include <stdexcept>
 #include <utility>
 
@@ -39,7 +38,7 @@ public:
     TransactionFactoryImpl(bcos::crypto::CryptoSuite::Ptr cryptoSuite)
       : m_cryptoSuite(std::move(cryptoSuite))
     {}
-    ~TransactionFactoryImpl() override = default;
+    ~TransactionFactoryImpl() noexcept override = default;
 
     bcos::protocol::Transaction::Ptr createTransaction(
         bcos::bytesConstRef txData, bool checkSig = true, bool checkHash = false) override
@@ -101,7 +100,6 @@ public:
         {
             transaction->mutableInner().sender.clear();  // Bugfix: User will fake a illegal sender,
             // must clear sender given by rpc
-
             transaction->verify(*m_cryptoSuite->hashImpl(), *m_cryptoSuite->signatureImpl());
         }
         return transaction;

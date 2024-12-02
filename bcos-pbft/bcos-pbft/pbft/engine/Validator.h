@@ -44,8 +44,8 @@ public:
     virtual PBFTProposalInterface::Ptr generateEmptyProposal(uint32_t _proposalVersion,
         PBFTMessageFactory::Ptr _factory, int64_t _index, int64_t _sealerId) = 0;
 
-    virtual void notifyTransactionsResult(
-        bcos::protocol::Block::Ptr _block, bcos::protocol::BlockHeader::Ptr _header) = 0;
+    // virtual void notifyTransactionsResult(
+    //     bcos::protocol::Block::Ptr _block, bcos::protocol::BlockHeader::Ptr _header) = 0;
 
     virtual void updateValidatorConfig(bcos::consensus::ConsensusNodeList const& _consensusNodeList,
         bcos::consensus::ConsensusNodeList const& _observerNodeList) = 0;
@@ -66,8 +66,7 @@ public:
         bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory)
       : m_txPool(std::move(_txPool)),
         m_blockFactory(std::move(_blockFactory)),
-        m_txResultFactory(std::move(_txResultFactory)),
-        m_worker(std::make_shared<ThreadPool>("validator", 2))
+        m_txResultFactory(std::move(_txResultFactory))
     {}
 
     ~TxsValidator() override = default;
@@ -86,9 +85,6 @@ public:
     PBFTProposalInterface::Ptr generateEmptyProposal(uint32_t _proposalVersion,
         PBFTMessageFactory::Ptr _factory, int64_t _index, int64_t _sealerId) override;
 
-    void notifyTransactionsResult(
-        bcos::protocol::Block::Ptr _block, bcos::protocol::BlockHeader::Ptr _header) override;
-
     void updateValidatorConfig(bcos::consensus::ConsensusNodeList const& _consensusNodeList,
         bcos::consensus::ConsensusNodeList const& _observerNodeList) override;
 
@@ -106,7 +102,6 @@ protected:
     bcos::txpool::TxPoolInterface::Ptr m_txPool;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bcos::protocol::TransactionSubmitResultFactory::Ptr m_txResultFactory;
-    ThreadPool::Ptr m_worker;
     std::set<bcos::crypto::HashType> m_resettingProposals;
     mutable SharedMutex x_resettingProposals;
 

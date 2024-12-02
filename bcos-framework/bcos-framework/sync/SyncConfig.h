@@ -23,17 +23,18 @@
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-utilities/Log.h>
+#include <mutex>
 namespace bcos::sync
 {
 class SyncConfig
 {
 public:
     using Ptr = std::shared_ptr<SyncConfig>;
-    explicit SyncConfig(bcos::crypto::NodeIDPtr _nodeId)
-      : m_nodeId(std::move(_nodeId)),
-        m_nodeList(std::make_shared<bcos::crypto::NodeIDSet>()),
-        m_connectedNodeList(std::make_shared<bcos::crypto::NodeIDSet>())
-    {}
+    SyncConfig(const SyncConfig&) = delete;
+    SyncConfig(SyncConfig&&) = delete;
+    SyncConfig& operator=(const SyncConfig&) = delete;
+    SyncConfig& operator=(SyncConfig&&) = delete;
+    explicit SyncConfig(bcos::crypto::NodeIDPtr _nodeId) : m_nodeId(std::move(_nodeId)) {}
     virtual ~SyncConfig() = default;
 
     bcos::crypto::NodeIDPtr nodeID() { return m_nodeId; }
@@ -75,69 +76,60 @@ public:
     virtual bcos::crypto::NodeIDSet connectedNodeList()
     {
         ReadGuard lock(x_connectedNodeList);
-        return *m_connectedNodeList;
+        return m_connectedNodeList;
     }
 
-    virtual bcos::crypto::NodeIDSetPtr connectedNodeSet()
+    virtual bcos::crypto::NodeIDSet connectedNodeSet()
     {
         ReadGuard lock(x_connectedNodeList);
         return m_connectedNodeList;
     }
 
-    virtual void setConnectedNodeList(bcos::crypto::NodeIDSet const& _connectedNodeList)
+    virtual void setConnectedNodeList(bcos::crypto::NodeIDSet _connectedNodeList)
     {
         WriteGuard lock(x_connectedNodeList);
-        *m_connectedNodeList = _connectedNodeList;
+        m_connectedNodeList = std::move(_connectedNodeList);
         BCOS_LOG(INFO) << LOG_DESC("SyncConfig: setConnectedNodeList")
-                       << LOG_KV("size", m_connectedNodeList->size());
-    }
-
-    virtual void setConnectedNodeList(bcos::crypto::NodeIDSet&& _connectedNodeList)
-    {
-        WriteGuard lock(x_connectedNodeList);
-        *m_connectedNodeList = std::move(_connectedNodeList);
-        BCOS_LOG(INFO) << LOG_DESC("SyncConfig: setConnectedNodeList")
-                       << LOG_KV("size", m_connectedNodeList->size());
+                       << LOG_KV("size", m_connectedNodeList.size());
     }
 
     virtual bool existsInGroup()
     {
         ReadGuard lock(x_nodeList);
-        return m_nodeList->contains(m_nodeId);
+        return m_nodeList.contains(m_nodeId);
     }
 
 
-    virtual bool existsInGroup(bcos::crypto::NodeIDPtr _nodeId)
+    virtual bool existsInGroup(const bcos::crypto::NodeIDPtr& _nodeId)
     {
         ReadGuard lock(x_nodeList);
-        return m_nodeList->contains(_nodeId);
+        return m_nodeList.contains(_nodeId);
     }
 
-    virtual bool connected(bcos::crypto::NodeIDPtr _nodeId)
+    virtual bool connected(const bcos::crypto::NodeIDPtr& _nodeId)
     {
         ReadGuard lock(x_connectedNodeList);
-        return m_connectedNodeList->contains(_nodeId);
+        return m_connectedNodeList.contains(_nodeId);
     }
 
     bcos::crypto::NodeIDSet groupNodeList()
     {
         ReadGuard lock(x_nodeList);
-        return *m_nodeList;
+        return m_nodeList;
     }
 
-    bcos::crypto::NodeIDSetPtr connectedGroupNodeList()
+    bcos::crypto::NodeIDSet connectedGroupNodeList()
     {
-        ReadGuard nlock(x_nodeList);
-        ReadGuard clock(x_connectedNodeList);
+        std::scoped_lock lock(x_nodeList, x_connectedNodeList);
         auto nodeList =
-            *m_nodeList | RANGES::views::filter([this](bcos::crypto::NodeIDPtr _nodeId) {
-                return m_connectedNodeList->contains(_nodeId);
+            m_nodeList | RANGES::views::filter([this](const bcos::crypto::NodeIDPtr& _nodeId) {
+                return m_connectedNodeList.contains(_nodeId);
             });
-        return std::make_shared<bcos::crypto::NodeIDSet>(nodeList.begin(), nodeList.end());
+        return {nodeList.begin(), nodeList.end()};
     }
 
     virtual void notifyConnectedNodes(bcos::crypto::NodeIDSet const& _connectedNodes,
-        std::function<void(Error::Ptr)> _onRecvResponse)
+        const std::function<void(Error::Ptr)>& _onRecvResponse)
     {
         setConnectedNodeList(_connectedNodes);
         if (!_onRecvResponse)
@@ -152,10 +144,10 @@ private:
     {
         auto nodeList = consensusNodeList() + observerNodeList();
         WriteGuard lock(x_nodeList);
-        m_nodeList->clear();
+        m_nodeList.clear();
         for (const auto& node : nodeList)
         {
-            m_nodeList->insert(node.nodeID);
+            m_nodeList.insert(node.nodeID);
         }
     }
 
@@ -168,10 +160,10 @@ protected:
     bcos::consensus::ConsensusNodeList m_observerNodeList;
     SharedMutex x_observerNodeList;
 
-    bcos::crypto::NodeIDSetPtr m_nodeList;
+    bcos::crypto::NodeIDSet m_nodeList;
     mutable SharedMutex x_nodeList;
 
-    bcos::crypto::NodeIDSetPtr m_connectedNodeList;
+    bcos::crypto::NodeIDSet m_connectedNodeList;
     mutable SharedMutex x_connectedNodeList;
 };
 }  // namespace bcos::sync

@@ -20,7 +20,6 @@
  */
 #pragma once
 
-#include "bcos-crypto/interfaces/crypto/CryptoSuite.h"
 #include "bcos-crypto/interfaces/crypto/Signature.h"
 #include "bcos-txpool/sync/TransactionSyncConfig.h"
 #include "bcos-txpool/sync/interfaces/TransactionSyncInterface.h"
@@ -35,10 +34,9 @@ class TransactionSync : public TransactionSyncInterface,
 {
 public:
     using Ptr = std::shared_ptr<TransactionSync>;
-    explicit TransactionSync(TransactionSyncConfig::Ptr config)
+    explicit TransactionSync(TransactionSyncConfig::Ptr config, bool checkTransactionSignature)
       : TransactionSyncInterface(std::move(config)),
-        m_worker(std::make_shared<ThreadPool>("txsSyncWorker", 4)),
-        m_txsRequester(std::make_shared<ThreadPool>("txsRequester", 4))
+        m_checkTransactionSignature(checkTransactionSignature)
     {
         m_hashImpl = m_config->blockFactory()->cryptoSuite()->hashImpl();
         m_signatureImpl = m_config->blockFactory()->cryptoSuite()->signatureImpl();
@@ -91,10 +89,9 @@ protected:
         bcos::protocol::Block::Ptr _verifiedProposal = nullptr);
 
 private:
-    ThreadPool::Ptr m_worker;
-    ThreadPool::Ptr m_txsRequester;
-
     bcos::crypto::Hash::Ptr m_hashImpl;
     bcos::crypto::SignatureCrypto::Ptr m_signatureImpl;
+
+    bool m_checkTransactionSignature;
 };
 }  // namespace bcos::sync

@@ -19,6 +19,7 @@
  * @date 2021-06-10
  */
 #include "libinitializer/ProtocolInitializer.h"
+#include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "libinitializer/Common.h"
 #include <bcos-crypto/encrypt/AESCrypto.h>
 #include <bcos-crypto/encrypt/HsmSM4Crypto.h>
@@ -198,7 +199,8 @@ bcos::security::KeyEncryptInterface::Ptr ProtocolInitializer::getKeyEncryptionBy
     else
     {
         INITIALIZER_LOG(INFO) << LOG_DESC("skiped, keyEncryptionType not support")
-                              << LOG_KV("keyEncryptionType", std::string(magic_enum::enum_name((_type))));
+                              << LOG_KV("keyEncryptionType",
+                                     std::string(magic_enum::enum_name((_type))));
     }
     return keyEncryptionPtr;
 }

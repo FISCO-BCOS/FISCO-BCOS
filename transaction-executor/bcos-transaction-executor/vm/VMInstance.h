@@ -24,11 +24,9 @@
 #pragma once
 #include "../EVMCResult.h"
 #include <bcos-utilities/Common.h>
-#include <bcos-utilities/Overloaded.h>
 #include <evmc/evmc.h>
 #include <evmone/evmone.h>
-#include <evmone/advanced_analysis.hpp>
-#include <evmone/advanced_execution.hpp>
+#include <compare>
 #include <evmone/baseline.hpp>
 #include <evmone/vm.hpp>
 
@@ -63,18 +61,13 @@ public:
 
 }  // namespace bcos::transaction_executor
 
+std::strong_ordering operator<=>(const evmc_address& lhs, const evmc_address& rhs) noexcept;
+bool operator==(const evmc_address& lhs, const evmc_address& rhs) noexcept;
 template <>
 struct std::equal_to<evmc_address>
 {
     bool operator()(const evmc_address& lhs, const evmc_address& rhs) const noexcept;
 };
-
-template <>
-struct boost::hash<evmc_address>
-{
-    size_t operator()(const evmc_address& address) const noexcept;
-};
-
 template <>
 struct std::hash<evmc_address>
 {

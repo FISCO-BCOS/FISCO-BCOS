@@ -405,7 +405,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         });
     }
     // init the txpool
-    m_txpoolInitializer->init(m_pbftInitializer->sealer());
+    m_txpoolInitializer->init();
 
     // Note: must init PBFT after txpool, in case of pbft calls txpool to verifyBlock before
     // txpool init finished

@@ -66,7 +66,7 @@ public:
     friend class StateKey;
 
     StateKeyView(StateKeyView&&) noexcept = default;
-    StateKeyView& operator=(const StateKeyView&) = default;
+    StateKeyView& operator=(const StateKeyView&) noexcept = default;
     StateKeyView& operator=(StateKeyView&&) noexcept = default;
     StateKeyView(const StateKeyView& stateKeyView) noexcept = default;
     explicit StateKeyView(const StateKey& stateKey) noexcept
@@ -91,10 +91,7 @@ public:
         return result;
     }
 
-    std::tuple<std::string_view, std::string_view> getTableAndKey() const noexcept
-    {
-        return {m_table, m_key};
-    }
+    std::tuple<std::string_view, std::string_view> get() const noexcept { return {m_table, m_key}; }
 };
 
 inline StateKey::StateKey(StateKeyView const& view) : StateKey(view.m_table, view.m_key) {}

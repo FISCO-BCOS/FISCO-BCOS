@@ -1,6 +1,6 @@
 #include "VMInstance.h"
-#include "bcos-transaction-executor/TransactionExecutorImpl.h"
-using bytes_view = std::basic_string_view<uint8_t>;
+#include <evmone/advanced_analysis.hpp>
+#include <evmone/advanced_execution.hpp>
 
 bcos::transaction_executor::VMInstance::VMInstance(
     std::shared_ptr<evmone::baseline::CodeAnalysis const> instance) noexcept
@@ -32,16 +32,21 @@ bcos::transaction_executor::EVMCResult bcos::transaction_executor::VMInstance::e
 
 void bcos::transaction_executor::VMInstance::enableDebugOutput() {}
 
+std::strong_ordering operator<=>(const evmc_address& lhs, const evmc_address& rhs) noexcept
+{
+    return std::memcmp(lhs.bytes, rhs.bytes, sizeof(evmc_address)) <=> 0;
+}
+bool operator==(const evmc_address& lhs, const evmc_address& rhs) noexcept
+{
+    return std::is_eq(lhs <=> rhs);
+}
 bool std::equal_to<evmc_address>::operator()(
     const evmc_address& lhs, const evmc_address& rhs) const noexcept
 {
-    return std::memcmp(lhs.bytes, rhs.bytes, sizeof(lhs.bytes)) == 0;
-}
-size_t boost::hash<evmc_address>::operator()(const evmc_address& address) const noexcept
-{
-    return boost::hash_range(address.bytes, address.bytes + sizeof(address.bytes));
+    return lhs == rhs;
 }
 size_t std::hash<evmc_address>::operator()(const evmc_address& address) const noexcept
 {
-    return boost::hash_range(address.bytes, address.bytes + sizeof(address.bytes));
+    std::span view(address.bytes);
+    return boost::hash_range(view.begin(), view.end());
 }

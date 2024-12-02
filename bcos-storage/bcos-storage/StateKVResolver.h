@@ -1,6 +1,4 @@
 #pragma once
-#include "bcos-concepts/ByteBuffer.h"
-#include "bcos-concepts/Exception.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include <bcos-framework/storage/Entry.h>
 #include <fmt/format.h>

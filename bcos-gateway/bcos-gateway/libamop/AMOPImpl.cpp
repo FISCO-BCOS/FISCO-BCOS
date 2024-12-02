@@ -149,7 +149,7 @@ void AMOPImpl::onReceiveRequestTopicMessage(P2pID const& _nodeID, AMOPMessage::P
         Options option(0);
         m_network->asyncSendMessageByP2PNodeID(GatewayMessageType::AMOPMessageType, _nodeID,
             bytesConstRef(buffer->data(), buffer->size()), option,
-            [_nodeID](Error::Ptr&& _error, int16_t, bytesPointer) {
+            [_nodeID](Error::Ptr&& _error, int16_t, bytesConstRef) {
                 if (_error && (_error->errorCode() != CommonError::SUCCESS))
                 {
                     AMOP_LOG(WARNING)
@@ -274,7 +274,7 @@ void AMOPImpl::onReceiveAMOPBroadcastMessage(P2pID const& _nodeID, AMOPMessage::
 
 bool AMOPImpl::trySendTopicMessageToLocalClient(const std::string& _topic,
     bcos::bytesConstRef _data,
-    std::function<void(bcos::Error::Ptr&&, int16_t, bytesPointer)> _respFunc)
+    std::function<void(bcos::Error::Ptr&&, int16_t, bytesConstRef)> _respFunc)
 {
     std::vector<std::string> clients;
     m_topicManager->queryClientsByTopic(_topic, clients);
@@ -299,7 +299,7 @@ bool AMOPImpl::trySendTopicMessageToLocalClient(const std::string& _topic,
 
 // asyncSendMessage to the given topic
 void AMOPImpl::asyncSendMessageByTopic(const std::string& _topic, bcos::bytesConstRef _data,
-    std::function<void(bcos::Error::Ptr&&, int16_t, bytesPointer)> _respFunc)
+    std::function<void(bcos::Error::Ptr&&, int16_t, bytesConstRef)> _respFunc)
 {
     std::vector<P2pID> nodeIDs;
     m_topicManager->queryNodeIDsByTopic(_topic, nodeIDs);
@@ -313,7 +313,7 @@ void AMOPImpl::asyncSendMessageByTopic(const std::string& _topic, bcos::bytesCon
             "there has no node subscribe this topic, topic: " + _topic);
         if (_respFunc)
         {
-            _respFunc(std::move(errorPtr), 0, nullptr);
+            _respFunc(std::move(errorPtr), 0, {});
         }
 
         AMOP_LOG(WARNING) << LOG_BADGE("asyncSendMessage")
@@ -330,11 +330,10 @@ void AMOPImpl::asyncSendMessageByTopic(const std::string& _topic, bcos::bytesCon
     public:
         std::vector<P2pID> m_nodeIDs;
         std::shared_ptr<bytes> m_buffer;
-        std::function<void(bcos::Error::Ptr&&, int16_t, bytesPointer)> m_callback;
+        std::function<void(bcos::Error::Ptr&&, int16_t, bytesConstRef)> m_callback;
         P2PInterface::Ptr m_network;
         std::shared_ptr<AMOPMessageFactory> m_messageFactory;
 
-    public:
         void sendMessage()
         {
             if (m_nodeIDs.empty())
@@ -343,7 +342,7 @@ void AMOPImpl::asyncSendMessageByTopic(const std::string& _topic, bcos::bytesCon
                     CommonError::AMOPSendMsgFailed, "unable to send message to peer by topic");
                 if (m_callback)
                 {
-                    m_callback(std::move(errorPtr), 0, nullptr);
+                    m_callback(std::move(errorPtr), 0, {});
                 }
 
                 return;
@@ -359,7 +358,7 @@ void AMOPImpl::asyncSendMessageByTopic(const std::string& _topic, bcos::bytesCon
             m_network->asyncSendMessageByP2PNodeID(GatewayMessageType::AMOPMessageType,
                 choosedNodeID, bytesConstRef(m_buffer->data(), m_buffer->size()), option,
                 [self, choosedNodeID, callback = m_callback](
-                    Error::Ptr&& _error, int16_t _type, bytesPointer _responseData) {
+                    Error::Ptr&& _error, int16_t _type, bytesConstRef _responseData) {
                     if (_error && (_error->errorCode() != CommonError::SUCCESS))
                     {
                         AMOP_LOG(DEBUG)
@@ -375,7 +374,7 @@ void AMOPImpl::asyncSendMessageByTopic(const std::string& _topic, bcos::bytesCon
                     if (_type == bcos::gateway::GatewayMessageType::AMOPMessageType)
                     {
                         // zero copy overhead
-                        auto amopMsg = self->m_messageFactory->buildMessage(ref(*_responseData));
+                        auto amopMsg = self->m_messageFactory->buildMessage(_responseData);
                         auto errorMessage =
                             std::string(amopMsg->data().begin(), amopMsg->data().end());
                         auto errorCode = amopMsg->status();
@@ -398,7 +397,7 @@ void AMOPImpl::asyncSendMessageByTopic(const std::string& _topic, bcos::bytesCon
                     {
                         AMOP_LOG(INFO)
                             << LOG_DESC("asyncSendMessageByTopic: receive responseData")
-                            << LOG_KV("size", _responseData->size()) << LOG_KV("type", _type);
+                            << LOG_KV("size", _responseData.size()) << LOG_KV("type", _type);
                         callback(std::move(error), _type, _responseData);
                     }
                 });
@@ -416,7 +415,7 @@ void AMOPImpl::asyncSendMessageByTopic(const std::string& _topic, bcos::bytesCon
 }
 
 void AMOPImpl::onRecvAMOPResponse(int16_t _type, bytesPointer _responseData,
-    std::function<void(bcos::Error::Ptr&&, int16_t, bytesPointer)> _callback)
+    std::function<void(bcos::Error::Ptr&&, int16_t, bytesConstRef)> _callback)
 {
     bcos::Error::Ptr error = nullptr;
     if (_type == bcos::gateway::GatewayMessageType::AMOPMessageType)
@@ -442,7 +441,7 @@ void AMOPImpl::onRecvAMOPResponse(int16_t _type, bytesPointer _responseData,
     {
         AMOP_LOG(INFO) << LOG_DESC("asyncSendMessageByTopic: receive responseData")
                        << LOG_KV("size", _responseData->size()) << LOG_KV("type", _type);
-        _callback(std::move(error), _type, _responseData);
+        _callback(std::move(error), _type, bcos::ref(*_responseData));
     }
 }
 
@@ -501,7 +500,7 @@ void AMOPImpl::dispatcherAMOPMessage(
         return;
     }
     // zero copy overhead
-    auto amopMessage = m_messageFactory->buildMessage(ref(*_message->payload()));
+    auto amopMessage = m_messageFactory->buildMessage(_message->payload());
     auto amopMsgType = amopMessage->type();
     auto fromNodeID =
         _message->srcP2PNodeID().empty() ? _session->p2pID() : _message->srcP2PNodeID();
@@ -527,7 +526,7 @@ void AMOPImpl::dispatcherAMOPMessage(
                 responseP2PMsg->setSrcP2PNodeID(_message->dstP2PNodeID());
                 responseP2PMsg->setSeq(_message->seq());
                 responseP2PMsg->setRespPacket();
-                responseP2PMsg->setPayload(_responseData);
+                responseP2PMsg->setPayload(*_responseData);
                 responseP2PMsg->setPacketType(_type);
                 m_network->asyncSendMessageByNodeID(
                     responseP2PMsg->dstP2PNodeID(), responseP2PMsg, nullptr);

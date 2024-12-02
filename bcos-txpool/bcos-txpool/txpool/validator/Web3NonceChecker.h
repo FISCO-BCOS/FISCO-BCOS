@@ -19,18 +19,31 @@
  */
 
 #pragma once
+#include "bcos-protocol/TransactionStatus.h"
 #include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
+#include <concepts>
 
 namespace bcos::txpool
 {
 constexpr uint16_t DefaultBucketSize = 256;
-struct pair_hash
+
+struct PairHash
+
 {
-    template <class T1, class T2>
-    std::size_t operator()(const std::pair<T1, T2>& p) const
+    template <std::convertible_to<std::string_view> StringView>
+    std::size_t operator()(const std::pair<StringView, StringView>& pair) const
     {
-        return std::hash<T1>()(p.first);
+        return std::hash<StringView>()(pair.first);
+    }
+};
+struct PairEqual
+{
+    template <std::convertible_to<std::string_view> Lhs, std::convertible_to<std::string_view> Rhs>
+    bool operator()(const std::pair<Lhs, Lhs>& lhs, const std::pair<Rhs, Rhs>& rhs) const
+    {
+        return std::string_view{lhs.first} == std::string_view{rhs.first} &&
+               std::string_view{lhs.second} == std::string_view{rhs.second};
     }
 };
 /**
@@ -60,7 +73,7 @@ public:
      * @return TransactionStatus: the status of the transaction
      */
     task::Task<bcos::protocol::TransactionStatus> checkWeb3Nonce(
-        bcos::protocol::Transaction::ConstPtr _tx, bool onlyCheckLedgerNonce = false);
+        const bcos::protocol::Transaction& _tx, bool onlyCheckLedgerNonce = false);
 
     /**
      * batch insert sender and nonce into ledger state nonce and memory nonce, call when block is
@@ -91,27 +104,21 @@ private:
     // ledger state nonce cache the nonce of the sender in storage, every tx send by the sender,
     // should bigger than the nonce in ledger state
     bcos::storage2::memory_storage::MemoryStorage<std::string, u256,
-        static_cast<storage2::memory_storage::Attribute>(
-            storage2::memory_storage::LRU | storage2::memory_storage::CONCURRENT),
-        std::hash<std::string>>
+        storage2::memory_storage::LRU | storage2::memory_storage::CONCURRENT>
         m_ledgerStateNonces;
 
     // <sender address (bytes string), nonce>
     // memory nonce cache the nonce of the sender in memory
     // every tx send by the sender, should bigger than the nonce in ledger state and not in memory
     bcos::storage2::memory_storage::MemoryStorage<std::pair<std::string, std::string>,
-        std::monostate,
-        static_cast<storage2::memory_storage::Attribute>(
-            storage2::memory_storage::LRU | storage2::memory_storage::CONCURRENT),
-        pair_hash>
+        std::monostate, storage2::memory_storage::LRU | storage2::memory_storage::CONCURRENT,
+        PairHash, PairEqual>
         m_memoryNonces;
 
     // sender address(bytes string), nonce
     // only store max nonce of memory nonce.
     bcos::storage2::memory_storage::MemoryStorage<std::string, u256,
-        static_cast<storage2::memory_storage::Attribute>(
-            storage2::memory_storage::LRU | storage2::memory_storage::CONCURRENT),
-        std::hash<std::string>>
+        storage2::memory_storage::LRU | storage2::memory_storage::CONCURRENT>
         m_maxNonces;
     bcos::ledger::LedgerInterface::Ptr m_ledger;
 };

@@ -20,15 +20,11 @@
 
 #pragma once
 
-#include "bcos-boostssl/websocket/WsError.h"
-#include "bcos-utilities/CompositeBuffer.h"
 #include <bcos-utilities/Common.h>
 #include <boost/asio/buffer.hpp>
-#include <set>
 
-namespace bcos
-{
-namespace gateway
+
+namespace bcos::gateway
 {
 
 class MessageExtAttributes
@@ -45,66 +41,16 @@ public:
     virtual ~MessageExtAttributes() = default;
 };
 
-struct EncodedMessage : public bcos::ObjectCounter<EncodedMessage>
+struct EncodedMessage
 {
-    using Ptr = std::shared_ptr<EncodedMessage>;
     bcos::bytes header;
-    // CompositeBuffer::Ptr payload;
-    std::shared_ptr<bcos::bytes> payload;
-    //
+    bcos::bytes payload;
     bool compress = true;
 
     inline std::size_t dataSize() const { return headerSize() + payloadSize(); }
     inline std::size_t headerSize() const { return header.size(); }
-    inline std::size_t payloadSize() const { return payload ? payload->size() : 0; }
+    inline std::size_t payloadSize() const { return payload.size(); }
 };
-
-/**
- * @brief convert EncodedMessage to std::vector<boost::asio::const_buffer> for use asio gather_io to
- * send the encoded message
- *
- * @param _bufs
- * @param _encoder
- * @return void
- */
-inline void toMultiBuffers(
-    std::vector<boost::asio::const_buffer>& _bufs, const EncodedMessage::Ptr& _encodedMessage)
-{
-    // header
-    _bufs.emplace_back(
-        boost::asio::buffer(_encodedMessage->header.data(), _encodedMessage->header.size()));
-
-    // payload
-    if (_encodedMessage->payloadSize() <= 0)
-    {
-        return;
-    }
-
-    _bufs.emplace_back(
-        boost::asio::buffer(_encodedMessage->payload->data(), _encodedMessage->payload->size()));
-
-    // auto& buffers = _encodedMessage->payload->buffers();
-    // std::for_each(buffers.begin(), buffers.end(), [&_bufs](const bcos::bytes& _buffer) {
-    //     _bufs.push_back(boost::asio::buffer(_buffer.data(), _buffer.size()));
-    // });
-}
-
-/**
- * @brief convert EncodedMessage to std::vector<boost::asio::const_buffer> for use asio gather_io to
- * send the encoded message
- *
- * @param _bufs
- * @param _encoder
- * @return void
- */
-inline void toMultiBuffers(std::vector<boost::asio::const_buffer>& _bufs,
-    std::vector<EncodedMessage::Ptr>& _multiEncodedMessage)
-{
-    std::for_each(_multiEncodedMessage.begin(), _multiEncodedMessage.end(),
-        [&_bufs](const EncodedMessage::Ptr& _encodedMessage) {
-            toMultiBuffers(_bufs, _encodedMessage);
-        });
-}
 
 class Message
 {
@@ -155,7 +101,6 @@ public:
     virtual ~MessageFactory() = default;
     virtual Message::Ptr buildMessage() = 0;
 
-public:
     virtual uint32_t newSeq()
     {
         uint32_t seq = ++m_seq;
@@ -166,5 +111,4 @@ private:
     std::atomic<uint32_t> m_seq = {1};
 };
 
-}  // namespace gateway
-}  // namespace bcos
+}  // namespace bcos::gateway

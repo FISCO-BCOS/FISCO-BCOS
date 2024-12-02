@@ -32,6 +32,7 @@
 using namespace bcos::task;
 using namespace bcos::storage2;
 using namespace bcos::transaction_executor;
+using namespace bcos::transaction_executor::hostcontext;
 
 class TestHostContextFixture
 {
@@ -88,8 +89,8 @@ public:
             hostContext(rollbackableStorage, rollbackableTransientStorage, blockHeader, message,
                 origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
                 bcos::task::syncWait);
-        syncWait(hostContext.prepare());
-        auto result = syncWait(hostContext.execute());
+        syncWait(prepare(hostContext));
+        auto result = syncWait(execute(hostContext));
         BOOST_REQUIRE_EQUAL(result.status_code, 0);
 
         helloworldAddress = result.create_address;
@@ -131,8 +132,8 @@ public:
             hostContext(rollbackableStorage, rollbackableTransientStorage, blockHeader, message,
                 origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
                 bcos::task::syncWait);
-        co_await hostContext.prepare();
-        auto result = co_await hostContext.execute();
+        co_await prepare(hostContext);
+        auto result = co_await execute(hostContext);
 
         co_return result;
     }
@@ -361,8 +362,8 @@ BOOST_AUTO_TEST_CASE(precompiled)
             hostContext(rollbackableStorage, rollbackableTransientStorage, blockHeader, message,
                 origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
                 bcos::task::syncWait);
-        syncWait(hostContext.prepare());
-        BOOST_CHECK_NO_THROW(auto result = syncWait(hostContext.execute()));
+        syncWait(prepare(hostContext));
+        BOOST_CHECK_NO_THROW(auto result = syncWait(execute(hostContext)));
     }
 
     std::optional<EVMCResult> result;
@@ -393,9 +394,9 @@ BOOST_AUTO_TEST_CASE(precompiled)
             hostContext(rollbackableStorage, rollbackableTransientStorage, blockHeader, message,
                 origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
                 bcos::task::syncWait);
-        syncWait(hostContext.prepare());
+        syncWait(prepare(hostContext));
 
-        auto notFoundResult = syncWait(hostContext.execute());
+        auto notFoundResult = syncWait(execute(hostContext));
         BOOST_CHECK_EQUAL(notFoundResult.status_code,
             (evmc_status_code)bcos::protocol::TransactionStatus::CallAddressError);
 
@@ -411,8 +412,8 @@ BOOST_AUTO_TEST_CASE(precompiled)
             hostContext2(rollbackableStorage, rollbackableTransientStorage, blockHeader, message,
                 origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
                 bcos::task::syncWait);
-        syncWait(hostContext2.prepare());
-        BOOST_CHECK_NO_THROW(result.emplace(syncWait(hostContext2.execute())));
+        syncWait(prepare(hostContext2));
+        BOOST_CHECK_NO_THROW(result.emplace(syncWait(execute(hostContext2))));
     }
 
     BOOST_CHECK_EQUAL(result->status_code, 0);

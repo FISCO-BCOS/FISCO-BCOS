@@ -20,6 +20,7 @@
  */
 
 #include "WatcherConfig.h"
+#include "bcos-utilities/BoostLog.h"
 
 using namespace bcos;
 using namespace bcos::election;
@@ -148,4 +149,14 @@ void WatcherConfig::onMemberDeleted(
                                 << LOG_KV("message", boost::diagnostic_information(e));
         }
     }
+}
+
+bcos::election::WatcherConfig::WatcherConfig(std::string const& _etcdEndPoint,
+    std::string const& _watchDir, bcos::protocol::MemberFactoryInterface::Ptr _memberFactory,
+    std::string const& _purpose, const std::string& _caPath, const std::string& _certPath,
+    const std::string& _keyPath)
+  : ElectionConfig(_etcdEndPoint, _memberFactory, _purpose, _caPath, _certPath, _keyPath)
+{
+    m_watchDir = _watchDir;
+    ELECTION_LOG(INFO) << LOG_DESC("WatcherConfig") << LOG_KV("watchDir", _watchDir);
 }

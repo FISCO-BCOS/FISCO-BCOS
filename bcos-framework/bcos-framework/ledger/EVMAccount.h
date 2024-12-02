@@ -214,22 +214,34 @@ public:
     EVMAccount(EVMAccount&&) noexcept = default;
     EVMAccount& operator=(const EVMAccount&) = delete;
     EVMAccount& operator=(EVMAccount&&) noexcept = default;
-    EVMAccount(Storage& storage, const evmc_address& address) : m_storage(storage)
+    EVMAccount(Storage& storage, const evmc_address& address, bool binaryAddress)
+      : m_storage(storage)
     {
         std::array<char, sizeof(address.bytes) * 2> table;  // NOLINT
         boost::algorithm::hex_lower(concepts::bytebuffer::toView(address.bytes), table.data());
         if (auto view = std::string_view(table.data(), table.size());
-            bcos::precompiled::c_systemTxsAddress.contains(view))
+            precompiled::contains(bcos::precompiled::c_systemTxsAddress, view))
         {
             m_tableName.reserve(ledger::SYS_DIRECTORY::SYS_APPS.size() + table.size());
             m_tableName.append(ledger::SYS_DIRECTORY::SYS_APPS);
+            m_tableName.append(std::string_view(table.data(), table.size()));
         }
         else
         {
-            m_tableName.reserve(ledger::SYS_DIRECTORY::USER_APPS.size() + table.size());
-            m_tableName.append(ledger::SYS_DIRECTORY::USER_APPS);
+            if (binaryAddress)
+            {
+                auto addressView = std::span(address.bytes);
+                m_tableName.reserve(ledger::SYS_DIRECTORY::USER_APPS.size() + addressView.size());
+                m_tableName.append(ledger::SYS_DIRECTORY::USER_APPS);
+                m_tableName.append((const char*)addressView.data(), addressView.size());
+            }
+            else
+            {
+                m_tableName.reserve(ledger::SYS_DIRECTORY::USER_APPS.size() + table.size());
+                m_tableName.append(ledger::SYS_DIRECTORY::USER_APPS);
+                m_tableName.append(std::string_view(table.data(), table.size()));
+            }
         }
-        m_tableName.append(std::string_view(table.data(), table.size()));
     }
 
     /**
@@ -237,21 +249,37 @@ public:
      * @param storage storage instance
      * @param address address of the account, hex string, should not contain 0x prefix
      */
-    EVMAccount(Storage& storage, bcos::concepts::StringLike auto address) : m_storage(storage)
+    EVMAccount(Storage& storage, std::string_view address, bool binaryAddress) : m_storage(storage)
     {
-        if (bcos::precompiled::c_systemTxsAddress.contains(address))
+        if (precompiled::contains(bcos::precompiled::c_systemTxsAddress, address))
         {
+            m_tableName.reserve(ledger::SYS_DIRECTORY::SYS_APPS.size() + address.size());
             m_tableName.append(ledger::SYS_DIRECTORY::SYS_APPS);
+            m_tableName.append(address);
         }
         else
         {
-            m_tableName.append(ledger::SYS_DIRECTORY::USER_APPS);
+            if (binaryAddress)
+            {
+                assert(address.size() % 2 == 0);
+                m_tableName.reserve(ledger::SYS_DIRECTORY::USER_APPS.size() + address.size() / 2);
+                m_tableName.append(ledger::SYS_DIRECTORY::USER_APPS);
+                boost::algorithm::unhex(
+                    address.begin(), address.end(), std::back_inserter(m_tableName));
+            }
+            else
+            {
+                m_tableName.reserve(ledger::SYS_DIRECTORY::USER_APPS.size() + address.size());
+                m_tableName.append(ledger::SYS_DIRECTORY::USER_APPS);
+                m_tableName.append(address);
+            }
         }
-        m_tableName.append(address);
     }
     ~EVMAccount() noexcept = default;
-    auto address() const { return this->m_tableName; }
+
+    std::string_view address() const { return this->m_tableName; }
 };
+
 template <class Storage>
 inline std::ostream& operator<<(std::ostream& stream, EVMAccount<Storage> const& account)
 {

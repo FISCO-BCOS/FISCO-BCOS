@@ -43,15 +43,15 @@ public:
     {}
     ~TxValidator() override = default;
 
-    bcos::protocol::TransactionStatus verify(bcos::protocol::Transaction::ConstPtr _tx) override;
+    bcos::protocol::TransactionStatus verify(const bcos::protocol::Transaction& _tx) override;
     bcos::protocol::TransactionStatus checkTransaction(
-        bcos::protocol::Transaction::ConstPtr _tx, bool onlyCheckLedgerNonce = false) override;
+        const bcos::protocol::Transaction& _tx, bool onlyCheckLedgerNonce = false) override;
     bcos::protocol::TransactionStatus checkLedgerNonceAndBlockLimit(
-        bcos::protocol::Transaction::ConstPtr _tx) override;
+        const bcos::protocol::Transaction& _tx) override;
     bcos::protocol::TransactionStatus checkTxpoolNonce(
-        bcos::protocol::Transaction::ConstPtr _tx) override;
+        const bcos::protocol::Transaction& _tx) override;
     bcos::protocol::TransactionStatus checkWeb3Nonce(
-        bcos::protocol::Transaction::ConstPtr _tx, bool onlyCheckLedgerNonce = false) override;
+        const bcos::protocol::Transaction& _tx, bool onlyCheckLedgerNonce = false) override;
 
     Web3NonceChecker::Ptr web3NonceChecker() override { return m_web3NonceChecker; }
 
@@ -62,9 +62,9 @@ public:
     }
 
 protected:
-    virtual inline bool isSystemTransaction(bcos::protocol::Transaction::ConstPtr const& _tx)
+    virtual inline bool isSystemTransaction(const bcos::protocol::Transaction& _tx)
     {
-        return bcos::precompiled::c_systemTxsAddress.contains(_tx->to());
+        return precompiled::contains(bcos::precompiled::c_systemTxsAddress, _tx.to());
     }
 
 private:

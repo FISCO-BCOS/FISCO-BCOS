@@ -2,13 +2,11 @@
 #include "../ledger/LedgerTypeDef.h"
 #include "../protocol/Protocol.h"
 #include "../storage/Entry.h"
-#include "../storage/LegacyStorageMethods.h"
 #include "../storage2/Storage.h"
 #include "../transaction-executor/StateKey.h"
 #include "bcos-concepts/Exception.h"
 #include "bcos-task/Task.h"
 #include "bcos-tool/Exceptions.h"
-#include "bcos-utilities/Ranges.h"
 #include <boost/throw_exception.hpp>
 #include <array>
 #include <bitset>
@@ -61,6 +59,7 @@ public:
         feature_evm_timestamp,
         feature_evm_address,
         feature_rpbft_term_weight,
+        feature_raw_address,
         feature_rpbft_vrf_type_secp256k1,
     };
 
@@ -348,15 +347,13 @@ inline task::Task<void> writeToStorage(Features const& features, auto&& storage,
     decltype(auto) flags =
         features.flags() | RANGES::views::filter([](auto&& tuple) { return std::get<2>(tuple); });
     co_await storage2::writeSome(std::forward<decltype(storage)>(storage),
-        RANGES::views::transform(flags,
-            [](auto&& tuple) {
-                return transaction_executor::StateKey(ledger::SYS_CONFIG, std::get<1>(tuple));
-            }),
-        RANGES::views::transform(flags, [&](auto&& tuple) {
+        ::ranges::views::transform(flags, [&](auto&& tuple) {
             storage::Entry entry;
             entry.setObject(SystemConfigEntry{
                 boost::lexical_cast<std::string>((int)std::get<2>(tuple)), blockNumber});
-            return entry;
+            return std::make_tuple(
+                transaction_executor::StateKey(ledger::SYS_CONFIG, std::get<1>(tuple)),
+                std::move(entry));
         }));
 }
 

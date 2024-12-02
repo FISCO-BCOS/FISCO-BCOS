@@ -52,7 +52,7 @@ public:
         bcos::crypto::NodeIDs const& _consensusNodes, bcos::crypto::NodeIDs const& _nodeList);
     // select the nodes by tree topology
     [[nodiscard]] virtual bcos::crypto::NodeIDSetPtr selectNodesForBlockSync(
-        bcos::crypto::NodeIDSetPtr const& _peers);
+        bcos::crypto::NodeIDSet const& _peers);
 
 protected:
     [[nodiscard]] bcos::crypto::NodeIDPtr getNodeIDByIndex(std::int32_t _nodeIndex) const override;
@@ -61,10 +61,10 @@ protected:
 
     // select the child nodes by tree
     [[nodiscard]] bcos::crypto::NodeIDSetPtr recursiveSelectChildNodes(std::int32_t _parentIndex,
-        bcos::crypto::NodeIDSetPtr const& _peers, std::int32_t _startIndex) override;
+        bcos::crypto::NodeIDSet const& _peers, std::int32_t _startIndex) override;
     // select the parent nodes by tree
     [[nodiscard]] bcos::crypto::NodeIDSetPtr selectParentNodes(
-        bcos::crypto::NodeIDSetPtr const& _peers, std::int32_t _nodeIndex, std::int32_t _startIndex,
+        bcos::crypto::NodeIDSet const& _peers, std::int32_t _nodeIndex, std::int32_t _startIndex,
         bool _selectAll) override;
 
 private:

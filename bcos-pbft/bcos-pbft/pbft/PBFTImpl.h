@@ -58,8 +58,6 @@ public:
         std::function<void(Error::Ptr)> _onRecv) override;
 
     void notifyHighestSyncingNumber(bcos::protocol::BlockNumber _blockNumber) override;
-    void asyncNoteUnSealedTxsSize(
-        uint64_t _unsealedTxsSize, std::function<void(Error::Ptr)> _onRecvResponse) override;
     PBFTEngine::Ptr pbftEngine() { return m_pbftEngine; }
 
     virtual void init();

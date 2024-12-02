@@ -111,7 +111,7 @@ public:
     {}
 
     void asyncSendMessageByTopic(const std::string&, bcos::bytesConstRef,
-        std::function<void(bcos::Error::Ptr&&, int16_t, bytesPointer)>) override
+        std::function<void(bcos::Error::Ptr&&, int16_t, bytesConstRef)>) override
     {}
     void asyncSendBroadcastMessageByTopic(const std::string&, bcos::bytesConstRef) override {}
 

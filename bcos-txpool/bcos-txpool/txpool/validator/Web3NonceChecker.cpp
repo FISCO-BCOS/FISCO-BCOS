@@ -20,6 +20,8 @@
 
 #include "Web3NonceChecker.h"
 #include "../utilities/Common.h"
+#include "bcos-framework/txpool/TxPoolTypeDef.h"
+#include "bcos-task/Wait.h"
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-protocol/TransactionStatus.h>
 
@@ -28,12 +30,12 @@ using namespace bcos::txpool;
 using namespace bcos::protocol;
 
 task::Task<TransactionStatus> Web3NonceChecker::checkWeb3Nonce(
-    Transaction::ConstPtr _tx, bool onlyCheckLedgerNonce)
+    const bcos::protocol::Transaction& _tx, bool onlyCheckLedgerNonce)
 {
     // sender is bytes view
-    auto sender = std::string(_tx->sender());
+    auto sender = std::string(_tx.sender());
     auto const senderHex = toHex(sender);
-    auto nonce = u256(_tx->nonce());
+    auto nonce = u256(_tx.nonce());
 
     // Note:
     // 在以太坊中，nonce是从0开始的，也代表着该地址发交易次数。例如：在存储中存储的是5，那么web3工具从rpc
@@ -46,7 +48,7 @@ task::Task<TransactionStatus> Web3NonceChecker::checkWeb3Nonce(
     {
         // memory nonce check nonce existence in memory first, if not exist, then check from storage
         if (co_await bcos::storage2::existsOne(
-                m_memoryNonces, std::make_pair(sender, _tx->nonce())))
+                m_memoryNonces, std::make_pair(_tx.sender(), _tx.nonce())))
         {
             if (c_fileLogLevel == TRACE) [[unlikely]]
             {
@@ -189,5 +191,5 @@ task::Task<std::optional<u256>> Web3NonceChecker::getPendingNonce(std::string_vi
 
 void Web3NonceChecker::insert(std::string sender, u256 nonce)
 {
-    task::wait(storage2::writeOne(m_ledgerStateNonces, sender, nonce));
+    task::syncWait(storage2::writeOne(m_ledgerStateNonces, sender, nonce));
 }

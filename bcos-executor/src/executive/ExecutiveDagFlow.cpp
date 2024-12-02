@@ -296,6 +296,7 @@ critical::CriticalFieldsInterface::Ptr ExecutiveDagFlow::generateDagCriticals(
                                 // get abi json
                                 // new logic
                                 std::string_view abiStr;
+                                storage::Entry tmpEntry;
                                 if (blockContext.blockVersion() >=
                                     uint32_t(bcos::protocol::BlockVersion::V3_1_VERSION))
                                 {
@@ -330,13 +331,15 @@ critical::CriticalFieldsInterface::Ptr ExecutiveDagFlow::generateDagCriticals(
                                             continue;
                                         }
                                     }
-                                    abiStr = abiEntry->getField(0);
+                                    tmpEntry = std::move(*abiEntry);
+                                    abiStr = tmpEntry.getField(0);
                                 }
                                 else
                                 {
                                     // old logic
                                     auto entry = table->getRow(ACCOUNT_ABI);
-                                    abiStr = entry->getField(0);
+                                    tmpEntry = std::move(*entry);
+                                    abiStr = tmpEntry.getField(0);
                                 }
                                 bool isSmCrypto = blockContext.hashHandler()->getHashImplType() ==
                                                   crypto::HashImplType::Sm3Hash;

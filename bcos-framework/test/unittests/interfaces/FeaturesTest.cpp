@@ -160,6 +160,7 @@ BOOST_AUTO_TEST_CASE(feature)
         "feature_evm_timestamp",
         "feature_evm_address",
         "feature_rpbft_term_weight",
+        "feature_raw_address",
         "feature_rpbft_vrf_type_secp256k1",
     };
     // clang-format on

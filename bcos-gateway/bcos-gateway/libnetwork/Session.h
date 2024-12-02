@@ -15,19 +15,19 @@
 #include <bcos-gateway/libnetwork/SessionCallback.h>
 #include <bcos-gateway/libnetwork/SessionFace.h>
 #include <bcos-utilities/Timer.h>
+#include <oneapi/tbb/concurrent_queue.h>
 #include <boost/heap/priority_queue.hpp>
 #include <cstddef>
 #include <memory>
 #include <utility>
 
-namespace bcos
-{
-namespace gateway
+
+namespace bcos::gateway
 {
 class Host;
 class SocketFace;
 
-class SessionRecvBuffer : public bcos::ObjectCounter<SessionRecvBuffer>
+class SessionRecvBuffer
 {
 public:
     SessionRecvBuffer(size_t _bufferSize) : m_recvBufferSize(_bufferSize)
@@ -221,23 +221,21 @@ public:
      * @param encodedMsgs
      * @param _maxSendDataSize
      * @param _maxSendMsgCount
-     * @return std::size_t
+     * @return bool
      */
-    std::size_t tryPopSomeEncodedMsgs(std::vector<EncodedMessage::Ptr>& encodedMsgs,
-        uint32_t _maxSendDataSize, uint32_t _maxSendMsgCount);
+    bool tryPopSomeEncodedMsgs(
+        std::vector<EncodedMessage>& encodedMsgs, size_t _maxSendDataSize, size_t _maxSendMsgCount);
 
 protected:
     virtual void checkNetworkStatus();
 
 private:
-    void send(EncodedMessage::Ptr& _encoder);
+    void send(EncodedMessage encodedMsg);
 
     void doRead();
 
     std::size_t m_maxRecvBufferSize;
     SessionRecvBuffer m_recvBuffer;
-
-    std::vector<boost::asio::const_buffer> m_writeConstBuffer;
 
     // ------ for optimize send message parameters  begin ---------------
     //  // Maximum amount of data to read one time, default: 40K
@@ -273,9 +271,8 @@ private:
 
     MessageFactory::Ptr m_messageFactory;
 
-    std::list<EncodedMessage::Ptr> m_writeQueue;
-    std::atomic_bool m_writing = {false};
-    bcos::Mutex x_writeQueue;
+    tbb::concurrent_queue<EncodedMessage> m_writeQueue;
+    std::atomic_bool m_writing = false;
 
     mutable bcos::Mutex x_info;
 
@@ -354,5 +351,4 @@ private:
     bool m_enableCompress = true;
 };
 
-}  // namespace gateway
-}  // namespace bcos
+}  // namespace bcos::gateway

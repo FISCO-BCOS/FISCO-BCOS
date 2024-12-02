@@ -15,6 +15,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace bcos::rpc::filter
 {
@@ -125,7 +126,13 @@ public:
 protected:
     bool uninstallFilterImpl(std::string_view groupId, u256 filterID)
     {
-        return m_filters.remove(filter::KeyType(groupId, filterID)) != nullptr;
+        if (decltype(m_filters)::WriteAccessor accessor;
+            m_filters.find(accessor, filter::KeyType(groupId, std::move(filterID))))
+        {
+            m_filters.remove(accessor);
+            return true;
+        }
+        return false;
     }
     task::Task<Json::Value> getFilterChangeImpl(std::string_view groupId, u256 filterID);
     task::Task<Json::Value> getBlockChangeImpl(std::string_view groupId, Filter::Ptr filter);
@@ -137,19 +144,18 @@ protected:
     task::Task<Json::Value> getLogsInternal(
         bcos::ledger::LedgerInterface& ledger, FilterRequest::Ptr params);
 
-protected:
     virtual int32_t InvalidParamsCode() = 0;
     uint64_t insertFilter(Filter::Ptr filter);
     void cleanUpExpiredFilters();
 
     Filter::Ptr getFilterByID(std::string_view groupId, u256 id)
     {
-        FilterMap::ReadAccessor::Ptr accessor;
+        FilterMap::ReadAccessor accessor;
         if (!m_filters.find<FilterMap::ReadAccessor>(accessor, filter::KeyType(groupId, id)))
         {
             return nullptr;
         }
-        return accessor->value();
+        return accessor.value();
     }
     static int64_t getLatestBlockNumber(bcos::ledger::LedgerInterface& _ledger)
     {
@@ -160,7 +166,6 @@ protected:
         return latest;
     }
 
-protected:
     using FilterMap = BucketMap<filter::KeyType, Filter::Ptr, std::hash<filter::KeyType>>;
 
     uint64_t m_filterTimeout = FILTER_DEFAULT_EXPIRATION_TIME;

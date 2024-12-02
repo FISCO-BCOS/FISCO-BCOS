@@ -23,6 +23,7 @@
 #include "../executive/ExecutiveDagFlow.h"
 #include "../executive/ExecutiveFactory.h"
 #include "bcos-framework/ledger/Features.h"
+#include "bcos-framework/storage/LegacyStorageMethods.h"
 #include <bcos-framework/executor/ExecuteError.h>
 
 using namespace std;

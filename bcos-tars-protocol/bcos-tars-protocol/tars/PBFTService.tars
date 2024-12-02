@@ -10,7 +10,6 @@ module bcostars {
         Error asyncCheckBlock(Block _block, out bool _verifyResult);
         Error asyncNotifyNewBlock(LedgerConfig _ledgerConfig);
         Error asyncNotifyBlockSyncMessage(string _uuid, vector<byte> _nodeId, vector<byte> _data);
-        Error asyncNoteUnSealedTxsSize(long _unsealedTxsSize);
         
         Error asyncGetSyncInfo(out string _syncInfo);
         Error asyncGetConsensusStatus(out string _consensusStatus);

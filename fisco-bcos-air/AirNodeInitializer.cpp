@@ -19,10 +19,6 @@
  * @date 2021-10-28
  */
 #include "AirNodeInitializer.h"
-#include "bcos-gateway/libnetwork/Session.h"
-#include "bcos-gateway/libnetwork/Socket.h"
-#include "bcos-gateway/libp2p/P2PMessageV2.h"
-#include "bcos-utilities/ratelimiter/DistributedRateLimiter.h"
 #include "libinitializer/Common.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
@@ -136,12 +132,7 @@ void AirNodeInitializer::start()
             bcos::boostssl::ws::WsSession, bcos::boostssl::ws::RawWsStream,
             bcos::boostssl::ws::SslWsStream, bcos::boostssl::ws::WsSession::CallBack,
             bcos::boostssl::ws::WsSession::Message,
-            bcos::boostssl::ws::WsStreamDelegate /*boostssl end*/,
-            /*gateway start*/ bcos::gateway::Session, bcos::gateway::Socket,
-            bcos::gateway::EncodedMessage, bcos::gateway::SessionRecvBuffer,
-            bcos::gateway::P2PMessage, bcos::gateway::P2PSession, bcos::gateway::P2PMessageV2,
-            bcos::gateway::FrontServiceInfo, bcos::gateway::GatewayNodeStatus,
-            bcos::gateway::GatewayStatus, bcos::gateway::ResponseCallback, bcos::gateway::Retry,
+            bcos::boostssl::ws::WsStreamDelegate /*boostssl end*/, bcos::gateway::FrontServiceInfo,
             bcos::ratelimiter::TimeWindowRateLimiter,
             bcos::ratelimiter::DistributedRateLimiter /*gateway end*/>(4);
     }

@@ -33,7 +33,7 @@ using Generator = std::generator<Ref, Val, Alloc>;
 #include <utility>
 namespace bcos::task
 {
-// Fork from https://open-std.org/JTC1/SC22/WG21/docs/papers/2020/p2168r0.pdf
+// From https://open-std.org/JTC1/SC22/WG21/docs/papers/2020/p2168r0.pdf
 // Can be replace with std::generator
 
 template <typename Ref, typename Value = std::remove_cvref_t<Ref>, typename Alloc = void>
@@ -82,14 +82,9 @@ public:
 
         final_awaiter final_suspend() noexcept { return {}; }
 
-        std::suspend_always yield_value(Ref&& x) noexcept
+        std::suspend_always yield_value(auto&& value) noexcept
         {
-            m_promise->m_value = std::addressof(x);
-            return {};
-        }
-        std::suspend_always yield_value(Ref& x) noexcept
-        {
-            m_promise->m_value = std::addressof(x);
+            m_promise->m_value = std::addressof(value);
             return {};
         }
 
