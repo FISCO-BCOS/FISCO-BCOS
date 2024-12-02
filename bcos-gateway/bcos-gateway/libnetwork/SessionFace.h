@@ -12,16 +12,17 @@
  */
 
 #pragma once
+#include "bcos-task/Task.h"
 #include "bcos-utilities/Error.h"
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/Message.h>
 #include <bcos-gateway/libnetwork/SessionCallback.h>
 #include <boost/asio.hpp>
 #include <optional>
+#include <range/v3/view/any_view.hpp>
 
-namespace bcos
-{
-namespace gateway
+
+namespace bcos::gateway
 {
 class SocketFace;
 
@@ -43,6 +44,9 @@ public:
     virtual void asyncSendMessage(
         Message::Ptr, Options = Options(), SessionCallbackFunc = SessionCallbackFunc()) = 0;
 
+    virtual task::Task<std::unique_ptr<Message>> sendMessage(
+        const Message& header, ::ranges::any_view<bytesConstRef> payloads, Options options) = 0;
+
     virtual std::shared_ptr<SocketFace> socket() = 0;
 
     virtual void setMessageHandler(
@@ -57,5 +61,4 @@ public:
 
     virtual std::size_t writeQueueSize() = 0;
 };
-}  // namespace gateway
-}  // namespace bcos
+}  // namespace bcos::gateway

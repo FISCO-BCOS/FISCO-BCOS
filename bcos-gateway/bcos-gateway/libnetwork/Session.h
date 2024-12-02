@@ -147,6 +147,9 @@ public:
     void asyncSendMessage(Message::Ptr message, Options options,
         SessionCallbackFunc callback = SessionCallbackFunc()) override;
 
+    task::Task<std::unique_ptr<Message>> sendMessage(const Message& header,
+        ::ranges::any_view<bytesConstRef> payloads, Options options) override;
+
     NodeIPEndpoint nodeIPEndpoint() const override;
 
     bool active() const override;

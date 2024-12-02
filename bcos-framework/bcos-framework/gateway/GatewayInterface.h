@@ -24,9 +24,11 @@
 #include "bcos-framework/multigroup/GroupInfo.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/protocol/ProtocolInfo.h"
+#include "bcos-task/Task.h"
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
+#include <range/v3/view/any_view.hpp>
 
 namespace bcos
 {
@@ -53,7 +55,6 @@ public:
     virtual void start() = 0;
     virtual void stop() = 0;
 
-public:
     /**
      * @brief: get nodeIDs from gateway
      * @param: _groupID
@@ -107,6 +108,9 @@ public:
      */
     virtual void asyncSendBroadcastMessage(uint16_t _type, const std::string& _groupID,
         int _moduleID, bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload) = 0;
+
+    virtual task::Task<void> broadcastMessage(uint16_t type, std::string_view groupID, int moduleID,
+        const bcos::crypto::NodeID& srcNodeID, ::ranges::any_view<bytesConstRef> payloads) = 0;
 
     /// multi-group related interfaces
 

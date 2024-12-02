@@ -191,6 +191,13 @@ public:
             std::vector<char>(_payload.begin(), _payload.end()));
     }
 
+    bcos::task::Task<void> broadcastMessage(uint16_t type, std::string_view groupID, int moduleID,
+        const bcos::crypto::NodeID& srcNodeID,
+        ::ranges::any_view<bcos::bytesConstRef> payloads) override
+    {
+        co_return;
+    };
+
     void asyncGetGroupNodeInfo(const std::string& _groupID,
         bcos::gateway::GetGroupNodeInfoFunc _onGetGroupNodeInfo) override
     {

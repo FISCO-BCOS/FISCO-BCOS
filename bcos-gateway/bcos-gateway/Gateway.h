@@ -21,7 +21,6 @@
 #pragma once
 
 #include "bcos-gateway/libratelimit/GatewayRateLimiter.h"
-#include "bcos-utilities/ObjectAllocatorMonitor.h"
 #include "filter/ReadOnlyFilter.h"
 #include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-framework/gateway/GatewayInterface.h>
@@ -167,7 +166,7 @@ public:
                                                             message->payload().end()))
                                    << LOG_KV("packetType", message->packetType())
                                    << LOG_KV("src", message->options().srcNodeID() ?
-                                                        toHex(*(message->options().srcNodeID())) :
+                                                        toHex(message->options().srcNodeID()) :
                                                         "unknown")
                                    << LOG_KV("size", message->length())
                                    << LOG_KV("message", e.what()) << LOG_KV("moduleID", moduleID);
@@ -276,6 +275,9 @@ public:
      */
     void asyncSendBroadcastMessage(uint16_t _type, const std::string& _groupID, int _moduleID,
         bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload) override;
+
+    task::Task<void> broadcastMessage(uint16_t type, std::string_view groupID, int moduleID,
+        const bcos::crypto::NodeID& srcNodeID, ::ranges::any_view<bytesConstRef> payloads) override;
 
     /**
      * @brief: receive p2p message

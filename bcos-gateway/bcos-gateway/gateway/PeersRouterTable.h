@@ -18,8 +18,8 @@
  * @date 2021-12-29
  */
 #pragma once
-#include "FrontServiceInfo.h"
 #include "GatewayStatus.h"
+#include "bcos-task/Task.h"
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-framework/gateway/GroupNodeInfo.h>
@@ -28,10 +28,10 @@
 #include <bcos-gateway/libp2p/P2PInterface.h>
 #include <bcos-gateway/protocol/GatewayNodeStatus.h>
 #include <memory>
+#include <utility>
 
-namespace bcos
-{
-namespace gateway
+
+namespace bcos::gateway
 {
 class PeersRouterTable
 {
@@ -39,9 +39,9 @@ public:
     using Ptr = std::shared_ptr<PeersRouterTable>;
     PeersRouterTable(std::string _uuid, bcos::crypto::KeyFactory::Ptr _keyFactory,
         P2PInterface::Ptr _p2pInterface)
-      : m_uuid(_uuid),
-        m_keyFactory(_keyFactory),
-        m_p2pInterface(_p2pInterface),
+      : m_uuid(std::move(_uuid)),
+        m_keyFactory(std::move(_keyFactory)),
+        m_p2pInterface(std::move(_p2pInterface)),
         m_gatewayStatusFactory(std::make_shared<GatewayStatusFactory>())
     {}
     virtual ~PeersRouterTable() {}
@@ -58,6 +58,9 @@ public:
 
     void asyncBroadcastMsg(
         uint16_t _type, std::string const& _group, uint16_t _moduleID, P2PMessage::Ptr _msg);
+
+    task::Task<void> broadcastMessage(uint16_t type, std::string_view group, uint16_t moduleID,
+        const P2PMessage& header, ::ranges::any_view<bytesConstRef> payloads);
 
     std::set<P2pID> getAllPeers() const;
     GatewayStatus::Ptr gatewayInfo(std::string const& _uuid);
@@ -94,5 +97,4 @@ private:
     std::map<std::string, GatewayStatus::Ptr> m_gatewayInfos;
     mutable SharedMutex x_gatewayInfos;
 };
-}  // namespace gateway
-}  // namespace bcos
+}  // namespace bcos::gateway

@@ -24,7 +24,7 @@
 using namespace bcos;
 using namespace bcos::gateway;
 
-bool P2PMessageV2::encodeHeader(bytes& _buffer)
+bool P2PMessageV2::encodeHeader(bytes& _buffer) const
 {
     auto ret = P2PMessage::encodeHeader(_buffer);
     if (m_version <= (uint16_t)(bcos::protocol::ProtocolVersion::V0))

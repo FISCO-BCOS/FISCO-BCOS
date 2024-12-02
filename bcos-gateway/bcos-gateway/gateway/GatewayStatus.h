@@ -38,21 +38,22 @@ public:
 
     // random choose the p2pNode to send message
     bool randomChooseP2PNode(
-        std::string& _p2pNodeID, uint16_t _type, std::string const& _groupID) const;
+        std::string& _p2pNodeID, uint16_t _type, std::string_view _groupID) const;
 
     // remove the p2p node from the gatewayInfo after the node disconnected
     void removeP2PNode(std::string const& _p2pNodeID);
 
 protected:
     bool randomChooseNode(
-        std::string& _choosedNode, GroupType _type, std::string const& _groupID) const;
+        std::string& _choosedNode, GroupType _type, std::string_view _groupID) const;
 
     void removeP2PIDWithoutLock(std::string const& _groupID, std::string const& _p2pNodeID);
 
 private:
     std::string m_uuid;
     // groupID => groupType => P2PNodeIDList
-    std::map<std::string, std::map<GroupType, std::set<std::string>>> m_groupP2PNodeList;
+    std::map<std::string, std::map<GroupType, std::set<std::string>>, std::less<>>
+        m_groupP2PNodeList;
     mutable std::mutex x_groupP2PNodeList;
 };
 
