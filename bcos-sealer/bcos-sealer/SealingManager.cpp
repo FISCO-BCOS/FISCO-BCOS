@@ -76,10 +76,10 @@ void SealingManager::clearPendingTxs()
     // return the txs back to the txpool
     SEAL_LOG(INFO) << LOG_DESC("clearPendingTxs: return back the unhandled transactions")
                    << LOG_KV("size", pendingTxsSize);
-    HashListPtr unHandledTxs = std::make_shared<HashList>(
+    auto unHandledTxs =
         ::ranges::views::concat(m_pendingTxs, m_pendingSysTxs) |
         ::ranges::views::transform([](auto& transaction) { return transaction->hash(); }) |
-        ::ranges::to<std::vector>);
+        ::ranges::to<std::vector>();
     try
     {
         notifyResetTxsFlag(unHandledTxs, false);
@@ -94,7 +94,7 @@ void SealingManager::clearPendingTxs()
     m_pendingSysTxs.clear();
 }
 
-void SealingManager::notifyResetTxsFlag(HashListPtr _txsHashList, bool _flag, size_t _retryTime)
+void SealingManager::notifyResetTxsFlag(const HashList& _txsHashList, bool _flag, size_t _retryTime)
 {
     m_config->txpool()->asyncMarkTxs(_txsHashList, _flag, -1, HashType(),
         [this, _txsHashList, _flag, _retryTime](Error::Ptr _error) {
@@ -113,12 +113,7 @@ void SealingManager::notifyResetTxsFlag(HashListPtr _txsHashList, bool _flag, si
 
 void SealingManager::notifyResetProposal(bcos::protocol::Block const& _block)
 {
-    auto txsHashList = std::make_shared<HashList>();
-    txsHashList->reserve(_block.transactionsHashSize());
-    for (size_t i = 0; i < _block.transactionsHashSize(); i++)
-    {
-        txsHashList->push_back(_block.transactionHash(i));
-    }
+    auto txsHashList = ::ranges::to<std::vector>(_block.transactionHashes());
     notifyResetTxsFlag(txsHashList, false);
 }
 

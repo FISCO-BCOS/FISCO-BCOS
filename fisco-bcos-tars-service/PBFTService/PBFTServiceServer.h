@@ -70,9 +70,9 @@ public:
         const bcostars::LedgerConfig& _ledgerConfig, tars::TarsCurrentPtr _current) override;
 
     // Note: since the sealer module is integrated with the PBFT, the interface is useless now
-    bcostars::Error asyncSubmitProposal(bool _containSysTxs,
-        const vector<tars::Char>& _proposalData, tars::Int64 _proposalIndex,
-        const vector<tars::Char>& _proposalHash, tars::TarsCurrentPtr _current) override;
+    bcostars::Error asyncSubmitProposal(bool _containSysTxs, const bcostars::Block& _proposalData,
+        tars::Int64 _proposalIndex, const vector<tars::Char>& _proposalHash,
+        tars::TarsCurrentPtr _current) override;
 
     bcostars::Error asyncNotifyConnectedNodes(
         const vector<vector<tars::Char>>& connectedNodes, tars::TarsCurrentPtr current) override

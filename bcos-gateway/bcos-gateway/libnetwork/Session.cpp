@@ -736,3 +736,67 @@ void Session::checkNetworkStatus()
                              << LOG_KV("msg", boost::diagnostic_information(e));
     }
 }
+
+bcos::task::Task<std::unique_ptr<Message>> bcos::gateway::Session::sendMessage(
+    const Message& header, ::ranges::any_view<bytesConstRef> payloads, Options options)
+{
+    auto server = m_server.lock();
+    if (!active() || !server)
+    {
+        SESSION_LOG(WARNING) << "Session inactive";
+        co_return {};
+    }
+
+    std::unique_ptr<Message> response;
+    if (options.response)
+    {
+        auto handler = std::make_shared<ResponseCallback>();
+        handler->callback = [](NetworkException exception, Message::Ptr response) {
+
+        };
+        if (options.timeout > 0)
+        {
+            handler->timeoutHandler.emplace(server->asioInterface()->newTimer(options.timeout));
+            auto session = std::weak_ptr<Session>(shared_from_this());
+            auto seq = header.seq();
+            handler->timeoutHandler->async_wait(
+                [session, seq](const boost::system::error_code& _error) {
+                    try
+                    {
+                        auto s = session.lock();
+                        if (!s)
+                        {
+                            return;
+                        }
+                        s->onTimeout(_error, seq);
+                    }
+                    catch (std::exception const& e)
+                    {
+                        SESSION_LOG(WARNING) << LOG_DESC("async_wait exception")
+                                             << LOG_KV("message", boost::diagnostic_information(e));
+                    }
+                });
+            handler->startTime = utcSteadyTime();
+        }
+        m_sessionCallbackManager->addCallback(header.seq(), handler);
+
+        struct Awaitable
+        {
+        };
+    }
+
+    EncodedMessage encodedMessage;
+    encodedMessage.compress = m_enableCompress;
+    header.encode(encodedMessage);
+
+    if (c_fileLogLevel <= LogLevel::TRACE)
+    {
+        SESSION_LOG(TRACE) << LOG_DESC("Session asyncSendMessage")
+                           << LOG_KV("endpoint", nodeIPEndpoint()) << LOG_KV("seq", header.seq())
+                           << LOG_KV("packetType", header.packetType())
+                           << LOG_KV("ext", header.ext());
+    }
+
+    send(encodedMessage);
+    co_return response;
+}

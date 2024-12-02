@@ -69,7 +69,7 @@ protected:
     virtual bool reachMinSealTimeCondition();
     virtual void clearPendingTxs();
     virtual void notifyResetTxsFlag(
-        bcos::crypto::HashListPtr _txsHash, bool _flag, size_t _retryTime = 0);
+        const bcos::crypto::HashList& _txsHash, bool _flag, size_t _retryTime = 0);
 
     virtual int64_t txsSizeExpectedToFetch();
     virtual size_t pendingTxsSize();

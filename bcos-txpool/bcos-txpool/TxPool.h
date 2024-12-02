@@ -100,7 +100,7 @@ public:
 
     // for consensus and sealer, for batch mark txs sealed flag
     // trigger scene such as view change, submit proposal, etc.
-    void asyncMarkTxs(bcos::crypto::HashListPtr _txsHash, bool _sealedFlag,
+    void asyncMarkTxs(const bcos::crypto::HashList& _txsHash, bool _sealedFlag,
         bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
         std::function<void(Error::Ptr)> _onRecvResponse) override;
 

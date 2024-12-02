@@ -302,3 +302,40 @@ void PeersRouterTable::asyncBroadcastMsg(
         m_p2pInterface->asyncSendMessageByNodeID(peer, _msg, CallbackFuncWithSession());
     }
 }
+
+bcos::task::Task<void> bcos::gateway::PeersRouterTable::broadcastMessage(uint16_t type,
+    std::string_view group, uint16_t moduleID, const P2PMessage& header,
+    ::ranges::any_view<bytesConstRef> payloads)
+{
+    std::vector<std::string> selectedPeers;
+    selectedPeers.reserve(m_gatewayInfos.size());
+    ReadGuard lock(x_gatewayInfos);
+    for (auto const& it : m_gatewayInfos)
+    {
+        // not broadcast message to the gateway-self
+        if (it.first == m_uuid)
+        {
+            continue;
+        }
+        std::string p2pNodeID;
+        if (it.second->randomChooseP2PNode(p2pNodeID, type, group))
+        {
+            selectedPeers.emplace_back(std::move(p2pNodeID));
+        }
+    }
+    lock.release();
+
+    ROUTER_LOG(TRACE) << LOG_BADGE("PeersRouterTable")
+                      << LOG_DESC("broadcastMsg: randomChooseP2PNode") << LOG_KV("nodeType", type)
+                      << LOG_KV("moduleID", moduleID) << LOG_KV("peersSize", selectedPeers.size());
+    for (auto const& peer : selectedPeers)
+    {
+        if (c_fileLogLevel <= TRACE) [[unlikely]]
+        {
+            ROUTER_LOG(TRACE) << LOG_BADGE("PeersRouterTable") << LOG_DESC("asyncBroadcastMsg")
+                              << LOG_KV("nodeType", type) << LOG_KV("moduleID", moduleID)
+                              << LOG_KV("dst", P2PMessage::printP2PIDElegantly(peer));
+        }
+        co_await m_p2pInterface->sendMessageByNodeID(peer, header, payloads);
+    }
+}

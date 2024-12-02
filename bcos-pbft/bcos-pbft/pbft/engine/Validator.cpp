@@ -69,10 +69,10 @@ void TxsValidator::verifyProposal(bcos::crypto::PublicPtr _fromNode,
     m_txPool->asyncVerifyBlock(_fromNode, _proposal->data(), _verifyFinishedHandler);
 }
 
-void TxsValidator::asyncResetTxsFlag(bytesConstRef _data, bool _flag, bool _emptyTxBatchHash)
+void TxsValidator::asyncResetTxsFlag(
+    const protocol::Block& proposal, bool _flag, bool _emptyTxBatchHash)
 {
-    auto block = m_blockFactory->createBlock(_data);
-    auto blockHeader = block->blockHeader();
+    auto blockHeader = proposal.blockHeaderConst();
     if (_flag)
     {
         // already has the reset request
@@ -83,18 +83,18 @@ void TxsValidator::asyncResetTxsFlag(bytesConstRef _data, bool _flag, bool _empt
     }
     try
     {
-        auto txsHash = std::make_shared<HashList>();
-        for (size_t i = 0; i < block->transactionsHashSize(); i++)
+        HashList txsHash;
+        for (size_t i = 0; i < proposal.transactionsHashSize(); i++)
         {
-            txsHash->emplace_back(block->transactionHash(i));
+            txsHash.emplace_back(proposal.transactionHash(i));
         }
-        if (txsHash->empty())
+        if (txsHash.empty())
         {
             return;
         }
         PBFT_LOG(INFO) << LOG_DESC("asyncResetTxsFlag") << LOG_KV("index", blockHeader->number())
                        << LOG_KV("hash", blockHeader->hash().abridged()) << LOG_KV("flag", _flag);
-        asyncResetTxsFlag(block, txsHash, _flag, _emptyTxBatchHash);
+        asyncResetTxsFlag(proposal, txsHash, _flag, _emptyTxBatchHash);
     }
     catch (std::exception const& e)
     {
@@ -104,9 +104,9 @@ void TxsValidator::asyncResetTxsFlag(bytesConstRef _data, bool _flag, bool _empt
 }
 
 void TxsValidator::asyncResetTxsFlag(
-    bcos::protocol::Block::Ptr _block, HashListPtr _txsHashList, bool _flag, bool _emptyTxBatchHash)
+    const protocol::Block& _block, HashList _txsHashList, bool _flag, bool _emptyTxBatchHash)
 {
-    auto blockHeader = _block->blockHeader();
+    auto blockHeader = _block.blockHeaderConst();
     auto proposalNumber = blockHeader->number();
     auto proposalHash = blockHeader->hash();
     if (_emptyTxBatchHash)
@@ -117,8 +117,7 @@ void TxsValidator::asyncResetTxsFlag(
     auto self = std::weak_ptr<TxsValidator>(shared_from_this());
     auto startT = utcSteadyTime();
     m_txPool->asyncMarkTxs(_txsHashList, _flag, proposalNumber, proposalHash,
-        [self, _block, blockHeader, _txsHashList, _flag, _emptyTxBatchHash, startT](
-            Error::Ptr _error) {
+        [self, blockHeader, _txsHashList, _flag, _emptyTxBatchHash, startT](Error::Ptr _error) {
             auto validator = self.lock();
             if (!validator)
             {

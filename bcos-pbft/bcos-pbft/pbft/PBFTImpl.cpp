@@ -48,12 +48,12 @@ void PBFTImpl::stop()
     PBFT_LOG(INFO) << LOG_DESC("Stop the PBFT module.");
 }
 
-void PBFTImpl::asyncSubmitProposal(bool _containSysTxs, bytesConstRef _proposalData,
+void PBFTImpl::asyncSubmitProposal(bool _containSysTxs, const protocol::Block& proposal,
     bcos::protocol::BlockNumber _proposalIndex, bcos::crypto::HashType const& _proposalHash,
     std::function<void(Error::Ptr)> _onProposalSubmitted)
 {
     return m_pbftEngine->asyncSubmitProposal(
-        _containSysTxs, _proposalData, _proposalIndex, _proposalHash, _onProposalSubmitted);
+        _containSysTxs, proposal, _proposalIndex, _proposalHash, _onProposalSubmitted);
 }
 
 void PBFTImpl::asyncGetPBFTView(std::function<void(Error::Ptr, ViewType)> _onGetView)
