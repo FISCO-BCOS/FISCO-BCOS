@@ -159,7 +159,7 @@ public:
 
     void executeWorkerByRoundbin() { return PBFTEngine::executeWorker(); }
 
-    void onRecvProposal(bool _containSysTxs, bytesConstRef _proposalData,
+    void onRecvProposal(bool _containSysTxs, const protocol::Block& _proposalData,
         bcos::protocol::BlockNumber _proposalIndex,
         bcos::crypto::HashType const& _proposalHash) override
     {

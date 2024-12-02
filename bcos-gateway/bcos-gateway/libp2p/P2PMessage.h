@@ -57,7 +57,7 @@ public:
     /// groupID length(2) + nodeID length(2) + dst nodeID count(1) + moduleID(2)
     const static size_t OPTIONS_MIN_LENGTH = 7;
 
-    P2PMessageOptions() { m_srcNodeID = std::make_shared<bytes>(); }
+    P2PMessageOptions() = default;
     P2PMessageOptions(const P2PMessageOptions&) = default;
     P2PMessageOptions(P2PMessageOptions&&) = default;
     P2PMessageOptions& operator=(const P2PMessageOptions&) = default;
@@ -72,7 +72,7 @@ public:
     /// The maximum gateway transport protocol supported dst nodeID count  127
     constexpr static size_t MAX_DST_NODEID_COUNT = 255;
 
-    bool encode(bytes& _buffer);
+    bool encode(bytes& _buffer) const;
     int32_t decode(const bytesConstRef& _buffer);
 
     uint16_t moduleID() const { return m_moduleID; }
@@ -81,20 +81,17 @@ public:
     std::string groupID() const { return m_groupID; }
     void setGroupID(const std::string& _groupID) { m_groupID = _groupID; }
 
-    const std::shared_ptr<bytes>& srcNodeID() const { return m_srcNodeID; }
-    void setSrcNodeID(std::shared_ptr<bytes> _srcNodeID) { m_srcNodeID = std::move(_srcNodeID); }
+    bytesConstRef srcNodeID() const { return ref(m_srcNodeID); }
+    void setSrcNodeID(bytes _srcNodeID) { m_srcNodeID = std::move(_srcNodeID); }
 
-    const std::vector<std::shared_ptr<bytes>>& dstNodeIDs() const { return m_dstNodeIDs; }
-    void setDstNodeIDs(std::vector<std::shared_ptr<bytes>> _dstNodeIDs)
-    {
-        m_dstNodeIDs = std::move(_dstNodeIDs);
-    }
-    std::vector<std::shared_ptr<bytes>>& mutableDstNodeIDs() { return m_dstNodeIDs; }
+    const std::vector<bytes>& dstNodeIDs() const { return m_dstNodeIDs; }
+    void setDstNodeIDs(std::vector<bytes> _dstNodeIDs) { m_dstNodeIDs = std::move(_dstNodeIDs); }
+    std::vector<bytes>& mutableDstNodeIDs() { return m_dstNodeIDs; }
 
 protected:
     std::string m_groupID;
-    std::shared_ptr<bytes> m_srcNodeID;
-    std::vector<std::shared_ptr<bytes>> m_dstNodeIDs;
+    bytes m_srcNodeID;
+    std::vector<bytes> m_dstNodeIDs;
     uint16_t m_moduleID = 0;
 };
 
@@ -146,8 +143,7 @@ public:
         if (hasOptions() && options().srcNodeID())
         {
             length += P2PMessageOptions::OPTIONS_MIN_LENGTH;
-            length +=
-                (int64_t)(options().srcNodeID()->size() * (1 + options().dstNodeIDs().size()));
+            length += (int64_t)(options().srcNodeID().size() * (1 + options().dstNodeIDs().size()));
         }
         return length;
     }
@@ -173,7 +169,7 @@ public:
 
     void setRespPacket() { m_ext |= bcos::protocol::MessageExtFieldFlag::RESPONSE; }
     bool encode(bytes& _buffer) override;
-    bool encode(EncodedMessage& _buffer) override;
+    bool encode(EncodedMessage& _buffer) const override;
     int32_t decode(const bytesConstRef& _buffer) override;
     bool isRespPacket() const override
     {
@@ -181,7 +177,7 @@ public:
     }
 
     // compress payload if payload need to be compressed
-    bool tryToCompressPayload(bytes& compressData);
+    bool tryToCompressPayload(bytes& compressData) const;
 
     bool hasOptions() const
     {
@@ -206,11 +202,8 @@ public:
     // Note: only for log
     std::string_view dstP2PNodeIDView() const { return printP2PIDElegantly(m_dstP2PNodeID); }
 
-    virtual void setExtAttributes(MessageExtAttributes::Ptr _extAttr)
-    {
-        m_extAttr = std::move(_extAttr);
-    }
-    MessageExtAttributes::Ptr extAttributes() override { return m_extAttr; }
+    virtual void setExtAttributes(std::any _extAttr) { m_extAttr = std::move(_extAttr); }
+    const std::any& extAttributes() const override { return m_extAttr; }
 
     static inline std::string_view printP2PIDElegantly(std::string_view p2pId) noexcept
     {
@@ -221,15 +214,16 @@ public:
         return p2pId.substr(RSA_PUBLIC_KEY_PREFIX, RSA_PUBLIC_KEY_TRUNC);
     }
 
+    virtual bool encodeHeader(bytes& _buffer) const;
+
 protected:
     virtual int32_t decodeHeader(const bytesConstRef& _buffer);
-    virtual bool encodeHeader(bytes& _buffer);
 
-    uint32_t m_length = 0;
+    mutable uint32_t m_length = 0;
     uint16_t m_version = (uint16_t)(bcos::protocol::ProtocolVersion::V0);
     uint16_t m_packetType = 0;
     uint32_t m_seq = 0;
-    uint16_t m_ext = 0;
+    mutable uint16_t m_ext = 0;
 
     // the src p2pNodeID, for message forward, only encode into the P2PMessageV2
     std::string m_srcP2PNodeID;
@@ -239,7 +233,7 @@ protected:
     P2PMessageOptions m_options;  ///< options fields
     bytes m_payload;              ///< payload data
 
-    MessageExtAttributes::Ptr m_extAttr = nullptr;  ///< message additional attributes
+    std::any m_extAttr = nullptr;  ///< message additional attributes
 };
 
 class P2PMessageFactory : public MessageFactory

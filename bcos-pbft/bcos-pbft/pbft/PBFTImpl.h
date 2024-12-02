@@ -39,7 +39,7 @@ public:
     void start() override;
     void stop() override;
 
-    void asyncSubmitProposal(bool _containSysTxs, bytesConstRef _proposalData,
+    void asyncSubmitProposal(bool _containSysTxs, const protocol::Block& proposal,
         bcos::protocol::BlockNumber _proposalIndex, bcos::crypto::HashType const& _proposalHash,
         std::function<void(Error::Ptr)> _onProposalSubmitted) override;
 

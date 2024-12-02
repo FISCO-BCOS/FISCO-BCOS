@@ -5,7 +5,7 @@
 module bcostars {
     interface PBFTService {
         Error asyncNotifyConsensusMessage(string _uuid, vector<byte> _nodeId, vector<byte> _data);
-        Error asyncSubmitProposal(bool _containSysTxs, vector<byte> _proposalData, long _proposalIndex, vector<byte> _proposalHash);
+        Error asyncSubmitProposal(bool _containSysTxs, Block _proposalData, long _proposalIndex, vector<byte> _proposalHash);
         Error asyncGetPBFTView(out long _view);
         Error asyncCheckBlock(Block _block, out bool _verifyResult);
         Error asyncNotifyNewBlock(LedgerConfig _ledgerConfig);

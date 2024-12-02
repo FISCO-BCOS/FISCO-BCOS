@@ -75,9 +75,8 @@ using P2pID = std::string;
 using P2pIDs = std::set<std::string>;
 struct Options
 {
-    Options() {}
-    Options(uint32_t _timeout) : timeout(_timeout) {}
     uint32_t timeout = 0;  ///< The timeout value of async function, in milliseconds.
+    bool response = true;  ///< Whether to wait for a response.
 };
 
 class NetworkException : public std::exception

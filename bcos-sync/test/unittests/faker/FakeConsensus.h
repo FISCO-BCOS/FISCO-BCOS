@@ -44,8 +44,8 @@ public:
     void stop() override {}
 
     // useless for bcos-sync
-    void asyncSubmitProposal(
-        bool, bytesConstRef, BlockNumber, HashType const&, std::function<void(Error::Ptr)>) override
+    void asyncSubmitProposal(bool, const protocol::Block&, BlockNumber, HashType const&,
+        std::function<void(Error::Ptr)>) override
     {}
 
     // useless for bcos-sync

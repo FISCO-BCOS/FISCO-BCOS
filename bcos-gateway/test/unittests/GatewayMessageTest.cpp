@@ -246,7 +246,7 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_optionsCodec)
         std::string srcNodeID = "nodeID";
 
         options->setGroupID(groupID);
-        auto srcNodeIDPtr = std::make_shared<bytes>(srcNodeID.begin(), srcNodeID.end());
+        bytes srcNodeIDPtr(srcNodeID.begin(), srcNodeID.end());
         options->setSrcNodeID(srcNodeIDPtr);
         auto buffer = std::make_shared<bytes>();
         auto r = options->encode(*buffer.get());
@@ -258,7 +258,7 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_optionsCodec)
         std::string groupID = "group";
         std::string srcNodeID = std::string(100000, 'a');
         options->setGroupID(groupID);
-        auto srcNodeIDPtr = std::make_shared<bytes>(srcNodeID.begin(), srcNodeID.end());
+        bytes srcNodeIDPtr(srcNodeID.begin(), srcNodeID.end());
         options->setSrcNodeID(srcNodeIDPtr);
         auto buffer = std::make_shared<bytes>();
         auto r = options->encode(*buffer.get());
@@ -271,8 +271,8 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_optionsCodec)
         std::string srcNodeID = "nodeID";
         std::string dstNodeID = std::string(100000, 'a');
 
-        auto srcNodeIDPtr = std::make_shared<bytes>(srcNodeID.begin(), srcNodeID.end());
-        auto dstNodeIDPtr = std::make_shared<bytes>(dstNodeID.begin(), dstNodeID.end());
+        auto srcNodeIDPtr = bytes(srcNodeID.begin(), srcNodeID.end());
+        auto dstNodeIDPtr = bytes(dstNodeID.begin(), dstNodeID.end());
 
         options->setGroupID(groupID);
         options->setSrcNodeID(srcNodeIDPtr);
@@ -291,7 +291,7 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_optionsCodec)
 
         options->setModuleID(moduleID);
         options->setGroupID(groupID);
-        auto srcNodeIDPtr = std::make_shared<bytes>(srcNodeID.begin(), srcNodeID.end());
+        auto srcNodeIDPtr = bytes(srcNodeID.begin(), srcNodeID.end());
         options->setSrcNodeID(srcNodeIDPtr);
         auto buffer = std::make_shared<bytes>();
         auto r = options->encode(*buffer.get());
@@ -303,7 +303,7 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_optionsCodec)
         BOOST_CHECK_EQUAL(groupID, decodeOptions->groupID());
         BOOST_CHECK_EQUAL(moduleID, decodeOptions->moduleID());
         BOOST_CHECK_EQUAL(srcNodeID,
-            std::string(decodeOptions->srcNodeID()->begin(), decodeOptions->srcNodeID()->end()));
+            std::string(decodeOptions->srcNodeID().begin(), decodeOptions->srcNodeID().end()));
         BOOST_CHECK_EQUAL(0, decodeOptions->dstNodeIDs().size());
     }
 
@@ -314,8 +314,8 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_optionsCodec)
         std::string dstNodeID = "nodeID";
         uint16_t moduleID = 11;
 
-        auto srcNodeIDPtr = std::make_shared<bytes>(srcNodeID.begin(), srcNodeID.end());
-        auto dstNodeIDPtr = std::make_shared<bytes>(dstNodeID.begin(), dstNodeID.end());
+        auto srcNodeIDPtr = bytes(srcNodeID.begin(), srcNodeID.end());
+        auto dstNodeIDPtr = bytes(dstNodeID.begin(), dstNodeID.end());
 
         options->setModuleID(moduleID);
         options->setGroupID(groupID);
@@ -335,12 +335,12 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_optionsCodec)
         BOOST_CHECK_EQUAL(groupID, decodeOptions->groupID());
         BOOST_CHECK_EQUAL(moduleID, decodeOptions->moduleID());
         BOOST_CHECK_EQUAL(srcNodeID,
-            std::string(decodeOptions->srcNodeID()->begin(), decodeOptions->srcNodeID()->end()));
+            std::string(decodeOptions->srcNodeID().begin(), decodeOptions->srcNodeID().end()));
         BOOST_CHECK_EQUAL(3, decodeOptions->dstNodeIDs().size());
         for (size_t i = 0; i < 3; ++i)
         {
-            BOOST_CHECK_EQUAL(dstNodeID, std::string(decodeOptions->dstNodeIDs()[i]->begin(),
-                                             decodeOptions->dstNodeIDs()[i]->end()));
+            BOOST_CHECK_EQUAL(dstNodeID, std::string(decodeOptions->dstNodeIDs()[i].begin(),
+                                             decodeOptions->dstNodeIDs()[i].end()));
         }
     }
 }
@@ -367,8 +367,8 @@ void testP2PMessageCodec(std::shared_ptr<MessageFactory> factory, uint32_t _vers
     std::string srcNodeID = "nodeID";
     std::string dstNodeID = "nodeID";
 
-    auto srcNodeIDPtr = std::make_shared<bytes>(srcNodeID.begin(), srcNodeID.end());
-    auto dstNodeIDPtr = std::make_shared<bytes>(dstNodeID.begin(), dstNodeID.end());
+    auto srcNodeIDPtr = bytes(srcNodeID.begin(), srcNodeID.end());
+    auto dstNodeIDPtr = bytes(dstNodeID.begin(), dstNodeID.end());
 
     options->setGroupID(groupID);
     options->setSrcNodeID(srcNodeIDPtr);
@@ -394,13 +394,13 @@ void testP2PMessageCodec(std::shared_ptr<MessageFactory> factory, uint32_t _vers
 
     auto decodeOptions = decodeMsg->options();
     BOOST_CHECK_EQUAL(groupID, decodeOptions.groupID());
-    BOOST_CHECK_EQUAL(srcNodeID,
-        std::string(decodeOptions.srcNodeID()->begin(), decodeOptions.srcNodeID()->end()));
+    BOOST_CHECK_EQUAL(
+        srcNodeID, std::string(decodeOptions.srcNodeID().begin(), decodeOptions.srcNodeID().end()));
     BOOST_CHECK_EQUAL(2, decodeOptions.dstNodeIDs().size());
     for (size_t i = 0; i < 2; ++i)
     {
-        BOOST_CHECK_EQUAL(dstNodeID, std::string(decodeOptions.dstNodeIDs()[i]->begin(),
-                                         decodeOptions.dstNodeIDs()[i]->end()));
+        BOOST_CHECK_EQUAL(dstNodeID, std::string(decodeOptions.dstNodeIDs()[i].begin(),
+                                         decodeOptions.dstNodeIDs()[i].end()));
     }
 }
 
@@ -441,8 +441,8 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_compress)
     std::string srcNodeID = "nodeID";
     std::string dstNodeID = "nodeID";
 
-    auto srcNodeIDPtr = std::make_shared<bytes>(srcNodeID.begin(), srcNodeID.end());
-    auto dstNodeIDPtr = std::make_shared<bytes>(dstNodeID.begin(), dstNodeID.end());
+    auto srcNodeIDPtr = bytes(srcNodeID.begin(), srcNodeID.end());
+    auto dstNodeIDPtr = bytes(dstNodeID.begin(), dstNodeID.end());
 
     options->setGroupID(groupID);
     options->setSrcNodeID(srcNodeIDPtr);

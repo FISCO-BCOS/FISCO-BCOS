@@ -22,24 +22,11 @@
 
 #include <bcos-utilities/Common.h>
 #include <boost/asio/buffer.hpp>
+#include <any>
 
 
 namespace bcos::gateway
 {
-
-class MessageExtAttributes
-{
-public:
-    using Ptr = std::shared_ptr<MessageExtAttributes>;
-    using ConstPtr = std::shared_ptr<const MessageExtAttributes>;
-
-    MessageExtAttributes() = default;
-    MessageExtAttributes(const MessageExtAttributes&) = delete;
-    MessageExtAttributes(MessageExtAttributes&&) = delete;
-    MessageExtAttributes& operator=(MessageExtAttributes&&) = delete;
-    MessageExtAttributes& operator=(const MessageExtAttributes&) = delete;
-    virtual ~MessageExtAttributes() = default;
-};
 
 struct EncodedMessage
 {
@@ -77,10 +64,8 @@ public:
         bcos::bytes& _buffer) = 0;
 
     virtual int32_t decode(const bytesConstRef& _buffer) = 0;
-
-    virtual bool encode(EncodedMessage& _buffer) = 0;
-
-    virtual MessageExtAttributes::Ptr extAttributes() = 0;
+    virtual bool encode(EncodedMessage& _buffer) const = 0;
+    virtual const std::any& extAttributes() const = 0;
 
     // TODO: move the follow interfaces to P2PMessage
     virtual std::string const& srcP2PNodeID() const = 0;

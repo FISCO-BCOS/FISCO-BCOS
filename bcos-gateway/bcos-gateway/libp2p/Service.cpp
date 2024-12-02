@@ -14,6 +14,7 @@
 #include <bcos-gateway/libp2p/P2PSession.h>  // for P2PSession
 #include <bcos-gateway/libp2p/Service.h>
 #include <boost/random.hpp>
+#include <boost/throw_exception.hpp>
 #include <utility>
 
 using namespace bcos;
@@ -810,4 +811,31 @@ void Service::updatePeerWhitelist(const std::set<std::string>& _strList, const b
             session.second->session()->disconnect(DisconnectReason::NotInWhitelistReason);
         }
     }
+}
+
+bcos::task::Task<void> bcos::gateway::Service::sendMessageByNodeID(P2pID nodeID,
+    const P2PMessage& header, ::ranges::any_view<bytesConstRef> payloads, Options options)
+{
+    if (nodeID == id())
+    {
+        // ignore myself
+        co_return;
+    }
+
+    P2PSession::Ptr session;
+    std::unique_lock lock(x_sessions);
+    auto it = m_sessions.find(nodeID);
+    if (it != m_sessions.end() && it->second->active())
+    {
+        session = it->second;
+    }
+    lock.release();
+
+    if (!session)
+    {
+        BOOST_THROW_EXCEPTION(
+            NetworkException(-1, "send message failed for no network established"));
+    }
+
+    co_await session->session()->sendMessage(header, std::move(payloads), {});
 }

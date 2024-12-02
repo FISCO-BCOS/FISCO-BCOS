@@ -114,12 +114,10 @@ bcostars::Error TxPoolServiceServer::asyncMarkTxs(const vector<vector<tars::Char
     tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
-    auto hashList = std::make_shared<std::vector<bcos::crypto::HashType>>();
-    for (auto hashData : txHashs)
-    {
-        hashList->push_back(bcos::crypto::HashType(
-            reinterpret_cast<const bcos::byte*>(hashData.data()), hashData.size()));
-    }
+    auto hashList = ::ranges::views::transform(txHashs, [](auto& txHash) {
+        return bcos::crypto::HashType(
+            reinterpret_cast<const bcos::byte*>(txHash.data()), txHash.size());
+    }) | ::ranges::to<std::vector>();
     auto batchHash = bcos::crypto::HashType(
         reinterpret_cast<const bcos::byte*>(_batchHash.data()), _batchHash.size());
     m_txpoolInitializer->txpool()->asyncMarkTxs(
