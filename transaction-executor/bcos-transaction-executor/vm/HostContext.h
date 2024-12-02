@@ -365,8 +365,6 @@ public:
     friend task::Task<void> prepare(HostContext& hostContext)
     {
         auto const& ref = hostContext.message();
-        assert(!concepts::bytebuffer::equalTo(
-            ref.code_address.bytes, executor::EMPTY_EVM_ADDRESS.bytes));
         assert(
             !concepts::bytebuffer::equalTo(ref.recipient.bytes, executor::EMPTY_EVM_ADDRESS.bytes));
         if (ref.kind == EVMC_CREATE || ref.kind == EVMC_CREATE2)
@@ -411,6 +409,16 @@ public:
 
         try
         {
+            // 先转账，再执行
+            // Transfer first, then proceed execute
+            if (hostContext.m_ledgerConfig.get().features().get(
+                    ledger::Features::Flag::feature_balance) &&
+                !hostContext.m_ledgerConfig.get().features().get(
+                    ledger::Features::Flag::feature_balance_policy1))
+            {
+                co_await hostContext.transferBalance(ref);
+            }
+
             if (!evmResult)
             {
                 if (ref.kind == EVMC_CREATE || ref.kind == EVMC_CREATE2)
@@ -489,13 +497,6 @@ public:
                                         << evmResult->gas_left;
             }
         }
-        else if (hostContext.m_ledgerConfig.get().features().get(
-                     ledger::Features::Flag::feature_balance) &&
-                 !hostContext.m_ledgerConfig.get().features().get(
-                     ledger::Features::Flag::feature_balance_policy1))
-        {
-            co_await hostContext.transferBalance(ref);
-        }
 
         // 如果本次调用的sender或recipient是系统合约，不消耗gas
         // If the sender or recipient of this call is a system contract, gas is not consumed
@@ -520,8 +521,6 @@ public:
         }
         co_return std::move(*evmResult);
     }
-
-    // task::Task<void> settled() {}
 
     task::Task<EVMCResult> externalCall(const evmc_message& message, auto&&... /*unused*/)
     {
@@ -672,24 +671,22 @@ private:
                 buildLegacyExternalCaller(), m_precompiledManager.get(), m_contextID, m_seq,
                 m_ledgerConfig.get().authCheckStatus());
         }
-        else
-        {
-            if (!m_executable)
-            {
-                if (m_executable = co_await getExecutable(m_rollbackableStorage.get(),
-                        ref.code_address, m_revision,
-                        m_ledgerConfig.get().features().get(
-                            ledger::Features::Flag::feature_raw_address));
-                    !m_executable)
-                {
-                    BOOST_THROW_EXCEPTION(NotFoundCodeError());
-                }
-            }
 
-            co_return m_executable->m_vmInstance.execute(interface, this, m_revision,
-                std::addressof(ref), (const uint8_t*)m_executable->m_code->data(),
-                m_executable->m_code->size());
+        if (!m_executable)
+        {
+            if (m_executable = co_await getExecutable(m_rollbackableStorage.get(), ref.code_address,
+                    m_revision,
+                    m_ledgerConfig.get().features().get(
+                        ledger::Features::Flag::feature_raw_address));
+                !m_executable)
+            {
+                BOOST_THROW_EXCEPTION(NotFoundCodeError());
+            }
         }
+
+        co_return m_executable->m_vmInstance.execute(interface, this, m_revision,
+            std::addressof(ref), (const uint8_t*)m_executable->m_code->data(),
+            m_executable->m_code->size());
     }
 };
 
