@@ -490,13 +490,11 @@ public:
             }
         }
         else if (hostContext.m_ledgerConfig.get().features().get(
-                     ledger::Features::Flag::feature_balance))
+                     ledger::Features::Flag::feature_balance) &&
+                 !hostContext.m_ledgerConfig.get().features().get(
+                     ledger::Features::Flag::feature_balance_policy1))
         {
-            if (!hostContext.m_ledgerConfig.get().features().get(
-                    ledger::Features::Flag::feature_balance_policy1))
-            {
-                co_await hostContext.transferBalance(ref);
-            }
+            co_await hostContext.transferBalance(ref);
         }
 
         // 如果本次调用的sender或recipient是系统合约，不消耗gas
