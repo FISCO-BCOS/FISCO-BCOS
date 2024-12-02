@@ -37,7 +37,7 @@ bool P2PMessageOptions::encode(bytes& _buffer) const
                           << LOG_KV("groupID length", m_groupID.size());
         return false;
     }
-    if (!m_srcNodeID.empty() || (m_srcNodeID.size() > MAX_NODEID_LENGTH))
+    if (m_srcNodeID.empty() || (m_srcNodeID.size() > MAX_NODEID_LENGTH))
     {
         P2PMSG_LOG(ERROR) << LOG_DESC("srcNodeID length valid")
                           << LOG_KV("srcNodeID length", m_srcNodeID.size());
