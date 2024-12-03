@@ -680,6 +680,10 @@ private:
                                                   ledger::Features::Flag::feature_raw_address));
             !m_executable)
         {
+            if (ref.input_size > 0)
+            {
+                BOOST_THROW_EXCEPTION(NotFoundCodeError());
+            }
             auto status = EVMC_SUCCESS;
             auto gasLeft = ref.gas - executor::BALANCE_TRANSFER_GAS;
             if (ref.gas < executor::BALANCE_TRANSFER_GAS)
