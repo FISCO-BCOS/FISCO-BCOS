@@ -295,7 +295,7 @@ private:
     // timer to check the connection
     std::atomic<uint64_t> m_lastReadTime;
     std::atomic<uint64_t> m_lastWriteTime;
-    std::shared_ptr<bcos::Timer> m_idleCheckTimer;
+    bcos::Timer m_idleCheckTimer;
     std::string m_hostNodeID;
 };
 

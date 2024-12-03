@@ -19,17 +19,8 @@
  */
 
 #include "bcos-front/FrontMessage.h"
-#include "bcos-gateway/GatewayConfig.h"
-#include "bcos-gateway/GatewayFactory.h"
-#include "bcos-gateway/gateway/FrontServiceInfo.h"
-#include "bcos-gateway/gateway/GatewayStatus.h"
-#include "bcos-gateway/libnetwork/Session.h"
-#include "bcos-gateway/libnetwork/Socket.h"
-#include "bcos-gateway/libp2p/P2PMessageV2.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
 #include "bcos-gateway/libp2p/Service.h"
-#include "bcos-gateway/libp2p/ServiceV2.h"
-#include "bcos-gateway/protocol/GatewayNodeStatus.h"
 #include "bcos-utilities/BoostLog.h"
 #include "filter/Filter.h"
 #include <bcos-framework/protocol/CommonError.h>
@@ -40,8 +31,6 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>
 #include <json/json.h>
-#include <algorithm>
-#include <random>
 #include <string>
 #include <vector>
 

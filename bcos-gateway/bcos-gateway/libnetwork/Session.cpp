@@ -9,7 +9,6 @@
 
 #include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-utilities/BoostLog.h"
-#include "bcos-utilities/CompositeBuffer.h"
 #include <bcos-gateway/libnetwork/ASIOInterface.h>  // for ASIOIn...
 #include <bcos-gateway/libnetwork/Common.h>         // for SESSIO...
 #include <bcos-gateway/libnetwork/Host.h>           // for Host
@@ -17,11 +16,7 @@
 #include <bcos-gateway/libnetwork/SessionFace.h>  // for Respon...
 #include <bcos-gateway/libnetwork/SocketFace.h>   // for Socket...
 #include <boost/asio/buffer.hpp>
-#include <chrono>
 #include <cstddef>
-#include <fstream>
-#include <iterator>
-#include <mutex>
 #include <range/v3/view/transform.hpp>
 #include <utility>
 
@@ -33,11 +28,11 @@ Session::Session(size_t _recvBufferSize, bool _forceSize)
   : m_maxRecvBufferSize(_recvBufferSize < MIN_SESSION_RECV_BUFFER_SIZE ?
                             MIN_SESSION_RECV_BUFFER_SIZE :
                             _recvBufferSize),
-    m_recvBuffer(_forceSize ? _recvBufferSize : MIN_SESSION_RECV_BUFFER_SIZE)
+    m_recvBuffer(_forceSize ? _recvBufferSize : MIN_SESSION_RECV_BUFFER_SIZE),
+    m_idleCheckTimer(m_socket->ioService(), m_idleTimeInterval, "idleChecker")
 {
     SESSION_LOG(INFO) << "[Session::Session] this=" << this
                       << LOG_KV("recvBufferSize", m_maxRecvBufferSize);
-    m_idleCheckTimer = std::make_shared<bcos::Timer>(m_idleTimeInterval, "idleChecker");
 }
 
 Session::~Session() noexcept
@@ -45,6 +40,7 @@ Session::~Session() noexcept
     SESSION_LOG(INFO) << "[Session::~Session] this=" << this;
     try
     {
+        m_idleCheckTimer.stop();
         if (m_socket)
         {
             bi::tcp::socket& socket = m_socket->ref();
@@ -52,10 +48,6 @@ Session::~Session() noexcept
             {
                 socket.close();
             }
-        }
-        if (m_idleCheckTimer)
-        {
-            m_idleCheckTimer->stop();
         }
     }
     catch (...)
@@ -449,14 +441,14 @@ void Session::start()
     }
 
     auto self = weak_from_this();
-    m_idleCheckTimer->registerTimeoutHandler([self]() {
+    m_idleCheckTimer.registerTimeoutHandler([self]() {
         auto session = self.lock();
         if (session)
         {
             session->checkNetworkStatus();
         }
     });
-    m_idleCheckTimer->start();
+    m_idleCheckTimer.start();
 
     SESSION_LOG(INFO) << "[start] start session " << LOG_KV("this", this);
 }
@@ -705,7 +697,7 @@ void Session::onTimeout(const boost::system::error_code& error, uint32_t seq)
 
 void Session::checkNetworkStatus()
 {
-    m_idleCheckTimer->restart();
+    m_idleCheckTimer.restart();
     try
     {
         auto now = utcSteadyTime();
