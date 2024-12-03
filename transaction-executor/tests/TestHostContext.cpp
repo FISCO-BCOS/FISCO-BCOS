@@ -496,6 +496,7 @@ BOOST_AUTO_TEST_CASE(transferBalance)
         message.sender = bcos::unhexAddress("0000000000000000000000000000000000000001");
         message.recipient = bcos::unhexAddress("0000000000000000000000000000000000000002");
         message.value = bcos::toEvmC(bcos::u256(1000));
+        message.kind = EVMC_CALL;
 
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> senderAccount(
             rollbackableStorage, message.sender, false);
@@ -510,7 +511,22 @@ BOOST_AUTO_TEST_CASE(transferBalance)
                 bcos::task::syncWait);
         co_await prepare(transferHostContext);
         auto evmResult = co_await execute(transferHostContext);
-        BOOST_CHECK(evmResult.status_code);
+        BOOST_CHECK_EQUAL(evmResult.status_code, EVMC_OUT_OF_GAS);
+
+        message.gas = 21000;
+        evmResult = co_await execute(transferHostContext);
+        BOOST_CHECK_EQUAL(evmResult.status_code, EVMC_SUCCESS);
+        BOOST_CHECK_EQUAL(evmResult.gas_left, 0);
+
+        auto features = ledgerConfig.features();
+        features.set(bcos::ledger::Features::Flag::feature_balance);
+        ledgerConfig.setFeatures(features);
+
+        evmResult = co_await execute(transferHostContext);
+        BOOST_CHECK_EQUAL(evmResult.status_code, EVMC_SUCCESS);
+        BOOST_CHECK_EQUAL(co_await bcos::ledger::account::balance(senderAccount), bcos::u256(1));
+        BOOST_CHECK_EQUAL(
+            co_await bcos::ledger::account::balance(recipientAccount), bcos::u256(1000));
 
         co_return;
     }());

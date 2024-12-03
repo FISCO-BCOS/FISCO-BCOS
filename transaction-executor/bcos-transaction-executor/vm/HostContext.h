@@ -412,9 +412,7 @@ public:
             // 先转账，再执行
             // Transfer first, then proceed execute
             if (hostContext.m_ledgerConfig.get().features().get(
-                    ledger::Features::Flag::feature_balance) &&
-                !hostContext.m_ledgerConfig.get().features().get(
-                    ledger::Features::Flag::feature_balance_policy1))
+                    ledger::Features::Flag::feature_balance))
             {
                 co_await hostContext.transferBalance(ref);
             }
@@ -672,16 +670,31 @@ private:
                 m_ledgerConfig.get().authCheckStatus());
         }
 
-        if (!m_executable)
+        // 因为流水线的原因，可能该合约还没创建
+        // Due to the pipeline process, it is possible that the contract has not
+        // yet been created
+        if (m_executable = m_executable ? m_executable :
+                                          co_await getExecutable(m_rollbackableStorage.get(),
+                                              ref.code_address, m_revision,
+                                              m_ledgerConfig.get().features().get(
+                                                  ledger::Features::Flag::feature_raw_address));
+            !m_executable)
         {
-            if (m_executable = co_await getExecutable(m_rollbackableStorage.get(), ref.code_address,
-                    m_revision,
-                    m_ledgerConfig.get().features().get(
-                        ledger::Features::Flag::feature_raw_address));
-                !m_executable)
+            auto status = EVMC_SUCCESS;
+            auto gasLeft = ref.gas - executor::BALANCE_TRANSFER_GAS;
+            if (ref.gas < executor::BALANCE_TRANSFER_GAS)
             {
-                BOOST_THROW_EXCEPTION(NotFoundCodeError());
+                status = EVMC_OUT_OF_GAS;
+                gasLeft = ref.gas;
             }
+            co_return EVMCResult{evmc_result{.status_code = status,
+                .gas_left = gasLeft,
+                .gas_refund = 0,
+                .output_data = nullptr,
+                .output_size = 0,
+                .release = nullptr,
+                .create_address = {},
+                .padding = {}}};
         }
 
         co_return m_executable->m_vmInstance.execute(interface, this, m_revision,
