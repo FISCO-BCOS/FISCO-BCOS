@@ -82,8 +82,6 @@ public:
         return false;
     }
 
-    // void realloc() {}
-
     void moveToHeader()
     {
         if (m_writePos > m_readPos)
@@ -130,7 +128,8 @@ public:
     constexpr static const std::size_t MIN_SESSION_RECV_BUFFER_SIZE =
         static_cast<std::size_t>(512 * 1024);
 
-    Session(size_t _recvBufferSize = MIN_SESSION_RECV_BUFFER_SIZE, bool _forceSize = false);
+    Session(std::shared_ptr<SocketFace> socket,
+        size_t _recvBufferSize = MIN_SESSION_RECV_BUFFER_SIZE, bool _forceSize = false);
 
     Session(const Session&) = delete;
     Session(Session&&) = delete;
@@ -226,8 +225,9 @@ public:
      * @param _maxSendMsgCount
      * @return bool
      */
+    using Payload = std::variant<bytesConstRef, bytes>;
     bool tryPopSomeEncodedMsgs(
-        std::vector<EncodedMessage>& encodedMsgs, size_t _maxSendDataSize, size_t _maxSendMsgCount);
+        std::vector<Payload>& encodedMsgs, size_t _maxSendDataSize, size_t _maxSendMsgCount);
 
 protected:
     virtual void checkNetworkStatus();
@@ -274,7 +274,7 @@ private:
 
     MessageFactory::Ptr m_messageFactory;
 
-    tbb::concurrent_queue<EncodedMessage> m_writeQueue;
+    tbb::concurrent_queue<Payload> m_writeQueue;
     std::atomic_bool m_writing = false;
 
     mutable bcos::Mutex x_info;
@@ -297,6 +297,8 @@ private:
     std::atomic<uint64_t> m_lastWriteTime;
     bcos::Timer m_idleCheckTimer;
     std::string m_hostNodeID;
+
+    std::vector<Payload> m_writingPayloads;
 };
 
 class SessionFactory
@@ -323,10 +325,10 @@ public:
         std::shared_ptr<SocketFace> const& _socket, MessageFactory::Ptr& _messageFactory,
         SessionCallbackManagerInterface::Ptr& _sessionCallbackManager)
     {
-        std::shared_ptr<Session> session = std::make_shared<Session>(m_sessionRecvBufferSize);
+        std::shared_ptr<Session> session =
+            std::make_shared<Session>(_socket, m_sessionRecvBufferSize);
         session->setHostNodeID(m_hostNodeID);
         session->setHost(_server);
-        session->setSocket(_socket);
         session->setMessageFactory(_messageFactory);
         session->setSessionCallbackManager(_sessionCallbackManager);
         session->setAllowMaxMsgSize(m_allowMaxMsgSize);

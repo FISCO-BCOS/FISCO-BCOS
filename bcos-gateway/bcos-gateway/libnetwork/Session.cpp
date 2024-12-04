@@ -24,11 +24,12 @@ using namespace bcos;
 using namespace bcos::gateway;
 
 
-Session::Session(size_t _recvBufferSize, bool _forceSize)
+Session::Session(std::shared_ptr<SocketFace> socket, size_t _recvBufferSize, bool _forceSize)
   : m_maxRecvBufferSize(_recvBufferSize < MIN_SESSION_RECV_BUFFER_SIZE ?
                             MIN_SESSION_RECV_BUFFER_SIZE :
                             _recvBufferSize),
     m_recvBuffer(_forceSize ? _recvBufferSize : MIN_SESSION_RECV_BUFFER_SIZE),
+    m_socket(std::move(socket)),
     m_idleCheckTimer(m_socket->ioService(), m_idleTimeInterval, "idleChecker")
 {
     SESSION_LOG(INFO) << "[Session::Session] this=" << this
@@ -188,7 +189,8 @@ void Session::send(EncodedMessage encodedMsg)
         return;
     }
 
-    m_writeQueue.push(std::move(encodedMsg));
+    m_writeQueue.push(std::move(encodedMsg.header));
+    m_writeQueue.push(std::move(encodedMsg.payload));
     write();
 }
 
@@ -221,17 +223,17 @@ void Session::onWrite(boost::system::error_code ec, std::size_t /*unused*/)
     }
 }
 
-bool Session::tryPopSomeEncodedMsgs(std::vector<EncodedMessage>& encodedMsgs,
-    size_t _maxSendDataSize, size_t _maxSendMsgCount)  // NOLINT
+bool Session::tryPopSomeEncodedMsgs(
+    std::vector<Payload>& encodedMsgs, size_t _maxSendDataSize, size_t _maxSendMsgCount)  // NOLINT
 {
     // Desc: Try to send multi packets one time to improve the efficiency of sending
     // data
     size_t totalDataSize = 0;
-    EncodedMessage encodedMsg;
-    while (totalDataSize < _maxSendDataSize && m_writeQueue.try_pop(encodedMsg))
+    Payload payload;
+    while (totalDataSize < _maxSendDataSize && m_writeQueue.try_pop(payload))
     {
-        totalDataSize += encodedMsg.dataSize();
-        encodedMsgs.emplace_back(std::move(encodedMsg));
+        totalDataSize += std::visit([](auto& data) { return data.size(); }, payload);
+        encodedMsgs.emplace_back(std::move(payload));
     }
 
     return totalDataSize > 0;
@@ -269,28 +271,22 @@ void Session::write()
         std::unique_ptr<std::atomic_bool, decltype([](std::atomic_bool* p) { *p = false; })> defer(
             std::addressof(m_writing));
 
-        std::vector<EncodedMessage> encodedMsgs;
-        if (!tryPopSomeEncodedMsgs(encodedMsgs, m_maxSendDataSize, m_maxSendMsgCountS))
+        m_writingPayloads.clear();
+        if (!tryPopSomeEncodedMsgs(m_writingPayloads, m_maxSendDataSize, m_maxSendMsgCountS))
         {
             return;
         }
 
         // asio::buffer reference buffer, so buffer need alive before
         // asio::buffer be used
-        auto buffers = ::ranges::views::iota(0LU, encodedMsgs.size() * 2) |
-                       ::ranges::views::transform(
-                           [it = encodedMsgs.begin()](auto index) -> boost::asio::const_buffer {
-                               auto& encodedMsgs = *(it + index / 2);
-                               if (index % 2 == 0)
-                               {
-                                   return {encodedMsgs.header.data(), encodedMsgs.header.size()};
-                               }
-                               return {encodedMsgs.payload.data(), encodedMsgs.payload.size()};
-                           });
+        auto buffers = ::ranges::views::transform(m_writingPayloads, [](const Payload& payload) {
+            return std::visit(
+                [](const auto& data) { return boost::asio::buffer(data.data(), data.size()); },
+                payload);
+        });
         defer.release();  // NOLINT
         server->asioInterface()->asyncWrite(m_socket, buffers,
-            [self = std::weak_ptr<Session>(shared_from_this()), encodedMsgs =
-                                                                    std::move(encodedMsgs)](
+            [self = std::weak_ptr<Session>(shared_from_this())](
                 const boost::system::error_code _error, std::size_t _size) mutable {
                 if (auto session = self.lock())
                 {
