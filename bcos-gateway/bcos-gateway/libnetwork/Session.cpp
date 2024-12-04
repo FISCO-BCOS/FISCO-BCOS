@@ -30,7 +30,8 @@ Session::Session(std::shared_ptr<SocketFace> socket, size_t _recvBufferSize, boo
                             _recvBufferSize),
     m_recvBuffer(_forceSize ? _recvBufferSize : MIN_SESSION_RECV_BUFFER_SIZE),
     m_socket(std::move(socket)),
-    m_idleCheckTimer(m_socket->ioService(), m_idleTimeInterval, "idleChecker")
+    m_idleCheckTimer(
+        std::make_shared<Timer>(m_socket->ioService(), m_idleTimeInterval, "idleChecker"))
 {
     SESSION_LOG(INFO) << "[Session::Session] this=" << this
                       << LOG_KV("recvBufferSize", m_maxRecvBufferSize);
@@ -41,7 +42,7 @@ Session::~Session() noexcept
     SESSION_LOG(INFO) << "[Session::~Session] this=" << this;
     try
     {
-        m_idleCheckTimer.stop();
+        m_idleCheckTimer->stop();
         if (m_socket)
         {
             bi::tcp::socket& socket = m_socket->ref();
@@ -268,25 +269,28 @@ void Session::write()
         {
             return;
         }
-        std::unique_ptr<std::atomic_bool, decltype([](std::atomic_bool* p) { *p = false; })> defer(
-            std::addressof(m_writing));
+        std::unique_ptr<std::atomic_bool, decltype([](std::atomic_bool* ptr) { *ptr = false; })>
+            defer(std::addressof(m_writing));
 
-        m_writingPayloads.clear();
-        if (!tryPopSomeEncodedMsgs(m_writingPayloads, m_maxSendDataSize, m_maxSendMsgCountS))
+        std::vector<Payload> payloads;
+        if (!tryPopSomeEncodedMsgs(payloads, m_maxSendDataSize, m_maxSendMsgCountS))
         {
             return;
         }
 
         // asio::buffer reference buffer, so buffer need alive before
         // asio::buffer be used
-        auto buffers = ::ranges::views::transform(m_writingPayloads, [](const Payload& payload) {
-            return std::visit(
-                [](const auto& data) { return boost::asio::buffer(data.data(), data.size()); },
-                payload);
-        });
+        auto buffers = ::ranges::views::transform(
+            ::ranges::subrange(payloads.begin(), payloads.end()), [](const Payload& payload) {
+                return std::visit(
+                    [](const auto& data) {
+                        return boost::asio::const_buffer(data.data(), data.size());
+                    },
+                    payload);
+            });
         defer.release();  // NOLINT
         server->asioInterface()->asyncWrite(m_socket, buffers,
-            [self = std::weak_ptr<Session>(shared_from_this())](
+            [self = std::weak_ptr<Session>(shared_from_this()), payloads = std::move(payloads)](
                 const boost::system::error_code _error, std::size_t _size) mutable {
                 if (auto session = self.lock())
                 {
@@ -437,14 +441,14 @@ void Session::start()
     }
 
     auto self = weak_from_this();
-    m_idleCheckTimer.registerTimeoutHandler([self]() {
+    m_idleCheckTimer->registerTimeoutHandler([self]() {
         auto session = self.lock();
         if (session)
         {
             session->checkNetworkStatus();
         }
     });
-    m_idleCheckTimer.start();
+    m_idleCheckTimer->start();
 
     SESSION_LOG(INFO) << "[start] start session " << LOG_KV("this", this);
 }
@@ -693,7 +697,7 @@ void Session::onTimeout(const boost::system::error_code& error, uint32_t seq)
 
 void Session::checkNetworkStatus()
 {
-    m_idleCheckTimer.restart();
+    m_idleCheckTimer->restart();
     try
     {
         auto now = utcSteadyTime();

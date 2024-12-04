@@ -295,10 +295,8 @@ private:
     // timer to check the connection
     std::atomic<uint64_t> m_lastReadTime;
     std::atomic<uint64_t> m_lastWriteTime;
-    bcos::Timer m_idleCheckTimer;
+    std::shared_ptr<bcos::Timer> m_idleCheckTimer;
     std::string m_hostNodeID;
-
-    std::vector<Payload> m_writingPayloads;
 };
 
 class SessionFactory
