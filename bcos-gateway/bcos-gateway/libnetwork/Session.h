@@ -18,6 +18,7 @@
 #include <bcos-utilities/Timer.h>
 #include <oneapi/tbb/concurrent_queue.h>
 #include <boost/asio/buffer.hpp>
+#include <boost/container/small_vector.hpp>
 #include <boost/heap/priority_queue.hpp>
 #include <cstddef>
 #include <memory>
@@ -126,7 +127,7 @@ private:
 
 struct Payload
 {
-    std::variant<EncodedMessage, std::vector<bytesConstRef>> m_data;
+    std::variant<EncodedMessage, boost::container::small_vector<bytesConstRef, 2>> m_data;
 
     size_t size() const
     {
@@ -135,7 +136,7 @@ struct Payload
                 [](const EncodedMessage& encodedMessage) -> size_t {
                     return encodedMessage.header.size() + encodedMessage.payload.size();
                 },
-                [](const std::vector<bytesConstRef>& refs) {
+                [](const boost::container::small_vector<bytesConstRef, 2>& refs) {
                     return ::ranges::accumulate(refs, size_t(0),
                         [](size_t sum, const bytesConstRef& ref) { return sum + ref.size(); });
                 }),
@@ -149,7 +150,7 @@ struct Payload
                            *output = {encodedMessage.header.data(), encodedMessage.header.size()};
                            *output = {encodedMessage.payload.data(), encodedMessage.payload.size()};
                        },
-                       [&](const std::vector<bytesConstRef>& refs) {
+                       [&](const boost::container::small_vector<bytesConstRef, 2>& refs) {
                            for (const auto& ref : refs)
                            {
                                *output = {ref.data(), ref.size()};
@@ -335,6 +336,8 @@ private:
     std::atomic<uint64_t> m_lastWriteTime;
     std::shared_ptr<bcos::Timer> m_idleCheckTimer;
     std::string m_hostNodeID;
+
+    std::vector<Payload> m_writingPayloads;
 };
 
 class SessionFactory

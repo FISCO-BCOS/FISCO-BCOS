@@ -168,8 +168,10 @@ int32_t P2PMessageOptions::decode(const bytesConstRef& _buffer)
     return offset;
 }
 
-bool P2PMessage::encodeHeader(bytes& _buffer) const
+bool P2PMessage::encodeHeader(bytes& _buffer, size_t payloadSize) const
 {
+    auto offset = _buffer.size();
+
     // set length to zero first
     uint32_t length = 0;
     uint16_t version = boost::asio::detail::socket_ops::host_to_network_short(m_version);
@@ -182,6 +184,10 @@ bool P2PMessage::encodeHeader(bytes& _buffer) const
     _buffer.insert(_buffer.end(), (byte*)&packetType, (byte*)&packetType + 2);
     _buffer.insert(_buffer.end(), (byte*)&seq, (byte*)&seq + 4);
     _buffer.insert(_buffer.end(), (byte*)&ext, (byte*)&ext + 2);
+
+    auto totalLength = boost::asio::detail::socket_ops::host_to_network_long(
+        (_buffer.size() - offset) + payloadSize);
+    std::copy((byte*)&length, (byte*)&length + 4, _buffer.data() + offset);
     return true;
 }
 
@@ -208,7 +214,7 @@ bool P2PMessage::encode(EncodedMessage& _buffer) const
 
     bytes headerBuffer;
     // encode header
-    if (!encodeHeader(headerBuffer))
+    if (!encodeHeader(headerBuffer, _buffer.payloadSize()))
     {
         return false;
     }
@@ -218,17 +224,7 @@ bool P2PMessage::encode(EncodedMessage& _buffer) const
         return false;
     }
 
-    std::size_t headerSize = headerBuffer.size();
-    std::size_t payloadSize = _buffer.payloadSize();
-
-    m_length = headerSize + payloadSize;
-    // calc total length and modify the length value in the buffer
-    auto length = boost::asio::detail::socket_ops::host_to_network_long((uint32_t)(m_length));
-    // update length
-    std::copy((byte*)&length, (byte*)&length + 4, headerBuffer.data());
-
     _buffer.header = std::move(headerBuffer);
-
     return true;
 }
 
@@ -247,7 +243,7 @@ bool P2PMessage::encode(bcos::bytes& _buffer)
         m_ext |= bcos::protocol::MessageExtFieldFlag::COMPRESS;
     }
 
-    if (!encodeHeader(_buffer))
+    if (!encodeHeader(_buffer, m_payload.size()))
     {
         return false;
     }
@@ -271,12 +267,6 @@ bool P2PMessage::encode(bcos::bytes& _buffer)
         _buffer.insert(_buffer.end(), m_payload.begin(), m_payload.end());
     }
 
-    // calc total length and modify the length value in the buffer
-    auto length = boost::asio::detail::socket_ops::host_to_network_long((uint32_t)_buffer.size());
-
-    // update length
-    std::copy((byte*)&length, (byte*)&length + 4, _buffer.data());
-    // set buffer size to m_length
     m_length = _buffer.size();
     return true;
 }

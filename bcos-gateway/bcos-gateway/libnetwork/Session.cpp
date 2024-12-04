@@ -16,7 +16,6 @@
 #include <bcos-gateway/libnetwork/SessionFace.h>
 #include <bcos-gateway/libnetwork/SocketFace.h>
 #include <boost/asio/buffer.hpp>
-#include <boost/container/small_vector.hpp>
 #include <cstddef>
 #include <iterator>
 #include <range/v3/view/transform.hpp>
@@ -274,8 +273,8 @@ void Session::write()
         std::unique_ptr<std::atomic_bool, decltype([](std::atomic_bool* ptr) { *ptr = false; })>
             defer(std::addressof(m_writing));
 
-        std::vector<Payload> payloads;
-        if (!tryPopSomeEncodedMsgs(payloads, m_maxSendDataSize, m_maxSendMsgCountS))
+        m_writingPayloads.clear();
+        if (!tryPopSomeEncodedMsgs(m_writingPayloads, m_maxSendDataSize, m_maxSendMsgCountS))
         {
             return;
         }
@@ -284,13 +283,13 @@ void Session::write()
         // asio::buffer be used
         boost::container::small_vector<boost::asio::const_buffer, 16> buffers;
         auto outputIt = std::back_inserter(buffers);
-        for (auto& payload : payloads)
+        for (auto& payload : m_writingPayloads)
         {
             payload.toBoostConstBuffer(outputIt);
         }
         defer.release();  // NOLINT
         server->asioInterface()->asyncWrite(m_socket, buffers,
-            [self = std::weak_ptr<Session>(shared_from_this()), payloads = std::move(payloads)](
+            [self = std::weak_ptr<Session>(shared_from_this())](
                 const boost::system::error_code _error, std::size_t _size) mutable {
                 if (auto session = self.lock())
                 {
