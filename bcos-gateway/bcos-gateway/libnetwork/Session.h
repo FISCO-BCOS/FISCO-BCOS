@@ -268,10 +268,10 @@ public:
     bool tryPopSomeEncodedMsgs(
         std::vector<Payload>& encodedMsgs, size_t _maxSendDataSize, size_t _maxSendMsgCount);
 
-protected:
+// protected:
     virtual void checkNetworkStatus();
 
-private:
+// private:
     void send(EncodedMessage encodedMsg);
 
     void doRead();

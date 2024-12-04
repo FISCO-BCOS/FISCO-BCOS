@@ -24,13 +24,14 @@
 using namespace bcos;
 using namespace bcos::gateway;
 
-bool P2PMessageV2::encodeHeader(bytes& _buffer, size_t payloadSize) const
+bool P2PMessageV2::encodeHeader(bytes& _buffer) const
 {
-    auto ret = P2PMessage::encodeHeader(_buffer, payloadSize);
+    auto ret = P2PMessage::encodeHeader(_buffer);
     if (m_version <= (uint16_t)(bcos::protocol::ProtocolVersion::V0))
     {
         return ret;
     }
+
     if (m_srcP2PNodeID.size() > P2PMessageOptions::MAX_NODEID_LENGTH)
     {
         P2PMSG_LOG(ERROR) << LOG_DESC("srcP2PNodeID length valid")

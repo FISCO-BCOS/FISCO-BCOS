@@ -35,7 +35,7 @@ public:
 
 protected:
     int32_t decodeHeader(const bytesConstRef& _buffer) override;
-    bool encodeHeader(bytes& _buffer, size_t payloadSize) const override;
+    bool encodeHeader(bytes& _buffer) const override;
 
     int16_t m_ttl = 10;
 };

@@ -168,7 +168,7 @@ int32_t P2PMessageOptions::decode(const bytesConstRef& _buffer)
     return offset;
 }
 
-bool P2PMessage::encodeHeader(bytes& _buffer, size_t payloadSize) const
+bool P2PMessage::encodeHeader(bytes& _buffer) const
 {
     auto offset = _buffer.size();
 
@@ -185,10 +185,8 @@ bool P2PMessage::encodeHeader(bytes& _buffer, size_t payloadSize) const
     _buffer.insert(_buffer.end(), (byte*)&seq, (byte*)&seq + 4);
     _buffer.insert(_buffer.end(), (byte*)&ext, (byte*)&ext + 2);
 
-    auto totalLength = boost::asio::detail::socket_ops::host_to_network_long(
-        (_buffer.size() - offset) + payloadSize);
-    std::copy((byte*)&length, (byte*)&length + 4, _buffer.data() + offset);
-    return true;
+    // encode options
+    return !hasOptions() || m_options.encode(_buffer);
 }
 
 bool P2PMessage::encode(EncodedMessage& _buffer) const
@@ -214,15 +212,13 @@ bool P2PMessage::encode(EncodedMessage& _buffer) const
 
     bytes headerBuffer;
     // encode header
-    if (!encodeHeader(headerBuffer, _buffer.payloadSize()))
+    if (!encodeHeader(headerBuffer))
     {
         return false;
     }
-    // encode options
-    if (hasOptions() && !m_options.encode(headerBuffer))
-    {
-        return false;
-    }
+
+    *(uint32_t*)headerBuffer.data() = boost::asio::detail::socket_ops::host_to_network_long(
+        headerBuffer.size() + _buffer.payload.size());
 
     _buffer.header = std::move(headerBuffer);
     return true;
@@ -243,12 +239,7 @@ bool P2PMessage::encode(bcos::bytes& _buffer)
         m_ext |= bcos::protocol::MessageExtFieldFlag::COMPRESS;
     }
 
-    if (!encodeHeader(_buffer, m_payload.size()))
-    {
-        return false;
-    }
-    // encode options
-    if (hasOptions() && !m_options.encode(_buffer))
+    if (!encodeHeader(_buffer))
     {
         return false;
     }
@@ -266,6 +257,8 @@ bool P2PMessage::encode(bcos::bytes& _buffer)
     {
         _buffer.insert(_buffer.end(), m_payload.begin(), m_payload.end());
     }
+    *(uint32_t*)_buffer.data() =
+        boost::asio::detail::socket_ops::host_to_network_long(_buffer.size());
 
     m_length = _buffer.size();
     return true;

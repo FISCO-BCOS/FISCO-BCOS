@@ -16,6 +16,7 @@
 #include <bcos-gateway/libnetwork/SessionFace.h>
 #include <bcos-gateway/libnetwork/SocketFace.h>
 #include <boost/asio/buffer.hpp>
+#include <boost/container/container_fwd.hpp>
 #include <cstddef>
 #include <iterator>
 #include <range/v3/view/transform.hpp>
@@ -181,18 +182,30 @@ std::size_t Session::writeQueueSize()
 
 void Session::send(EncodedMessage encodedMsg)
 {
-    if (!active())
-    {
-        return;
-    }
-
-    if (!m_socket->isConnected())
+    if (!active() || !m_socket->isConnected())
     {
         return;
     }
 
     m_writeQueue.push({.m_data = std::move(encodedMsg)});
     write();
+}
+
+void send(Session& session, ::ranges::input_range auto&& payloads)
+{
+    Payload payload{.m_data{std::in_place_index_t<1>{}}};
+    auto& vec = std::get<1>(payload.m_data);
+    if constexpr (::ranges::sized_range<decltype(payloads)>)
+    {
+        vec.reserve(::ranges::size(payloads));
+    }
+    for (const auto& data : payloads)
+    {
+        vec.emplace_back(data.data(), data.size());
+    }
+
+    session.m_writeQueue.push(std::move(payload));
+    session.write();
 }
 
 void Session::onWrite(boost::system::error_code ec, std::size_t /*unused*/)
@@ -776,9 +789,8 @@ bcos::task::Task<std::unique_ptr<Message>> bcos::gateway::Session::sendMessage(
         };
     }
 
-    EncodedMessage encodedMessage;
-    encodedMessage.compress = m_enableCompress;
-    header.encode(encodedMessage);
+    bytes headerBuffer;
+    header.encodeHeader(headerBuffer);
 
     if (c_fileLogLevel <= LogLevel::TRACE)
     {
@@ -788,6 +800,8 @@ bcos::task::Task<std::unique_ptr<Message>> bcos::gateway::Session::sendMessage(
                            << LOG_KV("ext", header.ext());
     }
 
-    send(encodedMessage);
+    auto headerView = ::ranges::views::single(bcos::ref(std::as_const(headerBuffer)));
+    auto view = ::ranges::views::concat(headerView, payloads);
+    ::send(*this, view);
     co_return response;
 }
