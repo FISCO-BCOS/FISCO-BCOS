@@ -11,15 +11,19 @@
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/Error.h"
 #include "bcos-utilities/ObjectCounter.h"
+#include "bcos-utilities/Overloaded.h"
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/SessionCallback.h>
 #include <bcos-gateway/libnetwork/SessionFace.h>
 #include <bcos-utilities/Timer.h>
 #include <oneapi/tbb/concurrent_queue.h>
+#include <boost/asio/buffer.hpp>
 #include <boost/heap/priority_queue.hpp>
 #include <cstddef>
 #include <memory>
+#include <range/v3/numeric/accumulate.hpp>
 #include <utility>
+#include <variant>
 
 
 namespace bcos::gateway
@@ -118,6 +122,41 @@ private:
     std::size_t m_readPos{0};
     // write pos of the buffer
     std::size_t m_writePos{0};
+};
+
+struct Payload
+{
+    std::variant<EncodedMessage, std::vector<bytesConstRef>> m_data;
+
+    size_t size() const
+    {
+        return std::visit(
+            bcos::overloaded(
+                [](const EncodedMessage& encodedMessage) -> size_t {
+                    return encodedMessage.header.size() + encodedMessage.payload.size();
+                },
+                [](const std::vector<bytesConstRef>& refs) {
+                    return ::ranges::accumulate(refs, size_t(0),
+                        [](size_t sum, const bytesConstRef& ref) { return sum + ref.size(); });
+                }),
+            m_data);
+    }
+
+    void toBoostConstBuffer(std::output_iterator<boost::asio::const_buffer> auto output) const
+    {
+        std::visit(bcos::overloaded(
+                       [&](const EncodedMessage& encodedMessage) {
+                           *output = {encodedMessage.header.data(), encodedMessage.header.size()};
+                           *output = {encodedMessage.payload.data(), encodedMessage.payload.size()};
+                       },
+                       [&](const std::vector<bytesConstRef>& refs) {
+                           for (const auto& ref : refs)
+                           {
+                               *output = {ref.data(), ref.size()};
+                           }
+                       }),
+            m_data);
+    }
 };
 
 class Session : public SessionFace,
@@ -225,7 +264,6 @@ public:
      * @param _maxSendMsgCount
      * @return bool
      */
-    using Payload = std::variant<bytesConstRef, bytes>;
     bool tryPopSomeEncodedMsgs(
         std::vector<Payload>& encodedMsgs, size_t _maxSendDataSize, size_t _maxSendMsgCount);
 

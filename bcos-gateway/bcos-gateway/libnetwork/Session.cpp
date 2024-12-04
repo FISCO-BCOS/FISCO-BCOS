@@ -9,14 +9,16 @@
 
 #include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-utilities/BoostLog.h"
-#include <bcos-gateway/libnetwork/ASIOInterface.h>  // for ASIOIn...
-#include <bcos-gateway/libnetwork/Common.h>         // for SESSIO...
-#include <bcos-gateway/libnetwork/Host.h>           // for Host
+#include <bcos-gateway/libnetwork/ASIOInterface.h>
+#include <bcos-gateway/libnetwork/Common.h>
+#include <bcos-gateway/libnetwork/Host.h>
 #include <bcos-gateway/libnetwork/Session.h>
-#include <bcos-gateway/libnetwork/SessionFace.h>  // for Respon...
-#include <bcos-gateway/libnetwork/SocketFace.h>   // for Socket...
+#include <bcos-gateway/libnetwork/SessionFace.h>
+#include <bcos-gateway/libnetwork/SocketFace.h>
 #include <boost/asio/buffer.hpp>
+#include <boost/container/small_vector.hpp>
 #include <cstddef>
+#include <iterator>
 #include <range/v3/view/transform.hpp>
 #include <utility>
 
@@ -190,8 +192,7 @@ void Session::send(EncodedMessage encodedMsg)
         return;
     }
 
-    m_writeQueue.push(std::move(encodedMsg.header));
-    m_writeQueue.push(std::move(encodedMsg.payload));
+    m_writeQueue.push({.m_data = std::move(encodedMsg)});
     write();
 }
 
@@ -231,9 +232,10 @@ bool Session::tryPopSomeEncodedMsgs(
     // data
     size_t totalDataSize = 0;
     Payload payload;
-    while (totalDataSize < _maxSendDataSize && m_writeQueue.try_pop(payload))
+    // while (totalDataSize < _maxSendDataSize && m_writeQueue.try_pop(payload))
+    while (m_writeQueue.try_pop(payload))
     {
-        totalDataSize += std::visit([](auto& data) { return data.size(); }, payload);
+        totalDataSize += payload.size();
         encodedMsgs.emplace_back(std::move(payload));
     }
 
@@ -280,14 +282,12 @@ void Session::write()
 
         // asio::buffer reference buffer, so buffer need alive before
         // asio::buffer be used
-        auto buffers = ::ranges::views::transform(
-            ::ranges::subrange(payloads.begin(), payloads.end()), [](const Payload& payload) {
-                return std::visit(
-                    [](const auto& data) {
-                        return boost::asio::const_buffer(data.data(), data.size());
-                    },
-                    payload);
-            });
+        boost::container::small_vector<boost::asio::const_buffer, 16> buffers;
+        auto outputIt = std::back_inserter(buffers);
+        for (auto& payload : payloads)
+        {
+            payload.toBoostConstBuffer(outputIt);
+        }
         defer.release();  // NOLINT
         server->asioInterface()->asyncWrite(m_socket, buffers,
             [self = std::weak_ptr<Session>(shared_from_this()), payloads = std::move(payloads)](
