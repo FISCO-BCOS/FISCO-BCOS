@@ -340,6 +340,12 @@ public:
         }
     }
 
+    bcos::task::Task<void> broadcastMessage(
+        uint16_t _type, int _moduleID, ::ranges::any_view<bytesConstRef> payloads) override
+    {
+        co_return;
+    }
+
     // useless for sync/pbft/txpool
     void onReceiveBroadcastMessage(
         const std::string&, NodeIDPtr, bytesConstRef, ReceiveMsgFunc) override

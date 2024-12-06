@@ -35,11 +35,11 @@ BOOST_AUTO_TEST_CASE(testFrontMessage_0)
     auto message = factory->buildMessage();
     BOOST_CHECK_EQUAL(message->moduleID(), 0);
     BOOST_CHECK_EQUAL(message->ext(), 0);
-    BOOST_CHECK_EQUAL(message->uuid()->size(), 0);
+    BOOST_CHECK_EQUAL(message->uuid().size(), 0);
     BOOST_CHECK_EQUAL(message->payload().size(), 0);
 
     std::shared_ptr<bytes> buffer = std::make_shared<bytes>();
-    auto r = message->encode(*buffer.get());
+    auto r = message->encode(*buffer);
     BOOST_CHECK(r);
     BOOST_CHECK(buffer->size() == FrontMessage::HEADER_MIN_LENGTH);
 }
@@ -55,7 +55,7 @@ BOOST_AUTO_TEST_CASE(testFrontMessage_1)
 
     message->setModuleID(moduleID);
     message->setExt(ext);
-    message->setUuid(std::make_shared<bytes>(uuid.begin(), uuid.end()));
+    message->setUuid(bytes(uuid.begin(), uuid.end()));
     auto payloadPtr = std::make_shared<bytes>(payload.begin(), payload.end());
     message->setPayload(bytesConstRef(payloadPtr->data(), payloadPtr->size()));
 
@@ -76,7 +76,7 @@ BOOST_AUTO_TEST_CASE(testFrontMessage_1)
     BOOST_CHECK_EQUAL(moduleID, decodeMessage->moduleID());
     BOOST_CHECK_EQUAL(ext, decodeMessage->ext());
     BOOST_CHECK_EQUAL(
-        uuid, std::string(decodeMessage->uuid()->begin(), decodeMessage->uuid()->end()));
+        uuid, std::string(decodeMessage->uuid().begin(), decodeMessage->uuid().end()));
     BOOST_CHECK_EQUAL(
         payload, std::string(decodeMessage->payload().begin(), decodeMessage->payload().end()));
 }
@@ -92,7 +92,7 @@ BOOST_AUTO_TEST_CASE(testFrontMessage_2)
 
     message->setModuleID(moduleID);
     message->setExt(ext);
-    message->setUuid(std::make_shared<bytes>(uuid.begin(), uuid.end()));
+    message->setUuid(bytes(uuid.begin(), uuid.end()));
     auto payloadPtr = std::make_shared<bytes>(payload.begin(), payload.end());
     message->setPayload(bytesConstRef(payloadPtr->data(), payloadPtr->size()));
 
@@ -113,7 +113,7 @@ BOOST_AUTO_TEST_CASE(testFrontMessage_2)
     BOOST_CHECK_EQUAL(moduleID, decodeMessage->moduleID());
     BOOST_CHECK_EQUAL(ext, decodeMessage->ext());
     BOOST_CHECK_EQUAL(
-        uuid, std::string(decodeMessage->uuid()->begin(), decodeMessage->uuid()->end()));
+        uuid, std::string(decodeMessage->uuid().begin(), decodeMessage->uuid().end()));
     BOOST_CHECK_EQUAL(
         payload, std::string(decodeMessage->payload().begin(), decodeMessage->payload().end()));
 }
@@ -129,7 +129,7 @@ BOOST_AUTO_TEST_CASE(testFrontMessage_3)
 
     message->setModuleID(moduleID);
     message->setExt(ext);
-    message->setUuid(std::make_shared<bytes>(uuid.begin(), uuid.end()));
+    message->setUuid(bytes(uuid.begin(), uuid.end()));
     auto payloadPtr = std::make_shared<bytes>(payload.begin(), payload.end());
     message->setPayload(bytesConstRef(payloadPtr->data(), payloadPtr->size()));
 
@@ -150,7 +150,7 @@ BOOST_AUTO_TEST_CASE(testFrontMessage_3)
     BOOST_CHECK_EQUAL(moduleID, decodeMessage->moduleID());
     BOOST_CHECK_EQUAL(ext, decodeMessage->ext());
     BOOST_CHECK_EQUAL(
-        uuid, std::string(decodeMessage->uuid()->begin(), decodeMessage->uuid()->end()));
+        uuid, std::string(decodeMessage->uuid().begin(), decodeMessage->uuid().end()));
     BOOST_CHECK_EQUAL(
         payload, std::string(decodeMessage->payload().begin(), decodeMessage->payload().end()));
 }
@@ -187,13 +187,13 @@ BOOST_AUTO_TEST_CASE(testFrontMessage_4)
 
     message->setModuleID(moduleID);
     message->setExt(ext);
-    message->setUuid(std::make_shared<bytes>(uuid.begin(), uuid.end()));
+    message->setUuid(bytes(uuid.begin(), uuid.end()));
     auto payloadPtr = std::make_shared<bytes>(payload.begin(), payload.end());
     message->setPayload(bytesConstRef(payloadPtr->data(), payloadPtr->size()));
 
     // encode
     std::shared_ptr<bytes> buffer = std::make_shared<bytes>();
-    auto r = message->encode(*buffer.get());
+    auto r = message->encode(*buffer);
     BOOST_CHECK(!r);
 
     buffer->clear();
@@ -211,7 +211,7 @@ BOOST_AUTO_TEST_CASE(testFrontMessage_5)
     std::string payload = std::string(1000, 'x');
 
     message->setModuleID(moduleID);
-    message->setUuid(std::make_shared<bytes>(uuid.begin(), uuid.end()));
+    message->setUuid(bytes(uuid.begin(), uuid.end()));
     auto payloadPtr = std::make_shared<bytes>(payload.begin(), payload.end());
     message->setPayload(bytesConstRef(payloadPtr->data(), payloadPtr->size()));
 

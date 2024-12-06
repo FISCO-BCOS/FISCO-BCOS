@@ -24,10 +24,8 @@
 using namespace bcos;
 using namespace front;
 
-bool FrontMessage::encode(bytes& _buffer)
+bool bcos::front::FrontMessage::encodeHeader(bytes& buffer)
 {
-    _buffer.clear();
-
     /// moduleID          :2 bytes
     /// UUID length       :1 bytes
     /// UUID              :UUID length bytes
@@ -37,20 +35,31 @@ bool FrontMessage::encode(bytes& _buffer)
     uint16_t moduleID = boost::asio::detail::socket_ops::host_to_network_short(m_moduleID);
     uint16_t ext = boost::asio::detail::socket_ops::host_to_network_short(m_ext);
 
-    size_t uuidLength = m_uuid->size();
+    size_t uuidLength = m_uuid.size();
     // uuid length should not be greater than 256
     if (uuidLength > MAX_MESSAGE_UUID_SIZE)
     {
         return false;
     }
 
-    _buffer.insert(_buffer.end(), (byte*)&moduleID, (byte*)&moduleID + 2);
-    _buffer.insert(_buffer.end(), (byte*)&uuidLength, (byte*)&uuidLength + 1);
+    buffer.insert(buffer.end(), (byte*)&moduleID, (byte*)&moduleID + 2);
+    buffer.insert(buffer.end(), (byte*)&uuidLength, (byte*)&uuidLength + 1);
     if (uuidLength > 0)
     {
-        _buffer.insert(_buffer.end(), m_uuid->begin(), m_uuid->end());
+        buffer.insert(buffer.end(), m_uuid.begin(), m_uuid.end());
     }
-    _buffer.insert(_buffer.end(), (byte*)&ext, (byte*)&ext + 2);
+    buffer.insert(buffer.end(), (byte*)&ext, (byte*)&ext + 2);
+
+    return true;
+}
+
+bool FrontMessage::encode(bytes& _buffer)
+{
+    _buffer.clear();
+    if (auto ret = encodeHeader(_buffer); !ret)
+    {
+        return ret;
+    }
 
     _buffer.insert(_buffer.end(), m_payload.begin(), m_payload.end());
     return true;
@@ -63,7 +72,7 @@ ssize_t FrontMessage::decode(bytesConstRef _buffer)
         return MessageDecodeStatus::MESSAGE_ERROR;
     }
 
-    m_uuid->clear();
+    m_uuid.clear();
     m_payload.reset();
 
     int32_t offset = 0;
@@ -76,7 +85,7 @@ ssize_t FrontMessage::decode(bytesConstRef _buffer)
 
     if (uuidLength > 0)
     {
-        m_uuid->assign(&_buffer[offset], &_buffer[offset] + uuidLength);
+        m_uuid.assign(&_buffer[offset], &_buffer[offset] + uuidLength);
         offset += uuidLength;
     }
 

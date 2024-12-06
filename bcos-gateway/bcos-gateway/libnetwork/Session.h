@@ -127,30 +127,18 @@ private:
 
 struct Payload
 {
-    std::variant<EncodedMessage, boost::container::small_vector<bytesConstRef, 2>> m_data;
+    std::variant<EncodedMessage, boost::container::small_vector<bytesConstRef, 3>> m_data;
+    std::function<void(boost::system::error_code)> m_callback;
 
-    size_t size() const
-    {
-        return std::visit(
-            bcos::overloaded(
-                [](const EncodedMessage& encodedMessage) -> size_t {
-                    return encodedMessage.header.size() + encodedMessage.payload.size();
-                },
-                [](const boost::container::small_vector<bytesConstRef, 2>& refs) {
-                    return ::ranges::accumulate(refs, size_t(0),
-                        [](size_t sum, const bytesConstRef& ref) { return sum + ref.size(); });
-                }),
-            m_data);
-    }
-
-    void toBoostConstBuffer(std::output_iterator<boost::asio::const_buffer> auto output) const
+    size_t size() const;
+    void toConstBuffer(std::output_iterator<boost::asio::const_buffer> auto output) const
     {
         std::visit(bcos::overloaded(
                        [&](const EncodedMessage& encodedMessage) {
                            *output = {encodedMessage.header.data(), encodedMessage.header.size()};
                            *output = {encodedMessage.payload.data(), encodedMessage.payload.size()};
                        },
-                       [&](const boost::container::small_vector<bytesConstRef, 2>& refs) {
+                       [&](const boost::container::small_vector<bytesConstRef, 3>& refs) {
                            for (const auto& ref : refs)
                            {
                                *output = {ref.data(), ref.size()};
@@ -186,7 +174,7 @@ public:
     void asyncSendMessage(Message::Ptr message, Options options,
         SessionCallbackFunc callback = SessionCallbackFunc()) override;
 
-    task::Task<std::unique_ptr<Message>> sendMessage(const Message& header,
+    task::Task<Message::Ptr> sendMessage(const Message& message,
         ::ranges::any_view<bytesConstRef> payloads, Options options) override;
 
     NodeIPEndpoint nodeIPEndpoint() const override;
@@ -209,7 +197,7 @@ public:
         m_messageFactory = _messageFactory;
     }
 
-    SessionCallbackManagerInterface::Ptr sessionCallbackManager()
+    SessionCallbackManagerInterface::Ptr sessionCallbackManager() const
     {
         return m_sessionCallbackManager;
     }
@@ -268,10 +256,10 @@ public:
     bool tryPopSomeEncodedMsgs(
         std::vector<Payload>& encodedMsgs, size_t _maxSendDataSize, size_t _maxSendMsgCount);
 
-// protected:
+    // protected:
     virtual void checkNetworkStatus();
 
-// private:
+    // private:
     void send(EncodedMessage encodedMsg);
 
     void doRead();

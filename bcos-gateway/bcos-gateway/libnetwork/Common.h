@@ -16,6 +16,7 @@
 #include <boost/asio/ip/tcp.hpp>
 #include <set>
 #include <string>
+#include <utility>
 
 namespace ba = boost::asio;
 namespace bi = boost::asio::ip;
@@ -75,16 +76,16 @@ using P2pID = std::string;
 using P2pIDs = std::set<std::string>;
 struct Options
 {
-    uint32_t timeout = 0;  ///< The timeout value of async function, in milliseconds.
-    bool response = true;  ///< Whether to wait for a response.
+    uint32_t timeout = 0;   ///< The timeout value of async function, in milliseconds.
+    bool response = false;  ///< Whether to wait for a response.
 };
 
 class NetworkException : public std::exception
 {
 public:
     NetworkException() = default;
-    NetworkException(int _errorCode, const std::string& _msg)
-      : m_errorCode(_errorCode), m_msg(_msg){};
+    NetworkException(int _errorCode, std::string _msg)
+      : m_errorCode(_errorCode), m_msg(std::move(_msg)){};
 
     virtual int errorCode() const { return m_errorCode; };
     const char* what() const noexcept override { return m_msg.c_str(); };

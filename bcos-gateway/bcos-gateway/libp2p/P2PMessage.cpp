@@ -170,6 +170,21 @@ int32_t P2PMessageOptions::decode(const bytesConstRef& _buffer)
 
 bool P2PMessage::encodeHeader(bytes& _buffer) const
 {
+    if (auto result = encodeHeaderImpl(_buffer); !result)
+    {
+        return result;
+    }
+
+    // encode options
+    if (hasOptions())
+    {
+        return m_options.encode(_buffer);
+    }
+    return true;
+}
+
+bool bcos::gateway::P2PMessage::encodeHeaderImpl(bytes& _buffer) const
+{
     auto offset = _buffer.size();
 
     // set length to zero first
@@ -185,9 +200,9 @@ bool P2PMessage::encodeHeader(bytes& _buffer) const
     _buffer.insert(_buffer.end(), (byte*)&seq, (byte*)&seq + 4);
     _buffer.insert(_buffer.end(), (byte*)&ext, (byte*)&ext + 2);
 
-    // encode options
-    return !hasOptions() || m_options.encode(_buffer);
+    return true;
 }
+
 
 bool P2PMessage::encode(EncodedMessage& _buffer) const
 {

@@ -15,8 +15,8 @@
 #include <bcos-gateway/Gateway.h>
 #include <bcos-gateway/libp2p/P2PInterface.h>
 #include <bcos-gateway/libp2p/P2PSession.h>
+#include <oneapi/tbb/concurrent_hash_map.h>
 #include <array>
-#include <unordered_map>
 
 
 namespace bcos::gateway
@@ -64,7 +64,7 @@ public:
     void asyncSendMessageByNodeID(P2pID nodeID, std::shared_ptr<P2PMessage> message,
         CallbackFuncWithSession callback, Options options = Options()) override;
 
-    task::Task<void> sendMessageByNodeID(P2pID nodeID, const P2PMessage& header,
+    task::Task<Message::Ptr> sendMessageByNodeID(P2pID nodeID, P2PMessage& header,
         ::ranges::any_view<bytesConstRef> payloads, Options options = Options()) override;
 
     void asyncBroadcastMessage(std::shared_ptr<P2PMessage> message, Options options) override;
@@ -114,11 +114,9 @@ public:
 
     std::shared_ptr<P2PSession> getP2PSessionByNodeId(P2pID const& _nodeID) override
     {
-        RecursiveGuard l(x_sessions);
-        auto it = m_sessions.find(_nodeID);
-        if (it != m_sessions.end())
+        if (decltype(m_sessions)::const_accessor accessor; m_sessions.find(accessor, _nodeID))
         {
-            return it->second;
+            return accessor->second;
         }
         return nullptr;
     }
@@ -231,8 +229,8 @@ private:
     bcos::RecursiveMutex x_nodes;
     std::shared_ptr<Host> m_host;
 
-    std::unordered_map<P2pID, P2PSession::Ptr> m_sessions;
-    mutable bcos::RecursiveMutex x_sessions;
+    tbb::concurrent_hash_map<P2pID, P2PSession::Ptr> m_sessions;
+    // tbb::concurrent_hash_map<P2pID, P2PSession::Ptr> m_seesions;
     std::shared_ptr<MessageFactory> m_messageFactory;
 
     P2pID m_nodeID;

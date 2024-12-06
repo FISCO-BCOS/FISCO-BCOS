@@ -9,6 +9,7 @@
 
 #include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/Overloaded.h"
 #include <bcos-gateway/libnetwork/ASIOInterface.h>
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/Host.h>
@@ -17,10 +18,14 @@
 #include <bcos-gateway/libnetwork/SocketFace.h>
 #include <boost/asio/buffer.hpp>
 #include <boost/container/container_fwd.hpp>
+#include <boost/throw_exception.hpp>
 #include <cstddef>
+#include <functional>
 #include <iterator>
+#include <range/v3/numeric/accumulate.hpp>
 #include <range/v3/view/transform.hpp>
 #include <utility>
+#include <variant>
 
 using namespace bcos;
 using namespace bcos::gateway;
@@ -187,13 +192,14 @@ void Session::send(EncodedMessage encodedMsg)
         return;
     }
 
-    m_writeQueue.push({.m_data = std::move(encodedMsg)});
+    m_writeQueue.push({.m_data = std::move(encodedMsg), .m_callback = {}});
     write();
 }
 
-void send(Session& session, ::ranges::input_range auto&& payloads)
+void send(Session& session, ::ranges::input_range auto&& payloads,
+    std::function<void(boost::system::error_code)> callback)
 {
-    Payload payload{.m_data{std::in_place_index_t<1>{}}};
+    Payload payload{.m_data{std::in_place_index_t<1>{}}, .m_callback = std::move(callback)};
     auto& vec = std::get<1>(payload.m_data);
     if constexpr (::ranges::sized_range<decltype(payloads)>)
     {
@@ -286,19 +292,16 @@ void Session::write()
         std::unique_ptr<std::atomic_bool, decltype([](std::atomic_bool* ptr) { *ptr = false; })>
             defer(std::addressof(m_writing));
 
-        m_writingPayloads.clear();
         if (!tryPopSomeEncodedMsgs(m_writingPayloads, m_maxSendDataSize, m_maxSendMsgCountS))
         {
             return;
         }
 
-        // asio::buffer reference buffer, so buffer need alive before
-        // asio::buffer be used
         boost::container::small_vector<boost::asio::const_buffer, 16> buffers;
         auto outputIt = std::back_inserter(buffers);
         for (auto& payload : m_writingPayloads)
         {
-            payload.toBoostConstBuffer(outputIt);
+            payload.toConstBuffer(outputIt);
         }
         defer.release();  // NOLINT
         server->asioInterface()->asyncWrite(m_socket, buffers,
@@ -306,8 +309,18 @@ void Session::write()
                 const boost::system::error_code _error, std::size_t _size) mutable {
                 if (auto session = self.lock())
                 {
+                    std::vector<Payload> payloads;
+                    payloads.swap(session->m_writingPayloads);
                     session->m_writing = false;
                     session->onWrite(_error, _size);
+
+                    for (auto& payload : payloads)
+                    {
+                        if (payload.m_callback)
+                        {
+                            payload.m_callback(_error);
+                        }
+                    }
                 }
             });
     }
@@ -741,8 +754,8 @@ void Session::checkNetworkStatus()
     }
 }
 
-bcos::task::Task<std::unique_ptr<Message>> bcos::gateway::Session::sendMessage(
-    const Message& header, ::ranges::any_view<bytesConstRef> payloads, Options options)
+bcos::task::Task<Message::Ptr> bcos::gateway::Session::sendMessage(
+    const Message& message, ::ranges::any_view<bytesConstRef> payloads, Options options)
 {
     auto server = m_server.lock();
     if (!active() || !server)
@@ -751,57 +764,146 @@ bcos::task::Task<std::unique_ptr<Message>> bcos::gateway::Session::sendMessage(
         co_return {};
     }
 
-    std::unique_ptr<Message> response;
-    if (options.response)
-    {
-        auto handler = std::make_shared<ResponseCallback>();
-        handler->callback = [](NetworkException exception, Message::Ptr response) {
-
-        };
-        if (options.timeout > 0)
-        {
-            handler->timeoutHandler.emplace(server->asioInterface()->newTimer(options.timeout));
-            auto session = std::weak_ptr<Session>(shared_from_this());
-            auto seq = header.seq();
-            handler->timeoutHandler->async_wait(
-                [session, seq](const boost::system::error_code& _error) {
-                    try
-                    {
-                        auto s = session.lock();
-                        if (!s)
-                        {
-                            return;
-                        }
-                        s->onTimeout(_error, seq);
-                    }
-                    catch (std::exception const& e)
-                    {
-                        SESSION_LOG(WARNING) << LOG_DESC("async_wait exception")
-                                             << LOG_KV("message", boost::diagnostic_information(e));
-                    }
-                });
-            handler->startTime = utcSteadyTime();
-        }
-        m_sessionCallbackManager->addCallback(header.seq(), handler);
-
-        struct Awaitable
-        {
-        };
-    }
-
     bytes headerBuffer;
-    header.encodeHeader(headerBuffer);
+    message.encodeHeader(headerBuffer);
+
+    auto view = ::ranges::views::concat(
+        ::ranges::views::single(bcos::ref(std::as_const(headerBuffer))), payloads);
+    uint32_t totalLength = 0;
+    for (auto ref : view)
+    {
+        totalLength += ref.size();
+    }
+    *(uint32_t*)headerBuffer.data() =
+        boost::asio::detail::socket_ops::host_to_network_long(totalLength);
 
     if (c_fileLogLevel <= LogLevel::TRACE)
     {
         SESSION_LOG(TRACE) << LOG_DESC("Session asyncSendMessage")
-                           << LOG_KV("endpoint", nodeIPEndpoint()) << LOG_KV("seq", header.seq())
-                           << LOG_KV("packetType", header.packetType())
-                           << LOG_KV("ext", header.ext());
+                           << LOG_KV("endpoint", nodeIPEndpoint()) << LOG_KV("seq", message.seq())
+                           << LOG_KV("packetType", message.packetType())
+                           << LOG_KV("ext", message.ext());
     }
+    if (options.response)
+    {
+        struct Awaitable
+        {
+            std::reference_wrapper<Options> m_options;
+            std::reference_wrapper<Host> m_host;
+            std::reference_wrapper<const Message> m_message;
+            std::weak_ptr<Session> m_self;
+            std::reference_wrapper<SessionCallbackManagerInterface> m_sessionCallbackManager;
+            std::reference_wrapper<decltype(view)> m_view;
+            std::variant<NetworkException, Message::Ptr> m_result;
 
-    auto headerView = ::ranges::views::single(bcos::ref(std::as_const(headerBuffer)));
-    auto view = ::ranges::views::concat(headerView, payloads);
-    ::send(*this, view);
-    co_return response;
+            constexpr static bool await_ready() noexcept { return false; }
+            void await_suspend(std::coroutine_handle<> handle)
+            {
+                auto handler = std::make_shared<ResponseCallback>();
+                handler->callback = [this, handle](
+                                        NetworkException exception, Message::Ptr response) {
+                    if (exception.errorCode() != 0)
+                    {
+                        m_result.emplace<NetworkException>(std::move(exception));
+                    }
+                    else
+                    {
+                        m_result.emplace<Message::Ptr>(std::move(response));
+                    }
+                    handle.resume();
+                };
+                auto seq = m_message.get().seq();
+                if (m_options.get().timeout > 0)
+                {
+                    handler->timeoutHandler.emplace(
+                        m_host.get().asioInterface()->newTimer(m_options.get().timeout));
+                    handler->timeoutHandler->async_wait(
+                        [self = m_self, seq](const boost::system::error_code& _error) {
+                            try
+                            {
+                                if (auto session = self.lock())
+                                {
+                                    session->onTimeout(_error, seq);
+                                }
+                            }
+                            catch (std::exception const& e)
+                            {
+                                SESSION_LOG(WARNING)
+                                    << LOG_DESC("async_wait exception")
+                                    << LOG_KV("message", boost::diagnostic_information(e));
+                            }
+                        });
+                    handler->startTime = utcSteadyTime();
+                }
+                m_sessionCallbackManager.get().addCallback(seq, std::move(handler));
+                ::send(*m_self.lock(), m_view.get(), {});
+            }
+            Message::Ptr await_resume()
+            {
+                return std::visit(
+                    bcos::overloaded(
+                        [](NetworkException& exception) -> Message::Ptr {
+                            BOOST_THROW_EXCEPTION(exception);
+                            return {};
+                        },
+                        [](Message::Ptr& response) -> Message::Ptr { return std::move(response); }),
+                    m_result);
+            }
+        };
+
+        Awaitable awaitable{.m_options = options,
+            .m_host = *server,
+            .m_message = message,
+            .m_self = shared_from_this(),
+            .m_sessionCallbackManager = *m_sessionCallbackManager,
+            .m_view = view,
+            .m_result = {}};
+
+        co_return co_await awaitable;
+    }
+    else
+    {
+        struct Awaitable
+        {
+            std::reference_wrapper<Session> m_self;
+            std::reference_wrapper<decltype(view)> m_view;
+            NetworkException m_exception;
+
+            constexpr static bool await_ready() noexcept { return false; }
+            void await_suspend(std::coroutine_handle<> handle)
+            {
+                ::send(m_self, m_view.get(), [this, handle](boost::system::error_code errorCode) {
+                    if (errorCode.failed())
+                    {
+                        m_exception = NetworkException(errorCode.value(), errorCode.message());
+                    }
+                    handle.resume();
+                });
+            }
+            void await_resume()
+            {
+                if (m_exception.errorCode() != 0)
+                {
+                    BOOST_THROW_EXCEPTION(m_exception);
+                }
+            }
+        };
+        Awaitable awaitable{.m_self = *this, .m_view = view, .m_exception = {}};
+        co_await awaitable;
+        co_return {};
+    }
+}
+
+size_t bcos::gateway::Payload::size() const
+{
+    return std::visit(
+        bcos::overloaded(
+            [](const EncodedMessage& encodedMessage) -> size_t {
+                return encodedMessage.header.size() + encodedMessage.payload.size();
+            },
+            [](const boost::container::small_vector<bytesConstRef, 3>& refs) {
+                return ::ranges::accumulate(refs, size_t(0),
+                    [](size_t sum, const bytesConstRef& ref) { return sum + ref.size(); });
+            }),
+        m_data);
 }

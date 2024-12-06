@@ -516,17 +516,23 @@ bcos::task::Task<void> bcos::gateway::Gateway::broadcastMessage(uint16_t type,
     std::string_view groupID, int moduleID, const bcos::crypto::NodeID& srcNodeID,
     ::ranges::any_view<bytesConstRef> payloads)
 {
-    P2PMessage message;
-    message.setPacketType(GatewayMessageType::BroadcastMessage);
-    message.setExt(type);
-    message.setSeq(m_p2pInterface->messageFactory()->newSeq());
+    auto message =
+        std::static_pointer_cast<P2PMessage>(m_p2pInterface->messageFactory()->buildMessage());
+    message->setPacketType(GatewayMessageType::BroadcastMessage);
+    message->setExt(type);
+    message->setSeq(m_p2pInterface->messageFactory()->newSeq());
 
     P2PMessageOptions options;
     options.setGroupID(std::string(groupID));
     options.setSrcNodeID(srcNodeID.encode());
     options.setModuleID(moduleID);
-    message.setOptions(std::move(options));
+    message->setOptions(std::move(options));
+
+    auto msgExtAttr = std::make_shared<GatewayMessageExtAttributes>();
+    msgExtAttr->setGroupID(std::string(groupID));
+    msgExtAttr->setModuleID(moduleID);
+    message->setExtAttributes(msgExtAttr);
 
     co_await m_gatewayNodeManager->peersRouterTable()->broadcastMessage(
-        type, groupID, moduleID, message, payloads);
+        type, groupID, moduleID, *message, payloads);
 }
