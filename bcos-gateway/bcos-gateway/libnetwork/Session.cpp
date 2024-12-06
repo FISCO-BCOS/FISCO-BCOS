@@ -199,7 +199,7 @@ void Session::send(EncodedMessage encodedMsg)
 void send(Session& session, ::ranges::input_range auto&& payloads,
     std::function<void(boost::system::error_code)> callback)
 {
-    Payload payload{.m_data{std::in_place_index_t<1>{}}, .m_callback = std::move(callback)};
+    Payload payload{.m_data{Payload::MessageList{}}, .m_callback = std::move(callback)};
     auto& vec = std::get<1>(payload.m_data);
     if constexpr (::ranges::sized_range<decltype(payloads)>)
     {

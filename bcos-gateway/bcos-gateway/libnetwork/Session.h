@@ -127,7 +127,8 @@ private:
 
 struct Payload
 {
-    std::variant<EncodedMessage, boost::container::small_vector<bytesConstRef, 3>> m_data;
+    using MessageList = boost::container::small_vector<bytesConstRef, 3>;
+    std::variant<EncodedMessage, MessageList> m_data;
     std::function<void(boost::system::error_code)> m_callback;
 
     size_t size() const;
@@ -138,7 +139,7 @@ struct Payload
                            *output = {encodedMessage.header.data(), encodedMessage.header.size()};
                            *output = {encodedMessage.payload.data(), encodedMessage.payload.size()};
                        },
-                       [&](const boost::container::small_vector<bytesConstRef, 3>& refs) {
+                       [&](const MessageList& refs) {
                            for (const auto& ref : refs)
                            {
                                *output = {ref.data(), ref.size()};
