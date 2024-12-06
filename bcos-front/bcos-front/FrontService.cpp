@@ -534,8 +534,8 @@ void FrontService::onReceiveMessage(const std::string& _groupID,
         }
         else
         {
-            auto it = m_moduleID2MessageDispatcher.find(moduleID);
-            if (it != m_moduleID2MessageDispatcher.end())
+            if (auto it = m_moduleID2MessageDispatcher.find(moduleID);
+                it != m_moduleID2MessageDispatcher.end())
             {
                 auto callback = it->second;
                 // construct shared_ptr<bytes> from message->payload() first for

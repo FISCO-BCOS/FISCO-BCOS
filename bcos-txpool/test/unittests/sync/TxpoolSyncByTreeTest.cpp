@@ -23,6 +23,7 @@
 #include "bcos-crypto/signature/sm2/SM2Crypto.h"
 #include "bcos-framework/bcos-framework/testutils/faker/FakeTransaction.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
+#include "bcos-task/Wait.h"
 #include "test/unittests/txpool/TxPoolFixture.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
@@ -45,7 +46,7 @@ BOOST_AUTO_TEST_CASE(testFreeNodeTreeSync)
     auto tx = fakeTransaction(this->m_cryptoSuite, std::to_string(utcTime()));
     bcos::bytes data;
     tx->encode(data);
-    txpool->broadcastTransactionBuffer(data);
+    task::syncWait(txpool->broadcastTransactionBuffer(bcos::ref(data)));
 }
 
 BOOST_AUTO_TEST_CASE(testConsensusNodeTreeSync)
@@ -75,7 +76,7 @@ BOOST_AUTO_TEST_CASE(testConsensusNodeTreeSync)
         [[maybe_unused]] auto submitResult =
             co_await txpool.submitTransaction(std::move(transaction));
     }(txpool, tx));
-    txpool.broadcastTransactionBufferByTree(data, true);
+    task::syncWait(txpool.broadcastTransactionBufferByTree(bcos::ref(data), true));
     // broadcast to all nodes finally
     auto totalMsg = m_frontService->totalSendMsgSize();
     for (const auto& item : this->m_nodeIdList)
@@ -111,7 +112,7 @@ BOOST_AUTO_TEST_CASE(testObserverNodeTreeSync)
     auto tx = fakeTransaction(this->m_cryptoSuite, std::to_string(utcSteadyTime()));
     bcos::bytes data;
     tx->encode(data);
-    txpool.broadcastTransactionBufferByTree(data, true);
+    task::syncWait(txpool.broadcastTransactionBufferByTree(bcos::ref(data), true));
     // broadcast to all nodes finally
     for (const auto& item : this->m_nodeIdList)
     {
@@ -147,7 +148,7 @@ BOOST_AUTO_TEST_CASE(testConsensusNodeWithLowerVersionTreeSync)
     auto tx = fakeTransaction(this->m_cryptoSuite, std::to_string(utcSteadyTimeUs()));
     bcos::bytes data;
     tx->encode(data);
-    txpool.broadcastTransactionBuffer(data);
+    task::syncWait(txpool.broadcastTransactionBuffer(bcos::ref(data)));
     // broadcast to all nodes
     for (const auto& item : this->m_nodeIdList)
     {

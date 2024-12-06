@@ -441,7 +441,7 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
     {
         WEB3_LOG(TRACE) << LOG_DESC("sendRawTransaction") << web3Tx.toString();
     }
-    txpool->broadcastTransaction(*tx);
+    co_await txpool->broadcastTransaction(*tx);
     auto const txResult = co_await txpool->submitTransaction(std::move(tx));
     auto const hash = std::move(web3TxHash);
     if (txResult->status() == 0)

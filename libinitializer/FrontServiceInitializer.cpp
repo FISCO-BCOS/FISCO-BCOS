@@ -245,7 +245,9 @@ void FrontServiceInitializer::initMsgHandlers(bcos::consensus::ConsensusInterfac
                            decltype(data) data, decltype(nodeID) nodeID) -> task::Task<void> {
                 try
                 {
-                    txpool->broadcastTransactionBufferByTree(data.toBytes(), false, nodeID);
+                    bytes buffer(data.begin(), data.end());
+                    co_await txpool->broadcastTransactionBufferByTree(
+                        bcos::ref(buffer), false, nodeID);
                     [[maybe_unused]] auto submitResult =
                         co_await txpool->submitTransaction(std::move(transaction));
                 }

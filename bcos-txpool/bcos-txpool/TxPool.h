@@ -51,10 +51,10 @@ public:
     task::Task<protocol::TransactionSubmitResult::Ptr> submitTransactionWithHook(
         protocol::Transaction::Ptr transaction, std::function<void()> onTxSubmitted) override;
 
-    void broadcastTransaction(const protocol::Transaction& transaction) override;
-    void broadcastTransactionBuffer(bytes data) override;
-    void broadcastTransactionBufferByTree(
-        bytes data, bool isStartNode = false, bcos::crypto::NodeIDPtr fromNode = nullptr) override;
+    task::Task<void> broadcastTransaction(const protocol::Transaction& transaction) override;
+    task::Task<void> broadcastTransactionBuffer(bytesConstRef data) override;
+    task::Task<void> broadcastTransactionBufferByTree(bytesConstRef data, bool isStartNode = false,
+        bcos::crypto::NodeIDPtr fromNode = nullptr) override;
 
     task::Task<std::vector<protocol::Transaction::ConstPtr>> getTransactions(
         RANGES::any_view<bcos::h256, RANGES::category::mask | RANGES::category::sized> hashes)
