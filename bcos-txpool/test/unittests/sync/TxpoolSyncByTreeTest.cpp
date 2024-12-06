@@ -45,7 +45,7 @@ BOOST_AUTO_TEST_CASE(testFreeNodeTreeSync)
     auto tx = fakeTransaction(this->m_cryptoSuite, std::to_string(utcTime()));
     bcos::bytes data;
     tx->encode(data);
-    txpool->broadcastTransactionBuffer(bcos::ref(data));
+    txpool->broadcastTransactionBuffer(data);
 }
 
 BOOST_AUTO_TEST_CASE(testConsensusNodeTreeSync)
@@ -75,7 +75,7 @@ BOOST_AUTO_TEST_CASE(testConsensusNodeTreeSync)
         [[maybe_unused]] auto submitResult =
             co_await txpool.submitTransaction(std::move(transaction));
     }(txpool, tx));
-    txpool.broadcastTransactionBufferByTree(bcos::ref(data), true);
+    txpool.broadcastTransactionBufferByTree(data, true);
     // broadcast to all nodes finally
     auto totalMsg = m_frontService->totalSendMsgSize();
     for (const auto& item : this->m_nodeIdList)
@@ -111,7 +111,7 @@ BOOST_AUTO_TEST_CASE(testObserverNodeTreeSync)
     auto tx = fakeTransaction(this->m_cryptoSuite, std::to_string(utcSteadyTime()));
     bcos::bytes data;
     tx->encode(data);
-    txpool.broadcastTransactionBufferByTree(bcos::ref(data), true);
+    txpool.broadcastTransactionBufferByTree(data, true);
     // broadcast to all nodes finally
     for (const auto& item : this->m_nodeIdList)
     {
@@ -147,7 +147,7 @@ BOOST_AUTO_TEST_CASE(testConsensusNodeWithLowerVersionTreeSync)
     auto tx = fakeTransaction(this->m_cryptoSuite, std::to_string(utcSteadyTimeUs()));
     bcos::bytes data;
     tx->encode(data);
-    txpool.broadcastTransactionBuffer(bcos::ref(data));
+    txpool.broadcastTransactionBuffer(data);
     // broadcast to all nodes
     for (const auto& item : this->m_nodeIdList)
     {

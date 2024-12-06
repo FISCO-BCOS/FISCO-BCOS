@@ -128,7 +128,7 @@ public:
     }
 
 
-    void broadcastTransactionBuffer([[maybe_unused]] const bcos::bytesConstRef& _data) override
+    void broadcastTransactionBuffer([[maybe_unused]] bcos::bytes _data) override
     {
         struct TarsCallback : public bcostars::TxPoolServicePrxCallback
         {

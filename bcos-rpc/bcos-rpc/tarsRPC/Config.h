@@ -16,6 +16,7 @@ constexpr static std::string_view TARS_CONFIG_TEMPLATE =
     "       logsize=10M\n"
     "       deactivating-timeout=2000\n"
     "       logLevel=INFO\n"
+    "       closecout=0\n"
     "       <fiscobcos.rpc.RPCObjAdapter>\n"
     "            allow\n"
     "            endpoint=tcp -h [[TARS_HOST]] -p [[TARS_PORT]] -t 60000\n"

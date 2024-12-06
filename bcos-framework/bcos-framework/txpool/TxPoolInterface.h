@@ -71,12 +71,12 @@ public:
         BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
     }
 
-    virtual void broadcastTransactionBuffer([[maybe_unused]] const bytesConstRef& _data)
+    virtual void broadcastTransactionBuffer([[maybe_unused]] bytes _data)
     {
         BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
     }
 
-    virtual void broadcastTransactionBufferByTree([[maybe_unused]] const bytesConstRef& _data,
+    virtual void broadcastTransactionBufferByTree([[maybe_unused]] bytes _data,
         bool isStartNode = false, bcos::crypto::NodeIDPtr fromNode = nullptr)
     {
         BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));

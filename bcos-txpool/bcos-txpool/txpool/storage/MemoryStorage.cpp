@@ -988,10 +988,11 @@ void MemoryStorage::clear()
 HashListPtr MemoryStorage::filterUnknownTxs(HashList const& _txsHashList, NodeIDPtr _peer)
 {
     auto values = m_txsTable.batchFind<TxsMap::ReadAccessor>(_txsHashList);
-    HashList missList =
-        ::ranges::views::filter(values, [](const auto& transaction) { return !transaction; }) |
-        ::ranges::views::transform([](const auto& transaction) { return (*transaction)->hash(); }) |
-        ::ranges::to<std::vector>();
+    HashList missList = ::ranges::views::filter(values, [](const auto& transaction) {
+        return transaction.has_value();
+    }) | ::ranges::views::transform([](const auto& transaction) {
+        return (*transaction)->hash();
+    }) | ::ranges::to<std::vector>();
 
     auto unknownTxsList = std::make_shared<HashList>();
     auto results = m_missedTxs.batchInsert<true>(missList);
