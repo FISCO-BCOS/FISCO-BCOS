@@ -122,11 +122,9 @@ void GatewayNodeManager::onReceiveStatusSeq(
 bool GatewayNodeManager::statusChanged(std::string const& _p2pNodeID, uint32_t _seq)
 {
     bool ret = true;
-    ReadGuard l(x_p2pID2Seq);
-    auto it = m_p2pID2Seq.find(_p2pNodeID);
-    if (it != m_p2pID2Seq.end())
+    if (decltype(m_p2pID2Seq)::const_accessor accessor; m_p2pID2Seq.find(accessor, _p2pNodeID))
     {
-        ret = (_seq > it->second);
+        ret = (_seq > accessor->second);
     }
     return ret;
 }
@@ -154,13 +152,12 @@ void GatewayNodeManager::updatePeerStatus(std::string const& _p2pID, GatewayNode
 {
     auto seq = _status->seq();
     {
-        UpgradableGuard l(x_p2pID2Seq);
-        if (m_p2pID2Seq.contains(_p2pID) && (m_p2pID2Seq.at(_p2pID) >= seq))
+        decltype(m_p2pID2Seq)::accessor accessor;
+        if (m_p2pID2Seq.find(accessor, _p2pID) && (accessor->second >= seq))
         {
             return;
         }
-        UpgradeGuard ul(l);
-        m_p2pID2Seq[_p2pID] = seq;
+        accessor->second = seq;
     }
     // remove peers info
     // insert the latest peers info
@@ -262,7 +259,6 @@ void GatewayNodeManager::onRemoveNodeIDs(const P2pID& _p2pID)
     NODE_MANAGER_LOG(INFO) << LOG_DESC("onRemoveNodeIDs") << LOG_KV("p2pid", _p2pID);
     {
         // remove statusSeq info
-        WriteGuard l(x_p2pID2Seq);
         m_p2pID2Seq.erase(_p2pID);
     }
     m_peersRouterTable->removeP2PID(_p2pID);

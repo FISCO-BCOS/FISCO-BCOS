@@ -103,7 +103,7 @@ bcostars::Error bcos::rpc::RPCServer::sendTransaction(const bcostars::Transactio
         task::wait(
             [](decltype(txpool) txpool, decltype(transaction) transaction) -> task::Task<void> {
                 co_await txpool.broadcastTransaction(*transaction);
-            }(txpool, std::move(transaction)));
+            }(txpool, transaction));
     });
     bcos::task::wait([](decltype(this) self, decltype(transaction) transaction,
                          decltype(txpool) txpool,
