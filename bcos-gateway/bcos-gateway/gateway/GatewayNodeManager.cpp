@@ -151,14 +151,13 @@ void GatewayNodeManager::onReceiveNodeStatus(
 void GatewayNodeManager::updatePeerStatus(std::string const& _p2pID, GatewayNodeStatus::Ptr _status)
 {
     auto seq = _status->seq();
+    decltype(m_p2pID2Seq)::accessor accessor;
+    if (!m_p2pID2Seq.insert(accessor, _p2pID) && (accessor->second >= seq))
     {
-        decltype(m_p2pID2Seq)::accessor accessor;
-        if (m_p2pID2Seq.find(accessor, _p2pID) && (accessor->second >= seq))
-        {
-            return;
-        }
-        accessor->second = seq;
+        return;
     }
+    accessor->second = seq;
+    accessor.release();
     // remove peers info
     // insert the latest peers info
     m_peersRouterTable->updatePeerStatus(_p2pID, _status);
