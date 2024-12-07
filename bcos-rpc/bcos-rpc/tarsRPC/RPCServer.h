@@ -45,7 +45,6 @@ public:
 
 private:
     Params& m_params;
-    tbb::task_group bradcastTaskGroup;
 };
 
 class RPCApplication : public tars::Application

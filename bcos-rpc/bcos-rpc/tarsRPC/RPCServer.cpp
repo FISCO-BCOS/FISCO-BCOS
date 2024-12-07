@@ -99,12 +99,9 @@ bcostars::Error bcos::rpc::RPCServer::sendTransaction(const bcostars::Transactio
         });
 
     auto& txpool = m_params.node->txpoolRef();
-    bradcastTaskGroup.run([&txpool, transaction]() {
-        task::wait(
-            [](decltype(txpool) txpool, decltype(transaction) transaction) -> task::Task<void> {
-                co_await txpool.broadcastTransaction(*transaction);
-            }(txpool, transaction));
-    });
+    task::wait([](decltype(txpool) txpool, decltype(transaction) transaction) -> task::Task<void> {
+        co_await txpool.broadcastTransaction(*transaction);
+    }(txpool, transaction));
     bcos::task::wait([](decltype(this) self, decltype(transaction) transaction,
                          decltype(txpool) txpool,
                          tars::TarsCurrentPtr current) -> task::Task<void> {
