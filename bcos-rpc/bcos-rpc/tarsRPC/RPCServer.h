@@ -1,10 +1,8 @@
 #pragma once
-#ifdef _WIN32
-#include <tup/Tars.h>
-#endif
 #include "../groupmgr/NodeService.h"
 #include <bcos-tars-protocol/tars/RPC.h>
 #include <tbb/concurrent_hash_map.h>
+#include <tup/Tars.h>
 #include <utility>
 
 namespace bcos::rpc
@@ -25,7 +23,12 @@ struct Params
 class RPCServer : public bcostars::RPC
 {
 public:
+    RPCServer(const RPCServer&) = delete;
+    RPCServer(RPCServer&&) = delete;
+    RPCServer& operator=(const RPCServer&) = delete;
+    RPCServer& operator=(RPCServer&&) = delete;
     RPCServer(Params& params) : m_params(params) {}
+    ~RPCServer() noexcept override = default;
 
     void initialize() override;
     void destroy() override;
@@ -42,6 +45,7 @@ public:
 
 private:
     Params& m_params;
+    tbb::task_group bradcastTaskGroup;
 };
 
 class RPCApplication : public tars::Application

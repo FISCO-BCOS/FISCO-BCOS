@@ -499,7 +499,6 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
             }
 
             auto start = utcSteadyTime();
-            std::string extraData = std::string(transaction->extraData());
             co_await txpool->broadcastTransactionBuffer(bcos::ref(transactionData));
             auto submitResult = co_await txpool->submitTransaction(transaction);
 
@@ -525,9 +524,8 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
             if (protocol::g_BCOSConfig.needRetInput())
             {
                 jResp["input"] = toHexStringWithPrefix(transaction->input());
-                jResp["extraData"] = extraData;
+                jResp["extraData"] = std::string(transaction->extraData());
             }
-
 
             if (requireProof) [[unlikely]]
             {
