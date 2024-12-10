@@ -71,7 +71,7 @@ TransactionStatus TxValidator::verify(bcos::protocol::Transaction::ConstPtr _tx)
 bcos::protocol::TransactionStatus TxValidator::checkTransaction(
     bcos::protocol::Transaction::ConstPtr _tx, bool onlyCheckLedgerNonce)
 {
-    if (_tx->type() == static_cast<uint8_t>(TransactionType::Web3Transaction)) [[unlikely]]
+    if (_tx->type() == static_cast<uint8_t>(TransactionType::Web3Transaction))
     {
         auto const status = checkWeb3Nonce(_tx, onlyCheckLedgerNonce);
         if (status != TransactionStatus::None)

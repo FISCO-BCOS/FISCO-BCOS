@@ -19,6 +19,7 @@
  * @date 2021-05-07
  */
 #include "bcos-txpool/txpool/storage/MemoryStorage.h"
+#include "bcos-txpool/txpool/validator/TransactionValidator.h"
 #include "bcos-utilities/Common.h"
 
 #include <bcos-protocol/TransactionSubmitResultImpl.h>
@@ -389,6 +390,19 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
         return TransactionStatus::None;
     }
 
+    if (result != TransactionStatus::None)
+    {
+        return result;
+    }
+
+    // check txpool validator
+    result = TransactionValidator::ValidateTransaction(transaction);
+    if (result != TransactionStatus::None)
+    {
+        return result;
+    }
+
+    result = TransactionValidator::ValidateTransactionWithState(transaction, m_config->ledger());
     if (result != TransactionStatus::None)
     {
         return result;

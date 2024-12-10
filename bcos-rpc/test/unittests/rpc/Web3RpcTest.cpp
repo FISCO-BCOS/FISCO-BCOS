@@ -27,6 +27,7 @@
 #include "bcos-crypto/signature/sm2/SM2KeyPair.h"
 #include "bcos-framework/protocol/GlobalConfig.h"
 #include "bcos-rpc/bcos-rpc/RpcFactory.h"
+#include "bcos-utilities/DataConvertUtility.h"
 
 #include <bcos-codec/wrapper/CodecWrapper.h>
 #include <bcos-crypto/hash/Keccak256.h>
@@ -44,6 +45,7 @@
 
 #include <bcos-rpc/filter/LogMatcher.h>
 #include <bcos-rpc/web3jsonrpc/model/Web3FilterRequest.h>
+#include <string_view>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -365,6 +367,12 @@ BOOST_AUTO_TEST_CASE(handleEIP1559TxTest)
         }(this, std::move(hashes)));
         return rawWeb3Tx;
     };
+
+    std::optional<storage::Entry> balanceOp = storage::Entry();
+    balanceOp->set(asBytes("0x123456700000000000"));
+    auto address = *fromHexString("0x1f9090aae28b8a3dceadf281b0f12828e676c326");
+    auto addressView = std::string_view((char*)address.data(), address.size());
+    m_ledger->setStoragteAt(addressView, bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE, balanceOp);
 
     // clang-format off
     // https://etherscan.io/tx/0x5b2f242c755ec9f9ed36628331991bd6c90b712b5867a0c7f3a4516caf09cc68
