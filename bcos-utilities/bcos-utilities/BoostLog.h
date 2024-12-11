@@ -21,6 +21,30 @@
  */
 #pragma once
 
+#ifdef WIN32
+#define WIN32_LEAN_AND_MEAN
+#endif
+
+#ifdef ERROR
+#undef ERROR
+#endif
+
+#ifdef TRACE
+#undef TRACE
+#endif
+
+#ifdef INFO
+#undef INFO
+#endif
+
+#ifdef WARNING
+#undef WARNING
+#endif
+
+#ifdef FATAL
+#undef FATAL
+#endif
+
 #include <boost/log/attributes/constant.hpp>
 #include <boost/log/attributes/scoped_attribute.hpp>
 #include <boost/log/sinks/text_file_backend.hpp>
@@ -42,10 +66,6 @@
 
 #ifndef LOG_KV
 #define LOG_KV(_K, _V) "," << (_K) << "=" << (_V)
-#endif
-
-#ifdef ERROR
-#undef ERROR
 #endif
 
 namespace bcos

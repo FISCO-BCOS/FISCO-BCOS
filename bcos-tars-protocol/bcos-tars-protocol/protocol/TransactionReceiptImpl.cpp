@@ -166,3 +166,19 @@ void bcostars::protocol::TransactionReceiptImpl::setMessage(std::string message)
 {
     m_inner()->message = std::move(message);
 }
+size_t bcostars::protocol::TransactionReceiptImpl::size() const
+{
+    size_t size = 0;
+    size += m_inner()->data.output.size();
+    for (auto& it : m_inner()->data.logEntries)
+    {
+        size += it.data.size();
+        size += it.address.size();
+        for (auto& topic : it.topic)
+        {
+            size += topic.size();
+        }
+    }
+    size += m_inner()->message.size();
+    return size;
+}

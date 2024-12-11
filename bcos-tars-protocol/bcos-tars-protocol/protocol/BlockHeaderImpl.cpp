@@ -279,3 +279,13 @@ void bcostars::protocol::BlockHeaderImpl::clearDataHash()
 {
     m_inner()->dataHash.clear();
 }
+
+size_t bcostars::protocol::BlockHeaderImpl::size() const
+{
+    size_t size = 0;
+    size += m_inner()->data.txsRoot.size();
+    size += m_inner()->data.stateRoot.size();
+    size += m_inner()->data.receiptRoot.size();
+    size += m_inner()->data.extraData.size();
+    return size;
+}

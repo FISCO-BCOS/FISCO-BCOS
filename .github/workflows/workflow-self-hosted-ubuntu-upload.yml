@@ -1,4 +1,4 @@
-name: Centos CI Upload
+name: Ubuntu CI Upload
 on:
   push:
     paths-ignore:
@@ -22,13 +22,13 @@ env:
 
 jobs:
   build_centos:
-    name: centos ci upload
-    runs-on: self-hosted-centos
+    name: ubuntu ci upload
+    runs-on: self-hosted-ubuntu
     strategy:
       fail-fast: false
     env:
-      VCPKG_ROOT: ~/cache/vcpkg
-      DEPS_ROOT: ~/cache/deps
+      VCPKG_ROOT: /home/ci/cache/vcpkg
+      DEPS_ROOT: /home/ci/cache/deps
     steps:
       - uses: actions/checkout@v3
         with:
@@ -45,16 +45,17 @@ jobs:
         with:
           node-version: "16.x"
 
-      - name: yum install
+      - name: apt install
         run: |
-          sudo yum install -y -q epel-release centos-release-scl flex bison patch gmp-static  glibc-static glibc-devel libzstd-devel
-          sudo yum install -y -q devtoolset-11 llvm-toolset-7.0 rh-perl530-perl cmake3 zlib-devel ccache python-devel python3-devel python3-pip automake openssl
-          sudo yum reinstall -y -q https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
-          sudo yum install -y -q git
+          sudo apt update
+          sudo apt install -y  lcov ccache wget python3-dev python3-pip git curl zip unzip tar
+          sudo apt install -y --no-install-recommends \
+              clang make build-essential cmake libssl-dev zlib1g-dev ca-certificates \
+              libgmp-dev flex bison patch libzstd-dev ninja-build pkg-config ccache uuid-runtime automake
 
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-01-10
+          toolchain: nightly-2024-02-25
           override: true
 
       - name: Reuse build cache
@@ -73,17 +74,10 @@ jobs:
 
       - name: Build for linux
         run: |
-          . /opt/rh/devtoolset-11/enable
-          . /opt/rh/rh-perl530/enable
-          export LIBCLANG_PATH=/opt/rh/llvm-toolset-7.0/root/lib64/
-          . /opt/rh/llvm-toolset-7.0/enable
-          cd build && cmake -DALLOCATOR=defalut -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DTESTS=ON -DWITH_LIGHTNODE=OFF -DWITH_CPPSDK=OFF -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=OFF .. || cat *.log
-          make -j8
-          chmod +x ./fisco-bcos-air/fisco-bcos
-          ./fisco-bcos-air/fisco-bcos -v
-      - name: Test
-        run: cd build
-      - uses: actions/upload-artifact@v2
+          export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
+          cd build && cmake -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DTESTS=OFF -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=OFF -DTOOLS=OFF -DBUILD_STATIC=ON -DALLOCATOR=default .. || cat *.log
+          make -j6
+      - uses: actions/upload-artifact@v3
         with:
           name: fisco-bcos.tar.gz
           path: build/fisco-bcos-air/fisco-bcos

@@ -192,9 +192,9 @@ BOOST_AUTO_TEST_CASE(test_initConfig)
         BOOST_CHECK_EQUAL(config->connectedNodes().size(), 3);
 
         auto certConfig = config->certConfig();
-        BOOST_CHECK(!certConfig.caCert.empty());
-        BOOST_CHECK(!certConfig.nodeCert.empty());
-        BOOST_CHECK(!certConfig.nodeKey.empty());
+        BOOST_CHECK(!certConfig.caCert->empty());
+        BOOST_CHECK(!certConfig.nodeCert->empty());
+        BOOST_CHECK(!certConfig.nodeKey->empty());
     }
 }
 
@@ -215,11 +215,11 @@ BOOST_AUTO_TEST_CASE(test_initSMConfig)
         BOOST_CHECK_EQUAL(config->connectedNodes().size(), 1);
 
         auto smCertConfig = config->smCertConfig();
-        BOOST_CHECK(!smCertConfig.caCert.empty());
-        BOOST_CHECK(!smCertConfig.nodeCert.empty());
-        BOOST_CHECK(!smCertConfig.nodeKey.empty());
-        BOOST_CHECK(!smCertConfig.enNodeCert.empty());
-        BOOST_CHECK(!smCertConfig.enNodeKey.empty());
+        BOOST_CHECK(!smCertConfig.caCert->empty());
+        BOOST_CHECK(!smCertConfig.nodeCert->empty());
+        BOOST_CHECK(!smCertConfig.nodeKey->empty());
+        BOOST_CHECK(!smCertConfig.enNodeCert->empty());
+        BOOST_CHECK(!smCertConfig.enNodeKey->empty());
     }
 }
 

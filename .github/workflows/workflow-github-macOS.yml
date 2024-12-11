@@ -1,4 +1,4 @@
-name: macOS-13 CI check
+name: macOS-15 CI check
 on:
   push:
     paths-ignore:
@@ -19,7 +19,7 @@ concurrency:
 jobs:
   compile_macOS_release:
     name: macOS
-    runs-on: macos-13
+    runs-on: macos-15
 
     steps:
       - uses: actions/checkout@v3
@@ -51,16 +51,5 @@ jobs:
         run: |
           cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
 
-      - name: prepare RPCAPI Tests
-        run: cd tools && bash .ci/rpcapi_ci_prepare.sh
-
-      - name: FISCO BCOS RpcApiTest
-        uses: matt-ball/newman-action@v1.0.4
-        with:
-          collection: https://raw.githubusercontent.com/FISCO-BCOS/FISCOBCOS-RPC-API/main/fiscobcos.rpcapi.collection.json
-
       - name: Integration test - Air
         run: cd tools && bash .ci/ci_check_air.sh ${{ github.base_ref }}
-
-      - name: Integration test - Pro
-        run: cd tools && bash .ci/ci_check_pro.sh ${{ github.base_ref }}

@@ -49,6 +49,7 @@ public:
     void setExtraData(bytes&& _extraData) override {}
     void setSignatureList(const gsl::span<const protocol::Signature>& _signatureList) override {}
     void setSignatureList(protocol::SignatureList&& _signatureList) override {}
+    size_t size() const override { return 0; }
 
 private:
     protocol::BlockNumber m_blockNumber;

@@ -15,7 +15,7 @@ concurrency:
 jobs:
   compile_macOS_release:
     name: upload standard binary of macOS
-    runs-on: macos-13
+    runs-on: macos-15
     # runs-on: self-hosted-mac
     # if: startsWith(github.ref,'v2')
     steps:
@@ -42,7 +42,7 @@ jobs:
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: bin/fisco-bcos.tar.gz
-          asset_name: fisco-bcos-macOS-x86_64.tar.gz
+          asset_name: fisco-bcos-macOS-arm.tar.gz
           tag: ${{ github.ref }}
           overwrite: true
       - name: Upload fisco-bcos-lightnode binaries to release
@@ -50,7 +50,7 @@ jobs:
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: bin/lightnode.tar.gz
-          asset_name: fisco-bcos-lightnode-macOS-x86_64.tar.gz
+          asset_name: fisco-bcos-lightnode-macOS-arm.tar.gz
           tag: ${{ github.ref }}
           overwrite: true
       - name: Upload BcosNodeService binaries to release
@@ -58,7 +58,7 @@ jobs:
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: fisco-bcos-tars-service/BcosNodeService.tgz
-          asset_name: BcosNodeService-macOS-x86_64.tgz
+          asset_name: BcosNodeService-macOS-arm.tgz
           tag: ${{ github.ref }}
           overwrite: true
       - name: Upload BcosRpcService binaries to release
@@ -66,7 +66,7 @@ jobs:
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: fisco-bcos-tars-service/BcosRpcService.tgz
-          asset_name: BcosRpcService-macOS-x86_64.tgz
+          asset_name: BcosRpcService-macOS-arm.tgz
           tag: ${{ github.ref }}
           overwrite: true
       - name: Upload BcosGatewayService binaries to release
@@ -74,7 +74,7 @@ jobs:
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: fisco-bcos-tars-service/BcosGatewayService.tgz
-          asset_name: BcosGatewayService-macOS-x86_64.tgz
+          asset_name: BcosGatewayService-macOS-arm.tgz
           tag: ${{ github.ref }}
           overwrite: true
       - name: Upload BcosMaxNodeService binaries to release
@@ -82,7 +82,7 @@ jobs:
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: fisco-bcos-tars-service/BcosMaxNodeService.tgz
-          asset_name: BcosMaxNodeService-macOS-x86_64.tgz
+          asset_name: BcosMaxNodeService-macOS-arm.tgz
           tag: ${{ github.ref }}
           overwrite: true
       - name: Upload BcosExecutorService binaries to release
@@ -90,7 +90,7 @@ jobs:
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: fisco-bcos-tars-service/BcosExecutorService.tgz
-          asset_name: BcosExecutorService-macOS-x86_64.tgz
+          asset_name: BcosExecutorService-macOS-arm.tgz
           tag: ${{ github.ref }}
           overwrite: true
       - name: Upload build_chain.sh
@@ -118,7 +118,13 @@ jobs:
     env:
       VCPKG_ROOT: ~/cache/vcpkg
       DEPS_ROOT: ~/cache/deps
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+      ACTIONS_RUNNER_FORCED_INTERNAL_NODE_VERSION: node16
+      ACTIONS_RUNNER_FORCE_ACTIONS_NODE_VERSION: node16
     steps:
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '16.x'
       - uses: actions/checkout@v3
         with:
           clean: false
@@ -227,7 +233,13 @@ jobs:
     env:
       VCPKG_ROOT: ~/cache/vcpkg
       DEPS_ROOT: ~/cache/deps
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+      ACTIONS_RUNNER_FORCED_INTERNAL_NODE_VERSION: node16
+      ACTIONS_RUNNER_FORCE_ACTIONS_NODE_VERSION: node16
     steps:
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '16.x'
       - uses: actions/checkout@v3
         with:
           clean: false
