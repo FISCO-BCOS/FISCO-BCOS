@@ -47,38 +47,6 @@ public:
 
 BOOST_FIXTURE_TEST_SUITE(testRpcValidator, RpcValidatorFixture)
 
-// BOOST_AUTO_TEST_CASE(testWeb3TransactionCheck)
-// {
-//     // std::cout << "===== BCOS Test Case : testWeb3TransactionCheck"
-//     //           << "=====" << std::endl;
-
-//     // Web3Transaction web3tx;
-//     // web3tx.chainId = 123;
-//     // auto result = RpcValidator::checkWeb3ReplayedProtected(std::move(web3tx), 123);
-//     // BOOST_CHECK(result == true);
-//     // uint64_t chainIdError = 124;
-//     // result = RpcValidator::checkWeb3ReplayedProtected(std::move(web3tx), chainIdError);
-//     // BOOST_CHECK(result == false);
-//     // web3tx.value = 1;
-
-//     // auto tarsTx = web3tx.takeToTarsTransaction();
-
-//     // auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
-//     //     [m_tx = std::move(tarsTx)]() mutable { return &m_tx; });
-
-//     // result = RpcValidator::checkValueNgative(tx);
-//     // BOOST_CHECK(result == true);
-//     // Web3Transaction web3tx1;
-
-//     // auto largeInput = "0x" + std::string(MAX_INITCODE_SIZE, '1');
-//     // web3tx1.data = bcos::asBytes(largeInput);
-//     // auto tarsTx1 = web3tx1.takeToTarsTransaction();
-//     // auto tx1 = std::make_shared<bcostars::protocol::TransactionImpl>(
-//     //     [m_tx = std::move(tarsTx1)]() mutable { return &m_tx; });
-//     // result = RpcValidator::checkValueNgative(tx1);
-//     // BOOST_CHECK(result == false);
-// }
-
 BOOST_AUTO_TEST_CASE(testBcosTransactionSignatureCheck)
 {
     std::cout << "===== BCOS Test Case : testBcosTransactionSignatureCheck"
