@@ -21,9 +21,11 @@
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include "bcos-framework/bcos-framework/testutils/faker/FakeTransaction.h"
 #include "bcos-framework/storage/Entry.h"
+#include "bcos-framework/txpool/Constant.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include <txpool/validator/TransactionValidator.h>
 
+#include "bcos-task/Wait.h"
 #include "test/unittests/txpool/TxPoolFixture.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
@@ -87,7 +89,7 @@ BOOST_AUTO_TEST_CASE(testTransactionValidator)
     auto txError = fakeInvalidateTransacton(inputStr, outRangeValue);
 
     auto resultError = TransactionValidator::ValidateTransaction(txError);
-    BOOST_CHECK(resultError == TransactionStatus::NegativeValue);
+    BOOST_CHECK(resultError == TransactionStatus::OverFlowValue);
     // fake input str large size transaction
     auto inputStrLarge = "0x" + std::string(MAX_INITCODE_SIZE, '1');
     auto txLarge = fakeInvalidateTransacton(inputStrLarge, "0x0");
@@ -100,39 +102,37 @@ BOOST_AUTO_TEST_CASE(testTransactionValidator)
 
     std::optional<storage::Entry> codeHashOp = storage::Entry();
     codeHashOp->set(asBytes(""));
-    ledger->setStoragteAt(tx->sender(), bcos::ledger::ACCOUNT_TABLE_FIELDS::CODE_HASH, codeHashOp);
+    ledger->setStorageAt(tx->sender(), bcos::ledger::ACCOUNT_TABLE_FIELDS::CODE_HASH, codeHashOp);
 
 
     std::optional<storage::Entry> balanceOp = storage::Entry();
     balanceOp->set(asBytes("0x123"));
-    ledger->setStoragteAt(tx->sender(), bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE, balanceOp);
+    ledger->setStorageAt(tx->sender(), bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE, balanceOp);
 
-    auto resultWithState = TransactionValidator::ValidateTransactionWithState(tx, ledger);
+    auto resultWithState = task::syncWait(TransactionValidator::ValidateTransactionWithState(tx, ledger));
     BOOST_CHECK(resultWithState == TransactionStatus::None);
 
-    // NoEoA
+    // NoEOA
     auto const eoaKeyNew = cryptoSuite->signatureImpl()->generateKeyPair();
     // case3: transaction with invalid nonce(conflict with the ledger nonce)
     auto txNoEoa = fakeWeb3Tx(cryptoSuite, duplicatedNonce, eoaKeyNew);
 
     std::optional<storage::Entry> codeHashOpNew = storage::Entry();
     codeHashOpNew->set(asBytes("0x012345"));
-    ledger->setStoragteAt(
+    ledger->setStorageAt(
         txNoEoa->sender(), bcos::ledger::ACCOUNT_TABLE_FIELDS::CODE_HASH, codeHashOpNew);
 
-    auto resultWithStateNoEoAAccount =
-        TransactionValidator::ValidateTransactionWithState(txNoEoa, ledger);
-    BOOST_CHECK(resultWithStateNoEoAAccount == TransactionStatus::NoEoAAccount);
+    auto resultWithStateNoEOAAccount =
+        task::syncWait(TransactionValidator::ValidateTransactionWithState(txNoEoa, ledger));
+    BOOST_CHECK(resultWithStateNoEOAAccount == TransactionStatus::NoEOAAccount);
 
     std::string value = "0x1234567";
     auto txNoEoughtValue = fakeInvalidateTransacton(inputStr, value);
-    ledger->setStoragteAt(txNoEoughtValue->sender(), bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE, balanceOp);
+    ledger->setStorageAt(txNoEoughtValue->sender(), bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE, balanceOp);
     auto resultWithStateNoEnoughBalance =
-        TransactionValidator::ValidateTransactionWithState(txNoEoughtValue, ledger);
+        task::syncWait(TransactionValidator::ValidateTransactionWithState(txNoEoughtValue, ledger));
     BOOST_CHECK(resultWithStateNoEnoughBalance == TransactionStatus::NoEnoughBalance);
 
-    // faker->ledger()->setStoragteAt(tx->sender(), std::string_view _key,
-    // std::optional<storage::Entry> _data) clear all the txs before exit
     txpool->txpoolStorage()->clear();
     std::cout << "#### testTransactionValidator finish" << std::endl;
 }

@@ -64,11 +64,10 @@ enum class TransactionStatus : int32_t
     RequestNotBelongToTheGroup = 10009,
     TransactionPoolTimeout = 10010,
     AlreadyInTxPoolAndAccept = 10011,
-    NegativeValue = 10012,
+    OverFlowValue = 10012,
     OversizedData = 10013,
-    NoAccount = 10014,
-    NoEoAAccount = 10015,
-    NoEnoughBalance = 10016,
+    NoEOAAccount = 10014,
+    NoEnoughBalance = 10015,
 };
 
 inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::TransactionStatus const& _er)
@@ -174,17 +173,14 @@ inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::TransactionS
     case TransactionStatus::TransactionPoolTimeout:
         _out << "TransactionPoolTimeout";
         break;
-    case TransactionStatus::NegativeValue:
-        _out << "NegativeValue";
+    case TransactionStatus::OverFlowValue:
+        _out << "OverFlowValue";
         break;
     case TransactionStatus::OversizedData:
         _out << "OversizedData";
         break;
-    case TransactionStatus::NoAccount:
-        _out << "NoAccount";
-        break;
-    case TransactionStatus::NoEoAAccount:
-        _out << "NoEoAAccount";
+    case TransactionStatus::NoEOAAccount:
+        _out << "NoEOAAccount";
         break;
     case TransactionStatus::NoEnoughBalance:
         _out << "NoEnoughBalance";

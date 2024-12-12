@@ -27,13 +27,6 @@
 #include <evmc/evmc.h>
 #include <memory>
 
-// u256 with 0x prefix
-const size_t TRANSACTION_VALUE_MAX_LENGTH = 256 * 2 + 2;
-// EIP-170
-const int MAX_CODE_SIZE = 0x6000;
-// EIP 3860
-const int MAX_INITCODE_SIZE = 2 * MAX_CODE_SIZE;
-
 namespace bcos::txpool
 {
 class TransactionValidator
@@ -44,7 +37,7 @@ public:
     // TODO: get from ledager config
     static bcos::protocol::TransactionStatus ValidateTransaction(
         bcos::protocol::Transaction::ConstPtr _tx);
-    static bcos::protocol::TransactionStatus ValidateTransactionWithState(
+    static task::Task<protocol::TransactionStatus> ValidateTransactionWithState(
         bcos::protocol::Transaction::ConstPtr _tx,
         std::shared_ptr<bcos::ledger::LedgerInterface> _ledger);
 };

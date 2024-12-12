@@ -19,6 +19,10 @@
  */
 
 #include "EthEndpoint.h"
+#include "bcos-protocol/TransactionStatus.h"
+#include "bcos-rpc/groupmgr/NodeService.h"
+#include "bcos-rpc/validator/RpcValidator.h"
+#include "bcos-task/Wait.h"
 
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-codec/rlp/RLPDecode.h>
@@ -36,6 +40,9 @@
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
+#include <boost/throw_exception.hpp>
+#include <cstdint>
+#include <string>
 #include <variant>
 
 using namespace bcos;
@@ -411,6 +418,12 @@ task::Task<void> EthEndpoint::sendTransaction(const Json::Value&, Json::Value& r
     buildJsonContent(result, response);
     co_return;
 }
+std::string removeHexPrefix(std::string_view str) {
+    if (str.starts_with("0x") || str.starts_with("0X")) {
+        return std::string(str.substr(2));
+    }
+    return std::string(str);
+}
 task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Json::Value& response)
 {
     // params: signedTransaction(DATA)
@@ -429,10 +442,31 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, error->errorMessage()));
     }
+    auto config = co_await ledger::getSystemConfig(
+        *m_nodeService->ledger(), ledger::SYSTEM_KEY_WEB3_CHAIN_ID);
+    if (!config.has_value())
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(JsonRpcError::InvalidParams, "ChainId not available!"));
+    }
+    auto [chainId, _] = config.value();
+    auto txChainId = removeHexPrefix(toQuantity(web3Tx.chainId.value_or(0)));
+    if (txChainId != chainId)
+    {
+        std::cout << "txChainId: " << txChainId << ", chainId: " << chainId << std::endl;
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(JsonRpcError::InvalidParams, "Replayed transaction!"));
+    }
+
     auto tarsTx = web3Tx.takeToTarsTransaction();
 
     auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
         [m_tx = std::move(tarsTx)]() mutable { return &m_tx; });
+    // check transaction validator
+    auto transactionStatus =
+        task::syncWait(RpcValidator::checkTransactionValidator(tx, m_nodeService->ledger()));
+    RpcValidator::handleTransactionStatus(transactionStatus);
+
     // for web3.eth.sendRawTransaction, return the hash of raw transaction
     auto web3TxHash = bcos::crypto::keccak256Hash(bcos::ref(rawTxBytes));
     tx->mutableInner().extraTransactionHash.assign(web3TxHash.begin(), web3TxHash.end());

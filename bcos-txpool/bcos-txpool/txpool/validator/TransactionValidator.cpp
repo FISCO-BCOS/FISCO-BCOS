@@ -20,6 +20,7 @@
  */
 #include "TransactionValidator.h"
 #include "bcos-task/Wait.h"
+#include "bcos-framework/txpool/Constant.h"
 
 using namespace bcos;
 using namespace bcos::protocol;
@@ -28,12 +29,12 @@ using namespace bcos::txpool;
 TransactionStatus TransactionValidator::ValidateTransaction(
     bcos::protocol::Transaction::ConstPtr _tx)
 {
-    // TODO: EIP-155
+    // TODO: EIP-155: Simple replay attack protection
     //  u256 value
-    //  TODO: EIP-2681 reduce this to 64 bits
+    //  TODO: EIP-2681: Limit account nonce to 2^64-1
     if (_tx->value().length() > TRANSACTION_VALUE_MAX_LENGTH)
     {
-        return TransactionStatus::NegativeValue;
+        return TransactionStatus::OverFlowValue;
     }
     // EIP-3860: Limit and meter initcode
     if (_tx->size() > MAX_INITCODE_SIZE)
@@ -44,29 +45,29 @@ TransactionStatus TransactionValidator::ValidateTransaction(
     return TransactionStatus::None;
 }
 
-TransactionStatus TransactionValidator::ValidateTransactionWithState(
+task::Task<TransactionStatus> TransactionValidator::ValidateTransactionWithState(
     bcos::protocol::Transaction::ConstPtr _tx,
     std::shared_ptr<bcos::ledger::LedgerInterface> _ledger)
 {
     // EIP-3607: Reject transactions from senders with deployed code
     auto sender = _tx->sender();
-    auto accountCodeHashOpt = task::syncWait(
+    auto accountCodeHashOpt = co_await(
         _ledger->getStorageAt(sender, bcos::ledger::ACCOUNT_TABLE_FIELDS::CODE_HASH, 0));
     auto accountCodeHash = accountCodeHashOpt ? accountCodeHashOpt.value() : storage::Entry();
     if (!accountCodeHash.get().empty())
     {
-        return TransactionStatus::NoEoAAccount;
+        co_return TransactionStatus::NoEOAAccount;
     }
 
     // TODO: add calculate gas price
-    auto balanceOpt = task::syncWait(
+    auto balanceOpt = co_await(
         _ledger->getStorageAt(sender, bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE, 0));
     auto balanceValue = balanceOpt ? u256(balanceOpt.value().get()) : u256(0);
     auto txValue = u256(_tx->value());
     if (balanceValue < txValue)
     {
-        return TransactionStatus::NoEnoughBalance;
+        co_return TransactionStatus::NoEnoughBalance;
     }
 
-    return TransactionStatus::None;
+    co_return TransactionStatus::None;
 }

@@ -415,7 +415,7 @@ public:
         eoaInLedgerNonce = std::move(nonce);
     }
 
-    void setStoragteAt(std::string_view _address, std::string_view _key, std::optional<storage::Entry> _data)
+    void setStorageAt(std::string_view _address, std::string_view _key, std::optional<storage::Entry> _data)
     {
         fakeStorageEntryMaps[std::string_view{_address}][std::string_view{_key}] = _data;
     }
