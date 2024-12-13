@@ -27,7 +27,6 @@
 #include <bcos-utilities/ObjectAllocatorMonitor.h>
 #include <utility>
 
-
 namespace bcos::node
 {
 class AirNodeInitializer

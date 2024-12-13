@@ -94,8 +94,6 @@ public:
 
     uint8_t type() const override;
     bcos::bytesConstRef extraTransactionBytes() const override;
-    ::ranges::any_view<bcos::h256, ::ranges::category::input | ::ranges::category::sized>
-    conflictFields() const override;
 
     const bcostars::Transaction& inner() const;
     bcostars::Transaction& mutableInner();

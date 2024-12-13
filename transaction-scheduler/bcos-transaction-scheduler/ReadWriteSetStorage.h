@@ -2,6 +2,7 @@
 #include "bcos-framework/storage2/Storage.h"
 #include <bcos-task/Trait.h>
 #include <type_traits>
+#include <utility>
 
 namespace bcos::transaction_scheduler
 {
@@ -83,6 +84,16 @@ private:
     {
         co_return co_await storage2::readOne(
             storage.m_storage.get(), std::forward<decltype(key)>(key), direct);
+    }
+
+    friend auto tag_invoke(storage2::tag_t<storage2::writeOne> /*unused*/,
+        ReadWriteSetStorage& storage, auto&& key, auto&& value)
+        -> task::Task<task::AwaitableReturnType<
+            std::invoke_result_t<storage2::WriteOne, Storage&, decltype(key), decltype(value)>>>
+    {
+        putSet(storage, true, key);
+        co_await storage2::writeOne(storage.m_storage.get(), std::forward<decltype(key)>(key),
+            std::forward<decltype(value)>(value));
     }
 
     friend auto tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/,
