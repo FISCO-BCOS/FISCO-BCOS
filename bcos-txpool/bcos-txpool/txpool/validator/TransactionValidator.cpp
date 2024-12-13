@@ -19,8 +19,8 @@
  * @date 2024-12-11
  */
 #include "TransactionValidator.h"
-#include "bcos-task/Wait.h"
 #include "bcos-framework/txpool/Constant.h"
+#include "bcos-task/Wait.h"
 
 using namespace bcos;
 using namespace bcos::protocol;
@@ -37,9 +37,12 @@ TransactionStatus TransactionValidator::ValidateTransaction(
         return TransactionStatus::OverFlowValue;
     }
     // EIP-3860: Limit and meter initcode
-    if (_tx->size() > MAX_INITCODE_SIZE)
+    if (_tx->type() == TransactionType::Web3Transaction)
     {
-        return TransactionStatus::OversizedData;
+        if (_tx->size() > MAX_INITCODE_SIZE)
+        {
+            return TransactionStatus::MaxInitCodeSizeExceeded;
+        }
     }
 
     return TransactionStatus::None;
@@ -51,22 +54,22 @@ task::Task<TransactionStatus> TransactionValidator::ValidateTransactionWithState
 {
     // EIP-3607: Reject transactions from senders with deployed code
     auto sender = _tx->sender();
-    auto accountCodeHashOpt = co_await(
-        _ledger->getStorageAt(sender, bcos::ledger::ACCOUNT_TABLE_FIELDS::CODE_HASH, 0));
+    auto accountCodeHashOpt =
+        co_await (_ledger->getStorageAt(sender, bcos::ledger::ACCOUNT_TABLE_FIELDS::CODE_HASH, 0));
     auto accountCodeHash = accountCodeHashOpt ? accountCodeHashOpt.value() : storage::Entry();
     if (!accountCodeHash.get().empty())
     {
-        co_return TransactionStatus::NoEOAAccount;
+        co_return TransactionStatus::SenderNoEOA;
     }
 
     // TODO: add calculate gas price
-    auto balanceOpt = co_await(
-        _ledger->getStorageAt(sender, bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE, 0));
+    auto balanceOpt =
+        co_await (_ledger->getStorageAt(sender, bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE, 0));
     auto balanceValue = balanceOpt ? u256(balanceOpt.value().get()) : u256(0);
     auto txValue = u256(_tx->value());
     if (balanceValue < txValue)
     {
-        co_return TransactionStatus::NoEnoughBalance;
+        co_return TransactionStatus::InsufficientFunds;
     }
 
     co_return TransactionStatus::None;

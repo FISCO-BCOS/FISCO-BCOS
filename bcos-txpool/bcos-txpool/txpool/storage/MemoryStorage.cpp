@@ -396,19 +396,6 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
         return result;
     }
 
-    // check txpool validator
-    result = TransactionValidator::ValidateTransaction(transaction);
-    if (result != TransactionStatus::None)
-    {
-        return result;
-    }
-
-    result = task::syncWait(TransactionValidator::ValidateTransactionWithState(transaction, m_config->ledger()));
-    if (result != TransactionStatus::None)
-    {
-        return result;
-    }
-
     // start stat the tps when receive first new tx from the sdk
     if (m_tpsStatstartTime == 0 && txsSize == 0)
     {
@@ -424,6 +411,23 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
     // verify the transaction
     result = m_config->txValidator()->verify(transaction);
     m_inRateCollector.update(1, true);
+    if (result != TransactionStatus::None)
+    {
+        return result;
+    }
+    // check txpool validator
+    result = TransactionValidator::ValidateTransaction(transaction);
+    if (result != TransactionStatus::None)
+    {
+        return result;
+    }
+
+    result = task::syncWait(
+        TransactionValidator::ValidateTransactionWithState(transaction, m_config->ledger()));
+    if (result != TransactionStatus::None)
+    {
+        return result;
+    }
     if (result == TransactionStatus::None)
     {
         auto const txImportTime = transaction->importTime();

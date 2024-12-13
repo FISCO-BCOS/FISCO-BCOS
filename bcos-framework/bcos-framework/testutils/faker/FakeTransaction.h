@@ -153,12 +153,11 @@ inline Transaction::Ptr fakeTransaction(CryptoSuite::Ptr _cryptoSuite, const std
 }
 
 inline Transaction::Ptr fakeWeb3Tx(CryptoSuite::Ptr _cryptoSuite, std::string nonce,
-    crypto::KeyPairInterface::UniquePtr const& key)
+    crypto::KeyPairInterface::UniquePtr const& key, std::string inputStr = "testTransaction")
 {
     bcostars::Transaction transaction;
 
     transaction.data.to = key->address(_cryptoSuite->hashImpl()).hex();
-    std::string inputStr = "testTransaction";
     transaction.data.input.assign(inputStr.begin(), inputStr.end());
     transaction.data.nonce = std::move(nonce);
     transaction.type = static_cast<tars::Char>(TransactionType::Web3Transaction);

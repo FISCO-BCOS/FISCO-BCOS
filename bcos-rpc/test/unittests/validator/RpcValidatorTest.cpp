@@ -12,7 +12,7 @@
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/protocol/Transaction.h>
-#include <bcos-rpc/validator/RpcValidator.h>
+#include <bcos-rpc/validator/TransactionValidator.h>
 #include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>
 #include <bcos-tars-protocol/bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <boost/test/tools/old/interface.hpp>
@@ -67,42 +67,23 @@ BOOST_AUTO_TEST_CASE(testBcosTransactionSignatureCheck)
     // BOOST_CHECK(result == false);
     auto tx = factory.createTransaction(
         1, to, input, nonce, 100, "testChainValidator", "testGroup", 1000, *keyPair, "");
-    auto resultStatus = task::syncWait(RpcValidator::checkTransactionValidator(tx, m_ledger));
+    auto resultStatus = TransactionValidator::ValidateTransaction(tx);
     BOOST_CHECK(resultStatus == TransactionStatus::None);
     auto outRangeValue = "0x" + std::string(TRANSACTION_VALUE_MAX_LENGTH, '1');
     tx = factory.createTransaction(1, to, input, nonce, 100, "testChainValidator", "testGroup",
         1000, *keyPair, "", outRangeValue);
-    resultStatus = task::syncWait(RpcValidator::checkTransactionValidator(tx, m_ledger));
+    resultStatus = TransactionValidator::ValidateTransaction(tx);
     BOOST_CHECK(resultStatus == TransactionStatus::OverFlowValue);
 
     auto largeInput = "0x" + std::string(MAX_INITCODE_SIZE, '1');
-    tx = factory.createTransaction(1, to, bcos::asBytes(largeInput), nonce, 100,
-        "testChainValidator", "testGroup", 1000, *keyPair);
-    resultStatus = task::syncWait(RpcValidator::checkTransactionValidator(tx, m_ledger));
-    BOOST_CHECK(resultStatus == TransactionStatus::OversizedData);
-
-    auto accountCodeHash = bcos::storage::Entry();
-    accountCodeHash.set(bcos::asBytes("0x123456"));
-    m_ledger->setStorageAt(
-        tx->sender(), bcos::ledger::ACCOUNT_TABLE_FIELDS::CODE_HASH, accountCodeHash);
-    tx = factory.createTransaction(
-        1, to, input, nonce, 100, "testChainValidator", "testGroup", 1000, *keyPair, "");
-    resultStatus = task::syncWait(RpcValidator::checkTransactionValidator(tx, m_ledger));
-    BOOST_CHECK(resultStatus == TransactionStatus::NoEOAAccount);
-
-    tx = factory.createTransaction(
-        1, to, input, nonce, 100, "testChainValidator", "testGroup", 1000, *keyPair, "", "0x1");
-    accountCodeHash = bcos::storage::Entry();
-    accountCodeHash.set(bcos::asBytes(""));
-    m_ledger->setStorageAt(
-        tx->sender(), bcos::ledger::ACCOUNT_TABLE_FIELDS::CODE_HASH, accountCodeHash);
-    resultStatus = task::syncWait(RpcValidator::checkTransactionValidator(tx, m_ledger));
-    BOOST_CHECK(resultStatus == TransactionStatus::NoEnoughBalance);
-    auto balance = bcos::storage::Entry();
-    balance.set(bcos::asBytes("0x123456"));
-    m_ledger->setStorageAt(tx->sender(), bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE, balance);
-    resultStatus = task::syncWait(RpcValidator::checkTransactionValidator(tx, m_ledger));
-    BOOST_CHECK(resultStatus == TransactionStatus::None);
+    auto const eoaKey = cryptoSuite->signatureImpl()->generateKeyPair();
+    int64_t blockLimit = 10;
+    auto const& blockData = m_ledger->ledgerData();
+    auto duplicatedNonce =
+        blockData[m_ledger->blockNumber() - blockLimit + 1]->transaction(0)->nonce();
+    tx = fakeWeb3Tx(cryptoSuite, duplicatedNonce, eoaKey, largeInput);
+    resultStatus = TransactionValidator::ValidateTransaction(tx);
+    BOOST_CHECK(resultStatus == TransactionStatus::MaxInitCodeSizeExceeded);
 }
 
 

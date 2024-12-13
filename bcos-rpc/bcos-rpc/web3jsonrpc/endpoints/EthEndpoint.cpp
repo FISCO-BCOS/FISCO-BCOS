@@ -21,7 +21,7 @@
 #include "EthEndpoint.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include "bcos-rpc/groupmgr/NodeService.h"
-#include "bcos-rpc/validator/RpcValidator.h"
+#include "bcos-rpc/validator/TransactionValidator.h"
 #include "bcos-task/Wait.h"
 
 #include <bcos-codec/rlp/Common.h>
@@ -418,8 +418,10 @@ task::Task<void> EthEndpoint::sendTransaction(const Json::Value&, Json::Value& r
     buildJsonContent(result, response);
     co_return;
 }
-std::string removeHexPrefix(std::string_view str) {
-    if (str.starts_with("0x") || str.starts_with("0X")) {
+std::string removeHexPrefix(std::string_view str)
+{
+    if (str.starts_with("0x") || str.starts_with("0X"))
+    {
         return std::string(str.substr(2));
     }
     return std::string(str);
@@ -450,10 +452,9 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
             JsonRpcException(JsonRpcError::InvalidParams, "ChainId not available!"));
     }
     auto [chainId, _] = config.value();
-    auto txChainId = removeHexPrefix(toQuantity(web3Tx.chainId.value_or(0)));
-    if (txChainId != chainId)
+    if (auto txChainId = removeHexPrefix(toQuantity(web3Tx.chainId.value_or(0)));
+        txChainId != chainId)
     {
-        std::cout << "txChainId: " << txChainId << ", chainId: " << chainId << std::endl;
         BOOST_THROW_EXCEPTION(
             JsonRpcException(JsonRpcError::InvalidParams, "Replayed transaction!"));
     }
@@ -463,9 +464,8 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
     auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
         [m_tx = std::move(tarsTx)]() mutable { return &m_tx; });
     // check transaction validator
-    auto transactionStatus =
-        task::syncWait(RpcValidator::checkTransactionValidator(tx, m_nodeService->ledger()));
-    RpcValidator::handleTransactionStatus(transactionStatus);
+    auto transactionStatus = TransactionValidator::ValidateTransaction(tx);
+    TransactionValidator::handleTransactionStatus(transactionStatus);
 
     // for web3.eth.sendRawTransaction, return the hash of raw transaction
     auto web3TxHash = bcos::crypto::keccak256Hash(bcos::ref(rawTxBytes));

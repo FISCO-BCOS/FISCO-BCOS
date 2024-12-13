@@ -13,7 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file RpcValidator.h
+ * @file TransactionValidator.h
  * @author: asherli
  * @date 2024/12/12
  */
@@ -32,7 +32,7 @@ namespace bcos::rpc
 // template <typename RpcTransactionTemplate>
 //     requires(std::same_as<RpcTransactionTemplate, protocol::Transaction::Ptr> ||
 //              std::same_as<RpcTransactionTemplate, Web3Transaction>)
-class RpcValidator
+class TransactionValidator
 {
 public:
     // EIP-155: Simple replay attack protection
@@ -45,8 +45,8 @@ public:
     // EIP-3860: Limit and meter initcode
     // EIP-3607: Reject transactions from senders with deployed code
     // Enough balance
-    static task::Task<protocol::TransactionStatus> checkTransactionValidator(
-        protocol::Transaction::Ptr _tx, ledger::LedgerInterface::Ptr _ledger);
+    static protocol::TransactionStatus ValidateTransaction(
+        protocol::Transaction::Ptr _tx);
     static void handleTransactionStatus(protocol::TransactionStatus transactionStatus);
 };
 

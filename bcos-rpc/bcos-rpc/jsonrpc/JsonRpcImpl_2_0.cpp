@@ -21,7 +21,7 @@
 #include "bcos-crypto/ChecksumAddress.h"
 #include "bcos-crypto/interfaces/crypto/CommonType.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
-#include "bcos-rpc/validator/RpcValidator.h"
+#include "bcos-rpc/validator/TransactionValidator.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
 #include <bcos-boostssl/websocket/WsMessage.h>
@@ -504,9 +504,8 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
                 BOOST_THROW_EXCEPTION(
                     JsonRpcException(JsonRpcError::InternalError, "Replayed transaction!"));
             }
-            auto transactionStatus = task::syncWait(
-                RpcValidator::checkTransactionValidator(transaction, nodeService->ledger()));
-            RpcValidator::handleTransactionStatus(transactionStatus);
+            auto transactionStatus = TransactionValidator::ValidateTransaction(transaction);
+            TransactionValidator::handleTransactionStatus(transactionStatus);
 
             auto start = utcSteadyTime();
             std::string extraData = std::string(transaction->extraData());

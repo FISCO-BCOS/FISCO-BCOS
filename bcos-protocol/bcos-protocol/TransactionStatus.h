@@ -65,9 +65,9 @@ enum class TransactionStatus : int32_t
     TransactionPoolTimeout = 10010,
     AlreadyInTxPoolAndAccept = 10011,
     OverFlowValue = 10012,
-    OversizedData = 10013,
-    NoEOAAccount = 10014,
-    NoEnoughBalance = 10015,
+    MaxInitCodeSizeExceeded = 10013,
+    SenderNoEOA = 10014,
+    InsufficientFunds = 10015,
 };
 
 inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::TransactionStatus const& _er)
@@ -176,14 +176,17 @@ inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::TransactionS
     case TransactionStatus::OverFlowValue:
         _out << "OverFlowValue";
         break;
-    case TransactionStatus::OversizedData:
-        _out << "OversizedData";
+    case TransactionStatus::MaxInitCodeSizeExceeded:
+        _out << "MaxInitCodeSizeExceeded";
         break;
-    case TransactionStatus::NoEOAAccount:
-        _out << "NoEOAAccount";
+    case TransactionStatus::SenderNoEOA:
+        _out << "SenderNoEOA";
         break;
-    case TransactionStatus::NoEnoughBalance:
-        _out << "NoEnoughBalance";
+    case TransactionStatus::InsufficientFunds:
+        _out << "InsufficientFunds";
+        break;
+    case TransactionStatus::AlreadyInTxPoolAndAccept:
+        _out << "AlreadyInTxPoolAndAccept";
         break;
     case TransactionStatus::Unknown:
     default:
@@ -192,7 +195,6 @@ inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::TransactionS
     }
     return _out;
 }
-
 inline std::string toString(protocol::TransactionStatus const& _status)
 {
     std::stringstream stream;
