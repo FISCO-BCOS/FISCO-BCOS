@@ -22,6 +22,7 @@
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-rpc/filter/Common.h>
 #include <json/json.h>
+#include <boost/algorithm/string.hpp>
 #include <string>
 #include <vector>
 
@@ -66,7 +67,12 @@ public:
 
     void setFromBlock(int64_t _fromBlock) { m_fromBlock = _fromBlock; }
     void setToBlock(int64_t _toBlock) { m_toBlock = _toBlock; }
-    void addAddress(std::string _address) { m_addresses.insert(std::move(_address)); }
+    // FIXME))
+    void addAddress(std::string _address)
+    {
+        boost::to_lower(_address);
+        m_addresses.insert(std::move(_address));
+    }
     void resizeTopic(size_t size) { m_topics.resize(size); }
     void addTopic(std::size_t _index, std::string _topic)
     {
