@@ -111,7 +111,7 @@ inline task::Task<std::shared_ptr<Executable>> getExecutable(
     Account<std::decay_t<decltype(storage)>> account(storage, address, binaryAddress);
     if (auto codeEntry = co_await ledger::account::code(account))
     {
-        auto executable = std::make_shared<Executable>(Executable(std::move(*codeEntry), revision));
+        auto executable = std::make_shared<Executable>(std::move(*codeEntry), revision);
         co_await storage2::writeOne(getCacheExecutables(), address, executable);
         co_return executable;
     }
@@ -673,32 +673,34 @@ private:
         // 因为流水线的原因，可能该合约还没创建
         // Due to the pipeline process, it is possible that the contract has not
         // yet been created
-        if (m_executable = m_executable ? m_executable :
-                                          co_await getExecutable(m_rollbackableStorage.get(),
-                                              ref.code_address, m_revision,
-                                              m_ledgerConfig.get().features().get(
-                                                  ledger::Features::Flag::feature_raw_address));
-            !m_executable)
+        if (!m_executable)
         {
-            if (ref.input_size > 0)
+            if (m_executable = co_await getExecutable(m_rollbackableStorage.get(), ref.code_address,
+                    m_revision,
+                    m_ledgerConfig.get().features().get(
+                        ledger::Features::Flag::feature_raw_address));
+                !m_executable)
             {
-                BOOST_THROW_EXCEPTION(NotFoundCodeError());
+                if (ref.input_size > 0)
+                {
+                    BOOST_THROW_EXCEPTION(NotFoundCodeError());
+                }
+                auto status = EVMC_SUCCESS;
+                auto gasLeft = ref.gas - executor::BALANCE_TRANSFER_GAS;
+                if (ref.gas < executor::BALANCE_TRANSFER_GAS)
+                {
+                    status = EVMC_OUT_OF_GAS;
+                    gasLeft = ref.gas;
+                }
+                co_return EVMCResult{evmc_result{.status_code = status,
+                    .gas_left = gasLeft,
+                    .gas_refund = 0,
+                    .output_data = nullptr,
+                    .output_size = 0,
+                    .release = nullptr,
+                    .create_address = {},
+                    .padding = {}}};
             }
-            auto status = EVMC_SUCCESS;
-            auto gasLeft = ref.gas - executor::BALANCE_TRANSFER_GAS;
-            if (ref.gas < executor::BALANCE_TRANSFER_GAS)
-            {
-                status = EVMC_OUT_OF_GAS;
-                gasLeft = ref.gas;
-            }
-            co_return EVMCResult{evmc_result{.status_code = status,
-                .gas_left = gasLeft,
-                .gas_refund = 0,
-                .output_data = nullptr,
-                .output_size = 0,
-                .release = nullptr,
-                .create_address = {},
-                .padding = {}}};
         }
 
         co_return m_executable->m_vmInstance.execute(interface, this, m_revision,
