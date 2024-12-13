@@ -157,7 +157,7 @@ public:
             auto tx = txFactory->createTransaction(_data);
             bcos::task::wait([](decltype(txpool) txpool, decltype(_data) _data, decltype(tx) tx,
                                  decltype(_fromNode) fromNode) -> bcos::task::Task<void> {
-                txpool->broadcastTransactionBufferByTree(_data, false, fromNode);
+                co_await txpool->broadcastTransactionBufferByTree(_data, false, fromNode);
                 auto submit = co_await txpool->submitTransaction(tx);
                 assert(submit->status() == (uint32_t)TransactionStatus::None);
             }(txpool, _data, tx, _fromNode));
@@ -338,6 +338,12 @@ public:
             }
             asyncSendMessageByNodeID(_moduleId, node, _data, 0, nullptr);
         }
+    }
+
+    bcos::task::Task<void> broadcastMessage(
+        uint16_t _type, int _moduleID, ::ranges::any_view<bytesConstRef> payloads) override
+    {
+        co_return;
     }
 
     // useless for sync/pbft/txpool

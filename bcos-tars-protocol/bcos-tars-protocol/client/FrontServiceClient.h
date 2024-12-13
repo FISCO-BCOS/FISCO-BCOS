@@ -246,6 +246,12 @@ public:
                 nullptr, _type, _moduleID, std::vector<char>(data.begin(), data.end()));
     }
 
+    bcos::task::Task<void> broadcastMessage(
+        uint16_t _type, int _moduleID, ::ranges::any_view<bcos::bytesConstRef> payloads) override
+    {
+        co_return;
+    }
+
 private:
     // 30s
     const int c_frontServiceTimeout = 30000;
