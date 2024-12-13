@@ -21,7 +21,6 @@
 #pragma once
 
 #include <bcos-rpc/Common.h>
-#include <string_view>
 
 namespace bcos::rpc
 {

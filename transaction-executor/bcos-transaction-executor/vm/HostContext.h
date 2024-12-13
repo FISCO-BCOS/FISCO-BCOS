@@ -111,7 +111,7 @@ inline task::Task<std::shared_ptr<Executable>> getExecutable(
     Account<std::decay_t<decltype(storage)>> account(storage, address, binaryAddress);
     if (auto codeEntry = co_await ledger::account::code(account))
     {
-        auto executable = std::make_shared<Executable>(Executable(std::move(*codeEntry), revision));
+        auto executable = std::make_shared<Executable>(std::move(*codeEntry), revision);
         co_await storage2::writeOne(getCacheExecutables(), address, executable);
         co_return executable;
     }
@@ -365,8 +365,6 @@ public:
     friend task::Task<void> prepare(HostContext& hostContext)
     {
         auto const& ref = hostContext.message();
-        assert(!concepts::bytebuffer::equalTo(
-            ref.code_address.bytes, executor::EMPTY_EVM_ADDRESS.bytes));
         assert(
             !concepts::bytebuffer::equalTo(ref.recipient.bytes, executor::EMPTY_EVM_ADDRESS.bytes));
         if (ref.kind == EVMC_CREATE || ref.kind == EVMC_CREATE2)
@@ -411,6 +409,14 @@ public:
 
         try
         {
+            // 先转账，再执行
+            // Transfer first, then proceed execute
+            if (hostContext.m_ledgerConfig.get().features().get(
+                    ledger::Features::Flag::feature_balance))
+            {
+                co_await hostContext.transferBalance(ref);
+            }
+
             if (!evmResult)
             {
                 if (ref.kind == EVMC_CREATE || ref.kind == EVMC_CREATE2)
@@ -489,15 +495,6 @@ public:
                                         << evmResult->gas_left;
             }
         }
-        else if (hostContext.m_ledgerConfig.get().features().get(
-                     ledger::Features::Flag::feature_balance))
-        {
-            if (!hostContext.m_ledgerConfig.get().features().get(
-                    ledger::Features::Flag::feature_balance_policy1))
-            {
-                co_await hostContext.transferBalance(ref);
-            }
-        }
 
         // 如果本次调用的sender或recipient是系统合约，不消耗gas
         // If the sender or recipient of this call is a system contract, gas is not consumed
@@ -522,8 +519,6 @@ public:
         }
         co_return std::move(*evmResult);
     }
-
-    // task::Task<void> settled() {}
 
     task::Task<EVMCResult> externalCall(const evmc_message& message, auto&&... /*unused*/)
     {
@@ -674,24 +669,43 @@ private:
                 buildLegacyExternalCaller(), m_precompiledManager.get(), m_contextID, m_seq,
                 m_ledgerConfig.get().authCheckStatus());
         }
-        else
+
+        // 因为流水线的原因，可能该合约还没创建
+        // Due to the pipeline process, it is possible that the contract has not
+        // yet been created
+        if (!m_executable)
         {
-            if (!m_executable)
+            if (m_executable = co_await getExecutable(m_rollbackableStorage.get(), ref.code_address,
+                    m_revision,
+                    m_ledgerConfig.get().features().get(
+                        ledger::Features::Flag::feature_raw_address));
+                !m_executable)
             {
-                if (m_executable = co_await getExecutable(m_rollbackableStorage.get(),
-                        ref.code_address, m_revision,
-                        m_ledgerConfig.get().features().get(
-                            ledger::Features::Flag::feature_raw_address));
-                    !m_executable)
+                if (ref.input_size > 0)
                 {
                     BOOST_THROW_EXCEPTION(NotFoundCodeError());
                 }
+                auto status = EVMC_SUCCESS;
+                auto gasLeft = ref.gas - executor::BALANCE_TRANSFER_GAS;
+                if (ref.gas < executor::BALANCE_TRANSFER_GAS)
+                {
+                    status = EVMC_OUT_OF_GAS;
+                    gasLeft = ref.gas;
+                }
+                co_return EVMCResult{evmc_result{.status_code = status,
+                    .gas_left = gasLeft,
+                    .gas_refund = 0,
+                    .output_data = nullptr,
+                    .output_size = 0,
+                    .release = nullptr,
+                    .create_address = {},
+                    .padding = {}}};
             }
-
-            co_return m_executable->m_vmInstance.execute(interface, this, m_revision,
-                std::addressof(ref), (const uint8_t*)m_executable->m_code->data(),
-                m_executable->m_code->size());
         }
+
+        co_return m_executable->m_vmInstance.execute(interface, this, m_revision,
+            std::addressof(ref), (const uint8_t*)m_executable->m_code->data(),
+            m_executable->m_code->size());
     }
 };
 
