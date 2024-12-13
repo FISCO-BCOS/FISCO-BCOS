@@ -9,9 +9,7 @@
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
-#include <limits>
 #include <memory>
-#include <memory_resource>
 
 using namespace bcos;
 using namespace bcos::storage2;
