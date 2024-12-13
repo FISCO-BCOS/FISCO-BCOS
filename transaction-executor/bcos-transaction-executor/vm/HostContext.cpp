@@ -15,9 +15,7 @@ std::variant<const evmc_message*, evmc_message> bcos::transaction_executor::host
     {
     case EVMC_CREATE:
     {
-        message.emplace<evmc_message>(inputMessage);
-        auto& ref = std::get<evmc_message>(message);
-
+        auto& ref = message.emplace<evmc_message>(inputMessage);
         if (concepts::bytebuffer::equalTo(
                 inputMessage.code_address.bytes, executor::EMPTY_EVM_ADDRESS.bytes))
         {
@@ -30,11 +28,9 @@ std::variant<const evmc_message*, evmc_message> bcos::transaction_executor::host
     }
     case EVMC_CREATE2:
     {
-        message.emplace<evmc_message>(inputMessage);
-        auto& ref = std::get<evmc_message>(message);
-
-        std::array<uint8_t, 1 + sizeof(ref.sender.bytes) + sizeof(inputMessage.create2_salt) +
-                                crypto::HashType::SIZE>
+        auto& ref = message.emplace<evmc_message>(inputMessage);
+        std::array<bcos::byte, 1 + sizeof(ref.sender.bytes) + sizeof(inputMessage.create2_salt) +
+                                   crypto::HashType::SIZE>
             buffer;
         uint8_t* ptr = buffer.data();
         *ptr++ = 0xff;
