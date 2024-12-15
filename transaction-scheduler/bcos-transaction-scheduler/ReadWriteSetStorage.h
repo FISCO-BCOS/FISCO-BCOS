@@ -124,7 +124,7 @@ private:
 
     friend auto tag_invoke(bcos::storage2::tag_t<storage2::range> /*unused*/,
         ReadWriteSetStorage& storage, auto&&... args)
-        -> task::Task<storage2::ReturnType<
+        -> task::Task<task::AwaitableReturnType<
             std::invoke_result_t<storage2::Range, Storage&, decltype(args)...>>>
     {
         co_return co_await storage2::range(

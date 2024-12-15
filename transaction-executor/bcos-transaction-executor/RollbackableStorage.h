@@ -145,14 +145,14 @@ private:
         co_return co_await storage2::removeSome(storage.m_storage.get(), keys);
     }
 
-    friend auto tag_invoke(bcos::storage2::tag_t<storage2::range> /*unused*/, Rollbackable& storage,
-        auto&&... args) -> task::Task<storage2::ReturnType<std::invoke_result_t<storage2::Range,
-                            std::add_lvalue_reference_t<Storage>, decltype(args)...>>>
+    friend auto tag_invoke(
+        bcos::storage2::tag_t<storage2::range> /*unused*/, Rollbackable& storage, auto&&... args)
+        -> task::Task<task::AwaitableReturnType<std::invoke_result_t<storage2::Range,
+            std::add_lvalue_reference_t<Storage>, decltype(args)...>>>
     {
         co_return co_await storage2::range(
             storage.m_storage.get(), std::forward<decltype(args)>(args)...);
     }
 };
-
 
 }  // namespace bcos::transaction_executor
