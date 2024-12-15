@@ -19,10 +19,13 @@
  */
 
 #pragma once
+#include "bcos-crypto/interfaces/crypto/Hash.h"
 #include <evmc/instructions.h>
 
 namespace bcos::transaction_executor
 {
+bytes writeErrInfoToOutput(const crypto::Hash& hashImpl, std::string const& errInfo);
+
 class EVMCResult : public evmc_result
 {
 public:

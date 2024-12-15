@@ -331,8 +331,7 @@ BOOST_AUTO_TEST_CASE(precompiled)
     genesis.m_compatibilityVersion = bcos::tool::toVersionNumber("3.6.0");
     ledger.buildGenesisBlock(genesis, ledgerConfig);
 
-    bcostars::protocol::BlockHeaderImpl blockHeader(
-        [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+    bcostars::protocol::BlockHeaderImpl blockHeader;
     blockHeader.mutableInner().data.version = (int)bcos::protocol::BlockVersion::V3_5_VERSION;
     blockHeader.calculateHash(*bcos::executor::GlobalHashImpl::g_hashImpl);
 
@@ -458,8 +457,7 @@ BOOST_AUTO_TEST_CASE(nestConstructor)
 BOOST_AUTO_TEST_CASE(codeSize)
 {
     syncWait([this]() -> Task<void> {
-        bcostars::protocol::BlockHeaderImpl blockHeader(
-            [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+        bcostars::protocol::BlockHeaderImpl blockHeader;
         blockHeader.setVersion(static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_3_VERSION));
 
         int64_t number = 0;
@@ -484,8 +482,7 @@ BOOST_AUTO_TEST_CASE(codeSize)
 BOOST_AUTO_TEST_CASE(transferBalance)
 {
     syncWait([this]() -> Task<void> {
-        bcostars::protocol::BlockHeaderImpl blockHeader(
-            [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+        bcostars::protocol::BlockHeaderImpl blockHeader;
         blockHeader.setVersion(static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_3_VERSION));
 
         static std::atomic_int64_t number = 0;
