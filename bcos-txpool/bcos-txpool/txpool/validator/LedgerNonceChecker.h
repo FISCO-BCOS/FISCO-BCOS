@@ -40,15 +40,14 @@ public:
             initNonceCache(std::move(_initialNonces));
         }
     }
-    bcos::protocol::TransactionStatus checkNonce(
-        bcos::protocol::Transaction::ConstPtr _tx) override;
+    bcos::protocol::TransactionStatus checkNonce(const bcos::protocol::Transaction& _tx) override;
 
     void batchInsert(bcos::protocol::BlockNumber _batchId,
         bcos::protocol::NonceListPtr const& _nonceList) override;
 
 protected:
     virtual bcos::protocol::TransactionStatus checkBlockLimit(
-        bcos::protocol::Transaction::ConstPtr _tx);
+        const bcos::protocol::Transaction& _tx);
     void initNonceCache(
         std::shared_ptr<std::map<int64_t, bcos::protocol::NonceListPtr> > _initialNonces);
 

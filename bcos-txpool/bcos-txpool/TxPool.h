@@ -20,7 +20,6 @@
  */
 #pragma once
 #include "TxPoolConfig.h"
-#include "bcos-framework/front/FrontServiceInterface.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/TransactionFactory.h"
@@ -29,7 +28,6 @@
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-tool/TreeTopology.h>
 #include <bcos-utilities/ThreadPool.h>
-#include <thread>
 namespace bcos::txpool
 {
 class TxPool : public TxPoolInterface, public std::enable_shared_from_this<TxPool>
@@ -102,7 +100,7 @@ public:
 
     // for consensus and sealer, for batch mark txs sealed flag
     // trigger scene such as view change, submit proposal, etc.
-    void asyncMarkTxs(bcos::crypto::HashListPtr _txsHash, bool _sealedFlag,
+    void asyncMarkTxs(const bcos::crypto::HashList& _txsHash, bool _sealedFlag,
         bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
         std::function<void(Error::Ptr)> _onRecvResponse) override;
 
@@ -115,9 +113,6 @@ public:
     void setTransactionSync(bcos::sync::TransactionSyncInterface::Ptr _transactionSync);
 
     virtual void init();
-    virtual void registerUnsealedTxsNotifier(
-        std::function<void(size_t, std::function<void(Error::Ptr)>)> _unsealedTxsNotifier);
-
     void asyncGetPendingTransactionSize(
         std::function<void(Error::Ptr, uint64_t)> _onGetTxsSize) override;
 
@@ -126,7 +121,7 @@ public:
 
     void tryToSyncTxsFromPeers() override;
 
-    virtual task::Task<std::optional<u256>> getWeb3PendingNonce(std::string_view address) override;
+    task::Task<std::optional<u256>> getWeb3PendingNonce(std::string_view address) override;
 
     bool existsInGroup(bcos::crypto::NodeIDPtr _nodeId) override
     {
@@ -173,9 +168,7 @@ private:
     std::function<void(std::string const&, int, bcos::crypto::NodeIDPtr, bytesConstRef)>
         m_sendResponseHandler;
 
-    ThreadPool::Ptr m_worker;
     ThreadPool::Ptr m_verifier;
-    ThreadPool::Ptr m_sealer;
     ThreadPool::Ptr m_txsPreStore;
     tool::TreeTopology::Ptr m_treeRouter = nullptr;
     std::atomic_bool m_running = {false};

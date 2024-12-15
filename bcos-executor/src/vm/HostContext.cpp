@@ -26,6 +26,7 @@
 #include "bcos-codec/wrapper/CodecWrapper.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/storage/LegacyStorageMethods.h"
 #include <bcos-framework/executor/ExecutionMessage.h>
 #include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/protocol/Protocol.h>
@@ -588,7 +589,7 @@ evmc_bytes32 HostContext::getTransientStorage(const evmc_bytes32* key)
 
     auto transientStorageMap = m_executive->blockContext().getTransientStorageMap();
     using TSMap = bcos::BucketMap<int64_t, std::shared_ptr<storage::StateStorageInterface>>;
-    TSMap::ReadAccessor::Ptr readAccessor;
+    TSMap::ReadAccessor readAccessor;
     auto has =
         transientStorageMap->find<TSMap::ReadAccessor>(readAccessor, m_executive->contextID());
     if (!has)
@@ -599,7 +600,7 @@ evmc_bytes32 HostContext::getTransientStorage(const evmc_bytes32* key)
         std::uninitialized_fill_n(result.bytes, sizeof(result), 0);
         return result;
     }
-    auto entry = readAccessor->value()->getRow(m_tableName, keyView);
+    auto entry = readAccessor.value()->getRow(m_tableName, keyView);
     if (!entry.first && entry.second.has_value())
     {
         auto field = entry.second->getField(0);

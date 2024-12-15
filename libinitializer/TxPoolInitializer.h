@@ -22,7 +22,6 @@
 #include "libinitializer/ProtocolInitializer.h"
 #include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-framework/ledger/LedgerInterface.h>
-#include <bcos-framework/sealer/SealerInterface.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/Common.h>
@@ -48,7 +47,7 @@ public:
         bcos::ledger::LedgerInterface::Ptr _ledger);
     virtual ~TxPoolInitializer() { stop(); }
 
-    virtual void init(bcos::sealer::SealerInterface::Ptr _sealer);
+    virtual void init();
     virtual void start();
     virtual void stop();
 

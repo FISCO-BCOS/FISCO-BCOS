@@ -94,7 +94,8 @@ BOOST_AUTO_TEST_CASE(readWriteRemoveSeek)
             return entry;
         });
 
-        BOOST_CHECK_NO_THROW(co_await storage2::writeSome(rocksDB, keys, values));
+        BOOST_CHECK_NO_THROW(
+            co_await storage2::writeSome(rocksDB, ::ranges::views::zip(keys, values)));
 
         auto queryKeys = RANGES::views::iota(0, 150) | RANGES::views::transform([](int num) {
             auto tableName = fmt::format("Table~{}", num % 10);
@@ -167,7 +168,7 @@ BOOST_AUTO_TEST_CASE(merge)
             entry.set(fmt::format("Entry value is: i am a value!!!!!!! {}", num));
             return entry;
         });
-        co_await storage2::writeSome(memoryStorage, keys, values);
+        co_await storage2::writeSome(memoryStorage, ::ranges::views::zip(keys, values));
 
         RocksDBStorage2<StateKey, StateValue, StateKeyResolver,
             bcos::storage2::rocksdb::StateValueResolver>

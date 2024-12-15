@@ -111,7 +111,7 @@ BOOST_AUTO_TEST_CASE(testPBFTInit)
     BOOST_CHECK(pbftConfig->isConsensusNode());
     pbftConfig->setConsensusTimeout(consensusTimeout);
     BOOST_CHECK(pbftConfig->consensusTimeout() == consensusTimeout);
-    BOOST_CHECK(pbftConfig->blockTxCountLimit() == txCountLimit);
+    BOOST_CHECK_EQUAL(pbftConfig->blockTxCountLimit(), txCountLimit);
     // Note: should update this check if consensusNodesSize has been changed
     BOOST_CHECK(pbftConfig->minRequiredQuorum() == 7);
     BOOST_CHECK(pbftConfig->committedProposal()->index() == faker->ledger()->blockNumber());

@@ -19,6 +19,7 @@
  */
 
 #include "ConsensusPrecompiled.h"
+#include "bcos-framework/sealer/VrfCurveType.h"
 #include "common/PrecompiledResult.h"
 #include "common/Utilities.h"
 #include "common/WorkingSealerManagerImpl.h"
@@ -290,6 +291,7 @@ static int setWeight(const std::shared_ptr<executor::TransactionExecutive>& _exe
     auto consensusList = task::syncWait(ledger::getNodeList(*storage.getRawStorage()));
     auto node = std::find_if(consensusList.begin(), consensusList.end(),
         [&](const consensus::ConsensusNode& node) { return node.nodeID->hex() == nodeID; });
+    bool forceSet = false;
     if (node != consensusList.end())
     {
         if (node->type == consensus::Type::consensus_observer)
@@ -298,6 +300,7 @@ static int setWeight(const std::shared_ptr<executor::TransactionExecutive>& _exe
         }
         if (setTermWeight)
         {
+            forceSet = true;
             node->termWeight = weight.convert_to<uint64_t>();
         }
         else
@@ -310,9 +313,21 @@ static int setWeight(const std::shared_ptr<executor::TransactionExecutive>& _exe
     {
         return CODE_NODE_NOT_EXIST;  // Not found
     }
-    task::syncWait(ledger::setNodeList(*storage.getRawStorage(), consensusList));
+    task::syncWait(ledger::setNodeList(*storage.getRawStorage(), consensusList, forceSet));
 
     return 0;
+}
+
+sealer::VrfCurveType getVrfCurveType(const std::shared_ptr<executor::TransactionExecutive>& _executive)
+{
+    sealer::VrfCurveType vrfCurveType = sealer::VrfCurveType::CURVE25519;
+
+    if (_executive->blockContext().features().get(
+            ledger::Features::Flag::feature_rpbft_vrf_type_secp256k1))
+    {
+        vrfCurveType = sealer::VrfCurveType::SECKP256K1;
+    }
+    return vrfCurveType;
 }
 
 static void rotateWorkingSealer(const std::shared_ptr<executor::TransactionExecutive>& _executive,
@@ -326,10 +341,11 @@ static void rotateWorkingSealer(const std::shared_ptr<executor::TransactionExecu
     codec.decode(_callParameters->params(), vrfPublicKey, vrfInput, vrfProof);
     try
     {
+        sealer::VrfCurveType vrfCurveType = getVrfCurveType(_executive);
         WorkingSealerManagerImpl sealerManger(
             _executive->blockContext().features().get(Features::Flag::feature_rpbft_term_weight));
         sealerManger.createVRFInfo(
-            std::move(vrfProof), std::move(vrfPublicKey), std::move(vrfInput));
+            std::move(vrfProof), std::move(vrfPublicKey), std::move(vrfInput), vrfCurveType);
         task::syncWait(sealerManger.rotateWorkingSealer(_executive, _callParameters));
     }
     catch (protocol::PrecompiledError const& _e)

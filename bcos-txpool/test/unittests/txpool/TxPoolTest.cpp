@@ -229,7 +229,7 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     // unseal 10 txs
     {
         std::promise<void> promise;
-        _txpool->asyncMarkTxs(sealedTxs, false, -1, HashType(), [&](Error::Ptr _error) {
+        _txpool->asyncMarkTxs(*sealedTxs, false, -1, HashType(), [&](Error::Ptr _error) {
             BOOST_CHECK(_error == nullptr);
             BOOST_CHECK(_txpoolStorage->size() == originTxsSize);
             promise.set_value();
@@ -254,7 +254,7 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     // mark txs to given proposal as false, expect: mark failed
     {
         std::promise<void> promise;
-        _txpool->asyncMarkTxs(sealedTxs, false, blockNumber, blockHash, [&](Error::Ptr _error) {
+        _txpool->asyncMarkTxs(*sealedTxs, false, blockNumber, blockHash, [&](Error::Ptr _error) {
             BOOST_CHECK(_error == nullptr);
             promise.set_value();
         });
@@ -280,7 +280,7 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     {
         std::promise<void> promise;
 
-        _txpool->asyncMarkTxs(sealedTxs, false, -1, HashType(), [&](Error::Ptr _error) {
+        _txpool->asyncMarkTxs(*sealedTxs, false, -1, HashType(), [&](Error::Ptr _error) {
             BOOST_CHECK(_error == nullptr);
             promise.set_value();
         });
@@ -304,7 +304,7 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     {
         std::promise<void> promise;
 
-        _txpool->asyncMarkTxs(sealedTxs, true, blockNumber, blockHash, [&](Error::Ptr _error) {
+        _txpool->asyncMarkTxs(*sealedTxs, true, blockNumber, blockHash, [&](Error::Ptr _error) {
             BOOST_CHECK(_error == nullptr);
             promise.set_value();
         });
@@ -329,7 +329,7 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     {
         std::promise<void> promise;
 
-        _txpool->asyncMarkTxs(sealedTxs, false, blockNumber, blockHash, [&](Error::Ptr _error) {
+        _txpool->asyncMarkTxs(*sealedTxs, false, blockNumber, blockHash, [&](Error::Ptr _error) {
             BOOST_CHECK(_error == nullptr);
             promise.set_value();
         });
@@ -387,8 +387,8 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
              return tx->type() != static_cast<uint8_t>(TransactionType::Web3Transaction);
          }))
     {
-        BOOST_CHECK(txPoolNonceChecker->checkNonce(tx) == TransactionStatus::None);
-        BOOST_CHECK(ledgerNonceChecker->checkNonce(tx) == TransactionStatus::NonceCheckFail);
+        BOOST_CHECK(txPoolNonceChecker->checkNonce(*tx) == TransactionStatus::None);
+        BOOST_CHECK(ledgerNonceChecker->checkNonce(*tx) == TransactionStatus::NonceCheckFail);
     }
     // check the nonce of ledger->blockNumber() hash been removed from ledgerNonceChecker
     auto const& blockData = _faker->ledger()->ledgerData();

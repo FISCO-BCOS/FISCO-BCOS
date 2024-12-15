@@ -75,7 +75,7 @@ BOOST_AUTO_TEST_CASE(UpdateTreeTopologyTest)
     BOOST_CHECK(treeTopology.consIndex() == consensusInsertSize);
 
     // select correct
-    auto selectedNodes = treeTopology.selectNodes(peers, treeTopology.consIndex());
+    auto selectedNodes = treeTopology.selectNodes(*peers, treeTopology.consIndex());
     BOOST_CHECK(selectedNodes->size() == treeWidth);
     for (size_t i = 0; i < treeWidth; ++i)
     {
@@ -89,13 +89,13 @@ BOOST_AUTO_TEST_CASE(SelectTest)
     consensusList.erase(consensusList.begin());
     treeTopology.updateConsensusNodeInfo(consensusList);
 
-    auto selectedNodes = treeTopology.selectNodes(peers, treeTopology.consIndex());
+    auto selectedNodes = treeTopology.selectNodes(*peers, treeTopology.consIndex());
     BOOST_CHECK(selectedNodes->empty());
 
-    selectedNodes = treeTopology.selectNodes(peers, treeTopology.consIndex(), true);
+    selectedNodes = treeTopology.selectNodes(*peers, treeTopology.consIndex(), true);
     BOOST_CHECK(selectedNodes->size() == 1);
 
-    selectedNodes = treeTopology.selectParent(peers, treeTopology.consIndex(), true);
+    selectedNodes = treeTopology.selectParent(*peers, treeTopology.consIndex(), true);
     BOOST_CHECK(selectedNodes->empty());
 
     consensusList.insert(consensusList.begin(), localKey);
@@ -112,7 +112,7 @@ BOOST_AUTO_TEST_CASE(SelectTest)
 
     for (const auto& nodeId : (*peers))
     {
-        auto nodeIdSet = treeTopology.selectParentByNodeID(peers, nodeId);
+        auto nodeIdSet = treeTopology.selectParentByNodeID(*peers, nodeId);
         if (nodeId->data() == localKey->data() ||
             std::find_if(consensusList.cbegin(), consensusList.cend(), [&nodeId](auto&& node) {
                 return node->data() == nodeId->data();

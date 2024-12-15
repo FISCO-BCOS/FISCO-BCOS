@@ -23,6 +23,7 @@
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
+#include <range/v3/view/any_view.hpp>
 #if !ONLY_CPP_SDK
 #include <bcos-utilities/ITTAPI.h>
 #endif
@@ -64,12 +65,13 @@ using TxSubmitCallback =
 class Transaction
 {
 public:
-    enum Attribute : uint32_t
+    enum Attribute : int32_t
     {
-        EVM_ABI_CODEC = 0x1,
-        LIQUID_SCALE_CODEC = 0x2,
-        DAG = 0x4,
-        LIQUID_CREATE = 0x8,
+        EVM_ABI_CODEC = 1,
+        LIQUID_SCALE_CODEC = 1 << 1,
+        DAG = 1 << 2,
+        LIQUID_CREATE = 1 << 3,
+        CONFLICT_HINT = 1 << 4,
     };
 
     using Ptr = std::shared_ptr<Transaction>;
@@ -121,7 +123,7 @@ public:
     virtual int64_t blockLimit() const = 0;
     virtual std::string_view nonce() const = 0;
     // only for test
-    virtual void setNonce(std::string) = 0;
+    virtual void setNonce(std::string nonce) = 0;
     virtual std::string_view to() const = 0;
     virtual std::string_view abi() const = 0;
 
@@ -136,8 +138,6 @@ public:
     virtual bcos::bytesConstRef extension() const = 0;
 
     virtual std::string_view extraData() const = 0;
-    virtual void setExtraData(std::string const& _extraData) = 0;
-
     virtual std::string_view sender() const = 0;
 
     virtual bcos::bytesConstRef input() const = 0;
@@ -185,6 +185,8 @@ public:
 
     bool storeToBackend() const { return m_storeToBackend; }
     void setStoreToBackend(bool _storeToBackend) const { m_storeToBackend = _storeToBackend; }
+
+    virtual size_t size() const { return 0; }
 
 private:
     TxSubmitCallback m_submitCallback;

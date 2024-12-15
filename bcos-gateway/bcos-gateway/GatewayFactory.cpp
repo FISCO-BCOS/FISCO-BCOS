@@ -246,7 +246,8 @@ void GatewayFactory::initSSLContextPubHexHandlerWithoutExtInfo()
             return false;
         }
 
-        GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("[NEW]SSLContext pubHex: " + _pubHex);
+        GATEWAY_FACTORY_LOG(INFO) << LOG_DESC(
+            "[NEW]initSSLContextPubHexHandlerWithoutExtInfo SSLContext pubHex: " + _pubHex);
         return true;
     };
 
@@ -254,7 +255,7 @@ void GatewayFactory::initSSLContextPubHexHandlerWithoutExtInfo()
 }
 
 std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
-    bool _server, const GatewayConfig::CertConfig& _certConfig)
+    bool _server, uint8_t sslMode, const GatewayConfig::CertConfig& _certConfig)
 {
     std::ignore = _server;
     std::shared_ptr<boost::asio::ssl::context> sslContext =
@@ -266,40 +267,45 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
 
     sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_none);
    */
-    std::shared_ptr<bytes> keyContent;
-    if (!_certConfig.nodeKey.empty())
+    if (_certConfig.nodeKey)
     {
-        try
+        std::shared_ptr<bytes> keyContent;
+        if (!_certConfig.nodeKey->empty())
         {
-            if (nullptr == m_dataEncrypt)  // storage_security.enable = false
-                keyContent = readContents(boost::filesystem::path(_certConfig.nodeKey));
-            else
-                keyContent = m_dataEncrypt->decryptFile(_certConfig.nodeKey);
+            try
+            {
+                if (nullptr == m_dataEncrypt)  // storage_security.enable = false
+                    keyContent = readContents(boost::filesystem::path(*_certConfig.nodeKey));
+                else
+                    keyContent = m_dataEncrypt->decryptFile(*_certConfig.nodeKey);
+            }
+            catch (std::exception& e)
+            {
+                GATEWAY_FACTORY_LOG(ERROR)
+                    << LOG_BADGE("SecureInitializer") << LOG_DESC("open privateKey failed")
+                    << LOG_KV("file", *_certConfig.nodeKey);
+                BOOST_THROW_EXCEPTION(
+                    InvalidParameter() << errinfo_comment(
+                        "buildSSLContext: unable read content of key: " + *_certConfig.nodeKey));
+            }
         }
-        catch (std::exception& e)
+        if (!keyContent || keyContent->empty())
         {
             GATEWAY_FACTORY_LOG(ERROR)
-                << LOG_BADGE("SecureInitializer") << LOG_DESC("open privateKey failed")
-                << LOG_KV("file", _certConfig.nodeKey);
+                << LOG_DESC("buildSSLContext: unable read content of key: " + *_certConfig.nodeKey);
             BOOST_THROW_EXCEPTION(
                 InvalidParameter() << errinfo_comment(
-                    "buildSSLContext: unable read content of key: " + _certConfig.nodeKey));
+                    "buildSSLContext: unable read content of key: " + *_certConfig.nodeKey));
         }
-    }
-    if (!keyContent || keyContent->empty())
-    {
-        GATEWAY_FACTORY_LOG(ERROR)
-            << LOG_DESC("buildSSLContext: unable read content of key: " + _certConfig.nodeKey);
-        BOOST_THROW_EXCEPTION(
-            InvalidParameter() << errinfo_comment(
-                "buildSSLContext: unable read content of key: " + _certConfig.nodeKey));
-    }
 
-    boost::asio::const_buffer keyBuffer(keyContent->data(), keyContent->size());
-    sslContext->use_private_key(keyBuffer, boost::asio::ssl::context::file_format::pem);
-
+        boost::asio::const_buffer keyBuffer(keyContent->data(), keyContent->size());
+        sslContext->use_private_key(keyBuffer, boost::asio::ssl::context::file_format::pem);
+    }
     // node.crt
-    sslContext->use_certificate_chain_file(_certConfig.nodeCert);
+    if (_certConfig.nodeCert)
+    {
+        sslContext->use_certificate_chain_file(*_certConfig.nodeCert);
+    }
     /*if (!SSL_CTX_get0_certificate(sslContext->native_handle())) {
       GATEWAY_FACTORY_LOG(ERROR)
           << LOG_DESC("buildSSLContext: SSL_CTX_get0_certificate failed");
@@ -309,33 +315,34 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
               _certConfig.nodeCert));
     }*/
 
-    auto caCertContent =
-        readContentsToString(boost::filesystem::path(_certConfig.caCert));  // ca.crt
-    if (!caCertContent || caCertContent->empty())
+    if (_certConfig.caCert)
     {
-        GATEWAY_FACTORY_LOG(ERROR)
-            << LOG_DESC("buildSSLContext: unable read content of ca: " + _certConfig.caCert);
-        BOOST_THROW_EXCEPTION(
-            InvalidParameter() << errinfo_comment(
-                "buildSSLContext: unable read content of ca: " + _certConfig.caCert));
+        auto caCertContent =
+            readContentsToString(boost::filesystem::path(*_certConfig.caCert));  // ca.crt
+        if (!caCertContent || caCertContent->empty())
+        {
+            GATEWAY_FACTORY_LOG(ERROR)
+                << LOG_DESC("buildSSLContext: unable read content of ca: " + *_certConfig.caCert);
+            BOOST_THROW_EXCEPTION(
+                InvalidParameter() << errinfo_comment(
+                    "buildSSLContext: unable read content of ca: " + *_certConfig.caCert));
+        }
+        sslContext->add_certificate_authority(
+            boost::asio::const_buffer(caCertContent->data(), caCertContent->size()));
     }
-    sslContext->add_certificate_authority(
-        boost::asio::const_buffer(caCertContent->data(), caCertContent->size()));
-
     std::string caPath = _certConfig.multiCaPath;
     if (!caPath.empty())
     {
         sslContext->add_verify_path(caPath);
     }
 
-    sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer |
-                                boost::asio::ssl::verify_fail_if_no_peer_cert);
+    sslContext->set_verify_mode(sslMode);
 
     return sslContext;
 }
 
 std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
-    bool _server, const GatewayConfig::SMCertConfig& _smCertConfig)
+    bool _server, uint8_t sslMode, const GatewayConfig::SMCertConfig& _smCertConfig)
 {
     SSL_CTX* ctx = NULL;
     if (_server)
@@ -354,98 +361,109 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
 
     sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_none);
 
-    /* Load the server certificate into the SSL_CTX structure */
-    if (SSL_CTX_use_certificate_file(
-            sslContext->native_handle(), _smCertConfig.nodeCert.c_str(), SSL_FILETYPE_PEM) <= 0)
+    if (_smCertConfig.nodeCert)
     {
-        ERR_print_errors_fp(stderr);
-        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_use_certificate_file failed"));
+        /* Load the server certificate into the SSL_CTX structure */
+        if (SSL_CTX_use_certificate_file(sslContext->native_handle(),
+                _smCertConfig.nodeCert->c_str(), SSL_FILETYPE_PEM) <= 0)
+        {
+            ERR_print_errors_fp(stderr);
+            BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_use_certificate_file failed"));
+        }
     }
 
-    std::shared_ptr<bytes> keyContent;
-    if (!_smCertConfig.nodeKey.empty())
+    if (_smCertConfig.nodeKey)
     {
-        try
+        std::shared_ptr<bytes> keyContent;
+        if (!_smCertConfig.nodeKey->empty())
         {
-            if (nullptr == m_dataEncrypt)  // storage_security.enable = false
-                keyContent = readContents(boost::filesystem::path(_smCertConfig.nodeKey));
-            else
-                keyContent = m_dataEncrypt->decryptFile(_smCertConfig.nodeKey);
+            try
+            {
+                if (nullptr == m_dataEncrypt)  // storage_security.enable = false
+                    keyContent = readContents(boost::filesystem::path(*_smCertConfig.nodeKey));
+                else
+                    keyContent = m_dataEncrypt->decryptFile(*_smCertConfig.nodeKey);
+            }
+            catch (std::exception& e)
+            {
+                GATEWAY_FACTORY_LOG(ERROR)
+                    << LOG_BADGE("SecureInitializer") << LOG_DESC("open privateKey failed")
+                    << LOG_KV("file", *_smCertConfig.nodeKey);
+                BOOST_THROW_EXCEPTION(
+                    InvalidParameter() << errinfo_comment(
+                        "buildSSLContext: unable read content of key: " + *_smCertConfig.nodeKey));
+            }
         }
-        catch (std::exception& e)
+        // nodekey
+        boost::asio::const_buffer keyBuffer(keyContent->data(), keyContent->size());
+        sslContext->use_private_key(keyBuffer, boost::asio::ssl::context::file_format::pem);
+
+        /* Check if the server certificate and private-key matches */
+        if (!SSL_CTX_check_private_key(sslContext->native_handle()))
         {
-            GATEWAY_FACTORY_LOG(ERROR)
-                << LOG_BADGE("SecureInitializer") << LOG_DESC("open privateKey failed")
-                << LOG_KV("file", _smCertConfig.nodeKey);
+            ERR_print_errors_fp(stderr);
+            BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_check_private_key failed"));
+        }
+    }
+    if (_smCertConfig.enNodeCert)
+    {
+        /* Load the server encrypt certificate into the SSL_CTX structure */
+        if (SSL_CTX_use_enc_certificate_file(sslContext->native_handle(),
+                _smCertConfig.enNodeCert->c_str(), SSL_FILETYPE_PEM) <= 0)
+        {
+            ERR_print_errors_fp(stderr);
+            BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_use_enc_certificate_file failed"));
+        }
+    }
+    if (_smCertConfig.enNodeKey)
+    {
+        std::shared_ptr<bytes> enNodeKeyContent;
+        if (!_smCertConfig.enNodeKey->empty())
+        {
+            try
+            {
+                if (nullptr == m_dataEncrypt)  // storage_security.enable = false
+                    enNodeKeyContent =
+                        readContents(boost::filesystem::path(*_smCertConfig.enNodeKey));
+                else
+                    enNodeKeyContent = m_dataEncrypt->decryptFile(*_smCertConfig.enNodeKey);
+            }
+            catch (std::exception& e)
+            {
+                GATEWAY_FACTORY_LOG(ERROR)
+                    << LOG_BADGE("SecureInitializer") << LOG_DESC("open privateKey failed")
+                    << LOG_KV("file", *_smCertConfig.enNodeKey);
+                BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                          "buildSSLContext: unable read content of key: " +
+                                          *_smCertConfig.enNodeKey));
+            }
+        }
+        std::string enNodeKeyStr((const char*)enNodeKeyContent->data(), enNodeKeyContent->size());
+        if (SSL_CTX_use_enc_PrivateKey(
+                sslContext->native_handle(), toEvpPkey(enNodeKeyStr.c_str())) <= 0)
+        {
+            GATEWAY_FACTORY_LOG(ERROR) << LOG_DESC("SSL_CTX_use_enc_PrivateKey failed");
             BOOST_THROW_EXCEPTION(
-                InvalidParameter() << errinfo_comment(
-                    "buildSSLContext: unable read content of key: " + _smCertConfig.nodeKey));
-        }
-    }
-    // nodekey
-    boost::asio::const_buffer keyBuffer(keyContent->data(), keyContent->size());
-    sslContext->use_private_key(keyBuffer, boost::asio::ssl::context::file_format::pem);
-
-    /* Check if the server certificate and private-key matches */
-    if (!SSL_CTX_check_private_key(sslContext->native_handle()))
-    {
-        ERR_print_errors_fp(stderr);
-        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_check_private_key failed"));
-    }
-
-    std::shared_ptr<bytes> enNodeKeyContent;
-    if (!_smCertConfig.enNodeKey.empty())
-    {
-        try
-        {
-            if (nullptr == m_dataEncrypt)  // storage_security.enable = false
-                enNodeKeyContent = readContents(boost::filesystem::path(_smCertConfig.enNodeKey));
-            else
-                enNodeKeyContent = m_dataEncrypt->decryptFile(_smCertConfig.enNodeKey);
-        }
-        catch (std::exception& e)
-        {
-            GATEWAY_FACTORY_LOG(ERROR)
-                << LOG_BADGE("SecureInitializer") << LOG_DESC("open privateKey failed")
-                << LOG_KV("file", _smCertConfig.enNodeKey);
-            BOOST_THROW_EXCEPTION(
-                InvalidParameter() << errinfo_comment(
-                    "buildSSLContext: unable read content of key: " + _smCertConfig.enNodeKey));
+                InvalidParameter() << errinfo_comment("GatewayFactory::buildSSLContext "
+                                                      "SSL_CTX_use_enc_PrivateKey failed"));
         }
     }
 
-
-    /* Load the server encrypt certificate into the SSL_CTX structure */
-    if (SSL_CTX_use_enc_certificate_file(
-            sslContext->native_handle(), _smCertConfig.enNodeCert.c_str(), SSL_FILETYPE_PEM) <= 0)
+    if (_smCertConfig.caCert)
     {
-        ERR_print_errors_fp(stderr);
-        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_use_enc_certificate_file failed"));
+        auto caContent = readContentsToString(
+            boost::filesystem::path(*_smCertConfig.caCert));  // node.key content
+
+        sslContext->add_certificate_authority(
+            boost::asio::const_buffer(caContent->data(), caContent->size()));
     }
-    std::string enNodeKeyStr((const char*)enNodeKeyContent->data(), enNodeKeyContent->size());
-
-    if (SSL_CTX_use_enc_PrivateKey(sslContext->native_handle(), toEvpPkey(enNodeKeyStr.c_str())) <=
-        0)
-    {
-        GATEWAY_FACTORY_LOG(ERROR) << LOG_DESC("SSL_CTX_use_enc_PrivateKey failed");
-        BOOST_THROW_EXCEPTION(
-            InvalidParameter() << errinfo_comment("GatewayFactory::buildSSLContext "
-                                                  "SSL_CTX_use_enc_PrivateKey failed"));
-    }
-    auto caContent =
-        readContentsToString(boost::filesystem::path(_smCertConfig.caCert));  // node.key content
-
-    sslContext->add_certificate_authority(
-        boost::asio::const_buffer(caContent->data(), caContent->size()));
-
     std::string caPath = _smCertConfig.multiCaPath;
     if (!caPath.empty())
     {
         sslContext->add_verify_path(caPath);
     }
 
-    sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer |
-                                boost::asio::ssl::verify_fail_if_no_peer_cert);
+    sslContext->set_verify_mode(sslMode);
 
     return sslContext;
 }
@@ -574,22 +592,30 @@ std::shared_ptr<gateway::ratelimiter::RateLimiterManager> GatewayFactory::buildR
 //
 std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& _config)
 {
-    std::string nodeCert =
+    auto nodeCert =
         (_config->smSSL() ? _config->smCertConfig().nodeCert : _config->certConfig().nodeCert);
     std::string pubHex;
-    if (!m_certPubHexHandler(nodeCert, pubHex))
+    auto verifyNoneMode = (_config->sslServerMode() & ba::ssl::verify_none) == 0 ||
+                          (_config->sslClientMode() & ba::ssl::verify_none) == 0;
+    if (!nodeCert && verifyNoneMode)
+    {
+        pubHex = h512::generateRandomFixedBytes().hex();
+    }
+    else if (!m_certPubHexHandler(*nodeCert, pubHex))
     {
         BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
                                   "GatewayFactory::init unable parse myself pub id"));
     }
 
     std::shared_ptr<ba::ssl::context> srvCtx =
-        (_config->smSSL() ? buildSSLContext(true, _config->smCertConfig()) :
-                            buildSSLContext(true, _config->certConfig()));
+        (_config->smSSL() ?
+                buildSSLContext(true, _config->sslServerMode(), _config->smCertConfig()) :
+                buildSSLContext(true, _config->sslServerMode(), _config->certConfig()));
 
     std::shared_ptr<ba::ssl::context> clientCtx =
-        (_config->smSSL() ? buildSSLContext(false, _config->smCertConfig()) :
-                            buildSSLContext(false, _config->certConfig()));
+        (_config->smSSL() ?
+                buildSSLContext(false, _config->sslClientMode(), _config->smCertConfig()) :
+                buildSSLContext(false, _config->sslClientMode(), _config->certConfig()));
 
     // init ASIOInterface
     auto asioInterface = std::make_shared<ASIOInterface>();
@@ -625,7 +651,7 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     host->setPeerBlacklist(peerBlacklist);
     host->setPeerWhitelist(peerWhitelist);
     host->setSessionCallbackManager(sessionCallbackManager);
-
+    host->setSslVerifyMode(_config->sslServerMode(), _config->sslClientMode());
     // init Service
     bool enableRIPProtocol = _config->enableRIPProtocol();
     Service::Ptr service = nullptr;
@@ -760,34 +786,34 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         {
             auto gatewayRateLimiterWeakPtr =
                 std::weak_ptr<ratelimiter::GatewayRateLimiter>(gatewayRateLimiter);
-            service->setBeforeMessageHandler([gatewayRateLimiterWeakPtr](SessionFace::Ptr _session,
-                                                 Message::Ptr _msg) -> std::optional<bcos::Error> {
-                auto gatewayRateLimiter = gatewayRateLimiterWeakPtr.lock();
-                if (!gatewayRateLimiter)
-                {
-                    return std::nullopt;
-                }
+            service->setBeforeMessageHandler(
+                [gatewayRateLimiterWeakPtr](const SessionFace::Ptr& _session,
+                    const Message::Ptr& _msg) -> std::optional<bcos::Error> {
+                    auto gatewayRateLimiter = gatewayRateLimiterWeakPtr.lock();
+                    if (!gatewayRateLimiter)
+                    {
+                        return std::nullopt;
+                    }
 
-                GatewayMessageExtAttributes::Ptr msgExtAttributes = nullptr;
-                if (_msg->extAttributes())
-                {
-                    msgExtAttributes = std::dynamic_pointer_cast<GatewayMessageExtAttributes>(
-                        _msg->extAttributes());
-                }
+                    if (const auto* msgExtAttributes =
+                            std::any_cast<const GatewayMessageExtAttributes*>(
+                                _msg->extAttributes()))
+                    {
+                        std::string groupID =
+                            msgExtAttributes ? msgExtAttributes->groupID() : std::string();
+                        uint16_t moduleID = msgExtAttributes ? msgExtAttributes->moduleID() : 0;
+                        std::string endpoint = _session->nodeIPEndpoint().address();
+                        int64_t msgLength = _msg->length();
+                        auto pkgType = _msg->packetType();
 
-                std::string groupID =
-                    msgExtAttributes ? msgExtAttributes->groupID() : std::string();
-                uint16_t moduleID = msgExtAttributes ? msgExtAttributes->moduleID() : 0;
-                std::string endpoint = _session->nodeIPEndpoint().address();
-                int64_t msgLength = _msg->length();
-                auto pkgType = _msg->packetType();
-
-                auto result = gatewayRateLimiter->checkOutGoing(
-                    endpoint, pkgType, groupID, moduleID, msgLength);
-                return result ? std::make_optional(
-                                    bcos::Error::buildError("", OutBWOverflow, result.value())) :
-                                std::nullopt;
-            });
+                        auto result = gatewayRateLimiter->checkOutGoing(
+                            endpoint, pkgType, groupID, moduleID, msgLength);
+                        return result ? std::make_optional(bcos::Error::buildError(
+                                            "", OutBWOverflow, result.value())) :
+                                        std::nullopt;
+                    }
+                    return {};
+                });
 
             service->setOnMessageHandler([gatewayRateLimiterWeakPtr](SessionFace::Ptr _session,
                                              Message::Ptr _message) -> std::optional<bcos::Error> {

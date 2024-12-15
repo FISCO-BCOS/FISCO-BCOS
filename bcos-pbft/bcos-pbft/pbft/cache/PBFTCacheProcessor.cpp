@@ -53,7 +53,8 @@ void PBFTCacheProcessor::initState(PBFTProposalList const& _proposals, NodeIDPtr
                         << LOG_KV("index", proposal->index())
                         << LOG_KV("hash", proposal->hash().abridged());
         // set the txs status to be sealed
-        m_config->validator()->asyncResetTxsFlag(proposal->data(), true);
+        auto block = m_config->blockFactory().createBlock(proposal->data(), false, false);
+        m_config->validator()->asyncResetTxsFlag(*block, true);
         // try to verify and load the proposal
         loadAndVerifyProposal(_fromNode, proposal);
     }

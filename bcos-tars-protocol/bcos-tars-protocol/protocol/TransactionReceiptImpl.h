@@ -78,6 +78,7 @@ public:
     void setLogEntries(std::vector<bcos::protocol::LogEntry> const& _logEntries);
     std::string const& message() const override;
     void setMessage(std::string message) override;
+    size_t size() const override;
 
 private:
     std::function<bcostars::TransactionReceipt*()> m_inner;

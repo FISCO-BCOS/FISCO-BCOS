@@ -2,7 +2,6 @@
 #include "../ledger/LedgerTypeDef.h"
 #include "../protocol/Protocol.h"
 #include "../storage/Entry.h"
-#include "../storage/LegacyStorageMethods.h"
 #include "../storage2/Storage.h"
 #include "../transaction-executor/StateKey.h"
 #include "bcos-concepts/Exception.h"
@@ -57,12 +56,11 @@ public:
         feature_balance_policy1,
         feature_paillier_add_raw,
         feature_evm_cancun,
-        feature_calculate_gasPrice,
         feature_evm_timestamp,
         feature_evm_address,
-        feature_ethereum_compatible,  // will enable all bugfixes, all features about evm
         feature_rpbft_term_weight,
         feature_raw_address,
+        feature_rpbft_vrf_type_secp256k1,
     };
 
 private:
@@ -127,19 +125,19 @@ public:
         /// NOTE：请不要在此处添加旧版本feature依赖！否则会出现数据不一致!
         /// Do NOT add old version feature dependencies here! Otherwise, data inconsistency will
         /// occur!
-        const auto mainSwitchDependence = std::unordered_map<Flag, std::set<Flag>>(
-            {{Flag::feature_ethereum_compatible, {
-                                                     Flag::feature_balance,
-                                                     Flag::feature_balance_precompiled,
-                                                     Flag::feature_calculate_gasPrice,
-                                                     Flag::feature_evm_timestamp,
-                                                     Flag::feature_evm_address,
-                                                     Flag::feature_evm_cancun,
-                                                 }}});
-        if (mainSwitchDependence.contains(flag))
-        {
-            return mainSwitchDependence.at(flag);
-        }
+        // const auto mainSwitchDependence = std::unordered_map<Flag, std::set<Flag>>(
+        //     {{Flag::feature_ethereum_compatible, {
+        //                                              Flag::feature_balance,
+        //                                              Flag::feature_balance_precompiled,
+        //                                              Flag::feature_calculate_gasPrice,
+        //                                              Flag::feature_evm_timestamp,
+        //                                              Flag::feature_evm_address,
+        //                                              Flag::feature_evm_cancun,
+        //                                          }}});
+        // if (mainSwitchDependence.contains(flag))
+        // {
+        //     return mainSwitchDependence.at(flag);
+        // }
         return std::set<Flag>();
     }
     void enableDependencyFeatures(Flag flag)
@@ -349,15 +347,13 @@ inline task::Task<void> writeToStorage(Features const& features, auto&& storage,
     decltype(auto) flags =
         features.flags() | RANGES::views::filter([](auto&& tuple) { return std::get<2>(tuple); });
     co_await storage2::writeSome(std::forward<decltype(storage)>(storage),
-        RANGES::views::transform(flags,
-            [](auto&& tuple) {
-                return transaction_executor::StateKey(ledger::SYS_CONFIG, std::get<1>(tuple));
-            }),
-        RANGES::views::transform(flags, [&](auto&& tuple) {
+        ::ranges::views::transform(flags, [&](auto&& tuple) {
             storage::Entry entry;
             entry.setObject(SystemConfigEntry{
                 boost::lexical_cast<std::string>((int)std::get<2>(tuple)), blockNumber});
-            return entry;
+            return std::make_tuple(
+                transaction_executor::StateKey(ledger::SYS_CONFIG, std::get<1>(tuple)),
+                std::move(entry));
         }));
 }
 

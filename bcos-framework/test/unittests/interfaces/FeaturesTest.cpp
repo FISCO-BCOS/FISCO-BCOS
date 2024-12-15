@@ -157,12 +157,11 @@ BOOST_AUTO_TEST_CASE(feature)
         "feature_balance_policy1",
         "feature_paillier_add_raw",
         "feature_evm_cancun",
-        "feature_calculate_gasPrice",
         "feature_evm_timestamp",
         "feature_evm_address",
-        "feature_ethereum_compatible",
         "feature_rpbft_term_weight",
         "feature_raw_address",
+        "feature_rpbft_vrf_type_secp256k1",
     };
     // clang-format on
     for (size_t i = 0; i < keys.size(); ++i)
@@ -420,12 +419,13 @@ BOOST_AUTO_TEST_CASE(genesis)
 BOOST_AUTO_TEST_CASE(testDependenciesFeatures)
 {
     Features features;
-    features.set(ledger::Features::Flag::feature_ethereum_compatible);
+    // features.set(ledger::Features::Flag::feature_ethereum_compatible);
     // BOOST_CHECK(features.get(ledger::Features::Flag::feature_balance));
     // BOOST_CHECK(features.get(ledger::Features::Flag::feature_balance_precompiled));
     // BOOST_CHECK(features.get(ledger::Features::Flag::feature_calculate_gasPrice));
     // BOOST_CHECK(features.get(ledger::Features::Flag::feature_evm_address));
     // BOOST_CHECK(features.get(ledger::Features::Flag::feature_evm_cancun));
 }
+
 
 BOOST_AUTO_TEST_SUITE_END()

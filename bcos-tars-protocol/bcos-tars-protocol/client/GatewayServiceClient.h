@@ -191,6 +191,13 @@ public:
             std::vector<char>(_payload.begin(), _payload.end()));
     }
 
+    bcos::task::Task<void> broadcastMessage(uint16_t type, std::string_view groupID, int moduleID,
+        const bcos::crypto::NodeID& srcNodeID,
+        ::ranges::any_view<bcos::bytesConstRef> payloads) override
+    {
+        co_return;
+    };
+
     void asyncGetGroupNodeInfo(const std::string& _groupID,
         bcos::gateway::GetGroupNodeInfoFunc _onGetGroupNodeInfo) override
     {
@@ -287,12 +294,12 @@ public:
     }
 
     void asyncSendMessageByTopic(const std::string& _topic, bcos::bytesConstRef _data,
-        std::function<void(bcos::Error::Ptr&&, int16_t, bcos::bytesPointer)> _respFunc) override
+        std::function<void(bcos::Error::Ptr&&, int16_t, bcos::bytesConstRef)> _respFunc) override
     {
         class Callback : public bcostars::GatewayServicePrxCallback
         {
         public:
-            Callback(std::function<void(bcos::Error::Ptr&&, int16_t, bcos::bytesPointer)> callback)
+            Callback(std::function<void(bcos::Error::Ptr&&, int16_t, bcos::bytesConstRef)> callback)
               : m_callback(callback)
             {}
             void callback_asyncSendMessageByTopic(const bcostars::Error& ret, tars::Int32 _type,
@@ -300,17 +307,18 @@ public:
             {
                 s_tarsTimeoutCount.store(0);
                 auto data =
-                    std::make_shared<bcos::bytes>(_responseData.begin(), _responseData.end());
+                    bcos::bytesConstRef(reinterpret_cast<const bcos::byte*>(_responseData.data()),
+                        _responseData.size());
                 m_callback(toBcosError(ret), _type, data);
             }
             void callback_asyncSendMessageByTopic_exception(tars::Int32 ret) override
             {
                 s_tarsTimeoutCount++;
-                return m_callback(toBcosError(ret), 0, nullptr);
+                return m_callback(toBcosError(ret), 0, {});
             }
 
         private:
-            std::function<void(bcos::Error::Ptr&&, int16_t, bcos::bytesPointer)> m_callback;
+            std::function<void(bcos::Error::Ptr&&, int16_t, bcos::bytesConstRef)> m_callback;
         };
         auto shouldBlockCall = shouldStopCall();
         auto ret = checkConnection(
@@ -318,7 +326,7 @@ public:
             [_respFunc](bcos::Error::Ptr _error) {
                 if (_respFunc)
                 {
-                    _respFunc(std::move(_error), 0, nullptr);
+                    _respFunc(std::move(_error), 0, {});
                 }
             },
             shouldBlockCall);

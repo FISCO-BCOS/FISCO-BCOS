@@ -96,7 +96,8 @@ public:
         auto txResultFactory = std::make_shared<TransactionSubmitResultFactoryImpl>();
 
         auto txPoolFactory = std::make_shared<TxPoolFactory>(nodeId, cryptoSuite, txResultFactory,
-            m_blockFactory, m_frontService, m_ledger, "group0", "chain0", 100000000);
+            m_blockFactory, m_frontService, m_ledger, "group0", "chain0", 100000000,
+            bcos::txpool::DEFAULT_POOL_LIMIT, true);
 
         txPool = txPoolFactory->createTxPool();
         txPool->init();
@@ -159,8 +160,7 @@ public:
         "    thread_count=4\n"
         "    ; ssl or sm ssl\n"
         "    sm_ssl=false\n"
-        "    ; ssl connection switch, if disable the ssl connection, default: false\n"
-        "    disable_ssl=true\n"
+        "    enable_ssl=false\n"
         "    ; return input params in sendTransaction() return, default: true\n"
         "    ; return_input_params=false\n"
         "\n"
@@ -194,8 +194,7 @@ std::string wrongConfigini = "[p2p]\n"
     "    thread_count=4\n"
     "    ; ssl or sm ssl\n"
     "    sm_ssl=false\n"
-    "    ; ssl connection switch, if disable the ssl connection, default: false\n"
-    "    disable_ssl=true\n"
+    "    enable_ssl=false\n"
     "    ; return input params in sendTransaction() return, default: true\n"
     "    ; return_input_params=false\n"
     "\n"

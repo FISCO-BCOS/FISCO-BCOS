@@ -48,12 +48,12 @@ void PBFTImpl::stop()
     PBFT_LOG(INFO) << LOG_DESC("Stop the PBFT module.");
 }
 
-void PBFTImpl::asyncSubmitProposal(bool _containSysTxs, bytesConstRef _proposalData,
+void PBFTImpl::asyncSubmitProposal(bool _containSysTxs, const protocol::Block& proposal,
     bcos::protocol::BlockNumber _proposalIndex, bcos::crypto::HashType const& _proposalHash,
     std::function<void(Error::Ptr)> _onProposalSubmitted)
 {
     return m_pbftEngine->asyncSubmitProposal(
-        _containSysTxs, _proposalData, _proposalIndex, _proposalHash, _onProposalSubmitted);
+        _containSysTxs, proposal, _proposalIndex, _proposalHash, _onProposalSubmitted);
 }
 
 void PBFTImpl::asyncGetPBFTView(std::function<void(Error::Ptr, ViewType)> _onGetView)
@@ -95,16 +95,6 @@ void PBFTImpl::asyncNotifyNewBlock(
 void PBFTImpl::notifyHighestSyncingNumber(bcos::protocol::BlockNumber _blockNumber)
 {
     m_pbftEngine->pbftConfig()->setSyncingHighestNumber(_blockNumber);
-}
-
-void PBFTImpl::asyncNoteUnSealedTxsSize(
-    uint64_t _unsealedTxsSize, std::function<void(Error::Ptr)> _onRecvResponse)
-{
-    m_pbftEngine->pbftConfig()->setUnSealedTxsSize(_unsealedTxsSize);
-    if (_onRecvResponse)
-    {
-        _onRecvResponse(nullptr);
-    }
 }
 
 void PBFTImpl::init()

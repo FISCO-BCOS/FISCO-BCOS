@@ -11,7 +11,7 @@ endif ()
 ExternalProject_Add(blst_project
         PREFIX ${CMAKE_SOURCE_DIR}/deps
         GIT_REPOSITORY https://${URL_BASE}/supranational/blst.git
-        GIT_TAG 3dd0f804b1819e5d03fb22ca2e6fac105932043a
+        GIT_TAG 52cc60d78591a56abb2f3d0bd1cdafc6ba242997
         GIT_SHALLOW 0
 
         CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>

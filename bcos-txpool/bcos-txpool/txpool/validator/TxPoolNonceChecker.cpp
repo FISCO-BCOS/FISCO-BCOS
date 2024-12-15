@@ -29,9 +29,9 @@ bool TxPoolNonceChecker::exists(NonceType const& _nonce)
     return m_nonces.contains(_nonce);
 }
 
-TransactionStatus TxPoolNonceChecker::checkNonce(Transaction::ConstPtr _tx)
+TransactionStatus TxPoolNonceChecker::checkNonce(const bcos::protocol::Transaction& _tx)
 {
-    auto nonce = _tx->nonce();
+    auto nonce = _tx.nonce();
 
     if (m_nonces.contains(nonce))
     {
@@ -42,7 +42,7 @@ TransactionStatus TxPoolNonceChecker::checkNonce(Transaction::ConstPtr _tx)
 
 void TxPoolNonceChecker::insert(NonceType const& _nonce)
 {
-    NonceSet::WriteAccessor::Ptr accessor;
+    NonceSet::WriteAccessor accessor;
     m_nonces.insert(accessor, _nonce);
 }
 
@@ -53,12 +53,16 @@ void TxPoolNonceChecker::batchInsert(BlockNumber /*_batchId*/, NonceListPtr cons
 
 void TxPoolNonceChecker::remove(NonceType const& _nonce)
 {
-    m_nonces.remove(_nonce);
+    NonceSet::WriteAccessor accessor;
+    if (m_nonces.find(accessor, _nonce))
+    {
+        m_nonces.remove(accessor);
+    }
 }
 
 void TxPoolNonceChecker::batchRemove(NonceList const& _nonceList)
 {
-    m_nonces.batchRemove(_nonceList);
+    m_nonces.batchRemove<decltype(_nonceList), false>(_nonceList);
 }
 
 void TxPoolNonceChecker::batchRemove(tbb::concurrent_unordered_set<bcos::protocol::NonceType,

@@ -27,6 +27,7 @@
 #include "../storage/StorageInterface.h"
 #include "Features.h"
 #include "LedgerTypeDef.h"
+#include "SystemConfigs.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-task/Task.h>
 #include <bcos-utilities/Error.h>
@@ -207,6 +208,17 @@ public:
         std::string_view _address, protocol::BlockNumber _blockNumber)
     {
         co_return std::nullopt;
+    }
+
+    virtual task::Task<bcos::ledger::SystemConfigs> fetchAllSystemConfigs(
+        protocol::BlockNumber _blockNumber)
+    {
+        co_return bcos::ledger::SystemConfigs{};  // Return an empty SystemConfigs object
+    }
+
+    virtual task::Task<bcos::ledger::Features> fetchAllFeatures(protocol::BlockNumber _blockNumber)
+    {
+        co_return bcos::ledger::Features{};  // Return an empty SystemConfigs object
     }
 };
 

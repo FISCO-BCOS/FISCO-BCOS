@@ -424,6 +424,12 @@ std::shared_ptr<BlockContext> TransactionExecutor::createBlockContextForCall(
 {
     BlockContext::Ptr context = make_shared<BlockContext>(storage, m_ledgerCache, m_hashImpl,
         blockNumber, blockHash, timestamp, blockVersion, m_isWasm, m_isAuthCheck);
+    ledger::Features features;
+    task::syncWait(features.readFromStorage(*storage, blockNumber + 1));
+    context->setFeatures(std::move(features));
+    ledger::SystemConfigs config;
+    task::syncWait(readFromStorage(config, *storage, blockNumber + 1));
+    context->setConfigs(std::move(config));
     context->setVMFactory(m_vmFactory);
     return context;
 }
@@ -1617,6 +1623,7 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                                 // get abi json
                                 // new logic
                                 std::string_view abiStr;
+                                storage::Entry tmpEntry;
                                 if (m_blockContext->blockVersion() >=
                                     uint32_t(bcos::protocol::BlockVersion::V3_1_VERSION))
                                 {
@@ -1654,13 +1661,15 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                                             continue;
                                         }
                                     }
-                                    abiStr = abiEntry->getField(0);
+                                    tmpEntry = std::move(*abiEntry);
+                                    abiStr = tmpEntry.getField(0);
                                 }
                                 else
                                 {
                                     // old logic
                                     auto entry = table->getRow(ACCOUNT_ABI);
-                                    abiStr = entry->getField(0);
+                                    tmpEntry = std::move(*entry);
+                                    abiStr = tmpEntry.getField(0);
                                 }
                                 bool isSmCrypto =
                                     m_hashImpl->getHashImplType() == crypto::HashImplType::Sm3Hash;

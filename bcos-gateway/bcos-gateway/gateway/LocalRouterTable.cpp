@@ -247,7 +247,7 @@ bool LocalRouterTable::eraseUnreachableNodes()
 }
 
 bool LocalRouterTable::asyncBroadcastMsg(uint16_t _nodeType, const std::string& _groupID,
-    uint16_t _moduleID, NodeIDPtr _srcNodeID, bytesConstRef _payload)
+    uint16_t _moduleID, NodeIDPtr _srcNodeID, bytesConstRef _payload) const
 {
     auto frontServiceList = getGroupFrontServiceList(_groupID);
     if (frontServiceList.empty())

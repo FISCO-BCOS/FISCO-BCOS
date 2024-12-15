@@ -79,8 +79,8 @@ void Config::loadCommon(
 {
     /*
     [common]
-        ; if disable ssl connection, default: false
         ; disable_ssl = true
+        enable_ssl=true
         ; thread pool size for network msg sending receiving handing
         thread_pool_size = 8
         ; send message timeout(ms)
@@ -89,6 +89,10 @@ void Config::loadCommon(
         send_rpc_request_to_highest_block_node = true;
     */
     bool disableSsl = _pt.get<bool>("common.disable_ssl", false);
+    if (auto enableSsl = _pt.get_optional<bool>("common.enable_ssl"))
+    {
+        disableSsl = !enableSsl.value();
+    }
     int threadPoolSize = _pt.get<int>("common.thread_pool_size", 8);
     int messageTimeOut = _pt.get<int>("common.message_timeout_ms", 10000);
     bool sendRpcRequestToHighestBlockNode =

@@ -18,6 +18,7 @@
  */
 
 #pragma once
+#include "bcos-utilities/Common.h"
 #include <boost/asio.hpp>
 #include <memory>
 namespace bcos
@@ -61,7 +62,7 @@ public:
         for (const auto& ioService : m_ioServices)
         {
             // https://github.com/chriskohlhoff/asio/issues/932#issuecomment-968103444
-            m_threads.emplace_back([ioService, running = &m_running]() {
+            m_threads.emplace_back([ioService, running = std::ref(m_running)]() {
                 if (!running)
                 {
                     return;
@@ -75,8 +76,7 @@ public:
 
     std::shared_ptr<IOService> getIOService()
     {
-        auto selectedIoService = (m_nextIOService % m_ioServices.size());
-        m_nextIOService++;
+        auto selectedIoService = (m_nextIOService.fetch_add(1) % m_ioServices.size());
         return m_ioServices.at(selectedIoService);
     }
 
@@ -116,7 +116,7 @@ private:
     std::vector<std::shared_ptr<IOService>> m_ioServices;
     std::vector<WorkPtr> m_works;
     std::vector<std::thread> m_threads;
-    size_t m_nextIOService;
+    std::atomic_size_t m_nextIOService = 0;
     bool m_running = false;
 };
 }  // namespace bcos

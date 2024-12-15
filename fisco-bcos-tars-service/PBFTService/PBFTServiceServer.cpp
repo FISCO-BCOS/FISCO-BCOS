@@ -22,6 +22,7 @@
 #include "PBFTServiceServer.h"
 #include "../Common/TarsUtils.h"
 #include "bcos-tars-protocol/Common.h"
+#include "bcos-tars-protocol/protocol/BlockImpl.h"
 
 using namespace bcostars;
 using namespace bcos::consensus;
@@ -47,18 +48,6 @@ Error PBFTServiceServer::asyncGetPBFTView(tars::Int64& _view, tars::TarsCurrentP
     m_pbftInitializer->pbft()->asyncGetPBFTView(
         [_current](bcos::Error::Ptr _error, bcos::consensus::ViewType _view) {
             async_response_asyncGetPBFTView(_current, toTarsError(_error), _view);
-        });
-    return bcostars::Error();
-}
-
-
-Error PBFTServiceServer::asyncNoteUnSealedTxsSize(
-    tars::Int64 _unsealedTxsSize, tars::TarsCurrentPtr _current)
-{
-    _current->setResponse(false);
-    m_pbftInitializer->sealer()->asyncNoteUnSealedTxsSize(
-        _unsealedTxsSize, [_current](bcos::Error::Ptr _error) {
-            async_response_asyncNoteUnSealedTxsSize(_current, toTarsError(_error));
         });
     return bcostars::Error();
 }
@@ -107,7 +96,7 @@ Error PBFTServiceServer::asyncNotifyNewBlock(
 }
 
 Error PBFTServiceServer::asyncSubmitProposal(bool _containSysTxs,
-    const vector<tars::Char>& _proposalData, tars::Int64 _proposalIndex,
+    const bcostars::Block& _proposalData, tars::Int64 _proposalIndex,
     const vector<tars::Char>& _proposalHash, tars::TarsCurrentPtr _current)
 {
     _current->setResponse(false);
@@ -117,12 +106,13 @@ Error PBFTServiceServer::asyncSubmitProposal(bool _containSysTxs,
         proposalHash = bcos::crypto::HashType(
             (const bcos::byte*)_proposalHash.data(), bcos::crypto::HashType::SIZE);
     }
-    m_pbftInitializer->pbft()->asyncSubmitProposal(_containSysTxs,
-        bcos::bytesConstRef((const bcos::byte*)_proposalData.data(), _proposalData.size()),
-        _proposalIndex, proposalHash, [_current](bcos::Error::Ptr _error) {
+
+    bcostars::protocol::BlockImpl block(std::move(const_cast<bcostars::Block&>(_proposalData)));
+    m_pbftInitializer->pbft()->asyncSubmitProposal(
+        _containSysTxs, block, _proposalIndex, proposalHash, [_current](bcos::Error::Ptr _error) {
             async_response_asyncSubmitProposal(_current, toTarsError(_error));
         });
-    return bcostars::Error();
+    return {};
 }
 
 bcostars::Error PBFTServiceServer::asyncGetSyncInfo(std::string&, tars::TarsCurrentPtr _current)

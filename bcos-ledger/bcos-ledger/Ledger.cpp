@@ -27,6 +27,7 @@
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/Ledger.h"
+#include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-tool/NodeConfig.h"
@@ -169,7 +170,6 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     auto header = block->blockHeaderConst();
 
     auto blockNumberStr = boost::lexical_cast<std::string>(header->number());
-
 
     size_t TOTAL_CALLBACK = 8;
     if (writeTxsAndReceipts)
@@ -422,15 +422,13 @@ task::Task<void> Ledger::batchInsertEoaNonce(bcos::storage::StorageInterface::Pt
         co_await ledger::account::setNonce(eoa, std::to_string(newNonce));
     }
 
-    co_await bcos::storage2::writeSome(*storage,
-        RANGES::views::keys(eoa2Nonce) | RANGES::views::transform([](auto&& sender) {
-            auto table = getContractTableName(SYS_DIRECTORY::USER_APPS, sender);
-            return transaction_executor::StateKey(table, "nonce");
-        }),
-        RANGES::views::values(eoa2Nonce) | RANGES::views::transform([](auto&& nonce) {
-            Entry entry;
-            entry.set(std::to_string(nonce + 1));
-            return entry;
+    co_await bcos::storage2::writeSome(
+        *storage, ::ranges::views::transform(eoa2Nonce, [&](auto& item) {
+            auto&& [sender, nonce] = item;
+            return std::make_tuple(
+                transaction_executor::StateKey(
+                    getContractTableName(SYS_DIRECTORY::USER_APPS, sender), "nonce"),
+                storage::Entry(std::to_string(nonce + 1)));
         }));
 }
 
@@ -876,8 +874,8 @@ void Ledger::asyncGetBlockNumberByHash(const crypto::HashType& _blockHash,
             {
                 LEDGER_LOG(INFO) << "GetBlockNumberByHash failed "
                                  << boost::diagnostic_information(e);
-                callback(BCOS_ERROR_WITH_PREV_PTR(LedgerError::GetStorageError,
-                             "GetBlockNumberByHash failed ", std::move(e)),
+                callback(BCOS_ERROR_WITH_PREV_PTR(
+                             LedgerError::GetStorageError, "GetBlockNumberByHash failed ", e),
                     -1);
             }
         });
@@ -1025,8 +1023,9 @@ void Ledger::asyncGetTotalTransactionCount(
     static std::string_view keys[] = {
         SYS_KEY_TOTAL_TRANSACTION_COUNT, SYS_KEY_TOTAL_FAILED_TRANSACTION, SYS_KEY_CURRENT_NUMBER};
 
-    m_stateStorage->asyncOpenTable(SYS_CURRENT_STATE,
-        [this, callback = std::move(_callback)](auto&& error, std::optional<Table>&& table) {
+    m_stateStorage->asyncOpenTable(
+        SYS_CURRENT_STATE, [this, callback = std::move(_callback)](
+                               auto&& error, std::optional<Table>&& table) mutable {
             auto tableError =
                 checkTableValid(std::forward<decltype(error)>(error), table, SYS_CURRENT_STATE);
             if (tableError)
@@ -2309,4 +2308,34 @@ Error::Ptr Ledger::setCurrentStateByKey(std::string_view const& _key, bcos::stor
     m_stateStorage->asyncSetRow(ledger::SYS_CURRENT_STATE, _key, std::move(entry),
         [&](Error::UniquePtr err) { setPromise.set_value(std::move(err)); });
     return setPromise.get_future().get();
+}
+
+task::Task<bcos::ledger::SystemConfigs> Ledger::fetchAllSystemConfigs(
+    protocol::BlockNumber _blockNumber)
+{
+    auto allConfigKeys = ledger::SystemConfigs::supportConfigs();
+    auto entries = co_await storage2::readSome(
+        *m_stateStorage, allConfigKeys | RANGES::views::transform([](auto&& key) {
+            return transaction_executor::StateKeyView(SYS_CONFIG, key);
+        }));
+    bcos::ledger::SystemConfigs configs;
+    for (auto&& [key, entry] : RANGES::views::zip(allConfigKeys, entries))
+    {
+        if (entry)
+        {
+            auto [value, enableNumber] = entry->getObject<SystemConfigEntry>();
+            if (enableNumber <= _blockNumber)
+            {
+                configs.set(key, value, enableNumber);
+            }
+        }
+    }
+    co_return configs;
+}
+
+task::Task<bcos::ledger::Features> Ledger::fetchAllFeatures(protocol::BlockNumber _blockNumber)
+{
+    bcos::ledger::Features features;
+    co_await features.readFromStorage(*m_stateStorage, _blockNumber);
+    co_return features;
 }

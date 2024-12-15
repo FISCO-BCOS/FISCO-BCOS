@@ -4,7 +4,7 @@
     thread_count=4
     sm_ssl=false
     ; ssl connection switch, if disable the ssl connection, default: false
-    ;disable_ssl=true
+    enable_ssl=true
     ; return input params in sendTransaction() return, default: true
     ; return_input_params=false
 

@@ -57,7 +57,7 @@ public:
      * @return void
      */
     virtual void asyncSendMessageByTopic(const std::string& _topic, bcos::bytesConstRef _data,
-        std::function<void(bcos::Error::Ptr&&, int16_t, bytesPointer)> _respFunc);
+        std::function<void(bcos::Error::Ptr&&, int16_t, bytesConstRef)> _respFunc);
 
     /**
      * @brief: async send message to all nodes subscribe _topic
@@ -139,11 +139,10 @@ private:
         std::string const& _topic, bytesConstRef _data,
         std::function<void(bytesPointer, int16_t)> const& _responseCallback);
     void onRecvAMOPResponse(int16_t _type, bytesPointer _responseData,
-        std::function<void(bcos::Error::Ptr&&, int16_t, bytesPointer)> _callback);
+        std::function<void(bcos::Error::Ptr&&, int16_t, bytesConstRef)> _callback);
     bool trySendTopicMessageToLocalClient(const std::string& _topic, bcos::bytesConstRef _data,
-        std::function<void(bcos::Error::Ptr&&, int16_t, bytesPointer)> _respFunc);
+        std::function<void(bcos::Error::Ptr&&, int16_t, bytesConstRef)> _respFunc);
 
-private:
     std::shared_ptr<TopicManager> m_topicManager;
     std::shared_ptr<AMOPMessageFactory> m_messageFactory;
     std::shared_ptr<bcos::protocol::AMOPRequestFactory> m_requestFactory;

@@ -4,7 +4,6 @@
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-utilities/FixedBytes.h"
 #include "bcos-utilities/ratelimiter/TimeWindowRateLimiter.h"
-#include "bcos-utilities/ratelimiter/TokenBucketRateLimiter.h"
 #include <bcos-codec/abi/ContractABICodec.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
@@ -17,14 +16,21 @@
 #include <atomic>
 #include <chrono>
 #include <exception>
-#include <random>
 #include <string>
 #include <thread>
 
-std::atomic_long blockNumber = 0;
+std::atomic_long g_blockNumber = 0;
 constexpr static long blockLimit = 900;
 constexpr static int64_t initialValue = 1000000000;
 const static std::string DAG_TRANSFER_ADDRESS = "000000000000000000000000000000000000100c";
+
+static std::string generateNonce(int64_t number)
+{
+    std::string nonce(8, '\0');
+    std::copy(
+        reinterpret_cast<char*>(&number), reinterpret_cast<char*>(&number) + 8, nonce.begin());
+    return nonce;
+}
 
 class PerformanceCallback : public bcos::sdk::Callback
 {
@@ -47,16 +53,18 @@ public:
 
 std::vector<std::atomic_long> query(bcos::sdk::RPCClient& rpcClient,
     std::shared_ptr<bcos::crypto::CryptoSuite> cryptoSuite, std::string contractAddress,
-    int userCount)
+    int userCount, int qps)
 {
     bcostars::protocol::TransactionFactoryImpl transactionFactory(cryptoSuite);
     boost::latch latch(userCount);
     std::vector<std::optional<bcos::sdk::Call>> handles(userCount);
 
+    bcos::ratelimiter::TimeWindowRateLimiter limiter(qps);
     bcos::sample::Collector collector(userCount, "Query");
     tbb::parallel_for(tbb::blocked_range(0LU, (size_t)userCount), [&](const auto& range) {
         for (auto it = range.begin(); it != range.end(); ++it)
         {
+            // limiter.acquire(1);
             bcos::codec::abi::ContractABICodec abiCodec(*cryptoSuite->hashImpl());
             bcos::bytes input;
             if (contractAddress == DAG_TRANSFER_ADDRESS)
@@ -67,8 +75,8 @@ std::vector<std::atomic_long> query(bcos::sdk::RPCClient& rpcClient,
             {
                 input = abiCodec.abiIn("balance(address)", bcos::Address(it));
             }
-            auto transaction = transactionFactory.createTransaction(0, contractAddress, input,
-                rpcClient.generateNonce(), blockNumber + blockLimit, "chain0", "group0", 0);
+            auto transaction = transactionFactory.createTransaction(
+                0, contractAddress, input, {}, g_blockNumber + blockLimit, "chain0", "group0", 0);
 
             handles[it].emplace(rpcClient);
             auto& call = *(handles[it]);
@@ -108,16 +116,18 @@ std::vector<std::atomic_long> query(bcos::sdk::RPCClient& rpcClient,
 
 int issue(bcos::sdk::RPCClient& rpcClient, std::shared_ptr<bcos::crypto::CryptoSuite> cryptoSuite,
     std::shared_ptr<bcos::crypto::KeyPairInterface> keyPair, std::string contractAddress,
-    int userCount, [[maybe_unused]] int qps, std::vector<std::atomic_long>& balances)
+    int userCount, int qps, std::vector<std::atomic_long>& balances, int64_t startNonce)
 {
     bcostars::protocol::TransactionFactoryImpl transactionFactory(cryptoSuite);
     boost::latch latch(userCount);
     std::vector<std::optional<bcos::sdk::SendTransaction>> handles(userCount);
 
+    bcos::ratelimiter::TimeWindowRateLimiter limiter(qps);
     bcos::sample::Collector collector(userCount, "Issue");
     tbb::parallel_for(tbb::blocked_range(0LU, (size_t)userCount), [&](const auto& range) {
         for (auto it = range.begin(); it != range.end(); ++it)
         {
+            limiter.acquire(1);
             bcos::codec::abi::ContractABICodec abiCodec(*cryptoSuite->hashImpl());
             bcos::bytes input;
             if (contractAddress == DAG_TRANSFER_ADDRESS)
@@ -131,7 +141,7 @@ int issue(bcos::sdk::RPCClient& rpcClient, std::shared_ptr<bcos::crypto::CryptoS
                     "issue(address,int256)", bcos::Address(it), bcos::s256(initialValue));
             }
             auto transaction = transactionFactory.createTransaction(0, contractAddress, input,
-                rpcClient.generateNonce(), blockNumber + blockLimit, "chain0", "group0", 0,
+                generateNonce(startNonce + it), g_blockNumber + blockLimit, "chain0", "group0", 0,
                 *keyPair);
             transaction->setAttribute(bcos::protocol::Transaction::Attribute::EVM_ABI_CODEC |
                                       bcos::protocol::Transaction::Attribute::DAG);
@@ -168,7 +178,7 @@ int issue(bcos::sdk::RPCClient& rpcClient, std::shared_ptr<bcos::crypto::CryptoS
 int transfer(bcos::sdk::RPCClient& rpcClient,
     std::shared_ptr<bcos::crypto::CryptoSuite> cryptoSuite, std::string contractAddress,
     std::shared_ptr<bcos::crypto::KeyPairInterface> keyPair, int userCount, int transactionCount,
-    [[maybe_unused]] int qps, std::vector<std::atomic_long>& balances)
+    int qps, std::vector<std::atomic_long>& balances, int64_t startNonce)
 {
     bcostars::protocol::TransactionFactoryImpl transactionFactory(cryptoSuite);
     boost::latch latch(transactionCount);
@@ -180,23 +190,25 @@ int transfer(bcos::sdk::RPCClient& rpcClient,
         for (auto it = range.begin(); it != range.end(); ++it)
         {
             limiter.acquire(1);
-            auto fromAddress = it % userCount;
-            auto toAddress = ((it + (userCount / 2)) % userCount);
+            auto fromAddress = (it * 2) % userCount;
+            auto toAddress = (it * 2 + 1) % userCount;
 
             bcos::codec::abi::ContractABICodec abiCodec(*cryptoSuite->hashImpl());
             bcos::bytes input;
             if (contractAddress == DAG_TRANSFER_ADDRESS)
             {
-                input = abiCodec.abiIn("userTransfer(string,string,uint256)",
-                    std::to_string(fromAddress), std::to_string(toAddress), bcos::u256(1));
+                const static std::string abi("userTransfer(string,string,uint256)");
+                input = abiCodec.abiIn(
+                    abi, std::to_string(fromAddress), std::to_string(toAddress), bcos::u256(1));
             }
             else
             {
-                input = abiCodec.abiIn("transfer(address,address,int256)",
-                    bcos::Address(fromAddress), bcos::Address(toAddress), bcos::s256(1));
+                const static std::string abi("transfer(address,address,int256)");
+                input = abiCodec.abiIn(
+                    abi, bcos::Address(fromAddress), bcos::Address(toAddress), bcos::s256(1));
             }
             auto transaction = transactionFactory.createTransaction(0, contractAddress, input,
-                rpcClient.generateNonce(), blockNumber + blockLimit, "chain0", "group0", 0,
+                generateNonce(startNonce + it), g_blockNumber + blockLimit, "chain0", "group0", 0,
                 *keyPair);
             transaction->setAttribute(bcos::protocol::Transaction::Attribute::EVM_ABI_CODEC |
                                       bcos::protocol::Transaction::Attribute::DAG);
@@ -237,7 +249,7 @@ void loopFetchBlockNumber(bcos::sdk::RPCClient& rpcClient, boost::atomic_flag co
     {
         try
         {
-            blockNumber = bcos::sdk::BlockNumber(rpcClient).send().get();
+            g_blockNumber = bcos::sdk::BlockNumber(rpcClient).send().get();
         }
         catch (std::exception& e)
         {
@@ -253,11 +265,11 @@ int main(int argc, char* argv[])
     {
         std::cout
             << "Usage: " << argv[0]
-            << " <connectionString> <solidity/precompiled> <userCount> <transactionCount> <qps>"
+            << " <connectionString> <solidity/precompiled> <userCount> <transactionCount> "
+               "<qps> <optional nonce>"
             << std::endl
             << "Example: " << argv[0]
-            << " solidity \"fiscobcos.rpc.RPCObj@tcp -h 127.0.0.1 -p 20021\" 100 1000 0 "
-            << std::endl;
+            << " \"fiscobcos.rpc.RPCObj@tcp -h 127.0.0.1 -p 20021\" solidity 100 1000 100 0\n";
 
         return 1;
     }
@@ -266,6 +278,7 @@ int main(int argc, char* argv[])
     int userCount = boost::lexical_cast<int>(argv[3]);
     int transactionCount = boost::lexical_cast<int>(argv[4]);
     int qps = boost::lexical_cast<int>(argv[5]);
+    int64_t nonce = argc >= 7 ? boost::lexical_cast<int64_t>(argv[6]) : 0;
 
     bcos::sdk::Config config = {
         .connectionString = connectionString,
@@ -274,6 +287,8 @@ int main(int argc, char* argv[])
     };
     bcos::sdk::RPCClient rpcClient(config);
     boost::atomic_flag stopFlag{};
+
+    g_blockNumber = bcos::sdk::BlockNumber(rpcClient).send().get();
     std::thread getBlockNumber([&]() { loopFetchBlockNumber(rpcClient, stopFlag); });
     auto cryptoSuite =
         std::make_shared<bcos::crypto::CryptoSuite>(std::make_shared<bcos::crypto::Keccak256>(),
@@ -287,36 +302,40 @@ int main(int argc, char* argv[])
     {
         bcos::bytes deployBin = bcos::sample::getContractBin();
         auto deployTransaction = transactionFactory.createTransaction(0, "", deployBin,
-            rpcClient.generateNonce(), blockNumber + blockLimit, "chain0", "group0", 0, *keyPair,
+            generateNonce(nonce++), g_blockNumber + blockLimit, "chain0", "group0", 0, *keyPair,
             std::string{bcos::sample::getContractABI()});
         auto receipt = bcos::sdk::SendTransaction(rpcClient).send(*deployTransaction).get();
 
         if (receipt->status() != 0)
         {
-            std::cout << "Deploy contract failed" << receipt->status() << std::endl;
+            std::cout << "Deploy contract failed" << receipt->status() << "\n";
             return 1;
         }
         contractAddress = receipt->contractAddress();
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
     std::cout << "Contract address is:" << contractAddress << std::endl;
-    auto balances = query(rpcClient, cryptoSuite, std::string(contractAddress), userCount);
-    issue(rpcClient, cryptoSuite, keyPair, std::string(contractAddress), userCount, qps, balances);
+    auto balances = query(rpcClient, cryptoSuite, std::string(contractAddress), userCount, qps);
+    issue(rpcClient, cryptoSuite, keyPair, std::string(contractAddress), userCount, qps, balances,
+        nonce);
+    nonce += userCount;
     transfer(rpcClient, cryptoSuite, std::string(contractAddress), keyPair, userCount,
-        transactionCount, qps, balances);
-    auto resultBalances = query(rpcClient, cryptoSuite, std::string(contractAddress), userCount);
+        transactionCount, qps, balances, nonce);
+    auto resultBalances =
+        query(rpcClient, cryptoSuite, std::string(contractAddress), userCount, qps);
 
     // Compare the result
     for (int i = 0; i < userCount; ++i)
     {
         if (balances[i] != resultBalances[i])
         {
-            std::cout << "Balance not match! " << balances[i] << " " << resultBalances[i]
-                      << std::endl;
+            std::cout << "Balance not match! " << balances[i] << " " << resultBalances[i] << "\n";
             exit(1);
         }
     }
     stopFlag.test_and_set();
     getBlockNumber.join();
+
+    std::cout << "Test finished, last nonce: " << nonce + transactionCount << "\n";
     return 0;
 }

@@ -74,7 +74,8 @@ static void read(benchmark::State& state)
             co_await std::visit(
                 [&](auto& storage) -> task::Task<void> {
                     setCapacityForMRU(storage);
-                    co_await storage2::writeSome(storage, fixture.allKeys, fixture.allValues);
+                    co_await storage2::writeSome(
+                        storage, ::ranges::views::zip(fixture.allKeys, fixture.allValues));
                 },
                 allStorage);
         }());

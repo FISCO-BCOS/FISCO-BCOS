@@ -19,6 +19,7 @@
  * @date 2022-04-26
  */
 #include "LeaderElection.h"
+#include "bcos-utilities/BoostLog.h"
 #include <etcd/KeepAlive.hpp>
 #include <etcd/v3/Transaction.hpp>
 

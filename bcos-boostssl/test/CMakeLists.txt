@@ -16,6 +16,7 @@
 # limitations under the License.
 # ------------------------------------------------------------------------------
 file(GLOB_RECURSE SOURCES "unittests/*.cpp" "unittests/*.h" "unittests/*.sol")
+include(SearchTestCases)
 
 # cmake settings
 set(TEST_BINARY_NAME test-boostssl)
@@ -25,4 +26,5 @@ target_include_directories(${TEST_BINARY_NAME} PRIVATE .)
 find_package(Boost REQUIRED unit_test_framework)
 target_link_libraries(${TEST_BINARY_NAME} bcos-boostssl bcos-utilities bcos-framework Boost::unit_test_framework)
 
-add_test(NAME test-boostssl WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND test-boostssl)
+# add_test(NAME test-boostssl WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND test-boostssl)
+config_test_cases("" "${SOURCES}" "${TEST_BINARY_NAME}" "")

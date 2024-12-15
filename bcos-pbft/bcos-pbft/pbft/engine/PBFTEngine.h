@@ -22,10 +22,9 @@
 #include "PBFTLogSync.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-pbft/core/ConsensusEngine.h"
-#include "bcos-rpbft/rpbft/config/RPBFTConfigTools.h"
-#include <bcos-utilities/ConcurrentQueue.h>
 #include <bcos-utilities/Error.h>
 #include <bcos-utilities/Timer.h>
+#include <oneapi/tbb/concurrent_queue.h>
 #include <utility>
 
 namespace bcos
@@ -44,9 +43,6 @@ class PBFTConfig;
 class PBFTCacheProcessor;
 class PBFTProposalInterface;
 
-using PBFTMsgQueue = ConcurrentQueue<std::shared_ptr<PBFTBaseMessageInterface>>;
-using PBFTMsgQueuePtr = std::shared_ptr<PBFTMsgQueue>;
-
 enum CheckResult
 {
     VALID = 0,
@@ -57,14 +53,14 @@ class PBFTEngine : public ConsensusEngine, public std::enable_shared_from_this<P
 {
 public:
     using Ptr = std::shared_ptr<PBFTEngine>;
-    using SendResponseCallback = std::function<void(bytesConstRef _respData)>;
+    using SendResponseCallback = std::function<void(bytesConstRef)>;
     explicit PBFTEngine(std::shared_ptr<PBFTConfig> _config);
     ~PBFTEngine() override { stop(); }
 
     void start() override;
     void stop() override;
 
-    virtual void asyncSubmitProposal(bool _containSysTxs, bytesConstRef _proposalData,
+    virtual void asyncSubmitProposal(bool _containSysTxs, const protocol::Block& proposal,
         bcos::protocol::BlockNumber _proposalIndex, bcos::crypto::HashType const& _proposalHash,
         std::function<void(Error::Ptr)> _onProposalSubmitted);
 
@@ -108,7 +104,7 @@ protected:
     virtual void onReceivePBFTMessage(bcos::Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,
         bytesConstRef _data, SendResponseCallback _sendResponse);
 
-    virtual void onRecvProposal(bool _containSysTxs, bytesConstRef _proposalData,
+    virtual void onRecvProposal(bool _containSysTxs, const protocol::Block& proposal,
         bcos::protocol::BlockNumber _proposalIndex, bcos::crypto::HashType const& _proposalHash);
 
     // PBFT main processing function
@@ -122,7 +118,8 @@ protected:
         bool _needVerifyProposal, bool _generatedFromNewView = false,
         bool _needCheckSignature = true);
     // When handlePrePrepareMsg return false, then reset sealed txs
-    virtual void resetSealedTxs(std::shared_ptr<PBFTMessageInterface> const& _prePrepareMsg);
+    virtual void resetSealedTxs(
+        std::shared_ptr<PBFTMessageInterface> const& _prePrepareMsg, const protocol::Block& block);
 
     // To check pre-prepare msg valid
     virtual CheckResult checkPrePrepareMsg(std::shared_ptr<PBFTMessageInterface> _prePrepareMsg);
@@ -209,7 +206,7 @@ private:
     void waitSignal()
     {
         boost::unique_lock<boost::mutex> lock(x_signalled);
-        m_signalled.wait_for(lock, boost::chrono::milliseconds(5));
+        m_signalled.wait_for(lock, boost::chrono::milliseconds(1));
     }
     void switchToRPBFT(const ledger::LedgerConfig::Ptr& _ledgerConfig);
 
@@ -218,10 +215,9 @@ protected:
     // mainly maintains the node information, consensus configuration information
     // such as consensus node list, consensus weight, etc.
     std::shared_ptr<PBFTConfig> m_config;
-    ThreadPool::Ptr m_worker;
 
     // PBFT message cache queue
-    PBFTMsgQueuePtr m_msgQueue;
+    tbb::concurrent_queue<std::shared_ptr<PBFTBaseMessageInterface>> m_msgQueue;
     std::shared_ptr<PBFTCacheProcessor> m_cacheProcessor;
     // for log syncing
     PBFTLogSync::Ptr m_logSync;

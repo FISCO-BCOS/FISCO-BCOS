@@ -40,12 +40,12 @@ public:
         std::function<void(Error::Ptr, bool)> _verifyFinishedHandler) = 0;
 
     virtual void asyncResetTxsFlag(
-        bytesConstRef _data, bool _flag, bool _emptyTxBatchHash = false) = 0;
+        const protocol::Block& proposal, bool _flag, bool _emptyTxBatchHash = false) = 0;
     virtual PBFTProposalInterface::Ptr generateEmptyProposal(uint32_t _proposalVersion,
         PBFTMessageFactory::Ptr _factory, int64_t _index, int64_t _sealerId) = 0;
 
-    virtual void notifyTransactionsResult(
-        bcos::protocol::Block::Ptr _block, bcos::protocol::BlockHeader::Ptr _header) = 0;
+    // virtual void notifyTransactionsResult(
+    //     bcos::protocol::Block::Ptr _block, bcos::protocol::BlockHeader::Ptr _header) = 0;
 
     virtual void updateValidatorConfig(bcos::consensus::ConsensusNodeList const& _consensusNodeList,
         bcos::consensus::ConsensusNodeList const& _observerNodeList) = 0;
@@ -66,8 +66,7 @@ public:
         bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory)
       : m_txPool(std::move(_txPool)),
         m_blockFactory(std::move(_blockFactory)),
-        m_txResultFactory(std::move(_txResultFactory)),
-        m_worker(std::make_shared<ThreadPool>("validator", 2))
+        m_txResultFactory(std::move(_txResultFactory))
     {}
 
     ~TxsValidator() override = default;
@@ -80,14 +79,11 @@ public:
         std::function<void(Error::Ptr, bool)> _verifyFinishedHandler) override;
 
     void asyncResetTxsFlag(
-        bytesConstRef _data, bool _flag, bool _emptyTxBatchHash = false) override;
+        const protocol::Block& proposal, bool _flag, bool _emptyTxBatchHash = false) override;
     ssize_t resettingProposalSize() const override;
 
     PBFTProposalInterface::Ptr generateEmptyProposal(uint32_t _proposalVersion,
         PBFTMessageFactory::Ptr _factory, int64_t _index, int64_t _sealerId) override;
-
-    void notifyTransactionsResult(
-        bcos::protocol::Block::Ptr _block, bcos::protocol::BlockHeader::Ptr _header) override;
 
     void updateValidatorConfig(bcos::consensus::ConsensusNodeList const& _consensusNodeList,
         bcos::consensus::ConsensusNodeList const& _observerNodeList) override;
@@ -100,13 +96,12 @@ protected:
     void triggerVerifyCompletedHook();
     virtual bool insertResettingProposal(bcos::crypto::HashType const& _hash);
 
-    virtual void asyncResetTxsFlag(bcos::protocol::Block::Ptr _block,
-        bcos::crypto::HashListPtr _txsHashList, bool _flag, bool _emptyTxBatchHash);
+    virtual void asyncResetTxsFlag(const protocol::Block& _block,
+        bcos::crypto::HashList _txsHashList, bool _flag, bool _emptyTxBatchHash);
 
     bcos::txpool::TxPoolInterface::Ptr m_txPool;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bcos::protocol::TransactionSubmitResultFactory::Ptr m_txResultFactory;
-    ThreadPool::Ptr m_worker;
     std::set<bcos::crypto::HashType> m_resettingProposals;
     mutable SharedMutex x_resettingProposals;
 

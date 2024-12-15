@@ -6,6 +6,7 @@
 #include <range/v3/view/indirect.hpp>
 #include <range/v3/view/single.hpp>
 #include <range/v3/view/transform.hpp>
+#include <range/v3/view/zip.hpp>
 #include <type_traits>
 
 // tag_invoke storage interface
@@ -14,11 +15,11 @@ namespace bcos::storage2
 
 inline constexpr struct DIRECT_TYPE
 {
-} DIRECT{};
+} DIRECT;
 
 inline constexpr struct RANGE_SEEK_TYPE
 {
-} RANGE_SEEK{};
+} RANGE_SEEK;
 
 template <class Tag, class Storage, class... Args>
 concept HasTag = requires(Tag tag, Storage storage, Args&&... args) {
@@ -38,21 +39,20 @@ inline constexpr struct ReadSome
                       ::ranges::range<task::AwaitableReturnType<AwaitableType>>);
         return awaitable;
     }
-} readSome{};
+} readSome;
 
 inline constexpr struct WriteSome
 {
-    decltype(auto) operator()(auto&& storage, ::ranges::input_range auto&& keys,
-        ::ranges::input_range auto&& values, auto&&... args) const
+    auto operator()(auto&& storage, ::ranges::input_range auto&& keyValues, auto&&... args) const
+        -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(*this,
+            std::forward<decltype(storage)>(storage), std::forward<decltype(keyValues)>(keyValues),
+            std::forward<decltype(args)>(args)...))>>
+        requires(std::tuple_size_v<::ranges::range_value_t<decltype(keyValues)>> >= 2)
     {
-        decltype(auto) awaitable = tag_invoke(*this, std::forward<decltype(storage)>(storage),
-            std::forward<decltype(keys)>(keys), std::forward<decltype(values)>(values),
-            std::forward<decltype(args)>(args)...);
-
-        static_assert(task::IsAwaitable<decltype(awaitable)>);
-        return awaitable;
+        co_await tag_invoke(*this, std::forward<decltype(storage)>(storage),
+            std::forward<decltype(keyValues)>(keyValues), std::forward<decltype(args)>(args)...);
     }
-} writeSome{};
+} writeSome;
 
 inline constexpr struct RemoveSome
 {
@@ -65,7 +65,7 @@ inline constexpr struct RemoveSome
         static_assert(task::IsAwaitable<decltype(awaitable)>);
         return awaitable;
     }
-} removeSome{};
+} removeSome;
 
 template <class IteratorType>
 concept Iterator =
@@ -82,7 +82,16 @@ inline constexpr struct Range
             task::IsAwaitable<AwaitableType> && Iterator<task::AwaitableReturnType<AwaitableType>>);
         return awaitable;
     }
-} range{};
+} range;
+
+inline constexpr struct RandomAccessRange
+{
+    auto operator()(auto&& storage, auto&&... args) const
+    {
+        return tag_invoke(
+            *this, std::forward<decltype(storage)>(storage), std::forward<decltype(args)>(args)...);
+    }
+} randomAccessRange;
 
 namespace detail
 {
@@ -101,44 +110,23 @@ auto toSingleView(auto&& item)
 
 inline constexpr struct ReadOne
 {
-    auto operator()(auto&& storage, auto&& key, auto&&... args) const
+    auto operator()(auto& storage, auto&& key, auto&&... args) const
         -> task::Task<std::optional<typename std::decay_t<decltype(storage)>::Value>>
     {
-        if constexpr (HasTag<ReadOne, decltype(storage), decltype(key), decltype(args)...>)
-        {
-            co_return co_await tag_invoke(*this, std::forward<decltype(storage)>(storage),
-                std::forward<decltype(key)>(key), std::forward<decltype(args)>(args)...);
-        }
-        else
-        {
-            auto values = co_await storage2::readSome(std::forward<decltype(storage)>(storage),
-                detail::toSingleView(std::forward<decltype(key)>(key)),
-                std::forward<decltype(args)>(args)...);
-            co_return std::move(values[0]);
-        }
+        co_return co_await tag_invoke(*this, storage, std::forward<decltype(key)>(key),
+            std::forward<decltype(args)>(args)...);
     }
-} readOne{};
+} readOne;
 
 inline constexpr struct WriteOne
 {
-    decltype(auto) operator()(auto&& storage, auto&& key, auto&& value, auto&&... args) const
+    auto operator()(
+        auto& storage, auto&& key, auto&& value, auto&&... args) const -> task::Task<void>
     {
-        if constexpr (HasTag<WriteOne, decltype(storage), decltype(key), decltype(value),
-                          decltype(args)...>)
-        {
-            return tag_invoke(*this, std::forward<decltype(storage)>(storage),
-                std::forward<decltype(key)>(key), std::forward<decltype(value)>(value),
-                std::forward<decltype(args)>(args)...);
-        }
-        else
-        {
-            return writeSome(std::forward<decltype(storage)>(storage),
-                detail::toSingleView(std::forward<decltype(key)>(key)),
-                detail::toSingleView(std::forward<decltype(value)>(value)),
-                std::forward<decltype(args)>(args)...);
-        }
+        co_await tag_invoke(*this, storage, std::forward<decltype(key)>(key),
+            std::forward<decltype(value)>(value), std::forward<decltype(args)>(args)...);
     }
-} writeOne{};
+} writeOne;
 
 inline constexpr struct RemoveOne
 {
@@ -156,7 +144,7 @@ inline constexpr struct RemoveOne
                 std::forward<decltype(args)>(args)...);
         }
     }
-} removeOne{};
+} removeOne;
 
 inline constexpr struct ExistsOne
 {
@@ -174,7 +162,7 @@ inline constexpr struct ExistsOne
             co_return result.has_value();
         }
     }
-} existsOne{};
+} existsOne;
 
 inline constexpr struct Merge
 {
@@ -187,7 +175,7 @@ inline constexpr struct Merge
         static_assert(task::IsAwaitable<decltype(awaitable)>);
         return awaitable;
     }
-} merge{};
+} merge;
 
 template <auto& Tag>
 using tag_t = std::decay_t<decltype(Tag)>;

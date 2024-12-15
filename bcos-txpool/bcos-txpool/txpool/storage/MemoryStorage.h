@@ -23,11 +23,9 @@
 #include "bcos-task/Task.h"
 #include "bcos-txpool/TxPoolConfig.h"
 #include "bcos-txpool/txpool/utilities/Common.h"
-#include "bcos-txpool/txpool/validator/Web3NonceChecker.h"
-#include <bcos-txpool/txpool/utilities/TransactionBucket.h>
+#include "txpool/interfaces/TxPoolStorageInterface.h"
 #include <bcos-utilities/BucketMap.h>
 #include <bcos-utilities/FixedBytes.h>
-#include <bcos-utilities/RateCollector.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <bcos-utilities/Timer.h>
 #include <tbb/concurrent_hash_map.h>
@@ -36,21 +34,6 @@
 
 namespace bcos::txpool
 {
-
-class HashCompare
-{
-public:
-    size_t hash(const bcos::crypto::HashType& x) const
-    {
-        uint64_t const* data = reinterpret_cast<uint64_t const*>(x.data());
-        return boost::hash_range(data, data + 4);
-    }
-    // True if strings are equal
-    bool equal(const bcos::crypto::HashType& x, const bcos::crypto::HashType& y) const
-    {
-        return x == y;
-    }
-};
 
 class MemoryStorage : public TxPoolStorageInterface,
                       public std::enable_shared_from_this<MemoryStorage>
@@ -96,12 +79,13 @@ public:
 
     // FIXME: deprecated, after using txpool::broadcastTransaction
     bcos::protocol::ConstTransactionsPtr fetchNewTxs(size_t _txsLimit) override;
-    void batchFetchTxs(bcos::protocol::Block::Ptr _txsList, bcos::protocol::Block::Ptr _sysTxsList,
+
+    bool batchFetchTxs(bcos::protocol::Block::Ptr _txsList, bcos::protocol::Block::Ptr _sysTxsList,
         size_t _txsLimit, TxsHashSetPtr _avoidTxs, bool _avoidDuplicate = true) override;
 
     bool exist(bcos::crypto::HashType const& _txHash) override
     {
-        TxsMap::ReadAccessor::Ptr accessor;
+        TxsMap::ReadAccessor accessor;
         return m_txsTable.find<TxsMap::ReadAccessor>(accessor, _txHash);
     }
     size_t size() const override { return m_txsTable.size(); }
@@ -113,8 +97,6 @@ public:
 
     bcos::crypto::HashListPtr getTxsHash(int _limit) override;
     void batchMarkAllTxs(bool _sealFlag) override;
-
-    size_t unSealedTxsSize() override;
 
     void stop() override;
     void start() override;
@@ -142,7 +124,6 @@ protected:
         bcos::protocol::Transaction::Ptr transaction);
     bcos::protocol::TransactionStatus enforceSubmitTransaction(
         bcos::protocol::Transaction::Ptr _tx);
-    size_t unSealedTxsSizeWithoutLock();
     bcos::protocol::TransactionStatus txpoolStorageCheck(
         const bcos::protocol::Transaction& transaction,
         protocol::TxSubmitCallback& txSubmitCallback);
@@ -162,8 +143,6 @@ protected:
         bcos::protocol::TransactionSubmitResult::Ptr txSubmitResult);
 
     virtual void removeInvalidTxs(bool lock);
-
-    virtual void notifyUnsealedTxsSize(size_t _retryTime = 0);
     virtual void cleanUpExpiredTransactions();
 
     // return true if all txs have been marked
@@ -171,7 +150,7 @@ protected:
         bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
         bool _sealFlag);
 
-    virtual void printPendingTxs() override;
+    void printPendingTxs() override;
 
     TxPoolConfig::Ptr m_config;
 
@@ -181,8 +160,6 @@ protected:
 
     using HashSet = BucketSet<bcos::crypto::HashType, std::hash<bcos::crypto::HashType>>;
     HashSet m_missedTxs;
-
-    std::atomic<size_t> m_sealedTxsSize = {0};
 
     std::atomic<bcos::protocol::BlockNumber> m_blockNumber = {0};
     uint64_t m_blockNumberUpdatedTime;
@@ -195,11 +172,6 @@ protected:
     // for tps stat
     std::atomic_uint64_t m_tpsStatstartTime = {0};
     std::atomic_uint64_t m_onChainTxsCount = {0};
-
-    RateCollector m_inRateCollector;
-    RateCollector m_sealRateCollector;
-    RateCollector m_removeRateCollector;
-
     bcos::crypto::HashType m_knownLatestSealedTxHash;
 };
 }  // namespace bcos::txpool

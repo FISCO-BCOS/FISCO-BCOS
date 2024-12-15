@@ -61,7 +61,7 @@ public:
     }
 
     bool asyncBroadcastMsg(uint16_t _nodeType, const std::string& _groupID, uint16_t _moduleID,
-        bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload);
+        bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload) const;
 
     bool sendMessage(const std::string& _groupID, bcos::crypto::NodeIDPtr _srcNodeID,
         bcos::crypto::NodeIDPtr _dstNodeID, bytesConstRef _payload, ErrorRespFunc _errorRespFunc);

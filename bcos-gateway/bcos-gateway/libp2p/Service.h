@@ -8,7 +8,6 @@
  */
 
 #pragma once
-#include "bcos-utilities/ObjectCounter.h"
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/gateway/GatewayTypeDef.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
@@ -20,9 +19,7 @@
 #include <unordered_map>
 
 
-namespace bcos
-{
-namespace gateway
+namespace bcos::gateway
 {
 class Host;
 class P2PMessage;
@@ -66,6 +63,9 @@ public:
 
     void asyncSendMessageByNodeID(P2pID nodeID, std::shared_ptr<P2PMessage> message,
         CallbackFuncWithSession callback, Options options = Options()) override;
+
+    task::Task<void> sendMessageByNodeID(P2pID nodeID, const P2PMessage& header,
+        ::ranges::any_view<bytesConstRef> payloads, Options options = Options()) override;
 
     void asyncBroadcastMessage(std::shared_ptr<P2PMessage> message, Options options) override;
 
@@ -236,7 +236,7 @@ private:
     std::shared_ptr<MessageFactory> m_messageFactory;
 
     P2pID m_nodeID;
-    std::shared_ptr<boost::asio::deadline_timer> m_timer;
+    std::optional<boost::asio::deadline_timer> m_timer;
     bool m_run = false;
 
     std::array<MessageHandler, bcos::gateway::GatewayMessageType::All> m_msgHandlers{};
@@ -257,5 +257,4 @@ private:
     // bcos::LogLevel m_connectionLogLevel = bcos::LogLevel::WARNING;
 };
 
-}  // namespace gateway
-}  // namespace bcos
+}  // namespace bcos::gateway

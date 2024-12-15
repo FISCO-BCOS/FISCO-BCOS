@@ -39,7 +39,7 @@ public:
     void start() override;
     void stop() override;
 
-    void asyncSubmitProposal(bool _containSysTxs, bytesConstRef _proposalData,
+    void asyncSubmitProposal(bool _containSysTxs, const protocol::Block& proposal,
         bcos::protocol::BlockNumber _proposalIndex, bcos::crypto::HashType const& _proposalHash,
         std::function<void(Error::Ptr)> _onProposalSubmitted) override;
 
@@ -58,8 +58,6 @@ public:
         std::function<void(Error::Ptr)> _onRecv) override;
 
     void notifyHighestSyncingNumber(bcos::protocol::BlockNumber _blockNumber) override;
-    void asyncNoteUnSealedTxsSize(
-        uint64_t _unsealedTxsSize, std::function<void(Error::Ptr)> _onRecvResponse) override;
     PBFTEngine::Ptr pbftEngine() { return m_pbftEngine; }
 
     virtual void init();

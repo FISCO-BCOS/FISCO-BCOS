@@ -56,7 +56,7 @@ void GatewayStatus::update(std::string const& _p2pNodeID, GatewayNodeStatus::Con
 }
 
 bool GatewayStatus::randomChooseP2PNode(
-    std::string& _p2pNodeID, uint16_t _type, std::string const& _groupID) const
+    std::string& _p2pNodeID, uint16_t _type, std::string_view _groupID) const
 {
     auto ret = false;
     // If need to send a message to a consensus node, select the consensus node first
@@ -78,7 +78,7 @@ bool GatewayStatus::randomChooseP2PNode(
 }
 
 bool GatewayStatus::randomChooseNode(
-    std::string& _choosedNode, GroupType _type, std::string const& _groupID) const
+    std::string& _choosedNode, GroupType _type, std::string_view _groupID) const
 {
     const std::set<std::string>* p2pNodeList = nullptr;
     std::map<std::string, std::map<bcos::gateway::GroupType, std::set<std::string>>>::const_iterator

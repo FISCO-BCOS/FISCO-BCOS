@@ -28,7 +28,7 @@ using namespace bcos;
 using namespace bcos::gateway;
 using namespace bcos::crypto;
 
-bool P2PMessageOptions::encode(bytes& _buffer)
+bool P2PMessageOptions::encode(bytes& _buffer) const
 {
     // parameters check
     if (m_groupID.size() > MAX_GROUPID_LENGTH)
@@ -37,10 +37,10 @@ bool P2PMessageOptions::encode(bytes& _buffer)
                           << LOG_KV("groupID length", m_groupID.size());
         return false;
     }
-    if (!m_srcNodeID || m_srcNodeID->empty() || (m_srcNodeID->size() > MAX_NODEID_LENGTH))
+    if (m_srcNodeID.empty() || (m_srcNodeID.size() > MAX_NODEID_LENGTH))
     {
         P2PMSG_LOG(ERROR) << LOG_DESC("srcNodeID length valid")
-                          << LOG_KV("srcNodeID length", (m_srcNodeID ? m_srcNodeID->size() : 0));
+                          << LOG_KV("srcNodeID length", m_srcNodeID.size());
         return false;
     }
     if (m_dstNodeIDs.size() > MAX_DST_NODEID_COUNT)
@@ -52,10 +52,10 @@ bool P2PMessageOptions::encode(bytes& _buffer)
 
     for (const auto& dstNodeID : m_dstNodeIDs)
     {
-        if (!dstNodeID || dstNodeID->empty() || (dstNodeID->size() > MAX_NODEID_LENGTH))
+        if (dstNodeID.empty() || (dstNodeID.size() > MAX_NODEID_LENGTH))
         {
             P2PMSG_LOG(ERROR) << LOG_DESC("dstNodeID length valid")
-                              << LOG_KV("dstNodeID length", (dstNodeID ? dstNodeID->size() : 0));
+                              << LOG_KV("dstNodeID length", dstNodeID.size());
             return false;
         }
     }
@@ -63,30 +63,33 @@ bool P2PMessageOptions::encode(bytes& _buffer)
     // groupID length
     uint16_t groupIDLength =
         boost::asio::detail::socket_ops::host_to_network_short((uint16_t)m_groupID.size());
-    _buffer.insert(_buffer.end(), (byte*)&groupIDLength, (byte*)&groupIDLength + 2);
+    _buffer.insert(
+        _buffer.end(), (byte*)&groupIDLength, (byte*)&groupIDLength + sizeof(groupIDLength));
     // groupID
     _buffer.insert(_buffer.end(), m_groupID.begin(), m_groupID.end());
 
     // nodeID length
     uint16_t nodeIDLength =
-        boost::asio::detail::socket_ops::host_to_network_short((uint16_t)m_srcNodeID->size());
-    _buffer.insert(_buffer.end(), (byte*)&nodeIDLength, (byte*)&nodeIDLength + 2);
+        boost::asio::detail::socket_ops::host_to_network_short((uint16_t)m_srcNodeID.size());
+    _buffer.insert(
+        _buffer.end(), (byte*)&nodeIDLength, (byte*)&nodeIDLength + sizeof(nodeIDLength));
     // srcNodeID
-    _buffer.insert(_buffer.end(), m_srcNodeID->begin(), m_srcNodeID->end());
+    _buffer.insert(_buffer.end(), m_srcNodeID.begin(), m_srcNodeID.end());
 
     // dstNodeID count
-    uint8_t dstNodeIDCount = (uint8_t)m_dstNodeIDs.size();
-    _buffer.insert(_buffer.end(), (byte*)&dstNodeIDCount, (byte*)&dstNodeIDCount + 1);
+    auto dstNodeIDCount = static_cast<uint8_t>(m_dstNodeIDs.size());
+    _buffer.insert(
+        _buffer.end(), (byte*)&dstNodeIDCount, (byte*)&dstNodeIDCount + sizeof(dstNodeIDCount));
 
     // dstNodeIDs
     for (const auto& nodeID : m_dstNodeIDs)
     {
-        _buffer.insert(_buffer.end(), nodeID->begin(), nodeID->end());
+        _buffer.insert(_buffer.end(), nodeID.begin(), nodeID.end());
     }
 
     // moduleID
     uint16_t moduleID = boost::asio::detail::socket_ops::host_to_network_short(m_moduleID);
-    _buffer.insert(_buffer.end(), (byte*)&moduleID, (byte*)&moduleID + 2);
+    _buffer.insert(_buffer.end(), (byte*)&moduleID, (byte*)&moduleID + sizeof(moduleID));
 
     return true;
 }
@@ -126,9 +129,9 @@ int32_t P2PMessageOptions::decode(const bytesConstRef& _buffer)
         offset += 2;
 
         CHECK_OFFSET_WITH_THROW_EXCEPTION(offset + nodeIDLength, length);
-        m_srcNodeID->clear();
-        m_srcNodeID->insert(
-            m_srcNodeID->begin(), (byte*)&_buffer[offset], (byte*)&_buffer[offset] + nodeIDLength);
+        m_srcNodeID.clear();
+        m_srcNodeID.insert(
+            m_srcNodeID.begin(), (byte*)&_buffer[offset], (byte*)&_buffer[offset] + nodeIDLength);
         offset += nodeIDLength;
 
         CHECK_OFFSET_WITH_THROW_EXCEPTION(offset + 1, length);
@@ -138,12 +141,11 @@ int32_t P2PMessageOptions::decode(const bytesConstRef& _buffer)
 
         CHECK_OFFSET_WITH_THROW_EXCEPTION(offset + dstNodeCount * nodeIDLength, length);
         // dstNodeIDs
-        m_dstNodeIDs.resize(dstNodeCount);
+        m_dstNodeIDs.reserve(dstNodeCount);
         for (size_t i = 0; i < dstNodeCount; i++)
         {
-            m_dstNodeIDs[i] = std::make_shared<bytes>(
+            m_dstNodeIDs.emplace_back(
                 (byte*)&_buffer[offset], (byte*)&_buffer[offset] + nodeIDLength);
-
             offset += nodeIDLength;
         }
 
@@ -166,7 +168,7 @@ int32_t P2PMessageOptions::decode(const bytesConstRef& _buffer)
     return offset;
 }
 
-bool P2PMessage::encodeHeader(bytes& _buffer)
+bool P2PMessage::encodeHeader(bytes& _buffer) const
 {
     // set length to zero first
     uint32_t length = 0;
@@ -183,13 +185,13 @@ bool P2PMessage::encodeHeader(bytes& _buffer)
     return true;
 }
 
-bool P2PMessage::encode(EncodedMessage& _buffer)
+bool P2PMessage::encode(EncodedMessage& _buffer) const
 {
     bool isCompressSuccess = false;
     if (_buffer.compress)
     {
-        auto compressData = std::make_shared<bcos::bytes>();
-        if (tryToCompressPayload(*compressData))
+        bcos::bytes compressData;
+        if (tryToCompressPayload(compressData))
         {
             isCompressSuccess = true;
             // set compress flag
@@ -211,7 +213,7 @@ bool P2PMessage::encode(EncodedMessage& _buffer)
         return false;
     }
     // encode options
-    if (hasOptions() && !m_options->encode(headerBuffer))
+    if (hasOptions() && !m_options.encode(headerBuffer))
     {
         return false;
     }
@@ -250,7 +252,7 @@ bool P2PMessage::encode(bcos::bytes& _buffer)
         return false;
     }
     // encode options
-    if (hasOptions() && !m_options->encode(_buffer))
+    if (hasOptions() && !m_options.encode(_buffer))
     {
         return false;
     }
@@ -266,7 +268,7 @@ bool P2PMessage::encode(bcos::bytes& _buffer)
     }
     else
     {
-        _buffer.insert(_buffer.end(), m_payload->begin(), m_payload->end());
+        _buffer.insert(_buffer.end(), m_payload.begin(), m_payload.end());
     }
 
     // calc total length and modify the length value in the buffer
@@ -280,9 +282,9 @@ bool P2PMessage::encode(bcos::bytes& _buffer)
 }
 
 /// compress the payload data to be sended
-bool P2PMessage::tryToCompressPayload(bytes& compressData)
+bool P2PMessage::tryToCompressPayload(bytes& compressData) const
 {
-    if (m_payload->size() <= bcos::gateway::c_compressThreshold)
+    if (m_payload.size() <= bcos::gateway::c_compressThreshold)
     {
         return false;
     }
@@ -293,7 +295,7 @@ bool P2PMessage::tryToCompressPayload(bytes& compressData)
     }
 
     bool isCompressSuccess =
-        ZstdCompress::compress(ref(*m_payload), compressData, bcos::gateway::c_zstdCompressLevel);
+        ZstdCompress::compress(ref(m_payload), compressData, bcos::gateway::c_zstdCompressLevel);
     return isCompressSuccess;
 }
 
@@ -355,7 +357,7 @@ int32_t P2PMessage::decode(const bytesConstRef& _buffer)
     if (hasOptions())
     {
         // encode options
-        auto optionsOffset = m_options->decode(_buffer.getCroppedData(offset));
+        auto optionsOffset = m_options.decode(_buffer.getCroppedData(offset));
         if (optionsOffset < 0)
         {
             return MessageDecodeStatus::MESSAGE_ERROR;
@@ -364,7 +366,7 @@ int32_t P2PMessage::decode(const bytesConstRef& _buffer)
     }
 
     uint32_t length = _buffer.size();
-    CHECK_OFFSET_WITH_THROW_EXCEPTION(m_length, length);
+    CHECK_OFFSET_WITH_THROW_EXCEPTION(offset, m_length);
     auto data = _buffer.getCroppedData(offset, m_length - offset);
     // raw data cropped from buffer, maybe be compressed or not
 
@@ -373,7 +375,7 @@ int32_t P2PMessage::decode(const bytesConstRef& _buffer)
     if ((m_ext & bcos::protocol::MessageExtFieldFlag::COMPRESS) ==
         bcos::protocol::MessageExtFieldFlag::COMPRESS)
     {
-        bool isUncompressSuccess = ZstdCompress::uncompress(data, *m_payload);
+        bool isUncompressSuccess = ZstdCompress::uncompress(data, m_payload);
         if (!isUncompressSuccess)
         {
             P2PMSG_LOG(ERROR) << LOG_DESC("ZstdCompress decode message error, uncompress failed")
@@ -393,7 +395,7 @@ int32_t P2PMessage::decode(const bytesConstRef& _buffer)
     }
     else
     {
-        m_payload = std::make_shared<bytes>(data.begin(), data.end());
+        m_payload.assign(data.begin(), data.end());
     }
 
     return (int32_t)m_length;

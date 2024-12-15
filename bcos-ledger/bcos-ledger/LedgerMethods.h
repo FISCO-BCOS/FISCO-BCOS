@@ -205,8 +205,8 @@ task::Task<consensus::ConsensusNodeList> tag_invoke(
     co_return nodes;
 }
 
-task::Task<void> tag_invoke(
-    ledger::tag_t<setNodeList> /*unused*/, auto& storage, RANGES::input_range auto&& nodeList)
+task::Task<void> tag_invoke(ledger::tag_t<setNodeList> /*unused*/, auto& storage,
+    RANGES::input_range auto&& nodeList, bool forceSet = false)
 {
     LEDGER_LOG(DEBUG) << "SetNodeList request";
     auto ledgerNodeList = RANGES::views::transform(nodeList, [&](auto const& node) {
@@ -220,8 +220,8 @@ task::Task<void> tag_invoke(
     co_await storage2::writeOne(storage, transaction_executor::StateKey{SYS_CONSENSUS, "key"},
         storage::Entry(std::move(nodeListEntry)));
 
-    auto tarsNodeList = RANGES::views::filter(nodeList, [](auto const& node) {
-        return node.termWeight > 0;
+    auto tarsNodeList = RANGES::views::filter(nodeList, [&](auto const& node) {
+        return forceSet || node.termWeight > 0;
     }) | RANGES::views::transform([](auto const& node) {
         bcostars::ConsensusNode tarsConsensusNode;
         tarsConsensusNode.nodeID.assign(
@@ -234,16 +234,14 @@ task::Task<void> tag_invoke(
     }) | RANGES::to<std::vector>();
     if (!tarsNodeList.empty())
     {
-        co_await storage2::writeSome(storage,
-            RANGES::views::transform(tarsNodeList,
-                [](auto const& node) {
-                    return transaction_executor::StateKey{
-                        SYS_CONSENSUS, std::string_view(node.nodeID.data(), node.nodeID.size())};
-                }),
-            RANGES::views::transform(tarsNodeList, [](auto const& node) {
+        co_await storage2::writeSome(
+            storage, RANGES::views::transform(tarsNodeList, [](auto const& node) {
                 bytes data;
                 concepts::serialize::encode(node, data);
-                return storage::Entry(std::move(data));
+                return std::make_tuple(
+                    transaction_executor::StateKey{
+                        SYS_CONSENSUS, std::string_view(node.nodeID.data(), node.nodeID.size())},
+                    storage::Entry(std::move(data)));
             }));
     }
     LEDGER_LOG(DEBUG) << "SetNodeList success" << LOG_KV("nodeList size", nodeList.size());

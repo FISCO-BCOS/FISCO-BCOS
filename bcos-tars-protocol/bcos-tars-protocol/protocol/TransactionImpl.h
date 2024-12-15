@@ -22,15 +22,14 @@
 #pragma once
 
 // if windows, manual include tup/Tars.h first
+
 #ifdef _WIN32
 #include <tup/Tars.h>
 #endif
+#include "bcos-crypto/interfaces/crypto/CommonType.h"
+#include "bcos-framework/protocol/Transaction.h"
 #include "bcos-tars-protocol/tars/Transaction.h"
-#include <bcos-crypto/hasher/Hasher.h>
-#include <bcos-crypto/interfaces/crypto/CommonType.h>
-#include <bcos-framework/protocol/Transaction.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/DataConvertUtility.h>
+#include "bcos-utilities/Common.h"
 
 namespace bcostars::protocol
 {
@@ -92,7 +91,6 @@ public:
     void setAttribute(int32_t attribute) override;
 
     std::string_view extraData() const override;
-    void setExtraData(std::string const& _extraData) override;
 
     uint8_t type() const override;
     bcos::bytesConstRef extraTransactionBytes() const override;
@@ -100,6 +98,8 @@ public:
     const bcostars::Transaction& inner() const;
     bcostars::Transaction& mutableInner();
     void setInner(bcostars::Transaction inner);
+
+    size_t size() const override;
 
 private:
     std::function<bcostars::Transaction*()> m_inner;

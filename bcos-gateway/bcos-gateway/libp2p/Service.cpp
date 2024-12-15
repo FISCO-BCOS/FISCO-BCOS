@@ -14,6 +14,7 @@
 #include <bcos-gateway/libp2p/P2PSession.h>  // for P2PSession
 #include <bcos-gateway/libp2p/Service.h>
 #include <boost/random.hpp>
+#include <boost/throw_exception.hpp>
 #include <utility>
 
 using namespace bcos;
@@ -119,9 +120,10 @@ void Service::heartBeat()
         }
         SERVICE_LOG(DEBUG) << LOG_DESC("heartBeat try to reconnect")
                            << LOG_KV("endpoint", it.first);
-        m_host->asyncConnect(
-            it.first, std::bind(&Service::onConnect, shared_from_this(), std::placeholders::_1,
-                          std::placeholders::_2, std::placeholders::_3));
+        m_host->asyncConnect(it.first,
+            [service = shared_from_this()](auto error, const P2PInfo& p2pInfo, auto session) {
+                service->onConnect(std::move(error), p2pInfo, std::move(session));
+            });
     }
 
     std::unordered_map<P2pID, P2PSession::Ptr> sessions;
@@ -149,7 +151,7 @@ void Service::heartBeat()
     }
 
     auto self = std::weak_ptr<Service>(shared_from_this());
-    m_timer = m_host->asioInterface()->newTimer(CHECK_INTERVAL);
+    m_timer.emplace(m_host->asioInterface()->newTimer(CHECK_INTERVAL));
     m_timer->async_wait([self](const boost::system::error_code& error) {
         if (error)
         {
@@ -270,7 +272,9 @@ void Service::onDisconnect(NetworkException e, P2PSession::Ptr p2pSession)
         callDeleteSessionHandlers(p2pSession);
 
         if (e.errorCode() == P2PExceptionType::DuplicateSession)
+        {
             return;
+        }
         SERVICE_LOG(INFO) << LOG_DESC("onDisconnect") << LOG_KV("code", e.errorCode())
                           << LOG_KV("what", boost::diagnostic_information(e));
         RecursiveGuard l(x_nodes);
@@ -319,7 +323,7 @@ void Service::sendRespMessageBySession(
 
     respMessage->setSeq(_p2pMessage->seq());
     respMessage->setRespPacket();
-    respMessage->setPayload(std::make_shared<bytes>(_payload.begin(), _payload.end()));
+    respMessage->setPayload({_payload.begin(), _payload.end()});
 
     sendMessageToSession(_p2pSession, respMessage);
     SERVICE_LOG(TRACE) << "sendRespMessageBySession" << LOG_KV("seq", _p2pMessage->seq())
@@ -562,7 +566,7 @@ void Service::asyncBroadcastMessage(P2PMessage::Ptr message, Options options)
 
         for (auto& session : sessions)
         {
-            asyncSendMessageByNodeID(session.first, message, nullptr, options);
+            asyncSendMessageByNodeID(session.first, message, {}, options);
         }
     }
     catch (std::exception& e)
@@ -610,7 +614,7 @@ std::shared_ptr<P2PMessage> Service::newP2PMessage(uint16_t _type, bytesConstRef
 
     message->setPacketType(_type);
     message->setSeq(messageFactory()->newSeq());
-    message->setPayload(std::make_shared<bytes>(_payload.begin(), _payload.end()));
+    message->setPayload({_payload.begin(), _payload.end()});
     return message;
 }
 
@@ -623,7 +627,7 @@ void Service::asyncSendMessageByP2PNodeID(uint16_t _type, P2pID _dstNodeID, byte
         {
             auto errorMsg =
                 "send message to " + _dstNodeID + " failed for no connection established";
-            _callback(BCOS_ERROR_PTR(-1, errorMsg), 0, nullptr);
+            _callback(BCOS_ERROR_PTR(-1, errorMsg), 0, {});
         }
         return;
     }
@@ -647,8 +651,8 @@ void Service::asyncSendMessageByP2PNodeID(uint16_t _type, P2pID _dstNodeID, byte
                                   << LOG_KV("type", packetType) << LOG_KV("dst", _dstNodeID);
                 if (_callback)
                 {
-                    _callback(
-                        _e.toError(), packetType, _p2pMessage ? _p2pMessage->payload() : nullptr);
+                    _callback(_e.toError(), packetType,
+                        _p2pMessage ? _p2pMessage->payload() : bytesConstRef{});
                 }
                 return;
             }
@@ -679,15 +683,15 @@ void Service::asyncSendMessageByP2PNodeIDs(
 // send the protocolInfo
 void Service::asyncSendProtocol(P2PSession::Ptr _session)
 {
-    auto payload = std::make_shared<bytes>();
-    m_codec->encode(m_localProtocol, *payload);
+    auto payload = bytes();
+    m_codec->encode(m_localProtocol, payload);
     auto message = std::static_pointer_cast<P2PMessage>(messageFactory()->buildMessage());
     message->setPacketType(GatewayMessageType::Handshake);
     auto seq = messageFactory()->newSeq();
     message->setSeq(seq);
     message->setPayload(payload);
 
-    SERVICE_LOG(INFO) << LOG_DESC("asyncSendProtocol") << LOG_KV("payload", payload->size())
+    SERVICE_LOG(INFO) << LOG_DESC("asyncSendProtocol") << LOG_KV("payload", payload.size())
                       << LOG_KV("seq", seq);
     sendMessageToSession(_session, message, Options(), nullptr);
 }
@@ -720,7 +724,7 @@ void Service::onReceiveProtocol(
     try
     {
         auto payload = _message->payload();
-        auto protocolInfo = m_codec->decode(bytesConstRef(payload->data(), payload->size()));
+        auto protocolInfo = m_codec->decode(bytesConstRef(payload.data(), payload.size()));
         // negotiated version
         if (protocolInfo->minVersion() > m_localProtocol->maxVersion() ||
             protocolInfo->maxVersion() < m_localProtocol->minVersion())
@@ -807,4 +811,31 @@ void Service::updatePeerWhitelist(const std::set<std::string>& _strList, const b
             session.second->session()->disconnect(DisconnectReason::NotInWhitelistReason);
         }
     }
+}
+
+bcos::task::Task<void> bcos::gateway::Service::sendMessageByNodeID(P2pID nodeID,
+    const P2PMessage& header, ::ranges::any_view<bytesConstRef> payloads, Options options)
+{
+    if (nodeID == id())
+    {
+        // ignore myself
+        co_return;
+    }
+
+    P2PSession::Ptr session;
+    std::unique_lock lock(x_sessions);
+    auto it = m_sessions.find(nodeID);
+    if (it != m_sessions.end() && it->second->active())
+    {
+        session = it->second;
+    }
+    lock.release();
+
+    if (!session)
+    {
+        BOOST_THROW_EXCEPTION(
+            NetworkException(-1, "send message failed for no network established"));
+    }
+
+    co_await session->session()->sendMessage(header, std::move(payloads), {});
 }

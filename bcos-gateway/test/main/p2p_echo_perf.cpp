@@ -158,9 +158,9 @@ int main(int argc, const char** argv)
             auto message = dynamic_pointer_cast<P2PMessage>(messageFactory->buildMessage());
             auto payload = std::make_shared<bcos::bytes>();
             payload->insert(payload->end(), content.begin(), content.end());
-            message->setPayload(payload);
+            message->setPayload(*payload);
 
-            std::cerr << "\t[Client] payload: " << message->payload()->size() << std::endl;
+            std::cerr << "\t[Client] payload: " << message->payload().size() << std::endl;
 
             message->setPacketType(packageType);
             while (true)

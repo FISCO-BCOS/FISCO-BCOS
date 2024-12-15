@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include "MemoryResourceBase.h"
 #include <version>
 
 #if __cpp_lib_generator >= 202207L
@@ -41,7 +40,7 @@ template <typename Ref, typename Value = std::remove_cvref_t<Ref>, typename Allo
 class Generator
 {
 public:
-    class promise_type : public MemoryResourceBase
+    class promise_type
     {
     public:
         promise_type() : m_promise(this) {}
@@ -83,14 +82,9 @@ public:
 
         final_awaiter final_suspend() noexcept { return {}; }
 
-        std::suspend_always yield_value(Ref&& x) noexcept
+        std::suspend_always yield_value(auto&& value) noexcept
         {
-            m_promise->m_value = std::addressof(x);
-            return {};
-        }
-        std::suspend_always yield_value(Ref& x) noexcept
-        {
-            m_promise->m_value = std::addressof(x);
+            m_promise->m_value = std::addressof(value);
             return {};
         }
 

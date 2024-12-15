@@ -7,21 +7,19 @@
 
 #include <bcos-gateway/libnetwork/Message.h>
 
-namespace bcos
-{
-namespace gateway
+namespace bcos::gateway
 {
 
-class GatewayMessageExtAttributes : public MessageExtAttributes
+class GatewayMessageExtAttributes
 {
 public:
     using Ptr = std::shared_ptr<GatewayMessageExtAttributes>;
     using ConstPtr = std::shared_ptr<GatewayMessageExtAttributes>;
 
-    uint16_t moduleID() { return m_moduleID; }
+    uint16_t moduleID() const { return m_moduleID; }
     void setModuleID(uint16_t _moduleID) { m_moduleID = _moduleID; }
 
-    std::string groupID() { return m_groupID; }
+    std::string groupID() const { return m_groupID; }
     void setGroupID(const std::string& _groupID) { m_groupID = _groupID; }
 
 private:
@@ -29,5 +27,4 @@ private:
     std::string m_groupID;
 };
 
-}  // namespace gateway
-}  // namespace bcos
+}  // namespace bcos::gateway

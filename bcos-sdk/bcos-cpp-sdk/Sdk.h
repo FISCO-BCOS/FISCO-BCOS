@@ -27,7 +27,6 @@
 #include <bcos-cpp-sdk/rpc/JsonRpcImpl.h>
 #include <bcos-cpp-sdk/ws/Service.h>
 #include <bcos-utilities/BoostLogInitializer.h>
-#include <bcos-utilities/ThreadPool.h>
 #include <memory>
 #include <utility>
 
