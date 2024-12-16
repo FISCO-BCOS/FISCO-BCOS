@@ -109,43 +109,21 @@ auto toSingleView(auto&& item)
 
 inline constexpr struct ReadOne
 {
-    auto operator()(auto&& storage, auto&& key, auto&&... args) const
+    auto operator()(auto& storage, auto&& key, auto&&... args) const
         -> task::Task<std::optional<typename std::decay_t<decltype(storage)>::Value>>
     {
-        if constexpr (HasTag<ReadOne, decltype(storage), decltype(key), decltype(args)...>)
-        {
-            co_return co_await tag_invoke(*this, std::forward<decltype(storage)>(storage),
-                std::forward<decltype(key)>(key), std::forward<decltype(args)>(args)...);
-        }
-        else
-        {
-            auto values = co_await storage2::readSome(std::forward<decltype(storage)>(storage),
-                detail::toSingleView(std::forward<decltype(key)>(key)),
-                std::forward<decltype(args)>(args)...);
-            co_return std::move(values[0]);
-        }
+        co_return co_await tag_invoke(*this, storage, std::forward<decltype(key)>(key),
+            std::forward<decltype(args)>(args)...);
     }
 } readOne;
 
 inline constexpr struct WriteOne
 {
     auto operator()(
-        auto&& storage, auto&& key, auto&& value, auto&&... args) const -> task::Task<void>
+        auto& storage, auto&& key, auto&& value, auto&&... args) const -> task::Task<void>
     {
-        if constexpr (HasTag<WriteOne, decltype(storage), decltype(key), decltype(value),
-                          decltype(args)...>)
-        {
-            co_await tag_invoke(*this, std::forward<decltype(storage)>(storage),
-                std::forward<decltype(key)>(key), std::forward<decltype(value)>(value),
-                std::forward<decltype(args)>(args)...);
-        }
-        else
-        {
-            co_await writeSome(std::forward<decltype(storage)>(storage),
-                ::ranges::views::single(std::make_tuple(
-                    std::forward<decltype(key)>(key), std::forward<decltype(value)>(value))),
-                std::forward<decltype(args)>(args)...);
-        }
+        co_await tag_invoke(*this, storage, std::forward<decltype(key)>(key),
+            std::forward<decltype(value)>(value), std::forward<decltype(args)>(args)...);
     }
 } writeOne;
 
