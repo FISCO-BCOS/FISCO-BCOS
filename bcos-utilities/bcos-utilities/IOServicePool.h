@@ -76,8 +76,7 @@ public:
 
     std::shared_ptr<IOService> getIOService()
     {
-        auto selectedIoService = (m_nextIOService % m_ioServices.size());
-        m_nextIOService++;
+        auto selectedIoService = (m_nextIOService.fetch_add(1) % m_ioServices.size());
         return m_ioServices.at(selectedIoService);
     }
 

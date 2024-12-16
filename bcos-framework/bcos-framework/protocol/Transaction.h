@@ -159,9 +159,6 @@ public:
     virtual int32_t attribute() const = 0;
     virtual void setAttribute(int32_t attribute) = 0;
 
-    virtual ::ranges::any_view<h256, ::ranges::category::input | ::ranges::category::sized>
-    conflictFields() const = 0;
-
     TxSubmitCallback takeSubmitCallback() { return std::move(m_submitCallback); }
     TxSubmitCallback const& submitCallback() const { return m_submitCallback; }
     void setSubmitCallback(TxSubmitCallback _submitCallback)
