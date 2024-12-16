@@ -27,9 +27,8 @@
 #include <bcos-utilities/ratelimiter/RateLimiterInterface.h>
 #include <mutex>
 
-namespace bcos
-{
-namespace ratelimiter
+
+namespace bcos::ratelimiter
 {
 
 class TimeWindowRateLimiter : public RateLimiterInterface,
@@ -40,7 +39,6 @@ public:
     using ConstPtr = std::shared_ptr<const TimeWindowRateLimiter>;
     using UniquePtr = std::unique_ptr<const TimeWindowRateLimiter>;
 
-public:
     TimeWindowRateLimiter(uint64_t _maxPermitsSize, uint64_t _timeWindowMS = 1000,
         bool _allowExceedMaxPermitSize = false)
       : m_maxPermitsSize(_maxPermitsSize),
@@ -48,12 +46,7 @@ public:
         m_currentPermitsSize(m_maxPermitsSize),
         m_timeWindowMS(_timeWindowMS),
         m_lastPermitsUpdateTime(utcSteadyTime())
-    {
-        RATELIMIT_LOG(INFO) << LOG_BADGE("[NEWOBJ][TimeWindowRateLimiter]")
-                            << LOG_KV("maxPermitsSize", _maxPermitsSize)
-                            << LOG_KV("allowExceedMaxPermitSize", _allowExceedMaxPermitSize)
-                            << LOG_KV("timeWindowMS", _timeWindowMS);
-    }
+    {}
 
     TimeWindowRateLimiter(TimeWindowRateLimiter&&) = delete;
     TimeWindowRateLimiter(const TimeWindowRateLimiter&) = delete;
@@ -67,7 +60,6 @@ public:
     uint64_t timeWindowMS() const { return m_timeWindowMS; }
     bool allowExceedMaxPermitSize() const { return m_allowExceedMaxPermitSize; }
 
-public:
     /**
      * @brief
      *
@@ -107,5 +99,4 @@ private:
     uint64_t m_lastPermitsUpdateTime;
 };
 
-}  // namespace ratelimiter
-}  // namespace bcos
+}  // namespace bcos::ratelimiter
