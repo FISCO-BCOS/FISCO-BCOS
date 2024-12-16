@@ -32,6 +32,7 @@
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/exception/diagnostic_information.hpp>
+#include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::sync;
@@ -154,7 +155,7 @@ BOOST_AUTO_TEST_CASE(testConsensusNodeWithLowerVersionTreeSync)
     {
         auto& nodeTxpool = dynamic_cast<TxPool&>(*m_fakeGateWay->m_nodeId2TxPool.at(item));
         auto size = nodeTxpool.txpoolStorage()->size();
-        BOOST_CHECK(size == 1);
+        BOOST_CHECK_EQUAL(size, 1);
     }
 }
 

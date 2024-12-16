@@ -201,7 +201,6 @@ public:
         _receiveCallback(nullptr);
     }
 
-public:
     std::map<std::string, CallbackFunc> m_uuidToCallback;
     Mutex m_mutex;
 
@@ -343,6 +342,19 @@ public:
     bcos::task::Task<void> broadcastMessage(
         uint16_t _type, int _moduleID, ::ranges::any_view<bytesConstRef> payloads) override
     {
+        for (const auto& node : m_nodeIDList)
+        {
+            if (node->data() == m_nodeId->data())
+            {
+                continue;
+            }
+            bytes buffer;
+            for (auto view : payloads)
+            {
+                buffer.insert(buffer.end(), view.begin(), view.end());
+            }
+            asyncSendMessageByNodeID(_moduleID, node, bcos::ref(buffer), 0, nullptr);
+        }
         co_return;
     }
 
