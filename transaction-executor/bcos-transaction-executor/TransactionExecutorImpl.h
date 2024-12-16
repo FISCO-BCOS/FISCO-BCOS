@@ -45,6 +45,7 @@ public:
         std::reference_wrapper<ledger::LedgerConfig const> m_ledgerConfig;
 
         Rollbackable<Storage> m_rollbackableStorage;
+        Rollbackable<Storage>::Savepoint m_startSavepoint;
         bcos::storage2::memory_storage::MemoryStorage<bcos::transaction_executor::StateKey,
             bcos::transaction_executor::StateValue, bcos::storage2::memory_storage::ORDERED>
             m_transientStorage;
@@ -67,6 +68,7 @@ public:
             m_contextID(contextID),
             m_ledgerConfig(ledgerConfig),
             m_rollbackableStorage(storage),
+            m_startSavepoint(current(m_rollbackableStorage)),
             m_rollbackableTransientStorage(m_transientStorage),
             m_gasLimit(static_cast<int64_t>(std::get<0>(ledgerConfig.gasLimit()))),
             m_evmcMessage(newEVMCMessage(transaction, m_gasLimit)),
@@ -107,14 +109,14 @@ public:
         }
         else if constexpr (step == 2)
         {
-            co_return co_await executeStep3(executeContext);
+            co_return co_await finish(executeContext);
         }
 
         co_return {};
     }
 
 
-    friend task::Task<protocol::TransactionReceipt::Ptr> executeStep3(auto& executeContext)
+    friend task::Task<protocol::TransactionReceipt::Ptr> finish(auto& executeContext)
     {
         auto& evmcMessage = executeContext.m_evmcMessage;
         auto& evmcResult = *executeContext.m_evmcResult;
@@ -136,7 +138,7 @@ public:
 
         auto gasUsed = executeContext.m_gasLimit - evmcResult.gas_left;
         if (executeContext.m_ledgerConfig.get().features().get(
-                ledger::Features::Flag::feature_balance))
+                ledger::Features::Flag::feature_balance_policy1))
         {
             auto gasPrice = u256{std::get<0>(executeContext.m_ledgerConfig.get().gasPrice())};
             auto balanceUsed = gasUsed * gasPrice;
@@ -148,6 +150,8 @@ public:
                 TRANSACTION_EXECUTOR_LOG(ERROR) << "Insufficient balance: " << senderBalance
                                                 << ", balanceUsed: " << balanceUsed;
                 evmcResult.status_code = EVMC_INSUFFICIENT_BALANCE;
+                co_await rollback(
+                    executeContext.m_rollbackableStorage, executeContext.m_startSavepoint);
             }
             else
             {
