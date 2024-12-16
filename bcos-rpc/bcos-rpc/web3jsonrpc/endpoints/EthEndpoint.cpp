@@ -418,14 +418,7 @@ task::Task<void> EthEndpoint::sendTransaction(const Json::Value&, Json::Value& r
     buildJsonContent(result, response);
     co_return;
 }
-std::string removeHexPrefix(std::string_view str)
-{
-    if (str.starts_with("0x") || str.starts_with("0X"))
-    {
-        return std::string(str.substr(2));
-    }
-    return std::string(str);
-}
+
 task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Json::Value& response)
 {
     // params: signedTransaction(DATA)
@@ -452,8 +445,7 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
             JsonRpcException(JsonRpcError::InvalidParams, "ChainId not available!"));
     }
     auto [chainId, _] = config.value();
-    if (auto txChainId = removeHexPrefix(toQuantity(web3Tx.chainId.value_or(0)));
-        txChainId != chainId)
+    if (auto txChainId = std::to_string(web3Tx.chainId.value_or(0)); txChainId != chainId)
     {
         BOOST_THROW_EXCEPTION(
             JsonRpcException(JsonRpcError::InvalidParams, "Replayed transaction!"));
