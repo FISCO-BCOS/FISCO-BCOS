@@ -350,15 +350,15 @@ void FrontService::asyncSendBroadcastMessage(uint16_t _type, int _moduleID, byte
 }
 
 task::Task<void> FrontService::broadcastMessage(
-    uint16_t _type, int _moduleID, ::ranges::any_view<bytesConstRef> payloads)
+    uint16_t type, int moduleID, ::ranges::any_view<bytesConstRef> payloads)
 {
     FrontMessage message;
-    message.setModuleID(_moduleID);
+    message.setModuleID(moduleID);
 
     bytes header;
     message.encodeHeader(header);
 
-    co_await m_gatewayInterface->broadcastMessage(_type, m_groupID, _moduleID, *m_nodeID,
+    co_await m_gatewayInterface->broadcastMessage(type, m_groupID, moduleID, *m_nodeID,
         ::ranges::views::concat(
             ::ranges::views::single(bcos::ref(std::as_const(header))), std::move(payloads)));
 }
