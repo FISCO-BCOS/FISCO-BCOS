@@ -55,7 +55,13 @@ public:
     {
         return GatewayNodeManager::updatePeerStatus(_p2pID, _status);
     }
-    void setStatusSeq(std::string const& _nodeID, uint32_t _seq) { m_p2pID2Seq[_nodeID] = _seq; }
+    void setStatusSeq(std::string const& _nodeID, uint32_t _seq)
+    {
+        if (decltype(m_p2pID2Seq)::accessor accessor; m_p2pID2Seq.insert(accessor, _nodeID))
+        {
+            accessor->second = _seq;
+        }
+    }
     void start() override {}
     void stop() override {}
 };

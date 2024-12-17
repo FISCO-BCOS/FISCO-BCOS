@@ -27,6 +27,7 @@
 #include <bcos-gateway/Common.h>
 #include <bcos-gateway/libp2p/P2PInterface.h>
 #include <bcos-gateway/protocol/GatewayNodeStatus.h>
+#include <oneapi/tbb/concurrent_hash_map.h>
 #include <memory>
 #include <utility>
 
@@ -60,7 +61,7 @@ public:
         uint16_t _type, std::string const& _group, uint16_t _moduleID, P2PMessage::Ptr _msg);
 
     task::Task<void> broadcastMessage(uint16_t type, std::string_view group, uint16_t moduleID,
-        const P2PMessage& header, ::ranges::any_view<bytesConstRef> payloads);
+        P2PMessage& message, ::ranges::any_view<bytesConstRef> payloads);
 
     std::set<P2pID> getAllPeers() const;
     GatewayStatus::Ptr gatewayInfo(std::string const& _uuid);
@@ -94,7 +95,6 @@ private:
 
     GatewayStatusFactory::Ptr m_gatewayStatusFactory;
     // uuid => gatewayInfo
-    std::map<std::string, GatewayStatus::Ptr> m_gatewayInfos;
-    mutable SharedMutex x_gatewayInfos;
+    tbb::concurrent_hash_map<std::string, GatewayStatus::Ptr> m_gatewayInfos;
 };
 }  // namespace bcos::gateway

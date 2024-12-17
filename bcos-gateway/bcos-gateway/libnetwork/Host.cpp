@@ -23,12 +23,9 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
-#include <chrono>
 #include <functional>
 #include <memory>
-#include <mutex>
 #include <set>
-#include <thread>
 
 
 using namespace std;
@@ -385,8 +382,8 @@ void Host::startPeerSession(P2PInfo const& p2pInfo, std::shared_ptr<SocketFace> 
     std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>)
 {
     auto weakHost = weak_from_this();
-    std::shared_ptr<SessionFace> session = m_sessionFactory->create_session(
-        weakHost, socket, m_messageFactory, m_sessionCallbackManager);
+    std::shared_ptr<SessionFace> session =
+        m_sessionFactory->createSession(*this, socket, m_messageFactory, m_sessionCallbackManager);
 
     m_taskArena.execute([&]() {
         m_asyncGroup.run([weakHost, session = std::move(session), p2pInfo]() {
