@@ -22,7 +22,6 @@
 #include "VRFBasedSealer.h"
 #include "bcos-framework/ledger/Features.h"
 #include <bcos-framework/protocol/GlobalConfig.h>
-
 #include <range/v3/view/transform.hpp>
 #include <utility>
 

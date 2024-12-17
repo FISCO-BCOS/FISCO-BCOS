@@ -28,6 +28,8 @@
 #include <boost/uuid/random_generator.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <random>
+#include <range/v3/view/concat.hpp>
+#include <range/v3/view/single.hpp>
 #include <thread>
 
 using namespace bcos;
@@ -336,7 +338,6 @@ void FrontService::asyncSendMessageByNodeIDs(
  */
 void FrontService::asyncSendBroadcastMessage(uint16_t _type, int _moduleID, bytesConstRef _data)
 {
-    // auto message = messageFactory()->buildMessage();
     FrontMessage message;
     message.setModuleID(_moduleID);
     message.setPayload(_data);
@@ -346,6 +347,20 @@ void FrontService::asyncSendBroadcastMessage(uint16_t _type, int _moduleID, byte
 
     m_gatewayInterface->asyncSendBroadcastMessage(
         _type, m_groupID, _moduleID, m_nodeID, bytesConstRef(buffer.data(), buffer.size()));
+}
+
+task::Task<void> FrontService::broadcastMessage(
+    uint16_t type, int moduleID, ::ranges::any_view<bytesConstRef> payloads)
+{
+    FrontMessage message;
+    message.setModuleID(moduleID);
+
+    bytes header;
+    message.encodeHeader(header);
+
+    co_await m_gatewayInterface->broadcastMessage(type, m_groupID, moduleID, *m_nodeID,
+        ::ranges::views::concat(
+            ::ranges::views::single(bcos::ref(std::as_const(header))), std::move(payloads)));
 }
 
 /**
@@ -506,7 +521,7 @@ void FrontService::onReceiveMessage(const std::string& _groupID,
 
         int moduleID = message->moduleID();
         int ext = message->ext();
-        std::string uuid = std::string(message->uuid()->begin(), message->uuid()->end());
+        std::string uuid = std::string(message->uuid().begin(), message->uuid().end());
 
         FRONT_LOG(TRACE) << LOG_BADGE("onReceiveMessage") << LOG_KV("moduleID", moduleID)
                          << LOG_KV("uuid", uuid) << LOG_KV("ext", ext)
@@ -519,8 +534,8 @@ void FrontService::onReceiveMessage(const std::string& _groupID,
         }
         else
         {
-            auto it = m_moduleID2MessageDispatcher.find(moduleID);
-            if (it != m_moduleID2MessageDispatcher.end())
+            if (auto it = m_moduleID2MessageDispatcher.find(moduleID);
+                it != m_moduleID2MessageDispatcher.end())
             {
                 auto callback = it->second;
                 // construct shared_ptr<bytes> from message->payload() first for
@@ -588,7 +603,7 @@ void FrontService::sendMessage(int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
 {
     auto message = messageFactory()->buildMessage();
     message->setModuleID(_moduleID);
-    message->setUuid(std::make_shared<bytes>(_uuid.begin(), _uuid.end()));
+    message->setUuid(bytes(_uuid.begin(), _uuid.end()));
     message->setPayload(_data);
     if (isResponse)
     {
@@ -596,7 +611,7 @@ void FrontService::sendMessage(int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
     }
 
     auto buffer = std::make_shared<bytes>();
-    message->encode(*buffer.get());
+    message->encode(*buffer);
 
     // call gateway interface to send the message
     m_gatewayInterface->asyncSendMessageByNodeID(m_groupID, _moduleID, m_nodeID, _nodeID,

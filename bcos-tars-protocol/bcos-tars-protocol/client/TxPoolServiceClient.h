@@ -104,7 +104,7 @@ public:
         co_return co_await awaitable;
     }
 
-    void broadcastTransaction(
+    bcos::task::Task<void> broadcastTransaction(
         [[maybe_unused]] const bcos::protocol::Transaction& transaction) override
     {
         struct TarsCallback : public bcostars::TxPoolServicePrxCallback
@@ -125,10 +125,12 @@ public:
         m_proxy->tars_set_timeout(600000)->async_broadcastTransaction(tarsCallback.release(),
             dynamic_cast<const bcostars::protocol::TransactionImpl&>(transaction)
                 .inner());  // tars take the m_callback ownership
+        co_return;
     }
 
 
-    void broadcastTransactionBuffer([[maybe_unused]] const bcos::bytesConstRef& _data) override
+    bcos::task::Task<void> broadcastTransactionBuffer(
+        [[maybe_unused]] bcos::bytesConstRef _data) override
     {
         struct TarsCallback : public bcostars::TxPoolServicePrxCallback
         {
@@ -154,6 +156,7 @@ public:
 
         m_proxy->tars_set_timeout(600000)->async_broadcastTransactionBuffer(tarsCallback.release(),
             std::vector<char>(_data.begin(), _data.end()));  // tars take the m_callback ownership
+        co_return;
     }
 
     void asyncSealTxs(uint64_t _txsLimit, bcos::txpool::TxsHashSetPtr _avoidTxs,

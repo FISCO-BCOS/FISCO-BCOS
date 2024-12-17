@@ -204,12 +204,12 @@ public:
         GatewayNodeManager::Ptr _gatewayNodeManager, bcos::amop::AMOPImpl::Ptr _amop,
         ratelimiter::GatewayRateLimiter::Ptr _gatewayRateLimiter,
         std::string _gatewayServiceName = "localGateway")
-      : m_gatewayServiceName(_gatewayServiceName),
-        m_gatewayConfig(_gatewayConfig),
-        m_p2pInterface(_p2pInterface),
-        m_gatewayNodeManager(_gatewayNodeManager),
-        m_amop(_amop),
-        m_gatewayRateLimiter(_gatewayRateLimiter)
+      : m_gatewayServiceName(std::move(_gatewayServiceName)),
+        m_gatewayConfig(std::move(_gatewayConfig)),
+        m_p2pInterface(std::move(_p2pInterface)),
+        m_gatewayNodeManager(std::move(_gatewayNodeManager)),
+        m_amop(std::move(_amop)),
+        m_gatewayRateLimiter(std::move(_gatewayRateLimiter))
     {
         m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::PeerToPeerMessage,
             boost::bind(&Gateway::onReceiveP2PMessage, this, boost::placeholders::_1,

@@ -99,6 +99,9 @@ public:
      */
     void asyncSendBroadcastMessage(uint16_t _type, int _moduleID, bytesConstRef _data) override;
 
+    task::Task<void> broadcastMessage(
+        uint16_t type, int moduleID, ::ranges::any_view<bytesConstRef> payloads) override;
+
     /**
      * @brief: receive nodeIDs from gateway
      * @param _groupID: groupID
