@@ -340,7 +340,7 @@ public:
     }
 
     bcos::task::Task<void> broadcastMessage(
-        uint16_t _type, int _moduleID, ::ranges::any_view<bytesConstRef> payloads) override
+        uint16_t type, int moduleID, ::ranges::any_view<bytesConstRef> payloads) override
     {
         for (const auto& node : m_nodeIDList)
         {
@@ -353,7 +353,7 @@ public:
             {
                 buffer.insert(buffer.end(), view.begin(), view.end());
             }
-            asyncSendMessageByNodeID(_moduleID, node, bcos::ref(buffer), 0, nullptr);
+            asyncSendMessageByNodeID(moduleID, node, bcos::ref(buffer), 0, nullptr);
         }
         co_return;
     }

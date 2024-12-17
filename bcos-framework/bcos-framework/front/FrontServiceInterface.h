@@ -139,7 +139,7 @@ public:
     virtual void asyncSendBroadcastMessage(uint16_t _type, int _moduleID, bytesConstRef _data) = 0;
 
     virtual task::Task<void> broadcastMessage(
-        uint16_t _type, int _moduleID, ::ranges::any_view<bytesConstRef> payloads) = 0;
+        uint16_t type, int moduleID, ::ranges::any_view<bytesConstRef> payloads) = 0;
 
     /**
      * @brief: get local protocol info

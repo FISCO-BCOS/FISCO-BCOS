@@ -24,22 +24,20 @@
 
 using namespace bcos;
 
-bcos::Timer::Timer(
-    std::shared_ptr<boost::asio::io_service> ioService, int64_t timeout, std::string threadName)
+bcos::Timer::Timer(boost::asio::io_service& ioService, int64_t timeout, std::string threadName)
   : m_timeout(timeout),
     m_working(true),
-    m_ioService(std::move(ioService)),
-    m_timer(*m_ioService),
-    m_threadName(std::move(threadName)),
-    m_borrowedIoService(true)
+    m_ioService(std::addressof(ioService)),
+    m_timer(this->ioService()),
+    m_threadName(std::move(threadName))
 {}
 
 bcos::Timer::Timer(int64_t _timeout, std::string _threadName)
   : m_timeout(_timeout),
     m_working(true),
-    m_ioService(std::make_shared<boost::asio::io_service>()),
-    m_work(*m_ioService),
-    m_timer(*m_ioService),
+    m_ioService(std::in_place_index_t<1>{}),
+    m_work(this->ioService()),
+    m_timer(this->ioService()),
     m_threadName(std::move(_threadName)),
     m_worker(std::make_unique<std::thread>([&]() {
         bcos::pthread_setThreadName(m_threadName);
@@ -47,14 +45,14 @@ bcos::Timer::Timer(int64_t _timeout, std::string _threadName)
         {
             try
             {
-                m_ioService->run();
+                ioService().run();
             }
             catch (std::exception const& e)
             {
                 BCOS_LOG(WARNING) << LOG_DESC("Exception in Worker Thread of timer")
                                   << LOG_KV("message", boost::diagnostic_information(e));
             }
-            m_ioService->reset();
+            ioService().reset();
         }
     }))
 {}
@@ -134,9 +132,9 @@ void Timer::destroy()
     }
     m_working = false;
     stop();
-    if (!m_borrowedIoService)
+    if (!borrowedIoService())
     {
-        m_ioService->stop();
+        ioService().stop();
         if (m_worker->get_id() != std::this_thread::get_id())
         {
             m_worker->join();
