@@ -19,17 +19,8 @@
  */
 
 #include "bcos-front/FrontMessage.h"
-#include "bcos-gateway/GatewayConfig.h"
-#include "bcos-gateway/GatewayFactory.h"
-#include "bcos-gateway/gateway/FrontServiceInfo.h"
-#include "bcos-gateway/gateway/GatewayStatus.h"
-#include "bcos-gateway/libnetwork/Session.h"
-#include "bcos-gateway/libnetwork/Socket.h"
-#include "bcos-gateway/libp2p/P2PMessageV2.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
 #include "bcos-gateway/libp2p/Service.h"
-#include "bcos-gateway/libp2p/ServiceV2.h"
-#include "bcos-gateway/protocol/GatewayNodeStatus.h"
 #include "bcos-utilities/BoostLog.h"
 #include "filter/Filter.h"
 #include <bcos-framework/protocol/CommonError.h>
@@ -40,8 +31,6 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>
 #include <json/json.h>
-#include <algorithm>
-#include <random>
 #include <string>
 #include <vector>
 
@@ -527,17 +516,26 @@ bcos::task::Task<void> bcos::gateway::Gateway::broadcastMessage(uint16_t type,
     std::string_view groupID, int moduleID, const bcos::crypto::NodeID& srcNodeID,
     ::ranges::any_view<bytesConstRef> payloads)
 {
-    P2PMessage message;
-    message.setPacketType(GatewayMessageType::BroadcastMessage);
-    message.setExt(type);
-    message.setSeq(m_p2pInterface->messageFactory()->newSeq());
+    auto message =
+        std::dynamic_pointer_cast<P2PMessage>(m_p2pInterface->messageFactory()->buildMessage());
+    message->setPacketType(GatewayMessageType::BroadcastMessage);
+    message->setExt(type);
+    message->setSeq(m_p2pInterface->messageFactory()->newSeq());
 
     P2PMessageOptions options;
     options.setGroupID(std::string(groupID));
     options.setSrcNodeID(srcNodeID.encode());
     options.setModuleID(moduleID);
-    message.setOptions(std::move(options));
+    message->setOptions(std::move(options));
+
+    if (m_gatewayRateLimiter)
+    {
+        GatewayMessageExtAttributes msgExtAttr;
+        msgExtAttr.setGroupID(std::string(groupID));
+        msgExtAttr.setModuleID(moduleID);
+        message->setExtAttributes(std::move(msgExtAttr));
+    }
 
     co_await m_gatewayNodeManager->peersRouterTable()->broadcastMessage(
-        type, groupID, moduleID, message, payloads);
+        type, groupID, moduleID, *message, payloads);
 }
