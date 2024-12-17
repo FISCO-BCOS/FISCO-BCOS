@@ -32,7 +32,6 @@
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/exception/diagnostic_information.hpp>
-#include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::sync;
