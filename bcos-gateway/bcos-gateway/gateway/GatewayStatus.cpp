@@ -19,6 +19,7 @@
  */
 #include "GatewayStatus.h"
 #include <mutex>
+#include <random>
 
 using namespace bcos;
 using namespace bcos::gateway;
@@ -102,13 +103,13 @@ bool GatewayStatus::randomChooseNode(
     {
         return false;
     }
-    // srand(utcTime());
-    // TODO: if rand() can be replaced by a faster random function?
-    auto selectedP2PNode = rand() % p2pNodeList->size();
+
+    static thread_local std::mt19937 random(std::random_device{}());
+    auto selectedP2PNodeIndex = random() % p2pNodeList->size();
     auto iterator = p2pNodeList->begin();
-    if (selectedP2PNode > 0)
+    if (selectedP2PNodeIndex > 0)
     {
-        std::advance(iterator, selectedP2PNode);
+        std::advance(iterator, selectedP2PNodeIndex);
     }
     _choosedNode = *iterator;
     return true;
