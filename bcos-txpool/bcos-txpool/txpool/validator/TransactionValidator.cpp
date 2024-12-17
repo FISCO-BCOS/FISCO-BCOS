@@ -55,14 +55,14 @@ task::Task<TransactionStatus> TransactionValidator::ValidateTransactionWithState
 {
     auto sender = toHex(_tx->sender());
     // EIP-3607: Reject transactions from senders with deployed code TODO: fix error code hash set
-    // auto accountCodeHashOpt =
-    //     co_await (_ledger->getStorageAt(sender, bcos::ledger::ACCOUNT_TABLE_FIELDS::CODE_HASH,
-    //     0));
-    // auto accountCodeHash = accountCodeHashOpt ? accountCodeHashOpt.value() : storage::Entry();
-    // if (!accountCodeHash.get().empty())
-    // {
-    //     co_return TransactionStatus::SenderNoEOA;
-    // }
+    auto accountCodeHashOpt =
+        co_await (_ledger->getStorageAt(sender, bcos::ledger::ACCOUNT_TABLE_FIELDS::CODE,
+        0));
+    auto accountCodeHash = accountCodeHashOpt ? accountCodeHashOpt.value() : storage::Entry();
+    if (!accountCodeHash.get().empty())
+    {
+        co_return TransactionStatus::SenderNoEOA;
+    }
 
     // TODO: add calculate gas price
     auto balanceOpt =

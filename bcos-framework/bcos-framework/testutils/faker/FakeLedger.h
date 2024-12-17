@@ -416,15 +416,15 @@ public:
     }
 
     void setStorageAt(
-        std::string_view _address, std::string_view _key, std::optional<storage::Entry> _data)
+        std::string _address, std::string _key, std::optional<storage::Entry> _data)
     {
-        fakeStorageEntryMaps[std::string_view{_address}][std::string_view{_key}] = _data;
+        fakeStorageEntryMaps[_address][_key] = _data;
     }
 
     task::Task<std::optional<storage::Entry>> getStorageAt(std::string_view _address,
         std::string_view _key, protocol::BlockNumber _blockNumber) override
     {
-        co_return fakeStorageEntryMaps[std::string_view{_address}][std::string_view{_key}];
+        co_return fakeStorageEntryMaps[std::string(_address)][std::string(_key)];
     }
 
 private:
@@ -447,7 +447,7 @@ private:
     std::shared_ptr<ThreadPool> m_worker = nullptr;
     std::string eoaInLedger;
     std::string eoaInLedgerNonce;
-    std::map<std::string_view, std::map<std::string_view, std::optional<storage::Entry>>>
+    std::map<std::string, std::map<std::string, std::optional<storage::Entry>>>
         fakeStorageEntryMaps;
 };
 }  // namespace test
