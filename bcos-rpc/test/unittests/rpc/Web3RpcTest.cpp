@@ -372,9 +372,7 @@ BOOST_AUTO_TEST_CASE(handleEIP1559TxTest)
 
     std::optional<storage::Entry> balanceOp = storage::Entry();
     balanceOp->set(asBytes("0x123456700000000000"));
-    auto address = *fromHexString("0x1f9090aae28b8a3dceadf281b0f12828e676c326");
-    auto addressView = std::string_view((char*)address.data(), address.size());
-    m_ledger->setStorageAt(addressView, bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE, balanceOp);
+    m_ledger->setStorageAt("1f9090aae28b8a3dceadf281b0f12828e676c326", std::string(bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE), balanceOp);
     m_ledger->setSystemConfig(ledger::SYSTEM_KEY_WEB3_CHAIN_ID, std::to_string(1));
     // clang-format off
     // https://etherscan.io/tx/0x5b2f242c755ec9f9ed36628331991bd6c90b712b5867a0c7f3a4516caf09cc68
