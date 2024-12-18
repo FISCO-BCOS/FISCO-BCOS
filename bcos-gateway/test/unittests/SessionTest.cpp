@@ -307,10 +307,8 @@ BOOST_AUTO_TEST_CASE(doReadTest)
     std::atomic<size_t> recvBufferSize = 0;
     std::atomic<uint64_t> lastReadTime = utcSteadyTime();
 
-    auto session = std::make_shared<Session>(2, true);
+    auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 2, true);
     session->setMessageFactory(fakeHost->messageFactory());
-    session->setHost(fakeHost);
-    session->setSocket(fakeSocket);
 
     session->setMessageHandler([&recvPacketCnt, &recvBufferSize, &lastReadTime](NetworkException e,
                                    SessionFace::Ptr sessionFace, Message::Ptr message) {
