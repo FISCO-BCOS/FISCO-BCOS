@@ -214,9 +214,10 @@ public:
         return p2pId.substr(RSA_PUBLIC_KEY_PREFIX, RSA_PUBLIC_KEY_TRUNC);
     }
 
-    virtual bool encodeHeader(bytes& _buffer) const;
+    bool encodeHeader(bytes& _buffer) const override;
 
 protected:
+    virtual bool encodeHeaderImpl(bytes& _buffer) const;
     virtual int32_t decodeHeader(const bytesConstRef& _buffer);
 
     mutable uint32_t m_length = 0;

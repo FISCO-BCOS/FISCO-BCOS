@@ -44,7 +44,7 @@ public:
     virtual void asyncSendMessage(
         Message::Ptr, Options = Options(), SessionCallbackFunc = SessionCallbackFunc()) = 0;
 
-    virtual task::Task<std::unique_ptr<Message>> sendMessage(
+    virtual task::Task<Message::Ptr> sendMessage(
         const Message& header, ::ranges::any_view<bytesConstRef> payloads, Options options) = 0;
 
     virtual std::shared_ptr<SocketFace> socket() = 0;
@@ -53,7 +53,7 @@ public:
         std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> messageHandler) = 0;
 
     virtual void setBeforeMessageHandler(
-        std::function<std::optional<bcos::Error>(SessionFace::Ptr, Message::Ptr)> handler) = 0;
+        std::function<std::optional<bcos::Error>(SessionFace&, Message&)> handler) = 0;
 
     virtual NodeIPEndpoint nodeIPEndpoint() const = 0;
 

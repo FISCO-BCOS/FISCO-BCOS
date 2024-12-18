@@ -348,14 +348,6 @@ void ServiceV2::asyncBroadcastMessage(std::shared_ptr<P2PMessage> message, Optio
     auto reachableNodes = m_routerTable->getAllReachableNode();
     try
     {
-        std::unordered_map<P2pID, P2PSession::Ptr> sessions;
-        {
-            RecursiveGuard recursiveGuard(x_sessions);
-            std::for_each(m_sessions.begin(), m_sessions.end(),
-                [&](std::unordered_map<P2pID, P2PSession::Ptr>::value_type& _value) {
-                    reachableNodes.insert(_value.first);
-                });
-        }
         for (auto const& node : reachableNodes)
         {
             message->setSrcP2PNodeID(m_nodeID);
@@ -414,4 +406,43 @@ void ServiceV2::sendRespMessageBySession(
                             << LOG_KV("dst", respMessage->dstP2PNodeIDView())
                             << LOG_KV("payload size", _payload.size());
     }
+}
+
+bcos::task::Task<Message::Ptr> bcos::gateway::ServiceV2::sendMessageByNodeID(
+    P2pID nodeID, P2PMessage& message, ::ranges::any_view<bytesConstRef> payloads, Options options)
+{
+    message.setSrcP2PNodeID(m_nodeID);
+    message.setDstP2PNodeID(nodeID);
+
+    auto dstNodeID = message.dstP2PNodeID();
+    // without nextHop: maybe network unreachable or with distance equal to 1
+    auto nextHop = m_routerTable->getNextHop(dstNodeID);
+    if (nextHop.empty())
+    {
+        if (c_fileLogLevel == TRACE) [[unlikely]]
+        {
+            SERVICE2_LOG(TRACE) << LOG_BADGE("asyncSendMessageByNodeID")
+                                << LOG_DESC("sendMessage to dstNode")
+                                << LOG_KV("from", message.srcP2PNodeIDView())
+                                << LOG_KV("to", message.dstP2PNodeIDView())
+                                << LOG_KV("type", message.packetType())
+                                << LOG_KV("seq", message.seq())
+                                << LOG_KV("rsp", message.isRespPacket());
+        }
+        co_return co_await Service::sendMessageByNodeID(
+            std::move(dstNodeID), message, std::move(payloads), options);
+    }
+    // with nextHop, send the message to nextHop
+    if (c_fileLogLevel == TRACE) [[unlikely]]
+    {
+        SERVICE2_LOG(TRACE) << LOG_BADGE("asyncSendMessageByNodeID")
+                            << LOG_DESC("forwardMessage to nextHop")
+                            << LOG_KV("from", message.srcP2PNodeIDView())
+                            << LOG_KV("to", message.dstP2PNodeIDView())
+                            << LOG_KV("nextHop", nextHop) << LOG_KV("type", message.packetType())
+                            << LOG_KV("seq", message.seq())
+                            << LOG_KV("rsp", message.isRespPacket());
+    }
+    co_return co_await Service::sendMessageByNodeID(
+        std::move(nextHop), message, std::move(payloads), options);
 }

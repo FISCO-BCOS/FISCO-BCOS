@@ -65,6 +65,7 @@ public:
 
     virtual int32_t decode(const bytesConstRef& _buffer) = 0;
     virtual bool encode(EncodedMessage& _buffer) const = 0;
+    virtual bool encodeHeader(bytes& _buffer) const = 0;
     virtual const std::any& extAttributes() const = 0;
 
     // TODO: move the follow interfaces to P2PMessage
