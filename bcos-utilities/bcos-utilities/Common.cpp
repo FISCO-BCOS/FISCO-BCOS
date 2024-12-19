@@ -106,17 +106,30 @@ u256 s2u(s256 _u)
         return u256(c_end + _u);
 }
 
+bool isHexStr(std::string_view str)
+{
+    if (str.empty() || str.size() < 2)
+    {
+        return false;
+    }
+    std::regex pattern("^(0x)?[0-9a-fA-F]+$");
+    return std::regex_match(str.begin(), str.end(), pattern);
+}
+
 u256 hex2u(std::string_view _hexStr)
 {
-    if (_hexStr.empty())
+    try
     {
-        return u256{0};
+        if (isHexStr(_hexStr))
+        {
+            return u256(_hexStr);
+        }
+        return 0;
     }
-    if (_hexStr.starts_with("0x") || _hexStr.starts_with("0X"))
+    catch (...)
     {
-        return u256(_hexStr);
+        return 0;
     }
-    return u256("0x" + std::string(_hexStr));
 }
 
 bool isalNumStr(std::string const& _stringData)
