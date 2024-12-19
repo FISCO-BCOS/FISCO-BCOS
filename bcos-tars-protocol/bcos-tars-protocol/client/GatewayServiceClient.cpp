@@ -18,6 +18,7 @@
  * @date 2021-04-20
  */
 #include "GatewayServiceClient.h"
+#include "bcos-crypto/signature/key/KeyImpl.h"
 #include "bcos-tars-protocol/Common.h"
 #include "bcos-tars-protocol/ErrorConverter.h"
 #include "bcos-tars-protocol/impl/TarsServantProxyCallback.h"
@@ -30,7 +31,7 @@ bcostars::GatewayServiceClient::GatewayServiceClient(bcostars::GatewayServicePrx
     std::string const& _serviceName, bcos::crypto::KeyFactory::Ptr _keyFactory)
   : GatewayServiceClient(_prx, _serviceName)
 {
-    m_keyFactory = _keyFactory;
+    m_keyFactory = std::move(_keyFactory);
 }
 bcostars::GatewayServiceClient::GatewayServiceClient(
     bcostars::GatewayServicePrx _prx, std::string const& _serviceName)
@@ -38,7 +39,7 @@ bcostars::GatewayServiceClient::GatewayServiceClient(
 {}
 void bcostars::GatewayServiceClient::setKeyFactory(bcos::crypto::KeyFactory::Ptr keyFactory)
 {
-    m_keyFactory = keyFactory;
+    m_keyFactory = std::move(keyFactory);
 }
 void bcostars::GatewayServiceClient::asyncSendMessageByNodeID(const std::string& _groupID,
     int _moduleID, bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
@@ -128,7 +129,7 @@ void bcostars::GatewayServiceClient::asyncGetPeers(std::function<void(
         [_callback](bcos::Error::Ptr _error) {
             if (_callback)
             {
-                _callback(_error, nullptr, nullptr);
+                _callback(std::move(_error), nullptr, nullptr);
             }
         },
         shouldBlockCall);
@@ -180,24 +181,9 @@ bcos::task::Task<void> bcostars::GatewayServiceClient::broadcastMessage(uint16_t
     std::string_view groupID, int moduleID, const bcos::crypto::NodeID& srcNodeID,
     ::ranges::any_view<bcos::bytesConstRef> payloads)
 {
-    std::vector<char> data;
-    for (auto payload : payloads)
-    {
-        data.insert(data.end(), payload.begin(), payload.end());
-    }
-
-
-    auto shouldBlockCall = shouldStopCall();
-    auto ret =
-        checkConnection(c_moduleName, "asyncSendBroadcastMessage", m_prx, nullptr, shouldBlockCall);
-    if (!ret && shouldBlockCall)
-    {
-        co_return;
-    }
-    const auto& srcNodeIDData = srcNodeID.data();
-    m_prx->async_asyncSendBroadcastMessage(nullptr, type, std::string(groupID), moduleID,
-        std::vector<char>(srcNodeIDData.begin(), srcNodeIDData.end()),
-        std::vector<char>(data.begin(), data.end()));
+    bcos::bytes data = ::ranges::views::join(payloads) | ::ranges::to<bcos::bytes>();
+    asyncSendBroadcastMessage(type, std::string(groupID), moduleID,
+        std::make_shared<bcos::crypto::KeyImpl>(srcNodeID.data()), bcos::ref(data));
     co_return;
 };
 void bcostars::GatewayServiceClient::asyncGetGroupNodeInfo(
@@ -355,7 +341,8 @@ void bcostars::GatewayServiceClient::asyncSubscribeTopic(std::string const& _cli
     class Callback : public bcostars::GatewayServicePrxCallback
     {
     public:
-        Callback(std::function<void(bcos::Error::Ptr&&)> callback) : m_callback(callback) {}
+        Callback(std::function<void(bcos::Error::Ptr&&)> callback) : m_callback(std::move(callback))
+        {}
         void callback_asyncSubscribeTopic(const bcostars::Error& ret) override
         {
             s_tarsTimeoutCount.store(0);
