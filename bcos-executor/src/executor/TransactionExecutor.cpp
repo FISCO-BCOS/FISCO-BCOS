@@ -2706,13 +2706,8 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->message = input.message();
     callParameters->data = input.takeData();
     callParameters->gas = input.gasAvailable();
-    callParameters->nonce = 0;
+    callParameters->nonce = hex2u(input.nonce());
     callParameters->transactionType = input.txType();
-    if (callParameters->transactionType !=
-        static_cast<uint8_t>(protocol::TransactionType::BCOSTransaction))
-    {
-        callParameters->nonce = hex2u(input.nonce());
-    }
     callParameters->staticCall = staticCall;
     callParameters->newEVMContractAddress = input.newEVMContractAddress();
     callParameters->keyLocks = input.takeKeyLocks();
@@ -2789,13 +2784,8 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->gasLimit = input.gasLimit();
     callParameters->maxFeePerGas = u256(input.maxFeePerGas());
     callParameters->maxPriorityFeePerGas = u256(input.maxPriorityFeePerGas());
-    callParameters->nonce = 0;
     callParameters->transactionType = input.txType();
-    if (callParameters->transactionType !=
-        static_cast<uint8_t>(protocol::TransactionType::BCOSTransaction))
-    {
-        callParameters->nonce = hex2u(input.nonce());
-    }
+    callParameters->nonce = hex2u(input.nonce());
 
     if (!m_isWasm && !callParameters->create)
     {

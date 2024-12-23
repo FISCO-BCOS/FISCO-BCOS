@@ -106,13 +106,13 @@ u256 s2u(s256 _u)
         return u256(c_end + _u);
 }
 
-bool isHexStr(std::string_view str)
+bool isHexStrWithPrefix(std::string_view str)
 {
     if (str.empty() || str.size() < 2)
     {
         return false;
     }
-    std::regex pattern("^(0x)?[0-9a-fA-F]+$");
+    std::regex pattern("^0x[0-9a-fA-F]+$");
     return std::regex_match(str.begin(), str.end(), pattern);
 }
 
@@ -120,11 +120,11 @@ u256 hex2u(std::string_view _hexStr)
 {
     try
     {
-        if (isHexStr(_hexStr))
+        if (isHexStrWithPrefix(_hexStr))
         {
             return u256(_hexStr);
         }
-        return 0;
+        return u256("0x" + std::string(_hexStr));
     }
     catch (...)
     {
