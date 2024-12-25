@@ -171,7 +171,7 @@ public:
         }
     }
 
-    void setUpgradeFeatures(protocol::BlockVersion from, protocol::BlockVersion to)
+    void setUpgradeFeatures(protocol::BlockVersion fromVersion, protocol::BlockVersion toVersion)
     {
         struct UpgradeFeatures
         {
@@ -238,8 +238,9 @@ public:
         });
         for (const auto& upgradeFeatures : upgradeRoadmap)
         {
-            if (((to < protocol::BlockVersion::V3_2_7_VERSION) && (to >= upgradeFeatures.to)) ||
-                (from < upgradeFeatures.to && to >= upgradeFeatures.to))
+            if (((toVersion < protocol::BlockVersion::V3_2_7_VERSION) &&
+                    (toVersion >= upgradeFeatures.to)) ||
+                (fromVersion < upgradeFeatures.to && toVersion >= upgradeFeatures.to))
             {
                 for (auto flag : upgradeFeatures.flags)
                 {
@@ -249,22 +250,22 @@ public:
         }
     }
 
-    void setGenesisFeatures(protocol::BlockVersion to)
+    void setGenesisFeatures(protocol::BlockVersion toVersion)
     {
-        setToShardingDefault(to);
-        if (to == protocol::BlockVersion::V3_3_VERSION ||
-            to == protocol::BlockVersion::V3_4_VERSION)
+        setToShardingDefault(toVersion);
+        if (toVersion == protocol::BlockVersion::V3_3_VERSION ||
+            toVersion == protocol::BlockVersion::V3_4_VERSION)
         {
             return;
         }
 
-        if (to == protocol::BlockVersion::V3_5_VERSION)
+        if (toVersion == protocol::BlockVersion::V3_5_VERSION)
         {
-            setUpgradeFeatures(protocol::BlockVersion::V3_4_VERSION, to);
+            setUpgradeFeatures(protocol::BlockVersion::V3_4_VERSION, toVersion);
         }
         else
         {
-            setUpgradeFeatures(protocol::BlockVersion::MIN_VERSION, to);
+            setUpgradeFeatures(protocol::BlockVersion::MIN_VERSION, toVersion);
         }
     }
 

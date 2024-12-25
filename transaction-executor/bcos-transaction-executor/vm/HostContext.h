@@ -33,6 +33,7 @@
 #include "bcos-framework/ledger/Account.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
+#include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/protocol/LogEntry.h"
@@ -54,6 +55,7 @@
 #include <functional>
 #include <intx/intx.hpp>
 #include <iterator>
+#include <magic_enum.hpp>
 #include <memory>
 #include <stdexcept>
 #include <string_view>
@@ -154,6 +156,15 @@ private:
                 [](const evmc_message* message) -> evmc_message const& { return *message; },
                 [](const evmc_message& message) -> evmc_message const& { return message; }},
             m_message);
+    }
+    evmc_message& mutableMessage()
+    {
+        if (std::holds_alternative<const evmc_message*>(m_message))
+        {
+            const auto* evmcMessage = std::get<const evmc_message*>(m_message);
+            m_message.emplace<evmc_message>(*evmcMessage);
+        }
+        return std::get<evmc_message>(m_message);
     }
 
     task::Task<void> transferBalance(const evmc_message& message)
@@ -379,7 +390,7 @@ public:
 
     friend task::Task<EVMCResult> execute(HostContext& hostContext)
     {
-        auto const& ref = hostContext.message();
+        auto& ref = hostContext.message();
         if (c_fileLogLevel <= LogLevel::TRACE)
         {
             HOST_CONTEXT_LOG(TRACE)
@@ -414,7 +425,22 @@ public:
             if (hostContext.m_ledgerConfig.get().features().get(
                     ledger::Features::Flag::feature_balance))
             {
-                co_await hostContext.transferBalance(ref);
+                if (auto balanceTransfer =
+                        co_await ledger::getSystemConfig(hostContext.m_rollbackableStorage.get(),
+                            magic_enum::enum_name(ledger::SystemConfig::balance_transfer),
+                            ledger::fromStorage);
+                    balanceTransfer && std::get<0>(*balanceTransfer) != "0" &&
+                    std::get<1>(*balanceTransfer) <= hostContext.m_blockHeader.get().number())
+                {
+                    co_await hostContext.transferBalance(ref);
+                }
+                else if (hostContext.m_ledgerConfig.get().features().get(
+                             ledger::Features::Flag::feature_balance_policy1))
+                {
+                    auto& mutableRef = hostContext.mutableMessage();
+                    std::fill(mutableRef.value.bytes,
+                        mutableRef.value.bytes + sizeof(mutableRef.value.bytes), 0);
+                }
             }
 
             if (!evmResult)
@@ -613,12 +639,7 @@ private:
                 m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
         if (m_executable && hasPrecompiledPrefix(m_executable->m_code->data()))
         {
-            if (std::holds_alternative<const evmc_message*>(m_message))
-            {
-                m_message.emplace<evmc_message>(*std::get<const evmc_message*>(m_message));
-            }
-
-            auto& message = std::get<evmc_message>(m_message);
+            auto& message = mutableMessage();
             const auto* code = m_executable->m_code->data();
 
             std::vector<std::string> codeParameters{};

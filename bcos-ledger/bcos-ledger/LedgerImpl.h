@@ -21,7 +21,6 @@
 #include <tbb/parallel_for.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
-#include <atomic>
 #include <type_traits>
 
 namespace bcos::ledger

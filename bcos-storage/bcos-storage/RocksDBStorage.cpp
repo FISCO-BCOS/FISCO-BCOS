@@ -143,8 +143,9 @@ void RocksDBStorage::asyncGetRow(std::string_view _table, std::string_view _key,
 
         _callback(nullptr, entry);
 
-        STORAGE_ROCKSDB_LOG(TRACE) << LOG_DESC("asyncGetRow") << LOG_KV("table", _table)
-                                   << LOG_KV("key", boost::algorithm::hex_lower(std::string(_key)));
+        auto key = boost::algorithm::hex_lower(std::string(_key));
+        STORAGE_ROCKSDB_LOG(TRACE)
+            << LOG_DESC("asyncGetRow") << LOG_KV("table", _table) << LOG_KV("key", key);
     }
     catch (const std::exception& e)
     {
