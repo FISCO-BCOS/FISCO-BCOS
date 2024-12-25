@@ -93,19 +93,18 @@ public:
     size_t size() const { return m_dataCount; }
     std::vector<unsigned char> toBytes() const
     {
-        unsigned const char* dataPointer = reinterpret_cast<unsigned const char*>(m_dataPointer);
-        return std::vector<unsigned char>(dataPointer, dataPointer + m_dataCount * sizeof(T));
+        const auto* dataPointer = reinterpret_cast<unsigned const char*>(m_dataPointer);
+        return {dataPointer, dataPointer + m_dataCount * sizeof(T)};
     }
 
     std::string toString() const
     {
-        return std::string(
-            (char const*)m_dataPointer, ((char const*)m_dataPointer) + m_dataCount * sizeof(T));
+        return {(char const*)m_dataPointer, ((char const*)m_dataPointer) + m_dataCount * sizeof(T)};
     }
 
     std::string_view toStringView() const
     {
-        return std::string_view((char const*)m_dataPointer, m_dataCount * sizeof(T));
+        return {(char const*)m_dataPointer, m_dataCount * sizeof(T)};
     }
 
     template <bcos::concepts::StringLike String>
@@ -140,30 +139,12 @@ public:
         return RefDataContainer<T>();
     }
 
-    bool dataOverlap(RefDataContainer<T> _dataContainer)
-    {
-        // data overlap
-        if (begin() < _dataContainer.end() && _dataContainer.begin() < end())
-        {
-            return true;
-        }
-        return false;
-    }
-
     // populate new RefDataContainer
     void populate(RefDataContainer<T> _dataContainer)
     {
-        // data overlap
-        if (dataOverlap(_dataContainer))
-        {
-            memmove((void*)_dataContainer.data(), (void*)data(),
-                (std::min)(_dataContainer.count(), count()) * sizeof(T));
-        }
-        else
-        {
-            memcpy((void*)_dataContainer.data(), (void*)data(),
-                (std::min)(_dataContainer.count(), count()) * sizeof(T));
-        }
+        memmove((void*)_dataContainer.data(), (void*)data(),
+            (std::min)(_dataContainer.count(), count()) * sizeof(T));
+
         // reset the remaining data to 0
         if (_dataContainer.count() > count())
         {
@@ -187,7 +168,7 @@ public:
     void cleanMemory()
     {
         static std::atomic<unsigned char> s_cleanCounter{0u};
-        uint8_t* p = (uint8_t*)begin();
+        auto* p = (uint8_t*)begin();
         size_t const len = (uint8_t*)end() - p;
         size_t loop = len;
         size_t count = s_cleanCounter;
