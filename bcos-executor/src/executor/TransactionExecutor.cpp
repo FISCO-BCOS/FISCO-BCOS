@@ -2789,8 +2789,8 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->gasLimit = input.gasLimit();
     callParameters->maxFeePerGas = u256(input.maxFeePerGas());
     callParameters->maxPriorityFeePerGas = u256(input.maxPriorityFeePerGas());
-    callParameters->nonce = hex2u(input.nonce());
     callParameters->transactionType = input.txType();
+    callParameters->nonce = hex2u(input.nonce());
 
     if (!m_isWasm && !callParameters->create)
     {

@@ -50,7 +50,7 @@ namespace bcos::rpc
         auto hash = crypto::keccak256Hash(bcos::ref(pk));
         Address address = right160(hash);
         auto addrString = address.hex();
-        auto addrHash = crypto::keccak256Hash(address.ref()).hex();
+        auto addrHash = crypto::keccak256Hash(bytesConstRef(addrString)).hex();
         toChecksumAddress(addrString, addrHash);
         result["miner"] = "0x" + addrString;
     }
