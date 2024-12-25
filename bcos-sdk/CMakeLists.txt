@@ -1,9 +1,11 @@
 file(GLOB_RECURSE SRC_LIST "bcos-cpp-sdk/*.cpp")
 list(APPEND LINK_LIB_LIST bcos-crypto bcos-boostssl bcos-utilities ${TARS_PROTOCOL_TARGET} jsoncpp_static OpenSSL::SSL OpenSSL::Crypto)
+file(GLOB_RECURSE TARS_LIST "bcos-cpp-sdk/tarsRPC/*.cpp")
 if (ONLY_CPP_SDK AND (NOT WITH_SWIG_SDK))
-    list(REMOVE_ITEM SRC_LIST "${CMAKE_CURRENT_SOURCE_DIR}/bcos-cpp-sdk/tarsRPC/CoRPCClient.cpp")
-    list(REMOVE_ITEM SRC_LIST "${CMAKE_CURRENT_SOURCE_DIR}/bcos-cpp-sdk/tarsRPC/RPCClient.cpp")
-    list(REMOVE_ITEM SRC_LIST "${CMAKE_CURRENT_SOURCE_DIR}/bcos-cpp-sdk/tarsRPC/detail/Core.cpp")
+    # for TARS_LIST
+    foreach (TARS_FILE ${TARS_LIST})
+        list(REMOVE_ITEM SRC_LIST "${TARS_FILE}")
+    endforeach ()
 endif ()
 
 find_package(Boost REQUIRED log serialization)

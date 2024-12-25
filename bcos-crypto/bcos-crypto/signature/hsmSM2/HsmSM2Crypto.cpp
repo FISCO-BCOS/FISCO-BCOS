@@ -18,12 +18,13 @@
  * @date 2022.10.07
  * @author lucasli
  */
-#include "hsm-crypto/hsm/CryptoProvider.h"
-#include "hsm-crypto/hsm/SDFCryptoProvider.h"
 #include <bcos-crypto/signature/Exceptions.h>
 #include <bcos-crypto/signature/codec/SignatureDataWithPub.h>
 #include <bcos-crypto/signature/hsmSM2/HsmSM2Crypto.h>
 #include <bcos-crypto/signature/hsmSM2/HsmSM2KeyPair.h>
+#include <bcos-utilities/BoostLog.h>
+#include <hsm-crypto/hsm/CryptoProvider.h>
+#include <hsm-crypto/hsm/SDFCryptoProvider.h>
 #include <algorithm>
 
 using namespace bcos;
@@ -77,8 +78,8 @@ std::shared_ptr<bytes> HsmSM2Crypto::sign(
         (unsigned char*)hashResult, &uiHashResultLen);
     if (code != SDR_OK)
     {
-        CRYPTO_LOG(ERROR) << "[HSMSignature::sign] ERROR of compute H(M')"
-                          << LOG_KV("message", provider.GetErrorMessage(code));
+        CRYPTO_LOG(WARNING) << "[HSMSignature::sign] ERROR of compute H(M')"
+                            << LOG_KV("message", provider.GetErrorMessage(code));
         return nullptr;
     }
 
@@ -88,8 +89,8 @@ std::shared_ptr<bytes> HsmSM2Crypto::sign(
         key, hsm::SM2, (const unsigned char*)hashResult, 32, signatureData->data(), &signLen);
     if (code != SDR_OK)
     {
-        CRYPTO_LOG(ERROR) << "[HSMSignature::sign] ERROR of Sign"
-                          << LOG_KV("message", provider.GetErrorMessage(code));
+        CRYPTO_LOG(WARNING) << "[HSMSignature::sign] ERROR of Sign"
+                            << LOG_KV("message", provider.GetErrorMessage(code));
         return nullptr;
     }
 
@@ -129,8 +130,8 @@ bool HsmSM2Crypto::verify(
         (unsigned char*)hashResult.data(), &uiHashResultLen);
     if (code != SDR_OK)
     {
-        CRYPTO_LOG(ERROR) << "[HSMSignature::verify] ERROR of Hash"
-                          << LOG_KV("message", provider.GetErrorMessage(code));
+        CRYPTO_LOG(WARNING) << "[HSMSignature::verify] ERROR of Hash"
+                            << LOG_KV("message", provider.GetErrorMessage(code));
         return false;
     }
 
@@ -138,8 +139,8 @@ bool HsmSM2Crypto::verify(
         HSM_SM3_DIGEST_LENGTH, _signatureData.data(), 64, &verifyResult);
     if (code != SDR_OK)
     {
-        CRYPTO_LOG(ERROR) << "[HSMSignature::verify] ERROR of Verify"
-                          << LOG_KV("message", provider.GetErrorMessage(code));
+        CRYPTO_LOG(WARNING) << "[HSMSignature::verify] ERROR of Verify"
+                            << LOG_KV("message", provider.GetErrorMessage(code));
         return false;
     }
     return true;
