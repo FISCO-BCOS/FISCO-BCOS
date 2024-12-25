@@ -320,11 +320,6 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
                 auto const storageNonce = u256(nonceInStorage.value_or("0"));
                 auto const newNonce = std::max(callNonce, storageNonce) + 1;
                 co_await ledger::account::setNonce(addr, newNonce.convert_to<std::string>());
-                if (c_fileLogLevel == TRACE)
-                {
-                    EXECUTIVE_LOG(TRACE) << "Web3Nonce: update address nonce to storage"
-                                         << LOG_KV("address", addr) << LOG_KV("nonce", newNonce);
-                }
             }(std::move(address), callParameters->nonce));
         }
     }

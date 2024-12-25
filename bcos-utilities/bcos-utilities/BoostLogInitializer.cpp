@@ -20,9 +20,9 @@
  */
 #include "BoostLogInitializer.h"
 #include "BoostLogThreadNameAttribute.h"
-#include "bcos-framework/bcos-framework/Common.h"
-#include "bcos-utilities/BoostLog.h"
+#include <bcos-framework/Common.h>
 #include <bcos-framework/bcos-framework/protocol/GlobalConfig.h>
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/RateCollector.h>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/core/null_deleter.hpp>

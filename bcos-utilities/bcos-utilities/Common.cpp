@@ -18,10 +18,11 @@
  * @date 2021-02-24
  */
 
-#include "bcos-utilities/BoostLog.h"
+#include <bcos-utilities/BoostLog.h>
 #define NOMINMAX
 #if defined(WIN32) || defined(WIN64) || defined(_WIN32) || defined(_WIN32_)
 #define _WIN32_WINNT 0x0601
+#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #else
 #include <sys/time.h>
@@ -105,17 +106,30 @@ u256 s2u(s256 _u)
         return u256(c_end + _u);
 }
 
+bool isHexStrWithPrefix(std::string_view str)
+{
+    if (str.empty() || str.size() < 2)
+    {
+        return false;
+    }
+    std::regex pattern("^0x[0-9a-fA-F]+$");
+    return std::regex_match(str.begin(), str.end(), pattern);
+}
+
 u256 hex2u(std::string_view _hexStr)
 {
-    if (_hexStr.empty())
+    try
     {
-        return u256{0};
+        if (isHexStrWithPrefix(_hexStr))
+        {
+            return u256(_hexStr);
+        }
+        return u256("0x" + std::string(_hexStr));
     }
-    if (_hexStr.starts_with("0x") || _hexStr.starts_with("0X"))
+    catch (...)
     {
-        return u256(_hexStr);
+        return 0;
     }
-    return u256("0x" + std::string(_hexStr));
 }
 
 bool isalNumStr(std::string const& _stringData)
