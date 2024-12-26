@@ -55,13 +55,13 @@ namespace bcos::rpc
         blockNumber = block->blockHeader()->number();
         for (; transactionIndex < block->transactionsHashSize(); transactionIndex++)
         {
-            if (block->transactionHash(transactionIndex) == tx->hash())
-            {
-                break;
-            }
             if (transactionIndex <= block->receiptsSize())
             {
                 cumulativeGasUsed += block->receipt(transactionIndex)->gasUsed();
+            }
+            if (block->transactionHash(transactionIndex) == tx->hash())
+            {
+                break;
             }
         }
     }

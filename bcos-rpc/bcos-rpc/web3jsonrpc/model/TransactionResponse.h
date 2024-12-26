@@ -100,7 +100,7 @@ static void combineTxResponse(Json::Value& result, bcos::protocol::Transaction::
     {
         result["type"] = toQuantity(0);
         // web3 tools do not compatible with too long hex
-        // result["nonce"] = tx->nonce();
+        result["nonce"] = "0x" + tx->nonce();
         result["value"] = std::string(tx->value().empty() ? "0x0" : tx->value());
         result["maxPriorityFeePerGas"] =
             std::string(tx->maxPriorityFeePerGas().empty() ? "0x0" : tx->maxPriorityFeePerGas());
