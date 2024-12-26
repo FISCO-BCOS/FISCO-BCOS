@@ -443,11 +443,12 @@ public:
             // 先转账，再执行
             // Transfer first, then proceed execute
             if (co_await enableTransfer(hostContext.m_ledgerConfig,
-                    hostContext.m_rollbackableStorage, hostContext.m_blockHeader))
+                    hostContext.m_rollbackableStorage.get(), hostContext.m_blockHeader))
             {
                 co_await hostContext.transferBalance(ref);
             }
-            else
+            else if (hostContext.m_ledgerConfig.get().features().get(
+                         ledger::Features::Flag::feature_balance_policy1))
             {
                 auto& mutableRef = hostContext.mutableMessage();
                 std::fill(mutableRef.value.bytes,
