@@ -120,6 +120,26 @@ inline task::Task<std::shared_ptr<Executable>> getExecutable(
     co_return {};
 }
 
+inline task::Task<bool> enableTransfer(const ledger::LedgerConfig& ledgerConfig, auto& storage,
+    const protocol::BlockHeader& blockHeader)
+{
+    auto featureBalance = ledgerConfig.features().get(ledger::Features::Flag::feature_balance);
+    auto policy1 = ledgerConfig.features().get(ledger::Features::Flag::feature_balance_policy1);
+
+    if (featureBalance && !policy1)
+    {
+        co_return true;
+    }
+    if (auto balanceTransfer = co_await ledger::getSystemConfig(storage,
+            magic_enum::enum_name(ledger::SystemConfig::balance_transfer), ledger::fromStorage);
+        balanceTransfer && std::get<0>(*balanceTransfer) != "0" &&
+        std::get<1>(*balanceTransfer) <= blockHeader.number())
+    {
+        co_return true;
+    }
+    co_return false;
+}
+
 template <class Storage, class TransientStorage>
 class HostContext : public evmc_host_context
 {
@@ -422,25 +442,16 @@ public:
         {
             // 先转账，再执行
             // Transfer first, then proceed execute
-            if (hostContext.m_ledgerConfig.get().features().get(
-                    ledger::Features::Flag::feature_balance))
+            if (co_await enableTransfer(hostContext.m_ledgerConfig,
+                    hostContext.m_rollbackableStorage, hostContext.m_blockHeader))
             {
-                if (auto balanceTransfer =
-                        co_await ledger::getSystemConfig(hostContext.m_rollbackableStorage.get(),
-                            magic_enum::enum_name(ledger::SystemConfig::balance_transfer),
-                            ledger::fromStorage);
-                    balanceTransfer && std::get<0>(*balanceTransfer) != "0" &&
-                    std::get<1>(*balanceTransfer) <= hostContext.m_blockHeader.get().number())
-                {
-                    co_await hostContext.transferBalance(ref);
-                }
-                else if (hostContext.m_ledgerConfig.get().features().get(
-                             ledger::Features::Flag::feature_balance_policy1))
-                {
-                    auto& mutableRef = hostContext.mutableMessage();
-                    std::fill(mutableRef.value.bytes,
-                        mutableRef.value.bytes + sizeof(mutableRef.value.bytes), 0);
-                }
+                co_await hostContext.transferBalance(ref);
+            }
+            else
+            {
+                auto& mutableRef = hostContext.mutableMessage();
+                std::fill(mutableRef.value.bytes,
+                    mutableRef.value.bytes + sizeof(mutableRef.value.bytes), 0);
             }
 
             if (!evmResult)
