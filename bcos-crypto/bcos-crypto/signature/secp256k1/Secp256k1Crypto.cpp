@@ -36,6 +36,18 @@ static const std::unique_ptr<secp256k1_context, decltype(&secp256k1_context_dest
     g_SECP256K1_CTX{secp256k1_context_create(SECP256K1_CONTEXT_SIGN | SECP256K1_CONTEXT_VERIFY),
         &secp256k1_context_destroy};
 
+inline void checkSigLen(bytesConstRef _signatureData)
+{
+    if (SECP256K1_SIGNATURE_LEN != _signatureData.size())
+    {
+        std::ostringstream oss;
+        oss << "invalid signature length : current length is " << _signatureData.size();
+        std::string errMsg = oss.str();
+        CRYPTO_LOG(WARNING) << LOG_DESC("recoverAddress failed") << LOG_KV("message", errMsg);
+        BOOST_THROW_EXCEPTION(InvalidSignature() << errinfo_comment(errMsg));
+    }
+}
+
 std::shared_ptr<bytes> bcos::crypto::secp256k1Sign(
     const KeyPairInterface& _keyPair, const HashType& _hash)
 {
@@ -74,6 +86,7 @@ std::shared_ptr<bytes> bcos::crypto::secp256k1Sign(
 bool bcos::crypto::secp256k1Verify(
     const PublicPtr& _pubKey, const HashType& _hash, bytesConstRef _signatureData)
 {
+    checkSigLen(_signatureData);
 #if 0
     CInputBuffer publicKey{_pubKey->constData(), _pubKey->size()};
     CInputBuffer msgHash{(const char*)_hash.data(), HashType::SIZE};
@@ -128,6 +141,7 @@ KeyPairInterface::UniquePtr bcos::crypto::secp256k1GenerateKeyPair()
 
 void secp256k1RecoverPrimitive(const HashType& _hash, char* _pubKey, bytesConstRef _signatureData)
 {
+    checkSigLen(_signatureData);
     secp256k1_ecdsa_recoverable_signature sig;
     secp256k1_ecdsa_recoverable_signature_parse_compact(g_SECP256K1_CTX.get(), &sig,
         _signatureData.data(), (int)_signatureData[SECP256K1_SIGNATURE_V]);
@@ -149,6 +163,7 @@ void secp256k1RecoverPrimitive(const HashType& _hash, char* _pubKey, bytesConstR
 
 PublicPtr bcos::crypto::secp256k1Recover(const HashType& _hash, bytesConstRef _signatureData)
 {
+    checkSigLen(_signatureData);
 #if 0
     CInputBuffer msgHash{(const char*)_hash.data(), HashType::SIZE};
     CInputBuffer signature{(const char*)_signatureData.data(), _signatureData.size()};
@@ -209,6 +224,7 @@ std::pair<bool, bytes> bcos::crypto::secp256k1Recover(Hash::Ptr _hashImpl, bytes
 std::pair<bool, bytes> Secp256k1Crypto::recoverAddress(
     crypto::Hash& _hashImpl, const HashType& _hash, bytesConstRef _signatureData) const
 {
+    checkSigLen(_signatureData);
     std::array<unsigned char, SECP256K1_UNCOMPRESS_PUBLICKEY_LEN> data{};
     secp256k1_ecdsa_recoverable_signature sig;
     secp256k1_pubkey pubkey;
