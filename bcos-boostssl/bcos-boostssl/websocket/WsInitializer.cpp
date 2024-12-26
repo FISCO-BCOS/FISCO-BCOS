@@ -97,8 +97,8 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
         }
 
         auto httpServerFactory = std::make_shared<HttpServerFactory>();
-        auto httpServer = httpServerFactory->buildHttpServer(_config->listenIP(),
-            _config->listenPort(), ioServicePool->getIOService(), srvCtx);
+        auto httpServer = httpServerFactory->buildHttpServer(
+            _config->listenIP(), _config->listenPort(), ioServicePool->getIOService(), srvCtx);
 
         httpServer->setIOServicePool(ioServicePool);
         httpServer->setDisableSsl(_config->disableSsl());
@@ -168,6 +168,12 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
         }
     }
 
+    auto threadPoolSize = _config->threadPoolSize();
+    if (threadPoolSize > 0)
+    {
+        _wsService->initTaskArena(threadPoolSize);
+    }
+
     connector->setCtx(clientCtx);
     connector->setBuilder(builder);
 
@@ -181,6 +187,7 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
         << LOG_KV("listenIP", _config->listenIP()) << LOG_KV("listenPort", _config->listenPort())
         << LOG_KV("disableSsl", _config->disableSsl()) << LOG_KV("server", _config->asServer())
         << LOG_KV("client", _config->asClient()) << LOG_KV("maxMsgSize", _config->maxMsgSize())
+        << LOG_KV("threadPoolSize", _config->threadPoolSize())
         << LOG_KV("msgTimeOut", _config->sendMsgTimeout())
         << LOG_KV("connected peers", _config->connectPeers() ? _config->connectPeers()->size() : 0);
 }

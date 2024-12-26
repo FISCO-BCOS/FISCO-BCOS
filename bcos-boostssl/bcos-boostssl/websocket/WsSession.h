@@ -27,6 +27,7 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <bcos-utilities/Timer.h>
+#include <oneapi/tbb/task_arena.h>
 #include <oneapi/tbb/task_group.h>
 #include <boost/asio/deadline_timer.hpp>
 #include <boost/asio/strand.hpp>
@@ -53,7 +54,7 @@ public:
     using Ptrs = std::vector<std::shared_ptr<WsSession>>;
 
 public:
-    explicit WsSession(tbb::task_group& taskGroup);
+    explicit WsSession(tbb::task_arena& taskArena, tbb::task_group& taskGroup);
 
     virtual ~WsSession() noexcept
     {
@@ -180,7 +181,9 @@ public:
     };
 
 protected:
+    tbb::task_arena& m_taskArena;
     tbb::task_group& m_taskGroup;
+
     // flag for message that need to check respond packet like p2p message
     bool m_needCheckRspPacket = false;
     //
@@ -212,8 +215,6 @@ protected:
 
     // message factory
     std::shared_ptr<MessageFaceFactory> m_messageFactory;
-    // thread pool
-    // std::shared_ptr<bcos::ThreadPool> m_threadPool;
 
     // ioc
     std::shared_ptr<boost::asio::io_context> m_ioc;
@@ -231,9 +232,9 @@ public:
     virtual ~WsSessionFactory() = default;
 
 public:
-    virtual WsSession::Ptr createSession(tbb::task_group& taskGroup)
+    virtual WsSession::Ptr createSession(tbb::task_arena& taskArena, tbb::task_group& taskGroup)
     {
-        auto session = std::make_shared<WsSession>(taskGroup);
+        auto session = std::make_shared<WsSession>(taskArena, taskGroup);
         return session;
     }
 };
