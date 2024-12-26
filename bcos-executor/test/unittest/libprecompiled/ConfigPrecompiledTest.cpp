@@ -497,7 +497,7 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
     // balance_transfer
     {
         simpleSetFunc(number++, 111, std::string{ledger::SYSTEM_KEY_COMPATIBILITY_VERSION},
-            std::string("3.10.3"));
+            std::string("3.10.4"));
 
         simpleSetFunc(
             number++, 111, std::string{ledger::ENABLE_BALANCE_TRANSFER}, std::string("1"));

@@ -176,6 +176,12 @@ BOOST_AUTO_TEST_CASE(testSecp256k1SignAndVerify)
     auto encodedData = signatureData->encode();
     BOOST_CHECK_THROW(secp256k1Crypto->recover(hashData, ref(*encodedData)), InvalidSignature);
 
+    // check4: invalid sig: len is not equal to 65(r+s+v)
+    bytesConstRef invalidSigData = bytesConstRef(signData->data(), signData->size() - 1);
+    BOOST_CHECK_THROW(
+        secp256k1Verify(keyPair->publicKey(), hashData, invalidSigData), InvalidSignature);
+    BOOST_CHECK_THROW(
+        secp256k1Crypto->recoverAddress(*hashImpl, hashData, invalidSigData), InvalidSignature);
 
     // test signatureData encode and decode
     encodedData = signatureData->encode();
