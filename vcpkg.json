@@ -1,6 +1,6 @@
 {
   "name": "fiscobcos",
-  "version-string": "3.12.2",
+  "version-string": "3.12.3",
   "homepage": "https://github.com/FISCO-BCOS/FISCO-BCOS",
   "description": "FISCO BCOS",
   "dependencies": [
