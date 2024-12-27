@@ -24,6 +24,8 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/ThreadPool.h>
+#include <oneapi/tbb/task_arena.h>
+#include <oneapi/tbb/task_group.h>
 #include <boost/beast/websocket/rfc6455.hpp>
 #include <boost/beast/websocket/stream.hpp>
 #include <boost/core/ignore_unused.hpp>
@@ -41,14 +43,14 @@ using namespace bcos::boostssl;
 using namespace bcos::boostssl::ws;
 using namespace bcos::boostssl::http;
 
-WsSession::WsSession(tbb::task_group& taskGroup)
-  : m_taskGroup(taskGroup)
+WsSession::WsSession(tbb::task_arena& taskArena, tbb::task_group& taskGroup)
+  : m_taskArena(taskArena), m_taskGroup(taskGroup)
 {
     WEBSOCKET_SESSION(INFO) << LOG_KV("[NEWOBJ][WSSESSION]", this);
 
     m_buffer = std::make_shared<boost::beast::flat_buffer>();
-
 }
+
 void WsSession::drop(uint32_t _reason)
 {
     if (m_isDrop)
@@ -86,8 +88,10 @@ void WsSession::drop(uint32_t _reason)
             WEBSOCKET_SESSION(TRACE)
                 << LOG_DESC("the session has been disconnected") << LOG_KV("seq", cbEntry.first);
 
-            m_taskGroup.run([callback = std::move(callback), error]() {
-                callback->respCallBack(error, nullptr, nullptr);
+            m_taskArena.execute([&, callback = std::move(callback), error = std::move(error)]() mutable {
+                m_taskGroup.run([callback = std::move(callback), error = std::move(error)]() {
+                    callback->respCallBack(error, nullptr, nullptr);
+                });
             });
         }
     }
@@ -103,12 +107,14 @@ void WsSession::drop(uint32_t _reason)
         m_wsStreamDelegate->close();
     }
 
-    m_taskGroup.run([self]() {
-        auto session = self.lock();
-        if (session)
-        {
-            session->disconnectHandler()(nullptr, session);
-        }
+    m_taskArena.execute([&, self]() {
+        m_taskGroup.run([self]() {
+            auto session = self.lock();
+            if (session)
+            {
+                session->disconnectHandler()(nullptr, session);
+            }
+        });
     });
 }
 
@@ -177,7 +183,18 @@ void WsSession::onReadPacket()
         }
 
         m_buffer->consume(m_buffer->size());
-        onMessage(message);
+
+        auto self = weak_from_this();
+        m_taskArena.execute([&, self, message = std::move(message)]() mutable {
+            m_taskGroup.run([self, message = std::move(message)]() {
+                auto session = self.lock();
+                if (!session)
+                {
+                    return;
+                }
+                session->onMessage(message);
+            });
+        });
     }
     catch (std::exception const& e)
     {
@@ -189,28 +206,21 @@ void WsSession::onReadPacket()
 
 void WsSession::onMessage(bcos::boostssl::MessageFace::Ptr _message)
 {
-    // task enqueue
-    m_taskGroup.run([self = weak_from_this(), _message = std::move(_message)]() {
-        auto session = self.lock();
-        if (!session)
+    auto session = shared_from_this();
+    auto callback = getAndRemoveRespCallback(_message->seq(), _message);
+    if (callback)
+    {
+        if (callback->timer)
         {
-            return;
+            callback->timer->cancel();
         }
-        auto callback = session->getAndRemoveRespCallback(_message->seq(), _message);
-        if (callback)
-        {
-            if (callback->timer)
-            {
-                callback->timer->cancel();
-            }
 
-            callback->respCallBack(nullptr, _message, session);
-        }
-        else
-        {
-            session->recvMessageHandler()(_message, session);
-        }
-    });
+        callback->respCallBack(nullptr, _message, session);
+    }
+    else
+    {
+        recvMessageHandler()(_message, session);
+    }
 }
 
 void WsSession::asyncRead()
@@ -478,7 +488,10 @@ void WsSession::onRespTimeout(const boost::system::error_code& _error, const std
     WEBSOCKET_SESSION(WARNING) << LOG_BADGE("onRespTimeout") << LOG_KV("seq", _seq);
 
     auto error = BCOS_ERROR_PTR(WsError::TimeOut, "waiting for message response timed out");
-    m_taskGroup.run([callback = std::move(callback), error = std::move(error)]() {
-        callback->respCallBack(error, nullptr, nullptr);
+
+    m_taskArena.execute([&, callback = std::move(callback), error = std::move(error)]() mutable {
+        m_taskGroup.run([callback = std::move(callback), error = std::move(error)]() {
+            callback->respCallBack(error, nullptr, nullptr);
+        });
     });
 }

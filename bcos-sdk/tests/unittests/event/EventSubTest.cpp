@@ -24,6 +24,7 @@
 #include <bcos-cpp-sdk/event/EventSubResponse.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
+#include <oneapi/tbb/task_arena.h>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <chrono>
@@ -170,10 +171,11 @@ BOOST_AUTO_TEST_CASE(test_EventSub_unsubscribeEvent)
     }
 
     tbb::task_group taskGroup;
+    tbb::task_arena taskArena;
     {
         // task is running
         auto session = std::make_shared<bcos::cppsdk::test::WsSessionFake>(
-            taskGroup);
+            taskArena, taskGroup);
         task->setSession(session);
 
         std::string resp = "{}";
@@ -190,7 +192,7 @@ BOOST_AUTO_TEST_CASE(test_EventSub_unsubscribeEvent)
     {
         // task is running
         auto session = std::make_shared<bcos::cppsdk::test::WsSessionFake>(
-            taskGroup);
+            taskArena, taskGroup);
 
         task->setSession(session);
 
