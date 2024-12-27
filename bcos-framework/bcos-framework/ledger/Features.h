@@ -271,8 +271,8 @@ public:
 
     auto flags() const
     {
-        return RANGES::views::iota(0LU, m_flags.size()) |
-               RANGES::views::transform([this](size_t index) {
+        return ::ranges::views::iota(0LU, m_flags.size()) |
+               ::ranges::views::transform([this](size_t index) {
                    auto flag = magic_enum::enum_value<Flag>(index);
                    return std::make_tuple(flag, magic_enum::enum_name(flag), m_flags[index]);
                });
@@ -280,8 +280,8 @@ public:
 
     static auto featureKeys()
     {
-        return RANGES::views::iota(0LU, magic_enum::enum_count<Flag>()) |
-               RANGES::views::transform([](size_t index) {
+        return ::ranges::views::iota(0LU, magic_enum::enum_count<Flag>()) |
+               ::ranges::views::transform([](size_t index) {
                    auto flag = magic_enum::enum_value<Flag>(index);
                    return magic_enum::enum_name(flag);
                });
@@ -327,10 +327,10 @@ inline task::Task<void> readFromStorage(Features& features, auto&& storage, long
 {
     decltype(auto) keys = bcos::ledger::Features::featureKeys();
     auto entries = co_await storage2::readSome(std::forward<decltype(storage)>(storage),
-        keys | RANGES::views::transform([](std::string_view key) {
+        keys | ::ranges::views::transform([](std::string_view key) {
             return transaction_executor::StateKeyView(ledger::SYS_CONFIG, key);
         }));
-    for (auto&& [key, entry] : RANGES::views::zip(keys, entries))
+    for (auto&& [key, entry] : ::ranges::views::zip(keys, entries))
     {
         if (entry)
         {
@@ -346,7 +346,7 @@ inline task::Task<void> readFromStorage(Features& features, auto&& storage, long
 inline task::Task<void> writeToStorage(Features const& features, auto&& storage, long blockNumber)
 {
     decltype(auto) flags =
-        features.flags() | RANGES::views::filter([](auto&& tuple) { return std::get<2>(tuple); });
+        features.flags() | ::ranges::views::filter([](auto&& tuple) { return std::get<2>(tuple); });
     co_await storage2::writeSome(std::forward<decltype(storage)>(storage),
         ::ranges::views::transform(flags, [&](auto&& tuple) {
             storage::Entry entry;
