@@ -233,6 +233,7 @@ public:
                     Flag::bugfix_eoa_match_failed,
                 }},
             {protocol::BlockVersion::V3_12_0_VERSION, {Flag::bugfix_rpbft_vrf_blocknumber_input}},
+            {protocol::BlockVersion::V3_13_0_VERSION, {Flag::bugfix_delete_account_code}},
         });
         for (const auto& upgradeFeatures : upgradeRoadmap)
         {

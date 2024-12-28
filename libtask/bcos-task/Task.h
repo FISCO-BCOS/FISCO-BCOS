@@ -16,12 +16,14 @@
 
 #pragma once
 #include "bcos-concepts/Exception.h"
+#include "bcos-utilities/Overloaded.h"
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
 #include <coroutine>
 #include <exception>
 #include <memory>
 #include <type_traits>
+#include <utility>
 #include <variant>
 
 namespace bcos::task
@@ -123,19 +125,19 @@ struct Awaitable
     }
     TaskType::Value await_resume()
     {
-        if (std::holds_alternative<std::exception_ptr>(m_continuation.value))
+        if (auto* exception = std::get_if<std::exception_ptr>(std::addressof(m_continuation.value)))
         {
-            std::rethrow_exception(std::get<std::exception_ptr>(m_continuation.value));
+            std::rethrow_exception(*exception);
         }
 
         if constexpr (!std::is_void_v<typename TaskType::Value>)
         {
-            if (!std::holds_alternative<typename TaskType::Value>(m_continuation.value))
+            if (auto* value =
+                    std::get_if<typename TaskType::Value>(std::addressof(m_continuation.value)))
             {
-                BOOST_THROW_EXCEPTION(NoReturnValue{});
+                return std::move(*value);
             }
-
-            return std::move(std::get<typename TaskType::Value>(m_continuation.value));
+            BOOST_THROW_EXCEPTION(NoReturnValue{});
         }
     }
 

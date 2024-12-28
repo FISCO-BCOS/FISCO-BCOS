@@ -148,6 +148,7 @@ BOOST_AUTO_TEST_CASE(feature)
         "bugfix_support_transfer_receive_fallback",
         "bugfix_set_row_with_dirty_flag",
         "bugfix_rpbft_vrf_blocknumber_input",
+        "bugfix_delete_account_code",
         "feature_dmc2serial",
         "feature_sharding",
         "feature_rpbft",
