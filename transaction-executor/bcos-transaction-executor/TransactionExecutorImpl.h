@@ -7,7 +7,6 @@
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
-#include "bcos-protocol/TransactionStatus.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include "precompiled/PrecompiledManager.h"
