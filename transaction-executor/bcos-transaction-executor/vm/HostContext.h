@@ -38,6 +38,7 @@
 #include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/protocol/LogEntry.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
+#include "bcos-framework/storage/Entry.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-transaction-executor/EVMCResult.h"
@@ -600,6 +601,19 @@ private:
             createAuthTable(m_rollbackableStorage.get(), m_blockHeader, message(), m_origin,
                 co_await ledger::account::path(m_recipientAccount), buildLegacyExternalCaller(),
                 m_precompiledManager.get(), m_contextID, m_seq);
+
+            // TODO: 兼容历史问题逻辑
+            if (m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_balance) &&
+                !m_ledgerConfig.get().features().get(
+                    ledger::Features::Flag::bugfix_delete_account_code))
+            {
+                storage::Entry deleteEntry;
+                deleteEntry.setStatus(storage::Entry::DELETED);
+                co_await storage2::writeOne(m_rollbackableStorage.get(),
+                    transaction_executor::StateKey(
+                        m_recipientAccount.address(), executor::ACCOUNT_CODE),
+                    deleteEntry);
+            }
         }
 
         auto& ref = message();

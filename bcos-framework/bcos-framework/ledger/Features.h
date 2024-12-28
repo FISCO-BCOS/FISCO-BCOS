@@ -11,14 +11,11 @@
 #include <array>
 #include <bitset>
 #include <magic_enum.hpp>
-
 namespace bcos::ledger
 {
-
 struct NoSuchFeatureError : public bcos::error::Exception
 {
 };
-
 class Features
 {
 public:
@@ -47,6 +44,7 @@ public:
         bugfix_support_transfer_receive_fallback,
         bugfix_set_row_with_dirty_flag,
         bugfix_rpbft_vrf_blocknumber_input,
+        bugfix_delete_account_code,
         feature_dmc2serial,
         feature_sharding,
         feature_rpbft,
