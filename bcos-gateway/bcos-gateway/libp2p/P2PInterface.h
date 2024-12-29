@@ -46,7 +46,7 @@ public:
     virtual void asyncSendMessageByNodeID(P2pID nodeID, std::shared_ptr<P2PMessage> message,
         CallbackFuncWithSession callback, Options options = Options()) = 0;
 
-    virtual task::Task<Message::Ptr> sendMessageByNodeID(P2pID nodeID, P2PMessage& header,
+    virtual task::Task<Message::Ptr> sendMessageByNodeID(const P2pID& nodeID, P2PMessage& header,
         ::ranges::any_view<bytesConstRef> payloads, Options options = Options()) = 0;
 
     virtual void asyncBroadcastMessage(std::shared_ptr<P2PMessage> message, Options options) = 0;

@@ -63,7 +63,7 @@ public:
     void asyncSendMessageByNodeID(P2pID nodeID, std::shared_ptr<P2PMessage> message,
         CallbackFuncWithSession callback, Options options = Options()) override;
 
-    task::Task<Message::Ptr> sendMessageByNodeID(P2pID nodeID, P2PMessage& header,
+    task::Task<Message::Ptr> sendMessageByNodeID(const P2pID& nodeID, P2PMessage& header,
         ::ranges::any_view<bytesConstRef> payloads, Options options = Options()) override;
 
     void asyncBroadcastMessage(std::shared_ptr<P2PMessage> message, Options options) override;

@@ -790,8 +790,8 @@ void Service::updatePeerWhitelist(const std::set<std::string>& _strList, const b
     }
 }
 
-bcos::task::Task<Message::Ptr> bcos::gateway::Service::sendMessageByNodeID(
-    P2pID nodeID, P2PMessage& header, ::ranges::any_view<bytesConstRef> payloads, Options options)
+bcos::task::Task<Message::Ptr> bcos::gateway::Service::sendMessageByNodeID(const P2pID& nodeID,
+    P2PMessage& header, ::ranges::any_view<bytesConstRef> payloads, Options options)
 {
     if (nodeID == id())
     {
@@ -804,8 +804,7 @@ bcos::task::Task<Message::Ptr> bcos::gateway::Service::sendMessageByNodeID(
     {
         session = accessor->second;
     }
-
-    if (!session)
+    else
     {
         BOOST_THROW_EXCEPTION(
             NetworkException(-1, "send message failed for no network established"));

@@ -302,9 +302,6 @@ public:
 
     tbb::concurrent_queue<Payload> m_writeQueue;
     std::atomic_bool m_writing = false;
-
-    mutable bcos::Mutex x_info;
-
     bool m_active = false;
 
     SessionCallbackManagerInterface::Ptr m_sessionCallbackManager;
@@ -322,6 +319,7 @@ public:
     std::string m_hostNodeID;
 
     std::vector<Payload> m_writingPayloads;
+    std::vector<boost::asio::const_buffer> m_writingBuffers;
 };
 
 class SessionFactory

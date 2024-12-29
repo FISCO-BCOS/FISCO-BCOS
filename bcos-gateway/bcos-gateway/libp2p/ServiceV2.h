@@ -55,7 +55,7 @@ public:
         m_unreachableHandlers.emplace_back(_handler);
     }
 
-    task::Task<Message::Ptr> sendMessageByNodeID(P2pID nodeID, P2PMessage& message,
+    task::Task<Message::Ptr> sendMessageByNodeID(const P2pID& nodeID, P2PMessage& message,
         ::ranges::any_view<bytesConstRef> payloads, Options options = Options()) override;
 
 protected:

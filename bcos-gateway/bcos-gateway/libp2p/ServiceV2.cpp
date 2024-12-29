@@ -408,8 +408,8 @@ void ServiceV2::sendRespMessageBySession(
     }
 }
 
-bcos::task::Task<Message::Ptr> bcos::gateway::ServiceV2::sendMessageByNodeID(
-    P2pID nodeID, P2PMessage& message, ::ranges::any_view<bytesConstRef> payloads, Options options)
+bcos::task::Task<Message::Ptr> bcos::gateway::ServiceV2::sendMessageByNodeID(const P2pID& nodeID,
+    P2PMessage& message, ::ranges::any_view<bytesConstRef> payloads, Options options)
 {
     message.setSrcP2PNodeID(m_nodeID);
     message.setDstP2PNodeID(nodeID);
@@ -430,7 +430,7 @@ bcos::task::Task<Message::Ptr> bcos::gateway::ServiceV2::sendMessageByNodeID(
                                 << LOG_KV("rsp", message.isRespPacket());
         }
         co_return co_await Service::sendMessageByNodeID(
-            std::move(dstNodeID), message, std::move(payloads), options);
+            dstNodeID, message, std::move(payloads), options);
     }
     // with nextHop, send the message to nextHop
     if (c_fileLogLevel == TRACE) [[unlikely]]
@@ -443,6 +443,5 @@ bcos::task::Task<Message::Ptr> bcos::gateway::ServiceV2::sendMessageByNodeID(
                             << LOG_KV("seq", message.seq())
                             << LOG_KV("rsp", message.isRespPacket());
     }
-    co_return co_await Service::sendMessageByNodeID(
-        std::move(nextHop), message, std::move(payloads), options);
+    co_return co_await Service::sendMessageByNodeID(nextHop, message, std::move(payloads), options);
 }

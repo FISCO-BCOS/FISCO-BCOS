@@ -197,7 +197,7 @@ void send(Session& session, ::ranges::input_range auto&& payloads,
     std::function<void(boost::system::error_code)> callback)
 {
     Payload payload{.m_data{Payload::MessageList{}}, .m_callback = std::move(callback)};
-    auto& vec = std::get<1>(payload.m_data);
+    auto& vec = std::get<Payload::MessageList>(payload.m_data);
     if constexpr (::ranges::sized_range<decltype(payloads)>)
     {
         vec.reserve(::ranges::size(payloads));
@@ -246,12 +246,10 @@ bool Session::tryPopSomeEncodedMsgs(
     // Desc: Try to send multi packets one time to improve the efficiency of sending
     // data
     size_t totalDataSize = 0;
-    Payload payload;
-    // while (totalDataSize < _maxSendDataSize && m_writeQueue.try_pop(payload))
-    while (m_writeQueue.try_pop(payload))
+    while (totalDataSize < _maxSendDataSize && encodedMsgs.size() < _maxSendMsgCount &&
+           m_writeQueue.try_pop(encodedMsgs.emplace_back()))
     {
-        totalDataSize += payload.size();
-        encodedMsgs.emplace_back(std::move(payload));
+        totalDataSize += encodedMsgs.back().size();
     }
 
     return totalDataSize > 0;
@@ -288,20 +286,21 @@ void Session::write()
             return;
         }
 
-        boost::container::small_vector<boost::asio::const_buffer, 16> buffers;
-        auto outputIt = std::back_inserter(buffers);
+        auto outputIt = std::back_inserter(m_writingBuffers);
         for (auto& payload : m_writingPayloads)
         {
             payload.toConstBuffer(outputIt);
         }
         defer.release();  // NOLINT
-        m_server.get().asioInterface()->asyncWrite(m_socket, buffers,
+        m_server.get().asioInterface()->asyncWrite(m_socket, m_writingBuffers,
             [self = std::weak_ptr<Session>(shared_from_this())](
                 const boost::system::error_code _error, std::size_t _size) mutable {
                 if (auto session = self.lock())
                 {
                     std::vector<Payload> payloads;
                     payloads.swap(session->m_writingPayloads);
+                    session->m_writingBuffers.clear();
+
                     session->m_writing = false;
                     session->onWrite(_error, _size);
 
@@ -449,8 +448,7 @@ void Session::start()
 
     auto self = weak_from_this();
     m_idleCheckTimer->registerTimeoutHandler([self]() {
-        auto session = self.lock();
-        if (session)
+        if (auto session = self.lock())
         {
             session->checkNetworkStatus();
         }
@@ -849,7 +847,7 @@ bcos::task::Task<Message::Ptr> bcos::gateway::Session::sendMessage(
                     handle.resume();
                 });
             }
-            void await_resume()
+            void await_resume() const
             {
                 if (m_exception.errorCode() != 0)
                 {
