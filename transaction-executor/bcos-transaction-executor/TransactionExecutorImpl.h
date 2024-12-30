@@ -7,7 +7,6 @@
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
-#include "bcos-protocol/TransactionStatus.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include "precompiled/PrecompiledManager.h"
@@ -145,7 +144,7 @@ public:
             auto senderAccount = getAccount(executeContext.m_hostContext, evmcMessage.sender);
             auto senderBalance = co_await ledger::account::balance(senderAccount);
 
-            if (senderBalance < balanceUsed)
+            if (senderBalance < balanceUsed || senderBalance == 0)
             {
                 TRANSACTION_EXECUTOR_LOG(ERROR) << "Insufficient balance: " << senderBalance
                                                 << ", balanceUsed: " << balanceUsed;
@@ -159,10 +158,8 @@ public:
             }
         }
 
-        int32_t receiptStatus =
-            evmcResult.status_code == EVMC_REVERT ?
-                static_cast<int32_t>(protocol::TransactionStatus::RevertInstruction) :
-                evmcResult.status_code;
+        auto receiptStatus =
+            static_cast<int32_t>(evmcStatusToTransactionStatus(evmcResult.status_code));
         auto const& logEntries = executeContext.m_hostContext.logs();
         auto transactionVersion = static_cast<bcos::protocol::TransactionVersion>(
             executeContext.m_transaction.get().version());

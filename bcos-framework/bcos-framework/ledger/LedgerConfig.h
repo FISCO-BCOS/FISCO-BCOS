@@ -22,6 +22,7 @@
 #include "../consensus/ConsensusNode.h"
 #include "../protocol/ProtocolTypeDef.h"
 #include "Features.h"
+#include "SystemConfigs.h"
 #include <evmc/evmc.hpp>
 #include <utility>
 

@@ -174,7 +174,8 @@ BOOST_AUTO_TEST_CASE(costBalance)
             0, "", helloworldBytecodeBinary, {}, 0, "", "", 0, std::string{}, {}, {}, 1000);
         auto receipt = co_await bcos::transaction_executor::executeTransaction(
             executor, storage, blockHeader, *transaction, 0, ledgerConfig, task::syncWait);
-        BOOST_CHECK_EQUAL(receipt->status(), EVMC_INSUFFICIENT_BALANCE);
+        BOOST_CHECK_EQUAL(
+            receipt->status(), static_cast<int32_t>(protocol::TransactionStatus::NotEnoughCash));
 
         using namespace std::string_view_literals;
         auto sender = "e0e794ca86d198042b64285c5ce667aee747509b"sv;

@@ -24,6 +24,7 @@ bcos::task::Task<void> bcos::transaction_scheduler::BaselineSchedulerInitializer
                        }) |
                        RANGES::to<std::vector>();
 
+#if 0
     if (!missingKeys.empty())
     {
         std::string message("All bugfix must be enabled to activate baseline scheduler, missing: ");
@@ -36,6 +37,7 @@ bcos::task::Task<void> bcos::transaction_scheduler::BaselineSchedulerInitializer
         INITIALIZER_LOG(ERROR) << message;
         BOOST_THROW_EXCEPTION(std::runtime_error(message));
     }
+#endif
 
     // baseline不支持dmc模式或wasm模式
     // Baseline does not support DMC mode or WASM mode

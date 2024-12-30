@@ -11,6 +11,7 @@
 #include "bcos-executor/src/precompiled/extension/AccountManagerPrecompiled.h"
 #include "bcos-executor/src/precompiled/extension/AccountPrecompiled.h"
 #include "bcos-executor/src/precompiled/extension/AuthManagerPrecompiled.h"
+#include "bcos-executor/src/precompiled/extension/BalancePrecompiled.h"
 #include "bcos-executor/src/precompiled/extension/ContractAuthMgrPrecompiled.h"
 #include "bcos-executor/src/precompiled/extension/DagTransferPrecompiled.h"
 #include "bcos-executor/src/precompiled/extension/GroupSigPrecompiled.h"
@@ -100,6 +101,9 @@ bcos::transaction_executor::PrecompiledManager::PrecompiledManager(crypto::Hash:
         0x10003, std::make_shared<precompiled::AccountManagerPrecompiled>(m_hashImpl));
     m_address2Precompiled.emplace_back(
         0x10004, std::make_shared<precompiled::AccountPrecompiled>(m_hashImpl));
+    m_address2Precompiled.emplace_back(
+        0x1011, Precompiled{std::make_shared<precompiled::BalancePrecompiled>(m_hashImpl),
+                    ledger::Features::Flag::feature_balance_precompiled});
 
     std::sort(m_address2Precompiled.begin(), m_address2Precompiled.end(),
         [](const auto& lhs, const auto& rhs) { return std::get<0>(lhs) < std::get<0>(rhs); });

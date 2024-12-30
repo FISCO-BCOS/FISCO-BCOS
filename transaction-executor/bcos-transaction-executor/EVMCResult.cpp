@@ -2,6 +2,7 @@
 
 #include "EVMCResult.h"
 #include "bcos-codec/abi/ContractABICodec.h"
+#include <evmc/evmc.h>
 
 static void cleanEVMCResult(evmc_result& from)
 {
@@ -44,4 +45,26 @@ bcos::bytes bcos::transaction_executor::writeErrInfoToOutput(
 {
     bcos::codec::abi::ContractABICodec abi(hashImpl);
     return abi.abiIn("Error(string)", errInfo);
+}
+
+bcos::protocol::TransactionStatus bcos::transaction_executor::evmcStatusToTransactionStatus(
+    evmc_status_code status)
+{
+    switch (status)
+    {
+    case EVMC_SUCCESS:
+        return protocol::TransactionStatus::None;
+    case EVMC_REVERT:
+        return protocol::TransactionStatus::RevertInstruction;
+    case EVMC_OUT_OF_GAS:
+        return protocol::TransactionStatus::OutOfGas;
+    case EVMC_INSUFFICIENT_BALANCE:
+        return protocol::TransactionStatus::NotEnoughCash;
+    case EVMC_STACK_OVERFLOW:
+        return protocol::TransactionStatus::OutOfStack;
+    case EVMC_STACK_UNDERFLOW:
+        return protocol::TransactionStatus::StackUnderflow;
+    default:
+        return protocol::TransactionStatus::RevertInstruction;
+    }
 }

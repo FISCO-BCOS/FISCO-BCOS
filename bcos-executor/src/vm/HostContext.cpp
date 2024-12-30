@@ -408,7 +408,8 @@ bool HostContext::setCode(bytes code)
         if (contractTable)
         {
             m_executive->setCode(m_tableName, std::move(code));
-            if (features().get(ledger::Features::Flag::feature_balance))
+            if (features().get(ledger::Features::Flag::feature_balance) &&
+                !features().get(ledger::Features::Flag::bugfix_delete_account_code))
             {
                 // update account's special code
                 Entry entryToDelete;
