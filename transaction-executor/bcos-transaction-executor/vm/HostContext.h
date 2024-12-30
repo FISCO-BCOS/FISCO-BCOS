@@ -33,10 +33,12 @@
 #include "bcos-framework/ledger/Account.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
+#include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/protocol/LogEntry.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
+#include "bcos-framework/storage/Entry.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-transaction-executor/EVMCResult.h"
@@ -54,6 +56,7 @@
 #include <functional>
 #include <intx/intx.hpp>
 #include <iterator>
+#include <magic_enum.hpp>
 #include <memory>
 #include <stdexcept>
 #include <string_view>
@@ -76,15 +79,8 @@ std::variant<const evmc_message*, evmc_message> getMessage(const evmc_message& i
 
 struct Executable
 {
-    Executable(storage::Entry code, evmc_revision revision)
-      : m_code(std::make_optional(std::move(code))),
-        m_vmInstance(VMFactory::create(VMKind::evmone,
-            bytesConstRef(reinterpret_cast<const uint8_t*>(m_code->data()), m_code->size()),
-            revision))
-    {}
-    explicit Executable(bytesConstRef code, evmc_revision revision)
-      : m_vmInstance(VMFactory::create(VMKind::evmone, code, revision))
-    {}
+    Executable(storage::Entry code, evmc_revision revision);
+    explicit Executable(bytesConstRef code, evmc_revision revision);
 
     std::optional<storage::Entry> m_code;
     VMInstance m_vmInstance;
@@ -116,6 +112,26 @@ inline task::Task<std::shared_ptr<Executable>> getExecutable(
         co_return executable;
     }
     co_return {};
+}
+
+inline task::Task<bool> enableTransfer(const ledger::LedgerConfig& ledgerConfig, auto& storage,
+    const protocol::BlockHeader& blockHeader)
+{
+    auto featureBalance = ledgerConfig.features().get(ledger::Features::Flag::feature_balance);
+    auto policy1 = ledgerConfig.features().get(ledger::Features::Flag::feature_balance_policy1);
+
+    if (featureBalance && !policy1)
+    {
+        co_return true;
+    }
+    if (auto balanceTransfer = co_await ledger::getSystemConfig(storage,
+            magic_enum::enum_name(ledger::SystemConfig::balance_transfer), ledger::fromStorage);
+        balanceTransfer && std::get<0>(*balanceTransfer) != "0" &&
+        std::get<1>(*balanceTransfer) <= blockHeader.number())
+    {
+        co_return true;
+    }
+    co_return false;
 }
 
 template <class Storage, class TransientStorage>
@@ -154,6 +170,14 @@ private:
                 [](const evmc_message* message) -> evmc_message const& { return *message; },
                 [](const evmc_message& message) -> evmc_message const& { return message; }},
             m_message);
+    }
+    evmc_message& mutableMessage()
+    {
+        if (auto* evmcMessage = std::get_if<const evmc_message*>(std::addressof(m_message)))
+        {
+            m_message.emplace<evmc_message>(**evmcMessage);
+        }
+        return std::get<evmc_message>(m_message);
     }
 
     task::Task<void> transferBalance(const evmc_message& message)
@@ -352,7 +376,7 @@ public:
     /// Revert any changes made (by any of the other calls).
     void log(const evmc_address& address, h256s topics, bytesConstRef data)
     {
-        std::span<const uint8_t> view(address.bytes);
+        std::span view(address.bytes);
         m_logs.emplace_back(
             toHex<decltype(view), bcos::bytes>(view), std::move(topics), data.toBytes());
     }
@@ -379,7 +403,7 @@ public:
 
     friend task::Task<EVMCResult> execute(HostContext& hostContext)
     {
-        auto const& ref = hostContext.message();
+        auto& ref = hostContext.message();
         if (c_fileLogLevel <= LogLevel::TRACE)
         {
             HOST_CONTEXT_LOG(TRACE)
@@ -411,10 +435,17 @@ public:
         {
             // 先转账，再执行
             // Transfer first, then proceed execute
-            if (hostContext.m_ledgerConfig.get().features().get(
-                    ledger::Features::Flag::feature_balance))
+            if (co_await enableTransfer(hostContext.m_ledgerConfig,
+                    hostContext.m_rollbackableStorage.get(), hostContext.m_blockHeader))
             {
                 co_await hostContext.transferBalance(ref);
+            }
+            else if (hostContext.m_ledgerConfig.get().features().get(
+                         ledger::Features::Flag::feature_balance_policy1))
+            {
+                auto& mutableRef = hostContext.mutableMessage();
+                std::fill(mutableRef.value.bytes,
+                    mutableRef.value.bytes + sizeof(mutableRef.value.bytes), 0);
             }
 
             if (!evmResult)
@@ -490,7 +521,7 @@ public:
                 precompiled::contains(bcos::precompiled::c_systemTxsAddress,
                     concepts::bytebuffer::toView(hexAddress)))
             {
-                evmResult->gas_left = hostContext.message().gas;
+                evmResult->gas_left = ref.gas;
                 HOST_CONTEXT_LOG(TRACE) << "System contract call failed, clear gasUsed, gas_left: "
                                         << evmResult->gas_left;
             }
@@ -551,23 +582,37 @@ public:
 private:
     void prepareCreate()
     {
-        bytesConstRef createCode(message().input_data, message().input_size);
+        auto& ref = message();
+        bytesConstRef createCode(ref.input_data, ref.input_size);
         m_executable = std::make_shared<Executable>(createCode, m_revision);
     }
 
     task::Task<EVMCResult> executeCreate()
     {
+        auto& ref = message();
         if (m_blockHeader.get().number() != 0)
         {
-            createAuthTable(m_rollbackableStorage.get(), m_blockHeader, message(), m_origin,
+            createAuthTable(m_rollbackableStorage.get(), m_blockHeader, ref, m_origin,
                 co_await ledger::account::path(m_recipientAccount), buildLegacyExternalCaller(),
                 m_precompiledManager.get(), m_contextID, m_seq);
+
+            // TODO: 兼容历史问题逻辑
+            if (m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_balance) &&
+                !m_ledgerConfig.get().features().get(
+                    ledger::Features::Flag::bugfix_delete_account_code))
+            {
+                storage::Entry deleteEntry;
+                deleteEntry.setStatus(storage::Entry::DELETED);
+                co_await storage2::writeOne(m_rollbackableStorage.get(),
+                    transaction_executor::StateKey(
+                        m_recipientAccount.address(), executor::ACCOUNT_CODE),
+                    deleteEntry);
+            }
         }
 
-        auto& ref = message();
         co_await ledger::account::create(m_recipientAccount);
-        auto result = m_executable->m_vmInstance.execute(interface, this, m_revision,
-            std::addressof(ref), message().input_data, message().input_size);
+        auto result = m_executable->m_vmInstance.execute(
+            interface, this, m_revision, std::addressof(ref), ref.input_data, ref.input_size);
         if (result.status_code == 0)
         {
             auto code = bytesConstRef(result.output_data, result.output_size);
@@ -575,7 +620,7 @@ private:
             co_await ledger::account::setCode(
                 m_recipientAccount, code.toBytes(), std::string(m_abi), codeHash);
             result.gas_left -= result.output_size * bcos::executor::VMSchedule().createDataGas;
-            result.create_address = message().code_address;
+            result.create_address = ref.code_address;
 
             // Clear the output
             if (result.release)
@@ -592,12 +637,13 @@ private:
 
     task::Task<void> prepareCall()
     {
+        auto& ref = message();
         // 不允许delegatecall static precompiled
         // delegatecall static precompiled is not allowed
-        if (message().kind != EVMC_DELEGATECALL)
+        if (ref.kind != EVMC_DELEGATECALL)
         {
             if (auto const* precompiled =
-                    m_precompiledManager.get().getPrecompiled(message().code_address))
+                    m_precompiledManager.get().getPrecompiled(ref.code_address))
             {
                 if (auto flag = transaction_executor::featureFlag(*precompiled);
                     !flag || m_ledgerConfig.get().features().get(*flag))
@@ -609,16 +655,11 @@ private:
         }
 
         m_executable =
-            co_await getExecutable(m_rollbackableStorage.get(), message().code_address, m_revision,
+            co_await getExecutable(m_rollbackableStorage.get(), ref.code_address, m_revision,
                 m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
         if (m_executable && hasPrecompiledPrefix(m_executable->m_code->data()))
         {
-            if (std::holds_alternative<const evmc_message*>(m_message))
-            {
-                m_message.emplace<evmc_message>(*std::get<const evmc_message*>(m_message));
-            }
-
-            auto& message = std::get<evmc_message>(m_message);
+            auto& message = mutableMessage();
             const auto* code = m_executable->m_code->data();
 
             std::vector<std::string> codeParameters{};

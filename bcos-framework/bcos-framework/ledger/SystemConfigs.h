@@ -81,7 +81,7 @@ public:
 
     void set(SystemConfig config, std::string value, protocol::BlockNumber number)
     {
-        m_sysConfigs[static_cast<int>(config)] = {std::move(value), number};
+        m_sysConfigs.at(static_cast<int>(config)) = {std::move(value), number};
     }
     void set(std::string_view config, std::string value, protocol::BlockNumber number)
     {

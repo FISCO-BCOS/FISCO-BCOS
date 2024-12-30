@@ -247,4 +247,15 @@ task::Task<void> tag_invoke(ledger::tag_t<setNodeList> /*unused*/, auto& storage
     LEDGER_LOG(DEBUG) << "SetNodeList success" << LOG_KV("nodeList size", nodeList.size());
 }
 
+task::Task<std::optional<SystemConfigEntry>> tag_invoke(
+    ledger::tag_t<getSystemConfig> /*unused*/, auto& storage, std::string_view key)
+{
+    if (auto entry = co_await storage2::readOne(
+            storage, transaction_executor::StateKeyView(SYS_CONFIG, key)))
+    {
+        co_return entry->template getObject<SystemConfigEntry>();
+    }
+    co_return {};
+}
+
 }  // namespace bcos::ledger

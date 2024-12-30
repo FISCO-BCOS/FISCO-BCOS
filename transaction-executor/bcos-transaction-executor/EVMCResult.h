@@ -20,12 +20,13 @@
 
 #pragma once
 #include "bcos-crypto/interfaces/crypto/Hash.h"
+#include "bcos-protocol/TransactionStatus.h"
 #include <evmc/instructions.h>
 
 namespace bcos::transaction_executor
 {
 bytes writeErrInfoToOutput(const crypto::Hash& hashImpl, std::string const& errInfo);
-
+protocol::TransactionStatus evmcStatusToTransactionStatus(evmc_status_code status);
 class EVMCResult : public evmc_result
 {
 public:

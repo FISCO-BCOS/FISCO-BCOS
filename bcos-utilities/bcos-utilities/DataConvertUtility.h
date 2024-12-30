@@ -324,9 +324,12 @@ inline std::vector<T>& operator+=(
     std::vector<typename std::enable_if<std::is_trivial<T>::value, T>::type>& _a,
     std::vector<T> const& _b)
 {
-    auto s = _a.size();
-    _a.resize(_a.size() + _b.size());
-    memcpy(_a.data() + s, _b.data(), _b.size() * sizeof(T));
+    if (!_b.empty())
+    {
+        auto s = _a.size();
+        _a.resize(_a.size() + _b.size());
+        memcpy(_a.data() + s, _b.data(), _b.size() * sizeof(T));
+    }
     return _a;
 }
 
