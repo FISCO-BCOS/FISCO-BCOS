@@ -2,7 +2,13 @@
 
 #include "EVMCResult.h"
 #include "bcos-codec/abi/ContractABICodec.h"
+#include "bcos-utilities/Exceptions.h"
 #include <evmc/evmc.h>
+#include <boost/throw_exception.hpp>
+
+struct UnknownEVMCStatus : public bcos::Exception
+{
+};
 
 static void cleanEVMCResult(evmc_result& from)
 {
@@ -11,12 +17,21 @@ static void cleanEVMCResult(evmc_result& from)
     from.output_size = 0;
 }
 
-bcos::transaction_executor::EVMCResult::EVMCResult(evmc_result&& from) : evmc_result(from)
+bcos::transaction_executor::EVMCResult::EVMCResult(evmc_result&& from)
+  : evmc_result(from), status{evmcStatusToTransactionStatus(from.status_code)}
 {
     cleanEVMCResult(from);
 }
 
-bcos::transaction_executor::EVMCResult::EVMCResult(EVMCResult&& from) noexcept : evmc_result(from)
+bcos::transaction_executor::EVMCResult::EVMCResult(
+    evmc_result&& from, protocol::TransactionStatus _status)
+  : evmc_result(from), status(_status)
+{
+    cleanEVMCResult(from);
+}
+
+bcos::transaction_executor::EVMCResult::EVMCResult(EVMCResult&& from) noexcept
+  : evmc_result(from), status{from.status}
 {
     cleanEVMCResult(from);
 }
@@ -65,6 +80,6 @@ bcos::protocol::TransactionStatus bcos::transaction_executor::evmcStatusToTransa
     case EVMC_STACK_UNDERFLOW:
         return protocol::TransactionStatus::StackUnderflow;
     default:
-        return protocol::TransactionStatus::RevertInstruction;
+        BOOST_THROW_EXCEPTION(UnknownEVMCStatus{});
     }
 }

@@ -485,10 +485,10 @@ public:
             // Static call或delegate call时，合约不存在要返回EVMC_SUCCESS
             // STATIC_CALL or DELEGATE_CALL, the EVMC_SUCCESS is returned when the contract does not
             // exist
-            co_return EVMCResult{evmc_result{
-                .status_code = (ref.flags == EVMC_STATIC || ref.kind == EVMC_DELEGATECALL) ?
-                                   EVMC_SUCCESS :
-                                   (evmc_status_code)protocol::TransactionStatus::CallAddressError,
+            auto status = (ref.flags == EVMC_STATIC || ref.kind == EVMC_DELEGATECALL) ?
+                              EVMC_SUCCESS :
+                              (evmc_status_code)protocol::TransactionStatus::CallAddressError;
+            co_return EVMCResult{evmc_result{.status_code = status,
                 .gas_left = ref.gas,
                 .gas_refund = 0,
                 .output_data = errorBuffer.release(),
@@ -501,13 +501,14 @@ public:
         {
             HOST_CONTEXT_LOG(DEBUG) << "Execute exception: " << boost::diagnostic_information(e);
             co_return EVMCResult{evmc_result{.status_code = EVMC_INTERNAL_ERROR,
-                .gas_left = ref.gas,
-                .gas_refund = 0,
-                .output_data = nullptr,
-                .output_size = 0,
-                .release = nullptr,
-                .create_address = {},
-                .padding = {}}};
+                                     .gas_left = ref.gas,
+                                     .gas_refund = 0,
+                                     .output_data = nullptr,
+                                     .output_size = 0,
+                                     .release = nullptr,
+                                     .create_address = {},
+                                     .padding = {}},
+                protocol::TransactionStatus::OutOfGas};
         }
 
         // 如果本次调用系统合约失败，不消耗gas

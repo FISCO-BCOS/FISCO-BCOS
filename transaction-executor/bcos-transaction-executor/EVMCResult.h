@@ -31,10 +31,13 @@ class EVMCResult : public evmc_result
 {
 public:
     explicit EVMCResult(evmc_result&& from);
+    EVMCResult(evmc_result&& from, protocol::TransactionStatus _status);
     EVMCResult(const EVMCResult&) = delete;
     EVMCResult(EVMCResult&& from) noexcept;
     EVMCResult& operator=(const EVMCResult&) = delete;
     EVMCResult& operator=(EVMCResult&& from) noexcept;
     ~EVMCResult() noexcept;
+
+    protocol::TransactionStatus status;
 };
 }  // namespace bcos::transaction_executor
