@@ -25,7 +25,6 @@
 #include "../precompiled/PrecompiledImpl.h"
 #include "../precompiled/PrecompiledManager.h"
 #include "EVMHostInterface.h"
-#include "VMFactory.h"
 #include "VMInstance.h"
 #include "bcos-codec/abi/ContractABICodec.h"
 #include "bcos-executor/src/Common.h"
@@ -114,7 +113,7 @@ inline task::Task<std::shared_ptr<Executable>> getExecutable(
     co_return {};
 }
 
-inline task::Task<bool> enableTransfer(const ledger::LedgerConfig& ledgerConfig, auto& storage,
+inline task::Task<bool> checkEnableTransfer(const ledger::LedgerConfig& ledgerConfig, auto& storage,
     const protocol::BlockHeader& blockHeader)
 {
     auto featureBalance = ledgerConfig.features().get(ledger::Features::Flag::feature_balance);
@@ -435,7 +434,7 @@ public:
         {
             // 先转账，再执行
             // Transfer first, then proceed execute
-            if (co_await enableTransfer(hostContext.m_ledgerConfig,
+            if (co_await checkEnableTransfer(hostContext.m_ledgerConfig,
                     hostContext.m_rollbackableStorage.get(), hostContext.m_blockHeader))
             {
                 co_await hostContext.transferBalance(ref);
@@ -443,6 +442,22 @@ public:
             else if (hostContext.m_ledgerConfig.get().features().get(
                          ledger::Features::Flag::feature_balance_policy1))
             {
+                // 兼容历史问题逻辑
+                if (!hostContext.m_ledgerConfig.get().features().get(
+                        ledger::Features::Flag::bugfix_policy1_emptyto) &&
+                    (!(co_await ledger::account::code(hostContext.m_recipientAccount))))
+                {
+                    co_return EVMCResult{evmc_result{.status_code = EVMC_REVERT,
+                                             .gas_left = ref.gas,
+                                             .gas_refund = 0,
+                                             .output_data = nullptr,
+                                             .output_size = 0,
+                                             .release = nullptr,
+                                             .create_address = {},
+                                             .padding = {}},
+                        protocol::TransactionStatus::CallAddressError};
+                }
+
                 auto& mutableRef = hostContext.mutableMessage();
                 std::fill(mutableRef.value.bytes,
                     mutableRef.value.bytes + sizeof(mutableRef.value.bytes), 0);
