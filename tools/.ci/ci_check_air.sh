@@ -248,6 +248,13 @@ if [[ ${?} == "0" ]]; then
         echo "java_sdk_integrationTest error"
         exit 1
 fi
+bash ${current_path}/.ci/java_sdk_demo_ci_test.sh ${console_branch} "true" "${current_path}/nodes/127.0.0.1"
+if [[ ${?} == "0" ]]; then
+       LOG_INFO "java_sdk_demo_ci_test success"
+   else
+       echo "java_sdk_demo_ci_test error"
+       exit 1
+fi
 stop_node
 LOG_INFO "======== check baseline cases success ========"
 clear_node
