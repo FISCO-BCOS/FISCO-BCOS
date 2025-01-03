@@ -6,6 +6,7 @@
 #include "bcos-executor/src/executive/TransactionExecutive.h"
 #include "bcos-executor/src/vm/Precompiled.h"
 #include "bcos-framework/ledger/Features.h"
+#include "bcos-protocol/TransactionStatus.h"
 #include "bcos-table/src/LegacyStorageWrapper.h"
 #include "bcos-utilities/Overloaded.h"
 #include <evmc/evmc.h>
@@ -44,9 +45,6 @@ inline auto buildLegacyExecutive(auto& storage, protocol::BlockHeader const& blo
         std::move(blockContext), std::move(contractAddress), contextID, seq, wasm::GasInjector{},
         std::move(externalCaller), precompiledManager);
 }
-
-ErrorMessage buildEncodeErrorMessage(std::string_view message, crypto::Hash const& hashImpl);
-ErrorMessage buildErrorMessage(std::string_view message);
 
 struct Precompiled
 {
@@ -92,21 +90,22 @@ inline constexpr struct
 
                     auto buffer = std::unique_ptr<uint8_t>(new uint8_t[output.size()]);
                     std::copy(output.begin(), output.end(), buffer.get());
-                    EVMCResult result{evmc_result{
-                        .status_code =
-                            (evmc_status_code)(int32_t)(success ?
-                                                            protocol::TransactionStatus::None :
-                                                            protocol::TransactionStatus::
-                                                                RevertInstruction),
-                        .gas_left = message.gas - gas.template convert_to<int64_t>(),
-                        .gas_refund = 0,
-                        .output_data = buffer.release(),
-                        .output_size = output.size(),
-                        .release =
-                            [](const struct evmc_result* result) { delete[] result->output_data; },
-                        .create_address = {},
-                        .padding = {},
-                    }};
+                    EVMCResult result{
+                        evmc_result{
+                            .status_code = success ? EVMC_SUCCESS : EVMC_REVERT,
+                            .gas_left = message.gas - gas.template convert_to<int64_t>(),
+                            .gas_refund = 0,
+                            .output_data = buffer.release(),
+                            .output_size = output.size(),
+                            .release =
+                                [](const struct evmc_result* result) {
+                                    delete[] result->output_data;
+                                },
+                            .create_address = {},
+                            .padding = {},
+                        },
+                        success ? protocol::TransactionStatus::None :
+                                  protocol::TransactionStatus::RevertInstruction};
 
                     return result;
                 },
@@ -135,18 +134,19 @@ inline constexpr struct
                         std::uninitialized_copy(
                             params->m_execResult.begin(), params->m_execResult.end(), buffer.get());
                         EVMCResult result{evmc_result{
-                            .status_code = (evmc_status_code)protocol::TransactionStatus::None,
-                            .gas_left = response->m_gasLeft,
-                            .gas_refund = 0,
-                            .output_data = buffer.release(),
-                            .output_size = params->m_execResult.size(),
-                            .release =
-                                [](const struct evmc_result* result) {
-                                    delete[] result->output_data;
-                                },
-                            .create_address = {},
-                            .padding = {},
-                        }};
+                                              .status_code = EVMC_SUCCESS,
+                                              .gas_left = response->m_gasLeft,
+                                              .gas_refund = 0,
+                                              .output_data = buffer.release(),
+                                              .output_size = params->m_execResult.size(),
+                                              .release =
+                                                  [](const struct evmc_result* result) {
+                                                      delete[] result->output_data;
+                                                  },
+                                              .create_address = {},
+                                              .padding = {},
+                                          },
+                            protocol::TransactionStatus::None};
 
                         return result;
                     }
@@ -155,47 +155,17 @@ inline constexpr struct
                         PRECOMPILE_LOG(WARNING)
                             << "Revert transaction: PrecompiledFailed"
                             << LOG_KV("address", contractAddress) << LOG_KV("message", e.what());
-
-                        std::string_view error(e.what());
-                        auto encodedErrorMessage =
-                            buildEncodeErrorMessage(error, *executor::GlobalHashImpl::g_hashImpl);
-
-                        static_assert(sizeof(EVMCResult::create_address) > sizeof(ErrorMessage));
-                        auto errorMessage = buildErrorMessage(error);
-                        decltype(EVMCResult::create_address) wrapAddress{};
-                        *(ErrorMessage*)wrapAddress.bytes = errorMessage;
-
-                        return EVMCResult{evmc_result{
-                            .status_code =
-                                (evmc_status_code)protocol::TransactionStatus::PrecompiledError,
-                            .gas_left = message.gas,
-                            .gas_refund = 0,
-                            .output_data = encodedErrorMessage.buffer,
-                            .output_size = encodedErrorMessage.size,
-                            .release =
-                                [](const struct evmc_result* result) {
-                                    delete[] result->output_data;
-                                    delete[] ((ErrorMessage*)result->create_address.bytes)->buffer;
-                                },
-                            .create_address = wrapAddress,
-                            .padding = {},
-                        }};
+                        return makeErrorEVMCResult(*executor::GlobalHashImpl::g_hashImpl,
+                            protocol::TransactionStatus::PrecompiledError, EVMC_REVERT, message.gas,
+                            e.what());
                     }
                     catch (std::exception& e)
                     {
                         PRECOMPILE_LOG(WARNING)
                             << "Precompiled execute error: " << boost::diagnostic_information(e);
-                        return EVMCResult{evmc_result{
-                            .status_code =
-                                (evmc_status_code)protocol::TransactionStatus::PrecompiledError,
-                            .gas_left = message.gas,
-                            .gas_refund = 0,
-                            .output_data = nullptr,
-                            .output_size = 0,
-                            .release = nullptr,
-                            .create_address = {},
-                            .padding = {},
-                        }};
+                        return makeErrorEVMCResult(*executor::GlobalHashImpl::g_hashImpl,
+                            protocol::TransactionStatus::PrecompiledError, EVMC_REVERT, message.gas,
+                            {});
                     }
                 }},
             precompiled.m_precompiled);

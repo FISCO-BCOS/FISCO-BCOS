@@ -40,6 +40,7 @@
 #include "bcos-framework/storage/Entry.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/Storage.h"
+#include "bcos-protocol/TransactionStatus.h"
 #include "bcos-transaction-executor/EVMCResult.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/DataConvertUtility.h"
@@ -155,6 +156,7 @@ private:
     std::shared_ptr<Executable> m_executable;
     const bcos::transaction_executor::Precompiled* m_preparedPrecompiled{};
     std::optional<bcos::bytes> m_dynamicPrecompiledInput;
+    bool m_enableTransfer = false;
 
     auto buildLegacyExternalCaller()
     {
@@ -434,30 +436,16 @@ public:
         {
             // 先转账，再执行
             // Transfer first, then proceed execute
-            if (co_await checkEnableTransfer(hostContext.m_ledgerConfig,
-                    hostContext.m_rollbackableStorage.get(), hostContext.m_blockHeader))
+            if (hostContext.m_enableTransfer =
+                    co_await checkEnableTransfer(hostContext.m_ledgerConfig,
+                        hostContext.m_rollbackableStorage.get(), hostContext.m_blockHeader);
+                hostContext.m_enableTransfer)
             {
                 co_await hostContext.transferBalance(ref);
             }
             else if (hostContext.m_ledgerConfig.get().features().get(
                          ledger::Features::Flag::feature_balance_policy1))
             {
-                // 兼容历史问题逻辑
-                if (!hostContext.m_ledgerConfig.get().features().get(
-                        ledger::Features::Flag::bugfix_policy1_emptyto) &&
-                    (!(co_await ledger::account::code(hostContext.m_recipientAccount))))
-                {
-                    co_return EVMCResult{evmc_result{.status_code = EVMC_REVERT,
-                                             .gas_left = ref.gas,
-                                             .gas_refund = 0,
-                                             .output_data = nullptr,
-                                             .output_size = 0,
-                                             .release = nullptr,
-                                             .create_address = {},
-                                             .padding = {}},
-                        protocol::TransactionStatus::CallAddressError};
-                }
-
                 auto& mutableRef = hostContext.mutableMessage();
                 std::fill(mutableRef.value.bytes,
                     mutableRef.value.bytes + sizeof(mutableRef.value.bytes), 0);
@@ -479,51 +467,31 @@ public:
         {
             HOST_CONTEXT_LOG(DEBUG)
                 << "NotEnoughCash exception: " << boost::diagnostic_information(e);
-            co_return EVMCResult{evmc_result{.status_code = EVMC_INSUFFICIENT_BALANCE,
-                .gas_left = ref.gas,
-                .gas_refund = 0,
-                .output_data = nullptr,
-                .output_size = 0,
-                .release = nullptr,
-                .create_address = {},
-                .padding = {}}};
+            co_return makeErrorEVMCResult(hostContext.m_hashImpl,
+                protocol::TransactionStatus::NotEnoughCash, EVMC_INSUFFICIENT_BALANCE, ref.gas, "");
         }
         catch (NotFoundCodeError& e)
         {
             HOST_CONTEXT_LOG(DEBUG)
                 << "Not found code exception: " << boost::diagnostic_information(e);
-            bcos::codec::abi::ContractABICodec abi(hostContext.m_hashImpl);
-            auto codecOutput = abi.abiIn("Error(string)", std::string("Call address error."));
-            auto errorBuffer = std::unique_ptr<uint8_t>(new uint8_t[codecOutput.size()]);
-            std::uninitialized_copy(codecOutput.begin(), codecOutput.end(), errorBuffer.get());
 
             // Static call或delegate call时，合约不存在要返回EVMC_SUCCESS
             // STATIC_CALL or DELEGATE_CALL, the EVMC_SUCCESS is returned when the contract does not
             // exist
+            auto evmcStatus = (ref.flags == EVMC_STATIC || ref.kind == EVMC_DELEGATECALL) ?
+                                  EVMC_SUCCESS :
+                                  EVMC_REVERT;
             auto status = (ref.flags == EVMC_STATIC || ref.kind == EVMC_DELEGATECALL) ?
-                              EVMC_SUCCESS :
-                              (evmc_status_code)protocol::TransactionStatus::CallAddressError;
-            co_return EVMCResult{evmc_result{.status_code = status,
-                .gas_left = ref.gas,
-                .gas_refund = 0,
-                .output_data = errorBuffer.release(),
-                .output_size = codecOutput.size(),
-                .release = [](const struct evmc_result* result) { delete[] result->output_data; },
-                .create_address = {},
-                .padding = {}}};
+                              protocol::TransactionStatus::None :
+                              protocol::TransactionStatus::RevertInstruction;
+            co_return makeErrorEVMCResult(
+                hostContext.m_hashImpl, status, evmcStatus, ref.gas, "Call address error.");
         }
         catch (std::exception& e)
         {
             HOST_CONTEXT_LOG(DEBUG) << "Execute exception: " << boost::diagnostic_information(e);
-            co_return EVMCResult{evmc_result{.status_code = EVMC_INTERNAL_ERROR,
-                                     .gas_left = ref.gas,
-                                     .gas_refund = 0,
-                                     .output_data = nullptr,
-                                     .output_size = 0,
-                                     .release = nullptr,
-                                     .create_address = {},
-                                     .padding = {}},
-                protocol::TransactionStatus::OutOfGas};
+            co_return makeErrorEVMCResult(hostContext.m_hashImpl,
+                protocol::TransactionStatus::OutOfGas, EVMC_INTERNAL_ERROR, ref.gas, "");
         }
 
         // 如果本次调用系统合约失败，不消耗gas
@@ -612,8 +580,9 @@ private:
                 co_await ledger::account::path(m_recipientAccount), buildLegacyExternalCaller(),
                 m_precompiledManager.get(), m_contextID, m_seq);
 
-            // TODO: 兼容历史问题逻辑
-            if (m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_balance) &&
+            // 兼容历史问题逻辑
+            if (!m_enableTransfer &&
+                m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_balance) &&
                 !m_ledgerConfig.get().features().get(
                     ledger::Features::Flag::bugfix_delete_account_code))
             {
@@ -742,6 +711,18 @@ private:
                 {
                     BOOST_THROW_EXCEPTION(NotFoundCodeError());
                 }
+
+                // 兼容历史问题逻辑
+                if (m_ledgerConfig.get().features().get(
+                        ledger::Features::Flag::feature_balance_policy1) &&
+                    !m_ledgerConfig.get().features().get(
+                        ledger::Features::Flag::bugfix_policy1_emptyto))
+                {
+                    co_return makeErrorEVMCResult(m_hashImpl,
+                        protocol::TransactionStatus::CallAddressError, EVMC_REVERT, ref.gas,
+                        "Call address error.");
+                }
+
                 auto status = EVMC_SUCCESS;
                 auto gasLeft = ref.gas - executor::BALANCE_TRANSFER_GAS;
                 if (ref.gas < executor::BALANCE_TRANSFER_GAS)

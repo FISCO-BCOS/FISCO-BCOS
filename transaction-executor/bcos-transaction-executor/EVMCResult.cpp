@@ -83,3 +83,32 @@ bcos::protocol::TransactionStatus bcos::transaction_executor::evmcStatusToTransa
         BOOST_THROW_EXCEPTION(UnknownEVMCStatus{});
     }
 }
+
+bcos::transaction_executor::EVMCResult bcos::transaction_executor::makeErrorEVMCResult(
+    crypto::Hash const& hashImpl, protocol::TransactionStatus status, evmc_status_code evmStatus,
+    int64_t gas, const std::string& errorInfo)
+{
+    constexpr static auto release =
+        +[](const struct evmc_result* result) { delete[] result->output_data; };
+
+    std::unique_ptr<uint8_t> output;
+    size_t outputSize = 0;
+
+    if (!errorInfo.empty())
+    {
+        auto codecOutput = writeErrInfoToOutput(hashImpl, errorInfo);
+        output = std::unique_ptr<uint8_t>(new uint8_t[codecOutput.size()]);
+        outputSize = codecOutput.size();
+        std::uninitialized_copy(codecOutput.begin(), codecOutput.end(), output.get());
+    }
+
+    return EVMCResult{evmc_result{.status_code = evmStatus,
+                          .gas_left = gas,
+                          .gas_refund = 0,
+                          .output_data = output.release(),
+                          .output_size = outputSize,
+                          .release = release,
+                          .create_address = {},
+                          .padding = {}},
+        status};
+}

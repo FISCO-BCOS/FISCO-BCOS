@@ -25,8 +25,6 @@
 
 namespace bcos::transaction_executor
 {
-bytes writeErrInfoToOutput(const crypto::Hash& hashImpl, std::string const& errInfo);
-protocol::TransactionStatus evmcStatusToTransactionStatus(evmc_status_code status);
 class EVMCResult : public evmc_result
 {
 public:
@@ -40,4 +38,9 @@ public:
 
     protocol::TransactionStatus status;
 };
+
+bytes writeErrInfoToOutput(const crypto::Hash& hashImpl, std::string const& errInfo);
+protocol::TransactionStatus evmcStatusToTransactionStatus(evmc_status_code status);
+EVMCResult makeErrorEVMCResult(crypto::Hash const& hashImpl, protocol::TransactionStatus status,
+    evmc_status_code evmStatus, int64_t gas, const std::string& errorInfo);
 }  // namespace bcos::transaction_executor

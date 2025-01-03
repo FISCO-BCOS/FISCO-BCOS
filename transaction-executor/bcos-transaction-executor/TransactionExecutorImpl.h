@@ -149,6 +149,7 @@ public:
                 TRANSACTION_EXECUTOR_LOG(ERROR) << "Insufficient balance: " << senderBalance
                                                 << ", balanceUsed: " << balanceUsed;
                 evmcResult.status_code = EVMC_INSUFFICIENT_BALANCE;
+                evmcResult.status = protocol::TransactionStatus::NotEnoughCash;
                 co_await rollback(
                     executeContext.m_rollbackableStorage, executeContext.m_startSavepoint);
             }
@@ -158,13 +159,11 @@ public:
             }
         }
 
-        auto receiptStatus =
-            static_cast<int32_t>(evmcStatusToTransactionStatus(evmcResult.status_code));
+        auto receiptStatus = static_cast<int32_t>(evmcResult.status);
         auto const& logEntries = executeContext.m_hostContext.logs();
-        auto transactionVersion = static_cast<bcos::protocol::TransactionVersion>(
-            executeContext.m_transaction.get().version());
         protocol::TransactionReceipt::Ptr receipt;
-        switch (transactionVersion)
+        switch (auto transactionVersion = static_cast<bcos::protocol::TransactionVersion>(
+                    executeContext.m_transaction.get().version()))
         {
         case bcos::protocol::TransactionVersion::V0_VERSION:
             receipt = executeContext.m_executor.get().m_receiptFactory.get().createReceipt(gasUsed,
@@ -186,12 +185,7 @@ public:
         if (c_fileLogLevel <= LogLevel::TRACE)
         {
             TRANSACTION_EXECUTOR_LOG(TRACE)
-                << "Execte transaction finished" << ", gasUsed: " << receipt->gasUsed()
-                << ", newContractAddress: " << receipt->contractAddress()
-                << ", logEntries: " << receipt->logEntries().size()
-                << ", status: " << receipt->status() << ", output: " << toHex(receipt->output())
-                << ", blockNumber: " << receipt->blockNumber() << ", receipt: " << receipt->hash()
-                << ", version: " << receipt->version();
+                << "Execte transaction finished: " << receipt->toString();
         }
 
         co_return receipt;  // 完成第三步 Complete the third step
