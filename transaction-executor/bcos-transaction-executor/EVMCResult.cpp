@@ -2,6 +2,7 @@
 
 #include "EVMCResult.h"
 #include "bcos-codec/abi/ContractABICodec.h"
+#include "bcos-protocol/TransactionStatus.h"
 #include "bcos-utilities/Exceptions.h"
 #include <evmc/evmc.h>
 #include <boost/throw_exception.hpp>
@@ -79,36 +80,97 @@ bcos::protocol::TransactionStatus bcos::transaction_executor::evmcStatusToTransa
         return protocol::TransactionStatus::OutOfStack;
     case EVMC_STACK_UNDERFLOW:
         return protocol::TransactionStatus::StackUnderflow;
+    case EVMC_INVALID_INSTRUCTION:
+    case EVMC_UNDEFINED_INSTRUCTION:
+        return protocol::TransactionStatus::BadInstruction;
     default:
         BOOST_THROW_EXCEPTION(UnknownEVMCStatus{});
     }
+}
+
+std::tuple<bcos::protocol::TransactionStatus, bcos::bytes>
+bcos::transaction_executor::evmcStatusToErrorMessage(
+    const bcos::crypto::Hash& hashImpl, evmc_status_code status)
+{
+    using namespace std::string_literals;
+    bcos::bytes output;
+
+    switch (status)
+    {
+    case EVMC_SUCCESS:
+        return {bcos::protocol::TransactionStatus::None, {}};
+    case EVMC_REVERT:
+        return {bcos::protocol::TransactionStatus::RevertInstruction, {}};
+    case EVMC_OUT_OF_GAS:
+        return {bcos::protocol::TransactionStatus::OutOfGas,
+            bcos::transaction_executor::writeErrInfoToOutput(hashImpl, "Execution out of gas."s)};
+    case EVMC_INSUFFICIENT_BALANCE:
+        return {bcos::protocol::TransactionStatus::NotEnoughCash, {}};
+    case EVMC_STACK_OVERFLOW:
+        return {bcos::protocol::TransactionStatus::OutOfStack,
+            bcos::transaction_executor::writeErrInfoToOutput(
+                hashImpl, "Execution stack overflow."s)};
+    case EVMC_STACK_UNDERFLOW:
+        return {bcos::protocol::TransactionStatus::StackUnderflow,
+            bcos::transaction_executor::writeErrInfoToOutput(
+                hashImpl, "Execution needs more items on EVM stack."s)};
+    case EVMC_INVALID_INSTRUCTION:
+    case EVMC_UNDEFINED_INSTRUCTION:
+        return {bcos::protocol::TransactionStatus::BadInstruction,
+            bcos::transaction_executor::writeErrInfoToOutput(
+                hashImpl, "Execution invalid/undefined opcode."s)};
+    case EVMC_BAD_JUMP_DESTINATION:
+        return {bcos::protocol::TransactionStatus::BadJumpDestination,
+            bcos::transaction_executor::writeErrInfoToOutput(
+                hashImpl, "Execution has violated the jump destination restrictions."s)};
+    case EVMC_INVALID_MEMORY_ACCESS:
+        return {bcos::protocol::TransactionStatus::StackUnderflow,
+            bcos::transaction_executor::writeErrInfoToOutput(
+                hashImpl, "Execution tried to read outside memory bounds."s)};
+    case EVMC_STATIC_MODE_VIOLATION:
+        return {bcos::protocol::TransactionStatus::Unknown,
+            bcos::transaction_executor::writeErrInfoToOutput(hashImpl,
+                "Execution tried to execute an operation which is restricted in static mode."s)};
+    case EVMC_INTERNAL_ERROR:
+    default:
+        return {bcos::protocol::TransactionStatus::Unknown, {}};
+    };
 }
 
 bcos::transaction_executor::EVMCResult bcos::transaction_executor::makeErrorEVMCResult(
     crypto::Hash const& hashImpl, protocol::TransactionStatus status, evmc_status_code evmStatus,
     int64_t gas, const std::string& errorInfo)
 {
-    constexpr static auto release =
-        +[](const struct evmc_result* result) { delete[] result->output_data; };
+    assert(evmStatus != EVMC_SUCCESS);
+
+    bytes errorBytes;
+    if (!errorInfo.empty())
+    {
+        errorBytes = writeErrInfoToOutput(hashImpl, errorInfo);
+    }
+    else
+    {
+        auto [_, errorMessage] = evmcStatusToErrorMessage(hashImpl, evmStatus);
+        errorBytes.swap(errorMessage);
+    }
 
     std::unique_ptr<uint8_t> output;
     size_t outputSize = 0;
-
-    if (!errorInfo.empty())
+    if (!errorBytes.empty())
     {
-        auto codecOutput = writeErrInfoToOutput(hashImpl, errorInfo);
-        output = std::unique_ptr<uint8_t>(new uint8_t[codecOutput.size()]);
-        outputSize = codecOutput.size();
-        std::uninitialized_copy(codecOutput.begin(), codecOutput.end(), output.get());
+        output = std::unique_ptr<uint8_t>(new uint8_t[errorBytes.size()]);
+        outputSize = errorBytes.size();
+        std::uninitialized_copy(errorBytes.begin(), errorBytes.end(), output.get());
     }
 
-    return EVMCResult{evmc_result{.status_code = evmStatus,
-                          .gas_left = gas,
-                          .gas_refund = 0,
-                          .output_data = output.release(),
-                          .output_size = outputSize,
-                          .release = release,
-                          .create_address = {},
-                          .padding = {}},
+    return EVMCResult{
+        evmc_result{.status_code = evmStatus,
+            .gas_left = gas,
+            .gas_refund = 0,
+            .output_data = output.release(),
+            .output_size = outputSize,
+            .release = +[](const struct evmc_result* result) { delete[] result->output_data; },
+            .create_address = {},
+            .padding = {}},
         status};
 }

@@ -8,7 +8,6 @@
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-task/Wait.h"
-#include "bcos-utilities/DataConvertUtility.h"
 #include "precompiled/PrecompiledManager.h"
 #include "vm/HostContext.h"
 #include <evmc/evmc.h>
@@ -133,6 +132,18 @@ public:
         if (evmcResult.status_code != 0)
         {
             TRANSACTION_EXECUTOR_LOG(DEBUG) << "Transaction revert: " << evmcResult.status_code;
+
+            auto [_, errorMessage] = evmcStatusToErrorMessage(
+                *executeContext.m_executor.get().m_hashImpl, evmcResult.status_code);
+            if (!errorMessage.empty())
+            {
+                auto output = std::unique_ptr<uint8_t>(new uint8_t[errorMessage.size()]);
+                std::uninitialized_copy(errorMessage.begin(), errorMessage.end(), output.get());
+                evmcResult.output_data = output.release();
+                evmcResult.output_size = errorMessage.size();
+                evmcResult.release =
+                    +[](const struct evmc_result* result) { delete[] result->output_data; };
+            }
         }
 
         auto gasUsed = executeContext.m_gasLimit - evmcResult.gas_left;
