@@ -40,6 +40,7 @@
 #include "bcos-framework/storage/Entry.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/Storage.h"
+#include "bcos-ledger/LedgerMethods.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include "bcos-transaction-executor/EVMCResult.h"
 #include "bcos-utilities/Common.h"
@@ -58,7 +59,6 @@
 #include <iterator>
 #include <magic_enum.hpp>
 #include <memory>
-#include <stdexcept>
 #include <string_view>
 #include <variant>
 
@@ -355,12 +355,14 @@ public:
     /// Hash of a block if within the last 256 blocks, or h256() otherwise.
     task::Task<h256> blockHash(int64_t number, auto&&... /*unused*/) const
     {
-        if (number >= blockNumber() || number < 0)
+        if (number < blockNumber() && number >= 0)
         {
-            co_return {};
+            if (auto blockHash = co_await ledger::getBlockHash(
+                    m_rollbackableStorage.get(), number, ledger::fromStorage))
+            {
+                co_return *blockHash;
+            }
         }
-
-        BOOST_THROW_EXCEPTION(std::runtime_error("Unsupported method!"));
         co_return {};
     }
     int64_t blockNumber() const { return m_blockHeader.get().number(); }
