@@ -156,15 +156,14 @@ private:
     std::shared_ptr<Executable> m_executable;
     const bcos::transaction_executor::Precompiled* m_preparedPrecompiled{};
     std::optional<bcos::bytes> m_dynamicPrecompiledInput;
-    bool m_enableTransfer = false;
 
-    auto buildLegacyExternalCaller()
+    constexpr auto buildLegacyExternalCaller()
     {
         return
             [this](const evmc_message& message) { return task::syncWait(externalCall(message)); };
     }
 
-    evmc_message const& message() const&
+    constexpr evmc_message const& message() const&
     {
         return std::visit(
             bcos::overloaded{
@@ -172,7 +171,7 @@ private:
                 [](const evmc_message& message) -> evmc_message const& { return message; }},
             m_message);
     }
-    evmc_message& mutableMessage()
+    constexpr evmc_message& mutableMessage()
     {
         if (auto* evmcMessage = std::get_if<const evmc_message*>(std::addressof(m_message)))
         {
@@ -436,10 +435,8 @@ public:
         {
             // 先转账，再执行
             // Transfer first, then proceed execute
-            if (hostContext.m_enableTransfer =
-                    co_await checkEnableTransfer(hostContext.m_ledgerConfig,
-                        hostContext.m_rollbackableStorage.get(), hostContext.m_blockHeader);
-                hostContext.m_enableTransfer)
+            if (co_await checkEnableTransfer(hostContext.m_ledgerConfig,
+                    hostContext.m_rollbackableStorage.get(), hostContext.m_blockHeader))
             {
                 co_await hostContext.transferBalance(ref);
             }
@@ -484,8 +481,12 @@ public:
             auto status = (ref.flags == EVMC_STATIC || ref.kind == EVMC_DELEGATECALL) ?
                               protocol::TransactionStatus::None :
                               protocol::TransactionStatus::RevertInstruction;
+            using namespace std::string_literals;
+            auto message = (ref.flags == EVMC_STATIC || ref.kind == EVMC_DELEGATECALL) ?
+                               ""s :
+                               "Call address error."s;
             co_return makeErrorEVMCResult(
-                hostContext.m_hashImpl, status, evmcStatus, ref.gas, "Call address error.");
+                hostContext.m_hashImpl, status, evmcStatus, ref.gas, message);
         }
         catch (std::exception& e)
         {
@@ -581,8 +582,7 @@ private:
                 m_precompiledManager.get(), m_contextID, m_seq);
 
             // 兼容历史问题逻辑
-            if (!m_enableTransfer &&
-                m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_balance) &&
+            if (m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_balance) &&
                 !m_ledgerConfig.get().features().get(
                     ledger::Features::Flag::bugfix_delete_account_code))
             {

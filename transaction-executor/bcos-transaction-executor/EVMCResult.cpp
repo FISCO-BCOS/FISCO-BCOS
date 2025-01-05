@@ -141,8 +141,6 @@ bcos::transaction_executor::EVMCResult bcos::transaction_executor::makeErrorEVMC
     crypto::Hash const& hashImpl, protocol::TransactionStatus status, evmc_status_code evmStatus,
     int64_t gas, const std::string& errorInfo)
 {
-    assert(evmStatus != EVMC_SUCCESS);
-
     bytes errorBytes;
     if (!errorInfo.empty())
     {

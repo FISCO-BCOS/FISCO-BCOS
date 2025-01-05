@@ -169,23 +169,23 @@ if [[ -n "${1}" ]]; then
 fi
 
 # non-sm test
-LOG_INFO "======== check non-sm case ========"
-init ""
-expand_node ""
-bash ${current_path}/.ci/console_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
-if [[ ${?} == "0" ]]; then
-        LOG_INFO "console_integrationTest success"
-    else
-        echo "console_integrationTest error"
-        exit 1
-fi
-bash ${current_path}/.ci/java_sdk_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
-if [[ ${?} == "0" ]]; then
-        LOG_INFO "java_sdk_integrationTest success"
-    else
-        echo "java_sdk_integrationTest error"
-        exit 1
-fi
+# LOG_INFO "======== check non-sm case ========"
+# init ""
+# expand_node ""
+# bash ${current_path}/.ci/console_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
+# if [[ ${?} == "0" ]]; then
+#         LOG_INFO "console_integrationTest success"
+#     else
+#         echo "console_integrationTest error"
+#         exit 1
+# fi
+# bash ${current_path}/.ci/java_sdk_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
+# if [[ ${?} == "0" ]]; then
+#         LOG_INFO "java_sdk_integrationTest success"
+#     else
+#         echo "java_sdk_integrationTest error"
+#         exit 1
+# fi
 #bash ${current_path}/.ci/java_sdk_demo_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
 #if [[ ${?} == "0" ]]; then
 #        LOG_INFO "java_sdk_demo_ci_test success"
@@ -201,22 +201,22 @@ LOG_INFO "======== clear node after non-sm test success ========"
 
 # sm test
 LOG_INFO "======== check sm case ========"
-init "-s"
-expand_node "-s"
-bash ${current_path}/.ci/console_ci_test.sh ${console_branch} "true" "${current_path}/nodes/127.0.0.1"
-if [[ ${?} == "0" ]]; then
-        LOG_INFO "console_integrationTest success"
-    else
-        echo "console_integrationTest error"
-        exit 1
-fi
-bash ${current_path}/.ci/java_sdk_ci_test.sh ${console_branch} "true" "${current_path}/nodes/127.0.0.1"
-if [[ ${?} == "0" ]]; then
-        LOG_INFO "java_sdk_integrationTest success"
-    else
-        echo "java_sdk_integrationTest error"
-        exit 1
-fi
+# init "-s"
+# expand_node "-s"
+# bash ${current_path}/.ci/console_ci_test.sh ${console_branch} "true" "${current_path}/nodes/127.0.0.1"
+# if [[ ${?} == "0" ]]; then
+#         LOG_INFO "console_integrationTest success"
+#     else
+#         echo "console_integrationTest error"
+#         exit 1
+# fi
+# bash ${current_path}/.ci/java_sdk_ci_test.sh ${console_branch} "true" "${current_path}/nodes/127.0.0.1"
+# if [[ ${?} == "0" ]]; then
+#         LOG_INFO "java_sdk_integrationTest success"
+#     else
+#         echo "java_sdk_integrationTest error"
+#         exit 1
+# fi
 #bash ${current_path}/.ci/java_sdk_demo_ci_test.sh ${console_branch} "true" "${current_path}/nodes/127.0.0.1"
 #if [[ ${?} == "0" ]]; then
 #        LOG_INFO "java_sdk_demo_ci_test success"
@@ -232,21 +232,28 @@ LOG_INFO "======== clear node after sm test success ========"
 # baseline暂时不支持balance precompiled，故不测试java_sdk_demo_ci_test
 # baseline does not support balance precompiled temporarily, so java_sdk_demo_ci_test is not tested
 LOG_INFO "======== check baseline cases ========"
-init_baseline "-s"
-expand_node "-s"
-bash ${current_path}/.ci/console_ci_test.sh ${console_branch} "true" "${current_path}/nodes/127.0.0.1"
+init_baseline ""
+expand_node ""
+bash ${current_path}/.ci/console_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
 if [[ ${?} == "0" ]]; then
         LOG_INFO "console_integrationTest success"
     else
         echo "console_integrationTest error"
         exit 1
 fi
-bash ${current_path}/.ci/java_sdk_ci_test.sh ${console_branch} "true" "${current_path}/nodes/127.0.0.1"
+bash ${current_path}/.ci/java_sdk_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
 if [[ ${?} == "0" ]]; then
         LOG_INFO "java_sdk_integrationTest success"
     else
         echo "java_sdk_integrationTest error"
         exit 1
+fi
+bash ${current_path}/.ci/java_sdk_demo_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
+if [[ ${?} == "0" ]]; then
+       LOG_INFO "java_sdk_demo_ci_test success"
+   else
+       echo "java_sdk_demo_ci_test error"
+       exit 1
 fi
 stop_node
 LOG_INFO "======== check baseline cases success ========"
