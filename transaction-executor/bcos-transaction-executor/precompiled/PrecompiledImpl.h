@@ -88,7 +88,7 @@ inline constexpr struct
                         precompiled.execute({message.input_data, message.input_size});
                     auto gas = precompiled.cost({message.input_data, message.input_size});
 
-                    auto buffer = std::unique_ptr<uint8_t>(new uint8_t[output.size()]);
+                    auto buffer = std::make_unique_for_overwrite<uint8_t[]>(output.size());
                     std::copy(output.begin(), output.end(), buffer.get());
                     EVMCResult result{
                         evmc_result{
@@ -110,6 +110,7 @@ inline constexpr struct
                     return result;
                 },
                 [&](std::shared_ptr<precompiled::Precompiled> const& precompiled) {
+                    using namespace std::string_literals;
                     auto contractAddress = address2HexString(message.code_address);
                     auto executive = buildLegacyExecutive(storage, blockHeader, contractAddress,
                         std::forward<decltype(externalCaller)>(externalCaller), precompiledManager,
@@ -129,8 +130,7 @@ inline constexpr struct
                     {
                         auto response = precompiled->call(executive, params);
 
-                        auto buffer =
-                            std::unique_ptr<uint8_t>(new uint8_t[params->m_execResult.size()]);
+                        auto buffer = std::make_unique<uint8_t[]>(params->m_execResult.size());
                         std::uninitialized_copy(
                             params->m_execResult.begin(), params->m_execResult.end(), buffer.get());
                         EVMCResult result{evmc_result{
@@ -165,7 +165,7 @@ inline constexpr struct
                             << "Precompiled execute error: " << boost::diagnostic_information(e);
                         return makeErrorEVMCResult(*executor::GlobalHashImpl::g_hashImpl,
                             protocol::TransactionStatus::PrecompiledError, EVMC_REVERT, message.gas,
-                            {});
+                            "InternalPrecompiledFailed"s);
                     }
                 }},
             precompiled.m_precompiled);

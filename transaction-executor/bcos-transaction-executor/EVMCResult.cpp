@@ -6,6 +6,8 @@
 #include "bcos-utilities/Exceptions.h"
 #include <evmc/evmc.h>
 #include <boost/throw_exception.hpp>
+#include <cstdint>
+#include <memory>
 
 struct UnknownEVMCStatus : public bcos::Exception
 {
@@ -152,11 +154,11 @@ bcos::transaction_executor::EVMCResult bcos::transaction_executor::makeErrorEVMC
         errorBytes.swap(errorMessage);
     }
 
-    std::unique_ptr<uint8_t> output;
+    std::unique_ptr<uint8_t[]> output;
     size_t outputSize = 0;
     if (!errorBytes.empty())
     {
-        output = std::unique_ptr<uint8_t>(new uint8_t[errorBytes.size()]);
+        output = std::make_unique_for_overwrite<uint8_t[]>(errorBytes.size());
         outputSize = errorBytes.size();
         std::uninitialized_copy(errorBytes.begin(), errorBytes.end(), output.get());
     }

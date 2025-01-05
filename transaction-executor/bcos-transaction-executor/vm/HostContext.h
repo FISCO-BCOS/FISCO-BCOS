@@ -465,7 +465,8 @@ public:
             HOST_CONTEXT_LOG(DEBUG)
                 << "NotEnoughCash exception: " << boost::diagnostic_information(e);
             co_return makeErrorEVMCResult(hostContext.m_hashImpl,
-                protocol::TransactionStatus::NotEnoughCash, EVMC_INSUFFICIENT_BALANCE, ref.gas, "");
+                protocol::TransactionStatus::NotEnoughCash, EVMC_INSUFFICIENT_BALANCE, ref.gas,
+                e.what());
         }
         catch (NotFoundCodeError& e)
         {
@@ -475,18 +476,18 @@ public:
             // Static call或delegate call时，合约不存在要返回EVMC_SUCCESS
             // STATIC_CALL or DELEGATE_CALL, the EVMC_SUCCESS is returned when the contract does not
             // exist
-            auto evmcStatus = (ref.flags == EVMC_STATIC || ref.kind == EVMC_DELEGATECALL) ?
-                                  EVMC_SUCCESS :
-                                  EVMC_REVERT;
-            auto status = (ref.flags == EVMC_STATIC || ref.kind == EVMC_DELEGATECALL) ?
-                              protocol::TransactionStatus::None :
-                              protocol::TransactionStatus::RevertInstruction;
             using namespace std::string_literals;
-            auto message = (ref.flags == EVMC_STATIC || ref.kind == EVMC_DELEGATECALL) ?
-                               ""s :
-                               "Call address error."s;
-            co_return makeErrorEVMCResult(
-                hostContext.m_hashImpl, status, evmcStatus, ref.gas, message);
+            if (ref.flags == EVMC_STATIC || ref.kind == EVMC_DELEGATECALL)
+            {
+                co_return makeErrorEVMCResult(hostContext.m_hashImpl,
+                    protocol::TransactionStatus::None, EVMC_SUCCESS, ref.gas, ""s);
+            }
+            else
+            {
+                co_return makeErrorEVMCResult(hostContext.m_hashImpl,
+                    protocol::TransactionStatus::RevertInstruction, EVMC_REVERT, ref.gas,
+                    "Call address error."s);
+            }
         }
         catch (std::exception& e)
         {
