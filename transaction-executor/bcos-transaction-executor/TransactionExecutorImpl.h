@@ -127,7 +127,6 @@ public:
                 evmcResult.create_address.bytes + sizeof(evmcResult.create_address.bytes),
                 std::back_inserter(newContractAddress));
         }
-        bcos::bytesConstRef output{evmcResult.output_data, evmcResult.output_size};
 
         if (evmcResult.status_code != 0)
         {
@@ -137,7 +136,7 @@ public:
                 *executeContext.m_executor.get().m_hashImpl, evmcResult.status_code);
             if (!errorMessage.empty())
             {
-                auto output = std::unique_ptr<uint8_t>(new uint8_t[errorMessage.size()]);
+                auto output = std::make_unique<uint8_t[]>(errorMessage.size());
                 std::uninitialized_copy(errorMessage.begin(), errorMessage.end(), output.get());
                 evmcResult.output_data = output.release();
                 evmcResult.output_size = errorMessage.size();
@@ -178,13 +177,15 @@ public:
         {
         case bcos::protocol::TransactionVersion::V0_VERSION:
             receipt = executeContext.m_executor.get().m_receiptFactory.get().createReceipt(gasUsed,
-                std::move(newContractAddress), logEntries, receiptStatus, output,
+                std::move(newContractAddress), logEntries, receiptStatus,
+                bcos::bytesConstRef{evmcResult.output_data, evmcResult.output_size},
                 executeContext.m_blockHeader.get().number());
             break;
         case bcos::protocol::TransactionVersion::V1_VERSION:
         case bcos::protocol::TransactionVersion::V2_VERSION:
             receipt = executeContext.m_executor.get().m_receiptFactory.get().createReceipt2(gasUsed,
-                std::move(newContractAddress), logEntries, receiptStatus, output,
+                std::move(newContractAddress), logEntries, receiptStatus,
+                bcos::bytesConstRef{evmcResult.output_data, evmcResult.output_size},
                 executeContext.m_blockHeader.get().number(), "", transactionVersion);
             break;
         default:
