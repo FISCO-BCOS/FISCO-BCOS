@@ -45,7 +45,7 @@ public:
         bugfix_set_row_with_dirty_flag,
         bugfix_rpbft_vrf_blocknumber_input,
         bugfix_delete_account_code,
-        bugfix_policy1_emptyto,
+        bugfix_policy1_empty_code_address,
         feature_dmc2serial,
         feature_sharding,
         feature_rpbft,
@@ -234,7 +234,8 @@ public:
                     Flag::bugfix_eoa_match_failed,
                 }},
             {protocol::BlockVersion::V3_12_0_VERSION, {Flag::bugfix_rpbft_vrf_blocknumber_input}},
-            {protocol::BlockVersion::V3_13_0_VERSION, {Flag::bugfix_delete_account_code}},
+            {protocol::BlockVersion::V3_13_0_VERSION,
+                {Flag::bugfix_delete_account_code, Flag::bugfix_policy1_empty_code_address}},
         });
         for (const auto& upgradeFeatures : upgradeRoadmap)
         {

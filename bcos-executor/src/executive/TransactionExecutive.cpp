@@ -1189,11 +1189,15 @@ CallParameters::UniquePtr TransactionExecutive::go(
                 revert();
                 auto callResult = hostContext.takeCallParameters();
 
-                if (m_blockContext.features().get(
-                        ledger::Features::Flag::bugfix_call_noaddr_return) &&
-                    callResult->staticCall &&
-                    callResult->seq > 0  // must staticCall from contract(not from rpc call)
-                )
+                if ((m_blockContext.features().get(
+                         ledger::Features::Flag::bugfix_call_noaddr_return) &&
+                        callResult->staticCall &&
+                        callResult->seq > 0  // must staticCall from contract(not from rpc call)
+                        ) ||
+                    (m_blockContext.features().get(
+                         ledger::Features::Flag::feature_balance_policy1) &&
+                        m_blockContext.features().get(
+                            ledger::Features::Flag::bugfix_policy1_empty_code_address)))
                 {
                     // Note: to be the same as eth
                     // if bugfix_call_noaddr_return is not set, callResult->evmStatus is still
