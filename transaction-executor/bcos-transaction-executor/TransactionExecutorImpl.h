@@ -8,7 +8,6 @@
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-task/Wait.h"
-#include "bcos-utilities/DataConvertUtility.h"
 #include "precompiled/PrecompiledManager.h"
 #include "vm/HostContext.h"
 #include <evmc/evmc.h>
@@ -128,11 +127,22 @@ public:
                 evmcResult.create_address.bytes + sizeof(evmcResult.create_address.bytes),
                 std::back_inserter(newContractAddress));
         }
-        bcos::bytesConstRef output{evmcResult.output_data, evmcResult.output_size};
 
         if (evmcResult.status_code != 0)
         {
             TRANSACTION_EXECUTOR_LOG(DEBUG) << "Transaction revert: " << evmcResult.status_code;
+
+            auto [_, errorMessage] = evmcStatusToErrorMessage(
+                *executeContext.m_executor.get().m_hashImpl, evmcResult.status_code);
+            if (!errorMessage.empty())
+            {
+                auto output = std::make_unique<uint8_t[]>(errorMessage.size());
+                std::uninitialized_copy(errorMessage.begin(), errorMessage.end(), output.get());
+                evmcResult.output_data = output.release();
+                evmcResult.output_size = errorMessage.size();
+                evmcResult.release =
+                    +[](const struct evmc_result* result) { delete[] result->output_data; };
+            }
         }
 
         auto gasUsed = executeContext.m_gasLimit - evmcResult.gas_left;
@@ -149,6 +159,7 @@ public:
                 TRANSACTION_EXECUTOR_LOG(ERROR) << "Insufficient balance: " << senderBalance
                                                 << ", balanceUsed: " << balanceUsed;
                 evmcResult.status_code = EVMC_INSUFFICIENT_BALANCE;
+                evmcResult.status = protocol::TransactionStatus::NotEnoughCash;
                 co_await rollback(
                     executeContext.m_rollbackableStorage, executeContext.m_startSavepoint);
             }
@@ -158,23 +169,23 @@ public:
             }
         }
 
-        auto receiptStatus =
-            static_cast<int32_t>(evmcStatusToTransactionStatus(evmcResult.status_code));
+        auto receiptStatus = static_cast<int32_t>(evmcResult.status);
         auto const& logEntries = executeContext.m_hostContext.logs();
-        auto transactionVersion = static_cast<bcos::protocol::TransactionVersion>(
-            executeContext.m_transaction.get().version());
         protocol::TransactionReceipt::Ptr receipt;
-        switch (transactionVersion)
+        switch (auto transactionVersion = static_cast<bcos::protocol::TransactionVersion>(
+                    executeContext.m_transaction.get().version()))
         {
         case bcos::protocol::TransactionVersion::V0_VERSION:
             receipt = executeContext.m_executor.get().m_receiptFactory.get().createReceipt(gasUsed,
-                std::move(newContractAddress), logEntries, receiptStatus, output,
+                std::move(newContractAddress), logEntries, receiptStatus,
+                {evmcResult.output_data, evmcResult.output_size},
                 executeContext.m_blockHeader.get().number());
             break;
         case bcos::protocol::TransactionVersion::V1_VERSION:
         case bcos::protocol::TransactionVersion::V2_VERSION:
             receipt = executeContext.m_executor.get().m_receiptFactory.get().createReceipt2(gasUsed,
-                std::move(newContractAddress), logEntries, receiptStatus, output,
+                std::move(newContractAddress), logEntries, receiptStatus,
+                {evmcResult.output_data, evmcResult.output_size},
                 executeContext.m_blockHeader.get().number(), "", transactionVersion);
             break;
         default:
@@ -186,12 +197,7 @@ public:
         if (c_fileLogLevel <= LogLevel::TRACE)
         {
             TRANSACTION_EXECUTOR_LOG(TRACE)
-                << "Execte transaction finished" << ", gasUsed: " << receipt->gasUsed()
-                << ", newContractAddress: " << receipt->contractAddress()
-                << ", logEntries: " << receipt->logEntries().size()
-                << ", status: " << receipt->status() << ", output: " << toHex(receipt->output())
-                << ", blockNumber: " << receipt->blockNumber() << ", receipt: " << receipt->hash()
-                << ", version: " << receipt->version();
+                << "Execte transaction finished: " << receipt->toString();
         }
 
         co_return receipt;  // 完成第三步 Complete the third step

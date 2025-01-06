@@ -1,4 +1,5 @@
 #include "HostContext.h"
+#include "VMFactory.h"
 #include <fmt/format.h>
 
 evmc_bytes32 bcos::transaction_executor::hostcontext::evm_hash_fn(const uint8_t* data, size_t size)
