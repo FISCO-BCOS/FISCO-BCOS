@@ -178,14 +178,14 @@ public:
         case bcos::protocol::TransactionVersion::V0_VERSION:
             receipt = executeContext.m_executor.get().m_receiptFactory.get().createReceipt(gasUsed,
                 std::move(newContractAddress), logEntries, receiptStatus,
-                bcos::bytesConstRef{evmcResult.output_data, evmcResult.output_size},
+                {evmcResult.output_data, evmcResult.output_size},
                 executeContext.m_blockHeader.get().number());
             break;
         case bcos::protocol::TransactionVersion::V1_VERSION:
         case bcos::protocol::TransactionVersion::V2_VERSION:
             receipt = executeContext.m_executor.get().m_receiptFactory.get().createReceipt2(gasUsed,
                 std::move(newContractAddress), logEntries, receiptStatus,
-                bcos::bytesConstRef{evmcResult.output_data, evmcResult.output_size},
+                {evmcResult.output_data, evmcResult.output_size},
                 executeContext.m_blockHeader.get().number(), "", transactionVersion);
             break;
         default:
