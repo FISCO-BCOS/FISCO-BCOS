@@ -397,8 +397,7 @@ BOOST_AUTO_TEST_CASE(precompiled)
         syncWait(prepare(hostContext));
 
         auto notFoundResult = syncWait(execute(hostContext));
-        BOOST_CHECK_EQUAL(notFoundResult.status_code,
-            (evmc_status_code)bcos::protocol::TransactionStatus::CallAddressError);
+        BOOST_CHECK_EQUAL(notFoundResult.status_code, EVMC_REVERT);
 
         bcos::codec::abi::ContractABICodec abi(*hashImpl);
         std::string errorMessage;
