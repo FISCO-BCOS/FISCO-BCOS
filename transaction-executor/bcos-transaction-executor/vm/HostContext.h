@@ -585,6 +585,7 @@ private:
                 m_precompiledManager.get(), m_contextID, m_seq);
 
             // 兼容历史问题逻辑
+            // Compatible with historical issue
             if (m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_balance) &&
                 !m_ledgerConfig.get().features().get(
                     ledger::Features::Flag::bugfix_delete_account_code))
@@ -716,6 +717,7 @@ private:
                 }
 
                 // 兼容历史问题逻辑
+                // Compatible with historical issue
                 if (m_ledgerConfig.get().features().get(
                         ledger::Features::Flag::feature_balance_policy1) &&
                     !m_ledgerConfig.get().features().get(
