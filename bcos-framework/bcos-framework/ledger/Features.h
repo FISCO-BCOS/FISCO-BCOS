@@ -46,6 +46,7 @@ public:
         bugfix_rpbft_vrf_blocknumber_input,
         bugfix_delete_account_code,
         bugfix_policy1_empty_code_address,
+        bugfix_precompiled_gasused,
         feature_dmc2serial,
         feature_sharding,
         feature_rpbft,
@@ -235,7 +236,8 @@ public:
                 }},
             {protocol::BlockVersion::V3_12_0_VERSION, {Flag::bugfix_rpbft_vrf_blocknumber_input}},
             {protocol::BlockVersion::V3_13_0_VERSION,
-                {Flag::bugfix_delete_account_code, Flag::bugfix_policy1_empty_code_address}},
+                {Flag::bugfix_delete_account_code, Flag::bugfix_policy1_empty_code_address,
+                    Flag::bugfix_precompiled_gasused}},
         });
         for (const auto& upgradeFeatures : upgradeRoadmap)
         {

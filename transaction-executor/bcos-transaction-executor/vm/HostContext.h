@@ -515,25 +515,12 @@ public:
             }
         }
 
-        // 如果本次调用的sender或recipient是系统合约，不消耗gas
-        // If the sender or recipient of this call is a system contract, gas is not consumed
-        if (auto senderAddress = address2FixedArray(ref.sender),
-            recipientAddress = address2FixedArray(ref.recipient);
-            precompiled::contains(bcos::precompiled::c_systemTxsAddress,
-                concepts::bytebuffer::toView(senderAddress)) ||
-            precompiled::contains(bcos::precompiled::c_systemTxsAddress,
-                concepts::bytebuffer::toView(recipientAddress)))
-        {
-            evmResult->gas_left = ref.gas;
-            HOST_CONTEXT_LOG(TRACE)
-                << "System contract sender call, clear gasUsed, gas_left: " << evmResult->gas_left;
-        }
-
         if (c_fileLogLevel <= LogLevel::TRACE) [[unlikely]]
         {
             HOST_CONTEXT_LOG(TRACE)
                 << "HostContext execute finished, kind: " << ref.kind
-                << " status: " << evmResult->status_code << " gas: " << evmResult->gas_left
+                << " seq:" << hostContext.m_seq << " status: " << evmResult->status_code
+                << " gas: " << evmResult->gas_left
                 << " output: " << bytesConstRef(evmResult->output_data, evmResult->output_size);
         }
         co_return std::move(*evmResult);
