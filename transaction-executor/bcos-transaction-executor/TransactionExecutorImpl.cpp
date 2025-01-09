@@ -27,7 +27,7 @@ evmc_message bcos::transaction_executor::newEVMCMessage(
         .sender_len = 0,
         .input_data = transaction.input().data(),
         .input_size = transaction.input().size(),
-        .value = {},
+        .value = toEvmC(u256(transaction.value())),
         .create2_salt = {},
         .code_address = toAddress};
 

@@ -311,7 +311,7 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
                 callParameters->senderAddress,
                 m_blockContext.features().get(ledger::Features::Flag::feature_raw_address));
             task::wait([](decltype(address) addr, u256 callNonce) -> task::Task<void> {
-                if (!co_await ledger::account::isExist(addr))
+                if (!co_await ledger::account::exists(addr))
                 {
                     co_await ledger::account::create(addr);
                 }

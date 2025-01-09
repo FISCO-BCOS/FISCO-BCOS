@@ -27,7 +27,9 @@
 #include "EVMHostInterface.h"
 #include "VMInstance.h"
 #include "bcos-codec/abi/ContractABICodec.h"
+#include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-executor/src/Common.h"
+#include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/ledger/Account.h"
 #include "bcos-framework/ledger/EVMAccount.h"
@@ -156,6 +158,7 @@ private:
     std::shared_ptr<Executable> m_executable;
     const bcos::transaction_executor::Precompiled* m_preparedPrecompiled{};
     std::optional<bcos::bytes> m_dynamicPrecompiledInput;
+    bool m_enableTransfer = false;
 
     constexpr auto buildLegacyExternalCaller()
     {
@@ -197,6 +200,41 @@ private:
                                     << LOG_BADGE("AccountPrecompiled, subAccountBalance")
                                     << LOG_DESC("account balance not enough");
             BOOST_THROW_EXCEPTION(protocol::NotEnoughCashError("Account balance is not enough!"));
+        }
+
+        if (!co_await ledger::account::exists(m_recipientAccount))
+        {
+            auto tableName = m_recipientAccount.address();
+            std::string codeString = getDynamicPrecompiledCodeString(
+                precompiled::ACCOUNT_ADDRESS, std::string(tableName));
+            bcos::CodecWrapper codec(
+                std::shared_ptr<crypto::Hash>(std::addressof(m_hashImpl), [](auto) {}), false);
+            auto input = codec.encode(tableName, codeString);
+
+            if (input->internalCreate)
+            {
+                if (input->codeAddress.empty())
+                {
+                    input->codeAddress = bcos::newEVMAddress(
+                        m_hashImpl, m_blockContext->number(), m_contextID, seq() + 1);
+                }
+                EXECUTIVE_WRAPPER(TRACE) << "codeAddress:" << input->codeAddress;
+                auto tuple = create(std::move(input));
+                return std::move(std::get<1>(tuple));
+            }
+
+            auto response = externalRequest(_executive, ref(input), _callParameters->m_origin,
+                _callParameters->m_codeAddress, accountHex, false, true, _callParameters->m_gasLeft,
+                true);
+
+            if (response->status != (int32_t)TransactionStatus::None)
+            {
+                PRECOMPILED_LOG(INFO)
+                    << LOG_BADGE("AccountManagerPrecompiled") << LOG_DESC("createAccount failed")
+                    << LOG_KV("accountTableName", accountTableName)
+                    << LOG_KV("status", response->status);
+                BOOST_THROW_EXCEPTION(PrecompiledError("Create account error."));
+            }
         }
 
         auto toBalance = co_await ledger::account::balance(m_recipientAccount);
@@ -437,8 +475,10 @@ public:
         {
             // 先转账，再执行
             // Transfer first, then proceed execute
-            if (co_await checkEnableTransfer(hostContext.m_ledgerConfig,
-                    hostContext.m_rollbackableStorage.get(), hostContext.m_blockHeader))
+            if (hostContext.m_enableTransfer =
+                    co_await checkEnableTransfer(hostContext.m_ledgerConfig,
+                        hostContext.m_rollbackableStorage.get(), hostContext.m_blockHeader);
+                hostContext.m_enableTransfer)
             {
                 co_await hostContext.transferBalance(ref);
             }
@@ -567,23 +607,9 @@ private:
         auto& ref = message();
         if (m_blockHeader.get().number() != 0)
         {
-            createAuthTable(m_rollbackableStorage.get(), m_blockHeader, ref, m_origin,
+            co_await createAuthTable(m_rollbackableStorage.get(), m_blockHeader, ref, m_origin,
                 co_await ledger::account::path(m_recipientAccount), buildLegacyExternalCaller(),
-                m_precompiledManager.get(), m_contextID, m_seq);
-
-            // 兼容历史问题逻辑
-            // Compatible with historical issue
-            if (m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_balance) &&
-                !m_ledgerConfig.get().features().get(
-                    ledger::Features::Flag::bugfix_delete_account_code))
-            {
-                storage::Entry deleteEntry;
-                deleteEntry.setStatus(storage::Entry::DELETED);
-                co_await storage2::writeOne(m_rollbackableStorage.get(),
-                    transaction_executor::StateKey(
-                        m_recipientAccount.address(), executor::ACCOUNT_CODE),
-                    deleteEntry);
-            }
+                m_precompiledManager.get(), m_contextID, m_seq, m_ledgerConfig);
         }
 
         co_await ledger::account::create(m_recipientAccount);
@@ -705,7 +731,8 @@ private:
 
                 // 兼容历史问题逻辑
                 // Compatible with historical issue
-                if (m_ledgerConfig.get().features().get(
+                if (!m_enableTransfer &&
+                    m_ledgerConfig.get().features().get(
                         ledger::Features::Flag::feature_balance_policy1) &&
                     !m_ledgerConfig.get().features().get(
                         ledger::Features::Flag::bugfix_policy1_empty_code_address))

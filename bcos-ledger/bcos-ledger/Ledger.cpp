@@ -412,7 +412,7 @@ task::Task<void> Ledger::batchInsertEoaNonce(bcos::storage::StorageInterface::Pt
         // write in storage
         ledger::account::EVMAccount eoa(
             *storage, sender, features.get(Features::Flag::feature_raw_address));
-        if (!co_await ledger::account::isExist(eoa))
+        if (!co_await ledger::account::exists(eoa))
         {
             co_await ledger::account::create(eoa);
         }
