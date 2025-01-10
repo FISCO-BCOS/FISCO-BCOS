@@ -202,58 +202,41 @@ private:
             BOOST_THROW_EXCEPTION(protocol::NotEnoughCashError("Account balance is not enough!"));
         }
 
-        if (!co_await ledger::account::exists(m_recipientAccount))
-        {
-            auto executive = buildLegacyExecutive(m_rollbackableStorage.get(), m_blockHeader,
-                address2HexString(m_recipientAccount.address()), buildLegacyExternalCaller(),
-                m_precompiledManager.get(), m_contextID, m_seq,
-                m_ledgerConfig.get().authCheckStatus());
-
-            auto tableName = m_recipientAccount.address();
-            std::string codeString = precompiled::getDynamicPrecompiledCodeString(
-                precompiled::ACCOUNT_ADDRESS, std::string(tableName));
-            bcos::CodecWrapper codec(
-                std::shared_ptr<crypto::Hash>(std::addressof(m_hashImpl), [](auto) {}), false);
-            auto input = codec.encode(tableName, codeString);
-
-            auto response = externalRequest(executive, ref(input), m_origin, message.code_address,
-                message.recipient, false, true, message.gas, true);
-
-            auto codeAddress = bcos::newEVMAddress(
-                m_hashImpl, m_blockHeader.get().number(), m_contextID, m_seq + 1);
-            EXECUTIVE_WRAPPER(TRACE) << "codeAddress:" << input->codeAddress;
-            auto tuple = create(std::move(input));
-            // return std::move(std::get<1>(tuple));
-            // evmc_message evmcMessage{.kind = input->create ? EVMC_CREATE : EVMC_CALL,
-            //     .flags = input->staticCall ? static_cast<uint32_t>(EVMC_STATIC) : 0,
-            //     .depth = 0,
-            //     .gas = input->gas,
-            //     .recipient = unhexAddress(input->receiveAddress),
-            //     .destination_ptr = nullptr,
-            //     .destination_len = 0,
-            //     .sender = unhexAddress(input->senderAddress),
-            //     .sender_ptr = nullptr,
-            //     .sender_len = 0,
-            //     .input_data = input->data.data(),
-            //     .input_size = input->data.size(),
-            //     .value = toEvmC(0x0_cppui256),
-            //     .create2_salt = toEvmC(0x0_cppui256),
-            //     .code_address = unhexAddress(input->codeAddress)};
-
-
-            // if (response->status != (int32_t)TransactionStatus::None)
-            // {
-            //     PRECOMPILED_LOG(INFO)
-            //         << LOG_BADGE("AccountManagerPrecompiled") << LOG_DESC("createAccount failed")
-            //         << LOG_KV("accountTableName", accountTableName)
-            //         << LOG_KV("status", response->status);
-            //     BOOST_THROW_EXCEPTION(PrecompiledError("Create account error."));
-            // }
-        }
-
         auto toBalance = co_await ledger::account::balance(m_recipientAccount);
         co_await ledger::account::setBalance(senderAccount, fromBalance - value);
-        co_await ledger::account::setBalance(m_recipientAccount, toBalance + value);
+        if (!co_await ledger::account::exists(m_recipientAccount))
+        {
+            CodecWrapper codec{m_hashImpl, false};
+            bytes subBalanceIn = codec.encodeWithSig("subAccountBalance(uint256)", balanceUsed);
+            std::vector<std::string> codeParameters{getContractTableName(balanceSpenderAddr)};
+            auto newParams = codec.encode(codeParameters, subBalanceIn);
+
+            evmc_message evmcMessage{.kind = EVMC_CALL,
+                .flags = 0,
+                .depth = 0,
+                .gas = message.gas,
+                .recipient = toEvmC(u256(0x10004)),
+                .destination_ptr = nullptr,
+                .destination_len = 0,
+                .sender = message.sender,
+                .sender_ptr = nullptr,
+                .sender_len = 0,
+                .input_data = input->data.data(),
+                .input_size = input->data.size(),
+                .value = toEvmC(0x0_cppui256),
+                .create2_salt = toEvmC(0x0_cppui256),
+                .code_address = unhexAddress(input->codeAddress)};
+
+            const auto* accountPrecompiled = m_precompiledManager.get().getPrecompiled(0x10004);
+            if (accountPrecompiled == nullptr)
+            {
+                BOOST_THROW_EXCEPTION(NotFoundCodeError());
+            }
+        }
+        else
+        {
+            co_await ledger::account::setBalance(m_recipientAccount, toBalance + value);
+        }
     }
 
     inline constexpr static struct InnerConstructor
