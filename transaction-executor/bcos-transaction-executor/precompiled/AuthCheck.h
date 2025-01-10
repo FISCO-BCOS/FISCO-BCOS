@@ -4,7 +4,6 @@
 #include "bcos-executor/src/CallParameters.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-transaction-executor/EVMCResult.h"
-#include "bcos-transaction-executor/precompiled/PrecompiledImpl.h"
 #include <evmc/evmc.h>
 #include <boost/throw_exception.hpp>
 #include <memory>
@@ -26,17 +25,7 @@ inline task::Task<void> createAuthTable(auto& storage, protocol::BlockHeader con
         true);
 
     executive->creatAuthTable(tableName, originAddress, senderAddress, blockHeader.version());
-
-    // 兼容历史问题逻辑
-    // Compatible with historical issue
-    if (ledgerConfig.features().get(ledger::Features::Flag::feature_balance) &&
-        !ledgerConfig.features().get(ledger::Features::Flag::bugfix_delete_account_code))
-    {
-        storage::Entry deleteEntry;
-        deleteEntry.setStatus(storage::Entry::DELETED);
-        co_await storage2::writeOne(storage,
-            transaction_executor::StateKey(tableName, executor::ACCOUNT_CODE), deleteEntry);
-    }
+    co_return;
 }
 
 inline std::optional<EVMCResult> checkAuth(auto& storage, protocol::BlockHeader const& blockHeader,
