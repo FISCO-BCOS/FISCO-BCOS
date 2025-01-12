@@ -207,31 +207,33 @@ private:
         if (!co_await ledger::account::exists(m_recipientAccount))
         {
             CodecWrapper codec{m_hashImpl, false};
-            bytes subBalanceIn = codec.encodeWithSig("subAccountBalance(uint256)", balanceUsed);
-            std::vector<std::string> codeParameters{getContractTableName(balanceSpenderAddr)};
-            auto newParams = codec.encode(codeParameters, subBalanceIn);
+            bytes balanceParams = codec.encodeWithSig("addAccountBalance(uint256)", value);
 
             evmc_message evmcMessage{.kind = EVMC_CALL,
                 .flags = 0,
                 .depth = 0,
                 .gas = message.gas,
-                .recipient = toEvmC(u256(0x10004)),
+                .recipient = message.recipient,
                 .destination_ptr = nullptr,
                 .destination_len = 0,
                 .sender = message.sender,
                 .sender_ptr = nullptr,
                 .sender_len = 0,
-                .input_data = input->data.data(),
-                .input_size = input->data.size(),
-                .value = toEvmC(0x0_cppui256),
-                .create2_salt = toEvmC(0x0_cppui256),
-                .code_address = unhexAddress(input->codeAddress)};
+                .input_data = balanceParams.data(),
+                .input_size = balanceParams.size(),
+                .value = {},
+                .create2_salt = {},
+                .code_address = toEvmC(precompiled::ACCOUNT_ADDRESS)};
 
             const auto* accountPrecompiled = m_precompiledManager.get().getPrecompiled(0x10004);
             if (accountPrecompiled == nullptr)
             {
                 BOOST_THROW_EXCEPTION(NotFoundCodeError());
             }
+            transaction_executor::callPrecompiled(*accountPrecompiled, m_rollbackableStorage.get(),
+                m_blockHeader, evmcMessage, m_origin, buildLegacyExternalCaller(),
+                m_precompiledManager.get(), m_contextID, m_seq,
+                m_ledgerConfig.get().authCheckStatus());
         }
         else
         {

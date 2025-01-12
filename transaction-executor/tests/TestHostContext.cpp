@@ -501,9 +501,10 @@ BOOST_AUTO_TEST_CASE(transferBalance)
             rollbackableStorage, message.recipient, false);
         co_await bcos::ledger::account::setBalance(recipientAccount, bcos::u256(0));
 
+        evmc_address origin;
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
             transferHostContext(rollbackableStorage, rollbackableTransientStorage, blockHeader,
-                message, {}, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
+                message, origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
                 bcos::task::syncWait);
         co_await prepare(transferHostContext);
         auto evmResult = co_await execute(transferHostContext);
