@@ -19,6 +19,7 @@
  */
 
 #include "BFSPrecompiled.h"
+#include "bcos-codec/scale/Scale.h"
 #include "bcos-executor/src/precompiled/common/Common.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"

@@ -21,6 +21,7 @@
 #include "AuthManagerPrecompiled.h"
 #include "../../vm/HostContext.h"
 #include "ContractAuthMgrPrecompiled.h"
+#include "bcos-codec/scale/Scale.h"
 #include "libinitializer/AuthInitializer.h"
 #include <bcos-tool/BfsFileFactory.h>
 #include <boost/archive/binary_iarchive.hpp>

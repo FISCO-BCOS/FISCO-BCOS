@@ -19,7 +19,7 @@
  */
 
 #include "ContractAuthMgrPrecompiled.h"
-
+#include "bcos-codec/scale/Scale.h"
 #include <utility>
 
 using namespace bcos;
