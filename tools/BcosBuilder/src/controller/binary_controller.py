@@ -21,7 +21,6 @@ class BinaryController:
         else:
             self.binary_postfix = "-linux-x86_64.tgz"
         self.mtail_binary_name = "mtail_3.0.0-rc49_Linux_x86_64.tar.gz"
-        self.cdn_link_header = "https://github.com/FISCO-BCOS"
         if node_type == "pro":
             self.binary_list = ["BcosRpcService",
                                 "BcosGatewayService", "BcosNodeService"]
@@ -35,11 +34,6 @@ class BinaryController:
         self.last_percent = 0
         self.download_prefix = "https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/"
         self.mtail_download_url = "https://github.com/google/mtail/releases/download/v3.0.0-rc49/%s" % self.mtail_binary_name
-        if self.use_cdn is True:
-            self.download_prefix = "%s/FISCO-BCOS/releases/" % (
-                self.cdn_link_header)
-            self.mtail_download_url = "%s/FISCO-BCOS/tools/mtail/%s" % (
-                self.cdn_link_header, self.mtail_binary_name)
 
     def download_all_binary(self):
         utilities.print_badge(
