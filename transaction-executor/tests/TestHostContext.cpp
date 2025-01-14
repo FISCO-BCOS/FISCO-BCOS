@@ -84,8 +84,8 @@ public:
             .value = {},
             .create2_salt = {},
             .code_address = {}};
-        evmc_address origin = {};
 
+        evmc_address origin = {};
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
             hostContext(rollbackableStorage, rollbackableTransientStorage, blockHeader, message,
                 origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
@@ -96,6 +96,33 @@ public:
 
         helloworldAddress = result.create_address;
         BCOS_LOG(INFO) << "Hello world address: " << bcos::address2HexString(helloworldAddress);
+
+        bcos::CodecWrapper codecWrapper(*hashImpl, false);
+        auto input = codecWrapper.encodeWithSig("initBfs()");
+
+        evmc_message message2 = {.kind = EVMC_CALL,
+            .flags = 0,
+            .depth = 0,
+            .gas = 300 * 10000,
+            .recipient = bcos::unhexAddress(bcos::precompiled::BFS_ADDRESS),
+            .destination_ptr = nullptr,
+            .destination_len = 0,
+            .sender = {},
+            .sender_ptr = nullptr,
+            .sender_len = 0,
+            .input_data = input.data(),
+            .input_size = input.size(),
+            .value = {},
+            .create2_salt = {},
+            .code_address = bcos::unhexAddress(bcos::precompiled::BFS_ADDRESS)};
+
+        HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
+            hostContext2(rollbackableStorage, rollbackableTransientStorage, blockHeader, message2,
+                origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
+                bcos::task::syncWait);
+        syncWait(prepare(hostContext2));
+        auto result2 = syncWait(execute(hostContext2));
+        BOOST_REQUIRE_EQUAL(result2.status_code, 0);
     }
 
     Task<EVMCResult> call(
