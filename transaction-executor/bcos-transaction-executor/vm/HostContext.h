@@ -212,7 +212,6 @@ private:
             std::vector<std::string> toTableNameVector = {
                 std::string(m_recipientAccount.address())};
             auto inputParams1 = codec.encode(toTableNameVector, balanceParams);
-            auto addParams = codec.encode(std::string(precompiled::ACCOUNT_ADDRESS), inputParams1);
 
             evmc_message evmcMessage{.kind = EVMC_CALL,
                 .flags = 0,
