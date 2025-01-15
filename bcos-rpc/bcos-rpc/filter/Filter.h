@@ -28,7 +28,12 @@ public:
         m_startBlockNumber(startBlockNumber),
         m_lastAccessTime(utcTime()),
         m_group(group)
-    {}
+    {
+        if (!params->fromIsLatest() && params->fromBlock() >= 0)
+        {
+            m_startBlockNumber = params->fromBlock();
+        }
+    }
 
     virtual ~Filter() {}
 
