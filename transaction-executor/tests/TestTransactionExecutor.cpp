@@ -186,14 +186,16 @@ BOOST_AUTO_TEST_CASE(costBalance)
             bytes(senderAddress.bytes, senderAddress.bytes + sizeof(senderAddress.bytes)));
 
         ledger::account::EVMAccount senderAccount(storage, senderAddress, false);
-        co_await ledger::account::setBalance(senderAccount, 90000);
+
+        constexpr static int64_t initBalance = 90000 + 21000;
+        co_await ledger::account::setBalance(senderAccount, initBalance);
 
         receipt = co_await bcos::transaction_executor::executeTransaction(
             executor, storage, blockHeader, *transaction, 0, ledgerConfig, task::syncWait);
         BOOST_CHECK_EQUAL(receipt->status(), 0);
         BOOST_CHECK_EQUAL(receipt->contractAddress(), "e0e794ca86d198042b64285c5ce667aee747509b");
         BOOST_CHECK_EQUAL(
-            co_await ledger::account::balance(senderAccount), 90000 - receipt->gasUsed());
+            co_await ledger::account::balance(senderAccount), initBalance - receipt->gasUsed());
     }());
 }
 
@@ -213,7 +215,8 @@ BOOST_AUTO_TEST_CASE(costBalance)
 //         ledgerConfig.setGasPrice({"1", 0});
 
 //         bcos::bytes helloworldBytecodeBinary;
-//         boost::algorithm::unhex(helloworldBytecode, std::back_inserter(helloworldBytecodeBinary));
+//         boost::algorithm::unhex(helloworldBytecode,
+//         std::back_inserter(helloworldBytecodeBinary));
 //         // First deploy
 //         auto transaction = transactionFactory.createTransaction(
 //             0, "", helloworldBytecodeBinary, {}, 0, "", "", 0, std::string{}, {}, {}, 1000);
@@ -234,8 +237,8 @@ BOOST_AUTO_TEST_CASE(costBalance)
 //         receipt = co_await bcos::transaction_executor::executeTransaction(
 //             executor, storage, blockHeader, *transaction, 0, ledgerConfig, task::syncWait);
 //         BOOST_CHECK_EQUAL(receipt->status(), 0);
-//         BOOST_CHECK_EQUAL(receipt->contractAddress(), "e0e794ca86d198042b64285c5ce667aee747509b");
-//         BOOST_CHECK_EQUAL(
+//         BOOST_CHECK_EQUAL(receipt->contractAddress(),
+//         "e0e794ca86d198042b64285c5ce667aee747509b"); BOOST_CHECK_EQUAL(
 //             co_await ledger::account::balance(senderAccount), 90000 - receipt->gasUsed());
 //     }());
 // }
