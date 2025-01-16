@@ -47,7 +47,9 @@
     },
     {
       "name": "aws-sdk-cpp",
-      "features": ["kms"]
+      "features": [
+        "kms"
+      ]
     },
     "wedprcrypto",
     "range-v3",
