@@ -121,44 +121,71 @@ void SchedulerManager::reset(std::function<void(Error::Ptr&&)> callback)
 void SchedulerManager::getCode(
     std::string_view contract, std::function<void(Error::Ptr, bcos::bytes)> callback)
 {
-    auto [ok, message] = checkAndInit();
-
-    if (!ok)
+    try
     {
-        callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::ExecutorNotEstablishedError, message), {});
-        return;
+        auto [ok, message] = checkAndInit();
+
+        if (!ok)
+        {
+            callback(
+                BCOS_ERROR_UNIQUE_PTR(SchedulerError::ExecutorNotEstablishedError, message), {});
+            return;
+        }
+
+        auto _holdSchedulerCallback = [schedulerHolder = m_scheduler, callback =
+                                                                          std::move(callback)](
+                                          bcos::Error::Ptr&& error, bcos::bytes bytes) {
+            SCHEDULER_LOG(TRACE) << "Release scheduler holder"
+                                 << LOG_KV("ptr count", schedulerHolder.use_count());
+            callback(std::move(error), std::move(bytes));
+        };
+
+
+        m_scheduler->getCode(contract, std::move(_holdSchedulerCallback));
     }
-
-    auto _holdSchedulerCallback = [schedulerHolder = m_scheduler, callback = std::move(callback)](
-                                      bcos::Error::Ptr&& error, bcos::bytes bytes) {
-        SCHEDULER_LOG(TRACE) << "Release scheduler holder"
-                             << LOG_KV("ptr count", schedulerHolder.use_count());
-        callback(std::move(error), std::move(bytes));
-    };
-
-
-    m_scheduler->getCode(contract, std::move(_holdSchedulerCallback));
+    catch (std::exception const& e)
+    {
+        SCHEDULER_LOG(WARNING) << LOG_DESC("SchedulerManager getCode failed")
+                               << LOG_KV("codeAddr", contract)
+                               << LOG_KV("error", boost::diagnostic_information(e));
+        if (!callback)
+        {
+            return;
+        }
+        callback(BCOS_ERROR_PTR(-1, boost::diagnostic_information(e)), {});
+    }
 }
 
 void SchedulerManager::getABI(
     std::string_view contract, std::function<void(Error::Ptr, std::string)> callback)
 {
-    auto [ok, message] = checkAndInit();
-
-    if (!ok)
+    try
     {
-        callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::ExecutorNotEstablishedError, message), {});
-        return;
+        auto [ok, message] = checkAndInit();
+
+        if (!ok)
+        {
+            callback(
+                BCOS_ERROR_UNIQUE_PTR(SchedulerError::ExecutorNotEstablishedError, message), {});
+            return;
+        }
+
+        auto _holdSchedulerCallback = [schedulerHolder = m_scheduler, callback =
+                                                                          std::move(callback)](
+                                          bcos::Error::Ptr&& error, std::string str) {
+            SCHEDULER_LOG(TRACE) << "Release scheduler holder"
+                                 << LOG_KV("ptr count", schedulerHolder.use_count());
+            callback(std::move(error), std::move(str));
+        };
+
+        m_scheduler->getABI(contract, std::move(_holdSchedulerCallback));
     }
-
-    auto _holdSchedulerCallback = [schedulerHolder = m_scheduler, callback = std::move(callback)](
-                                      bcos::Error::Ptr&& error, std::string str) {
-        SCHEDULER_LOG(TRACE) << "Release scheduler holder"
-                             << LOG_KV("ptr count", schedulerHolder.use_count());
-        callback(std::move(error), std::move(str));
-    };
-
-    m_scheduler->getABI(contract, std::move(_holdSchedulerCallback));
+    catch (std::exception const& e)
+    {
+        SCHEDULER_LOG(WARNING) << LOG_DESC("getABI exception") << LOG_KV("contract", contract)
+                               << LOG_KV("error", boost::diagnostic_information(e));
+        callback(BCOS_ERROR_UNIQUE_PTR(-1, boost::diagnostic_information(e)), {});
+    }
 }
 
 void SchedulerManager::preExecuteBlock(
