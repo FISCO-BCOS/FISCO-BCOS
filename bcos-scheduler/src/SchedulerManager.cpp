@@ -152,7 +152,7 @@ void SchedulerManager::getCode(
         {
             return;
         }
-        callback(BCOS_ERROR_PTR(-1, boost::diagnostic_information(e)), {});
+        callback(BCOS_ERROR_PTR(-1, boost::diagnostic_information(e)), bcos::bytes());
     }
 }
 
