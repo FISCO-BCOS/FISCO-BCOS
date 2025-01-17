@@ -114,6 +114,7 @@ enum ProtocolVersion : uint32_t
 
 enum class BlockVersion : uint32_t
 {
+    V3_12_4_VERSION = 0x030c0400,  // 3.12.4
     V3_12_3_VERSION = 0x030c0300,  // 3.12.3
     V3_12_2_VERSION = 0x030c0200,  // 3.12.2
     V3_12_1_VERSION = 0x030c0100,  // 3.12.1
@@ -145,7 +146,7 @@ enum class BlockVersion : uint32_t
     V3_0_VERSION = 0x03000000,
     RC4_VERSION = 4,
     MIN_VERSION = RC4_VERSION,
-    MAX_VERSION = V3_12_3_VERSION,  // 3.12.3
+    MAX_VERSION = V3_12_4_VERSION,  // 3.12.4
 };
 
 enum class TransactionVersion : uint32_t
