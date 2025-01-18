@@ -379,10 +379,14 @@ task::Task<void> EthEndpoint::getCode(const Json::Value& request, Json::Value& r
             return std::get<bcos::bytes>(m_result);
         }
     };
-    auto const code = co_await Awaitable{
+    // Note: Awaitable must be declared as a local variable,
+    // and then co_await the local variable,
+    // otherwise the object managed by the Awaitable variable will become invalid.
+    Awaitable awaitable{
         .m_scheduler = scheduler,
         .m_address = addressStr,
     };
+    auto const code = co_await awaitable;
     Json::Value result = toHexStringWithPrefix(code);
     buildJsonContent(result, response);
     co_return;
