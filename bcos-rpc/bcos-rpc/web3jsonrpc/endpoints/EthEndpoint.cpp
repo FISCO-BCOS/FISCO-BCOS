@@ -386,7 +386,7 @@ task::Task<void> EthEndpoint::getCode(const Json::Value& request, Json::Value& r
         .m_scheduler = scheduler,
         .m_address = addressStr,
     };
-    auto const code = co_await awaitable;
+    auto code = co_await awaitable;
     Json::Value result = toHexStringWithPrefix(code);
     buildJsonContent(result, response);
     co_return;
