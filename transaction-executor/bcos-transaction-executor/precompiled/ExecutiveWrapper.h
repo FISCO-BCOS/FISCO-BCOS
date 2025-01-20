@@ -7,6 +7,13 @@
 #include "bcos-executor/src/vm/HostContext.h"
 #include <evmc/evmc.h>
 #include <memory>
+#ifdef WITH_WASM
+#include "bcos-executor/src/vm/gas_meter/GasInjector.h"
+#else
+class bcos::wasm::GasInjector
+{
+};
+#endif
 
 #define EXECUTIVE_WRAPPER(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTIVE_WRAPPER")
 
@@ -138,4 +145,20 @@ public:
         return callResult;
     }
 };
+
+inline auto buildLegacyExecutive(auto& storage, protocol::BlockHeader const& blockHeader,
+    std::string contractAddress, ExternalCaller auto externalCaller, auto const& precompiledManager,
+    int64_t contextID, int64_t seq, bool authCheck)
+{
+    auto storageWrapper =
+        std::make_shared<storage::LegacyStateStorageWrapper<std::decay_t<decltype(storage)>>>(
+            storage);
+
+    auto blockContext = std::make_unique<executor::BlockContext>(storageWrapper, nullptr,
+        executor::GlobalHashImpl::g_hashImpl, blockHeader, false, authCheck);
+    return std::make_shared<
+        ExecutiveWrapper<decltype(externalCaller), std::decay_t<decltype(precompiledManager)>>>(
+        std::move(blockContext), std::move(contractAddress), contextID, seq, wasm::GasInjector{},
+        std::move(externalCaller), precompiledManager);
+}
 }  // namespace bcos::transaction_executor

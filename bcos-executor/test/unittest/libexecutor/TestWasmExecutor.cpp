@@ -22,6 +22,7 @@
 // if wasm ut crash on aarch64 linux check https://github.com/bytecodealliance/wasmtime/issues/4972
 // #if !defined(__aarch64__) && !defined(__linux__)
 
+#include "bcos-codec/scale/Scale.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #ifdef WITH_WASM
 

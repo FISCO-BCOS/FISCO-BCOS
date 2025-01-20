@@ -462,6 +462,13 @@ public:
                 }
             }
         }
+        catch (protocol::OutOfGas& e)
+        {
+            HOST_CONTEXT_LOG(DEBUG) << "OutOfGas exception: " << boost::diagnostic_information(e);
+            co_return makeErrorEVMCResult(hostContext.m_hashImpl,
+                protocol::TransactionStatus::OutOfGas, EVMC_OUT_OF_GAS, evmResult->gas_left,
+                e.what());
+        }
         catch (protocol::NotEnoughCashError& e)
         {
             HOST_CONTEXT_LOG(DEBUG)
@@ -515,25 +522,12 @@ public:
             }
         }
 
-        // 如果本次调用的sender或recipient是系统合约，不消耗gas
-        // If the sender or recipient of this call is a system contract, gas is not consumed
-        if (auto senderAddress = address2FixedArray(ref.sender),
-            recipientAddress = address2FixedArray(ref.recipient);
-            precompiled::contains(bcos::precompiled::c_systemTxsAddress,
-                concepts::bytebuffer::toView(senderAddress)) ||
-            precompiled::contains(bcos::precompiled::c_systemTxsAddress,
-                concepts::bytebuffer::toView(recipientAddress)))
-        {
-            evmResult->gas_left = ref.gas;
-            HOST_CONTEXT_LOG(TRACE)
-                << "System contract sender call, clear gasUsed, gas_left: " << evmResult->gas_left;
-        }
-
         if (c_fileLogLevel <= LogLevel::TRACE) [[unlikely]]
         {
             HOST_CONTEXT_LOG(TRACE)
                 << "HostContext execute finished, kind: " << ref.kind
-                << " status: " << evmResult->status_code << " gas: " << evmResult->gas_left
+                << " seq:" << hostContext.m_seq << " status: " << evmResult->status_code
+                << " gas: " << evmResult->gas_left
                 << " output: " << bytesConstRef(evmResult->output_data, evmResult->output_size);
         }
         co_return std::move(*evmResult);
@@ -580,10 +574,9 @@ private:
         auto& ref = message();
         if (m_blockHeader.get().number() != 0)
         {
-            createAuthTable(m_rollbackableStorage.get(), m_blockHeader, ref, m_origin,
+            co_await createAuthTable(m_rollbackableStorage.get(), m_blockHeader, ref, m_origin,
                 co_await ledger::account::path(m_recipientAccount), buildLegacyExternalCaller(),
-                m_precompiledManager.get(), m_contextID, m_seq);
-
+                m_precompiledManager.get(), m_contextID, m_seq, m_ledgerConfig);
             // 兼容历史问题逻辑
             // Compatible with historical issue
             if (m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_balance) &&
@@ -594,7 +587,7 @@ private:
                 deleteEntry.setStatus(storage::Entry::DELETED);
                 co_await storage2::writeOne(m_rollbackableStorage.get(),
                     transaction_executor::StateKey(
-                        m_recipientAccount.address(), executor::ACCOUNT_CODE),
+                        co_await ledger::account::path(m_recipientAccount), executor::ACCOUNT_CODE),
                     deleteEntry);
             }
         }
