@@ -2,8 +2,8 @@
 
 #include "ExecutiveWrapper.h"
 #include "bcos-executor/src/CallParameters.h"
+#include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-transaction-executor/EVMCResult.h"
-#include "bcos-transaction-executor/precompiled/PrecompiledImpl.h"
 #include <evmc/evmc.h>
 #include <boost/throw_exception.hpp>
 #include <memory>
@@ -12,9 +12,10 @@
 namespace bcos::transaction_executor
 {
 
-inline void createAuthTable(auto& storage, protocol::BlockHeader const& blockHeader,
+inline task::Task<void> createAuthTable(auto& storage, protocol::BlockHeader const& blockHeader,
     evmc_message const& message, evmc_address const& origin, std::string_view tableName,
-    ExternalCaller auto&& externalCaller, auto& precompiledManager, int64_t contextID, int64_t seq)
+    ExternalCaller auto&& externalCaller, auto& precompiledManager, int64_t contextID, int64_t seq,
+    const ledger::LedgerConfig& ledgerConfig)
 {
     auto contractAddress = address2HexString(message.code_address);
     auto originAddress = address2HexString(origin);
@@ -24,6 +25,7 @@ inline void createAuthTable(auto& storage, protocol::BlockHeader const& blockHea
         true);
 
     executive->creatAuthTable(tableName, originAddress, senderAddress, blockHeader.version());
+    co_return;
 }
 
 inline std::optional<EVMCResult> checkAuth(auto& storage, protocol::BlockHeader const& blockHeader,

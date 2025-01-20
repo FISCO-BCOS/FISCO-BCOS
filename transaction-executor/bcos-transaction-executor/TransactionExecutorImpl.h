@@ -146,6 +146,7 @@ public:
         }
 
         auto gasUsed = executeContext.m_gasLimit - evmcResult.gas_left;
+
         if (executeContext.m_ledgerConfig.get().features().get(
                 ledger::Features::Flag::feature_balance_policy1))
         {
@@ -166,6 +167,19 @@ public:
             else
             {
                 co_await ledger::account::setBalance(senderAccount, senderBalance - balanceUsed);
+            }
+        }
+
+        // 如果本次调用是eoa调用系统合约，将gasUsed设置为0
+        // If the call from eoa to system contract, the gasUsed is cleared to zero
+        if (!executeContext.m_ledgerConfig.get().features().get(
+                ledger::Features::Flag::bugfix_precompiled_gasused))
+        {
+            if (auto codeAddress = address2FixedArray(evmcMessage.code_address);
+                precompiled::contains(bcos::precompiled::c_systemTxsAddress,
+                    concepts::bytebuffer::toView(codeAddress)))
+            {
+                gasUsed = 0;
             }
         }
 

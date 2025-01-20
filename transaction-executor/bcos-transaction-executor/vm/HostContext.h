@@ -580,10 +580,9 @@ private:
         auto& ref = message();
         if (m_blockHeader.get().number() != 0)
         {
-            createAuthTable(m_rollbackableStorage.get(), m_blockHeader, ref, m_origin,
+            co_await createAuthTable(m_rollbackableStorage.get(), m_blockHeader, ref, m_origin,
                 co_await ledger::account::path(m_recipientAccount), buildLegacyExternalCaller(),
-                m_precompiledManager.get(), m_contextID, m_seq);
-
+                m_precompiledManager.get(), m_contextID, m_seq, m_ledgerConfig);
             // 兼容历史问题逻辑
             // Compatible with historical issue
             if (m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_balance) &&
@@ -594,7 +593,7 @@ private:
                 deleteEntry.setStatus(storage::Entry::DELETED);
                 co_await storage2::writeOne(m_rollbackableStorage.get(),
                     transaction_executor::StateKey(
-                        m_recipientAccount.address(), executor::ACCOUNT_CODE),
+                        co_await ledger::account::path(m_recipientAccount), executor::ACCOUNT_CODE),
                     deleteEntry);
             }
         }
