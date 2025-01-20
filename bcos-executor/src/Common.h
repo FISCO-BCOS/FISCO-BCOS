@@ -161,7 +161,6 @@ struct SubState
 
 struct VMSchedule
 {
-    VMSchedule() {}
     bool exceptionalFailedCodeDeposit = true;
     bool enableLondon = true;
     bool enablePairs = false;
@@ -174,12 +173,12 @@ struct VMSchedule
 };
 
 static const VMSchedule FiscoBcosSchedule = [] {
-    VMSchedule schedule = VMSchedule();
+    VMSchedule schedule;
     return schedule;
 }();
 
 static const VMSchedule FiscoBcosScheduleV320 = [] {
-    VMSchedule schedule = VMSchedule();
+    VMSchedule schedule;
     schedule.enablePairs = true;
     schedule.maxEvmCodeSize = 0x100000;   // 1MB
     schedule.maxWasmCodeSize = 0xF00000;  // 15MB
@@ -187,7 +186,7 @@ static const VMSchedule FiscoBcosScheduleV320 = [] {
 }();
 
 static const VMSchedule FiscoBcosScheduleCancun = [] {
-    VMSchedule schedule = VMSchedule();
+    VMSchedule schedule;
     schedule.enableCanCun = true;
     schedule.maxEvmCodeSize = 0x100000;   // 1MB
     schedule.maxWasmCodeSize = 0xF00000;  // 15MB

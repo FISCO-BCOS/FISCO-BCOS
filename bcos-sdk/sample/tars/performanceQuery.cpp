@@ -250,7 +250,7 @@ void loopFetchBlockNumber(bcos::sdk::RPCClient& rpcClient)
     {
         try
         {
-            blockNumber = bcos::sdk::BlockNumber(rpcClient).send().get();
+            g_blockNumber = bcos::sdk::BlockNumber(rpcClient).send().get();
         }
         catch (std::exception& e)
         {

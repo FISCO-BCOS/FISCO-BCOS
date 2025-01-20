@@ -22,15 +22,13 @@
 #include "Bloom.h"
 
 
+#include <bcos-crypto/ChecksumAddress.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-rpc/web3jsonrpc/model/Log.h>
 #include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <json/json.h>
-
-#include <bcos-crypto/ChecksumAddress.h>
-#include <ostream>
 
 namespace bcos::rpc
 {
@@ -98,7 +96,7 @@ namespace bcos::rpc
         result["contractAddress"] = "0x" + std::move(contractAddress);
     }
     result["logs"] = Json::arrayValue;
-    auto mutableReceipt = const_cast<bcos::protocol::TransactionReceipt*>(receipt.get());
+    auto* mutableReceipt = const_cast<bcos::protocol::TransactionReceipt*>(receipt.get());
     auto receiptLog = mutableReceipt->takeLogEntries();
     for (size_t i = 0; i < receiptLog.size(); i++)
     {

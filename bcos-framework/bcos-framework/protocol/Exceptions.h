@@ -20,9 +20,8 @@
  */
 #pragma once
 #include <bcos-utilities/Exceptions.h>
-namespace bcos
-{
-namespace protocol
+
+namespace bcos::protocol
 {
 DERIVE_BCOS_EXCEPTION(InvalidBlockHeader);
 DERIVE_BCOS_EXCEPTION(InvalidSignatureList);
@@ -55,5 +54,4 @@ public:
     NotEnoughCashError(std::string const& _msg) : Exception(_msg) {}
 };
 
-}  // namespace protocol
-}  // namespace bcos
+}  // namespace bcos::protocol

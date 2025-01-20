@@ -19,6 +19,7 @@
  */
 
 #pragma once
+#include "bcos-codec/scale/Scale.h"
 #include "bcos-crypto/interfaces/crypto/CommonType.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/storage/LegacyStorageMethods.h"
