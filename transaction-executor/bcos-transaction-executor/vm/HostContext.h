@@ -584,7 +584,7 @@ public:
 
         HostContext hostcontext(innerConstructor, m_rollbackableStorage.get(),
             m_rollbackableTransientStorage.get(), m_blockHeader, message, m_origin, {}, m_contextID,
-            m_seq, m_precompiledManager.get(), m_ledgerConfig, m_hashImpl, interface);
+            m_seq, m_precompiledManager, m_ledgerConfig, m_hashImpl, interface);
 
         co_await prepare(hostcontext);
         auto result = co_await execute(hostcontext);
