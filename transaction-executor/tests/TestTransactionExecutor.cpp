@@ -199,48 +199,48 @@ BOOST_AUTO_TEST_CASE(costBalance)
     }());
 }
 
-// BOOST_AUTO_TEST_CASE(bugfixPrecompiled)
-// {
-//     task::syncWait([this]() mutable -> task::Task<void> {
-//         bcostars::protocol::BlockHeaderImpl blockHeader(
-//             [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
-//         blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
-//         blockHeader.calculateHash(*cryptoSuite->hashImpl());
+BOOST_AUTO_TEST_CASE(bugfixPrecompiled)
+{
+    // task::syncWait([this]() mutable -> task::Task<void> {
+    //     bcostars::protocol::BlockHeaderImpl blockHeader(
+    //         [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+    //     blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
+    //     blockHeader.calculateHash(*cryptoSuite->hashImpl());
 
-//         auto features = ledgerConfig.features();
-//         features.setGenesisFeatures(protocol::BlockVersion::V3_13_0_VERSION);
-//         features.set(bcos::ledger::Features::Flag::feature_balance);
-//         features.set(bcos::ledger::Features::Flag::feature_balance_policy1);
-//         ledgerConfig.setFeatures(features);
-//         ledgerConfig.setGasPrice({"1", 0});
+    //     auto features = ledgerConfig.features();
+    //     features.setGenesisFeatures(protocol::BlockVersion::V3_13_0_VERSION);
+    //     features.set(bcos::ledger::Features::Flag::feature_balance);
+    //     features.set(bcos::ledger::Features::Flag::feature_balance_policy1);
+    //     ledgerConfig.setFeatures(features);
+    //     ledgerConfig.setGasPrice({"1", 0});
 
-//         bcos::bytes helloworldBytecodeBinary;
-//         boost::algorithm::unhex(helloworldBytecode,
-//         std::back_inserter(helloworldBytecodeBinary));
-//         // First deploy
-//         auto transaction = transactionFactory.createTransaction(
-//             0, "", helloworldBytecodeBinary, {}, 0, "", "", 0, std::string{}, {}, {}, 1000);
-//         auto receipt = co_await bcos::transaction_executor::executeTransaction(
-//             executor, storage, blockHeader, *transaction, 0, ledgerConfig, task::syncWait);
-//         BOOST_CHECK_EQUAL(
-//             receipt->status(), static_cast<int32_t>(protocol::TransactionStatus::NotEnoughCash));
+    //     bcos::bytes helloworldBytecodeBinary;
+    //     boost::algorithm::unhex(helloworldBytecode,
+    //     std::back_inserter(helloworldBytecodeBinary));
+    //     // First deploy
+    //     auto transaction = transactionFactory.createTransaction(
+    //         0, "", helloworldBytecodeBinary, {}, 0, "", "", 0, std::string{}, {}, {}, 1000);
+    //     auto receipt = co_await bcos::transaction_executor::executeTransaction(
+    //         executor, storage, blockHeader, *transaction, 0, ledgerConfig, task::syncWait);
+    //     BOOST_CHECK_EQUAL(
+    //         receipt->status(), static_cast<int32_t>(protocol::TransactionStatus::NotEnoughCash));
 
-//         using namespace std::string_view_literals;
-//         auto sender = "e0e794ca86d198042b64285c5ce667aee747509b"sv;
-//         evmc_address senderAddress = unhexAddress(sender);
-//         transaction->forceSender(
-//             bytes(senderAddress.bytes, senderAddress.bytes + sizeof(senderAddress.bytes)));
+    //     using namespace std::string_view_literals;
+    //     auto sender = "e0e794ca86d198042b64285c5ce667aee747509b"sv;
+    //     evmc_address senderAddress = unhexAddress(sender);
+    //     transaction->forceSender(
+    //         bytes(senderAddress.bytes, senderAddress.bytes + sizeof(senderAddress.bytes)));
 
-//         ledger::account::EVMAccount senderAccount(storage, senderAddress, false);
-//         co_await ledger::account::setBalance(senderAccount, 90000);
+    //     ledger::account::EVMAccount senderAccount(storage, senderAddress, false);
+    //     co_await ledger::account::setBalance(senderAccount, 90000);
 
-//         receipt = co_await bcos::transaction_executor::executeTransaction(
-//             executor, storage, blockHeader, *transaction, 0, ledgerConfig, task::syncWait);
-//         BOOST_CHECK_EQUAL(receipt->status(), 0);
-//         BOOST_CHECK_EQUAL(receipt->contractAddress(),
-//         "e0e794ca86d198042b64285c5ce667aee747509b"); BOOST_CHECK_EQUAL(
-//             co_await ledger::account::balance(senderAccount), 90000 - receipt->gasUsed());
-//     }());
-// }
+    //     receipt = co_await bcos::transaction_executor::executeTransaction(
+    //         executor, storage, blockHeader, *transaction, 0, ledgerConfig, task::syncWait);
+    //     BOOST_CHECK_EQUAL(receipt->status(), 0);
+    //     BOOST_CHECK_EQUAL(receipt->contractAddress(),
+    //     "e0e794ca86d198042b64285c5ce667aee747509b"); BOOST_CHECK_EQUAL(
+    //         co_await ledger::account::balance(senderAccount), 90000 - receipt->gasUsed());
+    // }());
+}
 
 BOOST_AUTO_TEST_SUITE_END()
