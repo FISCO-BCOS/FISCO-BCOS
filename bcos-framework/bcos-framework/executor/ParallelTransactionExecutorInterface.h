@@ -23,8 +23,6 @@
 
 #include "../protocol/BlockHeader.h"
 #include "../protocol/ProtocolTypeDef.h"
-#include "../protocol/Transaction.h"
-#include "../protocol/TransactionReceipt.h"
 #include "ExecutionMessage.h"
 #include "ExecutorStatus.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
@@ -132,9 +130,9 @@ public:
     virtual void getABI(
         std::string_view contract, std::function<void(bcos::Error::Ptr, std::string)> callback) = 0;
 
-    virtual void start(){};
+    virtual void start() {};
 
-    virtual void stop(){};
+    virtual void stop() {};
 
 protected:
     int64_t m_seq = utcTime();

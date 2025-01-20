@@ -103,9 +103,9 @@ constexpr inline struct SyncWait
             });
         }
 
-        if (std::holds_alternative<std::exception_ptr>(result))
+        if (auto* exception = std::get_if<std::exception_ptr>(std::addressof(result)))
         {
-            std::rethrow_exception(std::get<std::exception_ptr>(result));
+            std::rethrow_exception(*exception);
         }
 
         if constexpr (!std::is_void_v<ReturnType>)

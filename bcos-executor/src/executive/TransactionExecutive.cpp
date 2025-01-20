@@ -311,7 +311,7 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
                 callParameters->senderAddress,
                 m_blockContext.features().get(ledger::Features::Flag::feature_raw_address));
             task::wait([](decltype(address) addr, u256 callNonce) -> task::Task<void> {
-                if (!co_await ledger::account::isExist(addr))
+                if (!co_await ledger::account::exists(addr))
                 {
                     co_await ledger::account::create(addr);
                 }
@@ -1189,11 +1189,15 @@ CallParameters::UniquePtr TransactionExecutive::go(
                 revert();
                 auto callResult = hostContext.takeCallParameters();
 
-                if (m_blockContext.features().get(
-                        ledger::Features::Flag::bugfix_call_noaddr_return) &&
-                    callResult->staticCall &&
-                    callResult->seq > 0  // must staticCall from contract(not from rpc call)
-                )
+                if ((m_blockContext.features().get(
+                         ledger::Features::Flag::bugfix_call_noaddr_return) &&
+                        callResult->staticCall &&
+                        callResult->seq > 0  // must staticCall from contract(not from rpc call)
+                        ) ||
+                    (m_blockContext.features().get(
+                         ledger::Features::Flag::feature_balance_policy1) &&
+                        m_blockContext.features().get(
+                            ledger::Features::Flag::bugfix_policy1_empty_code_address)))
                 {
                     // Note: to be the same as eth
                     // if bugfix_call_noaddr_return is not set, callResult->evmStatus is still

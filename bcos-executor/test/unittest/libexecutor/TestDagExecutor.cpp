@@ -18,6 +18,7 @@
  * @author: catli
  * @date: 2021-10-27
  */
+#include "bcos-codec/scale/Scale.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "bcos-tars-protocol/tars/Block.h"
 
@@ -54,7 +55,6 @@
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/log/core/core.hpp>
-#include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <cstdio>
 #include <fstream>

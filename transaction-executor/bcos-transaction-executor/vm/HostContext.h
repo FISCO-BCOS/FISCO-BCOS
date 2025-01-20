@@ -721,7 +721,7 @@ private:
                 if (m_ledgerConfig.get().features().get(
                         ledger::Features::Flag::feature_balance_policy1) &&
                     !m_ledgerConfig.get().features().get(
-                        ledger::Features::Flag::bugfix_policy1_emptyto))
+                        ledger::Features::Flag::bugfix_policy1_empty_code_address))
                 {
                     co_return makeErrorEVMCResult(m_hashImpl,
                         protocol::TransactionStatus::CallAddressError, EVMC_REVERT, ref.gas,

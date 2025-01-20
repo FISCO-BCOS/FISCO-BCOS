@@ -16,7 +16,6 @@
 
 #pragma once
 #include "bcos-concepts/Exception.h"
-#include "bcos-utilities/Overloaded.h"
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
 #include <coroutine>

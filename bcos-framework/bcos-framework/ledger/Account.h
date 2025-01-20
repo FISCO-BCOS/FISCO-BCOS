@@ -6,13 +6,13 @@
 namespace bcos::ledger::account
 {
 
-inline constexpr struct IsExist
+inline constexpr struct Exists
 {
     task::Task<bool> operator()(auto& account, auto&&... args) const
     {
         co_return co_await tag_invoke(*this, account, std::forward<decltype(args)>(args)...);
     }
-} isExist{};
+} exists{};
 
 inline constexpr struct Create
 {

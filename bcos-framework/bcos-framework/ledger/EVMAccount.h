@@ -19,7 +19,7 @@ private:
     std::reference_wrapper<Storage> m_storage;
     std::string m_tableName;
 
-    friend task::Task<bool> tag_invoke(tag_t<isExist> /*unused*/, EVMAccount& account)
+    friend task::Task<bool> tag_invoke(tag_t<exists> /*unused*/, EVMAccount& account)
     {
         co_return co_await storage2::existsOne(account.m_storage.get(),
             transaction_executor::StateKeyView(SYS_TABLES, account.m_tableName));
