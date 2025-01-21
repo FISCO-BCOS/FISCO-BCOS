@@ -27,6 +27,7 @@
 #include "EVMHostInterface.h"
 #include "VMInstance.h"
 #include "bcos-codec/abi/ContractABICodec.h"
+#include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-executor/src/Common.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/ledger/Account.h"
@@ -35,6 +36,7 @@
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/protocol/BlockHeader.h"
+#include "bcos-framework/protocol/Exceptions.h"
 #include "bcos-framework/protocol/LogEntry.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/storage/Entry.h"
@@ -60,7 +62,6 @@
 #include <magic_enum.hpp>
 #include <memory>
 #include <string_view>
-#include <variant>
 
 namespace bcos::transaction_executor::hostcontext
 {
@@ -156,6 +157,7 @@ private:
     std::shared_ptr<Executable> m_executable;
     const bcos::transaction_executor::Precompiled* m_preparedPrecompiled{};
     std::optional<bcos::bytes> m_dynamicPrecompiledInput;
+    bool m_enableTransfer = false;
 
     constexpr auto buildLegacyExternalCaller()
     {
@@ -437,8 +439,10 @@ public:
         {
             // 先转账，再执行
             // Transfer first, then proceed execute
-            if (co_await checkEnableTransfer(hostContext.m_ledgerConfig,
-                    hostContext.m_rollbackableStorage.get(), hostContext.m_blockHeader))
+            if (hostContext.m_enableTransfer =
+                    co_await checkEnableTransfer(hostContext.m_ledgerConfig,
+                        hostContext.m_rollbackableStorage.get(), hostContext.m_blockHeader);
+                hostContext.m_enableTransfer)
             {
                 co_await hostContext.transferBalance(ref);
             }
@@ -711,7 +715,8 @@ private:
 
                 // 兼容历史问题逻辑
                 // Compatible with historical issue
-                if (m_ledgerConfig.get().features().get(
+                if (!m_enableTransfer &&
+                    m_ledgerConfig.get().features().get(
                         ledger::Features::Flag::feature_balance_policy1) &&
                     !m_ledgerConfig.get().features().get(
                         ledger::Features::Flag::bugfix_policy1_empty_code_address))
