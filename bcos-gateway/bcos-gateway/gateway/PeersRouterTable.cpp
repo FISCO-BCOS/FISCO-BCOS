@@ -18,6 +18,7 @@
  * @date 2021-12-29
  */
 #include "PeersRouterTable.h"
+#include "bcos-task/Wait.h"
 #include "bcos-utilities/BoostLog.h"
 
 using namespace bcos;
@@ -230,11 +231,9 @@ std::set<P2pID> PeersRouterTable::getAllPeers() const
 
 GatewayStatus::Ptr PeersRouterTable::gatewayInfo(std::string const& _uuid)
 {
-    ReadGuard lock(x_gatewayInfos);
-    auto it = m_gatewayInfos.find(_uuid);
-    if (it != m_gatewayInfos.end())
+    if (decltype(m_gatewayInfos)::const_accessor accessor; m_gatewayInfos.find(accessor, _uuid))
     {
-        return it->second;
+        return accessor->second;
     }
     return nullptr;
 }
@@ -242,22 +241,18 @@ GatewayStatus::Ptr PeersRouterTable::gatewayInfo(std::string const& _uuid)
 void PeersRouterTable::updateGatewayInfo(P2pID const& _p2pNodeID, GatewayNodeStatus::Ptr _status)
 {
     GatewayStatus::Ptr gatewayStatus;
+    decltype(m_gatewayInfos)::accessor accessor;
+    if (m_gatewayInfos.insert(accessor, _status->uuid()))
     {
-        UpgradableGuard l(x_gatewayInfos);
-        if (!m_gatewayInfos.count(_status->uuid()))
-        {
-            UpgradeGuard ul(l);
-            m_gatewayInfos[_status->uuid()] =
-                m_gatewayStatusFactory->createGatewayInfo(_status->uuid());
-        }
-        gatewayStatus = m_gatewayInfos.at(_status->uuid());
+        accessor->second = m_gatewayStatusFactory->createGatewayInfo(_status->uuid());
     }
+    gatewayStatus = accessor->second;
+    accessor.release();
     gatewayStatus->update(_p2pNodeID, _status);
 }
 
 void PeersRouterTable::removeNodeFromGatewayInfo(P2pID const& _p2pID)
 {
-    ReadGuard l(x_gatewayInfos);
     for (auto const& it : m_gatewayInfos)
     {
         it.second->removeP2PNode(_p2pID);
@@ -271,7 +266,6 @@ void PeersRouterTable::asyncBroadcastMsg(
     std::vector<std::string> selectedPeers;
     selectedPeers.reserve(m_gatewayInfos.size());
     {
-        ReadGuard l(x_gatewayInfos);
         for (auto const& it : m_gatewayInfos)
         {
             // not broadcast message to the gateway-self
@@ -289,7 +283,7 @@ void PeersRouterTable::asyncBroadcastMsg(
     ROUTER_LOG(TRACE) << LOG_BADGE("PeersRouterTable")
                       << LOG_DESC("asyncBroadcastMsg: randomChooseP2PNode")
                       << LOG_KV("nodeType", _type) << LOG_KV("moduleID", _moduleID)
-                      << LOG_KV("payloadSize", _msg->payload()->size())
+                      << LOG_KV("payloadSize", _msg->payload().size())
                       << LOG_KV("peersSize", selectedPeers.size());
     for (auto const& peer : selectedPeers)
     {
@@ -300,5 +294,40 @@ void PeersRouterTable::asyncBroadcastMsg(
                               << LOG_KV("dst", P2PMessage::printP2PIDElegantly(peer));
         }
         m_p2pInterface->asyncSendMessageByNodeID(peer, _msg, CallbackFuncWithSession());
+    }
+}
+
+bcos::task::Task<void> bcos::gateway::PeersRouterTable::broadcastMessage(uint16_t type,
+    std::string_view group, uint16_t moduleID, P2PMessage& message,
+    ::ranges::any_view<bytesConstRef> payloads)
+{
+    std::vector<std::string> selectedPeers;
+    selectedPeers.reserve(m_gatewayInfos.size());
+    for (auto const& it : m_gatewayInfos)
+    {
+        // not broadcast message to the gateway-self
+        if (it.first == m_uuid)
+        {
+            continue;
+        }
+        std::string p2pNodeID;
+        if (it.second->randomChooseP2PNode(p2pNodeID, type, group))
+        {
+            selectedPeers.emplace_back(std::move(p2pNodeID));
+        }
+    }
+
+    ROUTER_LOG(TRACE) << LOG_BADGE("PeersRouterTable")
+                      << LOG_DESC("broadcastMsg: randomChooseP2PNode") << LOG_KV("nodeType", type)
+                      << LOG_KV("moduleID", moduleID) << LOG_KV("peersSize", selectedPeers.size());
+    for (auto const& peer : selectedPeers)
+    {
+        if (c_fileLogLevel <= TRACE) [[unlikely]]
+        {
+            ROUTER_LOG(TRACE) << LOG_BADGE("PeersRouterTable") << LOG_DESC("asyncBroadcastMsg")
+                              << LOG_KV("nodeType", type) << LOG_KV("moduleID", moduleID)
+                              << LOG_KV("dst", P2PMessage::printP2PIDElegantly(peer));
+        }
+        co_await m_p2pInterface->sendMessageByNodeID(peer, message, payloads);
     }
 }

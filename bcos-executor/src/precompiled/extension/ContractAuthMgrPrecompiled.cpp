@@ -19,7 +19,7 @@
  */
 
 #include "ContractAuthMgrPrecompiled.h"
-
+#include "bcos-codec/scale/Scale.h"
 #include <utility>
 
 using namespace bcos;
@@ -32,37 +32,46 @@ using namespace bcos::protocol;
 /// wasm
 constexpr const char* const CONTRACT_AUTH_METHOD_GET_ADMIN = "getAdmin(string)";
 constexpr const char* const CONTRACT_AUTH_METHOD_SET_ADMIN = "resetAdmin(string,string)";
-constexpr const char* const CONTRACT_AUTH_METHOD_SET_AUTH_TYPE = "setMethodAuthType(string,bytes4,uint8)";
+constexpr const char* const CONTRACT_AUTH_METHOD_SET_AUTH_TYPE =
+    "setMethodAuthType(string,bytes4,uint8)";
 constexpr const char* const CONTRACT_AUTH_METHOD_OPEN_AUTH = "openMethodAuth(string,bytes4,string)";
-constexpr const char* const CONTRACT_AUTH_METHOD_CLOSE_AUTH = "closeMethodAuth(string,bytes4,string)";
-constexpr const char* const CONTRACT_AUTH_METHOD_CHECK_AUTH = "checkMethodAuth(string,bytes4,string)";
+constexpr const char* const CONTRACT_AUTH_METHOD_CLOSE_AUTH =
+    "closeMethodAuth(string,bytes4,string)";
+constexpr const char* const CONTRACT_AUTH_METHOD_CHECK_AUTH =
+    "checkMethodAuth(string,bytes4,string)";
 constexpr const char* const CONTRACT_AUTH_METHOD_GET_AUTH = "getMethodAuth(string,bytes4)";
 /// evm
 constexpr const char* const CONTRACT_AUTH_METHOD_GET_ADMIN_ADD = "getAdmin(address)";
 constexpr const char* const CONTRACT_AUTH_METHOD_SET_ADMIN_ADD = "resetAdmin(address,address)";
 constexpr const char* const CONTRACT_AUTH_METHOD_SET_AUTH_TYPE_ADD =
     "setMethodAuthType(address,bytes4,uint8)";
-constexpr const char* const CONTRACT_AUTH_METHOD_OPEN_AUTH_ADD = "openMethodAuth(address,bytes4,address)";
-constexpr const char* const CONTRACT_AUTH_METHOD_CLOSE_AUTH_ADD = "closeMethodAuth(address,bytes4,address)";
-constexpr const char* const CONTRACT_AUTH_METHOD_CHECK_AUTH_ADD = "checkMethodAuth(address,bytes4,address)";
+constexpr const char* const CONTRACT_AUTH_METHOD_OPEN_AUTH_ADD =
+    "openMethodAuth(address,bytes4,address)";
+constexpr const char* const CONTRACT_AUTH_METHOD_CLOSE_AUTH_ADD =
+    "closeMethodAuth(address,bytes4,address)";
+constexpr const char* const CONTRACT_AUTH_METHOD_CHECK_AUTH_ADD =
+    "checkMethodAuth(address,bytes4,address)";
 constexpr const char* const CONTRACT_AUTH_METHOD_GET_AUTH_ADD = "getMethodAuth(address,bytes4)";
 
 /// contract status
 constexpr const char* const CONTRACT_AUTH_METHOD_SET_CONTRACT = "setContractStatus(address,bool)";
-constexpr const char* const CONTRACT_AUTH_METHOD_SET_CONTRACT_32 = "setContractStatus(address,uint8)";
+constexpr const char* const CONTRACT_AUTH_METHOD_SET_CONTRACT_32 =
+    "setContractStatus(address,uint8)";
 constexpr const char* const CONTRACT_AUTH_METHOD_GET_CONTRACT = "contractAvailable(address)";
 
 ContractAuthMgrPrecompiled::ContractAuthMgrPrecompiled(crypto::Hash::Ptr _hashImpl, bool _isWasm)
   : bcos::precompiled::Precompiled(std::move(_hashImpl))
 {
-    const auto* getAdminStr = _isWasm ? CONTRACT_AUTH_METHOD_GET_ADMIN : CONTRACT_AUTH_METHOD_GET_ADMIN_ADD;
+    const auto* getAdminStr =
+        _isWasm ? CONTRACT_AUTH_METHOD_GET_ADMIN : CONTRACT_AUTH_METHOD_GET_ADMIN_ADD;
     registerFunc(
         getFuncSelector(getAdminStr, _hashImpl), [this](auto&& _executive, auto&& _callParameters) {
             getAdmin(std::forward<decltype(_executive)>(_executive),
                 std::forward<decltype(_callParameters)>(_callParameters));
         });
 
-    const auto* resetAdminStr = _isWasm ? CONTRACT_AUTH_METHOD_SET_ADMIN : CONTRACT_AUTH_METHOD_SET_ADMIN_ADD;
+    const auto* resetAdminStr =
+        _isWasm ? CONTRACT_AUTH_METHOD_SET_ADMIN : CONTRACT_AUTH_METHOD_SET_ADMIN_ADD;
     registerFunc(getFuncSelector(resetAdminStr, _hashImpl),
         [this](auto&& _executive, auto&& _callParameters) {
             resetAdmin(std::forward<decltype(_executive)>(_executive),
@@ -77,28 +86,32 @@ ContractAuthMgrPrecompiled::ContractAuthMgrPrecompiled(crypto::Hash::Ptr _hashIm
                 std::forward<decltype(_callParameters)>(_callParameters));
         });
 
-    const auto* openMethodAuthStr = _isWasm ? CONTRACT_AUTH_METHOD_OPEN_AUTH : CONTRACT_AUTH_METHOD_OPEN_AUTH_ADD;
+    const auto* openMethodAuthStr =
+        _isWasm ? CONTRACT_AUTH_METHOD_OPEN_AUTH : CONTRACT_AUTH_METHOD_OPEN_AUTH_ADD;
     registerFunc(getFuncSelector(openMethodAuthStr, _hashImpl),
         [this](auto&& _executive, auto&& _callParameters) {
             openMethodAuth(std::forward<decltype(_executive)>(_executive),
                 std::forward<decltype(_callParameters)>(_callParameters));
         });
 
-    const auto* closeMethodAuthStr = _isWasm ? CONTRACT_AUTH_METHOD_CLOSE_AUTH : CONTRACT_AUTH_METHOD_CLOSE_AUTH_ADD;
+    const auto* closeMethodAuthStr =
+        _isWasm ? CONTRACT_AUTH_METHOD_CLOSE_AUTH : CONTRACT_AUTH_METHOD_CLOSE_AUTH_ADD;
     registerFunc(getFuncSelector(closeMethodAuthStr, _hashImpl),
         [this](auto&& _executive, auto&& _callParameters) {
             closeMethodAuth(std::forward<decltype(_executive)>(_executive),
                 std::forward<decltype(_callParameters)>(_callParameters));
         });
 
-    const auto* checkMethodAuthStr = _isWasm ? CONTRACT_AUTH_METHOD_CHECK_AUTH : CONTRACT_AUTH_METHOD_CHECK_AUTH_ADD;
+    const auto* checkMethodAuthStr =
+        _isWasm ? CONTRACT_AUTH_METHOD_CHECK_AUTH : CONTRACT_AUTH_METHOD_CHECK_AUTH_ADD;
     registerFunc(getFuncSelector(checkMethodAuthStr, _hashImpl),
         [this](auto&& _executive, auto&& _callParameters) {
             checkMethodAuth(std::forward<decltype(_executive)>(_executive),
                 std::forward<decltype(_callParameters)>(_callParameters));
         });
 
-    const auto* getMethodAuthStr = _isWasm ? CONTRACT_AUTH_METHOD_GET_AUTH : CONTRACT_AUTH_METHOD_GET_AUTH_ADD;
+    const auto* getMethodAuthStr =
+        _isWasm ? CONTRACT_AUTH_METHOD_GET_AUTH : CONTRACT_AUTH_METHOD_GET_AUTH_ADD;
     registerFunc(getFuncSelector(getMethodAuthStr, _hashImpl),
         [this](auto&& _executive, auto&& _callParameters) {
             getMethodAuth(std::forward<decltype(_executive)>(_executive),
@@ -133,7 +146,7 @@ std::shared_ptr<PrecompiledExecResult> ContractAuthMgrPrecompiled::call(
     uint32_t func = getParamFunc(_callParameters->input());
 
     const auto& blockContext = _executive->blockContext();
-    const auto* authAddress = blockContext.isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS;
+    const auto authAddress = blockContext.isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS;
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     PRECOMPILED_LOG(TRACE) << BLOCK_NUMBER(blockContext.number())
                            << LOG_BADGE("ContractAuthMgrPrecompiled") << LOG_DESC("call")

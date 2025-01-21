@@ -55,14 +55,11 @@ void setCapacityForMRU(auto& storage)
 }
 
 Fixture fixture;
-std::variant<MemoryStorage<Key, storage::Entry, memory_storage::Attribute(ORDERED)>,
-    MemoryStorage<Key, storage::Entry, memory_storage::Attribute(ORDERED | CONCURRENT),
-        std::hash<Key>>,
-    MemoryStorage<Key, storage::Entry, memory_storage::Attribute(ORDERED | CONCURRENT | LRU),
-        std::hash<Key>>,
-    MemoryStorage<Key, storage::Entry>,
-    MemoryStorage<Key, storage::Entry, memory_storage::Attribute(CONCURRENT), std::hash<Key>>,
-    MemoryStorage<Key, storage::Entry, memory_storage::Attribute(CONCURRENT | LRU), std::hash<Key>>>
+std::variant<MemoryStorage<Key, storage::Entry, ORDERED>,
+    MemoryStorage<Key, storage::Entry, ORDERED | CONCURRENT>,
+    MemoryStorage<Key, storage::Entry, ORDERED | CONCURRENT | LRU>,
+    MemoryStorage<Key, storage::Entry>, MemoryStorage<Key, storage::Entry, CONCURRENT>,
+    MemoryStorage<Key, storage::Entry, CONCURRENT | LRU>>
     allStorage;
 
 template <class Storage>
@@ -77,7 +74,8 @@ static void read(benchmark::State& state)
             co_await std::visit(
                 [&](auto& storage) -> task::Task<void> {
                     setCapacityForMRU(storage);
-                    co_await storage2::writeSome(storage, fixture.allKeys, fixture.allValues);
+                    co_await storage2::writeSome(
+                        storage, ::ranges::views::zip(fixture.allKeys, fixture.allValues));
                 },
                 allStorage);
         }());
@@ -213,8 +211,7 @@ BENCHMARK(readTBBMap)->Arg(100000)->Arg(1000000)->Threads(1)->Threads(8);
 BENCHMARK(read<MemoryStorage<Key, storage::Entry, memory_storage::Attribute(ORDERED)>>)
     ->Arg(100000)
     ->Arg(1000000);
-BENCHMARK(read<MemoryStorage<Key, storage::Entry, memory_storage::Attribute(ORDERED | CONCURRENT),
-              std::hash<Key>>>)
+BENCHMARK(read<MemoryStorage<Key, storage::Entry, ORDERED | CONCURRENT>>)
     ->Arg(100000)
     ->Arg(1000000)
     ->Threads(1)
@@ -239,13 +236,8 @@ BENCHMARK(write<MemoryStorage<Key, storage::Entry, memory_storage::Attribute(ORD
     ->Threads(1)
     ->Threads(8);
 BENCHMARK(write<MemoryStorage<Key, storage::Entry>>);
-BENCHMARK(
-    write<
-        MemoryStorage<Key, storage::Entry, memory_storage::Attribute(CONCURRENT), std::hash<Key>>>)
-    ->Threads(1)
-    ->Threads(8);
-BENCHMARK(read<MemoryStorage<Key, storage::Entry, memory_storage::Attribute(CONCURRENT | LRU),
-              std::hash<Key>>>)
+BENCHMARK(write<MemoryStorage<Key, storage::Entry, CONCURRENT>>)->Threads(1)->Threads(8);
+BENCHMARK(read<MemoryStorage<Key, storage::Entry, CONCURRENT | LRU>>)
     ->Arg(100000)
     ->Arg(1000000)
     ->Threads(1)

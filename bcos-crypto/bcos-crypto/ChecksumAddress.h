@@ -99,11 +99,11 @@ inline std::string toChecksumAddressFromBytes(
 
 // address based on blockNumber, contextID, seq
 inline std::string newEVMAddress(
-    bcos::crypto::Hash::Ptr _hashImpl, int64_t blockNumber, int64_t contextID, int64_t seq)
+    const bcos::crypto::Hash& _hashImpl, int64_t blockNumber, int64_t contextID, int64_t seq)
 {
-    auto hash = _hashImpl->hash(boost::lexical_cast<std::string>(blockNumber) + "_" +
-                                boost::lexical_cast<std::string>(contextID) + "_" +
-                                boost::lexical_cast<std::string>(seq));
+    auto hash = _hashImpl.hash(boost::lexical_cast<std::string>(blockNumber) + "_" +
+                               boost::lexical_cast<std::string>(contextID) + "_" +
+                               boost::lexical_cast<std::string>(seq));
 
     std::string hexAddress;
     hexAddress.reserve(40);
@@ -112,6 +112,12 @@ inline std::string newEVMAddress(
     toAddress(hexAddress);
 
     return hexAddress;
+}
+
+inline std::string newEVMAddress(
+    const bcos::crypto::Hash::Ptr& _hashImpl, int64_t blockNumber, int64_t contextID, int64_t seq)
+{
+    return newEVMAddress(*_hashImpl, blockNumber, contextID, seq);
 }
 
 

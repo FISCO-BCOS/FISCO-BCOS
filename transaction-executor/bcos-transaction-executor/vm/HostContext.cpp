@@ -1,12 +1,13 @@
 #include "HostContext.h"
+#include "VMFactory.h"
 #include <fmt/format.h>
 
-evmc_bytes32 bcos::transaction_executor::evm_hash_fn(const uint8_t* data, size_t size)
+evmc_bytes32 bcos::transaction_executor::hostcontext::evm_hash_fn(const uint8_t* data, size_t size)
 {
     return toEvmC(executor::GlobalHashImpl::g_hashImpl->hash(bytesConstRef(data, size)));
 }
 
-std::variant<const evmc_message*, evmc_message> bcos::transaction_executor::getMessage(
+std::variant<const evmc_message*, evmc_message> bcos::transaction_executor::hostcontext::getMessage(
     const evmc_message& inputMessage, protocol::BlockNumber blockNumber, int64_t contextID,
     int64_t seq, crypto::Hash const& hashImpl)
 {
@@ -15,9 +16,7 @@ std::variant<const evmc_message*, evmc_message> bcos::transaction_executor::getM
     {
     case EVMC_CREATE:
     {
-        message.emplace<evmc_message>(inputMessage);
-        auto& ref = std::get<evmc_message>(message);
-
+        auto& ref = message.emplace<evmc_message>(inputMessage);
         if (concepts::bytebuffer::equalTo(
                 inputMessage.code_address.bytes, executor::EMPTY_EVM_ADDRESS.bytes))
         {
@@ -30,11 +29,9 @@ std::variant<const evmc_message*, evmc_message> bcos::transaction_executor::getM
     }
     case EVMC_CREATE2:
     {
-        message.emplace<evmc_message>(inputMessage);
-        auto& ref = std::get<evmc_message>(message);
-
-        std::array<uint8_t, 1 + sizeof(ref.sender.bytes) + sizeof(inputMessage.create2_salt) +
-                                crypto::HashType::SIZE>
+        auto& ref = message.emplace<evmc_message>(inputMessage);
+        std::array<bcos::byte, 1 + sizeof(ref.sender.bytes) + sizeof(inputMessage.create2_salt) +
+                                   crypto::HashType::SIZE>
             buffer;
         uint8_t* ptr = buffer.data();
         *ptr++ = 0xff;
@@ -59,11 +56,12 @@ std::variant<const evmc_message*, evmc_message> bcos::transaction_executor::getM
     return message;
 }
 
-bcos::transaction_executor::CacheExecutables& bcos::transaction_executor::getCacheExecutables()
+bcos::transaction_executor::hostcontext::CacheExecutables&
+bcos::transaction_executor::hostcontext::getCacheExecutables()
 {
     struct CacheExecutables
     {
-        bcos::transaction_executor::CacheExecutables m_cachedExecutables;
+        bcos::transaction_executor::hostcontext::CacheExecutables m_cachedExecutables;
 
         CacheExecutables()
         {
@@ -74,3 +72,15 @@ bcos::transaction_executor::CacheExecutables& bcos::transaction_executor::getCac
 
     return cachedExecutables.m_cachedExecutables;
 }
+
+bcos::transaction_executor::hostcontext::Executable::Executable(
+    storage::Entry code, evmc_revision revision)
+  : m_code(std::make_optional(std::move(code))),
+    m_vmInstance(VMFactory::create(VMKind::evmone,
+        bytesConstRef(reinterpret_cast<const uint8_t*>(m_code->data()), m_code->size()), revision))
+{}
+
+bcos::transaction_executor::hostcontext::Executable::Executable(
+    bytesConstRef code, evmc_revision revision)
+  : m_vmInstance(VMFactory::create(VMKind::evmone, code, revision))
+{}

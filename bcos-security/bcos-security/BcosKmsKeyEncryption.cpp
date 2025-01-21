@@ -20,8 +20,14 @@
  * @date: 2018-12-06
  */
 
-#include "DataEncryption.h"
-#include "KeyCenter.h"
+/**
+ * @brief : Key Encryption
+ * @author: HaoXuan40404
+ * @date: 2024-11-07
+ */
+
+#include "BcosKmsKeyEncryption.h"
+#include "BcosKms.h"
 #include <bcos-crypto/encrypt/AESCrypto.h>
 #include <bcos-crypto/encrypt/SM4Crypto.h>
 #include <bcos-framework/protocol/Protocol.h>
@@ -35,28 +41,40 @@ using namespace bcos;
 using namespace crypto;
 using namespace tool;
 
-namespace bcos
+namespace bcos::security
 {
-namespace security
-{
-DataEncryption::DataEncryption(const bcos::tool::NodeConfig::Ptr nodeConfig)
+BcosKmsKeyEncryption::BcosKmsKeyEncryption(const bcos::tool::NodeConfig::Ptr nodeConfig)
 {
     m_nodeConfig = nodeConfig;
     m_compatibilityVersion = m_nodeConfig->compatibilityVersion();
 
-    if (m_nodeConfig->storageSecurityEnable())
+    std::vector<std::string> values;
+    boost::split(
+        values, nodeConfig->keyEncryptionUrl(), boost::is_any_of(":"), boost::token_compress_on);
+    if (2 != values.size())
     {
-        std::string keyCenterIp = m_nodeConfig->storageSecurityKeyCenterIp();
-        unsigned short keyCenterPort = m_nodeConfig->storageSecurityKeyCenterPort();
-        std::string cipherDataKey = m_nodeConfig->storageSecurityCipherDataKey();
-
-        KeyCenter keyClient;
-        keyClient.setIpPort(keyCenterIp, keyCenterPort);
-        m_dataKey = asString(keyClient.getDataKey(cipherDataKey, m_nodeConfig->smCryptoType()));
-
-        BCOS_LOG(INFO) << LOG_BADGE("DataEncryption::init") << LOG_KV("key_center_ip:", keyCenterIp)
-                       << LOG_KV("key_center_port:", keyCenterPort);
+        BOOST_THROW_EXCEPTION(
+            InvalidParameter() << errinfo_comment(
+                "initGlobalConfig storage_security failed! Invalid key_center_url!"));
     }
+
+    std::string keyCenterIp = values[0];
+    unsigned short keyCenterPort = boost::lexical_cast<unsigned short>(values[1]);
+    if (!m_nodeConfig->isValidPort(keyCenterPort))
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "initGlobalConfig storage_security failed! Invalid key_manange_port!"));
+    }
+
+    std::string cipherDataKey = m_nodeConfig->bcosKmsKeySecurityCipherDataKey();
+
+    BcosKms keyClient;
+    keyClient.setIpPort(keyCenterIp, keyCenterPort);
+    m_dataKey = asString(keyClient.getDataKey(cipherDataKey, m_nodeConfig->smCryptoType()));
+
+    BCOS_LOG(INFO) << LOG_BADGE("BcosKmsKeyEncryption::init") << LOG_KV("key_center_ip:", keyCenterIp)
+                   << LOG_KV("key_center_port:", keyCenterPort);
 
     if (!m_nodeConfig->smCryptoType())
     {
@@ -68,7 +86,7 @@ DataEncryption::DataEncryption(const bcos::tool::NodeConfig::Ptr nodeConfig)
     }
 }
 
-DataEncryption::DataEncryption(const std::string& dataKey, const bool smCryptoType)
+BcosKmsKeyEncryption::BcosKmsKeyEncryption(const std::string& dataKey, const bool smCryptoType)
 {
     m_dataKey = dataKey;
 
@@ -82,7 +100,7 @@ DataEncryption::DataEncryption(const std::string& dataKey, const bool smCryptoTy
     }
 }
 
-std::shared_ptr<bytes> DataEncryption::decryptContents(const std::shared_ptr<bytes>& content)
+std::shared_ptr<bytes> BcosKmsKeyEncryption::decryptContents(const std::shared_ptr<bytes>& content)
 {
     std::shared_ptr<bytes> decFileBytes;
     bytesPointer decFileBytesBase64Ptr = nullptr;
@@ -126,7 +144,7 @@ std::shared_ptr<bytes> DataEncryption::decryptContents(const std::shared_ptr<byt
     return decFileBytes;
 }
 
-std::shared_ptr<bytes> DataEncryption::decryptFile(const std::string& filename)
+std::shared_ptr<bytes> BcosKmsKeyEncryption::decryptFile(const std::string& filename)
 {
     std::shared_ptr<bytes> decFileBytes;
     try
@@ -169,55 +187,16 @@ std::shared_ptr<bytes> DataEncryption::decryptFile(const std::string& filename)
     return decFileBytes;
 }
 
-std::string DataEncryption::encrypt(const std::string& data)
+std::shared_ptr<bytes> BcosKmsKeyEncryption::encryptContents(const std::shared_ptr<bytes>& content)
 {
-    bytesPointer encData = nullptr;
-    if (m_compatibilityVersion >= static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_3_VERSION))
-    {
-        random_bytes_engine rbe;
-        std::vector<unsigned char> ivData(16);
-        std::generate(std::begin(ivData), std::end(ivData), std::ref(rbe));
-
-        encData = m_symmetricEncrypt->symmetricEncrypt(
-            reinterpret_cast<const unsigned char*>(data.data()), data.size(),
-            reinterpret_cast<const unsigned char*>(m_dataKey.data()), m_dataKey.size(),
-            ivData.data(), 16);
-        encData->insert(encData->end(), ivData.begin(), ivData.end());
-    }
-    else
-    {
-        encData = m_symmetricEncrypt->symmetricEncrypt(
-            reinterpret_cast<const unsigned char*>(data.data()), data.size(),
-            reinterpret_cast<const unsigned char*>(m_dataKey.data()), m_dataKey.size());
-    }
-    std::string value((char*)encData->data(), encData->size());
-
-    return value;
+    BCOS_LOG(ERROR) << LOG_DESC("[BcosKmsKeyEncryption] encryptContents error");
+    BOOST_THROW_EXCEPTION(NotImplementedError());
 }
 
-std::string DataEncryption::decrypt(const std::string& data)
+std::shared_ptr<bytes> BcosKmsKeyEncryption::encryptFile(const std::string& filename)
 {
-    bytesPointer decData = nullptr;
-    if (m_compatibilityVersion >= static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_3_VERSION))
-    {
-        size_t offsetIv = data.size() - 16;
-        size_t cipherDataSize = data.size() - 16;
-        decData = m_symmetricEncrypt->symmetricDecrypt(
-            reinterpret_cast<const unsigned char*>(data.data()), cipherDataSize,
-            reinterpret_cast<const unsigned char*>(m_dataKey.data()), m_dataKey.size(),
-            reinterpret_cast<const unsigned char*>(data.data() + offsetIv), 16);
-    }
-    else
-    {
-        decData = m_symmetricEncrypt->symmetricDecrypt(
-            reinterpret_cast<const unsigned char*>(data.data()), data.size(),
-            reinterpret_cast<const unsigned char*>(m_dataKey.data()), m_dataKey.size());
-    }
-    std::string value((char*)decData->data(), decData->size());
-
-    return value;
+    BCOS_LOG(ERROR) << LOG_DESC("[BcosKmsKeyEncryption] encryptFile error");
+    BOOST_THROW_EXCEPTION(NotImplementedError());
 }
 
-}  // namespace security
-
-}  // namespace bcos
+}  // namespace bcos::security

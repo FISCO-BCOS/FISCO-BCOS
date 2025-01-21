@@ -46,7 +46,7 @@ using namespace std;
 #define STORAGE_ROCKSDB_LOG(LEVEL) BCOS_LOG(LEVEL) << "[STORAGE-RocksDB]"
 
 RocksDBStorage::RocksDBStorage(std::unique_ptr<rocksdb::DB, std::function<void(rocksdb::DB*)>>&& db,
-    const bcos::security::DataEncryptInterface::Ptr dataEncryption)
+    const bcos::security::StorageEncryptInterface::Ptr dataEncryption)
   : m_db(std::move(db)), m_dataEncryption(dataEncryption)
 {
     m_writeBatch = std::make_shared<WriteBatch>();
@@ -142,9 +142,6 @@ void RocksDBStorage::asyncGetRow(std::string_view _table, std::string_view _key,
         entry->set(std::move(value));
 
         _callback(nullptr, entry);
-
-        STORAGE_ROCKSDB_LOG(TRACE) << LOG_DESC("asyncGetRow") << LOG_KV("table", _table)
-                                   << LOG_KV("key", boost::algorithm::hex_lower(std::string(_key)));
     }
     catch (const std::exception& e)
     {

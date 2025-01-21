@@ -28,6 +28,7 @@
 #include <bcos-gateway/libp2p/P2PSession.h>
 #include <bcos-gateway/protocol/GatewayNodeStatus.h>
 #include <bcos-utilities/Timer.h>
+#include <oneapi/tbb/concurrent_hash_map.h>
 namespace bcos
 {
 namespace gateway
@@ -102,8 +103,7 @@ protected:
     // statusSeq
     std::atomic<uint32_t> m_statusSeq{1};
     // P2pID => statusSeq
-    std::map<std::string, uint32_t> m_p2pID2Seq;
-    mutable SharedMutex x_p2pID2Seq;
+    tbb::concurrent_hash_map<std::string, uint32_t> m_p2pID2Seq;
 
     LocalRouterTable::Ptr m_localRouterTable;
     PeersRouterTable::Ptr m_peersRouterTable;

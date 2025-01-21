@@ -148,6 +148,9 @@ BOOST_AUTO_TEST_CASE(feature)
         "bugfix_support_transfer_receive_fallback",
         "bugfix_set_row_with_dirty_flag",
         "bugfix_rpbft_vrf_blocknumber_input",
+        "bugfix_delete_account_code",
+        "bugfix_policy1_empty_code_address",
+        "bugfix_precompiled_gasused",
         "feature_dmc2serial",
         "feature_sharding",
         "feature_rpbft",
@@ -160,6 +163,8 @@ BOOST_AUTO_TEST_CASE(feature)
         "feature_evm_timestamp",
         "feature_evm_address",
         "feature_rpbft_term_weight",
+        "feature_raw_address",
+        "feature_rpbft_vrf_type_secp256k1",
     };
     // clang-format on
     for (size_t i = 0; i < keys.size(); ++i)

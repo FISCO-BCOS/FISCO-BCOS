@@ -75,7 +75,7 @@ void P2PSession::heartBeat()
         }
 
         auto self = std::weak_ptr<P2PSession>(shared_from_this());
-        m_timer = service->host()->asioInterface()->newTimer(HEARTBEAT_INTERVEL);
+        m_timer.emplace(service->host()->asioInterface()->newTimer(HEARTBEAT_INTERVEL));
         m_timer->async_wait([self](boost::system::error_code e) {
             if (e)
             {

@@ -17,14 +17,14 @@
  */
 /**
  * @brief : HSM Data Encryption
- * @author: lucasli
- * @date: 2022-02-17
+ * @author: lucasli,asherli
+ * @date: 2024-11-07
  */
 
 #pragma once
 #include "Common.h"
 #include <bcos-crypto/encrypt/HsmSM4Crypto.h>
-#include <bcos-framework/security/DataEncryptInterface.h>
+#include <bcos-framework/security/StorageEncryptInterface.h>
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/FileUtility.h>
 #include <memory>
@@ -33,27 +33,12 @@ namespace bcos
 {
 namespace security
 {
-class HsmDataEncryption : public DataEncryptInterface
+class HsmDataEncryption : public StorageEncryptInterface
 {
 public:
     using Ptr = std::shared_ptr<HsmDataEncryption>;
     HsmDataEncryption(const bcos::tool::NodeConfig::Ptr nodeConfig);
     ~HsmDataEncryption() override {}
-
-    // use to encrypt/decrypt node.key
-    std::shared_ptr<bytes> encryptFile(const std::string& filename)
-    {
-        std::shared_ptr<bytes> fileContents = readContents(boost::filesystem::path(filename));
-        return encryptContents(fileContents);
-    }
-    std::shared_ptr<bytes> decryptFile(const std::string& filename) override
-    {
-        std::shared_ptr<bytes> fileContents = readContents(boost::filesystem::path(filename));
-        return decryptContents(fileContents);
-    }
-    std::shared_ptr<bytes> encryptContents(const std::shared_ptr<bytes>& contents);
-    std::shared_ptr<bytes> decryptContents(const std::shared_ptr<bytes>& contents) override;
-
 
     // use to encrypt/decrypt in rocksdb
     std::string encrypt(const std::string& data) override

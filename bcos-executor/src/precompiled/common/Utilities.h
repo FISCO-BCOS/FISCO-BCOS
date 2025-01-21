@@ -81,10 +81,11 @@ inline std::string getAccountTableName(std::string_view _account)
 }
 
 inline std::string getDynamicPrecompiledCodeString(
-    const std::string& _address, const std::string& _params)
+    const std::string_view _address, const std::string& _params)
 {
     /// Prefix , address , params
-    return boost::join(std::vector<std::string>({PRECOMPILED_CODE_FIELD, _address, _params}), ",");
+    return boost::join(
+        std::vector<std::string>({PRECOMPILED_CODE_FIELD, std::string(_address), _params}), ",");
 }
 
 inline bool matchDynamicAccountCode(std::string_view code)

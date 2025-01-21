@@ -34,7 +34,11 @@ public:
     using ConstPtr = std::shared_ptr<const BlockHeader>;
     using BlockHeadersPtr = std::shared_ptr<std::vector<BlockHeader::Ptr> >;
     BlockHeader() = default;
-    virtual ~BlockHeader() = default;
+    BlockHeader(const BlockHeader&) = default;
+    BlockHeader(BlockHeader&&) noexcept = default;
+    BlockHeader& operator=(const BlockHeader&) = default;
+    BlockHeader& operator=(BlockHeader&&) noexcept = default;
+    virtual ~BlockHeader() noexcept = default;
 
     virtual void decode(bytesConstRef _data) = 0;
     virtual void encode(bytes& _encodeData) const = 0;

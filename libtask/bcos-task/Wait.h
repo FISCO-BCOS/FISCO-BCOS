@@ -28,8 +28,8 @@ namespace bcos::task
 
 constexpr inline struct Wait
 {
-    void operator()(auto&& task) const
-        requires std::is_rvalue_reference_v<decltype(task)>
+    template <IsAwaitable Task>
+    void operator()(Task&& task) const
     {
         std::forward<decltype(task)>(task).start();
     }
@@ -37,9 +37,9 @@ constexpr inline struct Wait
 
 constexpr inline struct SyncWait
 {
-    template <class Task>
-    auto operator()(Task&& task) const -> AwaitableReturnType<std::remove_cvref_t<Task>>
-        requires IsAwaitable<Task>
+    template <IsAwaitable Task>
+    auto operator()(
+        Task&& task, auto&&... args) const -> AwaitableReturnType<std::remove_cvref_t<Task>>
     {
         using ReturnType = AwaitableReturnType<std::remove_cvref_t<Task>>;
         using ReturnTypeWrap = std::conditional_t<std::is_reference_v<ReturnType>,
@@ -51,8 +51,9 @@ constexpr inline struct SyncWait
         boost::atomic_flag finished;
         boost::atomic_flag waitFlag;
 
-        auto waitTask = [](Task&& task, decltype(result)& result, boost::atomic_flag& finished,
-                            boost::atomic_flag& waitFlag) -> task::Task<void> {
+        auto handle = [](Task&& task, decltype(result)& result, boost::atomic_flag& finished,
+                          boost::atomic_flag& waitFlag,
+                          auto&&... args) -> task::Task<void> {
             try
             {
                 if constexpr (std::is_void_v<ReturnType>)
@@ -85,8 +86,9 @@ constexpr inline struct SyncWait
                 waitFlag.test_and_set();
                 waitFlag.notify_one();
             }
-        }(std::forward<Task>(task), result, finished, waitFlag);
-        waitTask.start();
+        }(std::forward<Task>(task), result, finished, waitFlag,
+                                              std::forward<decltype(args)>(args)...);
+        handle.start();
 
         if (!finished.test_and_set())
         {
@@ -95,9 +97,9 @@ constexpr inline struct SyncWait
             // task to complete
             waitFlag.wait(false);
         }
-        if (std::holds_alternative<std::exception_ptr>(result))
+        if (auto* exception = std::get_if<std::exception_ptr>(std::addressof(result)))
         {
-            std::rethrow_exception(std::get<std::exception_ptr>(result));
+            std::rethrow_exception(*exception);
         }
 
         if constexpr (!std::is_void_v<ReturnType>)

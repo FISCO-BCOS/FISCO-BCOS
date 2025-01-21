@@ -2,6 +2,7 @@
 
 #include "../TrivialObject.h"
 #include "Hasher.h"
+#include <openssl/crypto.h>
 #include <openssl/evp.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
@@ -10,7 +11,7 @@
 
 namespace bcos::crypto::hasher::openssl
 {
-enum HasherType
+enum class HasherType
 {
     SM3,
     SHA3_256,
@@ -49,7 +50,7 @@ public:
         }
 
         // Keccak256 special padding
-        if constexpr (hasherType == Keccak256)
+        if constexpr (hasherType == HasherType::Keccak256)
         {
             struct KECCAK1600_CTX
             {
@@ -136,15 +137,16 @@ public:
 
     constexpr const EVP_MD* chooseMD()
     {
-        if constexpr (hasherType == SM3)
+        if constexpr (hasherType == HasherType::SM3)
         {
             return EVP_sm3();
         }
-        else if constexpr (hasherType == SHA3_256 || hasherType == Keccak256)
+        else if constexpr (hasherType == HasherType::SHA3_256 ||
+                           hasherType == HasherType::Keccak256)
         {
             return EVP_sha3_256();
         }
-        else if constexpr (hasherType == SHA2_256)
+        else if constexpr (hasherType == HasherType::SHA2_256)
         {
             return EVP_sha256();
         }
@@ -154,21 +156,20 @@ public:
         }
     }
 
-    OpenSSLHasher clone() const
-    {
-        OpenSSLHasher newHasher;
-        return newHasher;
-    }
+    OpenSSLHasher clone() const { return {}; }
 
-    std::unique_ptr<EVP_MD_CTX, decltype([](EVP_MD_CTX* context) { EVP_MD_CTX_free(context); })>
-        m_mdCtx;
+    struct Deleter
+    {
+        void operator()(EVP_MD_CTX* context) const { EVP_MD_CTX_free(context); }
+    };
+    std::unique_ptr<::EVP_MD_CTX, Deleter> m_mdCtx;
     bool m_init = false;
 };
 
-using OpenSSL_SHA3_256_Hasher = OpenSSLHasher<SHA3_256>;
-using OpenSSL_SHA2_256_Hasher = OpenSSLHasher<SHA2_256>;
-using OpenSSL_SM3_Hasher = OpenSSLHasher<SM3>;
-using OpenSSL_Keccak256_Hasher = OpenSSLHasher<Keccak256>;
+using OpenSSL_SHA3_256_Hasher = OpenSSLHasher<HasherType::SHA3_256>;
+using OpenSSL_SHA2_256_Hasher = OpenSSLHasher<HasherType::SHA2_256>;
+using OpenSSL_SM3_Hasher = OpenSSLHasher<HasherType::SM3>;
+using OpenSSL_Keccak256_Hasher = OpenSSLHasher<HasherType::Keccak256>;
 
 static_assert(Hasher<OpenSSL_SHA3_256_Hasher>, "Assert OpenSSLHasher type");
 static_assert(Hasher<OpenSSL_SHA2_256_Hasher>, "Assert OpenSSLHasher type");

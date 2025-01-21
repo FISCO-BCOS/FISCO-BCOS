@@ -1,10 +1,5 @@
 #pragma once
 
-#include <boost/throw_exception.hpp>
-#include <variant>
-#pragma GCC diagnostic ignored "-Wunused-variable"
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-
 #include "bcos-tars-protocol/ErrorConverter.h"
 #include "bcos-tars-protocol/protocol/BlockImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
@@ -16,7 +11,10 @@
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-task/Task.h>
 #include <bcos-utilities/Common.h>
+#include <boost/throw_exception.hpp>
 #include <memory>
+#include <utility>
+#include <variant>
 
 namespace bcostars
 {
@@ -106,7 +104,7 @@ public:
         co_return co_await awaitable;
     }
 
-    void broadcastTransaction(
+    bcos::task::Task<void> broadcastTransaction(
         [[maybe_unused]] const bcos::protocol::Transaction& transaction) override
     {
         struct TarsCallback : public bcostars::TxPoolServicePrxCallback
@@ -127,10 +125,12 @@ public:
         m_proxy->tars_set_timeout(600000)->async_broadcastTransaction(tarsCallback.release(),
             dynamic_cast<const bcostars::protocol::TransactionImpl&>(transaction)
                 .inner());  // tars take the m_callback ownership
+        co_return;
     }
 
 
-    void broadcastTransactionBuffer([[maybe_unused]] const bcos::bytesConstRef& _data) override
+    bcos::task::Task<void> broadcastTransactionBuffer(
+        [[maybe_unused]] bcos::bytesConstRef _data) override
     {
         struct TarsCallback : public bcostars::TxPoolServicePrxCallback
         {
@@ -156,6 +156,7 @@ public:
 
         m_proxy->tars_set_timeout(600000)->async_broadcastTransactionBuffer(tarsCallback.release(),
             std::vector<char>(_data.begin(), _data.end()));  // tars take the m_callback ownership
+        co_return;
     }
 
     void asyncSealTxs(uint64_t _txsLimit, bcos::txpool::TxsHashSetPtr _avoidTxs,
@@ -212,14 +213,16 @@ public:
             new Callback(m_blockFactory, _sealCallback), _txsLimit, tarsAvoidTxs);
     }
 
-    void asyncMarkTxs(bcos::crypto::HashListPtr _txsHash, bool _sealedFlag,
+    void asyncMarkTxs(const bcos::crypto::HashList& _txsHash, bool _sealedFlag,
         bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
         std::function<void(bcos::Error::Ptr)> _onRecvResponse) override
     {
         class Callback : public bcostars::TxPoolServicePrxCallback
         {
         public:
-            Callback(std::function<void(bcos::Error::Ptr)> callback) : m_callback(callback) {}
+            Callback(std::function<void(bcos::Error::Ptr)> callback)
+              : m_callback(std::move(callback))
+            {}
 
             void callback_asyncMarkTxs(const bcostars::Error& ret) override
             {
@@ -236,7 +239,7 @@ public:
         };
 
         vector<vector<tars::Char>> txHashList;
-        for (auto& it : *_txsHash)
+        for (auto& it : _txsHash)
         {
             txHashList.push_back(std::vector<char>(it.begin(), it.end()));
         }

@@ -22,15 +22,14 @@
 #pragma once
 
 // if windows, manual include tup/Tars.h first
+
 #ifdef _WIN32
 #include <tup/Tars.h>
 #endif
+#include "bcos-crypto/interfaces/crypto/CommonType.h"
+#include "bcos-framework/protocol/Transaction.h"
 #include "bcos-tars-protocol/tars/Transaction.h"
-#include <bcos-crypto/hasher/Hasher.h>
-#include <bcos-crypto/interfaces/crypto/CommonType.h>
-#include <bcos-framework/protocol/Transaction.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/DataConvertUtility.h>
+#include "bcos-utilities/Common.h"
 
 namespace bcostars::protocol
 {
@@ -40,6 +39,11 @@ class TransactionImpl : public bcos::protocol::Transaction
 public:
     explicit TransactionImpl(std::function<bcostars::Transaction*()> inner)
       : m_inner(std::move(inner))
+    {}
+    TransactionImpl()
+      : m_inner([m_transaction = bcostars::Transaction()]() mutable {
+            return std::addressof(m_transaction);
+        })
     {}
     ~TransactionImpl() override = default;
     TransactionImpl& operator=(const TransactionImpl& _tx) = delete;
@@ -61,7 +65,7 @@ public:
     std::string_view chainId() const override;
     std::string_view groupId() const override;
     int64_t blockLimit() const override;
-    const std::string& nonce() const override;
+    std::string_view nonce() const override;
     // only for test
     void setNonce(std::string nonce) override;
     std::string_view to() const override;
@@ -87,7 +91,6 @@ public:
     void setAttribute(int32_t attribute) override;
 
     std::string_view extraData() const override;
-    void setExtraData(std::string const& _extraData) override;
 
     uint8_t type() const override;
     bcos::bytesConstRef extraTransactionBytes() const override;

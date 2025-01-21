@@ -234,18 +234,28 @@ task::Task<void> tag_invoke(ledger::tag_t<setNodeList> /*unused*/, auto& storage
     }) | RANGES::to<std::vector>();
     if (!tarsNodeList.empty())
     {
-        co_await storage2::writeSome(storage,
-            RANGES::views::transform(tarsNodeList,
-                [](auto const& node) {
-                    return transaction_executor::StateKey{
-                        SYS_CONSENSUS, std::string_view(node.nodeID.data(), node.nodeID.size())};
-                }),
-            RANGES::views::transform(tarsNodeList, [](auto const& node) {
+        co_await storage2::writeSome(
+            storage, RANGES::views::transform(tarsNodeList, [](auto const& node) {
                 bytes data;
                 concepts::serialize::encode(node, data);
-                return storage::Entry(std::move(data));
+                return std::make_tuple(
+                    transaction_executor::StateKey{
+                        SYS_CONSENSUS, std::string_view(node.nodeID.data(), node.nodeID.size())},
+                    storage::Entry(std::move(data)));
             }));
     }
     LEDGER_LOG(DEBUG) << "SetNodeList success" << LOG_KV("nodeList size", nodeList.size());
 }
+
+task::Task<std::optional<SystemConfigEntry>> tag_invoke(
+    ledger::tag_t<getSystemConfig> /*unused*/, auto& storage, std::string_view key)
+{
+    if (auto entry = co_await storage2::readOne(
+            storage, transaction_executor::StateKeyView(SYS_CONFIG, key)))
+    {
+        co_return entry->template getObject<SystemConfigEntry>();
+    }
+    co_return {};
+}
+
 }  // namespace bcos::ledger

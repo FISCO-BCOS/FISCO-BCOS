@@ -157,7 +157,7 @@ public:
             auto tx = txFactory->createTransaction(_data);
             bcos::task::wait([](decltype(txpool) txpool, decltype(_data) _data, decltype(tx) tx,
                                  decltype(_fromNode) fromNode) -> bcos::task::Task<void> {
-                txpool->broadcastTransactionBufferByTree(_data, false, fromNode);
+                co_await txpool->broadcastTransactionBufferByTree(_data, false, fromNode);
                 auto submit = co_await txpool->submitTransaction(tx);
                 assert(submit->status() == (uint32_t)TransactionStatus::None);
             }(txpool, _data, tx, _fromNode));
@@ -201,7 +201,6 @@ public:
         _receiveCallback(nullptr);
     }
 
-public:
     std::map<std::string, CallbackFunc> m_uuidToCallback;
     Mutex m_mutex;
 
@@ -267,11 +266,16 @@ public:
     void asyncSendBroadcastMessage(uint16_t _type, const std::string& _groupID, int _moduleID,
         bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload) override
     {}
+    task::Task<void> broadcastMessage(uint16_t type, std::string_view groupID, int moduleID,
+        const bcos::crypto::NodeID& srcNodeID, ::ranges::any_view<bytesConstRef> payloads) override
+    {
+        co_return;
+    };
     void asyncNotifyGroupInfo(
         bcos::group::GroupInfo::Ptr _groupInfo, std::function<void(Error::Ptr&&)> function) override
     {}
     void asyncSendMessageByTopic(const std::string& _topic, bcos::bytesConstRef _data,
-        std::function<void(bcos::Error::Ptr&&, int16_t, bytesPointer)> _respFunc) override
+        std::function<void(bcos::Error::Ptr&&, int16_t, bytesConstRef)> _respFunc) override
     {}
     void asyncSendBroadcastMessageByTopic(
         const std::string& _topic, bcos::bytesConstRef _data) override
@@ -333,6 +337,25 @@ public:
             }
             asyncSendMessageByNodeID(_moduleId, node, _data, 0, nullptr);
         }
+    }
+
+    bcos::task::Task<void> broadcastMessage(
+        uint16_t type, int moduleID, ::ranges::any_view<bytesConstRef> payloads) override
+    {
+        for (const auto& node : m_nodeIDList)
+        {
+            if (node->data() == m_nodeId->data())
+            {
+                continue;
+            }
+            bytes buffer;
+            for (auto view : payloads)
+            {
+                buffer.insert(buffer.end(), view.begin(), view.end());
+            }
+            asyncSendMessageByNodeID(moduleID, node, bcos::ref(buffer), 0, nullptr);
+        }
+        co_return;
     }
 
     // useless for sync/pbft/txpool

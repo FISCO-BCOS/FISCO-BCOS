@@ -35,27 +35,27 @@ static_assert(alignof(Address) == alignof(evmc_address), "Address types alignmen
 static_assert(sizeof(h256) == sizeof(evmc_bytes32), "Hash types size mismatch");
 static_assert(alignof(h256) == alignof(evmc_bytes32), "Hash types alignment mismatch");
 
-template <class HostContextType, auto waitOperator>
+template <class HostContextType, auto syncWait>
 struct EVMHostInterface
 {
     static bool accountExists(evmc_host_context* context, const evmc_address* addr) noexcept
     {
         auto& hostContext = static_cast<HostContextType&>(*context);
-        return waitOperator(hostContext.exists(*addr));
+        return syncWait(hostContext.exists(*addr));
     }
 
     static evmc_bytes32 getStorage(evmc_host_context* context,
         [[maybe_unused]] const evmc_address* addr, const evmc_bytes32* key) noexcept
     {
         auto& hostContext = static_cast<HostContextType&>(*context);
-        return waitOperator(hostContext.get(key));
+        return syncWait(hostContext.get(key));
     }
 
     static evmc_bytes32 getTransientStorage(evmc_host_context* context,
         [[maybe_unused]] const evmc_address* addr, const evmc_bytes32* key) noexcept
     {
         auto& hostContext = static_cast<HostContextType&>(*context);
-        return waitOperator(hostContext.getTransientStorage(key));
+        return syncWait(hostContext.getTransientStorage(key));
     }
 
     static evmc_storage_status setStorage(evmc_host_context* context,
@@ -70,7 +70,7 @@ struct EVMHostInterface
         {
             status = EVMC_STORAGE_DELETED;
         }
-        waitOperator(hostContext.set(key, value));
+        syncWait(hostContext.set(key, value));
         return status;
     }
 
@@ -79,33 +79,35 @@ struct EVMHostInterface
         const evmc_bytes32* value) noexcept
     {
         auto& hostContext = static_cast<HostContextType&>(*context);
-        waitOperator(hostContext.setTransientStorage(key, value));
+        syncWait(hostContext.setTransientStorage(key, value));
     }
 
     static evmc_bytes32 getBalance([[maybe_unused]] evmc_host_context* context,
         [[maybe_unused]] const evmc_address* addr) noexcept
     {
         // always return 0
+        auto& hostContext = static_cast<HostContextType&>(*context);
+
         return toEvmC(h256(0));
     }
 
     static size_t getCodeSize(evmc_host_context* context, const evmc_address* addr) noexcept
     {
         auto& hostContext = static_cast<HostContextType&>(*context);
-        return waitOperator(hostContext.codeSizeAt(*addr));
+        return syncWait(hostContext.codeSizeAt(*addr));
     }
 
     static evmc_bytes32 getCodeHash(evmc_host_context* context, const evmc_address* addr) noexcept
     {
         auto& hostContext = static_cast<HostContextType&>(*context);
-        return toEvmC(waitOperator(hostContext.codeHashAt(*addr)));
+        return toEvmC(syncWait(hostContext.codeHashAt(*addr)));
     }
 
     static size_t copyCode(evmc_host_context* context, const evmc_address* address,
         size_t codeOffset, uint8_t* bufferData, size_t bufferSize) noexcept
     {
         auto& hostContext = static_cast<HostContextType&>(*context);
-        auto codeEntry = waitOperator(hostContext.code(*address));
+        auto codeEntry = syncWait(hostContext.code(*address));
 
         // Handle "big offset" edge case.
         if (!codeEntry || codeOffset >= (size_t)codeEntry->size())
@@ -124,7 +126,6 @@ struct EVMHostInterface
         [[maybe_unused]] const evmc_address* beneficiary) noexcept
     {
         auto& hostContext = static_cast<HostContextType&>(*context);
-
         hostContext.suicide();  // FISCO BCOS has no _beneficiary
         return false;
     }
@@ -178,10 +179,10 @@ struct EVMHostInterface
     static evmc_bytes32 getBlockHash(evmc_host_context* context, int64_t number) noexcept
     {
         auto& hostContext = static_cast<HostContextType&>(*context);
-        return toEvmC(waitOperator(hostContext.blockHash(number)));
+        return toEvmC(syncWait(hostContext.blockHash(number)));
     }
 
-    static evmc_result call(evmc_host_context* context, const evmc_message* message) noexcept
+    static evmc_result call(evmc_host_context* context, const evmc_message* message)
     {
         if (message->gas < 0)
         {
@@ -191,7 +192,7 @@ struct EVMHostInterface
         }
 
         auto& hostContext = static_cast<HostContextType&>(*context);
-        auto result = waitOperator(hostContext.externalCall(*message));
+        auto result = syncWait(hostContext.externalCall(*message));
         evmc_result evmcResult = result;
         result.release = nullptr;
         return evmcResult;
@@ -199,9 +200,9 @@ struct EVMHostInterface
 };
 
 template <class HostContextType>
-const evmc_host_interface* getHostInterface(auto&& waitOperator)
+const evmc_host_interface* getHostInterface(auto&& syncWait)
 {
-    constexpr static std::decay_t<decltype(waitOperator)> localWaitOperator{};
+    constexpr static std::decay_t<decltype(syncWait)> localWaitOperator{};
     using HostContextImpl = EVMHostInterface<HostContextType, localWaitOperator>;
     static evmc_host_interface const fnTable = {
         HostContextImpl::accountExists,

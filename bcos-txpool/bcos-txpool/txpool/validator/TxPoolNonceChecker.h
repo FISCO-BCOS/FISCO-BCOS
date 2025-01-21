@@ -22,7 +22,6 @@
 #include "bcos-txpool/txpool/interfaces/NonceCheckerInterface.h"
 #include <bcos-utilities/BucketMap.h>
 #include <tbb/concurrent_hash_map.h>
-#include <variant>
 
 namespace bcos::txpool
 {
@@ -30,8 +29,7 @@ class TxPoolNonceChecker : public NonceCheckerInterface
 {
 public:
     TxPoolNonceChecker() : m_nonces(256){};
-    bcos::protocol::TransactionStatus checkNonce(
-        bcos::protocol::Transaction::ConstPtr _tx) override;
+    bcos::protocol::TransactionStatus checkNonce(const bcos::protocol::Transaction& _tx) override;
     void batchInsert(bcos::protocol::BlockNumber _batchId,
         bcos::protocol::NonceListPtr const& _nonceList) override;
     void batchRemove(bcos::protocol::NonceList const& _nonceList) override;
@@ -44,8 +42,7 @@ public:
 protected:
     void remove(bcos::protocol::NonceType const& _nonce) override;
 
-    using NonceSet =
-        bcos::BucketSet<bcos::protocol::NonceType, std::hash<bcos::protocol::NonceType>>;
+    using NonceSet = bcos::BucketSet<bcos::protocol::NonceType, StringHash>;
     NonceSet m_nonces;
     // tbb::concurrent_hash_map<bcos::protocol::NonceType, std::monostate> m_nonces;
 };

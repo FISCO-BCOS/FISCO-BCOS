@@ -129,7 +129,7 @@ void AMOPClient::onRecvAMOPRequest(
     m_gateway->asyncSendMessageByTopic(amopReq->topic(),
         bytesConstRef(_msg->payload()->data(), _msg->payload()->size()),
         [self, seq, _msg, topic, _session](
-            bcos::Error::Ptr&& _error, int16_t, bytesPointer _responseData) {
+            bcos::Error::Ptr&& _error, int16_t, bytesConstRef _responseData) {
             try
             {
                 auto amopClient = self.lock();
@@ -171,7 +171,7 @@ void AMOPClient::onRecvAMOPRequest(
                 }
                 // Note: the decode function will recover m_seq of wsMessage, so it should be
                 // better not set orgSeq into the responseMsg before decode
-                auto size = responseMsg->decode(ref(*_responseData));
+                auto size = responseMsg->decode(_responseData);
                 AMOP_CLIENT_LOG(DEBUG)
                     << LOG_BADGE("onRecvAMOPRequest")
                     << LOG_DESC("AMOP async send message: receive message response for sdk")
@@ -278,8 +278,7 @@ void AMOPClient::sendMessageToClient(std::string const& _topic,
             if (_error)
             {
                 _callback(
-                    BCOS_ERROR_PTR(_error->errorCode(), _error->errorMessage()),
-                    std::move(buffer));
+                    BCOS_ERROR_PTR(_error->errorCode(), _error->errorMessage()), std::move(buffer));
             }
             else
             {

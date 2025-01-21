@@ -305,7 +305,9 @@ void PBFTCache::resetCache(ViewType _curView)
         // reset the sealingManager, in case of the same block has been sealed twice
         m_config->notifyResetSealing(m_prePrepare->consensusProposal()->index());
         // reset the exceptioned txs to unsealed
-        m_config->validator()->asyncResetTxsFlag(m_prePrepare->consensusProposal()->data(), false);
+        auto block = m_config->blockFactory().createBlock(
+            m_prePrepare->consensusProposal()->data(), false, false);
+        m_config->validator()->asyncResetTxsFlag(*block, false);
         m_prePrepare = nullptr;
     }
     resetExceptionCache(_curView);
@@ -360,8 +362,9 @@ void PBFTCache::resetExceptionCache(ViewType _curView)
         {
             PBFT_LOG(INFO) << LOG_DESC("resetCache: asyncResetTxsFlag exceptionPrePrepare")
                            << printPBFTProposal((*exceptionPrePrepare)->consensusProposal());
-            m_config->validator()->asyncResetTxsFlag(
-                (*exceptionPrePrepare)->consensusProposal()->data(), false);
+            auto block = m_config->blockFactory().createBlock(
+                (*exceptionPrePrepare)->consensusProposal()->data(), false, false);
+            m_config->validator()->asyncResetTxsFlag(*block, false);
             exceptionPrePrepare = m_exceptionPrePrepareList.erase(exceptionPrePrepare);
             if (exceptionPrePrepare == m_exceptionPrePrepareList.end())
             {

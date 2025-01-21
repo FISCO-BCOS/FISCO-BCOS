@@ -55,23 +55,10 @@ struct ConsensusNode
     friend std::strong_ordering operator<=>(
         ConsensusNode const& lhs, ConsensusNode const& rhs) noexcept
     {
-        if (auto cmp = lhs.nodeID->data() <=> rhs.nodeID->data(); !std::is_eq(cmp))
-        {
-            return cmp;
-        }
-        if (auto cmp = lhs.type <=> rhs.type; !std::is_eq(cmp))
-        {
-            return cmp;
-        }
-        if (auto cmp = lhs.voteWeight <=> rhs.voteWeight; !std::is_eq(cmp))
-        {
-            return cmp;
-        }
-        if (auto cmp = lhs.termWeight <=> rhs.termWeight; !std::is_eq(cmp))
-        {
-            return cmp;
-        }
-        return lhs.enableNumber <=> rhs.enableNumber;
+        return std::make_tuple(lhs.nodeID->data(), std::ref(lhs.type), std::ref(lhs.voteWeight),
+                   std::ref(lhs.termWeight), std::ref(lhs.enableNumber)) <=>
+               std::make_tuple(rhs.nodeID->data(), std::ref(rhs.type), std::ref(rhs.voteWeight),
+                   std::ref(rhs.termWeight), std::ref(rhs.enableNumber));
     }
     friend bool operator==(ConsensusNode const& lhs, ConsensusNode const& rhs) noexcept
     {

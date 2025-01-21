@@ -26,9 +26,7 @@
 #include "bcos-codec/wrapper/CodecWrapper.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/bcos-framework/ledger/LedgerTypeDef.h"
-#include "bcos-framework/storage/Table.h"
-#include "bcos-table/src/StateStorage.h"
-#include "evmc/evmc.hpp"
+#include "bcos-framework/storage/LegacyStorageMethods.h"
 #include <bcos-framework/executor/ExecutionMessage.h>
 #include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/protocol/Protocol.h>
@@ -39,12 +37,9 @@
 #include <boost/algorithm/string/split.hpp>
 #include <boost/thread.hpp>
 #include <boost/throw_exception.hpp>
-#include <algorithm>
 #include <exception>
 #include <iterator>
-#include <limits>
 #include <memory>
-#include <sstream>
 #include <utility>
 #include <vector>
 
@@ -247,12 +242,12 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
     if (request->create && features().get(ledger::Features::Flag::feature_evm_address)) [[unlikely]]
     {
         // account must exist
-        ledger::account::EVMAccount account(
-            *m_executive->storage().getRawStorage(), request->senderAddress);
+        ledger::account::EVMAccount account(*m_executive->storage().getRawStorage(),
+            request->senderAddress, features().get(ledger::Features::Flag::feature_raw_address));
         request->nonce = task::syncWait([](decltype(account) contract) -> task::Task<u256> {
             auto const nonceString = co_await ledger::account::nonce(contract);
             // uint in storage
-            auto const nonce = u256(nonceString.value_or("0"));
+            auto nonce = u256(nonceString.value_or("0"));
             co_return nonce;
         }(std::move(account)));
     }
@@ -413,7 +408,8 @@ bool HostContext::setCode(bytes code)
         if (contractTable)
         {
             m_executive->setCode(m_tableName, std::move(code));
-            if (features().get(ledger::Features::Flag::feature_balance))
+            if (features().get(ledger::Features::Flag::feature_balance) &&
+                !features().get(ledger::Features::Flag::bugfix_delete_account_code))
             {
                 // update account's special code
                 Entry entryToDelete;
@@ -594,7 +590,7 @@ evmc_bytes32 HostContext::getTransientStorage(const evmc_bytes32* key)
 
     auto transientStorageMap = m_executive->blockContext().getTransientStorageMap();
     using TSMap = bcos::BucketMap<int64_t, std::shared_ptr<storage::StateStorageInterface>>;
-    TSMap::ReadAccessor::Ptr readAccessor;
+    TSMap::ReadAccessor readAccessor;
     auto has =
         transientStorageMap->find<TSMap::ReadAccessor>(readAccessor, m_executive->contextID());
     if (!has)
@@ -605,7 +601,7 @@ evmc_bytes32 HostContext::getTransientStorage(const evmc_bytes32* key)
         std::uninitialized_fill_n(result.bytes, sizeof(result), 0);
         return result;
     }
-    auto entry = readAccessor->value()->getRow(m_tableName, keyView);
+    auto entry = readAccessor.value()->getRow(m_tableName, keyView);
     if (!entry.first && entry.second.has_value())
     {
         auto field = entry.second->getField(0);

@@ -61,10 +61,6 @@ bcostars::TransactionMetaData& bcostars::protocol::TransactionMetaDataImpl::muta
 {
     return *m_inner();
 }
-bcostars::TransactionMetaData bcostars::protocol::TransactionMetaDataImpl::takeInner()
-{
-    return std::move(*m_inner());
-}
 void bcostars::protocol::TransactionMetaDataImpl::setInner(bcostars::TransactionMetaData inner)
 {
     *m_inner() = std::move(inner);

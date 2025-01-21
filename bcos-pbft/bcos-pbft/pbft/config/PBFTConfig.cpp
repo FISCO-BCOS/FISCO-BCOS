@@ -24,6 +24,7 @@ using namespace bcos;
 using namespace bcos::consensus;
 using namespace bcos::protocol;
 using namespace bcos::ledger;
+using namespace std::chrono_literals;
 
 void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
 {
@@ -134,7 +135,7 @@ void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
     if (m_syncingState)
     {
         m_syncingState = false;
-        m_timer->start();
+        m_pbftTimer->start();
     }
     // try to notify the sealer module to seal proposals
     if (!m_timeoutState)
@@ -159,20 +160,21 @@ void PBFTConfig::notifyResetSealing(std::function<void()> _callback)
     // only notify the non-leader to reset sealing
     PBFT_LOG(INFO) << LOG_DESC("notifyResetSealing") << printCurrentState();
     auto committedIndex = m_committedProposal->index();
-    m_sealerResetNotifier([this, _callback, committedIndex](Error::Ptr _error) {
-        if (_error)
-        {
-            PBFT_LOG(INFO) << LOG_DESC("notifyResetSealing failed")
-                           << LOG_KV("code", _error->errorCode())
-                           << LOG_KV("msg", _error->errorMessage()) << printCurrentState();
-            return;
-        }
-        if (_callback && m_waitResealUntil <= committedIndex)
-        {
-            _callback();
-        }
-        PBFT_LOG(INFO) << LOG_DESC("notifyResetSealing success") << printCurrentState();
-    });
+    m_sealerResetNotifier(
+        [this, _callback = std::move(_callback), committedIndex](Error::Ptr _error) {
+            if (_error)
+            {
+                PBFT_LOG(INFO) << LOG_DESC("notifyResetSealing failed")
+                               << LOG_KV("code", _error->errorCode())
+                               << LOG_KV("msg", _error->errorMessage()) << printCurrentState();
+                return;
+            }
+            if (_callback && m_waitResealUntil <= committedIndex)
+            {
+                _callback();
+            }
+            PBFT_LOG(INFO) << LOG_DESC("notifyResetSealing success") << printCurrentState();
+        });
     // reset the sealEndIndex and the sealStartIndex
     m_sealEndIndex = (sealStartIndex() - 1);
     m_sealStartIndex = (sealStartIndex() - 1);
@@ -248,7 +250,7 @@ bool PBFTConfig::tryTriggerFastViewChange(IndexType _leaderIndex)
     {
         return false;
     }
-    auto leaderNodeInfo = getConsensusNodeByIndex(_leaderIndex);
+    auto* leaderNodeInfo = getConsensusNodeByIndex(_leaderIndex);
     if (!leaderNodeInfo)
     {
         return false;
@@ -385,7 +387,7 @@ void PBFTConfig::asyncNotifySealProposal(
                     return;
                 }
                 // retry after 1 seconds
-                std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+                std::this_thread::sleep_for(1s);
                 // retry when send failed
                 pbftConfig->asyncNotifySealProposal(
                     _proposalIndex, _proposalEndIndex, _maxTxsToSeal, _retryTime + 1);
@@ -461,9 +463,8 @@ std::string PBFTConfig::printCurrentState()
                  << LOG_KV("consNum", progressedIndex())
                  << LOG_KV("committedHash", committedProposal()->hash().abridged())
                  << LOG_KV("view", view()) << LOG_KV("toView", toView())
-                 << LOG_KV("changeCycle", m_timer->changeCycle())
+                 << LOG_KV("changeCycle", m_pbftTimer->changeCycle())
                  << LOG_KV("expectedCheckPoint", m_expectedCheckPoint) << LOG_KV("Idx", nodeIndex())
-                 << LOG_KV("unsealedTxs", m_unsealedTxsSize.load())
                  << LOG_KV("sealUntil", m_waitSealUntil)
                  << LOG_KV("waitResealUntil", m_waitResealUntil)
                  << LOG_KV("consensusTimeout", m_consensusTimeout.load())
@@ -477,9 +478,8 @@ std::string PBFTConfig::printCurrentState()
 
 void PBFTConfig::tryToSyncTxs()
 {
-    // should not try to request txs to peer when unsealedTxs > 0
     // only the leader need tryToSyncTxs
-    if (m_unsealedTxsSize > 0 || m_timer->running() || getLeader() != nodeIndex())
+    if (m_pbftTimer->running() || getLeader() != nodeIndex())
     {
         return;
     }

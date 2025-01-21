@@ -12,6 +12,11 @@
 
 namespace bcos::ledger
 {
+
+inline constexpr struct FromStorage
+{
+} fromStorage{};
+
 inline constexpr struct BuildGenesisBlock
 {
     task::Task<bool> operator()(
@@ -72,10 +77,6 @@ inline constexpr struct GetTransactionCount
     }
 } getTransactionCount{};
 
-inline constexpr struct FromStorage
-{
-} fromStorage{};
-
 inline constexpr struct GetCurrentBlockNumber
 {
     task::Task<protocol::BlockNumber> operator()(auto& ledger) const
@@ -116,6 +117,11 @@ inline constexpr struct GetSystemConfig
         auto& ledger, std::string_view key) const
     {
         co_return co_await tag_invoke(*this, ledger, key);
+    }
+    task::Task<std::optional<SystemConfigEntry>> operator()(
+        auto& storage, std::string_view key, FromStorage /*unused*/) const
+    {
+        co_return co_await tag_invoke(*this, storage, key);
     }
 } getSystemConfig{};
 

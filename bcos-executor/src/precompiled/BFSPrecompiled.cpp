@@ -19,6 +19,7 @@
  */
 
 #include "BFSPrecompiled.h"
+#include "bcos-codec/scale/Scale.h"
 #include "bcos-executor/src/precompiled/common/Common.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
@@ -26,7 +27,6 @@
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-tool/BfsFileFactory.h>
-#include <bcos-utilities/Ranges.h>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
@@ -284,7 +284,7 @@ void BFSPrecompiled::makeDirImpl(const std::string& _absolutePath,
         return;
     }
 
-    const auto* bfsAddress = getThisAddress(blockContext.isWasm());
+    const auto bfsAddress = getThisAddress(blockContext.isWasm());
 
     auto response = externalTouchNewFile(_executive, _callParameters->m_origin, bfsAddress,
         getThisAddress(blockContext.isWasm()), _absolutePath, FS_TYPE_DIR,

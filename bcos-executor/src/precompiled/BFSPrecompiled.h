@@ -73,12 +73,15 @@ protected:
         const std::shared_ptr<executor::TransactionExecutive>& _executive,
         PrecompiledExecResult::Ptr const& _callParameters);
 
-    virtual const char* getThisAddress(bool _isWasm) { return _isWasm ? BFS_NAME : BFS_ADDRESS; }
+    virtual std::string getThisAddress(bool _isWasm)
+    {
+        return std::string(_isWasm ? BFS_NAME : BFS_ADDRESS);
+    }
     virtual std::string_view getLinkRootDir() { return executor::USER_APPS_PREFIX; }
     virtual bool checkPathPrefixValid(
         const std::string_view& path, uint32_t blockVersion, const std::string_view& type);
 
-    inline bool isShardPath(const std::string& _path)
+    static inline bool isShardPath(const std::string& _path)
     {
         return _path.starts_with(executor::USER_SHARD_PREFIX);
     }

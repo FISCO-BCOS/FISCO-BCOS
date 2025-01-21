@@ -1,7 +1,6 @@
 #include "ExecutorManager.h"
 #include "bcos-utilities/BoostLog.h"
 #include <bcos-utilities/Error.h>
-#include <tbb/parallel_sort.h>
 #include <boost/concept_check.hpp>
 #include <boost/core/ignore_unused.hpp>
 #include <boost/throw_exception.hpp>

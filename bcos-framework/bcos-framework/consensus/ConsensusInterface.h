@@ -43,7 +43,7 @@ public:
     virtual void start() = 0;
     virtual void stop() = 0;
 
-    virtual void asyncSubmitProposal(bool _containSysTxs, bytesConstRef _proposalData,
+    virtual void asyncSubmitProposal(bool _containSysTxs, const protocol::Block& proposal,
         bcos::protocol::BlockNumber _proposalIndex, bcos::crypto::HashType const& _proposalHash,
         std::function<void(Error::Ptr)> _onProposalSubmitted) = 0;
 
@@ -63,9 +63,6 @@ public:
 
     // for the sync module to notify the syncing number
     virtual void notifyHighestSyncingNumber(bcos::protocol::BlockNumber _number) = 0;
-
-    virtual void asyncNoteUnSealedTxsSize(
-        uint64_t _unsealedTxsSize, std::function<void(Error::Ptr)> _onRecvResponse) = 0;
 
     // get the consensusNodeList
     // Note: if separate sealer with the PBFT module, should implement with notify

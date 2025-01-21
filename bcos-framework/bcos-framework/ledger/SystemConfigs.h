@@ -19,19 +19,12 @@
  */
 
 #pragma once
-#include "../protocol/Protocol.h"
-#include "../storage/Entry.h"
-#include "../storage/LegacyStorageMethods.h"
-#include "../storage2/Storage.h"
-#include "../transaction-executor/StateKey.h"
-#include "bcos-framework/ledger/LedgerTypeDef.h"
-#include "bcos-task/Task.h"
-#include "bcos-tool/Exceptions.h"
-#include "bcos-utilities/Exceptions.h"
-#include "bcos-utilities/Ranges.h"
+#include "../protocol/ProtocolTypeDef.h"
+#include "bcos-concepts/Exception.h"
 #include <boost/throw_exception.hpp>
 #include <magic_enum.hpp>
-#include <utility>
+#include <range/v3/view/iota.hpp>
+#include <range/v3/view/transform.hpp>
 
 namespace bcos::ledger
 {
@@ -42,7 +35,7 @@ struct NoSuchSystemConfig : public bcos::error::Exception
 /// DO NOT change the name of enum. It is used to get the name of the config.
 enum class SystemConfig
 {
-    tx_gas_limit,
+    tx_gas_limit = 0,
     tx_gas_price,
     tx_count_limit,
     consensus_leader_period,
@@ -55,11 +48,10 @@ enum class SystemConfig
     web3_chain_id,
     balance_transfer,
 };
-class SystemConfigs
+struct SystemConfigs
 {
 public:
     using ConfigPair = std::pair<std::string, protocol::BlockNumber>;
-    SystemConfigs() { m_sysConfigs.reserve(magic_enum::enum_count<SystemConfig>()); }
 
     static SystemConfig fromString(std::string_view str)
     {
@@ -73,14 +65,11 @@ public:
 
     std::optional<ConfigPair> get(SystemConfig config) const
     {
-        if (const auto it = m_sysConfigs.find(config); it != m_sysConfigs.end())
+        if (magic_enum::enum_contains(config))
         {
-            return it->second;
+            return m_sysConfigs.at(static_cast<int>(config));
         }
-        else
-        {
-            return std::nullopt;
-        }
+        return {};
     }
 
     ConfigPair getOrDefault(SystemConfig config, std::string defaultValue) const
@@ -92,7 +81,7 @@ public:
 
     void set(SystemConfig config, std::string value, protocol::BlockNumber number)
     {
-        m_sysConfigs[config] = {std::move(value), number};
+        m_sysConfigs.at(static_cast<int>(config)) = {std::move(value), number};
     }
     void set(std::string_view config, std::string value, protocol::BlockNumber number)
     {
@@ -101,25 +90,26 @@ public:
 
     auto systemConfigs() const
     {
-        return RANGES::views::iota(0LU, m_sysConfigs.size()) |
-               RANGES::views::transform([this](size_t index) {
+        return ::ranges::views::iota(0LU, m_sysConfigs.size()) |
+               ::ranges::views::transform([this](size_t index) {
                    auto flag = magic_enum::enum_value<SystemConfig>(index);
-                   return std::make_tuple(flag, magic_enum::enum_name(flag), m_sysConfigs.at(flag));
+                   return std::make_tuple(
+                       flag, magic_enum::enum_name(flag), m_sysConfigs.at(index));
                });
     }
 
     // return all config names
     static auto supportConfigs()
     {
-        return RANGES::views::iota(0LU, magic_enum::enum_count<SystemConfig>()) |
-               RANGES::views::transform([](size_t index) {
+        return ::ranges::views::iota(0LU, magic_enum::enum_count<SystemConfig>()) |
+               ::ranges::views::transform([](size_t index) {
                    auto flag = magic_enum::enum_value<SystemConfig>(index);
                    return magic_enum::enum_name(flag);
                });
     }
 
 private:
-    std::unordered_map<SystemConfig, std::optional<ConfigPair>> m_sysConfigs;
+    std::array<std::optional<ConfigPair>, magic_enum::enum_count<SystemConfig>()> m_sysConfigs;
 };
 
 }  // namespace bcos::ledger

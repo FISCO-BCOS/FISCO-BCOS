@@ -227,7 +227,7 @@ public:
         params2->setSeq(1000);
         params2->setDepth(0);
         params2->setFrom(sender);
-        params2->setTo(precompiled::ACCOUNT_MGR_ADDRESS);
+        params2->setTo(std::string(precompiled::ACCOUNT_MGR_ADDRESS));
         params2->setOrigin(sender);
         params2->setStaticCall(false);
         params2->setGasAvailable(gas);
@@ -282,7 +282,7 @@ public:
         params2->setSeq(1000);
         params2->setDepth(0);
         params2->setFrom(sender);
-        params2->setTo(precompiled::ACCOUNT_MGR_ADDRESS);
+        params2->setTo(std::string(precompiled::ACCOUNT_MGR_ADDRESS));
         params2->setOrigin(sender);
         params2->setStaticCall(false);
         params2->setGasAvailable(gas);

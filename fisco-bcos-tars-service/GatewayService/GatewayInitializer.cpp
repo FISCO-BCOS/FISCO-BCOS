@@ -34,6 +34,7 @@
 #include <bcos-tars-protocol/protocol/MemberImpl.h>
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
 #include <bcos-tool/NodeConfig.h>
+// #include "bcos-framework/security/KeyEncryptionType.h"
 
 using namespace tars;
 using namespace bcostars;
@@ -71,8 +72,8 @@ void GatewayInitializer::init(std::string const& _configPath)
     auto protocolInitializer = std::make_shared<bcos::initializer::ProtocolInitializer>();
     protocolInitializer->init(nodeConfig);
 
-    bcos::gateway::GatewayFactory factory(
-        nodeConfig->chainId(), nodeConfig->rpcServiceName(), protocolInitializer->dataEncryption());
+    bcos::gateway::GatewayFactory factory(nodeConfig->chainId(), nodeConfig->rpcServiceName(),
+        protocolInitializer->getKeyEncryptionByType(nodeConfig->keyEncryptionType()));
     auto gatewayServiceName = bcostars::getProxyDesc(bcos::protocol::GATEWAY_SERVANT_NAME);
     GATEWAYSERVICE_LOG(INFO) << LOG_DESC("buildGateWay")
                              << LOG_KV("certPath", m_gatewayConfig->certPath())

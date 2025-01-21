@@ -16,9 +16,7 @@
 namespace ba = boost::asio;
 namespace bi = ba::ip;
 
-namespace bcos
-{
-namespace gateway
+namespace bcos::gateway
 {
 class ASIOInterface
 {
@@ -43,7 +41,7 @@ public:
     virtual std::shared_ptr<ba::io_context> ioService() { return m_ioServicePool->getIOService(); }
     virtual void setIOServicePool(IOServicePool::Ptr _ioServicePool)
     {
-        m_ioServicePool = _ioServicePool;
+        m_ioServicePool = std::move(_ioServicePool);
         m_timerIOService = m_ioServicePool->getIOService();
     }
 
@@ -59,10 +57,9 @@ public:
         m_clientContext = std::move(_clientContext);
     }
 
-    virtual std::shared_ptr<boost::asio::deadline_timer> newTimer(uint32_t timeout)
+    virtual boost::asio::deadline_timer newTimer(uint32_t timeout)
     {
-        return std::make_shared<boost::asio::deadline_timer>(
-            *(m_timerIOService), boost::posix_time::milliseconds(timeout));
+        return {*(m_timerIOService), boost::posix_time::milliseconds(timeout)};
     }
 
     virtual std::shared_ptr<SocketFace> newSocket(
@@ -90,110 +87,86 @@ public:
     virtual void start() { m_ioServicePool->start(); }
     virtual void stop() { m_ioServicePool->stop(); }
 
-    virtual void asyncAccept(std::shared_ptr<SocketFace> socket, Handler_Type handler,
-        boost::system::error_code = boost::system::error_code())
+    virtual void asyncAccept(const std::shared_ptr<SocketFace>& socket, Handler_Type handler,
+        boost::system::error_code /*unused*/ = boost::system::error_code())
     {
         m_acceptor->async_accept(socket->ref(), handler);
     }
 
-    virtual void asyncResolveConnect(std::shared_ptr<SocketFace> socket, Handler_Type handler);
+    virtual void asyncResolveConnect(
+        const std::shared_ptr<SocketFace>& socket, Handler_Type handler);
 
-    virtual void asyncWrite(std::shared_ptr<SocketFace> socket,
-        boost::asio::mutable_buffers_1 buffers, ReadWriteHandler handler)
+    void asyncWrite(const std::shared_ptr<SocketFace>& socket, const auto& buffers, auto handler)
     {
         auto type = m_type;
-        auto ioService = socket->ioService();
-        ioService->post([type, socket, buffers, handler]() {
-            if (socket->isConnected())
-            {
-                switch (type)
-                {
-                case TCP_ONLY:
-                {
-                    ba::async_write(socket->ref(), buffers, handler);
-                    break;
-                }
-                case SSL:
-                {
-                    ba::async_write(socket->sslref(), buffers, handler);
-                    break;
-                }
-                }
-            }
-        });
+        if (socket->isConnected())
+        {
+            auto& ioService = socket->ioService();
+            ioService.post(
+                [type, socket = socket, buffers, handler = std::move(handler)]() mutable {
+                    switch (type)
+                    {
+                    case TCP_ONLY:
+                    {
+                        ba::async_write(socket->ref(), buffers, std::move(handler));
+                        break;
+                    }
+                    case SSL:
+                    {
+                        ba::async_write(socket->sslref(), buffers, std::move(handler));
+                        break;
+                    }
+                    }
+                });
+        }
     }
 
-    virtual void asyncWrite(std::shared_ptr<SocketFace> socket,
-        const std::vector<boost::asio::const_buffer>& buffers, ReadWriteHandler handler)
-    {
-        auto type = m_type;
-        auto ioService = socket->ioService();
-        ioService->post([type, socket, buffers, handler]() {
-            if (socket->isConnected())
-            {
-                switch (type)
-                {
-                case TCP_ONLY:
-                {
-                    ba::async_write(socket->ref(), buffers, handler);
-                    break;
-                }
-                case SSL:
-                {
-                    ba::async_write(socket->sslref(), buffers, handler);
-                    break;
-                }
-                }
-            }
-        });
-    }
-
-    virtual void asyncRead(std::shared_ptr<SocketFace> socket,
+    virtual void asyncRead(const std::shared_ptr<SocketFace>& socket,
         boost::asio::mutable_buffers_1 buffers, ReadWriteHandler handler)
     {
         switch (m_type)
         {
         case TCP_ONLY:
         {
-            ba::async_read(socket->ref(), buffers, handler);
+            ba::async_read(socket->ref(), buffers, std::move(handler));
             break;
         }
         case SSL:
         {
-            ba::async_read(socket->sslref(), buffers, handler);
+            ba::async_read(socket->sslref(), buffers, std::move(handler));
             break;
         }
         }
     }
 
-    virtual void asyncReadSome(std::shared_ptr<SocketFace> socket,
+    virtual void asyncReadSome(const std::shared_ptr<SocketFace>& socket,
         boost::asio::mutable_buffers_1 buffers, ReadWriteHandler handler)
     {
         switch (m_type)
         {
         case TCP_ONLY:
         {
-            socket->ref().async_read_some(buffers, handler);
+            socket->ref().async_read_some(buffers, std::move(handler));
             break;
         }
         case SSL:
         {
-            socket->sslref().async_read_some(buffers, handler);
+            socket->sslref().async_read_some(buffers, std::move(handler));
             break;
         }
         }
     }
 
-    virtual void asyncHandshake(std::shared_ptr<SocketFace> socket,
+    virtual void asyncHandshake(const std::shared_ptr<SocketFace>& socket,
         ba::ssl::stream_base::handshake_type type, Handler_Type handler)
     {
-        socket->sslref().async_handshake(type, handler);
+        socket->sslref().async_handshake(type, std::move(handler));
     }
 
     virtual void setVerifyCallback(
-        std::shared_ptr<SocketFace> socket, VerifyCallback callback, bool = true)
+        const std::shared_ptr<SocketFace>& socket, VerifyCallback callback, bool /*unused*/ = true)
     {
-        socket->sslref().set_verify_callback(callback);
+        socket->sslref().set_verify_callback(std::move(callback));
     }
 
     virtual void strandPost(Base_Handler handler) { m_strand->post(handler); }
@@ -209,5 +182,4 @@ protected:
     std::shared_ptr<ba::ssl::context> m_clientContext;
     int m_type = 0;
 };
-}  // namespace gateway
-}  // namespace bcos
+}  // namespace bcos::gateway

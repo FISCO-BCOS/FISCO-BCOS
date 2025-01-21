@@ -7,9 +7,7 @@
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
-#include "bcos-framework/protocol/Transaction.h"
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
-#include "bcos-task/TBBWait.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/FixedBytes.h"
 #include "bcos-utilities/ratelimiter/TimeWindowRateLimiter.h"
@@ -24,11 +22,10 @@
 #include <atomic>
 #include <chrono>
 #include <exception>
-#include <random>
 #include <string>
 #include <thread>
 
-std::atomic_long blockNumber = 0;
+std::atomic_long g_blockNumber = 0;
 constexpr static long blockLimit = 900;
 constexpr static int64_t initialValue = 1000000000;
 struct User
@@ -102,7 +99,7 @@ void query(bcos::sdk::RPCClient& rpcClient, std::shared_ptr<bcos::crypto::Crypto
             auto input = abiCodec1.abiIn(
                 "availableBalance(address)", users[i].keyPair->address(cryptoSuite->hashImpl()));
             auto transaction = transactionFactory.createTransaction(0, contractAddress, input,
-                rpcClient.generateNonce(), blockNumber + blockLimit, "chain0", "group0", 0);
+                rpcClient.generateNonce(), g_blockNumber + blockLimit, "chain0", "group0", 0);
 
 
             handles[i].emplace(rpcClient);
@@ -152,7 +149,7 @@ void issue(bcos::sdk::RPCClient& rpcClient, std::shared_ptr<bcos::crypto::Crypto
             auto input = abiCodec.abiIn("mint(address,uint256)",
                 users[i].keyPair->address(cryptoSuite->hashImpl()), bcos::u256(initialValue));
             auto transaction = transactionFactory.createTransaction(0, contractAddress, input,
-                rpcClient.generateNonce(), blockNumber + blockLimit, "chain0", "group0", 0,
+                rpcClient.generateNonce(), g_blockNumber + blockLimit, "chain0", "group0", 0,
                 *adminKeyPair);
 
             handles[i].emplace(rpcClient);
@@ -203,7 +200,7 @@ void transfer(bcos::sdk::RPCClient& rpcClient,
             auto input = abiCodec.abiIn("transfer(address,uint256)",
                 users[toAddress].keyPair->address(cryptoSuite->hashImpl()), bcos::u256(1));
             auto transaction = transactionFactory.createTransaction(0, contractAddress, input,
-                rpcClient.generateNonce(), blockNumber + blockLimit, "chain0", "group0", 0,
+                rpcClient.generateNonce(), g_blockNumber + blockLimit, "chain0", "group0", 0,
                 *users[fromAddress].keyPair);
             handles[i].emplace(rpcClient);
             handles[i]->setCallback(std::make_shared<PerformanceCallback>(latch, collector));
@@ -238,7 +235,7 @@ void loopFetchBlockNumber(bcos::sdk::RPCClient& rpcClient, boost::atomic_flag co
     {
         try
         {
-            blockNumber = bcos::sdk::BlockNumber(rpcClient).send().get();
+            g_blockNumber = bcos::sdk::BlockNumber(rpcClient).send().get();
         }
         catch (std::exception& e)
         {
@@ -274,6 +271,8 @@ int main(int argc, char* argv[])
     };
     bcos::sdk::RPCClient rpcClient(config);
     boost::atomic_flag stopFlag{};
+
+    g_blockNumber = bcos::sdk::BlockNumber(rpcClient).send().get();
     std::thread getBlockNumber([&]() { loopFetchBlockNumber(rpcClient, stopFlag); });
     auto cryptoSuite =
         std::make_shared<bcos::crypto::CryptoSuite>(std::make_shared<bcos::crypto::Keccak256>(),
@@ -289,8 +288,9 @@ int main(int argc, char* argv[])
     auto deployParam = abiCodec.abiIn("", std::string("test_token"), std::string("tt"), false);
     transfer20Bin.insert(transfer20Bin.end(), deployParam.begin(), deployParam.end());
 
-    auto deployTransfer20Transaction = transactionFactory.createTransaction(0, "", transfer20Bin,
-        rpcClient.generateNonce(), blockNumber + blockLimit, "chain0", "group0", 0, *adminKeyPair);
+    auto deployTransfer20Transaction =
+        transactionFactory.createTransaction(0, "", transfer20Bin, rpcClient.generateNonce(),
+            g_blockNumber + blockLimit, "chain0", "group0", 0, *adminKeyPair);
     auto receipt = bcos::task::syncWait(
         bcos::sdk::async::sendTransaction(rpcClient, *deployTransfer20Transaction))
                        .get();
@@ -311,8 +311,9 @@ int main(int argc, char* argv[])
         ownerKeyPair->address(cryptoSuite->hashImpl()), bcos::bytes{});
     tupBin.insert(tupBin.end(), tupParam.begin(), tupParam.end());
 
-    auto deployTupTransaction = transactionFactory.createTransaction(0, "", tupBin,
-        rpcClient.generateNonce(), blockNumber + blockLimit, "chain0", "group0", 0, *adminKeyPair);
+    auto deployTupTransaction =
+        transactionFactory.createTransaction(0, "", tupBin, rpcClient.generateNonce(),
+            g_blockNumber + blockLimit, "chain0", "group0", 0, *adminKeyPair);
     auto receipt2 =
         bcos::task::syncWait(bcos::sdk::async::sendTransaction(rpcClient, *deployTupTransaction))
             .get();

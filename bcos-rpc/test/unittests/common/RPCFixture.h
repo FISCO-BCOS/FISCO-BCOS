@@ -96,7 +96,8 @@ public:
         auto txResultFactory = std::make_shared<TransactionSubmitResultFactoryImpl>();
 
         auto txPoolFactory = std::make_shared<TxPoolFactory>(nodeId, cryptoSuite, txResultFactory,
-            m_blockFactory, m_frontService, m_ledger, "group0", "chain0", 100000000);
+            m_blockFactory, m_frontService, m_ledger, "group0", "chain0", 100000000,
+            bcos::txpool::DEFAULT_POOL_LIMIT, true);
 
         txPool = txPoolFactory->createTxPool();
         txPool->init();

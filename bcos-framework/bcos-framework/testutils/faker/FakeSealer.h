@@ -48,13 +48,6 @@ public:
         m_maxTxsToSeal = _maxTxsToSeal;
     }
 
-    void asyncNoteUnSealedTxsSize(
-        uint64_t _unSealedTxsSize, std::function<void(Error::Ptr)> _onRecvResponse) override
-    {
-        m_unSealedTxsSize = _unSealedTxsSize;
-        _onRecvResponse(nullptr);
-    }
-
     uint64_t unSealedTxsSize() const { return m_unSealedTxsSize; }
 
     uint64_t proposalStartIndex() const { return m_proposalStartIndex; }

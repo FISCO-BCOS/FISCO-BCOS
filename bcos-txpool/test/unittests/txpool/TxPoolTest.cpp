@@ -150,10 +150,8 @@ void testAsyncFillBlock(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     std::cout << "#### test case3" << std::endl;
 
     std::promise<std::tuple<Error::Ptr, bool>> promise6;
-    _txpool->asyncVerifyBlock(
-        _faker->nodeID(), ref(*blockData), [&](Error::Ptr _error, bool _result) {
-            promise6.set_value({std::move(_error), _result});
-        });
+    _txpool->asyncVerifyBlock(_faker->nodeID(), ref(*blockData),
+        [&](Error::Ptr _error, bool _result) { promise6.set_value({std::move(_error), _result}); });
     std::tie(e, r) = promise6.get_future().get();
     BOOST_CHECK(e->errorCode() == CommonError::TransactionsMissing);
     BOOST_CHECK(r == false);
@@ -174,9 +172,8 @@ void testAsyncFillBlock(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     bcos::bytes data;
     block->encode(data);
     std::promise<std::tuple<Error::Ptr, bool>> promise7;
-    _txpool->asyncVerifyBlock(_faker->nodeID(), ref(data), [&](Error::Ptr _error, bool _result) {
-        promise7.set_value({std::move(_error), _result});
-    });
+    _txpool->asyncVerifyBlock(_faker->nodeID(), ref(data),
+        [&](Error::Ptr _error, bool _result) { promise7.set_value({std::move(_error), _result}); });
     std::tie(e, r) = promise7.get_future().get();
     // FIXME: duplicate tx in block, verify failed
     BOOST_CHECK(e->errorCode() == CommonError::VerifyProposalFailed);
@@ -232,7 +229,7 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     // unseal 10 txs
     {
         std::promise<void> promise;
-        _txpool->asyncMarkTxs(sealedTxs, false, -1, HashType(), [&](Error::Ptr _error) {
+        _txpool->asyncMarkTxs(*sealedTxs, false, -1, HashType(), [&](Error::Ptr _error) {
             BOOST_CHECK(_error == nullptr);
             BOOST_CHECK(_txpoolStorage->size() == originTxsSize);
             promise.set_value();
@@ -257,7 +254,7 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     // mark txs to given proposal as false, expect: mark failed
     {
         std::promise<void> promise;
-        _txpool->asyncMarkTxs(sealedTxs, false, blockNumber, blockHash, [&](Error::Ptr _error) {
+        _txpool->asyncMarkTxs(*sealedTxs, false, blockNumber, blockHash, [&](Error::Ptr _error) {
             BOOST_CHECK(_error == nullptr);
             promise.set_value();
         });
@@ -283,7 +280,7 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     {
         std::promise<void> promise;
 
-        _txpool->asyncMarkTxs(sealedTxs, false, -1, HashType(), [&](Error::Ptr _error) {
+        _txpool->asyncMarkTxs(*sealedTxs, false, -1, HashType(), [&](Error::Ptr _error) {
             BOOST_CHECK(_error == nullptr);
             promise.set_value();
         });
@@ -307,7 +304,7 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     {
         std::promise<void> promise;
 
-        _txpool->asyncMarkTxs(sealedTxs, true, blockNumber, blockHash, [&](Error::Ptr _error) {
+        _txpool->asyncMarkTxs(*sealedTxs, true, blockNumber, blockHash, [&](Error::Ptr _error) {
             BOOST_CHECK(_error == nullptr);
             promise.set_value();
         });
@@ -332,7 +329,7 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     {
         std::promise<void> promise;
 
-        _txpool->asyncMarkTxs(sealedTxs, false, blockNumber, blockHash, [&](Error::Ptr _error) {
+        _txpool->asyncMarkTxs(*sealedTxs, false, blockNumber, blockHash, [&](Error::Ptr _error) {
             BOOST_CHECK(_error == nullptr);
             promise.set_value();
         });
@@ -390,8 +387,8 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
              return tx->type() != static_cast<uint8_t>(TransactionType::Web3Transaction);
          }))
     {
-        BOOST_CHECK(txPoolNonceChecker->checkNonce(tx) == TransactionStatus::None);
-        BOOST_CHECK(ledgerNonceChecker->checkNonce(tx) == TransactionStatus::NonceCheckFail);
+        BOOST_CHECK(txPoolNonceChecker->checkNonce(*tx) == TransactionStatus::None);
+        BOOST_CHECK(ledgerNonceChecker->checkNonce(*tx) == TransactionStatus::NonceCheckFail);
     }
     // check the nonce of ledger->blockNumber() hash been removed from ledgerNonceChecker
     auto const& blockData = _faker->ledger()->ledgerData();
@@ -463,8 +460,8 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
     auto const& blockData = ledger->ledgerData();
     auto duplicatedNonce =
         blockData[ledger->blockNumber() - blockLimit + 1]->transaction(0)->nonce();
-    tx = fakeTransaction(_cryptoSuite, duplicatedNonce, ledger->blockNumber() + blockLimit - 4,
-        faker->chainId(), faker->groupId());
+    tx = fakeTransaction(_cryptoSuite, std::string(duplicatedNonce),
+        ledger->blockNumber() + blockLimit - 4, faker->chainId(), faker->groupId());
     checkTxSubmit(
         txpool, txpoolStorage, tx, tx->hash(), (uint32_t)TransactionStatus::NonceCheckFail, 0);
 
@@ -615,7 +612,7 @@ void txPoolInitAndSubmitWeb3TransactionTest(CryptoSuite::Ptr _cryptoSuite, bool 
 
     auto duplicatedNonce =
         blockData[ledger->blockNumber() - blockLimit + 1]->transaction(0)->nonce();
-    auto tx = fakeWeb3Tx(_cryptoSuite, duplicatedNonce, eoaKey);
+    auto tx = fakeWeb3Tx(_cryptoSuite, std::string(duplicatedNonce), eoaKey);
     // bcos nonce not effect web3 nonce
     checkWebTxSubmit(
         txpool, txpoolStorage, tx, tx->hash(), (uint32_t)TransactionStatus::None, importedTxNum);

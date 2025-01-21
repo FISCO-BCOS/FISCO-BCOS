@@ -23,7 +23,6 @@
 #include "TransactionImpl.h"
 #include <bcos-concepts/Hash.h>
 #include <bcos-framework/protocol/TransactionFactory.h>
-#include <fstream>
 #include <stdexcept>
 #include <utility>
 
@@ -39,7 +38,7 @@ public:
     TransactionFactoryImpl(bcos::crypto::CryptoSuite::Ptr cryptoSuite)
       : m_cryptoSuite(std::move(cryptoSuite))
     {}
-    ~TransactionFactoryImpl() override = default;
+    ~TransactionFactoryImpl() noexcept override = default;
 
     bcos::protocol::Transaction::Ptr createTransaction(
         bcos::bytesConstRef txData, bool checkSig = true, bool checkHash = false) override
@@ -101,7 +100,6 @@ public:
         {
             transaction->mutableInner().sender.clear();  // Bugfix: User will fake a illegal sender,
             // must clear sender given by rpc
-
             transaction->verify(*m_cryptoSuite->hashImpl(), *m_cryptoSuite->signatureImpl());
         }
         return transaction;
@@ -109,9 +107,9 @@ public:
 
     std::shared_ptr<bcos::protocol::Transaction> createTransaction(int32_t _version,
         std::string _to, bcos::bytes const& _input, std::string const& _nonce, int64_t _blockLimit,
-        std::string _chainId, std::string _groupId, int64_t _importTime, std::string _abi = "",
-        std::string _value = "", std::string _gasPrice = "", int64_t _gasLimit = 0,
-        std::string _maxFeePerGas = "", std::string _maxPriorityFeePerGas = "") override
+        std::string _chainId, std::string _groupId, int64_t _importTime, std::string _abi = {},
+        std::string _value = {}, std::string _gasPrice = {}, int64_t _gasLimit = 0,
+        std::string _maxFeePerGas = {}, std::string _maxPriorityFeePerGas = {}) override
     {
         auto transaction = std::make_shared<bcostars::protocol::TransactionImpl>(
             [m_transaction = bcostars::Transaction()]() mutable { return &m_transaction; });
@@ -169,9 +167,9 @@ public:
     bcos::protocol::Transaction::Ptr createTransaction(int32_t _version, std::string _to,
         bcos::bytes const& _input, std::string const& _nonce, int64_t _blockLimit,
         std::string _chainId, std::string _groupId, int64_t _importTime,
-        const bcos::crypto::KeyPairInterface& keyPair, std::string _abi = "",
-        std::string _value = "", std::string _gasPrice = "", int64_t _gasLimit = 0,
-        std::string _maxFeePerGas = "", std::string _maxPriorityFeePerGas = "") override
+        const bcos::crypto::KeyPairInterface& keyPair, std::string _abi = {},
+        std::string _value = {}, std::string _gasPrice = {}, int64_t _gasLimit = 0,
+        std::string _maxFeePerGas = {}, std::string _maxPriorityFeePerGas = {}) override
     {
         bcos::protocol::Transaction::Ptr tx;
         if (_version == int32_t(bcos::protocol::TransactionVersion::V0_VERSION))

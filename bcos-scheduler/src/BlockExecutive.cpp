@@ -7,6 +7,7 @@
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/protocol/Transaction.h"
+#include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-table/src/StateStorage.h"
 #include "bcos-tars-protocol/protocol/BlockImpl.h"
 #include "bcos-task/Wait.h"
@@ -112,7 +113,7 @@ bcos::protocol::ExecutionMessage::UniquePtr BlockExecutive::buildMessage(
     if (!m_isSysBlock)
     {
         auto toAddress = tx->to();
-        if (bcos::precompiled::c_systemTxsAddress.contains(toAddress))
+        if (precompiled::contains(bcos::precompiled::c_systemTxsAddress, toAddress))
         {
             m_isSysBlock.store(true);
         }
@@ -149,7 +150,7 @@ bcos::protocol::ExecutionMessage::UniquePtr BlockExecutive::buildMessage(
     message->setDepth(0);
     message->setGasAvailable(m_gasLimit);
     auto toAddress = tx->to();
-    if (precompiled::c_systemTxsAddress.contains(toAddress))
+    if (precompiled::contains(precompiled::c_systemTxsAddress, toAddress))
     {
         message->setGasAvailable(TRANSACTION_GAS);
     }
@@ -663,7 +664,7 @@ void BlockExecutive::asyncNotify(
         if (m_syncBlock)
         {
             auto tx = m_block->transaction(index);
-            submitResult->setNonce(tx->nonce());
+            submitResult->setNonce(std::string(tx->nonce()));
         }
         index++;
         results->emplace_back(submitResult);
@@ -1011,14 +1012,13 @@ void BlockExecutive::onDmcExecuteFinish(
     auto dmcChecksum = m_dmcRecorder->dumpAndClearChecksum();
     if (m_staticCall)
     {
-        DMC_LOG(TRACE) << LOG_BADGE("Stat") << "DMCExecute.6:"
-                       << "\t " << LOG_BADGE("DMCRecorder") << " DMCExecute for call finished "
-                       << LOG_KV("blockNumber", number()) << LOG_KV("checksum", dmcChecksum);
+        DMC_LOG(TRACE) << LOG_BADGE("Stat") << "DMCExecute.6:" << "\t " << LOG_BADGE("DMCRecorder")
+                       << " DMCExecute for call finished " << LOG_KV("blockNumber", number())
+                       << LOG_KV("checksum", dmcChecksum);
     }
     else
     {
-        DMC_LOG(INFO) << LOG_BADGE("Stat") << "DMCExecute.6:"
-                      << "\t " << LOG_BADGE("DMCRecorder")
+        DMC_LOG(INFO) << LOG_BADGE("Stat") << "DMCExecute.6:" << "\t " << LOG_BADGE("DMCRecorder")
                       << " DMCExecute for transaction finished " << LOG_KV("blockNumber", number())
                       << LOG_KV("checksum", dmcChecksum);
 
@@ -1586,7 +1586,9 @@ void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr outp
     auto txGasUsed = m_gasLimit - output->gasAvailable();
     // Calc the gas set to header
 
-    if (bcos::precompiled::c_systemTxsAddress.contains(output->from()))
+    if (!m_scheduler->ledgerConfig().features().get(
+            ledger::Features::Flag::bugfix_precompiled_gasused) &&
+        precompiled::contains(bcos::precompiled::c_systemTxsAddress, output->from()))
     {
         // Note: We will not consume gas when EOA call sys contract directly.
         // When dmc return, sys contract is from(), to() is EOA address.
@@ -1616,6 +1618,10 @@ void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr outp
                              << ", gasUsed: " << receipt->gasUsed()
                              << ", version: " << receipt->version()
                              << ", status: " << receipt->status();
+        if (c_fileLogLevel == LogLevel::TRACE)
+        {
+            SCHEDULER_LOG(TRACE) << receipt->toString();
+        }
         m_executiveResults[output->contextID() - m_startContextID].receipt = std::move(receipt);
         break;
     }
@@ -1634,6 +1640,10 @@ void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr outp
                              << ", version: " << receipt->version()
                              << ", status: " << receipt->status()
                              << ", effectiveGasPrice: " << receipt->effectiveGasPrice();
+        if (c_fileLogLevel == LogLevel::TRACE)
+        {
+            SCHEDULER_LOG(TRACE) << receipt->toString();
+        }
         m_executiveResults[output->contextID() - m_startContextID].receipt = std::move(receipt);
         break;
     }

@@ -138,7 +138,7 @@ void AccountPrecompiled::setAccountStatus(const std::string& accountTableName,
         BOOST_THROW_EXCEPTION(PrecompiledError("Account table not exist!"));
         return;
     }
-    const auto* accountMgrSender =
+    const auto accountMgrSender =
         blockContext.isWasm() ? ACCOUNT_MANAGER_NAME : ACCOUNT_MGR_ADDRESS;
     if (_callParameters->m_sender != accountMgrSender)
     {
@@ -292,7 +292,7 @@ void AccountPrecompiled::addAccountBalance(const std::string& accountTableName,
                            << LOG_KV("addAccountBalanceSender", _callParameters->m_origin)
                            << LOG_KV("accountTableName", accountTableName);
     // check sender
-    const auto* addAccountBalanceSender =
+    const auto addAccountBalanceSender =
         blockContext.isWasm() ? BALANCE_PRECOMPILED_NAME : BALANCE_PRECOMPILED_ADDRESS;
     if (!(_callParameters->m_sender == addAccountBalanceSender ||
             _callParameters->m_origin == BALANCE_PRECOMPILED_ADDRESS))
@@ -385,7 +385,7 @@ void AccountPrecompiled::subAccountBalance(const std::string& accountTableName,
                            << LOG_KV("accountTableName", accountTableName);
 
     // check sender
-    const auto* subAccountBalanceSender =
+    const auto subAccountBalanceSender =
         blockContext.isWasm() ? BALANCE_PRECOMPILED_NAME : BALANCE_PRECOMPILED_ADDRESS;
     if (!(_callParameters->m_sender == subAccountBalanceSender ||
             _callParameters->m_origin == BALANCE_PRECOMPILED_ADDRESS))

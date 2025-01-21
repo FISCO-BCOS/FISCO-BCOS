@@ -30,6 +30,7 @@
 #include "../vm/Precompiled.h"
 #include "../vm/VMFactory.h"
 #include "../vm/VMInstance.h"
+#include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-table/src/ContractShardUtils.h"
 
@@ -46,7 +47,6 @@
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include <bcos-framework/executor/ExecuteError.h>
-#include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-tool/BfsFileFactory.h>
 #include <bcos-utilities/Common.h>
 #include <boost/algorithm/hex.hpp>
@@ -307,10 +307,11 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
             (callParameters->create && !callParameters->internalCreate))
         {
             // TODO)): set nonce here will be better
-            ledger::account::EVMAccount address(
-                *m_blockContext.storage(), callParameters->senderAddress);
+            ledger::account::EVMAccount address(*m_blockContext.storage(),
+                callParameters->senderAddress,
+                m_blockContext.features().get(ledger::Features::Flag::feature_raw_address));
             task::wait([](decltype(address) addr, u256 callNonce) -> task::Task<void> {
-                if (!co_await ledger::account::isExist(addr))
+                if (!co_await ledger::account::exists(addr))
                 {
                     co_await ledger::account::create(addr);
                 }
@@ -466,13 +467,9 @@ CallParameters::UniquePtr TransactionExecutive::transferBalance(
         callParameters->evmStatus = EVMC_OUT_OF_GAS;
         return callParameters;
     }
-    else
-    {
-        callParameters->gas -= requireGas;
-    }
+    callParameters->gas -= requireGas;
 
     auto gas = callParameters->gas;
-
 
     EXECUTIVE_LOG(TRACE) << LOG_BADGE("Execute") << "now to transferBalance"
                          << LOG_KV("origin", origin) << LOG_KV("subAccount", subAccount)
@@ -616,8 +613,7 @@ CallParameters::UniquePtr TransactionExecutive::callPrecompiled(
     // NotEnoughCashError
     catch (protocol::NotEnoughCashError const& e)
     {
-        EXECUTIVE_LOG(INFO) << "Revert transaction: "
-                            << "NotEnoughCashError"
+        EXECUTIVE_LOG(INFO) << "Revert transaction: " << "NotEnoughCashError"
                             << LOG_KV("address", precompiledCallParams->m_precompiledAddress)
                             << LOG_KV("message", e.what());
         writeErrInfoToOutput(e.what(), *callParameters);
@@ -629,8 +625,7 @@ CallParameters::UniquePtr TransactionExecutive::callPrecompiled(
     }
     catch (protocol::PrecompiledError const& e)
     {
-        EXECUTIVE_LOG(INFO) << "Revert transaction: "
-                            << "PrecompiledFailed"
+        EXECUTIVE_LOG(INFO) << "Revert transaction: " << "PrecompiledFailed"
                             << LOG_KV("address", precompiledCallParams->m_precompiledAddress)
                             << LOG_KV("message", e.what());
         // Note: considering the scenario where the contract calls the contract, the error message
@@ -1194,11 +1189,15 @@ CallParameters::UniquePtr TransactionExecutive::go(
                 revert();
                 auto callResult = hostContext.takeCallParameters();
 
-                if (m_blockContext.features().get(
-                        ledger::Features::Flag::bugfix_call_noaddr_return) &&
-                    callResult->staticCall &&
-                    callResult->seq > 0  // must staticCall from contract(not from rpc call)
-                )
+                if ((m_blockContext.features().get(
+                         ledger::Features::Flag::bugfix_call_noaddr_return) &&
+                        callResult->staticCall &&
+                        callResult->seq > 0  // must staticCall from contract(not from rpc call)
+                        ) ||
+                    (m_blockContext.features().get(
+                         ledger::Features::Flag::feature_balance_policy1) &&
+                        m_blockContext.features().get(
+                            ledger::Features::Flag::bugfix_policy1_empty_code_address)))
                 {
                     // Note: to be the same as eth
                     // if bugfix_call_noaddr_return is not set, callResult->evmStatus is still
@@ -1388,14 +1387,15 @@ bool TransactionExecutive::isPrecompiled(const std::string& address) const
                m_blockContext.features()) != nullptr;
 }
 
-std::shared_ptr<Precompiled> TransactionExecutive::getPrecompiled(const std::string& address) const
+std::shared_ptr<Precompiled> TransactionExecutive::getPrecompiled(
+    const std::string_view address) const
 {
     return m_precompiled->at(address, m_blockContext.blockVersion(), m_blockContext.isAuthCheck(),
         m_blockContext.features());
 }
 
 std::shared_ptr<precompiled::Precompiled> bcos::executor::TransactionExecutive::getPrecompiled(
-    const std::string& address, uint32_t version, bool isAuth,
+    const std::string_view address, uint32_t version, bool isAuth,
     const ledger::Features& features) const
 {
     return m_precompiled->at(address, version, isAuth, features);
@@ -1744,7 +1744,7 @@ bool TransactionExecutive::buildBfsPath(std::string_view _absoluteDir, std::stri
     /// you should create locally, after external call successfully
     EXECUTIVE_LOG(TRACE) << LOG_DESC("build BFS metadata") << LOG_KV("absoluteDir", _absoluteDir)
                          << LOG_KV("type", _type);
-    const auto* to = m_blockContext.isWasm() ? BFS_NAME : BFS_ADDRESS;
+    const auto to = m_blockContext.isWasm() ? BFS_NAME : BFS_ADDRESS;
     auto response = externalTouchNewFile(
         shared_from_this(), _origin, _sender, to, _absoluteDir, _type, gasLeft);
     return response == (int)precompiled::CODE_SUCCESS;
@@ -1879,8 +1879,8 @@ bool TransactionExecutive::checkExecAuth(const CallParameters::UniquePtr& callPa
     {
         return true;
     }
-    const auto* authMgrAddress = m_blockContext.isWasm() ? precompiled::AUTH_MANAGER_NAME :
-                                                           precompiled::AUTH_MANAGER_ADDRESS;
+    const auto authMgrAddress = m_blockContext.isWasm() ? precompiled::AUTH_MANAGER_NAME :
+                                                          precompiled::AUTH_MANAGER_ADDRESS;
     auto contractAuthPrecompiled = dynamic_pointer_cast<precompiled::ContractAuthMgrPrecompiled>(
         getPrecompiled(AUTH_CONTRACT_MGR_ADDRESS, m_blockContext.blockVersion(),
             m_blockContext.isAuthCheck(), m_blockContext.features()));
@@ -1924,7 +1924,7 @@ int32_t TransactionExecutive::checkContractAvailable(
 {
     // precompiled always available
     if (isPrecompiled(callParameters->receiveAddress) ||
-        c_systemTxsAddress.contains(callParameters->receiveAddress))
+        contains(c_systemTxsAddress, std::string_view(callParameters->receiveAddress)))
     {
         return 0;
     }
@@ -1993,17 +1993,17 @@ std::shared_ptr<storage::StateStorageInterface> TransactionExecutive::getTransie
     bcos::storage::StateStorageInterface::Ptr transientStorage;
     bool has;
     {
-        tssMap::ReadAccessor::Ptr readAccessor;
+        tssMap::ReadAccessor readAccessor;
         has = transientStorageMap->find<tssMap::ReadAccessor>(readAccessor, contextID);
         if (has)
         {
-            transientStorage = readAccessor->value();
+            transientStorage = readAccessor.value();
         }
     }
     if (!has)
     {
         {
-            tssMap::WriteAccessor::Ptr writeAccessor;
+            tssMap::WriteAccessor writeAccessor;
             auto hasWrite =
                 transientStorageMap->find<tssMap::WriteAccessor>(writeAccessor, contextID);
 
@@ -2014,7 +2014,7 @@ std::shared_ptr<storage::StateStorageInterface> TransactionExecutive::getTransie
             }
             else
             {
-                transientStorage = writeAccessor->value();
+                transientStorage = writeAccessor.value();
             }
         }
     }

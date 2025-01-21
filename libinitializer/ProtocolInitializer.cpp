@@ -19,6 +19,7 @@
  * @date 2021-06-10
  */
 #include "libinitializer/ProtocolInitializer.h"
+#include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "libinitializer/Common.h"
 #include <bcos-crypto/encrypt/AESCrypto.h>
 #include <bcos-crypto/encrypt/HsmSM4Crypto.h>
@@ -29,7 +30,9 @@
 #include <bcos-crypto/signature/hsmSM2/HsmSM2Crypto.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
-#include <bcos-security/bcos-security/DataEncryption.h>
+#include <bcos-security/bcos-security/BcosKmsDataEncryption.h>
+#include <bcos-security/bcos-security/BcosKmsKeyEncryption.h>
+#include <bcos-security/bcos-security/cloudkms/CloudKmsKeyEncryption.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
@@ -48,11 +51,12 @@ ProtocolInitializer::ProtocolInitializer()
 {}
 void ProtocolInitializer::init(NodeConfig::Ptr _nodeConfig)
 {
-    m_enableHsm = _nodeConfig->enableHsm();
+    m_keyEncryptionType = _nodeConfig->keyEncryptionType();
+
     // TODO: ed25519
     if (_nodeConfig->smCryptoType())
     {
-        if (m_enableHsm)
+        if (m_keyEncryptionType == KeyEncryptionType::HSM)
         {
             m_hsmLibPath = _nodeConfig->hsmLibPath();
             m_keyIndex = _nodeConfig->keyIndex();
@@ -72,26 +76,43 @@ void ProtocolInitializer::init(NodeConfig::Ptr _nodeConfig)
     }
     INITIALIZER_LOG(INFO) << LOG_DESC("init crypto suite success");
 
-    if (true == _nodeConfig->storageSecurityEnable())
+    m_keyEncryption = nullptr;
+    if (m_keyEncryptionType == KeyEncryptionType::LEGACY)
     {
-        // Notice: the reason we don't use HSM for storage security is that the encrypt function in
-        // HSM only support data length from 0 to 65536 byte
-
-        // // storage security with HSM
-        // if (_nodeConfig->enableHsm())
-        // {
-        //     INITIALIZER_LOG(DEBUG)
-        //         << LOG_DESC("storage_security.enable = true, storage security with HSM");
-        //     m_dataEncryption = std::make_shared<HsmDataEncryption>(_nodeConfig);
-        // }
-        // else
-        // {
-        m_dataEncryption = std::make_shared<DataEncryption>(_nodeConfig);
-        // }
-
-        INITIALIZER_LOG(INFO) << LOG_DESC(
-            "storage_security.enable = true, init data encryption success");
+        INITIALIZER_LOG(INFO) << LOG_DESC("keyEncryptionType is LEGACY");
     }
+    else if (m_keyEncryptionType == KeyEncryptionType::BCOSKMS)
+    {
+        m_keyEncryption = std::make_shared<BcosKmsKeyEncryption>(_nodeConfig);
+        INITIALIZER_LOG(INFO) << LOG_DESC("kms security with BCOSKMS");
+    }
+    else if (m_keyEncryptionType == KeyEncryptionType::CLOUDKMS)
+    {
+        m_keyEncryption = std::make_shared<CloudKmsKeyEncryption>(_nodeConfig);
+        INITIALIZER_LOG(INFO) << LOG_DESC("kms security with CLOUDKMS");
+    }
+    else if (m_keyEncryptionType == KeyEncryptionType::HSM)
+    {
+        INITIALIZER_LOG(INFO) << LOG_DESC("kms security with HSM");
+    }
+    else
+    {
+        INITIALIZER_LOG(ERROR) << LOG_DESC("keyEncryptionType not support")
+                               << LOG_KV("keyEncryptionType",
+                                      std::string(magic_enum::enum_name((m_keyEncryptionType))));
+        throw std::runtime_error("keyEncryptionType not support");
+    }
+    if (_nodeConfig->storageSecurityEnable())
+    {
+        INITIALIZER_LOG(INFO) << LOG_DESC("storage security enable");
+        if (_nodeConfig->storageEncryptionType() != security::StorageEncryptionType::BCOSKMS)
+        {
+            INITIALIZER_LOG(ERROR) << LOG_DESC("storage security only support BCOSKMS");
+            throw std::runtime_error("storage security only support BCOSKMS");
+        }
+        m_dataEncryption = std::make_shared<BcosKmsDataEncryption>(_nodeConfig);
+    }
+
 
     // create the block factory
     // TODO: pb/tars option
@@ -134,7 +155,7 @@ void ProtocolInitializer::createHsmSMCryptoSuite()
 
 void ProtocolInitializer::loadKeyPair(std::string const& _privateKeyPath)
 {
-    if (m_enableHsm)
+    if (m_keyEncryptionType == KeyEncryptionType::HSM)
     {
         // Create key pair according to the key index which inside HSM(Hardware Secure Machine)
         m_keyPair = dynamic_pointer_cast<bcos::crypto::HsmSM2Crypto>(m_cryptoSuite->signatureImpl())
@@ -146,16 +167,17 @@ void ProtocolInitializer::loadKeyPair(std::string const& _privateKeyPath)
     else
     {
         auto privateKeyData =
-            loadPrivateKey(_privateKeyPath, c_hexedPrivateKeySize, m_dataEncryption);
+            loadPrivateKey(_privateKeyPath, c_hexedPrivateKeySize, m_keyEncryption);
         if (!privateKeyData)
         {
-            INITIALIZER_LOG(INFO) << LOG_DESC("loadKeyPair failed")
-                                  << LOG_KV("privateKeyPath", _privateKeyPath);
+            INITIALIZER_LOG(ERROR)
+                << LOG_DESC("loadKeyPair failed") << LOG_KV("privateKeyPath", _privateKeyPath);
             throw std::runtime_error("loadKeyPair failed, keyPair path: " + _privateKeyPath);
         }
         INITIALIZER_LOG(INFO) << LOG_DESC("loadKeyPair from privateKey")
                               << LOG_KV("privateKeySize", privateKeyData->size())
-                              << LOG_KV("enableStorageSecurity", m_dataEncryption ? true : false);
+                              << LOG_KV("keyEncryptionType",
+                                     std::string(magic_enum::enum_name((m_keyEncryptionType))));
         auto privateKey = m_keyFactory->createKey(*privateKeyData);
         m_keyPair = m_cryptoSuite->signatureImpl()->createKeyPair(privateKey);
         INITIALIZER_LOG(INFO) << METRIC << LOG_DESC("loadKeyPair from privateKeyPath")
@@ -164,4 +186,21 @@ void ProtocolInitializer::loadKeyPair(std::string const& _privateKeyPath)
 
     INITIALIZER_LOG(INFO) << METRIC << LOG_DESC("loadKeyPair success")
                           << LOG_KV("publicKey", m_keyPair->publicKey()->hex());
+}
+
+bcos::security::KeyEncryptInterface::Ptr ProtocolInitializer::getKeyEncryptionByType(
+    KeyEncryptionType _type)
+{
+    bcos::security::KeyEncryptInterface::Ptr keyEncryptionPtr = nullptr;
+    if (_type == KeyEncryptionType::HSM || _type == KeyEncryptionType::BCOSKMS)
+    {
+        keyEncryptionPtr = m_keyEncryption;
+    }
+    else
+    {
+        INITIALIZER_LOG(INFO) << LOG_DESC("skiped, keyEncryptionType not support")
+                              << LOG_KV("keyEncryptionType",
+                                     std::string(magic_enum::enum_name((_type))));
+    }
+    return keyEncryptionPtr;
 }

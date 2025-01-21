@@ -21,8 +21,6 @@
 
 #include "../vm/Precompiled.h"
 #include "../Common.h"
-#include "bcos-crypto/hash/Keccak256.h"
-#include "bcos-crypto/signature/codec/SignatureDataWithV.h"
 #include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
 #include "kzgPrecompiled.h"
 #include "wedpr-crypto/WedprBn128.h"
@@ -38,14 +36,14 @@ namespace bcos::executor
 {
 PrecompiledRegistrar* PrecompiledRegistrar::s_this = nullptr;
 
-bcos::precompiled::Precompiled::Ptr bcos::executor::PrecompiledMap::at(std::string const& _key,
+bcos::precompiled::Precompiled::Ptr bcos::executor::PrecompiledMap::at(std::string_view _key,
     uint32_t version, bool isAuth, ledger::Features const& features) const noexcept
 {
     if (!_key.starts_with(precompiled::SYS_ADDRESS_PREFIX) && !_key.starts_with(tool::FS_SYS_BIN))
     {
         return nullptr;
     }
-    auto it = m_map.find(_key);
+    auto it = m_map.find(std::string(_key));
     if (it == m_map.end())
     {
         return nullptr;

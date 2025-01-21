@@ -19,6 +19,7 @@
  * @date 2021-06-08
  */
 #pragma once
+#include "bcos-framework/protocol/Block.h"
 #include <bcos-framework/consensus/ConsensusInterface.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-pbft/pbft/config/PBFTConfig.h>
@@ -58,8 +59,8 @@ public:
     void stop() override { m_taskPool->stop(); }
 
     // useless for bcos-sync
-    void asyncSubmitProposal(
-        bool, bytesConstRef, BlockNumber, HashType const&, std::function<void(Error::Ptr)>) override
+    void asyncSubmitProposal(bool, const protocol::Block&, BlockNumber, HashType const&,
+        std::function<void(Error::Ptr)>) override
     {}
 
     // useless for bcos-sync
@@ -91,8 +92,6 @@ public:
     LedgerConfig::Ptr ledgerConfig() { return m_ledgerConfig; }
 
     void notifyHighestSyncingNumber(bcos::protocol::BlockNumber) override {}
-
-    void asyncNoteUnSealedTxsSize(uint64_t, std::function<void(Error::Ptr)>) override {}
 
     void asyncGetConsensusStatus(std::function<void(Error::Ptr, std::string)>) override {}
     void notifyConnectedNodes(

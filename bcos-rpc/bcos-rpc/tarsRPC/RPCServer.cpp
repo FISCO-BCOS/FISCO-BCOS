@@ -1,14 +1,12 @@
 #include "RPCServer.h"
 #include "../Common.h"
 #include "Config.h"
-#include "bcos-concepts/Serialize.h"
-#include "bcos-tars-protocol/impl/TarsSerializable.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
+#include "bcos-task/TBBWait.h"
 #include "bcos-task/Wait.h"
 #include <boost/exception/diagnostic_information.hpp>
 #include <memory>
-#include <variant>
 
 size_t bcos::rpc::Params::PtrHash::hash(const tars::CurrentPtr& key)
 {
@@ -106,7 +104,7 @@ bcostars::Error bcos::rpc::RPCServer::sendTransaction(const bcostars::Transactio
         try
         {
             auto& txpool = self->m_params.node->txpoolRef();
-            txpool.broadcastTransaction(*transaction);
+            co_await txpool.broadcastTransaction(*transaction);
             auto submitResult = co_await txpool.submitTransaction(std::move(transaction));
             const auto& receipt = dynamic_cast<bcostars::protocol::TransactionReceiptImpl const&>(
                 *submitResult->transactionReceipt());
@@ -172,7 +170,8 @@ void bcos::rpc::RPCApplication::destroyApp() {}
 void bcos::rpc::RPCApplication::pushBlockNumber(long blockNumber)
 {
     for (auto& [current, _] : m_params.sessions)
-    {}
+    {
+    }
 }
 
 std::string bcos::rpc::RPCApplication::generateTarsConfig(

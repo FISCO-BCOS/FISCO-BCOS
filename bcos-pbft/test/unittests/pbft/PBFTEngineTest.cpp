@@ -79,7 +79,7 @@ void testPBFTEngineWithFaulty(size_t _consensusNodes, size_t _connectedNodes)
     for (size_t i = 0; i < 3; i++)
     {
         leaderFaker->pbftEngine()->asyncSubmitProposal(
-            false, ref(*blockData), blockHeader->number(), blockHeader->hash(), nullptr);
+            false, *block, blockHeader->number(), blockHeader->hash(), nullptr);
     }
     // Discontinuous case
     auto faker = fakerMap[3];
@@ -88,7 +88,7 @@ void testPBFTEngineWithFaulty(size_t _consensusNodes, size_t _connectedNodes)
     blockData = std::make_shared<bytes>();
     block->encode(*blockData);
     faker->pbftEngine()->asyncSubmitProposal(
-        false, ref(*blockData), blockHeader->number(), blockHeader->hash(), nullptr);
+        false, *block, blockHeader->number(), blockHeader->hash(), nullptr);
 
     // the next leader seal the next block
     IndexType nextLeaderIndex = 1;
@@ -99,7 +99,7 @@ void testPBFTEngineWithFaulty(size_t _consensusNodes, size_t _connectedNodes)
     blockData = std::make_shared<bytes>();
     block->encode(*blockData);
     nextLeaderFacker->pbftEngine()->asyncSubmitProposal(
-        false, ref(*blockData), blockHeader->number(), blockHeader->hash(), nullptr);
+        false, *block, blockHeader->number(), blockHeader->hash(), nullptr);
 
     // handle prepare message and broadcast commit messages
     auto startT = utcTime();
@@ -120,7 +120,7 @@ void testPBFTEngineWithFaulty(size_t _consensusNodes, size_t _connectedNodes)
     blockData = std::make_shared<bytes>();
     block->encode(*blockData);
     faker->pbftEngine()->asyncSubmitProposal(
-        false, ref(*blockData), blockHeader->number(), blockHeader->hash(), nullptr);
+        false, *block, blockHeader->number(), blockHeader->hash(), nullptr);
 
     startT = utcTime();
     while (!shouldExit(fakerMap, currentBlockNumber + 4, _connectedNodes) &&

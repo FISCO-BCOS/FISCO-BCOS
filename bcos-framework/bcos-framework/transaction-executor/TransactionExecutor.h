@@ -3,11 +3,14 @@
 #include "../protocol/BlockHeader.h"
 #include "../protocol/Transaction.h"
 #include "bcos-task/Task.h"
+#include "bcos-task/Trait.h"
 #include <type_traits>
 #include <utility>
 
 namespace bcos::transaction_executor
 {
+
+constexpr static auto EXECUTOR_STACK = 1400;
 
 inline constexpr struct ExecuteTransaction
 {
@@ -33,35 +36,28 @@ inline constexpr struct ExecuteTransaction
     }
 } executeTransaction{};
 
-inline constexpr struct Execute3Step
+inline constexpr struct CreateExecuteContext
 {
-    /**
-     * @brief Executes a transaction in three steps.
-     *
-     * This function is a friend function of the TransactionExecutorImpl class.
-     * It executes a transaction in three steps and returns a generator that yields
-     * transaction receipts.
-     *
-     * 分三个步骤执行交易，可流水线执行
-     * Transaction are executed in three steps, which can be pipelined
-     *
-     * @param executor The reference to the TransactionExecutorImpl object.
-     * @param storage The reference to the storage object.
-     * @param blockHeader The reference to the block header object.
-     * @param transaction The reference to the transaction object.
-     * @param contextID The context ID.
-     * @param ledgerConfig The reference to the ledger configuration object.
-     * @param waitOperator The wait operator.
-     *
-     * @return A generator that yields transaction receipts.
-     */
     auto operator()(auto& executor, auto& storage, protocol::BlockHeader const& blockHeader,
         protocol::Transaction const& transaction, auto&&... args) const
+        -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(*this, executor, storage,
+            blockHeader, transaction, std::forward<decltype(args)>(args)...))>>
     {
         return tag_invoke(*this, executor, storage, blockHeader, transaction,
             std::forward<decltype(args)>(args)...);
     }
-} execute3Step{};
+} createExecuteContext{};
+
+inline constexpr struct ExecuteStep
+{
+    template <int step>
+    auto operator()(
+        auto& executeContext, auto&&... args) const -> task::Task<protocol::TransactionReceipt::Ptr>
+    {
+        co_return co_await tag_invoke<step>(
+            *this, executeContext, std::forward<decltype(args)>(args)...);
+    }
+} executeStep{};
 
 template <auto& Tag>
 using tag_t = std::decay_t<decltype(Tag)>;

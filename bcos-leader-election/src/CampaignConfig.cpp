@@ -20,6 +20,7 @@
  */
 
 #include "CampaignConfig.h"
+#include "bcos-utilities/BoostLog.h"
 
 using namespace bcos;
 using namespace bcos::election;

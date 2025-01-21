@@ -76,7 +76,7 @@ public:
     {
         concepts::resizeTo(output, hashSize());
         m_anyHasher->final(
-            std::span<std::byte>((std::byte*)RANGES::data(output), RANGES::size(output)));
+            std::span<std::byte>((std::byte*)::ranges::data(output), ::ranges::size(output)));
     }
 
     void final(std::span<std::byte> output);

@@ -53,9 +53,9 @@ private:
 
 
 private:
-    const char* getThisAddress(bool _isWasm) override
+    std::string getThisAddress(bool _isWasm) override
     {
-        return _isWasm ? SHARDING_PRECOMPILED_NAME : SHARDING_PRECOMPILED_ADDRESS;
+        return std::string(_isWasm ? SHARDING_PRECOMPILED_NAME : SHARDING_PRECOMPILED_ADDRESS);
     }
 
     std::string_view getLinkRootDir() override { return executor::USER_SHARD_PREFIX; }

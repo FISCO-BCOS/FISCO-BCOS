@@ -37,7 +37,7 @@ public:
     }
     crypto::HashType transactionHash(uint64_t _index) const override
     {
-        return Block::transactionHash(_index);
+        return transactionMetaData(_index)->hash();
     }
     void setBlockType(protocol::BlockType _blockType) override {}
     void setTransaction(uint64_t _index, protocol::Transaction::Ptr _transaction) override {}
@@ -53,6 +53,21 @@ public:
     void setNonceList(RANGES::any_view<protocol::NonceType> nonces) override {}
     RANGES::any_view<protocol::NonceType> nonceList() const override { return m_nodelist; }
     size_t size() const override { return 0; }
+
+    protocol::ViewResult<crypto::HashType> transactionHashes() const override { return {}; }
+    protocol::ViewResult<std::unique_ptr<protocol::TransactionMetaData>> transactionMetaDatas()
+        const override
+    {
+        return {};
+    }
+    protocol::ViewResult<std::unique_ptr<protocol::Transaction>> transactions() const override
+    {
+        return {};
+    }
+    protocol::ViewResult<std::unique_ptr<protocol::TransactionReceipt>> receipts() const override
+    {
+        return {};
+    }
 
 private:
     protocol::BlockHeader::Ptr m_blockHeader = std::make_shared<MockBlockHeader>(1);

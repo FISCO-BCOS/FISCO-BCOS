@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.17)
 
-add_library(bcos-task INTERFACE)
-target_include_directories(bcos-task INTERFACE
+add_library(bcos-task bcos-task/pmr/MemoryResourceBase.cpp)
+target_include_directories(bcos-task PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-task>)
-target_link_libraries(bcos-task INTERFACE bcos-concepts)
+target_link_libraries(bcos-task PUBLIC bcos-concepts)
 
 include(GNUInstallDirs)
 install(TARGETS bcos-task EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")

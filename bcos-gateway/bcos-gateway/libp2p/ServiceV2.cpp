@@ -80,7 +80,7 @@ void ServiceV2::onReceivePeersRouterTable(
                               << LOG_KV("code", _error.errorCode()) << LOG_KV("msg", _error.what());
         return;
     }
-    auto routerTable = m_routerTableFactory->createRouterTable(ref(*(_message->payload())));
+    auto routerTable = m_routerTableFactory->createRouterTable(_message->payload());
 
     SERVICE2_LOG(INFO) << LOG_BADGE("onReceivePeersRouterTable")
                        << LOG_KV("peer", _session->p2pID())
@@ -153,8 +153,7 @@ void ServiceV2::broadcastRouterSeq()
     message->setPacketType(GatewayMessageType::RouterTableSyncSeq);
     auto seq = m_statusSeq.load();
     auto statusSeq = boost::asio::detail::socket_ops::host_to_network_long(seq);
-    auto payload = std::make_shared<bytes>((byte*)&statusSeq, (byte*)&statusSeq + 4);
-    message->setPayload(payload);
+    message->setPayload({(byte*)&statusSeq, (byte*)&statusSeq + 4});
     // the router table should only exchange between neighbor
     asyncBroadcastMessageWithoutForward(message, Options());
 }
@@ -170,7 +169,7 @@ void ServiceV2::onReceiveRouterSeq(
         return;
     }
     auto statusSeq = boost::asio::detail::socket_ops::network_to_host_long(
-        *((uint32_t*)_message->payload()->data()));
+        *((uint32_t*)_message->payload().data()));
     if (!tryToUpdateSeq(_session->p2pID(), statusSeq))
     {
         return;
@@ -309,7 +308,7 @@ void ServiceV2::onMessage(NetworkException _error, SessionFace::Ptr _session, Me
                                 << LOG_KV("type", p2pMsg->packetType())
                                 << LOG_KV("rsp", p2pMsg->isRespPacket())
                                 << LOG_KV("ttl", p2pMsg->ttl())
-                                << LOG_KV("payLoadSize", p2pMsg->payload()->size());
+                                << LOG_KV("payLoadSize", p2pMsg->payload().size());
         }
         Service::onMessage(_error, _session, _message, _p2pSessionWeakPtr);
         return;
@@ -324,7 +323,7 @@ void ServiceV2::onMessage(NetworkException _error, SessionFace::Ptr _session, Me
                               << LOG_KV("dst", p2pMsg->dstP2PNodeID())
                               << LOG_KV("type", p2pMsg->packetType())
                               << LOG_KV("rsp", p2pMsg->isRespPacket())
-                              << LOG_KV("payLoadSize", p2pMsg->payload()->size())
+                              << LOG_KV("payLoadSize", p2pMsg->payload().size())
                               << LOG_KV("ttl", ttl);
         return;
     }
@@ -339,7 +338,7 @@ void ServiceV2::onMessage(NetworkException _error, SessionFace::Ptr _session, Me
                             << LOG_KV("dst", p2pMsg->dstP2PNodeIDView())
                             << LOG_KV("type", p2pMsg->packetType()) << LOG_KV("seq", p2pMsg->seq())
                             << LOG_KV("rsp", p2pMsg->isRespPacket()) << LOG_KV("ttl", p2pMsg->ttl())
-                            << LOG_KV("payLoadSize", p2pMsg->payload()->size());
+                            << LOG_KV("payLoadSize", p2pMsg->payload().size());
     }
     asyncSendMessageByNodeIDWithMsgForward(p2pMsg, nullptr);
 }
@@ -349,14 +348,6 @@ void ServiceV2::asyncBroadcastMessage(std::shared_ptr<P2PMessage> message, Optio
     auto reachableNodes = m_routerTable->getAllReachableNode();
     try
     {
-        std::unordered_map<P2pID, P2PSession::Ptr> sessions;
-        {
-            RecursiveGuard recursiveGuard(x_sessions);
-            std::for_each(m_sessions.begin(), m_sessions.end(),
-                [&](std::unordered_map<P2pID, P2PSession::Ptr>::value_type& _value) {
-                    reachableNodes.insert(_value.first);
-                });
-        }
         for (auto const& node : reachableNodes)
         {
             message->setSrcP2PNodeID(m_nodeID);
@@ -396,12 +387,11 @@ void ServiceV2::sendRespMessageBySession(
     auto respMessage = std::dynamic_pointer_cast<P2PMessageV2>(messageFactory()->buildMessage());
     auto requestMsg = std::dynamic_pointer_cast<P2PMessageV2>(_p2pMessage);
     respMessage->setDstP2PNodeID(requestMsg->srcP2PNodeID());
-    // respMessage->setSrcP2PNodeID(requestMsg->dstP2PNodeID());
     respMessage->setSrcP2PNodeID(m_nodeID);
     respMessage->setSeq(requestMsg->seq());
     respMessage->setRespPacket();
     // TODO: reduce memory copy
-    respMessage->setPayload(std::make_shared<bytes>(_payload.begin(), _payload.end()));
+    respMessage->setPayload({_payload.begin(), _payload.end()});
 
     // asyncSendMessageByNodeID(respMessage->dstP2PNodeID(), respMessage, nullptr);
 
@@ -416,4 +406,43 @@ void ServiceV2::sendRespMessageBySession(
                             << LOG_KV("dst", respMessage->dstP2PNodeIDView())
                             << LOG_KV("payload size", _payload.size());
     }
+}
+
+bcos::task::Task<Message::Ptr> bcos::gateway::ServiceV2::sendMessageByNodeID(
+    P2pID nodeID, P2PMessage& message, ::ranges::any_view<bytesConstRef> payloads, Options options)
+{
+    message.setSrcP2PNodeID(m_nodeID);
+    message.setDstP2PNodeID(nodeID);
+
+    auto dstNodeID = message.dstP2PNodeID();
+    // without nextHop: maybe network unreachable or with distance equal to 1
+    auto nextHop = m_routerTable->getNextHop(dstNodeID);
+    if (nextHop.empty())
+    {
+        if (c_fileLogLevel == TRACE) [[unlikely]]
+        {
+            SERVICE2_LOG(TRACE) << LOG_BADGE("asyncSendMessageByNodeID")
+                                << LOG_DESC("sendMessage to dstNode")
+                                << LOG_KV("from", message.srcP2PNodeIDView())
+                                << LOG_KV("to", message.dstP2PNodeIDView())
+                                << LOG_KV("type", message.packetType())
+                                << LOG_KV("seq", message.seq())
+                                << LOG_KV("rsp", message.isRespPacket());
+        }
+        co_return co_await Service::sendMessageByNodeID(
+            std::move(dstNodeID), message, std::move(payloads), options);
+    }
+    // with nextHop, send the message to nextHop
+    if (c_fileLogLevel == TRACE) [[unlikely]]
+    {
+        SERVICE2_LOG(TRACE) << LOG_BADGE("asyncSendMessageByNodeID")
+                            << LOG_DESC("forwardMessage to nextHop")
+                            << LOG_KV("from", message.srcP2PNodeIDView())
+                            << LOG_KV("to", message.dstP2PNodeIDView())
+                            << LOG_KV("nextHop", nextHop) << LOG_KV("type", message.packetType())
+                            << LOG_KV("seq", message.seq())
+                            << LOG_KV("rsp", message.isRespPacket());
+    }
+    co_return co_await Service::sendMessageByNodeID(
+        std::move(nextHop), message, std::move(payloads), options);
 }

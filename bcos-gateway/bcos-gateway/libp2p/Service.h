@@ -8,7 +8,6 @@
  */
 
 #pragma once
-#include "bcos-utilities/ObjectCounter.h"
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/gateway/GatewayTypeDef.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
@@ -16,13 +15,11 @@
 #include <bcos-gateway/Gateway.h>
 #include <bcos-gateway/libp2p/P2PInterface.h>
 #include <bcos-gateway/libp2p/P2PSession.h>
+#include <oneapi/tbb/concurrent_hash_map.h>
 #include <array>
-#include <unordered_map>
 
 
-namespace bcos
-{
-namespace gateway
+namespace bcos::gateway
 {
 class Host;
 class P2PMessage;
@@ -49,8 +46,7 @@ public:
     virtual void onMessage(NetworkException e, SessionFace::Ptr session, Message::Ptr message,
         std::weak_ptr<P2PSession> p2pSessionWeakPtr);
 
-    virtual std::optional<bcos::Error> onBeforeMessage(
-        SessionFace::Ptr _session, Message::Ptr _message);
+    virtual std::optional<bcos::Error> onBeforeMessage(SessionFace& _session, Message& _message);
 
     // handlers called when the node is unreachable
     virtual void registerUnreachableHandler(std::function<void(std::string)> /*unused*/)
@@ -66,6 +62,9 @@ public:
 
     void asyncSendMessageByNodeID(P2pID nodeID, std::shared_ptr<P2PMessage> message,
         CallbackFuncWithSession callback, Options options = Options()) override;
+
+    task::Task<Message::Ptr> sendMessageByNodeID(P2pID nodeID, P2PMessage& header,
+        ::ranges::any_view<bytesConstRef> payloads, Options options = Options()) override;
 
     void asyncBroadcastMessage(std::shared_ptr<P2PMessage> message, Options options) override;
 
@@ -114,11 +113,9 @@ public:
 
     std::shared_ptr<P2PSession> getP2PSessionByNodeId(P2pID const& _nodeID) override
     {
-        RecursiveGuard l(x_sessions);
-        auto it = m_sessions.find(_nodeID);
-        if (it != m_sessions.end())
+        if (decltype(m_sessions)::const_accessor accessor; m_sessions.find(accessor, _nodeID))
         {
-            return it->second;
+            return accessor->second;
         }
         return nullptr;
     }
@@ -151,7 +148,7 @@ public:
         CallbackFuncWithSession callback, Options options = Options());
 
     void setBeforeMessageHandler(
-        std::function<std::optional<bcos::Error>(SessionFace::Ptr, Message::Ptr)> _handler)
+        std::function<std::optional<bcos::Error>(SessionFace&, Message&)> _handler)
     {
         m_beforeMessageHandler = std::move(_handler);
     }
@@ -231,12 +228,12 @@ private:
     bcos::RecursiveMutex x_nodes;
     std::shared_ptr<Host> m_host;
 
-    std::unordered_map<P2pID, P2PSession::Ptr> m_sessions;
-    mutable bcos::RecursiveMutex x_sessions;
+    tbb::concurrent_hash_map<P2pID, P2PSession::Ptr> m_sessions;
+    // tbb::concurrent_hash_map<P2pID, P2PSession::Ptr> m_seesions;
     std::shared_ptr<MessageFactory> m_messageFactory;
 
     P2pID m_nodeID;
-    std::shared_ptr<boost::asio::deadline_timer> m_timer;
+    std::optional<boost::asio::deadline_timer> m_timer;
     bool m_run = false;
 
     std::array<MessageHandler, bcos::gateway::GatewayMessageType::All> m_msgHandlers{};
@@ -250,12 +247,10 @@ private:
     // handlers called when delete-session
     std::vector<std::function<void(P2PSession::Ptr)>> m_deleteSessionHandlers;
 
-    std::function<std::optional<bcos::Error>(SessionFace::Ptr, Message::Ptr)>
-        m_beforeMessageHandler;
+    std::function<std::optional<bcos::Error>(SessionFace&, Message&)> m_beforeMessageHandler;
 
     std::function<std::optional<bcos::Error>(SessionFace::Ptr, Message::Ptr)> m_onMessageHandler;
     // bcos::LogLevel m_connectionLogLevel = bcos::LogLevel::WARNING;
 };
 
-}  // namespace gateway
-}  // namespace bcos
+}  // namespace bcos::gateway

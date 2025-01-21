@@ -11,23 +11,29 @@
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/Error.h"
 #include "bcos-utilities/ObjectCounter.h"
+#include "bcos-utilities/Overloaded.h"
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/SessionCallback.h>
 #include <bcos-gateway/libnetwork/SessionFace.h>
 #include <bcos-utilities/Timer.h>
+#include <oneapi/tbb/concurrent_queue.h>
+#include <boost/asio/buffer.hpp>
+#include <boost/container/small_vector.hpp>
 #include <boost/heap/priority_queue.hpp>
 #include <cstddef>
+#include <functional>
 #include <memory>
+#include <range/v3/numeric/accumulate.hpp>
 #include <utility>
+#include <variant>
 
-namespace bcos
-{
-namespace gateway
+
+namespace bcos::gateway
 {
 class Host;
 class SocketFace;
 
-class SessionRecvBuffer : public bcos::ObjectCounter<SessionRecvBuffer>
+class SessionRecvBuffer
 {
 public:
     SessionRecvBuffer(size_t _bufferSize) : m_recvBufferSize(_bufferSize)
@@ -82,8 +88,6 @@ public:
         return false;
     }
 
-    // void realloc() {}
-
     void moveToHeader()
     {
         if (m_writePos > m_readPos)
@@ -122,6 +126,30 @@ private:
     std::size_t m_writePos{0};
 };
 
+struct Payload
+{
+    using MessageList = boost::container::small_vector<bytesConstRef, 3>;
+    std::variant<EncodedMessage, MessageList> m_data;
+    std::function<void(boost::system::error_code)> m_callback;
+
+    size_t size() const;
+    void toConstBuffer(std::output_iterator<boost::asio::const_buffer> auto output) const
+    {
+        std::visit(bcos::overloaded(
+                       [&](const EncodedMessage& encodedMessage) {
+                           *output = {encodedMessage.header.data(), encodedMessage.header.size()};
+                           *output = {encodedMessage.payload.data(), encodedMessage.payload.size()};
+                       },
+                       [&](const MessageList& refs) {
+                           for (const auto& ref : refs)
+                           {
+                               *output = {ref.data(), ref.size()};
+                           }
+                       }),
+            m_data);
+    }
+};
+
 class Session : public SessionFace,
                 public std::enable_shared_from_this<Session>,
                 public bcos::ObjectCounter<Session>
@@ -130,7 +158,8 @@ public:
     constexpr static const std::size_t MIN_SESSION_RECV_BUFFER_SIZE =
         static_cast<std::size_t>(512 * 1024);
 
-    Session(size_t _recvBufferSize = MIN_SESSION_RECV_BUFFER_SIZE, bool _forceSize = false);
+    Session(std::shared_ptr<SocketFace> socket, Host& server,
+        size_t _recvBufferSize = MIN_SESSION_RECV_BUFFER_SIZE, bool _forceSize = false);
 
     Session(const Session&) = delete;
     Session(Session&&) = delete;
@@ -147,16 +176,18 @@ public:
     void asyncSendMessage(Message::Ptr message, Options options,
         SessionCallbackFunc callback = SessionCallbackFunc()) override;
 
+    task::Task<Message::Ptr> sendMessage(const Message& message,
+        ::ranges::any_view<bytesConstRef> payloads, Options options) override;
+
     NodeIPEndpoint nodeIPEndpoint() const override;
 
     bool active() const override;
 
-    bool active(std::shared_ptr<bcos::gateway::Host>&) const;
+    bool active(Host& server) const;
 
     std::size_t writeQueueSize() override;
 
-    virtual std::weak_ptr<Host> host() { return m_server; }
-    virtual void setHost(std::weak_ptr<Host> host) { m_server = std::move(host); }
+    virtual Host& host() { return m_server; }
 
     std::shared_ptr<SocketFace> socket() override { return m_socket; }
     virtual void setSocket(const std::shared_ptr<SocketFace>& socket) { m_socket = socket; }
@@ -167,7 +198,7 @@ public:
         m_messageFactory = _messageFactory;
     }
 
-    SessionCallbackManagerInterface::Ptr sessionCallbackManager()
+    SessionCallbackManagerInterface::Ptr sessionCallbackManager() const
     {
         return m_sessionCallbackManager;
     }
@@ -191,7 +222,7 @@ public:
     // handle before sending message, if the check fails, meaning false is returned, the message
     // is not sent, and the SessionCallbackFunc will be performed
     void setBeforeMessageHandler(
-        std::function<std::optional<bcos::Error>(SessionFace::Ptr, Message::Ptr)> handler) override
+        std::function<std::optional<bcos::Error>(SessionFace&, Message&)> handler) override
     {
         m_beforeMessageHandler = handler;
     }
@@ -221,23 +252,19 @@ public:
      * @param encodedMsgs
      * @param _maxSendDataSize
      * @param _maxSendMsgCount
-     * @return std::size_t
+     * @return bool
      */
-    std::size_t tryPopSomeEncodedMsgs(std::vector<EncodedMessage::Ptr>& encodedMsgs,
-        uint32_t _maxSendDataSize, uint32_t _maxSendMsgCount);
+    bool tryPopSomeEncodedMsgs(
+        std::vector<Payload>& encodedMsgs, size_t _maxSendDataSize, size_t _maxSendMsgCount);
 
-protected:
     virtual void checkNetworkStatus();
 
-private:
-    void send(EncodedMessage::Ptr& _encoder);
+    void send(EncodedMessage encodedMsg);
 
     void doRead();
 
     std::size_t m_maxRecvBufferSize;
     SessionRecvBuffer m_recvBuffer;
-
-    std::vector<boost::asio::const_buffer> m_writeConstBuffer;
 
     // ------ for optimize send message parameters  begin ---------------
     //  // Maximum amount of data to read one time, default: 40K
@@ -268,25 +295,21 @@ private:
     /// call by doRead() to deal with message
     void onMessage(NetworkException const& e, Message::Ptr message);
 
-    std::weak_ptr<Host> m_server;          ///< The host that owns us. Never null.
-    std::shared_ptr<SocketFace> m_socket;  ///< Socket of peer's connection.
+    std::reference_wrapper<Host> m_server;  ///< The host that owns us. Never null.
+    std::shared_ptr<SocketFace> m_socket;   ///< Socket of peer's connection.
 
     MessageFactory::Ptr m_messageFactory;
 
-    std::list<EncodedMessage::Ptr> m_writeQueue;
-    std::atomic_bool m_writing = {false};
-    bcos::Mutex x_writeQueue;
+    tbb::concurrent_queue<Payload> m_writeQueue;
+    std::atomic_bool m_writing = false;
 
     mutable bcos::Mutex x_info;
 
     bool m_active = false;
 
     SessionCallbackManagerInterface::Ptr m_sessionCallbackManager;
-
     std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> m_messageHandler;
-
-    std::function<std::optional<bcos::Error>(SessionFace::Ptr, Message::Ptr)>
-        m_beforeMessageHandler;
+    std::function<std::optional<bcos::Error>(SessionFace&, Message&)> m_beforeMessageHandler;
 
     uint64_t m_shutDownTimeThres = 50000;
     // 1min
@@ -297,6 +320,8 @@ private:
     std::atomic<uint64_t> m_lastWriteTime;
     std::shared_ptr<bcos::Timer> m_idleCheckTimer;
     std::string m_hostNodeID;
+
+    std::vector<Payload> m_writingPayloads;
 };
 
 class SessionFactory
@@ -319,14 +344,13 @@ public:
     SessionFactory& operator=(const SessionFactory&) = delete;
     virtual ~SessionFactory() = default;
 
-    virtual std::shared_ptr<SessionFace> create_session(std::weak_ptr<Host>& _server,
+    virtual std::shared_ptr<SessionFace> createSession(Host& _server,
         std::shared_ptr<SocketFace> const& _socket, MessageFactory::Ptr& _messageFactory,
         SessionCallbackManagerInterface::Ptr& _sessionCallbackManager)
     {
-        std::shared_ptr<Session> session = std::make_shared<Session>(m_sessionRecvBufferSize);
+        std::shared_ptr<Session> session =
+            std::make_shared<Session>(_socket, _server, m_sessionRecvBufferSize);
         session->setHostNodeID(m_hostNodeID);
-        session->setHost(_server);
-        session->setSocket(_socket);
         session->setMessageFactory(_messageFactory);
         session->setSessionCallbackManager(_sessionCallbackManager);
         session->setAllowMaxMsgSize(m_allowMaxMsgSize);
@@ -354,5 +378,4 @@ private:
     bool m_enableCompress = true;
 };
 
-}  // namespace gateway
-}  // namespace bcos
+}  // namespace bcos::gateway

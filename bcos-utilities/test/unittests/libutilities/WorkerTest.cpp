@@ -37,7 +37,7 @@ class TestWorkerImpl : public Worker
 public:
     TestWorkerImpl() : Worker("TestWorkerImpl", 1)
     {
-        m_timer = std::make_shared<Timer>(1);
+        m_timer = std::make_shared<Timer>(1, "testTimer");
         m_timer->registerTimeoutHandler([]() { std::cout << "#### call timer" << std::endl; });
     }
     void run() { startWorking(); }

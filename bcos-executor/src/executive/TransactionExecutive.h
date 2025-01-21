@@ -109,8 +109,8 @@ public:
 
     virtual bool isPrecompiled(const std::string& _address) const;
 
-    std::shared_ptr<precompiled::Precompiled> getPrecompiled(const std::string& _address) const;
-    virtual std::shared_ptr<precompiled::Precompiled> getPrecompiled(const std::string& _address,
+    std::shared_ptr<precompiled::Precompiled> getPrecompiled(std::string_view _address) const;
+    virtual std::shared_ptr<precompiled::Precompiled> getPrecompiled(std::string_view _address,
         uint32_t version, bool isAuth, const ledger::Features& features) const;
 
     void setStaticPrecompiled(std::shared_ptr<const std::set<std::string>> _staticPrecompiled)

@@ -20,8 +20,8 @@
  */
 #pragma once
 
-#include <bcos-utilities/Ranges.h>
 #include <boost/throw_exception.hpp>
+#include <range/v3/range.hpp>
 #include <span>
 #include <stdexcept>
 
@@ -29,11 +29,12 @@ namespace bcos::crypto::trivial
 {
 
 template <class Object>
-concept Value = std::is_trivial_v<std::remove_cvref_t<Object>> && !std::is_pointer_v<std::remove_cvref_t<Object>>;
+concept Value = std::is_trivial_v<std::remove_cvref_t<Object>> &&
+                !std::is_pointer_v<std::remove_cvref_t<Object>>;
 
 template <class Object>
-concept Range = RANGES::contiguous_range<std::remove_cvref_t<Object>> &&
-    std::is_trivial_v<std::remove_cvref_t<RANGES::range_value_t<Object>>>;
+concept Range = ::ranges::contiguous_range<std::remove_cvref_t<Object>> &&
+                std::is_trivial_v<std::remove_cvref_t<::ranges::range_value_t<Object>>>;
 
 template <class Input>
 concept Object = Value<Input> || Range<Input>;
@@ -51,17 +52,19 @@ constexpr auto toView(trivial::Object auto&& object)
     if constexpr (trivial::Value<RawType>)
     {
         using ByteType =
-            std::conditional_t<std::is_const_v<std::remove_reference_t<decltype(object)>>, std::byte const, std::byte>;
+            std::conditional_t<std::is_const_v<std::remove_reference_t<decltype(object)>>,
+                std::byte const, std::byte>;
         std::span<ByteType> view{(ByteType*)&object, sizeof(object)};
 
         return view;
     }
     else if constexpr (trivial::Range<RawType>)
     {
-        using ByteType = std::conditional_t<std::is_const_v<std::remove_reference_t<RANGES::range_value_t<RawType>>>,
+        using ByteType = std::conditional_t<
+            std::is_const_v<std::remove_reference_t<::ranges::range_value_t<RawType>>>,
             std::byte const, std::byte>;
         std::span<ByteType> view{(ByteType*)std::data(object),
-            sizeof(std::remove_cvref_t<RANGES::range_value_t<RawType>>) * RANGES::size(object)};
+            sizeof(std::remove_cvref_t<::ranges::range_value_t<RawType>>) * ::ranges::size(object)};
 
         return view;
     }
@@ -72,16 +75,15 @@ constexpr auto toView(trivial::Object auto&& object)
 }
 
 template <class Range>
-concept DynamicRange = requires(Range range, size_t newSize)
-{
-    requires RANGES::range<Range>;
+concept DynamicRange = requires(Range range, size_t newSize) {
+    requires ::ranges::range<Range>;
     range.resize(newSize);
     range.reserve(newSize);
 };
 
-void resizeTo(RANGES::range auto& out, size_t size)
+void resizeTo(::ranges::range auto& out, size_t size)
 {
-    if ((size_t)RANGES::size(out) < size)
+    if ((size_t)::ranges::size(out) < size)
     {
         if constexpr (DynamicRange<std::remove_cvref_t<decltype(out)>>)
         {

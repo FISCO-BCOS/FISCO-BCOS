@@ -66,17 +66,18 @@ public:
         BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
     }
 
-    virtual void broadcastTransaction([[maybe_unused]] const protocol::Transaction& transaction)
+    virtual task::Task<void> broadcastTransaction(
+        [[maybe_unused]] const protocol::Transaction& transaction)
     {
         BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
     }
 
-    virtual void broadcastTransactionBuffer([[maybe_unused]] const bytesConstRef& _data)
+    virtual task::Task<void> broadcastTransactionBuffer([[maybe_unused]] bytesConstRef _data)
     {
         BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
     }
 
-    virtual void broadcastTransactionBufferByTree([[maybe_unused]] const bytesConstRef& _data,
+    virtual task::Task<void> broadcastTransactionBufferByTree([[maybe_unused]] bytesConstRef _data,
         bool isStartNode = false, bcos::crypto::NodeIDPtr fromNode = nullptr)
     {
         BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
@@ -110,7 +111,7 @@ public:
         std::function<void(Error::Ptr, bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr)>
             _sealCallback) = 0;
 
-    virtual void asyncMarkTxs(bcos::crypto::HashListPtr _txsHash, bool _sealedFlag,
+    virtual void asyncMarkTxs(const bcos::crypto::HashList& _txsHash, bool _sealedFlag,
         bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
         std::function<void(Error::Ptr)> _onRecvResponse) = 0;
     /**

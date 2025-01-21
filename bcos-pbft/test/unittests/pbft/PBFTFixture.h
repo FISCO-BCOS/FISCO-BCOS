@@ -146,10 +146,12 @@ public:
         PBFTEngine::onReceivePBFTMessage(_error, _nodeID, _data, _sendResponse);
     }
 
+    auto& msgQueue() { return m_msgQueue; }
+
     // PBFT main processing function
     void executeWorker() override
     {
-        while (!msgQueue()->empty())
+        while (!msgQueue().empty())
         {
             PBFTEngine::executeWorker();
         }
@@ -157,7 +159,7 @@ public:
 
     void executeWorkerByRoundbin() { return PBFTEngine::executeWorker(); }
 
-    void onRecvProposal(bool _containSysTxs, bytesConstRef _proposalData,
+    void onRecvProposal(bool _containSysTxs, const protocol::Block& _proposalData,
         bcos::protocol::BlockNumber _proposalIndex,
         bcos::crypto::HashType const& _proposalHash) override
     {
@@ -171,8 +173,6 @@ public:
         return PBFTEngine::handlePrePrepareMsg(
             _prePrepareMsg, _needVerifyProposal, _generatedFromNewView, _needCheckSignature);
     }
-
-    PBFTMsgQueuePtr msgQueue() { return m_msgQueue; }
 };
 
 class FakePBFTImpl : public PBFTImpl

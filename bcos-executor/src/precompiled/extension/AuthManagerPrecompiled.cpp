@@ -21,6 +21,7 @@
 #include "AuthManagerPrecompiled.h"
 #include "../../vm/HostContext.h"
 #include "ContractAuthMgrPrecompiled.h"
+#include "bcos-codec/scale/Scale.h"
 #include "libinitializer/AuthInitializer.h"
 #include <bcos-tool/BfsFileFactory.h>
 #include <boost/archive/binary_iarchive.hpp>
@@ -261,7 +262,7 @@ void AuthManagerPrecompiled::resetAdmin(
     }
     auto newParams =
         codec.encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), _callParameters->input().toBytes());
-    std::string authMgrAddress = blockContext.isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS;
+    std::string authMgrAddress(blockContext.isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS);
 
     auto response = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
         authMgrAddress, path, _callParameters->m_staticCall, _callParameters->m_create,
@@ -302,7 +303,7 @@ void AuthManagerPrecompiled::setMethodAuthType(
     }
     auto newParams =
         codec.encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), _callParameters->input().toBytes());
-    std::string authMgrAddress = blockContext.isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS;
+    std::string authMgrAddress(blockContext.isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS);
     auto response = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
         authMgrAddress, path, _callParameters->m_staticCall, _callParameters->m_create,
         _callParameters->m_gasLeft, true);
@@ -336,7 +337,7 @@ void AuthManagerPrecompiled::checkMethodAuth(
     }
     auto newParams =
         codec.encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), _callParameters->input().toBytes());
-    std::string authMgrAddress = blockContext.isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS;
+    std::string authMgrAddress(blockContext.isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS);
 
     auto response = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
         authMgrAddress, path, _callParameters->m_staticCall, _callParameters->m_create,
@@ -367,7 +368,7 @@ void AuthManagerPrecompiled::getMethodAuth(
     }
     auto newParams =
         codec.encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), _callParameters->input().toBytes());
-    std::string authMgrAddress = blockContext.isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS;
+    std::string authMgrAddress(blockContext.isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS);
 
     auto response = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
         authMgrAddress, path, _callParameters->m_staticCall, _callParameters->m_create,
@@ -412,7 +413,7 @@ void AuthManagerPrecompiled::setMethodAuth(
     }
     auto newParams =
         codec.encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), _callParameters->input().toBytes());
-    std::string authMgrAddress = blockContext.isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS;
+    std::string authMgrAddress(blockContext.isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS);
     auto response = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
         authMgrAddress, path, _callParameters->m_staticCall, _callParameters->m_create,
         _callParameters->m_gasLeft, true);
@@ -462,7 +463,7 @@ void AuthManagerPrecompiled::setContractStatus(
     }
     auto newParams =
         codec.encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), _callParameters->input().toBytes());
-    std::string authMgrAddress = blockContext.isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS;
+    std::string authMgrAddress(blockContext.isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS);
 
     auto response = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
         authMgrAddress, address, _callParameters->m_staticCall, _callParameters->m_create,
@@ -494,7 +495,7 @@ void AuthManagerPrecompiled::contractAvailable(
 
     auto newParams =
         codec.encode(std::string(AUTH_CONTRACT_MGR_ADDRESS), _callParameters->input().toBytes());
-    std::string authMgrAddress = blockContext.isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS;
+    std::string authMgrAddress(blockContext.isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS);
 
     auto response = externalRequest(_executive, ref(newParams), _callParameters->m_origin,
         authMgrAddress, address, _callParameters->m_staticCall, _callParameters->m_create,
@@ -510,7 +511,7 @@ std::string AuthManagerPrecompiled::getContractAdmin(
     const auto& blockContext = _executive->blockContext();
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
 
-    std::string authMgrAddress = blockContext.isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS;
+    std::string authMgrAddress(blockContext.isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS);
 
     bytes selector = blockContext.isWasm() ?
                          codec.encodeWithSig(AUTH_METHOD_GET_ADMIN, _to) :
@@ -837,7 +838,7 @@ void AuthManagerPrecompiled::initAuth(
         BOOST_THROW_EXCEPTION(protocol::PrecompiledError("Committee contract already exist."));
     }
 
-    std::string authMgrAddress = blockContext.isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS;
+    std::string authMgrAddress(blockContext.isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS);
 
     std::vector<Address> initGovernors({Address(account)});
     std::vector<string32> weights({bcos::codec::toString32(h256(1))});

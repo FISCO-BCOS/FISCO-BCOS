@@ -42,7 +42,8 @@ TxPoolInitializer::TxPoolInitializer(bcos::tool::NodeConfig::Ptr _nodeConfig,
     auto txpoolFactory = std::make_shared<TxPoolFactory>(keyPair->publicKey(), cryptoSuite,
         m_protocolInitializer->txResultFactory(), m_protocolInitializer->blockFactory(),
         m_frontService, m_ledger, m_nodeConfig->groupId(), m_nodeConfig->chainId(),
-        m_nodeConfig->blockLimit(), m_nodeConfig->txpoolLimit());
+        m_nodeConfig->blockLimit(), m_nodeConfig->txpoolLimit(),
+        m_nodeConfig->checkTransactionSignature());
 
     m_txpool = txpoolFactory->createTxPool(m_nodeConfig->notifyWorkerNum(),
         m_nodeConfig->verifierWorkerNum(), m_nodeConfig->txsExpirationTime());
@@ -56,21 +57,8 @@ TxPoolInitializer::TxPoolInitializer(bcos::tool::NodeConfig::Ptr _nodeConfig,
     }
 }
 
-void TxPoolInitializer::init(bcos::sealer::SealerInterface::Ptr _sealer)
+void TxPoolInitializer::init()
 {
-    m_txpool->registerUnsealedTxsNotifier(
-        [_sealer](size_t _unsealedTxsSize, std::function<void(Error::Ptr)> _onRecv) {
-            try
-            {
-                _sealer->asyncNoteUnSealedTxsSize(_unsealedTxsSize, _onRecv);
-            }
-            catch (std::exception const& e)
-            {
-                INITIALIZER_LOG(WARNING)
-                    << LOG_DESC("call UnsealedTxsNotifier to the sealer exception")
-                    << LOG_KV("message", boost::diagnostic_information(e));
-            }
-        });
     m_txpool->init();
 }
 

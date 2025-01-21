@@ -39,15 +39,11 @@ public:
     SealingManager& operator=(const SealingManager&) = delete;
     SealingManager& operator=(SealingManager&&) = delete;
 
-    virtual ~SealingManager();
-    void stop();
-
+    virtual ~SealingManager() noexcept = default;
     bool shouldGenerateProposal();
-    bool shouldFetchTransaction();
 
     std::pair<bool, bcos::protocol::Block::Ptr> generateProposal(
         std::function<uint16_t(bcos::protocol::Block::Ptr)>);
-    virtual void setUnsealedTxsSize(size_t _unsealedTxsSize);
 
     // the consensus module notify the sealer to reset sealing when viewchange
     virtual void resetSealing();
@@ -73,7 +69,7 @@ protected:
     virtual bool reachMinSealTimeCondition();
     virtual void clearPendingTxs();
     virtual void notifyResetTxsFlag(
-        bcos::crypto::HashListPtr _txsHash, bool _flag, size_t _retryTime = 0);
+        const bcos::crypto::HashList& _txsHash, bool _flag, size_t _retryTime = 0);
 
     virtual int64_t txsSizeExpectedToFetch();
     virtual size_t pendingTxsSize();
@@ -84,13 +80,9 @@ private:
     TxsMetaDataQueue m_pendingSysTxs;
     SharedMutex x_pendingTxs;
 
-    ThreadPool::Ptr m_worker;
-
     std::atomic<uint64_t> m_lastSealTime = {0};
-
     // the invalid sealingNumber is -1
     std::atomic<ssize_t> m_sealingNumber = {-1};
-    std::atomic<size_t> m_unsealedTxsSize = {0};
 
     std::atomic<ssize_t> m_startSealingNumber = {0};
     std::atomic<ssize_t> m_endSealingNumber = {0};
@@ -100,8 +92,7 @@ private:
     std::atomic<int64_t> m_waitUntil = {0};
 
     bcos::CallbackCollectionHandler<> m_onReady;
-
-    std::atomic_bool m_fetchingTxs = {false};
+    std::mutex m_fetchingTxsMutex;
 
     std::atomic<ssize_t> m_latestNumber = {0};
     bcos::crypto::HashType m_latestHash;

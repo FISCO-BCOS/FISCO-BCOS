@@ -18,10 +18,8 @@
  */
 
 #include "bcos-utilities/RefDataContainer.h"
-#include "bcos-utilities/Common.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/test/unit_test.hpp>
-#include <iostream>
 #include <vector>
 
 
@@ -133,6 +131,14 @@ BOOST_AUTO_TEST_CASE(testEmptyCropped)
     BOOST_CHECK(ret.empty() == true);
 }
 
+template <class T>
+bool dataOverlap(RefDataContainer<T> lhs, RefDataContainer<T> _dataContainer)
+{
+    // data overlap
+    return static_cast<bool>(
+        lhs.begin() < _dataContainer.end() && _dataContainer.begin() < lhs.end());
+}
+
 // test function "Overlap"
 BOOST_AUTO_TEST_CASE(testOverlap)
 {
@@ -152,9 +158,9 @@ BOOST_AUTO_TEST_CASE(testOverlap)
         str_ref.data() + 3, (size_t)(std::min)((size_t)str.length() - 2, (size_t)5) / sizeof(char));
     // std::string tmp_str = "abcd";
     // RefDataContainer<const char> non_overlap_ref(tmp_str);
-    BOOST_CHECK(str_ref.dataOverlap(sub_str_ref1) == true);
-    BOOST_CHECK(str_ref.dataOverlap(sub_str_ref2) == true);
-    BOOST_CHECK(sub_str_ref1.dataOverlap(sub_str_ref2) == true);
+    BOOST_CHECK(dataOverlap(str_ref, sub_str_ref1) == true);
+    BOOST_CHECK(dataOverlap(str_ref, sub_str_ref2) == true);
+    BOOST_CHECK(dataOverlap(sub_str_ref1, sub_str_ref2) == true);
 
     /// ====test vector Overlap ====
     std::vector<int> v1_int(size);
@@ -164,13 +170,14 @@ BOOST_AUTO_TEST_CASE(testOverlap)
         v1_ref[i] = i;
     }
 
-    RefDataContainer<int> v2_ref(&(*v1_int.begin()) + (size_t)(std::min)(v1_int.size(), (size_t)(1)),
+    RefDataContainer<int> v2_ref(
+        &(*v1_int.begin()) + (size_t)(std::min)(v1_int.size(), (size_t)(1)),
         (std::min)(v1_int.size(), (size_t)(5)));
     // test overlap
-    BOOST_CHECK(v2_ref.dataOverlap(v1_ref));
+    BOOST_CHECK(dataOverlap(v2_ref, v1_ref));
     std::vector<int> tmp_v;
     // test no-overlap
-    BOOST_CHECK(v2_ref.dataOverlap(RefDataContainer<int>(&tmp_v)) == false);
+    BOOST_CHECK(dataOverlap(v2_ref, RefDataContainer<int>(&tmp_v)) == false);
 }
 BOOST_AUTO_TEST_SUITE_END()
 

@@ -36,7 +36,7 @@ uint64_t FilterSystem::insertFilter(Filter::Ptr filter)
     while (true)
     {
         id = generator();
-        FilterMap::WriteAccessor::Ptr accessor;
+        FilterMap::WriteAccessor accessor;
         if (m_filters.insert(accessor, {KeyType(filter->group(), id), filter}))
         {
             break;
@@ -57,21 +57,19 @@ void FilterSystem::cleanUpExpiredFilters()
     size_t traversedFiltersNum = 0;
     uint64_t currentTime = utcTime();
     std::vector<KeyType> expiredFilters;
-    m_filters.forEach<FilterMap::ReadAccessor>(
-        [&traversedFiltersNum, &expiredFilters, this, &currentTime](
-            FilterMap::ReadAccessor::Ptr accessor) {
-            const auto& filter = accessor->value();
-            if (currentTime > (filter->lastAccessTime() + m_filterTimeout))
-            {
-                expiredFilters.emplace_back(KeyType(filter->group(), filter->id()));
-            }
-            if (++traversedFiltersNum > MAX_TRAVERSE_FILTERS_COUNT)
-            {
-                return false;
-            }
-            return true;
-        });
-    m_filters.batchRemove(expiredFilters);
+    for (auto& accessor : m_filters.range<FilterMap::ReadAccessor>())
+    {
+        const auto& filter = accessor.value();
+        if (currentTime > (filter->lastAccessTime() + m_filterTimeout))
+        {
+            expiredFilters.emplace_back(filter->group(), filter->id());
+        }
+        if (++traversedFiltersNum > MAX_TRAVERSE_FILTERS_COUNT)
+        {
+            break;
+        }
+    }
+    m_filters.batchRemove<decltype(expiredFilters), false>(expiredFilters);
     FILTER_LOG(INFO) << LOG_DESC("cleanUpExpiredFilters") << LOG_KV("filters", m_filters.size())
                      << LOG_KV("erasedFilters", expiredFilters.size())
                      << LOG_KV("traversedFiltersNum", traversedFiltersNum);

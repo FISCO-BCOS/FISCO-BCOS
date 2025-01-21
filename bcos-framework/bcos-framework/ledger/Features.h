@@ -2,25 +2,20 @@
 #include "../ledger/LedgerTypeDef.h"
 #include "../protocol/Protocol.h"
 #include "../storage/Entry.h"
-#include "../storage/LegacyStorageMethods.h"
 #include "../storage2/Storage.h"
 #include "../transaction-executor/StateKey.h"
 #include "bcos-concepts/Exception.h"
 #include "bcos-task/Task.h"
 #include "bcos-tool/Exceptions.h"
-#include "bcos-utilities/Ranges.h"
 #include <boost/throw_exception.hpp>
 #include <array>
 #include <bitset>
 #include <magic_enum.hpp>
-
 namespace bcos::ledger
 {
-
 struct NoSuchFeatureError : public bcos::error::Exception
 {
 };
-
 class Features
 {
 public:
@@ -49,6 +44,9 @@ public:
         bugfix_support_transfer_receive_fallback,
         bugfix_set_row_with_dirty_flag,
         bugfix_rpbft_vrf_blocknumber_input,
+        bugfix_delete_account_code,
+        bugfix_policy1_empty_code_address,
+        bugfix_precompiled_gasused,
         feature_dmc2serial,
         feature_sharding,
         feature_rpbft,
@@ -61,6 +59,8 @@ public:
         feature_evm_timestamp,
         feature_evm_address,
         feature_rpbft_term_weight,
+        feature_raw_address,
+        feature_rpbft_vrf_type_secp256k1,
     };
 
 private:
@@ -171,7 +171,7 @@ public:
         }
     }
 
-    void setUpgradeFeatures(protocol::BlockVersion from, protocol::BlockVersion to)
+    void setUpgradeFeatures(protocol::BlockVersion fromVersion, protocol::BlockVersion toVersion)
     {
         struct UpgradeFeatures
         {
@@ -235,11 +235,15 @@ public:
                     Flag::bugfix_eoa_match_failed,
                 }},
             {protocol::BlockVersion::V3_12_0_VERSION, {Flag::bugfix_rpbft_vrf_blocknumber_input}},
+            {protocol::BlockVersion::V3_13_0_VERSION,
+                {Flag::bugfix_delete_account_code, Flag::bugfix_policy1_empty_code_address,
+                    Flag::bugfix_precompiled_gasused}},
         });
         for (const auto& upgradeFeatures : upgradeRoadmap)
         {
-            if (((to < protocol::BlockVersion::V3_2_7_VERSION) && (to >= upgradeFeatures.to)) ||
-                (from < upgradeFeatures.to && to >= upgradeFeatures.to))
+            if (((toVersion < protocol::BlockVersion::V3_2_7_VERSION) &&
+                    (toVersion >= upgradeFeatures.to)) ||
+                (fromVersion < upgradeFeatures.to && toVersion >= upgradeFeatures.to))
             {
                 for (auto flag : upgradeFeatures.flags)
                 {
@@ -249,29 +253,29 @@ public:
         }
     }
 
-    void setGenesisFeatures(protocol::BlockVersion to)
+    void setGenesisFeatures(protocol::BlockVersion toVersion)
     {
-        setToShardingDefault(to);
-        if (to == protocol::BlockVersion::V3_3_VERSION ||
-            to == protocol::BlockVersion::V3_4_VERSION)
+        setToShardingDefault(toVersion);
+        if (toVersion == protocol::BlockVersion::V3_3_VERSION ||
+            toVersion == protocol::BlockVersion::V3_4_VERSION)
         {
             return;
         }
 
-        if (to == protocol::BlockVersion::V3_5_VERSION)
+        if (toVersion == protocol::BlockVersion::V3_5_VERSION)
         {
-            setUpgradeFeatures(protocol::BlockVersion::V3_4_VERSION, to);
+            setUpgradeFeatures(protocol::BlockVersion::V3_4_VERSION, toVersion);
         }
         else
         {
-            setUpgradeFeatures(protocol::BlockVersion::MIN_VERSION, to);
+            setUpgradeFeatures(protocol::BlockVersion::MIN_VERSION, toVersion);
         }
     }
 
     auto flags() const
     {
-        return RANGES::views::iota(0LU, m_flags.size()) |
-               RANGES::views::transform([this](size_t index) {
+        return ::ranges::views::iota(0LU, m_flags.size()) |
+               ::ranges::views::transform([this](size_t index) {
                    auto flag = magic_enum::enum_value<Flag>(index);
                    return std::make_tuple(flag, magic_enum::enum_name(flag), m_flags[index]);
                });
@@ -279,8 +283,8 @@ public:
 
     static auto featureKeys()
     {
-        return RANGES::views::iota(0LU, magic_enum::enum_count<Flag>()) |
-               RANGES::views::transform([](size_t index) {
+        return ::ranges::views::iota(0LU, magic_enum::enum_count<Flag>()) |
+               ::ranges::views::transform([](size_t index) {
                    auto flag = magic_enum::enum_value<Flag>(index);
                    return magic_enum::enum_name(flag);
                });
@@ -326,10 +330,10 @@ inline task::Task<void> readFromStorage(Features& features, auto&& storage, long
 {
     decltype(auto) keys = bcos::ledger::Features::featureKeys();
     auto entries = co_await storage2::readSome(std::forward<decltype(storage)>(storage),
-        keys | RANGES::views::transform([](std::string_view key) {
+        keys | ::ranges::views::transform([](std::string_view key) {
             return transaction_executor::StateKeyView(ledger::SYS_CONFIG, key);
         }));
-    for (auto&& [key, entry] : RANGES::views::zip(keys, entries))
+    for (auto&& [key, entry] : ::ranges::views::zip(keys, entries))
     {
         if (entry)
         {
@@ -345,17 +349,15 @@ inline task::Task<void> readFromStorage(Features& features, auto&& storage, long
 inline task::Task<void> writeToStorage(Features const& features, auto&& storage, long blockNumber)
 {
     decltype(auto) flags =
-        features.flags() | RANGES::views::filter([](auto&& tuple) { return std::get<2>(tuple); });
+        features.flags() | ::ranges::views::filter([](auto&& tuple) { return std::get<2>(tuple); });
     co_await storage2::writeSome(std::forward<decltype(storage)>(storage),
-        RANGES::views::transform(flags,
-            [](auto&& tuple) {
-                return transaction_executor::StateKey(ledger::SYS_CONFIG, std::get<1>(tuple));
-            }),
-        RANGES::views::transform(flags, [&](auto&& tuple) {
+        ::ranges::views::transform(flags, [&](auto&& tuple) {
             storage::Entry entry;
             entry.setObject(SystemConfigEntry{
                 boost::lexical_cast<std::string>((int)std::get<2>(tuple)), blockNumber});
-            return entry;
+            return std::make_tuple(
+                transaction_executor::StateKey(ledger::SYS_CONFIG, std::get<1>(tuple)),
+                std::move(entry));
         }));
 }
 

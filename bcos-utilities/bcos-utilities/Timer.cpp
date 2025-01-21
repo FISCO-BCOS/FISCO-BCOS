@@ -19,11 +19,43 @@
  * @date 2021-04-26
  */
 #include "Timer.h"
+#include "BoostLog.h"
 #include "Common.h"
-#include "Log.h"
-#include <iostream>
 
 using namespace bcos;
+
+bcos::Timer::Timer(boost::asio::io_service& ioService, int64_t timeout, std::string threadName)
+  : m_timeout(timeout),
+    m_working(true),
+    m_ioService(std::addressof(ioService)),
+    m_timer(this->ioService()),
+    m_threadName(std::move(threadName))
+{}
+
+bcos::Timer::Timer(int64_t _timeout, std::string _threadName)
+  : m_timeout(_timeout),
+    m_working(true),
+    m_ioService(std::in_place_index_t<1>{}),
+    m_work(this->ioService()),
+    m_timer(this->ioService()),
+    m_threadName(std::move(_threadName)),
+    m_worker(std::make_unique<std::thread>([&]() {
+        bcos::pthread_setThreadName(m_threadName);
+        while (m_working)
+        {
+            try
+            {
+                ioService().run();
+            }
+            catch (std::exception const& e)
+            {
+                BCOS_LOG(WARNING) << LOG_DESC("Exception in Worker Thread of timer")
+                                  << LOG_KV("message", boost::diagnostic_information(e));
+            }
+            ioService().reset();
+        }
+    }))
+{}
 
 void Timer::start()
 {
@@ -44,14 +76,14 @@ void Timer::start()
 
 void Timer::startTimer()
 {
-    if (m_running || !m_timer)
+    if (bool running = false; !m_running.compare_exchange_strong(running, true))
     {
         return;
     }
-    m_timer->expires_from_now(std::chrono::milliseconds(adjustTimeout()));
-    auto timer = std::weak_ptr<Timer>(shared_from_this());
+    m_timer.expires_from_now(std::chrono::milliseconds(adjustTimeout()));
     // calls the timeout handler
-    m_timer->async_wait([timer](const boost::system::error_code& error) {
+    m_timer.async_wait([timerWeak = std::weak_ptr<Timer>(shared_from_this())](
+                           const boost::system::error_code& error) {
         // the timer has been cancelled
         if (error == boost::asio::error::operation_aborted)
         {
@@ -64,12 +96,10 @@ void Timer::startTimer()
         }
         try
         {
-            auto t = timer.lock();
-            if (!t)
+            if (auto timer = timerWeak.lock())
             {
-                return;
+                timer->run();
             }
-            t->run();
         }
         catch (std::exception const& e)
         {
@@ -77,41 +107,83 @@ void Timer::startTimer()
                               << LOG_KV("message", boost::diagnostic_information(e));
         }
     });
-    m_running = true;
 }
 
 // stop the timer
 void Timer::stop()
 {
-    if (!m_working || !m_timer)
+    if (!m_working)
     {
         return;
     }
-    if (!m_running)
+
+    if (bool running = true; m_running.compare_exchange_strong(running, false))
     {
-        return;
+        // cancel the timer
+        m_timer.cancel();
     }
-    m_running = false;
-    // cancel the timer
-    m_timer->cancel();
 }
 
 void Timer::destroy()
 {
-    if (!m_working || !m_worker)
+    if (!m_working)
     {
         return;
     }
     m_working = false;
     stop();
-    m_ioService->stop();
-    if (m_worker->get_id() != std::this_thread::get_id())
+    if (!borrowedIoService())
     {
-        m_worker->join();
-        m_worker.reset();
+        ioService().stop();
+        if (m_worker->get_id() != std::this_thread::get_id())
+        {
+            m_worker->join();
+            m_worker.reset();
+        }
+        else
+        {
+            m_worker->detach();
+        }
     }
-    else
+}
+bcos::Timer::~Timer() noexcept
+{
+    destroy();
+}
+void bcos::Timer::restart()
+{
+    stop();
+    start();
+}
+void bcos::Timer::reset(int64_t _timeout)
+{
+    m_timeout = _timeout;
+    restart();
+}
+bool bcos::Timer::running()
+{
+    return m_running;
+}
+int64_t bcos::Timer::timeout()
+{
+    return m_timeout;
+}
+void bcos::Timer::registerTimeoutHandler(std::function<void()> _timeoutHandler)
+{
+    m_timeoutHandler = std::move(_timeoutHandler);
+}
+void bcos::Timer::run()
+{
+    if (m_timeoutHandler)
     {
-        m_worker->detach();
+        m_timeoutHandler();
     }
+}
+uint64_t bcos::Timer::adjustTimeout()
+{
+    return m_timeout;
+}
+void bcos::Timer::setTimeout(int64_t timeout)
+{
+    m_timeout = timeout;
 }

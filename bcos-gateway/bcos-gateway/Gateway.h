@@ -21,7 +21,6 @@
 #pragma once
 
 #include "bcos-gateway/libratelimit/GatewayRateLimiter.h"
-#include "bcos-utilities/ObjectAllocatorMonitor.h"
 #include "filter/ReadOnlyFilter.h"
 #include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-framework/gateway/GatewayInterface.h>
@@ -35,11 +34,10 @@
 #include <bcos-gateway/libratelimit/RateLimiterStat.h>
 #include <bcos-utilities/BoostLog.h>
 
-namespace bcos
+
+namespace bcos::gateway
 {
-namespace gateway
-{
-class Retry : public std::enable_shared_from_this<Retry>, public ObjectCounter<Retry>
+class Retry : public std::enable_shared_from_this<Retry>
 {
 public:
     Retry(crypto::NodeIDPtr _srcNodeID, crypto::NodeIDPtr _dstNodeID,
@@ -136,8 +134,8 @@ public:
             try
             {
                 auto payload = message->payload();
-                int respCode =
-                    boost::lexical_cast<int>(std::string(payload->begin(), payload->end()));
+                int respCode = boost::lexical_cast<int>(std::string_view(
+                    reinterpret_cast<const char*>(payload.data()), payload.size()));
                 // the peer gateway not response not ok ,it means the gateway not dispatch the
                 // message successfully,find another gateway and try again
                 if (respCode != bcos::protocol::CommonError::SUCCESS)
@@ -164,11 +162,11 @@ public:
             catch (const std::exception& e)
             {
                 GATEWAY_LOG(ERROR) << LOG_BADGE("trySendMessage and receive response exception")
-                                   << LOG_KV("payload", std::string(message->payload()->begin(),
-                                                            message->payload()->end()))
+                                   << LOG_KV("payload", std::string(message->payload().begin(),
+                                                            message->payload().end()))
                                    << LOG_KV("packetType", message->packetType())
-                                   << LOG_KV("src", message->options() ?
-                                                        toHex(*(message->options()->srcNodeID())) :
+                                   << LOG_KV("src", message->options().srcNodeID() ?
+                                                        toHex(message->options().srcNodeID()) :
                                                         "unknown")
                                    << LOG_KV("size", message->length())
                                    << LOG_KV("message", e.what()) << LOG_KV("moduleID", moduleID);
@@ -206,12 +204,12 @@ public:
         GatewayNodeManager::Ptr _gatewayNodeManager, bcos::amop::AMOPImpl::Ptr _amop,
         ratelimiter::GatewayRateLimiter::Ptr _gatewayRateLimiter,
         std::string _gatewayServiceName = "localGateway")
-      : m_gatewayServiceName(_gatewayServiceName),
-        m_gatewayConfig(_gatewayConfig),
-        m_p2pInterface(_p2pInterface),
-        m_gatewayNodeManager(_gatewayNodeManager),
-        m_amop(_amop),
-        m_gatewayRateLimiter(_gatewayRateLimiter)
+      : m_gatewayServiceName(std::move(_gatewayServiceName)),
+        m_gatewayConfig(std::move(_gatewayConfig)),
+        m_p2pInterface(std::move(_p2pInterface)),
+        m_gatewayNodeManager(std::move(_gatewayNodeManager)),
+        m_amop(std::move(_amop)),
+        m_gatewayRateLimiter(std::move(_gatewayRateLimiter))
     {
         m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::PeerToPeerMessage,
             boost::bind(&Gateway::onReceiveP2PMessage, this, boost::placeholders::_1,
@@ -278,6 +276,9 @@ public:
     void asyncSendBroadcastMessage(uint16_t _type, const std::string& _groupID, int _moduleID,
         bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload) override;
 
+    task::Task<void> broadcastMessage(uint16_t type, std::string_view groupID, int moduleID,
+        const bcos::crypto::NodeID& srcNodeID, ::ranges::any_view<bytesConstRef> payloads) override;
+
     /**
      * @brief: receive p2p message
      * @param _groupID: groupID
@@ -303,14 +304,14 @@ public:
 
     /// for AMOP
     void asyncSendMessageByTopic(const std::string& _topic, bcos::bytesConstRef _data,
-        std::function<void(bcos::Error::Ptr&&, int16_t, bytesPointer)> _respFunc) override
+        std::function<void(bcos::Error::Ptr&&, int16_t, bytesConstRef)> _respFunc) override
     {
         if (m_amop)
         {
             m_amop->asyncSendMessageByTopic(_topic, _data, std::move(_respFunc));
             return;
         }
-        _respFunc(BCOS_ERROR_PTR(-1, "AMOP is not initialized"), 0, nullptr);
+        _respFunc(BCOS_ERROR_PTR(-1, "AMOP is not initialized"), 0, {});
     }
     void asyncSendBroadcastMessageByTopic(
         const std::string& _topic, bcos::bytesConstRef _data) override
@@ -392,5 +393,4 @@ private:
     ratelimiter::GatewayRateLimiter::Ptr m_gatewayRateLimiter;
     std::optional<ReadOnlyFilter> m_readonlyFilter;
 };
-}  // namespace gateway
-}  // namespace bcos
+}  // namespace bcos::gateway

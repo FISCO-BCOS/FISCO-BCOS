@@ -2,7 +2,6 @@
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
-#include "bcos-ledger/LedgerMethods.h"
 #include "bcos-storage/RocksDBStorage2.h"
 #include "bcos-storage/StateKVResolver.h"
 #include "bcos-transaction-executor/TransactionExecutorImpl.h"
@@ -25,6 +24,7 @@ bcos::task::Task<void> bcos::transaction_scheduler::BaselineSchedulerInitializer
                        }) |
                        RANGES::to<std::vector>();
 
+#if 0
     if (!missingKeys.empty())
     {
         std::string message("All bugfix must be enabled to activate baseline scheduler, missing: ");
@@ -37,6 +37,7 @@ bcos::task::Task<void> bcos::transaction_scheduler::BaselineSchedulerInitializer
         INITIALIZER_LOG(ERROR) << message;
         BOOST_THROW_EXCEPTION(std::runtime_error(message));
     }
+#endif
 
     // baseline不支持dmc模式或wasm模式
     // Baseline does not support DMC mode or WASM mode
@@ -49,17 +50,14 @@ bcos::task::Task<void> bcos::transaction_scheduler::BaselineSchedulerInitializer
     }
 }
 
-using MutableStorage = bcos::storage2::memory_storage::MemoryStorage<
-    bcos::transaction_executor::StateKey, bcos::transaction_executor::StateValue,
-    bcos::storage2::memory_storage::Attribute(bcos::storage2::memory_storage::ORDERED |
-                                              bcos::storage2::memory_storage::LOGICAL_DELETION)>;
+using MutableStorage =
+    bcos::storage2::memory_storage::MemoryStorage<bcos::transaction_executor::StateKey,
+        bcos::transaction_executor::StateValue,
+        bcos::storage2::memory_storage::ORDERED | bcos::storage2::memory_storage::LOGICAL_DELETION>;
 using CacheStorage =
     bcos::storage2::memory_storage::MemoryStorage<bcos::transaction_executor::StateKey,
         bcos::transaction_executor::StateValue,
-        bcos::storage2::memory_storage::Attribute(bcos::storage2::memory_storage::ORDERED |
-                                                  bcos::storage2::memory_storage::CONCURRENT |
-                                                  bcos::storage2::memory_storage::LRU),
-        std::hash<bcos::transaction_executor::StateKey>>;
+        bcos::storage2::memory_storage::CONCURRENT | bcos::storage2::memory_storage::LRU>;
 
 std::tuple<std::function<std::shared_ptr<bcos::scheduler::SchedulerInterface>()>,
     std::function<void(std::function<void(bcos::protocol::BlockNumber)>)>>
@@ -121,12 +119,15 @@ bcos::transaction_scheduler::BaselineSchedulerInitializer::build(::rocksdb::DB& 
     };
 
     INITIALIZER_LOG(INFO) << "Initialize baseline scheduler, parallel: " << config.parallel
-                          << ", chunkSize: " << config.chunkSize
+                          << ", grainSize: " << config.grainSize
                           << ", maxThread: " << config.maxThread;
 
     if (config.parallel)
     {
-        return buildBaselineHolder(std::make_shared<SchedulerParallelImpl<MutableStorage>>());
+        auto scheduler = std::make_shared<SchedulerParallelImpl<MutableStorage>>();
+        scheduler->m_grainSize = config.grainSize;
+        scheduler->m_maxConcurrency = config.maxThread;
+        return buildBaselineHolder(std::move(scheduler));
     }
     return buildBaselineHolder(std::make_shared<SchedulerSerialImpl>());
 }

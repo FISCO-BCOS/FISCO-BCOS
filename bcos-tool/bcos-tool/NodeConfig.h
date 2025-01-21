@@ -21,6 +21,9 @@
 #pragma once
 #include "bcos-framework/ledger/GenesisConfig.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
+#include "bcos-framework/security/CloudKmsType.h"
+#include "bcos-framework/security/KeyEncryptionType.h"
+#include "bcos-framework/security/StorageEncryptionType.h"
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/Common.h>
 #include <bcos-framework/protocol/Protocol.h>
@@ -113,7 +116,6 @@ public:
     size_t blockLimit() const { return m_blockLimit; }
 
     std::string const& privateKeyPath() const { return m_privateKeyPath; }
-    bool const& enableHsm() const { return m_enableHsm; }
     std::string const& hsmLibPath() const { return m_hsmLibPath; }
     int const& keyIndex() const { return m_keyIndex; }
     int const& encKeyIndex() const { return m_encKeyIndex; }
@@ -247,9 +249,20 @@ public:
     std::string const& failOverClusterUrl() const { return m_failOverClusterUrl; }
 
     bool storageSecurityEnable() const { return m_storageSecurityEnable; }
-    std::string storageSecurityKeyCenterIp() const { return m_storageSecurityKeyCenterIp; }
-    unsigned short storageSecurityKeyCenterPort() const { return m_storageSecurityKeyCenterPort; }
+    std::string storageSecuirtyKeyCenterUrl() const { return m_storageSecurityUrl; }
     std::string storageSecurityCipherDataKey() const { return m_storageSecurityCipherDataKey; }
+
+    security::KeyEncryptionType keyEncryptionType() const { return m_keyEncryptionType; }
+    security::StorageEncryptionType storageEncryptionType() const
+    {
+        return m_storageEncryptionType;
+    }
+    security::CloudKmsType cloudKmsType() const { return m_cloudKmsType; }
+    std::string bcosKmsKeySecurityCipherDataKey() const
+    {
+        return m_bcosKmsKeySecurityCipherDataKey;
+    }
+    std::string keyEncryptionUrl() const { return m_KeyEncryptionUrl; }
 
     bool enableSendBlockStatusByTree() const { return m_enableSendBlockStatusByTree; }
     bool enableSendTxByTree() const { return m_enableSendTxByTree; }
@@ -269,7 +282,7 @@ public:
     struct BaselineSchedulerConfig
     {
         bool parallel = false;
-        int chunkSize = 0;
+        int grainSize = 0;
         int maxThread = 0;
     };
     BaselineSchedulerConfig const& baselineSchedulerConfig() const
@@ -285,7 +298,12 @@ public:
     };
     TarsRPCConfig const& tarsRPCConfig() const { return m_tarsRPCConfig; }
 
+    bool checkTransactionSignature() const;
+    bool checkParallelConflict() const;
+
     ledger::GenesisConfig const& genesisConfig() const;
+
+    bool isValidPort(int port);
 
 protected:
     virtual void loadChainConfig(boost::property_tree::ptree const& _pt, bool _enforceGroupId);
@@ -344,7 +362,6 @@ private:
     virtual int64_t checkAndGetValue(boost::property_tree::ptree const& _pt,
         std::string const& _value, std::string const& _defaultValue);
 
-    bool isValidPort(int port);
 
     bcos::crypto::KeyFactory::Ptr m_keyFactory;
     // txpool related configuration
@@ -366,16 +383,26 @@ private:
 
     // for security
     std::string m_privateKeyPath;
-    bool m_enableHsm{};
+
     std::string m_hsmLibPath;
     int m_keyIndex{};
     int m_encKeyIndex{};
     std::string m_password;
 
+    // for security cloudkms bcoskms hsm configuration
+    security::KeyEncryptionType m_keyEncryptionType;
+    security::StorageEncryptionType m_storageEncryptionType;
+    // key url
+    std::string m_KeyEncryptionUrl;
+    // cloude kms type, 0: AWS, 1: Aliyun...
+    security::CloudKmsType m_cloudKmsType;
+    // bcos kms data key
+    std::string m_bcosKmsKeySecurityCipherDataKey;
+
     // storage security configuration
     bool m_storageSecurityEnable{};
-    std::string m_storageSecurityKeyCenterIp;
-    unsigned short m_storageSecurityKeyCenterPort{};
+    std::string m_storageSecurityUrl;
+    // unsigned short m_storageSecurityKeyCenterPort{};
     std::string m_storageSecurityCipherDataKey;
 
     // ledger configuration
@@ -488,6 +515,10 @@ private:
     // others config
     int m_sendTxTimeout = -1;
     int64_t checkAndGetValue(const boost::property_tree::ptree& _pt, const std::string& _key);
+
+    // experimental
+    bool m_checkTransactionSignature = true;
+    bool m_checkParallelConflict = true;
 };
 
 std::string generateGenesisData(

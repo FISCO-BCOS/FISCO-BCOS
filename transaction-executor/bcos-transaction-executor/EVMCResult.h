@@ -19,44 +19,32 @@
  */
 
 #pragma once
+#include "bcos-crypto/interfaces/crypto/Hash.h"
+#include "bcos-protocol/TransactionStatus.h"
 #include <evmc/instructions.h>
-#include <type_traits>
 
 namespace bcos::transaction_executor
 {
 class EVMCResult : public evmc_result
 {
 public:
-    explicit EVMCResult(evmc_result const& result) : evmc_result(result) {}
+    explicit EVMCResult(evmc_result&& from);
+    EVMCResult(evmc_result&& from, protocol::TransactionStatus _status);
     EVMCResult(const EVMCResult&) = delete;
-    EVMCResult(EVMCResult&& from) noexcept : evmc_result(from)
-    {
-        from.release = nullptr;
-        from.output_data = nullptr;
-        from.output_size = 0;
-    }
+    EVMCResult(EVMCResult&& from) noexcept;
     EVMCResult& operator=(const EVMCResult&) = delete;
-    EVMCResult& operator=(EVMCResult&& from) noexcept
-    {
-        evmc_result::operator=(from);
-        from.release = nullptr;
-        from.output_data = nullptr;
-        from.output_size = 0;
-        return *this;
-    }
+    EVMCResult& operator=(EVMCResult&& from) noexcept;
+    ~EVMCResult() noexcept;
 
-    ~EVMCResult() noexcept
-    {
-        if (release != nullptr)
-        {
-            release(static_cast<evmc_result*>(this));
-            release = nullptr;
-            output_data = nullptr;
-            output_size = 0;
-        }
-    }
+    protocol::TransactionStatus status;
 };
 
-template <auto& Tag>
-using tag_t = std::decay_t<decltype(Tag)>;
+bytes writeErrInfoToOutput(const crypto::Hash& hashImpl, std::string const& errInfo);
+
+protocol::TransactionStatus evmcStatusToTransactionStatus(evmc_status_code status);
+std::tuple<bcos::protocol::TransactionStatus, bcos::bytes> evmcStatusToErrorMessage(
+    const bcos::crypto::Hash& hashImpl, evmc_status_code status);
+
+EVMCResult makeErrorEVMCResult(crypto::Hash const& hashImpl, protocol::TransactionStatus status,
+    evmc_status_code evmStatus, int64_t gas, const std::string& errorInfo);
 }  // namespace bcos::transaction_executor

@@ -26,7 +26,9 @@
 #include <bcos-concepts/Hash.h>
 #include <bcos-concepts/Serialize.h>
 #include <boost/endian/conversion.hpp>
+#include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
+#include <range/v3/view/any_view.hpp>
 
 using namespace bcostars;
 using namespace bcostars::protocol;
@@ -69,7 +71,7 @@ void bcostars::protocol::TransactionImpl::calculateHash(const bcos::crypto::Hash
     bcos::concepts::hash::calculate(*m_inner(), hashImpl.hasher(), m_inner()->dataHash);
 }
 
-const std::string& TransactionImpl::nonce() const
+std::string_view TransactionImpl::nonce() const
 {
     return m_inner()->data.nonce;
 }
@@ -95,9 +97,9 @@ int64_t bcostars::protocol::TransactionImpl::blockLimit() const
 {
     return m_inner()->data.blockLimit;
 }
-void bcostars::protocol::TransactionImpl::setNonce(std::string _n)
+void bcostars::protocol::TransactionImpl::setNonce(std::string nonce)
 {
-    m_inner()->data.nonce = std::move(_n);
+    m_inner()->data.nonce = std::move(nonce);
 }
 std::string_view bcostars::protocol::TransactionImpl::to() const
 {
@@ -170,15 +172,11 @@ int32_t bcostars::protocol::TransactionImpl::attribute() const
 }
 void bcostars::protocol::TransactionImpl::setAttribute(int32_t attribute)
 {
-    m_inner()->attribute = attribute;
+    m_inner()->attribute |= attribute;
 }
 std::string_view bcostars::protocol::TransactionImpl::extraData() const
 {
     return m_inner()->extraData;
-}
-void bcostars::protocol::TransactionImpl::setExtraData(std::string const& _extraData)
-{
-    m_inner()->extraData = _extraData;
 }
 uint8_t bcostars::protocol::TransactionImpl::type() const
 {

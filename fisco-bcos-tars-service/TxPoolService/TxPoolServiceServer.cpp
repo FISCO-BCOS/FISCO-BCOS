@@ -43,15 +43,19 @@ bcostars::Error TxPoolServiceServer::broadcastTransaction(
         [m_transaction = std::move(const_cast<bcostars::Transaction&>(tx))]() mutable {
             return &m_transaction;
         });
-    try
-    {
-        m_txpoolInitializer->txpool()->broadcastTransaction(*transaction);
-        async_response_broadcastTransaction(current, {});
-    }
-    catch (bcos::Error& e)
-    {
-        async_response_broadcastTransaction(current, toTarsError(e));
-    }
+    bcos::task::wait([](decltype(this) self, decltype(transaction) transaction,
+                         decltype(current) current) -> bcos::task::Task<void> {
+        try
+        {
+            co_await self->m_txpoolInitializer->txpool()->broadcastTransaction(*transaction);
+            async_response_broadcastTransaction(current, {});
+        }
+        catch (bcos::Error& e)
+        {
+            async_response_broadcastTransaction(current, toTarsError(e));
+        }
+    }(this, std::move(transaction), current));
+
     return {};
 }
 
@@ -59,17 +63,20 @@ bcostars::Error TxPoolServiceServer::broadcastTransactionBuffer(
     const vector<tars::Char>& transactionBuffer, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
-    try
-    {
-        m_txpoolInitializer->txpool()->broadcastTransactionBuffer(
-            bcos::bytesConstRef(reinterpret_cast<const bcos::byte*>(transactionBuffer.data()),
-                transactionBuffer.size()));
-        async_response_broadcastTransactionBuffer(current, {});
-    }
-    catch (bcos::Error& e)
-    {
-        async_response_broadcastTransactionBuffer(current, toTarsError(e));
-    }
+    bcos::task::wait([](decltype(this) self, vector<tars::Char> transactionBuffer,
+                         decltype(current) current) -> bcos::task::Task<void> {
+        try
+        {
+            co_await self->m_txpoolInitializer->txpool()->broadcastTransactionBuffer(
+                bcos::bytesConstRef(reinterpret_cast<const bcos::byte*>(transactionBuffer.data()),
+                    transactionBuffer.size()));
+            async_response_broadcastTransactionBuffer(current, {});
+        }
+        catch (bcos::Error& e)
+        {
+            async_response_broadcastTransactionBuffer(current, toTarsError(e));
+        }
+    }(this, std::move(const_cast<vector<tars::Char>&>(transactionBuffer)), current));
     return {};
 }
 
@@ -80,8 +87,8 @@ bcostars::Error TxPoolServiceServer::asyncFillBlock(const vector<vector<tars::Ch
     auto hashList = std::make_shared<std::vector<bcos::crypto::HashType>>();
     for (auto const& hashData : txHashs)
     {
-        hashList->push_back(bcos::crypto::HashType(
-            reinterpret_cast<const bcos::byte*>(hashData.data()), hashData.size()));
+        hashList->emplace_back(
+            reinterpret_cast<const bcos::byte*>(hashData.data()), hashData.size());
     }
 
     m_txpoolInitializer->txpool()->asyncFillBlock(
@@ -114,12 +121,10 @@ bcostars::Error TxPoolServiceServer::asyncMarkTxs(const vector<vector<tars::Char
     tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
-    auto hashList = std::make_shared<std::vector<bcos::crypto::HashType>>();
-    for (auto hashData : txHashs)
-    {
-        hashList->push_back(bcos::crypto::HashType(
-            reinterpret_cast<const bcos::byte*>(hashData.data()), hashData.size()));
-    }
+    auto hashList = ::ranges::views::transform(txHashs, [](auto& txHash) {
+        return bcos::crypto::HashType(
+            reinterpret_cast<const bcos::byte*>(txHash.data()), txHash.size());
+    }) | ::ranges::to<std::vector>();
     auto batchHash = bcos::crypto::HashType(
         reinterpret_cast<const bcos::byte*>(_batchHash.data()), _batchHash.size());
     m_txpoolInitializer->txpool()->asyncMarkTxs(

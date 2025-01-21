@@ -71,8 +71,8 @@ public:
         handler(boost::system::error_code(), bytesTransferred);
     }
 
-    void asyncReadSome(std::shared_ptr<SocketFace> socket, boost::asio::mutable_buffers_1 buffers,
-        ReadWriteHandler handler) override
+    void asyncReadSome(const std::shared_ptr<SocketFace>& socket,
+        boost::asio::mutable_buffers_1 buffers, ReadWriteHandler handler) override
     {
         m_threadPool->enqueue([this, socket, buffers, handler]() {
             if (m_recvPackets.empty())
@@ -139,7 +139,7 @@ public:
             }
         }
 
-        m_payload->assign(_buffer.begin(), _buffer.begin() + length);
+        m_payload.assign(_buffer.begin(), _buffer.begin() + length);
         return length;
     }
 };
@@ -252,23 +252,21 @@ public:
     void close() override {}
     boost::asio::ip::tcp::endpoint remoteEndpoint(boost::system::error_code ec) override
     {
-        return boost::asio::ip::tcp::endpoint();
+        return {};
     }
     boost::asio::ip::tcp::endpoint localEndpoint(boost::system::error_code ec) override
     {
-        return boost::asio::ip::tcp::endpoint();
+        return {};
     }
     bi::tcp::socket& ref() override { return m_sslSocket->next_layer(); }
     ba::ssl::stream<bi::tcp::socket>& sslref() override { return *m_sslSocket; }
     const NodeIPEndpoint& nodeIPEndpoint() const override { return m_nodeIPEndpoint; }
     void setNodeIPEndpoint(NodeIPEndpoint _nodeIPEndpoint) override {}
-    std::shared_ptr<ba::io_context> ioService() override
-    {
-        return std::shared_ptr<ba::io_context>();
-    }
+    ba::io_context& ioService() override { return m_ioService; }
 
 private:
     std::shared_ptr<ba::ssl::stream<bi::tcp::socket>> m_sslSocket;
+    ba::io_context m_ioService;
     NodeIPEndpoint m_nodeIPEndpoint;
 };
 
@@ -309,10 +307,8 @@ BOOST_AUTO_TEST_CASE(doReadTest)
     std::atomic<size_t> recvBufferSize = 0;
     std::atomic<uint64_t> lastReadTime = utcSteadyTime();
 
-    auto session = std::make_shared<Session>(2, true);
+    auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 2, true);
     session->setMessageFactory(fakeHost->messageFactory());
-    session->setHost(fakeHost);
-    session->setSocket(fakeSocket);
 
     session->setMessageHandler([&recvPacketCnt, &recvBufferSize, &lastReadTime](NetworkException e,
                                    SessionFace::Ptr sessionFace, Message::Ptr message) {

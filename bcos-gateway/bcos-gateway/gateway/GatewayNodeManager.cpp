@@ -105,8 +105,8 @@ void GatewayNodeManager::onReceiveStatusSeq(
                                   << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what());
         return;
     }
-    auto statusSeq = boost::asio::detail::socket_ops::network_to_host_long(
-        *((uint32_t*)_msg->payload()->data()));
+    auto statusSeq =
+        boost::asio::detail::socket_ops::network_to_host_long(*((uint32_t*)_msg->payload().data()));
     auto const& from = (_msg->srcP2PNodeID().size() > 0) ? _msg->srcP2PNodeID() : _session->p2pID();
     auto statusSeqChanged = statusChanged(from, statusSeq);
     if (!statusSeqChanged)
@@ -121,14 +121,11 @@ void GatewayNodeManager::onReceiveStatusSeq(
 
 bool GatewayNodeManager::statusChanged(std::string const& _p2pNodeID, uint32_t _seq)
 {
-    bool ret = true;
-    ReadGuard l(x_p2pID2Seq);
-    auto it = m_p2pID2Seq.find(_p2pNodeID);
-    if (it != m_p2pID2Seq.end())
+    if (decltype(m_p2pID2Seq)::const_accessor accessor; m_p2pID2Seq.find(accessor, _p2pNodeID))
     {
-        ret = (_seq > it->second);
+        return (_seq > accessor->second);
     }
-    return ret;
+    return true;
 }
 
 void GatewayNodeManager::onReceiveNodeStatus(
@@ -141,7 +138,7 @@ void GatewayNodeManager::onReceiveNodeStatus(
         return;
     }
     auto gatewayNodeStatus = m_gatewayNodeStatusFactory->createGatewayNodeStatus();
-    gatewayNodeStatus->decode(bytesConstRef(_msg->payload()->data(), _msg->payload()->size()));
+    gatewayNodeStatus->decode(bytesConstRef(_msg->payload().data(), _msg->payload().size()));
     auto const& from = (!_msg->srcP2PNodeID().empty()) ? _msg->srcP2PNodeID() : _session->p2pID();
 
     NODE_MANAGER_LOG(INFO) << LOG_DESC("onReceiveNodeStatus") << LOG_KV("from", from)
@@ -153,15 +150,13 @@ void GatewayNodeManager::onReceiveNodeStatus(
 void GatewayNodeManager::updatePeerStatus(std::string const& _p2pID, GatewayNodeStatus::Ptr _status)
 {
     auto seq = _status->seq();
+    decltype(m_p2pID2Seq)::accessor accessor;
+    if (!m_p2pID2Seq.insert(accessor, _p2pID) && (accessor->second >= seq))
     {
-        UpgradableGuard l(x_p2pID2Seq);
-        if (m_p2pID2Seq.contains(_p2pID) && (m_p2pID2Seq.at(_p2pID) >= seq))
-        {
-            return;
-        }
-        UpgradeGuard ul(l);
-        m_p2pID2Seq[_p2pID] = seq;
+        return;
     }
+    accessor->second = seq;
+    accessor.release();
     // remove peers info
     // insert the latest peers info
     m_peersRouterTable->updatePeerStatus(_p2pID, _status);
@@ -262,7 +257,6 @@ void GatewayNodeManager::onRemoveNodeIDs(const P2pID& _p2pID)
     NODE_MANAGER_LOG(INFO) << LOG_DESC("onRemoveNodeIDs") << LOG_KV("p2pid", _p2pID);
     {
         // remove statusSeq info
-        WriteGuard l(x_p2pID2Seq);
         m_p2pID2Seq.erase(_p2pID);
     }
     m_peersRouterTable->removeP2PID(_p2pID);
@@ -279,8 +273,7 @@ void GatewayNodeManager::broadcastStatusSeq()
     message->setPacketType(GatewayMessageType::SyncNodeSeq);
     auto seq = statusSeq();
     auto statusSeq = boost::asio::detail::socket_ops::host_to_network_long(seq);
-    auto payload = std::make_shared<bytes>((byte*)&statusSeq, (byte*)&statusSeq + 4);
-    message->setPayload(payload);
+    message->setPayload({(byte*)&statusSeq, (byte*)&statusSeq + 4});
     NODE_MANAGER_LOG(TRACE) << LOG_DESC("broadcastStatusSeq") << LOG_KV("seq", seq);
     m_p2pInterface->asyncBroadcastMessage(message, Options());
 }

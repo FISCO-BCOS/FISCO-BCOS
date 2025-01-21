@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include "bcos-task/Task.h"
 #include <bcos-gateway/libnetwork/Host.h>
 #include <bcos-gateway/libnetwork/SessionFace.h>
 #include <bcos-gateway/libp2p/Common.h>
@@ -27,8 +28,7 @@ using CallbackFuncWithSession =
     std::function<void(NetworkException, std::shared_ptr<P2PSession>, std::shared_ptr<P2PMessage>)>;
 using DisconnectCallbackFuncWithSession =
     std::function<void(NetworkException, std::shared_ptr<P2PSession>)>;
-using P2PResponseCallback =
-    std::function<void(Error::Ptr&& _error, uint16_t, std::shared_ptr<bytes> _data)>;
+using P2PResponseCallback = std::function<void(Error::Ptr, uint16_t, bytesConstRef)>;
 class P2PInterface
 {
 public:
@@ -46,6 +46,9 @@ public:
     virtual void asyncSendMessageByNodeID(P2pID nodeID, std::shared_ptr<P2PMessage> message,
         CallbackFuncWithSession callback, Options options = Options()) = 0;
 
+    virtual task::Task<Message::Ptr> sendMessageByNodeID(P2pID nodeID, P2PMessage& header,
+        ::ranges::any_view<bytesConstRef> payloads, Options options = Options()) = 0;
+
     virtual void asyncBroadcastMessage(std::shared_ptr<P2PMessage> message, Options options) = 0;
 
     virtual P2PInfos sessionInfos() = 0;
@@ -58,7 +61,6 @@ public:
     virtual std::shared_ptr<MessageFactory> messageFactory() = 0;
 
     virtual std::shared_ptr<P2PSession> getP2PSessionByNodeId(P2pID const& _nodeID) = 0;
-
 
     /**
      * @brief send message to the given p2p nodes

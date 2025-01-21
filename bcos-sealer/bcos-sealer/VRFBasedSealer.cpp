@@ -21,6 +21,7 @@
 #include "VRFBasedSealer.h"
 #include "Common.h"
 #include "bcos-framework/ledger/Features.h"
+#include "bcos-framework/sealer/VrfCurveType.h"
 #include "bcos-pbft/core/ConsensusConfig.h"
 #include "bcos-txpool/txpool/storage/MemoryStorage.h"
 #include <bcos-codec/wrapper/CodecWrapper.h>
@@ -29,9 +30,21 @@
 #include <bcos-txpool/TxPool.h>
 #include <wedpr-crypto/WedprCrypto.h>
 #include <boost/endian/conversion.hpp>
+#include <cstdint>
 
 namespace bcos::sealer
 {
+
+sealer::VrfCurveType VRFBasedSealer::getVrfCurveType(SealerConfig::Ptr const& _sealerConfig)
+{
+    sealer::VrfCurveType vrfCurveType = sealer::VrfCurveType::CURVE25519;
+    if (_sealerConfig->consensus()->consensusConfig()->features().get(
+            ledger::Features::Flag::feature_rpbft_vrf_type_secp256k1))
+    {
+        vrfCurveType = sealer::VrfCurveType::SECKP256K1;
+    }
+    return vrfCurveType;
+}
 
 uint16_t VRFBasedSealer::hookWhenSealBlock(bcos::protocol::Block::Ptr _block)
 {
@@ -67,12 +80,10 @@ uint16_t VRFBasedSealer::generateTransactionForRotating(bcos::protocol::Block::P
         CInputBuffer privateKey{reinterpret_cast<const char*>(keyPair->secretKey()->data().data()),
             keyPair->secretKey()->size()};
         bytes vrfPublicKey;
-        vrfPublicKey.resize(curve25519PublicKeySize);
-        COutputBuffer publicKey{(char*)vrfPublicKey.data(), vrfPublicKey.size()};
-        // NOTE: curve25519 fits sm2 and secp256k1 private key value range, so if you want to change
-        // elliptic curve, do think twice here.
-        auto pubkeyDerive = wedpr_curve25519_vrf_derive_public_key(&privateKey, &publicKey);
-
+        bcos::bytes vrfProof;
+        sealer::VrfCurveType vrfCurveType = getVrfCurveType(_sealerConfig);
+        int8_t vrfProve = 0;
+        int8_t pubkeyDerive = 0;
         auto blockHash = _sealingManager->latestHash();
         auto blockNumberBigEndian = boost::endian::native_to_big(blockNumber);
         CInputBuffer inputMsg = {
@@ -81,10 +92,30 @@ uint16_t VRFBasedSealer::generateTransactionForRotating(bcos::protocol::Block::P
                         reinterpret_cast<const char*>(blockHash.data()),
             .len = blockNumberInput ? sizeof(blockNumberBigEndian) :
                                       static_cast<size_t>(blockHash.size())};
-        bcos::bytes vrfProof;
-        vrfProof.resize(curve25519VRFProofSize);
-        COutputBuffer proof{(char*)vrfProof.data(), curve25519VRFProofSize};
-        auto vrfProve = wedpr_curve25519_vrf_prove_utf8(&privateKey, &inputMsg, &proof);
+        if (vrfCurveType == sealer::VrfCurveType::CURVE25519)
+        {
+            vrfPublicKey.resize(curve25519PublicKeySize);
+            COutputBuffer publicKey{(char*)vrfPublicKey.data(), vrfPublicKey.size()};
+            // NOTE: curve25519 fits sm2 and secp256k1 private key value range, so if you want to
+            // change elliptic curve, do think twice here.
+            pubkeyDerive = wedpr_curve25519_vrf_derive_public_key(&privateKey, &publicKey);
+
+            vrfProof.resize(curve25519VRFProofSize);
+            COutputBuffer proof{(char*)vrfProof.data(), curve25519VRFProofSize};
+            auto vrfProve = wedpr_curve25519_vrf_prove_utf8(&privateKey, &inputMsg, &proof);
+        }
+        else if (vrfCurveType == sealer::VrfCurveType::SECKP256K1)
+        {
+            vrfPublicKey.resize(secp256k1PublicKeySize);
+            COutputBuffer publicKey{(char*)vrfPublicKey.data(), vrfPublicKey.size()};
+            pubkeyDerive = wedpr_secp256k1_vrf_derive_public_key(&privateKey, &publicKey);
+
+            vrfProof.resize(secp256k1VRFProofSize);
+            COutputBuffer proof{(char*)vrfProof.data(), secp256k1VRFProofSize};
+            vrfProve = wedpr_secp256k1_vrf_prove_utf8(&privateKey, &inputMsg, &proof);
+        }
+
+
         if (vrfProve != WEDPR_SUCCESS || pubkeyDerive != WEDPR_SUCCESS) [[unlikely]]
         {
             SEAL_LOG(WARNING) << LOG_DESC(
@@ -105,8 +136,8 @@ uint16_t VRFBasedSealer::generateTransactionForRotating(bcos::protocol::Block::P
             vrfProof);
 
         auto tx = _sealerConfig->blockFactory()->transactionFactory()->createTransaction(0,
-            g_BCOSConfig.isWasm() ? precompiled::CONSENSUS_TABLE_NAME :
-                                    precompiled::CONSENSUS_ADDRESS,
+            std::string(g_BCOSConfig.isWasm() ? precompiled::CONSENSUS_TABLE_NAME :
+                                                precompiled::CONSENSUS_ADDRESS),
             input, std::to_string(utcSteadyTimeUs() * random()),
             _sealingManager->latestNumber() + txpool::DEFAULT_BLOCK_LIMIT, _sealerConfig->chainId(),
             _sealerConfig->groupId(), utcTime(), keyPair);

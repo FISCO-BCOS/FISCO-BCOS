@@ -22,7 +22,7 @@
 #include "VRFBasedSealer.h"
 #include "bcos-framework/ledger/Features.h"
 #include <bcos-framework/protocol/GlobalConfig.h>
-
+#include <range/v3/view/transform.hpp>
 #include <utility>
 
 using namespace bcos;
@@ -54,7 +54,6 @@ void Sealer::stop()
     }
     SEAL_LOG(INFO) << LOG_DESC("stop the sealer");
     m_running = false;
-    m_sealingManager->stop();
     finishWorker();
     if (isWorking())
     {
@@ -95,24 +94,11 @@ void Sealer::asyncNoteLatestBlockHash(crypto::HashType _hash)
     m_sealingManager->resetLatestHash(_hash);
 }
 
-void Sealer::asyncNoteUnSealedTxsSize(
-    uint64_t _unsealedTxsSize, std::function<void(Error::Ptr)> _onRecvResponse)
-{
-    m_sealingManager->setUnsealedTxsSize(_unsealedTxsSize);
-    if (_onRecvResponse)
-    {
-        _onRecvResponse(nullptr);
-    }
-}
-
 void Sealer::executeWorker()
 {
-    if (!m_sealingManager->shouldGenerateProposal() && !m_sealingManager->shouldFetchTransaction())
-    {
-        ///< 10 milliseconds to next loop
-        boost::unique_lock<boost::mutex> l(x_signalled);
-        m_signalled.wait_for(l, boost::chrono::milliseconds(1));
-    }
+    // try to fetch transactions
+    m_sealingManager->fetchTransactions();
+
     // try to generateProposal
     if (m_sealingManager->shouldGenerateProposal())
     {
@@ -120,18 +106,21 @@ void Sealer::executeWorker()
             [this](bcos::protocol::Block::Ptr _block) -> uint16_t {
                 return hookWhenSealBlock(std::move(_block));
             });
-        auto proposal = ret.second;
-        submitProposal(ret.first, proposal);
+        submitProposal(ret.first, ret.second);
+
+        // TODO: pullTxsTimer's work
     }
-    // try to fetch transactions
-    if (m_sealingManager->shouldFetchTransaction())
+    else
     {
-        m_sealingManager->fetchTransactions();
+        boost::unique_lock<boost::mutex> lock(x_signalled);
+        m_signalled.wait_for(lock, boost::chrono::milliseconds(1));
     }
 }
 
 void Sealer::submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _block)
 {
+    ittapi::Report report(
+        ittapi::ITT_DOMAINS::instance().SEALER, ittapi::ITT_DOMAINS::instance().SUBMIT_PROPOSAL);
     // Note: the block maybe empty
     if (!_block)
     {
@@ -146,16 +135,14 @@ void Sealer::submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _blo
         return;
     }
     // supplement the header info: set sealerList and weightList
-    std::vector<bytes> sealerList;
-    std::vector<uint64_t> weightList;
     auto consensusNodeInfo = m_sealerConfig->consensus()->consensusNodeList();
-    for (auto const& consensusNode : consensusNodeInfo)
-    {
-        sealerList.push_back(consensusNode.nodeID->data());
-        weightList.push_back(consensusNode.voteWeight);
-    }
-    _block->blockHeader()->setSealerList(std::move(sealerList));
-    _block->blockHeader()->setConsensusWeights(std::move(weightList));
+    _block->blockHeader()->setSealerList(::ranges::views::transform(consensusNodeInfo,
+                                             [](auto const& node) { return node.nodeID->data(); }) |
+                                         ::ranges::to<std::vector>());
+    _block->blockHeader()->setConsensusWeights(
+        ::ranges::views::transform(
+            consensusNodeInfo, [](auto const& node) { return node.voteWeight; }) |
+        ::ranges::to<std::vector>());
     _block->blockHeader()->setSealer(m_sealerConfig->consensus()->nodeIndex());
     // set the version
     auto version = std::min(m_sealerConfig->consensus()->compatibilityVersion(),
@@ -163,8 +150,6 @@ void Sealer::submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _blo
     _block->blockHeader()->setVersion(version);
     _block->blockHeader()->calculateHash(*m_hashImpl);
 
-    bytes encodedData;
-    _block->encode(encodedData);
     SEAL_LOG(INFO) << LOG_DESC("++++++++++++++++ Generate proposal")
                    << LOG_KV("index", _block->blockHeader()->number())
                    << LOG_KV("curNum", m_sealingManager->latestNumber())
@@ -172,7 +157,7 @@ void Sealer::submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _blo
                    << LOG_KV("sysTxs", _containSysTxs)
                    << LOG_KV("txsSize", _block->transactionsHashSize())
                    << LOG_KV("version", version);
-    m_sealerConfig->consensus()->asyncSubmitProposal(_containSysTxs, ref(encodedData),
+    m_sealerConfig->consensus()->asyncSubmitProposal(_containSysTxs, *_block,
         _block->blockHeader()->number(), _block->blockHeader()->hash(), [_block](auto&& _error) {
             if (_error == nullptr)
             {

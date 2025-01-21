@@ -19,11 +19,9 @@
  */
 #pragma once
 #include "Service.h"
-#include "bcos-utilities/ObjectCounter.h"
 #include "router/RouterTableInterface.h"
-namespace bcos
-{
-namespace gateway
+
+namespace bcos::gateway
 {
 class ServiceV2 : public Service
 {
@@ -56,6 +54,9 @@ public:
         WriteGuard writeGuard(x_unreachableHandlers);
         m_unreachableHandlers.emplace_back(_handler);
     }
+
+    task::Task<Message::Ptr> sendMessageByNodeID(P2pID nodeID, P2PMessage& message,
+        ::ranges::any_view<bytesConstRef> payloads, Options options = Options()) override;
 
 protected:
     // called when the nodes become unreachable
@@ -114,5 +115,4 @@ private:
     std::vector<std::function<void(std::string)>> m_unreachableHandlers;
     mutable SharedMutex x_unreachableHandlers;
 };
-}  // namespace gateway
-}  // namespace bcos
+}  // namespace bcos::gateway

@@ -19,8 +19,10 @@
  */
 
 #pragma once
+#include "bcos-codec/scale/Scale.h"
 #include "bcos-crypto/interfaces/crypto/CommonType.h"
 #include "bcos-framework/ledger/Features.h"
+#include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "executive/BlockContext.h"
 #include "executive/TransactionExecutive.h"
 #include "executor/TransactionExecutorFactory.h"
@@ -365,7 +367,7 @@ public:
         params->setFrom(sender);
 
         // toChecksumAddress(addressString, hashImpl);
-        params->setTo(precompiled::AUTH_COMMITTEE_ADDRESS);
+        params->setTo(std::string(precompiled::AUTH_COMMITTEE_ADDRESS));
         params->setStaticCall(false);
         params->setGasAvailable(gas);
         params->setData(input);
@@ -412,7 +414,7 @@ public:
         params2->setSeq(1000);
         params2->setDepth(0);
         params2->setFrom(sender);
-        params2->setTo(isWasm ? BFS_NAME : BFS_ADDRESS);
+        params2->setTo(std::string(isWasm ? BFS_NAME : BFS_ADDRESS));
         params2->setOrigin(sender);
         params2->setStaticCall(false);
         params2->setGasAvailable(gas);
@@ -451,7 +453,7 @@ public:
         params2->setSeq(1000);
         params2->setDepth(0);
         params2->setFrom(sender);
-        params2->setTo(isWasm ? BFS_NAME : BFS_ADDRESS);
+        params2->setTo(std::string(isWasm ? BFS_NAME : BFS_ADDRESS));
         params2->setOrigin(sender);
         params2->setStaticCall(false);
         params2->setGasAvailable(gas);

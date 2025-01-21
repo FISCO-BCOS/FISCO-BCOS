@@ -87,7 +87,7 @@ bcos::crypto::NodeIDPtr TreeTopology::getNodeIDByIndex(std::int32_t _nodeIndex) 
  *  3. _peers: the nodeIDs of peers maintained by syncStatus
  */
 bcos::crypto::NodeIDSetPtr TreeTopology::recursiveSelectChildNodes(
-    std::int32_t _treeIndex, bcos::crypto::NodeIDSetPtr const& _peers, std::int32_t _consIndex)
+    std::int32_t _treeIndex, bcos::crypto::NodeIDSet const& _peers, std::int32_t _consIndex)
 {
     bcos::crypto::NodeIDSetPtr selectedNodeSet = std::make_shared<bcos::crypto::NodeIDSet>();
     // if the node doesn't locate in the group
@@ -106,7 +106,7 @@ bcos::crypto::NodeIDSetPtr TreeTopology::recursiveSelectChildNodes(
             continue;
         }
         // the child node exists in the peers
-        if (_peers->contains(selectedNode) && selectedNode->data() != m_nodeId->data())
+        if (_peers.contains(selectedNode) && selectedNode->data() != m_nodeId->data())
         {
             selectedNodeSet->insert(selectedNode);
         }
@@ -137,7 +137,7 @@ bcos::crypto::NodeIDSetPtr TreeTopology::recursiveSelectChildNodes(
  *  2. _peers: the nodeIDs of peers maintained by syncStatus
  *  3. _nodeIndex: the index of the node that need select parent from given peers
  */
-bcos::crypto::NodeIDSetPtr TreeTopology::selectParentNodes(bcos::crypto::NodeIDSetPtr const& _peers,
+bcos::crypto::NodeIDSetPtr TreeTopology::selectParentNodes(bcos::crypto::NodeIDSet const& _peers,
     std::int32_t _nodeIndex, std::int32_t _startIndex, bool _selectAll)
 {
     // find the parent nodes
@@ -154,7 +154,7 @@ bcos::crypto::NodeIDSetPtr TreeTopology::selectParentNodes(bcos::crypto::NodeIDS
         // find the parentNode from the peers
         auto selectedIndex = transTreeIndexToNodeIndex(parentIndex, _startIndex);
         auto selectedNode = getNodeIDByIndex(selectedIndex);
-        if (selectedNode && _peers->contains(selectedNode) &&
+        if (selectedNode && _peers.contains(selectedNode) &&
             selectedNode->data() != m_nodeId->data())
         {
             selectedNodeSet->insert(selectedNode);
@@ -189,7 +189,7 @@ std::int32_t TreeTopology::getTreeIndex(std::int32_t _consIndex)
     return nodeIndex;
 }
 
-bcos::crypto::NodeIDSetPtr TreeTopology::selectNodes(bcos::crypto::NodeIDSetPtr const& _peers,
+bcos::crypto::NodeIDSetPtr TreeTopology::selectNodes(bcos::crypto::NodeIDSet const& _peers,
     std::int32_t _consIndex, bool _isTheStartNode, bcos::crypto::NodeIDPtr fromNode)
 {
     Guard lock(m_mutex);
@@ -207,7 +207,7 @@ bcos::crypto::NodeIDSetPtr TreeTopology::selectNodes(bcos::crypto::NodeIDSetPtr 
 
         // if node index exist && node alive in group peers && node is not self
         bcos::crypto::NodeIDPtr selectedNode = getNodeIDByIndex(_consIndex);
-        if (selectedNode && _peers->contains(selectedNode) &&
+        if (selectedNode && _peers.contains(selectedNode) &&
             selectedNode->data() != m_nodeId->data())
         {
             selectedNodeSet->insert(selectedNode);
@@ -259,7 +259,7 @@ bcos::crypto::NodeIDSetPtr TreeTopology::selectNodes(bcos::crypto::NodeIDSetPtr 
 }
 
 bcos::crypto::NodeIDSetPtr TreeTopology::selectParent(
-    bcos::crypto::NodeIDSetPtr const& _peers, std::int32_t _consIndex, bool _selectAll)
+    bcos::crypto::NodeIDSet const& _peers, std::int32_t _consIndex, bool _selectAll)
 {
     Guard lock(m_mutex);
     if (m_consIndex < 0)
@@ -271,9 +271,8 @@ bcos::crypto::NodeIDSetPtr TreeTopology::selectParent(
     return selectParentNodes(_peers, nodeIndex, _consIndex, _selectAll);
 }
 
-bcos::crypto::NodeIDSetPtr TreeTopology::selectNodesByNodeID(
-    bcos::crypto::NodeIDSetPtr const& _peers, bcos::crypto::NodeIDPtr const& _nodeID,
-    bool _isTheStartNode)
+bcos::crypto::NodeIDSetPtr TreeTopology::selectNodesByNodeID(bcos::crypto::NodeIDSet const& _peers,
+    bcos::crypto::NodeIDPtr const& _nodeID, bool _isTheStartNode)
 {
     auto consIndex = getNodeIndexByNodeId(m_consensusNodes, _nodeID);
     TREE_LOG(DEBUG) << LOG_DESC("selectNodesByNodeID") << LOG_KV("consIndex", consIndex)
@@ -282,7 +281,7 @@ bcos::crypto::NodeIDSetPtr TreeTopology::selectNodesByNodeID(
 }
 
 bcos::crypto::NodeIDSetPtr TreeTopology::selectParentByNodeID(
-    bcos::crypto::NodeIDSetPtr const& _peers, bcos::crypto::NodeIDPtr const& _nodeID)
+    bcos::crypto::NodeIDSet const& _peers, bcos::crypto::NodeIDPtr const& _nodeID)
 {
     auto consIndex = getNodeIndexByNodeId(m_consensusNodes, _nodeID);
     return selectParent(_peers, consIndex, false);

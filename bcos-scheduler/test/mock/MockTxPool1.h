@@ -31,7 +31,7 @@ public:
         std::function<void(Error::Ptr, bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr)>)
         override
     {}
-    void asyncMarkTxs(bcos::crypto::HashListPtr, bool, bcos::protocol::BlockNumber,
+    void asyncMarkTxs(const bcos::crypto::HashList&, bool, bcos::protocol::BlockNumber,
         bcos::crypto::HashType const&, std::function<void(Error::Ptr)>) override
     {}
     void asyncVerifyBlock(bcos::crypto::PublicPtr, bytesConstRef const&,
