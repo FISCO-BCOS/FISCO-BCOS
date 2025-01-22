@@ -169,6 +169,21 @@ public:
             }
         }
 
+        // 如果本次调用是eoa调用系统合约，将gasUsed设置为0
+        // If the call from eoa to system contract, the gasUsed is cleared to zero
+        if (!executeContext.m_ledgerConfig.get().features().get(
+                ledger::Features::Flag::bugfix_precompiled_gasused))
+        {
+            if (auto codeAddress = address2FixedArray(evmcMessage.code_address);
+                precompiled::contains(bcos::precompiled::c_systemTxsAddress,
+                    concepts::bytebuffer::toView(codeAddress)) ||
+                std::string_view{codeAddress.data(), codeAddress.size()} ==
+                    precompiled::BALANCE_PRECOMPILED_ADDRESS)
+            {
+                gasUsed = 0;
+            }
+        }
+
         auto receiptStatus = static_cast<int32_t>(evmcResult.status);
         auto const& logEntries = executeContext.m_hostContext.logs();
         protocol::TransactionReceipt::Ptr receipt;

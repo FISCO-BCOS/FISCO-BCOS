@@ -547,21 +547,6 @@ public:
                 protocol::TransactionStatus::OutOfGas, EVMC_INTERNAL_ERROR, ref.gas, "");
         }
 
-        // 如果本次调用是eoa调用系统合约，将gasUsed设置为0
-        // If the call from eoa to system contract, the gasUsed is cleared to zero
-        if (!hostContext.m_ledgerConfig.get().features().get(
-                ledger::Features::Flag::bugfix_precompiled_gasused))
-        {
-            if (auto codeAddress = address2FixedArray(ref.code_address);
-                precompiled::contains(bcos::precompiled::c_systemTxsAddress,
-                    concepts::bytebuffer::toView(codeAddress)) ||
-                std::string_view{codeAddress.data(), codeAddress.size()} ==
-                    precompiled::BALANCE_PRECOMPILED_ADDRESS)
-            {
-                evmResult->gas_left = ref.gas;
-            }
-        }
-
         // 如果本次调用系统合约失败，不消耗gas
         // If the call to system contract failed, the gasUsed is cleared to zero
         if (evmResult->status_code != EVMC_SUCCESS)
