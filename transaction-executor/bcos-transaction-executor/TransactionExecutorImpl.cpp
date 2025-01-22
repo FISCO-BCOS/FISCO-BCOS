@@ -1,4 +1,5 @@
 #include "TransactionExecutorImpl.h"
+#include "bcos-executor/src/Common.h"
 
 bcos::transaction_executor::TransactionExecutorImpl::TransactionExecutorImpl(
     protocol::TransactionReceiptFactory const& receiptFactory, crypto::Hash::Ptr hashImpl,

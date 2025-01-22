@@ -203,7 +203,45 @@ private:
 
         auto toBalance = co_await ledger::account::balance(m_recipientAccount);
         co_await ledger::account::setBalance(senderAccount, fromBalance - value);
-        co_await ledger::account::setBalance(m_recipientAccount, toBalance + value);
+        if (!co_await ledger::account::exists(m_recipientAccount))
+        {
+            CodecWrapper codec{m_hashImpl, false};
+
+            bytes balanceParams = codec.encodeWithSig("addAccountBalance(uint256)", value);
+            std::vector<std::string> toTableNameVector = {
+                std::string(m_recipientAccount.address())};
+            auto inputParams1 = codec.encode(toTableNameVector, balanceParams);
+
+            evmc_message evmcMessage{.kind = EVMC_CALL,
+                .flags = 0,
+                .depth = 0,
+                .gas = message.gas,
+                .recipient = message.recipient,
+                .destination_ptr = nullptr,
+                .destination_len = 0,
+                .sender = message.sender,
+                .sender_ptr = nullptr,
+                .sender_len = 0,
+                .input_data = inputParams1.data(),
+                .input_size = inputParams1.size(),
+                .value = {},
+                .create2_salt = {},
+                .code_address = unhexAddress(precompiled::ACCOUNT_ADDRESS)};
+            const auto* accountPrecompiled = m_precompiledManager.get().getPrecompiled(0x10004);
+            if (accountPrecompiled == nullptr)
+            {
+                BOOST_THROW_EXCEPTION(NotFoundCodeError());
+            }
+            static auto origin = unhexAddress(precompiled::BALANCE_PRECOMPILED_ADDRESS);
+            transaction_executor::callPrecompiled(*accountPrecompiled, m_rollbackableStorage.get(),
+                m_blockHeader, evmcMessage, origin, buildLegacyExternalCaller(),
+                m_precompiledManager.get(), m_contextID, m_seq,
+                m_ledgerConfig.get().authCheckStatus());
+        }
+        else
+        {
+            co_await ledger::account::setBalance(m_recipientAccount, toBalance + value);
+        }
     }
 
     inline constexpr static struct InnerConstructor
@@ -509,6 +547,21 @@ public:
                 protocol::TransactionStatus::OutOfGas, EVMC_INTERNAL_ERROR, ref.gas, "");
         }
 
+        // 如果本次调用是eoa调用系统合约，将gasUsed设置为0
+        // If the call from eoa to system contract, the gasUsed is cleared to zero
+        if (!hostContext.m_ledgerConfig.get().features().get(
+                ledger::Features::Flag::bugfix_precompiled_gasused))
+        {
+            if (auto codeAddress = address2FixedArray(ref.code_address);
+                precompiled::contains(bcos::precompiled::c_systemTxsAddress,
+                    concepts::bytebuffer::toView(codeAddress)) ||
+                std::string_view{codeAddress.data(), codeAddress.size()} ==
+                    precompiled::BALANCE_PRECOMPILED_ADDRESS)
+            {
+                evmResult->gas_left = ref.gas;
+            }
+        }
+
         // 如果本次调用系统合约失败，不消耗gas
         // If the call to system contract failed, the gasUsed is cleared to zero
         if (evmResult->status_code != EVMC_SUCCESS)
@@ -726,26 +779,34 @@ private:
                         "Call address error.");
                 }
 
-                auto status = EVMC_SUCCESS;
-                auto gasLeft = ref.gas - executor::BALANCE_TRANSFER_GAS;
-                if (ref.gas < executor::BALANCE_TRANSFER_GAS)
-                {
-                    status = EVMC_OUT_OF_GAS;
-                    gasLeft = ref.gas;
-                }
-                co_return EVMCResult{evmc_result{.status_code = status,
-                    .gas_left = gasLeft,
-                    .gas_refund = 0,
-                    .output_data = nullptr,
-                    .output_size = 0,
-                    .release = nullptr,
-                    .create_address = {},
-                    .padding = {}}};
+                co_return EVMCResult{evmc_result{.status_code = EVMC_SUCCESS,
+                                         .gas_left = ref.gas,
+                                         .gas_refund = 0,
+                                         .output_data = nullptr,
+                                         .output_size = 0,
+                                         .release = nullptr,
+                                         .create_address = {},
+                                         .padding = {}},
+                    protocol::TransactionStatus::None};
             }
         }
 
+        if (m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_balance) &&
+            m_seq == 0 &&
+            std::memcmp(
+                ref.value.bytes, executor::EMPTY_EVM_UINT256.bytes, sizeof(ref.value.bytes)) != 0)
+        {
+            if (ref.gas < executor::BALANCE_TRANSFER_GAS)
+            {
+                co_return makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::OutOfGas,
+                    EVMC_OUT_OF_GAS, ref.gas, {});
+            }
+            auto& mutableRef = mutableMessage();
+            mutableRef.gas -= executor::BALANCE_TRANSFER_GAS;
+        }
+
         co_return m_executable->m_vmInstance.execute(interface, this, m_revision,
-            std::addressof(ref), (const uint8_t*)m_executable->m_code->data(),
+            std::addressof(message()), (const uint8_t*)m_executable->m_code->data(),
             m_executable->m_code->size());
     }
 };
