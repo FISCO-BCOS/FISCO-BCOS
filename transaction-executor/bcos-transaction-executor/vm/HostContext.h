@@ -661,13 +661,29 @@ private:
 
     task::Task<void> prepareCall()
     {
-        auto& ref = message();
+        const auto* ref = std::addressof(message());
+        // if (m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_balance) &&
+        //     m_seq == 0 &&
+        //     std::memcmp(
+        //         ref->value.bytes, executor::EMPTY_EVM_UINT256.bytes, sizeof(ref->value.bytes)) !=
+        //         0)
+        // {
+        //     if (ref->gas < executor::BALANCE_TRANSFER_GAS)
+        //     {
+        //         co_return makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::OutOfGas,
+        //             EVMC_OUT_OF_GAS, ref->gas, {});
+        //     }
+        //     auto& mutableRef = mutableMessage();
+        //     mutableRef.gas -= executor::BALANCE_TRANSFER_GAS;
+        //     ref = std::addressof(mutableRef);
+        // }
+
         // 不允许delegatecall static precompiled
         // delegatecall static precompiled is not allowed
-        if (ref.kind != EVMC_DELEGATECALL)
+        if (ref->kind != EVMC_DELEGATECALL)
         {
             if (auto const* precompiled =
-                    m_precompiledManager.get().getPrecompiled(ref.code_address))
+                    m_precompiledManager.get().getPrecompiled(ref->code_address))
             {
                 if (auto flag = transaction_executor::featureFlag(*precompiled);
                     !flag || m_ledgerConfig.get().features().get(*flag))
@@ -679,7 +695,7 @@ private:
         }
 
         m_executable =
-            co_await getExecutable(m_rollbackableStorage.get(), ref.code_address, m_revision,
+            co_await getExecutable(m_rollbackableStorage.get(), ref->code_address, m_revision,
                 m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
         if (m_executable && hasPrecompiledPrefix(m_executable->m_code->data()))
         {
@@ -726,11 +742,11 @@ private:
 
     task::Task<EVMCResult> executeCall()
     {
-        auto& ref = message();
+        const auto* ref = std::addressof(message());
         if (m_preparedPrecompiled != nullptr)
         {
             co_return transaction_executor::callPrecompiled(*m_preparedPrecompiled,
-                m_rollbackableStorage.get(), m_blockHeader, ref, m_origin,
+                m_rollbackableStorage.get(), m_blockHeader, *ref, m_origin,
                 buildLegacyExternalCaller(), m_precompiledManager.get(), m_contextID, m_seq,
                 m_ledgerConfig.get().authCheckStatus());
         }
@@ -740,13 +756,13 @@ private:
         // yet been created
         if (!m_executable)
         {
-            if (m_executable = co_await getExecutable(m_rollbackableStorage.get(), ref.code_address,
-                    m_revision,
+            if (m_executable = co_await getExecutable(m_rollbackableStorage.get(),
+                    ref->code_address, m_revision,
                     m_ledgerConfig.get().features().get(
                         ledger::Features::Flag::feature_raw_address));
                 !m_executable)
             {
-                if (ref.input_size > 0)
+                if (ref->input_size > 0)
                 {
                     BOOST_THROW_EXCEPTION(NotFoundCodeError());
                 }
@@ -760,12 +776,12 @@ private:
                         ledger::Features::Flag::bugfix_policy1_empty_code_address))
                 {
                     co_return makeErrorEVMCResult(m_hashImpl,
-                        protocol::TransactionStatus::CallAddressError, EVMC_REVERT, ref.gas,
+                        protocol::TransactionStatus::CallAddressError, EVMC_REVERT, ref->gas,
                         "Call address error.");
                 }
 
                 co_return EVMCResult{evmc_result{.status_code = EVMC_SUCCESS,
-                                         .gas_left = ref.gas,
+                                         .gas_left = ref->gas,
                                          .gas_refund = 0,
                                          .output_data = nullptr,
                                          .output_size = 0,
@@ -774,20 +790,6 @@ private:
                                          .padding = {}},
                     protocol::TransactionStatus::None};
             }
-        }
-
-        if (m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_balance) &&
-            m_seq == 0 &&
-            std::memcmp(
-                ref.value.bytes, executor::EMPTY_EVM_UINT256.bytes, sizeof(ref.value.bytes)) != 0)
-        {
-            if (ref.gas < executor::BALANCE_TRANSFER_GAS)
-            {
-                co_return makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::OutOfGas,
-                    EVMC_OUT_OF_GAS, ref.gas, {});
-            }
-            auto& mutableRef = mutableMessage();
-            mutableRef.gas -= executor::BALANCE_TRANSFER_GAS;
         }
 
         co_return m_executable->m_vmInstance.execute(interface, this, m_revision,

@@ -97,6 +97,20 @@ public:
         tag_t<executeStep> /*unused*/, auto& context)
     {
         auto& executeContext = *context;
+
+        if (executeContext.m_ledgerConfig.features().get(ledger::Features::Flag::feature_balance) &&
+            std::memcmp(context.m_evmcMessage.value.bytes, executor::EMPTY_EVM_UINT256.bytes,
+                sizeof(context.m_evmcMessage.value.bytes)) != 0)
+        {
+            if (context.m_evmcMessage.gas < executor::BALANCE_TRANSFER_GAS)
+            {
+                co_return makeErrorEVMCResult(context.m_hashImpl,
+                    protocol::TransactionStatus::OutOfGas, EVMC_OUT_OF_GAS,
+                    context.m_evmcMessage.gas, {});
+            }
+            context.m_evmcMessage.gas -= executor::BALANCE_TRANSFER_GAS;
+        }
+
         if constexpr (step == 0)
         {
             co_await prepare(executeContext.m_hostContext);
