@@ -98,26 +98,13 @@ public:
     {
         auto& executeContext = *context;
 
-        if (executeContext.m_ledgerConfig.features().get(ledger::Features::Flag::feature_balance) &&
-            std::memcmp(context.m_evmcMessage.value.bytes, executor::EMPTY_EVM_UINT256.bytes,
-                sizeof(context.m_evmcMessage.value.bytes)) != 0)
-        {
-            if (context.m_evmcMessage.gas < executor::BALANCE_TRANSFER_GAS)
-            {
-                co_return makeErrorEVMCResult(context.m_hashImpl,
-                    protocol::TransactionStatus::OutOfGas, EVMC_OUT_OF_GAS,
-                    context.m_evmcMessage.gas, {});
-            }
-            context.m_evmcMessage.gas -= executor::BALANCE_TRANSFER_GAS;
-        }
-
         if constexpr (step == 0)
         {
-            co_await prepare(executeContext.m_hostContext);
+            co_await executeContext.m_hostContext.prepare();
         }
         else if constexpr (step == 1)
         {
-            executeContext.m_evmcResult.emplace(co_await execute(executeContext.m_hostContext));
+            executeContext.m_evmcResult.emplace(co_await executeContext.m_hostContext.execute());
         }
         else if constexpr (step == 2)
         {
