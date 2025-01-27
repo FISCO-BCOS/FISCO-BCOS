@@ -654,25 +654,27 @@ private:
         co_return result;
     }
 
+    task::Task<evmc_message*> cosumeTransferGas(const evmc_message& ref)
+    {
+        if (m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_balance) &&
+            std::memcmp(
+                ref.value.bytes, executor::EMPTY_EVM_UINT256.bytes, sizeof(ref.value.bytes)) != 0 &&
+            m_seq == 0)
+        {
+            if (ref.gas < executor::BALANCE_TRANSFER_GAS)
+            {
+                BOOST_THROW_EXCEPTION(protocol::OutOfGas{});
+            }
+            auto& mutableRef = mutableMessage();
+            mutableRef.gas -= executor::BALANCE_TRANSFER_GAS;
+            co_return std::addressof(mutableRef);
+        }
+        co_return nullptr;
+    }
+
     task::Task<void> prepareCall()
     {
         const auto* ref = std::addressof(message());
-        // if (m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_balance) &&
-        //     m_seq == 0 &&
-        //     std::memcmp(
-        //         ref->value.bytes, executor::EMPTY_EVM_UINT256.bytes, sizeof(ref->value.bytes)) !=
-        //         0)
-        // {
-        //     if (ref->gas < executor::BALANCE_TRANSFER_GAS)
-        //     {
-        //         co_return makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::OutOfGas,
-        //             EVMC_OUT_OF_GAS, ref->gas, {});
-        //     }
-        //     auto& mutableRef = mutableMessage();
-        //     mutableRef.gas -= executor::BALANCE_TRANSFER_GAS;
-        //     ref = std::addressof(mutableRef);
-        // }
-
         // 不允许delegatecall static precompiled
         // delegatecall static precompiled is not allowed
         if (ref->kind != EVMC_DELEGATECALL)
@@ -740,6 +742,10 @@ private:
         const auto* ref = std::addressof(message());
         if (m_preparedPrecompiled != nullptr)
         {
+            if (auto* cosumeMessage = co_await cosumeTransferGas(*ref))
+            {
+                ref = cosumeMessage;
+            }
             co_return transaction_executor::callPrecompiled(*m_preparedPrecompiled,
                 m_rollbackableStorage.get(), m_blockHeader, *ref, m_origin,
                 buildLegacyExternalCaller(), m_precompiledManager.get(), m_contextID, m_seq,
@@ -787,19 +793,9 @@ private:
             }
         }
 
-        if (m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_balance) &&
-            std::memcmp(ref->value.bytes, executor::EMPTY_EVM_UINT256.bytes,
-                sizeof(ref->value.bytes)) != 0 &&
-            m_seq == 0)
+        if (auto* cosumeMessage = co_await cosumeTransferGas(*ref))
         {
-            if (ref->gas < executor::BALANCE_TRANSFER_GAS)
-            {
-                co_return makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::OutOfGas,
-                    EVMC_OUT_OF_GAS, ref->gas, {});
-            }
-            auto& mutableRef = mutableMessage();
-            mutableRef.gas -= executor::BALANCE_TRANSFER_GAS;
-            ref = std::addressof(mutableRef);
+            ref = cosumeMessage;
         }
 
         co_return m_executable->m_vmInstance.execute(interface, this, m_revision,
