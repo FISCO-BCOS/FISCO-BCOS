@@ -8,6 +8,7 @@
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-task/Wait.h"
+#include "bcos-utilities/BoostLog.h"
 #include "precompiled/PrecompiledManager.h"
 #include "vm/HostContext.h"
 #include <evmc/evmc.h>
@@ -15,6 +16,7 @@
 #include <boost/exception/diagnostic_information.hpp>
 #include <functional>
 #include <iterator>
+#include <memory>
 #include <type_traits>
 
 namespace bcos::transaction_executor
@@ -88,6 +90,10 @@ public:
         ledger::LedgerConfig const& ledgerConfig)
         -> task::Task<std::unique_ptr<ExecuteContext<std::decay_t<decltype(storage)>>>>
     {
+        if (c_fileLogLevel == LogLevel::TRACE)
+        {
+            TRANSACTION_EXECUTOR_LOG(TRACE) << "Create transaction context: " << transaction;
+        }
         co_return std::make_unique<ExecuteContext<std::decay_t<decltype(storage)>>>(
             executor, storage, blockHeader, transaction, contextID, ledgerConfig);
     }
@@ -137,7 +143,7 @@ public:
                 *executeContext.m_executor.get().m_hashImpl, evmcResult.status_code);
             if (!errorMessage.empty())
             {
-                auto output = std::make_unique<uint8_t[]>(errorMessage.size());
+                auto output = std::make_unique_for_overwrite<uint8_t[]>(errorMessage.size());
                 std::uninitialized_copy(errorMessage.begin(), errorMessage.end(), output.get());
                 evmcResult.output_data = output.release();
                 evmcResult.output_size = errorMessage.size();

@@ -158,6 +158,7 @@ private:
     const bcos::transaction_executor::Precompiled* m_preparedPrecompiled{};
     std::optional<bcos::bytes> m_dynamicPrecompiledInput;
     bool m_enableTransfer = false;
+    int64_t m_level;
 
     constexpr auto buildLegacyExternalCaller()
     {
@@ -274,7 +275,8 @@ private:
         m_recipientAccount(getAccount(*this, this->message().recipient)),
         m_revision(m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_evm_cancun) ?
                        EVMC_CANCUN :
-                       EVMC_PARIS)
+                       EVMC_PARIS),
+        m_level(seq)
     {}
 
 public:
@@ -488,6 +490,7 @@ public:
                 auto& mutableRef = mutableMessage();
                 std::fill(mutableRef.value.bytes,
                     mutableRef.value.bytes + sizeof(mutableRef.value.bytes), 0);
+                ref = std::addressof(mutableRef);
             }
 
             if (!evmResult)
@@ -659,7 +662,7 @@ private:
         if (m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_balance) &&
             std::memcmp(
                 ref.value.bytes, executor::EMPTY_EVM_UINT256.bytes, sizeof(ref.value.bytes)) != 0 &&
-            m_seq == 0)
+            m_level == 0)
         {
             if (ref.gas < executor::BALANCE_TRANSFER_GAS)
             {
@@ -781,6 +784,7 @@ private:
                         "Call address error.");
                 }
 
+                co_await cosumeTransferGas(*ref);
                 co_return EVMCResult{evmc_result{.status_code = EVMC_SUCCESS,
                                          .gas_left = ref->gas,
                                          .gas_refund = 0,

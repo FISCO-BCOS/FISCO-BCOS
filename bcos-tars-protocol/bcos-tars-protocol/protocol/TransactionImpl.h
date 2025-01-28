@@ -37,14 +37,8 @@ namespace bcostars::protocol
 class TransactionImpl : public bcos::protocol::Transaction
 {
 public:
-    explicit TransactionImpl(std::function<bcostars::Transaction*()> inner)
-      : m_inner(std::move(inner))
-    {}
-    TransactionImpl()
-      : m_inner([m_transaction = bcostars::Transaction()]() mutable {
-            return std::addressof(m_transaction);
-        })
-    {}
+    explicit TransactionImpl(std::function<bcostars::Transaction*()> inner);
+    TransactionImpl();
     ~TransactionImpl() override = default;
     TransactionImpl& operator=(const TransactionImpl& _tx) = delete;
     TransactionImpl(const TransactionImpl& _tx) = delete;

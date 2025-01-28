@@ -37,6 +37,15 @@ struct EmptyTransactionHash : public bcos::error::Exception
 {
 };
 
+bcostars::protocol::TransactionImpl::TransactionImpl(std::function<bcostars::Transaction*()> inner)
+  : m_inner(std::move(inner))
+{}
+bcostars::protocol::TransactionImpl::TransactionImpl()
+  : m_inner([m_transaction = bcostars::Transaction()]() mutable {
+        return std::addressof(m_transaction);
+    })
+{}
+
 void TransactionImpl::decode(bcos::bytesConstRef _txData)
 {
     bcos::concepts::serialize::decode(_txData, *m_inner());
