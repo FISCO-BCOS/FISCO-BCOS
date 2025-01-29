@@ -186,7 +186,7 @@ private:
     task::Task<void> transferBalance(const evmc_message& message)
     {
         auto value = fromEvmC(message.value);
-        if (value == 0)
+        if (value == 0 || (m_preparedPrecompiled != nullptr))
         {
             co_return;
         }
