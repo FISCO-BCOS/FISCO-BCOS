@@ -451,8 +451,8 @@ public:
         if (c_fileLogLevel <= LogLevel::TRACE)
         {
             HOST_CONTEXT_LOG(TRACE)
-                << "HostContext execute, kind: " << ref->kind << " seq:" << m_seq.get()
-                << " sender:" << address2HexString(ref->sender)
+                << "HostContext execute, kind: " << ref->kind << " level: " << m_level
+                << " seq:" << m_seq.get() << " sender:" << address2HexString(ref->sender)
                 << " recipient:" << address2HexString(ref->recipient) << " gas:" << ref->gas;
         }
 

@@ -152,11 +152,16 @@ public:
             }
         }
 
+        std::string gasPriceStr;
         auto gasUsed = executeContext.m_gasLimit - evmcResult.gas_left;
         if (executeContext.m_ledgerConfig.get().features().get(
                 ledger::Features::Flag::feature_balance_policy1))
         {
             auto gasPrice = u256{std::get<0>(executeContext.m_ledgerConfig.get().gasPrice())};
+            if (gasPrice > 0)
+            {
+                gasPriceStr = "0x" + gasPrice.str(256, std::ios_base::hex);
+            }
             auto balanceUsed = gasUsed * gasPrice;
             auto senderAccount = getAccount(executeContext.m_hostContext, evmcMessage.sender);
             auto senderBalance = co_await ledger::account::balance(senderAccount);
@@ -208,7 +213,8 @@ public:
             receipt = executeContext.m_executor.get().m_receiptFactory.get().createReceipt2(gasUsed,
                 std::move(newContractAddress), logEntries, receiptStatus,
                 {evmcResult.output_data, evmcResult.output_size},
-                executeContext.m_blockHeader.get().number(), "", transactionVersion);
+                executeContext.m_blockHeader.get().number(), std::move(gasPriceStr),
+                transactionVersion);
             break;
         default:
             BOOST_THROW_EXCEPTION(
