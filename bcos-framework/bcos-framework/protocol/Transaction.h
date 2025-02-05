@@ -227,10 +227,16 @@ inline std::ostream& operator<<(std::ostream& stream, const Transaction& transac
            << "maxFeePerGas=" << transaction.maxFeePerGas() << ", "
            << "maxPriorityFeePerGas=" << transaction.maxPriorityFeePerGas() << ", "
            << "extension=" << toHex(transaction.extension()) << ", "
-           << "extraData=" << transaction.extraData() << ", " << "sender=" << transaction.sender()
-           << ", " << "input=" << toHex(transaction.input()) << ", "
-           << "importTime=" << transaction.importTime() << ", " << "type=" << transaction.type()
-           << ", " << "attribute=" << transaction.attribute() << ", "
+           << "extraData=" << transaction.extraData() << ", "
+           << "sender=" <<
+        [&]() {
+            auto view = transaction.sender();
+            return bcos::bytesConstRef{(const bcos::byte*)view.data(), view.size()};
+        }() << ", "
+           << "input=" << toHex(transaction.input()) << ", "
+           << "importTime=" << transaction.importTime() << ", "
+           << "type=" << static_cast<int>(transaction.type()) << ", "
+           << "attribute=" << transaction.attribute() << ", "
            << "size=" << transaction.size() << "}";
     return stream;
 }

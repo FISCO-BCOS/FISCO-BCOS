@@ -156,7 +156,7 @@ private:
     std::vector<protocol::LogEntry> m_logs;
     std::shared_ptr<Executable> m_executable;
     const bcos::transaction_executor::Precompiled* m_preparedPrecompiled{};
-    std::optional<bcos::bytes> m_dynamicPrecompiledInput;
+    bcos::bytes m_dynamicPrecompiledInput;
     bool m_enableTransfer = false;
     int64_t m_level;
 
@@ -698,10 +698,10 @@ private:
         m_executable =
             co_await getExecutable(m_rollbackableStorage.get(), ref->code_address, m_revision,
                 m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
-        if (m_executable && hasPrecompiledPrefix(m_executable->m_code->data()))
+        if (m_executable && hasPrecompiledPrefix(m_executable->m_code->get()))
         {
             auto& message = mutableMessage();
-            const auto* code = m_executable->m_code->data();
+            auto code = m_executable->m_code->get();
 
             std::vector<std::string> codeParameters{};
             boost::split(codeParameters, code, boost::is_any_of(","));
@@ -717,11 +717,15 @@ private:
             codeParameters.erase(codeParameters.begin(), codeParameters.begin() + 2);
 
             codec::abi::ContractABICodec codec(m_hashImpl);
-            m_dynamicPrecompiledInput.emplace(codec.abiIn(
-                "", codeParameters, bcos::bytesConstRef(message.input_data, message.input_size)));
+            m_dynamicPrecompiledInput = codec.abiIn(
+                "", codeParameters, bcos::bytesConstRef(message.input_data, message.input_size));
 
-            message.input_data = m_dynamicPrecompiledInput->data();
-            message.input_size = m_dynamicPrecompiledInput->size();
+            // auto codec = CodecWrapper(m_hashImpl, false);
+            // m_dynamicPrecompiledInput = codec.encode(codeParameters,
+            //     bcos::bytes(message.input_data, message.input_data + message.input_size));
+
+            message.input_data = m_dynamicPrecompiledInput.data();
+            message.input_size = m_dynamicPrecompiledInput.size();
             if (c_fileLogLevel <= LogLevel::TRACE) [[unlikely]]
             {
                 HOST_CONTEXT_LOG(TRACE)
