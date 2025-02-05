@@ -168,7 +168,7 @@ if [[ -n "${1}" ]]; then
      console_branch=${1}
 fi
 
-non-sm test
+# non-sm test
 LOG_INFO "======== check non-sm case ========"
 init ""
 expand_node ""
@@ -248,13 +248,13 @@ if [[ ${?} == "0" ]]; then
         echo "java_sdk_integrationTest error"
         exit 1
 fi
-# bash ${current_path}/.ci/java_sdk_demo_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
-# if [[ ${?} == "0" ]]; then
-#        LOG_INFO "java_sdk_demo_ci_test success"
-#    else
-#        echo "java_sdk_demo_ci_test error"
-#        exit 1
-# fi
+bash ${current_path}/.ci/java_sdk_demo_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
+if [[ ${?} == "0" ]]; then
+       LOG_INFO "java_sdk_demo_ci_test success"
+   else
+       echo "java_sdk_demo_ci_test error"
+       exit 1
+fi
 stop_node
 LOG_INFO "======== check baseline cases success ========"
 clear_node
