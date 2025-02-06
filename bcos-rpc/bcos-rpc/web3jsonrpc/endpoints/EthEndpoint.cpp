@@ -36,6 +36,7 @@
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
+#include <functional>
 #include <variant>
 
 using namespace bcos;
@@ -341,6 +342,7 @@ task::Task<void> EthEndpoint::getCode(const Json::Value& request, Json::Value& r
     }
     std::string addressStr(address);
     boost::algorithm::to_lower(addressStr);
+
     // TODO)): blockNumber is ignored nowadays
     auto const blockTag = toView(request[1u]);
     auto [blockNumber, _] = co_await getBlockNumberByTag(blockTag);
@@ -350,11 +352,15 @@ task::Task<void> EthEndpoint::getCode(const Json::Value& request, Json::Value& r
                         << LOG_KV("blockTag", blockTag) << LOG_KV("blockNumber", blockNumber);
     }
     auto const scheduler = m_nodeService->scheduler();
+
+    bcos::bytes code;
     struct Awaitable
     {
         bcos::scheduler::SchedulerInterface::Ptr m_scheduler;
-        std::string& m_address;
-        std::variant<Error::Ptr, bcos::bytes> m_result{};
+        std::string_view m_address;
+        std::reference_wrapper<bcos::bytes> m_code;
+        std::variant<Error::Ptr, bcos::bytes> m_result;
+
         constexpr static bool await_ready() noexcept { return false; }
         void await_suspend(std::coroutine_handle<> handle) noexcept
         {
@@ -370,13 +376,13 @@ task::Task<void> EthEndpoint::getCode(const Json::Value& request, Json::Value& r
                 handle.resume();
             });
         }
-        bcos::bytes await_resume()
+        void await_resume()
         {
             if (std::holds_alternative<Error::Ptr>(m_result))
             {
                 BOOST_THROW_EXCEPTION(*std::get<Error::Ptr>(m_result));
             }
-            return std::get<bcos::bytes>(m_result);
+            m_code.get() = std::get<bcos::bytes>(m_result);
         }
     };
     // Note: Awaitable must be declared as a local variable,
@@ -385,8 +391,10 @@ task::Task<void> EthEndpoint::getCode(const Json::Value& request, Json::Value& r
     Awaitable awaitable{
         .m_scheduler = scheduler,
         .m_address = addressStr,
+        .m_code = code,
+        .m_result = {},
     };
-    auto const code = co_await awaitable;
+    co_await awaitable;
     Json::Value result = toHexStringWithPrefix(code);
     buildJsonContent(result, response);
     co_return;
