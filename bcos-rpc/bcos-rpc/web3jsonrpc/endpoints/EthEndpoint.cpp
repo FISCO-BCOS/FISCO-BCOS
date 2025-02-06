@@ -350,33 +350,34 @@ task::Task<void> EthEndpoint::getCode(const Json::Value& request, Json::Value& r
                         << LOG_KV("blockTag", blockTag) << LOG_KV("blockNumber", blockNumber);
     }
     auto const scheduler = m_nodeService->scheduler();
+    bcos::bytes code;
     struct Awaitable
     {
         bcos::scheduler::SchedulerInterface::Ptr m_scheduler;
         std::string& m_address;
-        std::variant<Error::Ptr, bcos::bytes> m_result{};
+        bcos::bytes& m_code;
+        Error::Ptr m_error = nullptr;
         constexpr static bool await_ready() noexcept { return false; }
         void await_suspend(std::coroutine_handle<> handle) noexcept
         {
             m_scheduler->getCode(m_address, [this, handle](auto&& error, auto&& code) {
                 if (error)
                 {
-                    m_result.emplace<Error::Ptr>(std::forward<decltype(error)>(error));
+                    m_error = std::move(error);
                 }
                 else
                 {
-                    m_result.emplace<bcos::bytes>(std::forward<decltype(code)>(code));
+                    m_code = std::move(code);
                 }
                 handle.resume();
             });
         }
-        bcos::bytes await_resume()
+        void await_resume()
         {
-            if (std::holds_alternative<Error::Ptr>(m_result))
+            if (m_error)
             {
-                BOOST_THROW_EXCEPTION(*std::get<Error::Ptr>(m_result));
+                BOOST_THROW_EXCEPTION(*m_error);
             }
-            return std::get<bcos::bytes>(m_result);
         }
     };
     // Note: Awaitable must be declared as a local variable,
@@ -385,8 +386,9 @@ task::Task<void> EthEndpoint::getCode(const Json::Value& request, Json::Value& r
     Awaitable awaitable{
         .m_scheduler = scheduler,
         .m_address = addressStr,
+        .m_code = code,
     };
-    auto const code = co_await awaitable;
+    co_await awaitable;
     Json::Value result = toHexStringWithPrefix(code);
     buildJsonContent(result, response);
     co_return;
