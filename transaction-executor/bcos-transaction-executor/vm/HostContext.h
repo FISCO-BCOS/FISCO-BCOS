@@ -27,6 +27,7 @@
 #include "EVMHostInterface.h"
 #include "VMInstance.h"
 #include "bcos-codec/abi/ContractABICodec.h"
+#include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-executor/src/Common.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/ledger/Account.h"
@@ -35,6 +36,7 @@
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/protocol/BlockHeader.h"
+#include "bcos-framework/protocol/Exceptions.h"
 #include "bcos-framework/protocol/LogEntry.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/storage/Entry.h"
@@ -60,7 +62,6 @@
 #include <magic_enum.hpp>
 #include <memory>
 #include <string_view>
-#include <variant>
 
 namespace bcos::transaction_executor::hostcontext
 {
@@ -155,7 +156,9 @@ private:
     std::vector<protocol::LogEntry> m_logs;
     std::shared_ptr<Executable> m_executable;
     const bcos::transaction_executor::Precompiled* m_preparedPrecompiled{};
-    std::optional<bcos::bytes> m_dynamicPrecompiledInput;
+    bcos::bytes m_dynamicPrecompiledInput;
+    bool m_enableTransfer = false;
+    int64_t m_level;
 
     constexpr auto buildLegacyExternalCaller()
     {
@@ -183,7 +186,8 @@ private:
     task::Task<void> transferBalance(const evmc_message& message)
     {
         auto value = fromEvmC(message.value);
-        if (value == 0)
+        if (value == 0 || message.code_address == message.sender ||
+            message.recipient == message.sender)
         {
             co_return;
         }
@@ -201,7 +205,45 @@ private:
 
         auto toBalance = co_await ledger::account::balance(m_recipientAccount);
         co_await ledger::account::setBalance(senderAccount, fromBalance - value);
-        co_await ledger::account::setBalance(m_recipientAccount, toBalance + value);
+        if (!co_await ledger::account::exists(m_recipientAccount))
+        {
+            CodecWrapper codec{m_hashImpl, false};
+
+            bytes balanceParams = codec.encodeWithSig("addAccountBalance(uint256)", value);
+            std::vector<std::string> toTableNameVector = {
+                std::string(m_recipientAccount.address())};
+            auto inputParams1 = codec.encode(toTableNameVector, balanceParams);
+
+            evmc_message evmcMessage{.kind = EVMC_CALL,
+                .flags = 0,
+                .depth = 0,
+                .gas = message.gas,
+                .recipient = message.recipient,
+                .destination_ptr = nullptr,
+                .destination_len = 0,
+                .sender = message.sender,
+                .sender_ptr = nullptr,
+                .sender_len = 0,
+                .input_data = inputParams1.data(),
+                .input_size = inputParams1.size(),
+                .value = {},
+                .create2_salt = {},
+                .code_address = unhexAddress(precompiled::ACCOUNT_ADDRESS)};
+            const auto* accountPrecompiled = m_precompiledManager.get().getPrecompiled(0x10004);
+            if (accountPrecompiled == nullptr)
+            {
+                BOOST_THROW_EXCEPTION(NotFoundCodeError());
+            }
+            static auto origin = unhexAddress(precompiled::BALANCE_PRECOMPILED_ADDRESS);
+            transaction_executor::callPrecompiled(*accountPrecompiled, m_rollbackableStorage.get(),
+                m_blockHeader, evmcMessage, origin, buildLegacyExternalCaller(),
+                m_precompiledManager.get(), m_contextID, m_seq,
+                m_ledgerConfig.get().authCheckStatus());
+        }
+        else
+        {
+            co_await ledger::account::setBalance(m_recipientAccount, toBalance + value);
+        }
     }
 
     inline constexpr static struct InnerConstructor
@@ -234,7 +276,8 @@ private:
         m_recipientAccount(getAccount(*this, this->message().recipient)),
         m_revision(m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_evm_cancun) ?
                        EVMC_CANCUN :
-                       EVMC_PARIS)
+                       EVMC_PARIS),
+        m_level(seq)
     {}
 
 public:
@@ -388,45 +431,44 @@ public:
         // suicide(m_myContractTable); // TODO: add suicide
     }
 
-    friend task::Task<void> prepare(HostContext& hostContext)
+    task::Task<void> prepare()
     {
-        auto const& ref = hostContext.message();
+        auto const& ref = message();
         assert(
             !concepts::bytebuffer::equalTo(ref.recipient.bytes, executor::EMPTY_EVM_ADDRESS.bytes));
         if (ref.kind == EVMC_CREATE || ref.kind == EVMC_CREATE2)
         {
-            hostContext.prepareCreate();
+            prepareCreate();
         }
         else
         {
-            co_await hostContext.prepareCall();
+            co_await prepareCall();
         }
     }
 
-    friend task::Task<EVMCResult> execute(HostContext& hostContext)
+    task::Task<EVMCResult> execute()
     {
-        auto& ref = hostContext.message();
+        const auto* ref = std::addressof(message());
         if (c_fileLogLevel <= LogLevel::TRACE)
         {
             HOST_CONTEXT_LOG(TRACE)
-                << "HostContext execute, kind: " << ref.kind << " seq:" << hostContext.m_seq.get()
-                << " sender:" << address2HexString(ref.sender)
-                << " recipient:" << address2HexString(ref.recipient) << " gas:" << ref.gas;
+                << "HostContext execute, kind: " << ref->kind << " level: " << m_level
+                << " seq:" << m_seq.get() << " sender:" << address2HexString(ref->sender)
+                << " recipient:" << address2HexString(ref->recipient) << " gas:" << ref->gas;
         }
 
-        auto savepoint = current(hostContext.m_rollbackableStorage.get());
-        auto transientSavepoint = current(hostContext.m_rollbackableTransientStorage.get());
-        std::optional<EVMCResult> evmResult;
-        if (hostContext.m_ledgerConfig.get().authCheckStatus() != 0U)
-        {
-            HOST_CONTEXT_LOG(DEBUG)
-                << "Checking auth..." << hostContext.m_ledgerConfig.get().authCheckStatus()
-                << " gas: " << ref.gas;
+        auto savepoint = current(m_rollbackableStorage.get());
+        auto transientSavepoint = current(m_rollbackableTransientStorage.get());
 
-            if (auto result = checkAuth(hostContext.m_rollbackableStorage.get(),
-                    hostContext.m_blockHeader, ref, hostContext.m_origin,
-                    hostContext.buildLegacyExternalCaller(), hostContext.m_precompiledManager.get(),
-                    hostContext.m_contextID, hostContext.m_seq, hostContext.m_hashImpl))
+        std::optional<EVMCResult> evmResult;
+        if (m_ledgerConfig.get().authCheckStatus() != 0U)
+        {
+            HOST_CONTEXT_LOG(DEBUG) << "Checking auth..." << m_ledgerConfig.get().authCheckStatus()
+                                    << " gas: " << ref->gas;
+
+            if (auto result = checkAuth(m_rollbackableStorage.get(), m_blockHeader, *ref, m_origin,
+                    buildLegacyExternalCaller(), m_precompiledManager.get(), m_contextID, m_seq,
+                    m_hashImpl))
             {
                 HOST_CONTEXT_LOG(DEBUG) << "Auth check failed";
                 evmResult = std::move(result);
@@ -437,45 +479,45 @@ public:
         {
             // 先转账，再执行
             // Transfer first, then proceed execute
-            if (co_await checkEnableTransfer(hostContext.m_ledgerConfig,
-                    hostContext.m_rollbackableStorage.get(), hostContext.m_blockHeader))
+            if (m_enableTransfer = co_await checkEnableTransfer(
+                    m_ledgerConfig, m_rollbackableStorage.get(), m_blockHeader);
+                m_enableTransfer)
             {
-                co_await hostContext.transferBalance(ref);
+                co_await transferBalance(*ref);
             }
-            else if (hostContext.m_ledgerConfig.get().features().get(
+            else if (m_ledgerConfig.get().features().get(
                          ledger::Features::Flag::feature_balance_policy1))
             {
-                auto& mutableRef = hostContext.mutableMessage();
+                auto& mutableRef = mutableMessage();
                 std::fill(mutableRef.value.bytes,
                     mutableRef.value.bytes + sizeof(mutableRef.value.bytes), 0);
+                ref = std::addressof(mutableRef);
             }
 
             if (!evmResult)
             {
-                if (ref.kind == EVMC_CREATE || ref.kind == EVMC_CREATE2)
+                if (ref->kind == EVMC_CREATE || ref->kind == EVMC_CREATE2)
                 {
-                    evmResult.emplace(co_await hostContext.executeCreate());
+                    evmResult.emplace(co_await executeCreate());
                 }
                 else
                 {
-                    evmResult.emplace(co_await hostContext.executeCall());
+                    evmResult.emplace(co_await executeCall());
                 }
             }
         }
         catch (protocol::OutOfGas& e)
         {
             HOST_CONTEXT_LOG(DEBUG) << "OutOfGas exception: " << boost::diagnostic_information(e);
-            co_return makeErrorEVMCResult(hostContext.m_hashImpl,
-                protocol::TransactionStatus::OutOfGas, EVMC_OUT_OF_GAS, evmResult->gas_left,
-                e.what());
+            co_return makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::OutOfGas,
+                EVMC_OUT_OF_GAS, evmResult->gas_left, e.what());
         }
         catch (protocol::NotEnoughCashError& e)
         {
             HOST_CONTEXT_LOG(DEBUG)
                 << "NotEnoughCash exception: " << boost::diagnostic_information(e);
-            co_return makeErrorEVMCResult(hostContext.m_hashImpl,
-                protocol::TransactionStatus::NotEnoughCash, EVMC_INSUFFICIENT_BALANCE, ref.gas,
-                e.what());
+            co_return makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::NotEnoughCash,
+                EVMC_INSUFFICIENT_BALANCE, ref->gas, e.what());
         }
         catch (NotFoundCodeError& e)
         {
@@ -486,37 +528,37 @@ public:
             // STATIC_CALL or DELEGATE_CALL, the EVMC_SUCCESS is returned when the contract does not
             // exist
             using namespace std::string_literals;
-            if (ref.flags == EVMC_STATIC || ref.kind == EVMC_DELEGATECALL)
+            if (ref->flags == EVMC_STATIC || ref->kind == EVMC_DELEGATECALL)
             {
-                co_return makeErrorEVMCResult(hostContext.m_hashImpl,
-                    protocol::TransactionStatus::None, EVMC_SUCCESS, ref.gas, ""s);
+                co_return makeErrorEVMCResult(
+                    m_hashImpl, protocol::TransactionStatus::None, EVMC_SUCCESS, ref->gas, ""s);
             }
             else
             {
-                co_return makeErrorEVMCResult(hostContext.m_hashImpl,
-                    protocol::TransactionStatus::RevertInstruction, EVMC_REVERT, ref.gas,
+                co_return makeErrorEVMCResult(m_hashImpl,
+                    protocol::TransactionStatus::RevertInstruction, EVMC_REVERT, ref->gas,
                     "Call address error."s);
             }
         }
         catch (std::exception& e)
         {
             HOST_CONTEXT_LOG(DEBUG) << "Execute exception: " << boost::diagnostic_information(e);
-            co_return makeErrorEVMCResult(hostContext.m_hashImpl,
-                protocol::TransactionStatus::OutOfGas, EVMC_INTERNAL_ERROR, ref.gas, "");
+            co_return makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::OutOfGas,
+                EVMC_INTERNAL_ERROR, ref->gas, "");
         }
 
         // 如果本次调用系统合约失败，不消耗gas
         // If the call to system contract failed, the gasUsed is cleared to zero
         if (evmResult->status_code != EVMC_SUCCESS)
         {
-            co_await rollback(hostContext.m_rollbackableStorage.get(), savepoint);
-            co_await rollback(hostContext.m_rollbackableTransientStorage.get(), transientSavepoint);
+            co_await rollback(m_rollbackableStorage.get(), savepoint);
+            co_await rollback(m_rollbackableTransientStorage.get(), transientSavepoint);
 
-            if (auto hexAddress = address2FixedArray(ref.code_address);
+            if (auto hexAddress = address2FixedArray(ref->code_address);
                 precompiled::contains(bcos::precompiled::c_systemTxsAddress,
                     concepts::bytebuffer::toView(hexAddress)))
             {
-                evmResult->gas_left = ref.gas;
+                evmResult->gas_left = ref->gas;
                 HOST_CONTEXT_LOG(TRACE) << "System contract call failed, clear gasUsed, gas_left: "
                                         << evmResult->gas_left;
             }
@@ -525,9 +567,8 @@ public:
         if (c_fileLogLevel <= LogLevel::TRACE) [[unlikely]]
         {
             HOST_CONTEXT_LOG(TRACE)
-                << "HostContext execute finished, kind: " << ref.kind
-                << " seq:" << hostContext.m_seq << " status: " << evmResult->status_code
-                << " gas: " << evmResult->gas_left
+                << "HostContext execute finished, kind: " << ref->kind << " seq:" << m_seq
+                << " status: " << evmResult->status_code << " gas: " << evmResult->gas_left
                 << " output: " << bytesConstRef(evmResult->output_data, evmResult->output_size);
         }
         co_return std::move(*evmResult);
@@ -548,8 +589,8 @@ public:
             m_rollbackableTransientStorage.get(), m_blockHeader, message, m_origin, {}, m_contextID,
             m_seq, m_precompiledManager.get(), m_ledgerConfig, m_hashImpl, interface);
 
-        co_await prepare(hostcontext);
-        auto result = co_await execute(hostcontext);
+        co_await hostcontext.prepare();
+        auto result = co_await hostcontext.execute();
         auto& logs = hostcontext.logs();
         if (result.status_code == EVMC_SUCCESS && !logs.empty())
         {
@@ -617,15 +658,33 @@ private:
         co_return result;
     }
 
+    task::Task<evmc_message*> cosumeTransferGas(const evmc_message& ref)
+    {
+        if (m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_balance) &&
+            std::memcmp(
+                ref.value.bytes, executor::EMPTY_EVM_UINT256.bytes, sizeof(ref.value.bytes)) != 0 &&
+            m_level == 0)
+        {
+            if (ref.gas < executor::BALANCE_TRANSFER_GAS)
+            {
+                BOOST_THROW_EXCEPTION(protocol::OutOfGas{});
+            }
+            auto& mutableRef = mutableMessage();
+            mutableRef.gas -= executor::BALANCE_TRANSFER_GAS;
+            co_return std::addressof(mutableRef);
+        }
+        co_return nullptr;
+    }
+
     task::Task<void> prepareCall()
     {
-        auto& ref = message();
+        const auto* ref = std::addressof(message());
         // 不允许delegatecall static precompiled
         // delegatecall static precompiled is not allowed
-        if (ref.kind != EVMC_DELEGATECALL)
+        if (ref->kind != EVMC_DELEGATECALL)
         {
             if (auto const* precompiled =
-                    m_precompiledManager.get().getPrecompiled(ref.code_address))
+                    m_precompiledManager.get().getPrecompiled(ref->code_address))
             {
                 if (auto flag = transaction_executor::featureFlag(*precompiled);
                     !flag || m_ledgerConfig.get().features().get(*flag))
@@ -637,12 +696,12 @@ private:
         }
 
         m_executable =
-            co_await getExecutable(m_rollbackableStorage.get(), ref.code_address, m_revision,
+            co_await getExecutable(m_rollbackableStorage.get(), ref->code_address, m_revision,
                 m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
-        if (m_executable && hasPrecompiledPrefix(m_executable->m_code->data()))
+        if (m_executable && hasPrecompiledPrefix(m_executable->m_code->get()))
         {
             auto& message = mutableMessage();
-            const auto* code = m_executable->m_code->data();
+            auto code = m_executable->m_code->get();
 
             std::vector<std::string> codeParameters{};
             boost::split(codeParameters, code, boost::is_any_of(","));
@@ -658,11 +717,15 @@ private:
             codeParameters.erase(codeParameters.begin(), codeParameters.begin() + 2);
 
             codec::abi::ContractABICodec codec(m_hashImpl);
-            m_dynamicPrecompiledInput.emplace(codec.abiIn(
-                "", codeParameters, bcos::bytesConstRef(message.input_data, message.input_size)));
+            m_dynamicPrecompiledInput = codec.abiIn(
+                "", codeParameters, bcos::bytesConstRef(message.input_data, message.input_size));
 
-            message.input_data = m_dynamicPrecompiledInput->data();
-            message.input_size = m_dynamicPrecompiledInput->size();
+            // auto codec = CodecWrapper(m_hashImpl, false);
+            // m_dynamicPrecompiledInput = codec.encode(codeParameters,
+            //     bcos::bytes(message.input_data, message.input_data + message.input_size));
+
+            message.input_data = m_dynamicPrecompiledInput.data();
+            message.input_size = m_dynamicPrecompiledInput.size();
             if (c_fileLogLevel <= LogLevel::TRACE) [[unlikely]]
             {
                 HOST_CONTEXT_LOG(TRACE)
@@ -684,11 +747,15 @@ private:
 
     task::Task<EVMCResult> executeCall()
     {
-        auto& ref = message();
+        const auto* ref = std::addressof(message());
         if (m_preparedPrecompiled != nullptr)
         {
+            if (auto* cosumeMessage = co_await cosumeTransferGas(*ref))
+            {
+                ref = cosumeMessage;
+            }
             co_return transaction_executor::callPrecompiled(*m_preparedPrecompiled,
-                m_rollbackableStorage.get(), m_blockHeader, ref, m_origin,
+                m_rollbackableStorage.get(), m_blockHeader, *ref, m_origin,
                 buildLegacyExternalCaller(), m_precompiledManager.get(), m_contextID, m_seq,
                 m_ledgerConfig.get().authCheckStatus());
         }
@@ -698,49 +765,50 @@ private:
         // yet been created
         if (!m_executable)
         {
-            if (m_executable = co_await getExecutable(m_rollbackableStorage.get(), ref.code_address,
-                    m_revision,
+            if (m_executable = co_await getExecutable(m_rollbackableStorage.get(),
+                    ref->code_address, m_revision,
                     m_ledgerConfig.get().features().get(
                         ledger::Features::Flag::feature_raw_address));
                 !m_executable)
             {
-                if (ref.input_size > 0)
+                if (ref->input_size > 0)
                 {
                     BOOST_THROW_EXCEPTION(NotFoundCodeError());
                 }
 
                 // 兼容历史问题逻辑
                 // Compatible with historical issue
-                if (m_ledgerConfig.get().features().get(
+                if (!m_enableTransfer &&
+                    m_ledgerConfig.get().features().get(
                         ledger::Features::Flag::feature_balance_policy1) &&
                     !m_ledgerConfig.get().features().get(
                         ledger::Features::Flag::bugfix_policy1_empty_code_address))
                 {
                     co_return makeErrorEVMCResult(m_hashImpl,
-                        protocol::TransactionStatus::CallAddressError, EVMC_REVERT, ref.gas,
+                        protocol::TransactionStatus::CallAddressError, EVMC_REVERT, ref->gas,
                         "Call address error.");
                 }
 
-                auto status = EVMC_SUCCESS;
-                auto gasLeft = ref.gas - executor::BALANCE_TRANSFER_GAS;
-                if (ref.gas < executor::BALANCE_TRANSFER_GAS)
-                {
-                    status = EVMC_OUT_OF_GAS;
-                    gasLeft = ref.gas;
-                }
-                co_return EVMCResult{evmc_result{.status_code = status,
-                    .gas_left = gasLeft,
-                    .gas_refund = 0,
-                    .output_data = nullptr,
-                    .output_size = 0,
-                    .release = nullptr,
-                    .create_address = {},
-                    .padding = {}}};
+                co_await cosumeTransferGas(*ref);
+                co_return EVMCResult{evmc_result{.status_code = EVMC_SUCCESS,
+                                         .gas_left = ref->gas,
+                                         .gas_refund = 0,
+                                         .output_data = nullptr,
+                                         .output_size = 0,
+                                         .release = nullptr,
+                                         .create_address = {},
+                                         .padding = {}},
+                    protocol::TransactionStatus::None};
             }
         }
 
+        if (auto* cosumeMessage = co_await cosumeTransferGas(*ref))
+        {
+            ref = cosumeMessage;
+        }
+
         co_return m_executable->m_vmInstance.execute(interface, this, m_revision,
-            std::addressof(ref), (const uint8_t*)m_executable->m_code->data(),
+            std::addressof(message()), (const uint8_t*)m_executable->m_code->data(),
             m_executable->m_code->size());
     }
 };
