@@ -110,8 +110,8 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
 
         try
         {
-            /// return early when the certificate is invalid
-            if (!preverified)
+            /// return early when the certificate verify failed
+            if (!preverified && hostPtr->m_enableSSL)
             {
                 HOST_LOG(DEBUG) << LOG_DESC("ssl handshake certificate verify failed")
                                 << LOG_KV("preverified", preverified);
@@ -124,12 +124,12 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
                 HOST_LOG(ERROR) << LOG_DESC("Get cert failed");
                 return preverified;
             }
-
+            ////  always return true when disable ssl, return preverified when enable ssl
             // For compatibility, p2p communication between nodes still uses the old public key
             // analysis method
             if (!hostPtr->sslContextPubHandler()(cert, *nodeIDOut))
             {
-                return preverified;
+                return preverified || (!hostPtr->m_enableSSL);
             }
 
             int crit = 0;
@@ -138,7 +138,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             if (!basic)
             {
                 HOST_LOG(INFO) << LOG_DESC("Get ca basic failed");
-                return preverified;
+                return preverified || (!hostPtr->m_enableSSL);
             }
 
             /// ignore ca
@@ -147,7 +147,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
                 // ca or agency certificate
                 HOST_LOG(TRACE) << LOG_DESC("Ignore CA certificate");
                 BASIC_CONSTRAINTS_free(basic);
-                return preverified;
+                return preverified || (!hostPtr->m_enableSSL);
             }
 
             BASIC_CONSTRAINTS_free(basic);
@@ -156,7 +156,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             std::string nodeIDOutWithoutExtInfo;
             if (!hostPtr->sslContextPubHandlerWithoutExtInfo()(cert, nodeIDOutWithoutExtInfo))
             {
-                return preverified;
+                return preverified || (!hostPtr->m_enableSSL);
             }
             nodeIDOutWithoutExtInfo = boost::to_upper_copy(nodeIDOutWithoutExtInfo);
 
@@ -193,7 +193,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             OPENSSL_free((void*)certName);
             OPENSSL_free((void*)issuerName);
 
-            return preverified;
+            return preverified || (!hostPtr->m_enableSSL);
         }
         catch (std::exception& e)
         {
@@ -335,21 +335,10 @@ void Host::handshakeServer(const boost::system::error_code& error,
     std::string nodeInfo = *endpointPublicKey;
     if (nodeInfo.empty())
     {
-        if ((m_sslServerMode & ba::ssl::verify_none) == 0)
-        {
-            auto randomId = h512::generateRandomFixedBytes();
-            nodeInfo = randomId.hex();
-            HOST_LOG(INFO) << LOG_DESC("handshakeServer get p2pID failed because of verify_none")
-                           << LOG_KV("remote endpoint", socket->remoteEndpoint())
-                           << LOG_KV("randId", nodeInfo);
-        }
-        else
-        {
-            HOST_LOG(INFO) << LOG_DESC("handshakeServer get p2pID failed")
-                           << LOG_KV("remote endpoint", socket->remoteEndpoint());
-            socket->close();
-            return;
-        }
+        HOST_LOG(INFO) << LOG_DESC("handshakeServer get p2pID failed")
+                       << LOG_KV("remote endpoint", socket->remoteEndpoint());
+        socket->close();
+        return;
     }
     if (m_run)
     {
@@ -540,21 +529,10 @@ void Host::handshakeClient(const boost::system::error_code& error,
     std::string nodeInfo = *endpointPublicKey;
     if (nodeInfo.empty())
     {
-        if ((m_sslClientMode & ba::ssl::verify_none) == 0)
-        {
-            auto randomId = h512::generateRandomFixedBytes();
-            nodeInfo = randomId.hex();
-            HOST_LOG(INFO) << LOG_DESC("handshakeClient get p2pID failed because of verify_none")
-                           << LOG_KV("remote endpoint", socket->remoteEndpoint())
-                           << LOG_KV("randId", nodeInfo);
-        }
-        else
-        {
-            HOST_LOG(WARNING) << LOG_DESC("handshakeClient get p2pID failed")
-                              << LOG_KV("local endpoint", socket->localEndpoint());
-            socket->close();
-            return;
-        }
+        HOST_LOG(WARNING) << LOG_DESC("handshakeClient get p2pID failed")
+                          << LOG_KV("local endpoint", socket->localEndpoint());
+        socket->close();
+        return;
     }
 
     if (m_run)

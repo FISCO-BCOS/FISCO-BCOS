@@ -306,6 +306,8 @@ public:
         }
     }
 
+    bool enableSSL() const { return m_enableSSL; }
+
 private:
     // The maximum size of message that is allowed to send or receive
     uint32_t m_allowMaxMsgSize = MAX_MESSAGE_LENGTH;
@@ -318,10 +320,15 @@ private:
     std::string m_uuid;
     // if SM SSL connection or not
     bool m_smSSL;
+    // default verify mode
     uint8_t m_ssl_server_mode =
         boost::asio::ssl::context_base::verify_peer | boost::asio::ssl::verify_fail_if_no_peer_cert;
+    // default verify mode
     uint8_t m_ssl_client_mode =
         boost::asio::ssl::context_base::verify_peer | boost::asio::ssl::verify_fail_if_no_peer_cert;
+
+    // enable ssl or not, default is true
+    bool m_enableSSL = true;
     // p2p network listen IP
     std::string m_listenIP;
     // p2p network listen Port
