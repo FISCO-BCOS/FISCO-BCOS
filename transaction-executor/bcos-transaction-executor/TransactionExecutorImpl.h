@@ -8,6 +8,7 @@
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-task/Wait.h"
+#include "bcos-utilities/BoostLog.h"
 #include "precompiled/PrecompiledManager.h"
 #include "vm/HostContext.h"
 #include <evmc/evmc.h>
@@ -15,6 +16,7 @@
 #include <boost/exception/diagnostic_information.hpp>
 #include <functional>
 #include <iterator>
+#include <memory>
 #include <type_traits>
 
 namespace bcos::transaction_executor
@@ -88,6 +90,10 @@ public:
         ledger::LedgerConfig const& ledgerConfig)
         -> task::Task<std::unique_ptr<ExecuteContext<std::decay_t<decltype(storage)>>>>
     {
+        if (c_fileLogLevel == LogLevel::TRACE)
+        {
+            TRANSACTION_EXECUTOR_LOG(TRACE) << "Create transaction context: " << transaction;
+        }
         co_return std::make_unique<ExecuteContext<std::decay_t<decltype(storage)>>>(
             executor, storage, blockHeader, transaction, contextID, ledgerConfig);
     }
@@ -97,13 +103,14 @@ public:
         tag_t<executeStep> /*unused*/, auto& context)
     {
         auto& executeContext = *context;
+
         if constexpr (step == 0)
         {
-            co_await prepare(executeContext.m_hostContext);
+            co_await executeContext.m_hostContext.prepare();
         }
         else if constexpr (step == 1)
         {
-            executeContext.m_evmcResult.emplace(co_await execute(executeContext.m_hostContext));
+            executeContext.m_evmcResult.emplace(co_await executeContext.m_hostContext.execute());
         }
         else if constexpr (step == 2)
         {
@@ -136,7 +143,7 @@ public:
                 *executeContext.m_executor.get().m_hashImpl, evmcResult.status_code);
             if (!errorMessage.empty())
             {
-                auto output = std::make_unique<uint8_t[]>(errorMessage.size());
+                auto output = std::make_unique_for_overwrite<uint8_t[]>(errorMessage.size());
                 std::uninitialized_copy(errorMessage.begin(), errorMessage.end(), output.get());
                 evmcResult.output_data = output.release();
                 evmcResult.output_size = errorMessage.size();
@@ -145,12 +152,16 @@ public:
             }
         }
 
+        std::string gasPriceStr;
         auto gasUsed = executeContext.m_gasLimit - evmcResult.gas_left;
-
         if (executeContext.m_ledgerConfig.get().features().get(
                 ledger::Features::Flag::feature_balance_policy1))
         {
             auto gasPrice = u256{std::get<0>(executeContext.m_ledgerConfig.get().gasPrice())};
+            if (gasPrice > 0)
+            {
+                gasPriceStr = "0x" + gasPrice.str(256, std::ios_base::hex);
+            }
             auto balanceUsed = gasUsed * gasPrice;
             auto senderAccount = getAccount(executeContext.m_hostContext, evmcMessage.sender);
             auto senderBalance = co_await ledger::account::balance(senderAccount);
@@ -177,7 +188,9 @@ public:
         {
             if (auto codeAddress = address2FixedArray(evmcMessage.code_address);
                 precompiled::contains(bcos::precompiled::c_systemTxsAddress,
-                    concepts::bytebuffer::toView(codeAddress)))
+                    concepts::bytebuffer::toView(codeAddress)) ||
+                std::string_view{codeAddress.data(), codeAddress.size()} ==
+                    precompiled::BALANCE_PRECOMPILED_ADDRESS)
             {
                 gasUsed = 0;
             }
@@ -200,7 +213,8 @@ public:
             receipt = executeContext.m_executor.get().m_receiptFactory.get().createReceipt2(gasUsed,
                 std::move(newContractAddress), logEntries, receiptStatus,
                 {evmcResult.output_data, evmcResult.output_size},
-                executeContext.m_blockHeader.get().number(), "", transactionVersion);
+                executeContext.m_blockHeader.get().number(), std::move(gasPriceStr),
+                transactionVersion);
             break;
         default:
             BOOST_THROW_EXCEPTION(

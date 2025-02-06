@@ -215,4 +215,30 @@ using TransactionsConstPtr = std::shared_ptr<const Transactions>;
 using ConstTransactions = std::vector<Transaction::ConstPtr>;
 using ConstTransactionsPtr = std::shared_ptr<ConstTransactions>;
 
+inline std::ostream& operator<<(std::ostream& stream, const Transaction& transaction)
+{
+    stream << "Transaction{" << "hash=" << transaction.hash() << ", "
+           << "version=" << transaction.version() << ", " << "chainId=" << transaction.chainId()
+           << ", " << "groupId=" << transaction.groupId() << ", "
+           << "blockLimit=" << transaction.blockLimit() << ", " << "nonce=" << transaction.nonce()
+           << ", " << "to=" << transaction.to() << ", " << "abi=" << transaction.abi() << ", "
+           << "value=" << transaction.value() << ", " << "gasPrice=" << transaction.gasPrice()
+           << ", " << "gasLimit=" << transaction.gasLimit() << ", "
+           << "maxFeePerGas=" << transaction.maxFeePerGas() << ", "
+           << "maxPriorityFeePerGas=" << transaction.maxPriorityFeePerGas() << ", "
+           << "extension=" << toHex(transaction.extension()) << ", "
+           << "extraData=" << transaction.extraData() << ", "
+           << "sender=" <<
+        [&]() {
+            auto view = transaction.sender();
+            return bcos::bytesConstRef{(const bcos::byte*)view.data(), view.size()};
+        }() << ", "
+           << "input=" << toHex(transaction.input()) << ", "
+           << "importTime=" << transaction.importTime() << ", "
+           << "type=" << static_cast<int>(transaction.type()) << ", "
+           << "attribute=" << transaction.attribute() << ", "
+           << "size=" << transaction.size() << "}";
+    return stream;
+}
+
 }  // namespace bcos::protocol

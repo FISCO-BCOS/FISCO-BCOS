@@ -29,6 +29,7 @@
 #include "bcos-framework/protocol/LogEntry.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include "bcos-utilities/Exceptions.h"
+#include <evmc/evmc.h>
 #include <evmc/instructions.h>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <algorithm>
@@ -48,6 +49,7 @@ namespace executor
 
 constexpr static evmc_address EMPTY_EVM_ADDRESS = {};
 constexpr static evmc_bytes32 EMPTY_EVM_BYTES32 = {};
+constexpr static evmc_uint256be EMPTY_EVM_UINT256 = {};
 using bytes_view = std::basic_string_view<uint8_t>;
 
 #define EXECUTOR_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTOR")
