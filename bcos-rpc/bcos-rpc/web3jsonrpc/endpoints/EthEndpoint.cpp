@@ -350,12 +350,12 @@ task::Task<void> EthEndpoint::getCode(const Json::Value& request, Json::Value& r
                         << LOG_KV("blockTag", blockTag) << LOG_KV("blockNumber", blockNumber);
     }
     auto const scheduler = m_nodeService->scheduler();
-    auto code = std::make_shared<bcos::bytes>();
+    bcos::bytes code;
     struct Awaitable
     {
         bcos::scheduler::SchedulerInterface::Ptr m_scheduler;
         std::string& m_address;
-        std::shared_ptr<bcos::bytes> m_code;
+        bcos::bytes& m_code;
         Error::Ptr m_error = nullptr;
         constexpr static bool await_ready() noexcept { return false; }
         void await_suspend(std::coroutine_handle<> handle) noexcept
@@ -367,18 +367,17 @@ task::Task<void> EthEndpoint::getCode(const Json::Value& request, Json::Value& r
                 }
                 else
                 {
-                    *m_code = std::move(code);
+                    m_code = std::move(code);
                 }
                 handle.resume();
             });
         }
-        std::shared_ptr<bcos::bytes> await_resume()
+        void await_resume()
         {
             if (m_error)
             {
                 BOOST_THROW_EXCEPTION(*m_error);
             }
-            return m_code;
         }
     };
     // Note: Awaitable must be declared as a local variable,
@@ -390,7 +389,7 @@ task::Task<void> EthEndpoint::getCode(const Json::Value& request, Json::Value& r
         .m_code = code,
     };
     co_await awaitable;
-    Json::Value result = toHexStringWithPrefix(*code);
+    Json::Value result = toHexStringWithPrefix(code);
     buildJsonContent(result, response);
     co_return;
 }
