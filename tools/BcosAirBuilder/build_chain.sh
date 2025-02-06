@@ -1341,6 +1341,7 @@ generate_config_ini() {
     local rpc_listen_ip="${4}"
     local rpc_listen_port="${5}"
     local disable_ssl="${6}"
+    local p2p_enable_ssl="${7}"
 
     local enable_ssl_content="enable_ssl=true"
     if [[ "${disable_ssl}" == "true" ]]; then
@@ -1360,7 +1361,7 @@ generate_config_ini() {
     ; enable compression for p2p message, default: true
     ; enable_compression=false
     ; enable p2p ssl verify, default is true
-    ; enable_ssl = true
+    enable_ssl = ${p2p_enable_ssl}
 
 [certificate_blacklist]
     ; crl.0 should be nodeid, nodeid's length is 512
@@ -1562,7 +1563,8 @@ generate_sm_config_ini() {
     local rpc_listen_ip="${4}"
     local rpc_listen_port="${5}"
     local disable_ssl="${6}"
-
+    local p2p_enable_ssl="${7}"
+    
     local enable_ssl_content="enable_ssl=true"
     if [[ "${disable_ssl}" == "true" ]]; then
         enable_ssl_content="enable_ssl=false"
@@ -1580,6 +1582,8 @@ generate_sm_config_ini() {
     ; enable_rip_protocol=false
     ; enable compression for p2p message, default: true
     ; enable_compression=false
+    ; enable p2p ssl verify, default is true
+    enable_ssl = ${p2p_enable_ssl}
 
 [certificate_blacklist]
     ; crl.0 should be nodeid, nodeid's length is 128
@@ -1664,6 +1668,10 @@ generate_config() {
     local rpc_listen_port="${6}"
     local disable_ssl="${7}"
     local skip_generate_auth_account="${8}"
+    local enable_p2p_ssl="true"
+    if [ -n "${9}" ]; then  
+        enable_p2p_ssl="${9}"
+    fi
 
     if [[ -n "${skip_generate_auth_account}" ]]; then
         LOG_INFO "Skip generate auth account..."
@@ -1671,9 +1679,9 @@ generate_config() {
         check_auth_account
     fi
     if [ "${sm_mode}" == "false" ]; then
-        generate_config_ini "${node_config_path}" "${p2p_listen_ip}" "${p2p_listen_port}" "${rpc_listen_ip}" "${rpc_listen_port}" "${disable_ssl}"
+        generate_config_ini "${node_config_path}" "${p2p_listen_ip}" "${p2p_listen_port}" "${rpc_listen_ip}" "${rpc_listen_port}" "${disable_ssl}" "${enable_p2p_ssl}"
     else
-        generate_sm_config_ini "${node_config_path}" "${p2p_listen_ip}" "${p2p_listen_port}" "${rpc_listen_ip}" "${rpc_listen_port}" "${disable_ssl}"
+        generate_sm_config_ini "${node_config_path}" "${p2p_listen_ip}" "${p2p_listen_port}" "${rpc_listen_ip}" "${rpc_listen_port}" "${disable_ssl}" "${enable_p2p_ssl}"
     fi
 }
 
@@ -2257,7 +2265,7 @@ generate_template_package()
 
     local connected_nodes="[#P2P_CONNECTED_NODES]"
     # generate config for node
-    generate_config "${sm_mode}" "${node_dir}/config.ini" "${p2p_listen_ip}" "${p2p_listen_port}" "${rpc_listen_ip}" "${rpc_listen_port}" "true" "true"
+    generate_config "${sm_mode}" "${node_dir}/config.ini" "${p2p_listen_ip}" "${p2p_listen_port}" "${rpc_listen_ip}" "${rpc_listen_port}" "true" "true" "false"
     generate_p2p_connected_conf "${node_dir}/${p2p_connected_conf_name}" "${connected_nodes}" "true"
 
     LOG_INFO "Building template intstall package"

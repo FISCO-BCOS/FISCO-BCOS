@@ -159,6 +159,8 @@ public:
 
     void setLedger(ledger::LedgerInterface::Ptr ledger);
 
+    void asyncNotifyTxsSize(uint64_t txsSize, std::function<void(Error::Ptr)> _onRecvResponse);
+
 protected:
     PBFTEngine::Ptr m_pbftEngine;
     BlockValidator::Ptr m_blockValidator;

@@ -252,7 +252,26 @@ public:
         setTimeoutState(false);
     }
 
-    virtual void freshTimer() { m_pbftTimer->restart(); }
+    virtual void setTxsSize(size_t _txsSize)
+    {
+        m_txsSize = _txsSize;
+        if (m_txsSize > 0 && !m_pbftTimer->running())
+        {
+            m_pbftTimer->start();
+        }
+    }
+
+    virtual void freshTimer()
+    {
+        if (m_txsSize > 0)
+        {
+            m_pbftTimer->restart();
+        }
+        else
+        {
+            m_pbftTimer->stop();
+        }
+    }
 
     void registerSealProposalNotifier(
         std::function<void(size_t, size_t, size_t, std::function<void(Error::Ptr)>)>
@@ -463,5 +482,7 @@ protected:
 
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     RPBFTConfigTools::Ptr m_rpbftConfigTools = nullptr;
+
+    std::atomic<size_t> m_txsSize = {0};
 };
 }  // namespace bcos::consensus

@@ -320,10 +320,10 @@ private:
     std::string m_uuid;
     // if SM SSL connection or not
     bool m_smSSL;
-    // default verify mode
+    // default verify mode for server mode
     uint8_t m_ssl_server_mode =
         boost::asio::ssl::context_base::verify_peer | boost::asio::ssl::verify_fail_if_no_peer_cert;
-    // default verify mode
+    // default verify mode for client mode
     uint8_t m_ssl_client_mode =
         boost::asio::ssl::context_base::verify_peer | boost::asio::ssl::verify_fail_if_no_peer_cert;
 

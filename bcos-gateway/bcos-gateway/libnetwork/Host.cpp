@@ -124,14 +124,13 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
                 HOST_LOG(ERROR) << LOG_DESC("Get cert failed");
                 return preverified;
             }
-            ////  always return true when disable ssl, return preverified when enable ssl
             // For compatibility, p2p communication between nodes still uses the old public key
             // analysis method
             if (!hostPtr->sslContextPubHandler()(cert, *nodeIDOut))
             {
-                return preverified || (!hostPtr->m_enableSSL);
+                return preverified;
             }
-
+            ////  always return true when disable ssl, return preverified when enable ssl ///
             int crit = 0;
             BASIC_CONSTRAINTS* basic =
                 (BASIC_CONSTRAINTS*)X509_get_ext_d2i(cert, NID_basic_constraints, &crit, NULL);
@@ -156,7 +155,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             std::string nodeIDOutWithoutExtInfo;
             if (!hostPtr->sslContextPubHandlerWithoutExtInfo()(cert, nodeIDOutWithoutExtInfo))
             {
-                return preverified || (!hostPtr->m_enableSSL);
+                return preverified;
             }
             nodeIDOutWithoutExtInfo = boost::to_upper_copy(nodeIDOutWithoutExtInfo);
 

@@ -119,7 +119,10 @@ public:
         protocol::Transaction::Ptr transaction, protocol::TxSubmitCallback txSubmitCallback,
         bool checkPoolLimit, bool lock);
 
+
 protected:
+    virtual void notifyTxsSize(size_t _retryTime = 0);
+
     bcos::protocol::TransactionStatus insertWithoutLock(
         bcos::protocol::Transaction::Ptr transaction);
     bcos::protocol::TransactionStatus enforceSubmitTransaction(
@@ -168,6 +171,8 @@ protected:
     uint64_t m_txsExpirationTime = TX_DEFAULT_EXPIRATION_TIME;
     // timer to clear up the expired txs in-period
     std::shared_ptr<Timer> m_cleanUpTimer;
+    // timer to notify txs size
+    std::shared_ptr<Timer> m_txsSizeNotifierTimer;
 
     // for tps stat
     std::atomic_uint64_t m_tpsStatstartTime = {0};
