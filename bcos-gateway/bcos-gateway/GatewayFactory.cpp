@@ -349,6 +349,9 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
     {
         const SSL_METHOD* meth = SSLv23_server_method();
         ctx = SSL_CTX_new(meth);
+        SSL_CTX_set_cipher_list(ctx,
+            "ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES128-GCM-"
+            "SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECC-SM4-SM3:ECDHE-SM4-SM3");
     }
     else
     {

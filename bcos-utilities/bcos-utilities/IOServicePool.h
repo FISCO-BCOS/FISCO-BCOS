@@ -99,7 +99,6 @@ public:
         {
             ioService->stop();
         }
-
         // stop the thread
         for (auto& thread : m_threads)
         {
@@ -108,7 +107,6 @@ public:
                 thread.join();
             }
         }
-
         m_threads.clear();
     }
 
