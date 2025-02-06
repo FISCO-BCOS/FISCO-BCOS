@@ -100,18 +100,25 @@ int main(int argc, char** argv)
     // subscribe event
     sdk->eventSub()->subscribeEvent(
         group, params, [](Error::Ptr _error, const std::string& _events) {
+
+            auto tid = std::this_thread::get_id();
+
             if (_error)
             {
                 // error and exit
-                std::cout << " \t something is wrong" << LOG_KV("code", _error->errorCode())
-                          << LOG_KV("message", _error->errorMessage()) << std::endl;
+                std::cout << " \t something is wrong" 
+                            << LOG_KV("tid", tid)
+                            << LOG_KV("code", _error->errorCode())
+                            << LOG_KV("message", _error->errorMessage()) << std::endl;
                 std::exit(-1);
             }
             else
             {
                 // recv events from server
-                std::cout << " \t recv events from server ===>>>> " << LOG_KV("events", _events)
-                          << std::endl;
+                std::cout << " \t recv events from server ===>>>> " 
+                            << LOG_KV("tid", tid)
+                            << LOG_KV("events", _events)
+                            << std::endl;
             }
         });
 

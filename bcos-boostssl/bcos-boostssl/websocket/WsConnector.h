@@ -97,7 +97,6 @@ private:
 
     mutable std::mutex x_pendingConns;
     std::set<std::string> m_pendingConns;
-
     IOServicePool::Ptr m_ioservicePool;
 };
 }  // namespace bcos::boostssl::ws

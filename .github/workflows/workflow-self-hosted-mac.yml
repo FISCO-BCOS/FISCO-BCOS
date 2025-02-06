@@ -17,6 +17,9 @@ concurrency:
 env:
   ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
+env:
+  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+
 jobs:
   build_mac:
     name: mac ci check
@@ -31,7 +34,7 @@ jobs:
       - name: Set up JDK 1.8
         uses: actions/setup-java@v3
         with:
-          distribution: 'zulu'
+          distribution: "zulu"
           java-version: 8
           java-package: jdk
 

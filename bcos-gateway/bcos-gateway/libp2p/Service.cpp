@@ -360,9 +360,9 @@ void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message::P
 
         if (e.errorCode())
         {
-            SERVICE_LOG(INFO) << LOG_DESC("disconnect error P2PSession") << LOG_KV("p2pid", p2pID)
-                              << LOG_KV("endpoint", nodeIPEndpoint) << LOG_KV("code", e.errorCode())
-                              << LOG_KV("message", e.what());
+            SERVICE_LOG(INFO) << LOG_DESC("disconnect failed in P2PSession")
+                              << LOG_KV("p2pid", p2pID) << LOG_KV("endpoint", nodeIPEndpoint)
+                              << LOG_KV("code", e.errorCode()) << LOG_KV("message", e.what());
 
             if (p2pSession)
             {
@@ -629,7 +629,7 @@ void Service::asyncSendMessageByP2PNodeID(uint16_t _type, P2pID _dstNodeID, byte
             auto packetType = _p2pMessage ? _p2pMessage->packetType() : (uint16_t)0;
             if (_e.errorCode() != 0)
             {
-                SERVICE_LOG(INFO) << LOG_DESC("asyncSendMessageByP2PNodeID error")
+                SERVICE_LOG(INFO) << LOG_DESC("asyncSendMessageByP2PNodeID failed")
                                   << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what())
                                   << LOG_KV("type", packetType) << LOG_KV("dst", _dstNodeID);
                 if (_callback)
