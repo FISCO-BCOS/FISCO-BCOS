@@ -184,3 +184,13 @@ void bcos::consensus::PBFTImpl::setLedger(ledger::LedgerInterface::Ptr ledger)
 {
     m_pbftEngine->setLedger(std::move(ledger));
 }
+
+void PBFTImpl::asyncNotifyTxsSize(
+    uint64_t _txsSize, std::function<void(Error::Ptr)> _onRecvResponse)
+{
+    m_pbftEngine->pbftConfig()->setTxsSize(_txsSize);
+    if (_onRecvResponse)
+    {
+        _onRecvResponse(nullptr);
+    }
+}

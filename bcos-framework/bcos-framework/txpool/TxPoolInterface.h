@@ -172,6 +172,9 @@ public:
     virtual void clearAllTxs() {}
 
     virtual void tryToSyncTxsFromPeers() {}
+    virtual void registerTxsNotifier(
+        std::function<void(size_t, std::function<void(Error::Ptr)>)> _txsNotifier)
+    {}
 };
 
 }  // namespace bcos::txpool

@@ -367,6 +367,10 @@ void PBFTInitializer::registerHandlers()
         // clean up the expired txs for the consensus-timeout node
         return config->timeout();
     });
+
+    m_txpool->registerTxsNotifier([this](size_t txsSize, std::function<void(Error::Ptr)> callback) {
+        m_pbft->asyncNotifyTxsSize(txsSize, callback);
+    });
 }
 
 void PBFTInitializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
