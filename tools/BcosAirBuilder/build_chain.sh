@@ -1461,6 +1461,8 @@ generate_common_ini() {
     ;verify_worker_num=2
     ; txs expiration time, in seconds, default is 10 minutes
     txs_expiration_time = 600
+    ; permit txs from free node or not, default is false
+    enable_txs_from_free_node = false
 
 [sync]
     ; send transaction by tree-topology

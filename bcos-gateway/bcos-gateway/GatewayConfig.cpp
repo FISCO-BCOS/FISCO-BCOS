@@ -286,10 +286,13 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
     bool smSSL = _pt.get<bool>("p2p.sm_ssl", false);
     auto defaultSslMode =
         boost::asio::ssl::context_base::verify_peer | boost::asio::ssl::verify_fail_if_no_peer_cert;
-    m_ssl_server_mode = _pt.get<int>("p2p.ssl_server_verify_mode", defaultSslMode);
-    m_ssl_client_mode = _pt.get<int>("p2p.ssl_client_verify_mode", defaultSslMode);
+    // Note: currently not useful, use p2p.enable_ssl_verify to control whether to verify the
+    // certificate
+    // m_ssl_server_mode = _pt.get<int>("p2p.ssl_server_verify_mode", defaultSslMode);
+    // m_ssl_client_mode = _pt.get<int>("p2p.ssl_client_verify_mode", defaultSslMode);
+
     // enable p2p ssl verify or not
-    m_enableSSL = _pt.get<bool>("p2p.enable_ssl", true);
+    m_enableSSLVerify = _pt.get<bool>("p2p.enable_ssl_verify", true);
     std::string listenIP = _pt.get<std::string>("p2p.listen_ip", "0.0.0.0");
 
     int listenPort = _pt.get<int>("p2p.listen_port", 30300);
@@ -357,7 +360,7 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
                              << LOG_KV("p2p.nodes_path", m_nodePath)
                              << LOG_KV("p2p.nodes_file", m_nodeFileName)
                              << LOG_KV("p2p.readonly", m_readonly)
-                             << LOG_KV("p2p.enable_ssl", m_enableSSL);
+                             << LOG_KV("p2p.enable_ssl_verify", m_enableSSLVerify);
 }
 
 // load p2p connected peers
