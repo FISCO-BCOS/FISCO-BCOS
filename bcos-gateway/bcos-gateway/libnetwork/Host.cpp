@@ -31,6 +31,7 @@
 using namespace std;
 using namespace bcos;
 using namespace bcos::gateway;
+using namespace bcos::crypto;
 
 /**
  * @brief: accept connection requests, maily include procedures:
@@ -292,7 +293,12 @@ void Host::obtainNodeInfo(P2PInfo& info, std::string const& node_info)
     boost::split(node_info_vec, node_info, boost::is_any_of("#"), boost::token_compress_on);
     if (!node_info_vec.empty())
     {
-        info.p2pID = node_info_vec[0];
+        // raw p2pID
+        info.rawP2pID = node_info_vec[0];
+        HashType p2pIDHash =
+            m_hashImpl->hash(bcos::bytesConstRef(info.rawP2pID.begin(), info.rawP2pID.end()));
+        // the p2pID
+        info.p2pID = std::string(p2pIDHash.begin(), p2pIDHash.end());
     }
     if (node_info_vec.size() > 1)
     {

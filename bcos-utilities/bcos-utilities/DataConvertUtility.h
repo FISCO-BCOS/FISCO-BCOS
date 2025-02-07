@@ -461,4 +461,15 @@ std::string toQuantity(BigNumber auto number)
     return toQuantity(bytes);
 }
 
+std::string_view printShortHex(std::string_view data)
+{
+    auto startIt = data.begin();
+    auto endIt = data.end();
+    if (data.size() > 4)
+    {
+        endIt = startIt + 4 * sizeof(byte);
+    }
+    return toHex(std::span(startIt, endIt)) + "...";
+}
+
 }  // namespace bcos

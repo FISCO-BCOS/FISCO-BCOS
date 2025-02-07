@@ -6,6 +6,7 @@
 #include "bcos-gateway/Common.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
+#include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-security/bcos-security/BcosKms.h>
@@ -212,6 +213,7 @@ void GatewayConfig::initConfig(std::string const& _configPath, bool _uuidRequire
 {
     try
     {
+        m_hashImpl = std::make_shared<Keccak256>();
         boost::property_tree::ptree pt;
         boost::property_tree::ini_parser::read_ini(_configPath, pt);
         initP2PConfig(pt, _uuidRequired);
@@ -286,8 +288,11 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
     bool smSSL = _pt.get<bool>("p2p.sm_ssl", false);
     auto defaultSslMode =
         boost::asio::ssl::context_base::verify_peer | boost::asio::ssl::verify_fail_if_no_peer_cert;
-    m_ssl_server_mode = _pt.get<int>("p2p.ssl_server_verify_mode", defaultSslMode);
-    m_ssl_client_mode = _pt.get<int>("p2p.ssl_client_verify_mode", defaultSslMode);
+    // Note: currently not useful, use p2p.enable_ssl_verify to control whether to verify the
+    // certificate
+    // m_ssl_server_mode = _pt.get<int>("p2p.ssl_server_verify_mode", defaultSslMode);
+    // m_ssl_client_mode = _pt.get<int>("p2p.ssl_client_verify_mode", defaultSslMode);
+
     // enable p2p ssl verify or not
     m_enableSSLVerify = _pt.get<bool>("p2p.enable_ssl_verify", true);
     std::string listenIP = _pt.get<std::string>("p2p.listen_ip", "0.0.0.0");

@@ -6,6 +6,7 @@
 #pragma once
 
 #include "bcos-utilities/ObjectCounter.h"
+#include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-gateway/Common.h>
 #include <bcos-gateway/libnetwork/Common.h>
@@ -308,7 +309,10 @@ public:
 
     bool enableSSLVerify() const { return m_enableSSLVerify; }
 
+    bcos::crypto::Hash::Ptr const& hashImpl() const { return m_hashImpl; }
+
 private:
+    bcos::crypto::Hash::Ptr m_hashImpl;
     // The maximum size of message that is allowed to send or receive
     uint32_t m_allowMaxMsgSize = MAX_MESSAGE_LENGTH;
     // p2p session read buffer size, default: 128k

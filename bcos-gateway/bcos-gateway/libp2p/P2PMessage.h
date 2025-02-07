@@ -24,6 +24,7 @@
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/Message.h>
 #include <bcos-utilities/Common.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <boost/throw_exception.hpp>
 #include <utility>
 #include <vector>
@@ -207,11 +208,7 @@ public:
 
     static inline std::string_view printP2PIDElegantly(std::string_view p2pId) noexcept
     {
-        if (p2pId.length() < RSA_PUBLIC_KEY_TRUNC_LENGTH)
-        {
-            return p2pId;
-        }
-        return p2pId.substr(RSA_PUBLIC_KEY_PREFIX, RSA_PUBLIC_KEY_TRUNC);
+        return printShortHex(p2pId);
     }
 
     bool encodeHeader(bytes& _buffer) const override;
