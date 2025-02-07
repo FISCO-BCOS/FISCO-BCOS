@@ -28,6 +28,7 @@
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-framework/protocol/LogEntry.h"
 #include "bcos-protocol/TransactionStatus.h"
+#include "bcos-task/Task.h"
 #include "bcos-utilities/Exceptions.h"
 #include <evmc/evmc.h>
 #include <evmc/instructions.h>
@@ -239,7 +240,7 @@ inline evmc_uint256be toEvmC(const u256& _n)
 {
     evmc_uint256be ret;
     auto gasPriceBytes = toBigEndian(_n);
-    std::uninitialized_copy(gasPriceBytes.begin(), gasPriceBytes.end(), ret.bytes);
+    ::ranges::copy(gasPriceBytes, ret.bytes);
     return ret;
 }
 
@@ -252,7 +253,7 @@ inline evmc_bytes32 toEvmC(h256 const& hash)
 {
     evmc_bytes32 evmBytes;
     static_assert(sizeof(evmBytes) == h256::SIZE, "Hash size mismatch!");
-    std::uninitialized_copy(hash.begin(), hash.end(), evmBytes.bytes);
+    ::ranges::copy(hash, evmBytes.bytes);
     return evmBytes;
 }
 /**
@@ -316,5 +317,10 @@ std::string addressBytesStr2HexString(std::string_view receiveAddressBytes);
 std::string address2HexString(const evmc_address& address);
 std::array<char, sizeof(evmc_address) * 2> address2HexArray(const evmc_address& address);
 
+// task::Task<bool> checkTransferPermission(const evmc_address& sender)
+// {
+//     auto hexAddress = address2HexArray(sender);
+//     co_return false;
+// }
 
 }  // namespace bcos
