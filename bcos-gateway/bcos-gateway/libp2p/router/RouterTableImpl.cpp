@@ -115,8 +115,7 @@ bool RouterTable::update(std::set<std::string>& _unreachableNodes,
     if (c_fileLogLevel <= TRACE) [[unlikely]]
     {
         SERVICE_ROUTER_LOG(TRACE) << LOG_BADGE("update") << LOG_DESC("receive entry")
-                                  << LOG_KV(
-                                         "dst", P2PMessage::printP2PIDElegantly(_entry->dstNode()))
+                                  << LOG_KV("dst", printShortHex(_entry->dstNode()))
                                   << LOG_KV("distance", _entry->distance())
                                   << LOG_KV("from", printShortHex(_generatedFrom));
     }
@@ -266,7 +265,7 @@ std::set<std::string> RouterTable::getAllReachableNode()
     {
         std::stringstream nodes;
         std::for_each(reachableNodes.begin(), reachableNodes.end(),
-            [&](const auto& item) { nodes << P2PMessage::printP2PIDElegantly(item) << ","; });
+            [&](const auto& item) { nodes << printShortHex(item) << ","; });
         SERVICE_ROUTER_LOG(TRACE) << LOG_BADGE("getAllReachableNode")
                                   << LOG_KV("nodes size", reachableNodes.size())
                                   << LOG_KV("nodes", nodes.str());

@@ -37,7 +37,7 @@ public:
     virtual void setSession(std::shared_ptr<SessionFace> session) { m_session = session; }
 
     virtual P2pID p2pID() { return m_p2pInfo->p2pID; }
-    virtual std::string_view shortP2pID() { return printShortHex(m_p2pInfo->p2pID); }
+    virtual std::string shortP2pID() { return printShortHex(m_p2pInfo->p2pID); }
     // Note: the p2pInfo must be setted after session setted
     virtual void setP2PInfo(P2PInfo const& p2pInfo)
     {

@@ -297,7 +297,7 @@ void Host::obtainNodeInfo(P2PInfo& info, std::string const& node_info)
         info.rawP2pID = node_info_vec[0];
         HashType p2pIDHash = m_hashImpl->hash(
             bcos::bytesConstRef((bcos::byte const*)info.rawP2pID.data(), info.rawP2pID.size()));
-        // the p2pID
+        // the p2pID, hash(rawP2pID)
         info.p2pID = std::string(p2pIDHash.begin(), p2pIDHash.end());
     }
     if (node_info_vec.size() > 1)

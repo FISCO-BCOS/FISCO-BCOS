@@ -104,7 +104,7 @@ void ServiceV2::joinRouterTable(
     }
 
     SERVICE2_LOG(INFO) << LOG_BADGE("joinRouterTable") << LOG_DESC("create router entry")
-                       << LOG_KV("dst", _generatedFrom);
+                       << LOG_KV("dst", printShortHex(_generatedFrom));
 
     auto entry = m_routerTableFactory->createRouterEntry();
     entry->setDstNode(_generatedFrom);
@@ -116,7 +116,7 @@ void ServiceV2::joinRouterTable(
     if (!updated)
     {
         SERVICE2_LOG(DEBUG) << LOG_BADGE("joinRouterTable") << LOG_DESC("router table not updated")
-                            << LOG_KV("dst", _generatedFrom);
+                            << LOG_KV("dst", printShortHex(_generatedFrom));
         return;
     }
     onP2PNodesUnreachable(unreachableNodes);

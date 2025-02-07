@@ -292,7 +292,7 @@ void PeersRouterTable::asyncBroadcastMsg(
         {
             ROUTER_LOG(TRACE) << LOG_BADGE("PeersRouterTable") << LOG_DESC("asyncBroadcastMsg")
                               << LOG_KV("nodeType", _type) << LOG_KV("moduleID", _moduleID)
-                              << LOG_KV("dst", P2PMessage::printP2PIDElegantly(peer));
+                              << LOG_KV("dst", printShortHex(peer));
         }
         m_p2pInterface->asyncSendMessageByNodeID(peer, _msg, CallbackFuncWithSession());
     }
@@ -327,7 +327,7 @@ bcos::task::Task<void> bcos::gateway::PeersRouterTable::broadcastMessage(uint16_
         {
             ROUTER_LOG(TRACE) << LOG_BADGE("PeersRouterTable") << LOG_DESC("asyncBroadcastMsg")
                               << LOG_KV("nodeType", type) << LOG_KV("moduleID", moduleID)
-                              << LOG_KV("dst", P2PMessage::printP2PIDElegantly(peer));
+                              << LOG_KV("dst", printShortHex(peer));
         }
         co_await m_p2pInterface->sendMessageByNodeID(peer, message, payloads);
     }

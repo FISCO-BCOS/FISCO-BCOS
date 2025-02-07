@@ -199,17 +199,12 @@ public:
     std::string const& dstP2PNodeID() const override { return m_dstP2PNodeID; }
 
     // Note: only for log
-    std::string_view srcP2PNodeIDView() const { return printP2PIDElegantly(m_srcP2PNodeID); }
+    std::string_view srcP2PNodeIDView() const { return printShortHex(m_srcP2PNodeID); }
     // Note: only for log
-    std::string_view dstP2PNodeIDView() const { return printP2PIDElegantly(m_dstP2PNodeID); }
+    std::string_view dstP2PNodeIDView() const { return printShortHex(m_dstP2PNodeID); }
 
     virtual void setExtAttributes(std::any _extAttr) { m_extAttr = std::move(_extAttr); }
     const std::any& extAttributes() const override { return m_extAttr; }
-
-    static inline std::string_view printP2PIDElegantly(std::string_view p2pId) noexcept
-    {
-        return printShortHex(p2pId);
-    }
 
     bool encodeHeader(bytes& _buffer) const override;
 

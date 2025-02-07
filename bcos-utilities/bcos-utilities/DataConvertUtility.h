@@ -461,7 +461,7 @@ std::string toQuantity(BigNumber auto number)
     return toQuantity(bytes);
 }
 
-inline std::string_view printShortHex(std::string_view data)
+inline std::string printShortHex(std::string_view data)
 {
     auto startIt = data.begin();
     auto endIt = data.end();
