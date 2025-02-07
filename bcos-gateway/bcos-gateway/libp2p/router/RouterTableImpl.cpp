@@ -101,7 +101,8 @@ void RouterTable::updateDistanceForAllRouterEntries(
             SERVICE_ROUTER_LOG(INFO)
                 << LOG_BADGE("updateDistanceForAllRouterEntries")
                 << LOG_DESC("update entry since the nextHop distance has been updated")
-                << LOG_KV("dst", entry->dstNode()) << LOG_KV("nextHop", _nextHop)
+                << LOG_KV("dst", entry->printDstNode())
+                << LOG_KV("nextHop", printShortHex(_nextHop))
                 << LOG_KV("distance", entry->distance()) << LOG_KV("oldDistance", oldDistance)
                 << LOG_KV("size", m_routerEntries.size());
         }
@@ -117,7 +118,7 @@ bool RouterTable::update(std::set<std::string>& _unreachableNodes,
                                   << LOG_KV(
                                          "dst", P2PMessage::printP2PIDElegantly(_entry->dstNode()))
                                   << LOG_KV("distance", _entry->distance())
-                                  << LOG_KV("from", _generatedFrom);
+                                  << LOG_KV("from", printShortHex(_generatedFrom));
     }
     auto ret = updateDstNodeEntry(_generatedFrom, _entry);
     // the dst entry has not been updated
@@ -174,8 +175,8 @@ bool RouterTable::updateDstNodeEntry(
         SERVICE_ROUTER_LOG(INFO) << LOG_BADGE("updateDstNodeEntry")
                                  << LOG_DESC("insert new entry into the routerTable")
                                  << LOG_KV("distance", _entry->distance())
-                                 << LOG_KV("dst", _entry->dstNode())
-                                 << LOG_KV("nextHop", _entry->nextHop())
+                                 << LOG_KV("dst", _entry->printDstNode())
+                                 << LOG_KV("nextHop", _entry->printNextHop())
                                  << LOG_KV("size", m_routerEntries.size());
         return true;
     }
@@ -196,8 +197,8 @@ bool RouterTable::updateDstNodeEntry(
                                  << LOG_DESC("discover smaller distance, update entry")
                                  << LOG_KV("distance", currentEntry->distance())
                                  << LOG_KV("oldDistance", currentDistance)
-                                 << LOG_KV("dst", _entry->dstNode())
-                                 << LOG_KV("nextHop", _entry->nextHop())
+                                 << LOG_KV("dst", _entry->printDstNode())
+                                 << LOG_KV("nextHop", _entry->printNextHop())
                                  << LOG_KV("size", m_routerEntries.size());
         return true;
     }
@@ -223,8 +224,8 @@ bool RouterTable::updateDstNodeEntry(
                                  << LOG_DESC(
                                         "distance of the nextHop entry "
                                         "updated, update the current entry")
-                                 << LOG_KV("dst", currentEntry->dstNode())
-                                 << LOG_KV("nextHop", currentEntry->nextHop())
+                                 << LOG_KV("dst", currentEntry->printDstNode())
+                                 << LOG_KV("nextHop", currentEntry->printNextHop())
                                  << LOG_KV("distance", currentEntry->distance())
                                  << LOG_KV("size", m_routerEntries.size());
         return true;

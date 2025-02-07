@@ -124,7 +124,8 @@ void PeersRouterTable::batchInsertNodeList(
 
 void PeersRouterTable::removeP2PID(const P2pID& _p2pID)
 {
-    ROUTER_LOG(INFO) << LOG_DESC("PeersRouterTable: removeP2PID") << LOG_KV("p2pID", _p2pID);
+    ROUTER_LOG(INFO) << LOG_DESC("PeersRouterTable: removeP2PID")
+                     << LOG_KV("p2pID", printShortHex(_p2pID));
     // remove p2pID from groupNodeList
     removeP2PIDFromGroupNodeList(_p2pID);
     // remove p2pID from peerStatus

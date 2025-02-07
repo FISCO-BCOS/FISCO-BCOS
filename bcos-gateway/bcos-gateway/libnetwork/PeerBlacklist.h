@@ -14,7 +14,7 @@ public:
     PeerBlacklist(std::set<std::string> const& _strList, bool _enable = false)
       : PeerBlackWhitelistInterface(_strList, _enable)
     {}
-    PeerBlacklist(std::set<NodeID> const& _nodeList, bool _enable)
+    PeerBlacklist(std::set<P2PNodeID> const& _nodeList, bool _enable)
       : PeerBlackWhitelistInterface(_nodeList, _enable)
     {}
 

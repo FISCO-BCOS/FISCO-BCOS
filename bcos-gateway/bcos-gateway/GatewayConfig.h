@@ -310,6 +310,13 @@ public:
     bool enableSSLVerify() const { return m_enableSSLVerify; }
 
     bcos::crypto::Hash::Ptr const& hashImpl() const { return m_hashImpl; }
+    std::string calculateShortNodeID(std::string const& rawNodeID) const
+    {
+        bcos::crypto::HashType p2pIDHash = m_hashImpl->hash(
+            bcos::bytesConstRef((bcos::byte const*)rawNodeID.data(), rawNodeID.size()));
+        // the p2pID
+        return std::string(p2pIDHash.begin(), p2pIDHash.end());
+    }
 
 private:
     bcos::crypto::Hash::Ptr m_hashImpl;

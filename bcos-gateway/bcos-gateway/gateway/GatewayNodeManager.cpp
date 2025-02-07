@@ -254,7 +254,7 @@ bytesPointer GatewayNodeManager::generateNodeStatus()
 
 void GatewayNodeManager::onRemoveNodeIDs(const P2pID& _p2pID)
 {
-    NODE_MANAGER_LOG(INFO) << LOG_DESC("onRemoveNodeIDs") << LOG_KV("p2pid", _p2pID);
+    NODE_MANAGER_LOG(INFO) << LOG_DESC("onRemoveNodeIDs") << LOG_KV("p2pid", printShortHex(_p2pID));
     {
         // remove statusSeq info
         m_p2pID2Seq.erase(_p2pID);
