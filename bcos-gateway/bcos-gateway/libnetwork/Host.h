@@ -139,10 +139,11 @@ public:
         m_asyncGroup.template run(std::move(f));
     }
 
-    void setEnableSslVerify(bool _enableSSL)
+    void setEnableSslVerify(bool _enableSSLVerify)
     {
-        m_enableSSL = _enableSSL;
-        HOST_LOG(INFO) << LOG_DESC("setEnableSslVerify") << LOG_KV("enableSSL", m_enableSSL);
+        m_enableSSLVerify = _enableSSLVerify;
+        HOST_LOG(INFO) << LOG_DESC("setEnableSslVerify")
+                       << LOG_KV("enableSSLVerify", m_enableSSLVerify);
     }
 
 protected:
@@ -211,8 +212,8 @@ protected:
 
     std::string m_listenHost;
     uint16_t m_listenPort = 0;
-    // enable ssl or not
-    bool m_enableSSL = true;
+    // enable ssl verify or not
+    bool m_enableSSLVerify = true;
 
     std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>
         m_connectionHandler;

@@ -306,7 +306,7 @@ public:
         }
     }
 
-    bool enableSSL() const { return m_enableSSL; }
+    bool enableSSLVerify() const { return m_enableSSLVerify; }
 
 private:
     // The maximum size of message that is allowed to send or receive
@@ -327,8 +327,8 @@ private:
     uint8_t m_ssl_client_mode =
         boost::asio::ssl::context_base::verify_peer | boost::asio::ssl::verify_fail_if_no_peer_cert;
 
-    // enable ssl or not, default is true
-    bool m_enableSSL = true;
+    // enable ssl verify or not, default is true
+    bool m_enableSSLVerify = true;
     // p2p network listen IP
     std::string m_listenIP;
     // p2p network listen Port

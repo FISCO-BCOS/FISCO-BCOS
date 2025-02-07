@@ -648,7 +648,7 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     host->setPeerBlacklist(peerBlacklist);
     host->setPeerWhitelist(peerWhitelist);
     host->setSessionCallbackManager(sessionCallbackManager);
-    host->setEnableSslVerify(_config->enableSSL());
+    host->setEnableSslVerify(_config->enableSSLVerify());
     // init Service
     bool enableRIPProtocol = _config->enableRIPProtocol();
     Service::Ptr service = nullptr;

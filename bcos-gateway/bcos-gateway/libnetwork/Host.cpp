@@ -111,7 +111,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
         try
         {
             /// return early when the certificate verify failed
-            if (!preverified && hostPtr->m_enableSSL)
+            if (!preverified && hostPtr->m_enableSSLVerify)
             {
                 HOST_LOG(DEBUG) << LOG_DESC("ssl handshake certificate verify failed")
                                 << LOG_KV("preverified", preverified);
@@ -137,7 +137,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             if (!basic)
             {
                 HOST_LOG(INFO) << LOG_DESC("Get ca basic failed");
-                return preverified || (!hostPtr->m_enableSSL);
+                return preverified || (!hostPtr->m_enableSSLVerify);
             }
 
             /// ignore ca
@@ -146,7 +146,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
                 // ca or agency certificate
                 HOST_LOG(TRACE) << LOG_DESC("Ignore CA certificate");
                 BASIC_CONSTRAINTS_free(basic);
-                return preverified || (!hostPtr->m_enableSSL);
+                return preverified || (!hostPtr->m_enableSSLVerify);
             }
 
             BASIC_CONSTRAINTS_free(basic);
@@ -192,7 +192,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             OPENSSL_free((void*)certName);
             OPENSSL_free((void*)issuerName);
 
-            return preverified || (!hostPtr->m_enableSSL);
+            return preverified || (!hostPtr->m_enableSSLVerify);
         }
         catch (std::exception& e)
         {

@@ -1361,7 +1361,7 @@ generate_config_ini() {
     ; enable compression for p2p message, default: true
     ; enable_compression=false
     ; enable p2p ssl verify, default is true
-    enable_ssl = ${p2p_enable_ssl}
+    enable_ssl_verify = ${p2p_enable_ssl}
 
 [certificate_blacklist]
     ; crl.0 should be nodeid, nodeid's length is 512
@@ -1583,7 +1583,7 @@ generate_sm_config_ini() {
     ; enable compression for p2p message, default: true
     ; enable_compression=false
     ; enable p2p ssl verify, default is true
-    enable_ssl = ${p2p_enable_ssl}
+    enable_ssl_verify = ${p2p_enable_ssl}
 
 [certificate_blacklist]
     ; crl.0 should be nodeid, nodeid's length is 128
