@@ -554,7 +554,7 @@ public:
             co_await rollback(m_rollbackableStorage.get(), savepoint);
             co_await rollback(m_rollbackableTransientStorage.get(), transientSavepoint);
 
-            if (auto hexAddress = address2FixedArray(ref->code_address);
+            if (auto hexAddress = address2HexArray(ref->code_address);
                 precompiled::contains(bcos::precompiled::c_systemTxsAddress,
                     concepts::bytebuffer::toView(hexAddress)))
             {
