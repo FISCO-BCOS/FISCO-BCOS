@@ -183,7 +183,8 @@ void FrontServiceInitializer::initMsgHandlers(bcos::consensus::ConsensusInterfac
     m_front->registerModuleMessageDispatcher(protocol::SYNC_PUSH_TRANSACTION,
         [this, txpool = _txpool](bcos::crypto::NodeIDPtr const& nodeID,
             const std::string& messageID, bytesConstRef data) {
-            if (!txpool->existsInGroup(nodeID)) [[unlikely]]
+            if (!m_nodeConfig->enableTxsFromFreeNode() && !txpool->existsInGroup(nodeID))
+                [[unlikely]]
             {
                 if (c_fileLogLevel == TRACE) [[unlikely]]
                 {
@@ -232,7 +233,7 @@ void FrontServiceInitializer::initMsgHandlers(bcos::consensus::ConsensusInterfac
                                   << LOG_KV("tx", transaction ? transaction->hash().hex() : "")
                                   << LOG_KV("messageID", messageID);
             }
-            if (!txpool->existsInGroup(nodeID))
+            if (!m_nodeConfig->enableTxsFromFreeNode() && !txpool->existsInGroup(nodeID))
             {
                 if (c_fileLogLevel == TRACE) [[unlikely]]
                 {
