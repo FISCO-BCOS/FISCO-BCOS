@@ -50,10 +50,12 @@ MemoryStorage::MemoryStorage(
     m_missedTxs(CPU_CORES),
     m_blockNumberUpdatedTime(utcTime()),
     m_txsExpirationTime(_txsExpirationTime),
-    m_cleanUpTimer(std::make_shared<Timer>(TXPOOL_CLEANUP_TIME, "txpoolTimer"))
+    m_cleanUpTimer(std::make_shared<Timer>(TXPOOL_CLEANUP_TIME, "txpoolTimer")),
+    m_txsSizeNotifierTimer(std::make_shared<Timer>(TXS_SIZE_NOTIFY_TIME, "txsNotifier"))
 {
     // Trigger a transaction cleanup operation every 3s
     m_cleanUpTimer->registerTimeoutHandler([this] { cleanUpExpiredTransactions(); });
+    m_txsSizeNotifierTimer->registerTimeoutHandler([this] { notifyTxsSize(); });
     TXPOOL_LOG(INFO) << LOG_DESC("init MemoryStorage of txpool")
                      << LOG_KV("txNotifierWorkerNum", _notifyWorkerNum)
                      << LOG_KV("txsExpirationTime", m_txsExpirationTime)
@@ -63,12 +65,14 @@ MemoryStorage::MemoryStorage(
 void MemoryStorage::start()
 {
     m_cleanUpTimer->start();
+    m_txsSizeNotifierTimer->start();
 }
 
 void MemoryStorage::stop()
 {
     m_cleanUpTimer->stop();
     m_cleanUpTimer->destroy();
+    m_txsSizeNotifierTimer->stop();
 }
 
 task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransaction(
@@ -1215,7 +1219,6 @@ HashListPtr MemoryStorage::getTxsHash(int _limit)
 void MemoryStorage::cleanUpExpiredTransactions()
 {
     m_cleanUpTimer->restart();
-
     // Note: In order to minimize the impact of cleanUp on performance,
     // the normal consensus node does not clear expired txs in m_clearUpTimer, but clears
     // expired txs in the process of sealing txs
@@ -1362,4 +1365,35 @@ bool MemoryStorage::batchVerifyAndSubmitTransaction(
                       << LOG_KV("totalTxs", _txs->size()) << LOG_KV("lockT", lockT)
                       << LOG_KV("submitT", (utcTime() - recordT));
     return true;
+}
+
+void MemoryStorage::notifyTxsSize(size_t _retryTime)
+{
+    m_txsSizeNotifierTimer->restart();
+    // Note: must set the notifier
+    if (!m_txsNotifier)
+    {
+        return;
+    }
+    auto txsSize = size();
+    auto self = weak_from_this();
+    m_txsNotifier(txsSize, [_retryTime, self](Error::Ptr _error) {
+        if (_error == nullptr)
+        {
+            return;
+        }
+        TXPOOL_LOG(WARNING) << LOG_DESC("notifyTxsSize failed")
+                            << LOG_KV("code", _error->errorCode())
+                            << LOG_KV("msg", _error->errorMessage());
+        auto memoryStorage = self.lock();
+        if (!memoryStorage)
+        {
+            return;
+        }
+        if (_retryTime >= MAX_RETRY_NOTIFY_TIME)
+        {
+            return;
+        }
+        memoryStorage->notifyTxsSize((_retryTime + 1));
+    });
 }

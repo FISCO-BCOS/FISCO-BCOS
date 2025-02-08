@@ -479,7 +479,7 @@ std::string PBFTConfig::printCurrentState()
 void PBFTConfig::tryToSyncTxs()
 {
     // only the leader need tryToSyncTxs
-    if (m_pbftTimer->running() || getLeader() != nodeIndex())
+    if (m_txsSize > 0 || m_pbftTimer->running() || getLeader() != nodeIndex())
     {
         return;
     }

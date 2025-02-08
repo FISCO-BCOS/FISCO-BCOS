@@ -305,6 +305,8 @@ public:
 
     bool isValidPort(int port);
 
+    bool enableTxsFromFreeNode() const { return m_enableTxsFromFreeNode; }
+
 protected:
     virtual void loadChainConfig(boost::property_tree::ptree const& _pt, bool _enforceGroupId);
     virtual void loadWeb3ChainConfig(boost::property_tree::ptree const& _pt);
@@ -370,6 +372,8 @@ private:
     size_t m_verifierWorkerNum{};
     int64_t m_txsExpirationTime{};
     bool m_checkBlockLimit = true;
+    // permit txs from free node or not
+    bool m_enableTxsFromFreeNode = false;
     // TODO: the block sync module need some configurations?
 
     // chain configuration

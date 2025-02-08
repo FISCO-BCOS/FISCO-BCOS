@@ -560,13 +560,16 @@ void NodeConfig::loadTxPoolConfig(boost::property_tree::ptree const& _pt)
     }
     m_txsExpirationTime = std::max(
         {txsExpirationTime * 1000, (int64_t)DEFAULT_MIN_CONSENSUS_TIME_MS, (int64_t)m_minSealTime});
-
     m_checkBlockLimit = _pt.get<bool>("txpool.check_block_limit", true);
+
+    // enable free node to send transactions or not
+    m_enableTxsFromFreeNode = _pt.get<bool>("txpool.enable_txs_from_free_node", false);
     NodeConfig_LOG(INFO) << LOG_DESC("loadTxPoolConfig") << LOG_KV("txpoolLimit", m_txpoolLimit)
                          << LOG_KV("notifierWorkers", m_notifyWorkerNum)
                          << LOG_KV("verifierWorkers", m_verifierWorkerNum)
                          << LOG_KV("checkBlockLimit", m_checkBlockLimit)
-                         << LOG_KV("txsExpirationTime(ms)", m_txsExpirationTime);
+                         << LOG_KV("txsExpirationTime(ms)", m_txsExpirationTime)
+                         << LOG_KV("enableTxsFromFreeNode", m_enableTxsFromFreeNode);
 }
 
 void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt, bool _enforceGroupId)
@@ -623,7 +626,8 @@ void NodeConfig::loadSecurityConfig(boost::property_tree::ptree const& _pt)
 {
     m_privateKeyPath = _pt.get<std::string>("security.private_key_path", "node.pem");
     std::string keyEncryptionTypeStr = _pt.get<std::string>("security.kms_type", "LEGACY");
-    auto keyEncryptionTypeOption = magic_enum::enum_cast<security::KeyEncryptionType>(keyEncryptionTypeStr, magic_enum::case_insensitive);
+    auto keyEncryptionTypeOption = magic_enum::enum_cast<security::KeyEncryptionType>(
+        keyEncryptionTypeStr, magic_enum::case_insensitive);
     if (!keyEncryptionTypeOption.has_value())
     {
         NodeConfig_LOG(ERROR) << LOG_DESC("loadSecurityConfig")
@@ -707,8 +711,8 @@ void NodeConfig::loadSecurityConfig(boost::property_tree::ptree const& _pt)
                              << LOG_KV("privateKeyPath", m_privateKeyPath)
                              << LOG_KV("keyEncryptionType",
                                     std::string(magic_enum::enum_name((m_keyEncryptionType))))
-                             << LOG_KV(
-                                    "cloudKmsType", std::string(magic_enum::enum_name(m_cloudKmsType)));
+                             << LOG_KV("cloudKmsType",
+                                    std::string(magic_enum::enum_name(m_cloudKmsType)));
     }
     else if (m_keyEncryptionType == security::KeyEncryptionType::BCOSKMS)  // bcos kms
     {
