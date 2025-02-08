@@ -25,8 +25,11 @@
 
 #pragma once
 
+#include "bcos-concepts/ByteBuffer.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
+#include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/LogEntry.h"
+#include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include "bcos-task/Task.h"
 #include "bcos-utilities/Exceptions.h"
@@ -317,10 +320,20 @@ std::string addressBytesStr2HexString(std::string_view receiveAddressBytes);
 std::string address2HexString(const evmc_address& address);
 std::array<char, sizeof(evmc_address) * 2> address2HexArray(const evmc_address& address);
 
-// task::Task<bool> checkTransferPermission(const evmc_address& sender)
-// {
-//     auto hexAddress = address2HexArray(sender);
-//     co_return false;
-// }
+task::Task<bool> checkTransferPermission(auto& storage, std::string_view sender)
+{
+    if (auto entry = co_await storage2::readOne(
+            storage, transaction_executor::StateKeyView{ledger::SYS_BALANCE_CALLER, sender}))
+    {
+        co_return true;
+    }
+    co_return false;
+}
+
+task::Task<bool> checkTransferPermission(auto& storage, const evmc_address& sender)
+{
+    auto hexAddress = address2HexArray(sender);
+    co_return checkTransferPermission(storage, concepts::bytebuffer::toView(hexAddress));
+}
 
 }  // namespace bcos

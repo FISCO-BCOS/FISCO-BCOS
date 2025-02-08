@@ -30,6 +30,7 @@
 #include "../vm/Precompiled.h"
 #include "../vm/VMFactory.h"
 #include "../vm/VMInstance.h"
+#include "bcos-executor/src/Common.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-table/src/ContractShardUtils.h"
@@ -274,8 +275,17 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
         int64_t requiredGas = transferFromEVM ? 0 : BALANCE_TRANSFER_GAS;
         auto currentContextAddress = callParameters->receiveAddress;
 
-        callParameters =
-            transferBalance(std::move(callParameters), requiredGas, currentContextAddress);
+        if (m_blockContext.features().get(ledger::Features::Flag::feature_balance_policy2) &&
+            !task::syncWait(checkTransferPermission(
+                *m_storageWrapper->getRawStorage(), callParameters->senderAddress)))
+        {
+            callParameters->status = static_cast<int32_t>(TransactionStatus::PermissionDenied);
+        }
+        else
+        {
+            callParameters =
+                transferBalance(std::move(callParameters), requiredGas, currentContextAddress);
+        }
 
         if (callParameters->status != (int32_t)TransactionStatus::None)
         {
