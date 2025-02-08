@@ -153,7 +153,7 @@ BOOST_AUTO_TEST_CASE(fixedArray)
 {
     std::string_view lhs{"0000000000000000000000000000000000010003"};
     evmc_address address = unhexAddress(lhs);
-    auto fixedArray = bcos::address2FixedArray(address);
+    auto fixedArray = bcos::address2HexArray(address);
     std::string_view rhs(fixedArray.data(), fixedArray.size());
     BOOST_CHECK_EQUAL(lhs, rhs);
 }

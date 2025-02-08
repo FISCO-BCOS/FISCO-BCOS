@@ -24,14 +24,13 @@
 #include "../impl/TarsHashable.h"
 #include "bcos-concepts/Hash.h"
 #include "bcos-utilities/Common.h"
+#include "bcos-utilities/Exceptions.h"
 #include <boost/endian/conversion.hpp>
 
 using namespace bcostars;
 using namespace bcostars::protocol;
 
-struct EmptyBlockHeaderHash : public bcos::error::Exception
-{
-};
+DERIVE_BCOS_EXCEPTION(EmptyBlockHeaderHash);
 
 void BlockHeaderImpl::decode(bcos::bytesConstRef _data)
 {

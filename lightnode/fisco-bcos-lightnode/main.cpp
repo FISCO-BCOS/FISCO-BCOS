@@ -23,6 +23,7 @@
 #include "RPCInitializer.h"
 #include "bcos-crypto/interfaces/crypto/CryptoSuite.h"
 #include "bcos-utilities/Common.h"
+#include "bcos-utilities/Exceptions.h"
 #include "client/LedgerClientImpl.h"
 #include "client/P2PClientImpl.h"
 #include "client/SchedulerClientImpl.h"
@@ -42,9 +43,8 @@
 #include <exception>
 #include <memory>
 #include <thread>
-struct StartLightNodeException : public bcos::error::Exception
-{
-};
+
+DERIVE_BCOS_EXCEPTION(StartLightNodeException);
 
 static auto newStorage(const std::string& path)
 {
@@ -82,8 +82,7 @@ static auto startSyncerThread(bcos::concepts::ledger::Ledger auto fromLedger,
             {
                 auto& ledger = bcos::concepts::getRef(toLedger);
 
-                auto syncedBlock = bcos::task::syncWait(
-                    ledger
+                auto syncedBlock = bcos::task::syncWait(ledger
                         .template sync<std::remove_cvref_t<decltype(fromLedger)>, bcostars::Block>(
                             fromLedger, true));
                 auto currentStatus = bcos::task::syncWait(ledger.getStatus());
@@ -175,7 +174,7 @@ void starLightnode(bcos::tool::NodeConfig::Ptr nodeConfig, auto ledger, auto nod
         std::cout << "[" << bcos::getCurrentDateTime() << "] ";
         std::cout << "start fisco-bcos-lightnode failed, error:" << boost::diagnostic_information(e)
                   << std::endl;
-        BOOST_THROW_EXCEPTION(StartLightNodeException{} << bcos::error::ErrorMessage{
+        BOOST_THROW_EXCEPTION(StartLightNodeException{} << bcos::errinfo_comment{
                                   "start lightnode failed, " + boost::diagnostic_information(e)});
     }
 
@@ -232,7 +231,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
         std::cout << "[" << bcos::getCurrentDateTime() << "] ";
         std::cout << "start fisco-bcos-lightnode failed, error:" << boost::diagnostic_information(e)
                   << std::endl;
-        BOOST_THROW_EXCEPTION(StartLightNodeException{} << bcos::error::ErrorMessage{
+        BOOST_THROW_EXCEPTION(StartLightNodeException{} << bcos::errinfo_comment{
                                   "start lightnode failed, " + boost::diagnostic_information(e)});
     }
 

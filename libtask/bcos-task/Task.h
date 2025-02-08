@@ -15,7 +15,7 @@
  */
 
 #pragma once
-#include "bcos-concepts/Exception.h"
+#include "bcos-utilities/Exceptions.h"
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
 #include <coroutine>
@@ -27,10 +27,7 @@
 
 namespace bcos::task
 {
-
-struct NoReturnValue : public bcos::error::Exception
-{
-};
+DERIVE_BCOS_EXCEPTION(NoReturnValue);
 
 template <class Promise>
 struct FinalAwaitable
@@ -107,7 +104,7 @@ template <class TaskType>
 struct Awaitable
 {
     explicit Awaitable(std::coroutine_handle<typename TaskType::promise_type> handle)
-      : m_handle(std::move(handle)){};
+      : m_handle(std::move(handle)) {};
     Awaitable(const Awaitable&) = delete;
     Awaitable(Awaitable&&) noexcept = default;
     Awaitable& operator=(const Awaitable&) = delete;

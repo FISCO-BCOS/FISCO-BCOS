@@ -1,6 +1,5 @@
 #pragma once
 
-#include "bcos-concepts/Exception.h"
 #include "bcos-crypto/interfaces/crypto/KeyInterface.h"
 #include "bcos-lightnode/Log.h"
 #include "bcos-utilities/BoostLog.h"
@@ -15,10 +14,7 @@
 namespace bcos::p2p
 {
 
-// clang-format off
-struct NoNodeAvailable: public bcos::error::Exception {};
-// clang-format on
-
+DERIVE_BCOS_EXCEPTION(NoNodeAvailable);
 class P2PClientImpl
 {
 public:
@@ -193,7 +189,7 @@ public:
             LIGHTNODE_LOG(INFO) << LOG_DESC(
                 "randomSelectNode failed, nodeID is empty, no node available");
             BOOST_THROW_EXCEPTION(
-                NoNodeAvailable{} << bcos::error::ErrorMessage{
+                NoNodeAvailable{} << errinfo_comment{
                     "no node available, please check the node and network status"});
         }
 
@@ -287,7 +283,7 @@ public:
         if (nodeIDs.empty())
         {
             BOOST_THROW_EXCEPTION(
-                NoNodeAvailable{} << bcos::error::ErrorMessage{
+                NoNodeAvailable{} << errinfo_comment{
                     "no node available, please check the node and network status"});
         }
         co_return nodeIDs;

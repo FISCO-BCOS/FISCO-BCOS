@@ -412,18 +412,26 @@ public:
     class Iterator
     {
     private:
-        std::reference_wrapper<Buckets const> m_buckets;
-        size_t m_bucketIndex = 0;
+        size_t m_bucketIndex{};
+        std::reference_wrapper<Buckets> m_buckets;
+        std::unique_ptr<Lock> m_bucketLock;
         ::ranges::iterator_t<Container> m_begin;
         ::ranges::iterator_t<Container> m_end;
+
         using IteratorValue = std::conditional_t<withLogicalDeletion, const Value*, const Value&>;
 
+        void updateIterator()
+        {
+            if constexpr (withConcurrent)
+            {
+                m_bucketLock = std::make_unique<Lock>(m_buckets.get()[m_bucketIndex].mutex, false);
+            }
+            m_begin = (m_buckets.get()[m_bucketIndex]).container.begin();
+            m_end = (m_buckets.get()[m_bucketIndex]).container.end();
+        }
+
     public:
-        Iterator(const Buckets& buckets)
-          : m_buckets(buckets),
-            m_begin((m_buckets.get()[m_bucketIndex]).container.begin()),
-            m_end((m_buckets.get()[m_bucketIndex]).container.end())
-        {}
+        Iterator(Buckets& buckets) : m_buckets(buckets) { updateIterator(); }
 
         auto next()
         {
@@ -447,8 +455,7 @@ public:
             if (m_bucketIndex + 1 < m_buckets.get().size())
             {
                 ++m_bucketIndex;
-                m_begin = m_buckets.get()[m_bucketIndex].container.begin();
-                m_end = m_buckets.get()[m_bucketIndex].container.end();
+                updateIterator();
                 return next();
             }
             return task::AwaitableValue(std::move(result));
@@ -463,13 +470,13 @@ public:
     };
 
     friend auto tag_invoke(
-        bcos::storage2::tag_t<storage2::range> /*unused*/, MemoryStorage const& storage)
+        bcos::storage2::tag_t<storage2::range> /*unused*/, MemoryStorage& storage)
     {
         return task::AwaitableValue(Iterator(storage.m_buckets));
     }
 
     friend auto tag_invoke(bcos::storage2::tag_t<storage2::range> /*unused*/,
-        MemoryStorage const& storage, RANGE_SEEK_TYPE /*unused*/, auto&& key)
+        MemoryStorage& storage, RANGE_SEEK_TYPE /*unused*/, auto&& key)
         requires(!withConcurrent && withOrdered)
     {
         auto iterator = Iterator(storage.m_buckets);

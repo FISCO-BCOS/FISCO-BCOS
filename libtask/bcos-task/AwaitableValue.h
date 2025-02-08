@@ -18,7 +18,6 @@
 
 #include <concepts>
 #include <coroutine>
-#include <string>
 #include <utility>
 
 namespace bcos::task

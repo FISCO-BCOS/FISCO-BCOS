@@ -229,7 +229,6 @@ private:
     std::shared_ptr<Host> m_host;
 
     tbb::concurrent_hash_map<P2pID, P2PSession::Ptr> m_sessions;
-    // tbb::concurrent_hash_map<P2pID, P2PSession::Ptr> m_seesions;
     std::shared_ptr<MessageFactory> m_messageFactory;
 
     P2pID m_nodeID;
