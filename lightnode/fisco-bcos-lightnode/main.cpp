@@ -175,7 +175,7 @@ void starLightnode(bcos::tool::NodeConfig::Ptr nodeConfig, auto ledger, auto nod
         std::cout << "[" << bcos::getCurrentDateTime() << "] ";
         std::cout << "start fisco-bcos-lightnode failed, error:" << boost::diagnostic_information(e)
                   << std::endl;
-        BOOST_THROW_EXCEPTION(StartLightNodeException{} << bcos::error::ErrorMessage{
+        BOOST_THROW_EXCEPTION(StartLightNodeException{} << errinfo_comment{
                                   "start lightnode failed, " + boost::diagnostic_information(e)});
     }
 
@@ -232,7 +232,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
         std::cout << "[" << bcos::getCurrentDateTime() << "] ";
         std::cout << "start fisco-bcos-lightnode failed, error:" << boost::diagnostic_information(e)
                   << std::endl;
-        BOOST_THROW_EXCEPTION(StartLightNodeException{} << bcos::error::ErrorMessage{
+        BOOST_THROW_EXCEPTION(StartLightNodeException{} << errinfo_comment{
                                   "start lightnode failed, " + boost::diagnostic_information(e)});
     }
 

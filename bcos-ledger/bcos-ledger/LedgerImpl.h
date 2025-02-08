@@ -5,7 +5,6 @@
 #include "bcos-task/Task.h"
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/ByteBuffer.h>
-#include <bcos-concepts/Exception.h>
 #include <bcos-concepts/Hash.h>
 #include <bcos-concepts/ledger/Ledger.h>
 #include <bcos-concepts/storage/Storage.h>
@@ -27,15 +26,13 @@ namespace bcos::ledger
 {
 static constexpr const int LIGHTNODE_MAX_REQUEST_BLOCKS_COUNT = 50;
 
-// clang-format off
-struct NotFoundTransaction : public bcos::error::Exception {};
-struct UnexpectedRowIndex : public bcos::error::Exception {};
-struct MismatchTransactionCount : public bcos::error::Exception {};
-struct MismatchParentHash: public bcos::error::Exception {};
-struct NotFoundBlockHeader: public bcos::error::Exception {};
-struct GetABIError : public bcos::error::Exception {};
-struct GetBlockDataError : public bcos::error::Exception {};
-// clang-format on
+DERIVE_BCOS_EXCEPTION(NotFoundTransaction);
+DERIVE_BCOS_EXCEPTION(UnexpectedRowIndex);
+DERIVE_BCOS_EXCEPTION(MismatchTransactionCount);
+DERIVE_BCOS_EXCEPTION(MismatchParentHash);
+DERIVE_BCOS_EXCEPTION(NotFoundBlockHeader);
+DERIVE_BCOS_EXCEPTION(GetABIError);
+DERIVE_BCOS_EXCEPTION(GetBlockDataError);
 
 template <bcos::crypto::hasher::Hasher Hasher, bcos::concepts::storage::Storage Storage>
 class LedgerImpl : public bcos::concepts::ledger::LedgerBase<LedgerImpl<Hasher, Storage>>,
@@ -71,7 +68,7 @@ public:
         {
             LEDGER_LOG(ERROR) << "ParentHash mismatch!";
             BOOST_THROW_EXCEPTION(
-                MismatchParentHash{} << bcos::error::ErrorMessage{"No match parentHash!"});
+                MismatchParentHash{} << errinfo_comment{"No match parentHash!"});
         }
     }
 
@@ -186,7 +183,7 @@ private:
         {
             LEDGER_LOG(WARNING) << "Not found compatibilityVersion: ";
             BOOST_THROW_EXCEPTION(
-                GetABIError{} << bcos::error::ErrorMessage{"get compatibilityVersion not found"});
+                GetABIError{} << errinfo_comment{"get compatibilityVersion not found"});
         }
         m_compatibilityVersion = bcos::tool::toVersionNumber(compatibilityVersionStr);
         LEDGER_LOG(TRACE) << "getABI contractAddress is: " << _contractAddress
@@ -211,7 +208,7 @@ private:
         {
             LEDGER_LOG(WARNING) << "Not found codeHash contractAddress:" << _contractAddress;
             BOOST_THROW_EXCEPTION(
-                GetABIError{} << bcos::error::ErrorMessage{"Get CodeHash not found"});
+                GetABIError{} << errinfo_comment{"Get CodeHash not found"});
         }
         auto codeHash = codeHashEntry.second->getField(0);
 
@@ -220,7 +217,7 @@ private:
         if (!entry.second) [[unlikely]]
         {
             LEDGER_LOG(WARNING) << "Not found contractAddress abi:" << _contractAddress;
-            BOOST_THROW_EXCEPTION(GetABIError{} << bcos::error::ErrorMessage{"Get Abi not found"});
+            BOOST_THROW_EXCEPTION(GetABIError{} << errinfo_comment{"Get Abi not found"});
         }
 
         std::string abiStr = std::string(entry.second->getField(0));
@@ -249,7 +246,7 @@ private:
                     {
                         [[unlikely]] BOOST_THROW_EXCEPTION(
                             NotFoundTransaction{}
-                            << bcos::error::ErrorMessage{"Get transaction not found"});
+                            << errinfo_comment{"Get transaction not found"});
                     }
 
                     auto field = entries[index]->getField(0);
@@ -293,7 +290,7 @@ private:
                 break;
             default:
                 BOOST_THROW_EXCEPTION(
-                    UnexpectedRowIndex{} << bcos::error::ErrorMessage{
+                    UnexpectedRowIndex{} << errinfo_comment{
                         "Unexpected getRows index: " + boost::lexical_cast<std::string>(i)});
                 break;
             }
@@ -336,7 +333,7 @@ private:
         }
         // sync block
         for (auto blockNumber = status.blockNumber + 1; blockNumber <= syncBlockNumber;
-             ++blockNumber)
+            ++blockNumber)
         {
             LEDGER_LOG(INFO) << "Syncing block from remote: " << blockNumber << " | "
                              << syncBlockNumber << " | " << onlyHeader;
@@ -393,7 +390,7 @@ private:
         if (!entry) [[unlikely]]
         {
             BOOST_THROW_EXCEPTION(
-                NotFoundBlockHeader{} << bcos::error::ErrorMessage{"Not found block header!"});
+                NotFoundBlockHeader{} << errinfo_comment{"Not found block header!"});
         }
 
         auto field = entry->getField(0);
@@ -493,7 +490,7 @@ private:
         {
             LEDGER_LOG(ERROR) << "getBlockData all failed";
             BOOST_THROW_EXCEPTION(
-                GetBlockDataError{} << bcos::error::ErrorMessage{"getBlockData all failed!"});
+                GetBlockDataError{} << errinfo_comment{"getBlockData all failed!"});
         }
     }
 
@@ -627,7 +624,7 @@ private:
         {
             LEDGER_LOG(INFO) << "Not found genesis block, may be not initialized";
             BOOST_THROW_EXCEPTION(
-                NotFoundBlockHeader{} << bcos::error::ErrorMessage{"Not found genesis block!"});
+                NotFoundBlockHeader{} << errinfo_comment{"Not found genesis block!"});
         }
     }
 

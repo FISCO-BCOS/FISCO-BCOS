@@ -20,9 +20,7 @@
 
 namespace bcos::ledger
 {
-struct GetBlockFailed : public bcos::error::Exception
-{
-};
+DERIVE_BCOS_EXCEPTION(GetBlockFailed);
 class LedgerClientImpl : public bcos::concepts::ledger::LedgerBase<LedgerClientImpl>
 {
     friend bcos::concepts::ledger::LedgerBase<LedgerClientImpl>;

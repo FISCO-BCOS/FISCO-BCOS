@@ -20,7 +20,6 @@
 
 #pragma once
 #include "../protocol/ProtocolTypeDef.h"
-#include "bcos-concepts/Exception.h"
 #include <boost/throw_exception.hpp>
 #include <magic_enum.hpp>
 #include <range/v3/view/iota.hpp>
@@ -28,9 +27,8 @@
 
 namespace bcos::ledger
 {
-struct NoSuchSystemConfig : public bcos::error::Exception
-{
-};
+DERIVE_BCOS_EXCEPTION(NoSuchSystemConfig);
+
 /// IMPORTANT!!
 /// DO NOT change the name of enum. It is used to get the name of the config.
 enum class SystemConfig
