@@ -598,13 +598,7 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     auto nodeCert =
         (_config->smSSL() ? _config->smCertConfig().nodeCert : _config->certConfig().nodeCert);
     std::string pubHex;
-    auto verifyNoneMode = (_config->sslServerMode() & ba::ssl::verify_none) == 0 ||
-                          (_config->sslClientMode() & ba::ssl::verify_none) == 0;
-    if (!nodeCert && verifyNoneMode)
-    {
-        pubHex = h512::generateRandomFixedBytes().hex();
-    }
-    else if (!m_certPubHexHandler(*nodeCert, pubHex))
+    if (!nodeCert || !m_certPubHexHandler(*nodeCert, pubHex))
     {
         BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
                                   "GatewayFactory::init unable parse myself pub id"));
@@ -654,7 +648,7 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     host->setPeerBlacklist(peerBlacklist);
     host->setPeerWhitelist(peerWhitelist);
     host->setSessionCallbackManager(sessionCallbackManager);
-    host->setSslVerifyMode(_config->sslServerMode(), _config->sslClientMode());
+    host->setEnableSslVerify(_config->enableSSLVerify());
     // init Service
     bool enableRIPProtocol = _config->enableRIPProtocol();
     Service::Ptr service = nullptr;

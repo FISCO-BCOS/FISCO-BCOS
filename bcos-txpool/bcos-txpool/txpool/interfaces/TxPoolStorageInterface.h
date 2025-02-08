@@ -106,8 +106,18 @@ public:
         m_txsCleanUpSwitch = std::move(_txsCleanUpSwitch);
     }
 
+    virtual void registerTxsNotifier(
+        std::function<void(size_t, std::function<void(Error::Ptr)>)> _txsNotifier)
+    {
+        m_txsNotifier = std::move(_txsNotifier);
+    }
+
 protected:
     // Determine to periodically clean up expired transactions or not
     std::function<bool()> m_txsCleanUpSwitch;
+
+    // notify the consensus the latest txs count, to determine stop/start the consensus
+    // timer or not
+    std::function<void(size_t, std::function<void(Error::Ptr)>)> m_txsNotifier;
 };
 }  // namespace bcos::txpool
