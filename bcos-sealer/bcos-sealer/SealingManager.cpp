@@ -253,71 +253,47 @@ void SealingManager::fetchTransactions()
     // try to fetch transactions
     ssize_t startSealingNumber = m_startSealingNumber;
     ssize_t endSealingNumber = m_endSealingNumber;
-    m_config->txpool()->asyncSealTxs(txsToFetch, nullptr,
-        [self = weak_from_this(), startSealingNumber, endSealingNumber,
-            lock = std::make_shared<decltype(lock)>(std::move(lock))](
-            Error::Ptr _error, Block::Ptr _txsHashList, Block::Ptr _sysTxsList) {
-            try
-            {
-                auto sealingMgr = self.lock();
-                if (!sealingMgr)
-                {
-                    return;
-                }
 
-                if (_txsHashList->transactionsHashSize() == 0 &&
-                    _sysTxsList->transactionsHashSize() == 0)
-                {
-                    return;
-                }
-                if (_error != nullptr)
-                {
-                    SEAL_LOG(WARNING) << LOG_DESC("fetchTransactions exception")
-                                      << LOG_KV("returnCode", _error->errorCode())
-                                      << LOG_KV("returnMsg", _error->errorMessage());
-                    return;
-                }
-                bool abort = true;
-                if ((sealingMgr->m_sealingNumber >= startSealingNumber) &&
-                    (sealingMgr->m_sealingNumber <= endSealingNumber))
-                {
-                    sealingMgr->appendTransactions(sealingMgr->m_pendingTxs, *_txsHashList);
-                    sealingMgr->appendTransactions(sealingMgr->m_pendingSysTxs, *_sysTxsList);
-                    abort = false;
-                }
-                else
-                {
-                    SEAL_LOG(INFO) << LOG_DESC("fetchTransactions finish: abort the expired txs")
-                                   << LOG_KV("txsSize", _txsHashList->transactionsMetaDataSize())
-                                   << LOG_KV("sysTxsSize", _sysTxsList->transactionsMetaDataSize());
-                    // Note: should reset the aborted txs
-                    sealingMgr->notifyResetProposal(*_txsHashList);
-                    sealingMgr->notifyResetProposal(*_sysTxsList);
-                }
+    try
+    {
+        auto [_txsHashList, _sysTxsList] = m_config->txpool()->sealTxs(txsToFetch, nullptr);
+        if (_txsHashList->transactionsHashSize() == 0 && _sysTxsList->transactionsHashSize() == 0)
+        {
+            return;
+        }
 
-                sealingMgr->m_onReady();
-                SEAL_LOG(DEBUG) << LOG_DESC("fetchTransactions finish")
-                                << LOG_KV("txsSize", _txsHashList->transactionsMetaDataSize())
-                                << LOG_KV("sysTxsSize", _sysTxsList->transactionsMetaDataSize())
-                                << LOG_KV("pendingSize", sealingMgr->m_pendingTxs.size())
-                                << LOG_KV("pendingSysSize", sealingMgr->m_pendingSysTxs.size())
-                                << LOG_KV("startSealingNumber", startSealingNumber)
-                                << LOG_KV("endSealingNumber", endSealingNumber)
-                                << LOG_KV("sealingNumber", sealingMgr->m_sealingNumber)
-                                << LOG_KV("abort", abort);
-            }
-            catch (std::exception const& e)
-            {
-                SEAL_LOG(WARNING) << LOG_DESC("fetchTransactions: onRecv sealed txs failed")
-                                  << LOG_KV("message", boost::diagnostic_information(e))
-                                  << LOG_KV(
-                                         "fetchedTxsSize", _txsHashList->transactionsMetaDataSize())
-                                  << LOG_KV(
-                                         "fetchedSysTxs", _sysTxsList->transactionsMetaDataSize())
-                                  << LOG_KV("returnCode", _error->errorCode())
-                                  << LOG_KV("returnMsg", _error->errorMessage());
-            }
-        });
+        bool abort = true;
+        if ((m_sealingNumber >= startSealingNumber) && (m_sealingNumber <= endSealingNumber))
+        {
+            appendTransactions(m_pendingTxs, *_txsHashList);
+            appendTransactions(m_pendingSysTxs, *_sysTxsList);
+            abort = false;
+        }
+        else
+        {
+            SEAL_LOG(INFO) << LOG_DESC("fetchTransactions finish: abort the expired txs")
+                           << LOG_KV("txsSize", _txsHashList->transactionsMetaDataSize())
+                           << LOG_KV("sysTxsSize", _sysTxsList->transactionsMetaDataSize());
+            // Note: should reset the aborted txs
+            notifyResetProposal(*_txsHashList);
+            notifyResetProposal(*_sysTxsList);
+        }
+
+        m_onReady();
+        SEAL_LOG(DEBUG) << LOG_DESC("fetchTransactions finish")
+                        << LOG_KV("txsSize", _txsHashList->transactionsMetaDataSize())
+                        << LOG_KV("sysTxsSize", _sysTxsList->transactionsMetaDataSize())
+                        << LOG_KV("pendingSize", m_pendingTxs.size())
+                        << LOG_KV("pendingSysSize", m_pendingSysTxs.size())
+                        << LOG_KV("startSealingNumber", startSealingNumber)
+                        << LOG_KV("endSealingNumber", endSealingNumber)
+                        << LOG_KV("sealingNumber", m_sealingNumber) << LOG_KV("abort", abort);
+    }
+    catch (std::exception const& e)
+    {
+        SEAL_LOG(WARNING) << LOG_DESC("fetchTransactions: onRecv sealed txs failed")
+                          << LOG_KV("message", boost::diagnostic_information(e));
+    }
 }
 
 bcos::sealer::SealingManager::SealingManager(SealerConfig::Ptr _config)

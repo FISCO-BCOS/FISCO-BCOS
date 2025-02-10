@@ -192,38 +192,25 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     HashListPtr sealedTxs = std::make_shared<HashList>();
     // seal 10 txs
     {
-        std::promise<void> promise;
-        _txpool->asyncSealTxs(
-            txsLimit, nullptr, [&](Error::Ptr _error, Block::Ptr _txsMetaDataList, Block::Ptr) {
-                BOOST_CHECK(_error == nullptr);
-                BOOST_CHECK(_txsMetaDataList->transactionsMetaDataSize() == txsLimit);
-                for (size_t i = 0; i < _txsMetaDataList->transactionsMetaDataSize(); i++)
-                {
-                    sealedTxs->emplace_back(_txsMetaDataList->transactionHash(i));
-                }
-                BOOST_CHECK(_txpoolStorage->size() == originTxsSize);
-                promise.set_value();
-            });
-        promise.get_future().get();
+        auto [_txsMetaDataList, _] = _txpool->sealTxs(txsLimit, nullptr);
+        BOOST_CHECK(_txsMetaDataList->transactionsMetaDataSize() == txsLimit);
+        for (size_t i = 0; i < _txsMetaDataList->transactionsMetaDataSize(); i++)
+        {
+            sealedTxs->emplace_back(_txsMetaDataList->transactionHash(i));
+        }
+        BOOST_CHECK(_txpoolStorage->size() == originTxsSize);
     }
     // seal again to fetch all unsealed txs
     {
-        std::promise<void> promise;
-        _txpool->asyncSealTxs(
-            100000, nullptr, [&](Error::Ptr _error, Block::Ptr _txsMetaDataList, Block::Ptr) {
-                BOOST_CHECK(_error == nullptr);
-                BOOST_CHECK(
-                    _txsMetaDataList->transactionsMetaDataSize() == (originTxsSize - txsLimit));
-                BOOST_CHECK(_txpoolStorage->size() == originTxsSize);
-                std::set<HashType> txsSet(sealedTxs->begin(), sealedTxs->end());
-                for (size_t i = 0; i < _txsMetaDataList->transactionsMetaDataSize(); i++)
-                {
-                    auto const& hash = _txsMetaDataList->transactionHash(i);
-                    BOOST_CHECK(!txsSet.contains(hash));
-                }
-                promise.set_value();
-            });
-        promise.get_future().get();
+        auto [_txsMetaDataList, _] = _txpool->sealTxs(100000, nullptr);
+        BOOST_CHECK(_txsMetaDataList->transactionsMetaDataSize() == (originTxsSize - txsLimit));
+        BOOST_CHECK(_txpoolStorage->size() == originTxsSize);
+        std::set<HashType> txsSet(sealedTxs->begin(), sealedTxs->end());
+        for (size_t i = 0; i < _txsMetaDataList->transactionsMetaDataSize(); i++)
+        {
+            auto const& hash = _txsMetaDataList->transactionHash(i);
+            BOOST_CHECK(!txsSet.contains(hash));
+        }
     }
 
     // unseal 10 txs
@@ -239,15 +226,9 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
 
     // seal again
     {
-        std::promise<void> promise;
-        _txpool->asyncSealTxs(
-            100000, nullptr, [&](Error::Ptr _error, Block::Ptr _txsMetaDataList, Block::Ptr) {
-                BOOST_CHECK(_error == nullptr);
-                BOOST_CHECK(_txsMetaDataList->transactionsMetaDataSize() == sealedTxs->size());
-                BOOST_CHECK(_txsMetaDataList->transactionsHashSize() == sealedTxs->size());
-                promise.set_value();
-            });
-        promise.get_future().get();
+        auto [_txsMetaDataList, _] = _txpool->sealTxs(100000, nullptr);
+        BOOST_CHECK(_txsMetaDataList->transactionsMetaDataSize() == sealedTxs->size());
+        BOOST_CHECK(_txsMetaDataList->transactionsHashSize() == sealedTxs->size());
     }
     auto blockHash = _cryptoSuite->hashImpl()->hash("blockHash"sv);
     auto blockNumber = 10;
@@ -263,17 +244,10 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
 
     // re-seal
     {
-        std::promise<void> promise;
-
-        _txpool->asyncSealTxs(
-            100000, nullptr, [&](Error::Ptr _error, Block::Ptr _txsMetaDataList, Block::Ptr) {
-                BOOST_CHECK(_error == nullptr);
-                auto size = _txsMetaDataList->transactionsMetaDataSize();
-                BOOST_CHECK_EQUAL(size, 0);
-                BOOST_CHECK_EQUAL(_txsMetaDataList->transactionsHashSize(), 0);
-                promise.set_value();
-            });
-        promise.get_future().get();
+        auto [_txsMetaDataList, _] = _txpool->sealTxs(100000, nullptr);
+        auto size = _txsMetaDataList->transactionsMetaDataSize();
+        BOOST_CHECK_EQUAL(size, 0);
+        BOOST_CHECK_EQUAL(_txsMetaDataList->transactionsHashSize(), 0);
     }
 
     // mark txs to as false, expect mark success
@@ -288,16 +262,9 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     }
     // re-seal success
     {
-        std::promise<void> promise;
-
-        _txpool->asyncSealTxs(
-            100000, nullptr, [&](Error::Ptr _error, Block::Ptr _txsMetaDataList, Block::Ptr) {
-                BOOST_CHECK(_error == nullptr);
-                BOOST_CHECK(_txsMetaDataList->transactionsMetaDataSize() == sealedTxs->size());
-                BOOST_CHECK(_txsMetaDataList->transactionsHashSize() == sealedTxs->size());
-                promise.set_value();
-            });
-        promise.get_future().get();
+        auto [_txsMetaDataList, _] = _txpool->sealTxs(100000, nullptr);
+        BOOST_CHECK(_txsMetaDataList->transactionsMetaDataSize() == sealedTxs->size());
+        BOOST_CHECK(_txsMetaDataList->transactionsHashSize() == sealedTxs->size());
     }
 
     // mark txs to given proposal as true
@@ -313,16 +280,9 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
 
     // reseal failed
     {
-        std::promise<void> promise;
-
-        _txpool->asyncSealTxs(
-            100000, nullptr, [&](Error::Ptr _error, Block::Ptr _txsMetaDataList, Block::Ptr) {
-                BOOST_CHECK(_error == nullptr);
-                BOOST_CHECK(_txsMetaDataList->transactionsMetaDataSize() == 0);
-                BOOST_CHECK(_txsMetaDataList->transactionsHashSize() == 0);
-                promise.set_value();
-            });
-        promise.get_future().get();
+        auto [_txsMetaDataList, _] = _txpool->sealTxs(100000, nullptr);
+        BOOST_CHECK(_txsMetaDataList->transactionsMetaDataSize() == 0);
+        BOOST_CHECK(_txsMetaDataList->transactionsHashSize() == 0);
     }
 
     // mark txs to given proposal as false, expect success
@@ -338,16 +298,9 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
 
     // re-seal success
     {
-        std::promise<void> promise;
-
-        _txpool->asyncSealTxs(
-            100000, nullptr, [&](Error::Ptr _error, Block::Ptr _txsMetaDataList, Block::Ptr) {
-                BOOST_CHECK(_error == nullptr);
-                BOOST_CHECK(_txsMetaDataList->transactionsMetaDataSize() == sealedTxs->size());
-                BOOST_CHECK(_txsMetaDataList->transactionsHashSize() == sealedTxs->size());
-                promise.set_value();
-            });
-        promise.get_future().get();
+        auto [_txsMetaDataList, _] = _txpool->sealTxs(100000, nullptr);
+        BOOST_CHECK(_txsMetaDataList->transactionsMetaDataSize() == sealedTxs->size());
+        BOOST_CHECK(_txsMetaDataList->transactionsHashSize() == sealedTxs->size());
     }
 
     // test asyncNotifyBlockResult
@@ -407,15 +360,9 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
         cleanWeb3Func();
     }
     _txpool->asyncResetTxPool(nullptr);
-    std::promise<void> promise;
-    _txpool->asyncSealTxs(
-        100000, nullptr, [&](Error::Ptr _error, Block::Ptr _txsMetaDataList, Block::Ptr) {
-            BOOST_CHECK(_error == nullptr);
-            BOOST_CHECK_EQUAL(_txsMetaDataList->transactionsMetaDataSize(), 0);
-            BOOST_CHECK_EQUAL(_txsMetaDataList->transactionsHashSize(), 0);
-            promise.set_value();
-        });
-    promise.get_future().get();
+    auto [_txsMetaDataList, _] = _txpool->sealTxs(100000, nullptr);
+    BOOST_CHECK_EQUAL(_txsMetaDataList->transactionsMetaDataSize(), 0);
+    BOOST_CHECK_EQUAL(_txsMetaDataList->transactionsHashSize(), 0);
     BOOST_CHECK(_txpoolStorage->size() == 0);
 }
 

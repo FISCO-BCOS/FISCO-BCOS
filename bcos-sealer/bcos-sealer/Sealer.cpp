@@ -106,7 +106,7 @@ void Sealer::executeWorker()
             [this](bcos::protocol::Block::Ptr _block) -> uint16_t {
                 return hookWhenSealBlock(std::move(_block));
             });
-        submitProposal(ret.first, ret.second);
+        submitProposal(ret.first, std::move(ret.second));
 
         // TODO: pullTxsTimer's work
     }

@@ -90,6 +90,7 @@ public:
     RANGES::any_view<std::string> nonceList() const override;
 
     const bcostars::Block& inner() const;
+    bcostars::Block& inner();
     void setInner(bcostars::Block inner);
 
     bcos::crypto::HashType calculateTransactionRoot(
