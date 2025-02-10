@@ -58,6 +58,7 @@ public:
         feature_rpbft_term_weight,
         feature_raw_address,
         feature_rpbft_vrf_type_secp256k1,
+        feature_balance_policy2,  // 转账白名单 Transfer whitelist
     };
 
 private:
