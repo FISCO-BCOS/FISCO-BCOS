@@ -4,7 +4,6 @@
 #include "../storage/Entry.h"
 #include "../storage2/Storage.h"
 #include "../transaction-executor/StateKey.h"
-#include "bcos-concepts/Exception.h"
 #include "bcos-task/Task.h"
 #include "bcos-tool/Exceptions.h"
 #include <boost/throw_exception.hpp>
@@ -13,9 +12,7 @@
 #include <magic_enum.hpp>
 namespace bcos::ledger
 {
-struct NoSuchFeatureError : public bcos::error::Exception
-{
-};
+DERIVE_BCOS_EXCEPTION(NoSuchFeatureError);
 class Features
 {
 public:

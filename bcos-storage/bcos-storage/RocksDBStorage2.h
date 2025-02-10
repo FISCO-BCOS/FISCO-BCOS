@@ -1,5 +1,4 @@
 #pragma once
-#include "bcos-concepts/Exception.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-task/AwaitableValue.h"
 #include "bcos-task/Trait.h"
@@ -117,7 +116,7 @@ public:
 
     friend auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, RocksDBStorage2& storage,
         ::ranges::input_range auto&& keys) -> task::AwaitableValue<decltype(executeReadSome(storage,
-                                               std::forward<decltype(keys)>(keys)))>
+        std::forward<decltype(keys)>(keys)))>
     {
         return {executeReadSome(storage, std::forward<decltype(keys)>(keys))};
     }
@@ -192,7 +191,7 @@ public:
 
         if (!status.ok())
         {
-            BOOST_THROW_EXCEPTION(RocksDBException{} << error::ErrorMessage(status.ToString()));
+            BOOST_THROW_EXCEPTION(RocksDBException{} << errinfo_comment(status.ToString()));
         }
         return {};
     }
@@ -210,7 +209,7 @@ public:
 
         if (!status.ok())
         {
-            BOOST_THROW_EXCEPTION(RocksDBException{} << error::ErrorMessage(status.ToString()));
+            BOOST_THROW_EXCEPTION(RocksDBException{} << errinfo_comment(status.ToString()));
         }
     }
 
@@ -230,7 +229,7 @@ public:
         auto status = storage.m_rocksDB.Write(options, &writeBatch);
         if (!status.ok())
         {
-            BOOST_THROW_EXCEPTION(RocksDBException{} << error::ErrorMessage(status.ToString()));
+            BOOST_THROW_EXCEPTION(RocksDBException{} << errinfo_comment(status.ToString()));
         }
 
         return {};
@@ -310,7 +309,7 @@ public:
 
         if (!status.ok())
         {
-            BOOST_THROW_EXCEPTION(RocksDBException{} << error::ErrorMessage(status.ToString()));
+            BOOST_THROW_EXCEPTION(RocksDBException{} << errinfo_comment(status.ToString()));
         }
     }
 
