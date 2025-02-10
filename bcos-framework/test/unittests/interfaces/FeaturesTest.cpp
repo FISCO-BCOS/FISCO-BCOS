@@ -165,6 +165,7 @@ BOOST_AUTO_TEST_CASE(feature)
         "feature_rpbft_term_weight",
         "feature_raw_address",
         "feature_rpbft_vrf_type_secp256k1",
+        "feature_balance_policy2",
     };
     // clang-format on
     for (size_t i = 0; i < keys.size(); ++i)
