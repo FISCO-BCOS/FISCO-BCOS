@@ -254,8 +254,8 @@ void ServiceV2::asyncSendMessageByNodeIDWithMsgForward(
         {
             SERVICE2_LOG(TRACE) << LOG_BADGE("asyncSendMessageByNodeID")
                                 << LOG_DESC("sendMessage to dstNode")
-                                << LOG_KV("from", _message->srcP2PNodeIDView())
-                                << LOG_KV("to", _message->dstP2PNodeIDView())
+                                << LOG_KV("from", _message->printSrcP2PNodeID())
+                                << LOG_KV("to", _message->printDstP2PNodeID())
                                 << LOG_KV("type", _message->packetType())
                                 << LOG_KV("seq", _message->seq())
                                 << LOG_KV("rsp", _message->isRespPacket());
@@ -267,8 +267,8 @@ void ServiceV2::asyncSendMessageByNodeIDWithMsgForward(
     {
         SERVICE2_LOG(TRACE) << LOG_BADGE("asyncSendMessageByNodeID")
                             << LOG_DESC("forwardMessage to nextHop")
-                            << LOG_KV("from", _message->srcP2PNodeIDView())
-                            << LOG_KV("to", _message->dstP2PNodeIDView())
+                            << LOG_KV("from", _message->printSrcP2PNodeID())
+                            << LOG_KV("to", _message->printDstP2PNodeID())
                             << LOG_KV("nextHop", printShortHex(nextHop))
                             << LOG_KV("type", _message->packetType())
                             << LOG_KV("seq", _message->seq())
@@ -303,9 +303,9 @@ void ServiceV2::onMessage(NetworkException _error, SessionFace::Ptr _session, Me
         if (c_fileLogLevel <= TRACE) [[unlikely]]
         {
             SERVICE2_LOG(TRACE) << LOG_BADGE("onMessage")
-                                << LOG_KV("from", p2pMsg->srcP2PNodeIDView())
+                                << LOG_KV("from", p2pMsg->printSrcP2PNodeID())
                                 << LOG_KV("seq", p2pMsg->seq())
-                                << LOG_KV("dst", p2pMsg->dstP2PNodeIDView())
+                                << LOG_KV("dst", p2pMsg->printDstP2PNodeID())
                                 << LOG_KV("type", p2pMsg->packetType())
                                 << LOG_KV("rsp", p2pMsg->isRespPacket())
                                 << LOG_KV("ttl", p2pMsg->ttl())
@@ -320,7 +320,7 @@ void ServiceV2::onMessage(NetworkException _error, SessionFace::Ptr _session, Me
     {
         SERVICE2_LOG(WARNING) << LOG_BADGE("onMessage") << LOG_DESC("expired ttl")
                               << LOG_KV("seq", p2pMsg->seq())
-                              << LOG_KV("from", p2pMsg->srcP2PNodeIDView())
+                              << LOG_KV("from", p2pMsg->printSrcP2PNodeID())
                               << LOG_KV("dst", p2pMsg->dstP2PNodeID())
                               << LOG_KV("type", p2pMsg->packetType())
                               << LOG_KV("rsp", p2pMsg->isRespPacket())
@@ -335,8 +335,8 @@ void ServiceV2::onMessage(NetworkException _error, SessionFace::Ptr _session, Me
         SERVICE2_LOG(TRACE) << LOG_BADGE("onMessage")
                             << LOG_DESC("asyncSendMessageByNodeIDWithMsgForward")
                             << LOG_KV("seq", p2pMsg->seq())
-                            << LOG_KV("from", p2pMsg->srcP2PNodeIDView())
-                            << LOG_KV("dst", p2pMsg->dstP2PNodeIDView())
+                            << LOG_KV("from", p2pMsg->printSrcP2PNodeID())
+                            << LOG_KV("dst", p2pMsg->printDstP2PNodeID())
                             << LOG_KV("type", p2pMsg->packetType()) << LOG_KV("seq", p2pMsg->seq())
                             << LOG_KV("rsp", p2pMsg->isRespPacket()) << LOG_KV("ttl", p2pMsg->ttl())
                             << LOG_KV("payLoadSize", p2pMsg->payload().size());
@@ -403,8 +403,8 @@ void ServiceV2::sendRespMessageBySession(
     {
         SERVICE2_LOG(TRACE) << LOG_BADGE("sendRespMessageBySession")
                             << LOG_KV("seq", requestMsg->seq())
-                            << LOG_KV("from", respMessage->srcP2PNodeIDView())
-                            << LOG_KV("dst", respMessage->dstP2PNodeIDView())
+                            << LOG_KV("from", respMessage->printSrcP2PNodeID())
+                            << LOG_KV("dst", respMessage->printDstP2PNodeID())
                             << LOG_KV("payload size", _payload.size());
     }
 }
@@ -424,8 +424,8 @@ bcos::task::Task<Message::Ptr> bcos::gateway::ServiceV2::sendMessageByNodeID(
         {
             SERVICE2_LOG(TRACE) << LOG_BADGE("asyncSendMessageByNodeID")
                                 << LOG_DESC("sendMessage to dstNode")
-                                << LOG_KV("from", message.srcP2PNodeIDView())
-                                << LOG_KV("to", message.dstP2PNodeIDView())
+                                << LOG_KV("from", message.printSrcP2PNodeID())
+                                << LOG_KV("to", message.printDstP2PNodeID())
                                 << LOG_KV("type", message.packetType())
                                 << LOG_KV("seq", message.seq())
                                 << LOG_KV("rsp", message.isRespPacket());
@@ -438,8 +438,8 @@ bcos::task::Task<Message::Ptr> bcos::gateway::ServiceV2::sendMessageByNodeID(
     {
         SERVICE2_LOG(TRACE) << LOG_BADGE("asyncSendMessageByNodeID")
                             << LOG_DESC("forwardMessage to nextHop")
-                            << LOG_KV("from", message.srcP2PNodeIDView())
-                            << LOG_KV("to", message.dstP2PNodeIDView())
+                            << LOG_KV("from", message.printSrcP2PNodeID())
+                            << LOG_KV("to", message.printDstP2PNodeID())
                             << LOG_KV("nextHop", printShortHex(nextHop))
                             << LOG_KV("type", message.packetType()) << LOG_KV("seq", message.seq())
                             << LOG_KV("rsp", message.isRespPacket());

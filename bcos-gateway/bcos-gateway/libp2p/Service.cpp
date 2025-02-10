@@ -420,13 +420,13 @@ void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message::P
                                << LOG_DESC(": AMOP is disabled!") << LOG_KV("seq", message->seq())
                                << LOG_KV("packetType", packetType) << LOG_KV("ext", ext)
                                << LOG_KV("version", version)
-                               << LOG_KV("dst p2p", p2pMessage->dstP2PNodeIDView());
+                               << LOG_KV("dst p2p", p2pMessage->printDstP2PNodeID());
             return;
         }
         SERVICE_LOG(ERROR) << LOG_DESC("Unrecognized message type") << LOG_KV("seq", message->seq())
                            << LOG_KV("packetType", packetType) << LOG_KV("ext", ext)
                            << LOG_KV("version", version)
-                           << LOG_KV("dst p2p", p2pMessage->dstP2PNodeIDView());
+                           << LOG_KV("dst p2p", p2pMessage->printDstP2PNodeID());
     }
     catch (std::exception& e)
     {

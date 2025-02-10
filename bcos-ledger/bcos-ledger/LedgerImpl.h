@@ -67,8 +67,7 @@ public:
                 block.blockHeader.data.parentInfo[0].blockHash, parentHash))
         {
             LEDGER_LOG(ERROR) << "ParentHash mismatch!";
-            BOOST_THROW_EXCEPTION(
-                MismatchParentHash{} << errinfo_comment{"No match parentHash!"});
+            BOOST_THROW_EXCEPTION(MismatchParentHash{} << errinfo_comment{"No match parentHash!"});
         }
     }
 
@@ -207,8 +206,7 @@ private:
         if (!codeHashEntry.second) [[unlikely]]
         {
             LEDGER_LOG(WARNING) << "Not found codeHash contractAddress:" << _contractAddress;
-            BOOST_THROW_EXCEPTION(
-                GetABIError{} << errinfo_comment{"Get CodeHash not found"});
+            BOOST_THROW_EXCEPTION(GetABIError{} << errinfo_comment{"Get CodeHash not found"});
         }
         auto codeHash = codeHashEntry.second->getField(0);
 
@@ -245,8 +243,7 @@ private:
                     if (!entries[index])
                     {
                         [[unlikely]] BOOST_THROW_EXCEPTION(
-                            NotFoundTransaction{}
-                            << errinfo_comment{"Get transaction not found"});
+                            NotFoundTransaction{} << errinfo_comment{"Get transaction not found"});
                     }
 
                     auto field = entries[index]->getField(0);
