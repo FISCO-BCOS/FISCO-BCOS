@@ -5,6 +5,8 @@
     sm_ssl=false
     nodes_path=./
     nodes_file=nodes.json
+    ; enable p2p ssl verify, default is true
+    ; enable_ssl_verify = true
 
 [certificate_blacklist]
     ; crl.0 should be nodeid, nodeid's length is 512

@@ -1,15 +1,11 @@
 #pragma once
-#include "Exception.h"
 #include <boost/throw_exception.hpp>
 #include <range/v3/range.hpp>
+#include <stdexcept>
 #include <type_traits>
 
 namespace bcos::concepts
 {
-
-// clang-format off
-struct NoEnoughSpace : public bcos::error::Exception {};
-// clang-format on
 
 template <class ByteBufferType>
 concept ByteBuffer =
@@ -57,7 +53,7 @@ void resizeTo(::ranges::range auto& out, std::integral auto size)
             out.resize(size);
             return;
         }
-        BOOST_THROW_EXCEPTION(NoEnoughSpace{});
+        BOOST_THROW_EXCEPTION(std::runtime_error{"Not enough space"});
     }
 }
 }  // namespace bcos::concepts

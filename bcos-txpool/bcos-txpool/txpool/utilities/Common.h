@@ -25,6 +25,8 @@ namespace bcos::txpool
 {
 // Trigger a transaction cleanup operation every 3s
 static constexpr const uint64_t TXPOOL_CLEANUP_TIME = 3000;
+// Notify txsSize to consensus module every 100ms
+static constexpr const uint64_t TXS_SIZE_NOTIFY_TIME = 100;
 // the txs expiration time, default is 10 minutes
 static constexpr const uint64_t TX_DEFAULT_EXPIRATION_TIME = uint64_t(60 * 10 * 1000);
 // Maximum number of transactions traversed by m_cleanUpTimer,

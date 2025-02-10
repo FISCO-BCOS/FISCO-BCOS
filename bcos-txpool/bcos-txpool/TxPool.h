@@ -144,6 +144,12 @@ public:
 
     void setCheckBlockLimit(bool _checkBlockLimit) { m_checkBlockLimit = _checkBlockLimit; }
 
+    void registerTxsNotifier(
+        std::function<void(size_t, std::function<void(Error::Ptr)>)> _txsNotifier) override
+    {
+        m_txpoolStorage->registerTxsNotifier(_txsNotifier);
+    }
+
 protected:
     virtual bool checkExistsInGroup(bcos::protocol::TxSubmitCallback _txSubmitCallback);
     virtual void getTxsFromLocalLedger(bcos::crypto::HashListPtr _txsHash,
