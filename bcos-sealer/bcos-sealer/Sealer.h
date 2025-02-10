@@ -71,7 +71,7 @@ protected:
     void executeWorker() override;
     virtual void noteGenerateProposal() { m_signalled.notify_all(); }
 
-    virtual void submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _proposal);
+    virtual void submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _block);
 
     SealerConfig::Ptr m_sealerConfig;
     SealingManager::Ptr m_sealingManager;
