@@ -275,9 +275,14 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
         int64_t requiredGas = transferFromEVM ? 0 : BALANCE_TRANSFER_GAS;
         auto currentContextAddress = callParameters->receiveAddress;
 
+        // 启用policy2且sender和receiver都不在白名单，拒绝转账
+        // Enable policy2 and if neither the sender nor the receiver is on the whitelist, reject the
+        // transfer.
         if (m_blockContext.features().get(ledger::Features::Flag::feature_balance_policy2) &&
-            !task::syncWait(checkTransferPermission(
-                *m_storageWrapper->getRawStorage(), callParameters->senderAddress)))
+            (!task::syncWait(checkTransferPermission(
+                *m_storageWrapper->getRawStorage(), callParameters->senderAddress))) &&
+            (!task::syncWait(checkTransferPermission(
+                *m_storageWrapper->getRawStorage(), callParameters->receiveAddress))))
         {
             callParameters->status = static_cast<int32_t>(TransactionStatus::PermissionDenied);
         }

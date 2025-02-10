@@ -29,6 +29,7 @@
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/LogEntry.h"
+#include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include "bcos-task/Task.h"
@@ -301,14 +302,14 @@ inline std::string getContractTableName(
     if (_address[0] == '/')
     {
         out.reserve(prefix.size() + _address.size() - 1);
-        std::copy(prefix.begin(), prefix.end(), std::back_inserter(out));
-        std::copy(_address.begin() + 1, _address.end(), std::back_inserter(out));
+        ::ranges::copy(prefix, std::back_inserter(out));
+        ::ranges::copy(::ranges::views::drop(_address, 1), std::back_inserter(out));
     }
     else
     {
         out.reserve(prefix.size() + _address.size());
-        std::copy(prefix.begin(), prefix.end(), std::back_inserter(out));
-        std::copy(_address.begin(), _address.end(), std::back_inserter(out));
+        ::ranges::copy(prefix, std::back_inserter(out));
+        ::ranges::copy(_address, std::back_inserter(out));
     }
 
     return out;
@@ -322,7 +323,7 @@ std::array<char, sizeof(evmc_address) * 2> address2HexArray(const evmc_address& 
 
 task::Task<bool> checkTransferPermission(auto& storage, std::string_view sender)
 {
-    if (auto entry = co_await storage2::readOne(
+    if (co_await storage2::existsOne(
             storage, transaction_executor::StateKeyView{ledger::SYS_BALANCE_CALLER, sender}))
     {
         co_return true;
@@ -330,10 +331,10 @@ task::Task<bool> checkTransferPermission(auto& storage, std::string_view sender)
     co_return false;
 }
 
-task::Task<bool> checkTransferPermission(auto& storage, const evmc_address& sender)
+task::Task<bool> checkTransferPermission(auto& storage, evmc_address sender)
 {
     auto hexAddress = address2HexArray(sender);
-    co_return checkTransferPermission(storage, concepts::bytebuffer::toView(hexAddress));
+    co_return co_await checkTransferPermission(storage, concepts::bytebuffer::toView(hexAddress));
 }
 
 }  // namespace bcos
