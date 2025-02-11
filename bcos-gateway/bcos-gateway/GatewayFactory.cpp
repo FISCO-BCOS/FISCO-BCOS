@@ -597,13 +597,14 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
 {
     auto nodeCert =
         (_config->smSSL() ? _config->smCertConfig().nodeCert : _config->certConfig().nodeCert);
-    std::string pubHex;
-    if (!nodeCert || !m_certPubHexHandler(*nodeCert, pubHex))
+    std::string rawPubKey;
+    if (!nodeCert || !m_certPubHexHandler(*nodeCert, rawPubKey))
     {
         BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
                                   "GatewayFactory::init unable parse myself pub id"));
     }
 
+    auto pubHex = _config->calculateShortNodeID(rawPubKey);
     std::shared_ptr<ba::ssl::context> srvCtx =
         (_config->smSSL() ?
                 buildSSLContext(true, _config->sslServerMode(), _config->smCertConfig()) :
@@ -641,7 +642,8 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
         std::make_shared<PeerWhitelist>(_config->peerWhitelist(), _config->enableWhitelist());
 
     // init Host
-    auto host = std::make_shared<Host>(asioInterface, sessionFactory, messageFactory);
+    auto host =
+        std::make_shared<Host>(_config->hashImpl(), asioInterface, sessionFactory, messageFactory);
     host->setHostPort(_config->listenIP(), _config->listenPort());
     host->setSSLContextPubHandler(m_sslContextPubHandler);
     host->setSSLContextPubHandlerWithoutExtInfo(m_sslContextPubHandlerWithoutExtInfo);
@@ -675,7 +677,7 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     GATEWAY_FACTORY_LOG(INFO) << LOG_BADGE("buildService") << LOG_DESC("build service end")
                               << LOG_KV("enable rip protocol", _config->enableRIPProtocol())
                               << LOG_KV("enable compress", _config->enableCompress())
-                              << LOG_KV("myself pub id", pubHex);
+                              << LOG_KV("myself pub id", printShortHex(pubHex));
     service->setMessageFactory(messageFactory);
     service->setKeyFactory(keyFactory);
     return service;

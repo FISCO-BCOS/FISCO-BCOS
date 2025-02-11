@@ -84,7 +84,7 @@ class NetworkException : public std::exception
 public:
     NetworkException() = default;
     NetworkException(int _errorCode, std::string _msg)
-      : m_errorCode(_errorCode), m_msg(std::move(_msg)){};
+      : m_errorCode(_errorCode), m_msg(std::move(_msg)) {};
 
     virtual int errorCode() const { return m_errorCode; };
     const char* what() const noexcept override { return m_msg.c_str(); };

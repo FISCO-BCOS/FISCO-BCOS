@@ -18,7 +18,7 @@
  * @author: octopus
  * @date 2023-02-23
  */
-
+#include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-gateway/libnetwork/ASIOInterface.h>
 #include <bcos-gateway/libnetwork/Host.h>
 #include <bcos-gateway/libnetwork/Session.h>
@@ -31,6 +31,7 @@
 using namespace bcos;
 using namespace gateway;
 using namespace bcos::test;
+using namespace bcos::crypto;
 
 BOOST_FIXTURE_TEST_SUITE(SessionTest, TestPromptFixture)
 
@@ -39,8 +40,8 @@ class FakeASIO : public bcos::gateway::ASIOInterface
 {
 public:
     using Packet = std::shared_ptr<std::vector<uint8_t>>;
-    FakeASIO() : m_threadPool(std::make_shared<bcos::ThreadPool>("FakeASIO", 1)){};
-    virtual ~FakeASIO() noexcept override{};
+    FakeASIO() : m_threadPool(std::make_shared<bcos::ThreadPool>("FakeASIO", 1)) {};
+    virtual ~FakeASIO() noexcept override {};
 
     void readSome(std::shared_ptr<SocketFace> socket, boost::asio::mutable_buffers_1 buffers,
         ReadWriteHandler handler)
@@ -235,9 +236,9 @@ private:
 class FakeHost : public bcos::gateway::Host
 {
 public:
-    FakeHost(std::shared_ptr<ASIOInterface> _asioInterface,
+    FakeHost(bcos::crypto::Hash::Ptr _hash, std::shared_ptr<ASIOInterface> _asioInterface,
         std::shared_ptr<SessionFactory> _sessionFactory, MessageFactory::Ptr _messageFactory)
-      : Host(_asioInterface, _sessionFactory, _messageFactory)
+      : Host(_hash, _asioInterface, _sessionFactory, _messageFactory)
     {
         m_run = true;
     }
@@ -246,7 +247,7 @@ public:
 class FakeSocket : public SocketFace
 {
 public:
-    FakeSocket() : SocketFace(){};
+    FakeSocket() : SocketFace() {};
     ~FakeSocket() override = default;
     bool isConnected() const override { return true; }
     void close() override {}
@@ -300,7 +301,8 @@ BOOST_AUTO_TEST_CASE(doReadTest)
     FakeMessagesBuilder messageBuilder(totalPacketNum);
     auto fakeAsio = std::make_shared<FakeASIO>();
     auto fakeMessageFactory = std::make_shared<FakeMessageFactory>();
-    auto fakeHost = std::make_shared<FakeHost>(fakeAsio, nullptr, fakeMessageFactory);
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto fakeHost = std::make_shared<FakeHost>(hashImpl, fakeAsio, nullptr, fakeMessageFactory);
     auto fakeSocket = std::make_shared<FakeSocket>();
 
     std::atomic<size_t> recvPacketCnt = 0;

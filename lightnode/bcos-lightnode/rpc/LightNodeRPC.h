@@ -347,9 +347,8 @@ public:
                                 "TxsRoot check failed", -1, "CheckMerkleRootFailed");
                             self->toErrorResp(error, respFunc);
                             co_return;
-                            BOOST_THROW_EXCEPTION(
-                                CheckMerkleRootFailed{} << errinfo_comment{
-                                    "Check block transactionMerkle failed!"});
+                            BOOST_THROW_EXCEPTION(CheckMerkleRootFailed{} << errinfo_comment{
+                                                      "Check block transactionMerkle failed!"});
                         }
                     }
 

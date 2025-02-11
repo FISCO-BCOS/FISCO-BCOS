@@ -83,7 +83,7 @@ void ServiceV2::onReceivePeersRouterTable(
     auto routerTable = m_routerTableFactory->createRouterTable(_message->payload());
 
     SERVICE2_LOG(INFO) << LOG_BADGE("onReceivePeersRouterTable")
-                       << LOG_KV("peer", _session->p2pID())
+                       << LOG_KV("peer", _session->shortP2pID())
                        << LOG_KV("entrySize", routerTable->routerEntries().size());
     joinRouterTable(_session->p2pID(), routerTable);
 }
@@ -104,7 +104,7 @@ void ServiceV2::joinRouterTable(
     }
 
     SERVICE2_LOG(INFO) << LOG_BADGE("joinRouterTable") << LOG_DESC("create router entry")
-                       << LOG_KV("dst", _generatedFrom);
+                       << LOG_KV("dst", printShortHex(_generatedFrom));
 
     auto entry = m_routerTableFactory->createRouterEntry();
     entry->setDstNode(_generatedFrom);
@@ -116,7 +116,7 @@ void ServiceV2::joinRouterTable(
     if (!updated)
     {
         SERVICE2_LOG(DEBUG) << LOG_BADGE("joinRouterTable") << LOG_DESC("router table not updated")
-                            << LOG_KV("dst", _generatedFrom);
+                            << LOG_KV("dst", printShortHex(_generatedFrom));
         return;
     }
     onP2PNodesUnreachable(unreachableNodes);
@@ -135,7 +135,7 @@ void ServiceV2::onReceiveRouterTableRequest(
         return;
     }
     SERVICE2_LOG(INFO) << LOG_BADGE("onReceiveRouterTableRequest")
-                       << LOG_KV("peer", _session->p2pID())
+                       << LOG_KV("peer", _session->shortP2pID())
                        << LOG_KV("entrySize", m_routerTable->routerEntries().size());
 
     auto routerTableData = std::make_shared<bytes>();
@@ -176,7 +176,7 @@ void ServiceV2::onReceiveRouterSeq(
     }
     SERVICE2_LOG(INFO) << LOG_BADGE("onReceiveRouterSeq")
                        << LOG_DESC("receive router seq and request router table")
-                       << LOG_KV("peer", _session->p2pID()) << LOG_KV("seq", statusSeq);
+                       << LOG_KV("peer", _session->shortP2pID()) << LOG_KV("seq", statusSeq);
     // request router table to peer
     auto dstP2PNodeID =
         (!_message->srcP2PNodeID().empty()) ? _message->srcP2PNodeID() : _session->p2pID();
@@ -193,14 +193,14 @@ void ServiceV2::onNewSession(P2PSession::Ptr _session)
     if (!m_routerTable->update(unreachableNodes, m_nodeID, entry))
     {
         SERVICE2_LOG(INFO) << LOG_BADGE("onNewSession") << LOG_DESC("routerTable not changed")
-                           << LOG_KV("dst", _session->p2pID());
+                           << LOG_KV("dst", _session->shortP2pID());
         return;
     }
     onP2PNodesUnreachable(unreachableNodes);
     m_statusSeq++;
     broadcastRouterSeq();
     SERVICE2_LOG(INFO) << LOG_BADGE("onNewSession") << LOG_DESC("update routerTable")
-                       << LOG_KV("dst", _session->p2pID());
+                       << LOG_KV("dst", _session->shortP2pID());
 }
 
 void ServiceV2::onEraseSession(P2PSession::Ptr _session)
@@ -213,7 +213,7 @@ void ServiceV2::onEraseSession(P2PSession::Ptr _session)
         m_statusSeq++;
         broadcastRouterSeq();
     }
-    SERVICE2_LOG(INFO) << LOG_BADGE("onEraseSession") << LOG_KV("dst", _session->p2pID());
+    SERVICE2_LOG(INFO) << LOG_BADGE("onEraseSession") << LOG_KV("dst", _session->shortP2pID());
 }
 
 bool ServiceV2::tryToUpdateSeq(std::string const& _p2pNodeID, uint32_t _seq)
@@ -254,8 +254,8 @@ void ServiceV2::asyncSendMessageByNodeIDWithMsgForward(
         {
             SERVICE2_LOG(TRACE) << LOG_BADGE("asyncSendMessageByNodeID")
                                 << LOG_DESC("sendMessage to dstNode")
-                                << LOG_KV("from", _message->srcP2PNodeIDView())
-                                << LOG_KV("to", _message->dstP2PNodeIDView())
+                                << LOG_KV("from", _message->printSrcP2PNodeID())
+                                << LOG_KV("to", _message->printDstP2PNodeID())
                                 << LOG_KV("type", _message->packetType())
                                 << LOG_KV("seq", _message->seq())
                                 << LOG_KV("rsp", _message->isRespPacket());
@@ -267,9 +267,10 @@ void ServiceV2::asyncSendMessageByNodeIDWithMsgForward(
     {
         SERVICE2_LOG(TRACE) << LOG_BADGE("asyncSendMessageByNodeID")
                             << LOG_DESC("forwardMessage to nextHop")
-                            << LOG_KV("from", _message->srcP2PNodeIDView())
-                            << LOG_KV("to", _message->dstP2PNodeIDView())
-                            << LOG_KV("nextHop", nextHop) << LOG_KV("type", _message->packetType())
+                            << LOG_KV("from", _message->printSrcP2PNodeID())
+                            << LOG_KV("to", _message->printDstP2PNodeID())
+                            << LOG_KV("nextHop", printShortHex(nextHop))
+                            << LOG_KV("type", _message->packetType())
                             << LOG_KV("seq", _message->seq())
                             << LOG_KV("rsp", _message->isRespPacket());
     }
@@ -302,9 +303,9 @@ void ServiceV2::onMessage(NetworkException _error, SessionFace::Ptr _session, Me
         if (c_fileLogLevel <= TRACE) [[unlikely]]
         {
             SERVICE2_LOG(TRACE) << LOG_BADGE("onMessage")
-                                << LOG_KV("from", p2pMsg->srcP2PNodeIDView())
+                                << LOG_KV("from", p2pMsg->printSrcP2PNodeID())
                                 << LOG_KV("seq", p2pMsg->seq())
-                                << LOG_KV("dst", p2pMsg->dstP2PNodeIDView())
+                                << LOG_KV("dst", p2pMsg->printDstP2PNodeID())
                                 << LOG_KV("type", p2pMsg->packetType())
                                 << LOG_KV("rsp", p2pMsg->isRespPacket())
                                 << LOG_KV("ttl", p2pMsg->ttl())
@@ -319,7 +320,7 @@ void ServiceV2::onMessage(NetworkException _error, SessionFace::Ptr _session, Me
     {
         SERVICE2_LOG(WARNING) << LOG_BADGE("onMessage") << LOG_DESC("expired ttl")
                               << LOG_KV("seq", p2pMsg->seq())
-                              << LOG_KV("from", p2pMsg->srcP2PNodeID())
+                              << LOG_KV("from", p2pMsg->printSrcP2PNodeID())
                               << LOG_KV("dst", p2pMsg->dstP2PNodeID())
                               << LOG_KV("type", p2pMsg->packetType())
                               << LOG_KV("rsp", p2pMsg->isRespPacket())
@@ -334,8 +335,8 @@ void ServiceV2::onMessage(NetworkException _error, SessionFace::Ptr _session, Me
         SERVICE2_LOG(TRACE) << LOG_BADGE("onMessage")
                             << LOG_DESC("asyncSendMessageByNodeIDWithMsgForward")
                             << LOG_KV("seq", p2pMsg->seq())
-                            << LOG_KV("from", p2pMsg->srcP2PNodeIDView())
-                            << LOG_KV("dst", p2pMsg->dstP2PNodeIDView())
+                            << LOG_KV("from", p2pMsg->printSrcP2PNodeID())
+                            << LOG_KV("dst", p2pMsg->printDstP2PNodeID())
                             << LOG_KV("type", p2pMsg->packetType()) << LOG_KV("seq", p2pMsg->seq())
                             << LOG_KV("rsp", p2pMsg->isRespPacket()) << LOG_KV("ttl", p2pMsg->ttl())
                             << LOG_KV("payLoadSize", p2pMsg->payload().size());
@@ -402,8 +403,8 @@ void ServiceV2::sendRespMessageBySession(
     {
         SERVICE2_LOG(TRACE) << LOG_BADGE("sendRespMessageBySession")
                             << LOG_KV("seq", requestMsg->seq())
-                            << LOG_KV("from", respMessage->srcP2PNodeIDView())
-                            << LOG_KV("dst", respMessage->dstP2PNodeIDView())
+                            << LOG_KV("from", respMessage->printSrcP2PNodeID())
+                            << LOG_KV("dst", respMessage->printDstP2PNodeID())
                             << LOG_KV("payload size", _payload.size());
     }
 }
@@ -423,8 +424,8 @@ bcos::task::Task<Message::Ptr> bcos::gateway::ServiceV2::sendMessageByNodeID(
         {
             SERVICE2_LOG(TRACE) << LOG_BADGE("asyncSendMessageByNodeID")
                                 << LOG_DESC("sendMessage to dstNode")
-                                << LOG_KV("from", message.srcP2PNodeIDView())
-                                << LOG_KV("to", message.dstP2PNodeIDView())
+                                << LOG_KV("from", message.printSrcP2PNodeID())
+                                << LOG_KV("to", message.printDstP2PNodeID())
                                 << LOG_KV("type", message.packetType())
                                 << LOG_KV("seq", message.seq())
                                 << LOG_KV("rsp", message.isRespPacket());
@@ -437,10 +438,10 @@ bcos::task::Task<Message::Ptr> bcos::gateway::ServiceV2::sendMessageByNodeID(
     {
         SERVICE2_LOG(TRACE) << LOG_BADGE("asyncSendMessageByNodeID")
                             << LOG_DESC("forwardMessage to nextHop")
-                            << LOG_KV("from", message.srcP2PNodeIDView())
-                            << LOG_KV("to", message.dstP2PNodeIDView())
-                            << LOG_KV("nextHop", nextHop) << LOG_KV("type", message.packetType())
-                            << LOG_KV("seq", message.seq())
+                            << LOG_KV("from", message.printSrcP2PNodeID())
+                            << LOG_KV("to", message.printDstP2PNodeID())
+                            << LOG_KV("nextHop", printShortHex(nextHop))
+                            << LOG_KV("type", message.packetType()) << LOG_KV("seq", message.seq())
                             << LOG_KV("rsp", message.isRespPacket());
     }
     co_return co_await Service::sendMessageByNodeID(

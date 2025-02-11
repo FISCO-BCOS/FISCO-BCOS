@@ -114,7 +114,8 @@ void Service::heartBeat()
         if (!it.second.empty() && isConnected(it.second))
         {
             SERVICE_LOG(TRACE) << LOG_DESC("heartBeat ignore connected")
-                               << LOG_KV("endpoint", it.first) << LOG_KV("nodeid", it.second);
+                               << LOG_KV("endpoint", it.first)
+                               << LOG_KV("nodeid", printShortHex(it.second));
             continue;
         }
         SERVICE_LOG(DEBUG) << LOG_DESC("heartBeat try to reconnect")
@@ -169,14 +170,16 @@ void Service::updateStaticNodes(std::shared_ptr<SocketFace> const& _s, P2pID con
     // modify m_staticNodes(including accept cases, namely the client endpoint)
     if (it != m_staticNodes.end())
     {
-        SERVICE_LOG(INFO) << LOG_DESC("updateStaticNodes") << LOG_KV("nodeid", nodeID)
+        SERVICE_LOG(INFO) << LOG_DESC("updateStaticNodes")
+                          << LOG_KV("nodeid", printShortHex(nodeID))
                           << LOG_KV("endpoint", endpoint);
         it->second = nodeID;
     }
     else
     {
         SERVICE_LOG(DEBUG) << LOG_DESC("updateStaticNodes can't find endpoint")
-                           << LOG_KV("nodeid", nodeID) << LOG_KV("endpoint", endpoint);
+                           << LOG_KV("nodeid", printShortHex(nodeID))
+                           << LOG_KV("endpoint", endpoint);
     }
 }
 
@@ -192,13 +195,14 @@ void Service::onConnect(
     if (e.errorCode())
     {
         SERVICE_LOG(WARNING) << LOG_DESC("onConnect") << LOG_KV("code", e.errorCode())
-                             << LOG_KV("p2pid", p2pID) << LOG_KV("nodeName", p2pInfo.nodeName)
-                             << LOG_KV("endpoint", peer) << LOG_KV("message", e.what());
+                             << LOG_KV("p2pid", printShortHex(p2pID))
+                             << LOG_KV("nodeName", p2pInfo.nodeName) << LOG_KV("endpoint", peer)
+                             << LOG_KV("message", e.what());
 
         return;
     }
 
-    SERVICE_LOG(INFO) << LOG_DESC("onConnect") << LOG_KV("p2pid", p2pID)
+    SERVICE_LOG(INFO) << LOG_DESC("onConnect") << LOG_KV("p2pid", printShortHex(p2pID))
                       << LOG_KV("endpoint", peer);
 
     if (p2pID == id())
@@ -229,7 +233,7 @@ void Service::onConnect(
     decltype(m_sessions)::accessor accessor;
     if (m_sessions.find(accessor, p2pID) && accessor->second->active())
     {
-        SERVICE_LOG(INFO) << "Disconnect duplicate peer" << LOG_KV("p2pid", p2pID);
+        SERVICE_LOG(INFO) << "Disconnect duplicate peer" << LOG_KV("p2pid", printShortHex(p2pID));
         updateStaticNodes(session->socket(), p2pID);
         session->disconnect(DuplicatePeer);
         return;
@@ -247,7 +251,7 @@ void Service::onConnect(
         accessor.release();
         callNewSessionHandlers(p2pSession);
     }
-    SERVICE_LOG(INFO) << LOG_DESC("Connection established") << LOG_KV("p2pid", p2pID)
+    SERVICE_LOG(INFO) << LOG_DESC("Connection established") << LOG_KV("p2pid", printShortHex(p2pID))
                       << LOG_KV("endpoint", session->nodeIPEndpoint());
 }
 
@@ -263,7 +267,7 @@ void Service::onDisconnect(NetworkException e, P2PSession::Ptr p2pSession)
         m_sessions.find(accessor, p2pSession->p2pID()) && accessor->second == p2pSession)
     {
         SERVICE_LOG(TRACE) << "Service onDisconnect and remove from m_sessions"
-                           << LOG_KV("p2pid", p2pSession->p2pID())
+                           << LOG_KV("p2pid", p2pSession->shortP2pID())
                            << LOG_KV("endpoint", p2pSession->session()->nodeIPEndpoint());
 
         m_sessions.erase(accessor);
@@ -325,7 +329,7 @@ void Service::sendRespMessageBySession(
 
     sendMessageToSession(_p2pSession, respMessage);
     SERVICE_LOG(TRACE) << "sendRespMessageBySession" << LOG_KV("seq", _p2pMessage->seq())
-                       << LOG_KV("p2pid", _p2pSession->p2pID())
+                       << LOG_KV("p2pid", _p2pSession->shortP2pID())
                        << LOG_KV("payload size", _payload.size());
 }
 
@@ -361,8 +365,9 @@ void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message::P
         if (e.errorCode())
         {
             SERVICE_LOG(INFO) << LOG_DESC("disconnect failed in P2PSession")
-                              << LOG_KV("p2pid", p2pID) << LOG_KV("endpoint", nodeIPEndpoint)
-                              << LOG_KV("code", e.errorCode()) << LOG_KV("message", e.what());
+                              << LOG_KV("p2pid", printShortHex(p2pID))
+                              << LOG_KV("endpoint", nodeIPEndpoint) << LOG_KV("code", e.errorCode())
+                              << LOG_KV("message", e.what());
 
             if (p2pSession)
             {
@@ -391,7 +396,7 @@ void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message::P
         if (c_fileLogLevel <= TRACE) [[unlikely]]
         {
             SERVICE_LOG(TRACE) << LOG_DESC("onMessage receive message")
-                               << LOG_KV("p2pid", P2PMessage::printP2PIDElegantly(p2pID))
+                               << LOG_KV("p2pid", printShortHex(p2pID))
                                << LOG_KV("endpoint", nodeIPEndpoint)
                                << LOG_KV("seq", p2pMessage->seq())
                                << LOG_KV("version", p2pMessage->version())
@@ -415,13 +420,13 @@ void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message::P
                                << LOG_DESC(": AMOP is disabled!") << LOG_KV("seq", message->seq())
                                << LOG_KV("packetType", packetType) << LOG_KV("ext", ext)
                                << LOG_KV("version", version)
-                               << LOG_KV("dst p2p", p2pMessage->dstP2PNodeID());
+                               << LOG_KV("dst p2p", p2pMessage->printDstP2PNodeID());
             return;
         }
         SERVICE_LOG(ERROR) << LOG_DESC("Unrecognized message type") << LOG_KV("seq", message->seq())
                            << LOG_KV("packetType", packetType) << LOG_KV("ext", ext)
                            << LOG_KV("version", version)
-                           << LOG_KV("dst p2p", p2pMessage->dstP2PNodeID());
+                           << LOG_KV("dst p2p", p2pMessage->printDstP2PNodeID());
     }
     catch (std::exception& e)
     {
@@ -467,7 +472,8 @@ P2PMessage::Ptr Service::sendMessageByNodeID(P2pID nodeID, P2PMessage::Ptr messa
         if (error.errorCode() != 0)
         {
             SERVICE_LOG(ERROR) << LOG_DESC("asyncSendMessageByNodeID error")
-                               << LOG_KV("nodeid", nodeID) << LOG_KV("errorCode", error.errorCode())
+                               << LOG_KV("nodeid", printShortHex(nodeID))
+                               << LOG_KV("errorCode", error.errorCode())
                                << LOG_KV("what", error.what());
             BOOST_THROW_EXCEPTION(error);
         }
@@ -476,7 +482,8 @@ P2PMessage::Ptr Service::sendMessageByNodeID(P2pID nodeID, P2PMessage::Ptr messa
     }
     catch (std::exception& e)
     {
-        SERVICE_LOG(ERROR) << LOG_DESC("asyncSendMessageByNodeID error") << LOG_KV("nodeid", nodeID)
+        SERVICE_LOG(ERROR) << LOG_DESC("asyncSendMessageByNodeID error")
+                           << LOG_KV("nodeid", printShortHex(nodeID))
                            << LOG_KV("what", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(e);
     }
@@ -531,12 +538,12 @@ void Service::asyncSendMessageByNodeID(
                 NetworkException e(-1, "send message failed for no network established");
                 callback(e, nullptr, nullptr);
             }
-            SERVICE_LOG(INFO) << "Node inactive" << LOG_KV("nodeid", nodeID);
+            SERVICE_LOG(INFO) << "Node inactive" << LOG_KV("nodeid", printShortHex(nodeID));
         }
     }
     catch (std::exception& e)
     {
-        SERVICE_LOG(ERROR) << "asyncSendMessageByNodeID" << LOG_KV("nodeid", nodeID)
+        SERVICE_LOG(ERROR) << "asyncSendMessageByNodeID" << LOG_KV("nodeid", printShortHex(nodeID))
                            << LOG_KV("what", boost::diagnostic_information(e));
 
         if (callback)
@@ -631,7 +638,8 @@ void Service::asyncSendMessageByP2PNodeID(uint16_t _type, P2pID _dstNodeID, byte
             {
                 SERVICE_LOG(INFO) << LOG_DESC("asyncSendMessageByP2PNodeID failed")
                                   << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what())
-                                  << LOG_KV("type", packetType) << LOG_KV("dst", _dstNodeID);
+                                  << LOG_KV("type", packetType)
+                                  << LOG_KV("dst", printShortHex(_dstNodeID));
                 if (_callback)
                 {
                     _callback(_e.toError(), packetType,
@@ -701,7 +709,7 @@ void Service::onReceiveProtocol(
     {
         SERVICE_LOG(WARNING) << LOG_DESC("onReceiveProtocol failed")
                              << LOG_KV("code", _error.errorCode()) << LOG_KV("msg", _error.what())
-                             << LOG_KV("peer", _session ? _session->p2pID() : "unknown");
+                             << LOG_KV("peer", _session ? _session->shortP2pID() : "unknown");
         return;
     }
     try
@@ -714,7 +722,7 @@ void Service::onReceiveProtocol(
         {
             SERVICE_LOG(WARNING)
                 << LOG_DESC("onReceiveProtocol: protocolNegotiate failed, disconnect the session")
-                << LOG_KV("peer", _session->p2pID())
+                << LOG_KV("peer", _session->shortP2pID())
                 << LOG_KV("minVersion", protocolInfo->minVersion())
                 << LOG_KV("maxVersion", protocolInfo->maxVersion())
                 << LOG_KV("supportMinVersion", m_localProtocol->minVersion())
@@ -726,7 +734,7 @@ void Service::onReceiveProtocol(
         protocolInfo->setVersion(version);
         _session->setProtocolInfo(protocolInfo);
         SERVICE_LOG(INFO) << LOG_DESC("onReceiveProtocol: protocolNegotiate success")
-                          << LOG_KV("peer", _session->p2pID())
+                          << LOG_KV("peer", _session->shortP2pID())
                           << LOG_KV("minVersion", protocolInfo->minVersion())
                           << LOG_KV("maxVersion", protocolInfo->maxVersion())
                           << LOG_KV("supportMinVersion", m_localProtocol->minVersion())
@@ -736,7 +744,7 @@ void Service::onReceiveProtocol(
     catch (std::exception const& e)
     {
         SERVICE_LOG(WARNING) << LOG_DESC("onReceiveProtocol exception")
-                             << LOG_KV("peer", _session ? _session->p2pID() : "unknown")
+                             << LOG_KV("peer", _session ? _session->shortP2pID() : "unknown")
                              << LOG_KV("packetType", _message->packetType())
                              << LOG_KV("seq", _message->seq());
     }

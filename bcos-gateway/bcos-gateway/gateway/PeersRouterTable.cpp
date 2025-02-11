@@ -124,7 +124,8 @@ void PeersRouterTable::batchInsertNodeList(
 
 void PeersRouterTable::removeP2PID(const P2pID& _p2pID)
 {
-    ROUTER_LOG(INFO) << LOG_DESC("PeersRouterTable: removeP2PID") << LOG_KV("p2pID", _p2pID);
+    ROUTER_LOG(INFO) << LOG_DESC("PeersRouterTable: removeP2PID")
+                     << LOG_KV("p2pID", printShortHex(_p2pID));
     // remove p2pID from groupNodeList
     removeP2PIDFromGroupNodeList(_p2pID);
     // remove p2pID from peerStatus
@@ -291,7 +292,7 @@ void PeersRouterTable::asyncBroadcastMsg(
         {
             ROUTER_LOG(TRACE) << LOG_BADGE("PeersRouterTable") << LOG_DESC("asyncBroadcastMsg")
                               << LOG_KV("nodeType", _type) << LOG_KV("moduleID", _moduleID)
-                              << LOG_KV("dst", P2PMessage::printP2PIDElegantly(peer));
+                              << LOG_KV("dst", printShortHex(peer));
         }
         m_p2pInterface->asyncSendMessageByNodeID(peer, _msg, CallbackFuncWithSession());
     }
@@ -326,7 +327,7 @@ bcos::task::Task<void> bcos::gateway::PeersRouterTable::broadcastMessage(uint16_
         {
             ROUTER_LOG(TRACE) << LOG_BADGE("PeersRouterTable") << LOG_DESC("asyncBroadcastMsg")
                               << LOG_KV("nodeType", type) << LOG_KV("moduleID", moduleID)
-                              << LOG_KV("dst", P2PMessage::printP2PIDElegantly(peer));
+                              << LOG_KV("dst", printShortHex(peer));
         }
         co_await m_p2pInterface->sendMessageByNodeID(peer, message, payloads);
     }

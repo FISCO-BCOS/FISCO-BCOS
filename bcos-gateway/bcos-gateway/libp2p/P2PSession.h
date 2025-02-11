@@ -10,6 +10,7 @@
 #include <bcos-gateway/libnetwork/SessionFace.h>
 #include <bcos-gateway/libp2p/Common.h>
 #include <bcos-gateway/libp2p/P2PMessage.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <memory>
 
 
@@ -36,6 +37,7 @@ public:
     virtual void setSession(std::shared_ptr<SessionFace> session) { m_session = session; }
 
     virtual P2pID p2pID() { return m_p2pInfo->p2pID; }
+    virtual std::string shortP2pID() { return printShortHex(m_p2pInfo->p2pID); }
     // Note: the p2pInfo must be setted after session setted
     virtual void setP2PInfo(P2PInfo const& p2pInfo)
     {

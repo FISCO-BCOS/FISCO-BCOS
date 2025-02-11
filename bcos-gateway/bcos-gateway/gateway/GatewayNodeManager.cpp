@@ -38,7 +38,7 @@ GatewayNodeManager::GatewayNodeManager(std::string const& _uuid, P2pID const& _n
     m_uuid = _uuid;
     if (_uuid.empty())
     {
-        m_uuid = _nodeID;
+        m_uuid = toHex(_nodeID);
     }
     m_p2pNodeID = _nodeID;
     m_p2pInterface = _p2pInterface;
@@ -114,7 +114,8 @@ void GatewayNodeManager::onReceiveStatusSeq(
         return;
     }
     NODE_MANAGER_LOG(TRACE) << LOG_DESC("onReceiveStatusSeq request nodeStatus")
-                            << LOG_KV("from", from) << LOG_KV("statusSeq", statusSeq);
+                            << LOG_KV("from", printShortHex(from))
+                            << LOG_KV("statusSeq", statusSeq);
     m_p2pInterface->asyncSendMessageByP2PNodeID(
         GatewayMessageType::RequestNodeStatus, from, bytesConstRef());
 }
@@ -141,7 +142,7 @@ void GatewayNodeManager::onReceiveNodeStatus(
     gatewayNodeStatus->decode(bytesConstRef(_msg->payload().data(), _msg->payload().size()));
     auto const& from = (!_msg->srcP2PNodeID().empty()) ? _msg->srcP2PNodeID() : _session->p2pID();
 
-    NODE_MANAGER_LOG(INFO) << LOG_DESC("onReceiveNodeStatus") << LOG_KV("from", from)
+    NODE_MANAGER_LOG(INFO) << LOG_DESC("onReceiveNodeStatus") << LOG_KV("from", printShortHex(from))
                            << LOG_KV("seq", gatewayNodeStatus->seq())
                            << LOG_KV("uuid", gatewayNodeStatus->uuid());
     updatePeerStatus(from, gatewayNodeStatus);
@@ -189,10 +190,11 @@ void GatewayNodeManager::onRequestNodeStatus(
     if (!nodeStatusData)
     {
         NODE_MANAGER_LOG(WARNING) << LOG_DESC("onRequestNodeStatus: generate nodeInfo error")
-                                  << LOG_KV("from", from);
+                                  << LOG_KV("from", printShortHex(from));
         return;
     }
-    NODE_MANAGER_LOG(TRACE) << LOG_DESC("onRequestNodeStatus") << LOG_KV("from", from);
+    NODE_MANAGER_LOG(TRACE) << LOG_DESC("onRequestNodeStatus")
+                            << LOG_KV("from", printShortHex(from));
     m_p2pInterface->asyncSendMessageByP2PNodeID(GatewayMessageType::ResponseNodeStatus, from,
         bytesConstRef((byte*)nodeStatusData->data(), nodeStatusData->size()));
 }
@@ -254,7 +256,7 @@ bytesPointer GatewayNodeManager::generateNodeStatus()
 
 void GatewayNodeManager::onRemoveNodeIDs(const P2pID& _p2pID)
 {
-    NODE_MANAGER_LOG(INFO) << LOG_DESC("onRemoveNodeIDs") << LOG_KV("p2pid", _p2pID);
+    NODE_MANAGER_LOG(INFO) << LOG_DESC("onRemoveNodeIDs") << LOG_KV("p2pid", printShortHex(_p2pID));
     {
         // remove statusSeq info
         m_p2pID2Seq.erase(_p2pID);

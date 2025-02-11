@@ -65,10 +65,9 @@ void P2PSession::heartBeat()
             message->setPacketType(GatewayMessageType::Heartbeat);
             if (c_fileLogLevel <= TRACE) [[unlikely]]
             {
-                P2PSESSION_LOG(TRACE)
-                    << LOG_DESC("P2PSession onHeartBeat")
-                    << LOG_KV("p2pid", P2PMessage::printP2PIDElegantly(m_p2pInfo->p2pID))
-                    << LOG_KV("endpoint", m_session->nodeIPEndpoint());
+                P2PSESSION_LOG(TRACE) << LOG_DESC("P2PSession onHeartBeat")
+                                      << LOG_KV("p2pid", printShortHex(m_p2pInfo->p2pID))
+                                      << LOG_KV("endpoint", m_session->nodeIPEndpoint());
             }
 
             m_session->asyncSendMessage(message);
