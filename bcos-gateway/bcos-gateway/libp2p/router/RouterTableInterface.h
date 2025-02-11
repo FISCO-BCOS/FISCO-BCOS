@@ -46,8 +46,8 @@ public:
     virtual std::string const& dstNode() const = 0;
     virtual std::string const& nextHop() const = 0;
 
-    std::string printDstNode() const { return printShortHex(dstNode()); }
-    std::string printNextHop() const { return printShortHex(nextHop()); }
+    std::string printDstNode() const { return printShortP2pID(dstNode()); }
+    std::string printNextHop() const { return printShortP2pID(nextHop()); }
 
     virtual int32_t distance() const = 0;
 };
