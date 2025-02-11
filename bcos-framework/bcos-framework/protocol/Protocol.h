@@ -105,6 +105,7 @@ enum ProtocolVersion : uint32_t
     V0 = 0,
     V1 = 1,
     V2 = 2,
+    V3 = 3,  // for gateway support short p2p-id
 };
 
 // BlockVersion only present the data version with format major.minor.patch of 3 bytes, data should

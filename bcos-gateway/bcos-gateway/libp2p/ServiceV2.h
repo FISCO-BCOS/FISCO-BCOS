@@ -27,7 +27,7 @@ class ServiceV2 : public Service
 {
 public:
     using Ptr = std::shared_ptr<ServiceV2>;
-    ServiceV2(std::string const& _nodeID, RouterTableFactory::Ptr _routerTableFactory);
+    ServiceV2(P2PInfo const& _p2pInfo, RouterTableFactory::Ptr _routerTableFactory);
     ServiceV2() = delete;
     ServiceV2(const ServiceV2&) = delete;
     ServiceV2(ServiceV2&&) = delete;
@@ -58,7 +58,49 @@ public:
     task::Task<Message::Ptr> sendMessageByNodeID(P2pID nodeID, P2PMessage& message,
         ::ranges::any_view<bytesConstRef> payloads, Options options = Options()) override;
 
+    std::string getShortP2pID(std::string const& rawP2pID) const override
+    {
+        bcos::ReadGuard l(x_rawP2pIDInfo);
+        auto it = m_rawP2pIDInfo.find(rawP2pID);
+        if (it != m_rawP2pIDInfo.end())
+        {
+            return it->second;
+        }
+        SERVICE2_LOG(WARNING) << LOG_DESC("getShortP2pID failed, return rawP2pID directly")
+                              << LOG_KV("id", printShortP2pID(rawP2pID));
+        return rawP2pID;
+    }
+    std::string getRawP2pID(std::string const& shortP2pID) const override
+    {
+        // the old node case
+        if (shortP2pID.size() > HASH_DATA_MAX_SIZE)
+        {
+            return shortP2pID;
+        }
+        bcos::ReadGuard l(x_p2pIDInfo);
+        auto it = m_p2pIDInfo.find(shortP2pID);
+        if (it != m_p2pIDInfo.end())
+        {
+            return it->second;
+        }
+        SERVICE2_LOG(WARNING) << LOG_DESC("getRawP2pID failed, return shortP2pID directly")
+                              << LOG_KV("id", printShortP2pID(shortP2pID));
+        return shortP2pID;
+    }
+
 protected:
+    void convertToRawP2pID(P2PMessage::Ptr _p2pMessage) const
+    {
+        if (!_p2pMessage->srcP2PNodeID().empty())
+        {
+            _p2pMessage->setSrcP2PNodeID(getRawP2pID(_p2pMessage->srcP2PNodeID()));
+        }
+        if (!_p2pMessage->dstP2PNodeID().empty())
+        {
+            _p2pMessage->setDstP2PNodeID(getRawP2pID(_p2pMessage->dstP2PNodeID()));
+        }
+    }
+
     // called when the nodes become unreachable
     void onP2PNodesUnreachable(std::set<std::string> const& _p2pNodeIDs)
     {
@@ -98,6 +140,38 @@ protected:
     virtual void asyncBroadcastMessageWithoutForward(
         std::shared_ptr<P2PMessage> message, Options options);
 
+    void updateP2pInfo(P2PInfo const& p2pInfo)
+    {
+        if (p2pInfo.rawP2pID.empty() || p2pInfo.p2pID.empty())
+        {
+            return;
+        }
+        tryToUpdateRawP2pInfo(p2pInfo);
+        tryToUpdateP2pInfo(p2pInfo);
+    }
+
+    void tryToUpdateRawP2pInfo(P2PInfo const& p2pInfo)
+    {
+        bcos::UpgradableGuard l(x_rawP2pIDInfo);
+        auto it = m_rawP2pIDInfo.find(p2pInfo.rawP2pID);
+        if (it != m_rawP2pIDInfo.end())
+        {
+            return;
+        }
+        m_rawP2pIDInfo.insert(std::make_pair(p2pInfo.rawP2pID, p2pInfo.p2pID));
+    }
+
+    void tryToUpdateP2pInfo(P2PInfo const& p2pInfo)
+    {
+        bcos::UpgradableGuard l(x_p2pIDInfo);
+        auto it = m_p2pIDInfo.find(p2pInfo.p2pID);
+        if (it != m_p2pIDInfo.end())
+        {
+            return;
+        }
+        m_p2pIDInfo.insert(std::make_pair(p2pInfo.p2pID, p2pInfo.rawP2pID));
+    }
+
 private:
     // for message forward
     std::shared_ptr<bcos::Timer> m_routerTimer;
@@ -108,6 +182,13 @@ private:
 
     std::map<std::string, uint32_t> m_node2Seq;
     mutable SharedMutex x_node2Seq;
+
+    // rawP2pID->p2pID
+    std::map<std::string, std::string> m_rawP2pIDInfo;
+    mutable SharedMutex x_rawP2pIDInfo;
+    // p2pID->rawP2pID
+    std::map<std::string, std::string> m_p2pIDInfo;
+    mutable SharedMutex x_p2pIDInfo;
 
     const int c_unreachableDistance = 10;
 

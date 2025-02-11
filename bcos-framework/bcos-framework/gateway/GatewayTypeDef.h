@@ -20,6 +20,7 @@
  */
 #pragma once
 #include <bcos-utilities/Common.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <boost/asio/ip/tcp.hpp>
 #include <iostream>
 #include <memory>
@@ -27,6 +28,11 @@ namespace bcos
 {
 namespace gateway
 {
+/// For RSA public key, the prefix length is 18 in hex, used for print log graciously
+constexpr static size_t HASH_DATA_MAX_SIZE = 32;
+constexpr static size_t RSA_PUBLIC_KEY_PREFIX = 18;
+constexpr static size_t RSA_PUBLIC_KEY_TRUNC = 8;
+
 // Message type definition
 enum GatewayMessageType : uint16_t
 {
@@ -101,6 +107,11 @@ struct P2PInfo
 {
     using Ptr = std::shared_ptr<P2PInfo>;
     P2PInfo() = default;
+    P2PInfo(std::string const& _p2pID, std::string const& _rawP2pID)
+    {
+        p2pID = _p2pID;
+        rawP2pID = _rawP2pID;
+    }
     ~P2PInfo() noexcept = default;
     // the raw-p2p-nodeID
     std::string rawP2pID;
@@ -157,5 +168,25 @@ private:
 };
 using GatewayInfos = std::vector<GatewayInfo::Ptr>;
 using GatewayInfosPtr = std::shared_ptr<GatewayInfos>;
+
+inline std::string printShortP2pID(std::string const& data)
+{
+    if (data.length() == 0)
+    {
+        return "empty";
+    }
+    if (data.length() <= HASH_DATA_MAX_SIZE)
+    {
+        auto startIt = data.begin();
+        auto endIt = data.end();
+        if (data.size() > 4)
+        {
+            endIt = startIt + 4 * sizeof(byte);
+        }
+        return *toHexString(startIt, endIt, "hash-");
+    }
+    return data.substr(RSA_PUBLIC_KEY_PREFIX, RSA_PUBLIC_KEY_TRUNC);
+}
+
 }  // namespace gateway
 }  // namespace bcos

@@ -102,7 +102,7 @@ void RouterTable::updateDistanceForAllRouterEntries(
                 << LOG_BADGE("updateDistanceForAllRouterEntries")
                 << LOG_DESC("update entry since the nextHop distance has been updated")
                 << LOG_KV("dst", entry->printDstNode())
-                << LOG_KV("nextHop", printShortHex(_nextHop))
+                << LOG_KV("nextHop", printShortP2pID(_nextHop))
                 << LOG_KV("distance", entry->distance()) << LOG_KV("oldDistance", oldDistance)
                 << LOG_KV("size", m_routerEntries.size());
         }
@@ -115,9 +115,9 @@ bool RouterTable::update(std::set<std::string>& _unreachableNodes,
     if (c_fileLogLevel <= TRACE) [[unlikely]]
     {
         SERVICE_ROUTER_LOG(TRACE) << LOG_BADGE("update") << LOG_DESC("receive entry")
-                                  << LOG_KV("dst", printShortHex(_entry->dstNode()))
+                                  << LOG_KV("dst", printShortP2pID(_entry->dstNode()))
                                   << LOG_KV("distance", _entry->distance())
-                                  << LOG_KV("from", printShortHex(_generatedFrom));
+                                  << LOG_KV("from", printShortP2pID(_generatedFrom));
     }
     auto ret = updateDstNodeEntry(_generatedFrom, _entry);
     // the dst entry has not been updated
@@ -265,7 +265,7 @@ std::set<std::string> RouterTable::getAllReachableNode()
     {
         std::stringstream nodes;
         std::for_each(reachableNodes.begin(), reachableNodes.end(),
-            [&](const auto& item) { nodes << printShortHex(item) << ","; });
+            [&](const auto& item) { nodes << printShortP2pID(item) << ","; });
         SERVICE_ROUTER_LOG(TRACE) << LOG_BADGE("getAllReachableNode")
                                   << LOG_KV("nodes size", reachableNodes.size())
                                   << LOG_KV("nodes", nodes.str());

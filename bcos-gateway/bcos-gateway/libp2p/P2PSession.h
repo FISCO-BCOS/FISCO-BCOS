@@ -36,8 +36,8 @@ public:
     virtual SessionFace::Ptr session() { return m_session; }
     virtual void setSession(std::shared_ptr<SessionFace> session) { m_session = session; }
 
-    virtual P2pID p2pID() { return m_p2pInfo->p2pID; }
-    virtual std::string shortP2pID() { return printShortHex(m_p2pInfo->p2pID); }
+    virtual P2pID p2pID() { return m_p2pInfo->rawP2pID; }
+    virtual std::string printP2pID() { return printShortP2pID(m_p2pInfo->rawP2pID); }
     // Note: the p2pInfo must be setted after session setted
     virtual void setP2PInfo(P2PInfo const& p2pInfo)
     {
@@ -62,6 +62,9 @@ public:
         // ReadGuard l(x_protocolInfo);
         return m_protocolInfo;
     }
+
+    virtual void asyncSendP2PMessage(P2PMessage::Ptr message, Options options,
+        SessionCallbackFunc callback = SessionCallbackFunc());
 
 private:
     SessionFace::Ptr m_session;

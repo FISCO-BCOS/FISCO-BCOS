@@ -171,7 +171,9 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
         SESSION_LOG(TRACE) << LOG_DESC("Session asyncSendMessage")
                            << LOG_KV("endpoint", nodeIPEndpoint()) << LOG_KV("seq", message->seq())
                            << LOG_KV("packetType", message->packetType())
-                           << LOG_KV("ext", message->ext());
+                           << LOG_KV("ext", message->ext())
+                           << LOG_KV("src", printShortP2pID(message->srcP2PNodeID()))
+                           << LOG_KV("dst", printShortP2pID(message->dstP2PNodeID()));
     }
 
     send(encodedMessage);
