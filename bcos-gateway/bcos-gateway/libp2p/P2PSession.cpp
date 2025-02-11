@@ -15,6 +15,7 @@
 
 using namespace bcos;
 using namespace bcos::gateway;
+using namespace bcos::protocol;
 
 P2PSession::P2PSession()
   : m_p2pInfo(std::make_shared<P2PInfo>()),
@@ -66,11 +67,10 @@ void P2PSession::heartBeat()
             if (c_fileLogLevel <= TRACE) [[unlikely]]
             {
                 P2PSESSION_LOG(TRACE) << LOG_DESC("P2PSession onHeartBeat")
-                                      << LOG_KV("p2pid", printShortHex(m_p2pInfo->p2pID))
+                                      << LOG_KV("p2pid", printShortP2pID(m_p2pInfo->p2pID))
                                       << LOG_KV("endpoint", m_session->nodeIPEndpoint());
             }
-
-            m_session->asyncSendMessage(message);
+            asyncSendP2PMessage(message, Options());
         }
 
         auto self = std::weak_ptr<P2PSession>(shared_from_this());
@@ -89,4 +89,33 @@ void P2PSession::heartBeat()
             }
         });
     }
+}
+
+void P2PSession::asyncSendP2PMessage(
+    P2PMessage::Ptr message, Options options, SessionCallbackFunc callback)
+{
+    if (!m_session || !m_session->active()) [[unlikely]]
+    {
+        P2PSESSION_LOG(WARNING) << LOG_DESC("asyncSendP2PMessage failed for invalid session")
+                                << LOG_KV("from", message->printSrcP2PNodeID())
+                                << LOG_KV("dst", message->printDstP2PNodeID());
+        return;
+    }
+    auto service = m_service.lock();
+    // send message using original long nodeID
+    if (!service || m_protocolInfo == nullptr || m_protocolInfo->version() < ProtocolVersion::V3)
+    {
+        m_session->asyncSendMessage(message, options, callback);
+        return;
+    }
+    if (!message->srcP2PNodeID().empty())
+    {
+        message->setSrcP2PNodeID(service->getShortP2pID(message->srcP2PNodeID()));
+    }
+    // send message using short nodeID
+    if (!message->dstP2PNodeID().empty())
+    {
+        message->setDstP2PNodeID(service->getShortP2pID(message->dstP2PNodeID()));
+    }
+    m_session->asyncSendMessage(message, options, callback);
 }

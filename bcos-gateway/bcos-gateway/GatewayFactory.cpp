@@ -597,14 +597,12 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
 {
     auto nodeCert =
         (_config->smSSL() ? _config->smCertConfig().nodeCert : _config->certConfig().nodeCert);
-    std::string rawPubKey;
-    if (!nodeCert || !m_certPubHexHandler(*nodeCert, rawPubKey))
+    std::string pubHex;
+    if (!nodeCert || !m_certPubHexHandler(*nodeCert, pubHex))
     {
         BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
                                   "GatewayFactory::init unable parse myself pub id"));
     }
-
-    auto pubHex = _config->calculateShortNodeID(rawPubKey);
     std::shared_ptr<ba::ssl::context> srvCtx =
         (_config->smSSL() ?
                 buildSSLContext(true, _config->sslServerMode(), _config->smCertConfig()) :
@@ -654,14 +652,16 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     // init Service
     bool enableRIPProtocol = _config->enableRIPProtocol();
     Service::Ptr service = nullptr;
+    auto nodeIDHash = _config->calculateShortNodeID(pubHex);
+    P2PInfo selfInfo(nodeIDHash, pubHex);
     if (enableRIPProtocol)
     {
         auto routerTableFactory = std::make_shared<RouterTableFactoryImpl>();
-        service = std::make_shared<ServiceV2>(pubHex, routerTableFactory);
+        service = std::make_shared<ServiceV2>(selfInfo, routerTableFactory);
     }
     else
     {
-        service = std::make_shared<Service>(pubHex);
+        service = std::make_shared<Service>(selfInfo);
     }
 
     service->setHost(host);
@@ -677,7 +677,8 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     GATEWAY_FACTORY_LOG(INFO) << LOG_BADGE("buildService") << LOG_DESC("build service end")
                               << LOG_KV("enable rip protocol", _config->enableRIPProtocol())
                               << LOG_KV("enable compress", _config->enableCompress())
-                              << LOG_KV("myself pub id", printShortHex(pubHex));
+                              << LOG_KV("myself pub id", printShortP2pID(pubHex))
+                              << LOG_KV("myself_pub_id_hash", printShortP2pID(nodeIDHash));
     service->setMessageFactory(messageFactory);
     service->setKeyFactory(keyFactory);
     return service;

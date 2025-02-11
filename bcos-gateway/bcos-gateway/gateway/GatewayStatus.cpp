@@ -52,7 +52,7 @@ void GatewayStatus::update(std::string const& _p2pNodeID, GatewayNodeStatus::Con
         }
         (m_groupP2PNodeList[groupID][type]).insert(_p2pNodeID);
         ROUTER_LOG(INFO) << LOG_DESC("GatewayStatus: update") << LOG_KV("group", groupID)
-                         << LOG_KV("type", type) << LOG_KV("p2pID", printShortHex(_p2pNodeID));
+                         << LOG_KV("type", type) << LOG_KV("p2pID", printShortP2pID(_p2pNodeID));
     }
 }
 
@@ -155,5 +155,5 @@ void GatewayStatus::removeP2PNode(std::string const& _p2pNodeID)
         pGroupInfo++;
     }
     ROUTER_LOG(INFO) << LOG_DESC("GatewayStatus: removeP2PNode")
-                     << LOG_KV("p2pID", printShortHex(_p2pNodeID));
+                     << LOG_KV("p2pID", printShortP2pID(_p2pNodeID));
 }

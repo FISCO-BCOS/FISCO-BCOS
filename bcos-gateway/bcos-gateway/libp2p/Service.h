@@ -28,7 +28,7 @@ class Gateway;
 class Service : public P2PInterface, public std::enable_shared_from_this<Service>
 {
 public:
-    Service(std::string const& _nodeID);
+    Service(P2PInfo const& _p2pInfo);
     virtual ~Service() override { stop(); }
 
     using Ptr = std::shared_ptr<Service>;
@@ -162,6 +162,9 @@ public:
     void updatePeerBlacklist(const std::set<std::string>& _strList, const bool _enable) override;
     void updatePeerWhitelist(const std::set<std::string>& _strList, const bool _enable) override;
 
+    virtual std::string getShortP2pID(std::string const& rawP2pID) const { return rawP2pID; }
+    virtual std::string getRawP2pID(std::string const& shortP2pID) const { return shortP2pID; }
+
 protected:
     virtual void sendMessageToSession(P2PSession::Ptr _p2pSession, P2PMessage::Ptr _msg,
         Options = Options(), CallbackFuncWithSession = CallbackFuncWithSession());
@@ -219,7 +222,7 @@ protected:
 
     friend class ServiceV2;
 
-private:
+protected:
     std::vector<std::function<void(NetworkException, P2PSession::Ptr)>> m_disconnectionHandlers;
 
     std::shared_ptr<bcos::crypto::KeyFactory> m_keyFactory;
@@ -231,6 +234,7 @@ private:
     tbb::concurrent_hash_map<P2pID, P2PSession::Ptr> m_sessions;
     std::shared_ptr<MessageFactory> m_messageFactory;
 
+    P2PInfo m_selfInfo;
     P2pID m_nodeID;
     std::optional<boost::asio::deadline_timer> m_timer;
     bool m_run = false;
