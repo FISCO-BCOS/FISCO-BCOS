@@ -22,6 +22,7 @@ class GatewayConfig : public bcos::ObjectCounter<GatewayConfig>
 {
 public:
     using Ptr = std::shared_ptr<GatewayConfig>;
+    GatewayConfig();
 
     // cert for ssl connection
     struct CertConfig

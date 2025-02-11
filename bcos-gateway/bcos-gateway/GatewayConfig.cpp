@@ -25,6 +25,11 @@ using namespace bcos;
 using namespace security;
 using namespace gateway;
 
+GatewayConfig::GatewayConfig()
+{
+    m_hashImpl = std::make_shared<Keccak256>();
+}
+
 bool GatewayConfig::isValidPort(int port)
 {
     return port > 1024 && port <= 65535;
@@ -213,7 +218,6 @@ void GatewayConfig::initConfig(std::string const& _configPath, bool _uuidRequire
 {
     try
     {
-        m_hashImpl = std::make_shared<Keccak256>();
         boost::property_tree::ptree pt;
         boost::property_tree::ini_parser::read_ini(_configPath, pt);
         initP2PConfig(pt, _uuidRequired);
