@@ -347,8 +347,8 @@ void TopicManager::updateSeqAndTopicsByNodeID(
         m_nodeID2TopicItems[_nodeID] = _topicItems;
     }
 
-    TOPIC_LOG(INFO) << LOG_BADGE("updateSeqAndTopicsByNodeID") << LOG_KV("nodeID", _nodeID)
-                    << LOG_KV("topicSeq", _topicSeq)
+    TOPIC_LOG(INFO) << LOG_BADGE("updateSeqAndTopicsByNodeID")
+                    << LOG_KV("nodeID", printShortHex(_nodeID)) << LOG_KV("topicSeq", _topicSeq)
                     << LOG_KV("topicItems size", _topicItems.size());
 }
 

@@ -28,7 +28,7 @@ file(GLOB_RECURSE SRCS bcos-gateway/*.cpp)
 find_package(tarscpp REQUIRED)
 
 add_library(${GATEWAY_TARGET} ${SRCS})
-target_link_libraries(${GATEWAY_TARGET} PUBLIC jsoncpp_static Boost::filesystem bcos-boostssl ${FRONT_TARGET} ${TARS_PROTOCOL_TARGET} tarscpp::tarsservant tarscpp::tarsutil)
+target_link_libraries(${GATEWAY_TARGET} PUBLIC jsoncpp_static Boost::filesystem bcos-boostssl bcos-crypto ${FRONT_TARGET} ${TARS_PROTOCOL_TARGET} tarscpp::tarsservant tarscpp::tarsutil)
 set_target_properties(${GATEWAY_TARGET} PROPERTIES UNITY_BUILD "ON")
 
 if (APPLE)

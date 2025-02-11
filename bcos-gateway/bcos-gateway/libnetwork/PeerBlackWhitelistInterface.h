@@ -12,7 +12,7 @@
 #include <string>
 #include <vector>
 
-using NodeID = bcos::h512;
+using P2PNodeID = bcos::h512;
 
 namespace bcos
 {
@@ -27,10 +27,10 @@ public:
 
 public:
     PeerBlackWhitelistInterface(std::set<std::string> const& _strList, bool _enable = false);
-    PeerBlackWhitelistInterface(std::set<NodeID> const& _nodeList, bool _enable);
+    PeerBlackWhitelistInterface(std::set<P2PNodeID> const& _nodeList, bool _enable);
     virtual ~PeerBlackWhitelistInterface() = default;
 
-    virtual bool has(NodeID _peer) const;
+    virtual bool has(P2PNodeID _peer) const;
     virtual bool has(const std::string& _peer) const;
     virtual bool hasValueWhenDisable() const = 0;
     virtual void setEnable(bool _enable) { m_enable = _enable; }
@@ -42,7 +42,7 @@ public:
 protected:
     mutable bcos::Mutex x_peerList;
     bool m_enable{false};
-    std::set<NodeID> m_peerList;
+    std::set<P2PNodeID> m_peerList;
 };
 
 }  // namespace gateway
