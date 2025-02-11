@@ -23,9 +23,9 @@ using namespace std;
 
 namespace bcos::test
 {
-struct TestSealerFactoryFixture
+struct TestSealerFixture
 {
-    TestSealerFactoryFixture()
+    TestSealerFixture()
     {
         boost::log::core::get()->set_logging_enabled(false);
         hashImpl = std::make_shared<crypto::Keccak256>();
@@ -37,7 +37,7 @@ struct TestSealerFactoryFixture
     }
 
 
-    ~TestSealerFactoryFixture() { boost::log::core::get()->set_logging_enabled(true); }
+    ~TestSealerFixture() { boost::log::core::get()->set_logging_enabled(true); }
     inline protocol::BlockFactory::Ptr createBlockFactory()
     {
         auto blockHeaderFactory =
@@ -56,7 +56,7 @@ struct TestSealerFactoryFixture
     crypto::CryptoSuite::Ptr cryptoSuite = nullptr;
 };
 
-BOOST_FIXTURE_TEST_SUITE(TestSealerFactory, TestSealerFactoryFixture)
+BOOST_FIXTURE_TEST_SUITE(TestSealerFactory, TestSealerFixture)
 
 
 BOOST_AUTO_TEST_CASE(constructor)

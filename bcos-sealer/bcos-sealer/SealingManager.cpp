@@ -20,6 +20,7 @@
 #include "SealingManager.h"
 #include "Common.h"
 #include "Sealer.h"
+#include "bcos-framework/protocol/CommonError.h"
 
 using namespace bcos;
 using namespace bcos::sealer;
@@ -231,24 +232,24 @@ int64_t SealingManager::txsSizeExpectedToFetch()
     return (txsSizeToFetch - txsSize);
 }
 
-void SealingManager::fetchTransactions()
+bcos::sealer::SealingManager::FetchResult SealingManager::fetchTransactions()
 {
     // fetching transactions currently
     auto lock = std::unique_lock{m_fetchingTxsMutex, std::try_to_lock};
     if (!lock.owns_lock())
     {
-        return;
+        return FetchResult::NOT_READY;
     }
     // no need to sealing
     if (m_sealingNumber < m_startSealingNumber || m_sealingNumber > m_endSealingNumber)
     {
-        return;
+        return FetchResult::NOT_READY;
     }
 
     auto txsToFetch = txsSizeExpectedToFetch();
     if (txsToFetch == 0)
     {
-        return;
+        return FetchResult::NOT_READY;
     }
     // try to fetch transactions
     ssize_t startSealingNumber = m_startSealingNumber;
@@ -259,7 +260,7 @@ void SealingManager::fetchTransactions()
         auto [_txsHashList, _sysTxsList] = m_config->txpool()->sealTxs(txsToFetch, nullptr);
         if (_txsHashList->transactionsHashSize() == 0 && _sysTxsList->transactionsHashSize() == 0)
         {
-            return;
+            return FetchResult::NO_TRANSACTION;
         }
 
         bool abort = true;
@@ -294,6 +295,7 @@ void SealingManager::fetchTransactions()
         SEAL_LOG(WARNING) << LOG_DESC("fetchTransactions: onRecv sealed txs failed")
                           << LOG_KV("message", boost::diagnostic_information(e));
     }
+    return FetchResult::SUCCESS;
 }
 
 bcos::sealer::SealingManager::SealingManager(SealerConfig::Ptr _config)
