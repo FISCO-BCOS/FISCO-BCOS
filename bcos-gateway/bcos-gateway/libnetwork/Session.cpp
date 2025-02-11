@@ -727,7 +727,7 @@ void Session::checkNetworkStatus()
     }
 }
 
-bcos::task::Task<Message::Ptr> bcos::gateway::Session::sendMessage(
+bcos::task::Task<Message::Ptr> bcos::gateway::Session::fastSendMessage(
     const Message& message, ::ranges::any_view<bytesConstRef> payloads, Options options)
 {
     if (!active())
@@ -751,7 +751,7 @@ bcos::task::Task<Message::Ptr> bcos::gateway::Session::sendMessage(
 
     if (c_fileLogLevel <= LogLevel::TRACE)
     {
-        SESSION_LOG(TRACE) << LOG_DESC("Session asyncSendMessage")
+        SESSION_LOG(TRACE) << LOG_DESC("Session fastSendMessage")
                            << LOG_KV("endpoint", nodeIPEndpoint()) << LOG_KV("seq", message.seq())
                            << LOG_KV("packetType", message.packetType())
                            << LOG_KV("ext", message.ext());

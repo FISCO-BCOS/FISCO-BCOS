@@ -107,7 +107,7 @@ int main(int argc, const char** argv)
                     reporter->update(_message->length(), true);
                     _message->setRespPacket();
                     // echo message
-                    _session->asyncSendP2PMessage(_message);
+                    _session->asyncSendP2PMessage(_message, Options());
                 });
 
             while (true)

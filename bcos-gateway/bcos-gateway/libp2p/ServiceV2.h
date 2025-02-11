@@ -103,19 +103,18 @@ public:
 
     // Note: since the message of the old node maybe forwarded through new node, we should try to
     // reset the p2pNodeID in both cases >=v3 and <v3
-    void resetP2pID(
-        P2PMessage::Ptr message, bcos::protocol::ProtocolVersion const& version) override
+    void resetP2pID(P2PMessage& message, bcos::protocol::ProtocolVersion const& version) override
     {
         // old node case, set to long nodeID
         if (version < ProtocolVersion::V3) [[unlikely]]
         {
-            message->setSrcP2PNodeID(getRawP2pID(message->srcP2PNodeID()));
-            message->setDstP2PNodeID(getRawP2pID(message->dstP2PNodeID()));
+            message.setSrcP2PNodeID(getRawP2pID(message.srcP2PNodeID()));
+            message.setDstP2PNodeID(getRawP2pID(message.dstP2PNodeID()));
             return;
         }
         // new ndoe case, set to short nodeID
-        message->setSrcP2PNodeID(getShortP2pID(message->srcP2PNodeID()));
-        message->setDstP2PNodeID(getShortP2pID(message->dstP2PNodeID()));
+        message.setSrcP2PNodeID(getShortP2pID(message.srcP2PNodeID()));
+        message.setDstP2PNodeID(getShortP2pID(message.dstP2PNodeID()));
     }
 
 protected:
@@ -162,13 +161,13 @@ protected:
 
     void updateP2pInfo(P2PInfo const& p2pInfo)
     {
+        SERVICE2_LOG(INFO) << LOG_DESC("try to updateP2pInfo")
+                           << LOG_KV("p2pID", printShortP2pID(p2pInfo.p2pID))
+                           << LOG_KV("rawP2pID", printShortP2pID(p2pInfo.rawP2pID));
         if (p2pInfo.rawP2pID.empty() || p2pInfo.p2pID.empty())
         {
             return;
         }
-        SERVICE2_LOG(INFO) << LOG_DESC("try to updateP2pInfo")
-                           << LOG_KV("p2pID", printShortP2pID(p2pInfo.p2pID))
-                           << LOG_KV("rawP2pID", printShortP2pID(p2pInfo.rawP2pID));
         tryToUpdateRawP2pInfo(p2pInfo);
         tryToUpdateP2pInfo(p2pInfo);
     }

@@ -176,7 +176,7 @@ public:
     void asyncSendMessage(Message::Ptr message, Options options,
         SessionCallbackFunc callback = SessionCallbackFunc()) override;
 
-    task::Task<Message::Ptr> sendMessage(const Message& message,
+    task::Task<Message::Ptr> fastSendMessage(const Message& message,
         ::ranges::any_view<bytesConstRef> payloads, Options options) override;
 
     NodeIPEndpoint nodeIPEndpoint() const override;

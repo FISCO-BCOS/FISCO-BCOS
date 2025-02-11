@@ -822,5 +822,5 @@ bcos::task::Task<Message::Ptr> bcos::gateway::Service::sendMessageByNodeID(
             NetworkException(-1, "send message failed for no network established"));
     }
 
-    co_return co_await session->session()->sendMessage(header, std::move(payloads), {});
+    co_return co_await session->fastSendP2PMessage(header, std::move(payloads), {});
 }
