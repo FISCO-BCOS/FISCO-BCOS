@@ -102,20 +102,12 @@ void P2PSession::asyncSendP2PMessage(
         return;
     }
     auto service = m_service.lock();
-    // send message using original long nodeID
-    if (!service || m_protocolInfo == nullptr || m_protocolInfo->version() < ProtocolVersion::V3)
+    if (!service)
     {
-        m_session->asyncSendMessage(message, options, callback);
         return;
     }
-    if (!message->srcP2PNodeID().empty())
-    {
-        message->setSrcP2PNodeID(service->getShortP2pID(message->srcP2PNodeID()));
-    }
-    // send message using short nodeID
-    if (!message->dstP2PNodeID().empty())
-    {
-        message->setDstP2PNodeID(service->getShortP2pID(message->dstP2PNodeID()));
-    }
+    // reset message using original long nodeID or short nodeID according to the protocol version
+    // Note: m_protocolInfo be setted when create P2PSession
+    service->resetP2pID(message, (ProtocolVersion)m_protocolInfo->version());
     m_session->asyncSendMessage(message, options, callback);
 }

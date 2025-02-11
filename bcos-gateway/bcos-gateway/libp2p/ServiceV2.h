@@ -60,6 +60,15 @@ public:
 
     std::string getShortP2pID(std::string const& rawP2pID) const override
     {
+        if (rawP2pID.empty())
+        {
+            return rawP2pID;
+        }
+        // already the short p2pId
+        if (!isRawP2pID(rawP2pID))
+        {
+            return rawP2pID;
+        }
         bcos::ReadGuard l(x_rawP2pIDInfo);
         auto it = m_rawP2pIDInfo.find(rawP2pID);
         if (it != m_rawP2pIDInfo.end())
@@ -72,8 +81,12 @@ public:
     }
     std::string getRawP2pID(std::string const& shortP2pID) const override
     {
+        if (shortP2pID.empty())
+        {
+            return shortP2pID;
+        }
         // the old node case
-        if (shortP2pID.size() > HASH_DATA_MAX_SIZE)
+        if (isRawP2pID(shortP2pID))
         {
             return shortP2pID;
         }
@@ -88,18 +101,25 @@ public:
         return shortP2pID;
     }
 
-protected:
-    void convertToRawP2pID(P2PMessage::Ptr _p2pMessage) const
+    // Note: since the message of the old node maybe forwarded through new node, we should try to
+    // reset the p2pNodeID in both cases >=v3 and <v3
+    void resetP2pID(
+        P2PMessage::Ptr message, bcos::protocol::ProtocolVersion const& version) override
     {
-        if (!_p2pMessage->srcP2PNodeID().empty())
+        // old node case, set to long nodeID
+        if (version < ProtocolVersion::V3) [[unlikely]]
         {
-            _p2pMessage->setSrcP2PNodeID(getRawP2pID(_p2pMessage->srcP2PNodeID()));
+            message->setSrcP2PNodeID(getRawP2pID(message->srcP2PNodeID()));
+            message->setDstP2PNodeID(getRawP2pID(message->dstP2PNodeID()));
+            return;
         }
-        if (!_p2pMessage->dstP2PNodeID().empty())
-        {
-            _p2pMessage->setDstP2PNodeID(getRawP2pID(_p2pMessage->dstP2PNodeID()));
-        }
+        // new ndoe case, set to short nodeID
+        message->setSrcP2PNodeID(getShortP2pID(message->srcP2PNodeID()));
+        message->setDstP2PNodeID(getShortP2pID(message->dstP2PNodeID()));
     }
+
+protected:
+    bool isRawP2pID(std::string const& p2pID) const { return p2pID.size() > HASH_NODEID_MAX_SIZE; }
 
     // called when the nodes become unreachable
     void onP2PNodesUnreachable(std::set<std::string> const& _p2pNodeIDs)
@@ -122,7 +142,7 @@ protected:
     virtual void onReceivePeersRouterTable(
         NetworkException _error, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message);
     virtual void joinRouterTable(
-        std::string const& _generatedFrom, RouterTableInterface::Ptr _routerTable);
+        std::shared_ptr<P2PSession> _session, RouterTableInterface::Ptr _routerTable);
     virtual void onReceiveRouterTableRequest(
         NetworkException _error, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message);
     virtual void broadcastRouterSeq();
@@ -146,6 +166,9 @@ protected:
         {
             return;
         }
+        SERVICE2_LOG(INFO) << LOG_DESC("try to updateP2pInfo")
+                           << LOG_KV("p2pID", printShortP2pID(p2pInfo.p2pID))
+                           << LOG_KV("rawP2pID", printShortP2pID(p2pInfo.rawP2pID));
         tryToUpdateRawP2pInfo(p2pInfo);
         tryToUpdateP2pInfo(p2pInfo);
     }

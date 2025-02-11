@@ -28,8 +28,8 @@ namespace bcos
 {
 namespace gateway
 {
+constexpr static size_t HASH_NODEID_MAX_SIZE = 33;
 /// For RSA public key, the prefix length is 18 in hex, used for print log graciously
-constexpr static size_t HASH_DATA_MAX_SIZE = 32;
 constexpr static size_t RSA_PUBLIC_KEY_PREFIX = 18;
 constexpr static size_t RSA_PUBLIC_KEY_TRUNC = 8;
 
@@ -175,7 +175,7 @@ inline std::string printShortP2pID(std::string const& data)
     {
         return "empty";
     }
-    if (data.length() <= HASH_DATA_MAX_SIZE)
+    if (data.length() <= HASH_NODEID_MAX_SIZE)
     {
         auto startIt = data.begin();
         auto endIt = data.end();
