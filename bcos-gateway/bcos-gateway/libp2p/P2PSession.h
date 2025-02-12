@@ -66,6 +66,9 @@ public:
     virtual void asyncSendP2PMessage(P2PMessage::Ptr message, Options options,
         SessionCallbackFunc callback = SessionCallbackFunc());
 
+    task::Task<Message::Ptr> fastSendP2PMessage(
+        P2PMessage& message, ::ranges::any_view<bytesConstRef> payloads, Options options);
+
 private:
     SessionFace::Ptr m_session;
     /// gateway p2p info

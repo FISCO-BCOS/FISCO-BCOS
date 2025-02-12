@@ -38,7 +38,7 @@ GatewayNodeManager::GatewayNodeManager(std::string const& _uuid, P2pID const& _n
     m_uuid = _uuid;
     if (_uuid.empty())
     {
-        m_uuid = toHex(_nodeID);
+        m_uuid = _nodeID;
     }
     m_p2pNodeID = _nodeID;
     m_p2pInterface = _p2pInterface;

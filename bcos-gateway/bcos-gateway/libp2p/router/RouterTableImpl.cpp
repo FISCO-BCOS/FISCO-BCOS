@@ -182,6 +182,9 @@ bool RouterTable::updateDstNodeEntry(
 
     // discover smaller distance
     auto currentEntry = it->second;
+    // try to reset the existed entry
+    currentEntry->resetDstNodeInfo(_entry->dstNodeInfo());
+
     auto currentDistance = currentEntry->distance();
     auto distance = _entry->distance() + 1;
     if (currentDistance > distance)

@@ -165,6 +165,8 @@ public:
     virtual std::string getShortP2pID(std::string const& rawP2pID) const { return rawP2pID; }
     virtual std::string getRawP2pID(std::string const& shortP2pID) const { return shortP2pID; }
 
+    virtual void resetP2pID(P2PMessage&, bcos::protocol::ProtocolVersion const&) {}
+
 protected:
     virtual void sendMessageToSession(P2PSession::Ptr _p2pSession, P2PMessage::Ptr _msg,
         Options = Options(), CallbackFuncWithSession = CallbackFuncWithSession());

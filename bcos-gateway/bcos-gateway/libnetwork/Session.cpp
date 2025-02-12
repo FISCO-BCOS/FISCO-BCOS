@@ -623,7 +623,8 @@ void Session::onMessage(NetworkException const& e, Message::Ptr message)
             }
             // TODO: move the logic to Service for deal with the forwarding message
             if (!message->dstP2PNodeID().empty() &&
-                message->dstP2PNodeID() != session->m_hostNodeID)
+                message->dstP2PNodeID() != session->m_hostInfo.p2pID &&
+                message->dstP2PNodeID() != session->m_hostInfo.rawP2pID)
             {
                 session->m_messageHandler(e, session, message);
                 return;
@@ -726,7 +727,7 @@ void Session::checkNetworkStatus()
     }
 }
 
-bcos::task::Task<Message::Ptr> bcos::gateway::Session::sendMessage(
+bcos::task::Task<Message::Ptr> bcos::gateway::Session::fastSendMessage(
     const Message& message, ::ranges::any_view<bytesConstRef> payloads, Options options)
 {
     if (!active())
@@ -750,7 +751,7 @@ bcos::task::Task<Message::Ptr> bcos::gateway::Session::sendMessage(
 
     if (c_fileLogLevel <= LogLevel::TRACE)
     {
-        SESSION_LOG(TRACE) << LOG_DESC("Session asyncSendMessage")
+        SESSION_LOG(TRACE) << LOG_DESC("Session fastSendMessage")
                            << LOG_KV("endpoint", nodeIPEndpoint()) << LOG_KV("seq", message.seq())
                            << LOG_KV("packetType", message.packetType())
                            << LOG_KV("ext", message.ext());

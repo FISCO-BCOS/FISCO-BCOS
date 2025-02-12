@@ -297,6 +297,7 @@ void Service::sendMessageToSession(P2PSession::Ptr _p2pSession, P2PMessage::Ptr 
     Options _options, CallbackFuncWithSession _callback)
 {
     auto protocolVersion = _p2pSession->protocolInfo()->version();
+    // Note: p2pMessage version is binded to the protocol version
     _msg->setVersion(protocolVersion);
     if (!_callback)
     {
@@ -427,7 +428,7 @@ void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message::P
         SERVICE_LOG(ERROR) << LOG_DESC("Unrecognized message type") << LOG_KV("seq", message->seq())
                            << LOG_KV("packetType", packetType) << LOG_KV("ext", ext)
                            << LOG_KV("version", version)
-                           << LOG_KV("dst p2p", p2pMessage->printDstP2PNodeID());
+                           << LOG_KV("dstp2p", p2pMessage->printDstP2PNodeID());
     }
     catch (std::exception& e)
     {
@@ -821,5 +822,5 @@ bcos::task::Task<Message::Ptr> bcos::gateway::Service::sendMessageByNodeID(
             NetworkException(-1, "send message failed for no network established"));
     }
 
-    co_return co_await session->session()->sendMessage(header, std::move(payloads), {});
+    co_return co_await session->fastSendP2PMessage(header, std::move(payloads), {});
 }

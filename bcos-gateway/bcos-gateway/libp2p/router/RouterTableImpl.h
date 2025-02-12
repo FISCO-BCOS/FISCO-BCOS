@@ -51,11 +51,44 @@ public:
     void setDistance(int32_t _distance) override { m_inner()->distance = _distance; }
     void incDistance(int32_t _deltaDistance) override { m_inner()->distance += _deltaDistance; }
 
+    // Note: for compatibility, use long p2p-id
     std::string const& dstNode() const override { return m_inner()->dstNode; }
+    // Note: for compatibility, use long p2p-id
     std::string const& nextHop() const override { return m_inner()->nextHop; }
     int32_t distance() const override { return m_inner()->distance; }
 
     bcostars::RouterTableEntry const& inner() const { return *(m_inner()); }
+
+    // set the dstNodeInfo
+    void setDstNodeInfo(P2PInfo const& _dstNodeInfo) override
+    {
+        assignNodeIDInfo(m_inner()->dstNodeInfo, _dstNodeInfo);
+    }
+
+    void resetDstNodeInfo(P2PInfo const& _dstNodeInfo) override
+    {
+        if (!m_inner()->dstNodeInfo.p2pID.empty())
+        {
+            return;
+        }
+        if (_dstNodeInfo.p2pID.empty())
+        {
+            return;
+        }
+        setDstNodeInfo(_dstNodeInfo);
+    }
+
+    // the short p2p id
+    P2PInfo dstNodeInfo() const override
+    {
+        return P2PInfo(m_inner()->dstNodeInfo.p2pID, dstNode());
+    }
+
+private:
+    void assignNodeIDInfo(bcostars::NodeIDInfo& nodeIDInfo, P2PInfo const& routerNodeID)
+    {
+        nodeIDInfo.p2pID = routerNodeID.p2pID;
+    }
 
 private:
     std::function<bcostars::RouterTableEntry*()> m_inner;
