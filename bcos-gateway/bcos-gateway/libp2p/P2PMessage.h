@@ -188,10 +188,18 @@ public:
 
     virtual void setSrcP2PNodeID(std::string const& _srcP2PNodeID)
     {
+        if (m_srcP2PNodeID == _srcP2PNodeID)
+        {
+            return;
+        }
         m_srcP2PNodeID = _srcP2PNodeID;
     }
     virtual void setDstP2PNodeID(std::string const& _dstP2PNodeID)
     {
+        if (m_dstP2PNodeID == _dstP2PNodeID)
+        {
+            return;
+        }
         m_dstP2PNodeID = _dstP2PNodeID;
     }
 

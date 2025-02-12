@@ -86,29 +86,40 @@ void ServiceV2::onReceivePeersRouterTable(
     SERVICE2_LOG(INFO) << LOG_BADGE("onReceivePeersRouterTable")
                        << LOG_KV("peer", _session->printP2pID())
                        << LOG_KV("entrySize", routerTable->routerEntries().size());
-    joinRouterTable(_session->p2pID(), routerTable);
+    joinRouterTable(_session, routerTable);
 }
 
 void ServiceV2::joinRouterTable(
-    std::string const& _generatedFrom, RouterTableInterface::Ptr _routerTable)
+    std::shared_ptr<P2PSession> _session, RouterTableInterface::Ptr _routerTable)
 {
+    auto generatedFrom = _session->p2pID();
     std::set<std::string> unreachableNodes;
     bool updated = false;
     auto const& entries = _routerTable->routerEntries();
     for (auto const& it : entries)
     {
+        auto dstNodeInfo = it.second->dstNodeInfo();
+        // old-node case, without p2pID, try to find locally
+        if (dstNodeInfo.p2pID.empty())
+        {
+            getRawP2pID(dstNodeInfo.p2pID);
+            it.second->setDstNodeInfo(dstNodeInfo);
+        }
         auto entry = it.second;
-        if (m_routerTable->update(unreachableNodes, _generatedFrom, entry) && !updated)
+        if (m_routerTable->update(unreachableNodes, generatedFrom, entry) && !updated)
         {
             updated = true;
         }
+        // update the nodeInfo
+        updateP2pInfo(dstNodeInfo);
     }
 
     SERVICE2_LOG(INFO) << LOG_BADGE("joinRouterTable") << LOG_DESC("create router entry")
-                       << LOG_KV("dst", printShortP2pID(_generatedFrom));
+                       << LOG_KV("dst", printShortP2pID(generatedFrom));
 
     auto entry = m_routerTableFactory->createRouterEntry();
-    entry->setDstNode(_generatedFrom);
+    entry->setDstNode(_session->p2pID());
+    entry->setDstNodeInfo(_session->p2pInfo());
     entry->setDistance(0);
     if (m_routerTable->update(unreachableNodes, m_nodeID, entry) && !updated)
     {
@@ -117,7 +128,7 @@ void ServiceV2::joinRouterTable(
     if (!updated)
     {
         SERVICE2_LOG(DEBUG) << LOG_BADGE("joinRouterTable") << LOG_DESC("router table not updated")
-                            << LOG_KV("dst", printShortP2pID(_generatedFrom));
+                            << LOG_KV("dst", printShortP2pID(generatedFrom));
         return;
     }
     onP2PNodesUnreachable(unreachableNodes);
@@ -187,10 +198,12 @@ void ServiceV2::onReceiveRouterSeq(
 
 void ServiceV2::onNewSession(P2PSession::Ptr _session)
 {
+    // update the p2p information when establish new session
     updateP2pInfo(_session->p2pInfo());
     std::set<std::string> unreachableNodes;
     auto entry = m_routerTableFactory->createRouterEntry();
     entry->setDstNode(_session->p2pID());
+    entry->setDstNodeInfo(_session->p2pInfo());
     entry->setDistance(0);
     if (!m_routerTable->update(unreachableNodes, m_nodeID, entry))
     {
@@ -254,7 +267,7 @@ void ServiceV2::asyncSendMessageByNodeIDWithMsgForward(
     {
         if (c_fileLogLevel == TRACE) [[unlikely]]
         {
-            SERVICE2_LOG(TRACE) << LOG_BADGE("asyncSendMessageByNodeID")
+            SERVICE2_LOG(TRACE) << LOG_BADGE("asyncSendMessageByNodeIDWithMsgForward")
                                 << LOG_DESC("sendMessage to dstNode")
                                 << LOG_KV("from", _message->printSrcP2PNodeID())
                                 << LOG_KV("to", _message->printDstP2PNodeID())
@@ -267,7 +280,7 @@ void ServiceV2::asyncSendMessageByNodeIDWithMsgForward(
     // with nextHop, send the message to nextHop
     if (c_fileLogLevel == TRACE) [[unlikely]]
     {
-        SERVICE2_LOG(TRACE) << LOG_BADGE("asyncSendMessageByNodeID")
+        SERVICE2_LOG(TRACE) << LOG_BADGE("asyncSendMessageByNodeIDWithMsgForward")
                             << LOG_DESC("forwardMessage to nextHop")
                             << LOG_KV("from", _message->printSrcP2PNodeID())
                             << LOG_KV("to", _message->printDstP2PNodeID())
@@ -315,7 +328,8 @@ void ServiceV2::onMessage(NetworkException _error, SessionFace::Ptr _session, Me
                                 << LOG_KV("payLoadSize", p2pMsg->payload().size());
         }
         // convert short-p2p-id to long-p2p-id when handle the message
-        convertToRawP2pID(p2pMsg);
+        p2pMsg->setDstP2PNodeID(dstNodeP2pID);
+        p2pMsg->setSrcP2PNodeID(getRawP2pID(p2pMsg->srcP2PNodeID()));
         Service::onMessage(_error, _session, _message, _p2pSessionWeakPtr);
         return;
     }
@@ -334,6 +348,8 @@ void ServiceV2::onMessage(NetworkException _error, SessionFace::Ptr _session, Me
         return;
     }
     ttl -= 1;
+    // recover to long p2p-node id for dispatcher through router
+    p2pMsg->setDstP2PNodeID(dstNodeP2pID);
     p2pMsg->setTTL(ttl);
     if (c_fileLogLevel <= TRACE) [[unlikely]]
     {
@@ -427,7 +443,7 @@ bcos::task::Task<Message::Ptr> bcos::gateway::ServiceV2::sendMessageByNodeID(
     {
         if (c_fileLogLevel == TRACE) [[unlikely]]
         {
-            SERVICE2_LOG(TRACE) << LOG_BADGE("asyncSendMessageByNodeID")
+            SERVICE2_LOG(TRACE) << LOG_BADGE("sendMessageByNodeID")
                                 << LOG_DESC("sendMessage to dstNode")
                                 << LOG_KV("from", message.printSrcP2PNodeID())
                                 << LOG_KV("to", message.printDstP2PNodeID())
@@ -441,7 +457,7 @@ bcos::task::Task<Message::Ptr> bcos::gateway::ServiceV2::sendMessageByNodeID(
     // with nextHop, send the message to nextHop
     if (c_fileLogLevel == TRACE) [[unlikely]]
     {
-        SERVICE2_LOG(TRACE) << LOG_BADGE("asyncSendMessageByNodeID")
+        SERVICE2_LOG(TRACE) << LOG_BADGE("sendMessageByNodeID")
                             << LOG_DESC("forwardMessage to nextHop")
                             << LOG_KV("from", message.printSrcP2PNodeID())
                             << LOG_KV("to", message.printDstP2PNodeID())

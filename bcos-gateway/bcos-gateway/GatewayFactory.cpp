@@ -623,10 +623,12 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
 
     // Message Factory
     auto messageFactory = std::make_shared<P2PMessageFactoryV2>();
+    auto nodeIDHash = _config->calculateShortNodeID(pubHex);
+    P2PInfo selfInfo(nodeIDHash, pubHex);
     // Session Factory
-    auto sessionFactory = std::make_shared<SessionFactory>(pubHex, _config->sessionRecvBufferSize(),
-        _config->allowMaxMsgSize(), _config->maxReadDataSize(), _config->maxSendDataSize(),
-        _config->maxMsgCountSendOneTime(), _config->enableCompress());
+    auto sessionFactory = std::make_shared<SessionFactory>(selfInfo,
+        _config->sessionRecvBufferSize(), _config->allowMaxMsgSize(), _config->maxReadDataSize(),
+        _config->maxSendDataSize(), _config->maxMsgCountSendOneTime(), _config->enableCompress());
     // KeyFactory
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
     // Session Callback manager
@@ -652,8 +654,6 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     // init Service
     bool enableRIPProtocol = _config->enableRIPProtocol();
     Service::Ptr service = nullptr;
-    auto nodeIDHash = _config->calculateShortNodeID(pubHex);
-    P2PInfo selfInfo(nodeIDHash, pubHex);
     if (enableRIPProtocol)
     {
         auto routerTableFactory = std::make_shared<RouterTableFactoryImpl>();
@@ -764,7 +764,11 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         // register disconnect handler
         service->registerDisconnectHandler(
             [gatewayNodeManagerWeakPtr](NetworkException e, P2PSession::Ptr p2pSession) {
-                (void)e;
+                if (e.errorCode() == P2PExceptionType::DuplicateSession ||
+                    e.errorCode() == P2PExceptionType::Success)
+                {
+                    return;
+                }
                 auto gatewayNodeManager = gatewayNodeManagerWeakPtr.lock();
                 if (gatewayNodeManager && p2pSession)
                 {

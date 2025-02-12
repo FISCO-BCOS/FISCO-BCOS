@@ -50,6 +50,10 @@ public:
     std::string printNextHop() const { return printShortP2pID(nextHop()); }
 
     virtual int32_t distance() const = 0;
+
+    virtual void setDstNodeInfo(P2PInfo const& _dstNodeInfo) = 0;
+    virtual P2PInfo dstNodeInfo() const = 0;
+    virtual void resetDstNodeInfo(P2PInfo const& _dstNodeInfo) = 0;
 };
 
 class RouterTableInterface

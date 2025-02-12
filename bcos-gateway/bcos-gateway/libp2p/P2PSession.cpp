@@ -102,20 +102,33 @@ void P2PSession::asyncSendP2PMessage(
         return;
     }
     auto service = m_service.lock();
-    // send message using original long nodeID
-    if (!service || m_protocolInfo == nullptr || m_protocolInfo->version() < ProtocolVersion::V3)
+    if (!service)
     {
-        m_session->asyncSendMessage(message, options, callback);
         return;
     }
-    if (!message->srcP2PNodeID().empty())
-    {
-        message->setSrcP2PNodeID(service->getShortP2pID(message->srcP2PNodeID()));
-    }
-    // send message using short nodeID
-    if (!message->dstP2PNodeID().empty())
-    {
-        message->setDstP2PNodeID(service->getShortP2pID(message->dstP2PNodeID()));
-    }
+    // reset message using original long nodeID or short nodeID according to the protocol version
+    // Note: m_protocolInfo be setted when create P2PSession
+    service->resetP2pID(*message, (ProtocolVersion)m_protocolInfo->version());
     m_session->asyncSendMessage(message, options, callback);
+}
+
+bcos::task::Task<Message::Ptr> P2PSession::fastSendP2PMessage(
+    P2PMessage& message, ::ranges::any_view<bytesConstRef> payloads, Options options)
+{
+    if (!m_session || !m_session->active()) [[unlikely]]
+    {
+        P2PSESSION_LOG(WARNING) << LOG_DESC("fastSendP2PMessage failed for invalid session")
+                                << LOG_KV("from", message.printSrcP2PNodeID())
+                                << LOG_KV("dst", message.printDstP2PNodeID());
+        co_return {};
+    }
+    auto service = m_service.lock();
+    if (!service)
+    {
+        co_return {};
+    }
+    // reset message using original long nodeID or short nodeID according to the protocol version
+    // Note: m_protocolInfo be setted when create P2PSession
+    service->resetP2pID(message, (ProtocolVersion)m_protocolInfo->version());
+    co_return co_await m_session->fastSendMessage(message, payloads, options);
 }
