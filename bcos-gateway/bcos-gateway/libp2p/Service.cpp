@@ -563,7 +563,7 @@ void Service::asyncBroadcastMessage(P2PMessage::Ptr message, Options options)
     try
     {
         auto sessions = copySessions();
-        for (auto& session : sessions)
+        for (auto const& session : sessions)
         {
             asyncSendMessageByNodeID(session.first, message, {}, options);
         }
@@ -815,7 +815,7 @@ bcos::task::Task<Message::Ptr> bcos::gateway::Service::sendMessageByNodeID(
         co_return {};
     }
 
-    auto session = getP2PSessionByNodeId();
+    auto session = getP2PSessionByNodeId(nodeID);
     if (!session || !session->active())
     {
         BOOST_THROW_EXCEPTION(

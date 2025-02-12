@@ -15,7 +15,6 @@
 #include <bcos-gateway/Gateway.h>
 #include <bcos-gateway/libp2p/P2PInterface.h>
 #include <bcos-gateway/libp2p/P2PSession.h>
-#include <oneapi/tbb/concurrent_hash_map.h>
 #include <array>
 
 
@@ -112,7 +111,7 @@ public:
     }
 
 
-    std::shared_ptr<P2PSession> getP2PSessionByNodeId(P2pID const& _nodeID) override
+    std::shared_ptr<P2PSession> getP2PSessionByNodeId(P2pID const& _nodeID) const override
     {
         bcos::ReadGuard l(x_sessions);
         auto it = m_sessions.find(_nodeID);

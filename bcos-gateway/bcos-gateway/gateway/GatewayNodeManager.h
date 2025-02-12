@@ -102,6 +102,7 @@ protected:
     P2PInterface::Ptr m_p2pInterface;
     // statusSeq
     std::atomic<uint32_t> m_statusSeq{1};
+    // TODO: please fix the thread-safe problem when delete
     // P2pID => statusSeq
     tbb::concurrent_hash_map<std::string, uint32_t> m_p2pID2Seq;
 

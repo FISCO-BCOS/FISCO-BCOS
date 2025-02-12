@@ -28,7 +28,6 @@
 #include <bcos-utilities/FixedBytes.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <bcos-utilities/Timer.h>
-#include <tbb/concurrent_hash_map.h>
 #include <tbb/concurrent_queue.h>
 #include <boost/thread/pthread/shared_mutex.hpp>
 
