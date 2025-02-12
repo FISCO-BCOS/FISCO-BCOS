@@ -127,6 +127,9 @@ protected:
     virtual bcos::amop::AMOPImpl::Ptr buildLocalAMOP(
         bcos::gateway::P2PInterface::Ptr _network, bcos::gateway::P2pID const& _p2pNodeID);
 
+    void registerAMOPHandlers(
+        std::shared_ptr<Service> const& service, bcos::amop::TopicManager::Ptr const& topicManager);
+
 private:
     std::function<bool(X509* cert, std::string& pubHex)> m_sslContextPubHandler;
     std::function<bool(X509* cert, std::string& pubHex)> m_sslContextPubHandlerWithoutExtInfo;
