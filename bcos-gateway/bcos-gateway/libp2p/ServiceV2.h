@@ -75,8 +75,9 @@ public:
         {
             return it->second;
         }
-        SERVICE2_LOG(WARNING) << LOG_DESC("getShortP2pID failed, return rawP2pID directly")
-                              << LOG_KV("id", printShortP2pID(rawP2pID));
+        // note: in the case of running old node with the new node, the shortP2pID maybe not found
+        SERVICE2_LOG(TRACE) << LOG_DESC("getShortP2pID failed, return rawP2pID directly")
+                            << LOG_KV("id", printShortP2pID(rawP2pID));
         return rawP2pID;
     }
     std::string getRawP2pID(std::string const& shortP2pID) const override
