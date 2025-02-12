@@ -69,7 +69,7 @@ jobs:
 
       - name: update vcpkg
         run: |
-          cd ${{ env.VCPKG_ROOT }} && git fetch --all && git checkout master && git pull
+          cd ${{ env.VCPKG_ROOT }} && git fetch --all && git checkout master && git pull && ./bootstrap-vcpkg.sh
           cd -
 
       - name: Build for linux
