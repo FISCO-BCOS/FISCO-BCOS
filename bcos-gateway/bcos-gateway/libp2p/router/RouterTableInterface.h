@@ -19,6 +19,7 @@
  */
 #pragma once
 #include <bcos-utilities/Common.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <memory>
 #include <set>
 namespace bcos
@@ -44,7 +45,15 @@ public:
 
     virtual std::string const& dstNode() const = 0;
     virtual std::string const& nextHop() const = 0;
+
+    std::string printDstNode() const { return printShortP2pID(dstNode()); }
+    std::string printNextHop() const { return printShortP2pID(nextHop()); }
+
     virtual int32_t distance() const = 0;
+
+    virtual void setDstNodeInfo(P2PInfo const& _dstNodeInfo) = 0;
+    virtual P2PInfo dstNodeInfo() const = 0;
+    virtual void resetDstNodeInfo(P2PInfo const& _dstNodeInfo) = 0;
 };
 
 class RouterTableInterface

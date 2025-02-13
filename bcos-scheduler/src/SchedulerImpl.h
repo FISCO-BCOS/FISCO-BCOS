@@ -12,7 +12,6 @@
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-utilities/ThreadPool.h>
-#include <tbb/concurrent_hash_map.h>
 #include <list>
 
 namespace bcos::scheduler

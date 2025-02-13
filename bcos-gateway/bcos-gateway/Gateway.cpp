@@ -102,10 +102,10 @@ void Gateway::asyncGetPeers(
     for (auto const& info : sessionInfos)
     {
         auto gatewayInfo = std::make_shared<GatewayInfo>(info);
-        auto nodeIDList = m_gatewayNodeManager->peersNodeIDList(info.p2pID);
+        auto nodeIDList = m_gatewayNodeManager->peersNodeIDList(info.rawP2pID);
         gatewayInfo->setNodeIDInfo(std::move(nodeIDList));
         peerGatewayInfos->emplace_back(gatewayInfo);
-        peersNodeIDList.erase(info.p2pID);
+        peersNodeIDList.erase(info.rawP2pID);
     }
     // append peers that are not directly connected to nodeSelf
     for (auto const& peer : peersNodeIDList)
