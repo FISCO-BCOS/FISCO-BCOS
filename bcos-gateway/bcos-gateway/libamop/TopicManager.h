@@ -114,11 +114,11 @@ public:
      */
     bool checkTopicSeq(bcos::gateway::P2pID const& _nodeID, uint32_t _topicSeq);
     /**
-     * @brief: update online nodeIDs, clean up the offline nodeIDs state
-     * @param _nodeIDs: the online nodeIDs
+     * @brief: disconnect the offline p2p node
+     * @param _nodeIDs: the offline p2p node id
      * @return void
      */
-    void notifyNodeIDs(const std::vector<bcos::gateway::P2pID>& _nodeIDs);
+    void onDisconnect(const bcos::gateway::P2pID& _nodeID);
     /**
      * @brief: update the topicSeq and topicItems of the nodeID's
      * @param _nodeID: nodeID

@@ -1000,6 +1000,10 @@ bcos::amop::AMOPImpl::Ptr GatewayFactory::buildAMOP(
     auto topicManager = std::make_shared<TopicManager>(m_rpcServiceName, _network);
     auto amopMessageFactory = std::make_shared<AMOPMessageFactory>();
     auto requestFactory = std::make_shared<AMOPRequestFactory>();
+
+    auto service = std::dynamic_pointer_cast<Service>(_network);
+    registerAMOPHandlers(service, topicManager);
+
     return std::make_shared<AMOPImpl>(
         topicManager, amopMessageFactory, requestFactory, _network, _p2pNodeID);
 }
@@ -1011,6 +1015,40 @@ bcos::amop::AMOPImpl::Ptr GatewayFactory::buildLocalAMOP(
     auto topicManager = std::make_shared<LocalTopicManager>(m_rpcServiceName, _network);
     auto amopMessageFactory = std::make_shared<AMOPMessageFactory>();
     auto requestFactory = std::make_shared<AMOPRequestFactory>();
+
+    auto service = std::dynamic_pointer_cast<Service>(_network);
+    registerAMOPHandlers(service, topicManager);
+
     return std::make_shared<AMOPImpl>(
         topicManager, amopMessageFactory, requestFactory, _network, _p2pNodeID);
+}
+
+void GatewayFactory::registerAMOPHandlers(
+    std::shared_ptr<Service> const& service, TopicManager::Ptr const& topicManager)
+{
+    GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("registerAMOPHandlers");
+    auto weakTopicManager = std::weak_ptr<TopicManager>(topicManager);
+    // register disconnect handler
+    service->registerDisconnectHandler(
+        [weakTopicManager](NetworkException e, P2PSession::Ptr p2pSession) {
+            if (e.errorCode() == P2PExceptionType::DuplicateSession ||
+                e.errorCode() == P2PExceptionType::Success)
+            {
+                return;
+            }
+            auto topicMgr = weakTopicManager.lock();
+            if (topicMgr && p2pSession)
+            {
+                topicMgr->onDisconnect(p2pSession->p2pID());
+            }
+        });
+
+    service->registerUnreachableHandler([weakTopicManager](std::string const& _unreachableNode) {
+        auto topicMgr = weakTopicManager.lock();
+        if (!topicMgr)
+        {
+            return;
+        }
+        topicMgr->onDisconnect(_unreachableNode);
+    });
 }
