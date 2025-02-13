@@ -60,7 +60,7 @@ public:
 
     virtual std::shared_ptr<MessageFactory> messageFactory() = 0;
 
-    virtual std::shared_ptr<P2PSession> getP2PSessionByNodeId(P2pID const& _nodeID) = 0;
+    virtual std::shared_ptr<P2PSession> getP2PSessionByNodeId(P2pID const& _nodeID) const = 0;
 
     /**
      * @brief send message to the given p2p nodes

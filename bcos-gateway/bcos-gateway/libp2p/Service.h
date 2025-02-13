@@ -15,7 +15,6 @@
 #include <bcos-gateway/Gateway.h>
 #include <bcos-gateway/libp2p/P2PInterface.h>
 #include <bcos-gateway/libp2p/P2PSession.h>
-#include <oneapi/tbb/concurrent_hash_map.h>
 #include <array>
 
 
@@ -111,11 +110,14 @@ public:
         m_disconnectionHandlers.push_back(std::move(_handler));
     }
 
-    std::shared_ptr<P2PSession> getP2PSessionByNodeId(P2pID const& _nodeID) override
+
+    std::shared_ptr<P2PSession> getP2PSessionByNodeId(P2pID const& _nodeID) const override
     {
-        if (decltype(m_sessions)::const_accessor accessor; m_sessions.find(accessor, _nodeID))
+        bcos::ReadGuard l(x_sessions);
+        auto it = m_sessions.find(_nodeID);
+        if (it != m_sessions.end())
         {
-            return accessor->second;
+            return it->second;
         }
         return nullptr;
     }
@@ -224,6 +226,13 @@ protected:
 
     friend class ServiceV2;
 
+    using SessionsType = std::map<std::string, P2PSession::Ptr>;
+    virtual SessionsType copySessions() const
+    {
+        bcos::ReadGuard l(x_sessions);
+        return m_sessions;
+    }
+
 protected:
     std::vector<std::function<void(NetworkException, P2PSession::Ptr)>> m_disconnectionHandlers;
 
@@ -233,7 +242,10 @@ protected:
     bcos::RecursiveMutex x_nodes;
     std::shared_ptr<Host> m_host;
 
-    tbb::concurrent_hash_map<P2pID, P2PSession::Ptr> m_sessions;
+    // long p2pID to session
+    SessionsType m_sessions;
+    mutable bcos::SharedMutex x_sessions;
+
     std::shared_ptr<MessageFactory> m_messageFactory;
 
     P2PInfo m_selfInfo;
