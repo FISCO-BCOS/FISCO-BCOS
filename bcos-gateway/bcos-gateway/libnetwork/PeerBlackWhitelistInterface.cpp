@@ -15,12 +15,12 @@ PeerBlackWhitelistInterface::PeerBlackWhitelistInterface(
 {
     for (auto const& str : _strList)
     {
-        m_peerList.insert(NodeID(str));
+        m_peerList.insert(P2PNodeID(str));
     }
 }
 
 PeerBlackWhitelistInterface::PeerBlackWhitelistInterface(
-    std::set<NodeID> const& _nodeList, bool _enable)
+    std::set<P2PNodeID> const& _nodeList, bool _enable)
   : m_enable(_enable)
 {
     for (auto const& node : _nodeList)
@@ -29,7 +29,7 @@ PeerBlackWhitelistInterface::PeerBlackWhitelistInterface(
     }
 }
 
-bool PeerBlackWhitelistInterface::has(NodeID _peer) const
+bool PeerBlackWhitelistInterface::has(P2PNodeID _peer) const
 {
     if (!m_enable)
     {
@@ -44,7 +44,7 @@ bool PeerBlackWhitelistInterface::has(NodeID _peer) const
 
 bool PeerBlackWhitelistInterface::has(const std::string& _peer) const
 {
-    return has(NodeID(_peer));
+    return has(P2PNodeID(_peer));
 }
 
 std::string PeerBlackWhitelistInterface::dump(bool _isAbridged)
@@ -75,7 +75,7 @@ void PeerBlackWhitelistInterface::update(std::set<std::string> const& _strList, 
     bcos::Guard guard(x_peerList);
 
     m_peerList.clear();
-    for(auto& str : _strList)
+    for (auto& str : _strList)
     {
         m_peerList.emplace(str);
     }

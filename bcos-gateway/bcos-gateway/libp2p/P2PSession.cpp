@@ -15,6 +15,7 @@
 
 using namespace bcos;
 using namespace bcos::gateway;
+using namespace bcos::protocol;
 
 P2PSession::P2PSession()
   : m_p2pInfo(std::make_shared<P2PInfo>()),
@@ -65,13 +66,11 @@ void P2PSession::heartBeat()
             message->setPacketType(GatewayMessageType::Heartbeat);
             if (c_fileLogLevel <= TRACE) [[unlikely]]
             {
-                P2PSESSION_LOG(TRACE)
-                    << LOG_DESC("P2PSession onHeartBeat")
-                    << LOG_KV("p2pid", P2PMessage::printP2PIDElegantly(m_p2pInfo->p2pID))
-                    << LOG_KV("endpoint", m_session->nodeIPEndpoint());
+                P2PSESSION_LOG(TRACE) << LOG_DESC("P2PSession onHeartBeat")
+                                      << LOG_KV("p2pid", printShortP2pID(m_p2pInfo->p2pID))
+                                      << LOG_KV("endpoint", m_session->nodeIPEndpoint());
             }
-
-            m_session->asyncSendMessage(message);
+            asyncSendP2PMessage(message, Options());
         }
 
         auto self = std::weak_ptr<P2PSession>(shared_from_this());
@@ -90,4 +89,46 @@ void P2PSession::heartBeat()
             }
         });
     }
+}
+
+void P2PSession::asyncSendP2PMessage(
+    P2PMessage::Ptr message, Options options, SessionCallbackFunc callback)
+{
+    if (!m_session || !m_session->active()) [[unlikely]]
+    {
+        P2PSESSION_LOG(WARNING) << LOG_DESC("asyncSendP2PMessage failed for invalid session")
+                                << LOG_KV("from", message->printSrcP2PNodeID())
+                                << LOG_KV("dst", message->printDstP2PNodeID());
+        return;
+    }
+    auto service = m_service.lock();
+    if (!service)
+    {
+        return;
+    }
+    // reset message using original long nodeID or short nodeID according to the protocol version
+    // Note: m_protocolInfo be setted when create P2PSession
+    service->resetP2pID(*message, (ProtocolVersion)m_protocolInfo->version());
+    m_session->asyncSendMessage(message, options, callback);
+}
+
+bcos::task::Task<Message::Ptr> P2PSession::fastSendP2PMessage(
+    P2PMessage& message, ::ranges::any_view<bytesConstRef> payloads, Options options)
+{
+    if (!m_session || !m_session->active()) [[unlikely]]
+    {
+        P2PSESSION_LOG(WARNING) << LOG_DESC("fastSendP2PMessage failed for invalid session")
+                                << LOG_KV("from", message.printSrcP2PNodeID())
+                                << LOG_KV("dst", message.printDstP2PNodeID());
+        co_return {};
+    }
+    auto service = m_service.lock();
+    if (!service)
+    {
+        co_return {};
+    }
+    // reset message using original long nodeID or short nodeID according to the protocol version
+    // Note: m_protocolInfo be setted when create P2PSession
+    service->resetP2pID(message, (ProtocolVersion)m_protocolInfo->version());
+    co_return co_await m_session->fastSendMessage(message, payloads, options);
 }

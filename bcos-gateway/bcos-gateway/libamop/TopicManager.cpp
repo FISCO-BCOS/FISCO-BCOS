@@ -306,29 +306,17 @@ bool TopicManager::checkTopicSeq(P2pID const& _nodeID, uint32_t _topicSeq)
  * @param _nodeIDs: the online nodeIDs
  * @return void
  */
-void TopicManager::notifyNodeIDs(const std::vector<P2pID>& _nodeIDs)
+void TopicManager::onDisconnect(const bcos::gateway::P2pID& _nodeID)
 {
-    int removeCount = 0;
+    std::unique_lock lock(x_topics);
+    auto it = m_nodeID2TopicItems.find(_nodeID);
+    if (it != m_nodeID2TopicItems.end())
     {
-        std::unique_lock lock(x_topics);
-        for (auto it = m_nodeID2TopicSeq.begin(); it != m_nodeID2TopicSeq.end();)
-        {
-            if (std::find_if(_nodeIDs.begin(), _nodeIDs.end(), [&it](std::string _nodeID) -> bool {
-                    return it->first == _nodeID;
-                }) == _nodeIDs.end())
-            {  // nodeID is offline, remove the nodeID's state
-                m_nodeID2TopicItems.erase(it->first);
-                it = m_nodeID2TopicSeq.erase(it);
-                removeCount++;
-            }
-            else
-            {
-                ++it;
-            }
-        }
+        m_nodeID2TopicItems.erase(it);
+        m_nodeID2TopicSeq.erase(_nodeID);
     }
-
-    TOPIC_LOG(INFO) << LOG_BADGE("notifyNodeIDs") << LOG_KV("removeCount", removeCount);
+    TOPIC_LOG(INFO) << LOG_BADGE("onDisconnect") << LOG_KV("removedNode", _nodeID)
+                    << LOG_KV("currentNodeSize", m_nodeID2TopicItems.size());
 }
 
 /**
@@ -347,8 +335,8 @@ void TopicManager::updateSeqAndTopicsByNodeID(
         m_nodeID2TopicItems[_nodeID] = _topicItems;
     }
 
-    TOPIC_LOG(INFO) << LOG_BADGE("updateSeqAndTopicsByNodeID") << LOG_KV("nodeID", _nodeID)
-                    << LOG_KV("topicSeq", _topicSeq)
+    TOPIC_LOG(INFO) << LOG_BADGE("updateSeqAndTopicsByNodeID")
+                    << LOG_KV("nodeID", printShortP2pID(_nodeID)) << LOG_KV("topicSeq", _topicSeq)
                     << LOG_KV("topicItems size", _topicItems.size());
 }
 

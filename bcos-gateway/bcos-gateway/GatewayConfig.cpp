@@ -6,6 +6,7 @@
 #include "bcos-gateway/Common.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
+#include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-security/bcos-security/BcosKms.h>
@@ -23,6 +24,11 @@
 using namespace bcos;
 using namespace security;
 using namespace gateway;
+
+GatewayConfig::GatewayConfig()
+{
+    m_hashImpl = std::make_shared<Keccak256>();
+}
 
 bool GatewayConfig::isValidPort(int port)
 {

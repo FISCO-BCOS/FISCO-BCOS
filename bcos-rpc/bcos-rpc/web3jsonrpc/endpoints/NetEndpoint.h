@@ -22,7 +22,6 @@
 #include "bcos-rpc/groupmgr/GroupManager.h"
 #include <bcos-rpc/jsonrpc/JsonRpcInterface.h>
 #include <json/json.h>
-#include <tbb/concurrent_hash_map.h>
 #include <boost/core/ignore_unused.hpp>
 #include <unordered_map>
 

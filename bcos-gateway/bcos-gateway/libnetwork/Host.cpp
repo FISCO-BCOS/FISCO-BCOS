@@ -31,6 +31,7 @@
 using namespace std;
 using namespace bcos;
 using namespace bcos::gateway;
+using namespace bcos::crypto;
 
 /**
  * @brief: accept connection requests, maily include procedures:
@@ -165,7 +166,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
                 true == hostPtr->peerBlacklist()->has(nodeIDOutWithoutExtInfo))
             {
                 HOST_LOG(INFO) << LOG_DESC("NodeID in certificate blacklist")
-                               << LOG_KV("nodeID", NodeID(nodeIDOutWithoutExtInfo).abridged());
+                               << LOG_KV("nodeID", P2PNodeID(nodeIDOutWithoutExtInfo).abridged());
                 return false;
             }
 
@@ -173,7 +174,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
                 false == hostPtr->peerWhitelist()->has(nodeIDOutWithoutExtInfo))
             {
                 HOST_LOG(INFO) << LOG_DESC("NodeID is not in certificate whitelist")
-                               << LOG_KV("nodeID", NodeID(nodeIDOutWithoutExtInfo).abridged());
+                               << LOG_KV("nodeID", P2PNodeID(nodeIDOutWithoutExtInfo).abridged());
                 return false;
             }
 
@@ -226,7 +227,7 @@ P2PInfo Host::p2pInfo()
             {
                 m_p2pInfo.p2pID = boost::to_upper_copy(nodeIDOut);
                 HOST_LOG(INFO) << LOG_DESC("Get node information from cert")
-                               << LOG_KV("p2pid", m_p2pInfo.p2pID);
+                               << LOG_KV("p2pid", printShortP2pID(m_p2pInfo.p2pID));
             }
 
             std::string nodeIDOutWithoutExtInfo;
@@ -292,7 +293,12 @@ void Host::obtainNodeInfo(P2PInfo& info, std::string const& node_info)
     boost::split(node_info_vec, node_info, boost::is_any_of("#"), boost::token_compress_on);
     if (!node_info_vec.empty())
     {
-        info.p2pID = node_info_vec[0];
+        // raw p2pID
+        info.rawP2pID = node_info_vec[0];
+        HashType p2pIDHash = m_hashImpl->hash(
+            bcos::bytesConstRef((bcos::byte const*)info.rawP2pID.data(), info.rawP2pID.size()));
+        // the p2pID, hash(rawP2pID)
+        info.p2pID = std::string(p2pIDHash.begin(), p2pIDHash.end());
     }
     if (node_info_vec.size() > 1)
     {
@@ -308,7 +314,7 @@ void Host::obtainNodeInfo(P2PInfo& info, std::string const& node_info)
     }
 
     HOST_LOG(INFO) << "obtainP2pInfo " << LOG_KV("node_info", node_info)
-                   << LOG_KV("p2pid", info.p2pID);
+                   << LOG_KV("p2pid", printShortP2pID(info.p2pID));
 }
 
 /**
@@ -347,7 +353,7 @@ void Host::handshakeServer(const boost::system::error_code& error,
         obtainNodeInfo(info, nodeInfo);
         HOST_LOG(INFO) << LOG_DESC("handshakeServer succ")
                        << LOG_KV("remote endpoint", socket->remoteEndpoint())
-                       << LOG_KV("nodeid", info.p2pID);
+                       << LOG_KV("nodeid", printShortP2pID(info.p2pID));
         startPeerSession(info, socket, m_connectionHandler);
     }
 }
@@ -392,7 +398,7 @@ void Host::startPeerSession(P2PInfo const& p2pInfo, std::shared_ptr<SocketFace> 
     });
     HOST_LOG(INFO) << LOG_DESC("startPeerSession, Remote=") << socket->remoteEndpoint()
                    << LOG_KV("local endpoint", socket->localEndpoint())
-                   << LOG_KV("p2pid", p2pInfo.p2pID);
+                   << LOG_KV("p2pid", printShortP2pID(p2pInfo.p2pID));
 }
 
 /**

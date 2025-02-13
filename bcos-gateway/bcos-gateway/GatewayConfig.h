@@ -6,6 +6,7 @@
 #pragma once
 
 #include "bcos-utilities/ObjectCounter.h"
+#include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-gateway/Common.h>
 #include <bcos-gateway/libnetwork/Common.h>
@@ -21,6 +22,7 @@ class GatewayConfig : public bcos::ObjectCounter<GatewayConfig>
 {
 public:
     using Ptr = std::shared_ptr<GatewayConfig>;
+    GatewayConfig();
 
     // cert for ssl connection
     struct CertConfig
@@ -308,7 +310,17 @@ public:
 
     bool enableSSLVerify() const { return m_enableSSLVerify; }
 
+    bcos::crypto::Hash::Ptr const& hashImpl() const { return m_hashImpl; }
+    std::string calculateShortNodeID(std::string const& rawNodeID) const
+    {
+        bcos::crypto::HashType p2pIDHash = m_hashImpl->hash(
+            bcos::bytesConstRef((bcos::byte const*)rawNodeID.data(), rawNodeID.size()));
+        // the p2pID
+        return std::string(p2pIDHash.begin(), p2pIDHash.end());
+    }
+
 private:
+    bcos::crypto::Hash::Ptr m_hashImpl;
     // The maximum size of message that is allowed to send or receive
     uint32_t m_allowMaxMsgSize = MAX_MESSAGE_LENGTH;
     // p2p session read buffer size, default: 128k

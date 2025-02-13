@@ -44,7 +44,7 @@ public:
         // gatewayService
         c_supportedProtocols.insert({ProtocolModuleID::GatewayService,
             std::make_shared<ProtocolInfo>(
-                ProtocolModuleID::GatewayService, ProtocolVersion::V0, ProtocolVersion::V2)});
+                ProtocolModuleID::GatewayService, ProtocolVersion::V0, ProtocolVersion::V3)});
         // rpcService && SDK
         c_supportedProtocols.insert({ProtocolModuleID::RpcService,
             std::make_shared<ProtocolInfo>(

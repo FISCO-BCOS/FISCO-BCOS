@@ -10,6 +10,7 @@
 #include <bcos-gateway/libnetwork/SessionFace.h>
 #include <bcos-gateway/libp2p/Common.h>
 #include <bcos-gateway/libp2p/P2PMessage.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <memory>
 
 
@@ -35,7 +36,8 @@ public:
     virtual SessionFace::Ptr session() { return m_session; }
     virtual void setSession(std::shared_ptr<SessionFace> session) { m_session = session; }
 
-    virtual P2pID p2pID() { return m_p2pInfo->p2pID; }
+    virtual P2pID p2pID() { return m_p2pInfo->rawP2pID; }
+    virtual std::string printP2pID() { return printShortP2pID(m_p2pInfo->rawP2pID); }
     // Note: the p2pInfo must be setted after session setted
     virtual void setP2PInfo(P2PInfo const& p2pInfo)
     {
@@ -56,10 +58,15 @@ public:
     // empty when negotiate failed or negotiate unfinished
     virtual bcos::protocol::ProtocolInfo::ConstPtr protocolInfo() const
     {
-        // TODO: check if the lock below is necessary?
-        // ReadGuard l(x_protocolInfo);
+        ReadGuard l(x_protocolInfo);
         return m_protocolInfo;
     }
+
+    virtual void asyncSendP2PMessage(P2PMessage::Ptr message, Options options,
+        SessionCallbackFunc callback = SessionCallbackFunc());
+
+    task::Task<Message::Ptr> fastSendP2PMessage(
+        P2PMessage& message, ::ranges::any_view<bytesConstRef> payloads, Options options);
 
 private:
     SessionFace::Ptr m_session;

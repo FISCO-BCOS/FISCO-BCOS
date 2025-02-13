@@ -33,6 +33,7 @@ jobs:
       ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
       ACTIONS_RUNNER_FORCED_INTERNAL_NODE_VERSION: node16
       ACTIONS_RUNNER_FORCE_ACTIONS_NODE_VERSION: node16
+      VCPKG_FORCE_SYSTEM_BINARIES: arm
     steps:
       - name: Set up Node.js 16.x
         uses: actions/setup-node@v2
@@ -67,7 +68,7 @@ jobs:
         run: ./tools/.ci/clear_build_cache.sh
       - name: update vcpkg
         run: |
-          cd vcpkg && git fetch origin master
+          cd vcpkg && git fetch origin master && ./bootstrap-vcpkg.sh
           cd -
 
       - name: Build for linux

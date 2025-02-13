@@ -123,7 +123,7 @@ public:
 
                 GATEWAY_LOG(DEBUG)
                     << LOG_BADGE("Retry") << LOG_DESC("network callback") << LOG_KV("seq", seq)
-                    << LOG_KV("dstP2P", p2pID) << LOG_KV("code", e.errorCode())
+                    << LOG_KV("dstP2P", printShortP2pID(p2pID)) << LOG_KV("code", e.errorCode())
                     << LOG_KV("moduleID", moduleID) << LOG_KV("message", e.what())
                     << LOG_KV("timeCost", (utcTime() - startT));
                 // try again
@@ -140,18 +140,19 @@ public:
                 // message successfully,find another gateway and try again
                 if (respCode != bcos::protocol::CommonError::SUCCESS)
                 {
-                    GATEWAY_LOG(DEBUG) << LOG_BADGE("Retry") << LOG_KV("p2pid", p2pID)
-                                       << LOG_KV("moduleID", moduleID) << LOG_KV("code", respCode)
-                                       << LOG_KV("message", e.what());
+                    GATEWAY_LOG(DEBUG)
+                        << LOG_BADGE("Retry") << LOG_KV("p2pid", printShortP2pID(p2pID))
+                        << LOG_KV("moduleID", moduleID) << LOG_KV("code", respCode)
+                        << LOG_KV("message", e.what());
                     // try again
                     self->trySendMessage();
                     return;
                 }
-                GATEWAY_LOG(TRACE)
-                    << LOG_BADGE("Retry: asyncSendMessageByNodeID success")
-                    << LOG_KV("dstP2P", p2pID) << LOG_KV("srcNodeID", self->m_srcNodeID->hex())
-                    << LOG_KV("dstNodeID", self->m_dstNodeID->hex())
-                    << LOG_KV("moduleID", moduleID);
+                GATEWAY_LOG(TRACE) << LOG_BADGE("Retry: asyncSendMessageByNodeID success")
+                                   << LOG_KV("dstP2P", printShortP2pID(p2pID))
+                                   << LOG_KV("srcNodeID", self->m_srcNodeID->hex())
+                                   << LOG_KV("dstNodeID", self->m_dstNodeID->hex())
+                                   << LOG_KV("moduleID", moduleID);
                 // send message successfully
                 if (self->m_respFunc)
                 {

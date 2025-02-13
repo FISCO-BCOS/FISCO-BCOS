@@ -1,10 +1,16 @@
 module bcostars
 {
+struct NodeIDInfo
+{
+    1 optional string p2pID;  // the p2pID, 32Bytes, equal to hash(rawP2pID)
+    2 optional string rawP2pID; // the origin p2pID, 1024 Bytes
+};
 struct RouterTableEntry
 {
     1 require string dstNode;
     2 optional string nextHop;
     3 require int distance;
+    4 optional NodeIDInfo dstNodeInfo;
 };
 struct RouterTable
 {

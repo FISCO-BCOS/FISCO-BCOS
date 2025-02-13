@@ -15,7 +15,6 @@
 #include <bcos-gateway/Gateway.h>
 #include <bcos-gateway/libp2p/P2PInterface.h>
 #include <bcos-gateway/libp2p/P2PSession.h>
-#include <oneapi/tbb/concurrent_hash_map.h>
 #include <array>
 
 
@@ -28,7 +27,7 @@ class Gateway;
 class Service : public P2PInterface, public std::enable_shared_from_this<Service>
 {
 public:
-    Service(std::string const& _nodeID);
+    Service(P2PInfo const& _p2pInfo);
     virtual ~Service() override { stop(); }
 
     using Ptr = std::shared_ptr<Service>;
@@ -111,11 +110,14 @@ public:
         m_disconnectionHandlers.push_back(std::move(_handler));
     }
 
-    std::shared_ptr<P2PSession> getP2PSessionByNodeId(P2pID const& _nodeID) override
+
+    std::shared_ptr<P2PSession> getP2PSessionByNodeId(P2pID const& _nodeID) const override
     {
-        if (decltype(m_sessions)::const_accessor accessor; m_sessions.find(accessor, _nodeID))
+        bcos::ReadGuard l(x_sessions);
+        auto it = m_sessions.find(_nodeID);
+        if (it != m_sessions.end())
         {
-            return accessor->second;
+            return it->second;
         }
         return nullptr;
     }
@@ -161,6 +163,11 @@ public:
 
     void updatePeerBlacklist(const std::set<std::string>& _strList, const bool _enable) override;
     void updatePeerWhitelist(const std::set<std::string>& _strList, const bool _enable) override;
+
+    virtual std::string getShortP2pID(std::string const& rawP2pID) const { return rawP2pID; }
+    virtual std::string getRawP2pID(std::string const& shortP2pID) const { return shortP2pID; }
+
+    virtual void resetP2pID(P2PMessage&, bcos::protocol::ProtocolVersion const&) {}
 
 protected:
     virtual void sendMessageToSession(P2PSession::Ptr _p2pSession, P2PMessage::Ptr _msg,
@@ -219,7 +226,14 @@ protected:
 
     friend class ServiceV2;
 
-private:
+    using SessionsType = std::map<std::string, P2PSession::Ptr>;
+    virtual SessionsType copySessions() const
+    {
+        bcos::ReadGuard l(x_sessions);
+        return m_sessions;
+    }
+
+protected:
     std::vector<std::function<void(NetworkException, P2PSession::Ptr)>> m_disconnectionHandlers;
 
     std::shared_ptr<bcos::crypto::KeyFactory> m_keyFactory;
@@ -228,9 +242,13 @@ private:
     bcos::RecursiveMutex x_nodes;
     std::shared_ptr<Host> m_host;
 
-    tbb::concurrent_hash_map<P2pID, P2PSession::Ptr> m_sessions;
+    // long p2pID to session
+    SessionsType m_sessions;
+    mutable bcos::SharedMutex x_sessions;
+
     std::shared_ptr<MessageFactory> m_messageFactory;
 
+    P2PInfo m_selfInfo;
     P2pID m_nodeID;
     std::optional<boost::asio::deadline_timer> m_timer;
     bool m_run = false;
