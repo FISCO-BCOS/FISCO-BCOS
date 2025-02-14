@@ -108,6 +108,10 @@ BOOST_AUTO_TEST_CASE(executeWorker)
 
     sealer->executeWorker();
     BOOST_CHECK(txpool->trySynced);
+
+    txpool->trySynced = false;
+    sealer->executeWorker();
+    BOOST_CHECK(!txpool->trySynced);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
