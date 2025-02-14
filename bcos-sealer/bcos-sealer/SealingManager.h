@@ -61,7 +61,7 @@ public:
         NOT_READY,
         NO_TRANSACTION,
     };
-    FetchResult fetchTransactions();
+    virtual FetchResult fetchTransactions();
 
     template <class T>
     bcos::Handler<> onReady(T callback)

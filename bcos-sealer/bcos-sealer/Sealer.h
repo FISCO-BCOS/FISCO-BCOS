@@ -37,13 +37,7 @@ public:
         WAIT_FOR_LATEST_BLOCK = 2,
     };
     using Ptr = std::shared_ptr<Sealer>;
-    explicit Sealer(SealerConfig::Ptr _sealerConfig)
-      : Worker("Sealer", 0), m_sealerConfig(std::move(_sealerConfig))
-    {
-        m_sealingManager = std::make_shared<SealingManager>(m_sealerConfig);
-        m_sealingManager->onReady([=, this]() { this->noteGenerateProposal(); });
-        m_hashImpl = m_sealerConfig->blockFactory()->cryptoSuite()->hashImpl();
-    }
+    explicit Sealer(SealerConfig::Ptr _sealerConfig);
     ~Sealer() override = default;
 
     void start() override;
@@ -69,8 +63,10 @@ public:
     SealerConfig::Ptr sealerConfig() const { return m_sealerConfig; }
     SealingManager::Ptr sealingManager() const { return m_sealingManager; }
 
-protected:
     void executeWorker() override;
+    void setSealingManager(SealingManager::Ptr _sealingManager);
+
+protected:
     virtual void noteGenerateProposal() { m_signalled.notify_all(); }
     virtual void submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _block);
 

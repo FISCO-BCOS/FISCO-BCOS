@@ -30,6 +30,16 @@ using namespace bcos;
 using namespace bcos::sealer;
 using namespace bcos::protocol;
 
+bcos::sealer::Sealer::Sealer(SealerConfig::Ptr _sealerConfig)
+  : Worker("Sealer", 0),
+    m_sealerConfig(std::move(_sealerConfig)),
+    m_lastFetchTimepoint(std::chrono::steady_clock::now())
+{
+    m_sealingManager = std::make_shared<SealingManager>(m_sealerConfig);
+    m_sealingManager->onReady([this]() { noteGenerateProposal(); });
+    m_hashImpl = m_sealerConfig->blockFactory()->cryptoSuite()->hashImpl();
+}
+
 void Sealer::start()
 {
     if (m_running)
@@ -100,7 +110,7 @@ void Sealer::executeWorker()
         // When it is this node's turn to mint a block, and no transactions can be obtained after a
         // certain period of time, broadcast a transaction synchronization request.
         if (auto duration = std::chrono::duration_cast<std::chrono::seconds>(
-                m_lastFetchTimepoint.load() - std::chrono::steady_clock::now());
+                std::chrono::steady_clock::now() - m_lastFetchTimepoint.load());
             duration > std::chrono::seconds(m_fetchTimeout))
         {
             increseLastFetchTimepoint();
@@ -209,4 +219,8 @@ std::chrono::steady_clock::time_point Sealer::increseLastFetchTimepoint()
     {
     }
     return current;
+}
+void bcos::sealer::Sealer::setSealingManager(SealingManager::Ptr _sealingManager)
+{
+    m_sealingManager = std::move(_sealingManager);
 }
