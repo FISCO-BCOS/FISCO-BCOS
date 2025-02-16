@@ -70,9 +70,9 @@ struct MockSealingManager : public sealer::SealingManager
     FetchResult fetchTransactions() override { return FetchResult::NO_TRANSACTION; }
 };
 
-struct TestSealerFixture
+struct TestSealerFixture2
 {
-    TestSealerFixture()
+    TestSealerFixture2()
     {
         hashImpl = std::make_shared<crypto::Keccak256>();
         auto signatureImpl = std::make_shared<crypto::Secp256k1Crypto>();
@@ -95,7 +95,7 @@ struct TestSealerFixture
     sealer::Sealer::Ptr sealer;
 };
 
-BOOST_FIXTURE_TEST_SUITE(TestSealer, TestSealerFixture)
+BOOST_FIXTURE_TEST_SUITE(TestSealer, TestSealerFixture2)
 
 BOOST_AUTO_TEST_CASE(executeWorker)
 {
