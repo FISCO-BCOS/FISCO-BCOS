@@ -16,6 +16,7 @@
 #include <bcos-gateway/libp2p/P2PInterface.h>
 #include <bcos-gateway/libp2p/P2PSession.h>
 #include <array>
+#include <shared_mutex>
 
 
 namespace bcos::gateway
@@ -135,9 +136,8 @@ protected:
     // handlers called when delete-session
     void registerOnDeleteSession(std::function<void(P2PSession::Ptr)> _handler);
 
-
-    virtual void callNewSessionHandlers(P2PSession::Ptr _session);
-    virtual void callDeleteSessionHandlers(P2PSession::Ptr _session);
+    virtual void callNewSessionHandlers(const P2PSession::Ptr& _session);
+    virtual void callDeleteSessionHandlers(const P2PSession::Ptr& _session);
 
     friend class ServiceV2;
 
@@ -147,15 +147,14 @@ protected:
     std::shared_ptr<bcos::crypto::KeyFactory> m_keyFactory;
 
     std::map<NodeIPEndpoint, P2pID> m_staticNodes;
-    bcos::RecursiveMutex x_nodes;
+    std::shared_mutex x_nodes;
     std::shared_ptr<Host> m_host;
 
     // long p2pID to session
     SessionsType m_sessions;
-    mutable bcos::SharedMutex x_sessions;
+    mutable std::shared_mutex x_sessions;
 
     std::shared_ptr<MessageFactory> m_messageFactory;
-
     P2PInfo m_selfInfo;
     P2pID m_nodeID;
     std::optional<boost::asio::deadline_timer> m_timer;
@@ -173,9 +172,7 @@ protected:
     std::vector<std::function<void(P2PSession::Ptr)>> m_deleteSessionHandlers;
 
     std::function<std::optional<bcos::Error>(SessionFace&, Message&)> m_beforeMessageHandler;
-
     std::function<std::optional<bcos::Error>(SessionFace::Ptr, Message::Ptr)> m_onMessageHandler;
-    // bcos::LogLevel m_connectionLogLevel = bcos::LogLevel::WARNING;
 };
 
 }  // namespace bcos::gateway

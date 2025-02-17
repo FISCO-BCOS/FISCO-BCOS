@@ -16,6 +16,7 @@
 #include <bcos-gateway/libp2p/Service.h>
 #include <boost/random.hpp>
 #include <boost/throw_exception.hpp>
+#include <shared_mutex>
 #include <utility>
 
 using namespace bcos;
@@ -81,7 +82,7 @@ void Service::stop()
         m_host->stop();
 
         /// disconnect sessions
-        bcos::WriteGuard l(x_sessions);
+        std::unique_lock lock(x_sessions);
         for (auto& session : m_sessions)
         {
             session.second->stop(ClientQuit);
@@ -99,14 +100,9 @@ void Service::heartBeat()
         return;
     }
 
-    std::map<NodeIPEndpoint, P2pID> staticNodes;
-    {
-        RecursiveGuard l(x_nodes);
-        staticNodes = m_staticNodes;
-    }
-
     // Reconnect all nodes
-    for (auto& it : staticNodes)
+    std::shared_lock nodeLock(x_nodes);
+    for (auto& it : m_staticNodes)
     {
         /// exclude myself
         if (it.second == id())
@@ -127,8 +123,9 @@ void Service::heartBeat()
                 service->onConnect(std::move(error), p2pInfo, std::move(session));
             });
     }
+    nodeLock.release();
 
-    bcos::ReadGuard lock(x_sessions);
+    std::shared_lock sessionLock(x_sessions);
     SERVICE_LOG(INFO) << METRIC << LOG_DESC("heartBeat")
                       << LOG_KV("connected count", m_sessions.size());
     for (auto const& it : m_sessions)
@@ -148,7 +145,7 @@ void Service::heartBeat()
                                << LOG_KV("write queue size", queueSize);
         }
     }
-    lock.release();
+    sessionLock.release();
 
     auto self = std::weak_ptr<Service>(shared_from_this());
     m_timer.emplace(m_host->asioInterface()->newTimer(CHECK_INTERVAL));
@@ -170,7 +167,7 @@ void Service::heartBeat()
 void Service::updateStaticNodes(std::shared_ptr<SocketFace> const& _s, P2pID const& nodeID)
 {
     NodeIPEndpoint endpoint(_s->nodeIPEndpoint());
-    RecursiveGuard l(x_nodes);
+    std::unique_lock nodeLock(x_nodes);
     auto it = m_staticNodes.find(endpoint);
     // modify m_staticNodes(including accept cases, namely the client endpoint)
     if (it != m_staticNodes.end())
@@ -246,17 +243,17 @@ void Service::onConnect(
     p2pSession->start();
     asyncSendProtocol(p2pSession);
     updateStaticNodes(session->socket(), p2pID);
+
+    std::unique_lock lock(x_sessions);
     if (existedSession)
     {
-        bcos::WriteGuard l(x_sessions);
         m_sessions[p2pID] = p2pSession;
+        lock.unlock();
     }
     else
     {
-        {
-            bcos::WriteGuard l(x_sessions);
-            m_sessions.insert(std::make_pair(p2pID, p2pSession));
-        }
+        m_sessions.insert(std::make_pair(p2pID, p2pSession));
+        lock.unlock();
         callNewSessionHandlers(p2pSession);
     }
     SERVICE_LOG(INFO) << LOG_DESC("Connection established")
@@ -278,7 +275,7 @@ void Service::onDisconnect(NetworkException e, P2PSession::Ptr p2pSession)
                            << LOG_KV("p2pid", p2pSession->printP2pID())
                            << LOG_KV("endpoint", p2pSession->session()->nodeIPEndpoint());
         {
-            bcos::WriteGuard l(x_sessions);
+            std::unique_lock l(x_sessions);
             m_sessions.erase(p2pSession->p2pID());
         }
         callDeleteSessionHandlers(p2pSession);
@@ -289,7 +286,7 @@ void Service::onDisconnect(NetworkException e, P2PSession::Ptr p2pSession)
         }
         SERVICE_LOG(INFO) << LOG_DESC("onDisconnect") << LOG_KV("code", e.errorCode())
                           << LOG_KV("what", boost::diagnostic_information(e));
-        RecursiveGuard l(x_nodes);
+        std::unique_lock nodeLock(x_nodes);
         for (auto& it : m_staticNodes)
         {
             if (it.second == p2pSession->p2pID())
@@ -505,7 +502,7 @@ P2PMessage::Ptr Service::sendMessageByNodeID(P2pID nodeID, P2PMessage::Ptr messa
 void Service::asyncSendMessageByEndPoint(NodeIPEndpoint const& _endpoint, P2PMessage::Ptr message,
     CallbackFuncWithSession callback, Options options)
 {
-    bcos::ReadGuard lock(x_sessions);
+    std::shared_lock lock(x_sessions);
     for (auto const& it : m_sessions)
     {
         if (it.second->session()->nodeIPEndpoint() == _endpoint)
@@ -565,7 +562,7 @@ void Service::asyncBroadcastMessage(P2PMessage::Ptr message, Options options)
 {
     try
     {
-        bcos::ReadGuard lock(x_sessions);
+        std::shared_lock lock(x_sessions);
         for (auto const& session : m_sessions)
         {
             asyncSendMessageByNodeID(session.first, message, {}, options);
@@ -580,31 +577,16 @@ void Service::asyncBroadcastMessage(P2PMessage::Ptr message, Options options)
 
 P2PInfos Service::sessionInfos()
 {
-    P2PInfos infos;
-    try
-    {
-        bcos::ReadGuard lock(x_sessions);
-        for (auto const& session : m_sessions)
-        {
-            infos.push_back(session.second->p2pInfo());
-        }
-    }
-    catch (std::exception& e)
-    {
-        SERVICE_LOG(WARNING) << LOG_DESC("sessionInfos")
-                             << LOG_KV("what", boost::diagnostic_information(e));
-    }
-    return infos;
+    std::shared_lock lock(x_sessions);
+    return ::ranges::views::values(m_sessions) |
+           ::ranges::views::transform([](auto const& session) { return session->p2pInfo(); }) |
+           ::ranges::to<P2PInfos>();
 }
 
 bool Service::isConnected(P2pID const& nodeID) const
 {
     auto session = getP2PSessionByNodeId(nodeID);
-    if (session && session->active())
-    {
-        return true;
-    }
-    return false;
+    return session && session->active();
 }
 
 std::shared_ptr<P2PMessage> Service::newP2PMessage(uint16_t _type, bytesConstRef _payload)
@@ -766,7 +748,7 @@ void Service::updatePeerBlacklist(const std::set<std::string>& _strList, const b
     // disconnect nodes in the blacklist
     if (_enable)
     {
-        bcos::ReadGuard lock(x_sessions);
+        std::shared_lock lock(x_sessions);
         for (const auto& session : m_sessions)
         {
             auto p2pIdWithoutExtInfo = session.second->p2pInfo().p2pIDWithoutExtInfo;
@@ -791,7 +773,7 @@ void Service::updatePeerWhitelist(const std::set<std::string>& _strList, const b
     // disconnect nodes not in the whitelist
     if (_enable)
     {
-        bcos::ReadGuard lock(x_sessions);
+        std::shared_lock lock(x_sessions);
         for (auto const& session : m_sessions)
         {
             auto p2pIdWithoutExtInfo = session.second->p2pInfo().p2pIDWithoutExtInfo;
@@ -843,7 +825,7 @@ std::map<NodeIPEndpoint, P2pID> bcos::gateway::Service::staticNodes()
 }
 void bcos::gateway::Service::setStaticNodes(const std::set<NodeIPEndpoint>& staticNodes)
 {
-    RecursiveGuard lockGuard(x_nodes);
+    std::unique_lock nodeLock(x_nodes);
     m_staticNodes.clear();
     for (const auto& endpoint : staticNodes)
     {
@@ -892,9 +874,8 @@ void bcos::gateway::Service::registerDisconnectHandler(
 std::shared_ptr<P2PSession> bcos::gateway::Service::getP2PSessionByNodeId(
     P2pID const& _nodeID) const
 {
-    bcos::ReadGuard l(x_sessions);
-    auto it = m_sessions.find(_nodeID);
-    if (it != m_sessions.end())
+    std::shared_lock lock(x_sessions);
+    if (auto it = m_sessions.find(_nodeID); it != m_sessions.end())
     {
         return it->second;
     }
@@ -941,13 +922,13 @@ std::string bcos::gateway::Service::getRawP2pID(std::string const& shortP2pID) c
 void bcos::gateway::Service::resetP2pID(P2PMessage&, bcos::protocol::ProtocolVersion const&) {}
 void bcos::gateway::Service::registerOnNewSession(std::function<void(P2PSession::Ptr)> _handler)
 {
-    m_newSessionHandlers.emplace_back(_handler);
+    m_newSessionHandlers.emplace_back(std::move(_handler));
 }
 void bcos::gateway::Service::registerOnDeleteSession(std::function<void(P2PSession::Ptr)> _handler)
 {
-    m_deleteSessionHandlers.emplace_back(_handler);
+    m_deleteSessionHandlers.emplace_back(std::move(_handler));
 }
-void bcos::gateway::Service::callNewSessionHandlers(P2PSession::Ptr _session)
+void bcos::gateway::Service::callNewSessionHandlers(const P2PSession::Ptr& _session)
 {
     try
     {
@@ -962,7 +943,7 @@ void bcos::gateway::Service::callNewSessionHandlers(P2PSession::Ptr _session)
                              << LOG_KV("msg", boost::diagnostic_information(e));
     }
 }
-void bcos::gateway::Service::callDeleteSessionHandlers(P2PSession::Ptr _session)
+void bcos::gateway::Service::callDeleteSessionHandlers(const P2PSession::Ptr& _session)
 {
     try
     {
