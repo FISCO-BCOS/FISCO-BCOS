@@ -35,14 +35,9 @@ struct FinalAwaitable
     constexpr bool await_ready() noexcept { return false; }
     constexpr std::coroutine_handle<> await_suspend(std::coroutine_handle<Promise> handle) noexcept
     {
-        std::coroutine_handle<> continuationHandle;
-        if (handle.promise().m_continuation)
-        {
-            continuationHandle = handle.promise().m_continuation->handle;
-        }
-        handle.destroy();
-
-        return continuationHandle ? continuationHandle : std::noop_coroutine();
+        return handle.promise().m_continuation ?
+                   static_cast<std::coroutine_handle<>>(handle.promise().m_continuation->handle) :
+                   std::noop_coroutine();
     }
     constexpr void await_resume() noexcept {}
 };
@@ -70,9 +65,6 @@ struct PromiseBase
         auto exception = std::current_exception();
         if (m_continuation == nullptr)
         {
-            auto handle =
-                std::coroutine_handle<PromiseImpl>::from_promise(*static_cast<PromiseImpl*>(this));
-            handle.destroy();
             std::rethrow_exception(exception);
         }
         m_continuation->value.template emplace<std::exception_ptr>(exception);
@@ -168,7 +160,13 @@ public:
         m_handle = task.m_handle;
         task.m_handle = nullptr;
     }
-    ~Task() noexcept = default;
+    ~Task() noexcept
+    {
+        if (m_handle)
+        {
+            m_handle.destroy();
+        }
+    }
     void start() { m_handle.resume(); }
 
 private:
