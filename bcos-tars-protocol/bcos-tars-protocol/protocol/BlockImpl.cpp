@@ -182,6 +182,10 @@ const bcostars::Block& bcostars::protocol::BlockImpl::inner() const
 {
     return m_inner;
 }
+bcostars::Block& bcostars::protocol::BlockImpl::inner()
+{
+    return m_inner;
+}
 void bcostars::protocol::BlockImpl::setInner(bcostars::Block inner)
 {
     m_inner = std::move(inner);

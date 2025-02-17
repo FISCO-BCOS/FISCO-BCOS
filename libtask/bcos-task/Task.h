@@ -68,7 +68,7 @@ struct PromiseBase
     void unhandled_exception()
     {
         auto exception = std::current_exception();
-        if (!m_continuation)
+        if (m_continuation == nullptr)
         {
             auto handle =
                 std::coroutine_handle<PromiseImpl>::from_promise(*static_cast<PromiseImpl*>(this));
@@ -155,7 +155,6 @@ public:
         std::conditional_t<std::is_same_v<ValueType, void>, PromiseVoid<Task>, PromiseValue<Task>>;
 
     Awaitable<Task> operator co_await() && { return Awaitable<Task>(m_handle); }
-
     explicit Task(std::coroutine_handle<promise_type> handle) : m_handle(handle) {}
     Task(const Task&) = delete;
     Task(Task&& task) noexcept : m_handle(task.m_handle) { task.m_handle = nullptr; }

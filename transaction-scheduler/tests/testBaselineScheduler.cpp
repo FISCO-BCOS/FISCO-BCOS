@@ -88,10 +88,11 @@ struct MockTxPool : public txpool::TxPoolInterface
 {
     void start() override {}
     void stop() override {}
-    void asyncSealTxs(uint64_t _txsLimit, bcos::txpool::TxsHashSetPtr _avoidTxs,
-        std::function<void(Error::Ptr, bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr)>
-            _sealCallback) override
-    {}
+    std::tuple<bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr> sealTxs(
+        uint64_t _txsLimit, bcos::txpool::TxsHashSetPtr _avoidTxs) override
+    {
+        return {};
+    }
     void asyncMarkTxs(const bcos::crypto::HashList& _txsHash, bool _sealedFlag,
         bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
         std::function<void(Error::Ptr)> _onRecvResponse) override

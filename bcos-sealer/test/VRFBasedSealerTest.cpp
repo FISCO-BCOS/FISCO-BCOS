@@ -24,15 +24,12 @@
 #include "bcos-framework/testutils/faker/FakeConsensus.h"
 #include "bcos-framework/testutils/faker/FakeLedger.h"
 #include "bcos-sealer/SealerFactory.h"
-// #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
-// #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
 #include "bcos-txpool/TxPoolFactory.h"
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
 #include <wedpr-crypto/WedprUtilities.h>
 #include <boost/filesystem.hpp>
-#include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <memory>
 

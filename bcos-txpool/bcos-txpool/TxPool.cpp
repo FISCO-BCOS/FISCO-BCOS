@@ -210,22 +210,21 @@ bool TxPool::checkExistsInGroup(TxSubmitCallback _txSubmitCallback)
     txResult->setTxHash(HashType());
     txResult->setStatus((uint32_t)TransactionStatus::RequestNotBelongToTheGroup);
 
-    auto errorMsg = "Do not send transactions to nodes that are not in the group";
+    const auto* errorMsg = "Do not send transactions to nodes that are not in the group";
     _txSubmitCallback(BCOS_ERROR_PTR((int32_t)txResult->status(), errorMsg), txResult);
     TXPOOL_LOG(WARNING) << LOG_DESC(errorMsg);
     return false;
 }
 
-void TxPool::asyncSealTxs(uint64_t _txsLimit, TxsHashSetPtr _avoidTxs,
-    std::function<void(Error::Ptr, Block::Ptr, Block::Ptr)> _sealCallback)
+std::tuple<bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr> TxPool::sealTxs(
+    uint64_t _txsLimit, TxsHashSetPtr _avoidTxs)
 {
     auto fetchedTxs = m_config->blockFactory()->createBlock();
     auto sysTxs = m_config->blockFactory()->createBlock();
-    {
-        bcos::WriteGuard guard(x_markTxsMutex);
-        m_txpoolStorage->batchFetchTxs(fetchedTxs, sysTxs, _txsLimit, _avoidTxs, true);
-    }
-    _sealCallback(nullptr, fetchedTxs, sysTxs);
+
+    bcos::WriteGuard guard(x_markTxsMutex);
+    m_txpoolStorage->batchFetchTxs(fetchedTxs, sysTxs, _txsLimit, _avoidTxs, true);
+    return {std::move(fetchedTxs), std::move(sysTxs)};
 }
 
 void TxPool::asyncNotifyBlockResult(BlockNumber _blockNumber, TransactionSubmitResultsPtr txsResult,
