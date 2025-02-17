@@ -123,7 +123,7 @@ void Service::heartBeat()
                 service->onConnect(std::move(error), p2pInfo, std::move(session));
             });
     }
-    nodeLock.release();
+    nodeLock.unlock();
 
     std::shared_lock sessionLock(x_sessions);
     SERVICE_LOG(INFO) << METRIC << LOG_DESC("heartBeat")
@@ -145,7 +145,7 @@ void Service::heartBeat()
                                << LOG_KV("write queue size", queueSize);
         }
     }
-    sessionLock.release();
+    sessionLock.unlock();
 
     auto self = std::weak_ptr<Service>(shared_from_this());
     m_timer.emplace(m_host->asioInterface()->newTimer(CHECK_INTERVAL));
