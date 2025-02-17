@@ -54,7 +54,14 @@ public:
     virtual void resetLatestHash(crypto::HashType _latestHash);
     virtual int64_t latestNumber() const;
     virtual crypto::HashType latestHash() const;
-    virtual void fetchTransactions();
+
+    enum class FetchResult : int8_t
+    {
+        SUCCESS,
+        NOT_READY,
+        NO_TRANSACTION,
+    };
+    virtual FetchResult fetchTransactions();
 
     template <class T>
     bcos::Handler<> onReady(T callback)

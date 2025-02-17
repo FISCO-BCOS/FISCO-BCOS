@@ -159,58 +159,22 @@ public:
         co_return;
     }
 
-    void asyncSealTxs(uint64_t _txsLimit, bcos::txpool::TxsHashSetPtr _avoidTxs,
-        std::function<void(
-            bcos::Error::Ptr, bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr)>
-            _sealCallback) override
+    std::tuple<bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr> sealTxs(
+        uint64_t _txsLimit, bcos::txpool::TxsHashSetPtr _avoidTxs) override
     {
-        class Callback : public bcostars::TxPoolServicePrxCallback
-        {
-        public:
-            Callback(bcos::protocol::BlockFactory::Ptr _blockFactory,
-                std::function<void(
-                    bcos::Error::Ptr, bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr)>
-                    callback)
-              : m_blockFactory(_blockFactory), m_callback(callback)
-            {}
-
-            void callback_asyncSealTxs(const bcostars::Error& ret, const bcostars::Block& _txsList,
-                const bcostars::Block& _sysTxList) override
-            {
-                auto txsList = m_blockFactory->createBlock();
-                std::dynamic_pointer_cast<bcostars::protocol::BlockImpl>(txsList)->setInner(
-                    std::move(*const_cast<bcostars::Block*>(&_txsList)));
-
-                auto sysTxList = m_blockFactory->createBlock();
-                std::dynamic_pointer_cast<bcostars::protocol::BlockImpl>(sysTxList)->setInner(
-                    std::move(*const_cast<bcostars::Block*>(&_sysTxList)));
-
-                m_callback(toBcosError(ret), txsList, sysTxList);
-            }
-
-            void callback_asyncSealTxs_exception(tars::Int32 ret) override
-            {
-                m_callback(toBcosError(ret), nullptr, nullptr);
-            }
-
-        private:
-            bcos::protocol::BlockFactory::Ptr m_blockFactory;
-            std::function<void(
-                bcos::Error::Ptr, bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr)>
-                m_callback;
-        };
-
         vector<vector<tars::Char>> tarsAvoidTxs;
         if (_avoidTxs && _avoidTxs->size() > 0)
         {
-            for (auto& it : *_avoidTxs)
+            for (const auto& it : *_avoidTxs)
             {
-                tarsAvoidTxs.push_back(std::vector<char>(it.begin(), it.end()));
+                tarsAvoidTxs.emplace_back(it.begin(), it.end());
             }
         }
 
-        m_proxy->async_asyncSealTxs(
-            new Callback(m_blockFactory, _sealCallback), _txsLimit, tarsAvoidTxs);
+        auto txs = std::make_shared<bcostars::protocol::BlockImpl>();
+        auto sysTxs = std::make_shared<bcostars::protocol::BlockImpl>();
+        m_proxy->asyncSealTxs(_txsLimit, tarsAvoidTxs, txs->inner(), sysTxs->inner());
+        return {txs, sysTxs};
     }
 
     void asyncMarkTxs(const bcos::crypto::HashList& _txsHash, bool _sealedFlag,
