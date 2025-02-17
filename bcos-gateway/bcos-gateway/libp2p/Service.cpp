@@ -442,63 +442,6 @@ void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message::P
     }
 }
 
-P2PMessage::Ptr Service::sendMessageByNodeID(P2pID nodeID, P2PMessage::Ptr message)
-{
-    try
-    {
-        struct SessionCallback : public std::enable_shared_from_this<SessionCallback>
-        {
-        public:
-            using Ptr = std::shared_ptr<SessionCallback>;
-
-            SessionCallback() { mutex.lock(); }
-
-            void onResponse(
-                NetworkException _error, std::shared_ptr<P2PSession>, P2PMessage::Ptr _message)
-            {
-                error = _error;
-                response = _message;
-                mutex.unlock();
-            }
-
-            NetworkException error;
-            P2PMessage::Ptr response;
-            std::mutex mutex;
-        };
-
-        SessionCallback::Ptr callback = std::make_shared<SessionCallback>();
-        CallbackFuncWithSession fp = std::bind(&SessionCallback::onResponse, callback,
-            std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
-
-        asyncSendMessageByNodeID(nodeID, message, fp, Options());
-        // lock to wait for async send
-        callback->mutex.lock();
-        callback->mutex.unlock();
-        SERVICE_LOG(DEBUG) << LOG_DESC("sendMessageByNodeID mutex unlock");
-
-        NetworkException error = callback->error;
-        if (error.errorCode() != 0)
-        {
-            SERVICE_LOG(ERROR) << LOG_DESC("asyncSendMessageByNodeID error")
-                               << LOG_KV("nodeid", printShortP2pID(nodeID))
-                               << LOG_KV("errorCode", error.errorCode())
-                               << LOG_KV("what", error.what());
-            BOOST_THROW_EXCEPTION(error);
-        }
-
-        return callback->response;
-    }
-    catch (std::exception& e)
-    {
-        SERVICE_LOG(ERROR) << LOG_DESC("asyncSendMessageByNodeID error")
-                           << LOG_KV("nodeid", printShortP2pID(nodeID))
-                           << LOG_KV("what", boost::diagnostic_information(e));
-        BOOST_THROW_EXCEPTION(e);
-    }
-
-    return {};
-}
-
 void Service::asyncSendMessageByEndPoint(NodeIPEndpoint const& _endpoint, P2PMessage::Ptr message,
     CallbackFuncWithSession callback, Options options)
 {

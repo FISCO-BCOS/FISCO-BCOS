@@ -53,9 +53,6 @@ public:
     void sendRespMessageBySession(
         bytesConstRef _payload, P2PMessage::Ptr _p2pMessage, P2PSession::Ptr _p2pSession) override;
 
-    std::shared_ptr<P2PMessage> sendMessageByNodeID(
-        P2pID nodeID, std::shared_ptr<P2PMessage> message) override;
-
     void asyncSendMessageByNodeID(P2pID nodeID, std::shared_ptr<P2PMessage> message,
         CallbackFuncWithSession callback, Options options = Options()) override;
 

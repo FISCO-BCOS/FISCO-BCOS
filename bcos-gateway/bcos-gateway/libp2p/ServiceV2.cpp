@@ -415,8 +415,6 @@ void ServiceV2::sendRespMessageBySession(
     // TODO: reduce memory copy
     respMessage->setPayload({_payload.begin(), _payload.end()});
 
-    // asyncSendMessageByNodeID(respMessage->dstP2PNodeID(), respMessage, nullptr);
-
     // Note: send response directly with the original session
     sendMessageToSession(_p2pSession, respMessage);
 
