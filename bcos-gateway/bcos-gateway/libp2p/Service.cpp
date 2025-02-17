@@ -4,6 +4,7 @@
  */
 
 #include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/Common.h"
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-gateway/libnetwork/ASIOInterface.h>  // for ASIOInterface
 #include <bcos-gateway/libnetwork/Common.h>         // for SocketFace
@@ -126,10 +127,11 @@ void Service::heartBeat()
                 service->onConnect(std::move(error), p2pInfo, std::move(session));
             });
     }
-    auto sessions = copySessions();
+
+    bcos::ReadGuard lock(x_sessions);
     SERVICE_LOG(INFO) << METRIC << LOG_DESC("heartBeat")
-                      << LOG_KV("connected count", sessions.size());
-    for (auto const& it : sessions)
+                      << LOG_KV("connected count", m_sessions.size());
+    for (auto const& it : m_sessions)
     {
         auto session = it.second;
         auto queueSize = session->session()->writeQueueSize();
@@ -146,6 +148,7 @@ void Service::heartBeat()
                                << LOG_KV("write queue size", queueSize);
         }
     }
+    lock.release();
 
     auto self = std::weak_ptr<Service>(shared_from_this());
     m_timer.emplace(m_host->asioInterface()->newTimer(CHECK_INTERVAL));
@@ -502,8 +505,8 @@ P2PMessage::Ptr Service::sendMessageByNodeID(P2pID nodeID, P2PMessage::Ptr messa
 void Service::asyncSendMessageByEndPoint(NodeIPEndpoint const& _endpoint, P2PMessage::Ptr message,
     CallbackFuncWithSession callback, Options options)
 {
-    auto sessions = copySessions();
-    for (auto const& it : sessions)
+    bcos::ReadGuard lock(x_sessions);
+    for (auto const& it : m_sessions)
     {
         if (it.second->session()->nodeIPEndpoint() == _endpoint)
         {
@@ -562,8 +565,8 @@ void Service::asyncBroadcastMessage(P2PMessage::Ptr message, Options options)
 {
     try
     {
-        auto sessions = copySessions();
-        for (auto const& session : sessions)
+        bcos::ReadGuard lock(x_sessions);
+        for (auto const& session : m_sessions)
         {
             asyncSendMessageByNodeID(session.first, message, {}, options);
         }
@@ -580,8 +583,8 @@ P2PInfos Service::sessionInfos()
     P2PInfos infos;
     try
     {
-        auto sessions = copySessions();
-        for (auto const& session : sessions)
+        bcos::ReadGuard lock(x_sessions);
+        for (auto const& session : m_sessions)
         {
             infos.push_back(session.second->p2pInfo());
         }
@@ -763,8 +766,8 @@ void Service::updatePeerBlacklist(const std::set<std::string>& _strList, const b
     // disconnect nodes in the blacklist
     if (_enable)
     {
-        auto sessions = copySessions();
-        for (const auto& session : sessions)
+        bcos::ReadGuard lock(x_sessions);
+        for (const auto& session : m_sessions)
         {
             auto p2pIdWithoutExtInfo = session.second->p2pInfo().p2pIDWithoutExtInfo;
             if (_strList.end() == _strList.find(p2pIdWithoutExtInfo))
@@ -788,8 +791,8 @@ void Service::updatePeerWhitelist(const std::set<std::string>& _strList, const b
     // disconnect nodes not in the whitelist
     if (_enable)
     {
-        auto sessions = copySessions();
-        for (auto const& session : sessions)
+        bcos::ReadGuard lock(x_sessions);
+        for (auto const& session : m_sessions)
         {
             auto p2pIdWithoutExtInfo = session.second->p2pInfo().p2pIDWithoutExtInfo;
             if (_strList.end() != _strList.find(p2pIdWithoutExtInfo))
@@ -823,4 +826,154 @@ bcos::task::Task<Message::Ptr> bcos::gateway::Service::sendMessageByNodeID(
     }
 
     co_return co_await session->fastSendP2PMessage(header, std::move(payloads), {});
+}
+bool bcos::gateway::Service::active()
+{
+    return m_run;
+}
+bcos::gateway::P2pID bcos::gateway::Service::id() const
+{
+    return m_nodeID;
+}
+void bcos::gateway::Service::registerUnreachableHandler(std::function<void(std::string)> /*unused*/)
+{}
+std::map<NodeIPEndpoint, P2pID> bcos::gateway::Service::staticNodes()
+{
+    return m_staticNodes;
+}
+void bcos::gateway::Service::setStaticNodes(const std::set<NodeIPEndpoint>& staticNodes)
+{
+    RecursiveGuard lockGuard(x_nodes);
+    m_staticNodes.clear();
+    for (const auto& endpoint : staticNodes)
+    {
+        m_staticNodes.insert(std::make_pair(endpoint, ""));
+    }
+}
+bcos::gateway::P2PInfo bcos::gateway::Service::localP2pInfo()
+{
+    auto p2pInfo = m_host->p2pInfo();
+    p2pInfo.p2pID = m_nodeID;
+    return p2pInfo;
+}
+bool bcos::gateway::Service::isReachable(P2pID const& _nodeID) const
+{
+    return isConnected(_nodeID);
+}
+std::shared_ptr<Host> bcos::gateway::Service::host()
+{
+    return m_host;
+}
+void bcos::gateway::Service::setHost(std::shared_ptr<Host> host)
+{
+    m_host = std::move(host);
+}
+std::shared_ptr<MessageFactory> bcos::gateway::Service::messageFactory()
+{
+    return m_messageFactory;
+}
+void bcos::gateway::Service::setMessageFactory(std::shared_ptr<MessageFactory> _messageFactory)
+{
+    m_messageFactory = std::move(_messageFactory);
+}
+std::shared_ptr<bcos::crypto::KeyFactory> bcos::gateway::Service::keyFactory()
+{
+    return m_keyFactory;
+}
+void bcos::gateway::Service::setKeyFactory(std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory)
+{
+    m_keyFactory = std::move(_keyFactory);
+}
+void bcos::gateway::Service::registerDisconnectHandler(
+    std::function<void(NetworkException, P2PSession::Ptr)> _handler)
+{
+    m_disconnectionHandlers.push_back(std::move(_handler));
+}
+std::shared_ptr<P2PSession> bcos::gateway::Service::getP2PSessionByNodeId(
+    P2pID const& _nodeID) const
+{
+    bcos::ReadGuard l(x_sessions);
+    auto it = m_sessions.find(_nodeID);
+    if (it != m_sessions.end())
+    {
+        return it->second;
+    }
+    return nullptr;
+}
+bool bcos::gateway::Service::registerHandlerByMsgType(
+    uint16_t _type, MessageHandler const& _msgHandler)
+{
+    if (m_msgHandlers.at(_type))
+    {
+        return false;
+    }
+
+    m_msgHandlers.at(_type) = _msgHandler;
+    return true;
+}
+bcos::gateway::P2PInterface::MessageHandler bcos::gateway::Service::getMessageHandlerByMsgType(
+    uint16_t _type)
+{
+    return m_msgHandlers.at(_type);
+}
+void bcos::gateway::Service::eraseHandlerByMsgType(uint16_t _type)
+{
+    m_msgHandlers.at(_type) = nullptr;
+}
+void bcos::gateway::Service::setBeforeMessageHandler(
+    std::function<std::optional<bcos::Error>(SessionFace&, Message&)> _handler)
+{
+    m_beforeMessageHandler = std::move(_handler);
+}
+void bcos::gateway::Service::setOnMessageHandler(
+    std::function<std::optional<bcos::Error>(SessionFace::Ptr, Message::Ptr)> _handler)
+{
+    m_onMessageHandler = std::move(_handler);
+}
+std::string bcos::gateway::Service::getShortP2pID(std::string const& rawP2pID) const
+{
+    return rawP2pID;
+}
+std::string bcos::gateway::Service::getRawP2pID(std::string const& shortP2pID) const
+{
+    return shortP2pID;
+}
+void bcos::gateway::Service::resetP2pID(P2PMessage&, bcos::protocol::ProtocolVersion const&) {}
+void bcos::gateway::Service::registerOnNewSession(std::function<void(P2PSession::Ptr)> _handler)
+{
+    m_newSessionHandlers.emplace_back(_handler);
+}
+void bcos::gateway::Service::registerOnDeleteSession(std::function<void(P2PSession::Ptr)> _handler)
+{
+    m_deleteSessionHandlers.emplace_back(_handler);
+}
+void bcos::gateway::Service::callNewSessionHandlers(P2PSession::Ptr _session)
+{
+    try
+    {
+        for (auto const& handler : m_newSessionHandlers)
+        {
+            handler(_session);
+        }
+    }
+    catch (std::exception const& e)
+    {
+        SERVICE_LOG(WARNING) << LOG_DESC("callNewSessionHandlers exception")
+                             << LOG_KV("msg", boost::diagnostic_information(e));
+    }
+}
+void bcos::gateway::Service::callDeleteSessionHandlers(P2PSession::Ptr _session)
+{
+    try
+    {
+        for (auto const& handler : m_deleteSessionHandlers)
+        {
+            handler(_session);
+        }
+    }
+    catch (std::exception const& e)
+    {
+        SERVICE_LOG(WARNING) << LOG_DESC("callDeleteSessionHandlers exception")
+                             << LOG_KV("msg", boost::diagnostic_information(e));
+    }
 }
