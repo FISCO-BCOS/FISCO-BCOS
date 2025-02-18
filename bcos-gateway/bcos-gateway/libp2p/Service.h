@@ -16,6 +16,7 @@
 #include <bcos-gateway/libp2p/P2PInterface.h>
 #include <bcos-gateway/libp2p/P2PSession.h>
 #include <array>
+#include <shared_mutex>
 
 
 namespace bcos::gateway
@@ -28,7 +29,7 @@ class Service : public P2PInterface, public std::enable_shared_from_this<Service
 {
 public:
     Service(P2PInfo const& _p2pInfo);
-    virtual ~Service() override { stop(); }
+    ~Service() override { stop(); }
 
     using Ptr = std::shared_ptr<Service>;
 
@@ -36,8 +37,8 @@ public:
     void stop() override;
     virtual void heartBeat();
 
-    virtual bool active() { return m_run; }
-    P2pID id() const override { return m_nodeID; }
+    virtual bool active();
+    P2pID id() const override;
 
     virtual void onConnect(
         NetworkException e, P2PInfo const& p2pInfo, std::shared_ptr<SessionFace> session);
@@ -47,17 +48,10 @@ public:
 
     virtual std::optional<bcos::Error> onBeforeMessage(SessionFace& _session, Message& _message);
 
-    // handlers called when the node is unreachable
-    virtual void registerUnreachableHandler(std::function<void(std::string)> /*unused*/)
-    {
-        // Notice: this is an empty function, do nothing
-    }
+    virtual void registerUnreachableHandler(std::function<void(std::string)> /*unused*/);
 
     void sendRespMessageBySession(
         bytesConstRef _payload, P2PMessage::Ptr _p2pMessage, P2PSession::Ptr _p2pSession) override;
-
-    std::shared_ptr<P2PMessage> sendMessageByNodeID(
-        P2pID nodeID, std::shared_ptr<P2PMessage> message) override;
 
     void asyncSendMessageByNodeID(P2pID nodeID, std::shared_ptr<P2PMessage> message,
         CallbackFuncWithSession callback, Options options = Options()) override;
@@ -67,60 +61,28 @@ public:
 
     void asyncBroadcastMessage(std::shared_ptr<P2PMessage> message, Options options) override;
 
-    virtual std::map<NodeIPEndpoint, P2pID> staticNodes() { return m_staticNodes; }
-    virtual void setStaticNodes(const std::set<NodeIPEndpoint>& staticNodes)
-    {
-        RecursiveGuard lockGuard(x_nodes);
-        m_staticNodes.clear();
-        for (const auto& endpoint : staticNodes)
-        {
-            m_staticNodes.insert(std::make_pair(endpoint, ""));
-        }
-    }
+    virtual std::map<NodeIPEndpoint, P2pID> staticNodes();
+    virtual void setStaticNodes(const std::set<NodeIPEndpoint>& staticNodes);
 
     P2PInfos sessionInfos() override;  ///< Only connected node
-    P2PInfo localP2pInfo() override
-    {
-        auto p2pInfo = m_host->p2pInfo();
-        p2pInfo.p2pID = m_nodeID;
-        return p2pInfo;
-    }
+    P2PInfo localP2pInfo() override;
     bool isConnected(P2pID const& nodeID) const override;
-    bool isReachable(P2pID const& _nodeID) const override { return isConnected(_nodeID); }
+    bool isReachable(P2pID const& _nodeID) const override;
 
-    std::shared_ptr<Host> host() override { return m_host; }
-    virtual void setHost(std::shared_ptr<Host> host) { m_host = std::move(host); }
+    std::shared_ptr<Host> host() override;
+    virtual void setHost(std::shared_ptr<Host> host);
 
-    std::shared_ptr<MessageFactory> messageFactory() override { return m_messageFactory; }
-    virtual void setMessageFactory(std::shared_ptr<MessageFactory> _messageFactory)
-    {
-        m_messageFactory = std::move(_messageFactory);
-    }
+    std::shared_ptr<MessageFactory> messageFactory() override;
+    virtual void setMessageFactory(std::shared_ptr<MessageFactory> _messageFactory);
 
-    std::shared_ptr<bcos::crypto::KeyFactory> keyFactory() { return m_keyFactory; }
+    std::shared_ptr<bcos::crypto::KeyFactory> keyFactory();
 
-    void setKeyFactory(std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory)
-    {
-        m_keyFactory = std::move(_keyFactory);
-    }
+    void setKeyFactory(std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory);
     void updateStaticNodes(std::shared_ptr<SocketFace> const& _s, P2pID const& nodeId);
 
-    void registerDisconnectHandler(std::function<void(NetworkException, P2PSession::Ptr)> _handler)
-    {
-        m_disconnectionHandlers.push_back(std::move(_handler));
-    }
+    void registerDisconnectHandler(std::function<void(NetworkException, P2PSession::Ptr)> _handler);
 
-
-    std::shared_ptr<P2PSession> getP2PSessionByNodeId(P2pID const& _nodeID) const override
-    {
-        bcos::ReadGuard l(x_sessions);
-        auto it = m_sessions.find(_nodeID);
-        if (it != m_sessions.end())
-        {
-            return it->second;
-        }
-        return nullptr;
-    }
+    std::shared_ptr<P2PSession> getP2PSessionByNodeId(P2pID const& _nodeID) const override;
 
     void asyncSendMessageByP2PNodeID(uint16_t _type, P2pID _dstNodeID, bytesConstRef _payload,
         Options options = Options(), P2PResponseCallback _callback = nullptr) override;
@@ -131,43 +93,28 @@ public:
     void asyncSendMessageByP2PNodeIDs(uint16_t _type, const std::vector<P2pID>& _nodeIDs,
         bytesConstRef _payload, Options _options) override;
 
-    bool registerHandlerByMsgType(uint16_t _type, MessageHandler const& _msgHandler) override
-    {
-        if (m_msgHandlers.at(_type))
-        {
-            return false;
-        }
+    bool registerHandlerByMsgType(uint16_t _type, MessageHandler const& _msgHandler) override;
 
-        m_msgHandlers.at(_type) = _msgHandler;
-        return true;
-    }
+    MessageHandler getMessageHandlerByMsgType(uint16_t _type);
 
-    MessageHandler getMessageHandlerByMsgType(uint16_t _type) { return m_msgHandlers.at(_type); }
-
-    void eraseHandlerByMsgType(uint16_t _type) override { m_msgHandlers.at(_type) = nullptr; }
+    void eraseHandlerByMsgType(uint16_t _type) override;
 
     void asyncSendMessageByEndPoint(NodeIPEndpoint const& _endPoint, P2PMessage::Ptr message,
         CallbackFuncWithSession callback, Options options = Options());
 
     void setBeforeMessageHandler(
-        std::function<std::optional<bcos::Error>(SessionFace&, Message&)> _handler)
-    {
-        m_beforeMessageHandler = std::move(_handler);
-    }
+        std::function<std::optional<bcos::Error>(SessionFace&, Message&)> _handler);
 
     void setOnMessageHandler(
-        std::function<std::optional<bcos::Error>(SessionFace::Ptr, Message::Ptr)> _handler)
-    {
-        m_onMessageHandler = std::move(_handler);
-    }
+        std::function<std::optional<bcos::Error>(SessionFace::Ptr, Message::Ptr)> _handler);
 
     void updatePeerBlacklist(const std::set<std::string>& _strList, const bool _enable) override;
     void updatePeerWhitelist(const std::set<std::string>& _strList, const bool _enable) override;
 
-    virtual std::string getShortP2pID(std::string const& rawP2pID) const { return rawP2pID; }
-    virtual std::string getRawP2pID(std::string const& shortP2pID) const { return shortP2pID; }
+    virtual std::string getShortP2pID(std::string const& rawP2pID) const;
+    virtual std::string getRawP2pID(std::string const& shortP2pID) const;
 
-    virtual void resetP2pID(P2PMessage&, bcos::protocol::ProtocolVersion const&) {}
+    virtual void resetP2pID(P2PMessage&, bcos::protocol::ProtocolVersion const&);
 
 protected:
     virtual void sendMessageToSession(P2PSession::Ptr _p2pSession, P2PMessage::Ptr _msg,
@@ -182,72 +129,29 @@ protected:
         NetworkException _error, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message);
 
     // handlers called when new-session
-    void registerOnNewSession(std::function<void(P2PSession::Ptr)> _handler)
-    {
-        m_newSessionHandlers.emplace_back(_handler);
-    }
+    void registerOnNewSession(std::function<void(P2PSession::Ptr)> _handler);
     // handlers called when delete-session
-    void registerOnDeleteSession(std::function<void(P2PSession::Ptr)> _handler)
-    {
-        m_deleteSessionHandlers.emplace_back(_handler);
-    }
+    void registerOnDeleteSession(std::function<void(P2PSession::Ptr)> _handler);
 
-
-    virtual void callNewSessionHandlers(P2PSession::Ptr _session)
-    {
-        try
-        {
-            for (auto const& handler : m_newSessionHandlers)
-            {
-                handler(_session);
-            }
-        }
-        catch (std::exception const& e)
-        {
-            SERVICE_LOG(WARNING) << LOG_DESC("callNewSessionHandlers exception")
-                                 << LOG_KV("msg", boost::diagnostic_information(e));
-        }
-    }
-    virtual void callDeleteSessionHandlers(P2PSession::Ptr _session)
-    {
-        try
-        {
-            for (auto const& handler : m_deleteSessionHandlers)
-            {
-                handler(_session);
-            }
-        }
-        catch (std::exception const& e)
-        {
-            SERVICE_LOG(WARNING) << LOG_DESC("callDeleteSessionHandlers exception")
-                                 << LOG_KV("msg", boost::diagnostic_information(e));
-        }
-    }
+    virtual void callNewSessionHandlers(const P2PSession::Ptr& _session);
+    virtual void callDeleteSessionHandlers(const P2PSession::Ptr& _session);
 
     friend class ServiceV2;
 
     using SessionsType = std::map<std::string, P2PSession::Ptr>;
-    virtual SessionsType copySessions() const
-    {
-        bcos::ReadGuard l(x_sessions);
-        return m_sessions;
-    }
-
-protected:
     std::vector<std::function<void(NetworkException, P2PSession::Ptr)>> m_disconnectionHandlers;
 
     std::shared_ptr<bcos::crypto::KeyFactory> m_keyFactory;
 
     std::map<NodeIPEndpoint, P2pID> m_staticNodes;
-    bcos::RecursiveMutex x_nodes;
+    std::shared_mutex x_nodes;
     std::shared_ptr<Host> m_host;
 
     // long p2pID to session
     SessionsType m_sessions;
-    mutable bcos::SharedMutex x_sessions;
+    mutable std::shared_mutex x_sessions;
 
     std::shared_ptr<MessageFactory> m_messageFactory;
-
     P2PInfo m_selfInfo;
     P2pID m_nodeID;
     std::optional<boost::asio::deadline_timer> m_timer;
@@ -265,9 +169,7 @@ protected:
     std::vector<std::function<void(P2PSession::Ptr)>> m_deleteSessionHandlers;
 
     std::function<std::optional<bcos::Error>(SessionFace&, Message&)> m_beforeMessageHandler;
-
     std::function<std::optional<bcos::Error>(SessionFace::Ptr, Message::Ptr)> m_onMessageHandler;
-    // bcos::LogLevel m_connectionLogLevel = bcos::LogLevel::WARNING;
 };
 
 }  // namespace bcos::gateway

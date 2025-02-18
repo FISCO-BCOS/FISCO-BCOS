@@ -18,7 +18,6 @@
  * @date 2022-5-24
  */
 #include "ServiceV2.h"
-
 #include "Common.h"
 #include "P2PMessageV2.h"
 #include "bcos-utilities/BoostLog.h"
@@ -27,10 +26,17 @@
 using namespace bcos;
 using namespace bcos::gateway;
 
+static bool isRawP2pID(std::string const& p2pID)
+{
+    return p2pID.size() > HASH_NODEID_MAX_SIZE;
+}
+
 ServiceV2::ServiceV2(P2PInfo const& _p2pInfo, RouterTableFactory::Ptr _routerTableFactory)
   : Service(_p2pInfo),
+    m_routerTimer(3000, "routerSeqSync"),
     m_routerTableFactory(std::move(_routerTableFactory)),
     m_routerTable(m_routerTableFactory->createRouterTable())
+
 {
     updateP2pInfo(m_selfInfo);
     m_routerTable->setNodeID(m_nodeID);
@@ -49,25 +55,19 @@ ServiceV2::ServiceV2(P2PInfo const& _p2pInfo, RouterTableFactory::Ptr _routerTab
             boost::placeholders::_2, boost::placeholders::_3));
     registerOnNewSession([this](P2PSession::Ptr _session) { onNewSession(_session); });
     registerOnDeleteSession([this](P2PSession::Ptr _session) { onEraseSession(_session); });
-    m_routerTimer = std::make_shared<bcos::Timer>(3000, "routerSeqSync");
-    m_routerTimer->registerTimeoutHandler([this]() { broadcastRouterSeq(); });
+
+    m_routerTimer.registerTimeoutHandler([this]() { broadcastRouterSeq(); });
 }
 
 void ServiceV2::start()
 {
     Service::start();
-    if (m_routerTimer)
-    {
-        m_routerTimer->start();
-    }
+    m_routerTimer.start();
 }
 
 void ServiceV2::stop()
 {
-    if (m_routerTimer)
-    {
-        m_routerTimer->stop();
-    }
+    m_routerTimer.stop();
     Service::stop();
 }
 
@@ -160,7 +160,7 @@ void ServiceV2::onReceiveRouterTableRequest(
 
 void ServiceV2::broadcastRouterSeq()
 {
-    m_routerTimer->restart();
+    m_routerTimer.restart();
     auto message = std::static_pointer_cast<P2PMessage>(m_messageFactory->buildMessage());
     message->setPacketType(GatewayMessageType::RouterTableSyncSeq);
     auto seq = m_statusSeq.load();
@@ -415,8 +415,6 @@ void ServiceV2::sendRespMessageBySession(
     // TODO: reduce memory copy
     respMessage->setPayload({_payload.begin(), _payload.end()});
 
-    // asyncSendMessageByNodeID(respMessage->dstP2PNodeID(), respMessage, nullptr);
-
     // Note: send response directly with the original session
     sendMessageToSession(_p2pSession, respMessage);
 
@@ -467,4 +465,120 @@ bcos::task::Task<Message::Ptr> bcos::gateway::ServiceV2::sendMessageByNodeID(
     }
     co_return co_await Service::sendMessageByNodeID(
         std::move(nextHop), message, std::move(payloads), options);
+}
+
+void bcos::gateway::ServiceV2::registerUnreachableHandler(std::function<void(std::string)> _handler)
+{
+    WriteGuard writeGuard(x_unreachableHandlers);
+    m_unreachableHandlers.emplace_back(_handler);
+}
+
+std::string bcos::gateway::ServiceV2::getShortP2pID(std::string const& rawP2pID) const
+{
+    if (rawP2pID.empty())
+    {
+        return rawP2pID;
+    }
+    // already the short p2pId
+    if (!isRawP2pID(rawP2pID))
+    {
+        return rawP2pID;
+    }
+    bcos::ReadGuard lock(x_rawP2pIDInfo);
+    if (auto it = m_rawP2pIDInfo.find(rawP2pID); it != m_rawP2pIDInfo.end())
+    {
+        return it->second;
+    }
+    // note: in the case of running old node with the new node, the shortP2pID maybe not found
+    SERVICE2_LOG(TRACE) << LOG_DESC("getShortP2pID failed, return rawP2pID directly")
+                        << LOG_KV("id", printShortP2pID(rawP2pID));
+    return rawP2pID;
+}
+
+std::string bcos::gateway::ServiceV2::getRawP2pID(std::string const& shortP2pID) const
+{
+    if (shortP2pID.empty())
+    {
+        return shortP2pID;
+    }
+    // the old node case
+    if (isRawP2pID(shortP2pID))
+    {
+        return shortP2pID;
+    }
+    bcos::ReadGuard lock(x_p2pIDInfo);
+    if (auto it = m_p2pIDInfo.find(shortP2pID); it != m_p2pIDInfo.end())
+    {
+        return it->second;
+    }
+    SERVICE2_LOG(WARNING) << LOG_DESC("getRawP2pID failed, return shortP2pID directly")
+                          << LOG_KV("id", printShortP2pID(shortP2pID));
+    return shortP2pID;
+}
+
+void bcos::gateway::ServiceV2::resetP2pID(
+    P2PMessage& message, bcos::protocol::ProtocolVersion const& version)
+{
+    // old node case, set to long nodeID
+    if (version < protocol::ProtocolVersion::V3) [[unlikely]]
+    {
+        message.setSrcP2PNodeID(getRawP2pID(message.srcP2PNodeID()));
+        message.setDstP2PNodeID(getRawP2pID(message.dstP2PNodeID()));
+        return;
+    }
+    // new ndoe case, set to short nodeID
+    message.setSrcP2PNodeID(getShortP2pID(message.srcP2PNodeID()));
+    message.setDstP2PNodeID(getShortP2pID(message.dstP2PNodeID()));
+}
+
+void bcos::gateway::ServiceV2::onP2PNodesUnreachable(std::set<std::string> const& _p2pNodeIDs)
+{
+    std::vector<std::function<void(std::string)>> handlers;
+    {
+        ReadGuard readGuard(x_unreachableHandlers);
+        handlers = m_unreachableHandlers;
+    }
+    // TODO: async here
+    for (auto const& node : _p2pNodeIDs)
+    {
+        for (auto const& it : m_unreachableHandlers)
+        {
+            it(node);
+        }
+    }
+}
+
+void bcos::gateway::ServiceV2::updateP2pInfo(P2PInfo const& p2pInfo)
+{
+    SERVICE2_LOG(INFO) << LOG_DESC("try to updateP2pInfo")
+                       << LOG_KV("p2pID", printShortP2pID(p2pInfo.p2pID))
+                       << LOG_KV("rawP2pID", printShortP2pID(p2pInfo.rawP2pID));
+    if (p2pInfo.rawP2pID.empty() || p2pInfo.p2pID.empty())
+    {
+        return;
+    }
+    tryToUpdateRawP2pInfo(p2pInfo);
+    tryToUpdateP2pInfo(p2pInfo);
+}
+
+void bcos::gateway::ServiceV2::tryToUpdateRawP2pInfo(P2PInfo const& p2pInfo)
+{
+    bcos::UpgradableGuard lock(x_rawP2pIDInfo);
+    auto it = m_rawP2pIDInfo.find(p2pInfo.rawP2pID);
+    if (it != m_rawP2pIDInfo.end())
+    {
+        return;
+    }
+    m_rawP2pIDInfo.insert(std::make_pair(p2pInfo.rawP2pID, p2pInfo.p2pID));
+}
+
+void bcos::gateway::ServiceV2::tryToUpdateP2pInfo(P2PInfo const& p2pInfo)
+{
+    bcos::UpgradableGuard lock(x_p2pIDInfo);
+    auto it = m_p2pIDInfo.find(p2pInfo.p2pID);
+    if (it != m_p2pIDInfo.end())
+    {
+        return;
+    }
+    m_p2pIDInfo.insert(std::make_pair(p2pInfo.p2pID, p2pInfo.rawP2pID));
 }
