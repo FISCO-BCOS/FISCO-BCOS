@@ -73,7 +73,13 @@ public:
         m_handle = task.m_handle;
         task.m_handle = nullptr;
     }
-    ~Task() noexcept = default;
+    ~Task() noexcept
+    {
+        if (m_handle)
+        {
+            m_handle.destroy();
+        }
+    }
     void start() { m_handle.resume(); }
 
 private:

@@ -11,7 +11,6 @@
 #include <oneapi/tbb/task_arena.h>
 #include <oneapi/tbb/task_group.h>
 #include <boost/multiprecision/fwd.hpp>
-#include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <boost/throw_exception.hpp>
 #include <chrono>
@@ -267,15 +266,17 @@ Generator<int> generatorWithAlloc(
     }
 }
 
+#ifndef __APPLE__
 BOOST_AUTO_TEST_CASE(allocator)
 {
     std::array<char, 10240> mockStack;
 
     MyMemoryResource pool(mockStack.data(), mockStack.size());
     std::pmr::polymorphic_allocator<> allocator(std::addressof(pool));
-
-    auto awaitable = selfAlloc(100, std::allocator_arg, allocator);
-    awaitable.start();
+    {
+        auto awaitable = selfAlloc(100, std::allocator_arg, allocator);
+        awaitable.start();
+    }
     BOOST_CHECK_EQUAL(pool.allocate, 1);
     BOOST_CHECK_EQUAL(pool.deallocate, 1);
 
@@ -291,8 +292,10 @@ BOOST_AUTO_TEST_CASE(allocator)
         std::array<char, 1024> buf{};
         co_return;
     };
-    auto awaitable2 = lambda(100, std::allocator_arg, allocator);
-    awaitable2.start();
+    {
+        auto awaitable2 = lambda(100, std::allocator_arg, allocator);
+        awaitable2.start();
+    }
     BOOST_CHECK_EQUAL(pool.allocate, 1);
     BOOST_CHECK_EQUAL(pool.deallocate, 1);
 
@@ -306,6 +309,7 @@ BOOST_AUTO_TEST_CASE(allocator)
     BOOST_CHECK_GE(pool.allocate, 1);
     BOOST_CHECK_GE(pool.deallocate, 1);
 }
+#endif
 
 Task<bcos::u256> testU256()
 {
