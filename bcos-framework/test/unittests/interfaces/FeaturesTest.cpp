@@ -151,6 +151,8 @@ BOOST_AUTO_TEST_CASE(feature)
         "bugfix_delete_account_code",
         "bugfix_policy1_empty_code_address",
         "bugfix_precompiled_gasused",
+        "bugfix_nonce_not_increase_when_revert",
+        "bugfix_set_contract_nonce_when_create",
         "feature_dmc2serial",
         "feature_sharding",
         "feature_rpbft",

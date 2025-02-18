@@ -41,7 +41,7 @@ namespace test
 inline auto fakeTransaction(CryptoSuite::Ptr _cryptoSuite, KeyPairInterface::Ptr _keyPair,
     const std::string_view& _to, bytes const& _input, std::string const& _nonce,
     int64_t _blockLimit, std::string const& _chainId, std::string const& _groupId,
-    std::string const& _abi = "")
+    std::string const& _abi = "", const uint _type = 0, const uint64_t value = 0)
 {
     bcostars::Transaction transaction;
     transaction.data.to = _to;
@@ -51,6 +51,8 @@ inline auto fakeTransaction(CryptoSuite::Ptr _cryptoSuite, KeyPairInterface::Ptr
     transaction.data.chainID = _chainId;
     transaction.data.groupID = _groupId;
     transaction.data.abi = _abi;
+    transaction.data.value = std::to_string(value);
+    transaction.type = _type;
     auto pbTransaction = std::make_shared<bcostars::protocol::TransactionImpl>(
         [m_transaction = std::move(transaction)]() mutable { return &m_transaction; });
     // set signature

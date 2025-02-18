@@ -174,6 +174,15 @@ private:
             std::move(nonceEntry));
     }
 
+    friend task::Task<void> tag_invoke(tag_t<increaseNonce>, EVMAccount& account)
+    {
+        if (auto nonce = co_await ::bcos::ledger::account::nonce(account))
+        {
+            const auto newNonce = u256(nonce.value()) + 1;
+            co_await ::bcos::ledger::account::setNonce(account, newNonce.convert_to<std::string>());
+        }
+    }
+
     friend task::Task<evmc_bytes32> tag_invoke(
         tag_t<storage> /*unused*/, EVMAccount& account, const evmc_bytes32& key)
     {

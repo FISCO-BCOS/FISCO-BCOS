@@ -611,6 +611,8 @@ void DownloadingQueue::commitBlockState(bcos::protocol::Block::Ptr _block)
                               << LOG_KV("commitBlockTimeCost", (utcTime() - startT))
                               << LOG_KV("node", downloadingQueue->m_config->nodeID()->shortHex())
                               << LOG_KV("txsSize", _block->transactionsSize())
+                              << LOG_KV("highestNumber",
+                                     downloadingQueue->m_config->knownHighestNumber())
                               << LOG_KV("sealer", blockHeader->sealer());
         }
         catch (std::exception const& e)

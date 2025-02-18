@@ -239,6 +239,8 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
         }
     }
 
+    request->transactionType = m_callParameters->transactionType;
+
     if (request->create && features().get(ledger::Features::Flag::feature_evm_address)) [[unlikely]]
     {
         // account must exist
