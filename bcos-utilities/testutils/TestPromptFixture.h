@@ -95,6 +95,6 @@ public:
     // init test-suite fixture
     TestPromptFixture() { TestPrompt::get().initTest(); }
     // release test-suite fixture
-    ~TestPromptFixture() { TestPrompt::get().finishTest(); }
+    virtual ~TestPromptFixture() { TestPrompt::get().finishTest(); }
 };
 }  // namespace bcos::test

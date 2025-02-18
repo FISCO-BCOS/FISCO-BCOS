@@ -16,9 +16,9 @@ inline constexpr struct Exists
 
 inline constexpr struct Create
 {
-    auto operator()(auto& account,
-        auto&&... args) const -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(*this,
-                                  account, std::forward<decltype(args)>(args)...))>>
+    auto operator()(auto& account, auto&&... args) const
+        -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(
+            *this, account, std::forward<decltype(args)>(args)...))>>
     {
         co_return co_await tag_invoke(*this, account, std::forward<decltype(args)>(args)...);
     }
@@ -26,9 +26,9 @@ inline constexpr struct Create
 
 inline constexpr struct Code
 {
-    auto operator()(auto& account,
-        auto&&... args) const -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(*this,
-                                  account, std::forward<decltype(args)>(args)...))>>
+    auto operator()(auto& account, auto&&... args) const
+        -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(
+            *this, account, std::forward<decltype(args)>(args)...))>>
     {
         co_return co_await tag_invoke(*this, account, std::forward<decltype(args)>(args)...);
     }
@@ -45,9 +45,9 @@ inline constexpr struct SetCode
 
 inline constexpr struct CodeHash
 {
-    auto operator()(auto& account,
-        auto&&... args) const -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(*this,
-                                  account, std::forward<decltype(args)>(args)...))>>
+    auto operator()(auto& account, auto&&... args) const
+        -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(
+            *this, account, std::forward<decltype(args)>(args)...))>>
     {
         co_return co_await tag_invoke(*this, account, std::forward<decltype(args)>(args)...);
     }
@@ -55,9 +55,9 @@ inline constexpr struct CodeHash
 
 inline constexpr struct ABI
 {
-    auto operator()(auto& account,
-        auto&&... args) const -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(*this,
-                                  account, std::forward<decltype(args)>(args)...))>>
+    auto operator()(auto& account, auto&&... args) const
+        -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(
+            *this, account, std::forward<decltype(args)>(args)...))>>
     {
         co_return co_await tag_invoke(*this, account, std::forward<decltype(args)>(args)...);
     }
@@ -74,9 +74,9 @@ inline constexpr struct SetABI
 
 inline constexpr struct Balance
 {
-    auto operator()(auto& account,
-        auto&&... args) const -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(*this,
-                                  account, std::forward<decltype(args)>(args)...))>>
+    auto operator()(auto& account, auto&&... args) const
+        -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(
+            *this, account, std::forward<decltype(args)>(args)...))>>
     {
         co_return co_await tag_invoke(*this, account, std::forward<decltype(args)>(args)...);
     }
@@ -108,6 +108,14 @@ inline constexpr struct SetNonce
     }
 } setNonce{};
 
+inline constexpr struct IncreaseNonce
+{
+    task::Task<void> operator()(auto& account, auto&&... args) const
+    {
+        co_await tag_invoke(*this, account, std::forward<decltype(args)>(args)...);
+    }
+} increaseNonce{};
+
 inline constexpr struct Storage
 {
     auto operator()(auto& account, auto&& key, auto&&... args) const
@@ -133,9 +141,9 @@ inline constexpr struct SetStorage
 
 inline constexpr struct Path
 {
-    auto operator()(auto& account,
-        auto&&... args) const -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(*this,
-                                  account, std::forward<decltype(args)>(args)...))>>
+    auto operator()(auto& account, auto&&... args) const
+        -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(
+            *this, account, std::forward<decltype(args)>(args)...))>>
     {
         co_return co_await tag_invoke(*this, account, std::forward<decltype(args)>(args)...);
     }

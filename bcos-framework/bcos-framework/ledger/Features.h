@@ -44,6 +44,8 @@ public:
         bugfix_delete_account_code,
         bugfix_policy1_empty_code_address,
         bugfix_precompiled_gasused,
+        bugfix_nonce_not_increase_when_revert,
+        bugfix_set_contract_nonce_when_create,
         feature_dmc2serial,
         feature_sharding,
         feature_rpbft,
@@ -242,10 +244,23 @@ public:
                         Flag::bugfix_eoa_match_failed,
                     }},
             {.to = protocol::BlockVersion::V3_12_0_VERSION,
-                .flags = {Flag::bugfix_rpbft_vrf_blocknumber_input}},
+                .flags =
+                    {
+                        Flag::bugfix_rpbft_vrf_blocknumber_input,
+                    }},
             {.to = protocol::BlockVersion::V3_13_0_VERSION,
-                .flags = {Flag::bugfix_delete_account_code, Flag::bugfix_policy1_empty_code_address,
-                    Flag::bugfix_precompiled_gasused}},
+                .flags =
+                    {
+                        Flag::bugfix_delete_account_code,
+                        Flag::bugfix_policy1_empty_code_address,
+                        Flag::bugfix_precompiled_gasused,
+                    }},
+            {.to = protocol::BlockVersion::V3_14_0_VERSION,
+                .flags =
+                    {
+                        Flag::bugfix_nonce_not_increase_when_revert,
+                        Flag::bugfix_set_contract_nonce_when_create,
+                    }},
         });
         for (const auto& upgradeFeatures : upgradeRoadmap)
         {
