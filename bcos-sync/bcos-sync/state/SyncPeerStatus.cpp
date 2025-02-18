@@ -132,9 +132,7 @@ bool SyncPeerStatus::updatePeerStatus(
     {
         // create and insert the new peer status
         peerStatus = std::make_shared<PeerStatus>(m_config, _peer, _peerStatus);
-        {
-            m_peersStatus.insert({_peer, peerStatus});
-        }
+        m_peersStatus.insert({_peer, peerStatus});
         BLKSYNC_LOG(DEBUG) << LOG_DESC("updatePeerStatus: new peer")
                            << LOG_KV("peer", _peer->shortHex())
                            << LOG_KV("number", _peerStatus->number())

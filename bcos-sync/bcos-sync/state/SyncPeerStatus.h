@@ -22,7 +22,6 @@
 #include "bcos-sync/BlockSyncConfig.h"
 #include "bcos-sync/interfaces/BlockSyncStatusInterface.h"
 #include "bcos-sync/state/DownloadRequestQueue.h"
-#include "bcos-sync/utilities/Common.h"
 #include <tbb/concurrent_hash_map.h>
 #include <utility>
 namespace bcos::sync

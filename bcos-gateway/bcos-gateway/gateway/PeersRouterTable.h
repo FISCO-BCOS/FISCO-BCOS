@@ -95,6 +95,7 @@ private:
 
     GatewayStatusFactory::Ptr m_gatewayStatusFactory;
     // uuid => gatewayInfo
+    // TODO: check thread safe
     tbb::concurrent_hash_map<std::string, GatewayStatus::Ptr> m_gatewayInfos;
 };
 }  // namespace bcos::gateway
