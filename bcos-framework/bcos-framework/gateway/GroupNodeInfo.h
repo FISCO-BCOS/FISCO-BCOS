@@ -18,21 +18,19 @@
  * @date 2022-3-8
  */
 #pragma once
-#include "bcos-crypto/interfaces/crypto/KeyInterface.h"
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-framework/protocol/ProtocolInfo.h>
 #include <memory>
 #include <vector>
-namespace bcos
-{
-namespace gateway
+
+namespace bcos::gateway
 {
 class GroupNodeInfo
 {
 public:
     using Ptr = std::shared_ptr<GroupNodeInfo>;
     GroupNodeInfo() = default;
-    virtual ~GroupNodeInfo() {}
+    virtual ~GroupNodeInfo() = default;
     // the groupID
     virtual void setGroupID(std::string const& _groupID) = 0;
     // the nodeIDList
@@ -54,5 +52,4 @@ public:
     virtual std::vector<bcos::protocol::ProtocolInfo::ConstPtr> const& nodeProtocolList() const = 0;
     virtual bcos::protocol::ProtocolInfo::ConstPtr protocol(uint64_t _index) const = 0;
 };
-}  // namespace gateway
-}  // namespace bcos
+}  // namespace bcos::gateway
