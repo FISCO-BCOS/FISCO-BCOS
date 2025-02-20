@@ -18,13 +18,13 @@
  * @date 2022-5-24
  */
 #pragma once
+#include "bcos-framework/gateway/GatewayTypeDef.h"
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <memory>
 #include <set>
-namespace bcos
-{
-namespace gateway
+
+namespace bcos::gateway
 {
 class RouterTableEntryInterface
 {
@@ -99,5 +99,4 @@ public:
     virtual RouterTableEntryInterface::Ptr createRouterEntry() = 0;
 };
 
-}  // namespace gateway
-}  // namespace bcos
+}  // namespace bcos::gateway

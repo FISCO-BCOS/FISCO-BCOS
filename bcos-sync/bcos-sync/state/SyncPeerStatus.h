@@ -22,9 +22,10 @@
 #include "bcos-sync/BlockSyncConfig.h"
 #include "bcos-sync/interfaces/BlockSyncStatusInterface.h"
 #include "bcos-sync/state/DownloadRequestQueue.h"
-#include "bcos-sync/utilities/Common.h"
 #include <tbb/concurrent_hash_map.h>
+#include <shared_mutex>
 #include <utility>
+
 namespace bcos::sync
 {
 class PeerStatus
@@ -112,12 +113,8 @@ protected:
     virtual void updateKnownMaxBlockInfo(BlockSyncStatusInterface::ConstPtr _peerStatus);
 
 private:
-    // TODO: please make sure thread-safe, fix the thread-safe problem when deletePeer
-    tbb::concurrent_hash_map<bcos::crypto::PublicPtr, PeerStatus::Ptr, bcos::crypto::KeyHasher>
-        m_peersStatus;
-    //    std::map<bcos::crypto::PublicPtr, PeerStatus::Ptr, bcos::crypto::KeyCompare>
-    //    m_peersStatus;
-    //    mutable std::mutex x_peersStatus;
+    std::map<bcos::crypto::PublicPtr, PeerStatus::Ptr, bcos::crypto::KeyCompare> m_peersStatus;
+    mutable std::shared_mutex x_peersStatus;
 
     BlockSyncConfig::Ptr m_config;
 };
