@@ -314,7 +314,8 @@ void Host::obtainNodeInfo(P2PInfo& info, std::string const& node_info)
     }
 
     HOST_LOG(INFO) << "obtainP2pInfo " << LOG_KV("node_info", node_info)
-                   << LOG_KV("p2pid", printShortP2pID(info.p2pID));
+                   << LOG_KV("p2pid", printShortP2pID(info.p2pID))
+                   << LOG_KV("rawP2pID", printShortP2pID(info.rawP2pID));
 }
 
 /**

@@ -33,7 +33,7 @@ static bool isRawP2pID(std::string const& p2pID)
 
 ServiceV2::ServiceV2(P2PInfo const& _p2pInfo, RouterTableFactory::Ptr _routerTableFactory)
   : Service(_p2pInfo),
-    m_routerTimer(3000, "routerSeqSync"),
+    m_routerTimer(std::make_shared<Timer>(3000, "routerSeqSync")),
     m_routerTableFactory(std::move(_routerTableFactory)),
     m_routerTable(m_routerTableFactory->createRouterTable())
 
@@ -56,18 +56,18 @@ ServiceV2::ServiceV2(P2PInfo const& _p2pInfo, RouterTableFactory::Ptr _routerTab
     registerOnNewSession([this](P2PSession::Ptr _session) { onNewSession(_session); });
     registerOnDeleteSession([this](P2PSession::Ptr _session) { onEraseSession(_session); });
 
-    m_routerTimer.registerTimeoutHandler([this]() { broadcastRouterSeq(); });
+    m_routerTimer->registerTimeoutHandler([this]() { broadcastRouterSeq(); });
 }
 
 void ServiceV2::start()
 {
     Service::start();
-    m_routerTimer.start();
+    m_routerTimer->start();
 }
 
 void ServiceV2::stop()
 {
-    m_routerTimer.stop();
+    m_routerTimer->stop();
     Service::stop();
 }
 
@@ -160,7 +160,7 @@ void ServiceV2::onReceiveRouterTableRequest(
 
 void ServiceV2::broadcastRouterSeq()
 {
-    m_routerTimer.restart();
+    m_routerTimer->restart();
     auto message = std::static_pointer_cast<P2PMessage>(m_messageFactory->buildMessage());
     message->setPacketType(GatewayMessageType::RouterTableSyncSeq);
     auto seq = m_statusSeq.load();
