@@ -23,7 +23,9 @@
 #include "bcos-sync/interfaces/BlockSyncStatusInterface.h"
 #include "bcos-sync/state/DownloadRequestQueue.h"
 #include <tbb/concurrent_hash_map.h>
+#include <shared_mutex>
 #include <utility>
+
 namespace bcos::sync
 {
 class PeerStatus

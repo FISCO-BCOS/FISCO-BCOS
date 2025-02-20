@@ -18,16 +18,13 @@
  * @date 2022-5-24
  */
 #pragma once
-#pragma GCC diagnostic ignored "-Wunused-variable"
-#pragma GCC diagnostic ignored "-Wunused-parameter"
 
 #include "RouterTableInterface.h"
 #include <bcos-tars-protocol/tars/RouterTable.h>
 #include <memory>
 
-namespace bcos
-{
-namespace gateway
+
+namespace bcos::gateway
 {
 class RouterTableEntry : public RouterTableEntryInterface
 {
@@ -79,18 +76,14 @@ public:
     }
 
     // the short p2p id
-    P2PInfo dstNodeInfo() const override
-    {
-        return P2PInfo(m_inner()->dstNodeInfo.p2pID, dstNode());
-    }
+    P2PInfo dstNodeInfo() const override { return {m_inner()->dstNodeInfo.p2pID, dstNode()}; }
 
 private:
-    void assignNodeIDInfo(bcostars::NodeIDInfo& nodeIDInfo, P2PInfo const& routerNodeID)
+    static void assignNodeIDInfo(bcostars::NodeIDInfo& nodeIDInfo, P2PInfo const& routerNodeID)
     {
         nodeIDInfo.p2pID = routerNodeID.p2pID;
     }
 
-private:
     std::function<bcostars::RouterTableEntry*()> m_inner;
 };
 
@@ -163,5 +156,4 @@ public:
     }
 };
 
-}  // namespace gateway
-}  // namespace bcos
+}  // namespace bcos::gateway
