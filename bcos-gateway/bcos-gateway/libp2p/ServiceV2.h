@@ -92,7 +92,8 @@ protected:
 
 private:
     // for message forward
-    bcos::Timer m_routerTimer;
+    // Note: must use ptr here, for the timer uses enable_shared_from_this
+    std::shared_ptr<bcos::Timer> m_routerTimer;
     std::atomic<uint32_t> m_statusSeq{1};
 
     RouterTableFactory::Ptr m_routerTableFactory;

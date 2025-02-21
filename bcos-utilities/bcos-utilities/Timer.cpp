@@ -69,8 +69,10 @@ void Timer::start()
     }
     catch (std::exception const& e)
     {
-        BCOS_LOG(WARNING) << LOG_DESC("startTimer exception")
+        BCOS_LOG(WARNING) << LOG_DESC("startTimer exception") << LOG_KV("threadName", m_threadName)
                           << LOG_KV("message", boost::diagnostic_information(e));
+        // Note: should exit when timer start failed
+        throw e;
     }
 }
 
