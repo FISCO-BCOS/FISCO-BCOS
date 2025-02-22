@@ -40,7 +40,8 @@ Session::Session(
     m_server(server),
     m_socket(std::move(socket)),
     m_idleCheckTimer(
-        std::make_shared<Timer>(m_socket->ioService(), m_idleTimeInterval, "idleChecker"))
+        std::make_shared<Timer>(m_socket->ioService(), m_idleTimeInterval, "idleChecker")),
+    m_writings(std::make_shared<Writings>())
 {
     SESSION_LOG(INFO) << "[Session::Session] this=" << this
                       << LOG_KV("recvBufferSize", m_maxRecvBufferSize);
@@ -118,7 +119,7 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
     {
         if (callback && result.has_value())
         {
-            auto error = result.value();
+            const auto& error = result.value();
             auto errorCode = error.errorCode();
             auto errorMessage = error.errorMessage();
             m_server.get().asyncTo([callback = std::move(callback), errorCode,
@@ -277,34 +278,33 @@ void Session::write()
 
     try
     {
-        bool writing = false;
-        if (!m_writing.compare_exchange_strong(writing, true))
+        if (m_writing.test_and_set())
         {
             return;
         }
-        std::unique_ptr<std::atomic_bool, decltype([](std::atomic_bool* ptr) { *ptr = false; })>
+        std::unique_ptr<boost::atomic_flag, decltype([](boost::atomic_flag* ptr) { ptr->clear(); })>
             defer(std::addressof(m_writing));
 
-        if (!tryPopSomeEncodedMsgs(m_writingPayloads, m_maxSendDataSize, m_maxSendMsgCountS))
+        if (!tryPopSomeEncodedMsgs(m_writings->payloads, m_maxSendDataSize, m_maxSendMsgCountS))
         {
             return;
         }
 
-        boost::container::small_vector<boost::asio::const_buffer, 16> buffers;
-        auto outputIt = std::back_inserter(buffers);
-        for (auto& payload : m_writingPayloads)
+        auto outputIt = std::back_inserter(m_writings->buffers);
+        for (auto& payload : m_writings->payloads)
         {
             payload.toConstBuffer(outputIt);
         }
         defer.release();  // NOLINT
-        m_server.get().asioInterface()->asyncWrite(m_socket, buffers,
-            [self = std::weak_ptr<Session>(shared_from_this())](
+        m_server.get().asioInterface()->asyncWrite(m_socket, m_writings->buffers,
+            [self = std::weak_ptr<Session>(shared_from_this()), writings = m_writings](
                 const boost::system::error_code _error, std::size_t _size) mutable {
                 if (auto session = self.lock())
                 {
                     std::vector<Payload> payloads;
-                    payloads.swap(session->m_writingPayloads);
-                    session->m_writing = false;
+                    payloads.swap(session->m_writings->payloads);
+                    session->m_writings->buffers.clear();
+                    session->m_writing.clear();
                     session->onWrite(_error, _size);
 
                     for (auto& payload : payloads)

@@ -7,7 +7,7 @@ std::pmr::memory_resource*& bcos::task::pmr::MemoryResourceBase::getAllocator(
     std::span view(static_cast<std::pmr::memory_resource**>(ptr),
         std::max(size, sizeof(std::pmr::memory_resource*)) / sizeof(std::pmr::memory_resource*) +
             1);
-    return view.back();
+    return view.front();
 }
 
 void* bcos::task::pmr::MemoryResourceBase::operator new(size_t size)

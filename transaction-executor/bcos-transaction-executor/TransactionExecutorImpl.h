@@ -35,6 +35,10 @@ public:
     crypto::Hash::Ptr m_hashImpl;
     std::reference_wrapper<PrecompiledManager> m_precompiledManager;
 
+    using TransientStorage =
+        bcos::storage2::memory_storage::MemoryStorage<bcos::transaction_executor::StateKey,
+            bcos::transaction_executor::StateValue, bcos::storage2::memory_storage::ORDERED>;
+
     template <class Storage>
     struct ExecuteContext
     {
@@ -46,9 +50,7 @@ public:
 
         Rollbackable<Storage> m_rollbackableStorage;
         Rollbackable<Storage>::Savepoint m_startSavepoint;
-        bcos::storage2::memory_storage::MemoryStorage<bcos::transaction_executor::StateKey,
-            bcos::transaction_executor::StateValue, bcos::storage2::memory_storage::ORDERED>
-            m_transientStorage;
+        TransientStorage m_transientStorage;
         Rollbackable<decltype(m_transientStorage)> m_rollbackableTransientStorage;
 
         int64_t m_gasLimit;
@@ -178,21 +180,6 @@ public:
             else
             {
                 co_await ledger::account::setBalance(senderAccount, senderBalance - balanceUsed);
-            }
-        }
-
-        // 如果本次调用是eoa调用系统合约，将gasUsed设置为0
-        // If the call from eoa to system contract, the gasUsed is cleared to zero
-        if (!executeContext.m_ledgerConfig.get().features().get(
-                ledger::Features::Flag::bugfix_precompiled_gasused))
-        {
-            if (auto codeAddress = address2HexArray(evmcMessage.code_address);
-                precompiled::contains(bcos::precompiled::c_systemTxsAddress,
-                    concepts::bytebuffer::toView(codeAddress)) ||
-                std::string_view{codeAddress.data(), codeAddress.size()} ==
-                    precompiled::BALANCE_PRECOMPILED_ADDRESS)
-            {
-                gasUsed = 0;
             }
         }
 

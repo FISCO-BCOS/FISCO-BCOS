@@ -299,12 +299,8 @@ public:
     std::shared_ptr<SocketFace> m_socket;   ///< Socket of peer's connection.
 
     MessageFactory::Ptr m_messageFactory;
-
     tbb::concurrent_queue<Payload> m_writeQueue;
-    std::atomic_bool m_writing = false;
-
-    mutable bcos::Mutex x_info;
-
+    boost::atomic_flag m_writing;
     bool m_active = false;
 
     SessionCallbackManagerInterface::Ptr m_sessionCallbackManager;
@@ -321,13 +317,18 @@ public:
     std::shared_ptr<bcos::Timer> m_idleCheckTimer;
     P2PInfo m_hostInfo;
 
-    std::vector<Payload> m_writingPayloads;
+    struct Writings
+    {
+        std::vector<Payload> payloads;
+        std::vector<boost::asio::const_buffer> buffers;
+    };
+    std::shared_ptr<Writings> m_writings;
 };
 
 class SessionFactory
 {
 public:
-    SessionFactory(P2PInfo const& _hostInfo, uint32_t _sessionRecvBufferSize,  // NOLINT
+    SessionFactory(P2PInfo _hostInfo, uint32_t _sessionRecvBufferSize,  // NOLINT
         uint32_t _allowMaxMsgSize, uint32_t _maxReadDataSize, uint32_t _maxSendDataSize,
         uint32_t _maxSendMsgCountS, bool _enableCompress)
       : m_hostInfo(std::move(_hostInfo)),
