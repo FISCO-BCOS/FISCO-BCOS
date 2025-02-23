@@ -118,24 +118,5 @@ public:
         auto txGasLimit = txGasLimitFuture.get_future().get();
         return txGasLimit;
     }
-
-    evmc_uint256be chainId()
-    {
-        if (m_chainID)
-        {
-            return *m_chainID;
-        }
-
-        if (auto value = task::syncWait(
-                ledger::getSystemConfig(*m_ledger, ledger::SYSTEM_KEY_WEB3_CHAIN_ID)))
-        {
-            auto numChainID = boost::lexical_cast<u256>(std::get<0>(*value));
-            m_chainID.emplace(bcos::toEvmC(numChainID));
-            EXECUTOR_LOG(INFO) << LOG_DESC("fetchChainId success") << LOG_KV("chainId", numChainID);
-            return *m_chainID;
-        }
-
-        return {};
-    }
 };
 }  // namespace bcos::executor

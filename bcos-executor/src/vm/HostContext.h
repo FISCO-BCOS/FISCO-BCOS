@@ -24,22 +24,20 @@
 #include "../Common.h"
 #include "../executive/BlockContext.h"
 #include "../executive/TransactionExecutive.h"
-#include "bcos-framework/protocol/BlockHeader.h"
+#include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/protocol/Protocol.h"
+#include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-framework/storage/Table.h"
+#include "bcos-framework/transaction-executor/StateKey.h"
+#include "bcos-ledger/LedgerMethods.h"
 #include <bcos-framework/ledger/LedgerTypeDef.h>
-#include <bcos-framework/protocol/Protocol.h>
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
 #include <evmc/instructions.h>
-#include <atomic>
-#include <functional>
-#include <map>
 #include <memory>
 
-namespace bcos
-{
-namespace executor
+
+namespace bcos::executor
 {
 class TransactionExecutive;
 
@@ -60,7 +58,6 @@ public:
     HostContext& operator=(HostContext&&) = delete;
 
     std::string get(const std::string_view& _key);
-
     void set(const std::string_view& _key, std::string _value);
 
     /// Read storage location.
@@ -108,13 +105,24 @@ public:
             // FISCO BCOS only has tx Gas limit. We use it as block gas limit
             return m_executive->blockContext().txGasLimit();
         }
-        else
-        {
-            return 3000000000;
-        }
+
+        return 3000000000;
     }
 
-    evmc_uint256be chainId() const { return m_executive->blockContext().ledgerCache()->chainId(); }
+    evmc_uint256be chainId() const
+    {
+        if (auto value =
+                task::syncWait(ledger::getSystemConfig(*m_executive->storage().getRawStorage(),
+                    ledger::SYSTEM_KEY_WEB3_CHAIN_ID, ledger::fromStorage)))
+        {
+            auto numChainID = boost::lexical_cast<u256>(std::get<0>(*value));
+            auto chainID = bcos::toEvmC(numChainID);
+            EXECUTOR_LOG(TRACE) << LOG_DESC("fetchChainId success")
+                                << LOG_KV("chainId", numChainID);
+            return chainID;
+        }
+        return {};
+    }
 
     /// Revert any changes made (by any of the other calls).
     void log(h256s&& _topics, bytesConstRef _data);
@@ -128,7 +136,7 @@ public:
 
     bytes_view data() const
     {
-        return bytes_view(m_callParameters->data.data(), m_callParameters->data.size());
+        return {m_callParameters->data.data(), m_callParameters->data.size()};
     }
     virtual std::optional<storage::Entry> code();
     virtual h256 codeHash();
@@ -207,5 +215,4 @@ private:
     std::list<CallParameters::UniquePtr> m_responseStore;
 };
 
-}  // namespace executor
-}  // namespace bcos
+}  // namespace bcos::executor
