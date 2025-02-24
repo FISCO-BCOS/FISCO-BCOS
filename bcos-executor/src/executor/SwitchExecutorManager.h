@@ -255,25 +255,26 @@ public:
             inputsVec->emplace_back(std::move(inputs[i]));
         }
         auto queryTime = utcTime();
-        m_pool.enqueue([queryTime, executor = m_executor, contractAddress = std::move(contractAddress),
-                           inputsVec, callback = std::move(callback)] {
-            auto waitInPoolCost = utcTime() - queryTime;
-            // create a holder
-            auto _holdExecutorCallback =
-                [queryTime, waitInPoolCost ,executorHolder = executor, callback = std::move(callback)](
-                    bcos::Error::UniquePtr error,
-                    std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs) {
-                    EXECUTOR_LOG(TRACE) << "Release executor holder executeTransactions"
-                                        << LOG_KV("ptr count", executorHolder.use_count())
-                            << LOG_KV("waitInPoolCost", waitInPoolCost)
-                            << LOG_KV("costFromQuery", utcTime() - queryTime);
-                    callback(std::move(error), std::move(outputs));
-                };
+        m_pool.enqueue(
+            [queryTime, executor = m_executor, contractAddress = std::move(contractAddress),
+                inputsVec, callback = std::move(callback)] {
+                auto waitInPoolCost = utcTime() - queryTime;
+                // create a holder
+                auto _holdExecutorCallback =
+                    [queryTime, waitInPoolCost, executorHolder = executor,
+                        callback = std::move(callback)](bcos::Error::UniquePtr error,
+                        std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs) {
+                        EXECUTOR_LOG(TRACE) << "Release executor holder executeTransactions"
+                                            << LOG_KV("ptr count", executorHolder.use_count())
+                                            << LOG_KV("waitInPoolCost", waitInPoolCost)
+                                            << LOG_KV("costFromQuery", utcTime() - queryTime);
+                        callback(std::move(error), std::move(outputs));
+                    };
 
-            // execute the function
-            executor->executeTransactions(
-                contractAddress, *inputsVec, std::move(_holdExecutorCallback));
-        });
+                // execute the function
+                executor->executeTransactions(
+                    contractAddress, *inputsVec, std::move(_holdExecutorCallback));
+            });
     }
 
     void preExecuteTransactions(int64_t schedulerTermId,
@@ -683,6 +684,18 @@ public:
             // execute the function
             executor->getABI(contract, std::move(_holdExecutorCallback));
         });
+    }
+
+    void updateEoaNonce(std::unordered_map<std::string, u256> const& nonceMap) override
+    {
+        if (hasStopped())
+        {
+            std::string message = "updateEoaNonce: executor has been stopped";
+            EXECUTOR_LOG(DEBUG) << message;
+            return;
+        }
+
+        getAndNewExecutorIfNotExists()->updateEoaNonce(std::move(nonceMap));
     }
 
     void stop() override

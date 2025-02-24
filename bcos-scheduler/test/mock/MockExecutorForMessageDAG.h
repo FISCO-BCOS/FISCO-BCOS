@@ -153,6 +153,8 @@ public:
     {
         callback(nullptr, {});
     }
+
+    void updateEoaNonce(std::unordered_map<std::string, u256> const&) override {}
     void clear() { m_dagHashes.clear(); }
 
     std::string m_name;
