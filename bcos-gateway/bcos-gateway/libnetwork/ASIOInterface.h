@@ -102,22 +102,21 @@ public:
         if (socket->isConnected())
         {
             auto& ioService = socket->ioService();
-            ioService.post(
-                [type, socket = socket, buffers, handler = std::move(handler)]() mutable {
-                    switch (type)
-                    {
-                    case TCP_ONLY:
-                    {
-                        ba::async_write(socket->ref(), buffers, std::move(handler));
-                        break;
-                    }
-                    case SSL:
-                    {
-                        ba::async_write(socket->sslref(), buffers, std::move(handler));
-                        break;
-                    }
-                    }
-                });
+            ioService.post([type, socket, &buffers, handler = std::move(handler)]() mutable {
+                switch (type)
+                {
+                case TCP_ONLY:
+                {
+                    ba::async_write(socket->ref(), buffers, std::move(handler));
+                    break;
+                }
+                case SSL:
+                {
+                    ba::async_write(socket->sslref(), buffers, std::move(handler));
+                    break;
+                }
+                }
+            });
         }
     }
 
