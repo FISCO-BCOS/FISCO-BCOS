@@ -147,6 +147,11 @@ bcos::protocol::ExecutionMessage::UniquePtr BlockExecutive::buildMessage(
             message->setTo(preprocessAddress(tx->to()));
         }
     }
+    if (m_scheduler->ledgerConfig().features().get(
+            ledger::Features::Flag::bugfix_nonce_not_increase_when_revert))
+    {
+        message->setNonce(std::string(tx->nonce()));
+    }
     message->setDepth(0);
     message->setGasAvailable(m_gasLimit);
     auto toAddress = tx->to();
@@ -691,7 +696,27 @@ void BlockExecutive::asyncNotify(
 void BlockExecutive::saveMessage(
     std::string address, protocol::ExecutionMessage::UniquePtr message, bool withDAG)
 {
+    updateWeb3NonceMap(message);
     registerAndGetDmcExecutor(std::move(address))->submit(std::move(message), withDAG);
+}
+
+void BlockExecutive::updateWeb3NonceMap(protocol::ExecutionMessage::UniquePtr const& msg)
+{
+    if (msg->txType() != protocol::TransactionType::BCOSTransaction)
+    {
+        if (c_fileLogLevel == TRACE)
+        {
+            SCHEDULER_LOG(TRACE) << METRIC << LOG_DESC("fillNonceMap")
+                                 << LOG_KV("sender", msg->from()) << LOG_KV("nonce", msg->nonce());
+        }
+
+        auto const nonce = hex2u(msg->nonce());
+        auto [it, inserted] = m_web3NonceMap.try_emplace(std::string(msg->from()), nonce);
+        if (!inserted && it->second < nonce)
+        {
+            it->second = nonce;
+        }
+    }
 }
 
 void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
@@ -1027,7 +1052,23 @@ void BlockExecutive::onDmcExecuteFinish(
                       << LOG_KV("checksum", dmcChecksum);
     }
 
+    updateMultiExecutorsNonce();
     onExecuteFinish(std::move(callback));
+}
+
+void BlockExecutive::updateMultiExecutorsNonce()
+{
+    std::unordered_map<std::string, std::unordered_map<std::string, u256>> executorUpdateMap = {};
+    for (auto&& [sender, nonce] : m_web3NonceMap)
+    {
+        auto const info = m_scheduler->m_executorManager->getExecutorInfo(sender);
+        executorUpdateMap[info->name][sender] = nonce;
+    }
+    for (auto&& [name, map] : executorUpdateMap)
+    {
+        m_scheduler->m_executorManager->getExecutorInfoByName(name)->executor->updateEoaNonce(
+            std::move(map));
+    }
 }
 
 void BlockExecutive::onExecuteFinish(

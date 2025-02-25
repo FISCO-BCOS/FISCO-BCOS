@@ -160,7 +160,7 @@ public:
     void preExecuteTransactions(int64_t schedulerTermId,
         const bcos::protocol::BlockHeader::ConstPtr& blockHeader, std::string contractAddress,
         gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
-        std::function<void(bcos::Error::UniquePtr)> callback) override{};
+        std::function<void(bcos::Error::UniquePtr)> callback) override {};
 
     void dagExecuteTransactions(gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
         std::function<void(
@@ -235,6 +235,7 @@ public:
     }
     void reset(std::function<void(bcos::Error::Ptr)> callback) override { callback(nullptr); }
 
+    void updateEoaNonce(std::unordered_map<std::string, u256> const&) override {}
 
     std::string m_name;
     bcos::protocol::BlockNumber m_blockNumber = 0;

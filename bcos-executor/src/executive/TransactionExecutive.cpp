@@ -77,32 +77,7 @@ CallParameters::UniquePtr TransactionExecutive::start(CallParameters::UniquePtr 
 
     auto& callParameters = input;
 
-    bool updateEoaNonce = !callParameters->staticCall && callParameters->seq == 0 &&
-                          callParameters->transactionType != TransactionType::BCOSTransaction &&
-                          callParameters->origin == callParameters->senderAddress &&
-                          m_blockContext.features().get(
-                              ledger::Features::Flag::bugfix_nonce_not_increase_when_revert);
-    auto origin = callParameters->origin;
-    auto nonce = callParameters->nonce;
-
     auto message = execute(std::move(callParameters));
-
-    if (updateEoaNonce)
-    {
-        // only increase the nonce of EOA
-        ledger::account::EVMAccount address(*m_blockContext.storage(), std::move(origin),
-            m_blockContext.features().get(ledger::Features::Flag::feature_raw_address));
-        task::wait([](decltype(address) addr, u256 callNonce) -> task::Task<void> {
-            if (!co_await ledger::account::exists(addr))
-            {
-                co_await ledger::account::create(addr);
-            }
-            auto const nonceInStorage = co_await ledger::account::nonce(addr);
-            auto const storageNonce = u256(nonceInStorage.value_or("0"));
-            auto const newNonce = std::max(callNonce, storageNonce) + 1;
-            co_await ledger::account::setNonce(addr, newNonce.convert_to<std::string>());
-        }(std::move(address), nonce));
-    }
 
     message->contextID = contextID();
     message->seq = seq();

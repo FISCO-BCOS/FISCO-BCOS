@@ -37,6 +37,7 @@ void SerialBlockExecutive::prepare()
                                  << LOG_KV("block number", m_block->blockHeaderConst()->number());
         }
         m_transactions.resize(txSize);
+        m_web3NonceMap.clear();
 
         if (m_executor == nullptr)
         {
@@ -196,6 +197,7 @@ void SerialBlockExecutive::serialExecute(
             }
         }
 
+        updateWeb3NonceMap(tx);
         SERIAL_EXECUTE_LOG(DEBUG) << BLOCK_NUMBER(number()) << "0.Send:\t >>>> ["
                                   << m_executorInfo->name << "]: " << tx->toString();
     }
@@ -285,5 +287,6 @@ void SerialBlockExecutive::onExecuteFinish(
                                   << LOG_KV("receiptsSize", m_executiveResults.size())
                                   << LOG_KV("blockNumber", number());
     }
+    m_executor->updateEoaNonce(m_web3NonceMap);
     BlockExecutive::onExecuteFinish(std::move(callback));
 }

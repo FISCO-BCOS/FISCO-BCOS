@@ -66,6 +66,14 @@ public:
         auto result = executePromise.get_future().get();
 
         BOOST_CHECK_EQUAL(result->status(), 0);
+
+        if (type != TransactionType::BCOSTransaction)
+        {
+            std::unordered_map<std::string, u256> eoaNonceMap;
+            eoaNonceMap[sender.hex()] = nonce;
+            executor->updateEoaNonce(std::move(eoaNonceMap));
+        }
+
         commitBlock(blockNumber);
 
         auto const nonceOfEoa = task::syncWait(bcos::ledger::account::nonce(eoa));
@@ -74,7 +82,6 @@ public:
         auto const nonceOfContract = task::syncWait(bcos::ledger::account::nonce(contractAddress));
         if (type == TransactionType::BCOSTransaction)
         {
-            BOOST_CHECK_EQUAL(nonceOfEoa.has_value(), false);
             BOOST_CHECK_EQUAL(nonceOfContract.has_value(), true);
             BOOST_CHECK_EQUAL(nonceOfContract.value(), "1");
         }
@@ -128,6 +135,13 @@ public:
         auto result = executePromise.get_future().get();
 
         BOOST_CHECK_EQUAL(result->status(), 0);
+
+        if (type != TransactionType::BCOSTransaction)
+        {
+            std::unordered_map<std::string, u256> eoaNonceMap;
+            eoaNonceMap[sender.hex()] = nonce;
+            executor->updateEoaNonce(std::move(eoaNonceMap));
+        }
         commitBlock(blockNumber);
 
         auto const nonceOfEoa = task::syncWait(bcos::ledger::account::nonce(eoa));
@@ -188,6 +202,13 @@ public:
         auto result = executePromise.get_future().get();
 
         BOOST_CHECK_EQUAL(result->status(), 16);
+
+        if (type != TransactionType::BCOSTransaction)
+        {
+            std::unordered_map<std::string, u256> eoaNonceMap;
+            eoaNonceMap[sender.hex()] = nonce;
+            executor->updateEoaNonce(std::move(eoaNonceMap));
+        }
         commitBlock(blockNumber);
 
         auto const nonceOfEoa = task::syncWait(bcos::ledger::account::nonce(eoa));
@@ -208,7 +229,6 @@ public:
 
     auto transfer(uint blockNumber, TransactionType type, std::string toAddress,
         uint64_t initBalance, uint64_t transferValue, uint64_t initNonce)
-
     {
         nextBlock(blockNumber, protocol::BlockVersion::MAX_VERSION, web3Features);
         auto nonce = initNonce;
@@ -249,6 +269,13 @@ public:
 
         auto result = executePromise.get_future().get();
 
+        if (type != TransactionType::BCOSTransaction)
+        {
+            std::unordered_map<std::string, u256> eoaNonceMap;
+            eoaNonceMap[sender] = nonce;
+            executor->updateEoaNonce(std::move(eoaNonceMap));
+        }
+
         commitBlock(blockNumber);
 
         auto const nonceOfEoa = task::syncWait(bcos::ledger::account::nonce(eoa));
@@ -266,6 +293,66 @@ public:
         }
 
         return result;
+    }
+
+    auto rawNewHelloWorld(uint blockNumber, TransactionType type, std::string contractAddress,
+        RANGES::input_range auto nonces)
+    {
+        auto const sender = keyPair->address(hashImpl);
+        bcos::ledger::account::EVMAccount eoa(*storage, sender.hex(), false);
+        task::syncWait(bcos::ledger::account::create(eoa));
+        task::syncWait(bcos::ledger::account::setBalance(eoa, u256(1000000000000000ULL)));
+
+        for (auto it = nonces.begin(); it != nonces.end(); ++it)
+        {
+            auto nonce = *it;
+            bytes in = codec->encodeWithSig("newHello()");
+            auto tx = fakeTransaction(
+                cryptoSuite, keyPair, "", in, std::to_string(nonce), 100001, "1", "1", "");
+            auto hash = tx->hash();
+            txpool->hash2Transaction[hash] = tx;
+
+
+            auto params = std::make_unique<NativeExecutionMessage>();
+            params->setNonce(toQuantity(nonce));
+            params->setTransactionHash(hash);
+            params->setContextID(blockNumber);
+            params->setSeq(RANGES::distance(RANGES::begin(nonces), it));
+            params->setDepth(0);
+            params->setFrom(sender.hex());
+            params->setTo(contractAddress);
+            params->setOrigin(sender.hex());
+            params->setStaticCall(false);
+            params->setGasAvailable(gas);
+            params->setCreate(false);
+            params->setData(std::move(in));
+            params->setType(NativeExecutionMessage::TXHASH);
+            params->setTxType(static_cast<uint>(type));
+
+            std::promise<ExecutionMessage::UniquePtr> executePromise;
+            executor->executeTransaction(std::move(params), [&](auto&& error, auto&& result) {
+                BOOST_CHECK(!error);
+                executePromise.set_value(std::move(result));
+            });
+
+            auto result = executePromise.get_future().get();
+
+            BOOST_CHECK_EQUAL(result->status(), 0);
+        }
+
+        if (type != TransactionType::BCOSTransaction)
+        {
+            std::unordered_map<std::string, u256> eoaNonceMap;
+            for (auto nonce : nonces)
+            {
+                auto [it, inserted] = eoaNonceMap.try_emplace(sender.hex(), nonce);
+                if (!inserted && it->second < nonce)
+                {
+                    it->second = nonce;
+                }
+            }
+            executor->updateEoaNonce(std::move(eoaNonceMap));
+        }
     }
 
     Features web3Features{};
@@ -309,7 +396,6 @@ BOOST_AUTO_TEST_CASE(testNonceInRevertContract)
     newRevertHello(blockNumber++, TransactionType::Web3Transaction, address, 3);
 }
 
-
 BOOST_AUTO_TEST_CASE(testNonceInTransfer)
 {
     uint64_t blockNumber = 1;
@@ -324,6 +410,24 @@ BOOST_AUTO_TEST_CASE(testNonceInTransfer)
     result = transfer(
         blockNumber++, TransactionType::Web3Transaction, "0x1234567890", 10000000UL, 10000000UL, 0);
     BOOST_CHECK_EQUAL(result->status(), 0);
+}
+
+BOOST_AUTO_TEST_CASE(testMultiNonce)
+{
+    uint64_t blockNumber = 1;
+    auto const address = deployTestContract(blockNumber++, TransactionType::Web3Transaction);
+    auto newBlock = blockNumber++;
+    nextBlock(newBlock, protocol::BlockVersion::MAX_VERSION, web3Features);
+    // [10000, 10020)
+    rawNewHelloWorld(
+        newBlock, TransactionType::Web3Transaction, address, RANGES::views::iota(10000, 10020));
+    commitBlock(newBlock);
+
+    auto const sender = keyPair->address(hashImpl);
+    bcos::ledger::account::EVMAccount eoa(*storage, sender.hex(), false);
+    auto const nonceOfEoa = task::syncWait(bcos::ledger::account::nonce(eoa));
+
+    BOOST_CHECK_EQUAL(nonceOfEoa.value(), "10020");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

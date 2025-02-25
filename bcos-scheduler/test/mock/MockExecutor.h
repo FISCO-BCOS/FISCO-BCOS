@@ -181,6 +181,8 @@ public:
     }
     void reset(std::function<void(bcos::Error::Ptr)> callback) override {}
 
+    void updateEoaNonce(std::unordered_map<std::string, u256> const&) override {}
+
     void clear() { m_dagHashes.clear(); }
 
     std::string m_name;

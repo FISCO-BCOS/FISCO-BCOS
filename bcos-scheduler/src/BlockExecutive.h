@@ -164,9 +164,12 @@ protected:
     bcos::protocol::ConstTransactionsPtr fetchBlockTxsFromTxPool(
         bcos::protocol::Block::Ptr block, bcos::txpool::TxPoolInterface::Ptr txPool);
     std::string preprocessAddress(const std::string_view& address);
+    void updateMultiExecutorsNonce();
+    void updateWeb3NonceMap(protocol::ExecutionMessage::UniquePtr const& msg);
 
     std::map<std::string, std::shared_ptr<DmcExecutor>, std::less<>> m_dmcExecutors;
     std::shared_ptr<DmcStepRecorder> m_dmcRecorder;
+    std::unordered_map<std::string, u256> m_web3NonceMap;
 
     std::vector<ExecutiveResult> m_executiveResults;
 
