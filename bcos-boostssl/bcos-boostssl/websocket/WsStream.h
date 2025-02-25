@@ -54,9 +54,7 @@ public:
     using Ptr = std::shared_ptr<WsStream>;
     using ConstPtr = std::shared_ptr<const WsStream>;
 
-    WsStream(
-        std::shared_ptr<boost::beast::websocket::stream<STREAM>> _stream)
-      : m_stream(_stream)
+    WsStream(std::shared_ptr<boost::beast::websocket::stream<STREAM>> _stream) : m_stream(_stream)
     {
         initDefaultOpt();
         WEBSOCKET_STREAM(INFO) << LOG_KV("[NEWOBJ][WsStream]", this);

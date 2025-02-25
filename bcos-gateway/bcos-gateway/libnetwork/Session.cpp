@@ -174,7 +174,8 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
                            << LOG_KV("packetType", message->packetType())
                            << LOG_KV("ext", message->ext())
                            << LOG_KV("src", printShortP2pID(message->srcP2PNodeID()))
-                           << LOG_KV("dst", printShortP2pID(message->dstP2PNodeID()));
+                           << LOG_KV("dst", printShortP2pID(message->dstP2PNodeID()))
+                           << LOG_KV("this", this);
     }
 
     send(encodedMessage);
@@ -440,6 +441,7 @@ void Session::disconnect(DisconnectReason _reason)
 
 void Session::start()
 {
+    SESSION_LOG(INFO) << "[Session::start] this=" << this;
     if (!m_active && m_server.get().haveNetwork())
     {
         m_active = true;
@@ -754,7 +756,7 @@ bcos::task::Task<Message::Ptr> bcos::gateway::Session::fastSendMessage(
         SESSION_LOG(TRACE) << LOG_DESC("Session fastSendMessage")
                            << LOG_KV("endpoint", nodeIPEndpoint()) << LOG_KV("seq", message.seq())
                            << LOG_KV("packetType", message.packetType())
-                           << LOG_KV("ext", message.ext());
+                           << LOG_KV("ext", message.ext()) << LOG_KV("this", this);
     }
     if (options.response)
     {

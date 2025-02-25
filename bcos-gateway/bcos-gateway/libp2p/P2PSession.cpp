@@ -33,6 +33,7 @@ P2PSession::~P2PSession()
 
 void P2PSession::start()
 {
+    P2PSESSION_LOG(INFO) << "[P2PSession::start] this=" << this;
     if (!m_run && m_session)
     {
         m_run = true;

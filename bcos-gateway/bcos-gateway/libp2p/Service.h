@@ -82,8 +82,11 @@ public:
 
     void registerDisconnectHandler(std::function<void(NetworkException, P2PSession::Ptr)> _handler);
 
-    std::shared_ptr<P2PSession> getP2PSessionByNodeId(P2pID const& _nodeID) const override;
-
+    std::shared_ptr<P2PSession> getP2PSessionByNodeId(P2pID const& _nodeID) const override
+    {
+        std::shared_lock lock(x_sessions);
+        return getP2PSessionByNodeIdWithoutLock(_nodeID);
+    }
     void asyncSendMessageByP2PNodeID(uint16_t _type, P2pID _dstNodeID, bytesConstRef _payload,
         Options options = Options(), P2PResponseCallback _callback = nullptr) override;
 
@@ -117,6 +120,7 @@ public:
     virtual void resetP2pID(P2PMessage&, bcos::protocol::ProtocolVersion const&);
 
 protected:
+    std::shared_ptr<P2PSession> getP2PSessionByNodeIdWithoutLock(P2pID const& _nodeID) const;
     virtual void sendMessageToSession(P2PSession::Ptr _p2pSession, P2PMessage::Ptr _msg,
         Options = Options(), CallbackFuncWithSession = CallbackFuncWithSession());
 

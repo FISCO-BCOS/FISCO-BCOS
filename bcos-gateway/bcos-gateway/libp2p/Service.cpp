@@ -192,7 +192,8 @@ void Service::onConnect(
     std::string peer = "unknown";
     if (session)
     {
-        peer = session->nodeIPEndpoint().address();
+        peer = session->nodeIPEndpoint().address() + ":" +
+               std::to_string(session->nodeIPEndpoint().port());
     }
     if (e.errorCode())
     {
@@ -232,10 +233,15 @@ void Service::onConnect(
         return onBeforeMessage(session, message);
     });
 
-    auto existedSession = getP2PSessionByNodeId(p2pID);
+    // Note: the lock must be here, otherwise there will be more than one started sessions,
+    // and a session not maintained in m_sessions will be choosed when send messages in some cases
+    // which will cause coredump
+    std::unique_lock lock(x_sessions);
+    auto existedSession = getP2PSessionByNodeIdWithoutLock(p2pID);
     if (existedSession && existedSession->active())
     {
-        SERVICE_LOG(INFO) << "Disconnect duplicate peer" << LOG_KV("p2pid", printShortP2pID(p2pID));
+        SERVICE_LOG(INFO) << "Disconnect duplicate peer" << LOG_KV("p2pid", printShortP2pID(p2pID))
+                          << LOG_KV("endpoint", peer);
         updateStaticNodes(session->socket(), p2pID);
         session->disconnect(DuplicatePeer);
         return;
@@ -244,7 +250,6 @@ void Service::onConnect(
     asyncSendProtocol(p2pSession);
     updateStaticNodes(session->socket(), p2pID);
 
-    std::unique_lock lock(x_sessions);
     if (existedSession)
     {
         m_sessions[p2pID] = p2pSession;
@@ -814,16 +819,18 @@ void bcos::gateway::Service::registerDisconnectHandler(
 {
     m_disconnectionHandlers.push_back(std::move(_handler));
 }
-std::shared_ptr<P2PSession> bcos::gateway::Service::getP2PSessionByNodeId(
+
+std::shared_ptr<P2PSession> bcos::gateway::Service::getP2PSessionByNodeIdWithoutLock(
     P2pID const& _nodeID) const
 {
-    std::shared_lock lock(x_sessions);
     if (auto it = m_sessions.find(_nodeID); it != m_sessions.end())
     {
         return it->second;
     }
     return nullptr;
 }
+
+
 bool bcos::gateway::Service::registerHandlerByMsgType(
     uint16_t _type, MessageHandler const& _msgHandler)
 {

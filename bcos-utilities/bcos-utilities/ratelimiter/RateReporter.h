@@ -107,7 +107,7 @@ public:
     {
         auto& stat = m_rateReporterStat;
         BCOS_LOG(INFO) << LOG_BADGE("RateReporter")
-                      << LOG_BADGE(m_moduleName)
+                       << LOG_BADGE(m_moduleName)
                        //    << LOG_KV("totalCount", stat.totalCount)
                        //    << LOG_KV("totalFailedCount", stat.totalFailedCount)
                        //    << LOG_KV("totalDataSize", stat.totalDataSize)
