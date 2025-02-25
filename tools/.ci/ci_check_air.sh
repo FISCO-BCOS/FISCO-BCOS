@@ -229,8 +229,6 @@ LOG_INFO "======== check sm case success ========"
 clear_node
 LOG_INFO "======== clear node after sm test success ========"
 
-# baseline暂时不支持balance precompiled，故不测试java_sdk_demo_ci_test
-# baseline does not support balance precompiled temporarily, so java_sdk_demo_ci_test is not tested
 LOG_INFO "======== check baseline cases ========"
 init_baseline ""
 expand_node ""
@@ -248,13 +246,13 @@ if [[ ${?} == "0" ]]; then
         echo "java_sdk_integrationTest error"
         exit 1
 fi
-# bash ${current_path}/.ci/java_sdk_demo_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
-# if [[ ${?} == "0" ]]; then
-#        LOG_INFO "java_sdk_demo_ci_test success"
-#    else
-#        echo "java_sdk_demo_ci_test error"
-#        exit 1
-# fi
+bash ${current_path}/.ci/java_sdk_demo_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
+if [[ ${?} == "0" ]]; then
+       LOG_INFO "java_sdk_demo_ci_test success"
+   else
+       echo "java_sdk_demo_ci_test error"
+       exit 1
+fi
 stop_node
 LOG_INFO "======== check baseline cases success ========"
 clear_node
