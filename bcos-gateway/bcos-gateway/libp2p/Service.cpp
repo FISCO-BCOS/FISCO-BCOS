@@ -263,6 +263,7 @@ void Service::onConnect(
     }
     SERVICE_LOG(INFO) << LOG_DESC("Connection established")
                       << LOG_KV("p2pid", printShortP2pID(p2pID))
+                      << LOG_KV("shortP2pid", printShortP2pID(p2pInfo.p2pID))
                       << LOG_KV("endpoint", session->nodeIPEndpoint());
 }
 
@@ -819,7 +820,6 @@ void bcos::gateway::Service::registerDisconnectHandler(
 {
     m_disconnectionHandlers.push_back(std::move(_handler));
 }
-
 std::shared_ptr<P2PSession> bcos::gateway::Service::getP2PSessionByNodeIdWithoutLock(
     P2pID const& _nodeID) const
 {
