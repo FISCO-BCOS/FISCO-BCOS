@@ -25,10 +25,16 @@
 
 #pragma once
 
+#include "bcos-concepts/ByteBuffer.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
+#include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/LogEntry.h"
+#include "bcos-framework/storage2/Storage.h"
+#include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-protocol/TransactionStatus.h"
+#include "bcos-task/Task.h"
 #include "bcos-utilities/Exceptions.h"
+#include <evmc/evmc.h>
 #include <evmc/instructions.h>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <algorithm>
@@ -48,6 +54,7 @@ namespace executor
 
 constexpr static evmc_address EMPTY_EVM_ADDRESS = {};
 constexpr static evmc_bytes32 EMPTY_EVM_BYTES32 = {};
+constexpr static evmc_uint256be EMPTY_EVM_UINT256 = {};
 using bytes_view = std::basic_string_view<uint8_t>;
 
 #define EXECUTOR_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTOR")
@@ -237,7 +244,7 @@ inline evmc_uint256be toEvmC(const u256& _n)
 {
     evmc_uint256be ret;
     auto gasPriceBytes = toBigEndian(_n);
-    std::uninitialized_copy(gasPriceBytes.begin(), gasPriceBytes.end(), ret.bytes);
+    ::ranges::copy(gasPriceBytes, ret.bytes);
     return ret;
 }
 
@@ -250,7 +257,7 @@ inline evmc_bytes32 toEvmC(h256 const& hash)
 {
     evmc_bytes32 evmBytes;
     static_assert(sizeof(evmBytes) == h256::SIZE, "Hash size mismatch!");
-    std::uninitialized_copy(hash.begin(), hash.end(), evmBytes.bytes);
+    ::ranges::copy(hash, evmBytes.bytes);
     return evmBytes;
 }
 /**
@@ -295,14 +302,14 @@ inline std::string getContractTableName(
     if (_address[0] == '/')
     {
         out.reserve(prefix.size() + _address.size() - 1);
-        std::copy(prefix.begin(), prefix.end(), std::back_inserter(out));
-        std::copy(_address.begin() + 1, _address.end(), std::back_inserter(out));
+        ::ranges::copy(prefix, std::back_inserter(out));
+        ::ranges::copy(::ranges::views::drop(_address, 1), std::back_inserter(out));
     }
     else
     {
         out.reserve(prefix.size() + _address.size());
-        std::copy(prefix.begin(), prefix.end(), std::back_inserter(out));
-        std::copy(_address.begin(), _address.end(), std::back_inserter(out));
+        ::ranges::copy(prefix, std::back_inserter(out));
+        ::ranges::copy(_address, std::back_inserter(out));
     }
 
     return out;
@@ -312,5 +319,22 @@ bytes getComponentBytes(size_t index, const std::string& typeName, const bytesCo
 evmc_address unhexAddress(std::string_view view);
 std::string addressBytesStr2HexString(std::string_view receiveAddressBytes);
 std::string address2HexString(const evmc_address& address);
-std::array<char, sizeof(evmc_address) * 2> address2FixedArray(const evmc_address& address);
+std::array<char, sizeof(evmc_address) * 2> address2HexArray(const evmc_address& address);
+
+task::Task<bool> checkTransferPermission(auto& storage, std::string_view sender)
+{
+    if (co_await storage2::existsOne(
+            storage, transaction_executor::StateKeyView{ledger::SYS_BALANCE_CALLER, sender}))
+    {
+        co_return true;
+    }
+    co_return false;
+}
+
+task::Task<bool> checkTransferPermission(auto& storage, evmc_address sender)
+{
+    auto hexAddress = address2HexArray(sender);
+    co_return co_await checkTransferPermission(storage, concepts::bytebuffer::toView(hexAddress));
+}
+
 }  // namespace bcos

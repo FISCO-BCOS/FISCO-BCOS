@@ -264,7 +264,7 @@ void PBFTEngine::onProposalApplySuccess(
     auto encodedData = m_config->codec()->encode(checkPointMsg);
     // only broadcast message to the consensus nodes
     m_config->frontService()->asyncSendBroadcastMessage(
-        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, ref(*encodedData));
+        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, bcos::ref(*encodedData));
     auto startT = utcTime();
     auto recordT = utcTime();
     // Note: must lock here to ensure thread safe
@@ -409,10 +409,15 @@ void PBFTEngine::onRecvProposal(bool _containSysTxs, const protocol::Block& prop
     auto encodeEnd = utcTime();
 
     // only broadcast pbft message to the consensus nodes
-    task::wait([](decltype(m_config) config, decltype(encodedData) encoded) -> task::Task<void> {
+
+    // TODO: check and fix broadcastMessage get stucked
+
+    /*task::wait([](decltype(m_config) config, decltype(encodedData) encoded) -> task::Task<void> {
         co_await config->frontService()->broadcastMessage(bcos::protocol::NodeType::CONSENSUS_NODE,
             ModuleID::PBFT, ::ranges::views::single(ref(std::as_const(*encoded))));
-    }(m_config, encodedData));
+    }(m_config, encodedData));*/
+    m_config->frontService()->asyncSendBroadcastMessage(
+        protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, bcos::ref(*encodedData));
     PBFT_LOG(INFO) << LOG_DESC("broadcast pre-prepare packet")
                    << LOG_KV("packetSize", encodedData->size())
                    << LOG_KV("index", pbftMessage->index())

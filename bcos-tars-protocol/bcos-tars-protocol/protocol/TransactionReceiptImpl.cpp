@@ -27,9 +27,7 @@
 using namespace bcostars;
 using namespace bcostars::protocol;
 
-struct EmptyReceiptHash : public bcos::error::Exception
-{
-};
+DERIVE_BCOS_EXCEPTION(EmptyReceiptHash);
 
 void TransactionReceiptImpl::decode(bcos::bytesConstRef _receiptData)
 {

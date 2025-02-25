@@ -349,6 +349,9 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
     {
         const SSL_METHOD* meth = SSLv23_server_method();
         ctx = SSL_CTX_new(meth);
+        SSL_CTX_set_cipher_list(ctx,
+            "ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES128-GCM-"
+            "SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECC-SM4-SM3:ECDHE-SM4-SM3");
     }
     else
     {
@@ -595,18 +598,11 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     auto nodeCert =
         (_config->smSSL() ? _config->smCertConfig().nodeCert : _config->certConfig().nodeCert);
     std::string pubHex;
-    auto verifyNoneMode = (_config->sslServerMode() & ba::ssl::verify_none) == 0 ||
-                          (_config->sslClientMode() & ba::ssl::verify_none) == 0;
-    if (!nodeCert && verifyNoneMode)
-    {
-        pubHex = h512::generateRandomFixedBytes().hex();
-    }
-    else if (!m_certPubHexHandler(*nodeCert, pubHex))
+    if (!nodeCert || !m_certPubHexHandler(*nodeCert, pubHex))
     {
         BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
                                   "GatewayFactory::init unable parse myself pub id"));
     }
-
     std::shared_ptr<ba::ssl::context> srvCtx =
         (_config->smSSL() ?
                 buildSSLContext(true, _config->sslServerMode(), _config->smCertConfig()) :
@@ -627,10 +623,12 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
 
     // Message Factory
     auto messageFactory = std::make_shared<P2PMessageFactoryV2>();
+    auto nodeIDHash = _config->calculateShortNodeID(pubHex);
+    P2PInfo selfInfo(nodeIDHash, pubHex);
     // Session Factory
-    auto sessionFactory = std::make_shared<SessionFactory>(pubHex, _config->sessionRecvBufferSize(),
-        _config->allowMaxMsgSize(), _config->maxReadDataSize(), _config->maxSendDataSize(),
-        _config->maxMsgCountSendOneTime(), _config->enableCompress());
+    auto sessionFactory = std::make_shared<SessionFactory>(selfInfo,
+        _config->sessionRecvBufferSize(), _config->allowMaxMsgSize(), _config->maxReadDataSize(),
+        _config->maxSendDataSize(), _config->maxMsgCountSendOneTime(), _config->enableCompress());
     // KeyFactory
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
     // Session Callback manager
@@ -644,25 +642,26 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
         std::make_shared<PeerWhitelist>(_config->peerWhitelist(), _config->enableWhitelist());
 
     // init Host
-    auto host = std::make_shared<Host>(asioInterface, sessionFactory, messageFactory);
+    auto host =
+        std::make_shared<Host>(_config->hashImpl(), asioInterface, sessionFactory, messageFactory);
     host->setHostPort(_config->listenIP(), _config->listenPort());
     host->setSSLContextPubHandler(m_sslContextPubHandler);
     host->setSSLContextPubHandlerWithoutExtInfo(m_sslContextPubHandlerWithoutExtInfo);
     host->setPeerBlacklist(peerBlacklist);
     host->setPeerWhitelist(peerWhitelist);
     host->setSessionCallbackManager(sessionCallbackManager);
-    host->setSslVerifyMode(_config->sslServerMode(), _config->sslClientMode());
+    host->setEnableSslVerify(_config->enableSSLVerify());
     // init Service
     bool enableRIPProtocol = _config->enableRIPProtocol();
     Service::Ptr service = nullptr;
     if (enableRIPProtocol)
     {
         auto routerTableFactory = std::make_shared<RouterTableFactoryImpl>();
-        service = std::make_shared<ServiceV2>(pubHex, routerTableFactory);
+        service = std::make_shared<ServiceV2>(selfInfo, routerTableFactory);
     }
     else
     {
-        service = std::make_shared<Service>(pubHex);
+        service = std::make_shared<Service>(selfInfo);
     }
 
     service->setHost(host);
@@ -678,7 +677,8 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     GATEWAY_FACTORY_LOG(INFO) << LOG_BADGE("buildService") << LOG_DESC("build service end")
                               << LOG_KV("enable rip protocol", _config->enableRIPProtocol())
                               << LOG_KV("enable compress", _config->enableCompress())
-                              << LOG_KV("myself pub id", pubHex);
+                              << LOG_KV("myself pub id", printShortP2pID(pubHex))
+                              << LOG_KV("myself_pub_id_hash", printShortP2pID(nodeIDHash));
     service->setMessageFactory(messageFactory);
     service->setKeyFactory(keyFactory);
     return service;
@@ -764,7 +764,11 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         // register disconnect handler
         service->registerDisconnectHandler(
             [gatewayNodeManagerWeakPtr](NetworkException e, P2PSession::Ptr p2pSession) {
-                (void)e;
+                if (e.errorCode() == P2PExceptionType::DuplicateSession ||
+                    e.errorCode() == P2PExceptionType::Success)
+                {
+                    return;
+                }
                 auto gatewayNodeManager = gatewayNodeManagerWeakPtr.lock();
                 if (gatewayNodeManager && p2pSession)
                 {
@@ -996,6 +1000,10 @@ bcos::amop::AMOPImpl::Ptr GatewayFactory::buildAMOP(
     auto topicManager = std::make_shared<TopicManager>(m_rpcServiceName, _network);
     auto amopMessageFactory = std::make_shared<AMOPMessageFactory>();
     auto requestFactory = std::make_shared<AMOPRequestFactory>();
+
+    auto service = std::dynamic_pointer_cast<Service>(_network);
+    registerAMOPHandlers(service, topicManager);
+
     return std::make_shared<AMOPImpl>(
         topicManager, amopMessageFactory, requestFactory, _network, _p2pNodeID);
 }
@@ -1007,6 +1015,40 @@ bcos::amop::AMOPImpl::Ptr GatewayFactory::buildLocalAMOP(
     auto topicManager = std::make_shared<LocalTopicManager>(m_rpcServiceName, _network);
     auto amopMessageFactory = std::make_shared<AMOPMessageFactory>();
     auto requestFactory = std::make_shared<AMOPRequestFactory>();
+
+    auto service = std::dynamic_pointer_cast<Service>(_network);
+    registerAMOPHandlers(service, topicManager);
+
     return std::make_shared<AMOPImpl>(
         topicManager, amopMessageFactory, requestFactory, _network, _p2pNodeID);
+}
+
+void GatewayFactory::registerAMOPHandlers(
+    std::shared_ptr<Service> const& service, TopicManager::Ptr const& topicManager)
+{
+    GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("registerAMOPHandlers");
+    auto weakTopicManager = std::weak_ptr<TopicManager>(topicManager);
+    // register disconnect handler
+    service->registerDisconnectHandler(
+        [weakTopicManager](NetworkException e, P2PSession::Ptr p2pSession) {
+            if (e.errorCode() == P2PExceptionType::DuplicateSession ||
+                e.errorCode() == P2PExceptionType::Success)
+            {
+                return;
+            }
+            auto topicMgr = weakTopicManager.lock();
+            if (topicMgr && p2pSession)
+            {
+                topicMgr->onDisconnect(p2pSession->p2pID());
+            }
+        });
+
+    service->registerUnreachableHandler([weakTopicManager](std::string const& _unreachableNode) {
+        auto topicMgr = weakTopicManager.lock();
+        if (!topicMgr)
+        {
+            return;
+        }
+        topicMgr->onDisconnect(_unreachableNode);
+    });
 }

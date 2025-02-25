@@ -62,9 +62,8 @@ public:
     // ===============================
 
     // sealer module call this method for seal a block
-    void asyncSealTxs(uint64_t _txsLimit, TxsHashSetPtr _avoidTxs,
-        std::function<void(Error::Ptr, bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr)>
-            _sealCallback) override;
+    std::tuple<bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr> sealTxs(
+        uint64_t _txsLimit, TxsHashSetPtr _avoidTxs) override;
 
     // hook for scheduler, invoke notify when block execute finished
     void asyncNotifyBlockResult(bcos::protocol::BlockNumber _blockNumber,
@@ -143,6 +142,12 @@ public:
     auto treeRouter() const { return m_treeRouter; }
 
     void setCheckBlockLimit(bool _checkBlockLimit) { m_checkBlockLimit = _checkBlockLimit; }
+
+    void registerTxsNotifier(
+        std::function<void(size_t, std::function<void(Error::Ptr)>)> _txsNotifier) override
+    {
+        m_txpoolStorage->registerTxsNotifier(_txsNotifier);
+    }
 
 protected:
     virtual bool checkExistsInGroup(bcos::protocol::TxSubmitCallback _txSubmitCallback);

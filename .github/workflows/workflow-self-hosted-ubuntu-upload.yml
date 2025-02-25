@@ -69,7 +69,7 @@ jobs:
 
       - name: update vcpkg
         run: |
-          cd ${{ env.VCPKG_ROOT }} && git fetch --all && git checkout master && git pull
+          cd ${{ env.VCPKG_ROOT }} && git fetch --all && git checkout master && git pull && ./bootstrap-vcpkg.sh
           cd -
 
       - name: Build for linux
@@ -77,7 +77,7 @@ jobs:
           export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
           cd build && cmake -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DTESTS=OFF -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=OFF -DTOOLS=OFF -DBUILD_STATIC=ON -DALLOCATOR=default .. || cat *.log
           make -j6
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: fisco-bcos.tar.gz
           path: build/fisco-bcos-air/fisco-bcos

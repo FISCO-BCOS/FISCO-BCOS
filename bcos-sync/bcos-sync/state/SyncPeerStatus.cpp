@@ -83,11 +83,10 @@ bool PeerStatus::update(BlockSyncStatusInterface::ConstPtr _status)
 
 PeerStatus::Ptr SyncPeerStatus::peerStatus(bcos::crypto::PublicPtr const& _peer) const
 {
-    tbb::concurrent_hash_map<PublicPtr, PeerStatus::Ptr, crypto::KeyHasher>::const_accessor
-        statusIt;
-    if (m_peersStatus.find(statusIt, _peer))
+    std::shared_lock lock(x_peersStatus);
+    if (auto it = m_peersStatus.find(_peer); it != m_peersStatus.end())
     {
-        return statusIt->second;
+        return it->second;
     }
     return nullptr;
 }
@@ -95,8 +94,9 @@ PeerStatus::Ptr SyncPeerStatus::peerStatus(bcos::crypto::PublicPtr const& _peer)
 PeerStatus::Ptr SyncPeerStatus::insertEmptyPeer(PublicPtr _peer)
 {
     // create and insert the new peer status
+    std::unique_lock lock(x_peersStatus);
     auto peerStatus = std::make_shared<PeerStatus>(m_config, _peer);
-    m_peersStatus.insert({_peer, peerStatus});
+    m_peersStatus.emplace(_peer, peerStatus);
     return peerStatus;
 }
 
@@ -132,9 +132,8 @@ bool SyncPeerStatus::updatePeerStatus(
     {
         // create and insert the new peer status
         peerStatus = std::make_shared<PeerStatus>(m_config, _peer, _peerStatus);
-        {
-            m_peersStatus.insert({_peer, peerStatus});
-        }
+        std::unique_lock lock(x_peersStatus);
+        m_peersStatus.emplace(_peer, peerStatus);
         BLKSYNC_LOG(DEBUG) << LOG_DESC("updatePeerStatus: new peer")
                            << LOG_KV("peer", _peer->shortHex())
                            << LOG_KV("number", _peerStatus->number())
@@ -162,25 +161,27 @@ void SyncPeerStatus::updateKnownMaxBlockInfo(BlockSyncStatusInterface::ConstPtr 
 
 void SyncPeerStatus::deletePeer(PublicPtr _peer)
 {
+    std::unique_lock lock(x_peersStatus);
     m_peersStatus.erase(_peer);
 }
 
 void SyncPeerStatus::foreachPeerRandom(std::function<bool(PeerStatus::Ptr)> const& _f) const
 {
     std::vector<PeerStatus::Ptr> peersStatusList{};
+    std::shared_lock lock(x_peersStatus);
+    if (m_peersStatus.empty())
     {
-        if (m_peersStatus.empty())
-        {
-            return;
-        }
-        peersStatusList.reserve(m_peersStatus.size());
-
-        // Get nodeid list
-        for (const auto& [_, peer] : m_peersStatus)
-        {
-            peersStatusList.emplace_back(peer);
-        }
+        return;
     }
+    peersStatusList.reserve(m_peersStatus.size());
+
+    // Get nodeid list
+    for (const auto& [_, peer] : m_peersStatus)
+    {
+        peersStatusList.emplace_back(peer);
+    }
+    lock.unlock();
+
     if (peersStatusList.empty()) [[unlikely]]
     {
         return;
@@ -209,6 +210,7 @@ void SyncPeerStatus::foreachPeerRandom(std::function<bool(PeerStatus::Ptr)> cons
 
 void SyncPeerStatus::foreachPeer(std::function<bool(PeerStatus::Ptr)> const& _f) const
 {
+    std::shared_lock lock(x_peersStatus);
     for (const auto& [_, peerStatus] : m_peersStatus)
     {
         if (peerStatus && !_f(peerStatus))
@@ -221,6 +223,8 @@ void SyncPeerStatus::foreachPeer(std::function<bool(PeerStatus::Ptr)> const& _f)
 std::shared_ptr<NodeIDs> SyncPeerStatus::peers()
 {
     auto nodeIds = std::make_shared<NodeIDs>();
+
+    std::shared_lock lock(x_peersStatus);
     nodeIds->reserve(m_peersStatus.size());
     for (auto& peer : m_peersStatus)
     {

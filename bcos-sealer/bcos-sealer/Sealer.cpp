@@ -22,15 +22,22 @@
 #include "VRFBasedSealer.h"
 #include "bcos-framework/ledger/Features.h"
 #include <bcos-framework/protocol/GlobalConfig.h>
+#include <chrono>
 #include <range/v3/view/transform.hpp>
 #include <utility>
 
 using namespace bcos;
 using namespace bcos::sealer;
 using namespace bcos::protocol;
-namespace bcos::sealer
+
+bcos::sealer::Sealer::Sealer(SealerConfig::Ptr _sealerConfig)
+  : Worker("Sealer", 0),
+    m_sealerConfig(std::move(_sealerConfig)),
+    m_lastFetchTimepoint(std::chrono::steady_clock::now())
 {
-class VRFBasedSealer;
+    m_sealingManager = std::make_shared<SealingManager>(m_sealerConfig);
+    m_sealingManager->onReady([this]() { noteGenerateProposal(); });
+    m_hashImpl = m_sealerConfig->blockFactory()->cryptoSuite()->hashImpl();
 }
 
 void Sealer::start()
@@ -97,7 +104,23 @@ void Sealer::asyncNoteLatestBlockHash(crypto::HashType _hash)
 void Sealer::executeWorker()
 {
     // try to fetch transactions
-    m_sealingManager->fetchTransactions();
+    if (m_sealingManager->fetchTransactions() == SealingManager::FetchResult::NO_TRANSACTION)
+    {
+        // 轮到本节点出块，且超过一定时间取不到交易，广播交易同步请求
+        // When it is this node's turn to mint a block, and no transactions can be obtained after a
+        // certain period of time, broadcast a transaction synchronization request.
+        if (auto duration = std::chrono::duration_cast<std::chrono::seconds>(
+                std::chrono::steady_clock::now() - m_lastFetchTimepoint.load());
+            duration > std::chrono::seconds(m_fetchTimeout))
+        {
+            increseLastFetchTimepoint();
+            m_sealerConfig->txpool()->tryToSyncTxsFromPeers();
+        }
+    }
+    else
+    {
+        increseLastFetchTimepoint();
+    }
 
     // try to generateProposal
     if (m_sealingManager->shouldGenerateProposal())
@@ -106,9 +129,7 @@ void Sealer::executeWorker()
             [this](bcos::protocol::Block::Ptr _block) -> uint16_t {
                 return hookWhenSealBlock(std::move(_block));
             });
-        submitProposal(ret.first, ret.second);
-
-        // TODO: pullTxsTimer's work
+        submitProposal(ret.first, std::move(ret.second));
     }
     else
     {
@@ -188,4 +209,18 @@ uint16_t Sealer::hookWhenSealBlock(bcos::protocol::Block::Ptr _block)
         m_hashImpl,
         m_sealerConfig->consensus()->consensusConfig()->features().get(
             ledger::Features::Flag::bugfix_rpbft_vrf_blocknumber_input));
+}
+
+std::chrono::steady_clock::time_point Sealer::increseLastFetchTimepoint()
+{
+    auto now = std::chrono::steady_clock::now();
+    auto current = m_lastFetchTimepoint.load();
+    while (now > current && !m_lastFetchTimepoint.compare_exchange_strong(current, now))
+    {
+    }
+    return current;
+}
+void bcos::sealer::Sealer::setSealingManager(SealingManager::Ptr _sealingManager)
+{
+    m_sealingManager = std::move(_sealingManager);
 }

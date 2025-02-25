@@ -103,6 +103,8 @@ public:
     void getABI(std::string_view contract,
         std::function<void(bcos::Error::Ptr, std::string)> callback) override;
 
+    void updateEoaNonce(std::unordered_map<std::string, bcos::u256> const&) override;
+
 private:
     ExecutorServicePrx m_prx;
     bcos::ThreadPool::Ptr m_callbackPool;

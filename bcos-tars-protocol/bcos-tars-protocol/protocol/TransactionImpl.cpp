@@ -22,7 +22,6 @@
 #include "TransactionImpl.h"
 #include "../impl/TarsHashable.h"
 #include "../impl/TarsSerializable.h"
-#include "bcos-concepts/Exception.h"
 #include <bcos-concepts/Hash.h>
 #include <bcos-concepts/Serialize.h>
 #include <boost/endian/conversion.hpp>
@@ -33,9 +32,16 @@
 using namespace bcostars;
 using namespace bcostars::protocol;
 
-struct EmptyTransactionHash : public bcos::error::Exception
-{
-};
+DERIVE_BCOS_EXCEPTION(EmptyTransactionHash);
+
+bcostars::protocol::TransactionImpl::TransactionImpl(std::function<bcostars::Transaction*()> inner)
+  : m_inner(std::move(inner))
+{}
+bcostars::protocol::TransactionImpl::TransactionImpl()
+  : m_inner([m_transaction = bcostars::Transaction()]() mutable {
+        return std::addressof(m_transaction);
+    })
+{}
 
 void TransactionImpl::decode(bcos::bytesConstRef _txData)
 {

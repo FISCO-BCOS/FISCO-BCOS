@@ -214,13 +214,16 @@ void bcos::consensus::TxsValidator::eraseResettingProposal(bcos::crypto::HashTyp
 
 void bcos::consensus::TxsValidator::triggerVerifyCompletedHook()
 {
-    RecursiveGuard l(x_verifyCompletedHook);
-    if (!m_verifyCompletedHook)
+    std::function<void()> callback = nullptr;
     {
-        return;
+        RecursiveGuard l(x_verifyCompletedHook);
+        if (!m_verifyCompletedHook)
+        {
+            return;
+        }
+        callback = m_verifyCompletedHook;
+        m_verifyCompletedHook = nullptr;
     }
-    auto callback = m_verifyCompletedHook;
-    m_verifyCompletedHook = nullptr;
     auto self = weak_from_this();
     if (callback)
     {

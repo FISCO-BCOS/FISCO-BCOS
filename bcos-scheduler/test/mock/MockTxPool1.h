@@ -27,10 +27,11 @@ public:
         co_return nullptr;
     }
 
-    void asyncSealTxs(uint64_t, bcos::txpool::TxsHashSetPtr,
-        std::function<void(Error::Ptr, bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr)>)
-        override
-    {}
+    std::tuple<bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr> sealTxs(
+        uint64_t, bcos::txpool::TxsHashSetPtr) override
+    {
+        return {};
+    }
     void asyncMarkTxs(const bcos::crypto::HashList&, bool, bcos::protocol::BlockNumber,
         bcos::crypto::HashType const&, std::function<void(Error::Ptr)>) override
     {}

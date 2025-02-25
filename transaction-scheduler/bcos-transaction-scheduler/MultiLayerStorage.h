@@ -480,7 +480,7 @@ private:
             BOOST_THROW_EXCEPTION(NotExistsImmutableStorageError{});
         }
         auto backStoragePtr = storage.m_storages.back();
-        auto const& backStorage = *backStoragePtr;
+        auto& backStorage = *backStoragePtr;
         listLock.unlock();
 
         if constexpr (withCacheStorage)

@@ -24,6 +24,7 @@
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/Message.h>
 #include <bcos-utilities/Common.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <boost/throw_exception.hpp>
 #include <utility>
 #include <vector>
@@ -187,10 +188,18 @@ public:
 
     virtual void setSrcP2PNodeID(std::string const& _srcP2PNodeID)
     {
+        if (m_srcP2PNodeID == _srcP2PNodeID)
+        {
+            return;
+        }
         m_srcP2PNodeID = _srcP2PNodeID;
     }
     virtual void setDstP2PNodeID(std::string const& _dstP2PNodeID)
     {
+        if (m_dstP2PNodeID == _dstP2PNodeID)
+        {
+            return;
+        }
         m_dstP2PNodeID = _dstP2PNodeID;
     }
 
@@ -198,21 +207,12 @@ public:
     std::string const& dstP2PNodeID() const override { return m_dstP2PNodeID; }
 
     // Note: only for log
-    std::string_view srcP2PNodeIDView() const { return printP2PIDElegantly(m_srcP2PNodeID); }
+    std::string printSrcP2PNodeID() const { return printShortP2pID(m_srcP2PNodeID); }
     // Note: only for log
-    std::string_view dstP2PNodeIDView() const { return printP2PIDElegantly(m_dstP2PNodeID); }
+    std::string printDstP2PNodeID() const { return printShortP2pID(m_dstP2PNodeID); }
 
     virtual void setExtAttributes(std::any _extAttr) { m_extAttr = std::move(_extAttr); }
     const std::any& extAttributes() const override { return m_extAttr; }
-
-    static inline std::string_view printP2PIDElegantly(std::string_view p2pId) noexcept
-    {
-        if (p2pId.length() < RSA_PUBLIC_KEY_TRUNC_LENGTH)
-        {
-            return p2pId;
-        }
-        return p2pId.substr(RSA_PUBLIC_KEY_PREFIX, RSA_PUBLIC_KEY_TRUNC);
-    }
 
     bool encodeHeader(bytes& _buffer) const override;
 

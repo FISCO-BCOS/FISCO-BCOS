@@ -6,6 +6,7 @@
 
 #include "bcos-gateway/libnetwork/SessionCallback.h"
 #include "bcos-utilities/ThreadPool.h"
+#include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-gateway/libnetwork/Common.h>   // for  NodeIP...
 #include <bcos-gateway/libnetwork/Message.h>  // for Message
 #include <bcos-gateway/libnetwork/PeerBlacklist.h>
@@ -49,9 +50,10 @@ public:
     Host(Host&&) = delete;
     Host& operator=(const Host&) = delete;
     Host& operator=(Host&&) = delete;
-    Host(std::shared_ptr<ASIOInterface> _asioInterface,
+    Host(bcos::crypto::Hash::Ptr _hash, std::shared_ptr<ASIOInterface> _asioInterface,
         std::shared_ptr<SessionFactory> _sessionFactory, MessageFactory::Ptr _messageFactory)
-      : m_asioInterface(std::move(_asioInterface)),
+      : m_hashImpl(std::move(_hash)),
+        m_asioInterface(std::move(_asioInterface)),
         m_sessionFactory(std::move(_sessionFactory)),
         m_messageFactory(std::move(_messageFactory)) {};
     virtual ~Host() { stop(); };
@@ -139,12 +141,11 @@ public:
         m_asyncGroup.template run(std::move(f));
     }
 
-    void setSslVerifyMode(uint8_t _serverMode, uint8_t _clientMode)
+    void setEnableSslVerify(bool _enableSSLVerify)
     {
-        m_sslServerMode = _serverMode;
-        m_sslClientMode = _clientMode;
-        HOST_LOG(INFO) << LOG_DESC("setSslVerifyMode") << LOG_KV("serverMode", (int)m_sslServerMode)
-                       << LOG_KV("clientMode", (int)m_sslClientMode);
+        m_enableSSLVerify = _enableSSLVerify;
+        HOST_LOG(INFO) << LOG_DESC("setEnableSslVerify")
+                       << LOG_KV("enableSSLVerify", m_enableSSLVerify);
     }
 
 protected:
@@ -203,18 +204,20 @@ protected:
     tbb::task_group m_asyncGroup;
     std::shared_ptr<SessionCallbackManagerInterface> m_sessionCallbackManager;
 
+    bcos::crypto::Hash::Ptr m_hashImpl;
     /// representing to the network state
     std::shared_ptr<ASIOInterface> m_asioInterface;
     std::shared_ptr<SessionFactory> m_sessionFactory;
     int m_connectTimeThre = 50000;
+
     std::set<NodeIPEndpoint> m_pendingConns;
     bcos::Mutex x_pendingConns;
     MessageFactory::Ptr m_messageFactory;
 
     std::string m_listenHost;
     uint16_t m_listenPort = 0;
-    uint8_t m_sslServerMode = 3;
-    uint8_t m_sslClientMode = 3;
+    // enable ssl verify or not
+    bool m_enableSSLVerify = true;
 
     std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>
         m_connectionHandler;

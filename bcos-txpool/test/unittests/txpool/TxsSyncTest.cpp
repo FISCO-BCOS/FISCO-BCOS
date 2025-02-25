@@ -229,16 +229,12 @@ void testTransactionSync(bool _onlyTxsStatus = false)
     // the syncPeer sealTxs
     HashListPtr txsHash = std::make_shared<HashList>();
     bool finish = false;
-    syncPeer->txpool()->asyncSealTxs(
-        100000, nullptr, [&](Error::Ptr _error, Block::Ptr _fetchedTxs, Block::Ptr) {
-            BOOST_CHECK(_error == nullptr);
-            // BOOST_CHECK(_fetchedTxs->size() == syncPeer->txpool()->txpoolStorage()->size());
-            for (size_t i = 0; i < _fetchedTxs->transactionsMetaDataSize(); i++)
-            {
-                txsHash->emplace_back(_fetchedTxs->transactionHash(i));
-            }
-            finish = true;
-        });
+    auto [_fetchedTxs, _] = syncPeer->txpool()->sealTxs(100000, nullptr);
+    for (size_t i = 0; i < _fetchedTxs->transactionsMetaDataSize(); i++)
+    {
+        txsHash->emplace_back(_fetchedTxs->transactionHash(i));
+    }
+    finish = true;
     while (!finish)
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(2));

@@ -1337,6 +1337,7 @@ void JsonRpcImpl_2_0::gatewayInfoToJson(
     Json::Value& _response, bcos::gateway::GatewayInfo::Ptr _gatewayInfo)
 {
     auto p2pInfo = _gatewayInfo->p2pInfo();
+    //  hex string
     _response["p2pNodeID"] = p2pInfo.p2pID;
     if (!p2pInfo.nodeIPEndpoint.address().empty())
     {

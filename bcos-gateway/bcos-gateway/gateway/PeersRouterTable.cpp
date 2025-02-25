@@ -18,7 +18,6 @@
  * @date 2021-12-29
  */
 #include "PeersRouterTable.h"
-#include "bcos-task/Wait.h"
 #include "bcos-utilities/BoostLog.h"
 
 using namespace bcos;
@@ -29,18 +28,17 @@ using namespace bcos::crypto;
 void PeersRouterTable::getGroupNodeInfoList(
     GroupNodeInfo::Ptr _groupInfo, const std::string& _groupID) const
 {
-    ReadGuard l(x_groupNodeList);
-    if (!m_groupNodeList.count(_groupID))
+    ReadGuard lock(x_groupNodeList);
+    if (auto groupNodeIt = m_groupNodeList.find(_groupID); groupNodeIt != m_groupNodeList.end())
     {
-        return;
-    }
-    for (auto const& it : m_groupNodeList.at(_groupID))
-    {
-        auto nodeID = it.first;
-        _groupInfo->appendNodeID(nodeID);
-        if (m_nodeProtocolInfo.count(nodeID))
+        for (auto const& it : groupNodeIt->second)
         {
-            _groupInfo->appendProtocol(m_nodeProtocolInfo.at(nodeID));
+            auto nodeID = it.first;
+            _groupInfo->appendNodeID(nodeID);
+            if (auto nodeIt = m_nodeProtocolInfo.find(nodeID); nodeIt != m_nodeProtocolInfo.end())
+            {
+                _groupInfo->appendProtocol(nodeIt->second);
+            }
         }
     }
 }
@@ -52,12 +50,12 @@ std::set<P2pID> PeersRouterTable::queryP2pIDs(
     auto it = m_groupNodeList.find(_groupID);
     if (it == m_groupNodeList.end())
     {
-        return std::set<P2pID>();
+        return {};
     }
     auto it2 = it->second.find(_nodeID);
     if (it2 == it->second.end())
     {
-        return std::set<P2pID>();
+        return {};
     }
     return it2->second;
 }
@@ -124,7 +122,8 @@ void PeersRouterTable::batchInsertNodeList(
 
 void PeersRouterTable::removeP2PID(const P2pID& _p2pID)
 {
-    ROUTER_LOG(INFO) << LOG_DESC("PeersRouterTable: removeP2PID") << LOG_KV("p2pID", _p2pID);
+    ROUTER_LOG(INFO) << LOG_DESC("PeersRouterTable: removeP2PID")
+                     << LOG_KV("p2pID", printShortP2pID(_p2pID));
     // remove p2pID from groupNodeList
     removeP2PIDFromGroupNodeList(_p2pID);
     // remove p2pID from peerStatus
@@ -182,24 +181,25 @@ void PeersRouterTable::updatePeerNodeList(P2pID const& _p2pNodeID, GatewayNodeSt
 
 void PeersRouterTable::removePeerStatus(P2pID const& _p2pNodeID)
 {
-    UpgradableGuard l(x_peersStatus);
-    if (m_peersStatus.count(_p2pNodeID))
+    WriteGuard l(x_peersStatus);
+    if (auto it = m_peersStatus.find(_p2pNodeID); it != m_peersStatus.end())
     {
-        UpgradeGuard ul(l);
-        m_peersStatus.erase(_p2pNodeID);
+        m_peersStatus.erase(it);
     }
 }
 
 PeersRouterTable::Group2NodeIDListType PeersRouterTable::peersNodeIDList(
     P2pID const& _p2pNodeID) const
 {
-    ReadGuard l(x_peersStatus);
     PeersRouterTable::Group2NodeIDListType nodeIDList;
-    if (!m_peersStatus.count(_p2pNodeID))
+    ReadGuard l(x_peersStatus);
+
+    auto it = m_peersStatus.find(_p2pNodeID);
+    if (it == m_peersStatus.end())
     {
         return nodeIDList;
     }
-    auto const& groupNodeInfos = m_peersStatus.at(_p2pNodeID)->groupNodeInfos();
+    auto const& groupNodeInfos = it->second->groupNodeInfos();
     for (auto const& it : groupNodeInfos)
     {
         auto const& groupNodeIDList = it->nodeIDList();
@@ -231,9 +231,9 @@ std::set<P2pID> PeersRouterTable::getAllPeers() const
 
 GatewayStatus::Ptr PeersRouterTable::gatewayInfo(std::string const& _uuid)
 {
-    if (decltype(m_gatewayInfos)::const_accessor accessor; m_gatewayInfos.find(accessor, _uuid))
+    if (auto it = m_gatewayInfos.find(_uuid); it != m_gatewayInfos.end())
     {
-        return accessor->second;
+        return it->second;
     }
     return nullptr;
 }
@@ -241,13 +241,13 @@ GatewayStatus::Ptr PeersRouterTable::gatewayInfo(std::string const& _uuid)
 void PeersRouterTable::updateGatewayInfo(P2pID const& _p2pNodeID, GatewayNodeStatus::Ptr _status)
 {
     GatewayStatus::Ptr gatewayStatus;
-    decltype(m_gatewayInfos)::accessor accessor;
-    if (m_gatewayInfos.insert(accessor, _status->uuid()))
+    auto [it, inserted] = m_gatewayInfos.emplace(_status->uuid(), GatewayStatus::Ptr{});
+    if (inserted)
     {
-        accessor->second = m_gatewayStatusFactory->createGatewayInfo(_status->uuid());
+        it->second = m_gatewayStatusFactory->createGatewayInfo(_status->uuid());
     }
-    gatewayStatus = accessor->second;
-    accessor.release();
+    gatewayStatus = it->second;
+
     gatewayStatus->update(_p2pNodeID, _status);
 }
 
@@ -264,6 +264,7 @@ void PeersRouterTable::asyncBroadcastMsg(
     uint16_t _type, std::string const& _groupID, uint16_t _moduleID, P2PMessage::Ptr _msg)
 {
     std::vector<std::string> selectedPeers;
+
     selectedPeers.reserve(m_gatewayInfos.size());
     {
         for (auto const& it : m_gatewayInfos)
@@ -291,7 +292,7 @@ void PeersRouterTable::asyncBroadcastMsg(
         {
             ROUTER_LOG(TRACE) << LOG_BADGE("PeersRouterTable") << LOG_DESC("asyncBroadcastMsg")
                               << LOG_KV("nodeType", _type) << LOG_KV("moduleID", _moduleID)
-                              << LOG_KV("dst", P2PMessage::printP2PIDElegantly(peer));
+                              << LOG_KV("dst", printShortP2pID(peer));
         }
         m_p2pInterface->asyncSendMessageByNodeID(peer, _msg, CallbackFuncWithSession());
     }
@@ -302,6 +303,7 @@ bcos::task::Task<void> bcos::gateway::PeersRouterTable::broadcastMessage(uint16_
     ::ranges::any_view<bytesConstRef> payloads)
 {
     std::vector<std::string> selectedPeers;
+
     selectedPeers.reserve(m_gatewayInfos.size());
     for (auto const& it : m_gatewayInfos)
     {
@@ -326,7 +328,7 @@ bcos::task::Task<void> bcos::gateway::PeersRouterTable::broadcastMessage(uint16_
         {
             ROUTER_LOG(TRACE) << LOG_BADGE("PeersRouterTable") << LOG_DESC("asyncBroadcastMsg")
                               << LOG_KV("nodeType", type) << LOG_KV("moduleID", moduleID)
-                              << LOG_KV("dst", P2PMessage::printP2PIDElegantly(peer));
+                              << LOG_KV("dst", printShortP2pID(peer));
         }
         co_await m_p2pInterface->sendMessageByNodeID(peer, message, payloads);
     }

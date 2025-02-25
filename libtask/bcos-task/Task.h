@@ -15,7 +15,7 @@
  */
 
 #pragma once
-#include "bcos-concepts/Exception.h"
+#include "bcos-utilities/Exceptions.h"
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
 #include <coroutine>
@@ -27,10 +27,7 @@
 
 namespace bcos::task
 {
-
-struct NoReturnValue : public bcos::error::Exception
-{
-};
+DERIVE_BCOS_EXCEPTION(NoReturnValue);
 
 template <class Promise>
 struct FinalAwaitable
@@ -38,14 +35,9 @@ struct FinalAwaitable
     constexpr bool await_ready() noexcept { return false; }
     constexpr std::coroutine_handle<> await_suspend(std::coroutine_handle<Promise> handle) noexcept
     {
-        std::coroutine_handle<> continuationHandle;
-        if (handle.promise().m_continuation)
-        {
-            continuationHandle = handle.promise().m_continuation->handle;
-        }
-        handle.destroy();
-
-        return continuationHandle ? continuationHandle : std::noop_coroutine();
+        return handle.promise().m_continuation ?
+                   static_cast<std::coroutine_handle<>>(handle.promise().m_continuation->handle) :
+                   std::noop_coroutine();
     }
     constexpr void await_resume() noexcept {}
 };
@@ -71,11 +63,8 @@ struct PromiseBase
     void unhandled_exception()
     {
         auto exception = std::current_exception();
-        if (!m_continuation)
+        if (m_continuation == nullptr)
         {
-            auto handle =
-                std::coroutine_handle<PromiseImpl>::from_promise(*static_cast<PromiseImpl*>(this));
-            handle.destroy();
             std::rethrow_exception(exception);
         }
         m_continuation->value.template emplace<std::exception_ptr>(exception);
@@ -107,7 +96,7 @@ template <class TaskType>
 struct Awaitable
 {
     explicit Awaitable(std::coroutine_handle<typename TaskType::promise_type> handle)
-      : m_handle(std::move(handle)){};
+      : m_handle(std::move(handle)) {};
     Awaitable(const Awaitable&) = delete;
     Awaitable(Awaitable&&) noexcept = default;
     Awaitable& operator=(const Awaitable&) = delete;
@@ -158,7 +147,6 @@ public:
         std::conditional_t<std::is_same_v<ValueType, void>, PromiseVoid<Task>, PromiseValue<Task>>;
 
     Awaitable<Task> operator co_await() && { return Awaitable<Task>(m_handle); }
-
     explicit Task(std::coroutine_handle<promise_type> handle) : m_handle(handle) {}
     Task(const Task&) = delete;
     Task(Task&& task) noexcept : m_handle(task.m_handle) { task.m_handle = nullptr; }
@@ -172,7 +160,13 @@ public:
         m_handle = task.m_handle;
         task.m_handle = nullptr;
     }
-    ~Task() noexcept = default;
+    ~Task() noexcept
+    {
+        if (m_handle)
+        {
+            m_handle.destroy();
+        }
+    }
     void start() { m_handle.resume(); }
 
 private:

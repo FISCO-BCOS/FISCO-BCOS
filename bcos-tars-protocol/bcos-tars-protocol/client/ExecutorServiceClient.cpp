@@ -631,3 +631,8 @@ void ExecutorServiceClient::getABI(
     m_prx->tars_set_timeout(30000)->async_getABI(
         new Callback(m_callbackPool, std::move(callback)), std::string(contract));
 }
+
+void ExecutorServiceClient::updateEoaNonce(std::unordered_map<std::string, bcos::u256> const&)
+{
+    BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented"));
+}

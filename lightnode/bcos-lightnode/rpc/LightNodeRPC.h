@@ -4,7 +4,6 @@
 #include "Converter.h"
 #include "bcos-concepts/Basic.h"
 #include "bcos-concepts/ByteBuffer.h"
-#include "bcos-concepts/Exception.h"
 #include "bcos-concepts/Hash.h"
 #include "bcos-tars-protocol/impl/TarsSerializable.h"
 #include "bcos-tars-protocol/tars/TransactionMetaData.h"
@@ -31,10 +30,8 @@
 
 namespace bcos::rpc
 {
-// clang-format off
-struct NotFoundTransactionHash: public bcos::error::Exception {};
-struct CheckMerkleRootFailed: public bcos::error::Exception {};
-// clang-format on
+DERIVE_BCOS_EXCEPTION(NotFoundTransactionHash);
+DERIVE_BCOS_EXCEPTION(CheckMerkleRootFailed);
 
 template <bcos::concepts::ledger::Ledger LocalLedgerType,
     bcos::concepts::ledger::Ledger RemoteLedgerType,
@@ -350,9 +347,8 @@ public:
                                 "TxsRoot check failed", -1, "CheckMerkleRootFailed");
                             self->toErrorResp(error, respFunc);
                             co_return;
-                            BOOST_THROW_EXCEPTION(
-                                CheckMerkleRootFailed{} << bcos::error::ErrorMessage{
-                                    "Check block transactionMerkle failed!"});
+                            BOOST_THROW_EXCEPTION(CheckMerkleRootFailed{} << errinfo_comment{
+                                                      "Check block transactionMerkle failed!"});
                         }
                     }
 

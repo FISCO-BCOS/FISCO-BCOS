@@ -22,6 +22,7 @@
 #include "SealingManager.h"
 #include "bcos-framework/sealer/SealerInterface.h"
 #include <bcos-utilities/Worker.h>
+#include <chrono>
 #include <utility>
 
 namespace bcos::sealer
@@ -29,20 +30,14 @@ namespace bcos::sealer
 class Sealer : public Worker, public SealerInterface, public std::enable_shared_from_this<Sealer>
 {
 public:
-    enum SealBlockResult : uint16_t
+    enum SealBlockResult : int8_t
     {
         FAILED = 0,
         SUCCESS = 1,
         WAIT_FOR_LATEST_BLOCK = 2,
     };
     using Ptr = std::shared_ptr<Sealer>;
-    explicit Sealer(SealerConfig::Ptr _sealerConfig)
-      : Worker("Sealer", 0), m_sealerConfig(std::move(_sealerConfig))
-    {
-        m_sealingManager = std::make_shared<SealingManager>(m_sealerConfig);
-        m_sealingManager->onReady([=, this]() { this->noteGenerateProposal(); });
-        m_hashImpl = m_sealerConfig->blockFactory()->cryptoSuite()->hashImpl();
-    }
+    explicit Sealer(SealerConfig::Ptr _sealerConfig);
     ~Sealer() override = default;
 
     void start() override;
@@ -62,16 +57,18 @@ public:
     virtual void init(bcos::consensus::ConsensusInterface::Ptr _consensus);
 
     uint16_t hookWhenSealBlock([[maybe_unused]] bcos::protocol::Block::Ptr _block) override;
+    void setFetchTimeout(int fetchTimeout) { m_fetchTimeout = fetchTimeout; }
 
     // only for test
     SealerConfig::Ptr sealerConfig() const { return m_sealerConfig; }
     SealingManager::Ptr sealingManager() const { return m_sealingManager; }
 
-protected:
     void executeWorker() override;
-    virtual void noteGenerateProposal() { m_signalled.notify_all(); }
+    void setSealingManager(SealingManager::Ptr _sealingManager);
 
-    virtual void submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _proposal);
+protected:
+    virtual void noteGenerateProposal() { m_signalled.notify_all(); }
+    virtual void submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _block);
 
     SealerConfig::Ptr m_sealerConfig;
     SealingManager::Ptr m_sealingManager;
@@ -79,7 +76,11 @@ protected:
 
     boost::condition_variable m_signalled;
     // mutex to access m_signalled
+    std::atomic<std::chrono::steady_clock::time_point> m_lastFetchTimepoint;
+    int m_fetchTimeout = 5;  // Default timeout 5s
     boost::mutex x_signalled;
     bcos::crypto::Hash::Ptr m_hashImpl;
+
+    std::chrono::steady_clock::time_point increseLastFetchTimepoint();
 };
 }  // namespace bcos::sealer

@@ -176,7 +176,7 @@ public:
     void asyncSendMessage(Message::Ptr message, Options options,
         SessionCallbackFunc callback = SessionCallbackFunc()) override;
 
-    task::Task<Message::Ptr> sendMessage(const Message& message,
+    task::Task<Message::Ptr> fastSendMessage(const Message& message,
         ::ranges::any_view<bytesConstRef> payloads, Options options) override;
 
     NodeIPEndpoint nodeIPEndpoint() const override;
@@ -227,7 +227,7 @@ public:
         m_beforeMessageHandler = handler;
     }
 
-    void setHostNodeID(std::string const& _hostNodeID) { m_hostNodeID = _hostNodeID; }
+    void setHostInfo(P2PInfo const& _hostInfo) { m_hostInfo = _hostInfo; }
 
     uint32_t maxReadDataSize() const { return m_maxReadDataSize; }
     void setMaxReadDataSize(uint32_t _maxReadDataSize) { m_maxReadDataSize = _maxReadDataSize; }
@@ -299,12 +299,8 @@ public:
     std::shared_ptr<SocketFace> m_socket;   ///< Socket of peer's connection.
 
     MessageFactory::Ptr m_messageFactory;
-
     tbb::concurrent_queue<Payload> m_writeQueue;
-    std::atomic_bool m_writing = false;
-
-    mutable bcos::Mutex x_info;
-
+    boost::atomic_flag m_writing;
     bool m_active = false;
 
     SessionCallbackManagerInterface::Ptr m_sessionCallbackManager;
@@ -319,18 +315,23 @@ public:
     std::atomic<uint64_t> m_lastReadTime;
     std::atomic<uint64_t> m_lastWriteTime;
     std::shared_ptr<bcos::Timer> m_idleCheckTimer;
-    std::string m_hostNodeID;
+    P2PInfo m_hostInfo;
 
-    std::vector<Payload> m_writingPayloads;
+    struct Writings
+    {
+        std::vector<Payload> payloads;
+        std::vector<boost::asio::const_buffer> buffers;
+    };
+    std::shared_ptr<Writings> m_writings;
 };
 
 class SessionFactory
 {
 public:
-    SessionFactory(std::string _hostNodeID, uint32_t _sessionRecvBufferSize,  // NOLINT
+    SessionFactory(P2PInfo _hostInfo, uint32_t _sessionRecvBufferSize,  // NOLINT
         uint32_t _allowMaxMsgSize, uint32_t _maxReadDataSize, uint32_t _maxSendDataSize,
         uint32_t _maxSendMsgCountS, bool _enableCompress)
-      : m_hostNodeID(std::move(_hostNodeID)),
+      : m_hostInfo(std::move(_hostInfo)),
         m_sessionRecvBufferSize(_sessionRecvBufferSize),
         m_allowMaxMsgSize(_allowMaxMsgSize),
         m_maxReadDataSize(_maxReadDataSize),
@@ -350,7 +351,7 @@ public:
     {
         std::shared_ptr<Session> session =
             std::make_shared<Session>(_socket, _server, m_sessionRecvBufferSize);
-        session->setHostNodeID(m_hostNodeID);
+        session->setHostInfo(m_hostInfo);
         session->setMessageFactory(_messageFactory);
         session->setSessionCallbackManager(_sessionCallbackManager);
         session->setAllowMaxMsgSize(m_allowMaxMsgSize);
@@ -369,7 +370,7 @@ public:
     }
 
 private:
-    std::string m_hostNodeID;
+    P2PInfo m_hostInfo;
     uint32_t m_sessionRecvBufferSize;
     uint32_t m_allowMaxMsgSize{0};
     uint32_t m_maxReadDataSize{0};

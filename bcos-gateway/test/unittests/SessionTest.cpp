@@ -18,7 +18,7 @@
  * @author: octopus
  * @date 2023-02-23
  */
-
+#include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-gateway/libnetwork/ASIOInterface.h>
 #include <bcos-gateway/libnetwork/Host.h>
 #include <bcos-gateway/libnetwork/Session.h>
@@ -31,6 +31,7 @@
 using namespace bcos;
 using namespace gateway;
 using namespace bcos::test;
+using namespace bcos::crypto;
 
 BOOST_FIXTURE_TEST_SUITE(SessionTest, TestPromptFixture)
 
@@ -39,8 +40,8 @@ class FakeASIO : public bcos::gateway::ASIOInterface
 {
 public:
     using Packet = std::shared_ptr<std::vector<uint8_t>>;
-    FakeASIO() : m_threadPool(std::make_shared<bcos::ThreadPool>("FakeASIO", 1)){};
-    virtual ~FakeASIO() noexcept override{};
+    FakeASIO() : m_threadPool(std::make_shared<bcos::ThreadPool>("FakeASIO", 1)) {};
+    virtual ~FakeASIO() noexcept override {};
 
     void readSome(std::shared_ptr<SocketFace> socket, boost::asio::mutable_buffers_1 buffers,
         ReadWriteHandler handler)
@@ -235,9 +236,9 @@ private:
 class FakeHost : public bcos::gateway::Host
 {
 public:
-    FakeHost(std::shared_ptr<ASIOInterface> _asioInterface,
+    FakeHost(bcos::crypto::Hash::Ptr _hash, std::shared_ptr<ASIOInterface> _asioInterface,
         std::shared_ptr<SessionFactory> _sessionFactory, MessageFactory::Ptr _messageFactory)
-      : Host(_asioInterface, _sessionFactory, _messageFactory)
+      : Host(_hash, _asioInterface, _sessionFactory, _messageFactory)
     {
         m_run = true;
     }
@@ -246,7 +247,7 @@ public:
 class FakeSocket : public SocketFace
 {
 public:
-    FakeSocket() : SocketFace(){};
+    FakeSocket() : SocketFace() {};
     ~FakeSocket() override = default;
     bool isConnected() const override { return true; }
     void close() override {}
@@ -298,60 +299,66 @@ BOOST_AUTO_TEST_CASE(doReadTest)
 {
     auto totalPacketNum = 500;
     FakeMessagesBuilder messageBuilder(totalPacketNum);
-    auto fakeAsio = std::make_shared<FakeASIO>();
     auto fakeMessageFactory = std::make_shared<FakeMessageFactory>();
-    auto fakeHost = std::make_shared<FakeHost>(fakeAsio, nullptr, fakeMessageFactory);
+    auto hashImpl = std::make_shared<Keccak256>();
     auto fakeSocket = std::make_shared<FakeSocket>();
 
     std::atomic<size_t> recvPacketCnt = 0;
     std::atomic<size_t> recvBufferSize = 0;
     std::atomic<uint64_t> lastReadTime = utcSteadyTime();
-
-    auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 2, true);
-    session->setMessageFactory(fakeHost->messageFactory());
-
-    session->setMessageHandler([&recvPacketCnt, &recvBufferSize, &lastReadTime](NetworkException e,
-                                   SessionFace::Ptr sessionFace, Message::Ptr message) {
-        // doRead() call this function after reading a message
-        lastReadTime = utcSteadyTime();
-        if (e.errorCode() != P2PExceptionType::Success)
-        {
-            std::cout << "error: " << e.errorCode() << " " << e.what() << std::endl;
-        }
-        {
-            static bcos::SharedMutex x_mutex;
-            bcos::WriteGuard guard(x_mutex);
-            BOOST_CHECK_EQUAL(e.errorCode(), P2PExceptionType::Success);
-            BOOST_CHECK(message);
-            BOOST_CHECK(message->lengthDirect() > 0);
-        }
-
-        recvBufferSize += message->lengthDirect();
-        recvPacketCnt++;
-    });
-
-    session->start();
-    std::dynamic_pointer_cast<FakeASIO>(fakeHost->asioInterface())->triggerRead();
-
-    // send packets
-    while (auto packet = messageBuilder.nextPacket())
     {
-        std::dynamic_pointer_cast<FakeASIO>(fakeHost->asioInterface())
-            ->asyncAppendRecvPacket(packet);
+        auto fakeAsio = std::make_shared<FakeASIO>();
+        auto fakeHost = std::make_shared<FakeHost>(hashImpl, fakeAsio, nullptr, fakeMessageFactory);
+
+        auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 2, true);
+        session->setMessageFactory(fakeHost->messageFactory());
+
+        session->setMessageHandler(
+            [&recvPacketCnt, &recvBufferSize, &lastReadTime](
+                NetworkException e, SessionFace::Ptr sessionFace, Message::Ptr message) {
+                // doRead() call this function after reading a message
+                lastReadTime = utcSteadyTime();
+                if (e.errorCode() != P2PExceptionType::Success)
+                {
+                    std::cout << "error: " << e.errorCode() << " " << e.what() << std::endl;
+                }
+                {
+                    static bcos::SharedMutex x_mutex;
+                    bcos::WriteGuard guard(x_mutex);
+                    BOOST_CHECK_EQUAL(e.errorCode(), P2PExceptionType::Success);
+                    BOOST_CHECK(message);
+                    BOOST_CHECK(message->lengthDirect() > 0);
+                }
+
+                recvBufferSize += message->lengthDirect();
+                recvPacketCnt++;
+            });
+
+        session->start();
+        std::dynamic_pointer_cast<FakeASIO>(fakeHost->asioInterface())->triggerRead();
+
+        // send packets
+        while (auto packet = messageBuilder.nextPacket())
+        {
+            std::dynamic_pointer_cast<FakeASIO>(fakeHost->asioInterface())
+                ->asyncAppendRecvPacket(packet);
+        }
+
+        size_t retryTimes = 0;
+        while (auto restPacket = totalPacketNum - recvPacketCnt)
+        {
+            std::cout << "waiting " << restPacket << " packets" << std::endl;
+            retryTimes++;
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            BOOST_CHECK(retryTimes < 100);
+        }
+
+        BOOST_CHECK_EQUAL(recvPacketCnt, totalPacketNum);
+        BOOST_CHECK_EQUAL(recvBufferSize, messageBuilder.sendBufferSize());
+        session->setSocket(nullptr);
     }
 
-    size_t retryTimes = 0;
-    while (auto restPacket = totalPacketNum - recvPacketCnt)
-    {
-        std::cout << "waiting " << restPacket << " packets" << std::endl;
-        retryTimes++;
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
-        BOOST_CHECK(retryTimes < 100);
-    }
-
-    BOOST_CHECK_EQUAL(recvPacketCnt, totalPacketNum);
-    BOOST_CHECK_EQUAL(recvBufferSize, messageBuilder.sendBufferSize());
-    session->setSocket(nullptr);
+    fakeSocket->close();
 }
 
 BOOST_AUTO_TEST_CASE(SessionRecvBufferTest)

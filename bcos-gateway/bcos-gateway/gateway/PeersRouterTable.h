@@ -27,7 +27,7 @@
 #include <bcos-gateway/Common.h>
 #include <bcos-gateway/libp2p/P2PInterface.h>
 #include <bcos-gateway/protocol/GatewayNodeStatus.h>
-#include <oneapi/tbb/concurrent_hash_map.h>
+#include <oneapi/tbb/concurrent_unordered_map.h>
 #include <memory>
 #include <utility>
 
@@ -45,7 +45,7 @@ public:
         m_p2pInterface(std::move(_p2pInterface)),
         m_gatewayStatusFactory(std::make_shared<GatewayStatusFactory>())
     {}
-    virtual ~PeersRouterTable() {}
+    virtual ~PeersRouterTable() = default;
 
     void getGroupNodeInfoList(GroupNodeInfo::Ptr _groupInfo, const std::string& _groupID) const;
     std::set<P2pID> queryP2pIDs(const std::string& _groupID, const std::string& _nodeID) const;
@@ -94,7 +94,6 @@ private:
     mutable SharedMutex x_peersStatus;
 
     GatewayStatusFactory::Ptr m_gatewayStatusFactory;
-    // uuid => gatewayInfo
-    tbb::concurrent_hash_map<std::string, GatewayStatus::Ptr> m_gatewayInfos;
+    tbb::concurrent_unordered_map<std::string, GatewayStatus::Ptr> m_gatewayInfos;
 };
 }  // namespace bcos::gateway

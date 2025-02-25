@@ -40,15 +40,10 @@ public:
 
     virtual P2pID id() const = 0;
 
-    virtual std::shared_ptr<P2PMessage> sendMessageByNodeID(
-        P2pID nodeID, std::shared_ptr<P2PMessage> message) = 0;
-
     virtual void asyncSendMessageByNodeID(P2pID nodeID, std::shared_ptr<P2PMessage> message,
-        CallbackFuncWithSession callback, Options options = Options()) = 0;
-
+        CallbackFuncWithSession callback, Options options = {}) = 0;
     virtual task::Task<Message::Ptr> sendMessageByNodeID(P2pID nodeID, P2PMessage& header,
-        ::ranges::any_view<bytesConstRef> payloads, Options options = Options()) = 0;
-
+        ::ranges::any_view<bytesConstRef> payloads, Options options = {}) = 0;
     virtual void asyncBroadcastMessage(std::shared_ptr<P2PMessage> message, Options options) = 0;
 
     virtual P2PInfos sessionInfos() = 0;
@@ -60,7 +55,7 @@ public:
 
     virtual std::shared_ptr<MessageFactory> messageFactory() = 0;
 
-    virtual std::shared_ptr<P2PSession> getP2PSessionByNodeId(P2pID const& _nodeID) = 0;
+    virtual std::shared_ptr<P2PSession> getP2PSessionByNodeId(P2pID const& _nodeID) const = 0;
 
     /**
      * @brief send message to the given p2p nodes

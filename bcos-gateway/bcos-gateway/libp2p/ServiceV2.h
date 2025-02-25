@@ -27,7 +27,7 @@ class ServiceV2 : public Service
 {
 public:
     using Ptr = std::shared_ptr<ServiceV2>;
-    ServiceV2(std::string const& _nodeID, RouterTableFactory::Ptr _routerTableFactory);
+    ServiceV2(P2PInfo const& _p2pInfo, RouterTableFactory::Ptr _routerTableFactory);
     ServiceV2() = delete;
     ServiceV2(const ServiceV2&) = delete;
     ServiceV2(ServiceV2&&) = delete;
@@ -49,38 +49,26 @@ public:
     bool isReachable(P2pID const& _nodeID) const override;
 
     // handlers called when the node is unreachable
-    void registerUnreachableHandler(std::function<void(std::string)> _handler) override
-    {
-        WriteGuard writeGuard(x_unreachableHandlers);
-        m_unreachableHandlers.emplace_back(_handler);
-    }
+    void registerUnreachableHandler(std::function<void(std::string)> _handler) override;
 
     task::Task<Message::Ptr> sendMessageByNodeID(P2pID nodeID, P2PMessage& message,
         ::ranges::any_view<bytesConstRef> payloads, Options options = Options()) override;
 
+    std::string getShortP2pID(std::string const& rawP2pID) const override;
+    std::string getRawP2pID(std::string const& shortP2pID) const override;
+
+    // Note: since the message of the old node maybe forwarded through new node, we should try to
+    // reset the p2pNodeID in both cases >=v3 and <v3
+    void resetP2pID(P2PMessage& message, bcos::protocol::ProtocolVersion const& version) override;
+
 protected:
     // called when the nodes become unreachable
-    void onP2PNodesUnreachable(std::set<std::string> const& _p2pNodeIDs)
-    {
-        std::vector<std::function<void(std::string)>> handlers;
-        {
-            ReadGuard readGuard(x_unreachableHandlers);
-            handlers = m_unreachableHandlers;
-        }
-        // TODO: async here
-        for (auto const& node : _p2pNodeIDs)
-        {
-            for (auto const& it : m_unreachableHandlers)
-            {
-                it(node);
-            }
-        }
-    }
+    void onP2PNodesUnreachable(std::set<std::string> const& _p2pNodeIDs);
     // router related
     virtual void onReceivePeersRouterTable(
         NetworkException _error, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message);
     virtual void joinRouterTable(
-        std::string const& _generatedFrom, RouterTableInterface::Ptr _routerTable);
+        std::shared_ptr<P2PSession> _session, RouterTableInterface::Ptr _routerTable);
     virtual void onReceiveRouterTableRequest(
         NetworkException _error, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message);
     virtual void broadcastRouterSeq();
@@ -98,8 +86,13 @@ protected:
     virtual void asyncBroadcastMessageWithoutForward(
         std::shared_ptr<P2PMessage> message, Options options);
 
+    void updateP2pInfo(P2PInfo const& p2pInfo);
+    void tryToUpdateRawP2pInfo(P2PInfo const& p2pInfo);
+    void tryToUpdateP2pInfo(P2PInfo const& p2pInfo);
+
 private:
     // for message forward
+    // Note: must use ptr here, for the timer uses enable_shared_from_this
     std::shared_ptr<bcos::Timer> m_routerTimer;
     std::atomic<uint32_t> m_statusSeq{1};
 
@@ -108,6 +101,13 @@ private:
 
     std::map<std::string, uint32_t> m_node2Seq;
     mutable SharedMutex x_node2Seq;
+
+    // rawP2pID->p2pID
+    std::map<std::string, std::string> m_rawP2pIDInfo;
+    mutable SharedMutex x_rawP2pIDInfo;
+    // p2pID->rawP2pID
+    std::map<std::string, std::string> m_p2pIDInfo;
+    mutable SharedMutex x_p2pIDInfo;
 
     const int c_unreachableDistance = 10;
 

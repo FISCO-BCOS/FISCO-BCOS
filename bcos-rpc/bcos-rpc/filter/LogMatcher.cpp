@@ -1,9 +1,11 @@
+#include <bcos-protocol/TransactionStatus.h>
 #include <bcos-rpc/filter/LogMatcher.h>
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/DataConvertUtility.h>
 
 using namespace bcos;
 using namespace bcos::rpc;
+using namespace bcos::protocol;
 
 uint32_t LogMatcher::matches(
     FilterRequest::ConstPtr _params, bcos::protocol::Block::ConstPtr _block, Json::Value& _result)
@@ -24,6 +26,10 @@ uint32_t LogMatcher::matches(FilterRequest::ConstPtr _params, bcos::crypto::Hash
 {
     uint32_t count = 0;
     auto blockNumber = _receipt->blockNumber();
+    if (_receipt->status() != int32_t(TransactionStatus::None))
+    {
+        return 0;
+    }
     auto mutableReceipt = const_cast<bcos::protocol::TransactionReceipt*>(_receipt.get());
     auto logEntries = mutableReceipt->takeLogEntries();
     for (size_t i = 0; i < logEntries.size(); i++)

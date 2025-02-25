@@ -60,17 +60,12 @@ public:
     virtual std::string toString() const
     {
         std::stringstream ss;
-        ss << "TransactionReceipt{"
-           << "hash=" << hash() << ", "
-           << "version=" << version() << ", "
-           << "gasUsed=" << gasUsed() << ", "
-           << "contractAddress=" << contractAddress() << ", "
-           << "status=" << status() << ", "
-           << "output=" << toHex(output()) << ", "
-           << "logEntries=" << logEntries().size() << ", "
-           << "blockNumber=" << blockNumber() << ", "
-           << "effectiveGasPrice=" << effectiveGasPrice() << ", "
-           << "message=" << message() << "}";
+        ss << "TransactionReceipt{" << "hash=" << hash() << ", " << "version=" << version() << ", "
+           << "gasUsed=" << gasUsed() << ", " << "contractAddress=" << contractAddress() << ", "
+           << "status=" << status() << ", " << "output=" << toHex(output()) << ", "
+           << "logEntries=" << logEntries().size() << ", " << "blockNumber=" << blockNumber()
+           << ", " << "effectiveGasPrice=" << effectiveGasPrice() << ", " << "message=" << message()
+           << "}";
         return ss.str();
     }
 };

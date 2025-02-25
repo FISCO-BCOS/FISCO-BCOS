@@ -6,6 +6,7 @@
 #pragma once
 
 #include "bcos-utilities/ObjectCounter.h"
+#include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-gateway/Common.h>
 #include <bcos-gateway/libnetwork/Common.h>
@@ -21,6 +22,7 @@ class GatewayConfig : public bcos::ObjectCounter<GatewayConfig>
 {
 public:
     using Ptr = std::shared_ptr<GatewayConfig>;
+    GatewayConfig();
 
     // cert for ssl connection
     struct CertConfig
@@ -306,7 +308,19 @@ public:
         }
     }
 
+    bool enableSSLVerify() const { return m_enableSSLVerify; }
+
+    bcos::crypto::Hash::Ptr const& hashImpl() const { return m_hashImpl; }
+    std::string calculateShortNodeID(std::string const& rawNodeID) const
+    {
+        bcos::crypto::HashType p2pIDHash = m_hashImpl->hash(
+            bcos::bytesConstRef((bcos::byte const*)rawNodeID.data(), rawNodeID.size()));
+        // the p2pID
+        return std::string(p2pIDHash.begin(), p2pIDHash.end());
+    }
+
 private:
+    bcos::crypto::Hash::Ptr m_hashImpl;
     // The maximum size of message that is allowed to send or receive
     uint32_t m_allowMaxMsgSize = MAX_MESSAGE_LENGTH;
     // p2p session read buffer size, default: 128k
@@ -318,10 +332,15 @@ private:
     std::string m_uuid;
     // if SM SSL connection or not
     bool m_smSSL;
+    // default verify mode for server mode
     uint8_t m_ssl_server_mode =
         boost::asio::ssl::context_base::verify_peer | boost::asio::ssl::verify_fail_if_no_peer_cert;
+    // default verify mode for client mode
     uint8_t m_ssl_client_mode =
         boost::asio::ssl::context_base::verify_peer | boost::asio::ssl::verify_fail_if_no_peer_cert;
+
+    // enable ssl verify or not, default is true
+    bool m_enableSSLVerify = true;
     // p2p network listen IP
     std::string m_listenIP;
     // p2p network listen Port

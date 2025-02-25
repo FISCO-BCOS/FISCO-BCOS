@@ -33,7 +33,7 @@
 
 inline void CHECK_OFFSET(uint64_t offset, uint64_t length)
 {
-    if (offset > length)
+    if (std::cmp_greater(offset, length))
     {
         throw std::out_of_range("Out of range error, offset:" + std::to_string(offset) +
                                 " ,length: " + std::to_string(length));

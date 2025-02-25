@@ -54,7 +54,9 @@ public:
     using Ptr = std::shared_ptr<WsStream>;
     using ConstPtr = std::shared_ptr<const WsStream>;
 
-    WsStream(std::shared_ptr<boost::beast::websocket::stream<STREAM>> _stream) : m_stream(_stream)
+    WsStream(
+        std::shared_ptr<boost::beast::websocket::stream<STREAM>> _stream)
+      : m_stream(_stream)
     {
         initDefaultOpt();
         WEBSOCKET_STREAM(INFO) << LOG_KV("[NEWOBJ][WsStream]", this);
@@ -133,7 +135,6 @@ public:
             // socket
             auto& ss = boost::beast::get_lowest_layer(*m_stream);
             ws::WsTools::close(ss.socket());
-
             WEBSOCKET_STREAM(INFO)
                 << LOG_DESC("the real action to close the stream") << LOG_KV("this", this);
         }

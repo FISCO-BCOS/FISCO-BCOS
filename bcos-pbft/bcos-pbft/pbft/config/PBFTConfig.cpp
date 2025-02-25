@@ -272,7 +272,7 @@ bool PBFTConfig::tryTriggerFastViewChange(IndexType _leaderIndex)
 void PBFTConfig::notifySealer(BlockNumber _progressedIndex, bool _enforce)
 {
     auto startT = utcSteadyTime();
-    RecursiveGuard lock(m_mutex);
+    std::unique_lock<std::recursive_mutex> lock(m_mutex);
     auto lockNotifyT = utcSteadyTime() - startT;
     auto currentLeader = leaderIndex(_progressedIndex);
     if (currentLeader != nodeIndex())
@@ -332,6 +332,8 @@ void PBFTConfig::notifySealer(BlockNumber _progressedIndex, bool _enforce)
                               "been reset success")
                        << LOG_KV("resettingProposalSize", m_validator->resettingProposalSize())
                        << LOG_KV("startSealIndex", startSealIndex) << printCurrentState();
+        // Note: must unlock here, otherwise deadlock will happen
+        lock.unlock();
         // notify the leader to seal when all txs of all proposals have been reset
         auto self = weak_from_this();
         m_validator->setVerifyCompletedHook([self, _progressedIndex, _enforce]() {
@@ -479,7 +481,7 @@ std::string PBFTConfig::printCurrentState()
 void PBFTConfig::tryToSyncTxs()
 {
     // only the leader need tryToSyncTxs
-    if (m_pbftTimer->running() || getLeader() != nodeIndex())
+    if (m_txsSize > 0 || m_pbftTimer->running() || getLeader() != nodeIndex())
     {
         return;
     }

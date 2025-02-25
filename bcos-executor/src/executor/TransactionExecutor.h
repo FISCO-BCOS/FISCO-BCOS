@@ -175,6 +175,8 @@ public:
     void getABI(std::string_view contract,
         std::function<void(bcos::Error::Ptr, std::string)> callback) override;
 
+    void updateEoaNonce(std::unordered_map<std::string, u256> const& nonceMap) override;
+
     void start() override { m_isRunning = true; }
     void stop() override;
 

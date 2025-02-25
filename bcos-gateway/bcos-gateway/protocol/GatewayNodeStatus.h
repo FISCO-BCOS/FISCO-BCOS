@@ -36,7 +36,7 @@ public:
     using Ptr = std::shared_ptr<GatewayNodeStatus>;
     using ConstPtr = std::shared_ptr<GatewayNodeStatus const>;
     GatewayNodeStatus();
-    virtual ~GatewayNodeStatus() {}
+    virtual ~GatewayNodeStatus() = default;
 
     virtual void setUUID(std::string const& _uuid) { m_tarsStatus->uuid = _uuid; }
     virtual void setSeq(uint32_t _seq) { m_tarsStatus->seq = _seq; }
@@ -66,7 +66,7 @@ class GatewayNodeStatusFactory
 public:
     using Ptr = std::shared_ptr<GatewayNodeStatusFactory>;
     GatewayNodeStatusFactory() = default;
-    virtual ~GatewayNodeStatusFactory() {}
+    virtual ~GatewayNodeStatusFactory() = default;
 
     GatewayNodeStatus::Ptr createGatewayNodeStatus()
     {

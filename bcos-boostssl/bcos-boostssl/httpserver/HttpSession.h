@@ -272,7 +272,6 @@ public:
 
 private:
     HttpStream::Ptr m_httpStream;
-
     std::shared_ptr<boost::beast::flat_buffer> m_buffer;
 
     std::shared_ptr<Queue> m_queue;

@@ -44,7 +44,7 @@ public:
     virtual void asyncSendMessage(
         Message::Ptr, Options = Options(), SessionCallbackFunc = SessionCallbackFunc()) = 0;
 
-    virtual task::Task<Message::Ptr> sendMessage(
+    virtual task::Task<Message::Ptr> fastSendMessage(
         const Message& header, ::ranges::any_view<bytesConstRef> payloads, Options options) = 0;
 
     virtual std::shared_ptr<SocketFace> socket() = 0;

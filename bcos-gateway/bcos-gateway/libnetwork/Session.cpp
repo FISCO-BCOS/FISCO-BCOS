@@ -40,7 +40,8 @@ Session::Session(
     m_server(server),
     m_socket(std::move(socket)),
     m_idleCheckTimer(
-        std::make_shared<Timer>(m_socket->ioService(), m_idleTimeInterval, "idleChecker"))
+        std::make_shared<Timer>(m_socket->ioService(), m_idleTimeInterval, "idleChecker")),
+    m_writings(std::make_shared<Writings>())
 {
     SESSION_LOG(INFO) << "[Session::Session] this=" << this
                       << LOG_KV("recvBufferSize", m_maxRecvBufferSize);
@@ -118,7 +119,7 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
     {
         if (callback && result.has_value())
         {
-            auto error = result.value();
+            const auto& error = result.value();
             auto errorCode = error.errorCode();
             auto errorMessage = error.errorMessage();
             m_server.get().asyncTo([callback = std::move(callback), errorCode,
@@ -171,7 +172,9 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
         SESSION_LOG(TRACE) << LOG_DESC("Session asyncSendMessage")
                            << LOG_KV("endpoint", nodeIPEndpoint()) << LOG_KV("seq", message->seq())
                            << LOG_KV("packetType", message->packetType())
-                           << LOG_KV("ext", message->ext());
+                           << LOG_KV("ext", message->ext())
+                           << LOG_KV("src", printShortP2pID(message->srcP2PNodeID()))
+                           << LOG_KV("dst", printShortP2pID(message->dstP2PNodeID()));
     }
 
     send(encodedMessage);
@@ -275,34 +278,33 @@ void Session::write()
 
     try
     {
-        bool writing = false;
-        if (!m_writing.compare_exchange_strong(writing, true))
+        if (m_writing.test_and_set())
         {
             return;
         }
-        std::unique_ptr<std::atomic_bool, decltype([](std::atomic_bool* ptr) { *ptr = false; })>
+        std::unique_ptr<boost::atomic_flag, decltype([](boost::atomic_flag* ptr) { ptr->clear(); })>
             defer(std::addressof(m_writing));
 
-        if (!tryPopSomeEncodedMsgs(m_writingPayloads, m_maxSendDataSize, m_maxSendMsgCountS))
+        if (!tryPopSomeEncodedMsgs(m_writings->payloads, m_maxSendDataSize, m_maxSendMsgCountS))
         {
             return;
         }
 
-        boost::container::small_vector<boost::asio::const_buffer, 16> buffers;
-        auto outputIt = std::back_inserter(buffers);
-        for (auto& payload : m_writingPayloads)
+        auto outputIt = std::back_inserter(m_writings->buffers);
+        for (auto& payload : m_writings->payloads)
         {
             payload.toConstBuffer(outputIt);
         }
         defer.release();  // NOLINT
-        m_server.get().asioInterface()->asyncWrite(m_socket, buffers,
-            [self = std::weak_ptr<Session>(shared_from_this())](
+        m_server.get().asioInterface()->asyncWrite(m_socket, m_writings->buffers,
+            [self = std::weak_ptr<Session>(shared_from_this()), writings = m_writings](
                 const boost::system::error_code _error, std::size_t _size) mutable {
                 if (auto session = self.lock())
                 {
                     std::vector<Payload> payloads;
-                    payloads.swap(session->m_writingPayloads);
-                    session->m_writing = false;
+                    payloads.swap(session->m_writings->payloads);
+                    session->m_writings->buffers.clear();
+                    session->m_writing.clear();
                     session->onWrite(_error, _size);
 
                     for (auto& payload : payloads)
@@ -471,9 +473,9 @@ void Session::doRead()
             {
                 if (ec)
                 {
-                    SESSION_LOG(INFO)
-                        << LOG_DESC("doRead error") << LOG_KV("endpoint", session->nodeIPEndpoint())
-                        << LOG_KV("message", ec.message());
+                    SESSION_LOG(INFO) << LOG_DESC("doRead failed")
+                                      << LOG_KV("endpoint", session->nodeIPEndpoint())
+                                      << LOG_KV("message", ec.message());
                     session->drop(TCPError);
                     return;
                 }
@@ -621,7 +623,8 @@ void Session::onMessage(NetworkException const& e, Message::Ptr message)
             }
             // TODO: move the logic to Service for deal with the forwarding message
             if (!message->dstP2PNodeID().empty() &&
-                message->dstP2PNodeID() != session->m_hostNodeID)
+                message->dstP2PNodeID() != session->m_hostInfo.p2pID &&
+                message->dstP2PNodeID() != session->m_hostInfo.rawP2pID)
             {
                 session->m_messageHandler(e, session, message);
                 return;
@@ -724,7 +727,7 @@ void Session::checkNetworkStatus()
     }
 }
 
-bcos::task::Task<Message::Ptr> bcos::gateway::Session::sendMessage(
+bcos::task::Task<Message::Ptr> bcos::gateway::Session::fastSendMessage(
     const Message& message, ::ranges::any_view<bytesConstRef> payloads, Options options)
 {
     if (!active())
@@ -748,7 +751,7 @@ bcos::task::Task<Message::Ptr> bcos::gateway::Session::sendMessage(
 
     if (c_fileLogLevel <= LogLevel::TRACE)
     {
-        SESSION_LOG(TRACE) << LOG_DESC("Session asyncSendMessage")
+        SESSION_LOG(TRACE) << LOG_DESC("Session fastSendMessage")
                            << LOG_KV("endpoint", nodeIPEndpoint()) << LOG_KV("seq", message.seq())
                            << LOG_KV("packetType", message.packetType())
                            << LOG_KV("ext", message.ext());

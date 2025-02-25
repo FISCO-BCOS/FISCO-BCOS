@@ -36,7 +36,6 @@ class LedgerCache
 private:
     ledger::LedgerInterface::Ptr m_ledger;
     ledger::LedgerConfig::Ptr m_ledgerConfig;
-    std::optional<evmc_uint256be> m_chainID;
 
     std::map<int64_t, h256, std::less<>> m_blockNumber2Hash;
     mutable bcos::SharedMutex x_blockNumber2Hash;
@@ -121,18 +120,18 @@ public:
 
     evmc_uint256be chainId()
     {
-        if (m_chainID)
+        // Note: the ledger-config is updated after every block committed
+        if (m_ledgerConfig != nullptr && m_ledgerConfig->chainId().has_value())
         {
-            return *m_chainID;
+            return m_ledgerConfig->chainId().value();
         }
-
+        // fetch the chainID if missed
         if (auto value = task::syncWait(
                 ledger::getSystemConfig(*m_ledger, ledger::SYSTEM_KEY_WEB3_CHAIN_ID)))
         {
             auto numChainID = boost::lexical_cast<u256>(std::get<0>(*value));
-            m_chainID.emplace(bcos::toEvmC(numChainID));
             EXECUTOR_LOG(INFO) << LOG_DESC("fetchChainId success") << LOG_KV("chainId", numChainID);
-            return *m_chainID;
+            return bcos::toEvmC(numChainID);
         }
 
         return {};

@@ -107,9 +107,8 @@ public:
      * @param _sealCallback after the  txpool responds to the sealed txs, the callback is
      * triggered
      */
-    virtual void asyncSealTxs(uint64_t _txsLimit, TxsHashSetPtr _avoidTxs,
-        std::function<void(Error::Ptr, bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr)>
-            _sealCallback) = 0;
+    virtual std::tuple<bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr> sealTxs(
+        uint64_t _txsLimit, TxsHashSetPtr _avoidTxs) = 0;
 
     virtual void asyncMarkTxs(const bcos::crypto::HashList& _txsHash, bool _sealedFlag,
         bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
@@ -172,6 +171,9 @@ public:
     virtual void clearAllTxs() {}
 
     virtual void tryToSyncTxsFromPeers() {}
+    virtual void registerTxsNotifier(
+        std::function<void(size_t, std::function<void(Error::Ptr)>)> _txsNotifier)
+    {}
 };
 
 }  // namespace bcos::txpool

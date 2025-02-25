@@ -453,13 +453,13 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
     {
         auto view = blockHeader->parentInfo();
         auto parentInfoIt = view.begin();
-        EXECUTOR_NAME_LOG(DEBUG) << BLOCK_NUMBER(blockHeader->number())
-                                 << "NextBlockHeader request: "
-                                 << LOG_KV("blockVersion", blockHeader->version())
-                                 << LOG_KV("schedulerTermId", schedulerTermId)
-                                 << LOG_KV("parentHash", blockHeader->number() > 0 ?
-                                                             (*parentInfoIt).blockHash.abridged() :
-                                                             "null");
+        EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(blockHeader->number())
+                                << "NextBlockHeader request: "
+                                << LOG_KV("blockVersion", blockHeader->version())
+                                << LOG_KV("schedulerTermId", schedulerTermId)
+                                << LOG_KV("parentHash", blockHeader->number() > 0 ?
+                                                            (*parentInfoIt).blockHash.abridged() :
+                                                            "null");
         setBlockVersion(blockHeader->version());
         {
             std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
@@ -481,10 +481,11 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
 
                 // check storage block Number
                 auto storageBlockNumber = getBlockNumberInStorage();
-                EXECUTOR_NAME_LOG(DEBUG) << "NextBlockHeader, executor load from backend storage, "
-                                            "check storage blockNumber"
-                                         << LOG_KV("storageBlockNumber", storageBlockNumber)
-                                         << LOG_KV("requestBlockNumber", blockHeader->number());
+                EXECUTOR_NAME_LOG(INFO) << "NextBlockHeader, executor load from backend storage, "
+                                           "check storage blockNumber"
+                                        << LOG_KV("storageBlockNumber", storageBlockNumber)
+                                        << LOG_KV("requestBlockNumber", blockHeader->number())
+                                        << LOG_KV("withDirtyFlag", withDirtyFlag);
                 // Note: skip check for sys contract deploy
                 if (blockHeader->number() - storageBlockNumber != 1 &&
                     !isSysContractDeploy(blockHeader->number()))
@@ -556,11 +557,11 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
         }
         m_lastCommittedBlockTimestamp = blockHeader->timestamp();
 
-        EXECUTOR_NAME_LOG(DEBUG) << BLOCK_NUMBER(blockHeader->number()) << "NextBlockHeader success"
-                                 << LOG_KV("number", blockHeader->number())
-                                 << LOG_KV("parentHash", blockHeader->number() > 0 ?
-                                                             (*parentInfoIt).blockHash.abridged() :
-                                                             "null");
+        EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(blockHeader->number()) << "NextBlockHeader success"
+                                << LOG_KV("number", blockHeader->number())
+                                << LOG_KV("parentHash", blockHeader->number() > 0 ?
+                                                            (*parentInfoIt).blockHash.abridged() :
+                                                            "null");
         callback(nullptr);
     }
     catch (std::exception& e)
@@ -1166,6 +1167,24 @@ void TransactionExecutor::getHash(bcos::protocol::BlockNumber number,
                             << LOG_KV("hash", hash.hex()) << LOG_KV("time(ms)", (end - start));
 
     callback(nullptr, std::move(hash));
+}
+
+void TransactionExecutor::updateEoaNonce(std::unordered_map<std::string, u256> const& eoa2Nonce)
+{
+    if (m_blockContext->features().get(
+            ledger::Features::Flag::bugfix_nonce_not_increase_when_revert))
+    {
+        for (auto&& [sender, nonce] : eoa2Nonce)
+        {
+            LEDGER_LOG(TRACE) << METRIC << LOG_DESC("updateEoaNonce") << LOG_KV("sender", sender)
+                              << LOG_KV("nonce", nonce);
+            auto eoa = ledger::account::EVMAccount(*m_blockContext->storage(), sender,
+                m_blockContext->features().get(ledger::Features::Flag::feature_raw_address));
+            auto nonceInStorage = task::syncWait(ledger::account::nonce(eoa));
+            auto nonceToUpdate = std::max(u256(nonceInStorage.value_or("0")), nonce) + 1;
+            task::syncWait(ledger::account::setNonce(eoa, nonceToUpdate.convert_to<std::string>()));
+        }
+    }
 }
 
 void TransactionExecutor::dagExecuteTransactions(

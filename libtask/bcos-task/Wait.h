@@ -15,6 +15,7 @@
  */
 
 #pragma once
+#include "AsyncTask.h"
 #include "Task.h"
 #include "Trait.h"
 #include <boost/atomic/atomic_flag.hpp>
@@ -28,18 +29,21 @@ namespace bcos::task
 
 constexpr inline struct Wait
 {
+    static AsyncTask executeTask(auto task) { co_await std::move(task); }
+
     template <IsAwaitable Task>
     void operator()(Task&& task) const
     {
-        std::forward<decltype(task)>(task).start();
+        auto asyncTask = executeTask(std::forward<Task>(task));
+        asyncTask.start();
     }
 } wait{};
 
 constexpr inline struct SyncWait
 {
     template <IsAwaitable Task>
-    auto operator()(
-        Task&& task, auto&&... args) const -> AwaitableReturnType<std::remove_cvref_t<Task>>
+    auto operator()(Task&& task, auto&&... args) const
+        -> AwaitableReturnType<std::remove_cvref_t<Task>>
     {
         using ReturnType = AwaitableReturnType<std::remove_cvref_t<Task>>;
         using ReturnTypeWrap = std::conditional_t<std::is_reference_v<ReturnType>,

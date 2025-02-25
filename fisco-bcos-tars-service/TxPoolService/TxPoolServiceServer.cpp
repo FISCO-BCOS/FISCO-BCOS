@@ -185,22 +185,23 @@ bcostars::Error TxPoolServiceServer::asyncSealTxs(tars::Int64 txsLimit,
         bcosAvoidTxs->insert(bcos::crypto::HashType(bcos::bytes(tx.begin(), tx.end())));
     }
 
-    m_txpoolInitializer->txpool()->asyncSealTxs(txsLimit, bcosAvoidTxs,
-        [current](bcos::Error::Ptr error, bcos::protocol::Block::Ptr _txsList,
-            bcos::protocol::Block::Ptr _sysTxsList) {
-            if (error)
-            {
-                TXPOOLSERVICE_LOG(WARNING)
-                    << LOG_DESC("asyncSealTxs failed") << LOG_KV("code", error->errorCode())
-                    << LOG_KV("msg", error->errorMessage());
-                async_response_asyncSealTxs(
-                    current, toTarsError(error), bcostars::Block(), bcostars::Block());
-                return;
-            }
-            async_response_asyncSealTxs(current, toTarsError(error),
-                std::dynamic_pointer_cast<bcostars::protocol::BlockImpl>(_txsList)->inner(),
-                std::dynamic_pointer_cast<bcostars::protocol::BlockImpl>(_sysTxsList)->inner());
-        });
+    try
+    {
+        auto [_txsList, _sysTxsList] =
+            m_txpoolInitializer->txpool()->sealTxs(txsLimit, bcosAvoidTxs);
+
+        async_response_asyncSealTxs(current, toTarsError({}),
+            std::dynamic_pointer_cast<bcostars::protocol::BlockImpl>(_txsList)->inner(),
+            std::dynamic_pointer_cast<bcostars::protocol::BlockImpl>(_sysTxsList)->inner());
+    }
+    catch (bcos::Error& error)
+    {
+        TXPOOLSERVICE_LOG(WARNING)
+            << LOG_DESC("asyncSealTxs failed") << LOG_KV("code", error.errorCode())
+            << LOG_KV("msg", error.errorMessage());
+        async_response_asyncSealTxs(
+            current, toTarsError(error), bcostars::Block(), bcostars::Block());
+    }
 
     return {};
 }

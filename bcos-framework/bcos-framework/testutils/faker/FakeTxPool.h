@@ -78,10 +78,11 @@ public:
     void notifyConnectedNodes(
         bcos::crypto::NodeIDSet const&, std::function<void(Error::Ptr)>) override
     {}
-    void asyncSealTxs(uint64_t, TxsHashSetPtr,
-        std::function<void(Error::Ptr, bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr)>)
-        override
-    {}
+    std::tuple<bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr> sealTxs(
+        uint64_t, TxsHashSetPtr) override
+    {
+        return {};
+    }
 
     void asyncMarkTxs(const HashList&, bool, bcos::protocol::BlockNumber,
         bcos::crypto::HashType const&, std::function<void(Error::Ptr)>) override
