@@ -197,13 +197,6 @@ public:
         co_return std::nullopt;
     }
 
-    virtual task::Task<void> batchInsertEoaNonce(bcos::storage::StorageInterface::Ptr storage,
-        std::unordered_map<std::string, uint64_t> eoa2Nonce,
-        std::unordered_map<std::string, uint64_t> fbEoa2Nonce)
-    {
-        co_return;
-    }
-
     virtual task::Task<std::optional<ledger::StorageState>> getStorageState(
         std::string_view _address, protocol::BlockNumber _blockNumber)
     {

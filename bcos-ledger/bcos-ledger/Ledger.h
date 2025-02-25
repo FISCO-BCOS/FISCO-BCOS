@@ -195,10 +195,6 @@ private:
         return _s.substr(_s.find_last_of('/') + 1);
     }
 
-    task::Task<void> batchInsertEoaNonce(bcos::storage::StorageInterface::Ptr storage,
-        std::unordered_map<std::string, uint64_t> eoa2Nonce,
-        std::unordered_map<std::string, uint64_t> fbEoa2Nonce) override;
-
     task::Task<std::optional<ledger::StorageState>> getStorageState(
         std::string_view _address, protocol::BlockNumber _blockNumber) override;
 

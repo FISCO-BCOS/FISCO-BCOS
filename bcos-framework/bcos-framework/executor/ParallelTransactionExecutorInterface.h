@@ -105,6 +105,8 @@ public:
     virtual void getHash(bcos::protocol::BlockNumber number,
         std::function<void(bcos::Error::UniquePtr, crypto::HashType)> callback) = 0;
 
+    virtual void updateEoaNonce(std::unordered_map<std::string, u256> const& nonceMap) = 0;
+
     /* ----- XA Transaction interface Start ----- */
 
     // Write data to storage uncommitted

@@ -228,8 +228,6 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     // number 2 nonce
     auto nonceBlock = m_blockFactory->createBlock();
     protocol::NonceList nonceList;
-    std::unordered_map<std::string, uint64_t> web3NonceMap{};
-    std::unordered_map<std::string, uint64_t> bcosNonceMap{};
     // get nonce from _blockTxs
     if (_blockTxs)
     {
@@ -394,41 +392,6 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
                              << LOG_KV("totalTxs", totalTxsCount) << LOG_KV("failedTxs", failedTxs)
                              << LOG_KV("incTxs", totalCount) << LOG_KV("incFailedTxs", failedCount);
         });
-}
-
-task::Task<void> Ledger::batchInsertEoaNonce(bcos::storage::StorageInterface::Ptr storage,
-    std::unordered_map<std::string, uint64_t> eoa2Nonce,
-    std::unordered_map<std::string, uint64_t> fbEoa2Nonce)
-{
-    auto features = co_await ledger::getFeatures(*this);
-
-    for (auto&& [sender, nonce] : fbEoa2Nonce)
-    {
-        if (eoa2Nonce.contains(sender))
-        {
-            eoa2Nonce[sender] += nonce;
-            continue;
-        }
-        // write in storage
-        ledger::account::EVMAccount eoa(
-            *storage, sender, features.get(Features::Flag::feature_raw_address));
-        if (!co_await ledger::account::exists(eoa))
-        {
-            co_await ledger::account::create(eoa);
-        }
-        auto nonceInStorage = co_await ledger::account::nonce(eoa);
-        auto const newNonce = nonce + std::stoull(nonceInStorage.value_or("0"));
-        co_await ledger::account::setNonce(eoa, std::to_string(newNonce));
-    }
-
-    co_await bcos::storage2::writeSome(
-        *storage, ::ranges::views::transform(eoa2Nonce, [&](auto& item) {
-            auto&& [sender, nonce] = item;
-            return std::make_tuple(
-                transaction_executor::StateKey(
-                    getContractTableName(SYS_DIRECTORY::USER_APPS, sender), "nonce"),
-                storage::Entry(std::to_string(nonce + 1)));
-        }));
 }
 
 task::Task<std::optional<ledger::StorageState>> Ledger::getStorageState(

@@ -1169,6 +1169,24 @@ void TransactionExecutor::getHash(bcos::protocol::BlockNumber number,
     callback(nullptr, std::move(hash));
 }
 
+void TransactionExecutor::updateEoaNonce(std::unordered_map<std::string, u256> const& eoa2Nonce)
+{
+    if (m_blockContext->features().get(
+            ledger::Features::Flag::bugfix_nonce_not_increase_when_revert))
+    {
+        for (auto&& [sender, nonce] : eoa2Nonce)
+        {
+            LEDGER_LOG(TRACE) << METRIC << LOG_DESC("updateEoaNonce") << LOG_KV("sender", sender)
+                              << LOG_KV("nonce", nonce);
+            auto eoa = ledger::account::EVMAccount(*m_blockContext->storage(), sender,
+                m_blockContext->features().get(ledger::Features::Flag::feature_raw_address));
+            auto nonceInStorage = task::syncWait(ledger::account::nonce(eoa));
+            auto nonceToUpdate = std::max(u256(nonceInStorage.value_or("0")), nonce) + 1;
+            task::syncWait(ledger::account::setNonce(eoa, nonceToUpdate.convert_to<std::string>()));
+        }
+    }
+}
+
 void TransactionExecutor::dagExecuteTransactions(
     gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
     std::function<void(
