@@ -1,6 +1,4 @@
 #include "BaselineSchedulerInitializer.h"
-#include "bcos-framework/ledger/Features.h"
-#include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-storage/RocksDBStorage2.h"
 #include "bcos-storage/StateKVResolver.h"
@@ -10,45 +8,6 @@
 #include "bcos-transaction-scheduler/SchedulerSerialImpl.h"
 #include "libinitializer/Common.h"
 #include <boost/throw_exception.hpp>
-#include <stdexcept>
-
-bcos::task::Task<void> bcos::transaction_scheduler::BaselineSchedulerInitializer::checkRequirements(
-    bcos::ledger::LedgerInterface& ledger, bool dmc, bool wasm)
-{
-    // 必须启用所有bugfix才能开启baseline scheduler
-    // All bugfix must be enabled to activate baseline scheduler
-    auto features = co_await bcos::ledger::getFeatures(ledger);
-    auto missingKeys = bcos::ledger::Features::featureKeys() |
-                       RANGES::views::filter([&](std::string_view feature) {
-                           return feature.starts_with("bugfix") && !features.get(feature);
-                       }) |
-                       RANGES::to<std::vector>();
-
-#if 0
-    if (!missingKeys.empty())
-    {
-        std::string message("All bugfix must be enabled to activate baseline scheduler, missing: ");
-        for (auto const& key : missingKeys)
-        {
-            message += key;
-            message += " ";
-        }
-
-        INITIALIZER_LOG(ERROR) << message;
-        BOOST_THROW_EXCEPTION(std::runtime_error(message));
-    }
-#endif
-
-    // baseline不支持dmc模式或wasm模式
-    // Baseline does not support DMC mode or WASM mode
-    if (dmc || wasm)
-    {
-        auto message = fmt::format(
-            "Baseline does not support DMC mode or WASM mode, dmc: {} wasm: {}", dmc, wasm);
-        INITIALIZER_LOG(ERROR) << message;
-        BOOST_THROW_EXCEPTION(std::runtime_error(message));
-    }
-}
 
 using MutableStorage =
     bcos::storage2::memory_storage::MemoryStorage<bcos::transaction_executor::StateKey,

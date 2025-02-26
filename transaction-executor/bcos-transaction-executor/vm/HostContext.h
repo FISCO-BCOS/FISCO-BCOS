@@ -104,8 +104,8 @@ inline task::Task<std::shared_ptr<Executable>> getExecutable(
         co_return std::move(*executable);
     }
 
-    Account<std::decay_t<decltype(storage)>> account(storage, address, binaryAddress);
-    if (auto codeEntry = co_await ledger::account::code(account))
+    if (Account<std::decay_t<decltype(storage)>> account(storage, address, binaryAddress);
+        auto codeEntry = co_await ledger::account::code(account))
     {
         auto executable = std::make_shared<Executable>(std::move(*codeEntry), revision);
         co_await storage2::writeOne(getCacheExecutables(), address, executable);
@@ -117,16 +117,12 @@ inline task::Task<std::shared_ptr<Executable>> getExecutable(
 inline task::Task<bool> checkEnableTransfer(const ledger::LedgerConfig& ledgerConfig, auto& storage,
     const protocol::BlockHeader& blockHeader)
 {
-    if (auto featureBalance = ledgerConfig.features().get(ledger::Features::Flag::feature_balance);
-        featureBalance)
+    if (auto balanceTransfer = co_await ledger::getSystemConfig(storage,
+            magic_enum::enum_name(ledger::SystemConfig::balance_transfer), ledger::fromStorage);
+        balanceTransfer && std::get<0>(*balanceTransfer) != "0" &&
+        std::get<1>(*balanceTransfer) <= blockHeader.number())
     {
-        if (auto balanceTransfer = co_await ledger::getSystemConfig(storage,
-                magic_enum::enum_name(ledger::SystemConfig::balance_transfer), ledger::fromStorage);
-            balanceTransfer && std::get<0>(*balanceTransfer) != "0" &&
-            std::get<1>(*balanceTransfer) <= blockHeader.number())
-        {
-            co_return true;
-        }
+        co_return true;
     }
     co_return false;
 }
@@ -232,9 +228,7 @@ private:
         m_message(
             getMessage(message, m_blockHeader.get().number(), m_contextID, m_seq, m_hashImpl)),
         m_recipientAccount(getAccount(*this, this->message().recipient)),
-        m_revision(m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_evm_cancun) ?
-                       EVMC_CANCUN :
-                       EVMC_PARIS),
+        m_revision(EVMC_CANCUN),
         m_level(seq)
     {}
 
@@ -286,7 +280,7 @@ public:
         }
         else
         {
-            std::uninitialized_fill_n(value.bytes, sizeof(value), 0);
+            ::ranges::fill(value.bytes, 0);
         }
         if (c_fileLogLevel <= LogLevel::TRACE)
         {

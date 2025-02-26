@@ -206,7 +206,7 @@ task::Task<consensus::ConsensusNodeList> tag_invoke(
 }
 
 task::Task<void> tag_invoke(ledger::tag_t<setNodeList> /*unused*/, auto& storage,
-    RANGES::input_range auto&& nodeList, bool forceSet = false)
+    ::ranges::input_range auto&& nodeList, bool forceSet = false)
 {
     LEDGER_LOG(DEBUG) << "SetNodeList request";
     auto ledgerNodeList = RANGES::views::transform(nodeList, [&](auto const& node) {

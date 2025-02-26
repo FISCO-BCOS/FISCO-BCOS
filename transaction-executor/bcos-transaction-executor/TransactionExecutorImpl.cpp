@@ -12,25 +12,24 @@ bcos::transaction_executor::TransactionExecutorImpl::TransactionExecutorImpl(
 evmc_message bcos::transaction_executor::newEVMCMessage(
     protocol::Transaction const& transaction, int64_t gasLimit)
 {
-    auto toAddress = unhexAddress(transaction.to());
+    auto recipientAddress = unhexAddress(transaction.to());
     evmc_message message = {.kind = transaction.to().empty() ? EVMC_CREATE : EVMC_CALL,
         .flags = 0,
         .depth = 0,
         .gas = gasLimit,
-        .recipient = toAddress,
+        .recipient = recipientAddress,
         .destination_ptr = nullptr,
         .destination_len = 0,
-        .sender =
-            (!transaction.sender().empty() && transaction.sender().size() == sizeof(evmc_address)) ?
-                *(evmc_address*)transaction.sender().data() :
-                evmc_address{},
+        .sender = (transaction.sender().size() == sizeof(evmc_address)) ?
+                      *(evmc_address*)transaction.sender().data() :
+                      evmc_address{},
         .sender_ptr = nullptr,
         .sender_len = 0,
         .input_data = transaction.input().data(),
         .input_size = transaction.input().size(),
         .value = toEvmC(u256(transaction.value())),
         .create2_salt = {},
-        .code_address = toAddress};
+        .code_address = recipientAddress};
 
     return message;
 }
