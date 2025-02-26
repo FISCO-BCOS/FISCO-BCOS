@@ -54,7 +54,11 @@ private:
     // groupID => groupType => P2PNodeIDList
     std::map<std::string, std::map<GroupType, std::set<std::string>>, std::less<>>
         m_groupP2PNodeList;
-    mutable std::mutex x_groupP2PNodeList;
+
+    // Note: since m_groupP2PNodeList not changed frequently,
+    // Most scenarios involve reading, with only a few involving writing,
+    // so using a read-write lock will not cause significant additional overhead.
+    mutable SharedMutex x_groupP2PNodeList;
 };
 
 class GatewayStatusFactory
