@@ -45,7 +45,7 @@ enum class SystemConfig
     feature_balance_precompiled,
     web3_chain_id,
     balance_transfer,
-    execution_engine_version,
+    executor_version,
 };
 struct SystemConfigs
 {
