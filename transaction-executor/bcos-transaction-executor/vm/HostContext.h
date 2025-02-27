@@ -165,8 +165,6 @@ private:
             [this](const evmc_message& message) { return task::syncWait(externalCall(message)); };
     }
 
-    constexpr evmc_message& mutableMessage() { return m_message; }
-
     task::Task<void> transferBalance(const evmc_message& message)
     {
         auto value = fromEvmC(message.value);
@@ -282,6 +280,7 @@ public:
     HostContext& operator=(HostContext&&) noexcept = default;
 
     constexpr evmc_message const& message() const& { return m_message; }
+    constexpr evmc_message& mutableMessage() & { return m_message; }
 
     friend auto getAccount(HostContext& hostContext, const evmc_address& address)
     {
@@ -420,8 +419,9 @@ public:
     task::Task<void> prepare()
     {
         auto const& ref = message();
-        assert(
-            !concepts::bytebuffer::equalTo(ref.recipient.bytes, executor::EMPTY_EVM_ADDRESS.bytes));
+        // assert(
+        //     !concepts::bytebuffer::equalTo(ref.recipient.bytes,
+        //     executor::EMPTY_EVM_ADDRESS.bytes));
         if (ref.kind == EVMC_CREATE || ref.kind == EVMC_CREATE2)
         {
             prepareCreate();
