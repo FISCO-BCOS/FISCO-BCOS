@@ -3,6 +3,7 @@
 #include "EVMCResult.h"
 #include "bcos-codec/abi/ContractABICodec.h"
 #include "bcos-protocol/TransactionStatus.h"
+#include "bcos-utilities/Common.h"
 #include "bcos-utilities/Exceptions.h"
 #include <evmc/evmc.h>
 #include <boost/throw_exception.hpp>
@@ -173,4 +174,33 @@ bcos::transaction_executor::EVMCResult bcos::transaction_executor::makeErrorEVMC
             .create_address = {},
             .padding = {}},
         status};
+}
+
+std::ostream& operator<<(std::ostream& output, const evmc_message& message)
+{
+    output << "evmc_message{";
+    output << "kind: " << message.kind << ", ";
+    output << "flags: " << message.flags << ", ";
+    output << "depth: " << message.depth << ", ";
+    output << "gas: " << message.gas << ", ";
+    output << "recipient: " << bcos::bytesConstRef(message.recipient.bytes) << ", ";
+    output << "sender: " << bcos::bytesConstRef(message.sender.bytes) << ", ";
+    output << "input_data: " << bcos::bytesConstRef(message.input_data, message.input_size) << ", ";
+    output << "value: " << bcos::bytesConstRef(message.value.bytes) << ", ";
+    output << "create2_salt: " << bcos::bytesConstRef(message.create2_salt.bytes) << ", ";
+    output << "code_address: " << bcos::bytesConstRef(message.code_address.bytes) << "}";
+    return output;
+}
+
+std::ostream& operator<<(std::ostream& output, const evmc_result& result)
+{
+    output << "evmc_result{";
+    output << "status_code: " << result.status_code << ", ";
+    output << "gas_left: " << result.gas_left << ", ";
+    output << "gas_refund: " << result.gas_refund << ", ";
+    output << "output_data: " << bcos::bytesConstRef(result.output_data, result.output_size)
+           << ", ";
+    output << "release: " << result.release << ", ";
+    output << "create_address: " << bcos::bytesConstRef(result.create_address.bytes) << "}";
+    return output;
 }
