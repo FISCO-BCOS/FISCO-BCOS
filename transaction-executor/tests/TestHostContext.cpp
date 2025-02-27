@@ -521,7 +521,9 @@ BOOST_AUTO_TEST_CASE(transferBalance)
         BOOST_CHECK_EQUAL(co_await bcos::ledger::account::balance(senderAccount), bcos::u256(1001));
         BOOST_CHECK_EQUAL(co_await bcos::ledger::account::balance(recipientAccount), bcos::u256(0));
 
-        message.gas = 21000;
+        auto& contextMessage = transferHostContext.mutableMessage();
+
+        contextMessage.gas = 21000;
         evmResult = co_await transferHostContext.execute();
         BOOST_CHECK_EQUAL(evmResult.status_code, EVMC_SUCCESS);
         BOOST_CHECK_EQUAL(evmResult.gas_left, 21000);
