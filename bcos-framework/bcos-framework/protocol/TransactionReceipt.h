@@ -56,17 +56,19 @@ public:
     virtual void setMessage(std::string message) = 0;
     virtual size_t size() const = 0;
 
-    // NOTE: only use for trace log
-    virtual std::string toString() const
+    friend std::ostream& operator<<(std::ostream& output, const TransactionReceipt& receipt)
     {
-        std::stringstream ss;
-        ss << "TransactionReceipt{" << "hash=" << hash() << ", " << "version=" << version() << ", "
-           << "gasUsed=" << gasUsed() << ", " << "contractAddress=" << contractAddress() << ", "
-           << "status=" << status() << ", " << "output=" << toHex(output()) << ", "
-           << "logEntries=" << logEntries().size() << ", " << "blockNumber=" << blockNumber()
-           << ", " << "effectiveGasPrice=" << effectiveGasPrice() << ", " << "message=" << message()
-           << "}";
-        return ss.str();
+        output << "TransactionReceipt{" << "hash=" << receipt.hash() << ", "
+               << "version=" << receipt.version() << ", "
+               << "gasUsed=" << receipt.gasUsed() << ", "
+               << "contractAddress=" << receipt.contractAddress() << ", "
+               << "status=" << receipt.status() << ", " << "output=" << toHex(receipt.output())
+               << ", "
+               << "logEntries=" << receipt.logEntries().size() << ", "
+               << "blockNumber=" << receipt.blockNumber() << ", "
+               << "effectiveGasPrice=" << receipt.effectiveGasPrice() << ", "
+               << "message=" << receipt.message() << "}";
+        return output;
     }
 };
 using Receipts = std::vector<TransactionReceipt::Ptr>;

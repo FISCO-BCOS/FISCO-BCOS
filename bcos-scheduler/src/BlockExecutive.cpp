@@ -1655,14 +1655,7 @@ void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr outp
         // write receipt in results
         SCHEDULER_LOG(TRACE) << " 6.GenReceipt:\t [^^] " << output->toString()
                              << " -> contextID:" << output->contextID() - m_startContextID
-                             << ", receipt: " << receipt->hash()
-                             << ", gasUsed: " << receipt->gasUsed()
-                             << ", version: " << receipt->version()
-                             << ", status: " << receipt->status();
-        if (c_fileLogLevel == LogLevel::TRACE)
-        {
-            SCHEDULER_LOG(TRACE) << receipt->toString();
-        }
+                             << *receipt;
         m_executiveResults[output->contextID() - m_startContextID].receipt = std::move(receipt);
         break;
     }
@@ -1676,15 +1669,7 @@ void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr outp
         // write receipt in results
         SCHEDULER_LOG(TRACE) << " 6.GenReceipt:\t [^^] " << output->toString()
                              << " -> contextID:" << output->contextID() - m_startContextID
-                             << ", receipt: " << receipt->hash()
-                             << ", gasUsed: " << receipt->gasUsed()
-                             << ", version: " << receipt->version()
-                             << ", status: " << receipt->status()
-                             << ", effectiveGasPrice: " << receipt->effectiveGasPrice();
-        if (c_fileLogLevel == LogLevel::TRACE)
-        {
-            SCHEDULER_LOG(TRACE) << receipt->toString();
-        }
+                             << *receipt;
         m_executiveResults[output->contextID() - m_startContextID].receipt = std::move(receipt);
         break;
     }
