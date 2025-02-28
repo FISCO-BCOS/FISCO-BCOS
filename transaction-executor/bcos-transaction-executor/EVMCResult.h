@@ -47,4 +47,8 @@ std::tuple<bcos::protocol::TransactionStatus, bcos::bytes> evmcStatusToErrorMess
 
 EVMCResult makeErrorEVMCResult(crypto::Hash const& hashImpl, protocol::TransactionStatus status,
     evmc_status_code evmStatus, int64_t gas, const std::string& errorInfo);
+
 }  // namespace bcos::transaction_executor
+
+std::ostream& operator<<(std::ostream& output, const evmc_message& message);
+std::ostream& operator<<(std::ostream& output, const evmc_result& result);

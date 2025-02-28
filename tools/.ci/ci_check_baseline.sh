@@ -174,19 +174,19 @@ LOG_INFO "======== check baseline cases ========"
 init_baseline ""
 expand_node ""
 bash ${current_path}/.ci/console_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
-# if [[ ${?} == "0" ]]; then
-#         LOG_INFO "console_integrationTest success"
-#     else
-#         echo "console_integrationTest error"
-#         exit 1
-# fi
-# bash ${current_path}/.ci/java_sdk_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
-# if [[ ${?} == "0" ]]; then
-#         LOG_INFO "java_sdk_integrationTest success"
-#     else
-#         echo "java_sdk_integrationTest error"
-#         exit 1
-# fi
+if [[ ${?} == "0" ]]; then
+        LOG_INFO "console_integrationTest success"
+    else
+        echo "console_integrationTest error"
+        exit 1
+fi
+bash ${current_path}/.ci/java_sdk_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
+if [[ ${?} == "0" ]]; then
+        LOG_INFO "java_sdk_integrationTest success"
+    else
+        echo "java_sdk_integrationTest error"
+        exit 1
+fi
 bash ${current_path}/.ci/java_sdk_demo_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
 if [[ ${?} == "0" ]]; then
        LOG_INFO "java_sdk_demo_ci_test success"

@@ -74,9 +74,8 @@ struct NotFoundCodeError : public bcos::Error {};
 
 evmc_bytes32 evm_hash_fn(const uint8_t* data, size_t size);
 
-std::variant<const evmc_message*, evmc_message> getMessage(const evmc_message& inputMessage,
-    protocol::BlockNumber blockNumber, int64_t contextID, int64_t seq,
-    crypto::Hash const& hashImpl);
+evmc_message getMessage(const evmc_message& inputMessage, protocol::BlockNumber blockNumber,
+    int64_t contextID, int64_t seq, crypto::Hash const& hashImpl);
 
 struct Executable
 {
@@ -149,7 +148,7 @@ private:
     std::reference_wrapper<const PrecompiledManager> m_precompiledManager;
     std::reference_wrapper<const ledger::LedgerConfig> m_ledgerConfig;
     std::reference_wrapper<const crypto::Hash> m_hashImpl;
-    std::variant<const evmc_message*, evmc_message> m_message;
+    evmc_message m_message;
     Account<Storage> m_recipientAccount;
 
     evmc_revision m_revision;
@@ -164,23 +163,6 @@ private:
     {
         return
             [this](const evmc_message& message) { return task::syncWait(externalCall(message)); };
-    }
-
-    constexpr evmc_message const& message() const&
-    {
-        return std::visit(
-            bcos::overloaded{
-                [](const evmc_message* message) -> evmc_message const& { return *message; },
-                [](const evmc_message& message) -> evmc_message const& { return message; }},
-            m_message);
-    }
-    constexpr evmc_message& mutableMessage()
-    {
-        if (auto* evmcMessage = std::get_if<const evmc_message*>(std::addressof(m_message)))
-        {
-            m_message.emplace<evmc_message>(**evmcMessage);
-        }
-        return std::get<evmc_message>(m_message);
     }
 
     task::Task<void> transferBalance(const evmc_message& message)
@@ -246,7 +228,7 @@ private:
         }
     }
 
-    inline constexpr static struct InnerConstructor
+    constexpr static struct InnerConstructor
     {
     } innerConstructor{};
 
@@ -296,6 +278,9 @@ public:
     HostContext& operator=(HostContext const&) = default;
     HostContext(HostContext&&) noexcept = default;
     HostContext& operator=(HostContext&&) noexcept = default;
+
+    constexpr evmc_message const& message() const& { return m_message; }
+    constexpr evmc_message& mutableMessage() & { return m_message; }
 
     friend auto getAccount(HostContext& hostContext, const evmc_address& address)
     {
@@ -434,8 +419,9 @@ public:
     task::Task<void> prepare()
     {
         auto const& ref = message();
-        assert(
-            !concepts::bytebuffer::equalTo(ref.recipient.bytes, executor::EMPTY_EVM_ADDRESS.bytes));
+        // assert(
+        //     !concepts::bytebuffer::equalTo(ref.recipient.bytes,
+        //     executor::EMPTY_EVM_ADDRESS.bytes));
         if (ref.kind == EVMC_CREATE || ref.kind == EVMC_CREATE2)
         {
             prepareCreate();
@@ -451,10 +437,7 @@ public:
         const auto* ref = std::addressof(message());
         if (c_fileLogLevel <= LogLevel::TRACE)
         {
-            HOST_CONTEXT_LOG(TRACE)
-                << "HostContext execute, kind: " << ref->kind << " level: " << m_level
-                << " seq:" << m_seq.get() << " sender:" << address2HexString(ref->sender)
-                << " recipient:" << address2HexString(ref->recipient) << " gas:" << ref->gas;
+            HOST_CONTEXT_LOG(TRACE) << "HostContext execute: " << *ref;
         }
 
         auto savepoint = current(m_rollbackableStorage.get());
@@ -564,12 +547,10 @@ public:
             }
         }
 
-        if (c_fileLogLevel <= LogLevel::TRACE) [[unlikely]]
+        if (c_fileLogLevel <= LogLevel::TRACE)
         {
-            HOST_CONTEXT_LOG(TRACE)
-                << "HostContext execute finished, kind: " << ref->kind << " seq:" << m_seq
-                << " status: " << evmResult->status_code << " gas: " << evmResult->gas_left
-                << " output: " << bytesConstRef(evmResult->output_data, evmResult->output_size);
+            HOST_CONTEXT_LOG(TRACE) << "HostContext execute finished, kind: " << ref->kind
+                                    << " seq: " << m_seq << " " << *evmResult;
         }
         co_return std::move(*evmResult);
     }
@@ -579,10 +560,7 @@ public:
         ++m_seq;
         if (c_fileLogLevel <= LogLevel::TRACE) [[unlikely]]
         {
-            HOST_CONTEXT_LOG(TRACE)
-                << "External call, kind: " << message.kind << " seq:" << m_seq
-                << " sender:" << address2HexString(message.sender)
-                << " recipient:" << address2HexString(message.recipient) << " gas:" << message.gas;
+            HOST_CONTEXT_LOG(TRACE) << "External call: " << message;
         }
 
         HostContext hostcontext(innerConstructor, m_rollbackableStorage.get(),
@@ -595,7 +573,7 @@ public:
         if (result.status_code == EVMC_SUCCESS && !logs.empty())
         {
             m_logs.reserve(m_logs.size() + RANGES::size(logs));
-            RANGES::move(logs, std::back_inserter(m_logs));
+            ::ranges::move(logs, std::back_inserter(m_logs));
         }
         co_return result;
     }

@@ -78,6 +78,7 @@ macro(configure_project)
     default_option(WITH_WASM ON)
     default_option(WITH_VTUNE_ITT OFF)
     default_option(ONLY_CPP_SDK OFF)
+    default_option(TOOLS OFF)
 
     if((NOT FULLNODE) AND (NOT WITH_LIGHTNODE) AND WITH_CPPSDK)
         set(ONLY_CPP_SDK ON)

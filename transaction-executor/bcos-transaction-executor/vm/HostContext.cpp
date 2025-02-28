@@ -7,51 +7,46 @@ evmc_bytes32 bcos::transaction_executor::hostcontext::evm_hash_fn(const uint8_t*
     return toEvmC(executor::GlobalHashImpl::g_hashImpl->hash(bytesConstRef(data, size)));
 }
 
-std::variant<const evmc_message*, evmc_message> bcos::transaction_executor::hostcontext::getMessage(
-    const evmc_message& inputMessage, protocol::BlockNumber blockNumber, int64_t contextID,
-    int64_t seq, crypto::Hash const& hashImpl)
+evmc_message bcos::transaction_executor::hostcontext::getMessage(const evmc_message& inputMessage,
+    protocol::BlockNumber blockNumber, int64_t contextID, int64_t seq, crypto::Hash const& hashImpl)
 {
-    std::variant<const evmc_message*, evmc_message> message;
-    switch (inputMessage.kind)
+    evmc_message message = inputMessage;
+    switch (message.kind)
     {
     case EVMC_CREATE:
     {
-        auto& ref = message.emplace<evmc_message>(inputMessage);
         if (concepts::bytebuffer::equalTo(
-                inputMessage.code_address.bytes, executor::EMPTY_EVM_ADDRESS.bytes))
+                message.code_address.bytes, executor::EMPTY_EVM_ADDRESS.bytes))
         {
             auto address = fmt::format(FMT_COMPILE("{}_{}_{}"), blockNumber, contextID, seq);
             auto hash = hashImpl.hash(address);
-            std::copy_n(hash.data(), sizeof(ref.code_address.bytes), ref.code_address.bytes);
+            std::copy_n(
+                hash.data(), sizeof(message.code_address.bytes), message.code_address.bytes);
         }
-        ref.recipient = ref.code_address;
+        message.recipient = message.code_address;
         break;
     }
     case EVMC_CREATE2:
     {
-        auto& ref = message.emplace<evmc_message>(inputMessage);
-        std::array<bcos::byte, 1 + sizeof(ref.sender.bytes) + sizeof(inputMessage.create2_salt) +
+        std::array<bcos::byte, 1 + sizeof(message.sender.bytes) + sizeof(message.create2_salt) +
                                    crypto::HashType::SIZE>
             buffer;
         uint8_t* ptr = buffer.data();
         *ptr++ = 0xff;
-        ptr = std::uninitialized_copy_n(ref.sender.bytes, sizeof(ref.sender.bytes), ptr);
-        auto salt = toBigEndian(fromEvmC(inputMessage.create2_salt));
+        ptr = std::uninitialized_copy_n(message.sender.bytes, sizeof(message.sender.bytes), ptr);
+        auto salt = toBigEndian(fromEvmC(message.create2_salt));
         ptr = std::uninitialized_copy(salt.begin(), salt.end(), ptr);
-        auto inputHash = hashImpl.hash(bytesConstRef(ref.input_data, ref.input_size));
+        auto inputHash = hashImpl.hash(bytesConstRef(message.input_data, message.input_size));
         ptr = std::uninitialized_copy(inputHash.begin(), inputHash.end(), ptr);
         auto addressHash = hashImpl.hash(bytesConstRef(buffer.data(), buffer.size()));
 
-        std::copy_n(
-            addressHash.begin() + 12, sizeof(ref.code_address.bytes), ref.code_address.bytes);
-        ref.recipient = ref.code_address;
+        std::copy_n(addressHash.begin() + 12, sizeof(message.code_address.bytes),
+            message.code_address.bytes);
+        message.recipient = message.code_address;
         break;
     }
     default:
-    {
-        message.emplace<const evmc_message*>(std::addressof(inputMessage));
         break;
-    }
     }
     return message;
 }
