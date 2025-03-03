@@ -27,25 +27,14 @@ struct Precompiled
     std::optional<ledger::Features::Flag> m_flag;
     size_t m_size{1};
 
-    explicit Precompiled(auto precompiled) : m_precompiled(std::move(precompiled)) {}
-    Precompiled(auto precompiled, ledger::Features::Flag flag)
-      : m_precompiled(std::move(precompiled)), m_flag(flag)
-    {}
-    Precompiled(auto precompiled, size_t size) : m_precompiled(precompiled), m_size(size) {}
+    explicit Precompiled(decltype(m_precompiled) precompiled);
+    Precompiled(decltype(m_precompiled) precompiled, ledger::Features::Flag flag);
+    Precompiled(decltype(m_precompiled) precompiled, size_t size);
 };
 
-inline constexpr struct
-{
-    size_t operator()(Precompiled const& precompiled) const noexcept { return precompiled.m_size; }
-} size{};
+size_t size(Precompiled const& precompiled);
 
-inline constexpr struct
-{
-    std::optional<ledger::Features::Flag> operator()(Precompiled const& precompiled) const noexcept
-    {
-        return precompiled.m_flag;
-    }
-} featureFlag{};
+std::optional<ledger::Features::Flag> featureFlag(Precompiled const& precompiled);
 
 inline constexpr struct
 {

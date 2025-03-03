@@ -37,7 +37,6 @@
 #include <evmc/evmc.h>
 #include <evmc/instructions.h>
 #include <boost/algorithm/string/case_conv.hpp>
-#include <algorithm>
 #include <iterator>
 #include <memory>
 #include <set>
