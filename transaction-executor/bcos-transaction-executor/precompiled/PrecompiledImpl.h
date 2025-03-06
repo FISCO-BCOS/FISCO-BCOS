@@ -33,7 +33,6 @@ struct Precompiled
 };
 
 size_t size(Precompiled const& precompiled);
-
 std::optional<ledger::Features::Flag> featureFlag(Precompiled const& precompiled);
 
 inline constexpr struct
@@ -52,7 +51,7 @@ inline constexpr struct
                     auto gas = precompiled.cost({message.input_data, message.input_size});
 
                     auto buffer = std::make_unique_for_overwrite<uint8_t[]>(output.size());
-                    std::copy(output.begin(), output.end(), buffer.get());
+                    ::ranges::copy(output, buffer.get());
                     EVMCResult result{
                         evmc_result{
                             .status_code = success ? EVMC_SUCCESS : EVMC_REVERT,
