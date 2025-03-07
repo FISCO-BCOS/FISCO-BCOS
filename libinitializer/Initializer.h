@@ -116,8 +116,8 @@ private:
     bcos::ledger::LedgerInterface::Ptr m_ledger;
     std::shared_ptr<bcos::scheduler::SchedulerInterface> m_scheduler;
     std::weak_ptr<bcos::executor::SwitchExecutorManager> m_switchExecutorManager;
-    std::string const c_consensusStorageDBName = "consensus_log";
-    std::string const c_fileSeparator = "/";
+    std::string c_consensusStorageDBName = "consensus_log";
+    std::string c_fileSeparator = "/";
     std::shared_ptr<bcos::archive::ArchiveService> m_archiveService = nullptr;
     bcos::storage::TransactionalStorageInterface::Ptr m_storage = nullptr;
     // if enable SeparateBlockAndState,txs and receipts will be stored in m_blockStorage

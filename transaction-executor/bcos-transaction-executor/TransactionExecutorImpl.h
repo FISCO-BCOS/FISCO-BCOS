@@ -77,9 +77,9 @@ public:
                          *(evmc_address*)m_transaction.get().sender().data() :
                          evmc_address{}),
             m_hostContext(m_rollbackableStorage, m_rollbackableTransientStorage, blockHeader,
-                newEVMCMessage(m_blockHeader.get().number(), transaction, m_gasLimit, m_origin), m_origin,
-                transaction.abi(), contextID, m_seq, executor.m_precompiledManager, ledgerConfig,
-                *executor.m_hashImpl, task::syncWait)
+                newEVMCMessage(m_blockHeader.get().number(), transaction, m_gasLimit, m_origin),
+                m_origin, transaction.abi(), contextID, m_seq, executor.m_precompiledManager,
+                ledgerConfig, *executor.m_hashImpl, task::syncWait)
         {}
     };
 
@@ -221,12 +221,7 @@ public:
                                    std::to_string(executeContext.m_transaction.get().version())));
         }
 
-        if (c_fileLogLevel <= LogLevel::TRACE)
-        {
-            TRANSACTION_EXECUTOR_LOG(TRACE)
-                << "Execte transaction finished: " << receipt->toString();
-        }
-
+        TRANSACTION_EXECUTOR_LOG(TRACE) << "Execte transaction finished: " << *receipt;
         co_return receipt;  // 完成第三步 Complete the third step
     }
 

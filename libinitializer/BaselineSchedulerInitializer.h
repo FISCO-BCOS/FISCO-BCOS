@@ -13,9 +13,6 @@ namespace bcos::transaction_scheduler
 class BaselineSchedulerInitializer
 {
 public:
-    static bcos::task::Task<void> checkRequirements(
-        bcos::ledger::LedgerInterface& ledger, bool dmc, bool wasm);
-
     static std::tuple<std::function<std::shared_ptr<scheduler::SchedulerInterface>()>,
         std::function<void(std::function<void(protocol::BlockNumber)>)>>
     build(::rocksdb::DB& rocksDB, std::shared_ptr<protocol::BlockFactory> blockFactory,
