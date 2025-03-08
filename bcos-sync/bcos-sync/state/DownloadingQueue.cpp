@@ -575,6 +575,11 @@ void DownloadingQueue::commitBlockState(bcos::protocol::Block::Ptr _block)
             {
                 return;
             }
+            if (auto executorVersion = _ledgerConfig->executorVersion(); executorVersion > 0)
+            {
+                BLKSYNC_LOG(INFO) << "Use executor version: " << executorVersion;
+                downloadingQueue->m_config->scheduler()->setVersion(executorVersion, _ledgerConfig);
+            }
             if (_error != nullptr)
             {
                 BLKSYNC_LOG(WARNING)

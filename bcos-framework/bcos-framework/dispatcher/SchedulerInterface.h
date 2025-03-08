@@ -68,5 +68,6 @@ public:
         std::function<void(Error::Ptr&&)> callback) = 0;
 
     virtual void stop() {};
+    virtual void setVersion(int version, ledger::LedgerConfig::Ptr ledgerConfig) {};
 };
 }  // namespace bcos::scheduler

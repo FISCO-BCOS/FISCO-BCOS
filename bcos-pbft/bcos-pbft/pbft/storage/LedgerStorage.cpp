@@ -366,6 +366,13 @@ void LedgerStorage::commitStableCheckPoint(PBFTProposalInterface::Ptr _stablePro
             {
                 return;
             }
+
+            if (auto executorVersion = _ledgerConfig->executorVersion(); executorVersion > 0)
+            {
+                PBFT_STORAGE_LOG(INFO) << "Use executor version: " << executorVersion;
+                ledgerStorage->m_scheduler->setVersion(executorVersion, _ledgerConfig);
+            }
+
             if (_error != nullptr)
             {
                 PBFT_STORAGE_LOG(ERROR) << LOG_DESC("commitStableCheckPoint failed")

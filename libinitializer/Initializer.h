@@ -25,6 +25,7 @@
 #include "TxPoolInitializer.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-tool/NodeConfig.h"
+#include "libinitializer/MultiVersionScheduler.h"
 #include "tools/archive-tool/ArchiveService.h"
 #include <bcos-executor/src/executor/SwitchExecutorManager.h>
 #include <bcos-scheduler/src/SchedulerManager.h>
@@ -114,7 +115,7 @@ private:
     std::shared_ptr<LightNodeInitializer> m_lightNodeInitializer;
 #endif
     bcos::ledger::LedgerInterface::Ptr m_ledger;
-    std::shared_ptr<bcos::scheduler::SchedulerInterface> m_scheduler;
+    std::shared_ptr<transaction_scheduler::MultiVersionScheduler> m_scheduler;
     std::weak_ptr<bcos::executor::SwitchExecutorManager> m_switchExecutorManager;
     std::string const c_consensusStorageDBName = "consensus_log";
     std::string const c_fileSeparator = "/";
