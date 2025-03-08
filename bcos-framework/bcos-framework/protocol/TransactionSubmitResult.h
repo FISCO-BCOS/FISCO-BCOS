@@ -53,20 +53,26 @@ public:
     virtual void setTo(std::string const& _to) = 0;
 
     // NOTE: only use for trace log
-    std::string toString() const
+    friend std::ostream& operator<<(
+        std::ostream& output, const TransactionSubmitResult& submitResult)
     {
-        std::stringstream ss;
-        ss << "TransactionSubmitResult{"
-           << "status=" << status() << ", "
-           << "txHash=" << txHash() << ", "
-           << "blockHash=" << blockHash() << ", "
-           << "transactionIndex=" << transactionIndex() << ", "
-           << "nonce=" << nonce() << ", "
-           << "transactionReceipt="
-           << (transactionReceipt() ? transactionReceipt()->toString() : "null") << ", "
-           << "sender=" << toHex(sender()) << ", "
-           << "to=" << to() << "}";
-        return ss.str();
+        output << "TransactionSubmitResult{"
+               << "status=" << submitResult.status() << ", "
+               << "txHash=" << submitResult.txHash() << ", "
+               << "blockHash=" << submitResult.blockHash() << ", "
+               << "transactionIndex=" << submitResult.transactionIndex() << ", "
+               << "nonce=" << submitResult.nonce() << ", " << "transactionReceipt=";
+        if (auto receipt = submitResult.transactionReceipt())
+        {
+            output << *receipt;
+        }
+        else
+        {
+            output << "null";
+        }
+        output << ", sender=" << toHex(submitResult.sender()) << ", "
+               << "to=" << submitResult.to() << "}";
+        return output;
     }
 };
 
