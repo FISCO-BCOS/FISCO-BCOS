@@ -138,6 +138,7 @@ public:
         if (evmcResult.status_code != 0)
         {
             TRANSACTION_EXECUTOR_LOG(DEBUG) << "Transaction revert: " << evmcResult.status_code;
+            
 
             auto [_, errorMessage] = evmcStatusToErrorMessage(
                 *executeContext.m_executor.get().m_hashImpl, evmcResult.status_code);

@@ -450,11 +450,14 @@ public:
                 EVMC_INTERNAL_ERROR, ref->gas, "");
         }
 
-        if (c_fileLogLevel <= LogLevel::TRACE) [[unlikely]]
+        if (evmResult->status_code != EVMC_SUCCESS)
         {
-            HOST_CONTEXT_LOG(TRACE) << "HostContext execute finished, kind: " << ref->kind
-                                    << " seq: " << m_seq << " " << *evmResult;
+            co_await rollback(m_rollbackableStorage.get(), savepoint);
+            co_await rollback(m_rollbackableTransientStorage.get(), transientSavepoint);
         }
+
+        HOST_CONTEXT_LOG(TRACE) << "HostContext execute finished, kind: " << ref->kind
+                                << " seq: " << m_seq << " " << *evmResult;
         co_return std::move(*evmResult);
     }
 
