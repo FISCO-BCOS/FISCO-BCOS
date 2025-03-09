@@ -2,13 +2,13 @@
 
 #include "RollbackableStorage.h"
 #include "bcos-framework/ledger/Account.h"
-#include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/Exceptions.h"
 #include "precompiled/PrecompiledManager.h"
 #include "vm/HostContext.h"
 #include <evmc/evmc.h>
@@ -18,6 +18,8 @@
 #include <iterator>
 #include <memory>
 #include <type_traits>
+
+DERIVE_BCOS_EXCEPTION(InvalidReceiptVersion);
 
 namespace bcos::transaction_executor
 {
@@ -91,10 +93,7 @@ public:
         ledger::LedgerConfig const& ledgerConfig)
         -> task::Task<std::unique_ptr<ExecuteContext<std::decay_t<decltype(storage)>>>>
     {
-        if (c_fileLogLevel == LogLevel::TRACE)
-        {
-            TRANSACTION_EXECUTOR_LOG(TRACE) << "Create transaction context: " << transaction;
-        }
+        TRANSACTION_EXECUTOR_LOG(TRACE) << "Create transaction context: " << transaction;
         co_return std::make_unique<ExecuteContext<std::decay_t<decltype(storage)>>>(
             executor, storage, blockHeader, transaction, contextID, ledgerConfig);
     }
@@ -148,26 +147,24 @@ public:
                 std::uninitialized_copy(errorMessage.begin(), errorMessage.end(), output.get());
                 evmcResult.output_data = output.release();
                 evmcResult.output_size = errorMessage.size();
-                evmcResult.release =
-                    +[](const struct evmc_result* result) { delete[] result->output_data; };
+                evmcResult.release = [](const struct evmc_result* result) {
+                    delete[] result->output_data;
+                };
             }
         }
 
         std::string gasPriceStr;
         auto gasUsed = executeContext.m_gasLimit - evmcResult.gas_left;
-        if (executeContext.m_ledgerConfig.get().features().get(
-                ledger::Features::Flag::feature_balance_policy1))
+        if (auto gasPrice = u256{std::get<0>(executeContext.m_ledgerConfig.get().gasPrice())};
+            gasPrice > 0)
         {
-            auto gasPrice = u256{std::get<0>(executeContext.m_ledgerConfig.get().gasPrice())};
-            if (gasPrice > 0)
-            {
-                gasPriceStr = "0x" + gasPrice.str(256, std::ios_base::hex);
-            }
+            gasPriceStr = "0x" + gasPrice.str(256, std::ios_base::hex);
+
             auto balanceUsed = gasUsed * gasPrice;
             auto senderAccount = getAccount(executeContext.m_hostContext, evmcMessage.sender);
             auto senderBalance = co_await ledger::account::balance(senderAccount);
 
-            if (senderBalance < balanceUsed || senderBalance == 0)
+            if (senderBalance < balanceUsed)
             {
                 TRANSACTION_EXECUTOR_LOG(ERROR) << "Insufficient balance: " << senderBalance
                                                 << ", balanceUsed: " << balanceUsed;
@@ -204,8 +201,9 @@ public:
             break;
         default:
             BOOST_THROW_EXCEPTION(
-                std::runtime_error("Invalid receipt version: " +
-                                   std::to_string(executeContext.m_transaction.get().version())));
+                InvalidReceiptVersion{} << bcos::errinfo_comment(
+                    "Invalid receipt version: " +
+                    std::to_string(executeContext.m_transaction.get().version())));
         }
 
         TRANSACTION_EXECUTOR_LOG(TRACE) << "Execte transaction finished: " << *receipt;

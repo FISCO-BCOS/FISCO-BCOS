@@ -1,5 +1,6 @@
 #include "LedgerMethods.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
+#include "bcos-framework/ledger/SystemConfigs.h"
 #include "bcos-tool/VersionConverter.h"
 #include <bcos-executor/src/Common.h>
 #include <boost/exception/diagnostic_information.hpp>
@@ -463,6 +464,8 @@ bcos::task::Task<void> bcos::ledger::tag_invoke(
     ledgerConfig.setAuthCheckStatus(boost::lexical_cast<uint32_t>(auth.first));
     auto [chainId, _] = sysConfig.getOrDefault(ledger::SystemConfig::web3_chain_id, "0");
     ledgerConfig.setChainId(bcos::toEvmC(boost::lexical_cast<u256>(chainId)));
+    ledgerConfig.setBalanceTransfer(
+        sysConfig.getOrDefault(ledger::SystemConfig::balance_transfer, "0").first != "0");
 }
 
 bcos::task::Task<bcos::ledger::Features> bcos::ledger::tag_invoke(
