@@ -105,7 +105,7 @@ bcos::transaction_executor::PrecompiledManager::PrecompiledManager(crypto::Hash:
         0x1011, Precompiled{std::make_shared<precompiled::BalancePrecompiled>(m_hashImpl),
                     ledger::Features::Flag::feature_balance_precompiled});
 
-    std::sort(m_address2Precompiled.begin(), m_address2Precompiled.end(),
+    ::ranges::sort(m_address2Precompiled,
         [](const auto& lhs, const auto& rhs) { return std::get<0>(lhs) < std::get<0>(rhs); });
 
     // Init the AUTH_COMMITTEE_ADDRESS

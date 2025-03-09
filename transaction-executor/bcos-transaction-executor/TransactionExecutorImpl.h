@@ -23,7 +23,8 @@ namespace bcos::transaction_executor
 {
 #define TRANSACTION_EXECUTOR_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("TRANSACTION_EXECUTOR")
 
-evmc_message newEVMCMessage(protocol::Transaction const& transaction, int64_t gasLimit);
+evmc_message newEVMCMessage(protocol::BlockNumber blockNumber,
+    protocol::Transaction const& transaction, int64_t gasLimit, const evmc_address& origin);
 
 class TransactionExecutorImpl
 {
@@ -54,8 +55,8 @@ public:
         Rollbackable<decltype(m_transientStorage)> m_rollbackableTransientStorage;
 
         int64_t m_gasLimit;
-        evmc_message m_evmcMessage;
         int64_t m_seq = 0;
+        evmc_address m_origin;
         hostcontext::HostContext<decltype(m_rollbackableStorage),
             decltype(m_rollbackableTransientStorage)>
             m_hostContext;
@@ -73,17 +74,15 @@ public:
             m_startSavepoint(current(m_rollbackableStorage)),
             m_rollbackableTransientStorage(m_transientStorage),
             m_gasLimit(static_cast<int64_t>(std::get<0>(ledgerConfig.gasLimit()))),
-            m_evmcMessage(newEVMCMessage(transaction, m_gasLimit)),
+            m_origin((!m_transaction.get().sender().empty() &&
+                         m_transaction.get().sender().size() == sizeof(evmc_address)) ?
+                         *(evmc_address*)m_transaction.get().sender().data() :
+                         evmc_address{}),
             m_hostContext(m_rollbackableStorage, m_rollbackableTransientStorage, blockHeader,
-                m_evmcMessage, m_evmcMessage.sender, transaction.abi(), contextID, m_seq,
-                executor.m_precompiledManager, ledgerConfig, *executor.m_hashImpl, task::syncWait)
-        {
-            if (blockHeader.number() == 0 &&
-                m_transaction.get().to() == precompiled::AUTH_COMMITTEE_ADDRESS)
-            {
-                m_evmcMessage.kind = EVMC_CREATE;
-            }
-        }
+                newEVMCMessage(m_blockHeader.get().number(), transaction, m_gasLimit, m_origin),
+                m_origin, transaction.abi(), contextID, m_seq, executor.m_precompiledManager,
+                ledgerConfig, *executor.m_hashImpl, task::syncWait)
+        {}
     };
 
     friend auto tag_invoke(tag_t<createExecuteContext> /*unused*/,
@@ -125,7 +124,7 @@ public:
 
     friend task::Task<protocol::TransactionReceipt::Ptr> finish(auto& executeContext)
     {
-        auto& evmcMessage = executeContext.m_evmcMessage;
+        const auto& evmcMessage = executeContext.m_hostContext.message();
         auto& evmcResult = *executeContext.m_evmcResult;
 
         std::string newContractAddress;
@@ -209,12 +208,7 @@ public:
                                    std::to_string(executeContext.m_transaction.get().version())));
         }
 
-        if (c_fileLogLevel <= LogLevel::TRACE)
-        {
-            TRANSACTION_EXECUTOR_LOG(TRACE)
-                << "Execte transaction finished: " << receipt->toString();
-        }
-
+        TRANSACTION_EXECUTOR_LOG(TRACE) << "Execte transaction finished: " << *receipt;
         co_return receipt;  // 完成第三步 Complete the third step
     }
 

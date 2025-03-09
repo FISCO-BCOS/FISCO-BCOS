@@ -85,11 +85,12 @@ void WsSession::drop(WsError _reason)
             WEBSOCKET_SESSION(TRACE)
                 << LOG_DESC("the session has been disconnected") << LOG_KV("seq", cbEntry.first);
 
-            m_taskArena.execute([&, callback = std::move(callback), error = std::move(error)]() mutable {
-                m_taskGroup.run([callback = std::move(callback), error = std::move(error)]() {
-                    callback->respCallBack(error, nullptr, nullptr);
+            m_taskArena.execute(
+                [&, callback = std::move(callback), error = std::move(error)]() mutable {
+                    m_taskGroup.run([callback = std::move(callback), error = std::move(error)]() {
+                        callback->respCallBack(error, nullptr, nullptr);
+                    });
                 });
-            });
         }
     }
 
