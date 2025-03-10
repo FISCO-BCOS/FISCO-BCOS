@@ -107,7 +107,7 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl) : P
     m_sysValueCmp.emplace(magic_enum::enum_name(ledger::SystemConfig::executor_version),
         [defaultCmp](int64_t _value, uint32_t version) {
             defaultCmp(magic_enum::enum_name(ledger::SystemConfig::executor_version), _value, 0,
-                version, BlockVersion::V3_10_2_VERSION);
+                version, BlockVersion::V3_15_0_VERSION);
         });
     // for compatibility
     // Note: the compatibility_version is not compatibility
