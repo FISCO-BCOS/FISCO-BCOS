@@ -21,7 +21,7 @@ endif()
 add_library(${TXPOOL_INIT_LIB} TxPoolInitializer.cpp)
 target_link_libraries(${TXPOOL_INIT_LIB} PUBLIC ${PROTOCOL_INIT_LIB} ${TOOL_TARGET} ${TXPOOL_TARGET})
 
-add_library(baseline_init BaselineSchedulerInitializer.cpp)
+add_library(baseline_init BaselineSchedulerInitializer.cpp MultiVersionScheduler.cpp)
 target_link_libraries(baseline_init transaction-scheduler transaction-executor ${STORAGE_TARGET})
 
 add_library(${INIT_LIB} Initializer.cpp)

@@ -408,7 +408,6 @@ bcos::task::Task<void> bcos::ledger::tag_invoke(
     }) | ::ranges::to<std::vector>());
 
     auto blockNumber = co_await getCurrentBlockNumber(ledger);
-
     auto sysConfig = co_await ledger.fetchAllSystemConfigs(blockNumber + 1);
 
     if (auto txLimitConfig = sysConfig.get(ledger::SystemConfig::tx_count_limit))
@@ -466,6 +465,12 @@ bcos::task::Task<void> bcos::ledger::tag_invoke(
     ledgerConfig.setChainId(bcos::toEvmC(boost::lexical_cast<u256>(chainId)));
     ledgerConfig.setBalanceTransfer(
         sysConfig.getOrDefault(ledger::SystemConfig::balance_transfer, "0").first != "0");
+
+    if (auto executorVersion = sysConfig.get(ledger::SystemConfig::executor_version);
+        executorVersion)
+    {
+        ledgerConfig.setExecutorVersion(boost::lexical_cast<int>(executorVersion.value().first));
+    }
 }
 
 bcos::task::Task<bcos::ledger::Features> bcos::ledger::tag_invoke(

@@ -1381,7 +1381,6 @@ BOOST_AUTO_TEST_CASE(getLedgerConfig)
         BOOST_CHECK_EQUAL(std::get<0>(ledgerConfig->epochSealerNum()), 12345);
         BOOST_CHECK_EQUAL(std::get<0>(ledgerConfig->epochBlockNum()), 1000);
         BOOST_CHECK_EQUAL(ledgerConfig->notifyRotateFlagInfo(), 0);
-        co_return;
     }());
 }
 
