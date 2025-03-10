@@ -31,7 +31,7 @@ public:
     {
         task::wait([](decltype(this) self, std::string table,
                        std::optional<storage::Condition const> condition,
-                       const decltype(_callback)& callback) -> task::Task<void> {
+                       decltype(_callback) callback) -> task::Task<void> {
             std::vector<std::string> keys;
 
             size_t index = 0;

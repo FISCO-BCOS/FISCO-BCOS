@@ -278,7 +278,6 @@ public:
     void getTarsClientProxyEndpoints(
         const std::string& _clientPrx, std::vector<tars::TC_Endpoint>& _endPoints);
 
-    bool enableBaselineScheduler() const { return m_enableBaselineScheduler; }
     struct BaselineSchedulerConfig
     {
         bool parallel = false;
@@ -445,7 +444,6 @@ private:
 
     // executor config
     size_t m_vmCacheSize = 1024;
-    bool m_enableBaselineScheduler = false;
     BaselineSchedulerConfig m_baselineSchedulerConfig;
     TarsRPCConfig m_tarsRPCConfig;
 

@@ -247,7 +247,8 @@ void SchedulerImpl::executeBlockInternal(bcos::protocol::Block::Ptr block, bool 
                         << LOG_KV("txCount", block->transactionsSize())
                         << LOG_KV("metaTxCount", block->transactionsMetaDataSize())
                         << LOG_KV("version", (bcos::protocol::BlockVersion)(block->version()))
-                        << LOG_KV("waitT", waitT);
+                        << LOG_KV("waitT", waitT)
+                        << LOG_KV("executor version", m_ledgerConfig->executorVersion());
     auto start = utcTime();
     auto callback = [requestBlockNumber, _callback = std::move(_callback)](bcos::Error::Ptr&& error,
                         bcos::protocol::BlockHeader::Ptr&& blockHeader, bool _sysBlock) {
