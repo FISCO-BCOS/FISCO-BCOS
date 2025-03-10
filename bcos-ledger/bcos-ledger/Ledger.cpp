@@ -26,6 +26,7 @@
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/Ledger.h"
+#include "bcos-framework/ledger/SystemConfigs.h"
 #include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
@@ -1615,7 +1616,7 @@ static std::shared_ptr<std::vector<h256>> getMerkleTreeFromCache(int64_t blockNu
         auto newMerkleTree = std::make_shared<std::vector<h256>>();
         // Notice: generateMerkle will use tbb thread. Should not place in RecursiveGuard below to
         // avoid locking each other in tbb thread pool and RecursiveGuard
-        merkle.template generateMerkle(hashesRange, *newMerkleTree);
+        merkle.generateMerkle(hashesRange, *newMerkleTree);
         {
             RecursiveGuard l(mutex);
             if (!merkleTree->empty())
@@ -1689,7 +1690,7 @@ void Ledger::getTxProof(
                             auto merkleTree =
                                 getMerkleTreeFromCache(blockNumber, m_txProofMerkleCache,
                                     m_txMerkleMtx, "getTxProof", merkle, hashesRange);
-                            merkle.template generateMerkleProof(
+                            merkle.generateMerkleProof(
                                 hashesRange, *merkleTree, _txHash, *merkleProofPtr);
 
                             LEDGER_LOG(TRACE)
@@ -1737,7 +1738,7 @@ void Ledger::getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
                     auto merkleTree = getMerkleTreeFromCache(blockNumber, m_receiptProofMerkleCache,
                         m_receiptMerkleMtx, "getReceiptProof", merkle, hashesRange);
 
-                    merkle.template generateMerkleProof(
+                    merkle.generateMerkleProof(
                         hashesRange, *merkleTree, receiptHash, *merkleProofPtr);
 
                     LEDGER_LOG(TRACE)
@@ -1827,30 +1828,16 @@ bool Ledger::buildGenesisBlock(
                               << LOG_KV("gasLimitMin", TX_GAS_LIMIT_MIN);
             co_return false;
         }
-        auto genesisBlockHash =
-            task::syncWait(ledger::getBlockHash(*m_stateStorage, 0, fromStorage));
+        auto genesisBlockHash = co_await ledger::getBlockHash(*m_stateStorage, 0, fromStorage);
         auto genesisData = generateGenesisData(genesis, ledgerConfig);
         if (genesisBlockHash)
         {
             // genesis block exists, quit
             LEDGER_LOG(INFO) << LOG_DESC("[#buildGenesisBlock] success, block exists");
             std::promise<protocol::BlockHeader::Ptr> blockHeaderFuture;
-            // get genesisBlockHeader
-            asyncGetBlockDataByNumber(
-                0, HEADER, [&blockHeaderFuture](Error::Ptr error, Block::Ptr block) {
-                    if (error)
-                    {
-                        LEDGER_LOG(INFO) << "Get genesisBlockHeader from storage failed";
-                        blockHeaderFuture.set_value(nullptr);
-                    }
-                    else
-                    {
-                        blockHeaderFuture.set_value(block->blockHeader());
-                    }
-                });
-            bcos::protocol::BlockHeader::Ptr m_genesisBlockHeader =
-                blockHeaderFuture.get_future().get();
-            auto existsGenesisData = m_genesisBlockHeader->extraData().toStringView();
+            auto block = co_await ledger::getBlockData(*this, 0, HEADER);
+            bcos::protocol::BlockHeader::Ptr genesisBlockHeader = block->blockHeader();
+            auto existsGenesisData = genesisBlockHeader->extraData().toStringView();
 
             // check genesisData whether inconsistent with initialGenesisData
             if (existsGenesisData == genesisData)
@@ -1893,12 +1880,12 @@ bool Ledger::buildGenesisBlock(
                 co_return true;
             }
             // GetBlockDataByNumber success but not consistent with initialGenesisData
-            if (m_genesisBlockHeader)
+            if (genesisBlockHeader)
             {
                 std::cout << "The Genesis Data is inconsistent with the initial Genesis Data. "
-                          << std::endl
-                          << LOG_KV("existsGenesisData", existsGenesisData) << std::endl
-                          << LOG_KV("genesisData", genesisData) << std::endl;
+                          << '\n'
+                          << LOG_KV("existsGenesisData", existsGenesisData) << '\n'
+                          << LOG_KV("genesisData", genesisData) << '\n';
                 BOOST_THROW_EXCEPTION(
                     bcos::tool::InvalidConfig() << errinfo_comment(
                         "The Genesis Data is inconsistent with the initial Genesis Data"));
@@ -1972,25 +1959,14 @@ bool Ledger::buildGenesisBlock(
         header->setNumber(0);
         if (versionNumber >= protocol::BlockVersion::V3_1_VERSION)
         {
-            header->setVersion(static_cast<uint32_t>(versionNumber));
+            header->setVersion(versionNumber);
         }
         header->setExtraData(bcos::bytes(genesisData.begin(), genesisData.end()));
         header->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
 
         auto block = m_blockFactory->createBlock();
         block->setBlockHeader(header);
-
-        std::promise<Error::Ptr> genesisBlockPromise;
-        asyncPrewriteBlock(m_stateStorage, nullptr, block,
-            [&genesisBlockPromise](std::string, Error::Ptr&& error) {
-                genesisBlockPromise.set_value(std::move(error));
-            });
-
-        auto error = genesisBlockPromise.get_future().get();
-        if (error)
-        {
-            BOOST_THROW_EXCEPTION(*error);
-        }
+        co_await ledger::prewriteBlockToStorage(*this, nullptr, block, true, m_stateStorage);
 
         // write sys config
         std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> sysTablePromise;
@@ -2092,16 +2068,27 @@ bool Ledger::buildGenesisBlock(
             sysTable->setRow(SYSTEM_KEY_WEB3_CHAIN_ID, std::move(chainIdEntry));
         }
 
+        // Write executor version
+        if (genesis.m_executorVersion > 0)
+        {
+            Entry executorVersion;
+            executorVersion.setObject(
+                SystemConfigEntry{std::to_string(genesis.m_executorVersion), 0});
+            co_await storage2::writeOne(*m_stateStorage,
+                transaction_executor::StateKey(
+                    SYS_CONFIG, magic_enum::enum_name(ledger::SystemConfig::executor_version)),
+                executorVersion);
+        }
+
         // write consensus node list
         // update some node type to CONSENSUS_CANDIDATE_SEALER
         if (versionNumber >= (uint32_t)protocol::BlockVersion::V3_5_VERSION &&
             RPBFT_CONSENSUS_TYPE == genesis.m_consensusType)
         {
             auto workingSealerList = selectWorkingSealer(ledgerConfig, genesis.m_epochSealerNum);
-            std::sort(workingSealerList.begin(), workingSealerList.end(),
-                [](auto const& lhs, auto const& rhs) {
-                    return lhs.nodeID->data() < rhs.nodeID->data();
-                });
+            ::ranges::sort(workingSealerList, [](auto const& lhs, auto const& rhs) {
+                return lhs.nodeID->data() < rhs.nodeID->data();
+            });
             co_await ledger::setNodeList(*m_stateStorage,
                 RANGES::views::concat(
                     ledgerConfig.consensusNodeList() | RANGES::views::transform([&](auto node) {

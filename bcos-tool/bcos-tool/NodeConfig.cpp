@@ -1102,9 +1102,11 @@ ConsensusNodeList NodeConfig::parseConsensusNodeList(boost::property_tree::ptree
             BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                       "Please set weight for " + nodeId + " to positive!"));
         }
-        ConsensusNode consensusNode{m_keyFactory->createKey(fromHex(nodeId)),
-            consensus::Type::consensus_sealer, static_cast<uint64_t>(voteWeight),
-            static_cast<uint64_t>(termWeight), 0};
+        ConsensusNode consensusNode{.nodeID = m_keyFactory->createKey(fromHex(nodeId)),
+            .type = consensus::Type::consensus_sealer,
+            .voteWeight = static_cast<uint64_t>(voteWeight),
+            .termWeight = static_cast<uint64_t>(termWeight),
+            .enableNumber = 0};
         NodeConfig_LOG(INFO) << LOG_BADGE("parseConsensusNodeList")
                              << LOG_KV("sectionName", _sectionName) << LOG_KV("nodeId", nodeId)
                              << LOG_KV("voteWeight", voteWeight)
@@ -1112,7 +1114,7 @@ ConsensusNodeList NodeConfig::parseConsensusNodeList(boost::property_tree::ptree
         nodeList.push_back(consensusNode);
     }
     // only sort nodeList after rc3 version
-    std::sort(nodeList.begin(), nodeList.end());
+    ::ranges::sort(nodeList);
     NodeConfig_LOG(INFO) << LOG_BADGE("parseConsensusNodeList")
                          << LOG_KV("totalNodesSize", nodeList.size());
     return nodeList;
@@ -1126,6 +1128,7 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
         m_genesisConfig.m_isAuthCheck = _genesisConfig.get<bool>("executor.is_auth_check", false);
         m_genesisConfig.m_isSerialExecute =
             _genesisConfig.get<bool>("executor.is_serial_execute", false);
+        m_genesisConfig.m_executorVersion = _genesisConfig.get<int>("executor.version", 0);
     }
     catch (std::exception const& e)
     {
@@ -1186,7 +1189,8 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
                          << LOG_KV("isWasm", m_genesisConfig.m_isWasm)
                          << LOG_KV("isAuthCheck", m_genesisConfig.m_isAuthCheck)
                          << LOG_KV("authAdminAccount", m_genesisConfig.m_authAdminAccount)
-                         << LOG_KV("ismSerialExecute", m_genesisConfig.m_isSerialExecute);
+                         << LOG_KV("ismSerialExecute", m_genesisConfig.m_isSerialExecute)
+                         << LOG_KV("executorVersion", m_genesisConfig.m_executorVersion);
 }
 
 // load config.ini
@@ -1295,6 +1299,10 @@ std::string bcos::tool::generateGenesisData(
             {
                 ss << feature.flag << ":" << feature.enable << '\n';
             }
+        }
+        if (genesisConfig.m_executorVersion > 0)
+        {
+            ss << "executorVersion:" << genesisConfig.m_executorVersion << '\n';
         }
 
         size_t j = 0;

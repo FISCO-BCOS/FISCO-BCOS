@@ -17,7 +17,6 @@ bcos::task::Task<void> bcos::ledger::prewriteBlockToStorage(LedgerInterface& led
         decltype(block) m_block;
         bool m_withTransactionsAndReceipts{};
         decltype(storage) m_storage;
-
         Error::Ptr m_error;
 
         constexpr static bool await_ready() noexcept { return false; }
