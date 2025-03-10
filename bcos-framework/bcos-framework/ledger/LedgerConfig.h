@@ -163,6 +163,8 @@ public:
     std::optional<evmc_uint256be> const& chainId() const { return m_chainId; }
     void setChainId(evmc_uint256be _chainId) { m_chainId = _chainId; }
 
+    bool balanceTransfer() const { return m_balanceTransfer; }
+    void setBalanceTransfer(bool _balanceTransfer) { m_balanceTransfer = _balanceTransfer; }
     int executorVersion() const { return m_executorVersion; }
     void setExecutorVersion(int _executorVersion) { m_executorVersion = _executorVersion; }
 
@@ -189,6 +191,7 @@ private:
     uint32_t m_authCheckStatus = 0;
     Features m_features;
     std::optional<evmc_uint256be> m_chainId;
+    bool m_balanceTransfer = false;
     int m_executorVersion = 0;
 };
 }  // namespace bcos::ledger

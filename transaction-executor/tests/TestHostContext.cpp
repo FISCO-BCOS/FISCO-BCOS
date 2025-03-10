@@ -502,6 +502,7 @@ BOOST_AUTO_TEST_CASE(transferBalance)
         message.recipient = bcos::unhexAddress("0000000000000000000000000000000000000002");
         message.value = bcos::toEvmC(bcos::u256(1000));
         message.kind = EVMC_CALL;
+        message.gas = 21000;
 
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> senderAccount(
             rollbackableStorage, message.sender, false);
@@ -518,20 +519,12 @@ BOOST_AUTO_TEST_CASE(transferBalance)
         co_await transferHostContext.prepare();
         auto evmResult = co_await transferHostContext.execute();
         BOOST_CHECK_EQUAL(evmResult.status_code, EVMC_SUCCESS);
+        BOOST_CHECK_EQUAL(evmResult.gas_left, 0);
         BOOST_CHECK_EQUAL(co_await bcos::ledger::account::balance(senderAccount), bcos::u256(1001));
         BOOST_CHECK_EQUAL(co_await bcos::ledger::account::balance(recipientAccount), bcos::u256(0));
 
-        auto& contextMessage = transferHostContext.mutableMessage();
-
-        contextMessage.gas = 21000;
-        evmResult = co_await transferHostContext.execute();
-        BOOST_CHECK_EQUAL(evmResult.status_code, EVMC_SUCCESS);
-        BOOST_CHECK_EQUAL(evmResult.gas_left, 21000);
-
-        auto features = ledgerConfig.features();
-        features.set(bcos::ledger::Features::Flag::feature_balance);
-        ledgerConfig.setFeatures(features);
-
+        ledgerConfig.setBalanceTransfer(true);
+        transferHostContext.mutableMessage().gas = 21000;
         evmResult = co_await transferHostContext.execute();
         BOOST_CHECK_EQUAL(evmResult.status_code, EVMC_SUCCESS);
         BOOST_CHECK_EQUAL(co_await bcos::ledger::account::balance(senderAccount), bcos::u256(1));

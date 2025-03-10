@@ -161,7 +161,7 @@ bcos::transaction_executor::EVMCResult bcos::transaction_executor::makeErrorEVMC
     {
         output = std::make_unique_for_overwrite<uint8_t[]>(errorBytes.size());
         outputSize = errorBytes.size();
-        std::uninitialized_copy(errorBytes.begin(), errorBytes.end(), output.get());
+        ::ranges::copy(errorBytes, output.get());
     }
 
     return EVMCResult{

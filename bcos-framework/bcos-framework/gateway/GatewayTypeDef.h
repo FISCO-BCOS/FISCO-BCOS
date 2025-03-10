@@ -24,9 +24,9 @@
 #include <boost/asio/ip/tcp.hpp>
 #include <iostream>
 #include <memory>
-namespace bcos
-{
-namespace gateway
+#include <utility>
+
+namespace bcos::gateway
 {
 constexpr static size_t HASH_NODEID_MAX_SIZE = 33;
 /// For RSA public key, the prefix length is 18 in hex, used for print log graciously
@@ -58,6 +58,9 @@ struct NodeIPEndpoint
 {
     using Ptr = std::shared_ptr<NodeIPEndpoint>;
     NodeIPEndpoint() = default;
+    NodeIPEndpoint(NodeIPEndpoint&&) noexcept = default;
+    NodeIPEndpoint& operator=(const NodeIPEndpoint&) = default;
+    NodeIPEndpoint& operator=(NodeIPEndpoint&&) noexcept = default;
     NodeIPEndpoint(std::string _host, uint16_t _port) : m_host(std::move(_host)), m_port(_port) {}
     NodeIPEndpoint(const NodeIPEndpoint& _nodeIPEndpoint) = default;
     NodeIPEndpoint(const boost::asio::ip::address& _addr, uint16_t _port)
@@ -81,7 +84,7 @@ struct NodeIPEndpoint
     }
     operator boost::asio::ip::tcp::endpoint() const
     {
-        return boost::asio::ip::tcp::endpoint(boost::asio::ip::make_address(m_host), m_port);
+        return {boost::asio::ip::make_address(m_host), m_port};
     }
 
     // Get the port associated with the endpoint.
@@ -92,7 +95,7 @@ struct NodeIPEndpoint
     bool isIPv6() const { return m_ipv6; }
 
     std::string m_host;
-    uint16_t m_port;
+    uint16_t m_port{};
     bool m_ipv6 = false;
 };
 
@@ -107,11 +110,13 @@ struct P2PInfo
 {
     using Ptr = std::shared_ptr<P2PInfo>;
     P2PInfo() = default;
-    P2PInfo(std::string const& _p2pID, std::string const& _rawP2pID)
-    {
-        p2pID = _p2pID;
-        rawP2pID = _rawP2pID;
-    }
+    P2PInfo(const P2PInfo&) = default;
+    P2PInfo(P2PInfo&&) noexcept = default;
+    P2PInfo& operator=(const P2PInfo&) = default;
+    P2PInfo& operator=(P2PInfo&&) noexcept = default;
+    P2PInfo(std::string _p2pID, std::string _rawP2pID)
+      : rawP2pID(std::move(_rawP2pID)), p2pID(std::move(_p2pID))
+    {}
     ~P2PInfo() noexcept = default;
     // the raw-p2p-nodeID
     std::string rawP2pID;
@@ -133,6 +138,10 @@ public:
     GatewayInfo()
       : m_p2pInfo(std::make_shared<P2PInfo>()), m_nodeIDInfo(std::make_shared<NodeIDInfoType>())
     {}
+    GatewayInfo(const GatewayInfo&) = delete;
+    GatewayInfo(GatewayInfo&&) = delete;
+    GatewayInfo& operator=(const GatewayInfo&) = delete;
+    GatewayInfo& operator=(GatewayInfo&&) = delete;
     explicit GatewayInfo(P2PInfo const& _p2pInfo) : GatewayInfo() { *m_p2pInfo = _p2pInfo; }
 
     virtual ~GatewayInfo() {}
@@ -188,5 +197,4 @@ inline std::string printShortP2pID(std::string const& data)
     return data.substr(RSA_PUBLIC_KEY_PREFIX, RSA_PUBLIC_KEY_TRUNC);
 }
 
-}  // namespace gateway
-}  // namespace bcos
+}  // namespace bcos::gateway
