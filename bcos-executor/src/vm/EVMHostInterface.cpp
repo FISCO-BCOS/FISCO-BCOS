@@ -222,7 +222,7 @@ evmc_access_status access_storage(
 evmc_tx_context getTxContext(evmc_host_context* _context) noexcept
 {
     auto& hostContext = static_cast<HostContext&>(*_context);
-    evmc_tx_context result;
+    evmc_tx_context result{};
     if (hostContext.isWasm())
     {
         result.tx_origin = toEvmC(hostContext.origin());
