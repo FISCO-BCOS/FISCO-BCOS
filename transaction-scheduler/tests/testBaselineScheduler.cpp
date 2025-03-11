@@ -19,14 +19,14 @@
 
 using namespace bcos;
 using namespace bcos::storage2;
-using namespace bcos::transaction_executor;
-using namespace bcos::transaction_scheduler;
+using namespace bcos::executor_v1;
+using namespace bcos::scheduler_v1;
 
 struct MockExecutorBaseline
 {
     friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
-        bcos::transaction_executor::tag_t<
-            bcos::transaction_executor::executeTransaction> /*unused*/,
+        bcos::executor_v1::tag_t<
+            bcos::executor_v1::executeTransaction> /*unused*/,
         MockExecutorBaseline& executor, auto& storage, protocol::BlockHeader const& blockHeader,
         protocol::Transaction const& transaction, int contextID, ledger::LedgerConfig const&,
         auto&& waitOperator)
@@ -37,7 +37,7 @@ struct MockExecutorBaseline
 struct MockScheduler
 {
     friend task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
-        transaction_scheduler::tag_t<transaction_scheduler::executeBlock> /*unused*/,
+        scheduler_v1::tag_t<scheduler_v1::executeBlock> /*unused*/,
         MockScheduler& /*unused*/, auto& storage, auto& executor,
         protocol::BlockHeader const& blockHeader, RANGES::input_range auto const& transactions,
         ledger::LedgerConfig const& /*unused*/)

@@ -14,7 +14,7 @@
 #include <oneapi/tbb/task_arena.h>
 #include <tbb/task_arena.h>
 
-namespace bcos::transaction_scheduler
+namespace bcos::scheduler_v1
 {
 
 #define SERIAL_SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("SERIAL_SCHEDULER")
@@ -35,7 +35,7 @@ task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
     auto count = static_cast<int32_t>(RANGES::size(transactions));
 
     using ExecutionContext =
-        task::AwaitableReturnType<std::invoke_result_t<transaction_executor::CreateExecuteContext,
+        task::AwaitableReturnType<std::invoke_result_t<executor_v1::CreateExecuteContext,
             decltype(executor), decltype(storage), protocol::BlockHeader const&,
             protocol::Transaction const&, int, ledger::LedgerConfig const&>>;
     std::vector<ExecutionContext, tbb::cache_aligned_allocator<ExecutionContext>> contexts;
@@ -72,7 +72,7 @@ task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
                         for (auto i : range)
                         {
                             contexts.emplace_back(
-                                co_await transaction_executor::createExecuteContext(executor,
+                                co_await executor_v1::createExecuteContext(executor,
                                     storage, blockHeader, transactions[i], i, ledgerConfig));
                         }
                         co_return range;
@@ -86,7 +86,7 @@ task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
                             for (auto i : range)
                             {
                                 auto& context = contexts[i];
-                                co_await transaction_executor::executeStep.operator()<0>(context);
+                                co_await executor_v1::executeStep.operator()<0>(context);
                             }
                             co_return range;
                         }());
@@ -99,7 +99,7 @@ task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
                             for (auto i : range)
                             {
                                 auto& context = contexts[i];
-                                co_await transaction_executor::executeStep.operator()<1>(context);
+                                co_await executor_v1::executeStep.operator()<1>(context);
                             }
                             co_return range;
                         }());
@@ -113,7 +113,7 @@ task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
                             {
                                 auto& context = contexts[i];
                                 receipts.emplace_back(
-                                    co_await transaction_executor::executeStep.operator()<2>(
+                                    co_await executor_v1::executeStep.operator()<2>(
                                         context));
                             }
                         }());
@@ -123,4 +123,4 @@ task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
     GC::collect(std::move(contexts));
     co_return receipts;
 }
-}  // namespace bcos::transaction_scheduler
+}  // namespace bcos::scheduler_v1

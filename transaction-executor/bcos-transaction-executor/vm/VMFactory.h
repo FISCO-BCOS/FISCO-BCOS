@@ -26,7 +26,7 @@
 #include <boost/throw_exception.hpp>
 #include <memory>
 
-namespace bcos::transaction_executor
+namespace bcos::executor_v1
 {
 enum class VMKind
 {
@@ -55,4 +55,4 @@ public:
         }
     }
 };
-}  // namespace bcos::transaction_executor
+}  // namespace bcos::executor_v1

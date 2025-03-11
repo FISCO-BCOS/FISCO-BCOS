@@ -133,7 +133,7 @@ task::Task<std::optional<storage::Entry>> Ledger::getStorageAt(
     auto const contractTableName = getContractTableName(SYS_DIRECTORY::USER_APPS, _address);
     auto const stateStorage = getStateStorage();
     co_return co_await bcos::storage2::readOne(
-        *stateStorage, transaction_executor::StateKeyView{contractTableName, _key});
+        *stateStorage, executor_v1::StateKeyView{contractTableName, _key});
 }
 
 void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
@@ -1871,10 +1871,10 @@ bool Ledger::buildGenesisBlock(
                 // The existing chain, which only replaces the binary, has not yet executed the
                 // upgraded version of the transaction
                 auto versionEntry = co_await storage2::readOne(
-                    *m_stateStorage, transaction_executor::StateKeyView(
+                    *m_stateStorage, executor_v1::StateKeyView(
                                          SYS_CONFIG, SYSTEM_KEY_COMPATIBILITY_VERSION));
                 auto blockNumberEntry = co_await storage2::readOne(*m_stateStorage,
-                    transaction_executor::StateKeyView(SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER));
+                    executor_v1::StateKeyView(SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER));
                 if (versionEntry && blockNumberEntry)
                 {
                     auto [versionStr, _] = versionEntry->getObject<SystemConfigEntry>();
@@ -2341,7 +2341,7 @@ task::Task<bcos::ledger::SystemConfigs> Ledger::fetchAllSystemConfigs(
     auto allConfigKeys = ledger::SystemConfigs::supportConfigs();
     auto entries = co_await storage2::readSome(
         *m_stateStorage, allConfigKeys | RANGES::views::transform([](auto&& key) {
-            return transaction_executor::StateKeyView(SYS_CONFIG, key);
+            return executor_v1::StateKeyView(SYS_CONFIG, key);
         }));
     bcos::ledger::SystemConfigs configs;
     for (auto&& [key, entry] : RANGES::views::zip(allConfigKeys, entries))

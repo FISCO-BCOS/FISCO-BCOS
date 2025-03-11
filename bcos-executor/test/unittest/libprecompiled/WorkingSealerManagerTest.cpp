@@ -58,7 +58,7 @@ BOOST_AUTO_TEST_CASE(testRotate)
         // 75 % 100 = 75 -- select node2
         // 75 % 80 = 75 -- select node3
 
-        storage2::memory_storage::MemoryStorage<transaction_executor::StateKey, storage::Entry,
+        storage2::memory_storage::MemoryStorage<executor_v1::StateKey, storage::Entry,
             storage2::memory_storage::Attribute::ORDERED>
             storage;
 
@@ -67,7 +67,7 @@ BOOST_AUTO_TEST_CASE(testRotate)
         ledger::SystemConfigEntry systemConfigEntry{"1", 0};
         notifyRotateEntry.setObject(systemConfigEntry);
         co_await storage2::writeOne(storage,
-            transaction_executor::StateKey{
+            executor_v1::StateKey{
                 ledger::SYS_CONFIG, ledger::INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE},
             notifyRotateEntry);
 

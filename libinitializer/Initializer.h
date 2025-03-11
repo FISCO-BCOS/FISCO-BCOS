@@ -115,7 +115,7 @@ private:
     std::shared_ptr<LightNodeInitializer> m_lightNodeInitializer;
 #endif
     bcos::ledger::LedgerInterface::Ptr m_ledger;
-    std::shared_ptr<transaction_scheduler::MultiVersionScheduler> m_scheduler;
+    std::shared_ptr<scheduler_v1::MultiVersionScheduler> m_scheduler;
     std::weak_ptr<bcos::executor::SwitchExecutorManager> m_switchExecutorManager;
     std::string c_consensusStorageDBName = "consensus_log";
     std::string c_fileSeparator = "/";

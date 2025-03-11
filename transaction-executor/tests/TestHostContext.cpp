@@ -33,8 +33,8 @@
 
 using namespace bcos::task;
 using namespace bcos::storage2;
-using namespace bcos::transaction_executor;
-using namespace bcos::transaction_executor::hostcontext;
+using namespace bcos::executor_v1;
+using namespace bcos::executor_v1::hostcontext;
 
 class TestHostContextFixture
 {
@@ -43,8 +43,8 @@ public:
     MutableStorage storage;
     Rollbackable<decltype(storage)> rollbackableStorage;
     using MemoryStorageType =
-        bcos::storage2::memory_storage::MemoryStorage<bcos::transaction_executor::StateKey,
-            bcos::transaction_executor::StateValue,
+        bcos::storage2::memory_storage::MemoryStorage<bcos::executor_v1::StateKey,
+            bcos::executor_v1::StateValue,
             bcos::storage2::memory_storage::Attribute(
                 bcos::storage2::memory_storage::ORDERED |
                 bcos::storage2::memory_storage::LOGICAL_DELETION)>;
@@ -332,7 +332,7 @@ BOOST_AUTO_TEST_CASE(log)
     // bcos::s256 getIntResult = -1;
     // std::string out;
     // bcos::codec::abi::ContractABICodec abiCodec(
-    //     bcos::transaction_executor::GlobalHashImpl::g_hashImpl);
+    //     bcos::executor_v1::GlobalHashImpl::g_hashImpl);
 
     // abiCodec.abiOut(bcos::bytesConstRef(.output_data, result4.output_size), out);
     // BOOST_CHECK_EQUAL(out, "Hello world, fisco-bcos!");

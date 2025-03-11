@@ -13,7 +13,7 @@
 
 using namespace bcos;
 using namespace bcos::storage2::rocksdb;
-using namespace bcos::transaction_executor;
+using namespace bcos::executor_v1;
 using namespace std::string_view_literals;
 
 struct TestRocksDBStorage2Fixture

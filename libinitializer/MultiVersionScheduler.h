@@ -3,7 +3,7 @@
 #include "bcos-framework/dispatcher/SchedulerInterface.h"
 #include <boost/atomic/atomic_flag.hpp>
 
-namespace bcos::transaction_scheduler
+namespace bcos::scheduler_v1
 {
 
 class MultiVersionScheduler : public bcos::scheduler::SchedulerInterface
@@ -49,4 +49,4 @@ public:
 
     void setVersion(int version, ledger::LedgerConfig::Ptr ledgerConfig) override;
 };
-}  // namespace bcos::transaction_scheduler
+}  // namespace bcos::scheduler_v1

@@ -24,7 +24,7 @@
 #include <range/v3/view/enumerate.hpp>
 #include <type_traits>
 
-namespace bcos::transaction_scheduler
+namespace bcos::scheduler_v1
 {
 
 #define PARALLEL_SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("PARALLEL_SCHEDULER")
@@ -34,7 +34,7 @@ struct StorageTrait
 {
     using LocalStorageView = View<MutableStorage, void, Storage>;
     using LocalReadWriteSetStorage =
-        ReadWriteSetStorage<LocalStorageView, transaction_executor::StateKey>;
+        ReadWriteSetStorage<LocalStorageView, executor_v1::StateKey>;
 };
 
 struct ExecutionContext
@@ -56,7 +56,7 @@ private:
     typename StorageTrait<MutableStorage, Storage>::LocalReadWriteSetStorage m_readWriteSetStorage;
 
     using ExecuteContext = task::AwaitableReturnType<std::invoke_result_t<
-        transaction_executor::CreateExecuteContext, std::add_lvalue_reference_t<Executor>,
+        executor_v1::CreateExecuteContext, std::add_lvalue_reference_t<Executor>,
         std::add_lvalue_reference_t<decltype(m_readWriteSetStorage)>, protocol::BlockHeader const&,
         protocol::Transaction const&, int, ledger::LedgerConfig const&>>;
 
@@ -88,7 +88,7 @@ public:
         m_executeContexts.reserve(RANGES::size(m_contexts));
         for (auto& context : m_contexts)
         {
-            m_executeContexts.emplace_back(co_await transaction_executor::createExecuteContext(
+            m_executeContexts.emplace_back(co_await executor_v1::createExecuteContext(
                 m_executor.get(), m_readWriteSetStorage, blockHeader, *context.transaction,
                 context.contextID, ledgerConfig));
         }
@@ -107,7 +107,7 @@ public:
                     << " transactions";
                 break;
             }
-            co_await transaction_executor::executeStep.operator()<0>(executeContext);
+            co_await executor_v1::executeStep.operator()<0>(executeContext);
         }
     }
 
@@ -124,7 +124,7 @@ public:
                     << " transactions";
                 break;
             }
-            co_await transaction_executor::executeStep.operator()<1>(executeContext);
+            co_await executor_v1::executeStep.operator()<1>(executeContext);
         }
     }
 
@@ -135,7 +135,7 @@ public:
         for (auto&& [context, executeContext] : ::ranges::views::zip(m_contexts, m_executeContexts))
         {
             *context.receipt =
-                co_await transaction_executor::executeStep.operator()<2>(executeContext);
+                co_await executor_v1::executeStep.operator()<2>(executeContext);
         }
     }
 };
@@ -175,7 +175,7 @@ size_t executeSinglePass(SchedulerParallelImpl& scheduler, auto& storage, auto& 
         ittapi::ITT_DOMAINS::instance().SINGLE_PASS);
 
     const auto count = RANGES::size(contexts);
-    ReadWriteSetStorage<decltype(storage), transaction_executor::StateKey> writeSet(storage);
+    ReadWriteSetStorage<decltype(storage), executor_v1::StateKey> writeSet(storage);
 
     using Chunk = ChunkStatus<typename SchedulerParallelImpl::MutableStorage,
         std::decay_t<decltype(storage)>, std::decay_t<decltype(executor)>,
@@ -357,4 +357,4 @@ task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
     co_return receipts;
 }
 
-}  // namespace bcos::transaction_scheduler
+}  // namespace bcos::scheduler_v1

@@ -318,7 +318,7 @@ public:
         for (auto key : bcos::ledger::Features::featureKeys())
         {
             auto entry = co_await storage2::readOne(
-                storage, transaction_executor::StateKeyView(ledger::SYS_CONFIG, key));
+                storage, executor_v1::StateKeyView(ledger::SYS_CONFIG, key));
             if (entry)
             {
                 auto [value, enableNumber] = entry->template getObject<ledger::SystemConfigEntry>();
@@ -337,13 +337,13 @@ public:
         {
             if (value && !(ignoreDuplicate &&
                              co_await storage2::existsOne(storage,
-                                 transaction_executor::StateKeyView(ledger::SYS_CONFIG, name))))
+                                 executor_v1::StateKeyView(ledger::SYS_CONFIG, name))))
             {
                 storage::Entry entry;
                 entry.setObject(
                     SystemConfigEntry{boost::lexical_cast<std::string>((int)value), blockNumber});
                 co_await storage2::writeOne(storage,
-                    transaction_executor::StateKey(ledger::SYS_CONFIG, name), std::move(entry));
+                    executor_v1::StateKey(ledger::SYS_CONFIG, name), std::move(entry));
             }
         }
     }
@@ -354,7 +354,7 @@ inline task::Task<void> readFromStorage(Features& features, auto&& storage, long
     decltype(auto) keys = bcos::ledger::Features::featureKeys();
     auto entries = co_await storage2::readSome(std::forward<decltype(storage)>(storage),
         keys | ::ranges::views::transform([](std::string_view key) {
-            return transaction_executor::StateKeyView(ledger::SYS_CONFIG, key);
+            return executor_v1::StateKeyView(ledger::SYS_CONFIG, key);
         }));
     for (auto&& [key, entry] : ::ranges::views::zip(keys, entries))
     {
@@ -379,7 +379,7 @@ inline task::Task<void> writeToStorage(Features const& features, auto&& storage,
             entry.setObject(SystemConfigEntry{
                 boost::lexical_cast<std::string>((int)std::get<2>(tuple)), blockNumber});
             return std::make_tuple(
-                transaction_executor::StateKey(ledger::SYS_CONFIG, std::get<1>(tuple)),
+                executor_v1::StateKey(ledger::SYS_CONFIG, std::get<1>(tuple)),
                 std::move(entry));
         }));
 }
