@@ -78,6 +78,7 @@ public:
     bool m_isAuthCheck = true;
     std::string m_authAdminAccount;
     bool m_isSerialExecute = true;
+    int m_executorVersion = 0;
 
     // rpbft config
     int64_t m_epochSealerNum = 4;

@@ -29,6 +29,7 @@
 #include "bcos-framework/ledger/GenesisConfig.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/ledger/SystemConfigs.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/storage/LegacyStorageMethods.h"
@@ -1440,6 +1441,32 @@ BOOST_AUTO_TEST_CASE(genesisBlockWithAllocs)
             BOOST_CHECK_EQUAL(codeHashEntry->get(),
                 std::string_view((const char*)codeHashBytes.data(), codeHashBytes.size()));
         }
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(genesisExecutorVersion)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        auto hashImpl = std::make_shared<Keccak256>();
+        auto memoryStorage = std::make_shared<StateStorage>(nullptr, false);
+        auto storage = std::make_shared<MockStorage>(memoryStorage);
+        auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+
+        LedgerConfig param;
+        GenesisConfig genesisConfig;
+
+        genesisConfig.m_executorVersion = 10086;
+        co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param);
+
+        auto value = co_await storage2::readOne(
+            *storage, transaction_executor::StateKeyView(ledger::SYS_CONFIG,
+                          magic_enum::enum_name(ledger::SystemConfig::executor_version)));
+        BOOST_REQUIRE(value);
+
+        ledger::SystemConfigEntry entry;
+        value->getObject(entry);
+        using namespace std::string_view_literals;
+        BOOST_CHECK_EQUAL(std::get<0>(entry), "10086"sv);
     }());
 }
 
