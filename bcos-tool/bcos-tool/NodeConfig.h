@@ -46,7 +46,7 @@ public:
     constexpr static ssize_t DEFAULT_PIPELINE_SIZE = 50;
 
     using Ptr = std::shared_ptr<NodeConfig>;
-    NodeConfig();
+    NodeConfig() : m_ledgerConfig(std::make_shared<bcos::ledger::LedgerConfig>()) {}
 
     NodeConfig(const NodeConfig&) = default;
     NodeConfig(NodeConfig&&) = default;
@@ -56,7 +56,12 @@ public:
     virtual ~NodeConfig() = default;
 
     virtual void loadConfig(std::string const& _configPath, bool _enforceMemberID = true,
-        bool enforceChainConfig = false, bool enforceGroupId = true);
+        bool enforceChainConfig = false, bool enforceGroupId = true)
+    {
+        boost::property_tree::ptree iniConfig;
+        boost::property_tree::read_ini(_configPath, iniConfig);
+        loadConfig(iniConfig, _enforceMemberID, enforceChainConfig, enforceGroupId);
+    }
     virtual void loadServiceConfig(boost::property_tree::ptree const& _pt);
     virtual void loadRpcServiceConfig(boost::property_tree::ptree const& _pt);
     virtual void loadGatewayServiceConfig(boost::property_tree::ptree const& _pt);
@@ -71,177 +76,209 @@ public:
     virtual void loadServiceTarsProxyConfig(
         const std::string& _serviceSectionName, boost::property_tree::ptree const& _pt);
 
-    virtual void loadGenesisConfig(std::string const& _genesisConfigPath);
+    virtual void loadGenesisConfig(std::string const& _genesisConfigPath)
+    {
+        boost::property_tree::ptree genesisConfig;
+        boost::property_tree::read_ini(_genesisConfigPath, genesisConfig);
+        loadGenesisConfig(genesisConfig);
+    }
 
-    virtual void loadConfigFromString(std::string const& _content);
+    virtual void loadConfigFromString(std::string const& _content)
+    {
+        boost::property_tree::ptree iniConfig;
+        std::stringstream contentStream(_content);
+        boost::property_tree::read_ini(contentStream, iniConfig);
+        loadConfig(iniConfig);
+    }
 
-    virtual void loadGenesisConfigFromString(std::string const& _content);
+    virtual void loadGenesisConfigFromString(std::string const& _content)
+    {
+        boost::property_tree::ptree genesisConfig;
+        std::stringstream contentStream(_content);
+        boost::property_tree::read_ini(contentStream, genesisConfig);
+        loadGenesisConfig(genesisConfig);
+    }
 
     virtual void loadConfig(boost::property_tree::ptree const& _pt, bool _enforceMemberID = true,
         bool _enforceChainConfig = false, bool _enforceGroupId = true);
     virtual void loadGenesisConfig(boost::property_tree::ptree const& _genesisConfig);
 
     // the txpool configurations
-    size_t txpoolLimit() const;
-    size_t notifyWorkerNum() const;
-    size_t verifierWorkerNum() const;
-    int64_t txsExpirationTime() const;
-    bool checkBlockLimit() const;
+    size_t txpoolLimit() const { return m_txpoolLimit; }
+    size_t notifyWorkerNum() const { return m_notifyWorkerNum; }
+    size_t verifierWorkerNum() const { return m_verifierWorkerNum; }
+    int64_t txsExpirationTime() const { return m_txsExpirationTime; }
+    bool checkBlockLimit() const { return m_checkBlockLimit; }
 
-    bool smCryptoType() const;
-    std::string const& chainId() const;
-    std::string const& groupId() const;
-    size_t blockLimit() const;
+    bool smCryptoType() const { return m_genesisConfig.m_smCrypto; }
+    std::string const& chainId() const { return m_genesisConfig.m_chainID; }
+    std::string const& groupId() const { return m_genesisConfig.m_groupID; }
+    size_t blockLimit() const { return m_blockLimit; }
 
-    std::string const& privateKeyPath() const;
-    std::string const& hsmLibPath() const;
-    int const& keyIndex() const;
-    int const& encKeyIndex() const;
-    std::string const& password() const;
+    std::string const& privateKeyPath() const { return m_privateKeyPath; }
+    std::string const& hsmLibPath() const { return m_hsmLibPath; }
+    int const& keyIndex() const { return m_keyIndex; }
+    int const& encKeyIndex() const { return m_encKeyIndex; }
+    std::string const& password() const { return m_password; }
 
-    size_t minSealTime() const;
-    bool allowFreeNodeSync() const;
-    size_t checkPointTimeoutInterval() const;
-    size_t pipelineSize() const;
+    size_t minSealTime() const { return m_minSealTime; }
+    bool allowFreeNodeSync() const { return m_allowFreeNode; }
+    size_t checkPointTimeoutInterval() const { return m_checkPointTimeoutInterval; }
+    size_t pipelineSize() const { return m_pipelineSize; }
 
-    std::string const& storagePath() const;
-    std::string const& stateDBPath() const;
-    std::string const& blockDBPath() const;
-    std::string const& storageType() const;
-    size_t keyPageSize() const;
-    int maxWriteBufferNumber() const;
-    bool enableStatistics() const;
-    int maxBackgroundJobs() const;
-    size_t writeBufferSize() const;
-    int minWriteBufferNumberToMerge() const;
-    size_t blockCacheSize() const;
-    bool enableRocksDBBlob() const;
-    std::vector<std::string> const& pdAddrs() const;
-    std::string const& pdCaPath() const;
-    std::string const& pdCertPath() const;
-    std::string const& pdKeyPath() const;
-    std::string const& storageDBName() const;
-    std::string const& stateDBName() const;
-    bool enableArchive() const;
-    bool syncArchivedBlocks() const;
-    bool enableSeparateBlockAndState() const;
-    std::string const& archiveListenIP() const;
-    uint16_t archiveListenPort() const;
+    std::string const& storagePath() const { return m_storagePath; }
+    std::string const& stateDBPath() const { return m_stateDBPath; }
+    std::string const& blockDBPath() const { return m_blockDBPath; }
+    std::string const& storageType() const { return m_storageType; }
+    size_t keyPageSize() const { return m_keyPageSize; }
+    int maxWriteBufferNumber() const { return m_maxWriteBufferNumber; }
+    bool enableStatistics() const { return m_enableDBStatistics; }
+    int maxBackgroundJobs() const { return m_maxBackgroundJobs; }
+    size_t writeBufferSize() const { return m_writeBufferSize; }
+    int minWriteBufferNumberToMerge() const { return m_minWriteBufferNumberToMerge; }
+    size_t blockCacheSize() const { return m_blockCacheSize; }
+    bool enableRocksDBBlob() const { return m_enableRocksDBBlob; }
+    std::vector<std::string> const& pdAddrs() const { return m_pd_addrs; }
+    std::string const& pdCaPath() const { return m_pdCaPath; }
+    std::string const& pdCertPath() const { return m_pdCertPath; }
+    std::string const& pdKeyPath() const { return m_pdKeyPath; }
+    std::string const& storageDBName() const { return m_storageDBName; }
+    std::string const& stateDBName() const { return m_stateDBName; }
+    bool enableArchive() const { return m_enableArchive; }
+    bool syncArchivedBlocks() const { return m_syncArchivedBlocks; }
+    bool enableSeparateBlockAndState() const { return m_enableSeparateBlockAndState; }
+    std::string const& archiveListenIP() const { return m_archiveListenIP; }
+    uint16_t archiveListenPort() const { return m_archiveListenPort; }
 
-    bcos::crypto::KeyFactory::Ptr keyFactory();
+    bcos::crypto::KeyFactory::Ptr keyFactory() { return m_keyFactory; }
 
-    bcos::ledger::LedgerConfig::Ptr ledgerConfig();
+    bcos::ledger::LedgerConfig::Ptr ledgerConfig() { return m_ledgerConfig; }
 
-    std::string const& consensusType() const;
-    size_t txGasLimit() const;
-    std::string const& genesisData() const;
+    std::string const& consensusType() const { return m_genesisConfig.m_consensusType; }
+    size_t txGasLimit() const { return m_genesisConfig.m_txGasLimit; }
+    std::string const& genesisData() const { return m_genesisData; }
 
-    std::int64_t epochSealerNum() const;
-    std::int64_t epochBlockNum() const;
+    std::int64_t epochSealerNum() const { return m_genesisConfig.m_epochSealerNum; }
+    std::int64_t epochBlockNum() const { return m_genesisConfig.m_epochBlockNum; }
 
-    bool isWasm() const;
-    bool isAuthCheck() const;
-    bool isSerialExecute() const;
-    size_t vmCacheSize() const;
+    bool isWasm() const { return m_genesisConfig.m_isWasm; }
+    bool isAuthCheck() const { return m_genesisConfig.m_isAuthCheck; }
+    bool isSerialExecute() const { return m_genesisConfig.m_isSerialExecute; }
+    size_t vmCacheSize() const { return m_vmCacheSize; }
 
-    std::string const& authAdminAddress() const;
+    std::string const& authAdminAddress() const { return m_genesisConfig.m_authAdminAccount; }
 
-    std::string const& rpcServiceName() const;
-    std::string const& gatewayServiceName() const;
+    std::string const& rpcServiceName() const { return m_rpcServiceName; }
+    std::string const& gatewayServiceName() const { return m_gatewayServiceName; }
 
-    std::string const& schedulerServiceName() const;
-    std::string const& executorServiceName() const;
-    std::string const& txpoolServiceName() const;
+    std::string const& schedulerServiceName() const { return m_schedulerServiceName; }
+    std::string const& executorServiceName() const { return m_executorServiceName; }
+    std::string const& txpoolServiceName() const { return m_txpoolServiceName; }
 
-    std::string const& nodeName() const;
+    std::string const& nodeName() const { return m_nodeName; }
 
     std::string getDefaultServiceName(
         std::string const& _nodeName, std::string const& _serviceName) const;
 
     // the rpc configurations
-    const std::string& rpcListenIP() const;
-    uint16_t rpcListenPort() const;
-    uint32_t rpcThreadPoolSize() const;
-    uint32_t rpcFilterTimeout() const;
-    uint32_t rpcMaxProcessBlock() const;
-    bool rpcSmSsl() const;
-    bool rpcDisableSsl() const;
+    const std::string& rpcListenIP() const { return m_rpcListenIP; }
+    uint16_t rpcListenPort() const { return m_rpcListenPort; }
+    uint32_t rpcThreadPoolSize() const { return m_rpcThreadPoolSize; }
+    uint32_t rpcFilterTimeout() const { return m_rpcFilterTimeout; }
+    uint32_t rpcMaxProcessBlock() const { return m_rpcMaxProcessBlock; }
+    bool rpcSmSsl() const { return m_rpcSmSsl; }
+    bool rpcDisableSsl() const { return m_rpcDisableSsl; }
 
     // the web3 rpc configurations
-    bool enableWeb3Rpc() const;
-    const std::string& web3RpcListenIP() const;
-    uint16_t web3RpcListenPort() const;
-    uint32_t web3RpcThreadSize() const;
-    uint32_t web3FilterTimeout() const;
-    uint32_t web3MaxProcessBlock() const;
+    bool enableWeb3Rpc() const { return m_enableWeb3Rpc; }
+    const std::string& web3RpcListenIP() const { return m_web3RpcListenIP; }
+    uint16_t web3RpcListenPort() const { return m_web3RpcListenPort; }
+    uint32_t web3RpcThreadSize() const { return m_web3RpcThreadSize; }
+    uint32_t web3FilterTimeout() const { return m_web3FilterTimeout; }
+    uint32_t web3MaxProcessBlock() const { return m_web3MaxProcessBlock; }
 
     // the gateway configurations
-    const std::string& p2pListenIP() const;
-    uint16_t p2pListenPort() const;
-    bool p2pSmSsl() const;
-    const std::string& p2pNodeDir() const;
-    const std::string& p2pNodeFileName() const;
+    const std::string& p2pListenIP() const { return m_p2pListenIP; }
+    uint16_t p2pListenPort() const { return m_p2pListenPort; }
+    bool p2pSmSsl() const { return m_p2pSmSsl; }
+    const std::string& p2pNodeDir() const { return m_p2pNodeDir; }
+    const std::string& p2pNodeFileName() const { return m_p2pNodeFileName; }
 
     // config for cert
-    const std::string& certPath();
-    void setCertPath(const std::string& _certPath);
+    const std::string& certPath() { return m_certPath; }
+    void setCertPath(const std::string& _certPath) { m_certPath = _certPath; }
 
-    const std::string& caCert();
-    void setCaCert(const std::string& _caCert);
+    const std::string& caCert() { return m_caCert; }
+    void setCaCert(const std::string& _caCert) { m_caCert = _caCert; }
 
-    const std::string& nodeCert();
-    void setNodeCert(const std::string& _nodeCert);
+    const std::string& nodeCert() { return m_nodeCert; }
+    void setNodeCert(const std::string& _nodeCert) { m_nodeCert = _nodeCert; }
 
-    const std::string& nodeKey();
-    void setNodeKey(const std::string& _nodeKey);
+    const std::string& nodeKey() { return m_nodeKey; }
+    void setNodeKey(const std::string& _nodeKey) { m_nodeKey = _nodeKey; }
 
-    const std::string& smCaCert() const;
-    void setSmCaCert(const std::string& _smCaCert);
+    const std::string& smCaCert() const { return m_smCaCert; }
+    void setSmCaCert(const std::string& _smCaCert) { m_smCaCert = _smCaCert; }
 
-    const std::string& smNodeCert() const;
-    void setSmNodeCert(const std::string& _smNodeCert);
+    const std::string& smNodeCert() const { return m_smNodeCert; }
+    void setSmNodeCert(const std::string& _smNodeCert) { m_smNodeCert = _smNodeCert; }
 
-    const std::string& smNodeKey() const;
-    void setSmNodeKey(const std::string& _smNodeKey);
+    const std::string& smNodeKey() const { return m_smNodeKey; }
+    void setSmNodeKey(const std::string& _smNodeKey) { m_smNodeKey = _smNodeKey; }
 
-    const std::string& enSmNodeCert() const;
-    void setEnSmNodeCert(const std::string& _enSmNodeCert);
+    const std::string& enSmNodeCert() const { return m_enSmNodeCert; }
+    void setEnSmNodeCert(const std::string& _enSmNodeCert) { m_enSmNodeCert = _enSmNodeCert; }
 
-    const std::string& enSmNodeKey() const;
-    void setEnSmNodeKey(const std::string& _enSmNodeKey);
+    const std::string& enSmNodeKey() const { return m_enSmNodeKey; }
+    void setEnSmNodeKey(const std::string& _enSmNodeKey) { m_enSmNodeKey = _enSmNodeKey; }
 
-    bool enableLRUCacheStorage() const;
-    ssize_t cacheSize() const;
+    bool enableLRUCacheStorage() const { return m_enableLRUCacheStorage; }
+    ssize_t cacheSize() const { return m_cacheSize; }
 
-    uint32_t compatibilityVersion() const;
-    std::string compatibilityVersionStr() const;
+    uint32_t compatibilityVersion() const { return m_genesisConfig.m_compatibilityVersion; }
+    std::string compatibilityVersionStr() const
+    {
+        std::stringstream ss;
+        ss << (bcos::protocol::BlockVersion)m_genesisConfig.m_compatibilityVersion;
+        return ss.str();
+    }
 
-    std::string const& memberID() const;
-    unsigned leaseTTL() const;
-    bool enableFailOver() const;
-    std::string const& failOverClusterUrl() const;
+    std::string const& memberID() const { return m_memberID; }
+    unsigned leaseTTL() const { return m_leaseTTL; }
+    bool enableFailOver() const { return m_enableFailOver; }
+    std::string const& failOverClusterUrl() const { return m_failOverClusterUrl; }
 
-    bool storageSecurityEnable() const;
-    std::string storageSecuirtyKeyCenterUrl() const;
-    std::string storageSecurityCipherDataKey() const;
+    bool storageSecurityEnable() const { return m_storageSecurityEnable; }
+    std::string storageSecuirtyKeyCenterUrl() const { return m_storageSecurityUrl; }
+    std::string storageSecurityCipherDataKey() const { return m_storageSecurityCipherDataKey; }
 
-    security::KeyEncryptionType keyEncryptionType() const;
-    security::StorageEncryptionType storageEncryptionType() const;
-    security::CloudKmsType cloudKmsType() const;
-    std::string bcosKmsKeySecurityCipherDataKey() const;
-    std::string keyEncryptionUrl() const;
+    security::KeyEncryptionType keyEncryptionType() const { return m_keyEncryptionType; }
+    security::StorageEncryptionType storageEncryptionType() const
+    {
+        return m_storageEncryptionType;
+    }
+    security::CloudKmsType cloudKmsType() const { return m_cloudKmsType; }
+    std::string bcosKmsKeySecurityCipherDataKey() const
+    {
+        return m_bcosKmsKeySecurityCipherDataKey;
+    }
+    std::string keyEncryptionUrl() const { return m_KeyEncryptionUrl; }
 
-    bool enableSendBlockStatusByTree() const;
-    bool enableSendTxByTree() const;
-    std::int64_t treeWidth() const;
+    bool enableSendBlockStatusByTree() const { return m_enableSendBlockStatusByTree; }
+    bool enableSendTxByTree() const { return m_enableSendTxByTree; }
+    std::int64_t treeWidth() const { return m_treeWidth; }
 
-    int sendTxTimeout() const;
+    int sendTxTimeout() const { return m_sendTxTimeout; }
 
-    bool withoutTarsFramework() const;
-    void setWithoutTarsFramework(bool _withoutTarsFramework);
+    bool withoutTarsFramework() const { return m_withoutTarsFramework; }
+    void setWithoutTarsFramework(bool _withoutTarsFramework)
+    {
+        m_withoutTarsFramework = _withoutTarsFramework;
+    }
     void getTarsClientProxyEndpoints(
         const std::string& _clientPrx, std::vector<tars::TC_Endpoint>& _endPoints);
 
+    bool enableBaselineScheduler() const { return m_enableBaselineScheduler; }
     struct BaselineSchedulerConfig
     {
         bool parallel = false;
@@ -269,7 +306,6 @@ public:
     bool isValidPort(int port);
 
     bool enableTxsFromFreeNode() const { return m_enableTxsFromFreeNode; }
-
     int executorVersion() const;
 
 protected:
@@ -307,7 +343,20 @@ protected:
 
 private:
     void loadGenesisFeatures(boost::property_tree::ptree const& ptree);
-    void loadAlloc(boost::property_tree::ptree const& ptree);
+    void loadAlloc(boost::property_tree::ptree const& ptree)
+    {
+        if (auto node = ptree.get_child_optional("alloc"))
+        {
+            for (const auto& it : *node)
+            {
+                auto flag = it.first;
+                auto enableNumber = it.second.get_value<bool>();
+                m_genesisConfig.m_features.emplace_back(
+                    ledger::FeatureSet{.flag = ledger::Features::string2Flag(flag),
+                        .enable = static_cast<int>(enableNumber)});
+            }
+        }
+    }
 
     bcos::consensus::ConsensusNodeList parseConsensusNodeList(
         boost::property_tree::ptree const& _pt, std::string const& _sectionName,
@@ -315,6 +364,7 @@ private:
 
     virtual int64_t checkAndGetValue(boost::property_tree::ptree const& _pt,
         std::string const& _value, std::string const& _defaultValue);
+
 
     bcos::crypto::KeyFactory::Ptr m_keyFactory;
     // txpool related configuration
@@ -345,12 +395,12 @@ private:
     std::string m_password;
 
     // for security cloudkms bcoskms hsm configuration
-    security::KeyEncryptionType m_keyEncryptionType{};
-    security::StorageEncryptionType m_storageEncryptionType{};
+    security::KeyEncryptionType m_keyEncryptionType;
+    security::StorageEncryptionType m_storageEncryptionType;
     // key url
     std::string m_KeyEncryptionUrl;
     // cloude kms type, 0: AWS, 1: Aliyun...
-    security::CloudKmsType m_cloudKmsType{};
+    security::CloudKmsType m_cloudKmsType;
     // bcos kms data key
     std::string m_bcosKmsKeySecurityCipherDataKey;
 
@@ -396,6 +446,7 @@ private:
 
     // executor config
     size_t m_vmCacheSize = 1024;
+    bool m_enableBaselineScheduler = false;
     BaselineSchedulerConfig m_baselineSchedulerConfig;
     TarsRPCConfig m_tarsRPCConfig;
 

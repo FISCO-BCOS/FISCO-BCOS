@@ -271,7 +271,7 @@ void NodeConfig::loadServiceTarsProxyConfig(
 
     for (auto const& it : _pt.get_child(_serviceName))
     {
-        if (!it.first.starts_with("proxy."))
+        if (it.first.find("proxy.") != 0)
         {
             continue;
         }
@@ -934,6 +934,7 @@ void NodeConfig::loadOthersConfig(boost::property_tree::ptree const& _pt)
 {
     m_sendTxTimeout = _pt.get<int>("others.send_tx_timeout", -1);
     m_vmCacheSize = _pt.get<int>("executor.vm_cache_size", 1024);
+    m_enableBaselineScheduler = _pt.get<bool>("executor.baseline_scheduler", false);
     m_baselineSchedulerConfig.grainSize =
         _pt.get<int>("executor.baseline_scheduler_chunksize", 100);
     m_baselineSchedulerConfig.maxThread = _pt.get<int>("executor.baseline_scheduler_maxthread", 16);
@@ -1102,11 +1103,9 @@ ConsensusNodeList NodeConfig::parseConsensusNodeList(boost::property_tree::ptree
             BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                       "Please set weight for " + nodeId + " to positive!"));
         }
-        ConsensusNode consensusNode{.nodeID = m_keyFactory->createKey(fromHex(nodeId)),
-            .type = consensus::Type::consensus_sealer,
-            .voteWeight = static_cast<uint64_t>(voteWeight),
-            .termWeight = static_cast<uint64_t>(termWeight),
-            .enableNumber = 0};
+        ConsensusNode consensusNode{m_keyFactory->createKey(fromHex(nodeId)),
+            consensus::Type::consensus_sealer, static_cast<uint64_t>(voteWeight),
+            static_cast<uint64_t>(termWeight), 0};
         NodeConfig_LOG(INFO) << LOG_BADGE("parseConsensusNodeList")
                              << LOG_KV("sectionName", _sectionName) << LOG_KV("nodeId", nodeId)
                              << LOG_KV("voteWeight", voteWeight)
@@ -1114,7 +1113,7 @@ ConsensusNodeList NodeConfig::parseConsensusNodeList(boost::property_tree::ptree
         nodeList.push_back(consensusNode);
     }
     // only sort nodeList after rc3 version
-    ::ranges::sort(nodeList);
+    std::sort(nodeList.begin(), nodeList.end());
     NodeConfig_LOG(INFO) << LOG_BADGE("parseConsensusNodeList")
                          << LOG_KV("totalNodesSize", nodeList.size());
     return nodeList;
@@ -1128,7 +1127,6 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
         m_genesisConfig.m_isAuthCheck = _genesisConfig.get<bool>("executor.is_auth_check", false);
         m_genesisConfig.m_isSerialExecute =
             _genesisConfig.get<bool>("executor.is_serial_execute", false);
-        m_genesisConfig.m_executorVersion = _genesisConfig.get<int>("executor.version", 0);
     }
     catch (std::exception const& e)
     {
@@ -1189,8 +1187,7 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
                          << LOG_KV("isWasm", m_genesisConfig.m_isWasm)
                          << LOG_KV("isAuthCheck", m_genesisConfig.m_isAuthCheck)
                          << LOG_KV("authAdminAccount", m_genesisConfig.m_authAdminAccount)
-                         << LOG_KV("ismSerialExecute", m_genesisConfig.m_isSerialExecute)
-                         << LOG_KV("executorVersion", m_genesisConfig.m_executorVersion);
+                         << LOG_KV("ismSerialExecute", m_genesisConfig.m_isSerialExecute);
 }
 
 // load config.ini
@@ -1300,10 +1297,6 @@ std::string bcos::tool::generateGenesisData(
                 ss << feature.flag << ":" << feature.enable << '\n';
             }
         }
-        if (genesisConfig.m_executorVersion > 0)
-        {
-            ss << "executorVersion:" << genesisConfig.m_executorVersion << '\n';
-        }
 
         size_t j = 0;
         for (const auto& node : ledgerConfig.consensusNodeList())
@@ -1354,517 +1347,3 @@ int bcos::tool::NodeConfig::executorVersion() const
 {
     return m_genesisConfig.m_executorVersion;
 }
-void bcos::tool::NodeConfig::loadConfig(std::string const& _configPath, bool _enforceMemberID,
-    bool enforceChainConfig, bool enforceGroupId)
-{
-    boost::property_tree::ptree iniConfig;
-    boost::property_tree::read_ini(_configPath, iniConfig);
-    loadConfig(iniConfig, _enforceMemberID, enforceChainConfig, enforceGroupId);
-}
-void bcos::tool::NodeConfig::loadGenesisConfig(std::string const& _genesisConfigPath)
-{
-    boost::property_tree::ptree genesisConfig;
-    boost::property_tree::read_ini(_genesisConfigPath, genesisConfig);
-    loadGenesisConfig(genesisConfig);
-}
-void bcos::tool::NodeConfig::loadConfigFromString(std::string const& _content)
-{
-    boost::property_tree::ptree iniConfig;
-    std::stringstream contentStream(_content);
-    boost::property_tree::read_ini(contentStream, iniConfig);
-    loadConfig(iniConfig);
-}
-void bcos::tool::NodeConfig::loadGenesisConfigFromString(std::string const& _content)
-{
-    boost::property_tree::ptree genesisConfig;
-    std::stringstream contentStream(_content);
-    boost::property_tree::read_ini(contentStream, genesisConfig);
-    loadGenesisConfig(genesisConfig);
-}
-size_t bcos::tool::NodeConfig::txpoolLimit() const
-{
-    return m_txpoolLimit;
-}
-size_t bcos::tool::NodeConfig::notifyWorkerNum() const
-{
-    return m_notifyWorkerNum;
-}
-size_t bcos::tool::NodeConfig::verifierWorkerNum() const
-{
-    return m_verifierWorkerNum;
-}
-int64_t bcos::tool::NodeConfig::txsExpirationTime() const
-{
-    return m_txsExpirationTime;
-}
-bool bcos::tool::NodeConfig::checkBlockLimit() const
-{
-    return m_checkBlockLimit;
-}
-bool bcos::tool::NodeConfig::smCryptoType() const
-{
-    return m_genesisConfig.m_smCrypto;
-}
-std::string const& bcos::tool::NodeConfig::chainId() const
-{
-    return m_genesisConfig.m_chainID;
-}
-std::string const& bcos::tool::NodeConfig::groupId() const
-{
-    return m_genesisConfig.m_groupID;
-}
-size_t bcos::tool::NodeConfig::blockLimit() const
-{
-    return m_blockLimit;
-}
-std::string const& bcos::tool::NodeConfig::privateKeyPath() const
-{
-    return m_privateKeyPath;
-}
-std::string const& bcos::tool::NodeConfig::hsmLibPath() const
-{
-    return m_hsmLibPath;
-}
-int const& bcos::tool::NodeConfig::keyIndex() const
-{
-    return m_keyIndex;
-}
-int const& bcos::tool::NodeConfig::encKeyIndex() const
-{
-    return m_encKeyIndex;
-}
-std::string const& bcos::tool::NodeConfig::password() const
-{
-    return m_password;
-}
-size_t bcos::tool::NodeConfig::minSealTime() const
-{
-    return m_minSealTime;
-}
-bool bcos::tool::NodeConfig::allowFreeNodeSync() const
-{
-    return m_allowFreeNode;
-}
-size_t bcos::tool::NodeConfig::checkPointTimeoutInterval() const
-{
-    return m_checkPointTimeoutInterval;
-}
-size_t bcos::tool::NodeConfig::pipelineSize() const
-{
-    return m_pipelineSize;
-}
-std::string const& bcos::tool::NodeConfig::storagePath() const
-{
-    return m_storagePath;
-}
-std::string const& bcos::tool::NodeConfig::stateDBPath() const
-{
-    return m_stateDBPath;
-}
-std::string const& bcos::tool::NodeConfig::blockDBPath() const
-{
-    return m_blockDBPath;
-}
-std::string const& bcos::tool::NodeConfig::storageType() const
-{
-    return m_storageType;
-}
-size_t bcos::tool::NodeConfig::keyPageSize() const
-{
-    return m_keyPageSize;
-}
-int bcos::tool::NodeConfig::maxWriteBufferNumber() const
-{
-    return m_maxWriteBufferNumber;
-}
-bool bcos::tool::NodeConfig::enableStatistics() const
-{
-    return m_enableDBStatistics;
-}
-int bcos::tool::NodeConfig::maxBackgroundJobs() const
-{
-    return m_maxBackgroundJobs;
-}
-size_t bcos::tool::NodeConfig::writeBufferSize() const
-{
-    return m_writeBufferSize;
-}
-int bcos::tool::NodeConfig::minWriteBufferNumberToMerge() const
-{
-    return m_minWriteBufferNumberToMerge;
-}
-size_t bcos::tool::NodeConfig::blockCacheSize() const
-{
-    return m_blockCacheSize;
-}
-bool bcos::tool::NodeConfig::enableRocksDBBlob() const
-{
-    return m_enableRocksDBBlob;
-}
-std::vector<std::string> const& bcos::tool::NodeConfig::pdAddrs() const
-{
-    return m_pd_addrs;
-}
-std::string const& bcos::tool::NodeConfig::pdCaPath() const
-{
-    return m_pdCaPath;
-}
-std::string const& bcos::tool::NodeConfig::pdCertPath() const
-{
-    return m_pdCertPath;
-}
-std::string const& bcos::tool::NodeConfig::pdKeyPath() const
-{
-    return m_pdKeyPath;
-}
-std::string const& bcos::tool::NodeConfig::storageDBName() const
-{
-    return m_storageDBName;
-}
-std::string const& bcos::tool::NodeConfig::stateDBName() const
-{
-    return m_stateDBName;
-}
-bool bcos::tool::NodeConfig::enableArchive() const
-{
-    return m_enableArchive;
-}
-bool bcos::tool::NodeConfig::syncArchivedBlocks() const
-{
-    return m_syncArchivedBlocks;
-}
-bool bcos::tool::NodeConfig::enableSeparateBlockAndState() const
-{
-    return m_enableSeparateBlockAndState;
-}
-std::string const& bcos::tool::NodeConfig::archiveListenIP() const
-{
-    return m_archiveListenIP;
-}
-uint16_t bcos::tool::NodeConfig::archiveListenPort() const
-{
-    return m_archiveListenPort;
-}
-bcos::crypto::KeyFactory::Ptr bcos::tool::NodeConfig::keyFactory()
-{
-    return m_keyFactory;
-}
-bcos::ledger::LedgerConfig::Ptr bcos::tool::NodeConfig::ledgerConfig()
-{
-    return m_ledgerConfig;
-}
-std::string const& bcos::tool::NodeConfig::consensusType() const
-{
-    return m_genesisConfig.m_consensusType;
-}
-size_t bcos::tool::NodeConfig::txGasLimit() const
-{
-    return m_genesisConfig.m_txGasLimit;
-}
-std::string const& bcos::tool::NodeConfig::genesisData() const
-{
-    return m_genesisData;
-}
-std::int64_t bcos::tool::NodeConfig::epochSealerNum() const
-{
-    return m_genesisConfig.m_epochSealerNum;
-}
-std::int64_t bcos::tool::NodeConfig::epochBlockNum() const
-{
-    return m_genesisConfig.m_epochBlockNum;
-}
-bool bcos::tool::NodeConfig::isWasm() const
-{
-    return m_genesisConfig.m_isWasm;
-}
-bool bcos::tool::NodeConfig::isAuthCheck() const
-{
-    return m_genesisConfig.m_isAuthCheck;
-}
-bool bcos::tool::NodeConfig::isSerialExecute() const
-{
-    return m_genesisConfig.m_isSerialExecute;
-}
-size_t bcos::tool::NodeConfig::vmCacheSize() const
-{
-    return m_vmCacheSize;
-}
-std::string const& bcos::tool::NodeConfig::authAdminAddress() const
-{
-    return m_genesisConfig.m_authAdminAccount;
-}
-std::string const& bcos::tool::NodeConfig::rpcServiceName() const
-{
-    return m_rpcServiceName;
-}
-std::string const& bcos::tool::NodeConfig::gatewayServiceName() const
-{
-    return m_gatewayServiceName;
-}
-std::string const& bcos::tool::NodeConfig::schedulerServiceName() const
-{
-    return m_schedulerServiceName;
-}
-std::string const& bcos::tool::NodeConfig::executorServiceName() const
-{
-    return m_executorServiceName;
-}
-std::string const& bcos::tool::NodeConfig::txpoolServiceName() const
-{
-    return m_txpoolServiceName;
-}
-std::string const& bcos::tool::NodeConfig::nodeName() const
-{
-    return m_nodeName;
-}
-const std::string& bcos::tool::NodeConfig::rpcListenIP() const
-{
-    return m_rpcListenIP;
-}
-uint16_t bcos::tool::NodeConfig::rpcListenPort() const
-{
-    return m_rpcListenPort;
-}
-uint32_t bcos::tool::NodeConfig::rpcThreadPoolSize() const
-{
-    return m_rpcThreadPoolSize;
-}
-uint32_t bcos::tool::NodeConfig::rpcFilterTimeout() const
-{
-    return m_rpcFilterTimeout;
-}
-uint32_t bcos::tool::NodeConfig::rpcMaxProcessBlock() const
-{
-    return m_rpcMaxProcessBlock;
-}
-bool bcos::tool::NodeConfig::rpcSmSsl() const
-{
-    return m_rpcSmSsl;
-}
-bool bcos::tool::NodeConfig::rpcDisableSsl() const
-{
-    return m_rpcDisableSsl;
-}
-bool bcos::tool::NodeConfig::enableWeb3Rpc() const
-{
-    return m_enableWeb3Rpc;
-}
-const std::string& bcos::tool::NodeConfig::web3RpcListenIP() const
-{
-    return m_web3RpcListenIP;
-}
-uint16_t bcos::tool::NodeConfig::web3RpcListenPort() const
-{
-    return m_web3RpcListenPort;
-}
-uint32_t bcos::tool::NodeConfig::web3RpcThreadSize() const
-{
-    return m_web3RpcThreadSize;
-}
-uint32_t bcos::tool::NodeConfig::web3FilterTimeout() const
-{
-    return m_web3FilterTimeout;
-}
-uint32_t bcos::tool::NodeConfig::web3MaxProcessBlock() const
-{
-    return m_web3MaxProcessBlock;
-}
-const std::string& bcos::tool::NodeConfig::p2pListenIP() const
-{
-    return m_p2pListenIP;
-}
-uint16_t bcos::tool::NodeConfig::p2pListenPort() const
-{
-    return m_p2pListenPort;
-}
-bool bcos::tool::NodeConfig::p2pSmSsl() const
-{
-    return m_p2pSmSsl;
-}
-const std::string& bcos::tool::NodeConfig::p2pNodeDir() const
-{
-    return m_p2pNodeDir;
-}
-const std::string& bcos::tool::NodeConfig::p2pNodeFileName() const
-{
-    return m_p2pNodeFileName;
-}
-const std::string& bcos::tool::NodeConfig::certPath()
-{
-    return m_certPath;
-}
-void bcos::tool::NodeConfig::setCertPath(const std::string& _certPath)
-{
-    m_certPath = _certPath;
-}
-const std::string& bcos::tool::NodeConfig::caCert()
-{
-    return m_caCert;
-}
-void bcos::tool::NodeConfig::setCaCert(const std::string& _caCert)
-{
-    m_caCert = _caCert;
-}
-const std::string& bcos::tool::NodeConfig::nodeCert()
-{
-    return m_nodeCert;
-}
-void bcos::tool::NodeConfig::setNodeCert(const std::string& _nodeCert)
-{
-    m_nodeCert = _nodeCert;
-}
-const std::string& bcos::tool::NodeConfig::nodeKey()
-{
-    return m_nodeKey;
-}
-void bcos::tool::NodeConfig::setNodeKey(const std::string& _nodeKey)
-{
-    m_nodeKey = _nodeKey;
-}
-const std::string& bcos::tool::NodeConfig::smCaCert() const
-{
-    return m_smCaCert;
-}
-void bcos::tool::NodeConfig::setSmCaCert(const std::string& _smCaCert)
-{
-    m_smCaCert = _smCaCert;
-}
-const std::string& bcos::tool::NodeConfig::smNodeCert() const
-{
-    return m_smNodeCert;
-}
-void bcos::tool::NodeConfig::setSmNodeCert(const std::string& _smNodeCert)
-{
-    m_smNodeCert = _smNodeCert;
-}
-const std::string& bcos::tool::NodeConfig::smNodeKey() const
-{
-    return m_smNodeKey;
-}
-void bcos::tool::NodeConfig::setSmNodeKey(const std::string& _smNodeKey)
-{
-    m_smNodeKey = _smNodeKey;
-}
-const std::string& bcos::tool::NodeConfig::enSmNodeCert() const
-{
-    return m_enSmNodeCert;
-}
-void bcos::tool::NodeConfig::setEnSmNodeCert(const std::string& _enSmNodeCert)
-{
-    m_enSmNodeCert = _enSmNodeCert;
-}
-const std::string& bcos::tool::NodeConfig::enSmNodeKey() const
-{
-    return m_enSmNodeKey;
-}
-void bcos::tool::NodeConfig::setEnSmNodeKey(const std::string& _enSmNodeKey)
-{
-    m_enSmNodeKey = _enSmNodeKey;
-}
-bool bcos::tool::NodeConfig::enableLRUCacheStorage() const
-{
-    return m_enableLRUCacheStorage;
-}
-ssize_t bcos::tool::NodeConfig::cacheSize() const
-{
-    return m_cacheSize;
-}
-uint32_t bcos::tool::NodeConfig::compatibilityVersion() const
-{
-    return m_genesisConfig.m_compatibilityVersion;
-}
-std::string bcos::tool::NodeConfig::compatibilityVersionStr() const
-{
-    std::stringstream ss;
-    ss << (bcos::protocol::BlockVersion)m_genesisConfig.m_compatibilityVersion;
-    return ss.str();
-}
-std::string const& bcos::tool::NodeConfig::memberID() const
-{
-    return m_memberID;
-}
-unsigned bcos::tool::NodeConfig::leaseTTL() const
-{
-    return m_leaseTTL;
-}
-bool bcos::tool::NodeConfig::enableFailOver() const
-{
-    return m_enableFailOver;
-}
-std::string const& bcos::tool::NodeConfig::failOverClusterUrl() const
-{
-    return m_failOverClusterUrl;
-}
-bool bcos::tool::NodeConfig::storageSecurityEnable() const
-{
-    return m_storageSecurityEnable;
-}
-std::string bcos::tool::NodeConfig::storageSecuirtyKeyCenterUrl() const
-{
-    return m_storageSecurityUrl;
-}
-std::string bcos::tool::NodeConfig::storageSecurityCipherDataKey() const
-{
-    return m_storageSecurityCipherDataKey;
-}
-bcos::security::KeyEncryptionType bcos::tool::NodeConfig::keyEncryptionType() const
-{
-    return m_keyEncryptionType;
-}
-bcos::security::StorageEncryptionType bcos::tool::NodeConfig::storageEncryptionType() const
-{
-    return m_storageEncryptionType;
-}
-bcos::security::CloudKmsType bcos::tool::NodeConfig::cloudKmsType() const
-{
-    return m_cloudKmsType;
-}
-std::string bcos::tool::NodeConfig::bcosKmsKeySecurityCipherDataKey() const
-{
-    return m_bcosKmsKeySecurityCipherDataKey;
-}
-std::string bcos::tool::NodeConfig::keyEncryptionUrl() const
-{
-    return m_KeyEncryptionUrl;
-}
-bool bcos::tool::NodeConfig::enableSendBlockStatusByTree() const
-{
-    return m_enableSendBlockStatusByTree;
-}
-bool bcos::tool::NodeConfig::enableSendTxByTree() const
-{
-    return m_enableSendTxByTree;
-}
-std::int64_t bcos::tool::NodeConfig::treeWidth() const
-{
-    return m_treeWidth;
-}
-int bcos::tool::NodeConfig::sendTxTimeout() const
-{
-    return m_sendTxTimeout;
-}
-bool bcos::tool::NodeConfig::withoutTarsFramework() const
-{
-    return m_withoutTarsFramework;
-}
-void bcos::tool::NodeConfig::setWithoutTarsFramework(bool _withoutTarsFramework)
-{
-    m_withoutTarsFramework = _withoutTarsFramework;
-}
-void bcos::tool::NodeConfig::loadAlloc(boost::property_tree::ptree const& ptree)
-{
-    if (auto node = ptree.get_child_optional("alloc"))
-    {
-        for (const auto& it : *node)
-        {
-            auto flag = it.first;
-            auto enableNumber = it.second.get_value<bool>();
-            m_genesisConfig.m_features.emplace_back(
-                ledger::FeatureSet{.flag = ledger::Features::string2Flag(flag),
-                    .enable = static_cast<int>(enableNumber)});
-        }
-    }
-}
-bcos::tool::NodeConfig::NodeConfig()
-  : m_ledgerConfig(std::make_shared<bcos::ledger::LedgerConfig>())
-{}
