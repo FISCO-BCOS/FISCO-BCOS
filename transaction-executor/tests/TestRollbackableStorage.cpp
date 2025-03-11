@@ -9,7 +9,7 @@
 
 using namespace bcos;
 using namespace bcos::storage2;
-using namespace bcos::transaction_executor;
+using namespace bcos::executor_v1;
 using namespace std::string_literals;
 using namespace std::string_view_literals;
 
@@ -130,9 +130,9 @@ BOOST_AUTO_TEST_CASE(equal)
     task::syncWait([]() -> task::Task<void> {
         BackendStorag2 storage;
 
-        co_await storage2::writeOne(storage, transaction_executor::StateKey("table"sv, "0"sv), 0);
-        co_await storage2::writeOne(storage, transaction_executor::StateKey("table"sv, "1"sv), 1);
-        co_await storage2::writeOne(storage, transaction_executor::StateKey("table"sv, "2"sv), 2);
+        co_await storage2::writeOne(storage, executor_v1::StateKey("table"sv, "0"sv), 0);
+        co_await storage2::writeOne(storage, executor_v1::StateKey("table"sv, "1"sv), 1);
+        co_await storage2::writeOne(storage, executor_v1::StateKey("table"sv, "2"sv), 2);
 
         auto keys = RANGES::iota_view<int, int>(0, 3) | RANGES::views::transform([](int num) {
             return StateKey("table"sv, boost::lexical_cast<std::string>(num));

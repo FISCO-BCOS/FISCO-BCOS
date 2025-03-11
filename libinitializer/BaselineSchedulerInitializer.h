@@ -8,7 +8,7 @@
 #include <rocksdb/db.h>
 #include <memory>
 
-namespace bcos::transaction_scheduler
+namespace bcos::scheduler_v1
 {
 class BaselineSchedulerInitializer
 {
@@ -21,4 +21,4 @@ public:
         std::shared_ptr<ledger::LedgerInterface> ledger,
         tool::NodeConfig::BaselineSchedulerConfig const& config);
 };
-}  // namespace bcos::transaction_scheduler
+}  // namespace bcos::scheduler_v1

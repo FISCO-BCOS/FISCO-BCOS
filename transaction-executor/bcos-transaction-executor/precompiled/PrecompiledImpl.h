@@ -15,7 +15,7 @@
 #include <memory>
 #include <variant>
 
-namespace bcos::transaction_executor
+namespace bcos::executor_v1
 {
 
 #define PRECOMPILE_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("PRECOMPILE")
@@ -134,4 +134,4 @@ inline constexpr struct
     }
 } callPrecompiled{};
 
-}  // namespace bcos::transaction_executor
+}  // namespace bcos::executor_v1

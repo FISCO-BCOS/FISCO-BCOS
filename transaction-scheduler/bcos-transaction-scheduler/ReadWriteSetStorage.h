@@ -4,7 +4,7 @@
 #include <type_traits>
 #include <utility>
 
-namespace bcos::transaction_scheduler
+namespace bcos::scheduler_v1
 {
 
 template <class StorageType, class KeyType>
@@ -172,4 +172,4 @@ private:
     }
 };
 
-}  // namespace bcos::transaction_scheduler
+}  // namespace bcos::scheduler_v1

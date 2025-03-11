@@ -1342,3 +1342,7 @@ bool bcos::tool::NodeConfig::checkParallelConflict() const
 {
     return m_checkParallelConflict;
 }
+int bcos::tool::NodeConfig::executorVersion() const
+{
+    return m_genesisConfig.m_executorVersion;
+}

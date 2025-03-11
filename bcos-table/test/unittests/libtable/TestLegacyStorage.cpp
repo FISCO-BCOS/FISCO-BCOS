@@ -29,7 +29,7 @@
 
 struct LegacyStorageTestFixture
 {
-    bcos::storage2::memory_storage::MemoryStorage<bcos::transaction_executor::StateKey,
+    bcos::storage2::memory_storage::MemoryStorage<bcos::executor_v1::StateKey,
         bcos::storage::Entry,
         bcos::storage2::memory_storage::Attribute(bcos::storage2::memory_storage::ORDERED |
                                                   bcos::storage2::memory_storage::LOGICAL_DELETION)>
@@ -43,7 +43,7 @@ BOOST_AUTO_TEST_CASE(getPrimaryKeys)
     bcos::task::syncWait([this]() -> bcos::task::Task<void> {
         co_await bcos::storage2::writeSome(
             storage, RANGES::views::iota(0, 10) | RANGES::views::transform([](int i) {
-                auto key = bcos::transaction_executor::StateKey("t_test", std::to_string(i));
+                auto key = bcos::executor_v1::StateKey("t_test", std::to_string(i));
                 return std::make_tuple(key, bcos::storage::Entry("t_test"));
             }));
 
@@ -62,7 +62,7 @@ BOOST_AUTO_TEST_CASE(getPrimaryKeys)
             });
 
         co_await bcos::storage2::removeOne(
-            storage, bcos::transaction_executor::StateKeyView("t_test", "5"));
+            storage, bcos::executor_v1::StateKeyView("t_test", "5"));
 
         legacyStorage.asyncGetPrimaryKeys(
             "t_test", condition, [](bcos::Error::UniquePtr error, std::vector<std::string> keys) {

@@ -257,7 +257,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
     auto baselineSchedulerConfig = m_nodeConfig->baselineSchedulerConfig();
     std::tie(m_baselineSchedulerHolder, m_setBaselineSchedulerBlockNumberNotifier) =
-        transaction_scheduler::BaselineSchedulerInitializer::build(existsRocksDB->rocksDB(),
+        scheduler_v1::BaselineSchedulerInitializer::build(existsRocksDB->rocksDB(),
             m_protocolInitializer->blockFactory(), m_txpoolInitializer->txpool(),
             transactionSubmitResultFactory, ledger, baselineSchedulerConfig);
 
@@ -271,11 +271,12 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
     int64_t schedulerSeq = 0;  // In Max node, this seq will be update after consensus module
                                // switch to a leader during startup
-    m_scheduler = std::make_shared<transaction_scheduler::MultiVersionScheduler>(
+    m_scheduler = std::make_shared<scheduler_v1::MultiVersionScheduler>(
         std::to_array<scheduler::SchedulerInterface::Ptr>(
             {std::make_shared<bcos::scheduler::SchedulerManager>(
                  schedulerSeq, factory, executorManager),
                 m_baselineSchedulerHolder()}));
+    m_scheduler->setVersion(m_nodeConfig->executorVersion(), {});
 
     if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
     {

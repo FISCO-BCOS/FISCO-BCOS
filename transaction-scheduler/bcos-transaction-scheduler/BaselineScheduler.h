@@ -40,7 +40,7 @@
 #include <memory>
 #include <type_traits>
 
-namespace bcos::transaction_scheduler
+namespace bcos::scheduler_v1
 {
 #define BASELINE_SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("BASELINE_SCHEDULER")
 
@@ -96,7 +96,7 @@ task::Task<h256> calculateStateRoot(
     {
         hashGroup.run([keyValue = std::move(keyValue), &hashes, &deletedEntry, &hashImpl]() {
             auto [key, entry] = *keyValue;
-            transaction_executor::StateKeyView view(key);
+            executor_v1::StateKeyView view(key);
             auto [tableName, keyName] = view.get();
             if (!entry)
             {
@@ -283,25 +283,24 @@ private:
                 // If the block has been executed, the result will be returned directly without
                 // error, which is used for the scenario of consensus and synchronous execution of a
                 // block at the same time
+                std::unique_lock resultsLock(scheduler.m_resultsMutex);
+                if (!scheduler.m_results.empty())
                 {
-                    std::unique_lock resultsLock(scheduler.m_resultsMutex);
-                    if (!scheduler.m_results.empty())
+                    auto& front = scheduler.m_results.front();
+                    auto& back = scheduler.m_results.back();
+                    auto number = blockHeader->number();
+                    if (number >= front.m_executedBlockHeader->number() &&
+                        number <= back.m_executedBlockHeader->number())
                     {
-                        auto& front = scheduler.m_results.front();
-                        auto& back = scheduler.m_results.back();
-                        auto number = blockHeader->number();
-                        if (number >= front.m_executedBlockHeader->number() &&
-                            number <= back.m_executedBlockHeader->number())
-                        {
-                            BASELINE_SCHEDULER_LOG(INFO)
-                                << "Block has been executed, return result directly";
-                            auto& result = scheduler.m_results.at(
-                                number - front.m_executedBlockHeader->number());
-                            co_return std::make_tuple(
-                                nullptr, result.m_executedBlockHeader, result.m_sysBlock);
-                        }
+                        BASELINE_SCHEDULER_LOG(INFO)
+                            << "Block has been executed, return result directly";
+                        auto& result =
+                            scheduler.m_results.at(number - front.m_executedBlockHeader->number());
+                        co_return std::make_tuple(
+                            nullptr, result.m_executedBlockHeader, result.m_sysBlock);
                     }
                 }
+                resultsLock.unlock();
 
                 auto message =
                     fmt::format("Discontinuous execute block number! expect: {} input: {}",
@@ -322,7 +321,7 @@ private:
                 std::unique_lock ledgerConfigLock(scheduler.m_ledgerConfigMutex);
                 ledgerConfig = scheduler.m_ledgerConfig;
             }
-            auto receipts = co_await transaction_scheduler::executeBlock(
+            auto receipts = co_await scheduler_v1::executeBlock(
                 scheduler.m_schedulerImpl.get(), view, scheduler.m_executor.get(), *blockHeader,
                 ::ranges::views::indirect(transactions), *ledgerConfig);
 
@@ -602,7 +601,7 @@ public:
                 blockHeader->setVersion(ledgerConfig->compatibilityVersion());
                 blockHeader->setNumber(ledgerConfig->blockNumber() + 1);  // Use next block number
                 blockHeader->calculateHash(self->m_hashImpl.get());
-                receipt = co_await transaction_executor::executeTransaction(self->m_executor.get(),
+                receipt = co_await executor_v1::executeTransaction(self->m_executor.get(),
                     view, *blockHeader, *transaction, 0, *ledgerConfig, task::syncWait);
             }
             else
@@ -610,7 +609,7 @@ public:
                 ledger::LedgerConfig emptyLedgerConfig;
                 blockHeader->setVersion((uint32_t)bcos::protocol::BlockVersion::V3_2_4_VERSION);
                 blockHeader->calculateHash(self->m_hashImpl.get());
-                receipt = co_await transaction_executor::executeTransaction(self->m_executor.get(),
+                receipt = co_await executor_v1::executeTransaction(self->m_executor.get(),
                     view, *blockHeader, *transaction, 0, emptyLedgerConfig, task::syncWait);
             }
 
@@ -688,8 +687,11 @@ public:
 
     void setVersion(int version, ledger::LedgerConfig::Ptr ledgerConfig) override
     {
-        m_ledgerConfig = std::move(ledgerConfig);
+        if (ledgerConfig)
+        {
+            m_ledgerConfig = std::move(ledgerConfig);
+        }
     }
 };
 
-}  // namespace bcos::transaction_scheduler
+}  // namespace bcos::scheduler_v1

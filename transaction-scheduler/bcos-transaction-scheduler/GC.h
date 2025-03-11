@@ -1,7 +1,7 @@
 #pragma once
 #include <oneapi/tbb/task_arena.h>
 
-namespace bcos::transaction_scheduler
+namespace bcos::scheduler_v1
 {
 class GC
 {
@@ -13,4 +13,4 @@ public:
                            std::forward<decltype(resources)>(resources)...)]() noexcept {});
     }
 };
-}  // namespace bcos::transaction_scheduler
+}  // namespace bcos::scheduler_v1

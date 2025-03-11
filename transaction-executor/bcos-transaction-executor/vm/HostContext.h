@@ -62,7 +62,7 @@
 #include <memory>
 #include <string_view>
 
-namespace bcos::transaction_executor::hostcontext
+namespace bcos::executor_v1::hostcontext
 {
 
 #define HOST_CONTEXT_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("HOST_CONTEXT")
@@ -133,7 +133,7 @@ private:
     evmc_revision m_revision;
     std::vector<protocol::LogEntry> m_logs;
     std::shared_ptr<Executable> m_executable;
-    const bcos::transaction_executor::Precompiled* m_preparedPrecompiled{};
+    const bcos::executor_v1::Precompiled* m_preparedPrecompiled{};
     bcos::bytes m_dynamicPrecompiledInput;
     bool m_enableTransfer = false;
     int64_t m_level;
@@ -242,7 +242,7 @@ public:
     {
         evmc_bytes32 value;
         if (auto valueEntry = co_await storage2::readOne(m_rollbackableTransientStorage.get(),
-                transaction_executor::StateKeyView{
+                executor_v1::StateKeyView{
                     concepts::bytebuffer::toView(
                         co_await ledger::account::path(m_recipientAccount)),
                     concepts::bytebuffer::toView(key->bytes)}))
@@ -290,7 +290,7 @@ public:
     {
         if (auto const* precompiled = m_precompiledManager.get().getPrecompiled(address))
         {
-            co_return transaction_executor::size(*precompiled);
+            co_return executor_v1::size(*precompiled);
         }
 
         if (auto codeEntry = co_await code(address))
@@ -551,7 +551,7 @@ private:
             if (auto const* precompiled =
                     m_precompiledManager.get().getPrecompiled(ref.code_address))
             {
-                if (auto flag = transaction_executor::featureFlag(*precompiled);
+                if (auto flag = executor_v1::featureFlag(*precompiled);
                     !flag || m_ledgerConfig.get().features().get(*flag))
                 {
                     m_preparedPrecompiled = precompiled;
@@ -615,7 +615,7 @@ private:
 
         if (m_preparedPrecompiled != nullptr)
         {
-            co_return transaction_executor::callPrecompiled(*m_preparedPrecompiled,
+            co_return executor_v1::callPrecompiled(*m_preparedPrecompiled,
                 m_rollbackableStorage.get(), m_blockHeader, ref, m_origin,
                 buildLegacyExternalCaller(), m_precompiledManager.get(), m_contextID, m_seq,
                 m_ledgerConfig.get().authCheckStatus());
@@ -655,4 +655,4 @@ private:
     }
 };
 
-}  // namespace bcos::transaction_executor::hostcontext
+}  // namespace bcos::executor_v1::hostcontext

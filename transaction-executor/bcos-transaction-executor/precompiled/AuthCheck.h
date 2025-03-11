@@ -9,7 +9,7 @@
 #include <memory>
 #include <utility>
 
-namespace bcos::transaction_executor
+namespace bcos::executor_v1
 {
 
 inline task::Task<void> createAuthTable(auto& storage, protocol::BlockHeader const& blockHeader,
@@ -65,4 +65,4 @@ inline std::optional<EVMCResult> checkAuth(auto& storage, protocol::BlockHeader 
     return {};
 }
 
-}  // namespace bcos::transaction_executor
+}  // namespace bcos::executor_v1

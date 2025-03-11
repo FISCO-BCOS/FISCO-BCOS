@@ -305,6 +305,7 @@ public:
     bool isValidPort(int port);
 
     bool enableTxsFromFreeNode() const { return m_enableTxsFromFreeNode; }
+    int executorVersion() const;
 
 protected:
     virtual void loadChainConfig(boost::property_tree::ptree const& _pt, bool _enforceGroupId);

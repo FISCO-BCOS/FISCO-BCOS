@@ -5,7 +5,7 @@
 #include "bcos-task/Task.h"
 #include "bcos-task/Trait.h"
 
-namespace bcos::transaction_scheduler
+namespace bcos::scheduler_v1
 {
 
 struct ExecuteBlock
@@ -47,4 +47,4 @@ inline constexpr ExecuteBlock executeBlock{};
 template <auto& Tag>
 using tag_t = std::decay_t<decltype(Tag)>;
 
-}  // namespace bcos::transaction_scheduler
+}  // namespace bcos::scheduler_v1

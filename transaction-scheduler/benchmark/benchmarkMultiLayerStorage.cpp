@@ -8,7 +8,7 @@
 
 using namespace bcos;
 using namespace bcos::storage2::memory_storage;
-using namespace bcos::transaction_scheduler;
+using namespace bcos::scheduler_v1;
 
 using namespace std::string_view_literals;
 
@@ -24,7 +24,7 @@ struct Fixture
             newMutable(view);
             allKeys = RANGES::views::iota(0, count) | RANGES::views::transform([](int num) {
                 auto key = fmt::format("key: {}", num);
-                return transaction_executor::StateKey{"test_table"sv, std::string_view(key)};
+                return executor_v1::StateKey{"test_table"sv, std::string_view(key)};
             }) | RANGES::to<decltype(allKeys)>();
 
             auto allValues = RANGES::views::iota(0, count) | RANGES::views::transform([](int num) {
@@ -46,15 +46,15 @@ struct Fixture
         }
     }
 
-    using MutableStorage = MemoryStorage<transaction_executor::StateKey,
-        transaction_executor::StateValue, Attribute(ORDERED | LOGICAL_DELETION)>;
+    using MutableStorage = MemoryStorage<executor_v1::StateKey,
+        executor_v1::StateValue, Attribute(ORDERED | LOGICAL_DELETION)>;
     using BackendStorage =
-        MemoryStorage<transaction_executor::StateKey, transaction_executor::StateValue,
-            Attribute(ORDERED | CONCURRENT), std::hash<transaction_executor::StateKey>>;
+        MemoryStorage<executor_v1::StateKey, executor_v1::StateValue,
+            Attribute(ORDERED | CONCURRENT), std::hash<executor_v1::StateKey>>;
 
     BackendStorage m_backendStorage;
     MultiLayerStorage<MutableStorage, void, BackendStorage> multiLayerStorage;
-    std::vector<bcos::transaction_executor::StateKey> allKeys;
+    std::vector<bcos::executor_v1::StateKey> allKeys;
 };
 
 static void read1(benchmark::State& state)
@@ -111,7 +111,7 @@ static void write1(benchmark::State& state)
             entry.set(fmt::format("value: {}", i));
             auto key = fmt::format("key: {}", i);
             co_await storage2::writeOne(view,
-                transaction_executor::StateKey{"test_table"sv, std::string_view(key)},
+                executor_v1::StateKey{"test_table"sv, std::string_view(key)},
                 std::move(entry));
             ++i;
         }
