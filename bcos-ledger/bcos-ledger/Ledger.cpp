@@ -2069,7 +2069,7 @@ bool Ledger::buildGenesisBlock(
         }
 
         // Write executor version
-        if (genesis.m_executorVersion > 0)
+        if (versionNumber >= BlockVersion::V3_15_0_VERSION && genesis.m_executorVersion > 0)
         {
             Entry executorVersion;
             executorVersion.setObject(
