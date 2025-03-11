@@ -7,7 +7,7 @@
 #include <type_traits>
 #include <utility>
 
-namespace bcos::transaction_executor
+namespace bcos::executor_v1
 {
 
 constexpr static auto EXECUTOR_STACK = 1400;
@@ -62,4 +62,4 @@ inline constexpr struct ExecuteStep
 template <auto& Tag>
 using tag_t = std::decay_t<decltype(Tag)>;
 
-}  // namespace bcos::transaction_executor
+}  // namespace bcos::executor_v1

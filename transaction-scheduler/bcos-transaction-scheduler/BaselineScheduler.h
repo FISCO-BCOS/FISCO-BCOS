@@ -40,7 +40,7 @@
 #include <memory>
 #include <type_traits>
 
-namespace bcos::transaction_scheduler
+namespace bcos::scheduler_v1
 {
 #define BASELINE_SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("BASELINE_SCHEDULER")
 
@@ -96,7 +96,7 @@ task::Task<h256> calculateStateRoot(
     {
         hashGroup.run([keyValue = std::move(keyValue), &hashes, &deletedEntry, &hashImpl]() {
             auto [key, entry] = *keyValue;
-            transaction_executor::StateKeyView view(key);
+            executor_v1::StateKeyView view(key);
             auto [tableName, keyName] = view.get();
             if (!entry)
             {
@@ -321,7 +321,7 @@ private:
                 std::unique_lock ledgerConfigLock(scheduler.m_ledgerConfigMutex);
                 ledgerConfig = scheduler.m_ledgerConfig;
             }
-            auto receipts = co_await transaction_scheduler::executeBlock(
+            auto receipts = co_await scheduler_v1::executeBlock(
                 scheduler.m_schedulerImpl.get(), view, scheduler.m_executor.get(), *blockHeader,
                 ::ranges::views::indirect(transactions), *ledgerConfig);
 
@@ -601,7 +601,7 @@ public:
                 blockHeader->setVersion(ledgerConfig->compatibilityVersion());
                 blockHeader->setNumber(ledgerConfig->blockNumber() + 1);  // Use next block number
                 blockHeader->calculateHash(self->m_hashImpl.get());
-                receipt = co_await transaction_executor::executeTransaction(self->m_executor.get(),
+                receipt = co_await executor_v1::executeTransaction(self->m_executor.get(),
                     view, *blockHeader, *transaction, 0, *ledgerConfig, task::syncWait);
             }
             else
@@ -609,7 +609,7 @@ public:
                 ledger::LedgerConfig emptyLedgerConfig;
                 blockHeader->setVersion((uint32_t)bcos::protocol::BlockVersion::V3_2_4_VERSION);
                 blockHeader->calculateHash(self->m_hashImpl.get());
-                receipt = co_await transaction_executor::executeTransaction(self->m_executor.get(),
+                receipt = co_await executor_v1::executeTransaction(self->m_executor.get(),
                     view, *blockHeader, *transaction, 0, emptyLedgerConfig, task::syncWait);
             }
 
@@ -694,4 +694,4 @@ public:
     }
 };
 
-}  // namespace bcos::transaction_scheduler
+}  // namespace bcos::scheduler_v1

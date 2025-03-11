@@ -17,7 +17,7 @@ class bcos::wasm::GasInjector
 
 #define EXECUTIVE_WRAPPER(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTIVE_WRAPPER")
 
-namespace bcos::transaction_executor
+namespace bcos::executor_v1
 {
 
 inline std::shared_ptr<precompiled::Precompiled> getInnerPrecompiled(auto const& precompiled)
@@ -161,4 +161,4 @@ inline auto buildLegacyExecutive(auto& storage, protocol::BlockHeader const& blo
         std::move(blockContext), std::move(contractAddress), contextID, seq, wasm::GasInjector{},
         std::move(externalCaller), precompiledManager);
 }
-}  // namespace bcos::transaction_executor
+}  // namespace bcos::executor_v1

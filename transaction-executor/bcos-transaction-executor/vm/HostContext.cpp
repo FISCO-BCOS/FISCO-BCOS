@@ -2,12 +2,12 @@
 #include "VMFactory.h"
 #include <fmt/format.h>
 
-evmc_bytes32 bcos::transaction_executor::hostcontext::evm_hash_fn(const uint8_t* data, size_t size)
+evmc_bytes32 bcos::executor_v1::hostcontext::evm_hash_fn(const uint8_t* data, size_t size)
 {
     return toEvmC(executor::GlobalHashImpl::g_hashImpl->hash(bytesConstRef(data, size)));
 }
 
-evmc_message bcos::transaction_executor::hostcontext::getMessage(const evmc_message& inputMessage,
+evmc_message bcos::executor_v1::hostcontext::getMessage(const evmc_message& inputMessage,
     protocol::BlockNumber blockNumber, int64_t contextID, int64_t seq, crypto::Hash const& hashImpl)
 {
     evmc_message message = inputMessage;
@@ -51,12 +51,12 @@ evmc_message bcos::transaction_executor::hostcontext::getMessage(const evmc_mess
     return message;
 }
 
-bcos::transaction_executor::hostcontext::CacheExecutables&
-bcos::transaction_executor::hostcontext::getCacheExecutables()
+bcos::executor_v1::hostcontext::CacheExecutables&
+bcos::executor_v1::hostcontext::getCacheExecutables()
 {
     struct CacheExecutables
     {
-        bcos::transaction_executor::hostcontext::CacheExecutables m_cachedExecutables;
+        bcos::executor_v1::hostcontext::CacheExecutables m_cachedExecutables;
 
         CacheExecutables()
         {
@@ -68,14 +68,14 @@ bcos::transaction_executor::hostcontext::getCacheExecutables()
     return cachedExecutables.m_cachedExecutables;
 }
 
-bcos::transaction_executor::hostcontext::Executable::Executable(
+bcos::executor_v1::hostcontext::Executable::Executable(
     storage::Entry code, evmc_revision revision)
   : m_code(std::make_optional(std::move(code))),
     m_vmInstance(VMFactory::create(VMKind::evmone,
         bytesConstRef(reinterpret_cast<const uint8_t*>(m_code->data()), m_code->size()), revision))
 {}
 
-bcos::transaction_executor::hostcontext::Executable::Executable(
+bcos::executor_v1::hostcontext::Executable::Executable(
     bytesConstRef code, evmc_revision revision)
   : m_vmInstance(VMFactory::create(VMKind::evmone, code, revision))
 {}

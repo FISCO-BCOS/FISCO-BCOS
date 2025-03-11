@@ -2,12 +2,12 @@
 #include <evmone/advanced_analysis.hpp>
 #include <evmone/advanced_execution.hpp>
 
-bcos::transaction_executor::VMInstance::VMInstance(
+bcos::executor_v1::VMInstance::VMInstance(
     std::shared_ptr<evmone::baseline::CodeAnalysis const> instance) noexcept
   : m_instance(std::move(instance))
 {}
 
-bcos::transaction_executor::EVMCResult bcos::transaction_executor::VMInstance::execute(
+bcos::executor_v1::EVMCResult bcos::executor_v1::VMInstance::execute(
     const struct evmc_host_interface* host, struct evmc_host_context* context, evmc_revision rev,
     const evmc_message* msg, const uint8_t* code, size_t codeSize)
 {
@@ -30,7 +30,7 @@ bcos::transaction_executor::EVMCResult bcos::transaction_executor::VMInstance::e
     return result;
 }
 
-void bcos::transaction_executor::VMInstance::enableDebugOutput() {}
+void bcos::executor_v1::VMInstance::enableDebugOutput() {}
 
 std::strong_ordering operator<=>(const evmc_address& lhs, const evmc_address& rhs) noexcept
 {

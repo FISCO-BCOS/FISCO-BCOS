@@ -13,8 +13,8 @@
 
 using namespace bcos;
 using namespace bcos::storage2;
-using namespace bcos::transaction_executor;
-using namespace bcos::transaction_scheduler;
+using namespace bcos::executor_v1;
+using namespace bcos::scheduler_v1;
 
 struct MockExecutorSerial
 {
@@ -23,7 +23,7 @@ struct MockExecutorSerial
     };
 
     friend task::Task<Context> tag_invoke(
-        transaction_executor::tag_t<createExecuteContext> /*unused*/, MockExecutorSerial& executor,
+        executor_v1::tag_t<createExecuteContext> /*unused*/, MockExecutorSerial& executor,
         auto& storage, protocol::BlockHeader const& blockHeader,
         protocol::Transaction const& transaction, int32_t contextID,
         ledger::LedgerConfig const& ledgerConfig)
@@ -33,13 +33,13 @@ struct MockExecutorSerial
 
     template <int step>
     friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
-        transaction_executor::tag_t<executeStep> /*unused*/, Context& executeContext)
+        executor_v1::tag_t<executeStep> /*unused*/, Context& executeContext)
     {
         co_return {};
     }
 
     friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
-        transaction_executor::tag_t<transaction_executor::executeTransaction> /*unused*/,
+        executor_v1::tag_t<executor_v1::executeTransaction> /*unused*/,
         MockExecutorSerial& executor, auto& storage, protocol::BlockHeader const& blockHeader,
         protocol::Transaction const& transaction, int contextID, ledger::LedgerConfig const&,
         auto&& waitOperator)
@@ -91,7 +91,7 @@ BOOST_AUTO_TEST_CASE(executeBlock)
         auto view = fork(multiLayerStorage);
         newMutable(view);
         ledger::LedgerConfig ledgerConfig;
-        auto receipts = co_await bcos::transaction_scheduler::executeBlock(scheduler, view,
+        auto receipts = co_await bcos::scheduler_v1::executeBlock(scheduler, view,
             executor, blockHeader,
             transactions | RANGES::views::transform([](auto& ptr) -> auto& { return *ptr; }),
             ledgerConfig);

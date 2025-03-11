@@ -28,7 +28,7 @@
 #include <evmc/instructions.h>
 #include <boost/core/pointer_traits.hpp>
 
-namespace bcos::transaction_executor
+namespace bcos::executor_v1
 {
 static_assert(sizeof(Address) == sizeof(evmc_address), "Address types size mismatch");
 static_assert(alignof(Address) == alignof(evmc_address), "Address types alignment mismatch");
@@ -225,4 +225,4 @@ const evmc_host_interface* getHostInterface(auto&& syncWait)
     return &fnTable;
 }
 
-}  // namespace bcos::transaction_executor
+}  // namespace bcos::executor_v1

@@ -21,7 +21,7 @@
 
 DERIVE_BCOS_EXCEPTION(InvalidReceiptVersion);
 
-namespace bcos::transaction_executor
+namespace bcos::executor_v1
 {
 #define TRANSACTION_EXECUTOR_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("TRANSACTION_EXECUTOR")
 
@@ -39,8 +39,8 @@ public:
     std::reference_wrapper<PrecompiledManager> m_precompiledManager;
 
     using TransientStorage =
-        bcos::storage2::memory_storage::MemoryStorage<bcos::transaction_executor::StateKey,
-            bcos::transaction_executor::StateValue, bcos::storage2::memory_storage::ORDERED>;
+        bcos::storage2::memory_storage::MemoryStorage<bcos::executor_v1::StateKey,
+            bcos::executor_v1::StateValue, bcos::storage2::memory_storage::ORDERED>;
 
     template <class Storage>
     struct ExecuteContext
@@ -219,10 +219,10 @@ public:
         auto executeContext = co_await createExecuteContext(
             executor, storage, blockHeader, transaction, contextID, ledgerConfig);
 
-        co_await transaction_executor::executeStep.operator()<0>(executeContext);
-        co_await transaction_executor::executeStep.operator()<1>(executeContext);
-        co_return co_await transaction_executor::executeStep.operator()<2>(executeContext);
+        co_await executor_v1::executeStep.operator()<0>(executeContext);
+        co_await executor_v1::executeStep.operator()<1>(executeContext);
+        co_return co_await executor_v1::executeStep.operator()<2>(executeContext);
     }
 };
 
-}  // namespace bcos::transaction_executor
+}  // namespace bcos::executor_v1

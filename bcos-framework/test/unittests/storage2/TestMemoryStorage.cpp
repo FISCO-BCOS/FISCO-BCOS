@@ -341,8 +341,8 @@ BOOST_AUTO_TEST_CASE(directDelete)
 
 BOOST_AUTO_TEST_CASE(keyComp)
 {
-    transaction_executor::StateKey key1("/tables/t_testV320", "type");
-    transaction_executor::StateKeyView key2("/tables/t_testV320", "type");
+    executor_v1::StateKey key1("/tables/t_testV320", "type");
+    executor_v1::StateKeyView key2("/tables/t_testV320", "type");
 
     BOOST_CHECK(key1 == key2);
     BOOST_CHECK(!(key1 > key2));

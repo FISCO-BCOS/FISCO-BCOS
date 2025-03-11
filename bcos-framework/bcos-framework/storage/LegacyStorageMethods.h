@@ -10,7 +10,7 @@ namespace bcos::storage
 {
 
 inline task::Task<std::optional<Entry>> tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/,
-    StorageInterface& storage, transaction_executor::StateKeyView stateKey)
+    StorageInterface& storage, executor_v1::StateKeyView stateKey)
 {
     struct Awaitable
     {
@@ -83,7 +83,7 @@ inline task::Task<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unused
 
 
 inline task::Task<void> tag_invoke(storage2::tag_t<storage2::writeOne> /*unused*/,
-    StorageInterface& storage, transaction_executor::StateKey stateKey, Entry entry)
+    StorageInterface& storage, executor_v1::StateKey stateKey, Entry entry)
 {
     struct Awaitable
     {
@@ -114,7 +114,7 @@ inline task::Task<void> tag_invoke(storage2::tag_t<storage2::writeOne> /*unused*
         }
     };
 
-    auto view = transaction_executor::StateKeyView(stateKey);
+    auto view = executor_v1::StateKeyView(stateKey);
     auto [table, key] = view.get();
     Awaitable awaitable{.m_storage = storage,
         .m_table = table,

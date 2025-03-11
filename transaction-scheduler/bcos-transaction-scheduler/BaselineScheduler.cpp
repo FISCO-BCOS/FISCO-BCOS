@@ -1,7 +1,7 @@
 #include "BaselineScheduler.h"
 
 bcos::task::Task<std::vector<bcos::protocol::Transaction::ConstPtr>>
-bcos::transaction_scheduler::getTransactions(
+bcos::scheduler_v1::getTransactions(
     txpool::TxPoolInterface& txpool, protocol::Block& block)
 {
     ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
@@ -21,7 +21,7 @@ bcos::transaction_scheduler::getTransactions(
             [&block](uint64_t index) { return block.transactionHash(index); }));
 }
 
-bcos::h256 bcos::transaction_scheduler::calcauteTransactionRoot(
+bcos::h256 bcos::scheduler_v1::calcauteTransactionRoot(
     protocol::Block const& block, crypto::Hash const& hashImpl)
 {
     auto hasher = hashImpl.hasher();
@@ -45,7 +45,7 @@ bcos::h256 bcos::transaction_scheduler::calcauteTransactionRoot(
     return *RANGES::rbegin(merkleTrie);
 }
 
-std::chrono::milliseconds::rep bcos::transaction_scheduler::current()
+std::chrono::milliseconds::rep bcos::scheduler_v1::current()
 {
     return std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now().time_since_epoch())

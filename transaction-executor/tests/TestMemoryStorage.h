@@ -3,7 +3,7 @@
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 
-namespace bcos::transaction_executor
+namespace bcos::executor_v1
 {
 using MutableStorage = storage2::memory_storage::MemoryStorage<StateKey, StateValue,
     storage2::memory_storage::ORDERED>;
@@ -21,4 +21,4 @@ auto tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/, MutableStorage& s
 {
     co_return co_await storage2::readOne(storage, key);
 }
-}  // namespace bcos::transaction_executor
+}  // namespace bcos::executor_v1

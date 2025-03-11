@@ -2,7 +2,7 @@
 
 #include "PrecompiledImpl.h"
 
-namespace bcos::transaction_executor
+namespace bcos::executor_v1
 {
 
 class PrecompiledManager
@@ -17,4 +17,4 @@ private:
     std::vector<std::tuple<unsigned long, Precompiled>> m_address2Precompiled;
 };
 
-}  // namespace bcos::transaction_executor
+}  // namespace bcos::executor_v1

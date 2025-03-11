@@ -5,7 +5,7 @@
 #include <range/v3/view/map.hpp>
 #include <type_traits>
 
-namespace bcos::transaction_executor
+namespace bcos::executor_v1
 {
 
 template <class Storage>
@@ -155,4 +155,4 @@ private:
 };
 
 
-}  // namespace bcos::transaction_executor
+}  // namespace bcos::executor_v1

@@ -2,7 +2,7 @@
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include <boost/test/unit_test.hpp>
 
-using namespace bcos::transaction_executor;
+using namespace bcos::executor_v1;
 using namespace std::string_view_literals;
 
 struct TestTransactionExecutorFixture

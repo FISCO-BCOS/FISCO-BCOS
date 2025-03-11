@@ -14,7 +14,7 @@
 #include <type_traits>
 #include <variant>
 
-namespace bcos::transaction_scheduler
+namespace bcos::scheduler_v1
 {
 
 // clang-format off
@@ -536,4 +536,4 @@ private:
     }
 };
 
-}  // namespace bcos::transaction_scheduler
+}  // namespace bcos::scheduler_v1
