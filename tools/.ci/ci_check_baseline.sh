@@ -109,6 +109,9 @@ expand_node()
     bash ${build_chain_path} -C expand -c config -d config/ca -o nodes/127.0.0.1/node4 -e ${fisco_bcos_path} "${sm_option}"
     LOG_INFO "expand node success..."
     bash ${current_path}/nodes/127.0.0.1/node4/start.sh
+
+    perl -p -i -e 's/baseline_scheduler=false/baseline_scheduler=true/g' ${current_path}/nodes/127.0.0.1/node4/config.ini
+
     sleep 10
     LOG_INFO "check expand node status..."
     flag='false'
@@ -162,8 +165,6 @@ if [[ -n "${1}" ]]; then
      console_branch=${1}
 fi
 
-# baseline暂时不支持balance precompiled，故不测试java_sdk_demo_ci_test
-# baseline does not support balance precompiled temporarily, so java_sdk_demo_ci_test is not tested
 LOG_INFO "======== check baseline cases ========"
 init_baseline ""
 expand_node ""

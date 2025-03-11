@@ -13,12 +13,12 @@ bcos::transaction_executor::TransactionExecutorImpl::TransactionExecutorImpl(
 evmc_message bcos::transaction_executor::newEVMCMessage(protocol::BlockNumber blockNumber,
     protocol::Transaction const& transaction, int64_t gasLimit, const evmc_address& origin)
 {
-    auto toAddress = unhexAddress(transaction.to());
+    auto recipientAddress = unhexAddress(transaction.to());
     evmc_message message = {.kind = transaction.to().empty() ? EVMC_CREATE : EVMC_CALL,
         .flags = 0,
         .depth = 0,
         .gas = gasLimit,
-        .recipient = toAddress,
+        .recipient = recipientAddress,
         .destination_ptr = nullptr,
         .destination_len = 0,
         .sender = origin,
@@ -28,7 +28,7 @@ evmc_message bcos::transaction_executor::newEVMCMessage(protocol::BlockNumber bl
         .input_size = transaction.input().size(),
         .value = toEvmC(u256(transaction.value())),
         .create2_salt = {},
-        .code_address = toAddress};
+        .code_address = recipientAddress};
 
     if (blockNumber == 0 && transaction.to() == precompiled::AUTH_COMMITTEE_ADDRESS)
     {
