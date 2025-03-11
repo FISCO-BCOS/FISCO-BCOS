@@ -83,15 +83,7 @@ init_baseline()
 
     # 将node2、node3替换为baseline scheduler, 这样不一致时可立即发现
     # Replace node2 and node3 with baseline scheduler, so that inconsistencies can be detected immediately
-    perl -p -i -e 's/baseline_scheduler=false/baseline_scheduler=true/g' nodes/127.0.0.1/node0/config.ini
-    perl -p -i -e 's/baseline_scheduler=false/baseline_scheduler=true/g' nodes/127.0.0.1/node1/config.ini
-    perl -p -i -e 's/baseline_scheduler=false/baseline_scheduler=true/g' nodes/127.0.0.1/node2/config.ini
-    perl -p -i -e 's/baseline_scheduler=false/baseline_scheduler=true/g' nodes/127.0.0.1/node3/config.ini
-    perl -p -i -e 's/baseline_scheduler_parallel=false/baseline_scheduler_parallel=true/g' nodes/127.0.0.1/node3/config.ini
-
-    perl -p -i -e 's/level=info/level=trace/g' nodes/127.0.0.1/node0/config.ini
-    # perl -p -i -e 's/level=info/level=trace/g' nodes/127.0.0.1/node2/config.ini
-
+    perl -p -i -e 's/version=0/version=1/g' nodes/127.0.0.1/node*/config.genesis
     cd nodes/127.0.0.1 && wait_and_start
 }
 

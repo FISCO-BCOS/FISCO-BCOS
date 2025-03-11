@@ -283,25 +283,24 @@ private:
                 // If the block has been executed, the result will be returned directly without
                 // error, which is used for the scenario of consensus and synchronous execution of a
                 // block at the same time
+                std::unique_lock resultsLock(scheduler.m_resultsMutex);
+                if (!scheduler.m_results.empty())
                 {
-                    std::unique_lock resultsLock(scheduler.m_resultsMutex);
-                    if (!scheduler.m_results.empty())
+                    auto& front = scheduler.m_results.front();
+                    auto& back = scheduler.m_results.back();
+                    auto number = blockHeader->number();
+                    if (number >= front.m_executedBlockHeader->number() &&
+                        number <= back.m_executedBlockHeader->number())
                     {
-                        auto& front = scheduler.m_results.front();
-                        auto& back = scheduler.m_results.back();
-                        auto number = blockHeader->number();
-                        if (number >= front.m_executedBlockHeader->number() &&
-                            number <= back.m_executedBlockHeader->number())
-                        {
-                            BASELINE_SCHEDULER_LOG(INFO)
-                                << "Block has been executed, return result directly";
-                            auto& result = scheduler.m_results.at(
-                                number - front.m_executedBlockHeader->number());
-                            co_return std::make_tuple(
-                                nullptr, result.m_executedBlockHeader, result.m_sysBlock);
-                        }
+                        BASELINE_SCHEDULER_LOG(INFO)
+                            << "Block has been executed, return result directly";
+                        auto& result =
+                            scheduler.m_results.at(number - front.m_executedBlockHeader->number());
+                        co_return std::make_tuple(
+                            nullptr, result.m_executedBlockHeader, result.m_sysBlock);
                     }
                 }
+                resultsLock.unlock();
 
                 auto message =
                     fmt::format("Discontinuous execute block number! expect: {} input: {}",
@@ -688,7 +687,10 @@ public:
 
     void setVersion(int version, ledger::LedgerConfig::Ptr ledgerConfig) override
     {
-        m_ledgerConfig = std::move(ledgerConfig);
+        if (ledgerConfig)
+        {
+            m_ledgerConfig = std::move(ledgerConfig);
+        }
     }
 };
 
