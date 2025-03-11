@@ -52,6 +52,8 @@ download_lightnode_binary="false"
 mtail_binary_path=""
 wasm_mode="false"
 serial_mode="true"
+executor_version=0
+
 node_key_dir=""
 # if the config.genesis path has been set, don't generate genesis file, use the config instead
 genesis_conf_path=""
@@ -1781,6 +1783,7 @@ generate_genesis_config() {
     is_auth_check=${auth_mode}
     auth_admin_account=${auth_admin_account}
     is_serial_execute=${serial_mode}
+    version=${executor_version}
 EOF
 }
 

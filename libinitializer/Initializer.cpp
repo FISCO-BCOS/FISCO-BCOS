@@ -276,6 +276,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             {std::make_shared<bcos::scheduler::SchedulerManager>(
                  schedulerSeq, factory, executorManager),
                 m_baselineSchedulerHolder()}));
+    m_scheduler->setVersion(m_nodeConfig->executorVersion(), {});
 
     if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
     {
