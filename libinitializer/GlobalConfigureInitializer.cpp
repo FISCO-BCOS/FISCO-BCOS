@@ -43,7 +43,7 @@ uint32_t dev::initializer::getVersionNumber(const string& _version)
     vector<string> versions;
     uint32_t versionNumber = 0;
     boost::split(versions, _version, boost::is_any_of("."));
-    if (versions.size() != 3)
+    if (versions.size() < 3)
     {
         BOOST_THROW_EXCEPTION(UnknowSupportVersion() << errinfo_comment(_version));
     }
