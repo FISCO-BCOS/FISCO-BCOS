@@ -170,7 +170,12 @@ public:
         m_allowFutureBlocks = isAllowFutureBlocks;
     }
 
-    virtual IDXTYPE minValidNodes() const { return m_nodeNum - m_f; }
+    virtual IDXTYPE minValidNodes() const
+    {
+        // Note: according to ibft, the quorum is upper(2n/3)
+        // previous formula: m_nodeNum - m_f
+        return std::min((2 * m_nodeNum + 2) / 3, m_nodeNum - m_f);
+    }
     /// update the context of PBFT after commit a block into the block-chain
     void reportBlock(dev::eth::Block const&) override;
 
