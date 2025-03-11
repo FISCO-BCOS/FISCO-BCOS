@@ -1857,9 +1857,8 @@ bool Ledger::buildGenesisBlock(
                 // 已有的链，仅替换了二进制，还没有执行升级版本交易
                 // The existing chain, which only replaces the binary, has not yet executed the
                 // upgraded version of the transaction
-                auto versionEntry = co_await storage2::readOne(
-                    *m_stateStorage, executor_v1::StateKeyView(
-                                         SYS_CONFIG, SYSTEM_KEY_COMPATIBILITY_VERSION));
+                auto versionEntry = co_await storage2::readOne(*m_stateStorage,
+                    executor_v1::StateKeyView(SYS_CONFIG, SYSTEM_KEY_COMPATIBILITY_VERSION));
                 auto blockNumberEntry = co_await storage2::readOne(*m_stateStorage,
                     executor_v1::StateKeyView(SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER));
                 if (versionEntry && blockNumberEntry)
@@ -2075,7 +2074,7 @@ bool Ledger::buildGenesisBlock(
             executorVersion.setObject(
                 SystemConfigEntry{std::to_string(genesis.m_executorVersion), 0});
             co_await storage2::writeOne(*m_stateStorage,
-                transaction_executor::StateKey(
+                executor_v1::StateKey(
                     SYS_CONFIG, magic_enum::enum_name(ledger::SystemConfig::executor_version)),
                 executorVersion);
         }
@@ -2326,10 +2325,9 @@ task::Task<bcos::ledger::SystemConfigs> Ledger::fetchAllSystemConfigs(
     protocol::BlockNumber _blockNumber)
 {
     auto allConfigKeys = ledger::SystemConfigs::supportConfigs();
-    auto entries = co_await storage2::readSome(
-        *m_stateStorage, allConfigKeys | RANGES::views::transform([](auto&& key) {
-            return executor_v1::StateKeyView(SYS_CONFIG, key);
-        }));
+    auto entries = co_await storage2::readSome(*m_stateStorage,
+        allConfigKeys | RANGES::views::transform(
+                            [](auto&& key) { return executor_v1::StateKeyView(SYS_CONFIG, key); }));
     bcos::ledger::SystemConfigs configs;
     for (auto&& [key, entry] : RANGES::views::zip(allConfigKeys, entries))
     {
