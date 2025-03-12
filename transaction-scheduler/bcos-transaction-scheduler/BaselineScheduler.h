@@ -44,9 +44,7 @@ namespace bcos::scheduler_v1
 {
 #define BASELINE_SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("BASELINE_SCHEDULER")
 
-struct NotFoundTransactionError : public bcos::Error
-{
-};
+DERIVE_BCOS_EXCEPTION(NotFoundTransactionError);
 
 /**
  * Retrieves a vector of transactions from the provided transaction pool and block.
@@ -321,8 +319,8 @@ private:
                 std::unique_lock ledgerConfigLock(scheduler.m_ledgerConfigMutex);
                 ledgerConfig = scheduler.m_ledgerConfig;
             }
-            auto receipts = co_await scheduler_v1::executeBlock(
-                scheduler.m_schedulerImpl.get(), view, scheduler.m_executor.get(), *blockHeader,
+            auto receipts = co_await scheduler_v1::executeBlock(scheduler.m_schedulerImpl.get(),
+                view, scheduler.m_executor.get(), *blockHeader,
                 ::ranges::views::indirect(transactions), *ledgerConfig);
 
             auto executedBlockHeader =
@@ -601,16 +599,16 @@ public:
                 blockHeader->setVersion(ledgerConfig->compatibilityVersion());
                 blockHeader->setNumber(ledgerConfig->blockNumber() + 1);  // Use next block number
                 blockHeader->calculateHash(self->m_hashImpl.get());
-                receipt = co_await executor_v1::executeTransaction(self->m_executor.get(),
-                    view, *blockHeader, *transaction, 0, *ledgerConfig, task::syncWait);
+                receipt = co_await executor_v1::executeTransaction(self->m_executor.get(), view,
+                    *blockHeader, *transaction, 0, *ledgerConfig, task::syncWait);
             }
             else
             {
                 ledger::LedgerConfig emptyLedgerConfig;
                 blockHeader->setVersion((uint32_t)bcos::protocol::BlockVersion::V3_2_4_VERSION);
                 blockHeader->calculateHash(self->m_hashImpl.get());
-                receipt = co_await executor_v1::executeTransaction(self->m_executor.get(),
-                    view, *blockHeader, *transaction, 0, emptyLedgerConfig, task::syncWait);
+                receipt = co_await executor_v1::executeTransaction(self->m_executor.get(), view,
+                    *blockHeader, *transaction, 0, emptyLedgerConfig, task::syncWait);
             }
 
             callback(nullptr, std::move(receipt));
