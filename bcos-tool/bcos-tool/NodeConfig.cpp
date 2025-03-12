@@ -1126,6 +1126,7 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
         m_genesisConfig.m_isAuthCheck = _genesisConfig.get<bool>("executor.is_auth_check", false);
         m_genesisConfig.m_isSerialExecute =
             _genesisConfig.get<bool>("executor.is_serial_execute", false);
+        m_genesisConfig.m_executorVersion = _genesisConfig.get<int>("executor.version", 0);
     }
     catch (std::exception const& e)
     {

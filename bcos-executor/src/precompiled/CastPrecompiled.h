@@ -1,7 +1,6 @@
 #pragma once
 
 #include "../vm/Precompiled.h"
-#include "bcos-executor/src/precompiled/common/Common.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 
 namespace bcos::precompiled
@@ -16,6 +15,5 @@ public:
     std::shared_ptr<PrecompiledExecResult> call(
         std::shared_ptr<executor::TransactionExecutive> _executive,
         PrecompiledExecResult::Ptr _callParameters) override;
-        
 };
-}  // namespace precompiled
+}  // namespace bcos::precompiled
