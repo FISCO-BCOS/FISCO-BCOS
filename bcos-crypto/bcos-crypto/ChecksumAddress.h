@@ -25,8 +25,10 @@
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <evmc/evmc.h>
 #include <fmt/format.h>
 #include <boost/algorithm/string.hpp>
+#include <memory>
 #include <string>
 
 namespace bcos
@@ -120,26 +122,37 @@ inline std::string newEVMAddress(
     return newEVMAddress(*_hashImpl, blockNumber, contextID, seq);
 }
 
-
 // keccak256(rlp.encode([normalize_address(sender), nonce]))[12:]
-inline std::string newLegacyEVMAddress(bytesConstRef sender, u256 nonce) noexcept
+inline evmc_address newLegacyEVMAddress(bytesConstRef sender, const u256& nonce) noexcept
 {
-    codec::rlp::Header header{true, 1 + sender.size()};
+    codec::rlp::Header header{.isList = true, .payloadLength = 1 + sender.size()};
     header.payloadLength += codec::rlp::length(nonce);
     bcos::bytes rlp;
     codec::rlp::encodeHeader(rlp, header);
     codec::rlp::encode(rlp, sender);
     codec::rlp::encode(rlp, nonce);
     auto hash = bcos::crypto::keccak256Hash(ref(rlp));
+    evmc_address address;
+    std::uninitialized_copy(hash.begin() + 12, hash.end(), address.bytes);
+
+    return address;
+}
+
+inline std::string newLegacyEVMAddressString(bytesConstRef sender, const u256& nonce) noexcept
+{
+    auto address = newLegacyEVMAddress(sender, nonce);
+    auto view = std::span{address.bytes};
     std::string out;
-    boost::algorithm::hex_lower(hash.begin() + 12, hash.end(), std::back_inserter(out));
+    out.reserve(view.size() * 2);
+    boost::algorithm::hex_lower(view.begin(), view.end(), std::back_inserter(out));
     return out;
 }
 
-inline std::string newLegacyEVMAddress(bytesConstRef sender, std::string const& nonce) noexcept
+inline std::string newLegacyEVMAddressString(
+    bytesConstRef sender, std::string const& nonce) noexcept
 {
     const auto uNonce = hex2u(nonce);
-    return newLegacyEVMAddress(sender, uNonce);
+    return newLegacyEVMAddressString(sender, uNonce);
 }
 
 // EIP-1014

@@ -89,7 +89,7 @@ public:
 
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
             hostContext(rollbackableStorage, rollbackableTransientStorage, blockHeader, message,
-                origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
+                origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl, false, 0,
                 bcos::task::syncWait);
         syncWait(hostContext.prepare());
         auto result = syncWait(hostContext.execute());
@@ -132,7 +132,7 @@ public:
 
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
             hostContext(rollbackableStorage, rollbackableTransientStorage, blockHeader, message,
-                origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
+                origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl, false, 0,
                 bcos::task::syncWait);
         co_await hostContext.prepare();
         auto result = co_await hostContext.execute();
@@ -181,7 +181,8 @@ public:
 
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
             hostContext(rollbackableStorage, rollbackableTransientStorage, header, message, origin,
-                "", 0, seq, *precompiledManager, ledgerConfig, hashImpl, bcos::task::syncWait);
+                "", 0, seq, *precompiledManager, ledgerConfig, hashImpl, false, 0,
+                bcos::task::syncWait);
         co_await hostContext.prepare();
         BOOST_CHECK_NO_THROW(auto result = co_await hostContext.execute());
     }
@@ -397,7 +398,7 @@ BOOST_AUTO_TEST_CASE(precompiled)
 
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
             hostContext(rollbackableStorage, rollbackableTransientStorage, blockHeader, message,
-                origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
+                origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl, false, 0,
                 bcos::task::syncWait);
         syncWait(hostContext.prepare());
 
@@ -414,7 +415,7 @@ BOOST_AUTO_TEST_CASE(precompiled)
         features.set(bcos::ledger::Features::Flag::feature_sharding);
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
             hostContext2(rollbackableStorage, rollbackableTransientStorage, blockHeader, message,
-                origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
+                origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl, false, 0,
                 bcos::task::syncWait);
         syncWait(hostContext2.prepare());
         BOOST_CHECK_NO_THROW(result.emplace(syncWait(hostContext2.execute())));
@@ -472,7 +473,7 @@ BOOST_AUTO_TEST_CASE(codeSize)
 
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
             codeSizeHostContext(rollbackableStorage, rollbackableTransientStorage, blockHeader,
-                message, {}, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
+                message, {}, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl, false, 0,
                 bcos::task::syncWait);
 
         auto builtinAddress = bcos::unhexAddress("0000000000000000000000000000000000000001");
@@ -514,7 +515,7 @@ BOOST_AUTO_TEST_CASE(transferBalance)
         evmc_address origin{};
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
             transferHostContext(rollbackableStorage, rollbackableTransientStorage, blockHeader,
-                message, origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
+                message, origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl, false, 0,
                 bcos::task::syncWait);
         co_await transferHostContext.prepare();
         auto evmResult = co_await transferHostContext.execute();

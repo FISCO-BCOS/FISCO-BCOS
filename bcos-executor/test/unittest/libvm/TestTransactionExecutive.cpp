@@ -35,7 +35,7 @@ public:
 
 
         auto const sender = keyPair->address(hashImpl);
-        auto const address = newLegacyEVMAddress(sender.ref(), u256(nonce));
+        auto const address = newLegacyEVMAddressString(sender.ref(), u256(nonce));
 
         bcos::ledger::account::EVMAccount eoa(*storage, sender.hex(), false);
         task::syncWait(bcos::ledger::account::create(eoa));
