@@ -311,7 +311,7 @@ void TableManagerPrecompiled::openTable(
             // if link
             auto addressEntry = _executive->storage().getRow(absolutePath, FS_LINK_ADDRESS);
             auto contractAddress = std::string(addressEntry->get());
-            auto codecAddress = codec.encode(Address(std::move(contractAddress)));
+            auto codecAddress = codec.encode(Address(contractAddress));
             _callParameters->setExecResult(std::move(codecAddress));
             return;
         }

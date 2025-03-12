@@ -242,9 +242,8 @@ public:
     {
         evmc_bytes32 value;
         if (auto valueEntry = co_await storage2::readOne(m_rollbackableTransientStorage.get(),
-                executor_v1::StateKeyView{
-                    concepts::bytebuffer::toView(
-                        co_await ledger::account::path(m_recipientAccount)),
+                executor_v1::StateKeyView{concepts::bytebuffer::toView(
+                                              co_await ledger::account::path(m_recipientAccount)),
                     concepts::bytebuffer::toView(key->bytes)}))
         {
             auto field = valueEntry->get();
@@ -388,17 +387,17 @@ public:
             };
         }
 
-        try
+        if (!evmResult)
         {
-            // 先转账，再执行
-            // Transfer first, then proceed execute
-            if (m_ledgerConfig.get().balanceTransfer())
+            try
             {
-                co_await transferBalance(*ref);
-            }
+                // 先转账，再执行
+                // Transfer first, then proceed execute
+                if (m_ledgerConfig.get().balanceTransfer())
+                {
+                    co_await transferBalance(*ref);
+                }
 
-            if (!evmResult)
-            {
                 if (ref->kind == EVMC_CREATE || ref->kind == EVMC_CREATE2)
                 {
                     evmResult.emplace(co_await executeCreate());
@@ -408,46 +407,51 @@ public:
                     evmResult.emplace(co_await executeCall());
                 }
             }
-        }
-        catch (protocol::OutOfGas& e)
-        {
-            HOST_CONTEXT_LOG(DEBUG) << "OutOfGas exception: " << boost::diagnostic_information(e);
-            co_return makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::OutOfGas,
-                EVMC_OUT_OF_GAS, evmResult->gas_left, e.what());
-        }
-        catch (protocol::NotEnoughCashError& e)
-        {
-            HOST_CONTEXT_LOG(DEBUG)
-                << "NotEnoughCash exception: " << boost::diagnostic_information(e);
-            co_return makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::NotEnoughCash,
-                EVMC_INSUFFICIENT_BALANCE, ref->gas, e.what());
-        }
-        catch (NotFoundCodeError& e)
-        {
-            HOST_CONTEXT_LOG(DEBUG)
-                << "Not found code exception: " << boost::diagnostic_information(e);
+            catch (protocol::OutOfGas& e)
+            {
+                HOST_CONTEXT_LOG(DEBUG)
+                    << "OutOfGas exception: " << boost::diagnostic_information(e);
+                evmResult.emplace(
+                    makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::OutOfGas,
+                        EVMC_OUT_OF_GAS, evmResult->gas_left, e.what()));
+            }
+            catch (protocol::NotEnoughCashError& e)
 
-            // Static call或delegate call时，合约不存在要返回EVMC_SUCCESS
-            // STATIC_CALL or DELEGATE_CALL, the EVMC_SUCCESS is returned when the contract does not
-            // exist
-            using namespace std::string_literals;
-            if (ref->flags == EVMC_STATIC || ref->kind == EVMC_DELEGATECALL)
             {
-                co_return makeErrorEVMCResult(
-                    m_hashImpl, protocol::TransactionStatus::None, EVMC_SUCCESS, ref->gas, ""s);
+                HOST_CONTEXT_LOG(DEBUG)
+                    << "NotEnoughCash exception: " << boost::diagnostic_information(e);
+                evmResult.emplace(
+                    makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::NotEnoughCash,
+                        EVMC_INSUFFICIENT_BALANCE, ref->gas, e.what()));
             }
-            else
+            catch (NotFoundCodeError& e)
             {
-                co_return makeErrorEVMCResult(m_hashImpl,
-                    protocol::TransactionStatus::RevertInstruction, EVMC_REVERT, ref->gas,
-                    "Call address error."s);
+                HOST_CONTEXT_LOG(DEBUG)
+                    << "Not found code exception: " << boost::diagnostic_information(e);
+
+                // Static call或delegate call时，合约不存在要返回EVMC_SUCCESS
+                // STATIC_CALL or DELEGATE_CALL, the EVMC_SUCCESS is returned when the contract does
+                // not exist
+                using namespace std::string_literals;
+                if (ref->flags == EVMC_STATIC || ref->kind == EVMC_DELEGATECALL)
+                {
+                    evmResult.emplace(makeErrorEVMCResult(m_hashImpl,
+                        protocol::TransactionStatus::None, EVMC_SUCCESS, ref->gas, ""s));
+                }
+                else
+                {
+                    evmResult.emplace(makeErrorEVMCResult(m_hashImpl,
+                        protocol::TransactionStatus::RevertInstruction, EVMC_REVERT, ref->gas,
+                        "Call address error."s));
+                }
             }
-        }
-        catch (std::exception& e)
-        {
-            HOST_CONTEXT_LOG(DEBUG) << "Execute exception: " << boost::diagnostic_information(e);
-            co_return makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::OutOfGas,
-                EVMC_INTERNAL_ERROR, ref->gas, "");
+            catch (std::exception& e)
+            {
+                HOST_CONTEXT_LOG(DEBUG)
+                    << "Execute exception: " << boost::diagnostic_information(e);
+                evmResult.emplace(makeErrorEVMCResult(m_hashImpl,
+                    protocol::TransactionStatus::OutOfGas, EVMC_INTERNAL_ERROR, ref->gas, ""));
+            }
         }
 
         if (evmResult->status_code != EVMC_SUCCESS)
@@ -457,7 +461,7 @@ public:
         }
 
         HOST_CONTEXT_LOG(TRACE) << "HostContext execute finished, kind: " << ref->kind
-                                << " seq: " << m_seq << " " << *evmResult;
+                                << " level: " << m_level << " seq: " << m_seq << " " << *evmResult;
         co_return std::move(*evmResult);
     }
 
