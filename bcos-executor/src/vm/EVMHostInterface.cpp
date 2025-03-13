@@ -222,7 +222,8 @@ evmc_access_status access_storage(
 evmc_tx_context getTxContext(evmc_host_context* _context) noexcept
 {
     auto& hostContext = static_cast<HostContext&>(*_context);
-    evmc_tx_context result;
+    // FIXME: the evmc_tx_context should init use the transaction info
+    evmc_tx_context result{};
     if (hostContext.isWasm())
     {
         result.tx_origin = toEvmC(hostContext.origin());
