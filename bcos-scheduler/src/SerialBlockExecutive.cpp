@@ -185,7 +185,7 @@ void SerialBlockExecutive::serialExecute(
                     // EOA create contract
                     auto const sender = tx->origin();
                     Address senderAddress(sender, Address::FromHex);
-                    address = bcos::newLegacyEVMAddress(senderAddress.ref(), tx->nonce());
+                    address = bcos::newLegacyEVMAddressString(senderAddress.ref(), tx->nonce());
                 }
                 else
                 {

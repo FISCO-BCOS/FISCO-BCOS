@@ -50,7 +50,6 @@ public:
         std::reference_wrapper<protocol::Transaction const> m_transaction;
         int m_contextID;
         std::reference_wrapper<ledger::LedgerConfig const> m_ledgerConfig;
-
         Rollbackable<Storage> m_rollbackableStorage;
         Rollbackable<Storage>::Savepoint m_startSavepoint;
         TransientStorage m_transientStorage;
@@ -59,6 +58,7 @@ public:
         int64_t m_gasLimit;
         int64_t m_seq = 0;
         evmc_address m_origin;
+        u256 m_nonce;
         hostcontext::HostContext<decltype(m_rollbackableStorage),
             decltype(m_rollbackableTransientStorage)>
             m_hostContext;
@@ -80,10 +80,12 @@ public:
                          m_transaction.get().sender().size() == sizeof(evmc_address)) ?
                          *(evmc_address*)m_transaction.get().sender().data() :
                          evmc_address{}),
+            m_nonce(hex2u(transaction.nonce())),
             m_hostContext(m_rollbackableStorage, m_rollbackableTransientStorage, blockHeader,
                 newEVMCMessage(m_blockHeader.get().number(), transaction, m_gasLimit, m_origin),
                 m_origin, transaction.abi(), contextID, m_seq, executor.m_precompiledManager,
-                ledgerConfig, *executor.m_hashImpl, task::syncWait)
+                ledgerConfig, *executor.m_hashImpl, transaction.type() != 0, m_nonce,
+                task::syncWait)
         {}
     };
 
@@ -106,6 +108,7 @@ public:
 
         if constexpr (step == 0)
         {
+            co_await updateNonce(executeContext);
             co_await executeContext.m_hostContext.prepare();
         }
         else if constexpr (step == 1)
@@ -120,6 +123,26 @@ public:
         co_return {};
     }
 
+    friend task::Task<void> updateNonce(auto& executeContext)
+    {
+        if (auto& transaction = executeContext.m_transaction.get(); transaction.type() != 0) // TODO == 1
+        {
+            auto& callNonce = executeContext.m_nonce;
+            ledger::account::EVMAccount account(executeContext.m_rollbackableStorage,
+                executeContext.m_origin,
+                executeContext.m_ledgerConfig.get().features().get(
+                    ledger::Features::Flag::feature_raw_address));
+
+            if (!co_await ledger::account::exists(account))
+            {
+                co_await ledger::account::create(account);
+            }
+            auto nonceInStorage = co_await ledger::account::nonce(account);
+            auto storageNonce = u256(nonceInStorage.value_or("0"));
+            u256 newNonce = std::max(callNonce, storageNonce) + 1;
+            co_await ledger::account::setNonce(account, newNonce.convert_to<std::string>());
+        }
+    }
 
     friend task::Task<protocol::TransactionReceipt::Ptr> finish(auto& executeContext)
     {
@@ -138,7 +161,7 @@ public:
         if (evmcResult.status_code != 0)
         {
             TRANSACTION_EXECUTOR_LOG(DEBUG) << "Transaction revert: " << evmcResult.status_code;
-            
+
 
             auto [_, errorMessage] = evmcStatusToErrorMessage(
                 *executeContext.m_executor.get().m_hashImpl, evmcResult.status_code);

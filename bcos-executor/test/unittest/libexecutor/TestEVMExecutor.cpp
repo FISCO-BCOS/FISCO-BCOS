@@ -2632,7 +2632,7 @@ contract HelloFactory {
     params->setSeq(1000);
     params->setDepth(0);
     auto senderBytes = keyPair->address(cryptoSuite->hashImpl());
-    auto newAddress = newLegacyEVMAddress(senderBytes.ref(), nonce);
+    auto newAddress = newLegacyEVMAddressString(senderBytes.ref(), nonce);
     params->setTo(newAddress);
 
     params->setOrigin(std::string(sender));
@@ -2710,7 +2710,7 @@ contract HelloFactory {
     codec->decode(result2->data(), newHello);
 
     auto helloFactoryAddress = fromHex(newAddress);
-    auto const expectNewHelloAddress = newLegacyEVMAddress(bcos::ref(helloFactoryAddress), u256(0));
+    auto const expectNewHelloAddress = newLegacyEVMAddressString(bcos::ref(helloFactoryAddress), u256(0));
     BOOST_CHECK_EQUAL(newHello.hex(), expectNewHelloAddress);
 }
 

@@ -52,6 +52,7 @@
 #include <evmc/instructions.h>
 #include <evmone/evmone.h>
 #include <boost/algorithm/hex.hpp>
+#include <boost/concept_archetype.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/multiprecision/cpp_int/import_export.hpp>
 #include <boost/throw_exception.hpp>
@@ -73,8 +74,9 @@ struct NotFoundCodeError : public bcos::Error {};
 
 evmc_bytes32 evm_hash_fn(const uint8_t* data, size_t size);
 
-evmc_message getMessage(const evmc_message& inputMessage, protocol::BlockNumber blockNumber,
-    int64_t contextID, int64_t seq, crypto::Hash const& hashImpl);
+evmc_message getMessage(bool web3Tx, const evmc_message& inputMessage,
+    protocol::BlockNumber blockNumber, int64_t contextID, int64_t seq, const u256& nonce,
+    crypto::Hash const& hashImpl);
 
 struct Executable
 {
@@ -137,6 +139,7 @@ private:
     bcos::bytes m_dynamicPrecompiledInput;
     bool m_enableTransfer = false;
     int64_t m_level;
+    bool m_web3Tx;
 
     constexpr auto buildLegacyExternalCaller()
     {
@@ -177,7 +180,8 @@ private:
         const protocol::BlockHeader& blockHeader, const evmc_message& message,
         const evmc_address& origin, std::string_view abi, int contextID, int64_t& seq,
         PrecompiledManager const& precompiledManager, ledger::LedgerConfig const& ledgerConfig,
-        crypto::Hash const& hashImpl, const evmc_host_interface* hostInterface)
+        crypto::Hash const& hashImpl, bool web3Tx, const u256& nonce,
+        const evmc_host_interface* hostInterface)
       : evmc_host_context{.interface = hostInterface,
             .wasm_interface = nullptr,
             .hash_fn = evm_hash_fn,
@@ -194,11 +198,12 @@ private:
         m_precompiledManager(precompiledManager),
         m_ledgerConfig(ledgerConfig),
         m_hashImpl(hashImpl),
-        m_message(
-            getMessage(message, m_blockHeader.get().number(), m_contextID, m_seq, m_hashImpl)),
+        m_message(getMessage(
+            web3Tx, message, m_blockHeader.get().number(), m_contextID, m_seq, nonce, m_hashImpl)),
         m_recipientAccount(getAccount(*this, this->message().recipient)),
         m_revision(EVMC_CANCUN),
-        m_level(seq)
+        m_level(seq),
+        m_web3Tx(web3Tx)
     {}
 
 public:
@@ -206,9 +211,9 @@ public:
         protocol::BlockHeader const& blockHeader, const evmc_message& message,
         const evmc_address& origin, std::string_view abi, int contextID, int64_t& seq,
         PrecompiledManager const& precompiledManager, ledger::LedgerConfig const& ledgerConfig,
-        crypto::Hash const& hashImpl, auto&& waitOperator)
+        crypto::Hash const& hashImpl, bool web3Tx, const u256& nonce, auto&& waitOperator)
       : HostContext(innerConstructor, storage, transientStorage, blockHeader, message, origin, abi,
-            contextID, seq, precompiledManager, ledgerConfig, hashImpl,
+            contextID, seq, precompiledManager, ledgerConfig, hashImpl, web3Tx, nonce,
             getHostInterface<HostContext>(std::forward<decltype(waitOperator)>(waitOperator)))
     {}
 
@@ -468,14 +473,15 @@ public:
     task::Task<EVMCResult> externalCall(const evmc_message& message, auto&&... /*unused*/)
     {
         ++m_seq;
-        if (c_fileLogLevel <= LogLevel::TRACE) [[unlikely]]
-        {
-            HOST_CONTEXT_LOG(TRACE) << "External call: " << message;
-        }
+        HOST_CONTEXT_LOG(TRACE) << "External call: " << message;
 
+        auto senderAccount = getAccount(*this, message.sender);
+        auto nonceStr = co_await ledger::account::nonce(senderAccount);
+        auto nonce = u256(nonceStr.value_or(std::string("0")));
         HostContext hostcontext(innerConstructor, m_rollbackableStorage.get(),
             m_rollbackableTransientStorage.get(), m_blockHeader, message, m_origin, {}, m_contextID,
-            m_seq, m_precompiledManager.get(), m_ledgerConfig, m_hashImpl, interface);
+            m_seq, m_precompiledManager.get(), m_ledgerConfig, m_hashImpl, m_web3Tx, nonce,
+            interface);
 
         co_await hostcontext.prepare();
         auto result = co_await hostcontext.execute();
@@ -508,6 +514,12 @@ private:
                 m_precompiledManager.get(), m_contextID, m_seq, m_ledgerConfig);
         }
 
+        if (m_web3Tx && m_level != 0)
+        {
+            auto senderAccount = getAccount(*this, ref.sender);
+            co_await ledger::account::increaseNonce(senderAccount);
+        }
+
         co_await ledger::account::create(m_recipientAccount);
         auto result = m_executable->m_vmInstance.execute(
             interface, this, m_revision, std::addressof(ref), ref.input_data, ref.input_size);
@@ -517,6 +529,7 @@ private:
             auto codeHash = m_hashImpl.get().hash(code);
             co_await ledger::account::setCode(
                 m_recipientAccount, code.toBytes(), std::string(m_abi), codeHash);
+            co_await ledger::account::setNonce(m_recipientAccount, "1");
             result.gas_left -= result.output_size * bcos::executor::VMSchedule().createDataGas;
             result.create_address = ref.code_address;
 

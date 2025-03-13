@@ -39,62 +39,27 @@ public:
     BlockFactoryImpl(bcos::crypto::CryptoSuite::Ptr cryptoSuite,
         bcos::protocol::BlockHeaderFactory::Ptr blockHeaderFactory,
         bcos::protocol::TransactionFactory::Ptr transactionFactory,
-        bcos::protocol::TransactionReceiptFactory::Ptr receiptFactory)
-      : m_cryptoSuite(std::move(cryptoSuite)),
-        m_blockHeaderFactory(std::move(blockHeaderFactory)),
-        m_transactionFactory(std::move(transactionFactory)),
-        m_receiptFactory(std::move(receiptFactory)){};
+        bcos::protocol::TransactionReceiptFactory::Ptr receiptFactory);
     BlockFactoryImpl(BlockFactoryImpl const&) = default;
     BlockFactoryImpl(BlockFactoryImpl&&) = default;
     BlockFactoryImpl& operator=(BlockFactoryImpl const&) = default;
     BlockFactoryImpl& operator=(BlockFactoryImpl&&) = default;
     ~BlockFactoryImpl() override = default;
 
-    bcos::protocol::Block::Ptr createBlock() override { return std::make_shared<BlockImpl>(); }
+    bcos::protocol::Block::Ptr createBlock() override;
 
     bcos::protocol::Block::Ptr createBlock(
-        bcos::bytesConstRef _data, bool _calculateHash = true, bool _checkSig = true) override
-    {
-        auto block = std::make_shared<BlockImpl>();
-        block->decode(_data, _calculateHash, _checkSig);
+        bcos::bytesConstRef _data, bool _calculateHash = true, bool _checkSig = true) override;
 
-        if (block->inner().blockHeader.dataHash.empty())
-        {
-            block->blockHeader()->calculateHash(*m_cryptoSuite->hashImpl());
-        }
+    bcos::crypto::CryptoSuite::Ptr cryptoSuite() override;
+    bcos::protocol::BlockHeaderFactory::Ptr blockHeaderFactory() override;
+    bcos::protocol::TransactionFactory::Ptr transactionFactory() override;
+    bcos::protocol::TransactionReceiptFactory::Ptr receiptFactory() override;
 
-        return block;
-    }
-
-    bcos::crypto::CryptoSuite::Ptr cryptoSuite() override { return m_cryptoSuite; }
-    bcos::protocol::BlockHeaderFactory::Ptr blockHeaderFactory() override
-    {
-        return m_blockHeaderFactory;
-    }
-    bcos::protocol::TransactionFactory::Ptr transactionFactory() override
-    {
-        return m_transactionFactory;
-    }
-    bcos::protocol::TransactionReceiptFactory::Ptr receiptFactory() override
-    {
-        return m_receiptFactory;
-    }
-
-    bcos::protocol::TransactionMetaData::Ptr createTransactionMetaData() override
-    {
-        return std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(
-            [inner = bcostars::TransactionMetaData()]() mutable { return &inner; });
-    }
+    bcos::protocol::TransactionMetaData::Ptr createTransactionMetaData() override;
 
     bcos::protocol::TransactionMetaData::Ptr createTransactionMetaData(
-        bcos::crypto::HashType const _hash, std::string const& _to) override
-    {
-        auto txMetaData = std::make_shared<bcostars::protocol::TransactionMetaDataImpl>();
-        txMetaData->setHash(_hash);
-        txMetaData->setTo(_to);
-
-        return txMetaData;
-    }
+        bcos::crypto::HashType const _hash, std::string const& _to) override;
 
 private:
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
