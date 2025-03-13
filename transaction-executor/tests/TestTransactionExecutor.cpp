@@ -199,6 +199,44 @@ BOOST_AUTO_TEST_CASE(costBalance)
     }());
 }
 
+BOOST_AUTO_TEST_CASE(nonce)
+{
+    task::syncWait([this]() mutable -> task::Task<void> {
+        bcostars::protocol::BlockHeaderImpl blockHeader(
+            [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+        blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_13_0_VERSION);
+        blockHeader.calculateHash(*cryptoSuite->hashImpl());
+
+        bcos::bytes helloworldBytecodeBinary;
+        boost::algorithm::unhex(helloworldBytecode, std::back_inserter(helloworldBytecodeBinary));
+        // First deploy
+        auto transaction = transactionFactory.createTransaction(
+            0, "", helloworldBytecodeBinary, "1500", 0, "", "", 0, std::string{}, {}, {}, 1000);
+        auto receipt = co_await bcos::executor_v1::executeTransaction(
+            executor, storage, blockHeader, *transaction, 0, ledgerConfig, task::syncWait);
+        BOOST_CHECK_EQUAL(
+            receipt->status(), static_cast<int32_t>(protocol::TransactionStatus::NotEnoughCash));
+
+        using namespace std::string_view_literals;
+        auto sender = "e0e794ca86d198042b64285c5ce667aee747509b"sv;
+        evmc_address senderAddress = unhexAddress(sender);
+        transaction->forceSender(
+            bytes(senderAddress.bytes, senderAddress.bytes + sizeof(senderAddress.bytes)));
+
+        ledger::account::EVMAccount senderAccount(storage, senderAddress, false);
+
+        constexpr static int64_t initBalance = 90000 + 21000;
+        co_await ledger::account::setBalance(senderAccount, initBalance);
+
+        receipt = co_await bcos::executor_v1::executeTransaction(
+            executor, storage, blockHeader, *transaction, 0, ledgerConfig, task::syncWait);
+        BOOST_CHECK_EQUAL(receipt->status(), 0);
+        BOOST_CHECK_EQUAL(receipt->contractAddress(), "e0e794ca86d198042b64285c5ce667aee747509b");
+        BOOST_CHECK_EQUAL(
+            co_await ledger::account::balance(senderAccount), initBalance - receipt->gasUsed());
+    }());
+}
+
 BOOST_AUTO_TEST_CASE(bugfixPrecompiled)
 {
     // task::syncWait([this]() mutable -> task::Task<void> {

@@ -20,7 +20,7 @@ evmc_message bcos::executor_v1::hostcontext::getMessage(bool web3Tx,
         if (concepts::bytebuffer::equalTo(
                 message.code_address.bytes, executor::EMPTY_EVM_ADDRESS.bytes))
         {
-            if (web3Tx)
+            if (!web3Tx)
             {
                 auto address = fmt::format(FMT_COMPILE("{}_{}_{}"), blockNumber, contextID, seq);
                 auto hash = hashImpl.hash(address);

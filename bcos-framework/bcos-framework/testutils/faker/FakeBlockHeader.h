@@ -23,6 +23,7 @@
 #include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
 #include "bcos-protocol/Common.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
+#include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "bcos-utilities/Common.h"
 #include <tbb/parallel_invoke.h>
 #include <boost/test/tools/old/interface.hpp>

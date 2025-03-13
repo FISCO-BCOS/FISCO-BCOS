@@ -536,4 +536,61 @@ BOOST_AUTO_TEST_CASE(transferBalance)
     }());
 }
 
+BOOST_AUTO_TEST_CASE(nonce)
+{
+    syncWait([this]() -> Task<void> {
+        bcostars::protocol::BlockHeaderImpl blockHeader;
+        blockHeader.setVersion(
+            static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_15_0_VERSION));
+
+        static int64_t number = 0;
+        blockHeader.setNumber(number++);
+        blockHeader.calculateHash(*hashImpl);
+
+        co_await initBFS(blockHeader, *hashImpl);
+        blockHeader.setNumber(number++);
+        blockHeader.calculateHash(*hashImpl);
+
+        evmc_message message{};
+        message.sender = bcos::unhexAddress("0000000000000000000000000000000000000001");
+        message.recipient = bcos::unhexAddress("0000000000000000000000000000000000000002");
+        message.value = bcos::toEvmC(bcos::u256(1000));
+        message.kind = EVMC_CALL;
+        message.gas = 21000;
+
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> senderAccount(
+            rollbackableStorage, message.sender, false);
+        co_await bcos::ledger::account::setBalance(senderAccount, bcos::u256(1001));
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> recipientAccount(
+            rollbackableStorage, message.recipient, false);
+        co_await bcos::ledger::account::setBalance(recipientAccount, bcos::u256(0));
+
+        evmc_address origin{};
+        HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
+            transferHostContext(rollbackableStorage, rollbackableTransientStorage, blockHeader,
+                message, origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl, true,
+                100, bcos::task::syncWait);
+        co_await transferHostContext.prepare();
+        auto evmResult = co_await transferHostContext.execute();
+        BOOST_CHECK_EQUAL(evmResult.status_code, EVMC_SUCCESS);
+        BOOST_CHECK_EQUAL(evmResult.gas_left, 0);
+        BOOST_CHECK_EQUAL(co_await bcos::ledger::account::balance(senderAccount), bcos::u256(1001));
+        BOOST_CHECK_EQUAL(co_await bcos::ledger::account::balance(recipientAccount), bcos::u256(0));
+
+        auto nonce = co_await bcos::ledger::account::nonce(senderAccount);
+        BOOST_REQUIRE(nonce);
+        BOOST_CHECK_EQUAL(*nonce, "101");
+
+        // ledgerConfig.setBalanceTransfer(true);
+        // transferHostContext.mutableMessage().gas = 21000;
+        // evmResult = co_await transferHostContext.execute();
+        // BOOST_CHECK_EQUAL(evmResult.status_code, EVMC_SUCCESS);
+        // BOOST_CHECK_EQUAL(co_await bcos::ledger::account::balance(senderAccount), bcos::u256(1));
+        // BOOST_CHECK_EQUAL(
+        //     co_await bcos::ledger::account::balance(recipientAccount), bcos::u256(1000));
+
+        co_return;
+    }());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
