@@ -514,7 +514,7 @@ private:
                 m_precompiledManager.get(), m_contextID, m_seq, m_ledgerConfig);
         }
 
-        if (m_web3Tx)
+        if (m_web3Tx && m_level != 0)
         {
             auto senderAccount = getAccount(*this, ref.sender);
             co_await ledger::account::increaseNonce(senderAccount);
@@ -529,6 +529,7 @@ private:
             auto codeHash = m_hashImpl.get().hash(code);
             co_await ledger::account::setCode(
                 m_recipientAccount, code.toBytes(), std::string(m_abi), codeHash);
+            co_await ledger::account::setNonce(m_recipientAccount, "1");
             result.gas_left -= result.output_size * bcos::executor::VMSchedule().createDataGas;
             result.create_address = ref.code_address;
 

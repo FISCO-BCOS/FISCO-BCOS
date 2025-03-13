@@ -2,10 +2,13 @@
 #include "TestBytecode.h"
 #include "TestMemoryStorage.h"
 #include "bcos-codec/bcos-codec/abi/ContractABICodec.h"
+#include "bcos-crypto/ChecksumAddress.h"
 #include "bcos-executor/src/Common.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
+#include "bcos-tars-protocol/protocol/TransactionImpl.h"
+#include "bcos-tars-protocol/tars/Transaction.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
@@ -204,36 +207,58 @@ BOOST_AUTO_TEST_CASE(nonce)
     task::syncWait([this]() mutable -> task::Task<void> {
         bcostars::protocol::BlockHeaderImpl blockHeader(
             [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
-        blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_13_0_VERSION);
+        blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_15_0_VERSION);
         blockHeader.calculateHash(*cryptoSuite->hashImpl());
 
         bcos::bytes helloworldBytecodeBinary;
         boost::algorithm::unhex(helloworldBytecode, std::back_inserter(helloworldBytecodeBinary));
         // First deploy
         auto transaction = transactionFactory.createTransaction(
-            0, "", helloworldBytecodeBinary, "1500", 0, "", "", 0, std::string{}, {}, {}, 1000);
+            0, "", helloworldBytecodeBinary, "0x5", 0, "", "", 0, std::string{}, {}, {}, 1000);
+        using namespace std::string_view_literals;
+        evmc_address senderAddress = unhexAddress("e0e794ca86d198042b64285c5ce667aee747509b"sv);
+        transaction->forceSender(
+            bytes(senderAddress.bytes, senderAddress.bytes + sizeof(senderAddress.bytes)));
+        auto& tarsTransaction = dynamic_cast<bcostars::protocol::TransactionImpl&>(*transaction);
+        tarsTransaction.mutableInner().type = 1;
         auto receipt = co_await bcos::executor_v1::executeTransaction(
             executor, storage, blockHeader, *transaction, 0, ledgerConfig, task::syncWait);
         BOOST_CHECK_EQUAL(
-            receipt->status(), static_cast<int32_t>(protocol::TransactionStatus::NotEnoughCash));
-
-        using namespace std::string_view_literals;
-        auto sender = "e0e794ca86d198042b64285c5ce667aee747509b"sv;
-        evmc_address senderAddress = unhexAddress(sender);
-        transaction->forceSender(
-            bytes(senderAddress.bytes, senderAddress.bytes + sizeof(senderAddress.bytes)));
+            receipt->status(), static_cast<int32_t>(protocol::TransactionStatus::None));
 
         ledger::account::EVMAccount senderAccount(storage, senderAddress, false);
+        auto nonce = co_await ledger::account::nonce(senderAccount);
+        BOOST_REQUIRE(nonce);
+        BOOST_CHECK_EQUAL(*nonce, "6");
 
-        constexpr static int64_t initBalance = 90000 + 21000;
-        co_await ledger::account::setBalance(senderAccount, initBalance);
+        ledger::account::EVMAccount contractAccount(storage, receipt->contractAddress(), false);
+        auto contractNonce = co_await ledger::account::nonce(contractAccount);
+        BOOST_REQUIRE(contractNonce);
+        BOOST_CHECK_EQUAL(*contractNonce, "1");
 
+        bcos::codec::abi::ContractABICodec abiCodec(*cryptoSuite->hashImpl());
+
+        auto newAddress = unhexAddress(receipt->contractAddress());
+        auto expectAddress = newLegacyEVMAddress(bytesConstRef{newAddress.bytes}, 1);
+        ledger::account::EVMAccount expectAccount(storage, expectAddress, false);
+
+        auto input = abiCodec.abiIn("deployAndCall(int256)", bcos::s256(90));
+        auto createTx = transactionFactory.createTransaction(0,
+            std::string(receipt->contractAddress()), input, "0x5", 0, "", "", 0, {}, {}, {}, 1001);
+        auto& tarsCreateTx = dynamic_cast<bcostars::protocol::TransactionImpl&>(*createTx);
+        tarsCreateTx.mutableInner().type = 1;
         receipt = co_await bcos::executor_v1::executeTransaction(
-            executor, storage, blockHeader, *transaction, 0, ledgerConfig, task::syncWait);
+            executor, storage, blockHeader, *createTx, 0, ledgerConfig, task::syncWait);
+
         BOOST_CHECK_EQUAL(receipt->status(), 0);
-        BOOST_CHECK_EQUAL(receipt->contractAddress(), "e0e794ca86d198042b64285c5ce667aee747509b");
-        BOOST_CHECK_EQUAL(
-            co_await ledger::account::balance(senderAccount), initBalance - receipt->gasUsed());
+        contractNonce = co_await ledger::account::nonce(contractAccount);
+        BOOST_REQUIRE(contractNonce);
+        BOOST_CHECK_EQUAL(*contractNonce, "2");
+
+        BOOST_REQUIRE(co_await ledger::account::exists(expectAccount));
+        auto expectNonce = co_await ledger::account::nonce(expectAccount);
+        BOOST_REQUIRE(expectNonce);
+        BOOST_CHECK_EQUAL(*expectNonce, "1");
     }());
 }
 
