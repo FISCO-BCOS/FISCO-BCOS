@@ -228,13 +228,11 @@ BOOST_AUTO_TEST_CASE(nonce)
 
         ledger::account::EVMAccount senderAccount(storage, senderAddress, false);
         auto nonce = co_await ledger::account::nonce(senderAccount);
-        BOOST_REQUIRE(nonce);
-        BOOST_CHECK_EQUAL(*nonce, "6");
+        BOOST_CHECK_EQUAL(nonce.value(), "6");
 
         ledger::account::EVMAccount contractAccount(storage, receipt->contractAddress(), false);
         auto contractNonce = co_await ledger::account::nonce(contractAccount);
-        BOOST_REQUIRE(contractNonce);
-        BOOST_CHECK_EQUAL(*contractNonce, "1");
+        BOOST_CHECK_EQUAL(contractNonce.value(), "1");
 
         bcos::codec::abi::ContractABICodec abiCodec(*cryptoSuite->hashImpl());
 
@@ -243,22 +241,39 @@ BOOST_AUTO_TEST_CASE(nonce)
         ledger::account::EVMAccount expectAccount(storage, expectAddress, false);
 
         auto input = abiCodec.abiIn("deployAndCall(int256)", bcos::s256(90));
-        auto createTx = transactionFactory.createTransaction(0,
+        auto deployCallTx = transactionFactory.createTransaction(0,
             std::string(receipt->contractAddress()), input, "0x5", 0, "", "", 0, {}, {}, {}, 1001);
-        auto& tarsCreateTx = dynamic_cast<bcostars::protocol::TransactionImpl&>(*createTx);
-        tarsCreateTx.mutableInner().type = 1;
+        deployCallTx->forceSender(
+            bytes(senderAddress.bytes, senderAddress.bytes + sizeof(senderAddress.bytes)));
+        dynamic_cast<bcostars::protocol::TransactionImpl&>(*deployCallTx).mutableInner().type = 1;
         receipt = co_await bcos::executor_v1::executeTransaction(
-            executor, storage, blockHeader, *createTx, 0, ledgerConfig, task::syncWait);
+            executor, storage, blockHeader, *deployCallTx, 0, ledgerConfig, task::syncWait);
 
         BOOST_CHECK_EQUAL(receipt->status(), 0);
+        nonce = co_await ledger::account::nonce(senderAccount);
+        BOOST_CHECK_EQUAL(nonce.value(), "7");
+
         contractNonce = co_await ledger::account::nonce(contractAccount);
         BOOST_REQUIRE(contractNonce);
         BOOST_CHECK_EQUAL(*contractNonce, "2");
 
         BOOST_REQUIRE(co_await ledger::account::exists(expectAccount));
         auto expectNonce = co_await ledger::account::nonce(expectAccount);
-        BOOST_REQUIRE(expectNonce);
-        BOOST_CHECK_EQUAL(*expectNonce, "1");
+        BOOST_CHECK_EQUAL(expectNonce.value(), "1");
+
+        input = abiCodec.abiIn("returnRevert()");
+        auto revertTx = transactionFactory.createTransaction(0,
+            std::string(receipt->contractAddress()), input, "0x10", 0, "", "", 0, {}, {}, {}, 1002);
+        revertTx->forceSender(
+            bytes(senderAddress.bytes, senderAddress.bytes + sizeof(senderAddress.bytes)));
+        dynamic_cast<bcostars::protocol::TransactionImpl&>(*revertTx).mutableInner().type = 1;
+        receipt = co_await bcos::executor_v1::executeTransaction(
+            executor, storage, blockHeader, *revertTx, 0, ledgerConfig, task::syncWait);
+
+        BOOST_CHECK_NE(receipt->status(), 0);
+        BOOST_CHECK_EQUAL((co_await ledger::account::nonce(senderAccount)).value(), "17");
+        BOOST_CHECK_EQUAL((co_await ledger::account::nonce(contractAccount)).value(), "2");
+        BOOST_CHECK_EQUAL((co_await ledger::account::nonce(expectAccount)).value(), "1");
     }());
 }
 

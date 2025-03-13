@@ -125,7 +125,7 @@ public:
 
     friend task::Task<void> updateNonce(auto& executeContext)
     {
-        if (auto& transaction = executeContext.m_transaction.get(); transaction.type() != 0)
+        if (auto& transaction = executeContext.m_transaction.get(); transaction.type() != 0) // TODO == 1
         {
             auto& callNonce = executeContext.m_nonce;
             ledger::account::EVMAccount account(executeContext.m_rollbackableStorage,
