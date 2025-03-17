@@ -29,26 +29,24 @@ using namespace bcos;
 using namespace bcos::txpool;
 using namespace bcos::protocol;
 
-task::Task<TransactionStatus> Web3NonceChecker::checkWeb3Nonce(
-    const bcos::protocol::Transaction& _tx, bool onlyCheckLedgerNonce)
+task::Task<bcos::protocol::TransactionStatus> Web3NonceChecker::checkWeb3Nonce(
+    std::string sender, std::string nonce, bool onlyCheckLedgerNonce)
 {
     // sender is bytes view
-    auto sender = std::string(_tx.sender());
     auto const senderHex = toHex(sender);
-    auto nonce = u256(_tx.nonce());
+    auto nonceU256 = u256(nonce);
 
     // Note:
     // 在以太坊中，nonce是从0开始的，也代表着该地址发交易次数。例如：在存储中存储的是5，那么web3工具从rpc
     // api获取的transactionCount就是5，那么新的交易将从5开始发。
     // Note: In Ethereum, the nonce starts from 0, which also represents the number of transactions
-    // sent by the address. For example: if 5 is stored in the storage, then the transactionCount
-    // obtained from the rpc api by the web3 tool is 5, then the new transaction will be sent
+    // sent by the address. For example, if 5 is stored in the storage, then the transactionCount
+    // obtained from the rpc api by the web3 tool is 5; then the new transaction will be sent
     // from 5.
     if (!onlyCheckLedgerNonce)
     {
         // memory nonce check nonce existence in memory first, if not exist, then check from storage
-        if (co_await bcos::storage2::existsOne(
-                m_memoryNonces, std::make_pair(_tx.sender(), _tx.nonce())))
+        if (co_await bcos::storage2::existsOne(m_memoryNonces, std::make_pair(sender, nonce)))
         {
             if (c_fileLogLevel == TRACE) [[unlikely]]
             {
@@ -63,8 +61,8 @@ task::Task<TransactionStatus> Web3NonceChecker::checkWeb3Nonce(
     if (auto const nonceInLedger = co_await bcos::storage2::readOne(m_ledgerStateNonces, sender))
     {
         if (auto nonceInLedgerValue = nonceInLedger.value();
-            nonce < nonceInLedgerValue ||
-            nonce > nonceInLedgerValue + DEFAULT_WEB3_NONCE_CHECK_LIMIT)
+            nonceU256 < nonceInLedgerValue ||
+            nonceU256 > nonceInLedgerValue + DEFAULT_WEB3_NONCE_CHECK_LIMIT)
         {
             if (c_fileLogLevel == TRACE) [[unlikely]]
             {
@@ -86,7 +84,8 @@ task::Task<TransactionStatus> Web3NonceChecker::checkWeb3Nonce(
         auto const nonceInStorage = u256(storageState.value().nonce);
         // update memory first
         co_await storage2::writeOne(m_ledgerStateNonces, sender, nonceInStorage);
-        if (nonce < nonceInStorage || nonce > nonceInStorage + DEFAULT_WEB3_NONCE_CHECK_LIMIT)
+        if (nonceU256 < nonceInStorage ||
+            nonceU256 > nonceInStorage + DEFAULT_WEB3_NONCE_CHECK_LIMIT)
         {
             if (c_fileLogLevel == TRACE) [[unlikely]]
             {
@@ -101,58 +100,13 @@ task::Task<TransactionStatus> Web3NonceChecker::checkWeb3Nonce(
     co_return TransactionStatus::None;
 }
 
-task::Task<void> Web3NonceChecker::batchRemoveMemoryNonce(
-    RANGES::input_range auto&& senders, RANGES::input_range auto&& nonces)
+task::Task<TransactionStatus> Web3NonceChecker::checkWeb3Nonce(
+    const bcos::protocol::Transaction& _tx, bool onlyCheckLedgerNonce)
 {
-    // 假设交易池里有0xabcd的3笔交易，nonce分别是5，7，9。如果nonce为7的交易先被打包进区块，ledge
-    // state nonce将会更新到7，那么交易池中memory nonce中小等于ledger
-    // nonce的5和7的交易就会被移除。
-    // Suppose there are 3 transactions with nonce 5, 7,
-    // 9 in the transaction pool sent by 0xabcd. If the transaction with nonce 7 is packaged
-    // into a block first, the ledge state nonce will be updated to 7, then the transactions
-    // with nonce 5 and 7 in the memory nonce of the transaction pool will be removed.
-    std::stringstream ss;
-    for (auto&& [sender, nonce] : RANGES::views::zip(senders, nonces))
-    {
-        if (c_fileLogLevel == TRACE)
-        {
-            ss << toHex(sender) << ":" << nonce << ", ";
-        }
-        co_await storage2::removeOne(m_memoryNonces, std::make_pair(sender, nonce));
-    }
-    TXPOOL_LOG(DEBUG) << LOG_DESC("Web3Nonce: rm mem nonce cache for invalid txs.") << ss.str();
-}
-
-task::Task<void> Web3NonceChecker::updateNonceCache(
-    RANGES::input_range auto&& senders, RANGES::input_range auto&& noncesSet)
-{
-    for (auto&& [sender, nonceSet] : RANGES::views::zip(senders, noncesSet))
-    {
-        if (nonceSet.empty()) [[unlikely]]
-        {
-            auto maxNonce = *nonceSet.rbegin();
-            if (c_fileLogLevel == TRACE)
-            {
-                TXPOOL_LOG(TRACE) << LOG_DESC("Web3Nonce: update ledger nonce cache")
-                                  << LOG_KV("sender", toHex(sender)) << LOG_KV("nonce", maxNonce);
-            }
-            co_await storage2::writeOne(m_ledgerStateNonces, sender, maxNonce);
-            if (auto maxMemNonce = co_await storage2::readOne(m_maxNonces, sender);
-                maxMemNonce.has_value() && maxNonce >= maxMemNonce.value())
-            {
-                co_await storage2::removeOne(m_maxNonces, sender);
-            }
-        }
-        for (auto&& nonce : nonceSet)
-        {
-            if (c_fileLogLevel == TRACE)
-            {
-                TXPOOL_LOG(TRACE) << LOG_DESC("Web3Nonce: rm mem nonce cache")
-                                  << LOG_KV("sender", toHex(sender)) << LOG_KV("nonce", nonce);
-            }
-            co_await storage2::removeOne(m_memoryNonces, std::make_pair(sender, toQuantity(nonce)));
-        }
-    }
+    // sender is bytes view
+    auto sender = std::string(_tx.sender());
+    auto nonce = std::string(_tx.nonce());
+    co_return co_await checkWeb3Nonce(std::move(sender), std::move(nonce), onlyCheckLedgerNonce);
 }
 
 task::Task<void> Web3NonceChecker::insertMemoryNonce(std::string sender, std::string nonce)
@@ -188,8 +142,8 @@ task::Task<std::optional<u256>> Web3NonceChecker::getPendingNonce(std::string_vi
     co_return std::nullopt;
 }
 
-
+// only for test, inset nonce into ledgerStateNonces
 void Web3NonceChecker::insert(std::string sender, u256 nonce)
 {
-    task::syncWait(storage2::writeOne(m_ledgerStateNonces, sender, nonce));
+    task::syncWait(storage2::writeOne(m_ledgerStateNonces, std::move(sender), nonce));
 }
