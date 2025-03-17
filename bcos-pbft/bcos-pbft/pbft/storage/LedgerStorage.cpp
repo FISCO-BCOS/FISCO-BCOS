@@ -367,12 +367,6 @@ void LedgerStorage::commitStableCheckPoint(PBFTProposalInterface::Ptr _stablePro
                 return;
             }
 
-            if (auto executorVersion = _ledgerConfig->executorVersion(); executorVersion > 0)
-            {
-                PBFT_STORAGE_LOG(INFO) << "Use executor version: " << executorVersion;
-                ledgerStorage->m_scheduler->setVersion(executorVersion, _ledgerConfig);
-            }
-
             if (_error != nullptr)
             {
                 PBFT_STORAGE_LOG(ERROR) << LOG_DESC("commitStableCheckPoint failed")
@@ -383,6 +377,14 @@ void LedgerStorage::commitStableCheckPoint(PBFTProposalInterface::Ptr _stablePro
                 ledgerStorage->m_onStableCheckPointCommitFailed(std::move(_error), _stableProposal);
                 return;
             }
+
+            assert(_ledgerConfig);
+            if (auto executorVersion = _ledgerConfig->executorVersion(); executorVersion > 0)
+            {
+                PBFT_STORAGE_LOG(INFO) << "Use executor version: " << executorVersion;
+                ledgerStorage->m_scheduler->setVersion(executorVersion, _ledgerConfig);
+            }
+
             auto commitPerTx =
                 (double)(utcTime() - startT) / (double)(_blockInfo->transactionsHashSize());
             PBFT_STORAGE_LOG(INFO)
