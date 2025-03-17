@@ -565,8 +565,9 @@ void txPoolInitAndSubmitWeb3TransactionTest(CryptoSuite::Ptr _cryptoSuite, bool 
         txpool, txpoolStorage, tx, tx->hash(), (uint32_t)TransactionStatus::None, importedTxNum);
 
     u256 fakeNonce = u256(duplicatedNonce);
-    faker->ledger()->initEoaContext(
-        eoaKey->address(_cryptoSuite->hashImpl()).hex(), fakeNonce.convert_to<std::string>());
+    StorageState state{.nonce = fakeNonce.convert_to<std::string>(), .balance = "1"};
+    faker->ledger()->setStorageState(
+        eoaKey->address(_cryptoSuite->hashImpl()).hex(), std::move(state));
     // ledger update to fakeNonce, tx do not clean
     std::this_thread::sleep_for(std::chrono::milliseconds(TXPOOL_CLEANUP_TIME));
     BOOST_CHECK_EQUAL(txpoolStorage->size(), importedTxNum);
