@@ -302,6 +302,11 @@ public:
 
     std::string toRawString() const { return std::string(data(), data() + N); }
 
+    bool allZero() const
+    {
+        return std::all_of(m_data.begin(), m_data.end(), [](const byte _b) { return _b == 0; });
+    }
+
     /// Populate with random data.
     template <class Engine>
     void generateRandomFixedBytesByEngine(Engine& _eng)

@@ -58,7 +58,7 @@ BOOST_AUTO_TEST_CASE(testLegacyTransactionDecode)
     BOOST_CHECK_EQUAL(tx.maxPriorityFeePerGas, 20000000000);
     BOOST_CHECK_EQUAL(tx.maxFeePerGas, 20000000000);
     BOOST_CHECK_EQUAL(tx.gasLimit, 21000);
-    BOOST_CHECK_EQUAL(tx.to, Address("0x727fc6a68321b754475c668a6abfb6e9e71c169a"));
+    BOOST_CHECK_EQUAL(tx.to.value(), Address("0x727fc6a68321b754475c668a6abfb6e9e71c169a"));
     BOOST_CHECK_EQUAL(tx.value, 10000000000000000000ull);
     BOOST_CHECK_EQUAL(toHex(tx.data),
         "a9059cbb000000000213ed0f886efd100b67c7e4ec0a85a7d20dc9"
@@ -127,7 +127,7 @@ BOOST_AUTO_TEST_CASE(testEIP2930Transaction)
     BOOST_CHECK_EQUAL(tx.maxPriorityFeePerGas, 30000000000);
     BOOST_CHECK_EQUAL(tx.maxFeePerGas, 30000000000);
     BOOST_CHECK_EQUAL(tx.gasLimit, 5748100);
-    BOOST_CHECK_EQUAL(tx.to, Address("0x811a752c8cd697e3cb27279c330ed1ada745a8d7"));
+    BOOST_CHECK_EQUAL(tx.to.value(), Address("0x811a752c8cd697e3cb27279c330ed1ada745a8d7"));
     BOOST_CHECK_EQUAL(tx.value, 2000000000000000000ull);
     BOOST_CHECK_EQUAL(toHex(tx.data), "6ebaf477f83e051589c1188bcc6ddccd");
     BOOST_CHECK_EQUAL(tx.getSignatureV(), tx.chainId.value() * 2 + 35);
@@ -160,7 +160,7 @@ BOOST_AUTO_TEST_CASE(testEIP1559Transaction)
     BOOST_CHECK_EQUAL(tx.maxPriorityFeePerGas, 10000000000);
     BOOST_CHECK_EQUAL(tx.maxFeePerGas, 30000000000);
     BOOST_CHECK_EQUAL(tx.gasLimit, 5748100);
-    BOOST_CHECK_EQUAL(tx.to, Address("0x811a752c8cd697e3cb27279c330ed1ada745a8d7"));
+    BOOST_CHECK_EQUAL(tx.to.value(), Address("0x811a752c8cd697e3cb27279c330ed1ada745a8d7"));
     BOOST_CHECK_EQUAL(tx.value, 2000000000000000000ull);
     BOOST_CHECK_EQUAL(toHex(tx.data), "6ebaf477f83e051589c1188bcc6ddccd");
     BOOST_CHECK_EQUAL(tx.getSignatureV(), tx.chainId.value() * 2 + 35);
@@ -170,6 +170,45 @@ BOOST_AUTO_TEST_CASE(testEIP1559Transaction)
         toHex(tx.signatureS), "5edcc541b4741c5cc6dd347c5ed9577ef293a62787b4510465fadbfe39ee4094");
     BOOST_CHECK(tx.accessList == s_accessList);
 
+    bcos::bytes encoded{};
+    codec::rlp::encode(encoded, tx);
+    auto rawTx2 = toHexStringWithPrefix(encoded);
+    BOOST_CHECK_EQUAL(rawTx, rawTx2);
+}
+BOOST_AUTO_TEST_CASE(testEIP1559Transaction2)
+{
+    // clang-format off
+    constexpr std::string_view rawTx = "0x02f90129824ee8090a82012c84014fb1808080b8d46080604052348015600e575f5ffd5b506040517fcf16a92280c1bbb43f72d31126b724d508df2877835849e8744017ab36a9b47f905f90a160928060425f395ff3fe6080604052348015600e575f5ffd5b50600436106026575f3560e01c80637b0cb83914602a575b5f5ffd5b60306032565b005b6040517fcf16a92280c1bbb43f72d31126b724d508df2877835849e8744017ab36a9b47f905f90a156fea2646970667358221220b26bf8d47ffaa4c5ffecf6303ac218970d8ab50724943980b859fc2ac8e384e164736f6c634300081c0033c080a0f0643ec9f740e363dfa8d0f902a643dd4828a04cd80dd733822f2dd636fb6693a053ad48b39f2bbb3b3a5e073074bcb1dd43d908b292ad9078d4478dc42f1195bd";
+    // clang-format on
+    auto bytes = fromHexWithPrefix(rawTx);
+    auto bRef = bcos::ref(bytes);
+    Web3Transaction tx{};
+    auto e = codec::rlp::decode(bRef, tx);
+    BOOST_CHECK(e == nullptr);
+    BOOST_CHECK(tx.type == rpc::TransactionType::EIP1559);
+    BOOST_CHECK(tx.chainId.has_value());
+    BOOST_CHECK_EQUAL(tx.chainId.value(), 20200);
+    BOOST_CHECK_EQUAL(tx.nonce, 9);
+    BOOST_CHECK_EQUAL(tx.maxPriorityFeePerGas, 10);
+    BOOST_CHECK_EQUAL(tx.maxFeePerGas, 300);
+    BOOST_CHECK_EQUAL(tx.gasLimit, 22000000);
+    BOOST_CHECK_EQUAL(tx.to.has_value(), false);
+    BOOST_CHECK_EQUAL(tx.value, 0);
+    BOOST_CHECK_EQUAL(toHex(tx.data),
+        "6080604052348015600e575f5ffd5b506040517fcf16a92280c1bbb43f72d31126b724d508df2877835849e874"
+        "4017ab36a9b47f905f90a160928060425f395ff3fe6080604052348015600e575f5ffd5b50600436106026575f"
+        "3560e01c80637b0cb83914602a575b5f5ffd5b60306032565b005b6040517fcf16a92280c1bbb43f72d31126b7"
+        "24d508df2877835849e8744017ab36a9b47f905f90a156fea2646970667358221220b26bf8d47ffaa4c5ffecf6"
+        "303ac218970d8ab50724943980b859fc2ac8e384e164736f6c634300081c0033");
+    BOOST_CHECK_EQUAL(tx.getSignatureV(), tx.chainId.value() * 2 + 35);
+    BOOST_CHECK_EQUAL(
+        toHex(tx.signatureR), "f0643ec9f740e363dfa8d0f902a643dd4828a04cd80dd733822f2dd636fb6693");
+    BOOST_CHECK_EQUAL(
+        toHex(tx.signatureS), "53ad48b39f2bbb3b3a5e073074bcb1dd43d908b292ad9078d4478dc42f1195bd");
+
+    BOOST_CHECK_EQUAL(tx.sender(), "0x2a09be8823b80f337170650802d1a0f8a99fe2d8");
+    BOOST_CHECK_EQUAL(tx.txHash().hexPrefixed(),
+        "0x1c4af2f7b65cc5c589aced8a9e0965183636d718f6fcdab3322b538710d22995");
     bcos::bytes encoded{};
     codec::rlp::encode(encoded, tx);
     auto rawTx2 = toHexStringWithPrefix(encoded);
@@ -193,7 +232,7 @@ BOOST_AUTO_TEST_CASE(testEIP4844Transaction)
     BOOST_CHECK_EQUAL(tx.maxPriorityFeePerGas, 10000000000);
     BOOST_CHECK_EQUAL(tx.maxFeePerGas, 30000000000);
     BOOST_CHECK_EQUAL(tx.gasLimit, 5748100);
-    BOOST_CHECK_EQUAL(tx.to, Address("0x811a752c8cd697e3cb27279c330ed1ada745a8d7"));
+    BOOST_CHECK_EQUAL(tx.to.value(), Address("0x811a752c8cd697e3cb27279c330ed1ada745a8d7"));
     BOOST_CHECK_EQUAL(tx.value, 0);
     BOOST_CHECK_EQUAL(toHex(tx.data), "04f7");
     BOOST_CHECK_EQUAL(tx.maxFeePerBlobGas, 123);
@@ -263,7 +302,7 @@ BOOST_AUTO_TEST_CASE(EIP1559Recover)
     BOOST_CHECK_EQUAL(tx.maxPriorityFeePerGas, 0);
     BOOST_CHECK_EQUAL(tx.maxFeePerGas, 36947013254u);
     BOOST_CHECK_EQUAL(tx.gasLimit, 21000);
-    BOOST_CHECK_EQUAL(tx.to.hexPrefixed(), "0xe10f39a0dfb9e380b6d176eb7183af32b68028d7");
+    BOOST_CHECK_EQUAL(tx.to.value().hexPrefixed(), "0xe10f39a0dfb9e380b6d176eb7183af32b68028d7");
     BOOST_CHECK_EQUAL(tx.value, 498134000000000000ull);
     BOOST_CHECK_EQUAL(toHex(tx.data), "");
     BOOST_CHECK_EQUAL(tx.getSignatureV(), tx.chainId.value() * 2 + 35);
@@ -308,7 +347,7 @@ BOOST_AUTO_TEST_CASE(EIP4844Recover)
     BOOST_CHECK_EQUAL(tx.maxPriorityFeePerGas, 1000000000);
     BOOST_CHECK_EQUAL(tx.maxFeePerGas, 238709112240);
     BOOST_CHECK_EQUAL(tx.gasLimit, 223787);
-    BOOST_CHECK_EQUAL(tx.to.hexPrefixed(), "0x1c479675ad559dc151f6ec7ed3fbf8cee79582b6");
+    BOOST_CHECK_EQUAL(tx.to.value().hexPrefixed(), "0x1c479675ad559dc151f6ec7ed3fbf8cee79582b6");
     BOOST_CHECK_EQUAL(tx.value, 0);
     // clang-format off
     BOOST_CHECK_EQUAL(toHex(tx.data), "3e5aa082000000000000000000000000000000000000000000000000000000000008f7060000000000000000000000000000000000000000000000000000000000168763000000000000000000000000e64a54e2533fd126c2e452c5fab544d80e2e4eb5000000000000000000000000000000000000000000000000000000000a8cc7c7000000000000000000000000000000000000000000000000000000000a8ccabe");
