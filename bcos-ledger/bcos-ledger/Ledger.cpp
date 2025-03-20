@@ -2077,6 +2077,15 @@ bool Ledger::buildGenesisBlock(
                 executor_v1::StateKey(
                     SYS_CONFIG, magic_enum::enum_name(ledger::SystemConfig::executor_version)),
                 executorVersion);
+
+            // 按会议结论，executor v1默认打开balance_transfer
+            // According to the meeting conclusion, executor v1 defaults to open balance_transfer
+            Entry transferBalance;
+            transferBalance.setObject(SystemConfigEntry{"1", 0});
+            co_await storage2::writeOne(*m_stateStorage,
+                executor_v1::StateKey(
+                    SYS_CONFIG, magic_enum::enum_name(ledger::SystemConfig::balance_transfer)),
+                transferBalance);
         }
 
         // write consensus node list
