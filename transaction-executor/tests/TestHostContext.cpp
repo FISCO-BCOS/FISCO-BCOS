@@ -319,32 +319,6 @@ BOOST_AUTO_TEST_CASE(delegateCall)
     }());
 }
 
-BOOST_AUTO_TEST_CASE(log)
-{
-    // syncWait([this]() -> Task<void> {
-    // auto result1 = co_await call("setInt(int256)", bcos::s256(10000));
-    // auto result2 = co_await call("setString(string)", std::string("Hello world,
-    // fisco-bcos!")); auto result3 = co_await call("logOut()");
-
-    // BOOST_CHECK_EQUAL(result1.status_code, 0);
-    // BOOST_CHECK_EQUAL(result2.status_code, 0);
-    // BOOST_CHECK_EQUAL(result3.status_code, 0);
-
-    // bcos::s256 getIntResult = -1;
-    // std::string out;
-    // bcos::codec::abi::ContractABICodec abiCodec(
-    //     bcos::executor_v1::GlobalHashImpl::g_hashImpl);
-
-    // abiCodec.abiOut(bcos::bytesConstRef(.output_data, result4.output_size), out);
-    // BOOST_CHECK_EQUAL(out, "Hello world, fisco-bcos!");
-
-    // releaseResult(result1);
-    // releaseResult(result2);
-
-    //     co_return;
-    // }());
-}
-
 BOOST_AUTO_TEST_CASE(precompiled)
 {
     // Use ledger to init storage

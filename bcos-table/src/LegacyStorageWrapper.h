@@ -10,7 +10,6 @@
 #include <boost/throw_exception.hpp>
 #include <exception>
 #include <functional>
-#include <iterator>
 #include <stdexcept>
 
 namespace bcos::storage
@@ -103,8 +102,7 @@ public:
             try
             {
                 auto stateKeys = RANGES::views::transform(keys, [&table](auto&& key) -> auto {
-                    return executor_v1::StateKeyView{
-                        table, std::forward<decltype(key)>(key)};
+                    return executor_v1::StateKeyView{table, std::forward<decltype(key)>(key)};
                 });
                 auto values = co_await storage2::readSome(self->m_storage.get(), stateKeys);
                 callback(nullptr, std::move(values));
@@ -130,8 +128,8 @@ public:
                 }
                 else
                 {
-                    co_await storage2::writeOne(self->m_storage.get(),
-                        executor_v1::StateKey(table, key), std::move(entry));
+                    co_await storage2::writeOne(
+                        self->m_storage.get(), executor_v1::StateKey(table, key), std::move(entry));
                 }
                 callback(nullptr);
             }

@@ -47,7 +47,6 @@ public:
     StateKey& operator=(StateKey&&) noexcept = default;
     ~StateKey() noexcept = default;
 
-    friend auto operator<=>(const StateKey& lhs, const StateKey& rhs) noexcept = default;
     friend ::std::ostream& operator<<(
         ::std::ostream& stream, const bcos::executor_v1::StateKey& stateKey)
     {
@@ -96,14 +95,25 @@ public:
 
 inline StateKey::StateKey(StateKeyView const& view) : StateKey(view.m_table, view.m_key) {}
 
+inline std::strong_ordering operator<=>(const StateKey& lhs, const StateKey& rhs) noexcept
+{
+    auto lhsView = bcos::executor_v1::StateKeyView{lhs};
+    auto rhsView = bcos::executor_v1::StateKeyView{rhs};
+    return lhsView <=> rhsView;
+}
+inline bool operator==(const StateKey& lhs, const StateKey& rhs) noexcept
+{
+    return std::is_eq(lhs <=> rhs);
+}
+
 inline std::strong_ordering operator<=>(
     const StateKey& lhs, const bcos::executor_v1::StateKeyView& rhs) noexcept
 {
-    auto lhsView = bcos::executor_v1::StateKeyView(lhs);
+    auto lhsView = bcos::executor_v1::StateKeyView{lhs};
     return lhsView <=> rhs;
 }
-inline bool operator==(const bcos::executor_v1::StateKey& lhs,
-    const bcos::executor_v1::StateKeyView& rhs) noexcept
+inline bool operator==(
+    const bcos::executor_v1::StateKey& lhs, const bcos::executor_v1::StateKeyView& rhs) noexcept
 {
     return std::is_eq(lhs <=> rhs);
 }
@@ -142,8 +152,7 @@ struct std::hash<bcos::executor_v1::StateKey>
 };
 
 template <>
-struct boost::hash<bcos::executor_v1::StateKey>
-  : public std::hash<bcos::executor_v1::StateKey>
+struct boost::hash<bcos::executor_v1::StateKey> : public std::hash<bcos::executor_v1::StateKey>
 {
 };
 
