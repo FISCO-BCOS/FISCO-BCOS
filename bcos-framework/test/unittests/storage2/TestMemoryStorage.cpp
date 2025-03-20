@@ -344,13 +344,67 @@ BOOST_AUTO_TEST_CASE(keyComp)
     executor_v1::StateKey key1("/tables/t_testV320", "type");
     executor_v1::StateKeyView key2("/tables/t_testV320", "type");
 
-    BOOST_CHECK(key1 == key2);
+    BOOST_CHECK_EQUAL(key1, key2);
     BOOST_CHECK(!(key1 > key2));
     BOOST_CHECK(!(key1 < key2));
+
+    BOOST_CHECK_EQUAL(key2, key1);
+    BOOST_CHECK(!(key2 > key1));
+    BOOST_CHECK(!(key2 < key1));
 
     auto hash1 = std::hash<decltype(key1)>{}(key1);
     auto hash2 = std::hash<decltype(key2)>{}(key2);
     BOOST_CHECK_EQUAL(hash1, hash2);
+
+    constexpr static auto keys = std::to_array<std::string_view>(
+        {"s_tables:/apps/130cfa5e32bcb8bfcffc146bbdcb8967ecc3e556_accessAuth",
+            "/apps/130cfa5e32bcb8bfcffc146bbdcb8967ecc3e556_accessAuth:admin",
+            "/apps/130cfa5e32bcb8bfcffc146bbdcb8967ecc3e556_accessAuth:status",
+            "/apps/130cfa5e32bcb8bfcffc146bbdcb8967ecc3e556_accessAuth:method_auth_type",
+            "/apps/130cfa5e32bcb8bfcffc146bbdcb8967ecc3e556_accessAuth:method_auth_white",
+            "/apps/130cfa5e32bcb8bfcffc146bbdcb8967ecc3e556_accessAuth:method_auth_black",
+            "s_tables:/apps/130cfa5e32bcb8bfcffc146bbdcb8967ecc3e556", "/tables:t_testV320",
+            "s_tables:/tables/t_testV320",
+            "s_tables:/apps/f051d3dc3139daa9eeb86a4e388b73cb024d5f5f",
+            "s_code_binary:\216+wW_4\312\301\233\314G\024\367\271K!\223\023\364\245\004Ioi\216="
+            "\027\355\205Ł",
+            "/apps/f051d3dc3139daa9eeb86a4e388b73cb024d5f5f:codeHash",
+            "s_contract_abi:\305\322F\001\206\367#<\222~}\262\334\307\003\300\345\000\266Sʂ';{"
+            "\372\330\004]\205\244p",
+            "/tables/t_testV320:type", "/tables/t_testV320:link_address",
+            "s_tables:/apps/f051d3dc3139daa9eeb86a4e388b73cb024d5f5f_accessAuth",
+            "/apps/f051d3dc3139daa9eeb86a4e388b73cb024d5f5f_accessAuth:admin",
+            "/apps/f051d3dc3139daa9eeb86a4e388b73cb024d5f5f_accessAuth:status",
+            "/apps/f051d3dc3139daa9eeb86a4e388b73cb024d5f5f_accessAuth:method_auth_type",
+            "/apps/f051d3dc3139daa9eeb86a4e388b73cb024d5f5f_accessAuth:method_auth_white",
+            "/apps/f051d3dc3139daa9eeb86a4e388b73cb024d5f5f_accessAuth:method_auth_black",
+            "s_tables:u_/tables/t_testV320"});
+
+    bcos::task::syncWait([&]() -> task::Task<void> {
+        bcos::storage2::memory_storage::MemoryStorage<bcos::executor_v1::StateKey,
+            bcos::executor_v1::StateValue,
+            bcos::storage2::memory_storage::ORDERED |
+                bcos::storage2::memory_storage::LOGICAL_DELETION>
+            storage;
+        for (const auto& key : keys)
+        {
+            bcos::executor_v1::StateValue value;
+            value.set("link");
+            co_await storage2::writeOne(
+                storage, bcos::executor_v1::StateKey(std::string{key}), std::move(value));
+        }
+
+        BOOST_CHECK(co_await storage2::existsOne(
+            storage, bcos::executor_v1::StateKeyView("/tables/t_testV320", "type")));
+        BOOST_CHECK(co_await storage2::existsOne(
+            storage, bcos::executor_v1::StateKeyView("/tables/t_testV320", "link_address")));
+        BOOST_CHECK(co_await storage2::existsOne(storage,
+            bcos::executor_v1::StateKeyView(
+                "/apps/f051d3dc3139daa9eeb86a4e388b73cb024d5f5f_accessAuth", "method_auth_white")));
+        BOOST_CHECK(co_await storage2::existsOne(
+            storage, bcos::executor_v1::StateKeyView(
+                         "/apps/130cfa5e32bcb8bfcffc146bbdcb8967ecc3e556_accessAuth", "status")));
+    }());
 }
 
 BOOST_AUTO_TEST_CASE(HeterogeneousLookup)

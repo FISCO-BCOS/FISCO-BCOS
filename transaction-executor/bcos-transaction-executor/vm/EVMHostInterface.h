@@ -85,10 +85,9 @@ struct EVMHostInterface
     static evmc_bytes32 getBalance([[maybe_unused]] evmc_host_context* context,
         [[maybe_unused]] const evmc_address* addr) noexcept
     {
-        // always return 0
         auto& hostContext = static_cast<HostContextType&>(*context);
-
-        return toEvmC(h256(0));
+        auto balance = syncWait(hostContext.balance());
+        return toEvmC(balance);
     }
 
     static size_t getCodeSize(evmc_host_context* context, const evmc_address* addr) noexcept
