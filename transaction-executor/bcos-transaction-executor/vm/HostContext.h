@@ -243,6 +243,11 @@ public:
         co_await ledger::account::setStorage(m_recipientAccount, *key, *value);
     }
 
+    task::Task<u256> balance(auto&&... /*unused*/)
+    {
+        co_return co_await ledger::account::balance(m_recipientAccount);
+    }
+
     task::Task<evmc_bytes32> getTransientStorage(const evmc_bytes32* key, auto&&... /*unused*/)
     {
         evmc_bytes32 value;
