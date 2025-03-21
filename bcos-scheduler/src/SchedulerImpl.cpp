@@ -254,7 +254,6 @@ void SchedulerImpl::executeBlockInternal(bcos::protocol::Block::Ptr block, bool 
                         bcos::protocol::BlockHeader::Ptr&& blockHeader, bool _sysBlock) {
         SCHEDULER_LOG(DEBUG) << METRIC << BLOCK_NUMBER(requestBlockNumber)
                              << "ExecuteBlock response"
-
                              << LOG_KV(error ? "failed" : "ok", error ? error->what() : "ok");
 
         _callback(error == nullptr ? nullptr : std::move(error), std::move(blockHeader), _sysBlock);

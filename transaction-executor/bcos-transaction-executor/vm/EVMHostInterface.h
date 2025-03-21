@@ -135,7 +135,7 @@ struct EVMHostInterface
         auto& hostContext = static_cast<HostContextType&>(*context);
         h256s hashTopics;
         hashTopics.reserve(numTopics);
-        for (auto i : RANGES::iota_view<size_t, size_t>(0, numTopics))
+        for (auto i : ::ranges::views::iota(0LU, numTopics))
         {
             hashTopics.emplace_back(topics[i].bytes, sizeof(evmc_bytes32));
         }
