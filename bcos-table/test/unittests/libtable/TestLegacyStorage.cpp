@@ -29,8 +29,7 @@
 
 struct LegacyStorageTestFixture
 {
-    bcos::storage2::memory_storage::MemoryStorage<bcos::executor_v1::StateKey,
-        bcos::storage::Entry,
+    bcos::storage2::memory_storage::MemoryStorage<bcos::executor_v1::StateKey, bcos::storage::Entry,
         bcos::storage2::memory_storage::Attribute(bcos::storage2::memory_storage::ORDERED |
                                                   bcos::storage2::memory_storage::LOGICAL_DELETION)>
         storage;
@@ -61,15 +60,27 @@ BOOST_AUTO_TEST_CASE(getPrimaryKeys)
                     keys.begin(), keys.end(), expectedKeys.begin(), expectedKeys.end());
             });
 
-        co_await bcos::storage2::removeOne(
-            storage, bcos::executor_v1::StateKeyView("t_test", "5"));
+        bcos::storage::Entry deletedEntry;
+        deletedEntry.setStatus(bcos::storage::Entry::DELETED);
+        legacyStorage.asyncSetRow(
+            "t_test", "9", deletedEntry, [](bcos::Error::UniquePtr error) { BOOST_CHECK(!error); });
 
         legacyStorage.asyncGetPrimaryKeys(
-            "t_test", condition, [](bcos::Error::UniquePtr error, std::vector<std::string> keys) {
+            "t_test", {}, [](bcos::Error::UniquePtr error, std::vector<std::string> keys) {
                 BOOST_CHECK(!error);
                 BOOST_CHECK(!keys.empty());
-                BOOST_CHECK_EQUAL(keys.size(), 4);
-                auto expectedKeys = std::vector<std::string>{"6", "7", "8", "9"};
+                BOOST_CHECK_EQUAL(keys.size(), 9);
+                auto expectedKeys = std::vector<std::string>{
+                    "0",
+                    "1",
+                    "2",
+                    "3",
+                    "4",
+                    "5",
+                    "6",
+                    "7",
+                    "8",
+                };
                 BOOST_CHECK_EQUAL_COLLECTIONS(
                     keys.begin(), keys.end(), expectedKeys.begin(), expectedKeys.end());
             });
