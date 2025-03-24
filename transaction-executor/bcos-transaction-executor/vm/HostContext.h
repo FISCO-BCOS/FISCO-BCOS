@@ -149,13 +149,12 @@ private:
 
     task::Task<void> transferBalance(const evmc_message& message)
     {
-        auto value = fromEvmC(message.value);
-        if (value == 0 || message.code_address == message.sender ||
-            message.recipient == message.sender)
+        if (message.code_address == message.sender || message.recipient == message.sender)
         {
             co_return;
         }
 
+        auto value = fromEvmC(message.value);
         auto senderAccount = getAccount(*this, message.sender);
         auto fromBalance = co_await ledger::account::balance(senderAccount);
 
@@ -403,7 +402,8 @@ public:
             {
                 // 先转账，再执行
                 // Transfer first, then proceed execute
-                if (m_ledgerConfig.get().balanceTransfer())
+                if (!::ranges::equal(ref->value.bytes, executor::EMPTY_EVM_BYTES32.bytes) &&
+                    m_ledgerConfig.get().balanceTransfer())
                 {
                     co_await transferBalance(*ref);
                 }
@@ -445,8 +445,8 @@ public:
                 using namespace std::string_literals;
                 if (ref->flags == EVMC_STATIC || ref->kind == EVMC_DELEGATECALL)
                 {
-                    evmResult.emplace(makeErrorEVMCResult(m_hashImpl,
-                        protocol::TransactionStatus::None, EVMC_SUCCESS, ref->gas, ""s));
+                    evmResult.emplace(makeErrorEVMCResult(
+                        m_hashImpl, protocol::TransactionStatus::None, EVMC_SUCCESS, ref->gas, {}));
                 }
                 else
                 {
