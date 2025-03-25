@@ -268,7 +268,7 @@ Generator<int> generatorWithAlloc(
 
 BOOST_AUTO_TEST_CASE(allocator)
 {
-#ifdef __APPLE__
+#ifndef __APPLE__
     std::array<char, 10240> mockStack;
 
     MyMemoryResource pool(mockStack.data(), mockStack.size());
