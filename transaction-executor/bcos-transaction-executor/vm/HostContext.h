@@ -149,13 +149,12 @@ private:
 
     task::Task<void> transferBalance(const evmc_message& message)
     {
-        auto value = fromEvmC(message.value);
-        if (value == 0 || message.code_address == message.sender ||
-            message.recipient == message.sender)
+        if (message.code_address == message.sender || message.recipient == message.sender)
         {
             co_return;
         }
 
+        auto value = fromEvmC(message.value);
         auto senderAccount = getAccount(*this, message.sender);
         auto fromBalance = co_await ledger::account::balance(senderAccount);
 
@@ -243,9 +242,10 @@ public:
         co_await ledger::account::setStorage(m_recipientAccount, *key, *value);
     }
 
-    task::Task<u256> balance(auto&&... /*unused*/)
+    task::Task<u256> balance(evmc_address addr, auto&&... /*unused*/)
     {
-        co_return co_await ledger::account::balance(m_recipientAccount);
+        auto account = getAccount(*this, addr);
+        co_return co_await ledger::account::balance(account);
     }
 
     task::Task<evmc_bytes32> getTransientStorage(const evmc_bytes32* key, auto&&... /*unused*/)
@@ -377,7 +377,7 @@ public:
     task::Task<EVMCResult> execute()
     {
         const auto* ref = std::addressof(message());
-        HOST_CONTEXT_LOG(TRACE) << "HostContext execute: " << *ref;
+        HOST_CONTEXT_LOG(TRACE) << "HostContext execute level: " << m_level << " " << *ref;
 
         auto savepoint = current(m_rollbackableStorage.get());
         auto transientSavepoint = current(m_rollbackableTransientStorage.get());
@@ -403,7 +403,8 @@ public:
             {
                 // 先转账，再执行
                 // Transfer first, then proceed execute
-                if (m_ledgerConfig.get().balanceTransfer())
+                if (!::ranges::equal(ref->value.bytes, executor::EMPTY_EVM_BYTES32.bytes) &&
+                    m_ledgerConfig.get().balanceTransfer())
                 {
                     co_await transferBalance(*ref);
                 }
@@ -445,8 +446,8 @@ public:
                 using namespace std::string_literals;
                 if (ref->flags == EVMC_STATIC || ref->kind == EVMC_DELEGATECALL)
                 {
-                    evmResult.emplace(makeErrorEVMCResult(m_hashImpl,
-                        protocol::TransactionStatus::None, EVMC_SUCCESS, ref->gas, ""s));
+                    evmResult.emplace(makeErrorEVMCResult(
+                        m_hashImpl, protocol::TransactionStatus::None, EVMC_SUCCESS, ref->gas, {}));
                 }
                 else
                 {
@@ -464,10 +465,18 @@ public:
             }
         }
 
+        if (evmResult->gas_left < 0)
+        {
+            HOST_CONTEXT_LOG(DEBUG) << "Execute gas < 0: " << evmResult->gas_left;
+            evmResult.emplace(makeErrorEVMCResult(
+                m_hashImpl, protocol::TransactionStatus::OutOfGas, EVMC_OUT_OF_GAS, ref->gas, ""));
+        }
+
         if (evmResult->status_code != EVMC_SUCCESS)
         {
             co_await rollback(m_rollbackableStorage.get(), savepoint);
             co_await rollback(m_rollbackableTransientStorage.get(), transientSavepoint);
+            m_logs.clear();
         }
 
         HOST_CONTEXT_LOG(TRACE) << "HostContext execute finished, kind: " << ref->kind
@@ -478,8 +487,7 @@ public:
     task::Task<EVMCResult> externalCall(const evmc_message& message, auto&&... /*unused*/)
     {
         ++m_seq;
-        HOST_CONTEXT_LOG(TRACE) << "External call: " << message;
-
+        HOST_CONTEXT_LOG(TRACE) << "External call, seq: " << m_seq;
         auto senderAccount = getAccount(*this, message.sender);
         auto nonceStr = co_await ledger::account::nonce(senderAccount);
         auto nonce = u256(nonceStr.value_or(std::string("0")));
@@ -672,7 +680,7 @@ private:
         }
 
         co_return m_executable->m_vmInstance.execute(interface, this, m_revision,
-            std::addressof(message()), (const uint8_t*)m_executable->m_code->data(),
+            std::addressof(ref), (const uint8_t*)m_executable->m_code->data(),
             m_executable->m_code->size());
     }
 };

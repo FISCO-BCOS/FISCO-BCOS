@@ -1154,10 +1154,10 @@ void Ledger::asyncGetNonceList(bcos::protocol::BlockNumber _startNumber, int64_t
                 return;
             }
 
-            auto numberRange = RANGES::views::iota(_startNumber, _startNumber + _offset + 1);
-            auto numberList = numberRange | RANGES::views::transform([](BlockNumber blockNumber) {
+            auto numberRange = ::ranges::views::iota(_startNumber, _startNumber + _offset + 1);
+            auto numberList = numberRange | ::ranges::views::transform([](BlockNumber blockNumber) {
                 return boost::lexical_cast<std::string>(blockNumber);
-            }) | RANGES::to<std::vector<std::string>>();
+            }) | ::ranges::to<std::vector<std::string>>();
 
             table->asyncGetRows(
                 numberList, [this, numberRange, callback = std::move(callback)](
@@ -1175,7 +1175,7 @@ void Ledger::asyncGetNonceList(bcos::protocol::BlockNumber _startNumber, int64_t
                     auto retMap =
                         std::make_shared<std::map<protocol::BlockNumber, protocol::NonceListPtr>>();
 
-                    for (auto const& [number, entry] : RANGES::views::zip(numberRange, entries))
+                    for (auto const& [number, entry] : ::ranges::views::zip(numberRange, entries))
                     {
                         try
                         {
@@ -1191,7 +1191,7 @@ void Ledger::asyncGetNonceList(bcos::protocol::BlockNumber _startNumber, int64_t
 
                             retMap->emplace(std::make_pair(
                                 number, std::make_shared<NonceList>(
-                                            block->nonceList() | RANGES::to<NonceList>())));
+                                            block->nonceList() | ::ranges::to<NonceList>())));
                         }
                         catch (std::exception const& e)
                         {
@@ -1259,9 +1259,9 @@ void Ledger::asyncGetNodeListByType(std::string_view const& _type,
             auto effectNumber = blockNumber + 1;
             auto nodeList = co_await ledger::getNodeList(*self.m_stateStorage);
 
-            auto filterNodeList = RANGES::views::filter(nodeList, [&](auto const& node) {
+            auto filterNodeList = ::ranges::views::filter(nodeList, [&](auto const& node) {
                 return (!type || node.type == *type) && node.enableNumber <= effectNumber;
-            }) | RANGES::to<std::vector>();
+            }) | ::ranges::to<std::vector>();
             callback(nullptr, std::move(filterNodeList));
         }
         catch (std::exception& e)
@@ -1683,7 +1683,7 @@ void Ledger::getTxProof(
                             bcos::crypto::merkle::Merkle merkle(cryptoSuite->hashImpl()->hasher());
                             auto hashesRange =
                                 _txList |
-                                RANGES::views::transform([](const Transaction::Ptr& transaction) {
+                                ::ranges::views::transform([](const Transaction::Ptr& transaction) {
                                     return transaction->hash();
                                 });
 
@@ -1732,7 +1732,7 @@ void Ledger::getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
                     bcos::crypto::merkle::Merkle merkle(cryptoSuite->hashImpl()->hasher());
                     auto hashesRange =
                         _receiptList |
-                        RANGES::views::transform(
+                        ::ranges::views::transform(
                             [](const TransactionReceipt::Ptr& receipt) { return receipt->hash(); });
 
                     auto merkleTree = getMerkleTreeFromCache(blockNumber, m_receiptProofMerkleCache,
@@ -1749,7 +1749,7 @@ void Ledger::getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
         });
 }
 
-static task::Task<void> setGenesisFeatures(RANGES::input_range auto const& featureSets,
+static task::Task<void> setGenesisFeatures(::ranges::input_range auto const& featureSets,
     const ledger::Features existsFeatures, auto& storage)
 {
     ledger::Features features = existsFeatures;
@@ -1764,7 +1764,7 @@ static task::Task<void> setGenesisFeatures(RANGES::input_range auto const& featu
 }
 
 static task::Task<void> importGenesisState(
-    RANGES::input_range auto const& allocs, auto& storage, const crypto::Hash& hashImpl)
+    ::ranges::input_range auto const& allocs, auto& storage, const crypto::Hash& hashImpl)
 {
     Features features;
     co_await ledger::readFromStorage(features, storage, 0);
@@ -1920,14 +1920,14 @@ bool Ledger::buildGenesisBlock(
     constexpr static auto moreTables = std::to_array<std::string_view>(
             {SYS_CODE_BINARY, SYS_VALUE, SYS_CONTRACT_ABI, SYS_VALUE});
         // clang-format on
-        RANGES::any_view<std::string_view, RANGES::category::mask | RANGES::category::sized>
+        ::ranges::any_view<std::string_view, ::ranges::category::mask | ::ranges::category::sized>
             tablesView(tables);
         if (versionNumber >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
         {
-            tablesView = RANGES::views::concat(tablesView, moreTables);
+            tablesView = ::ranges::views::concat(tablesView, moreTables);
         }
 
-        for (auto&& pair : tablesView | RANGES::views::chunk(2))
+        for (auto&& pair : tablesView | ::ranges::views::chunk(2))
         {
             auto tableName = pair[0];
             auto tableField = pair[1];
@@ -2080,12 +2080,12 @@ bool Ledger::buildGenesisBlock(
 
             // 按会议结论，executor v1默认打开balance_transfer
             // According to the meeting conclusion, executor v1 defaults to open balance_transfer
-            Entry transferBalance;
-            transferBalance.setObject(SystemConfigEntry{"1", 0});
+            Entry balanceTransfer;
+            balanceTransfer.setObject(SystemConfigEntry{"1", 0});
             co_await storage2::writeOne(*m_stateStorage,
                 executor_v1::StateKey(
                     SYS_CONFIG, magic_enum::enum_name(ledger::SystemConfig::balance_transfer)),
-                transferBalance);
+                balanceTransfer);
         }
 
         // write consensus node list
@@ -2098,8 +2098,8 @@ bool Ledger::buildGenesisBlock(
                 return lhs.nodeID->data() < rhs.nodeID->data();
             });
             co_await ledger::setNodeList(*m_stateStorage,
-                RANGES::views::concat(
-                    ledgerConfig.consensusNodeList() | RANGES::views::transform([&](auto node) {
+                ::ranges::views::concat(
+                    ledgerConfig.consensusNodeList() | ::ranges::views::transform([&](auto node) {
                         if (auto it = std::lower_bound(workingSealerList.begin(),
                                 workingSealerList.end(), node.nodeID,
                                 [](auto const& lhs, auto const& rhs) {
@@ -2117,7 +2117,7 @@ bool Ledger::buildGenesisBlock(
         else
         {
             co_await ledger::setNodeList(
-                *m_stateStorage, RANGES::views::concat(ledgerConfig.consensusNodeList(),
+                *m_stateStorage, ::ranges::views::concat(ledgerConfig.consensusNodeList(),
                                      ledgerConfig.observerNodeList()));
         }
 
@@ -2188,7 +2188,7 @@ bcos::consensus::ConsensusNodeList Ledger::selectWorkingSealer(
     }
 
     bcos::consensus::ConsensusNodeList workingSealerList =
-        RANGES::views::take(sealerList, selectedNum) | RANGES::to<std::vector>();
+        ::ranges::views::take(sealerList, selectedNum) | ::ranges::to<std::vector>();
     for (auto& node : workingSealerList)
     {
         LEDGER_LOG(INFO) << LOG_DESC("selectWorkingSealer") << LOG_KV("nodeID", node.nodeID->hex())
@@ -2213,7 +2213,7 @@ void Ledger::createFileSystemTables(uint32_t blockVersion)
 
     Entry rootSubEntry;
     std::map<std::string, std::string> rootSubMap;
-    for (const auto& sub : rootSubNames | RANGES::views::transform(
+    for (const auto& sub : rootSubNames | ::ranges::views::transform(
                                               [](std::string_view const& sub) -> std::string_view {
                                                   return sub.substr(1);
                                               }))
@@ -2240,7 +2240,7 @@ void Ledger::createFileSystemTables(uint32_t blockVersion)
     std::map<std::string, std::string> sysSubMap;
     for (const auto& contract :
         precompiled::BFS_SYS_SUBS_V30 |
-            RANGES::views::transform([](std::string_view const& sub) -> std::string_view {
+            ::ranges::views::transform([](std::string_view const& sub) -> std::string_view {
                 return sub.substr(tool::FS_SYS_BIN.length() + 1);
             }))
     {
@@ -2335,10 +2335,10 @@ task::Task<bcos::ledger::SystemConfigs> Ledger::fetchAllSystemConfigs(
 {
     auto allConfigKeys = ledger::SystemConfigs::supportConfigs();
     auto entries = co_await storage2::readSome(*m_stateStorage,
-        allConfigKeys | RANGES::views::transform(
+        allConfigKeys | ::ranges::views::transform(
                             [](auto&& key) { return executor_v1::StateKeyView(SYS_CONFIG, key); }));
     bcos::ledger::SystemConfigs configs;
-    for (auto&& [key, entry] : RANGES::views::zip(allConfigKeys, entries))
+    for (auto&& [key, entry] : ::ranges::views::zip(allConfigKeys, entries))
     {
         if (entry)
         {

@@ -32,7 +32,9 @@
 #include "StorageInitializer.h"
 #include "bcos-executor/src/executor/SwitchExecutorManager.h"
 #include "bcos-framework/dispatcher/SchedulerInterface.h"
+#include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/storage/StorageInterface.h"
+#include "bcos-ledger/LedgerMethods.h"
 #include "bcos-scheduler/src/TarsExecutorManager.h"
 #include "bcos-storage/RocksDBStorage.h"
 #include "bcos-task/Wait.h"
@@ -276,7 +278,16 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             {std::make_shared<bcos::scheduler::SchedulerManager>(
                  schedulerSeq, factory, executorManager),
                 m_baselineSchedulerHolder()}));
-    m_scheduler->setVersion(m_nodeConfig->executorVersion(), {});
+
+    auto executorVersion = m_nodeConfig->executorVersion();
+    if (auto versionConfig = task::syncWait(ledger::getSystemConfig(
+            *m_ledger, magic_enum::enum_name(ledger::SystemConfig::executor_version))))
+    {
+        executorVersion = boost::lexical_cast<int>(std::get<0>(*versionConfig));
+        INITIALIZER_LOG(INFO) << "Use ledger executor version: " << executorVersion;
+    }
+    INITIALIZER_LOG(INFO) << "Set executor version to: " << executorVersion;
+    m_scheduler->setVersion(executorVersion, {});
 
     if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
     {
