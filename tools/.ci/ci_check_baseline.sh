@@ -84,6 +84,7 @@ init_baseline()
     # 将node2、node3替换为baseline scheduler, 这样不一致时可立即发现
     # Replace node2 and node3 with baseline scheduler, so that inconsistencies can be detected immediately
     perl -p -i -e 's/version=0/version=1/g' nodes/127.0.0.1/node*/config.genesis
+    # perl -p -i -e 's/level=info/level=trace/g' nodes/127.0.0.1/node*/config.ini
     cd nodes/127.0.0.1 && wait_and_start
 }
 
@@ -110,7 +111,7 @@ expand_node()
     LOG_INFO "expand node success..."
     bash ${current_path}/nodes/127.0.0.1/node4/start.sh
 
-    perl -p -i -e 's/baseline_scheduler=false/baseline_scheduler=true/g' ${current_path}/nodes/127.0.0.1/node4/config.ini
+    perl -p -i -e 's/version=0/version=1/g' ${current_path}/nodes/127.0.0.1/node4/config.genesis
 
     sleep 10
     LOG_INFO "check expand node status..."

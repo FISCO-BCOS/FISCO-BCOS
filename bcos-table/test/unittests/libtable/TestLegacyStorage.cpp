@@ -41,7 +41,7 @@ BOOST_AUTO_TEST_CASE(getPrimaryKeys)
 {
     bcos::task::syncWait([this]() -> bcos::task::Task<void> {
         co_await bcos::storage2::writeSome(
-            storage, RANGES::views::iota(0, 10) | RANGES::views::transform([](int i) {
+            storage, ::ranges::views::iota(0, 10) | RANGES::views::transform([](int i) {
                 auto key = bcos::executor_v1::StateKey("t_test", std::to_string(i));
                 return std::make_tuple(key, bcos::storage::Entry("t_test"));
             }));
