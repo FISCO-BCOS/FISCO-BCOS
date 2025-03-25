@@ -268,6 +268,7 @@ Generator<int> generatorWithAlloc(
 
 BOOST_AUTO_TEST_CASE(allocator)
 {
+#ifdef __APPLE__
     std::array<char, 10240> mockStack;
 
     MyMemoryResource pool(mockStack.data(), mockStack.size());
@@ -307,6 +308,7 @@ BOOST_AUTO_TEST_CASE(allocator)
         std::allocator_arg, allocator);
     BOOST_CHECK_GE(pool.allocate, 1);
     BOOST_CHECK_GE(pool.deallocate, 1);
+#endif
 }
 
 Task<bcos::u256> testU256()

@@ -582,7 +582,6 @@ void BalancePrecompiled::listCaller(
     PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number()) << LOG_BADGE("BalancePrecompiled")
                           << LOG_DESC("listCaller success")
                           << LOG_KV("addresses size", addresses.size());
-    PRECOMPILED_LOG(INFO) << "Addresses: " << addresses;
     auto encodeCallers = codec.encode(addresses);
     _callParameters->setExecResult(std::move(encodeCallers));
 }
