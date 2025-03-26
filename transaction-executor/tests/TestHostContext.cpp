@@ -33,8 +33,8 @@
 
 using namespace bcos::task;
 using namespace bcos::storage2;
-using namespace bcos::transaction_executor;
-using namespace bcos::transaction_executor::hostcontext;
+using namespace bcos::executor_v1;
+using namespace bcos::executor_v1::hostcontext;
 
 class TestHostContextFixture
 {
@@ -43,8 +43,8 @@ public:
     MutableStorage storage;
     Rollbackable<decltype(storage)> rollbackableStorage;
     using MemoryStorageType =
-        bcos::storage2::memory_storage::MemoryStorage<bcos::transaction_executor::StateKey,
-            bcos::transaction_executor::StateValue,
+        bcos::storage2::memory_storage::MemoryStorage<bcos::executor_v1::StateKey,
+            bcos::executor_v1::StateValue,
             bcos::storage2::memory_storage::Attribute(
                 bcos::storage2::memory_storage::ORDERED |
                 bcos::storage2::memory_storage::LOGICAL_DELETION)>;
@@ -89,7 +89,7 @@ public:
 
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
             hostContext(rollbackableStorage, rollbackableTransientStorage, blockHeader, message,
-                origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
+                origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl, false, 0,
                 bcos::task::syncWait);
         syncWait(hostContext.prepare());
         auto result = syncWait(hostContext.execute());
@@ -132,7 +132,7 @@ public:
 
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
             hostContext(rollbackableStorage, rollbackableTransientStorage, blockHeader, message,
-                origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
+                origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl, false, 0,
                 bcos::task::syncWait);
         co_await hostContext.prepare();
         auto result = co_await hostContext.execute();
@@ -181,7 +181,8 @@ public:
 
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
             hostContext(rollbackableStorage, rollbackableTransientStorage, header, message, origin,
-                "", 0, seq, *precompiledManager, ledgerConfig, hashImpl, bcos::task::syncWait);
+                "", 0, seq, *precompiledManager, ledgerConfig, hashImpl, false, 0,
+                bcos::task::syncWait);
         co_await hostContext.prepare();
         BOOST_CHECK_NO_THROW(auto result = co_await hostContext.execute());
     }
@@ -318,32 +319,6 @@ BOOST_AUTO_TEST_CASE(delegateCall)
     }());
 }
 
-BOOST_AUTO_TEST_CASE(log)
-{
-    // syncWait([this]() -> Task<void> {
-    // auto result1 = co_await call("setInt(int256)", bcos::s256(10000));
-    // auto result2 = co_await call("setString(string)", std::string("Hello world,
-    // fisco-bcos!")); auto result3 = co_await call("logOut()");
-
-    // BOOST_CHECK_EQUAL(result1.status_code, 0);
-    // BOOST_CHECK_EQUAL(result2.status_code, 0);
-    // BOOST_CHECK_EQUAL(result3.status_code, 0);
-
-    // bcos::s256 getIntResult = -1;
-    // std::string out;
-    // bcos::codec::abi::ContractABICodec abiCodec(
-    //     bcos::transaction_executor::GlobalHashImpl::g_hashImpl);
-
-    // abiCodec.abiOut(bcos::bytesConstRef(.output_data, result4.output_size), out);
-    // BOOST_CHECK_EQUAL(out, "Hello world, fisco-bcos!");
-
-    // releaseResult(result1);
-    // releaseResult(result2);
-
-    //     co_return;
-    // }());
-}
-
 BOOST_AUTO_TEST_CASE(precompiled)
 {
     // Use ledger to init storage
@@ -397,7 +372,7 @@ BOOST_AUTO_TEST_CASE(precompiled)
 
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
             hostContext(rollbackableStorage, rollbackableTransientStorage, blockHeader, message,
-                origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
+                origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl, false, 0,
                 bcos::task::syncWait);
         syncWait(hostContext.prepare());
 
@@ -414,7 +389,7 @@ BOOST_AUTO_TEST_CASE(precompiled)
         features.set(bcos::ledger::Features::Flag::feature_sharding);
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
             hostContext2(rollbackableStorage, rollbackableTransientStorage, blockHeader, message,
-                origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
+                origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl, false, 0,
                 bcos::task::syncWait);
         syncWait(hostContext2.prepare());
         BOOST_CHECK_NO_THROW(result.emplace(syncWait(hostContext2.execute())));
@@ -472,7 +447,7 @@ BOOST_AUTO_TEST_CASE(codeSize)
 
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
             codeSizeHostContext(rollbackableStorage, rollbackableTransientStorage, blockHeader,
-                message, {}, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
+                message, {}, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl, false, 0,
                 bcos::task::syncWait);
 
         auto builtinAddress = bcos::unhexAddress("0000000000000000000000000000000000000001");
@@ -502,6 +477,7 @@ BOOST_AUTO_TEST_CASE(transferBalance)
         message.recipient = bcos::unhexAddress("0000000000000000000000000000000000000002");
         message.value = bcos::toEvmC(bcos::u256(1000));
         message.kind = EVMC_CALL;
+        message.gas = 21000;
 
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> senderAccount(
             rollbackableStorage, message.sender, false);
@@ -513,23 +489,17 @@ BOOST_AUTO_TEST_CASE(transferBalance)
         evmc_address origin{};
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
             transferHostContext(rollbackableStorage, rollbackableTransientStorage, blockHeader,
-                message, origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
+                message, origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl, false, 0,
                 bcos::task::syncWait);
         co_await transferHostContext.prepare();
         auto evmResult = co_await transferHostContext.execute();
         BOOST_CHECK_EQUAL(evmResult.status_code, EVMC_SUCCESS);
+        BOOST_CHECK_EQUAL(evmResult.gas_left, 0);
         BOOST_CHECK_EQUAL(co_await bcos::ledger::account::balance(senderAccount), bcos::u256(1001));
         BOOST_CHECK_EQUAL(co_await bcos::ledger::account::balance(recipientAccount), bcos::u256(0));
 
-        message.gas = 21000;
-        evmResult = co_await transferHostContext.execute();
-        BOOST_CHECK_EQUAL(evmResult.status_code, EVMC_SUCCESS);
-        BOOST_CHECK_EQUAL(evmResult.gas_left, 21000);
-
-        auto features = ledgerConfig.features();
-        features.set(bcos::ledger::Features::Flag::feature_balance);
-        ledgerConfig.setFeatures(features);
-
+        ledgerConfig.setBalanceTransfer(true);
+        transferHostContext.mutableMessage().gas = 21000;
         evmResult = co_await transferHostContext.execute();
         BOOST_CHECK_EQUAL(evmResult.status_code, EVMC_SUCCESS);
         BOOST_CHECK_EQUAL(co_await bcos::ledger::account::balance(senderAccount), bcos::u256(1));

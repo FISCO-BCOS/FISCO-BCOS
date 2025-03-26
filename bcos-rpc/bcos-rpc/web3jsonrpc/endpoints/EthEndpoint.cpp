@@ -435,13 +435,20 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, error->errorMessage()));
     }
+    auto encodeTxHash = web3Tx.txHash();
     auto tarsTx = web3Tx.takeToTarsTransaction();
 
     auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
         [m_tx = std::move(tarsTx)]() mutable { return &m_tx; });
     // for web3.eth.sendRawTransaction, return the hash of raw transaction
-    auto web3TxHash = bcos::crypto::keccak256Hash(bcos::ref(rawTxBytes));
-    tx->mutableInner().extraTransactionHash.assign(web3TxHash.begin(), web3TxHash.end());
+    if (auto web3TxHash = bcos::crypto::keccak256Hash(bcos::ref(rawTxBytes));
+        c_fileLogLevel == DEBUG && web3TxHash != encodeTxHash) [[unlikely]]
+    {
+        WEB3_LOG(DEBUG) << "sendRawTransaction hash not match"
+                        << LOG_KV("inputHash", web3TxHash.hexPrefixed())
+                        << LOG_KV("encodedHash", encodeTxHash.hexPrefixed());
+    }
+    tx->mutableInner().extraTransactionHash.assign(encodeTxHash.begin(), encodeTxHash.end());
 
     if (c_fileLogLevel == TRACE)
     {
@@ -449,10 +456,9 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
     }
     co_await txpool->broadcastTransaction(*tx);
     auto const txResult = co_await txpool->submitTransaction(std::move(tx));
-    auto const hash = std::move(web3TxHash);
     if (txResult->status() == 0)
     {
-        Json::Value result = hash.hexPrefixed();
+        Json::Value result = encodeTxHash.hexPrefixed();
         buildJsonContent(result, response);
     }
     else
@@ -460,7 +466,7 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
         protocol::TransactionStatus status =
             static_cast<protocol::TransactionStatus>(txResult->status());
         Json::Value errorData = Json::objectValue;
-        errorData["txHash"] = hash.hexPrefixed();
+        errorData["txHash"] = encodeTxHash.hexPrefixed();
         auto output = toHex(txResult->transactionReceipt()->output(), "0x");
         auto msg = fmt::format("VM Exception while processing transaction, reason: {}, msg: {}",
             protocol::toString(status), output);
@@ -472,7 +478,8 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
     {
         WEB3_LOG(TRACE) << LOG_DESC("sendRawTransaction finished")
                         << LOG_KV("status", txResult->status())
-                        << LOG_KV("hash", hash.hexPrefixed()) << LOG_KV("rsp", printJson(response));
+                        << LOG_KV("hash", encodeTxHash.hexPrefixed())
+                        << LOG_KV("rsp", printJson(response));
     }
     co_return;
 }

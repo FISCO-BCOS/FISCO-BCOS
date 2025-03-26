@@ -1,5 +1,6 @@
 #include "LedgerMethods.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
+#include "bcos-framework/ledger/SystemConfigs.h"
 #include "bcos-tool/VersionConverter.h"
 #include <bcos-executor/src/Common.h>
 #include <boost/exception/diagnostic_information.hpp>
@@ -17,7 +18,6 @@ bcos::task::Task<void> bcos::ledger::prewriteBlockToStorage(LedgerInterface& led
         decltype(block) m_block;
         bool m_withTransactionsAndReceipts{};
         decltype(storage) m_storage;
-
         Error::Ptr m_error;
 
         constexpr static bool await_ready() noexcept { return false; }
@@ -407,7 +407,6 @@ bcos::task::Task<void> bcos::ledger::tag_invoke(
     }) | ::ranges::to<std::vector>());
 
     auto blockNumber = co_await getCurrentBlockNumber(ledger);
-
     auto sysConfig = co_await ledger.fetchAllSystemConfigs(blockNumber + 1);
 
     if (auto txLimitConfig = sysConfig.get(ledger::SystemConfig::tx_count_limit))
@@ -463,6 +462,14 @@ bcos::task::Task<void> bcos::ledger::tag_invoke(
     ledgerConfig.setAuthCheckStatus(boost::lexical_cast<uint32_t>(auth.first));
     auto [chainId, _] = sysConfig.getOrDefault(ledger::SystemConfig::web3_chain_id, "0");
     ledgerConfig.setChainId(bcos::toEvmC(boost::lexical_cast<u256>(chainId)));
+    ledgerConfig.setBalanceTransfer(
+        sysConfig.getOrDefault(ledger::SystemConfig::balance_transfer, "0").first != "0");
+
+    if (auto executorVersion = sysConfig.get(ledger::SystemConfig::executor_version);
+        executorVersion)
+    {
+        ledgerConfig.setExecutorVersion(boost::lexical_cast<int>(executorVersion.value().first));
+    }
 }
 
 bcos::task::Task<bcos::ledger::Features> bcos::ledger::tag_invoke(

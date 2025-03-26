@@ -1,5 +1,5 @@
-file(GLOB SRC_LIST "*.cpp")
-file(GLOB HEADERS "*.h")
+file(GLOB_RECURSE SRC_LIST "*.cpp")
+file(GLOB_RECURSE HEADERS "*.h")
 aux_source_directory(. SRC_LIST)
 include_directories(.)
 

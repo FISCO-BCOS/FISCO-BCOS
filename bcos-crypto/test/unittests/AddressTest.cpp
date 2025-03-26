@@ -57,13 +57,13 @@ BOOST_AUTO_TEST_CASE(testCreatLegacyEVMAddress)
 {
     {
         auto sender = fromHex("fbe0afcd7658ba86be41922059dd879c192d4c73"sv);
-        auto newAddress = newLegacyEVMAddress(ref(sender), u256(0));
+        auto newAddress = newLegacyEVMAddressString(ref(sender), u256(0));
         BOOST_CHECK_EQUAL(newAddress, "c669eaad75042be84daaf9b461b0e868b9ac1871");
     }
 
     {
         auto sender = fromHex("f39Fd6e51aad88F6F4ce6aB8827279cffFb92266"sv);
-        auto newAddress = newLegacyEVMAddress(ref(sender), u256(0));
+        auto newAddress = newLegacyEVMAddressString(ref(sender), u256(0));
         BOOST_CHECK_EQUAL(newAddress, "5fbdb2315678afecb367f032d93f642f64180aa3");
     }
 
@@ -71,7 +71,7 @@ BOOST_AUTO_TEST_CASE(testCreatLegacyEVMAddress)
     {
         auto sender = fromHex("f39Fd6e51aad88F6F4ce6aB8827279cffFb92266"sv);
         auto nonce = "0";
-        auto newAddress = newLegacyEVMAddress(ref(sender), nonce);
+        auto newAddress = newLegacyEVMAddressString(ref(sender), nonce);
         BOOST_CHECK_EQUAL(newAddress, "5fbdb2315678afecb367f032d93f642f64180aa3");
     }
 }

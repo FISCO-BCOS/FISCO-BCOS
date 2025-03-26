@@ -34,9 +34,9 @@ std::tuple<bool, std::string> JsonValidator::validate(const Json::Value& root)
 
 std::tuple<bool, std::string> JsonValidator::checkRequestFields(const Json::Value& root)
 {
-    // flag for 4 fileds, maybe twice?
-    auto flag = 0x1111;
-    for (auto item = root.begin(); item != root.end(); item++)
+    // flag for 4 fields
+    auto flag = 0b111;
+    for (auto item = root.begin(); item != root.end(); ++item)
     {
         if (item.name() == "jsonrpc")
         {
@@ -44,7 +44,7 @@ std::tuple<bool, std::string> JsonValidator::checkRequestFields(const Json::Valu
             {
                 return {false, "Invalid field: " + item.name()};
             }
-            flag &= 0x1110;
+            flag &= 0b110;
         }
         else if (item.name() == "method")
         {
@@ -52,7 +52,7 @@ std::tuple<bool, std::string> JsonValidator::checkRequestFields(const Json::Valu
             {
                 return {false, "Invalid field: " + item.name()};
             }
-            flag &= 0x1101;
+            flag &= 0b101;
         }
         else if (item.name() == "params")
         {
@@ -60,7 +60,6 @@ std::tuple<bool, std::string> JsonValidator::checkRequestFields(const Json::Valu
             {
                 return {false, "Invalid field: " + item.name()};
             }
-            flag &= 0x1011;
         }
         else if (item.name() == "id")
         {
@@ -79,7 +78,7 @@ std::tuple<bool, std::string> JsonValidator::checkRequestFields(const Json::Valu
                     return {false, "Invalid field: " + item.name()};
                 }
             }
-            flag &= 0x0111;
+            flag &= 0b011;
         }
         else
         {

@@ -116,7 +116,7 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
             if (m_blockContext.features().get(ledger::Features::Flag::feature_evm_address))
             {
                 auto senderBytes = fromHex(input->senderAddress);
-                newAddress = bcos::newLegacyEVMAddress(ref(senderBytes), input->nonce);
+                newAddress = bcos::newLegacyEVMAddressString(ref(senderBytes), input->nonce);
             }
             else
             {

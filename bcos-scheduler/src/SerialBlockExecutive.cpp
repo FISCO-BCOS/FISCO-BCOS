@@ -185,7 +185,7 @@ void SerialBlockExecutive::serialExecute(
                     // EOA create contract
                     auto const sender = tx->origin();
                     Address senderAddress(sender, Address::FromHex);
-                    address = bcos::newLegacyEVMAddress(senderAddress.ref(), tx->nonce());
+                    address = bcos::newLegacyEVMAddressString(senderAddress.ref(), tx->nonce());
                 }
                 else
                 {
@@ -286,7 +286,7 @@ void SerialBlockExecutive::onExecuteFinish(
         SERIAL_EXECUTE_LOG(DEBUG) << BLOCK_NUMBER(number()) << "2.Receipt:\t [^^]"
                                   << LOG_KV("receiptsSize", m_executiveResults.size())
                                   << LOG_KV("blockNumber", number());
+        m_executor->updateEoaNonce(m_web3NonceMap);
     }
-    m_executor->updateEoaNonce(m_web3NonceMap);
     BlockExecutive::onExecuteFinish(std::move(callback));
 }

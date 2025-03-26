@@ -29,6 +29,7 @@
 #include "bcos-framework/ledger/GenesisConfig.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/ledger/SystemConfigs.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/storage/LegacyStorageMethods.h"
@@ -1326,7 +1327,7 @@ BOOST_AUTO_TEST_CASE(getLedgerConfig)
     task::syncWait([this]() -> task::Task<void> {
         initFixture();
 
-        using KeyType = transaction_executor::StateKey;
+        using KeyType = executor_v1::StateKey;
         Entry value;
         SystemConfigEntry config;
 
@@ -1381,7 +1382,6 @@ BOOST_AUTO_TEST_CASE(getLedgerConfig)
         BOOST_CHECK_EQUAL(std::get<0>(ledgerConfig->epochSealerNum()), 12345);
         BOOST_CHECK_EQUAL(std::get<0>(ledgerConfig->epochBlockNum()), 1000);
         BOOST_CHECK_EQUAL(ledgerConfig->notifyRotateFlagInfo(), 0);
-        co_return;
     }());
 }
 
@@ -1428,11 +1428,11 @@ BOOST_AUTO_TEST_CASE(genesisBlockWithAllocs)
         for (auto i : RANGES::views::iota(0, 10))
         {
             auto tableName = fmt::format("{}{:0>40}", SYS_DIRECTORY::USER_APPS, i);
-            auto codeHashEntry = co_await storage2::readOne(*storage,
-                transaction_executor::StateKeyView(tableName, ACCOUNT_TABLE_FIELDS::CODE_HASH));
+            auto codeHashEntry = co_await storage2::readOne(
+                *storage, executor_v1::StateKeyView(tableName, ACCOUNT_TABLE_FIELDS::CODE_HASH));
 
-            auto codeEntry = co_await storage2::readOne(*storage,
-                transaction_executor::StateKeyView(ledger::SYS_CODE_BINARY, codeHashEntry->get()));
+            auto codeEntry = co_await storage2::readOne(
+                *storage, executor_v1::StateKeyView(ledger::SYS_CODE_BINARY, codeHashEntry->get()));
             BOOST_CHECK_EQUAL(codeEntry->get(), code);
             auto codeView = codeEntry->get();
             auto codeHash = hashImpl->hash(
@@ -1441,6 +1441,32 @@ BOOST_AUTO_TEST_CASE(genesisBlockWithAllocs)
             BOOST_CHECK_EQUAL(codeHashEntry->get(),
                 std::string_view((const char*)codeHashBytes.data(), codeHashBytes.size()));
         }
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(genesisExecutorVersion)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        auto hashImpl = std::make_shared<Keccak256>();
+        auto memoryStorage = std::make_shared<StateStorage>(nullptr, false);
+        auto storage = std::make_shared<MockStorage>(memoryStorage);
+        auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+
+        LedgerConfig param;
+        GenesisConfig genesisConfig;
+
+        genesisConfig.m_executorVersion = 10086;
+        co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param);
+
+        auto value = co_await storage2::readOne(
+            *storage, executor_v1::StateKeyView(ledger::SYS_CONFIG,
+                          magic_enum::enum_name(ledger::SystemConfig::executor_version)));
+        BOOST_REQUIRE(value);
+
+        ledger::SystemConfigEntry entry;
+        value->getObject(entry);
+        using namespace std::string_view_literals;
+        BOOST_CHECK_EQUAL(std::get<0>(entry), "10086"sv);
     }());
 }
 
@@ -1468,16 +1494,16 @@ BOOST_AUTO_TEST_CASE(replaceBinary)
         co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param);
 
         // Delete the bugfix_statestorage_hash
-        BOOST_CHECK(co_await storage2::existsOne(*storage,
-            transaction_executor::StateKeyView(ledger::SYS_CONFIG, "bugfix_statestorage_hash")));
+        BOOST_CHECK(co_await storage2::existsOne(
+            *storage, executor_v1::StateKeyView(ledger::SYS_CONFIG, "bugfix_statestorage_hash")));
         Entry entry;
         entry.setStatus(Entry::DELETED);
-        co_await storage2::writeOne(*storage,
-            transaction_executor::StateKey(ledger::SYS_CONFIG, "bugfix_statestorage_hash"), entry);
+        co_await storage2::writeOne(
+            *storage, executor_v1::StateKey(ledger::SYS_CONFIG, "bugfix_statestorage_hash"), entry);
 
         co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param);
-        auto result = co_await storage2::readOne(*storage,
-            transaction_executor::StateKeyView(ledger::SYS_CONFIG, "bugfix_statestorage_hash"));
+        auto result = co_await storage2::readOne(
+            *storage, executor_v1::StateKeyView(ledger::SYS_CONFIG, "bugfix_statestorage_hash"));
         BOOST_REQUIRE(result);
     }());
 }
@@ -1495,14 +1521,14 @@ BOOST_AUTO_TEST_CASE(nonceList)
         block->setNonceList(nonceList);
 
         co_await storage2::writeOne(*storage,
-            transaction_executor::StateKey(SYS_TABLES, SYS_BLOCK_NUMBER_2_NONCES),
+            executor_v1::StateKey(SYS_TABLES, SYS_BLOCK_NUMBER_2_NONCES),
             storage::Entry{std::string_view{"value"}});
 
         bytes buffer;
         block->encode(buffer);
         Entry nonceEntry{buffer};
         co_await storage2::writeOne(
-            *storage, transaction_executor::StateKey(SYS_BLOCK_NUMBER_2_NONCES, "1"), nonceEntry);
+            *storage, executor_v1::StateKey(SYS_BLOCK_NUMBER_2_NONCES, "1"), nonceEntry);
 
         auto gotNonceList = co_await ledger::getNonceList(*ledger, 1, 1);
         BOOST_REQUIRE(gotNonceList);

@@ -14,7 +14,7 @@
 #include <type_traits>
 #include <variant>
 
-namespace bcos::transaction_scheduler
+namespace bcos::scheduler_v1
 {
 
 // clang-format off
@@ -272,7 +272,7 @@ public:
         using RangeValue = std::optional<std::tuple<Key, Value>>;
         std::vector<std::tuple<StorageIterator, RangeValue>> m_iterators;
 
-        task::Task<void> forwardIterators(auto&& iterators)
+        task::Task<void> forwardIterators(::ranges::range auto&& iterators)
         {
             for (auto& it : iterators)
             {
@@ -281,8 +281,7 @@ public:
                     bcos::recursiveLambda(
                         [&](auto const& self, auto& input) -> task::Task<RangeValue> {
                             RangeValue item;
-                            auto rangeValue = co_await input.next();
-                            if (rangeValue)
+                            if (auto rangeValue = co_await input.next(); rangeValue)
                             {
                                 auto&& [key, value] = *rangeValue;
                                 if constexpr (std::is_pointer_v<std::decay_t<decltype(value)>>)
@@ -335,7 +334,7 @@ public:
             });
             if (::ranges::empty(iterators))
             {
-                co_return std::nullopt;
+                co_return {};
             }
 
             std::vector<std::tuple<StorageIterator, RangeValue>*> minIterators;
@@ -364,9 +363,7 @@ public:
             }
 
             RangeValue result = std::get<1>(*minIterators[0]);
-            co_await forwardIterators(
-                minIterators |
-                ::ranges::views::transform([](auto* iterator) -> auto& { return *iterator; }));
+            co_await forwardIterators(::ranges::views::indirect(minIterators));
             co_return result;
         };
     };
@@ -539,4 +536,4 @@ private:
     }
 };
 
-}  // namespace bcos::transaction_scheduler
+}  // namespace bcos::scheduler_v1

@@ -26,6 +26,7 @@
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/Ledger.h"
+#include "bcos-framework/ledger/SystemConfigs.h"
 #include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
@@ -133,7 +134,7 @@ task::Task<std::optional<storage::Entry>> Ledger::getStorageAt(
     auto const contractTableName = getContractTableName(SYS_DIRECTORY::USER_APPS, _address);
     auto const stateStorage = getStateStorage();
     co_return co_await bcos::storage2::readOne(
-        *stateStorage, transaction_executor::StateKeyView{contractTableName, _key});
+        *stateStorage, executor_v1::StateKeyView{contractTableName, _key});
 }
 
 void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
@@ -1153,10 +1154,10 @@ void Ledger::asyncGetNonceList(bcos::protocol::BlockNumber _startNumber, int64_t
                 return;
             }
 
-            auto numberRange = RANGES::views::iota(_startNumber, _startNumber + _offset + 1);
-            auto numberList = numberRange | RANGES::views::transform([](BlockNumber blockNumber) {
+            auto numberRange = ::ranges::views::iota(_startNumber, _startNumber + _offset + 1);
+            auto numberList = numberRange | ::ranges::views::transform([](BlockNumber blockNumber) {
                 return boost::lexical_cast<std::string>(blockNumber);
-            }) | RANGES::to<std::vector<std::string>>();
+            }) | ::ranges::to<std::vector<std::string>>();
 
             table->asyncGetRows(
                 numberList, [this, numberRange, callback = std::move(callback)](
@@ -1174,7 +1175,7 @@ void Ledger::asyncGetNonceList(bcos::protocol::BlockNumber _startNumber, int64_t
                     auto retMap =
                         std::make_shared<std::map<protocol::BlockNumber, protocol::NonceListPtr>>();
 
-                    for (auto const& [number, entry] : RANGES::views::zip(numberRange, entries))
+                    for (auto const& [number, entry] : ::ranges::views::zip(numberRange, entries))
                     {
                         try
                         {
@@ -1190,7 +1191,7 @@ void Ledger::asyncGetNonceList(bcos::protocol::BlockNumber _startNumber, int64_t
 
                             retMap->emplace(std::make_pair(
                                 number, std::make_shared<NonceList>(
-                                            block->nonceList() | RANGES::to<NonceList>())));
+                                            block->nonceList() | ::ranges::to<NonceList>())));
                         }
                         catch (std::exception const& e)
                         {
@@ -1258,9 +1259,9 @@ void Ledger::asyncGetNodeListByType(std::string_view const& _type,
             auto effectNumber = blockNumber + 1;
             auto nodeList = co_await ledger::getNodeList(*self.m_stateStorage);
 
-            auto filterNodeList = RANGES::views::filter(nodeList, [&](auto const& node) {
+            auto filterNodeList = ::ranges::views::filter(nodeList, [&](auto const& node) {
                 return (!type || node.type == *type) && node.enableNumber <= effectNumber;
-            }) | RANGES::to<std::vector>();
+            }) | ::ranges::to<std::vector>();
             callback(nullptr, std::move(filterNodeList));
         }
         catch (std::exception& e)
@@ -1615,7 +1616,7 @@ static std::shared_ptr<std::vector<h256>> getMerkleTreeFromCache(int64_t blockNu
         auto newMerkleTree = std::make_shared<std::vector<h256>>();
         // Notice: generateMerkle will use tbb thread. Should not place in RecursiveGuard below to
         // avoid locking each other in tbb thread pool and RecursiveGuard
-        merkle.template generateMerkle(hashesRange, *newMerkleTree);
+        merkle.generateMerkle(hashesRange, *newMerkleTree);
         {
             RecursiveGuard l(mutex);
             if (!merkleTree->empty())
@@ -1682,14 +1683,14 @@ void Ledger::getTxProof(
                             bcos::crypto::merkle::Merkle merkle(cryptoSuite->hashImpl()->hasher());
                             auto hashesRange =
                                 _txList |
-                                RANGES::views::transform([](const Transaction::Ptr& transaction) {
+                                ::ranges::views::transform([](const Transaction::Ptr& transaction) {
                                     return transaction->hash();
                                 });
 
                             auto merkleTree =
                                 getMerkleTreeFromCache(blockNumber, m_txProofMerkleCache,
                                     m_txMerkleMtx, "getTxProof", merkle, hashesRange);
-                            merkle.template generateMerkleProof(
+                            merkle.generateMerkleProof(
                                 hashesRange, *merkleTree, _txHash, *merkleProofPtr);
 
                             LEDGER_LOG(TRACE)
@@ -1731,13 +1732,13 @@ void Ledger::getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
                     bcos::crypto::merkle::Merkle merkle(cryptoSuite->hashImpl()->hasher());
                     auto hashesRange =
                         _receiptList |
-                        RANGES::views::transform(
+                        ::ranges::views::transform(
                             [](const TransactionReceipt::Ptr& receipt) { return receipt->hash(); });
 
                     auto merkleTree = getMerkleTreeFromCache(blockNumber, m_receiptProofMerkleCache,
                         m_receiptMerkleMtx, "getReceiptProof", merkle, hashesRange);
 
-                    merkle.template generateMerkleProof(
+                    merkle.generateMerkleProof(
                         hashesRange, *merkleTree, receiptHash, *merkleProofPtr);
 
                     LEDGER_LOG(TRACE)
@@ -1748,7 +1749,7 @@ void Ledger::getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
         });
 }
 
-static task::Task<void> setGenesisFeatures(RANGES::input_range auto const& featureSets,
+static task::Task<void> setGenesisFeatures(::ranges::input_range auto const& featureSets,
     const ledger::Features existsFeatures, auto& storage)
 {
     ledger::Features features = existsFeatures;
@@ -1763,7 +1764,7 @@ static task::Task<void> setGenesisFeatures(RANGES::input_range auto const& featu
 }
 
 static task::Task<void> importGenesisState(
-    RANGES::input_range auto const& allocs, auto& storage, const crypto::Hash& hashImpl)
+    ::ranges::input_range auto const& allocs, auto& storage, const crypto::Hash& hashImpl)
 {
     Features features;
     co_await ledger::readFromStorage(features, storage, 0);
@@ -1827,30 +1828,16 @@ bool Ledger::buildGenesisBlock(
                               << LOG_KV("gasLimitMin", TX_GAS_LIMIT_MIN);
             co_return false;
         }
-        auto genesisBlockHash =
-            task::syncWait(ledger::getBlockHash(*m_stateStorage, 0, fromStorage));
+        auto genesisBlockHash = co_await ledger::getBlockHash(*m_stateStorage, 0, fromStorage);
         auto genesisData = generateGenesisData(genesis, ledgerConfig);
         if (genesisBlockHash)
         {
             // genesis block exists, quit
             LEDGER_LOG(INFO) << LOG_DESC("[#buildGenesisBlock] success, block exists");
             std::promise<protocol::BlockHeader::Ptr> blockHeaderFuture;
-            // get genesisBlockHeader
-            asyncGetBlockDataByNumber(
-                0, HEADER, [&blockHeaderFuture](Error::Ptr error, Block::Ptr block) {
-                    if (error)
-                    {
-                        LEDGER_LOG(INFO) << "Get genesisBlockHeader from storage failed";
-                        blockHeaderFuture.set_value(nullptr);
-                    }
-                    else
-                    {
-                        blockHeaderFuture.set_value(block->blockHeader());
-                    }
-                });
-            bcos::protocol::BlockHeader::Ptr m_genesisBlockHeader =
-                blockHeaderFuture.get_future().get();
-            auto existsGenesisData = m_genesisBlockHeader->extraData().toStringView();
+            auto block = co_await ledger::getBlockData(*this, 0, HEADER);
+            bcos::protocol::BlockHeader::Ptr genesisBlockHeader = block->blockHeader();
+            auto existsGenesisData = genesisBlockHeader->extraData().toStringView();
 
             // check genesisData whether inconsistent with initialGenesisData
             if (existsGenesisData == genesisData)
@@ -1870,11 +1857,10 @@ bool Ledger::buildGenesisBlock(
                 // 已有的链，仅替换了二进制，还没有执行升级版本交易
                 // The existing chain, which only replaces the binary, has not yet executed the
                 // upgraded version of the transaction
-                auto versionEntry = co_await storage2::readOne(
-                    *m_stateStorage, transaction_executor::StateKeyView(
-                                         SYS_CONFIG, SYSTEM_KEY_COMPATIBILITY_VERSION));
+                auto versionEntry = co_await storage2::readOne(*m_stateStorage,
+                    executor_v1::StateKeyView(SYS_CONFIG, SYSTEM_KEY_COMPATIBILITY_VERSION));
                 auto blockNumberEntry = co_await storage2::readOne(*m_stateStorage,
-                    transaction_executor::StateKeyView(SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER));
+                    executor_v1::StateKeyView(SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER));
                 if (versionEntry && blockNumberEntry)
                 {
                     auto [versionStr, _] = versionEntry->getObject<SystemConfigEntry>();
@@ -1893,12 +1879,12 @@ bool Ledger::buildGenesisBlock(
                 co_return true;
             }
             // GetBlockDataByNumber success but not consistent with initialGenesisData
-            if (m_genesisBlockHeader)
+            if (genesisBlockHeader)
             {
                 std::cout << "The Genesis Data is inconsistent with the initial Genesis Data. "
-                          << std::endl
-                          << LOG_KV("existsGenesisData", existsGenesisData) << std::endl
-                          << LOG_KV("genesisData", genesisData) << std::endl;
+                          << '\n'
+                          << LOG_KV("existsGenesisData", existsGenesisData) << '\n'
+                          << LOG_KV("genesisData", genesisData) << '\n';
                 BOOST_THROW_EXCEPTION(
                     bcos::tool::InvalidConfig() << errinfo_comment(
                         "The Genesis Data is inconsistent with the initial Genesis Data"));
@@ -1934,14 +1920,14 @@ bool Ledger::buildGenesisBlock(
     constexpr static auto moreTables = std::to_array<std::string_view>(
             {SYS_CODE_BINARY, SYS_VALUE, SYS_CONTRACT_ABI, SYS_VALUE});
         // clang-format on
-        RANGES::any_view<std::string_view, RANGES::category::mask | RANGES::category::sized>
+        ::ranges::any_view<std::string_view, ::ranges::category::mask | ::ranges::category::sized>
             tablesView(tables);
         if (versionNumber >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
         {
-            tablesView = RANGES::views::concat(tablesView, moreTables);
+            tablesView = ::ranges::views::concat(tablesView, moreTables);
         }
 
-        for (auto&& pair : tablesView | RANGES::views::chunk(2))
+        for (auto&& pair : tablesView | ::ranges::views::chunk(2))
         {
             auto tableName = pair[0];
             auto tableField = pair[1];
@@ -1972,25 +1958,14 @@ bool Ledger::buildGenesisBlock(
         header->setNumber(0);
         if (versionNumber >= protocol::BlockVersion::V3_1_VERSION)
         {
-            header->setVersion(static_cast<uint32_t>(versionNumber));
+            header->setVersion(versionNumber);
         }
         header->setExtraData(bcos::bytes(genesisData.begin(), genesisData.end()));
         header->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
 
         auto block = m_blockFactory->createBlock();
         block->setBlockHeader(header);
-
-        std::promise<Error::Ptr> genesisBlockPromise;
-        asyncPrewriteBlock(m_stateStorage, nullptr, block,
-            [&genesisBlockPromise](std::string, Error::Ptr&& error) {
-                genesisBlockPromise.set_value(std::move(error));
-            });
-
-        auto error = genesisBlockPromise.get_future().get();
-        if (error)
-        {
-            BOOST_THROW_EXCEPTION(*error);
-        }
+        co_await ledger::prewriteBlockToStorage(*this, nullptr, block, true, m_stateStorage);
 
         // write sys config
         std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> sysTablePromise;
@@ -2092,19 +2067,39 @@ bool Ledger::buildGenesisBlock(
             sysTable->setRow(SYSTEM_KEY_WEB3_CHAIN_ID, std::move(chainIdEntry));
         }
 
+        // Write executor version
+        if (versionNumber >= BlockVersion::V3_15_0_VERSION && genesis.m_executorVersion > 0)
+        {
+            Entry executorVersion;
+            executorVersion.setObject(
+                SystemConfigEntry{std::to_string(genesis.m_executorVersion), 0});
+            co_await storage2::writeOne(*m_stateStorage,
+                executor_v1::StateKey(
+                    SYS_CONFIG, magic_enum::enum_name(ledger::SystemConfig::executor_version)),
+                executorVersion);
+
+            // 按会议结论，executor v1默认打开balance_transfer
+            // According to the meeting conclusion, executor v1 defaults to open balance_transfer
+            Entry balanceTransfer;
+            balanceTransfer.setObject(SystemConfigEntry{"1", 0});
+            co_await storage2::writeOne(*m_stateStorage,
+                executor_v1::StateKey(
+                    SYS_CONFIG, magic_enum::enum_name(ledger::SystemConfig::balance_transfer)),
+                balanceTransfer);
+        }
+
         // write consensus node list
         // update some node type to CONSENSUS_CANDIDATE_SEALER
         if (versionNumber >= (uint32_t)protocol::BlockVersion::V3_5_VERSION &&
             RPBFT_CONSENSUS_TYPE == genesis.m_consensusType)
         {
             auto workingSealerList = selectWorkingSealer(ledgerConfig, genesis.m_epochSealerNum);
-            std::sort(workingSealerList.begin(), workingSealerList.end(),
-                [](auto const& lhs, auto const& rhs) {
-                    return lhs.nodeID->data() < rhs.nodeID->data();
-                });
+            ::ranges::sort(workingSealerList, [](auto const& lhs, auto const& rhs) {
+                return lhs.nodeID->data() < rhs.nodeID->data();
+            });
             co_await ledger::setNodeList(*m_stateStorage,
-                RANGES::views::concat(
-                    ledgerConfig.consensusNodeList() | RANGES::views::transform([&](auto node) {
+                ::ranges::views::concat(
+                    ledgerConfig.consensusNodeList() | ::ranges::views::transform([&](auto node) {
                         if (auto it = std::lower_bound(workingSealerList.begin(),
                                 workingSealerList.end(), node.nodeID,
                                 [](auto const& lhs, auto const& rhs) {
@@ -2122,7 +2117,7 @@ bool Ledger::buildGenesisBlock(
         else
         {
             co_await ledger::setNodeList(
-                *m_stateStorage, RANGES::views::concat(ledgerConfig.consensusNodeList(),
+                *m_stateStorage, ::ranges::views::concat(ledgerConfig.consensusNodeList(),
                                      ledgerConfig.observerNodeList()));
         }
 
@@ -2193,7 +2188,7 @@ bcos::consensus::ConsensusNodeList Ledger::selectWorkingSealer(
     }
 
     bcos::consensus::ConsensusNodeList workingSealerList =
-        RANGES::views::take(sealerList, selectedNum) | RANGES::to<std::vector>();
+        ::ranges::views::take(sealerList, selectedNum) | ::ranges::to<std::vector>();
     for (auto& node : workingSealerList)
     {
         LEDGER_LOG(INFO) << LOG_DESC("selectWorkingSealer") << LOG_KV("nodeID", node.nodeID->hex())
@@ -2218,7 +2213,7 @@ void Ledger::createFileSystemTables(uint32_t blockVersion)
 
     Entry rootSubEntry;
     std::map<std::string, std::string> rootSubMap;
-    for (const auto& sub : rootSubNames | RANGES::views::transform(
+    for (const auto& sub : rootSubNames | ::ranges::views::transform(
                                               [](std::string_view const& sub) -> std::string_view {
                                                   return sub.substr(1);
                                               }))
@@ -2245,7 +2240,7 @@ void Ledger::createFileSystemTables(uint32_t blockVersion)
     std::map<std::string, std::string> sysSubMap;
     for (const auto& contract :
         precompiled::BFS_SYS_SUBS_V30 |
-            RANGES::views::transform([](std::string_view const& sub) -> std::string_view {
+            ::ranges::views::transform([](std::string_view const& sub) -> std::string_view {
                 return sub.substr(tool::FS_SYS_BIN.length() + 1);
             }))
     {
@@ -2339,12 +2334,11 @@ task::Task<bcos::ledger::SystemConfigs> Ledger::fetchAllSystemConfigs(
     protocol::BlockNumber _blockNumber)
 {
     auto allConfigKeys = ledger::SystemConfigs::supportConfigs();
-    auto entries = co_await storage2::readSome(
-        *m_stateStorage, allConfigKeys | RANGES::views::transform([](auto&& key) {
-            return transaction_executor::StateKeyView(SYS_CONFIG, key);
-        }));
+    auto entries = co_await storage2::readSome(*m_stateStorage,
+        allConfigKeys | ::ranges::views::transform(
+                            [](auto&& key) { return executor_v1::StateKeyView(SYS_CONFIG, key); }));
     bcos::ledger::SystemConfigs configs;
-    for (auto&& [key, entry] : RANGES::views::zip(allConfigKeys, entries))
+    for (auto&& [key, entry] : ::ranges::views::zip(allConfigKeys, entries))
     {
         if (entry)
         {

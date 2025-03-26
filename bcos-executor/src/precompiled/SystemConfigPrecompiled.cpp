@@ -22,6 +22,7 @@
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/ledger/Features.h"
+#include "bcos-framework/ledger/SystemConfigs.h"
 #include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-task/Wait.h"
 #include <bcos-framework/ledger/LedgerTypeDef.h>
@@ -103,6 +104,11 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl) : P
         std::make_pair(ENABLE_BALANCE_TRANSFER, [defaultCmp](int64_t _value, uint32_t version) {
             defaultCmp(ENABLE_BALANCE_TRANSFER, _value, 0, version, BlockVersion::V3_10_2_VERSION);
         }));
+    m_sysValueCmp.emplace(magic_enum::enum_name(ledger::SystemConfig::executor_version),
+        [defaultCmp](int64_t _value, uint32_t version) {
+            defaultCmp(magic_enum::enum_name(ledger::SystemConfig::executor_version), _value, 0,
+                version, BlockVersion::V3_15_0_VERSION);
+        });
     // for compatibility
     // Note: the compatibility_version is not compatibility
     m_sysValueCmp.insert(

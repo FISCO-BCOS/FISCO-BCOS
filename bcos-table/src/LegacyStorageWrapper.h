@@ -10,7 +10,6 @@
 #include <boost/throw_exception.hpp>
 #include <exception>
 #include <functional>
-#include <iterator>
 #include <stdexcept>
 
 namespace bcos::storage
@@ -31,7 +30,7 @@ public:
     {
         task::wait([](decltype(this) self, std::string table,
                        std::optional<storage::Condition const> condition,
-                       const decltype(_callback)& callback) -> task::Task<void> {
+                       decltype(_callback) callback) -> task::Task<void> {
             std::vector<std::string> keys;
 
             size_t index = 0;
@@ -49,7 +48,7 @@ public:
                     }
                 }
 
-                transaction_executor::StateKeyView stateKeyView(key);
+                executor_v1::StateKeyView stateKeyView(key);
                 auto [entryTable, entryKey] = stateKeyView.get();
                 if (entryTable == table && (!condition || condition->isValid(entryKey)))
                 {
@@ -81,7 +80,7 @@ public:
             try
             {
                 auto value = co_await storage2::readOne(
-                    self->m_storage.get(), transaction_executor::StateKeyView{table, key});
+                    self->m_storage.get(), executor_v1::StateKeyView{table, key});
                 callback(nullptr, std::move(value));
             }
             catch (std::exception& e)
@@ -103,8 +102,7 @@ public:
             try
             {
                 auto stateKeys = RANGES::views::transform(keys, [&table](auto&& key) -> auto {
-                    return transaction_executor::StateKeyView{
-                        table, std::forward<decltype(key)>(key)};
+                    return executor_v1::StateKeyView{table, std::forward<decltype(key)>(key)};
                 });
                 auto values = co_await storage2::readSome(self->m_storage.get(), stateKeys);
                 callback(nullptr, std::move(values));
@@ -126,12 +124,12 @@ public:
                 if (entry.status() == storage::Entry::Status::DELETED)
                 {
                     co_await storage2::removeOne(
-                        self->m_storage.get(), transaction_executor::StateKeyView(table, key));
+                        self->m_storage.get(), executor_v1::StateKeyView(table, key));
                 }
                 else
                 {
-                    co_await storage2::writeOne(self->m_storage.get(),
-                        transaction_executor::StateKey(table, key), std::move(entry));
+                    co_await storage2::writeOne(
+                        self->m_storage.get(), executor_v1::StateKey(table, key), std::move(entry));
                 }
                 callback(nullptr);
             }
@@ -161,7 +159,7 @@ public:
                         storage::Entry entry;
                         entry.setField(0, value);
                         return std::make_pair(
-                            transaction_executor::StateKey{tableName, key}, std::move(entry));
+                            executor_v1::StateKey{tableName, key}, std::move(entry));
                     }));
                 co_return nullptr;
             }

@@ -29,9 +29,8 @@
 #include <bcos-framework/protocol/ExecutionResult.h>
 #include <bcos-utilities/Common.h>
 
-namespace bcostars
-{
-namespace protocol
+
+namespace bcostars::protocol
 {
 class ExecutionResultImpl : public bcos::protocol::ExecutionResult
 {
@@ -58,5 +57,4 @@ private:
     std::shared_ptr<bcostars::ExecutionResult> m_inner;
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
 };
-}  // namespace protocol
-}  // namespace bcostars
+}  // namespace bcostars::protocol

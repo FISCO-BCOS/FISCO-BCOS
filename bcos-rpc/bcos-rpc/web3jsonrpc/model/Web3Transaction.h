@@ -114,7 +114,8 @@ public:
         std::stringstream stringstream{};
         stringstream << " chainId: " << this->chainId.value_or(0)
                      << " hash:" << this->txHash().hex()
-                     << " type: " << static_cast<uint16_t>(this->type) << " to: " << this->to
+                     << " type: " << static_cast<uint16_t>(this->type)
+                     << " to: " << this->to.value_or(Address()).hex()
                      << " data: " << toHex(this->data) << " value: " << this->value
                      << " nonce: " << this->nonce << " gasLimit: " << this->gasLimit
                      << " maxPriorityFeePerGas: " << this->maxPriorityFeePerGas
@@ -129,7 +130,7 @@ public:
 
     std::optional<uint64_t> chainId{std::nullopt};  // nullopt means a pre-EIP-155 transaction
     TransactionType type{TransactionType::Legacy};
-    Address to{};
+    std::optional<Address> to{};
     bcos::bytes data{};
     u256 value{0};
     uint64_t nonce{0};
@@ -162,5 +163,7 @@ void encode(bcos::bytes& out, const rpc::Web3Transaction&) noexcept;
 bcos::Error::UniquePtr decode(bcos::bytesRef& in, rpc::AccessListEntry&) noexcept;
 bcos::Error::UniquePtr decode(bcos::bytesRef& in, rpc::Web3Transaction&) noexcept;
 bcos::Error::UniquePtr decodeFromPayload(bcos::bytesRef& in, rpc::Web3Transaction&) noexcept;
+bcos::Error::UniquePtr decodeTransaction(
+    bcos::bytesRef& in, rpc::Web3Transaction&, bool withSignature) noexcept;
 }  // namespace codec::rlp
 }  // namespace bcos

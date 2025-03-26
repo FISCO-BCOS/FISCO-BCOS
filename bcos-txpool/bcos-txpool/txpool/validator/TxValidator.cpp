@@ -74,12 +74,7 @@ bcos::protocol::TransactionStatus TxValidator::checkTransaction(
 {
     if (_tx.type() == static_cast<uint8_t>(TransactionType::Web3Transaction)) [[unlikely]]
     {
-        auto const status = checkWeb3Nonce(_tx, onlyCheckLedgerNonce);
-        if (status != TransactionStatus::None)
-        {
-            return status;
-        }
-        return TransactionStatus::None;
+        return checkWeb3Nonce(_tx, onlyCheckLedgerNonce);
     }
     // compare with nonces cached in memory, only check nonce in txpool
     auto status = TransactionStatus::None;

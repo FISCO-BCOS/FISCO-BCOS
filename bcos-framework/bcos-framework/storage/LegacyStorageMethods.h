@@ -10,7 +10,7 @@ namespace bcos::storage
 {
 
 inline task::Task<std::optional<Entry>> tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/,
-    StorageInterface& storage, transaction_executor::StateKeyView stateKey)
+    StorageInterface& storage, executor_v1::StateKeyView stateKey)
 {
     struct Awaitable
     {
@@ -52,16 +52,16 @@ inline task::Task<std::optional<Entry>> tag_invoke(storage2::tag_t<storage2::rea
 
 inline task::Task<std::vector<std::optional<Entry>>> tag_invoke(
     storage2::tag_t<storage2::readSome> /*unused*/, StorageInterface& storage,
-    RANGES::input_range auto&& keys)
+    ::ranges::input_range auto&& keys)
 {
     // 这里调用StorageInterface的asyncGetRows接口效率更高,但是keys可能包含不同的table,aysncGetRows每次只能传一个table,因此留给未来优化
     // The asyncGetRows interface of StorageInterface is more efficient, but keys may contain
     // different tables, and aysncGetRows can only be used by one table at a time, so it is left to
     // future optimization
     std::vector<std::optional<Entry>> values;
-    if constexpr (RANGES::sized_range<decltype(keys)>)
+    if constexpr (::ranges::sized_range<decltype(keys)>)
     {
-        values.reserve(decltype(values)::size_type(RANGES::size(keys)));
+        values.reserve(decltype(values)::size_type(::ranges::size(keys)));
     }
     for (auto&& key : keys)
     {
@@ -72,7 +72,7 @@ inline task::Task<std::vector<std::optional<Entry>>> tag_invoke(
 }
 
 inline task::Task<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/,
-    StorageInterface& storage, RANGES::input_range auto&& keyValues)
+    StorageInterface& storage, ::ranges::input_range auto&& keyValues)
 {
     for (auto&& [key, value] : keyValues)
     {
@@ -83,7 +83,7 @@ inline task::Task<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unused
 
 
 inline task::Task<void> tag_invoke(storage2::tag_t<storage2::writeOne> /*unused*/,
-    StorageInterface& storage, transaction_executor::StateKey stateKey, Entry entry)
+    StorageInterface& storage, executor_v1::StateKey stateKey, Entry entry)
 {
     struct Awaitable
     {
@@ -114,7 +114,7 @@ inline task::Task<void> tag_invoke(storage2::tag_t<storage2::writeOne> /*unused*
         }
     };
 
-    auto view = transaction_executor::StateKeyView(stateKey);
+    auto view = executor_v1::StateKeyView(stateKey);
     auto [table, key] = view.get();
     Awaitable awaitable{.m_storage = storage,
         .m_table = table,

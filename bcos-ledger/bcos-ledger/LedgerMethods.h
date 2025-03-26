@@ -123,7 +123,7 @@ task::Task<std::optional<crypto::HashType>> tag_invoke(ledger::tag_t<getBlockHas
     }
     auto blockNumberString = boost::lexical_cast<std::string>(blockNumber);
     if (auto entry = co_await storage2::readOne(
-            storage, transaction_executor::StateKeyView{SYS_NUMBER_2_HASH, blockNumberString}))
+            storage, executor_v1::StateKeyView{SYS_NUMBER_2_HASH, blockNumberString}))
     {
         auto hashStr = entry->getField(0);
         bcos::crypto::HashType hash(hashStr, bcos::crypto::HashType::FromBinary);
@@ -137,7 +137,7 @@ task::Task<protocol::BlockNumber> tag_invoke(
     ledger::tag_t<getCurrentBlockNumber> /*unused*/, auto& storage, FromStorage /*unused*/)
 {
     if (auto blockNumberEntry = co_await storage2::readOne(
-            storage, transaction_executor::StateKeyView{SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER}))
+            storage, executor_v1::StateKeyView{SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER}))
     {
         bcos::protocol::BlockNumber blockNumber = -1;
         try
@@ -162,7 +162,7 @@ task::Task<consensus::ConsensusNodeList> tag_invoke(
 {
     LEDGER_LOG(DEBUG) << "GetNodeLis";
     auto nodeListEntry = co_await storage2::readOne(
-        storage, transaction_executor::StateKeyView{SYS_CONSENSUS, "key"});
+        storage, executor_v1::StateKeyView{SYS_CONSENSUS, "key"});
     if (!nodeListEntry)
     {
         co_return consensus::ConsensusNodeList{};
@@ -189,7 +189,7 @@ task::Task<consensus::ConsensusNodeList> tag_invoke(
     auto entries =
         co_await storage2::readSome(storage, RANGES::views::transform(nodes, [](auto const& node) {
             std::string_view extraKey{node.nodeID->constData(), node.nodeID->size()};
-            return transaction_executor::StateKeyView{SYS_CONSENSUS, extraKey};
+            return executor_v1::StateKeyView{SYS_CONSENSUS, extraKey};
         }));
     for (auto&& [node, entry] : RANGES::views::zip(nodes, entries))
     {
@@ -206,7 +206,7 @@ task::Task<consensus::ConsensusNodeList> tag_invoke(
 }
 
 task::Task<void> tag_invoke(ledger::tag_t<setNodeList> /*unused*/, auto& storage,
-    RANGES::input_range auto&& nodeList, bool forceSet = false)
+    ::ranges::input_range auto&& nodeList, bool forceSet = false)
 {
     LEDGER_LOG(DEBUG) << "SetNodeList request";
     auto ledgerNodeList = RANGES::views::transform(nodeList, [&](auto const& node) {
@@ -217,7 +217,7 @@ task::Task<void> tag_invoke(ledger::tag_t<setNodeList> /*unused*/, auto& storage
         return ledgerNode;
     }) | RANGES::to<std::vector>();
     auto nodeListEntry = encodeConsensusList(ledgerNodeList);
-    co_await storage2::writeOne(storage, transaction_executor::StateKey{SYS_CONSENSUS, "key"},
+    co_await storage2::writeOne(storage, executor_v1::StateKey{SYS_CONSENSUS, "key"},
         storage::Entry(std::move(nodeListEntry)));
 
     auto tarsNodeList = RANGES::views::filter(nodeList, [&](auto const& node) {
@@ -239,7 +239,7 @@ task::Task<void> tag_invoke(ledger::tag_t<setNodeList> /*unused*/, auto& storage
                 bytes data;
                 concepts::serialize::encode(node, data);
                 return std::make_tuple(
-                    transaction_executor::StateKey{
+                    executor_v1::StateKey{
                         SYS_CONSENSUS, std::string_view(node.nodeID.data(), node.nodeID.size())},
                     storage::Entry(std::move(data)));
             }));
@@ -251,7 +251,7 @@ task::Task<std::optional<SystemConfigEntry>> tag_invoke(
     ledger::tag_t<getSystemConfig> /*unused*/, auto& storage, std::string_view key)
 {
     if (auto entry = co_await storage2::readOne(
-            storage, transaction_executor::StateKeyView(SYS_CONFIG, key)))
+            storage, executor_v1::StateKeyView(SYS_CONFIG, key)))
     {
         co_return entry->template getObject<SystemConfigEntry>();
     }

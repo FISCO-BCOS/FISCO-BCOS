@@ -36,7 +36,7 @@ class SchedulerInterface
 public:
     using Ptr = std::shared_ptr<SchedulerInterface>;
     SchedulerInterface() = default;
-    virtual ~SchedulerInterface() {}
+    virtual ~SchedulerInterface() noexcept = default;
 
     // by pbft & sync
     virtual void executeBlock(bcos::protocol::Block::Ptr block, bool verify,
@@ -68,5 +68,6 @@ public:
         std::function<void(Error::Ptr&&)> callback) = 0;
 
     virtual void stop() {};
+    virtual void setVersion(int version, ledger::LedgerConfig::Ptr ledgerConfig) {};
 };
 }  // namespace bcos::scheduler

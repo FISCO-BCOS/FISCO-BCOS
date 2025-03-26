@@ -13,7 +13,7 @@
 using namespace bcos;
 using namespace bcos::storage2;
 using namespace bcos::storage2::memory_storage;
-using namespace bcos::transaction_executor;
+using namespace bcos::executor_v1;
 
 using Key = StateKey;
 

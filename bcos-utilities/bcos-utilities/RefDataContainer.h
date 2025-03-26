@@ -55,6 +55,9 @@ public:
     explicit RefDataContainer(RequiredStringRefType& _data)
       : m_dataPointer(reinterpret_cast<T*>(_data.data())), m_dataCount(_data.size() / sizeof(T))
     {}
+    template <size_t N>
+    explicit RefDataContainer(T (&array)[N]) : m_dataPointer(array), m_dataCount(N)
+    {}
 
     operator RefDataContainer<T const>() const
     {

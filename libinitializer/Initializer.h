@@ -25,6 +25,7 @@
 #include "TxPoolInitializer.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-tool/NodeConfig.h"
+#include "libinitializer/MultiVersionScheduler.h"
 #include "tools/archive-tool/ArchiveService.h"
 #include <bcos-executor/src/executor/SwitchExecutorManager.h>
 #include <bcos-scheduler/src/SchedulerManager.h>
@@ -114,10 +115,10 @@ private:
     std::shared_ptr<LightNodeInitializer> m_lightNodeInitializer;
 #endif
     bcos::ledger::LedgerInterface::Ptr m_ledger;
-    std::shared_ptr<bcos::scheduler::SchedulerInterface> m_scheduler;
+    std::shared_ptr<scheduler_v1::MultiVersionScheduler> m_scheduler;
     std::weak_ptr<bcos::executor::SwitchExecutorManager> m_switchExecutorManager;
-    std::string const c_consensusStorageDBName = "consensus_log";
-    std::string const c_fileSeparator = "/";
+    std::string c_consensusStorageDBName = "consensus_log";
+    std::string c_fileSeparator = "/";
     std::shared_ptr<bcos::archive::ArchiveService> m_archiveService = nullptr;
     bcos::storage::TransactionalStorageInterface::Ptr m_storage = nullptr;
     // if enable SeparateBlockAndState,txs and receipts will be stored in m_blockStorage

@@ -153,6 +153,21 @@ public:
         callback("", nullptr);
     }
 
+    void setStorageState(std::string address, ledger::StorageState _state)
+    {
+        m_storageState[std::move(address)] = std::move(_state);
+    }
+
+    task::Task<std::optional<ledger::StorageState>> getStorageState(
+        std::string_view _address, protocol::BlockNumber) override
+    {
+        if (auto const it = m_storageState.find(std::string(_address)); it != m_storageState.end())
+        {
+            co_return std::make_optional(it->second);
+        }
+        co_return std::nullopt;
+    }
+
     void asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr,
         bcos::protocol::Block::ConstPtr, std::function<void(Error::UniquePtr&&)> _callback) override
     {
@@ -334,16 +349,6 @@ public:
     }
     void removeExpiredNonce(protocol::BlockNumber blockNumber, bool sync) override {}
 
-    task::Task<std::optional<ledger::StorageState>> getStorageState(
-        std::string_view _address, protocol::BlockNumber) override
-    {
-        if (eoaInLedger == _address)
-        {
-            ledger::StorageState state{.nonce = eoaInLedgerNonce, .balance = ""};
-            co_return state;
-        }
-        co_return std::nullopt;
-    }
     void setStatus(bool _normal) { m_statusNormal = _normal; }
     void setTotalTxCount(size_t _totalTxCount) { m_totalTxCount = _totalTxCount; }
     void setSystemConfig(std::string_view _key, std::string const& _value)
@@ -408,12 +413,6 @@ public:
         });
     }
 
-    void initEoaContext(std::string eoaInLedger, std::string nonce)
-    {
-        this->eoaInLedger = std::move(eoaInLedger);
-        eoaInLedgerNonce = std::move(nonce);
-    }
-
 private:
     BlockFactory::Ptr m_blockFactory;
     std::vector<KeyPairInterface::Ptr> m_keyPairVec;
@@ -432,8 +431,7 @@ private:
     std::map<std::string, std::string, std::less<>> m_systemConfig;
     std::vector<bytes> m_sealerList;
     std::shared_ptr<ThreadPool> m_worker = nullptr;
-    std::string eoaInLedger;
-    std::string eoaInLedgerNonce;
+    std::unordered_map<std::string, ledger::StorageState> m_storageState = {};
 };
 }  // namespace test
 }  // namespace bcos

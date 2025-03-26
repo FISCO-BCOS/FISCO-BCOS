@@ -28,7 +28,7 @@
 #include <evmc/instructions.h>
 #include <boost/core/pointer_traits.hpp>
 
-namespace bcos::transaction_executor
+namespace bcos::executor_v1
 {
 static_assert(sizeof(Address) == sizeof(evmc_address), "Address types size mismatch");
 static_assert(alignof(Address) == alignof(evmc_address), "Address types alignment mismatch");
@@ -82,13 +82,11 @@ struct EVMHostInterface
         syncWait(hostContext.setTransientStorage(key, value));
     }
 
-    static evmc_bytes32 getBalance([[maybe_unused]] evmc_host_context* context,
-        [[maybe_unused]] const evmc_address* addr) noexcept
+    static evmc_bytes32 getBalance(evmc_host_context* context, const evmc_address* addr) noexcept
     {
-        // always return 0
         auto& hostContext = static_cast<HostContextType&>(*context);
-
-        return toEvmC(h256(0));
+        auto balance = syncWait(hostContext.balance(*addr));
+        return toEvmC(balance);
     }
 
     static size_t getCodeSize(evmc_host_context* context, const evmc_address* addr) noexcept
@@ -136,7 +134,7 @@ struct EVMHostInterface
         auto& hostContext = static_cast<HostContextType&>(*context);
         h256s hashTopics;
         hashTopics.reserve(numTopics);
-        for (auto i : RANGES::iota_view<size_t, size_t>(0, numTopics))
+        for (auto i : ::ranges::views::iota(0LU, numTopics))
         {
             hashTopics.emplace_back(topics[i].bytes, sizeof(evmc_bytes32));
         }
@@ -225,4 +223,4 @@ const evmc_host_interface* getHostInterface(auto&& syncWait)
     return &fnTable;
 }
 
-}  // namespace bcos::transaction_executor
+}  // namespace bcos::executor_v1

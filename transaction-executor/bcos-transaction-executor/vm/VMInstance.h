@@ -30,7 +30,7 @@
 #include <evmone/baseline.hpp>
 #include <evmone/vm.hpp>
 
-namespace bcos::transaction_executor
+namespace bcos::executor_v1
 {
 
 struct ReleaseEVMC
@@ -59,7 +59,7 @@ public:
     void enableDebugOutput();
 };
 
-}  // namespace bcos::transaction_executor
+}  // namespace bcos::executor_v1
 
 std::strong_ordering operator<=>(const evmc_address& lhs, const evmc_address& rhs) noexcept;
 bool operator==(const evmc_address& lhs, const evmc_address& rhs) noexcept;

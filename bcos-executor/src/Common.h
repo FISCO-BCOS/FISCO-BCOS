@@ -37,7 +37,6 @@
 #include <evmc/evmc.h>
 #include <evmc/instructions.h>
 #include <boost/algorithm/string/case_conv.hpp>
-#include <algorithm>
 #include <iterator>
 #include <memory>
 #include <set>
@@ -324,7 +323,7 @@ std::array<char, sizeof(evmc_address) * 2> address2HexArray(const evmc_address& 
 task::Task<bool> checkTransferPermission(auto& storage, std::string_view sender)
 {
     if (co_await storage2::existsOne(
-            storage, transaction_executor::StateKeyView{ledger::SYS_BALANCE_CALLER, sender}))
+            storage, executor_v1::StateKeyView{ledger::SYS_BALANCE_CALLER, sender}))
     {
         co_return true;
     }

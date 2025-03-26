@@ -2,13 +2,13 @@
 
 #include "RollbackableStorage.h"
 #include "bcos-framework/ledger/Account.h"
-#include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/Exceptions.h"
 #include "precompiled/PrecompiledManager.h"
 #include "vm/HostContext.h"
 #include <evmc/evmc.h>
@@ -19,11 +19,14 @@
 #include <memory>
 #include <type_traits>
 
-namespace bcos::transaction_executor
+DERIVE_BCOS_EXCEPTION(InvalidReceiptVersion);
+
+namespace bcos::executor_v1
 {
 #define TRANSACTION_EXECUTOR_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("TRANSACTION_EXECUTOR")
 
-evmc_message newEVMCMessage(protocol::Transaction const& transaction, int64_t gasLimit);
+evmc_message newEVMCMessage(protocol::BlockNumber blockNumber,
+    protocol::Transaction const& transaction, int64_t gasLimit, const evmc_address& origin);
 
 class TransactionExecutorImpl
 {
@@ -35,6 +38,10 @@ public:
     crypto::Hash::Ptr m_hashImpl;
     std::reference_wrapper<PrecompiledManager> m_precompiledManager;
 
+    using TransientStorage =
+        bcos::storage2::memory_storage::MemoryStorage<bcos::executor_v1::StateKey,
+            bcos::executor_v1::StateValue, bcos::storage2::memory_storage::ORDERED>;
+
     template <class Storage>
     struct ExecuteContext
     {
@@ -43,17 +50,15 @@ public:
         std::reference_wrapper<protocol::Transaction const> m_transaction;
         int m_contextID;
         std::reference_wrapper<ledger::LedgerConfig const> m_ledgerConfig;
-
         Rollbackable<Storage> m_rollbackableStorage;
         Rollbackable<Storage>::Savepoint m_startSavepoint;
-        bcos::storage2::memory_storage::MemoryStorage<bcos::transaction_executor::StateKey,
-            bcos::transaction_executor::StateValue, bcos::storage2::memory_storage::ORDERED>
-            m_transientStorage;
+        TransientStorage m_transientStorage;
         Rollbackable<decltype(m_transientStorage)> m_rollbackableTransientStorage;
 
         int64_t m_gasLimit;
-        evmc_message m_evmcMessage;
         int64_t m_seq = 0;
+        evmc_address m_origin;
+        u256 m_nonce;
         hostcontext::HostContext<decltype(m_rollbackableStorage),
             decltype(m_rollbackableTransientStorage)>
             m_hostContext;
@@ -71,17 +76,17 @@ public:
             m_startSavepoint(current(m_rollbackableStorage)),
             m_rollbackableTransientStorage(m_transientStorage),
             m_gasLimit(static_cast<int64_t>(std::get<0>(ledgerConfig.gasLimit()))),
-            m_evmcMessage(newEVMCMessage(transaction, m_gasLimit)),
+            m_origin((!m_transaction.get().sender().empty() &&
+                         m_transaction.get().sender().size() == sizeof(evmc_address)) ?
+                         *(evmc_address*)m_transaction.get().sender().data() :
+                         evmc_address{}),
+            m_nonce(hex2u(transaction.nonce())),
             m_hostContext(m_rollbackableStorage, m_rollbackableTransientStorage, blockHeader,
-                m_evmcMessage, m_evmcMessage.sender, transaction.abi(), contextID, m_seq,
-                executor.m_precompiledManager, ledgerConfig, *executor.m_hashImpl, task::syncWait)
-        {
-            if (blockHeader.number() == 0 &&
-                m_transaction.get().to() == precompiled::AUTH_COMMITTEE_ADDRESS)
-            {
-                m_evmcMessage.kind = EVMC_CREATE;
-            }
-        }
+                newEVMCMessage(m_blockHeader.get().number(), transaction, m_gasLimit, m_origin),
+                m_origin, transaction.abi(), contextID, m_seq, executor.m_precompiledManager,
+                ledgerConfig, *executor.m_hashImpl, transaction.type() != 0, m_nonce,
+                task::syncWait)
+        {}
     };
 
     friend auto tag_invoke(tag_t<createExecuteContext> /*unused*/,
@@ -90,10 +95,7 @@ public:
         ledger::LedgerConfig const& ledgerConfig)
         -> task::Task<std::unique_ptr<ExecuteContext<std::decay_t<decltype(storage)>>>>
     {
-        if (c_fileLogLevel == LogLevel::TRACE)
-        {
-            TRANSACTION_EXECUTOR_LOG(TRACE) << "Create transaction context: " << transaction;
-        }
+        TRANSACTION_EXECUTOR_LOG(TRACE) << "Create transaction context: " << transaction;
         co_return std::make_unique<ExecuteContext<std::decay_t<decltype(storage)>>>(
             executor, storage, blockHeader, transaction, contextID, ledgerConfig);
     }
@@ -106,6 +108,7 @@ public:
 
         if constexpr (step == 0)
         {
+            co_await updateNonce(executeContext);
             co_await executeContext.m_hostContext.prepare();
         }
         else if constexpr (step == 1)
@@ -120,10 +123,31 @@ public:
         co_return {};
     }
 
+    friend task::Task<void> updateNonce(auto& executeContext)
+    {
+        if (auto& transaction = executeContext.m_transaction.get();
+            transaction.type() == 1)  // 1 = web3 transaction
+        {
+            auto& callNonce = executeContext.m_nonce;
+            ledger::account::EVMAccount account(executeContext.m_rollbackableStorage,
+                executeContext.m_origin,
+                executeContext.m_ledgerConfig.get().features().get(
+                    ledger::Features::Flag::feature_raw_address));
+
+            if (!co_await ledger::account::exists(account))
+            {
+                co_await ledger::account::create(account);
+            }
+            auto nonceInStorage = co_await ledger::account::nonce(account);
+            auto storageNonce = u256(nonceInStorage.value_or("0"));
+            u256 newNonce = std::max(callNonce, storageNonce) + 1;
+            co_await ledger::account::setNonce(account, newNonce.convert_to<std::string>());
+        }
+    }
 
     friend task::Task<protocol::TransactionReceipt::Ptr> finish(auto& executeContext)
     {
-        auto& evmcMessage = executeContext.m_evmcMessage;
+        const auto& evmcMessage = executeContext.m_hostContext.message();
         auto& evmcResult = *executeContext.m_evmcResult;
 
         std::string newContractAddress;
@@ -139,6 +163,7 @@ public:
         {
             TRANSACTION_EXECUTOR_LOG(DEBUG) << "Transaction revert: " << evmcResult.status_code;
 
+
             auto [_, errorMessage] = evmcStatusToErrorMessage(
                 *executeContext.m_executor.get().m_hashImpl, evmcResult.status_code);
             if (!errorMessage.empty())
@@ -147,26 +172,24 @@ public:
                 std::uninitialized_copy(errorMessage.begin(), errorMessage.end(), output.get());
                 evmcResult.output_data = output.release();
                 evmcResult.output_size = errorMessage.size();
-                evmcResult.release =
-                    +[](const struct evmc_result* result) { delete[] result->output_data; };
+                evmcResult.release = [](const struct evmc_result* result) {
+                    delete[] result->output_data;
+                };
             }
         }
 
         std::string gasPriceStr;
         auto gasUsed = executeContext.m_gasLimit - evmcResult.gas_left;
-        if (executeContext.m_ledgerConfig.get().features().get(
-                ledger::Features::Flag::feature_balance_policy1))
+        if (auto gasPrice = u256{std::get<0>(executeContext.m_ledgerConfig.get().gasPrice())};
+            gasPrice > 0)
         {
-            auto gasPrice = u256{std::get<0>(executeContext.m_ledgerConfig.get().gasPrice())};
-            if (gasPrice > 0)
-            {
-                gasPriceStr = "0x" + gasPrice.str(256, std::ios_base::hex);
-            }
+            gasPriceStr = "0x" + gasPrice.str(256, std::ios_base::hex);
+
             auto balanceUsed = gasUsed * gasPrice;
             auto senderAccount = getAccount(executeContext.m_hostContext, evmcMessage.sender);
             auto senderBalance = co_await ledger::account::balance(senderAccount);
 
-            if (senderBalance < balanceUsed || senderBalance == 0)
+            if (senderBalance < balanceUsed)
             {
                 TRANSACTION_EXECUTOR_LOG(ERROR) << "Insufficient balance: " << senderBalance
                                                 << ", balanceUsed: " << balanceUsed;
@@ -178,21 +201,6 @@ public:
             else
             {
                 co_await ledger::account::setBalance(senderAccount, senderBalance - balanceUsed);
-            }
-        }
-
-        // 如果本次调用是eoa调用系统合约，将gasUsed设置为0
-        // If the call from eoa to system contract, the gasUsed is cleared to zero
-        if (!executeContext.m_ledgerConfig.get().features().get(
-                ledger::Features::Flag::bugfix_precompiled_gasused))
-        {
-            if (auto codeAddress = address2HexArray(evmcMessage.code_address);
-                precompiled::contains(bcos::precompiled::c_systemTxsAddress,
-                    concepts::bytebuffer::toView(codeAddress)) ||
-                std::string_view{codeAddress.data(), codeAddress.size()} ==
-                    precompiled::BALANCE_PRECOMPILED_ADDRESS)
-            {
-                gasUsed = 0;
             }
         }
 
@@ -218,16 +226,12 @@ public:
             break;
         default:
             BOOST_THROW_EXCEPTION(
-                std::runtime_error("Invalid receipt version: " +
-                                   std::to_string(executeContext.m_transaction.get().version())));
+                InvalidReceiptVersion{} << bcos::errinfo_comment(
+                    "Invalid receipt version: " +
+                    std::to_string(executeContext.m_transaction.get().version())));
         }
 
-        if (c_fileLogLevel <= LogLevel::TRACE)
-        {
-            TRANSACTION_EXECUTOR_LOG(TRACE)
-                << "Execte transaction finished: " << receipt->toString();
-        }
-
+        TRANSACTION_EXECUTOR_LOG(TRACE) << "Execte transaction finished: " << *receipt;
         co_return receipt;  // 完成第三步 Complete the third step
     }
 
@@ -239,10 +243,10 @@ public:
         auto executeContext = co_await createExecuteContext(
             executor, storage, blockHeader, transaction, contextID, ledgerConfig);
 
-        co_await transaction_executor::executeStep.operator()<0>(executeContext);
-        co_await transaction_executor::executeStep.operator()<1>(executeContext);
-        co_return co_await transaction_executor::executeStep.operator()<2>(executeContext);
+        co_await executor_v1::executeStep.operator()<0>(executeContext);
+        co_await executor_v1::executeStep.operator()<1>(executeContext);
+        co_return co_await executor_v1::executeStep.operator()<2>(executeContext);
     }
 };
 
-}  // namespace bcos::transaction_executor
+}  // namespace bcos::executor_v1

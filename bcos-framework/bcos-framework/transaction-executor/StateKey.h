@@ -8,7 +8,7 @@
 #include <functional>
 #include <string_view>
 
-namespace bcos::transaction_executor
+namespace bcos::executor_v1
 {
 struct NoTableSpliterError : public bcos::Exception
 {
@@ -47,9 +47,8 @@ public:
     StateKey& operator=(StateKey&&) noexcept = default;
     ~StateKey() noexcept = default;
 
-    friend auto operator<=>(const StateKey& lhs, const StateKey& rhs) noexcept = default;
     friend ::std::ostream& operator<<(
-        ::std::ostream& stream, const bcos::transaction_executor::StateKey& stateKey)
+        ::std::ostream& stream, const bcos::executor_v1::StateKey& stateKey)
     {
         stream << stateKey.m_tableAndKey;
         return stream;
@@ -96,59 +95,69 @@ public:
 
 inline StateKey::StateKey(StateKeyView const& view) : StateKey(view.m_table, view.m_key) {}
 
-inline std::strong_ordering operator<=>(
-    const StateKey& lhs, const bcos::transaction_executor::StateKeyView& rhs) noexcept
+inline std::strong_ordering operator<=>(const StateKey& lhs, const StateKey& rhs) noexcept
 {
-    auto lhsView = bcos::transaction_executor::StateKeyView(lhs);
-    return lhsView <=> rhs;
+    auto lhsView = bcos::executor_v1::StateKeyView{lhs};
+    auto rhsView = bcos::executor_v1::StateKeyView{rhs};
+    return lhsView <=> rhsView;
 }
-inline bool operator==(const bcos::transaction_executor::StateKey& lhs,
-    const bcos::transaction_executor::StateKeyView& rhs) noexcept
+inline bool operator==(const StateKey& lhs, const StateKey& rhs) noexcept
 {
     return std::is_eq(lhs <=> rhs);
 }
 
-}  // namespace bcos::transaction_executor
+inline std::strong_ordering operator<=>(
+    const StateKey& lhs, const bcos::executor_v1::StateKeyView& rhs) noexcept
+{
+    auto lhsView = bcos::executor_v1::StateKeyView{lhs};
+    return lhsView <=> rhs;
+}
+inline bool operator==(
+    const bcos::executor_v1::StateKey& lhs, const bcos::executor_v1::StateKeyView& rhs) noexcept
+{
+    return std::is_eq(lhs <=> rhs);
+}
+
+}  // namespace bcos::executor_v1
 
 template <>
-struct std::less<bcos::transaction_executor::StateKey>
+struct std::less<bcos::executor_v1::StateKey>
 {
     auto operator()(auto const& lhs, auto const& rhs) const noexcept -> bool { return lhs < rhs; }
 };
 
 template <>
-struct std::hash<bcos::transaction_executor::StateKeyView>
+struct std::hash<bcos::executor_v1::StateKeyView>
 {
-    size_t operator()(const bcos::transaction_executor::StateKeyView& stateKeyView) const noexcept
+    size_t operator()(const bcos::executor_v1::StateKeyView& stateKeyView) const noexcept
     {
         return stateKeyView.hash();
     }
 };
 
 template <>
-struct boost::hash<bcos::transaction_executor::StateKeyView>
-  : public std::hash<bcos::transaction_executor::StateKeyView>
+struct boost::hash<bcos::executor_v1::StateKeyView>
+  : public std::hash<bcos::executor_v1::StateKeyView>
 {
 };
 
 template <>
-struct std::hash<bcos::transaction_executor::StateKey>
+struct std::hash<bcos::executor_v1::StateKey>
 {
     size_t operator()(const auto& stateKey) const noexcept
     {
-        bcos::transaction_executor::StateKeyView view(stateKey);
-        return std::hash<bcos::transaction_executor::StateKeyView>{}(view);
+        bcos::executor_v1::StateKeyView view(stateKey);
+        return std::hash<bcos::executor_v1::StateKeyView>{}(view);
     }
 };
 
 template <>
-struct boost::hash<bcos::transaction_executor::StateKey>
-  : public std::hash<bcos::transaction_executor::StateKey>
+struct boost::hash<bcos::executor_v1::StateKey> : public std::hash<bcos::executor_v1::StateKey>
 {
 };
 
 template <>
-struct std::equal_to<bcos::transaction_executor::StateKey>
+struct std::equal_to<bcos::executor_v1::StateKey>
 {
     bool operator()(auto const& lhs, auto const& rhs) const noexcept { return lhs == rhs; }
 };

@@ -32,26 +32,26 @@ struct StateValueResolver
 
 struct StateKeyResolver
 {
-    static std::string_view encode(const transaction_executor::StateKey& stateKey)
+    static std::string_view encode(const executor_v1::StateKey& stateKey)
     {
         return {stateKey.data(), stateKey.size()};
     }
-    static transaction_executor::StateKey encode(transaction_executor::StateKey&& stateKey)
+    static executor_v1::StateKey encode(executor_v1::StateKey&& stateKey)
     {
-        return std::forward<transaction_executor::StateKey>(stateKey);
+        return std::forward<executor_v1::StateKey>(stateKey);
     }
-    static transaction_executor::StateKey encode(
-        const transaction_executor::StateKeyView& stateKeyView)
+    static executor_v1::StateKey encode(
+        const executor_v1::StateKeyView& stateKeyView)
     {
-        return transaction_executor::StateKey(stateKeyView);
+        return executor_v1::StateKey(stateKeyView);
     }
-    static transaction_executor::StateKey decode(std::string_view view)
+    static executor_v1::StateKey decode(std::string_view view)
     {
-        return transaction_executor::StateKey(std::string(view));
+        return executor_v1::StateKey(std::string(view));
     }
-    static transaction_executor::StateKey decode(std::string buffer)
+    static executor_v1::StateKey decode(std::string buffer)
     {
-        return transaction_executor::StateKey(std::move(buffer));
+        return executor_v1::StateKey(std::move(buffer));
     }
 };
 

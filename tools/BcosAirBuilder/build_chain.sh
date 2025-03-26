@@ -39,7 +39,7 @@ ca_dir=""
 prometheus_dir=""
 config_path=""
 docker_mode=
-default_version="v3.12.2"
+default_version="v3.15.0"
 compatibility_version=${default_version}
 default_mtail_version="3.0.0-rc49"
 compatibility_mtail_version=${default_mtail_version}
@@ -52,6 +52,8 @@ download_lightnode_binary="false"
 mtail_binary_path=""
 wasm_mode="false"
 serial_mode="true"
+executor_version=0
+
 node_key_dir=""
 # if the config.genesis path has been set, don't generate genesis file, use the config instead
 genesis_conf_path=""
@@ -1781,6 +1783,7 @@ generate_genesis_config() {
     is_auth_check=${auth_mode}
     auth_admin_account=${auth_admin_account}
     is_serial_execute=${serial_mode}
+    version=${executor_version}
 EOF
 }
 

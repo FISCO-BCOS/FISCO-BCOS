@@ -83,13 +83,8 @@ init_baseline()
 
     # 将node2、node3替换为baseline scheduler, 这样不一致时可立即发现
     # Replace node2 and node3 with baseline scheduler, so that inconsistencies can be detected immediately
-    perl -p -i -e 's/baseline_scheduler=false/baseline_scheduler=true/g' nodes/127.0.0.1/node2/config.ini
-    perl -p -i -e 's/baseline_scheduler=false/baseline_scheduler=true/g' nodes/127.0.0.1/node3/config.ini
-    perl -p -i -e 's/baseline_scheduler_parallel=false/baseline_scheduler_parallel=true/g' nodes/127.0.0.1/node3/config.ini
-
-    perl -p -i -e 's/level=info/level=trace/g' nodes/127.0.0.1/node1/config.ini
-    perl -p -i -e 's/level=info/level=trace/g' nodes/127.0.0.1/node2/config.ini
-
+    perl -p -i -e 's/version=0/version=1/g' nodes/127.0.0.1/node*/config.genesis
+    # perl -p -i -e 's/level=info/level=trace/g' nodes/127.0.0.1/node*/config.ini
     cd nodes/127.0.0.1 && wait_and_start
 }
 
@@ -115,6 +110,9 @@ expand_node()
     bash ${build_chain_path} -C expand -c config -d config/ca -o nodes/127.0.0.1/node4 -e ${fisco_bcos_path} "${sm_option}"
     LOG_INFO "expand node success..."
     bash ${current_path}/nodes/127.0.0.1/node4/start.sh
+
+    perl -p -i -e 's/version=0/version=1/g' ${current_path}/nodes/127.0.0.1/node4/config.genesis
+
     sleep 10
     LOG_INFO "check expand node status..."
     flag='false'
@@ -168,25 +166,23 @@ if [[ -n "${1}" ]]; then
      console_branch=${1}
 fi
 
-# baseline暂时不支持balance precompiled，故不测试java_sdk_demo_ci_test
-# baseline does not support balance precompiled temporarily, so java_sdk_demo_ci_test is not tested
 LOG_INFO "======== check baseline cases ========"
 init_baseline ""
 expand_node ""
 bash ${current_path}/.ci/console_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
-# if [[ ${?} == "0" ]]; then
-#         LOG_INFO "console_integrationTest success"
-#     else
-#         echo "console_integrationTest error"
-#         exit 1
-# fi
-# bash ${current_path}/.ci/java_sdk_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
-# if [[ ${?} == "0" ]]; then
-#         LOG_INFO "java_sdk_integrationTest success"
-#     else
-#         echo "java_sdk_integrationTest error"
-#         exit 1
-# fi
+if [[ ${?} == "0" ]]; then
+        LOG_INFO "console_integrationTest success"
+    else
+        echo "console_integrationTest error"
+        exit 1
+fi
+bash ${current_path}/.ci/java_sdk_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
+if [[ ${?} == "0" ]]; then
+        LOG_INFO "java_sdk_integrationTest success"
+    else
+        echo "java_sdk_integrationTest error"
+        exit 1
+fi
 bash ${current_path}/.ci/java_sdk_demo_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
 if [[ ${?} == "0" ]]; then
        LOG_INFO "java_sdk_demo_ci_test success"

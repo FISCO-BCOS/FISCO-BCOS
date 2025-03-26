@@ -15,7 +15,7 @@
 #include <memory>
 #include <variant>
 
-namespace bcos::transaction_executor
+namespace bcos::executor_v1
 {
 
 #define PRECOMPILE_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("PRECOMPILE")
@@ -27,25 +27,13 @@ struct Precompiled
     std::optional<ledger::Features::Flag> m_flag;
     size_t m_size{1};
 
-    explicit Precompiled(auto precompiled) : m_precompiled(std::move(precompiled)) {}
-    Precompiled(auto precompiled, ledger::Features::Flag flag)
-      : m_precompiled(std::move(precompiled)), m_flag(flag)
-    {}
-    Precompiled(auto precompiled, size_t size) : m_precompiled(precompiled), m_size(size) {}
+    explicit Precompiled(decltype(m_precompiled) precompiled);
+    Precompiled(decltype(m_precompiled) precompiled, ledger::Features::Flag flag);
+    Precompiled(decltype(m_precompiled) precompiled, size_t size);
 };
 
-inline constexpr struct
-{
-    size_t operator()(Precompiled const& precompiled) const noexcept { return precompiled.m_size; }
-} size{};
-
-inline constexpr struct
-{
-    std::optional<ledger::Features::Flag> operator()(Precompiled const& precompiled) const noexcept
-    {
-        return precompiled.m_flag;
-    }
-} featureFlag{};
+size_t size(Precompiled const& precompiled);
+std::optional<ledger::Features::Flag> featureFlag(Precompiled const& precompiled);
 
 inline constexpr struct
 {
@@ -63,7 +51,7 @@ inline constexpr struct
                     auto gas = precompiled.cost({message.input_data, message.input_size});
 
                     auto buffer = std::make_unique_for_overwrite<uint8_t[]>(output.size());
-                    std::copy(output.begin(), output.end(), buffer.get());
+                    ::ranges::copy(output, buffer.get());
                     EVMCResult result{
                         evmc_result{
                             .status_code = success ? EVMC_SUCCESS : EVMC_REVERT,
@@ -146,4 +134,4 @@ inline constexpr struct
     }
 } callPrecompiled{};
 
-}  // namespace bcos::transaction_executor
+}  // namespace bcos::executor_v1

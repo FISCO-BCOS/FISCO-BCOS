@@ -17,7 +17,7 @@ class bcos::wasm::GasInjector
 
 #define EXECUTIVE_WRAPPER(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTIVE_WRAPPER")
 
-namespace bcos::transaction_executor
+namespace bcos::executor_v1
 {
 
 inline std::shared_ptr<precompiled::Precompiled> getInnerPrecompiled(auto const& precompiled)
@@ -85,10 +85,11 @@ public:
             {
                 input->codeAddress = bcos::newEVMAddress(
                     m_hashImpl, m_blockContext->number(), m_contextID, seq() + 1);
+                input->receiveAddress = input->codeAddress;
             }
             EXECUTIVE_WRAPPER(TRACE) << "codeAddress:" << input->codeAddress;
-            auto tuple = create(std::move(input));
-            return std::move(std::get<1>(tuple));
+            auto [hostContext, callResults] = create(std::move(input));
+            return callResults;
         }
 
         evmc_message evmcMessage{.kind = input->create ? EVMC_CREATE : EVMC_CALL,
@@ -161,4 +162,4 @@ inline auto buildLegacyExecutive(auto& storage, protocol::BlockHeader const& blo
         std::move(blockContext), std::move(contractAddress), contextID, seq, wasm::GasInjector{},
         std::move(externalCaller), precompiledManager);
 }
-}  // namespace bcos::transaction_executor
+}  // namespace bcos::executor_v1

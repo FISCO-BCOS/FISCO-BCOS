@@ -15,8 +15,8 @@
 
 using namespace bcos;
 using namespace bcos::storage2;
-using namespace bcos::transaction_executor;
-using namespace bcos::transaction_scheduler;
+using namespace bcos::executor_v1;
+using namespace bcos::scheduler_v1;
 using namespace std::string_view_literals;
 
 struct MockExecutorParallel
@@ -26,7 +26,7 @@ struct MockExecutorParallel
     };
 
     friend task::Task<Context> tag_invoke(
-        transaction_executor::tag_t<createExecuteContext> /*unused*/,
+        executor_v1::tag_t<createExecuteContext> /*unused*/,
         MockExecutorParallel& executor, auto& storage, protocol::BlockHeader const& blockHeader,
         protocol::Transaction const& transaction, int32_t contextID,
         ledger::LedgerConfig const& ledgerConfig)
@@ -36,14 +36,14 @@ struct MockExecutorParallel
 
     template <int step>
     friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
-        transaction_executor::tag_t<executeStep> /*unused*/, Context& executeContext)
+        executor_v1::tag_t<executeStep> /*unused*/, Context& executeContext)
     {
         co_return {};
     }
 
     friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
-        bcos::transaction_executor::tag_t<
-            bcos::transaction_executor::executeTransaction> /*unused*/,
+        bcos::executor_v1::tag_t<
+            bcos::executor_v1::executeTransaction> /*unused*/,
         MockExecutorParallel& executor, auto& storage, protocol::BlockHeader const& blockHeader,
         protocol::Transaction const& transaction, int contextID, ledger::LedgerConfig const&,
         auto&& waitOperator, auto&&...)
@@ -95,7 +95,7 @@ BOOST_AUTO_TEST_CASE(simple)
         auto view = fork(multiLayerStorage);
         newMutable(view);
         ledger::LedgerConfig ledgerConfig;
-        auto receipts = co_await bcos::transaction_scheduler::executeBlock(scheduler, view,
+        auto receipts = co_await bcos::scheduler_v1::executeBlock(scheduler, view,
             executor, blockHeader,
             transactions | RANGES::views::transform([](auto& ptr) -> auto& { return *ptr; }),
             ledgerConfig);
@@ -119,7 +119,7 @@ struct MockConflictExecutor
         std::string toAddress;
     };
 
-    friend auto tag_invoke(transaction_executor::tag_t<createExecuteContext> /*unused*/,
+    friend auto tag_invoke(executor_v1::tag_t<createExecuteContext> /*unused*/,
         MockConflictExecutor& executor, auto& storage, protocol::BlockHeader const& blockHeader,
         protocol::Transaction const& transaction, int32_t contextID,
         ledger::LedgerConfig const& ledgerConfig)
@@ -133,7 +133,7 @@ struct MockConflictExecutor
 
     template <int step>
     friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
-        transaction_executor::tag_t<executeStep> /*unused*/, auto& executeContext)
+        executor_v1::tag_t<executeStep> /*unused*/, auto& executeContext)
     {
         if constexpr (step == 0)
         {
@@ -205,7 +205,7 @@ BOOST_AUTO_TEST_CASE(conflict)
         auto view = fork(multiLayerStorage);
         newMutable(view);
         ledger::LedgerConfig ledgerConfig;
-        auto receipts = co_await bcos::transaction_scheduler::executeBlock(
+        auto receipts = co_await bcos::scheduler_v1::executeBlock(
             scheduler, view, executor, blockHeader, transactionRefs, ledgerConfig);
         pushView(multiLayerStorage, std::move(view));
 

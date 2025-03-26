@@ -530,7 +530,7 @@ void MemoryStorage::notifyTxResult(
     if (c_fileLogLevel == TRACE) [[unlikely]]
     {
         TXPOOL_LOG(TRACE) << LOG_DESC("notifyTxResult")
-                          << LOG_KV("txSubmitResult", txSubmitResult->toString());
+                          << LOG_KV("txSubmitResult", *txSubmitResult);
     }
     try
     {

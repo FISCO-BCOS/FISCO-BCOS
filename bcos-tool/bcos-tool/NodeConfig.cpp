@@ -934,7 +934,6 @@ void NodeConfig::loadOthersConfig(boost::property_tree::ptree const& _pt)
 {
     m_sendTxTimeout = _pt.get<int>("others.send_tx_timeout", -1);
     m_vmCacheSize = _pt.get<int>("executor.vm_cache_size", 1024);
-    m_enableBaselineScheduler = _pt.get<bool>("executor.baseline_scheduler", false);
     m_baselineSchedulerConfig.grainSize =
         _pt.get<int>("executor.baseline_scheduler_chunksize", 100);
     m_baselineSchedulerConfig.maxThread = _pt.get<int>("executor.baseline_scheduler_maxthread", 16);
@@ -1127,6 +1126,7 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
         m_genesisConfig.m_isAuthCheck = _genesisConfig.get<bool>("executor.is_auth_check", false);
         m_genesisConfig.m_isSerialExecute =
             _genesisConfig.get<bool>("executor.is_serial_execute", false);
+        m_genesisConfig.m_executorVersion = _genesisConfig.get<int>("executor.version", 0);
     }
     catch (std::exception const& e)
     {
@@ -1342,4 +1342,8 @@ bool bcos::tool::NodeConfig::checkTransactionSignature() const
 bool bcos::tool::NodeConfig::checkParallelConflict() const
 {
     return m_checkParallelConflict;
+}
+int bcos::tool::NodeConfig::executorVersion() const
+{
+    return m_genesisConfig.m_executorVersion;
 }
