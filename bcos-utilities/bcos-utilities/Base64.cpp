@@ -18,7 +18,6 @@
  */
 
 #include "Base64.h"
-#include "Ranges.h"
 #include <boost/algorithm/string.hpp>
 #include <boost/archive/iterators/base64_from_binary.hpp>
 #include <boost/archive/iterators/binary_from_base64.hpp>
@@ -59,7 +58,7 @@ std::string bcos::base64Decode(std::string const& _data)
         }
     }
     using It = transform_width<binary_from_base64<std::string::const_iterator>, 8, 6>;
-    auto ret = std::string(It(_data.begin()), It(RANGES::end(_data)));
+    auto ret = std::string(It(_data.begin()), It(::ranges::end(_data)));
     ret.resize(ret.size() - suffix);
     return ret;
 }
