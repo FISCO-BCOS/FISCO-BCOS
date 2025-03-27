@@ -35,7 +35,7 @@ concept HasMemberSize = requires(Object object) {
 
 using Empty = std::monostate;
 
-enum Attribute : int
+enum Attribute : uint8_t
 {
     UNORDERED = 0,
     ORDERED = 1,
@@ -181,8 +181,7 @@ public:
     }
 
     friend auto tag_invoke(bcos::storage2::tag_t<readSome> /*unused*/, MemoryStorage& storage,
-        ::ranges::input_range auto&& keys)
-        -> task::AwaitableValue<std::vector<std::optional<Value>>>
+        ::ranges::input_range auto keys) -> task::AwaitableValue<std::vector<std::optional<Value>>>
     {
         task::AwaitableValue<std::vector<std::optional<Value>>> result;
         if constexpr (::ranges::sized_range<decltype(keys)>)
@@ -218,7 +217,7 @@ public:
     }
 
     friend task::AwaitableValue<std::optional<Value>> tag_invoke(
-        storage2::tag_t<storage2::readOne> /*unused*/, MemoryStorage& storage, auto&& key,
+        storage2::tag_t<storage2::readOne> /*unused*/, MemoryStorage& storage, auto key,
         auto&&... /*unused*/)
     {
         task::AwaitableValue<std::optional<Value>> result;
@@ -233,7 +232,7 @@ public:
             lock.release();
             if constexpr (std::decay_t<decltype(storage)>::withLRU)
             {
-                if (Lock LRULock; LRULock.try_acquire(bucket.mutex, true))
+                if (Lock lruLock; lruLock.try_acquire(bucket.mutex, true))
                 {
                     updateLRUAndCheck(storage, bucket, it);
                 }
@@ -243,7 +242,7 @@ public:
     }
 
     friend void writeOneImpl(
-        MemoryStorage& storage, Bucket& bucket, auto&& key, auto&& value, bool direct)
+        MemoryStorage& storage, Bucket& bucket, auto key, auto value, bool direct)
     {
         auto const& index = bucket.container.template get<0>();
         std::conditional_t<withLRU, int64_t, Empty> updatedCapacity{};
@@ -289,8 +288,8 @@ public:
                 {
                     updatedCapacity -= (getSize(key) + getSize(existsValue));
                 }
-                bucket.container.modify(it,
-                    [&](Data& data) mutable { data.value = std::forward<decltype(value)>(value); });
+                bucket.container.modify(
+                    it, [&](Data& data) mutable { data.value = std::move(value); });
             }
         }
         else
@@ -306,20 +305,20 @@ public:
                     if constexpr (std::is_same_v<std::decay_t<decltype(key)>, Key>)
                     {
                         it = bucket.container.emplace_hint(
-                            it, Data{.key = std::forward<decltype(key)>(key), .value = {}});
+                            it, Data{.key = std::move(key), .value = {}});
                     }
                     else
                     {
                         it = bucket.container.emplace_hint(
-                            it, Data{.key = Key{std::forward<decltype(key)>(key)}, .value = {}});
+                            it, Data{.key = Key{std::move(key)}, .value = {}});
                     }
                 }
             }
             else
             {
                 it = bucket.container.emplace_hint(
-                    it, typename MemoryStorage::Data{.key = Key(std::forward<decltype(key)>(key)),
-                            .value = std::forward<decltype(value)>(value)});
+                    it, typename MemoryStorage::Data{
+                            .key = Key(std::move(key)), .value = std::move(value)});
             }
         }
 
@@ -331,17 +330,16 @@ public:
     }
 
     friend task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::writeOne> /*unused*/,
-        MemoryStorage& storage, auto&& key, auto&& value)
+        MemoryStorage& storage, auto key, auto value)
     {
         auto& bucket = getBucket(storage, key);
         Lock lock(bucket.mutex, true);
-        writeOneImpl(storage, bucket, std::forward<decltype(key)>(key),
-            std::forward<decltype(value)>(value), false);
+        writeOneImpl(storage, bucket, std::move(key), std::move(value), false);
         return {};
     }
 
     friend task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/,
-        MemoryStorage& storage, ::ranges::input_range auto&& keyValues)
+        MemoryStorage& storage, ::ranges::input_range auto keyValues)
     {
         for (auto&& [key, value] : keyValues)
         {
@@ -354,7 +352,7 @@ public:
         return {};
     }
 
-    task::AwaitableValue<void> removeSome(::ranges::input_range auto&& keys, bool direct)
+    task::AwaitableValue<void> removeSome(::ranges::input_range auto keys, bool direct)
     {
         for (auto&& key : keys)
         {
@@ -367,19 +365,19 @@ public:
     }
 
     friend task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/,
-        MemoryStorage& storage, ::ranges::input_range auto&& keys)
+        MemoryStorage& storage, ::ranges::input_range auto keys)
     {
-        return storage.removeSome(std::forward<decltype(keys)>(keys), false);
+        return storage.removeSome(std::move(keys), false);
     }
 
     friend task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/,
-        MemoryStorage& storage, ::ranges::input_range auto&& keys, DIRECT_TYPE /*unused*/)
+        MemoryStorage& storage, ::ranges::input_range auto keys, DIRECT_TYPE /*unused*/)
     {
-        return storage.removeSome(std::forward<decltype(keys)>(keys), true);
+        return storage.removeSome(std::move(keys), true);
     }
 
     friend task::AwaitableValue<void> tag_invoke(
-        storage2::tag_t<merge> /*unused*/, MemoryStorage& toStorage, MemoryStorage&& fromStorage)
+        storage2::tag_t<merge> /*unused*/, MemoryStorage& toStorage, MemoryStorage& fromStorage)
         requires(!std::is_const_v<decltype(fromStorage)>)
     {
         for (auto&& [bucket, fromBucket] :
@@ -461,7 +459,7 @@ public:
             return task::AwaitableValue(std::move(result));
         }
 
-        auto seek(auto&& key)
+        auto seek(const auto& key)
             requires(!withConcurrent && withOrdered)
         {
             auto const& index = m_buckets.get()[m_bucketIndex].container.template get<0>();
@@ -476,18 +474,18 @@ public:
     }
 
     friend auto tag_invoke(bcos::storage2::tag_t<storage2::range> /*unused*/,
-        MemoryStorage& storage, RANGE_SEEK_TYPE /*unused*/, auto&& key)
+        MemoryStorage& storage, RANGE_SEEK_TYPE /*unused*/, const auto& key)
         requires(!withConcurrent && withOrdered)
     {
         auto iterator = Iterator(storage.m_buckets);
-        iterator.seek(std::forward<decltype(key)>(key));
+        iterator.seek(key);
         return task::AwaitableValue(std::move(iterator));
     }
 
     template <class FromStorage>
         requires withConcurrent
     friend task::Task<void> tag_invoke(
-        storage2::tag_t<merge> /*unused*/, MemoryStorage& toStorage, FromStorage&& fromStorage)
+        storage2::tag_t<merge> /*unused*/, MemoryStorage& toStorage, FromStorage& fromStorage)
     {
         auto& bucket = fromStorage.m_buckets[0];
         auto& index = bucket.container.template get<0>();

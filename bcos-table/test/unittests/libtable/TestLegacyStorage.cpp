@@ -95,11 +95,20 @@ BOOST_AUTO_TEST_CASE(balanceCase)
                 "893de00e32b0765e03366ce8b3bfcd0404b24995",
                 "d24180cc0fef2f3e545de4f9aafc09345cd08903"});
 
-        co_await bcos::storage2::writeSome(
-            storage, keys | ::ranges::views::transform([](std::string_view keyView) {
-                auto key = bcos::executor_v1::StateKey("s_balance_caller", keyView);
-                return std::make_tuple(key, bcos::storage::Entry("1"));
-            }));
+        auto otherKeys = ::ranges::views::iota(0, 496) | ::ranges::views::transform([](int i) {
+            return fmt::format("{:#040x}", i);
+        });
+
+        using namespace std::string_literals;
+        co_await bcos::storage2::writeSome(storage,
+            ::ranges::views::concat(keys | ::ranges::views::transform([](std::string_view view) {
+                return std::string(view);
+            }),
+                otherKeys) |
+                ::ranges::views::transform([](std::string keyView) {
+                    auto key = bcos::executor_v1::StateKey("s_balance_caller"s, std::move(keyView));
+                    return std::make_tuple(key, bcos::storage::Entry("1"));
+                }));
 
         bcos::storage::LegacyStorageWrapper legacyStorage(storage);
 

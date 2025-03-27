@@ -34,7 +34,12 @@ public:
             std::vector<std::string> keys;
 
             size_t index = 0;
-            auto [start, count] = condition->getLimit();
+            size_t start = 0;
+            size_t count = 0;
+            if (condition)
+            {
+                std::tie(start, count) = condition->getLimit();
+            }
             auto range = co_await storage2::range(self->m_storage.get());
             while (auto keyValue = co_await range.next())
             {
