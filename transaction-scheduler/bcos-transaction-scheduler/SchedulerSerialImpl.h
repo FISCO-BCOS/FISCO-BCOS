@@ -37,7 +37,7 @@ task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
     using ExecutionContext =
         task::AwaitableReturnType<std::invoke_result_t<executor_v1::CreateExecuteContext,
             decltype(executor), decltype(storage), protocol::BlockHeader const&,
-            protocol::Transaction const&, int, ledger::LedgerConfig const&>>;
+            protocol::Transaction const&, int, ledger::LedgerConfig const&, bool>>;
     std::vector<ExecutionContext, tbb::cache_aligned_allocator<ExecutionContext>> contexts;
     contexts.reserve(count);
 
@@ -72,8 +72,8 @@ task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
                         for (auto i : range)
                         {
                             contexts.emplace_back(
-                                co_await executor_v1::createExecuteContext(executor,
-                                    storage, blockHeader, transactions[i], i, ledgerConfig));
+                                co_await executor_v1::createExecuteContext(executor, storage,
+                                    blockHeader, transactions[i], i, ledgerConfig, false));
                         }
                         co_return range;
                     }());
@@ -113,8 +113,7 @@ task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
                             {
                                 auto& context = contexts[i];
                                 receipts.emplace_back(
-                                    co_await executor_v1::executeStep.operator()<2>(
-                                        context));
+                                    co_await executor_v1::executeStep.operator()<2>(context));
                             }
                         }());
                     }));

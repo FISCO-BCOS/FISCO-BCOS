@@ -181,7 +181,7 @@ public:
 
         std::string gasPriceStr;
         auto gasUsed = executeContext.m_gasLimit - evmcResult.gas_left;
-        if (executeContext.call)
+        if (!executeContext.m_call)
         {
             if (auto gasPrice = u256{std::get<0>(executeContext.m_ledgerConfig.get().gasPrice())};
                 gasPrice > 0)

@@ -25,11 +25,8 @@ using namespace bcos::scheduler_v1;
 struct MockExecutorBaseline
 {
     friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
-        bcos::executor_v1::tag_t<
-            bcos::executor_v1::executeTransaction> /*unused*/,
-        MockExecutorBaseline& executor, auto& storage, protocol::BlockHeader const& blockHeader,
-        protocol::Transaction const& transaction, int contextID, ledger::LedgerConfig const&,
-        auto&& waitOperator)
+        bcos::executor_v1::tag_t<bcos::executor_v1::executeTransaction> /*unused*/,
+        MockExecutorBaseline& executor, auto&&...)
     {
         co_return std::shared_ptr<protocol::TransactionReceipt>();
     }
@@ -37,10 +34,9 @@ struct MockExecutorBaseline
 struct MockScheduler
 {
     friend task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
-        scheduler_v1::tag_t<scheduler_v1::executeBlock> /*unused*/,
-        MockScheduler& /*unused*/, auto& storage, auto& executor,
-        protocol::BlockHeader const& blockHeader, RANGES::input_range auto const& transactions,
-        ledger::LedgerConfig const& /*unused*/)
+        scheduler_v1::tag_t<scheduler_v1::executeBlock> /*unused*/, MockScheduler& /*unused*/,
+        auto& storage, auto& executor, protocol::BlockHeader const& blockHeader,
+        RANGES::input_range auto const& transactions, ledger::LedgerConfig const& /*unused*/)
     {
         auto receipts =
             RANGES::iota_view<size_t, size_t>(0, RANGES::size(transactions)) |

@@ -33,8 +33,7 @@ template <class MutableStorage, class Storage>
 struct StorageTrait
 {
     using LocalStorageView = View<MutableStorage, void, Storage>;
-    using LocalReadWriteSetStorage =
-        ReadWriteSetStorage<LocalStorageView, executor_v1::StateKey>;
+    using LocalReadWriteSetStorage = ReadWriteSetStorage<LocalStorageView, executor_v1::StateKey>;
 };
 
 struct ExecutionContext
@@ -58,7 +57,7 @@ private:
     using ExecuteContext = task::AwaitableReturnType<std::invoke_result_t<
         executor_v1::CreateExecuteContext, std::add_lvalue_reference_t<Executor>,
         std::add_lvalue_reference_t<decltype(m_readWriteSetStorage)>, protocol::BlockHeader const&,
-        protocol::Transaction const&, int, ledger::LedgerConfig const&>>;
+        protocol::Transaction const&, int, ledger::LedgerConfig const&, bool>>;
 
     std::vector<ExecuteContext> m_executeContexts;
 
@@ -88,9 +87,9 @@ public:
         m_executeContexts.reserve(RANGES::size(m_contexts));
         for (auto& context : m_contexts)
         {
-            m_executeContexts.emplace_back(co_await executor_v1::createExecuteContext(
-                m_executor.get(), m_readWriteSetStorage, blockHeader, *context.transaction,
-                context.contextID, ledgerConfig));
+            m_executeContexts.emplace_back(
+                co_await executor_v1::createExecuteContext(m_executor.get(), m_readWriteSetStorage,
+                    blockHeader, *context.transaction, context.contextID, ledgerConfig, false));
         }
     }
 
@@ -134,8 +133,7 @@ public:
             ittapi::ITT_DOMAINS::instance().EXECUTE_CHUNK3);
         for (auto&& [context, executeContext] : ::ranges::views::zip(m_contexts, m_executeContexts))
         {
-            *context.receipt =
-                co_await executor_v1::executeStep.operator()<2>(executeContext);
+            *context.receipt = co_await executor_v1::executeStep.operator()<2>(executeContext);
         }
     }
 };
