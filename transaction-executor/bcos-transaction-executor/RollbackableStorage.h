@@ -40,7 +40,9 @@ private:
     std::vector<Record> m_records;
     std::reference_wrapper<Storage> m_storage;
 
-    task::Task<void> storeOldValues(auto&& keys, bool withEmpty)
+    template <class Keys>
+        requires ::ranges::sized_range<Keys> && ::ranges::input_range<Keys>
+    task::Task<void> storeOldValues(Keys keys, bool withEmpty)
     {
         auto oldValues = co_await storage2::readSome(m_storage.get(), keys, storage2::DIRECT);
         m_records.reserve(m_records.size() + ::ranges::size(keys));
@@ -56,7 +58,7 @@ private:
 
     friend Savepoint current(Rollbackable const& storage)
     {
-        return static_cast<int64_t>(storage.m_records.size());
+        return static_cast<Savepoint>(storage.m_records.size());
     }
 
     friend task::Task<void> rollback(Rollbackable& storage, Savepoint savepoint)

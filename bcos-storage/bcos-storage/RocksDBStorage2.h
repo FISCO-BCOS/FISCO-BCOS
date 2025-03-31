@@ -79,7 +79,7 @@ public:
     using Key = KeyType;
     using Value = ValueType;
 
-    static auto executeReadSome(RocksDBStorage2& storage, ::ranges::input_range auto&& keys)
+    static auto executeReadSome(RocksDBStorage2& storage, ::ranges::input_range auto keys)
     {
         auto encodedKeys = keys | ::ranges::views::transform([&](auto&& key) {
             return storage.m_keyResolver.encode(std::forward<decltype(key)>(key));
@@ -115,14 +115,14 @@ public:
     }
 
     friend auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, RocksDBStorage2& storage,
-        ::ranges::input_range auto&& keys) -> task::AwaitableValue<decltype(executeReadSome(storage,
+        ::ranges::input_range auto keys) -> task::AwaitableValue<decltype(executeReadSome(storage,
         std::forward<decltype(keys)>(keys)))>
     {
-        return {executeReadSome(storage, std::forward<decltype(keys)>(keys))};
+        return {executeReadSome(storage, std::move(keys))};
     }
 
     friend auto tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/, RocksDBStorage2& storage,
-        auto&& key) -> task::AwaitableValue<std::optional<ValueType>>
+        auto key) -> task::AwaitableValue<std::optional<ValueType>>
     {
         task::AwaitableValue<std::optional<ValueType>> result;
 
@@ -147,7 +147,7 @@ public:
     }
 
     friend task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/,
-        RocksDBStorage2& storage, ::ranges::input_range auto&& keyValues)
+        RocksDBStorage2& storage, ::ranges::input_range auto keyValues)
     {
         using RangeKeyType = std::tuple_element_t<0, ::ranges::range_value_t<decltype(keyValues)>>;
         using RangeValueType =
@@ -187,7 +187,7 @@ public:
                 ::rocksdb::Slice(::ranges::data(valueBuffer), ::ranges::size(valueBuffer)));
         }
         ::rocksdb::WriteOptions options;
-        auto status = storage.m_rocksDB.Write(options, &writeBatch);
+        auto status = storage.m_rocksDB.Write(options, std::addressof(writeBatch));
 
         if (!status.ok())
         {
@@ -196,11 +196,11 @@ public:
         return {};
     }
 
-    friend task::AwaitableValue<void> tag_invoke(
-        storage2::tag_t<storage2::writeOne> /*unused*/, RocksDBStorage2& storage, auto const& key)
+    friend task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::writeOne> /*unused*/,
+        RocksDBStorage2& storage, auto key, auto value)
     {
         auto rocksDBKey = storage.m_keyResolver.encode(key);
-        auto rocksDBValue = storage.m_valueResolver.encode(key);
+        auto rocksDBValue = storage.m_valueResolver.encode(value);
 
         ::rocksdb::WriteOptions options;
         auto status = storage.m_rocksDB.Put(options,
@@ -214,7 +214,7 @@ public:
     }
 
     friend task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/,
-        RocksDBStorage2& storage, ::ranges::input_range auto const& keys)
+        RocksDBStorage2& storage, ::ranges::input_range auto keys)
     {
         ::rocksdb::WriteBatch writeBatch;
 
@@ -236,7 +236,7 @@ public:
     }
 
     friend task::Task<void> tag_invoke(
-        storage2::tag_t<merge> /*unused*/, RocksDBStorage2& storage, auto&& fromStorage)
+        storage2::tag_t<merge> /*unused*/, RocksDBStorage2& storage, auto& fromStorage)
     {
         auto range = co_await storage2::range(fromStorage);
 

@@ -28,7 +28,7 @@ struct UnsupportedMethod : public bcos::Error {};
 
 template <class KeyType, class ValueType>
 task::Task<bool> fillMissingValues(
-    auto& storage, ::ranges::input_range auto&& keys, ::ranges::input_range auto& values)
+    auto& storage, ::ranges::input_range auto& keys, ::ranges::input_range auto& values)
 {
     using StoreKeyType =
         std::conditional_t<std::is_lvalue_reference_v<::ranges::range_value_t<decltype(keys)>>,
@@ -43,11 +43,11 @@ task::Task<bool> fillMissingValues(
             missingKeyValues.emplace_back(std::forward<decltype(key)>(key), std::ref(value));
         }
     }
-    auto gotValues = co_await storage2::readSome(storage, missingKeyValues | ::ranges::views::keys);
+    auto gotValues = co_await storage2::readSome(storage, ::ranges::views::keys(missingKeyValues));
 
     size_t count = 0;
     for (auto&& [from, to] :
-        ::ranges::views::zip(gotValues, missingKeyValues | ::ranges::views::values))
+        ::ranges::views::zip(gotValues, ::ranges::views::values(missingKeyValues)))
     {
         if (from)
         {
