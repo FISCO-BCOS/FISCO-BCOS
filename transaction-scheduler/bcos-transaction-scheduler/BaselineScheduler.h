@@ -600,15 +600,15 @@ public:
                 blockHeader->setNumber(ledgerConfig->blockNumber() + 1);  // Use next block number
                 blockHeader->calculateHash(self->m_hashImpl.get());
                 receipt = co_await executor_v1::executeTransaction(self->m_executor.get(), view,
-                    *blockHeader, *transaction, 0, *ledgerConfig, task::syncWait);
+                    *blockHeader, *transaction, 0, *ledgerConfig, true, task::syncWait);
             }
             else
             {
                 ledger::LedgerConfig emptyLedgerConfig;
-                blockHeader->setVersion((uint32_t)bcos::protocol::BlockVersion::V3_2_4_VERSION);
+                blockHeader->setVersion((uint32_t)bcos::protocol::BlockVersion::MAX_VERSION);
                 blockHeader->calculateHash(self->m_hashImpl.get());
                 receipt = co_await executor_v1::executeTransaction(self->m_executor.get(), view,
-                    *blockHeader, *transaction, 0, emptyLedgerConfig, task::syncWait);
+                    *blockHeader, *transaction, 0, emptyLedgerConfig, true, task::syncWait);
             }
 
             callback(nullptr, std::move(receipt));

@@ -54,6 +54,7 @@ public:
         Rollbackable<Storage>::Savepoint m_startSavepoint;
         TransientStorage m_transientStorage;
         Rollbackable<decltype(m_transientStorage)> m_rollbackableTransientStorage;
+        bool m_call;
 
         int64_t m_gasLimit;
         int64_t m_seq = 0;
@@ -66,7 +67,7 @@ public:
 
         ExecuteContext(TransactionExecutorImpl& executor, Storage& storage,
             protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
-            int contextID, ledger::LedgerConfig const& ledgerConfig)
+            int contextID, ledger::LedgerConfig const& ledgerConfig, bool call)
           : m_executor(executor),
             m_blockHeader(blockHeader),
             m_transaction(transaction),
@@ -75,6 +76,7 @@ public:
             m_rollbackableStorage(storage),
             m_startSavepoint(current(m_rollbackableStorage)),
             m_rollbackableTransientStorage(m_transientStorage),
+            m_call(call),
             m_gasLimit(static_cast<int64_t>(std::get<0>(ledgerConfig.gasLimit()))),
             m_origin((!m_transaction.get().sender().empty() &&
                          m_transaction.get().sender().size() == sizeof(evmc_address)) ?
@@ -92,12 +94,12 @@ public:
     friend auto tag_invoke(tag_t<createExecuteContext> /*unused*/,
         TransactionExecutorImpl& executor, auto& storage, protocol::BlockHeader const& blockHeader,
         protocol::Transaction const& transaction, int contextID,
-        ledger::LedgerConfig const& ledgerConfig)
+        ledger::LedgerConfig const& ledgerConfig, bool call)
         -> task::Task<std::unique_ptr<ExecuteContext<std::decay_t<decltype(storage)>>>>
     {
         TRANSACTION_EXECUTOR_LOG(TRACE) << "Create transaction context: " << transaction;
         co_return std::make_unique<ExecuteContext<std::decay_t<decltype(storage)>>>(
-            executor, storage, blockHeader, transaction, contextID, ledgerConfig);
+            executor, storage, blockHeader, transaction, contextID, ledgerConfig, call);
     }
 
     template <int step>
@@ -163,7 +165,6 @@ public:
         {
             TRANSACTION_EXECUTOR_LOG(DEBUG) << "Transaction revert: " << evmcResult.status_code;
 
-
             auto [_, errorMessage] = evmcStatusToErrorMessage(
                 *executeContext.m_executor.get().m_hashImpl, evmcResult.status_code);
             if (!errorMessage.empty())
@@ -180,27 +181,31 @@ public:
 
         std::string gasPriceStr;
         auto gasUsed = executeContext.m_gasLimit - evmcResult.gas_left;
-        if (auto gasPrice = u256{std::get<0>(executeContext.m_ledgerConfig.get().gasPrice())};
-            gasPrice > 0)
+        if (executeContext.call)
         {
-            gasPriceStr = "0x" + gasPrice.str(256, std::ios_base::hex);
-
-            auto balanceUsed = gasUsed * gasPrice;
-            auto senderAccount = getAccount(executeContext.m_hostContext, evmcMessage.sender);
-            auto senderBalance = co_await ledger::account::balance(senderAccount);
-
-            if (senderBalance < balanceUsed)
+            if (auto gasPrice = u256{std::get<0>(executeContext.m_ledgerConfig.get().gasPrice())};
+                gasPrice > 0)
             {
-                TRANSACTION_EXECUTOR_LOG(ERROR) << "Insufficient balance: " << senderBalance
-                                                << ", balanceUsed: " << balanceUsed;
-                evmcResult.status_code = EVMC_INSUFFICIENT_BALANCE;
-                evmcResult.status = protocol::TransactionStatus::NotEnoughCash;
-                co_await rollback(
-                    executeContext.m_rollbackableStorage, executeContext.m_startSavepoint);
-            }
-            else
-            {
-                co_await ledger::account::setBalance(senderAccount, senderBalance - balanceUsed);
+                gasPriceStr = "0x" + gasPrice.str(256, std::ios_base::hex);
+
+                auto balanceUsed = gasUsed * gasPrice;
+                auto senderAccount = getAccount(executeContext.m_hostContext, evmcMessage.sender);
+                auto senderBalance = co_await ledger::account::balance(senderAccount);
+
+                if (senderBalance < balanceUsed)
+                {
+                    TRANSACTION_EXECUTOR_LOG(ERROR) << "Insufficient balance: " << senderBalance
+                                                    << ", balanceUsed: " << balanceUsed;
+                    evmcResult.status_code = EVMC_INSUFFICIENT_BALANCE;
+                    evmcResult.status = protocol::TransactionStatus::NotEnoughCash;
+                    co_await rollback(
+                        executeContext.m_rollbackableStorage, executeContext.m_startSavepoint);
+                }
+                else
+                {
+                    co_await ledger::account::setBalance(
+                        senderAccount, senderBalance - balanceUsed);
+                }
             }
         }
 
@@ -238,10 +243,10 @@ public:
     friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
         tag_t<executeTransaction> /*unused*/, TransactionExecutorImpl& executor, auto& storage,
         protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
-        int contextID, ledger::LedgerConfig const& ledgerConfig, auto&& syncWait)
+        int contextID, ledger::LedgerConfig const& ledgerConfig, bool call, auto&& syncWait)
     {
         auto executeContext = co_await createExecuteContext(
-            executor, storage, blockHeader, transaction, contextID, ledgerConfig);
+            executor, storage, blockHeader, transaction, contextID, ledgerConfig, call);
 
         co_await executor_v1::executeStep.operator()<0>(executeContext);
         co_await executor_v1::executeStep.operator()<1>(executeContext);
