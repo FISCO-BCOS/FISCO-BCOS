@@ -99,16 +99,19 @@ BOOST_AUTO_TEST_CASE(balanceCase)
             return fmt::format("{:#040x}", i);
         });
 
-        using namespace std::string_literals;
-        co_await bcos::storage2::writeSome(storage,
-            ::ranges::views::concat(keys | ::ranges::views::transform([](std::string_view view) {
-                return std::string(view);
-            }),
+        auto totalKeys =
+            ::ranges::views::concat(::ranges::views::transform(keys,
+                                        [](std::string_view view) { return std::string(view); }),
                 otherKeys) |
-                ::ranges::views::transform([](std::string keyView) {
-                    auto key = bcos::executor_v1::StateKey("s_balance_caller"s, std::move(keyView));
-                    return std::make_tuple(key, bcos::storage::Entry("1"));
-                }));
+            ::ranges::to<std::vector>();
+        ::ranges::sort(totalKeys);
+
+        using namespace std::string_literals;
+        co_await bcos::storage2::writeSome(
+            storage, totalKeys | ::ranges::views::transform([](std::string keyView) {
+                auto key = bcos::executor_v1::StateKey("s_balance_caller"s, std::move(keyView));
+                return std::make_tuple(key, bcos::storage::Entry("1"));
+            }));
 
         bcos::storage::LegacyStorageWrapper legacyStorage(storage);
 
@@ -116,10 +119,16 @@ BOOST_AUTO_TEST_CASE(balanceCase)
             [&](bcos::Error::UniquePtr error, std::vector<std::string> gotKeys) {
                 BOOST_CHECK(!error);
                 BOOST_CHECK(!gotKeys.empty());
-                BOOST_CHECK_EQUAL(gotKeys.size(), 4);
+                BOOST_CHECK_EQUAL(gotKeys.size(), 500);
+                ::ranges::sort(gotKeys);
                 BOOST_CHECK_EQUAL_COLLECTIONS(
-                    gotKeys.begin(), gotKeys.end(), keys.begin(), keys.end());
+                    gotKeys.begin(), gotKeys.end(), totalKeys.begin(), totalKeys.end());
             });
+
+        co_await bcos::storage2::removeSome(
+            storage, ::ranges::views::transform(otherKeys, [](std::string view) {
+                return bcos::executor_v1::StateKey("s_balance_caller", view);
+            }));
 
         bcos::storage::Entry deletedEntry;
         deletedEntry.setStatus(bcos::storage::Entry::DELETED);
