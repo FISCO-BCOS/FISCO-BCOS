@@ -198,6 +198,14 @@ public:
                                                     << ", balanceUsed: " << balanceUsed;
                     evmcResult.status_code = EVMC_INSUFFICIENT_BALANCE;
                     evmcResult.status = protocol::TransactionStatus::NotEnoughCash;
+                    if (evmcResult.release)
+                    {
+                        evmcResult.release(std::addressof(evmcResult));
+                    }
+                    evmcResult.output_data = nullptr;
+                    evmcResult.output_size = 0;
+                    evmcResult.release = nullptr;
+                    newContractAddress.clear();
                     co_await rollback(
                         executeContext.m_rollbackableStorage, executeContext.m_startSavepoint);
                 }

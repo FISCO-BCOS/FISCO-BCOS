@@ -321,4 +321,31 @@ BOOST_AUTO_TEST_CASE(bugfixPrecompiled)
     // }());
 }
 
+BOOST_AUTO_TEST_CASE(callGas)
+{
+    task::syncWait([this]() mutable -> task::Task<void> {
+        bcostars::protocol::BlockHeaderImpl blockHeader(
+            [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+        blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::MAX_VERSION);
+        blockHeader.calculateHash(*cryptoSuite->hashImpl());
+
+        ledgerConfig.setGasPrice({"21000", 0});
+        ledgerConfig.setBalanceTransfer(true);
+        bcos::bytes helloworldBytecodeBinary;
+        boost::algorithm::unhex(helloworldBytecode, std::back_inserter(helloworldBytecodeBinary));
+        // First deploy
+        auto transaction =
+            transactionFactory.createTransaction(0, "", helloworldBytecodeBinary, {}, 0, "", "", 0);
+        auto receipt = co_await bcos::executor_v1::executeTransaction(
+            executor, storage, blockHeader, *transaction, 0, ledgerConfig, false, task::syncWait);
+        BOOST_CHECK_EQUAL(receipt->status(), 7);
+        BOOST_CHECK_EQUAL(receipt->contractAddress(), "");
+
+        auto receipt2 = co_await bcos::executor_v1::executeTransaction(
+            executor, storage, blockHeader, *transaction, 0, ledgerConfig, true, task::syncWait);
+        BOOST_CHECK_EQUAL(receipt2->status(), 0);
+        BOOST_CHECK_EQUAL(receipt2->contractAddress(), "e0e794ca86d198042b64285c5ce667aee747509b");
+    }());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
