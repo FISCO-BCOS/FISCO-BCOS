@@ -222,7 +222,6 @@ private:
         std::function<void(Error::Ptr)>)>
         m_transactionNotifier;
     std::reference_wrapper<crypto::Hash const> m_hashImpl;
-    std::atomic<std::shared_ptr<ledger::LedgerConfig>> m_ledgerConfig;
 
     int64_t m_lastExecutedBlockNumber = -1;
     std::mutex m_executeMutex;
@@ -230,22 +229,21 @@ private:
     std::mutex m_commitMutex;
     tbb::task_group m_asyncGroup;
 
-    task::Task<std::shared_ptr<ledger::LedgerConfig>> getLedgerConfig()
-    {
-        if (auto current = m_ledgerConfig.load(); current)
-        {
-            co_return current;
-        }
+    std::shared_ptr<ledger::LedgerConfig> m_ledgerConfig;
+    std::mutex m_ledgerConfigMutex;
 
-        co_return co_await ledger::getLedgerConfig(m_ledger.get());
+    std::shared_ptr<ledger::LedgerConfig> getLedgerConfig()
+    {
+        std::unique_lock lock(m_ledgerConfigMutex);
+        return m_ledgerConfig;
     }
 
-    void updateLedgerConfig(const std::shared_ptr<ledger::LedgerConfig>& newLedgerConfig)
+    void updateLedgerConfig(std::shared_ptr<ledger::LedgerConfig> newLedgerConfig)
     {
-        auto current = m_ledgerConfig.load();
-        while ((!current || newLedgerConfig->blockNumber() > current->blockNumber()) &&
-               m_ledgerConfig.compare_exchange_strong(current, newLedgerConfig))
+        std::unique_lock lock(m_ledgerConfigMutex);
+        if (!m_ledgerConfig || newLedgerConfig->blockNumber() > m_ledgerConfig->blockNumber())
         {
+            m_ledgerConfig = std::move(newLedgerConfig);
         }
     }
 
@@ -332,7 +330,7 @@ private:
             newMutable(view);
             auto transactions = co_await getTransactions(scheduler.m_txpool.get(), *block);
 
-            ledger::LedgerConfig::Ptr ledgerConfig = scheduler.m_ledgerConfig.load();
+            auto ledgerConfig = scheduler.getLedgerConfig();
             auto receipts = co_await scheduler_v1::executeBlock(scheduler.m_schedulerImpl.get(),
                 view, scheduler.m_executor.get(), *blockHeader,
                 ::ranges::views::indirect(transactions), *ledgerConfig);
@@ -599,7 +597,7 @@ public:
             auto view = fork(self->m_multiLayerStorage.get());
             newMutable(view);
             auto blockHeader = self->m_blockHeaderFactory.get().createBlockHeader();
-            auto ledgerConfig = co_await self->getLedgerConfig();
+            auto ledgerConfig = self->getLedgerConfig();
 
             blockHeader->setVersion(ledgerConfig->compatibilityVersion());
             blockHeader->setNumber(ledgerConfig->blockNumber() + 1);  // Use next block number
@@ -623,7 +621,7 @@ public:
                        decltype(callback) callback) -> task::Task<void> {
             auto view = fork(self->m_multiLayerStorage.get());
             auto contractAddress = unhexAddress(contract);
-            auto ledgerConfig = co_await self->getLedgerConfig();
+            auto ledgerConfig = self->getLedgerConfig();
             ledger::account::EVMAccount account(view, contractAddress,
                 ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address));
             auto code = co_await ledger::account::code(account);
@@ -645,7 +643,7 @@ public:
                        decltype(callback) callback) -> task::Task<void> {
             auto view = fork(self->m_multiLayerStorage.get());
             auto contractAddress = unhexAddress(contract);
-            auto ledgerConfig = co_await self->getLedgerConfig();
+            auto ledgerConfig = self->getLedgerConfig();
             ledger::account::EVMAccount account(view, contractAddress,
                 ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address));
             auto abi = co_await ledger::account::abi(account);
@@ -685,7 +683,7 @@ public:
     {
         if (ledgerConfig)
         {
-            m_ledgerConfig = std::move(ledgerConfig);
+            updateLedgerConfig(std::move(ledgerConfig));
         }
     }
 };
