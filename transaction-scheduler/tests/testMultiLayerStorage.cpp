@@ -194,9 +194,7 @@ BOOST_AUTO_TEST_CASE(deletedEntry)
         newMutable(view2);
         co_await storage2::removeOne(view2, key);
 
-        // 已知有bug，暂时屏蔽
-        // Known issue, temporarily disabled.
-        // BOOST_CHECK(!co_await storage2::existsOne(view2, key));
+        BOOST_CHECK(!co_await storage2::existsOne(view2, key));
     }());
 }
 
