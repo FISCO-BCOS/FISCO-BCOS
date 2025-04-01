@@ -22,11 +22,10 @@ struct MockExecutorSerial
     {
     };
 
-    friend task::Task<Context> tag_invoke(
-        executor_v1::tag_t<createExecuteContext> /*unused*/, MockExecutorSerial& executor,
-        auto& storage, protocol::BlockHeader const& blockHeader,
+    friend task::Task<Context> tag_invoke(executor_v1::tag_t<createExecuteContext> /*unused*/,
+        MockExecutorSerial& executor, auto& storage, protocol::BlockHeader const& blockHeader,
         protocol::Transaction const& transaction, int32_t contextID,
-        ledger::LedgerConfig const& ledgerConfig)
+        ledger::LedgerConfig const& ledgerConfig, bool call)
     {
         co_return {};
     }
@@ -91,10 +90,10 @@ BOOST_AUTO_TEST_CASE(executeBlock)
         auto view = fork(multiLayerStorage);
         newMutable(view);
         ledger::LedgerConfig ledgerConfig;
-        auto receipts = co_await bcos::scheduler_v1::executeBlock(scheduler, view,
-            executor, blockHeader,
-            transactions | RANGES::views::transform([](auto& ptr) -> auto& { return *ptr; }),
-            ledgerConfig);
+        auto receipts =
+            co_await bcos::scheduler_v1::executeBlock(scheduler, view, executor, blockHeader,
+                transactions | RANGES::views::transform([](auto& ptr) -> auto& { return *ptr; }),
+                ledgerConfig);
         BOOST_CHECK_EQUAL(transactions.size(), receipts.size());
 
         co_return;

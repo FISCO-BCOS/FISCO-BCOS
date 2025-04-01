@@ -28,8 +28,8 @@ inline constexpr struct ExecuteTransaction
      * @return A task that resolves to a transaction receipt.
      */
     auto operator()(auto& executor, auto& storage, const protocol::BlockHeader& blockHeader,
-        const protocol::Transaction& transaction,
-        auto&&... args) const -> task::Task<protocol::TransactionReceipt::Ptr>
+        const protocol::Transaction& transaction, auto&&... args) const
+        -> task::Task<protocol::TransactionReceipt::Ptr>
     {
         co_return co_await tag_invoke(*this, executor, storage, blockHeader, transaction,
             std::forward<decltype(args)>(args)...);
@@ -51,8 +51,8 @@ inline constexpr struct CreateExecuteContext
 inline constexpr struct ExecuteStep
 {
     template <int step>
-    auto operator()(
-        auto& executeContext, auto&&... args) const -> task::Task<protocol::TransactionReceipt::Ptr>
+    auto operator()(auto& executeContext, auto&&... args) const
+        -> task::Task<protocol::TransactionReceipt::Ptr>
     {
         co_return co_await tag_invoke<step>(
             *this, executeContext, std::forward<decltype(args)>(args)...);

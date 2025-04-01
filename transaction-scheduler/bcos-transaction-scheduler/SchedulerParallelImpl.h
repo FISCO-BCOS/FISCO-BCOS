@@ -57,7 +57,7 @@ private:
     using ExecuteContext = task::AwaitableReturnType<std::invoke_result_t<
         executor_v1::CreateExecuteContext, std::add_lvalue_reference_t<Executor>,
         std::add_lvalue_reference_t<decltype(m_readWriteSetStorage)>, protocol::BlockHeader const&,
-        protocol::Transaction const&, int, ledger::LedgerConfig const&>>;
+        protocol::Transaction const&, int, ledger::LedgerConfig const&, bool>>;
 
     std::vector<ExecuteContext> m_executeContexts;
 
@@ -89,7 +89,7 @@ public:
         {
             m_executeContexts.emplace_back(
                 co_await executor_v1::createExecuteContext(m_executor.get(), m_readWriteSetStorage,
-                    blockHeader, *context.transaction, context.contextID, ledgerConfig));
+                    blockHeader, *context.transaction, context.contextID, ledgerConfig, false));
         }
     }
 
