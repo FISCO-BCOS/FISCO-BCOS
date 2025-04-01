@@ -25,11 +25,10 @@ struct MockExecutorParallel
     {
     };
 
-    friend task::Task<Context> tag_invoke(
-        executor_v1::tag_t<createExecuteContext> /*unused*/,
+    friend task::Task<Context> tag_invoke(executor_v1::tag_t<createExecuteContext> /*unused*/,
         MockExecutorParallel& executor, auto& storage, protocol::BlockHeader const& blockHeader,
         protocol::Transaction const& transaction, int32_t contextID,
-        ledger::LedgerConfig const& ledgerConfig)
+        ledger::LedgerConfig const& ledgerConfig, bool call)
     {
         co_return {};
     }
@@ -42,8 +41,7 @@ struct MockExecutorParallel
     }
 
     friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
-        bcos::executor_v1::tag_t<
-            bcos::executor_v1::executeTransaction> /*unused*/,
+        bcos::executor_v1::tag_t<bcos::executor_v1::executeTransaction> /*unused*/,
         MockExecutorParallel& executor, auto& storage, protocol::BlockHeader const& blockHeader,
         protocol::Transaction const& transaction, int contextID, ledger::LedgerConfig const&,
         auto&& waitOperator, auto&&...)
@@ -95,10 +93,10 @@ BOOST_AUTO_TEST_CASE(simple)
         auto view = fork(multiLayerStorage);
         newMutable(view);
         ledger::LedgerConfig ledgerConfig;
-        auto receipts = co_await bcos::scheduler_v1::executeBlock(scheduler, view,
-            executor, blockHeader,
-            transactions | RANGES::views::transform([](auto& ptr) -> auto& { return *ptr; }),
-            ledgerConfig);
+        auto receipts =
+            co_await bcos::scheduler_v1::executeBlock(scheduler, view, executor, blockHeader,
+                transactions | RANGES::views::transform([](auto& ptr) -> auto& { return *ptr; }),
+                ledgerConfig);
         BOOST_CHECK_EQUAL(transactions.size(), receipts.size());
 
         co_return;
@@ -122,7 +120,7 @@ struct MockConflictExecutor
     friend auto tag_invoke(executor_v1::tag_t<createExecuteContext> /*unused*/,
         MockConflictExecutor& executor, auto& storage, protocol::BlockHeader const& blockHeader,
         protocol::Transaction const& transaction, int32_t contextID,
-        ledger::LedgerConfig const& ledgerConfig)
+        ledger::LedgerConfig const& ledgerConfig, bool call)
         -> task::Task<Context<std::decay_t<decltype(storage)>>>
     {
         co_return {.transaction = std::addressof(transaction),
