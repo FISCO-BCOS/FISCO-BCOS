@@ -27,6 +27,9 @@ struct NullLock
     constexpr bool try_acquire(auto&&... /*unused*/) { return true; }
     constexpr void release() {}
 };
+struct NOT_EXISTS_TYPE
+{
+};
 
 template <class Object>
 concept HasMemberSize = requires(Object object) {
@@ -95,7 +98,7 @@ public:
 
     constexpr unsigned getBucketSize()
     {
-        return withConcurrent ? std::thread::hardware_concurrency() * 2 : 1;
+        return withConcurrent ? std::thread::hardware_concurrency() * 2 : 1;  // Magic
     }
 
     static_assert(withOrdered || !std::is_void_v<HasherType>);
@@ -230,13 +233,42 @@ public:
         {
             result.value() = it->value;
             lock.release();
-            if constexpr (std::decay_t<decltype(storage)>::withLRU)
+            if constexpr (withLRU)
             {
                 if (Lock lruLock; lruLock.try_acquire(bucket.mutex, true))
                 {
                     updateLRUAndCheck(storage, bucket, it);
                 }
             }
+        }
+        return result;
+    }
+
+    task::AwaitableValue<std::variant<std::optional<Value>, NOT_EXISTS_TYPE>> readOne(
+        auto key, auto&&... /*unused*/)
+        requires withLogicalDeletion
+    {
+        std::variant<std::optional<Value>, NOT_EXISTS_TYPE> result;
+        auto& bucket = getBucket(*this, key);
+        Lock lock(bucket.mutex, false);
+
+        auto const& index = bucket.container.template get<0>();
+        auto it = index.find(key);
+        if (it != index.end())
+        {
+            result.template emplace<std::optional<Value>>(it->value);
+            lock.release();
+            if constexpr (withLRU)
+            {
+                if (Lock lruLock; lruLock.try_acquire(bucket.mutex, true))
+                {
+                    updateLRUAndCheck(*this, bucket, it);
+                }
+            }
+        }
+        else
+        {
+            result.template emplace<NOT_EXISTS_TYPE>();
         }
         return result;
     }
