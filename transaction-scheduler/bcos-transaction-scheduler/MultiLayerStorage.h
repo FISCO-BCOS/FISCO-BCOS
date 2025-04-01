@@ -3,6 +3,7 @@
 #include "bcos-task/TBBWait.h"
 #include "bcos-task/Trait.h"
 #include "bcos-utilities/Error.h"
+#include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/ITTAPI.h"
 #include "bcos-utilities/RecursiveLambda.h"
 #include <oneapi/tbb/parallel_invoke.h>
@@ -17,14 +18,12 @@
 namespace bcos::scheduler_v1
 {
 
-// clang-format off
-struct DuplicateMutableStorageError : public bcos::Error {};
-struct DuplicateMutableViewError: public bcos::Error {};
-struct NonExistsKeyIteratorError: public bcos::Error {};
-struct NotExistsMutableStorageError : public bcos::Error {};
-struct NotExistsImmutableStorageError : public bcos::Error {};
-struct UnsupportedMethod : public bcos::Error {};
-// clang-format on
+DERIVE_BCOS_EXCEPTION(DuplicateMutableStorageError);
+DERIVE_BCOS_EXCEPTION(DuplicateMutableViewError);
+DERIVE_BCOS_EXCEPTION(NonExistsKeyIteratorError);
+DERIVE_BCOS_EXCEPTION(NotExistsMutableStorageError);
+DERIVE_BCOS_EXCEPTION(NotExistsImmutableStorageError);
+DERIVE_BCOS_EXCEPTION(UnsupportedMethod);
 
 template <class KeyType, class ValueType>
 task::Task<bool> fillMissingValues(
