@@ -1,8 +1,10 @@
 #pragma once
+#include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-task/TBBWait.h"
 #include "bcos-task/Trait.h"
 #include "bcos-utilities/Error.h"
+#include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/ITTAPI.h"
 #include "bcos-utilities/RecursiveLambda.h"
 #include <oneapi/tbb/parallel_invoke.h>
@@ -17,14 +19,12 @@
 namespace bcos::scheduler_v1
 {
 
-// clang-format off
-struct DuplicateMutableStorageError : public bcos::Error {};
-struct DuplicateMutableViewError: public bcos::Error {};
-struct NonExistsKeyIteratorError: public bcos::Error {};
-struct NotExistsMutableStorageError : public bcos::Error {};
-struct NotExistsImmutableStorageError : public bcos::Error {};
-struct UnsupportedMethod : public bcos::Error {};
-// clang-format on
+DERIVE_BCOS_EXCEPTION(DuplicateMutableStorageError);
+DERIVE_BCOS_EXCEPTION(DuplicateMutableViewError);
+DERIVE_BCOS_EXCEPTION(NonExistsKeyIteratorError);
+DERIVE_BCOS_EXCEPTION(NotExistsMutableStorageError);
+DERIVE_BCOS_EXCEPTION(NotExistsImmutableStorageError);
+DERIVE_BCOS_EXCEPTION(UnsupportedMethod);
 
 template <class KeyType, class ValueType>
 task::Task<bool> fillMissingValues(
@@ -112,7 +112,8 @@ public:
                  ::ranges::sized_range<task::AwaitableReturnType<
                      std::invoke_result_t<storage2::ReadSome, MutableStorage&, decltype(keys)>>>
     {
-        task::AwaitableReturnType<decltype(storage2::readSome(*view.m_mutableStorage, keys))>
+        task::AwaitableReturnType<
+            std::invoke_result_t<storage2::ReadSome, MutableStorage&, decltype(keys)>>
             values(::ranges::size(keys));
         if (view.m_mutableStorage &&
             co_await fillMissingValues<typename View::Key, typename View::Value>(
@@ -177,17 +178,19 @@ public:
     {
         if (view.m_mutableStorage)
         {
-            if (auto value = co_await storage2::readOne(*view.m_mutableStorage, key))
+            auto value = co_await view.m_mutableStorage->readOne(key);
+            if (auto* ptr = std::get_if<std::optional<typename View::Value>>(std::addressof(value)))
             {
-                co_return value;
+                co_return *ptr;
             }
         }
 
         for (auto& immutableStorage : view.m_immutableStorages)
         {
-            if (auto value = co_await storage2::readOne(*immutableStorage, key))
+            auto value = co_await immutableStorage->readOne(key);
+            if (auto* ptr = std::get_if<std::optional<typename View::Value>>(std::addressof(value)))
             {
-                co_return value;
+                co_return *ptr;
             }
         }
 
@@ -380,7 +383,7 @@ public:
 };
 
 template <class MutableStorageType, class CachedStorage, class BackendStorage>
-    requires((std::is_void_v<CachedStorage> || (!std::is_void_v<CachedStorage>)))
+    requires MutableStorageType::withLogicalDeletion
 class MultiLayerStorage
 {
 public:
@@ -399,7 +402,6 @@ public:
         m_cacheStorage;
 
     using MutableStorage = MutableStorageType;
-
     using Key = KeyType;
     using Value = ValueType;
 
