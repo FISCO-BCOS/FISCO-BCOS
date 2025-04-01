@@ -152,12 +152,12 @@ public:
     size_t m_maxConcurrency = DEFAULT_MAX_CONCURRENCY;
 
     friend task::Task<void> mergeLastStorage(
-        SchedulerParallelImpl& scheduler, auto& storage, auto&& lastStorage)
+        SchedulerParallelImpl& scheduler, auto& storage, auto& lastStorage)
     {
         ittapi::Report mergeReport(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,
             ittapi::ITT_DOMAINS::instance().MERGE_LAST_CHUNK);
         PARALLEL_SCHEDULER_LOG(DEBUG) << "Final merge lastStorage";
-        co_await storage2::merge(storage, std::forward<decltype(lastStorage)>(lastStorage));
+        co_await storage2::merge(storage, lastStorage);
     }
 };
 
@@ -299,8 +299,8 @@ size_t executeSinglePass(SchedulerParallelImpl& scheduler, auto& storage, auto& 
                         PARALLEL_SCHEDULER_LOG(DEBUG)
                             << "Merging storage... " << chunk->chunkIndex() << " | "
                             << chunk->count();
-                        task::tbb::syncWait(storage2::merge(
-                            lastStorage, std::move(mutableStorage(chunk->storageView()))));
+                        task::tbb::syncWait(
+                            storage2::merge(lastStorage, mutableStorage(chunk->storageView())));
                         GC::collect(std::move(chunk));
                     }
                     else
@@ -310,7 +310,7 @@ size_t executeSinglePass(SchedulerParallelImpl& scheduler, auto& storage, auto& 
                 }),
         context);
 
-    task::tbb::syncWait(mergeLastStorage(scheduler, storage, std::move(lastStorage)));
+    task::tbb::syncWait(mergeLastStorage(scheduler, storage, lastStorage));
     GC::collect(std::move(writeSet));
     if (offset < count)
     {

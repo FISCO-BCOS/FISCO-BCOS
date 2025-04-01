@@ -24,15 +24,11 @@
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/Error.h"
 #include "bcos-utilities/Exceptions.h"
-#include "bcos-utilities/Ranges.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/test/unit_test.hpp>
 #include <chrono>
 #include <thread>
 
-
-using namespace bcos;
-using namespace std;
 namespace bcos
 {
 namespace test
@@ -200,9 +196,9 @@ BOOST_AUTO_TEST_CASE(testError)
     BOOST_CHECK(error->errorMessage() == errorMessage);
 }
 
-void testRange(RANGES::range auto range)
+void testRange(::ranges::range auto range)
 {
-    BOOST_CHECK(RANGES::size(range) > 0);
+    BOOST_CHECK(::ranges::size(range) > 0);
 }
 
 BOOST_AUTO_TEST_CASE(range)

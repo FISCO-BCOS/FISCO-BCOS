@@ -2,6 +2,7 @@
 #include "../Basic.h"
 #include "../Hash.h"
 #include "../Serialize.h"
+#include <range/v3/range.hpp>
 
 namespace bcos::concepts::receipt
 {
@@ -9,7 +10,7 @@ template <class LogEntryType>
 concept LogEntry = requires(LogEntryType logEntry)
 {
     logEntry.address;
-    requires RANGES::range<decltype(logEntry.topic)>;
+    requires ::ranges::range<decltype(logEntry.topic)>;
     logEntry.data;
 };
 
@@ -21,8 +22,8 @@ concept TransactionReceiptData = requires(TransactionReceiptDataType transaction
     transactionReceiptData.contractAddress;
     requires std::integral<decltype(transactionReceiptData.status)>;
     transactionReceiptData.output;
-    requires RANGES::range<decltype(transactionReceiptData.logEntries)> &&
-        LogEntry<RANGES::range_value_t<decltype(transactionReceiptData.logEntries)>>;
+    requires ::ranges::range<decltype(transactionReceiptData.logEntries)> &&
+        LogEntry<::ranges::range_value_t<decltype(transactionReceiptData.logEntries)>>;
     requires std::integral<decltype(transactionReceiptData.blockNumber)>;
 };
 

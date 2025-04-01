@@ -267,7 +267,7 @@ int64_t SystemConfigPrecompiled::validate(
     int64_t configuredValue = 0;
     std::string key = std::string(_key);
     auto featureKeys = ledger::Features::featureKeys();
-    bool setFeature = (RANGES::find(featureKeys, key) != featureKeys.end());
+    bool setFeature = (::ranges::find(featureKeys, key) != featureKeys.end());
     if (!m_sysValueCmp.contains(key) && !m_valueConverter.contains(key) && !setFeature)
     {
         BOOST_THROW_EXCEPTION(PrecompiledError("unsupported key " + key));
@@ -485,18 +485,15 @@ void SystemConfigPrecompiled::registerGovernorToCaller(
         }
         return;
     }
-    else
+
+    for (auto const& address : governorAddress)
     {
-        for (auto const& address : governorAddress)
+        auto entry = table->getRow(address.hex());
+        if (!entry)
         {
-            auto entry = table->getRow(address.hex());
-            if (!entry)
-            {
-                Entry CallerEntry;
-                CallerEntry.importFields({"1"});
-                _executive->storage().setRow(
-                    SYS_BALANCE_CALLER, address.hex(), std::move(CallerEntry));
-            }
+            Entry CallerEntry;
+            CallerEntry.importFields({"1"});
+            _executive->storage().setRow(SYS_BALANCE_CALLER, address.hex(), std::move(CallerEntry));
         }
     }
 }

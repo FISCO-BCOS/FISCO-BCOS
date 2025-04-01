@@ -20,7 +20,6 @@
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/signature/sm2/SM2KeyPairFactory.h>
 #include <bcos-sync/utilities/SyncTreeTopology.h>
-#include <bcos-utilities/Ranges.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 
