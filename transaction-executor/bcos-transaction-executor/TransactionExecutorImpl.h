@@ -55,6 +55,8 @@ public:
         TransientStorage m_transientStorage;
         Rollbackable<decltype(m_transientStorage)> m_rollbackableTransientStorage;
         bool m_call;
+        int64_t m_gasUsed = 0;
+        std::string m_gasPriceStr;
 
         int64_t m_gasLimit;
         int64_t m_seq = 0;
@@ -102,6 +104,49 @@ public:
             executor, storage, blockHeader, transaction, contextID, ledgerConfig, call);
     }
 
+    static task::Task<void> cosumeBalance(auto& context)
+    {
+        auto& executeContext = context;
+        auto& evmcResult = *executeContext.m_evmcResult;
+        auto& evmcMessage = executeContext.m_hostContext.message();
+        executeContext.m_gasUsed = executeContext.m_gasLimit - evmcResult.gas_left;
+        if (!executeContext.m_call)
+        {
+            if (auto gasPrice = u256{std::get<0>(executeContext.m_ledgerConfig.get().gasPrice())};
+                gasPrice > 0)
+            {
+                executeContext.m_gasPriceStr = "0x" + gasPrice.str(256, std::ios_base::hex);
+
+                auto balanceUsed = executeContext.m_gasUsed * gasPrice;
+                auto senderAccount = getAccount(executeContext.m_hostContext, evmcMessage.sender);
+                auto senderBalance = co_await ledger::account::balance(senderAccount);
+
+                if (senderBalance < balanceUsed)
+                {
+                    TRANSACTION_EXECUTOR_LOG(ERROR) << "Insufficient balance: " << senderBalance
+                                                    << ", balanceUsed: " << balanceUsed;
+                    evmcResult.status_code = EVMC_INSUFFICIENT_BALANCE;
+                    evmcResult.status = protocol::TransactionStatus::NotEnoughCash;
+                    if (evmcResult.release)
+                    {
+                        evmcResult.release(std::addressof(evmcResult));
+                    }
+                    evmcResult.output_data = nullptr;
+                    evmcResult.output_size = 0;
+                    evmcResult.release = nullptr;
+                    evmcResult.create_address = {};
+                    co_await rollback(
+                        executeContext.m_rollbackableStorage, executeContext.m_startSavepoint);
+                }
+                else
+                {
+                    co_await ledger::account::setBalance(
+                        senderAccount, senderBalance - balanceUsed);
+                }
+            }
+        }
+    }
+
     template <int step>
     friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
         tag_t<executeStep> /*unused*/, auto& context)
@@ -116,6 +161,7 @@ public:
         else if constexpr (step == 1)
         {
             executeContext.m_evmcResult.emplace(co_await executeContext.m_hostContext.execute());
+            co_await cosumeBalance(executeContext);
         }
         else if constexpr (step == 2)
         {
@@ -179,44 +225,6 @@ public:
             }
         }
 
-        std::string gasPriceStr;
-        auto gasUsed = executeContext.m_gasLimit - evmcResult.gas_left;
-        if (!executeContext.m_call)
-        {
-            if (auto gasPrice = u256{std::get<0>(executeContext.m_ledgerConfig.get().gasPrice())};
-                gasPrice > 0)
-            {
-                gasPriceStr = "0x" + gasPrice.str(256, std::ios_base::hex);
-
-                auto balanceUsed = gasUsed * gasPrice;
-                auto senderAccount = getAccount(executeContext.m_hostContext, evmcMessage.sender);
-                auto senderBalance = co_await ledger::account::balance(senderAccount);
-
-                if (senderBalance < balanceUsed)
-                {
-                    TRANSACTION_EXECUTOR_LOG(ERROR) << "Insufficient balance: " << senderBalance
-                                                    << ", balanceUsed: " << balanceUsed;
-                    evmcResult.status_code = EVMC_INSUFFICIENT_BALANCE;
-                    evmcResult.status = protocol::TransactionStatus::NotEnoughCash;
-                    if (evmcResult.release)
-                    {
-                        evmcResult.release(std::addressof(evmcResult));
-                    }
-                    evmcResult.output_data = nullptr;
-                    evmcResult.output_size = 0;
-                    evmcResult.release = nullptr;
-                    newContractAddress.clear();
-                    co_await rollback(
-                        executeContext.m_rollbackableStorage, executeContext.m_startSavepoint);
-                }
-                else
-                {
-                    co_await ledger::account::setBalance(
-                        senderAccount, senderBalance - balanceUsed);
-                }
-            }
-        }
-
         auto receiptStatus = static_cast<int32_t>(evmcResult.status);
         auto const& logEntries = executeContext.m_hostContext.logs();
         protocol::TransactionReceipt::Ptr receipt;
@@ -224,18 +232,18 @@ public:
                     executeContext.m_transaction.get().version()))
         {
         case bcos::protocol::TransactionVersion::V0_VERSION:
-            receipt = executeContext.m_executor.get().m_receiptFactory.get().createReceipt(gasUsed,
-                std::move(newContractAddress), logEntries, receiptStatus,
+            receipt = executeContext.m_executor.get().m_receiptFactory.get().createReceipt(
+                executeContext.m_gasUsed, std::move(newContractAddress), logEntries, receiptStatus,
                 {evmcResult.output_data, evmcResult.output_size},
                 executeContext.m_blockHeader.get().number());
             break;
         case bcos::protocol::TransactionVersion::V1_VERSION:
         case bcos::protocol::TransactionVersion::V2_VERSION:
-            receipt = executeContext.m_executor.get().m_receiptFactory.get().createReceipt2(gasUsed,
-                std::move(newContractAddress), logEntries, receiptStatus,
+            receipt = executeContext.m_executor.get().m_receiptFactory.get().createReceipt2(
+                executeContext.m_gasUsed, std::move(newContractAddress), logEntries, receiptStatus,
                 {evmcResult.output_data, evmcResult.output_size},
-                executeContext.m_blockHeader.get().number(), std::move(gasPriceStr),
-                transactionVersion);
+                executeContext.m_blockHeader.get().number(),
+                std::move(executeContext.m_gasPriceStr), transactionVersion);
             break;
         default:
             BOOST_THROW_EXCEPTION(
