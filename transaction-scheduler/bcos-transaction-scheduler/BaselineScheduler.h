@@ -128,14 +128,15 @@ task::Task<h256> calculateStateRoot(
 }
 
 task::Task<std::tuple<u256, h256>> calculateReceiptRoot(
-    RANGES::range auto const& receipts, protocol::Block& block, crypto::Hash const& hashImpl)
+    ::ranges::range auto const& receipts, protocol::Block& block, crypto::Hash const& hashImpl)
 {
     u256 gasUsed;
     h256 receiptRoot;
 
     tbb::parallel_invoke(
         [&]() {
-            for (auto&& [receipt, index] : RANGES::views::zip(receipts, RANGES::views::iota(0UL)))
+            for (auto&& [receipt, index] :
+                ::ranges::views::zip(receipts, ::ranges::views::iota(0UL)))
             {
                 gasUsed += receipt->gasUsed();
                 if (index < block.receiptsSize())
@@ -150,13 +151,13 @@ task::Task<std::tuple<u256, h256>> calculateReceiptRoot(
         },
         [&]() {
             bcos::crypto::merkle::Merkle merkle(hashImpl.hasher());
-            auto hashesRange = receipts | RANGES::views::transform(
+            auto hashesRange = receipts | ::ranges::views::transform(
                                               [](const auto& receipt) { return receipt->hash(); });
 
             std::vector<bcos::h256> merkleTrie;
             merkle.generateMerkle(hashesRange, merkleTrie);
 
-            receiptRoot = *RANGES::rbegin(merkleTrie);
+            receiptRoot = *::ranges::rbegin(merkleTrie);
         });
 
     co_return std::make_tuple(gasUsed, receiptRoot);
@@ -172,9 +173,9 @@ task::Task<std::tuple<u256, h256>> calculateReceiptRoot(
  * @param newBlock The updated block.
  * @param hashImpl The hash implementation used to calculate the block hash.
  */
-void finishExecute(auto& storage, RANGES::range auto const& receipts,
+void finishExecute(auto& storage, ::ranges::range auto const& receipts,
     protocol::BlockHeader& newBlockHeader, protocol::Block& block,
-    RANGES::input_range auto const& transactions, bool& sysBlock, crypto::Hash const& hashImpl)
+    ::ranges::input_range auto const& transactions, bool& sysBlock, crypto::Hash const& hashImpl)
 {
     ittapi::Report finishReport(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
         ittapi::ITT_DOMAINS::instance().FINISH_EXECUTE);
@@ -494,10 +495,10 @@ private:
                     ittapi::ITT_DOMAINS::instance().NOTIFY_RESULTS);
 
                 auto submitResults =
-                    RANGES::views::zip(
-                        RANGES::views::iota(0), *result.m_transactions, result.m_receipts) |
-                    RANGES::views::transform([&](auto input)
-                                                 -> protocol::TransactionSubmitResult::Ptr {
+                    ::ranges::views::zip(
+                        ::ranges::views::iota(0), *result.m_transactions, result.m_receipts) |
+                    ::ranges::views::transform([&](auto input)
+                                                   -> protocol::TransactionSubmitResult::Ptr {
                         auto&& [index, transaction, receipt] = input;
 
                         auto submitResult =
@@ -513,7 +514,7 @@ private:
 
                         return submitResult;
                     }) |
-                    RANGES::to<std::vector>();
+                    ::ranges::to<std::vector>();
 
                 auto submitResultsPtr = std::make_shared<bcos::protocol::TransactionSubmitResults>(
                     std::move(submitResults));
