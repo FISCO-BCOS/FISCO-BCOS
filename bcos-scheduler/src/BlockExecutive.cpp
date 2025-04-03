@@ -155,7 +155,7 @@ bcos::protocol::ExecutionMessage::UniquePtr BlockExecutive::buildMessage(
     message->setDepth(0);
     message->setGasAvailable(m_gasLimit);
     auto toAddress = tx->to();
-    if (m_scheduler->ledgerConfig().features().get(
+    if (!m_scheduler->ledgerConfig().features().get(
             ledger::Features::Flag::bugfix_precompiled_gascalc) &&
         precompiled::contains(precompiled::c_systemTxsAddress, toAddress))
     {
