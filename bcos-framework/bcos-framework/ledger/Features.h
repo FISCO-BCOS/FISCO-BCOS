@@ -46,6 +46,7 @@ public:
         bugfix_precompiled_gasused,
         bugfix_nonce_not_increase_when_revert,
         bugfix_set_contract_nonce_when_create,
+        bugfix_precompiled_gascalc,
         feature_dmc2serial,
         feature_sharding,
         feature_rpbft,
@@ -335,15 +336,15 @@ public:
     {
         for (auto [flag, name, value] : flags())
         {
-            if (value && !(ignoreDuplicate &&
-                             co_await storage2::existsOne(storage,
-                                 executor_v1::StateKeyView(ledger::SYS_CONFIG, name))))
+            if (value &&
+                !(ignoreDuplicate && co_await storage2::existsOne(storage,
+                                         executor_v1::StateKeyView(ledger::SYS_CONFIG, name))))
             {
                 storage::Entry entry;
                 entry.setObject(
                     SystemConfigEntry{boost::lexical_cast<std::string>((int)value), blockNumber});
-                co_await storage2::writeOne(storage,
-                    executor_v1::StateKey(ledger::SYS_CONFIG, name), std::move(entry));
+                co_await storage2::writeOne(
+                    storage, executor_v1::StateKey(ledger::SYS_CONFIG, name), std::move(entry));
             }
         }
     }
@@ -379,8 +380,7 @@ inline task::Task<void> writeToStorage(Features const& features, auto&& storage,
             entry.setObject(SystemConfigEntry{
                 boost::lexical_cast<std::string>((int)std::get<2>(tuple)), blockNumber});
             return std::make_tuple(
-                executor_v1::StateKey(ledger::SYS_CONFIG, std::get<1>(tuple)),
-                std::move(entry));
+                executor_v1::StateKey(ledger::SYS_CONFIG, std::get<1>(tuple)), std::move(entry));
         }));
 }
 

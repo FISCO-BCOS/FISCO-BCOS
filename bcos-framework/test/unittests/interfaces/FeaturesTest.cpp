@@ -153,6 +153,7 @@ BOOST_AUTO_TEST_CASE(feature)
         "bugfix_precompiled_gasused",
         "bugfix_nonce_not_increase_when_revert",
         "bugfix_set_contract_nonce_when_create",
+        "bugfix_precompiled_gascalc",
         "feature_dmc2serial",
         "feature_sharding",
         "feature_rpbft",
