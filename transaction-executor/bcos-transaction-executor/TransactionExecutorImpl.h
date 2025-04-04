@@ -104,7 +104,7 @@ public:
             executor, storage, blockHeader, transaction, contextID, ledgerConfig, call);
     }
 
-    static task::Task<void> cosumeBalance(auto& context)
+    static task::Task<void> consumeBalance(auto& context)
     {
         auto& executeContext = context;
         auto& evmcResult = *executeContext.m_evmcResult;
@@ -161,7 +161,7 @@ public:
         else if constexpr (step == 1)
         {
             executeContext.m_evmcResult.emplace(co_await executeContext.m_hostContext.execute());
-            co_await cosumeBalance(executeContext);
+            co_await consumeBalance(executeContext);
         }
         else if constexpr (step == 2)
         {
