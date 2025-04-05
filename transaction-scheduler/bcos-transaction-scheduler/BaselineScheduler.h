@@ -488,47 +488,51 @@ private:
                                          << " | elapsed: " << (current() - now) << "ms";
             commitLock.unlock();
 
-            scheduler.m_asyncGroup.run([&, result = std::move(result),
-                                           blockHash = ledgerConfig->hash(),
-                                           blockNumber = ledgerConfig->blockNumber()]() {
-                ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
-                    ittapi::ITT_DOMAINS::instance().NOTIFY_RESULTS);
+            tbb::this_task_arena::isolate([&]() {
+                scheduler.m_asyncGroup.run([&, result = std::move(result),
+                                               blockHash = ledgerConfig->hash(),
+                                               blockNumber = ledgerConfig->blockNumber()]() {
+                    ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
+                        ittapi::ITT_DOMAINS::instance().NOTIFY_RESULTS);
 
-                auto submitResults =
-                    ::ranges::views::zip(
-                        ::ranges::views::iota(0), *result.m_transactions, result.m_receipts) |
-                    ::ranges::views::transform([&](auto input)
-                                                   -> protocol::TransactionSubmitResult::Ptr {
-                        auto&& [index, transaction, receipt] = input;
+                    auto submitResults =
+                        ::ranges::views::zip(
+                            ::ranges::views::iota(0), *result.m_transactions, result.m_receipts) |
+                        ::ranges::views::transform(
+                            [&](auto input) -> protocol::TransactionSubmitResult::Ptr {
+                                auto&& [index, transaction, receipt] = input;
 
-                        auto submitResult =
-                            scheduler.m_transactionSubmitResultFactory.get().createTxSubmitResult();
-                        submitResult->setStatus(receipt->status());
-                        submitResult->setTxHash(transaction->hash());
-                        submitResult->setBlockHash(blockHash);
-                        submitResult->setTransactionIndex(static_cast<int64_t>(index));
-                        submitResult->setNonce(std::string(transaction->nonce()));
-                        submitResult->setTransactionReceipt(receipt);
-                        submitResult->setSender(std::string(transaction->sender()));
-                        submitResult->setTo(std::string(transaction->to()));
+                                auto submitResult = scheduler.m_transactionSubmitResultFactory.get()
+                                                        .createTxSubmitResult();
+                                submitResult->setStatus(receipt->status());
+                                submitResult->setTxHash(transaction->hash());
+                                submitResult->setBlockHash(blockHash);
+                                submitResult->setTransactionIndex(static_cast<int64_t>(index));
+                                submitResult->setNonce(std::string(transaction->nonce()));
+                                submitResult->setTransactionReceipt(receipt);
+                                submitResult->setSender(std::string(transaction->sender()));
+                                submitResult->setTo(std::string(transaction->to()));
 
-                        return submitResult;
-                    }) |
-                    ::ranges::to<std::vector>();
+                                return submitResult;
+                            }) |
+                        ::ranges::to<std::vector>();
 
-                auto submitResultsPtr = std::make_shared<bcos::protocol::TransactionSubmitResults>(
-                    std::move(submitResults));
-                scheduler.m_blockNumberNotifier(blockNumber);
-                scheduler.m_transactionNotifier(
-                    blockNumber, std::move(submitResultsPtr), [](const Error::Ptr& error) {
-                        if (error)
-                        {
-                            BASELINE_SCHEDULER_LOG(WARNING)
-                                << "Push block notify error!"
-                                << boost::diagnostic_information(*error);
-                        }
-                    });
+                    auto submitResultsPtr =
+                        std::make_shared<bcos::protocol::TransactionSubmitResults>(
+                            std::move(submitResults));
+                    scheduler.m_blockNumberNotifier(blockNumber);
+                    scheduler.m_transactionNotifier(
+                        blockNumber, std::move(submitResultsPtr), [](const Error::Ptr& error) {
+                            if (error)
+                            {
+                                BASELINE_SCHEDULER_LOG(WARNING)
+                                    << "Push block notify error!"
+                                    << boost::diagnostic_information(*error);
+                            }
+                        });
+                });
             });
+
 
             co_return std::make_tuple(Error::Ptr{}, std::move(ledgerConfig));
         }
