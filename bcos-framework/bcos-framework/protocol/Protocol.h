@@ -115,7 +115,7 @@ enum ProtocolVersion : uint32_t
 
 enum class BlockVersion : uint32_t
 {
-    V3_15_1_VERSION = 0x030f0001,  // 3.15.1
+    V3_15_1_VERSION = 0x030f0100,  // 3.15.1
     V3_15_0_VERSION = 0x030f0000,  // 3.15.0
     V3_14_0_VERSION = 0x030e0000,  // 3.14.0
     V3_13_0_VERSION = 0x030d0000,  // 3.13.0
