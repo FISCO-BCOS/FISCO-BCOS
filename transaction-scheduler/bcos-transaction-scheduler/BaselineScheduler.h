@@ -160,7 +160,7 @@ task::Task<std::tuple<u256, h256>> calculateReceiptRoot(
             receiptRoot = *::ranges::rbegin(merkleTrie);
         });
 
-    co_return std::make_tuple(gasUsed, receiptRoot);
+    co_return {gasUsed, receiptRoot};
 }
 
 /**
@@ -226,7 +226,7 @@ private:
 
     int64_t m_lastExecutedBlockNumber = -1;
     std::mutex m_executeMutex;
-    int64_t m_lastcommittedBlockNumber = -1;
+    int64_t m_lastCommittedBlockNumber = -1;
     std::mutex m_commitMutex;
     tbb::task_group m_asyncGroup;
 
@@ -286,9 +286,8 @@ private:
                 auto message = fmt::format(
                     "Another block:{} is executing!", scheduler.m_lastExecutedBlockNumber);
                 BASELINE_SCHEDULER_LOG(INFO) << message;
-                co_return std::make_tuple(
-                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
-                    nullptr, false);
+                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
+                    nullptr, false};
             }
 
             if (scheduler.m_lastExecutedBlockNumber != -1 &&
@@ -311,8 +310,7 @@ private:
                             << "Block has been executed, return result directly";
                         auto& result =
                             scheduler.m_results.at(number - front.m_executedBlockHeader->number());
-                        co_return std::make_tuple(
-                            nullptr, result.m_executedBlockHeader, result.m_sysBlock);
+                        co_return {nullptr, result.m_executedBlockHeader, result.m_sysBlock};
                     }
                 }
                 resultsLock.unlock();
@@ -321,9 +319,9 @@ private:
                     fmt::format("Discontinuous execute block number! expect: {} input: {}",
                         scheduler.m_lastExecutedBlockNumber + 1, blockHeader->number());
                 BASELINE_SCHEDULER_LOG(INFO) << message;
-                co_return std::make_tuple(
+                co_return {
                     BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message),
-                    nullptr, false);
+                    nullptr, false};
             }
 
             auto now = current();
@@ -364,9 +362,8 @@ private:
                 }
                 BASELINE_SCHEDULER_LOG(ERROR) << message;
 
-                co_return std::make_tuple(
-                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlocks, message),
-                    nullptr, false);
+                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlocks, message),
+                    nullptr, false};
             }
 
             pushView(scheduler.m_multiLayerStorage.get(), std::move(view));
@@ -391,7 +388,7 @@ private:
                 << " | gasUsed: " << executedBlockHeader->gasUsed() << " | sysBlock: " << sysBlock
                 << " | elapsed: " << (current() - now) << "ms";
 
-            co_return std::make_tuple(nullptr, std::move(executedBlockHeader), sysBlock);
+            co_return {nullptr, std::move(executedBlockHeader), sysBlock};
         }
         catch (std::exception& e)
         {
@@ -399,9 +396,8 @@ private:
                 fmt::format("Execute block failed! {}", boost::diagnostic_information(e));
             BASELINE_SCHEDULER_LOG(ERROR) << message;
 
-            co_return std::make_tuple(
-                BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message), nullptr,
-                false);
+            co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message),
+                nullptr, false};
         }
     }
 
@@ -426,24 +422,23 @@ private:
             if (!commitLock.owns_lock())
             {
                 auto message = fmt::format(
-                    "Another block:{} is committing!", scheduler.m_lastcommittedBlockNumber);
+                    "Another block:{} is committing!", scheduler.m_lastCommittedBlockNumber);
                 BASELINE_SCHEDULER_LOG(INFO) << message;
 
-                co_return std::make_tuple(
-                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
-                    nullptr);
+                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
+                    nullptr};
             }
 
-            if (scheduler.m_lastcommittedBlockNumber != -1 &&
-                header->number() - scheduler.m_lastcommittedBlockNumber != 1)
+            if (scheduler.m_lastCommittedBlockNumber != -1 &&
+                header->number() - scheduler.m_lastCommittedBlockNumber != 1)
             {
                 auto message = fmt::format("Discontinuous commit block number: {}! expect: {}",
-                    header->number(), scheduler.m_lastcommittedBlockNumber + 1);
+                    header->number(), scheduler.m_lastCommittedBlockNumber + 1);
 
                 BASELINE_SCHEDULER_LOG(INFO) << message;
-                co_return std::make_tuple(
+                co_return {
                     BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message),
-                    nullptr);
+                    nullptr};
             }
 
             std::unique_lock resultsLock(scheduler.m_resultsMutex);
@@ -530,15 +525,15 @@ private:
                     });
             });
 
-            co_return std::make_tuple(Error::Ptr{}, std::move(ledgerConfig));
+            co_return {Error::Ptr{}, std::move(ledgerConfig)};
         }
         catch (std::exception& e)
         {
             auto message = fmt::format("Commit block failed! {}", boost::diagnostic_information(e));
             BASELINE_SCHEDULER_LOG(ERROR) << message;
 
-            co_return std::make_tuple(
-                BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message), nullptr);
+            co_return {
+                BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message), nullptr};
         }
     }
 
