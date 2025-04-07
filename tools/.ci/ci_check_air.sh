@@ -223,8 +223,6 @@ LOG_INFO "======== check sm case success ========"
 clear_node
 LOG_INFO "======== clear node after sm test success ========"
 
-# baseline暂时不支持balance precompiled，故不测试java_sdk_demo_ci_test
-# baseline does not support balance precompiled temporarily, so java_sdk_demo_ci_test is not tested
 LOG_INFO "======== check baseline cases ========"
 init_baseline ""
 expand_node ""
