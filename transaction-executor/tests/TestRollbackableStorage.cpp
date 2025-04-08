@@ -28,11 +28,11 @@ BOOST_AUTO_TEST_CASE(addRollback)
         MutableStorage memoryStorage;
         Rollbackable rollbackableStorage(memoryStorage);
 
-        auto view = RANGES::single_view(StateKey{"table1"sv, "Key1"sv});
+        auto view = ::ranges::single_view(StateKey{"table1"sv, "Key1"sv});
         co_await storage2::readSome(memoryStorage, view, storage2::DIRECT);
 
         std::string_view tableID = "table1";
-        auto point = current(rollbackableStorage);
+        auto point = rollbackableStorage.current();
         storage::Entry entry;
         entry.set("OK!");
         co_await storage2::writeOne(rollbackableStorage, StateKey{tableID, "Key1"sv}, entry);
@@ -45,19 +45,19 @@ BOOST_AUTO_TEST_CASE(addRollback)
         std::vector<StateKey> keys{StateKey{tableID, "Key1"sv}, StateKey{"table1"sv, "Key2"sv}};
         auto values = co_await storage2::readSome(rollbackableStorage, keys);
         auto count = 0;
-        for (auto&& [key, value] : RANGES::views::zip(keys, values))
+        for (auto&& [key, value] : ::ranges::views::zip(keys, values))
         {
             BOOST_REQUIRE(value);
             BOOST_CHECK_EQUAL(key, StateKey(tableID, "Key" + std::to_string(count + 1)));
             ++count;
         }
         BOOST_CHECK_EQUAL(count, 2);
-        co_await rollback(rollbackableStorage, point);
+        co_await rollbackableStorage.rollback(point);
 
         // Query again
         std::vector<StateKey> keys2{StateKey{tableID, "Key1"sv}, StateKey{"table1"sv, "Key2"sv}};
         auto values2 = co_await storage2::readSome(rollbackableStorage, keys2);
-        for (auto&& [key, value] : RANGES::views::zip(keys2, values2))
+        for (auto&& [key, value] : ::ranges::views::zip(keys2, values2))
         {
             BOOST_REQUIRE(!value);
         }
@@ -66,7 +66,7 @@ BOOST_AUTO_TEST_CASE(addRollback)
         co_await storage2::writeOne(
             rollbackableStorage, StateKey{tableID, "Key1"sv}, storage::Entry{"OK!"});
 
-        auto savepoint2 = current(rollbackableStorage);
+        auto savepoint2 = rollbackableStorage.current();
         co_await storage2::writeOne(
             rollbackableStorage, StateKey{tableID, "Key1"s}, storage::Entry{"OK3!"});
         auto value3 =
@@ -74,7 +74,7 @@ BOOST_AUTO_TEST_CASE(addRollback)
         BOOST_CHECK(value3);
         BOOST_CHECK_EQUAL(value3->get(), "OK3!");
 
-        co_await rollback(rollbackableStorage, savepoint2);
+        co_await rollbackableStorage.rollback(savepoint2);
         auto value4 =
             co_await storage2::readOne(rollbackableStorage, StateKeyView{tableID, "Key1"sv});
         BOOST_CHECK(value4);
@@ -91,7 +91,7 @@ BOOST_AUTO_TEST_CASE(removeRollback)
         Rollbackable rollbackableStorage(memoryStorage);
 
         std::string_view tableID = "table1";
-        auto point = current(rollbackableStorage);
+        auto point = rollbackableStorage.current();
         storage::Entry entry;
         entry.set("OK!");
         co_await storage2::writeOne(rollbackableStorage, StateKey{tableID, "Key1"sv}, entry);
@@ -105,18 +105,18 @@ BOOST_AUTO_TEST_CASE(removeRollback)
         auto values = co_await storage2::readSome(rollbackableStorage, keys);
 
         int count = 0;
-        for (auto&& [key, value] : RANGES::views::zip(keys, values))
+        for (auto&& [key, value] : ::ranges::views::zip(keys, values))
         {
             BOOST_REQUIRE(value);
             BOOST_CHECK_EQUAL(key, StateKey(tableID, "Key" + std::to_string(count + 1)));
             ++count;
         }
-        co_await rollback(rollbackableStorage, point);
+        co_await rollbackableStorage.rollback(point);
 
         // Query again
         std::vector<StateKey> keys2{StateKey{tableID, "Key1"sv}, StateKey{"table1"sv, "Key2"sv}};
         auto values2 = co_await storage2::readSome(rollbackableStorage, keys2);
-        for (auto&& [key, value] : RANGES::views::zip(keys2, values2))
+        for (auto&& [key, value] : ::ranges::views::zip(keys2, values2))
         {
             BOOST_REQUIRE(!value);
         }
@@ -134,12 +134,12 @@ BOOST_AUTO_TEST_CASE(equal)
         co_await storage2::writeOne(storage, executor_v1::StateKey("table"sv, "1"sv), 1);
         co_await storage2::writeOne(storage, executor_v1::StateKey("table"sv, "2"sv), 2);
 
-        auto keys = RANGES::iota_view<int, int>(0, 3) | RANGES::views::transform([](int num) {
+        auto keys = ::ranges::iota_view<int, int>(0, 3) | ::ranges::views::transform([](int num) {
             return StateKey("table"sv, boost::lexical_cast<std::string>(num));
         });
         auto values = co_await storage2::readSome(storage, keys);
         int i = 0;
-        for (auto&& [key, value] : RANGES::views::zip(keys, values))
+        for (auto&& [key, value] : ::ranges::views::zip(keys, values))
         {
             auto view = StateKeyView(key);
             auto str = boost::lexical_cast<std::string>(i);
