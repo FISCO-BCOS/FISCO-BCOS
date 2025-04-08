@@ -7,6 +7,7 @@
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-task/Wait.h"
+#include "bcos-transaction-executor/EVMCResult.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Exceptions.h"
 #include "precompiled/PrecompiledManager.h"
@@ -76,7 +77,7 @@ public:
             m_contextID(contextID),
             m_ledgerConfig(ledgerConfig),
             m_rollbackableStorage(storage),
-            m_startSavepoint(current(m_rollbackableStorage)),
+            m_startSavepoint(m_rollbackableStorage.current()),
             m_rollbackableTransientStorage(m_transientStorage),
             m_call(call),
             m_gasLimit(static_cast<int64_t>(std::get<0>(ledgerConfig.gasLimit()))),
@@ -135,8 +136,8 @@ public:
                     evmcResult.output_size = 0;
                     evmcResult.release = nullptr;
                     evmcResult.create_address = {};
-                    co_await rollback(
-                        executeContext.m_rollbackableStorage, executeContext.m_startSavepoint);
+                    co_await executeContext.m_rollbackableStorage.rollback(
+                        executeContext.m_startSavepoint);
                 }
                 else
                 {
@@ -149,17 +150,17 @@ public:
 
     template <int step>
     friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
-        tag_t<executeStep> /*unused*/, auto& context)
+        tag_t<executeStep> /*unused*/, auto& context) noexcept
     {
         auto& executeContext = *context;
 
         if constexpr (step == 0)
         {
-            co_await updateNonce(executeContext);
             co_await executeContext.m_hostContext.prepare();
         }
         else if constexpr (step == 1)
         {
+            co_await updateNonce(executeContext);
             executeContext.m_evmcResult.emplace(co_await executeContext.m_hostContext.execute());
             co_await consumeBalance(executeContext);
         }

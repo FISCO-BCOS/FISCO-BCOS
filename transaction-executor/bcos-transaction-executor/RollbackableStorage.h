@@ -29,6 +29,32 @@ public:
 
     Rollbackable(Storage& storage) : m_storage(storage) {}
 
+    Savepoint current() { return static_cast<Savepoint>(m_records.size()); }
+
+    task::Task<void> rollback(Savepoint savepoint)
+    {
+        if (m_records.empty())
+        {
+            co_return;
+        }
+        for (auto index = static_cast<int64_t>(m_records.size()); index > savepoint; --index)
+        {
+            assert(index > 0);
+            auto& record = m_records[index - 1];
+            if (record.oldValue)
+            {
+                co_await storage2::writeOne(
+                    m_storage.get(), std::move(record.key), std::move(*record.oldValue));
+            }
+            else
+            {
+                co_await storage2::removeOne(
+                    m_storage.get(), std::move(record.key), storage2::DIRECT);
+            }
+            m_records.pop_back();
+        }
+    }
+
 private:
     struct Record
     {
@@ -54,37 +80,6 @@ private:
                     .key = Key(key), .oldValue = std::forward<decltype(oldValue)>(oldValue)});
             }
         }
-    }
-
-    friend Savepoint current(Rollbackable const& storage)
-    {
-        return static_cast<Savepoint>(storage.m_records.size());
-    }
-
-    friend task::Task<void> rollback(Rollbackable& storage, Savepoint savepoint)
-    {
-        if (storage.m_records.empty())
-        {
-            co_return;
-        }
-        for (auto index = static_cast<int64_t>(storage.m_records.size()); index > savepoint;
-            --index)
-        {
-            assert(index > 0);
-            auto& record = storage.m_records[index - 1];
-            if (record.oldValue)
-            {
-                co_await storage2::writeOne(
-                    storage.m_storage.get(), std::move(record.key), std::move(*record.oldValue));
-            }
-            else
-            {
-                co_await storage2::removeOne(
-                    storage.m_storage.get(), std::move(record.key), storage2::DIRECT);
-            }
-            storage.m_records.pop_back();
-        }
-        co_return;
     }
 
     friend auto tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/, Rollbackable& storage,

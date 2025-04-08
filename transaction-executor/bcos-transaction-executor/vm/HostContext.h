@@ -340,6 +340,7 @@ public:
     int64_t timestamp() const { return m_blockHeader.get().timestamp(); }
     evmc_address const& origin() const { return m_origin; }
     int64_t blockGasLimit() const { return std::get<0>(m_ledgerConfig.get().gasLimit()); }
+    u256 gasPrice() const { return u256(std::get<0>(m_ledgerConfig.get().gasPrice())); }
     evmc_uint256be chainId() const
     {
         return m_ledgerConfig.get().chainId().value_or(evmc_uint256be{});
@@ -379,8 +380,8 @@ public:
         const auto* ref = std::addressof(message());
         HOST_CONTEXT_LOG(TRACE) << "HostContext execute level: " << m_level << " " << *ref;
 
-        auto savepoint = current(m_rollbackableStorage.get());
-        auto transientSavepoint = current(m_rollbackableTransientStorage.get());
+        auto savepoint = m_rollbackableStorage.get().current();
+        auto transientSavepoint = m_rollbackableTransientStorage.get().current();
 
         std::optional<EVMCResult> evmResult;
         if (m_ledgerConfig.get().authCheckStatus() != 0U)
@@ -474,8 +475,8 @@ public:
 
         if (evmResult->status_code != EVMC_SUCCESS)
         {
-            co_await rollback(m_rollbackableStorage.get(), savepoint);
-            co_await rollback(m_rollbackableTransientStorage.get(), transientSavepoint);
+            co_await m_rollbackableStorage.get().rollback(savepoint);
+            co_await m_rollbackableTransientStorage.get().rollback(transientSavepoint);
             m_logs.clear();
         }
 
@@ -559,7 +560,7 @@ private:
         co_return result;
     }
 
-    void cosumeTransferGas(evmc_message& ref)
+    void consumeTransferGas(evmc_message& ref)
     {
         if (m_level == 0)
         {
@@ -641,7 +642,7 @@ private:
         auto& ref = mutableMessage();
         // 先扣除BALANCE_TRANSFER_GAS
         // First deduct the BALANCE_TRANSFER_GAS.
-        cosumeTransferGas(ref);
+        consumeTransferGas(ref);
 
         if (m_preparedPrecompiled != nullptr)
         {
