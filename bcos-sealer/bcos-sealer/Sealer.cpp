@@ -147,6 +147,12 @@ void Sealer::submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _blo
     {
         return;
     }
+    if (_block->transactionsMetaDataSize() == 0 && _block->transactionsSize() == 0)
+    {
+        SEAL_LOG(INFO) << LOG_DESC("submitProposal return for the block has no transactions")
+                       << LOG_KV("proposalIndex", _block->blockHeader()->number());
+        return;
+    }
     if (_block->blockHeader()->number() <= m_sealingManager->latestNumber())
     {
         SEAL_LOG(INFO) << LOG_DESC("submitProposal return for the block has already been committed")
