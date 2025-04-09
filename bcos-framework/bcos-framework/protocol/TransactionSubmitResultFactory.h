@@ -32,8 +32,4 @@ public:
     virtual TransactionSubmitResult::Ptr createTxSubmitResult() = 0;
 };
 
-template <class T>
-concept IsTransactionSubmitResultFactory =
-    std::derived_from<std::remove_cvref_t<T>, TransactionSubmitResultFactory> ||
-    std::same_as<std::remove_cvref_t<T>, TransactionSubmitResultFactory>;
 }  // namespace bcos::protocol
