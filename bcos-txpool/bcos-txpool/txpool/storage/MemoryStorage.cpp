@@ -230,7 +230,7 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
 
 
 std::vector<protocol::Transaction::ConstPtr> MemoryStorage::getTransactions(
-    RANGES::any_view<bcos::h256, RANGES::category::mask | RANGES::category::sized> hashes)
+    ::ranges::any_view<bcos::h256, ::ranges::category::mask | ::ranges::category::sized> hashes)
 {
     auto hashesVector = ::ranges::to<std::vector>(hashes);
     auto values = m_txsTable.batchFind<decltype(m_txsTable)::ReadAccessor>(hashesVector);
@@ -660,7 +660,7 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
 
     startT = utcTime();
     task::syncWait(m_config->txValidator()->web3NonceChecker()->updateNonceCache(
-        RANGES::views::keys(web3NonceMap), RANGES::views::values(web3NonceMap)));
+        ::ranges::views::keys(web3NonceMap), ::ranges::views::values(web3NonceMap)));
     auto updateWeb3NonceT = utcTime() - startT;
 
     startT = utcTime();
@@ -929,16 +929,16 @@ void MemoryStorage::removeInvalidTxs(bool lock)
             }
         }
         auto web3Txs =
-            RANGES::views::values(txs2Remove) | RANGES::views::filter([](auto const& _tx) {
+            ::ranges::views::values(txs2Remove) | ::ranges::views::filter([](auto const& _tx) {
                 return _tx->type() == TransactionType::Web3Transaction;
             });
         m_config->txPoolNonceChecker()->batchRemove(invalidNonceList);
         task::syncWait(m_config->txValidator()->web3NonceChecker()->batchRemoveMemoryNonce(
-            web3Txs | RANGES::views::transform([](auto const& _tx) { return _tx->sender(); }),
-            web3Txs | RANGES::views::transform([](auto const& _tx) { return _tx->nonce(); })));
+            web3Txs | ::ranges::views::transform([](auto const& _tx) { return _tx->sender(); }),
+            web3Txs | ::ranges::views::transform([](auto const& _tx) { return _tx->nonce(); })));
 
         /*
-        m_txsTable.batchRemove(txs2Remove | RANGES::views::keys,
+        m_txsTable.batchRemove(txs2Remove | ::ranges::views::keys,
             [&](bool success, const crypto::HashType& key, Transaction::Ptr const& tx) {
                 if (!success)
                 {
@@ -947,7 +947,7 @@ void MemoryStorage::removeInvalidTxs(bool lock)
                 }
             });
             */
-        for (const auto& tx2Remove : txs2Remove | RANGES::views::keys)
+        for (const auto& tx2Remove : txs2Remove | ::ranges::views::keys)
         {
             if (decltype(m_txsTable)::WriteAccessor accessor; m_txsTable.find(accessor, tx2Remove))
             {
@@ -959,7 +959,7 @@ void MemoryStorage::removeInvalidTxs(bool lock)
             }
         }
 
-        auto txs2Notify = txs2Remove | RANGES::views::filter([](auto const& tx2Remove) {
+        auto txs2Notify = txs2Remove | ::ranges::views::filter([](auto const& tx2Remove) {
             return tx2Remove.second != nullptr;
         });
 
@@ -1127,8 +1127,8 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::Ptr _block)
     auto lockT = utcTime() - startT;
     startT = utcTime();
 
-    auto txHashes = RANGES::iota_view<size_t, size_t>{0, txsSize} |
-                    RANGES::views::transform(
+    auto txHashes = ::ranges::iota_view<size_t, size_t>{0, txsSize} |
+                    ::ranges::views::transform(
                         [&_block](size_t index) { return _block->transactionHash(index); }) |
                     ::ranges::to<std::vector>();
     bool findErrorTxInBlock = false;
