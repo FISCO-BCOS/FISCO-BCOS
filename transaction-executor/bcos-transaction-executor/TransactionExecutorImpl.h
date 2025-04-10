@@ -160,7 +160,10 @@ public:
         }
         else if constexpr (step == 1)
         {
-            co_await updateNonce(executeContext);
+            if (co_await updateNonce(executeContext))
+            {
+                executeContext.m_startSavepoint = executeContext.m_rollbackableStorage.current();
+            }
             executeContext.m_evmcResult.emplace(co_await executeContext.m_hostContext.execute());
             co_await consumeBalance(executeContext);
         }
@@ -172,7 +175,7 @@ public:
         co_return {};
     }
 
-    friend task::Task<void> updateNonce(auto& executeContext)
+    friend task::Task<bool> updateNonce(auto& executeContext)
     {
         if (auto& transaction = executeContext.m_transaction.get();
             transaction.type() == 1)  // 1 = web3 transaction
@@ -191,7 +194,9 @@ public:
             auto storageNonce = u256(nonceInStorage.value_or("0"));
             u256 newNonce = std::max(callNonce, storageNonce) + 1;
             co_await ledger::account::setNonce(account, newNonce.convert_to<std::string>());
+            co_return true;
         }
+        co_return false;
     }
 
     friend task::Task<protocol::TransactionReceipt::Ptr> finish(auto& executeContext)
