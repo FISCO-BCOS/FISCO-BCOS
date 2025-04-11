@@ -280,6 +280,7 @@ private:
                 << "Execute block: " << blockHeader->number() << " | " << verify << " | "
                 << block->transactionsMetaDataSize() << " | " << block->transactionsSize();
 
+            std::unique_lock resultsLock(scheduler.m_resultsMutex);
             if (scheduler.m_lastExecutedBlockNumber != -1 &&
                 blockHeader->number() - scheduler.m_lastExecutedBlockNumber != 1)
             {
@@ -287,7 +288,6 @@ private:
                 // If the block has been executed, the result will be returned directly without
                 // error, which is used for the scenario of consensus and synchronous execution of a
                 // block at the same time
-                std::unique_lock resultsLock(scheduler.m_resultsMutex);
                 if (!scheduler.m_results.empty())
                 {
                     auto& front = scheduler.m_results.front();
@@ -299,8 +299,7 @@ private:
                     {
                         BASELINE_SCHEDULER_LOG(INFO)
                             << "Block has been executed, return result directly";
-                        auto& result =
-                            scheduler.m_results.at(front.m_executedBlockHeader->number() - number);
+                        auto& result = scheduler.m_results.at(frontNumber - number);
                         co_return {nullptr, result.m_executedBlockHeader, result.m_sysBlock};
                     }
 
@@ -308,7 +307,6 @@ private:
                         << "Block number out of cache range! front: " << frontNumber
                         << " back: " << backNumber << " input: " << blockHeader->number();
                 }
-                resultsLock.unlock();
 
                 auto message =
                     fmt::format("Discontinuous execute block number! expect: {} input: {}",
@@ -318,6 +316,7 @@ private:
                     BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message),
                     nullptr, false};
             }
+            resultsLock.unlock();
 
             std::unique_lock executeLock(scheduler.m_executeMutex, std::try_to_lock);
             if (!executeLock.owns_lock())
@@ -374,7 +373,7 @@ private:
             pushView(scheduler.m_multiLayerStorage.get(), std::move(view));
             scheduler.m_lastExecutedBlockNumber = blockHeader->number();
 
-            std::unique_lock resultsLock(scheduler.m_resultsMutex);
+            resultsLock.lock();
             scheduler.m_results.push_front(
                 {.m_transactions =
                         std::make_shared<protocol::ConstTransactions>(std::move(transactions)),
