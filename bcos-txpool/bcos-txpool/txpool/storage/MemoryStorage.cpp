@@ -905,22 +905,17 @@ void MemoryStorage::removeInvalidTxs(bool lock)
         }
 
         // remove invalid txs
-        std::atomic<size_t> txCnt = 0;
-
+        size_t txCnt = 0;
         std::unordered_map<bcos::crypto::HashType, bcos::protocol::Transaction::Ptr> txs2Remove;
 
-        m_invalidTxs.clear([&](bool success, const bcos::crypto::HashType& txHash,
-                               const bcos::protocol::Transaction::Ptr& tx) {
-            if (!success)
-            {
-                return;
-            }
+        for (auto& accessor : m_invalidTxs.range<decltype(m_invalidTxs)::ReadAccessor>())
+        {
+            ++txCnt;
+            txs2Remove.emplace(accessor.key(), accessor.value());
+        }
+        m_invalidTxs.clear();
 
-            txCnt++;
-            txs2Remove.emplace(txHash, tx);
-        });
-
-        bcos::protocol::NonceList invalidNonceList = {};
+        bcos::protocol::NonceList invalidNonceList;
         for (auto const& [_, tx] : txs2Remove)
         {
             if (tx->type() == TransactionType::BCOSTransaction) [[likely]]
@@ -937,16 +932,6 @@ void MemoryStorage::removeInvalidTxs(bool lock)
             web3Txs | ::ranges::views::transform([](auto const& _tx) { return _tx->sender(); }),
             web3Txs | ::ranges::views::transform([](auto const& _tx) { return _tx->nonce(); })));
 
-        /*
-        m_txsTable.batchRemove(txs2Remove | ::ranges::views::keys,
-            [&](bool success, const crypto::HashType& key, Transaction::Ptr const& tx) {
-                if (!success)
-                {
-                    txs2Remove[key] = nullptr;
-                    return;
-                }
-            });
-            */
         for (const auto& tx2Remove : txs2Remove | ::ranges::views::keys)
         {
             if (decltype(m_txsTable)::WriteAccessor accessor; m_txsTable.find(accessor, tx2Remove))
