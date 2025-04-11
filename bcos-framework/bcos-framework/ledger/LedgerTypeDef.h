@@ -167,10 +167,10 @@ inline task::Task<void> readFromStorage(
 {
     decltype(auto) keys = bcos::ledger::SystemConfigs::supportConfigs();
     auto entries = co_await storage2::readSome(std::forward<decltype(storage)>(storage),
-        keys | RANGES::views::transform([](std::string_view key) {
+        keys | ::ranges::views::transform([](std::string_view key) {
             return executor_v1::StateKeyView(ledger::SYS_CONFIG, key);
         }));
-    for (auto&& [key, entry] : RANGES::views::zip(keys, entries))
+    for (auto&& [key, entry] : ::ranges::views::zip(keys, entries))
     {
         if (entry)
         {
