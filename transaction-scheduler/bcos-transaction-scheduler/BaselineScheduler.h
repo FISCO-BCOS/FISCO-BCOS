@@ -280,16 +280,6 @@ private:
                 << "Execute block: " << blockHeader->number() << " | " << verify << " | "
                 << block->transactionsMetaDataSize() << " | " << block->transactionsSize();
 
-            std::unique_lock executeLock(scheduler.m_executeMutex, std::try_to_lock);
-            if (!executeLock.owns_lock())
-            {
-                auto message = fmt::format(
-                    "Another block:{} is executing!", scheduler.m_lastExecutedBlockNumber);
-                BASELINE_SCHEDULER_LOG(INFO) << message;
-                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
-                    nullptr, false};
-            }
-
             if (scheduler.m_lastExecutedBlockNumber != -1 &&
                 blockHeader->number() - scheduler.m_lastExecutedBlockNumber != 1)
             {
@@ -303,15 +293,20 @@ private:
                     auto& front = scheduler.m_results.front();
                     auto& back = scheduler.m_results.back();
                     auto number = blockHeader->number();
-                    if (number >= front.m_executedBlockHeader->number() &&
-                        number <= back.m_executedBlockHeader->number())
+                    auto frontNumber = front.m_executedBlockHeader->number();
+                    auto backNumber = back.m_executedBlockHeader->number();
+                    if (number <= frontNumber && number >= backNumber)
                     {
                         BASELINE_SCHEDULER_LOG(INFO)
                             << "Block has been executed, return result directly";
                         auto& result =
-                            scheduler.m_results.at(number - front.m_executedBlockHeader->number());
+                            scheduler.m_results.at(front.m_executedBlockHeader->number() - number);
                         co_return {nullptr, result.m_executedBlockHeader, result.m_sysBlock};
                     }
+
+                    BASELINE_SCHEDULER_LOG(INFO)
+                        << "Block number out of cache range! front: " << frontNumber
+                        << " back: " << backNumber << " input: " << blockHeader->number();
                 }
                 resultsLock.unlock();
 
@@ -321,6 +316,16 @@ private:
                 BASELINE_SCHEDULER_LOG(INFO) << message;
                 co_return {
                     BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message),
+                    nullptr, false};
+            }
+
+            std::unique_lock executeLock(scheduler.m_executeMutex, std::try_to_lock);
+            if (!executeLock.owns_lock())
+            {
+                auto message = fmt::format(
+                    "Another block:{} is executing!", scheduler.m_lastExecutedBlockNumber);
+                BASELINE_SCHEDULER_LOG(INFO) << message;
+                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
                     nullptr, false};
             }
 
