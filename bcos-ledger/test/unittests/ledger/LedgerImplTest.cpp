@@ -16,7 +16,6 @@
 #include <bcos-tars-protocol/tars/TransactionMetaData.h>
 #include <bcos-tars-protocol/tars/TransactionReceipt.h>
 #include <bcos-task/Wait.h>
-#include <bcos-utilities/Ranges.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/test/unit_test.hpp>
 #include <boost/throw_exception.hpp>

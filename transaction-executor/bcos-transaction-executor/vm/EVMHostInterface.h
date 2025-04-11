@@ -158,7 +158,7 @@ struct EVMHostInterface
     {
         auto& hostContext = static_cast<HostContextType&>(*context);
         evmc_tx_context result = {
-            .tx_gas_price = {},
+            .tx_gas_price = toEvmC(hostContext.gasPrice()),
             .tx_origin = hostContext.origin(),
             .block_coinbase = {},
             .block_number = hostContext.blockNumber(),

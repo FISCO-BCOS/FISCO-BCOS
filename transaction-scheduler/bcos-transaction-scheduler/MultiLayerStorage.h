@@ -1,8 +1,10 @@
 #pragma once
+#include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-task/TBBWait.h"
 #include "bcos-task/Trait.h"
 #include "bcos-utilities/Error.h"
+#include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/ITTAPI.h"
 #include "bcos-utilities/RecursiveLambda.h"
 #include <oneapi/tbb/parallel_invoke.h>
@@ -17,18 +19,16 @@
 namespace bcos::scheduler_v1
 {
 
-// clang-format off
-struct DuplicateMutableStorageError : public bcos::Error {};
-struct DuplicateMutableViewError: public bcos::Error {};
-struct NonExistsKeyIteratorError: public bcos::Error {};
-struct NotExistsMutableStorageError : public bcos::Error {};
-struct NotExistsImmutableStorageError : public bcos::Error {};
-struct UnsupportedMethod : public bcos::Error {};
-// clang-format on
+DERIVE_BCOS_EXCEPTION(DuplicateMutableStorageError);
+DERIVE_BCOS_EXCEPTION(DuplicateMutableViewError);
+DERIVE_BCOS_EXCEPTION(NonExistsKeyIteratorError);
+DERIVE_BCOS_EXCEPTION(NotExistsMutableStorageError);
+DERIVE_BCOS_EXCEPTION(NotExistsImmutableStorageError);
+DERIVE_BCOS_EXCEPTION(UnsupportedMethod);
 
 template <class KeyType, class ValueType>
 task::Task<bool> fillMissingValues(
-    auto& storage, ::ranges::input_range auto&& keys, ::ranges::input_range auto& values)
+    auto& storage, ::ranges::input_range auto& keys, ::ranges::input_range auto& values)
 {
     using StoreKeyType =
         std::conditional_t<std::is_lvalue_reference_v<::ranges::range_value_t<decltype(keys)>>,
@@ -43,11 +43,11 @@ task::Task<bool> fillMissingValues(
             missingKeyValues.emplace_back(std::forward<decltype(key)>(key), std::ref(value));
         }
     }
-    auto gotValues = co_await storage2::readSome(storage, missingKeyValues | ::ranges::views::keys);
+    auto gotValues = co_await storage2::readSome(storage, ::ranges::views::keys(missingKeyValues));
 
     size_t count = 0;
     for (auto&& [from, to] :
-        ::ranges::views::zip(gotValues, missingKeyValues | ::ranges::views::values))
+        ::ranges::views::zip(gotValues, ::ranges::views::values(missingKeyValues)))
     {
         if (from)
         {
@@ -104,15 +104,16 @@ public:
         return *storage.m_mutableStorage;
     }
 
-    friend auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, View& view,
-        ::ranges::input_range auto&& keys)
+    friend auto tag_invoke(
+        storage2::tag_t<storage2::readSome> /*unused*/, View& view, ::ranges::input_range auto keys)
         -> task::Task<task::AwaitableReturnType<
             std::invoke_result_t<storage2::ReadSome, MutableStorage&, decltype(keys)>>>
         requires ::ranges::sized_range<decltype(keys)> &&
                  ::ranges::sized_range<task::AwaitableReturnType<
                      std::invoke_result_t<storage2::ReadSome, MutableStorage&, decltype(keys)>>>
     {
-        task::AwaitableReturnType<decltype(storage2::readSome(*view.m_mutableStorage, keys))>
+        task::AwaitableReturnType<
+            std::invoke_result_t<storage2::ReadSome, MutableStorage&, decltype(keys)>>
             values(::ranges::size(keys));
         if (view.m_mutableStorage &&
             co_await fillMissingValues<typename View::Key, typename View::Value>(
@@ -149,49 +150,47 @@ public:
     }
 
     friend auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, View& view,
-        ::ranges::input_range auto&& keys, storage2::DIRECT_TYPE /*unused*/)
+        ::ranges::input_range auto keys, storage2::DIRECT_TYPE /*unused*/)
         -> task::Task<task::AwaitableReturnType<
             std::invoke_result_t<storage2::ReadSome, MutableStorage&, decltype(keys)>>>
     {
         if (view.m_mutableStorage)
         {
-            co_return co_await storage2::readSome(
-                *view.m_mutableStorage, std::forward<decltype(keys)>(keys));
+            co_return co_await storage2::readSome(*view.m_mutableStorage, std::move(keys));
         }
 
         for (auto& immutableStorage : view.m_immutableStorages)
         {
-            co_return co_await storage2::readSome(
-                *immutableStorage, std::forward<decltype(keys)>(keys));
+            co_return co_await storage2::readSome(*immutableStorage, std::move(keys));
         }
 
         if constexpr (View::withCacheStorage)
         {
-            co_return co_await storage2::readSome(
-                view.m_cacheStorage.get(), std::forward<decltype(keys)>(keys));
+            co_return co_await storage2::readSome(view.m_cacheStorage.get(), std::move(keys));
         }
 
-        co_return co_await storage2::readSome(
-            view.m_backendStorage.get(), std::forward<decltype(keys)>(keys));
+        co_return co_await storage2::readSome(view.m_backendStorage.get(), std::move(keys));
     }
 
-    friend auto tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/, View& view, auto&& key)
+    friend auto tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/, View& view, auto key)
         -> task::Task<task::AwaitableReturnType<
             std::invoke_result_t<storage2::ReadOne, MutableStorage&, decltype(key)>>>
     {
         if (view.m_mutableStorage)
         {
-            if (auto value = co_await storage2::readOne(*view.m_mutableStorage, key))
+            auto value = co_await view.m_mutableStorage->readOne(key);
+            if (auto* ptr = std::get_if<std::optional<typename View::Value>>(std::addressof(value)))
             {
-                co_return value;
+                co_return *ptr;
             }
         }
 
         for (auto& immutableStorage : view.m_immutableStorages)
         {
-            if (auto value = co_await storage2::readOne(*immutableStorage, key))
+            auto value = co_await immutableStorage->readOne(key);
+            if (auto* ptr = std::get_if<std::optional<typename View::Value>>(std::addressof(value)))
             {
-                co_return value;
+                co_return *ptr;
             }
         }
 
@@ -206,59 +205,52 @@ public:
         co_return co_await storage2::readOne(view.m_backendStorage.get(), key);
     }
 
-    friend auto tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/, View& view, auto&& key,
-        storage2::DIRECT_TYPE /*unused*/)
+    friend auto tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/, View& view,
+        const auto& key, storage2::DIRECT_TYPE /*unused*/)
         -> task::Task<task::AwaitableReturnType<
             std::invoke_result_t<storage2::ReadOne, MutableStorage&, decltype(key)>>>
     {
         if (view.m_mutableStorage)
         {
-            co_return co_await storage2::readOne(
-                *view.m_mutableStorage, std::forward<decltype(key)>(key));
+            co_return co_await storage2::readOne(*view.m_mutableStorage, key);
         }
 
         for (auto& immutableStorage : view.m_immutableStorages)
         {
-            co_return co_await storage2::readOne(
-                *immutableStorage, std::forward<decltype(key)>(key));
+            co_return co_await storage2::readOne(*immutableStorage, key);
         }
 
         if constexpr (View::withCacheStorage)
         {
-            co_return co_await storage2::readOne(
-                view.m_cacheStorage.get(), std::forward<decltype(key)>(key));
+            co_return co_await storage2::readOne(view.m_cacheStorage.get(), key);
         }
 
-        co_return co_await storage2::readOne(
-            view.m_backendStorage.get(), std::forward<decltype(key)>(key));
+        co_return co_await storage2::readOne(view.m_backendStorage.get(), key);
     }
 
     friend task::Task<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/, View& view,
-        ::ranges::input_range auto&& keyValues)
+        ::ranges::input_range auto keyValues)
     {
-        co_await storage2::writeSome(
-            mutableStorage(view), std::forward<decltype(keyValues)>(keyValues));
+        co_await storage2::writeSome(mutableStorage(view), std::move(keyValues));
     }
 
-    friend auto tag_invoke(storage2::tag_t<storage2::writeOne> /*unused*/, View& view, auto&& key,
-        auto&& value) -> task::Task<void>
+    friend auto tag_invoke(storage2::tag_t<storage2::writeOne> /*unused*/, View& view, auto key,
+        auto value) -> task::Task<void>
     {
-        co_await storage2::writeOne(mutableStorage(view), std::forward<decltype(key)>(key),
-            std::forward<decltype(value)>(value));
+        co_await storage2::writeOne(mutableStorage(view), std::move(key), std::move(value));
     }
 
     friend task::Task<void> tag_invoke(
-        storage2::tag_t<storage2::merge> /*unused*/, View& toView, auto&& fromStorage)
+        storage2::tag_t<storage2::merge> /*unused*/, View& toView, auto& fromStorage)
     {
-        co_await storage2::merge(
-            mutableStorage(toView), std::forward<decltype(fromStorage)>(fromStorage));
+        co_await storage2::merge(mutableStorage(toView), fromStorage);
     }
 
     friend task::Task<void> tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/, View& view,
-        ::ranges::input_range auto&& keys, auto&&... args)
+        ::ranges::input_range auto keys, auto&&... args)
     {
-        co_await storage2::removeSome(mutableStorage(view), std::forward<decltype(keys)>(keys),
-            std::forward<decltype(args)>(args)...);
+        co_await storage2::removeSome(
+            mutableStorage(view), std::move(keys), std::forward<decltype(args)>(args)...);
     }
 
     class Iterator
@@ -391,7 +383,7 @@ public:
 };
 
 template <class MutableStorageType, class CachedStorage, class BackendStorage>
-    requires((std::is_void_v<CachedStorage> || (!std::is_void_v<CachedStorage>)))
+    requires MutableStorageType::withLogicalDeletion
 class MultiLayerStorage
 {
 public:
@@ -410,7 +402,6 @@ public:
         m_cacheStorage;
 
     using MutableStorage = MutableStorageType;
-
     using Key = KeyType;
     using Value = ValueType;
 

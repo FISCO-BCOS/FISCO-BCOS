@@ -160,19 +160,9 @@ public:
         return m_values.contains(key);
     }
 
-    void clear(WriteAccessor& accessor,
-        std::function<void(bool, const KeyType&, WriteAccessor)> onRemove = nullptr)
+    void clear()
     {
-        accessor.emplaceLock(m_mutex);
-
-        for (auto it = m_values.begin(); it != m_values.end(); it++)
-        {
-            if (onRemove)
-            {
-                onRemove(true, it->first, accessor);
-            }
-        }
-
+        Guard guard(m_mutex, true);
         m_values.clear();
     }
 
@@ -362,19 +352,11 @@ public:
         return bucket->contains(key);
     }
 
-    void clear(std::function<void(bool, const KeyType&, const ValueType&)> onRemove = {})
+    void clear()
     {
-        if (onRemove)
+        for (auto& bucket : m_buckets)
         {
-            for (auto& accessor : range<ReadAccessor>())
-            {
-                onRemove(true, accessor.key(), accessor.value());
-            }
-        }
-
-        for (size_t i = 0; i < m_buckets.size(); i++)
-        {
-            m_buckets[i] = std::make_shared<BucketType>();
+            bucket->clear();
         }
     }
 
@@ -432,7 +414,7 @@ public:
     BucketSet& operator=(BucketSet&&) noexcept = default;
     ~BucketSet() noexcept = default;
 
-    BucketSet(size_t bucketSize) : BucketMap<KeyType, EmptyType, BucketHasher>(bucketSize){};
+    BucketSet(size_t bucketSize) : BucketMap<KeyType, EmptyType, BucketHasher>(bucketSize) {};
 
     using WriteAccessor = typename BucketMap<KeyType, EmptyType, BucketHasher>::WriteAccessor;
     using ReadAccessor = typename BucketMap<KeyType, EmptyType, BucketHasher>::ReadAccessor;

@@ -41,7 +41,7 @@ BOOST_AUTO_TEST_CASE(getPrimaryKeys)
 {
     bcos::task::syncWait([this]() -> bcos::task::Task<void> {
         co_await bcos::storage2::writeSome(
-            storage, ::ranges::views::iota(0, 10) | RANGES::views::transform([](int i) {
+            storage, ::ranges::views::iota(0, 10) | ::ranges::views::transform([](int i) {
                 auto key = bcos::executor_v1::StateKey("t_test", std::to_string(i));
                 return std::make_tuple(key, bcos::storage::Entry("t_test"));
             }));
@@ -83,6 +83,69 @@ BOOST_AUTO_TEST_CASE(getPrimaryKeys)
                 };
                 BOOST_CHECK_EQUAL_COLLECTIONS(
                     keys.begin(), keys.end(), expectedKeys.begin(), expectedKeys.end());
+            });
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(balanceCase)
+{
+    bcos::task::syncWait([this]() -> bcos::task::Task<void> {
+        constexpr static auto keys = std::to_array<std::string_view>(
+            {"00000000000000000000000000000195cb2ccc38", "57e8f689daed377a69915c0ddce26da288f3aa65",
+                "893de00e32b0765e03366ce8b3bfcd0404b24995",
+                "d24180cc0fef2f3e545de4f9aafc09345cd08903"});
+
+        auto otherKeys = ::ranges::views::iota(0, 496) | ::ranges::views::transform([](int i) {
+            return fmt::format("{:#040x}", i);
+        });
+
+        auto totalKeys =
+            ::ranges::views::concat(::ranges::views::transform(keys,
+                                        [](std::string_view view) { return std::string(view); }),
+                otherKeys) |
+            ::ranges::to<std::vector>();
+        ::ranges::sort(totalKeys);
+
+        using namespace std::string_literals;
+        co_await bcos::storage2::writeSome(
+            storage, totalKeys | ::ranges::views::transform([](std::string keyView) {
+                auto key = bcos::executor_v1::StateKey("s_balance_caller"s, std::move(keyView));
+                return std::make_tuple(key, bcos::storage::Entry("1"));
+            }));
+
+        bcos::storage::LegacyStorageWrapper legacyStorage(storage);
+
+        legacyStorage.asyncGetPrimaryKeys("s_balance_caller", {},
+            [&](bcos::Error::UniquePtr error, std::vector<std::string> gotKeys) {
+                BOOST_CHECK(!error);
+                BOOST_CHECK(!gotKeys.empty());
+                BOOST_CHECK_EQUAL(gotKeys.size(), 500);
+                ::ranges::sort(gotKeys);
+                BOOST_CHECK_EQUAL_COLLECTIONS(
+                    gotKeys.begin(), gotKeys.end(), totalKeys.begin(), totalKeys.end());
+            });
+
+        co_await bcos::storage2::removeSome(
+            storage, ::ranges::views::transform(otherKeys, [](std::string view) {
+                return bcos::executor_v1::StateKey("s_balance_caller", view);
+            }));
+
+        bcos::storage::Entry deletedEntry;
+        deletedEntry.setStatus(bcos::storage::Entry::DELETED);
+        legacyStorage.asyncSetRow("s_balance_caller", "d24180cc0fef2f3e545de4f9aafc09345cd08903",
+            deletedEntry, [](bcos::Error::UniquePtr error) { BOOST_CHECK(!error); });
+
+        legacyStorage.asyncGetPrimaryKeys("s_balance_caller", {},
+            [](bcos::Error::UniquePtr error, std::vector<std::string> gotKeys) {
+                BOOST_CHECK(!error);
+                BOOST_CHECK(!gotKeys.empty());
+                BOOST_CHECK_EQUAL(gotKeys.size(), 3);
+                auto expectedKeys =
+                    std::vector<std::string>{"00000000000000000000000000000195cb2ccc38",
+                        "57e8f689daed377a69915c0ddce26da288f3aa65",
+                        "893de00e32b0765e03366ce8b3bfcd0404b24995"};
+                BOOST_CHECK_EQUAL_COLLECTIONS(
+                    gotKeys.begin(), gotKeys.end(), expectedKeys.begin(), expectedKeys.end());
             });
     }());
 }

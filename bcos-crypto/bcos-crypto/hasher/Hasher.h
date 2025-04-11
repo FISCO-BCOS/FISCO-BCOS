@@ -1,5 +1,4 @@
 #pragma once
-#include <bcos-utilities/Ranges.h>
 #include <concepts>
 #include <span>
 #include <type_traits>

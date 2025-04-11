@@ -128,14 +128,15 @@ task::Task<h256> calculateStateRoot(
 }
 
 task::Task<std::tuple<u256, h256>> calculateReceiptRoot(
-    RANGES::range auto const& receipts, protocol::Block& block, crypto::Hash const& hashImpl)
+    ::ranges::range auto const& receipts, protocol::Block& block, crypto::Hash const& hashImpl)
 {
     u256 gasUsed;
     h256 receiptRoot;
 
     tbb::parallel_invoke(
         [&]() {
-            for (auto&& [receipt, index] : RANGES::views::zip(receipts, RANGES::views::iota(0UL)))
+            for (auto&& [receipt, index] :
+                ::ranges::views::zip(receipts, ::ranges::views::iota(0UL)))
             {
                 gasUsed += receipt->gasUsed();
                 if (index < block.receiptsSize())
@@ -150,16 +151,16 @@ task::Task<std::tuple<u256, h256>> calculateReceiptRoot(
         },
         [&]() {
             bcos::crypto::merkle::Merkle merkle(hashImpl.hasher());
-            auto hashesRange = receipts | RANGES::views::transform(
+            auto hashesRange = receipts | ::ranges::views::transform(
                                               [](const auto& receipt) { return receipt->hash(); });
 
             std::vector<bcos::h256> merkleTrie;
             merkle.generateMerkle(hashesRange, merkleTrie);
 
-            receiptRoot = *RANGES::rbegin(merkleTrie);
+            receiptRoot = *::ranges::rbegin(merkleTrie);
         });
 
-    co_return std::make_tuple(gasUsed, receiptRoot);
+    co_return {gasUsed, receiptRoot};
 }
 
 /**
@@ -172,9 +173,9 @@ task::Task<std::tuple<u256, h256>> calculateReceiptRoot(
  * @param newBlock The updated block.
  * @param hashImpl The hash implementation used to calculate the block hash.
  */
-void finishExecute(auto& storage, RANGES::range auto const& receipts,
+void finishExecute(auto& storage, ::ranges::range auto const& receipts,
     protocol::BlockHeader& newBlockHeader, protocol::Block& block,
-    RANGES::input_range auto const& transactions, bool& sysBlock, crypto::Hash const& hashImpl)
+    ::ranges::input_range auto const& transactions, bool& sysBlock, crypto::Hash const& hashImpl)
 {
     ittapi::Report finishReport(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
         ittapi::ITT_DOMAINS::instance().FINISH_EXECUTE);
@@ -222,14 +223,30 @@ private:
         std::function<void(Error::Ptr)>)>
         m_transactionNotifier;
     std::reference_wrapper<crypto::Hash const> m_hashImpl;
-    std::shared_ptr<ledger::LedgerConfig> m_ledgerConfig;
-    std::mutex m_ledgerConfigMutex;
 
     int64_t m_lastExecutedBlockNumber = -1;
     std::mutex m_executeMutex;
-    int64_t m_lastcommittedBlockNumber = -1;
+    int64_t m_lastCommittedBlockNumber = -1;
     std::mutex m_commitMutex;
     tbb::task_group m_asyncGroup;
+
+    std::shared_ptr<ledger::LedgerConfig> m_ledgerConfig;
+    std::mutex m_ledgerConfigMutex;
+
+    std::shared_ptr<ledger::LedgerConfig> getLedgerConfig()
+    {
+        std::unique_lock lock(m_ledgerConfigMutex);
+        return m_ledgerConfig;
+    }
+
+    void updateLedgerConfig(std::shared_ptr<ledger::LedgerConfig> newLedgerConfig)
+    {
+        std::unique_lock lock(m_ledgerConfigMutex);
+        if (!m_ledgerConfig || newLedgerConfig->blockNumber() > m_ledgerConfig->blockNumber())
+        {
+            m_ledgerConfig = std::move(newLedgerConfig);
+        }
+    }
 
     struct ExecuteResult
     {
@@ -269,9 +286,8 @@ private:
                 auto message = fmt::format(
                     "Another block:{} is executing!", scheduler.m_lastExecutedBlockNumber);
                 BASELINE_SCHEDULER_LOG(INFO) << message;
-                co_return std::make_tuple(
-                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
-                    nullptr, false);
+                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
+                    nullptr, false};
             }
 
             if (scheduler.m_lastExecutedBlockNumber != -1 &&
@@ -294,8 +310,7 @@ private:
                             << "Block has been executed, return result directly";
                         auto& result =
                             scheduler.m_results.at(number - front.m_executedBlockHeader->number());
-                        co_return std::make_tuple(
-                            nullptr, result.m_executedBlockHeader, result.m_sysBlock);
+                        co_return {nullptr, result.m_executedBlockHeader, result.m_sysBlock};
                     }
                 }
                 resultsLock.unlock();
@@ -304,9 +319,9 @@ private:
                     fmt::format("Discontinuous execute block number! expect: {} input: {}",
                         scheduler.m_lastExecutedBlockNumber + 1, blockHeader->number());
                 BASELINE_SCHEDULER_LOG(INFO) << message;
-                co_return std::make_tuple(
+                co_return {
                     BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message),
-                    nullptr, false);
+                    nullptr, false};
             }
 
             auto now = current();
@@ -314,11 +329,7 @@ private:
             newMutable(view);
             auto transactions = co_await getTransactions(scheduler.m_txpool.get(), *block);
 
-            ledger::LedgerConfig::Ptr ledgerConfig;
-            {
-                std::unique_lock ledgerConfigLock(scheduler.m_ledgerConfigMutex);
-                ledgerConfig = scheduler.m_ledgerConfig;
-            }
+            auto ledgerConfig = scheduler.getLedgerConfig();
             auto receipts = co_await scheduler_v1::executeBlock(scheduler.m_schedulerImpl.get(),
                 view, scheduler.m_executor.get(), *blockHeader,
                 ::ranges::views::indirect(transactions), *ledgerConfig);
@@ -351,9 +362,8 @@ private:
                 }
                 BASELINE_SCHEDULER_LOG(ERROR) << message;
 
-                co_return std::make_tuple(
-                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlocks, message),
-                    nullptr, false);
+                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlocks, message),
+                    nullptr, false};
             }
 
             pushView(scheduler.m_multiLayerStorage.get(), std::move(view));
@@ -378,7 +388,7 @@ private:
                 << " | gasUsed: " << executedBlockHeader->gasUsed() << " | sysBlock: " << sysBlock
                 << " | elapsed: " << (current() - now) << "ms";
 
-            co_return std::make_tuple(nullptr, std::move(executedBlockHeader), sysBlock);
+            co_return {nullptr, std::move(executedBlockHeader), sysBlock};
         }
         catch (std::exception& e)
         {
@@ -386,9 +396,8 @@ private:
                 fmt::format("Execute block failed! {}", boost::diagnostic_information(e));
             BASELINE_SCHEDULER_LOG(ERROR) << message;
 
-            co_return std::make_tuple(
-                BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message), nullptr,
-                false);
+            co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message),
+                nullptr, false};
         }
     }
 
@@ -413,24 +422,23 @@ private:
             if (!commitLock.owns_lock())
             {
                 auto message = fmt::format(
-                    "Another block:{} is committing!", scheduler.m_lastcommittedBlockNumber);
+                    "Another block:{} is committing!", scheduler.m_lastCommittedBlockNumber);
                 BASELINE_SCHEDULER_LOG(INFO) << message;
 
-                co_return std::make_tuple(
-                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
-                    nullptr);
+                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
+                    nullptr};
             }
 
-            if (scheduler.m_lastcommittedBlockNumber != -1 &&
-                header->number() - scheduler.m_lastcommittedBlockNumber != 1)
+            if (scheduler.m_lastCommittedBlockNumber != -1 &&
+                header->number() - scheduler.m_lastCommittedBlockNumber != 1)
             {
                 auto message = fmt::format("Discontinuous commit block number: {}! expect: {}",
-                    header->number(), scheduler.m_lastcommittedBlockNumber + 1);
+                    header->number(), scheduler.m_lastCommittedBlockNumber + 1);
 
                 BASELINE_SCHEDULER_LOG(INFO) << message;
-                co_return std::make_tuple(
+                co_return {
                     BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message),
-                    nullptr);
+                    nullptr};
             }
 
             std::unique_lock resultsLock(scheduler.m_resultsMutex);
@@ -469,65 +477,66 @@ private:
 
             auto ledgerConfig = co_await ledger::getLedgerConfig(scheduler.m_ledger.get());
             ledgerConfig->setHash(header->hash());
-            {
-                std::unique_lock ledgerConfigLock(scheduler.m_ledgerConfigMutex);
-                scheduler.m_ledgerConfig = ledgerConfig;
-            }
+            scheduler.updateLedgerConfig(ledgerConfig);
+
             BASELINE_SCHEDULER_LOG(INFO) << "Commit block finished: " << header->number()
                                          << " | elapsed: " << (current() - now) << "ms";
             commitLock.unlock();
 
-            scheduler.m_asyncGroup.run([&, result = std::move(result),
-                                           blockHash = ledgerConfig->hash(),
-                                           blockNumber = ledgerConfig->blockNumber()]() {
-                ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
-                    ittapi::ITT_DOMAINS::instance().NOTIFY_RESULTS);
+            tbb::this_task_arena::isolate([&]() {
+                scheduler.m_asyncGroup.run([&, result = std::move(result),
+                                               blockHash = ledgerConfig->hash(),
+                                               blockNumber = ledgerConfig->blockNumber()]() {
+                    ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
+                        ittapi::ITT_DOMAINS::instance().NOTIFY_RESULTS);
 
-                auto submitResults =
-                    RANGES::views::zip(
-                        RANGES::views::iota(0), *result.m_transactions, result.m_receipts) |
-                    RANGES::views::transform([&](auto input)
-                                                 -> protocol::TransactionSubmitResult::Ptr {
-                        auto&& [index, transaction, receipt] = input;
+                    auto submitResults =
+                        ::ranges::views::zip(
+                            ::ranges::views::iota(0), *result.m_transactions, result.m_receipts) |
+                        ::ranges::views::transform(
+                            [&](auto input) -> protocol::TransactionSubmitResult::Ptr {
+                                auto&& [index, transaction, receipt] = input;
 
-                        auto submitResult =
-                            scheduler.m_transactionSubmitResultFactory.get().createTxSubmitResult();
-                        submitResult->setStatus(receipt->status());
-                        submitResult->setTxHash(transaction->hash());
-                        submitResult->setBlockHash(blockHash);
-                        submitResult->setTransactionIndex(static_cast<int64_t>(index));
-                        submitResult->setNonce(std::string(transaction->nonce()));
-                        submitResult->setTransactionReceipt(receipt);
-                        submitResult->setSender(std::string(transaction->sender()));
-                        submitResult->setTo(std::string(transaction->to()));
+                                auto submitResult = scheduler.m_transactionSubmitResultFactory.get()
+                                                        .createTxSubmitResult();
+                                submitResult->setStatus(receipt->status());
+                                submitResult->setTxHash(transaction->hash());
+                                submitResult->setBlockHash(blockHash);
+                                submitResult->setTransactionIndex(static_cast<int64_t>(index));
+                                submitResult->setNonce(std::string(transaction->nonce()));
+                                submitResult->setTransactionReceipt(receipt);
+                                submitResult->setSender(std::string(transaction->sender()));
+                                submitResult->setTo(std::string(transaction->to()));
 
-                        return submitResult;
-                    }) |
-                    RANGES::to<std::vector>();
+                                return submitResult;
+                            }) |
+                        ::ranges::to<std::vector>();
 
-                auto submitResultsPtr = std::make_shared<bcos::protocol::TransactionSubmitResults>(
-                    std::move(submitResults));
-                scheduler.m_blockNumberNotifier(blockNumber);
-                scheduler.m_transactionNotifier(
-                    blockNumber, std::move(submitResultsPtr), [](const Error::Ptr& error) {
-                        if (error)
-                        {
-                            BASELINE_SCHEDULER_LOG(WARNING)
-                                << "Push block notify error!"
-                                << boost::diagnostic_information(*error);
-                        }
-                    });
+                    auto submitResultsPtr =
+                        std::make_shared<bcos::protocol::TransactionSubmitResults>(
+                            std::move(submitResults));
+                    scheduler.m_blockNumberNotifier(blockNumber);
+                    scheduler.m_transactionNotifier(
+                        blockNumber, std::move(submitResultsPtr), [](const Error::Ptr& error) {
+                            if (error)
+                            {
+                                BASELINE_SCHEDULER_LOG(WARNING)
+                                    << "Push block notify error!"
+                                    << boost::diagnostic_information(*error);
+                            }
+                        });
+                });
             });
 
-            co_return std::make_tuple(Error::Ptr{}, std::move(ledgerConfig));
+            co_return {Error::Ptr{}, std::move(ledgerConfig)};
         }
         catch (std::exception& e)
         {
             auto message = fmt::format("Commit block failed! {}", boost::diagnostic_information(e));
             BASELINE_SCHEDULER_LOG(ERROR) << message;
 
-            co_return std::make_tuple(
-                BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message), nullptr);
+            co_return {
+                BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message), nullptr};
         }
     }
 
@@ -587,29 +596,13 @@ public:
             auto view = fork(self->m_multiLayerStorage.get());
             newMutable(view);
             auto blockHeader = self->m_blockHeaderFactory.get().createBlockHeader();
-            ledger::LedgerConfig::Ptr ledgerConfig;
-            {
-                std::unique_lock ledgerConfigLock(self->m_ledgerConfigMutex);
-                ledgerConfig = self->m_ledgerConfig;
-            }
+            auto ledgerConfig = self->getLedgerConfig();
 
-            protocol::TransactionReceipt::Ptr receipt;
-            if (ledgerConfig)
-            {
-                blockHeader->setVersion(ledgerConfig->compatibilityVersion());
-                blockHeader->setNumber(ledgerConfig->blockNumber() + 1);  // Use next block number
-                blockHeader->calculateHash(self->m_hashImpl.get());
-                receipt = co_await executor_v1::executeTransaction(self->m_executor.get(), view,
-                    *blockHeader, *transaction, 0, *ledgerConfig, task::syncWait);
-            }
-            else
-            {
-                ledger::LedgerConfig emptyLedgerConfig;
-                blockHeader->setVersion((uint32_t)bcos::protocol::BlockVersion::V3_2_4_VERSION);
-                blockHeader->calculateHash(self->m_hashImpl.get());
-                receipt = co_await executor_v1::executeTransaction(self->m_executor.get(), view,
-                    *blockHeader, *transaction, 0, emptyLedgerConfig, task::syncWait);
-            }
+            blockHeader->setVersion(ledgerConfig->compatibilityVersion());
+            blockHeader->setNumber(ledgerConfig->blockNumber() + 1);  // Use next block number
+            blockHeader->calculateHash(self->m_hashImpl.get());
+            auto receipt = co_await executor_v1::executeTransaction(self->m_executor.get(), view,
+                *blockHeader, *transaction, 0, *ledgerConfig, true, task::syncWait);
 
             callback(nullptr, std::move(receipt));
         }(this, std::move(transaction), std::move(callback)));
@@ -627,8 +620,9 @@ public:
                        decltype(callback) callback) -> task::Task<void> {
             auto view = fork(self->m_multiLayerStorage.get());
             auto contractAddress = unhexAddress(contract);
+            auto ledgerConfig = self->getLedgerConfig();
             ledger::account::EVMAccount account(view, contractAddress,
-                self->m_ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address));
+                ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address));
             auto code = co_await ledger::account::code(account);
 
             if (!code)
@@ -648,8 +642,9 @@ public:
                        decltype(callback) callback) -> task::Task<void> {
             auto view = fork(self->m_multiLayerStorage.get());
             auto contractAddress = unhexAddress(contract);
+            auto ledgerConfig = self->getLedgerConfig();
             ledger::account::EVMAccount account(view, contractAddress,
-                self->m_ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address));
+                ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address));
             auto abi = co_await ledger::account::abi(account);
 
             if (!abi)
@@ -687,7 +682,7 @@ public:
     {
         if (ledgerConfig)
         {
-            m_ledgerConfig = std::move(ledgerConfig);
+            updateLedgerConfig(std::move(ledgerConfig));
         }
     }
 };

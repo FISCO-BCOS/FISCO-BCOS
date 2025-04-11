@@ -75,9 +75,10 @@ void LedgerNonceChecker::batchInsert(BlockNumber _batchId, NonceListPtr const& _
     TxPoolNonceChecker::batchInsert(_batchId, _nonceList);
 
     WriteGuard lock(x_blockNonceCache);
-    if (!m_blockNonceCache.contains(_batchId))
+    if (auto it = m_blockNonceCache.lower_bound(_batchId);
+        it == m_blockNonceCache.end() || it->first != _batchId)
     {
-        m_blockNonceCache[_batchId] = _nonceList;
+        m_blockNonceCache.emplace_hint(it, _batchId, _nonceList);
         NONCECHECKER_LOG(DEBUG) << LOG_DESC("batchInsert nonceList") << LOG_KV("batchId", _batchId)
                                 << LOG_KV("nonceSize", _nonceList->size());
     }
@@ -96,6 +97,8 @@ void LedgerNonceChecker::batchInsert(BlockNumber _batchId, NonceListPtr const& _
     }
     auto nonceList = std::move(it->second);
     m_blockNonceCache.erase(it);
+    lock.unlock();
+
     batchRemove(*nonceList);
     NONCECHECKER_LOG(DEBUG) << LOG_DESC("batchInsert: remove expired nonce")
                             << LOG_KV("batchToBeRemoved", batchToBeRemoved)

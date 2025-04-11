@@ -34,7 +34,12 @@ public:
             std::vector<std::string> keys;
 
             size_t index = 0;
-            auto [start, count] = condition->getLimit();
+            size_t start = 0;
+            size_t count = 0;
+            if (condition)
+            {
+                std::tie(start, count) = condition->getLimit();
+            }
             auto range = co_await storage2::range(self->m_storage.get());
             while (auto keyValue = co_await range.next())
             {
@@ -91,8 +96,9 @@ public:
     }
 
     void asyncGetRows(std::string_view table,
-        RANGES::any_view<std::string_view,
-            RANGES::category::input | RANGES::category::random_access | RANGES::category::sized>
+        ::ranges::any_view<std::string_view, ::ranges::category::input |
+                                                 ::ranges::category::random_access |
+                                                 ::ranges::category::sized>
             keys,
         std::function<void(Error::UniquePtr, std::vector<std::optional<storage::Entry>>)> callback)
         override
@@ -101,7 +107,7 @@ public:
                        decltype(callback) callback) -> task::Task<void> {
             try
             {
-                auto stateKeys = RANGES::views::transform(keys, [&table](auto&& key) -> auto {
+                auto stateKeys = ::ranges::views::transform(keys, [&table](auto&& key) -> auto {
                     return executor_v1::StateKeyView{table, std::forward<decltype(key)>(key)};
                 });
                 auto values = co_await storage2::readSome(self->m_storage.get(), stateKeys);
@@ -141,33 +147,34 @@ public:
     }
 
     Error::Ptr setRows(std::string_view tableName,
-        RANGES::any_view<std::string_view,
-            RANGES::category::random_access | RANGES::category::sized>
+        ::ranges::any_view<std::string_view,
+            ::ranges::category::random_access | ::ranges::category::sized>
             keys,
-        RANGES::any_view<std::string_view,
-            RANGES::category::random_access | RANGES::category::sized>
+        ::ranges::any_view<std::string_view,
+            ::ranges::category::random_access | ::ranges::category::sized>
             values) override
     {
-        return task::syncWait([](decltype(this) self, decltype(tableName) tableName,
-                                  decltype(keys) keys,
-                                  decltype(values) values) -> task::Task<Error::Ptr> {
-            try
-            {
-                co_await storage2::writeSome(self->m_storage.get(),
-                    ::ranges::views::zip(keys, values) | RANGES::views::transform([&](auto tuple) {
-                        auto& [key, value] = tuple;
-                        storage::Entry entry;
-                        entry.setField(0, value);
-                        return std::make_pair(
-                            executor_v1::StateKey{tableName, key}, std::move(entry));
-                    }));
-                co_return nullptr;
-            }
-            catch (std::exception& e)
-            {
-                co_return BCOS_ERROR_WITH_PREV_PTR(-1, "setRows error!", e);
-            }
-        }(this, tableName, std::move(keys), std::move(values)));
+        return task::syncWait(
+            [](decltype(this) self, decltype(tableName) tableName, decltype(keys) keys,
+                decltype(values) values) -> task::Task<Error::Ptr> {
+                try
+                {
+                    co_await storage2::writeSome(self->m_storage.get(),
+                        ::ranges::views::zip(keys, values) |
+                            ::ranges::views::transform([&](auto tuple) {
+                                auto& [key, value] = tuple;
+                                storage::Entry entry;
+                                entry.setField(0, value);
+                                return std::make_pair(
+                                    executor_v1::StateKey{tableName, key}, std::move(entry));
+                            }));
+                    co_return nullptr;
+                }
+                catch (std::exception& e)
+                {
+                    co_return BCOS_ERROR_WITH_PREV_PTR(-1, "setRows error!", e);
+                }
+            }(this, tableName, std::move(keys), std::move(values)));
     };
 };
 

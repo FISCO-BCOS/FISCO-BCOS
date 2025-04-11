@@ -1,7 +1,6 @@
 #include "MultiVersionScheduler.h"
 
-bcos::scheduler::SchedulerInterface&
-bcos::scheduler_v1::MultiVersionScheduler::getScheduler()
+bcos::scheduler::SchedulerInterface& bcos::scheduler_v1::MultiVersionScheduler::getScheduler()
 {
     return *m_schedulers.at(m_currentIndex);
 }
@@ -11,16 +10,15 @@ bcos::scheduler_v1::MultiVersionScheduler::MultiVersionScheduler(
   : m_schedulers(std::move(schedulers)), m_currentIndex(0)
 {}
 
-void bcos::scheduler_v1::MultiVersionScheduler::executeBlock(
-    bcos::protocol::Block::Ptr block, bool verify,
+void bcos::scheduler_v1::MultiVersionScheduler::executeBlock(bcos::protocol::Block::Ptr block,
+    bool verify,
     std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool sysBlock)>
         callback)
 {
     auto& scheduler = getScheduler();
     scheduler.executeBlock(std::move(block), verify, std::move(callback));
 }
-void bcos::scheduler_v1::MultiVersionScheduler::commitBlock(
-    protocol::BlockHeader::Ptr header,
+void bcos::scheduler_v1::MultiVersionScheduler::commitBlock(protocol::BlockHeader::Ptr header,
     std::function<void(Error::Ptr&&, ledger::LedgerConfig::Ptr&&)> callback)
 {
     auto& scheduler = getScheduler();
@@ -33,8 +31,7 @@ void bcos::scheduler_v1::MultiVersionScheduler::status(
     auto& scheduler = getScheduler();
     scheduler.status(std::move(callback));
 }
-void bcos::scheduler_v1::MultiVersionScheduler::call(
-    protocol::Transaction::Ptr transaction,
+void bcos::scheduler_v1::MultiVersionScheduler::call(protocol::Transaction::Ptr transaction,
     std::function<void(Error::Ptr&&, protocol::TransactionReceipt::Ptr&&)> callback)
 {
     auto& scheduler = getScheduler();
@@ -74,7 +71,7 @@ void bcos::scheduler_v1::MultiVersionScheduler::setVersion(
     int version, ledger::LedgerConfig::Ptr ledgerConfig)
 {
     m_currentIndex = version;
-};
+}
 bcos::scheduler::SchedulerInterface& bcos::scheduler_v1::MultiVersionScheduler::scheduler(
     int version)
 {

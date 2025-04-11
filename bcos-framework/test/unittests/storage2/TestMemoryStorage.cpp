@@ -7,6 +7,7 @@
 #include <boost/test/unit_test.hpp>
 #include <functional>
 #include <string>
+#include <variant>
 
 using namespace bcos;
 using namespace bcos::storage2::memory_storage;
@@ -69,7 +70,7 @@ BOOST_AUTO_TEST_CASE(writeReadModifyRemove)
         constexpr static int count = 100;
         MemoryStorage<std::tuple<std::string, std::string>, storage::Entry, ORDERED> storage;
         co_await storage2::writeSome(
-            storage, ::ranges::views::iota(0, count) | RANGES::views::transform([](auto num) {
+            storage, ::ranges::views::iota(0, count) | ::ranges::views::transform([](auto num) {
                 auto key = std::tuple<std::string, std::string>(
                     "table", "key:" + boost::lexical_cast<std::string>(num));
                 storage::Entry entry;
@@ -78,12 +79,12 @@ BOOST_AUTO_TEST_CASE(writeReadModifyRemove)
             }));
 
         auto values = co_await storage2::readSome(
-            storage, ::ranges::views::iota(0, count) | RANGES::views::transform([](int i) {
+            storage, ::ranges::views::iota(0, count) | ::ranges::views::transform([](int i) {
                 return std::tuple<std::string, std::string>(
                     "table", "key:" + boost::lexical_cast<std::string>(i));
             }));
 
-        for (auto&& [i, value] : RANGES::views::enumerate(values))
+        for (auto&& [i, value] : ::ranges::views::enumerate(values))
         {
             BOOST_REQUIRE(value);
             BOOST_CHECK_EQUAL(value->get(), "Hello world!" + boost::lexical_cast<std::string>(i));
@@ -152,7 +153,7 @@ BOOST_AUTO_TEST_CASE(lru)
 
         // ensure 10 are useable
         auto values = co_await storage2::readSome(storage, ::ranges::views::iota(0, 10));
-        for (auto&& [i, value] : RANGES::views::enumerate(values))
+        for (auto&& [i, value] : ::ranges::views::enumerate(values))
         {
             BOOST_REQUIRE(value);
         }
@@ -187,7 +188,7 @@ BOOST_AUTO_TEST_CASE(logicalDeletion)
 
         // Write 100 items
         co_await storage2::writeSome(
-            storage, ::ranges::views::iota(0, 100) | RANGES::views::transform([](int num) {
+            storage, ::ranges::views::iota(0, 100) | ::ranges::views::transform([](int num) {
                 storage::Entry entry;
                 entry.set(fmt::format("Item: {}", num));
                 return std::make_tuple(num, entry);
@@ -196,7 +197,7 @@ BOOST_AUTO_TEST_CASE(logicalDeletion)
         // Delete half of items
         co_await storage2::removeSome(
             storage, ::ranges::views::iota(0, 50) |
-                         RANGES::views::transform([](int num) { return num * 2; }));
+                         ::ranges::views::transform([](int num) { return num * 2; }));
 
         // Query and check if deleted items
         int i = 0;
@@ -226,7 +227,7 @@ BOOST_AUTO_TEST_CASE(range)
 
         MemoryStorage<std::tuple<std::string, std::string>, storage::Entry, ORDERED> storage;
         co_await storage2::writeSome(
-            storage, ::ranges::views::iota(0, count) | RANGES::views::transform([](auto num) {
+            storage, ::ranges::views::iota(0, count) | ::ranges::views::transform([](auto num) {
                 auto key = std::tuple<std::string, std::string>(
                     "table", "key:" + boost::lexical_cast<std::string>(num));
                 storage::Entry entry;
@@ -235,11 +236,11 @@ BOOST_AUTO_TEST_CASE(range)
             }));
 
         auto readRange = co_await storage2::readSome(
-            storage, ::ranges::views::iota(0, 10) | RANGES::views::transform([](int i) {
+            storage, ::ranges::views::iota(0, 10) | ::ranges::views::transform([](int i) {
                 return std::tuple<std::string, std::string>(
                     "table", "key:" + boost::lexical_cast<std::string>(i));
             }));
-        for (auto&& [value, num] : RANGES::views::zip(readRange, RANGES::iota_view<size_t>(0)))
+        for (auto&& [value, num] : ::ranges::views::zip(readRange, ::ranges::iota_view<size_t>(0)))
         {
             BOOST_CHECK(value);
             BOOST_CHECK_EQUAL(value->get(), "Hello world!" + boost::lexical_cast<std::string>(num));
@@ -264,7 +265,7 @@ BOOST_AUTO_TEST_CASE(range)
                 bcos::storage2::memory_storage::ORDERED)>
             intStorage;
         co_await storage2::writeSome(intStorage,
-            ::ranges::views::zip(::ranges::views::iota(0, 10), RANGES::repeat_view<int>(100)));
+            ::ranges::views::zip(::ranges::views::iota(0, 10), ::ranges::repeat_view<int>(100)));
         auto start = 4;
         auto range3 = co_await storage2::range(intStorage, storage2::RANGE_SEEK, start);
         while (auto pair = co_await range3.next())
@@ -283,11 +284,11 @@ BOOST_AUTO_TEST_CASE(merge)
         MemoryStorage<int, int, ORDERED> storage2;
 
         co_await storage2::writeSome(storage1,
-            ::ranges::views::zip(::ranges::views::iota(0, 10), RANGES::repeat_view<int>(100)));
+            ::ranges::views::zip(::ranges::views::iota(0, 10), ::ranges::repeat_view<int>(100)));
         co_await storage2::writeSome(storage2,
-            ::ranges::views::zip(::ranges::views::iota(9, 19), RANGES::repeat_view<int>(200)));
+            ::ranges::views::zip(::ranges::views::iota(9, 19), ::ranges::repeat_view<int>(200)));
 
-        co_await storage2::merge(storage1, std::move(storage2));
+        co_await storage2::merge(storage1, storage2);
         auto values = co_await storage2::range(storage1);
 
         int i = 0;
@@ -318,7 +319,7 @@ BOOST_AUTO_TEST_CASE(directDelete)
         MemoryStorage<int, int, bcos::storage2::memory_storage::LOGICAL_DELETION, std::hash<int>>
             storage;
         co_await storage2::writeSome(storage,
-            ::ranges::views::zip(::ranges::views::iota(0, 10), RANGES::repeat_view<int>(100)));
+            ::ranges::views::zip(::ranges::views::iota(0, 10), ::ranges::repeat_view<int>(100)));
 
         auto range1 = co_await storage2::range(storage);
         int count1 = 0;
@@ -449,7 +450,7 @@ BOOST_AUTO_TEST_CASE(concurrentRange)
             storage;
 
         co_await storage2::writeSome(
-            storage, ::ranges::views::iota(0, count) | RANGES::views::transform([](auto num) {
+            storage, ::ranges::views::iota(0, count) | ::ranges::views::transform([](auto num) {
                 auto key = boost::lexical_cast<std::string>(num);
                 storage::Entry entry;
                 entry.set("Hello world!" + boost::lexical_cast<std::string>(num));
@@ -466,6 +467,30 @@ BOOST_AUTO_TEST_CASE(concurrentRange)
             BOOST_CHECK_LT(index, count);
         }
         BOOST_CHECK_EQUAL(expect, 0);
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(dirtctReadOne)
+{
+    task::syncWait([]() -> task::Task<void> {
+        MemoryStorage<int, int,
+            bcos::storage2::memory_storage::ORDERED |
+                bcos::storage2::memory_storage::LOGICAL_DELETION>
+            storage;
+        co_await storage2::writeSome(storage,
+            ::ranges::views::zip(::ranges::views::iota(0, 10), ::ranges::repeat_view<int>(100)));
+
+        co_await storage2::removeOne(storage, 6);
+
+        auto value = co_await storage2::readOne(storage, 6);
+        BOOST_CHECK(!value);
+
+        auto value2 = co_await storage.readOne(6, bcos::storage2::DIRECT);
+        BOOST_CHECK(std::holds_alternative<std::optional<int>>(value2));
+
+        auto value3 = co_await storage.readOne(11, bcos::storage2::DIRECT);
+        BOOST_CHECK(
+            std::holds_alternative<bcos::storage2::memory_storage::NOT_EXISTS_TYPE>(value3));
     }());
 }
 
