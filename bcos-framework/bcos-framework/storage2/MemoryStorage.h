@@ -2,6 +2,7 @@
 
 #include "Storage.h"
 #include "bcos-task/AwaitableValue.h"
+#include "bcos-utilities/Overloaded.h"
 #include <oneapi/tbb/parallel_for.h>
 #include <oneapi/tbb/rw_mutex.h>
 #include <boost/multi_index/hashed_index.hpp>
@@ -26,6 +27,7 @@ struct NullLock
     NullLock(auto&&... /*unused*/) {}
     constexpr bool try_acquire(auto&&... /*unused*/) { return true; }
     constexpr void release() {}
+    constexpr bool upgrade_to_writer() { return true; }
 };
 struct NOT_EXISTS_TYPE
 {
@@ -167,15 +169,15 @@ public:
         }
     }
 
-    friend void updateLRUAndCheck(MemoryStorage& storage, Bucket& bucket,
-        typename Container::template nth_index<0>::type::iterator entryIt)
+    void updateLRUAndCheck(
+        Bucket& bucket, typename Container::template nth_index<0>::type::iterator entryIt)
         requires withLRU
     {
         auto& index = bucket.container.template get<1>();
         auto seqIt = index.iterator_to(*entryIt);
         index.relocate(index.end(), seqIt);
 
-        while (bucket.capacity > storage.m_maxCapacity && !bucket.container.empty())
+        while (bucket.capacity > m_maxCapacity && !bucket.container.empty())
         {
             auto const& item = index.front();
             bucket.capacity -= (getSize(item.key) + getSize(item.value));
@@ -198,16 +200,14 @@ public:
             Lock lock(bucket.mutex, false);
 
             auto const& index = bucket.container.template get<0>();
-            auto it = index.find(key);
-            if (it != index.end())
+            if (auto it = index.find(key); it != index.end())
             {
                 result.value().emplace_back(it->value);
-                lock.release();
-                if constexpr (std::decay_t<decltype(storage)>::withLRU)
+                if constexpr (withLRU)
                 {
-                    if (Lock LRULock; LRULock.try_acquire(bucket.mutex, true))
+                    if (lock.upgrade_to_writer())
                     {
-                        updateLRUAndCheck(storage, bucket, it);
+                        storage.updateLRUAndCheck(bucket, it);
                     }
                 }
             }
@@ -221,60 +221,42 @@ public:
 
     friend task::AwaitableValue<std::optional<Value>> tag_invoke(
         storage2::tag_t<storage2::readOne> /*unused*/, MemoryStorage& storage, auto key,
-        auto&&... /*unused*/)
+        auto&&... args)
     {
-        task::AwaitableValue<std::optional<Value>> result;
-        auto& bucket = getBucket(storage, key);
-        Lock lock(bucket.mutex, false);
-
-        auto const& index = bucket.container.template get<0>();
-        auto it = index.find(key);
-        if (it != index.end())
-        {
-            result.value() = it->value;
-            lock.release();
-            if constexpr (withLRU)
-            {
-                if (Lock lruLock; lruLock.try_acquire(bucket.mutex, true))
-                {
-                    updateLRUAndCheck(storage, bucket, it);
-                }
-            }
-        }
-        return result;
+        auto result = storage.readOne(std::move(key), std::forward<decltype(args)>(args)...);
+        return {std::visit(
+            bcos::overloaded{[](std::optional<Value>& value) { return std::move(value); },
+                [](NOT_EXISTS_TYPE) { return std::optional<Value>{}; }},
+            result.value())};
     }
 
-    task::AwaitableValue<std::variant<std::optional<Value>, NOT_EXISTS_TYPE>> readOne(
-        auto key, auto&&... /*unused*/)
-        requires withLogicalDeletion
+    auto readOne(auto key, auto&&... /*unused*/)
     {
-        std::variant<std::optional<Value>, NOT_EXISTS_TYPE> result;
+        task::AwaitableValue<std::variant<std::optional<Value>, NOT_EXISTS_TYPE>> result;
         auto& bucket = getBucket(*this, key);
         Lock lock(bucket.mutex, false);
 
         auto const& index = bucket.container.template get<0>();
-        auto it = index.find(key);
-        if (it != index.end())
+        if (auto it = index.find(key); it != index.end())
         {
-            result.template emplace<std::optional<Value>>(it->value);
-            lock.release();
+            result.value().template emplace<std::optional<Value>>(it->value);
+
             if constexpr (withLRU)
             {
-                if (Lock lruLock; lruLock.try_acquire(bucket.mutex, true))
+                if (lock.upgrade_to_writer())
                 {
-                    updateLRUAndCheck(*this, bucket, it);
+                    updateLRUAndCheck(bucket, it);
                 }
             }
         }
         else
         {
-            result.template emplace<NOT_EXISTS_TYPE>();
+            result.value().template emplace<NOT_EXISTS_TYPE>();
         }
         return result;
     }
 
-    friend void writeOneImpl(
-        MemoryStorage& storage, Bucket& bucket, auto key, auto value, bool direct)
+    void writeOne(Bucket& bucket, auto key, auto value, bool direct)
     {
         auto const& index = bucket.container.template get<0>();
         std::conditional_t<withLRU, int64_t, Empty> updatedCapacity{};
@@ -357,7 +339,7 @@ public:
         if constexpr (!deleteOP && withLRU)
         {
             bucket.capacity += updatedCapacity;
-            updateLRUAndCheck(storage, bucket, it);
+            updateLRUAndCheck(bucket, it);
         }
     }
 
@@ -366,7 +348,7 @@ public:
     {
         auto& bucket = getBucket(storage, key);
         Lock lock(bucket.mutex, true);
-        writeOneImpl(storage, bucket, std::move(key), std::move(value), false);
+        storage.writeOne(bucket, std::move(key), std::move(value), false);
         return {};
     }
 
@@ -377,7 +359,7 @@ public:
         {
             auto& bucket = getBucket(storage, key);
             Lock lock(bucket.mutex, true);
-            writeOneImpl(storage, bucket, std::forward<decltype(key)>(key),
+            storage.writeOne(bucket, std::forward<decltype(key)>(key),
                 std::forward<decltype(value)>(value), false);
         }
 
@@ -390,7 +372,7 @@ public:
         {
             auto& bucket = getBucket(*this, key);
             Lock lock(bucket.mutex, true);
-            writeOneImpl(*this, bucket, std::forward<decltype(key)>(key), deleteItem, direct);
+            writeOne(bucket, std::forward<decltype(key)>(key), deleteItem, direct);
         }
 
         return {};
@@ -549,16 +531,16 @@ public:
                     {
                         if (value)
                         {
-                            writeOneImpl(toStorage, bucket, key, *value, true);
+                            toStorage.writeOne(bucket, key, *value, true);
                         }
                         else
                         {
-                            writeOneImpl(toStorage, bucket, key, deleteItem, true);
+                            toStorage.writeOne(bucket, key, deleteItem, true);
                         }
                     }
                     else
                     {
-                        writeOneImpl(toStorage, bucket, *key, *value, false);
+                        toStorage.writeOne(bucket, *key, *value, false);
                     }
                 }
             }
