@@ -64,7 +64,7 @@ task::Task<std::vector<protocol::Transaction::ConstPtr>> getTransactions(
  * @param hashImpl The hash implementation to use for the calculation.
  * @return The calculated transaction root hash.
  */
-bcos::h256 calcauteTransactionRoot(protocol::Block const& block, crypto::Hash const& hashImpl);
+bcos::h256 calculateTransactionRoot(protocol::Block const& block, crypto::Hash const& hashImpl);
 
 /**
  * Returns the current time in milliseconds since the epoch.
@@ -184,7 +184,7 @@ void finishExecute(auto& storage, ::ranges::range auto const& receipts,
     h256 stateRoot;
     h256 receiptRoot;
 
-    tbb::parallel_invoke([&]() { transactionRoot = calcauteTransactionRoot(block, hashImpl); },
+    tbb::parallel_invoke([&]() { transactionRoot = calculateTransactionRoot(block, hashImpl); },
         [&]() {
             stateRoot = task::tbb::syncWait(
                 calculateStateRoot(storage, block.blockHeaderConst()->version(), hashImpl));
@@ -268,8 +268,8 @@ private:
      * @return A tuple containing an error (if any), the block header, and a boolean indicating
      * success.
      */
-    friend task::Task<std::tuple<bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool>>
-    coExecuteBlock(BaselineScheduler& scheduler, bcos::protocol::Block::Ptr block, bool verify)
+    task::Task<std::tuple<bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool>> coExecuteBlock(
+        bcos::protocol::Block::Ptr block, bool verify)
     {
         ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
             ittapi::ITT_DOMAINS::instance().EXECUTE_BLOCK);
@@ -280,18 +280,18 @@ private:
                 << "Execute block: " << blockHeader->number() << " | " << verify << " | "
                 << block->transactionsMetaDataSize() << " | " << block->transactionsSize();
 
-            std::unique_lock resultsLock(scheduler.m_resultsMutex);
-            if (scheduler.m_lastExecutedBlockNumber != -1 &&
-                blockHeader->number() - scheduler.m_lastExecutedBlockNumber != 1)
+            std::unique_lock resultsLock(m_resultsMutex);
+            if (m_lastExecutedBlockNumber != -1 &&
+                blockHeader->number() - m_lastExecutedBlockNumber != 1)
             {
                 // 如果区块已经执行过，则直接返回结果，不报错，用于共识和同步同时执行一个区块的场景
                 // If the block has been executed, the result will be returned directly without
                 // error, which is used for the scenario of consensus and synchronous execution of a
                 // block at the same time
-                if (!scheduler.m_results.empty())
+                if (!m_results.empty())
                 {
-                    auto& front = scheduler.m_results.front();
-                    auto& back = scheduler.m_results.back();
+                    auto& front = m_results.front();
+                    auto& back = m_results.back();
                     auto number = blockHeader->number();
                     auto frontNumber = front.m_executedBlockHeader->number();
                     auto backNumber = back.m_executedBlockHeader->number();
@@ -299,7 +299,7 @@ private:
                     {
                         BASELINE_SCHEDULER_LOG(INFO)
                             << "Block has been executed, return result directly";
-                        auto& result = scheduler.m_results.at(frontNumber - number);
+                        auto& result = m_results.at(frontNumber - number);
                         co_return {nullptr, result.m_executedBlockHeader, result.m_sysBlock};
                     }
 
@@ -310,7 +310,7 @@ private:
 
                 auto message =
                     fmt::format("Discontinuous execute block number! expect: {} input: {}",
-                        scheduler.m_lastExecutedBlockNumber + 1, blockHeader->number());
+                        m_lastExecutedBlockNumber + 1, blockHeader->number());
                 BASELINE_SCHEDULER_LOG(INFO) << message;
                 co_return {
                     BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message),
@@ -318,31 +318,30 @@ private:
             }
             resultsLock.unlock();
 
-            std::unique_lock executeLock(scheduler.m_executeMutex, std::try_to_lock);
+            std::unique_lock executeLock(m_executeMutex, std::try_to_lock);
             if (!executeLock.owns_lock())
             {
-                auto message = fmt::format(
-                    "Another block:{} is executing!", scheduler.m_lastExecutedBlockNumber);
+                auto message =
+                    fmt::format("Another block:{} is executing!", m_lastExecutedBlockNumber);
                 BASELINE_SCHEDULER_LOG(INFO) << message;
                 co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
                     nullptr, false};
             }
 
             auto now = current();
-            auto view = fork(scheduler.m_multiLayerStorage.get());
+            auto view = fork(m_multiLayerStorage.get());
             newMutable(view);
-            auto transactions = co_await getTransactions(scheduler.m_txpool.get(), *block);
+            auto transactions = co_await getTransactions(m_txpool.get(), *block);
 
-            auto ledgerConfig = scheduler.getLedgerConfig();
-            auto receipts = co_await scheduler_v1::executeBlock(scheduler.m_schedulerImpl.get(),
-                view, scheduler.m_executor.get(), *blockHeader,
-                ::ranges::views::indirect(transactions), *ledgerConfig);
+            auto ledgerConfig = getLedgerConfig();
+            auto receipts =
+                co_await scheduler_v1::executeBlock(m_schedulerImpl.get(), view, m_executor.get(),
+                    *blockHeader, ::ranges::views::indirect(transactions), *ledgerConfig);
 
-            auto executedBlockHeader =
-                scheduler.m_blockHeaderFactory.get().populateBlockHeader(blockHeader);
+            auto executedBlockHeader = m_blockHeaderFactory.get().populateBlockHeader(blockHeader);
             bool sysBlock = false;
             finishExecute(mutableStorage(view), receipts, *executedBlockHeader, *block,
-                transactions, sysBlock, scheduler.m_hashImpl.get());
+                transactions, sysBlock, m_hashImpl.get());
 
             if (verify && (executedBlockHeader->hash() != blockHeader->hash()))
             {
@@ -370,17 +369,16 @@ private:
                     nullptr, false};
             }
 
-            pushView(scheduler.m_multiLayerStorage.get(), std::move(view));
-            scheduler.m_lastExecutedBlockNumber = blockHeader->number();
+            pushView(m_multiLayerStorage.get(), std::move(view));
+            m_lastExecutedBlockNumber = blockHeader->number();
 
             resultsLock.lock();
-            scheduler.m_results.push_front(
-                {.m_transactions =
-                        std::make_shared<protocol::ConstTransactions>(std::move(transactions)),
-                    .m_receipts = std::move(receipts),
-                    .m_executedBlockHeader = executedBlockHeader,
-                    .m_block = std::move(block),
-                    .m_sysBlock = sysBlock});
+            m_results.push_front({.m_transactions = std::make_shared<protocol::ConstTransactions>(
+                                      std::move(transactions)),
+                .m_receipts = std::move(receipts),
+                .m_executedBlockHeader = executedBlockHeader,
+                .m_block = std::move(block),
+                .m_sysBlock = sysBlock});
 
             BASELINE_SCHEDULER_LOG(INFO)
                 << "Execute block finished: " << executedBlockHeader->number() << " | "
@@ -413,8 +411,8 @@ private:
      * @return A task that returns a tuple containing an error object and a ledger configuration
      * object.
      */
-    friend task::Task<std::tuple<Error::Ptr, ledger::LedgerConfig::Ptr>> coCommitBlock(
-        BaselineScheduler& scheduler, protocol::BlockHeader::Ptr header)
+    task::Task<std::tuple<Error::Ptr, ledger::LedgerConfig::Ptr>> coCommitBlock(
+        protocol::BlockHeader::Ptr header)
     {
         ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
             ittapi::ITT_DOMAINS::instance().COMMIT_BLOCK);
@@ -422,22 +420,22 @@ private:
         {
             BASELINE_SCHEDULER_LOG(INFO) << "Commit block: " << header->number();
 
-            std::unique_lock commitLock(scheduler.m_commitMutex, std::try_to_lock);
+            std::unique_lock commitLock(m_commitMutex, std::try_to_lock);
             if (!commitLock.owns_lock())
             {
-                auto message = fmt::format(
-                    "Another block:{} is committing!", scheduler.m_lastCommittedBlockNumber);
+                auto message =
+                    fmt::format("Another block:{} is committing!", m_lastCommittedBlockNumber);
                 BASELINE_SCHEDULER_LOG(INFO) << message;
 
                 co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
                     nullptr};
             }
 
-            if (scheduler.m_lastCommittedBlockNumber != -1 &&
-                header->number() - scheduler.m_lastCommittedBlockNumber != 1)
+            if (m_lastCommittedBlockNumber != -1 &&
+                header->number() - m_lastCommittedBlockNumber != 1)
             {
                 auto message = fmt::format("Discontinuous commit block number: {}! expect: {}",
-                    header->number(), scheduler.m_lastCommittedBlockNumber + 1);
+                    header->number(), m_lastCommittedBlockNumber + 1);
 
                 BASELINE_SCHEDULER_LOG(INFO) << message;
                 co_return {
@@ -445,52 +443,51 @@ private:
                     nullptr};
             }
 
-            std::unique_lock resultsLock(scheduler.m_resultsMutex);
-            if (scheduler.m_results.empty())
+            std::unique_lock resultsLock(m_resultsMutex);
+            if (m_results.empty())
             {
                 BOOST_THROW_EXCEPTION(std::runtime_error("Unexpected empty results!"));
             }
 
             auto now = current();
-            auto result = std::move(scheduler.m_results.back());
-            scheduler.m_results.pop_back();
+            auto result = std::move(m_results.back());
+            m_results.pop_back();
             resultsLock.unlock();
 
             result.m_block->setBlockHeader(header);
-            auto lastStorage = backStorage(scheduler.m_multiLayerStorage.get());
+            auto lastStorage = backStorage(m_multiLayerStorage.get());
             if (result.m_block->blockHeaderConst()->number() != 0)
             {
                 ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
                     ittapi::ITT_DOMAINS::instance().SET_BLOCK);
-                task::tbb::syncWait(ledger::prewriteBlock(scheduler.m_ledger.get(),
-                    result.m_transactions, result.m_block, false, *lastStorage));
+                task::tbb::syncWait(ledger::prewriteBlock(
+                    m_ledger.get(), result.m_transactions, result.m_block, false, *lastStorage));
             }
 
             tbb::parallel_invoke(
                 [&]() {
                     ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
                         ittapi::ITT_DOMAINS::instance().MERGE_STATE);
-                    task::tbb::syncWait(mergeBackStorage(scheduler.m_multiLayerStorage.get()));
+                    task::tbb::syncWait(mergeBackStorage(m_multiLayerStorage.get()));
                 },
                 [&]() {
                     ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
                         ittapi::ITT_DOMAINS::instance().STORE_TRANSACTION_RECEIPTS);
                     task::tbb::syncWait(ledger::storeTransactionsAndReceipts(
-                        scheduler.m_ledger.get(), result.m_transactions, result.m_block));
+                        m_ledger.get(), result.m_transactions, result.m_block));
                 });
 
-            auto ledgerConfig = co_await ledger::getLedgerConfig(scheduler.m_ledger.get());
+            auto ledgerConfig = co_await ledger::getLedgerConfig(m_ledger.get());
             ledgerConfig->setHash(header->hash());
-            scheduler.updateLedgerConfig(ledgerConfig);
+            updateLedgerConfig(ledgerConfig);
 
             BASELINE_SCHEDULER_LOG(INFO) << "Commit block finished: " << header->number()
                                          << " | elapsed: " << (current() - now) << "ms";
             commitLock.unlock();
 
             tbb::this_task_arena::isolate([&]() {
-                scheduler.m_asyncGroup.run([&, result = std::move(result),
-                                               blockHash = ledgerConfig->hash(),
-                                               blockNumber = ledgerConfig->blockNumber()]() {
+                m_asyncGroup.run([&, result = std::move(result), blockHash = ledgerConfig->hash(),
+                                     blockNumber = ledgerConfig->blockNumber()]() {
                     ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
                         ittapi::ITT_DOMAINS::instance().NOTIFY_RESULTS);
 
@@ -501,8 +498,8 @@ private:
                             [&](auto input) -> protocol::TransactionSubmitResult::Ptr {
                                 auto&& [index, transaction, receipt] = input;
 
-                                auto submitResult = scheduler.m_transactionSubmitResultFactory.get()
-                                                        .createTxSubmitResult();
+                                auto submitResult =
+                                    m_transactionSubmitResultFactory.get().createTxSubmitResult();
                                 submitResult->setStatus(receipt->status());
                                 submitResult->setTxHash(transaction->hash());
                                 submitResult->setBlockHash(blockHash);
@@ -519,8 +516,8 @@ private:
                     auto submitResultsPtr =
                         std::make_shared<bcos::protocol::TransactionSubmitResults>(
                             std::move(submitResults));
-                    scheduler.m_blockNumberNotifier(blockNumber);
-                    scheduler.m_transactionNotifier(
+                    m_blockNumberNotifier(blockNumber);
+                    m_transactionNotifier(
                         blockNumber, std::move(submitResultsPtr), [](const Error::Ptr& error) {
                             if (error)
                             {
@@ -572,7 +569,7 @@ public:
     {
         task::wait([](decltype(this) self, bcos::protocol::Block::Ptr block, bool verify,
                        decltype(callback) callback) -> task::Task<void> {
-            std::apply(callback, co_await coExecuteBlock(*self, std::move(block), verify));
+            std::apply(callback, co_await self->coExecuteBlock(std::move(block), verify));
         }(this, std::move(block), verify, std::move(callback)));
     }
 
@@ -581,7 +578,7 @@ public:
     {
         task::wait([](decltype(this) self, protocol::BlockHeader::Ptr blockHeader,
                        decltype(callback) callback) -> task::Task<void> {
-            std::apply(callback, co_await coCommitBlock(*self, std::move(blockHeader)));
+            std::apply(callback, co_await self->coCommitBlock(std::move(blockHeader)));
         }(this, std::move(header), std::move(callback)));
     }
 
