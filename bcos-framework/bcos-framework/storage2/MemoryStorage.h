@@ -137,13 +137,13 @@ public:
     Buckets m_buckets;
     [[no_unique_address]] std::conditional_t<withLRU, int64_t, Empty> m_maxCapacity;
 
-    friend void setMaxCapacity(MemoryStorage& storage, int64_t capacity)
+    void setMaxCapacity(int64_t capacity)
         requires withLRU
     {
-        storage.m_maxCapacity = capacity;
+        m_maxCapacity = capacity;
     }
 
-    friend size_t getBucketIndex(MemoryStorage const& storage, auto const& key)
+    size_t getBucketIndex(auto const& key) const
     {
         if constexpr (!withConcurrent)
         {
@@ -151,21 +151,21 @@ public:
         }
         else
         {
-            auto hash = typename MemoryStorage::BucketHasher{}(key);
-            return hash % storage.m_buckets.size();
+            auto hash = BucketHasher{}(key);
+            return hash % m_buckets.size();
         }
     }
 
-    friend Bucket& getBucket(MemoryStorage& storage, auto const& key) noexcept
+    Bucket& getBucket(auto const& key) noexcept
     {
         if constexpr (!withConcurrent)
         {
-            return storage.m_buckets[0];
+            return m_buckets[0];
         }
         else
         {
-            auto index = getBucketIndex(storage, key);
-            return storage.m_buckets[index];
+            auto index = getBucketIndex(key);
+            return m_buckets[index];
         }
     }
 
@@ -196,7 +196,7 @@ public:
 
         for (auto&& key : keys)
         {
-            auto& bucket = getBucket(storage, key);
+            auto& bucket = storage.getBucket(key);
             Lock lock(bucket.mutex, false);
 
             auto const& index = bucket.container.template get<0>();
@@ -233,7 +233,7 @@ public:
     auto readOne(auto key, auto&&... /*unused*/)
     {
         task::AwaitableValue<std::variant<std::optional<Value>, NOT_EXISTS_TYPE>> result;
-        auto& bucket = getBucket(*this, key);
+        auto& bucket = getBucket(key);
         Lock lock(bucket.mutex, false);
 
         auto const& index = bucket.container.template get<0>();
@@ -346,7 +346,7 @@ public:
     friend task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::writeOne> /*unused*/,
         MemoryStorage& storage, auto key, auto value)
     {
-        auto& bucket = getBucket(storage, key);
+        auto& bucket = storage.getBucket(key);
         Lock lock(bucket.mutex, true);
         storage.writeOne(bucket, std::move(key), std::move(value), false);
         return {};
@@ -357,7 +357,7 @@ public:
     {
         for (auto&& [key, value] : keyValues)
         {
-            auto& bucket = getBucket(storage, key);
+            auto& bucket = storage.getBucket(key);
             Lock lock(bucket.mutex, true);
             storage.writeOne(bucket, std::forward<decltype(key)>(key),
                 std::forward<decltype(value)>(value), false);
@@ -370,7 +370,7 @@ public:
     {
         for (auto&& key : keys)
         {
-            auto& bucket = getBucket(*this, key);
+            auto& bucket = getBucket(key);
             Lock lock(bucket.mutex, true);
             writeOne(bucket, std::forward<decltype(key)>(key), deleteItem, direct);
         }
@@ -506,7 +506,7 @@ public:
         auto sortedList = ::ranges::views::transform(index,
                               [&](typename std::decay_t<FromStorage>::Data const& data) {
                                   return std::make_tuple(
-                                      std::addressof(data), getBucketIndex(toStorage, data.key));
+                                      std::addressof(data), toStorage.getBucketIndex(data.key));
                               }) |
                           ::ranges::to<std::vector>();
         std::sort(sortedList.begin(), sortedList.end(), [](auto const& left, auto const& right) {
