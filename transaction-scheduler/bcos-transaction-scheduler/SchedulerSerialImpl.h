@@ -27,12 +27,12 @@ public:
 
 task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
     tag_t<executeBlock> /*unused*/, SchedulerSerialImpl& scheduler, auto& storage, auto& executor,
-    protocol::BlockHeader const& blockHeader, RANGES::input_range auto const& transactions,
+    protocol::BlockHeader const& blockHeader, ::ranges::input_range auto const& transactions,
     ledger::LedgerConfig const& ledgerConfig)
 {
     ittapi::Report report(ittapi::ITT_DOMAINS::instance().SERIAL_SCHEDULER,
         ittapi::ITT_DOMAINS::instance().SERIAL_EXECUTE);
-    auto count = static_cast<int32_t>(RANGES::size(transactions));
+    auto count = static_cast<int32_t>(::ranges::size(transactions));
 
     using ExecutionContext =
         task::AwaitableReturnType<std::invoke_result_t<executor_v1::CreateExecuteContext,
@@ -41,12 +41,12 @@ task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
     std::vector<ExecutionContext, tbb::cache_aligned_allocator<ExecutionContext>> contexts;
     contexts.reserve(count);
 
-    auto chunks = RANGES::views::iota(0, count) |
-                  RANGES::views::chunk(
+    auto chunks = ::ranges::views::iota(0, count) |
+                  ::ranges::views::chunk(
                       std::max<size_t>((size_t)(count / tbb::this_task_arena::max_concurrency()),
                           (size_t)SchedulerSerialImpl::MIN_TRANSACTION_GRAIN_SIZE));
-    using ChunkRange = RANGES::range_value_t<decltype(chunks)>;
-    RANGES::range_size_t<decltype(transactions)> chunkIndex = 0;
+    using ChunkRange = ::ranges::range_value_t<decltype(chunks)>;
+    ::ranges::range_size_t<decltype(transactions)> chunkIndex = 0;
 
     std::vector<protocol::TransactionReceipt::Ptr> receipts;
     receipts.reserve(count);
@@ -59,7 +59,7 @@ task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
             tbb::make_filter<void, ChunkRange>(tbb::filter_mode::serial_in_order,
                 [&](tbb::flow_control& control) -> ChunkRange {
                     return task::tbb::syncWait([&]() -> task::Task<ChunkRange> {
-                        if (chunkIndex >= RANGES::size(chunks))
+                        if (chunkIndex >= ::ranges::size(chunks))
                         {
                             control.stop();
                             co_return {};
