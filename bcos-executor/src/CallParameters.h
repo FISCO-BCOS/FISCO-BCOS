@@ -23,11 +23,11 @@ struct CallParameters
 
     explicit CallParameters(Type _type) : type(_type) {}
 
-    CallParameters(const CallParameters&) = delete;
-    CallParameters& operator=(const CallParameters&) = delete;
-
-    CallParameters(CallParameters&&) = delete;
-    CallParameters(const CallParameters&&) = delete;
+    CallParameters(const CallParameters&) = default;
+    CallParameters& operator=(const CallParameters&) = default;
+    CallParameters(CallParameters&&) = default;
+    CallParameters& operator=(CallParameters&&) = default;
+    ~CallParameters() noexcept = default;
 
     int64_t contextID = 0;
     int64_t seq = 0;
