@@ -22,7 +22,7 @@
 
 [version]
     ; compatible version, can be dynamically upgraded through setSystemConfig
-    compatibility_version=3.15.1
+    compatibility_version=3.15.2
 
 [tx]
     ; transaction gas limit
