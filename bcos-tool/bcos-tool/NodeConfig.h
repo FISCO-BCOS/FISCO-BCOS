@@ -19,6 +19,7 @@
  * @date 2021-06-10
  */
 #pragma once
+#include "bcos-crypto/interfaces/crypto/KeyInterface.h"
 #include "bcos-framework/ledger/GenesisConfig.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/security/CloudKmsType.h"
@@ -299,6 +300,8 @@ public:
 
     bool checkTransactionSignature() const;
     bool checkParallelConflict() const;
+    bool singlePointConsensus() const;
+    const bytes& forceSender() const;
 
     ledger::GenesisConfig const& genesisConfig() const;
 
@@ -522,6 +525,8 @@ private:
     // experimental
     bool m_checkTransactionSignature = true;
     bool m_checkParallelConflict = true;
+    bool m_singlePointConsensus = false;
+    bytes m_forceSender;
 };
 
 std::string generateGenesisData(

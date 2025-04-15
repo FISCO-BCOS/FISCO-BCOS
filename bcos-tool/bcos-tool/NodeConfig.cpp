@@ -946,11 +946,19 @@ void NodeConfig::loadOthersConfig(boost::property_tree::ptree const& _pt)
 
     m_checkTransactionSignature = _pt.get<bool>("experimental.check_transaction_signature", true);
     m_checkParallelConflict = _pt.get<bool>("experimental.check_parallel_conflict", true);
+    m_singlePointConsensus = _pt.get<bool>("experimental.single_point_consensus", false);
+    if (auto forceSender = _pt.get<std::string>("experimental.force_sender", {});
+        !forceSender.empty())
+    {
+        m_forceSender = fromHexWithPrefix(forceSender);
+    }
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadOthersConfig") << LOG_KV("sendTxTimeout", m_sendTxTimeout)
                          << LOG_KV("vmCacheSize", m_vmCacheSize)
                          << LOG_KV("checkTransactionSignature", m_checkTransactionSignature)
-                         << LOG_KV("checkParallelConflict", m_checkParallelConflict);
+                         << LOG_KV("checkParallelConflict", m_checkParallelConflict)
+                         << LOG_KV("singlePointConsensus", m_singlePointConsensus)
+                         << LOG_KV("enableAuth", toHex(m_forceSender));
 }
 
 void NodeConfig::loadConsensusConfig(boost::property_tree::ptree const& _pt)
@@ -1068,7 +1076,7 @@ ConsensusNodeList NodeConfig::parseConsensusNodeList(boost::property_tree::ptree
     ConsensusNodeList nodeList;
     for (auto const& it : _pt.get_child(_sectionName))
     {
-        if (it.first.find(_subSectionName) != 0)
+        if (!it.first.starts_with(_subSectionName))
         {
             continue;
         }
@@ -1102,9 +1110,11 @@ ConsensusNodeList NodeConfig::parseConsensusNodeList(boost::property_tree::ptree
             BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                       "Please set weight for " + nodeId + " to positive!"));
         }
-        ConsensusNode consensusNode{m_keyFactory->createKey(fromHex(nodeId)),
-            consensus::Type::consensus_sealer, static_cast<uint64_t>(voteWeight),
-            static_cast<uint64_t>(termWeight), 0};
+        ConsensusNode consensusNode{.nodeID = m_keyFactory->createKey(fromHex(nodeId)),
+            .type = consensus::Type::consensus_sealer,
+            .voteWeight = static_cast<uint64_t>(voteWeight),
+            .termWeight = static_cast<uint64_t>(termWeight),
+            .enableNumber = 0};
         NodeConfig_LOG(INFO) << LOG_BADGE("parseConsensusNodeList")
                              << LOG_KV("sectionName", _sectionName) << LOG_KV("nodeId", nodeId)
                              << LOG_KV("voteWeight", voteWeight)
@@ -1346,4 +1356,12 @@ bool bcos::tool::NodeConfig::checkParallelConflict() const
 int bcos::tool::NodeConfig::executorVersion() const
 {
     return m_genesisConfig.m_executorVersion;
+}
+bool bcos::tool::NodeConfig::singlePointConsensus() const
+{
+    return m_singlePointConsensus;
+}
+const bytes& bcos::tool::NodeConfig::forceSender() const
+{
+    return m_forceSender;
 }
