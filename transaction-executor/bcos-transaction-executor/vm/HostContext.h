@@ -166,6 +166,11 @@ private:
             BOOST_THROW_EXCEPTION(protocol::NotEnoughCashError("Account balance is not enough!"));
         }
 
+        if (!co_await ledger::account::exists(m_recipientAccount))
+        {
+            co_await ledger::account::create(m_recipientAccount);
+        }
+
         auto toBalance = co_await ledger::account::balance(m_recipientAccount);
         co_await ledger::account::setBalance(senderAccount, fromBalance - value);
         co_await ledger::account::setBalance(m_recipientAccount, toBalance + value);
