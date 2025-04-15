@@ -71,7 +71,7 @@ bcos::executor_v1::hostcontext::getCacheExecutables()
         CacheExecutables()
         {
             constexpr static auto maxContracts = 100;
-            setMaxCapacity(m_cachedExecutables, sizeof(std::shared_ptr<Executable>) * maxContracts);
+            m_cachedExecutables.setMaxCapacity(sizeof(std::shared_ptr<Executable>) * maxContracts);
         }
     } static cachedExecutables;
 

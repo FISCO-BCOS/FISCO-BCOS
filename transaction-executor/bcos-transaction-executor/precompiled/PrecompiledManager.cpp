@@ -93,8 +93,7 @@ bcos::executor_v1::PrecompiledManager::PrecompiledManager(crypto::Hash::Ptr hash
     m_address2Precompiled.emplace_back(
         0x10002, std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl, false));
     m_address2Precompiled.emplace_back(
-        0x1010, Precompiled{std::make_shared<precompiled::ShardingPrecompiled>(m_hashImpl),
-                    ledger::Features::Flag::feature_sharding});
+        0x1010, std::make_shared<precompiled::ShardingPrecompiled>(m_hashImpl));
     m_address2Precompiled.emplace_back(
         0x100f, std::make_shared<precompiled::CastPrecompiled>(m_hashImpl));
     m_address2Precompiled.emplace_back(
@@ -102,17 +101,14 @@ bcos::executor_v1::PrecompiledManager::PrecompiledManager(crypto::Hash::Ptr hash
     m_address2Precompiled.emplace_back(
         0x10004, std::make_shared<precompiled::AccountPrecompiled>(m_hashImpl));
     m_address2Precompiled.emplace_back(
-        0x1011, Precompiled{std::make_shared<precompiled::BalancePrecompiled>(m_hashImpl),
-                    ledger::Features::Flag::feature_balance_precompiled});
+        0x1011, std::make_shared<precompiled::BalancePrecompiled>(m_hashImpl));
 
     ::ranges::sort(m_address2Precompiled,
         [](const auto& lhs, const auto& rhs) { return std::get<0>(lhs) < std::get<0>(rhs); });
-
-    // Init the AUTH_COMMITTEE_ADDRESS
 }
 
-bcos::executor_v1::Precompiled const*
-bcos::executor_v1::PrecompiledManager::getPrecompiled(unsigned long contractAddress) const
+bcos::executor_v1::Precompiled const* bcos::executor_v1::PrecompiledManager::getPrecompiled(
+    unsigned long contractAddress) const
 {
     auto it = std::lower_bound(m_address2Precompiled.begin(), m_address2Precompiled.end(),
         contractAddress,
@@ -127,8 +123,8 @@ bcos::executor_v1::PrecompiledManager::getPrecompiled(unsigned long contractAddr
     return nullptr;
 }
 
-bcos::executor_v1::Precompiled const*
-bcos::executor_v1::PrecompiledManager::getPrecompiled(const evmc_address& address) const
+bcos::executor_v1::Precompiled const* bcos::executor_v1::PrecompiledManager::getPrecompiled(
+    const evmc_address& address) const
 {
     constexpr static unsigned long MAX_PRECOMPILED_ADDRESS = 100000;
 
