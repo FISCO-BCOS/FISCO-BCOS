@@ -25,6 +25,7 @@
 #include "bcos-task/TBBWait.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Common.h"
+#include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/ITTAPI.h"
 #include <fmt/format.h>
 #include <oneapi/tbb/blocked_range.h>
@@ -45,6 +46,7 @@ namespace bcos::scheduler_v1
 #define BASELINE_SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("BASELINE_SCHEDULER")
 
 DERIVE_BCOS_EXCEPTION(NotFoundTransactionError);
+DERIVE_BCOS_EXCEPTION(UnexpectedEmptyResults);
 
 /**
  * Retrieves a vector of transactions from the provided transaction pool and block.
@@ -443,13 +445,12 @@ private:
                     nullptr};
             }
 
+            auto now = current();
             std::unique_lock resultsLock(m_resultsMutex);
             if (m_results.empty())
             {
-                BOOST_THROW_EXCEPTION(std::runtime_error("Unexpected empty results!"));
+                BOOST_THROW_EXCEPTION(UnexpectedEmptyResults{});
             }
-
-            auto now = current();
             auto result = std::move(m_results.back());
             m_results.pop_back();
             resultsLock.unlock();
@@ -460,6 +461,8 @@ private:
             {
                 ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
                     ittapi::ITT_DOMAINS::instance().SET_BLOCK);
+
+                // TODO: Avoid write to read only storage
                 task::tbb::syncWait(ledger::prewriteBlock(
                     m_ledger.get(), result.m_transactions, result.m_block, false, *lastStorage));
             }
