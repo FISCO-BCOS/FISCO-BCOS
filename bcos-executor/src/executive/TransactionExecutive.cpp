@@ -1947,14 +1947,23 @@ bool TransactionExecutive::checkExecAuth(const CallParameters::UniquePtr& callPa
     else
     {
         bytesRef func = ref(callParameters->data).getCroppedData(0, 4);
-        result = contractAuthPrecompiled->checkMethodAuth(
-            shared_from_this(), callParameters->receiveAddress, func, callParameters->origin);
-        if (versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_2_VERSION) >= 0 &&
-            callParameters->origin != callParameters->senderAddress)
+
+        if (m_blockContext.features().get(ledger::Features::Flag::bugfix_method_auth_sender))
         {
-            auto senderCheck = contractAuthPrecompiled->checkMethodAuth(shared_from_this(),
+            result = contractAuthPrecompiled->checkMethodAuth(shared_from_this(),
                 callParameters->receiveAddress, func, callParameters->senderAddress);
-            result = result && senderCheck;
+        }
+        else
+        {
+            result = contractAuthPrecompiled->checkMethodAuth(
+                shared_from_this(), callParameters->receiveAddress, func, callParameters->origin);
+            if (versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_2_VERSION) >= 0 &&
+                callParameters->origin != callParameters->senderAddress)
+            {
+                auto senderCheck = contractAuthPrecompiled->checkMethodAuth(shared_from_this(),
+                    callParameters->receiveAddress, func, callParameters->senderAddress);
+                result = result && senderCheck;
+            }
         }
     }
     EXECUTIVE_LOG(TRACE) << "check auth finished"
