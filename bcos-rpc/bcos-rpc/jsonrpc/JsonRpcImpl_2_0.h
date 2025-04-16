@@ -22,14 +22,12 @@
 #pragma once
 #include "bcos-protocol/TransactionStatus.h"
 #include "bcos-rpc/groupmgr/GroupManager.h"
-#include "bcos-rpc/validator/CallValidator.h"
 #include <bcos-boostssl/websocket/WsService.h>
 #include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-rpc/filter/FilterSystem.h>
 #include <bcos-rpc/jsonrpc/JsonRpcInterface.h>
 #include <json/json.h>
 #include <boost/core/ignore_unused.hpp>
-#include <unordered_map>
 
 namespace bcos::rpc
 {
@@ -40,7 +38,8 @@ public:
     using Ptr = std::shared_ptr<JsonRpcImpl_2_0>;
     JsonRpcImpl_2_0(GroupManager::Ptr _groupManager,
         bcos::gateway::GatewayInterface::Ptr _gatewayInterface,
-        std::shared_ptr<boostssl::ws::WsService> _wsService, FilterSystem::Ptr filterSystem);
+        std::shared_ptr<boostssl::ws::WsService> _wsService, FilterSystem::Ptr filterSystem,
+        bytes forceSender);
     ~JsonRpcImpl_2_0() override = default;
 
     void setClientID(std::string_view _clientID) { m_clientID = _clientID; }
@@ -168,7 +167,6 @@ protected:
 
     FilterSystem& filterSystem() { return *m_filterSystem; }
 
-protected:
     void gatewayInfoToJson(Json::Value& _response, bcos::gateway::GatewayInfo::Ptr _gatewayInfo);
     void gatewayInfoToJson(Json::Value& _response, bcos::gateway::GatewayInfo::Ptr _localP2pInfo,
         bcos::gateway::GatewayInfosPtr _peersInfo);
@@ -191,6 +189,7 @@ protected:
     // Note: here clientID must non-empty for the rpc will set clientID as source for the tx for
     // tx-notify and the scheduler will not notify the tx-result if the tx source is empty
     std::string m_clientID = "localRpc";
+    bytes m_forceSender;
 
     struct TxHasher
     {

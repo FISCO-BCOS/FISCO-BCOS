@@ -474,7 +474,9 @@ public:
         }
 
         auto seek(const auto& key)
-            requires(!withConcurrent && withOrdered)
+            // TODO: need !withConcurrent, fix benchmarkScheduler
+            // requires(!withConcurrent && withOrdered)
+            requires withOrdered
         {
             auto const& index = m_buckets.get()[m_bucketIndex].container.template get<0>();
             m_begin = index.lower_bound(std::forward<decltype(key)>(key));
@@ -489,7 +491,9 @@ public:
 
     friend auto tag_invoke(bcos::storage2::tag_t<storage2::range> /*unused*/,
         MemoryStorage& storage, RANGE_SEEK_TYPE /*unused*/, const auto& key)
-        requires(!withConcurrent && withOrdered)
+        // TODO: need !withConcurrent, fix benchmarkScheduler
+        // requires(!withConcurrent && withOrdered)
+        requires withOrdered
     {
         auto iterator = Iterator(storage.m_buckets);
         iterator.seek(key);

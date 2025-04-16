@@ -40,7 +40,8 @@ public:
             {
                 std::tie(start, count) = condition->getLimit();
             }
-            auto range = co_await storage2::range(self->m_storage.get());
+            auto range = co_await storage2::range(
+                self->m_storage.get(), storage2::RANGE_SEEK, executor_v1::StateKeyView{table, {}});
             while (auto keyValue = co_await range.next())
             {
                 auto&& [key, value] = *keyValue;
@@ -55,7 +56,12 @@ public:
 
                 executor_v1::StateKeyView stateKeyView(key);
                 auto [entryTable, entryKey] = stateKeyView.get();
-                if (entryTable == table && (!condition || condition->isValid(entryKey)))
+                if (entryTable != table)
+                {
+                    break;
+                }
+
+                if (!condition || condition->isValid(entryKey))
                 {
                     if (start != 0 || count != 0)
                     {
