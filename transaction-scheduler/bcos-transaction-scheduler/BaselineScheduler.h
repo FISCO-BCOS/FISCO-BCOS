@@ -455,20 +455,21 @@ private:
             resultsLock.unlock();
 
             result.m_block->setBlockHeader(header);
-            auto lastStorage = backStorage(m_multiLayerStorage.get());
-            if (result.m_block->blockHeaderConst()->number() != 0)
-            {
-                ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
-                    ittapi::ITT_DOMAINS::instance().SET_BLOCK);
-                task::tbb::syncWait(ledger::prewriteBlock(
-                    m_ledger.get(), result.m_transactions, result.m_block, false, *lastStorage));
-            }
-
             tbb::parallel_invoke(
+                [&]() {
+                    if (result.m_block->blockHeaderConst()->number() != 0)
+                    {
+                        ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
+                            ittapi::ITT_DOMAINS::instance().SET_BLOCK);
+                        auto& backendStorage = m_multiLayerStorage.get().backendStorage();
+                        task::tbb::syncWait(ledger::prewriteBlock(m_ledger.get(),
+                            result.m_transactions, result.m_block, false, backendStorage));
+                    }
+                },
                 [&]() {
                     ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
                         ittapi::ITT_DOMAINS::instance().MERGE_STATE);
-                    task::tbb::syncWait(mergeBackStorage(m_multiLayerStorage.get()));
+                    task::tbb::syncWait(m_multiLayerStorage.get().mergeBackStorage());
                 },
                 [&]() {
                     ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,

@@ -86,10 +86,10 @@ BOOST_AUTO_TEST_CASE(merge)
                        RANGES::iota_view<int, int>(0, 100) | toValue));
 
         BOOST_CHECK_THROW(
-            co_await mergeBackStorage(multiLayerStorage), NotExistsImmutableStorageError);
+            co_await multiLayerStorage.mergeBackStorage(), NotExistsImmutableStorageError);
 
         pushView(multiLayerStorage, std::move(*view));
-        co_await mergeBackStorage(multiLayerStorage);
+        co_await multiLayerStorage.mergeBackStorage();
 
         auto view2 = fork(multiLayerStorage);
         auto keys = RANGES::iota_view<int, int>(0, 100) | toKey;
@@ -105,7 +105,7 @@ BOOST_AUTO_TEST_CASE(merge)
         newMutable(view3);
         co_await storage2::removeSome(view3, RANGES::iota_view<int, int>(20, 30) | toKey);
         pushView(multiLayerStorage, std::move(view3));
-        co_await mergeBackStorage(multiLayerStorage);
+        co_await multiLayerStorage.mergeBackStorage();
 
         auto values2 = co_await storage2::readSome(view3, keys);
         for (auto&& [index, value] : RANGES::views::enumerate(values2))

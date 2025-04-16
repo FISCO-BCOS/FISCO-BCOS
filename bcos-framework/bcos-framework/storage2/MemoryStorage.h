@@ -188,58 +188,36 @@ public:
     friend auto tag_invoke(bcos::storage2::tag_t<readSome> /*unused*/, MemoryStorage& storage,
         ::ranges::input_range auto keys) -> task::AwaitableValue<std::vector<std::optional<Value>>>
     {
-        task::AwaitableValue<std::vector<std::optional<Value>>> result;
-        if constexpr (::ranges::sized_range<decltype(keys)>)
-        {
-            result.value().reserve(::ranges::size(keys));
-        }
-
-        for (auto&& key : keys)
-        {
-            auto& bucket = getBucket(storage, key);
-            Lock lock(bucket.mutex, false);
-
-            auto const& index = bucket.container.template get<0>();
-            if (auto it = index.find(key); it != index.end())
-            {
-                result.value().emplace_back(it->value);
-                if constexpr (withLRU)
-                {
-                    if (lock.upgrade_to_writer())
-                    {
-                        storage.updateLRUAndCheck(bucket, it);
-                    }
-                }
-            }
-            else
-            {
-                result.value().emplace_back(std::optional<Value>{});
-            }
-        }
-        return result;
+        auto results = storage.readSome(std::move(keys));
+        return {::ranges::views::transform(results, [](auto& result) {
+            return std::visit(
+                bcos::overloaded{[](std::optional<Value>& value) { return std::move(value); },
+                    [](NOT_EXISTS_TYPE) { return std::optional<Value>{}; }},
+                result);
+        }) | ::ranges::to<std::vector>()};
     }
 
     friend task::AwaitableValue<std::optional<Value>> tag_invoke(
         storage2::tag_t<storage2::readOne> /*unused*/, MemoryStorage& storage, auto key,
         auto&&... args)
     {
-        auto result = storage.readOne(std::move(key), std::forward<decltype(args)>(args)...);
+        auto result = storage.readOne(key, std::forward<decltype(args)>(args)...);
         return {std::visit(
             bcos::overloaded{[](std::optional<Value>& value) { return std::move(value); },
                 [](NOT_EXISTS_TYPE) { return std::optional<Value>{}; }},
-            result.value())};
+            result)};
     }
 
-    auto readOne(auto key, auto&&... /*unused*/)
+    auto readOne(const auto& key, auto&&... /*unused*/)
     {
-        task::AwaitableValue<std::variant<std::optional<Value>, NOT_EXISTS_TYPE>> result;
+        std::variant<std::optional<Value>, NOT_EXISTS_TYPE> result;
         auto& bucket = getBucket(*this, key);
         Lock lock(bucket.mutex, false);
 
         auto const& index = bucket.container.template get<0>();
         if (auto it = index.find(key); it != index.end())
         {
-            result.value().template emplace<std::optional<Value>>(it->value);
+            result.template emplace<std::optional<Value>>(it->value);
 
             if constexpr (withLRU)
             {
@@ -251,9 +229,24 @@ public:
         }
         else
         {
-            result.value().template emplace<NOT_EXISTS_TYPE>();
+            result.template emplace<NOT_EXISTS_TYPE>();
         }
         return result;
+    }
+
+    auto readSome(::ranges::input_range auto keys)
+    {
+        std::vector<std::variant<std::optional<Value>, NOT_EXISTS_TYPE>> results;
+        if constexpr (::ranges::sized_range<decltype(keys)>)
+        {
+            results.reserve(::ranges::size(keys));
+        }
+
+        for (auto&& key : keys)
+        {
+            results.emplace_back(readOne(key));
+        }
+        return results;
     }
 
     void writeOne(Bucket& bucket, auto key, auto value, bool direct)

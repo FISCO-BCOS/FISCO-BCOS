@@ -87,3 +87,13 @@ bcos::executor_v1::hostcontext::Executable::Executable(storage::Entry code, evmc
 bcos::executor_v1::hostcontext::Executable::Executable(bytesConstRef code, evmc_revision revision)
   : m_vmInstance(VMFactory::create(VMKind::evmone, code, revision))
 {}
+
+bcos::task::Task<std::shared_ptr<bcos::executor_v1::hostcontext::Executable>>
+bcos::executor_v1::hostcontext::getExecutableFromCache(const evmc_address& address)
+{
+    if (auto executable = co_await storage2::readOne(getCacheExecutables(), address))
+    {
+        co_return std::move(*executable);
+    }
+    co_return {};
+}

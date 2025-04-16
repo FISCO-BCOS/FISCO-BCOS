@@ -178,7 +178,7 @@ public:
     {
         if (view.m_mutableStorage)
         {
-            auto value = co_await view.m_mutableStorage->readOne(key);
+            auto value = view.m_mutableStorage->readOne(key);
             if (auto* ptr = std::get_if<std::optional<typename View::Value>>(std::addressof(value)))
             {
                 co_return *ptr;
@@ -187,7 +187,7 @@ public:
 
         for (auto& immutableStorage : view.m_immutableStorages)
         {
-            auto value = co_await immutableStorage->readOne(key);
+            auto value = immutableStorage->readOne(key);
             if (auto* ptr = std::get_if<std::optional<typename View::Value>>(std::addressof(value)))
             {
                 co_return *ptr;
@@ -431,7 +431,6 @@ public:
     MultiLayerStorage& operator=(MultiLayerStorage&&) noexcept = default;
     ~MultiLayerStorage() noexcept = default;
 
-private:
     friend ViewType fork(MultiLayerStorage& storage)
     {
         std::unique_lock lock(storage.m_listMutex);
@@ -459,15 +458,15 @@ private:
         storage.m_storages.push_front(std::move(view.m_mutableStorage));
     }
 
-    friend task::Task<std::shared_ptr<MutableStorage>> mergeBackStorage(MultiLayerStorage& storage)
+    task::Task<std::shared_ptr<MutableStorage>> mergeBackStorage()
     {
-        std::unique_lock mergeLock(storage.m_mergeMutex);
-        std::unique_lock listLock(storage.m_listMutex);
-        if (storage.m_storages.empty())
+        std::unique_lock mergeLock(m_mergeMutex);
+        std::unique_lock listLock(m_listMutex);
+        if (m_storages.empty())
         {
             BOOST_THROW_EXCEPTION(NotExistsImmutableStorageError{});
         }
-        auto backStoragePtr = storage.m_storages.back();
+        auto backStoragePtr = m_storages.back();
         auto& backStorage = *backStoragePtr;
         listLock.unlock();
 
@@ -477,54 +476,28 @@ private:
                 [&]() {
                     ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
                         ittapi::ITT_DOMAINS::instance().MERGE_BACKEND);
-                    task::tbb::syncWait(
-                        storage2::merge(storage.m_backendStorage.get(), backStorage));
+                    task::tbb::syncWait(storage2::merge(m_backendStorage.get(), backStorage));
                 },
                 [&]() {
                     ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
                         ittapi::ITT_DOMAINS::instance().MERGE_CACHE);
-                    task::tbb::syncWait(storage2::merge(storage.m_cacheStorage.get(), backStorage));
+                    task::tbb::syncWait(storage2::merge(m_cacheStorage.get(), backStorage));
                 });
         }
         else
         {
             ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
                 ittapi::ITT_DOMAINS::instance().MERGE_BACKEND);
-            co_await storage2::merge(storage.m_backendStorage.get(), backStorage);
+            co_await storage2::merge(m_backendStorage.get(), backStorage);
         }
 
         listLock.lock();
-        storage.m_storages.pop_back();
+        m_storages.pop_back();
 
         co_return backStoragePtr;
     }
 
-    friend std::shared_ptr<MutableStorage> frontStorage(MultiLayerStorage& storage)
-    {
-        std::unique_lock immutablesLock(storage.m_listMutex);
-        if (storage.m_storages.empty())
-        {
-            BOOST_THROW_EXCEPTION(NotExistsImmutableStorageError{});
-        }
-
-        return storage.m_storages.front();
-    }
-
-    friend std::shared_ptr<MutableStorage> backStorage(MultiLayerStorage& storage)
-    {
-        std::unique_lock immutablesLock(storage.m_listMutex);
-        if (storage.m_storages.empty())
-        {
-            BOOST_THROW_EXCEPTION(NotExistsImmutableStorageError{});
-        }
-
-        return storage.m_storages.back();
-    }
-
-    friend BackendStorage& backendStorage(MultiLayerStorage& storage)
-    {
-        return storage.m_backendStorage;
-    }
+    BackendStorage& backendStorage() { return m_backendStorage; }
 };
 
 }  // namespace bcos::scheduler_v1

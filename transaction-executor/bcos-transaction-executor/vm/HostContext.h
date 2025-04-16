@@ -81,7 +81,7 @@ evmc_message getMessage(bool web3Tx, const evmc_message& inputMessage,
 struct Executable
 {
     Executable(storage::Entry code, evmc_revision revision);
-    explicit Executable(bytesConstRef code, evmc_revision revision);
+    Executable(bytesConstRef code, evmc_revision revision);
 
     std::optional<storage::Entry> m_code;
     VMInstance m_vmInstance;
@@ -97,14 +97,11 @@ using CacheExecutables =
         std::hash<evmc_address>>;
 CacheExecutables& getCacheExecutables();
 
-inline task::Task<std::shared_ptr<Executable>> getExecutable(
+task::Task<std::shared_ptr<Executable>> getExecutableFromCache(const evmc_address& address);
+
+task::Task<std::shared_ptr<Executable>> getExecutableFromStorage(
     auto& storage, const evmc_address& address, const evmc_revision& revision, bool binaryAddress)
 {
-    if (auto executable = co_await storage2::readOne(getCacheExecutables(), address))
-    {
-        co_return std::move(*executable);
-    }
-
     if (Account<std::decay_t<decltype(storage)>> account(storage, address, binaryAddress);
         auto codeEntry = co_await ledger::account::code(account))
     {
@@ -135,6 +132,7 @@ private:
     evmc_revision m_revision;
     std::vector<protocol::LogEntry> m_logs;
     std::shared_ptr<Executable> m_executable;
+    bool m_processedDynamicPrecompiled = false;
     const bcos::executor_v1::Precompiled* m_preparedPrecompiled{};
     bcos::bytes m_dynamicPrecompiledInput;
     bool m_enableTransfer = false;
@@ -290,8 +288,8 @@ public:
     task::Task<std::optional<storage::Entry>> code(
         const evmc_address& address, auto&&... /*unused*/)
     {
-        if (auto executable = co_await getExecutable(m_rollbackableStorage.get(), address,
-                m_revision,
+        if (auto executable = co_await getExecutableFromStorage(m_rollbackableStorage.get(),
+                address, m_revision,
                 m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
             executable && executable->m_code)
         {
@@ -367,9 +365,6 @@ public:
     task::Task<void> prepare()
     {
         auto const& ref = message();
-        // assert(
-        //     !concepts::bytebuffer::equalTo(ref.recipient.bytes,
-        //     executor::EMPTY_EVM_ADDRESS.bytes));
         if (ref.kind == EVMC_CREATE || ref.kind == EVMC_CREATE2)
         {
             prepareCreate();
@@ -577,29 +572,10 @@ private:
         }
     }
 
-    task::Task<void> prepareCall()
+    void processDynamicPrecompiled()
     {
-        auto& ref = message();
-        // 不允许delegatecall static precompiled
-        // delegatecall static precompiled is not allowed
-        if (ref.kind != EVMC_DELEGATECALL)
-        {
-            if (auto const* precompiled =
-                    m_precompiledManager.get().getPrecompiled(ref.code_address))
-            {
-                if (auto flag = executor_v1::featureFlag(*precompiled);
-                    !flag || m_ledgerConfig.get().features().get(*flag))
-                {
-                    m_preparedPrecompiled = precompiled;
-                    co_return;
-                }
-            }
-        }
-
-        m_executable =
-            co_await getExecutable(m_rollbackableStorage.get(), ref.code_address, m_revision,
-                m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
-        if (m_executable && hasPrecompiledPrefix(m_executable->m_code->get()))
+        if (!m_processedDynamicPrecompiled && m_executable &&
+            hasPrecompiledPrefix(m_executable->m_code->get()))
         {
             auto& message = mutableMessage();
             auto code = m_executable->m_code->get();
@@ -638,8 +614,32 @@ private:
             {
                 BOOST_THROW_EXCEPTION(NotFoundCodeError());
             }
-            co_return;
+
+            m_processedDynamicPrecompiled = true;
         }
+    }
+
+    task::Task<void> prepareCall()
+    {
+        auto& ref = message();
+        // 不允许delegatecall static precompiled
+        // delegatecall static precompiled is not allowed
+        if (ref.kind != EVMC_DELEGATECALL)
+        {
+            if (auto const* precompiled =
+                    m_precompiledManager.get().getPrecompiled(ref.code_address))
+            {
+                if (auto flag = executor_v1::featureFlag(*precompiled);
+                    !flag || m_ledgerConfig.get().features().get(*flag))
+                {
+                    m_preparedPrecompiled = precompiled;
+                    co_return;
+                }
+            }
+        }
+
+        m_executable = co_await getExecutableFromCache(ref.code_address);
+        processDynamicPrecompiled();
     }
 
     task::Task<EVMCResult> executeCall()
@@ -662,8 +662,8 @@ private:
         // yet been created
         if (!m_executable)
         {
-            if (m_executable = co_await getExecutable(m_rollbackableStorage.get(), ref.code_address,
-                    m_revision,
+            if (m_executable = co_await getExecutableFromStorage(m_rollbackableStorage.get(),
+                    ref.code_address, m_revision,
                     m_ledgerConfig.get().features().get(
                         ledger::Features::Flag::feature_raw_address));
                 !m_executable)
@@ -682,6 +682,10 @@ private:
                                          .create_address = {},
                                          .padding = {}},
                     protocol::TransactionStatus::None};
+            }
+            else
+            {
+                processDynamicPrecompiled();
             }
         }
 
