@@ -447,6 +447,15 @@ void PBFTInitializer::createPBFT()
     pbftConfig->setCheckPointTimeoutInterval(m_nodeConfig->checkPointTimeoutInterval());
     pbftConfig->setMinSealTime(m_nodeConfig->minSealTime());
     pbftConfig->setPipeLineSize(m_nodeConfig->pipelineSize());
+
+    if (m_nodeConfig->singlePointConsensus())
+    {
+        ConsensusNodeList nodeList;
+        nodeList.emplace_back(
+            m_protocolInitializer->keyPair()->publicKey(), Type::consensus_sealer, 1, 0, 0);
+        pbftConfig->setConsensusNodeList(std::move(nodeList));
+        pbftConfig->setSinglePointConsensus(true);
+    }
 }
 
 void PBFTInitializer::createSync()
