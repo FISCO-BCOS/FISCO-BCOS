@@ -155,6 +155,7 @@ BOOST_AUTO_TEST_CASE(feature)
         "bugfix_set_contract_nonce_when_create",
         "bugfix_precompiled_gascalc",
         "bugfix_method_auth_sender",
+        "bugfix_precompiled_evm_status",
         "feature_dmc2serial",
         "feature_sharding",
         "feature_rpbft",
@@ -459,7 +460,7 @@ BOOST_AUTO_TEST_CASE(genesis)
         "bugfix_delete_account_code", "bugfix_policy1_empty_code_address",
         "bugfix_precompiled_gasused", "bugfix_nonce_not_increase_when_revert",
         "bugfix_set_contract_nonce_when_create", "bugfix_precompiled_gascalc",
-        "bugfix_method_auth_sender"});
+        "bugfix_method_auth_sender", "bugfix_precompiled_evm_status"});
 
     BOOST_CHECK_EQUAL(validFlags(features3_152).size(), expect3_152.size());
     for (auto feature : expect3_152)
