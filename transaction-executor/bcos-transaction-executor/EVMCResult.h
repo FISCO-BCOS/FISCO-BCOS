@@ -52,3 +52,4 @@ EVMCResult makeErrorEVMCResult(crypto::Hash const& hashImpl, protocol::Transacti
 
 std::ostream& operator<<(std::ostream& output, const evmc_message& message);
 std::ostream& operator<<(std::ostream& output, const evmc_result& result);
+std::ostream& operator<<(std::ostream& output, const evmc_address& address);

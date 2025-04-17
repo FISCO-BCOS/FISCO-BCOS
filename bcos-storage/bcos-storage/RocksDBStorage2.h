@@ -158,7 +158,10 @@ public:
 
         std::atomic_size_t totalReservedLength = ROCKSDB_SEP_HEADER_SIZE;
         tbb::concurrent_vector<RocksDBKeyValueTuple> rocksDBKeyValues;
-        rocksDBKeyValues.reserve(::ranges::size(keyValues));
+        if constexpr (::ranges::sized_range<decltype(keyValues)>)
+        {
+            rocksDBKeyValues.reserve(::ranges::size(keyValues));
+        }
         auto chunkRange = ::ranges::views::chunk(keyValues, ROCKSDB_WRITE_CHUNK_SIZE);
         tbb::task_group writeGroup;
         for (auto&& subrange : chunkRange)
@@ -211,6 +214,7 @@ public:
         {
             BOOST_THROW_EXCEPTION(RocksDBException{} << errinfo_comment(status.ToString()));
         }
+        return {};
     }
 
     friend task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/,

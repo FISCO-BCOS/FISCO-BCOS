@@ -484,10 +484,10 @@ BOOST_AUTO_TEST_CASE(dirtctReadOne)
         auto value = co_await storage2::readOne(storage, 6);
         BOOST_CHECK(!value);
 
-        auto value2 = co_await storage.readOne(6);
+        auto value2 = storage.readOne(6);
         BOOST_CHECK(std::holds_alternative<std::optional<int>>(value2));
 
-        auto value3 = co_await storage.readOne(11);
+        auto value3 = storage.readOne(11);
         BOOST_CHECK(
             std::holds_alternative<bcos::storage2::memory_storage::NOT_EXISTS_TYPE>(value3));
         auto value4 = co_await storage2::readOne(storage, 11);
@@ -501,11 +501,11 @@ BOOST_AUTO_TEST_CASE(dirtctReadOne)
         auto value21 = co_await storage2::readOne(storage_2, 6);
         BOOST_CHECK(!value21);
 
-        auto value22 = co_await storage_2.readOne(6);
+        auto value22 = storage_2.readOne(6);
         BOOST_CHECK(
             std::holds_alternative<bcos::storage2::memory_storage::NOT_EXISTS_TYPE>(value22));
 
-        auto value23 = co_await storage_2.readOne(11);
+        auto value23 = storage_2.readOne(11);
         BOOST_CHECK(
             std::holds_alternative<bcos::storage2::memory_storage::NOT_EXISTS_TYPE>(value23));
         auto value24 = co_await storage2::readOne(storage_2, 11);

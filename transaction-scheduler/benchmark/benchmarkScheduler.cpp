@@ -136,7 +136,7 @@ struct Fixture
                             co_return;
                         }
                         pushView(m_multiLayerStorage, std::move(view));
-                        co_await mergeBackStorage(m_multiLayerStorage);
+                        co_await m_multiLayerStorage.mergeBackStorage();
 
                         m_contractAddress = receipts[0]->contractAddress();
                     }());
@@ -400,7 +400,7 @@ static void noConflictTransfer(benchmark::State& state)
                                     to.template convert_to<std::string>())));
                         }
                     }
-                    co_await mergeBackStorage(fixture.m_multiLayerStorage);
+                    co_await fixture.m_multiLayerStorage.mergeBackStorage();
                 }(state));
             }
         },
@@ -474,7 +474,7 @@ static void randomTransfer(benchmark::State& state)
                                     expect.str(), got.str())));
                         }
                     }
-                    co_await mergeBackStorage(fixture.m_multiLayerStorage);
+                    co_await fixture.m_multiLayerStorage.mergeBackStorage();
                 }(state));
             }
         },
@@ -566,7 +566,7 @@ static void conflictTransfer(benchmark::State& state)
                             }
                         }
                     }
-                    co_await mergeBackStorage(fixture.m_multiLayerStorage);
+                    co_await fixture.m_multiLayerStorage.mergeBackStorage();
                 }(state));
             }
         },

@@ -81,7 +81,7 @@ evmc_message getMessage(bool web3Tx, const evmc_message& inputMessage,
 struct Executable
 {
     Executable(storage::Entry code, evmc_revision revision);
-    explicit Executable(bytesConstRef code, evmc_revision revision);
+    Executable(bytesConstRef code, evmc_revision revision);
 
     std::optional<storage::Entry> m_code;
     VMInstance m_vmInstance;
@@ -97,7 +97,7 @@ using CacheExecutables =
         std::hash<evmc_address>>;
 CacheExecutables& getCacheExecutables();
 
-inline task::Task<std::shared_ptr<Executable>> getExecutable(
+task::Task<std::shared_ptr<Executable>> getExecutable(
     auto& storage, const evmc_address& address, const evmc_revision& revision, bool binaryAddress)
 {
     if (auto executable = co_await storage2::readOne(getCacheExecutables(), address))
@@ -367,9 +367,6 @@ public:
     task::Task<void> prepare()
     {
         auto const& ref = message();
-        // assert(
-        //     !concepts::bytebuffer::equalTo(ref.recipient.bytes,
-        //     executor::EMPTY_EVM_ADDRESS.bytes));
         if (ref.kind == EVMC_CREATE || ref.kind == EVMC_CREATE2)
         {
             prepareCreate();
@@ -577,29 +574,9 @@ private:
         }
     }
 
-    task::Task<void> prepareCall()
+    void processDynamicPrecompiled()
     {
-        auto& ref = message();
-        // 不允许delegatecall static precompiled
-        // delegatecall static precompiled is not allowed
-        if (ref.kind != EVMC_DELEGATECALL)
-        {
-            if (auto const* precompiled =
-                    m_precompiledManager.get().getPrecompiled(ref.code_address))
-            {
-                if (auto flag = executor_v1::featureFlag(*precompiled);
-                    !flag || m_ledgerConfig.get().features().get(*flag))
-                {
-                    m_preparedPrecompiled = precompiled;
-                    co_return;
-                }
-            }
-        }
-
-        m_executable =
-            co_await getExecutable(m_rollbackableStorage.get(), ref.code_address, m_revision,
-                m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
-        if (m_executable && hasPrecompiledPrefix(m_executable->m_code->get()))
+        if (hasPrecompiledPrefix(m_executable->m_code->get()))
         {
             auto& message = mutableMessage();
             auto code = m_executable->m_code->get();
@@ -623,14 +600,10 @@ private:
 
             message.input_data = m_dynamicPrecompiledInput.data();
             message.input_size = m_dynamicPrecompiledInput.size();
-            if (c_fileLogLevel <= LogLevel::TRACE) [[unlikely]]
-            {
-                HOST_CONTEXT_LOG(TRACE)
-                    << LOG_DESC("callDynamicPrecompiled")
-                    << LOG_KV("codeAddr", address2HexString(message.code_address))
-                    << LOG_KV("recvAddr", address2HexString(message.recipient))
-                    << LOG_KV("code", code);
-            }
+
+            HOST_CONTEXT_LOG(TRACE)
+                << LOG_DESC("callDynamicPrecompiled") << LOG_KV("codeAddr", message.code_address)
+                << LOG_KV("recvAddr", message.recipient) << LOG_KV("code", code);
 
             if (m_preparedPrecompiled =
                     m_precompiledManager.get().getPrecompiled(message.recipient);
@@ -638,7 +611,25 @@ private:
             {
                 BOOST_THROW_EXCEPTION(NotFoundCodeError());
             }
-            co_return;
+        }
+    }
+
+    task::Task<void> prepareCall()
+    {
+        auto& ref = message();
+        // delegatecall static precompiled is not allowed
+        if (ref.kind != EVMC_DELEGATECALL)
+        {
+            if (auto const* precompiled =
+                    m_precompiledManager.get().getPrecompiled(ref.code_address))
+            {
+                if (auto flag = executor_v1::featureFlag(*precompiled);
+                    !flag || m_ledgerConfig.get().features().get(*flag))
+                {
+                    m_preparedPrecompiled = precompiled;
+                    co_return;
+                }
+            }
         }
     }
 
@@ -657,32 +648,34 @@ private:
                 m_ledgerConfig.get().authCheckStatus());
         }
 
-        // 因为流水线的原因，可能该合约还没创建
-        // Due to the pipeline process, it is possible that the contract has not
-        // yet been created
-        if (!m_executable)
+        if (m_executable = co_await getExecutable(m_rollbackableStorage.get(), ref.code_address,
+                m_revision,
+                m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
+            !m_executable)
         {
-            if (m_executable = co_await getExecutable(m_rollbackableStorage.get(), ref.code_address,
-                    m_revision,
-                    m_ledgerConfig.get().features().get(
-                        ledger::Features::Flag::feature_raw_address));
-                !m_executable)
+            if (ref.input_size > 0)
             {
-                if (ref.input_size > 0)
-                {
-                    BOOST_THROW_EXCEPTION(NotFoundCodeError());
-                }
-
-                co_return EVMCResult{evmc_result{.status_code = EVMC_SUCCESS,
-                                         .gas_left = ref.gas,
-                                         .gas_refund = 0,
-                                         .output_data = nullptr,
-                                         .output_size = 0,
-                                         .release = nullptr,
-                                         .create_address = {},
-                                         .padding = {}},
-                    protocol::TransactionStatus::None};
+                BOOST_THROW_EXCEPTION(NotFoundCodeError());
             }
+
+            co_return EVMCResult{evmc_result{.status_code = EVMC_SUCCESS,
+                                     .gas_left = ref.gas,
+                                     .gas_refund = 0,
+                                     .output_data = nullptr,
+                                     .output_size = 0,
+                                     .release = nullptr,
+                                     .create_address = {},
+                                     .padding = {}},
+                protocol::TransactionStatus::None};
+        }
+        processDynamicPrecompiled();
+
+        if (m_preparedPrecompiled != nullptr)
+        {
+            co_return executor_v1::callPrecompiled(*m_preparedPrecompiled,
+                m_rollbackableStorage.get(), m_blockHeader, ref, m_origin,
+                buildLegacyExternalCaller(), m_precompiledManager.get(), m_contextID, m_seq,
+                m_ledgerConfig.get().authCheckStatus());
         }
 
         co_return m_executable->m_vmInstance.execute(interface, this, m_revision,
