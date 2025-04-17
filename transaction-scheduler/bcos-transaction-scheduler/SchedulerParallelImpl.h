@@ -71,7 +71,7 @@ public:
         m_storageView(storage),
         m_readWriteSetStorage(m_storageView)
     {
-        newMutable(m_storageView);
+        m_storageView.newMutable();
     }
 
     int64_t chunkIndex() const { return m_chunkIndex; }

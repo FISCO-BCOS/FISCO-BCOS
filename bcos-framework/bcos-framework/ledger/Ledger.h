@@ -150,7 +150,7 @@ inline constexpr struct SetNodeList
 
 inline constexpr struct GetLedgerConfig
 {
-    task::Task<void> operator()(auto& ledger, auto& ledgerConfig) const
+    task::Task<void> operator()(auto& ledger, LedgerConfig& ledgerConfig) const
     {
         co_await tag_invoke(*this, ledger, ledgerConfig);
     }
@@ -158,6 +158,19 @@ inline constexpr struct GetLedgerConfig
     {
         auto ledgerConfig = std::make_shared<LedgerConfig>();
         co_await tag_invoke(*this, ledger, *ledgerConfig);
+        co_return ledgerConfig;
+    }
+
+    // Read from storage
+    task::Task<void> operator()(
+        auto& storage, LedgerConfig& ledgerConfig, protocol::BlockNumber blockNumber) const
+    {
+        co_await tag_invoke(*this, storage, ledgerConfig, blockNumber);
+    }
+    task::Task<LedgerConfig::Ptr> operator()(auto& storage, protocol::BlockNumber blockNumber) const
+    {
+        auto ledgerConfig = std::make_shared<LedgerConfig>();
+        co_await tag_invoke(*this, storage, *ledgerConfig, blockNumber);
         co_return ledgerConfig;
     }
 } getLedgerConfig{};

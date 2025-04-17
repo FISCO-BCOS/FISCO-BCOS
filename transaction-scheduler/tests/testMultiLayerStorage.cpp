@@ -47,7 +47,7 @@ BOOST_AUTO_TEST_CASE(readWriteMutable)
 {
     task::syncWait([this]() -> task::Task<void> {
         auto view = std::make_optional(fork(multiLayerStorage));
-        newMutable(*view);
+        view->newMutable();
         StateKey key{"test_table"sv, "test_key"sv};
 
         storage::Entry entry;
@@ -72,7 +72,7 @@ BOOST_AUTO_TEST_CASE(merge)
 {
     task::syncWait([this]() -> task::Task<void> {
         auto view = std::make_optional(fork(multiLayerStorage));
-        newMutable(*view);
+        view->newMutable();
         auto toKey = RANGES::views::transform(
             [](int num) { return StateKey{"test_table"sv, fmt::format("key: {}", num)}; });
         auto toValue = RANGES::views::transform([](int num) {
@@ -102,7 +102,7 @@ BOOST_AUTO_TEST_CASE(merge)
         BOOST_CHECK_EQUAL(RANGES::size(values), 100);
 
         auto view3 = fork(multiLayerStorage);
-        newMutable(view3);
+        view3.newMutable();
         co_await storage2::removeSome(view3, RANGES::iota_view<int, int>(20, 30) | toKey);
         pushView(multiLayerStorage, std::move(view3));
         co_await multiLayerStorage.mergeBackStorage();
@@ -139,14 +139,14 @@ BOOST_AUTO_TEST_CASE(rangeMulti)
         MultiLayerStorage<MutableStorage, void, BackendStorage> myMultiLayerStorage(backendStorage);
 
         auto view1 = fork(myMultiLayerStorage);
-        newMutable(view1);
+        view1.newMutable();
         co_await storage2::writeSome(
             view1, ::ranges::views::zip(RANGES::views::iota(2, 6), RANGES::views::repeat(1)));
         co_await storage2::removeOne(view1, 2);
         pushView(myMultiLayerStorage, std::move(view1));
 
         auto view2 = fork(myMultiLayerStorage);
-        newMutable(view2);
+        view2.newMutable();
         co_await storage2::writeSome(
             view2, ::ranges::views::zip(RANGES::views::iota(4, 8), RANGES::views::repeat(2)));
 
@@ -182,7 +182,7 @@ BOOST_AUTO_TEST_CASE(deletedEntry)
 {
     task::syncWait([this]() -> task::Task<void> {
         auto view = fork(multiLayerStorage);
-        newMutable(view);
+        view.newMutable();
         StateKey key{"test_table"sv, "test_key"sv};
 
         storage::Entry entry;
@@ -191,7 +191,7 @@ BOOST_AUTO_TEST_CASE(deletedEntry)
         pushView(multiLayerStorage, std::move(view));
 
         auto view2 = fork(multiLayerStorage);
-        newMutable(view2);
+        view2.newMutable();
         co_await storage2::removeOne(view2, key);
 
         BOOST_CHECK(!co_await storage2::existsOne(view2, key));

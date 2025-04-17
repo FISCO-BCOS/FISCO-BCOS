@@ -2,6 +2,7 @@
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
+#include "bcos-ledger/LedgerMethods.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
@@ -138,6 +139,7 @@ public:
     using BackendStorage = memory_storage::MemoryStorage<StateKey, StateValue,
         memory_storage::Attribute(memory_storage::ORDERED | memory_storage::CONCURRENT),
         std::hash<StateKey>>;
+    using MyMultiLayerStorage = MultiLayerStorage<MutableStorage, void, BackendStorage>;
 
     TestBaselineSchedulerFixture()
       : cryptoSuite(std::make_shared<bcos::crypto::CryptoSuite>(
@@ -170,11 +172,18 @@ public:
     MockScheduler mockScheduler;
     MockLedger mockLedger;
     MockTxPool mockTxPool;
-    MultiLayerStorage<MutableStorage, void, BackendStorage> multiLayerStorage;
+    MyMultiLayerStorage multiLayerStorage;
     MockExecutorBaseline mockExecutor;
     BaselineScheduler<decltype(multiLayerStorage), MockExecutorBaseline, MockScheduler, MockLedger>
         baselineScheduler;
 };
+
+// task::AwaitableValue<void> tag_invoke(ledger::tag_t<bcos::ledger::getLedgerConfig> /*unused*/,
+//     TestBaselineSchedulerFixture::MyMultiLayerStorage::ViewType& storage,
+//     ledger::LedgerConfig& ledgerConfig, protocol::BlockNumber blockNumber)
+// {
+//     return {};
+// }
 
 BOOST_FIXTURE_TEST_SUITE(TestBaselineScheduler, TestBaselineSchedulerFixture)
 

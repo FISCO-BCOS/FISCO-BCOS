@@ -3,6 +3,7 @@
 #include "ExecutiveWrapper.h"
 #include "bcos-executor/src/CallParameters.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
+#include "bcos-protocol/TransactionStatus.h"
 #include "bcos-transaction-executor/EVMCResult.h"
 #include <evmc/evmc.h>
 #include <boost/throw_exception.hpp>
@@ -52,15 +53,16 @@ inline std::optional<EVMCResult> checkAuth(auto& storage, protocol::BlockHeader 
     {
         auto buffer = std::unique_ptr<uint8_t>(new uint8_t[params->data.size()]);
         std::uninitialized_copy(params->data.begin(), params->data.end(), buffer.get());
-        return std::make_optional(
-            EVMCResult{evmc_result{.status_code = static_cast<evmc_status_code>(params->status),
+        return std::make_optional(EVMCResult{
+            evmc_result{.status_code = static_cast<evmc_status_code>(params->evmStatus),
                 .gas_left = params->gas,
                 .gas_refund = 0,
                 .output_data = buffer.release(),
                 .output_size = params->data.size(),
                 .release = [](const struct evmc_result* result) { delete[] result->output_data; },
                 .create_address = {},
-                .padding = {}}});
+                .padding = {}},
+            (protocol::TransactionStatus)params->status});
     }
     return {};
 }
