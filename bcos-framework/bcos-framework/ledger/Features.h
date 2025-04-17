@@ -47,6 +47,7 @@ public:
         bugfix_nonce_not_increase_when_revert,
         bugfix_set_contract_nonce_when_create,
         bugfix_precompiled_gascalc,
+        bugfix_method_auth_sender,
         feature_dmc2serial,
         feature_sharding,
         feature_rpbft,
@@ -263,7 +264,9 @@ public:
                             Flag::bugfix_set_contract_nonce_when_create,
                         }},
                 {.to = protocol::BlockVersion::V3_15_1_VERSION,
-                    .flags = {Flag::bugfix_precompiled_gascalc}}});
+                    .flags = {Flag::bugfix_precompiled_gascalc}},
+                {.to = protocol::BlockVersion::V3_15_2_VERSION,
+                    .flags = {Flag::bugfix_method_auth_sender}}});
         for (const auto& upgradeFeatures : upgradeRoadmap)
         {
             if (((toVersion < protocol::BlockVersion::V3_2_7_VERSION) &&
