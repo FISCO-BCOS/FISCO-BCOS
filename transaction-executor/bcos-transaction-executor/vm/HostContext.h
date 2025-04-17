@@ -132,7 +132,6 @@ private:
     evmc_revision m_revision;
     std::vector<protocol::LogEntry> m_logs;
     std::shared_ptr<Executable> m_executable;
-    bool m_processedDynamicPrecompiled = false;
     const bcos::executor_v1::Precompiled* m_preparedPrecompiled{};
     bcos::bytes m_dynamicPrecompiledInput;
     bool m_enableTransfer = false;
@@ -574,8 +573,7 @@ private:
 
     void processDynamicPrecompiled()
     {
-        if (!m_processedDynamicPrecompiled && m_executable &&
-            hasPrecompiledPrefix(m_executable->m_code->get()))
+        if (hasPrecompiledPrefix(m_executable->m_code->get()))
         {
             auto& message = mutableMessage();
             auto code = m_executable->m_code->get();
@@ -599,14 +597,10 @@ private:
 
             message.input_data = m_dynamicPrecompiledInput.data();
             message.input_size = m_dynamicPrecompiledInput.size();
-            if (c_fileLogLevel <= LogLevel::TRACE) [[unlikely]]
-            {
-                HOST_CONTEXT_LOG(TRACE)
-                    << LOG_DESC("callDynamicPrecompiled")
-                    << LOG_KV("codeAddr", address2HexString(message.code_address))
-                    << LOG_KV("recvAddr", address2HexString(message.recipient))
-                    << LOG_KV("code", code);
-            }
+
+            HOST_CONTEXT_LOG(TRACE)
+                << LOG_DESC("callDynamicPrecompiled") << LOG_KV("codeAddr", message.code_address)
+                << LOG_KV("recvAddr", message.recipient) << LOG_KV("code", code);
 
             if (m_preparedPrecompiled =
                     m_precompiledManager.get().getPrecompiled(message.recipient);
@@ -614,15 +608,12 @@ private:
             {
                 BOOST_THROW_EXCEPTION(NotFoundCodeError());
             }
-
-            m_processedDynamicPrecompiled = true;
         }
     }
 
     task::Task<void> prepareCall()
     {
         auto& ref = message();
-        // 不允许delegatecall static precompiled
         // delegatecall static precompiled is not allowed
         if (ref.kind != EVMC_DELEGATECALL)
         {
@@ -638,8 +629,10 @@ private:
             }
         }
 
-        m_executable = co_await getExecutableFromCache(ref.code_address);
-        processDynamicPrecompiled();
+        if (m_executable = co_await getExecutableFromCache(ref.code_address); m_executable)
+        {
+            processDynamicPrecompiled();
+        }
     }
 
     task::Task<EVMCResult> executeCall()
@@ -648,7 +641,6 @@ private:
         // 先扣除BALANCE_TRANSFER_GAS
         // First deduct the BALANCE_TRANSFER_GAS.
         consumeTransferGas(ref);
-
         if (m_preparedPrecompiled != nullptr)
         {
             co_return executor_v1::callPrecompiled(*m_preparedPrecompiled,
@@ -657,16 +649,17 @@ private:
                 m_ledgerConfig.get().authCheckStatus());
         }
 
-        // 因为流水线的原因，可能该合约还没创建
-        // Due to the pipeline process, it is possible that the contract has not
-        // yet been created
         if (!m_executable)
         {
             if (m_executable = co_await getExecutableFromStorage(m_rollbackableStorage.get(),
                     ref.code_address, m_revision,
                     m_ledgerConfig.get().features().get(
                         ledger::Features::Flag::feature_raw_address));
-                !m_executable)
+                m_executable)
+            {
+                processDynamicPrecompiled();
+            }
+            else
             {
                 if (ref.input_size > 0)
                 {
@@ -682,10 +675,6 @@ private:
                                          .create_address = {},
                                          .padding = {}},
                     protocol::TransactionStatus::None};
-            }
-            else
-            {
-                processDynamicPrecompiled();
             }
         }
 

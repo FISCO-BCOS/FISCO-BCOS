@@ -1,9 +1,7 @@
 #pragma once
-#include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-task/TBBWait.h"
 #include "bcos-task/Trait.h"
-#include "bcos-utilities/Error.h"
 #include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/ITTAPI.h"
 #include "bcos-utilities/RecursiveLambda.h"
