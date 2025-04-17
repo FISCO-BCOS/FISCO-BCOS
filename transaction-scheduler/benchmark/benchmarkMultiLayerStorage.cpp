@@ -21,7 +21,7 @@ struct Fixture
         // Write count data
         task::syncWait([this](int64_t count) -> task::Task<void> {
             auto view = fork(multiLayerStorage);
-            newMutable(view);
+            view.newMutable();
             allKeys = RANGES::views::iota(0, count) | RANGES::views::transform([](int num) {
                 auto key = fmt::format("key: {}", num);
                 return executor_v1::StateKey{"test_table"sv, std::string_view(key)};
@@ -41,16 +41,15 @@ struct Fixture
         for (auto i = 0; i < layer; ++i)
         {
             auto view = fork(multiLayerStorage);
-            newMutable(view);
+            view.newMutable();
             pushView(multiLayerStorage, std::move(view));
         }
     }
 
-    using MutableStorage = MemoryStorage<executor_v1::StateKey,
-        executor_v1::StateValue, Attribute(ORDERED | LOGICAL_DELETION)>;
-    using BackendStorage =
-        MemoryStorage<executor_v1::StateKey, executor_v1::StateValue,
-            Attribute(ORDERED | CONCURRENT), std::hash<executor_v1::StateKey>>;
+    using MutableStorage = MemoryStorage<executor_v1::StateKey, executor_v1::StateValue,
+        Attribute(ORDERED | LOGICAL_DELETION)>;
+    using BackendStorage = MemoryStorage<executor_v1::StateKey, executor_v1::StateValue,
+        Attribute(ORDERED | CONCURRENT), std::hash<executor_v1::StateKey>>;
 
     BackendStorage m_backendStorage;
     MultiLayerStorage<MutableStorage, void, BackendStorage> multiLayerStorage;
@@ -104,15 +103,14 @@ static void write1(benchmark::State& state)
     int i = 0;
     task::syncWait([&](benchmark::State& state) -> task::Task<void> {
         auto view = fork(fixture.multiLayerStorage);
-        newMutable(view);
+        view.newMutable();
         for (auto const& it : state)
         {
             storage::Entry entry;
             entry.set(fmt::format("value: {}", i));
             auto key = fmt::format("key: {}", i);
             co_await storage2::writeOne(view,
-                executor_v1::StateKey{"test_table"sv, std::string_view(key)},
-                std::move(entry));
+                executor_v1::StateKey{"test_table"sv, std::string_view(key)}, std::move(entry));
             ++i;
         }
 

@@ -230,24 +230,6 @@ private:
     std::mutex m_commitMutex;
     tbb::task_group m_asyncGroup;
 
-    std::shared_ptr<ledger::LedgerConfig> m_ledgerConfig;
-    std::mutex m_ledgerConfigMutex;
-
-    std::shared_ptr<ledger::LedgerConfig> getLedgerConfig()
-    {
-        std::unique_lock lock(m_ledgerConfigMutex);
-        return m_ledgerConfig;
-    }
-
-    void updateLedgerConfig(std::shared_ptr<ledger::LedgerConfig> newLedgerConfig)
-    {
-        std::unique_lock lock(m_ledgerConfigMutex);
-        if (!m_ledgerConfig || newLedgerConfig->blockNumber() > m_ledgerConfig->blockNumber())
-        {
-            m_ledgerConfig = std::move(newLedgerConfig);
-        }
-    }
-
     struct ExecuteResult
     {
         protocol::ConstTransactionsPtr m_transactions;
@@ -290,11 +272,9 @@ private:
                 // block at the same time
                 if (!m_results.empty())
                 {
-                    auto& front = m_results.front();
-                    auto& back = m_results.back();
                     auto number = blockHeader->number();
-                    auto frontNumber = front.m_executedBlockHeader->number();
-                    auto backNumber = back.m_executedBlockHeader->number();
+                    auto frontNumber = m_results.front().m_executedBlockHeader->number();
+                    auto backNumber = m_results.back().m_executedBlockHeader->number();
                     if (number <= frontNumber && number >= backNumber)
                     {
                         BASELINE_SCHEDULER_LOG(INFO)
@@ -330,10 +310,10 @@ private:
 
             auto now = current();
             auto view = fork(m_multiLayerStorage.get());
-            newMutable(view);
+            view.newMutable();
             auto transactions = co_await getTransactions(m_txpool.get(), *block);
 
-            auto ledgerConfig = getLedgerConfig();
+            auto ledgerConfig = co_await ledger::getLedgerConfig(view, blockHeader->number());
             auto receipts =
                 co_await scheduler_v1::executeBlock(m_schedulerImpl.get(), view, m_executor.get(),
                     *blockHeader, ::ranges::views::indirect(transactions), *ledgerConfig);
@@ -480,7 +460,6 @@ private:
 
             auto ledgerConfig = co_await ledger::getLedgerConfig(m_ledger.get());
             ledgerConfig->setHash(header->hash());
-            updateLedgerConfig(ledgerConfig);
 
             BASELINE_SCHEDULER_LOG(INFO) << "Commit block finished: " << header->number()
                                          << " | elapsed: " << (current() - now) << "ms";
@@ -555,8 +534,7 @@ public:
         m_ledger(ledger),
         m_txpool(txPool),
         m_transactionSubmitResultFactory(transactionSubmitResultFactory),
-        m_hashImpl(hashImpl),
-        m_ledgerConfig(task::syncWait(ledger::getLedgerConfig(m_ledger)))
+        m_hashImpl(hashImpl)
     {}
     BaselineScheduler(const BaselineScheduler&) = delete;
     BaselineScheduler(BaselineScheduler&&) noexcept = default;
@@ -596,10 +574,11 @@ public:
         task::wait([](decltype(this) self, protocol::Transaction::Ptr transaction,
                        decltype(callback) callback) -> task::Task<void> {
             auto view = fork(self->m_multiLayerStorage.get());
-            newMutable(view);
-            auto blockHeader = self->m_blockHeaderFactory.get().createBlockHeader();
-            auto ledgerConfig = self->getLedgerConfig();
+            view.newMutable();
+            auto blockNumber = co_await ledger::getCurrentBlockNumber(view, ledger::fromStorage);
+            auto ledgerConfig = co_await ledger::getLedgerConfig(view, blockNumber);
 
+            auto blockHeader = self->m_blockHeaderFactory.get().createBlockHeader();
             blockHeader->setVersion(ledgerConfig->compatibilityVersion());
             blockHeader->setNumber(ledgerConfig->blockNumber() + 1);  // Use next block number
             blockHeader->calculateHash(self->m_hashImpl.get());
@@ -622,7 +601,9 @@ public:
                        decltype(callback) callback) -> task::Task<void> {
             auto view = fork(self->m_multiLayerStorage.get());
             auto contractAddress = unhexAddress(contract);
-            auto ledgerConfig = self->getLedgerConfig();
+            auto blockNumber = co_await ledger::getCurrentBlockNumber(view, ledger::fromStorage);
+            auto ledgerConfig = co_await ledger::getLedgerConfig(view, blockNumber);
+
             ledger::account::EVMAccount account(view, contractAddress,
                 ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address));
             auto code = co_await ledger::account::code(account);
@@ -644,7 +625,9 @@ public:
                        decltype(callback) callback) -> task::Task<void> {
             auto view = fork(self->m_multiLayerStorage.get());
             auto contractAddress = unhexAddress(contract);
-            auto ledgerConfig = self->getLedgerConfig();
+            auto blockNumber = co_await ledger::getCurrentBlockNumber(view, ledger::fromStorage);
+            auto ledgerConfig = co_await ledger::getLedgerConfig(view, blockNumber);
+
             ledger::account::EVMAccount account(view, contractAddress,
                 ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address));
             auto abi = co_await ledger::account::abi(account);
@@ -680,13 +663,7 @@ public:
         m_blockNumberNotifier = std::move(blockNumberNotifier);
     }
 
-    void setVersion(int version, ledger::LedgerConfig::Ptr ledgerConfig) override
-    {
-        if (ledgerConfig)
-        {
-            updateLedgerConfig(std::move(ledgerConfig));
-        }
-    }
+    void setVersion(int version, ledger::LedgerConfig::Ptr ledgerConfig) override {}
 };
 
 }  // namespace bcos::scheduler_v1

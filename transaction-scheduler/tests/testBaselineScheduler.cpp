@@ -2,6 +2,7 @@
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
+#include "bcos-ledger/LedgerMethods.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
@@ -138,6 +139,7 @@ public:
     using BackendStorage = memory_storage::MemoryStorage<StateKey, StateValue,
         memory_storage::Attribute(memory_storage::ORDERED | memory_storage::CONCURRENT),
         std::hash<StateKey>>;
+    using MyMultiLayerStorage = MultiLayerStorage<MutableStorage, void, BackendStorage>;
 
     TestBaselineSchedulerFixture()
       : cryptoSuite(std::make_shared<bcos::crypto::CryptoSuite>(
@@ -170,7 +172,7 @@ public:
     MockScheduler mockScheduler;
     MockLedger mockLedger;
     MockTxPool mockTxPool;
-    MultiLayerStorage<MutableStorage, void, BackendStorage> multiLayerStorage;
+    MyMultiLayerStorage multiLayerStorage;
     MockExecutorBaseline mockExecutor;
     BaselineScheduler<decltype(multiLayerStorage), MockExecutorBaseline, MockScheduler, MockLedger>
         baselineScheduler;

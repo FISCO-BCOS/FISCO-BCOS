@@ -88,7 +88,7 @@ BOOST_AUTO_TEST_CASE(executeBlock)
 
         MockExecutorSerial executor;
         auto view = fork(multiLayerStorage);
-        newMutable(view);
+        view.newMutable();
         ledger::LedgerConfig ledgerConfig;
         auto receipts =
             co_await bcos::scheduler_v1::executeBlock(scheduler, view, executor, blockHeader,

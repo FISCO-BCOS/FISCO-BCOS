@@ -102,17 +102,18 @@ public:
         return *storage.m_mutableStorage;
     }
 
-    friend auto tag_invoke(
-        storage2::tag_t<storage2::readSome> /*unused*/, View& view, ::ranges::input_range auto keys)
+    template <::ranges::input_range Keys>
+    friend auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, View& view, Keys keys)
         -> task::Task<task::AwaitableReturnType<
             std::invoke_result_t<storage2::ReadSome, MutableStorage&, decltype(keys)>>>
-        requires ::ranges::sized_range<decltype(keys)> &&
+        requires ::ranges::sized_range<Keys> &&
                  ::ranges::sized_range<task::AwaitableReturnType<
-                     std::invoke_result_t<storage2::ReadSome, MutableStorage&, decltype(keys)>>>
+                     std::invoke_result_t<storage2::ReadSome, MutableStorage&, Keys>>>
     {
+        auto keySize = static_cast<size_t>(keys.size());
         task::AwaitableReturnType<
             std::invoke_result_t<storage2::ReadSome, MutableStorage&, decltype(keys)>>
-            values(::ranges::size(keys));
+            values(keySize);
         if (view.m_mutableStorage &&
             co_await fillMissingValues<typename View::Key, typename View::Value>(
                 *view.m_mutableStorage, keys, values))
@@ -121,7 +122,7 @@ public:
         }
         else
         {
-            values.resize(::ranges::size(keys));
+            values.resize(keySize);
         }
 
         for (auto& immutableStorage : view.m_immutableStorages)
@@ -358,15 +359,14 @@ public:
         };
     };
 
-    friend void newMutable(View& view, auto&&... args)
+    void newMutable(auto&&... args)
     {
-        if (view.m_mutableStorage)
+        if (m_mutableStorage)
         {
             BOOST_THROW_EXCEPTION(DuplicateMutableStorageError{});
         }
 
-        view.m_mutableStorage =
-            std::make_shared<MutableStorage>(std::forward<decltype(args)>(args)...);
+        m_mutableStorage = std::make_shared<MutableStorage>(std::forward<decltype(args)>(args)...);
     }
 
     friend BackendStorage& backendStorage(View& view) { return view.m_backendStorage; }

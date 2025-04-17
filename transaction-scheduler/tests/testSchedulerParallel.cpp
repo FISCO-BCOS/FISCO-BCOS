@@ -91,7 +91,7 @@ BOOST_AUTO_TEST_CASE(simple)
             ::ranges::to<std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>>>();
 
         auto view = fork(multiLayerStorage);
-        newMutable(view);
+        view.newMutable();
         ledger::LedgerConfig ledgerConfig;
         auto receipts =
             co_await bcos::scheduler_v1::executeBlock(scheduler, view, executor, blockHeader,
@@ -173,7 +173,7 @@ BOOST_AUTO_TEST_CASE(conflict)
         SchedulerParallelImpl<MutableStorage> scheduler;
 
         auto view1 = fork(multiLayerStorage);
-        newMutable(view1);
+        view1.newMutable();
         auto& front = mutableStorage(view1);
         pushView(multiLayerStorage, std::move(view1));
 
@@ -202,7 +202,7 @@ BOOST_AUTO_TEST_CASE(conflict)
         auto transactionRefs =
             transactions | ::ranges::views::transform([](auto& ptr) -> auto& { return *ptr; });
         auto view = fork(multiLayerStorage);
-        newMutable(view);
+        view.newMutable();
         ledger::LedgerConfig ledgerConfig;
         auto receipts = co_await bcos::scheduler_v1::executeBlock(
             scheduler, view, executor, blockHeader, transactionRefs, ledgerConfig);
