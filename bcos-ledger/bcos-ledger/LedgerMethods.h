@@ -132,7 +132,7 @@ task::Task<void> tag_invoke(ledger::tag_t<getLedgerConfig> /*unused*/, auto& sto
 
     ledgerConfig.setBlockNumber(blockNumber);
     auto blockHash = co_await getBlockHash(storage, blockNumber, fromStorage);
-    ledgerConfig.setHash(blockHash.value());
+    ledgerConfig.setHash(blockHash.value_or(crypto::HashType{}));
 
     Features features;
     co_await readFromStorage(features, storage, blockNumber);

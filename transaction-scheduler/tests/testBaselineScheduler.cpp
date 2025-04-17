@@ -178,13 +178,6 @@ public:
         baselineScheduler;
 };
 
-// task::AwaitableValue<void> tag_invoke(ledger::tag_t<bcos::ledger::getLedgerConfig> /*unused*/,
-//     TestBaselineSchedulerFixture::MyMultiLayerStorage::ViewType& storage,
-//     ledger::LedgerConfig& ledgerConfig, protocol::BlockNumber blockNumber)
-// {
-//     return {};
-// }
-
 BOOST_FIXTURE_TEST_SUITE(TestBaselineScheduler, TestBaselineSchedulerFixture)
 
 BOOST_AUTO_TEST_CASE(scheduleBlock)
