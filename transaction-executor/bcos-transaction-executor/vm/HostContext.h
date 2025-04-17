@@ -97,11 +97,14 @@ using CacheExecutables =
         std::hash<evmc_address>>;
 CacheExecutables& getCacheExecutables();
 
-task::Task<std::shared_ptr<Executable>> getExecutableFromCache(const evmc_address& address);
-
-task::Task<std::shared_ptr<Executable>> getExecutableFromStorage(
+task::Task<std::shared_ptr<Executable>> getExecutable(
     auto& storage, const evmc_address& address, const evmc_revision& revision, bool binaryAddress)
 {
+    if (auto executable = co_await storage2::readOne(getCacheExecutables(), address))
+    {
+        co_return std::move(*executable);
+    }
+
     if (Account<std::decay_t<decltype(storage)>> account(storage, address, binaryAddress);
         auto codeEntry = co_await ledger::account::code(account))
     {
@@ -287,8 +290,8 @@ public:
     task::Task<std::optional<storage::Entry>> code(
         const evmc_address& address, auto&&... /*unused*/)
     {
-        if (auto executable = co_await getExecutableFromStorage(m_rollbackableStorage.get(),
-                address, m_revision,
+        if (auto executable = co_await getExecutable(m_rollbackableStorage.get(), address,
+                m_revision,
                 m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
             executable && executable->m_code)
         {
@@ -628,11 +631,6 @@ private:
                 }
             }
         }
-
-        if (m_executable = co_await getExecutableFromCache(ref.code_address); m_executable)
-        {
-            processDynamicPrecompiled();
-        }
     }
 
     task::Task<EVMCResult> executeCall()
@@ -641,6 +639,7 @@ private:
         // 先扣除BALANCE_TRANSFER_GAS
         // First deduct the BALANCE_TRANSFER_GAS.
         consumeTransferGas(ref);
+
         if (m_preparedPrecompiled != nullptr)
         {
             co_return executor_v1::callPrecompiled(*m_preparedPrecompiled,
@@ -649,33 +648,34 @@ private:
                 m_ledgerConfig.get().authCheckStatus());
         }
 
-        if (!m_executable)
+        if (m_executable = co_await getExecutable(m_rollbackableStorage.get(), ref.code_address,
+                m_revision,
+                m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
+            !m_executable)
         {
-            if (m_executable = co_await getExecutableFromStorage(m_rollbackableStorage.get(),
-                    ref.code_address, m_revision,
-                    m_ledgerConfig.get().features().get(
-                        ledger::Features::Flag::feature_raw_address));
-                m_executable)
+            if (ref.input_size > 0)
             {
-                processDynamicPrecompiled();
+                BOOST_THROW_EXCEPTION(NotFoundCodeError());
             }
-            else
-            {
-                if (ref.input_size > 0)
-                {
-                    BOOST_THROW_EXCEPTION(NotFoundCodeError());
-                }
 
-                co_return EVMCResult{evmc_result{.status_code = EVMC_SUCCESS,
-                                         .gas_left = ref.gas,
-                                         .gas_refund = 0,
-                                         .output_data = nullptr,
-                                         .output_size = 0,
-                                         .release = nullptr,
-                                         .create_address = {},
-                                         .padding = {}},
-                    protocol::TransactionStatus::None};
-            }
+            co_return EVMCResult{evmc_result{.status_code = EVMC_SUCCESS,
+                                     .gas_left = ref.gas,
+                                     .gas_refund = 0,
+                                     .output_data = nullptr,
+                                     .output_size = 0,
+                                     .release = nullptr,
+                                     .create_address = {},
+                                     .padding = {}},
+                protocol::TransactionStatus::None};
+        }
+        processDynamicPrecompiled();
+
+        if (m_preparedPrecompiled != nullptr)
+        {
+            co_return executor_v1::callPrecompiled(*m_preparedPrecompiled,
+                m_rollbackableStorage.get(), m_blockHeader, ref, m_origin,
+                buildLegacyExternalCaller(), m_precompiledManager.get(), m_contextID, m_seq,
+                m_ledgerConfig.get().authCheckStatus());
         }
 
         co_return m_executable->m_vmInstance.execute(interface, this, m_revision,
