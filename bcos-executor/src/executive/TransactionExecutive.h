@@ -200,6 +200,7 @@ protected:
 
     void revert();
 
+
     CallParameters::UniquePtr parseEVMCResult(
         CallParameters::UniquePtr callResults, const Result& _result);
 
