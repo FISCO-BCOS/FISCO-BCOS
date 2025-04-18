@@ -154,10 +154,12 @@ task::Task<std::tuple<u256, h256>> calculateReceiptRoot(
             auto hashesRange = receipts | ::ranges::views::transform(
                                               [](const auto& receipt) { return receipt->hash(); });
 
-            std::vector<bcos::h256> merkleTrie;
-            merkle.generateMerkle(hashesRange, merkleTrie);
-
-            receiptRoot = *::ranges::rbegin(merkleTrie);
+            if (!::ranges::empty(hashesRange))
+            {
+                std::vector<bcos::h256> merkleTrie;
+                merkle.generateMerkle(hashesRange, merkleTrie);
+                receiptRoot = *::ranges::rbegin(merkleTrie);
+            }
         });
 
     co_return {gasUsed, receiptRoot};

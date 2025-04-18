@@ -1,5 +1,5 @@
 ---
-Checks:          'readability-*,clang-diagnostic-*,clang-analyzer-*,bugprone-*,cppcoreguidelines-*,modernize-*,performance-*,-modernize-use-trailing-return-type,-modernize-use-nodiscard,-cppcoreguidelines-avoid-reference-coroutine-parameters'
+Checks:          'readability-*,clang-diagnostic-*,clang-analyzer-*,bugprone-*,cppcoreguidelines-*,modernize-*,performance-*,-modernize-use-trailing-return-type,-modernize-use-nodiscard,-cppcoreguidelines-avoid-reference-coroutine-parameters,-bugprone-throw-keyword-missing'
 WarningsAsErrors: ''
 HeaderFilterRegex: ''
 FormatStyle:     none
