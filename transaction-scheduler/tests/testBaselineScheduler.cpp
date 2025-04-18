@@ -1,3 +1,4 @@
+#include "bcos-crypto/interfaces/crypto/CommonType.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
@@ -200,7 +201,6 @@ BOOST_AUTO_TEST_CASE(scheduleBlock)
             BOOST_CHECK(!error);
             BOOST_CHECK(blockHeader);
             BOOST_CHECK(!sysBlock);
-
             end.set_value();
         });
 
@@ -335,6 +335,27 @@ BOOST_AUTO_TEST_CASE(resultCache)
             [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr gotBlockHeader,
                 bool sysBlock) { BOOST_CHECK(!error); });
     }
+}
+
+BOOST_AUTO_TEST_CASE(emptyBlock)
+{
+    auto block = std::make_shared<bcostars::protocol::BlockImpl>();
+    auto blockHeader = block->blockHeader();
+    blockHeader->setNumber(111);
+    blockHeader->setVersion(200);
+    blockHeader->calculateHash(*hashImpl);
+
+    baselineScheduler.executeBlock(block, false,
+        [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr gotBlockHeader,
+            bool sysBlock) {
+            BOOST_CHECK(!error);
+            BOOST_CHECK(gotBlockHeader);
+            BOOST_CHECK(!sysBlock);
+
+            BOOST_CHECK_EQUAL(blockHeader->txsRoot(), bcos::crypto::HashType{});
+            BOOST_CHECK_EQUAL(blockHeader->receiptsRoot(), bcos::crypto::HashType{});
+            BOOST_CHECK_EQUAL(blockHeader->stateRoot(), bcos::crypto::HashType{});
+        });
 }
 
 BOOST_AUTO_TEST_SUITE_END()
