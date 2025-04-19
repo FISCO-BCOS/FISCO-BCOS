@@ -13,6 +13,7 @@
 #include <boost/multi_index/sequenced_index.hpp>
 #include <boost/multi_index_container.hpp>
 #include <boost/throw_exception.hpp>
+#include <optional>
 #include <range/v3/view/chunk_by.hpp>
 #include <range/v3/view/transform.hpp>
 #include <range/v3/view/zip.hpp>
@@ -27,10 +28,7 @@ struct NullLock
     NullLock(auto&&... /*unused*/) {}
     constexpr bool try_acquire(auto&&... /*unused*/) { return true; }
     constexpr void release() {}
-    constexpr bool upgrade_to_writer() { return true; }
-};
-struct NOT_EXISTS_TYPE
-{
+    static constexpr bool upgrade_to_writer() { return true; }
 };
 
 template <class Object>
@@ -39,6 +37,12 @@ concept HasMemberSize = requires(Object object) {
 };
 
 using Empty = std::monostate;
+struct NOT_EXISTS_TYPE
+{
+};
+constexpr inline struct DELETED_TYPE
+{
+} deleteItem;
 
 enum Attribute : uint8_t
 {
@@ -49,29 +53,12 @@ enum Attribute : uint8_t
     LOGICAL_DELETION = 1 << 3
 };
 
-inline int64_t getSize(auto const& object)
-{
-    using ObjectType = std::remove_cvref_t<decltype(object)>;
-    if constexpr (HasMemberSize<ObjectType>)
-    {
-        return object.size();
-    }
-    // Treat any no-size() object as trivial, TODO: fix it
-    return sizeof(ObjectType);
-}
-
-constexpr inline struct DeleteItem
-{
-} deleteItem{};
-
 template <class KeyType, class ValueType = Empty, int attribute = Attribute::UNORDERED,
     class HasherType = std::hash<KeyType>, class Equal = std::equal_to<>,
     class BucketHasherType = HasherType>
 class MemoryStorage
 {
 public:
-    constexpr static bool isMemoryStorage = true;
-
     constexpr static bool withOrdered = (attribute & Attribute::ORDERED) != 0;
     constexpr static bool withConcurrent = (attribute & Attribute::CONCURRENT) != 0;
     constexpr static bool withLRU = (attribute & Attribute::LRU) != 0;
@@ -109,12 +96,27 @@ public:
     constexpr static unsigned DEFAULT_CAPACITY = 32 * 1024 * 1024;  // For mru
     using Mutex = std::conditional_t<withConcurrent, tbb::rw_mutex, Empty>;
     using Lock = std::conditional_t<withConcurrent, tbb::rw_mutex::scoped_lock, NullLock>;
-    using DataValue = std::conditional_t<withLogicalDeletion, std::optional<ValueType>, ValueType>;
+    using DataValue = std::variant<NOT_EXISTS_TYPE, DELETED_TYPE, Value>;
+
+    static int64_t getSize(const DataValue& object)
+    {
+        return std::visit([](const auto& value) { return getSize(value); }, object);
+    }
+    static int64_t getSize(auto const& object)
+    {
+        using ObjectType = std::remove_cvref_t<decltype(object)>;
+        if constexpr (HasMemberSize<ObjectType>)
+        {
+            return object.size();
+        }
+        // Treat any no-size() object as trivial, TODO: fix it
+        return sizeof(ObjectType);
+    }
 
     struct Data
     {
         KeyType key;
-        [[no_unique_address]] DataValue value;
+        DataValue value;
     };
 
     using IndexType = std::conditional_t<withOrdered,
@@ -137,13 +139,13 @@ public:
     Buckets m_buckets;
     [[no_unique_address]] std::conditional_t<withLRU, int64_t, Empty> m_maxCapacity;
 
-    friend void setMaxCapacity(MemoryStorage& storage, int64_t capacity)
+    void setMaxCapacity(int64_t capacity)
         requires withLRU
     {
-        storage.m_maxCapacity = capacity;
+        m_maxCapacity = capacity;
     }
 
-    friend size_t getBucketIndex(MemoryStorage const& storage, auto const& key)
+    size_t getBucketIndex(auto const& key)
     {
         if constexpr (!withConcurrent)
         {
@@ -152,20 +154,20 @@ public:
         else
         {
             auto hash = typename MemoryStorage::BucketHasher{}(key);
-            return hash % storage.m_buckets.size();
+            return hash % m_buckets.size();
         }
     }
 
-    friend Bucket& getBucket(MemoryStorage& storage, auto const& key) noexcept
+    Bucket& getBucket(auto const& key) noexcept
     {
         if constexpr (!withConcurrent)
         {
-            return storage.m_buckets[0];
+            return m_buckets[0];
         }
         else
         {
-            auto index = getBucketIndex(storage, key);
-            return storage.m_buckets[index];
+            auto index = getBucketIndex(key);
+            return m_buckets[index];
         }
     }
 
@@ -191,8 +193,9 @@ public:
         auto results = storage.readSome(std::move(keys));
         return {::ranges::views::transform(results, [](auto& result) {
             return std::visit(
-                bcos::overloaded{[](std::optional<Value>& value) { return std::move(value); },
-                    [](NOT_EXISTS_TYPE) { return std::optional<Value>{}; }},
+                bcos::overloaded{[](DELETED_TYPE) { return std::optional<Value>{}; },
+                    [](NOT_EXISTS_TYPE) { return std::optional<Value>{}; },
+                    [](Value& value) { return std::make_optional(std::move(value)); }},
                 result);
         }) | ::ranges::to<std::vector>()};
     }
@@ -202,23 +205,20 @@ public:
         auto&&... args)
     {
         auto result = storage.readOne(key, std::forward<decltype(args)>(args)...);
-        return {std::visit(
-            bcos::overloaded{[](std::optional<Value>& value) { return std::move(value); },
-                [](NOT_EXISTS_TYPE) { return std::optional<Value>{}; }},
+        return {std::visit(bcos::overloaded{[](DELETED_TYPE) { return std::optional<Value>{}; },
+                               [](NOT_EXISTS_TYPE) { return std::optional<Value>{}; },
+                               [](Value& value) { return std::make_optional(std::move(value)); }},
             result)};
     }
 
-    auto readOne(const auto& key, auto&&... /*unused*/)
+    DataValue readOne(const auto& key, auto&&... /*unused*/)
     {
-        std::variant<std::optional<Value>, NOT_EXISTS_TYPE> result;
-        auto& bucket = getBucket(*this, key);
+        auto& bucket = this->getBucket(key);
         Lock lock(bucket.mutex, false);
 
         auto const& index = bucket.container.template get<0>();
         if (auto it = index.find(key); it != index.end())
         {
-            result.template emplace<std::optional<Value>>(it->value);
-
             if constexpr (withLRU)
             {
                 if (lock.upgrade_to_writer())
@@ -226,110 +226,65 @@ public:
                     updateLRUAndCheck(bucket, it);
                 }
             }
+            return it->value;
         }
-        else
-        {
-            result.template emplace<NOT_EXISTS_TYPE>();
-        }
-        return result;
+        return {};
     }
 
     auto readSome(::ranges::input_range auto keys)
     {
-        std::vector<std::variant<std::optional<Value>, NOT_EXISTS_TYPE>> results;
-        if constexpr (::ranges::sized_range<decltype(keys)>)
-        {
-            results.reserve(::ranges::size(keys));
-        }
-
-        for (auto&& key : keys)
-        {
-            results.emplace_back(readOne(key));
-        }
-        return results;
+        return ::ranges::views::transform(keys, [&](auto&& key) {
+            return readOne(std::forward<decltype(key)>(key));
+        }) | ::ranges::to<std::vector>();
     }
 
     void writeOne(Bucket& bucket, auto key, auto value, bool direct)
     {
         auto const& index = bucket.container.template get<0>();
-        std::conditional_t<withLRU, int64_t, Empty> updatedCapacity{};
-        constexpr static auto deleteOP = std::is_same_v<std::decay_t<decltype(value)>, DeleteItem>;
-        if constexpr (withLRU)
-        {
-            updatedCapacity = getSize(key) + getSize(value);
-        }
+        int64_t updatedCapacity = 0;
+        constexpr static auto deleteOP =
+            std::is_same_v<std::decay_t<decltype(value)>, DELETED_TYPE>;
 
         auto it = index.find(key);
         if (it != index.end())
         {
-            auto& existsValue = it->value;
-            if constexpr (deleteOP)
+            if (!deleteOP || (withLogicalDeletion && !direct))
             {
-                if constexpr (withLRU)
-                {
-                    updatedCapacity = -updatedCapacity;
-                }
-                if constexpr (withLogicalDeletion)
-                {
-                    if (existsValue)
+                bucket.container.modify(it, [&](Data& data) mutable {
+                    if constexpr (withLRU)
                     {
-                        if (!direct)
-                        {
-                            bucket.container.modify(
-                                it, [](Data& data) mutable { data.value.reset(); });
-                        }
-                        else
-                        {
-                            bucket.container.erase(it);
-                        }
+                        updatedCapacity = getSize(data.value);
                     }
-                }
-                else
-                {
-                    bucket.container.erase(it);
-                }
+                    data.value.template emplace<decltype(value)>(std::move(value));
+                    if constexpr (withLRU)
+                    {
+                        updatedCapacity = getSize(data.value) - updatedCapacity;
+                    }
+                });
             }
             else
             {
                 if constexpr (withLRU)
                 {
-                    updatedCapacity -= (getSize(key) + getSize(existsValue));
+                    updatedCapacity = -(getSize(it->key) + getSize(it->value));
                 }
-                bucket.container.modify(
-                    it, [&](Data& data) mutable { data.value = std::move(value); });
+                it = bucket.container.erase(it);
             }
         }
         else
         {
-            if constexpr (deleteOP)
-            {
-                if constexpr (withLRU)
-                {
-                    updatedCapacity = 0;
-                }
-                if constexpr (withLogicalDeletion)
-                {
-                    if constexpr (std::is_same_v<std::decay_t<decltype(key)>, Key>)
-                    {
-                        it = bucket.container.emplace_hint(
-                            it, Data{.key = std::move(key), .value = {}});
-                    }
-                    else
-                    {
-                        it = bucket.container.emplace_hint(
-                            it, Data{.key = Key{std::move(key)}, .value = {}});
-                    }
-                }
-            }
-            else
+            if (!deleteOP || (withLogicalDeletion && !direct))
             {
                 it = bucket.container.emplace_hint(
-                    it, typename MemoryStorage::Data{
-                            .key = Key(std::move(key)), .value = std::move(value)});
+                    it, Data{.key = Key{std::move(key)}, .value = {std::move(value)}});
+                if constexpr (withLRU)
+                {
+                    updatedCapacity = getSize(it->key) + getSize(it->value);
+                }
             }
         }
 
-        if constexpr (!deleteOP && withLRU)
+        if constexpr (withLRU && !deleteOP)
         {
             bucket.capacity += updatedCapacity;
             updateLRUAndCheck(bucket, it);
@@ -339,7 +294,7 @@ public:
     friend task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::writeOne> /*unused*/,
         MemoryStorage& storage, auto key, auto value)
     {
-        auto& bucket = getBucket(storage, key);
+        auto& bucket = storage.getBucket(key);
         Lock lock(bucket.mutex, true);
         storage.writeOne(bucket, std::move(key), std::move(value), false);
         return {};
@@ -350,7 +305,7 @@ public:
     {
         for (auto&& [key, value] : keyValues)
         {
-            auto& bucket = getBucket(storage, key);
+            auto& bucket = storage.getBucket(key);
             Lock lock(bucket.mutex, true);
             storage.writeOne(bucket, std::forward<decltype(key)>(key),
                 std::forward<decltype(value)>(value), false);
@@ -363,7 +318,7 @@ public:
     {
         for (auto&& key : keys)
         {
-            auto& bucket = getBucket(*this, key);
+            auto& bucket = getBucket(key);
             Lock lock(bucket.mutex, true);
             writeOne(bucket, std::forward<decltype(key)>(key), deleteItem, direct);
         }
@@ -447,11 +402,12 @@ public:
                 if constexpr (withLogicalDeletion)
                 {
                     result.emplace(std::make_tuple(
-                        std::cref(data.key), data.value ? std::addressof(*(data.value)) : nullptr));
+                        std::cref(data.key), std::get_if<Value>(std::addressof(data.value))));
                 }
                 else
                 {
-                    result.emplace(std::make_tuple(std::cref(data.key), std::cref(data.value)));
+                    result.emplace(std::make_tuple(
+                        std::cref(data.key), std::cref(std::get<Value>(data.value))));
                 }
                 ++m_begin;
                 return task::AwaitableValue(std::move(result));
@@ -494,7 +450,7 @@ public:
     }
 
     template <class FromStorage>
-        requires withConcurrent
+        requires withConcurrent && (!FromStorage::withConcurrent)
     friend task::Task<void> tag_invoke(
         storage2::tag_t<merge> /*unused*/, MemoryStorage& toStorage, FromStorage& fromStorage)
     {
@@ -503,7 +459,7 @@ public:
         auto sortedList = ::ranges::views::transform(index,
                               [&](typename std::decay_t<FromStorage>::Data const& data) {
                                   return std::make_tuple(
-                                      std::addressof(data), getBucketIndex(toStorage, data.key));
+                                      std::addressof(data), toStorage.getBucketIndex(data.key));
                               }) |
                           ::ranges::to<std::vector>();
         std::sort(sortedList.begin(), sortedList.end(), [](auto const& left, auto const& right) {
@@ -524,21 +480,11 @@ public:
                 for (auto& [data, _] : chunk)
                 {
                     auto&& [key, value] = *data;
-                    if constexpr (std::decay_t<FromStorage>::withLogicalDeletion)
-                    {
-                        if (value)
-                        {
-                            toStorage.writeOne(bucket, key, *value, true);
-                        }
-                        else
-                        {
-                            toStorage.writeOne(bucket, key, deleteItem, true);
-                        }
-                    }
-                    else
-                    {
-                        toStorage.writeOne(bucket, *key, *value, false);
-                    }
+                    std::visit(
+                        [&](auto& innerValue) {
+                            toStorage.writeOne(bucket, key, std::move(innerValue), false);
+                        },
+                        value);
                 }
             }
         });

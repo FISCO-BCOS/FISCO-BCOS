@@ -143,7 +143,7 @@ BOOST_AUTO_TEST_CASE(lru)
 {
     task::syncWait([]() -> task::Task<void> {
         MemoryStorage<int, storage::Entry, Attribute(ORDERED | LRU)> storage(1);
-        setMaxCapacity(storage, 1040);
+        storage.setMaxCapacity(1040);
 
         // write 10 100byte value
         storage::Entry entry;
@@ -483,15 +483,19 @@ BOOST_AUTO_TEST_CASE(dirtctReadOne)
 
         auto value = co_await storage2::readOne(storage, 6);
         BOOST_CHECK(!value);
-
         auto value2 = storage.readOne(6);
-        BOOST_CHECK(std::holds_alternative<std::optional<int>>(value2));
+        BOOST_CHECK(std::holds_alternative<DELETED_TYPE>(value2));
 
         auto value3 = storage.readOne(11);
         BOOST_CHECK(
             std::holds_alternative<bcos::storage2::memory_storage::NOT_EXISTS_TYPE>(value3));
         auto value4 = co_await storage2::readOne(storage, 11);
         BOOST_CHECK(!value4);
+
+        auto value5 = co_await storage2::readOne(storage, 3);
+        BOOST_CHECK(value5);
+        auto value6 = storage.readOne(3);
+        BOOST_CHECK(std::holds_alternative<int>(value6));
 
         MemoryStorage<int, int, bcos::storage2::memory_storage::ORDERED> storage_2;
         co_await storage2::writeSome(storage_2,

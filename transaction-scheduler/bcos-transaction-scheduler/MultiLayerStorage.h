@@ -1,9 +1,11 @@
 #pragma once
+#include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-task/TBBWait.h"
 #include "bcos-task/Trait.h"
 #include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/ITTAPI.h"
+#include "bcos-utilities/Overloaded.h"
 #include "bcos-utilities/RecursiveLambda.h"
 #include <oneapi/tbb/parallel_invoke.h>
 #include <boost/throw_exception.hpp>
@@ -22,7 +24,26 @@ DERIVE_BCOS_EXCEPTION(DuplicateMutableViewError);
 DERIVE_BCOS_EXCEPTION(NonExistsKeyIteratorError);
 DERIVE_BCOS_EXCEPTION(NotExistsMutableStorageError);
 DERIVE_BCOS_EXCEPTION(NotExistsImmutableStorageError);
+DERIVE_BCOS_EXCEPTION(UnexceptNotExistsValue);
 DERIVE_BCOS_EXCEPTION(UnsupportedMethod);
+
+template <class Value>
+std::optional<Value> getValue(auto& input)
+{
+    return std::visit(
+        bcos::overloaded{[](storage2::memory_storage::NOT_EXISTS_TYPE) {
+                             BOOST_THROW_EXCEPTION(UnexceptNotExistsValue{});
+                             return std::optional<Value>{};
+                         },
+            [](storage2::memory_storage::DELETED_TYPE) { return std::optional<Value>{}; },
+            [](Value& value) { return std::make_optional(std::move(value)); }},
+        input);
+}
+
+template <class Storage, class Keys>
+concept hasMemberReadSome = requires(Storage& storage, Keys keys) {
+    { storage.readSome(keys) } -> ::ranges::range;
+};
 
 template <class KeyType, class ValueType>
 task::Task<bool> fillMissingValues(
@@ -41,20 +62,41 @@ task::Task<bool> fillMissingValues(
             missingKeyValues.emplace_back(std::forward<decltype(key)>(key), std::ref(value));
         }
     }
-    auto gotValues = co_await storage2::readSome(storage, ::ranges::views::keys(missingKeyValues));
 
     size_t count = 0;
-    for (auto&& [from, to] :
-        ::ranges::views::zip(gotValues, ::ranges::views::values(missingKeyValues)))
+    size_t gotSize = 0;
+    if constexpr (hasMemberReadSome<std::decay_t<decltype(storage)>,
+                      decltype(::ranges::views::keys(missingKeyValues))>)
     {
-        if (from)
+        auto gotValues = storage.readSome(::ranges::views::keys(missingKeyValues));
+        gotSize = ::ranges::size(gotValues);
+        for (auto&& [from, to] :
+            ::ranges::views::zip(gotValues, ::ranges::views::values(missingKeyValues)))
         {
-            to.get() = std::move(from);
-            ++count;
+            if (!std::holds_alternative<storage2::memory_storage::NOT_EXISTS_TYPE>(from))
+            {
+                to.get() = std::move(getValue<ValueType>(from));
+                ++count;
+            }
+        }
+    }
+    else
+    {
+        auto gotValues =
+            co_await storage2::readSome(storage, ::ranges::views::keys(missingKeyValues));
+        gotSize = ::ranges::size(gotValues);
+        for (auto&& [from, to] :
+            ::ranges::views::zip(gotValues, ::ranges::views::values(missingKeyValues)))
+        {
+            if (!from)
+            {
+                to.get() = std::move(from);
+                ++count;
+            }
         }
     }
 
-    co_return count == ::ranges::size(gotValues);
+    co_return count == gotSize;
 }
 
 template <class MutableStorageType, class CachedStorage, class BackendStorageType>
@@ -178,18 +220,18 @@ public:
         if (view.m_mutableStorage)
         {
             auto value = view.m_mutableStorage->readOne(key);
-            if (auto* ptr = std::get_if<std::optional<typename View::Value>>(std::addressof(value)))
+            if (!std::holds_alternative<storage2::memory_storage::NOT_EXISTS_TYPE>(value))
             {
-                co_return *ptr;
+                co_return getValue<Value>(value);
             }
         }
 
         for (auto& immutableStorage : view.m_immutableStorages)
         {
             auto value = immutableStorage->readOne(key);
-            if (auto* ptr = std::get_if<std::optional<typename View::Value>>(std::addressof(value)))
+            if (!std::holds_alternative<storage2::memory_storage::NOT_EXISTS_TYPE>(value))
             {
-                co_return *ptr;
+                co_return getValue<Value>(value);
             }
         }
 
