@@ -235,7 +235,7 @@ public:
             }
         }
 
-        if constexpr (View::withCacheStorage)
+        if constexpr (withCacheStorage)
         {
             if (auto value = co_await storage2::readOne(view.m_cacheStorage.get(), key))
             {

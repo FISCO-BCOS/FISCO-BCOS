@@ -238,7 +238,7 @@ public:
         }) | ::ranges::to<std::vector>();
     }
 
-    void writeOne(Bucket& bucket, auto key, auto value, bool direct)
+    void writeOne(Bucket& bucket, auto key, auto value, bool ignoreLogicalDeletion)
     {
         auto const& index = bucket.container.template get<0>();
         int64_t updatedCapacity = 0;
@@ -248,7 +248,7 @@ public:
         auto it = index.find(key);
         if (it != index.end())
         {
-            if (!deleteOP || (withLogicalDeletion && !direct))
+            if (!deleteOP || (withLogicalDeletion && !ignoreLogicalDeletion))
             {
                 bucket.container.modify(it, [&](Data& data) mutable {
                     if constexpr (withLRU)
@@ -273,7 +273,7 @@ public:
         }
         else
         {
-            if (!deleteOP || (withLogicalDeletion && !direct))
+            if (!deleteOP || (withLogicalDeletion && !ignoreLogicalDeletion))
             {
                 it = bucket.container.emplace_hint(
                     it, Data{.key = Key{std::move(key)}, .value = {std::move(value)}});
