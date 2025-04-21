@@ -86,15 +86,15 @@ public:
      * @param noncesSet nonce u256 set
      */
     task::Task<void> updateNonceCache(
-        RANGES::input_range auto&& senders, RANGES::input_range auto&& noncesSet)
+        ::ranges::input_range auto&& senders, ::ranges::input_range auto&& noncesSet)
     {
-        if (RANGES::size(senders) != RANGES::size(noncesSet)) [[unlikely]]
+        if (::ranges::size(senders) != ::ranges::size(noncesSet)) [[unlikely]]
         {
             TXPOOL_LOG(ERROR) << LOG_DESC("Web3Nonce: update nonce cache with different size")
-                              << LOG_KV("senderSize", RANGES::size(senders))
-                              << LOG_KV("nonceSize", RANGES::size(noncesSet));
+                              << LOG_KV("senderSize", ::ranges::size(senders))
+                              << LOG_KV("nonceSize", ::ranges::size(noncesSet));
         }
-        for (auto&& [sender, nonceSet] : RANGES::views::zip(senders, noncesSet))
+        for (auto&& [sender, nonceSet] : ::ranges::views::zip(senders, noncesSet))
         {
             // Update ledger nonce cache and remove memory nonce cache here. When a new transaction
             // is coming with the same nonce, it should be refused by ledger nonce layer.
@@ -136,7 +136,7 @@ public:
      * @param nonces nonce string list
      */
     task::Task<void> batchRemoveMemoryNonce(
-        RANGES::input_range auto&& senders, RANGES::input_range auto&& nonces)
+        ::ranges::input_range auto&& senders, ::ranges::input_range auto&& nonces)
     {
         // 假设交易池里有0xabcd的3笔交易，nonce分别是5，7，9。如果nonce为7的交易先被打包进区块，ledger
         // state nonce将会更新到7，那么交易池中memory nonce中小等于ledger
@@ -146,7 +146,7 @@ public:
         // into a block first, the ledge state nonce will be updated to 7, then the transactions
         // with nonce 5 and 7 in the memory nonce of the transaction pool will be removed.
         std::stringstream ss;
-        for (auto&& [sender, nonce] : RANGES::views::zip(senders, nonces))
+        for (auto&& [sender, nonce] : ::ranges::views::zip(senders, nonces))
         {
             if (c_fileLogLevel == TRACE) [[unlikely]]
             {

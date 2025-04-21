@@ -93,10 +93,12 @@ task::Task<h256> calculateStateRoot(
     while (auto keyValue = co_await range.next())
     {
         hashGroup.run([keyValue = std::move(keyValue), &hashes, &deletedEntry, &hashImpl]() {
-            auto [key, entry] = *keyValue;
+            auto [key, value] = *keyValue;
             executor_v1::StateKeyView view(key);
             auto [tableName, keyName] = view.get();
-            if (!entry)
+
+            const storage::Entry* entry = nullptr;
+            if (entry = std::get_if<storage::Entry>(std::addressof(value)); !entry)
             {
                 entry = std::addressof(deletedEntry);
             }

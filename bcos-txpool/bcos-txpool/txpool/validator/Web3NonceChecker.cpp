@@ -51,9 +51,7 @@ task::Task<bcos::protocol::TransactionStatus> Web3NonceChecker::checkWeb3Nonce(
             if (c_fileLogLevel == TRACE) [[unlikely]]
             {
                 TXPOOL_LOG(TRACE) << LOG_DESC("Web3Nonce: nonce mem check fail")
-                                  << LOG_KV("sender", senderHex) << LOG_KV("nonce", nonce)
-                                  << LOG_KV("memSize",
-                                         bcos::storage2::memory_storage::getSize(m_memoryNonces));
+                                  << LOG_KV("sender", senderHex) << LOG_KV("nonce", nonce);
             }
             co_return TransactionStatus::NonceCheckFail;
         }
@@ -68,9 +66,7 @@ task::Task<bcos::protocol::TransactionStatus> Web3NonceChecker::checkWeb3Nonce(
             {
                 TXPOOL_LOG(TRACE) << LOG_DESC("Web3Nonce: nonce ledger check fail")
                                   << LOG_KV("sender", senderHex) << LOG_KV("nonce", nonce)
-                                  << LOG_KV("nonceInLedger", nonceInLedgerValue)
-                                  << LOG_KV("ledgerSize", bcos::storage2::memory_storage::getSize(
-                                                              m_ledgerStateNonces));
+                                  << LOG_KV("nonceInLedger", nonceInLedgerValue);
             }
             co_return TransactionStatus::NonceCheckFail;
         }

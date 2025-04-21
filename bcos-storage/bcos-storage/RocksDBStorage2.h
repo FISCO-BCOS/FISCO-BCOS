@@ -15,6 +15,7 @@
 #include <memory>
 #include <range/v3/view/chunk.hpp>
 #include <type_traits>
+#include <variant>
 
 namespace bcos::storage2::rocksdb
 {
@@ -79,10 +80,10 @@ public:
     using Key = KeyType;
     using Value = ValueType;
 
-    static auto executeReadSome(RocksDBStorage2& storage, ::ranges::input_range auto keys)
+    auto readSome(::ranges::input_range auto keys)
     {
         auto encodedKeys = keys | ::ranges::views::transform([&](auto&& key) {
-            return storage.m_keyResolver.encode(std::forward<decltype(key)>(key));
+            return m_keyResolver.encode(std::forward<decltype(key)>(key));
         }) | ::ranges::to<std::vector>();
 
         std::vector<::rocksdb::PinnableSlice> results(::ranges::size(encodedKeys));
@@ -91,13 +92,12 @@ public:
         auto rocksDBKeys = encodedKeys | ::ranges::views::transform([](const auto& encodedKey) {
             return ::rocksdb::Slice(::ranges::data(encodedKey), ::ranges::size(encodedKey));
         }) | ::ranges::to<std::vector>();
-        storage.m_rocksDB.MultiGet(::rocksdb::ReadOptions(),
-            storage.m_rocksDB.DefaultColumnFamily(), rocksDBKeys.size(), rocksDBKeys.data(),
-            results.data(), status.data());
+        m_rocksDB.MultiGet(::rocksdb::ReadOptions(), m_rocksDB.DefaultColumnFamily(),
+            rocksDBKeys.size(), rocksDBKeys.data(), results.data(), status.data());
 
         auto values =
             ::ranges::views::zip(results, status) |
-            ::ranges::views::transform([&](auto tuple) -> std::optional<ValueType> {
+            ::ranges::views::transform([&](auto tuple) -> StorageValueType<ValueType> {
                 auto& [result, status] = tuple;
                 if (!status.ok())
                 {
@@ -108,17 +108,24 @@ public:
                     }
                     return {};
                 }
-                return std::make_optional(storage.m_valueResolver.decode(result.ToStringView()));
+                return {m_valueResolver.decode(result.ToStringView())};
             }) |
             ::ranges::to<std::vector>();
         return values;
     }
 
     friend auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, RocksDBStorage2& storage,
-        ::ranges::input_range auto keys) -> task::AwaitableValue<decltype(executeReadSome(storage,
-        std::forward<decltype(keys)>(keys)))>
+        ::ranges::input_range auto keys)
+        -> task::AwaitableValue<std::vector<std::optional<ValueType>>>
     {
-        return {executeReadSome(storage, std::move(keys))};
+        auto values = storage.readSome(std::move(keys));
+        return {::ranges::views::transform(values, [](auto&& value) -> std::optional<ValueType> {
+            if (auto entry = std::get_if<ValueType>(std::addressof(value)))
+            {
+                return std::make_optional(std::move(*entry));
+            }
+            return {};
+        }) | ::ranges::to<std::vector>()};
     }
 
     friend auto tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/, RocksDBStorage2& storage,
@@ -244,13 +251,13 @@ public:
     {
         auto range = co_await storage2::range(fromStorage);
 
-        using RangeValueType = typename task::AwaitableReturnType<
+        using MergeRangeValueType = typename task::AwaitableReturnType<
             std::invoke_result_t<decltype(&decltype(range)::next), decltype(range)>>::value_type;
-        using RocksDBKeyValueTuple = std::tuple<
-            decltype(storage.m_keyResolver.encode(
-                std::declval<std::remove_pointer_t<std::tuple_element_t<0, RangeValueType>>>())),
-            std::optional<decltype(storage.m_valueResolver.encode(
-                std::declval<std::remove_pointer_t<std::tuple_element_t<1, RangeValueType>>>()))>>;
+        using RocksDBKeyValueTuple =
+            std::tuple<decltype(storage.m_keyResolver.encode(std::declval<
+                           std::remove_pointer_t<std::tuple_element_t<0, MergeRangeValueType>>>())),
+                std::optional<decltype(storage.m_valueResolver.encode(std::get<Value>(
+                    std::declval<std::tuple_element_t<1, MergeRangeValueType>>())))>>;
 
         std::atomic_size_t totalReservedLength = ROCKSDB_SEP_HEADER_SIZE;
         tbb::concurrent_vector<RocksDBKeyValueTuple> rocksDBKeyValues;
@@ -261,32 +268,21 @@ public:
                                keyValue = std::move(keyValue)]() {
                 auto&& [key, value] = *keyValue;
                 size_t localReservedLength = 0;
-                if constexpr (std::is_pointer_v<decltype(value)>)
+                if (!std::holds_alternative<DELETED_TYPE>(value))
                 {
-                    if (value)
-                    {
-                        auto it = rocksDBKeyValues.emplace_back(storage.m_keyResolver.encode(key),
-                            std::make_optional(storage.m_valueResolver.encode(*value)));
-                        auto&& [keyBuffer, valueBuffer] = *it;
-                        localReservedLength += getRocksDBKeyPairSize(
-                            false, ::ranges::size(keyBuffer), ::ranges::size(*valueBuffer));
-                    }
-                    else
-                    {
-                        auto it = rocksDBKeyValues.emplace_back(storage.m_keyResolver.encode(key),
-                            std::tuple_element_t<1, RocksDBKeyValueTuple>{});
-                        auto&& [keyBuffer, valueBuffer] = *it;
-                        localReservedLength +=
-                            getRocksDBKeyPairSize(false, ::ranges::size(keyBuffer), 0);
-                    }
+                    auto it = rocksDBKeyValues.emplace_back(storage.m_keyResolver.encode(key),
+                        std::make_optional(storage.m_valueResolver.encode(std::get<Value>(value))));
+                    auto&& [keyBuffer, valueBuffer] = *it;
+                    localReservedLength += getRocksDBKeyPairSize(
+                        false, ::ranges::size(keyBuffer), ::ranges::size(*valueBuffer));
                 }
                 else
                 {
                     auto it = rocksDBKeyValues.emplace_back(storage.m_keyResolver.encode(key),
-                        std::make_optional(storage.m_valueResolver.encode(value)));
+                        std::tuple_element_t<1, RocksDBKeyValueTuple>{});
                     auto&& [keyBuffer, valueBuffer] = *it;
-                    localReservedLength += getRocksDBKeyPairSize(
-                        false, ::ranges::size(keyBuffer), ::ranges::size(*valueBuffer));
+                    localReservedLength +=
+                        getRocksDBKeyPairSize(false, ::ranges::size(keyBuffer), 0);
                 }
                 totalReservedLength += localReservedLength;
             });
@@ -356,15 +352,16 @@ public:
             }
         }
 
-        task::AwaitableValue<std::optional<std::tuple<KeyType, ValueType>>> next()
+        auto next()
         {
-            task::AwaitableValue<std::optional<std::tuple<KeyType, ValueType>>> result;
+            task::AwaitableValue<std::optional<std::tuple<KeyType, StorageValueType<ValueType>>>>
+                result;
             if (m_iterator->Valid())
             {
                 auto key = m_storage->m_keyResolver.decode(m_iterator->key().ToStringView());
                 auto value = m_storage->m_valueResolver.decode(m_iterator->value().ToStringView());
                 m_iterator->Next();
-                result.value().emplace(std::move(key), std::move(value));
+                result.value().emplace(std::move(key), StorageValueType<Value>{std::move(value)});
             }
             return result;
         }
