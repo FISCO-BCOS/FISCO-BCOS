@@ -11,6 +11,7 @@
 #include <exception>
 #include <functional>
 #include <stdexcept>
+#include <variant>
 
 namespace bcos::storage
 {
@@ -45,15 +46,6 @@ public:
             while (auto keyValue = co_await range.next())
             {
                 auto&& [key, value] = *keyValue;
-                if constexpr (std::is_pointer_v<decltype(value)>)
-                {
-                    if (!value)
-                    {
-                        ++index;
-                        continue;
-                    }
-                }
-
                 executor_v1::StateKeyView stateKeyView(key);
                 auto [entryTable, entryKey] = stateKeyView.get();
                 if (entryTable != table)
@@ -61,7 +53,8 @@ public:
                     break;
                 }
 
-                if (!condition || condition->isValid(entryKey))
+                if ((!condition || condition->isValid(entryKey)) &&
+                    std::holds_alternative<storage::Entry>(value))
                 {
                     if (start != 0 || count != 0)
                     {
