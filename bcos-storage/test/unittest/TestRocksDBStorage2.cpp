@@ -8,7 +8,6 @@
 #include <fmt/format.h>
 #include <boost/filesystem.hpp>
 #include <boost/test/unit_test.hpp>
-#include <algorithm>
 #include <string_view>
 
 using namespace bcos;

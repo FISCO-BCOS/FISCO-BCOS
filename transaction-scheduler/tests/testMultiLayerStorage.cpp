@@ -6,6 +6,7 @@
 #include "bcos-transaction-scheduler/ReadWriteSetStorage.h"
 #include <fmt/format.h>
 #include <boost/test/unit_test.hpp>
+#include <variant>
 
 using namespace bcos;
 using namespace bcos::storage2;
@@ -151,10 +152,11 @@ BOOST_AUTO_TEST_CASE(rangeMulti)
             view2, ::ranges::views::zip(::ranges::views::iota(4, 8), ::ranges::views::repeat(2)));
 
         auto resultList = co_await storage2::readSome(view2, ::ranges::views::iota(0, 8));
-        auto vecList = resultList | ::ranges::views::transform([](auto input) { return *input; }) |
+        auto vecList = resultList |
+                       ::ranges::views::transform([](auto input) { return input.value_or(-1); }) |
                        ::ranges::to<std::vector>();
         BOOST_CHECK_EQUAL(resultList.size(), 8);
-        auto expectList = std::vector<int>({0, 0, 0, 1, 2, 2, 2, 2});
+        auto expectList = std::vector<int>({0, 0, -1, 1, 2, 2, 2, 2});
         BOOST_CHECK_EQUAL_COLLECTIONS(
             vecList.begin(), vecList.end(), expectList.begin(), expectList.end());
 
@@ -164,11 +166,17 @@ BOOST_AUTO_TEST_CASE(rangeMulti)
         while (auto keyValue = co_await range.next())
         {
             auto& [key, value] = *keyValue;
-            std::cout << fmt::format("key: {}, value: {}\n", key, value);
-            BOOST_CHECK_EQUAL(key, i);
+            if (auto* ptr = std::get_if<int>(std::addressof(value)))
+            {
+                std::cout << fmt::format("key: {}, value: {}\n", key, *ptr);
+                BOOST_CHECK_EQUAL(key, i);
+                vecList2.emplace_back(*ptr);
+            }
+            else
+            {
+                vecList2.emplace_back(-1);
+            }
             ++i;
-
-            vecList2.emplace_back(value);
         }
         BOOST_CHECK_EQUAL_COLLECTIONS(
             vecList2.begin(), vecList2.end(), expectList.begin(), expectList.end());
@@ -203,11 +211,13 @@ BOOST_AUTO_TEST_CASE(deletedEntry)
         BOOST_CHECK(!values[0]);
 
         auto range = co_await storage2::range(view2);
-        auto value = co_await range.next();
-        BOOST_CHECK(value);
-        BOOST_CHECK_EQUAL(std::get<0>(*value), key2);
-        value = co_await range.next();
-        BOOST_CHECK(!value);
+        auto keyValue = co_await range.next();
+        BOOST_CHECK(keyValue);
+        BOOST_CHECK_EQUAL(std::get<0>(*keyValue), key);
+        BOOST_CHECK(std::holds_alternative<DELETED_TYPE>(std::get<1>(*keyValue)));
+        keyValue = co_await range.next();
+        BOOST_CHECK(keyValue);
+        BOOST_CHECK_EQUAL(std::get<0>(*keyValue), key2);
     }());
 }
 

@@ -63,6 +63,16 @@ inline constexpr struct RemoveSome
     }
 } removeSome;
 
+struct NOT_EXISTS_TYPE
+{
+};
+constexpr inline struct DELETED_TYPE
+{
+} deleteItem;
+
+template <class Value>
+using StorageValueType = std::variant<NOT_EXISTS_TYPE, DELETED_TYPE, Value>;
+
 template <class IteratorType>
 concept Iterator =
     requires(IteratorType iterator) { requires task::IsAwaitable<decltype(iterator.next())>; };
@@ -76,14 +86,6 @@ inline constexpr struct Range
         co_return co_await tag_invoke(*this, storage, std::forward<decltype(args)>(args)...);
     }
 } range;
-
-inline constexpr struct RandomAccessRange
-{
-    auto operator()(auto& storage, auto&&... args) const
-    {
-        return tag_invoke(*this, storage, std::forward<decltype(args)>(args)...);
-    }
-} randomAccessRange;
 
 namespace detail
 {

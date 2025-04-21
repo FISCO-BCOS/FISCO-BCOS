@@ -36,13 +36,9 @@ concept HasMemberSize = requires(Object object) {
     { object.size() } -> std::integral;
 };
 
-using Empty = std::monostate;
-struct NOT_EXISTS_TYPE
+struct Empty
 {
 };
-constexpr inline struct DELETED_TYPE
-{
-} deleteItem;
 
 enum Attribute : uint8_t
 {
@@ -96,7 +92,7 @@ public:
     constexpr static unsigned DEFAULT_CAPACITY = 32 * 1024 * 1024;  // For mru
     using Mutex = std::conditional_t<withConcurrent, tbb::rw_mutex, Empty>;
     using Lock = std::conditional_t<withConcurrent, tbb::rw_mutex::scoped_lock, NullLock>;
-    using DataValue = std::variant<NOT_EXISTS_TYPE, DELETED_TYPE, Value>;
+    using DataValue = StorageValueType<Value>;
 
     static int64_t getSize(const DataValue& object)
     {
@@ -378,8 +374,6 @@ public:
         ::ranges::iterator_t<Container> m_begin;
         ::ranges::iterator_t<Container> m_end;
 
-        using IteratorValue = std::conditional_t<withLogicalDeletion, const Value*, const Value&>;
-
         void updateIterator()
         {
             if constexpr (withConcurrent)
@@ -395,20 +389,11 @@ public:
 
         auto next()
         {
-            std::optional<std::tuple<Key const&, IteratorValue>> result;
+            std::optional<std::tuple<Key const&, DataValue const&>> result;
             if (m_begin != m_end)
             {
                 auto const& data = *m_begin;
-                if constexpr (withLogicalDeletion)
-                {
-                    result.emplace(std::make_tuple(
-                        std::cref(data.key), std::get_if<Value>(std::addressof(data.value))));
-                }
-                else
-                {
-                    result.emplace(std::make_tuple(
-                        std::cref(data.key), std::cref(std::get<Value>(data.value))));
-                }
+                result.emplace(std::make_tuple(std::cref(data.key), std::cref(data.value)));
                 ++m_begin;
                 return task::AwaitableValue(std::move(result));
             }
