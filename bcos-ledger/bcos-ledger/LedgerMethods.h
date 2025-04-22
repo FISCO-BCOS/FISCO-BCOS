@@ -217,7 +217,23 @@ task::Task<std::optional<crypto::HashType>> tag_invoke(ledger::tag_t<getBlockHas
 
         co_return std::make_optional(hash);
     }
-    co_return std::nullopt;
+    co_return {};
+}
+
+task::Task<std::optional<protocol::BlockNumber>> tag_invoke(
+    ledger::tag_t<getBlockNumber> /*unused*/, auto& storage, crypto::HashType hash,
+    FromStorage /*unused*/)
+{
+    LEDGER_LOG(TRACE) << "GetBlockNumberByHash request" << LOG_KV("blockHash", hash);
+    if (auto entry = co_await storage2::readOne(storage,
+            executor_v1::StateKeyView{SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(hash)}))
+    {
+        auto blockNumberStr = entry->getField(0);
+        auto blockNumber = boost::lexical_cast<protocol::BlockNumber>(blockNumberStr);
+
+        co_return std::make_optional(blockNumber);
+    }
+    co_return {};
 }
 
 task::Task<protocol::BlockNumber> tag_invoke(

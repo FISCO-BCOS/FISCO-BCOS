@@ -10,6 +10,7 @@
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
+#include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/Block.h"
 #include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/protocol/BlockHeaderFactory.h"
@@ -177,7 +178,7 @@ task::Task<std::tuple<u256, h256>> calculateReceiptRoot(
  * @param newBlock The updated block.
  * @param hashImpl The hash implementation used to calculate the block hash.
  */
-void finishExecute(auto& storage, ::ranges::range auto const& receipts,
+task::Task<void> finishExecute(auto& storage, ::ranges::range auto const& receipts,
     protocol::BlockHeader& newBlockHeader, protocol::Block& block,
     ::ranges::input_range auto const& transactions, bool& sysBlock, crypto::Hash const& hashImpl)
 {
@@ -203,11 +204,29 @@ void finishExecute(auto& storage, ::ranges::range auto const& receipts,
                     bcos::precompiled::c_systemTxsAddress, transaction->to());
             });
         });
+
     newBlockHeader.setGasUsed(gasUsed);
     newBlockHeader.setTxsRoot(transactionRoot);
     newBlockHeader.setStateRoot(stateRoot);
     newBlockHeader.setReceiptsRoot(receiptRoot);
     newBlockHeader.calculateHash(hashImpl);
+
+    // 写入blocknumber和blockhash供getBlockHash()使用
+    // Write the blocknumber and blockhash for getBlockHash() to use
+    auto blockNumberStr = boost::lexical_cast<std::string>(newBlockHeader.number());
+    auto blockHash = newBlockHeader.hash();
+
+    storage::Entry hashEntry;
+    hashEntry.importFields({blockHash.asBytes()});
+    co_await storage2::writeOne(storage,
+        executor_v1::StateKey{ledger::SYS_NUMBER_2_HASH, blockNumberStr}, std::move(hashEntry));
+
+    storage::Entry hash2NumberEntry;
+    hash2NumberEntry.importFields({blockNumberStr});
+    co_await storage2::writeOne(storage,
+        executor_v1::StateKey{
+            ledger::SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(blockHash)},
+        hash2NumberEntry);
 }
 
 template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
@@ -324,7 +343,7 @@ private:
 
             auto executedBlockHeader = m_blockHeaderFactory.get().populateBlockHeader(blockHeader);
             bool sysBlock = false;
-            finishExecute(mutableStorage(view), receipts, *executedBlockHeader, *block,
+            co_await finishExecute(mutableStorage(view), receipts, *executedBlockHeader, *block,
                 transactions, sysBlock, m_hashImpl.get());
 
             if (verify && (executedBlockHeader->hash() != blockHeader->hash()))
@@ -441,16 +460,6 @@ private:
             result.m_block->setBlockHeader(header);
             tbb::parallel_invoke(
                 [&]() {
-                    if (result.m_block->blockHeaderConst()->number() != 0)
-                    {
-                        ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
-                            ittapi::ITT_DOMAINS::instance().SET_BLOCK);
-                        auto& backendStorage = m_multiLayerStorage.get().backendStorage();
-                        task::tbb::syncWait(ledger::prewriteBlock(m_ledger.get(),
-                            result.m_transactions, result.m_block, false, backendStorage));
-                    }
-                },
-                [&]() {
                     ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
                         ittapi::ITT_DOMAINS::instance().MERGE_STATE);
                     task::tbb::syncWait(m_multiLayerStorage.get().mergeBackStorage());
@@ -461,6 +470,15 @@ private:
                     task::tbb::syncWait(ledger::storeTransactionsAndReceipts(
                         m_ledger.get(), result.m_transactions, result.m_block));
                 });
+
+            if (result.m_block->blockHeaderConst()->number() != 0)
+            {
+                ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
+                    ittapi::ITT_DOMAINS::instance().SET_BLOCK);
+                auto& backendStorage = m_multiLayerStorage.get().backendStorage();
+                co_await ledger::prewriteBlock(
+                    m_ledger.get(), result.m_transactions, result.m_block, false, backendStorage);
+            }
 
             auto ledgerConfig = co_await ledger::getLedgerConfig(m_ledger.get());
             ledgerConfig->setHash(header->hash());
