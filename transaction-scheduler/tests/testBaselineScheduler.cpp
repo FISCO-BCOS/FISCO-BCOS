@@ -1,4 +1,5 @@
 #include "bcos-crypto/interfaces/crypto/CommonType.h"
+#include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
@@ -201,12 +202,22 @@ BOOST_AUTO_TEST_CASE(scheduleBlock)
             BOOST_CHECK(!error);
             BOOST_CHECK(blockHeader);
             BOOST_CHECK(!sysBlock);
+
+            task::syncWait([&]() -> task::Task<void> {
+                auto view = fork(multiLayerStorage);
+
+                auto blockHash =
+                    co_await ledger::getBlockHash(view, blockHeader->number(), ledger::fromStorage);
+                BOOST_CHECK_EQUAL(blockHash.value(), blockHeader->hash());
+
+                auto blockNumber =
+                    co_await ledger::getBlockNumber(view, blockHeader->hash(), ledger::fromStorage);
+                BOOST_CHECK_EQUAL(blockNumber.value(), blockHeader->number());
+            }());
             end.set_value();
         });
 
     end.get_future().get();
-    // baselineScheduler.commitBlock(blockHeader, std::function<void (Error::Ptr &&,
-    // ledger::LedgerConfig::Ptr &&)> callback)
 }
 
 BOOST_AUTO_TEST_CASE(sameBlock)

@@ -108,6 +108,11 @@ inline constexpr struct GetBlockNumber
     {
         co_return co_await tag_invoke(*this, ledger, hash);
     }
+    task::Task<std::optional<protocol::BlockNumber>> operator()(
+        auto& storage, crypto::HashType hash, FromStorage fromStorage) const
+    {
+        co_return co_await tag_invoke(*this, storage, hash, fromStorage);
+    }
 } getBlockNumber{};
 
 using SystemConfigEntry = std::tuple<std::string, protocol::BlockNumber>;
