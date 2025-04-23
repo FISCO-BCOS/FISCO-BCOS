@@ -3,9 +3,9 @@
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-task/TBBWait.h"
 #include "bcos-task/Trait.h"
-#include "bcos-utilities/Error.h"
 #include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/ITTAPI.h"
+#include "bcos-utilities/Overloaded.h"
 #include "bcos-utilities/RecursiveLambda.h"
 #include <oneapi/tbb/parallel_invoke.h>
 #include <boost/throw_exception.hpp>
@@ -24,7 +24,20 @@ DERIVE_BCOS_EXCEPTION(DuplicateMutableViewError);
 DERIVE_BCOS_EXCEPTION(NonExistsKeyIteratorError);
 DERIVE_BCOS_EXCEPTION(NotExistsMutableStorageError);
 DERIVE_BCOS_EXCEPTION(NotExistsImmutableStorageError);
+DERIVE_BCOS_EXCEPTION(UnexceptNotExistsValue);
 DERIVE_BCOS_EXCEPTION(UnsupportedMethod);
+
+template <class Value>
+std::optional<Value> getValue(auto& input)
+{
+    return std::visit(bcos::overloaded{[](storage2::NOT_EXISTS_TYPE) {
+                                           BOOST_THROW_EXCEPTION(UnexceptNotExistsValue{});
+                                           return std::optional<Value>{};
+                                       },
+                          [](storage2::DELETED_TYPE) { return std::optional<Value>{}; },
+                          [](Value& value) { return std::make_optional(std::move(value)); }},
+        input);
+}
 
 template <class KeyType, class ValueType>
 task::Task<bool> fillMissingValues(
@@ -34,29 +47,45 @@ task::Task<bool> fillMissingValues(
         std::conditional_t<std::is_lvalue_reference_v<::ranges::range_value_t<decltype(keys)>>,
             std::reference_wrapper<KeyType>, KeyType>;
 
-    std::vector<std::pair<StoreKeyType, std::reference_wrapper<std::optional<ValueType>>>>
+    std::vector<
+        std::pair<StoreKeyType, std::reference_wrapper<storage2::StorageValueType<ValueType>>>>
         missingKeyValues;
     for (auto&& [key, value] : ::ranges::views::zip(std::forward<decltype(keys)>(keys), values))
     {
-        if (!value)
+        if (std::holds_alternative<storage2::NOT_EXISTS_TYPE>(value))
         {
             missingKeyValues.emplace_back(std::forward<decltype(key)>(key), std::ref(value));
         }
     }
-    auto gotValues = co_await storage2::readSome(storage, ::ranges::views::keys(missingKeyValues));
 
     size_t count = 0;
+    size_t gotSize = 0;
+
+    auto gotValues = co_await [&]() -> task::Task<std::vector<storage2::StorageValueType<ValueType>>> {
+        if constexpr (task::IsAwaitable<decltype(storage.readSome(
+                          ::ranges::views::keys(missingKeyValues)))>)
+        {
+            co_return co_await storage.readSome(::ranges::views::keys(missingKeyValues));
+        }
+        else
+        {
+            co_return storage.readSome(::ranges::views::keys(missingKeyValues));
+        }
+    }();
+
+    // auto gotValues = storage.readSome(::ranges::views::keys(missingKeyValues));
+    gotSize = ::ranges::size(gotValues);
     for (auto&& [from, to] :
         ::ranges::views::zip(gotValues, ::ranges::views::values(missingKeyValues)))
     {
-        if (from)
+        if (!std::holds_alternative<storage2::NOT_EXISTS_TYPE>(from))
         {
             to.get() = std::move(from);
             ++count;
         }
     }
 
-    co_return count == ::ranges::size(gotValues);
+    co_return count == gotSize;
 }
 
 template <class MutableStorageType, class CachedStorage, class BackendStorageType>
@@ -104,29 +133,20 @@ public:
         return *storage.m_mutableStorage;
     }
 
-    friend auto tag_invoke(
-        storage2::tag_t<storage2::readSome> /*unused*/, View& view, ::ranges::input_range auto keys)
-        -> task::Task<task::AwaitableReturnType<
-            std::invoke_result_t<storage2::ReadSome, MutableStorage&, decltype(keys)>>>
-        requires ::ranges::sized_range<decltype(keys)> &&
-                 ::ranges::sized_range<task::AwaitableReturnType<
-                     std::invoke_result_t<storage2::ReadSome, MutableStorage&, decltype(keys)>>>
+    template <::ranges::input_range Keys>
+    auto readSome(Keys keys) -> task::Task<std::vector<storage2::StorageValueType<Value>>>
+        requires ::ranges::sized_range<Keys>
     {
-        task::AwaitableReturnType<
-            std::invoke_result_t<storage2::ReadSome, MutableStorage&, decltype(keys)>>
-            values(::ranges::size(keys));
-        if (view.m_mutableStorage &&
+        auto keySize = static_cast<size_t>(keys.size());
+        decltype(m_mutableStorage->readSome(keys)) values(keySize);
+        if (m_mutableStorage &&
             co_await fillMissingValues<typename View::Key, typename View::Value>(
-                *view.m_mutableStorage, keys, values))
+                *m_mutableStorage, keys, values))
         {
             co_return values;
         }
-        else
-        {
-            values.resize(::ranges::size(keys));
-        }
 
-        for (auto& immutableStorage : view.m_immutableStorages)
+        for (auto& immutableStorage : m_immutableStorages)
         {
             if (co_await fillMissingValues<typename View::Key, typename View::Value>(
                     *immutableStorage, keys, values))
@@ -138,15 +158,30 @@ public:
         if constexpr (withCacheStorage)
         {
             if (co_await fillMissingValues<typename View::Key, typename View::Value>(
-                    view.m_cacheStorage.get(), keys, values))
+                    m_cacheStorage.get(), keys, values))
             {
                 co_return values;
             }
         }
 
         co_await fillMissingValues<typename View::Key, typename View::Value>(
-            view.m_backendStorage.get(), keys, values);
+            m_backendStorage.get(), keys, values);
         co_return values;
+    }
+
+    template <::ranges::input_range Keys>
+    friend auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, View& view, Keys keys)
+        -> task::Task<std::vector<std::optional<Value>>>
+        requires ::ranges::sized_range<Keys>
+    {
+        auto values = co_await view.readSome(std::move(keys));
+        co_return ::ranges::views::transform(values, [](auto&& value) -> std::optional<Value> {
+            if (auto entry = std::get_if<Value>(std::addressof(value)))
+            {
+                return std::make_optional(std::move(*entry));
+            }
+            return {};
+        }) | ::ranges::to<std::vector>();
     }
 
     friend auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, View& view,
@@ -178,23 +213,23 @@ public:
     {
         if (view.m_mutableStorage)
         {
-            auto value = co_await view.m_mutableStorage->readOne(key);
-            if (auto* ptr = std::get_if<std::optional<typename View::Value>>(std::addressof(value)))
+            auto value = view.m_mutableStorage->readOne(key);
+            if (!std::holds_alternative<storage2::NOT_EXISTS_TYPE>(value))
             {
-                co_return *ptr;
+                co_return getValue<Value>(value);
             }
         }
 
         for (auto& immutableStorage : view.m_immutableStorages)
         {
-            auto value = co_await immutableStorage->readOne(key);
-            if (auto* ptr = std::get_if<std::optional<typename View::Value>>(std::addressof(value)))
+            auto value = immutableStorage->readOne(key);
+            if (!std::holds_alternative<storage2::NOT_EXISTS_TYPE>(value))
             {
-                co_return *ptr;
+                co_return getValue<Value>(value);
             }
         }
 
-        if constexpr (View::withCacheStorage)
+        if constexpr (withCacheStorage)
         {
             if (auto value = co_await storage2::readOne(view.m_cacheStorage.get(), key))
             {
@@ -261,36 +296,24 @@ public:
                              std::add_lvalue_reference_t<MutableStorage>>>,
                 task::AwaitableReturnType<std::invoke_result_t<storage2::Range,
                     std::add_lvalue_reference_t<BackendStorage>>>>;
-        using RangeValue = std::optional<std::tuple<Key, Value>>;
+        using RangeValue = std::optional<std::tuple<Key, storage2::StorageValueType<Value>>>;
         std::vector<std::tuple<StorageIterator, RangeValue>> m_iterators;
 
-        task::Task<void> forwardIterators(::ranges::range auto&& iterators)
+        task::Task<void> forwardIterators(::ranges::range auto iterators)
         {
             for (auto& it : iterators)
             {
                 auto& [variantIterator, item] = it;
                 item = co_await std::visit(
-                    bcos::recursiveLambda(
-                        [&](auto const& self, auto& input) -> task::Task<RangeValue> {
-                            RangeValue item;
-                            if (auto rangeValue = co_await input.next(); rangeValue)
-                            {
-                                auto&& [key, value] = *rangeValue;
-                                if constexpr (std::is_pointer_v<std::decay_t<decltype(value)>>)
-                                {
-                                    if (!value)
-                                    {
-                                        co_return co_await self(self, input);
-                                    }
-                                    item.emplace(key, *value);
-                                }
-                                else
-                                {
-                                    item = std::move(rangeValue);
-                                }
-                            }
-                            co_return item;
-                        }),
+                    [&](auto& input) -> task::Task<RangeValue> {
+                        RangeValue item;
+                        if (auto rangeValue = co_await input.next(); rangeValue)
+                        {
+                            auto&& [key, value] = *rangeValue;
+                            item.emplace(key, std::move(value));
+                        }
+                        co_return item;
+                    },
                     variantIterator);
             }
         }
@@ -313,7 +336,7 @@ public:
             m_iterators.emplace_back(co_await storage2::range(view.m_backendStorage.get(),
                                          std::forward<decltype(args)>(args)...),
                 RangeValue{});
-            co_await forwardIterators(m_iterators);
+            co_await forwardIterators(::ranges::views::all(m_iterators));
         }
 
         task::Task<RangeValue> next()
@@ -360,15 +383,14 @@ public:
         };
     };
 
-    friend void newMutable(View& view, auto&&... args)
+    void newMutable(auto&&... args)
     {
-        if (view.m_mutableStorage)
+        if (m_mutableStorage)
         {
             BOOST_THROW_EXCEPTION(DuplicateMutableStorageError{});
         }
 
-        view.m_mutableStorage =
-            std::make_shared<MutableStorage>(std::forward<decltype(args)>(args)...);
+        m_mutableStorage = std::make_shared<MutableStorage>(std::forward<decltype(args)>(args)...);
     }
 
     friend BackendStorage& backendStorage(View& view) { return view.m_backendStorage; }
@@ -431,7 +453,6 @@ public:
     MultiLayerStorage& operator=(MultiLayerStorage&&) noexcept = default;
     ~MultiLayerStorage() noexcept = default;
 
-private:
     friend ViewType fork(MultiLayerStorage& storage)
     {
         std::unique_lock lock(storage.m_listMutex);
@@ -459,15 +480,15 @@ private:
         storage.m_storages.push_front(std::move(view.m_mutableStorage));
     }
 
-    friend task::Task<std::shared_ptr<MutableStorage>> mergeBackStorage(MultiLayerStorage& storage)
+    task::Task<std::shared_ptr<MutableStorage>> mergeBackStorage()
     {
-        std::unique_lock mergeLock(storage.m_mergeMutex);
-        std::unique_lock listLock(storage.m_listMutex);
-        if (storage.m_storages.empty())
+        std::unique_lock mergeLock(m_mergeMutex);
+        std::unique_lock listLock(m_listMutex);
+        if (m_storages.empty())
         {
             BOOST_THROW_EXCEPTION(NotExistsImmutableStorageError{});
         }
-        auto backStoragePtr = storage.m_storages.back();
+        auto backStoragePtr = m_storages.back();
         auto& backStorage = *backStoragePtr;
         listLock.unlock();
 
@@ -477,54 +498,28 @@ private:
                 [&]() {
                     ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
                         ittapi::ITT_DOMAINS::instance().MERGE_BACKEND);
-                    task::tbb::syncWait(
-                        storage2::merge(storage.m_backendStorage.get(), backStorage));
+                    task::tbb::syncWait(storage2::merge(m_backendStorage.get(), backStorage));
                 },
                 [&]() {
                     ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
                         ittapi::ITT_DOMAINS::instance().MERGE_CACHE);
-                    task::tbb::syncWait(storage2::merge(storage.m_cacheStorage.get(), backStorage));
+                    task::tbb::syncWait(storage2::merge(m_cacheStorage.get(), backStorage));
                 });
         }
         else
         {
             ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
                 ittapi::ITT_DOMAINS::instance().MERGE_BACKEND);
-            co_await storage2::merge(storage.m_backendStorage.get(), backStorage);
+            co_await storage2::merge(m_backendStorage.get(), backStorage);
         }
 
         listLock.lock();
-        storage.m_storages.pop_back();
+        m_storages.pop_back();
 
         co_return backStoragePtr;
     }
 
-    friend std::shared_ptr<MutableStorage> frontStorage(MultiLayerStorage& storage)
-    {
-        std::unique_lock immutablesLock(storage.m_listMutex);
-        if (storage.m_storages.empty())
-        {
-            BOOST_THROW_EXCEPTION(NotExistsImmutableStorageError{});
-        }
-
-        return storage.m_storages.front();
-    }
-
-    friend std::shared_ptr<MutableStorage> backStorage(MultiLayerStorage& storage)
-    {
-        std::unique_lock immutablesLock(storage.m_listMutex);
-        if (storage.m_storages.empty())
-        {
-            BOOST_THROW_EXCEPTION(NotExistsImmutableStorageError{});
-        }
-
-        return storage.m_storages.back();
-    }
-
-    friend BackendStorage& backendStorage(MultiLayerStorage& storage)
-    {
-        return storage.m_backendStorage;
-    }
+    BackendStorage& backendStorage() { return m_backendStorage; }
 };
 
 }  // namespace bcos::scheduler_v1

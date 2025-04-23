@@ -1,7 +1,10 @@
+#include "bcos-crypto/interfaces/crypto/CommonType.h"
+#include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
+#include "bcos-ledger/LedgerMethods.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
@@ -36,11 +39,11 @@ struct MockScheduler
     friend task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
         scheduler_v1::tag_t<scheduler_v1::executeBlock> /*unused*/, MockScheduler& /*unused*/,
         auto& storage, auto& executor, protocol::BlockHeader const& blockHeader,
-        RANGES::input_range auto const& transactions, ledger::LedgerConfig const& /*unused*/)
+        ::ranges::input_range auto const& transactions, ledger::LedgerConfig const& /*unused*/)
     {
         auto receipts =
-            RANGES::iota_view<size_t, size_t>(0, RANGES::size(transactions)) |
-            RANGES::views::transform([](size_t index) -> protocol::TransactionReceipt::Ptr {
+            ::ranges::iota_view<size_t, size_t>(0, ::ranges::size(transactions)) |
+            ::ranges::views::transform([](size_t index) -> protocol::TransactionReceipt::Ptr {
                 auto receipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>(
                     [inner = bcostars::TransactionReceipt()]() mutable {
                         return std::addressof(inner);
@@ -49,7 +52,7 @@ struct MockScheduler
                 receipt->mutableInner().dataHash.assign(str.begin(), str.end());
                 return receipt;
             }) |
-            RANGES::to<std::vector<protocol::TransactionReceipt::Ptr>>();
+            ::ranges::to<std::vector<protocol::TransactionReceipt::Ptr>>();
 
         co_return receipts;
     }
@@ -123,7 +126,7 @@ struct MockTxPool : public txpool::TxPoolInterface
     {}
 
     task::Task<std::vector<protocol::Transaction::ConstPtr>> getTransactions(
-        RANGES::any_view<bcos::h256, RANGES::category::mask | RANGES::category::sized> hashes)
+        ::ranges::any_view<bcos::h256, ::ranges::category::mask | ::ranges::category::sized> hashes)
         override
     {
         co_return std::vector<protocol::Transaction::ConstPtr>{};
@@ -138,6 +141,7 @@ public:
     using BackendStorage = memory_storage::MemoryStorage<StateKey, StateValue,
         memory_storage::Attribute(memory_storage::ORDERED | memory_storage::CONCURRENT),
         std::hash<StateKey>>;
+    using MyMultiLayerStorage = MultiLayerStorage<MutableStorage, void, BackendStorage>;
 
     TestBaselineSchedulerFixture()
       : cryptoSuite(std::make_shared<bcos::crypto::CryptoSuite>(
@@ -170,7 +174,7 @@ public:
     MockScheduler mockScheduler;
     MockLedger mockLedger;
     MockTxPool mockTxPool;
-    MultiLayerStorage<MutableStorage, void, BackendStorage> multiLayerStorage;
+    MyMultiLayerStorage multiLayerStorage;
     MockExecutorBaseline mockExecutor;
     BaselineScheduler<decltype(multiLayerStorage), MockExecutorBaseline, MockScheduler, MockLedger>
         baselineScheduler;
@@ -199,12 +203,21 @@ BOOST_AUTO_TEST_CASE(scheduleBlock)
             BOOST_CHECK(blockHeader);
             BOOST_CHECK(!sysBlock);
 
+            task::syncWait([&]() -> task::Task<void> {
+                auto view = fork(multiLayerStorage);
+
+                auto blockHash =
+                    co_await ledger::getBlockHash(view, blockHeader->number(), ledger::fromStorage);
+                BOOST_CHECK_EQUAL(blockHash.value(), blockHeader->hash());
+
+                auto blockNumber =
+                    co_await ledger::getBlockNumber(view, blockHeader->hash(), ledger::fromStorage);
+                BOOST_CHECK_EQUAL(blockNumber.value(), blockHeader->number());
+            }());
             end.set_value();
         });
 
     end.get_future().get();
-    // baselineScheduler.commitBlock(blockHeader, std::function<void (Error::Ptr &&,
-    // ledger::LedgerConfig::Ptr &&)> callback)
 }
 
 BOOST_AUTO_TEST_CASE(sameBlock)
@@ -248,6 +261,112 @@ BOOST_AUTO_TEST_CASE(sameBlock)
         });
     auto error2 = end2.get_future().get();
     BOOST_CHECK(!error2);
+}
+
+BOOST_AUTO_TEST_CASE(resultCache)
+{
+    std::vector<protocol::Block::Ptr> blocks;
+
+    for (auto i = 100; i < 110; ++i)
+    {
+        auto block = blocks.emplace_back(std::make_shared<bcostars::protocol::BlockImpl>());
+        auto blockHeader = block->blockHeader();
+        blockHeader->setNumber(i);
+        blockHeader->setVersion(200);
+        blockHeader->calculateHash(*hashImpl);
+        bcos::bytes input;
+        block->appendTransaction(transactionFactory->createTransaction(
+            0, "to", input, "12345", 100, "chain", "group", 0));
+
+        baselineScheduler.executeBlock(block, false,
+            [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr gotBlockHeader,
+                bool sysBlock) {
+                BOOST_CHECK(!error);
+                BOOST_CHECK(gotBlockHeader);
+                BOOST_CHECK(!sysBlock);
+                BOOST_CHECK(!error);
+            });
+    }
+
+    // Try get same block
+    for (auto& block : blocks)
+    {
+        baselineScheduler.executeBlock(block, false,
+            [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr gotBlockHeader,
+                bool sysBlock) {
+                BOOST_CHECK(!error);
+                BOOST_CHECK_EQUAL(gotBlockHeader->number(), block->blockHeader()->number());
+            });
+    }
+
+    // Try smaller block
+    auto smallBlock = std::make_shared<bcostars::protocol::BlockImpl>();
+    auto smallBlockHeader = smallBlock->blockHeader();
+    smallBlockHeader->setNumber(99);
+    smallBlockHeader->setVersion(200);
+    smallBlockHeader->calculateHash(*hashImpl);
+    bcos::bytes input;
+    smallBlock->appendTransaction(
+        transactionFactory->createTransaction(0, "to", input, "12345", 100, "chain", "group", 0));
+
+    baselineScheduler.executeBlock(smallBlock, false,
+        [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr gotBlockHeader,
+            bool sysBlock) {
+            BOOST_CHECK(error);
+            BOOST_CHECK(error->errorCode() == bcos::scheduler::SchedulerError::InvalidBlockNumber);
+        });
+
+    // Try Bigger block
+    auto bigBlock = std::make_shared<bcostars::protocol::BlockImpl>();
+    auto bigBlockHeader = bigBlock->blockHeader();
+    bigBlockHeader->setNumber(111);
+    bigBlockHeader->setVersion(200);
+    bigBlockHeader->calculateHash(*hashImpl);
+    bigBlock->appendTransaction(
+        transactionFactory->createTransaction(0, "to", input, "12345", 100, "chain", "group", 0));
+
+    baselineScheduler.executeBlock(bigBlock, false,
+        [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr gotBlockHeader,
+            bool sysBlock) {
+            BOOST_CHECK(error);
+            BOOST_CHECK(error->errorCode() == bcos::scheduler::SchedulerError::InvalidBlockNumber);
+        });
+
+    // Try expect block
+    {
+        auto expectBlock = std::make_shared<bcostars::protocol::BlockImpl>();
+        auto expectBlockHeader = expectBlock->blockHeader();
+        expectBlockHeader->setNumber(110);
+        expectBlockHeader->setVersion(200);
+        expectBlockHeader->calculateHash(*hashImpl);
+        expectBlock->appendTransaction(transactionFactory->createTransaction(
+            0, "to", input, "12345", 100, "chain", "group", 0));
+
+        baselineScheduler.executeBlock(expectBlock, false,
+            [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr gotBlockHeader,
+                bool sysBlock) { BOOST_CHECK(!error); });
+    }
+}
+
+BOOST_AUTO_TEST_CASE(emptyBlock)
+{
+    auto block = std::make_shared<bcostars::protocol::BlockImpl>();
+    auto blockHeader = block->blockHeader();
+    blockHeader->setNumber(111);
+    blockHeader->setVersion(200);
+    blockHeader->calculateHash(*hashImpl);
+
+    baselineScheduler.executeBlock(block, false,
+        [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr gotBlockHeader,
+            bool sysBlock) {
+            BOOST_CHECK(!error);
+            BOOST_CHECK(gotBlockHeader);
+            BOOST_CHECK(!sysBlock);
+
+            BOOST_CHECK_EQUAL(blockHeader->txsRoot(), bcos::crypto::HashType{});
+            BOOST_CHECK_EQUAL(blockHeader->receiptsRoot(), bcos::crypto::HashType{});
+            BOOST_CHECK_EQUAL(blockHeader->stateRoot(), bcos::crypto::HashType{});
+        });
 }
 
 BOOST_AUTO_TEST_SUITE_END()

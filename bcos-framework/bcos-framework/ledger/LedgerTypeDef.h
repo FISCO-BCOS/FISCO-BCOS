@@ -27,6 +27,7 @@
 #include "bcos-task/Task.h"
 #include <bcos-utilities/Common.h>
 #include <oneapi/tbb/concurrent_unordered_map.h>
+#include <boost/archive/binary_iarchive.hpp>
 #include <magic_enum.hpp>
 
 namespace bcos::ledger
@@ -163,13 +164,14 @@ struct StorageState
     std::string balance;
 };
 inline task::Task<void> readFromStorage(
-    SystemConfigs& configs, auto&& storage, protocol::BlockNumber blockNumber = INT64_MAX)
+    SystemConfigs& configs, auto& storage, protocol::BlockNumber blockNumber = INT64_MAX)
 {
-    decltype(auto) keys = bcos::ledger::SystemConfigs::supportConfigs();
-    auto entries = co_await storage2::readSome(std::forward<decltype(storage)>(storage),
-        keys | ::ranges::views::transform([](std::string_view key) {
+    auto keys = bcos::ledger::SystemConfigs::supportConfigs();
+    auto entries = co_await storage2::readSome(
+        storage, keys | ::ranges::views::transform([](std::string_view key) {
             return executor_v1::StateKeyView(ledger::SYS_CONFIG, key);
         }));
+
     for (auto&& [key, entry] : ::ranges::views::zip(keys, entries))
     {
         if (entry)

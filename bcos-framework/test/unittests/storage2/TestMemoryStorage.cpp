@@ -143,7 +143,7 @@ BOOST_AUTO_TEST_CASE(lru)
 {
     task::syncWait([]() -> task::Task<void> {
         MemoryStorage<int, storage::Entry, Attribute(ORDERED | LRU)> storage(1);
-        setMaxCapacity(storage, 1040);
+        storage.setMaxCapacity(1040);
 
         // write 10 100byte value
         storage::Entry entry;
@@ -207,11 +207,12 @@ BOOST_AUTO_TEST_CASE(logicalDeletion)
             auto [key, value] = *item;
             if (i % 2 == 0)
             {
-                BOOST_CHECK(!value);
+                BOOST_CHECK(std::holds_alternative<storage2::DELETED_TYPE>(value));
             }
             else
             {
-                BOOST_CHECK_EQUAL(value->get(), fmt::format("Item: {}", i));
+                BOOST_CHECK_EQUAL(
+                    std::get<storage::Entry>(value).get(), fmt::format("Item: {}", i));
             }
             ++i;
         }
@@ -296,7 +297,7 @@ BOOST_AUTO_TEST_CASE(merge)
         {
             auto [key, value] = *tuple;
             auto keyNum = key;
-            auto valueNum = value;
+            auto valueNum = std::get<int>(value);
 
             BOOST_CHECK_EQUAL(keyNum, i);
             if (keyNum > 8)
@@ -479,18 +480,38 @@ BOOST_AUTO_TEST_CASE(dirtctReadOne)
             storage;
         co_await storage2::writeSome(storage,
             ::ranges::views::zip(::ranges::views::iota(0, 10), ::ranges::repeat_view<int>(100)));
-
         co_await storage2::removeOne(storage, 6);
 
         auto value = co_await storage2::readOne(storage, 6);
         BOOST_CHECK(!value);
+        auto value2 = storage.readOne(6);
+        BOOST_CHECK(std::holds_alternative<bcos::storage2::DELETED_TYPE>(value2));
 
-        auto value2 = co_await storage.readOne(6, bcos::storage2::DIRECT);
-        BOOST_CHECK(std::holds_alternative<std::optional<int>>(value2));
+        auto value3 = storage.readOne(11);
+        BOOST_CHECK(std::holds_alternative<bcos::storage2::NOT_EXISTS_TYPE>(value3));
+        auto value4 = co_await storage2::readOne(storage, 11);
+        BOOST_CHECK(!value4);
 
-        auto value3 = co_await storage.readOne(11, bcos::storage2::DIRECT);
-        BOOST_CHECK(
-            std::holds_alternative<bcos::storage2::memory_storage::NOT_EXISTS_TYPE>(value3));
+        auto value5 = co_await storage2::readOne(storage, 3);
+        BOOST_CHECK(value5);
+        auto value6 = storage.readOne(3);
+        BOOST_CHECK(std::holds_alternative<int>(value6));
+
+        MemoryStorage<int, int, bcos::storage2::memory_storage::ORDERED> storage_2;
+        co_await storage2::writeSome(storage_2,
+            ::ranges::views::zip(::ranges::views::iota(0, 10), ::ranges::repeat_view<int>(100)));
+        co_await storage2::removeOne(storage_2, 6);
+
+        auto value21 = co_await storage2::readOne(storage_2, 6);
+        BOOST_CHECK(!value21);
+
+        auto value22 = storage_2.readOne(6);
+        BOOST_CHECK(std::holds_alternative<bcos::storage2::NOT_EXISTS_TYPE>(value22));
+
+        auto value23 = storage_2.readOne(11);
+        BOOST_CHECK(std::holds_alternative<bcos::storage2::NOT_EXISTS_TYPE>(value23));
+        auto value24 = co_await storage2::readOne(storage_2, 11);
+        BOOST_CHECK(!value24);
     }());
 }
 

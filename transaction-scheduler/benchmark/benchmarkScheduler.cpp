@@ -126,7 +126,7 @@ struct Fixture
                             ::ranges::single_view(&createTransaction) | ::ranges::views::indirect;
 
                         auto view = fork(m_multiLayerStorage);
-                        newMutable(view);
+                        view.newMutable();
                         auto receipts = co_await scheduler_v1::executeBlock(scheduler, view,
                             m_executor, *block->blockHeaderConst(), transactions, m_ledgerConfig);
                         if (receipts[0]->status() != 0)
@@ -136,7 +136,7 @@ struct Fixture
                             co_return;
                         }
                         pushView(m_multiLayerStorage, std::move(view));
-                        co_await mergeBackStorage(m_multiLayerStorage);
+                        co_await m_multiLayerStorage.mergeBackStorage();
 
                         m_contractAddress = receipts[0]->contractAddress();
                     }());
@@ -286,7 +286,7 @@ struct Fixture
                             std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>>>();
 
                     auto view = fork(m_multiLayerStorage);
-                    newMutable(view);
+                    view.newMutable();
                     auto receipts = co_await scheduler_v1::executeBlock(scheduler, view, m_executor,
                         blockHeader, ::ranges::views::indirect(checkTransactions), m_ledgerConfig);
 
@@ -357,7 +357,7 @@ static void noConflictTransfer(benchmark::State& state)
                     blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
 
                     auto view = fork(fixture.m_multiLayerStorage);
-                    newMutable(view);
+                    view.newMutable();
 
                     [[maybe_unused]] auto receipts = co_await scheduler_v1::executeBlock(scheduler,
                         view, fixture.m_executor, blockHeader,
@@ -400,7 +400,7 @@ static void noConflictTransfer(benchmark::State& state)
                                     to.template convert_to<std::string>())));
                         }
                     }
-                    co_await mergeBackStorage(fixture.m_multiLayerStorage);
+                    co_await fixture.m_multiLayerStorage.mergeBackStorage();
                 }(state));
             }
         },
@@ -434,7 +434,7 @@ static void randomTransfer(benchmark::State& state)
                     blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::MAX_VERSION);
 
                     auto view = fork(fixture.m_multiLayerStorage);
-                    newMutable(view);
+                    view.newMutable();
 
                     [[maybe_unused]] auto receipts = co_await scheduler_v1::executeBlock(scheduler,
                         view, fixture.m_executor, blockHeader,
@@ -474,7 +474,7 @@ static void randomTransfer(benchmark::State& state)
                                     expect.str(), got.str())));
                         }
                     }
-                    co_await mergeBackStorage(fixture.m_multiLayerStorage);
+                    co_await fixture.m_multiLayerStorage.mergeBackStorage();
                 }(state));
             }
         },
@@ -502,7 +502,7 @@ static void conflictTransfer(benchmark::State& state)
             {
                 int i = 0;
                 auto view = fork(fixture.m_multiLayerStorage);
-                newMutable(view);
+                view.newMutable();
 
                 task::syncWait([&](benchmark::State& state) -> task::Task<void> {
                     // First issue
@@ -566,7 +566,7 @@ static void conflictTransfer(benchmark::State& state)
                             }
                         }
                     }
-                    co_await mergeBackStorage(fixture.m_multiLayerStorage);
+                    co_await fixture.m_multiLayerStorage.mergeBackStorage();
                 }(state));
             }
         },

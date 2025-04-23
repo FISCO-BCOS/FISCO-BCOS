@@ -84,18 +84,18 @@ BOOST_AUTO_TEST_CASE(simple)
         bcostars::protocol::BlockHeaderImpl blockHeader(
             [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
         auto transactions =
-            RANGES::iota_view<int, int>(0, 100) | RANGES::views::transform([](int index) {
+            ::ranges::iota_view<int, int>(0, 100) | ::ranges::views::transform([](int index) {
                 return std::make_unique<bcostars::protocol::TransactionImpl>(
                     [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
             }) |
-            RANGES::to<std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>>>();
+            ::ranges::to<std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>>>();
 
         auto view = fork(multiLayerStorage);
-        newMutable(view);
+        view.newMutable();
         ledger::LedgerConfig ledgerConfig;
         auto receipts =
             co_await bcos::scheduler_v1::executeBlock(scheduler, view, executor, blockHeader,
-                transactions | RANGES::views::transform([](auto& ptr) -> auto& { return *ptr; }),
+                transactions | ::ranges::views::transform([](auto& ptr) -> auto& { return *ptr; }),
                 ledgerConfig);
         BOOST_CHECK_EQUAL(transactions.size(), receipts.size());
 
@@ -173,44 +173,46 @@ BOOST_AUTO_TEST_CASE(conflict)
         SchedulerParallelImpl<MutableStorage> scheduler;
 
         auto view1 = fork(multiLayerStorage);
-        newMutable(view1);
+        view1.newMutable();
+        auto& front = mutableStorage(view1);
         pushView(multiLayerStorage, std::move(view1));
 
         constexpr static int INITIAL_VALUE = 100000;
-        for (auto i : RANGES::views::iota(0LU, MOCK_USER_COUNT))
+        for (auto i : ::ranges::views::iota(0LU, MOCK_USER_COUNT))
         {
             StateKey key{"t_test"sv, boost::lexical_cast<std::string>(i)};
             storage::Entry entry;
             entry.set(boost::lexical_cast<std::string>(INITIAL_VALUE));
-            co_await storage2::writeOne(*frontStorage(multiLayerStorage), key, std::move(entry));
+            co_await storage2::writeOne(front, key, std::move(entry));
         }
 
         bcostars::protocol::BlockHeaderImpl blockHeader(
             [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
         constexpr static auto TRANSACTION_COUNT = 1000;
         auto transactions =
-            RANGES::views::iota(0, TRANSACTION_COUNT) | RANGES::views::transform([](int index) {
+            ::ranges::views::iota(0, TRANSACTION_COUNT) | ::ranges::views::transform([](int index) {
                 auto transaction = std::make_unique<bcostars::protocol::TransactionImpl>();
                 auto num = boost::lexical_cast<std::string>(index);
                 transaction->mutableInner().data.input.assign(num.begin(), num.end());
 
                 return transaction;
             }) |
-            RANGES::to<std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>>>();
+            ::ranges::to<std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>>>();
 
         auto transactionRefs =
-            transactions | RANGES::views::transform([](auto& ptr) -> auto& { return *ptr; });
+            transactions | ::ranges::views::transform([](auto& ptr) -> auto& { return *ptr; });
         auto view = fork(multiLayerStorage);
-        newMutable(view);
+        view.newMutable();
         ledger::LedgerConfig ledgerConfig;
         auto receipts = co_await bcos::scheduler_v1::executeBlock(
             scheduler, view, executor, blockHeader, transactionRefs, ledgerConfig);
+        auto& front2 = mutableStorage(view);
         pushView(multiLayerStorage, std::move(view));
 
-        for (auto i : RANGES::views::iota(0LU, MOCK_USER_COUNT))
+        for (auto i : ::ranges::views::iota(0LU, MOCK_USER_COUNT))
         {
             StateKey key{"t_test"sv, boost::lexical_cast<std::string>(i)};
-            auto entry = co_await storage2::readOne(*frontStorage(multiLayerStorage), key);
+            auto entry = co_await storage2::readOne(front2, key);
             BOOST_CHECK_EQUAL(boost::lexical_cast<int>(entry->get()), INITIAL_VALUE);
         }
         for (auto const& receipt : receipts)

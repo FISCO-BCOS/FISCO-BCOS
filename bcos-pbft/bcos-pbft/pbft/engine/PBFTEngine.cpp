@@ -1413,7 +1413,11 @@ void PBFTEngine::reachNewView(ViewType _view)
     // try to preCommit/commit after no-timeout
     m_cacheProcessor->checkAndPreCommit();
     m_cacheProcessor->checkAndCommit();
-    PBFT_LOG(INFO) << LOG_DESC("reachNewView") << m_config->printCurrentState();
+    // reset the lowWarterMark after reachNewView
+    m_config->setLowWaterMark(m_config->progressedIndex());
+    PBFT_LOG(INFO) << LOG_DESC("reachNewView") << m_config->printCurrentState()
+                   << LOG_KV("lowWaterMark", m_config->lowWaterMark())
+                   << LOG_KV("highWaterMark", m_config->highWaterMark());
     m_cacheProcessor->tryToApplyCommitQueue();
     m_cacheProcessor->tryToCommitStableCheckPoint();
 }

@@ -84,7 +84,7 @@ void ConsensusConfig::setConsensusNodeList(ConsensusNodeList _consensusNodeList)
                               << errinfo_comment("Must contain at least one consensus node"));
     }
 
-    std::sort(_consensusNodeList.begin(), _consensusNodeList.end());
+    ::ranges::sort(_consensusNodeList);
     // update the consensus list
     {
         UpgradableGuard lock(x_consensusNodeList);

@@ -333,14 +333,17 @@ public:
 
     void setConsensusNodeList(ConsensusNodeList _consensusNodeList) override
     {
-        ConsensusConfig::setConsensusNodeList(_consensusNodeList);
-        if (!m_consensusNodeListUpdated)
+        if (!m_singlePointConsensus)
         {
-            return;
-        }
-        if (committedProposal())
-        {
-            notifyResetSealing(sealStartIndex());
+            ConsensusConfig::setConsensusNodeList(_consensusNodeList);
+            if (!m_consensusNodeListUpdated)
+            {
+                return;
+            }
+            if (committedProposal())
+            {
+                notifyResetSealing(sealStartIndex());
+            }
         }
     }
 
