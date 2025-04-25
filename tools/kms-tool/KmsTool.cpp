@@ -47,19 +47,35 @@ int saveFile(const std::string& filePath, const std::shared_ptr<bytes>& content)
 
 int main(int argc, char* argv[])
 {
-    if (argc != 8)
-    {
-        printUsage(argv[0]);
-        return 1;
-    }
+    std::string kmsType;
+    std::string accessKey;
+    std::string secretKey;
+    std::string region;
+    std::string keyId;
+    std::string inputFilePath;
+    std::string outputFilePath;
 
-    const std::string kmsType = argv[1];
-    const std::string accessKey = argv[2];
-    const std::string secretKey = argv[3];
-    const std::string region = argv[4];
-    const std::string keyId = argv[5];
-    const std::string inputFilePath = argv[6];
-    const std::string outputFilePath = argv[7];
+    // 提示用户输入参数
+    std::cout << "Enter KMS type: ";
+    std::cin >> kmsType;
+
+    std::cout << "Enter access key: ";
+    std::cin >> accessKey;
+
+    std::cout << "Enter secret key: ";
+    std::cin >> secretKey;
+
+    std::cout << "Enter region: ";
+    std::cin >> region;
+
+    std::cout << "Enter key ID: ";
+    std::cin >> keyId;
+
+    std::cout << "Enter input file path: ";
+    std::cin >> inputFilePath;
+
+    std::cout << "Enter output file path: ";
+    std::cin >> outputFilePath;
 
     auto prividerOption =
         magic_enum::enum_cast<CloudKmsType>(kmsType, magic_enum::case_insensitive);
