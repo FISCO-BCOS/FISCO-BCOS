@@ -61,7 +61,7 @@ BOOST_AUTO_TEST_CASE(rangeReadWrite)
         auto range = co_await storage2::range(firstStorage);
         while (auto keyValue = co_await range.next())
         {
-            result.emplace_back(std::get<1>(*keyValue));
+            result.emplace_back(std::get<int>(std::get<1>(*keyValue)));
         }
 
         BOOST_CHECK_EQUAL(result.size(), 3);

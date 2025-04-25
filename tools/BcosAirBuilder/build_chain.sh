@@ -15,7 +15,7 @@ current_dir=$(pwd)
 binary_name="fisco-bcos"
 lightnode_binary_name="fisco-bcos-lightnode"
 mtail_binary_name="mtail"
-key_page_size=10240
+key_page_size=0
 # for cert generation
 ca_cert_dir="${dirpath}"
 sm_cert_conf='sm_cert.cnf'
@@ -39,7 +39,7 @@ ca_dir=""
 prometheus_dir=""
 config_path=""
 docker_mode=
-default_version="v3.15.1"
+default_version="v3.15.2"
 compatibility_version=${default_version}
 default_mtail_version="3.0.0-rc49"
 compatibility_mtail_version=${default_mtail_version}
@@ -84,8 +84,7 @@ service_output_dir="generated"
 proOrmax_port_start=(30300 20200 40400 2379 3901)
 isPortSpecified="false"
 tars_listen_port_space=5
-
-executor_version=0
+executor_version=1
 
 #for pro or max expand
 expand_dir="expand"
