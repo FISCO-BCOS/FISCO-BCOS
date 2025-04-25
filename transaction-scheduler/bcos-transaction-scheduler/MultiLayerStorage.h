@@ -1,12 +1,10 @@
 #pragma once
-#include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-task/TBBWait.h"
 #include "bcos-task/Trait.h"
 #include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/ITTAPI.h"
 #include "bcos-utilities/Overloaded.h"
-#include "bcos-utilities/RecursiveLambda.h"
 #include <oneapi/tbb/parallel_invoke.h>
 #include <boost/throw_exception.hpp>
 #include <functional>
@@ -61,7 +59,8 @@ task::Task<bool> fillMissingValues(
     size_t count = 0;
     size_t gotSize = 0;
 
-    auto gotValues = co_await [&]() -> task::Task<std::vector<storage2::StorageValueType<ValueType>>> {
+    auto gotValues =
+        co_await [&]() -> task::Task<std::vector<storage2::StorageValueType<ValueType>>> {
         if constexpr (task::IsAwaitable<decltype(storage.readSome(
                           ::ranges::views::keys(missingKeyValues)))>)
         {
@@ -480,7 +479,7 @@ public:
         storage.m_storages.push_front(std::move(view.m_mutableStorage));
     }
 
-    task::Task<std::shared_ptr<MutableStorage>> mergeBackStorage()
+    task::Task<std::shared_ptr<MutableStorage>> mergeBackStorage(auto&... fromStorage)
     {
         std::unique_lock mergeLock(m_mergeMutex);
         std::unique_lock listLock(m_listMutex);
@@ -498,19 +497,21 @@ public:
                 [&]() {
                     ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
                         ittapi::ITT_DOMAINS::instance().MERGE_BACKEND);
-                    task::tbb::syncWait(storage2::merge(m_backendStorage.get(), backStorage));
+                    task::tbb::syncWait(
+                        storage2::merge(m_backendStorage.get(), backStorage, fromStorage...));
                 },
                 [&]() {
                     ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
                         ittapi::ITT_DOMAINS::instance().MERGE_CACHE);
-                    task::tbb::syncWait(storage2::merge(m_cacheStorage.get(), backStorage));
+                    task::tbb::syncWait(
+                        storage2::merge(m_cacheStorage.get(), backStorage, fromStorage...));
                 });
         }
         else
         {
             ittapi::Report report(ittapi::ITT_DOMAINS::instance().STORAGE2,
                 ittapi::ITT_DOMAINS::instance().MERGE_BACKEND);
-            co_await storage2::merge(m_backendStorage.get(), backStorage);
+            co_await storage2::merge(m_backendStorage.get(), backStorage, fromStorage...);
         }
 
         listLock.lock();

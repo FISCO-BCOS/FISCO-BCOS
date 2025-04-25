@@ -4,8 +4,11 @@
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-task/Wait.h>
 #include <fmt/format.h>
+#include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <functional>
+#include <ostream>
+#include <range/v3/view/transform.hpp>
 #include <string>
 #include <variant>
 
@@ -311,6 +314,23 @@ BOOST_AUTO_TEST_CASE(merge)
             ++i;
         }
         BOOST_CHECK_EQUAL(i, 19);
+
+        MemoryStorage<int, int, ORDERED> storage3;
+        MemoryStorage<int, int, ORDERED> storage4;
+        MemoryStorage<int, int, ORDERED | CONCURRENT> storage5;
+
+        co_await storage2::writeSome(storage3,
+            ::ranges::views::zip(::ranges::views::iota(0, 10), ::ranges::repeat_view<int>(100)));
+        co_await storage2::writeSome(storage4,
+            ::ranges::views::zip(::ranges::views::iota(10, 20), ::ranges::repeat_view<int>(100)));
+        co_await storage2::merge(storage5, storage3, storage4);
+
+        auto values2 = co_await storage2::readSome(storage5, ::ranges::views::iota(0, 20));
+        BOOST_CHECK_EQUAL(values2.size(), 20);
+        auto expectValues2 = ::ranges::views::iota(0, 20) | ::ranges::views::transform([](int i) {
+            return std::make_optional(100);
+        }) | ::ranges::to<std::vector>();
+        BOOST_CHECK(values2 == expectValues2);
     }());
 }
 

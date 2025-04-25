@@ -458,11 +458,22 @@ private:
             resultsLock.unlock();
 
             result.m_block->setBlockHeader(header);
+            typename MultiLayerStorage::MutableStorage prewriteStorage;
+            if (result.m_block->blockHeaderConst()->number() != 0)
+            {
+                ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
+                    ittapi::ITT_DOMAINS::instance().SET_BLOCK);
+                auto& backendStorage = m_multiLayerStorage.get().backendStorage();
+                co_await ledger::prewriteBlock(
+                    m_ledger.get(), result.m_transactions, result.m_block, false, prewriteStorage);
+            }
+
             tbb::parallel_invoke(
                 [&]() {
                     ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
                         ittapi::ITT_DOMAINS::instance().MERGE_STATE);
-                    task::tbb::syncWait(m_multiLayerStorage.get().mergeBackStorage());
+                    task::tbb::syncWait(
+                        m_multiLayerStorage.get().mergeBackStorage(prewriteStorage));
                 },
                 [&]() {
                     ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
@@ -470,15 +481,6 @@ private:
                     task::tbb::syncWait(ledger::storeTransactionsAndReceipts(
                         m_ledger.get(), result.m_transactions, result.m_block));
                 });
-
-            if (result.m_block->blockHeaderConst()->number() != 0)
-            {
-                ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
-                    ittapi::ITT_DOMAINS::instance().SET_BLOCK);
-                auto& backendStorage = m_multiLayerStorage.get().backendStorage();
-                co_await ledger::prewriteBlock(
-                    m_ledger.get(), result.m_transactions, result.m_block, false, backendStorage);
-            }
 
             auto ledgerConfig = co_await ledger::getLedgerConfig(m_ledger.get());
             ledgerConfig->setHash(header->hash());
