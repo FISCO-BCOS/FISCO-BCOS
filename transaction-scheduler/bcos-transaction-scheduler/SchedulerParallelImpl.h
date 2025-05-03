@@ -33,7 +33,7 @@ template <class MutableStorage, class Storage>
 struct StorageTrait
 {
     using LocalStorageView = View<MutableStorage, void, Storage>;
-    using LocalReadWriteSetStorage = ReadWriteSetStorage<LocalStorageView, executor_v1::StateKey>;
+    using LocalReadWriteSetStorage = ReadWriteSetStorage<LocalStorageView>;
 };
 
 struct ExecutionContext
@@ -173,7 +173,7 @@ size_t executeSinglePass(SchedulerParallelImpl& scheduler, auto& storage, auto& 
         ittapi::ITT_DOMAINS::instance().SINGLE_PASS);
 
     const auto count = RANGES::size(contexts);
-    ReadWriteSetStorage<decltype(storage), executor_v1::StateKey> writeSet(storage);
+    ReadWriteSetStorage<decltype(storage)> writeSet(storage);
 
     using Chunk = ChunkStatus<typename SchedulerParallelImpl::MutableStorage,
         std::decay_t<decltype(storage)>, std::decay_t<decltype(executor)>,
