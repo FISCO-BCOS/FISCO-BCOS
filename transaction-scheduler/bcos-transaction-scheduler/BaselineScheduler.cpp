@@ -34,14 +34,14 @@ bcos::h256 bcos::scheduler_v1::calculateTransactionRoot(
     std::vector<bcos::h256> merkleTrie;
     if (block.transactionsSize() > 0)
     {
-        auto hashes = ::ranges::views::iota(0LU, block.transactionsSize()) |
+        auto hashes = ::ranges::iota_view<size_t, size_t>(0LU, block.transactionsSize()) |
                       ::ranges::views::transform(
                           [&block](uint64_t index) { return block.transaction(index)->hash(); });
         merkle.generateMerkle(hashes, merkleTrie);
     }
     else
     {
-        auto hashes = ::ranges::views::iota(0LU, block.transactionsMetaDataSize()) |
+        auto hashes = ::ranges::iota_view<size_t, size_t>(0LU, block.transactionsMetaDataSize()) |
                       ::ranges::views::transform(
                           [&block](uint64_t index) { return block.transactionHash(index); });
         merkle.generateMerkle(hashes, merkleTrie);
