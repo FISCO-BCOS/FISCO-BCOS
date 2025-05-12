@@ -169,9 +169,8 @@ public:
     }
 
     template <::ranges::input_range Keys>
-    friend auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, View& view, Keys keys)
-        -> task::Task<std::vector<std::optional<Value>>>
-        requires ::ranges::sized_range<Keys>
+    friend task::Task<std::vector<std::optional<Value>>> tag_invoke(
+        storage2::tag_t<storage2::readSome> /*unused*/, View& view, Keys keys)
     {
         auto values = co_await view.readSome(std::move(keys));
         co_return ::ranges::views::transform(values, [](auto&& value) -> std::optional<Value> {
@@ -239,8 +238,8 @@ public:
         co_return co_await storage2::readOne(view.m_backendStorage.get(), key);
     }
 
-    friend auto tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/, View& view,
-        const auto& key, storage2::DIRECT_TYPE /*unused*/)
+    friend auto tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/, View& view, auto key,
+        storage2::DIRECT_TYPE /*unused*/)
         -> task::Task<task::AwaitableReturnType<
             std::invoke_result_t<storage2::ReadOne, MutableStorage&, decltype(key)>>>
     {
@@ -275,9 +274,9 @@ public:
     }
 
     friend task::Task<void> tag_invoke(
-        storage2::tag_t<storage2::merge> /*unused*/, View& toView, auto& fromStorage)
+        storage2::tag_t<storage2::merge> /*unused*/, View& toView, auto&... fromStorage)
     {
-        co_await storage2::merge(mutableStorage(toView), fromStorage);
+        co_await storage2::merge(mutableStorage(toView), fromStorage...);
     }
 
     friend task::Task<void> tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/, View& view,
@@ -300,9 +299,8 @@ public:
 
         task::Task<void> forwardIterators(::ranges::range auto iterators)
         {
-            for (auto& it : iterators)
+            for (auto& [variantIterator, item] : iterators)
             {
-                auto& [variantIterator, item] = it;
                 item = co_await std::visit(
                     [&](auto& input) -> task::Task<RangeValue> {
                         RangeValue item;

@@ -134,7 +134,7 @@ public:
 
         setNumberToHash(count, out.emplace_back());
         for (auto it = ::ranges::begin(originHashes) + index;
-             it < ::ranges::begin(originHashes) + index + count; ++it)
+            it < ::ranges::begin(originHashes) + index + count; ++it)
         {
             bcos::concepts::bytebuffer::assignTo(*it, out.emplace_back());
         }
@@ -162,9 +162,9 @@ public:
         }
     }
 
-    void generateMerkle(HashRange auto const& originHashes, MerkleRange auto& out) const
+    void generateMerkle(HashRange auto&& originHashes, MerkleRange auto& out) const
     {
-        if (::ranges::empty(originHashes)) [[unlikely]]
+        if (::ranges::empty(originHashes))
         {
             BOOST_THROW_EXCEPTION(std::invalid_argument{"Empty input"});
         }

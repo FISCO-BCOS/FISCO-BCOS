@@ -7,16 +7,15 @@
 namespace bcos::scheduler_v1
 {
 
-template <class StorageType, class KeyType>
+template <class StorageType>
 class ReadWriteSetStorage
 {
 private:
     std::reference_wrapper<std::remove_reference_t<StorageType>> m_storage;
 
 public:
-    using Key = KeyType;
-    using Value = typename task::AwaitableReturnType<std::invoke_result_t<storage2::ReadOne,
-        std::add_lvalue_reference_t<StorageType>, KeyType>>::value_type;
+    using Key = std::decay_t<StorageType>::Key;
+    using Value = std::decay_t<StorageType>::Value;
     ReadWriteSetStorage(StorageType& storage) : m_storage(std::ref(storage)) {}
 
 private:

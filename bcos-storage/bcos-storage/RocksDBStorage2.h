@@ -205,11 +205,20 @@ public:
     friend task::Task<void> tag_invoke(
         storage2::tag_t<storage2::merge> /*unused*/, RocksDBStorage2& storage, auto&... fromStorage)
     {
-        ::rocksdb::WriteBatch writeBatch;
-        co_await storage.writeToBatch(writeBatch, fromStorage...);
+        static thread_local std::unique_ptr<::rocksdb::WriteBatch> writeBatch;
+        auto currentWriteBatch =
+            writeBatch ? std::move(writeBatch) : std::make_unique<::rocksdb::WriteBatch>();
 
+        co_await storage.writeToBatch(*currentWriteBatch, fromStorage...);
         ::rocksdb::WriteOptions options;
-        auto status = storage.m_rocksDB.get().Write(options, std::addressof(writeBatch));
+        auto status = storage.m_rocksDB.get().Write(options, currentWriteBatch.get());
+
+        currentWriteBatch->Clear();
+        if (!writeBatch || currentWriteBatch->Data().capacity() > writeBatch->Data().capacity())
+        {
+            writeBatch = std::move(currentWriteBatch);
+        }
+
         if (!status.ok())
         {
             BOOST_THROW_EXCEPTION(RocksDBException{} << errinfo_comment(status.ToString()));
