@@ -188,8 +188,7 @@ private:
         }
         else
         {
-            auto view = std::span(value.bytes);
-            std::uninitialized_fill(view.begin(), view.end(), 0);
+            ::ranges::fill(value.bytes, 0);
         }
         co_return value;
     }
@@ -262,7 +261,7 @@ public:
             if (binaryAddress)
             {
                 assert(address.size() % 2 == 0);
-                m_tableName.reserve(ledger::SYS_DIRECTORY::USER_APPS.size() + address.size() / 2);
+                m_tableName.reserve(ledger::SYS_DIRECTORY::USER_APPS.size() + (address.size() / 2));
                 m_tableName.append(ledger::SYS_DIRECTORY::USER_APPS);
                 boost::algorithm::unhex(
                     address.begin(), address.end(), std::back_inserter(m_tableName));

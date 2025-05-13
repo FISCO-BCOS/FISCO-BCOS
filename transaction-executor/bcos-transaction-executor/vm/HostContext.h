@@ -323,7 +323,7 @@ public:
 
     task::Task<bool> exists([[maybe_unused]] const evmc_address& address, auto&&... /*unused*/)
     {
-        // TODO: impl the full suport for solidity
+        // TODO: impl the full support for solidity
         co_return true;
     }
 
