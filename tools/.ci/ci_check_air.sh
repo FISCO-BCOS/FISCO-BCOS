@@ -85,6 +85,9 @@ init_baseline()
     # Enable executor v1
     perl -p -i -e 's/version=0/version=1/g' nodes/127.0.0.1/node*/config.genesis
     cd nodes/127.0.0.1 && wait_and_start
+
+    # 为node0启用web3rpc
+    perl -p -i -e 'if (/web3_rpc/) { $flag=1 } elsif ($flag && s/enable\s*=\s*false/enable=true/i) { $flag=0; }' node0/config.ini
 }
 
 expand_node()
@@ -247,6 +250,14 @@ if [[ ${?} == "0" ]]; then
        echo "java_sdk_demo_ci_test error"
        exit 1
 fi
+bash ${current_path}/.ci/web3_test.sh
+if [[ ${?} == "0" ]]; then
+       LOG_INFO "web3 test success"
+   else
+       echo "web3 test error"
+       exit 1
+fi
+
 stop_node
 LOG_INFO "======== check baseline cases success ========"
 clear_node
