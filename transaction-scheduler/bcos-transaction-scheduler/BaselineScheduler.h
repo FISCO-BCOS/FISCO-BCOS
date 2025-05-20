@@ -130,7 +130,7 @@ task::Task<h256> calculateStateRoot(
     co_return xorHash.m_hash;
 }
 
-task::Task<std::tuple<u256, h256>> calculateReceiptRoot(
+std::tuple<u256, h256> calculateReceiptRoot(
     ::ranges::range auto const& receipts, protocol::Block& block, crypto::Hash const& hashImpl)
 {
     u256 gasUsed;
@@ -165,7 +165,7 @@ task::Task<std::tuple<u256, h256>> calculateReceiptRoot(
             }
         });
 
-    co_return {gasUsed, receiptRoot};
+    return {gasUsed, receiptRoot};
 }
 
 /**
@@ -194,10 +194,7 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto const& receip
             stateRoot = task::tbb::syncWait(
                 calculateStateRoot(storage, block.blockHeaderConst()->version(), hashImpl));
         },
-        [&]() {
-            std::tie(gasUsed, receiptRoot) =
-                task::tbb::syncWait(calculateReceiptRoot(receipts, block, hashImpl));
-        },
+        [&]() { std::tie(gasUsed, receiptRoot) = calculateReceiptRoot(receipts, block, hashImpl); },
         [&]() {
             sysBlock = ::ranges::any_of(transactions, [](auto const& transaction) {
                 return precompiled::contains(
@@ -458,11 +455,22 @@ private:
             resultsLock.unlock();
 
             result.m_block->setBlockHeader(header);
+            typename MultiLayerStorage::MutableStorage prewriteStorage;
+            if (result.m_block->blockHeaderConst()->number() != 0)
+            {
+                ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
+                    ittapi::ITT_DOMAINS::instance().SET_BLOCK);
+                auto& backendStorage = m_multiLayerStorage.get().backendStorage();
+                co_await ledger::prewriteBlock(
+                    m_ledger.get(), result.m_transactions, result.m_block, false, prewriteStorage);
+            }
+
             tbb::parallel_invoke(
                 [&]() {
                     ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
                         ittapi::ITT_DOMAINS::instance().MERGE_STATE);
-                    task::tbb::syncWait(m_multiLayerStorage.get().mergeBackStorage());
+                    task::tbb::syncWait(
+                        m_multiLayerStorage.get().mergeBackStorage(prewriteStorage));
                 },
                 [&]() {
                     ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
@@ -471,15 +479,6 @@ private:
                         m_ledger.get(), result.m_transactions, result.m_block));
                 });
 
-            if (result.m_block->blockHeaderConst()->number() != 0)
-            {
-                ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
-                    ittapi::ITT_DOMAINS::instance().SET_BLOCK);
-                auto& backendStorage = m_multiLayerStorage.get().backendStorage();
-                co_await ledger::prewriteBlock(
-                    m_ledger.get(), result.m_transactions, result.m_block, false, backendStorage);
-            }
-
             auto ledgerConfig = co_await ledger::getLedgerConfig(m_ledger.get());
             ledgerConfig->setHash(header->hash());
 
@@ -487,48 +486,45 @@ private:
                                          << " | elapsed: " << (current() - now) << "ms";
             commitLock.unlock();
 
-            tbb::this_task_arena::isolate([&]() {
-                m_asyncGroup.run([&, result = std::move(result), blockHash = ledgerConfig->hash(),
-                                     blockNumber = ledgerConfig->blockNumber()]() {
-                    ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
-                        ittapi::ITT_DOMAINS::instance().NOTIFY_RESULTS);
+            m_asyncGroup.run([&, result = std::move(result), blockHash = ledgerConfig->hash(),
+                                 blockNumber = ledgerConfig->blockNumber()]() {
+                ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
+                    ittapi::ITT_DOMAINS::instance().NOTIFY_RESULTS);
 
-                    auto submitResults =
-                        ::ranges::views::zip(
-                            ::ranges::views::iota(0), *result.m_transactions, result.m_receipts) |
-                        ::ranges::views::transform(
-                            [&](auto input) -> protocol::TransactionSubmitResult::Ptr {
-                                auto&& [index, transaction, receipt] = input;
+                auto submitResults =
+                    ::ranges::views::zip(
+                        ::ranges::views::iota(0), *result.m_transactions, result.m_receipts) |
+                    ::ranges::views::transform(
+                        [&](auto input) -> protocol::TransactionSubmitResult::Ptr {
+                            auto&& [index, transaction, receipt] = input;
 
-                                auto submitResult =
-                                    m_transactionSubmitResultFactory.get().createTxSubmitResult();
-                                submitResult->setStatus(receipt->status());
-                                submitResult->setTxHash(transaction->hash());
-                                submitResult->setBlockHash(blockHash);
-                                submitResult->setTransactionIndex(static_cast<int64_t>(index));
-                                submitResult->setNonce(std::string(transaction->nonce()));
-                                submitResult->setTransactionReceipt(receipt);
-                                submitResult->setSender(std::string(transaction->sender()));
-                                submitResult->setTo(std::string(transaction->to()));
+                            auto submitResult =
+                                m_transactionSubmitResultFactory.get().createTxSubmitResult();
+                            submitResult->setStatus(receipt->status());
+                            submitResult->setTxHash(transaction->hash());
+                            submitResult->setBlockHash(blockHash);
+                            submitResult->setTransactionIndex(static_cast<int64_t>(index));
+                            submitResult->setNonce(std::string(transaction->nonce()));
+                            submitResult->setTransactionReceipt(receipt);
+                            submitResult->setSender(std::string(transaction->sender()));
+                            submitResult->setTo(std::string(transaction->to()));
 
-                                return submitResult;
-                            }) |
-                        ::ranges::to<std::vector>();
+                            return submitResult;
+                        }) |
+                    ::ranges::to<std::vector>();
 
-                    auto submitResultsPtr =
-                        std::make_shared<bcos::protocol::TransactionSubmitResults>(
-                            std::move(submitResults));
-                    m_blockNumberNotifier(blockNumber);
-                    m_transactionNotifier(
-                        blockNumber, std::move(submitResultsPtr), [](const Error::Ptr& error) {
-                            if (error)
-                            {
-                                BASELINE_SCHEDULER_LOG(WARNING)
-                                    << "Push block notify error!"
-                                    << boost::diagnostic_information(*error);
-                            }
-                        });
-                });
+                auto submitResultsPtr = std::make_shared<bcos::protocol::TransactionSubmitResults>(
+                    std::move(submitResults));
+                m_blockNumberNotifier(blockNumber);
+                m_transactionNotifier(
+                    blockNumber, std::move(submitResultsPtr), [](const Error::Ptr& error) {
+                        if (error)
+                        {
+                            BASELINE_SCHEDULER_LOG(WARNING)
+                                << "Push block notify error!"
+                                << boost::diagnostic_information(*error);
+                        }
+                    });
             });
 
             co_return {Error::Ptr{}, std::move(ledgerConfig)};

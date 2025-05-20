@@ -310,13 +310,14 @@ public:
         return {};
     }
 
-    task::AwaitableValue<void> removeSome(::ranges::input_range auto keys, bool direct)
+    task::AwaitableValue<void> removeSome(
+        ::ranges::input_range auto keys, bool ignoreLogicalDeletion)
     {
         for (auto&& key : keys)
         {
             auto& bucket = getBucket(key);
             Lock lock(bucket.mutex, true);
-            writeOne(bucket, std::forward<decltype(key)>(key), deleteItem, direct);
+            writeOne(bucket, std::forward<decltype(key)>(key), deleteItem, ignoreLogicalDeletion);
         }
 
         return {};
@@ -434,10 +435,13 @@ public:
         return task::AwaitableValue(std::move(iterator));
     }
 
-    template <class FromStorage>
-        requires withConcurrent && (!FromStorage::withConcurrent)
-    friend task::Task<void> tag_invoke(
-        storage2::tag_t<merge> /*unused*/, MemoryStorage& toStorage, FromStorage& fromStorage)
+    void merge(MemoryStorage& toStorage)
+        requires withConcurrent
+    {}
+    template <class FromStorage, class... FromStorages>
+    void merge(MemoryStorage& toStorage, FromStorage& fromStorage, FromStorages&... fromStorages)
+        requires(withConcurrent && !FromStorage::withConcurrent &&
+                 (... && (!FromStorages::withConcurrent)))
     {
         auto& bucket = fromStorage.m_buckets[0];
         auto& index = bucket.container.template get<0>();
@@ -473,6 +477,15 @@ public:
                 }
             }
         });
+        merge(toStorage, fromStorages...);
+    }
+
+    template <class... FromStorages>
+        requires(withConcurrent && (... && (!FromStorages::withConcurrent)))
+    friend task::Task<void> tag_invoke(storage2::tag_t<storage2::merge> /*unused*/,
+        MemoryStorage& toStorage, FromStorages&... fromStorage)
+    {
+        toStorage.merge(toStorage, fromStorage...);
         co_return;
     }
 };

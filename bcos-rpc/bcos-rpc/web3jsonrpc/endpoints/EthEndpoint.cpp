@@ -255,8 +255,8 @@ task::Task<void> EthEndpoint::getTransactionCount(const Json::Value& request, Js
         {
             WEB3_LOG(TRACE) << "eth_getTransactionCount pending tx from txpool"
                             << LOG_KV("address", address) << LOG_KV("blockTag", blockTag)
-                            << LOG_KV("nonce", nonce.value() + 1);
-            Json::Value result = toQuantity(nonce.value() + 1);
+                            << LOG_KV("nonce", nonce.value());
+            Json::Value result = toQuantity(nonce.value());
             buildJsonContent(result, response);
             co_return;
         }
