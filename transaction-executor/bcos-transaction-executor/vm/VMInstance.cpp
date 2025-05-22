@@ -1,7 +1,6 @@
 #include "VMInstance.h"
 #include <evmone/advanced_analysis.hpp>
 #include <evmone/advanced_execution.hpp>
-#include <range/v3/algorithm/lexicographical_compare.hpp>
 
 bcos::executor_v1::VMInstance::VMInstance(
     std::shared_ptr<evmone::baseline::CodeAnalysis const> instance) noexcept
