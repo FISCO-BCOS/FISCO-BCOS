@@ -81,6 +81,6 @@ protected:
     boost::mutex x_signalled;
     bcos::crypto::Hash::Ptr m_hashImpl;
 
-    std::chrono::steady_clock::time_point increseLastFetchTimepoint();
+    std::chrono::steady_clock::time_point increaseLastFetchTimepoint();
 };
 }  // namespace bcos::sealer

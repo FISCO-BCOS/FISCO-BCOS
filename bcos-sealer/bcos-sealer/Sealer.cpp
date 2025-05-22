@@ -113,13 +113,13 @@ void Sealer::executeWorker()
                 std::chrono::steady_clock::now() - m_lastFetchTimepoint.load());
             duration > std::chrono::seconds(m_fetchTimeout))
         {
-            increseLastFetchTimepoint();
+            increaseLastFetchTimepoint();
             m_sealerConfig->txpool()->tryToSyncTxsFromPeers();
         }
     }
     else
     {
-        increseLastFetchTimepoint();
+        increaseLastFetchTimepoint();
     }
 
     // try to generateProposal
@@ -217,7 +217,7 @@ uint16_t Sealer::hookWhenSealBlock(bcos::protocol::Block::Ptr _block)
             ledger::Features::Flag::bugfix_rpbft_vrf_blocknumber_input));
 }
 
-std::chrono::steady_clock::time_point Sealer::increseLastFetchTimepoint()
+std::chrono::steady_clock::time_point Sealer::increaseLastFetchTimepoint()
 {
     auto now = std::chrono::steady_clock::now();
     auto current = m_lastFetchTimepoint.load();
