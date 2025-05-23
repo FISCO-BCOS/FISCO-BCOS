@@ -29,9 +29,9 @@
 #include "bcos-utilities/ITTAPI.h"
 #include <fmt/format.h>
 #include <oneapi/tbb/blocked_range.h>
-#include <oneapi/tbb/concurrent_vector.h>
 #include <oneapi/tbb/parallel_invoke.h>
-#include <oneapi/tbb/parallel_reduce.h>
+#include <oneapi/tbb/parallel_pipeline.h>
+#include <oneapi/tbb/task_arena.h>
 #include <oneapi/tbb/task_group.h>
 #include <boost/atomic.hpp>
 #include <boost/exception/diagnostic_information.hpp>
@@ -84,50 +84,39 @@ std::chrono::milliseconds::rep current();
 task::Task<h256> calculateStateRoot(
     auto& storage, uint32_t blockVersion, crypto::Hash const& hashImpl)
 {
-    constexpr static auto STATE_ROOT_CHUNK_SIZE = 64;
     auto range = co_await storage2::range(storage);
     storage::Entry deletedEntry;
     deletedEntry.setStatus(storage::Entry::DELETED);
 
-    tbb::concurrent_vector<h256> hashes;
-    tbb::task_group hashGroup;
-    while (auto keyValue = co_await range.next())
-    {
-        hashGroup.run([keyValue = std::move(keyValue), &hashes, &deletedEntry, &hashImpl]() {
-            auto [key, value] = *keyValue;
-            executor_v1::StateKeyView view(key);
-            auto [tableName, keyName] = view.get();
+    h256 totalHash;
+    using KeyValueType = task::AwaitableReturnType<decltype(range.next())>;
+    tbb::parallel_pipeline(tbb::this_task_arena::max_concurrency(),
+        tbb::make_filter<void, KeyValueType>(tbb::filter_mode::serial_in_order,
+            [&](tbb::flow_control& control) -> KeyValueType {
+                if (auto keyValue = task::tbb::syncWait(range.next()))
+                {
+                    return keyValue;
+                }
+                control.stop();
+                return {};
+            }) &
+            tbb::make_filter<KeyValueType, h256>(tbb::filter_mode::parallel,
+                [&](KeyValueType keyValue) -> h256 {
+                    auto& [key, value] = *keyValue;
+                    executor_v1::StateKeyView view(key);
+                    auto [tableName, keyName] = view.get();
 
-            const storage::Entry* entry = nullptr;
-            if (entry = std::get_if<storage::Entry>(std::addressof(value)); !entry)
-            {
-                entry = std::addressof(deletedEntry);
-            }
-
-            hashes.emplace_back(entry->hash(tableName, keyName, hashImpl,
-                static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION)));
-        });
-    }
-    hashGroup.wait();
-
-    struct XORHash
-    {
-        h256 m_hash;
-        std::reference_wrapper<decltype(hashes) const> m_hashes;
-
-        XORHash(decltype(hashes) const& hashes) : m_hashes(hashes) {};
-        XORHash(XORHash& source, tbb::split /*unused*/) : m_hashes(source.m_hashes) {};
-        void operator()(const tbb::blocked_range<size_t>& range)
-        {
-            for (size_t i = range.begin(); i != range.end(); ++i)
-            {
-                m_hash ^= m_hashes.get()[i];
-            }
-        }
-        void join(XORHash const& rhs) { m_hash ^= rhs.m_hash; }
-    } xorHash(hashes);
-    tbb::parallel_reduce(tbb::blocked_range<size_t>(0, hashes.size()), xorHash);
-    co_return xorHash.m_hash;
+                    const storage::Entry* entry = nullptr;
+                    if (entry = std::get_if<storage::Entry>(std::addressof(value)); !entry)
+                    {
+                        entry = std::addressof(deletedEntry);
+                    }
+                    return entry->hash(tableName, keyName, hashImpl,
+                        static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION));
+                }) &
+            tbb::make_filter<h256, void>(
+                tbb::filter_mode::serial_out_of_order, [&](h256 hash) { totalHash ^= hash; }));
+    co_return totalHash;
 }
 
 std::tuple<u256, h256> calculateReceiptRoot(
