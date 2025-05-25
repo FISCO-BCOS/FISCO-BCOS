@@ -1,14 +1,10 @@
 #pragma once
 
-#include "../Common.h"
-#include "bcos-framework/storage/StorageInterface.h"
-#include "bcos-framework/storage/Table.h"
-#include "bcos-table/src/StateStorage.h"
 #include "bcos-table/src/StorageWrapper.h"
 #include <boost/iterator/iterator_categories.hpp>
 #include <boost/throw_exception.hpp>
 #include <optional>
-#include <thread>
+#include <utility>
 #include <vector>
 
 namespace bcos::executor
@@ -24,7 +20,7 @@ public:
     SyncStorageWrapper(storage::StateStorageInterface::Ptr storage,
         std::function<void(std::string)> externalAcquireKeyLocks,
         bcos::storage::Recoder::Ptr recoder)
-      : StorageWrapper(storage, recoder),
+      : StorageWrapper(std::move(storage), std::move(recoder)),
         m_externalAcquireKeyLocks(std::move(externalAcquireKeyLocks))
     {}
 

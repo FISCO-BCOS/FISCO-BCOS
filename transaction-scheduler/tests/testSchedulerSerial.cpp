@@ -1,8 +1,6 @@
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
-#include "bcos-framework/transaction-executor/TransactionExecutor.h"
-#include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-transaction-scheduler/MultiLayerStorage.h"
@@ -18,30 +16,27 @@ using namespace bcos::scheduler_v1;
 
 struct MockExecutorSerial
 {
-    struct Context
+    template <class Storage>
+    struct ExecuteContext
     {
+        template <int step>
+        task::Task<protocol::TransactionReceipt::Ptr> executeStep()
+        {
+            co_return {};
+        }
     };
 
-    friend task::Task<Context> tag_invoke(executor_v1::tag_t<createExecuteContext> /*unused*/,
-        MockExecutorSerial& executor, auto& storage, protocol::BlockHeader const& blockHeader,
+    auto createExecuteContext(auto& storage, protocol::BlockHeader const& blockHeader,
         protocol::Transaction const& transaction, int32_t contextID,
-        ledger::LedgerConfig const& ledgerConfig, bool call)
+        ledger::LedgerConfig const& ledgerConfig,
+        bool call) -> task::Task<ExecuteContext<std::decay_t<decltype(storage)>>>
     {
         co_return {};
     }
 
-    template <int step>
-    friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
-        executor_v1::tag_t<executeStep> /*unused*/, Context& executeContext)
-    {
-        co_return {};
-    }
-
-    friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
-        executor_v1::tag_t<executor_v1::executeTransaction> /*unused*/,
-        MockExecutorSerial& executor, auto& storage, protocol::BlockHeader const& blockHeader,
-        protocol::Transaction const& transaction, int contextID, ledger::LedgerConfig const&,
-        auto&& waitOperator)
+    task::Task<protocol::TransactionReceipt::Ptr> executeTransaction(auto& storage,
+        protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
+        int contextID, ledger::LedgerConfig const&, auto&& waitOperator)
     {
         co_return {};
     }
@@ -90,10 +85,9 @@ BOOST_AUTO_TEST_CASE(executeBlock)
         auto view = fork(multiLayerStorage);
         view.newMutable();
         ledger::LedgerConfig ledgerConfig;
-        auto receipts =
-            co_await bcos::scheduler_v1::executeBlock(scheduler, view, executor, blockHeader,
-                transactions | RANGES::views::transform([](auto& ptr) -> auto& { return *ptr; }),
-                ledgerConfig);
+        auto receipts = co_await scheduler.executeBlock(view, executor, blockHeader,
+            transactions | RANGES::views::transform([](auto& ptr) -> auto& { return *ptr; }),
+            ledgerConfig);
         BOOST_CHECK_EQUAL(transactions.size(), receipts.size());
 
         co_return;

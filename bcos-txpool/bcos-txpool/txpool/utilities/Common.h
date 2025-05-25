@@ -19,8 +19,9 @@
  */
 
 #pragma once
-#include "bcos-utilities/Common.h"
 
+#include <cstddef>
+#include <cstdint>
 namespace bcos::txpool
 {
 // Trigger a transaction cleanup operation every 3s

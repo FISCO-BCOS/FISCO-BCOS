@@ -20,8 +20,6 @@
 #include "bcos-framework/protocol/TransactionSubmitResultFactory.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
-#include "bcos-framework/transaction-executor/TransactionExecutor.h"
-#include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
 #include "bcos-task/TBBWait.h"
 #include "bcos-task/Wait.h"
@@ -323,9 +321,8 @@ private:
             auto transactions = co_await getTransactions(m_txpool.get(), *block);
 
             auto ledgerConfig = co_await ledger::getLedgerConfig(view, blockHeader->number());
-            auto receipts =
-                co_await scheduler_v1::executeBlock(m_schedulerImpl.get(), view, m_executor.get(),
-                    *blockHeader, ::ranges::views::indirect(transactions), *ledgerConfig);
+            auto receipts = co_await m_schedulerImpl.get().executeBlock(view, m_executor.get(),
+                *blockHeader, ::ranges::views::indirect(transactions), *ledgerConfig);
 
             auto executedBlockHeader = m_blockHeaderFactory.get().populateBlockHeader(blockHeader);
             bool sysBlock = false;
@@ -449,7 +446,6 @@ private:
             {
                 ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
                     ittapi::ITT_DOMAINS::instance().SET_BLOCK);
-                auto& backendStorage = m_multiLayerStorage.get().backendStorage();
                 co_await ledger::prewriteBlock(
                     m_ledger.get(), result.m_transactions, result.m_block, false, prewriteStorage);
             }
@@ -589,8 +585,8 @@ public:
             blockHeader->setVersion(ledgerConfig->compatibilityVersion());
             blockHeader->setNumber(ledgerConfig->blockNumber() + 1);  // Use next block number
             blockHeader->calculateHash(self->m_hashImpl.get());
-            auto receipt = co_await executor_v1::executeTransaction(self->m_executor.get(), view,
-                *blockHeader, *transaction, 0, *ledgerConfig, true, task::syncWait);
+            auto receipt = co_await self->m_executor.get().executeTransaction(
+                view, *blockHeader, *transaction, 0, *ledgerConfig, true, task::syncWait);
 
             callback(nullptr, std::move(receipt));
         }(this, std::move(transaction), std::move(callback)));

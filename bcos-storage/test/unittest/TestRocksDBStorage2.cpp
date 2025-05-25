@@ -3,7 +3,6 @@
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Wait.h"
 #include <bcos-framework/storage/Entry.h>
-#include <bcos-framework/transaction-executor/TransactionExecutor.h>
 #include <bcos-storage/RocksDBStorage2.h>
 #include <bcos-storage/StateKVResolver.h>
 #include <fmt/format.h>
