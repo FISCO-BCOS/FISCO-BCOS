@@ -93,7 +93,7 @@ public:
         {}
 
         template <int step>
-        task::Task<protocol::TransactionReceipt::Ptr> executeStep() noexcept
+        task::Task<protocol::TransactionReceipt::Ptr> executeStep()
         {
             if constexpr (step == 0)
             {
@@ -101,7 +101,8 @@ public:
             }
             else if constexpr (step == 1)
             {
-                if (co_await updateNonce())
+                auto updated = co_await updateNonce();
+                if (updated)
                 {
                     m_startSavepoint = m_rollbackableStorage.current();
                 }
@@ -118,8 +119,9 @@ public:
 
         task::Task<bool> updateNonce()
         {
-            if (auto& transaction = m_transaction.get(); transaction.type() == 1)  // 1 = web3
-                                                                                   // transaction
+            if (const auto& transaction = m_transaction.get();
+                transaction.type() == 1)  // 1 = web3
+                                          // transaction
             {
                 auto& callNonce = m_nonce;
                 ledger::account::EVMAccount account(m_rollbackableStorage, m_origin,
@@ -237,15 +239,15 @@ public:
                                           std::to_string(m_transaction.get().version())));
             }
 
-            TRANSACTION_EXECUTOR_LOG(TRACE) << "Execte transaction finished: " << *receipt;
+            TRANSACTION_EXECUTOR_LOG(TRACE) << "Execute transaction finished: " << *receipt;
             co_return receipt;  // 完成第三步 Complete the third step
         }
     };
 
     auto createExecuteContext(auto& storage, protocol::BlockHeader const& blockHeader,
         protocol::Transaction const& transaction, int contextID,
-        ledger::LedgerConfig const& ledgerConfig,
-        bool call) -> task::Task<std::unique_ptr<ExecuteContext<std::decay_t<decltype(storage)>>>>
+        ledger::LedgerConfig const& ledgerConfig, bool call)
+        -> task::Task<std::unique_ptr<ExecuteContext<std::decay_t<decltype(storage)>>>>
     {
         TRANSACTION_EXECUTOR_LOG(TRACE) << "Create transaction context: " << transaction;
         co_return std::make_unique<ExecuteContext<std::decay_t<decltype(storage)>>>(
