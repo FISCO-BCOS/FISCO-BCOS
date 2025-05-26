@@ -326,7 +326,7 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
                 callParameters->senderAddress,
                 m_blockContext.features().get(ledger::Features::Flag::feature_raw_address));
             task::wait([](decltype(address) addr) -> task::Task<void> {
-                co_await ledger::account::increaseNonce(addr);
+                co_await addr.increaseNonce();
             }(std::move(address)));
         }
     }
@@ -348,15 +348,15 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
                     callParameters->senderAddress,
                     m_blockContext.features().get(ledger::Features::Flag::feature_raw_address));
                 task::wait([](decltype(address) addr, u256 callNonce) -> task::Task<void> {
-                    if (!co_await ledger::account::exists(addr))
+                    if (!co_await addr.exists())
                     {
-                        co_await ledger::account::create(addr);
+                        co_await addr.create();
                     }
-                    auto const nonceInStorage = co_await ledger::account::nonce(addr);
+                    auto const nonceInStorage = co_await addr.nonce();
                     // FIXME)) : only web3 tx use this
                     auto const storageNonce = u256(nonceInStorage.value_or("0"));
                     auto const newNonce = std::max(callNonce, storageNonce) + 1;
-                    co_await ledger::account::setNonce(addr, newNonce.convert_to<std::string>());
+                    co_await addr.setNonce(newNonce.convert_to<std::string>());
                 }(std::move(address), callParameters->nonce));
             }
         }
@@ -789,8 +789,8 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
             // set nonce to 1 when create contract
             ledger::account::EVMAccount account(
                 *m_blockContext.storage(), callParameters->codeAddress, false);
-            task::wait([](decltype(account) contract_account) -> task::Task<void> {
-                co_await ledger::account::setNonce(contract_account, "1");
+            task::wait([](decltype(account) contractAccount) -> task::Task<void> {
+                co_await contractAccount.setNonce("1");
             }(std::move(account)));
         }
 
