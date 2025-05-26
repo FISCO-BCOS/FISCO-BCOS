@@ -359,7 +359,7 @@ static void noConflictTransfer(benchmark::State& state)
                     auto view = fork(fixture.m_multiLayerStorage);
                     view.newMutable();
 
-                    [[maybe_unused]] auto receipts = scheduler.executeBlock(view,
+                    [[maybe_unused]] auto receipts = co_await scheduler.executeBlock(view,
                         fixture.m_executor, blockHeader,
                         ::ranges::views::indirect(fixture.m_transactions), fixture.m_ledgerConfig);
                     fixture.m_transactions.clear();
