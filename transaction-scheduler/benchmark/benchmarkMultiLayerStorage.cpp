@@ -1,6 +1,5 @@
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include <bcos-framework/storage2/MemoryStorage.h>
-#include <bcos-framework/transaction-executor/TransactionExecutor.h>
 #include <bcos-task/Wait.h>
 #include <bcos-transaction-scheduler/MultiLayerStorage.h>
 #include <benchmark/benchmark.h>
@@ -14,7 +13,7 @@ using namespace std::string_view_literals;
 
 struct Fixture
 {
-    Fixture() : multiLayerStorage(m_backendStorage) {}
+    Fixture() : multiLayerStorage(m_backendStorage){};
 
     void prepareData(int64_t count, int layer = 0)
     {

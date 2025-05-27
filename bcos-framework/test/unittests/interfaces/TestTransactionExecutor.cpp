@@ -1,5 +1,4 @@
 #include "bcos-framework/transaction-executor/StateKey.h"
-#include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos::executor_v1;

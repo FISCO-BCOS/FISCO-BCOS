@@ -1,13 +1,10 @@
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/Storage.h"
-#include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
-#include "bcos-task/Generator.h"
 #include "bcos-transaction-scheduler/MultiLayerStorage.h"
 #include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-framework/transaction-executor/TransactionExecutor.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-task/Wait.h>
 #include <bcos-transaction-scheduler/SchedulerParallelImpl.h>
@@ -21,30 +18,27 @@ using namespace std::string_view_literals;
 
 struct MockExecutorParallel
 {
-    struct Context
+    template <class Storage>
+    struct ExecuteContext
     {
+        template <int step>
+        task::Task<protocol::TransactionReceipt::Ptr> executeStep()
+        {
+            co_return {};
+        }
     };
 
-    friend task::Task<Context> tag_invoke(executor_v1::tag_t<createExecuteContext> /*unused*/,
-        MockExecutorParallel& executor, auto& storage, protocol::BlockHeader const& blockHeader,
+    auto createExecuteContext(auto& storage, protocol::BlockHeader const& blockHeader,
         protocol::Transaction const& transaction, int32_t contextID,
         ledger::LedgerConfig const& ledgerConfig, bool call)
+        -> task::Task<std::unique_ptr<ExecuteContext<std::decay_t<decltype(storage)>>>>
     {
         co_return {};
     }
 
-    template <int step>
-    friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
-        executor_v1::tag_t<executeStep> /*unused*/, Context& executeContext)
-    {
-        co_return {};
-    }
-
-    friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
-        bcos::executor_v1::tag_t<bcos::executor_v1::executeTransaction> /*unused*/,
-        MockExecutorParallel& executor, auto& storage, protocol::BlockHeader const& blockHeader,
-        protocol::Transaction const& transaction, int contextID, ledger::LedgerConfig const&,
-        auto&& waitOperator, auto&&...)
+    task::Task<protocol::TransactionReceipt::Ptr> executeTransaction(auto& storage,
+        protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
+        int contextID, ledger::LedgerConfig const&, auto&& waitOperator, auto&&...)
     {
         co_return {};
     }
@@ -93,10 +87,9 @@ BOOST_AUTO_TEST_CASE(simple)
         auto view = fork(multiLayerStorage);
         view.newMutable();
         ledger::LedgerConfig ledgerConfig;
-        auto receipts =
-            co_await bcos::scheduler_v1::executeBlock(scheduler, view, executor, blockHeader,
-                transactions | ::ranges::views::transform([](auto& ptr) -> auto& { return *ptr; }),
-                ledgerConfig);
+        auto receipts = co_await scheduler.executeBlock(view, executor, blockHeader,
+            transactions | ::ranges::views::transform([](auto& ptr) -> auto& { return *ptr; }),
+            ledgerConfig);
         BOOST_CHECK_EQUAL(transactions.size(), receipts.size());
 
         co_return;
@@ -108,61 +101,60 @@ constexpr static size_t MOCK_USER_COUNT = 1000;
 struct MockConflictExecutor
 {
     template <class Storage>
-    struct Context
+    struct ExecuteContext
     {
         protocol::Transaction const* transaction;
         Storage* storage;
 
         std::string fromAddress;
         std::string toAddress;
+
+        template <int step>
+        task::Task<protocol::TransactionReceipt::Ptr> executeStep()
+        {
+            if constexpr (step == 0)
+            {
+                auto input = transaction->input();
+                auto inputNum = boost::lexical_cast<int>(
+                    std::string_view((const char*)input.data(), input.size()));
+                fromAddress = std::to_string(inputNum % MOCK_USER_COUNT);
+                toAddress = std::to_string((inputNum + (MOCK_USER_COUNT / 2)) % MOCK_USER_COUNT);
+            }
+            else if constexpr (step == 1)
+            {
+                StateKey fromKey{"t_test"sv, fromAddress};
+                auto fromEntry = co_await storage2::readOne(*storage, fromKey);
+                fromEntry->set(boost::lexical_cast<std::string>(
+                    boost::lexical_cast<int>(fromEntry->get()) - 1));
+                co_await storage2::writeOne(*storage, fromKey, *fromEntry);
+
+                // Read toKey and +1
+                StateKey toKey{"t_test"sv, toAddress};
+                auto toEntry = co_await storage2::readOne(*storage, toKey);
+                toEntry->set(
+                    boost::lexical_cast<std::string>(boost::lexical_cast<int>(toEntry->get()) + 1));
+                co_await storage2::writeOne(*storage, toKey, *toEntry);
+            }
+            else if constexpr (step == 2)
+            {
+                co_return std::shared_ptr<bcos::protocol::TransactionReceipt>(
+                    (bcos::protocol::TransactionReceipt*)0x10086, [](auto* p) {});
+            }
+            co_return {};
+        }
     };
 
-    friend auto tag_invoke(executor_v1::tag_t<createExecuteContext> /*unused*/,
-        MockConflictExecutor& executor, auto& storage, protocol::BlockHeader const& blockHeader,
+    auto createExecuteContext(auto& storage, protocol::BlockHeader const& blockHeader,
         protocol::Transaction const& transaction, int32_t contextID,
         ledger::LedgerConfig const& ledgerConfig, bool call)
-        -> task::Task<Context<std::decay_t<decltype(storage)>>>
+        -> task::Task<std::unique_ptr<ExecuteContext<std::decay_t<decltype(storage)>>>>
     {
-        co_return {.transaction = std::addressof(transaction),
-            .storage = std::addressof(storage),
-            .fromAddress = {},
-            .toAddress = {}};
-    }
-
-    template <int step>
-    friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
-        executor_v1::tag_t<executeStep> /*unused*/, auto& executeContext)
-    {
-        if constexpr (step == 0)
-        {
-            auto input = executeContext.transaction->input();
-            auto inputNum =
-                boost::lexical_cast<int>(std::string_view((const char*)input.data(), input.size()));
-            executeContext.fromAddress = std::to_string(inputNum % MOCK_USER_COUNT);
-            executeContext.toAddress =
-                std::to_string((inputNum + (MOCK_USER_COUNT / 2)) % MOCK_USER_COUNT);
-        }
-        else if constexpr (step == 1)
-        {
-            StateKey fromKey{"t_test"sv, executeContext.fromAddress};
-            auto fromEntry = co_await storage2::readOne(*executeContext.storage, fromKey);
-            fromEntry->set(
-                boost::lexical_cast<std::string>(boost::lexical_cast<int>(fromEntry->get()) - 1));
-            co_await storage2::writeOne(*executeContext.storage, fromKey, *fromEntry);
-
-            // Read toKey and +1
-            StateKey toKey{"t_test"sv, executeContext.toAddress};
-            auto toEntry = co_await storage2::readOne(*executeContext.storage, toKey);
-            toEntry->set(
-                boost::lexical_cast<std::string>(boost::lexical_cast<int>(toEntry->get()) + 1));
-            co_await storage2::writeOne(*executeContext.storage, toKey, *toEntry);
-        }
-        else if constexpr (step == 2)
-        {
-            co_return std::shared_ptr<bcos::protocol::TransactionReceipt>(
-                (bcos::protocol::TransactionReceipt*)0x10086, [](auto* p) {});
-        }
-        co_return {};
+        co_return std::make_unique<ExecuteContext<std::decay_t<decltype(storage)>>>(
+            ExecuteContext<std::decay_t<decltype(storage)>>{
+                .transaction = std::addressof(transaction),
+                .storage = std::addressof(storage),
+                .fromAddress = {},
+                .toAddress = {}});
     }
 };
 
@@ -204,8 +196,8 @@ BOOST_AUTO_TEST_CASE(conflict)
         auto view = fork(multiLayerStorage);
         view.newMutable();
         ledger::LedgerConfig ledgerConfig;
-        auto receipts = co_await bcos::scheduler_v1::executeBlock(
-            scheduler, view, executor, blockHeader, transactionRefs, ledgerConfig);
+        auto receipts = co_await scheduler.executeBlock(
+            view, executor, blockHeader, transactionRefs, ledgerConfig);
         auto& front2 = mutableStorage(view);
         pushView(multiLayerStorage, std::move(view));
 

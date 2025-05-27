@@ -34,7 +34,6 @@
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
-#include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Wait.h"
 #include "bcos-tool/BfsFileFactory.h"
