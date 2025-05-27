@@ -156,9 +156,9 @@ protected:
 
     TxPoolConfig::Ptr m_config;
 
-    using TxsMap = BucketMap<bcos::crypto::HashType, bcos::protocol::Transaction::Ptr,
-        std::hash<bcos::crypto::HashType>>;
-    TxsMap m_txsTable, m_invalidTxs;
+    using TxsMap = BucketMap<bcos::crypto::HashType, bcos::protocol::Transaction::Ptr>;
+    TxsMap m_txsTable;
+    TxsMap m_invalidTxs;
 
     using HashSet = BucketSet<bcos::crypto::HashType, std::hash<bcos::crypto::HashType>>;
     HashSet m_missedTxs;
