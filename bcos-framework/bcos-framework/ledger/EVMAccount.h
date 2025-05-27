@@ -175,6 +175,7 @@ public:
             auto field = valueEntry->get();
             evmc_bytes32 value;
             std::uninitialized_copy_n(field.data(), sizeof(value), value.bytes);
+            co_return value;
         }
         else
         {
