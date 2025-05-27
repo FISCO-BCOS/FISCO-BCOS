@@ -785,11 +785,8 @@ bool MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
 
         if (currentTime > (tx->importTime() + m_txsExpirationTime))
         {
-            // add to m_invalidTxs to be deleted
-            {
-                TxsMap::WriteAccessor accessor;
-                m_invalidTxs.insert(accessor, {txHash, tx});
-            }
+            TxsMap::WriteAccessor accessor;
+            m_invalidTxs.insert(accessor, {txHash, tx});
             return false;
         }
 
