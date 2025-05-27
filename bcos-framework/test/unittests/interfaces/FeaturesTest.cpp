@@ -156,6 +156,7 @@ BOOST_AUTO_TEST_CASE(feature)
         "bugfix_precompiled_gascalc",
         "bugfix_method_auth_sender",
         "bugfix_precompiled_evm_status",
+        "bugfix_check_nonce_in_executive",
         "feature_dmc2serial",
         "feature_sharding",
         "feature_rpbft",

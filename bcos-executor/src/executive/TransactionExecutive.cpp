@@ -315,6 +315,29 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
         }
     }
 
+    if (callParameters->origin == callParameters->senderAddress &&
+        callParameters->transactionType != TransactionType::BCOSTransaction &&
+        m_blockContext.features().get(ledger::Features::Flag::bugfix_check_nonce_in_executive))
+    {
+        // only check eoa tx
+        ledger::account::EVMAccount eoa(*m_blockContext.backendStorage(),
+            callParameters->senderAddress,
+            m_blockContext.features().get(ledger::Features::Flag::feature_raw_address));
+        auto const nonceInStorage = task::syncWait(bcos::ledger::account::nonce(eoa));
+        if (auto const storageNonce = u256(nonceInStorage.value_or("0"));
+            callParameters->nonce < storageNonce)
+        {
+            EXECUTIVE_LOG(WARNING)
+                << LOG_BADGE("Execute") << LOG_DESC("nonce is not match and will revert")
+                << LOG_KV("nonceInStorage", storageNonce)
+                << LOG_KV("callNonce", callParameters->nonce);
+            callResults = std::move(callParameters);
+            callResults->status = static_cast<int32_t>(TransactionStatus::RevertInstruction);
+            callResults->evmStatus = EVMC_REVERT;
+            return callResults;
+        }
+    }
+
     if (m_blockContext.features().get(
             ledger::Features::Flag::bugfix_nonce_not_increase_when_revert))
     {
