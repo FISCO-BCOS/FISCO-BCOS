@@ -123,7 +123,6 @@ task::Task<void> Web3NonceChecker::insertMemoryNonce(std::string sender, std::st
     {
         co_await storage2::writeOne(m_maxNonces, sender, uNonce + 1);
     }
-    co_return;
 }
 
 task::Task<std::optional<u256>> Web3NonceChecker::getPendingNonce(std::string_view sender)

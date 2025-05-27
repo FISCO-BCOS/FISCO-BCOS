@@ -609,7 +609,7 @@ public:
 
             ledger::account::EVMAccount account(view, contractAddress,
                 ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address));
-            auto code = co_await ledger::account::code(account);
+            auto code = co_await account.code();
 
             if (!code)
             {
@@ -633,7 +633,7 @@ public:
 
             ledger::account::EVMAccount account(view, contractAddress,
                 ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address));
-            auto abi = co_await ledger::account::abi(account);
+            auto abi = co_await account.abi();
 
             if (!abi)
             {

@@ -1776,7 +1776,7 @@ static task::Task<void> importGenesisState(
 
         account::EVMAccount account(
             storage, address, features.get(Features::Flag::feature_raw_address));
-        co_await account::create(account);
+        co_await account.create();
 
         if (!importAccount.code.empty())
         {
@@ -1785,17 +1785,17 @@ static task::Task<void> importGenesisState(
             boost::algorithm::unhex(importAccount.code, std::back_inserter(binaryCode));
 
             auto codeHash = hashImpl.hash(binaryCode);
-            co_await account::setCode(account, std::move(binaryCode), std::string{}, codeHash);
+            co_await account.setCode(std::move(binaryCode), std::string{}, codeHash);
         }
 
         if (!importAccount.nonce.empty())
         {
-            co_await account::setNonce(account, std::move(importAccount.nonce));
+            co_await account.setNonce(std::move(importAccount.nonce));
         }
 
         if (importAccount.balance > 0)
         {
-            co_await account::setBalance(account, importAccount.balance);
+            co_await account.setBalance(importAccount.balance);
         }
 
         if (!importAccount.storage.empty())
@@ -1807,7 +1807,7 @@ static task::Task<void> importGenesisState(
                 evmc_bytes32 evmValue;
                 boost::algorithm::unhex(value, evmValue.bytes);
 
-                co_await account::setStorage(account, evmKey, evmValue);
+                co_await account.setStorage(evmKey, evmValue);
             }
         }
     }
