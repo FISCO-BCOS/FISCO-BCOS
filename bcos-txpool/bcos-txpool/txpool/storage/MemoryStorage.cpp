@@ -660,7 +660,7 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
 
     startT = utcTime();
     task::syncWait(m_config->txValidator()->web3NonceChecker()->updateNonceCache(
-        ::ranges::views::keys(web3NonceMap), ::ranges::views::values(web3NonceMap)));
+        ::ranges::views::all(web3NonceMap)));
     auto updateWeb3NonceT = utcTime() - startT;
 
     startT = utcTime();
