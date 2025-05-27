@@ -1,8 +1,6 @@
 #include "../../src/executive/TransactionExecutive.h"
 #include "fixture/TransactionFixture.h"
-
 #include <bcos-crypto/ChecksumAddress.h>
-#include <bcos-framework/ledger/Account.h>
 #include <bcos-framework/ledger/EVMAccount.h>
 
 #include <boost/test/unit_test.hpp>
@@ -38,8 +36,8 @@ public:
         auto const address = newLegacyEVMAddressString(sender.ref(), u256(nonce));
 
         bcos::ledger::account::EVMAccount eoa(*storage, sender.hex(), false);
-        task::syncWait(bcos::ledger::account::create(eoa));
-        task::syncWait(bcos::ledger::account::setBalance(eoa, u256(1000000000000000ULL)));
+        task::syncWait(eoa.create());
+        task::syncWait(eoa.setBalance(u256(1000000000000000ULL)));
 
         auto params = std::make_unique<NativeExecutionMessage>();
         params->setNonce(toQuantity(nonce));
@@ -76,10 +74,10 @@ public:
 
         commitBlock(blockNumber);
 
-        auto const nonceOfEoa = task::syncWait(bcos::ledger::account::nonce(eoa));
+        auto const nonceOfEoa = task::syncWait(eoa.nonce());
 
         bcos::ledger::account::EVMAccount contractAddress(*storage, address, false);
-        auto const nonceOfContract = task::syncWait(bcos::ledger::account::nonce(contractAddress));
+        auto const nonceOfContract = task::syncWait(contractAddress.nonce());
         if (type == TransactionType::BCOSTransaction)
         {
             BOOST_CHECK_EQUAL(nonceOfContract.has_value(), true);
@@ -107,8 +105,8 @@ public:
         auto const sender = keyPair->address(hashImpl);
 
         bcos::ledger::account::EVMAccount eoa(*storage, sender.hex(), false);
-        task::syncWait(bcos::ledger::account::create(eoa));
-        task::syncWait(bcos::ledger::account::setBalance(eoa, u256(1000000000000000ULL)));
+        task::syncWait(eoa.create());
+        task::syncWait(eoa.setBalance(u256(1000000000000000ULL)));
 
         auto params = std::make_unique<NativeExecutionMessage>();
         params->setNonce(toQuantity(nonce));
@@ -144,10 +142,10 @@ public:
         }
         commitBlock(blockNumber);
 
-        auto const nonceOfEoa = task::syncWait(bcos::ledger::account::nonce(eoa));
+        auto const nonceOfEoa = task::syncWait(eoa.nonce());
 
         bcos::ledger::account::EVMAccount contractAccount(*storage, contractAddress, false);
-        auto const nonceOfContract = task::syncWait(bcos::ledger::account::nonce(contractAccount));
+        auto const nonceOfContract = task::syncWait(contractAccount.nonce());
         if (type == TransactionType::BCOSTransaction)
         {
             BOOST_CHECK_EQUAL(nonceOfContract.has_value(), true);
@@ -174,8 +172,8 @@ public:
         auto const sender = keyPair->address(hashImpl);
 
         bcos::ledger::account::EVMAccount eoa(*storage, sender.hex(), false);
-        task::syncWait(bcos::ledger::account::create(eoa));
-        task::syncWait(bcos::ledger::account::setBalance(eoa, u256(1000000000000000ULL)));
+        task::syncWait(eoa.create());
+        task::syncWait(eoa.setBalance(u256(1000000000000000ULL)));
 
         auto params = std::make_unique<NativeExecutionMessage>();
         params->setNonce(toQuantity(nonce));
@@ -211,10 +209,10 @@ public:
         }
         commitBlock(blockNumber);
 
-        auto const nonceOfEoa = task::syncWait(bcos::ledger::account::nonce(eoa));
+        auto const nonceOfEoa = task::syncWait(eoa.nonce());
 
         bcos::ledger::account::EVMAccount contractAccount(*storage, contractAddress, false);
-        auto const nonceOfContract = task::syncWait(bcos::ledger::account::nonce(contractAccount));
+        auto const nonceOfContract = task::syncWait(contractAccount.nonce());
         if (type == TransactionType::BCOSTransaction)
         {
             BOOST_CHECK_EQUAL(nonceOfContract.has_value(), true);
@@ -242,8 +240,8 @@ public:
         auto sender = keyPair->address(hashImpl).hex();
 
         bcos::ledger::account::EVMAccount eoa(*storage, sender, false);
-        task::syncWait(bcos::ledger::account::create(eoa));
-        task::syncWait(bcos::ledger::account::setBalance(eoa, u256(initBalance)));
+        task::syncWait(eoa.create());
+        task::syncWait(eoa.setBalance(u256(initBalance)));
 
         auto params = std::make_unique<NativeExecutionMessage>();
         params->setTransactionHash(hash);
@@ -278,7 +276,7 @@ public:
 
         commitBlock(blockNumber);
 
-        auto const nonceOfEoa = task::syncWait(bcos::ledger::account::nonce(eoa));
+        auto const nonceOfEoa = task::syncWait(eoa.nonce());
 
         if (type == TransactionType::BCOSTransaction)
         {
@@ -300,8 +298,8 @@ public:
     {
         auto const sender = keyPair->address(hashImpl);
         bcos::ledger::account::EVMAccount eoa(*storage, sender.hex(), false);
-        task::syncWait(bcos::ledger::account::create(eoa));
-        task::syncWait(bcos::ledger::account::setBalance(eoa, u256(1000000000000000ULL)));
+        task::syncWait(eoa.create());
+        task::syncWait(eoa.setBalance(u256(1000000000000000ULL)));
 
         for (auto it = nonces.begin(); it != nonces.end(); ++it)
         {
@@ -332,7 +330,7 @@ public:
             std::promise<ExecutionMessage::UniquePtr> executePromise;
             executor->executeTransaction(std::move(params), [&](auto&& error, auto&& result) {
                 BOOST_CHECK(!error);
-                executePromise.set_value(std::move(result));
+                executePromise.set_value(std::forward<decltype(result)>(result));
             });
 
             auto result = executePromise.get_future().get();
@@ -425,7 +423,7 @@ BOOST_AUTO_TEST_CASE(testMultiNonce)
 
     auto const sender = keyPair->address(hashImpl);
     bcos::ledger::account::EVMAccount eoa(*storage, sender.hex(), false);
-    auto const nonceOfEoa = task::syncWait(bcos::ledger::account::nonce(eoa));
+    auto const nonceOfEoa = task::syncWait(eoa.nonce());
 
     BOOST_CHECK_EQUAL(nonceOfEoa.value(), "10020");
 }

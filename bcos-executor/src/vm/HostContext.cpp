@@ -247,7 +247,7 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
         ledger::account::EVMAccount account(*m_executive->storage().getRawStorage(),
             request->senderAddress, features().get(ledger::Features::Flag::feature_raw_address));
         request->nonce = task::syncWait([](decltype(account) contract) -> task::Task<u256> {
-            auto const nonceString = co_await ledger::account::nonce(contract);
+            auto const nonceString = co_await contract.nonce();
             // uint in storage
             auto nonce = u256(nonceString.value_or("0"));
             co_return nonce;

@@ -190,14 +190,13 @@ BOOST_AUTO_TEST_CASE(costBalance)
         ledger::account::EVMAccount senderAccount(storage, senderAddress, false);
 
         constexpr static int64_t initBalance = 90000 + 21000;
-        co_await ledger::account::setBalance(senderAccount, initBalance);
+        co_await senderAccount.setBalance(initBalance);
 
         receipt = co_await executor.executeTransaction(
             storage, blockHeader, *transaction, 0, ledgerConfig, false, task::syncWait);
         BOOST_CHECK_EQUAL(receipt->status(), 0);
         BOOST_CHECK_EQUAL(receipt->contractAddress(), "e0e794ca86d198042b64285c5ce667aee747509b");
-        BOOST_CHECK_EQUAL(
-            co_await ledger::account::balance(senderAccount), initBalance - receipt->gasUsed());
+        BOOST_CHECK_EQUAL(co_await senderAccount.balance(), initBalance - receipt->gasUsed());
     }());
 }
 
@@ -226,11 +225,11 @@ BOOST_AUTO_TEST_CASE(nonce)
             receipt->status(), static_cast<int32_t>(protocol::TransactionStatus::None));
 
         ledger::account::EVMAccount senderAccount(storage, senderAddress, false);
-        auto nonce = co_await ledger::account::nonce(senderAccount);
+        auto nonce = co_await senderAccount.nonce();
         BOOST_CHECK_EQUAL(nonce.value(), "6");
 
         ledger::account::EVMAccount contractAccount(storage, receipt->contractAddress(), false);
-        auto contractNonce = co_await ledger::account::nonce(contractAccount);
+        auto contractNonce = co_await contractAccount.nonce();
         BOOST_CHECK_EQUAL(contractNonce.value(), "1");
 
         bcos::codec::abi::ContractABICodec abiCodec(*cryptoSuite->hashImpl());
@@ -249,15 +248,15 @@ BOOST_AUTO_TEST_CASE(nonce)
             storage, blockHeader, *deployCallTx, 0, ledgerConfig, false, task::syncWait);
 
         BOOST_CHECK_EQUAL(receipt->status(), 0);
-        nonce = co_await ledger::account::nonce(senderAccount);
+        nonce = co_await senderAccount.nonce();
         BOOST_CHECK_EQUAL(nonce.value(), "7");
 
-        contractNonce = co_await ledger::account::nonce(contractAccount);
+        contractNonce = co_await contractAccount.nonce();
         BOOST_REQUIRE(contractNonce);
         BOOST_CHECK_EQUAL(*contractNonce, "2");
 
-        BOOST_REQUIRE(co_await ledger::account::exists(expectAccount));
-        auto expectNonce = co_await ledger::account::nonce(expectAccount);
+        BOOST_REQUIRE(co_await expectAccount.exists());
+        auto expectNonce = co_await expectAccount.nonce();
         BOOST_CHECK_EQUAL(expectNonce.value(), "1");
 
         input = abiCodec.abiIn("returnRevert()");
@@ -270,9 +269,9 @@ BOOST_AUTO_TEST_CASE(nonce)
             storage, blockHeader, *revertTx, 0, ledgerConfig, false, task::syncWait);
 
         BOOST_CHECK_NE(receipt->status(), 0);
-        BOOST_CHECK_EQUAL((co_await ledger::account::nonce(senderAccount)).value(), "17");
-        BOOST_CHECK_EQUAL((co_await ledger::account::nonce(contractAccount)).value(), "2");
-        BOOST_CHECK_EQUAL((co_await ledger::account::nonce(expectAccount)).value(), "1");
+        BOOST_CHECK_EQUAL((co_await senderAccount.nonce()).value(), "17");
+        BOOST_CHECK_EQUAL((co_await contractAccount.nonce()).value(), "2");
+        BOOST_CHECK_EQUAL((co_await expectAccount.nonce()).value(), "1");
     }());
 }
 
@@ -328,7 +327,7 @@ BOOST_AUTO_TEST_CASE(cashRevert)
         BOOST_CHECK_EQUAL(receipt->contractAddress(), "");
 
         ledger::account::EVMAccount senderAccount(storage, senderAddress, false);
-        auto nonce = co_await ledger::account::nonce(senderAccount);
+        auto nonce = co_await senderAccount.nonce();
         BOOST_CHECK_EQUAL(nonce.value(), "1");
     }());
 }

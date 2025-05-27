@@ -1,7 +1,6 @@
 #pragma once
 
 #include "RollbackableStorage.h"
-#include "bcos-framework/ledger/Account.h"
 #include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
@@ -128,14 +127,14 @@ public:
                     m_ledgerConfig.get().features().get(
                         ledger::Features::Flag::feature_raw_address));
 
-                if (!co_await ledger::account::exists(account))
+                if (!co_await account.exists())
                 {
-                    co_await ledger::account::create(account);
+                    co_await account.create();
                 }
-                auto nonceInStorage = co_await ledger::account::nonce(account);
+                auto nonceInStorage = co_await account.nonce();
                 auto storageNonce = u256(nonceInStorage.value_or("0"));
                 u256 newNonce = std::max(callNonce, storageNonce) + 1;
-                co_await ledger::account::setNonce(account, newNonce.convert_to<std::string>());
+                co_await account.setNonce(newNonce.convert_to<std::string>());
                 co_return true;
             }
             co_return false;
@@ -156,7 +155,7 @@ public:
 
                     auto balanceUsed = m_gasUsed * gasPrice;
                     auto senderAccount = getAccount(m_hostContext, evmcMessage.sender);
-                    auto senderBalance = co_await ledger::account::balance(senderAccount);
+                    auto senderBalance = co_await senderAccount.balance();
 
                     if (senderBalance < balanceUsed)
                     {
@@ -176,8 +175,7 @@ public:
                     }
                     else
                     {
-                        co_await ledger::account::setBalance(
-                            senderAccount, senderBalance - balanceUsed);
+                        co_await senderAccount.setBalance(senderBalance - balanceUsed);
                     }
                 }
             }
