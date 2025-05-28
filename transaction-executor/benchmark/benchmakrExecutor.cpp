@@ -57,8 +57,8 @@ struct Fixture
                 [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
             createTransaction.mutableInner().data.input.assign(
                 m_helloworldBytecodeBinary.begin(), m_helloworldBytecodeBinary.end());
-            auto receipt = co_await m_executor.executeTransaction(m_backendStorage, blockHeader,
-                createTransaction, 0, ledgerConfig, false, task::syncWait);
+            auto receipt = co_await m_executor.executeTransaction(
+                m_backendStorage, blockHeader, createTransaction, 0, ledgerConfig, false);
             contractAddress = receipt->contractAddress();
         }());
 
@@ -82,9 +82,9 @@ static void create(benchmark::State& state)
             for (auto const& it : state)
             {
                 ++contextID;
-                [[maybe_unused]] auto receipt = co_await fixture.m_executor.executeTransaction(
-                    fixture.m_backendStorage, fixture.blockHeader, transaction, contextID,
-                    fixture.ledgerConfig, false, task::syncWait);
+                [[maybe_unused]] auto receipt =
+                    co_await fixture.m_executor.executeTransaction(fixture.m_backendStorage,
+                        fixture.blockHeader, transaction, contextID, fixture.ledgerConfig, false);
             }
         }(state, transaction));
 }
@@ -108,9 +108,9 @@ static void call_setInt(benchmark::State& state)
             transaction.mutableInner().dataHash.resize(1);
 
             ++contextID;
-            [[maybe_unused]] auto receipt = co_await fixture.m_executor.executeTransaction(
-                fixture.m_backendStorage, fixture.blockHeader, transaction, contextID,
-                fixture.ledgerConfig, false, task::syncWait);
+            [[maybe_unused]] auto receipt =
+                co_await fixture.m_executor.executeTransaction(fixture.m_backendStorage,
+                    fixture.blockHeader, transaction, contextID, fixture.ledgerConfig, false);
         }
     }(state));
 }
@@ -134,9 +134,9 @@ static void call_setString(benchmark::State& state)
             transaction.mutableInner().data.to = contractAddress;
             transaction.mutableInner().dataHash.resize(1);
             ++contextID;
-            [[maybe_unused]] auto receipt = co_await fixture.m_executor.executeTransaction(
-                fixture.m_backendStorage, fixture.blockHeader, transaction, contextID,
-                fixture.ledgerConfig, false, task::syncWait);
+            [[maybe_unused]] auto receipt =
+                co_await fixture.m_executor.executeTransaction(fixture.m_backendStorage,
+                    fixture.blockHeader, transaction, contextID, fixture.ledgerConfig, false);
         }
     }(state));
 }
@@ -159,9 +159,9 @@ static void call_delegateCall(benchmark::State& state)
         for (auto const& it : state)
         {
             ++contextID;
-            [[maybe_unused]] auto receipt = co_await fixture.m_executor.executeTransaction(
-                fixture.m_backendStorage, fixture.blockHeader, transaction1, contextID,
-                fixture.ledgerConfig, false, task::syncWait);
+            [[maybe_unused]] auto receipt =
+                co_await fixture.m_executor.executeTransaction(fixture.m_backendStorage,
+                    fixture.blockHeader, transaction1, contextID, fixture.ledgerConfig, false);
         }
     }(state));
 }
@@ -184,9 +184,9 @@ static void call_deployAndCall(benchmark::State& state)
         for (auto const& it : state)
         {
             ++contextID;
-            [[maybe_unused]] auto receipt = co_await fixture.m_executor.executeTransaction(
-                fixture.m_backendStorage, fixture.blockHeader, transaction1, contextID,
-                fixture.ledgerConfig, false, task::syncWait);
+            [[maybe_unused]] auto receipt =
+                co_await fixture.m_executor.executeTransaction(fixture.m_backendStorage,
+                    fixture.blockHeader, transaction1, contextID, fixture.ledgerConfig, false);
         }
     }(state));
 }

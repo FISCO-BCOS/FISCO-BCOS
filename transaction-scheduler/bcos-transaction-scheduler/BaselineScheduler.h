@@ -586,7 +586,7 @@ public:
             blockHeader->setNumber(ledgerConfig->blockNumber() + 1);  // Use next block number
             blockHeader->calculateHash(self->m_hashImpl.get());
             auto receipt = co_await self->m_executor.get().executeTransaction(
-                view, *blockHeader, *transaction, 0, *ledgerConfig, true, task::syncWait);
+                view, *blockHeader, *transaction, 0, *ledgerConfig, true);
 
             callback(nullptr, std::move(receipt));
         }(this, std::move(transaction), std::move(callback)));

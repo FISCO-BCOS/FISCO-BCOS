@@ -18,11 +18,11 @@
 #include <memory>
 #include <type_traits>
 
-DERIVE_BCOS_EXCEPTION(InvalidReceiptVersion);
-
 namespace bcos::executor_v1
 {
 #define TRANSACTION_EXECUTOR_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("TRANSACTION_EXECUTOR")
+
+DERIVE_BCOS_EXCEPTION(InvalidReceiptVersion);
 
 evmc_message newEVMCMessage(protocol::BlockNumber blockNumber,
     protocol::Transaction const& transaction, int64_t gasLimit, const evmc_address& origin);
@@ -244,8 +244,8 @@ public:
 
     auto createExecuteContext(auto& storage, protocol::BlockHeader const& blockHeader,
         protocol::Transaction const& transaction, int contextID,
-        ledger::LedgerConfig const& ledgerConfig, bool call)
-        -> task::Task<std::unique_ptr<ExecuteContext<std::decay_t<decltype(storage)>>>>
+        ledger::LedgerConfig const& ledgerConfig,
+        bool call) -> task::Task<std::unique_ptr<ExecuteContext<std::decay_t<decltype(storage)>>>>
     {
         TRANSACTION_EXECUTOR_LOG(TRACE) << "Create transaction context: " << transaction;
         co_return std::make_unique<ExecuteContext<std::decay_t<decltype(storage)>>>(
@@ -254,7 +254,7 @@ public:
 
     task::Task<protocol::TransactionReceipt::Ptr> executeTransaction(auto& storage,
         protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
-        int contextID, ledger::LedgerConfig const& ledgerConfig, bool call, auto&& syncWait)
+        int contextID, ledger::LedgerConfig const& ledgerConfig, bool call)
     {
         auto executeContext = co_await createExecuteContext(
             storage, blockHeader, transaction, contextID, ledgerConfig, call);

@@ -30,8 +30,8 @@ struct MockExecutorParallel
 
     auto createExecuteContext(auto& storage, protocol::BlockHeader const& blockHeader,
         protocol::Transaction const& transaction, int32_t contextID,
-        ledger::LedgerConfig const& ledgerConfig, bool call)
-        -> task::Task<std::unique_ptr<ExecuteContext<std::decay_t<decltype(storage)>>>>
+        ledger::LedgerConfig const& ledgerConfig,
+        bool call) -> task::Task<std::unique_ptr<ExecuteContext<std::decay_t<decltype(storage)>>>>
     {
         co_return {};
     }
@@ -146,8 +146,8 @@ struct MockConflictExecutor
 
     auto createExecuteContext(auto& storage, protocol::BlockHeader const& blockHeader,
         protocol::Transaction const& transaction, int32_t contextID,
-        ledger::LedgerConfig const& ledgerConfig, bool call)
-        -> task::Task<std::unique_ptr<ExecuteContext<std::decay_t<decltype(storage)>>>>
+        ledger::LedgerConfig const& ledgerConfig,
+        bool call) -> task::Task<std::unique_ptr<ExecuteContext<std::decay_t<decltype(storage)>>>>
     {
         co_return std::make_unique<ExecuteContext<std::decay_t<decltype(storage)>>>(
             ExecuteContext<std::decay_t<decltype(storage)>>{
@@ -155,6 +155,13 @@ struct MockConflictExecutor
                 .storage = std::addressof(storage),
                 .fromAddress = {},
                 .toAddress = {}});
+    }
+
+    task::Task<protocol::TransactionReceipt::Ptr> executeTransaction(auto& storage,
+        protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
+        int contextID, ledger::LedgerConfig const& /*unused*/, bool /*unused*/)
+    {
+        co_return {};
     }
 };
 

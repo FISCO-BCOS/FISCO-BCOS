@@ -28,15 +28,15 @@ struct MockExecutorSerial
 
     auto createExecuteContext(auto& storage, protocol::BlockHeader const& blockHeader,
         protocol::Transaction const& transaction, int32_t contextID,
-        ledger::LedgerConfig const& ledgerConfig, bool call)
-        -> task::Task<std::unique_ptr<ExecuteContext<std::decay_t<decltype(storage)>>>>
+        ledger::LedgerConfig const& ledgerConfig,
+        bool call) -> task::Task<std::unique_ptr<ExecuteContext<std::decay_t<decltype(storage)>>>>
     {
         co_return {};
     }
 
     task::Task<protocol::TransactionReceipt::Ptr> executeTransaction(auto& storage,
         protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
-        int contextID, ledger::LedgerConfig const&, auto&& waitOperator)
+        int contextID, ledger::LedgerConfig const& /*unused*/, bool /*unused*/)
     {
         co_return {};
     }

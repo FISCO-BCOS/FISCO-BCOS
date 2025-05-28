@@ -4,10 +4,8 @@
 #include "MultiLayerStorage.h"
 #include "ReadWriteSetStorage.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
-#include "bcos-framework/protocol/BlockHeader.h"
-#include "bcos-framework/protocol/Transaction.h"
-#include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-framework/storage2/Storage.h"
+#include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-task/TBBWait.h"
 #include "bcos-utilities/ITTAPI.h"
 #include <oneapi/tbb/cache_aligned_allocator.h>
@@ -20,7 +18,6 @@
 #include <functional>
 #include <memory>
 #include <range/v3/view/enumerate.hpp>
-#include <type_traits>
 
 namespace bcos::scheduler_v1
 {
@@ -41,7 +38,8 @@ struct ExecutionContext
     protocol::TransactionReceipt::Ptr* receipt;
 };
 
-template <class MutableStorage, class Storage, class TransactionExecutor, class Contexts>
+template <class MutableStorage, class Storage,
+    executor_v1::IsTransactionExecutor<Storage> TransactionExecutor, class Contexts>
 class ChunkStatus
 {
 private:
@@ -153,7 +151,8 @@ public:
         co_await storage2::merge(storage, lastStorage);
     }
 
-    size_t executeSinglePass(auto& storage, auto& executor,
+    template <class Storage, executor_v1::IsTransactionExecutor<Storage> TransactionExecutor>
+    size_t executeSinglePass(Storage& storage, TransactionExecutor& executor,
         protocol::BlockHeader const& blockHeader, ledger::LedgerConfig const& ledgerConfig,
         ::ranges::random_access_range auto& contexts, size_t chunkSize)
     {
@@ -161,10 +160,10 @@ public:
             ittapi::ITT_DOMAINS::instance().SINGLE_PASS);
 
         const auto count = ::ranges::size(contexts);
-        ReadWriteSetStorage<decltype(storage)> writeSet(storage);
+        ReadWriteSetStorage<Storage> writeSet(storage);
 
-        using Chunk = ChunkStatus<typename SchedulerParallelImpl::MutableStorage,
-            std::decay_t<decltype(storage)>, std::decay_t<decltype(executor)>,
+        using Chunk = ChunkStatus<typename SchedulerParallelImpl::MutableStorage, Storage,
+            TransactionExecutor,
             decltype(::ranges::subrange<::ranges::iterator_t<decltype(contexts)>>(contexts))>;
 
         boost::atomic_flag hasRAW;
@@ -316,8 +315,9 @@ public:
         return 0;
     }
 
-    task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(auto& storage,
-        auto& executor, protocol::BlockHeader const& blockHeader,
+    template <class Storage, executor_v1::IsTransactionExecutor<Storage> TransactionExecutor>
+    task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(Storage& storage,
+        TransactionExecutor& executor, protocol::BlockHeader const& blockHeader,
         ::ranges::random_access_range auto const& transactions,
         ledger::LedgerConfig const& ledgerConfig)
     {
