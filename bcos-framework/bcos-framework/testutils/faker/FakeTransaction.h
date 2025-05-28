@@ -65,6 +65,7 @@ inline auto fakeTransaction(CryptoSuite::Ptr _cryptoSuite, KeyPairInterface::Ptr
     return pbTransaction;
 }
 
+
 inline void checkTransaction(
     Transaction::ConstPtr pbTransaction, Transaction::ConstPtr decodedTransaction)
 {
@@ -84,11 +85,11 @@ inline void checkTransaction(
 inline Transaction::Ptr testTransaction(CryptoSuite::Ptr _cryptoSuite,
     KeyPairInterface::Ptr _keyPair, const std::string_view& _to, bytes const& _input,
     std::string const& _nonce, int64_t _blockLimit, std::string const& _chainId,
-    std::string const& _groupId, bool isCheck = true)
+    std::string const& _groupId, bool isCheck = true, const uint64_t value = 0)
 {
     auto factory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(_cryptoSuite);
     auto pbTransaction = fakeTransaction(
-        _cryptoSuite, _keyPair, _to, _input, _nonce, _blockLimit, _chainId, _groupId);
+        _cryptoSuite, _keyPair, _to, _input, _nonce, _blockLimit, _chainId, _groupId, "", 0 ,value);
     auto addr = _keyPair->address(_cryptoSuite->hashImpl());
     if (isCheck)
     {
@@ -153,12 +154,11 @@ inline Transaction::Ptr fakeTransaction(CryptoSuite::Ptr _cryptoSuite, const std
 }
 
 inline Transaction::Ptr fakeWeb3Tx(CryptoSuite::Ptr _cryptoSuite, std::string nonce,
-    crypto::KeyPairInterface::UniquePtr const& key)
+    crypto::KeyPairInterface::UniquePtr const& key, std::string inputStr = "testTransaction")
 {
     bcostars::Transaction transaction;
 
     transaction.data.to = key->address(_cryptoSuite->hashImpl()).hex();
-    std::string inputStr = "testTransaction";
     transaction.data.input.assign(inputStr.begin(), inputStr.end());
     transaction.data.nonce = std::move(nonce);
     transaction.type = static_cast<tars::Char>(TransactionType::Web3Transaction);
@@ -200,6 +200,22 @@ inline TransactionsPtr fakeTransactions(int _size)
             cryptoSuite, keyPair, to, input, nonce.str(), blockLimit, chainId, groupId));
     }
     return txs;
+}
+
+inline Transaction::Ptr fakeInvalidateTransacton(std::string inputStr, const uint64_t value)
+{
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
+    auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
+    bcos::crypto::KeyPairInterface::Ptr keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
+    auto to = *toHexString(cryptoSuite->calculateAddress(keyPair->publicKey()).asBytes());
+    bytes input = asBytes(inputStr);
+    u256 nonce = 120012323;
+    int64_t blockLimit = 1001;
+    std::string chainId = "InvalidateChainId";
+    std::string groupId = "InvalidateGroupId";
+    return testTransaction(
+        cryptoSuite, keyPair, to, input, nonce.str(), blockLimit, chainId, groupId, false, value);
 }
 }  // namespace test
 }  // namespace bcos
