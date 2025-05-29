@@ -5,10 +5,13 @@
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-task/Trait.h"
-#include <concepts>
 
 namespace bcos::executor_v1
 {
+
+template <class Storage>
+concept IsExecutorStorage = storage2::IsReadableStorage<Storage, StateKeyView> &&
+                            storage2::IsWritableStorage<Storage, StateKey, StateValue>;
 
 template <class TransactionExecutor, class Storage>
 concept IsTransactionExecutor = requires(TransactionExecutor& executor, Storage& storage,

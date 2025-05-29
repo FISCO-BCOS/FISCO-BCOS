@@ -22,7 +22,8 @@ class SchedulerSerialImpl
 public:
     constexpr static auto MIN_TRANSACTION_GRAIN_SIZE = 16;
 
-    template <class Storage, executor_v1::IsTransactionExecutor<Storage> TransactionExecutor>
+    template <executor_v1::IsExecutorStorage Storage,
+        executor_v1::IsTransactionExecutor<Storage> TransactionExecutor>
     task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(Storage& storage,
         TransactionExecutor& executor, protocol::BlockHeader const& blockHeader,
         ::ranges::input_range auto const& transactions, ledger::LedgerConfig const& ledgerConfig)

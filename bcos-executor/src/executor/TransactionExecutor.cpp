@@ -418,7 +418,7 @@ std::shared_ptr<BlockContext> TransactionExecutor::createBlockContextForCall(
         blockNumber, blockHash, timestamp, blockVersion, m_isWasm, m_isAuthCheck);
     ledger::Features features;
     task::syncWait(features.readFromStorage(*storage, blockNumber + 1));
-    context->setFeatures(std::move(features));
+    context->setFeatures(features);
     ledger::SystemConfigs config;
     task::syncWait(readFromStorage(config, *storage, blockNumber + 1));
     context->setConfigs(std::move(config));
