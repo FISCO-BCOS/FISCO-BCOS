@@ -6,6 +6,7 @@
 #include "bcos-executor/src/Common.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/protocol/Protocol.h"
+#include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tars-protocol/tars/Transaction.h"
 #include <bcos-crypto/hash/Keccak256.h>
@@ -34,6 +35,10 @@ public:
     PrecompiledManager precompiledManager{cryptoSuite->hashImpl()};
     bcos::executor_v1::TransactionExecutorImpl executor{
         receiptFactory, cryptoSuite->hashImpl(), precompiledManager};
+
+    static_assert(
+        bcos::executor_v1::IsTransactionExecutor<bcos::executor_v1::TransactionExecutorImpl,
+            MutableStorage>);
 };
 
 BOOST_FIXTURE_TEST_SUITE(TransactionExecutorImpl, TestTransactionExecutorImplFixture)
@@ -52,7 +57,7 @@ BOOST_AUTO_TEST_CASE(execute)
         auto transaction =
             transactionFactory.createTransaction(0, "", helloworldBytecodeBinary, {}, 0, "", "", 0);
         auto receipt = co_await executor.executeTransaction(
-            storage, blockHeader, *transaction, 0, ledgerConfig, false, task::syncWait);
+            storage, blockHeader, *transaction, 0, ledgerConfig, false);
         BOOST_CHECK_EQUAL(receipt->status(), 0);
         BOOST_CHECK_EQUAL(receipt->contractAddress(), "e0e794ca86d198042b64285c5ce667aee747509b");
 
@@ -62,7 +67,7 @@ BOOST_AUTO_TEST_CASE(execute)
         auto transaction2 = transactionFactory.createTransaction(
             0, std::string(receipt->contractAddress()), input, {}, 0, "", "", 0);
         auto receipt2 = co_await executor.executeTransaction(
-            storage, blockHeader, *transaction2, 1, ledgerConfig, false, task::syncWait);
+            storage, blockHeader, *transaction2, 1, ledgerConfig, false);
         BOOST_CHECK_EQUAL(receipt2->status(), 0);
 
         // Get the value
@@ -70,7 +75,7 @@ BOOST_AUTO_TEST_CASE(execute)
         auto transaction3 = transactionFactory.createTransaction(
             0, std::string(receipt->contractAddress()), input2, {}, 0, "", "", 0);
         auto receipt3 = co_await executor.executeTransaction(
-            storage, blockHeader, *transaction3, 2, ledgerConfig, false, task::syncWait);
+            storage, blockHeader, *transaction3, 2, ledgerConfig, false);
         BOOST_CHECK_EQUAL(receipt3->status(), 0);
         bcos::s256 getIntResult = -1;
         abiCodec.abiOut(receipt3->output(), getIntResult);
@@ -98,7 +103,7 @@ BOOST_AUTO_TEST_CASE(transientStorageTest)
         auto transaction =
             transactionFactory.createTransaction(0, "", transientStorageBinary, {}, 0, "", "", 0);
         auto receipt = co_await executor.executeTransaction(
-            storage, blockHeader, *transaction, 3, ledgerConfig, false, task::syncWait);
+            storage, blockHeader, *transaction, 3, ledgerConfig, false);
         BOOST_CHECK_EQUAL(receipt->status(), 0);
 
         // test read and write transient storage
@@ -107,7 +112,7 @@ BOOST_AUTO_TEST_CASE(transientStorageTest)
         auto transaction2 = transactionFactory.createTransaction(
             0, std::string(receipt->contractAddress()), input, {}, 0, "", "", 0);
         auto receipt2 = co_await executor.executeTransaction(
-            storage, blockHeader, *transaction2, 4, ledgerConfig, false, task::syncWait);
+            storage, blockHeader, *transaction2, 4, ledgerConfig, false);
         BOOST_CHECK_EQUAL(receipt2->status(), 0);
         bcos::s256 getIntResult = -1;
         abiCodec.abiOut(receipt2->output(), getIntResult);
@@ -138,7 +143,7 @@ BOOST_AUTO_TEST_CASE(transientStorageContractTest)
         auto transaction =
             transactionFactory.createTransaction(0, "", transientStorageBinary, {}, 0, "", "", 0);
         auto receipt = co_await executor.executeTransaction(
-            storage, blockHeader, *transaction, 5, ledgerConfig, false, task::syncWait);
+            storage, blockHeader, *transaction, 5, ledgerConfig, false);
         BOOST_CHECK_EQUAL(receipt->status(), 0);
 
         // test read and write transient storage
@@ -147,7 +152,7 @@ BOOST_AUTO_TEST_CASE(transientStorageContractTest)
         auto transaction2 = transactionFactory.createTransaction(
             0, std::string(receipt->contractAddress()), input, {}, 0, "", "", 0);
         auto receipt2 = co_await executor.executeTransaction(
-            storage, blockHeader, *transaction2, 6, ledgerConfig, false, task::syncWait);
+            storage, blockHeader, *transaction2, 6, ledgerConfig, false);
         BOOST_CHECK_EQUAL(receipt2->status(), 0);
         bool checkResult = false;
         abiCodec.abiOut(receipt2->output(), checkResult);
@@ -177,7 +182,7 @@ BOOST_AUTO_TEST_CASE(costBalance)
         auto transaction = transactionFactory.createTransaction(
             0, "", helloworldBytecodeBinary, {}, 0, "", "", 0, std::string{}, {}, {}, 1000);
         auto receipt = co_await executor.executeTransaction(
-            storage, blockHeader, *transaction, 0, ledgerConfig, false, task::syncWait);
+            storage, blockHeader, *transaction, 0, ledgerConfig, false);
         BOOST_CHECK_EQUAL(
             receipt->status(), static_cast<int32_t>(protocol::TransactionStatus::NotEnoughCash));
 
@@ -193,7 +198,7 @@ BOOST_AUTO_TEST_CASE(costBalance)
         co_await senderAccount.setBalance(initBalance);
 
         receipt = co_await executor.executeTransaction(
-            storage, blockHeader, *transaction, 0, ledgerConfig, false, task::syncWait);
+            storage, blockHeader, *transaction, 0, ledgerConfig, false);
         BOOST_CHECK_EQUAL(receipt->status(), 0);
         BOOST_CHECK_EQUAL(receipt->contractAddress(), "e0e794ca86d198042b64285c5ce667aee747509b");
         BOOST_CHECK_EQUAL(co_await senderAccount.balance(), initBalance - receipt->gasUsed());
@@ -220,7 +225,7 @@ BOOST_AUTO_TEST_CASE(nonce)
         auto& tarsTransaction = dynamic_cast<bcostars::protocol::TransactionImpl&>(*transaction);
         tarsTransaction.mutableInner().type = 1;
         auto receipt = co_await executor.executeTransaction(
-            storage, blockHeader, *transaction, 0, ledgerConfig, false, task::syncWait);
+            storage, blockHeader, *transaction, 0, ledgerConfig, false);
         BOOST_CHECK_EQUAL(
             receipt->status(), static_cast<int32_t>(protocol::TransactionStatus::None));
 
@@ -245,7 +250,7 @@ BOOST_AUTO_TEST_CASE(nonce)
             bytes(senderAddress.bytes, senderAddress.bytes + sizeof(senderAddress.bytes)));
         dynamic_cast<bcostars::protocol::TransactionImpl&>(*deployCallTx).mutableInner().type = 1;
         receipt = co_await executor.executeTransaction(
-            storage, blockHeader, *deployCallTx, 0, ledgerConfig, false, task::syncWait);
+            storage, blockHeader, *deployCallTx, 0, ledgerConfig, false);
 
         BOOST_CHECK_EQUAL(receipt->status(), 0);
         nonce = co_await senderAccount.nonce();
@@ -266,7 +271,7 @@ BOOST_AUTO_TEST_CASE(nonce)
             bytes(senderAddress.bytes, senderAddress.bytes + sizeof(senderAddress.bytes)));
         dynamic_cast<bcostars::protocol::TransactionImpl&>(*revertTx).mutableInner().type = 1;
         receipt = co_await executor.executeTransaction(
-            storage, blockHeader, *revertTx, 0, ledgerConfig, false, task::syncWait);
+            storage, blockHeader, *revertTx, 0, ledgerConfig, false);
 
         BOOST_CHECK_NE(receipt->status(), 0);
         BOOST_CHECK_EQUAL((co_await senderAccount.nonce()).value(), "17");
@@ -291,12 +296,12 @@ BOOST_AUTO_TEST_CASE(callGas)
         auto transaction =
             transactionFactory.createTransaction(0, "", helloworldBytecodeBinary, {}, 0, "", "", 0);
         auto receipt = co_await executor.executeTransaction(
-            storage, blockHeader, *transaction, 0, ledgerConfig, false, task::syncWait);
+            storage, blockHeader, *transaction, 0, ledgerConfig, false);
         BOOST_CHECK_EQUAL(receipt->status(), 7);
         BOOST_CHECK_EQUAL(receipt->contractAddress(), "");
 
         auto receipt2 = co_await executor.executeTransaction(
-            storage, blockHeader, *transaction, 0, ledgerConfig, true, task::syncWait);
+            storage, blockHeader, *transaction, 0, ledgerConfig, true);
         BOOST_CHECK_EQUAL(receipt2->status(), 0);
         BOOST_CHECK_EQUAL(receipt2->contractAddress(), "e0e794ca86d198042b64285c5ce667aee747509b");
     }());
@@ -322,7 +327,7 @@ BOOST_AUTO_TEST_CASE(cashRevert)
         dynamic_cast<bcostars::protocol::TransactionImpl&>(*transaction).mutableInner().type = 1;
 
         auto receipt = co_await executor.executeTransaction(
-            storage, blockHeader, *transaction, 0, ledgerConfig, false, task::syncWait);
+            storage, blockHeader, *transaction, 0, ledgerConfig, false);
         BOOST_CHECK_EQUAL(receipt->status(), 7);
         BOOST_CHECK_EQUAL(receipt->contractAddress(), "");
 
