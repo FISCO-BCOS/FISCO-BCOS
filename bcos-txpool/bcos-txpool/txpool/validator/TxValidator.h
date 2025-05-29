@@ -25,7 +25,6 @@
 #include <bcos-txpool/txpool/validator/Web3NonceChecker.h>
 #include <bcos-utilities/DataConvertUtility.h>
 
-#include <utility>
 namespace bcos::txpool
 {
 class TxValidator : public TxValidatorInterface

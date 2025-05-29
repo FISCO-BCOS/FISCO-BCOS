@@ -93,8 +93,7 @@ BOOST_AUTO_TEST_CASE(testNormalFlow)
             commitMap.insert({sender, {nonceU256}});
         }
     }
-    task::syncWait(
-        checker.updateNonceCache(ranges::views::keys(commitMap), ranges::views::values(commitMap)));
+    task::syncWait(checker.updateNonceCache(::ranges::views::all(commitMap)));
 
     for (auto&& sender : senders)
     {
@@ -144,8 +143,7 @@ BOOST_AUTO_TEST_CASE(testLedgerNonce)
             commitMap.insert({sender, {nonceU256}});
         }
     }
-    task::syncWait(
-        checker.updateNonceCache(ranges::views::keys(commitMap), ranges::views::values(commitMap)));
+    task::syncWait(checker.updateNonceCache(::ranges::views::all(commitMap)));
 
     uint64_t errorCount = 0;
     for (const auto& [sender, nonce] : nonces)
