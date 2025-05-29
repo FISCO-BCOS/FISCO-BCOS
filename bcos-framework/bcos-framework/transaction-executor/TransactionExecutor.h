@@ -20,7 +20,8 @@ concept IsTransactionExecutor = requires(TransactionExecutor& executor, Storage&
     } -> task::IsAwaitableReturnValue<bcos::protocol::TransactionReceipt::Ptr>;
 
     typename TransactionExecutor::template ExecuteContext<Storage>;
-    std::move_constructible<typename TransactionExecutor::template ExecuteContext<Storage>>;
+    requires std::move_constructible<
+        typename TransactionExecutor::template ExecuteContext<Storage>>;
 
     {
         executor.createExecuteContext(
