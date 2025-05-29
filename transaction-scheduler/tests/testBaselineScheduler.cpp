@@ -30,6 +30,24 @@ struct MockExecutorBaseline
     {
         co_return std::shared_ptr<protocol::TransactionReceipt>();
     }
+
+    template <class Storage>
+    struct ExecuteContext
+    {
+        template <int step>
+        task::Task<protocol::TransactionReceipt::Ptr> executeStep()
+        {
+            co_return {};
+        }
+    };
+
+    auto createExecuteContext(auto& storage, protocol::BlockHeader const& blockHeader,
+        protocol::Transaction const& transaction, int32_t contextID,
+        ledger::LedgerConfig const& ledgerConfig, bool call)
+        -> task::Task<std::unique_ptr<ExecuteContext<std::decay_t<decltype(storage)>>>>
+    {
+        co_return {};
+    }
 };
 struct MockScheduler
 {

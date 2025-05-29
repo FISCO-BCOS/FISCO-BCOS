@@ -5,7 +5,6 @@
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-task/Trait.h"
-#include <concepts>
 
 namespace bcos::executor_v1
 {
@@ -14,13 +13,17 @@ template <class TransactionExecutor, class Storage>
 concept IsTransactionExecutor = requires(TransactionExecutor& executor, Storage& storage,
     const protocol::BlockHeader& blockHeader, const protocol::Transaction& transaction,
     int contextID, const ledger::LedgerConfig& ledgerConfig, bool call) {
-    requires std::same_as<task::AwaitableReturnType<decltype(executor.executeTransaction(
-                              storage, blockHeader, transaction, contextID, ledgerConfig, call))>,
-        bcos::protocol::TransactionReceipt::Ptr>;
+    {
+        executor.executeTransaction(
+            storage, blockHeader, transaction, contextID, ledgerConfig, call)
+    } -> task::IsAwaitableReturnValue<bcos::protocol::TransactionReceipt::Ptr>;
 
     typename TransactionExecutor::template ExecuteContext<Storage>;
-    requires std::same_as<task::AwaitableReturnType<decltype(executor.createExecuteContext(
-                              storage, blockHeader, transaction, contextID, ledgerConfig, call))>,
+
+    {
+        executor.createExecuteContext(
+            storage, blockHeader, transaction, contextID, ledgerConfig, call)
+    } -> task::IsAwaitableReturnValue<
         std::unique_ptr<typename TransactionExecutor::template ExecuteContext<Storage>>>;
 };
 

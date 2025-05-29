@@ -20,6 +20,8 @@
 #include "bcos-framework/protocol/TransactionSubmitResultFactory.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
+#include "bcos-framework/transaction-executor/TransactionExecutor.h"
+#include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
 #include "bcos-task/TBBWait.h"
 #include "bcos-task/Wait.h"
@@ -213,7 +215,12 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto const& receip
         hash2NumberEntry);
 }
 
-template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
+template <class MultiLayerStorage,
+    executor_v1::IsTransactionExecutor<typename MultiLayerStorage::ViewType> Executor,
+    scheduler_v1::IsTransactionScheduler<typename MultiLayerStorage::ViewType, Executor,
+        std::vector<protocol::Transaction::ConstPtr>>
+        SchedulerImpl,
+    class Ledger>
 class BaselineScheduler : public scheduler::SchedulerInterface
 {
 private:
