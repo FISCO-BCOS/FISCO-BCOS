@@ -44,51 +44,62 @@ public:
     template <class Storage>
     struct ExecuteContext
     {
-        std::reference_wrapper<TransactionExecutorImpl> m_executor;
-        std::reference_wrapper<protocol::BlockHeader const> m_blockHeader;
-        std::reference_wrapper<protocol::Transaction const> m_transaction;
-        int m_contextID;
-        std::reference_wrapper<ledger::LedgerConfig const> m_ledgerConfig;
-        Rollbackable<Storage> m_rollbackableStorage;
-        Rollbackable<Storage>::Savepoint m_startSavepoint;
-        TransientStorage m_transientStorage;
-        Rollbackable<decltype(m_transientStorage)> m_rollbackableTransientStorage;
-        bool m_call;
-        int64_t m_gasUsed = 0;
-        std::string m_gasPriceStr;
+        struct Data
+        {
+            std::reference_wrapper<TransactionExecutorImpl> m_executor;
+            std::reference_wrapper<protocol::BlockHeader const> m_blockHeader;
+            std::reference_wrapper<protocol::Transaction const> m_transaction;
+            int m_contextID;
+            std::reference_wrapper<ledger::LedgerConfig const> m_ledgerConfig;
+            Rollbackable<Storage> m_rollbackableStorage;
+            Rollbackable<Storage>::Savepoint m_startSavepoint;
+            TransientStorage m_transientStorage;
+            Rollbackable<decltype(m_transientStorage)> m_rollbackableTransientStorage;
+            bool m_call;
+            int64_t m_gasUsed = 0;
+            std::string m_gasPriceStr;
 
-        int64_t m_gasLimit;
-        int64_t m_seq = 0;
-        evmc_address m_origin;
-        u256 m_nonce;
-        hostcontext::HostContext<decltype(m_rollbackableStorage),
-            decltype(m_rollbackableTransientStorage)>
-            m_hostContext;
-        std::optional<EVMCResult> m_evmcResult;
+            int64_t m_gasLimit;
+            int64_t m_seq = 0;
+            evmc_address m_origin;
+            u256 m_nonce;
+            hostcontext::HostContext<decltype(m_rollbackableStorage),
+                decltype(m_rollbackableTransientStorage)>
+                m_hostContext;
+            std::optional<EVMCResult> m_evmcResult;
+
+            Data(TransactionExecutorImpl& executor, Storage& storage,
+                protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
+                int contextID, ledger::LedgerConfig const& ledgerConfig, bool call)
+              : m_executor(executor),
+                m_blockHeader(blockHeader),
+                m_transaction(transaction),
+                m_contextID(contextID),
+                m_ledgerConfig(ledgerConfig),
+                m_rollbackableStorage(storage),
+                m_startSavepoint(m_rollbackableStorage.current()),
+                m_rollbackableTransientStorage(m_transientStorage),
+                m_call(call),
+                m_gasLimit(static_cast<int64_t>(std::get<0>(ledgerConfig.gasLimit()))),
+                m_origin((!m_transaction.get().sender().empty() &&
+                             m_transaction.get().sender().size() == sizeof(evmc_address)) ?
+                             *(evmc_address*)m_transaction.get().sender().data() :
+                             evmc_address{}),
+                m_nonce(hex2u(transaction.nonce())),
+                m_hostContext(m_rollbackableStorage, m_rollbackableTransientStorage, blockHeader,
+                    newEVMCMessage(m_blockHeader.get().number(), transaction, m_gasLimit, m_origin),
+                    m_origin, transaction.abi(), contextID, m_seq, executor.m_precompiledManager,
+                    ledgerConfig, *executor.m_hashImpl, transaction.type() != 0, m_nonce,
+                    task::syncWait)
+            {}
+        };
+        std::unique_ptr<Data> m_data;
 
         ExecuteContext(TransactionExecutorImpl& executor, Storage& storage,
             protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
             int contextID, ledger::LedgerConfig const& ledgerConfig, bool call)
-          : m_executor(executor),
-            m_blockHeader(blockHeader),
-            m_transaction(transaction),
-            m_contextID(contextID),
-            m_ledgerConfig(ledgerConfig),
-            m_rollbackableStorage(storage),
-            m_startSavepoint(m_rollbackableStorage.current()),
-            m_rollbackableTransientStorage(m_transientStorage),
-            m_call(call),
-            m_gasLimit(static_cast<int64_t>(std::get<0>(ledgerConfig.gasLimit()))),
-            m_origin((!m_transaction.get().sender().empty() &&
-                         m_transaction.get().sender().size() == sizeof(evmc_address)) ?
-                         *(evmc_address*)m_transaction.get().sender().data() :
-                         evmc_address{}),
-            m_nonce(hex2u(transaction.nonce())),
-            m_hostContext(m_rollbackableStorage, m_rollbackableTransientStorage, blockHeader,
-                newEVMCMessage(m_blockHeader.get().number(), transaction, m_gasLimit, m_origin),
-                m_origin, transaction.abi(), contextID, m_seq, executor.m_precompiledManager,
-                ledgerConfig, *executor.m_hashImpl, transaction.type() != 0, m_nonce,
-                task::syncWait)
+          : m_data(std::make_unique<Data>(
+                executor, storage, blockHeader, transaction, contextID, ledgerConfig, call))
         {}
 
         template <int step>
@@ -96,16 +107,16 @@ public:
         {
             if constexpr (step == 0)
             {
-                co_await m_hostContext.prepare();
+                co_await m_data->m_hostContext.prepare();
             }
             else if constexpr (step == 1)
             {
                 auto updated = co_await updateNonce();
                 if (updated)
                 {
-                    m_startSavepoint = m_rollbackableStorage.current();
+                    m_data->m_startSavepoint = m_data->m_rollbackableStorage.current();
                 }
-                m_evmcResult.emplace(co_await m_hostContext.execute());
+                m_data->m_evmcResult.emplace(co_await m_data->m_hostContext.execute());
                 co_await consumeBalance();
             }
             else if constexpr (step == 2)
@@ -118,13 +129,13 @@ public:
 
         task::Task<bool> updateNonce()
         {
-            if (const auto& transaction = m_transaction.get();
+            if (const auto& transaction = m_data->m_transaction.get();
                 transaction.type() == 1)  // 1 = web3
                                           // transaction
             {
-                auto& callNonce = m_nonce;
-                ledger::account::EVMAccount account(m_rollbackableStorage, m_origin,
-                    m_ledgerConfig.get().features().get(
+                auto& callNonce = m_data->m_nonce;
+                ledger::account::EVMAccount account(m_data->m_rollbackableStorage, m_data->m_origin,
+                    m_data->m_ledgerConfig.get().features().get(
                         ledger::Features::Flag::feature_raw_address));
 
                 if (!co_await account.exists())
@@ -142,19 +153,19 @@ public:
 
         task::Task<void> consumeBalance()
         {
-            if (!m_call)
+            if (!m_data->m_call)
             {
-                auto& evmcResult = *m_evmcResult;
-                auto& evmcMessage = m_hostContext.message();
-                m_gasUsed = m_gasLimit - evmcResult.gas_left;
+                auto& evmcResult = *m_data->m_evmcResult;
+                auto& evmcMessage = m_data->m_hostContext.message();
+                m_data->m_gasUsed = m_data->m_gasLimit - evmcResult.gas_left;
 
-                if (auto gasPrice = u256{std::get<0>(m_ledgerConfig.get().gasPrice())};
+                if (auto gasPrice = u256{std::get<0>(m_data->m_ledgerConfig.get().gasPrice())};
                     gasPrice > 0)
                 {
-                    m_gasPriceStr = "0x" + gasPrice.str(256, std::ios_base::hex);
+                    m_data->m_gasPriceStr = "0x" + gasPrice.str(256, std::ios_base::hex);
 
-                    auto balanceUsed = m_gasUsed * gasPrice;
-                    auto senderAccount = getAccount(m_hostContext, evmcMessage.sender);
+                    auto balanceUsed = m_data->m_gasUsed * gasPrice;
+                    auto senderAccount = getAccount(m_data->m_hostContext, evmcMessage.sender);
                     auto senderBalance = co_await senderAccount.balance();
 
                     if (senderBalance < balanceUsed)
@@ -171,7 +182,7 @@ public:
                         evmcResult.output_size = 0;
                         evmcResult.release = nullptr;
                         evmcResult.create_address = {};
-                        co_await m_rollbackableStorage.rollback(m_startSavepoint);
+                        co_await m_data->m_rollbackableStorage.rollback(m_data->m_startSavepoint);
                     }
                     else
                     {
@@ -183,8 +194,8 @@ public:
 
         task::Task<protocol::TransactionReceipt::Ptr> finish()
         {
-            const auto& evmcMessage = m_hostContext.message();
-            auto& evmcResult = *m_evmcResult;
+            const auto& evmcMessage = m_data->m_hostContext.message();
+            auto& evmcResult = *m_data->m_evmcResult;
 
             std::string newContractAddress;
             if (evmcMessage.kind == EVMC_CREATE && evmcResult.status_code == EVMC_SUCCESS)
@@ -199,8 +210,8 @@ public:
             {
                 TRANSACTION_EXECUTOR_LOG(DEBUG) << "Transaction revert: " << evmcResult.status_code;
 
-                auto [_, errorMessage] =
-                    evmcStatusToErrorMessage(*m_executor.get().m_hashImpl, evmcResult.status_code);
+                auto [_, errorMessage] = evmcStatusToErrorMessage(
+                    *m_data->m_executor.get().m_hashImpl, evmcResult.status_code);
                 if (!errorMessage.empty())
                 {
                     auto output = std::make_unique_for_overwrite<uint8_t[]>(errorMessage.size());
@@ -214,27 +225,29 @@ public:
             }
 
             auto receiptStatus = static_cast<int32_t>(evmcResult.status);
-            auto const& logEntries = m_hostContext.logs();
+            auto const& logEntries = m_data->m_hostContext.logs();
             protocol::TransactionReceipt::Ptr receipt;
             switch (auto transactionVersion = static_cast<bcos::protocol::TransactionVersion>(
-                        m_transaction.get().version()))
+                        m_data->m_transaction.get().version()))
             {
             case bcos::protocol::TransactionVersion::V0_VERSION:
-                receipt = m_executor.get().m_receiptFactory.get().createReceipt(m_gasUsed,
-                    std::move(newContractAddress), logEntries, receiptStatus,
-                    {evmcResult.output_data, evmcResult.output_size}, m_blockHeader.get().number());
+                receipt = m_data->m_executor.get().m_receiptFactory.get().createReceipt(
+                    m_data->m_gasUsed, std::move(newContractAddress), logEntries, receiptStatus,
+                    {evmcResult.output_data, evmcResult.output_size},
+                    m_data->m_blockHeader.get().number());
                 break;
             case bcos::protocol::TransactionVersion::V1_VERSION:
             case bcos::protocol::TransactionVersion::V2_VERSION:
-                receipt = m_executor.get().m_receiptFactory.get().createReceipt2(m_gasUsed,
-                    std::move(newContractAddress), logEntries, receiptStatus,
-                    {evmcResult.output_data, evmcResult.output_size}, m_blockHeader.get().number(),
-                    std::move(m_gasPriceStr), transactionVersion);
+                receipt = m_data->m_executor.get().m_receiptFactory.get().createReceipt2(
+                    m_data->m_gasUsed, std::move(newContractAddress), logEntries, receiptStatus,
+                    {evmcResult.output_data, evmcResult.output_size},
+                    m_data->m_blockHeader.get().number(), std::move(m_data->m_gasPriceStr),
+                    transactionVersion);
                 break;
             default:
                 BOOST_THROW_EXCEPTION(InvalidReceiptVersion{} << bcos::errinfo_comment(
                                           "Invalid receipt version: " +
-                                          std::to_string(m_transaction.get().version())));
+                                          std::to_string(m_data->m_transaction.get().version())));
             }
 
             TRANSACTION_EXECUTOR_LOG(TRACE) << "Execute transaction finished: " << *receipt;

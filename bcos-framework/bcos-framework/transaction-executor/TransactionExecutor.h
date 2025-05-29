@@ -5,6 +5,7 @@
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-task/Trait.h"
+#include <concepts>
 
 namespace bcos::executor_v1
 {
@@ -19,6 +20,7 @@ concept IsTransactionExecutor = requires(TransactionExecutor& executor, Storage&
     } -> task::IsAwaitableReturnValue<bcos::protocol::TransactionReceipt::Ptr>;
 
     typename TransactionExecutor::template ExecuteContext<Storage>;
+    std::move_constructible<typename TransactionExecutor::template ExecuteContext<Storage>>;
 
     {
         executor.createExecuteContext(
