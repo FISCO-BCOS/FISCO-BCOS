@@ -315,6 +315,33 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
         }
     }
 
+    // NOTE: It should check nonce before execution, but it should check nonce in the state storage,
+    // not backend storage. But the txs of the same sender in one block will be disordered, so it
+    // cannot check state storage for now. Will add this logic in the future.
+    //
+    // if (callParameters->origin == callParameters->senderAddress &&
+    //     callParameters->transactionType != TransactionType::BCOSTransaction &&
+    //     m_blockContext.features().get(ledger::Features::Flag::bugfix_check_nonce_in_executive))
+    // {
+    //     // only check eoa tx
+    //     ledger::account::EVMAccount eoa(*m_blockContext.backendStorage(),
+    //         callParameters->senderAddress,
+    //         m_blockContext.features().get(ledger::Features::Flag::feature_raw_address));
+    //     auto const nonceInStorage = task::syncWait(eoa.nonce());
+    //     if (auto const storageNonce = u256(nonceInStorage.value_or("0"));
+    //         callParameters->nonce < storageNonce)
+    //     {
+    //         EXECUTIVE_LOG(WARNING)
+    //             << LOG_BADGE("Execute") << LOG_DESC("nonce is not match and will revert")
+    //             << LOG_KV("nonceInStorage", storageNonce)
+    //             << LOG_KV("callNonce", callParameters->nonce);
+    //         callResults = std::move(callParameters);
+    //         callResults->status = static_cast<int32_t>(TransactionStatus::RevertInstruction);
+    //         callResults->evmStatus = EVMC_REVERT;
+    //         return callResults;
+    //     }
+    // }
+
     if (m_blockContext.features().get(
             ledger::Features::Flag::bugfix_nonce_not_increase_when_revert))
     {

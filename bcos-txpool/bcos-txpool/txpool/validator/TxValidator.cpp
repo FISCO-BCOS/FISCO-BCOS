@@ -43,11 +43,9 @@ TransactionStatus TxValidator::verify(const bcos::protocol::Transaction& _tx)
             return TransactionStatus::InvalidChainId;
         }
     }
-    if (auto status = checkTransaction(_tx); status != TransactionStatus::None)
-    {
-        return status;
-    }
-    // check signature
+
+    // should check the transaction signature first, because the sender of transaction will be force
+    // remove in front module check signature
     try
     {
         _tx.verify(*m_cryptoSuite->hashImpl(), *m_cryptoSuite->signatureImpl());
@@ -55,6 +53,12 @@ TransactionStatus TxValidator::verify(const bcos::protocol::Transaction& _tx)
     catch (...)
     {
         return TransactionStatus::InvalidSignature;
+    }
+
+    // should check the transaction signature first, because sender is empty
+    if (const auto status = checkTransaction(_tx); status != TransactionStatus::None)
+    {
+        return status;
     }
 
     if (isSystemTransaction(_tx))
