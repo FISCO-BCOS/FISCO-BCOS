@@ -21,6 +21,7 @@
 #include "TransactionValidator.h"
 #include "bcos-framework/txpool/Constant.h"
 #include "bcos-task/Wait.h"
+#include "bcos-txpool/txpool/interfaces/TxValidatorInterface.h"
 #include "bcos-utilities/DataConvertUtility.h"
 
 using namespace bcos;
@@ -42,6 +43,11 @@ TransactionStatus TransactionValidator::ValidateTransaction(
     {
         if (_tx->size() > MAX_INITCODE_SIZE)
         {
+            TX_VALIDATOR_CHECKER_LOG(TRACE)
+                << LOG_BADGE("ValidateTransaction")
+                << LOG_DESC("RejectTransactionWithLargeInitCode") << LOG_KV("txSize", _tx->size())
+                << LOG_KV("maxInitCodeSize", MAX_INITCODE_SIZE);
+            // Reject transactions with initcode larger than MAX_INITCODE_SIZE
             return TransactionStatus::MaxInitCodeSizeExceeded;
         }
     }
@@ -56,11 +62,14 @@ task::Task<TransactionStatus> TransactionValidator::ValidateTransactionWithState
     auto sender = toHex(_tx->sender());
     // EIP-3607: Reject transactions from senders with deployed code TODO: fix error code hash set
     auto accountCodeHashOpt =
-        co_await (_ledger->getStorageAt(sender, bcos::ledger::ACCOUNT_TABLE_FIELDS::CODE,
-        0));
+        co_await (_ledger->getStorageAt(sender, bcos::ledger::ACCOUNT_TABLE_FIELDS::CODE, 0));
     auto accountCodeHash = accountCodeHashOpt ? accountCodeHashOpt.value() : storage::Entry();
     if (!accountCodeHash.get().empty())
     {
+        TX_VALIDATOR_CHECKER_LOG(TRACE)
+            << LOG_BADGE("ValidateTransactionWithState")
+            << LOG_DESC("RejectTransactionWithDeployedCode") << LOG_KV("sender", sender)
+            << LOG_KV("codeHash", accountCodeHash.get());
         co_return TransactionStatus::SenderNoEOA;
     }
 
@@ -71,6 +80,10 @@ task::Task<TransactionStatus> TransactionValidator::ValidateTransactionWithState
     auto txValue = u256(_tx->value());
     if (balanceValue < txValue)
     {
+        TX_VALIDATOR_CHECKER_LOG(TRACE)
+            << LOG_BADGE("ValidateTransactionWithState") << LOG_DESC("InsufficientFunds")
+            << LOG_KV("sender", sender) << LOG_KV("balance", balanceValue)
+            << LOG_KV("txValue", txValue);
         co_return TransactionStatus::InsufficientFunds;
     }
 

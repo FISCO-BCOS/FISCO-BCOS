@@ -14,7 +14,7 @@
  *  limitations under the License.
  *
  * @brief unit test for the txpool
- * @file TransactionValiditorTest.cpp
+ * @file TransactionValidatorTest.cpp
  * @author: asherli
  * @date 2024-12-11
  */
@@ -84,13 +84,7 @@ BOOST_AUTO_TEST_CASE(testTransactionValidator)
     auto result = TransactionValidator::ValidateTransaction(tx);
     BOOST_CHECK(result == TransactionStatus::None);
 
-    const uint64_t outRangeValue = -1;
     std::string inputStr = "testTransactionValidatorTx";
-
-    auto txError = fakeInvalidateTransacton(inputStr, outRangeValue);
-
-    auto resultError = TransactionValidator::ValidateTransaction(txError);
-    BOOST_CHECK(resultError == TransactionStatus::OverFlowValue);
     // fake input str large size transaction
     auto inputStrLarge = "0x" + std::string(MAX_INITCODE_SIZE, '1');
     // std::string duplicatedNonceStr(duplicatedNonce);

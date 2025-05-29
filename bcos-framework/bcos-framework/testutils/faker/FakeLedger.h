@@ -26,6 +26,7 @@
 #include <bcos-utilities/ThreadPool.h>
 
 #include <map>
+#include <string>
 #include <utility>
 
 using namespace bcos;
@@ -422,22 +423,13 @@ public:
 
     void setStorageAt(std::string _address, std::string _key, std::optional<storage::Entry> _data)
     {
-        fakeStorageEntryMaps[std::move(_address)][std::move(_key)] = std::move(_data);
+        fakeStorageEntryMaps[_address][_key] = std::move(_data);
     }
 
     task::Task<std::optional<storage::Entry>> getStorageAt(std::string_view _address,
         std::string_view _key, protocol::BlockNumber _blockNumber) override
     {
-        auto addressIt = fakeStorageEntryMaps.find(std::string(_address));
-        if (addressIt != fakeStorageEntryMaps.end())
-        {
-            auto keyIt = addressIt->second.find(std::string(_key));
-            if (keyIt != addressIt->second.end())
-            {
-                co_return keyIt->second;
-            }
-        }
-        co_return std::nullopt;
+        co_return fakeStorageEntryMaps[std::string(_address)][std::string(_key)];
     }
 
 private:
@@ -461,7 +453,7 @@ private:
     std::unordered_map<std::string, ledger::StorageState> m_storageState = {};
     std::string eoaInLedger;
     std::string eoaInLedgerNonce;
-    std::map<std::string_view, std::map<std::string_view, std::optional<storage::Entry>>>
+    std::map<std::string, std::map<std::string, std::optional<storage::Entry>>>
         fakeStorageEntryMaps;
 };
 }  // namespace test

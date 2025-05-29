@@ -31,22 +31,6 @@
 using namespace bcos;
 using namespace bcos::rpc;
 
-// bool TransactionValidator::checkWeb3ReplayedProtected(
-//     std::optional<uint64_t> _txChainId, std::string _chainId)
-// {
-//     if(!_txChainId.has_value()){
-//         return false;
-//     }
-//     auto chainId = std::to_string(_txChainId.value());
-//     return chainId == _chainId;
-// }
-
-// bool TransactionValidator::checkBcosReplayedProtected(
-//     protocol::Transaction::Ptr _tx, std::string_view _chainId)
-// {
-//     return _tx->chainId() == _chainId;
-// }
-
 protocol::TransactionStatus TransactionValidator::ValidateTransaction(
     protocol::Transaction::Ptr _tx)
 {
@@ -61,22 +45,6 @@ protocol::TransactionStatus TransactionValidator::ValidateTransaction(
             return protocol::TransactionStatus::MaxInitCodeSizeExceeded;
         }
     }
-    // auto sender = _tx->sender();
-    // auto accountCodeHashOpt =
-    //     co_await (_ledger->getStorageAt(sender, bcos::ledger::ACCOUNT_TABLE_FIELDS::CODE_HASH, 0));
-    // auto accountCodeHash = accountCodeHashOpt ? accountCodeHashOpt.value() : storage::Entry();
-    // if (!accountCodeHash.get().empty())
-    // {
-    //     co_return protocol::TransactionStatus::SenderNoEOA;
-    // }
-    // auto balanceOpt =
-    //     co_await (_ledger->getStorageAt(sender, bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE, 0));
-    // auto balanceValue = balanceOpt ? u256(balanceOpt.value().get()) : u256(0);
-    // auto txValue = u256(_tx->value());
-    // if (balanceValue < txValue)
-    // {
-    //     co_return protocol::TransactionStatus::InsufficientFunds;
-    // }
     return protocol::TransactionStatus::None;
 }
 
@@ -94,16 +62,6 @@ void TransactionValidator::handleTransactionStatus(protocol::TransactionStatus t
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(JsonRpcError::InvalidParams, "Transaction data too large"));
         }
-        // else if (transactionStatus == protocol::TransactionStatus::SenderNoEOA)
-        // {
-        //     BOOST_THROW_EXCEPTION(JsonRpcException(
-        //         JsonRpcError::InvalidParams, "Transaction sender account is not EOA"));
-        // }
-        // else if (transactionStatus == protocol::TransactionStatus::InsufficientFunds)
-        // {
-        //     BOOST_THROW_EXCEPTION(JsonRpcException(
-        //         JsonRpcError::InvalidParams, "Transaction sender account has no enough balance"));
-        // }
         else
         {
             BOOST_THROW_EXCEPTION(
