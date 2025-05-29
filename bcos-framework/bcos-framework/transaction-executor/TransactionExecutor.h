@@ -23,8 +23,8 @@ concept IsTransactionExecutor = requires(TransactionExecutor& executor, Storage&
     {
         executor.createExecuteContext(
             storage, blockHeader, transaction, contextID, ledgerConfig, call)
-    } -> task::IsAwaitableReturnValue<
-        std::unique_ptr<typename TransactionExecutor::template ExecuteContext<Storage>>>;
+    }
+    -> task::IsAwaitableReturnValue<typename TransactionExecutor::template ExecuteContext<Storage>>;
 };
 
 }  // namespace bcos::executor_v1

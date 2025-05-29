@@ -31,8 +31,7 @@ public:
             ittapi::ITT_DOMAINS::instance().SERIAL_EXECUTE);
         auto count = static_cast<int32_t>(::ranges::size(transactions));
 
-        std::vector<std::unique_ptr<typename TransactionExecutor::template ExecuteContext<Storage>>>
-            contexts;
+        std::vector<typename TransactionExecutor::template ExecuteContext<Storage>> contexts;
         contexts.reserve(count);
 
         auto chunks = ::ranges::views::iota(0, count) |
@@ -80,7 +79,7 @@ public:
                                 for (auto i : range)
                                 {
                                     auto& context = contexts[i];
-                                    co_await context->template executeStep<0>();
+                                    co_await context.template executeStep<0>();
                                 }
                                 co_return range;
                             }());
@@ -94,7 +93,7 @@ public:
                                 for (auto i : range)
                                 {
                                     auto& context = contexts[i];
-                                    co_await context->template executeStep<1>();
+                                    co_await context.template executeStep<1>();
                                 }
                                 co_return range;
                             }());
@@ -109,7 +108,7 @@ public:
                                 {
                                     auto& context = contexts[i];
                                     receipts.emplace_back(
-                                        co_await context->template executeStep<2>());
+                                        co_await context.template executeStep<2>());
                                 }
                             }());
                         }));

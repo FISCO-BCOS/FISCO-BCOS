@@ -244,12 +244,11 @@ public:
 
     auto createExecuteContext(auto& storage, protocol::BlockHeader const& blockHeader,
         protocol::Transaction const& transaction, int contextID,
-        ledger::LedgerConfig const& ledgerConfig,
-        bool call) -> task::Task<std::unique_ptr<ExecuteContext<std::decay_t<decltype(storage)>>>>
+        ledger::LedgerConfig const& ledgerConfig, bool call)
+        -> task::Task<ExecuteContext<std::decay_t<decltype(storage)>>>
     {
         TRANSACTION_EXECUTOR_LOG(TRACE) << "Create transaction context: " << transaction;
-        co_return std::make_unique<ExecuteContext<std::decay_t<decltype(storage)>>>(
-            *this, storage, blockHeader, transaction, contextID, ledgerConfig, call);
+        co_return {*this, storage, blockHeader, transaction, contextID, ledgerConfig, call};
     }
 
     task::Task<protocol::TransactionReceipt::Ptr> executeTransaction(auto& storage,
@@ -259,9 +258,9 @@ public:
         auto executeContext = co_await createExecuteContext(
             storage, blockHeader, transaction, contextID, ledgerConfig, call);
 
-        co_await executeContext->template executeStep<0>();
-        co_await executeContext->template executeStep<1>();
-        co_return co_await executeContext->template executeStep<2>();
+        co_await executeContext.template executeStep<0>();
+        co_await executeContext.template executeStep<1>();
+        co_return co_await executeContext.template executeStep<2>();
     }
 };
 

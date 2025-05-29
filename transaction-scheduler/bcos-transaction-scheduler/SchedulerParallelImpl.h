@@ -49,8 +49,8 @@ private:
     std::reference_wrapper<TransactionExecutor> m_executor;
     typename StorageTrait<MutableStorage, Storage>::LocalStorageView m_storageView;
     typename StorageTrait<MutableStorage, Storage>::LocalReadWriteSetStorage m_readWriteSetStorage;
-    std::vector<std::unique_ptr<
-        typename TransactionExecutor::template ExecuteContext<decltype(m_readWriteSetStorage)>>>
+    std::vector<
+        typename TransactionExecutor::template ExecuteContext<decltype(m_readWriteSetStorage)>>
         m_executeContexts;
 
 public:
@@ -98,7 +98,7 @@ public:
                     << " transactions";
                 break;
             }
-            co_await executeContext->template executeStep<0>();
+            co_await executeContext.template executeStep<0>();
         }
     }
 
@@ -115,7 +115,7 @@ public:
                     << " transactions";
                 break;
             }
-            co_await executeContext->template executeStep<1>();
+            co_await executeContext.template executeStep<1>();
         }
     }
 
@@ -125,7 +125,7 @@ public:
             ittapi::ITT_DOMAINS::instance().EXECUTE_CHUNK3);
         for (auto&& [context, executeContext] : ::ranges::views::zip(m_contexts, m_executeContexts))
         {
-            *context.receipt = co_await executeContext->template executeStep<2>();
+            *context.receipt = co_await executeContext.template executeStep<2>();
         }
     }
 };
