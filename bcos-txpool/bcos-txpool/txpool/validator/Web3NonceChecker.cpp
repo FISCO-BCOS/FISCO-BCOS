@@ -101,11 +101,15 @@ task::Task<void> Web3NonceChecker::insertMemoryNonce(std::string sender, std::st
     }
     co_await storage2::writeOne(m_memoryNonces, std::make_pair(sender, nonce), std::monostate{});
     const auto maxMemNonce = co_await storage2::readOne(m_maxNonces, sender);
-    if (auto const uNonce = u256(nonce); uNonce > maxMemNonce.value_or(0))
+    if (!maxMemNonce.has_value())
     {
-        co_await storage2::writeOne(m_maxNonces, sender, uNonce);
+        co_await storage2::writeOne(m_maxNonces, sender, u256(1));
+        co_return;
     }
-    co_return;
+    if (auto const uNonce = u256(nonce); uNonce > maxMemNonce.value())
+    {
+        co_await storage2::writeOne(m_maxNonces, sender, uNonce + 1);
+    }
 }
 
 task::Task<std::optional<u256>> Web3NonceChecker::getPendingNonce(std::string_view sender)
