@@ -228,7 +228,6 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
     co_return co_await awaitable;
 }
 
-
 std::vector<protocol::Transaction::ConstPtr> MemoryStorage::getTransactions(
     ::ranges::any_view<bcos::h256, ::ranges::category::mask | ::ranges::category::sized> hashes)
 {
@@ -249,9 +248,7 @@ TransactionStatus MemoryStorage::txpoolStorageCheck(
     const Transaction& transaction, protocol::TxSubmitCallback& txSubmitCallback)
 {
     auto txHash = transaction.hash();
-    TxsMap::ReadAccessor accessor;
-    auto has = m_txsTable.find<TxsMap::ReadAccessor>(accessor, txHash);
-    if (has)
+    if (TxsMap::ReadAccessor accessor; m_txsTable.find<TxsMap::ReadAccessor>(accessor, txHash))
     {
         if (txSubmitCallback && !accessor.value()->submitCallback())
         {
@@ -269,69 +266,56 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
 {
     auto txHash = _tx->hash();
     // the transaction has already onChain, reject it
+    // check ledger tx
+    // check web3 tx
+    if (auto result = m_config->txValidator()->checkTransaction(*_tx, true);
+        result == TransactionStatus::NonceCheckFail)
     {
-        // check txpool nonce
-        // check ledger tx
-        // check web3 tx
-        auto result = m_config->txValidator()->checkTransaction(*_tx);
-        Transaction::ConstPtr tx = nullptr;
-        {
-            TxsMap::ReadAccessor accessor;
-            auto has = m_txsTable.find<TxsMap::ReadAccessor>(accessor, txHash);
-            if (has)
-            {
-                tx = accessor.value();
-            }
-        }
-        if (result == TransactionStatus::NonceCheckFail) [[unlikely]]
-        {
-            if (!tx)
-            {
-                TXPOOL_LOG(WARNING)
-                    << LOG_DESC("enforce to seal failed for nonce check failed: ")
-                    // << tx->hash().hex() << LOG_KV("batchId", tx->batchId())
-                    // << LOG_KV("batchHash", tx->batchHash().abridged())
-                    << LOG_KV("importTxHash", txHash) << LOG_KV("importBatchId", _tx->batchId())
-                    << LOG_KV("importBatchHash", _tx->batchHash().abridged());
-                return TransactionStatus::NonceCheckFail;
-            }
-        }
+        TXPOOL_LOG(WARNING) << LOG_DESC("enforce to seal failed for nonce check failed: ")
+                            << LOG_KV("importTxHash", txHash)
+                            << LOG_KV("importBatchId", _tx->batchId())
+                            << LOG_KV("importBatchHash", _tx->batchHash().abridged());
+        return TransactionStatus::NonceCheckFail;
+    }
 
-        // tx already in txpool
-        if (tx) [[likely]]
+    Transaction::ConstPtr tx = nullptr;
+    if (TxsMap::ReadAccessor accessor; m_txsTable.find<TxsMap::ReadAccessor>(accessor, txHash))
+    {
+        tx = accessor.value();
+    }
+    // tx already in txpool
+    if (tx)
+    {
+        if (!tx->sealed() || tx->batchHash() == HashType())
         {
-            if (!tx->sealed() || tx->batchHash() == HashType())
+            if (!tx->sealed())
             {
-                if (!tx->sealed())
-                {
-                    tx->setSealed(true);
-                }
-                tx->setBatchId(_tx->batchId());
-                tx->setBatchHash(_tx->batchHash());
-                TXPOOL_LOG(TRACE) << LOG_DESC("enforce to seal:") << tx->hash().abridged()
-                                  << LOG_KV("num", tx->batchId())
-                                  << LOG_KV("hash", tx->batchHash().abridged());
-                return TransactionStatus::None;
+                tx->setSealed(true);
             }
-            // sealed for the same proposal
-            if (tx->batchId() == _tx->batchId() && tx->batchHash() == _tx->batchHash())
-            {
-                return TransactionStatus::None;
-            }
-            TXPOOL_LOG(WARNING) << LOG_DESC("enforce to seal failed: ") << tx->hash().abridged()
-                                << LOG_KV("batchId", tx->batchId())
-                                << LOG_KV("batchHash", tx->batchHash().abridged())
-                                << LOG_KV("importBatchId", _tx->batchId())
-                                << LOG_KV("importBatchHash", _tx->batchHash().abridged());
-            // The transaction has already been sealed by another node
-            return TransactionStatus::AlreadyInTxPool;
+            tx->setBatchId(_tx->batchId());
+            tx->setBatchHash(_tx->batchHash());
+            TXPOOL_LOG(TRACE) << LOG_DESC("enforce to seal:") << tx->hash().abridged()
+                              << LOG_KV("num", tx->batchId())
+                              << LOG_KV("hash", tx->batchHash().abridged());
+            return TransactionStatus::None;
         }
+        // sealed for the same proposal
+        if (tx->batchId() == _tx->batchId() && tx->batchHash() == _tx->batchHash())
+        {
+            return TransactionStatus::None;
+        }
+        TXPOOL_LOG(WARNING) << LOG_DESC("enforce to seal failed: ") << tx->hash().abridged()
+                            << LOG_KV("batchId", tx->batchId())
+                            << LOG_KV("batchHash", tx->batchHash().abridged())
+                            << LOG_KV("importBatchId", _tx->batchId())
+                            << LOG_KV("importBatchHash", _tx->batchHash().abridged());
+        // The transaction has already been sealed by another node
+        return TransactionStatus::AlreadyInTxPool;
     }
 
     auto txHasSeal = _tx->sealed();
     _tx->setSealed(true);  // must set seal before insert
-    auto status = insertWithoutLock(_tx);
-    if (status != TransactionStatus::None)
+    if (auto status = insertWithoutLock(_tx); status != TransactionStatus::None)
     {
         _tx->setSealed(txHasSeal);
         Transaction::Ptr tx;
@@ -440,18 +424,16 @@ TransactionStatus MemoryStorage::insert(Transaction::Ptr transaction)
 
 TransactionStatus MemoryStorage::insertWithoutLock(Transaction::Ptr transaction)
 {
+    TxsMap::WriteAccessor accessor;
+    auto inserted = m_txsTable.insert(accessor, {transaction->hash(), transaction});
+    if (!inserted)
     {
-        TxsMap::WriteAccessor accessor;
-        auto inserted = m_txsTable.insert(accessor, {transaction->hash(), transaction});
-        if (!inserted)
+        if (transaction->submitCallback() && !accessor.value()->submitCallback())
         {
-            if (transaction->submitCallback() && !accessor.value()->submitCallback())
-            {
-                accessor.value()->setSubmitCallback(transaction->submitCallback());
-                return TransactionStatus::None;
-            }
-            return TransactionStatus::AlreadyInTxPool;
+            accessor.value()->setSubmitCallback(transaction->submitCallback());
+            return TransactionStatus::None;
         }
+        return TransactionStatus::AlreadyInTxPool;
     }
     return TransactionStatus::None;
 }
@@ -660,7 +642,7 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
 
     startT = utcTime();
     task::syncWait(m_config->txValidator()->web3NonceChecker()->updateNonceCache(
-        ::ranges::views::keys(web3NonceMap), ::ranges::views::values(web3NonceMap)));
+        ::ranges::views::all(web3NonceMap)));
     auto updateWeb3NonceT = utcTime() - startT;
 
     startT = utcTime();
@@ -1331,8 +1313,7 @@ bool MemoryStorage::batchVerifyAndSubmitTransaction(
         {
             continue;
         }
-        auto result = enforceSubmitTransaction(tx);
-        if (result != TransactionStatus::None)
+        if (auto result = enforceSubmitTransaction(tx); result != TransactionStatus::None)
         {
             TXPOOL_LOG(WARNING) << LOG_BADGE("batchSubmitTransaction: verify proposal failed")
                                 << LOG_KV("tx", tx->hash().abridged()) << LOG_KV("result", result)
