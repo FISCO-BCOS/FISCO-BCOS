@@ -46,6 +46,8 @@ jobs:
             !${{ github.workspace }}/vcpkg/downloads
           key: |
             ${{ hashFiles( 'vcpkg.json' ) }}-${{ runner.os }}-cache-key-v1
+          restore-keys: |
+            ${{ hashFiles( 'vcpkg.json' ) }}-${{ runner.os }}-cache-key-v1
 
       - name: install rust language
         uses: actions-rs/toolchain@v1
