@@ -34,7 +34,7 @@ jobs:
           java-package: jdk
 
       - name: Restore vcpkg cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         id: vcpkg-cache
         with:
           path: |
