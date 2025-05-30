@@ -1,8 +1,7 @@
-#include "../../src/executive/TransactionExecutive.h"
+#include "bcos-framework/ledger/Account.h"
 #include "fixture/TransactionFixture.h"
 #include <bcos-crypto/ChecksumAddress.h>
 #include <bcos-framework/ledger/EVMAccount.h>
-
 #include <boost/test/unit_test.hpp>
 #include <utility>
 
@@ -11,7 +10,7 @@ namespace bcos::test
 class TransactionExecutiveFixture : public TransactionFixture
 {
 public:
-    TransactionExecutiveFixture() : TransactionFixture()
+    TransactionExecutiveFixture()
     {
         setIsWasm(false);
         web3Features.set(Features::Flag::feature_balance);
@@ -36,6 +35,8 @@ public:
         auto const address = newLegacyEVMAddressString(sender.ref(), u256(nonce));
 
         bcos::ledger::account::EVMAccount eoa(*storage, sender.hex(), false);
+        static_assert(bcos::ledger::account::IsAccount<decltype(eoa)>);
+
         task::syncWait(eoa.create());
         task::syncWait(eoa.setBalance(u256(1000000000000000ULL)));
 
