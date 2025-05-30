@@ -154,10 +154,9 @@ task::Task<void> TxPool::broadcastTransactionBufferByTree(
         // NOTE: the protocolList is a vector which sorted by nodeID, and is NOT convenience
         // for filter whether send new protocol or not. So one-size-fits-all approach, if
         // protocolList have lower V2 version, broadcast SYNC_PUSH_TRANSACTION by default.
-        auto index =
-            std::find_if(protocolList.begin(), protocolList.end(), [](auto const& protocol) {
-                return protocol->version() < protocol::ProtocolVersion::V2;
-            });
+        auto index = ::ranges::find_if(protocolList, [](auto const& protocol) {
+            return protocol->version() < protocol::ProtocolVersion::V2;
+        });
         if (index != protocolList.end()) [[unlikely]]
         {
             TXPOOL_LOG(TRACE) << LOG_DESC(
@@ -194,7 +193,7 @@ task::Task<void> TxPool::broadcastTransactionBufferByTree(
 }
 
 task::Task<std::vector<protocol::Transaction::ConstPtr>> TxPool::getTransactions(
-    RANGES::any_view<bcos::h256, RANGES::category::mask | RANGES::category::sized> hashes)
+    ::ranges::any_view<bcos::h256, ::ranges::category::mask | ::ranges::category::sized> hashes)
 {
     co_return m_txpoolStorage->getTransactions(std::move(hashes));
 }
