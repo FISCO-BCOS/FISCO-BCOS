@@ -35,7 +35,7 @@ public:
         auto const address = newLegacyEVMAddressString(sender.ref(), u256(nonce));
 
         bcos::ledger::account::EVMAccount eoa(*storage, sender.hex(), false);
-        static_assert(bcos::ledger::account::IsAccount<decltype(eoa)>);
+        static_assert(bcos::ledger::account::Account<decltype(eoa)>);
 
         task::syncWait(eoa.create());
         task::syncWait(eoa.setBalance(u256(1000000000000000ULL)));

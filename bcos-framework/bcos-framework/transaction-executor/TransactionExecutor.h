@@ -10,8 +10,8 @@
 namespace bcos::executor_v1
 {
 
-template <class TransactionExecutor, class Storage>
-concept IsTransactionExecutor = requires(TransactionExecutor& executor, Storage& storage,
+template <class TransactionExecutorType, class Storage>
+concept TransactionExecutor = requires(TransactionExecutorType& executor, Storage& storage,
     const protocol::BlockHeader& blockHeader, const protocol::Transaction& transaction,
     int contextID, const ledger::LedgerConfig& ledgerConfig, bool call) {
     {
@@ -19,15 +19,15 @@ concept IsTransactionExecutor = requires(TransactionExecutor& executor, Storage&
             storage, blockHeader, transaction, contextID, ledgerConfig, call)
     } -> task::IsAwaitableReturnValue<bcos::protocol::TransactionReceipt::Ptr>;
 
-    typename TransactionExecutor::template ExecuteContext<Storage>;
+    typename TransactionExecutorType::template ExecuteContext<Storage>;
     requires std::move_constructible<
-        typename TransactionExecutor::template ExecuteContext<Storage>>;
+        typename TransactionExecutorType::template ExecuteContext<Storage>>;
 
     {
         executor.createExecuteContext(
             storage, blockHeader, transaction, contextID, ledgerConfig, call)
-    }
-    -> task::IsAwaitableReturnValue<typename TransactionExecutor::template ExecuteContext<Storage>>;
+    } -> task::IsAwaitableReturnValue<
+          typename TransactionExecutorType::template ExecuteContext<Storage>>;
 };
 
 }  // namespace bcos::executor_v1

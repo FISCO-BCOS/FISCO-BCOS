@@ -5,8 +5,8 @@
 
 namespace bcos::ledger::account
 {
-template <class Account>
-concept IsAccount = requires(Account account) {
+template <class AccountType>
+concept Account = requires(AccountType account) {
     { account.exists() } -> task::IsAwaitableReturnValue<bool>;
     { account.create() } -> task::IsAwaitableReturnValue<void>;
     { account.code() } -> task::IsAwaitableReturnValue<std::optional<storage::Entry>>;
