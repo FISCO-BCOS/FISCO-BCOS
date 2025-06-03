@@ -213,6 +213,11 @@ public:
     {
         co_return bcos::ledger::Features{};  // Return an empty SystemConfigs object
     }
+
+    virtual bcos::storage::StorageInterface::Ptr getStateStorage()
+    {
+        return nullptr;  // Default implementation, can be overridden
+    }
 };
 
 }  // namespace bcos::ledger

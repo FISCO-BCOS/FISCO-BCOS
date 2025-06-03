@@ -20,7 +20,8 @@
  */
 #include "TransactionValidator.h"
 #include "bcos-framework/txpool/Constant.h"
-#include "bcos-task/Wait.h"
+#include "bcos-framework/ledger/EVMAccount.h"
+#include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-txpool/txpool/interfaces/TxValidatorInterface.h"
 #include "bcos-utilities/DataConvertUtility.h"
 
@@ -60,23 +61,34 @@ task::Task<TransactionStatus> TransactionValidator::ValidateTransactionWithState
     std::shared_ptr<bcos::ledger::LedgerInterface> _ledger)
 {
     auto sender = toHex(_tx->sender());
-    // EIP-3607: Reject transactions from senders with deployed code TODO: fix error code hash set
-    auto accountCodeHashOpt =
-        co_await (_ledger->getStorageAt(sender, bcos::ledger::ACCOUNT_TABLE_FIELDS::CODE, 0));
-    auto accountCodeHash = accountCodeHashOpt ? accountCodeHashOpt.value() : storage::Entry();
-    if (!accountCodeHash.get().empty())
+    
+    // 通过 _ledger 获取 storage
+    auto storage = _ledger->getStateStorage();
+    if (!storage)
     {
-        TX_VALIDATOR_CHECKER_LOG(TRACE)
+        TX_VALIDATOR_CHECKER_LOG(WARNING)
             << LOG_BADGE("ValidateTransactionWithState")
-            << LOG_DESC("RejectTransactionWithDeployedCode") << LOG_KV("sender", sender)
-            << LOG_KV("codeHash", accountCodeHash.get());
-        co_return TransactionStatus::SenderNoEOA;
+            << LOG_DESC("Failed to get state storage from ledger");
+        co_return TransactionStatus::None;
     }
+    
+    // 构建 EVMAccount
+    bcos::ledger::account::EVMAccount account(*storage, sender, false);
+    
+    // EIP-3607: Reject transactions from senders with deployed code
+    // EIP-7702: EOA accounts also have code
+    // auto code = co_await account.code();
+    // if (code != h256{})
+    // {
+    //     TX_VALIDATOR_CHECKER_LOG(TRACE)
+    //         << LOG_BADGE("ValidateTransactionWithState")
+    //         << LOG_DESC("RejectTransactionWithDeployedCode") << LOG_KV("sender", sender)
+    //         << LOG_KV("code", code);
+    //     co_return TransactionStatus::SenderNoEOA;
+    // }
 
-    // TODO: add calculate gas price
-    auto balanceOpt =
-        co_await (_ledger->getStorageAt(sender, bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE, 0));
-    auto balanceValue = balanceOpt ? u256(balanceOpt.value().get()) : u256(0);
+    // 检查账户余额
+    auto balanceValue = co_await account.balance();
     auto txValue = u256(_tx->value());
     if (balanceValue < txValue)
     {

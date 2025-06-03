@@ -38,9 +38,92 @@ namespace bcos
 {
 namespace test
 {
+
 class FakeLedger : public LedgerInterface, public std::enable_shared_from_this<FakeLedger>
 {
 public:
+    class FakeStorage : public storage::StorageInterface
+    {
+    public:
+        using Value = storage::Entry;  // 必须的类型别名
+
+        FakeStorage(FakeLedger* ledger) : m_ledger(ledger) {}
+
+        // 修复 asyncGetRow 方法签名
+        void asyncGetRow(std::string_view table, std::string_view _key,
+            std::function<void(Error::UniquePtr, std::optional<storage::Entry>)> _callback) override
+        {
+            std::string tableStr(table);
+            std::string keyStr(_key);
+
+            // 直接使用 FakeLedger 的 fakeStorageEntryMaps
+            if (m_ledger->fakeStorageEntryMaps.count(tableStr) &&
+                m_ledger->fakeStorageEntryMaps[tableStr].count(keyStr))
+            {
+                _callback(nullptr, m_ledger->fakeStorageEntryMaps[tableStr][keyStr]);
+            }
+            else
+            {
+                _callback(nullptr, std::nullopt);
+            }
+        }
+
+        // 修复 asyncSetRow 方法签名
+        void asyncSetRow(std::string_view table, std::string_view key, storage::Entry entry,
+            std::function<void(Error::UniquePtr)> callback) override
+        {
+            // 直接使用 FakeLedger 的 fakeStorageEntryMaps
+            m_ledger->fakeStorageEntryMaps[std::string(table)][std::string(key)] = std::move(entry);
+            callback(nullptr);
+        }
+
+        // 修复 asyncGetRows 方法签名
+        void asyncGetRows(std::string_view table,
+            RANGES::any_view<std::string_view,
+                RANGES::category::input | RANGES::category::random_access | RANGES::category::sized>
+                keys,
+            std::function<void(Error::UniquePtr, std::vector<std::optional<storage::Entry>>)>
+                _callback) override
+        {
+            std::vector<std::optional<storage::Entry>> results;
+            for (auto const& key : keys)
+            {
+                std::string tableStr(table);
+                std::string keyStr(key);
+
+                if (m_ledger->fakeStorageEntryMaps.count(tableStr) &&
+                    m_ledger->fakeStorageEntryMaps[tableStr].count(keyStr))
+                {
+                    results.push_back(m_ledger->fakeStorageEntryMaps[tableStr][keyStr]);
+                }
+                else
+                {
+                    results.push_back(std::nullopt);
+                }
+            }
+            _callback(nullptr, std::move(results));
+        }
+
+        // 添加其他必需的虚函数实现
+        void asyncGetPrimaryKeys(std::string_view table,
+            const std::optional<storage::Condition const>& _condition,
+            std::function<void(Error::UniquePtr, std::vector<std::string>)> _callback) override
+        {
+            std::vector<std::string> keys;
+            std::string tableStr(table);
+            if (m_ledger->fakeStorageEntryMaps.count(tableStr))
+            {
+                for (const auto& [key, value] : m_ledger->fakeStorageEntryMaps[tableStr])
+                {
+                    keys.push_back(key);
+                }
+            }
+            _callback(nullptr, std::move(keys));
+        }
+
+    private:
+        FakeLedger* m_ledger;
+    };
     using Ptr = std::shared_ptr<FakeLedger>;
     FakeLedger() = default;
     FakeLedger(BlockFactory::Ptr _blockFactory, size_t _blockNumber, size_t _txsSize, size_t,
@@ -432,6 +515,15 @@ public:
         co_return fakeStorageEntryMaps[std::string(_address)][std::string(_key)];
     }
 
+    storage::StorageInterface::Ptr getStateStorage() override
+    {
+        if (!m_fakeStorage)
+        {
+            m_fakeStorage = std::make_shared<FakeStorage>(this);
+        }
+        return m_fakeStorage;
+    }
+
 private:
     BlockFactory::Ptr m_blockFactory;
     std::vector<KeyPairInterface::Ptr> m_keyPairVec;
@@ -453,6 +545,7 @@ private:
     std::unordered_map<std::string, ledger::StorageState> m_storageState = {};
     std::string eoaInLedger;
     std::string eoaInLedgerNonce;
+    std::shared_ptr<FakeStorage> m_fakeStorage;
     std::map<std::string, std::map<std::string, std::optional<storage::Entry>>>
         fakeStorageEntryMaps;
 };

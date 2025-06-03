@@ -114,14 +114,14 @@ BOOST_AUTO_TEST_CASE(testTransactionValidator)
     // std::string duplicatedNonceStr(duplicatedNonce);
     auto txNoEoa = fakeWeb3Tx(cryptoSuite, duplicatedNonceStr, eoaKeyNew);
 
-    std::optional<storage::Entry> codeHashOpNew = storage::Entry();
-    codeHashOpNew->set(asBytes("0x0123456"));
-    ledger->setStorageAt(
-        toHex(txNoEoa->sender()), std::string(bcos::ledger::ACCOUNT_TABLE_FIELDS::CODE), codeHashOpNew);
+    // std::optional<storage::Entry> codeHashOpNew = storage::Entry();
+    // codeHashOpNew->set(asBytes("0x0123456"));
+    // ledger->setStorageAt(
+    //     toHex(txNoEoa->sender()), std::string(bcos::ledger::ACCOUNT_TABLE_FIELDS::CODE), codeHashOpNew);
 
-    auto resultWithStateNoEOAAccount =
-        task::syncWait(TransactionValidator::ValidateTransactionWithState(txNoEoa, ledger));
-    BOOST_CHECK(resultWithStateNoEOAAccount == TransactionStatus::SenderNoEOA);
+    // auto resultWithStateNoEOAAccount =
+    //     task::syncWait(TransactionValidator::ValidateTransactionWithState(txNoEoa, ledger));
+    // BOOST_CHECK(resultWithStateNoEOAAccount == TransactionStatus::SenderNoEOA);
 
     const uint64_t value = 1234567;
     auto txNoEoughtValue = fakeInvalidateTransacton(inputStr, value);
