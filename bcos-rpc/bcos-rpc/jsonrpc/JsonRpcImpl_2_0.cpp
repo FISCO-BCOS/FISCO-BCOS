@@ -513,7 +513,7 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
             if (transaction->chainId() != self->m_groupManager->chainID())
             {
                 BOOST_THROW_EXCEPTION(
-                    JsonRpcException(JsonRpcError::InternalError, "Replayed transaction!"));
+                    JsonRpcException(JsonRpcError::InternalError, "Chain ID mismatch!"));
             }
             auto transactionStatus = TransactionValidator::ValidateTransaction(transaction);
             TransactionValidator::handleTransactionStatus(transactionStatus);
