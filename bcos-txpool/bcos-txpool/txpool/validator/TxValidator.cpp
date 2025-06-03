@@ -31,22 +31,21 @@ TransactionStatus TxValidator::verify(const bcos::protocol::Transaction& _tx)
     {
         return TransactionStatus::InvalidSignature;
     }
-    // check groupId and chainId
-    if (_tx.groupId() != m_groupId &&
-        _tx.type() == static_cast<uint8_t>(TransactionType::BCOSTransaction)) [[unlikely]]
+    if (_tx.type() == static_cast<uint8_t>(TransactionType::BCOSTransaction))
     {
-        return TransactionStatus::InvalidGroupId;
+        // check groupId and chainId
+        if (_tx.groupId() != m_groupId) [[unlikely]]
+        {
+            return TransactionStatus::InvalidGroupId;
+        }
+        if (_tx.chainId() != m_chainId) [[unlikely]]
+        {
+            return TransactionStatus::InvalidChainId;
+        }
     }
-    if (_tx.chainId() != m_chainId &&
-        _tx.type() == static_cast<uint8_t>(TransactionType::BCOSTransaction)) [[unlikely]]
-    {
-        return TransactionStatus::InvalidChainId;
-    }
-    if (const auto status = checkTransaction(_tx); status != TransactionStatus::None)
-    {
-        return status;
-    }
-    // check signature
+
+    // should check the transaction signature first, because the sender of transaction will be force
+    // remove in front module check signature
     try
     {
         _tx.verify(*m_cryptoSuite->hashImpl(), *m_cryptoSuite->signatureImpl());
@@ -54,6 +53,12 @@ TransactionStatus TxValidator::verify(const bcos::protocol::Transaction& _tx)
     catch (...)
     {
         return TransactionStatus::InvalidSignature;
+    }
+
+    // should check the transaction signature first, because sender is empty
+    if (const auto status = checkTransaction(_tx); status != TransactionStatus::None)
+    {
+        return status;
     }
 
     if (isSystemTransaction(_tx))
@@ -77,17 +82,15 @@ bcos::protocol::TransactionStatus TxValidator::checkTransaction(
         return checkWeb3Nonce(_tx, onlyCheckLedgerNonce);
     }
     // compare with nonces cached in memory, only check nonce in txpool
-    auto status = TransactionStatus::None;
     if (!onlyCheckLedgerNonce)
     {
-        status = checkTxpoolNonce(_tx);
-        if (status != TransactionStatus::None)
+        if (auto status = checkTxpoolNonce(_tx); status != TransactionStatus::None)
         {
             return status;
         }
     }
     // check ledger nonce and block limit
-    status = checkLedgerNonceAndBlockLimit(_tx);
+    auto status = checkLedgerNonceAndBlockLimit(_tx);
     return status;
 }
 

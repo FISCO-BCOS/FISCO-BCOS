@@ -294,7 +294,7 @@ public:
     }
 
     auto rawNewHelloWorld(uint blockNumber, TransactionType type, std::string contractAddress,
-        RANGES::input_range auto nonces)
+        RANGES::input_range auto nonces, int32_t status)
     {
         auto const sender = keyPair->address(hashImpl);
         bcos::ledger::account::EVMAccount eoa(*storage, sender.hex(), false);
@@ -335,7 +335,7 @@ public:
 
             auto result = executePromise.get_future().get();
 
-            BOOST_CHECK_EQUAL(result->status(), 0);
+            BOOST_CHECK_EQUAL(result->status(), status);
         }
 
         if (type != TransactionType::BCOSTransaction)
@@ -418,7 +418,7 @@ BOOST_AUTO_TEST_CASE(testMultiNonce)
     nextBlock(newBlock, protocol::BlockVersion::MAX_VERSION, web3Features);
     // [10000, 10020)
     rawNewHelloWorld(
-        newBlock, TransactionType::Web3Transaction, address, RANGES::views::iota(10000, 10020));
+        newBlock, TransactionType::Web3Transaction, address, RANGES::views::iota(10000, 10020), 0);
     commitBlock(newBlock);
 
     auto const sender = keyPair->address(hashImpl);
@@ -426,6 +426,15 @@ BOOST_AUTO_TEST_CASE(testMultiNonce)
     auto const nonceOfEoa = task::syncWait(eoa.nonce());
 
     BOOST_CHECK_EQUAL(nonceOfEoa.value(), "10020");
+
+    // De-comment the following lines to test the multi-nonce feature
+    // bugfix_check_nonce_in_executive newBlock = blockNumber++; nextBlock(newBlock,
+    // protocol::BlockVersion::MAX_VERSION, web3Features);
+    // // [10000, 10020)
+    // rawNewHelloWorld(
+    //     newBlock, TransactionType::Web3Transaction, address, RANGES::views::iota(10000, 10020),
+    //     16);
+    // commitBlock(newBlock);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

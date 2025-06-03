@@ -422,6 +422,8 @@ bool TransactionSync::importDownloadedTxs(TransactionsPtr _txs, Block::Ptr _veri
                 {
                     try
                     {
+                        // force sender to empty for the txs verification
+                        tx->forceSender({});
                         // verify failed, it will throw exception
                         tx->verify(*m_hashImpl, *m_signatureImpl);
                     }

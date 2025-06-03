@@ -3,16 +3,14 @@
 #include "GC.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/protocol/BlockHeader.h"
-#include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
+#include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-task/TBBWait.h"
-#include "bcos-transaction-scheduler/SchedulerParallelImpl.h"
 #include <oneapi/tbb/cache_aligned_allocator.h>
 #include <oneapi/tbb/parallel_pipeline.h>
 #include <oneapi/tbb/partitioner.h>
 #include <oneapi/tbb/task_arena.h>
 #include <tbb/task_arena.h>
-#include <type_traits>
 
 namespace bcos::scheduler_v1
 {
@@ -24,8 +22,8 @@ class SchedulerSerialImpl
 public:
     constexpr static auto MIN_TRANSACTION_GRAIN_SIZE = 16;
 
-    template <class TransactionExecutor>
-    task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(auto& storage,
+    template <class Storage, executor_v1::IsTransactionExecutor<Storage> TransactionExecutor>
+    task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(Storage& storage,
         TransactionExecutor& executor, protocol::BlockHeader const& blockHeader,
         ::ranges::input_range auto const& transactions, ledger::LedgerConfig const& ledgerConfig)
     {
@@ -33,9 +31,7 @@ public:
             ittapi::ITT_DOMAINS::instance().SERIAL_EXECUTE);
         auto count = static_cast<int32_t>(::ranges::size(transactions));
 
-        std::vector<std::unique_ptr<
-            typename TransactionExecutor::template ExecuteContext<std::decay_t<decltype(storage)>>>>
-            contexts;
+        std::vector<typename TransactionExecutor::template ExecuteContext<Storage>> contexts;
         contexts.reserve(count);
 
         auto chunks = ::ranges::views::iota(0, count) |
@@ -83,7 +79,7 @@ public:
                                 for (auto i : range)
                                 {
                                     auto& context = contexts[i];
-                                    co_await context->template executeStep<0>();
+                                    co_await context.template executeStep<0>();
                                 }
                                 co_return range;
                             }());
@@ -97,7 +93,7 @@ public:
                                 for (auto i : range)
                                 {
                                     auto& context = contexts[i];
-                                    co_await context->template executeStep<1>();
+                                    co_await context.template executeStep<1>();
                                 }
                                 co_return range;
                             }());
@@ -112,7 +108,7 @@ public:
                                 {
                                     auto& context = contexts[i];
                                     receipts.emplace_back(
-                                        co_await context->template executeStep<2>());
+                                        co_await context.template executeStep<2>());
                                 }
                             }());
                         }));

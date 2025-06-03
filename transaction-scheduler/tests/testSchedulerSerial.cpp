@@ -1,6 +1,7 @@
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
+#include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-transaction-scheduler/MultiLayerStorage.h"
@@ -29,14 +30,14 @@ struct MockExecutorSerial
     auto createExecuteContext(auto& storage, protocol::BlockHeader const& blockHeader,
         protocol::Transaction const& transaction, int32_t contextID,
         ledger::LedgerConfig const& ledgerConfig, bool call)
-        -> task::Task<std::unique_ptr<ExecuteContext<std::decay_t<decltype(storage)>>>>
+        -> task::Task<ExecuteContext<std::decay_t<decltype(storage)>>>
     {
         co_return {};
     }
 
     task::Task<protocol::TransactionReceipt::Ptr> executeTransaction(auto& storage,
         protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
-        int contextID, ledger::LedgerConfig const&, auto&& waitOperator)
+        int contextID, ledger::LedgerConfig const& /*unused*/, bool /*unused*/)
     {
         co_return {};
     }
@@ -75,18 +76,21 @@ BOOST_AUTO_TEST_CASE(executeBlock)
         bcostars::protocol::BlockHeaderImpl blockHeader(
             [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
         auto transactions =
-            RANGES::iota_view<int, int>(0, 100) | RANGES::views::transform([](int index) {
+            ::ranges::iota_view<int, int>(0, 100) | ::ranges::views::transform([](int index) {
                 return std::make_unique<bcostars::protocol::TransactionImpl>(
                     [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
             }) |
-            RANGES::to<std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>>>();
+            ::ranges::to<std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>>>();
 
         MockExecutorSerial executor;
         auto view = fork(multiLayerStorage);
         view.newMutable();
         ledger::LedgerConfig ledgerConfig;
+
+        static_assert(scheduler_v1::IsTransactionScheduler<SchedulerSerialImpl, decltype(view),
+            MockExecutorSerial, decltype(transactions)>);
         auto receipts = co_await scheduler.executeBlock(view, executor, blockHeader,
-            transactions | RANGES::views::transform([](auto& ptr) -> auto& { return *ptr; }),
+            transactions | ::ranges::views::transform([](auto& ptr) -> auto& { return *ptr; }),
             ledgerConfig);
         BOOST_CHECK_EQUAL(transactions.size(), receipts.size());
 
