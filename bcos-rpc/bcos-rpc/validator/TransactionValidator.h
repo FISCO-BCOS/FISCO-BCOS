@@ -20,27 +20,13 @@
 #pragma once
 
 #include "bcos-protocol/TransactionStatus.h"
-#include "bcos-rpc/web3jsonrpc/model/Web3Transaction.h"
 #include <bcos-framework/protocol/Transaction.h>
-#include <bcos-rpc/Common.h>
-#include <bcos-rpc/groupmgr/NodeService.h>
-#include <json/json.h>
-#include <string_view>
 
 namespace bcos::rpc
 {
-// template <typename RpcTransactionTemplate>
-//     requires(std::same_as<RpcTransactionTemplate, protocol::Transaction::Ptr> ||
-//              std::same_as<RpcTransactionTemplate, Web3Transaction>)
 class TransactionValidator
 {
 public:
-    // EIP-155: Simple replay attack protection
-    // static bool checkWeb3ReplayedProtected(
-    //     std::optional<uint64_t> _txChainId, std::string _chainId);
-    // static bool checkBcosReplayedProtected(
-    //     protocol::Transaction::Ptr _tx, std::string_view _chainId);
-
     // EIP-2681: Limit account nonce to 2^64-1
     // EIP-3860: Limit and meter initcode
     // EIP-3607: Reject transactions from senders with deployed code
