@@ -31,41 +31,35 @@
 using namespace bcos;
 using namespace bcos::rpc;
 
-protocol::TransactionStatus TransactionValidator::ValidateTransaction(
-    protocol::Transaction::Ptr _tx)
+protocol::TransactionStatus TransactionValidator::checkTransaction(
+    protocol::Transaction::Ptr _tx, bool isHandleException)
 {
     if (_tx->value().length() > TRANSACTION_VALUE_MAX_LENGTH)
     {
-        return protocol::TransactionStatus::OverFlowValue;
+        if (isHandleException)
+        {
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(JsonRpcError::InvalidParams, "Transaction value overflow"));
+        }
+        else
+        {
+            return protocol::TransactionStatus::OverFlowValue;
+        }
     }
     if (_tx->type() == static_cast<uint8_t>(protocol::TransactionType::Web3Transaction))
     {
         if (_tx->size() > MAX_INITCODE_SIZE)
         {
-            return protocol::TransactionStatus::MaxInitCodeSizeExceeded;
+            if (isHandleException)
+            {
+                BOOST_THROW_EXCEPTION(
+                    JsonRpcException(JsonRpcError::InvalidParams, "Transaction data too large"));
+            }
+            else
+            {
+                return protocol::TransactionStatus::MaxInitCodeSizeExceeded;
+            }
         }
     }
     return protocol::TransactionStatus::None;
-}
-
-void TransactionValidator::handleTransactionStatus(protocol::TransactionStatus transactionStatus)
-{
-    if (transactionStatus != protocol::TransactionStatus::None)
-    {
-        if (transactionStatus == protocol::TransactionStatus::OverFlowValue)
-        {
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(JsonRpcError::InvalidParams, "Transaction value overflow"));
-        }
-        else if (transactionStatus == protocol::TransactionStatus::MaxInitCodeSizeExceeded)
-        {
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(JsonRpcError::InvalidParams, "Transaction data too large"));
-        }
-        else
-        {
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(JsonRpcError::InvalidParams, "Transaction invalid"));
-        }
-    }
 }

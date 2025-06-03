@@ -31,9 +31,8 @@ public:
     // EIP-3860: Limit and meter initcode
     // EIP-3607: Reject transactions from senders with deployed code
     // Enough balance
-    static protocol::TransactionStatus ValidateTransaction(
-        protocol::Transaction::Ptr _tx);
-    static void handleTransactionStatus(protocol::TransactionStatus transactionStatus);
+    static protocol::TransactionStatus checkTransaction(
+        protocol::Transaction::Ptr _tx, bool isHandleException = false);
 };
 
 }  // namespace bcos::rpc
