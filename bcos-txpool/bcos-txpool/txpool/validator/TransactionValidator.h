@@ -24,7 +24,6 @@
 #include "bcos-protocol/TransactionStatus.h"
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/protocol/Transaction.h>
-#include <evmc/evmc.h>
 #include <memory>
 
 namespace bcos::txpool
