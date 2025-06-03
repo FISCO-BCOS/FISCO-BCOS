@@ -372,8 +372,10 @@ BOOST_AUTO_TEST_CASE(handleEIP1559TxTest)
     };
 
     std::optional<storage::Entry> balanceOp = storage::Entry();
-    balanceOp->set(asBytes("0x123456700000000000"));
-    m_ledger->setStorageAt("1f9090aae28b8a3dceadf281b0f12828e676c326",
+    balanceOp->set(asBytes("123456700000000000"));
+    std::string address = "1f9090aae28b8a3dceadf281b0f12828e676c326";
+    std::string tableName = std::string(bcos::ledger::SYS_DIRECTORY::USER_APPS) + address;
+    m_ledger->setStorageAt(tableName,
         std::string(bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE), balanceOp);
     m_ledger->setSystemConfig(ledger::SYSTEM_KEY_WEB3_CHAIN_ID, std::to_string(1));
     // clang-format off

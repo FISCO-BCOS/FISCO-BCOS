@@ -21,7 +21,6 @@
 #pragma once
 
 #include "bcos-framework/ledger/LedgerInterface.h"
-#include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/protocol/Transaction.h>

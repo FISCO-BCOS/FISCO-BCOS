@@ -20,6 +20,8 @@
  */
 #include "TransactionValidator.h"
 #include "bcos-framework/txpool/Constant.h"
+#include "bcos-framework/bcos-framework/ledger/Ledger.h"
+#include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-txpool/txpool/interfaces/TxValidatorInterface.h"
@@ -62,7 +64,6 @@ task::Task<TransactionStatus> TransactionValidator::ValidateTransactionWithState
 {
     auto sender = toHex(_tx->sender());
     
-    // 通过 _ledger 获取 storage
     auto storage = _ledger->getStateStorage();
     if (!storage)
     {
@@ -74,6 +75,36 @@ task::Task<TransactionStatus> TransactionValidator::ValidateTransactionWithState
     
     // 构建 EVMAccount
     bcos::ledger::account::EVMAccount account(*storage, sender, false);
+
+    auto gasPriceConfig = co_await ledger::getSystemConfig(*storage, ledger::SYSTEM_KEY_TX_GAS_PRICE, ledger::fromStorage);
+    
+    // if gasPriceConfig is not set, we can skip the balance check
+    bool skipBalanceCheck = false;
+    if (gasPriceConfig.has_value())
+    {
+        auto [gasPriceStr, blockNumber] = gasPriceConfig.value();
+        try 
+        {
+            auto gasPrice = boost::lexical_cast<uint64_t>(gasPriceStr);
+            if (gasPrice == 0)
+            {
+                skipBalanceCheck = true;
+                TX_VALIDATOR_CHECKER_LOG(TRACE)
+                    << LOG_BADGE("ValidateTransactionWithState")
+                    << LOG_DESC("Skip balance check due to zero gas price")
+                    << LOG_KV("gasPrice", gasPrice);
+            }
+        }
+        catch (const std::exception& e)
+        {
+            TX_VALIDATOR_CHECKER_LOG(WARNING)
+                << LOG_BADGE("ValidateTransactionWithState")
+                << LOG_DESC("Failed to parse gas price, using default balance check")
+                << LOG_KV("gasPriceStr", gasPriceStr)
+                << LOG_KV("error", e.what());
+        }
+    }
+    
     
     // EIP-3607: Reject transactions from senders with deployed code
     // EIP-7702: EOA accounts also have code
@@ -88,15 +119,23 @@ task::Task<TransactionStatus> TransactionValidator::ValidateTransactionWithState
     // }
 
     // 检查账户余额
-    auto balanceValue = co_await account.balance();
-    auto txValue = u256(_tx->value());
-    if (balanceValue < txValue)
+
+    if (!skipBalanceCheck)
     {
-        TX_VALIDATOR_CHECKER_LOG(TRACE)
-            << LOG_BADGE("ValidateTransactionWithState") << LOG_DESC("InsufficientFunds")
-            << LOG_KV("sender", sender) << LOG_KV("balance", balanceValue)
-            << LOG_KV("txValue", txValue);
-        co_return TransactionStatus::InsufficientFunds;
+        // 构建 EVMAccount
+        bcos::ledger::account::EVMAccount account(*storage, sender, false);
+        
+        // 检查账户余额
+        auto balanceValue = co_await account.balance();
+        auto txValue = u256(_tx->value());
+        if (balanceValue < txValue)
+        {
+            TX_VALIDATOR_CHECKER_LOG(TRACE)
+                << LOG_BADGE("ValidateTransactionWithState") << LOG_DESC("InsufficientFunds")
+                << LOG_KV("sender", sender) << LOG_KV("balance", balanceValue)
+                << LOG_KV("txValue", txValue);
+            co_return TransactionStatus::InsufficientFunds;
+        }
     }
 
     co_return TransactionStatus::None;
