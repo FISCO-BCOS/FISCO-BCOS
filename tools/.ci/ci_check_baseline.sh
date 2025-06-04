@@ -85,10 +85,9 @@ init_baseline()
     # Replace node2 and node3 with baseline scheduler, so that inconsistencies can be detected immediately
     perl -p -i -e 's/version=0/version=1/g' nodes/127.0.0.1/node*/config.genesis
     perl -p -i -e 's/level=info/level=trace/g' nodes/127.0.0.1/node*/config.ini
-    cd nodes/127.0.0.1 && wait_and_start
-
     # 为node0启用web3rpc
     perl -p -i -e 'if (/web3_rpc/) { $flag=1 } elsif ($flag && s/enable\s*=\s*false/enable=true/i) { $flag=0; }' node0/config.ini
+    cd nodes/127.0.0.1 && wait_and_start
 }
 
 check_consensus()
@@ -153,6 +152,7 @@ if [[ ${?} == "0" ]]; then
 fi
 cd "${current_path}/console/dist/"
 bash console.sh addBalance "0x2A09bE8823B80F337170650802d1a0F8A99FE2D8" 10000000000
+cd "${current_path}"
 bash ${current_path}/.ci/web3_test.sh
 if [[ ${?} == "0" ]]; then
        LOG_INFO "web3 test success"
