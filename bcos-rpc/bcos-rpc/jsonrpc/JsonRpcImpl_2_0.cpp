@@ -515,7 +515,7 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
                 BOOST_THROW_EXCEPTION(
                     JsonRpcException(JsonRpcError::InternalError, "Chain ID mismatch!"));
             }
-            TransactionValidator::checkTransaction(transaction, true);
+            TransactionValidator::checkTransaction(*transaction, true);
 
             auto start = utcSteadyTime();
             co_await txpool->broadcastTransactionBuffer(bcos::ref(transactionData));

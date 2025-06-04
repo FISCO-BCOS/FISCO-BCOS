@@ -34,10 +34,10 @@ public:
     using Ptr = std::shared_ptr<TransactionValidator>;
     // check simple replay attack protection
     // TODO: get from ledager config
-    static bcos::protocol::TransactionStatus ValidateTransaction(
-        bcos::protocol::Transaction::ConstPtr _tx);
-    static task::Task<protocol::TransactionStatus> ValidateTransactionWithState(
-        bcos::protocol::Transaction::ConstPtr _tx,
+    static bcos::protocol::TransactionStatus validateTransaction(
+        const bcos::protocol::Transaction& _tx);
+    static task::Task<protocol::TransactionStatus> validateTransactionWithState(
+        const bcos::protocol::Transaction& _tx,
         std::shared_ptr<bcos::ledger::LedgerInterface> _ledger);
 };
 }  // namespace bcos::txpool

@@ -378,14 +378,14 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
         return result;
     }
     // check txpool validator
-    result = TransactionValidator::ValidateTransaction(transaction);
+    result = TransactionValidator::validateTransaction(*transaction);
     if (result != TransactionStatus::None)
     {
         return result;
     }
 
     result = task::syncWait(
-        TransactionValidator::ValidateTransactionWithState(transaction, m_config->ledger()));
+        TransactionValidator::validateTransactionWithState(*transaction, m_config->ledger()));
     if (result != TransactionStatus::None)
     {
         return result;
