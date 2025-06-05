@@ -1,5 +1,12 @@
 #!/bin/bash
 
+pem_file="$1"
+hex_privatekey=$(openssl ec -in "$pem_file" -text -noout | 
+           grep -A3 'priv:' | 
+           tail -n +2 | 
+           tr -d ': \n' | 
+           sed 's/^00//; s/$.\{64\}$$/\\1/')
+
 git clone https://github.com/FISCO-BCOS/bcos-testing
 cd bcos-testing
 npm install
@@ -7,7 +14,7 @@ npm install ethereum-cryptography
 npm install node@22.14.0
 
 cat << EOF > .env
-PRIVATE_KEY=b0b9d33d8558ffb74cfa501426a1652bd4cb3452d49faad9b235c42f66d39e33
+PRIVATE_KEY=$hex_privatekey
 BCOS_HOST_URL=http://127.0.0.1:8545
 LOCAL_HOST_URL=http://127.0.0.1:8545
 INFURA_API_KEY=your_infura_api_key_here

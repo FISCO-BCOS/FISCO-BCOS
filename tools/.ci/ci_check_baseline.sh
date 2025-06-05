@@ -81,12 +81,9 @@ init_baseline()
     clear_node
     bash ${build_chain_path} -l "127.0.0.1:4" -e ${fisco_bcos_path} "${sm_option}"
 
-    # 将node2、node3替换为baseline scheduler, 这样不一致时可立即发现
-    # Replace node2 and node3 with baseline scheduler, so that inconsistencies can be detected immediately
     perl -p -i -e 's/version=0/version=1/g' nodes/127.0.0.1/node*/config.genesis
     perl -p -i -e 's/level=info/level=trace/g' nodes/127.0.0.1/node*/config.ini
-    # 为node0启用web3rpc
-    perl -p -i -e 'if (/web3_rpc/) { $flag=1 } elsif ($flag && s/enable\s*=\s*false/enable=true/i) { $flag=0; }' node0/config.ini
+    perl -p -i -e 'if (/web3_rpc/) { $flag=1 } elsif ($flag && s/enable\s*=\s*false/enable=true/i) { $flag=0; }' nodes/127.0.0.1/node1/config.ini
     cd nodes/127.0.0.1 && wait_and_start
 }
 
@@ -150,10 +147,16 @@ if [[ ${?} == "0" ]]; then
        echo "java_sdk_demo_ci_test error"
        exit 1
 fi
+
+cp ${current_path}/nodes/127.0.0.1/sdk/* ${current_path}/console/dist/conf/
+rm -rf ${current_path}/console/dist/account/ecdsa/*
+cp ${current_path}/nodes/ca/accounts/* ${current_path}/console/dist/account/ecdsa/
 cd "${current_path}/console/dist/"
-bash console.sh addBalance "0x2A09bE8823B80F337170650802d1a0F8A99FE2D8" 10000000000
-cd "${current_path}"
-bash ${current_path}/.ci/web3_test.sh
+account=$(bash console.sh listAccount | grep "current account" | awk -F '(' '{print $1}')
+bash console.sh addBalance "${account}" 200 ether
+bash console.sh setSystemConfigByKey tx_gas_price 1
+cd ${current_path}
+bash ${current_path}/.ci/web3_test.sh "${current_path}/console/dist/account/ecdsa/${account}.pem"
 if [[ ${?} == "0" ]]; then
        LOG_INFO "web3 test success"
    else
