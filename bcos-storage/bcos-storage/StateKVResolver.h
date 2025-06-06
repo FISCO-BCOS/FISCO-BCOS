@@ -15,7 +15,7 @@ struct InvalidStateKey : public Error
 struct StateValueResolver
 {
     static auto encode(const storage::Entry& entry) { return entry; }
-    static auto encode(storage::Entry&& entry) { return std::forward<decltype(entry)>(entry); }
+    static auto encode(storage::Entry&& entry) { return std::move(entry); }
     static storage::Entry decode(std::string_view view)
     {
         storage::Entry entry;
@@ -38,10 +38,9 @@ struct StateKeyResolver
     }
     static executor_v1::StateKey encode(executor_v1::StateKey&& stateKey)
     {
-        return std::forward<executor_v1::StateKey>(stateKey);
+        return std::move(stateKey);
     }
-    static executor_v1::StateKey encode(
-        const executor_v1::StateKeyView& stateKeyView)
+    static executor_v1::StateKey encode(const executor_v1::StateKeyView& stateKeyView)
     {
         return executor_v1::StateKey(stateKeyView);
     }

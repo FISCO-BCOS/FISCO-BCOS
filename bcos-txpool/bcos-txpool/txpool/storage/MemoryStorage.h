@@ -51,7 +51,7 @@ public:
         protocol::Transaction::Ptr transaction) override;
 
     std::vector<protocol::Transaction::ConstPtr> getTransactions(
-        RANGES::any_view<bcos::h256, RANGES::category::mask | RANGES::category::sized> hashes)
+        ::ranges::any_view<bcos::h256, ::ranges::category::mask | ::ranges::category::sized> hashes)
         override;
     // ============================
 
@@ -156,9 +156,9 @@ protected:
 
     TxPoolConfig::Ptr m_config;
 
-    using TxsMap = BucketMap<bcos::crypto::HashType, bcos::protocol::Transaction::Ptr,
-        std::hash<bcos::crypto::HashType>>;
-    TxsMap m_txsTable, m_invalidTxs;
+    using TxsMap = BucketMap<bcos::crypto::HashType, bcos::protocol::Transaction::Ptr>;
+    TxsMap m_txsTable;
+    TxsMap m_invalidTxs;
 
     using HashSet = BucketSet<bcos::crypto::HashType, std::hash<bcos::crypto::HashType>>;
     HashSet m_missedTxs;

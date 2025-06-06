@@ -14,11 +14,8 @@ bcos::executor_v1::EVMCResult bcos::executor_v1::VMInstance::execute(
     static auto const* evm = evmc_create_evmone();
     static thread_local std::unique_ptr<evmone::ExecutionState> localExecutionState;
 
-    auto executionState = std::move(localExecutionState);
-    if (!executionState)
-    {
-        executionState = std::make_unique<evmone::ExecutionState>();
-    }
+    auto executionState = localExecutionState ? std::move(localExecutionState) :
+                                                std::make_unique<evmone::ExecutionState>();
     executionState->reset(
         *msg, rev, *host, context, std::basic_string_view<uint8_t>(code, codeSize), {});
     auto result = EVMCResult(evmone::baseline::execute(

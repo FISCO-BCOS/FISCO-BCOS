@@ -93,14 +93,34 @@ BOOST_AUTO_TEST_CASE(testNormalFlow)
             commitMap.insert({sender, {nonceU256}});
         }
     }
-    task::syncWait(
-        checker.updateNonceCache(ranges::views::keys(commitMap), ranges::views::values(commitMap)));
+    task::syncWait(checker.updateNonceCache(::ranges::views::all(commitMap)));
 
     for (auto&& sender : senders)
     {
         auto nonce = task::syncWait(checker.getPendingNonce(toHex(sender)));
         BOOST_CHECK(nonce.has_value());
         BOOST_CHECK_EQUAL(nonce.value(), *commitMap[sender].rbegin() + 1);
+    }
+
+    // new pending
+    for (auto&& sender : senders)
+    {
+        task::syncWait(checker.insertMemoryNonce(sender, (*commitMap[sender].rbegin() + 2).str()));
+        auto nonce = task::syncWait(checker.getPendingNonce(toHex(sender)));
+        BOOST_CHECK(nonce.has_value());
+        BOOST_CHECK_EQUAL(nonce.value(), *commitMap[sender].rbegin() + 2);
+    }
+
+    // new sender
+    {
+        auto&& newSender = Address::generateRandomFixedBytes().toRawString();
+        auto nonce = task::syncWait(checker.getPendingNonce(toHex(newSender)));
+        BOOST_CHECK(!nonce.has_value());
+
+        task::syncWait(checker.insertMemoryNonce(newSender, "1"));
+        nonce = task::syncWait(checker.getPendingNonce(toHex(newSender)));
+        BOOST_CHECK(nonce.has_value());
+        BOOST_CHECK_EQUAL(nonce.value(), 1);
     }
 }
 
@@ -144,8 +164,7 @@ BOOST_AUTO_TEST_CASE(testLedgerNonce)
             commitMap.insert({sender, {nonceU256}});
         }
     }
-    task::syncWait(
-        checker.updateNonceCache(ranges::views::keys(commitMap), ranges::views::values(commitMap)));
+    task::syncWait(checker.updateNonceCache(::ranges::views::all(commitMap)));
 
     uint64_t errorCount = 0;
     for (const auto& [sender, nonce] : nonces)

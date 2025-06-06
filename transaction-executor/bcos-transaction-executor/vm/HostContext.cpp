@@ -29,8 +29,8 @@ evmc_message bcos::executor_v1::hostcontext::getMessage(bool web3Tx,
             }
             else
             {
-                message.code_address = newLegacyEVMAddress(
-                    bytesConstRef(message.sender.bytes, sizeof(message.sender.bytes)), nonce);
+                message.code_address =
+                    newLegacyEVMAddress(bytesConstRef(message.sender.bytes), nonce);
             }
         }
         message.recipient = message.code_address;
