@@ -81,7 +81,7 @@ BOOST_AUTO_TEST_CASE(testTransactionValidator)
     u256 fakeNonce = u256(duplicatedNonce);
     faker->ledger()->initEoaContext(
         eoaKey->address(cryptoSuite->hashImpl()).hex(), fakeNonce.convert_to<std::string>());
-    auto result = TransactionValidator::ValidateTransaction(tx);
+    auto result = TransactionValidator::validateTransaction(*tx);
     BOOST_CHECK(result == TransactionStatus::None);
 
     std::string inputStr = "testTransactionValidatorTx";
@@ -89,23 +89,26 @@ BOOST_AUTO_TEST_CASE(testTransactionValidator)
     auto inputStrLarge = "0x" + std::string(MAX_INITCODE_SIZE, '1');
     // std::string duplicatedNonceStr(duplicatedNonce);
     tx = fakeWeb3Tx(cryptoSuite, duplicatedNonceStr, eoaKey, inputStrLarge);
-    auto resultLarge = TransactionValidator::ValidateTransaction(tx);
+    auto resultLarge = TransactionValidator::validateTransaction(*tx);
     BOOST_CHECK(resultLarge == TransactionStatus::MaxInitCodeSizeExceeded);
 
     // check with state
-    // auto resultWithStateNoAccount = TransactionValidator::ValidateTransactionWithState(tx, ledger);
-    // BOOST_CHECK(resultWithStateNoAccount == TransactionStatus::NoAccount);
+    // auto resultWithStateNoAccount = TransactionValidator::ValidateTransactionWithState(tx,
+    // ledger); BOOST_CHECK(resultWithStateNoAccount == TransactionStatus::NoAccount);
 
     std::optional<storage::Entry> codeHashOp = storage::Entry();
     codeHashOp->set(asBytes(""));
-    ledger->setStorageAt(toHex(tx->sender()), std::string(bcos::ledger::ACCOUNT_TABLE_FIELDS::CODE), codeHashOp);
+    ledger->setStorageAt(
+        toHex(tx->sender()), std::string(bcos::ledger::ACCOUNT_TABLE_FIELDS::CODE), codeHashOp);
 
 
     std::optional<storage::Entry> balanceOp = storage::Entry();
     balanceOp->set(asBytes("0x123"));
-    ledger->setStorageAt(toHex(tx->sender()), std::string(bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE), balanceOp);
+    ledger->setStorageAt(
+        toHex(tx->sender()), std::string(bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE), balanceOp);
 
-    auto resultWithState = task::syncWait(TransactionValidator::ValidateTransactionWithState(tx, ledger));
+    auto resultWithState =
+        task::syncWait(TransactionValidator::validateTransactionWithState(*tx, ledger));
     BOOST_CHECK(resultWithState == TransactionStatus::None);
 
     // NoEOA
@@ -117,7 +120,8 @@ BOOST_AUTO_TEST_CASE(testTransactionValidator)
     // std::optional<storage::Entry> codeHashOpNew = storage::Entry();
     // codeHashOpNew->set(asBytes("0x0123456"));
     // ledger->setStorageAt(
-    //     toHex(txNoEoa->sender()), std::string(bcos::ledger::ACCOUNT_TABLE_FIELDS::CODE), codeHashOpNew);
+    //     toHex(txNoEoa->sender()), std::string(bcos::ledger::ACCOUNT_TABLE_FIELDS::CODE),
+    //     codeHashOpNew);
 
     // auto resultWithStateNoEOAAccount =
     //     task::syncWait(TransactionValidator::ValidateTransactionWithState(txNoEoa, ledger));
@@ -125,9 +129,10 @@ BOOST_AUTO_TEST_CASE(testTransactionValidator)
 
     const uint64_t value = 1234567;
     auto txNoEoughtValue = fakeInvalidateTransacton(inputStr, value);
-    ledger->setStorageAt(toHex(txNoEoughtValue->sender()), std::string(bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE), balanceOp);
-    auto resultWithStateNoEnoughBalance =
-        task::syncWait(TransactionValidator::ValidateTransactionWithState(txNoEoughtValue, ledger));
+    ledger->setStorageAt(toHex(txNoEoughtValue->sender()),
+        std::string(bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE), balanceOp);
+    auto resultWithStateNoEnoughBalance = task::syncWait(
+        TransactionValidator::validateTransactionWithState(*txNoEoughtValue, ledger));
     BOOST_CHECK(resultWithStateNoEnoughBalance == TransactionStatus::InsufficientFunds);
 
     txpool->txpoolStorage()->clear();

@@ -19,11 +19,11 @@
  * @date 2024-12-11
  */
 #include "TransactionValidator.h"
-#include "bcos-framework/txpool/Constant.h"
 #include "bcos-framework/bcos-framework/ledger/Ledger.h"
-#include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/ledger/EVMAccount.h"
+#include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/storage/LegacyStorageMethods.h"
+#include "bcos-framework/txpool/Constant.h"
 #include "bcos-txpool/txpool/interfaces/TxValidatorInterface.h"
 #include "bcos-utilities/DataConvertUtility.h"
 
@@ -31,24 +31,23 @@ using namespace bcos;
 using namespace bcos::protocol;
 using namespace bcos::txpool;
 
-TransactionStatus TransactionValidator::ValidateTransaction(
-    bcos::protocol::Transaction::ConstPtr _tx)
+TransactionStatus TransactionValidator::validateTransaction(const bcos::protocol::Transaction& _tx)
 {
     // TODO: EIP-155: Simple replay attack protection
     //  u256 value
     //  TODO: EIP-2681: Limit account nonce to 2^64-1
-    if (_tx->value().length() > TRANSACTION_VALUE_MAX_LENGTH)
+    if (_tx.value().length() > TRANSACTION_VALUE_MAX_LENGTH)
     {
         return TransactionStatus::OverFlowValue;
     }
     // EIP-3860: Limit and meter initcode
-    if (_tx->type() == TransactionType::Web3Transaction)
+    if (_tx.type() == TransactionType::Web3Transaction)
     {
-        if (_tx->size() > MAX_INITCODE_SIZE)
+        if (_tx.size() > MAX_INITCODE_SIZE)
         {
             TX_VALIDATOR_CHECKER_LOG(TRACE)
                 << LOG_BADGE("ValidateTransaction")
-                << LOG_DESC("RejectTransactionWithLargeInitCode") << LOG_KV("txSize", _tx->size())
+                << LOG_DESC("RejectTransactionWithLargeInitCode") << LOG_KV("txSize", _tx.size())
                 << LOG_KV("maxInitCodeSize", MAX_INITCODE_SIZE);
             // Reject transactions with initcode larger than MAX_INITCODE_SIZE
             return TransactionStatus::MaxInitCodeSizeExceeded;
@@ -58,43 +57,37 @@ TransactionStatus TransactionValidator::ValidateTransaction(
     return TransactionStatus::None;
 }
 
-task::Task<TransactionStatus> TransactionValidator::ValidateTransactionWithState(
-    bcos::protocol::Transaction::ConstPtr _tx,
-    std::shared_ptr<bcos::ledger::LedgerInterface> _ledger)
+task::Task<TransactionStatus> TransactionValidator::validateTransactionWithState(
+    const bcos::protocol::Transaction& _tx, std::shared_ptr<bcos::ledger::LedgerInterface> _ledger)
 {
-    auto sender = toHex(_tx->sender());
-    
+    auto sender = toHex(_tx.sender());
+
     auto storage = _ledger->getStateStorage();
     if (!storage)
     {
-        TX_VALIDATOR_CHECKER_LOG(WARNING)
-            << LOG_BADGE("ValidateTransactionWithState")
-            << LOG_DESC("Failed to get state storage from ledger");
+        TX_VALIDATOR_CHECKER_LOG(WARNING) << LOG_BADGE("ValidateTransactionWithState")
+                                          << LOG_DESC("Failed to get state storage from ledger");
         co_return TransactionStatus::None;
     }
-    
-    // 构建 EVMAccount
+
     bcos::ledger::account::EVMAccount account(*storage, sender, false);
 
-    auto gasPriceConfig = co_await ledger::getSystemConfig(*storage, ledger::SYSTEM_KEY_TX_GAS_PRICE, ledger::fromStorage);
-    
     // if gasPriceConfig is not set, we can skip the balance check
     bool skipBalanceCheck = false;
-    if (gasPriceConfig.has_value())
+    if (auto gasPriceConfig = co_await ledger::getSystemConfig(
+            *storage, ledger::SYSTEM_KEY_TX_GAS_PRICE, ledger::fromStorage))
     {
-        auto [gasPriceStr, blockNumber] = gasPriceConfig.value();
-
-        if (gasPriceStr == "0x0" || gasPriceStr == "0")
+        if (auto& [gasPriceStr, blockNumber] = gasPriceConfig.value();
+            gasPriceStr == "0x0" || gasPriceStr == "0")
         {
             skipBalanceCheck = true;
-            TX_VALIDATOR_CHECKER_LOG(TRACE)
-                << LOG_BADGE("ValidateTransactionWithState")
-                << LOG_DESC("Skip balance check due to zero gas price")
-                << LOG_KV("gasPrice", gasPriceStr);
+            TX_VALIDATOR_CHECKER_LOG(TRACE) << LOG_BADGE("ValidateTransactionWithState")
+                                            << LOG_DESC("Skip balance check due to zero gas price")
+                                            << LOG_KV("gasPrice", gasPriceStr);
         }
     }
-    
-    
+
+
     // EIP-3607: Reject transactions from senders with deployed code
     // EIP-7702: EOA accounts also have code
     // auto code = co_await account.code();
@@ -111,12 +104,9 @@ task::Task<TransactionStatus> TransactionValidator::ValidateTransactionWithState
 
     if (!skipBalanceCheck)
     {
-        // 构建 EVMAccount
-        bcos::ledger::account::EVMAccount account(*storage, sender, false);
-        
         // 检查账户余额
         auto balanceValue = co_await account.balance();
-        auto txValue = u256(_tx->value());
+        auto txValue = u256(_tx.value());
         if (balanceValue < txValue)
         {
             TX_VALIDATOR_CHECKER_LOG(TRACE)

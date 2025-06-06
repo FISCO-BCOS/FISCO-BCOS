@@ -67,12 +67,12 @@ BOOST_AUTO_TEST_CASE(testBcosTransactionSignatureCheck)
     // BOOST_CHECK(result == false);
     auto tx = factory.createTransaction(
         1, to, input, nonce, 100, "testChainValidator", "testGroup", 1000, *keyPair, "");
-    auto resultStatus = TransactionValidator::checkTransaction(tx);
+    auto resultStatus = TransactionValidator::checkTransaction(*tx);
     BOOST_CHECK(resultStatus == TransactionStatus::None);
     auto outRangeValue = "0x" + std::string(TRANSACTION_VALUE_MAX_LENGTH, '1');
     tx = factory.createTransaction(1, to, input, nonce, 100, "testChainValidator", "testGroup",
         1000, *keyPair, "", outRangeValue);
-    resultStatus = TransactionValidator::checkTransaction(tx);
+    resultStatus = TransactionValidator::checkTransaction(*tx);
     BOOST_CHECK(resultStatus == TransactionStatus::OverFlowValue);
 
     auto largeInput = "0x" + std::string(MAX_INITCODE_SIZE, '1');
@@ -83,7 +83,7 @@ BOOST_AUTO_TEST_CASE(testBcosTransactionSignatureCheck)
         blockData[m_ledger->blockNumber() - blockLimit + 1]->transaction(0)->nonce();
     std::string duplicatedNonceStr(duplicatedNonce);
     tx = fakeWeb3Tx(cryptoSuite, duplicatedNonceStr, eoaKey, largeInput);
-    resultStatus = TransactionValidator::checkTransaction(tx);
+    resultStatus = TransactionValidator::checkTransaction(*tx);
     BOOST_CHECK(resultStatus == TransactionStatus::MaxInitCodeSizeExceeded);
 }
 

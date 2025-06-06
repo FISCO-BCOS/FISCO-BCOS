@@ -32,9 +32,9 @@ using namespace bcos;
 using namespace bcos::rpc;
 
 protocol::TransactionStatus TransactionValidator::checkTransaction(
-    protocol::Transaction::Ptr _tx, bool isHandleException)
+    const protocol::Transaction& _tx, bool isHandleException)
 {
-    if (_tx->value().length() > TRANSACTION_VALUE_MAX_LENGTH)
+    if (_tx.value().length() > TRANSACTION_VALUE_MAX_LENGTH)
     {
         if (isHandleException)
         {
@@ -46,9 +46,9 @@ protocol::TransactionStatus TransactionValidator::checkTransaction(
             return protocol::TransactionStatus::OverFlowValue;
         }
     }
-    if (_tx->type() == static_cast<uint8_t>(protocol::TransactionType::Web3Transaction))
+    if (_tx.type() == static_cast<uint8_t>(protocol::TransactionType::Web3Transaction))
     {
-        if (_tx->size() > MAX_INITCODE_SIZE)
+        if (_tx.size() > MAX_INITCODE_SIZE)
         {
             if (isHandleException)
             {

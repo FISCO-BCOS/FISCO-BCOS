@@ -39,7 +39,7 @@ struct ExecutionContext
 };
 
 template <class MutableStorage, class Storage,
-    executor_v1::IsTransactionExecutor<Storage> TransactionExecutor, class Contexts>
+    executor_v1::TransactionExecutor<Storage> TransactionExecutor, class Contexts>
 class ChunkStatus
 {
 private:
@@ -151,7 +151,7 @@ public:
         co_await storage2::merge(storage, lastStorage);
     }
 
-    template <class Storage, executor_v1::IsTransactionExecutor<Storage> TransactionExecutor>
+    template <class Storage, executor_v1::TransactionExecutor<Storage> TransactionExecutor>
     size_t executeSinglePass(Storage& storage, TransactionExecutor& executor,
         protocol::BlockHeader const& blockHeader, ledger::LedgerConfig const& ledgerConfig,
         ::ranges::random_access_range auto& contexts, size_t chunkSize)
@@ -315,7 +315,7 @@ public:
         return 0;
     }
 
-    template <class Storage, executor_v1::IsTransactionExecutor<Storage> TransactionExecutor>
+    template <class Storage, executor_v1::TransactionExecutor<Storage> TransactionExecutor>
     task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(Storage& storage,
         TransactionExecutor& executor, protocol::BlockHeader const& blockHeader,
         ::ranges::random_access_range auto const& transactions,

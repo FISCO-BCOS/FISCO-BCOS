@@ -216,8 +216,8 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto const& receip
 }
 
 template <class MultiLayerStorage,
-    executor_v1::IsTransactionExecutor<typename MultiLayerStorage::ViewType> Executor,
-    scheduler_v1::IsTransactionScheduler<typename MultiLayerStorage::ViewType, Executor,
+    executor_v1::TransactionExecutor<typename MultiLayerStorage::ViewType> Executor,
+    scheduler_v1::TransactionScheduler<typename MultiLayerStorage::ViewType, Executor,
         std::vector<protocol::Transaction::ConstPtr>>
         SchedulerImpl,
     class Ledger>

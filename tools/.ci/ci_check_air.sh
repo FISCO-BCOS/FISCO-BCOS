@@ -247,6 +247,23 @@ if [[ ${?} == "0" ]]; then
        echo "java_sdk_demo_ci_test error"
        exit 1
 fi
+
+# cp ${current_path}/nodes/127.0.0.1/sdk/* ${current_path}/console/dist/conf/
+# rm -rf ${current_path}/console/dist/account/ecdsa/*
+# cp ${current_path}/nodes/ca/accounts/* ${current_path}/console/dist/account/ecdsa/
+# cd "${current_path}/console/dist/"
+# account=$(bash console.sh listAccount | grep "current account" | awk -F '(' '{print $1}')
+# bash console.sh addBalance "${account}" 200 ether
+# bash console.sh setSystemConfigByKey tx_gas_price 1
+# cd ${current_path}
+# bash ${current_path}/.ci/web3_test.sh "${current_path}/console/dist/account/ecdsa/${account}.pem"
+# if [[ ${?} == "0" ]]; then
+#        LOG_INFO "web3 test success"
+#    else
+#        echo "web3 test error"
+#        exit 1
+# fi
+
 stop_node
 LOG_INFO "======== check baseline cases success ========"
 clear_node

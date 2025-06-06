@@ -29,8 +29,8 @@ struct MockExecutorSerial
 
     auto createExecuteContext(auto& storage, protocol::BlockHeader const& blockHeader,
         protocol::Transaction const& transaction, int32_t contextID,
-        ledger::LedgerConfig const& ledgerConfig, bool call)
-        -> task::Task<ExecuteContext<std::decay_t<decltype(storage)>>>
+        ledger::LedgerConfig const& ledgerConfig,
+        bool call) -> task::Task<ExecuteContext<std::decay_t<decltype(storage)>>>
     {
         co_return {};
     }
@@ -87,7 +87,7 @@ BOOST_AUTO_TEST_CASE(executeBlock)
         view.newMutable();
         ledger::LedgerConfig ledgerConfig;
 
-        static_assert(scheduler_v1::IsTransactionScheduler<SchedulerSerialImpl, decltype(view),
+        static_assert(scheduler_v1::TransactionScheduler<SchedulerSerialImpl, decltype(view),
             MockExecutorSerial, decltype(transactions)>);
         auto receipts = co_await scheduler.executeBlock(view, executor, blockHeader,
             transactions | ::ranges::views::transform([](auto& ptr) -> auto& { return *ptr; }),

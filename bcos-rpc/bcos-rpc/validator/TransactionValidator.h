@@ -32,7 +32,7 @@ public:
     // EIP-3607: Reject transactions from senders with deployed code
     // Enough balance
     static protocol::TransactionStatus checkTransaction(
-        protocol::Transaction::Ptr _tx, bool isHandleException = false);
+        const protocol::Transaction& _tx, bool isHandleException = false);
 };
 
 }  // namespace bcos::rpc

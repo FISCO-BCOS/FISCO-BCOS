@@ -54,7 +54,7 @@ public:
         {
             co_return codeEntry;
         }
-        co_return std::optional<storage::Entry>{};
+        co_return {};
     }
 
     task::Task<void> setCode(bytes code, std::string abi, const crypto::HashType& codeHash)
@@ -91,7 +91,7 @@ public:
             h256 codeHash((const bcos::byte*)view.data(), view.size());
             co_return codeHash;
         }
-        co_return h256{};
+        co_return {};
     }
 
     task::Task<std::optional<storage::Entry>> abi()
@@ -117,7 +117,7 @@ public:
         {
             co_return abiEntry;
         }
-        co_return std::optional<storage::Entry>{};
+        co_return {};
     }
 
     task::Task<u256> balance()
@@ -129,7 +129,7 @@ public:
             auto balance = boost::lexical_cast<u256>(view);
             co_return balance;
         }
-        co_return u256{};
+        co_return {};
     }
 
     task::Task<void> setBalance(const u256& balance)
@@ -148,7 +148,7 @@ public:
             auto view = entry->get();
             co_return std::string(view);
         }
-        co_return std::nullopt;
+        co_return {};
     }
 
     task::Task<void> setNonce(std::string nonce)

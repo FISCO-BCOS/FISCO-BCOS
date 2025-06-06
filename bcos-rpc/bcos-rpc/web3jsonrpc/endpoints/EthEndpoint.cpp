@@ -463,7 +463,7 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
     auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
         [m_tx = std::move(tarsTx)]() mutable { return &m_tx; });
     // check transaction validator
-    TransactionValidator::checkTransaction(tx, true);
+    TransactionValidator::checkTransaction(*tx, true);
 
     // for web3.eth.sendRawTransaction, return the hash of raw transaction
     if (auto web3TxHash = bcos::crypto::keccak256Hash(bcos::ref(rawTxBytes));
