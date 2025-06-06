@@ -77,24 +77,13 @@ task::Task<TransactionStatus> TransactionValidator::validateTransactionWithState
     if (auto gasPriceConfig = co_await ledger::getSystemConfig(
             *storage, ledger::SYSTEM_KEY_TX_GAS_PRICE, ledger::fromStorage))
     {
-        auto& [gasPriceStr, blockNumber] = gasPriceConfig.value();
-        try
+        if (auto& [gasPriceStr, blockNumber] = gasPriceConfig.value();
+            gasPriceStr == "0x0" || gasPriceStr == "0")
         {
-            if (auto gasPrice = boost::lexical_cast<uint64_t>(gasPriceStr); gasPrice == 0)
-            {
-                skipBalanceCheck = true;
-                TX_VALIDATOR_CHECKER_LOG(TRACE)
-                    << LOG_BADGE("ValidateTransactionWithState")
-                    << LOG_DESC("Skip balance check due to zero gas price")
-                    << LOG_KV("gasPrice", gasPrice);
-            }
-        }
-        catch (const std::exception& e)
-        {
-            TX_VALIDATOR_CHECKER_LOG(WARNING)
-                << LOG_BADGE("ValidateTransactionWithState")
-                << LOG_DESC("Failed to parse gas price, using default balance check")
-                << LOG_KV("gasPriceStr", gasPriceStr) << LOG_KV("error", e.what());
+            skipBalanceCheck = true;
+            TX_VALIDATOR_CHECKER_LOG(TRACE) << LOG_BADGE("ValidateTransactionWithState")
+                                            << LOG_DESC("Skip balance check due to zero gas price")
+                                            << LOG_KV("gasPrice", gasPriceStr);
         }
     }
 
