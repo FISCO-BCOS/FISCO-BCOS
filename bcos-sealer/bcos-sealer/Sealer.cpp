@@ -134,7 +134,7 @@ void Sealer::executeWorker()
     else
     {
         boost::unique_lock<boost::mutex> lock(x_signalled);
-        m_signalled.wait_for(lock, boost::chrono::milliseconds(1));
+        m_signalled.wait_for(lock, boost::chrono::seconds(1));
     }
 }
 
@@ -229,4 +229,20 @@ std::chrono::steady_clock::time_point Sealer::increaseLastFetchTimepoint()
 void bcos::sealer::Sealer::setSealingManager(SealingManager::Ptr _sealingManager)
 {
     m_sealingManager = std::move(_sealingManager);
+}
+void bcos::sealer::Sealer::setFetchTimeout(int fetchTimeout)
+{
+    m_fetchTimeout = fetchTimeout;
+}
+bcos::sealer::SealerConfig::Ptr bcos::sealer::Sealer::sealerConfig() const
+{
+    return m_sealerConfig;
+}
+bcos::sealer::SealingManager::Ptr bcos::sealer::Sealer::sealingManager() const
+{
+    return m_sealingManager;
+}
+void bcos::sealer::Sealer::noteGenerateProposal()
+{
+    m_signalled.notify_one();
 }
