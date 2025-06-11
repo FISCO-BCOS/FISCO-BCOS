@@ -23,7 +23,6 @@
 #include "bcos-framework/sealer/SealerInterface.h"
 #include <bcos-utilities/Worker.h>
 #include <chrono>
-#include <utility>
 
 namespace bcos::sealer
 {
@@ -57,17 +56,17 @@ public:
     virtual void init(bcos::consensus::ConsensusInterface::Ptr _consensus);
 
     uint16_t hookWhenSealBlock([[maybe_unused]] bcos::protocol::Block::Ptr _block) override;
-    void setFetchTimeout(int fetchTimeout) { m_fetchTimeout = fetchTimeout; }
+    void setFetchTimeout(int fetchTimeout);
 
     // only for test
-    SealerConfig::Ptr sealerConfig() const { return m_sealerConfig; }
-    SealingManager::Ptr sealingManager() const { return m_sealingManager; }
+    SealerConfig::Ptr sealerConfig() const;
+    SealingManager::Ptr sealingManager() const;
 
     void executeWorker() override;
     void setSealingManager(SealingManager::Ptr _sealingManager);
 
 protected:
-    virtual void noteGenerateProposal() { m_signalled.notify_all(); }
+    virtual void noteGenerateProposal();
     virtual void submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _block);
 
     SealerConfig::Ptr m_sealerConfig;
