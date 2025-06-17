@@ -214,6 +214,37 @@ public:
         return block;
     }
 
+    void addNewBlock(BlockHeader::Ptr _parentBlockHeader, BlockNumber _blockNumber, size_t _txsSize,
+        int64_t _timestamp = utcTime())
+    {
+        auto block = fakeAndCheckBlock(m_blockFactory->cryptoSuite(), m_blockFactory, _txsSize,
+            _txsSize, _blockNumber, true, false);
+        ParentInfoList parentInfo;
+        if (_parentBlockHeader != nullptr)
+        {
+            ParentInfo info{_parentBlockHeader->number(), _parentBlockHeader->hash()};
+            parentInfo.push_back(info);
+        }
+        auto rootHash =
+            m_blockFactory->cryptoSuite()->hashImpl()->hash(std::to_string(_blockNumber));
+        u256 gasUsed = 1232342523;
+
+        SignatureList signatureList;
+        // fake blockHeader
+        auto blockHeader = fakeAndTestBlockHeader(m_blockFactory->cryptoSuite(), 0, parentInfo,
+            rootHash, rootHash, rootHash, _blockNumber, gasUsed, _timestamp, 0, m_sealerList,
+            bytes(), signatureList, false);
+        auto sigImpl = m_blockFactory->cryptoSuite()->signatureImpl();
+        blockHeader->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
+        signatureList = fakeSignatureList(sigImpl, m_keyPairVec, blockHeader->hash());
+        blockHeader->setSignatureList(signatureList);
+        block->setBlockHeader(blockHeader);
+        m_ledger.push_back(block);
+        m_hash2Block[block->blockHeader()->hash()] = _blockNumber;
+        auto latestBlock = m_ledger[m_ledger.size() - 1];
+        updateLedgerConfig(latestBlock->blockHeader());
+    }
+
     Block::Ptr populateFromHeader(BlockHeader::Ptr _blockHeader)
     {
         auto block = m_blockFactory->createBlock();

@@ -15,7 +15,7 @@ using namespace bcos::rpc::filter;
 
 FilterSystem::FilterSystem(GroupManager::Ptr groupManager, std::string groupId,
     FilterRequestFactory::Ptr factory, int filterTimeout, int maxBlockProcessPerReq)
-  : m_filterTimeout(filterTimeout * 1000),
+  : m_filterTimeout(filterTimeout),
     m_maxBlockProcessPerReq(maxBlockProcessPerReq),
     m_groupManager(std::move(groupManager)),
     m_group(std::move(groupId)),

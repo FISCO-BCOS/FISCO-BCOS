@@ -386,7 +386,7 @@ void NodeConfig::loadRpcConfig(boost::property_tree::ptree const& _pt)
     m_rpcThreadPoolSize = threadCount;
     m_rpcDisableSsl = disableSsl;
     m_rpcSmSsl = smSsl;
-    m_rpcFilterTimeout = filterTimeout;
+    m_rpcFilterTimeout = filterTimeout * 1000;  // to milliseconds
     m_rpcMaxProcessBlock = maxProcessBlock;
     g_BCOSConfig.setNeedRetInput(needRetInput);
 
@@ -419,7 +419,7 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
     m_web3RpcListenPort = listenPort;
     m_web3RpcThreadSize = threadCount;
     m_enableWeb3Rpc = enableWeb3Rpc;
-    m_web3FilterTimeout = filterTimeout;
+    m_web3FilterTimeout = filterTimeout * 1000;  // to milliseconds
     m_web3MaxProcessBlock = maxProcessBlock;
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadWeb3RpcConfig") << LOG_KV("enableWeb3Rpc", enableWeb3Rpc)
