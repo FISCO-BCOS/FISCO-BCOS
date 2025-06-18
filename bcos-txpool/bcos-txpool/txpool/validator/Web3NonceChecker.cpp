@@ -96,13 +96,20 @@ task::Task<void> Web3NonceChecker::insertMemoryNonce(std::string sender, std::st
 {
     if (c_fileLogLevel == TRACE) [[unlikely]]
     {
-        TXPOOL_LOG(TRACE) << LOG_DESC("write memory nonces") << LOG_KV("sender", toHex(sender))
-                          << LOG_KV("nonce", nonce);
+        TXPOOL_LOG(TRACE) << LOG_DESC("Web3Nonce: write memory nonces")
+                          << LOG_KV("sender", toHex(sender)) << LOG_KV("nonce", nonce);
     }
     co_await storage2::writeOne(m_memoryNonces, std::make_pair(sender, nonce), std::monostate{});
     const auto maxMemNonce = co_await storage2::readOne(m_maxNonces, sender);
-    if (auto const uNonce = u256(nonce); !maxMemNonce.has_value() || uNonce > maxMemNonce.value())
+    if (auto const uNonce = u256(nonce); !maxMemNonce.has_value() || uNonce >= maxMemNonce.value())
     {
+        if (c_fileLogLevel == TRACE) [[unlikely]]
+        {
+            TXPOOL_LOG(TRACE) << LOG_DESC("Web3Nonce: update max nonce")
+                              << LOG_KV("sender", toHex(sender))
+                              << LOG_KV("originNonce", maxMemNonce.value_or(0))
+                              << LOG_KV("newNonce", uNonce);
+        }
         co_await storage2::writeOne(m_maxNonces, sender, uNonce + 1);
     }
 }
