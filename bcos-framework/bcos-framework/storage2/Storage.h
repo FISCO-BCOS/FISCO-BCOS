@@ -164,7 +164,8 @@ inline constexpr struct Merge
     }
 } merge;
 
-#if defined(__GNUC__) && ((__GNUC__ * 100 + GNUC_MINOR) >= 1203)
+#if (defined(__GNUC__) && ((__GNUC__ * 100 + GNUC_MINOR) >= 1203)) || \
+    (defined(__clang__) && (__clang_major__ > 13))
 template <class Storage, class Key>
 concept IsReadableStorage = requires(Storage& storage, Key key, std::array<Key, 1> keys) {
     { readSome(storage, keys) } -> task::IsAwaitable;
