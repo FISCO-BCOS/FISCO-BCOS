@@ -164,6 +164,14 @@ inline constexpr struct Merge
     }
 } merge;
 
+#if defined(__GNUC__) && (__GNUC__ <= 11)
+template <class Storage, class Key>
+concept IsReadableStorage = true;
+template <class Storage, class Key, class Value>
+concept IsWritableStorage = true;
+template <class Storage, class Key, class Value>
+concept IsReadWriteStorage = true;
+#else
 template <class Storage, class Key>
 concept IsReadableStorage = requires(Storage& storage, Key key, std::array<Key, 1> keys) {
     { readSome(storage, keys) } -> task::IsAwaitable;
@@ -180,6 +188,7 @@ concept IsWritableStorage = requires(
 template <class Storage, class Key, class Value>
 concept IsReadWriteStorage =
     IsReadableStorage<Storage, Key> && IsWritableStorage<Storage, Key, Value>;
+#endif
 
 template <auto& Tag>
 using tag_t = std::decay_t<decltype(Tag)>;
