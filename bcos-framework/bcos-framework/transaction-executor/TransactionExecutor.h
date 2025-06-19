@@ -5,7 +5,6 @@
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-task/Trait.h"
-#include <concepts>
 
 namespace bcos::executor_v1
 {
@@ -27,7 +26,7 @@ concept TransactionExecutor = requires(TransactionExecutorType& executor, Storag
         executor.createExecuteContext(
             storage, blockHeader, transaction, contextID, ledgerConfig, call)
     } -> task::IsAwaitableReturnValue<
-          typename TransactionExecutorType::template ExecuteContext<Storage>>;
+        typename TransactionExecutorType::template ExecuteContext<Storage>>;
 };
 
 }  // namespace bcos::executor_v1

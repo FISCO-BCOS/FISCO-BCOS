@@ -2,8 +2,6 @@
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/storage/Entry.h"
-#include "bcos-framework/storage2/Storage.h"
-#include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Task.h"
 #include <evmc/evmc.h>
 
