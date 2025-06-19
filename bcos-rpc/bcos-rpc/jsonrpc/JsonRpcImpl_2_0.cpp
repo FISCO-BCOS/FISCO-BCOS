@@ -22,6 +22,7 @@
 #include "bcos-crypto/interfaces/crypto/CommonType.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-rpc/validator/CallValidator.h"
+#include "bcos-rpc/validator/TransactionValidator.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
 #include <bcos-boostssl/websocket/WsMessage.h>
@@ -508,6 +509,13 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
                 RPC_IMPL_LOG(TRACE) << LOG_DESC("sendTransaction") << LOG_KV("group", groupID)
                                     << LOG_KV("node", nodeName) << LOG_KV("isWasm", isWasm);
             }
+            // check transaction validator
+            if (transaction->chainId() != self->m_groupManager->chainID())
+            {
+                BOOST_THROW_EXCEPTION(
+                    JsonRpcException(JsonRpcError::InternalError, "Chain ID mismatch!"));
+            }
+            TransactionValidator::checkTransaction(*transaction, true);
 
             auto start = utcSteadyTime();
             co_await txpool->broadcastTransactionBuffer(bcos::ref(transactionData));

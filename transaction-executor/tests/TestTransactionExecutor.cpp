@@ -36,9 +36,8 @@ public:
     bcos::executor_v1::TransactionExecutorImpl executor{
         receiptFactory, cryptoSuite->hashImpl(), precompiledManager};
 
-    static_assert(
-        bcos::executor_v1::IsTransactionExecutor<bcos::executor_v1::TransactionExecutorImpl,
-            MutableStorage>);
+    static_assert(bcos::executor_v1::TransactionExecutor<bcos::executor_v1::TransactionExecutorImpl,
+        MutableStorage>);
 };
 
 BOOST_FIXTURE_TEST_SUITE(TransactionExecutorImpl, TestTransactionExecutorImplFixture)

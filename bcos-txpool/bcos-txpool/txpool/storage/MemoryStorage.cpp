@@ -20,6 +20,7 @@
  */
 #include "bcos-txpool/txpool/storage/MemoryStorage.h"
 #include "bcos-task/Wait.h"
+#include "bcos-txpool/txpool/validator/TransactionValidator.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/ITTAPI.h"
 #include <bcos-protocol/TransactionSubmitResultImpl.h>
@@ -372,6 +373,23 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
         result = m_config->txValidator()->verify(*transaction);
     }
 
+    if (result != TransactionStatus::None)
+    {
+        return result;
+    }
+    // check txpool validator
+    result = TransactionValidator::validateTransaction(*transaction);
+    if (result != TransactionStatus::None)
+    {
+        return result;
+    }
+
+    result = task::syncWait(
+        TransactionValidator::validateTransactionWithState(*transaction, m_config->ledger()));
+    if (result != TransactionStatus::None)
+    {
+        return result;
+    }
     if (result == TransactionStatus::None)
     {
         auto const txImportTime = transaction->importTime();

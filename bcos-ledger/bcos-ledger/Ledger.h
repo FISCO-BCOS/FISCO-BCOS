@@ -128,31 +128,7 @@ public:
 
     task::Task<bcos::ledger::Features> fetchAllFeatures(protocol::BlockNumber) override;
 
-protected:
-    storage::StateStorageInterface::Ptr getStateStorage()
-    {
-        if (m_keyPageSize > 0)
-        {
-            // create keyPageStorage
-            storage::StateStorageFactory stateStorageFactory(m_keyPageSize);
-            // getABI function begin in version 320
-            auto keyPageIgnoreTables = std::make_shared<std::set<std::string, std::less<>>>(
-                storage::IGNORED_ARRAY_310.begin(), storage::IGNORED_ARRAY_310.end());
-            auto [error, entry] = m_stateStorage->getRow(
-                ledger::SYS_CONFIG, ledger::SYSTEM_KEY_COMPATIBILITY_VERSION);
-            if (!entry || error)
-            {
-                BOOST_THROW_EXCEPTION(
-                    BCOS_ERROR(GetStorageError, "Not found compatibilityVersion."));
-            }
-            auto [compatibilityVersionStr, _] = entry->template getObject<SystemConfigEntry>();
-            auto const version = bcos::tool::toVersionNumber(compatibilityVersionStr);
-            auto stateStorage = stateStorageFactory.createStateStorage(
-                m_stateStorage, version, true, false, keyPageIgnoreTables);
-            return stateStorage;
-        }
-        return std::make_shared<bcos::storage::StateStorage>(m_stateStorage, true);
-    }
+    storage::StorageInterface::Ptr getStateStorage() override;
 
 private:
     Error::Ptr checkTableValid(Error::UniquePtr&& error,
