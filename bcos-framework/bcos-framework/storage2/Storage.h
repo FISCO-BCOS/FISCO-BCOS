@@ -167,26 +167,24 @@ inline constexpr struct Merge
 #if (defined(__GNUC__) && ((__GNUC__ * 100 + GNUC_MINOR) >= 1203)) || \
     (defined(__clang__) && (__clang_major__ > 13))
 template <class Storage, class Key>
-concept IsReadableStorage = requires(Storage& storage, Key key, std::array<Key, 1> keys) {
+concept ReadableStorage = requires(Storage& storage, Key key, std::array<Key, 1> keys) {
     { readSome(storage, keys) } -> task::IsAwaitable;
     { readOne(storage, key) } -> task::IsAwaitable;
 };
-
 template <class Storage, class Key, class Value>
-concept IsWritableStorage = requires(
+concept WritableStorage = requires(
     Storage& storage, Key key, Value value, std::array<std::pair<Key, Value>, 1> keyValues) {
     { writeSome(storage, keyValues) } -> task::IsAwaitable;
     { writeOne(storage, key, value) } -> task::IsAwaitable;
 };
 #else
 template <class Storage, class Key>
-concept IsReadableStorage = true;
+concept ReadableStorage = true;
 template <class Storage, class Key, class Value>
-concept IsWritableStorage = true;
+concept WritableStorage = true;
 #endif
 template <class Storage, class Key, class Value>
-concept IsReadWriteStorage =
-    IsReadableStorage<Storage, Key> && IsWritableStorage<Storage, Key, Value>;
+concept ReadWriteStorage = ReadableStorage<Storage, Key> && WritableStorage<Storage, Key, Value>;
 
 template <auto& Tag>
 using tag_t = std::decay_t<decltype(Tag)>;

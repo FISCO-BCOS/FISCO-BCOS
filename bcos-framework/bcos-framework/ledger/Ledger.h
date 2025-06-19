@@ -85,7 +85,7 @@ inline constexpr struct GetCurrentBlockNumber
         co_return co_await tag_invoke(*this, ledger);
     }
     task::Task<protocol::BlockNumber> operator()(
-        storage2::IsReadableStorage<executor_v1::StateKey> auto& storage,
+        storage2::ReadableStorage<executor_v1::StateKey> auto& storage,
         FromStorage fromStorage) const
     {
         co_return co_await tag_invoke(*this, storage, fromStorage);
@@ -99,7 +99,7 @@ inline constexpr struct GetBlockHash
         co_return co_await tag_invoke(*this, ledger, blockNumber);
     }
     task::Task<std::optional<crypto::HashType>> operator()(
-        storage2::IsReadableStorage<executor_v1::StateKey> auto& storage,
+        storage2::ReadableStorage<executor_v1::StateKey> auto& storage,
         protocol::BlockNumber blockNumber, FromStorage fromStorage) const
     {
         co_return co_await tag_invoke(*this, storage, blockNumber, fromStorage);
@@ -113,7 +113,7 @@ inline constexpr struct GetBlockNumber
         co_return co_await tag_invoke(*this, ledger, hash);
     }
     task::Task<std::optional<protocol::BlockNumber>> operator()(
-        storage2::IsReadableStorage<executor_v1::StateKey> auto& storage, crypto::HashType hash,
+        storage2::ReadableStorage<executor_v1::StateKey> auto& storage, crypto::HashType hash,
         FromStorage fromStorage) const
     {
         co_return co_await tag_invoke(*this, storage, hash, fromStorage);
@@ -129,7 +129,7 @@ inline constexpr struct GetSystemConfig
         co_return co_await tag_invoke(*this, ledger, key);
     }
     task::Task<std::optional<SystemConfigEntry>> operator()(
-        storage2::IsReadableStorage<executor_v1::StateKey> auto& storage, std::string_view key,
+        storage2::ReadableStorage<executor_v1::StateKey> auto& storage, std::string_view key,
         FromStorage /*unused*/) const
     {
         co_return co_await tag_invoke(*this, storage, key);
@@ -152,7 +152,7 @@ inline constexpr struct GetNodeList
 inline constexpr struct SetNodeList
 {
     task::Task<void> operator()(
-        storage2::IsWritableStorage<executor_v1::StateKey, executor_v1::StateValue> auto& storage,
+        storage2::WritableStorage<executor_v1::StateKey, executor_v1::StateValue> auto& storage,
         RANGES::input_range auto&& nodeList, auto&&... args) const
     {
         co_await tag_invoke(*this, storage, std::forward<decltype(nodeList)>(nodeList),
@@ -174,13 +174,13 @@ inline constexpr struct GetLedgerConfig
     }
 
     // Read from storage
-    task::Task<void> operator()(storage2::IsReadableStorage<executor_v1::StateKey> auto& storage,
+    task::Task<void> operator()(storage2::ReadableStorage<executor_v1::StateKey> auto& storage,
         LedgerConfig& ledgerConfig, protocol::BlockNumber blockNumber) const
     {
         co_await tag_invoke(*this, storage, ledgerConfig, blockNumber);
     }
     task::Task<LedgerConfig::Ptr> operator()(
-        storage2::IsReadableStorage<executor_v1::StateKey> auto& storage,
+        storage2::ReadableStorage<executor_v1::StateKey> auto& storage,
         protocol::BlockNumber blockNumber) const
     {
         auto ledgerConfig = std::make_shared<LedgerConfig>();

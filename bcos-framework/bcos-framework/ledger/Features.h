@@ -323,7 +323,7 @@ public:
     }
 
     task::Task<void> readFromStorage(
-        storage2::IsReadableStorage<executor_v1::StateKeyView> auto& storage, long blockNumber)
+        storage2::ReadableStorage<executor_v1::StateKeyView> auto& storage, long blockNumber)
     {
         for (auto key : bcos::ledger::Features::featureKeys())
         {
@@ -341,7 +341,7 @@ public:
     }
 
     task::Task<void> writeToStorage(
-        storage2::IsWritableStorage<executor_v1::StateKey, executor_v1::StateValue> auto& storage,
+        storage2::WritableStorage<executor_v1::StateKey, executor_v1::StateValue> auto& storage,
         long blockNumber, bool ignoreDuplicate = true) const
     {
         for (auto [flag, name, value] : flags())
@@ -361,7 +361,7 @@ public:
 };
 
 inline task::Task<void> readFromStorage(Features& features,
-    storage2::IsReadableStorage<executor_v1::StateKey> auto& storage, long blockNumber)
+    storage2::ReadableStorage<executor_v1::StateKey> auto& storage, long blockNumber)
 {
     decltype(auto) keys = bcos::ledger::Features::featureKeys();
     auto entries = co_await storage2::readSome(std::forward<decltype(storage)>(storage),
@@ -382,7 +382,7 @@ inline task::Task<void> readFromStorage(Features& features,
 }
 
 inline task::Task<void> writeToStorage(Features const& features,
-    storage2::IsWritableStorage<executor_v1::StateKey, executor_v1::StateValue> auto& storage,
+    storage2::WritableStorage<executor_v1::StateKey, executor_v1::StateValue> auto& storage,
     long blockNumber)
 {
     decltype(auto) flags =

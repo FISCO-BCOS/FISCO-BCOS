@@ -200,7 +200,7 @@ bcos::task::Task<bcos::crypto::HashType> tag_invoke(ledger::tag_t<getBlockHash> 
     LedgerInterface& ledger, protocol::BlockNumber blockNumber);
 
 task::Task<std::optional<crypto::HashType>> tag_invoke(ledger::tag_t<getBlockHash> /*unused*/,
-    storage2::IsReadableStorage<executor_v1::StateKey> auto& storage,
+    storage2::ReadableStorage<executor_v1::StateKey> auto& storage,
     protocol::BlockNumber blockNumber, FromStorage /*unused*/)
 {
     LEDGER_LOG(TRACE) << "GetBlockHashByNumber request" << LOG_KV("blockNumber", blockNumber);
@@ -223,7 +223,7 @@ task::Task<std::optional<crypto::HashType>> tag_invoke(ledger::tag_t<getBlockHas
 
 task::Task<std::optional<protocol::BlockNumber>> tag_invoke(
     ledger::tag_t<getBlockNumber> /*unused*/,
-    storage2::IsReadableStorage<executor_v1::StateKey> auto& storage, crypto::HashType hash,
+    storage2::ReadableStorage<executor_v1::StateKey> auto& storage, crypto::HashType hash,
     FromStorage /*unused*/)
 {
     LEDGER_LOG(TRACE) << "GetBlockNumberByHash request" << LOG_KV("blockHash", hash);
@@ -239,7 +239,7 @@ task::Task<std::optional<protocol::BlockNumber>> tag_invoke(
 }
 
 task::Task<protocol::BlockNumber> tag_invoke(ledger::tag_t<getCurrentBlockNumber> /*unused*/,
-    storage2::IsReadableStorage<executor_v1::StateKey> auto& storage, FromStorage /*unused*/)
+    storage2::ReadableStorage<executor_v1::StateKey> auto& storage, FromStorage /*unused*/)
 {
     if (auto blockNumberEntry = co_await storage2::readOne(
             storage, executor_v1::StateKeyView{SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER}))
@@ -263,7 +263,7 @@ task::Task<protocol::BlockNumber> tag_invoke(ledger::tag_t<getCurrentBlockNumber
 }
 
 task::Task<consensus::ConsensusNodeList> tag_invoke(ledger::tag_t<getNodeList> /*unused*/,
-    storage2::IsReadableStorage<executor_v1::StateKey> auto& storage)
+    storage2::ReadableStorage<executor_v1::StateKey> auto& storage)
 {
     LEDGER_LOG(DEBUG) << "GetNodeLis";
     auto nodeListEntry =
@@ -311,7 +311,7 @@ task::Task<consensus::ConsensusNodeList> tag_invoke(ledger::tag_t<getNodeList> /
 }
 
 task::Task<void> tag_invoke(ledger::tag_t<setNodeList> /*unused*/,
-    storage2::IsReadableStorage<executor_v1::StateKey> auto& storage,
+    storage2::ReadableStorage<executor_v1::StateKey> auto& storage,
     ::ranges::input_range auto&& nodeList, bool forceSet = false)
 {
     LEDGER_LOG(DEBUG) << "SetNodeList request";
@@ -354,7 +354,7 @@ task::Task<void> tag_invoke(ledger::tag_t<setNodeList> /*unused*/,
 }
 
 task::Task<std::optional<SystemConfigEntry>> tag_invoke(ledger::tag_t<getSystemConfig> /*unused*/,
-    storage2::IsReadableStorage<executor_v1::StateKey> auto& storage, std::string_view key)
+    storage2::ReadableStorage<executor_v1::StateKey> auto& storage, std::string_view key)
 {
     if (auto entry =
             co_await storage2::readOne(storage, executor_v1::StateKeyView(SYS_CONFIG, key)))
