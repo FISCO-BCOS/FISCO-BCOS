@@ -21,7 +21,7 @@
  * @date 2024-11-07
  */
 #pragma once
-#include <magic_enum.hpp>
+#include <magic_enum/magic_enum.hpp>
 namespace bcos::security
 {
 enum class CloudKmsType

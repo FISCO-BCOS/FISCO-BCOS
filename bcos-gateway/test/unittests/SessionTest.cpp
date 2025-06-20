@@ -43,7 +43,7 @@ public:
     FakeASIO() : m_threadPool(std::make_shared<bcos::ThreadPool>("FakeASIO", 1)) {};
     virtual ~FakeASIO() noexcept override {};
 
-    void readSome(std::shared_ptr<SocketFace> socket, boost::asio::mutable_buffers_1 buffers,
+    void readSome(std::shared_ptr<SocketFace> socket, boost::asio::mutable_buffer buffers,
         ReadWriteHandler handler)
     {
         std::size_t bytesTransferred = 0;
@@ -73,7 +73,7 @@ public:
     }
 
     void asyncReadSome(const std::shared_ptr<SocketFace>& socket,
-        boost::asio::mutable_buffers_1 buffers, ReadWriteHandler handler) override
+        boost::asio::mutable_buffer buffers, ReadWriteHandler handler) override
     {
         m_threadPool->enqueue([this, socket, buffers, handler]() {
             if (m_recvPackets.empty())

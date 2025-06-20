@@ -23,7 +23,7 @@ set(TEST_BINARY_NAME test-bcos-tars-protocol)
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR})
 
-find_package(Boost REQUIRED unit_test_framework)
+find_package(Boost REQUIRED COMPONENTS unit_test_framework)
 find_package(jsoncpp REQUIRED)
 
 target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-unused-variable)

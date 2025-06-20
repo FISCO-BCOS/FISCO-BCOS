@@ -2,7 +2,6 @@
 #include "bcos-crypto/bcos-crypto/ChecksumAddress.h"
 #include "bcos-framework/executor/ExecuteError.h"
 #include <bcos-protocol/TransactionStatus.h>
-#include <boost/format.hpp>
 
 
 using namespace bcos::scheduler;

@@ -182,8 +182,8 @@ public:
         m_gatewayInterface = std::move(_gatewayInterface);
     }
 
-    std::shared_ptr<boost::asio::io_service> ioService() const { return m_ioService; }
-    void setIoService(std::shared_ptr<boost::asio::io_service> _ioService)
+    std::shared_ptr<boost::asio::io_context> ioService() const { return m_ioService; }
+    void setIoService(std::shared_ptr<boost::asio::io_context> _ioService)
     {
         m_ioService = std::move(_ioService);
     }
@@ -275,7 +275,7 @@ private:
     tbb::task_arena m_taskArena;
     tbb::task_group m_asyncGroup;
     // timer
-    std::shared_ptr<boost::asio::io_service> m_ioService;
+    std::shared_ptr<boost::asio::io_context> m_ioService;
     /// gateway interface
     std::shared_ptr<bcos::gateway::GatewayInterface> m_gatewayInterface;
     FrontMessageFactory::Ptr m_messageFactory;

@@ -23,7 +23,6 @@
 #include "../protocol/BlockImpl.h"
 #include "../protocol/TransactionImpl.h"
 #include "../protocol/TransactionReceiptImpl.h"
-#include <magic_enum.hpp>
 
 using namespace bcostars;
 

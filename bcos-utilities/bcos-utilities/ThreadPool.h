@@ -41,12 +41,13 @@ public:
     ThreadPool& operator=(ThreadPool&&) = delete;
 
     explicit ThreadPool(std::string threadName, size_t size, bool dispatch = true)
-      : m_threadName(std::move(threadName)), m_work(m_ioService)
+      : m_threadName(std::move(threadName))
     {
         for (size_t i = 0; i < size; ++i)
         {
             m_workers.create_thread([this] {
                 bcos::pthread_setThreadName(m_threadName);
+                auto work = boost::asio::make_work_guard(m_ioService);
                 m_ioService.run();
             });
         }
@@ -74,9 +75,7 @@ public:
 private:
     std::string m_threadName;
     boost::thread_group m_workers;
-    boost::asio::io_service m_ioService;
-    // m_work ensures that io_service's run() function will not exit while work is underway
-    boost::asio::io_service::work m_work;
+    boost::asio::io_context m_ioService;
 };
 
 }  // namespace bcos

@@ -134,10 +134,7 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
                     boost::system::error_code err;
 
                     // test if the address domain name
-                    boost::asio::ip::tcp::resolver::query qry(
-                        peer.address(), boost::lexical_cast<std::string>(0));
-                    resolver->resolve(qry, err);
-
+                    resolver->resolve(peer.address(), boost::lexical_cast<std::string>(0), err);
                     if (err)
                     {
                         BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(

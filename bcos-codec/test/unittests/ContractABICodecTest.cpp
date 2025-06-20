@@ -26,7 +26,6 @@
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/test/unit_test.hpp>
-#include <iterator>
 
 using namespace std;
 using namespace bcos;

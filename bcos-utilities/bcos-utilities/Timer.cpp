@@ -21,10 +21,11 @@
 #include "Timer.h"
 #include "BoostLog.h"
 #include "Common.h"
+#include <boost/asio/executor_work_guard.hpp>
 
 using namespace bcos;
 
-bcos::Timer::Timer(boost::asio::io_service& ioService, int64_t timeout, std::string threadName)
+bcos::Timer::Timer(boost::asio::io_context& ioService, int64_t timeout, std::string threadName)
   : m_timeout(timeout),
     m_working(true),
     m_ioService(std::addressof(ioService)),
@@ -36,7 +37,6 @@ bcos::Timer::Timer(int64_t _timeout, std::string _threadName)
   : m_timeout(_timeout),
     m_working(true),
     m_ioService(std::in_place_index_t<1>{}),
-    m_work(this->ioService()),
     m_timer(this->ioService()),
     m_threadName(std::move(_threadName)),
     m_worker(std::make_unique<std::thread>([&]() {
@@ -45,6 +45,7 @@ bcos::Timer::Timer(int64_t _timeout, std::string _threadName)
         {
             try
             {
+                auto work = boost::asio::make_work_guard(this->ioService());
                 ioService().run();
             }
             catch (std::exception const& e)
@@ -52,7 +53,7 @@ bcos::Timer::Timer(int64_t _timeout, std::string _threadName)
                 BCOS_LOG(WARNING) << LOG_DESC("Exception in Worker Thread of timer")
                                   << LOG_KV("message", boost::diagnostic_information(e));
             }
-            ioService().reset();
+            ioService().stop();
         }
     }))
 {}
@@ -82,7 +83,7 @@ void Timer::startTimer()
     {
         return;
     }
-    m_timer.expires_from_now(std::chrono::milliseconds(adjustTimeout()));
+    m_timer.expires_after(std::chrono::milliseconds(adjustTimeout()));
     // calls the timeout handler
     m_timer.async_wait([timerWeak = std::weak_ptr<Timer>(shared_from_this())](
                            const boost::system::error_code& error) {

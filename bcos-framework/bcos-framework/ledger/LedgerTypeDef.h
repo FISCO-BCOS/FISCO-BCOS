@@ -28,7 +28,7 @@
 #include <bcos-utilities/Common.h>
 #include <oneapi/tbb/concurrent_unordered_map.h>
 #include <boost/archive/binary_iarchive.hpp>
-#include <magic_enum.hpp>
+#include <magic_enum/magic_enum.hpp>
 
 namespace bcos::ledger
 {

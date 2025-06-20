@@ -3,7 +3,6 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Error.h>
 #include <boost/core/ignore_unused.hpp>
-#include <boost/format.hpp>
 #include <boost/graph/adjacency_list.hpp>
 #include <boost/graph/depth_first_search.hpp>
 #include <boost/graph/detail/adjacency_list.hpp>
@@ -24,10 +23,10 @@ bool GraphKeyLocks::batchAcquireKeyLock(
         {
             if (!acquireKeyLock(contract, it, contextID, seq))
             {
-                auto message = (boost::format("Batch acquire lock failed, contract: %s"
-                                              ", key: %s, contextID: %ld, seq: %ld") %
-                                contract % toHex(it) % contextID % seq)
-                                   .str();
+                auto message = fmt::format(
+                    "Batch acquire lock failed, contract: {}"
+                    ", key: {}, contextID: {}, seq: {}",
+                    contract, toHex(it), contextID, seq);
                 SCHEDULER_LOG(ERROR) << message;
                 BOOST_THROW_EXCEPTION(BCOS_ERROR(UnexpectedKeyLockError, message));
             }
@@ -49,11 +48,10 @@ bool GraphKeyLocks::acquireKeyLock(
         auto vertex = boost::get(VertexPropertyTag(), boost::target(*it, m_graph));
         if (std::get<0>(*vertex) != contextID)
         {
-            KEY_LOCK_LOG(TRACE) << boost::format(
-                                       "Acquire key lock failed, request: [%s:%s] -> %ld | %ld, "
-                                       "exists: [%ld]") %
-                                       contract % toHex(key) % contextID % seq %
-                                       std::get<0>(*vertex);
+            KEY_LOCK_LOG(TRACE) << fmt::format(
+                "Acquire key lock failed, request: [{}:{}] -> {} | {}, "
+                "exists: [{}]",
+                contract, toHex(key), contextID, seq, std::get<0>(*vertex));
 
             // Key lock holding by another context
             addEdge(contextVertex, keyVertex, seq);

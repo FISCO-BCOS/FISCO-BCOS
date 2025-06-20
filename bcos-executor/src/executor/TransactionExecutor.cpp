@@ -84,8 +84,6 @@
 #include <boost/algorithm/hex.hpp>
 #include <boost/exception/detail/exception_ptr.hpp>
 #include <boost/exception/diagnostic_information.hpp>
-#include <boost/format.hpp>
-#include <boost/format/format_fwd.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/thread/latch.hpp>
 #include <boost/throw_exception.hpp>
@@ -482,14 +480,13 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
                 if (blockHeader->number() - storageBlockNumber != 1 &&
                     !isSysContractDeploy(blockHeader->number()))
                 {
-                    auto fmt = boost::format(
-                                   "[%s] Block number mismatch in storage! request: %d, current in "
-                                   "storage: %d, trigger switch") %
-                               m_name % blockHeader->number() % storageBlockNumber;
+                    auto fmt = fmt::format(
+                        "[{}] Block number mismatch in storage! request: {}, current in "
+                        "storage: {}, trigger switch",
+                        m_name, blockHeader->number(), storageBlockNumber);
                     EXECUTOR_NAME_LOG(ERROR) << fmt;
                     // to trigger switch operation
-                    callback(
-                        BCOS_ERROR_UNIQUE_PTR(ExecuteError::SCHEDULER_TERM_ID_ERROR, fmt.str()));
+                    callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::SCHEDULER_TERM_ID_ERROR, fmt));
                     return;
                 }
             }
@@ -501,14 +498,13 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
                 if (blockHeader->number() - prev.number != 1)
                 {
                     // m_stateStorages.pop_back();
-                    auto fmt = boost::format(
-                                   "[%s] Block number mismatch! request: %d, current: %d. trigger "
-                                   "switch.") %
-                               m_name % blockHeader->number() % prev.number;
+                    auto fmt = fmt::format(
+                        "[{}] Block number mismatch! request: %d, current: %d. trigger "
+                        "switch.",
+                        m_name, blockHeader->number(), prev.number);
                     EXECUTOR_NAME_LOG(WARNING) << fmt;
                     m_stateStorages.clear();
-                    callback(
-                        BCOS_ERROR_UNIQUE_PTR(ExecuteError::SCHEDULER_TERM_ID_ERROR, fmt.str()));
+                    callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::SCHEDULER_TERM_ID_ERROR, fmt));
                     return;
                 }
 
@@ -992,8 +988,7 @@ void TransactionExecutor::executeTransactionsInternal(std::string contractAddres
             }
             default:
             {
-                auto message =
-                    (boost::format("Unsupported message type: %d") % params->type()).str();
+                auto message = fmt::format("Unsupported message type: {}", (int)params->type());
                 EXECUTOR_NAME_LOG(ERROR)
                     << BLOCK_NUMBER(blockNumber) << "Execute error, " << message;
                 // callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::DAG_ERROR, message), {});
@@ -1254,7 +1249,7 @@ void TransactionExecutor::dagExecuteTransactions(
         }
         default:
         {
-            auto message = (boost::format("Unsupported message type: %d") % params->type()).str();
+            auto message = fmt::format("Unsupported message type: {}", (int)params->type());
             EXECUTOR_NAME_LOG(ERROR) << "DAG Execute error, " << message;
             // callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::DAG_ERROR, message), {});
             break;
@@ -2079,8 +2074,7 @@ void TransactionExecutor::getCode(
         stateStorage->asyncGetRow(bcos::ledger::SYS_CODE_BINARY, codeKey,
             [this, contractTableName, callback = std::move(callback),
                 getCodeFromContractTable = std::move(getCodeFromContractTable),
-                features = std::move(features)](
-                Error::UniquePtr error, std::optional<Entry> entry) {
+                features = features](Error::UniquePtr error, std::optional<Entry> entry) {
                 if (!m_isRunning)
                 {
                     callback(BCOS_ERROR_UNIQUE_PTR(

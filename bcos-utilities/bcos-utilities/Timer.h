@@ -21,7 +21,8 @@
 #pragma once
 #include "bcos-utilities/Overloaded.h"
 #include <boost/asio.hpp>
-#include <boost/asio/io_service.hpp>
+#include <boost/asio/executor_work_guard.hpp>
+#include <boost/asio/io_context.hpp>
 #include <boost/asio/steady_timer.hpp>
 #include <optional>
 #include <variant>
@@ -31,7 +32,7 @@ namespace bcos
 class Timer : public std::enable_shared_from_this<Timer>
 {
 public:
-    Timer(boost::asio::io_service& ioService, int64_t timeout, std::string threadName);
+    Timer(boost::asio::io_context& ioService, int64_t timeout, std::string threadName);
     Timer(int64_t _timeout, std::string _threadName);
 
     virtual ~Timer() noexcept;
@@ -61,8 +62,8 @@ private:
     std::atomic_bool m_running = false;
     std::atomic_bool m_working = false;
 
-    std::variant<boost::asio::io_service*, boost::asio::io_service> m_ioService;
-    std::optional<boost::asio::io_service::work> m_work;
+    std::variant<boost::asio::io_context*, boost::asio::io_context> m_ioService;
+
     boost::asio::steady_timer m_timer;
     std::string m_threadName;
     std::unique_ptr<std::thread> m_worker;
@@ -71,14 +72,14 @@ private:
     // m_work ensures that io_service's run() function will not exit while work is underway
     bool borrowedIoService() const
     {
-        return std::holds_alternative<boost::asio::io_service*>(m_ioService);
+        return std::holds_alternative<boost::asio::io_context*>(m_ioService);
     }
 
-    boost::asio::io_service& ioService()
+    boost::asio::io_context& ioService()
     {
         return std::visit(
-            bcos::overloaded([](boost::asio::io_service* ptr) -> auto& { return *ptr; },
-                [](boost::asio::io_service& ref) -> auto& { return ref; }),
+            bcos::overloaded([](boost::asio::io_context* ptr) -> auto& { return *ptr; },
+                [](boost::asio::io_context& ref) -> auto& { return ref; }),
             m_ioService);
     }
 };

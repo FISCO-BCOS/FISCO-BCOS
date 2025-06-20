@@ -17,8 +17,7 @@
         "jemalloc",
         "secp256k1",
         "tbb",
-        "hsm-crypto",
-        "boost-beast"
+        "hsm-crypto"
       ]
     }
   ]

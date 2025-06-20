@@ -20,7 +20,7 @@
 
 #pragma once
 
-#include <magic_enum.hpp>
+#include <magic_enum/magic_enum.hpp>
 #include <string>
 namespace bcos::rpc
 {

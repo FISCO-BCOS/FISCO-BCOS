@@ -42,7 +42,7 @@ public:
     using Ptr = std::shared_ptr<Timer>;
     using ConstPtr = std::shared_ptr<Timer>;
 
-    Timer(std::shared_ptr<boost::asio::io_service> _ioService, TimerTask&& _task,
+    Timer(std::shared_ptr<boost::asio::io_context> _ioService, TimerTask&& _task,
         int _periodMS,  // NOLINT
         int _delayMS)
       : m_ioService(std::move(_ioService)),
@@ -161,7 +161,7 @@ private:
     }
 
     bool m_running = false;
-    std::shared_ptr<boost::asio::io_service> m_ioService;
+    std::shared_ptr<boost::asio::io_context> m_ioService;
     TimerTask m_timerTask;
     int m_delayMS;
     int m_periodMS;
@@ -174,10 +174,10 @@ public:
     using Ptr = std::shared_ptr<TimerFactory>;
     using ConstPtr = std::shared_ptr<TimerFactory>;
 
-    TimerFactory(std::shared_ptr<boost::asio::io_service> _ioService)
+    TimerFactory(std::shared_ptr<boost::asio::io_context> _ioService)
       : m_ioService(std::move(_ioService))
     {}
-    TimerFactory() : m_ioService(std::make_shared<boost::asio::io_service>())
+    TimerFactory() : m_ioService(std::make_shared<boost::asio::io_context>())
     {
         // No io_service object is provided, create io_service and the worker thread
         startThread();
@@ -233,7 +233,7 @@ private:
                                       << LOG_DESC("Exception in Worker Thread of timer")
                                       << LOG_KV("message", boost::diagnostic_information(e));
                 }
-                m_ioService->reset();
+                m_ioService->stop();
             }
 
             BCOS_LOG(INFO) << LOG_BADGE("startThread") << LOG_DESC("the timer thread stop");
@@ -263,8 +263,8 @@ private:
 
     std::atomic_bool m_running = {false};
     std::string m_threadName = "timerFactory";
-    std::unique_ptr<std::thread> m_worker = nullptr;
-    std::shared_ptr<boost::asio::io_service> m_ioService = nullptr;
+    std::unique_ptr<std::thread> m_worker;
+    std::shared_ptr<boost::asio::io_context> m_ioService;
 };
 
 }  // namespace timer

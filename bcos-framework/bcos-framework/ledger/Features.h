@@ -9,7 +9,7 @@
 #include <boost/throw_exception.hpp>
 #include <array>
 #include <bitset>
-#include <magic_enum.hpp>
+#include <magic_enum/magic_enum.hpp>
 namespace bcos::ledger
 {
 DERIVE_BCOS_EXCEPTION(NoSuchFeatureError);
