@@ -33,8 +33,7 @@
 #ifdef __APPLE__
 #include <pthread.h>
 #endif
-
-using namespace std;
+#include <regex>
 
 namespace bcos
 {

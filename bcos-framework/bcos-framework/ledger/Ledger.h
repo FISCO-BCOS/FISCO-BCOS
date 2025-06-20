@@ -6,6 +6,7 @@
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/protocol/Block.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
+#include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Task.h"
 
 #define LEDGER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("LEDGER")
@@ -83,7 +84,9 @@ inline constexpr struct GetCurrentBlockNumber
     {
         co_return co_await tag_invoke(*this, ledger);
     }
-    task::Task<protocol::BlockNumber> operator()(auto& storage, FromStorage fromStorage) const
+    task::Task<protocol::BlockNumber> operator()(
+        storage2::ReadableStorage<executor_v1::StateKey> auto& storage,
+        FromStorage fromStorage) const
     {
         co_return co_await tag_invoke(*this, storage, fromStorage);
     }
@@ -96,7 +99,8 @@ inline constexpr struct GetBlockHash
         co_return co_await tag_invoke(*this, ledger, blockNumber);
     }
     task::Task<std::optional<crypto::HashType>> operator()(
-        auto& storage, protocol::BlockNumber blockNumber, FromStorage fromStorage) const
+        storage2::ReadableStorage<executor_v1::StateKey> auto& storage,
+        protocol::BlockNumber blockNumber, FromStorage fromStorage) const
     {
         co_return co_await tag_invoke(*this, storage, blockNumber, fromStorage);
     }
@@ -107,6 +111,12 @@ inline constexpr struct GetBlockNumber
     task::Task<protocol::BlockNumber> operator()(auto& ledger, crypto::HashType hash) const
     {
         co_return co_await tag_invoke(*this, ledger, hash);
+    }
+    task::Task<std::optional<protocol::BlockNumber>> operator()(
+        storage2::ReadableStorage<executor_v1::StateKey> auto& storage, crypto::HashType hash,
+        FromStorage fromStorage) const
+    {
+        co_return co_await tag_invoke(*this, storage, hash, fromStorage);
     }
 } getBlockNumber{};
 
@@ -119,7 +129,8 @@ inline constexpr struct GetSystemConfig
         co_return co_await tag_invoke(*this, ledger, key);
     }
     task::Task<std::optional<SystemConfigEntry>> operator()(
-        auto& storage, std::string_view key, FromStorage /*unused*/) const
+        storage2::ReadableStorage<executor_v1::StateKey> auto& storage, std::string_view key,
+        FromStorage /*unused*/) const
     {
         co_return co_await tag_invoke(*this, storage, key);
     }
@@ -141,7 +152,8 @@ inline constexpr struct GetNodeList
 inline constexpr struct SetNodeList
 {
     task::Task<void> operator()(
-        auto& storage, RANGES::input_range auto&& nodeList, auto&&... args) const
+        storage2::WritableStorage<executor_v1::StateKey, executor_v1::StateValue> auto& storage,
+        RANGES::input_range auto&& nodeList, auto&&... args) const
     {
         co_await tag_invoke(*this, storage, std::forward<decltype(nodeList)>(nodeList),
             std::forward<decltype(args)>(args)...);
@@ -150,7 +162,7 @@ inline constexpr struct SetNodeList
 
 inline constexpr struct GetLedgerConfig
 {
-    task::Task<void> operator()(auto& ledger, auto& ledgerConfig) const
+    task::Task<void> operator()(auto& ledger, LedgerConfig& ledgerConfig) const
     {
         co_await tag_invoke(*this, ledger, ledgerConfig);
     }
@@ -158,6 +170,21 @@ inline constexpr struct GetLedgerConfig
     {
         auto ledgerConfig = std::make_shared<LedgerConfig>();
         co_await tag_invoke(*this, ledger, *ledgerConfig);
+        co_return ledgerConfig;
+    }
+
+    // Read from storage
+    task::Task<void> operator()(storage2::ReadableStorage<executor_v1::StateKey> auto& storage,
+        LedgerConfig& ledgerConfig, protocol::BlockNumber blockNumber) const
+    {
+        co_await tag_invoke(*this, storage, ledgerConfig, blockNumber);
+    }
+    task::Task<LedgerConfig::Ptr> operator()(
+        storage2::ReadableStorage<executor_v1::StateKey> auto& storage,
+        protocol::BlockNumber blockNumber) const
+    {
+        auto ledgerConfig = std::make_shared<LedgerConfig>();
+        co_await tag_invoke(*this, storage, *ledgerConfig, blockNumber);
         co_return ledgerConfig;
     }
 } getLedgerConfig{};

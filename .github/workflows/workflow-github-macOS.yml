@@ -25,12 +25,27 @@ jobs:
       - uses: actions/checkout@v3
         with:
           clean: false
+
       - name: Set up JDK 1.8
         uses: actions/setup-java@v3
         with:
           distribution: 'zulu'
           java-version: 8
           java-package: jdk
+
+      - name: Restore vcpkg cache
+        uses: actions/cache@v4
+        id: vcpkg-cache
+        with:
+          path: |
+            ${{ github.workspace }}/vcpkg
+            ${{ github.workspace }}/build/vcpkg_installed
+            !${{ github.workspace }}/vcpkg/.git
+            !${{ github.workspace }}/vcpkg/buildtrees
+            !${{ github.workspace }}/vcpkg/packages
+            !${{ github.workspace }}/vcpkg/downloads
+          key: |
+            ${{ hashFiles( 'vcpkg.json' ) }}-${{ runner.os }}-cache-key-v1
 
       - name: install rust language
         uses: actions-rs/toolchain@v1
@@ -42,7 +57,7 @@ jobs:
         run: brew install ccache libomp gmp
 
       - name: configure
-        run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && mkdir build && cd build && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON .. || cat *.log
+        run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && mkdir -p build && cd build && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON .. || cat *.log
 
       - name: compile
         run: cd build && make -j2

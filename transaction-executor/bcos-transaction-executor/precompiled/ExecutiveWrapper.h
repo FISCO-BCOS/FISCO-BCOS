@@ -89,7 +89,7 @@ public:
             }
             EXECUTIVE_WRAPPER(TRACE) << "codeAddress:" << input->codeAddress;
             auto [hostContext, callResults] = create(std::move(input));
-            return callResults;
+            return std::move(callResults);
         }
 
         evmc_message evmcMessage{.kind = input->create ? EVMC_CREATE : EVMC_CALL,

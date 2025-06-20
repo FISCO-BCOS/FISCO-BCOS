@@ -135,6 +135,12 @@ public:
     ledger::Features features() const override;
     void setFeatures(ledger::Features features) override;
 
+    void setSinglePointConsensus(bool singlePointConsensus)
+    {
+        m_singlePointConsensus = singlePointConsensus;
+    }
+    bool singlePointConsensus() const { return m_singlePointConsensus; }
+
 protected:
     static bool isNodeExist(ConsensusNode const& _node, ConsensusNodeList const& _nodeList);
 
@@ -166,5 +172,6 @@ protected:
     bcos::protocol::BlockNumber m_syncingHighestNumber = {0};
     std::function<void(uint32_t _version)> m_versionNotification;
     ledger::Features m_features;
+    bool m_singlePointConsensus = false;
 };
 }  // namespace bcos::consensus

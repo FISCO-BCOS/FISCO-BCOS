@@ -71,4 +71,7 @@ struct AwaitableReturnTrait
 template <class Task>
 using AwaitableReturnType = typename AwaitableReturnTrait<Task>::type;
 
+template <class ReturnValue, class ValueType>
+concept IsAwaitableReturnValue = std::same_as<task::AwaitableReturnType<ReturnValue>, ValueType>;
+
 }  // namespace bcos::task

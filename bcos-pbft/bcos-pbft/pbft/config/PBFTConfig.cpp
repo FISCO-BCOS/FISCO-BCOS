@@ -409,15 +409,23 @@ uint64_t PBFTConfig::minRequiredQuorum() const
 
 void PBFTConfig::updateQuorum()
 {
-    m_totalQuorum.store(0);
-    ReadGuard lock(x_consensusNodeList);
-    for (const auto& consensusNode : m_consensusNodeList)
+    if (!m_singlePointConsensus)
     {
-        m_totalQuorum += consensusNode.voteWeight;
+        m_totalQuorum.store(0);
+        ReadGuard lock(x_consensusNodeList);
+        for (const auto& consensusNode : m_consensusNodeList)
+        {
+            m_totalQuorum += consensusNode.voteWeight;
+        }
+        // get m_maxFaultyQuorum
+        m_maxFaultyQuorum = (m_totalQuorum - 1) / 3;
+        m_minRequiredQuorum = m_totalQuorum - m_maxFaultyQuorum;
     }
-    // get m_maxFaultyQuorum
-    m_maxFaultyQuorum = (m_totalQuorum - 1) / 3;
-    m_minRequiredQuorum = m_totalQuorum - m_maxFaultyQuorum;
+    else
+    {
+        m_minRequiredQuorum = 1;
+        m_maxFaultyQuorum = 0;
+    }
 }
 
 IndexType PBFTConfig::leaderIndex(BlockNumber _proposalIndex)

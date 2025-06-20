@@ -297,6 +297,11 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
             revert();  // direct transfer need revert by hand
             EXECUTIVE_LOG(DEBUG) << LOG_BADGE("Execute")
                                  << LOG_DESC("transferBalance failed and will revert");
+            if (m_blockContext.features().get(
+                    ledger::Features::Flag::bugfix_precompiled_evm_status))
+            {
+                callParameters->evmStatus = EVMC_REVERT;
+            }
             return callParameters;
         }
 
@@ -310,6 +315,33 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
         }
     }
 
+    // NOTE: It should check nonce before execution, but it should check nonce in the state storage,
+    // not backend storage. But the txs of the same sender in one block will be disordered, so it
+    // cannot check state storage for now. Will add this logic in the future.
+    //
+    // if (callParameters->origin == callParameters->senderAddress &&
+    //     callParameters->transactionType != TransactionType::BCOSTransaction &&
+    //     m_blockContext.features().get(ledger::Features::Flag::bugfix_check_nonce_in_executive))
+    // {
+    //     // only check eoa tx
+    //     ledger::account::EVMAccount eoa(*m_blockContext.backendStorage(),
+    //         callParameters->senderAddress,
+    //         m_blockContext.features().get(ledger::Features::Flag::feature_raw_address));
+    //     auto const nonceInStorage = task::syncWait(eoa.nonce());
+    //     if (auto const storageNonce = u256(nonceInStorage.value_or("0"));
+    //         callParameters->nonce < storageNonce)
+    //     {
+    //         EXECUTIVE_LOG(WARNING)
+    //             << LOG_BADGE("Execute") << LOG_DESC("nonce is not match and will revert")
+    //             << LOG_KV("nonceInStorage", storageNonce)
+    //             << LOG_KV("callNonce", callParameters->nonce);
+    //         callResults = std::move(callParameters);
+    //         callResults->status = static_cast<int32_t>(TransactionStatus::RevertInstruction);
+    //         callResults->evmStatus = EVMC_REVERT;
+    //         return callResults;
+    //     }
+    // }
+
     if (m_blockContext.features().get(
             ledger::Features::Flag::bugfix_nonce_not_increase_when_revert))
     {
@@ -321,7 +353,7 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
                 callParameters->senderAddress,
                 m_blockContext.features().get(ledger::Features::Flag::feature_raw_address));
             task::wait([](decltype(address) addr) -> task::Task<void> {
-                co_await ledger::account::increaseNonce(addr);
+                co_await addr.increaseNonce();
             }(std::move(address)));
         }
     }
@@ -343,15 +375,15 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
                     callParameters->senderAddress,
                     m_blockContext.features().get(ledger::Features::Flag::feature_raw_address));
                 task::wait([](decltype(address) addr, u256 callNonce) -> task::Task<void> {
-                    if (!co_await ledger::account::exists(addr))
+                    if (!co_await addr.exists())
                     {
-                        co_await ledger::account::create(addr);
+                        co_await addr.create();
                     }
-                    auto const nonceInStorage = co_await ledger::account::nonce(addr);
+                    auto const nonceInStorage = co_await addr.nonce();
                     // FIXME)) : only web3 tx use this
                     auto const storageNonce = u256(nonceInStorage.value_or("0"));
                     auto const newNonce = std::max(callNonce, storageNonce) + 1;
-                    co_await ledger::account::setNonce(addr, newNonce.convert_to<std::string>());
+                    co_await addr.setNonce(newNonce.convert_to<std::string>());
                 }(std::move(address), callParameters->nonce));
             }
         }
@@ -373,6 +405,15 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
         // TODO: check this function is ok if we need to use this
         hostContext->sub().refunds +=
             hostContext->vmSchedule().suicideRefundGas * hostContext->sub().suicides.size();
+    }
+    else
+    {
+        if (m_blockContext.features().get(ledger::Features::Flag::bugfix_precompiled_evm_status) &&
+            callResults->status != static_cast<int32_t>(TransactionStatus::None) &&
+            callResults->evmStatus == 0)
+        {
+            callResults->evmStatus = EVMC_REVERT;
+        }
     }
     if (c_fileLogLevel <= LogLevel::TRACE)
     {
@@ -775,8 +816,8 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
             // set nonce to 1 when create contract
             ledger::account::EVMAccount account(
                 *m_blockContext.storage(), callParameters->codeAddress, false);
-            task::wait([](decltype(account) contract_account) -> task::Task<void> {
-                co_await ledger::account::setNonce(contract_account, "1");
+            task::wait([](decltype(account) contractAccount) -> task::Task<void> {
+                co_await contractAccount.setNonce("1");
             }(std::move(account)));
         }
 
@@ -1947,14 +1988,23 @@ bool TransactionExecutive::checkExecAuth(const CallParameters::UniquePtr& callPa
     else
     {
         bytesRef func = ref(callParameters->data).getCroppedData(0, 4);
-        result = contractAuthPrecompiled->checkMethodAuth(
-            shared_from_this(), callParameters->receiveAddress, func, callParameters->origin);
-        if (versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_2_VERSION) >= 0 &&
-            callParameters->origin != callParameters->senderAddress)
+
+        if (m_blockContext.features().get(ledger::Features::Flag::bugfix_method_auth_sender))
         {
-            auto senderCheck = contractAuthPrecompiled->checkMethodAuth(shared_from_this(),
+            result = contractAuthPrecompiled->checkMethodAuth(shared_from_this(),
                 callParameters->receiveAddress, func, callParameters->senderAddress);
-            result = result && senderCheck;
+        }
+        else
+        {
+            result = contractAuthPrecompiled->checkMethodAuth(
+                shared_from_this(), callParameters->receiveAddress, func, callParameters->origin);
+            if (versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_2_VERSION) >= 0 &&
+                callParameters->origin != callParameters->senderAddress)
+            {
+                auto senderCheck = contractAuthPrecompiled->checkMethodAuth(shared_from_this(),
+                    callParameters->receiveAddress, func, callParameters->senderAddress);
+                result = result && senderCheck;
+            }
         }
     }
     EXECUTIVE_LOG(TRACE) << "check auth finished"

@@ -122,6 +122,7 @@ public:
     FilterRequestFactory::Ptr requestFactory() const { return m_factory; }
     LogMatcher::Ptr matcher() const { return m_matcher; }
     NodeService::Ptr getNodeService(std::string_view _groupID, std::string_view _command) const;
+    void cleanUpExpiredFilters();
 
 protected:
     bool uninstallFilterImpl(std::string_view groupId, u256 filterID)
@@ -146,7 +147,6 @@ protected:
 
     virtual int32_t InvalidParamsCode() = 0;
     uint64_t insertFilter(Filter::Ptr filter);
-    void cleanUpExpiredFilters();
 
     Filter::Ptr getFilterByID(std::string_view groupId, u256 id)
     {

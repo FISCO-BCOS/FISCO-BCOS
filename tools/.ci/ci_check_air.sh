@@ -4,6 +4,7 @@ fisco_bcos_path="../build/fisco-bcos-air/fisco-bcos"
 build_chain_path="BcosAirBuilder/build_chain.sh"
 current_path=`pwd`
 node_list="node0 node1 node2 node3"
+check_web3_test="false"
 LOG_ERROR() {
     local content=${1}
     echo -e "\033[31m ${content}\033[0m"
@@ -69,6 +70,8 @@ init()
     ${fisco_bcos_path} -v
     clear_node
     bash ${build_chain_path} -l "127.0.0.1:4" -e ${fisco_bcos_path} "${sm_option}"
+    # sed change node0 config.ini to change web3 rpc enable
+    sed -e 's/^enable_web3_rpc = false/enable_web3_rpc = true/' -i nodes/
     cd nodes/127.0.0.1 && wait_and_start
 }
 
@@ -84,6 +87,7 @@ init_baseline()
     # 启用executor v1
     # Enable executor v1
     perl -p -i -e 's/version=0/version=1/g' nodes/127.0.0.1/node*/config.genesis
+    perl -p -i -e 'if (/web3_rpc/) { $flag=1 } elsif ($flag && s/enable\s*=\s*false/enable=true/i) { $flag=0; }' nodes/127.0.0.1/node1/config.ini
     cd nodes/127.0.0.1 && wait_and_start
 }
 
@@ -162,6 +166,10 @@ if [[ -n "${1}" ]]; then
      console_branch=${1}
 fi
 
+if [[ -n "${2}" ]]; then
+     check_web3_test=${2}
+fi
+
 # non-sm test
 LOG_INFO "======== check non-sm case ========"
 init ""
@@ -223,8 +231,6 @@ LOG_INFO "======== check sm case success ========"
 clear_node
 LOG_INFO "======== clear node after sm test success ========"
 
-# baseline暂时不支持balance precompiled，故不测试java_sdk_demo_ci_test
-# baseline does not support balance precompiled temporarily, so java_sdk_demo_ci_test is not tested
 LOG_INFO "======== check baseline cases ========"
 init_baseline ""
 expand_node ""
@@ -242,13 +248,32 @@ if [[ ${?} == "0" ]]; then
         echo "java_sdk_integrationTest error"
         exit 1
 fi
-# bash ${current_path}/.ci/java_sdk_demo_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
-# if [[ ${?} == "0" ]]; then
-#        LOG_INFO "java_sdk_demo_ci_test success"
-#    else
-#        echo "java_sdk_demo_ci_test error"
-#        exit 1
-# fi
+bash ${current_path}/.ci/java_sdk_demo_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
+if [[ ${?} == "0" ]]; then
+       LOG_INFO "java_sdk_demo_ci_test success"
+   else
+       echo "java_sdk_demo_ci_test error"
+       exit 1
+fi
+
+if [[ ${check_web3_test} == "true" ]]; then
+    cp ${current_path}/nodes/127.0.0.1/sdk/* ${current_path}/console/dist/conf/
+    rm -rf ${current_path}/console/dist/account/ecdsa/*
+    cp ${current_path}/nodes/ca/accounts/* ${current_path}/console/dist/account/ecdsa/
+    cd "${current_path}/console/dist/"
+    account=$(bash console.sh listAccount | grep "current account" | awk -F '(' '{print $1}')
+    bash console.sh addBalance "${account}" 200 ether
+    bash console.sh setSystemConfigByKey tx_gas_price 1
+    cd ${current_path}
+    bash ${current_path}/.ci/web3_test.sh "${current_path}/console/dist/account/ecdsa/${account}.pem"
+    if [[ ${?} == "0" ]]; then
+        LOG_INFO "web3 test success"
+    else
+        echo "web3 test error"
+        exit 1
+    fi
+fi
+
 stop_node
 LOG_INFO "======== check baseline cases success ========"
 clear_node

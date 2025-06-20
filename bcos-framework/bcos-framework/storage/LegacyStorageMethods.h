@@ -49,12 +49,17 @@ inline task::Task<std::optional<Entry>> tag_invoke(storage2::tag_t<storage2::rea
     Awaitable awaitable{.m_storage = storage, .m_table = table, .m_key = key, .m_result = {}};
     co_return co_await awaitable;
 }
+// inline task::Task<std::optional<Entry>> tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/,
+//     StorageInterface& storage, const executor_v1::StateKey& stateKey)
+// {
+//     co_return co_await storage2::readOne(storage, executor_v1::StateKeyView{stateKey});
+// }
 
-inline task::Task<std::vector<std::optional<Entry>>> tag_invoke(
+task::Task<std::vector<std::optional<Entry>>> tag_invoke(
     storage2::tag_t<storage2::readSome> /*unused*/, StorageInterface& storage,
-    ::ranges::input_range auto&& keys)
+    ::ranges::input_range auto keys)
 {
-    // 这里调用StorageInterface的asyncGetRows接口效率更高,但是keys可能包含不同的table,aysncGetRows每次只能传一个table,因此留给未来优化
+    // 这里调用StorageInterface的asyncGetRows接口效率更高,但是keys可能包含不同的table,asyncGetRows每次只能传一个table,因此留给未来优化
     // The asyncGetRows interface of StorageInterface is more efficient, but keys may contain
     // different tables, and aysncGetRows can only be used by one table at a time, so it is left to
     // future optimization
@@ -72,7 +77,7 @@ inline task::Task<std::vector<std::optional<Entry>>> tag_invoke(
 }
 
 inline task::Task<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/,
-    StorageInterface& storage, ::ranges::input_range auto&& keyValues)
+    StorageInterface& storage, ::ranges::input_range auto keyValues)
 {
     for (auto&& [key, value] : keyValues)
     {
@@ -80,7 +85,6 @@ inline task::Task<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unused
             storage, std::forward<decltype(key)>(key), std::forward<decltype(value)>(value));
     }
 }
-
 
 inline task::Task<void> tag_invoke(storage2::tag_t<storage2::writeOne> /*unused*/,
     StorageInterface& storage, executor_v1::StateKey stateKey, Entry entry)

@@ -120,7 +120,7 @@ public:
                 return;
             }
 
-            HTTP_SESSION(INFO) << LOG_BADGE("onRead") << LOG_DESC("receive http request");
+            HTTP_SESSION(TRACE) << LOG_BADGE("onRead") << LOG_DESC("receive http request");
 
             handleRequest(m_parser->release());
         }

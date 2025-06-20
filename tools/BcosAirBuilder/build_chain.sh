@@ -15,7 +15,7 @@ current_dir=$(pwd)
 binary_name="fisco-bcos"
 lightnode_binary_name="fisco-bcos-lightnode"
 mtail_binary_name="mtail"
-key_page_size=10240
+key_page_size=0
 # for cert generation
 ca_cert_dir="${dirpath}"
 sm_cert_conf='sm_cert.cnf'
@@ -39,7 +39,7 @@ ca_dir=""
 prometheus_dir=""
 config_path=""
 docker_mode=
-default_version="v3.15.0"
+default_version="v3.15.2"
 compatibility_version=${default_version}
 default_mtail_version="3.0.0-rc49"
 compatibility_mtail_version=${default_mtail_version}
@@ -52,11 +52,9 @@ download_lightnode_binary="false"
 mtail_binary_path=""
 wasm_mode="false"
 serial_mode="true"
-executor_version=0
-
 node_key_dir=""
 # if the config.genesis path has been set, don't generate genesis file, use the config instead
-genesis_conf_path=""
+genesis_conf_dir=""
 lightnode_flag="false"
 download_timeout=240
 make_tar=
@@ -86,6 +84,7 @@ service_output_dir="generated"
 proOrmax_port_start=(30300 20200 40400 2379 3901)
 isPortSpecified="false"
 tars_listen_port_space=5
+executor_version=1
 
 #for pro or max expand
 expand_dir="expand"
@@ -133,7 +132,8 @@ file_must_exists() {
 check_env() {
     if [ "$(uname)" == "Darwin" ];then
         macOS="macOS"
-    elif [ "$(uname -m)" == "x86_64" ];then
+    fi
+    if [ "$(uname -m)" == "x86_64" ];then
         x86_64_arch="true"
     elif [ "$(uname -m)" == "arm64" ];then
         arm64_arch="true"
@@ -394,7 +394,11 @@ download_bin()
     if [ "${x86_64_arch}" != "true" ] && [ "${arm64_arch}" != "true" ] && [ "${macOS}" != "macOS" ];then exit_with_clean "We only offer x86_64/aarch64 and macOS precompiled fisco-bcos binary, your OS architecture is not x86_64/aarch64 and macOS. Please compile from source."; fi
     binary_path="bin/${binary_name}"
     if [ -n "${macOS}" ];then
-        package_name="${binary_name}-macOS-x86_64.tar.gz"
+        if [ "${arm64_arch}" == "true" ];then
+            package_name="${binary_name}-macOS-arm.tar.gz"
+        else
+            package_name="${binary_name}-macOS-x86_64.tar.gz"
+        fi
     elif [ "${arm64_arch}" == "true" ];then
         package_name="${binary_name}-linux-aarch64.tar.gz"
     elif [ "${x86_64_arch}" == "true" ];then
@@ -404,16 +408,10 @@ download_bin()
     local Download_Link="${cdn_link_header}/FISCO-BCOS/releases/${compatibility_version}/${package_name}"
     local github_link="https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/${compatibility_version}/${package_name}"
     # the binary can obtained from the cos
-    if [ $(curl -IL -o /dev/null -s -w %{http_code} "${Download_Link}") == 200 ];then
-        # try cdn_link
-        LOG_INFO "Downloading fisco-bcos binary from ${Download_Link} ..."
-        curl -#LO "${Download_Link}"
-    else
-        LOG_INFO "Downloading fisco-bcos binary from ${github_link} ..."
-        curl -#LO "${github_link}"
-    fi
+    LOG_INFO "Downloading fisco-bcos binary from ${github_link} ..."
+    curl -#LO "${github_link}"
     if [[ "$(ls -al . | grep "fisco-bcos.*tar.gz" | grep -vE "lightnode"| awk '{print $5}')" -lt "1048576" ]];then
-        exit_with_clean "Download fisco-bcos failed, please try again. Or download and extract it manually from ${Download_Link} and use -e option."
+        exit_with_clean "Download fisco-bcos failed, please try again. Or download and extract it manually from ${github_link} and use -e option."
     fi
     mkdir -p bin && mv ${package_name} bin && cd bin && tar -zxf ${package_name} && cd ..
     chmod a+x ${binary_path}
@@ -670,6 +668,7 @@ parse_params() {
             output_dir="$OPTARG"
             service_output_dir="$OPTARG"
             expand_dir="$OPTARG"
+            cert_conf="${output_dir}/cert.cnf"
             ;;
         e)
             use_exist_binary="true"
@@ -695,7 +694,7 @@ parse_params() {
         g) default_group="${OPTARG}"
             check_name "group" "${default_group}"
             ;;
-        G) genesis_conf_path="${OPTARG}"
+        G) genesis_conf_dir="${OPTARG}"
             ;;
         I) default_chainid="${OPTARG}"
             check_name "chain" "${default_chainid}"
@@ -1344,6 +1343,7 @@ generate_config_ini() {
     local rpc_listen_port="${5}"
     local disable_ssl="${6}"
     local p2p_enable_ssl="${7}"
+    local enable_web3_rpc="${8}"
 
     local enable_ssl_content="enable_ssl=true"
     if [[ "${disable_ssl}" == "true" ]]; then
@@ -1386,7 +1386,7 @@ generate_config_ini() {
     ; tars_rpc_port=20021
 
 [web3_rpc]
-    enable=false
+    enable=${enable_web3_rpc}
     listen_ip=0.0.0.0
     listen_port=8545
     thread_count=8
@@ -1676,6 +1676,10 @@ generate_config() {
     if [ -n "${9}" ]; then  
         enable_p2p_ssl="${9}"
     fi
+    local enable_web3_rpc="false"
+    if [ -n "${10}" ];then
+        enable_web3_rpc="${10}"
+    fi
 
     if [[ -n "${skip_generate_auth_account}" ]]; then
         LOG_INFO "Skip generate auth account..."
@@ -1683,7 +1687,7 @@ generate_config() {
         check_auth_account
     fi
     if [ "${sm_mode}" == "false" ]; then
-        generate_config_ini "${node_config_path}" "${p2p_listen_ip}" "${p2p_listen_port}" "${rpc_listen_ip}" "${rpc_listen_port}" "${disable_ssl}" "${enable_p2p_ssl}"
+        generate_config_ini "${node_config_path}" "${p2p_listen_ip}" "${p2p_listen_port}" "${rpc_listen_ip}" "${rpc_listen_port}" "${disable_ssl}" "${enable_p2p_ssl}" "${enable_web3_rpc}"
     else
         generate_sm_config_ini "${node_config_path}" "${p2p_listen_ip}" "${p2p_listen_port}" "${rpc_listen_ip}" "${rpc_listen_port}" "${disable_ssl}" "${enable_p2p_ssl}"
     fi
@@ -2227,6 +2231,7 @@ generate_template_package()
     local binary_path="${2}"
     local genesis_conf_path="${3}"
     local output_dir="${4}"
+    local connection_file_path="${5}"
 
     # do not support docker
     if [ -n "${docker_mode}" ];then
@@ -2251,11 +2256,11 @@ generate_template_package()
     mkdir -p "${node_dir}"
     mkdir -p "${node_dir}/conf"
 
-    p2p_listen_ip="[#P2P_LISTEN_IP]"
-    rpc_listen_ip="[#RPC_LISTEN_IP]"
+    p2p_listen_ip="${default_listen_ip}"
+    rpc_listen_ip="${default_listen_ip}"
 
-    p2p_listen_port="[#P2P_LISTEN_PORT]"
-    rpc_listen_port="[#RPC_LISTEN_PORT]"
+    p2p_listen_port=port_start[0]
+    rpc_listen_port=port_start[1]
 
     # copy binary file
     cp "${binary_path}" "${node_dir}/../"
@@ -2268,10 +2273,13 @@ generate_template_package()
     # generate node start.sh stop.sh
     generate_node_scripts "${node_dir}"
 
-    local connected_nodes="[#P2P_CONNECTED_NODES]"
+    #local connected_nodes="[#P2P_CONNECTED_NODES]"
     # generate config for node
-    generate_config "${sm_mode}" "${node_dir}/config.ini" "${p2p_listen_ip}" "${p2p_listen_port}" "${rpc_listen_ip}" "${rpc_listen_port}" "true" "true" "false"
-    generate_p2p_connected_conf "${node_dir}/${p2p_connected_conf_name}" "${connected_nodes}" "true"
+    generate_config "${sm_mode}" "${node_dir}/config.ini" "${p2p_listen_ip}" "${p2p_listen_port}" "${rpc_listen_ip}" "${rpc_listen_port}" "true" "true" "false" "true"
+    # copy the p2p files
+    LOG_INFO "* Generate the bootstrap file from ${connection_file_path}"
+    cp ${connection_file_path} ${node_dir}
+    #generate_p2p_connected_conf "${node_dir}/${p2p_connected_conf_name}" "${connected_nodes}" "true"
 
     LOG_INFO "Building template intstall package"
     LOG_INFO "Auth mode            : ${auth_mode}"
@@ -2801,22 +2809,29 @@ main() {
         expand_lighenode "${sm_mode}" "${ca_dir}" "${output_dir}" "${config_path}" "${mtail_ip_param}" "${prometheus_dir}"
     elif [[ "${command}" == "generate-template-package"  ]]; then
         local node_name="node0"
-        if [[ -n "${genesis_conf_path}" ]]; then
+        if [[ -n "${genesis_conf_dir}" ]]; then
             dir_must_not_exists "${output_dir}"
             # config.genesis is set
+            genesis_conf_path=${genesis_conf_dir}/config.genesis
+            connection_file_path=${genesis_conf_dirl}/nodes.json
+            if [[ "${genesis_conf_dir}" != /* ]]; then  
+                genesis_conf_path="${dirpath}/${genesis_conf_path}"
+                connection_file_path="${dirpath}/${connection_file_path}"
+            fi  
+            LOG_INFO "* genesis_conf_path: ${genesis_conf_path}"
+            LOG_INFO "* connection_file_path: ${connection_file_path}"
             file_must_exists "${genesis_conf_path}"
-            generate_template_package "${node_name}" "${binary_path}" "${genesis_conf_path}" "${output_dir}"
+            download_bin
+            generate_template_package "${node_name}" "${binary_path}" "${genesis_conf_path}" "${output_dir}" "${connection_file_path}"
         elif [[ -n "${node_key_dir}" ]] && [[ -d "${node_key_dir}" ]]; then
             dir_must_not_exists "${output_dir}"
             generate_genesis_config_by_nodeids "${node_key_dir}" "${output_dir}/"
             file_must_exists "${output_dir}/config.genesis"
-            generate_template_package "${node_name}" "${binary_path}" "${output_dir}/config.genesis" "${output_dir}"
+            generate_template_package "${node_name}" "${binary_path}" "${output_dir}/config.genesis" "${output_dir}" "${output_dir}/nodes.json"
         else
             echo "bash build_chain.sh generate-template-package -h "
             echo "  eg:"
-            echo "      bash build_chain.sh -C generate-template-package -e ./fisco-bcos -o ./nodes -G ./config.genesis "
-            echo "      bash build_chain.sh -C generate-template-package -e ./fisco-bcos -o ./nodes -G ./config.genesis -s"
-            echo "      bash build_chain.sh -C generate-template-package -e ./fisco-bcos -o ./nodes -n nodeids -s -R"
+            echo "      bash build_chain.sh -C generate-template-package -o ./nodes -G POTOS-testnet -k 0"
         fi
     elif [[ "${command}" == "generate_cert" ]]; then
       mkdir -p "${output_dir}"

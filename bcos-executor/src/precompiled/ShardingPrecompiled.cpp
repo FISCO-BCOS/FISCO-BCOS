@@ -26,7 +26,6 @@
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-tool/BfsFileFactory.h>
-#include <bcos-utilities/Ranges.h>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
@@ -92,7 +91,7 @@ inline bool isFromThisOrGovernors(std::shared_ptr<executor::TransactionExecutive
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
 
     auto governors = getGovernorList(_executive, _callParameters, codec);
-    return (RANGES::find_if(governors, [&_callParameters](const Address& address) {
+    return (::ranges::find_if(governors, [&_callParameters](const Address& address) {
         return address.hex() == _callParameters->m_sender;
     }) != governors.end());
 }

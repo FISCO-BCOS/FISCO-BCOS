@@ -21,6 +21,8 @@
 #include "bcos-crypto/ChecksumAddress.h"
 #include "bcos-crypto/interfaces/crypto/CommonType.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
+#include "bcos-rpc/validator/CallValidator.h"
+#include "bcos-rpc/validator/TransactionValidator.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
 #include <bcos-boostssl/websocket/WsMessage.h>
@@ -50,6 +52,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
 
 using namespace std;
 using namespace bcos;
@@ -60,11 +63,13 @@ using namespace boost::archive::iterators;
 
 JsonRpcImpl_2_0::JsonRpcImpl_2_0(GroupManager::Ptr _groupManager,
     bcos::gateway::GatewayInterface::Ptr _gatewayInterface,
-    std::shared_ptr<boostssl::ws::WsService> _wsService, FilterSystem::Ptr filterSystem)
+    std::shared_ptr<boostssl::ws::WsService> _wsService, FilterSystem::Ptr filterSystem,
+    bytes forceSender)
   : m_groupManager(std::move(_groupManager)),
     m_gatewayInterface(std::move(_gatewayInterface)),
     m_wsService(std::move(_wsService)),
-    m_filterSystem(filterSystem)
+    m_filterSystem(std::move(filterSystem)),
+    m_forceSender(std::move(forceSender))
 {
     m_wsService->registerMsgHandler(bcos::protocol::MessageType::RPC_REQUEST,
         boost::bind(&JsonRpcImpl_2_0::handleRpcRequest, this, boost::placeholders::_1,
@@ -490,13 +495,27 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
             auto transactionData = decodeData(data);
             auto transaction = nodeService->blockFactory()->transactionFactory()->createTransaction(
                 bcos::ref(transactionData), false, true);
-            transaction->forceSender({});  // must clear sender here for future verify
+            if (!self->m_forceSender.empty())
+            {
+                transaction->forceSender(self->m_forceSender);
+            }
+            else
+            {
+                transaction->forceSender({});  // must clear sender here for future verify
+            }
 
             if (c_fileLogLevel <= TRACE)
             {
                 RPC_IMPL_LOG(TRACE) << LOG_DESC("sendTransaction") << LOG_KV("group", groupID)
                                     << LOG_KV("node", nodeName) << LOG_KV("isWasm", isWasm);
             }
+            // check transaction validator
+            if (transaction->chainId() != self->m_groupManager->chainID())
+            {
+                BOOST_THROW_EXCEPTION(
+                    JsonRpcException(JsonRpcError::InternalError, "Chain ID mismatch!"));
+            }
+            TransactionValidator::checkTransaction(*transaction, true);
 
             auto start = utcSteadyTime();
             co_await txpool->broadcastTransactionBuffer(bcos::ref(transactionData));

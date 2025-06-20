@@ -177,10 +177,6 @@ private:
     ThreadPool::Ptr m_txsPreStore;
     tool::TreeTopology::Ptr m_treeRouter = nullptr;
     std::atomic_bool m_running = {false};
-
-    // Note: This x_markTxsMutex is used for locking asyncSealTxs() during sealBlock
-    // because memory storage is not contain a big lock now
-    mutable bcos::SharedMutex x_markTxsMutex;
     bool m_checkBlockLimit = true;
 };
 }  // namespace bcos::txpool

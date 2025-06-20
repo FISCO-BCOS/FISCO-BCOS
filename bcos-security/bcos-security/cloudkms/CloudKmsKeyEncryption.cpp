@@ -62,11 +62,20 @@ std::shared_ptr<bytes> CloudKmsKeyEncryption::decryptContents(
         try
         {
             // Do not comment here, otherwise the AWS client will be instantiated repeatedly
-            struct AwsSdkLifecycleManager
+            static struct AwsSdkLifecycleManager
             {
                 Aws::SDKOptions options;
-                AwsSdkLifecycleManager() { Aws::InitAPI(options); }
-                ~AwsSdkLifecycleManager() { Aws::ShutdownAPI(options); }
+                AwsSdkLifecycleManager()
+                {
+                    options.cryptoOptions.initAndCleanupOpenSSL = false;
+                    Aws::InitAPI(options);
+                    BCOS_LOG(INFO) << LOG_BADGE("AwsSdkLifecycleManager") << "AWS SDK Initialized.";
+                }
+                ~AwsSdkLifecycleManager()
+                {
+                    Aws::ShutdownAPI(options);
+                    BCOS_LOG(INFO) << LOG_BADGE("AwsSdkLifecycleManager") << "AWS SDK Shutdown.";
+                }
                 AwsSdkLifecycleManager(const AwsSdkLifecycleManager&) = delete;
                 AwsSdkLifecycleManager& operator=(const AwsSdkLifecycleManager&) = delete;
                 AwsSdkLifecycleManager(AwsSdkLifecycleManager&&) = delete;

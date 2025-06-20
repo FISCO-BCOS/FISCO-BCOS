@@ -46,6 +46,9 @@ public:
         bugfix_precompiled_gasused,
         bugfix_nonce_not_increase_when_revert,
         bugfix_set_contract_nonce_when_create,
+        bugfix_precompiled_gascalc,
+        bugfix_method_auth_sender,
+        bugfix_precompiled_evm_status,
         feature_dmc2serial,
         feature_sharding,
         feature_rpbft,
@@ -178,90 +181,96 @@ public:
             protocol::BlockVersion to;
             std::vector<Flag> flags;
         };
-        const static auto upgradeRoadmap = std::to_array<UpgradeFeatures>({
-            {.to = protocol::BlockVersion::V3_2_3_VERSION,
-                .flags =
-                    {
-                        Flag::bugfix_revert,
-                    }},
-            {.to = protocol::BlockVersion::V3_2_4_VERSION,
-                .flags =
-                    {
-                        Flag::bugfix_statestorage_hash,
-                        Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy,
-                    }},
-            {.to = protocol::BlockVersion::V3_2_7_VERSION,
-                .flags =
-                    {
-                        Flag::bugfix_event_log_order,
-                        Flag::bugfix_call_noaddr_return,
-                        Flag::bugfix_precompiled_codehash,
-                        Flag::bugfix_dmc_revert,
-                    }},
-            {.to = protocol::BlockVersion::V3_5_VERSION,
-                .flags =
-                    {
-                        Flag::bugfix_revert,
-                        Flag::bugfix_statestorage_hash,
-                    }},
-            {.to = protocol::BlockVersion::V3_6_VERSION,
-                .flags =
-                    {
-                        Flag::bugfix_statestorage_hash,
-                        Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy,
-                        Flag::bugfix_event_log_order,
-                        Flag::bugfix_call_noaddr_return,
-                        Flag::bugfix_precompiled_codehash,
-                        Flag::bugfix_dmc_revert,
-                    }},
-            {.to = protocol::BlockVersion::V3_6_1_VERSION,
-                .flags =
-                    {
-                        Flag::bugfix_keypage_system_entry_hash,
-                        Flag::bugfix_internal_create_redundant_storage,
-                    }},
-            {.to = protocol::BlockVersion::V3_7_0_VERSION,
-                .flags =
-                    {
-                        Flag::bugfix_empty_abi_reset,
-                        Flag::bugfix_eip55_addr,
-                        Flag::bugfix_sharding_call_in_child_executive,
-                        Flag::bugfix_internal_create_permission_denied,
-                    }},
-            {.to = protocol::BlockVersion::V3_8_0_VERSION,
-                .flags =
-                    {
-                        Flag::bugfix_eoa_as_contract,
-                        Flag::bugfix_dmc_deploy_gas_used,
-                        Flag::bugfix_evm_exception_gas_used,
-                        Flag::bugfix_set_row_with_dirty_flag,
-                    }},
-            {.to = protocol::BlockVersion::V3_9_0_VERSION,
-                .flags =
-                    {
-                        Flag::bugfix_staticcall_noaddr_return,
-                        Flag::bugfix_support_transfer_receive_fallback,
-                        Flag::bugfix_eoa_match_failed,
-                    }},
-            {.to = protocol::BlockVersion::V3_12_0_VERSION,
-                .flags =
-                    {
-                        Flag::bugfix_rpbft_vrf_blocknumber_input,
-                    }},
-            {.to = protocol::BlockVersion::V3_13_0_VERSION,
-                .flags =
-                    {
-                        Flag::bugfix_delete_account_code,
-                        Flag::bugfix_policy1_empty_code_address,
-                        Flag::bugfix_precompiled_gasused,
-                    }},
-            {.to = protocol::BlockVersion::V3_14_0_VERSION,
-                .flags =
-                    {
-                        Flag::bugfix_nonce_not_increase_when_revert,
-                        Flag::bugfix_set_contract_nonce_when_create,
-                    }},
-        });
+        const static auto upgradeRoadmap =
+            std::to_array<UpgradeFeatures>({{.to = protocol::BlockVersion::V3_2_3_VERSION,
+                                                .flags =
+                                                    {
+                                                        Flag::bugfix_revert,
+                                                    }},
+                {.to = protocol::BlockVersion::V3_2_4_VERSION,
+                    .flags =
+                        {
+                            Flag::bugfix_statestorage_hash,
+                            Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy,
+                        }},
+                {.to = protocol::BlockVersion::V3_2_7_VERSION,
+                    .flags =
+                        {
+                            Flag::bugfix_event_log_order,
+                            Flag::bugfix_call_noaddr_return,
+                            Flag::bugfix_precompiled_codehash,
+                            Flag::bugfix_dmc_revert,
+                        }},
+                {.to = protocol::BlockVersion::V3_5_VERSION,
+                    .flags =
+                        {
+                            Flag::bugfix_revert,
+                            Flag::bugfix_statestorage_hash,
+                        }},
+                {.to = protocol::BlockVersion::V3_6_VERSION,
+                    .flags =
+                        {
+                            Flag::bugfix_statestorage_hash,
+                            Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy,
+                            Flag::bugfix_event_log_order,
+                            Flag::bugfix_call_noaddr_return,
+                            Flag::bugfix_precompiled_codehash,
+                            Flag::bugfix_dmc_revert,
+                        }},
+                {.to = protocol::BlockVersion::V3_6_1_VERSION,
+                    .flags =
+                        {
+                            Flag::bugfix_keypage_system_entry_hash,
+                            Flag::bugfix_internal_create_redundant_storage,
+                        }},
+                {.to = protocol::BlockVersion::V3_7_0_VERSION,
+                    .flags =
+                        {
+                            Flag::bugfix_empty_abi_reset,
+                            Flag::bugfix_eip55_addr,
+                            Flag::bugfix_sharding_call_in_child_executive,
+                            Flag::bugfix_internal_create_permission_denied,
+                        }},
+                {.to = protocol::BlockVersion::V3_8_0_VERSION,
+                    .flags =
+                        {
+                            Flag::bugfix_eoa_as_contract,
+                            Flag::bugfix_dmc_deploy_gas_used,
+                            Flag::bugfix_evm_exception_gas_used,
+                            Flag::bugfix_set_row_with_dirty_flag,
+                        }},
+                {.to = protocol::BlockVersion::V3_9_0_VERSION,
+                    .flags =
+                        {
+                            Flag::bugfix_staticcall_noaddr_return,
+                            Flag::bugfix_support_transfer_receive_fallback,
+                            Flag::bugfix_eoa_match_failed,
+                        }},
+                {.to = protocol::BlockVersion::V3_12_0_VERSION,
+                    .flags =
+                        {
+                            Flag::bugfix_rpbft_vrf_blocknumber_input,
+                        }},
+                {.to = protocol::BlockVersion::V3_13_0_VERSION,
+                    .flags =
+                        {
+                            Flag::bugfix_delete_account_code,
+                            Flag::bugfix_policy1_empty_code_address,
+                            Flag::bugfix_precompiled_gasused,
+                        }},
+                {.to = protocol::BlockVersion::V3_14_0_VERSION,
+                    .flags =
+                        {
+                            Flag::bugfix_nonce_not_increase_when_revert,
+                            Flag::bugfix_set_contract_nonce_when_create,
+                        }},
+                {.to = protocol::BlockVersion::V3_15_1_VERSION,
+                    .flags = {Flag::bugfix_precompiled_gascalc}},
+                {.to = protocol::BlockVersion::V3_15_2_VERSION,
+                    .flags = {
+                        Flag::bugfix_method_auth_sender,
+                        Flag::bugfix_precompiled_evm_status,
+                    }}});
         for (const auto& upgradeFeatures : upgradeRoadmap)
         {
             if (((toVersion < protocol::BlockVersion::V3_2_7_VERSION) &&
@@ -313,7 +322,8 @@ public:
                });
     }
 
-    task::Task<void> readFromStorage(auto& storage, long blockNumber)
+    task::Task<void> readFromStorage(
+        storage2::ReadableStorage<executor_v1::StateKeyView> auto& storage, long blockNumber)
     {
         for (auto key : bcos::ledger::Features::featureKeys())
         {
@@ -331,25 +341,27 @@ public:
     }
 
     task::Task<void> writeToStorage(
-        auto& storage, long blockNumber, bool ignoreDuplicate = true) const
+        storage2::WritableStorage<executor_v1::StateKey, executor_v1::StateValue> auto& storage,
+        long blockNumber, bool ignoreDuplicate = true) const
     {
         for (auto [flag, name, value] : flags())
         {
-            if (value && !(ignoreDuplicate &&
-                             co_await storage2::existsOne(storage,
-                                 executor_v1::StateKeyView(ledger::SYS_CONFIG, name))))
+            if (value &&
+                !(ignoreDuplicate && co_await storage2::existsOne(storage,
+                                         executor_v1::StateKeyView(ledger::SYS_CONFIG, name))))
             {
                 storage::Entry entry;
                 entry.setObject(
                     SystemConfigEntry{boost::lexical_cast<std::string>((int)value), blockNumber});
-                co_await storage2::writeOne(storage,
-                    executor_v1::StateKey(ledger::SYS_CONFIG, name), std::move(entry));
+                co_await storage2::writeOne(
+                    storage, executor_v1::StateKey(ledger::SYS_CONFIG, name), std::move(entry));
             }
         }
     }
 };
 
-inline task::Task<void> readFromStorage(Features& features, auto&& storage, long blockNumber)
+inline task::Task<void> readFromStorage(Features& features,
+    storage2::ReadableStorage<executor_v1::StateKey> auto& storage, long blockNumber)
 {
     decltype(auto) keys = bcos::ledger::Features::featureKeys();
     auto entries = co_await storage2::readSome(std::forward<decltype(storage)>(storage),
@@ -369,7 +381,9 @@ inline task::Task<void> readFromStorage(Features& features, auto&& storage, long
     }
 }
 
-inline task::Task<void> writeToStorage(Features const& features, auto&& storage, long blockNumber)
+inline task::Task<void> writeToStorage(Features const& features,
+    storage2::WritableStorage<executor_v1::StateKey, executor_v1::StateValue> auto& storage,
+    long blockNumber)
 {
     decltype(auto) flags =
         features.flags() | ::ranges::views::filter([](auto&& tuple) { return std::get<2>(tuple); });
@@ -379,8 +393,7 @@ inline task::Task<void> writeToStorage(Features const& features, auto&& storage,
             entry.setObject(SystemConfigEntry{
                 boost::lexical_cast<std::string>((int)std::get<2>(tuple)), blockNumber});
             return std::make_tuple(
-                executor_v1::StateKey(ledger::SYS_CONFIG, std::get<1>(tuple)),
-                std::move(entry));
+                executor_v1::StateKey(ledger::SYS_CONFIG, std::get<1>(tuple)), std::move(entry));
         }));
 }
 

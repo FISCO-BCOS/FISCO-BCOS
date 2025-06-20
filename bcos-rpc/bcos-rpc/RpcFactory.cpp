@@ -359,7 +359,7 @@ bcos::rpc::JsonRpcImpl_2_0::Ptr RpcFactory::buildJsonRpc(int sendTxTimeout,
         std::make_shared<JsonRpcFilterSystem>(_groupManager, m_nodeConfig->groupId(),
             m_nodeConfig->rpcFilterTimeout(), m_nodeConfig->rpcMaxProcessBlock());
     auto jsonRpcInterface = std::make_shared<bcos::rpc::JsonRpcImpl_2_0>(
-        _groupManager, m_gateway, _wsService, filterSystem);
+        _groupManager, m_gateway, _wsService, filterSystem, m_nodeConfig->forceSender());
     jsonRpcInterface->setSendTxTimeout(sendTxTimeout);
     auto httpServer = _wsService->httpServer();
     if (httpServer)

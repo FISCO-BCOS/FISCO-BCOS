@@ -33,11 +33,6 @@
 namespace bcos::executor_v1
 {
 
-struct ReleaseEVMC
-{
-    void operator()(evmc_vm* ptr) const noexcept;
-};
-
 /// The RAII wrapper for an VMInstance-C instance.
 class VMInstance
 {

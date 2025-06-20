@@ -1,7 +1,6 @@
 #pragma once
 
 #include "bcos-framework/dispatcher/SchedulerInterface.h"
-#include <boost/atomic/atomic_flag.hpp>
 
 namespace bcos::scheduler_v1
 {

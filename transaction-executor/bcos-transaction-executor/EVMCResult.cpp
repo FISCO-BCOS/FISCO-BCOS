@@ -27,8 +27,7 @@ bcos::executor_v1::EVMCResult::EVMCResult(evmc_result&& from)
     cleanEVMCResult(from);
 }
 
-bcos::executor_v1::EVMCResult::EVMCResult(
-    evmc_result&& from, protocol::TransactionStatus _status)
+bcos::executor_v1::EVMCResult::EVMCResult(evmc_result&& from, protocol::TransactionStatus _status)
   : evmc_result(from), status(_status)
 {
     cleanEVMCResult(from);
@@ -40,8 +39,7 @@ bcos::executor_v1::EVMCResult::EVMCResult(EVMCResult&& from) noexcept
     cleanEVMCResult(from);
 }
 
-bcos::executor_v1::EVMCResult& bcos::executor_v1::EVMCResult::operator=(
-    EVMCResult&& from) noexcept
+bcos::executor_v1::EVMCResult& bcos::executor_v1::EVMCResult::operator=(EVMCResult&& from) noexcept
 {
     evmc_result::operator=(from);
     cleanEVMCResult(from);
@@ -111,8 +109,7 @@ bcos::executor_v1::evmcStatusToErrorMessage(
         return {bcos::protocol::TransactionStatus::NotEnoughCash, {}};
     case EVMC_STACK_OVERFLOW:
         return {bcos::protocol::TransactionStatus::OutOfStack,
-            bcos::executor_v1::writeErrInfoToOutput(
-                hashImpl, "Execution stack overflow."s)};
+            bcos::executor_v1::writeErrInfoToOutput(hashImpl, "Execution stack overflow."s)};
     case EVMC_STACK_UNDERFLOW:
         return {bcos::protocol::TransactionStatus::StackUnderflow,
             bcos::executor_v1::writeErrInfoToOutput(
@@ -140,9 +137,9 @@ bcos::executor_v1::evmcStatusToErrorMessage(
     };
 }
 
-bcos::executor_v1::EVMCResult bcos::executor_v1::makeErrorEVMCResult(
-    crypto::Hash const& hashImpl, protocol::TransactionStatus status, evmc_status_code evmStatus,
-    int64_t gas, const std::string& errorInfo)
+bcos::executor_v1::EVMCResult bcos::executor_v1::makeErrorEVMCResult(crypto::Hash const& hashImpl,
+    protocol::TransactionStatus status, evmc_status_code evmStatus, int64_t gas,
+    const std::string& errorInfo)
 {
     bytes errorBytes;
     if (!errorInfo.empty())
@@ -202,5 +199,11 @@ std::ostream& operator<<(std::ostream& output, const evmc_result& result)
            << ", ";
     output << "release: " << result.release << ", ";
     output << "create_address: " << bcos::bytesConstRef(result.create_address.bytes) << "}";
+    return output;
+}
+
+std::ostream& operator<<(std::ostream& output, const evmc_address& address)
+{
+    output << bcos::bytesConstRef(address.bytes);
     return output;
 }
