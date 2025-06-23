@@ -20,7 +20,6 @@
 #pragma once
 
 #include "bcos-utilities/NewTimer.h"
-#include "bcos-utilities/ObjectAllocatorMonitor.h"
 #include <bcos-boostssl/httpserver/HttpServer.h>
 #include <bcos-boostssl/interfaces/MessageFace.h>
 #include <bcos-boostssl/websocket/Common.h>

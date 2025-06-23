@@ -499,7 +499,7 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
                 {
                     // m_stateStorages.pop_back();
                     auto fmt = fmt::format(
-                        "[{}] Block number mismatch! request: %d, current: %d. trigger "
+                        "[{}] Block number mismatch! request: {}, current: {}. trigger "
                         "switch.",
                         m_name, blockHeader->number(), prev.number);
                     EXECUTOR_NAME_LOG(WARNING) << fmt;

@@ -28,10 +28,7 @@
 #include <exception>
 #include <memory>
 
-namespace bcos
-{
-
-namespace timer
+namespace bcos::timer
 {
 
 using TimerTask = std::function<void()>;
@@ -267,5 +264,4 @@ private:
     std::shared_ptr<boost::asio::io_context> m_ioService;
 };
 
-}  // namespace timer
-}  // namespace bcos
+}  // namespace bcos::timer
