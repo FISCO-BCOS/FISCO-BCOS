@@ -25,7 +25,7 @@
 #include "libinitializer/ProtocolInitializer.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/election/FailOverTypeDef.h>
-#ifdef WITH_TIKV
+#ifdef WITH_LEDGER_ELECTION
 #include <bcos-leader-election/src/LeaderEntryPoint.h>
 #endif
 #include <bcos-rpc/RpcFactory.h>
