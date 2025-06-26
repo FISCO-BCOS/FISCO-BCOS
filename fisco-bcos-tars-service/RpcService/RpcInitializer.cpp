@@ -54,7 +54,7 @@ void RpcInitializer::init(std::string const& _configDir)
         m_nodeConfig->setEnSmNodeCert(_configDir + "/" + "sm_enssl.crt");
         m_nodeConfig->setEnSmNodeKey(_configDir + "/" + "sm_enssl.key");
     }
-#ifdef WITH_TIKV
+#ifdef WITH_LEDGER_ELECTION
     if (m_nodeConfig->enableFailOver())
     {
         RPCSERVICE_LOG(INFO) << LOG_DESC("enable failover");

@@ -121,7 +121,6 @@ public:
     }
     void clear()
     {
-        stop();
         bcos::WriteGuard l(x_executiveFlows);
         m_executiveFlows.clear();
     }
