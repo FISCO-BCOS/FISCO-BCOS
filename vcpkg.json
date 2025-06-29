@@ -119,5 +119,10 @@
     }
   },
   "builtin-baseline": "f6729a3ac3bfdefc999aa8e3664f8014370886b8",
-  "overrides": []
+  "overrides": [
+    {
+      "name": "boost-context",
+      "version": "1.88.0-ucontext"
+    }
+  ]
 }
