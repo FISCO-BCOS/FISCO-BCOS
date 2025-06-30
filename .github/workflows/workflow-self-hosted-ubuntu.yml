@@ -72,6 +72,7 @@ jobs:
       - name: Build for linux
         run: |
           export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
+          unset VCPKG_FORCE_SYSTEM_BINARIES
           cd build && cmake -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Debug -DLINKER=gold -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=ON -DWITH_TARS_SERVICES=ON -DTOOLS=ON .. || cat *.log
           make -j6
       - name: Test
