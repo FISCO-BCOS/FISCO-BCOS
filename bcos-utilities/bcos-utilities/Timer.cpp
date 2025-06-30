@@ -21,6 +21,7 @@
 #include "Timer.h"
 #include "BoostLog.h"
 #include "Common.h"
+#include "bcos-utilities/Overloaded.h"
 #include <boost/asio/executor_work_guard.hpp>
 
 using namespace bcos;
@@ -43,17 +44,21 @@ bcos::Timer::Timer(int64_t _timeout, std::string _threadName)
         bcos::pthread_setThreadName(m_threadName);
         while (m_working)
         {
+            auto& ioContext = ioService();
+            if (ioContext.stopped())
+            {
+                ioContext.restart();
+            }
             try
             {
-                auto work = boost::asio::make_work_guard(this->ioService());
-                ioService().run();
+                auto work = boost::asio::make_work_guard(ioContext);
+                ioContext.run();
             }
             catch (std::exception const& e)
             {
                 BCOS_LOG(WARNING) << LOG_DESC("Exception in Worker Thread of timer")
                                   << LOG_KV("message", boost::diagnostic_information(e));
             }
-            ioService().stop();
         }
     }))
 {}
@@ -189,4 +194,14 @@ uint64_t bcos::Timer::adjustTimeout()
 void bcos::Timer::setTimeout(int64_t timeout)
 {
     m_timeout = timeout;
+}
+bool bcos::Timer::borrowedIoService() const
+{
+    return std::holds_alternative<boost::asio::io_context*>(m_ioService);
+}
+boost::asio::io_context& bcos::Timer::ioService()
+{
+    return std::visit(bcos::overloaded([](boost::asio::io_context* ptr) -> auto& { return *ptr; },
+                          [](boost::asio::io_context& ref) -> auto& { return ref; }),
+        m_ioService);
 }

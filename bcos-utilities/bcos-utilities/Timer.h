@@ -19,12 +19,10 @@
  * @date 2021-04-26
  */
 #pragma once
-#include "bcos-utilities/Overloaded.h"
 #include <boost/asio.hpp>
 #include <boost/asio/executor_work_guard.hpp>
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/steady_timer.hpp>
-#include <optional>
 #include <variant>
 
 namespace bcos
@@ -70,17 +68,7 @@ private:
 
     std::function<void()> m_timeoutHandler;
     // m_work ensures that io_service's run() function will not exit while work is underway
-    bool borrowedIoService() const
-    {
-        return std::holds_alternative<boost::asio::io_context*>(m_ioService);
-    }
-
-    boost::asio::io_context& ioService()
-    {
-        return std::visit(
-            bcos::overloaded([](boost::asio::io_context* ptr) -> auto& { return *ptr; },
-                [](boost::asio::io_context& ref) -> auto& { return ref; }),
-            m_ioService);
-    }
+    bool borrowedIoService() const;
+    boost::asio::io_context& ioService();
 };
 }  // namespace bcos
