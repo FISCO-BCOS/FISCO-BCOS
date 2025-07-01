@@ -29,7 +29,7 @@ class Header256Hash : public bcos::crypto::Hash
 public:
     typedef std::shared_ptr<Header256Hash> Ptr;
     Header256Hash() = default;
-    virtual ~Header256Hash(){};
+    virtual ~Header256Hash() {};
     bcos::crypto::HashType hash(bytesConstRef _data) const override
     {
         std::hash<std::string_view> hash;
@@ -706,7 +706,7 @@ BOOST_AUTO_TEST_CASE(multiStorageCommit)
 BOOST_AUTO_TEST_CASE(singleStorageRollback)
 {
     size_t tableEntries = 101;
-    std::string table1Name = "table1";
+    std::string table1Name = "table1_singleStorageRollback";
     storage->asyncGetPrimaryKeys(table1Name, std::optional<storage::Condition const>(),
         [&](Error::UniquePtr error, std::vector<std::string> keys) {
             BOOST_CHECK_EQUAL(error.get(), nullptr);
@@ -761,8 +761,8 @@ BOOST_AUTO_TEST_CASE(multiStorageRollback)
     }
     auto stateStorage2 = std::make_shared<bcos::storage::StateStorage>(storage2, false);
     auto stateStorage3 = std::make_shared<bcos::storage::StateStorage>(storage3, false);
-    auto table1Name = "table1";
-    auto table2Name = "table2";
+    auto table1Name = "multiStorageRollback_table1";
+    auto table2Name = "multiStorageRollback_table2";
     BOOST_CHECK_EQUAL(
         stateStorage2->createTable(table1Name, "value1,value2,value3").has_value(), true);
     BOOST_CHECK_EQUAL(
@@ -854,7 +854,7 @@ BOOST_AUTO_TEST_CASE(secondaryRollbackAndPrimaryCommit)
         testTable->setRow(key, std::move(entry));
     }
     auto stateStorage1 = std::make_shared<bcos::storage::StateStorage>(storage2, false);
-    auto table1Name = "table1";
+    auto table1Name = "secondaryRollbackAndPrimaryCommit_table1";
     BOOST_CHECK_EQUAL(
         stateStorage1->createTable(table1Name, "value1,value2,value3").has_value(), true);
     auto table1 = stateStorage1->openTable(table1Name);
@@ -927,8 +927,8 @@ BOOST_AUTO_TEST_CASE(multiStorageScondaryCrash)
     }
     auto stateStorage2 = std::make_shared<bcos::storage::StateStorage>(storage2, false);
     auto stateStorage3 = std::make_shared<bcos::storage::StateStorage>(storage3, false);
-    auto table1Name = "table1";
-    auto table2Name = "table2";
+    auto table1Name = "multiStorageScondaryCrash_table1";
+    auto table2Name = "multiStorageScondaryCrash_table2";
     BOOST_CHECK_EQUAL(
         stateStorage2->createTable(table1Name, "value1,value2,value3").has_value(), true);
     BOOST_CHECK_EQUAL(
