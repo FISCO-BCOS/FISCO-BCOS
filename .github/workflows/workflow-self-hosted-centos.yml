@@ -77,7 +77,9 @@ jobs:
 
           make -j8
       - name: Test
-        run: cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test #&& make coverage && curl -LO https://codecov.io/bash && /bin/bash ./bash && bash ../tools/.ci/check_coverage.sh
+        run: |
+          ulimit -s unlimited
+          cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test #&& make coverage && curl -LO https://codecov.io/bash && /bin/bash ./bash && bash ../tools/.ci/check_coverage.sh
       #       - name: Add comment
       #         env:
       #           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

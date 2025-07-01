@@ -84,6 +84,7 @@ jobs:
           tiup update --self && tiup update playground
           tiup install playground tikv:v6.5.9 pd:v6.5.9
           nohup tiup playground v6.5.9 --mode tikv-slim --without-monitor &
+          ulimit -s unlimited
           sleep 30 && cd build && CTEST_OUTPUT_ON_FAILURE=TRUE ctest
 
       - name: prepare RPCAPI Tests
