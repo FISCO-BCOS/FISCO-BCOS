@@ -8,8 +8,6 @@
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/exception/diagnostic_information.hpp>
-#include <boost/format.hpp>
-#include <boost/format/format_fwd.hpp>
 #include <boost/iostreams/device/back_inserter.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <boost/lexical_cast.hpp>
@@ -621,7 +619,7 @@ BOOST_AUTO_TEST_CASE(commitAndCheck)
         Entry entry;
         entry.importFields({boost::lexical_cast<std::string>(100)});
 
-        auto key = (boost::format("key_%d") % keyIndex).str();
+        auto key = fmt::format("key_{}", keyIndex);
         initState->asyncSetRow("test_table1", key, std::move(entry),
             [](Error::UniquePtr error) { BOOST_CHECK(!error); });
     }
@@ -641,7 +639,7 @@ BOOST_AUTO_TEST_CASE(commitAndCheck)
         STORAGE_LOG(INFO) << "Expected: " << i;
         for (size_t keyIndex = 0; keyIndex < 100; ++keyIndex)
         {
-            auto key = (boost::format("key_%d") % keyIndex).str();
+            auto key = fmt::format("key_{}", keyIndex);
 
             size_t num = 0;
             state->asyncGetRow(

@@ -8,7 +8,6 @@
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
 #include <boost/endian.hpp>
-#include <boost/format.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
 #include <iterator>

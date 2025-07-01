@@ -42,7 +42,7 @@ FrontService::Ptr FrontServiceFactory::buildFrontService(
     frontService->setMessageFactory(std::make_shared<FrontMessageFactory>());
     frontService->setGroupID(_groupID);
     frontService->setNodeID(std::move(_nodeID));
-    frontService->setIoService(std::make_shared<boost::asio::io_service>());
+    frontService->setIoService(std::make_shared<boost::asio::io_context>());
     frontService->setGatewayInterface(m_gatewayInterface);
 
     return frontService;

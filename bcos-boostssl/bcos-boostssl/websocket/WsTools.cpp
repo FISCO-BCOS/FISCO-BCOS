@@ -88,8 +88,7 @@ bool WsTools::hostAndPort2Endpoint(const std::string& _host, NodeIPEndpoint& _en
     {
         boost::asio::io_context io_context;
         boost::asio::ip::tcp::resolver resolver(io_context);
-        boost::asio::ip::tcp::resolver::query query(boost::asio::ip::tcp::v4(), ip, "80");
-        boost::asio::ip::tcp::resolver::results_type results = resolver.resolve(query, ec);
+        boost::asio::ip::tcp::resolver::results_type results = resolver.resolve(ip, "80", ec);
         if (!ec)
         {
             ip_address = results.begin()->endpoint().address();

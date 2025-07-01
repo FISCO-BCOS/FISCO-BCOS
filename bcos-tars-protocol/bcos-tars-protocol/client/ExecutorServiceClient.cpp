@@ -40,12 +40,11 @@ public:
         if (pool)
         {
             // m_callback(std::move(args)...);
-            pool->template enqueue(
-                [callback = std::move(m_callback),
-                    m_args = std::make_shared<std::tuple<Args...>>(
-                        std::make_tuple(std::forward<Args>(args)...))]() mutable {
-                    std::apply(callback, std::move(*m_args));
-                });
+            pool->enqueue([callback = std::move(m_callback),
+                              m_args = std::make_shared<std::tuple<Args...>>(
+                                  std::make_tuple(std::forward<Args>(args)...))]() mutable {
+                std::apply(callback, std::move(*m_args));
+            });
         }
     }
 

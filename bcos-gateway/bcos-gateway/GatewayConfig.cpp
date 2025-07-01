@@ -129,9 +129,8 @@ void GatewayConfig::hostAndPort2Endpoint(const std::string& _host, NodeIPEndpoin
     {
         boost::asio::io_context io_context;
         boost::asio::ip::tcp::resolver resolver(io_context);
-        boost::asio::ip::tcp::resolver::query query(boost::asio::ip::tcp::v4(), ip, "80");
-        boost::asio::ip::tcp::resolver::results_type results = resolver.resolve(query, ec);
-        if (!ec)
+        boost::asio::ip::tcp::resolver::results_type results = resolver.resolve(ip, "80", ec);
+        if (!ec && results.begin() != results.end())
         {
             ip_address = results.begin()->endpoint().address();
         }

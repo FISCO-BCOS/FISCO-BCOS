@@ -272,8 +272,7 @@ void ShardingTransactionExecutor::preExecuteTransactions(int64_t schedulerTermId
                 }
                 default:
                 {
-                    auto message =
-                        (boost::format("Unsupported message type: %d") % params->type()).str();
+                    auto message = fmt::format("Unsupported message type: {}", (int)params->type());
                     EXECUTOR_NAME_LOG(ERROR)
                         << BLOCK_NUMBER(blockNumber) << "DAG Execute error, " << message;
                     // callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::DAG_ERROR, message), {});

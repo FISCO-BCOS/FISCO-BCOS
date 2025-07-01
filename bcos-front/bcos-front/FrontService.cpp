@@ -127,7 +127,7 @@ void FrontService::start()
         {
             try
             {
-                boost::asio::io_service::work work(*m_ioService);
+                auto work = boost::asio::make_work_guard(*m_ioService);
                 m_ioService->run();
             }
             catch (std::exception& e)

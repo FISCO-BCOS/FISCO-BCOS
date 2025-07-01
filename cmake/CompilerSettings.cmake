@@ -51,6 +51,7 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
 
     # for boost json spirit
     add_compile_options(-DBOOST_SPIRIT_THREADSAFE)
+    # add_compile_options(-DBOOST_USE_UCONTEXT)
 
     # for tbb, TODO: https://software.intel.com/sites/default/files/managed/b2/d2/TBBRevamp.pdf
     add_compile_options(-DTBB_SUPPRESS_DEPRECATED_MESSAGES=1)

@@ -30,7 +30,7 @@ jobs:
         with:
           fetch-depth: 5
       - uses: actions/cache@v3
-        id: cache
+        id: vcpkg-cache
         with:
           path: |
             deps/

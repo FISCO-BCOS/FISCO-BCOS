@@ -79,7 +79,6 @@ if(FULLNODE)
     add_subdirectory(bcos-txpool)
     add_subdirectory(bcos-sync)
     add_subdirectory(bcos-front)
-    add_subdirectory(bcos-leader-election)
     add_subdirectory(libinitializer)
     add_subdirectory(fisco-bcos-air)
 
@@ -88,6 +87,7 @@ if(FULLNODE)
 
     if(WITH_TARS_SERVICES)
         add_subdirectory(fisco-bcos-tars-service)
+        add_subdirectory(bcos-leader-election)
     endif()
 
     if(TESTS)
