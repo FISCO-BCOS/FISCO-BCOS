@@ -554,8 +554,8 @@ BOOST_AUTO_TEST_CASE(multiStorageCommit)
     }
     auto stateStorage2 = std::make_shared<bcos::storage::StateStorage>(storage2, false);
     auto stateStorage3 = std::make_shared<bcos::storage::StateStorage>(storage3, false);
-    auto table1Name = "table1";
-    auto table2Name = "table2";
+    auto table1Name = "multiStorageCommit_table1";
+    auto table2Name = "multiStorageCommit_table2";
     BOOST_CHECK_EQUAL(
         stateStorage2->createTable(table1Name, "value1,value2,value3").has_value(), true);
     BOOST_CHECK_EQUAL(
