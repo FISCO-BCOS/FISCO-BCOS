@@ -78,10 +78,12 @@ jobs:
           . /opt/rh/llvm-toolset-7.0/enable
           mkdir -p build && cd build
           unset VCPKG_FORCE_SYSTEM_BINARIES
-          cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=ON -DLINKER=ld -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON .. || cat *.log
+          cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DTESTS=ON -DWITH_CPPSDK=ON -DSANITIZE_ADDRESS=ON -DWITH_TARS_SERVICES=ON -DLINKER=ld -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=ON .. || cat *.log
           make -j8
       - name: Test
-        run: cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
+        run: |
+          ulimit -s unlimited
+          cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
 
       - name: prepare RPCAPI Tests
         run: cd tools && bash .ci/rpcapi_ci_prepare.sh
