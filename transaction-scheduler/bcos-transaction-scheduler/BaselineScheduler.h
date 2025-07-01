@@ -29,9 +29,9 @@
 #include "bcos-utilities/ITTAPI.h"
 #include <fmt/format.h>
 #include <oneapi/tbb/blocked_range.h>
-#include <oneapi/tbb/concurrent_vector.h>
 #include <oneapi/tbb/parallel_invoke.h>
-#include <oneapi/tbb/parallel_reduce.h>
+#include <oneapi/tbb/parallel_pipeline.h>
+#include <oneapi/tbb/task_arena.h>
 #include <oneapi/tbb/task_group.h>
 #include <boost/atomic.hpp>
 #include <boost/exception/diagnostic_information.hpp>
@@ -84,50 +84,39 @@ std::chrono::milliseconds::rep current();
 task::Task<h256> calculateStateRoot(
     auto& storage, uint32_t blockVersion, crypto::Hash const& hashImpl)
 {
-    constexpr static auto STATE_ROOT_CHUNK_SIZE = 64;
     auto range = co_await storage2::range(storage);
     storage::Entry deletedEntry;
     deletedEntry.setStatus(storage::Entry::DELETED);
 
-    tbb::concurrent_vector<h256> hashes;
-    tbb::task_group hashGroup;
-    while (auto keyValue = co_await range.next())
-    {
-        hashGroup.run([keyValue = std::move(keyValue), &hashes, &deletedEntry, &hashImpl]() {
-            auto [key, value] = *keyValue;
-            executor_v1::StateKeyView view(key);
-            auto [tableName, keyName] = view.get();
+    h256 totalHash;
+    using KeyValueType = task::AwaitableReturnType<decltype(range.next())>;
+    tbb::parallel_pipeline(tbb::this_task_arena::max_concurrency(),
+        tbb::make_filter<void, KeyValueType>(tbb::filter_mode::serial_in_order,
+            [&](tbb::flow_control& control) -> KeyValueType {
+                if (auto keyValue = task::tbb::syncWait(range.next()))
+                {
+                    return keyValue;
+                }
+                control.stop();
+                return {};
+            }) &
+            tbb::make_filter<KeyValueType, h256>(tbb::filter_mode::parallel,
+                [&](KeyValueType keyValue) -> h256 {
+                    auto& [key, value] = *keyValue;
+                    executor_v1::StateKeyView view(key);
+                    auto [tableName, keyName] = view.get();
 
-            const storage::Entry* entry = nullptr;
-            if (entry = std::get_if<storage::Entry>(std::addressof(value)); !entry)
-            {
-                entry = std::addressof(deletedEntry);
-            }
-
-            hashes.emplace_back(entry->hash(tableName, keyName, hashImpl,
-                static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION)));
-        });
-    }
-    hashGroup.wait();
-
-    struct XORHash
-    {
-        h256 m_hash;
-        std::reference_wrapper<decltype(hashes) const> m_hashes;
-
-        XORHash(decltype(hashes) const& hashes) : m_hashes(hashes) {};
-        XORHash(XORHash& source, tbb::split /*unused*/) : m_hashes(source.m_hashes) {};
-        void operator()(const tbb::blocked_range<size_t>& range)
-        {
-            for (size_t i = range.begin(); i != range.end(); ++i)
-            {
-                m_hash ^= m_hashes.get()[i];
-            }
-        }
-        void join(XORHash const& rhs) { m_hash ^= rhs.m_hash; }
-    } xorHash(hashes);
-    tbb::parallel_reduce(tbb::blocked_range<size_t>(0, hashes.size()), xorHash);
-    co_return xorHash.m_hash;
+                    const storage::Entry* entry = nullptr;
+                    if (entry = std::get_if<storage::Entry>(std::addressof(value)); !entry)
+                    {
+                        entry = std::addressof(deletedEntry);
+                    }
+                    return entry->hash(tableName, keyName, hashImpl,
+                        static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION));
+                }) &
+            tbb::make_filter<h256, void>(
+                tbb::filter_mode::serial_out_of_order, [&](h256 hash) { totalHash ^= hash; }));
+    co_return totalHash;
 }
 
 std::tuple<u256, h256> calculateReceiptRoot(
@@ -226,7 +215,12 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto const& receip
         hash2NumberEntry);
 }
 
-template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
+template <class MultiLayerStorage,
+    executor_v1::TransactionExecutor<typename MultiLayerStorage::ViewType> Executor,
+    scheduler_v1::TransactionScheduler<typename MultiLayerStorage::ViewType, Executor,
+        std::vector<protocol::Transaction::ConstPtr>>
+        SchedulerImpl,
+    class Ledger>
 class BaselineScheduler : public scheduler::SchedulerInterface
 {
 private:
@@ -334,9 +328,8 @@ private:
             auto transactions = co_await getTransactions(m_txpool.get(), *block);
 
             auto ledgerConfig = co_await ledger::getLedgerConfig(view, blockHeader->number());
-            auto receipts =
-                co_await scheduler_v1::executeBlock(m_schedulerImpl.get(), view, m_executor.get(),
-                    *blockHeader, ::ranges::views::indirect(transactions), *ledgerConfig);
+            auto receipts = co_await m_schedulerImpl.get().executeBlock(view, m_executor.get(),
+                *blockHeader, ::ranges::views::indirect(transactions), *ledgerConfig);
 
             auto executedBlockHeader = m_blockHeaderFactory.get().populateBlockHeader(blockHeader);
             bool sysBlock = false;
@@ -460,7 +453,6 @@ private:
             {
                 ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
                     ittapi::ITT_DOMAINS::instance().SET_BLOCK);
-                auto& backendStorage = m_multiLayerStorage.get().backendStorage();
                 co_await ledger::prewriteBlock(
                     m_ledger.get(), result.m_transactions, result.m_block, false, prewriteStorage);
             }
@@ -600,8 +592,8 @@ public:
             blockHeader->setVersion(ledgerConfig->compatibilityVersion());
             blockHeader->setNumber(ledgerConfig->blockNumber() + 1);  // Use next block number
             blockHeader->calculateHash(self->m_hashImpl.get());
-            auto receipt = co_await executor_v1::executeTransaction(self->m_executor.get(), view,
-                *blockHeader, *transaction, 0, *ledgerConfig, true, task::syncWait);
+            auto receipt = co_await self->m_executor.get().executeTransaction(
+                view, *blockHeader, *transaction, 0, *ledgerConfig, true);
 
             callback(nullptr, std::move(receipt));
         }(this, std::move(transaction), std::move(callback)));
@@ -624,7 +616,7 @@ public:
 
             ledger::account::EVMAccount account(view, contractAddress,
                 ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address));
-            auto code = co_await ledger::account::code(account);
+            auto code = co_await account.code();
 
             if (!code)
             {
@@ -648,7 +640,7 @@ public:
 
             ledger::account::EVMAccount account(view, contractAddress,
                 ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address));
-            auto abi = co_await ledger::account::abi(account);
+            auto abi = co_await account.abi();
 
             if (!abi)
             {

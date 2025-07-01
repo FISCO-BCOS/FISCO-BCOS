@@ -27,8 +27,7 @@
 
 namespace bcos::txpool
 {
-constexpr uint16_t DefaultBucketSize = 256;
-
+constexpr static uint16_t DefaultBucketSize = 256;
 struct PairHash
 
 {
@@ -37,14 +36,24 @@ struct PairHash
     {
         return std::hash<StringView>()(pair.first);
     }
-};
-struct PairEqual
-{
     template <std::convertible_to<std::string_view> Lhs, std::convertible_to<std::string_view> Rhs>
     bool operator()(const std::pair<Lhs, Lhs>& lhs, const std::pair<Rhs, Rhs>& rhs) const
     {
         return std::string_view{lhs.first} == std::string_view{rhs.first} &&
                std::string_view{lhs.second} == std::string_view{rhs.second};
+    }
+};
+struct StateNonceHash
+{
+    template <std::convertible_to<std::string_view> StringView>
+    std::size_t operator()(const StringView& sender) const
+    {
+        return std::hash<std::string_view>{}(std::string_view{sender});
+    }
+    template <std::convertible_to<std::string_view> Lhs, std::convertible_to<std::string_view> Rhs>
+    std::size_t operator()(const Lhs& lhs, const Rhs& rhs) const
+    {
+        return std::string_view{lhs} == std::string_view{rhs};
     }
 };
 /**
@@ -77,7 +86,7 @@ public:
         const bcos::protocol::Transaction& _tx, bool onlyCheckLedgerNonce = false);
 
     task::Task<bcos::protocol::TransactionStatus> checkWeb3Nonce(
-        std::string sender, std::string nonce, bool onlyCheckLedgerNonce = false);
+        std::string_view sender, std::string_view nonce, bool onlyCheckLedgerNonce = false);
 
     /**
      * batch insert sender and nonce into ledger state nonce and memory nonce, call when block is
@@ -85,16 +94,9 @@ public:
      * @param senders sender string list
      * @param noncesSet nonce u256 set
      */
-    task::Task<void> updateNonceCache(
-        ::ranges::input_range auto&& senders, ::ranges::input_range auto&& noncesSet)
+    task::Task<void> updateNonceCache(::ranges::input_range auto senderNonces)
     {
-        if (::ranges::size(senders) != ::ranges::size(noncesSet)) [[unlikely]]
-        {
-            TXPOOL_LOG(ERROR) << LOG_DESC("Web3Nonce: update nonce cache with different size")
-                              << LOG_KV("senderSize", ::ranges::size(senders))
-                              << LOG_KV("nonceSize", ::ranges::size(noncesSet));
-        }
-        for (auto&& [sender, nonceSet] : ::ranges::views::zip(senders, noncesSet))
+        for (auto&& [sender, nonceSet] : senderNonces)
         {
             // Update ledger nonce cache and remove memory nonce cache here. When a new transaction
             // is coming with the same nonce, it should be refused by ledger nonce layer.
@@ -176,7 +178,8 @@ private:
     // ledger state nonce cache the nonce of the sender in storage, every tx send by the sender,
     // should bigger than the nonce in ledger state
     bcos::storage2::memory_storage::MemoryStorage<std::string, u256,
-        storage2::memory_storage::LRU | storage2::memory_storage::CONCURRENT>
+        storage2::memory_storage::LRU | storage2::memory_storage::CONCURRENT, StateNonceHash,
+        StateNonceHash>
         m_ledgerStateNonces;
 
     // <sender address(bytes string), nonce>
@@ -185,7 +188,7 @@ private:
     // memory
     bcos::storage2::memory_storage::MemoryStorage<std::pair<std::string, std::string>,
         std::monostate, storage2::memory_storage::LRU | storage2::memory_storage::CONCURRENT,
-        PairHash, PairEqual>
+        PairHash, PairHash>
         m_memoryNonces;
 
     // <sender address(bytes string) => nonce>

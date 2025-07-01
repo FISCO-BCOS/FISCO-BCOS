@@ -2,7 +2,6 @@
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
-#include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
@@ -27,18 +26,33 @@ using namespace bcos::scheduler_v1;
 
 struct MockExecutorBaseline
 {
-    friend task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
-        bcos::executor_v1::tag_t<bcos::executor_v1::executeTransaction> /*unused*/,
-        MockExecutorBaseline& executor, auto&&...)
+    task::Task<protocol::TransactionReceipt::Ptr> executeTransaction(auto&&...)
     {
         co_return std::shared_ptr<protocol::TransactionReceipt>();
+    }
+
+    template <class Storage>
+    struct ExecuteContext
+    {
+        template <int step>
+        task::Task<protocol::TransactionReceipt::Ptr> executeStep()
+        {
+            co_return {};
+        }
+    };
+
+    auto createExecuteContext(auto& storage, protocol::BlockHeader const& blockHeader,
+        protocol::Transaction const& transaction, int32_t contextID,
+        ledger::LedgerConfig const& ledgerConfig, bool call)
+        -> task::Task<ExecuteContext<std::decay_t<decltype(storage)>>>
+    {
+        co_return {};
     }
 };
 struct MockScheduler
 {
-    friend task::Task<std::vector<protocol::TransactionReceipt::Ptr>> tag_invoke(
-        scheduler_v1::tag_t<scheduler_v1::executeBlock> /*unused*/, MockScheduler& /*unused*/,
-        auto& storage, auto& executor, protocol::BlockHeader const& blockHeader,
+    task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(auto& storage,
+        auto& executor, protocol::BlockHeader const& blockHeader,
         ::ranges::input_range auto const& transactions, ledger::LedgerConfig const& /*unused*/)
     {
         auto receipts =

@@ -14,10 +14,7 @@ bcos::scheduler_v1::getTransactions(txpool::TxPoolInterface& txpool, protocol::B
             ::ranges::to<std::vector>();
     }
 
-    co_return co_await txpool.getTransactions(
-        ::ranges::iota_view<size_t, size_t>(0LU, block.transactionsMetaDataSize()) |
-        ::ranges::views::transform(
-            [&block](uint64_t index) { return block.transactionHash(index); }));
+    co_return co_await txpool.getTransactions(block.transactionHashes());
 }
 
 bcos::h256 bcos::scheduler_v1::calculateTransactionRoot(

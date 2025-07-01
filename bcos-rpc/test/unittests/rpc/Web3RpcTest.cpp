@@ -27,6 +27,7 @@
 #include "bcos-crypto/signature/sm2/SM2KeyPair.h"
 #include "bcos-framework/protocol/GlobalConfig.h"
 #include "bcos-rpc/bcos-rpc/RpcFactory.h"
+#include "bcos-utilities/DataConvertUtility.h"
 
 #include <bcos-codec/wrapper/CodecWrapper.h>
 #include <bcos-crypto/hash/Keccak256.h>
@@ -44,6 +45,7 @@
 
 #include <bcos-rpc/filter/LogMatcher.h>
 #include <bcos-rpc/web3jsonrpc/model/Web3FilterRequest.h>
+#include <string_view>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -274,7 +276,7 @@ BOOST_AUTO_TEST_CASE(handleLegacyTxTest)
     // method eth_sendRawTransaction
     auto testLegacyTx = [&](std::string const& rawTx, std::string const& expectHash) {
         // clang-format off
-        const std::string request = R"({"jsonrpc":"2.0","id":1132123, "method":"eth_sendRawTransaction","params":[")" + rawTx + R"("]})";
+    const std::string request = R"({"jsonrpc":"2.0","id":1132123, "method":"eth_sendRawTransaction","params":[")" + rawTx + R"("]})";
         // clang-format on
         auto rawTxBytes = fromHexWithPrefix(rawTx);
         auto rawTxBytesRef = bcos::ref(rawTxBytes);
@@ -284,6 +286,7 @@ BOOST_AUTO_TEST_CASE(handleLegacyTxTest)
         // validRespCheck(response);
         // BOOST_CHECK(response["id"].asInt64() == 1132123);
         // BOOST_CHECK(response["result"].asString() == expectHash);
+
         std::vector<crypto::HashType> hashes = {HashType(expectHash)};
         task::wait([](Web3TestFixture* self, decltype(hashes) m_hashes,
                        decltype(rawWeb3Tx) rawWeb3Tx) -> task::Task<void> {
@@ -310,12 +313,14 @@ BOOST_AUTO_TEST_CASE(handleLegacyTxTest)
         }(this, std::move(hashes), std::move(rawWeb3Tx)));
     };
 
+    m_ledger->setSystemConfig(ledger::SYSTEM_KEY_WEB3_CHAIN_ID, std::to_string(1));
     // clang-format off
     // https://etherscan.io/tx/0x6f55e12280765243993c76e80e244ecad548aff22380c8e89e060a60deab4b28
     testLegacyTx(
         "0xf902ee83031ae9850256506a88831b40d094d56e4eab23cb81f43168f9f45211eb027b9ac7cc80b90284b143044b00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000650000000000000000000000004d73adb72bc3dd368966edd0f0b2148401a178e200000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000661d084300000000000000000000000000000000000000000000000000000000000001600000000000000000000000000000000000000000000000000000000000000084704316e5000000000000000000000000000000000000000000000000000000000000006e740e551c6ee78d757128b8e476b390f891c54e96538e1bb4469a62105220215a0000000000000000000000000000000000000000000000000000000000000014740e551c6ee78d757128b8e476b390f891c54e96538e1bb4469a62105220215a000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000082ce44cffc92754f8825e1c60cadc5f54a504b769ee616e9f28a9797c2a4b84d11542a1aa4a06a6aa60ee062a36c4fb467145b8914959e42323a13068e2475bff41c67af8dd96034675776cb78036711c1f320b82085df5ee005ffca77959f29a0a07a226241787f06b57483d509e0befd84e5ac84d960e881c7b0853ee1d7c63dff1b00000000000000000000000000000000000000000000000000000000000026a04932608e9743aaa76626f082cedb5da11ff8a1ebe6b5a62a372c81393b5912aea012f36de80608ba3b0f72f3e8f299379ce2802e64b1cbb55275ad9aaa81190b44",
         "0x6f55e12280765243993c76e80e244ecad548aff22380c8e89e060a60deab4b28");
     // https://etherscan.io/tx/0xdd2294fae0bce9409e3f52684b9947613147b9fe2fcb8efb648ca096728236f5
+    m_ledger->setSystemConfig(ledger::SYSTEM_KEY_WEB3_CHAIN_ID, std::to_string(0));
     testLegacyTx("0xf9014d8203bb8504a817c800830f42408080b8f9606060405260008054600160a060020a0319163317905560d78060226000396000f36060604052361560275760e060020a600035046341c0e1b58114606e578063e5225381146096575b60d56000341115606c57346060908152605890600160a060020a033316907f90890809c654f11d6e72a28fa60149770a0d11ec6c92319d6ceb2bb0a4ea1a1590602090a35b565b60d5600054600160a060020a0390811633919091161415606c57600054600160a060020a0316ff5b60d5600054600160a060020a0390811633919091161415606c5760008054600160a060020a039081169190301631606082818181858883f15050505050565b001ca0e97321e5cdb2d677b840337568b057cdf9748659f47fc92e3d29c5d418c36f01a02c2eb384060b1784c0c5b4029d704bc75ae9cbcd17994db535e2cc4863ec1973",
         "0xdd2294fae0bce9409e3f52684b9947613147b9fe2fcb8efb648ca096728236f5");
     // https://etherscan.io/tx/0x4cbe0f1e383e4aec60cedd0e8dc01832efd160415d82557a72853ec1a58e615b
@@ -366,6 +371,13 @@ BOOST_AUTO_TEST_CASE(handleEIP1559TxTest)
         return rawWeb3Tx;
     };
 
+    std::optional<storage::Entry> balanceOp = storage::Entry();
+    balanceOp->set(asBytes("123456700000000000"));
+    std::string address = "1f9090aae28b8a3dceadf281b0f12828e676c326";
+    std::string tableName = std::string(bcos::ledger::SYS_DIRECTORY::USER_APPS) + address;
+    m_ledger->setStorageAt(tableName,
+        std::string(bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE), balanceOp);
+    m_ledger->setSystemConfig(ledger::SYSTEM_KEY_WEB3_CHAIN_ID, std::to_string(1));
     // clang-format off
     // https://etherscan.io/tx/0x5b2f242c755ec9f9ed36628331991bd6c90b712b5867a0c7f3a4516caf09cc68
     testEIP1559Tx(
@@ -422,6 +434,8 @@ BOOST_AUTO_TEST_CASE(handleEIP4844TxTest)
         }(this, std::move(hashes)));
         return rawWeb3Tx;
     };
+
+    m_ledger->setSystemConfig(ledger::SYSTEM_KEY_WEB3_CHAIN_ID, std::to_string(1));
 
     // clang-format off
     // https://etherscan.io/tx/0x637b7e88d7a0992b62a973acd41736ee2b63be1c86d0ffeb683747964daea892

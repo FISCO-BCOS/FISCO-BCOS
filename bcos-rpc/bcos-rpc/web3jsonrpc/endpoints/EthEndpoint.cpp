@@ -19,6 +19,10 @@
  */
 
 #include "EthEndpoint.h"
+#include "bcos-protocol/TransactionStatus.h"
+#include "bcos-rpc/groupmgr/NodeService.h"
+#include "bcos-rpc/validator/TransactionValidator.h"
+#include "bcos-task/Wait.h"
 
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-codec/rlp/RLPDecode.h>
@@ -36,6 +40,9 @@
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
+#include <boost/throw_exception.hpp>
+#include <cstdint>
+#include <string>
 #include <variant>
 
 using namespace bcos;
@@ -417,6 +424,7 @@ task::Task<void> EthEndpoint::sendTransaction(const Json::Value&, Json::Value& r
     buildJsonContent(result, response);
     co_return;
 }
+
 task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Json::Value& response)
 {
     // params: signedTransaction(DATA)
@@ -436,10 +444,27 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, error->errorMessage()));
     }
     auto encodeTxHash = web3Tx.txHash();
+    auto config = co_await ledger::getSystemConfig(
+        *m_nodeService->ledger(), ledger::SYSTEM_KEY_WEB3_CHAIN_ID);
+    if (!config.has_value())
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(JsonRpcError::InvalidParams, "ChainId not available!"));
+    }
+    auto [chainId, _] = config.value();
+    if (auto txChainId = std::to_string(web3Tx.chainId.value_or(0)); txChainId != chainId)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(JsonRpcError::InvalidParams, "Replayed transaction!"));
+    }
+
     auto tarsTx = web3Tx.takeToTarsTransaction();
 
     auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
         [m_tx = std::move(tarsTx)]() mutable { return &m_tx; });
+    // check transaction validator
+    TransactionValidator::checkTransaction(*tx, true);
+
     // for web3.eth.sendRawTransaction, return the hash of raw transaction
     if (auto web3TxHash = bcos::crypto::keccak256Hash(bcos::ref(rawTxBytes));
         c_fileLogLevel == DEBUG && web3TxHash != encodeTxHash) [[unlikely]]
