@@ -8,7 +8,8 @@ vcpkg_from_github(
         marmasm.patch
 )
 
-if(CMAKE_SYSTEM_NAME MATCHES "Linux")
+if(VCPKG_TARGET_IS_LINUX)
+    message(STATUS "Linux detected, using ucontext for Boost.Context")
     set(FEATURE_OPTIONS "-DBOOST_CONTEXT_IMPLEMENTATION=ucontext")
 else()
     set(FEATURE_OPTIONS "")

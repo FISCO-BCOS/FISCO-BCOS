@@ -91,7 +91,7 @@ jobs:
       - name: Build
         run: |
           cd build
-          cmake --build . --parallel
+          cmake --build . --parallel 3
       - name: Test
         if: matrix.os != 'windows-2022'
         run: |
