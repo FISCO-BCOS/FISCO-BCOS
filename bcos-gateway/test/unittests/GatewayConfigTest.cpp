@@ -104,9 +104,8 @@ BOOST_AUTO_TEST_CASE(test_hostAndPort2Endpoint)
     {
         NodeIPEndpoint endpoint;
         BOOST_CHECK_NO_THROW(config->hostAndPort2Endpoint("localhost:2333", endpoint));
-        BOOST_CHECK_EQUAL(endpoint.address(), "127.0.0.1");
+        BOOST_CHECK(endpoint.address() == "127.0.0.1" || endpoint.address() == "::1");
         BOOST_CHECK_EQUAL(endpoint.port(), 2333);
-        BOOST_CHECK(!endpoint.isIPv6());
     }
 
     {

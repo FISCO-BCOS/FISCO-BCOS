@@ -24,7 +24,7 @@ jobs:
       VCPKG_ROOT: c:/vcpkg
     strategy:
       matrix:
-        os: [windows-2019]
+        os: [windows-2022]
     steps:
       - uses: actions/checkout@v2
         with:
