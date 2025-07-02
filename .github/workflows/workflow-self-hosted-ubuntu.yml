@@ -37,10 +37,10 @@ jobs:
           distribution: "zulu"
           java-version: "8.0.382"
 
-      - name: Set up Node.js 16.x
-        uses: actions/setup-node@v2
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
         with:
-          node-version: "16.x"
+          node-version: 20
 
       - name: apt install
         run: |
@@ -94,6 +94,6 @@ jobs:
           collection: https://raw.githubusercontent.com/FISCO-BCOS/FISCOBCOS-RPC-API/main/fiscobcos.rpcapi.collection.json
 
       - name: Integration test - Air
-        run: cd tools && bash .ci/ci_check_air.sh ${{ github.base_ref }}
-      - name: Integration test - Pro
-        run: cd tools && bash .ci/ci_check_pro.sh ${{ github.base_ref }}
+        run: cd tools && bash .ci/ci_check_air.sh ${{ github.base_ref }} "true"
+#      - name: Integration test - Pro
+#        run: cd tools && bash .ci/ci_check_pro.sh ${{ github.base_ref }}

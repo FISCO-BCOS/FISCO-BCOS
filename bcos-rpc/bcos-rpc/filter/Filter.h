@@ -29,7 +29,7 @@ public:
         m_lastAccessTime(utcTime()),
         m_group(group)
     {
-        if (!params->fromIsLatest() && params->fromBlock() >= 0)
+        if (params && !params->fromIsLatest() && params->fromBlock() >= 0)
         {
             m_startBlockNumber = params->fromBlock();
         }

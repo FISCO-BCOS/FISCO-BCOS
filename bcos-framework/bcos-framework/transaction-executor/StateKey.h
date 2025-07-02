@@ -1,6 +1,5 @@
 #pragma once
 #include "../storage/Entry.h"
-#include "bcos-utilities/Common.h"
 #include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/ThreeWay4Apple.h"
 #include <boost/throw_exception.hpp>
@@ -10,9 +9,7 @@
 
 namespace bcos::executor_v1
 {
-struct NoTableSpliterError : public bcos::Exception
-{
-};
+DERIVE_BCOS_EXCEPTION(NoTableSpliterError);
 
 using StateValue = storage::Entry;
 class StateKeyView;

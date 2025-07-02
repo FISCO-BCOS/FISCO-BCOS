@@ -146,7 +146,7 @@ public:
      * @return void
      */
     void sendMessage(int _moduleID, bcos::crypto::NodeIDPtr _nodeID, const std::string& _uuid,
-        bytesConstRef _data, bool isResponse, ReceiveMsgFunc _receiveMsgCallback);
+        bytesConstRef _data, bool isResponse, const ReceiveMsgFunc& _receiveMsgCallback);
 
     /**
      * @brief: handle message timeout
@@ -267,7 +267,7 @@ protected:
     virtual void handleCallback(bcos::Error::Ptr _error, bytesConstRef _payLoad,
         std::string const& _uuid, int _moduleID, bcos::crypto::NodeIDPtr _nodeID);
     void notifyGroupNodeInfo(
-        const std::string& _groupID, bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo);
+        const std::string& _groupID, const bcos::gateway::GroupNodeInfo::Ptr& _groupNodeInfo);
 
     virtual void protocolNegotiate(bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo);
 

@@ -181,7 +181,7 @@ BOOST_AUTO_TEST_CASE(rangeMulti)
         BOOST_CHECK_EQUAL_COLLECTIONS(
             vecList2.begin(), vecList2.end(), expectList.begin(), expectList.end());
 
-        ReadWriteSetStorage<decltype(view2), int> readWriteSetStorage(view2);
+        ReadWriteSetStorage<decltype(view2)> readWriteSetStorage(view2);
         auto range2 = co_await storage2::range(readWriteSetStorage);
     }());
 }

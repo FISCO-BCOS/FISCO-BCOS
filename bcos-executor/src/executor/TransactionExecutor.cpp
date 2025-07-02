@@ -52,6 +52,7 @@
 #include "../precompiled/extension/UserPrecompiled.h"
 #include "../precompiled/extension/ZkpPrecompiled.h"
 #include "../vm/Precompiled.h"
+#include "bcos-framework/ledger/EVMAccount.h"
 
 #include <array>
 #include <cstring>
@@ -60,26 +61,18 @@
 #include "../vm/gas_meter/GasInjector.h"
 #endif
 
-#include "../Common.h"
 #include "ExecuteOutputs.h"
-#include "bcos-codec/abi/ContractABIType.h"
 #include "bcos-executor/src/executive/BlockContext.h"
-#include "bcos-executor/src/precompiled/common/Common.h"
-#include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
-#include "bcos-framework/dispatcher/SchedulerInterface.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
-#include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-framework/storage/Table.h"
 #include "bcos-table/src/KeyPageStorage.h"
-#include "bcos-table/src/StateStorage.h"
 #include "bcos-table/src/StateStorageFactory.h"
 #include "bcos-task/Wait.h"
-#include "bcos-tool/BfsFileFactory.h"
 #include "tbb/flow_graph.h"
 #include <bcos-framework/executor/ExecuteError.h>
 #include <bcos-framework/protocol/LogEntry.h>
@@ -101,7 +94,6 @@
 #include <exception>
 #include <functional>
 #include <gsl/util>
-#include <iterator>
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
@@ -426,7 +418,7 @@ std::shared_ptr<BlockContext> TransactionExecutor::createBlockContextForCall(
         blockNumber, blockHash, timestamp, blockVersion, m_isWasm, m_isAuthCheck);
     ledger::Features features;
     task::syncWait(features.readFromStorage(*storage, blockNumber + 1));
-    context->setFeatures(std::move(features));
+    context->setFeatures(features);
     ledger::SystemConfigs config;
     task::syncWait(readFromStorage(config, *storage, blockNumber + 1));
     context->setConfigs(std::move(config));
@@ -1180,9 +1172,9 @@ void TransactionExecutor::updateEoaNonce(std::unordered_map<std::string, u256> c
                               << LOG_KV("nonce", nonce);
             auto eoa = ledger::account::EVMAccount(*m_blockContext->storage(), sender,
                 m_blockContext->features().get(ledger::Features::Flag::feature_raw_address));
-            auto nonceInStorage = task::syncWait(ledger::account::nonce(eoa));
+            auto nonceInStorage = task::syncWait(eoa.nonce());
             auto nonceToUpdate = std::max(u256(nonceInStorage.value_or("0")), nonce) + 1;
-            task::syncWait(ledger::account::setNonce(eoa, nonceToUpdate.convert_to<std::string>()));
+            task::syncWait(eoa.setNonce(nonceToUpdate.convert_to<std::string>()));
         }
     }
 }
