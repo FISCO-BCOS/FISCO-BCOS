@@ -138,7 +138,7 @@ public:
     template <class F>
     void asyncTo(F f)
     {
-        m_asyncGroup.template run(std::move(f));
+        m_asyncGroup.run(std::move(f));
     }
 
     void setEnableSslVerify(bool _enableSSLVerify)

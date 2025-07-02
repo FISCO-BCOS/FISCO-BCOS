@@ -25,7 +25,6 @@
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/core/ignore_unused.hpp>
-#include <boost/format.hpp>
 #include <boost/iostreams/device/back_inserter.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <boost/multi_index/hashed_index.hpp>
@@ -1003,9 +1002,8 @@ public:
                 {  // delete a key not exist
                     KeyPage_LOG(DEBUG)
                         << "Revert invalid delete: " << change.table << " | " << toHex(change.key);
-                    auto message = (boost::format("Not found rollback entry: %s:%s") %
-                                    change.table % change.key)
-                                       .str();
+                    auto message =
+                        fmt::format("Not found rollback entry: {}:{}", change.table, change.key);
                     BOOST_THROW_EXCEPTION(BCOS_ERROR(StorageError::UnknownError, message));
                 }
             }

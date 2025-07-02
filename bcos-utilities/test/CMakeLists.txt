@@ -19,13 +19,13 @@ file(GLOB_RECURSE SOURCES "*.cpp")
 
 # cmake settings
 set(TEST_BINARY_NAME test-bcos-utilities)
-find_package(Boost REQUIRED COMPONENTS unit_test_framework)
+find_package(Boost REQUIRED COMPONENTS unit_test_framework log_setup)
 find_package(TBB REQUIRED)
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR})
 
-target_link_libraries(${TEST_BINARY_NAME} bcos-utilities Boost::unit_test_framework TBB::tbb)
+target_link_libraries(${TEST_BINARY_NAME} PRIVATE bcos-utilities Boost::unit_test_framework Boost::log_setup TBB::tbb)
 set_source_files_properties("unittests/main/main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
 add_test(NAME ${TEST_BINARY_NAME} WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})

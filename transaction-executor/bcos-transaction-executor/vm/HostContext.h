@@ -58,7 +58,6 @@
 #include <functional>
 #include <intx/intx.hpp>
 #include <iterator>
-#include <magic_enum.hpp>
 #include <memory>
 #include <string_view>
 

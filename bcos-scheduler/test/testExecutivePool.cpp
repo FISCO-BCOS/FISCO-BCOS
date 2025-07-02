@@ -5,7 +5,6 @@
 #include <stdlib.h>
 #include <tbb/concurrent_set.h>
 #include <tbb/concurrent_unordered_map.h>
-#include <boost/format.hpp>
 #include <boost/test/unit_test.hpp>
 #include <string>
 

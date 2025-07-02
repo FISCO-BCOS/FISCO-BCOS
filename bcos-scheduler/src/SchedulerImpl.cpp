@@ -15,7 +15,6 @@
 #include <bcos-utilities/Overloaded.h>
 #include <ittnotify.h>
 #include <boost/exception/diagnostic_information.hpp>
-#include <boost/format.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <memory>
@@ -261,9 +260,8 @@ void SchedulerImpl::executeBlockInternal(bcos::protocol::Block::Ptr block, bool 
 
 
     auto whenOlder = [requestBlockNumber, callback](bcos::protocol::BlockNumber number) {
-        auto message = (boost::format("Execute an history block %d, current number is %d") %
-                        requestBlockNumber % number)
-                           .str();
+        auto message = fmt::format(
+            "Execute an history block %d, current number is %d", requestBlockNumber, number);
         SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(number) << message;
         callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidBlocks, message), nullptr, false);
     };
@@ -319,17 +317,15 @@ void SchedulerImpl::executeBlockInternal(bcos::protocol::Block::Ptr block, bool 
 
     auto whenNewer = [requestBlockNumber, callback](bcos::protocol::BlockNumber backNumber) {
         auto message =
-            (boost::format(
-                 "Try to execute an discontinuous block: %ld, queue back blockNumber: %ld") %
-                requestBlockNumber % backNumber)
-                .str();
+            fmt::format("Try to execute an discontinuous block: %ld, queue back blockNumber: %ld",
+                requestBlockNumber, backNumber);
         SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(requestBlockNumber) << "ExecuteBlock error, "
                              << message;
         callback(
             BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidBlockNumber, message), nullptr, false);
     };
     auto whenException = [requestBlockNumber, callback](std::exception const& e) {
-        auto message = (boost::format("ExecuteBlock exception %s") % e.what()).str();
+        auto message = fmt::format("ExecuteBlock exception {}", e.what());
         SCHEDULER_LOG(WARNING) << BLOCK_NUMBER(requestBlockNumber) << message;
         callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::UnknownError, message), nullptr, false);
     };
@@ -479,9 +475,8 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
 
     auto whenOlder = [requestBlockNumber, callback](
                          bcos::protocol::BlockNumber currentBlockNumber) {
-        auto message = (boost::format("commit an history block %d, current number is %d") %
-                        requestBlockNumber % currentBlockNumber)
-                           .str();
+        auto message = fmt::format("commit an history block {}, current number is {}",
+            requestBlockNumber, currentBlockNumber);
         SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(requestBlockNumber) << message;
         callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidBlocks, message), nullptr);
     };
@@ -507,7 +502,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
 
     auto whenNewer = [whenAfterFront](bcos::protocol::BlockNumber) { whenAfterFront(); };
     auto whenException = [callback, requestBlockNumber](std::exception const& e) {
-        auto message = (boost::format("CommitBlock exception %s") % e.what()).str();
+        auto message = fmt::format("CommitBlock exception {}", e.what());
         SCHEDULER_LOG(WARNING) << BLOCK_NUMBER(requestBlockNumber) << message;
         callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::UnknownError, message), nullptr);
     };
@@ -520,11 +515,10 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
 
         if (!commitLock->owns_lock() && !commitLock->try_lock_for(std::chrono::seconds(1)))
         {
-            std::string message =
-                (boost::format("commitBlock: Another block is committing! Block to commit "
-                               "number: %ld, hash: %s, waiting for it") %
-                    requestBlockNumber % header->hash().abridged())
-                    .str();
+            std::string message = fmt::format(
+                "commitBlock: Another block is committing! Block to commit "
+                "number: {}, hash: {}, waiting for it",
+                requestBlockNumber, header->hash().abridged());
 
 
             SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(requestBlockNumber) << "CommitBlock error, "
@@ -537,9 +531,8 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
         if (currentBlockNumber + 1 != requestBlockNumber)
         {
             // happens in some multi-thread scenario, the block has been commited
-            auto message = (boost::format("commit an committed block %d, current number is %d") %
-                            requestBlockNumber % currentBlockNumber)
-                               .str();
+            auto message = fmt::format("commit an committed block {}, current number is {}",
+                requestBlockNumber, currentBlockNumber);
             SCHEDULER_LOG(ERROR) << message;
             commitLock->unlock();
             callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidBlocks, message), nullptr);

@@ -31,20 +31,13 @@
     "ms-gsl",
     "protobuf",
     "tbb",
-    {
-      "name": "jsoncpp",
-      "version>=": "1.9.5"
-    },
+    "jsoncpp",
     {
       "name": "openssl",
       "version>=": "1.1.1-tassl"
     },
     "fmt",
-    {
-      "name": "secp256k1",
-      "version>=": "2022-12-13#1",
-      "features": []
-    },
+    "secp256k1",
     {
       "name": "aws-sdk-cpp",
       "features": [
@@ -60,18 +53,9 @@
     "fullnode": {
       "description": "Full node dependencies",
       "dependencies": [
-        {
-          "name": "evmone",
-          "version>=": "0.11.0"
-        },
-        {
-          "name": "evmc",
-          "version>=": "11.0.1"
-        },
-        {
-          "name": "boost-coroutine2",
-          "version>=": "1.83.0"
-        },
+        "evmone",
+        "evmc",
+        "boost-coroutine2",
         {
           "name": "rocksdb",
           "features": [
@@ -80,14 +64,8 @@
           ]
         },
         "zstd",
-        {
-          "name": "cryptopp",
-          "version>=": "8.6.0"
-        },
-        {
-          "name": "redis-plus-plus",
-          "version>=": "1.3.2"
-        },
+        "cryptopp",
+        "redis-plus-plus",
         "tarscpp"
       ]
     },
@@ -101,10 +79,7 @@
             "tbb"
           ]
         },
-        {
-          "name": "redis-plus-plus",
-          "version>=": "1.3.2"
-        },
+        "redis-plus-plus",
         "zstd",
         "tarscpp"
       ]
@@ -136,15 +111,6 @@
         }
       ]
     },
-    "jemalloc": {
-      "description": "jemalloc dependencies",
-      "dependencies": [
-        {
-          "name": "jemalloc",
-          "version>=": "5.3.0#1"
-        }
-      ]
-    },
     "mimalloc": {
       "description": "mimalloc dependencies",
       "dependencies": [
@@ -152,137 +118,11 @@
       ]
     }
   },
-  "builtin-baseline": "51b14cd4e1230dd51c11ffeff6f7d53c61cc5297",
+  "builtin-baseline": "f6729a3ac3bfdefc999aa8e3664f8014370886b8",
   "overrides": [
     {
-      "name": "boost-log",
-      "version": "1.83.0"
-    },
-    {
-      "name": "boost-beast",
-      "version": "1.83.0"
-    },
-    {
-      "name": "boost-uuid",
-      "version": "1.83.0"
-    },
-    {
-      "name": "boost-heap",
-      "version": "1.83.0"
-    },
-    {
-      "name": "boost-graph",
-      "version": "1.83.0"
-    },
-    {
       "name": "boost-context",
-      "version": "1.80.0"
-    },
-    {
-      "name": "boost-asio",
-      "version": "1.79.0"
-    },
-    {
-      "name": "boost-property-map",
-      "version": "1.83.0"
-    },
-    {
-      "name": "boost-chrono",
-      "version": "1.83.0"
-    },
-    {
-      "name": "boost-iostreams",
-      "version": "1.83.0"
-    },
-    {
-      "name": "boost-thread",
-      "version": "1.83.0"
-    },
-    {
-      "name": "boost-test",
-      "version": "1.83.0"
-    },
-    {
-      "name": "boost-compute",
-      "version": "1.83.0"
-    },
-    {
-      "name": "boost-container-hash",
-      "version": "1.83.0"
-    },
-    {
-      "name": "boost-multiprecision",
-      "version": "1.83.0"
-    },
-    {
-      "name": "boost-program-options",
-      "version": "1.83.0"
-    },
-    {
-      "name": "boost-variant2",
-      "version": "1.83.0"
-    },
-    {
-      "name": "rocksdb",
-      "version": "8.5.3"
-    },
-    {
-      "name": "magic-enum",
-      "version": "0.8.0"
-    },
-    {
-      "name": "ms-gsl",
-      "version": "4.0.0"
-    },
-    {
-      "name": "zstd",
-      "version": "1.5.5"
-    },
-    {
-      "name": "upb",
-      "version": "2022-06-21",
-      "port-version": 1
-    },
-    {
-      "name": "tbb",
-      "version": "2021.8.0"
-    },
-    {
-      "name": "fmt",
-      "version": "8.1.1"
-    },
-    {
-      "name": "range-v3",
-      "version": "0.12.0",
-      "port-version": 1
-    },
-    {
-      "name": "abseil",
-      "version": "20230802.1"
-    },
-    {
-      "name": "intx",
-      "version": "0.10.1"
-    },
-    {
-      "name": "indicators",
-      "version": "2.2"
-    },
-    {
-      "name": "redis-plus-plus",
-      "version": "1.3.10"
-    },
-    {
-      "name": "hiredis",
-      "version": "1.0.2"
-    },
-    {
-      "name": "tarscpp",
-      "version": "3.0.3-2"
-    },
-    {
-      "name": "wedprcrypto",
-      "version": "1.3.2"
+      "version": "1.88.0-ucontext"
     }
   ]
 }

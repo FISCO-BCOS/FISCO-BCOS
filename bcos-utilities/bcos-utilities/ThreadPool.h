@@ -24,8 +24,8 @@
 #include "Common.h"
 #include <boost/asio.hpp>
 #include <boost/asio/dispatch.hpp>
+#include <boost/asio/executor_work_guard.hpp>
 #include <boost/thread/thread.hpp>
-#include <iosfwd>
 #include <memory>
 
 namespace bcos
@@ -41,7 +41,7 @@ public:
     ThreadPool& operator=(ThreadPool&&) = delete;
 
     explicit ThreadPool(std::string threadName, size_t size, bool dispatch = true)
-      : m_threadName(std::move(threadName)), m_work(m_ioService)
+      : m_threadName(std::move(threadName)), m_workGuard(boost::asio::make_work_guard(m_ioService))
     {
         for (size_t i = 0; i < size; ++i)
         {
@@ -74,9 +74,8 @@ public:
 private:
     std::string m_threadName;
     boost::thread_group m_workers;
-    boost::asio::io_service m_ioService;
-    // m_work ensures that io_service's run() function will not exit while work is underway
-    boost::asio::io_service::work m_work;
+    boost::asio::io_context m_ioService;
+    boost::asio::executor_work_guard<decltype(m_ioService.get_executor())> m_workGuard;
 };
 
 }  // namespace bcos

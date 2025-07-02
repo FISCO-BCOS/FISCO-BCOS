@@ -26,6 +26,8 @@
 #include "Log.h"
 #include <boost/date_time/time_facet.hpp>
 #include <boost/enable_shared_from_this.hpp>
+#include <boost/filesystem/directory.hpp>
+#include <boost/filesystem/exception.hpp>
 #include <boost/filesystem/operations.hpp>
 #include <boost/intrusive/link_mode.hpp>
 #include <boost/intrusive/list.hpp>
@@ -35,6 +37,8 @@
 #include <boost/log/detail/singleton.hpp>
 #include <boost/make_shared.hpp>
 #include <boost/spirit/home/qi/numeric/numeric_utils.hpp>
+#include <boost/system/detail/error_category.hpp>
+#include <boost/system/detail/error_code.hpp>
 namespace bcos
 {
 std::string const FileLogger = "FileLogger";
@@ -62,7 +66,7 @@ namespace
 {  // copy form
 using path_string_type = boost::filesystem::path::string_type;
 using path_char_type = path_string_type::value_type;
-using filesystem_error = boost::filesystem::filesystem_error;
+using filesystem_error = boost::system::system_error;
 using path_string_type = boost::filesystem::path::string_type;
 using path_char_type = path_string_type::value_type;
 
@@ -435,7 +439,7 @@ inline void move_file(boost::filesystem::path const& from, boost::filesystem::pa
         else
         {
             BOOST_THROW_EXCEPTION(
-                filesystem_error("failed to move file to another location", from, to, ec));
+                boost::system::system_error(ec, "failed to move file to another location"));
         }
     }
 #endif
@@ -560,10 +564,7 @@ public:
         return boost::filesystem::equivalent(m_StorageDir, dir);
     }
 
-    void convert_tar_gz(bool ConvertTarGZ)
-    {
-        m_ConvertTarGZ = ConvertTarGZ;
-    }
+    void convert_tar_gz(bool ConvertTarGZ) { m_ConvertTarGZ = ConvertTarGZ; }
 
 private:
     //! Makes relative path absolute with respect to the base path
@@ -685,11 +686,9 @@ void file_collector::store_file(boost::filesystem::path const& src_path)
 
                 if (BOOST_UNLIKELY(n == (std::numeric_limits<unsigned int>::max)()))
                 {
-                    BOOST_THROW_EXCEPTION(boost::filesystem::filesystem_error(
-                        "Target file exists and an unused fallback file name could not be found",
-                        info.m_Path,
-                        boost::system::error_code(
-                            boost::system::errc::io_error, boost::system::generic_category())));
+                    BOOST_THROW_EXCEPTION(boost::system::system_error(boost::system::error_code{},
+                        "Target file exists and an unused fallback file name could not be "
+                        "found"));
                 }
 
                 ++n;
@@ -849,8 +848,8 @@ boost::log::sinks::file::scan_result file_collector::scan_for_files(
         if (status.type() == boost::filesystem::directory_file)
         {
             std::lock_guard<std::mutex> lock(m_Mutex);
-
             file_list files;
+
             boost::filesystem::directory_iterator it(dir);
             boost::filesystem::directory_iterator end;
             uintmax_t total_size = 0U;

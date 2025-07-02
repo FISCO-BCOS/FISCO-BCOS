@@ -20,18 +20,17 @@ void ASIOInterface::asyncResolveConnect(
     m_resolver->async_resolve(protocol, socket->nodeIPEndpoint().address(),
         to_string(socket->nodeIPEndpoint().port()),
         [=](const boost::system::error_code& ec, bi::tcp::resolver::results_type results) {
-            if (!ec)
-            {
-                // results is a iterator, but only use first endpoint.
-                socket->ref().async_connect(results->endpoint(), handler);
-                ASIO_LOG(INFO) << LOG_DESC("asyncResolveConnect")
-                               << LOG_KV("endpoint", results->endpoint());
-            }
-            else
+            if (ec || results.empty())
             {
                 ASIO_LOG(WARNING) << LOG_DESC("asyncResolve failed")
                                   << LOG_KV("host", socket->nodeIPEndpoint().address())
                                   << LOG_KV("port", socket->nodeIPEndpoint().port());
+                return;
             }
+
+            // results is a iterator, but only use first endpoint.
+            auto it = results.begin();
+            socket->ref().async_connect(it->endpoint(), handler);
+            ASIO_LOG(INFO) << LOG_DESC("asyncResolveConnect") << LOG_KV("endpoint", it->endpoint());
         });
 }

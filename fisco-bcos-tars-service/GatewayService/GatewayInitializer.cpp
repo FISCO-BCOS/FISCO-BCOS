@@ -26,11 +26,9 @@
 #include <bcos-gateway/Gateway.h>
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-gateway/GatewayFactory.h>
-
-#ifdef WITH_TIKV
+#ifdef WITH_LEDGER_ELECTION
 #include <bcos-leader-election/src/LeaderEntryPoint.h>
 #endif
-
 #include <bcos-tars-protocol/protocol/MemberImpl.h>
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
 #include <bcos-tool/NodeConfig.h>
@@ -55,7 +53,7 @@ void GatewayInitializer::init(std::string const& _configPath)
     boost::property_tree::read_ini(_configPath, pt);
     nodeConfig->loadServiceConfig(pt);
     GATEWAYSERVICE_LOG(INFO) << LOG_DESC("load nodeConfig success");
-#ifdef WITH_TIKV
+#ifdef WITH_LEDGER_ELECTION
     if (nodeConfig->enableFailOver())
     {
         GATEWAYSERVICE_LOG(INFO) << LOG_DESC("enable failover");

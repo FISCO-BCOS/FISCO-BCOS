@@ -25,12 +25,12 @@
 #pragma once
 
 #include "StateStorageInterface.h"
+#include "fmt/format.h"
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-utilities/Error.h>
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
 #include <boost/core/ignore_unused.hpp>
-#include <boost/format.hpp>
 #include <boost/multi_index/identity.hpp>
 #include <boost/multi_index/key.hpp>
 #include <boost/multi_index/mem_fun.hpp>
@@ -503,9 +503,8 @@ public:
                 }
                 else
                 {
-                    auto message = (boost::format("Not found rollback entry: %s:%s") %
-                                    change.table % change.key)
-                                       .str();
+                    auto message =
+                        fmt::format("Not found rollback entry: {}:{}", change.table, change.key);
 
                     BOOST_THROW_EXCEPTION(BCOS_ERROR(StorageError::UnknownError, message));
                 }
