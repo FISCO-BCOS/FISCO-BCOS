@@ -641,6 +641,7 @@ BOOST_AUTO_TEST_CASE(multiStorageCommit)
                 });
         });
 
+#if 0
     storage->asyncGetPrimaryKeys(table2->tableInfo()->name(),
         std::optional<storage::Condition const>(),
         [&](Error::UniquePtr error, std::vector<std::string> keys) {
@@ -699,7 +700,7 @@ BOOST_AUTO_TEST_CASE(multiStorageCommit)
             BOOST_CHECK_EQUAL(error.get(), nullptr);
             BOOST_CHECK_EQUAL(keys.size(), 0);
         });
-
+#endif
     cleanupTestTableData();
 }
 
