@@ -71,7 +71,7 @@ jobs:
           toolchain: nightly-2024-02-25
           override: true
       - name: Configure for linux
-        if: matrix.os != 'macos-15'
+        if: matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm'
         run: |
           mkdir -p build
           cd build
