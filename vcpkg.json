@@ -47,7 +47,10 @@
     "wedprcrypto",
     "range-v3",
     "hsm-crypto",
-    "tarscpp"
+    {
+      "name": "tarscpp",
+      "version>=": "3.0.3-3"
+    }
   ],
   "features": {
     "fullnode": {
@@ -122,7 +125,7 @@
   "overrides": [
     {
       "name": "boost-context",
-      "version": "1.88.0-ucontext"
+      "version": "1.88.0-u1"
     }
   ]
 }

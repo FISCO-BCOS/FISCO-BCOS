@@ -316,7 +316,7 @@ jobs:
           file: build/fisco-bcos-tars-service/BcosGatewayService.tgz
           asset_name: BcosGatewayService-linux-aarch64.tgz
           tag: ${{ github.ref }}
-          verwrite: true
+          overwrite: true
       - name: Upload BcosMaxNodeService binaries to release
         uses: svenstaro/upload-release-action@v1-release
         with:

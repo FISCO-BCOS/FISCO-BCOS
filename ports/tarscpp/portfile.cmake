@@ -1,0 +1,20 @@
+vcpkg_from_github(
+    OUT_SOURCE_PATH SOURCE_PATH
+    REPO FISCO-BCOS/TarsCpp
+    REF 7952793a0ea7b02ffb6524046f13bae15cd2f1f3
+    SHA512 83cd5b1daad8b1a6d9d68cb676925f7c5d1de62acf5f2888b2e1425972977271ae252daf0a15bbed1c8cbc7102da78a23a5e6265ce9b1acfb3659d56edac8718
+    HEAD_REF master
+)
+
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
+    OPTIONS -DTARS_MYSQL=OFF
+    DISABLE_PARALLEL_CONFIGURE
+)
+
+vcpkg_cmake_build()
+vcpkg_cmake_install()
+
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/share")
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include")
+file(INSTALL "${SOURCE_PATH}/LICENSE" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}" RENAME copyright)
