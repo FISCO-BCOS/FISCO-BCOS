@@ -47,7 +47,10 @@
     "wedprcrypto",
     "range-v3",
     "hsm-crypto",
-    "tarscpp"
+    {
+      "name": "tarscpp",
+      "version>=": "3.0.3-3"
+    }
   ],
   "features": {
     "fullnode": {
