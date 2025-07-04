@@ -45,7 +45,7 @@ jobs:
             !${{ github.workspace }}/vcpkg/buildtrees
             !${{ github.workspace }}/vcpkg/packages
             !${{ github.workspace }}/vcpkg/downloads
-          key: vcpkg-${{ hashFiles( 'vcpkg.json' ) }}-${{ runner.os }}-${{ runner.arch }}-cache-key-v1
+          key: vcpkg-${{ hashFiles( 'vcpkg.json' ) }}-${{ hashFiles( 'vcpkg-configuration.json' ) }}-${{ runner.os }}-${{ runner.arch }}-cache-key-v1
       - name: Set up Node.js 20
         if: matrix.os != 'windows-2022'
         uses: actions/setup-node@v4
