@@ -55,10 +55,10 @@ public:
     bcos::bytes& m_buffer;
 };
 
-constexpr const std::string_view EarliestBlock{"earliest"};
-constexpr const std::string_view LatestBlock{"latest"};
-constexpr const std::string_view PendingBlock{"pending"};
-constexpr const std::string_view SafeBlock{"safe"};
-constexpr const std::string_view FinalizedBlock{"finalized"};
+constexpr static std::string_view EarliestBlock{"earliest"};
+constexpr static std::string_view LatestBlock{"latest"};
+constexpr static std::string_view PendingBlock{"pending"};
+constexpr static std::string_view SafeBlock{"safe"};
+constexpr static std::string_view FinalizedBlock{"finalized"};
 
 }  // namespace bcos::rpc

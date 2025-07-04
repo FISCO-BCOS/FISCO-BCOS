@@ -12,7 +12,6 @@
         "intx",
         "fiscobcos",
         "wedprcrypto",
-        "secp256k1",
         "hsm-crypto"
       ]
     }
