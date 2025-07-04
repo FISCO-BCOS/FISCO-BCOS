@@ -21,11 +21,8 @@
  * @date 2023-02-20
  */
 #pragma once
-#include "Common.h"
-#include "bcos-utilities/BoostLog.h"
 #include <boost/asio.hpp>
 #include <boost/asio/steady_timer.hpp>
-#include <exception>
 #include <memory>
 
 namespace bcos::timer
