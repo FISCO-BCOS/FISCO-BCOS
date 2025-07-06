@@ -78,11 +78,7 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
     # Configuration-specific compiler settings.
     set(CMAKE_CXX_FLAGS_DEBUG "-Og -g")
     set(CMAKE_CXX_FLAGS_MINSIZEREL "-Os -DNDEBUG")
-    if(ONLY_CPP_SDK)
-        set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
-    else ()
-        set(CMAKE_CXX_FLAGS_RELEASE "-O3 -g -DNDEBUG")
-    endif ()
+    set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
     set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g -DNDEBUG")
 
     if("${LINKER}" MATCHES "gold")
@@ -97,22 +93,16 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
     endif()
 
     if("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
-        # Check that we've got GCC 10.0 or newer.
-        set(GCC_MIN_VERSION "10.0")
+        # Check that we've got GCC 11.0 or newer.
+        set(GCC_MIN_VERSION "11.0")
         execute_process(
             COMMAND ${CMAKE_CXX_COMPILER} -dumpversion OUTPUT_VARIABLE GCC_VERSION)
 
-        set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g")
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${MARCH_TYPE}")
         set(CMAKE_C_FLAGS "-std=c99 -fexceptions ${CMAKE_C_FLAGS} ${MARCH_TYPE}")
 
         add_compile_options(-fstack-protector-strong)
         add_compile_options(-fstack-protector)
-
-        if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 11.0)
-            add_compile_options(-fcoroutines)
-            add_compile_options(-Wno-error=unused-value)
-        endif()
 
         add_compile_options(-fPIC)
         add_compile_options(-Wno-error=nonnull)
