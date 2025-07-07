@@ -19,18 +19,14 @@
  */
 
 #pragma once
-#include <bcos-rpc/web3jsonrpc/utils/util.h>
-
 #include <bcos-boostssl/websocket/WsService.h>
 #include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-rpc/groupmgr/GroupManager.h>
 #include <bcos-rpc/validator/JsonValidator.h>
 #include <bcos-rpc/web3jsonrpc/endpoints/Endpoints.h>
 #include <bcos-rpc/web3jsonrpc/endpoints/EndpointsMapping.h>
+#include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <json/json.h>
-#include <boost/core/ignore_unused.hpp>
-#include <unordered_map>
-
 namespace bcos::rpc
 {
 class Web3JsonRpcImpl : public std::enable_shared_from_this<Web3JsonRpcImpl>

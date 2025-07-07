@@ -45,7 +45,7 @@ jobs:
             !${{ github.workspace }}/vcpkg/buildtrees
             !${{ github.workspace }}/vcpkg/packages
             !${{ github.workspace }}/vcpkg/downloads
-          key: vcpkg-${{ hashFiles( 'vcpkg.json' ) }}-${{ runner.os }}-${{ runner.arch }}-cache-key-v1
+          key: vcpkg-${{ hashFiles( 'vcpkg.json' ) }}-${{ hashFiles( 'vcpkg-configuration.json' ) }}-${{ runner.os }}-${{ runner.arch }}-cache-key-v1
       - name: Set up Node.js 20
         if: matrix.os != 'windows-2022'
         uses: actions/setup-node@v4
@@ -75,13 +75,13 @@ jobs:
         run: |
           mkdir -p build
           cd build
-          CC=gcc-14 CXX=g++-14 cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=OFF ..
+          CC=gcc-14 CXX=g++-14 cmake -DCMAKE_BUILD_TYPE=Release -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=OFF ..
       - name: Configure for macOS
         if: matrix.os == 'macos-15'
         run: |
           export SDKROOT=$(xcrun --sdk macosx --show-sdk-path)
           mkdir -p build
-          cd build && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=OFF ..
+          cd build && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=OFF ..
       - name: Configure for windows
         if: matrix.os == 'windows-2022'
         run: |
