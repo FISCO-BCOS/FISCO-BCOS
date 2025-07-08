@@ -38,7 +38,7 @@ void bcos::boostssl::http::HttpSession::onRead(
         if (ec == boost::beast::http::error::end_of_stream)
         {
             HTTP_SESSION(TRACE) << LOG_BADGE("onRead") << LOG_DESC("end of stream");
-            // return doClose();
+            doClose();
             return;
         }
 
@@ -46,7 +46,7 @@ void bcos::boostssl::http::HttpSession::onRead(
         {
             HTTP_SESSION(WARNING) << LOG_BADGE("onRead") << LOG_DESC("close the connection")
                                   << LOG_KV("failed", ec);
-            // return doClose();
+            doClose();
             return;
         }
 
@@ -69,14 +69,13 @@ void bcos::boostssl::http::HttpSession::onRead(
                                       << LOG_DESC(
                                              "the session will be closed for "
                                              "unsupported websocket upgrade");
-                // doClose();
+                doClose();
                 return;
             }
             return;
         }
 
         HTTP_SESSION(TRACE) << LOG_BADGE("onRead") << LOG_DESC("receive http request");
-
         handleRequest(m_parser->release());
     }
     catch (...)
@@ -138,7 +137,7 @@ void bcos::boostssl::http::HttpSession::handleRequest(HttpRequest&& _httpRequest
     auto self = std::weak_ptr<HttpSession>(shared_from_this());
     if (m_httpReqHandler)
     {
-        std::string request = _httpRequest.body();
+        const std::string& request = _httpRequest.body();
         m_httpReqHandler(request, [self, version, startT](bcos::bytes _content) {
             auto session = self.lock();
             if (!session)
@@ -148,12 +147,12 @@ void bcos::boostssl::http::HttpSession::handleRequest(HttpRequest&& _httpRequest
             auto resp = session->buildHttpResp(
                 boost::beast::http::status::ok, version, std::move(_content));
             // put the response into the queue and waiting to be send
-            session->queue()->enqueue(resp);
             BCOS_LOG(TRACE) << LOG_BADGE("handleRequest") << LOG_DESC("response")
                             << LOG_KV("body", std::string_view((const char*)resp->body().data(),
                                                   resp->body().size()))
                             << LOG_KV("keep_alive", resp->keep_alive())
                             << LOG_KV("timecost", (utcTime() - startT));
+            session->queue()->enqueue(std::move(resp));
         });
     }
     else
@@ -167,11 +166,10 @@ void bcos::boostssl::http::HttpSession::handleRequest(HttpRequest&& _httpRequest
             return;
         }
         // put the response into the queue and waiting to be send
-        session->queue()->enqueue(resp);
-
         HTTP_SESSION(WARNING) << LOG_BADGE("handleRequest") << LOG_DESC("unsupported http service")
                               << LOG_KV("body", std::string_view((const char*)resp->body().data(),
                                                     resp->body().size()));
+        session->queue()->enqueue(std::move(resp));
     }
 }
 bcos::boostssl::http::HttpResponsePtr bcos::boostssl::http::HttpSession::buildHttpResp(
