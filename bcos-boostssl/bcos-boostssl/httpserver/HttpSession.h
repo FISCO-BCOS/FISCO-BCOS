@@ -48,7 +48,6 @@ public:
     void onRead(boost::beast::error_code ec, std::size_t bytes_transferred);
     void onWrite(
         bool close, boost::beast::error_code ec, [[maybe_unused]] std::size_t bytes_transferred);
-
     void doClose();
 
     /**
