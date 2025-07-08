@@ -192,12 +192,9 @@ HttpSession::Ptr HttpServer::buildHttpSession(
             return;
         }
 
-        // HTTP_SESSION(TRACE) << LOG_BADGE("Queue::Write") << LOG_KV("resp",
-        // _httpResp->body())
-        //                     << LOG_KV("keep_alive", _httpResp->keep_alive());
-
-        session->httpStream()->asyncWrite(*_httpResp,
-            [self, _httpResp](boost::beast::error_code ec, std::size_t bytes_transferred) {
+        session->httpStream()->asyncWrite(
+            *_httpResp, [self, _httpResp = std::move(_httpResp)](
+                            boost::beast::error_code ec, std::size_t bytes_transferred) {
                 auto session = self.lock();
                 if (!session)
                 {
@@ -208,10 +205,10 @@ HttpSession::Ptr HttpServer::buildHttpSession(
     });
 
     session->setQueue(queue);
-    session->setHttpStream(_httpStream);
+    session->setHttpStream(std::move(_httpStream));
     session->setRequestHandler(m_httpReqHandler);
     session->setWsUpgradeHandler(m_wsUpgradeHandler);
-    session->setNodeId(_nodeId);
+    session->setNodeId(std::move(_nodeId));
 
     return session;
 }
@@ -231,7 +228,7 @@ HttpServer::Ptr HttpServerFactory::buildHttpServer(const std::string& _listenIP,
 {
     // create httpserver and launch a listening port
     auto server = std::make_shared<HttpServer>(_listenIP, _listenPort);
-    auto acceptor = std::make_shared<boost::asio::ip::tcp::acceptor>((*_ioc));
+    auto acceptor = std::make_shared<boost::asio::ip::tcp::acceptor>(*_ioc);
     auto httpStreamFactory = std::make_shared<HttpStreamFactory>();
     server->setCtx(std::move(_ctx));
     server->setAcceptor(acceptor);
