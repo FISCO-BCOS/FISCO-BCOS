@@ -184,23 +184,21 @@ HttpSession::Ptr HttpServer::buildHttpSession(
     auto session = std::make_shared<HttpSession>();
 
     auto queue = std::make_shared<Queue>();
-    auto self = std::weak_ptr<HttpSession>(session);
-    queue->setSender([self](HttpResponsePtr _httpResp) {
+    queue->setSender([self = std::weak_ptr<HttpSession>(session)](HttpResponsePtr _httpResp) {
         auto session = self.lock();
         if (!session)
         {
             return;
         }
 
+        auto* httpRespPtr = _httpResp.get();
         session->httpStream()->asyncWrite(
-            *_httpResp, [self, _httpResp = std::move(_httpResp)](
-                            boost::beast::error_code ec, std::size_t bytes_transferred) {
-                auto session = self.lock();
-                if (!session)
+            *httpRespPtr, [self, _httpResp = std::move(_httpResp)](
+                              boost::beast::error_code ec, std::size_t bytes_transferred) {
+                if (auto session = self.lock())
                 {
-                    return;
+                    session->onWrite(_httpResp->need_eof(), ec, bytes_transferred);
                 }
-                session->onWrite(_httpResp->need_eof(), ec, bytes_transferred);
             });
     });
 
