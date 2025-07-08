@@ -1,9 +1,6 @@
 #include "HttpQueue.h"
 
-bcos::boostssl::http::Queue::Queue(std::size_t _limit) : m_limit(_limit)
-{
-    m_allResp.reserve(m_limit);
-}
+bcos::boostssl::http::Queue::Queue(std::size_t _limit) : m_limit(_limit) {}
 void bcos::boostssl::http::Queue::setSender(std::function<void(HttpResponsePtr)> _sender)
 {
     m_sender = std::move(_sender);
@@ -28,8 +25,8 @@ bool bcos::boostssl::http::Queue::isFull() const
 bool bcos::boostssl::http::Queue::onWrite()
 {
     BOOST_ASSERT(!m_allResp.empty());
-    auto const was_full = isFull();
-    m_allResp.erase(m_allResp.begin());
+    auto was_full = isFull();
+    m_allResp.pop_front();
     if (!m_allResp.empty())
     {
         m_sender(m_allResp.front());

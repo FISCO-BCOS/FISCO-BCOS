@@ -29,7 +29,7 @@ private:
     // the maximum number size of queue
     std::size_t m_limit;
     // messages to be send
-    std::vector<HttpResponsePtr> m_allResp;
+    std::deque<HttpResponsePtr> m_allResp;
     // send handler
     std::function<void(HttpResponsePtr)> m_sender;
 

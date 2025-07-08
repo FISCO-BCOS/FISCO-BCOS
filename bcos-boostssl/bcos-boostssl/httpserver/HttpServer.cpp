@@ -204,7 +204,7 @@ HttpSession::Ptr HttpServer::buildHttpSession(
             });
     });
 
-    session->setQueue(queue);
+    session->setQueue(std::move(queue));
     session->setHttpStream(std::move(_httpStream));
     session->setRequestHandler(m_httpReqHandler);
     session->setWsUpgradeHandler(m_wsUpgradeHandler);

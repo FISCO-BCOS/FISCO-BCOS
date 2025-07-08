@@ -24,7 +24,6 @@
 #include <bcos-utilities/Common.h>
 #include <boost/beast/ssl/ssl_stream.hpp>
 #include <memory>
-#include <utility>
 
 namespace bcos::boostssl::http
 {
@@ -54,7 +53,7 @@ public:
     virtual std::string remoteEndpoint();
 
 protected:
-    std::atomic<bool> m_closed{false};
+    boost::atomic_flag m_closed;
 };
 
 // The http stream
@@ -99,7 +98,6 @@ public:
     ws::WsStreamDelegate::Ptr wsStream() override;
 
     bool open() override;
-
     void close() override;
 
     void asyncRead(boost::beast::flat_buffer& _buffer,

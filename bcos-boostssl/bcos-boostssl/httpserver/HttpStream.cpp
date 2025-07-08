@@ -1,4 +1,5 @@
 #include "HttpStream.h"
+
 std::string bcos::boostssl::http::HttpStream::localEndpoint()
 {
     try
@@ -46,13 +47,13 @@ boost::beast::tcp_stream& bcos::boostssl::http::HttpStreamImpl::stream()
 }
 bcos::boostssl::ws::WsStreamDelegate::Ptr bcos::boostssl::http::HttpStreamImpl::wsStream()
 {
-    m_closed.store(true);
+    m_closed.test_and_set();
     auto builder = std::make_shared<ws::WsStreamDelegateBuilder>();
     return builder->build(m_stream);
 }
 bool bcos::boostssl::http::HttpStreamImpl::open()
 {
-    if (!m_closed.load() && m_stream)
+    if (!m_closed.test() && m_stream)
     {
         return m_stream->socket().is_open();
     }
@@ -60,14 +61,12 @@ bool bcos::boostssl::http::HttpStreamImpl::open()
 }
 void bcos::boostssl::http::HttpStreamImpl::close()
 {
-    if (m_closed.load())
+    if (m_closed.test())
     {
         return;
     }
 
-    bool trueValue = true;
-    bool falseValue = false;
-    if (m_closed.compare_exchange_strong(falseValue, trueValue))
+    if (m_closed.test_and_set())
     {
         HTTP_STREAM(INFO) << LOG_DESC("close the stream") << LOG_KV("this", this);
         ws::WsTools::close(m_stream->socket());
@@ -77,12 +76,18 @@ void bcos::boostssl::http::HttpStreamImpl::asyncRead(boost::beast::flat_buffer& 
     boost::optional<boost::beast::http::request_parser<boost::beast::http::string_body>>& _parser,
     HttpStreamRWHandler _handler)
 {
-    boost::beast::http::async_read(*m_stream, _buffer, *_parser, _handler);
+    if (!m_closed.test())
+    {
+        boost::beast::http::async_read(*m_stream, _buffer, *_parser, _handler);
+    }
 }
 void bcos::boostssl::http::HttpStreamImpl::asyncWrite(
     const HttpResponse& _httpResp, HttpStreamRWHandler _handler)
 {
-    boost::beast::http::async_write(*m_stream, _httpResp, _handler);
+    if (!m_closed.test())
+    {
+        boost::beast::http::async_write(*m_stream, _httpResp, _handler);
+    }
 }
 bcos::boostssl::http::HttpStreamSslImpl::HttpStreamSslImpl(
     std::shared_ptr<boost::beast::ssl_stream<boost::beast::tcp_stream>> _stream)
@@ -101,13 +106,13 @@ boost::beast::tcp_stream& bcos::boostssl::http::HttpStreamSslImpl::stream()
 }
 bcos::boostssl::ws::WsStreamDelegate::Ptr bcos::boostssl::http::HttpStreamSslImpl::wsStream()
 {
-    m_closed.store(true);
+    m_closed.test_and_set();
     auto builder = std::make_shared<ws::WsStreamDelegateBuilder>();
     return builder->build(m_stream);
 }
 bool bcos::boostssl::http::HttpStreamSslImpl::open()
 {
-    if (!m_closed.load() && m_stream)
+    if (!m_closed.test() && m_stream)
     {
         return m_stream->next_layer().socket().is_open();
     }
@@ -116,14 +121,14 @@ bool bcos::boostssl::http::HttpStreamSslImpl::open()
 }
 void bcos::boostssl::http::HttpStreamSslImpl::close()
 {
-    if (m_closed.load())
+    if (m_closed.test())
     {
         return;
     }
 
     bool trueValue = true;
     bool falseValue = false;
-    if (m_closed.compare_exchange_strong(falseValue, trueValue))
+    if (m_closed.test_and_set())
     {
         HTTP_STREAM(INFO) << LOG_DESC("close the ssl stream") << LOG_KV("this", this);
         ws::WsTools::close(m_stream->next_layer().socket());
