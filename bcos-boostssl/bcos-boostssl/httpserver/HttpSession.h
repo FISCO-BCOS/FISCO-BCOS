@@ -146,7 +146,7 @@ public:
         {
             HTTP_SESSION(WARNING) << LOG_BADGE("onWrite") << LOG_DESC("close the connection")
                                   << LOG_KV("failed", ec);
-            // return doClose();
+            doClose();
             return;
         }
 
@@ -154,7 +154,7 @@ public:
         {
             // we should close the connection, usually because
             // the response indicated the "Connection: close" semantic.
-            // return doClose();
+            doClose();
             return;
         }
 
