@@ -53,7 +53,7 @@ bcos::boostssl::ws::WsStreamDelegate::Ptr bcos::boostssl::http::HttpStreamImpl::
 }
 bool bcos::boostssl::http::HttpStreamImpl::open()
 {
-    return m_closed.test() && m_stream && m_stream->socket().is_open();
+    return !m_closed.test() && m_stream && m_stream->socket().is_open();
 }
 void bcos::boostssl::http::HttpStreamImpl::close()
 {
@@ -103,7 +103,7 @@ bcos::boostssl::ws::WsStreamDelegate::Ptr bcos::boostssl::http::HttpStreamSslImp
 }
 bool bcos::boostssl::http::HttpStreamSslImpl::open()
 {
-    return m_closed.test() && m_stream && m_stream->next_layer().socket().is_open();
+    return !m_closed.test() && m_stream && m_stream->next_layer().socket().is_open();
 }
 void bcos::boostssl::http::HttpStreamSslImpl::close()
 {
