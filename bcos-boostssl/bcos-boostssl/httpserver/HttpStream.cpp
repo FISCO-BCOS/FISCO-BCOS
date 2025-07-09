@@ -53,20 +53,11 @@ bcos::boostssl::ws::WsStreamDelegate::Ptr bcos::boostssl::http::HttpStreamImpl::
 }
 bool bcos::boostssl::http::HttpStreamImpl::open()
 {
-    if (!m_closed.test() && m_stream)
-    {
-        return m_stream->socket().is_open();
-    }
-    return false;
+    return m_closed.test() && m_stream && m_stream->socket().is_open();
 }
 void bcos::boostssl::http::HttpStreamImpl::close()
 {
-    if (m_closed.test())
-    {
-        return;
-    }
-
-    if (m_closed.test_and_set())
+    if (!m_closed.test_and_set())
     {
         HTTP_STREAM(INFO) << LOG_DESC("close the stream") << LOG_KV("this", this);
         ws::WsTools::close(m_stream->socket());
@@ -112,23 +103,11 @@ bcos::boostssl::ws::WsStreamDelegate::Ptr bcos::boostssl::http::HttpStreamSslImp
 }
 bool bcos::boostssl::http::HttpStreamSslImpl::open()
 {
-    if (!m_closed.test() && m_stream)
-    {
-        return m_stream->next_layer().socket().is_open();
-    }
-
-    return false;
+    return m_closed.test() && m_stream && m_stream->next_layer().socket().is_open();
 }
 void bcos::boostssl::http::HttpStreamSslImpl::close()
 {
-    if (m_closed.test())
-    {
-        return;
-    }
-
-    bool trueValue = true;
-    bool falseValue = false;
-    if (m_closed.test_and_set())
+    if (!m_closed.test_and_set())
     {
         HTTP_STREAM(INFO) << LOG_DESC("close the ssl stream") << LOG_KV("this", this);
         ws::WsTools::close(m_stream->next_layer().socket());
